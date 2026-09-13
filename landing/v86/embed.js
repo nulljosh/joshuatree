@@ -8,10 +8,11 @@
 //   bar, scrolling with space, anything, as if it were meant for the
 //   emulator. Every real v86 embed handles this the same way: leave it off
 //   until the visitor has actually clicked in.
-// - The idle-then-autoplay behavior demonstrates the kernel's own real
-//   commands (not scripted fakery: these are genuine simulate_char calls
-//   into the exact same input path a real keystroke uses) after a period
-//   of no interaction, and stops the instant a visitor does anything.
+// - The kernel boots into a real text-mode shell first, that's just how it
+//   works, but a visitor shouldn't have to look at a command line to see
+//   what this actually is. The instant the kernel can accept input, this
+//   drives it straight into "gui" through the same simulate_char path a
+//   real keystroke uses, real command, not a fake screen swap.
 (function () {
   var container = document.getElementById("v86-embed");
   if (!container) return;
@@ -48,6 +49,32 @@
     // "typing in the search bar" and "typing into someone else's kernel".
     emulator.keyboard_adapter.emu_enabled = false;
     emulator.mouse_adapter.emu_enabled = false;
+
+    // The visible demo is the GUI, not the shell it boots into first: the
+    // text-mode banner is real and correct, but a visitor landing on the
+    // page shouldn't have to look at a command line before seeing the
+    // thing this kernel actually does. Drive straight into "gui" through
+    // the exact same simulate_char path a real keystroke uses, same as any
+    // other command, but only once the shell's own prompt actually shows
+    // up: kbd_drain() (kernel/irq.c) deliberately discards anything typed
+    // before that point to swallow real stray boot-time PS/2 noise, and it
+    // was swallowing this too when sent the instant the CPU existed, well
+    // before the kernel had actually finished booting.
+    (function waitForPrompt() {
+      var lines = emulator.screen_adapter && emulator.screen_adapter.get_text_screen();
+      var ready = lines && lines.some(function (l) { return /^>\s*$/.test(l.replace(/\s+$/, "") + " "); });
+      if (!ready) { setTimeout(waitForPrompt, 100); return; }
+      emulator.keyboard_adapter.emu_enabled = true;
+      var chars = "gui\n".split("");
+      (function typeGui() {
+        if (!chars.length) {
+          if (!focused) emulator.keyboard_adapter.emu_enabled = false; // a real visitor may have clicked in during this, don't fight their focus
+          return;
+        }
+        emulator.keyboard_adapter.simulate_char(chars.shift());
+        setTimeout(typeGui, 60);
+      })();
+    })();
   });
 
   var focused = false;
@@ -73,66 +100,11 @@
     if (screenText) screenText.style.display = graphical ? "none" : "block";
   }, 200);
 
-  // --- Idle-then-autoplay: shows real commands, hands control back the
-  // instant a visitor does anything themselves. ---
-  var idleTimer = null;
-  var autoplayRunning = false;
-  var autoplayCancelled = false;
-
-  function type(s, cb) {
-    var i = 0;
-    (function next() {
-      if (autoplayCancelled) return;
-      if (i >= s.length) { if (cb) cb(); return; }
-      emulator.keyboard_adapter.simulate_char(s[i++]);
-      setTimeout(next, 45 + Math.random() * 40);
-    })();
-  }
-
-  function runCommand(cmd, pause, cb) {
-    if (autoplayCancelled) return;
-    type(cmd, function () {
-      if (autoplayCancelled) return;
-      emulator.keyboard_adapter.simulate_char("\n");
-      setTimeout(function () { if (!autoplayCancelled) cb(); }, pause);
-    });
-  }
-
-  function startAutoplay() {
-    if (focused || autoplayRunning) return;
-    if (!adaptersReady) { idleTimer = setTimeout(startAutoplay, 500); return; }
-    autoplayRunning = true;
-    autoplayCancelled = false;
-    // Autoplay drives the emulator directly, same as focusIn would, just
-    // without waiting for a click; a real interaction still wins instantly
-    // via stopAutoplay()/focusIn().
-    emulator.keyboard_adapter.emu_enabled = true;
-    var steps = [
-      function (next) { runCommand("help", 2200, next); },
-      function (next) { runCommand("mem", 1800, next); },
-      function (next) { runCommand("write hello.txt a real file, written live", 1600, next); },
-      function (next) { runCommand("cat hello.txt", 2200, next); },
-      function (next) { runCommand("gui", 2600, next); },
-    ];
-    var i = 0;
-    (function step() {
-      if (autoplayCancelled || i >= steps.length) { autoplayRunning = false; return; }
-      steps[i++](step);
-    })();
-  }
-
-  function stopAutoplay() {
-    autoplayCancelled = true;
-    autoplayRunning = false;
-    clearTimeout(idleTimer);
-  }
-
-  function resetIdleTimer() {
-    if (focused || window.__jtReducedMotion) return; // once a real visitor has taken over, autoplay never restarts on its own; reduced-motion visitors never get unrequested typing
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(startAutoplay, 8000);
-  }
-  resetIdleTimer();
+  // stopAutoplay is kept as a no-op call site for focusIn() above; there's
+  // no scripted CLI demo left to cancel now that boot drives straight into
+  // the GUI, but focusIn() calling it costs nothing and keeps that code
+  // simple if a mouse-driven idle tour gets added here later.
+  function stopAutoplay() {}
 
   window.__joshuaTreeEmulator = emulator; // for debugging from the console, harmless to leave
 })();
