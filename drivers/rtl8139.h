@@ -17,4 +17,10 @@ void rtl8139_get_mac(unsigned char mac[6]);
    transmitted (TOK), 0 on timeout. len must be <= 1792 (one TX descriptor's
    worth) and ideally >= 60 (Ethernet's minimum frame size before the FCS). */
 int rtl8139_send(const void *data, unsigned int len);
+
+/* Non-blocking: copies the next received frame (if any) into buf (up to
+   maxlen bytes, CRC already stripped) and returns its length, or 0 if
+   nothing has arrived. Poll this in a loop with hlt between checks rather
+   than busy-spinning. */
+unsigned int rtl8139_receive(void *buf, unsigned int maxlen);
 #endif

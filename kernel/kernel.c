@@ -15,6 +15,7 @@
 #include "mouse.h"
 #include "window.h"
 #include "rtl8139.h"
+#include "net.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -294,6 +295,14 @@ static void run(char *line){
             for (int i = 0; i < 64; i++) buf[i] = frame[i];
             for (int i = 0; i < 6; i++) buf[6 + i] = mac[i];
             puts(rtl8139_send(buf, sizeof(buf)) ? "send:ok\n" : "send:FAIL (timeout)\n");
+
+            net_init(0x0A00020F); /* 10.0.2.15, QEMU SLIRP's default guest IP */
+            unsigned char gw_mac[6];
+            puts("arp 10.0.2.2: ");
+            if (arp_resolve(0x0A000202, gw_mac)) { /* SLIRP's built-in gateway */
+                for (int i = 0; i < 6; i++) { puthex(gw_mac[i]); if (i < 5) putc(':'); }
+                putc('\n');
+            } else puts("timeout\n");
         }
     }
     else if (!strcmp(line, "gfxtest")) {

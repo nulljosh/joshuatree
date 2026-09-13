@@ -5,9 +5,9 @@ this is the map of what exists right now.
 
 ## Boot sequence
 
-1. `boot.S`, multiboot1 header, sets up a stack, pushes the multiboot info
+1. `boot/boot.S`, multiboot1 header, sets up a stack, pushes the multiboot info
    pointer GRUB/QEMU leaves in `%ebx`, calls `kmain`.
-2. `kmain` (`kernel.c`) brings subsystems up in dependency order:
+2. `kmain` (`kernel/kernel.c`) brings subsystems up in dependency order:
    `gdt_install` → `idt_install` → `irq_install` → `pmm_init` →
    `paging_install` → `tasks_init` → `fat_mount` → the shell loop.
 
@@ -26,7 +26,7 @@ this is the map of what exists right now.
 | `ata.c` | ATA PIO disk driver, LBA28, primary master only |
 | `fat.c` | Read-only FAT16, root directory only, 8.3 names |
 | `exec.c` | Loads a flat binary via `fat.c` and calls into it, ring 0, no isolation |
-| `kernel.c` | VGA text console, PS/2 scancode table, RTC clock, the shell |
+| `kernel/kernel.c` | VGA text console, PS/2 scancode table, RTC clock, the shell |
 
 ## Why things are ordered this way
 

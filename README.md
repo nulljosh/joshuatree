@@ -17,14 +17,14 @@ the same way this kernel is. Also a nod to the U2 album, and my own name.
 
 | Piece | Where |
 |-------|-------|
-| Boot | `boot.S`: multiboot1 header, stack, jump to `kmain` |
+| Boot | `boot/boot.S`: multiboot1 header, stack, jump to `kmain` |
 | Segments | `gdt.c`: flat GDT (ring-0 code + data, 4GB) |
 | Interrupts | `idt.c` + `isr.S`: IDT and the 32 CPU-exception handlers |
 | IRQs | `pic.c`, `irq.c` + `irq_stubs.S`: PIC remap, IRQ-driven keyboard, PIT timer |
 | Memory | `pmm.c` (physical frames), `paging.c` (identity-mapped paging), `kheap.c` (`kmalloc`/`kfree`) |
 | Tasks | `task.c` + `task_switch.S`: cooperative round-robin scheduling |
 | Storage | `ata.c` (disk driver), `fat.c` (FAT16 read), `exec.c` (load+run a flat binary) |
-| Console | `kernel.c`: VGA text, keyboard, clock, the shell |
+| Console | `kernel/kernel.c`: VGA text, keyboard, clock, the shell |
 | Link | `linker.ld`: flat ELF32 at 1 MB |
 | Check | `check.sh`: boots it and checks the banner reached VGA memory |
 
