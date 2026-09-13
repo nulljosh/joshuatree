@@ -1,5 +1,6 @@
 /* Freestanding i386 kernel: VGA text, PS/2 keyboard, RTC clock, tiny shell. */
 #include "gdt.h"
+#include "idt.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -27,7 +28,7 @@ static void scroll(void){
     cy = H - 1;
 }
 
-static void putc(char c){
+void putc(char c){
     if (c == '\n') { cx = 0; cy++; }
     else if (c == '\b') {
         if (cx) cx--; else if (cy) { cy--; cx = W - 1; }
@@ -39,7 +40,7 @@ static void putc(char c){
     scroll(); cursor();
 }
 
-static void puts(const char *s){ while (*s) putc(*s++); }
+void puts(const char *s){ while (*s) putc(*s++); }
 
 static void clear(void){
     for (int i = 0; i < W * H; i++) VGA[i] = (ATTR << 8) | ' ';
@@ -98,9 +99,10 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (streq(line, "help"))       puts("help clear echo time reboot\n");
+    if (streq(line, "help"))       puts("help clear echo time reboot crash\n");
     else if (streq(line, "clear")) clear();
     else if (streq(line, "echo"))  { puts(arg); putc('\n'); }
+    else if (streq(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
     else if (streq(line, "time"))  show_time();
     else if (streq(line, "reboot"))reboot();
     else { puts("? "); puts(line); putc('\n'); }
@@ -108,6 +110,7 @@ static void run(char *line){
 
 void kmain(void){
     gdt_install();
+    idt_install();
     clear();
     puts("os v0 -- type help\n");
     char line[80];

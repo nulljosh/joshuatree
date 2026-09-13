@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>os — a kernel from nothing</title>
+<meta name="description" content="A freestanding kernel built from scratch, toward its own file explorer and browser. No macOS, no Linux underneath.">
+<link rel="icon" href="icon.svg">
+<style>
+  :root { color-scheme: light dark; --bg:#f4f4f6; --fg:#111; --sub:#666; --border:rgba(0,0,0,0.08); --card:rgba(255,255,255,0.55); --accent:#2e7d32; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#08080a; --fg:#f2f2f2; --sub:#999; --border:rgba(255,255,255,0.1); --card:rgba(255,255,255,0.06); } }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:var(--fg); font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 56px 20px; text-align: center; }
+  img.icon { border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
+  .eyebrow { color: var(--sub); font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; margin: 24px 0 0; }
+  h1 { font-size: 44px; margin: 4px 0 8px; letter-spacing: -0.02em; }
+  p.tagline { color: var(--sub); font-size: 19px; margin: 0 0 36px; line-height: 1.5; }
+
+  .term { background: #0b0d0b; color: #3ee06a; border-radius: 12px; padding: 18px 20px; text-align: left; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; box-shadow: 0 8px 24px rgba(0,0,0,0.2); margin-bottom: 36px; overflow-x: auto; }
+  .term .dim { color: #5a9c6b; }
+  .term .cursor { display:inline-block; width:7px; height:14px; background:#3ee06a; vertical-align:-2px; animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .progress-card { background: var(--card); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 32px; }
+  .progress-card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sub); margin: 0 0 14px; font-weight: 600; }
+  .progress-card img { width: 100%; height: auto; border-radius: 8px; }
+
+  .steps { display:grid; grid-template-columns: repeat(3,1fr); gap: 16px; text-align:left; margin-bottom: 8px; }
+  .step { background: var(--card); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--border); border-radius: 16px; padding: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+  .step .n { color: var(--sub); font-size: 12px; }
+  .step p { margin: 6px 0 0; font-size: 14px; }
+
+  @media (max-width: 520px) {
+    main { padding: 40px 20px; }
+    .steps { grid-template-columns: 1fr; }
+    h1 { font-size: 34px; }
+    p.tagline { font-size: 16px; margin-bottom: 28px; }
+  }
+
+  .links { margin-top: 32px; }
+  .links a { color: var(--fg); text-decoration: none; background: var(--card); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--border); border-radius: 8px; padding: 10px 18px; display: inline-block; font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+  .links a:hover { border-color: var(--sub); }
+</style>
+</head>
+<body>
+<main>
+  <img class="icon" src="icon.svg" width="56" height="56" alt="">
+  <p class="eyebrow">Built from nothing</p>
+  <h1>os</h1>
+  <p class="tagline">A kernel with no macOS, no Linux, nothing underneath.<br>Toward its own file explorer and browser.</p>
+
+  <div class="term" aria-hidden="true">
+    <div><span class="dim">$</span> qemu-system-i386 -kernel kernel.elf</div>
+    <div>&nbsp;</div>
+    <div>os v0 -- type help</div>
+    <div>&gt; help</div>
+    <div>help clear echo time reboot crash</div>
+    <div>&gt; <span class="cursor"></span></div>
+  </div>
+
+  <div class="progress-card">
+    <h2>Build progress</h2>
+    <img src="progress.svg" alt="Feature completion by version, generated from roadmap.md">
+  </div>
+
+  <div class="steps">
+    <div class="step"><div class="n">No host OS</div><p>Freestanding i386, boots straight from a multiboot header. Nothing to hide behind.</p></div>
+    <div class="step"><div class="n">One piece at a time</div><p>GDT, then interrupts, then memory, then a filesystem, then graphics. Same order every real kernel takes.</p></div>
+    <div class="step"><div class="n">Ends at a browser</div><p>The whole point: your own file explorer and a browser, running on a kernel you wrote.</p></div>
+  </div>
+
+  <div class="links">
+    <a href="https://github.com/nulljosh/os">Source</a>
+  </div>
+</main>
+</body>
+</html>
