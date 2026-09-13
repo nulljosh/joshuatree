@@ -26,8 +26,8 @@ static void vbe_write(u16 index, u16 value) {
 }
 
 int vbe_set_mode(unsigned int width, unsigned int height, unsigned int bpp, unsigned int *fb_addr) {
-    unsigned int bar0;
-    if (!pci_find_device(0x03, 0x00, &bar0)) return 0;
+    struct pci_device dev;
+    if (!pci_find_device(0x03, 0x00, &dev)) return 0;
 
     vbe_write(VBE_INDEX_ENABLE, 0); /* disable before changing resolution, per spec */
     vbe_write(VBE_INDEX_XRES, (u16)width);
@@ -35,7 +35,7 @@ int vbe_set_mode(unsigned int width, unsigned int height, unsigned int bpp, unsi
     vbe_write(VBE_INDEX_BPP, (u16)bpp);
     vbe_write(VBE_INDEX_ENABLE, VBE_ENABLED | VBE_LFB);
 
-    *fb_addr = bar0;
+    *fb_addr = dev.bar0;
     return 1;
 }
 

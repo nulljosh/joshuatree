@@ -269,9 +269,13 @@ static void run(char *line){
         else { puts(fat_delete(arg) ? "deleted\n" : "not found\n"); }
     }
     else if (!strcmp(line, "lspci")) {
-        unsigned int bar0;
-        if (pci_find_device(0x03, 0x00, &bar0)) { puts("VGA device found, BAR0="); puthex(bar0); putc('\n'); }
+        struct pci_device dev;
+        if (pci_find_device(0x03, 0x00, &dev)) { puts("VGA device found, BAR0="); puthex(dev.bar0); putc('\n'); }
         else puts("no VGA device found\n");
+        if (pci_find_device(0x02, 0x00, &dev)) {
+            puts("NIC found, "); puts(dev.bar0_is_io ? "I/O BAR=" : "MEM BAR=");
+            puthex(dev.bar0); putc('\n');
+        } else puts("no NIC found\n");
     }
     else if (!strcmp(line, "gfxtest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }

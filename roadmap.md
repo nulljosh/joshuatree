@@ -55,7 +55,8 @@ Once graphics exist, a lighter early win becomes possible without waiting for v7
 
 ## v7, networking (the "browser" part needs a network stack), ETA: 2-3 sessions (~6-10h)
 The hardest version in the plan: a NIC driver plus a real TCP stack, both easy to get subtly wrong in ways that "sort of work."
-- [ ] NIC driver (RTL8139 or virtio-net, both are the standard QEMU-emulatable choices with tons of reference code)
+- [x] PCI extended for I/O-space BARs (RTL8139's BAR0 is an I/O port range, not a physical memory address like the VGA framebuffer was) plus `pci_enable_device` to set the I/O/memory/bus-master bits ourselves, since a kernel entered directly via multiboot has no BIOS pass that already did it. Verified against a real `-device rtl8139` QEMU NIC: boot-time check read back `vga:ok nic:ok io=0xc000`, correctly distinguishing the two BAR types
+- [ ] NIC driver (RTL8139, chosen over virtio-net for being simpler and better-documented, real BAR now known at 0xc000)
 - [ ] Ethernet/ARP/IP/UDP minimal stack
 - [ ] TCP: enough to open one connection and do a raw HTTP GET
 - [ ] DNS: enough to resolve a hostname before the GET
