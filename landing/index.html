@@ -7,30 +7,42 @@
 <meta name="description" content="A freestanding kernel built from scratch, with its own GUI desktop, network stack, and voice-controlled LLM. No macOS, no Linux underneath.">
 <link rel="icon" href="icon.svg">
 <style>
-  :root { color-scheme: light dark; --bg:#faf8f6; --fg:#1c1c1e; --sub:#75726e; --border:rgba(0,0,0,0.08); --card:rgba(255,255,255,0.7); --accent:#c1502f; --accent2:#7a2048; }
+  :root { color-scheme: light dark; --bg:#faf8f6; --fg:#1c1c1e; --sub:#75726e; --border:rgba(0,0,0,0.08); --card:rgba(255,255,255,0.7); --accent:#b74c2c; --accent2:#7a2048; }
   @media (prefers-color-scheme: dark) { :root { --bg:#121212; --fg:#f2f0ee; --sub:#9c9894; --border:rgba(255,255,255,0.1); --card:rgba(30,30,30,0.6); --accent:#d66a45; --accent2:#a8395f; } }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
 
-  /* Mobile: true full-bleed, edge to edge, no border, no radius, height off
-     100svh not 100dvh. dvh actively tracks and animates with Safari's
+  /* Keyboard focus needs to be visible for anyone not using a mouse; the
+     warm accent color instead of a generic blue keeps it consistent with
+     the rest of the page rather than looking like an unstyled default. */
+  a:focus-visible, .skip-link:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .skip-link { position: absolute; left: 12px; top: -48px; z-index: 20; background: var(--bg); color: var(--fg); padding: 10px 16px; border-radius: 8px; text-decoration: none; font-size: 14px; transition: top 0.15s; }
+  .skip-link:focus { top: 12px; }
+
+  /* Full-bleed at every width, no framed-window card: the demo is the
+     whole hero, edge to edge, same on a phone and a 27" display. Height
+     off 100svh not 100dvh. dvh actively tracks and animates with Safari's
      toolbar as it collapses, which is exactly what caused a real glitch,
      a visible seam and a phantom second black box mid-animation. svh is a
      static floor (the height once the toolbar is fully expanded) that
-     never animates, so the box never moves during a toolbar transition.
-     Desktop/tablet gets the framed-window card look instead, where a
-     margin around a black rectangle looks intentional rather than like a
-     mistake, sized by width via aspect-ratio there since full-bleed
-     doesn't apply once there's a margin anyway. */
-  #stage-wrap { background: #000; }
-  #stage { position: relative; width: 100%; height: 100vh; height: 100svh; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-  #stage video.boot { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+     never animates, so the box never moves during a toolbar transition. */
+  #stage-wrap { background: #000; position: relative; }
+  #stage { position: relative; width: 100%; height: 100vh; height: 100svh; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 1; }
+  #stage video.boot { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
 
-  @media (min-width: 641px) {
-    #stage-wrap { padding: 20px; background: var(--bg); display: flex; justify-content: center; }
-    #stage { max-width: 900px; aspect-ratio: 800 / 632; height: auto; max-height: 80vh; max-height: 80svh; border-radius: 24px; }
-  }
+  /* A field of real kernel fragments (shell commands, real addresses this
+     kernel actually uses) drifting behind the intro copy, the same
+     treatment nimble's landing page uses for its own hero. Lives here, not
+     around the demo above, since that's full-bleed black with no margin
+     for anything to drift across. */
+  main { position: relative; }
+  .hero-float { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .float { position: absolute; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; color: var(--accent); opacity: 0.16; white-space: nowrap; will-change: transform; animation: drift var(--dur, 18s) ease-in-out var(--delay, 0s) infinite alternate; }
+  @keyframes drift { to { transform: translate(var(--dx, 0px), var(--dy, 0px)); } }
+  @media (prefers-reduced-motion: reduce) { .float { animation: none; } }
+  main > * { position: relative; z-index: 1; }
 
   /* logo + name, top-left, over the running kernel */
   .brand { position: absolute; top: 18px; left: 18px; z-index: 5; display: flex; align-items: center; gap: 10px; }
@@ -41,8 +53,9 @@
   .hint code { background: rgba(255,255,255,0.12); padding: 1px 5px; border-radius: 4px; color: #eee; }
 
   .links { position: absolute; top: 18px; right: 18px; z-index: 5; }
-  .links a { color: #eee; text-decoration: none; background: rgba(255,255,255,0.1); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 14px; font-size: 13px; }
+  .links a { color: #eee; text-decoration: none; background: rgba(255,255,255,0.1); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
   .links a:hover { background: rgba(255,255,255,0.18); }
+  .links svg { width: 20px; height: 20px; fill: #eee; }
 
   .scroll-cue { position: absolute; bottom: 18px; right: 18px; z-index: 5; color: #aaa; font-size: 12px; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
 
@@ -68,23 +81,31 @@
     p.tagline { font-size: 15px; margin-bottom: 32px; }
   }
 
+
   footer { text-align: center; padding: 24px; color: var(--sub); font-size: 13px; background: var(--bg); }
   footer a { color: var(--accent2); }
 </style>
 </head>
 <body>
 
+<a class="skip-link" href="#main">Skip to content</a>
+
 <div id="stage-wrap">
   <div id="stage">
-    <video class="boot" id="bootdemo" src="demo.mp4?r=2" autoplay muted loop playsinline
+    <video class="boot" id="bootdemo" src="demo.mp4?r=3" autoplay muted loop playsinline
       aria-label="A real QEMU boot of this exact kernel.elf: help, mem, writing and reading back a real file on FAT16, then opening the real macOS-style Dock with working apps."></video>
     <div class="brand"><img src="icon.svg" alt=""><span>Joshua Tree</span></div>
-    <div class="links"><a href="https://github.com/nulljosh/joshuatree">Source</a></div>
+    <div class="links">
+      <a href="https://github.com/nulljosh/joshuatree" aria-label="Source code on GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      </a>
+    </div>
     <div class="hint">A real boot of this exact <code>kernel.elf</code>, recorded in QEMU. Not staged. Loops automatically.</div>
   </div>
 </div>
 
-<main>
+<main id="main">
+  <div class="hero-float" id="heroFloat" aria-hidden="true"></div>
   <p class="eyebrow">Joshua's kernel, built from nothing</p>
   <h1>What you just booted</h1>
   <p class="tagline">No macOS, no Linux underneath it. Written from scratch,<br>with its own GUI desktop, its own network stack, and a real conversation with an LLM, by voice.</p>
@@ -107,5 +128,48 @@
   <a href="https://github.com/nulljosh/joshuatree">github.com/nulljosh/joshuatree</a>
 </footer>
 
+<script>
+// Field of real kernel fragments drifting behind the framed demo, the same
+// treatment nimble's landing page uses for its own hero. Every one of these
+// is something this exact kernel actually does or actually is, not
+// decoration invented for the page.
+(function () {
+  var field = document.getElementById('heroFloat');
+  if (!field) return;
+
+  var items = [
+    'joshuatree v0', '> help', '> gui', '> mem', '> chat',
+    '0xC0000000', '0xB8000', 'kmain()', 'fat_write_file()',
+    'ring3test', 'preempttest', '129920K total', 'ARP DNS TCP',
+    'no macOS, no Linux'
+  ];
+
+  var rand = function (a, b) { return a + Math.random() * (b - a); };
+  items.forEach(function (text) {
+    var el = document.createElement('span');
+    el.className = 'float';
+    el.textContent = text;
+    el.style.left = rand(2, 90).toFixed(1) + '%';
+    el.style.top = rand(2, 92).toFixed(1) + '%';
+    var dx = rand(10, 24) * (Math.random() < 0.5 ? -1 : 1);
+    var dy = rand(8, 18) * (Math.random() < 0.5 ? -1 : 1);
+    el.style.setProperty('--dx', dx.toFixed(1) + 'px');
+    el.style.setProperty('--dy', dy.toFixed(1) + 'px');
+    el.style.setProperty('--dur', rand(14, 28).toFixed(1) + 's');
+    el.style.setProperty('--delay', (-rand(0, 20)).toFixed(1) + 's');
+    field.appendChild(el);
+  });
+})();
+
+  // A looping autoplay video is exactly the kind of motion this OS-level
+  // preference exists to suppress. The recording is the whole point of
+  // the page, so pause on the real boot banner rather than remove it
+  // entirely: that first frame still tells the same story a still image
+  // would, without moving on its own.
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    var v = document.getElementById('bootdemo');
+    if (v) { v.removeAttribute('autoplay'); v.removeAttribute('loop'); v.pause(); }
+  }
+</script>
 </body>
 </html>

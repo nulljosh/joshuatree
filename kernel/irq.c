@@ -55,6 +55,28 @@ static void pit_init(unsigned int hz) {
     outb(0x40, (divisor >> 8) & 0xFF);
 }
 
+/* Real hardware and QEMU both inherit a keyboard that's already scanning
+   from their own BIOS's POST sequence, so this kernel never had to enable
+   it itself, exactly the same class of gap the VGA text-mode init fix
+   closed. A BIOS-less multiboot path (v86) leaves the keyboard's internal
+   scan-enable flag off by default: confirmed by direct inspection of a
+   live v86 instance (`ps2.enable_keyboard_stream === false`), the reason
+   real keydown events never reached this kernel's IRQ1 handler even
+   though v86 itself was receiving them fine. 0xF4 written straight to the
+   data port (0x60), no 0xD4 mouse-redirect prefix, targets the keyboard
+   channel specifically. */
+static void keyboard_enable_scanning(void) {
+    while (inb(0x64) & 0x02) {} /* wait for the controller's input buffer to be clear */
+    outb(0x60, 0xF4);
+    unsigned int timeout = 100000;
+    while (timeout-- && !(inb(0x64) & 0x01)) {} /* wait for the ACK to land in the output buffer */
+    /* Drain everything sitting in the output buffer, not just one byte: a
+       real, found-by-testing bug here was a single stray byte still queued
+       after just consuming the ACK, which the IRQ1 handler then picked up
+       once interrupts turned on and got misread as a real keypress. */
+    while (inb(0x64) & 0x01) (void)inb(0x60);
+}
+
 void irq_install(void) {
     pic_remap();
     pit_init(100);
@@ -62,5 +84,6 @@ void irq_install(void) {
     SET(0);  SET(1);  SET(2);  SET(3);  SET(4);  SET(5);  SET(6);  SET(7);
     SET(8);  SET(9);  SET(10); SET(11); SET(12); SET(13); SET(14); SET(15);
 #undef SET
+    keyboard_enable_scanning();
     __asm__ volatile ("sti");
 }
