@@ -14,4 +14,10 @@ int fat_read_file(const char *name_8_3, void *buf, unsigned int bufsize);
 
 /* Lists root-directory entries by calling cb(name, size) for each file. */
 void fat_list(void (*cb)(const char *name, unsigned int size));
+
+/* Marks the named file's directory entry deleted (0xE5) and writes that
+   sector back. Returns 1 on success, 0 if the file wasn't found. Doesn't
+   free its clusters in the FAT -- ponytail: no free-space reclaim yet,
+   just enough to make a file stop showing up in ls/cat. */
+int fat_delete(const char *name);
 #endif

@@ -132,7 +132,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec\n");
+    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm\n");
     else if (streq(line, "clear")) clear();
     else if (streq(line, "echo"))  { puts(arg); putc('\n'); }
     else if (streq(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -181,6 +181,10 @@ static void run(char *line){
     else if (streq(line, "exec")) {
         if (!*arg) { puts("usage: exec <file> (runs in ring 0, no isolation -- see roadmap.md v3)\n"); }
         else if (!exec_flat(arg)) { puts(arg); puts(": exec failed (not found or too big)\n"); }
+    }
+    else if (streq(line, "rm")) {
+        if (!*arg) { puts("usage: rm <file>\n"); }
+        else { puts(fat_delete(arg) ? "deleted\n" : "not found\n"); }
     }
     else if (streq(line, "time"))  show_time();
     else if (streq(line, "reboot"))reboot();

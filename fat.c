@@ -133,6 +133,28 @@ int fat_read_file(const char *name, void *buf, unsigned int bufsize) {
     return (int)(total - remaining);
 }
 
+int fat_delete(const char *name) {
+    if (!mounted) return 0;
+    u8 want[11];
+    to_fat_name(name, want);
+    u8 sector[512];
+
+    for (u32 s = 0; s < root_dir_sectors; s++) {
+        if (!ata_read_sector(root_dir_start + s, sector)) return 0;
+        struct dir_entry *entries = (struct dir_entry *)sector;
+        for (int i = 0; i < 512 / 32; i++) {
+            if (entries[i].name[0] == 0x00) return 0;
+            if (entries[i].name[0] == 0xE5) continue;
+            if (entries[i].attr & (ATTR_VOLUME_ID | ATTR_DIRECTORY)) continue;
+            if (names_eq(entries[i].name, want)) {
+                entries[i].name[0] = 0xE5;
+                return ata_write_sector(root_dir_start + s, sector);
+            }
+        }
+    }
+    return 0;
+}
+
 void fat_list(void (*cb)(const char *name, unsigned int size)) {
     if (!mounted) return;
     u8 sector[512];

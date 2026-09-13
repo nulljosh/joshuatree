@@ -35,7 +35,8 @@ Full breakdown of what shipped in each: `git log --oneline` or the commit histor
 
 ## v5 — the "file explorer" (this is why the project exists) — ETA: 1 session (~2-3h)
 Mechanical once v4's VFS exists — mostly shell commands and a UI loop.
-- [ ] Shell commands: `ls`, `cd`, `cat`, `rm`, `mkdir` over the VFS
+- [x] `ls`/`cat` already exist (v4). `rm`: real delete, marks the directory entry `0xE5` and rewrites that sector (`fat.c`'s `fat_delete`, `rm` shell command). Verified against a real FAT image: file present → `rm` → gone from `ls`, unrelated files untouched
+- [ ] `cd`/`mkdir` need actual subdirectories, which don't exist yet — root-directory-only was v4's deliberate scope call (see `fat.c`'s header comment). Adding real subdirectory traversal is its own small chunk of work, not a one-liner alongside `rm`
 - [ ] Simple text-mode file browser (arrow keys, VGA text UI, not just a shell)
 - [ ] Basic libc subset: `malloc`, `memcpy`, `strcmp`, etc. for anything above the kernel
 
