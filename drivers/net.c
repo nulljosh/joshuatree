@@ -26,6 +26,14 @@ static u32 our_ip = 0;
    wired into this driver, not calibrated to a real duration. */
 #define LAN_TIMEOUT_ITERS  2000000
 #define WAN_TIMEOUT_ITERS  50000000
+/* A plain HTTP fetch's WAN_TIMEOUT_ITERS budget is tuned for network round
+   trip, not for however long an LLM takes to actually generate a reply
+   (calibrated elsewhere in this file: 50,000,000 iterations is only a few
+   real seconds here, an 8B local model can easily take longer than that
+   for even a short answer). Reused by tcp_get for any request this slow,
+   not a v10-specific constant, since the same gap would bite anything
+   else slower than a typical page fetch. */
+#define SLOW_REPLY_TIMEOUT_ITERS 500000000
 /* A server's "wait for a connection" isn't bounded by a network round trip
    at all, it's bounded by how long a human takes to open a connection.
    Found by testing tcp_serve_once against a real curl: 50,000,000 empty
@@ -434,7 +442,7 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
 
     u32 total = 0;
     int got_fin = 0;
-    for (int attempts = 0; attempts < WAN_TIMEOUT_ITERS && !got_fin && total < response_maxlen; attempts++) {
+    for (int attempts = 0; attempts < SLOW_REPLY_TIMEOUT_ITERS && !got_fin && total < response_maxlen; attempts++) {
         u32 n = rtl8139_receive(rx, sizeof(rx));
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
