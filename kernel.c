@@ -14,6 +14,7 @@
 #include "vbe.h"
 #include "mouse.h"
 #include "window.h"
+#include "rtl8139.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -213,7 +214,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest mousetest\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest mousetest nettest\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -276,6 +277,24 @@ static void run(char *line){
             puts("NIC found, "); puts(dev.bar0_is_io ? "I/O BAR=" : "MEM BAR=");
             puthex(dev.bar0); putc('\n');
         } else puts("no NIC found\n");
+    }
+    else if (!strcmp(line, "nettest")) {
+        if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        else {
+            unsigned char mac[6];
+            rtl8139_get_mac(mac);
+            puts("MAC: ");
+            for (int i = 0; i < 6; i++) { puthex(mac[i]); if (i < 5) putc(':'); }
+            putc('\n');
+            static const unsigned char frame[64] = {
+                0xFF,0xFF,0xFF,0xFF,0xFF,0xFF, /* dest: broadcast */
+                0,0,0,0,0,0,                    /* src: filled from our MAC below */
+            };
+            unsigned char buf[64];
+            for (int i = 0; i < 64; i++) buf[i] = frame[i];
+            for (int i = 0; i < 6; i++) buf[6 + i] = mac[i];
+            puts(rtl8139_send(buf, sizeof(buf)) ? "send:ok\n" : "send:FAIL (timeout)\n");
+        }
     }
     else if (!strcmp(line, "gfxtest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
