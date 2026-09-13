@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <rect width="200" height="200" rx="44" fill="#e8722c"/>
+  <rect width="200" height="200" rx="44" fill="#c1502f"/>
   <!-- Joshua tree silhouette: trunk, two branching arms, spiky yucca tufts -->
   <g fill="none" stroke="#241408" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
     <path d="M100 168 L100 108"/>

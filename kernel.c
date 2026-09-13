@@ -10,6 +10,7 @@
 #include "fat.h"
 #include "exec.h"
 #include "libc.h"
+#include "pci.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -209,7 +210,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -263,6 +264,11 @@ static void run(char *line){
     else if (!strcmp(line, "rm")) {
         if (!*arg) { puts("usage: rm <file>\n"); }
         else { puts(fat_delete(arg) ? "deleted\n" : "not found\n"); }
+    }
+    else if (!strcmp(line, "lspci")) {
+        unsigned int bar0;
+        if (pci_find_device(0x03, 0x00, &bar0)) { puts("VGA device found, BAR0="); puthex(bar0); putc('\n'); }
+        else puts("no VGA device found\n");
     }
     else if (!strcmp(line, "time"))  show_time();
     else if (!strcmp(line, "reboot"))reboot();

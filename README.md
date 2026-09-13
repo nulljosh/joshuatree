@@ -12,9 +12,8 @@
 A kernel. A small one, from nothing. It boots in QEMU, reads a real disk,
 runs code loaded off it. Full breakdown: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-Renamed from `os`. Same tree survives the Mojave on almost nothing, I'm
-building this the same way, piece by piece, nothing borrowed. Also a nod
-to the U2 album, and yeah, my own name.
+Renamed from `os`. The tree survives the Mojave on almost nothing, built
+the same way this kernel is. Also a nod to the U2 album, and my own name.
 
 | Piece | Where |
 |-------|-------|

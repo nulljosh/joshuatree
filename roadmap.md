@@ -41,8 +41,9 @@ Mechanical once v4's VFS exists, mostly shell commands and a UI loop.
 - [x] Basic libc subset: `memcpy`/`memset`/`memcmp`/`strlen`/`strcmp` (`libc.c`), not speculative, actually replaced real duplicate loops (`kernel.c`'s 19 `streq` call sites, `fat.c`'s `names_eq`)
 
 ## v6, graphics (text mode won't carry a browser), ETA: 2-3 sessions (~6-10h)
-VESA mode-setting and a font renderer are fiddly and hard to verify without eyes on a real screen (not just VGA-text memory dumps).
-- [ ] VESA/VBE linear framebuffer mode instead of VGA text
+A real fork discovered mid-implementation: requesting a video mode via the multiboot header (the obvious first approach) makes QEMU boot straight into graphics mode with no way back to VGA text, breaking the working shell until the font renderer exists too, since text and framebuffer output can't coexist that way. The better path is switching graphics on and off at runtime via QEMU's Bochs VBE register interface (ports 0x1CE/0x1CF), which needs the framebuffer's real physical address first, only PCI config space knows that, not a fixed constant.
+- [x] PCI enumeration: scans config space via ports 0xCF8/0xCFC, finds QEMU's VGA device and reads its BAR0 (`pci.c`, `lspci` shell command). Verified against the real device: boot-time check printed `pci:ok VGA BAR0=0xfd000000`, the actual address QEMU's std VGA framebuffer lives at
+- [ ] VESA/VBE linear framebuffer mode instead of VGA text, via the Bochs VBE register interface (set XRES/YRES/BPP then ENABLE with LFB bit) now that BAR0 is known, not the multiboot header approach
 - [ ] Software framebuffer primitives: pixel, rect, blit, a bitmap font renderer. Take typography seriously here, this is the first thing anyone actually looks at once VGA text mode is gone. A crude 8x8 font that technically renders isn't good enough, even monospace should be a genuinely nice-looking face at a real size. Support more than one embedded font and let the user pick, don't hardcode a single typeface as if it's the only option
 - [ ] Mouse: PS/2 mouse driver (IRQ12), cursor sprite
 - [ ] A minimal windowing surface, even one full-screen buffer counts for v6
