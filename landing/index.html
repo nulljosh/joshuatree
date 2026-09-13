@@ -7,57 +7,77 @@
 <meta name="description" content="A freestanding kernel built from scratch, toward its own file explorer and browser. No macOS, no Linux underneath.">
 <link rel="icon" href="icon.svg">
 <style>
-  :root { color-scheme: light dark; --bg:#f4f4f6; --fg:#111; --sub:#666; --border:rgba(0,0,0,0.08); --card:rgba(255,255,255,0.55); --accent:#111; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#08080a; --fg:#f2f2f2; --sub:#999; --border:rgba(255,255,255,0.1); --card:rgba(255,255,255,0.06); } }
+  :root { color-scheme: light dark; --bg:#f7f0ea; --fg:#3a2a20; --sub:#8a7362; --border:rgba(120,80,50,0.12); --card:rgba(255,250,245,0.7); --accent:#d97a4d; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1a1410; --fg:#f2e8de; --sub:#a8927f; --border:rgba(255,220,190,0.12); --card:rgba(40,32,26,0.6); --accent:#e8925f; } }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
-  body { margin:0; min-height:100vh; background:var(--bg); color:var(--fg); font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif; }
-  main { max-width: 640px; margin: 0 auto; padding: 56px 20px; text-align: center; }
-  img.icon { border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); }
-  .eyebrow { color: var(--sub); font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; margin: 24px 0 0; }
-  h1 { font-size: 44px; margin: 4px 0 8px; letter-spacing: -0.02em; }
-  p.tagline { color: var(--sub); font-size: 19px; margin: 0 0 36px; line-height: 1.5; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
 
-  .term-wrap { background: #1c1c1e; border-radius: 12px; padding: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); margin-bottom: 12px; }
-  .term-wrap .label { color: #8e8e93; font: 11px -apple-system, Helvetica, Arial, sans-serif; text-align: left; padding: 0 8px 8px; }
-  #screen_container { display: block; width: 100%; min-height: 200px; color: #d1d1d6; font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: left; padding: 4px; }
-  #screen_container canvas { width: 100%; image-rendering: pixelated; }
-  .boot-note { color: var(--sub); font-size: 12px; margin: 0 0 32px; }
-  .boot-note code { background: var(--card); padding: 1px 5px; border-radius: 4px; }
+  /* the OS screen fills most of the viewport, framed like a window rather
+     than a fullbleed black wall -- friendly, not hacker-terminal */
+  #stage-wrap { padding: 20px; height: 100vh; background: var(--bg); }
+  #stage { position: relative; width: 100%; height: 100%; background: #000; overflow: hidden; border-radius: 24px; box-shadow: 0 24px 64px rgba(217,122,77,0.18), 0 4px 16px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; }
+  #stage img.boot { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
 
-  .progress-card { background: var(--card); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 32px; }
-  .progress-card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sub); margin: 0 0 14px; font-weight: 600; }
+  /* logo + name, top-left, over the running kernel */
+  .brand { position: absolute; top: 18px; left: 18px; z-index: 5; display: flex; align-items: center; gap: 10px; }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; box-shadow: 0 2px 10px rgba(0,0,0,0.4); }
+  .brand span { color: #eee; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+
+  .hint { position: absolute; bottom: 18px; left: 18px; z-index: 5; color: #aaa; font-size: 12px; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+  .hint code { background: rgba(255,255,255,0.12); padding: 1px 5px; border-radius: 4px; color: #eee; }
+
+  .links { position: absolute; top: 18px; right: 18px; z-index: 5; }
+  .links a { color: #eee; text-decoration: none; background: rgba(255,255,255,0.1); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 14px; font-size: 13px; }
+  .links a:hover { background: rgba(255,255,255,0.18); }
+
+  .scroll-cue { position: absolute; bottom: 18px; right: 18px; z-index: 5; color: #aaa; font-size: 12px; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+  .replay { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 5; color: #eee; background: rgba(255,255,255,0.1); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; font: inherit; }
+  .replay:hover { background: rgba(255,255,255,0.18); }
+
+  /* everything else lives below the fold, scrolled to */
+  main { max-width: 640px; margin: 0 auto; padding: 64px 20px 56px; text-align: center; background: var(--bg); }
+  .eyebrow { color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; margin: 0; font-weight: 600; }
+  h1 { font-size: 36px; margin: 4px 0 8px; letter-spacing: -0.02em; }
+  p.tagline { color: var(--sub); font-size: 18px; margin: 0 0 40px; line-height: 1.5; }
+  p.note { color: var(--sub); font-size: 14px; margin: 0 0 40px; line-height: 1.6; }
+
+  .progress-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 32px; }
+  .progress-card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin: 0 0 14px; font-weight: 600; }
   .progress-card img { width: 100%; height: auto; border-radius: 8px; }
 
-  .steps { display:grid; grid-template-columns: repeat(3,1fr); gap: 16px; text-align:left; margin-bottom: 8px; }
-  .step { background: var(--card); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--border); border-radius: 16px; padding: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+  .steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; text-align: left; margin-bottom: 8px; }
+  .step { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
   .step .n { color: var(--sub); font-size: 12px; }
   .step p { margin: 6px 0 0; font-size: 14px; }
 
   @media (max-width: 520px) {
-    main { padding: 40px 20px; }
     .steps { grid-template-columns: 1fr; }
-    h1 { font-size: 34px; }
-    p.tagline { font-size: 16px; margin-bottom: 28px; }
+    h1 { font-size: 30px; }
+    p.tagline { font-size: 15px; margin-bottom: 32px; }
   }
 
-  .links { margin-top: 32px; }
-  .links a { color: var(--fg); text-decoration: none; background: var(--card); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--border); border-radius: 8px; padding: 10px 18px; display: inline-block; font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
-  .links a:hover { border-color: var(--sub); }
+  footer { text-align: center; padding: 24px; color: var(--sub); font-size: 13px; background: var(--bg); }
+  footer a { color: var(--fg); }
 </style>
 </head>
 <body>
-<main>
-  <img class="icon" src="icon.svg" width="56" height="56" alt="">
-  <p class="eyebrow">Joshua's kernel, built from nothing</p>
-  <h1>os</h1>
-  <p class="tagline">No macOS, no Linux underneath it. I'm writing this one myself,<br>piece by piece, toward my own file explorer and browser.</p>
 
-  <div class="term-wrap">
-    <div class="label">the actual kernel, booting live in your browser</div>
-    <div id="screen_container">booting...</div>
+<div id="stage-wrap">
+  <div id="stage">
+    <img class="boot" id="bootgif" src="boot.gif?r=1" alt="A real QEMU boot of this exact kernel.elf: booting, then help, mem, and uptime typed at the shell.">
+    <div class="brand"><img src="icon.svg" alt=""><span>os</span></div>
+    <div class="links"><a href="https://github.com/nulljosh/os">Source</a></div>
+    <div class="hint">A real boot of this exact <code>kernel.elf</code>, recorded in QEMU. Not staged.</div>
+    <button class="replay" onclick="document.getElementById('bootgif').src='boot.gif?r='+Date.now()">Replay</button>
   </div>
-  <p class="boot-note">Real emulation, not a recording. Click in and type <code>help</code>.</p>
+</div>
+
+<main>
+  <p class="eyebrow">Joshua's kernel, built from nothing</p>
+  <h1>What you just booted</h1>
+  <p class="tagline">No macOS, no Linux underneath it. I'm writing this one myself,<br>piece by piece, toward my own file explorer and browser.</p>
+  <p class="note">Yes, it's a command prompt today. That's honestly where it is — no graphics yet (v6), no conversation with it yet (v10). I'd rather show you the real thing than fake the future version.</p>
 
   <div class="progress-card">
     <h2>How far I've gotten</h2>
@@ -69,21 +89,11 @@
     <div class="step"><div class="n">How</div><p>One real piece at a time: interrupts, memory, a filesystem, graphics. No shortcuts, no borrowed kernel.</p></div>
     <div class="step"><div class="n">Where it's going</div><p>My own file explorer and browser, running on something I wrote myself.</p></div>
   </div>
-
-  <div class="links">
-    <a href="https://github.com/nulljosh/os">Source</a>
-  </div>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/v86@0.5.460/build/libv86.js"></script>
-<script>
-  var emulator = new V86({
-    wasm_path: "https://cdn.jsdelivr.net/npm/v86@0.5.460/build/v86.wasm",
-    screen_container: document.getElementById("screen_container"),
-    multiboot: { url: "kernel.elf" },
-    memory_size: 32 * 1024 * 1024,
-    vga_memory_size: 2 * 1024 * 1024,
-    autostart: true,
-  });
-</script>
+
+<footer>
+  <a href="https://github.com/nulljosh/os">github.com/nulljosh/os</a>
+</footer>
+
 </body>
 </html>

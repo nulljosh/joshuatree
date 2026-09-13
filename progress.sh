@@ -51,17 +51,25 @@ for i in "${!labels[@]}"; do
   dots+="<circle cx=\"$x\" cy=\"$y\" r=\"3\" fill=\"#111\"/>"
 done
 
+half=$((max / 2))
+
 svg="<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"$width\" height=\"$height\" viewBox=\"0 0 $width $height\">"
 svg+="<rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>"
+# y-axis gridlines + labels at 0, half, max
+svg+="<line x1=\"$pad_l\" y1=\"$pad_t\" x2=\"$((pad_l+plot_w))\" y2=\"$pad_t\" stroke=\"#eee\"/>"
+svg+="<text x=\"2\" y=\"$((pad_t+3))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"9\" fill=\"#999\">$max</text>"
+svg+="<line x1=\"$pad_l\" y1=\"$((pad_t+plot_h/2))\" x2=\"$((pad_l+plot_w))\" y2=\"$((pad_t+plot_h/2))\" stroke=\"#eee\"/>"
+svg+="<text x=\"2\" y=\"$((pad_t+plot_h/2+3))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"9\" fill=\"#999\">$half</text>"
 svg+="<line x1=\"$pad_l\" y1=\"$pad_t\" x2=\"$pad_l\" y2=\"$((pad_t+plot_h))\" stroke=\"#ddd\"/>"
 svg+="<line x1=\"$pad_l\" y1=\"$((pad_t+plot_h))\" x2=\"$((pad_l+plot_w))\" y2=\"$((pad_t+plot_h))\" stroke=\"#ddd\"/>"
+svg+="<text x=\"2\" y=\"$((pad_t+plot_h+3))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"9\" fill=\"#999\">0</text>"
 svg+="<polyline points=\"$points\" fill=\"none\" stroke=\"#111\" stroke-width=\"2\"/>"
 svg+="$dots"
 for i in "${!labels[@]}"; do
   x=$((pad_l + i * plot_w / (n - 1 > 0 ? n - 1 : 1)))
   svg+="<text x=\"$x\" y=\"$((pad_t+plot_h+16))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" fill=\"#666\" text-anchor=\"middle\">${labels[$i]}</text>"
 done
-svg+="<text x=\"$pad_l\" y=\"12\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"11\" fill=\"#666\">${cum[$((n-1))]} features shipped</text>"
+svg+="<text x=\"$pad_l\" y=\"$((height-4))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" fill=\"#666\">${cum[$((n-1))]} of $max features shipped</text>"
 svg+="</svg>"
 
 echo "$svg" > progress.svg
