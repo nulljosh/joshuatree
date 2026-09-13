@@ -25,4 +25,14 @@ int udp_send(unsigned int dest_ip, unsigned short dest_port, unsigned short src_
    ip_out (host-byte-order, same form as dest_ip elsewhere) on success, 0 on
    timeout or no A record in the answer. */
 int dns_resolve(const char *hostname, unsigned int dns_server_ip, unsigned int *ip_out);
+
+/* Opens one TCP connection to dest_ip:dest_port, sends request, reads the
+   response into response (up to response_maxlen bytes), and closes. One
+   connection at a time, no retransmission, no reassembly of out-of-order
+   segments, exactly enough for a single request/response like a raw HTTP
+   GET. Returns the number of response bytes read, or -1 on failure
+   (ARP/handshake timeout, request too large). */
+int tcp_get(unsigned int dest_ip, unsigned short dest_port,
+            const void *request, unsigned int request_len,
+            void *response, unsigned int response_maxlen);
 #endif

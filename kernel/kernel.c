@@ -304,14 +304,30 @@ static void run(char *line){
                 putc('\n');
             } else puts("timeout\n");
 
-            unsigned int resolved_ip;
+            unsigned int resolved_ip = 0;
+            int dns_ok = dns_resolve("example.com", 0x0A000203, &resolved_ip); /* SLIRP's built-in DNS proxy */
             puts("dns example.com: ");
-            if (dns_resolve("example.com", 0x0A000203, &resolved_ip)) { /* SLIRP's built-in DNS proxy */
+            if (dns_ok) {
                 putn((resolved_ip >> 24) & 0xFF); putc('.');
                 putn((resolved_ip >> 16) & 0xFF); putc('.');
                 putn((resolved_ip >> 8) & 0xFF); putc('.');
                 putn(resolved_ip & 0xFF); putc('\n');
             } else puts("timeout/no answer\n");
+
+            puts("tcp GET example.com: ");
+            if (!dns_ok) puts("skipped, no IP\n");
+            else {
+                static const char req[] = "GET / HTTP/1.0\r\nHost: example.com\r\nConnection: close\r\n\r\n";
+                static char resp[1400];
+                int n = tcp_get(resolved_ip, 80, req, sizeof(req) - 1, resp, sizeof(resp) - 1);
+                if (n < 0) puts("FAIL\n");
+                else {
+                    resp[n] = 0;
+                    putn((unsigned int)n); puts(" bytes, starts: ");
+                    for (int i = 0; i < 20 && resp[i] && resp[i] != '\r'; i++) putc(resp[i]);
+                    putc('\n');
+                }
+            }
         }
     }
     else if (!strcmp(line, "gfxtest")) {
