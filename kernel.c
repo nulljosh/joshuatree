@@ -11,6 +11,7 @@
 #include "exec.h"
 #include "libc.h"
 #include "pci.h"
+#include "vbe.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -210,7 +211,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -269,6 +270,22 @@ static void run(char *line){
         unsigned int bar0;
         if (pci_find_device(0x03, 0x00, &bar0)) { puts("VGA device found, BAR0="); puthex(bar0); putc('\n'); }
         else puts("no VGA device found\n");
+    }
+    else if (!strcmp(line, "gfxtest")) {
+        unsigned int fb;
+        if (!vbe_set_mode(800, 600, 32, &fb)) { puts("no VGA device found\n"); }
+        else if (!paging_map_region(fb, 800 * 600 * 4)) { puts("out of page tables\n"); vbe_disable(); }
+        else {
+            unsigned int *pixels = (unsigned int *)fb;
+            for (int y = 0; y < 600; y++) {
+                unsigned int color = (y < 200) ? 0x00C1502F : (y < 400) ? 0x007A2048 : 0x00FAF8F6;
+                for (int x = 0; x < 800; x++) pixels[y * 800 + x] = color;
+            }
+            get_key(); /* leave the picture up until a key is pressed */
+            vbe_disable();
+            clear();
+            puts("back in text mode\n");
+        }
     }
     else if (!strcmp(line, "time"))  show_time();
     else if (!strcmp(line, "reboot"))reboot();
