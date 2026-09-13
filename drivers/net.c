@@ -144,3 +144,84 @@ int udp_send(u32 dest_ip, u16 dest_port, u16 src_port, const void *data, u32 len
     if (frame_len < 60) frame_len = 60; /* Ethernet minimum */
     return rtl8139_send(frame, frame_len);
 }
+
+#define DNS_PORT     53
+#define DNS_SRC_PORT 53000
+
+/* Writes a DNS header + single question (QTYPE A, QCLASS IN) for hostname
+   into buf, returns the query's total length. */
+static u32 dns_build_query(u8 *buf, const char *hostname, u16 id) {
+    u16 *hdr = (u16 *)buf;
+    hdr[0] = htons(id);
+    hdr[1] = htons(0x0100); /* standard query, recursion desired */
+    hdr[2] = htons(1);      /* QDCOUNT */
+    hdr[3] = 0; hdr[4] = 0; hdr[5] = 0; /* ANCOUNT/NSCOUNT/ARCOUNT */
+
+    u8 *p = buf + 12;
+    const char *label = hostname;
+    while (*label) {
+        const char *dot = label;
+        while (*dot && *dot != '.') dot++;
+        u8 len = (u8)(dot - label);
+        *p++ = len;
+        for (u8 i = 0; i < len; i++) *p++ = (u8)label[i];
+        label = (*dot == '.') ? dot + 1 : dot;
+    }
+    *p++ = 0; /* root label */
+    *p++ = 0; *p++ = 1; /* QTYPE A */
+    *p++ = 0; *p++ = 1; /* QCLASS IN */
+    return (u32)(p - buf);
+}
+
+/* Advances past one DNS name occurrence (a real label sequence or a 2-byte
+   compression pointer), returns the position right after it. */
+static const u8 *dns_skip_name(const u8 *p) {
+    while (*p) {
+        if ((*p & 0xC0) == 0xC0) return p + 2;
+        p += *p + 1;
+    }
+    return p + 1;
+}
+
+int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
+    u8 query[256];
+    u32 qlen = dns_build_query(query, hostname, 0x1234);
+    if (!udp_send(dns_server_ip, DNS_PORT, DNS_SRC_PORT, query, qlen)) return 0;
+
+    u8 rx[1514];
+    for (int attempts = 0; attempts < 2000000; attempts++) {
+        u32 n = rtl8139_receive(rx, sizeof(rx));
+        if (n < sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct udp_header)) continue;
+
+        struct eth_header *eth = (struct eth_header *)rx;
+        if (eth->ethertype != htons(ETHERTYPE_IP)) continue;
+        struct ip_header *ip = (struct ip_header *)(rx + sizeof(*eth));
+        if (ip->protocol != 17) continue; /* UDP */
+        u32 ip_hlen = (u32)(ip->version_ihl & 0x0F) * 4;
+        struct udp_header *udp = (struct udp_header *)(rx + sizeof(*eth) + ip_hlen);
+        if (udp->src_port != htons(DNS_PORT) || udp->dst_port != htons(DNS_SRC_PORT)) continue;
+
+        const u8 *dns = rx + sizeof(*eth) + ip_hlen + sizeof(*udp);
+        u16 ancount = htons(*(u16 *)(dns + 6));
+        if (ancount == 0) return 0; /* NXDOMAIN or no A record, not a timeout */
+
+        const u8 *p = dns + 12;
+        p = dns_skip_name(p); /* question name */
+        p += 4; /* QTYPE + QCLASS */
+
+        for (u16 i = 0; i < ancount; i++) {
+            p = dns_skip_name(p);
+            u16 type = htons(*(u16 *)p); p += 2;
+            p += 2; /* class */
+            p += 4; /* ttl */
+            u16 rdlength = htons(*(u16 *)p); p += 2;
+            if (type == 1 && rdlength == 4) { /* A record */
+                *ip_out = ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | p[3];
+                return 1;
+            }
+            p += rdlength;
+        }
+        return 0; /* answers present but none were an A record */
+    }
+    return 0;
+}

@@ -303,6 +303,15 @@ static void run(char *line){
                 for (int i = 0; i < 6; i++) { puthex(gw_mac[i]); if (i < 5) putc(':'); }
                 putc('\n');
             } else puts("timeout\n");
+
+            unsigned int resolved_ip;
+            puts("dns example.com: ");
+            if (dns_resolve("example.com", 0x0A000203, &resolved_ip)) { /* SLIRP's built-in DNS proxy */
+                putn((resolved_ip >> 24) & 0xFF); putc('.');
+                putn((resolved_ip >> 16) & 0xFF); putc('.');
+                putn((resolved_ip >> 8) & 0xFF); putc('.');
+                putn(resolved_ip & 0xFF); putc('\n');
+            } else puts("timeout/no answer\n");
         }
     }
     else if (!strcmp(line, "gfxtest")) {

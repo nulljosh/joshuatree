@@ -18,4 +18,11 @@ int arp_resolve(unsigned int ip, unsigned char mac_out[6]);
    or the underlying send failed. */
 int udp_send(unsigned int dest_ip, unsigned short dest_port, unsigned short src_port,
              const void *data, unsigned int len);
+
+/* Resolves hostname to an IPv4 address via a single-question A-record query
+   to dns_server_ip (e.g. QEMU SLIRP's built-in resolver at 10.0.2.3), which
+   forwards to whatever the host machine actually uses. Returns 1 and fills
+   ip_out (host-byte-order, same form as dest_ip elsewhere) on success, 0 on
+   timeout or no A record in the answer. */
+int dns_resolve(const char *hostname, unsigned int dns_server_ip, unsigned int *ip_out);
 #endif
