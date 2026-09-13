@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Joshua Tree, a kernel from nothing</title>
-<meta name="description" content="A freestanding kernel built from scratch, toward its own file explorer and browser. No macOS, no Linux underneath.">
+<meta name="description" content="A freestanding kernel built from scratch, with its own GUI desktop, network stack, and voice-controlled LLM. No macOS, no Linux underneath.">
 <link rel="icon" href="icon.svg">
 <style>
   :root { color-scheme: light dark; --bg:#faf8f6; --fg:#1c1c1e; --sub:#75726e; --border:rgba(0,0,0,0.08); --card:rgba(255,255,255,0.7); --accent:#c1502f; --accent2:#7a2048; }
@@ -25,11 +25,11 @@
      doesn't apply once there's a margin anyway. */
   #stage-wrap { background: #000; }
   #stage { position: relative; width: 100%; height: 100vh; height: 100svh; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-  #stage img.boot { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+  #stage video.boot { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
 
   @media (min-width: 641px) {
     #stage-wrap { padding: 20px; background: var(--bg); display: flex; justify-content: center; }
-    #stage { max-width: 900px; aspect-ratio: 720 / 400; height: auto; max-height: 80vh; max-height: 80svh; border-radius: 24px; }
+    #stage { max-width: 900px; aspect-ratio: 800 / 632; height: auto; max-height: 80vh; max-height: 80svh; border-radius: 24px; }
   }
 
   /* logo + name, top-left, over the running kernel */
@@ -76,7 +76,8 @@
 
 <div id="stage-wrap">
   <div id="stage">
-    <img class="boot" id="bootgif" src="boot.gif?r=2" alt="A real QEMU boot of this exact kernel.elf: booting, then help, lspci, and mem typed at the shell, showing the current command set and real PCI/memory output.">
+    <video class="boot" id="bootdemo" src="demo.mp4?r=1" autoplay muted loop playsinline
+      aria-label="A real QEMU boot of this exact kernel.elf: help, mem, writing and reading back a real file on FAT16, then opening the real mouse-driven GUI desktop with working apps."></video>
     <div class="brand"><img src="icon.svg" alt=""><span>Joshua Tree</span></div>
     <div class="links"><a href="https://github.com/nulljosh/joshuatree">Source</a></div>
     <div class="hint">A real boot of this exact <code>kernel.elf</code>, recorded in QEMU. Not staged. Loops automatically.</div>
@@ -86,8 +87,8 @@
 <main>
   <p class="eyebrow">Joshua's kernel, built from nothing</p>
   <h1>What you just booted</h1>
-  <p class="tagline">No macOS, no Linux underneath it. Written from scratch,<br>with its own network stack, its own web server, and a real conversation with an LLM.</p>
-  <p class="note">It boots, manages its own memory, runs a filesystem it wrote the driver for, and talks over a real network stack built from raw Ethernet frames up: ARP, DNS, TCP, a browser-shaped HTTP client, its own tiny web server, and a shell command that holds a real conversation with an LLM. This is the real thing, not a mockup of where it's headed.</p>
+  <p class="tagline">No macOS, no Linux underneath it. Written from scratch,<br>with its own GUI desktop, its own network stack, and a real conversation with an LLM, by voice.</p>
+  <p class="note">It boots, manages its own memory, runs a filesystem it wrote the driver for and can now write real files to, and talks over a real network stack built from raw Ethernet frames up: ARP, DNS, TCP, a browser-shaped HTTP client, its own tiny web server. A real mouse-driven GUI desktop opens real apps from this same codebase. A shell command holds a real conversation with a local LLM, and a separate voice layer lets you speak a request and have that same LLM decide what to run. This is the real thing, not a mockup of where it's headed.</p>
   <p class="note">Named Joshua Tree, renamed from a plain "os". The tree survives the Mojave on almost nothing, built the same way this kernel is. Also a nod to the U2 album, and my own name.</p>
 
   <div class="progress-card">
@@ -98,7 +99,7 @@
   <div class="steps">
     <div class="step"><div class="n">Why</div><p>I already talk to Claude and get it to build things. I want an OS that does that natively, not bolted onto macOS.</p></div>
     <div class="step"><div class="n">How</div><p>One real piece at a time: interrupts, memory, a filesystem, graphics. No shortcuts, no borrowed kernel.</p></div>
-    <div class="step"><div class="n">Where it's going</div><p>Real graphics, a font renderer, and its own apps running natively, all on something I wrote myself.</p></div>
+    <div class="step"><div class="n">Where it's going</div><p>Real hardware, not just QEMU, and support for the rest of this codebase's own apps, not just the handful running today.</p></div>
   </div>
 </main>
 
