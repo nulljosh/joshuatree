@@ -43,7 +43,7 @@ Mechanical once v4's VFS exists, mostly shell commands and a UI loop.
 ## v6, graphics (text mode won't carry a browser), ETA: 2-3 sessions (~6-10h)
 VESA mode-setting and a font renderer are fiddly and hard to verify without eyes on a real screen (not just VGA-text memory dumps).
 - [ ] VESA/VBE linear framebuffer mode instead of VGA text
-- [ ] Software framebuffer primitives: pixel, rect, blit, a bitmap font renderer. Take typography seriously here, this is the first thing anyone actually looks at once VGA text mode is gone. A crude 8x8 font that technically renders isn't good enough. Aim for a clean, legible face at a real size, not just "characters exist on screen"
+- [ ] Software framebuffer primitives: pixel, rect, blit, a bitmap font renderer. Take typography seriously here, this is the first thing anyone actually looks at once VGA text mode is gone. A crude 8x8 font that technically renders isn't good enough, even monospace should be a genuinely nice-looking face at a real size. Support more than one embedded font and let the user pick, don't hardcode a single typeface as if it's the only option
 - [ ] Mouse: PS/2 mouse driver (IRQ12), cursor sprite
 - [ ] A minimal windowing surface, even one full-screen buffer counts for v6
 
