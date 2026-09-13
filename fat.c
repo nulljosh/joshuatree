@@ -4,6 +4,7 @@
    fixed volume starting at sector 0 (no MBR partition table yet). */
 #include "fat.h"
 #include "ata.h"
+#include "libc.h"
 
 typedef unsigned int   u32;
 typedef unsigned short u16;
@@ -80,8 +81,7 @@ static void to_fat_name(const char *in, u8 out[11]) {
 }
 
 static int names_eq(const u8 a[11], const u8 b[11]) {
-    for (int i = 0; i < 11; i++) if (a[i] != b[i]) return 0;
-    return 1;
+    return memcmp(a, b, 11) == 0;
 }
 
 static struct dir_entry *find_entry(const char *name) {

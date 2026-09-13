@@ -9,6 +9,7 @@
 #include "ata.h"
 #include "fat.h"
 #include "exec.h"
+#include "libc.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -195,10 +196,6 @@ static void browse(void){
 }
 
 /* ---- shell ---- */
-static int streq(const char *a, const char *b){
-    while (*a && *a == *b) { a++; b++; }
-    return *a == *b;
-}
 
 static void reboot(void){
     while (inb(0x64) & 2) {}
@@ -212,25 +209,25 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse\n");
-    else if (streq(line, "clear")) clear();
-    else if (streq(line, "echo"))  { puts(arg); putc('\n'); }
-    else if (streq(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
-    else if (streq(line, "pagefault")) { volatile int *p = (int *)0xDEAD0000; *p = 1; } /* manual check: exercises paging */
-    else if (streq(line, "heaptest")) {
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse\n");
+    else if (!strcmp(line, "clear")) clear();
+    else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
+    else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
+    else if (!strcmp(line, "pagefault")) { volatile int *p = (int *)0xDEAD0000; *p = 1; } /* manual check: exercises paging */
+    else if (!strcmp(line, "heaptest")) {
         char *a = kmalloc(16);
         char *b = kmalloc(32);
         if (a && b) { a[0] = 'A'; b[0] = 'B'; kfree(a); char *c = kmalloc(8);
             puts(c == (void*)a ? "reused freed block: ok\n" : "alloc ok, no reuse\n"); kfree(b); kfree(c); }
         else puts("kmalloc failed\n");
     }
-    else if (streq(line, "uptime")){ putn(ticks() / 100); puts("s\n"); }
-    else if (streq(line, "mem")) {
+    else if (!strcmp(line, "uptime")){ putn(ticks() / 100); puts("s\n"); }
+    else if (!strcmp(line, "mem")) {
         putn(pmm_free_frames() * 4); puts("K free / ");
         putn(pmm_total_frames() * 4); puts("K total (4K frames)\n");
     }
-    else if (streq(line, "sleep")) { puts("sleeping 1s...\n"); sleep_ticks(100); puts("awake\n"); }
-    else if (streq(line, "disktest")) {
+    else if (!strcmp(line, "sleep")) { puts("sleeping 1s...\n"); sleep_ticks(100); puts("awake\n"); }
+    else if (!strcmp(line, "disktest")) {
         char wbuf[512], rbuf[512];
         for (int i = 0; i < 512; i++) wbuf[i] = (char)i;
         if (!ata_write_sector(100, wbuf)) { puts("disk write failed (no drive?)\n"); }
@@ -241,16 +238,16 @@ static void run(char *line){
             puts(ok ? "wrote+read sector 100: ok\n" : "wrote+read sector 100: MISMATCH\n");
         }
     }
-    else if (streq(line, "tasktest")) {
+    else if (!strcmp(line, "tasktest")) {
         puts("\n");
         task_create(task_a);
         task_create(task_b);
         for (int i = 0; i < 10; i++) yield(); /* shell is task 0; let A/B interleave */
         puts("\ndone (expect ABABAB...)\n");
     }
-    else if (streq(line, "ls"))    fat_list(ls_cb);
-    else if (streq(line, "browse")) browse();
-    else if (streq(line, "cat")) {
+    else if (!strcmp(line, "ls"))    fat_list(ls_cb);
+    else if (!strcmp(line, "browse")) browse();
+    else if (!strcmp(line, "cat")) {
         if (!*arg) { puts("usage: cat <file>\n"); }
         else {
             char buf[4096];
@@ -259,16 +256,16 @@ static void run(char *line){
             else { buf[n] = 0; puts(buf); putc('\n'); }
         }
     }
-    else if (streq(line, "exec")) {
+    else if (!strcmp(line, "exec")) {
         if (!*arg) { puts("usage: exec <file> (runs in ring 0, no isolation -- see roadmap.md v3)\n"); }
         else if (!exec_flat(arg)) { puts(arg); puts(": exec failed (not found or too big)\n"); }
     }
-    else if (streq(line, "rm")) {
+    else if (!strcmp(line, "rm")) {
         if (!*arg) { puts("usage: rm <file>\n"); }
         else { puts(fat_delete(arg) ? "deleted\n" : "not found\n"); }
     }
-    else if (streq(line, "time"))  show_time();
-    else if (streq(line, "reboot"))reboot();
+    else if (!strcmp(line, "time"))  show_time();
+    else if (!strcmp(line, "reboot"))reboot();
     else { puts("? "); puts(line); putc('\n'); }
 }
 

@@ -33,12 +33,12 @@ Full breakdown of what shipped in each: `git log --oneline` or the commit histor
 - [ ] VFS layer so the shell's `open`/`read` don't care which fs backs them — lower priority now: FAT is the only filesystem that exists, so there's nothing to abstract over yet
 - [x] Load and exec a flat binary from disk (`exec.c`, `exec` shell command; runs in ring 0, no isolation — v3's ring-3 work is deferred, documented on the command itself). Verified end to end: a real flat binary assembled outside the kernel, placed on a real FAT image, loaded via `fat_read_file`, and actually executed (`exec:ok`, and its own VGA write appeared exactly where expected)
 
-## v5 — the "file explorer" (this is why the project exists) — ETA: 1 session (~2-3h)
+## v5 — the "file explorer" — done (Sep 2026)
 Mechanical once v4's VFS exists — mostly shell commands and a UI loop.
 - [x] `ls`/`cat` already exist (v4). `rm`: real delete, marks the directory entry `0xE5` and rewrites that sector (`fat.c`'s `fat_delete`, `rm` shell command). Verified against a real FAT image: file present → `rm` → gone from `ls`, unrelated files untouched
 - [ ] `cd`/`mkdir` need actual subdirectories, which don't exist yet — root-directory-only was v4's deliberate scope call (see `fat.c`'s header comment). Adding real subdirectory traversal is its own small chunk of work, not a one-liner alongside `rm`
 - [x] Text-mode file browser: arrow keys, Enter to view, Esc/q to quit (`browse` shell command, `get_key()` handles extended scancodes for arrows). Data-collection path verified against a real FAT image with real files (correct names/sizes); the interactive navigation itself can't be confirmed through the QEMU `sendkey` harness (same known limitation as Enter elsewhere), so it rests on the verified collection logic plus already-proven `puts`/`putn` rendering
-- [ ] Basic libc subset: `malloc`, `memcpy`, `strcmp`, etc. for anything above the kernel
+- [x] Basic libc subset: `memcpy`/`memset`/`memcmp`/`strlen`/`strcmp` (`libc.c`) — not speculative, actually replaced real duplicate loops (`kernel.c`'s 19 `streq` call sites, `fat.c`'s `names_eq`)
 
 ## v6 — graphics (text mode won't carry a browser) — ETA: 2-3 sessions (~6-10h)
 VESA mode-setting and a font renderer are fiddly and hard to verify without eyes on a real screen (not just VGA-text memory dumps).
