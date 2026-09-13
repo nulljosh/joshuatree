@@ -1,0 +1,60 @@
+# Architecture
+
+What each file does and how boot actually proceeds. `roadmap.md` is the plan;
+this is the map of what exists right now.
+
+## Boot sequence
+
+1. `boot.S` — multiboot1 header, sets up a stack, pushes the multiboot info
+   pointer GRUB/QEMU leaves in `%ebx`, calls `kmain`.
+2. `kmain` (`kernel.c`) brings subsystems up in dependency order:
+   `gdt_install` → `idt_install` → `irq_install` → `pmm_init` →
+   `paging_install` → `tasks_init` → `fat_mount` → the shell loop.
+
+## Subsystems
+
+| File | What it owns |
+|---|---|
+| `gdt.c` | Flat GDT: one ring-0 code segment, one ring-0 data segment, both spanning 4GB |
+| `idt.c` + `isr.S` | IDT and the 32 CPU-exception handlers. An exception prints and halts — no recovery |
+| `pic.c` | Remaps the 8259 PIC so IRQs land on vectors 32-47 instead of overlapping CPU exceptions |
+| `irq.c` + `irq_stubs.S` | IRQ0 (PIT tick counter) and IRQ1 (keyboard ring buffer) |
+| `pmm.c` | Physical memory: a bitmap over `mem_upper` from the multiboot info struct |
+| `paging.c` | Identity-maps the first 4MB and turns paging on |
+| `kheap.c` | `kmalloc`/`kfree`, a first-fit free list grown a frame at a time from `pmm.c` |
+| `task.c` + `task_switch.S` | Cooperative round-robin: `yield()` swaps stacks. No preemption yet |
+| `ata.c` | ATA PIO disk driver, LBA28, primary master only |
+| `fat.c` | Read-only FAT16, root directory only, 8.3 names |
+| `exec.c` | Loads a flat binary via `fat.c` and calls into it — ring 0, no isolation |
+| `kernel.c` | VGA text console, PS/2 scancode table, RTC clock, the shell |
+
+## Why things are ordered this way
+
+Each subsystem depends on the ones above it: paging needs `pmm.c`'s frames,
+the heap needs paging to be sane, tasks need the heap for their stacks, `fat.c`
+needs `ata.c`'s sectors, `exec.c` needs `fat.c`'s files. Bringing them up
+out of order is the fastest way to a silent, hard-to-diagnose bug.
+
+## What's deliberately not here yet
+
+Two pieces were scoped out on purpose rather than rushed — see `roadmap.md`
+for the full reasoning:
+
+- **Higher-half kernel** (v2): needs a boot-time page directory split between
+  physical and virtual addresses before `kmain` can even run. Every
+  physical-address computation in `paging.c`/`pmm.c` currently assumes
+  virtual == physical.
+- **Ring-3 user mode** (v3): needs a TSS, new GDT entries, and page tables
+  switched from supervisor-only to user-accessible. A subtle bug here can
+  leave "user" code silently running with kernel privileges — the kind of
+  bug `check.sh`'s boot-banner check can't catch, only a crash can.
+
+## Verification
+
+`check.sh` is the only automated check: it boots the kernel in QEMU and
+asserts the startup banner reached VGA memory. That catches "does it boot
+at all." Everything beyond that — does paging actually work, does the disk
+driver actually read what it wrote, does the context switch actually swap
+stacks correctly — gets verified manually per change (see commit messages
+and `roadmap.md`'s per-item notes) against real QEMU-attached disks and
+boot-time output, not just "it compiled."
