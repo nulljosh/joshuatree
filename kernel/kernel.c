@@ -461,22 +461,38 @@ static void reboot(void){
    so "rounded" and "shadow" are both done by painting flat colors, corner
    pixels outside a quarter-circle get overwritten with whatever's behind
    them, not blended. ---- */
-#define GUI_ICON_COUNT 4
+#define GUI_ICON_COUNT 7
+#define GUI_COLS     4
 #define GUI_CARD_W   150
 #define GUI_CARD_H   140
 #define GUI_CARD_GAP 30
-#define GUI_CARD_Y   200
+#define GUI_ROW_GAP  30
+#define GUI_CARD_Y   180
 #define GUI_CORNER_R 14
 #define GUI_GLYPH_SIZE 56
 #define GUI_BG       0x00FAF8F6
 #define GUI_MENUBAR_H 30
-static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files"};
-static const char  GUI_GLYPHS[GUI_ICON_COUNT] = {'W', 'C', '@', 'F'};
-static const unsigned int GUI_COLORS[GUI_ICON_COUNT] = {0x00C1502F, 0x007A2048, 0x00365E8C, 0x00707070};
+static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes"};
+static const char  GUI_GLYPHS[GUI_ICON_COUNT] = {'W', 'C', '@', 'F', 'K', 'B', 'Q'};
+static const unsigned int GUI_COLORS[GUI_ICON_COUNT] = {
+    0x00C1502F, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C
+};
 
-static int gui_dock_x0(void){
-    int total = GUI_ICON_COUNT * GUI_CARD_W + (GUI_ICON_COUNT - 1) * GUI_CARD_GAP;
+/* Each row is centered on its own item count, so a partial last row
+   (3 icons here, not a full 4) still looks deliberate, not left-aligned
+   leftovers. */
+static int gui_row_x0(int row){
+    int start = row * GUI_COLS;
+    int count = GUI_ICON_COUNT - start;
+    if (count > GUI_COLS) count = GUI_COLS;
+    int total = count * GUI_CARD_W + (count - 1) * GUI_CARD_GAP;
     return ((int)window_width() - total) / 2;
+}
+
+static void gui_icon_pos(int i, int *x, int *y){
+    int row = i / GUI_COLS, col = i % GUI_COLS;
+    *x = gui_row_x0(row) + col * (GUI_CARD_W + GUI_CARD_GAP);
+    *y = GUI_CARD_Y + row * (GUI_CARD_H + GUI_ROW_GAP);
 }
 
 /* Paints a rect, then overwrites each corner's pixels outside a quarter
@@ -511,19 +527,19 @@ static void gui_draw_menubar(void){
 static void gui_draw_desktop(int hover){
     window_clear(GUI_BG);
     gui_draw_menubar();
-    font_draw_string("click an app  --  esc to quit", gui_dock_x0(), 150, 0x0075726E, -1);
+    font_draw_string("click an app  --  esc to quit", gui_row_x0(0), 150, 0x0075726E, -1);
 
-    int x0 = gui_dock_x0();
     for (int i = 0; i < GUI_ICON_COUNT; i++) {
-        int x = x0 + i * (GUI_CARD_W + GUI_CARD_GAP);
+        int x, y;
+        gui_icon_pos(i, &x, &y);
         int lift = (i == hover) ? 4 : 0; /* hovered card "lifts": bigger shadow gap, icon shifts up */
 
         /* drop shadow first, offset down-right, then the card on top */
-        gui_rounded_rect(x + 4, GUI_CARD_Y + 5 - lift, GUI_CARD_W, GUI_CARD_H, 0x00E3DFD8, GUI_BG, GUI_CORNER_R);
-        gui_rounded_rect(x, GUI_CARD_Y - lift, GUI_CARD_W, GUI_CARD_H, 0x00FFFFFF, GUI_BG, GUI_CORNER_R);
+        gui_rounded_rect(x + 4, y + 5 - lift, GUI_CARD_W, GUI_CARD_H, 0x00E3DFD8, GUI_BG, GUI_CORNER_R);
+        gui_rounded_rect(x, y - lift, GUI_CARD_W, GUI_CARD_H, 0x00FFFFFF, GUI_BG, GUI_CORNER_R);
 
         int icon_x = x + (GUI_CARD_W - GUI_GLYPH_SIZE) / 2;
-        int icon_y = GUI_CARD_Y - lift + 18;
+        int icon_y = y - lift + 18;
         gui_rounded_rect(icon_x, icon_y, GUI_GLYPH_SIZE, GUI_GLYPH_SIZE, GUI_COLORS[i], 0x00FFFFFF, 12);
         font_draw_char((unsigned char)GUI_GLYPHS[i], icon_x + GUI_GLYPH_SIZE / 2 - 4, icon_y + GUI_GLYPH_SIZE / 2 - 8, 0x00FFFFFF, -1);
 
@@ -533,11 +549,10 @@ static void gui_draw_desktop(int hover){
 }
 
 static int gui_hit_test(int mx, int my){
-    if (my < GUI_CARD_Y - 4 || my >= GUI_CARD_Y + GUI_CARD_H) return -1;
-    int x0 = gui_dock_x0();
     for (int i = 0; i < GUI_ICON_COUNT; i++) {
-        int x = x0 + i * (GUI_CARD_W + GUI_CARD_GAP);
-        if (mx >= x && mx < x + GUI_CARD_W) return i;
+        int x, y;
+        gui_icon_pos(i, &x, &y);
+        if (my >= y - 4 && my < y + GUI_CARD_H && mx >= x && mx < x + GUI_CARD_W) return i;
     }
     return -1;
 }
@@ -562,7 +577,7 @@ static void gui_launch_html(const char *label, const unsigned char *data, unsign
        gen_app.sh, not null-terminated C strings; html_to_text expects one,
        so copy with an explicit terminator rather than let it scan past the
        real buffer into whatever memory follows. */
-    static char html[16384]; /* comfortably covers both embedded apps (curbfind is the larger at 14318 bytes) */
+    static char html[20480]; /* comfortably covers every embedded app (quotestreak is the largest at 18947 bytes) */
     unsigned int copy_len = data_len < sizeof(html) - 1 ? data_len : sizeof(html) - 1;
     for (unsigned int i = 0; i < copy_len; i++) html[i] = (char)data[i];
     html[copy_len] = 0;
@@ -670,6 +685,9 @@ static void gui_run(void){
             else if (new_hover == 1) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
             else if (new_hover == 2) gui_launch_chat();
             else if (new_hover == 3) gui_launch_files();
+            else if (new_hover == 4) gui_launch_html("Keyrate", app_keyrate_html, app_keyrate_len);
+            else if (new_hover == 5) gui_launch_html("Bookrank", app_bookrank_html, app_bookrank_len);
+            else if (new_hover == 6) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
             hover = -1;
         }
         else hover = new_hover;
