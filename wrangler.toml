@@ -1,11 +1,11 @@
-name = "os"
+name = "joshuatree"
 compatibility_date = "2025-01-01"
 
 [assets]
 directory = "landing"
 
 [[routes]]
-pattern = "os.heyitsmejosh.com"
+pattern = "joshuatree.heyitsmejosh.com"
 custom_domain = true
 
 [observability]

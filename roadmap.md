@@ -1,4 +1,4 @@
-# os roadmap
+# Joshua Tree roadmap
 
 Freestanding i386 kernel, no libc. v0 boots in QEMU with VGA text, PS/2
 keyboard, RTC clock, and a shell that only knows `help clear echo time

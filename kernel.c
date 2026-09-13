@@ -200,7 +200,7 @@ void kmain(unsigned int multiboot_info_addr){
     tasks_init();
     int fs_ok = fat_mount();
     clear();
-    puts("os v0 -- type help\n");
+    puts("joshuatree v0 -- type help\n");
     if (!fs_ok) puts("(no FAT filesystem found -- ls/cat unavailable)\n");
     char line[80];
     for (;;) {

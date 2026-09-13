@@ -1,13 +1,18 @@
 <img src="icon.svg" width="80">
 
-# os
+# Joshua Tree
 
 ![version](https://img.shields.io/badge/version-v4-blue)
-![license](https://img.shields.io/badge/license-MIT-green) [![GitHub](https://img.shields.io/badge/GitHub-nulljosh%2Fos-black?logo=github)](https://github.com/nulljosh/os)
+![license](https://img.shields.io/badge/license-MIT-green) [![GitHub](https://img.shields.io/badge/GitHub-nulljosh%2Fjoshuatree-black?logo=github)](https://github.com/nulljosh/joshuatree)
 
 A kernel. A small one, from nothing. It boots in QEMU, reads a real
 filesystem off a real disk, and runs code loaded from it. Full breakdown:
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+Renamed from `os` (Sep 2026). Same tree that's survived the Mojave desert
+for centuries on almost nothing — a fitting name for something built the
+same way, piece by piece, with nothing borrowed underneath. Also a small
+nod to U2's album of the same name, and yes, my own name too.
 
 | Piece | Where |
 |-------|-------|

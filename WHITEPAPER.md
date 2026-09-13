@@ -1,4 +1,4 @@
-# os Technical Whitepaper
+# Joshua Tree Technical Whitepaper
 
 **v4** | September 2026
 
