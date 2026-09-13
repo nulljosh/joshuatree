@@ -41,3 +41,9 @@ dependencies beyond clang, ld.lld and qemu.
   cold black-and-blue. The real VGA boot output is genuinely black-on-gray
   text (can't be restyled, it's the actual kernel's real output), everything
   *around* it (frame, accent color, copy) should stay warm.
+- "Joshua Tree" is the kernel name, unchanging. "Leopard Gecko" is reserved
+  for the eventual full-OS/distro name once this becomes a usable graphical
+  system (v6+), the same relationship as Linux the kernel vs Ubuntu the
+  distro. Not to be confused with gato (`~/Documents/Code/gato`), a
+  completely separate macOS voice app whose product name reverted to plain
+  "Gato" after briefly borrowing "Leopard Gecko" (Sep 2026).
