@@ -35,4 +35,11 @@ int dns_resolve(const char *hostname, unsigned int dns_server_ip, unsigned int *
 int tcp_get(unsigned int dest_ip, unsigned short dest_port,
             const void *request, unsigned int request_len,
             void *response, unsigned int response_maxlen);
+
+/* Passive open: waits for one inbound connection on port, discards
+   whatever request it sends (there's only one thing being served),
+   sends response, and closes. One connection, one page, response_len
+   must fit in a single segment (<=536 bytes). Returns 1 on success, 0 on
+   timeout or a request that never arrived. */
+int tcp_serve_once(unsigned short port, const void *response, unsigned int response_len);
 #endif

@@ -24,8 +24,16 @@ static u32 our_ip = 0;
    still lost the race against a poll budget that had been tuned against an
    earlier ~14ms reply. Generous and iteration-based since there's no timer
    wired into this driver, not calibrated to a real duration. */
-#define LAN_TIMEOUT_ITERS 2000000
-#define WAN_TIMEOUT_ITERS 50000000
+#define LAN_TIMEOUT_ITERS  2000000
+#define WAN_TIMEOUT_ITERS  50000000
+/* A server's "wait for a connection" isn't bounded by a network round trip
+   at all, it's bounded by how long a human takes to open a connection.
+   Found by testing tcp_serve_once against a real curl: 50,000,000 empty
+   iterations burns through in only ~3 real seconds here, so the server had
+   already given up and returned to the shell before a curl fired a few
+   seconds later ever got a chance. An order of magnitude bigger buys
+   roughly a minute of real wait instead of a few seconds. */
+#define SERVE_TIMEOUT_ITERS 1000000000
 
 struct eth_header {
     u8  dest[6];
@@ -110,6 +118,40 @@ int arp_resolve(u32 ip, u8 mac_out[6]) {
         return 1;
     }
     return 0;
+}
+
+/* arp_resolve only ever asks; nothing answered when something else asked
+   "who has our_ip", which is exactly what a gateway does before it can
+   deliver an inbound connection to us. Found this by testing tcp_serve_once
+   against a real curl from the host through QEMU's hostfwd: the request
+   never arrived, and pcap showed the gateway repeating "who-has 10.0.2.15"
+   forever, we just never replied. Called from the server-side receive
+   loops, not the client-side ones, since only a server needs to be findable
+   by someone else first. */
+static void arp_maybe_reply(const u8 *rx, u32 n) {
+    if (n < sizeof(struct eth_header) + sizeof(struct arp_packet)) return;
+    const struct eth_header *eth = (const struct eth_header *)rx;
+    if (eth->ethertype != htons(ETHERTYPE_ARP)) return;
+    const struct arp_packet *req = (const struct arp_packet *)(rx + sizeof(*eth));
+    if (req->oper != htons(1)) return;              /* not a request */
+    if (req->target_ip != htonl(our_ip)) return;     /* not asking about us */
+
+    u8 frame[60] = {0};
+    struct eth_header *reth = (struct eth_header *)frame;
+    struct arp_packet *reply = (struct arp_packet *)(frame + sizeof(*reth));
+
+    for (int i = 0; i < 6; i++) { reth->dest[i] = req->sender_mac[i]; reth->src[i] = our_mac[i]; }
+    reth->ethertype = htons(ETHERTYPE_ARP);
+
+    reply->htype = htons(1);
+    reply->ptype = htons(0x0800);
+    reply->hlen = 6; reply->plen = 4;
+    reply->oper = htons(2); /* reply */
+    for (int i = 0; i < 6; i++) { reply->sender_mac[i] = our_mac[i]; reply->target_mac[i] = req->sender_mac[i]; }
+    reply->sender_ip = htonl(our_ip);
+    reply->target_ip = req->sender_ip;
+
+    rtl8139_send(frame, sizeof(frame));
 }
 
 /* ARP only ever answers for a host on the same physical link. A real
@@ -421,4 +463,70 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
     tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, their_seq, TCP_FIN | TCP_ACK, 0, 0);
 
     return (int)total;
+}
+
+/* ---- TCP server side: one connection at a time, passive open. Waits for
+   a SYN on port, handshakes, discards whatever request comes in (there's
+   only one thing to serve), sends response, closes. The client's MAC
+   comes straight off the SYN frame's own Ethernet header, no ARP needed,
+   this kernel already has the one piece of information ARP exists to
+   provide. ---- */
+int tcp_serve_once(u16 port, const void *response, u32 response_len) {
+    u8 rx[1514];
+    u32 client_ip = 0;
+    u16 client_port = 0;
+    u8 client_mac[6];
+    u32 their_seq = 0;
+
+    int got_syn = 0;
+    for (int attempts = 0; attempts < SERVE_TIMEOUT_ITERS && !got_syn; attempts++) {
+        u32 n = rtl8139_receive(rx, sizeof(rx));
+        if (n == 0) continue;
+        arp_maybe_reply(rx, n); /* the gateway can't deliver anything to us until it knows our MAC */
+        if (n < sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct tcp_header)) continue;
+
+        struct eth_header *eth = (struct eth_header *)rx;
+        if (eth->ethertype != htons(ETHERTYPE_IP)) continue;
+        struct ip_header *ip = (struct ip_header *)(rx + sizeof(*eth));
+        if (ip->protocol != 6) continue;
+        u32 ip_hlen = (u32)(ip->version_ihl & 0x0F) * 4;
+        struct tcp_header *tcp = (struct tcp_header *)((u8 *)ip + ip_hlen);
+        if (tcp->dst_port != htons(port)) continue;
+        if ((tcp->flags & (TCP_SYN | TCP_ACK)) != TCP_SYN) continue; /* a pure SYN opens a new connection */
+
+        for (int i = 0; i < 6; i++) client_mac[i] = eth->src[i];
+        client_ip = htonl(ip->src_ip);
+        client_port = htons(tcp->src_port);
+        their_seq = htonl(tcp->seq) + 1;
+        got_syn = 1;
+    }
+    if (!got_syn) return 0;
+
+    u16 local_port = port;
+    u32 our_seq = 0x2000; /* toy ISN, same reasoning as tcp_get's */
+
+    tcp_send_segment(client_ip, client_mac, local_port, client_port, our_seq, their_seq, TCP_SYN | TCP_ACK, 0, 0);
+    our_seq++;
+
+    struct tcp_header *tcp;
+    u8 *payload;
+    u32 paylen;
+    int got_request = 0;
+    for (int attempts = 0; attempts < WAN_TIMEOUT_ITERS && !got_request; attempts++) {
+        u32 n = rtl8139_receive(rx, sizeof(rx));
+        if (n == 0) continue;
+        arp_maybe_reply(rx, n);
+        if (!tcp_match(client_ip, local_port, client_port, rx, n, &tcp, &payload, &paylen)) continue;
+        if (htonl(tcp->seq) != their_seq) continue;
+        if (paylen > 0) { their_seq += paylen; got_request = 1; } /* don't care what it says, only one page to serve */
+    }
+    if (!got_request) return 0;
+
+    tcp_send_segment(client_ip, client_mac, local_port, client_port, our_seq, their_seq, TCP_ACK, 0, 0);
+    tcp_send_segment(client_ip, client_mac, local_port, client_port, our_seq, their_seq, TCP_PSH | TCP_ACK, response, response_len);
+    our_seq += response_len;
+    tcp_send_segment(client_ip, client_mac, local_port, client_port, our_seq, their_seq, TCP_FIN | TCP_ACK, 0, 0);
+    our_seq++;
+
+    return 1;
 }

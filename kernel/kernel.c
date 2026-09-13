@@ -217,7 +217,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest mousetest nettest web\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest mousetest nettest web serve\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -353,6 +353,17 @@ static void run(char *line){
                 puts(text);
                 putc('\n');
             }
+        }
+    }
+    else if (!strcmp(line, "serve")) {
+        if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        else {
+            net_init(0x0A00020F);
+            static const char page[] =
+                "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n"
+                "<html><body><h1>Joshua Tree</h1><p>served from a kernel with no OS underneath it.</p></body></html>";
+            puts("waiting for a connection on :8080...\n");
+            puts(tcp_serve_once(8080, page, sizeof(page) - 1) ? "served:ok\n" : "timeout, nobody connected\n");
         }
     }
     else if (!strcmp(line, "gfxtest")) {
