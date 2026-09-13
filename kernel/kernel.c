@@ -455,44 +455,63 @@ static void reboot(void){
    listing of whatever's actually on the FAT filesystem.
 
    Styled after the one visual language every viewer already knows a real
-   desktop by, without pretending to be one: a menu bar, a real clock (the
-   same CMOS read `time` uses), a centered dock of cards with rounded
-   corners and a soft drop shadow. No alpha blending in this framebuffer,
-   so "rounded" and "shadow" are both done by painting flat colors, corner
-   pixels outside a quarter-circle get overwritten with whatever's behind
-   them, not blended. ---- */
+   desktop by, without pretending to be one: a menu bar with a real clock
+   (the same CMOS read `time` uses), and a real Dock, a bottom tray of
+   icons, unlabeled until hovered (the label then floats above it, exactly
+   like the real thing), the hovered icon magnified and lifted. No alpha
+   blending in this framebuffer, so "rounded" and "shadow" are both done by
+   painting flat colors, corner pixels outside a quarter-circle get
+   overwritten with whatever's behind them, not blended. ---- */
 #define GUI_ICON_COUNT 7
-#define GUI_COLS     4
-#define GUI_CARD_W   150
-#define GUI_CARD_H   140
-#define GUI_CARD_GAP 30
-#define GUI_ROW_GAP  30
-#define GUI_CARD_Y   180
-#define GUI_CORNER_R 14
-#define GUI_GLYPH_SIZE 56
-#define GUI_BG       0x00FAF8F6
-#define GUI_MENUBAR_H 30
 static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes"};
 static const char  GUI_GLYPHS[GUI_ICON_COUNT] = {'W', 'C', '@', 'F', 'K', 'B', 'Q'};
 static const unsigned int GUI_COLORS[GUI_ICON_COUNT] = {
     0x00C1502F, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C
 };
 
-/* Each row is centered on its own item count, so a partial last row
-   (3 icons here, not a full 4) still looks deliberate, not left-aligned
-   leftovers. */
-static int gui_row_x0(int row){
-    int start = row * GUI_COLS;
-    int count = GUI_ICON_COUNT - start;
-    if (count > GUI_COLS) count = GUI_COLS;
-    int total = count * GUI_CARD_W + (count - 1) * GUI_CARD_GAP;
-    return ((int)window_width() - total) / 2;
+/* gui_order is a permutation of icon indices by dock slot: dragging an icon
+   and dropping it on another slot swaps the two, so the arrangement is
+   real and sticks for the rest of this GUI session (reset to launch order
+   next time `gui` runs; nothing about layout is saved to disk, matching
+   this whole desktop's one-screen, nothing-persisted scope). */
+static int gui_order[GUI_ICON_COUNT];
+static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = i; }
+
+#define GUI_BG          0x00FAF8F6
+#define GUI_MENUBAR_H   30
+#define DOCK_ICON       56
+#define DOCK_GAP        16
+#define DOCK_PAD        12
+#define DOCK_MARGIN_BOT 24
+#define DOCK_MAGNIFY    12
+#define DOCK_LIFT       10
+
+static int gui_dock_w(void){ return GUI_ICON_COUNT * DOCK_ICON + (GUI_ICON_COUNT - 1) * DOCK_GAP + 2 * DOCK_PAD; }
+static int gui_dock_x0(void){ return ((int)window_width() - gui_dock_w()) / 2; }
+static int gui_dock_y0(void){ return (int)window_height() - DOCK_ICON - 2 * DOCK_PAD - DOCK_MARGIN_BOT; }
+static int gui_slot_x(int slot){ return gui_dock_x0() + DOCK_PAD + slot * (DOCK_ICON + DOCK_GAP); }
+
+/* Which dock slot a point falls in, clamped to the nearest end rather than
+   returning "none": once a drag has started, the icon should track the
+   cursor even past the dock's own edge, the same way a real dock does. */
+static int gui_slot_at(int mx){
+    int rel = mx - (gui_dock_x0() + DOCK_PAD) - DOCK_ICON / 2;
+    int slot = rel / (DOCK_ICON + DOCK_GAP);
+    if (rel < 0) slot = 0;
+    if (slot < 0) slot = 0;
+    if (slot >= GUI_ICON_COUNT) slot = GUI_ICON_COUNT - 1;
+    return slot;
 }
 
-static void gui_icon_pos(int i, int *x, int *y){
-    int row = i / GUI_COLS, col = i % GUI_COLS;
-    *x = gui_row_x0(row) + col * (GUI_CARD_W + GUI_CARD_GAP);
-    *y = GUI_CARD_Y + row * (GUI_CARD_H + GUI_ROW_GAP);
+/* Only counts as being "over the dock" within its actual drawn rect,
+   unlike gui_slot_at (used once a drag is already underway, where the
+   dragged icon should keep tracking the cursor even briefly outside it). */
+static int gui_dock_hit_test(int mx, int my){
+    int y0 = gui_dock_y0(), h = DOCK_ICON + 2 * DOCK_PAD;
+    if (my < y0 - DOCK_MAGNIFY - 20 || my >= y0 + h) return -1;
+    int x0 = gui_dock_x0(), w = gui_dock_w();
+    if (mx < x0 || mx >= x0 + w) return -1;
+    return gui_slot_at(mx);
 }
 
 /* Paints a rect, then overwrites each corner's pixels outside a quarter
@@ -524,37 +543,40 @@ static void gui_draw_menubar(void){
     font_draw_string(clock, (int)window_width() - 60, 7, 0x001C1C1E, -1);
 }
 
-static void gui_draw_desktop(int hover){
-    window_clear(GUI_BG);
-    gui_draw_menubar();
-    font_draw_string("click an app  --  esc to quit", gui_row_x0(0), 150, 0x0075726E, -1);
-
-    for (int i = 0; i < GUI_ICON_COUNT; i++) {
-        int x, y;
-        gui_icon_pos(i, &x, &y);
-        int lift = (i == hover) ? 4 : 0; /* hovered card "lifts": bigger shadow gap, icon shifts up */
-
-        /* drop shadow first, offset down-right, then the card on top */
-        gui_rounded_rect(x + 4, y + 5 - lift, GUI_CARD_W, GUI_CARD_H, 0x00E3DFD8, GUI_BG, GUI_CORNER_R);
-        gui_rounded_rect(x, y - lift, GUI_CARD_W, GUI_CARD_H, 0x00FFFFFF, GUI_BG, GUI_CORNER_R);
-
-        int icon_x = x + (GUI_CARD_W - GUI_GLYPH_SIZE) / 2;
-        int icon_y = y - lift + 18;
-        gui_rounded_rect(icon_x, icon_y, GUI_GLYPH_SIZE, GUI_GLYPH_SIZE, GUI_COLORS[i], 0x00FFFFFF, 12);
-        font_draw_char((unsigned char)GUI_GLYPHS[i], icon_x + GUI_GLYPH_SIZE / 2 - 4, icon_y + GUI_GLYPH_SIZE / 2 - 8, 0x00FFFFFF, -1);
-
-        int label_w = (int)strlen(GUI_LABELS[i]) * 8;
-        font_draw_string(GUI_LABELS[i], x + (GUI_CARD_W - label_w) / 2, icon_y + GUI_GLYPH_SIZE + 14, 0x001C1C1E, -1);
-    }
+static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
+    int x = cx_center - size / 2, y = cy_bottom - size;
+    gui_rounded_rect(x, y, size, size, GUI_COLORS[icon], GUI_BG, 12);
+    font_draw_char((unsigned char)GUI_GLYPHS[icon], x + size / 2 - 4, y + size / 2 - 8, 0x00FFFFFF, -1);
 }
 
-static int gui_hit_test(int mx, int my){
-    for (int i = 0; i < GUI_ICON_COUNT; i++) {
-        int x, y;
-        gui_icon_pos(i, &x, &y);
-        if (my >= y - 4 && my < y + GUI_CARD_H && mx >= x && mx < x + GUI_CARD_W) return i;
+/* hover_slot: which slot shows the magnify+label (-1 none). drag_slot: the
+   slot currently being dragged, drawn separately so it can float free of
+   the row under the cursor instead of at its slot position. */
+static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
+    window_clear(GUI_BG);
+    gui_draw_menubar();
+    font_draw_string("drag to rearrange -- click to open -- esc to quit", gui_dock_x0(), gui_dock_y0() - 44, 0x0075726E, -1);
+
+    int y0 = gui_dock_y0();
+    gui_rounded_rect(gui_dock_x0(), y0, gui_dock_w(), DOCK_ICON + 2 * DOCK_PAD, 0x00EFEBE4, GUI_BG, 20);
+
+    for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
+        if (slot == drag_slot) continue; /* drawn last, floating at the cursor */
+        int icon = gui_order[slot];
+        int magnified = (slot == hover_slot);
+        int size = magnified ? DOCK_ICON + DOCK_MAGNIFY : DOCK_ICON;
+        int cx_center = gui_slot_x(slot) + DOCK_ICON / 2;
+        int cy_bottom = y0 + DOCK_PAD + DOCK_ICON - (magnified ? DOCK_LIFT : 0);
+        gui_draw_one_icon(icon, cx_center, cy_bottom, size);
+        if (magnified) {
+            int label_w = (int)strlen(GUI_LABELS[icon]) * 8;
+            font_draw_string(GUI_LABELS[icon], cx_center - label_w / 2, cy_bottom - size - 18, 0x001C1C1E, -1);
+        }
     }
-    return -1;
+    if (drag_slot >= 0) {
+        int icon = gui_order[drag_slot];
+        gui_draw_one_icon(icon, drag_mx, drag_my + (DOCK_ICON + DOCK_MAGNIFY) / 2, DOCK_ICON + DOCK_MAGNIFY);
+    }
 }
 
 static void gui_draw_cursor(int x, int y){
@@ -662,37 +684,84 @@ static void gui_launch_chat(void){
     gui_wait_close();
 }
 
+static void gui_launch(int icon){
+    if (icon == 0)      gui_launch_html("Weather", app_weather_html, app_weather_len);
+    else if (icon == 1) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
+    else if (icon == 2) gui_launch_chat();
+    else if (icon == 3) gui_launch_files();
+    else if (icon == 4) gui_launch_html("Keyrate", app_keyrate_html, app_keyrate_len);
+    else if (icon == 5) gui_launch_html("Bookrank", app_bookrank_html, app_bookrank_len);
+    else if (icon == 6) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
+}
+
 static void gui_run(void){
     if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); return; }
+    gui_order_init();
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;
-    int hover = -1;
-    gui_draw_desktop(hover);
+    /* press_slot: the slot the mouse went down on, latched until release.
+       drag_slot: only set once the mouse has actually moved past a small
+       threshold while held, so a plain click (down, no movement, up)
+       never gets mistaken for a drag onto its own slot. */
+    int press_slot = -1, press_x = 0, press_y = 0, drag_slot = -1;
+
+    int last_mx = mx, last_my = my, last_hover = -1, last_drag = -1;
+    gui_draw_desktop(-1, -1, 0, 0);
+    gui_draw_cursor(mx, my);
     for (;;) {
         __asm__ volatile ("hlt");
         int sc = kbd_pop();
         if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) break; /* esc, non-blocking */
-        int dx, dy;
-        if (mouse_get_delta(&dx, &dy, &buttons)) {
+        int dx = 0, dy = 0;
+        int moved_mouse = mouse_get_delta(&dx, &dy, &buttons);
+        if (moved_mouse) {
             mx += dx; my += dy;
             if (mx < 0) mx = 0; if ((unsigned)mx >= window_width())  mx = (int)window_width() - 1;
             if (my < 0) my = 0; if ((unsigned)my >= window_height()) my = (int)window_height() - 1;
         }
-        int new_hover = gui_hit_test(mx, my);
-        int clicked = (buttons & 1) && !(prev_buttons & 1);
-        prev_buttons = buttons;
-        if (clicked && new_hover >= 0) {
-            if (new_hover == 0)      gui_launch_html("Weather", app_weather_html, app_weather_len);
-            else if (new_hover == 1) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
-            else if (new_hover == 2) gui_launch_chat();
-            else if (new_hover == 3) gui_launch_files();
-            else if (new_hover == 4) gui_launch_html("Keyrate", app_keyrate_html, app_keyrate_len);
-            else if (new_hover == 5) gui_launch_html("Bookrank", app_bookrank_html, app_bookrank_len);
-            else if (new_hover == 6) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
-            hover = -1;
+        int held = buttons & 1;
+        int just_pressed = held && !(prev_buttons & 1);
+        int just_released = !held && (prev_buttons & 1);
+        int slot_here = gui_dock_hit_test(mx, my);
+
+        if (just_pressed && slot_here >= 0) { press_slot = slot_here; press_x = mx; press_y = my; drag_slot = -1; }
+
+        if (held && press_slot >= 0 && drag_slot < 0) {
+            int moved = (mx > press_x ? mx - press_x : press_x - mx) + (my > press_y ? my - press_y : press_y - my);
+            if (moved > 8) drag_slot = press_slot; /* threshold crossed: this is a drag, not a click */
         }
-        else hover = new_hover;
-        gui_draw_desktop(hover); /* redraw every frame: simplest way to erase the old cursor */
-        gui_draw_cursor(mx, my);
+
+        int launched = 0;
+        if (just_released) {
+            if (drag_slot >= 0) {
+                int target = gui_slot_at(mx);
+                int tmp = gui_order[drag_slot];
+                gui_order[drag_slot] = gui_order[target];
+                gui_order[target] = tmp;
+            } else if (press_slot >= 0 && press_slot == slot_here) {
+                gui_launch(gui_order[press_slot]);
+                launched = 1; /* the app view just took over the whole screen; force a redraw below even if the cursor never moved */
+            }
+            press_slot = -1; drag_slot = -1;
+        }
+        prev_buttons = buttons;
+
+        int hover_slot = (drag_slot < 0) ? slot_here : -1;
+        /* Redraw only when something actually visible changed. A real,
+           user-visible bug this fixed, not just a cosmetic worry: redrawing
+           the whole screen unconditionally on every single timer tick
+           (~100/sec, whether or not the mouse ever moved) produced visible
+           tearing on a real display, this framebuffer has no vsync and no
+           back buffer, so a full-screen redraw mid-scanout shows a torn
+           frame. Only redrawing on an actual state change cuts redraws from
+           ~100/sec down to roughly "as fast as a human can move a mouse",
+           which doesn't eliminate tearing (still no double buffering, an
+           honest, separate, larger limitation) but makes it rare instead
+           of constant. */
+        if (launched || mx != last_mx || my != last_my || hover_slot != last_hover || drag_slot != last_drag) {
+            gui_draw_desktop(hover_slot, drag_slot, mx, my);
+            if (drag_slot < 0) gui_draw_cursor(mx, my);
+            last_mx = mx; last_my = my; last_hover = hover_slot; last_drag = drag_slot;
+        }
     }
     window_close();
     clear();
