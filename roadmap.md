@@ -15,7 +15,7 @@ Full breakdown of what shipped in each: `git log --oneline` or the commit histor
 
 ## v2 — memory (from "one flat blob" to real address space)
 - [x] Physical memory manager: bitmap over `mem_upper` from the multiboot info struct, kernel image frames pre-reserved (`pmm.c`, `mem` shell command reports free/total)
-- [ ] Paging: identity-map the kernel, enable it, handle page faults
+- [x] Paging: identity-map the first 4MB, enable it (`paging.c`); page faults now report the faulting address from CR2 (`pagefault` shell command exercises it)
 - [ ] Kernel heap: `kmalloc`/`kfree` over the physical allocator
 - [ ] Higher-half kernel (map kernel to 0xC0000000+, standard OSDev move)
 

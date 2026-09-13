@@ -55,6 +55,12 @@ static const char *EXC_NAME[32] = {
 void isr_handler(u32 vector) {
     puts("\n!! CPU exception: ");
     puts(EXC_NAME[vector < 32 ? vector : 31]);
+    if (vector == 14) {
+        u32 fault_addr;
+        __asm__ volatile ("mov %%cr2, %0" : "=r"(fault_addr));
+        puts(" at ");
+        puthex(fault_addr);
+    }
     puts(" -- halted\n");
     for (;;) __asm__ volatile ("cli; hlt");
 }

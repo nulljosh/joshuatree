@@ -3,6 +3,7 @@
 #include "idt.h"
 #include "irq.h"
 #include "pmm.h"
+#include "paging.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -43,6 +44,14 @@ void putc(char c){
 }
 
 void puts(const char *s){ while (*s) putc(*s++); }
+
+void puthex(unsigned int v){
+    puts("0x");
+    for (int shift = 28; shift >= 0; shift -= 4) {
+        int nib = (v >> shift) & 0xF;
+        putc(nib < 10 ? '0' + nib : 'a' + nib - 10);
+    }
+}
 
 static void clear(void){
     for (int i = 0; i < W * H; i++) VGA[i] = (ATTR << 8) | ' ';
@@ -109,10 +118,11 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash\n");
+    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault\n");
     else if (streq(line, "clear")) clear();
     else if (streq(line, "echo"))  { puts(arg); putc('\n'); }
     else if (streq(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
+    else if (streq(line, "pagefault")) { volatile int *p = (int *)0xDEAD0000; *p = 1; } /* manual check: exercises paging */
     else if (streq(line, "uptime")){ putn(ticks() / 100); puts("s\n"); }
     else if (streq(line, "mem")) {
         putn(pmm_free_frames() * 4); puts("K free / ");
@@ -128,6 +138,7 @@ void kmain(unsigned int multiboot_info_addr){
     idt_install();
     irq_install();
     pmm_init(multiboot_info_addr);
+    paging_install();
     clear();
     puts("os v0 -- type help\n");
     char line[80];
