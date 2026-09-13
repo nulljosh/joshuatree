@@ -65,7 +65,10 @@ void net_init(u32 ip) {
 }
 
 int arp_resolve(u32 ip, u8 mac_out[6]) {
-    u8 frame[sizeof(struct eth_header) + sizeof(struct arp_packet)];
+    u8 frame[60] = {0}; /* Ethernet's minimum frame size; the header+ARP
+                           payload is only 42 bytes and a short frame never
+                           makes it onto the wire (found via real pcap
+                           capture: rtl8139_send silently failed on this). */
     struct eth_header *eth = (struct eth_header *)frame;
     struct arp_packet *arp = (struct arp_packet *)(frame + sizeof(*eth));
 

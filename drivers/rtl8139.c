@@ -38,7 +38,17 @@ static u32 rx_offset = 0;
    framebuffer required one. That stops being true the day higher-half
    lands, whoever does that has to fix this too. */
 static u8 rx_buffer[8192 + 16 + 1500] __attribute__((aligned(4)));
-static u8 tx_buffer[1792]             __attribute__((aligned(4)));
+
+/* The card has 4 TX descriptors (TSAD0-3/TSD0-3, 4 bytes apart) and expects
+   the driver to cycle through them in order, one per send. Reusing
+   descriptor 0 for every send works exactly once and then stalls forever
+   (found via a real pcap capture showing the second frame never left the
+   wire, and TSD0 stuck with OWN=0/TOK=0). 4 separate buffers, one per
+   descriptor, since each send is synchronous (we wait for TOK) but the
+   next call may pick a different descriptor before this one's DMA read is
+   fully retired. */
+static u8 tx_buffer[4][1792] __attribute__((aligned(4)));
+static int tx_cur = 0;
 
 int rtl8139_init(void) {
     struct pci_device dev;
@@ -92,14 +102,19 @@ u32 rtl8139_receive(void *buf, u32 maxlen) {
 }
 
 int rtl8139_send(const void *data, u32 len) {
-    if (len > sizeof(tx_buffer)) return 0;
+    if (len > sizeof(tx_buffer[0])) return 0;
     const u8 *src = data;
-    for (u32 i = 0; i < len; i++) tx_buffer[i] = src[i];
+    u8 *buf = tx_buffer[tx_cur];
+    for (u32 i = 0; i < len; i++) buf[i] = src[i];
 
-    outl(io_base + REG_TSAD0, (u32)tx_buffer);
-    outl(io_base + REG_TSD0, len); /* starts the transmit */
+    u16 tsad = (u16)(REG_TSAD0 + tx_cur * 4);
+    u16 tsd  = (u16)(REG_TSD0  + tx_cur * 4);
+    tx_cur = (tx_cur + 1) % 4;
+
+    outl(io_base + tsad, (u32)buf);
+    outl(io_base + tsd, len); /* starts the transmit */
 
     int timeout = 1000000;
-    while (!(inl(io_base + REG_TSD0) & 0x8000) && timeout--) {} /* bit15 = TOK */
+    while (!(inl(io_base + tsd) & 0x8000) && timeout--) {} /* bit15 = TOK */
     return timeout > 0;
 }
