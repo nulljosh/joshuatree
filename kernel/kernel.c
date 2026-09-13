@@ -164,9 +164,22 @@ static void putn(unsigned int v){
 }
 
 /* ---- task demo: two tasks that each print a letter and yield, round-robin,
-   to prove context switching actually swaps stacks correctly. ---- */
-static void task_a(void){ for (;;) { puts("A"); yield(); } }
-static void task_b(void){ for (;;) { puts("B"); yield(); } }
+   to prove context switching actually swaps stacks correctly. Bounded, then
+   hlt forever: a task can't safely return (see task.c), and now that irq0
+   itself can round-robin into these on every tick regardless of who calls
+   yield(), letting them print forever would spam the shell's own output for
+   the rest of the boot session the first time anyone ran tasktest. ---- */
+static void task_a(void){ for (int i = 0; i < 10; i++) { puts("A"); yield(); } for (;;) __asm__ volatile ("hlt"); }
+static void task_b(void){ for (int i = 0; i < 10; i++) { puts("B"); yield(); } for (;;) __asm__ volatile ("hlt"); }
+
+/* ---- preemption demo: two tasks that never call yield() or hlt, proving
+   the timer itself forces a switch. The shell's own wait loop below also
+   never yields/hlts on purpose, so if preemption weren't real this whole
+   command would just spin, and neither counter would ever move. ---- */
+static volatile int preempt_a_count = 0;
+static volatile int preempt_b_count = 0;
+static void preempt_task_a(void){ for (;;) preempt_a_count++; }
+static void preempt_task_b(void){ for (;;) preempt_b_count++; }
 
 static void ls_cb(const char *name, unsigned int size, int is_dir) {
     puts(name); if (is_dir) putc('/');
@@ -436,7 +449,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm cd mkdir browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest preempttest sleep disktest ls cat exec rm cd mkdir browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -486,6 +499,17 @@ static void run(char *line){
         task_create(task_b);
         for (int i = 0; i < 10; i++) yield(); /* shell is task 0; let A/B interleave */
         puts("\ndone (expect ABABAB...)\n");
+    }
+    else if (!strcmp(line, "preempttest")) {
+        preempt_a_count = 0; preempt_b_count = 0;
+        int ida = task_create(preempt_task_a);
+        int idb = task_create(preempt_task_b);
+        if (ida < 0 || idb < 0) { puts("no free task slots (run fewer other task tests first)\n"); }
+        else {
+            unsigned int deadline = ticks() + 20; /* ~200ms real wall clock */
+            while (ticks() < deadline) { } /* deliberately no yield()/hlt here */
+            puts((preempt_a_count > 0 && preempt_b_count > 0) ? "preempted without yield: ok\n" : "no preemption (still cooperative-only)\n");
+        }
     }
     else if (!strcmp(line, "ls"))    fat_list(ls_cb);
     else if (!strcmp(line, "browse")) browse();

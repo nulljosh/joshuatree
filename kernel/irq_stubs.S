@@ -12,8 +12,29 @@ irq\n:
     iret
 .endm
 
+/* IRQ0 (the PIT timer) additionally drives preemption: after the normal
+   tick bookkeeping, esp already points at exactly the pusha+CPU-frame
+   shape task.c's schedule() expects and hands back (task.c's own comment
+   explains why every task's stack is fabricated to match). Swapping esp
+   to schedule()'s return value before popa/iret is the entire preemptive
+   switch, whether schedule() picked a different task or handed the same
+   esp straight back. yield() reaches this exact path too, via `int $32`
+   (same IDT gate, same frame shape), so voluntary and involuntary
+   switches are one tested mechanism, not two. */
 .section .text
-IRQ_STUB 0
+.global irq0
+irq0:
+    pusha
+    push $0
+    call irq_handler
+    add $4, %esp
+    push %esp
+    call schedule
+    add $4, %esp
+    mov %eax, %esp
+    popa
+    iret
+
 IRQ_STUB 1
 IRQ_STUB 2
 IRQ_STUB 3

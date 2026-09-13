@@ -22,7 +22,7 @@ this is the map of what exists right now.
 | `pmm.c` | Physical memory: a bitmap over `mem_upper` from the multiboot info struct |
 | `paging.c` | Identity-maps the first 4MB and turns paging on |
 | `kheap.c` | `kmalloc`/`kfree`, a first-fit free list grown a frame at a time from `pmm.c` |
-| `task.c` + `task_switch.S` | Cooperative round-robin: `yield()` swaps stacks. No preemption yet |
+| `task.c` + `irq_stubs.S`'s irq0 | Preemptive round-robin off the PIT tick. `yield()` reaches the same switch in software via `int $32`, same IDT gate as the hardware timer |
 | `ata.c` | ATA PIO disk driver, LBA28, primary master only |
 | `fat.c` | Read-only FAT16, root directory only, 8.3 names |
 | `exec.c` | Loads a flat binary via `fat.c` and calls into it, ring 0, no isolation |

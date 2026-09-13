@@ -22,7 +22,7 @@ the same way this kernel is. Also a nod to the U2 album, and my own name.
 | Interrupts | `idt.c` + `isr.S`: IDT and the 32 CPU-exception handlers |
 | IRQs | `pic.c`, `irq.c` + `irq_stubs.S`: PIC remap, IRQ-driven keyboard, PIT timer |
 | Memory | `pmm.c` (physical frames), `paging.c` (identity-mapped paging), `kheap.c` (`kmalloc`/`kfree`) |
-| Tasks | `task.c` + `task_switch.S`: cooperative round-robin scheduling |
+| Tasks | `task.c` + `irq_stubs.S`'s irq0: preemptive round-robin off the PIT tick, `yield()` reaches the same path in software via `int $32` |
 | Storage | `ata.c` (disk driver), `fat.c` (FAT16 read), `exec.c` (load+run a flat binary) |
 | Console | `kernel/kernel.c`: VGA text, keyboard, clock, the shell |
 | Link | `linker.ld`: flat ELF32 at 1 MB |
