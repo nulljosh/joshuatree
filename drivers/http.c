@@ -102,6 +102,6 @@ int http_post(const char *host, const char *path, unsigned short port,
     while (*tail && n < sizeof(req) - 1) req[n++] = *tail++;
     for (unsigned int i = 0; i < body_len && n < sizeof(req) - 1; i++) req[n++] = body[i];
 
-    char raw[4096];
+    char raw[8192]; /* headroom for a generated-HTML response, not just a short chat reply */
     return http_body_only(ip, port, req, n, response_out, response_maxlen, raw, sizeof(raw));
 }

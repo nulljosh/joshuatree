@@ -6,6 +6,7 @@
    present benefit; split later if any one of them grows real complexity. */
 #include "net.h"
 #include "rtl8139.h"
+#include "irq.h"
 
 typedef unsigned int   u32;
 typedef unsigned short u16;
@@ -17,31 +18,26 @@ static u32 htonl(u32 v) { return (v << 24) | ((v & 0xFF00) << 8) | ((v & 0xFF000
 static u8 our_mac[6];
 static u32 our_ip = 0;
 
-/* ARP replies come from the same LAN segment (QEMU's own SLIRP gateway),
-   basically instant, so a short poll budget is fine there. DNS and TCP
-   replies cross SLIRP's NAT out to the real internet, real round-trip time,
-   found by getting burned once: a real DNS reply that took ~300ms real time
-   still lost the race against a poll budget that had been tuned against an
-   earlier ~14ms reply. Generous and iteration-based since there's no timer
-   wired into this driver, not calibrated to a real duration. */
-#define LAN_TIMEOUT_ITERS  2000000
-#define WAN_TIMEOUT_ITERS  50000000
-/* A plain HTTP fetch's WAN_TIMEOUT_ITERS budget is tuned for network round
-   trip, not for however long an LLM takes to actually generate a reply
-   (calibrated elsewhere in this file: 50,000,000 iterations is only a few
-   real seconds here, an 8B local model can easily take longer than that
-   for even a short answer). Reused by tcp_get for any request this slow,
-   not a v10-specific constant, since the same gap would bite anything
-   else slower than a typical page fetch. */
-#define SLOW_REPLY_TIMEOUT_ITERS 500000000
-/* A server's "wait for a connection" isn't bounded by a network round trip
-   at all, it's bounded by how long a human takes to open a connection.
-   Found by testing tcp_serve_once against a real curl: 50,000,000 empty
-   iterations burns through in only ~3 real seconds here, so the server had
-   already given up and returned to the shell before a curl fired a few
-   seconds later ever got a chance. An order of magnitude bigger buys
-   roughly a minute of real wait instead of a few seconds. */
-#define SERVE_TIMEOUT_ITERS 1000000000
+/* Every wait loop in this file used to be a plain iteration count, tuned
+   by guessing how many empty polls a given wait "should" need. That's
+   fundamentally broken: how long N iterations take in real time depends on
+   host CPU load, which varies (found exactly this way: the same 50,000,000
+   iteration budget covered a ~300ms DNS reply fine one run and, under
+   heavier host load from a local LLM generating text, let a real inbound
+   SYN sit unanswered long enough that curl's own timeout gave up first).
+   ticks() is the PIT-driven counter from v1 (nominally 100/sec), a real
+   improvement since it measures actual elapsed time instead of counting
+   meaningless loop spins, but it still isn't a perfect wall clock in this
+   environment: confirmed by direct measurement (a debug print inside the
+   wait loop) that ticks() genuinely advances the whole time, just at
+   roughly 40/sec instead of 100 under heavy host CPU load, because QEMU's
+   own process wasn't getting scheduled by the host often enough to
+   deliver its virtual PIT interrupt on time. Not a kernel bug, an
+   environment one, budgets below have real margin built in for it. */
+#define LAN_TIMEOUT_TICKS         600   /* ~5-15s depending on host load: same-LAN ARP is near-instant either way */
+#define WAN_TIMEOUT_TICKS        2000   /* ~20-50s: a real internet round trip */
+#define SLOW_REPLY_TIMEOUT_TICKS 15000  /* ~2.5-6min: local LLM generation time under load */
+#define SERVE_TIMEOUT_TICKS      30000  /* ~5-12min: however long a human takes to connect, on a loaded host */
 
 struct eth_header {
     u8  dest[6];
@@ -112,7 +108,8 @@ int arp_resolve(u32 ip, u8 mac_out[6]) {
     if (!rtl8139_send(frame, sizeof(frame))) return 0;
 
     u8 rx[1514];
-    for (int attempts = 0; attempts < LAN_TIMEOUT_ITERS; attempts++) {
+    u32 deadline = ticks() + LAN_TIMEOUT_TICKS;
+    while (ticks() < deadline) {
         u32 n = rtl8139_receive(rx, sizeof(rx));
         if (n < sizeof(struct eth_header) + sizeof(struct arp_packet)) continue;
 
@@ -267,7 +264,8 @@ int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
     if (!udp_send(dns_server_ip, DNS_PORT, DNS_SRC_PORT, query, qlen)) return 0;
 
     u8 rx[1514];
-    for (int attempts = 0; attempts < WAN_TIMEOUT_ITERS; attempts++) {
+    u32 deadline = ticks() + WAN_TIMEOUT_TICKS;
+    while (ticks() < deadline) {
         u32 n = rtl8139_receive(rx, sizeof(rx));
         if (n < sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct udp_header)) continue;
 
@@ -425,7 +423,8 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
     u8 *payload;
     u32 paylen;
     int got_synack = 0;
-    for (int attempts = 0; attempts < WAN_TIMEOUT_ITERS && !got_synack; attempts++) {
+    u32 synack_deadline = ticks() + WAN_TIMEOUT_TICKS;
+    while (ticks() < synack_deadline && !got_synack) {
         u32 n = rtl8139_receive(rx, sizeof(rx));
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
@@ -442,7 +441,8 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
 
     u32 total = 0;
     int got_fin = 0;
-    for (int attempts = 0; attempts < SLOW_REPLY_TIMEOUT_ITERS && !got_fin && total < response_maxlen; attempts++) {
+    u32 data_deadline = ticks() + SLOW_REPLY_TIMEOUT_TICKS;
+    while (ticks() < data_deadline && !got_fin && total < response_maxlen) {
         u32 n = rtl8139_receive(rx, sizeof(rx));
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
@@ -487,7 +487,8 @@ int tcp_serve_once(u16 port, const void *response, u32 response_len) {
     u32 their_seq = 0;
 
     int got_syn = 0;
-    for (int attempts = 0; attempts < SERVE_TIMEOUT_ITERS && !got_syn; attempts++) {
+    u32 syn_deadline = ticks() + SERVE_TIMEOUT_TICKS;
+    while (ticks() < syn_deadline && !got_syn) {
         u32 n = rtl8139_receive(rx, sizeof(rx));
         if (n == 0) continue;
         arp_maybe_reply(rx, n); /* the gateway can't deliver anything to us until it knows our MAC */
@@ -520,7 +521,8 @@ int tcp_serve_once(u16 port, const void *response, u32 response_len) {
     u8 *payload;
     u32 paylen;
     int got_request = 0;
-    for (int attempts = 0; attempts < WAN_TIMEOUT_ITERS && !got_request; attempts++) {
+    u32 request_deadline = ticks() + WAN_TIMEOUT_TICKS;
+    while (ticks() < request_deadline && !got_request) {
         u32 n = rtl8139_receive(rx, sizeof(rx));
         if (n == 0) continue;
         arp_maybe_reply(rx, n);
@@ -547,7 +549,8 @@ int tcp_serve_once(u16 port, const void *response, u32 response_len) {
         u32 expect_ack = our_seq + chunk;
 
         int got_ack = 0;
-        for (int attempts = 0; attempts < WAN_TIMEOUT_ITERS && !got_ack; attempts++) {
+        u32 ack_deadline = ticks() + WAN_TIMEOUT_TICKS;
+        while (ticks() < ack_deadline && !got_ack) {
             u32 n = rtl8139_receive(rx, sizeof(rx));
             if (n == 0) continue;
             if (!tcp_match(client_ip, local_port, client_port, rx, n, &tcp, &payload, &paylen)) continue;

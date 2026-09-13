@@ -231,6 +231,28 @@ static void browse(void){
    output) into one buffer and serves it. Shared by every serveapp target
    so adding another embedded app is one dispatch line, not a copy-pasted
    block. */
+/* LLMs habitually wrap generated code in a ```html ... ``` fence even when
+   told not to. Strips a leading ``` line and a trailing ``` if present,
+   in place, returns the new length. Not a markdown parser, just this one
+   specific, extremely common habit. */
+static unsigned int strip_code_fence(char *s, unsigned int len){
+    unsigned int start = 0;
+    if (len >= 3 && s[0] == '`' && s[1] == '`' && s[2] == '`') {
+        unsigned int i = 3;
+        while (i < len && s[i] != '\n') i++; /* skip the rest of the ```html line */
+        if (i < len) i++;
+        start = i;
+    }
+    unsigned int end = len;
+    while (end > start && (s[end - 1] == '\n' || s[end - 1] == ' ')) end--;
+    if (end - start >= 3 && s[end - 3] == '`' && s[end - 2] == '`' && s[end - 1] == '`') end -= 3;
+    while (end > start && (s[end - 1] == '\n' || s[end - 1] == ' ')) end--;
+
+    unsigned int new_len = end - start;
+    for (unsigned int i = 0; i < new_len; i++) s[i] = s[start + i];
+    return new_len;
+}
+
 static void serve_app(const char *label, const unsigned char *data, unsigned int data_len){
     static const char header[] = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n";
     unsigned int total_len = (sizeof(header) - 1) + data_len;
@@ -258,7 +280,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest mousetest nettest web serve serveapp chat\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest mousetest nettest web serve serveapp chat build\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -466,6 +488,45 @@ static void run(char *line){
                 unsigned int an = json_extract_string(resp, "response", answer, sizeof(answer));
                 if (an == 0) puts("(no response field in the reply)\n");
                 else { puts(answer); putc('\n'); }
+            }
+        }
+    }
+    else if (!strcmp(line, "build")) {
+        /* v10's "build stuff" loop: take a request, ask the LLM to generate
+           a page for it, serve the result live. The kernel-native version
+           of what gato does on macOS, minus the file-editing part, there's
+           no persistent app catalog to edit yet, just this one slot. */
+        if (!*arg) { puts("usage: build <what to make>\n"); }
+        else if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        else {
+            net_init(0x0A00020F);
+            char escaped[256];
+            json_escape(arg, escaped, sizeof(escaped));
+
+            static char req_body[1024];
+            unsigned int n = 0;
+            const char *parts[3];
+            parts[0] = "{\"model\":\"llama3.1:8b\",\"stream\":false,\"prompt\":\"Output ONLY raw HTML for one self-contained page, inline CSS and JS, no external resources, no markdown code fences, no explanation, just the HTML. Make: ";
+            parts[1] = escaped;
+            parts[2] = "\"}";
+            for (int p = 0; p < 3; p++) {
+                const char *s = parts[p];
+                while (*s && n < sizeof(req_body)) req_body[n++] = *s++;
+            }
+
+            puts("asking llama3.1 to build it...\n");
+            static char resp[8192];
+            int rn = http_post("10.0.2.2", "/api/generate", 11434, req_body, n, resp, sizeof(resp) - 1);
+            if (rn <= 0) { puts("FAIL (couldn't reach the host's Ollama server)\n"); }
+            else {
+                resp[rn] = 0;
+                static char html[6144];
+                unsigned int hn = json_extract_string(resp, "response", html, sizeof(html));
+                if (hn == 0) { puts("(no response field in the reply)\n"); }
+                else {
+                    hn = strip_code_fence(html, hn);
+                    serve_app("the generated page", (const unsigned char *)html, hn);
+                }
             }
         }
     }
