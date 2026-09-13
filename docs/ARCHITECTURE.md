@@ -15,7 +15,7 @@ this is the map of what exists right now.
 
 | File | What it owns |
 |---|---|
-| `gdt.c` | Flat GDT: one ring-0 code segment, one ring-0 data segment, both spanning 4GB |
+| `gdt.c` | Flat GDT: ring-0 and ring-3 code/data segments (both spanning 4GB) plus a TSS for ring-3-to-ring-0 stack switches |
 | `idt.c` + `isr.S` | IDT and the 32 CPU-exception handlers. An exception prints and halts, no recovery |
 | `pic.c` | Remaps the 8259 PIC so IRQs land on vectors 32-47 instead of overlapping CPU exceptions |
 | `irq.c` + `irq_stubs.S` | IRQ0 (PIT tick counter) and IRQ1 (keyboard ring buffer) |
@@ -37,17 +37,24 @@ out of order is the fastest way to a silent, hard-to-diagnose bug.
 
 ## What's deliberately not here yet
 
-Two pieces were scoped out on purpose rather than rushed, see `roadmap.md`
-for the full reasoning:
+One piece is still scoped out on purpose rather than rushed, see
+`roadmap.md` for the full reasoning:
 
 - **Higher-half kernel** (v2): needs a boot-time page directory split between
   physical and virtual addresses before `kmain` can even run. Every
   physical-address computation in `paging.c`/`pmm.c` currently assumes
   virtual == physical.
-- **Ring-3 user mode** (v3): needs a TSS, new GDT entries, and page tables
-  switched from supervisor-only to user-accessible. A subtle bug here can
-  leave "user" code silently running with kernel privileges, the kind of
-  bug `check.sh`'s boot-banner check can't catch, only a crash can.
+
+Ring-3 user mode (v3) shipped: `gdt.c` adds ring-3 code/data segments and a
+TSS, `paging.c`'s `paging_set_user()` marks specific pages user-accessible
+while everything else stays supervisor-only, and `ring3.c`/`ring3_asm.S`
+run a one-shot demo payload in ring 3 that writes a proof-of-execution
+marker, then attempts a privileged instruction and faults, verified by an
+independent QEMU-monitor memory read of the marker and the kernel's own
+correctly-named general-protection fault report, not just "didn't crash".
+`ring3test` halts the kernel by design (no process kill/reap exists yet),
+reboot after running it. No `int 0x80` syscall gate yet, nothing calls into
+the kernel from ring 3 today to need one.
 
 ## Verification
 

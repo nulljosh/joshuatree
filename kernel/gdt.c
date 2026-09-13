@@ -1,5 +1,9 @@
-/* Flat GDT: null, ring-0 code, ring-0 data, each spanning the full 4GB.
-   ponytail: no user-mode segments yet, add those with v3's ring-3/TSS work. */
+/* Flat GDT: null, ring-0 code/data, ring-3 code/data, and a TSS whose only
+   real job is telling the CPU which kernel stack (ss0:esp0) to switch to
+   when a ring-3->ring-0 privilege change happens, e.g. the general-
+   protection fault a ring-3 task gets for trying a privileged instruction
+   (see ring3.c). No per-task TSS switching, one static TSS is enough since
+   there's no ring-3 task scheduler yet, just the one demo transition. */
 #include "gdt.h"
 
 typedef unsigned int  u32;
@@ -20,8 +24,28 @@ struct gdt_ptr {
     u32 base;
 } __attribute__((packed));
 
-static struct gdt_entry gdt[3];
+/* Only esp0/ss0 matter here: the fields the CPU actually reads on a
+   privilege-raising interrupt. Everything else stays zeroed. iomap_base
+   equal to the TSS limit means "no I/O permission bitmap present", so a
+   ring-3 in/out always faults regardless of IOPL, which is exactly the
+   privileged-instruction fault this whole feature exists to prove. */
+struct tss_entry {
+    u32 prev_tss;
+    u32 esp0, ss0;
+    u32 esp1, ss1;
+    u32 esp2, ss2;
+    u32 cr3;
+    u32 eip, eflags;
+    u32 eax, ecx, edx, ebx, esp, ebp, esi, edi;
+    u32 es, cs, ss, ds, fs, gs;
+    u32 ldt;
+    u16 trap, iomap_base;
+} __attribute__((packed));
+
+static struct gdt_entry gdt[6];
 static struct gdt_ptr gp;
+static struct tss_entry tss;
+static u8 tss_kernel_stack[4096] __attribute__((aligned(16)));
 
 static void set_gate(int n, u32 base, u32 limit, u8 access, u8 gran) {
     gdt[n].base_low  = base & 0xFFFF;
@@ -37,8 +61,16 @@ void gdt_install(void) {
     gp.base  = (u32)&gdt;
 
     set_gate(0, 0, 0, 0, 0);                    /* null */
-    set_gate(1, 0, 0xFFFFFFFF, 0x9A, 0xCF);      /* code: present, ring0, exec/read */
-    set_gate(2, 0, 0xFFFFFFFF, 0x92, 0xCF);      /* data: present, ring0, read/write */
+    set_gate(1, 0, 0xFFFFFFFF, 0x9A, 0xCF);      /* 0x08 code: present, ring0, exec/read */
+    set_gate(2, 0, 0xFFFFFFFF, 0x92, 0xCF);      /* 0x10 data: present, ring0, read/write */
+    set_gate(3, 0, 0xFFFFFFFF, 0xFA, 0xCF);      /* 0x18 code: present, ring3, exec/read */
+    set_gate(4, 0, 0xFFFFFFFF, 0xF2, 0xCF);      /* 0x20 data: present, ring3, read/write */
+
+    for (u32 i = 0; i < sizeof(tss); i++) ((u8 *)&tss)[i] = 0;
+    tss.ss0 = 0x10;
+    tss.esp0 = (u32)(tss_kernel_stack + sizeof(tss_kernel_stack));
+    tss.iomap_base = sizeof(tss); /* no I/O bitmap: any ring-3 in/out faults */
+    set_gate(5, (u32)&tss, sizeof(tss) - 1, 0x89, 0x00); /* 0x28 TSS: present, ring0, 32-bit TSS available */
 
     __asm__ volatile ("lgdt %0" :: "m"(gp));
     __asm__ volatile (
@@ -50,6 +82,8 @@ void gdt_install(void) {
         "mov %%ax, %%fs\n"
         "mov %%ax, %%gs\n"
         "mov %%ax, %%ss\n"
+        "mov $0x28, %%ax\n"
+        "ltr %%ax\n"
         ::: "ax"
     );
 }

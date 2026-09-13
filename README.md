@@ -18,11 +18,12 @@ the same way this kernel is. Also a nod to the U2 album, and my own name.
 | Piece | Where |
 |-------|-------|
 | Boot | `boot/boot.S`: multiboot1 header, stack, jump to `kmain` |
-| Segments | `gdt.c`: flat GDT (ring-0 code + data, 4GB) |
+| Segments | `gdt.c`: flat GDT (ring-0 + ring-3 code/data, 4GB, plus a TSS) |
 | Interrupts | `idt.c` + `isr.S`: IDT and the 32 CPU-exception handlers |
 | IRQs | `pic.c`, `irq.c` + `irq_stubs.S`: PIC remap, IRQ-driven keyboard, PIT timer |
 | Memory | `pmm.c` (physical frames), `paging.c` (identity-mapped paging), `kheap.c` (`kmalloc`/`kfree`) |
 | Tasks | `task.c` + `irq_stubs.S`'s irq0: preemptive round-robin off the PIT tick, `yield()` reaches the same path in software via `int $32` |
+| User mode | `ring3.c` + `ring3_asm.S`: real ring-3 privilege isolation, `ring3test` proves a privileged instruction faults instead of silently succeeding |
 | Storage | `ata.c` (disk driver), `fat.c` (FAT16 read), `exec.c` (load+run a flat binary) |
 | Console | `kernel/kernel.c`: VGA text, keyboard, clock, the shell |
 | Link | `linker.ld`: flat ELF32 at 1 MB |

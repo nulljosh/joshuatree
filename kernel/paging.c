@@ -55,3 +55,11 @@ int paging_map_region(u32 phys_addr, u32 length) {
     }
     return 1;
 }
+
+void paging_set_user(void *virt_addr) {
+    u32 addr = (u32)virt_addr;
+    u32 pte = (addr % 0x400000) / 0x1000;
+    first_page_table[pte] |= 0x4;
+    page_directory[0] |= 0x4;
+    __asm__ volatile ("mov %0, %%cr3" :: "r"(page_directory));
+}

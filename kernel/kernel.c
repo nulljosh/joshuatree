@@ -6,6 +6,7 @@
 #include "paging.h"
 #include "kheap.h"
 #include "task.h"
+#include "ring3.h"
 #include "ata.h"
 #include "fat.h"
 #include "exec.h"
@@ -449,7 +450,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest preempttest sleep disktest ls cat exec rm cd mkdir browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest preempttest ring3test sleep disktest ls cat exec rm cd mkdir browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -499,6 +500,9 @@ static void run(char *line){
         task_create(task_b);
         for (int i = 0; i < 10; i++) yield(); /* shell is task 0; let A/B interleave */
         puts("\ndone (expect ABABAB...)\n");
+    }
+    else if (!strcmp(line, "ring3test")) {
+        ring3_test();
     }
     else if (!strcmp(line, "preempttest")) {
         preempt_a_count = 0; preempt_b_count = 0;

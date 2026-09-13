@@ -1,11 +1,24 @@
 /* 32 CPU-exception entry points. Each pushes its own vector number and calls
    isr_handler(vector) cdecl-style; the handler never returns (halts), so no
    iret/register-save machinery is needed yet. Vectors 8,10-14,17 have the CPU
-   push an error code first -- we ignore it since we only ever report+halt. */
+   push an error code first -- we ignore it since we only ever report+halt.
+   Every path first forces ds/es/fs/gs to the kernel data selector: since
+   ring-3 user mode exists now, an exception (a general-protection fault on
+   a privileged instruction, most of all) can arrive with those still set to
+   the ring-3 data selector from whatever code just faulted. The flat GDT
+   means isr_handler's own memory access happens to still work either way,
+   but relying on that would be an accident, not a design; this makes it
+   correct instead. No save/restore needed since these paths never resume
+   the interrupted context anyway. */
 .macro ISR_NOERR n
 .global isr\n
 isr\n:
     push $\n
+    mov $0x10, %ax
+    mov %ax, %ds
+    mov %ax, %es
+    mov %ax, %fs
+    mov %ax, %gs
     call isr_handler
 1:  cli
     hlt
@@ -16,6 +29,11 @@ isr\n:
 .global isr\n
 isr\n:
     push $\n
+    mov $0x10, %ax
+    mov %ax, %ds
+    mov %ax, %es
+    mov %ax, %fs
+    mov %ax, %gs
     call isr_handler
 1:  cli
     hlt
