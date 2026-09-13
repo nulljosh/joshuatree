@@ -39,7 +39,7 @@
      for anything to drift across. */
   main { position: relative; }
   .hero-float { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-  .float { position: absolute; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; color: var(--accent); opacity: 0.16; white-space: nowrap; will-change: transform; animation: drift var(--dur, 18s) ease-in-out var(--delay, 0s) infinite alternate; }
+  .float { position: absolute; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; font-size: 13px; color: var(--accent); opacity: 0.16; white-space: nowrap; will-change: transform; animation: drift var(--dur, 18s) ease-in-out var(--delay, 0s) infinite alternate; }
   @keyframes drift { to { transform: translate(var(--dx, 0px), var(--dy, 0px)); } }
   @media (prefers-reduced-motion: reduce) { .float { animation: none; } }
   main > * { position: relative; z-index: 1; }
@@ -50,7 +50,7 @@
   .brand span { color: #eee; font-weight: 600; font-size: 15px; letter-spacing: -0.01em; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
 
   .hint { position: absolute; bottom: 18px; left: 18px; z-index: 5; color: #aaa; font-size: 12px; text-shadow: 0 1px 3px rgba(0,0,0,0.6); }
-  .hint code { background: rgba(255,255,255,0.12); padding: 1px 5px; border-radius: 4px; color: #eee; }
+  .hint code { font-family: inherit; background: rgba(255,255,255,0.12); padding: 1px 5px; border-radius: 4px; color: #eee; }
 
   .links { position: absolute; top: 18px; right: 18px; z-index: 5; }
   .links a { color: #eee; text-decoration: none; background: rgba(255,255,255,0.1); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
