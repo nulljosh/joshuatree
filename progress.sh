@@ -12,6 +12,15 @@ cur=""
 done_n=0
 total_n=0
 
+# collapsed/archived versions (see roadmap.md's "## Done" section) still count
+# toward the total, via a "<!-- progress.sh: done-items D/T -->" marker line,
+# so pruning finished checklists doesn't erase them from the graph.
+if marker="$(grep -o 'done-items [0-9]*/[0-9]*' roadmap.md | head -1)"; then
+  d="${marker#done-items }"; d="${d%/*}"
+  t="${marker#*/}"
+  versions+=("done"); dones+=("$d"); totals+=("$t")
+fi
+
 flush() {
   if [ -n "$cur" ]; then
     versions+=("$cur"); totals+=("$total_n"); dones+=("$done_n")

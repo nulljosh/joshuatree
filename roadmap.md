@@ -6,19 +6,12 @@ reboot`. Everything below is the standard bare-metal-to-usable-OS path
 (same order every OSDev-wiki "Bare Bones" -> "Meaty Skeleton" walkthrough
 takes, and roughly what xv6/ToaruOS/Linux 0.01 did in their first months).
 
-## v0 — done (Aug-Sep 2026)
-- [x] Multiboot header, boots under QEMU/GRUB
-- [x] VGA text mode output, scrolling
-- [x] PS/2 keyboard input, polled
-- [x] RTC clock read
-- [x] Tiny line-based shell (`help`, `clear`, `echo`, `time`, `reboot`)
+## Done
+<!-- progress.sh: done-items 10/10 -->
+- **v0** (Aug-Sep 2026): boots under QEMU/GRUB, VGA text, polled PS/2 keyboard, RTC clock, shell (`help clear echo time reboot`)
+- **v1** (Sep 2026): flat GDT, IDT + CPU exception handlers (`crash` command exercises it), PIC remap, IRQ-driven keyboard, PIT timer (`uptime`)
 
-## v1 — interrupts (the machine can react instead of only polling) — done (Sep 2026)
-- [x] GDT: proper flat segments (`gdt.c`, null/code/data descriptors spanning 4GB, `lgdt` + far jump to reload `%cs`, then reload the data segments)
-- [x] IDT + ISRs: CPU exceptions (divide-by-zero, page fault, GPF) print a message and halt instead of triple-faulting (`idt.c`, `isr.S`, manual check: `crash` shell command)
-- [x] PIC remap (IRQs 0-15 off the CPU exception vectors 0-31, onto 32-47) (`pic.c`)
-- [x] IRQ1 keyboard handler replaces polling `getch` — a ring buffer filled by the handler, drained by `getch`, `hlt` between keys instead of busy-waiting (`irq.c`, `irq_stubs.S`)
-- [x] PIT timer (IRQ0) — 100Hz tick counter, `uptime` shell command reads it
+Full breakdown of what shipped in each: `git log --oneline` or the commit history, not here — this file is the queue, not the changelog.
 
 ## v2 — memory (from "one flat blob" to real address space)
 - [ ] Physical memory manager: bitmap or free-list over the multiboot memory map
