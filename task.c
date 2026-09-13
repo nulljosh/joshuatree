@@ -6,6 +6,7 @@
    this cooperative half is proven solid. */
 #include "task.h"
 #include "kheap.h"
+#include "irq.h"
 
 typedef unsigned int u32;
 
@@ -56,4 +57,16 @@ void yield(void) {
     int prev = current;
     current = (current + 1) % n_tasks;
     switch_context(&tasks[prev].esp, tasks[current].esp);
+}
+
+/* ponytail: no sleep queue, this task keeps taking its round-robin turn and
+   just re-checks the clock each time -- fine for a handful of cooperative
+   tasks, wasteful for many. Add a real timer-ordered wait queue if that
+   ever matters. */
+void sleep_ticks(unsigned int n) {
+    unsigned int start = ticks();
+    while (ticks() - start < n) {
+        if (n_tasks < 2) { __asm__ volatile ("hlt"); continue; }
+        yield();
+    }
 }

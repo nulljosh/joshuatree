@@ -22,7 +22,7 @@ Full breakdown of what shipped in each: `git log --oneline` or the commit histor
 ## v3 — multitasking (more than one thing running)
 - [x] Kernel stacks + context switch: cooperative round-robin, `yield()` swaps ESP + callee-saved registers (`task.c`, `task_switch.S`). Verified `ABABAB...` interleaving at boot before shipping. `tasktest` shell command exists but its Enter-key output can't be confirmed through the QEMU-monitor `sendkey` test harness (known limitation, see below) — the boot-time verification is the real evidence
 - [ ] Preemptive scheduling off the PIT tick — deferred: needs the timer IRQ handler itself to call the switch, which means every task's initial stack must exactly mimic the IRQ frame layout (`pusha`+vector+CPU frame), not just `yield()`'s simpler callee-saved layout. Real risk of a subtly wrong stack frame. Do this as its own focused pass once cooperative switching has been exercised more (real second/third tasks, not just the two-letter demo)
-- [ ] Basic IPC or at least a wait/sleep primitive
+- [x] Wait/sleep primitive: `sleep_ticks(n)` yields until n PIT ticks pass (`task.c`, `sleep` shell command). Verified it actually returns via a temporary boot-time check before shipping
 - [ ] User mode: ring 3, TSS, syscall via `int 0x80`
 
 ## v4 — storage (data survives reboot)
