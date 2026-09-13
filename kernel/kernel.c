@@ -378,9 +378,21 @@ static void run(char *line){
         if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
         else {
             net_init(0x0A00020F);
+            /* Long enough on purpose: >536 bytes forces tcp_serve_once
+               through its multi-segment path, not just the one-chunk case. */
             static const char page[] =
                 "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n"
-                "<html><body><h1>Joshua Tree</h1><p>served from a kernel with no OS underneath it.</p></body></html>";
+                "<html><body><h1>Joshua Tree</h1>"
+                "<p>Served from a kernel with no OS underneath it: no Linux, no XNU, "
+                "no Windows NT, nothing between this HTML and the bare metal except "
+                "the code in this repository. Booted with a multiboot1 header, brought "
+                "up its own GDT, IDT, paging, and a cooperative scheduler, mounted a "
+                "FAT16 filesystem it wrote the driver for, found this network card by "
+                "walking PCI configuration space by hand, and built Ethernet, ARP, "
+                "IPv4, UDP, DNS and TCP from raw bytes on the wire, no libc anywhere "
+                "in the chain. The response you are reading crossed that entire stack "
+                "in more than one TCP segment, which is exactly why this paragraph is "
+                "this long.</p></body></html>";
             puts("waiting for a connection on :8080...\n");
             puts(tcp_serve_once(8080, page, sizeof(page) - 1) ? "served:ok\n" : "timeout, nobody connected\n");
         }

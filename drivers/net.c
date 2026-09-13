@@ -523,8 +523,34 @@ int tcp_serve_once(u16 port, const void *response, u32 response_len) {
     if (!got_request) return 0;
 
     tcp_send_segment(client_ip, client_mac, local_port, client_port, our_seq, their_seq, TCP_ACK, 0, 0);
-    tcp_send_segment(client_ip, client_mac, local_port, client_port, our_seq, their_seq, TCP_PSH | TCP_ACK, response, response_len);
-    our_seq += response_len;
+
+    /* Stop-and-wait, one segment outstanding at a time: send a chunk, wait
+       for its ACK before sending the next. No pipelining, no window
+       scaling, but correct, and a real page is bigger than one segment
+       (found immediately: a single-segment cap made anything beyond a toy
+       string silently truncate). */
+    const u8 *body = response;
+    u32 sent = 0;
+    while (sent < response_len) {
+        u32 chunk = response_len - sent;
+        if (chunk > TCP_MAX_PAYLOAD) chunk = TCP_MAX_PAYLOAD;
+
+        tcp_send_segment(client_ip, client_mac, local_port, client_port, our_seq, their_seq, TCP_PSH | TCP_ACK, body + sent, chunk);
+        u32 expect_ack = our_seq + chunk;
+
+        int got_ack = 0;
+        for (int attempts = 0; attempts < WAN_TIMEOUT_ITERS && !got_ack; attempts++) {
+            u32 n = rtl8139_receive(rx, sizeof(rx));
+            if (n == 0) continue;
+            if (!tcp_match(client_ip, local_port, client_port, rx, n, &tcp, &payload, &paylen)) continue;
+            if ((tcp->flags & TCP_ACK) && htonl(tcp->ack) == expect_ack) got_ack = 1;
+        }
+        if (!got_ack) return 0; /* real failure, the client never got this chunk, don't claim success */
+
+        our_seq = expect_ack;
+        sent += chunk;
+    }
+
     tcp_send_segment(client_ip, client_mac, local_port, client_port, our_seq, their_seq, TCP_FIN | TCP_ACK, 0, 0);
     our_seq++;
 
