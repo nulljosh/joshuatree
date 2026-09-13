@@ -2,17 +2,19 @@
 
 # Joshua Tree
 
-![version](https://img.shields.io/badge/version-v4-blue)
+![version](https://img.shields.io/badge/version-v5-blue)
 ![license](https://img.shields.io/badge/license-MIT-green) [![GitHub](https://img.shields.io/badge/GitHub-nulljosh%2Fjoshuatree-black?logo=github)](https://github.com/nulljosh/joshuatree)
+![language](https://img.shields.io/badge/language-C%20%2F%20x86%20asm-blue)
+![platform](https://img.shields.io/badge/platform-i386-lightgrey)
+[![repo size](https://img.shields.io/github/repo-size/nulljosh/joshuatree)](https://github.com/nulljosh/joshuatree)
+[![last commit](https://img.shields.io/github/last-commit/nulljosh/joshuatree)](https://github.com/nulljosh/joshuatree/commits/main)
 
-A kernel. A small one, from nothing. It boots in QEMU, reads a real
-filesystem off a real disk, and runs code loaded from it. Full breakdown:
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+A kernel. A small one, from nothing. It boots in QEMU, reads a real disk,
+runs code loaded off it. Full breakdown: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-Renamed from `os` (Sep 2026). Same tree that's survived the Mojave desert
-for centuries on almost nothing — a fitting name for something built the
-same way, piece by piece, with nothing borrowed underneath. Also a small
-nod to U2's album of the same name, and yes, my own name too.
+Renamed from `os`. Same tree survives the Mojave on almost nothing, I'm
+building this the same way, piece by piece, nothing borrowed. Also a nod
+to the U2 album, and yeah, my own name.
 
 | Piece | Where |
 |-------|-------|
@@ -42,7 +44,7 @@ make run      # boots to the shell
 ```
 
 Commands: `help` `clear` `echo` `time` `uptime` `mem` `reboot` `crash` `pagefault`
-`heaptest` `tasktest` `sleep` `disktest` `ls` `cat` `exec` — most exist to
+`heaptest` `tasktest` `sleep` `disktest` `ls` `cat` `exec`, most exist to
 manually exercise a subsystem (see `docs/ARCHITECTURE.md`), not just to be useful.
 
 ## Architecture

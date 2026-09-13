@@ -1,4 +1,4 @@
-/* IDT + the 32 CPU-exception ISRs. ponytail: no recovery path — an exception
+/* IDT + the 32 CPU-exception ISRs. ponytail: no recovery path, an exception
    here means a real bug, so the handler prints and halts instead of trying
    to resume. Add iret + register save/restore when IRQs (v1's next step)
    need to return control to interrupted code. */

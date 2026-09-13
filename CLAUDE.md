@@ -9,21 +9,21 @@ dependencies beyond clang, ld.lld and qemu.
 - Full subsystem map: `docs/ARCHITECTURE.md`. Plan and per-item verification notes: `roadmap.md`.
 - `check.sh` asserts on raw VGA memory through the QEMU monitor, because a
   headless `screendump` renders black even when the kernel is running fine.
-  It only proves "boots without crashing" — real subsystem correctness (paging,
+  It only proves "boots without crashing", real subsystem correctness (paging,
   disk I/O, context switches) is verified manually against real artifacts
   (real disk images, real flat binaries) before each commit, not by `check.sh` alone.
 - The QEMU monitor's `sendkey ret` does not reliably deliver Enter to this
-  kernel's keyboard driver (known harness limitation, not a kernel bug —
+  kernel's keyboard driver (known harness limitation, not a kernel bug,
   reproduces identically before and after the IRQ-driven keyboard rewrite).
   Typing individual letters works and proves the keyboard path; verifying a
   command's *output* needs the boot-time direct-call trick instead (temporarily
   call the function from `kmain` before `clear()`, dump VGA memory, revert).
 - Higher-half kernel (v2) and ring-3/TSS user mode (v3) are deliberately
-  deferred, not forgotten — see `roadmap.md` for the specific technical
+  deferred, not forgotten, see `roadmap.md` for the specific technical
   reason each is risky to rush blind.
 - Landing page (`landing/index.html`, deployed to joshuatree.heyitsmejosh.com)
   shows a real recorded QEMU boot as `landing/boot.gif`, not a live in-browser
-  emulator — v86 was tried first and hit a real multiboot compatibility gap
+  emulator, v86 was tried first and hit a real multiboot compatibility gap
   (kernel hangs before `paging_install` under v86 specifically; QEMU boots it
   fine every time), so a real recording replaced it rather than shipping a
   broken "live" demo. Re-record after any change that affects boot output:
@@ -36,8 +36,8 @@ dependencies beyond clang, ld.lld and qemu.
   checking items off.
 - Each version gets a `git tag -a jt-vN` + `gh release create jt-vN` once it
   ships. Earlier tags from before the rename (`os-v0` through `os-v4`) stay
-  as-is on their original commits — don't rewrite history to relabel them.
+  as-is on their original commits, don't rewrite history to relabel them.
 - Landing page theme: warm ("Her"-movie inspired), never matrix-green or
   cold black-and-blue. The real VGA boot output is genuinely black-on-gray
-  text (can't be restyled, it's the actual kernel's real output) — everything
+  text (can't be restyled, it's the actual kernel's real output), everything
   *around* it (frame, accent color, copy) should stay warm.

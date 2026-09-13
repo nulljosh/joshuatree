@@ -1,6 +1,6 @@
 /* Physical memory manager: a bitmap, one bit per 4K frame.
    ponytail: reads mem_upper (contiguous RAM above 1MB) from the multiboot
-   info struct instead of walking the full mmap array — QEMU/GRUB always
+   info struct instead of walking the full mmap array, QEMU/GRUB always
    fill mem_upper, and a single contiguous region is all this machine has
    until something adds real hotplug/holes to worry about. Bitmap is a fixed
    MAX_FRAMES array (128MB worth); more RAM than that is just left untracked

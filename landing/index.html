@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Joshua Tree — a kernel from nothing</title>
+<title>Joshua Tree, a kernel from nothing</title>
 <meta name="description" content="A freestanding kernel built from scratch, toward its own file explorer and browser. No macOS, no Linux underneath.">
 <link rel="icon" href="icon.svg">
 <style>
@@ -18,7 +18,7 @@
      100dvh (not 100vh) so mobile Safari's address bar doesn't cause the
      stage to overflow into main and show a ghost border. */
   #stage-wrap { padding: 20px; height: 100vh; height: 100dvh; background: var(--bg); }
-  #stage { position: relative; width: 100%; height: 100%; background: #000; overflow: hidden; border-radius: 24px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; }
+  #stage { position: relative; width: 100%; height: 100%; background: #000; overflow: hidden; border-radius: 24px; display: flex; align-items: center; justify-content: center; }
   #stage img.boot { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
 
   /* logo + name, top-left, over the running kernel */
@@ -76,8 +76,8 @@
   <p class="eyebrow">Joshua's kernel, built from nothing</p>
   <h1>What you just booted</h1>
   <p class="tagline">No macOS, no Linux underneath it. I'm writing this one myself,<br>piece by piece, toward my own file explorer and browser.</p>
-  <p class="note">Yes, it's a command prompt today. That's honestly where it is — no graphics yet (v6), no conversation with it yet (v10). I'd rather show you the real thing than fake the future version.</p>
-  <p class="note">Named Joshua Tree, renamed from a plain "os" — a tree that survives on almost nothing in the Mojave, built the same way this kernel is: piece by piece, nothing borrowed. A small nod to the U2 album too. And yeah, my own name.</p>
+  <p class="note">Yes, it's a command prompt today. That's honestly where it is, no graphics yet (v6), no conversation with it yet (v10). I'd rather show you the real thing than fake the future version.</p>
+  <p class="note">Named Joshua Tree, renamed from a plain "os", a tree that survives on almost nothing in the Mojave, built the same way this kernel is: piece by piece, nothing borrowed. A small nod to the U2 album too. And yeah, my own name.</p>
 
   <div class="progress-card">
     <h2>How far I've gotten</h2>
