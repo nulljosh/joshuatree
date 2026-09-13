@@ -27,12 +27,11 @@ Full breakdown of what shipped in each: `git log --oneline` or the commit histor
 - [x] Wait/sleep primitive: `sleep_ticks(n)` yields until n PIT ticks pass (`task.c`, `sleep` shell command). Verified it actually returns via a temporary boot-time check before shipping
 - [ ] User mode: ring 3, TSS, syscall via `int 0x80` — **deliberately deferred, not blocked**: needs new GDT entries (ring-3 code/data + a TSS descriptor), a TSS with a valid ss0/esp0, `paging.c`'s page tables switched from supervisor-only to user-accessible, and a correct `iret`-based privilege transition. Same failure mode as higher-half: a subtle bug here (wrong RPL, wrong TSS field) can leave ring-3 code silently running with ring-0 privileges while `check.sh`'s boot-banner check still passes — it can't detect a privilege-isolation bug, only a crash. Wants real verification (does ring-3 code actually fault on a privileged instruction) before shipping, not a rushed pass.
 
-## v4 — storage (data survives reboot) — ETA: 1 more session (~2-4h)
-FAT is the slow part: real spec-reading, not mechanical like ATA was.
+## v4 — storage (data survives reboot) — done (Sep 2026)
 - [x] ATA PIO driver: LBA28 read/write on the primary master (`ata.c`, `disktest` shell command). Verified with a real attached disk image (`write:ok read:ok match:ok`), not just the graceful-no-drive path
 - [x] FAT16 read support: root directory only, 8.3 names (`fat.c`, `ls`/`cat` shell commands). Verified against a real FAT16 image made with macOS `newfs_msdos` containing an actual file, not a hand-rolled test fixture (`mount:ok`, real directory listing, `cat:ok -> hello from fat16, real filesystem test`)
 - [ ] VFS layer so the shell's `open`/`read` don't care which fs backs them — lower priority now: FAT is the only filesystem that exists, so there's nothing to abstract over yet
-- [ ] Load and exec a flat binary or minimal ELF from disk
+- [x] Load and exec a flat binary from disk (`exec.c`, `exec` shell command; runs in ring 0, no isolation — v3's ring-3 work is deferred, documented on the command itself). Verified end to end: a real flat binary assembled outside the kernel, placed on a real FAT image, loaded via `fat_read_file`, and actually executed (`exec:ok`, and its own VGA write appeared exactly where expected)
 
 ## v5 — the "file explorer" (this is why the project exists) — ETA: 1 session (~2-3h)
 Mechanical once v4's VFS exists — mostly shell commands and a UI loop.
