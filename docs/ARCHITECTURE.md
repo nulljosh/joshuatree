@@ -35,7 +35,7 @@ that with the permanent, same-shaped tables.
 | `ata.c` | ATA PIO disk driver, LBA28, primary master only |
 | `fat.c` | Read-only FAT16, root directory only, 8.3 names |
 | `exec.c` | Loads a flat binary via `fat.c` and calls into it, ring 0, no isolation |
-| `kernel/kernel.c` | VGA text console, PS/2 scancode table, RTC clock, the shell |
+| `kernel/kernel.c` | VGA text console, PS/2 scancode table, RTC clock, the shell, and a mouse-driven GUI desktop (`gui`) built on v6's graphics/font/mouse primitives |
 
 ## Why things are ordered this way
 

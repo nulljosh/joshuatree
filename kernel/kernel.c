@@ -444,13 +444,247 @@ static void reboot(void){
     __asm__ volatile("cli; hlt");
 }
 
+/* ---- a real mouse-driven desktop, built entirely from v6's graphics
+   primitives (window/font/mouse), no new subsystem needed. Each icon
+   launches something genuinely real, not a mockup: the same HTML-to-text
+   renderer `web` uses, on this codebase's own embedded apps; the same LLM
+   call `chat` uses, with the reply drawn instead of printed; a real
+   listing of whatever's actually on the FAT filesystem.
+
+   Styled after the one visual language every viewer already knows a real
+   desktop by, without pretending to be one: a menu bar, a real clock (the
+   same CMOS read `time` uses), a centered dock of cards with rounded
+   corners and a soft drop shadow. No alpha blending in this framebuffer,
+   so "rounded" and "shadow" are both done by painting flat colors, corner
+   pixels outside a quarter-circle get overwritten with whatever's behind
+   them, not blended. ---- */
+#define GUI_ICON_COUNT 4
+#define GUI_CARD_W   150
+#define GUI_CARD_H   140
+#define GUI_CARD_GAP 30
+#define GUI_CARD_Y   200
+#define GUI_CORNER_R 14
+#define GUI_GLYPH_SIZE 56
+#define GUI_BG       0x00FAF8F6
+#define GUI_MENUBAR_H 30
+static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files"};
+static const char  GUI_GLYPHS[GUI_ICON_COUNT] = {'W', 'C', '@', 'F'};
+static const unsigned int GUI_COLORS[GUI_ICON_COUNT] = {0x00C1502F, 0x007A2048, 0x00365E8C, 0x00707070};
+
+static int gui_dock_x0(void){
+    int total = GUI_ICON_COUNT * GUI_CARD_W + (GUI_ICON_COUNT - 1) * GUI_CARD_GAP;
+    return ((int)window_width() - total) / 2;
+}
+
+/* Paints a rect, then overwrites each corner's pixels outside a quarter
+   circle of radius r with bg, faking a rounded rect with no alpha. */
+static void gui_rounded_rect(int x, int y, int w, int h, unsigned int color, unsigned int bg, int r){
+    window_rect(x, y, w, h, color);
+    for (int dy = 0; dy < r; dy++){
+        for (int dx = 0; dx < r; dx++){
+            if (dx * dx + dy * dy > r * r){
+                window_pixel(x + dx,         y + dy,         bg);
+                window_pixel(x + w - 1 - dx, y + dy,         bg);
+                window_pixel(x + dx,         y + h - 1 - dy, bg);
+                window_pixel(x + w - 1 - dx, y + h - 1 - dy, bg);
+            }
+        }
+    }
+}
+
+static void gui_draw_menubar(void){
+    window_rect(0, 0, (int)window_width(), GUI_MENUBAR_H, 0x00FFFFFF);
+    window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
+    font_draw_string("Joshua Tree", 14, 7, 0x001C1C1E, -1);
+
+    u8 h = cmos(4), m = cmos(2);
+    char clock[6];
+    u8 hv = (h & 0x0F) + ((h >> 4) * 10), mv = (m & 0x0F) + ((m >> 4) * 10);
+    clock[0] = '0' + hv / 10; clock[1] = '0' + hv % 10; clock[2] = ':';
+    clock[3] = '0' + mv / 10; clock[4] = '0' + mv % 10; clock[5] = 0;
+    font_draw_string(clock, (int)window_width() - 60, 7, 0x001C1C1E, -1);
+}
+
+static void gui_draw_desktop(int hover){
+    window_clear(GUI_BG);
+    gui_draw_menubar();
+    font_draw_string("click an app  --  esc to quit", gui_dock_x0(), 150, 0x0075726E, -1);
+
+    int x0 = gui_dock_x0();
+    for (int i = 0; i < GUI_ICON_COUNT; i++) {
+        int x = x0 + i * (GUI_CARD_W + GUI_CARD_GAP);
+        int lift = (i == hover) ? 4 : 0; /* hovered card "lifts": bigger shadow gap, icon shifts up */
+
+        /* drop shadow first, offset down-right, then the card on top */
+        gui_rounded_rect(x + 4, GUI_CARD_Y + 5 - lift, GUI_CARD_W, GUI_CARD_H, 0x00E3DFD8, GUI_BG, GUI_CORNER_R);
+        gui_rounded_rect(x, GUI_CARD_Y - lift, GUI_CARD_W, GUI_CARD_H, 0x00FFFFFF, GUI_BG, GUI_CORNER_R);
+
+        int icon_x = x + (GUI_CARD_W - GUI_GLYPH_SIZE) / 2;
+        int icon_y = GUI_CARD_Y - lift + 18;
+        gui_rounded_rect(icon_x, icon_y, GUI_GLYPH_SIZE, GUI_GLYPH_SIZE, GUI_COLORS[i], 0x00FFFFFF, 12);
+        font_draw_char((unsigned char)GUI_GLYPHS[i], icon_x + GUI_GLYPH_SIZE / 2 - 4, icon_y + GUI_GLYPH_SIZE / 2 - 8, 0x00FFFFFF, -1);
+
+        int label_w = (int)strlen(GUI_LABELS[i]) * 8;
+        font_draw_string(GUI_LABELS[i], x + (GUI_CARD_W - label_w) / 2, icon_y + GUI_GLYPH_SIZE + 14, 0x001C1C1E, -1);
+    }
+}
+
+static int gui_hit_test(int mx, int my){
+    if (my < GUI_CARD_Y - 4 || my >= GUI_CARD_Y + GUI_CARD_H) return -1;
+    int x0 = gui_dock_x0();
+    for (int i = 0; i < GUI_ICON_COUNT; i++) {
+        int x = x0 + i * (GUI_CARD_W + GUI_CARD_GAP);
+        if (mx >= x && mx < x + GUI_CARD_W) return i;
+    }
+    return -1;
+}
+
+static void gui_draw_cursor(int x, int y){
+    window_rect(x, y, 3, 13, 0x001C1C1E);
+    window_rect(x, y, 13, 3, 0x001C1C1E);
+    window_rect(x + 1, y + 1, 1, 11, 0x00FFFFFF);
+    window_rect(x + 1, y + 1, 11, 1, 0x00FFFFFF);
+}
+
+static void gui_wait_close(void){
+    font_draw_string("any key to go back", 20, (int)window_height() - 30, 0x0075726E, -1);
+    get_key();
+}
+
+static void gui_launch_html(const char *label, const unsigned char *data, unsigned int data_len){
+    window_clear(0x00FAF8F6);
+    font_draw_string(label, 20, 16, 0x00C1502F, -1);
+
+    /* app_weather_html/app_curbfind_html are raw byte arrays generated by
+       gen_app.sh, not null-terminated C strings; html_to_text expects one,
+       so copy with an explicit terminator rather than let it scan past the
+       real buffer into whatever memory follows. */
+    static char html[16384]; /* comfortably covers both embedded apps (curbfind is the larger at 14318 bytes) */
+    unsigned int copy_len = data_len < sizeof(html) - 1 ? data_len : sizeof(html) - 1;
+    for (unsigned int i = 0; i < copy_len; i++) html[i] = (char)data[i];
+    html[copy_len] = 0;
+
+    static char text[6144];
+    unsigned int n = html_to_text(html, text, sizeof(text) - 1);
+    text[n] = 0;
+    render_wrapped_text(text, 20, 44, (int)window_width() - 40, (int)window_height() - 90, 0x001C1C1E);
+    gui_wait_close();
+}
+
+static int gui_fat_count;
+static char gui_fat_names[16][14];
+static void gui_fat_collect(const char *name, unsigned int size, int is_dir){
+    (void)size;
+    if (gui_fat_count >= 16) return;
+    int i = 0;
+    while (name[i] && i < 12) { gui_fat_names[gui_fat_count][i] = name[i]; i++; }
+    if (is_dir) gui_fat_names[gui_fat_count][i++] = '/';
+    gui_fat_names[gui_fat_count][i] = 0;
+    gui_fat_count++;
+}
+
+static void gui_launch_files(void){
+    window_clear(0x00FAF8F6);
+    font_draw_string("Files", 20, 16, 0x00C1502F, -1);
+    gui_fat_count = 0;
+    fat_list(gui_fat_collect);
+    if (gui_fat_count == 0) font_draw_string("(no files, or no FAT filesystem)", 20, 50, 0x001C1C1E, -1);
+    for (int i = 0; i < gui_fat_count; i++) font_draw_string(gui_fat_names[i], 20, 50 + i * 18, 0x001C1C1E, -1);
+    gui_wait_close();
+}
+
+static void gui_launch_chat(void){
+    window_clear(0x00FAF8F6);
+    font_draw_string("Chat", 20, 16, 0x00C1502F, -1);
+    font_draw_string("type a message, enter to send, esc to cancel:", 20, 44, 0x0075726E, -1);
+
+    static char msg[200];
+    unsigned int n = 0;
+    for (;;) {
+        int k = get_key();
+        if (k == KEY_ESC) return;
+        if (k == KEY_ENTER) break;
+        if (k == '\b') { if (n > 0) n--; }
+        else if (n < sizeof(msg) - 1 && k >= 32 && k < 127) msg[n++] = (char)k;
+        window_rect(20, 68, (int)window_width() - 40, 20, 0x00FFFFFF);
+        msg[n] = 0;
+        font_draw_string(msg, 24, 70, 0x001C1C1E, -1);
+    }
+    msg[n] = 0;
+    if (n == 0) return;
+
+    font_draw_string("asking llama3.1 (local, on the host machine)...", 20, 100, 0x0075726E, -1);
+    if (!rtl8139_init()) { font_draw_string("no RTL8139 found", 20, 120, 0x001C1C1E, -1); gui_wait_close(); return; }
+    net_init(0x0A00020F);
+
+    char escaped[256];
+    json_escape(msg, escaped, sizeof(escaped));
+    static char req_body[512];
+    unsigned int rn = 0;
+    const char *parts[3];
+    parts[0] = "{\"model\":\"llama3.1:8b\",\"stream\":false,\"prompt\":\"";
+    parts[1] = escaped;
+    parts[2] = "\"}";
+    for (int p = 0; p < 3; p++) { const char *s = parts[p]; while (*s && rn < sizeof(req_body)) req_body[rn++] = *s++; }
+
+    static char resp[4096];
+    int respn = http_post("10.0.2.2", "/api/generate", 11434, req_body, rn, resp, sizeof(resp) - 1);
+    window_clear(0x00FAF8F6);
+    font_draw_string("Chat", 20, 16, 0x00C1502F, -1);
+    font_draw_string(msg, 20, 44, 0x007A2048, -1);
+    if (respn <= 0) { font_draw_string("FAIL (couldn't reach the host's Ollama server)", 20, 70, 0x001C1C1E, -1); }
+    else {
+        resp[respn] = 0;
+        static char answer[2048];
+        unsigned int an = json_extract_string(resp, "response", answer, sizeof(answer));
+        answer[an] = 0;
+        if (an == 0) font_draw_string("(no response field in the reply)", 20, 70, 0x001C1C1E, -1);
+        else render_wrapped_text(answer, 20, 70, (int)window_width() - 40, (int)window_height() - 110, 0x001C1C1E);
+    }
+    gui_wait_close();
+}
+
+static void gui_run(void){
+    if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); return; }
+    int mx = 400, my = 300, buttons = 0, prev_buttons = 0;
+    int hover = -1;
+    gui_draw_desktop(hover);
+    for (;;) {
+        __asm__ volatile ("hlt");
+        int sc = kbd_pop();
+        if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) break; /* esc, non-blocking */
+        int dx, dy;
+        if (mouse_get_delta(&dx, &dy, &buttons)) {
+            mx += dx; my += dy;
+            if (mx < 0) mx = 0; if ((unsigned)mx >= window_width())  mx = (int)window_width() - 1;
+            if (my < 0) my = 0; if ((unsigned)my >= window_height()) my = (int)window_height() - 1;
+        }
+        int new_hover = gui_hit_test(mx, my);
+        int clicked = (buttons & 1) && !(prev_buttons & 1);
+        prev_buttons = buttons;
+        if (clicked && new_hover >= 0) {
+            if (new_hover == 0)      gui_launch_html("Weather", app_weather_html, app_weather_len);
+            else if (new_hover == 1) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
+            else if (new_hover == 2) gui_launch_chat();
+            else if (new_hover == 3) gui_launch_files();
+            hover = -1;
+        }
+        else hover = new_hover;
+        gui_draw_desktop(hover); /* redraw every frame: simplest way to erase the old cursor */
+        gui_draw_cursor(mx, my);
+    }
+    window_close();
+    clear();
+    puts("back in text mode\n");
+}
+
 static void run(char *line){
     char *arg = line;
     while (*arg && *arg != ' ') arg++;
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest preempttest ring3test sleep disktest ls cat exec rm cd mkdir browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest preempttest ring3test sleep disktest ls cat exec rm cd mkdir browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build gui\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -752,6 +986,9 @@ static void run(char *line){
             clear();
             puts("back in text mode\n");
         }
+    }
+    else if (!strcmp(line, "gui")) {
+        gui_run();
     }
     else if (!strcmp(line, "mousetest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }

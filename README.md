@@ -25,7 +25,7 @@ the same way this kernel is. Also a nod to the U2 album, and my own name.
 | Tasks | `task.c` + `irq_stubs.S`'s irq0: preemptive round-robin off the PIT tick, `yield()` reaches the same path in software via `int $32` |
 | User mode | `ring3.c` + `ring3_asm.S`: real ring-3 privilege isolation, `ring3test` proves a privileged instruction faults instead of silently succeeding |
 | Storage | `ata.c` (disk driver), `fat.c` (FAT16 read), `exec.c` (load+run a flat binary) |
-| Console | `kernel/kernel.c`: VGA text, keyboard, clock, the shell |
+| Console | `kernel/kernel.c`: VGA text, keyboard, clock, the shell, a real mouse-driven GUI desktop (`gui`) |
 | Link | `linker.ld`: flat ELF32 at 1 MB |
 | Check | `check.sh`: boots it and checks the banner reached VGA memory |
 
