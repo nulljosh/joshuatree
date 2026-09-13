@@ -4,6 +4,7 @@
 #include "irq.h"
 #include "pmm.h"
 #include "paging.h"
+#include "kheap.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -118,11 +119,18 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault\n");
+    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest\n");
     else if (streq(line, "clear")) clear();
     else if (streq(line, "echo"))  { puts(arg); putc('\n'); }
     else if (streq(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
     else if (streq(line, "pagefault")) { volatile int *p = (int *)0xDEAD0000; *p = 1; } /* manual check: exercises paging */
+    else if (streq(line, "heaptest")) {
+        char *a = kmalloc(16);
+        char *b = kmalloc(32);
+        if (a && b) { a[0] = 'A'; b[0] = 'B'; kfree(a); char *c = kmalloc(8);
+            puts(c == (void*)a ? "reused freed block: ok\n" : "alloc ok, no reuse\n"); kfree(b); kfree(c); }
+        else puts("kmalloc failed\n");
+    }
     else if (streq(line, "uptime")){ putn(ticks() / 100); puts("s\n"); }
     else if (streq(line, "mem")) {
         putn(pmm_free_frames() * 4); puts("K free / ");
