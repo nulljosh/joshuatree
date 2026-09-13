@@ -1,9 +1,12 @@
 /* First-fit free-list heap, grown a physical frame at a time via pmm.
-   ponytail: no coalescing on free, and the heap can only grow inside
-   paging.c's identity-mapped first 4MB (a frame handed back at or past
-   0x400000 isn't mapped yet, so growth just stops there and kmalloc
-   returns 0 -- fine until something above 4MB needs to be heap-backed,
-   which is exactly what the higher-half move later in v2 has to fix). */
+   ponytail: no splitting a larger free block on reuse, a whole block goes
+   to a smaller request rather than being carved up, add real splitting if
+   a workload's block-size mix ever makes that waste matter. The heap can
+   only grow inside paging.c's identity-mapped first 4MB (a frame handed
+   back at or past 0x400000 isn't mapped yet, so growth just stops there
+   and kmalloc returns 0 -- fine until something above 4MB needs to be
+   heap-backed, which is exactly what the higher-half move later in v2 has
+   to fix). */
 #include "kheap.h"
 #include "pmm.h"
 
@@ -58,4 +61,26 @@ void kfree(void *ptr) {
     if (!ptr) return;
     struct block *b = (struct block *)ptr - 1;
     b->free = 1;
+
+    /* Coalesce adjacent free blocks. The list is exactly in decreasing-
+       address order: every new block is carved at the current heap_next
+       (always higher than anything carved before) and pushed onto the
+       head, so a node and its immediate successor in the list are always
+       memory-adjacent, higher address first. Merge into the lower-address
+       side (its header is the one actually sitting at the merged block's
+       start) whenever both sides of a boundary are free, walking the
+       whole list once so one free can close a run of several. */
+    struct block *prev = 0;
+    struct block *cur = heap_head;
+    while (cur && cur->next) {
+        struct block *nxt = cur->next;
+        if (cur->free && nxt->free) {
+            nxt->size += (u32)sizeof(struct block) + cur->size;
+            if (prev) prev->next = nxt; else heap_head = nxt;
+            cur = nxt;
+        } else {
+            prev = cur;
+            cur = cur->next;
+        }
+    }
 }

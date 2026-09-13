@@ -447,6 +447,21 @@ static void run(char *line){
         if (a && b) { a[0] = 'A'; b[0] = 'B'; kfree(a); char *c = kmalloc(8);
             puts(c == (void*)a ? "reused freed block: ok\n" : "alloc ok, no reuse\n"); kfree(b); kfree(c); }
         else puts("kmalloc failed\n");
+
+        /* two adjacent blocks, freed, should merge into one big enough for
+           a request neither could satisfy alone, with no new frame pulled
+           in for it: the real, distinguishing signature of coalescing
+           actually running, not just "didn't crash" */
+        char *x = kmalloc(20);
+        char *y = kmalloc(20);
+        if (x && y) {
+            unsigned int before = pmm_free_frames();
+            kfree(y); kfree(x);
+            char *big = kmalloc(48);
+            unsigned int after = pmm_free_frames();
+            puts((big == x && after == before) ? "coalesced adjacent free blocks: ok\n" : "coalesce failed\n");
+            kfree(big);
+        } else puts("kmalloc failed\n");
     }
     else if (!strcmp(line, "uptime")){ putn(ticks() / 100); puts("s\n"); }
     else if (!strcmp(line, "mem")) {
