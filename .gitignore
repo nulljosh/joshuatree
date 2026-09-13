@@ -1,6 +1,7 @@
 *.o
 kernel.elf
 landing/kernel.elf
+!landing/v86/kernel.elf
 .DS_Store
 .wrangler/
 menubar/JoshuaTreeMonitor.app/

@@ -1133,6 +1133,7 @@ void kmain(unsigned int multiboot_info_addr){
     boot_chime();
     puts("joshuatree v0 -- type help\n");
     if (!fs_ok) puts("(no FAT filesystem found -- ls/cat unavailable)\n");
+    kbd_drain(); /* discard any stray byte queued during boot (keyboard_enable_scanning, mouse_init) before real input starts */
     char line[80];
     for (;;) {
         puts("> ");

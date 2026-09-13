@@ -45,6 +45,10 @@ int kbd_pop(void) {
     return sc;
 }
 
+void kbd_drain(void) {
+    while (kbd_pop() >= 0) {}
+}
+
 unsigned int ticks(void) { return tick_count; }
 
 /* PIT channel 0, mode 3 (square wave), reload for ~100Hz from the 1.193182MHz base. */

@@ -54,6 +54,8 @@ static void vbe_write(u16 index, u16 value) {
 #define INPUT_STATUS1  0x3DA
 #define MISC_WRITE     0x3C2
 #define MISC_READ      0x3CC
+#define DAC_INDEX_WRITE 0x3C8
+#define DAC_DATA        0x3C9
 
 static u8  saved_misc;
 static u8  saved_seq[5];
@@ -179,4 +181,29 @@ void vga_text_mode_init(void) {
     }
     (void)inb(INPUT_STATUS1);
     outb(AC_INDEX_DATA, 0x20);
+
+    /* The attribute controller above maps each 4-bit text attribute nibble
+       to one of these 16 DAC color registers, but the DAC's actual RGB
+       values behind them are separate hardware state again, real silicon
+       has a hardwired default palette burned in at power-on, no BIOS
+       execution required, and QEMU's std VGA device models that same
+       power-on default. v86 has no "power-on" to model it from: found by
+       direct inspection that text bytes were landing in the row divs with
+       the right characters but both foreground and background colors
+       reading back as rgb(0,0,0), 0x07 (light gray on black) rendering as
+       black on black. These are the standard 16-color VGA default DAC
+       values (6-bit per channel, 0-63), scaled to 8-bit by *4 like a real
+       DAC's output stage does driving the analog signal. */
+    static const u8 dac[16][3] = {
+        {0x00,0x00,0x00}, {0x00,0x00,0x2A}, {0x00,0x2A,0x00}, {0x00,0x2A,0x2A},
+        {0x2A,0x00,0x00}, {0x2A,0x00,0x2A}, {0x2A,0x15,0x00}, {0x2A,0x2A,0x2A},
+        {0x15,0x15,0x15}, {0x15,0x15,0x3F}, {0x15,0x3F,0x15}, {0x15,0x3F,0x3F},
+        {0x3F,0x15,0x15}, {0x3F,0x15,0x3F}, {0x3F,0x3F,0x15}, {0x3F,0x3F,0x3F}
+    };
+    outb(DAC_INDEX_WRITE, 0);
+    for (int i = 0; i < 16; i++) {
+        outb(DAC_DATA, dac[i][0]);
+        outb(DAC_DATA, dac[i][1]);
+        outb(DAC_DATA, dac[i][2]);
+    }
 }
