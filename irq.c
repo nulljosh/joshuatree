@@ -4,6 +4,7 @@
 #include "irq.h"
 #include "pic.h"
 #include "idt.h"
+#include "mouse.h"
 
 typedef unsigned int  u32;
 typedef unsigned short u16;
@@ -31,6 +32,8 @@ void irq_handler(u32 irq_no) {
         u8 sc = inb(0x60);
         int next = (kbd_head + 1) % KBD_BUF_SIZE;
         if (next != kbd_tail) { kbd_buf[kbd_head] = sc; kbd_head = next; }
+    } else if (irq_no == 12) {
+        mouse_handle_byte(inb(0x60));
     }
     pic_eof((int)irq_no);
 }

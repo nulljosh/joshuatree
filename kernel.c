@@ -12,6 +12,7 @@
 #include "libc.h"
 #include "pci.h"
 #include "vbe.h"
+#include "mouse.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -211,7 +212,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest mousetest\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -287,6 +288,35 @@ static void run(char *line){
             puts("back in text mode\n");
         }
     }
+    else if (!strcmp(line, "mousetest")) {
+        unsigned int fb;
+        if (!vbe_set_mode(800, 600, 32, &fb)) { puts("no VGA device found\n"); }
+        else if (!paging_map_region(fb, 800 * 600 * 4)) { puts("out of page tables\n"); vbe_disable(); }
+        else {
+            unsigned int *pixels = (unsigned int *)fb;
+            int cx_pos = 400, cy_pos = 300;
+            int buttons = 0;
+            do {
+                for (int i = 0; i < 800 * 600; i++) pixels[i] = 0x00FAF8F6;
+                for (int dy = -5; dy <= 5; dy++) {
+                    for (int dx = -5; dx <= 5; dx++) {
+                        int px = cx_pos + dx, py = cy_pos + dy;
+                        if (px >= 0 && px < 800 && py >= 0 && py < 600) pixels[py * 800 + px] = 0x00C1502F;
+                    }
+                }
+                __asm__ volatile ("hlt"); /* wake on the next IRQ (timer, keyboard, or mouse) */
+                int dx, dy;
+                if (mouse_get_delta(&dx, &dy, &buttons)) {
+                    cx_pos += dx; cy_pos += dy;
+                    if (cx_pos < 0) cx_pos = 0; if (cx_pos > 799) cx_pos = 799;
+                    if (cy_pos < 0) cy_pos = 0; if (cy_pos > 599) cy_pos = 599;
+                }
+            } while (!(buttons & 1)); /* left click to exit */
+            vbe_disable();
+            clear();
+            puts("back in text mode\n");
+        }
+    }
     else if (!strcmp(line, "time"))  show_time();
     else if (!strcmp(line, "reboot"))reboot();
     else { puts("? "); puts(line); putc('\n'); }
@@ -296,6 +326,7 @@ void kmain(unsigned int multiboot_info_addr){
     gdt_install();
     idt_install();
     irq_install();
+    mouse_init();
     pmm_init(multiboot_info_addr);
     paging_install();
     tasks_init();

@@ -23,9 +23,11 @@ void pic_remap(void) {
     outb(PIC1_DATA, 0x01); io_wait();  /* ICW4: 8086 mode */
     outb(PIC2_DATA, 0x01); io_wait();
 
-    /* mask everything except IRQ0 (timer) and IRQ1 (keyboard) for now */
-    outb(PIC1_DATA, 0xFC);
-    outb(PIC2_DATA, 0xFF);
+    /* mask everything except IRQ0 (timer), IRQ1 (keyboard), IRQ2 (the
+       cascade line itself, must stay unmasked or no slave-PIC IRQ, like
+       the mouse's IRQ12, can ever reach the CPU), and IRQ12 (mouse) */
+    outb(PIC1_DATA, 0xF8);
+    outb(PIC2_DATA, 0xEF);
 }
 
 void pic_eof(int irq) {
