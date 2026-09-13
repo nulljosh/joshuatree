@@ -13,6 +13,7 @@
 #include "pci.h"
 #include "vbe.h"
 #include "mouse.h"
+#include "window.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -273,46 +274,34 @@ static void run(char *line){
         else puts("no VGA device found\n");
     }
     else if (!strcmp(line, "gfxtest")) {
-        unsigned int fb;
-        if (!vbe_set_mode(800, 600, 32, &fb)) { puts("no VGA device found\n"); }
-        else if (!paging_map_region(fb, 800 * 600 * 4)) { puts("out of page tables\n"); vbe_disable(); }
+        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
         else {
-            unsigned int *pixels = (unsigned int *)fb;
-            for (int y = 0; y < 600; y++) {
-                unsigned int color = (y < 200) ? 0x00C1502F : (y < 400) ? 0x007A2048 : 0x00FAF8F6;
-                for (int x = 0; x < 800; x++) pixels[y * 800 + x] = color;
-            }
+            window_rect(0, 0, 800, 200, 0x00C1502F);
+            window_rect(0, 200, 800, 200, 0x007A2048);
+            window_rect(0, 400, 800, 200, 0x00FAF8F6);
             get_key(); /* leave the picture up until a key is pressed */
-            vbe_disable();
+            window_close();
             clear();
             puts("back in text mode\n");
         }
     }
     else if (!strcmp(line, "mousetest")) {
-        unsigned int fb;
-        if (!vbe_set_mode(800, 600, 32, &fb)) { puts("no VGA device found\n"); }
-        else if (!paging_map_region(fb, 800 * 600 * 4)) { puts("out of page tables\n"); vbe_disable(); }
+        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
         else {
-            unsigned int *pixels = (unsigned int *)fb;
             int cx_pos = 400, cy_pos = 300;
             int buttons = 0;
             do {
-                for (int i = 0; i < 800 * 600; i++) pixels[i] = 0x00FAF8F6;
-                for (int dy = -5; dy <= 5; dy++) {
-                    for (int dx = -5; dx <= 5; dx++) {
-                        int px = cx_pos + dx, py = cy_pos + dy;
-                        if (px >= 0 && px < 800 && py >= 0 && py < 600) pixels[py * 800 + px] = 0x00C1502F;
-                    }
-                }
+                window_clear(0x00FAF8F6);
+                window_rect(cx_pos - 5, cy_pos - 5, 10, 10, 0x00C1502F);
                 __asm__ volatile ("hlt"); /* wake on the next IRQ (timer, keyboard, or mouse) */
                 int dx, dy;
                 if (mouse_get_delta(&dx, &dy, &buttons)) {
                     cx_pos += dx; cy_pos += dy;
-                    if (cx_pos < 0) cx_pos = 0; if (cx_pos > 799) cx_pos = 799;
-                    if (cy_pos < 0) cy_pos = 0; if (cy_pos > 599) cy_pos = 599;
+                    if (cx_pos < 0) cx_pos = 0; if ((unsigned)cx_pos >= window_width())  cx_pos = window_width() - 1;
+                    if (cy_pos < 0) cy_pos = 0; if ((unsigned)cy_pos >= window_height()) cy_pos = window_height() - 1;
                 }
             } while (!(buttons & 1)); /* left click to exit */
-            vbe_disable();
+            window_close();
             clear();
             puts("back in text mode\n");
         }
