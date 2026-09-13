@@ -14,7 +14,7 @@ takes, and roughly what xv6/ToaruOS/Linux 0.01 did in their first months).
 - [x] Tiny line-based shell (`help`, `clear`, `echo`, `time`, `reboot`)
 
 ## v1 — interrupts (the machine can react instead of only polling)
-- [ ] GDT: proper flat segments (currently relying on whatever GRUB left set up)
+- [x] GDT: proper flat segments (`gdt.c`, null/code/data descriptors spanning 4GB, `lgdt` + far jump to reload `%cs`, then reload the data segments)
 - [ ] IDT + ISRs: CPU exceptions (divide-by-zero, page fault, GPF) print a message instead of triple-faulting
 - [ ] PIC remap (IRQs 0-15 off the CPU exception vectors 0-31)
 - [ ] IRQ1 keyboard handler replaces polling `getch`

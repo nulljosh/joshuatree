@@ -1,4 +1,5 @@
 /* Freestanding i386 kernel: VGA text, PS/2 keyboard, RTC clock, tiny shell. */
+#include "gdt.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -106,6 +107,7 @@ static void run(char *line){
 }
 
 void kmain(void){
+    gdt_install();
     clear();
     puts("os v0 -- type help\n");
     char line[80];
