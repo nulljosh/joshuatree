@@ -13,12 +13,16 @@
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
 
-  /* the OS screen fills most of the viewport, framed like a window rather
-     than a fullbleed black wall -- friendly, not hacker-terminal.
-     100dvh (not 100vh) so mobile Safari's address bar doesn't cause the
-     stage to overflow into main and show a ghost border. */
-  #stage-wrap { padding: 20px; height: 100vh; height: 100dvh; background: var(--bg); }
-  #stage { position: relative; width: 100%; height: 100%; background: #000; overflow: hidden; border-radius: 24px; display: flex; align-items: center; justify-content: center; }
+  /* the OS screen is framed like a window rather than a fullbleed black
+     wall -- friendly, not hacker-terminal. Sized by aspect-ratio (driven
+     by width, which mobile Safari's toolbar never touches) with a
+     viewport-height cap, not by height:100dvh directly: a height-based box
+     is exactly what mobile Safari's toolbar-collapse animation destabilizes,
+     seen as a real glitch, a visible seam and a second phantom black box
+     while the toolbar was mid-transition. Sizing off width sidesteps the
+     whole class of bug instead of chasing another viewport-unit fix. */
+  #stage-wrap { padding: 20px; background: var(--bg); display: flex; justify-content: center; }
+  #stage { position: relative; width: 100%; max-width: 900px; aspect-ratio: 720 / 400; max-height: 80vh; max-height: 80dvh; background: #000; overflow: hidden; border-radius: 24px; display: flex; align-items: center; justify-content: center; }
   #stage img.boot { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
 
   /* logo + name, top-left, over the running kernel */
@@ -65,7 +69,7 @@
 
 <div id="stage-wrap">
   <div id="stage">
-    <img class="boot" id="bootgif" src="boot.gif?r=1" alt="A real QEMU boot of this exact kernel.elf: booting, then help, mem, and uptime typed at the shell.">
+    <img class="boot" id="bootgif" src="boot.gif?r=2" alt="A real QEMU boot of this exact kernel.elf: booting, then help, lspci, and mem typed at the shell, showing the current command set and real PCI/memory output.">
     <div class="brand"><img src="icon.svg" alt=""><span>Joshua Tree</span></div>
     <div class="links"><a href="https://github.com/nulljosh/joshuatree">Source</a></div>
     <div class="hint">A real boot of this exact <code>kernel.elf</code>, recorded in QEMU. Not staged. Loops automatically.</div>
@@ -75,8 +79,8 @@
 <main>
   <p class="eyebrow">Joshua's kernel, built from nothing</p>
   <h1>What you just booted</h1>
-  <p class="tagline">No macOS, no Linux underneath it. Written from scratch,<br>toward its own file explorer and browser.</p>
-  <p class="note">It's a command prompt today. No graphics yet (v6), no conversation with it yet (v10). This is the real thing, not a mockup of where it's headed.</p>
+  <p class="tagline">No macOS, no Linux underneath it. Written from scratch,<br>with its own network stack, its own web server, and a real conversation with an LLM.</p>
+  <p class="note">It boots, manages its own memory, runs a filesystem it wrote the driver for, and talks over a real network stack built from raw Ethernet frames up: ARP, DNS, TCP, a browser-shaped HTTP client, its own tiny web server, and a shell command that holds a real conversation with an LLM. This is the real thing, not a mockup of where it's headed.</p>
   <p class="note">Named Joshua Tree, renamed from a plain "os". The tree survives the Mojave on almost nothing, built the same way this kernel is. Also a nod to the U2 album, and my own name.</p>
 
   <div class="progress-card">
@@ -87,7 +91,7 @@
   <div class="steps">
     <div class="step"><div class="n">Why</div><p>I already talk to Claude and get it to build things. I want an OS that does that natively, not bolted onto macOS.</p></div>
     <div class="step"><div class="n">How</div><p>One real piece at a time: interrupts, memory, a filesystem, graphics. No shortcuts, no borrowed kernel.</p></div>
-    <div class="step"><div class="n">Where it's going</div><p>My own file explorer and browser, running on something I wrote myself.</p></div>
+    <div class="step"><div class="n">Where it's going</div><p>Real graphics, a font renderer, and its own apps running natively, all on something I wrote myself.</p></div>
   </div>
 </main>
 
