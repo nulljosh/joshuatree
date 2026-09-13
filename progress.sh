@@ -37,7 +37,7 @@ n=${#labels[@]}
 max=$total
 [ "$max" -eq 0 ] && max=1
 
-pad_l=30; pad_r=16; pad_t=16; pad_b=28
+pad_l=30; pad_r=16; pad_t=26; pad_b=28
 plot_w=420; plot_h=140
 width=$((pad_l + plot_w + pad_r))
 height=$((pad_t + plot_h + pad_b))
@@ -55,7 +55,9 @@ half=$((max / 2))
 
 svg="<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"$width\" height=\"$height\" viewBox=\"0 0 $width $height\">"
 svg+="<rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>"
-# y-axis gridlines + labels at 0, half, max
+svg+="<text x=\"$pad_l\" y=\"12\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" fill=\"#999\">features shipped</text>"
+# y-axis gridlines + labels at 0, half, max, each tagged with a unit so the
+# numbers read as a count of features, not arbitrary axis ticks
 svg+="<line x1=\"$pad_l\" y1=\"$pad_t\" x2=\"$((pad_l+plot_w))\" y2=\"$pad_t\" stroke=\"#eee\"/>"
 svg+="<text x=\"2\" y=\"$((pad_t+3))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"9\" fill=\"#999\">$max</text>"
 svg+="<line x1=\"$pad_l\" y1=\"$((pad_t+plot_h/2))\" x2=\"$((pad_l+plot_w))\" y2=\"$((pad_t+plot_h/2))\" stroke=\"#eee\"/>"
@@ -69,7 +71,7 @@ for i in "${!labels[@]}"; do
   x=$((pad_l + i * plot_w / (n - 1 > 0 ? n - 1 : 1)))
   svg+="<text x=\"$x\" y=\"$((pad_t+plot_h+16))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" fill=\"#666\" text-anchor=\"middle\">${labels[$i]}</text>"
 done
-svg+="<text x=\"$pad_l\" y=\"$((height-4))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" fill=\"#666\">${cum[$((n-1))]} of $max features shipped</text>"
+svg+="<text x=\"$pad_l\" y=\"$((height-4))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" fill=\"#666\">${cum[$((n-1))]} of $max shipped</text>"
 svg+="</svg>"
 
 echo "$svg" > progress.svg
