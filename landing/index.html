@@ -18,10 +18,12 @@
   h1 { font-size: 44px; margin: 4px 0 8px; letter-spacing: -0.02em; }
   p.tagline { color: var(--sub); font-size: 19px; margin: 0 0 36px; line-height: 1.5; }
 
-  .term { background: #0b0d0b; color: #3ee06a; border-radius: 12px; padding: 18px 20px; text-align: left; font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; box-shadow: 0 8px 24px rgba(0,0,0,0.2); margin-bottom: 36px; overflow-x: auto; }
-  .term .dim { color: #5a9c6b; }
-  .term .cursor { display:inline-block; width:7px; height:14px; background:#3ee06a; vertical-align:-2px; animation: blink 1s step-end infinite; }
-  @keyframes blink { 50% { opacity: 0; } }
+  .term-wrap { background: #0b0d0b; border-radius: 12px; padding: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); margin-bottom: 12px; }
+  .term-wrap .label { color: #5a9c6b; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: left; padding: 0 8px 8px; }
+  #screen_container { display: block; width: 100%; min-height: 200px; color: #3ee06a; font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: left; padding: 4px; }
+  #screen_container canvas { width: 100%; image-rendering: pixelated; }
+  .boot-note { color: var(--sub); font-size: 12px; margin: 0 0 32px; }
+  .boot-note code { background: var(--card); padding: 1px 5px; border-radius: 4px; }
 
   .progress-card { background: var(--card); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); border: 1px solid var(--border); border-radius: 16px; padding: 20px; margin-bottom: 32px; }
   .progress-card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--sub); margin: 0 0 14px; font-weight: 600; }
@@ -51,14 +53,11 @@
   <h1>os</h1>
   <p class="tagline">A kernel with no macOS, no Linux, nothing underneath.<br>Toward its own file explorer and browser.</p>
 
-  <div class="term" aria-hidden="true">
-    <div><span class="dim">$</span> qemu-system-i386 -kernel kernel.elf</div>
-    <div>&nbsp;</div>
-    <div>os v0 -- type help</div>
-    <div>&gt; help</div>
-    <div>help clear echo time reboot crash</div>
-    <div>&gt; <span class="cursor"></span></div>
+  <div class="term-wrap">
+    <div class="label">this kernel.elf, actually booting, right now, in your browser (v86 x86 emulator)</div>
+    <div id="screen_container">booting...</div>
   </div>
+  <p class="boot-note">Real x86 emulation, not a recording. Click in and type <code>help</code>. Slow to boot on first load (~1MB emulator core).</p>
 
   <div class="progress-card">
     <h2>Build progress</h2>
@@ -75,5 +74,16 @@
     <a href="https://github.com/nulljosh/os">Source</a>
   </div>
 </main>
+<script src="https://cdn.jsdelivr.net/npm/v86@0.5.460/build/libv86.js"></script>
+<script>
+  var emulator = new V86({
+    wasm_path: "https://cdn.jsdelivr.net/npm/v86@0.5.460/build/v86.wasm",
+    screen_container: document.getElementById("screen_container"),
+    multiboot: { url: "kernel.elf" },
+    memory_size: 32 * 1024 * 1024,
+    vga_memory_size: 2 * 1024 * 1024,
+    autostart: true,
+  });
+</script>
 </body>
 </html>

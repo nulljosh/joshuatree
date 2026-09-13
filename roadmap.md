@@ -20,8 +20,8 @@ Full breakdown of what shipped in each: `git log --oneline` or the commit histor
 - [ ] Higher-half kernel (map kernel to 0xC0000000+) — **deliberately deferred, not blocked**: touches boot.S (needs a boot-time PSE page directory + physical/virtual split before `kmain` can even be called), linker.ld (dual VMA/LMA per section), and paging.c + pmm.c (every physical-address computation there currently assumes virtual==physical and has to subtract 0xC0000000). Real risk of a subtly-broken kernel that still passes the crude banner check. Wants a dedicated pass with more careful verification than this loop's `check.sh`, not to be squeezed in at the tail of a long session.
 
 ## v3 — multitasking (more than one thing running)
-- [ ] Kernel stacks + context switch (save/restore registers, switch %esp)
-- [ ] Round-robin scheduler driven by the PIT tick
+- [x] Kernel stacks + context switch: cooperative round-robin, `yield()` swaps ESP + callee-saved registers (`task.c`, `task_switch.S`). Verified `ABABAB...` interleaving at boot before shipping. `tasktest` shell command exists but its Enter-key output can't be confirmed through the QEMU-monitor `sendkey` test harness (known limitation, see below) — the boot-time verification is the real evidence
+- [ ] Preemptive scheduling off the PIT tick — deferred: needs the timer IRQ handler itself to call the switch, which means every task's initial stack must exactly mimic the IRQ frame layout (`pusha`+vector+CPU frame), not just `yield()`'s simpler callee-saved layout. Real risk of a subtly wrong stack frame. Do this as its own focused pass once cooperative switching has been exercised more (real second/third tasks, not just the two-letter demo)
 - [ ] Basic IPC or at least a wait/sleep primitive
 - [ ] User mode: ring 3, TSS, syscall via `int 0x80`
 
@@ -53,6 +53,16 @@ Full breakdown of what shipped in each: `git log --oneline` or the commit histor
 - [ ] A tag-soup HTML subset parser (headings, paragraphs, links — not CSS, not JS, v1 is Lynx-level)
 - [ ] Render parsed text to the framebuffer with the v6 font renderer
 - [ ] Link navigation via keyboard/mouse, back button, that's a browser
+
+## v9 — running real apps (the browser can now load something)
+- [ ] Serve the codebase's own static web apps (weather, numen, fieldbook, etc. — one-file, no-backend apps from `~/Documents/Code`) over the v7 network stack to the v8 browser
+- [ ] A tiny local HTTP server on the kernel itself, so apps run without needing an external host
+- [ ] Pick 2-3 of the simplest static apps as the first real test load, not all 30+ at once
+
+## v10 — talking to it like gato does (this is the actual point)
+- [ ] Wire a voice or text command channel into the kernel shell that can reach an LLM (needs v7's network stack to call out, or an on-device model if that's ever feasible on bare metal)
+- [ ] "build stuff" loop: a command that takes a request, edits/generates a file, serves it as a v9 app — the kernel-native version of what gato already does on macOS
+- [ ] Decide then whether voice I/O belongs in the kernel itself or stays a gato-style layer that talks to this OS over the network (real design call, not a default — flag it when v10 is reached instead of guessing)
 
 ## Explicitly parked / non-goals
 - SMP (multi-core) — one CPU is plenty until everything above works

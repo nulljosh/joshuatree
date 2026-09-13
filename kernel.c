@@ -5,6 +5,7 @@
 #include "pmm.h"
 #include "paging.h"
 #include "kheap.h"
+#include "task.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -101,6 +102,11 @@ static void putn(unsigned int v){
     while (n) putc(buf[--n]);
 }
 
+/* ---- task demo: two tasks that each print a letter and yield, round-robin,
+   to prove context switching actually swaps stacks correctly. ---- */
+static void task_a(void){ for (;;) { puts("A"); yield(); } }
+static void task_b(void){ for (;;) { puts("B"); yield(); } }
+
 /* ---- shell ---- */
 static int streq(const char *a, const char *b){
     while (*a && *a == *b) { a++; b++; }
@@ -119,7 +125,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest\n");
+    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest\n");
     else if (streq(line, "clear")) clear();
     else if (streq(line, "echo"))  { puts(arg); putc('\n'); }
     else if (streq(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -136,6 +142,13 @@ static void run(char *line){
         putn(pmm_free_frames() * 4); puts("K free / ");
         putn(pmm_total_frames() * 4); puts("K total (4K frames)\n");
     }
+    else if (streq(line, "tasktest")) {
+        puts("\n");
+        task_create(task_a);
+        task_create(task_b);
+        for (int i = 0; i < 10; i++) yield(); /* shell is task 0; let A/B interleave */
+        puts("\ndone (expect ABABAB...)\n");
+    }
     else if (streq(line, "time"))  show_time();
     else if (streq(line, "reboot"))reboot();
     else { puts("? "); puts(line); putc('\n'); }
@@ -147,6 +160,7 @@ void kmain(unsigned int multiboot_info_addr){
     irq_install();
     pmm_init(multiboot_info_addr);
     paging_install();
+    tasks_init();
     clear();
     puts("os v0 -- type help\n");
     char line[80];
