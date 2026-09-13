@@ -34,3 +34,42 @@ unsigned int html_to_text(const char *html, char *out, unsigned int maxlen) {
     out[pos] = 0;
     return pos;
 }
+
+/* Double-quoted href="..." only, real-world markup overwhelmingly uses it;
+   single-quoted attributes are a known gap, not silently mishandled. */
+unsigned int html_extract_links(const char *html, struct html_link *links_out, unsigned int max_links) {
+    unsigned int count = 0;
+    const char *p = html;
+    while (*p && count < max_links) {
+        if (!starts_with(p, "<a ") && !starts_with(p, "<a>")) { p++; continue; }
+
+        const char *tag_end = p;
+        while (*tag_end && *tag_end != '>') tag_end++;
+        const char *href_pos = 0;
+        for (const char *q = p; q < tag_end; q++) {
+            if (starts_with(q, "href=\"")) { href_pos = q + 6; break; }
+        }
+
+        struct html_link *link = &links_out[count];
+        link->href[0] = 0;
+        link->text[0] = 0;
+        if (href_pos) {
+            unsigned int hi = 0;
+            while (*href_pos && *href_pos != '"' && hi < HTML_HREF_LEN - 1) link->href[hi++] = *href_pos++;
+            link->href[hi] = 0;
+        }
+        p = *tag_end ? tag_end + 1 : tag_end;
+
+        unsigned int ti = 0;
+        while (*p && !starts_with(p, "</a>")) {
+            if (*p == '<') { while (*p && *p != '>') p++; if (*p) p++; continue; }
+            if (ti < HTML_LINK_TEXT_LEN - 1) link->text[ti++] = *p;
+            p++;
+        }
+        link->text[ti] = 0;
+        if (starts_with(p, "</a>")) p += 4;
+
+        if (href_pos) count++; /* only a real link if it actually had an href */
+    }
+    return count;
+}

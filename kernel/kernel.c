@@ -14,6 +14,7 @@
 #include "vbe.h"
 #include "mouse.h"
 #include "window.h"
+#include "font.h"
 #include "rtl8139.h"
 #include "net.h"
 #include "http.h"
@@ -253,6 +254,149 @@ static unsigned int strip_code_fence(char *s, unsigned int len){
     return new_len;
 }
 
+/* v8's actual point: parsed page text drawn to the framebuffer with the
+   real font, not just dumped to the text-mode shell. Word-wraps at the
+   window's pixel width; no scrolling yet, a page longer than one screen
+   just clips, that's the next thing to add once this is proven to render
+   real pages correctly at all. */
+static void render_wrapped_text(const char *text, int x0, int y0, int max_w_px, int max_h_px, unsigned int fg) {
+    int x = x0, y = y0;
+    const char *p = text;
+    while (*p) {
+        if (y + 16 > y0 + max_h_px) return; /* out of room */
+        if (*p == '\n') { y += 16; x = x0; p++; continue; }
+        if (*p == ' ') {
+            if (x + 8 > x0 + max_w_px) { x = x0; y += 16; }
+            else { x += 8; }
+            p++;
+            continue;
+        }
+        unsigned int wlen = 0;
+        while (p[wlen] && p[wlen] != ' ' && p[wlen] != '\n') wlen++;
+        if (x > x0 && x + (int)wlen * 8 > x0 + max_w_px) { x = x0; y += 16; if (y + 16 > y0 + max_h_px) return; }
+        for (unsigned int i = 0; i < wlen; i++) {
+            if (x + 8 > x0 + max_w_px) { x = x0; y += 16; if (y + 16 > y0 + max_h_px) return; }
+            font_draw_char((unsigned char)p[i], x, y, fg, -1);
+            x += 8;
+        }
+        p += wlen;
+    }
+}
+
+static int web_starts_with(const char *p, const char *needle) {
+    while (*needle) { if (*p != *needle) return 0; p++; needle++; }
+    return 1;
+}
+
+static void web_str_copy(char *dst, const char *src, unsigned int cap) {
+    unsigned int i = 0;
+    while (src[i] && i < cap - 1) { dst[i] = src[i]; i++; }
+    dst[i] = 0;
+}
+
+/* Resolves a link's href against the current page's host. No TLS in this
+   stack, so an https:// link is a real, honest dead end, reported as one
+   rather than silently attempted and failed. Bare relative paths (no
+   leading /) and non-http schemes (mailto:, #anchors) are a known gap,
+   not a scope this pass claims to cover. */
+static int resolve_href(const char *href, const char *cur_host, char *host_out, unsigned int host_cap,
+                         char *path_out, unsigned int path_cap, const char **reason_out) {
+    if (!href[0]) { *reason_out = "empty link"; return 0; }
+    if (web_starts_with(href, "https://")) { *reason_out = "https not supported, no TLS in this kernel yet"; return 0; }
+    if (web_starts_with(href, "http://")) {
+        const char *h = href + 7;
+        unsigned int i = 0;
+        while (h[i] && h[i] != '/' && i < host_cap - 1) { host_out[i] = h[i]; i++; }
+        host_out[i] = 0;
+        if (h[i] == '/') web_str_copy(path_out, h + i, path_cap);
+        else { path_out[0] = '/'; path_out[1] = 0; }
+        return 1;
+    }
+    if (href[0] == '/') {
+        web_str_copy(host_out, cur_host, host_cap);
+        web_str_copy(path_out, href, path_cap);
+        return 1;
+    }
+    *reason_out = "relative/unsupported link (mailto:, anchors, bare relative paths)";
+    return 0;
+}
+
+/* v8's link navigation: fetch, render, list real links found on the page,
+   number keys follow one, 'b' goes back, anything else closes. A small
+   fixed-depth history stack, not a general browser session, that's plenty
+   for what this proves. */
+#define WEB_HISTORY_DEPTH 6
+static void browse_web(const char *first_host, const char *first_path) {
+    char cur_host[64], cur_path[192];
+    web_str_copy(cur_host, first_host, sizeof(cur_host));
+    web_str_copy(cur_path, first_path, sizeof(cur_path));
+
+    char hist_host[WEB_HISTORY_DEPTH][64];
+    char hist_path[WEB_HISTORY_DEPTH][192];
+    int hist_n = 0;
+
+    for (;;) {
+        static char body[1400];
+        int n = http_get(cur_host, cur_path, 80, body, sizeof(body) - 1);
+        if (n < 0) { puts("FAIL (dns/tcp)\n"); return; }
+        if (n == 0) { puts("FAIL (no body, response too large or truncated)\n"); return; }
+        body[n] = 0;
+
+        static char text[1400];
+        unsigned int tn = html_to_text(body, text, sizeof(text));
+        putn(tn); puts(" bytes of text:\n\n");
+        puts(text);
+        putc('\n');
+
+        static struct html_link links[HTML_MAX_LINKS];
+        unsigned int nlinks = html_extract_links(body, links, HTML_MAX_LINKS);
+
+        if (!window_open(800, 600, 32)) return;
+        window_clear(0x00FAF8F6);
+        render_wrapped_text(text, 20, 20, 760, 420, 0x001C1C1E);
+
+        int ly = 460;
+        for (unsigned int i = 0; i < nlinks && ly < 560; i++) {
+            char label[8]; label[0] = '['; label[1] = (char)('1' + i); label[2] = ']'; label[3] = ' '; label[4] = 0;
+            font_draw_string(label, 20, ly, 0x007A2048, -1);
+            font_draw_string(links[i].text[0] ? links[i].text : links[i].href, 20 + 32, ly, 0x007A2048, -1);
+            ly += 18;
+        }
+        font_draw_string(hist_n > 0 ? "[b]ack   any other key closes" : "any other key closes", 20, 570, 0x0075726E, -1);
+
+        int k = get_key();
+        window_close();
+        clear();
+        puts("back in text mode\n");
+
+        if (k == 'b' && hist_n > 0) {
+            hist_n--;
+            web_str_copy(cur_host, hist_host[hist_n], sizeof(cur_host));
+            web_str_copy(cur_path, hist_path[hist_n], sizeof(cur_path));
+            continue;
+        }
+        if (k >= '1' && k <= '9') {
+            unsigned int idx = (unsigned int)(k - '1');
+            if (idx < nlinks) {
+                char new_host[64], new_path[192];
+                const char *reason = 0;
+                if (resolve_href(links[idx].href, cur_host, new_host, sizeof(new_host), new_path, sizeof(new_path), &reason)) {
+                    if (hist_n < WEB_HISTORY_DEPTH) {
+                        web_str_copy(hist_host[hist_n], cur_host, sizeof(hist_host[0]));
+                        web_str_copy(hist_path[hist_n], cur_path, sizeof(hist_path[0]));
+                        hist_n++;
+                    }
+                    web_str_copy(cur_host, new_host, sizeof(cur_host));
+                    web_str_copy(cur_path, new_path, sizeof(cur_path));
+                    continue;
+                }
+                puts("can't follow that link: "); puts(reason); putc('\n');
+            }
+        }
+        return;
+    }
+}
+
 static void serve_app(const char *label, const unsigned char *data, unsigned int data_len){
     static const char header[] = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n";
     unsigned int total_len = (sizeof(header) - 1) + data_len;
@@ -280,7 +424,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest mousetest nettest web serve serveapp chat build\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -396,26 +540,15 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "web")) {
-        char *host = arg;
-        char *path = host;
-        while (*path && *path != ' ') path++;
-        if (*path) *path++ = 0; else path = "/";
-        if (!*host) { puts("usage: web <host> [path]\n"); }
+        char *first_host = arg;
+        char *first_path = first_host;
+        while (*first_path && *first_path != ' ') first_path++;
+        if (*first_path) *first_path++ = 0; else first_path = "/";
+        if (!*first_host) { puts("usage: web <host> [path]\n"); }
         else if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
         else {
             net_init(0x0A00020F);
-            static char body[1400];
-            int n = http_get(host, path, 80, body, sizeof(body) - 1);
-            if (n < 0) puts("FAIL (dns/tcp)\n");
-            else if (n == 0) puts("FAIL (no body, response too large or truncated)\n");
-            else {
-                body[n] = 0;
-                static char text[1400];
-                unsigned int tn = html_to_text(body, text, sizeof(text));
-                putn(tn); puts(" bytes of text:\n\n");
-                puts(text);
-                putc('\n');
-            }
+            browse_web(first_host, first_path);
         }
     }
     else if (!strcmp(line, "serve")) {
@@ -542,6 +675,21 @@ static void run(char *line){
             puts("back in text mode\n");
         }
     }
+    else if (!strcmp(line, "fonttest")) {
+        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
+        else {
+            window_clear(0x00FAF8F6);
+            font_draw_string("Joshua Tree", 20, 20, 0x00C1502F, -1);
+            font_draw_string("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 20, 60, 0x001C1C1E, -1);
+            font_draw_string("abcdefghijklmnopqrstuvwxyz", 20, 80, 0x001C1C1E, -1);
+            font_draw_string("0123456789 !?.,:;()", 20, 100, 0x001C1C1E, -1);
+            font_draw_string("the quick brown fox jumps", 20, 140, 0x007A2048, -1);
+            get_key();
+            window_close();
+            clear();
+            puts("back in text mode\n");
+        }
+    }
     else if (!strcmp(line, "mousetest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
         else {
@@ -573,6 +721,7 @@ void kmain(unsigned int multiboot_info_addr){
     idt_install();
     irq_install();
     mouse_init();
+    font_init(); /* must run while still in plain VGA text mode, before any window_open */
     pmm_init(multiboot_info_addr);
     paging_install();
     tasks_init();

@@ -9,7 +9,7 @@ KERNEL_SRCS := kernel/gdt.c kernel/idt.c kernel/pic.c kernel/irq.c kernel/pmm.c 
 KERNEL_ASM  := kernel/isr.S kernel/irq_stubs.S kernel/task_switch.S
 DRIVER_SRCS := drivers/ata.c drivers/fat.c drivers/pci.c drivers/vbe.c drivers/mouse.c \
                drivers/window.c drivers/rtl8139.c drivers/net.c drivers/http.c drivers/html.c \
-               drivers/json.c
+               drivers/json.c drivers/font.c
 LIB_SRCS    := lib/libc.c
 
 OBJS := boot/boot.o $(KERNEL_ASM:.S=.o) $(KERNEL_SRCS:.c=.o) $(DRIVER_SRCS:.c=.o) $(LIB_SRCS:.c=.o)
