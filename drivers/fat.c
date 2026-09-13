@@ -1,7 +1,7 @@
-/* Read-only FAT16 over ata.c. ponytail: root directory only (no subdirs,
-   see fat.h), FAT16 only (no FAT32 -- QEMU test images and anything this
-   kernel writes itself will be small enough that FAT16 is plenty), single
-   fixed volume starting at sector 0 (no MBR partition table yet). */
+/* FAT16 over ata.c. ponytail: FAT16 only (no FAT32 -- QEMU test images and
+   anything this kernel writes itself will be small enough that FAT16 is
+   plenty), single fixed volume starting at sector 0 (no MBR partition
+   table yet), no long filenames (8.3 exactly as FAT stores them). */
 #include "fat.h"
 #include "ata.h"
 #include "libc.h"
@@ -17,8 +17,13 @@ static u8  num_fats;
 static u16 root_entry_count;
 static u16 fat_size_sectors;
 
-static u32 fat_start, root_dir_start, root_dir_sectors, data_start;
+static u32 fat_start, root_dir_start, root_dir_sectors, data_start, total_clusters;
 static int mounted = 0;
+
+/* 0 means root (the fixed pre-data-area directory FAT16 has no cluster
+   number for); any other value is the first cluster of a real subdirectory,
+   same convention "." and ".." entries use. */
+static u16 current_dir_cluster = 0;
 
 struct dir_entry {
     u8  name[11];
@@ -53,12 +58,69 @@ int fat_mount(void) {
     root_dir_sectors = ((u32)root_entry_count * 32 + 511) / 512;
     data_start       = root_dir_start + root_dir_sectors;
 
+    u32 total_sectors_16 = rd16(&boot[19]);
+    u32 total_sectors_32 = (u32)boot[32] | ((u32)boot[33] << 8) | ((u32)boot[34] << 16) | ((u32)boot[35] << 24);
+    u32 total_sectors = total_sectors_16 ? total_sectors_16 : total_sectors_32;
+    total_clusters = total_sectors > data_start ? (total_sectors - data_start) / sectors_per_cluster : 0;
+
+    current_dir_cluster = 0;
     mounted = 1;
     return 1;
 }
 
 static u32 cluster_to_lba(u16 cluster) {
     return data_start + ((u32)cluster - 2) * sectors_per_cluster;
+}
+
+/* FAT[cluster]: the next cluster in the chain, or an end-of-chain/free
+   marker. Shared by file-data reads, directory-cluster-chain walks, and
+   free-cluster search, the three things that all need to ask "what comes
+   after this cluster". */
+static u16 fat_entry_read(u16 cluster) {
+    u32 fat_byte_off = (u32)cluster * 2;
+    u32 fat_sector = fat_start + fat_byte_off / 512;
+    u8 fatbuf[512];
+    if (!ata_read_sector(fat_sector, fatbuf)) return 0xFFFF;
+    return rd16(&fatbuf[fat_byte_off % 512]);
+}
+
+static int fat_entry_write(u16 cluster, u16 value) {
+    u32 fat_byte_off = (u32)cluster * 2;
+    u32 row = fat_byte_off / 512;
+    u8 fatbuf[512];
+    if (!ata_read_sector(fat_start + row, fatbuf)) return 0;
+    fatbuf[fat_byte_off % 512]     = (u8)(value & 0xFF);
+    fatbuf[fat_byte_off % 512 + 1] = (u8)(value >> 8);
+    for (u8 f = 0; f < num_fats; f++) {
+        if (!ata_write_sector(fat_start + (u32)f * fat_size_sectors + row, fatbuf)) return 0;
+    }
+    return 1;
+}
+
+static u16 alloc_cluster(void) {
+    for (u32 c = 2; c < total_clusters + 2; c++) {
+        if (fat_entry_read((u16)c) == 0) {
+            if (!fat_entry_write((u16)c, 0xFFFF)) return 0;
+            return (u16)c;
+        }
+    }
+    return 0;
+}
+
+/* The lba of the index'th sector of a directory, root (fixed area, can't
+   grow) or a real subdirectory (cluster chain, walked via the FAT). 0 means
+   past the end: root is simply full, a subdirectory's chain ran out. */
+static u32 dir_get_sector(u16 dir_cluster, u32 index) {
+    if (dir_cluster == 0) {
+        if (index >= root_dir_sectors) return 0;
+        return root_dir_start + index;
+    }
+    u16 cluster = dir_cluster;
+    for (u32 skip = index / sectors_per_cluster; skip > 0; skip--) {
+        cluster = fat_entry_read(cluster);
+        if (cluster < 2 || cluster >= 0xFFF8) return 0;
+    }
+    return cluster_to_lba(cluster) + (index % sectors_per_cluster);
 }
 
 /* format "TEST.TXT" into FAT's fixed 11-byte "TEST    TXT" layout for comparison */
@@ -84,29 +146,46 @@ static int names_eq(const u8 a[11], const u8 b[11]) {
     return memcmp(a, b, 11) == 0;
 }
 
-static struct dir_entry *find_entry(const char *name) {
+static struct dir_entry *find_entry_in(u16 dir_cluster, const char *name) {
     static u8 sector[512];
     static struct dir_entry match;
     u8 want[11];
     to_fat_name(name, want);
 
-    for (u32 s = 0; s < root_dir_sectors; s++) {
-        if (!ata_read_sector(root_dir_start + s, sector)) return 0;
+    for (u32 s = 0; ; s++) {
+        u32 lba = dir_get_sector(dir_cluster, s);
+        if (!lba) return 0;
+        if (!ata_read_sector(lba, sector)) return 0;
         struct dir_entry *entries = (struct dir_entry *)sector;
         for (int i = 0; i < 512 / 32; i++) {
             if (entries[i].name[0] == 0x00) return 0;       /* end of directory */
             if (entries[i].name[0] == 0xE5) continue;         /* deleted */
-            if (entries[i].attr & (ATTR_VOLUME_ID | ATTR_DIRECTORY)) continue;
+            if (entries[i].attr & ATTR_VOLUME_ID) continue;
             if (names_eq(entries[i].name, want)) { match = entries[i]; return &match; }
         }
     }
-    return 0;
+}
+
+static int find_free_slot(u16 dir_cluster, u32 *out_lba, int *out_index) {
+    u8 sector[512];
+    for (u32 s = 0; ; s++) {
+        u32 lba = dir_get_sector(dir_cluster, s);
+        if (!lba) return 0; /* root exhausted, or subdirectory needs another cluster (not done yet) */
+        if (!ata_read_sector(lba, sector)) return 0;
+        struct dir_entry *entries = (struct dir_entry *)sector;
+        for (int i = 0; i < 512 / 32; i++) {
+            if (entries[i].name[0] == 0x00 || entries[i].name[0] == 0xE5) {
+                *out_lba = lba; *out_index = i;
+                return 1;
+            }
+        }
+    }
 }
 
 int fat_read_file(const char *name, void *buf, unsigned int bufsize) {
     if (!mounted) return -1;
-    struct dir_entry *e = find_entry(name);
-    if (!e) return -1;
+    struct dir_entry *e = find_entry_in(current_dir_cluster, name);
+    if (!e || (e->attr & ATTR_DIRECTORY)) return -1;
 
     u32 remaining = e->file_size < bufsize ? e->file_size : bufsize;
     u32 total = remaining;
@@ -123,12 +202,7 @@ int fat_read_file(const char *name, void *buf, unsigned int bufsize) {
             out += chunk;
             remaining -= chunk;
         }
-        /* follow the FAT16 chain: entry = 2 bytes at fat_start + cluster*2 */
-        u32 fat_byte_off = (u32)cluster * 2;
-        u32 fat_sector = fat_start + fat_byte_off / 512;
-        u8 fatbuf[512];
-        if (!ata_read_sector(fat_sector, fatbuf)) break;
-        cluster = rd16(&fatbuf[fat_byte_off % 512]);
+        cluster = fat_entry_read(cluster);
     }
     return (int)(total - remaining);
 }
@@ -139,8 +213,10 @@ int fat_delete(const char *name) {
     to_fat_name(name, want);
     u8 sector[512];
 
-    for (u32 s = 0; s < root_dir_sectors; s++) {
-        if (!ata_read_sector(root_dir_start + s, sector)) return 0;
+    for (u32 s = 0; ; s++) {
+        u32 lba = dir_get_sector(current_dir_cluster, s);
+        if (!lba) return 0;
+        if (!ata_read_sector(lba, sector)) return 0;
         struct dir_entry *entries = (struct dir_entry *)sector;
         for (int i = 0; i < 512 / 32; i++) {
             if (entries[i].name[0] == 0x00) return 0;
@@ -148,25 +224,27 @@ int fat_delete(const char *name) {
             if (entries[i].attr & (ATTR_VOLUME_ID | ATTR_DIRECTORY)) continue;
             if (names_eq(entries[i].name, want)) {
                 entries[i].name[0] = 0xE5;
-                return ata_write_sector(root_dir_start + s, sector);
+                return ata_write_sector(lba, sector);
             }
         }
     }
-    return 0;
 }
 
-void fat_list(void (*cb)(const char *name, unsigned int size)) {
+void fat_list(void (*cb)(const char *name, unsigned int size, int is_dir)) {
     if (!mounted) return;
     u8 sector[512];
     char namebuf[13];
 
-    for (u32 s = 0; s < root_dir_sectors; s++) {
-        if (!ata_read_sector(root_dir_start + s, sector)) return;
+    for (u32 s = 0; ; s++) {
+        u32 lba = dir_get_sector(current_dir_cluster, s);
+        if (!lba) return;
+        if (!ata_read_sector(lba, sector)) return;
         struct dir_entry *entries = (struct dir_entry *)sector;
         for (int i = 0; i < 512 / 32; i++) {
             if (entries[i].name[0] == 0x00) return;
             if (entries[i].name[0] == 0xE5) continue;
-            if (entries[i].attr & (ATTR_VOLUME_ID | ATTR_DIRECTORY)) continue;
+            if (entries[i].attr & ATTR_VOLUME_ID) continue;
+            if (entries[i].name[0] == '.') continue; /* skip "." and ".." */
 
             int n = 0;
             for (int c = 0; c < 8 && entries[i].name[c] != ' '; c++) namebuf[n++] = entries[i].name[c];
@@ -175,7 +253,77 @@ void fat_list(void (*cb)(const char *name, unsigned int size)) {
                 for (int c = 8; c < 11 && entries[i].name[c] != ' '; c++) namebuf[n++] = entries[i].name[c];
             }
             namebuf[n] = 0;
-            cb(namebuf, entries[i].file_size);
+            cb(namebuf, entries[i].file_size, (entries[i].attr & ATTR_DIRECTORY) != 0);
         }
     }
+}
+
+int fat_chdir(const char *name) {
+    if (!mounted) return 0;
+    if (!strcmp(name, ".")) return 1;
+    if (!strcmp(name, "..")) {
+        if (current_dir_cluster == 0) return 1; /* already at root */
+        u8 want[11];
+        for (int i = 0; i < 11; i++) want[i] = ' ';
+        want[0] = '.'; want[1] = '.';
+        u8 sector[512];
+        for (u32 s = 0; ; s++) {
+            u32 lba = dir_get_sector(current_dir_cluster, s);
+            if (!lba) return 0;
+            if (!ata_read_sector(lba, sector)) return 0;
+            struct dir_entry *entries = (struct dir_entry *)sector;
+            for (int i = 0; i < 512 / 32; i++) {
+                if (names_eq(entries[i].name, want)) { current_dir_cluster = entries[i].first_cluster_low; return 1; }
+            }
+        }
+    }
+    struct dir_entry *e = find_entry_in(current_dir_cluster, name);
+    if (!e || !(e->attr & ATTR_DIRECTORY)) return 0;
+    current_dir_cluster = e->first_cluster_low;
+    return 1;
+}
+
+int fat_mkdir(const char *name) {
+    if (!mounted || !*name) return 0;
+    if (find_entry_in(current_dir_cluster, name)) return 0; /* name taken */
+
+    u16 new_cluster = alloc_cluster();
+    if (!new_cluster) return 0;
+
+    u8 first[512];
+    memset(first, 0, sizeof(first));
+    struct dir_entry *entries = (struct dir_entry *)first;
+    entries[0].name[0] = '.';
+    for (int i = 1; i < 11; i++) entries[0].name[i] = ' ';
+    entries[0].attr = ATTR_DIRECTORY;
+    entries[0].first_cluster_low = new_cluster;
+    entries[1].name[0] = '.'; entries[1].name[1] = '.';
+    for (int i = 2; i < 11; i++) entries[1].name[i] = ' ';
+    entries[1].attr = ATTR_DIRECTORY;
+    entries[1].first_cluster_low = current_dir_cluster; /* 0 (root) or a real parent cluster */
+
+    u32 lba = cluster_to_lba(new_cluster);
+    if (!ata_write_sector(lba, first)) return 0;
+
+    u8 blank[512];
+    memset(blank, 0, sizeof(blank));
+    for (u8 s = 1; s < sectors_per_cluster; s++) {
+        if (!ata_write_sector(lba + s, blank)) return 0;
+    }
+
+    u32 slot_lba; int slot_idx;
+    if (!find_free_slot(current_dir_cluster, &slot_lba, &slot_idx)) return 0; /* directory full, ponytail: no growth yet, see fat.h */
+
+    u8 sector[512];
+    if (!ata_read_sector(slot_lba, sector)) return 0;
+    struct dir_entry *slot = &((struct dir_entry *)sector)[slot_idx];
+    to_fat_name(name, slot->name);
+    slot->attr = ATTR_DIRECTORY;
+    for (int i = 0; i < 8; i++) slot->reserved[i] = 0;
+    slot->first_cluster_high = 0;
+    slot->write_time = 0;
+    slot->write_date = 0;
+    slot->first_cluster_low = new_cluster;
+    slot->file_size = 0;
+    return ata_write_sector(slot_lba, sector);
 }

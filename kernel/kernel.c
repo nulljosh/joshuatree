@@ -168,37 +168,42 @@ static void putn(unsigned int v){
 static void task_a(void){ for (;;) { puts("A"); yield(); } }
 static void task_b(void){ for (;;) { puts("B"); yield(); } }
 
-static void ls_cb(const char *name, unsigned int size) {
-    puts(name); puts("  "); putn(size); puts(" bytes\n");
+static void ls_cb(const char *name, unsigned int size, int is_dir) {
+    puts(name); if (is_dir) putc('/');
+    puts("  "); putn(size); puts(" bytes\n");
 }
 
 /* ---- text-mode file browser: arrow keys + Enter/Esc, not just a shell.
-   ponytail: root directory only (same limit as fat.c everywhere else),
-   capped at BROWSE_MAX entries -- plenty for what fits on a 25-line screen
-   anyway, and the "no subdirectories yet" limit means there's nowhere for
-   a real filesystem to hide more than that today. ---- */
+   ponytail: capped at BROWSE_MAX entries -- plenty for what fits on a
+   25-line screen anyway. Enter on a directory descends into it (fat_chdir
+   + refresh); esc/q at any depth just quits back to the shell, not up a
+   level, matching browse's existing "in or out" model rather than growing
+   its own breadcrumb stack. ---- */
 #define BROWSE_MAX 20
 static char browse_names[BROWSE_MAX][13];
 static unsigned int browse_sizes[BROWSE_MAX];
+static int browse_is_dir[BROWSE_MAX];
 static int browse_count;
 
-static void browse_collect_cb(const char *name, unsigned int size) {
+static void browse_collect_cb(const char *name, unsigned int size, int is_dir) {
     if (browse_count >= BROWSE_MAX) return;
     int i = 0;
     while (name[i] && i < 12) { browse_names[browse_count][i] = name[i]; i++; }
     browse_names[browse_count][i] = 0;
     browse_sizes[browse_count] = size;
+    browse_is_dir[browse_count] = is_dir;
     browse_count++;
 }
 
 static void browse_draw(int sel){
     clear();
-    puts("-- file browser: up/down, enter=view, esc=quit --\n\n");
-    if (browse_count == 0) { puts("(no files)\n"); return; }
+    puts("-- file browser: up/down, enter=view/open, esc=quit --\n\n");
+    if (browse_count == 0) { puts("(empty)\n"); return; }
     for (int i = 0; i < browse_count; i++) {
         putc(i == sel ? '>' : ' '); putc(' ');
         puts(browse_names[i]);
-        puts("  "); putn(browse_sizes[i]); puts(" bytes\n");
+        if (browse_is_dir[i]) { putc('/'); putc('\n'); }
+        else { puts("  "); putn(browse_sizes[i]); puts(" bytes\n"); }
     }
 }
 
@@ -212,7 +217,14 @@ static void browse(void){
         if (k == KEY_ESC || k == 'q') { clear(); return; }
         if (k == KEY_UP)   { if (sel > 0) sel--; browse_draw(sel); }
         if (k == KEY_DOWN) { if (sel < browse_count - 1) sel++; browse_draw(sel); }
-        if (k == KEY_ENTER && browse_count > 0) {
+        if (k == KEY_ENTER && browse_count > 0 && browse_is_dir[sel]) {
+            fat_chdir(browse_names[sel]);
+            browse_count = 0;
+            fat_list(browse_collect_cb);
+            sel = 0;
+            browse_draw(sel);
+        }
+        else if (k == KEY_ENTER && browse_count > 0) {
             clear();
             puts(browse_names[sel]); puts(":\n\n");
             char buf[2048];
@@ -424,7 +436,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm cd mkdir browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -478,6 +490,14 @@ static void run(char *line){
     else if (!strcmp(line, "rm")) {
         if (!*arg) { puts("usage: rm <file>\n"); }
         else { puts(fat_delete(arg) ? "deleted\n" : "not found\n"); }
+    }
+    else if (!strcmp(line, "cd")) {
+        if (!*arg) { puts("usage: cd <dir> (or ..)\n"); }
+        else { puts(fat_chdir(arg) ? "ok\n" : "not found or not a directory\n"); }
+    }
+    else if (!strcmp(line, "mkdir")) {
+        if (!*arg) { puts("usage: mkdir <name>\n"); }
+        else { puts(fat_mkdir(arg) ? "created\n" : "failed (name taken, disk full, or directory full)\n"); }
     }
     else if (!strcmp(line, "lspci")) {
         struct pci_device dev;
