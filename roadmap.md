@@ -65,8 +65,8 @@ The hardest version in the plan: a NIC driver plus a real TCP stack, both easy t
 
 ## v8, the actual browser (the point of all of this), ETA: 1-2 sessions (~4-6h)
 Mostly glue over v6+v7 once both exist; the HTML parser is deliberately tiny.
-- [ ] [Haiku] HTTP client good enough to fetch a page
-- [ ] [Haiku] A tag-soup HTML subset parser (headings, paragraphs, links, not CSS, not JS, v1 is Lynx-level)
+- [x] HTTP client good enough to fetch a page (`http.c`'s `http_get`, thin wrapper over `net.c`'s `dns_resolve`+`tcp_get`, strips the status line and headers down to just the body)
+- [x] A tag-soup HTML subset parser (`html.c`'s `html_to_text`, `web <host> [path]` shell command). Found a real bug immediately by actually looking at the output, not just checking it ran: a plain strip-everything-in-`<>` pass printed example.com's raw CSS as if it were page text, since `<style>`/`<script>` element *content* isn't inside angle brackets, it's text between two tags. Fixed by skipping to the matching close tag for those two elements specifically before falling through to the normal single-tag skip. Verified against the real page: extracted text now matches exactly (title, heading, paragraph, link text), no leaked CSS
 - [ ] [Haiku] Render parsed text to the framebuffer with the v6 font renderer
 - [ ] [Haiku] Link navigation via keyboard/mouse, back button, that's a browser
 
@@ -86,3 +86,8 @@ Mostly glue over v6+v7 once both exist; the HTML parser is deliberately tiny.
 - Wi-Fi, wired NIC only, QEMU doesn't emulate Wi-Fi hardware anyway
 - Anything GUI-toolkit-shaped (widgets, themes) before v6's raw framebuffer works
 - gato (the macOS voice kiosk, `~/Documents/Code/gato`), different project, different repo, on purpose. Voice control of this kernel is a real future idea but nowhere near the front of the queue.
+
+## Later product ideas (real, not scheduled, revisit once v8's browser actually renders to the framebuffer)
+- Replace the landing page's recorded boot GIF with the real thing once there's something worth interacting with: an actual in-browser demo of this kernel, not a video of one.
+- User accounts on the landing page, each with their own space.
+- A downloadable, installable image so someone can put this on real hardware, not just QEMU. Real hardware brings its own driver-compatibility questions (this rtl8139 driver, the PCI enumeration, the ATA driver) that QEMU's emulated devices don't raise, worth its own pass when it's actually time, not assumed to just work.

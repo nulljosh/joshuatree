@@ -16,6 +16,8 @@
 #include "window.h"
 #include "rtl8139.h"
 #include "net.h"
+#include "http.h"
+#include "html.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -215,7 +217,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest mousetest nettest\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest mousetest nettest web\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -327,6 +329,29 @@ static void run(char *line){
                     for (int i = 0; i < 20 && resp[i] && resp[i] != '\r'; i++) putc(resp[i]);
                     putc('\n');
                 }
+            }
+        }
+    }
+    else if (!strcmp(line, "web")) {
+        char *host = arg;
+        char *path = host;
+        while (*path && *path != ' ') path++;
+        if (*path) *path++ = 0; else path = "/";
+        if (!*host) { puts("usage: web <host> [path]\n"); }
+        else if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        else {
+            net_init(0x0A00020F);
+            static char body[1400];
+            int n = http_get(host, path, 80, body, sizeof(body) - 1);
+            if (n < 0) puts("FAIL (dns/tcp)\n");
+            else if (n == 0) puts("FAIL (no body, response too large or truncated)\n");
+            else {
+                body[n] = 0;
+                static char text[1400];
+                unsigned int tn = html_to_text(body, text, sizeof(text));
+                putn(tn); puts(" bytes of text:\n\n");
+                puts(text);
+                putc('\n');
             }
         }
     }

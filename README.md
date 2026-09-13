@@ -43,8 +43,11 @@ make run      # boots to the shell
 ```
 
 Commands: `help` `clear` `echo` `time` `uptime` `mem` `reboot` `crash` `pagefault`
-`heaptest` `tasktest` `sleep` `disktest` `ls` `cat` `exec`, most exist to
-manually exercise a subsystem (see `docs/ARCHITECTURE.md`), not just to be useful.
+`heaptest` `tasktest` `sleep` `disktest` `ls` `cat` `exec` `rm` `browse` `lspci`
+`gfxtest` `mousetest` `nettest` `web <host> [path]`, most exist to manually
+exercise a subsystem (see `docs/ARCHITECTURE.md`), not just to be useful.
+`web` is the one worth trying: it does a real DNS lookup and TCP connection
+over the network stack in this repo, no libc, no OS underneath.
 
 ## Architecture
 
