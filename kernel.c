@@ -2,6 +2,7 @@
 #include "gdt.h"
 #include "idt.h"
 #include "irq.h"
+#include "pmm.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -83,6 +84,13 @@ static void show_time(void){
     print2(h); putc(':'); print2(m); putc(':'); print2(s); putc('\n');
 }
 
+static void putn(unsigned int v){
+    char buf[12]; int n = 0;
+    if (v == 0) buf[n++] = '0';
+    while (v) { buf[n++] = '0' + v % 10; v /= 10; }
+    while (n) putc(buf[--n]);
+}
+
 /* ---- shell ---- */
 static int streq(const char *a, const char *b){
     while (*a && *a == *b) { a++; b++; }
@@ -101,28 +109,25 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (streq(line, "help"))       puts("help clear echo time uptime reboot crash\n");
+    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash\n");
     else if (streq(line, "clear")) clear();
     else if (streq(line, "echo"))  { puts(arg); putc('\n'); }
     else if (streq(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
-    else if (streq(line, "uptime")){
-        unsigned int t = ticks();
-        char buf[12]; int n = 0;
-        unsigned int v = t / 100; /* 100 ticks/sec */
-        if (v == 0) buf[n++] = '0';
-        while (v) { buf[n++] = '0' + v % 10; v /= 10; }
-        while (n) putc(buf[--n]);
-        puts("s\n");
+    else if (streq(line, "uptime")){ putn(ticks() / 100); puts("s\n"); }
+    else if (streq(line, "mem")) {
+        putn(pmm_free_frames() * 4); puts("K free / ");
+        putn(pmm_total_frames() * 4); puts("K total (4K frames)\n");
     }
     else if (streq(line, "time"))  show_time();
     else if (streq(line, "reboot"))reboot();
     else { puts("? "); puts(line); putc('\n'); }
 }
 
-void kmain(void){
+void kmain(unsigned int multiboot_info_addr){
     gdt_install();
     idt_install();
     irq_install();
+    pmm_init(multiboot_info_addr);
     clear();
     puts("os v0 -- type help\n");
     char line[80];

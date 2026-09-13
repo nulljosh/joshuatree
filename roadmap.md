@@ -14,7 +14,7 @@ takes, and roughly what xv6/ToaruOS/Linux 0.01 did in their first months).
 Full breakdown of what shipped in each: `git log --oneline` or the commit history, not here — this file is the queue, not the changelog.
 
 ## v2 — memory (from "one flat blob" to real address space)
-- [ ] Physical memory manager: bitmap or free-list over the multiboot memory map
+- [x] Physical memory manager: bitmap over `mem_upper` from the multiboot info struct, kernel image frames pre-reserved (`pmm.c`, `mem` shell command reports free/total)
 - [ ] Paging: identity-map the kernel, enable it, handle page faults
 - [ ] Kernel heap: `kmalloc`/`kfree` over the physical allocator
 - [ ] Higher-half kernel (map kernel to 0xC0000000+, standard OSDev move)

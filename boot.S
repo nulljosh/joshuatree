@@ -20,6 +20,7 @@ stack_top:
 .global _start
 _start:
     mov $stack_top, %esp
+    push %ebx           /* multiboot info struct, GRUB/QEMU set this per spec */
     call kmain
 1:  cli
     hlt
