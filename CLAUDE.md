@@ -24,12 +24,19 @@ dependencies beyond clang, ld.lld and qemu.
 - Landing page (`landing/index.html`, deployed to joshuatree.heyitsmejosh.com)
   shows a real recorded QEMU session as `landing/demo.mp4` (autoplay/muted/
   loop video, not a GIF as of v13, real video compresses far better than a
-  GIF for this much content and looks sharper), not a live in-browser
-  emulator, v86 was tried first and hit a real multiboot compatibility gap
-  (kernel hangs before `paging_install` under v86 specifically; QEMU boots it
-  fine every time), so a real recording replaced it rather than shipping a
-  broken "live" demo. Re-record after any change that affects what the demo
-  shows: `qemu-system-i386 -kernel kernel.elf -hda <a real FAT16 image> -display cocoa`,
+  GIF for this much content and looks sharper), not yet a live in-browser
+  emulator. v86 was tried early on and hit a real multiboot compatibility
+  gap; retested as of v16 after the higher-half rewrite changed enough of
+  the boot path that the original blocker turned out to be gone, and
+  v86 now genuinely boots this kernel, real output and all, once
+  `vga_text_mode_init()` (v16) tells the emulated VGA card it's in text
+  mode, something real hardware/QEMU's own BIOS already did for free.
+  Keyboard input still doesn't reach the kernel under v86, a distinct,
+  narrower, real gap tracked in `roadmap.md`, not yet solved, so the
+  landing page still ships the recorded video rather than a half-working
+  "live" demo a visitor can't actually type into. Re-record the video
+  after any change that affects what it shows:
+  `qemu-system-i386 -kernel kernel.elf -hda <a real FAT16 image> -display cocoa`,
   get the window's real position/size via `System Events` (`position`/`size`
   of window 1) since it differs between text mode and graphics mode, and
   crop the AVFoundation capture to exactly that rect (`-vf crop=w:h:x:y`),

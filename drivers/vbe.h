@@ -14,4 +14,11 @@ int vbe_set_mode(unsigned int width, unsigned int height, unsigned int bpp, unsi
 
 /* Switches back to VGA text mode (0x03), restoring the shell. */
 void vbe_disable(void);
+
+/* Programs standard VGA mode 3 (80x25 text) from scratch: the exact
+   registers a real VGA BIOS's mode-3 call would set. Real hardware/QEMU
+   already boot into this via their own BIOS, so this was never needed
+   there; a BIOS-less multiboot environment (v86) never sets it at all.
+   Call once, first thing in kmain, before any VGA output. */
+void vga_text_mode_init(void);
 #endif

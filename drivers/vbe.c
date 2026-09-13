@@ -135,3 +135,48 @@ void vbe_disable(void) {
 
     restore_vga_text_state();
 }
+
+/* Programs standard VGA mode 3 (80x25, 16-color text) from first
+   principles, the exact register values a real VGA BIOS's own INT 10h
+   mode-3 call would write, not a guess. Real hardware and QEMU both
+   already boot into this mode via their own BIOS before a multiboot
+   kernel ever gets control, so this kernel never needed to set it itself,
+   it just wrote straight to 0xB8000 and trusted the inherited state. That
+   assumption breaks under v86 (a JS/wasm x86 emulator with no BIOS in its
+   multiboot boot path): confirmed by direct inspection that the kernel
+   was booting and writing correct bytes to 0xB8000 the whole time, CRTC's
+   own screen_width/screen_height just stayed 0 because nothing had ever
+   told the emulated VGA card it was in text mode at all. Calling this
+   once at the very start of kmain, before any VGA output, makes the
+   kernel correct on its own terms instead of quietly depending on
+   whichever BIOS happened to run first. */
+void vga_text_mode_init(void) {
+    static const u8 seq[5]  = {0x03, 0x00, 0x03, 0x00, 0x02};
+    static const u8 crtc[25] = {
+        0x5F, 0x4F, 0x50, 0x82, 0x55, 0x81, 0xBF, 0x1F, 0x00, 0x4F,
+        0x0D, 0x0E, 0x00, 0x00, 0x00, 0x50, 0x9C, 0x0E, 0x8F, 0x28,
+        0x1F, 0x96, 0xB9, 0xA3, 0xFF
+    };
+    static const u8 gc[9]   = {0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x0E, 0x00, 0xFF};
+    static const u8 ac[21]  = {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x14, 0x07, 0x38, 0x39, 0x3A,
+        0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x0C, 0x00, 0x0F, 0x08, 0x00
+    };
+
+    outb(MISC_WRITE, 0x67);
+    for (int i = 0; i < 5; i++) { outb(SEQ_INDEX, (u8)i); outb(SEQ_DATA, seq[i]); }
+
+    outb(CRTC_INDEX, 0x11);
+    outb(CRTC_DATA, (u8)(inb(CRTC_DATA) & 0x7F)); /* unlock CRTC 0-7 before the loop writes them */
+    for (int i = 0; i < 25; i++) { outb(CRTC_INDEX, (u8)i); outb(CRTC_DATA, crtc[i]); }
+
+    for (int i = 0; i < 9; i++) { outb(GC_INDEX, (u8)i); outb(GC_DATA, gc[i]); }
+
+    for (int i = 0; i < 21; i++) {
+        (void)inb(INPUT_STATUS1);
+        outb(AC_INDEX_DATA, (u8)i);
+        outb(AC_INDEX_DATA, ac[i]);
+    }
+    (void)inb(INPUT_STATUS1);
+    outb(AC_INDEX_DATA, 0x20);
+}

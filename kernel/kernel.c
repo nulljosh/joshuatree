@@ -1119,6 +1119,7 @@ static void run(char *line){
 }
 
 void kmain(unsigned int multiboot_info_addr){
+    vga_text_mode_init(); /* real hardware/QEMU already boot into text mode via their own BIOS; a BIOS-less multiboot path (v86) never sets it at all, so make it explicit rather than inherited */
     gdt_install();
     idt_install();
     irq_install();
