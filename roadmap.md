@@ -17,7 +17,7 @@ Full breakdown of what shipped in each: `git log --oneline` or the commit histor
 - [x] Physical memory manager: bitmap over `mem_upper` from the multiboot info struct, kernel image frames pre-reserved (`pmm.c`, `mem` shell command reports free/total)
 - [x] Paging: identity-map the first 4MB, enable it (`paging.c`); page faults now report the faulting address from CR2 (`pagefault` shell command exercises it)
 - [x] Kernel heap: `kmalloc`/`kfree`, first-fit free list grown a frame at a time via `pmm_alloc_frame` (`kheap.c`, `heaptest` shell command)
-- [ ] Higher-half kernel (map kernel to 0xC0000000+, standard OSDev move)
+- [ ] Higher-half kernel (map kernel to 0xC0000000+) — **deliberately deferred, not blocked**: touches boot.S (needs a boot-time PSE page directory + physical/virtual split before `kmain` can even be called), linker.ld (dual VMA/LMA per section), and paging.c + pmm.c (every physical-address computation there currently assumes virtual==physical and has to subtract 0xC0000000). Real risk of a subtly-broken kernel that still passes the crude banner check. Wants a dedicated pass with more careful verification than this loop's `check.sh`, not to be squeezed in at the tail of a long session.
 
 ## v3 — multitasking (more than one thing running)
 - [ ] Kernel stacks + context switch (save/restore registers, switch %esp)
