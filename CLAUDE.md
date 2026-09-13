@@ -18,9 +18,9 @@ dependencies beyond clang, ld.lld and qemu.
   Typing individual letters works and proves the keyboard path; verifying a
   command's *output* needs the boot-time direct-call trick instead (temporarily
   call the function from `kmain` before `clear()`, dump VGA memory, revert).
-- Higher-half kernel (v2) and ring-3/TSS user mode (v3) are deliberately
-  deferred, not forgotten, see `roadmap.md` for the specific technical
-  reason each is risky to rush blind.
+- Higher-half kernel (v2) and ring-3/TSS user mode (v3) are both shipped.
+  Kernel runs at 0xC0000000+, loaded physically at 1MB; see `roadmap.md`
+  for the two real virtual/physical bugs that shipping them caught.
 - Landing page (`landing/index.html`, deployed to joshuatree.heyitsmejosh.com)
   shows a real recorded QEMU boot as `landing/boot.gif`, not a live in-browser
   emulator, v86 was tried first and hit a real multiboot compatibility gap

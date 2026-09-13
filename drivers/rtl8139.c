@@ -32,11 +32,19 @@ static inline void outw(u16 p, u16 v)  { __asm__ volatile ("outw %0,%1" :: "a"(v
 static u16 io_base = 0;
 static u32 rx_offset = 0;
 
-/* ponytail: the whole first 4MB is identity-mapped (virtual == physical),
-   so these static buffers can be handed to the NIC's DMA registers as-is,
-   no separate physical-address translation needed the way the v6
-   framebuffer required one. That stops being true the day higher-half
-   lands, whoever does that has to fix this too. */
+/* Higher-half landed: these are now normal kernel .bss statics linked at
+   0xC0000000+, but the NIC does raw physical-memory DMA, it has no concept
+   of the CPU's page tables at all, so its address registers need the
+   physical address, not whatever &buffer happens to read as from C code
+   now. A real bug this exact gap produced: MMIO register reads (MAC
+   address) still worked, since those go through the CPU normally, while
+   the actual transmitted frame, checked independently with a real pcap
+   capture, came back all zeros, since the card was DMAing from a physical
+   address that was never actually the buffer's real memory. Fixed with a
+   plain KVIRT_TO_PHYS subtraction; the first 4MB stays double-mapped
+   (identity low + high alias, see paging.c), so this is a fixed offset,
+   not a real translation. */
+#define KVIRT_TO_PHYS(addr) ((u32)(addr) - 0xC0000000)
 static u8 rx_buffer[8192 + 16 + 1500] __attribute__((aligned(4)));
 
 /* The card has 4 TX descriptors (TSAD0-3/TSD0-3, 4 bytes apart) and expects
@@ -64,7 +72,7 @@ int rtl8139_init(void) {
     while ((inb(io_base + REG_CR) & 0x10) && timeout--) {}
     if (timeout <= 0) return 0;
 
-    outl(io_base + REG_RBSTART, (u32)rx_buffer);
+    outl(io_base + REG_RBSTART, KVIRT_TO_PHYS(rx_buffer));
     outb(io_base + REG_CR, 0x0C);       /* enable RX and TX */
     outl(io_base + REG_RCR, 0x0F | 0x80); /* accept all packet types, wrap the RX ring */
 
@@ -111,7 +119,7 @@ int rtl8139_send(const void *data, u32 len) {
     u16 tsd  = (u16)(REG_TSD0  + tx_cur * 4);
     tx_cur = (tx_cur + 1) % 4;
 
-    outl(io_base + tsad, (u32)buf);
+    outl(io_base + tsad, KVIRT_TO_PHYS(buf));
     outl(io_base + tsd, len); /* starts the transmit */
 
     int timeout = 1000000;
