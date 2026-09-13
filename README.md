@@ -2,7 +2,7 @@
 
 # os
 
-![version](https://img.shields.io/badge/version-v0-blue)
+![version](https://img.shields.io/badge/version-v3-blue)
 ![license](https://img.shields.io/badge/license-MIT-green) [![GitHub](https://img.shields.io/badge/GitHub-nulljosh%2Fos-black?logo=github)](https://github.com/nulljosh/os)
 
 A kernel. A small one, from nothing. It boots in QEMU and drops you at a prompt.
