@@ -133,6 +133,25 @@ static void show_time(void){
     print2(h); putc(':'); print2(m); putc(':'); print2(s); putc('\n');
 }
 
+/* ---- PC speaker via PIT channel 2. A square wave is all this hardware can
+   produce, no envelope, no timbre, so "soft" here just means picking two
+   consonant notes and a short duration rather than one harsh flat tone,
+   about as warm as a beep from 1981 gets. ---- */
+static void beep(unsigned int freq_hz, unsigned int duration_ticks){
+    unsigned int divisor = 1193182 / freq_hz;
+    outb(0x43, 0xB6);                       /* channel 2, lobyte/hibyte, mode 3 */
+    outb(0x42, (u8)(divisor & 0xFF));
+    outb(0x42, (u8)((divisor >> 8) & 0xFF));
+    outb(0x61, inb(0x61) | 0x03);           /* gate the speaker on */
+    sleep_ticks(duration_ticks);
+    outb(0x61, inb(0x61) & 0xFC);           /* off */
+}
+
+static void boot_chime(void){
+    beep(523, 8);  /* C5 */
+    beep(659, 12); /* E5, held a touch longer to land the chime */
+}
+
 static void putn(unsigned int v){
     char buf[12]; int n = 0;
     if (v == 0) buf[n++] = '0';
@@ -414,6 +433,7 @@ void kmain(unsigned int multiboot_info_addr){
     tasks_init();
     int fs_ok = fat_mount();
     clear();
+    boot_chime();
     puts("joshuatree v0 -- type help\n");
     if (!fs_ok) puts("(no FAT filesystem found -- ls/cat unavailable)\n");
     char line[80];
