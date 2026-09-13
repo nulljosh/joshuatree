@@ -16,6 +16,13 @@ OBJS := boot/boot.o $(KERNEL_ASM:.S=.o) $(KERNEL_SRCS:.c=.o) $(DRIVER_SRCS:.c=.o
 kernel.elf: $(OBJS) boot/linker.ld
 	$(LD) -m elf_i386 -T boot/linker.ld -o $@ $(OBJS)
 
+# Generated from a sibling repo (gen_app.sh), not checked in. Only built
+# once if missing; rerun gen_app.sh by hand to pick up a changed source app.
+drivers/app_weather.h:
+	./gen_app.sh
+
+kernel/kernel.o: drivers/app_weather.h
+
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
 

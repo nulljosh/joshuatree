@@ -4,3 +4,4 @@ landing/kernel.elf
 .DS_Store
 .wrangler/
 menubar/JoshuaTreeMonitor.app/
+drivers/app_*.h

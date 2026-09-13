@@ -17,6 +17,7 @@
 #include "rtl8139.h"
 #include "net.h"
 #include "http.h"
+#include "app_weather.h"
 #include "html.h"
 
 typedef unsigned char  u8;
@@ -236,7 +237,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest mousetest nettest web serve\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse lspci gfxtest mousetest nettest web serve serveapp\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -395,6 +396,23 @@ static void run(char *line){
                 "this long.</p></body></html>";
             puts("waiting for a connection on :8080...\n");
             puts(tcp_serve_once(8080, page, sizeof(page) - 1) ? "served:ok\n" : "timeout, nobody connected\n");
+        }
+    }
+    else if (!strcmp(line, "serveapp")) {
+        if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        else {
+            net_init(0x0A00020F);
+            static const char header[] = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n";
+            unsigned int total_len = (sizeof(header) - 1) + app_weather_len;
+            char *buf = kmalloc(total_len);
+            if (!buf) { puts("out of heap\n"); }
+            else {
+                for (unsigned int i = 0; i < sizeof(header) - 1; i++) buf[i] = header[i];
+                for (unsigned int i = 0; i < app_weather_len; i++) buf[sizeof(header) - 1 + i] = (char)app_weather_html[i];
+                puts("serving weather (a real app from the codebase, "); putn(app_weather_len); puts(" bytes), waiting on :8080...\n");
+                puts(tcp_serve_once(8080, buf, total_len) ? "served:ok\n" : "timeout, nobody connected\n");
+                kfree(buf);
+            }
         }
     }
     else if (!strcmp(line, "gfxtest")) {
