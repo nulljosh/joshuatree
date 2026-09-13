@@ -30,8 +30,8 @@ Full breakdown of what shipped in each: `git log --oneline` or the commit histor
 ## v4 — storage (data survives reboot) — ETA: 1 more session (~2-4h)
 FAT is the slow part: real spec-reading, not mechanical like ATA was.
 - [x] ATA PIO driver: LBA28 read/write on the primary master (`ata.c`, `disktest` shell command). Verified with a real attached disk image (`write:ok read:ok match:ok`), not just the graceful-no-drive path
-- [ ] A real filesystem: FAT16/32 (read support first, most-documented, most tooling) or a small custom one if FAT is too much
-- [ ] VFS layer so the shell's `open`/`read` don't care which fs backs them
+- [x] FAT16 read support: root directory only, 8.3 names (`fat.c`, `ls`/`cat` shell commands). Verified against a real FAT16 image made with macOS `newfs_msdos` containing an actual file, not a hand-rolled test fixture (`mount:ok`, real directory listing, `cat:ok -> hello from fat16, real filesystem test`)
+- [ ] VFS layer so the shell's `open`/`read` don't care which fs backs them — lower priority now: FAT is the only filesystem that exists, so there's nothing to abstract over yet
 - [ ] Load and exec a flat binary or minimal ELF from disk
 
 ## v5 — the "file explorer" (this is why the project exists) — ETA: 1 session (~2-3h)

@@ -7,6 +7,7 @@
 #include "kheap.h"
 #include "task.h"
 #include "ata.h"
+#include "fat.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -108,6 +109,10 @@ static void putn(unsigned int v){
 static void task_a(void){ for (;;) { puts("A"); yield(); } }
 static void task_b(void){ for (;;) { puts("B"); yield(); } }
 
+static void ls_cb(const char *name, unsigned int size) {
+    puts(name); puts("  "); putn(size); puts(" bytes\n");
+}
+
 /* ---- shell ---- */
 static int streq(const char *a, const char *b){
     while (*a && *a == *b) { a++; b++; }
@@ -126,7 +131,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest\n");
+    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat\n");
     else if (streq(line, "clear")) clear();
     else if (streq(line, "echo"))  { puts(arg); putc('\n'); }
     else if (streq(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -162,6 +167,16 @@ static void run(char *line){
         for (int i = 0; i < 10; i++) yield(); /* shell is task 0; let A/B interleave */
         puts("\ndone (expect ABABAB...)\n");
     }
+    else if (streq(line, "ls"))    fat_list(ls_cb);
+    else if (streq(line, "cat")) {
+        if (!*arg) { puts("usage: cat <file>\n"); }
+        else {
+            char buf[4096];
+            int n = fat_read_file(arg, buf, sizeof(buf) - 1);
+            if (n < 0) { puts(arg); puts(": not found\n"); }
+            else { buf[n] = 0; puts(buf); putc('\n'); }
+        }
+    }
     else if (streq(line, "time"))  show_time();
     else if (streq(line, "reboot"))reboot();
     else { puts("? "); puts(line); putc('\n'); }
@@ -174,8 +189,10 @@ void kmain(unsigned int multiboot_info_addr){
     pmm_init(multiboot_info_addr);
     paging_install();
     tasks_init();
+    int fs_ok = fat_mount();
     clear();
     puts("os v0 -- type help\n");
+    if (!fs_ok) puts("(no FAT filesystem found -- ls/cat unavailable)\n");
     char line[80];
     for (;;) {
         puts("> ");
