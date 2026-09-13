@@ -21,7 +21,10 @@ kernel.elf: $(OBJS) boot/linker.ld
 drivers/app_weather.h:
 	./gen_app.sh
 
-kernel/kernel.o: drivers/app_weather.h
+drivers/app_curbfind.h:
+	./gen_app.sh "$$HOME/Documents/Code/curbfind/web/index.html" drivers/app_curbfind.h app_curbfind
+
+kernel/kernel.o: drivers/app_weather.h drivers/app_curbfind.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@

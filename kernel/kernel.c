@@ -18,6 +18,7 @@
 #include "net.h"
 #include "http.h"
 #include "app_weather.h"
+#include "app_curbfind.h"
 #include "html.h"
 
 typedef unsigned char  u8;
@@ -225,6 +226,25 @@ static void browse(void){
 
 /* ---- shell ---- */
 
+/* Combines HTTP headers with an embedded app's raw bytes (gen_app.sh's
+   output) into one buffer and serves it. Shared by every serveapp target
+   so adding another embedded app is one dispatch line, not a copy-pasted
+   block. */
+static void serve_app(const char *label, const unsigned char *data, unsigned int data_len){
+    static const char header[] = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n";
+    unsigned int total_len = (sizeof(header) - 1) + data_len;
+    char *buf = kmalloc(total_len);
+    if (!buf) { puts("out of heap\n"); return; }
+
+    for (unsigned int i = 0; i < sizeof(header) - 1; i++) buf[i] = header[i];
+    for (unsigned int i = 0; i < data_len; i++) buf[sizeof(header) - 1 + i] = (char)data[i];
+
+    puts("serving "); puts(label); puts(" (a real app from the codebase, ");
+    putn(data_len); puts(" bytes), waiting on :8080...\n");
+    puts(tcp_serve_once(8080, buf, total_len) ? "served:ok\n" : "timeout, nobody connected\n");
+    kfree(buf);
+}
+
 static void reboot(void){
     while (inb(0x64) & 2) {}
     outb(0x64, 0xFE);                        /* 8042 CPU reset pulse */
@@ -399,20 +419,13 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "serveapp")) {
-        if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        if (!*arg) { puts("usage: serveapp weather|curbfind\n"); }
+        else if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
         else {
             net_init(0x0A00020F);
-            static const char header[] = "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n";
-            unsigned int total_len = (sizeof(header) - 1) + app_weather_len;
-            char *buf = kmalloc(total_len);
-            if (!buf) { puts("out of heap\n"); }
-            else {
-                for (unsigned int i = 0; i < sizeof(header) - 1; i++) buf[i] = header[i];
-                for (unsigned int i = 0; i < app_weather_len; i++) buf[sizeof(header) - 1 + i] = (char)app_weather_html[i];
-                puts("serving weather (a real app from the codebase, "); putn(app_weather_len); puts(" bytes), waiting on :8080...\n");
-                puts(tcp_serve_once(8080, buf, total_len) ? "served:ok\n" : "timeout, nobody connected\n");
-                kfree(buf);
-            }
+            if (!strcmp(arg, "weather"))       serve_app("weather", app_weather_html, app_weather_len);
+            else if (!strcmp(arg, "curbfind")) serve_app("curbfind", app_curbfind_html, app_curbfind_len);
+            else puts("unknown app, try weather or curbfind\n");
         }
     }
     else if (!strcmp(line, "gfxtest")) {
