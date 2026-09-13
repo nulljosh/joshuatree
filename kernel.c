@@ -6,6 +6,7 @@
 #include "paging.h"
 #include "kheap.h"
 #include "task.h"
+#include "ata.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -125,7 +126,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep\n");
+    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest\n");
     else if (streq(line, "clear")) clear();
     else if (streq(line, "echo"))  { puts(arg); putc('\n'); }
     else if (streq(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -143,6 +144,17 @@ static void run(char *line){
         putn(pmm_total_frames() * 4); puts("K total (4K frames)\n");
     }
     else if (streq(line, "sleep")) { puts("sleeping 1s...\n"); sleep_ticks(100); puts("awake\n"); }
+    else if (streq(line, "disktest")) {
+        char wbuf[512], rbuf[512];
+        for (int i = 0; i < 512; i++) wbuf[i] = (char)i;
+        if (!ata_write_sector(100, wbuf)) { puts("disk write failed (no drive?)\n"); }
+        else if (!ata_read_sector(100, rbuf)) { puts("disk read failed\n"); }
+        else {
+            int ok = 1;
+            for (int i = 0; i < 512; i++) if (rbuf[i] != wbuf[i]) { ok = 0; break; }
+            puts(ok ? "wrote+read sector 100: ok\n" : "wrote+read sector 100: MISMATCH\n");
+        }
+    }
     else if (streq(line, "tasktest")) {
         puts("\n");
         task_create(task_a);

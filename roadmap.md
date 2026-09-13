@@ -26,7 +26,7 @@ Full breakdown of what shipped in each: `git log --oneline` or the commit histor
 - [ ] User mode: ring 3, TSS, syscall via `int 0x80` — **deliberately deferred, not blocked**: needs new GDT entries (ring-3 code/data + a TSS descriptor), a TSS with a valid ss0/esp0, `paging.c`'s page tables switched from supervisor-only to user-accessible, and a correct `iret`-based privilege transition. Same failure mode as higher-half: a subtle bug here (wrong RPL, wrong TSS field) can leave ring-3 code silently running with ring-0 privileges while `check.sh`'s boot-banner check still passes — it can't detect a privilege-isolation bug, only a crash. Wants real verification (does ring-3 code actually fault on a privileged instruction) before shipping, not a rushed pass.
 
 ## v4 — storage (data survives reboot)
-- [ ] ATA PIO driver (read/write sectors, the simplest disk interface)
+- [x] ATA PIO driver: LBA28 read/write on the primary master (`ata.c`, `disktest` shell command). Verified with a real attached disk image (`write:ok read:ok match:ok`), not just the graceful-no-drive path
 - [ ] A real filesystem: FAT16/32 (read support first, most-documented, most tooling) or a small custom one if FAT is too much
 - [ ] VFS layer so the shell's `open`/`read` don't care which fs backs them
 - [ ] Load and exec a flat binary or minimal ELF from disk
