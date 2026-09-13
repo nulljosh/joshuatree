@@ -44,11 +44,32 @@ make run      # boots to the shell
 ```
 
 Commands: `help` `clear` `echo` `time` `uptime` `mem` `reboot` `crash` `pagefault`
-`heaptest` `tasktest` `sleep` `disktest` `ls` `cat` `exec` `rm` `browse` `lspci`
-`gfxtest` `mousetest` `nettest` `web <host> [path]`, most exist to manually
-exercise a subsystem (see `docs/ARCHITECTURE.md`), not just to be useful.
-`web` is the one worth trying: it does a real DNS lookup and TCP connection
-over the network stack in this repo, no libc, no OS underneath.
+`heaptest` `tasktest` `preempttest` `ring3test` `sleep` `disktest` `ls` `cat`
+`exec` `rm` `cd` `mkdir` `browse` `lspci` `gfxtest` `fonttest` `mousetest`
+`nettest` `web <host> [path]` `serve` `serveapp` `chat <message>`
+`build <what>` `gui`, most exist to manually exercise a subsystem (see
+`docs/ARCHITECTURE.md`), not just to be useful. `web` and `gui` are worth
+trying: `web` does a real DNS lookup and TCP connection over the network
+stack in this repo, no libc, no OS underneath; `gui` opens a real
+mouse-driven desktop with working apps.
+
+## Voice control
+
+`tools/voice-control.sh` is a host-side script (not part of the kernel, see
+`roadmap.md`'s v10 note on why voice stays outside it): speak a request, a
+local Ollama model maps it onto one of the kernel's real commands, and it
+gets typed into a running QEMU instance through its monitor socket. Start
+the kernel with a monitor socket first:
+
+```sh
+qemu-system-i386 -kernel kernel.elf -display none \
+  -monitor unix:/tmp/jt-monitor.sock,server,nowait \
+  -netdev user,id=n0 -device rtl8139,netdev=n0
+tools/voice-control.sh          # records 4s, or: voice-control.sh 6
+```
+
+Needs `sox` (`rec`), `whisper-cpp` (`whisper-cli` plus a downloaded
+`ggml-*.bin` model), and Ollama running locally with `llama3.1:8b`.
 
 ## Architecture
 
