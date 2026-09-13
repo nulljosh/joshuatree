@@ -83,6 +83,32 @@ static char getch(void){
     }
 }
 
+/* ---- extended keys (arrows) for the file browser. 0xE0 is the make-code
+   prefix for the "extended" keyboard block; 0x48/0x50 are up/down within it. ---- */
+#define KEY_UP    256
+#define KEY_DOWN  257
+#define KEY_ENTER 258
+#define KEY_ESC   259
+
+static int get_key(void){
+    for (;;) {
+        int sc = kbd_pop();
+        if (sc < 0) { __asm__ volatile ("hlt"); continue; }
+        if (sc == 0xE0) {
+            int sc2;
+            do { sc2 = kbd_pop(); if (sc2 < 0) __asm__ volatile ("hlt"); } while (sc2 < 0);
+            if (sc2 == 0x48) return KEY_UP;
+            if (sc2 == 0x50) return KEY_DOWN;
+            continue; /* other extended keys: ignore */
+        }
+        if (sc & 0x80) continue;
+        char c = SC[sc & 0x7F];
+        if (c == '\n') return KEY_ENTER;
+        if (c == 27)   return KEY_ESC;
+        if (c) return c;
+    }
+}
+
 /* ---- RTC via CMOS. ponytail: no PIT tick counter; the shell only ever
    needs wall-clock, and this needs no interrupt handler. ---- */
 static u8 cmos(u8 reg){ outb(0x70, reg); return inb(0x71); }
@@ -114,6 +140,60 @@ static void ls_cb(const char *name, unsigned int size) {
     puts(name); puts("  "); putn(size); puts(" bytes\n");
 }
 
+/* ---- text-mode file browser: arrow keys + Enter/Esc, not just a shell.
+   ponytail: root directory only (same limit as fat.c everywhere else),
+   capped at BROWSE_MAX entries -- plenty for what fits on a 25-line screen
+   anyway, and the "no subdirectories yet" limit means there's nowhere for
+   a real filesystem to hide more than that today. ---- */
+#define BROWSE_MAX 20
+static char browse_names[BROWSE_MAX][13];
+static unsigned int browse_sizes[BROWSE_MAX];
+static int browse_count;
+
+static void browse_collect_cb(const char *name, unsigned int size) {
+    if (browse_count >= BROWSE_MAX) return;
+    int i = 0;
+    while (name[i] && i < 12) { browse_names[browse_count][i] = name[i]; i++; }
+    browse_names[browse_count][i] = 0;
+    browse_sizes[browse_count] = size;
+    browse_count++;
+}
+
+static void browse_draw(int sel){
+    clear();
+    puts("-- file browser: up/down, enter=view, esc=quit --\n\n");
+    if (browse_count == 0) { puts("(no files)\n"); return; }
+    for (int i = 0; i < browse_count; i++) {
+        putc(i == sel ? '>' : ' '); putc(' ');
+        puts(browse_names[i]);
+        puts("  "); putn(browse_sizes[i]); puts(" bytes\n");
+    }
+}
+
+static void browse(void){
+    browse_count = 0;
+    fat_list(browse_collect_cb);
+    int sel = 0;
+    browse_draw(sel);
+    for (;;) {
+        int k = get_key();
+        if (k == KEY_ESC || k == 'q') { clear(); return; }
+        if (k == KEY_UP)   { if (sel > 0) sel--; browse_draw(sel); }
+        if (k == KEY_DOWN) { if (sel < browse_count - 1) sel++; browse_draw(sel); }
+        if (k == KEY_ENTER && browse_count > 0) {
+            clear();
+            puts(browse_names[sel]); puts(":\n\n");
+            char buf[2048];
+            int n = fat_read_file(browse_names[sel], buf, sizeof(buf) - 1);
+            if (n < 0) puts("(couldn't read)\n");
+            else { buf[n] = 0; puts(buf); }
+            puts("\n\n-- press any key to go back --\n");
+            get_key();
+            browse_draw(sel);
+        }
+    }
+}
+
 /* ---- shell ---- */
 static int streq(const char *a, const char *b){
     while (*a && *a == *b) { a++; b++; }
@@ -132,7 +212,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm\n");
+    if (streq(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest sleep disktest ls cat exec rm browse\n");
     else if (streq(line, "clear")) clear();
     else if (streq(line, "echo"))  { puts(arg); putc('\n'); }
     else if (streq(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -169,6 +249,7 @@ static void run(char *line){
         puts("\ndone (expect ABABAB...)\n");
     }
     else if (streq(line, "ls"))    fat_list(ls_cb);
+    else if (streq(line, "browse")) browse();
     else if (streq(line, "cat")) {
         if (!*arg) { puts("usage: cat <file>\n"); }
         else {
