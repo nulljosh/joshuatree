@@ -33,7 +33,7 @@ that with the permanent, same-shaped tables.
 | `kheap.c` | `kmalloc`/`kfree`, a first-fit free list grown a frame at a time from `pmm.c` |
 | `task.c` + `irq_stubs.S`'s irq0 | Preemptive round-robin off the PIT tick. `yield()` reaches the same switch in software via `int $32`, same IDT gate as the hardware timer |
 | `ata.c` | ATA PIO disk driver, LBA28, primary master only |
-| `fat.c` | Read-only FAT16, root directory only, 8.3 names |
+| `fat.c` | FAT16, real subdirectories and file writes, 8.3 names |
 | `exec.c` | Loads a flat binary via `fat.c` and calls into it, ring 0, no isolation |
 | `kernel/kernel.c` | VGA text console, PS/2 scancode table, RTC clock, the shell, and a mouse-driven GUI desktop (`gui`) built on v6's graphics/font/mouse primitives |
 

@@ -687,7 +687,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest preempttest ring3test sleep disktest ls cat exec rm cd mkdir browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build gui\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest preempttest ring3test sleep disktest ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build gui\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -778,6 +778,15 @@ static void run(char *line){
     else if (!strcmp(line, "mkdir")) {
         if (!*arg) { puts("usage: mkdir <name>\n"); }
         else { puts(fat_mkdir(arg) ? "created\n" : "failed (name taken, disk full, or directory full)\n"); }
+    }
+    else if (!strcmp(line, "write")) {
+        if (!*arg) { puts("usage: write <file> <content>\n"); }
+        else {
+            char *content = arg;
+            while (*content && *content != ' ') content++;
+            if (*content) *content++ = 0;
+            puts(fat_write_file(arg, content, strlen(content)) ? "written\n" : "failed (name taken or disk full)\n");
+        }
     }
     else if (!strcmp(line, "lspci")) {
         struct pci_device dev;

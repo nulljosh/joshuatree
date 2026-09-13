@@ -35,4 +35,9 @@ int fat_chdir(const char *name);
    growth yet, see fat.c) the current directory's already-allocated space
    is full. */
 int fat_mkdir(const char *name);
+
+/* Creates a new file in the current directory with exactly this content.
+   Returns 1 on success, 0 if the name already exists (no overwrite yet,
+   same scope decision as fat_mkdir) or the disk is full. */
+int fat_write_file(const char *name, const void *data, unsigned int len);
 #endif

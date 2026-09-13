@@ -327,3 +327,47 @@ int fat_mkdir(const char *name) {
     slot->file_size = 0;
     return ata_write_sector(slot_lba, sector);
 }
+
+int fat_write_file(const char *name, const void *data, unsigned int len) {
+    if (!mounted || !*name) return 0;
+    if (find_entry_in(current_dir_cluster, name)) return 0; /* name taken, same scope as mkdir: no overwrite yet */
+
+    const u8 *src = (const u8 *)data;
+    u16 first_cluster = 0, prev_cluster = 0;
+    u32 remaining = len;
+
+    while (remaining > 0) {
+        u16 c = alloc_cluster();
+        if (!c) return 0; /* out of space; ponytail: no rollback of clusters already claimed, matches fat_delete's own no-reclaim scope */
+        if (first_cluster == 0) first_cluster = c; else fat_entry_write(prev_cluster, c);
+        prev_cluster = c;
+
+        u32 lba = cluster_to_lba(c);
+        for (u8 s = 0; s < sectors_per_cluster && remaining > 0; s++) {
+            u8 buf[512];
+            memset(buf, 0, sizeof(buf)); /* zero-pad the tail of the last sector */
+            u32 chunk = remaining < 512 ? remaining : 512;
+            for (u32 i = 0; i < chunk; i++) buf[i] = src[i];
+            if (!ata_write_sector(lba + s, buf)) return 0;
+            src += chunk;
+            remaining -= chunk;
+        }
+    }
+    if (prev_cluster) fat_entry_write(prev_cluster, 0xFFFF); /* end of chain */
+
+    u32 slot_lba; int slot_idx;
+    if (!find_free_slot(current_dir_cluster, &slot_lba, &slot_idx)) return 0;
+
+    u8 sector[512];
+    if (!ata_read_sector(slot_lba, sector)) return 0;
+    struct dir_entry *slot = &((struct dir_entry *)sector)[slot_idx];
+    to_fat_name(name, slot->name);
+    slot->attr = 0;
+    for (int i = 0; i < 8; i++) slot->reserved[i] = 0;
+    slot->first_cluster_high = 0;
+    slot->write_time = 0;
+    slot->write_date = 0;
+    slot->first_cluster_low = first_cluster;
+    slot->file_size = len;
+    return ata_write_sector(slot_lba, sector);
+}

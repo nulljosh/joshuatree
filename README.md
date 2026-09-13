@@ -45,7 +45,7 @@ make run      # boots to the shell
 
 Commands: `help` `clear` `echo` `time` `uptime` `mem` `reboot` `crash` `pagefault`
 `heaptest` `tasktest` `preempttest` `ring3test` `sleep` `disktest` `ls` `cat`
-`exec` `rm` `cd` `mkdir` `browse` `lspci` `gfxtest` `fonttest` `mousetest`
+`exec` `rm` `cd` `mkdir` `write <file> <content>` `browse` `lspci` `gfxtest` `fonttest` `mousetest`
 `nettest` `web <host> [path]` `serve` `serveapp` `chat <message>`
 `build <what>` `gui`, most exist to manually exercise a subsystem (see
 `docs/ARCHITECTURE.md`), not just to be useful. `web` and `gui` are worth
