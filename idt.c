@@ -25,7 +25,7 @@ struct idt_ptr {
 static struct idt_entry idt[256];
 static struct idt_ptr ip;
 
-static void set_gate(int n, u32 base, u16 sel, u8 flags) {
+void idt_set_gate(int n, u32 base, u16 sel, u8 flags) {
     idt[n].base_low  = base & 0xFFFF;
     idt[n].base_high = (base >> 16) & 0xFFFF;
     idt[n].sel       = sel;
@@ -62,9 +62,9 @@ void isr_handler(u32 vector) {
 void idt_install(void) {
     ip.limit = sizeof(idt) - 1;
     ip.base  = (u32)&idt;
-    for (int i = 0; i < 256; i++) set_gate(i, 0, 0, 0);
+    for (int i = 0; i < 256; i++) idt_set_gate(i, 0, 0, 0);
 
-#define SET(n) set_gate(n, (u32)isr##n, 0x08, 0x8E)
+#define SET(n) idt_set_gate(n, (u32)isr##n, 0x08, 0x8E)
     SET(0);  SET(1);  SET(2);  SET(3);  SET(4);  SET(5);  SET(6);  SET(7);
     SET(8);  SET(9);  SET(10); SET(11); SET(12); SET(13); SET(14); SET(15);
     SET(16); SET(17); SET(18); SET(19); SET(20); SET(21); SET(22); SET(23);

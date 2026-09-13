@@ -1,6 +1,7 @@
 /* Freestanding i386 kernel: VGA text, PS/2 keyboard, RTC clock, tiny shell. */
 #include "gdt.h"
 #include "idt.h"
+#include "irq.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -47,8 +48,9 @@ static void clear(void){
     cx = cy = 0; cursor();
 }
 
-/* ---- PS/2 keyboard, polled. ponytail: no IDT, no IRQs. Add both when
-   something other than the shell needs to run while waiting for a key. ---- */
+/* ---- PS/2 keyboard, IRQ-driven. irq.c's handler fills a ring buffer on
+   IRQ1; getch() drains it and halts between ticks instead of busy-polling
+   port 0x60 itself. ---- */
 static const char SC[128] = {
     0,27,'1','2','3','4','5','6','7','8','9','0','-','=','\b','\t',
     'q','w','e','r','t','y','u','i','o','p','[',']','\n',0,
@@ -58,8 +60,8 @@ static const char SC[128] = {
 
 static char getch(void){
     for (;;) {
-        if (!(inb(0x64) & 1)) continue;
-        u8 sc = inb(0x60);
+        int sc = kbd_pop();
+        if (sc < 0) { __asm__ volatile ("hlt"); continue; }
         if (sc & 0x80) continue;            /* key release */
         char c = SC[sc & 0x7F];
         if (c) return c;
@@ -99,10 +101,19 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (streq(line, "help"))       puts("help clear echo time reboot crash\n");
+    if (streq(line, "help"))       puts("help clear echo time uptime reboot crash\n");
     else if (streq(line, "clear")) clear();
     else if (streq(line, "echo"))  { puts(arg); putc('\n'); }
     else if (streq(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
+    else if (streq(line, "uptime")){
+        unsigned int t = ticks();
+        char buf[12]; int n = 0;
+        unsigned int v = t / 100; /* 100 ticks/sec */
+        if (v == 0) buf[n++] = '0';
+        while (v) { buf[n++] = '0' + v % 10; v /= 10; }
+        while (n) putc(buf[--n]);
+        puts("s\n");
+    }
     else if (streq(line, "time"))  show_time();
     else if (streq(line, "reboot"))reboot();
     else { puts("? "); puts(line); putc('\n'); }
@@ -111,6 +122,7 @@ static void run(char *line){
 void kmain(void){
     gdt_install();
     idt_install();
+    irq_install();
     clear();
     puts("os v0 -- type help\n");
     char line[80];
