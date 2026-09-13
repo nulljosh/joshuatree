@@ -47,6 +47,9 @@ A real fork discovered mid-implementation: requesting a video mode via the multi
 - [ ] Software framebuffer primitives: pixel, rect, blit, a bitmap font renderer. Take typography seriously here, this is the first thing anyone actually looks at once VGA text mode is gone. A crude 8x8 font that technically renders isn't good enough, even monospace should be a genuinely nice-looking face at a real size. Support more than one embedded font and let the user pick, don't hardcode a single typeface as if it's the only option
 - [ ] Mouse: PS/2 mouse driver (IRQ12), cursor sprite
 - [ ] A minimal windowing surface, even one full-screen buffer counts for v6
+- [ ] Memory efficiency pass: this is a real standing constraint from here on, not a one-time task. Watch static allocations (paging.c's extra page tables, kheap's growth), avoid needless copies, keep the kernel's own footprint small before it starts hosting real app logic in v9. Revisit whenever a subsystem's memory use looks bigger than it needs to be, not just once
+
+Once graphics exist, a lighter early win becomes possible without waiting for v7/v8's full network stack and browser: pure-logic apps from the codebase (no DOM, no network dependency, e.g. numen's calculator parser, keyrate's typing-test scoring, weather's forecast math minus the live fetch) can be ported natively in C and rendered straight to the framebuffer, no HTTP client or HTML parser needed. This is real groundwork for v9, not a replacement for it: the full vision (real web apps served and rendered by the real browser) still needs v7 and v8. Worth a small side-track once the framebuffer and font renderer above are solid, picking one simple app's core logic (not its whole UI) as the first native port.
 
 ## v7, networking (the "browser" part needs a network stack), ETA: 2-3 sessions (~6-10h)
 The hardest version in the plan: a NIC driver plus a real TCP stack, both easy to get subtly wrong in ways that "sort of work."
