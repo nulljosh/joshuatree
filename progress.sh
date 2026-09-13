@@ -1,75 +1,70 @@
 #!/usr/bin/env bash
-# Regenerate progress.svg from roadmap.md's checkbox counts. Run after checking
-# off or adding roadmap items. ponytail: parses "- [x]"/"- [ ]" lines directly,
-# no markdown library needed for a format this simple.
+# Regenerate progress.svg: a line graph of cumulative capability (items
+# checked off) across versions, from roadmap.md's checkbox counts and the
+# "## Done" collapsed-version marker. Run after checking off/adding items.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-versions=()
-totals=()
-dones=()
-cur=""
-done_n=0
-total_n=0
+labels=()
+cum=()
+running=0
 
-# collapsed/archived versions (see roadmap.md's "## Done" section) still count
-# toward the total, via a "<!-- progress.sh: done-items D/T -->" marker line,
-# so pruning finished checklists doesn't erase them from the graph.
-if marker="$(grep -o 'done-items [0-9]*/[0-9]*' roadmap.md | head -1)"; then
-  d="${marker#done-items }"; d="${d%/*}"
-  t="${marker#*/}"
-  versions+=("done"); dones+=("$d"); totals+=("$t")
+total=0
+
+marker="$(grep -o 'done-items [0-9]*/[0-9]*' roadmap.md | head -1 || true)"
+if [ -n "$marker" ]; then
+  d="${marker#done-items }"; t="${marker#*/}"; d="${d%/*}"
+  running=$((running + d)); total=$((total + t))
+  labels+=("done"); cum+=("$running")
 fi
 
-flush() {
-  if [ -n "$cur" ]; then
-    versions+=("$cur"); totals+=("$total_n"); dones+=("$done_n")
-  fi
-}
+cur=""; count=0; vtotal=0
+flush() { if [ -n "$cur" ]; then running=$((running + count)); total=$((total + vtotal)); labels+=("$cur"); cum+=("$running"); fi; }
 
 while IFS= read -r line; do
   if [[ "$line" =~ ^##[[:space:]]+(v[0-9]+) ]]; then
     flush
-    cur="${BASH_REMATCH[1]}"
-    total_n=0; done_n=0
+    cur="${BASH_REMATCH[1]}"; count=0; vtotal=0
   elif [[ "$line" =~ ^-\ \[x\] ]]; then
-    total_n=$((total_n+1)); done_n=$((done_n+1))
+    count=$((count+1)); vtotal=$((vtotal+1))
   elif [[ "$line" =~ ^-\ \[\ \] ]]; then
-    total_n=$((total_n+1))
+    vtotal=$((vtotal+1))
   fi
 done < roadmap.md
 flush
 
-bar_h=28
-gap=10
-pad=20
-label_w=50
-bar_w=360
-width=$((pad*2 + label_w + bar_w + 50))
-height=$((pad*2 + ${#versions[@]} * (bar_h + gap)))
+n=${#labels[@]}
+max=$total
+[ "$max" -eq 0 ] && max=1
+
+pad_l=30; pad_r=16; pad_t=16; pad_b=28
+plot_w=420; plot_h=140
+width=$((pad_l + plot_w + pad_r))
+height=$((pad_t + plot_h + pad_b))
+
+points=""
+dots=""
+for i in "${!labels[@]}"; do
+  x=$((pad_l + i * plot_w / (n - 1 > 0 ? n - 1 : 1)))
+  y=$((pad_t + plot_h - cum[i] * plot_h / max))
+  points+="$x,$y "
+  dots+="<circle cx=\"$x\" cy=\"$y\" r=\"3\" fill=\"#111\"/>"
+done
 
 svg="<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"$width\" height=\"$height\" viewBox=\"0 0 $width $height\">"
 svg+="<rect width=\"100%\" height=\"100%\" fill=\"#ffffff\"/>"
-y=$pad
-for i in "${!versions[@]}"; do
-  v="${versions[$i]}"; t="${totals[$i]}"; d="${dones[$i]}"
-  pct=0
-  [ "$t" -gt 0 ] && pct=$((d * 100 / t))
-  fill_w=$((bar_w * pct / 100))
-  svg+="<text x=\"$pad\" y=\"$((y + bar_h/2 + 4))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"13\" fill=\"#111\">$v</text>"
-  svg+="<rect x=\"$((pad+label_w))\" y=\"$y\" width=\"$bar_w\" height=\"$bar_h\" rx=\"4\" fill=\"#eee\" stroke=\"#ddd\"/>"
-  color="#111"
-  [ "$pct" -eq 100 ] && color="#2e7d32"
-  svg+="<rect x=\"$((pad+label_w))\" y=\"$y\" width=\"$fill_w\" height=\"$bar_h\" rx=\"4\" fill=\"$color\"/>"
-  svg+="<text x=\"$((pad+label_w+bar_w+10))\" y=\"$((y + bar_h/2 + 4))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"12\" fill=\"#666\">$d/$t</text>"
-  y=$((y + bar_h + gap))
+svg+="<line x1=\"$pad_l\" y1=\"$pad_t\" x2=\"$pad_l\" y2=\"$((pad_t+plot_h))\" stroke=\"#ddd\"/>"
+svg+="<line x1=\"$pad_l\" y1=\"$((pad_t+plot_h))\" x2=\"$((pad_l+plot_w))\" y2=\"$((pad_t+plot_h))\" stroke=\"#ddd\"/>"
+svg+="<polyline points=\"$points\" fill=\"none\" stroke=\"#111\" stroke-width=\"2\"/>"
+svg+="$dots"
+for i in "${!labels[@]}"; do
+  x=$((pad_l + i * plot_w / (n - 1 > 0 ? n - 1 : 1)))
+  svg+="<text x=\"$x\" y=\"$((pad_t+plot_h+16))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" fill=\"#666\" text-anchor=\"middle\">${labels[$i]}</text>"
 done
+svg+="<text x=\"$pad_l\" y=\"12\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"11\" fill=\"#666\">${cum[$((n-1))]} features shipped</text>"
 svg+="</svg>"
 
 echo "$svg" > progress.svg
 mkdir -p landing
 cp progress.svg landing/progress.svg
-
-sum_d=0; sum_t=0
-for i in "${!dones[@]}"; do sum_d=$((sum_d + dones[i])); sum_t=$((sum_t + totals[i])); done
-echo "wrote progress.svg ($sum_d/$sum_t items done)"
+echo "wrote progress.svg (cumulative through ${labels[$((n-1))]}: ${cum[$((n-1))]} items)"

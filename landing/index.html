@@ -7,7 +7,7 @@
 <meta name="description" content="A freestanding kernel built from scratch, toward its own file explorer and browser. No macOS, no Linux underneath.">
 <link rel="icon" href="icon.svg">
 <style>
-  :root { color-scheme: light dark; --bg:#f4f4f6; --fg:#111; --sub:#666; --border:rgba(0,0,0,0.08); --card:rgba(255,255,255,0.55); --accent:#2e7d32; }
+  :root { color-scheme: light dark; --bg:#f4f4f6; --fg:#111; --sub:#666; --border:rgba(0,0,0,0.08); --card:rgba(255,255,255,0.55); --accent:#111; }
   @media (prefers-color-scheme: dark) { :root { --bg:#08080a; --fg:#f2f2f2; --sub:#999; --border:rgba(255,255,255,0.1); --card:rgba(255,255,255,0.06); } }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -18,9 +18,9 @@
   h1 { font-size: 44px; margin: 4px 0 8px; letter-spacing: -0.02em; }
   p.tagline { color: var(--sub); font-size: 19px; margin: 0 0 36px; line-height: 1.5; }
 
-  .term-wrap { background: #0b0d0b; border-radius: 12px; padding: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); margin-bottom: 12px; }
-  .term-wrap .label { color: #5a9c6b; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; text-align: left; padding: 0 8px 8px; }
-  #screen_container { display: block; width: 100%; min-height: 200px; color: #3ee06a; font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: left; padding: 4px; }
+  .term-wrap { background: #1c1c1e; border-radius: 12px; padding: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); margin-bottom: 12px; }
+  .term-wrap .label { color: #8e8e93; font: 11px -apple-system, Helvetica, Arial, sans-serif; text-align: left; padding: 0 8px 8px; }
+  #screen_container { display: block; width: 100%; min-height: 200px; color: #d1d1d6; font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: left; padding: 4px; }
   #screen_container canvas { width: 100%; image-rendering: pixelated; }
   .boot-note { color: var(--sub); font-size: 12px; margin: 0 0 32px; }
   .boot-note code { background: var(--card); padding: 1px 5px; border-radius: 4px; }
@@ -49,25 +49,25 @@
 <body>
 <main>
   <img class="icon" src="icon.svg" width="56" height="56" alt="">
-  <p class="eyebrow">Built from nothing</p>
+  <p class="eyebrow">Joshua's kernel, built from nothing</p>
   <h1>os</h1>
-  <p class="tagline">A kernel with no macOS, no Linux, nothing underneath.<br>Toward its own file explorer and browser.</p>
+  <p class="tagline">No macOS, no Linux underneath it. I'm writing this one myself,<br>piece by piece, toward my own file explorer and browser.</p>
 
   <div class="term-wrap">
-    <div class="label">this kernel.elf, actually booting, right now, in your browser (v86 x86 emulator)</div>
+    <div class="label">the actual kernel, booting live in your browser</div>
     <div id="screen_container">booting...</div>
   </div>
-  <p class="boot-note">Real x86 emulation, not a recording. Click in and type <code>help</code>. Slow to boot on first load (~1MB emulator core).</p>
+  <p class="boot-note">Real emulation, not a recording. Click in and type <code>help</code>.</p>
 
   <div class="progress-card">
-    <h2>Build progress</h2>
+    <h2>How far I've gotten</h2>
     <img src="progress.svg" alt="Feature completion by version, generated from roadmap.md">
   </div>
 
   <div class="steps">
-    <div class="step"><div class="n">No host OS</div><p>Freestanding i386, boots straight from a multiboot header. Nothing to hide behind.</p></div>
-    <div class="step"><div class="n">One piece at a time</div><p>GDT, then interrupts, then memory, then a filesystem, then graphics. Same order every real kernel takes.</p></div>
-    <div class="step"><div class="n">Ends at a browser</div><p>The whole point: your own file explorer and a browser, running on a kernel you wrote.</p></div>
+    <div class="step"><div class="n">Why</div><p>I already talk to Claude and get it to build things. I want an OS that does that natively, not bolted onto macOS.</p></div>
+    <div class="step"><div class="n">How</div><p>One real piece at a time: interrupts, memory, a filesystem, graphics. No shortcuts, no borrowed kernel.</p></div>
+    <div class="step"><div class="n">Where it's going</div><p>My own file explorer and browser, running on something I wrote myself.</p></div>
   </div>
 
   <div class="links">
