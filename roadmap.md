@@ -13,6 +13,8 @@ takes, and roughly what xv6/ToaruOS/Linux 0.01 did in their first months).
 
 Full breakdown of what shipped in each: `git log --oneline` or the commit history, not here — this file is the queue, not the changelog.
 
+**Total remaining, roughly: 10-14 sessions (~30-45 active hours)** to v10, per-version ETAs below. These are active-work estimates, not calendar time — usage caps and check.sh-quality verification pace it across days, not one continuous run. Revised after each version actually ships, not predicted once and left stale.
+
 ## v2 — memory (from "one flat blob" to real address space)
 - [x] Physical memory manager: bitmap over `mem_upper` from the multiboot info struct, kernel image frames pre-reserved (`pmm.c`, `mem` shell command reports free/total)
 - [x] Paging: identity-map the first 4MB, enable it (`paging.c`); page faults now report the faulting address from CR2 (`pagefault` shell command exercises it)
@@ -25,41 +27,46 @@ Full breakdown of what shipped in each: `git log --oneline` or the commit histor
 - [x] Wait/sleep primitive: `sleep_ticks(n)` yields until n PIT ticks pass (`task.c`, `sleep` shell command). Verified it actually returns via a temporary boot-time check before shipping
 - [ ] User mode: ring 3, TSS, syscall via `int 0x80` — **deliberately deferred, not blocked**: needs new GDT entries (ring-3 code/data + a TSS descriptor), a TSS with a valid ss0/esp0, `paging.c`'s page tables switched from supervisor-only to user-accessible, and a correct `iret`-based privilege transition. Same failure mode as higher-half: a subtle bug here (wrong RPL, wrong TSS field) can leave ring-3 code silently running with ring-0 privileges while `check.sh`'s boot-banner check still passes — it can't detect a privilege-isolation bug, only a crash. Wants real verification (does ring-3 code actually fault on a privileged instruction) before shipping, not a rushed pass.
 
-## v4 — storage (data survives reboot)
+## v4 — storage (data survives reboot) — ETA: 1 more session (~2-4h)
+FAT is the slow part: real spec-reading, not mechanical like ATA was.
 - [x] ATA PIO driver: LBA28 read/write on the primary master (`ata.c`, `disktest` shell command). Verified with a real attached disk image (`write:ok read:ok match:ok`), not just the graceful-no-drive path
 - [ ] A real filesystem: FAT16/32 (read support first, most-documented, most tooling) or a small custom one if FAT is too much
 - [ ] VFS layer so the shell's `open`/`read` don't care which fs backs them
 - [ ] Load and exec a flat binary or minimal ELF from disk
 
-## v5 — the "file explorer" (this is why the project exists)
+## v5 — the "file explorer" (this is why the project exists) — ETA: 1 session (~2-3h)
+Mechanical once v4's VFS exists — mostly shell commands and a UI loop.
 - [ ] Shell commands: `ls`, `cd`, `cat`, `rm`, `mkdir` over the VFS
 - [ ] Simple text-mode file browser (arrow keys, VGA text UI, not just a shell)
 - [ ] Basic libc subset: `malloc`, `memcpy`, `strcmp`, etc. for anything above the kernel
 
-## v6 — graphics (text mode won't carry a browser)
+## v6 — graphics (text mode won't carry a browser) — ETA: 2-3 sessions (~6-10h)
+VESA mode-setting and a font renderer are fiddly and hard to verify without eyes on a real screen (not just VGA-text memory dumps).
 - [ ] VESA/VBE linear framebuffer mode instead of VGA text
 - [ ] Software framebuffer primitives: pixel, rect, blit, a bitmap font renderer
 - [ ] Mouse: PS/2 mouse driver (IRQ12), cursor sprite
 - [ ] A minimal windowing surface — even one full-screen buffer counts for v6
 
-## v7 — networking (the "browser" part needs a network stack)
+## v7 — networking (the "browser" part needs a network stack) — ETA: 2-3 sessions (~6-10h)
+The hardest version in the plan: a NIC driver plus a real TCP stack, both easy to get subtly wrong in ways that "sort of work."
 - [ ] NIC driver (RTL8139 or virtio-net — both are the standard QEMU-emulatable choices with tons of reference code)
 - [ ] Ethernet/ARP/IP/UDP minimal stack
 - [ ] TCP: enough to open one connection and do a raw HTTP GET
 - [ ] DNS: enough to resolve a hostname before the GET
 
-## v8 — the actual browser (the point of all of this)
+## v8 — the actual browser (the point of all of this) — ETA: 1-2 sessions (~4-6h)
+Mostly glue over v6+v7 once both exist; the HTML parser is deliberately tiny.
 - [ ] HTTP client good enough to fetch a page
 - [ ] A tag-soup HTML subset parser (headings, paragraphs, links — not CSS, not JS, v1 is Lynx-level)
 - [ ] Render parsed text to the framebuffer with the v6 font renderer
 - [ ] Link navigation via keyboard/mouse, back button, that's a browser
 
-## v9 — running real apps (the browser can now load something)
+## v9 — running real apps (the browser can now load something) — ETA: 1 session (~2-3h)
 - [ ] Serve the codebase's own static web apps (weather, numen, fieldbook, etc. — one-file, no-backend apps from `~/Documents/Code`) over the v7 network stack to the v8 browser
 - [ ] A tiny local HTTP server on the kernel itself, so apps run without needing an external host
 - [ ] Pick 2-3 of the simplest static apps as the first real test load, not all 30+ at once
 
-## v10 — talking to it like gato does (this is the actual point)
+## v10 — talking to it like gato does (this is the actual point) — ETA: 1-2 sessions (~3-5h), plus a real design decision along the way
 - [ ] Wire a voice or text command channel into the kernel shell that can reach an LLM (needs v7's network stack to call out, or an on-device model if that's ever feasible on bare metal)
 - [ ] "build stuff" loop: a command that takes a request, edits/generates a file, serves it as a v9 app — the kernel-native version of what gato already does on macOS
 - [ ] Decide then whether voice I/O belongs in the kernel itself or stays a gato-style layer that talks to this OS over the network (real design call, not a default — flag it when v10 is reached instead of guessing)
