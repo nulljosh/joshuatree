@@ -25,7 +25,16 @@ drivers/app_weather.h:
 drivers/app_curbfind.h:
 	./gen_app.sh "$$HOME/Documents/Code/curbfind/web/index.html" drivers/app_curbfind.h app_curbfind
 
-kernel/kernel.o: drivers/app_weather.h drivers/app_curbfind.h
+drivers/app_keyrate.h:
+	./gen_app.sh "$$HOME/Documents/Code/keyrate/index.html" drivers/app_keyrate.h app_keyrate
+
+drivers/app_bookrank.h:
+	./gen_app.sh "$$HOME/Documents/Code/bookrank/index.html" drivers/app_bookrank.h app_bookrank
+
+drivers/app_quotestreak.h:
+	./gen_app.sh "$$HOME/Documents/Code/quotestreak/index.html" drivers/app_quotestreak.h app_quotestreak
+
+kernel/kernel.o: drivers/app_weather.h drivers/app_curbfind.h drivers/app_keyrate.h drivers/app_bookrank.h drivers/app_quotestreak.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@

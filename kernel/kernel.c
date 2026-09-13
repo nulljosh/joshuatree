@@ -21,6 +21,9 @@
 #include "http.h"
 #include "app_weather.h"
 #include "app_curbfind.h"
+#include "app_keyrate.h"
+#include "app_bookrank.h"
+#include "app_quotestreak.h"
 #include "json.h"
 #include "html.h"
 
@@ -872,13 +875,16 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "serveapp")) {
-        if (!*arg) { puts("usage: serveapp weather|curbfind\n"); }
+        if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak\n"); }
         else if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
         else {
             net_init(0x0A00020F);
-            if (!strcmp(arg, "weather"))       serve_app("weather", app_weather_html, app_weather_len);
-            else if (!strcmp(arg, "curbfind")) serve_app("curbfind", app_curbfind_html, app_curbfind_len);
-            else puts("unknown app, try weather or curbfind\n");
+            if (!strcmp(arg, "weather"))          serve_app("weather", app_weather_html, app_weather_len);
+            else if (!strcmp(arg, "curbfind"))    serve_app("curbfind", app_curbfind_html, app_curbfind_len);
+            else if (!strcmp(arg, "keyrate"))     serve_app("keyrate", app_keyrate_html, app_keyrate_len);
+            else if (!strcmp(arg, "bookrank"))    serve_app("bookrank", app_bookrank_html, app_bookrank_len);
+            else if (!strcmp(arg, "quotestreak")) serve_app("quotestreak", app_quotestreak_html, app_quotestreak_len);
+            else puts("unknown app, try weather, curbfind, keyrate, bookrank, or quotestreak\n");
         }
     }
     else if (!strcmp(line, "chat")) {
