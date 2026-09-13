@@ -13,17 +13,24 @@
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
 
-  /* the OS screen is framed like a window rather than a fullbleed black
-     wall -- friendly, not hacker-terminal. Sized by aspect-ratio (driven
-     by width, which mobile Safari's toolbar never touches) with a
-     viewport-height cap, not by height:100dvh directly: a height-based box
-     is exactly what mobile Safari's toolbar-collapse animation destabilizes,
-     seen as a real glitch, a visible seam and a second phantom black box
-     while the toolbar was mid-transition. Sizing off width sidesteps the
-     whole class of bug instead of chasing another viewport-unit fix. */
-  #stage-wrap { padding: 20px; background: var(--bg); display: flex; justify-content: center; }
-  #stage { position: relative; width: 100%; max-width: 900px; aspect-ratio: 720 / 400; max-height: 80vh; max-height: 80dvh; background: #000; overflow: hidden; border-radius: 24px; display: flex; align-items: center; justify-content: center; }
+  /* Mobile: true full-bleed, edge to edge, no border, no radius, height off
+     100svh not 100dvh. dvh actively tracks and animates with Safari's
+     toolbar as it collapses, which is exactly what caused a real glitch,
+     a visible seam and a phantom second black box mid-animation. svh is a
+     static floor (the height once the toolbar is fully expanded) that
+     never animates, so the box never moves during a toolbar transition.
+     Desktop/tablet gets the framed-window card look instead, where a
+     margin around a black rectangle looks intentional rather than like a
+     mistake, sized by width via aspect-ratio there since full-bleed
+     doesn't apply once there's a margin anyway. */
+  #stage-wrap { background: #000; }
+  #stage { position: relative; width: 100%; height: 100vh; height: 100svh; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   #stage img.boot { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+
+  @media (min-width: 641px) {
+    #stage-wrap { padding: 20px; background: var(--bg); display: flex; justify-content: center; }
+    #stage { max-width: 900px; aspect-ratio: 720 / 400; height: auto; max-height: 80vh; max-height: 80svh; border-radius: 24px; }
+  }
 
   /* logo + name, top-left, over the running kernel */
   .brand { position: absolute; top: 18px; left: 18px; z-index: 5; display: flex; align-items: center; gap: 10px; }
