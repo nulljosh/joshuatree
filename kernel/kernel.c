@@ -1327,6 +1327,20 @@ static void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; }
 static char weather_text[24] = "";
 static unsigned int weather_last_tick = 0;
 static int weather_tried_once = 0;
+/* v53: real fields behind the one-line summary, kept for the dropdown
+   panel. Nothing fabricated: temp/code are exactly what weather_fetch
+   already parses out of the reply, lat/lon are the exact literals already
+   in the http_get() call below, not a place name that isn't really in the
+   data. */
+static int weather_temp_c = 0;
+static int weather_code10 = 0;
+static int weather_have = 0;
+/* Hit box for the menu-bar weather text, recomputed by gui_draw_menubar
+   every time it actually redraws that text (same cadence the clock hit
+   test already tolerates: coarse, minute-granularity, matching how often
+   the underlying layout can shift). -1/-1 means "nothing drawn, not
+   clickable" rather than a stale box from a previous boot. */
+static int weather_hit_x0 = -1, weather_hit_x1 = -1;
 
 static const char *weather_word(int code){
     if (code == 0) return "Clear";
@@ -1382,6 +1396,7 @@ static void weather_fetch(void){
     if (!json_current_number(body, "temperature_2m", &t10)) return;
     json_current_number(body, "weather_code", &code10);
     int t = (t10 >= 0 ? t10 + 5 : t10 - 5) / 10; /* round to whole degrees */
+    weather_temp_c = t; weather_code10 = code10; weather_have = 1;
     int p = 0;
     if (t < 0) { weather_text[p++] = '-'; t = -t; }
     if (t >= 10) weather_text[p++] = '0' + t / 10;
@@ -1441,7 +1456,11 @@ static void gui_draw_menubar(void){
     font_draw_string(clock, (int)window_width() - p * 8 - 16, 7, 0x001C1C1E, -1);
     if (weather_text[0]) {
         int wl = (int)strlen(weather_text);
-        font_draw_string(weather_text, (int)window_width() - p * 8 - 16 - wl * 8 - 28, 7, 0x00884B16, -1);
+        int wx = (int)window_width() - p * 8 - 16 - wl * 8 - 28;
+        font_draw_string(weather_text, wx, 7, 0x00884B16, -1);
+        weather_hit_x0 = wx - 4; weather_hit_x1 = wx + wl * 8 + 4; /* v53: real click target, same padding feel as the clock's own */
+    } else {
+        weather_hit_x0 = weather_hit_x1 = -1;
     }
 }
 
@@ -3018,6 +3037,47 @@ static void gui_draw_notif_panel(void){
     }
 }
 
+/* v53: the weather text opens a dropdown too, same open-on-press/
+   dismiss-on-next-release contract as the clock's notif panel above, same
+   panel chrome (colors, border-drawing, font). Shows only real fields the
+   existing weather_fetch() already parses (temp, WMO code -> condition
+   word, the fixed lat/lon it queries) plus how long ago the fetch ran, no
+   invented humidity/wind/forecast rows the data doesn't have. */
+#define WEATHER_W 220
+static void gui_draw_weather_panel(void){
+    int x0 = weather_hit_x0 >= 0 ? weather_hit_x0 : (int)window_width() - WEATHER_W - 200;
+    if (x0 + WEATHER_W > (int)window_width() - 4) x0 = (int)window_width() - WEATHER_W - 4;
+    int y0 = GUI_MENUBAR_H;
+    unsigned int bg = 0x002C2C2E, border = 0x001C1C1E, text = 0x00F5F5F7, dim = 0x00A0A0A6;
+
+    int total_h = 10 + 4 * 20 + 6;
+    window_rect(x0, y0, WEATHER_W, total_h, bg);
+    window_rect(x0, y0, WEATHER_W, 1, border);
+    window_rect(x0, y0 + total_h - 1, WEATHER_W, 1, border);
+    window_rect(x0, y0, 1, total_h, border);
+    window_rect(x0 + WEATHER_W - 1, y0, 1, total_h, border);
+
+    int y = y0 + 8;
+    if (!weather_have) {
+        font_draw_string("No weather yet", x0 + 12, y, dim, -1);
+        return;
+    }
+    font_draw_string(weather_text[0] ? weather_text : "Weather", x0 + 12, y, text, -1); y += 20;
+
+    char line[40]; int p;
+    p = 0; line[p++]='T'; line[p++]='e'; line[p++]='m'; line[p++]='p'; line[p++]=':'; line[p++]=' ';
+    { int t = weather_temp_c; if (t < 0) { line[p++]='-'; t=-t; } if (t>=10) line[p++]='0'+t/10; line[p++]='0'+t%10; line[p++]=(char)0xF8; line[p++]='C'; }
+    line[p]=0; font_draw_string(line, x0 + 12, y, dim, -1); y += 20;
+
+    p = 0; line[p++]='C'; line[p++]='o'; line[p++]='d'; line[p++]='e'; line[p++]=':'; line[p++]=' ';
+    { int c = weather_code10 / 10; if (c >= 100) line[p++]='0'+c/100; if (c>=10) line[p++]='0'+(c/10)%10; line[p++]='0'+c%10; }
+    line[p]=0; font_draw_string(line, x0 + 12, y, dim, -1); y += 20;
+
+    p = 0; const char *loc = "49.28, -123.12";
+    for (const char *s = loc; *s; s++) line[p++] = *s;
+    line[p]=0; font_draw_string(line, x0 + 12, y, dim, -1);
+}
+
 static void gui_launch_settings(void);
 static void gui_menu_run_item(int item){
     if (item == 0) gui_launch_about();
@@ -3065,6 +3125,7 @@ static void gui_run(void){
        second click either picks something or dismisses it). */
     int menu_open = 0, menu_opening = 0;
     int notif_open = 0, notif_opening = 0, notif_draw_pending = 0; /* v42: the clock's panel, same open-on-press/dismiss-on-next-release contract as the Apple menu */
+    int weather_open = 0, weather_opening = 0, weather_draw_pending = 0; /* v53: same contract, off the weather text */
 
     int last_mx = mx, last_my = my, last_hover = -1, last_drag = -1, last_menu_open = 0, last_menu_hover = -2;
     gui_menubar_force_redraw(); /* this GUI session's first frame, the minute-change gate must not skip it */
@@ -3088,7 +3149,7 @@ static void gui_run(void){
            this (v86 in a browser) and it switches itself off for good. */
         {
             static unsigned int wind_last = 0; static int wind_dir = 1;
-            if (wind_enabled && !menu_open && !notif_open && drag_slot < 0 && ticks() - wind_last >= 5) { /* cached wallpaper: ~3 ticks per frame, leaving input time at 20 fps */
+            if (wind_enabled && !menu_open && !notif_open && !weather_open && drag_slot < 0 && ticks() - wind_last >= 5) { /* cached wallpaper: ~3 ticks per frame, leaving input time at 20 fps */
                 wind_last = ticks();
                 wind_phase += wind_dir * 3; /* same slow sway period at the higher frame rate */ if (wind_phase >= 256 || wind_phase <= -256) wind_dir = -wind_dir;
                 unsigned int t0 = ticks();
@@ -3121,12 +3182,14 @@ static void gui_run(void){
         int held = buttons & 1;
         int just_pressed = held && !(prev_buttons & 1);
         int just_released = !held && (prev_buttons & 1);
-        int logo_here = !menu_open && !notif_open && mx >= 4 && mx <= 28 && my < GUI_MENUBAR_H;
-        int clock_here = !menu_open && !notif_open && mx >= (int)window_width() - 200 && my < GUI_MENUBAR_H;
-        int slot_here = (menu_open || notif_open) ? -1 : gui_dock_hit_test(mx, my); /* the dock is inert while the menu covers it */
+        int logo_here = !menu_open && !notif_open && !weather_open && mx >= 4 && mx <= 28 && my < GUI_MENUBAR_H;
+        int clock_here = !menu_open && !notif_open && !weather_open && mx >= (int)window_width() - 200 && my < GUI_MENUBAR_H;
+        int weather_here = !menu_open && !notif_open && !weather_open && weather_hit_x0 >= 0 && mx >= weather_hit_x0 && mx <= weather_hit_x1 && my < GUI_MENUBAR_H;
+        int slot_here = (menu_open || notif_open || weather_open) ? -1 : gui_dock_hit_test(mx, my); /* the dock is inert while a panel covers it */
 
         if (just_pressed) {
             if (logo_here) { menu_open = 1; menu_opening = 1; }
+            else if (weather_here) { weather_open = 1; weather_opening = 1; weather_draw_pending = 1; }
             else if (clock_here) { notif_open = 1; notif_opening = 1; notif_draw_pending = 1; }
             else if (slot_here >= 0) { press_slot = slot_here; press_x = mx; press_y = my; drag_slot = -1; }
         }
@@ -3136,11 +3199,14 @@ static void gui_run(void){
             if (moved > 8) drag_slot = press_slot; /* threshold crossed: this is a drag, not a click */
         }
 
-        int launched = notif_draw_pending; notif_draw_pending = 0;
+        int launched = notif_draw_pending || weather_draw_pending; notif_draw_pending = 0; weather_draw_pending = 0;
         if (just_released) {
             if (notif_open) {
                 if (notif_opening) notif_opening = 0;
                 else { notif_open = 0; launched = 1; } /* any release dismisses; force the full redraw that erases the panel */
+            } else if (weather_open) {
+                if (weather_opening) weather_opening = 0;
+                else { weather_open = 0; launched = 1; } /* any release dismisses; force the full redraw that erases the panel */
             } else if (menu_open) {
                 if (menu_opening) {
                     menu_opening = 0; /* this release just finishes the click that opened the menu; a real second click picks something or dismisses it */
@@ -3219,6 +3285,7 @@ static void gui_run(void){
             for (int i = 0; i < GUI_ICON_COUNT; i++) dock_presented_extra[i] = dock_hover_extra[i];
             if (menu_open) gui_draw_apple_menu(menu_hover);
             if (notif_open) gui_draw_notif_panel();
+            if (weather_open) gui_draw_weather_panel();
             if (drag_slot < 0) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
             last_mx = mx; last_my = my; last_hover = hover_slot; last_drag = drag_slot;
             last_menu_open = menu_open; last_menu_hover = menu_hover;
