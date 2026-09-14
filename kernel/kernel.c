@@ -1355,6 +1355,61 @@ static void gui_launch(int icon){
     else if (icon == 7) gui_launch_editor();
 }
 
+/* A loop (octagon approximating a circle, 8 capsule segments) for the
+   round parts of a script letter: no sin/cos in this freestanding build,
+   an 8-point table scaled by the target radius reads as smoothly round
+   once anti-aliased at this size, the same shortcut real low-res icon
+   fonts have always taken. `skip_mask` drops edges (bit i skips segment
+   i, 0 for none), an open loop for 'e' so it doesn't render as the exact
+   same closed ring 'o' uses. Real legibility bug caught in the first
+   render, twice: "hello" with two identical closed loops for e and o
+   read as "hollo". Dropping a single edge didn't fix it either, the
+   thick rounded end-caps on the segments either side of the gap simply
+   overlapped and covered it back up, two adjacent edges need to go for
+   an opening actually wide enough to read at this size. */
+static void gui_draw_script_loop(int cx, int cy, int r, int thick, unsigned int color, unsigned int bg, int skip_mask){
+    static const int px8[8] = {10, 7, 0, -7, -10, -7, 0, 7};
+    static const int py8[8] = {0, 7, 10, 7, 0, -7, -10, -7};
+    for (int i = 0; i < 8; i++){
+        if (skip_mask & (1 << i)) continue;
+        int j = (i + 1) % 8;
+        gui_draw_capsule(cx + px8[i] * r / 10, cy + py8[i] * r / 10,
+                          cx + px8[j] * r / 10, cy + py8[j] * r / 10, thick, color, bg);
+    }
+}
+
+/* A small hand-plotted script "hello", a real nod to the original 1984
+   Macintosh boot screen rather than this file's usual blocky bitmap
+   font: every stroke here is the same AA capsule/loop primitive already
+   used elsewhere, curved letterforms instead of a monospace grid being
+   the whole point. `cx` is the horizontal center of the whole word, not
+   a left edge, so the caller doesn't need to know its rendered width. */
+static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int color, unsigned int bg){
+    int thick = scale > 2 ? scale / 2 : 1;
+    int total_w = 23 * scale;
+    int x = cx - total_w / 2;
+    int asc = 10 * scale;
+
+    gui_draw_capsule(x, baseline - asc, x, baseline, thick, color, bg); /* h: ascender stem */
+    gui_draw_capsule(x, baseline - 5 * scale, x + scale, baseline - 7 * scale, thick, color, bg);
+    gui_draw_capsule(x + scale, baseline - 7 * scale, x + 3 * scale, baseline - 7 * scale, thick, color, bg);
+    gui_draw_capsule(x + 3 * scale, baseline - 7 * scale, x + 4 * scale, baseline - 5 * scale, thick, color, bg);
+    gui_draw_capsule(x + 4 * scale, baseline - 5 * scale, x + 4 * scale, baseline, thick, color, bg);
+    x += 6 * scale;
+
+    gui_draw_script_loop(x + 2 * scale, baseline - 3 * scale, 3 * scale, thick, color, bg, (1 << 7) | (1 << 0)); /* e, open at the right */
+    gui_draw_capsule(x - scale, baseline - 3 * scale, x + 5 * scale, baseline - 3 * scale, thick, color, bg); /* crossbar: a 'c' shape reads as 'e' with one */
+    x += 6 * scale;
+
+    gui_draw_capsule(x, baseline - asc, x, baseline, thick, color, bg); /* l */
+    x += 3 * scale;
+
+    gui_draw_capsule(x, baseline - asc, x, baseline, thick, color, bg); /* l */
+    x += 3 * scale;
+
+    gui_draw_script_loop(x + 2 * scale, baseline - 3 * scale, 3 * scale, thick, color, bg, 0); /* o, closed */
+}
+
 /* A brief boot splash instead of cutting straight to the desktop with no
    transition at all, the same beat every real OS gives a fresh boot: the
    logo shows immediately, and a thin progress bar only appears once that
@@ -1368,8 +1423,7 @@ static void gui_draw_boot_screen(void){
     unsigned int bg = 0x00201009; /* the wallpaper's own espresso-brown, on-brand, not a new color */
     window_clear(bg);
     gui_draw_logo(400, 260, 5, bg);
-    const char *wordmark = "JOSHUA TREE";
-    font_draw_string(wordmark, 400 - (int)strlen(wordmark) * 4, 300, 0x00F5EFE8, -1);
+    gui_draw_hello_script(400, 320, 6, 0x00F5EFE8, bg);
 
     unsigned int start = ticks();
     unsigned int logo_only = 60; /* 0.6s: just the logo and wordmark, no bar yet */
