@@ -69,7 +69,7 @@ static void editor_draw(void) {
 
 static int editor_save(void) {
     editor_buffer[editor_length] = 0;
-    if (!fat_replace_file("NOTES.TXT", editor_buffer, editor_length)) {
+    if (!vfs_replace_file("NOTES.TXT", editor_buffer, editor_length)) {
         editor_status = "Save failed. Text kept in RAM. Esc closes; Ctrl+S retries.";
         return 0;
     }
@@ -100,7 +100,7 @@ static void editor_vertical(int direction) {
 
 static void gui_launch_editor(void) {
     if (!editor_loaded) {
-        editor_length = fat_read_file("NOTES.TXT", editor_buffer, sizeof(editor_buffer));
+        editor_length = vfs_read_file("NOTES.TXT", editor_buffer, sizeof(editor_buffer));
         if (editor_length >= (int)sizeof(editor_buffer)) {
             window_clear(0x00FAF8F6);
             gui_draw_app_titlebar("Notes");
