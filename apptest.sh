@@ -41,7 +41,7 @@ import sys
 
 workdir = sys.argv[1]
 apps = sys.argv[2:]
-TITLE_COLOR = (0xC1, 0x50, 0x2F)  # the real accent red every app title is drawn in
+TITLE_COLOR = (0x85, 0x14, 0x4B)  # the real accent burgundy every app title is drawn in (Mojave palette refresh)
 
 def read_ppm(path):
     with open(path, 'rb') as f:
