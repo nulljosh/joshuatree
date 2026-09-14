@@ -571,12 +571,28 @@ static void reboot(void){
    blending in this framebuffer, so "rounded" and "shadow" are both done by
    painting flat colors, corner pixels outside a quarter-circle get
    overwritten with whatever's behind them, not blended. ---- */
-#define GUI_ICON_COUNT 15 /* v35: was 8, +6 ported apps; v36: +Terminal */
-static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Terminal"};
-static const unsigned int GUI_COLORS[GUI_ICON_COUNT] = {
+/* v37 (0.37.0): the dock stopped being "every app that exists". Every app
+   added between v14 and v36 went straight into the dock, which is how it
+   reached 15 icons and had to be resized twice to physically fit the
+   screen, each icon getting smaller and less legible as the number grew.
+   A real dock is a *choice*: the handful you actually reach for, with
+   everything else one click away in an Apps folder, the same split macOS
+   makes between the Dock and Launchpad. GUI_APP_COUNT is every real app;
+   GUI_ICON_COUNT is only what the dock shows. */
+#define GUI_APP_COUNT   16 /* 15 real apps + the Apps folder itself at the end */
+#define GUI_APPS_FOLDER 15 /* not an app: the dock tile that opens the folder */
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Terminal", "Apps"};
+static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
     0x0085144B, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x006B4423,
-    0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x002B2B2B
+    0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x002B2B2B, 0x004A4F57
 };
+
+/* The pinned set, chosen on what someone actually reaches for on a fresh
+   boot rather than what happened to be built most recently: a terminal, a
+   file browser, a notepad, the LLM chat, and the two apps with live data
+   behind them. Everything else is one click away in Apps. */
+#define GUI_ICON_COUNT 7
+static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {14, 3, 7, 2, 0, 1, GUI_APPS_FOLDER};
 
 /* gui_order is a permutation of icon indices by dock slot: dragging an icon
    and dropping it on another slot swaps the two, so the arrangement is
@@ -584,7 +600,7 @@ static const unsigned int GUI_COLORS[GUI_ICON_COUNT] = {
    next time `gui` runs; nothing about layout is saved to disk, matching
    this whole desktop's one-screen, nothing-persisted scope). */
 static int gui_order[GUI_ICON_COUNT];
-static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = i; }
+static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = GUI_DOCK_DEFAULT[i]; }
 
 #define GUI_BG          0x00FAF8F6
 #define GUI_MENUBAR_H   30
@@ -599,7 +615,24 @@ static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_o
 #define DOCK_BUDGET     740
 #define DOCK_GAP        6
 #define DOCK_PAD        10
-#define DOCK_ICON       ((DOCK_BUDGET - 2 * DOCK_PAD - (GUI_ICON_COUNT - 1) * DOCK_GAP) / GUI_ICON_COUNT)
+/* v37: the dock is sized as a real fraction of the window rather than a
+   constant, so it stays proportionate at any resolution this kernel ever
+   opens (vbe_set_mode already accepts any mode; only the hardcoded
+   800x600 in gui_run stands between here and that). dock_scale_pct is
+   the user-adjustable knob Settings writes to. The clamp is the part
+   that actually matters: whatever scale is asked for, the dock still has
+   to fit on screen, which is exactly the arithmetic v35 and v36 each had
+   to rediscover from a screendump. */
+static int dock_scale_pct = 10;
+
+static int gui_dock_icon(void){
+    int by_height = (int)window_height() * dock_scale_pct / 100;
+    int max_by_width = (DOCK_BUDGET - 2 * DOCK_PAD - (GUI_ICON_COUNT - 1) * DOCK_GAP) / GUI_ICON_COUNT;
+    if (by_height > max_by_width) by_height = max_by_width;
+    if (by_height < 16) by_height = 16; /* below this the vector glyphs stop being legible at all */
+    return by_height;
+}
+#define DOCK_ICON (gui_dock_icon())
 #define DOCK_MARGIN_BOT 24
 #define DOCK_MAGNIFY    9
 #define DOCK_LIFT       10
@@ -739,21 +772,27 @@ static unsigned int gui_wallpaper_color(int row){
    it was sampled, wrong for where it was actually used. */
 static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned int color, int r){
     window_rect(x, y, w, h, color);
-    int outer2 = (r + AA_BAND) * (r + AA_BAND);
-    for (int dy = 0; dy <= r + AA_BAND; dy++){
+    /* Same inverted-corner bug as gui_rounded_rect_gradient had, in the
+       function that draws the dock panel and the menu dropdown, so those
+       corners were wrong too, just less obvious against a busy wallpaper
+       than against a solid icon tile. Distance is measured from the arc's
+       centre at (r, r), not from the rect's corner. */
+    for (int dy = 0; dy <= r; dy++){
         unsigned int bg_top = gui_wallpaper_color(y + dy);
         unsigned int bg_bot = gui_wallpaper_color(y + h - 1 - dy);
-        for (int dx = 0; dx <= r + AA_BAND; dx++){
-            int d2 = dx * dx + dy * dy;
-            if (d2 <= r * r) continue;
-            if (d2 > outer2) {
+        for (int dx = 0; dx <= r; dx++){
+            int ox = r - dx, oy = r - dy;
+            int d2 = ox * ox + oy * oy;
+            int inner = r - AA_BAND;
+            if (d2 <= inner * inner) continue;
+            if (d2 >= r * r) {
                 window_pixel(x + dx,         y + dy,         bg_top);
                 window_pixel(x + w - 1 - dx, y + dy,         bg_top);
                 window_pixel(x + dx,         y + h - 1 - dy, bg_bot);
                 window_pixel(x + w - 1 - dx, y + h - 1 - dy, bg_bot);
                 continue;
             }
-            int t = gui_isqrt(d2) - r;
+            int t = gui_isqrt(d2) - (r - AA_BAND);
             window_pixel(x + dx,         y + dy,         gui_lerp(color, bg_top, t, AA_BAND));
             window_pixel(x + w - 1 - dx, y + dy,         gui_lerp(color, bg_top, t, AA_BAND));
             window_pixel(x + dx,         y + h - 1 - dy, gui_lerp(color, bg_bot, t, AA_BAND));
@@ -773,21 +812,36 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
 static void gui_rounded_rect_gradient(int x, int y, int w, int h, unsigned int color_top, unsigned int color_bottom, unsigned int bg, int r){
     for (int row = 0; row < h; row++)
         window_rect(x, row + y, w, 1, gui_lerp(color_top, color_bottom, row, h));
-    int outer2 = (r + AA_BAND) * (r + AA_BAND);
-    for (int dy = 0; dy <= r + AA_BAND; dy++){
-        for (int dx = 0; dx <= r + AA_BAND; dx++){
-            int d2 = dx * dx + dy * dy;
-            if (d2 <= r * r) continue;
+    /* v37, real long-standing bug fixed here, not a tweak: this loop used
+       to measure each corner pixel's distance from the rect's own CORNER
+       (dx*dx + dy*dy) and keep everything within r of it as fill. That is
+       inverted. The corner pixel is the one furthest outside a rounded
+       corner, not inside it, so the true corner stayed filled and the
+       background got painted in an arc *beside* it, giving every tile a
+       square corner with a notch cut out of its side. It was nearly
+       invisible while r was a fixed 12px and stayed that way for many
+       versions; making the radius proportional to icon size (22%, the
+       iOS/macOS squircle ratio) blew it up to a 39px artifact on every
+       dock icon, which is how it finally got caught, by measuring real
+       pixel values out of a screendump rather than trusting the shape.
+       Correct math: distance from the arc's CENTER, which sits at
+       (r, r) inside each corner. */
+    for (int dy = 0; dy <= r; dy++){
+        for (int dx = 0; dx <= r; dx++){
+            int ox = r - dx, oy = r - dy;      /* offset from the arc's centre */
+            int d2 = ox * ox + oy * oy;
+            int inner = r - AA_BAND;
+            if (d2 <= inner * inner) continue;  /* comfortably inside the curve: leave the gradient alone */
             unsigned int top_local = gui_lerp(color_top, color_bottom, dy, h);
             unsigned int bot_local = gui_lerp(color_top, color_bottom, h - 1 - dy, h);
-            if (d2 > outer2) {
+            if (d2 >= r * r) {                  /* outside the curve: this is background */
                 window_pixel(x + dx,         y + dy,         bg);
                 window_pixel(x + w - 1 - dx, y + dy,         bg);
                 window_pixel(x + dx,         y + h - 1 - dy, bg);
                 window_pixel(x + w - 1 - dx, y + h - 1 - dy, bg);
                 continue;
             }
-            int t = gui_isqrt(d2) - r;
+            int t = gui_isqrt(d2) - inner;      /* inside the AA band: blend out to background */
             window_pixel(x + dx,         y + dy,         gui_lerp(top_local, bg, t, AA_BAND));
             window_pixel(x + w - 1 - dx, y + dy,         gui_lerp(top_local, bg, t, AA_BAND));
             window_pixel(x + dx,         y + h - 1 - dy, gui_lerp(bot_local, bg, t, AA_BAND));
@@ -1279,6 +1333,18 @@ static void gui_icon_homeqi(int cx, int cy, int s, unsigned int bg){
     window_rect(cx - half + 2, roof_y, 2 * (half - 2) + 1, half + 2, gui_blend(ICON_FG, bg));
     window_rect(cx - s/14, roof_y + half - s/8, 2 * (s/14) + 1, s/8 + 2, ICON_FG);
 }
+/* v37: the Apps folder tile, a 3x3 grid of rounded tiles reading as
+   "more inside", the same shape every launcher grid has used since the
+   first iPhone home screen. */
+static void gui_icon_apps(int cx, int cy, int s, unsigned int bg){
+    (void)bg;
+    int t = s / 5, gap = s / 16, span = 3 * t + 2 * gap;
+    int x0 = cx - span / 2, y0 = cy - span / 2;
+    for (int row = 0; row < 3; row++)
+        for (int col = 0; col < 3; col++)
+            window_rect(x0 + col * (t + gap), y0 + row * (t + gap), t, t, ICON_FG);
+}
+
 /* v36: a real prompt, the ">_" every terminal since the VT100 has worn,
    drawn as two capsule strokes and a cursor bar, same vector-only rule as
    every icon in this file. */
@@ -1328,31 +1394,36 @@ static void gui_draw_gloss(int x, int y, int w, int h, unsigned int bg, int corn
    construction: every point's distance from center is real radial
    distance, so gui_isqrt's same AA falloff fades smoothly all the way
    around with no straight edge anywhere to look hard. */
-static void gui_fill_ellipse(int cx, int cy, int rx, int ry, unsigned int color, unsigned int into){
-    if (rx <= 0 || ry <= 0) return;
-    int outer2 = (ry + AA_BAND) * (ry + AA_BAND);
-    for (int dy = -ry - AA_BAND; dy <= ry + AA_BAND; dy++){
-        for (int dx = -rx - AA_BAND; dx <= rx + AA_BAND; dx++){
-            int sdx = dx * ry / rx; /* scale x into the same units as y, so it's a circle in transformed space */
-            int d2 = sdx * sdx + dy * dy;
-            if (d2 > outer2) continue;
-            if (d2 <= ry * ry) { window_pixel(cx + dx, cy + dy, color); continue; }
-            int t = gui_isqrt(d2) - ry;
-            window_pixel(cx + dx, cy + dy, gui_lerp(color, into, t, AA_BAND));
-        }
-    }
-}
-
 /* A soft contact shadow centered right at the icon's own bottom edge:
    the icon (drawn after this) covers the top half of the ellipse, only
    the bottom crescent peeks out, exactly the soft "floating above the
    tray" cue a flat icon can't give on its own. `into` is the dock
    tray's own flat color, icons sit on the tray, not the gradient
    wallpaper behind it. */
+/* v37: a real soft shadow with falloff across its whole body, not a flat
+   dark ellipse with a 2px antialiased rim. The old version read as a hard
+   dark bar under every icon at any size big enough to notice, obvious the
+   moment the v37 dock made icons large. Pure per-pixel math like every
+   other effect here, no alpha channel and no bitmap: darkest directly
+   under the icon, blending out to the dock's own color at the edge,
+   which is exactly what a soft shadow is. */
 static void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
     unsigned int dock_bg = 0x00EFEBE4;
-    unsigned int shadow = gui_blend(dock_bg, 0x00000000);
-    gui_fill_ellipse(cx_center, cy_bottom - 1, size / 2 - 2, size / 10, shadow, dock_bg);
+    unsigned int core = gui_lerp(dock_bg, 0x00000000, 45, 100); /* never full black: this is a contact shadow on a light surface */
+    int rx = size / 2, ry = size / 9;
+    if (rx <= 0 || ry <= 0) return;
+    for (int dy = -ry; dy <= ry; dy++){
+        for (int dx = -rx; dx <= rx; dx++){
+            int sdx = dx * ry / rx;
+            int d2 = sdx * sdx + dy * dy;
+            if (d2 > ry * ry) continue;
+            /* Quadratic-ish falloff: distance squared against radius
+               squared gives a soft centre and a fast fade at the rim,
+               closer to a real penumbra than a linear ramp. */
+            int t = d2 * 100 / (ry * ry);
+            window_pixel(cx_center + dx, cy_bottom - 1 + dy, gui_lerp(core, dock_bg, t, 100));
+        }
+    }
 }
 
 static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsigned int bg){
@@ -1372,6 +1443,7 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
         case 12: gui_icon_homeqi(cx_center, cy, size, bg); break;
         case 13: gui_icon_fieldbook(cx_center, cy, size, bg); break;
         case 14: gui_icon_terminal(cx_center, cy, size, bg); break;
+        case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
     }
 }
 
@@ -1410,8 +1482,25 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
     unsigned int *ssbuf = (unsigned int *)kmalloc(ssz * ssz * sizeof(unsigned int));
     if (ssbuf) {
         window_push_target(ssbuf, ssz, ssz);
-        gui_rounded_rect_gradient(0, 0, (int)ssz, (int)ssz, bg_light, bg_dark, GUI_BG, 12 * ICON_SS_SCALE);
-        gui_draw_gloss(0, 0, (int)ssz, (int)ssz, bg, 13 * ICON_SS_SCALE);
+        /* v37, real latent bug, not a cosmetic tweak: this buffer comes
+           straight from kmalloc and gui_rounded_rect_gradient only paints
+           *inside* its rounded rect, so every pixel in the four corners
+           was whatever heap garbage happened to be there, scaled down and
+           drawn to screen. It went unnoticed while icons were small (tiny
+           corner area, and early-boot heap happened to be mostly zeros);
+           the v37 dock's much larger icons made it obvious as dark
+           notches on every tile. The direct path below never had this bug
+           because it draws onto the real framebuffer, which already has
+           the dock painted underneath. */
+        for (unsigned int i = 0; i < ssz * ssz; i++) ssbuf[i] = GUI_BG;
+        /* v37: radius is a *proportion* of the icon (22%, the ratio iOS
+           and macOS have used since the squircle), not a fixed 12px.
+           With the dock now showing 7 large icons instead of 15 small
+           ones, a flat 12px corner on a 97px tile read as a hard square
+           with odd dark notches, caught by looking at a real screendump. */
+        int r = (int)ssz * 22 / 100;
+        gui_rounded_rect_gradient(0, 0, (int)ssz, (int)ssz, bg_light, bg_dark, GUI_BG, r);
+        gui_draw_gloss(0, 0, (int)ssz, (int)ssz, bg, r + ICON_SS_SCALE);
         int scy = (int)ssz / 2;
         unsigned int real_fg = ICON_FG;
         ICON_FG = gui_blend(bg, 0x00000000);
@@ -1438,8 +1527,8 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
         return;
     }
 
-    gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, GUI_BG, 12);
-    gui_draw_gloss(x, y, size, size, bg, 13);
+    gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, GUI_BG, size * 22 / 100);
+    gui_draw_gloss(x, y, size, size, bg, size * 22 / 100 + 1);
     int cy = y + size / 2;
     unsigned int real_fg = ICON_FG;
     ICON_FG = gui_blend(bg, 0x00000000);
@@ -1880,7 +1969,54 @@ static void gui_launch_terminal(void){
     }
 }
 
+/* v37: the Apps folder. Every real app, laid out as a grid, so the dock
+   can stay a short pinned list instead of growing until the icons are too
+   small to read. Arrow keys + enter drive it as well as the mouse: the
+   headless test harness can't inject usable mouse events (see
+   guitest.sh's header for that whole trace), and an app screen only
+   reachable by mouse would be an app screen this project can never
+   regression-test. */
+#define APPS_COLS 5
+static void gui_launch(int icon); /* mutually recursive with the folder: the folder launches apps, and the dock launches the folder */
+static void gui_launch_apps(void){
+    int sel = 0;
+    int rows = (GUI_APPS_FOLDER + APPS_COLS - 1) / APPS_COLS;
+    int cell_w = 140, cell_h = 120, tile = 64;
+    int grid_w = APPS_COLS * cell_w;
+    int x0 = ((int)window_width() - grid_w) / 2;
+    int y0 = 90;
+
+    for (;;) {
+        window_clear(GUI_BG);
+        gui_draw_app_titlebar("Apps");
+        font_draw_string("arrow keys to move   enter opens   esc closes", 20, 52, 0x00807468, -1);
+
+        for (int i = 0; i < GUI_APPS_FOLDER; i++) {
+            int row = i / APPS_COLS, col = i % APPS_COLS;
+            int cx = x0 + col * cell_w + cell_w / 2;
+            int cy = y0 + row * cell_h;
+            if (i == sel) /* selection plate, drawn under the icon so it reads as a highlight, not a border */
+                gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 14,
+                                          0x00EDE6DC, 0x00DDD3C6, GUI_BG, 12);
+            gui_draw_one_icon(i, cx, cy + tile, tile);
+            int lw = (int)strlen(GUI_LABELS[i]) * 8;
+            font_draw_string(GUI_LABELS[i], cx - lw / 2, cy + tile + 10, 0x001C1C1E, -1);
+        }
+        (void)rows;
+
+        int k = get_key();
+        if (k == KEY_ESC) return;
+        if (k == KEY_ENTER) { gui_launch(sel); continue; } /* returns here when that app closes, folder still open, same as a real launcher */
+        if (k == 'a' && sel > 0) sel--;                 /* left  */
+        else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) sel++; /* right */
+        else if (k == 'w' && sel >= APPS_COLS) sel -= APPS_COLS;
+        else if (k == 's' && sel + APPS_COLS < GUI_APPS_FOLDER) sel += APPS_COLS;
+        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_launch(sel); }
+    }
+}
+
 static void gui_launch(int icon){
+    if (icon == GUI_APPS_FOLDER) { gui_launch_apps(); return; }
     if (icon == 0)      gui_launch_html("Weather", app_weather_html, app_weather_len);
     else if (icon == 1) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
     else if (icon == 2) gui_launch_chat();
@@ -2649,7 +2785,11 @@ static void run(char *line){
            script can drive this whole suite with nothing but sendkey. */
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
         else {
-            for (int i = 0; i < GUI_ICON_COUNT; i++) gui_launch(i);
+            /* Walks every real app, not just the pinned dock subset: the
+               point of this command is regression coverage of all of
+               them (see apptest.sh), and since v37 the dock deliberately
+               shows only a handful. */
+            for (int i = 0; i < GUI_APPS_FOLDER; i++) gui_launch(i);
             window_close();
             clear();
             puts("testapps done\n");
