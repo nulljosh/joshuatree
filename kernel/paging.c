@@ -11,6 +11,7 @@
    kernel, its stack, and the pmm bitmap need right now. Add more page
    tables (or 4MB pages) when something is allocated above 0x400000. */
 #include "paging.h"
+#include "pmm.h"
 
 typedef unsigned int u32;
 
@@ -91,4 +92,48 @@ void paging_set_user(void *virt_addr) {
     page_directory[0] |= 0x4;
     page_directory[KERNEL_PDE_INDEX] |= 0x4;
     __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
+}
+
+/* v31 (0.31.0): real per-task memory isolation, see paging.h. A directory
+   and its private table/frame are all plain physical frames from pmm,
+   below IDENTITY_MAP_LIMIT (kheap.c's own limit, re-used here rather than
+   redefined) so this file can dereference them directly as pointers, the
+   same established convention kheap.c already relies on. */
+#define IDENTITY_MAP_LIMIT 0x400000
+
+unsigned int paging_kernel_directory(void) {
+    return phys(page_directory);
+}
+
+unsigned int paging_new_task_directory(void) {
+    u32 dir_phys = pmm_alloc_frame();
+    if (!dir_phys || dir_phys >= IDENTITY_MAP_LIMIT) return 0;
+    u32 *dir = (u32 *)dir_phys;
+    for (int i = 0; i < 1024; i++) dir[i] = page_directory[i]; /* share every existing mapping (kernel code/data/stack) by value */
+
+    u32 table_phys = pmm_alloc_frame();
+    if (!table_phys || table_phys >= IDENTITY_MAP_LIMIT) { pmm_free_frame(dir_phys); return 0; }
+    u32 *table = (u32 *)table_phys;
+    for (int i = 0; i < 1024; i++) table[i] = 0x00000002; /* not present, read/write, supervisor */
+
+    u32 page_phys = pmm_alloc_frame();
+    if (!page_phys || page_phys >= IDENTITY_MAP_LIMIT) { pmm_free_frame(table_phys); pmm_free_frame(dir_phys); return 0; }
+    table[0] = page_phys | 0x3; /* the one private page, PAGING_PRIVATE_VADDR's page-table index is 0 since it starts a fresh 4MB region */
+
+    dir[PAGING_PRIVATE_PDE] = table_phys | 0x3;
+    return dir_phys;
+}
+
+void paging_free_task_directory(unsigned int dir_phys) {
+    u32 *dir = (u32 *)dir_phys;
+    u32 table_phys = dir[PAGING_PRIVATE_PDE] & ~0xFFF;
+    u32 *table = (u32 *)table_phys;
+    u32 page_phys = table[0] & ~0xFFF;
+    pmm_free_frame(page_phys);
+    pmm_free_frame(table_phys);
+    pmm_free_frame(dir_phys);
+}
+
+void paging_load_directory(unsigned int dir_phys) {
+    __asm__ volatile ("mov %0, %%cr3" :: "r"(dir_phys));
 }

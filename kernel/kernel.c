@@ -243,6 +243,27 @@ static volatile int preempt_stop = 0;
 static void preempt_task_a(void){ while (!preempt_stop) preempt_a_count++; task_exit(); }
 static void preempt_task_b(void){ while (!preempt_stop) preempt_b_count++; task_exit(); }
 
+/* ---- v31 (0.31.0) isolation demo: two tasks write different markers to
+   the SAME virtual address, PAGING_PRIVATE_VADDR. If page directories were
+   still shared (the pre-v31 world), the second write would clobber the
+   first and both readbacks would show 0xBBBBBBBB. Each task's own
+   directory maps that address to its own private physical frame, so both
+   readbacks should show what that task itself wrote, unaffected by the
+   other task's write to the "same" address in between. ---- */
+static volatile unsigned int iso_readback_a = 0, iso_readback_b = 0;
+static void iso_task_a(void){
+    *(volatile unsigned int *)PAGING_PRIVATE_VADDR = 0xAAAAAAAA;
+    yield(); /* let task B run and write its own marker to the "same" address before we read ours back */
+    iso_readback_a = *(volatile unsigned int *)PAGING_PRIVATE_VADDR;
+    task_exit();
+}
+static void iso_task_b(void){
+    *(volatile unsigned int *)PAGING_PRIVATE_VADDR = 0xBBBBBBBB;
+    yield();
+    iso_readback_b = *(volatile unsigned int *)PAGING_PRIVATE_VADDR;
+    task_exit();
+}
+
 static void ls_cb(const char *name, unsigned int size, int is_dir) {
     puts(name); if (is_dir) putc('/');
     puts("  "); putn(size); puts(" bytes\n");
@@ -1907,7 +1928,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest reaptest ring3test sleep disktest fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest isotest reaptest ring3test sleep disktest fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -1973,6 +1994,17 @@ static void run(char *line){
             puts((preempt_a_count > 0 && preempt_b_count > 0) ? "preempted without yield: ok\n" : "no preemption (still cooperative-only)\n");
             preempt_stop = 1;
             for (int i = 0; i < 5; i++) yield(); /* let both tasks actually reach task_exit() and free their slots before returning */
+        }
+    }
+    else if (!strcmp(line, "isotest")) {
+        iso_readback_a = 0; iso_readback_b = 0;
+        int ida = task_create(iso_task_a);
+        int idb = task_create(iso_task_b);
+        if (ida < 0 || idb < 0) { puts("no free task slots\n"); }
+        else {
+            for (int i = 0; i < 6; i++) yield(); /* let both tasks actually finish and reap themselves */
+            int ok = (iso_readback_a == 0xAAAAAAAA) && (iso_readback_b == 0xBBBBBBBB);
+            puts(ok ? "isolation: separate address spaces confirmed: ok\n" : "isolation: FAILED (one task saw the other's write)\n");
         }
     }
     else if (!strcmp(line, "reaptest")) {

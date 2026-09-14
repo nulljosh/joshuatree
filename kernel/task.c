@@ -18,6 +18,7 @@
 #include "task.h"
 #include "kheap.h"
 #include "irq.h"
+#include "paging.h"
 
 typedef unsigned int u32;
 
@@ -27,6 +28,7 @@ typedef unsigned int u32;
 struct task {
     u32 esp;
     void *stack_base;
+    u32 page_dir; /* v31 (0.31.0): physical addr of this task's own page directory, loaded into CR3 on switch */
     int used;
 };
 
@@ -38,6 +40,7 @@ void tasks_init(void) {
     for (int i = 0; i < MAX_TASKS; i++) tasks[i].used = 0;
     tasks[0].used = 1;         /* the currently-running boot/shell stack */
     tasks[0].stack_base = 0;   /* not ours to free */
+    tasks[0].page_dir = paging_kernel_directory(); /* the shell keeps running on the kernel's own shared directory, no isolation of its own */
     n_tasks = 1;
     current = 0;
 }
@@ -69,6 +72,9 @@ int task_create(void (*entry)(void)) {
 
     tasks[id].esp = (u32)sp;
     tasks[id].stack_base = stack;
+    u32 dir = paging_new_task_directory();
+    if (!dir) { kfree(stack); return -1; } /* real OOM, not swallowed: no isolated directory means no task */
+    tasks[id].page_dir = dir;
     tasks[id].used = 1;
     if (id >= n_tasks) n_tasks = id + 1; /* n_tasks is a high-water mark for the round-robin scan below, not a live count */
     return id;
@@ -86,6 +92,7 @@ u32 schedule(u32 esp) {
         next = (next + 1) % n_tasks;
         if (tasks[next].used) break;
     }
+    if (next != current) paging_load_directory(tasks[next].page_dir); /* v31 (0.31.0): the actual switch of address space, not just stacks */
     current = next;
     return tasks[current].esp;
 }
@@ -104,9 +111,22 @@ void yield(void) {
    permanently, then reschedules away and never returns. See this file's
    header comment for why freeing the stack it's still standing on is safe. */
 void task_exit(void) {
+    /* v31 (0.31.0): cli across the free-then-switch window, a real race
+       this file didn't close before: a timer tick landing between
+       kfree(stack)/paging_free_task_directory() and this task's own
+       int $32 would preempt into another task that could kmalloc or
+       task_create its way into reusing these just-freed physical frames
+       while this task is still nominally suspended "on" them (its own
+       saved register state, mid-call-frame locals, and CR3 all still
+       point there until the switch actually happens). `int $32` is a
+       software trap, not maskable by IF, so it still fires with
+       interrupts off; nothing else can run in between. */
+    __asm__ volatile ("cli");
     int id = current;
     if (tasks[id].stack_base) kfree(tasks[id].stack_base);
+    if (tasks[id].page_dir && tasks[id].page_dir != paging_kernel_directory()) paging_free_task_directory(tasks[id].page_dir);
     tasks[id].stack_base = 0;
+    tasks[id].page_dir = 0;
     tasks[id].used = 0;
     for (;;) __asm__ volatile ("int $32"); /* loop in case of a spurious extra resume; schedule() will never pick this slot again */
 }
