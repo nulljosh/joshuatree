@@ -12,6 +12,7 @@
 #include "vfs.h"
 #include "blockdev.h"
 #include "ramdisk.h"
+#include "trash.h"
 #include "ramfs.h"
 #include "exec.h"
 #include "libc.h"
@@ -613,20 +614,24 @@ static void reboot(void){
    everything else one click away in an Apps folder, the same split macOS
    makes between the Dock and Launchpad. GUI_APP_COUNT is every real app;
    GUI_ICON_COUNT is only what the dock shows. */
-#define GUI_APP_COUNT   16 /* 15 real apps + the Apps folder itself at the end */
+#define GUI_APP_COUNT   17 /* 15 real apps + the Apps folder + Trash */
 #define GUI_APPS_FOLDER 15 /* not an app: the dock tile that opens the folder */
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Terminal", "Apps"};
+#define GUI_TRASH       16
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Terminal", "Apps", "Trash"};
 static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
     0x0085144B, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x006B4423,
-    0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x002B2B2B, 0x004A4F57
+    0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x002B2B2B, 0x004A4F57, 0x00566068
 };
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
    boot rather than what happened to be built most recently: a terminal, a
    file browser, a notepad, the LLM chat, and the two apps with live data
    behind them. Everything else is one click away in Apps. */
-#define GUI_ICON_COUNT 7
-static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {14, 3, 7, 2, 0, 1, GUI_APPS_FOLDER};
+/* v39: Apps first and Files second, by direct request, then the rest in
+   no particular order, then Trash pinned last, the one position every
+   desktop has agreed on for thirty years. */
+#define GUI_ICON_COUNT 8
+static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 3, 14, 7, 2, 0, 1, GUI_TRASH};
 
 /* gui_order is a permutation of icon indices by dock slot: dragging an icon
    and dropping it on another slot swaps the two, so the arrangement is
@@ -1367,6 +1372,22 @@ static void gui_icon_homeqi(int cx, int cy, int s, unsigned int bg){
     window_rect(cx - half + 2, roof_y, 2 * (half - 2) + 1, half + 2, gui_blend(ICON_FG, bg));
     window_rect(cx - s/14, roof_y + half - s/8, 2 * (s/14) + 1, s/8 + 2, ICON_FG);
 }
+/* v39: a real bin, drawn as geometry like every other icon here: a lid
+   with a handle above a tapered body with three ribs. Tapered because a
+   plain rectangle reads as a box or a building, not a bin. */
+static void gui_icon_trash(int cx, int cy, int s, unsigned int bg){
+    int half = s * 3 / 10, top = cy - half, h = half * 2;
+    int lid = s / 12; if (lid < 2) lid = 2;
+    window_rect(cx - half - 2, top, 2 * (half + 2) + 1, lid, ICON_FG);              /* lid */
+    window_rect(cx - s / 12, top - lid, 2 * (s / 12) + 1, lid, ICON_FG);            /* handle */
+    for (int row = 0; row < h - lid; row++) {
+        int w = half - (row * (half / 5)) / (h - lid);                              /* taper toward the base */
+        window_rect(cx - w, top + lid + 1 + row, 2 * w + 1, 1, ICON_FG);
+    }
+    for (int r = -1; r <= 1; r++)                                                   /* ribs, punched through in the tile colour */
+        window_rect(cx + r * (half / 2), top + lid + 5, s / 26 + 1, h - lid - 9, bg);
+}
+
 /* v37: the Apps folder tile, a 3x3 grid of rounded tiles reading as
    "more inside", the same shape every launcher grid has used since the
    first iPhone home screen. */
@@ -1478,6 +1499,7 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
         case 13: gui_icon_fieldbook(cx_center, cy, size, bg); break;
         case 14: gui_icon_terminal(cx_center, cy, size, bg); break;
         case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
+        case GUI_TRASH: gui_icon_trash(cx_center, cy, size, bg); break;
     }
 }
 
@@ -2060,8 +2082,46 @@ static void gui_launch_apps(void){
     }
 }
 
+/* v39: the Trash, a real view of what rm set aside, with real recovery.
+   Same keyboard-and-click contract every screen here uses (see
+   gui_wait_close): a phone has no keyboard, so every action has a tap. */
+static void gui_launch_trash(void){
+    int sel = 0;
+    for (;;) {
+        window_clear(GUI_BG);
+        gui_draw_app_titlebar("Trash");
+        int n = trash_count();
+        if (!n) {
+            font_draw_string("Trash is empty.", 20, 70, 0x001C1C1E, -1);
+            font_draw_string("Deleting a file with rm puts it here first.", 20, 94, 0x00807468, -1);
+        } else {
+            font_draw_string("up/down to pick   r restores   e empties   esc closes", 20, 52, 0x00807468, -1);
+            for (int i = 0; i < n; i++) {
+                int y = 84 + i * 22;
+                if (i == sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);
+                font_draw_string(trash_name(i), 28, y, 0x001C1C1E, -1);
+                char sz[16]; int p = 0; unsigned int v = trash_size(i);
+                char t[12]; int ti = 0; if (!v) t[ti++] = '0'; while (v) { t[ti++] = '0' + v % 10; v /= 10; }
+                while (ti) sz[p++] = t[--ti];
+                sz[p++] = ' '; sz[p++] = 'b'; sz[p] = 0;
+                font_draw_string(sz, 300, y, 0x00807468, -1);
+            }
+        }
+        sleep_ticks(5);
+        mouse_click_edge_sync();
+        int k = get_key_or_click();
+        if (k == KEY_ESC || k == KEY_CLICK) return;
+        if (!n) continue;
+        if (k == KEY_UP && sel > 0) sel--;
+        else if (k == KEY_DOWN && sel < n - 1) sel++;
+        else if (k == 'r') { trash_restore(sel); if (sel >= trash_count() && sel > 0) sel--; }
+        else if (k == 'e') { trash_empty(); sel = 0; }
+    }
+}
+
 static void gui_launch(int icon){
     if (icon == GUI_APPS_FOLDER) { gui_launch_apps(); return; }
+    if (icon == GUI_TRASH) { gui_launch_trash(); return; }
     if (icon == 0)      gui_launch_html("Weather", app_weather_html, app_weather_len);
     else if (icon == 1) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
     else if (icon == 2) gui_launch_chat();
@@ -2517,7 +2577,31 @@ static void run(char *line){
     }
     else if (!strcmp(line, "rm")) {
         if (!*arg) { puts("usage: rm <file>\n"); }
-        else { puts(vfs_delete(arg) ? "deleted\n" : "not found\n"); }
+        else {
+            /* v39: read it before deleting so it can be recovered. A file
+               too big for the trash, or a full trash, still deletes, but
+               says so plainly rather than implying it's recoverable. */
+            static char rmbuf[TRASH_MAX_SIZE];
+            int n = vfs_read_file(arg, rmbuf, sizeof(rmbuf));
+            int kept = (n > 0) && trash_put(arg, rmbuf, (unsigned int)n);
+            if (!vfs_delete(arg)) puts("not found\n");
+            else puts(kept ? "moved to trash\n" : "deleted permanently (too big for trash, or trash full)\n");
+        }
+    }
+    else if (!strcmp(line, "trash")) {
+        int n = trash_count();
+        if (!n) { puts("trash is empty\n"); }
+        else for (int i = 0; i < n; i++) {
+            putn((unsigned int)i); puts(" "); puts(trash_name(i));
+            puts("  "); putn(trash_size(i)); puts(" bytes\n");
+        }
+    }
+    else if (!strcmp(line, "restore")) {
+        if (!*arg) { puts("usage: restore <number, see trash>\n"); }
+        else {
+            int id = 0; const char *p = arg; while (*p >= '0' && *p <= '9') { id = id*10 + (*p-'0'); p++; }
+            puts(trash_restore(id) ? "restored\n" : "could not restore (bad number, or the write failed)\n");
+        }
     }
     else if (!strcmp(line, "cd")) {
         if (!*arg) { puts("usage: cd <dir> (or ..)\n"); }
@@ -2889,6 +2973,7 @@ void kmain(unsigned int multiboot_info_addr){
     klog("tasks_init: scheduler ready");
     ata_blockdev_register(); /* v33 (0.33.0): register real backends before anything tries to mount a filesystem over one */
     ramdisk_init();
+    trash_init();
     int fs_ok = fat_mount();
     klog(fs_ok ? "fat_mount: FAT16 filesystem mounted" : "fat_mount: no filesystem found");
     fat_vfs_register(); /* registered regardless of fs_ok: an unmounted fat backend just returns real failures, same as before v29 */
