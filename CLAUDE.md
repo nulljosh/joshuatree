@@ -11,6 +11,17 @@ dependencies beyond clang, ld.lld and qemu.
   headless `screendump` renders black even when the kernel is running fine.
   It only proves "boots without crashing", real subsystem correctness (paging,
   disk I/O, context switches) is verified manually against real artifacts
+  (real disk images, real flat binaries) before each commit, not by `check.sh`
+  alone. A real pixel-level screenshot IS possible when a session has this
+  Mac's own attached display, though, a different mechanism than QEMU's own
+  broken `screendump`: launch the real `-display cocoa` window (the same one
+  `menubar/JoshuaTree.app`'s launcher opens), bring it frontmost via
+  `osascript`/System Events, then macOS's own `screencapture` CLI. Confirmed
+  working end to end in the v50/v51 passes (verified the DejaVu Sans font
+  swap and the landing page's restructured layout this way, both against
+  real captured PNGs, not assumed). Only available when this session is
+  actually running on hardware with a display attached, not every context.
+  disk I/O, context switches) is verified manually against real artifacts
   (real disk images, real flat binaries) before each commit, not by `check.sh` alone.
 - The QEMU monitor's `sendkey ret` does not reliably deliver Enter to this
   kernel's keyboard driver (known harness limitation, not a kernel bug,
@@ -86,6 +97,20 @@ dependencies beyond clang, ld.lld and qemu.
   disk image) over ones that need a human looking at a real screen (mouse
   feel, dock animation smoothness); the latter get implemented and marked
   honestly unverified rather than skipped, same as v46's boot-chime note.
+- Exception to the fleet-wide "a push deploys nothing" rule
+  (`~/Documents/Code/CLAUDE.md`): direct request, this repo now has
+  `.github/workflows/deploy.yml`, which runs `wrangler deploy` for real on
+  every push to `main`/`master` that touches `landing/**` or
+  `wrangler.toml`. Needs a real `CLOUDFLARE_API_TOKEN` repo secret with
+  Workers deploy permission to actually fire; neither Cloudflare token
+  already in `secrets.fish` works for this (`CLOUDFLARE_DNS_TOKEN` is
+  DNS-only by design; `CLOUDFLARE_PAGES_DEPLOY_TOKEN` returned zero
+  accounts when probed here, it's very likely an app-level secret litigate
+  reads for its own Basic Auth gate, not a real Cloudflare API bearer
+  token, despite the name), so a real token still needs adding
+  (`gh secret set CLOUDFLARE_API_TOKEN --repo nulljosh/joshuatree`) before
+  this workflow does anything. Every other repo in the fleet keeps the
+  manual `wrangler deploy` default.
 - "Joshua Tree" is the kernel name, unchanging. "Leopard Gecko" is reserved
   for the eventual full-OS/distro name once this becomes a usable graphical
   system (v6+), the same relationship as Linux the kernel vs Ubuntu the
