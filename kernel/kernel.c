@@ -724,6 +724,40 @@ static void gui_fill_circle(int cx, int cy, int r, unsigned int color, unsigned 
     }
 }
 
+/* A thick, soft-edged line segment (a capsule: flat sides, rounded caps),
+   anti-aliased into `into` with the same AA_BAND falloff every other shape
+   here uses. The one real line primitive icons were missing: before this,
+   a diagonal like the weather icon's sun rays could only be a raw, single-
+   pixel-wide staircase of window_pixel calls, no thickness, no softening,
+   the single most "8-bit" looking thing on the whole dock. Point-to-segment
+   distance stays in plain 32-bit int math (icon coordinates never exceed a
+   few hundred px, nowhere near overflow), no 64-bit division helper this
+   freestanding build doesn't link. */
+static void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color, unsigned int into){
+    int dx = x1 - x0, dy = y1 - y0;
+    int len2 = dx * dx + dy * dy;
+    int minx = (x0 < x1 ? x0 : x1) - r - AA_BAND, maxx = (x0 > x1 ? x0 : x1) + r + AA_BAND;
+    int miny = (y0 < y1 ? y0 : y1) - r - AA_BAND, maxy = (y0 > y1 ? y0 : y1) + r + AA_BAND;
+    int outer2 = (r + AA_BAND) * (r + AA_BAND);
+    for (int py = miny; py <= maxy; py++){
+        for (int px = minx; px <= maxx; px++){
+            int vx = px - x0, vy = py - y0, ex, ey;
+            if (len2 == 0) { ex = vx; ey = vy; }
+            else {
+                int dot = vx * dx + vy * dy;
+                if (dot < 0) dot = 0; else if (dot > len2) dot = len2;
+                int cxp = x0 + dot * dx / len2, cyp = y0 + dot * dy / len2;
+                ex = px - cxp; ey = py - cyp;
+            }
+            int d2 = ex * ex + ey * ey;
+            if (d2 > outer2) continue;
+            if (d2 <= r * r) { window_pixel(px, py, color); continue; }
+            int t = gui_isqrt(d2) - r;
+            window_pixel(px, py, gui_lerp(color, into, t, AA_BAND));
+        }
+    }
+}
+
 /* Fills a downward-pointing triangle: flat top of half-width `half_w` at
    (cx, y0), narrowing to a point over `h` rows. Used for the map pin's tip
    and the quote marks' tails. */
@@ -821,19 +855,16 @@ static void gui_draw_menubar(void){
 }
 
 static void gui_icon_weather(int cx, int cy, int s, unsigned int bg){
-    int r = s / 6, ray = s / 8, gap = r + 2;
+    int r = s / 6, ray = s / 8, gap = r + 2, diag = (ray * 7) / 10; /* ~cos(45deg) */
     gui_fill_circle(cx, cy, r, ICON_FG, bg);
-    window_rect(cx - 1, cy - gap - ray, 2, ray, ICON_FG);
-    window_rect(cx - 1, cy + gap,       2, ray, ICON_FG);
-    window_rect(cx - gap - ray, cy - 1, ray, 2, ICON_FG);
-    window_rect(cx + gap,       cy - 1, ray, 2, ICON_FG);
-    for (int t = 0; t < ray; t++){
-        int d = ((gap + t) * 7) / 10; /* ~cos(45deg), diagonal ray projection */
-        window_pixel(cx - d, cy - d, ICON_FG);
-        window_pixel(cx + d, cy - d, ICON_FG);
-        window_pixel(cx - d, cy + d, ICON_FG);
-        window_pixel(cx + d, cy + d, ICON_FG);
-    }
+    gui_draw_capsule(cx, cy - gap,         cx, cy - gap - ray,         1, ICON_FG, bg);
+    gui_draw_capsule(cx, cy + gap,         cx, cy + gap + ray,         1, ICON_FG, bg);
+    gui_draw_capsule(cx - gap,       cy,   cx - gap - ray,       cy,   1, ICON_FG, bg);
+    gui_draw_capsule(cx + gap,       cy,   cx + gap + ray,       cy,   1, ICON_FG, bg);
+    gui_draw_capsule(cx - gap, cy - gap,   cx - gap - diag, cy - gap - diag, 1, ICON_FG, bg);
+    gui_draw_capsule(cx + gap, cy - gap,   cx + gap + diag, cy - gap - diag, 1, ICON_FG, bg);
+    gui_draw_capsule(cx - gap, cy + gap,   cx - gap - diag, cy + gap + diag, 1, ICON_FG, bg);
+    gui_draw_capsule(cx + gap, cy + gap,   cx + gap + diag, cy + gap + diag, 1, ICON_FG, bg);
 }
 
 static void gui_icon_pin(int cx, int cy, int s, unsigned int bg){
