@@ -147,6 +147,17 @@
      floor (the height once the toolbar is fully expanded) that never
      animates, so the box never moves during a toolbar transition. */
   #stage-wrap { background: #000; position: absolute; inset: 0; z-index: 0; }
+  /* v52.5: real boot moment instead of a blank black flash, direct
+     request ("bridge the gap between css/html and the actual demo
+     loading"). The logo shows immediately (it's a tiny inline SVG,
+     nothing to wait on) and fades out once embed.js's own existing
+     graphical-mode check (the same one that already toggles the canvas
+     vs text-mode banner, see its setInterval) flips #boot-logo to
+     hidden, no separate detection logic added. */
+  #boot-logo { position: absolute; inset: 0; margin: auto; width: 72px; height: 72px; z-index: 1; animation: bootpulse 1.6s ease-in-out infinite; transition: opacity 0.3s ease; }
+  #boot-logo[hidden] { display: none; }
+  @keyframes bootpulse { 0%,100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
+  @media (prefers-reduced-motion: reduce) { #boot-logo { animation: none; opacity: 0.85; } }
   #stage { position: relative; width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 1; }
   /* v52: the demo is a background layer behind real text now, not the
      whole hero's content, so the older per-viewport letterbox tuning
@@ -239,6 +250,7 @@
 
 <header class="hero" id="main">
   <div id="stage-wrap">
+    <img id="boot-logo" src="icon.svg" alt="" aria-hidden="true">
     <div id="stage">
       <div id="v86-embed" tabindex="0" role="application" aria-label="A real, live boot of this exact kernel.elf, running in your browser. Click or tap to control it.">
         <div id="screen_container">

@@ -321,6 +321,7 @@
   // surfaces as a fallback if graphical mode genuinely never arrives
   // (auto-gui failed for some reason), not as the default path.
   var bootStart = Date.now();
+  var bootLogo = document.getElementById("boot-logo");
   setInterval(function () {
     var vga = emulator.v86 && emulator.v86.cpu.devices.vga;
     if (!vga) return;
@@ -328,6 +329,10 @@
     var stuckInText = !graphical && Date.now() - bootStart > 4000;
     if (screenCanvas) screenCanvas.style.display = graphical ? "block" : "none";
     if (screenText) screenText.style.display = graphical ? "none" : (stuckInText ? "block" : "none");
+    // Same real signal the line above already uses, no new detection:
+    // once the kernel's own framebuffer is actually up, the boot logo's
+    // job is done.
+    if (bootLogo && graphical) bootLogo.hidden = true;
     resizeCanvas(); // the canvas's real pixel resolution only exists once graphical mode sets it, re-check every tick until it does
   }, 200);
 
