@@ -30,6 +30,18 @@
      never animates, so the box never moves during a toolbar transition. */
   #stage-wrap { background: #000; position: relative; }
   #stage { position: relative; width: 100%; height: 100vh; height: 100svh; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 1; }
+  /* Real, repeatedly-reported bug, root cause finally confirmed live: on a
+     narrow phone, a 100svh stage is far taller than the kernel's real 4:3
+     (800x600) output can ever fill at full width, so most of that height
+     was unavoidable black letterbox by simple geometry, not a centering
+     glitch, measured directly at 290px of pure black above AND below a
+     286px-tall canvas in an 866px box. Full-bleed 100svh only makes sense
+     when the viewport is roughly as wide as it is tall or wider; below
+     that, sizing the stage to the demo's own 4:3 shape instead removes
+     the dead space at the source rather than trying to center it better. */
+  @media (max-width: 700px) {
+    #stage { height: auto; aspect-ratio: 4 / 3; }
+  }
   #v86-embed { position: absolute; inset: 0; cursor: pointer; outline: none; }
   #screen_container { position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   /* Hidden by default: the demo is the GUI, not the shell it boots through
