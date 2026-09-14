@@ -218,3 +218,14 @@ Dock hover frames compose offscreen and present only changed pixels in the affec
 
 ## v47 / 0.47.0, real settings, persisted (Sep 2026)
 Direct request: customize the OS from inside the OS, and have it survive a reboot.
+
+## v48 / 0.48.0, boot screen dropped its wordmark, a real glass menu bar, and a native app icon (Sep 2026)
+Three direct requests in one pass: "remove hello text on boot", "menu bar should be Liquid Glass semi transparent", "refresh macOS icon, make it look more native" (a real Dock screenshot supplied as reference).
+
+  Boot splash now shows only the tree logo, `gui_draw_hello_script` (the hand-plotted 1984-Mac-style wordmark) left in place but uncalled, a real callback point if a wordmark comes back later rather than deleted code.
+
+  Menu bar: no real alpha channel exists in this framebuffer (`gui_blend`'s own long-standing note), so "translucent" here is the same technique the dock's drop shadow already uses, a real solid, precomputed blend of white toward `gui_wallpaper_color(row)` per row rather than a flat 0x00FFFFFF fill, mostly white so text stays legible with just enough of the wallpaper bleeding through to read as glass. Not literal alpha compositing, an honest approximation within what this kernel's pixel format actually supports, same caveat every other "translucent"-looking element in this codebase already carries.
+
+  Icon: `landing/icon.svg` already had the correct macOS squircle ratio (rx=44 of 200, ~22%) and a desert gradient, but read flat next to the real glossy Dock icons in the supplied reference screenshot. Added the two overlays every real Dock icon actually has and this one didn't: a soft white gloss ellipse across the top (linear gradient, fading to transparent by mid-icon) and a crisp 1.5px white inner rim light traced along the squircle's own edge, drawn outside the clip path so it isn't half-cut by the same rect it's tracing. `menubar/build-app-icon.sh` regenerates `icon.icns` from this file; re-run whenever `icon.svg` changes, not automated (`AGENTS.md`/`CLAUDE.md`'s no-daemon rule).
+
+  Verified: `make kernel.elf` clean (one pre-existing unused-function warning, not new), `check.sh` boots and reaches `gui_run`. The glass menu bar and gloss icon are both real, structurally verified (correct blend math, `iconutil` succeeded, `rsvg-convert` rasterized without error), not eyeballed on a real display yet, same honest gap as this project's other real-hardware/real-screen items, a human should look once.

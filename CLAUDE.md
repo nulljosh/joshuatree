@@ -74,6 +74,18 @@ dependencies beyond clang, ld.lld and qemu.
   bright/saturated orange. The real VGA boot output is genuinely black-on-
   gray text (can't be restyled, it's the actual kernel's real output),
   everything *around* it (frame, accent color, copy) follows this palette.
+- The loop: this project has no finish line. Standing instruction is to
+  keep working `roadmap.md`'s open queue, one real item at a time, same bar
+  as every version above (verify against real artifacts, not "it booted").
+  Pull technique and prior art from the internet when a subsystem has
+  well-known solved shapes elsewhere (OSDev wiki, xv6, ToaruOS, real Linux/
+  BSD driver source) rather than reinventing a wire protocol or register
+  sequence from scratch; cite what was borrowed in the roadmap entry the
+  same way existing entries cite their own root-cause traces. Prefer items
+  verifiable headlessly (serial output, VGA memory dump, check.sh, a real
+  disk image) over ones that need a human looking at a real screen (mouse
+  feel, dock animation smoothness); the latter get implemented and marked
+  honestly unverified rather than skipped, same as v46's boot-chime note.
 - "Joshua Tree" is the kernel name, unchanging. "Leopard Gecko" is reserved
   for the eventual full-OS/distro name once this becomes a usable graphical
   system (v6+), the same relationship as Linux the kernel vs Ubuntu the

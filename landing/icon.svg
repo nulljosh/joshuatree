@@ -46,6 +46,16 @@
       <stop offset="82%" stop-color="#000000" stop-opacity="0"/>
       <stop offset="100%" stop-color="#000000" stop-opacity="0.18"/>
     </linearGradient>
+    <!-- Real macOS Dock icons (see reference screenshot) all carry a
+         glossy top sheen and a crisp 1px inner rim light, not just a flat
+         gradient fill; the roundedSquare clip alone (already the correct
+         ~22% squircle ratio) read as flat next to real ones once compared
+         side by side. Two more overlays, no new shape language. -->
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="45%" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
     <clipPath id="roundedSquare">
       <rect width="200" height="200" rx="44"/>
     </clipPath>
@@ -97,5 +107,11 @@
     <path d="M96 172 L94 141 L98 109" fill="none" stroke="#F2C879" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
 
     <rect width="200" height="200" fill="url(#vignette)"/>
+    <ellipse cx="100" cy="6" rx="130" ry="70" fill="url(#gloss)"/>
   </g>
+  <!-- inner rim light, outside the clip so it traces the squircle's own
+       edge (a stroked rect inside a clip of the same rect gets half-cut
+       by the clip itself); every real Dock icon has this crisp hairline,
+       the flat clip alone reads like a screenshot crop, not an icon -->
+  <rect x="1" y="1" width="198" height="198" rx="43" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="1.5"/>
 </svg>

@@ -1386,7 +1386,16 @@ static void gui_draw_menubar(void){
     if (mv == gui_menubar_last_min) return;
     gui_menubar_last_min = mv;
 
-    window_rect(0, 0, (int)window_width(), GUI_MENUBAR_H, 0x00FFFFFF);
+    /* v48: Liquid Glass, direct request. No real alpha compositing in this
+       framebuffer (see gui_blend's own note), so "translucent" here means
+       the same trick the dock shadow already uses: a real, solid,
+       precomputed blend of white toward whatever wallpaper color sits
+       behind this row, sampled per-row (gui_wallpaper_color already does
+       exactly this, reused, not a second sampler). Mostly white so text
+       stays legible, just enough wallpaper bleeding through to read as
+       glass instead of a flat opaque bar. */
+    for (int row = 0; row < GUI_MENUBAR_H; row++)
+        window_rect(0, row, (int)window_width(), 1, gui_lerp(gui_wallpaper_color(row), 0x00FFFFFF, 7, 10));
     window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
     gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2, 1, 0x00FFFFFF);
     font_draw_string("Joshua Tree", 32, 7, 0x001C1C1E, -1);
@@ -2770,8 +2779,7 @@ static void gui_draw_boot_screen(void){
     unsigned int bg = 0x00201009; /* the wallpaper's own espresso-brown, on-brand, not a new color */
     window_clear(bg);
     int cx = (int)window_width() / 2, cy = (int)window_height() / 2; /* v45.2: centred on the real window; 400 was the 800-wide centre and sat left of centre at 960 */
-    gui_draw_logo(cx, cy - 10, 5, bg);
-    gui_draw_hello_script(cx, cy + 50, 6, 0x00F5EFE8, bg);
+    gui_draw_logo(cx, cy - 10, 5, bg); /* v48: dropped the "hello" wordmark, direct request, logo alone reads cleaner */
 
     unsigned int start = ticks();
     unsigned int logo_only = 60; /* 0.6s: just the logo and wordmark, no bar yet */
