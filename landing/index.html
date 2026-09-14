@@ -58,40 +58,37 @@
      moves further down still, past the demo, so the very first thing a
      visitor sees is the headline, not a black box or a field of symbols. */
   /* v52: the live demo moved behind the hero text instead of its own
-     section further down, direct request once the extra vertical room
-     from the graph/legend cleanup made it feel like there was space for
-     it. #stage-wrap sits absolutely behind .hero-copy, which gets a real
-     frosted scrim (the same backdrop-filter treatment #v86-overlay's own
-     pill already uses elsewhere on this page) so the headline stays
-     legible over a busy live desktop instead of relying on text-shadow
-     alone. */
-  .hero { position: relative; overflow: hidden; text-align: center; padding: 148px 20px 96px; min-height: 78vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; }
-  .hero-copy { position: relative; z-index: 2; background: rgba(10,8,6,0.42); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-radius: 24px; padding: 36px 32px; transition: opacity 0.4s ease, transform 0.4s ease; }
-  .hero .eyebrow { color: #e8b98a; }
-  .hero h1, .hero p.tagline { color: #fff; }
+     section further down. v52.1: dropped the frosted glass card a pass
+     later (direct request, "remove the Liquid Glass overlay, blend the
+     text into the demo, make it the wallpaper"), back to the plain
+     text-shadow treatment this page's very first version used for
+     .hint/.links, just scaled up for real display type. This also fixed
+     the real dead-black-space bug reported right before it: the card's
+     own fixed padding was most of what forced the hero taller than its
+     content, gone now that there's no card, so min-height could come
+     down a lot too, not just get capped smaller as the first attempt at
+     that bug did. */
+  .hero { position: relative; overflow: hidden; text-align: center; padding: 96px 20px 64px; min-height: 56vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; }
+  .hero-copy { position: relative; z-index: 2; transition: opacity 0.4s ease, transform 0.4s ease; }
+  .hero .eyebrow { color: #f0cba0; text-shadow: 0 2px 16px rgba(0,0,0,0.85), 0 1px 3px rgba(0,0,0,0.9); }
+  .hero h1, .hero p.tagline { color: #fff; text-shadow: 0 4px 28px rgba(0,0,0,0.85), 0 2px 8px rgba(0,0,0,0.9); }
   /* Direct request: click into the demo, the hero text gets out of the
      way; click/tap/esc back out (embed.js's own real focus state, not a
      second tracker) and it returns. */
   .hero.demo-focused .hero-copy, .hero.demo-focused .scroll-hint { opacity: 0; transform: translateY(-8px); pointer-events: none; }
   .eyebrow { color: var(--accent); font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; margin: 0; font-weight: 600; }
-  .hero h1 { font-size: 56px; margin: 14px 0 18px; letter-spacing: -0.03em; line-height: 1.05; }
-  .hero p.tagline { color: var(--sub); font-size: 20px; margin: 0 auto; max-width: 520px; line-height: 1.5; }
-  .scroll-hint { display: inline-block; margin-top: 44px; color: var(--sub); font-size: 13px; opacity: 0.8; text-decoration: none; }
-  .scroll-hint:hover { opacity: 1; color: var(--accent); }
-  .scroll-hint::after { content: ''; display: block; width: 1px; height: 28px; margin: 10px auto 0; background: linear-gradient(var(--sub), transparent); animation: scrolldown 1.8s ease-in-out infinite; }
+  .hero h1 { font-size: 56px; margin: 14px 0 10px; letter-spacing: -0.03em; line-height: 1.05; }
+  .hero p.tagline { font-size: 18px; margin: 0 auto; max-width: 480px; line-height: 1.5; opacity: 0.92; }
+  .scroll-hint { display: inline-block; margin-top: 40px; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.85); font-size: 13px; opacity: 0.75; text-decoration: none; }
+  .scroll-hint:hover { opacity: 1; }
+  .scroll-hint::after { content: ''; display: block; width: 1px; height: 28px; margin: 10px auto 0; background: linear-gradient(rgba(255,255,255,0.8), transparent); animation: scrolldown 1.8s ease-in-out infinite; }
   @keyframes scrolldown { 0%,100% { opacity: 0.2; transform: translateY(0); } 50% { opacity: 1; transform: translateY(6px); } }
   @media (prefers-reduced-motion: reduce) { .scroll-hint::after { animation: none; } }
 
   @media (max-width: 520px) {
-    /* Direct bug report with a screenshot: real dead black space below
-       the dock on a phone, not the demo's own letterbox. 70vh forced the
-       hero taller than its actual content (frosted card + dock) needed,
-       the black beneath is just unused hero background. min-height, not
-       a fixed height, so it still shrinks to fit if content is even
-       shorter, but 40vh caps how much empty box gets reserved up front. */
-    .hero { padding: 72px 20px 40px; min-height: 40vh; }
+    .hero { padding: 56px 20px 40px; min-height: 40vh; }
     .hero h1 { font-size: 34px; }
-    .hero p.tagline { font-size: 16px; }
+    .hero p.tagline { font-size: 15px; }
   }
 
   /* Sections reveal on scroll, the same "content arrives as you get to
@@ -237,7 +234,7 @@
   <div class="hero-copy">
     <p class="eyebrow">An operating system, from scratch</p>
     <h1>Mi OS, tu OS.</h1>
-    <p class="tagline">A fresh, custom OS. Its own desktop, its own network stack, its own text editor. Built in the open, yours to help build. Running live behind this text, right now, click or tap it.</p>
+    <p class="tagline">Click or tap. It's really running.</p>
   </div>
   <p class="scroll-hint">Keep scrolling</p>
 </header>
