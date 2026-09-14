@@ -85,18 +85,26 @@ dependencies beyond clang, ld.lld and qemu.
   bright/saturated orange. The real VGA boot output is genuinely black-on-
   gray text (can't be restyled, it's the actual kernel's real output),
   everything *around* it (frame, accent color, copy) follows this palette.
-- The loop: this project has no finish line. Standing instruction is to
-  keep working `roadmap.md`'s open queue, one real item at a time, same bar
-  as every version above (verify against real artifacts, not "it booted").
-  Pull technique and prior art from the internet when a subsystem has
-  well-known solved shapes elsewhere (OSDev wiki, xv6, ToaruOS, real Linux/
-  BSD driver source) rather than reinventing a wire protocol or register
-  sequence from scratch; cite what was borrowed in the roadmap entry the
-  same way existing entries cite their own root-cause traces. Prefer items
-  verifiable headlessly (serial output, VGA memory dump, check.sh, a real
-  disk image) over ones that need a human looking at a real screen (mouse
-  feel, dock animation smoothness); the latter get implemented and marked
-  honestly unverified rather than skipped, same as v46's boot-chime note.
+- The loop (direct request, tightened to exactly this, Sep 2026): this
+  project has no finish line. Each pass:
+  1. Check for a direct request first; only fall back to `roadmap.md`'s
+     open queue (one real item) when there isn't one.
+  2. Current standing focus, absent a direct request: typeface/font
+     rendering and icon sharpening, both real, ongoing, re-checked against
+     actual screenshots each time, not assumed fixed from a prior pass.
+  3. Pull technique from real prior art (OSDev wiki, xv6, ToaruOS, real
+     Linux/BSD source) for anything with a well-known solved shape, rather
+     than reinventing a wire protocol or register sequence; cite what was
+     borrowed the same way existing roadmap entries cite their own
+     root-cause traces.
+  4. Verify against a real artifact before calling it done: `check.sh`, a
+     real screenshot (this Mac's own attached display + `screencapture`,
+     not QEMU's broken `screendump`), a real disk image, not "it booted."
+  5. Ship it: commit, push, `wrangler deploy` for the landing page, bump
+     `VERSION` for kernel work, one clear TLDR back, then pick up step 1
+     again. Constraints and rules (this file, `roadmap.md`'s own model-
+     routing legend) get tightened in place as real gaps in them turn up,
+     not left to drift.
 - Exception to the fleet-wide "a push deploys nothing" rule
   (`~/Documents/Code/CLAUDE.md`): direct request, this repo now has
   `.github/workflows/deploy.yml`, which runs `wrangler deploy` for real on
