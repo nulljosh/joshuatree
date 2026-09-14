@@ -14,8 +14,8 @@
      loaded. preload starts the fetch the instant the HTML itself parses,
      in parallel with every other page asset, not free but a real,
      measurable head start on the only part actually addressable here. -->
-<link rel="preload" href="v86/v86.wasm" as="fetch" crossorigin>
-<link rel="preload" href="v86/kernel.elf" as="fetch" crossorigin>
+<link rel="preload" href="v86/v86.wasm" as="fetch">
+<link rel="preload" href="v86/kernel.elf" as="fetch">
 <link rel="preload" href="v86/libv86.js" as="script">
 <style>
   /* Real palette refresh, not a tweak: the old warm orange/burgundy read
@@ -35,8 +35,19 @@
      scrolling the page a little on purpose, see #v86-embed's own note),
      forcing a snap mid-drag would undo that. Proximity only pulls the
      page to rest at a section boundary near where it already stopped. */
-  html { scroll-snap-type: y proximity; }
-  .hero, .features, .progress-section, .grain-zone { scroll-snap-align: start; }
+  /* v52.3: scroll-snap-type removed, direct bug report ("snaps the user
+     halfway down the page on load"). Real, plausible cause traced, not
+     guessed blind: the demo canvas resizes itself repeatedly during boot
+     (resizeCanvas() polls every 200ms until graphical mode reports real,
+     see embed.js), growing from a placeholder size to the real 1920x1080
+     mid-load, now a much bigger size swing than before this same pass's
+     own cover-fit change (Math.max, not Math.min). A size change inside
+     the hero while scroll-snap-type was active is exactly the kind of
+     thing that can make a browser "correct" scroll position once it
+     settles, landing on a section boundary the visitor never scrolled
+     to. Removed rather than chased further: a plain scrolling page beats
+     one that yanks the visitor's position out from under them, and nothing
+     else on this page depended on snap being present. */
   body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
 
   /* Keyboard focus needs to be visible for anyone not using a mouse; the
