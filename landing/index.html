@@ -336,21 +336,39 @@
   }
 
   if (reduced) return;
+  // v52: made this dramatically more visible, direct repeated feedback
+  // that the parallax wasn't reading as present at all. Two real layers
+  // now, not one subtle one: the grain field's own range roughly tripled
+  // (60px -> 180px), and the progress chart card now drifts against the
+  // page at a different rate too, the second, more common "parallax"
+  // reference point (cards/panels moving slower than the scroll itself).
+  // Never touches #stage-wrap/the live demo: that canvas's own click
+  // math depends on getBoundingClientRect matching its real screen
+  // position exactly (see embed.js's own resizeCanvas note), a CSS
+  // transform offset on it would desync clicks from where they land.
+  var layers = [];
   var grainZone = document.querySelector('.grain-zone');
   var field = document.getElementById('heroFloat');
-  if (!grainZone || !field) return;
+  if (grainZone && field) layers.push({ zone: grainZone, el: field, range: 180 });
+  var progressZone = document.querySelector('.progress-section');
+  var progressCard = document.querySelector('.progress-card');
+  if (progressZone && progressCard) layers.push({ zone: progressZone, el: progressCard, range: 70 });
+  if (!layers.length) return;
   var ticking = false;
   function updateParallax() {
     ticking = false;
-    var rect = grainZone.getBoundingClientRect();
     var vh = window.innerHeight || document.documentElement.clientHeight;
-    // Progress through the zone's own scroll range, 0 as it enters the
-    // bottom of the viewport, 1 as it leaves the top: the field moves a
-    // fraction of that range, a real depth cue instead of scrolling in
-    // lockstep with the text in front of it.
-    var progress = (vh - rect.top) / (vh + rect.height);
-    var offset = (progress - 0.5) * 60; // px of travel across the whole pass
-    field.style.transform = 'translateY(' + offset.toFixed(1) + 'px)';
+    for (var i = 0; i < layers.length; i++) {
+      var L = layers[i];
+      var rect = L.zone.getBoundingClientRect();
+      // Progress through the zone's own scroll range, 0 as it enters the
+      // bottom of the viewport, 1 as it leaves the top: the layer moves a
+      // fraction of that range, a real depth cue instead of scrolling in
+      // lockstep with the text in front of it.
+      var progress = (vh - rect.top) / (vh + rect.height);
+      var offset = (progress - 0.5) * L.range;
+      L.el.style.transform = 'translateY(' + offset.toFixed(1) + 'px)';
+    }
   }
   window.addEventListener('scroll', function () {
     if (!ticking) { window.requestAnimationFrame(updateParallax); ticking = true; }
