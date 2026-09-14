@@ -28,6 +28,7 @@ static inline void outw(u16 p, u16 v)  { __asm__ volatile ("outw %0,%1" :: "a"(v
 #define REG_ISR     0x3E
 
 #define ISR_ROK 0x01
+#define CR_BUFE 0x01 /* Command Register bit 0: RX buffer empty (v71) */
 
 static u16 io_base = 0;
 static u32 rx_offset = 0;
@@ -85,12 +86,34 @@ void rtl8139_get_mac(u8 mac[6]) {
 
 /* RTL8139 RX ring: packets land sequentially in rx_buffer as [u16 status]
    [u16 length-including-CRC][data...], length rounded up to a 4-byte
-   boundary between packets. ISR bit0 (ROK) is set on arrival regardless of
-   whether interrupts are enabled, so polling it works fine without ever
-   touching IMR. CAPR's "subtract 16" offset is this register's own
-   documented quirk, not a bug. */
+   boundary between packets. CAPR's "subtract 16" offset is this
+   register's own documented quirk, not a bug.
+
+   v71 (0.65.0), real bug found the day weather_fetch started making TWO
+   connections on one init (ip-api.com, then Open-Meteo): this used to
+   gate on ISR bit0 (ROK) and write-1-clear it after reading ONE packet.
+   ROK is a "something arrived" latch, not a ring-occupancy flag, so when
+   two frames land between polls (a SYN-ACK and its data, or the server's
+   FIN after tcp_get's best-effort close that never waits for it) the
+   second stays in the ring with ROK already cleared, and only gets read
+   when a THIRD frame arrives and sets ROK again: the driver runs one
+   packet behind for the rest of the session after any burst. Seen live,
+   headless: the second dns_resolve's reply arrived, the poll handed back
+   the previous server's stale FIN instead, cleared ROK, and the real
+   reply sat unread until the timeout ("dns-fail", http_get -1). Every
+   earlier caller (web, weathertest, chat) happened to call rtl8139_init
+   right before its one connection, which resets the ring and hid this
+   for 60+ versions. The fix is the standard one: gate on the Command
+   Register's BUFE bit (bit 0, "RX buffer empty"), which reflects the
+   real ring state, exactly what the OSDev RTL8139 page's receive loop
+   and Linux's rtl8139_rx (`while ((RTL_R8(ChipCmd) & RxBufEmpty) == 0)`)
+   both do. ROK is still write-1-cleared below so the ISR doesn't stay
+   latched, it just no longer decides whether there is data to read.
+   tools/geo-check.sh is the permanent regression test: it needs both
+   back-to-back connections to land (its `wx=` assertion) and fails on
+   the old ROK gate. */
 u32 rtl8139_receive(void *buf, u32 maxlen) {
-    if (!(inw(io_base + REG_ISR) & ISR_ROK)) return 0;
+    if (inb(io_base + REG_CR) & CR_BUFE) return 0; /* v71: ring really empty, see the comment above */
 
     u16 status = *(volatile u16 *)(rx_buffer + rx_offset);
     u16 length = *(volatile u16 *)(rx_buffer + rx_offset + 2);
