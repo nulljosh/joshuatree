@@ -871,71 +871,6 @@ static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int 
 #undef SL
 }
 
-/* The same cursive "hello" from the boot screen, echoed faintly on the
-   desktop itself, a real nod carried through rather than a one-off boot
-   moment: ink color is the local wallpaper tone blended toward white, so
-   it reads as a soft watermark pressed into the background, not a bold
-   second logo competing with the dock or menu bar. One row (the word's
-   own vertical middle) stands in for the wallpaper color across the
-   whole word's height: the gradient shifts little enough over the ~40px
-   the letters span that this reads as smooth, unlike the tray corner bug
-   found earlier this session, where the same shortcut spanned a much
-   wider color gap and showed. */
-/* A deliberately blocky, un-anti-aliased Joshua tree silhouette, a real
-   8-bit nod to this OS's own retro/bitmap nature, direct request after
-   a real photo turned out to need either a licensing chase (attributed
-   Creative Commons) or a genuinely bigger image-decoder undertaking this
-   freestanding kernel has no asset pipeline for at all. `block` is the
-   size of one "pixel" in this chunky sprite; every rect is exactly
-   block x block, no AA_BAND softening anywhere, that hard edge is the
-   whole point here, the opposite treatment from every icon in this file. */
-/* A spiky tuft, the yucca-leaf cluster every one of this tree's three
-   arms ends in. Real revision, still not there on the last pass: three
-   attempts in, direct feedback was still "kind of shitty", the shape
-   read as a tree by then but a thin, spindly one, nothing like a real
-   yucca's dense, spiky pom-pom of leaves. Widened to a real 5-spike
-   starburst (up, both upper diagonals, and both sides pushed out an
-   extra block) instead of the previous 3-spike version. */
-static void gui_draw_pixel_tuft(int cx, int cy, int block, unsigned int color){
-    window_rect(cx,             cy,         block, block, color);
-    window_rect(cx - block,     cy - block, block, block, color);
-    window_rect(cx + block,     cy - block, block, block, color);
-    window_rect(cx,             cy - block, block, block, color);
-    window_rect(cx - 2 * block, cy,         block, block, color); /* left spike, pushed further out */
-    window_rect(cx + 2 * block, cy,         block, block, color); /* right spike */
-}
-
-/* Real revision, not the first attempt: a thin single-block trunk with
-   one clean branch split read more like a candelabra or a stick figure
-   than a real Joshua tree's thick, gnarled trunk and irregular, staggered
-   branching. Trunk is 2 blocks wide now, and the branches fork at two
-   different heights instead of one single split point, closer to how a
-   real one actually grows. Tuft spacing widened to match the wider
-   starburst above, arms end 6 blocks out instead of 3 so neighboring
-   tufts (5 blocks wide each now) still never touch. */
-static void gui_draw_pixel_tree(int x0, int ground_y, int block, unsigned int color){
-    for (int i = 0; i < 5; i++) window_rect(x0 - block, ground_y - (i + 1) * block, 2 * block, block, color); /* thick trunk */
-    int low_split = ground_y - 3 * block;   /* a lower, secondary branch pair */
-    window_rect(x0 - 2 * block, low_split - block,     block, block, color);
-    window_rect(x0 - 3 * block, low_split - 2 * block, block, block, color);
-    gui_draw_pixel_tuft(x0 - 3 * block, low_split - 3 * block, block, color);
-    window_rect(x0 + 2 * block, low_split - block,     block, block, color);
-    window_rect(x0 + 3 * block, low_split - 2 * block, block, block, color);
-    gui_draw_pixel_tuft(x0 + 3 * block, low_split - 3 * block, block, color);
-
-    int split = ground_y - 5 * block;       /* the main, higher branch pair */
-    window_rect(x0 - block,     split - block,     block, block, color);
-    window_rect(x0 - 2 * block, split - 2 * block, block, block, color);
-    window_rect(x0 - 4 * block, split - 3 * block, 2 * block, block, color);
-    gui_draw_pixel_tuft(x0 - 5 * block, split - 4 * block, block, color);
-    window_rect(x0 + block,     split - block,     block, block, color);
-    window_rect(x0 + 2 * block, split - 2 * block, block, block, color);
-    window_rect(x0 + 2 * block, split - 3 * block, 2 * block, block, color);
-    gui_draw_pixel_tuft(x0 + 5 * block, split - 4 * block, block, color);
-    window_rect(x0, split - block,     block, block, color); /* center, continuing straight up */
-    window_rect(x0, split - 2 * block, block, block, color);
-    gui_draw_pixel_tuft(x0, split - 3 * block, block, color);
-}
 
 static void gui_draw_wallpaper(void){
     int w = (int)window_width(), h = (int)window_height();
@@ -957,33 +892,12 @@ static void gui_draw_wallpaper(void){
         }
     }
 
-    /* Real bug caught before shipping, not assumed fine: a first pass put
-       these low enough that the dock tray, drawn afterward, covered
-       everything but a couple of stray blocks poking above it, unrecog-
-       nizable as a tree at all. Moved well clear of the dock's own top
-       edge (gui_dock_y0()), and off to the sides past the dock's own
-       width so they never compete with it horizontally either. */
-    int ground_y = gui_dock_y0() - 30;
-    unsigned int silhouette = gui_wallpaper_color(ground_y);
-    unsigned int dark = gui_blend(silhouette, 0x00000000);
-    /* Real clipping bug caught before shipping: the wider branch spread
-       from the last revision reaches 7 blocks out from center now (the
-       outer tuft's own spike included), which ran the left tree's arm
-       straight off the left edge of the screen at x0=70. Moved both
-       trees in enough to clear that at their own block size. */
-    gui_draw_pixel_tree(110,     ground_y, 13, dark);
-    gui_draw_pixel_tree(w - 120, ground_y, 15, dark);
-
-    /* Real feedback: the desktop's own echo of the boot screen's "hello"
-       should actually show, not just technically be there. A plain 50/50
-       blend toward white read as barely-there; leaning further toward
-       white (gui_lerp instead of gui_blend's fixed midpoint) gives it
-       real, visible contrast while still reading as a soft watermark,
-       not a second opaque logo competing with the dock. */
-    int watermark_row = GUI_MENUBAR_H + 190;
-    unsigned int wall = gui_wallpaper_color(watermark_row);
-    unsigned int ink = gui_lerp(wall, 0x00FFFFFF, 3, 4);
-    gui_draw_hello_script(w / 2, watermark_row, 4, ink, wall);
+    /* Direct feedback after living with both a while: the 8-bit pixel
+       trees and the desktop's own echo of "hello" are gone now, real
+       photo speaks for itself, and "hello" stays a one-time boot moment
+       (gui_draw_boot_screen) rather than repeating on every desktop
+       frame. Removed rather than left disabled behind a flag, nothing
+       here needs to come back on short notice. */
 }
 
 /* Fills a downward-pointing triangle: flat top of half-width `half_w` at
@@ -1165,16 +1079,23 @@ static void gui_icon_chat(int cx, int cy, int s, unsigned int bg){
    flat rectangle. A slightly darker back-panel shade behind the front
    face fakes that fold without any alpha blending, just a second real
    solid color. */
+/* Real regression caught after living with it next to a real photo
+   background, not on the first screendump: the color redesign swapped
+   this from gui_rounded_rect (real AA corners) to a plain per-row
+   window_rect loop with none at all, so the folder alone had hard
+   square corners while every other icon on the dock stayed rounded, the
+   kind of inconsistency that reads as "bitmap" even when nothing about
+   it is actually jagged. Front face is gui_rounded_rect_gradient again,
+   the same primitive it always should have kept, just with real color
+   this time instead of the old flat white. */
 static void gui_icon_folder(int cx, int cy, int s, unsigned int bg){
-    (void)bg; /* folder is fully opaque now (real blue, not white-on-bg), no AA blend target needed here */
     int w = (s * 8) / 10, h = (s * 6) / 10;
     int x = cx - w / 2, y = cy - h / 2 + s / 12;
     unsigned int face_top = 0x006FC6FF, face_bot = 0x000A84FF; /* real Finder blue, a color, not white */
     unsigned int shade = gui_blend(face_bot, 0x00000000); /* back panel/tab a real shadow tone of the same blue, not a generic gray */
-    window_rect(x, y, w / 3, s / 12, shade);          /* tab, sits behind the front face */
-    window_rect(x + 2, y + s / 12 - 2, w - 4, h, shade); /* back panel peeking out top/right */
-    for (int row = 0; row < h; row++)
-        window_rect(x, y + s / 12 + row, w, 1, gui_lerp(face_top, face_bot, row, h > 0 ? h : 1)); /* front face, on top, real gradient */
+    window_rect(x, y - s / 12, w / 3, s / 12, shade);  /* tab, sits behind the front face */
+    window_rect(x + 2, y - 2, w - 4, h, shade);        /* back panel peeking out top/right */
+    gui_rounded_rect_gradient(x, y, w, h, face_top, face_bot, bg, 6);
 }
 
 /* Each key gets a light top-left / dark bottom-right bevel instead of one
