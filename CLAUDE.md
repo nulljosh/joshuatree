@@ -151,6 +151,16 @@ dependencies beyond clang, ld.lld and qemu.
       second job for `tools/check-refs.sh`. Add to it when a real gap
       is found, the same discipline as every other standing rule here,
       not a one-time setup task.
+  4e. Standing release-notes requirement (direct request, Sep 2026): a
+      real gap found doing a quick audit, `jt-v70`'s release notes were
+      one generic line ("Two real, low-risk apps...") while sibling
+      releases the same session carried the full real story (root
+      cause, evidence, what was verified). `gh release create`/`edit`
+      always gets substantial notes, not a placeholder: what shipped,
+      the real bug/finding behind it if there was one, how it was
+      verified. `roadmap.md`'s own entry for the version is usually the
+      source to pull from, don't write a thinner summary than what
+      already exists there.
   5. Ship it: commit, push, `wrangler deploy` for the landing page, bump
      `VERSION` for kernel work, one clear TLDR back, then pick up step 1
      again. Constraints and rules (this file, `roadmap.md`'s own model-
