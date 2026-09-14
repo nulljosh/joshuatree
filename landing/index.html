@@ -143,27 +143,26 @@
         <div id="screen_text"></div>
         <canvas id="screen_canvas"></canvas>
       </div>
-      <div id="v86-overlay"><span>Click or tap to take over</span></div>
+      <div id="v86-overlay"></div>
     </div>
     <div class="links">
       <a href="https://github.com/nulljosh/joshuatree" aria-label="Source code on GitHub">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
       </a>
     </div>
-    <div class="hint">Live demo of <code>kernel.elf</code>, interactable in your browser.</div>
   </div>
 </div>
 
 <main id="main">
   <div class="hero-float" id="heroFloat" aria-hidden="true"></div>
-  <p class="eyebrow">Joshua's kernel, built from nothing</p>
-  <h1>What you just booted</h1>
-  <p class="tagline">No macOS, no Linux underneath it. Written from scratch,<br>with its own GUI desktop, its own network stack, and its own text editor.</p>
-  <p class="note">It manages its own memory. It reads and writes its own filesystem. It talks over a real network stack, built from raw Ethernet frames up. The desktop opens real apps from this same codebase, including a plain text editor that actually saves to disk. A shell command talks to a local LLM. Nothing here is a mockup.</p>
-  <p class="note">Named after the tree that survives the Mojave on almost nothing. Also a nod to the U2 album, and my own name.</p>
+  <p class="eyebrow">An operating system, from scratch</p>
+  <h1>No Linux under this</h1>
+  <p class="tagline">Its own desktop. Its own network stack. Its own text editor.<br>Written from nothing, boots on real hardware rules.</p>
+  <p class="note">Own memory manager. Own filesystem. TCP built from raw Ethernet frames. The desktop runs real apps, the editor writes to a real disk, and one command talks to a local LLM. Nothing faked.</p>
+  <p class="note">Named for the tree that survives the Mojave on nothing. And the album. And me.</p>
 
   <div class="progress-card">
-    <h2>How far I've gotten</h2>
+    <h2>Where it's at</h2>
     <img src="progress.svg" alt="Feature completion by version, generated from roadmap.md">
   </div>
 
@@ -187,11 +186,15 @@
   var field = document.getElementById('heroFloat');
   if (!field) return;
 
+  // What this OS *is*, not what its source looks like. Symbols a visitor
+  // recognizes (a desktop, a terminal, a network) land; raw hex addresses
+  // and function names only mean something to someone already reading the
+  // code, which is not who this page is for.
   var items = [
-    'joshuatree v0', '> help', '> gui', '> mem', '> chat',
-    '0xC0000000', '0xB8000', 'kmain()', 'fat_write_file()',
-    'ring3test', 'preempttest', '129920K total', 'ARP DNS TCP',
-    'no macOS, no Linux'
+    'a desktop', 'a terminal', 'a text editor', 'a file browser',
+    'its own network stack', 'its own memory manager', 'talks to an LLM',
+    'boots in 2 seconds', 'no Linux', 'no macOS', 'written from nothing',
+    '15 apps', 'runs in this tab'
   ];
 
   var rand = function (a, b) { return a + Math.random() * (b - a); };

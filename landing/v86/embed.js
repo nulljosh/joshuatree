@@ -114,6 +114,7 @@
     if (document.pointerLockElement) return; // pointer-locked play (a real click-drag drag) already reports device-independent deltas v86 handles correctly on its own
     var dx = ev.movementX / currentScale, dy = ev.movementY / currentScale;
     emulator.bus.send("mouse-delta", [dx, -dy]); // y inverted, matching v86's own convention exactly
+    trackDelta(dx, dy); // keep the shadow cursor (see tap-to-click below) in step with real mouse movement too
     ev.stopImmediatePropagation();
   }, true);
 
@@ -141,15 +142,61 @@
     if (lastTouchX !== null) {
       var dx = (t.clientX - lastTouchX) / currentScale, dy = (t.clientY - lastTouchY) / currentScale;
       emulator.bus.send("mouse-delta", [dx, -dy]);
+      trackDelta(dx, dy);
     }
     lastTouchX = t.clientX; lastTouchY = t.clientY;
     ev.stopImmediatePropagation();
   }, { capture: true, passive: true });
   screenContainer.addEventListener("touchstart", function (ev) {
     var t = ev.changedTouches && ev.changedTouches[0];
-    if (t) { lastTouchX = t.clientX; lastTouchY = t.clientY; }
+    if (t) { lastTouchX = t.clientX; lastTouchY = t.clientY; tapStartX = t.clientX; tapStartY = t.clientY; tapStartT = Date.now(); }
   }, { capture: true, passive: true });
-  screenContainer.addEventListener("touchend", function () { lastTouchX = lastTouchY = null; }, { capture: true, passive: true });
+
+  // Real tap-to-click. Before this, touch could only ever *move* the
+  // kernel's cursor: no mouse button was sent on a tap at all, so a phone
+  // visitor could push the pointer around the desktop and never once open
+  // an app. The demo was, in practice, look-only on mobile.
+  //
+  // A tap also has to land where the finger actually is, which a relative
+  // PS/2-style cursor can't do by itself: it only understands deltas, and
+  // nothing on this page knows where the kernel currently thinks its
+  // cursor is. So we track it: the kernel starts its cursor at (400,300)
+  // (gui_run's own initial mx/my) and clamps to the 800x600 screen, so
+  // mirroring both here keeps a shadow copy that stays in step with every
+  // delta we send. A tap then becomes "move by the difference, then
+  // click", which lands on the icon under the finger.
+  var shadowX = 400, shadowY = 300;
+  function moveCursorTo(kx, ky) {
+    var dx = kx - shadowX, dy = ky - shadowY;
+    shadowX = kx; shadowY = ky;
+    emulator.bus.send("mouse-delta", [dx, -dy]); // y inverted, same convention as every other send here
+  }
+  function trackDelta(dx, dy) {
+    shadowX += dx; shadowY += dy;
+    if (shadowX < 0) shadowX = 0; if (shadowX > 799) shadowX = 799;
+    if (shadowY < 0) shadowY = 0; if (shadowY > 599) shadowY = 599;
+  }
+  var tapStartX = 0, tapStartY = 0, tapStartT = 0;
+  screenContainer.addEventListener("touchend", function (ev) {
+    lastTouchX = lastTouchY = null;
+    if (!focused || !emulator.mouse_adapter || !emulator.mouse_adapter.emu_enabled) return;
+    var t = ev.changedTouches && ev.changedTouches[0];
+    if (!t) return;
+    var moved = Math.abs(t.clientX - tapStartX) + Math.abs(t.clientY - tapStartY);
+    // A tap, not a drag: a short press that barely moved. Drags are the
+    // cursor-steering gesture above and must not also fire a click.
+    if (moved > 12 || Date.now() - tapStartT > 500) return;
+    var rect = screenCanvas.getBoundingClientRect();
+    var kx = (t.clientX - rect.left) / currentScale;
+    var ky = (t.clientY - rect.top) / currentScale;
+    if (kx < 0 || ky < 0 || kx > 799 || ky > 599) return;
+    moveCursorTo(Math.round(kx), Math.round(ky));
+    // Down then up, with a real gap: the kernel samples the mouse from its
+    // own loop rather than an interrupt-driven queue, so a press and
+    // release in the same tick can be missed entirely.
+    emulator.bus.send("mouse-click", [true, false, false]);
+    setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 60);
+  }, { capture: true, passive: true });
 
   // Toggle between the text and graphical screen elements: v86 keeps both
   // in the DOM and expects the embedder to show whichever is active. The
