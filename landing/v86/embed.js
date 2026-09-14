@@ -30,7 +30,7 @@
   var emulator = new V86({
     wasm_path: "v86/v86.wasm",
     memory_size: 32 * 1024 * 1024,
-    vga_memory_size: 8 * 1024 * 1024,
+    vga_memory_size: 16 * 1024 * 1024, // v41: 1600x1200x32bpp is 7.68MB, 8 was one bad rounding away from failing
     screen_container: screenContainer,
     multiboot: { url: "v86/kernel.elf" },
     autostart: true,
@@ -130,7 +130,8 @@
   screenContainer.addEventListener("mousemove", function (ev) {
     if (!focused || !emulator.mouse_adapter || !emulator.mouse_adapter.emu_enabled) return;
     if (document.pointerLockElement) return; // pointer-locked play (a real click-drag drag) already reports device-independent deltas v86 handles correctly on its own
-    var dx = ev.movementX / currentScale, dy = ev.movementY / currentScale;
+    var lscale = screenCanvas.getBoundingClientRect().width / 800; // CSS px per LOGICAL kernel px (v41: canvas is 1600 physical, cursor is 800 logical)
+    var dx = ev.movementX / lscale, dy = ev.movementY / lscale;
     emulator.bus.send("mouse-delta", [dx, -dy]); // y inverted, matching v86's own convention exactly
     ev.stopImmediatePropagation();
   }, true);
@@ -157,7 +158,8 @@
     var t = ev.changedTouches && ev.changedTouches[ev.changedTouches.length - 1];
     if (!t) return;
     if (lastTouchX !== null) {
-      var dx = (t.clientX - lastTouchX) / currentScale, dy = (t.clientY - lastTouchY) / currentScale;
+      var lscale = screenCanvas.getBoundingClientRect().width / 800;
+      var dx = (t.clientX - lastTouchX) / lscale, dy = (t.clientY - lastTouchY) / lscale;
       emulator.bus.send("mouse-delta", [dx, -dy]);
     }
     lastTouchX = t.clientX; lastTouchY = t.clientY;
@@ -242,9 +244,12 @@
     // A tap, not a drag: a short press that barely moved. Drags are the
     // cursor-steering gesture above and must not also fire a click.
     if (moved > 12 || Date.now() - tapStartT > 500) return;
+    // v41: the kernel's cursor lives in LOGICAL 800x600 coordinates no
+    // matter what physical mode it opened (it's 1600x1200 now, drawn 2x),
+    // so map by fraction of the canvas box, not by physical pixels.
     var rect = screenCanvas.getBoundingClientRect();
-    var kx = (t.clientX - rect.left) / currentScale;
-    var ky = (t.clientY - rect.top) / currentScale;
+    var kx = (t.clientX - rect.left) / rect.width * 800;
+    var ky = (t.clientY - rect.top) / rect.height * 600;
     if (kx < 0 || ky < 0 || kx > 799 || ky > 599) return;
     // Click only once the cursor has actually finished travelling: the
     // movement is paced across several frames now, and clicking before it

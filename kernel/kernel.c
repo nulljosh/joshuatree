@@ -1549,7 +1549,10 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
    downsampling does. Falls back to drawing at native resolution
    directly (the old path) if the allocation fails, never a blank icon,
    just a less-smooth one on a machine tight on heap. */
-#define ICON_SS_SCALE 3
+/* v41: 4, not 3, so that the downsample to 2x physical pixels is an exact
+   2:1 box filter (240 -> 120) instead of a 1.5:1 one that would have to
+   pick which sample to drop. */
+#define ICON_SS_SCALE 4
 static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
     int x = cx_center - size / 2, y = cy_bottom - size;
     unsigned int bg = GUI_COLORS[icon];
@@ -1586,18 +1589,29 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
         gui_draw_icon_glyph(icon, (int)ssz / 2, scy, (int)ssz, bg);
         window_pop_target();
 
-        unsigned int samples = ICON_SS_SCALE * ICON_SS_SCALE;
-        for (int oy = 0; oy < size; oy++){
-            for (int ox = 0; ox < size; ox++){
+        /* v41: downsample to *physical* pixels, not logical ones. At
+           window scale 2 each logical icon pixel is a 2x2 block on the
+           real framebuffer; writing those four physical pixels from four
+           different parts of the supersample buffer (instead of one
+           averaged colour stamped four times, which is what window_pixel
+           would do) is exactly what makes the icon genuinely sharper at
+           the higher resolution rather than just bigger. */
+        unsigned int sc = window_scale();
+        unsigned int per = ICON_SS_SCALE / sc;           /* supersamples per physical pixel, per axis */
+        if (per < 1) per = 1;
+        unsigned int samples = per * per;
+        int pw = size * (int)sc;                         /* physical icon size */
+        for (int py = 0; py < pw; py++){
+            for (int px = 0; px < pw; px++){
                 unsigned int rs = 0, gs = 0, bs = 0;
-                for (int sy = 0; sy < ICON_SS_SCALE; sy++){
-                    unsigned int *row = &ssbuf[(unsigned int)(oy * ICON_SS_SCALE + sy) * ssz + (unsigned int)ox * ICON_SS_SCALE];
-                    for (int sx = 0; sx < ICON_SS_SCALE; sx++){
+                for (unsigned int sy = 0; sy < per; sy++){
+                    unsigned int *row = &ssbuf[((unsigned int)py * per + sy) * ssz + (unsigned int)px * per];
+                    for (unsigned int sx = 0; sx < per; sx++){
                         unsigned int c = row[sx];
                         rs += (c >> 16) & 0xFF; gs += (c >> 8) & 0xFF; bs += c & 0xFF;
                     }
                 }
-                window_pixel(x + ox, y + oy, ((rs / samples) << 16) | ((gs / samples) << 8) | (bs / samples));
+                window_pixel_phys(x * (int)sc + px, y * (int)sc + py, ((rs / samples) << 16) | ((gs / samples) << 8) | (bs / samples));
             }
         }
         kfree(ssbuf);
@@ -2339,7 +2353,7 @@ static void gui_menu_run_item(int item){
 }
 
 static void gui_run(void){
-    if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); return; }
+    if (!window_open_scaled(800, 600, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
     gui_draw_boot_screen();
     gui_order_init();
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;

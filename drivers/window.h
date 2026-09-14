@@ -23,6 +23,11 @@ void window_pixel(int x, int y, unsigned int color);
    guessing a background color, needed for font_draw_char's "transparent"
    mode (bg < 0) where there's no single known background to blend into. */
 unsigned int window_get_pixel(int x, int y);
+/* v41: see window.c. Logical size stays what window_width/height report;
+   the framebuffer is `scale` times bigger in each axis. */
+int window_open_scaled(unsigned int width, unsigned int height, unsigned int bpp, unsigned int scale);
+unsigned int window_scale(void);
+void window_pixel_phys(int px, int py, unsigned int color);
 void window_rect(int x, int y, int w, int h, unsigned int color);
 unsigned int window_width(void);
 unsigned int window_height(void);
@@ -36,4 +41,9 @@ unsigned int window_height(void);
 void window_push_target(unsigned int *buf, unsigned int w, unsigned int h);
 void window_pop_target(void);
 unsigned int window_get_pixel(int x, int y);
+/* v41: see window.c. Logical size stays what window_width/height report;
+   the framebuffer is `scale` times bigger in each axis. */
+int window_open_scaled(unsigned int width, unsigned int height, unsigned int bpp, unsigned int scale);
+unsigned int window_scale(void);
+void window_pixel_phys(int px, int py, unsigned int color);
 #endif
