@@ -810,32 +810,33 @@ static unsigned int gui_wallpaper_color(int row){
    at that mid-row really does compute to a dark R=62, correct for where
    it was sampled, wrong for where it was actually used. */
 static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned int color, int r){
-    window_rect(x, y, w, h, color);
-    /* Same inverted-corner bug as gui_rounded_rect_gradient had, in the
-       function that draws the dock panel and the menu dropdown, so those
-       corners were wrong too, just less obvious against a busy wallpaper
-       than against a solid icon tile. Distance is measured from the arc's
-       centre at (r, r), not from the rect's corner. */
-    for (int dy = 0; dy <= r; dy++){
-        unsigned int bg_top = gui_wallpaper_color(y + dy);
-        unsigned int bg_bot = gui_wallpaper_color(y + h - 1 - dy);
-        for (int dx = 0; dx <= r; dx++){
-            int ox = r - dx, oy = r - dy;
-            int d2 = ox * ox + oy * oy;
-            int inner = r - AA_BAND;
-            if (d2 <= inner * inner) continue;
-            if (d2 >= r * r) {
-                window_pixel(x + dx,         y + dy,         bg_top);
-                window_pixel(x + w - 1 - dx, y + dy,         bg_top);
-                window_pixel(x + dx,         y + h - 1 - dy, bg_bot);
-                window_pixel(x + w - 1 - dx, y + h - 1 - dy, bg_bot);
-                continue;
+    /* v43: drawn at PHYSICAL resolution. Through the logical layer every
+       corner step was a 2x2 block and the AA band two logical pixels wide,
+       which on a 1920px panel reads as a plainly staircased edge (real
+       macro photo). Same math as before, in physical units, with the AA
+       band widened to match, blending each edge pixel against the actual
+       wallpaper colour behind it. */
+    int sc = (int)window_scale();
+    int px0 = x * sc, py0 = y * sc, pw = w * sc, ph = h * sc, pr = r * sc, band = AA_BAND * sc;
+    for (int py = 0; py < ph; py++){
+        unsigned int bg = gui_wallpaper_color(y + py / sc);
+        for (int px = 0; px < pw; px++){
+            /* distance from the nearest corner arc centre, or 0 if this
+               pixel isn't in a corner region at all */
+            int cx = px < pr ? pr : (px >= pw - pr ? pw - 1 - pr : -1);
+            int cy = py < pr ? pr : (py >= ph - pr ? ph - 1 - pr : -1);
+            unsigned int col = color;
+            if (cx >= 0 && cy >= 0){
+                int ox = px - cx, oy = py - cy;
+                int d2 = ox * ox + oy * oy;
+                int inner = pr - band;
+                if (d2 > inner * inner){
+                    if (d2 >= pr * pr) continue;            /* outside: leave the wallpaper alone */
+                    int t = gui_isqrt(d2) - inner;
+                    col = gui_lerp(color, bg, t, band);
+                }
             }
-            int t = gui_isqrt(d2) - (r - AA_BAND);
-            window_pixel(x + dx,         y + dy,         gui_lerp(color, bg_top, t, AA_BAND));
-            window_pixel(x + w - 1 - dx, y + dy,         gui_lerp(color, bg_top, t, AA_BAND));
-            window_pixel(x + dx,         y + h - 1 - dy, gui_lerp(color, bg_bot, t, AA_BAND));
-            window_pixel(x + w - 1 - dx, y + h - 1 - dy, gui_lerp(color, bg_bot, t, AA_BAND));
+            window_pixel_phys(px0 + px, py0 + py, col);
         }
     }
 }
@@ -1450,10 +1451,22 @@ static void gui_icon_fieldbook(int cx, int cy, int s, unsigned int bg){
    owns that region, gloss only takes over once the shape is genuinely
    flat-sided. */
 static void gui_draw_gloss(int x, int y, int w, int h, unsigned int bg, int corner_r){
+    /* v43: follows the tile's own curve edge to edge. This used to inset by
+       corner_r on every side and start corner_r rows down, fine when r was
+       a fixed 12px, absurd once r became 22% of the tile: the gloss shrank
+       to a small inner rectangle and the strip of raw base gradient left
+       around it read as a chunky dark bezel on every icon, caught in a
+       macro photo of the real panel. For rows inside the corner arc the
+       inset is the arc's own x at that row, so the lit band meets the
+       antialiased edge exactly and nothing is left un-glossed. */
     unsigned int light = gui_blend(bg, 0x00FFFFFF);
     int gloss_h = h * 2 / 5;
-    for (int row = corner_r; row < gloss_h; row++)
-        window_rect(x + corner_r, y + row, w - 2 * corner_r, 1, gui_lerp(light, bg, row, gloss_h));
+    for (int row = 0; row < gloss_h; row++){
+        int inset = 0;
+        if (row < corner_r) { int dy = corner_r - row; inset = corner_r - gui_isqrt(corner_r * corner_r - dy * dy); }
+        int span = w - 2 * inset;
+        if (span > 0) window_rect(x + inset, y + row, span, 1, gui_lerp(light, bg, row, gloss_h));
+    }
 }
 
 /* Real bug caught before shipping, not assumed fine: a first pass drew
@@ -1548,7 +1561,7 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
 /* v41: 4, not 3, so that the downsample to 2x physical pixels is an exact
    2:1 box filter (240 -> 120) instead of a 1.5:1 one that would have to
    pick which sample to drop. */
-#define ICON_SS_SCALE 4
+#define ICON_SS_SCALE 6 /* v43: 3 samples per physical pixel per axis (9 per pixel) at 2x, up from 2x2, visibly cleaner curves on the folder/pin/sun edges */
 static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
     int x = cx_center - size / 2, y = cy_bottom - size;
     unsigned int bg = GUI_COLORS[icon];
@@ -2289,6 +2302,9 @@ static void gui_launch_about(void){
     { char tmp[12]; int tn = 0; unsigned int v = secs; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
     buf[n++] = 's'; buf[n] = 0;
     font_draw_string(buf, 20, 100, 0x00884B16, -1);
+    /* v0.42.x: the version string, plus the one joke this release earns.
+       It's a Joshua tree. Different tree. */
+    font_draw_string("Version 0.42.1, the 4:20 release. It's a Joshua tree. Different tree.", 20, 130, 0x0075726E, -1);
 
     gui_wait_close();
 }

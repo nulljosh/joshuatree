@@ -296,3 +296,11 @@ Four direct reports in one pass: "skewed on full screen", "less pixels overall",
 - [x] The pointer is a real arrow now (black, white outline, classic 12x19 shape described as scanline rows, not a sprite), readable over both the dark sky and the light dock; the crosshair corner mark is gone.
 - [x] Mac launcher: `-display cocoa,zoom-to-fit=on,full-screen=on`, so the Dock app opens fullscreen and fits the panel.
 - [x] Verified: `check.sh`, `apptest.sh` (15 apps at the new resolution), `mobiletest.mjs` (tap-to-click passing on v86 at 1920x1080), a real QEMU screendump reviewed at full size, and a v86 screenshot of the clock panel open.
+
+## 0.42.1, the dock under a macro lens (Sep 2026)
+PATCH: three rendering defects, all caught in one macro photo of the real panel, none new capability.
+- [x] `gui_draw_gloss` inset by `corner_r` on every side and started `corner_r` rows down. Fine at a fixed 12px radius; at the proportional 22% radius the gloss shrank to a small inner rectangle and the strip of raw base gradient around it read as a chunky dark bezel on every tile. Now follows the tile's own arc edge to edge, so the lit band meets the antialiased corner exactly.
+- [x] The dock tray (`gui_rounded_rect_on_wallpaper`) was drawn through the 2x logical layer: every corner step a 2x2 block, AA band two logical pixels. Now drawn at physical resolution with the band scaled to match, blending each edge pixel against the actual wallpaper behind it.
+- [x] Icon supersample 4x -> 6x: three samples per physical pixel per axis at 2x (nine per pixel), visibly cleaner curves on the folder, pin and sun edges.
+- [x] About screen shows the version string, with the one joke a 0.42 release earns.
+- [x] Verified: `check.sh`, `apptest.sh` (15 apps), a real zoomed screendump of the dock before and after.
