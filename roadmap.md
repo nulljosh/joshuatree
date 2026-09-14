@@ -564,3 +564,10 @@ Real queue built up over one long session, reordered by actual priority/risk/dep
 8. **Prerequisite bridge, part 1: minimal PNG decoder** — the biggest, riskiest item, standalone (doesn't block anything else currently queued), deliberately last. First of the three named app-gap prerequisites (image decoder, audio driver, TLS), most tractable of the three, unlocks the most (Photos + Maps rendering) once real.
 
 Re-order this list honestly if a direct request jumps the queue, same as any other item here, this isn't a fixed contract.
+
+## Real direction, not a roadmap item yet: free OS, monetize custom hardware (Sep 2026)
+Direct statement from Joshua on the "what's the business plan" question: the OS stays free, monetization is custom hardware built to run it. Real, coherent shape (same model a lot of hobbyist single-board-computer kits use), worth recording accurately since it reframes what "real hardware" already means elsewhere in this file, not a new, separate idea.
+
+Honest technical gap this implies, checked against what's actually built: everything this kernel currently drives is QEMU's emulated hardware specifically, not a generic PC target. `rtl8139.c` speaks the emulated Realtek NIC QEMU presents, `vmmouse.c` speaks a VMware-specific backdoor port real hardware doesn't have, `vbe.c` speaks QEMU's Bochs VBE interface. None of these map directly to a real board's real chipsets without real driver work, the same class of gap the WiFi note above already named ("driver-level WiFi support only becomes meaningful once this kernel targets real hardware with a real 802.11 card... a genuinely large project on its own"). A custom-hardware business direction means that real-hardware port stops being a someday-idea and becomes the actual target for future driver work, worth keeping in mind when scoping future audio/network/input work: build it portable to a real chipset where realistic, not only against QEMU's emulated one, even while QEMU stays the day-to-day dev target.
+
+Not a coding task, not queued as a task, a real direction recorded honestly for future prioritization calls.
