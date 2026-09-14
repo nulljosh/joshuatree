@@ -206,7 +206,7 @@ svg.append(f'<line x1="{pad_l}" y1="8" x2="{pad_l+14}" y2="8" stroke="var(--line
 svg.append(f'<text x="{pad_l+19}" y="11" font-size="10" fill="var(--label)">Lines of real code</text>')
 legend2_x = pad_l + 150
 svg.append(f'<line x1="{legend2_x}" y1="8" x2="{legend2_x+14}" y2="8" stroke="var(--line2)" stroke-width="2" stroke-dasharray="4 3"/>')
-svg.append(f'<text x="{legend2_x+19}" y="11" font-size="10" fill="var(--label)">% documented</text>')
+svg.append(f'<text x="{legend2_x+19}" y="11" font-size="10" fill="var(--label)">% comment density</text>')
 svg.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l+plot_w}" y2="{pad_t}" stroke="var(--grid)"/>')
 svg.append(f'<text x="2" y="{pad_t+3}" font-size="9" fill="var(--muted)">{max_v}</text>')
 svg.append(f'<line x1="{pad_l}" y1="{pad_t+plot_h//2}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h//2}" stroke="var(--grid)"/>')
@@ -223,7 +223,7 @@ svg.append(f'<polyline points="{points_attr}" fill="none" stroke="var(--line)" s
 svg.append(dots)
 for i in shown:
     svg.append(f'<text x="{xf(i)}" y="{pad_t+plot_h+16}" font-size="10" fill="var(--label)" text-anchor="middle">{short_date(labels[i])}</text>')
-svg.append(f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fill="var(--strong)">{max_v:,} lines &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>')
+svg.append(f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fill="var(--strong)">{max_v:,} lines &#183; {doc_pct[-1]}% comment density &#183; {commit_count} commits since {short_date(points[0][2])}</text>')
 svg.append('</svg>')
 
 out = "".join(svg)
@@ -232,5 +232,5 @@ with open("progress.svg", "w") as f:
 import shutil, os
 os.makedirs("landing", exist_ok=True)
 shutil.copy("progress.svg", "landing/progress.svg")
-print(f"wrote progress.svg: {max_v:,} real lines, {doc_pct[-1]}% documented, across {n} sampled points, {commit_count} total commits")
+print(f"wrote progress.svg: {max_v:,} real lines, {doc_pct[-1]}% comment density, across {n} sampled points, {commit_count} total commits")
 PYEOF
