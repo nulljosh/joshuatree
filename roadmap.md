@@ -189,7 +189,7 @@ Reported as "the demo is missing the clock". It was missing every string it has 
 ## v39 / 0.39.0, a real Trash, and the dock in a deliberate order (Sep 2026)
 Direct requests: "add a trash feature, with the bin in dock", "the apps launchpad should be far left, Finder before it". Real new capability, MINOR bump.
 
-## v40 / 0.40.0, the dock stopped flashing on hover (Sep 2026)
+## v40 / 0.40.0, first dock hover repaint fix (Sep 2026)
 Direct bug report: "icons on dock are flashing when we hover them, redrawing every millisecond." Correct diagnosis in the report, too: it *was* redrawing constantly.
 
 ## v41 / 0.41.0, 1600x1200: icons that are actually sharp (Sep 2026)
@@ -214,7 +214,7 @@ Direct request: "make the wallpaper animated somehow, make the tree blow in the 
 PATCH. Reported from a video within minutes of v45 shipping: the pointer flashed.
 
 ## Desktop QA follow-up (Sep 2026)
-Dock hover frames now compose offscreen and present only changed pixels in the affected slots; real-display confirmation is still pending. App launches use bounded windows with close and back controls. Launchpad uses a translucent panel, and Weather has a native card. The attached FAT16 disk carries readable dotfile copies, not a runnable Fish installation.
+Dock hover frames compose offscreen and present only changed pixels in the affected slots. Intermediate icon frames also skip their opaque background color. **The dock still visibly flashes on hover in the Mac app after these changes; this bug is open.** App launches use bounded windows with close and back controls. Launchpad uses a translucent panel, and Weather has a native card. The attached FAT16 disk carries readable dotfile copies, not a runnable Fish installation.
 
 ## v47 / 0.47.0, real settings, persisted (Sep 2026)
 Direct request: customize the OS from inside the OS, and have it survive a reboot.
