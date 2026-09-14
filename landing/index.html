@@ -6,6 +6,17 @@
 <title>Joshua Tree, a new custom OS</title>
 <meta name="description" content="A fresh, custom operating system built from scratch: its own GUI desktop, network stack, filesystem, and a real text editor. Open, and open to help build.">
 <link rel="icon" href="icon.svg">
+<!-- v52: real perf request ("demo takes half a second, can we make it
+     instant?"). The floor is real WASM instantiation + this kernel's own
+     boot-to-GUI time, not shrinkable from the page side, but the browser
+     was previously discovering these three files only once it parsed the
+     script tags at the very bottom of body, after everything else
+     loaded. preload starts the fetch the instant the HTML itself parses,
+     in parallel with every other page asset, not free but a real,
+     measurable head start on the only part actually addressable here. -->
+<link rel="preload" href="v86/v86.wasm" as="fetch" crossorigin>
+<link rel="preload" href="v86/kernel.elf" as="fetch" crossorigin>
+<link rel="preload" href="v86/libv86.js" as="script">
 <style>
   /* Real palette refresh, not a tweak: the old warm orange/burgundy read
      as pumpkin, Halloween, not the actual target, the real Mojave desert
@@ -72,7 +83,13 @@
   @media (prefers-reduced-motion: reduce) { .scroll-hint::after { animation: none; } }
 
   @media (max-width: 520px) {
-    .hero { padding: 88px 20px 56px; min-height: 70vh; }
+    /* Direct bug report with a screenshot: real dead black space below
+       the dock on a phone, not the demo's own letterbox. 70vh forced the
+       hero taller than its actual content (frosted card + dock) needed,
+       the black beneath is just unused hero background. min-height, not
+       a fixed height, so it still shrinks to fit if content is even
+       shorter, but 40vh caps how much empty box gets reserved up front. */
+    .hero { padding: 72px 20px 40px; min-height: 40vh; }
     .hero h1 { font-size: 34px; }
     .hero p.tagline { font-size: 16px; }
   }
