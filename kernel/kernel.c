@@ -164,6 +164,12 @@ static int gui_getch_or_click(void){
 #define KEY_DOWN  257
 #define KEY_ENTER 258
 #define KEY_ESC   259
+/* v54: left/right (0x4B/0x4D in the same extended block) for Calendar's
+   month stepping. Every existing consumer gates text input on
+   32 <= k < 127, so these new values fall through as ignored keys there,
+   same as up/down always have. */
+#define KEY_LEFT  261
+#define KEY_RIGHT 262
 
 /* v38: same shape as get_key below, but a click (or a tap, which reaches
    the kernel as a real PS/2 click from the browser embed) also counts as
@@ -184,6 +190,8 @@ static int get_key(void){
             do { sc2 = kbd_pop(); if (sc2 < 0) __asm__ volatile ("hlt"); } while (sc2 < 0);
             if (sc2 == 0x48) return KEY_UP;
             if (sc2 == 0x50) return KEY_DOWN;
+            if (sc2 == 0x4B) return KEY_LEFT;
+            if (sc2 == 0x4D) return KEY_RIGHT;
             continue; /* other extended keys: ignore */
         }
         if (sc & 0x80) continue;
@@ -204,6 +212,8 @@ static int get_key_or_click(void){
                 do { sc2 = kbd_pop(); if (sc2 < 0) __asm__ volatile ("hlt"); } while (sc2 < 0);
                 if (sc2 == 0x48) return KEY_UP;
                 if (sc2 == 0x50) return KEY_DOWN;
+                if (sc2 == 0x4B) return KEY_LEFT;
+                if (sc2 == 0x4D) return KEY_RIGHT;
                 continue;
             }
             if (!(sc & 0x80)) {
@@ -618,13 +628,13 @@ static void reboot(void){
    everything else one click away in an Apps folder, the same split macOS
    makes between the Dock and Launchpad. GUI_APP_COUNT is every real app;
    GUI_ICON_COUNT is only what the dock shows. */
-#define GUI_APP_COUNT   18 /* 16 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 16 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       17
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Terminal", "Reminders", "Apps", "Trash"};
+#define GUI_APP_COUNT   19 /* 17 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 17 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       18
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Terminal", "Reminders", "Calendar", "Apps", "Trash"};
 static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
     0x0085144B, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x006B4423,
-    0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x002B2B2B, 0x00375A4A, 0x004A4F57, 0x00566068
+    0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x002B2B2B, 0x00375A4A, 0x00A0553F, 0x004A4F57, 0x00566068
 };
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
@@ -1622,6 +1632,37 @@ static void gui_icon_reminders(int cx, int cy, int s, unsigned int bg){
         gui_draw_capsule(cx - half + 8, y, cx + half, y, s / 20, row == 0 ? gui_blend(ICON_FG, bg) : ICON_FG, bg);
     }
 }
+/* v54: Calendar. A page: rounded body with a solid header band across
+   the top (the tear-off-pad silhouette every calendar icon since System 7
+   has used, instantly readable at dock size), two binder rings punched
+   through the band in the tile's own color, then a real 3x2 grid of
+   faint day squares below, one of them solid to mean "today". Same
+   primitives as the rest of the dock (window_rect for the flat fills,
+   gui_fill_circle for the rings), no bitmap. */
+static void gui_icon_calendar(int cx, int cy, int s, unsigned int bg){
+    int half = s * 3 / 10, band = s / 7, r = s / 40 + 1;
+    int x0 = cx - half, y0 = cy - half, w = 2 * half + 1, h = 2 * half + 1;
+    unsigned int faint = gui_blend(ICON_FG, bg);
+    window_rect(x0, y0, w, h, faint);           /* page body, soft */
+    window_rect(x0, y0, w, band, ICON_FG);      /* header band, solid */
+    for (int cyy = 0; cyy < r; cyy++) {         /* trim the page's four corners */
+        for (int cxx = 0; cxx < r - cyy; cxx++) {
+            window_rect(x0 + cxx, y0 + cyy, 1, 1, bg);
+            window_rect(x0 + w - 1 - cxx, y0 + cyy, 1, 1, bg);
+            window_rect(x0 + cxx, y0 + h - 1 - cyy, 1, 1, bg);
+            window_rect(x0 + w - 1 - cxx, y0 + h - 1 - cyy, 1, 1, bg);
+        }
+    }
+    gui_fill_circle(cx - half / 2, y0 + band / 2, s / 28 + 1, bg, ICON_FG); /* binder rings */
+    gui_fill_circle(cx + half / 2, y0 + band / 2, s / 28 + 1, bg, ICON_FG);
+    int gx = x0 + s / 12, gy = y0 + band + s / 12;                          /* 3x2 day grid */
+    int cell = (w - 2 * (s / 12)) / 3, sq = cell * 3 / 5;
+    for (int row = 0; row < 2; row++)
+        for (int col = 0; col < 3; col++) {
+            int today = (row == 1 && col == 1);
+            window_rect(gx + col * cell + (cell - sq) / 2, gy + row * cell + (cell - sq) / 2, sq, sq, today ? ICON_FG : bg);
+        }
+}
 static void gui_icon_plan(int cx, int cy, int s, unsigned int bg){
     int half = s * 3 / 10;
     for (int row = 0; row < 3; row++) {
@@ -1808,6 +1849,7 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
         case 13: gui_icon_fieldbook(cx_center, cy, size, bg); break;
         case 14: gui_icon_terminal(cx_center, cy, size, bg); break;
         case 15: gui_icon_reminders(cx_center, cy, size, bg); break;
+        case 16: gui_icon_calendar(cx_center, cy, size, bg); break;
         case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
         case GUI_TRASH: gui_icon_trash(cx_center, cy, size, bg); break;
     }
@@ -2312,6 +2354,7 @@ static void gui_launch_chat(void){
 
 #include "editor.h"
 #include "reminders.h"
+#include "calendar.h"
 
 /* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
    dock hover labels, titlebars) read as monospace/typewriter, not the
@@ -2764,6 +2807,7 @@ static void gui_launch(int icon){
     else if (icon == 13) gui_launch_html("Fieldbook", app_fieldbook_html, app_fieldbook_len);
     else if (icon == 14) gui_launch_terminal();
     else if (icon == 15) gui_launch_reminders();
+    else if (icon == 16) gui_launch_calendar();
 }
 
 static void gui_launch_from_dock(int icon){
