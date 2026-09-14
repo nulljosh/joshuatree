@@ -25,6 +25,15 @@
   // v42: the kernel's cursor and layout live in this LOGICAL space; the
   // physical mode is 2x this. Keep in sync with gui_run's window_open_scaled.
   var LOGICAL_W = 960, LOGICAL_H = 540;
+  // v52.6: real shadow cursor position, kept in sync by every real send
+  // this file makes (mousemove, touchmove drags, and moveCursorTo's own
+  // taps below), starting at gui_run's own literal initial (400,300).
+  // See moveCursorTo's own comment for why this replaced homing-every-tap.
+  var trackedKx = 400, trackedKy = 300;
+  function trackCursorDelta(dx, dy) {
+    trackedKx = Math.max(0, Math.min(LOGICAL_W - 1, trackedKx + dx));
+    trackedKy = Math.max(0, Math.min(LOGICAL_H - 1, trackedKy + dy));
+  }
   var screenContainer = document.getElementById("screen_container");
   var screenText = document.getElementById("screen_text");
   var screenCanvas = document.getElementById("screen_canvas");
@@ -181,6 +190,7 @@
     var lscale = screenCanvas.getBoundingClientRect().width / LOGICAL_W; // CSS px per LOGICAL kernel px (v41: canvas is 1600 physical, cursor is 800 logical)
     var dx = ev.movementX / lscale, dy = ev.movementY / lscale;
     emulator.bus.send("mouse-delta", [dx, -dy]); // y inverted, matching v86's own convention exactly
+    trackCursorDelta(dx, dy); // v52.6: keep the tap-to-click shadow position in sync with real mouse drags too, not just its own sends
     ev.stopImmediatePropagation();
   }, true);
 
@@ -209,6 +219,7 @@
       var lscale = screenCanvas.getBoundingClientRect().width / LOGICAL_W;
       var dx = (t.clientX - lastTouchX) / lscale, dy = (t.clientY - lastTouchY) / lscale;
       emulator.bus.send("mouse-delta", [dx, -dy]);
+      trackCursorDelta(dx, dy);
     }
     lastTouchX = t.clientX; lastTouchY = t.clientY;
     ev.stopImmediatePropagation();
@@ -269,16 +280,40 @@
   // cursor (v86's own touch handlers do exactly that) and then every tap
   // landed somewhere wrong, confirmed by reading the kernel's real serial
   // log: the cursor had been slammed to the bottom edge while the shadow
-  // still believed it was centred.
+  // still believed it was centred. The fix at the time was homing to a
+  // known corner before every single tap, self-correcting, no state to
+  // drift, at the real cost of a visible corner-to-target dart on every
+  // tap, still reported directly ("house jumps around, glitch") even
+  // after the click itself landed correctly.
   //
-  // Homing instead of tracking removes the whole class of bug: push far
-  // enough up-left that the kernel's own clamp pins the cursor at exactly
-  // (0,0) no matter where it was, then move to the target from a known
-  // origin. Self-correcting every single tap, no state to drift.
+  // v52.6: back to shadow tracking, but for real this time: the drift
+  // source above was v86's own internal touch listeners double-moving
+  // the cursor behind our back, and that path is now actually closed
+  // (touchend's own `ev.stopImmediatePropagation()`, added since), not
+  // just assumed fixed. `trackedKx/Ky` mirrors the kernel's real cursor
+  // (starts at gui_run's own literal 400,300, the same value the old
+  // homing comment already named) and updates after every send this file
+  // makes, both taps and drags, so it can't fall out of sync with
+  // anything WE do. A periodic real re-home every 8th tap is cheap
+  // insurance against whatever's left uncounted for (the idle tour
+  // reusing this same function already keeps it in sync too, since it
+  // updates the same shared variable), not a sign this is expected to
+  // drift under normal use.
+  var tapsSinceResync = 0;
   function moveCursorTo(kx, ky, done) {
+    kx = Math.max(0, Math.min(LOGICAL_W - 1, kx));
+    ky = Math.max(0, Math.min(LOGICAL_H - 1, ky));
     var packets = [];
-    splitDelta(-(LOGICAL_W + 400), -(LOGICAL_H + 400), packets); // clamps to (0,0) from anywhere on screen
-    splitDelta(kx, ky, packets);
+    var forceResync = (tapsSinceResync >= 8);
+    if (forceResync) {
+      splitDelta(-(LOGICAL_W + 400), -(LOGICAL_H + 400), packets); // clamps to (0,0) from anywhere on screen
+      splitDelta(kx, ky, packets);
+      tapsSinceResync = 0;
+    } else {
+      splitDelta(kx - trackedKx, ky - trackedKy, packets);
+      tapsSinceResync++;
+    }
+    trackedKx = kx; trackedKy = ky;
     sendPaced(packets, done);
   }
   var tapStartX = 0, tapStartY = 0, tapStartT = 0;
