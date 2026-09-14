@@ -271,3 +271,10 @@ Direct requests: "add a trash feature, with the bin in dock", "the apps launchpa
 - [x] Shell: `rm` reports "moved to trash" vs "deleted permanently (too big, or trash full)" honestly; `trash` lists; `restore <n>` recovers. GUI: a Trash app with a real vector bin icon (tapered body, lid, ribs), up/down/r/e keys plus tap-to-close, same touch contract as every other screen.
 - [x] Dock order is now a decision, not accretion: Apps far left, Files second, Trash pinned last, the rest in between.
 - [x] Verified end to end over real VGA memory, not assumed: `write` → `rm` ("moved to trash") → `ls` (gone) → `trash` (listed, 17 bytes) → `restore 0` → `ls` (back) → `cat` (content intact). `check.sh` and `apptest.sh` (15 apps) pass; dock screendump confirms the order and the bin.
+
+## v40 / 0.40.0, the dock stopped flashing on hover (Sep 2026)
+Direct bug report: "icons on dock are flashing when we hover them, redrawing every millisecond." Correct diagnosis in the report, too: it *was* redrawing constantly.
+- [x] Root cause: any change at all, including a 1px cursor jitter while hovering, ran the one repaint path this desktop had: a full 456,000-pixel photo blit, the dock panel, and all eight icons re-rendered through 3x supersampling. With no double buffer, every one of those repaints is visible mid-frame. That's the flash. Every mouse packet triggered it.
+- [x] Fixed with dirty-region rendering, three tiers, cheapest that's correct: a cursor-only move now costs ~340 pixel writes (a real software cursor that saves the 13x13 patch under it via new `window_get_pixel` and puts it back exactly, whatever was there); a hover change repaints only the dock band (`gui_draw_wallpaper_rows` + `gui_draw_dock`); only launches, drags, and menu changes still do the full repaint.
+- [x] `gui_draw_desktop` split into wallpaper + menubar + `gui_draw_dock`, so the dock is repaintable on its own. No behaviour change on the full path.
+- [x] Verified: `check.sh`, `apptest.sh` (15 apps). The Mac dock app restarted on this build so the fix and v39's Trash are both visible live.

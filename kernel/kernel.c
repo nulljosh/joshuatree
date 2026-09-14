@@ -1031,6 +1031,27 @@ static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int 
 }
 
 
+/* v40: a row band, so a partial repaint (the dock band on a hover change)
+   doesn't have to blit the whole photo. Rows are screen rows. */
+static void gui_draw_wallpaper_rows(int y_from, int y_to){
+    int w = (int)window_width(), h = (int)window_height();
+    int area_h = h - GUI_MENUBAR_H;
+    if (y_from < GUI_MENUBAR_H) y_from = GUI_MENUBAR_H;
+    if (y_to > h) y_to = h;
+    for (int y = y_from; y < y_to; y++){
+        int row = y - GUI_MENUBAR_H;
+        int sy = row * WALLPAPER_H / (area_h > 0 ? area_h : 1);
+        if (sy >= WALLPAPER_H) sy = WALLPAPER_H - 1;
+        const unsigned char *src_row = &wallpaper_rgb[sy * WALLPAPER_W * 3];
+        for (int col = 0; col < w; col++){
+            int sx = col * WALLPAPER_W / w;
+            if (sx >= WALLPAPER_W) sx = WALLPAPER_W - 1;
+            const unsigned char *p = &src_row[sx * 3];
+            window_pixel(col, y, ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2]);
+        }
+    }
+}
+
 static void gui_draw_wallpaper(void){
     int w = (int)window_width(), h = (int)window_height();
     int area_h = h - GUI_MENUBAR_H;
@@ -1596,10 +1617,28 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
 /* hover_slot: which slot shows the magnify+label (-1 none). drag_slot: the
    slot currently being dragged, drawn separately so it can float free of
    the row under the cursor instead of at its slot position. */
+/* v40: the dock band's top edge, high enough to cover a magnified,
+   lifted icon and its label, so repainting this band alone is enough to
+   erase any previous hover state. */
+static int gui_dock_band_top(void){ return gui_dock_y0() - DOCK_MAGNIFY - DOCK_LIFT - 24; }
+
+static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my);
+
 static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     gui_draw_wallpaper();
     gui_draw_menubar();
+    gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
+}
 
+/* v40: repaint only the dock band: the wallpaper rows behind it, then the
+   dock itself. This is what a hover change costs now, instead of a full
+   456,000-pixel photo blit plus eight supersampled icons. */
+static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int drag_my){
+    gui_draw_wallpaper_rows(gui_dock_band_top(), (int)window_height());
+    gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
+}
+
+static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     int y0 = gui_dock_y0(), dock_h = DOCK_ICON + 2 * DOCK_PAD, dock_w = gui_dock_w(), dock_x = gui_dock_x0();
 
     /* A soft shadow beneath the tray, the same floating-panel look a real
@@ -1647,6 +1686,29 @@ static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int dra
     }
 }
 
+/* v40: a real software cursor. Save the 13x13 patch it's about to cover,
+   draw, and later put that patch back exactly. Moving the cursor then
+   costs ~340 pixel writes instead of repainting the desktop, which is the
+   whole fix for "icons flash on hover": the flashing WAS the full
+   repaint, visible because there's no double buffer, triggered by every
+   single mouse packet. */
+#define CURSOR_W 13
+#define CURSOR_H 13
+static unsigned int cursor_backup[CURSOR_W * CURSOR_H];
+static int cursor_saved_x = -1, cursor_saved_y = -1;
+static void gui_cursor_restore(void){
+    if (cursor_saved_x < 0) return;
+    for (int j = 0; j < CURSOR_H; j++)
+        for (int i = 0; i < CURSOR_W; i++)
+            window_pixel(cursor_saved_x + i, cursor_saved_y + j, cursor_backup[j * CURSOR_W + i]);
+    cursor_saved_x = cursor_saved_y = -1;
+}
+static void gui_cursor_save(int x, int y){
+    for (int j = 0; j < CURSOR_H; j++)
+        for (int i = 0; i < CURSOR_W; i++)
+            cursor_backup[j * CURSOR_W + i] = window_get_pixel(x + i, y + j);
+    cursor_saved_x = x; cursor_saved_y = y;
+}
 static void gui_draw_cursor(int x, int y){
     window_rect(x, y, 3, 13, 0x001C1C1E);
     window_rect(x, y, 13, 3, 0x001C1C1E);
@@ -2297,6 +2359,8 @@ static void gui_run(void){
     int last_mx = mx, last_my = my, last_hover = -1, last_drag = -1, last_menu_open = 0, last_menu_hover = -2;
     gui_menubar_force_redraw(); /* this GUI session's first frame, the minute-change gate must not skip it */
     gui_draw_desktop(-1, -1, 0, 0);
+    cursor_saved_x = cursor_saved_y = -1;
+    gui_cursor_save(mx, my);
     gui_draw_cursor(mx, my);
     for (;;) {
         __asm__ volatile ("hlt");
@@ -2362,24 +2426,36 @@ static void gui_run(void){
            which doesn't eliminate tearing (still no double buffering, an
            honest, separate, larger limitation) but makes it rare instead
            of constant. */
-        if (launched || mx != last_mx || my != last_my || hover_slot != last_hover || drag_slot != last_drag || menu_open != last_menu_open || menu_hover != last_menu_hover) {
-            /* Real, user-reported bug, reproduced live: hovering the cursor
-               over the menu bar left a jagged trail of ghost cursors there.
-               Root cause: the menu bar's own minute-change gate (above)
-               means it only repaints when the clock ticks over, but the
-               cursor is drawn directly on top of it every frame regardless.
-               Everywhere else on screen gui_draw_wallpaper repaints every
-               row every frame, which erases the previous cursor draw for
-               free; the menu bar's rows are the one band nothing repaints
-               on a normal frame, so old cursor pixels never get cleared
-               while the mouse is up there. Forcing a real menu bar redraw
-               whenever the cursor is entering, moving within, or leaving
-               that band (not just on the minute) fixes it at the source
-               instead of special-casing the cursor draw itself. */
+        /* v40: three tiers of repaint, cheapest that's correct.
+           Before this, ANY change, including a 1px cursor jitter, ran the
+           full path below (whole photo blit + dock + eight supersampled
+           icons) with no double buffer to hide it, which is exactly the
+           "icons flash when I hover" report: the flashing was the
+           repaint. */
+        int cursor_only = !launched && (mx != last_mx || my != last_my)
+                          && hover_slot == last_hover && drag_slot == last_drag
+                          && menu_open == last_menu_open && menu_hover == last_menu_hover;
+        int dock_only = !launched && !cursor_only && drag_slot < 0 && last_drag < 0
+                        && !menu_open && !last_menu_open
+                        && hover_slot != last_hover;
+        if (cursor_only) {
+            gui_cursor_restore();
+            if (my < GUI_MENUBAR_H || last_my < GUI_MENUBAR_H) { gui_menubar_force_redraw(); gui_draw_menubar(); }
+            gui_cursor_save(mx, my);
+            gui_draw_cursor(mx, my);
+            last_mx = mx; last_my = my;
+        } else if (dock_only) {
+            gui_cursor_restore();
+            gui_redraw_dock_band(hover_slot, drag_slot, mx, my);
+            gui_cursor_save(mx, my);
+            gui_draw_cursor(mx, my);
+            last_mx = mx; last_my = my; last_hover = hover_slot;
+        } else if (launched || mx != last_mx || my != last_my || hover_slot != last_hover || drag_slot != last_drag || menu_open != last_menu_open || menu_hover != last_menu_hover) {
             if (my < GUI_MENUBAR_H || last_my < GUI_MENUBAR_H) gui_menubar_force_redraw();
+            cursor_saved_x = cursor_saved_y = -1; /* the full repaint replaces whatever the backup held */
             gui_draw_desktop(hover_slot, drag_slot, mx, my);
             if (menu_open) gui_draw_apple_menu(menu_hover);
-            if (drag_slot < 0) gui_draw_cursor(mx, my);
+            if (drag_slot < 0) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
             last_mx = mx; last_my = my; last_hover = hover_slot; last_drag = drag_slot;
             last_menu_open = menu_open; last_menu_hover = menu_hover;
         }

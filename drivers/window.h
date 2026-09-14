@@ -35,4 +35,5 @@ unsigned int window_height(void);
    nothing in this kernel needs to nest two offscreen targets. */
 void window_push_target(unsigned int *buf, unsigned int w, unsigned int h);
 void window_pop_target(void);
+unsigned int window_get_pixel(int x, int y);
 #endif

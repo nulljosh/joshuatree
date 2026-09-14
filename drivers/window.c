@@ -57,5 +57,16 @@ void window_rect(int x, int y, int w, int h, u32 color) {
             window_pixel(xx, yy, color);
 }
 
+/* v40: read-back, so a software cursor can save what it's about to cover
+   and put it back exactly, whatever it was (wallpaper, dock, an icon). */
+u32 window_get_pixel(int x, int y) {
+    if (target_fb) {
+        if (x < 0 || y < 0 || (u32)x >= target_w || (u32)y >= target_h) return 0;
+        return target_fb[(u32)y * target_w + (u32)x];
+    }
+    if (x < 0 || y < 0 || (u32)x >= win_w || (u32)y >= win_h) return 0;
+    return fb[(u32)y * win_w + (u32)x];
+}
+
 u32 window_width(void)  { return target_fb ? target_w : win_w; }
 u32 window_height(void) { return target_fb ? target_h : win_h; }
