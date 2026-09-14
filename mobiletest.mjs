@@ -9,6 +9,13 @@
 // actually gets, including the deployed kernel.elf, not a local build that
 // may differ. Pass a URL to test somewhere else.
 //
+// v62: also checks the absolute-pointer path. The page exposes whether the
+// kernel enabled v86's VMware absolute-mouse backdoor (`__jt.absolute`) and
+// the kernel's own serial log (`__jt.serial`), so this can assert that the
+// GUEST saw an absolute packet, not just that the page sent one, and it
+// times how long a dock tap takes to open an app: the whole point of the
+// change is that the pointer no longer walks there first.
+//
 // Usage: node mobiletest.mjs [url]
 import { chromium, devices } from 'playwright';
 
@@ -61,38 +68,71 @@ async function fingerprint() {
     return { sum, light };
   });
 }
+const state = () => page.evaluate(() => window.__jt ? { ready: __jt.ready, focused: __jt.focused, mouseOn: __jt.mouseOn, absolute: __jt.absolute } : 'no hook');
+const serialLines = (needle) => page.evaluate(n => (window.__jt && __jt.serial || '').split('\n').filter(l => l.includes(n)), needle);
 
-console.log('input state:', JSON.stringify(await page.evaluate(() => window.__jt ? {ready:__jt.ready, focused:__jt.focused, mouseOn:__jt.mouseOn} : 'no hook')));
+console.log('input state:', JSON.stringify(await state()));
+console.log('kernel serial (vmmouse):', JSON.stringify(await serialLines('vmmouse')));
+
+// Tap once to focus/enable input (the embed gates input behind a real
+// tap), then tap a dock icon. The focus tap also stops the idle tour and,
+// if the tour already had an app open (it opens Files ~6.5s after
+// graphical mode, i.e. before this script's own settle wait is over),
+// closes it, since a click anywhere closes an app view. So `before` is
+// sampled AFTER this tap, on the settled desktop: v62 caught the earlier
+// version of this script sampling `before` with the tour's Files view
+// still open, which made "the app closed" indistinguishable from "an app
+// opened" and passed for the wrong reason.
+const box = await canvas.boundingBox();
+await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+const absolute = (await state()).absolute === true;
+// Relative fallback: let the paced homing+travel finish before the next
+// tap. Absolute: the pointer is already there, a beat is plenty.
+await page.waitForTimeout(absolute ? 1500 : 5000);
 console.log('before tap:', await shot('1-desktop'));
 const before = await fingerprint();
 console.log('  fingerprint', JSON.stringify(before));
 
-// Tap once to focus/enable input (the embed gates input behind a real
-// tap), then tap a dock icon.
-const box = await canvas.boundingBox();
-await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
-await page.waitForTimeout(5000); // let the paced homing+travel finish before the next tap
-
-// Dock icons sit along the bottom of the kernel's own 800x600 output,
-// centred. Icon 0 (Terminal) is the leftmost of 7. Compute in kernel
-// coordinates, then map into the canvas's real on-screen box.
-const KW = 960, KH = 540; // logical kernel space (physical is 2x)
-const ICON = 60, GAP = 6, PAD = 10, COUNT = 7, MARGIN_BOT = 24;
+// Dock geometry in LOGICAL kernel pixels, the same arithmetic as
+// kernel.c's gui_dock_icon/gui_dock_x0/gui_slot_x (v59: 10 slots; v52:
+// default dock_scale_pct 7, so a tile is floor(540*7/100) = 37px, well
+// under the DOCK_BUDGET width cap). Slot 1 is Files (slot 0 is the Apps
+// folder). A fresh v86 boot has no SETTINGS.TXT, so the default scale is
+// what's really on screen.
+const KW = 960, KH = 540;
+const ICON = Math.floor(KH * 7 / 100), GAP = 6, PAD = 10, COUNT = 10, MARGIN_BOT = 24, SLOT = 1;
 const dockW = COUNT * ICON + (COUNT - 1) * GAP + 2 * PAD;
-const dockX0 = (KW - dockW) / 2;
-const iconCX = dockX0 + PAD + ICON / 2;          // centre of icon 0
-const iconCY = KH - MARGIN_BOT - PAD - ICON / 2; // vertical centre of the icon row
+const dockX0 = Math.floor((KW - dockW) / 2);
+const iconCX = dockX0 + PAD + SLOT * (ICON + GAP) + ICON / 2;
+const iconCY = KH - ICON - 2 * PAD - MARGIN_BOT + PAD + ICON / 2;
 
 const sx = box.x + (iconCX / KW) * box.width;
 const sy = box.y + (iconCY / KH) * box.height;
-console.log(`tapping dock icon 0 at kernel (${iconCX.toFixed(0)},${iconCY.toFixed(0)}) -> screen (${sx.toFixed(0)},${sy.toFixed(0)})`);
+console.log(`tapping dock slot ${SLOT} at kernel (${iconCX.toFixed(0)},${iconCY.toFixed(0)}) -> screen (${sx.toFixed(0)},${sy.toFixed(0)}), absolute=${absolute}`);
 
+const t0 = Date.now();
 await page.touchscreen.tap(sx, sy);
-await page.waitForTimeout(9000);
-console.log('input state after taps:', JSON.stringify(await page.evaluate(() => window.__jt ? {ready:__jt.ready, focused:__jt.focused, mouseOn:__jt.mouseOn} : 'no hook')));
+// Poll instead of sleeping a fixed 9s: the time until the app view shows
+// up is the real number this change is about.
+let after = before, openedAt = -1;
+const looksOpened = (a, b) => a.light > b.light * 2 + 50 || a.light < b.light / 2;
+while (Date.now() - t0 < 9000) {
+  await page.waitForTimeout(100);
+  after = await fingerprint();
+  if (looksOpened(after, before)) { openedAt = Date.now() - t0; break; }
+}
+// A transient (one mid-redraw frame) must not count: the app view has to
+// still be there a second and a half later.
+if (openedAt >= 0) {
+  await page.waitForTimeout(1500);
+  const settled = await fingerprint();
+  if (!looksOpened(settled, before)) { console.log('  transient only: screen went back to', JSON.stringify(settled)); openedAt = -1; }
+  after = settled;
+}
+console.log('input state after taps:', JSON.stringify(await state()));
+console.log('kernel serial (vmmouse):', JSON.stringify(await serialLines('vmmouse')));
 
 console.log('after tap:', await shot('2-after-tap'));
-const after = await fingerprint();
 console.log('  fingerprint', JSON.stringify(after));
 
 // An app view clears the whole screen to one flat colour, so a real
@@ -102,12 +142,17 @@ console.log('  fingerprint', JSON.stringify(after));
 // for "got brighter" and therefore reported a working Terminal launch as
 // a failure. The desktop photo never looks like either extreme.
 const changed = Math.abs(after.sum - before.sum) > before.sum * 0.05;
-const opened = after.light > before.light * 2 + 50 || after.light < before.light / 2;
+const opened = looksOpened(after, before);
+const guestSawAbsolute = (await serialLines('vmmouse: first absolute packet')).length > 0;
 console.log('\nRESULT');
 console.log('  screen changed at all :', changed);
 console.log('  looks like an app view:', opened, `(light px ${before.light} -> ${after.light})`);
+console.log('  tap to app view       :', openedAt >= 0 ? openedAt + 'ms' : 'never');
+console.log('  guest absolute mode   :', absolute, guestSawAbsolute ? '(kernel logged a real absolute packet)' : '(kernel never logged an absolute packet)');
 if (logs.length) console.log('  console:', logs.slice(-8).join(' | '));
-console.log(opened ? '\nPASS: a tap on the dock opened an app' : '\nFAIL: tapping the dock did not open an app');
+if (process.env.JT_SERIAL) { console.log('--- full kernel serial log'); console.log(await page.evaluate(() => window.__jt ? __jt.serial : '')); }
+const pass = opened && (!absolute || guestSawAbsolute);
+console.log(pass ? '\nPASS: a tap on the dock opened an app' : '\nFAIL: tapping the dock did not open an app');
 
 await browser.close();
-process.exit(opened ? 0 : 1);
+process.exit(pass ? 0 : 1);

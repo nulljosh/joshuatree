@@ -19,6 +19,7 @@
 #include "pci.h"
 #include "vbe.h"
 #include "mouse.h"
+#include "vmmouse.h"
 #include "window.h"
 #include "font.h"
 #include "rtl8139.h"
@@ -2359,6 +2360,7 @@ static void gui_app_mouse_tick(void){
     window_clear_viewport();
     gui_cursor_restore();
     app_cursor_x += dx; app_cursor_y += dy;
+    mouse_get_absolute(&app_cursor_x, &app_cursor_y, (int)window_width(), (int)window_height()); /* v62: absolute pointer wins over the relative walk when the backdoor is live; viewport already cleared above, so this is the full screen */
     if (app_cursor_x < 0) app_cursor_x = 0;
     if (app_cursor_y < 0) app_cursor_y = 0;
     if (app_cursor_x > (int)window_width() - CURSOR_W) app_cursor_x = (int)window_width() - CURSOR_W;
@@ -3341,6 +3343,7 @@ static void gui_run(void){
         int moved_mouse = mouse_get_delta(&dx, &dy, &buttons);
         if (moved_mouse) {
             mx += dx; my += dy;
+            mouse_get_absolute(&mx, &my, (int)window_width(), (int)window_height()); /* v62: a tap lands exactly here, no travel */
             if (mx < 0) mx = 0; if ((unsigned)mx >= window_width())  mx = (int)window_width() - 1;
             if (my < 0) my = 0; if ((unsigned)my >= window_height()) my = (int)window_height() - 1;
         }
@@ -4060,6 +4063,7 @@ static void run(char *line){
                 int dx, dy;
                 if (mouse_get_delta(&dx, &dy, &buttons)) {
                     cx_pos += dx; cy_pos += dy;
+                    mouse_get_absolute(&cx_pos, &cy_pos, (int)window_width(), (int)window_height());
                     if (cx_pos < 0) cx_pos = 0; if ((unsigned)cx_pos >= window_width())  cx_pos = window_width() - 1;
                     if (cy_pos < 0) cy_pos = 0; if ((unsigned)cy_pos >= window_height()) cy_pos = window_height() - 1;
                 }
@@ -4087,6 +4091,11 @@ void kmain(unsigned int multiboot_info_addr){
     klog("irq_install: PIC remapped, PIT/keyboard IRQs live");
     mouse_init();
     klog("mouse_init: PS/2 mouse enabled");
+    /* v62: probe the VMware absolute-pointer backdoor (port 0x5658). v86
+       and QEMU's default pc machine both answer; bare hardware and
+       -machine vmport=off don't, and PS/2 relative stays the only mouse. */
+    klog(vmmouse_init() ? "vmmouse_init: VMware backdoor answered, absolute pointer on"
+                        : "vmmouse_init: no backdoor, PS/2 relative pointer only");
     font_init(); /* must run while still in plain VGA text mode, before any window_open */
     klog("font_init: CP437 glyphs dumped from VGA hardware");
     pmm_init(multiboot_info_addr);

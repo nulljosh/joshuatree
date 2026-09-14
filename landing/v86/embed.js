@@ -34,6 +34,38 @@
     trackedKx = Math.max(0, Math.min(LOGICAL_W - 1, trackedKx + dx));
     trackedKy = Math.max(0, Math.min(LOGICAL_H - 1, trackedKy + dy));
   }
+  // v62: absolute pointer. The kernel now speaks the VMware absolute-mouse
+  // backdoor (drivers/vmmouse.c), the same protocol v86 implements in
+  // src/vmware.js (read in the vendored libv86.js, not assumed): once the
+  // guest enables it, v86 fires "vmware-absolute-mouse" true on the bus,
+  // and from then on a "mouse-absolute" [x, y, w, h] send puts the guest's
+  // pointer at exactly x/w, y/h of the screen in one packet, no relative
+  // walk, no shadow-cursor bookkeeping, no drift to insure against. The
+  // shadow tracking above stays only as the fallback for a kernel that
+  // never advertises it (an older kernel.elf, or the backdoor probe
+  // failing), so nothing here is worse than before if that ever happens.
+  var absoluteMouse = false; // set by the bus listener registered right after `new V86()` below, the emulator doesn't exist yet up here
+  function sendAbsolute(kx, ky) {
+    kx = Math.max(0, Math.min(LOGICAL_W - 1, Math.round(kx)));
+    ky = Math.max(0, Math.min(LOGICAL_H - 1, Math.round(ky)));
+    // Pixel CENTRE on the wire: v86 rounds x/w to 0..65535 and the kernel
+    // floors (v * w) >> 16 back to a pixel, and only a centre survives
+    // both roundings landing on exactly this pixel, never the one before.
+    emulator.bus.send("mouse-absolute", [kx + 0.5, ky + 0.5, LOGICAL_W, LOGICAL_H]);
+    trackedKx = kx; trackedKy = ky; // keep the fallback's shadow honest too, in case the mode ever flips back
+  }
+  // A client-space point (a touch or a mouse position) to LOGICAL kernel
+  // pixels, measured against the canvas's own live box (see resizeCanvas
+  // below for why the canvas, never the container).
+  function clientToKernel(cx, cy) {
+    var r = screenCanvas.getBoundingClientRect();
+    return [(cx - r.left) / r.width * LOGICAL_W, (cy - r.top) / r.height * LOGICAL_H];
+  }
+  // The kernel's own serial log, captured from the first byte so a QA
+  // script (mobiletest.mjs) can read what the guest actually reported,
+  // e.g. whether the backdoor probe found v86's vmmouse and whether an
+  // absolute packet really arrived, not just whether the page sent one.
+  var serialLog = "";
   var screenContainer = document.getElementById("screen_container");
   var screenText = document.getElementById("screen_text");
   var screenCanvas = document.getElementById("screen_canvas");
@@ -60,6 +92,14 @@
     // "typing in the search bar" and "typing into someone else's kernel".
     emulator.keyboard_adapter.emu_enabled = false;
     emulator.mouse_adapter.emu_enabled = false;
+  });
+  // v62: both registered here, after the constructor, because add_listener
+  // is the emulator's own bus. Registering before "emulator-ready" is fine
+  // and necessary: the serial log starts at the first boot byte, and the
+  // kernel enables the backdoor a few ms into boot, long before ready.
+  emulator.add_listener("vmware-absolute-mouse", function (on) { absoluteMouse = !!on; });
+  emulator.add_listener("serial0-output-byte", function (b) {
+    if (serialLog.length < 65536) serialLog += String.fromCharCode(b);
   });
 
   var focused = false;
@@ -116,11 +156,17 @@
     get ready() { return adaptersReady; },
     get focused() { return focused; },
     get mouseOn() { return !!(emulator.mouse_adapter && emulator.mouse_adapter.emu_enabled); },
+    get absolute() { return absoluteMouse; }, /* v62: did the kernel enable v86's vmmouse backdoor */
+    get serial() { return serialLog; },
     click: function () {
       emulator.bus.send("mouse-click", [true, false, false]);
       setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 60);
     },
-    move: function (dx, dy) { emulator.bus.send("mouse-delta", [dx, -dy]); }
+    move: function (dx, dy) {
+      if (absoluteMouse) { sendAbsolute(trackedKx + dx, trackedKy + dy); return; }
+      emulator.bus.send("mouse-delta", [dx, -dy]);
+    },
+    moveTo: function (kx, ky) { sendAbsolute(kx, ky); }
   };
 
   // Real bug, reported directly ("the cursor is really misplaced... ten
@@ -200,6 +246,16 @@
   screenContainer.addEventListener("mousemove", function (ev) {
     if (!focused || !emulator.mouse_adapter || !emulator.mouse_adapter.emu_enabled) return;
     if (document.pointerLockElement) return; // pointer-locked play (a real click-drag drag) already reports device-independent deltas v86 handles correctly on its own
+    if (absoluteMouse) {
+      // v62: the kernel's pointer sits exactly under the real one, so
+      // scale drift can't exist by construction; v86's own adapter would
+      // send the same event measured against the CONTAINER box, which is
+      // the wrong rectangle whenever cover/contain has resized the canvas.
+      var kp = clientToKernel(ev.clientX, ev.clientY);
+      sendAbsolute(kp[0], kp[1]);
+      ev.stopImmediatePropagation();
+      return;
+    }
     var lscale = screenCanvas.getBoundingClientRect().width / LOGICAL_W; // CSS px per LOGICAL kernel px (v41: canvas is 1600 physical, cursor is 800 logical)
     var dx = ev.movementX / lscale, dy = ev.movementY / lscale;
     emulator.bus.send("mouse-delta", [dx, -dy]); // y inverted, matching v86's own convention exactly
@@ -228,6 +284,15 @@
     if (!focused || !emulator.mouse_adapter || !emulator.mouse_adapter.emu_enabled) return;
     var t = ev.changedTouches && ev.changedTouches[ev.changedTouches.length - 1];
     if (!t) return;
+    if (absoluteMouse) {
+      // v62: a finger drag steers the pointer to wherever the finger IS,
+      // not by how far it moved, so a drag can never lag or overshoot.
+      var kp = clientToKernel(t.clientX, t.clientY);
+      sendAbsolute(kp[0], kp[1]);
+      lastTouchX = t.clientX; lastTouchY = t.clientY;
+      ev.stopImmediatePropagation();
+      return;
+    }
     if (lastTouchX !== null) {
       var lscale = screenCanvas.getBoundingClientRect().width / LOGICAL_W;
       var dx = (t.clientX - lastTouchX) / lscale, dy = (t.clientY - lastTouchY) / lscale;
@@ -320,10 +385,23 @@
   // only from the idle tour's own calls (`allowResync: true`), where
   // cursor motion is already the point of what's on screen, a resync
   // dart there reads as part of the demo, not a bug in it.
+  //
+  // v62: with the absolute backdoor live none of the above applies. One
+  // "mouse-absolute" send IS the position; the only wait left is for the
+  // guest to poll it (the kernel polls the backdoor from its GUI loop,
+  // woken at worst every 10ms by its own 100Hz timer, since v86 raises no
+  // IRQ for an absolute move), so `done` fires after two frames instead
+  // of after a paced multi-packet walk. The paced relative path below is
+  // untouched and still runs when the kernel never advertised support.
   var toursSinceResync = 0;
   function moveCursorTo(kx, ky, done, allowResync) {
     kx = Math.max(0, Math.min(LOGICAL_W - 1, kx));
     ky = Math.max(0, Math.min(LOGICAL_H - 1, ky));
+    if (absoluteMouse) {
+      sendAbsolute(kx, ky);
+      if (done) setTimeout(done, 32);
+      return;
+    }
     var packets = [];
     var forceResync = allowResync && (toursSinceResync >= 4);
     if (forceResync) {
@@ -348,6 +426,19 @@
     // A tap, not a drag: a short press that barely moved. Drags are the
     // cursor-steering gesture above and must not also fire a click.
     if (moved > 12 || Date.now() - tapStartT > 500) return;
+    // v62: a browser follows a tap with synthesized mousedown/mouseup
+    // (touch compatibility events), and v86's own adapter listens for
+    // those on `window` and turns them into a SECOND click, at the same
+    // instant as the tap. Caught in the kernel's own serial trace under
+    // mobiletest.mjs: every tap arrived as two press/release pairs. On
+    // the old path the extra pair was (accidentally) always lost to the
+    // kernel reading both packets in one poll; with the driver no longer
+    // losing clicks, it would open an app and immediately close it.
+    // preventDefault on touchend is the standard way to suppress those
+    // compatibility events, and it never affects scrolling (that's
+    // touchstart/touchmove, deliberately left passive above). Only for a
+    // handled tap: drags return above without touching the default.
+    ev.preventDefault();
     // v41: the kernel's cursor lives in LOGICAL 800x600 coordinates no
     // matter what physical mode it opened (it's 1600x1200 now, drawn 2x),
     // so map by fraction of the canvas box, not by physical pixels.
@@ -365,9 +456,9 @@
         // missed entirely.
         emulator.bus.send("mouse-click", [true, false, false]);
         setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 80);
-      }, 120);
+      }, absoluteMouse ? 40 : 120); // v62: nothing is still travelling in absolute mode, only the guest's next poll to wait for
     });
-  }, { capture: true, passive: true });
+  }, { capture: true, passive: false }); // v62: passive:false so the tap's preventDefault above is honoured (touchend has no scroll to block)
 
   // Toggle between the text and graphical screen elements: v86 keeps both
   // in the DOM and expects the embedder to show whichever is active. The
@@ -419,13 +510,21 @@
   // input) and deliberately never presses Enter, leaving the reply-over-
   // network step for the real native app where a real Ollama server
   // actually answers it.
+  //
+  // v62: each step names its real dock SLOT. Found while verifying the
+  // absolute pointer, by arithmetic against kernel.c's own dock layout
+  // (v59 grew the dock to 10 tiles in the stock-macOS order Apps, Files,
+  // Mail, Calendar, Notes, Reminders, Terminal, Chat, Weather, Trash; v52
+  // trimmed tiles to 7% of the height): the old "slots 1..6 in this list's
+  // order" assumption had the tour typing `help` into Mail and "what can
+  // you do?" into Reminders. Curbfind is no longer pinned since v59, so
+  // it's out of the tour rather than aimed at a tile that isn't there.
   var TOUR_APPS = [
-    { name: 'Files' },
-    { name: 'Terminal', text: 'help\n', settle: 500 },
-    { name: 'Notes', text: 'A real OS, from scratch.' },
-    { name: 'Chat', text: 'what can you do?' }, // no \n, see note above
-    { name: 'Weather' },
-    { name: 'Curbfind' }
+    { name: 'Files', slot: 1 },
+    { name: 'Terminal', slot: 6, text: 'help\n', settle: 500 },
+    { name: 'Notes', slot: 4, text: 'A real OS, from scratch.' },
+    { name: 'Chat', slot: 7, text: 'what can you do?' }, // no \n, see note above
+    { name: 'Weather', slot: 8 }
   ];
   var tourTimer = 0, tourRunning = false;
   function stopAutoplay() { if (tourTimer) { clearTimeout(tourTimer); tourTimer = 0; } tourRunning = false; }
@@ -468,16 +567,20 @@
   }
   function startTourWhenReady() {
     if (focused) return;
-    // Dock geometry in LOGICAL kernel pixels, same constants as kernel.c:
-    // 8 slots, icons 10% of height, gap 6, pad 10, bottom margin 24.
-    var icon = Math.floor(LOGICAL_H * 10 / 100), gap = 6, pad = 10, count = 8, marginBot = 24;
+    // Dock geometry in LOGICAL kernel pixels, the same arithmetic as
+    // kernel.c's gui_dock_icon/gui_dock_x0/gui_slot_x: 10 slots, tiles
+    // dock_scale_pct (default 7) percent of the height capped by the 740px
+    // DOCK_BUDGET, gap 6, pad 10, bottom margin 24. A fresh v86 boot has no
+    // SETTINGS.TXT, so the default scale is what's actually on screen.
+    var count = 10, gap = 6, pad = 10, marginBot = 24, budget = 740;
+    var icon = Math.floor(LOGICAL_H * 7 / 100);
+    var maxByWidth = Math.floor((budget - 2 * pad - (count - 1) * gap) / count);
+    if (icon > maxByWidth) icon = maxByWidth;
+    if (icon < 16) icon = 16;
     var dockW = count * icon + (count - 1) * gap + 2 * pad;
     var x0 = Math.floor((LOGICAL_W - dockW) / 2) + pad + Math.floor(icon / 2);
     var cy = LOGICAL_H - marginBot - pad - Math.floor(icon / 2);
-    // slots 1..6: Files, Terminal, Notes, Chat, Weather, Curbfind (skip
-    // Apps and Trash), same order TOUR_APPS above describes each step for.
-    var order = [];
-    for (var slot = 1; slot <= 6; slot++) order.push([x0 + slot * (icon + gap), cy]);
+    var order = TOUR_APPS.map(function (a) { return [x0 + a.slot * (icon + gap), cy]; });
     tourStep(0, order);
   }
   // Boot takes a few seconds; the tour waits for graphical mode plus a

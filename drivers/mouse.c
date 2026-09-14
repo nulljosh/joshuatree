@@ -2,6 +2,7 @@
    the keyboard already uses (ports 0x60/0x64), just addressed through the
    0xD4 "write to the mouse, not the keyboard" prefix. */
 #include "mouse.h"
+#include "vmmouse.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -53,6 +54,25 @@ static int packet_index = 0;
 static int accum_dx = 0, accum_dy = 0, last_buttons = 0;
 static int dirty = 0;
 
+/* Once the VMware backdoor is live it owns position AND buttons. The
+   PS/2 stream still has to be parsed byte for byte so the 3-byte phase
+   never slips, but its contents are deliberately thrown away: QEMU's
+   vmmouse announces every queued packet by faking a PS/2 event through
+   the 8042 (ps2_mouse_fake_event, a real dx=+1 packet, purely so IRQ12
+   fires and a driver wakes to poll), which a driver that kept honouring
+   PS/2 deltas would read as a one-pixel drift right on every single host
+   event. QEMU also routes button events only to the active (absolute)
+   handler, so PS/2's button bits stay stale there; the backdoor's own
+   status word is the one source of truth for both. */
+static void vmmouse_fold(void) {
+    if (!vmmouse_active()) return;
+    if (!vmmouse_pump()) return;
+    int rdx, rdy;
+    if (vmmouse_take_relative(&rdx, &rdy)) { accum_dx += rdx; accum_dy += -rdy; }
+    last_buttons = vmmouse_buttons();
+    dirty = 1;
+}
+
 void mouse_handle_byte(u8 byte) {
     /* byte 0 of a real packet always has bit3 set; resync if we're out of
        phase (e.g. IRQ12 fired once for something that wasn't a real packet
@@ -62,6 +82,8 @@ void mouse_handle_byte(u8 byte) {
     packet[packet_index++] = byte;
     if (packet_index < 3) return;
     packet_index = 0;
+
+    if (vmmouse_active()) return; /* phase kept, contents ignored, see vmmouse_fold */
 
     int x_sign = packet[0] & 0x10;
     int y_sign = packet[0] & 0x20;
@@ -76,6 +98,7 @@ void mouse_handle_byte(u8 byte) {
 }
 
 int mouse_get_delta(int *dx, int *dy, int *buttons) {
+    vmmouse_fold();
     *dx = accum_dx;
     *dy = accum_dy;
     *buttons = last_buttons;
@@ -84,15 +107,33 @@ int mouse_get_delta(int *dx, int *dy, int *buttons) {
     return was_dirty;
 }
 
+int mouse_get_absolute(int *x, int *y, int w, int h) {
+    unsigned int ax, ay;
+    if (!vmmouse_take_absolute(&ax, &ay)) return 0;
+    /* 0..65535 across the screen -> 0..w-1. Same x*w>>16 the X.org vmmouse
+       driver and Linux's evdev consumers use; the sender puts the pixel
+       CENTRE on the wire, so this floors back onto exactly that pixel. */
+    *x = (int)((ax * (unsigned int)w) >> 16);
+    *y = (int)((ay * (unsigned int)h) >> 16);
+    return 1;
+}
+
 static int edge_baseline = 0;
 
 void mouse_click_edge_sync(void) {
+    vmmouse_fold();
+    vmmouse_take_presses(); /* a press already in the stream (the click that opened this app) is the baseline, not a fresh click */
     edge_baseline = last_buttons & 1;
 }
 
 int mouse_click_edge(void) {
+    vmmouse_fold(); /* v86 raises no IRQ for backdoor packets: a wait loop that only reads this must poll for itself */
     int now = last_buttons & 1;
-    int fired = now && !edge_baseline;
+    /* Sampled edge (the PS/2 path, unchanged) OR a press the backdoor
+       driver counted in its packet stream: the latter is what survives a
+       press+release landing in one poll, see vmmouse_pump. Never both for
+       the same press: a press the sample sees is the same one counted. */
+    int fired = (now && !edge_baseline) || vmmouse_take_presses() > 0;
     edge_baseline = now;
     return fired;
 }

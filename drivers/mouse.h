@@ -14,6 +14,13 @@ void mouse_handle_byte(unsigned char byte);
    nothing happened (dx/dy/buttons are still written either way, just 0). */
 int mouse_get_delta(int *dx, int *dy, int *buttons);
 
+/* Absolute position, only when the VMware backdoor (vmmouse.h) is live
+   and a new packet arrived since the last call: writes the pointer's
+   position scaled into a w x h pixel space and returns 1. Returns 0 (x/y
+   untouched) on plain PS/2 hardware, so callers apply the relative delta
+   first and then let this override it, and the same code runs on both. */
+int mouse_get_absolute(int *x, int *y, int w, int h);
+
 /* Edge-triggered left-click detection, separate from mouse_get_delta's own
    continuous "is it currently held" reporting (which real dragging needs).
    Real, reported bug this exists to fix: a "click to close" check that
