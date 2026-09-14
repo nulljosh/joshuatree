@@ -157,6 +157,27 @@ static void mail_read_message(int idx) {
     }
 }
 
+/* Deletes message `sel`, shifting everything after it down one slot.
+   Field-by-field, not a whole-struct assignment: this struct is large
+   enough (~320 bytes) that clang can lower `a = b` to a real call to
+   memcpy, a libc symbol this freestanding build doesn't link, the same
+   reason reminders.h's own delete loop shifts its plain char array one
+   field at a time instead of relying on a builtin. Pulled out on its own
+   (v59 test gap fix) so mailtest can exercise the exact same shift path
+   the UI's 'd' key runs, not a re-typed copy that could drift from it. */
+static void mail_delete_at(int sel) {
+    if (sel < 0 || sel >= mail_count) return;
+    for (int j = sel; j < mail_count - 1; j++) {
+        mail_msg_t *dst = &mail_msgs[j], *src = &mail_msgs[j + 1];
+        for (int c = 0; c < MAIL_FROM_MAX; c++) dst->from[c] = src->from[c];
+        for (int c = 0; c < MAIL_SUBJECT_MAX; c++) dst->subject[c] = src->subject[c];
+        for (int c = 0; c < MAIL_BODY_MAX; c++) dst->body[c] = src->body[c];
+        dst->read = src->read;
+    }
+    mail_count--;
+    mail_save();
+}
+
 /* Same up/down/select list contract Reminders and Trash already use,
    plus 'c' to compose (Reminders' 'a' would collide with the from/
    subject/body text fields' own letters, so this file picks its own),
@@ -193,22 +214,8 @@ static void gui_launch_mail(void) {
         else if (k == KEY_DOWN && sel < mail_count - 1) sel++;
         else if (k == KEY_ENTER) mail_read_message(sel);
         else if (k == 'd') {
-            /* Field-by-field, not a whole-struct assignment: this struct is
-               large enough (~320 bytes) that clang can lower `a = b` to a
-               real call to memcpy, a libc symbol this freestanding build
-               doesn't link, the same reason reminders.h's own delete loop
-               below shifts its plain char array one field at a time
-               instead of relying on a builtin. */
-            for (int j = sel; j < mail_count - 1; j++) {
-                mail_msg_t *dst = &mail_msgs[j], *src = &mail_msgs[j + 1];
-                for (int c = 0; c < MAIL_FROM_MAX; c++) dst->from[c] = src->from[c];
-                for (int c = 0; c < MAIL_SUBJECT_MAX; c++) dst->subject[c] = src->subject[c];
-                for (int c = 0; c < MAIL_BODY_MAX; c++) dst->body[c] = src->body[c];
-                dst->read = src->read;
-            }
-            mail_count--;
+            mail_delete_at(sel);
             if (sel >= mail_count && sel > 0) sel--;
-            mail_save();
         }
     }
 }

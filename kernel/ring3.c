@@ -14,9 +14,10 @@ typedef unsigned char u8;
 static u8 ring3_code_page[4096]  __attribute__((aligned(4096)));
 static u8 ring3_stack_page[4096] __attribute__((aligned(4096)));
 
-extern u8 ring3_demo_code[],  ring3_demo_code_end[];
-extern u8 ring3_fault_code[], ring3_fault_code_end[];
-extern u8 ring3_spin_code[],  ring3_spin_code_end[];
+extern u8 ring3_demo_code[],    ring3_demo_code_end[];
+extern u8 ring3_fault_code[],   ring3_fault_code_end[];
+extern u8 ring3_spin_code[],    ring3_spin_code_end[];
+extern u8 ring3_badptr_code[],  ring3_badptr_code_end[];
 
 #define KERNEL_VIRTUAL_BASE 0xC0000000u
 #define MARKER (*(volatile u32 *)ring3_stack_page)
@@ -53,9 +54,25 @@ static void report_marker(void) {
 }
 
 void ring3_test(const char *mode) {
-    int fault = mode && mode[0] == 'f';
-    int spin  = mode && mode[0] == 's';
+    int fault   = mode && mode[0] == 'f';
+    int spin    = mode && mode[0] == 's';
+    int badptr  = mode && mode[0] == 'b';
     int id;
+    if (badptr) {
+        /* v64 test gap fix: sys_write's paging_user_range_ok check had no
+           regression test proving it actually rejects a bad pointer, only
+           that valid writes succeed (the default mode below). */
+        id = ring3_start(ring3_badptr_code, ring3_badptr_code_end);
+        if (id < 0) { puts("no free task slots\n"); return; }
+        puts("ring-3 task started (will call SYS_WRITE with buf=NULL)...\n");
+        wait_reaped(id);
+        report_marker();
+        int code = task_last_exit_code();
+        int ok = (int)MARKER == -14 /* -EFAULT */ && code == 7;
+        puts(ok ? "int 0x80 write rejects an unmapped user pointer (-EFAULT): ok\n" : "bad-pointer rejection: FAILED\n");
+        serial_puts(ok ? "ring3test badptr: ok\n" : "ring3test badptr: FAILED\n");
+        return;
+    }
     if (spin) {
         id = ring3_start(ring3_spin_code, ring3_spin_code_end);
         if (id < 0) { puts("no free task slots\n"); return; }

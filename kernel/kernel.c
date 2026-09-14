@@ -3692,7 +3692,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest weatherfxtest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest weatherfxtest weatherpaneltest windweathertest cursortest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -3936,6 +3936,223 @@ static void run(char *line){
 
         for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++) weather_particles[i] = save_particles[i];
         weather_particles_seeded = save_seeded;
+    }
+    else if (!strcmp(line, "windweathertest")) {
+        /* v60 gap fix: verification that pass was a boot-time direct-call
+           dump of three gui_wind_shift() samples, reverted before commit,
+           nothing left in the suite. Real, discriminating logic to pin
+           down: wind_pct_for_weather_code's seven WMO-code buckets, the
+           exact percentages roadmap.md's own table names (Fog stillest at
+           40%, then Clear/Cloudy/Snow/Rain/Showers/Storm climbing to
+           200%), every boundary value, not just one code per bucket. */
+        int ok =
+            wind_pct_for_weather_code(0)  == 60  && wind_pct_for_weather_code(3)  == 100 &&
+            wind_pct_for_weather_code(4)  == 40  && wind_pct_for_weather_code(48) == 40  &&
+            wind_pct_for_weather_code(49) == 130 && wind_pct_for_weather_code(67) == 130 &&
+            wind_pct_for_weather_code(68) == 90  && wind_pct_for_weather_code(77) == 90  &&
+            wind_pct_for_weather_code(78) == 150 && wind_pct_for_weather_code(82) == 150 &&
+            wind_pct_for_weather_code(83) == 200 && wind_pct_for_weather_code(95) == 200;
+        puts(ok ? "wind_pct_for_weather_code: every WMO bucket boundary maps to its real percent: ok\n"
+                : "wind_pct_for_weather_code: FAILED\n");
+    }
+    else if (!strcmp(line, "weatherpaneltest")) {
+        /* v56 gap fix: weathertest (above) proves weather_fetch's JSON
+           parse; nothing proved the dropdown itself once shipped, that
+           pass's verification was a boot-time pixel dump into fixed RAM,
+           reverted before commit. Two real, discriminating checks: (1)
+           weather_word()'s WMO-code bucket mapping, the same function the
+           dropdown's condition word and v60's wind multiplier both depend
+           on, every boundary named in roadmap.md's own table; (2)
+           gui_draw_weather_panel() actually paints its own bg/border
+           chrome and, only once weather_have is set, real antialiased
+           glyph ink for the line it claims to show, not a blank rect. */
+        int ok_word =
+            !strcmp(weather_word(0),  "Clear")   && !strcmp(weather_word(3),  "Cloudy") &&
+            !strcmp(weather_word(4),  "Fog")     && !strcmp(weather_word(48), "Fog")    &&
+            !strcmp(weather_word(49), "Rain")    && !strcmp(weather_word(67), "Rain")   &&
+            !strcmp(weather_word(68), "Snow")    && !strcmp(weather_word(77), "Snow")   &&
+            !strcmp(weather_word(78), "Showers") && !strcmp(weather_word(82), "Showers")&&
+            !strcmp(weather_word(83), "Storm")   && !strcmp(weather_word(95), "Storm");
+        puts(ok_word ? "weather_word: every WMO bucket boundary maps correctly: ok\n" : "weather_word: FAILED\n");
+
+        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
+        else {
+            unsigned int bg = 0x002C2C2E, border = 0x001C1C1E;
+            weather_hit_x0 = -1; /* force the fallback geometry branch, same formula gui_draw_weather_panel uses */
+            int x0 = (int)window_width() - WEATHER_W - 200;
+            if (x0 + WEATHER_W > (int)window_width() - 4) x0 = (int)window_width() - WEATHER_W - 4;
+            int y0 = GUI_MENUBAR_H;
+
+            weather_have = 0;
+            window_clear(0x00111111);
+            gui_draw_weather_panel();
+            int chrome_empty = window_get_pixel(x0 + 4, y0 + 4) == bg;
+            puts(chrome_empty ? "weather panel (no data): chrome painted: ok\n" : "weather panel (no data): FAILED\n");
+
+            weather_have = 1; weather_temp_c = -3; weather_code10 = 610;
+            int wi = 0; const char *seed = "-3\xf8 Rain";
+            while (seed[wi] && wi < (int)sizeof(weather_text) - 1) { weather_text[wi] = seed[wi]; wi++; }
+            weather_text[wi] = 0;
+            window_clear(0x00111111);
+            gui_draw_weather_panel();
+            int border_ok = window_get_pixel(x0, y0) == border;
+            int ink = 0;
+            for (int dx = 0; dx < WEATHER_W - 24 && !ink; dx++)
+                if (window_get_pixel(x0 + 12 + dx, y0 + 10) != border && window_get_pixel(x0 + 12 + dx, y0 + 10) != bg) ink = 1;
+            puts((border_ok && ink) ? "weather panel (live data): chrome + real ink drawn: ok\n" : "weather panel (live data): FAILED\n");
+            window_close();
+            weather_have = 0; weather_text[0] = 0; /* leave state clean for anything run after */
+        }
+    }
+    else if (!strcmp(line, "cursortest")) {
+        /* v56.1 gap fix: the notif-panel bitmap-font regression (cursor
+           save/restore reading/writing antialiased text through the
+           LOGICAL layer, pixel-doubling it) was reproduced and fixed via
+           a scripted headless sweep + pmemsave that pass, then fully
+           reverted, nothing permanent left to catch the same class of bug
+           coming back on any other never-repainted AA surface. Real,
+           discriminating: renders real antialiased glyphs (font_draw_string
+           genuinely blends at physical resolution) at a scale-2 window,
+           captures the true per-physical-pixel content independently
+           (window_get_pixel_phys, not through cursor_backup itself),
+           then runs the real gui_cursor_save/gui_draw_cursor/
+           gui_cursor_restore sequence over it and confirms every physical
+           sub-pixel came back byte-exact. The old logical-layer bug would
+           sample only each block's top-left pixel and write it back
+           across the whole 2x2 block, so any block with real per-pixel
+           variation (the entire point of antialiasing) would fail this. */
+        if (!window_open_scaled(400, 300, 32, 2)) { puts("no VGA device found or out of page tables\n"); }
+        else {
+            int mx = 40, my = 40;
+            font_set_aa(gui_aa_char); /* real physical-resolution AA text, the exact surface v56.1 fixed; gui_run() normally registers this but this test doesn't call gui_run() */
+            window_clear(0x00202020);
+            font_draw_string("Wg", mx, my, 0x00F5F5F7, -1);
+
+            int sc = gui_cursor_scale(), pw = CURSOR_W * sc, ph = CURSOR_H * sc;
+            int px0 = mx * sc, py0 = my * sc;
+            static unsigned int truth[CURSOR_W * CURSOR_MAX_SCALE * CURSOR_H * CURSOR_MAX_SCALE];
+            int varied = 0;
+            for (int j = 0; j < ph; j++) {
+                for (int i = 0; i < pw; i++) {
+                    truth[j * pw + i] = window_get_pixel_phys(px0 + i, py0 + j);
+                    if (i > 0 && truth[j * pw + i] != truth[j * pw + i - 1]) varied = 1; /* real AA content, not a flat fill */
+                }
+            }
+            gui_cursor_save(mx, my);
+            gui_draw_cursor(mx, my);
+            gui_cursor_restore();
+            int mismatches = 0;
+            for (int j = 0; j < ph; j++)
+                for (int i = 0; i < pw; i++)
+                    if (window_get_pixel_phys(px0 + i, py0 + j) != truth[j * pw + i]) mismatches++;
+            puts(varied ? "cursor test area has real per-pixel AA variation: ok\n" : "cursor test area has NO variation (test not discriminating): FAILED\n");
+            puts((varied && mismatches == 0) ? "cursor save/restore: AA text came back byte-exact through the physical layer: ok\n" : "cursor save/restore: FAILED (pixel-doubled or otherwise wrong)\n");
+            window_close();
+        }
+    }
+    else if (!strcmp(line, "dockstyletest")) {
+        /* v58/v61 gap fix: both passes verified against a real, one-off
+           framebuffer pixel dump, reverted before commit, nothing
+           permanent left in the suite (dockhover-check.py, added in v63,
+           only covers the hover-magnify bug, a different defect
+           entirely). Two real, discriminating checks against the exact
+           functions those passes fixed, called directly with real
+           geometry rather than needing a QEMU pixel-dump script: (1)
+           gui_rounded_rect_on_wallpaper's straight top edge (v61): before
+           the fix every non-corner edge pixel was a 100% solid `col =
+           color` with zero blend, so the very first row of the rect was
+           already the exact fill color; after, the first `band` (3)
+           physical rows blend toward the real backdrop first. (2)
+           gui_draw_icon_shadow (v58): before the fix it drew through the
+           LOGICAL layer at a quarter the physical resolution, so every
+           physical pixel pair came out identical (blocky); after, it
+           draws physical-resolution with real per-pixel falloff. */
+        if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); }
+        else {
+            gui_draw_wallpaper_rows(0, (int)window_height());
+            int y0 = gui_dock_y0(), dock_x = gui_dock_x0(), dock_w = gui_dock_w(), dock_h = DOCK_ICON + 2 * DOCK_PAD;
+            int sc = (int)window_scale();
+            int sample_x = (dock_x + dock_w / 2) * sc; /* dock centre: far from either rounded corner */
+            unsigned int bg_before = window_get_pixel_phys(sample_x, y0 * sc - 2);
+            gui_rounded_rect_on_wallpaper(dock_x, y0, dock_w, dock_h, DOCK_TRAY_COLOR, 20);
+            unsigned int row0 = window_get_pixel_phys(sample_x, y0 * sc + 0);
+            unsigned int row1 = window_get_pixel_phys(sample_x, y0 * sc + 1);
+            unsigned int row3 = window_get_pixel_phys(sample_x, y0 * sc + 3); /* one row past the v61 band (3 physical rows) */
+            int seam_ok = row0 != DOCK_TRAY_COLOR && row0 != bg_before && row1 != row0 && row3 == DOCK_TRAY_COLOR;
+            puts(seam_ok ? "dock tray top edge: real multi-row blend, not a 1-row solid cut: ok\n" : "dock tray top edge: FAILED (single-row seam)\n");
+
+            window_rect(0, 0, (int)window_width(), (int)window_height(), DOCK_TRAY_COLOR);
+            int cx = (int)window_width() / 2, cy = (int)window_height() / 2;
+            gui_draw_icon_shadow(cx, cy, DOCK_ICON);
+            int ry = (DOCK_ICON * sc) / 9; /* the ellipse's own physical half-height, see gui_draw_icon_shadow */
+            int px = cx * sc; /* vertical centreline: dy sweeps distance^2 fast, the axis that best exposes ry's real division headroom (8 physical steps) vs the old ry=4 logical-block version's coarser ~4-5 */
+            unsigned int seen[16]; int nseen = 0;
+            for (int dy = -ry; dy < ry; dy++) {
+                unsigned int v = window_get_pixel_phys(px, cy * sc - sc + dy);
+                int found = 0; for (int s = 0; s < nseen; s++) if (seen[s] == v) { found = 1; break; }
+                if (!found && nseen < 16) seen[nseen++] = v;
+            }
+            /* The pre-v58 bug drew this ellipse through the LOGICAL layer
+               at ry=4 (real division headroom halved) with each logical
+               row blown up into a 2-physical-row block, so a vertical
+               sweep only ever showed ~5 distinct levels, each repeated in
+               pairs; the real fixed version (ry=8, physical resolution)
+               shows close to its own ry+1 distinct levels. */
+            int shadow_ok = nseen >= 7;
+            puts(shadow_ok ? "dock icon shadow: real per-physical-pixel falloff, not blocky: ok\n" : "dock icon shadow: FAILED (blocky/coarse)\n");
+            window_close();
+        }
+    }
+    else if (!strcmp(line, "mailtest")) {
+        /* v59 gap fix: Mail shipped with no regression test at all, the
+           reminders/calendar precedent (check-calendar.sh) only covers
+           date math, nothing VFS-backed like Mail's write-through. Real,
+           discriminating: three known messages through mail_save() ->
+           MAIL.TXT -> a forced mail_load() (state wiped first, so this is
+           a real read off disk, not the array still sitting in RAM),
+           confirms every field and the read flag survived the '|'-
+           delimited round trip; then deletes the middle message through
+           the exact mail_delete_at() the UI's 'd' key now calls, confirms
+           the remaining two shifted into the right slots with every field
+           intact, not just that mail_count went down by one. Runs against
+           ramfs explicitly (fsuse's own backend switch) so the test is
+           real and repeatable even when no FAT disk image is attached,
+           the same reason this suite ships a ramfs backend at all;
+           whatever backend was active is restored after. */
+        const char *prev_fs = vfs_current_name();
+        char prev_fs_buf[16]; int pfi = 0; while (prev_fs[pfi] && pfi < 15) { prev_fs_buf[pfi] = prev_fs[pfi]; pfi++; } prev_fs_buf[pfi] = 0;
+        vfs_switch("ramfs");
+        mail_count = 3;
+        mail_str_copy(mail_msgs[0].from, "Alice", MAIL_FROM_MAX);
+        mail_str_copy(mail_msgs[0].subject, "First", MAIL_SUBJECT_MAX);
+        mail_str_copy(mail_msgs[0].body, "alpha body", MAIL_BODY_MAX);
+        mail_msgs[0].read = 1;
+        mail_str_copy(mail_msgs[1].from, "Bob", MAIL_FROM_MAX);
+        mail_str_copy(mail_msgs[1].subject, "Second", MAIL_SUBJECT_MAX);
+        mail_str_copy(mail_msgs[1].body, "bravo body", MAIL_BODY_MAX);
+        mail_msgs[1].read = 0;
+        mail_str_copy(mail_msgs[2].from, "Carol", MAIL_FROM_MAX);
+        mail_str_copy(mail_msgs[2].subject, "Third", MAIL_SUBJECT_MAX);
+        mail_str_copy(mail_msgs[2].body, "charlie body", MAIL_BODY_MAX);
+        mail_msgs[2].read = 1;
+        mail_save();
+
+        for (int i = 0; i < MAIL_MAX; i++) { mail_msgs[i].from[0] = 0; mail_msgs[i].subject[0] = 0; mail_msgs[i].body[0] = 0; mail_msgs[i].read = 0; }
+        mail_count = 0;
+        mail_loaded = 0;
+        mail_load();
+        int ok = mail_count == 3
+            && !strcmp(mail_msgs[0].from, "Alice") && !strcmp(mail_msgs[0].subject, "First") && !strcmp(mail_msgs[0].body, "alpha body") && mail_msgs[0].read == 1
+            && !strcmp(mail_msgs[1].from, "Bob")   && !strcmp(mail_msgs[1].subject, "Second") && !strcmp(mail_msgs[1].body, "bravo body") && mail_msgs[1].read == 0
+            && !strcmp(mail_msgs[2].from, "Carol") && !strcmp(mail_msgs[2].subject, "Third")  && !strcmp(mail_msgs[2].body, "charlie body") && mail_msgs[2].read == 1;
+        puts(ok ? "mail round trip (3 messages through MAIL.TXT): ok\n" : "mail round trip: FAILED\n");
+
+        mail_delete_at(1);
+        int ok2 = mail_count == 2
+            && !strcmp(mail_msgs[0].from, "Alice") && mail_msgs[0].read == 1
+            && !strcmp(mail_msgs[1].from, "Carol") && !strcmp(mail_msgs[1].subject, "Third") && !strcmp(mail_msgs[1].body, "charlie body") && mail_msgs[1].read == 1;
+        puts(ok2 ? "mail delete: shifted correctly: ok\n" : "mail delete: FAILED\n");
+        vfs_switch(prev_fs_buf);
     }
     else if (!strcmp(line, "wind")) {
         if (!strcmp(arg, "off")) { wind_enabled = 0; settings_save(); puts("wind off\n"); }

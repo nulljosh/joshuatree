@@ -52,6 +52,30 @@ ring3_fault_code:
     hlt
 ring3_fault_code_end:
 
+/* Bad pointer: calls SYS_WRITE with buf=NULL, a real user-mode address
+   this task has no mapping for, exercising sys_write's paging_user_range_ok
+   check (v64's access_ok equivalent) instead of just its happy path. The
+   marker records the raw kernel return value (expect -EFAULT, i.e.
+   0xFFFFFFF2) BEFORE the exit, same "kernel-known value written back from
+   ring 3" proof ring3_demo_code uses, so a kernel that skipped the check
+   and let the write proceed (or worse, faulted on an unmapped kernel
+   read) is distinguishable from one that correctly rejected it. */
+.global ring3_badptr_code
+.global ring3_badptr_code_end
+ring3_badptr_code:
+    mov (%esp), %edi
+    mov $4, %eax                                /* SYS_WRITE */
+    mov $1, %ebx                                 /* fd 1 */
+    xor %ecx, %ecx                               /* buf = NULL: not mapped, not user-accessible */
+    mov $10, %edx                                /* len */
+    int $0x80
+    mov %eax, (%edi)
+    mov $1, %eax                                 /* SYS_EXIT */
+    mov $7, %ebx                                 /* distinct exit code, checked alongside the marker */
+    int $0x80
+    hlt
+ring3_badptr_code_end:
+
 /* Spinner: never syscalls, never faults, just counts in the marker forever
    at ring 3. Exists to prove a ring-3 task gets preempted like any other
    (the counter moves while the shell has the CPU too) and that task_kill
