@@ -17,7 +17,7 @@ make -s kernel.elf
 WORKDIR=$(mktemp -d /tmp/jt-apptest-XXXX)
 trap 'rm -rf "$WORKDIR"' EXIT
 
-APPS=(Weather Curbfind Chat Files Keyrate Bookrank Quotestreak Notes Plan Lexly Toroid Sparkjar Homeqi Fieldbook)
+APPS=(Weather Curbfind Chat Files Keyrate Bookrank Quotestreak Notes Plan Lexly Toroid Sparkjar Homeqi Fieldbook Terminal)
 # v35 (0.35.0): Notes (icon 7, gui_launch_editor) is included now, it was
 # missing before purely because this list has to stay in lockstep, index
 # for index, with `testapps`'s own single sequential loop over every dock

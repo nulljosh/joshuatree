@@ -65,7 +65,29 @@ static void scroll(void){
     cy = H - 1;
 }
 
+/* v36 (0.36.0): output capture, the piece a real GUI terminal needs.
+   Every shell command in this kernel prints through putc, which writes
+   straight into VGA *text* memory at 0xB8000, a region that isn't even
+   mapped the same way once the card is in a graphics mode, so a
+   graphical terminal could never see a single character a command
+   produced. Redirecting at putc itself (rather than rewriting ~60 shell
+   commands to take an output sink) means every existing command, and
+   every future one, works in the GUI terminal for free. */
+static char *capture_buf = 0;
+static unsigned int capture_len = 0, capture_cap = 0;
+
+static void capture_begin(char *buf, unsigned int cap){ capture_buf = buf; capture_len = 0; capture_cap = cap; buf[0] = 0; }
+static unsigned int capture_end(void){ unsigned int n = capture_len; capture_buf = 0; return n; }
+
 void putc(char c){
+    if (capture_buf) {
+        /* Backspace has to edit the captured text, not append a control
+           byte the font renderer would draw as a glyph. */
+        if (c == '\b') { if (capture_len) capture_len--; }
+        else if (capture_len + 1 < capture_cap) capture_buf[capture_len++] = c;
+        capture_buf[capture_len] = 0;
+        return;
+    }
     if (c == '\n') { cx = 0; cy++; }
     else if (c == '\b') {
         if (cx) cx--; else if (cy) { cy--; cx = W - 1; }
@@ -549,11 +571,11 @@ static void reboot(void){
    blending in this framebuffer, so "rounded" and "shadow" are both done by
    painting flat colors, corner pixels outside a quarter-circle get
    overwritten with whatever's behind them, not blended. ---- */
-#define GUI_ICON_COUNT 14 /* v35 (0.35.0): was 8, +6 for the newly-ported apps */
-static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook"};
+#define GUI_ICON_COUNT 15 /* v35: was 8, +6 ported apps; v36: +Terminal */
+static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Terminal"};
 static const unsigned int GUI_COLORS[GUI_ICON_COUNT] = {
     0x0085144B, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x006B4423,
-    0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B
+    0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x002B2B2B
 };
 
 /* gui_order is a permutation of icon indices by dock slot: dragging an icon
@@ -566,14 +588,18 @@ static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_o
 
 #define GUI_BG          0x00FAF8F6
 #define GUI_MENUBAR_H   30
-/* v35 (0.35.0): shrunk from 56/16/12/12 when the dock grew from 8 to 14
-   icons, real overflow caught by actually looking at a screendump, not
-   assumed to fit: 14*56 + 13*16 + 2*12 = 1016px, wider than the real
-   800px screen. This size (14*44 + 13*8 + 2*10 = 740px) leaves real
-   margin on both sides at the full 14-icon count. */
-#define DOCK_ICON       44
-#define DOCK_GAP        8
+/* v36 (0.36.0): the icon size is now *derived* from how many icons there
+   are, instead of a constant that silently overflows the screen every
+   time an app is added. v35 hit that for real (14 icons at the old
+   56px sizing came to 1016px on an 800px screen, two icons genuinely cut
+   off), and adding Terminal would have hit it again at 792px, 8px from
+   the edge. Solving it once, in arithmetic, beats rediscovering it in a
+   screendump on every future app. DOCK_BUDGET is the widest the dock may
+   ever draw, leaving a real margin on both sides of the 800px screen. */
+#define DOCK_BUDGET     740
+#define DOCK_GAP        6
 #define DOCK_PAD        10
+#define DOCK_ICON       ((DOCK_BUDGET - 2 * DOCK_PAD - (GUI_ICON_COUNT - 1) * DOCK_GAP) / GUI_ICON_COUNT)
 #define DOCK_MARGIN_BOT 24
 #define DOCK_MAGNIFY    9
 #define DOCK_LIFT       10
@@ -1253,6 +1279,15 @@ static void gui_icon_homeqi(int cx, int cy, int s, unsigned int bg){
     window_rect(cx - half + 2, roof_y, 2 * (half - 2) + 1, half + 2, gui_blend(ICON_FG, bg));
     window_rect(cx - s/14, roof_y + half - s/8, 2 * (s/14) + 1, s/8 + 2, ICON_FG);
 }
+/* v36: a real prompt, the ">_" every terminal since the VT100 has worn,
+   drawn as two capsule strokes and a cursor bar, same vector-only rule as
+   every icon in this file. */
+static void gui_icon_terminal(int cx, int cy, int s, unsigned int bg){
+    int half = s * 3 / 10, t = s / 16;
+    gui_draw_capsule(cx - half, cy - half / 2, cx - half / 3, cy, t, ICON_FG, bg);
+    gui_draw_capsule(cx - half / 3, cy, cx - half, cy + half / 2, t, ICON_FG, bg);
+    window_rect(cx + 2, cy + half / 3, half - 2, t + 1, ICON_FG);
+}
 static void gui_icon_fieldbook(int cx, int cy, int s, unsigned int bg){
     int half = s * 3 / 10;
     gui_draw_capsule(cx - half, cy - half / 3, cx - 2, cy + half, s / 18, ICON_FG, bg);
@@ -1336,6 +1371,7 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
         case 11: gui_icon_sparkjar(cx_center, cy, size, bg); break;
         case 12: gui_icon_homeqi(cx_center, cy, size, bg); break;
         case 13: gui_icon_fieldbook(cx_center, cy, size, bg); break;
+        case 14: gui_icon_terminal(cx_center, cy, size, bg); break;
     }
 }
 
@@ -1731,6 +1767,119 @@ static void gui_launch_keyrate(void){
     }
 }
 
+/* v36 (0.36.0): a real terminal inside the desktop, not a second shell.
+   It runs the exact same run() every text-mode command goes through, so
+   there is precisely one shell in this kernel and anything it learns
+   later works here the same day, rather than two implementations drifting
+   apart. Output comes back through putc's capture hook (see capture_begin
+   above), which is why no command needed changing to appear here. */
+static void run(char *line); /* defined after the GUI; one shell, called from both */
+
+#define TERM_COLS 96
+#define TERM_ROWS 28
+#define TERM_SCROLLBACK 8192
+
+static char term_buf[TERM_SCROLLBACK];
+static unsigned int term_len = 0;
+
+static void term_putc(char c){
+    if (term_len + 1 >= TERM_SCROLLBACK) {
+        /* Drop the oldest half rather than the oldest byte: a byte-at-a-
+           time memmove on every character once full would make a long
+           session visibly slow, and nobody scrolls back 4KB in an 800x600
+           window anyway. */
+        unsigned int keep = TERM_SCROLLBACK / 2;
+        for (unsigned int i = 0; i < keep; i++) term_buf[i] = term_buf[term_len - keep + i];
+        term_len = keep;
+    }
+    term_buf[term_len++] = c;
+    term_buf[term_len] = 0;
+}
+static void term_puts(const char *s){ while (*s) term_putc(*s++); }
+
+/* Walks the scrollback once, wrapping at TERM_COLS and on newlines, and
+   draws only the last TERM_ROWS lines. Two passes over the same logic
+   (count, then draw from the right offset) keeps this one source of truth
+   for where a line breaks, instead of a separate wrap calculation that
+   could disagree with what actually gets drawn. */
+static void term_render(const char *input, unsigned int input_len){
+    window_clear(0x001A1512); /* warm near-black, the Mojave palette's dark end, not a cold pure black */
+    gui_draw_app_titlebar("Terminal");
+
+    unsigned int starts[TERM_ROWS + 1];
+    unsigned int total_lines = 0, col = 0, line_start = 0;
+    for (unsigned int i = 0; i <= term_len; i++) {
+        int wrapped = (col == TERM_COLS);
+        int newline = (i < term_len && term_buf[i] == '\n');
+        if (wrapped || newline || i == term_len) {
+            starts[total_lines % (TERM_ROWS + 1)] = line_start;
+            total_lines++;
+            line_start = newline ? i + 1 : i;
+            col = 0;
+            if (newline) continue;
+            if (i == term_len) break;
+        }
+        col++;
+    }
+
+    unsigned int first = total_lines > TERM_ROWS ? total_lines - TERM_ROWS : 0;
+    int y = 44;
+    for (unsigned int ln = first; ln < total_lines && y < 520; ln++) {
+        unsigned int p = starts[ln % (TERM_ROWS + 1)];
+        int x = 16;
+        for (unsigned int c = 0; c < TERM_COLS && p < term_len; c++, p++) {
+            if (term_buf[p] == '\n') break;
+            font_draw_char((unsigned char)term_buf[p], x, y, 0x00D8CFC4, -1);
+            x += 8;
+        }
+        y += 16;
+    }
+
+    /* Prompt line, pinned to the bottom so typing never scrolls out of
+       view no matter how much output the last command produced. */
+    int py = 540;
+    font_draw_string("> ", 16, py, 0x00C98A3E, -1);
+    int x = 32;
+    for (unsigned int i = 0; i < input_len && x < 780; i++, x += 8)
+        font_draw_char((unsigned char)input[i], x, py, 0x00F2E9D8, -1);
+    window_rect(x, py, 8, 15, 0x00C98A3E); /* block cursor */
+    font_draw_string("esc closes   |   same shell as text mode", 16, 572, 0x00807468, -1);
+}
+
+static void gui_launch_terminal(void){
+    static char input[TERM_COLS];
+    static char out[4096];
+    unsigned int input_len = 0;
+
+    if (term_len == 0) term_puts("Joshua Tree terminal. Type help.\n");
+    term_render(input, input_len);
+
+    for (;;) {
+        int k = get_key();
+        if (k == KEY_ESC) return;
+        if (k == KEY_ENTER) {
+            input[input_len] = 0;
+            term_puts("> "); term_puts(input); term_putc('\n');
+            if (input_len) {
+                /* Same run() the text-mode shell uses. Its output lands
+                   in `out` instead of VGA memory purely because of the
+                   capture hook, no command knows the difference. */
+                capture_begin(out, sizeof(out));
+                run(input);
+                unsigned int n = capture_end();
+                for (unsigned int i = 0; i < n; i++) term_putc(out[i]);
+            }
+            input_len = 0;
+            term_render(input, input_len);
+            continue;
+        }
+        if (k == '\b') { if (input_len) input_len--; }
+        else if (k >= 32 && k < 127 && input_len < TERM_COLS - 1) input[input_len++] = (char)k;
+        else continue;
+        term_render(input, input_len);
+    }
+}
+
 static void gui_launch(int icon){
     if (icon == 0)      gui_launch_html("Weather", app_weather_html, app_weather_len);
     else if (icon == 1) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
@@ -1746,6 +1895,7 @@ static void gui_launch(int icon){
     else if (icon == 11) gui_launch_html("Sparkjar", app_sparkjar_html, app_sparkjar_len);
     else if (icon == 12) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
     else if (icon == 13) gui_launch_html("Fieldbook", app_fieldbook_html, app_fieldbook_len);
+    else if (icon == 14) gui_launch_terminal();
 }
 
 /* A loop (octagon approximating a circle, 8 capsule segments) for the
