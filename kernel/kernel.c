@@ -107,6 +107,7 @@ static char getch(void){
    already gets on the read-only viewers via gui_wait_close, not just a
    keyboard escape hatch. */
 static int gui_getch_or_click(void){
+    mouse_click_edge_sync(); /* a button already held (e.g. the click that opened this app) is the baseline, not a fresh click */
     for (;;) {
         int sc = kbd_pop();
         if (sc >= 0) {
@@ -115,9 +116,7 @@ static int gui_getch_or_click(void){
             if (c) return (int)(unsigned char)c;
             continue;
         }
-        int dx, dy, buttons;
-        mouse_get_delta(&dx, &dy, &buttons);
-        if (buttons) return -1;
+        if (mouse_click_edge()) return -1;
         __asm__ volatile ("hlt");
     }
 }
@@ -1294,6 +1293,7 @@ static void gui_wait_close(void){
        gives it that gap without real hardware/QEMU visitors ever noticing
        an unnecessary pause, they didn't need it in the first place. */
     sleep_ticks(5);
+    mouse_click_edge_sync(); /* a button already held (e.g. the click that opened this app) is the baseline, not a fresh click */
     for (;;) {
         int sc = kbd_pop();
         /* Real, reported bug: "any key" closed every read-only viewer,
@@ -1304,9 +1304,7 @@ static void gui_wait_close(void){
            else to do with a keypress, and no longer surprising on one
            that does. */
         if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) return;
-        int dx, dy, buttons;
-        mouse_get_delta(&dx, &dy, &buttons);
-        if (buttons) return;
+        if (mouse_click_edge()) return;
         __asm__ volatile ("hlt");
     }
 }
@@ -1476,7 +1474,20 @@ static void gui_launch_keyrate(void){
     unsigned int start_tick = 0;
 
     for (;;) {
-        window_rect(20, 60, (int)window_width() - 40, 40, 0x00FAF8F6);
+        /* Real bug shipped and reported live, not caught in time: an
+           earlier fix for this exact overlap (clear both the target-text
+           row and the hint row every frame, not just inside one branch)
+           was verified working in testing, then accidentally reverted by
+           restoring kernel.c from a stale backup taken before that fix
+           while cleaning up an unrelated temporary test command, the same
+           wrong-backup mistake this session already made once with the
+           gradient icon work. Re-applied here, and this time verified
+           again with a real two-round script test (finish, retry, finish
+           again) after re-applying, not just trusted from memory. One
+           clear covering everything that can change, every frame,
+           regardless of which branch below runs. */
+        window_rect(20, 60, (int)window_width() - 40, 70, 0x00FAF8F6);
+        window_rect(20, (int)window_height() - 30, (int)window_width() - 40, 16, 0x00FAF8F6);
         for (int i = 0; i < tlen; i++)
             font_draw_char((unsigned char)target[i], 20 + i * 8, 60, i < pos ? 0x00884B16 : 0x001C1C1E, -1);
 
@@ -1490,7 +1501,6 @@ static void gui_launch_keyrate(void){
             font_draw_string(buf, 20, 110, 0x00884B16, -1);
             font_draw_string("r to retry, esc or click to close", 20, (int)window_height() - 30, 0x0075726E, -1);
         } else {
-            window_rect(20, (int)window_height() - 30, (int)window_width() - 40, 16, 0x00FAF8F6);
             font_draw_string("type the line above, esc or click to close", 20, (int)window_height() - 30, 0x0075726E, -1);
         }
 

@@ -13,4 +13,22 @@ void mouse_handle_byte(unsigned char byte);
    1 if the mouse moved or a button changed since the last call, 0 if
    nothing happened (dx/dy/buttons are still written either way, just 0). */
 int mouse_get_delta(int *dx, int *dy, int *buttons);
+
+/* Edge-triggered left-click detection, separate from mouse_get_delta's own
+   continuous "is it currently held" reporting (which real dragging needs).
+   Real, reported bug this exists to fix: a "click to close" check that
+   just tests mouse_get_delta's buttons field fires every single poll for
+   as long as last_buttons stays nonzero, and it stays nonzero until a
+   fresh packet clears it, real PS/2 hardware or a host trackpad's press/
+   release packets translated through QEMU are not guaranteed to always
+   arrive as a clean pair. One missed or coalesced release packet leaves
+   it looking permanently "held", so every future wait-for-input poll
+   (typing a retry key included) sees a phantom click and exits instantly.
+   mouse_click_edge_sync() latches the CURRENT held state as the new
+   baseline (call once when an app that waits on this starts, so a button
+   already down from the very click that opened it isn't mistaken for a
+   fresh click); mouse_click_edge() then returns 1 only on a genuine
+   transition from up to down since that baseline, once per transition. */
+void mouse_click_edge_sync(void);
+int mouse_click_edge(void);
 #endif

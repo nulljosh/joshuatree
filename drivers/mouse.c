@@ -83,3 +83,16 @@ int mouse_get_delta(int *dx, int *dy, int *buttons) {
     accum_dx = 0; accum_dy = 0; dirty = 0;
     return was_dirty;
 }
+
+static int edge_baseline = 0;
+
+void mouse_click_edge_sync(void) {
+    edge_baseline = last_buttons & 1;
+}
+
+int mouse_click_edge(void) {
+    int now = last_buttons & 1;
+    int fired = now && !edge_baseline;
+    edge_baseline = now;
+    return fired;
+}
