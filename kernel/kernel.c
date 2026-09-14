@@ -618,13 +618,13 @@ static void reboot(void){
    everything else one click away in an Apps folder, the same split macOS
    makes between the Dock and Launchpad. GUI_APP_COUNT is every real app;
    GUI_ICON_COUNT is only what the dock shows. */
-#define GUI_APP_COUNT   17 /* 15 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 15 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       16
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Terminal", "Apps", "Trash"};
+#define GUI_APP_COUNT   18 /* 16 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 16 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       17
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Terminal", "Reminders", "Apps", "Trash"};
 static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
     0x0085144B, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x006B4423,
-    0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x002B2B2B, 0x004A4F57, 0x00566068
+    0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x002B2B2B, 0x00375A4A, 0x004A4F57, 0x00566068
 };
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
@@ -1596,6 +1596,27 @@ static void gui_icon_notes(int cx, int cy, int s, unsigned int bg){
    kernel has no image decoder and that's deliberate, see v19's own
    reasoning). Real, distinct shapes per app rather than one reused
    placeholder, matching the bar the rest of this dock already holds. */
+/* v52: Reminders. Three real checkbox rows, not Plan's shrinking bullet
+   outline (that one already reads as "list/outline"; this needs to read
+   as "checklist" specifically, distinct at dock size): equal-length
+   lines instead of a taper, small square boxes instead of circles, one
+   row actually checked (a filled square) so the glyph itself shows the
+   app's real function rather than three identical blanks. */
+static void gui_icon_reminders(int cx, int cy, int s, unsigned int bg){
+    int half = s * 3 / 10, box = s / 8;
+    for (int row = 0; row < 3; row++) {
+        int y = cy - half + row * half;
+        int bx = cx - half - box / 2;
+        if (row == 0) window_rect(bx, y - box / 2, box, box, ICON_FG); /* checked: filled */
+        else { /* unchecked: outline only */
+            window_rect(bx, y - box / 2, box, 1, ICON_FG);
+            window_rect(bx, y + box / 2, box, 1, ICON_FG);
+            window_rect(bx, y - box / 2, 1, box, ICON_FG);
+            window_rect(bx + box, y - box / 2, 1, box, ICON_FG);
+        }
+        gui_draw_capsule(cx - half + 8, y, cx + half, y, s / 20, row == 0 ? gui_blend(ICON_FG, bg) : ICON_FG, bg);
+    }
+}
 static void gui_icon_plan(int cx, int cy, int s, unsigned int bg){
     int half = s * 3 / 10;
     for (int row = 0; row < 3; row++) {
@@ -1781,6 +1802,7 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
         case 12: gui_icon_homeqi(cx_center, cy, size, bg); break;
         case 13: gui_icon_fieldbook(cx_center, cy, size, bg); break;
         case 14: gui_icon_terminal(cx_center, cy, size, bg); break;
+        case 15: gui_icon_reminders(cx_center, cy, size, bg); break;
         case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
         case GUI_TRASH: gui_icon_trash(cx_center, cy, size, bg); break;
     }
@@ -2284,6 +2306,7 @@ static void gui_launch_chat(void){
 }
 
 #include "editor.h"
+#include "reminders.h"
 
 /* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
    dock hover labels, titlebars) read as monospace/typewriter, not the
@@ -2735,6 +2758,7 @@ static void gui_launch(int icon){
     else if (icon == 12) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
     else if (icon == 13) gui_launch_html("Fieldbook", app_fieldbook_html, app_fieldbook_len);
     else if (icon == 14) gui_launch_terminal();
+    else if (icon == 15) gui_launch_reminders();
 }
 
 static void gui_launch_from_dock(int icon){
