@@ -149,7 +149,16 @@ svg+="<text x=\"2\" y=\"$((pad_t+plot_h+3))\" font-family=\"-apple-system,Helvet
 svg+="<polygon points=\"$area_points\" fill=\"url(#area)\"/>"
 svg+="<polyline points=\"$points\" fill=\"none\" stroke=\"#884b16\" stroke-width=\"2.5\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>"
 svg+="$dots"
+# Real fix, not a guess: with 37+ versions on one axis, drawing every
+# label at font-size 10 packs them closer than their own glyph width and
+# they visibly overlap into unreadable mush, worst on a narrow mobile
+# viewport. min_gap is the smallest pixel spacing two 10px labels can
+# have without touching (2 digits + padding); skip enough labels to
+# respect it, but always keep the first and the last (today's version).
+min_gap=26
+step=$(( (n - 1) * min_gap / (plot_w > 0 ? plot_w : 1) + 1 ))
 for i in "${!labels[@]}"; do
+  if (( i % step != 0 && i != n - 1 )); then continue; fi
   x=$((pad_l + i * plot_w / (n - 1 > 0 ? n - 1 : 1)))
   svg+="<text x=\"$x\" y=\"$((pad_t+plot_h+16))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" fill=\"#75726e\" text-anchor=\"middle\">${labels[$i]}</text>"
 done
