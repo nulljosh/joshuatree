@@ -615,9 +615,17 @@ static unsigned int gui_wallpaper_color(int row){
     return gui_lerp(WALL_MID, WALL_BOT, row - mid, h - mid);
 }
 
+/* Real regression caught by testing, not assumed safe: this used to paint
+   every row including the menu bar's, harmless when gui_draw_menubar()
+   unconditionally redrew its own opaque bar right on top of it every
+   single call. Once that redraw started skipping frames where the clock
+   hadn't changed, the gradient painted here was left exposed instead,
+   the menu bar visibly vanishing. Skipping the menu bar's own rows here
+   makes the two draws correct independently of what order or how often
+   either one runs, not just how they currently happen to interact. */
 static void gui_draw_wallpaper(void){
     int w = (int)window_width(), h = (int)window_height();
-    for (int row = 0; row < h; row++)
+    for (int row = GUI_MENUBAR_H; row < h; row++)
         window_rect(0, row, w, 1, gui_wallpaper_color(row));
 }
 
