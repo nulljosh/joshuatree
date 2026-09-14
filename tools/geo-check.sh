@@ -11,6 +11,7 @@
 # parsed the location but forgot to use it fails on the second. Needs
 # internet access on the host and python3 (json parse of the curl body).
 set -e
+export LC_ALL=C # the kernel's weather text carries a CP437 degree byte (0xF8); BSD grep/cut/tr under a UTF-8 locale truncate or choke on it
 cd "$(dirname "$0")/.."
 make -s kernel.elf
 LOG=/tmp/jt-geo-serial.log
@@ -28,7 +29,7 @@ kill $QPID 2>/dev/null || true
 wait $QPID 2>/dev/null || true
 geo=$(grep '^geo=' "$LOG" | head -1 | tr -d '\r' | cut -d= -f2)
 url=$(grep '^wxurl=' "$LOG" | head -1 | tr -d '\r' | cut -d= -f2-)
-wx=$(grep '^wx=' "$LOG" | head -1 | tr -d '\r' | cut -d= -f2- | LC_ALL=C tr -c '[:print:]\n' '?') # CP437 degree byte (0xF8) -> '?', so a UTF-8 locale's tr doesn't choke on it
+wx=$(grep '^wx=' "$LOG" | head -1 | tr -d '\r' | cut -d= -f2- | tr -c '[:print:]\n' '?') # degree byte -> '?'
 echo "host ip-api: $host"
 echo "kernel geo:  $geo"
 echo "kernel url:  $url"

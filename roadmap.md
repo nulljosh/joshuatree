@@ -561,13 +561,13 @@ Real queue built up over one long session, reordered by actual priority/risk/dep
 
 Reordered same day, direct request: PNG decoder moved to the front, it's the real blocker for the satellite-wallpaper idea Joshua's actively pushing on, not "deliberately last" anymore. Pacing note, also direct request: run conservatively while Joshua's away (fewer concurrent agents, not weaker models on genuinely risky work), and lean Haiku for anything that's actually mechanical.
 
-1. **Prerequisite bridge, part 1: minimal PNG decoder** — real blocker for the satellite-town wallpaper. Fable-tier, decompression/filter-reconstruction math is genuine correctness risk, not a place to cut corners for pacing.
-2. **Systematic bug-hunt / stress-test pass** — Fable-tier (undiscovered-bug hunting is the "subtly wrong" class), queued for while Joshua's asleep per his own framing.
-3. **Security pass (claude-security skill)** — same audit spirit, sequenced right after the bug hunt, real overlap likely.
-4. **Real chat app** (history, bigger buffers, GUI window) **+ global LLM config in Settings** — clear existing pattern to copy, Sonnet-tier.
-5. **Icon sharpness, next iteration** — standing visual-polish loop, Sonnet-tier.
-6. **progress.svg rate-of-change series + README/landing badge refresh** — light, cosmetic, Haiku-tier.
-7. **Native Stocks app** (static/demo data, no live source exists per the real curl checks above) — Haiku-tier, mechanical.
+1. **Prerequisite bridge, part 1: minimal PNG decoder**: real blocker for the satellite-town wallpaper. Fable-tier, decompression/filter-reconstruction math is genuine correctness risk, not a place to cut corners for pacing.
+2. **Systematic bug-hunt / stress-test pass**: Fable-tier (undiscovered-bug hunting is the "subtly wrong" class), queued for while Joshua's asleep per his own framing.
+3. **Security pass (claude-security skill)**: same audit spirit, sequenced right after the bug hunt, real overlap likely.
+4. **Real chat app** (history, bigger buffers, GUI window) **+ global LLM config in Settings**: clear existing pattern to copy, Sonnet-tier.
+5. **Icon sharpness, next iteration**: standing visual-polish loop, Sonnet-tier.
+6. **progress.svg rate-of-change series + README/landing badge refresh**: light, cosmetic, Haiku-tier.
+7. **Native Stocks app** (static/demo data, no live source exists per the real curl checks above): Haiku-tier, mechanical.
 
 Re-order this list honestly if a direct request jumps the queue, same as any other item here, this isn't a fixed contract.
 
@@ -579,13 +579,13 @@ Honest technical gap this implies, checked against what's actually built: everyt
 Not a coding task, not queued as a task, a real direction recorded honestly for future prioritization calls.
 
 ## Later idea: location-dynamic satellite wallpaper, switchable in Settings (Sep 2026)
-Direct request: wallpaper should be a real satellite image of the user's own town/city, dynamically, not the fixed baked photo — "not to spy on them but just because it's cool." Switchable between wallpaper styles in Settings.
+Direct request: wallpaper should be a real satellite image of the user's own town/city, dynamically, not the fixed baked photo, "not to spy on them but just because it's cool." Switchable between wallpaper styles in Settings.
 
-Real dependency chain, traces back to prerequisites already logged in this file, not a new separate blocker: (1) real geolocation — Weather's lat/long is a hardcoded constant today, not live, a real gap on its own; (2) a real satellite/map tile image source, which needs the same missing image decoder (PNG at minimum) the Photos/Maps entry above already named as the real blocker, plus most tile/satellite providers force HTTPS the same way the Stocks-app data-source check proved for market data; (3) wallpaper switching itself is a real, easy extension of the existing Settings app + `SETTINGS.TXT` persistence (v47), already proven for other knobs, not blocked on anything.
+Real dependency chain, traces back to prerequisites already logged in this file, not a new separate blocker: (1) real geolocation, Weather's lat/long is a hardcoded constant today, not live, a real gap on its own; (2) a real satellite/map tile image source, which needs the same missing image decoder (PNG at minimum) the Photos/Maps entry above already named as the real blocker, plus most tile/satellite providers force HTTPS the same way the Stocks-app data-source check proved for market data; (3) wallpaper switching itself is a real, easy extension of the existing Settings app + `SETTINGS.TXT` persistence (v47), already proven for other knobs, not blocked on anything.
 
 So: the "switch wallpapers in Settings" mechanism is real and buildable now (a style/source enum persisted the same way wind/dock-scale already are). The "location-dynamic satellite image" half is blocked on exactly task #9's prerequisite chain (image decoder) plus a real geolocation source and a real HTTPS-capable tile/satellite provider, not separate new scope. Revisit once the PNG decoder (queued) is real.
 
-Direct follow-up, same day: the real satellite-town wallpaper should become the default once buildable, with the existing v56/v60/v65 weather feature (dropdown, wind-reactive sway, rain/snow particles) kept but disabled by default rather than removed, an opt-in Settings toggle. Also recorded verbatim, not yet understood well enough to scope honestly: "eventually we can make the wallpaper epiphany" — noted here as stated rather than guessed at, revisit with Joshua directly before acting on it.
+Direct follow-up, same day: the real satellite-town wallpaper should become the default once buildable, with the existing v56/v60/v65 weather feature (dropdown, wind-reactive sway, rain/snow particles) kept but disabled by default rather than removed, an opt-in Settings toggle. Also recorded verbatim, not yet understood well enough to scope honestly: "eventually we can make the wallpaper epiphany", noted here as stated rather than guessed at, revisit with Joshua directly before acting on it.
 
 ## Real find: IP-based geolocation works over plain HTTP, no TLS needed (Sep 2026)
 Direct follow-up after Joshua asked about real GPS. Honest correction first: this kernel runs inside QEMU, which has no GPS hardware at all, emulated or real, a GNSS receiver is a real, separate piece of hardware even a future real-hardware target would need, not something "real hardware" alone unlocks. GPS is not the realistic path here.
