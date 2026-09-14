@@ -125,6 +125,19 @@ dependencies beyond clang, ld.lld and qemu.
       with no coverage tooling, don't chase that number, chase "does this
       feature have a real test that would catch a regression" for
       everything that ships from here on, kernel and app code alike.
+  4c. Standing docs-completeness requirement (direct request, Sep 2026):
+      `docs/ARCHITECTURE.md`'s Subsystems table and README.md's `Piece |
+      Where` table reached full real coverage of every `.c`/header-only
+      subsystem in this repo once (Sep 2026, 32/32 files + 15/15 apps).
+      Don't let that decay back into a stale v0-v6-era snapshot the way it
+      did before that pass. Any change that adds a new real file (a new
+      `drivers/*.c`, a new `kernel/*.h` app) gets a real row in both
+      tables in the same pass that ships it, not deferred to a later
+      cleanup sweep. This is architecture-doc coverage (does every real
+      file have a documented row), a different, achievable metric from
+      `progress.svg`'s comment-density line (real comment/blank-line %
+      inside the code itself, which has no sensible 100% target, chasing
+      that number would mean writing worse code on purpose).
   5. Ship it: commit, push, `wrangler deploy` for the landing page, bump
      `VERSION` for kernel work, one clear TLDR back, then pick up step 1
      again. Constraints and rules (this file, `roadmap.md`'s own model-
