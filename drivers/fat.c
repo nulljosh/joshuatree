@@ -146,6 +146,8 @@ static int names_eq(const u8 a[11], const u8 b[11]) {
     return memcmp(a, b, 11) == 0;
 }
 
+static u32 matched_lba;
+static int matched_index;
 static struct dir_entry *find_entry_in(u16 dir_cluster, const char *name) {
     static u8 sector[512];
     static struct dir_entry match;
@@ -161,7 +163,7 @@ static struct dir_entry *find_entry_in(u16 dir_cluster, const char *name) {
             if (entries[i].name[0] == 0x00) return 0;       /* end of directory */
             if (entries[i].name[0] == 0xE5) continue;         /* deleted */
             if (entries[i].attr & ATTR_VOLUME_ID) continue;
-            if (names_eq(entries[i].name, want)) { match = entries[i]; return &match; }
+            if (names_eq(entries[i].name, want)) { matched_lba = lba; matched_index = i; match = entries[i]; return &match; }
         }
     }
 }
@@ -328,9 +330,21 @@ int fat_mkdir(const char *name) {
     return ata_write_sector(slot_lba, sector);
 }
 
-int fat_write_file(const char *name, const void *data, unsigned int len) {
+static void release_chain(u16 cluster) {
+    for (u32 count = 0; cluster >= 2 && cluster < 0xFFF8 && count < total_clusters; count++) {
+        u16 next = fat_entry_read(cluster);
+        if (!fat_entry_write(cluster, 0)) return;
+        cluster = next;
+    }
+}
+
+static int write_file(const char *name, const void *data, unsigned int len, int replace) {
     if (!mounted || !*name) return 0;
-    if (find_entry_in(current_dir_cluster, name)) return 0; /* name taken, same scope as mkdir: no overwrite yet */
+    struct dir_entry *existing = find_entry_in(current_dir_cluster, name);
+    if (existing && (!replace || (existing->attr & ATTR_DIRECTORY))) return 0;
+    u16 old_cluster = existing ? existing->first_cluster_low : 0;
+    u32 slot_lba = matched_lba; int slot_idx = matched_index;
+    if (!existing && !find_free_slot(current_dir_cluster, &slot_lba, &slot_idx)) return 0;
 
     const u8 *src = (const u8 *)data;
     u16 first_cluster = 0, prev_cluster = 0;
@@ -338,8 +352,9 @@ int fat_write_file(const char *name, const void *data, unsigned int len) {
 
     while (remaining > 0) {
         u16 c = alloc_cluster();
-        if (!c) return 0; /* out of space; ponytail: no rollback of clusters already claimed, matches fat_delete's own no-reclaim scope */
-        if (first_cluster == 0) first_cluster = c; else fat_entry_write(prev_cluster, c);
+        if (!c) goto failed;
+        if (first_cluster == 0) first_cluster = c;
+        else if (!fat_entry_write(prev_cluster, c)) { release_chain(c); goto failed; }
         prev_cluster = c;
 
         u32 lba = cluster_to_lba(c);
@@ -348,18 +363,15 @@ int fat_write_file(const char *name, const void *data, unsigned int len) {
             memset(buf, 0, sizeof(buf)); /* zero-pad the tail of the last sector */
             u32 chunk = remaining < 512 ? remaining : 512;
             for (u32 i = 0; i < chunk; i++) buf[i] = src[i];
-            if (!ata_write_sector(lba + s, buf)) return 0;
+            if (!ata_write_sector(lba + s, buf)) goto failed;
             src += chunk;
             remaining -= chunk;
         }
     }
-    if (prev_cluster) fat_entry_write(prev_cluster, 0xFFFF); /* end of chain */
-
-    u32 slot_lba; int slot_idx;
-    if (!find_free_slot(current_dir_cluster, &slot_lba, &slot_idx)) return 0;
+    if (prev_cluster && !fat_entry_write(prev_cluster, 0xFFFF)) goto failed;
 
     u8 sector[512];
-    if (!ata_read_sector(slot_lba, sector)) return 0;
+    if (!ata_read_sector(slot_lba, sector)) goto failed;
     struct dir_entry *slot = &((struct dir_entry *)sector)[slot_idx];
     to_fat_name(name, slot->name);
     slot->attr = 0;
@@ -369,5 +381,18 @@ int fat_write_file(const char *name, const void *data, unsigned int len) {
     slot->write_date = 0;
     slot->first_cluster_low = first_cluster;
     slot->file_size = len;
-    return ata_write_sector(slot_lba, sector);
+    if (!ata_write_sector(slot_lba, sector)) return 0;
+    release_chain(old_cluster);
+    return 1;
+failed:
+    release_chain(first_cluster);
+    return 0;
+}
+
+int fat_write_file(const char *name, const void *data, unsigned int len) {
+    return write_file(name, data, len, 0);
+}
+
+int fat_replace_file(const char *name, const void *data, unsigned int len) {
+    return write_file(name, data, len, 1);
 }

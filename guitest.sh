@@ -11,17 +11,24 @@
 # DOCK_GAP=16, DOCK_PAD=12, DOCK_MARGIN_BOT=24, GUI_ICON_COUNT=7), not
 # guessed pixel coordinates, so this stays correct if that layout changes.
 #
-# HONEST, UNRESOLVED GAP: this currently fails end to end. Real
-# screendumps taken right after `mouse_move` show no cursor movement and
-# no hover-magnify at all, meaning QEMU's monitor mouse events aren't
-# reaching this kernel's PS2 driver in this headless config, most likely
-# because newer QEMU machine types default to a USB tablet as the primary
-# pointing device and `mouse_move`/`mouse_button` route there instead of
-# the legacy PS2 channel this kernel's mouse.c actually listens to. Tried
-# both with and without an explicit `-vga std`, same result either way.
-# Not wired into any regression flow, not claimed to work, kept here as a
-# real, complete starting point for whoever picks this up next rather
-# than thrown away, see roadmap.md for the honest status.
+# HONEST, UNRESOLVED GAP, re-diagnosed (Sep 2026): the original theory
+# ("QEMU routes monitor mouse to a USB tablet, never reaches PS2") was
+# wrong, disproved directly: `info mice` shows only "QEMU PS/2 Mouse"
+# registered, and a temporary serial klog inside mouse_get_delta's real
+# call site confirmed IRQ12 packets DO arrive and DO get decoded, one
+# `mouse_move` produces exactly one delta callback, every time. The real
+# problem is worse than "doesn't arrive": the decoded dx/dy bear no
+# consistent relationship to what was actually sent (`mouse_move 100 0`
+# and `mouse_move 0 100` both logged completely different, non-repeating
+# deltas across identical runs, one even showed movement on an axis given
+# 0). Most likely QEMU's HMP `mouse_move` synthesizes its motion through
+# an internal absolute-space conversion regardless of the active device
+# being relative PS/2, and/or the resulting packet stream races this
+# kernel's edge-triggered IRQ12 handler under -display none's timing,
+# neither of which this harness can fix from the guest side. Coordinate
+# math in this script (dock geometry -> pixel deltas) was never the bug;
+# don't waste time re-deriving it. Not wired into any regression flow,
+# not claimed to work, kept as a real starting point, see roadmap.md.
 set -e
 cd "$(dirname "$0")"
 make -s kernel.elf

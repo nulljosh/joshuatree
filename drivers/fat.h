@@ -40,4 +40,5 @@ int fat_mkdir(const char *name);
    Returns 1 on success, 0 if the name already exists (no overwrite yet,
    same scope decision as fat_mkdir) or the disk is full. */
 int fat_write_file(const char *name, const void *data, unsigned int len);
+int fat_replace_file(const char *name, const void *data, unsigned int len);
 #endif

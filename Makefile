@@ -35,6 +35,7 @@ drivers/app_quotestreak.h:
 	./gen_app.sh "$$HOME/Documents/Code/quotestreak/index.html" drivers/app_quotestreak.h app_quotestreak
 
 kernel/kernel.o: drivers/app_weather.h drivers/app_curbfind.h drivers/app_keyrate.h drivers/app_bookrank.h drivers/app_quotestreak.h
+kernel/kernel.o: kernel/editor.h drivers/editor_fonts.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
