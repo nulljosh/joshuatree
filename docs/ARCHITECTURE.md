@@ -54,7 +54,7 @@ that with the permanent, same-shaped tables.
 ## Apps
 
 Two different shapes of app live in this kernel, both dock-mounted, both
-counted in `GUI_APP_COUNT` (18 real apps, plus the Apps-folder tile and
+counted in `GUI_APP_COUNT` (20 real apps, plus the Apps-folder tile and
 Trash, `kernel/kernel.c`).
 
 **Four built-in apps, each its own header, each VFS-backed.** Same
@@ -69,6 +69,9 @@ separate Save step.
 | Reminders | `kernel/reminders.h` (v52 / 0.52.0) | `REMINDERS.TXT`, one line per item: `0`/`1` done flag, a space, the text. Up/down/select, `a` adds, `d` deletes, space toggles done |
 | Calendar | `kernel/calendar.h` (v54 / 0.54.0 grid, v55 / 0.55.0 events) | No file for the grid itself, today's date comes straight from the RTC's CMOS BCD registers each time; day-of-week is Zeller's congruence, swept against libc's own `timegm` for every day 1900-2099 (`tools/check-calendar.sh`, 0 mismatches) before shipping. Events: `EVENTS.TXT`, one `YYYY-MM-DD\|text` line per day, one event per date (a second add on the same day overwrites, doesn't append) |
 | Mail | `kernel/mail.h` (v59 / 0.58.0) | `MAIL.TXT`, `\|`-delimited `from\|subject\|body\|read`. Two starter messages compiled in so the inbox isn't blank before a real `MAIL.TXT` exists, which always wins once it does. No SMTP/IMAP client, deliberately: a local mail-shaped app, the same relationship Reminders has to a real to-do sync service |
+| Contacts | `kernel/contacts.h` (v70 / 0.64.0) | `CONTACTS.TXT`, same VFS write-through shape as the other three: a fixed-size static array (name/phone/email), view/add/delete. No CardDAV/sync backend, deliberately, same offline-only call Mail already made |
+
+**Calculator** (`kernel/calculator.h`, v70 / 0.64.0) doesn't fit the VFS-backed table above, it has no persistence at all on purpose: a recursive-descent parser over `+ - * / ()` and numbers, one-line input evaluated on enter. Ported from numen's real calculator parser (the v6 roadmap note that first flagged it as portable, pure logic, no network dependency).
 
 **Eleven apps ported natively from the fleet, thin ports on purpose.**
 `gen_app.sh` turns a sibling repo's real single-file static build
