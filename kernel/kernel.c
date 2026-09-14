@@ -2011,6 +2011,38 @@ static void gui_launch_chat(void){
 
 #include "editor.h"
 
+/* v44: draws one character of DejaVu Sans Mono (the same antialiased
+   glyph tables the Notes editor already ships) into the 16x32 physical
+   cell that one logical 8x16 character occupies, alpha-blended over
+   whatever is already there. Mono, regular, the 24px size: at 2x a 24px
+   face fills the 32px cell the way the bitmap did, and its advance
+   (~14px) fits inside the 16px cell so glyphs never collide. */
+static void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg){
+    if (c < 32 || c > 126) c = (c == 0xF8) ? 176 : '?'; /* 0xF8 is the CP437 degree sign the weather uses */
+    const struct editor_glyph *g;
+    if (c == 176) { /* degree: DejaVu has it, but the table only carries 32..126; draw a small ring instead */
+        if (bg >= 0) for (int j = 0; j < 32; j++) for (int i = 0; i < 16; i++) window_pixel_phys(px + i, py + j, (unsigned int)bg);
+        for (int j = 0; j < 9; j++) for (int i = 0; i < 9; i++) { int dx = i - 4, dy = j - 4; int d2 = dx*dx + dy*dy; if (d2 >= 5 && d2 <= 12) window_pixel_phys(px + 3 + i, py + 8 + j, fg); } /* a ring at cap height, where a degree sign sits */
+        return;
+    }
+    g = &editor_glyphs[((2 * 2 + 0) * 4 + 2) * 95 + (c - 32)];
+    if (bg >= 0) for (int j = 0; j < 32; j++) for (int i = 0; i < 16; i++) window_pixel_phys(px + i, py + j, (unsigned int)bg);
+    int ox = px + 1 + g->left, oy = py + g->top - 2; /* `top` is measured from the line box's top (see editor_layout), not a baseline; the 24px face was sized for a 36px line box, ours is 32 */
+    for (int row = 0; row < g->height; row++){
+        for (int col = 0; col < g->width; col++){
+            int a = editor_pixels[g->offset + row * g->width + col];
+            if (!a) continue;
+            int x = ox + col, y = oy + row;
+            if (x < px || x >= px + 16) continue; /* keep inside the cell so neighbours never overdraw each other */
+            unsigned int d = window_get_pixel_phys(x, y);
+            unsigned int r = (((fg >> 16) & 0xFF) * a + ((d >> 16) & 0xFF) * (255 - a)) / 255;
+            unsigned int gg = (((fg >> 8) & 0xFF) * a + ((d >> 8) & 0xFF) * (255 - a)) / 255;
+            unsigned int b = ((fg & 0xFF) * a + (d & 0xFF) * (255 - a)) / 255;
+            window_pixel_phys(x, y, (r << 16) | (gg << 8) | b);
+        }
+    }
+}
+
 /* Real, reported bug, not a style complaint: gui_wait_close's "any key
    closes" is right for a page you only ever read (Weather, Curbfind,
    Bookrank, Quotestreak), but Keyrate was wired to that same read-only
@@ -2541,6 +2573,7 @@ static void gui_run(void){
        16:9 panel came out visibly skewed; matching the panel's own shape
        means fullscreen is pixel-exact with no scaling at all. */
     if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
+    font_set_aa(gui_aa_char); /* v44: real typeface for every string from here on */
     gui_draw_boot_screen();
     gui_order_init();
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;

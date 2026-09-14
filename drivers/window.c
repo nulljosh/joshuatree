@@ -19,6 +19,7 @@ static u32 phys_w = 0, scale = 1;  /* v41: physical framebuffer may be an intege
 static u32 *target_fb = 0;
 static u32 target_w = 0, target_h = 0;
 
+int window_has_target(void) { return target_fb != 0; }
 void window_push_target(u32 *buf, u32 w, u32 h) { target_fb = buf; target_w = w; target_h = h; }
 void window_pop_target(void) { target_fb = 0; target_w = 0; target_h = 0; }
 

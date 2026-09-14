@@ -38,16 +38,19 @@
   #stage-wrap { background: #000; position: relative; }
   #stage { position: relative; width: 100%; height: 100vh; height: 100svh; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 1; }
   /* Real, repeatedly-reported bug, root cause finally confirmed live: on a
-     narrow phone, a 100svh stage is far taller than the kernel's real 4:3
-     (800x600) output can ever fill at full width, so most of that height
+     narrow phone, a 100svh stage is far taller than the kernel's real 16:9
+     (1920x1080) output can ever fill at full width, so most of that height
      was unavoidable black letterbox by simple geometry, not a centering
      glitch, measured directly at 290px of pure black above AND below a
      286px-tall canvas in an 866px box. Full-bleed 100svh only makes sense
      when the viewport is roughly as wide as it is tall or wider; below
      that, sizing the stage to the demo's own 4:3 shape instead removes
      the dead space at the source rather than trying to center it better. */
+  /* v44: 16:9, not 4:3. The kernel opens 1920x1080 now (v42), and a 4:3
+     stage around a 16:9 image is the same black-bar bug the note above
+     describes, just rotated. */
   @media (max-width: 700px) {
-    #stage { height: auto; aspect-ratio: 4 / 3; }
+    #stage { height: auto; aspect-ratio: 16 / 9; }
   }
   #v86-embed { position: absolute; inset: 0; cursor: pointer; outline: none; }
   #screen_container { position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
@@ -171,9 +174,9 @@
   </div>
 
   <div class="steps">
-    <div class="step"><div class="n">What</div><p>A whole operating system. Kernel, desktop, windows, network stack, 15 apps. Every layer written here, nothing borrowed.</p></div>
+    <div class="step"><div class="n">What</div><p>A whole operating system. Kernel, desktop, terminal, network stack, 15 apps, live weather in the menu bar. Runs at 1920×1080. Every layer written here, nothing borrowed.</p></div>
     <div class="step"><div class="n">Who</div><p>Me, solo, pairing with Claude. No team, no funding, no company.</p></div>
-    <div class="step"><div class="n">When</div><p>Started August 2026. 37 versions since, each one shipped only after it was actually proven working, not just compiling.</p></div>
+    <div class="step"><div class="n">When</div><p>Started August 2026. 44 versions since, each one shipped only after it was actually proven working, not just compiling. Leave the demo alone for a few seconds and it shows itself off.</p></div>
     <div class="step"><div class="n">Why</div><p>I already talk to an AI to build things. I want that native to the machine, not bolted onto someone else's OS.</p></div>
     <div class="step"><div class="n">Where it's going</div><p>Next: a real syscall interface, so programs can target this thing. That's 1.0. Then voice control, then booting on actual hardware instead of an emulator.</p></div>
   </div>

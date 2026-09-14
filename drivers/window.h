@@ -29,6 +29,7 @@ int window_open_scaled(unsigned int width, unsigned int height, unsigned int bpp
 unsigned int window_scale(void);
 void window_pixel_phys(int px, int py, unsigned int color);
 unsigned int window_get_pixel_phys(int px, int py);
+int window_has_target(void);
 void window_rect(int x, int y, int w, int h, unsigned int color);
 unsigned int window_width(void);
 unsigned int window_height(void);
@@ -48,4 +49,5 @@ int window_open_scaled(unsigned int width, unsigned int height, unsigned int bpp
 unsigned int window_scale(void);
 void window_pixel_phys(int px, int py, unsigned int color);
 unsigned int window_get_pixel_phys(int px, int py);
+int window_has_target(void);
 #endif

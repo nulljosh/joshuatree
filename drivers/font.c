@@ -71,7 +71,21 @@ void font_init(void) {
     outb(GC_INDEX,  0x06); outb(GC_DATA, gc6);
 }
 
+/* v44 (0.44.0): the typeface pass. Every string in the GUI goes through
+   font_draw_char, so this one hook is enough to replace the 8x16 CP437
+   bitmap (each pixel a 2x2 block on the real panel) with a real
+   antialiased typeface drawn at physical resolution, everywhere at once.
+   The hook is set by the GUI (it owns the glyph tables, see kernel.c) and
+   only used when there is a real scaled framebuffer to draw into; the
+   supersample targets icons render through, and VGA text mode, keep the
+   bitmap path. The 8px logical advance is untouched on purpose: every
+   layout in this kernel measures text as strlen*8, and this changes what
+   text looks like, not where it goes. */
+static void (*aa_hook)(unsigned char c, int px, int py, unsigned int fg, int bg) = 0;
+void font_set_aa(void (*hook)(unsigned char, int, int, unsigned int, int)) { aa_hook = hook; }
+
 void font_draw_char(unsigned char c, int x, int y, unsigned int fg, int bg) {
+    if (aa_hook && window_scale() > 1 && !window_has_target()) { aa_hook(c, x * (int)window_scale(), y * (int)window_scale(), fg, bg); return; }
     const u8 *glyph = glyphs + (unsigned int)c * 16;
     for (int row = 0; row < 16; row++) {
         u8 bits = glyph[row];

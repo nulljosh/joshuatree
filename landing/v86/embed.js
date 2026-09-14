@@ -286,11 +286,60 @@
     resizeCanvas(); // the canvas's real pixel resolution only exists once graphical mode sets it, re-check every tick until it does
   }, 200);
 
-  // stopAutoplay is kept as a no-op call site for focusIn() above; there's
-  // no scripted CLI demo left to cancel now that boot drives straight into
-  // the GUI, but focusIn() calling it costs nothing and keeps that code
-  // simple if a mouse-driven idle tour gets added here later.
-  function stopAutoplay() {}
+  // v44: the idle tour. Left alone for a few seconds, the demo shows
+  // itself off: the cursor glides to each dock app, opens it, lets it sit,
+  // closes it, moves on. Every step goes through the exact same bus path
+  // a real tap uses (moveCursorTo + a click), so the tour is proof the
+  // real input path works, not a separate animation that could drift from
+  // it. The instant a visitor clicks, taps or types, focusIn() sets
+  // `focused` and the tour stops between steps and never restarts.
+  var tourTimer = 0, tourRunning = false;
+  function stopAutoplay() { if (tourTimer) { clearTimeout(tourTimer); tourTimer = 0; } tourRunning = false; }
+  function tourStep(i, order) {
+    if (focused || !adaptersReady) return;
+    if (i >= order.length) i = 0;
+    var kx = order[i][0], ky = order[i][1];
+    tourRunning = true;
+    // Drive the emulator's own input even though the visitor hasn't
+    // focused: the mouse adapter is gated for real people, not for us.
+    emulator.mouse_adapter.emu_enabled = true;
+    moveCursorTo(kx, ky, function () {
+      if (focused) return;
+      tourTimer = setTimeout(function () {
+        if (focused) return;
+        emulator.bus.send("mouse-click", [true, false, false]);
+        setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 80);
+        // let the app sit on screen, then a tap anywhere closes it
+        tourTimer = setTimeout(function () {
+          if (focused) return;
+          emulator.bus.send("mouse-click", [true, false, false]);
+          setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 80);
+          tourTimer = setTimeout(function () { tourStep(i + 1, order); }, 1500);
+        }, 3500);
+      }, 400);
+    });
+  }
+  function startTourWhenReady() {
+    if (focused) return;
+    // Dock geometry in LOGICAL kernel pixels, same constants as kernel.c:
+    // 8 slots, icons 10% of height, gap 6, pad 10, bottom margin 24.
+    var icon = Math.floor(LOGICAL_H * 10 / 100), gap = 6, pad = 10, count = 8, marginBot = 24;
+    var dockW = count * icon + (count - 1) * gap + 2 * pad;
+    var x0 = Math.floor((LOGICAL_W - dockW) / 2) + pad + Math.floor(icon / 2);
+    var cy = LOGICAL_H - marginBot - pad - Math.floor(icon / 2);
+    // slots 1..6: Files, Terminal, Notes, Chat, Weather, Curbfind (skip Apps and Trash)
+    var order = [];
+    for (var slot = 1; slot <= 6; slot++) order.push([x0 + slot * (icon + gap), cy]);
+    tourStep(0, order);
+  }
+  // Boot takes a few seconds; the tour waits for graphical mode plus a
+  // beat, and never starts at all once the visitor has focused.
+  var tourArmed = false;
+  setInterval(function () {
+    if (tourArmed || focused) return;
+    var vga = emulator.v86 && emulator.v86.cpu.devices.vga;
+    if (vga && vga.graphical_mode) { tourArmed = true; tourTimer = setTimeout(startTourWhenReady, 6000); }
+  }, 500);
 
   window.__joshuaTreeEmulator = emulator; // for debugging from the console, harmless to leave
 })();
