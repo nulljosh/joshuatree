@@ -1,14 +1,70 @@
 #!/usr/bin/env bash
 # Regenerate progress.svg: a line graph of cumulative capability (items
-# checked off) across versions, from roadmap.md's checkbox counts and the
-# "## Done" collapsed-version marker. Run after checking off/adding items.
+# checked off) across versions.
+#
+# Real bug found and fixed, not a styling tweak: this used to count
+# "- [x]" lines live out of roadmap.md for every version, but roadmap-prune
+# (part of every /wrapup) deliberately strips a shipped version's checked
+# items back out once it's tagged, keeping the real history in git log
+# instead of duplicating it in the roadmap file. That's correct for
+# roadmap.md's own job (show what's still open), but it meant this script
+# saw zero items for every already-pruned version, a dead flat line for
+# v2 through v22 before the real jump at v23+, not because nothing
+# shipped, because the live file could no longer see what had.
+#
+# Real fix: version-history.tsv is a small, permanent ledger (never
+# pruned) of "version <tab> real item count", computed once per version
+# straight from that version's own roadmap.md content at the moment it
+# was tagged (`git show jt-vN:roadmap.md`, before any later pruning
+# touched it), so the number is exactly what actually shipped, not a
+# guess. This script keeps that ledger self-maintaining: any git tag not
+# yet recorded gets computed and appended automatically. Only the current,
+# still-open, not-yet-tagged version is counted live from roadmap.md, the
+# one case where that's still correct.
 set -euo pipefail
 cd "$(dirname "$0")"
+
+LEDGER="version-history.tsv"
+touch "$LEDGER"
+
+count_items_at() {
+  # $1: git ref (a tag, or empty for the working tree's roadmap.md)
+  # $2: version label, e.g. v23
+  local ref="$1" vnum="$2" content
+  if [ -n "$ref" ]; then
+    content="$(git show "$ref:roadmap.md" 2>/dev/null || true)"
+  else
+    content="$(cat roadmap.md)"
+  fi
+  python3 -c "
+import re, sys
+vnum = sys.argv[1]
+content = sys.stdin.read()
+in_section = False
+count = 0
+for line in content.split(chr(10)):
+    if line.startswith('## '):
+        m = re.match(r'^## (v\d+)\b', line)
+        in_section = bool(m and m.group(1) == vnum)
+    elif in_section and line.startswith('- [x]'):
+        count += 1
+print(count)
+" "$vnum" <<< "$content"
+}
+
+# Backfill any tagged version this ledger hasn't recorded yet.
+for tag in $(git tag -l 'jt-v*' | sort -V); do
+  vnum="${tag#jt-}"
+  if ! grep -q "^${vnum}	" "$LEDGER"; then
+    c="$(count_items_at "$tag" "$vnum")"
+    echo -e "${vnum}\t${c}" >> "$LEDGER"
+  fi
+done
+sort -t v -k2 -n -o "$LEDGER" "$LEDGER"
 
 labels=()
 cum=()
 running=0
-
 total=0
 
 marker="$(grep -o 'done-items [0-9]*/[0-9]*' roadmap.md | head -1 || true)"
@@ -18,9 +74,22 @@ if [ -n "$marker" ]; then
   labels+=("done"); cum+=("$running")
 fi
 
-cur=""; count=0; vtotal=0
-flush() { if [ -n "$cur" ]; then running=$((running + count)); total=$((total + vtotal)); labels+=("$cur"); cum+=("$running"); fi; }
+# Every version already recorded in the permanent ledger, oldest first.
+while IFS=$'\t' read -r vnum c; do
+  [ -z "$vnum" ] && continue
+  running=$((running + c)); total=$((total + c))
+  labels+=("$vnum"); cum+=("$running")
+done < "$LEDGER"
 
+# Whatever's left in the live roadmap.md that isn't yet in the ledger (the
+# current, still-open, not-yet-tagged frontier version), counted live.
+# Real bug caught here, not shipped blind: comparing against only the
+# LAST ledger version let every earlier ledgered version whose "## vN"
+# header is still in roadmap.md (checkbox items get pruned, the header
+# doesn't) get counted a second time on top of its own ledger entry.
+# Needs the full set of ledgered versions excluded, not just the newest.
+cur=""; count=0; vtotal=0
+flush() { if [ -n "$cur" ] && ! grep -q "^${cur}	" "$LEDGER"; then running=$((running + count)); total=$((total + vtotal)); labels+=("$cur"); cum+=("$running"); fi; }
 while IFS= read -r line; do
   if [[ "$line" =~ ^##[[:space:]]+(v[0-9]+) ]]; then
     flush
@@ -90,4 +159,4 @@ svg+="</svg>"
 echo "$svg" > progress.svg
 mkdir -p landing
 cp progress.svg landing/progress.svg
-echo "wrote progress.svg (cumulative through ${labels[$((n-1))]}: ${cum[$((n-1))]} items)"
+echo "wrote progress.svg (cumulative through ${labels[$((n-1))]}: ${cum[$((n-1))]} items, real per-version data)"

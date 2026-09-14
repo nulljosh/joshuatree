@@ -603,16 +603,19 @@ static int gui_isqrt(int n){
    stops instead (warm gold catching the light, terracotta through the
    middle, deep espresso at the bottom), still entirely inside this
    repo's own warm-only rule, never touching teal or blue. */
-#define WALL_TOP 0x00F0B25C
-#define WALL_MID 0x00C6672E
-#define WALL_BOT 0x00201009
+/* Real variables, not #defines: a real Settings app (below) lets the user
+   actually change these, a customizable wallpaper needs somewhere real to
+   write the choice to, not a compile-time constant. */
+static unsigned int wall_top = 0x00F0B25C;
+static unsigned int wall_mid = 0x00C6672E;
+static unsigned int wall_bot = 0x00201009;
 static unsigned int gui_wallpaper_color(int row){
     int h = (int)window_height();
     if (row < 0) row = 0;
     if (row > h) row = h;
     int mid = h * 2 / 5; /* the warm midtone sits closer to the top, like a real sunset's brightest band */
-    if (row <= mid) return gui_lerp(WALL_TOP, WALL_MID, row, mid);
-    return gui_lerp(WALL_MID, WALL_BOT, row - mid, h - mid);
+    if (row <= mid) return gui_lerp(wall_top, wall_mid, row, mid);
+    return gui_lerp(wall_mid, wall_bot, row - mid, h - mid);
 }
 
 /* Real regression caught by testing, not assumed safe: this used to paint

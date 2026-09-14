@@ -122,6 +122,17 @@
   // unscaled-pixel problem as mouse movementX/Y above, worse on a phone
   // where the display scale is usually larger. Same fix, our own tracked
   // last-touch position instead of the browser-provided movement value.
+  //
+  // Real, reported bug this used to have: the hero is full viewport height
+  // (100svh), and this used to call preventDefault() on every touchmove
+  // once focused, which is the browser's own scroll gesture, trapping a
+  // mobile visitor with no way to scroll past it at all once they'd
+  // tapped in even once. Never calling preventDefault() here means the
+  // page can still scroll normally during a touch-drag inside the kernel
+  // view, at the cost of that drag not being quite as clean (the page
+  // may scroll a little at the same time), a real, deliberate trade-off:
+  // never trapping a visitor matters more than perfectly smooth touch
+  // control, which wasn't the primary way to use this anyway.
   var lastTouchX = null, lastTouchY = null;
   screenContainer.addEventListener("touchmove", function (ev) {
     if (!focused || !emulator.mouse_adapter || !emulator.mouse_adapter.emu_enabled) return;
@@ -133,8 +144,7 @@
     }
     lastTouchX = t.clientX; lastTouchY = t.clientY;
     ev.stopImmediatePropagation();
-    ev.preventDefault();
-  }, { capture: true, passive: false });
+  }, { capture: true, passive: true });
   screenContainer.addEventListener("touchstart", function (ev) {
     var t = ev.changedTouches && ev.changedTouches[0];
     if (t) { lastTouchX = t.clientX; lastTouchY = t.clientY; }
