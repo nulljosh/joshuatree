@@ -648,7 +648,7 @@ static unsigned int gui_wallpaper_color(int row){
    are well under 16px), a real gradient across a few pixels using the
    actual radial distance (gui_isqrt) reads meaningfully smoother, direct
    follow-up feedback after the first AA pass still looked too bitmap. */
-#define AA_BAND 3
+#define AA_BAND 5
 
 /* The flat-fill rounded rect this once sat next to is gone now, no
    caller left once chat/folder moved to a real gradient or opaque fill.
@@ -2155,14 +2155,6 @@ void kmain(unsigned int multiboot_info_addr){
        the banner) rather than assumed. A plain RAM address ordinary text
        memory doesn't share survives the mode switch untouched. */
     *(volatile unsigned int *)0x9000 = 0xB007C0DE;
-    { /* TEMP verification, reverted after: dump a generated keyrate word batch to raw RAM */
-        static char kr_test[256];
-        unsigned int rng = 12345u | 1;
-        int n = keyrate_gen_words(kr_test, sizeof(kr_test), &rng);
-        int dump = n < 96 ? n : 96;
-        for (int i = 0; i < dump; i++) *(volatile char *)(0xA000 + i) = kr_test[i];
-        *(volatile char *)(0xA000 + dump) = '$';
-    }
     kbd_drain(); /* discard any stray byte queued during boot (keyboard_enable_scanning, mouse_init) before real input starts */
     /* A real desktop OS boots to a desktop, not a command line: gui_run()
        already has a clean way back to this exact shell (esc closes the
