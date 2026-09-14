@@ -1200,6 +1200,20 @@ static void gui_run(void){
            honest, separate, larger limitation) but makes it rare instead
            of constant. */
         if (launched || mx != last_mx || my != last_my || hover_slot != last_hover || drag_slot != last_drag) {
+            /* Real, user-reported bug, reproduced live: hovering the cursor
+               over the menu bar left a jagged trail of ghost cursors there.
+               Root cause: the menu bar's own minute-change gate (above)
+               means it only repaints when the clock ticks over, but the
+               cursor is drawn directly on top of it every frame regardless.
+               Everywhere else on screen gui_draw_wallpaper repaints every
+               row every frame, which erases the previous cursor draw for
+               free; the menu bar's rows are the one band nothing repaints
+               on a normal frame, so old cursor pixels never get cleared
+               while the mouse is up there. Forcing a real menu bar redraw
+               whenever the cursor is entering, moving within, or leaving
+               that band (not just on the minute) fixes it at the source
+               instead of special-casing the cursor draw itself. */
+            if (my < GUI_MENUBAR_H || last_my < GUI_MENUBAR_H) gui_menubar_force_redraw();
             gui_draw_desktop(hover_slot, drag_slot, mx, my);
             if (drag_slot < 0) gui_draw_cursor(mx, my);
             last_mx = mx; last_my = my; last_hover = hover_slot; last_drag = drag_slot;
