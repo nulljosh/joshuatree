@@ -769,10 +769,6 @@ static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned i
     }
 }
 
-static void gui_draw_diag(int x0, int y0, int dx, int dy, int n, unsigned int c){
-    for (int i = 0; i < n; i++) window_pixel(x0 + dx * i, y0 + dy * i, c);
-}
-
 /* The real mark, not an approximation invented from scratch: this is the
    same trunk/two-branch/tufted-yucca structure `icon.svg` actually draws
    (M100 168 L100 108, then two branches, then a 3-line spiky tuft at the
@@ -781,18 +777,35 @@ static void gui_draw_diag(int x0, int y0, int dx, int dy, int n, unsigned int c)
    every dock icon already uses. A first attempt drew the crown as one
    filled circle; a real screenshot showed it reading as a lollipop, not a
    tree, caught by looking, not assumed correct from the code alone. */
-static void gui_draw_logo(int x, int cy){
+/* `scale` lets the same logo draw crisp at the tiny 16px menu bar size
+   (scale 1, hairline AA strokes) and much larger on the boot splash
+   (scale 4+, real thickness) without two separate drawings to keep in
+   sync. `bg` is whatever this is drawn over, so the branch/tuft capsule
+   strokes' AA can blend into it correctly, the menu bar's white and the
+   boot screen's dark background are not the same color. Real fix, not
+   just a scale knob: the branches and tufts used to be gui_draw_diag,
+   raw single-pixel window_pixel dots approximating a line, the same
+   "8-bit" staircase problem the weather icon's rays had, now on the one
+   piece of branding that appears everywhere including full-size at boot. */
+static void gui_draw_logo(int x, int cy, int scale, unsigned int bg){
     unsigned int c = 0x00C1502F;
-    int split_y = cy - 1, top_y = cy - 7;
-    window_rect(x, split_y, 1, (cy + 5) - split_y + 1, c); /* trunk, base to branch split */
-    window_rect(x, top_y, 1, split_y - top_y + 1, c);      /* trunk continuing above the split */
-    gui_draw_diag(x - 1, split_y - 1, -1, -1, 4, c);        /* left branch */
-    gui_draw_diag(x + 1, split_y - 1,  1, -1, 4, c);        /* right branch */
+    int split_y = cy - scale, top_y = cy - 7 * scale;
+    int r = scale > 1 ? scale - 1 : 0;
+    window_rect(x, split_y, scale, (cy + 5 * scale) - split_y + 1, c); /* trunk, base to branch split */
+    window_rect(x, top_y, scale, split_y - top_y + 1, c);              /* trunk continuing above the split */
+    gui_draw_capsule(x, split_y, x - 4 * scale, split_y - 4 * scale, r, c, bg); /* left branch */
+    gui_draw_capsule(x, split_y, x + 4 * scale, split_y - 4 * scale, r, c, bg); /* right branch */
 
-    int lx = x - 4, ly = split_y - 4, rx = x + 4, ry = split_y - 4;
-    gui_draw_diag(x,  top_y, -1, -1, 2, c); gui_draw_diag(x,  top_y, 0, -1, 3, c); gui_draw_diag(x,  top_y, 1, -1, 2, c);
-    gui_draw_diag(lx, ly,   -1, -1, 2, c); gui_draw_diag(lx, ly,   -1,  0, 2, c);  gui_draw_diag(lx, ly,   -1,  1, 2, c);
-    gui_draw_diag(rx, ry,    1, -1, 2, c); gui_draw_diag(rx, ry,    1,  0, 2, c);  gui_draw_diag(rx, ry,    1,  1, 2, c);
+    int lx = x - 4 * scale, ly = split_y - 4 * scale, rx = x + 4 * scale, ry = split_y - 4 * scale;
+    gui_draw_capsule(x, top_y, x - 3 * scale, top_y - 3 * scale, r, c, bg);
+    gui_draw_capsule(x, top_y, x,             top_y - 3 * scale, r, c, bg);
+    gui_draw_capsule(x, top_y, x + 3 * scale, top_y - 3 * scale, r, c, bg);
+    gui_draw_capsule(lx, ly, lx - 2 * scale, ly - 2 * scale, r, c, bg);
+    gui_draw_capsule(lx, ly, lx - 2 * scale, ly,             r, c, bg);
+    gui_draw_capsule(lx, ly, lx - 2 * scale, ly + 2 * scale, r, c, bg);
+    gui_draw_capsule(rx, ry, rx + 2 * scale, ry - 2 * scale, r, c, bg);
+    gui_draw_capsule(rx, ry, rx + 2 * scale, ry,             r, c, bg);
+    gui_draw_capsule(rx, ry, rx + 2 * scale, ry + 2 * scale, r, c, bg);
 }
 
 /* Real, user-reported flicker: this whole bar (a solid white rect, the
@@ -825,7 +838,7 @@ static void gui_draw_menubar(void){
 
     window_rect(0, 0, (int)window_width(), GUI_MENUBAR_H, 0x00FFFFFF);
     window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
-    gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2);
+    gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2, 1, 0x00FFFFFF);
     font_draw_string("Joshua Tree", 32, 7, 0x001C1C1E, -1);
 
     static const char *WD[7] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
@@ -1209,8 +1222,43 @@ static void gui_launch(int icon){
     else if (icon == 6) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
 }
 
+/* A brief boot splash instead of cutting straight to the desktop with no
+   transition at all, the same beat every real OS gives a fresh boot: the
+   logo shows immediately, and a thin progress bar only appears once that
+   hold crosses a full second, so a genuinely fast boot (which this one
+   almost always is) never shows a bar filling for no real reason, just
+   the logo for a beat. Runs off ticks() (real PIT time, ~100Hz, already
+   confirmed via the shell's own "sleep 1s" = sleep_ticks(100)), not a
+   frame-counted loop, so it holds the same real duration regardless of
+   how fast this machine happens to render each frame. */
+static void gui_draw_boot_screen(void){
+    unsigned int bg = 0x00201009; /* the wallpaper's own espresso-brown, on-brand, not a new color */
+    window_clear(bg);
+    gui_draw_logo(400, 260, 5, bg);
+    const char *wordmark = "JOSHUA TREE";
+    font_draw_string(wordmark, 400 - (int)strlen(wordmark) * 4, 300, 0x00F5EFE8, -1);
+
+    unsigned int start = ticks();
+    unsigned int logo_only = 60; /* 0.6s: just the logo and wordmark, no bar yet */
+    unsigned int bar_span  = 40; /* 0.4s: bar fills once shown, ~1s total */
+    int bar_x = 320, bar_y = 340, bar_w = 160, bar_h = 6;
+    int bar_track_drawn = 0;
+    for (;;) {
+        unsigned int elapsed = ticks() - start;
+        if (elapsed >= logo_only) {
+            if (!bar_track_drawn) { window_rect(bar_x, bar_y, bar_w, bar_h, gui_blend(bg, 0x00FFFFFF)); bar_track_drawn = 1; }
+            unsigned int since_bar = elapsed - logo_only;
+            int fill = since_bar >= bar_span ? bar_w : (int)(bar_w * since_bar / bar_span);
+            window_rect(bar_x, bar_y, fill, bar_h, 0x00C1502F);
+        }
+        if (elapsed >= logo_only + bar_span) break;
+        __asm__ volatile ("hlt");
+    }
+}
+
 static void gui_run(void){
     if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); return; }
+    gui_draw_boot_screen();
     gui_order_init();
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;
     /* press_slot: the slot the mouse went down on, latched until release.
