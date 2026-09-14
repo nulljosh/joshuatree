@@ -314,3 +314,11 @@ Direct requests: "improve fonts across OS, no more bitmap", "the demo should aut
 - [x] `tourtest.mjs`: loads the demo, touches nothing, samples the canvas for 14s and requires an app to have opened on its own. It did: desktop 5932 bright px, then 117 (Terminal), then 71309 (a light app). `mobiletest.mjs` is the interactive half; together they cover both ways a visitor meets this thing.
 - [x] Landing: phone stage is 16:9 now to match the kernel (the 4:3 stage around a 16:9 image was the old black-bar bug rotated ninety degrees); copy updated to 44 versions, weather, 1920x1080, the tour.
 - [x] Verified: `check.sh`, `apptest.sh` (15 apps), `tourtest.mjs`, a real screendump of the menu bar at full res reviewed against the previous bitmap one.
+
+## 0.44.1, the crunch (Sep 2026)
+PATCH: three more sources of visible pixels, each named from a 2x nearest-neighbour zoom of the real dock, none new capability.
+- [x] `AA_BAND` was a constant 5. Inside an icon's 6x supersample that is a third of a physical pixel, so primitives went in with effectively no antialiasing and the box filter did all of it, ~10 grey levels per edge, crunch on every diagonal. It's a runtime knob now; the icon renderer widens it to 3 physical pixels' worth for the duration of a render and restores it.
+- [x] The dock tray's edge used `AA_BAND * scale`, ten physical pixels, which read as a soft, blurry corner. Three physical pixels now: crisp.
+- [x] `gui_fill_triangle_down` never had antialiasing at all (the pencil tip, the pin's point, the chat bubble's tail). Exact half-width in 8.8 fixed point, edge pixels blended by fractional coverage.
+- [x] The glyph "shadow" was a hard, near-black offset copy, reading as a dark outline. 25% toward black now, a shadow.
+- [x] Verified: `check.sh`, `apptest.sh` (15 apps), 2x zoomed screendumps before and after each change.

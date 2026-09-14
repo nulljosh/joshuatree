@@ -790,7 +790,14 @@ static unsigned int gui_wallpaper_color(int row){
    are well under 16px), a real gradient across a few pixels using the
    actual radial distance (gui_isqrt) reads meaningfully smoother, direct
    follow-up feedback after the first AA pass still looked too bitmap. */
-#define AA_BAND 5
+/* v44.1: a runtime knob, not a constant. On screen, 5 logical px is right.
+   Inside an icon's supersample buffer it is a third of a physical pixel,
+   so the primitives went in with effectively no antialiasing and the
+   downsample's box filter did all of it, with only ~10 grey levels per
+   edge, visible as crunch on every diagonal. The icon renderer widens it
+   for the duration of a render and puts it back. */
+static int aa_band = 5;
+#define AA_BAND aa_band
 
 /* The flat-fill rounded rect this once sat next to is gone now, no
    caller left once chat/folder moved to a real gradient or opaque fill.
@@ -818,7 +825,7 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
        band widened to match, blending each edge pixel against the actual
        wallpaper colour behind it. */
     int sc = (int)window_scale();
-    int px0 = x * sc, py0 = y * sc, pw = w * sc, ph = h * sc, pr = r * sc, band = AA_BAND * sc;
+    int px0 = x * sc, py0 = y * sc, pw = w * sc, ph = h * sc, pr = r * sc, band = 3; /* v44.1: 3 physical px; AA_BAND*sc was 10 and read as a soft, blurry corner */
     for (int py = 0; py < ph; py++){
         unsigned int bg = gui_wallpaper_color(y + py / sc);
         for (int px = 0; px < pw; px++){
@@ -1081,11 +1088,22 @@ static void gui_draw_wallpaper(void){
 /* Fills a downward-pointing triangle: flat top of half-width `half_w` at
    (cx, y0), narrowing to a point over `h` rows. Used for the map pin's tip
    and the quote marks' tails. */
+/* v44.1: antialiased. The old version rounded each row's half-width to a
+   whole pixel, so both slanted edges were staircases (the pencil tip in
+   every dock render). Exact half-width in 8.8 fixed point; the outermost
+   pixel on each side is blended by its fractional coverage against what
+   is already there. */
 static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned int color){
+    if (h <= 0) return;
     for (int row = 0; row < h; row++){
-        int w = half_w - (half_w * row) / h;
-        if (w < 0) w = 0;
-        window_rect(cx - w, y0 + row, 2 * w + 1, 1, color);
+        int w256 = (half_w * 256 * (h - row)) / h;   /* half-width, 8.8 */
+        int wi = w256 >> 8, frac = w256 & 255;
+        if (wi > 0) window_rect(cx - wi + 1, y0 + row, 2 * wi - 1, 1, color);
+        if (frac) {
+            unsigned int l = window_get_pixel(cx - wi, y0 + row), r = window_get_pixel(cx + wi, y0 + row);
+            window_pixel(cx - wi, y0 + row, gui_lerp(l, color, frac, 256));
+            window_pixel(cx + wi, y0 + row, gui_lerp(r, color, frac, 256));
+        }
     }
 }
 
@@ -1682,16 +1700,18 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     unsigned int bg = GUI_COLORS[icon];
     unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
     window_push_target(ssbuf, ssz, ssz);
+    int saved_band = aa_band; aa_band = ICON_SS_SCALE * 3; /* 3 physical px of real AA on every primitive edge, before the box filter */
     for (unsigned int i = 0; i < ssz * ssz; i++) ssbuf[i] = under;
     int r = (int)ssz * 22 / 100;
     gui_rounded_rect_gradient(0, 0, (int)ssz, (int)ssz, bg_light, bg_dark, under, r);
     gui_draw_gloss(0, 0, (int)ssz, (int)ssz, bg, r + ICON_SS_SCALE);
     int scy = (int)ssz / 2;
     unsigned int real_fg = ICON_FG;
-    ICON_FG = gui_blend(bg, 0x00000000);
+    ICON_FG = gui_blend(gui_blend(bg, 0x00000000), bg); /* 25% toward black: a shadow, not an outline */
     gui_draw_icon_glyph(icon, (int)ssz / 2 + ICON_SS_SCALE, scy + 2 * ICON_SS_SCALE, (int)ssz, bg);
     ICON_FG = real_fg;
     gui_draw_icon_glyph(icon, (int)ssz / 2, scy, (int)ssz, bg);
+    aa_band = saved_band;
     window_pop_target();
     unsigned int per = ICON_SS_SCALE / sc; if (per < 1) per = 1;
     unsigned int samples = per * per;
