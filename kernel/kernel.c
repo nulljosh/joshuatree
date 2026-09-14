@@ -1539,41 +1539,7 @@ static void gui_launch_chat(void){
     gui_wait_close();
 }
 
-/* A real, working plain-text notes app, in the spirit of this same
-   codebase's Plain editor (iOS/macOS/CLI): open a file, type into it,
-   save it, nothing else. Scoped down for a real, honest v1 rather than
-   half-building more: editing is append-only (typing adds at the end,
-   backspace removes from the end), no arrow-key cursor repositioning
-   into the middle of existing text yet, the same kind of deliberate,
-   noted-not-hidden gap this repo already uses for higher-half/ring-3
-   style deferrals rather than shipping a half-working line editor. One
-   fixed file (NOTES.TXT) rather than a file picker, Files already
-   covers browsing; this is the "type something down" app. */
-static void gui_launch_editor(void){
-    window_clear(0x00FAF8F6);
-    gui_draw_app_titlebar("Notes");
-    font_draw_string("esc saves and closes", 20, (int)window_height() - 30, 0x0075726E, -1);
-
-    static char buf[4096];
-    int n = fat_read_file("NOTES.TXT", buf, sizeof(buf) - 2);
-    if (n < 0) n = 0;
-    int len = n;
-
-    for (;;) {
-        window_rect(20, 44, (int)window_width() - 40, (int)window_height() - 90, 0x00FAF8F6);
-        buf[len] = '_'; buf[len + 1] = 0; /* a visible caret is just the next character in the same buffer, no separate draw pass needed */
-        render_wrapped_text(buf, 20, 44, (int)window_width() - 40, (int)window_height() - 90, 0x001C1C1E);
-        buf[len] = 0;
-
-        int ci = gui_getch_or_click();
-        if (ci == -1 || ci == 27) break; /* click, or esc */
-        char c = (char)ci;
-        if (c == '\b') { if (len > 0) len--; }
-        else if (len < (int)sizeof(buf) - 2) buf[len++] = c;
-    }
-    fat_delete("NOTES.TXT"); /* fat_write_file doesn't overwrite; clear the old copy first, ignore a "didn't exist" result */
-    fat_write_file("NOTES.TXT", buf, len);
-}
+#include "editor.h"
 
 /* Real, reported bug, not a style complaint: gui_wait_close's "any key
    closes" is right for a page you only ever read (Weather, Curbfind,
@@ -1740,6 +1706,98 @@ static void gui_draw_boot_screen(void){
     }
 }
 
+/* A real about panel, not a placeholder: actual physical memory stats
+   straight from pmm (the same real physical memory manager the rest of
+   this kernel allocates through) and real uptime off ticks(), the same
+   PIT tick counter every other real-time feature in this file already
+   uses. Closes the same way every other app view does. */
+static void gui_launch_about(void){
+    window_clear(0x00FAF8F6);
+    gui_draw_app_titlebar("About Joshua Tree");
+    font_draw_string("A freestanding i386 kernel, written from scratch.", 20, 50, 0x001C1C1E, -1);
+    char buf[64]; int n;
+
+    unsigned int total_kb = pmm_total_frames() * 4, free_kb = pmm_free_frames() * 4;
+    n = 0; buf[n++] = 'M'; buf[n++] = 'e'; buf[n++] = 'm'; buf[n++] = 'o'; buf[n++] = 'r'; buf[n++] = 'y'; buf[n++] = ':'; buf[n++] = ' ';
+    { char tmp[12]; int tn = 0; unsigned int v = free_kb; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
+    buf[n++] = 'K'; buf[n++] = ' '; buf[n++] = 'f'; buf[n++] = 'r'; buf[n++] = 'e'; buf[n++] = 'e'; buf[n++] = ' '; buf[n++] = 'o'; buf[n++] = 'f'; buf[n++] = ' ';
+    { char tmp[12]; int tn = 0; unsigned int v = total_kb; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
+    buf[n++] = 'K'; buf[n] = 0;
+    font_draw_string(buf, 20, 80, 0x00884B16, -1);
+
+    unsigned int secs = ticks() / 100;
+    n = 0; buf[n++] = 'U'; buf[n++] = 'p'; buf[n++] = 't'; buf[n++] = 'i'; buf[n++] = 'm'; buf[n++] = 'e'; buf[n++] = ':'; buf[n++] = ' ';
+    { char tmp[12]; int tn = 0; unsigned int v = secs; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
+    buf[n++] = 's'; buf[n] = 0;
+    font_draw_string(buf, 20, 100, 0x00884B16, -1);
+
+    gui_wait_close();
+}
+
+/* A real Apple-menu-style dropdown off the tree logo, macOS-shaped (dark
+   panel, one highlighted row under the cursor) but with items that
+   actually do something real on this kernel, not a decorative copy of
+   a macOS menu that happens to not work: About shows real memory/uptime
+   stats, Files and Notes launch the same real apps the dock does,
+   Restart calls this kernel's own real reboot() (the 8042 reset pulse,
+   already used by the "reboot" shell command), Shut Down really halts
+   the CPU. "-" is a separator row, not a real item. */
+#define GUI_MENU_ITEM_COUNT 6
+static const char *GUI_MENU_LABELS[GUI_MENU_ITEM_COUNT] = {
+    "About Joshua Tree", "Files", "Notes", "-", "Restart", "Shut Down"
+};
+#define GUI_MENU_ROW_H  22
+#define GUI_MENU_SEP_H  9
+#define GUI_MENU_X0     4
+#define GUI_MENU_W      180
+
+static int gui_menu_row_h(int i){ return GUI_MENU_LABELS[i][0] == '-' ? GUI_MENU_SEP_H : GUI_MENU_ROW_H; }
+static int gui_menu_total_h(void){ int h = 0; for (int i = 0; i < GUI_MENU_ITEM_COUNT; i++) h += gui_menu_row_h(i); return h; }
+
+/* Returns the item index under (mx,my), -2 for a separator row (a real
+   hit, but not an actionable one), or -1 if outside the menu entirely. */
+static int gui_menu_hit_test(int mx, int my){
+    int y = GUI_MENUBAR_H;
+    if (mx < GUI_MENU_X0 || mx >= GUI_MENU_X0 + GUI_MENU_W || my < y || my >= y + gui_menu_total_h()) return -1;
+    for (int i = 0; i < GUI_MENU_ITEM_COUNT; i++){
+        int rh = gui_menu_row_h(i);
+        if (my < y + rh) return GUI_MENU_LABELS[i][0] == '-' ? -2 : i;
+        y += rh;
+    }
+    return -1;
+}
+
+static void gui_draw_apple_menu(int hover_item){
+    int y0 = GUI_MENUBAR_H, total_h = gui_menu_total_h();
+    unsigned int bg = 0x002C2C2E, border = 0x001C1C1E, text = 0x00F5F5F7;
+    window_rect(GUI_MENU_X0, y0, GUI_MENU_W, total_h, bg);
+    window_rect(GUI_MENU_X0, y0, GUI_MENU_W, 1, border);
+    window_rect(GUI_MENU_X0, y0 + total_h - 1, GUI_MENU_W, 1, border);
+    window_rect(GUI_MENU_X0, y0, 1, total_h, border);
+    window_rect(GUI_MENU_X0 + GUI_MENU_W - 1, y0, 1, total_h, border);
+    int ry = y0;
+    for (int i = 0; i < GUI_MENU_ITEM_COUNT; i++){
+        int rh = gui_menu_row_h(i);
+        if (GUI_MENU_LABELS[i][0] == '-') { window_rect(GUI_MENU_X0 + 8, ry + rh / 2, GUI_MENU_W - 16, 1, 0x00545458); ry += rh; continue; }
+        if (i == hover_item) window_rect(GUI_MENU_X0 + 2, ry, GUI_MENU_W - 4, rh, 0x0085144B);
+        font_draw_string(GUI_MENU_LABELS[i], GUI_MENU_X0 + 12, ry + 5, text, -1);
+        ry += rh;
+    }
+}
+
+static void gui_menu_run_item(int item){
+    if (item == 0) gui_launch_about();
+    else if (item == 1) gui_launch_files();
+    else if (item == 2) gui_launch_editor();
+    else if (item == 4) reboot();
+    else if (item == 5) {
+        window_clear(0x00111111);
+        font_draw_string("It's now safe to turn off this computer.", 20, (int)window_height() / 2, 0x00F5F5F7, -1);
+        __asm__ volatile ("cli");
+        for (;;) __asm__ volatile ("hlt");
+    }
+}
+
 static void gui_run(void){
     if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); return; }
     gui_draw_boot_screen();
@@ -1750,8 +1808,15 @@ static void gui_run(void){
        threshold while held, so a plain click (down, no movement, up)
        never gets mistaken for a drag onto its own slot. */
     int press_slot = -1, press_x = 0, press_y = 0, drag_slot = -1;
+    /* menu_open: the Apple-menu-style dropdown off the tree logo.
+       menu_opening: true for exactly the one release that completes the
+       same click that opened it, so that release doesn't also count as
+       the "pick an item or dismiss" click, real macOS menu behavior
+       (open on press, stays open past that first release, a real
+       second click either picks something or dismisses it). */
+    int menu_open = 0, menu_opening = 0;
 
-    int last_mx = mx, last_my = my, last_hover = -1, last_drag = -1;
+    int last_mx = mx, last_my = my, last_hover = -1, last_drag = -1, last_menu_open = 0, last_menu_hover = -2;
     gui_menubar_force_redraw(); /* this GUI session's first frame, the minute-change gate must not skip it */
     gui_draw_desktop(-1, -1, 0, 0);
     gui_draw_cursor(mx, my);
@@ -1769,9 +1834,13 @@ static void gui_run(void){
         int held = buttons & 1;
         int just_pressed = held && !(prev_buttons & 1);
         int just_released = !held && (prev_buttons & 1);
-        int slot_here = gui_dock_hit_test(mx, my);
+        int logo_here = !menu_open && mx >= 4 && mx <= 28 && my < GUI_MENUBAR_H;
+        int slot_here = menu_open ? -1 : gui_dock_hit_test(mx, my); /* the dock is inert while the menu covers it */
 
-        if (just_pressed && slot_here >= 0) { press_slot = slot_here; press_x = mx; press_y = my; drag_slot = -1; }
+        if (just_pressed) {
+            if (logo_here) { menu_open = 1; menu_opening = 1; }
+            else if (slot_here >= 0) { press_slot = slot_here; press_x = mx; press_y = my; drag_slot = -1; }
+        }
 
         if (held && press_slot >= 0 && drag_slot < 0) {
             int moved = (mx > press_x ? mx - press_x : press_x - mx) + (my > press_y ? my - press_y : press_y - my);
@@ -1780,12 +1849,21 @@ static void gui_run(void){
 
         int launched = 0;
         if (just_released) {
-            if (drag_slot >= 0) {
+            if (menu_open) {
+                if (menu_opening) {
+                    menu_opening = 0; /* this release just finishes the click that opened the menu; a real second click picks something or dismisses it */
+                } else {
+                    int item = gui_menu_hit_test(mx, my);
+                    if (item >= 0) { gui_menu_run_item(item); launched = 1; } /* every real item takes over the screen or reboots/halts; force a fresh desktop redraw either way */
+                    menu_open = 0;
+                }
+            } else if (drag_slot >= 0) {
                 int target = gui_slot_at(mx);
                 int tmp = gui_order[drag_slot];
                 gui_order[drag_slot] = gui_order[target];
                 gui_order[target] = tmp;
             } else if (press_slot >= 0 && press_slot == slot_here) {
+                editor_mouse_x = mx; editor_mouse_y = my;
                 gui_launch(gui_order[press_slot]);
                 launched = 1; /* the app view just took over the whole screen; force a redraw below even if the cursor never moved */
             }
@@ -1794,6 +1872,7 @@ static void gui_run(void){
         prev_buttons = buttons;
 
         int hover_slot = (drag_slot < 0) ? slot_here : -1;
+        int menu_hover = menu_open ? gui_menu_hit_test(mx, my) : -2;
         /* Redraw only when something actually visible changed. A real,
            user-visible bug this fixed, not just a cosmetic worry: redrawing
            the whole screen unconditionally on every single timer tick
@@ -1805,7 +1884,7 @@ static void gui_run(void){
            which doesn't eliminate tearing (still no double buffering, an
            honest, separate, larger limitation) but makes it rare instead
            of constant. */
-        if (launched || mx != last_mx || my != last_my || hover_slot != last_hover || drag_slot != last_drag) {
+        if (launched || mx != last_mx || my != last_my || hover_slot != last_hover || drag_slot != last_drag || menu_open != last_menu_open || menu_hover != last_menu_hover) {
             /* Real, user-reported bug, reproduced live: hovering the cursor
                over the menu bar left a jagged trail of ghost cursors there.
                Root cause: the menu bar's own minute-change gate (above)
@@ -1821,8 +1900,10 @@ static void gui_run(void){
                instead of special-casing the cursor draw itself. */
             if (my < GUI_MENUBAR_H || last_my < GUI_MENUBAR_H) gui_menubar_force_redraw();
             gui_draw_desktop(hover_slot, drag_slot, mx, my);
+            if (menu_open) gui_draw_apple_menu(menu_hover);
             if (drag_slot < 0) gui_draw_cursor(mx, my);
             last_mx = mx; last_my = my; last_hover = hover_slot; last_drag = drag_slot;
+            last_menu_open = menu_open; last_menu_hover = menu_hover;
         }
     }
     window_close();
@@ -2123,6 +2204,13 @@ static void run(char *line){
                     serve_app("the generated page", (const unsigned char *)html, hn);
                 }
             }
+        }
+    }
+    else if (!strcmp(line, "notes")) {
+        if (window_open(800, 600, 32)) {
+            gui_launch_editor();
+            window_close();
+            clear();
         }
     }
     else if (!strcmp(line, "gfxtest")) {
