@@ -849,6 +849,78 @@ static int gui_isqrt(int n){
     return r;
 }
 
+/* v65 (0.62.0): day/night tint. Direct request, building on v60's real-
+   weather sway: the baked wallpaper photo (wallpaper_rgb, a compile-time
+   constant, no image decoder in this freestanding kernel to regenerate it
+   at runtime) now color-grades per real hour of day, a genuine per-pixel
+   multiply/lerp pass at render time, not new pixel data. Real time source
+   reused, not invented: the exact same CMOS RTC register 4 + BCD decode
+   gui_draw_menubar()/show_time() already read (`u8 h = cmos(4); hv = (h &
+   0x0F) + ((h >> 4) * 10);`), so `time` and the menu bar clock and this
+   tint always agree about what hour it really is.
+   daynight_calc(hour, ...) is kept as a pure function of an explicit hour,
+   not a read of the live CMOS state, specifically so daynighttest below
+   can call it with fixed hours (2 vs 14) and get a deterministic,
+   reproducible answer without faking hardware, the same shape v60's own
+   wind_pct_for_weather_code has (a pure function of a code, not a live
+   read). daynight_update() is the one function that actually touches
+   cmos()/ticks(), rate-limited to at most once a real second (matching
+   show_time's own cadence) so the wallpaper's frequent per-frame redraws
+   (wind sway alone repaints ~20x/sec) don't hammer CMOS I/O on every call;
+   it's called from gui_draw_wallpaper_rows_sway_ex, the one real choke
+   point every wallpaper draw already funnels through (gui_draw_wallpaper,
+   the dock band redraw, and the wind-sway tick all end up there), so no
+   caller needed to change to pick this up.
+   Stays inside the Mojave desert palette CLAUDE.md documents on purpose:
+   real night hours blend toward 0x00201009, "the wallpaper's own espresso-
+   brown" (already used and named exactly that a few hundred lines below
+   for the dock icon menu background), never toward black or blue, so a
+   dimmed desert night still reads as leather-brown/granite, not a cold
+   blue filter. Real day hours blend a little toward 0x00DDDDDD, this
+   file's own documented Silver, a small real brighten, not a wash to
+   white. */
+static int daynight_hour = 12;              /* default noon (full daylight, no tint) until the first real CMOS read */
+static int daynight_night_pct = 0;          /* 0 = no night blend, up to 100 = fully at the espresso-brown floor; cached by daynight_update() */
+static int daynight_day_pct = 0;            /* 0 = no brighten, small positive = midday's real, small brighten */
+static unsigned int daynight_last_tick = 0;
+
+/* Pure: same answer every time for the same hour, no CMOS/ticks() touched,
+   so daynighttest can call this directly with fixed hours. Boundaries are
+   a plain judgment call, stated as one (no sunrise/sunset table in this
+   kernel), same honesty standard v60's wind_pct_for_weather_code comment
+   already sets for its own percentages: 08:00-18:00 full real daylight (a
+   small +10% brighten), 18:00-21:00 dusk deepening, 05:00-08:00 dawn
+   lightening back up, 21:00-05:00 the real deep-night floor. */
+static void daynight_calc(int hour, int *night_out, int *day_out){
+    int night = 0, day = 0;
+    if (hour >= 8 && hour < 18) day = 10;                       /* real midday: small, real brighten */
+    else if (hour >= 18 && hour < 21) night = (hour - 18) * 22; /* dusk: 18->0, 19->22, 20->44 */
+    else if (hour >= 5 && hour < 8) night = (8 - hour) * 20;    /* dawn: 5->60, 6->40, 7->20 */
+    else night = 65;                                             /* 21:00-05:00: deep night floor, dim not pitch black */
+    *night_out = night; *day_out = day;
+}
+
+static void daynight_update(void){
+    if (daynight_last_tick && ticks() - daynight_last_tick < 100) return; /* real RTC read at most once a real second */
+    daynight_last_tick = ticks();
+    u8 h = cmos(4);
+    daynight_hour = (h & 0x0F) + ((h >> 4) * 10); /* same BCD decode gui_draw_menubar()/show_time() already use */
+    daynight_calc(daynight_hour, &daynight_night_pct, &daynight_day_pct);
+}
+
+/* The one real per-pixel tint pass, `night`/`day` explicit rather than
+   read from the cached globals so daynighttest can drive it with fixed
+   percentages too, not just fixed hours. gui_lerp is this file's own
+   existing channel-wise blend (the wind/AA code already uses it for
+   every other precomputed solid-color transition here), reused rather
+   than a new blend primitive. */
+static unsigned int gui_daynight_tint_pct(unsigned int rgb, int night, int day){
+    if (night > 0) return gui_lerp(rgb, 0x00201009, night, 100); /* toward the wallpaper's own espresso-brown floor, never blue */
+    if (day > 0)   return gui_lerp(rgb, 0x00DDDDDD, day, 100);   /* toward this file's own documented Silver, a small real brighten */
+    return rgb;
+}
+static unsigned int gui_daynight_tint(unsigned int rgb){ return gui_daynight_tint_pct(rgb, daynight_night_pct, daynight_day_pct); }
+
 /* Real photo now, not a procedural gradient: direct request for an
    actual, non-copyrighted image of the real park instead of drawn
    colors. wallpaper_rgb is a genuine public domain U.S. National Park
@@ -868,7 +940,11 @@ static int gui_isqrt(int n){
    gradient value, a real color close enough for a blend target even
    though the actual photo varies left-to-right too (gui_draw_wallpaper
    below is the one that blits the real 2D image, this is only for
-   things blending toward "whatever's roughly there"). */
+   things blending toward "whatever's roughly there"). v65: also runs the
+   same daynight tint every other wallpaper pixel gets, so the AA blend
+   targets it feeds (dock tray corners, the shadow beneath it) always
+   agree with the real photo pixels sitting right next to them instead of
+   the tray looking night-tinted against a still-daylit backdrop. */
 static unsigned int gui_wallpaper_color(int row){
     int area_h = (int)window_height() - GUI_MENUBAR_H;
     int r = row - GUI_MENUBAR_H;
@@ -878,7 +954,8 @@ static unsigned int gui_wallpaper_color(int row){
     int sy = r * WALLPAPER_H / area_h;
     if (sy >= WALLPAPER_H) sy = WALLPAPER_H - 1;
     const unsigned char *p = &wallpaper_rgb[(sy * WALLPAPER_W + WALLPAPER_W / 2) * 3];
-    return ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2];
+    unsigned int rgb = ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2];
+    return gui_daynight_tint(rgb);
 }
 
 /* Real regression caught by testing, not assumed safe: this used to paint
@@ -1269,9 +1346,14 @@ static unsigned int gui_wind_cached_pixel(int px, int py){
     return frac ? gui_lerp(row[sx], row[sx1], frac, 256) : row[sx];
 }
 static unsigned int gui_wallpaper_sample(int px, int py, int sway){
+    /* v65: wind_base (below) caches RAW, untinted samples on purpose, so
+       the tint here is always computed fresh against the current real
+       hour, not frozen at whatever hour the cache happened to be built. */
+    unsigned int raw;
     if (sway && wind_base && py >= WIND_TOP_ROW * (int)window_scale() && py < WIND_HORIZON_ROW * (int)window_scale())
-        return gui_wind_cached_pixel(px, py);
-    struct wp_row c = gui_wallpaper_row(py, sway); return gui_wallpaper_px(&c, px);
+        raw = gui_wind_cached_pixel(px, py);
+    else { struct wp_row c = gui_wallpaper_row(py, sway); raw = gui_wallpaper_px(&c, px); }
+    return gui_daynight_tint(raw);
 }
 
 /* ex/ey/ew/eh: a physical rect to leave untouched (the cursor). v45.1: the
@@ -1280,6 +1362,7 @@ static unsigned int gui_wallpaper_sample(int px, int py, int sway){
    real flashing cursor reported from a video. Skipping its rect means it
    is simply never touched. */
 static void gui_draw_wallpaper_rows_sway_ex(int y_from, int y_to, int sway, int ex, int ey, int ew, int eh){
+    daynight_update(); /* v65: the one real choke point every wallpaper draw funnels through, see its own comment above */
     int lh = (int)window_height();
     int sc = (int)window_scale();
     if (y_from < GUI_MENUBAR_H) y_from = GUI_MENUBAR_H;
@@ -1297,7 +1380,11 @@ static void gui_draw_wallpaper_rows_sway_ex(int y_from, int y_to, int sway, int 
                 if (sx < 0) sx = 0;
                 if (sx >= wind_base_width) sx = wind_base_width - 1;
                 int sx1 = sx + 1 < wind_base_width ? sx + 1 : sx;
+                /* wind_base holds RAW samples (v65: see its own build-loop
+                   comment), tinted fresh here against the current real
+                   hour rather than baked in once at cache-build time. */
                 unsigned int color = frac ? gui_lerp(row[sx], row[sx1], frac, 256) : row[sx];
+                color = gui_daynight_tint(color);
                 if (dst) dst[px] = color;
                 else window_pixel_phys(px, py, color);
             }
@@ -1307,7 +1394,7 @@ static void gui_draw_wallpaper_rows_sway_ex(int y_from, int y_to, int sway, int 
         int in_rows = (eh > 0 && py >= ey && py < ey + eh);
         for (int px = 0; px < c.pw; px++){
             if (in_rows && px >= ex && px < ex + ew) continue;
-            window_pixel_phys(px, py, gui_wallpaper_px(&c, px));
+            window_pixel_phys(px, py, gui_daynight_tint(gui_wallpaper_px(&c, px)));
         }
     }
 }
@@ -1452,6 +1539,111 @@ static int wind_pct_for_weather_code(int code){
     if (code <= 77) return 90;   /* Snow: typically calmer than rain */
     if (code <= 82) return 150;  /* Showers */
     return 200;                  /* Storm: strongest sway */
+}
+
+/* v65 (0.62.0): weather particle overlay, direct follow-up to v60's wind-
+   amplitude scaling, the "beyond wind" half of the same real request.
+   Real, visible rain streaks / snow dots for the condition codes that
+   warrant one, no new subsystem: a small fixed-size particle array
+   (WEATHER_PARTICLE_COUNT, same shape as wind_base's own fixed cost
+   budget), advanced and drawn once per wind tick (weather_fx_tick, called
+   from the same ~20fps loop in gui_run that already drives wind_phase),
+   same cost class as the existing wind-sway sampler it rides alongside.
+   weather_fx_kind reuses weather_word()'s own threshold boundaries
+   exactly (same code10/10 input, same cutoffs), on purpose, so the
+   overlay always matches the condition word the menu bar/dropdown already
+   shows, never a second guess at the same fetched field: Clear/Cloudy/Fog
+   get no overlay, Rain/Showers/Storm get rain streaks, Snow gets snow
+   dots. Honest scope note: particles are only ever drawn inside
+   WIND_TOP_ROW..WIND_HORIZON_ROW, the same swaying sky band the wind tick
+   already repaints in full every frame, which is what erases last frame's
+   particles with no separate restore/dirty-rect logic needed (the same
+   trick the wind redraw itself already relies on). Extending particles
+   across the dock/ground band below the horizon would need the same kind
+   of repaint plumbing gui_redraw_dock_band's own band cache has, real
+   follow-up, not attempted here. A NIC-less boot (v86) never calls
+   weather_fetch, so weather_have stays 0 and weather_fx_tick is a no-op,
+   same "nothing fabricated" contract v56/v60 already established for
+   every other weather-derived effect in this file. */
+#define WEATHER_FX_NONE 0
+#define WEATHER_FX_RAIN 1
+#define WEATHER_FX_SNOW 2
+#define WEATHER_PARTICLE_COUNT 36
+
+struct weather_particle { int x, y, speed; };
+static struct weather_particle weather_particles[WEATHER_PARTICLE_COUNT];
+static int weather_particles_seeded = 0;
+static unsigned int weather_rng = 0;
+
+/* Same tiny LCG keyrate's own word generator already uses (no rand()/no
+   libc in this freestanding build); good enough for particle scatter, not
+   for anything security-sensitive, same honesty note that code carries. */
+static unsigned int weather_rand(void){
+    weather_rng = weather_rng * 1103515245u + 12345u;
+    return (weather_rng >> 16) & 0x7fff;
+}
+
+/* Pure: same answer every time for the same code, no globals touched, so
+   weatherfxtest can call this directly. Same cutoffs as weather_word()
+   above, stated once rather than re-derived: <=3 Clear/Cloudy, <=48 Fog,
+   <=67 Rain, <=77 Snow, <=82 Showers, else Storm. */
+static int weather_fx_kind(int code){
+    if (code <= 3) return WEATHER_FX_NONE;    /* Clear, Cloudy */
+    if (code <= 48) return WEATHER_FX_NONE;   /* Fog */
+    if (code <= 67) return WEATHER_FX_RAIN;   /* Rain */
+    if (code <= 77) return WEATHER_FX_SNOW;   /* Snow */
+    return WEATHER_FX_RAIN;                   /* Showers, Storm */
+}
+
+static void weather_particles_seed(int w){
+    weather_rng = ticks() ? ticks() : 1;
+    for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++){
+        weather_particles[i].x = (int)(weather_rand() % (unsigned int)(w > 0 ? w : 1));
+        weather_particles[i].y = WIND_TOP_ROW + (int)(weather_rand() % (unsigned int)(WIND_HORIZON_ROW - WIND_TOP_ROW));
+        weather_particles[i].speed = 4 + (int)(weather_rand() % 5);
+    }
+    weather_particles_seeded = 1;
+}
+
+/* Advances every particle one tick and draws it directly (physical
+   coords via window_pixel_phys, same as the wallpaper's own draw path,
+   so it scales correctly at any window_scale()). Colors stay inside the
+   Mojave palette on purpose: a light silvery-sand rain streak and an off-
+   white (the dock tray's own cream) snow dot, never a saturated or cold-
+   blue tone. `kind`/`w` passed explicitly rather than read from globals
+   so weatherfxtest can drive this deterministically. */
+static void weather_fx_tick_kind(int kind, int w){
+    if (kind == WEATHER_FX_NONE) return;
+    if (!weather_particles_seeded) weather_particles_seed(w);
+    int sc = (int)window_scale();
+    for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++){
+        struct weather_particle *p = &weather_particles[i];
+        if (kind == WEATHER_FX_RAIN){
+            p->y += p->speed;                       /* fast, mostly-vertical fall */
+            p->x += 1;                               /* a slight real wind-blown slant */
+            int x0 = p->x * sc, y0 = p->y * sc;
+            for (int s = 0; s < 4; s++)
+                window_pixel_phys(x0 - s, y0 - s * sc, 0x00C9C0B4); /* light silvery-sand streak, in-palette */
+        } else {
+            p->y += 1;                               /* snow drifts, much slower than rain */
+            if (weather_rand() & 1) p->x += ((i & 1) * 2 - 1); /* gentle side-to-side drift */
+            int x0 = p->x * sc, y0 = p->y * sc;
+            window_pixel_phys(x0, y0, 0x00EFEBE4);           /* off-white dot, the dock tray's own cream */
+            if (sc > 1) window_pixel_phys(x0 + 1, y0, 0x00EFEBE4);
+        }
+        if (p->y >= WIND_HORIZON_ROW || p->x < 0 || p->x >= w){
+            p->x = (int)(weather_rand() % (unsigned int)(w > 0 ? w : 1));
+            p->y = WIND_TOP_ROW;
+            p->speed = 4 + (int)(weather_rand() % 5);
+        }
+    }
+}
+
+/* The real, live entry point: derives kind from the actually-fetched
+   weather_code10, "nothing fabricated" the same way weather_fetch's own
+   callers already require. */
+static void weather_fx_tick(int w){
+    weather_fx_tick_kind(weather_have ? weather_fx_kind(weather_code10 / 10) : WEATHER_FX_NONE, w);
 }
 
 /* Pulls a number for `key` from inside the "current":{...} object. The
@@ -2187,9 +2379,25 @@ static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int dra
         wind_base = (unsigned int *)kmalloc((unsigned int)(width * height) * sizeof(unsigned int));
         if (wind_base) {
             wind_base_width = width;
-            for (int py = 0; py < height; py++)
+            /* v65: sampled directly via gui_wallpaper_row/px (RAW, no
+               daynight tint) rather than read back from the framebuffer
+               like before. Reading the framebuffer would have baked
+               whatever tint was in effect at this one-time cache build
+               into every future frame for the swaying crown region
+               forever (this cache is built once per boot and never
+               rebuilt, see wind_base's own declaration comment), so the
+               sky would freeze at boot's hour while the untouched ground/
+               dock rows below the horizon kept re-tinting live on every
+               redraw. Sampling raw here and tinting fresh on every read
+               instead (gui_wallpaper_sample / gui_draw_wallpaper_rows_
+               sway_ex's own wind-cache branch both do this now) keeps the
+               whole photo, cached region included, honestly following the
+               real hour for the entire session, not just its first frame. */
+            for (int py = 0; py < height; py++) {
+                struct wp_row rc = gui_wallpaper_row(WIND_TOP_ROW * sc + py, 0);
                 for (int px = 0; px < width; px++)
-                    wind_base[py * width + px] = window_get_pixel_phys(px, WIND_TOP_ROW * sc + py);
+                    wind_base[py * width + px] = gui_wallpaper_px(&rc, px);
+            }
         }
     }
     gui_draw_menubar();
@@ -3336,6 +3544,13 @@ static void gui_run(void){
                 if (cx0 >= 0) { int csc = gui_cursor_scale(), pw = CURSOR_W * csc, ph = CURSOR_H * csc; /* physical-res backup, same layout as gui_cursor_save */
                     for (int j = 0; j < ph; j++) { int py = cy0 * csc + j; int ly = py / csc; if (ly < WIND_TOP_ROW || ly >= WIND_HORIZON_ROW) continue;
                         for (int i = 0; i < pw; i++) cursor_backup[j * pw + i] = gui_wallpaper_sample(cx0 * csc + i, py, 1); } }
+                /* v65: rain/snow, drawn on top of the freshly repainted sway
+                   band, right here on purpose: that repaint is what erases
+                   last frame's particles, so drawing before it would just
+                   get overwritten, and drawing it here keeps the cost
+                   inside the same dt budget check right below, the same
+                   self-throttle the wind redraw itself already relies on. */
+                weather_fx_tick((int)window_width());
                 /* two slow frames in a row, not one: the first frame under
                    QEMU includes the JIT translating this very loop and can
                    trip a single-frame gate falsely */
@@ -3477,7 +3692,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest weatherfxtest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -3645,6 +3860,82 @@ static void run(char *line){
         int ok = ok_t && ok_c && t10 == -35 && code10 == 610;
         puts(ok ? "weather parse: -3.5C / code 61 through the units-block trap: ok\n" : "weather parse: FAILED\n");
         if (!ok) { puts("  t10="); putn((unsigned int)t10); puts(" code10="); putn((unsigned int)code10); puts("\n"); }
+    }
+    else if (!strcmp(line, "daynighttest")) {
+        /* v65 (0.62.0): standing QA per CLAUDE.md's 4b. daynight_calc and
+           gui_daynight_tint_pct are both pure functions of an explicit
+           hour/pct (see their own comments above, deliberately shaped
+           this way for exactly this test), so this pins hour=2 (deep
+           night) against hour=14 (real midday) directly, no faked
+           hardware needed, the same boot-time direct-call trick this
+           suite's other tests use, just via a pure function instead of a
+           temporary kmain hook. Three real, discriminating checks a
+           reverted feature would fail: the two hours actually produce a
+           different color for the same input pixel, the night one is
+           genuinely darker (not just different), and it stays inside
+           this repo's own "never cold black-and-blue" rule (blue channel
+           never exceeds red on a warm test color, at either hour). */
+        unsigned int test_color = 0x00C97A3E; /* a plausible warm sunset tone from this file's own photo */
+        int night2 = 0, day2 = 0, night14 = 0, day14 = 0;
+        daynight_calc(2, &night2, &day2);
+        daynight_calc(14, &night14, &day14);
+        unsigned int c2 = gui_daynight_tint_pct(test_color, night2, day2);
+        unsigned int c14 = gui_daynight_tint_pct(test_color, night14, day14);
+        int r2 = (int)((c2 >> 16) & 0xFF), g2 = (int)((c2 >> 8) & 0xFF), b2 = (int)(c2 & 0xFF);
+        int r14 = (int)((c14 >> 16) & 0xFF), g14 = (int)((c14 >> 8) & 0xFF), b14 = (int)(c14 & 0xFF);
+        int sum2 = r2 + g2 + b2, sum14 = r14 + g14 + b14;
+        int ok = (c2 != c14) && (sum2 < sum14) && (b2 <= r2) && (b14 <= r14) && (night2 > night14) && (day14 >= day2);
+        puts(ok ? "daynight: hour=2 darker+warm than hour=14, both differ: ok\n" : "daynight: FAILED\n");
+        if (!ok) {
+            puts("  c2="); puthex(c2); puts(" c14="); puthex(c14);
+            puts(" sum2="); putn((unsigned int)sum2); puts(" sum14="); putn((unsigned int)sum14); puts("\n");
+        }
+    }
+    else if (!strcmp(line, "weatherfxtest")) {
+        /* v65 (0.62.0): standing QA per CLAUDE.md's 4b, two real,
+           discriminating checks. (1) weather_fx_kind is a pure function
+           of a WMO code (see its own comment above, same cutoffs
+           weather_word() uses), so Clear/Fog/Rain/Snow/Storm codes are
+           checked directly against the classification a reverted feature
+           would get wrong. (2) weather_fx_tick_kind actually has to move
+           real particle state, not just classify a code correctly: seed
+           a known particle set, tick it under a live Rain classification
+           and confirm particle 0 really moved, then tick the same count
+           under WEATHER_FX_NONE and confirm it does NOT move (the early-
+           return path), proving the "Clear gets no overlay" contract is
+           real, not just a comment. Global particle state is saved and
+           restored around this so a real live overlay in progress isn't
+           disturbed by running the test. */
+        int save_seeded = weather_particles_seeded;
+        struct weather_particle save_particles[WEATHER_PARTICLE_COUNT];
+        for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++) save_particles[i] = weather_particles[i];
+
+        int ok_kind = weather_fx_kind(0) == WEATHER_FX_NONE   /* Clear */
+                   && weather_fx_kind(45) == WEATHER_FX_NONE  /* Fog */
+                   && weather_fx_kind(61) == WEATHER_FX_RAIN  /* Rain */
+                   && weather_fx_kind(73) == WEATHER_FX_SNOW  /* Snow */
+                   && weather_fx_kind(95) == WEATHER_FX_RAIN; /* Storm */
+
+        weather_particles_seed(800);
+        int y0 = weather_particles[0].y, x0 = weather_particles[0].x;
+        for (int i = 0; i < 5; i++) weather_fx_tick_kind(WEATHER_FX_RAIN, 800);
+        int moved_on_rain = (weather_particles[0].y != y0) || (weather_particles[0].x != x0);
+
+        weather_particles[0].y = y0; weather_particles[0].x = x0;
+        int y1 = weather_particles[0].y, x1 = weather_particles[0].x;
+        for (int i = 0; i < 5; i++) weather_fx_tick_kind(WEATHER_FX_NONE, 800);
+        int still_on_clear = (weather_particles[0].y == y1) && (weather_particles[0].x == x1);
+
+        int ok = ok_kind && moved_on_rain && still_on_clear;
+        puts(ok ? "weatherfx: classification + rain moves/clear doesn't: ok\n" : "weatherfx: FAILED\n");
+        if (!ok) {
+            puts("  ok_kind="); putn((unsigned int)ok_kind);
+            puts(" moved_on_rain="); putn((unsigned int)moved_on_rain);
+            puts(" still_on_clear="); putn((unsigned int)still_on_clear); puts("\n");
+        }
+
+        for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++) weather_particles[i] = save_particles[i];
+        weather_particles_seeded = save_seeded;
     }
     else if (!strcmp(line, "wind")) {
         if (!strcmp(arg, "off")) { wind_enabled = 0; settings_save(); puts("wind off\n"); }
