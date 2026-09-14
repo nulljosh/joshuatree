@@ -1,9 +1,11 @@
-/* FAT16 over ata.c. ponytail: FAT16 only (no FAT32 -- QEMU test images and
+/* FAT16 over blockdev.c (v33/0.33.0: was ata.c directly, now goes through
+   the same real block-device abstraction ata.c and ramdisk.c both
+   register with). ponytail: FAT16 only (no FAT32 -- QEMU test images and
    anything this kernel writes itself will be small enough that FAT16 is
    plenty), single fixed volume starting at sector 0 (no MBR partition
    table yet), no long filenames (8.3 exactly as FAT stores them). */
 #include "fat.h"
-#include "ata.h"
+#include "blockdev.h"
 #include "libc.h"
 #include "vfs.h"
 
@@ -43,7 +45,7 @@ static u16 rd16(u8 *p) { return p[0] | (p[1] << 8); }
 
 int fat_mount(void) {
     u8 boot[512];
-    if (!ata_read_sector(0, boot)) return 0;
+    if (!blockdev_read_sector(0, boot)) return 0;
 
     bytes_per_sector   = rd16(&boot[11]);
     sectors_per_cluster = boot[13];
@@ -81,7 +83,7 @@ static u16 fat_entry_read(u16 cluster) {
     u32 fat_byte_off = (u32)cluster * 2;
     u32 fat_sector = fat_start + fat_byte_off / 512;
     u8 fatbuf[512];
-    if (!ata_read_sector(fat_sector, fatbuf)) return 0xFFFF;
+    if (!blockdev_read_sector(fat_sector, fatbuf)) return 0xFFFF;
     return rd16(&fatbuf[fat_byte_off % 512]);
 }
 
@@ -89,11 +91,11 @@ static int fat_entry_write(u16 cluster, u16 value) {
     u32 fat_byte_off = (u32)cluster * 2;
     u32 row = fat_byte_off / 512;
     u8 fatbuf[512];
-    if (!ata_read_sector(fat_start + row, fatbuf)) return 0;
+    if (!blockdev_read_sector(fat_start + row, fatbuf)) return 0;
     fatbuf[fat_byte_off % 512]     = (u8)(value & 0xFF);
     fatbuf[fat_byte_off % 512 + 1] = (u8)(value >> 8);
     for (u8 f = 0; f < num_fats; f++) {
-        if (!ata_write_sector(fat_start + (u32)f * fat_size_sectors + row, fatbuf)) return 0;
+        if (!blockdev_write_sector(fat_start + (u32)f * fat_size_sectors + row, fatbuf)) return 0;
     }
     return 1;
 }
@@ -158,7 +160,7 @@ static struct dir_entry *find_entry_in(u16 dir_cluster, const char *name) {
     for (u32 s = 0; ; s++) {
         u32 lba = dir_get_sector(dir_cluster, s);
         if (!lba) return 0;
-        if (!ata_read_sector(lba, sector)) return 0;
+        if (!blockdev_read_sector(lba, sector)) return 0;
         struct dir_entry *entries = (struct dir_entry *)sector;
         for (int i = 0; i < 512 / 32; i++) {
             if (entries[i].name[0] == 0x00) return 0;       /* end of directory */
@@ -174,7 +176,7 @@ static int find_free_slot(u16 dir_cluster, u32 *out_lba, int *out_index) {
     for (u32 s = 0; ; s++) {
         u32 lba = dir_get_sector(dir_cluster, s);
         if (!lba) return 0; /* root exhausted, or subdirectory needs another cluster (not done yet) */
-        if (!ata_read_sector(lba, sector)) return 0;
+        if (!blockdev_read_sector(lba, sector)) return 0;
         struct dir_entry *entries = (struct dir_entry *)sector;
         for (int i = 0; i < 512 / 32; i++) {
             if (entries[i].name[0] == 0x00 || entries[i].name[0] == 0xE5) {
@@ -199,7 +201,7 @@ int fat_read_file(const char *name, void *buf, unsigned int bufsize) {
     while (remaining > 0 && cluster >= 2 && cluster < 0xFFF8) {
         u32 lba = cluster_to_lba(cluster);
         for (u8 s = 0; s < sectors_per_cluster && remaining > 0; s++) {
-            if (!ata_read_sector(lba + s, sector)) return (int)(total - remaining);
+            if (!blockdev_read_sector(lba + s, sector)) return (int)(total - remaining);
             u32 chunk = remaining < 512 ? remaining : 512;
             for (u32 i = 0; i < chunk; i++) out[i] = sector[i];
             out += chunk;
@@ -219,7 +221,7 @@ int fat_delete(const char *name) {
     for (u32 s = 0; ; s++) {
         u32 lba = dir_get_sector(current_dir_cluster, s);
         if (!lba) return 0;
-        if (!ata_read_sector(lba, sector)) return 0;
+        if (!blockdev_read_sector(lba, sector)) return 0;
         struct dir_entry *entries = (struct dir_entry *)sector;
         for (int i = 0; i < 512 / 32; i++) {
             if (entries[i].name[0] == 0x00) return 0;
@@ -227,7 +229,7 @@ int fat_delete(const char *name) {
             if (entries[i].attr & (ATTR_VOLUME_ID | ATTR_DIRECTORY)) continue;
             if (names_eq(entries[i].name, want)) {
                 entries[i].name[0] = 0xE5;
-                return ata_write_sector(lba, sector);
+                return blockdev_write_sector(lba, sector);
             }
         }
     }
@@ -241,7 +243,7 @@ void fat_list(void (*cb)(const char *name, unsigned int size, int is_dir)) {
     for (u32 s = 0; ; s++) {
         u32 lba = dir_get_sector(current_dir_cluster, s);
         if (!lba) return;
-        if (!ata_read_sector(lba, sector)) return;
+        if (!blockdev_read_sector(lba, sector)) return;
         struct dir_entry *entries = (struct dir_entry *)sector;
         for (int i = 0; i < 512 / 32; i++) {
             if (entries[i].name[0] == 0x00) return;
@@ -273,7 +275,7 @@ int fat_chdir(const char *name) {
         for (u32 s = 0; ; s++) {
             u32 lba = dir_get_sector(current_dir_cluster, s);
             if (!lba) return 0;
-            if (!ata_read_sector(lba, sector)) return 0;
+            if (!blockdev_read_sector(lba, sector)) return 0;
             struct dir_entry *entries = (struct dir_entry *)sector;
             for (int i = 0; i < 512 / 32; i++) {
                 if (names_eq(entries[i].name, want)) { current_dir_cluster = entries[i].first_cluster_low; return 1; }
@@ -306,19 +308,19 @@ int fat_mkdir(const char *name) {
     entries[1].first_cluster_low = current_dir_cluster; /* 0 (root) or a real parent cluster */
 
     u32 lba = cluster_to_lba(new_cluster);
-    if (!ata_write_sector(lba, first)) return 0;
+    if (!blockdev_write_sector(lba, first)) return 0;
 
     u8 blank[512];
     memset(blank, 0, sizeof(blank));
     for (u8 s = 1; s < sectors_per_cluster; s++) {
-        if (!ata_write_sector(lba + s, blank)) return 0;
+        if (!blockdev_write_sector(lba + s, blank)) return 0;
     }
 
     u32 slot_lba; int slot_idx;
     if (!find_free_slot(current_dir_cluster, &slot_lba, &slot_idx)) return 0; /* directory full, ponytail: no growth yet, see fat.h */
 
     u8 sector[512];
-    if (!ata_read_sector(slot_lba, sector)) return 0;
+    if (!blockdev_read_sector(slot_lba, sector)) return 0;
     struct dir_entry *slot = &((struct dir_entry *)sector)[slot_idx];
     to_fat_name(name, slot->name);
     slot->attr = ATTR_DIRECTORY;
@@ -328,7 +330,7 @@ int fat_mkdir(const char *name) {
     slot->write_date = 0;
     slot->first_cluster_low = new_cluster;
     slot->file_size = 0;
-    return ata_write_sector(slot_lba, sector);
+    return blockdev_write_sector(slot_lba, sector);
 }
 
 static void release_chain(u16 cluster) {
@@ -364,7 +366,7 @@ static int write_file(const char *name, const void *data, unsigned int len, int 
             memset(buf, 0, sizeof(buf)); /* zero-pad the tail of the last sector */
             u32 chunk = remaining < 512 ? remaining : 512;
             for (u32 i = 0; i < chunk; i++) buf[i] = src[i];
-            if (!ata_write_sector(lba + s, buf)) goto failed;
+            if (!blockdev_write_sector(lba + s, buf)) goto failed;
             src += chunk;
             remaining -= chunk;
         }
@@ -372,7 +374,7 @@ static int write_file(const char *name, const void *data, unsigned int len, int 
     if (prev_cluster && !fat_entry_write(prev_cluster, 0xFFFF)) goto failed;
 
     u8 sector[512];
-    if (!ata_read_sector(slot_lba, sector)) goto failed;
+    if (!blockdev_read_sector(slot_lba, sector)) goto failed;
     struct dir_entry *slot = &((struct dir_entry *)sector)[slot_idx];
     to_fat_name(name, slot->name);
     slot->attr = 0;
@@ -382,7 +384,7 @@ static int write_file(const char *name, const void *data, unsigned int len, int 
     slot->write_date = 0;
     slot->first_cluster_low = first_cluster;
     slot->file_size = len;
-    if (!ata_write_sector(slot_lba, sector)) return 0;
+    if (!blockdev_write_sector(slot_lba, sector)) return 0;
     release_chain(old_cluster);
     return 1;
 failed:

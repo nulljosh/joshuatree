@@ -7,7 +7,7 @@ LD := ld.lld
 KERNEL_SRCS := kernel/gdt.c kernel/idt.c kernel/pic.c kernel/irq.c kernel/pmm.c \
                kernel/paging.c kernel/kheap.c kernel/task.c kernel/exec.c kernel/ring3.c kernel/kernel.c
 KERNEL_ASM  := kernel/isr.S kernel/irq_stubs.S kernel/ring3_asm.S
-DRIVER_SRCS := drivers/ata.c drivers/fat.c drivers/vfs.c drivers/ramfs.c drivers/pci.c drivers/vbe.c drivers/mouse.c \
+DRIVER_SRCS := drivers/ata.c drivers/blockdev.c drivers/ramdisk.c drivers/fat.c drivers/vfs.c drivers/ramfs.c drivers/pci.c drivers/vbe.c drivers/mouse.c \
                drivers/window.c drivers/rtl8139.c drivers/net.c drivers/http.c drivers/html.c \
                drivers/json.c drivers/font.c drivers/serial.c
 LIB_SRCS    := lib/libc.c

@@ -10,6 +10,8 @@
 #include "ata.h"
 #include "fat.h"
 #include "vfs.h"
+#include "blockdev.h"
+#include "ramdisk.h"
 #include "ramfs.h"
 #include "exec.h"
 #include "libc.h"
@@ -1928,7 +1930,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest isotest reaptest ring3test ps kill killtest sleep disktest fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -1965,8 +1967,8 @@ static void run(char *line){
     else if (!strcmp(line, "disktest")) {
         char wbuf[512], rbuf[512];
         for (int i = 0; i < 512; i++) wbuf[i] = (char)i;
-        if (!ata_write_sector(100, wbuf)) { puts("disk write failed (no drive?)\n"); }
-        else if (!ata_read_sector(100, rbuf)) { puts("disk read failed\n"); }
+        if (!blockdev_write_sector(100, wbuf)) { puts("disk write failed (no drive?)\n"); }
+        else if (!blockdev_read_sector(100, rbuf)) { puts("disk read failed\n"); }
         else {
             int ok = 1;
             for (int i = 0; i < 512; i++) if (rbuf[i] != wbuf[i]) { ok = 0; break; }
@@ -2065,6 +2067,10 @@ static void run(char *line){
     else if (!strcmp(line, "fsuse")) {
         if (!*arg) { puts("current: "); puts(vfs_current_name()); puts(" (usage: fsuse fat|ramfs)\n"); }
         else puts(vfs_switch(arg) ? "switched\n" : "no such backend\n");
+    }
+    else if (!strcmp(line, "diskuse")) {
+        if (!*arg) { puts("current: "); puts(blockdev_current_name()); puts(" (usage: diskuse ata|ramdisk; run 'fsuse fat' then 'disktest'/'ls' after switching to see it take effect)\n"); }
+        else puts(blockdev_switch(arg) ? "switched\n" : "no such backend\n");
     }
     else if (!strcmp(line, "ls"))    vfs_list(ls_cb);
     else if (!strcmp(line, "browse")) browse();
@@ -2443,6 +2449,8 @@ void kmain(unsigned int multiboot_info_addr){
     klog("paging_install: higher-half paging active");
     tasks_init();
     klog("tasks_init: scheduler ready");
+    ata_blockdev_register(); /* v33 (0.33.0): register real backends before anything tries to mount a filesystem over one */
+    ramdisk_init();
     int fs_ok = fat_mount();
     klog(fs_ok ? "fat_mount: FAT16 filesystem mounted" : "fat_mount: no filesystem found");
     fat_vfs_register(); /* registered regardless of fs_ok: an unmounted fat backend just returns real failures, same as before v29 */

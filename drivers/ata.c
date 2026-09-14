@@ -3,6 +3,7 @@
    >128GB disks -- none of that exists yet to need handling. QEMU always
    attaches the boot disk as primary master, which is all this targets. */
 #include "ata.h"
+#include "blockdev.h"
 
 typedef unsigned short u16;
 typedef unsigned char u8;
@@ -64,4 +65,13 @@ int ata_write_sector(unsigned int lba, const void *buf) {
     outb(ATA_COMMAND, 0xE7); /* CACHE FLUSH, so QEMU actually persists it */
     wait_ready();
     return 1;
+}
+
+/* v33 (0.33.0): ata's own functions already match struct blockdev_ops's
+   signatures exactly, same "no adapter needed" shape as fat.c's own
+   vfs_ops registration. */
+static const struct blockdev_ops ata_blockdev_ops = { "ata", ata_read_sector, ata_write_sector };
+
+void ata_blockdev_register(void) {
+    blockdev_register("ata", &ata_blockdev_ops);
 }

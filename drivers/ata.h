@@ -5,4 +5,8 @@
    status). buf must be at least 512 bytes. */
 int ata_read_sector(unsigned int lba, void *buf);
 int ata_write_sector(unsigned int lba, const void *buf);
+
+/* v33 (0.33.0): registers ata's own functions with blockdev.c as the
+   "ata" backend. Call once at boot. */
+void ata_blockdev_register(void);
 #endif
