@@ -55,6 +55,14 @@ dependencies beyond clang, ld.lld and qemu.
 - Each version gets a `git tag -a jt-vN` + `gh release create jt-vN` once it
   ships. Earlier tags from before the rename (`os-v0` through `os-v4`) stay
   as-is on their original commits, don't rewrite history to relabel them.
+- Real semver from `v31` on (Sep 2026, Joshua's own call): `VERSION` holds
+  the current `MAJOR.MINOR.PATCH`, starting at `0.30.0` to match what v30
+  shipped. `v1`-`v30` keep their existing labels and tags, not rewritten.
+  Going forward, bump MINOR for a new capability (nearly every roadmap
+  item so far), PATCH for a fix that adds no capability, MAJOR only for a
+  real breaking change (none yet; this kernel has no external callers to
+  break). `0.x.y` is deliberate, not an oversight: nothing here has a
+  stable contract yet for a 1.0.0 to actually mean.
 - Theme (kernel wallpaper, landing page, everywhere else this project shows
   color): Mojave desert, real palette refresh from the earlier warm orange/
   burgundy "Her"-movie look, which read as pumpkin/Halloween, not the
