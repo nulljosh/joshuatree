@@ -714,15 +714,29 @@ static void gui_draw_logo(int x, int cy){
     gui_draw_diag(rx, ry,    1, -1, 2, c); gui_draw_diag(rx, ry,    1,  0, 2, c);  gui_draw_diag(rx, ry,    1,  1, 2, c);
 }
 
+/* Real, user-reported flicker: this whole bar (a solid white rect, the
+   logo, "Joshua Tree", the clock) got redrawn identically on every single
+   hover-state change, since gui_draw_desktop calls this unconditionally
+   on every mouse move. Nothing here actually depends on hover at all, and
+   without a back buffer to swap in atomically, redrawing pixels that
+   didn't need to change is pure flicker, not just pure waste. Skips the
+   redraw entirely once per real minute unless forced, matching the one
+   thing in this bar that actually changes on its own. */
+static int gui_menubar_last_min = -1;
+static void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; }
+
 static void gui_draw_menubar(void){
+    u8 h = cmos(4), m = cmos(2);
+    u8 hv = (h & 0x0F) + ((h >> 4) * 10), mv = (m & 0x0F) + ((m >> 4) * 10);
+    if (mv == gui_menubar_last_min) return;
+    gui_menubar_last_min = mv;
+
     window_rect(0, 0, (int)window_width(), GUI_MENUBAR_H, 0x00FFFFFF);
     window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
     gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2);
     font_draw_string("Joshua Tree", 32, 7, 0x001C1C1E, -1);
 
-    u8 h = cmos(4), m = cmos(2);
     char clock[6];
-    u8 hv = (h & 0x0F) + ((h >> 4) * 10), mv = (m & 0x0F) + ((m >> 4) * 10);
     clock[0] = '0' + hv / 10; clock[1] = '0' + hv % 10; clock[2] = ':';
     clock[3] = '0' + mv / 10; clock[4] = '0' + mv % 10; clock[5] = 0;
     font_draw_string(clock, (int)window_width() - 60, 7, 0x001C1C1E, -1);
@@ -868,7 +882,6 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
 static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     gui_draw_wallpaper();
     gui_draw_menubar();
-    font_draw_string("drag to rearrange -- click to open -- esc to quit", gui_dock_x0(), gui_dock_y0() - 44, 0x00FFF6EC, -1);
 
     int y0 = gui_dock_y0(), dock_h = DOCK_ICON + 2 * DOCK_PAD, dock_w = gui_dock_w(), dock_x = gui_dock_x0();
 
@@ -1087,6 +1100,7 @@ static void gui_run(void){
     int press_slot = -1, press_x = 0, press_y = 0, drag_slot = -1;
 
     int last_mx = mx, last_my = my, last_hover = -1, last_drag = -1;
+    gui_menubar_force_redraw(); /* this GUI session's first frame, the minute-change gate must not skip it */
     gui_draw_desktop(-1, -1, 0, 0);
     gui_draw_cursor(mx, my);
     for (;;) {
