@@ -8,6 +8,7 @@
    font only uses the first 16, the BIOS reserves room for taller fonts. */
 #include "font.h"
 #include "window.h"
+#include "vgafont.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -39,6 +40,28 @@ void font_init(void) {
     for (int ch = 0; ch < 256; ch++)
         for (int row = 0; row < 16; row++)
             glyphs[ch * 16 + row] = vga_mem[ch * 32 + row]; /* 32-byte stride per glyph slot */
+
+    /* v38: real, measured bug, not a hypothetical. The dump above only
+       works where something already put a font in plane 2, which on real
+       hardware and under QEMU is the BIOS. v86 (the emulator the landing
+       page demo runs on) has no BIOS, so the dump returns 4096 zero bytes
+       and every glyph is blank: no clock, no menu bar text, no app titles,
+       no terminal output, nothing, in the demo most visitors actually see.
+       Confirmed by probing the real guest over serial, not inferred:
+       FONT=2320 non-zero bytes under QEMU, FONT=0 under v86.
+
+       Same shape as v16 (VGA text mode), v17 (keyboard scanning) and v18
+       (DAC palette): one more piece of state a BIOS sets up that this
+       kernel has to set up itself. Detect-and-fall-back rather than always
+       using the built-in font, because the real hardware CP437 font is
+       still the better one wherever it genuinely exists. */
+    int have_hw_font = 0;
+    for (int i = 0; i < 256 * 16 && !have_hw_font; i++) if (glyphs[i]) have_hw_font = 1;
+    if (!have_hw_font) {
+        for (int ch = VGAFONT_FIRST; ch <= VGAFONT_LAST; ch++)
+            for (int row = 0; row < 16; row++)
+                glyphs[ch * 16 + row] = vgafont_glyphs[(ch - VGAFONT_FIRST) * 16 + row];
+    }
 
     outb(SEQ_INDEX, 0x02); outb(SEQ_DATA, seq2);
     outb(SEQ_INDEX, 0x04); outb(SEQ_DATA, seq4);
