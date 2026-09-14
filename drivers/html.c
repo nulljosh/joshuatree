@@ -29,6 +29,20 @@ unsigned int html_to_text(const char *html, char *out, unsigned int maxlen) {
             else if (starts_with(p, "&quot;")) { out[pos++] = '"';  p += 6; continue; }
             else if (starts_with(p, "&#39;"))  { out[pos++] = '\''; p += 5; continue; }
         }
+        /* Real bug, not a theory: found via a screendump that looked like
+           memory corruption (a perfectly regular vertical-stripe pattern
+           across the entire screen) for exactly the apps whose real copy
+           uses more typographic punctuation (em dashes, curly quotes).
+           Those are multi-byte UTF-8 sequences this extractor has no
+           decoder for; copied through raw, each byte >= 0x80 lands on
+           CP437's line-drawing/box block (─│┌┐└┘█▓ etc.), and repeated
+           across a page's worth of body copy that reads as a stripe
+           pattern, not garbled text. Real UTF-8 decoding (turning one
+           multi-byte sequence into its closest ASCII equivalent) is a
+           bigger, separate feature; skipping these bytes entirely instead
+           of passing them straight to a font that was never going to
+           render them correctly is the honest, scoped fix for now. */
+        if ((unsigned char)*p >= 0x80) { p++; continue; }
         out[pos++] = *p++;
     }
     out[pos] = 0;

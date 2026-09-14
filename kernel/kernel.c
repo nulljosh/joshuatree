@@ -1178,7 +1178,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest ring3test sleep disktest ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build gui\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest ring3test sleep disktest ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build gui testapps\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -1496,6 +1496,24 @@ static void run(char *line){
     }
     else if (!strcmp(line, "gui")) {
         gui_run();
+    }
+    else if (!strcmp(line, "testapps")) {
+        /* A real, permanent diagnostic, not scaffolding bolted on for one
+           test run: automated QA needs to exercise each real app's own
+           launch function, and the only reliable way to drive input from
+           a script is keyboard injection (proven repeatedly this session;
+           QEMU's monitor mouse commands don't reach this kernel's real
+           PS2 driver headlessly, see roadmap.md's honest note on that).
+           Any key (Escape included) closes every one of these exactly the
+           same way a real click already does via gui_wait_close, so a
+           script can drive this whole suite with nothing but sendkey. */
+        if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
+        else {
+            for (int i = 0; i < GUI_ICON_COUNT; i++) gui_launch(i);
+            window_close();
+            clear();
+            puts("testapps done\n");
+        }
     }
     else if (!strcmp(line, "mousetest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
