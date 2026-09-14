@@ -88,7 +88,12 @@ dependencies beyond clang, ld.lld and qemu.
 - The loop (direct request, tightened to exactly this, Sep 2026): this
   project has no finish line. Each pass:
   1. Check for a direct request first; only fall back to `roadmap.md`'s
-     open queue (one real item) when there isn't one.
+     open queue (one real item) when there isn't one. Re-read `roadmap.md`
+     fresh from disk every single pass, never from memory of an earlier
+     read this session: `/split-roadmap` can have parallel agents
+     committing real changes to it while this loop is also running, and a
+     stale in-context copy is exactly how two passes trip over the same
+     item or miss that it's already done.
   2. Current standing focus, absent a direct request: typeface/font
      rendering and icon sharpening, both real, ongoing, re-checked against
      actual screenshots each time, not assumed fixed from a prior pass.
