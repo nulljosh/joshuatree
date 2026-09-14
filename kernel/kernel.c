@@ -1907,7 +1907,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest reaptest ring3test sleep disktest fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build gui testapps\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest reaptest ring3test sleep disktest fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -2087,6 +2087,58 @@ static void run(char *line){
                     putn((unsigned int)n); puts(" bytes, starts: ");
                     for (int i = 0; i < 20 && resp[i] && resp[i] != '\r'; i++) putc(resp[i]);
                     putc('\n');
+                }
+            }
+        }
+    }
+    else if (!strcmp(line, "ifconfig")) {
+        if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        else {
+            unsigned char mac[6]; rtl8139_get_mac(mac);
+            puts("rtl0: 10.0.2.15\n  mac ");
+            for (int i = 0; i < 6; i++) {
+                char hx[3]; const char *hexd = "0123456789abcdef";
+                hx[0] = hexd[mac[i] >> 4]; hx[1] = hexd[mac[i] & 0xF]; hx[2] = 0;
+                puts(hx); if (i < 5) puts(":");
+            }
+            puts("\n");
+        }
+    }
+    else if (!strcmp(line, "netscan")) {
+        /* v30: a real, honest connect scan, Kali-flavored in spirit only,
+           not a clone: no SYN-stealth/OS-fingerprint modes, one scan type,
+           a fixed common-port list, exactly what tcp_probe_port actually
+           supports. Same "not a general tool, a real narrow proof" scope
+           as everything else this session, see roadmap.md's v30 entry. */
+        if (!*arg) { puts("usage: netscan <host, e.g. 10.0.2.2>\n"); }
+        else if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        else {
+            net_init(0x0A00020F);
+            unsigned int ip;
+            int have_ip = 0;
+            /* accept a bare dotted-quad directly, skip DNS for the common
+               "scan a LAN host" case; anything else goes through the same
+               DNS path `web`/`nettest` already use. */
+            { unsigned int a=0,b=0,c=0,d=0; int i=0; const char *p=arg; int quad=1;
+              while (*p) { if (*p=='.') i++; else if (*p<'0'||*p>'9') { quad=0; break; } p++; }
+              if (quad && i==3) { unsigned int parts[4]={0,0,0,0}; int pi=0; p=arg;
+                  while (*p) { if (*p=='.') pi++; else parts[pi]=parts[pi]*10+(*p-'0'); p++; }
+                  a=parts[0];b=parts[1];c=parts[2];d=parts[3];
+                  ip = (a<<24)|(b<<16)|(c<<8)|d; have_ip = 1; }
+            }
+            if (!have_ip) have_ip = dns_resolve(arg, 0x0A000203, &ip);
+            if (!have_ip) { puts("could not resolve host\n"); }
+            else {
+                static const unsigned short ports[] = {21,22,23,25,80,443,3306,8080};
+                puts("scanning...\n");
+                for (unsigned int i = 0; i < sizeof(ports)/sizeof(ports[0]); i++) {
+                    char buf[16]; int n = 0; unsigned int v = ports[i];
+                    char tmp[6]; int ti = 0; if (v==0) tmp[ti++]='0'; while (v) { tmp[ti++]='0'+v%10; v/=10; }
+                    while (ti) buf[n++] = tmp[--ti];
+                    buf[n++] = '/'; buf[n++]='t'; buf[n++]='c'; buf[n++]='p'; buf[n++]=' '; buf[n]=0;
+                    puts(buf);
+                    int r = tcp_probe_port(ip, ports[i]);
+                    puts(r == 1 ? "open\n" : r == 0 ? "closed\n" : "filtered\n");
                 }
             }
         }

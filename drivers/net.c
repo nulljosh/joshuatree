@@ -405,6 +405,43 @@ static int tcp_match(u32 dest_ip, u16 local_port, u16 remote_port, u8 *rx, u32 n
     return 1;
 }
 
+/* v30: a real TCP connect-scan primitive, kept separate from tcp_get
+   rather than bolted onto it, since a scanner needs a short per-port
+   timeout (a closed/filtered port must not cost tcp_get's ~20-50s
+   WAN_TIMEOUT_TICKS wait) and never sends a request or reads a response,
+   just classifies the SYN's answer. Returns 1 open (SYN-ACK seen, answered
+   with RST instead of completing a real handshake, this is a scan, not a
+   connection anyone needs to keep), 0 closed (a real RST came back), -1
+   filtered/unreachable (timeout, no answer at all, the honest third state
+   nmap itself reports, not something to collapse into "closed"). */
+#define SCAN_TIMEOUT_TICKS 60 /* ~600ms, plenty for a real reply on a local/SLIRP network, fast enough to scan a real port list */
+int tcp_probe_port(u32 dest_ip, u16 dest_port) {
+    u8 dest_mac[6];
+    if (!resolve_next_hop(dest_ip, dest_mac)) return -1;
+
+    u16 local_port = 44100;
+    u32 our_seq = 0x2000;
+    if (!tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, 0, TCP_SYN, 0, 0)) return -1;
+    our_seq++;
+
+    u8 rx[1514];
+    struct tcp_header *tcp;
+    u8 *payload; u32 paylen;
+    u32 deadline = ticks() + SCAN_TIMEOUT_TICKS;
+    while (ticks() < deadline) {
+        u32 n = rtl8139_receive(rx, sizeof(rx));
+        if (n == 0) continue;
+        if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
+        if (tcp->flags & TCP_RST) return 0; /* closed: the target itself said so */
+        if ((tcp->flags & (TCP_SYN | TCP_ACK)) == (TCP_SYN | TCP_ACK)) {
+            u32 their_seq = htonl(tcp->seq) + 1;
+            tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, their_seq, TCP_RST, 0, 0); /* abort cleanly, this was only ever a probe */
+            return 1; /* open */
+        }
+    }
+    return -1; /* filtered/unreachable: nothing answered in time */
+}
+
 int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
             void *response, u32 response_maxlen) {
     if (request_len > TCP_MAX_PAYLOAD) return -1;

@@ -44,7 +44,7 @@ kernel/kernel.o: kernel/editor.h drivers/editor_fonts.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 run: kernel.elf
-	qemu-system-i386 -kernel kernel.elf -rtc base=localtime
+	qemu-system-i386 -kernel kernel.elf -rtc base=localtime -net nic,model=rtl8139 -net user
 
 clean:
 	rm -f $(OBJS) kernel.elf

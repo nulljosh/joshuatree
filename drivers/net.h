@@ -43,4 +43,9 @@ int tcp_get(unsigned int dest_ip, unsigned short dest_port,
    0 on timeout, a request that never arrived, or a chunk that was never
    ACKed. */
 int tcp_serve_once(unsigned short port, const void *response, unsigned int response_len);
+
+/* v30: real connect-scan primitive for one port, a short timeout of its
+   own rather than tcp_get's WAN-scale one. Returns 1 open, 0 closed
+   (a real RST came back), -1 filtered/unreachable (no answer in time). */
+int tcp_probe_port(unsigned int dest_ip, unsigned short dest_port);
 #endif
