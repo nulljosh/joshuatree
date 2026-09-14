@@ -870,14 +870,30 @@ static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int dra
     gui_draw_menubar();
     font_draw_string("drag to rearrange -- click to open -- esc to quit", gui_dock_x0(), gui_dock_y0() - 44, 0x00FFF6EC, -1);
 
-    int y0 = gui_dock_y0();
+    int y0 = gui_dock_y0(), dock_h = DOCK_ICON + 2 * DOCK_PAD, dock_w = gui_dock_w(), dock_x = gui_dock_x0();
+
+    /* A soft shadow beneath the tray, the same floating-panel look a real
+       macOS dock has, drawn before the tray itself so the tray's own edge
+       sits cleanly on top of it. Real per-pixel colors blended toward
+       black (gui_blend), fading back to the plain wallpaper color over a
+       few rows, no alpha compositing needed since these are precomputed
+       solid colors, same technique every AA edge in this file already
+       uses. Inset a little past the tray's own rounded corners so it
+       reads as a shadow, not a second, darker rectangle. */
+    for (int row = 0; row < 10; row++){
+        int sy = y0 + dock_h + row;
+        unsigned int wall = gui_wallpaper_color(sy);
+        unsigned int dark = gui_blend(wall, 0x00000000);
+        window_rect(dock_x + 6, sy, dock_w - 12, 1, gui_lerp(dark, wall, row, 10));
+    }
+
     /* Corner-blend target is the wallpaper's real color at the dock's own
        row, not the old flat GUI_BG constant: the background here is a
        gradient now, and the dock sits low enough on screen that its actual
        backdrop is much closer to the burgundy end than a fixed light
        constant would assume, a mismatched blend would show as a visible
        fringe around the tray's rounded corners. */
-    gui_rounded_rect(gui_dock_x0(), y0, gui_dock_w(), DOCK_ICON + 2 * DOCK_PAD, 0x00EFEBE4, gui_wallpaper_color(y0 + (DOCK_ICON + 2 * DOCK_PAD) / 2), 20);
+    gui_rounded_rect(dock_x, y0, dock_w, dock_h, 0x00EFEBE4, gui_wallpaper_color(y0 + dock_h / 2), 20);
 
     for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
         if (slot == drag_slot) continue; /* drawn last, floating at the cursor */
