@@ -1,25 +1,91 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <rect width="200" height="200" rx="44" fill="#c1502f"/>
-  <!-- Joshua tree silhouette: trunk, two branching arms, spiky yucca tufts -->
-  <g fill="none" stroke="#241408" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M100 168 L100 108"/>
-    <path d="M100 130 L68 92"/>
-    <path d="M100 118 L134 84"/>
-    <path d="M100 108 L100 66"/>
+  <!-- Real Mojave desert palette (this repo's CLAUDE.md, same colors the
+       kernel wallpaper/dock already use): silver sky fading through
+       granite gray to the exact leather-brown (#6B4423) already used as
+       one of the dock's own real accent colors. Warm sun glow reuses the
+       exact gold (#FFE380/#FFA716) the in-kernel Weather icon already
+       draws, one real palette, not a second one invented for this file.
+
+       Redrawn against real reference (Yucca brevifolia): a stout,
+       irregularly-branching trunk (Mormon settlers named it for a figure
+       "praying with uplifted arms"), each branch capped with a DENSE
+       rosette of many sharp, radiating spikes, not the sparse 3-line
+       tuft the previous pass here drew, which read as antlers instead of
+       a yucca crown once actually looked at, not assumed correct from
+       the path data alone. -->
+  <defs>
+    <linearGradient id="desert" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E6E6E6"/>
+      <stop offset="45%" stop-color="#A8A8A0"/>
+      <stop offset="100%" stop-color="#5A3A1C"/>
+    </linearGradient>
+    <!-- userSpaceOnUse, not the default per-shape bounding box: this tree
+         is drawn as many separate path/line elements, and an
+         objectBoundingBox gradient recomputes independently for each
+         one's own tiny bbox, a real bug caught here on an earlier pass
+         (the lower trunk nearly vanished into the background). Fixed
+         coordinates make it one continuous light-from-above gradient
+         across the whole tree regardless of how many shapes draw it. -->
+    <linearGradient id="treeGrad" gradientUnits="userSpaceOnUse" x1="0" y1="40" x2="0" y2="176">
+      <stop offset="0%" stop-color="#4A3A26"/>
+      <stop offset="100%" stop-color="#1C130A"/>
+    </linearGradient>
+    <radialGradient id="sunGlow" cx="68%" cy="20%" r="45%">
+      <stop offset="0%" stop-color="#FFE380" stop-opacity="0.55"/>
+      <stop offset="60%" stop-color="#FFA716" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#FFA716" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="groundShadow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0A0602" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#0A0602" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="vignette" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.08"/>
+      <stop offset="18%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="82%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.18"/>
+    </linearGradient>
+    <clipPath id="roundedSquare">
+      <rect width="200" height="200" rx="44"/>
+    </clipPath>
+    <!-- One rosette: 7 spikes radiating from a point, real fullness
+         instead of 3 sparse lines. Reused at the trunk top and both
+         branch tips via <use>, rotated/scaled to fit each. -->
+    <g id="rosette">
+      <line x1="0" y1="0" x2="0"   y2="-22" stroke-width="4.5"/>
+      <line x1="0" y1="0" x2="-9"  y2="-20" stroke-width="4.5"/>
+      <line x1="0" y1="0" x2="9"   y2="-20" stroke-width="4.5"/>
+      <line x1="0" y1="0" x2="-17" y2="-13" stroke-width="4"/>
+      <line x1="0" y1="0" x2="17"  y2="-13" stroke-width="4"/>
+      <line x1="0" y1="0" x2="-20" y2="-2"  stroke-width="4"/>
+      <line x1="0" y1="0" x2="20"  y2="-2"  stroke-width="4"/>
+    </g>
+  </defs>
+
+  <g clip-path="url(#roundedSquare)">
+    <rect width="200" height="200" fill="url(#desert)"/>
+    <rect width="200" height="200" fill="url(#sunGlow)"/>
+    <ellipse cx="100" cy="174" rx="44" ry="9" fill="url(#groundShadow)"/>
+
+    <g fill="none" stroke="url(#treeGrad)" stroke-linecap="round">
+      <!-- trunk, a slight organic kink instead of one dead-straight line -->
+      <path d="M100 176 L98 140 L102 108 L100 88" stroke-width="13"/>
+      <!-- two irregular arms at different heights, "uplifted", not a
+           mirrored pair -->
+      <path d="M100 152 Q72 140 60 100" stroke-width="10"/>
+      <path d="M101 124 Q128 108 138 76" stroke-width="9"/>
+    </g>
+
+    <g stroke="url(#treeGrad)" stroke-linecap="round">
+      <use href="#rosette" transform="translate(100 88) scale(1.05)"/>
+      <use href="#rosette" transform="translate(60 100) rotate(-18) scale(0.85)"/>
+      <use href="#rosette" transform="translate(138 76) rotate(16) scale(0.9)"/>
+    </g>
+
+    <!-- a thin warm rim light on the trunk's sun-facing edge, real
+         directional light instead of a flat silhouette -->
+    <path d="M96 172 L94 141 L98 109" fill="none" stroke="#F2C879" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/>
+
+    <rect width="200" height="200" fill="url(#vignette)"/>
   </g>
-  <g stroke="#241408" stroke-width="6" stroke-linecap="round">
-    <!-- tuft: trunk top -->
-    <line x1="100" y1="66" x2="86" y2="46"/>
-    <line x1="100" y1="66" x2="100" y2="40"/>
-    <line x1="100" y1="66" x2="114" y2="46"/>
-    <!-- tuft: left arm -->
-    <line x1="68" y1="92" x2="54" y2="76"/>
-    <line x1="68" y1="92" x2="52" y2="94"/>
-    <line x1="68" y1="92" x2="60" y2="108"/>
-    <!-- tuft: right arm -->
-    <line x1="134" y1="84" x2="150" y2="68"/>
-    <line x1="134" y1="84" x2="150" y2="86"/>
-    <line x1="134" y1="84" x2="142" y2="100"/>
-  </g>
-  <rect x="66" y="168" width="68" height="10" rx="5" fill="#241408" opacity="0.5"/>
 </svg>
