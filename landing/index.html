@@ -52,7 +52,18 @@
   @media (max-width: 700px) {
     #stage { height: auto; aspect-ratio: 16 / 9; }
   }
-  #v86-embed { position: absolute; inset: 0; cursor: pointer; outline: none; }
+  /* v47.1: real bug, reported as "clicking just spins the cursor around"
+     on iOS. That's not the kernel's own drawn cursor, it's Safari's own
+     text-selection loupe: a tap-and-hold on any element without these
+     three properties is treated as a text-selection gesture by iOS,
+     which shows its own floating magnifier cursor that follows the
+     finger, completely unrelated to anything this page or the kernel
+     draws. touch-action stays untouched on purpose (not set to none):
+     that would also kill the deliberate "never trap a visitor, let the
+     page scroll during a drag" behaviour touchmove's handler already
+     documents. These three properties only suppress the callout/selection
+     UI, not scrolling. */
+  #v86-embed { position: absolute; inset: 0; cursor: pointer; outline: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
   #screen_container { position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   /* Hidden by default: the demo is the GUI, not the shell it boots through
      first. embed.js drives the kernel straight into "gui" and only ever
@@ -75,7 +86,7 @@
      since real PS/2-style relative deltas never perfectly match native
      screen movement, is exactly what read as "the cursor is offset", a
      real, reported, confusing bug, not a rendering glitch to tune away. */
-  #screen_canvas { width: 100%; height: 100%; image-rendering: pixelated; cursor: none; }
+  #screen_canvas { width: 100%; height: 100%; image-rendering: pixelated; cursor: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   /* A small badge, not a dark veil over the whole demo: the earlier full-
      screen `inset:0` dark overlay dimmed the entire GUI just to show one
      line of text, direct feedback that it read as "ugly". Now it's one
