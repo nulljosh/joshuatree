@@ -329,3 +329,11 @@ Direct request: "make the wallpaper animated somehow, make the tree blow in the 
 - [x] Four frames a second, only the rows between the menu bar and the skyline, only while the desktop itself is what's on screen. The cached dock band below the horizon is never touched, so the v40/v43 dirty-region scheme stays intact and nothing else flickers.
 - [x] Self-timing: the first frame measures itself on the PIT; over a tenth of a second and the machine is too slow for this (v86 in a browser) and it switches itself off for good. Confirmed in the tour test: desktop samples flat at 6016 across seven seconds in v86, i.e. the wind never ran there, then the tour opened apps on cue.
 - [x] Verified: `check.sh`, `apptest.sh` (15 apps), `tourtest.mjs`, and a real two-frame screendump diff under QEMU: 41,390 pixels changed, bounding box rows 60..638 physical, zero below the skyline.
+
+## 0.45.1, the flashing cursor (Sep 2026)
+PATCH. Reported from a video within minutes of v45 shipping: the pointer flashed.
+- [x] Cause: every wind frame restored the cursor, repainted the whole sky band (~1.4M samples), then redrew the cursor, so the pointer was absent for most of each frame, four times a second. The wind repaint now skips the cursor's own rectangle and refreshes its backup patch instead. The pointer is never erased. Proven by counting its white outline pixels across three consecutive frames: 140, 140, 140.
+- [x] Second real bug found on the way, by measuring over serial: refactoring the sampler into a per-pixel function recomputed the row maths (two divisions, the wind shift) for every pixel; a frame went from ~9 to 14 PIT ticks and tripped the slow-machine gate, which is why the wind silently stopped in the first build of this fix. Split into a per-row context plus a per-pixel step: 7 ticks.
+- [x] The gate itself now needs two slow frames in a row, not one: under QEMU the first frame includes the JIT translating the loop and could trip a single-frame gate falsely.
+- [x] `WHITEPAPER.md` rewritten from a stale "v4" (no GUI, no ring 3) to 0.45.0, in plain English, around the why.
+- [x] Verified: `check.sh`, `apptest.sh` (15 apps), `tourtest.mjs`, serial `wind=7t`, three-frame cursor-outline count, two-frame sky diff (7,144 px, the wind running).

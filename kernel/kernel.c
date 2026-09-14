@@ -1064,46 +1064,68 @@ static int gui_wind_shift(int row){ /* source-pixel shift for this screen row, i
 static void gui_draw_wallpaper_rows_sway(int y_from, int y_to, int sway);
 static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway(y_from, y_to, 0); }
 
-static void gui_draw_wallpaper_rows_sway(int y_from, int y_to, int sway){
-    /* v42: sampled bilinearly at PHYSICAL resolution, not nearest-neighbour
-       through the logical layer. The old path picked one source pixel per
-       logical pixel and window_pixel stamped it as a 2x2 block, so a 640px
-       source became a 6x6 mosaic on a 1920px panel, glaring next to icons
-       that are now genuinely sharp. Interpolating between the four nearest
-       source pixels for every physical pixel gives smooth gradients from a
-       960x540 source with no blocks at all. Integer fixed-point (8 bits of
-       fraction): there is no float in this kernel and none is needed. */
+/* One wallpaper pixel at PHYSICAL (px, py): bilinear over the 960x540
+   source, plus the wind shift when `sway` is set. Everything that paints
+   or samples the wallpaper goes through here now, so the band draw and
+   the cursor-backup refresh can never disagree about what a pixel is. */
+/* Per-row context for the bilinear sampler: source row pair, vertical
+   weight, wind shift. Computed once per screen row; the per-pixel step
+   below then does only the horizontal work. (v45.1: a first refactor
+   recomputed all of this per pixel and a wind frame went from ~9 to 14
+   PIT ticks, tripping the slow-machine gate. Measured over serial, then
+   fixed here.) */
+struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
+static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
+    struct wp_row c;
     int lw = (int)window_width(), lh = (int)window_height();
     int sc = (int)window_scale();
-    int pw = lw * sc;
+    c.pw = lw * sc;
     int area_h = lh - GUI_MENUBAR_H;
+    int row = py - GUI_MENUBAR_H * sc; if (row < 0) row = 0;
+    int fy = row * (WALLPAPER_H - 1) * 256 / (area_h * sc > 1 ? area_h * sc - 1 : 1);
+    int sy = fy >> 8; c.wy = fy & 255;
+    if (sy >= WALLPAPER_H - 1) { sy = WALLPAPER_H - 2; c.wy = 255; }
+    c.r0 = &wallpaper_rgb[sy * WALLPAPER_W * 3];
+    c.r1 = c.r0 + WALLPAPER_W * 3;
+    c.shift = sway ? (gui_wind_shift(py / sc) * WALLPAPER_W / lw) >> 8 : 0;
+    return c;
+}
+static inline __attribute__((always_inline)) unsigned int gui_wallpaper_px(const struct wp_row *c, int px){
+    int fx = px * (WALLPAPER_W - 1) * 256 / (c->pw > 1 ? c->pw - 1 : 1) + c->shift * 256;
+    if (fx < 0) fx = 0; if (fx > (WALLPAPER_W - 1) * 256) fx = (WALLPAPER_W - 1) * 256;
+    int sx = fx >> 8, wx = fx & 255;
+    if (sx >= WALLPAPER_W - 1) { sx = WALLPAPER_W - 2; wx = 255; }
+    const unsigned char *a = &c->r0[sx * 3], *b = a + 3, *cc = &c->r1[sx * 3], *d = cc + 3;
+    unsigned int col = 0;
+    for (int ch = 0; ch < 3; ch++){
+        int top = a[ch] * (256 - wx) + b[ch] * wx;
+        int bot = cc[ch] * (256 - wx) + d[ch] * wx;
+        col = (col << 8) | (unsigned int)((top * (256 - c->wy) + bot * c->wy) >> 16);
+    }
+    return col;
+}
+static unsigned int gui_wallpaper_sample(int px, int py, int sway){ struct wp_row c = gui_wallpaper_row(py, sway); return gui_wallpaper_px(&c, px); }
+
+/* ex/ey/ew/eh: a physical rect to leave untouched (the cursor). v45.1: the
+   wind used to restore the cursor, repaint the band, and redraw it, which
+   erased the pointer for most of every frame, four times a second, a
+   real flashing cursor reported from a video. Skipping its rect means it
+   is simply never touched. */
+static void gui_draw_wallpaper_rows_sway_ex(int y_from, int y_to, int sway, int ex, int ey, int ew, int eh){
+    int lh = (int)window_height();
+    int sc = (int)window_scale();
     if (y_from < GUI_MENUBAR_H) y_from = GUI_MENUBAR_H;
     if (y_to > lh) y_to = lh;
     for (int py = y_from * sc; py < y_to * sc; py++){
-        int row = py - GUI_MENUBAR_H * sc;                      /* physical row within the wallpaper area */
-        int fy = row * (WALLPAPER_H - 1) * 256 / (area_h * sc > 1 ? area_h * sc - 1 : 1);
-        int sy = fy >> 8, wy = fy & 255;
-        if (sy >= WALLPAPER_H - 1) { sy = WALLPAPER_H - 2; wy = 255; }
-        const unsigned char *r0 = &wallpaper_rgb[sy * WALLPAPER_W * 3];
-        const unsigned char *r1 = r0 + WALLPAPER_W * 3;
-        int shift = sway ? (gui_wind_shift(py / sc) * WALLPAPER_W / lw) >> 8 : 0; /* source px, 8.8 -> int */
-        for (int px = 0; px < pw; px++){
-            int fx = px * (WALLPAPER_W - 1) * 256 / (pw > 1 ? pw - 1 : 1) + shift * 256;
-            if (fx < 0) fx = 0; if (fx > (WALLPAPER_W - 1) * 256) fx = (WALLPAPER_W - 1) * 256;
-            int sx = fx >> 8, wx = fx & 255;
-            if (sx >= WALLPAPER_W - 1) { sx = WALLPAPER_W - 2; wx = 255; }
-            const unsigned char *a = &r0[sx * 3], *b = a + 3, *c = &r1[sx * 3], *d = c + 3;
-            unsigned int col = 0;
-            for (int ch = 0; ch < 3; ch++){
-                int top = a[ch] * (256 - wx) + b[ch] * wx;
-                int bot = c[ch] * (256 - wx) + d[ch] * wx;
-                int v = (top * (256 - wy) + bot * wy) >> 16;
-                col = (col << 8) | (unsigned int)v;
-            }
-            window_pixel_phys(px, py, col);
+        struct wp_row c = gui_wallpaper_row(py, sway);
+        int in_rows = (eh > 0 && py >= ey && py < ey + eh);
+        for (int px = 0; px < c.pw; px++){
+            if (in_rows && px >= ex && px < ex + ew) continue;
+            window_pixel_phys(px, py, gui_wallpaper_px(&c, px));
         }
     }
 }
+static void gui_draw_wallpaper_rows_sway(int y_from, int y_to, int sway){ gui_draw_wallpaper_rows_sway_ex(y_from, y_to, sway, 0, 0, 0, 0); }
 
 static void gui_draw_wallpaper(void){
     gui_draw_wallpaper_rows(GUI_MENUBAR_H, (int)window_height());
@@ -2661,10 +2683,21 @@ static void gui_run(void){
                 wind_last = ticks();
                 wind_phase += wind_dir * 16; if (wind_phase >= 256 || wind_phase <= -256) wind_dir = -wind_dir;
                 unsigned int t0 = ticks();
-                gui_cursor_restore();
-                gui_draw_wallpaper_rows_sway(WIND_TOP_ROW, WIND_HORIZON_ROW, 1);
-                gui_cursor_save(mx, my); gui_draw_cursor(mx, my);
-                if (ticks() - t0 > 10) wind_enabled = 0;
+                int sc = (int)window_scale();
+                int cx0 = cursor_saved_x, cy0 = cursor_saved_y;
+                if (cx0 >= 0) gui_draw_wallpaper_rows_sway_ex(WIND_TOP_ROW, WIND_HORIZON_ROW, 1, cx0 * sc, cy0 * sc, CURSOR_W * sc, CURSOR_H * sc);
+                else gui_draw_wallpaper_rows_sway(WIND_TOP_ROW, WIND_HORIZON_ROW, 1);
+                /* the backup under the cursor must track the sway too, or the
+                   next real cursor move would restore a pre-wind patch */
+                if (cx0 >= 0)
+                    for (int j = 0; j < CURSOR_H; j++) { int ly = cy0 + j; if (ly < WIND_TOP_ROW || ly >= WIND_HORIZON_ROW) continue;
+                        for (int i = 0; i < CURSOR_W; i++) cursor_backup[j * CURSOR_W + i] = gui_wallpaper_sample((cx0 + i) * sc, ly * sc, 1); }
+                /* two slow frames in a row, not one: the first frame under
+                   QEMU includes the JIT translating this very loop and can
+                   trip a single-frame gate falsely */
+                { static int slow = 0, logged = 0; unsigned int dt = ticks() - t0;
+                  if (!logged) { logged = 1; char b[24]; int i = 0; b[i++]='w'; b[i++]='i'; b[i++]='n'; b[i++]='d'; b[i++]='='; if (dt >= 10) b[i++]='0'+dt/10%10; b[i++]='0'+dt%10; b[i++]='t'; b[i++]='\n'; b[i]=0; serial_puts(b); }
+                  if (dt > 12) { if (++slow >= 2) wind_enabled = 0; } else slow = 0; }
             }
         }
         int sc = kbd_pop();
