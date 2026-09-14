@@ -878,13 +878,73 @@ static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int 
    the letters span that this reads as smooth, unlike the tray corner bug
    found earlier this session, where the same shortcut spanned a much
    wider color gap and showed. */
+/* A deliberately blocky, un-anti-aliased Joshua tree silhouette, a real
+   8-bit nod to this OS's own retro/bitmap nature, direct request after
+   a real photo turned out to need either a licensing chase (attributed
+   Creative Commons) or a genuinely bigger image-decoder undertaking this
+   freestanding kernel has no asset pipeline for at all. `block` is the
+   size of one "pixel" in this chunky sprite; every rect is exactly
+   block x block, no AA_BAND softening anywhere, that hard edge is the
+   whole point here, the opposite treatment from every icon in this file. */
+/* A spiky tuft, the yucca-leaf cluster every one of this tree's three
+   arms ends in. Went through two real revisions, not shipped on the
+   first attempt: a plus-shaped 6-block cluster (both side blocks plus
+   both upper diagonals) was wide enough that with the arms spaced only
+   2 blocks apart, adjacent tufts' edges touched and merged into one
+   solid bar, the whole silhouette read as a mushroom or an anvil, not a
+   tree, caught by actually zooming into a real screendump. Narrower (no
+   side blocks, just up and the two upper diagonals) and the arms spread
+   further apart below fixes it without the tufts ever touching. */
+static void gui_draw_pixel_tuft(int cx, int cy, int block, unsigned int color){
+    window_rect(cx,         cy,         block, block, color);
+    window_rect(cx - block, cy - block, block, block, color);
+    window_rect(cx + block, cy - block, block, block, color);
+    window_rect(cx,         cy - block, block, block, color);
+}
+
+static void gui_draw_pixel_tree(int x0, int ground_y, int block, unsigned int color){
+    for (int i = 0; i < 4; i++) window_rect(x0, ground_y - (i + 1) * block, block, block, color); /* trunk */
+    int split = ground_y - 4 * block;
+    window_rect(x0 - block,     split - block,     block, block, color); /* left arm, 3 diagonal steps */
+    window_rect(x0 - 2 * block, split - 2 * block, block, block, color);
+    window_rect(x0 - 3 * block, split - 3 * block, block, block, color);
+    gui_draw_pixel_tuft(x0 - 3 * block, split - 4 * block, block, color);
+    window_rect(x0 + block,     split - block,     block, block, color); /* right arm, mirrored */
+    window_rect(x0 + 2 * block, split - 2 * block, block, block, color);
+    window_rect(x0 + 3 * block, split - 3 * block, block, block, color);
+    gui_draw_pixel_tuft(x0 + 3 * block, split - 4 * block, block, color);
+    window_rect(x0, split - block,     block, block, color); /* center arm, continuing straight up */
+    window_rect(x0, split - 2 * block, block, block, color);
+    gui_draw_pixel_tuft(x0, split - 3 * block, block, color);
+}
+
 static void gui_draw_wallpaper(void){
     int w = (int)window_width(), h = (int)window_height();
     for (int row = GUI_MENUBAR_H; row < h; row++)
         window_rect(0, row, w, 1, gui_wallpaper_color(row));
+
+    /* Real bug caught before shipping, not assumed fine: a first pass put
+       these low enough that the dock tray, drawn afterward, covered
+       everything but a couple of stray blocks poking above it, unrecog-
+       nizable as a tree at all. Moved well clear of the dock's own top
+       edge (gui_dock_y0()), and off to the sides past the dock's own
+       width so they never compete with it horizontally either. */
+    int ground_y = gui_dock_y0() - 30;
+    unsigned int silhouette = gui_wallpaper_color(ground_y);
+    unsigned int dark = gui_blend(silhouette, 0x00000000);
+    gui_draw_pixel_tree(70,     ground_y, 13, dark);
+    gui_draw_pixel_tree(w - 70, ground_y, 15, dark);
+
+    /* Real feedback: the desktop's own echo of the boot screen's "hello"
+       should actually show, not just technically be there. A plain 50/50
+       blend toward white read as barely-there; leaning further toward
+       white (gui_lerp instead of gui_blend's fixed midpoint) gives it
+       real, visible contrast while still reading as a soft watermark,
+       not a second opaque logo competing with the dock. */
     int watermark_row = GUI_MENUBAR_H + 190;
     unsigned int wall = gui_wallpaper_color(watermark_row);
-    gui_draw_hello_script(w / 2, watermark_row, 4, gui_blend(wall, 0x00FFFFFF), wall);
+    unsigned int ink = gui_lerp(wall, 0x00FFFFFF, 3, 4);
+    gui_draw_hello_script(w / 2, watermark_row, 4, ink, wall);
 }
 
 /* Fills a downward-pointing triangle: flat top of half-width `half_w` at
