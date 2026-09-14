@@ -17,6 +17,12 @@ void window_close(void);
 
 void window_clear(unsigned int color);
 void window_pixel(int x, int y, unsigned int color);
+/* Reads back whatever's currently at (x,y), 0 if out of bounds. Lets a
+   caller correctly alpha-blend a partial-coverage pixel (real anti-
+   aliasing) against whatever's actually on screen there instead of
+   guessing a background color, needed for font_draw_char's "transparent"
+   mode (bg < 0) where there's no single known background to blend into. */
+unsigned int window_get_pixel(int x, int y);
 void window_rect(int x, int y, int w, int h, unsigned int color);
 unsigned int window_width(void);
 unsigned int window_height(void);

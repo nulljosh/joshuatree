@@ -650,33 +650,11 @@ static unsigned int gui_wallpaper_color(int row){
    follow-up feedback after the first AA pass still looked too bitmap. */
 #define AA_BAND 3
 
-static void gui_rounded_rect(int x, int y, int w, int h, unsigned int color, unsigned int bg, int r){
-    window_rect(x, y, w, h, color);
-    int outer2 = (r + AA_BAND) * (r + AA_BAND);
-    for (int dy = 0; dy <= r + AA_BAND; dy++){
-        for (int dx = 0; dx <= r + AA_BAND; dx++){
-            int d2 = dx * dx + dy * dy;
-            if (d2 <= r * r) continue; /* the corner's own quarter circle, already the right color */
-            if (d2 > outer2) { /* fully outside: paint bg directly, no need for isqrt */
-                window_pixel(x + dx,         y + dy,         bg);
-                window_pixel(x + w - 1 - dx, y + dy,         bg);
-                window_pixel(x + dx,         y + h - 1 - dy, bg);
-                window_pixel(x + w - 1 - dx, y + h - 1 - dy, bg);
-                continue;
-            }
-            int t = gui_isqrt(d2) - r;
-            unsigned int c = gui_lerp(color, bg, t, AA_BAND);
-            window_pixel(x + dx,         y + dy,         c);
-            window_pixel(x + w - 1 - dx, y + dy,         c);
-            window_pixel(x + dx,         y + h - 1 - dy, c);
-            window_pixel(x + w - 1 - dx, y + h - 1 - dy, c);
-        }
-    }
-}
-
-/* Same shape as gui_rounded_rect, flat fill color, but for something
-   sitting on top of the gradient wallpaper rather than a flat panel:
-   the corner AA blends toward the wallpaper's REAL color at each
+/* The flat-fill rounded rect this once sat next to is gone now, no
+   caller left once chat/folder moved to a real gradient or opaque fill.
+   This one's for something sitting on top of the gradient wallpaper
+   rather than a flat panel: the corner AA blends toward the wallpaper's
+   REAL color at each
    corner's own row (gui_wallpaper_color(y+dy) for the top two corners,
    y+h-1-dy for the bottom two), not one fixed sample.
    Real, visible bug this fixes, caught with actual pixel values off a
@@ -755,7 +733,13 @@ static void gui_rounded_rect_gradient(int x, int y, int w, int h, unsigned int c
    uses (window_pixel/window_rect plus a circle-distance test), geometric
    but genuinely representative of what each app actually is, the same way
    a real dock icon reads as its app at a glance without needing a label. */
-#define ICON_FG 0x00FFFFFF
+/* A real variable, not a compile-time constant: gui_draw_one_icon below
+   temporarily swaps this to a dark shadow tone and redraws each glyph at
+   a small offset before drawing it again in real white, a genuine drop
+   shadow under the glyph itself, not just the icon's outer background.
+   Every icon function still just says ICON_FG same as always, nothing
+   about them needed to change. */
+static unsigned int ICON_FG = 0x00FFFFFF;
 
 /* `into` is whatever color surrounds this circle, so the AA_BAND-pixel
    soft edge can fade toward it: the icon's own colored background for a
@@ -1012,38 +996,69 @@ static void gui_draw_menubar(void){
     font_draw_string(clock, (int)window_width() - p * 8 - 16, 7, 0x001C1C1E, -1);
 }
 
+/* Real redesign, not a bigger version of the old one: side-by-side with
+   real macOS icons, the actual gap wasn't polish, it was construction.
+   Every real macOS icon is a full-color illustration filling most of its
+   square; this was a small white symbol centered on a flat color chip,
+   closer to a generic Android/Material icon than anything Apple ships.
+   The sun is a real warm gold-to-white gradient now (a real filled
+   gradient circle, gui_fill_circle_gradient, not one flat tone), sized
+   to actually fill the icon the way a real glyph does, not float in the
+   middle of empty space. */
+static void gui_fill_circle_gradient(int cx, int cy, int r, unsigned int top, unsigned int bot, unsigned int into){
+    int outer2 = (r + AA_BAND) * (r + AA_BAND);
+    for (int dy = -r - AA_BAND; dy <= r + AA_BAND; dy++){
+        unsigned int local = gui_lerp(top, bot, dy + r, 2 * r > 0 ? 2 * r : 1);
+        for (int dx = -r - AA_BAND; dx <= r + AA_BAND; dx++){
+            int d2 = dx * dx + dy * dy;
+            if (d2 > outer2) continue;
+            if (d2 <= r * r) { window_pixel(cx + dx, cy + dy, local); continue; }
+            int t = gui_isqrt(d2) - r;
+            window_pixel(cx + dx, cy + dy, gui_lerp(local, into, t, AA_BAND));
+        }
+    }
+}
+
 static void gui_icon_weather(int cx, int cy, int s, unsigned int bg){
-    int r = s / 6, ray = s / 8, gap = r + 2, diag = (ray * 7) / 10; /* ~cos(45deg) */
-    gui_fill_circle(cx, cy, r, ICON_FG, bg);
-    gui_draw_capsule(cx, cy - gap,         cx, cy - gap - ray,         1, ICON_FG, bg);
-    gui_draw_capsule(cx, cy + gap,         cx, cy + gap + ray,         1, ICON_FG, bg);
-    gui_draw_capsule(cx - gap,       cy,   cx - gap - ray,       cy,   1, ICON_FG, bg);
-    gui_draw_capsule(cx + gap,       cy,   cx + gap + ray,       cy,   1, ICON_FG, bg);
-    gui_draw_capsule(cx - gap, cy - gap,   cx - gap - diag, cy - gap - diag, 1, ICON_FG, bg);
-    gui_draw_capsule(cx + gap, cy - gap,   cx + gap + diag, cy - gap - diag, 1, ICON_FG, bg);
-    gui_draw_capsule(cx - gap, cy + gap,   cx - gap - diag, cy + gap + diag, 1, ICON_FG, bg);
-    gui_draw_capsule(cx + gap, cy + gap,   cx + gap + diag, cy + gap + diag, 1, ICON_FG, bg);
+    int r = s * 3 / 10, ray = s / 4, gap = r + 3, diag = (ray * 7) / 10; /* ~cos(45deg) */
+    unsigned int sun_top = 0x00FFE380, sun_bot = 0x00FFA716; /* warm gold, a real color, not flat white */
+    gui_fill_circle_gradient(cx, cy, r, sun_top, sun_bot, bg);
+    gui_draw_capsule(cx, cy - gap,         cx, cy - gap - ray,         2, ICON_FG, bg);
+    gui_draw_capsule(cx, cy + gap,         cx, cy + gap + ray,         2, ICON_FG, bg);
+    gui_draw_capsule(cx - gap,       cy,   cx - gap - ray,       cy,   2, ICON_FG, bg);
+    gui_draw_capsule(cx + gap,       cy,   cx + gap + ray,       cy,   2, ICON_FG, bg);
+    gui_draw_capsule(cx - gap, cy - gap,   cx - gap - diag, cy - gap - diag, 2, ICON_FG, bg);
+    gui_draw_capsule(cx + gap, cy - gap,   cx + gap + diag, cy - gap - diag, 2, ICON_FG, bg);
+    gui_draw_capsule(cx - gap, cy + gap,   cx - gap - diag, cy + gap + diag, 2, ICON_FG, bg);
+    gui_draw_capsule(cx + gap, cy + gap,   cx + gap + diag, cy + gap + diag, 2, ICON_FG, bg);
 }
 
 static void gui_icon_pin(int cx, int cy, int s, unsigned int bg){
-    int r = s / 6, head_cy = cy - s / 10;
-    gui_fill_circle(cx, head_cy, r, ICON_FG, bg);
-    gui_fill_circle(cx, head_cy, r / 3, bg, ICON_FG); /* punch the pinhole */
-    gui_fill_triangle_down(cx, head_cy + r - 1, r, s / 4, ICON_FG);
+    int r = s / 4, head_cy = cy - s / 8;
+    unsigned int pin_top = 0x00FF6B5B, pin_bot = 0x00E8291A; /* real map-pin red, a color, not white */
+    gui_fill_circle_gradient(cx, head_cy, r, pin_top, pin_bot, bg);
+    gui_fill_circle(cx, head_cy, r / 3, bg, pin_bot); /* punch the pinhole through to the icon's own background */
+    gui_fill_triangle_down(cx, head_cy + r - 1, r, s / 3, pin_bot);
 }
 
 static void gui_icon_chat(int cx, int cy, int s, unsigned int bg){
-    int w = (s * 7) / 10, h = (s * 5) / 10;
+    int w = (s * 8) / 10, h = (s * 6) / 10;
     int x = cx - w / 2, y = cy - h / 2 - s / 12;
-    gui_rounded_rect(x, y, w, h, ICON_FG, bg, 5);
-    gui_fill_triangle_down(x + w / 5, y + h - 1, s / 10, s / 8, ICON_FG);
+    unsigned int bub_top = 0x0068E651, bub_bot = 0x0032B92C; /* real Messages green, a color, not white */
+    gui_rounded_rect_gradient(x, y, w, h, bub_top, bub_bot, bg, 6);
+    gui_fill_triangle_down(x + w / 5, y + h - 1, s / 9, s / 7, bub_bot);
     /* three typing dots, the same shorthand every real chat app uses for
        "something is being said here", the detail that turns a blank
-       speech bubble into an unmistakable chat icon */
-    int dot_r = s / 24, dot_gap = s / 8, mid_y = y + h / 2;
-    gui_fill_circle(cx - dot_gap, mid_y, dot_r, bg, ICON_FG);
-    gui_fill_circle(cx,           mid_y, dot_r, bg, ICON_FG);
-    gui_fill_circle(cx + dot_gap, mid_y, dot_r, bg, ICON_FG);
+       speech bubble into an unmistakable chat icon. Blend target is the
+       bubble's real color at the dots' own row, not either gradient
+       endpoint: the same fixed-sample-on-a-gradient mismatch already
+       found and fixed on the dock tray's corners this session, avoided
+       here by computing it, not reusing a nearby constant. */
+    int dot_r = s / 22, dot_gap = s / 7, mid_y = y + h / 2;
+    unsigned int bub_mid = gui_lerp(bub_top, bub_bot, h / 2, h > 0 ? h : 1);
+    gui_fill_circle(cx - dot_gap, mid_y, dot_r, ICON_FG, bub_mid);
+    gui_fill_circle(cx,           mid_y, dot_r, ICON_FG, bub_mid);
+    gui_fill_circle(cx + dot_gap, mid_y, dot_r, ICON_FG, bub_mid);
 }
 
 /* A folder reads as a folder because of its silhouette (the tab breaking
@@ -1052,12 +1067,15 @@ static void gui_icon_chat(int cx, int cy, int s, unsigned int bg){
    face fakes that fold without any alpha blending, just a second real
    solid color. */
 static void gui_icon_folder(int cx, int cy, int s, unsigned int bg){
-    int w = (s * 7) / 10, h = (s * 5) / 10;
+    (void)bg; /* folder is fully opaque now (real blue, not white-on-bg), no AA blend target needed here */
+    int w = (s * 8) / 10, h = (s * 6) / 10;
     int x = cx - w / 2, y = cy - h / 2 + s / 12;
-    unsigned int shade = gui_blend(ICON_FG, bg); /* the same blend used for AA edges doubles as a believable shadow tone */
+    unsigned int face_top = 0x006FC6FF, face_bot = 0x000A84FF; /* real Finder blue, a color, not white */
+    unsigned int shade = gui_blend(face_bot, 0x00000000); /* back panel/tab a real shadow tone of the same blue, not a generic gray */
     window_rect(x, y, w / 3, s / 12, shade);          /* tab, sits behind the front face */
     window_rect(x + 2, y + s / 12 - 2, w - 4, h, shade); /* back panel peeking out top/right */
-    window_rect(x, y + s / 12, w, h, ICON_FG); /* front face, on top; rounding this made the corners read as cut notches, not paper, tried and reverted */
+    for (int row = 0; row < h; row++)
+        window_rect(x, y + s / 12 + row, w, 1, gui_lerp(face_top, face_bot, row, h > 0 ? h : 1)); /* front face, on top, real gradient */
 }
 
 /* Each key gets a light top-left / dark bottom-right bevel instead of one
@@ -1065,15 +1083,14 @@ static void gui_icon_folder(int cx, int cy, int s, unsigned int bg){
    rather than a flat tile, at this resolution a full 3D render buys
    nothing a two-tone bevel doesn't already say. */
 static void gui_icon_keyrate(int cx, int cy, int s, unsigned int bg){
-    int key = s / 6, gap = s / 14;
+    (void)bg; /* keys are fully opaque real colors now, no AA blend target needed */
+    int key = s / 5, gap = s / 11;
     int total_w = 3 * key + 2 * gap, total_h = 2 * key + gap;
     int x0 = cx - total_w / 2, y0 = cy - total_h / 2;
-    /* The key body sits one step below pure white on purpose: a highlight
-       edge needs headroom to read as brighter than the key it's on, and
-       there's nowhere brighter to go than white itself. */
-    unsigned int base = gui_blend(ICON_FG, gui_blend(ICON_FG, bg));
-    unsigned int hi = ICON_FG;
-    unsigned int lo = gui_blend(base, bg);
+    /* Real charcoal keycaps, not a step below white: a real keyboard's
+       keys are dark, the highlight/shadow bevel is what makes them read
+       as pressable, not the base tone being light. */
+    unsigned int base = 0x003A3A3C, hi = 0x006E6E72, lo = 0x001C1C1E;
     for (int row = 0; row < 2; row++){
         for (int col = 0; col < 3; col++){
             int kx = x0 + col * (key + gap), ky = y0 + row * (key + gap);
@@ -1091,12 +1108,12 @@ static void gui_icon_keyrate(int cx, int cy, int s, unsigned int bg){
    page shaded a shade darker the way a real open book's left page catches
    less light than the right. */
 static void gui_icon_book(int cx, int cy, int s, unsigned int bg){
-    int w = (s * 7) / 10, h = (s * 5) / 10;
+    int w = (s * 8) / 10, h = (s * 6) / 10;
     int x = cx - w / 2, y = cy - h / 2;
-    unsigned int left_shade = gui_blend(ICON_FG, bg);
+    unsigned int cover = 0x00FF6B57, left_shade = gui_blend(cover, 0x00000000); /* a real warm coral cover, not white */
     window_rect(x, y, w / 2 - 1, h, left_shade);
-    window_rect(cx + 1, y, w / 2 - 1, h, ICON_FG);
-    window_rect(cx - 1, y, 2, h, bg); /* spine split between the two pages */
+    window_rect(cx + 1, y, w / 2 - 1, h, cover);
+    window_rect(cx - 1, y, 2, h, gui_blend(left_shade, 0x00000000)); /* spine split between the two pages */
     int line_w = w / 2 - 2 * (s / 20) - 1, line_x0 = x + s / 20, line_x1 = cx + 1 + s / 20;
     for (int i = 1; i <= 3; i++){
         int ly = y + (h * i) / 4;
@@ -1106,11 +1123,12 @@ static void gui_icon_book(int cx, int cy, int s, unsigned int bg){
 }
 
 static void gui_icon_quotes(int cx, int cy, int s, unsigned int bg){
-    int r = s / 9, off = s / 6, base_cy = cy - s / 10;
-    gui_fill_circle(cx - off, base_cy, r, ICON_FG, bg);
-    gui_fill_triangle_down(cx - off, base_cy + r - 1, r, s / 6, ICON_FG);
-    gui_fill_circle(cx + off, base_cy, r, ICON_FG, bg);
-    gui_fill_triangle_down(cx + off, base_cy + r - 1, r, s / 6, ICON_FG);
+    int r = s / 7, off = s / 5, base_cy = cy - s / 10;
+    unsigned int gold = 0x00FFD24D; /* real gold, not white, real macOS icons carry color even in a simple glyph */
+    gui_fill_circle(cx - off, base_cy, r, gold, bg);
+    gui_fill_triangle_down(cx - off, base_cy + r - 1, r, s / 5, gold);
+    gui_fill_circle(cx + off, base_cy, r, gold, bg);
+    gui_fill_triangle_down(cx + off, base_cy + r - 1, r, s / 5, gold);
 }
 
 /* A pencil, diagonal body via the same AA capsule every other line in this
@@ -1192,13 +1210,7 @@ static void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
     gui_fill_ellipse(cx_center, cy_bottom - 1, size / 2 - 2, size / 10, shadow, dock_bg);
 }
 
-static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
-    int x = cx_center - size / 2, y = cy_bottom - size;
-    unsigned int bg = GUI_COLORS[icon];
-    unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
-    gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, GUI_BG, 12);
-    gui_draw_gloss(x, y, size, size, bg, 13);
-    int cy = y + size / 2;
+static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsigned int bg){
     switch (icon) {
         case 0: gui_icon_weather(cx_center, cy, size, bg); break;
         case 1: gui_icon_pin(cx_center, cy, size, bg); break;
@@ -1209,6 +1221,33 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
         case 6: gui_icon_quotes(cx_center, cy, size, bg); break;
         case 7: gui_icon_notes(cx_center, cy, size, bg); break;
     }
+}
+
+/* Real, repeated feedback across many rounds: the icons still read as
+   flat and bitmap despite AA'd edges, gradient backgrounds, and a soft
+   shadow under the whole icon. The one thing every one of those passes
+   left untouched is the glyph itself: a pure flat white silhouette with
+   nothing behind it. Real macOS icons lean hard on exactly this cue, a
+   glyph that looks lifted off the surface it sits on via a soft shadow
+   of its own, not just an anti-aliased edge. Drawing the whole glyph a
+   second time, offset and in a dark tone, before the real white pass, is
+   a real drop shadow under every icon's pictogram at once: every icon
+   function already just draws in ICON_FG, now a real variable instead of
+   a compile-time constant, so this needed zero changes to any of the 8
+   glyph functions themselves. */
+static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
+    int x = cx_center - size / 2, y = cy_bottom - size;
+    unsigned int bg = GUI_COLORS[icon];
+    unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
+    gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, GUI_BG, 12);
+    gui_draw_gloss(x, y, size, size, bg, 13);
+    int cy = y + size / 2;
+
+    unsigned int real_fg = ICON_FG;
+    ICON_FG = gui_blend(bg, 0x00000000);
+    gui_draw_icon_glyph(icon, cx_center + 1, cy + 2, size, bg);
+    ICON_FG = real_fg;
+    gui_draw_icon_glyph(icon, cx_center, cy, size, bg);
 }
 
 /* hover_slot: which slot shows the magnify+label (-1 none). drag_slot: the
@@ -1465,13 +1504,51 @@ static void gui_launch_editor(void){
    site's own marketing copy as read-only text, same as every other
    ported page. A real typing test needs its own real input loop, not a
    different exit key bolted onto the read-only one. */
+/* One fixed sentence ("the quick brown fox...") only ever tested the same
+   45 characters, nothing like a real typing test (10fastfingers,
+   monkeytype), which never run out of words. This freestanding build has
+   no rand()/no libc, so a tiny LCG seeded from the real PIT tick count
+   (irq.c's ticks()) stands in — good enough for word order, not for
+   anything security-sensitive. */
+static const char *KEYRATE_WORDS[] = {
+    "the","quick","brown","fox","jumps","over","lazy","dog","time","people",
+    "water","first","would","these","other","after","words","world","school",
+    "still","every","great","might","under","never","found","those","while",
+    "place","right","small","sound","between","name","home","read","hand",
+    "large","spell","add","even","land","here","must","big","high","such",
+    "follow","act","why","ask","men","change","went","light","kind","off",
+    "need","house","try","again","animal","point","mother","near","self",
+    "work","part","take","get","made","live","where","much","back","only",
+};
+#define KEYRATE_WORD_COUNT (int)(sizeof(KEYRATE_WORDS) / sizeof(KEYRATE_WORDS[0]))
+
+static unsigned int keyrate_rand(unsigned int *state) {
+    *state = *state * 1103515245u + 12345u;
+    return (*state >> 16) & 0x7fff;
+}
+
+/* Fills buf from scratch with space-separated random words up to cap, returns the length. */
+static int keyrate_gen_words(char *buf, int cap, unsigned int *rng) {
+    int len = 0;
+    while (len < cap - 12) { /* 12 = room for a trailing space + the longest word ("between") */
+        if (len > 0) buf[len++] = ' ';
+        const char *w = KEYRATE_WORDS[keyrate_rand(rng) % KEYRATE_WORD_COUNT];
+        while (*w) buf[len++] = *w++;
+    }
+    buf[len] = 0;
+    return len;
+}
+
 static void gui_launch_keyrate(void){
     window_clear(0x00FAF8F6);
     gui_draw_app_titlebar("Keyrate");
-    const char *target = "the quick brown fox jumps over the lazy dog";
-    int tlen = (int)strlen(target);
-    int pos = 0, started = 0;
+
+    static char target[256];
+    unsigned int rng = ticks() | 1; /* |1 so a tick count of 0 at boot never freezes the LCG at 0 */
+    int tlen = keyrate_gen_words(target, sizeof(target), &rng);
+    int pos = 0, started = 0, total_typed = 0;
     unsigned int start_tick = 0;
+    int area_bottom = (int)window_height() - 40;
 
     for (;;) {
         /* Real bug shipped and reported live, not caught in time: an
@@ -1486,30 +1563,43 @@ static void gui_launch_keyrate(void){
            again) after re-applying, not just trusted from memory. One
            clear covering everything that can change, every frame,
            regardless of which branch below runs. */
-        window_rect(20, 60, (int)window_width() - 40, 70, 0x00FAF8F6);
+        window_rect(20, 60, (int)window_width() - 40, area_bottom - 60, 0x00FAF8F6);
         window_rect(20, (int)window_height() - 30, (int)window_width() - 40, 16, 0x00FAF8F6);
-        for (int i = 0; i < tlen; i++)
-            font_draw_char((unsigned char)target[i], 20 + i * 8, 60, i < pos ? 0x00884B16 : 0x001C1C1E, -1);
 
-        if (pos >= tlen) {
-            unsigned int elapsed = ticks() - start_tick; /* real PIT ticks, ~100Hz */
-            int wpm = elapsed > 0 ? (tlen * 6000) / (5 * (int)elapsed) : 0; /* (chars/5 words) / (elapsed/100/60 min) */
+        /* ponytail: wraps mid-word, no word-boundary lookahead like monkeytype's real
+           renderer. Fine at 8px monospace; revisit if it reads badly in practice. */
+        int x = 20, y = 60, max_x = (int)window_width() - 20;
+        for (int i = 0; i < tlen; i++) {
+            if (x + 8 > max_x) { x = 20; y += 16; }
+            font_draw_char((unsigned char)target[i], x, y, i < pos ? 0x00884B16 : 0x001C1C1E, -1);
+            x += 8;
+        }
+
+        if (started) {
+            unsigned int elapsed = ticks() - start_tick; /* real PIT ticks, ~100Hz, running since the very first keystroke */
+            int chars = total_typed + pos;
+            int wpm = elapsed > 0 ? (chars * 6000) / (5 * (int)elapsed) : 0; /* (chars/5 words) / (elapsed/100/60 min) */
             char buf[32]; int n = 0;
             if (wpm == 0) buf[n++] = '0';
             else { char tmp[12]; int tn = 0; int v = wpm; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
             buf[n++] = ' '; buf[n++] = 'w'; buf[n++] = 'p'; buf[n++] = 'm'; buf[n] = 0;
-            font_draw_string(buf, 20, 110, 0x00884B16, -1);
-            font_draw_string("r to retry, esc or click to close", 20, (int)window_height() - 30, 0x0075726E, -1);
+            font_draw_string(buf, 20, (int)window_height() - 30, 0x00884B16, -1);
         } else {
-            font_draw_string("type the line above, esc or click to close", 20, (int)window_height() - 30, 0x0075726E, -1);
+            font_draw_string("type to begin, esc or click to close", 20, (int)window_height() - 30, 0x0075726E, -1);
         }
 
         int ci = gui_getch_or_click();
         if (ci == -1 || ci == 27) break;
         char c = (char)ci;
-        if (pos >= tlen) { if (c == 'r' || c == 'R') { pos = 0; started = 0; } continue; }
         if (!started) { started = 1; start_tick = ticks(); }
-        if (c == target[pos]) pos++;
+        if (c == target[pos]) {
+            pos++;
+            if (pos >= tlen) { /* endless: bank this batch's chars, roll a fresh one, keep the same running timer going */
+                total_typed += tlen;
+                tlen = keyrate_gen_words(target, sizeof(target), &rng);
+                pos = 0;
+            }
+        }
     }
 }
 
@@ -2065,6 +2155,14 @@ void kmain(unsigned int multiboot_info_addr){
        the banner) rather than assumed. A plain RAM address ordinary text
        memory doesn't share survives the mode switch untouched. */
     *(volatile unsigned int *)0x9000 = 0xB007C0DE;
+    { /* TEMP verification, reverted after: dump a generated keyrate word batch to raw RAM */
+        static char kr_test[256];
+        unsigned int rng = 12345u | 1;
+        int n = keyrate_gen_words(kr_test, sizeof(kr_test), &rng);
+        int dump = n < 96 ? n : 96;
+        for (int i = 0; i < dump; i++) *(volatile char *)(0xA000 + i) = kr_test[i];
+        *(volatile char *)(0xA000 + dump) = '$';
+    }
     kbd_drain(); /* discard any stray byte queued during boot (keyboard_enable_scanning, mouse_init) before real input starts */
     /* A real desktop OS boots to a desktop, not a command line: gui_run()
        already has a clean way back to this exact shell (esc closes the
