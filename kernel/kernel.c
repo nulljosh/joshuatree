@@ -697,7 +697,7 @@ static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_o
 static unsigned char dock_hover_extra[GUI_ICON_COUNT];
 
 #define GUI_BG          0x00FAF8F6
-#define GUI_MENUBAR_H   30
+#define GUI_MENUBAR_H   26
 /* v36 (0.36.0): the icon size is now *derived* from how many icons there
    are, instead of a constant that silently overflows the screen every
    time an app is added. v35 hit that for real (14 icons at the old

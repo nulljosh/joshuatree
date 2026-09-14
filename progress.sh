@@ -162,7 +162,13 @@ def yf(v): return pad_t + plot_h - v * plot_h // max_v
 def yf_pct(v): return pad_t + plot_h - v * plot_h // 100  # right axis is always 0-100%
 
 points_attr = " ".join(f"{xf(i)},{yf(cum[i])}" for i in range(n))
-dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/>' for i in range(n))
+# Direct feedback: 40+ dots on a smooth curve is visual noise, not more
+# information, the line itself already carries every sampled value.
+# Thin markers to ~10 total, always keeping the first and last real point.
+DOT_TARGET = 10
+dot_step = max(1, (n - 1) // (DOT_TARGET - 1)) if n > 1 else 1
+dot_idx = sorted(set(list(range(0, n, dot_step)) + [n - 1]))
+dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/>' for i in dot_idx)
 last_x = xf(n - 1)
 area_points = f"{pad_l},{pad_t+plot_h} {points_attr} {last_x},{pad_t+plot_h}"
 half_v = max_v // 2
