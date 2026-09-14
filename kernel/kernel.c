@@ -19,6 +19,7 @@
 #include "rtl8139.h"
 #include "net.h"
 #include "http.h"
+#include "wallpaper.h"
 #include "serial.h"
 #include "app_weather.h"
 #include "app_curbfind.h"
@@ -605,34 +606,36 @@ static int gui_isqrt(int n){
     return r;
 }
 
-/* Real palette refresh, not a tweak: direct feedback that the old warm
-   orange/burgundy gradient read as "pumpkin, Halloween", not the actual
-   target, the real Mojave desert the real Joshua tree grows in, sand and
-   granite and brush, brownish-silver, not a sunset. Colors pulled from
-   clrs.cc (colors.css), a real named palette, not eyeballed hexes: Silver
-   (#DDDDDD) catching the light like sun-bleached sand, Gray (#AAAAAA) for
-   the dusty middle distance.
-   The bottom stop went through a real revision, not assumed right on the
-   first try: plain Maroon (#85144b) on its own rendered and looked like
-   wine or plum, not the requested "brownish", its green channel is too
-   low relative to red/blue for that. Blending Maroon toward something
-   else isn't right either since it has no orange in it to lean on; used
-   clrs.cc's own Orange (#FF851B) blended with Black (#111111) instead, a
-   real leather-brown, still built entirely from named clrs.cc colors,
-   just darkened and desaturated well clear of "pumpkin" territory rather
-   than left at full brightness. Same three-stop shape as before (this
-   repo's own earlier finding that a flat two-stop lerp reads dead next
-   to a real horizon wallpaper still holds), new hues. */
-static unsigned int wall_top = 0x00DDDDDD;
-static unsigned int wall_mid = 0x00AAAAAA;
-static unsigned int wall_bot = 0x00884B16;
+/* Real photo now, not a procedural gradient: direct request for an
+   actual, non-copyrighted image of the real park instead of drawn
+   colors. wallpaper_rgb is a genuine public domain U.S. National Park
+   Service photo (a real Joshua tree, Mount San Jacinto, and the desert
+   floor beyond, confirmed PD-USGov on its Wikimedia Commons file page,
+   no attribution legally required), downsampled to 240x171 and embedded
+   as a flat RGB byte array, see gen_wallpaper.sh for the exact source
+   URL and regeneration steps. No image decoder exists in this
+   freestanding kernel (deliberately, same scope note as the app HTML
+   embedding), so this is the same "raw bytes in, no parsing needed"
+   approach gen_app.sh already uses for ported web pages, just for pixels
+   instead of markup.
+   gui_wallpaper_color(row) keeps its exact old signature so every
+   existing caller (icon drop shadows, the dock tray's corner AA, the
+   hello watermark) needed zero changes: it now samples the photo at a
+   representative center column for that row instead of computing a
+   gradient value, a real color close enough for a blend target even
+   though the actual photo varies left-to-right too (gui_draw_wallpaper
+   below is the one that blits the real 2D image, this is only for
+   things blending toward "whatever's roughly there"). */
 static unsigned int gui_wallpaper_color(int row){
-    int h = (int)window_height();
-    if (row < 0) row = 0;
-    if (row > h) row = h;
-    int mid = h * 2 / 5; /* the warm midtone sits closer to the top, like a real sunset's brightest band */
-    if (row <= mid) return gui_lerp(wall_top, wall_mid, row, mid);
-    return gui_lerp(wall_mid, wall_bot, row - mid, h - mid);
+    int area_h = (int)window_height() - GUI_MENUBAR_H;
+    int r = row - GUI_MENUBAR_H;
+    if (r < 0) r = 0;
+    if (area_h < 1) area_h = 1;
+    if (r >= area_h) r = area_h - 1;
+    int sy = r * WALLPAPER_H / area_h;
+    if (sy >= WALLPAPER_H) sy = WALLPAPER_H - 1;
+    const unsigned char *p = &wallpaper_rgb[(sy * WALLPAPER_W + WALLPAPER_W / 2) * 3];
+    return ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2];
 }
 
 /* Real regression caught by testing, not assumed safe: this used to paint
@@ -936,8 +939,23 @@ static void gui_draw_pixel_tree(int x0, int ground_y, int block, unsigned int co
 
 static void gui_draw_wallpaper(void){
     int w = (int)window_width(), h = (int)window_height();
-    for (int row = GUI_MENUBAR_H; row < h; row++)
-        window_rect(0, row, w, 1, gui_wallpaper_color(row));
+    int area_h = h - GUI_MENUBAR_H;
+    /* A real 2D blit of the embedded photo (nearest-neighbor, this
+       framebuffer has no scaling hardware and this kernel has no
+       resampling filter to spare), not the single-column sample
+       gui_wallpaper_color above uses for blend targets: this is what
+       actually shows on screen, that one only needs to be close. */
+    for (int row = 0; row < area_h; row++){
+        int sy = row * WALLPAPER_H / (area_h > 0 ? area_h : 1);
+        if (sy >= WALLPAPER_H) sy = WALLPAPER_H - 1;
+        const unsigned char *src_row = &wallpaper_rgb[sy * WALLPAPER_W * 3];
+        for (int col = 0; col < w; col++){
+            int sx = col * WALLPAPER_W / w;
+            if (sx >= WALLPAPER_W) sx = WALLPAPER_W - 1;
+            const unsigned char *p = &src_row[sx * 3];
+            window_pixel(col, GUI_MENUBAR_H + row, ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2]);
+        }
+    }
 
     /* Real bug caught before shipping, not assumed fine: a first pass put
        these low enough that the dock tray, drawn afterward, covered
