@@ -138,7 +138,7 @@ def yf_pct(v): return pad_t + plot_h - v * plot_h // 100  # right axis is always
 
 points_attr = " ".join(f"{xf(i)},{yf(cum[i])}" for i in range(n))
 doc_points_attr = " ".join(f"{xf(i)},{yf_pct(doc_pct[i])}" for i in range(n))
-dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="#fff" stroke="#884b16" stroke-width="2"/>' for i in range(n))
+dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/>' for i in range(n))
 last_x = xf(n - 1)
 area_points = f"{pad_l},{pad_t+plot_h} {points_attr} {last_x},{pad_t+plot_h}"
 half_v = max_v // 2
@@ -170,37 +170,60 @@ def short_date(d):
 
 svg = []
 svg.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">')
+# v52.4: real dark-mode support, direct feedback ("white graph on dark
+# mode... should be dynamic and native as code, not a screenshot"). A
+# plain pre-rendered SVG with hardcoded colors can't respond to the
+# viewer's theme at all, exactly the "screenshot" complaint. The real
+# fix: an SVG loaded via <img> still evaluates its OWN <style> block's
+# @media queries against the browser's color-scheme preference, a real,
+# supported platform feature, not a hack, so this doesn't need inlining
+# into the page or a second dark-mode image generated alongside it.
+# CSS custom properties defined once here, redefined under
+# prefers-color-scheme:dark, same technique index.html's own :root
+# already uses for the rest of the page, every fill/stroke below
+# reads via var(--x) instead of a literal hex.
+svg.append('''<style>
+  :root {
+    --bg: #faf8f6; --grid: #e8e2da; --axis: #ded6ca; --muted: #a39c92;
+    --label: #75726e; --strong: #1c1c1e; --line: #884b16; --line2: #4c2e13; --line2-pct: #b6a08a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161412; --grid: #2c2724; --axis: #3a332e; --muted: #8a8177;
+             --label: #b3aa9f; --strong: #f2f0ee; --line: #d99a5b; --line2: #e8b98a; --line2-pct: #c3a58a; }
+  }
+  text { font-family: -apple-system, Helvetica, Arial, sans-serif; }
+</style>''')
 svg.append('<defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1">'
-            '<stop offset="0%" stop-color="#884b16" stop-opacity="0.35"/>'
-            '<stop offset="100%" stop-color="#884b16" stop-opacity="0"/></linearGradient></defs>')
-svg.append('<rect width="100%" height="100%" fill="#faf8f6"/>')
+            '<stop offset="0%" stop-color="var(--line)" stop-opacity="0.35"/>'
+            '<stop offset="100%" stop-color="var(--line)" stop-opacity="0"/></linearGradient></defs>')
+svg.append('<rect width="100%" height="100%" fill="var(--bg)"/>')
 # One quiet legend row instead of two competing bold all-caps titles
 # (direct feedback: "clean up graph UI"), a small solid swatch for the
 # real line-count series and a small dashed swatch for the % documented
 # series, same colors the plotted lines themselves use so the mapping is
 # immediate rather than inferred from a title.
-svg.append(f'<line x1="{pad_l}" y1="8" x2="{pad_l+14}" y2="8" stroke="#884b16" stroke-width="2.5"/>')
-svg.append(f'<text x="{pad_l+19}" y="11" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="10" fill="#75726e">Lines of real code</text>')
+svg.append(f'<line x1="{pad_l}" y1="8" x2="{pad_l+14}" y2="8" stroke="var(--line)" stroke-width="2.5"/>')
+svg.append(f'<text x="{pad_l+19}" y="11" font-size="10" fill="var(--label)">Lines of real code</text>')
 legend2_x = pad_l + 150
-svg.append(f'<line x1="{legend2_x}" y1="8" x2="{legend2_x+14}" y2="8" stroke="#4c2e13" stroke-width="2" stroke-dasharray="4 3"/>')
-svg.append(f'<text x="{legend2_x+19}" y="11" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="10" fill="#75726e">% documented</text>')
-svg.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l+plot_w}" y2="{pad_t}" stroke="#e8e2da"/>')
-svg.append(f'<text x="2" y="{pad_t+3}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="9" fill="#a39c92">{max_v}</text>')
-svg.append(f'<line x1="{pad_l}" y1="{pad_t+plot_h//2}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h//2}" stroke="#e8e2da"/>')
-svg.append(f'<text x="2" y="{pad_t+plot_h//2+3}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="9" fill="#a39c92">{half_v}</text>')
-svg.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l}" y2="{pad_t+plot_h}" stroke="#ded6ca"/>')
-svg.append(f'<line x1="{pad_l}" y1="{pad_t+plot_h}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h}" stroke="#ded6ca"/>')
-svg.append(f'<text x="2" y="{pad_t+plot_h+3}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="9" fill="#a39c92">0</text>')
+svg.append(f'<line x1="{legend2_x}" y1="8" x2="{legend2_x+14}" y2="8" stroke="var(--line2)" stroke-width="2" stroke-dasharray="4 3"/>')
+svg.append(f'<text x="{legend2_x+19}" y="11" font-size="10" fill="var(--label)">% documented</text>')
+svg.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l+plot_w}" y2="{pad_t}" stroke="var(--grid)"/>')
+svg.append(f'<text x="2" y="{pad_t+3}" font-size="9" fill="var(--muted)">{max_v}</text>')
+svg.append(f'<line x1="{pad_l}" y1="{pad_t+plot_h//2}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h//2}" stroke="var(--grid)"/>')
+svg.append(f'<text x="2" y="{pad_t+plot_h//2+3}" font-size="9" fill="var(--muted)">{half_v}</text>')
+svg.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l}" y2="{pad_t+plot_h}" stroke="var(--axis)"/>')
+svg.append(f'<line x1="{pad_l}" y1="{pad_t+plot_h}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h}" stroke="var(--axis)"/>')
+svg.append(f'<text x="2" y="{pad_t+plot_h+3}" font-size="9" fill="var(--muted)">0</text>')
 svg.append(f'<polygon points="{area_points}" fill="url(#area)"/>')
 # Right axis (%) ticks, muted, opposite side, own color to match its line
-svg.append(f'<text x="{pad_l+plot_w+4}" y="{pad_t+3}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="9" fill="#b6a08a">100%</text>')
-svg.append(f'<text x="{pad_l+plot_w+4}" y="{pad_t+plot_h+3}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="9" fill="#b6a08a">0%</text>')
-svg.append(f'<polyline points="{doc_points_attr}" fill="none" stroke="#4c2e13" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round" stroke-linecap="round" opacity="0.75"/>')
-svg.append(f'<polyline points="{points_attr}" fill="none" stroke="#884b16" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>')
+svg.append(f'<text x="{pad_l+plot_w+4}" y="{pad_t+3}" font-size="9" fill="var(--line2-pct)">100%</text>')
+svg.append(f'<text x="{pad_l+plot_w+4}" y="{pad_t+plot_h+3}" font-size="9" fill="var(--line2-pct)">0%</text>')
+svg.append(f'<polyline points="{doc_points_attr}" fill="none" stroke="var(--line2)" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round" stroke-linecap="round" opacity="0.75"/>')
+svg.append(f'<polyline points="{points_attr}" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>')
 svg.append(dots)
 for i in shown:
-    svg.append(f'<text x="{xf(i)}" y="{pad_t+plot_h+16}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="10" fill="#75726e" text-anchor="middle">{short_date(labels[i])}</text>')
-svg.append(f'<text x="{pad_l}" y="{height-4}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1c1c1e">{max_v:,} lines &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>')
+    svg.append(f'<text x="{xf(i)}" y="{pad_t+plot_h+16}" font-size="10" fill="var(--label)" text-anchor="middle">{short_date(labels[i])}</text>')
+svg.append(f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fill="var(--strong)">{max_v:,} lines &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>')
 svg.append('</svg>')
 
 out = "".join(svg)

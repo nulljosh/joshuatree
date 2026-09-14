@@ -85,14 +85,21 @@
   .hero h1, .hero p.tagline { color: #fff; text-shadow: 0 4px 28px rgba(0,0,0,0.85), 0 2px 8px rgba(0,0,0,0.9); }
   /* Direct request: click into the demo, the hero text gets out of the
      way; click/tap/esc back out (embed.js's own real focus state, not a
-     second tracker) and it returns. */
-  .hero.demo-focused .hero-copy, .hero.demo-focused .scroll-hint { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+     second tracker) and it returns. scroll-hint no longer lives inside
+     .hero (moved below it, a direct follow-up request), so it isn't part
+     of this hide/show pair any more, it's permanent page chrome now, not
+     an overlay competing with the live demo underneath. */
+  .hero.demo-focused .hero-copy { opacity: 0; transform: translateY(-8px); pointer-events: none; }
   .eyebrow { color: var(--accent); font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; margin: 0; font-weight: 600; }
   .hero h1 { font-size: 56px; margin: 14px 0 10px; letter-spacing: -0.03em; line-height: 1.05; }
   .hero p.tagline { font-size: 18px; margin: 0 auto; max-width: 480px; line-height: 1.5; opacity: 0.92; }
-  .scroll-hint { display: inline-block; margin-top: 40px; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,0.85); font-size: 13px; opacity: 0.75; text-decoration: none; }
-  .scroll-hint:hover { opacity: 1; }
-  .scroll-hint::after { content: ''; display: block; width: 1px; height: 28px; margin: 10px auto 0; background: linear-gradient(rgba(255,255,255,0.8), transparent); animation: scrolldown 1.8s ease-in-out infinite; }
+  /* Now sits on the page's own background, below the hero, not over the
+     live demo, so it uses the page's normal muted text color like every
+     other secondary label here, not the white/text-shadow treatment that
+     only made sense on top of a busy photo. */
+  .scroll-hint { display: block; text-align: center; margin: 28px auto; color: var(--sub); font-size: 13px; opacity: 0.8; text-decoration: none; }
+  .scroll-hint:hover { opacity: 1; color: var(--accent); }
+  .scroll-hint::after { content: ''; display: block; width: 1px; height: 22px; margin: 8px auto 0; background: linear-gradient(var(--sub), transparent); animation: scrolldown 1.8s ease-in-out infinite; }
   @keyframes scrolldown { 0%,100% { opacity: 0.2; transform: translateY(0); } 50% { opacity: 1; transform: translateY(6px); } }
   @media (prefers-reduced-motion: reduce) { .scroll-hint::after { animation: none; } }
 
@@ -194,7 +201,7 @@
   #v86-overlay.hidden { opacity: 0; }
 
   .progress-section { padding: 64px 20px; }
-  .progress-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px; max-width: 640px; margin: 0 auto; }
+  .progress-card { background: var(--card); border-radius: 16px; padding: 20px; max-width: 640px; margin: 0 auto; }
   .progress-card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin: 0 0 14px; font-weight: 600; }
   .progress-card img { width: 100%; height: auto; border-radius: 8px; }
 
@@ -247,8 +254,10 @@
     <h1>Mi OS, tu OS.</h1>
     <p class="tagline">Click or tap. It's really running.</p>
   </div>
-  <p class="scroll-hint">Keep scrolling</p>
+
 </header>
+
+<p class="scroll-hint">Keep scrolling</p>
 
 <section class="features reveal">
   <div class="steps">
