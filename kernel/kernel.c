@@ -1162,10 +1162,25 @@ static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int 
 /* wind_enabled itself now declared earlier (see settings_load), self-disables if a frame measures slow (v86, the browser demo) */
 static int wind_phase = 0;     /* -256..256, current displacement scale */
 
+/* v60 (0.59.0): wind reacts to the real weather v56's dropdown already
+   shows. Honest gap check done first, not assumed: weather_fetch's
+   Open-Meteo call below only ever requests
+   `current=temperature_2m,weather_code`, no wind field at all, so there
+   is no real wind-speed number in this kernel to scale by. This instead
+   scales sway amplitude off `weather_code10`, the exact real WMO code
+   weather_word() already turns into the dropdown's condition word
+   (Clear/Cloudy/Fog/Rain/Snow/Showers/Storm) -- a real fetched field,
+   just not the one a "wind" effect would ideally want. 100 is the
+   pre-v60 baseline amplitude, in force until the first real fetch lands
+   (see weather_fetch's wind_pct_for_weather_code call), so a NIC-less
+   boot (v86, the browser demo, never fetches) sways exactly as before. */
+static int wind_weather_pct = 100;
+
 static int gui_wind_shift(int row){ /* source-pixel shift for this screen row, in 8.8 fixed point */
     if (row >= WIND_HORIZON_ROW) return 0;
     int h = WIND_HORIZON_ROW - row;                     /* 0..365 */
     int amp = (h * h) / (365 * 365 / 14);               /* up to ~14 logical px at the very top, ~6 at the crown */
+    amp = amp * wind_weather_pct / 100;                 /* v60: real-weather scale, see wind_weather_pct above */
     return amp * wind_phase;                            /* * (-256..256) */
 }
 
@@ -1393,6 +1408,24 @@ static const char *weather_word(int code){
     return "Storm";
 }
 
+/* v60: wind_weather_pct's source. Same thresholds as weather_word() above
+   on purpose, so the sway always matches the word actually shown in the
+   menu bar/dropdown, not a second guess at the same code. Percentages are
+   a judgment call (no real wind-speed field exists to derive them from,
+   see wind_weather_pct's comment), ordered calmest to strongest by what
+   each condition plausibly implies about the air: Fog is stillest, Clear
+   next, Cloudy is the unchanged pre-v60 baseline, then Snow/Rain/Showers/
+   Storm climb from there. */
+static int wind_pct_for_weather_code(int code){
+    if (code == 0) return 60;    /* Clear: calm */
+    if (code <= 3) return 100;   /* Cloudy: baseline, matches pre-v60 sway */
+    if (code <= 48) return 40;   /* Fog: stillest air */
+    if (code <= 67) return 130;  /* Rain */
+    if (code <= 77) return 90;   /* Snow: typically calmer than rain */
+    if (code <= 82) return 150;  /* Showers */
+    return 200;                  /* Storm: strongest sway */
+}
+
 /* Pulls a number for `key` from inside the "current":{...} object. The
    units object earlier in the same reply has the same keys with string
    values ("°C"), so the search has to start after "current":{ or it would
@@ -1438,6 +1471,7 @@ static void weather_fetch(void){
     json_current_number(body, "weather_code", &code10);
     int t = (t10 >= 0 ? t10 + 5 : t10 - 5) / 10; /* round to whole degrees */
     weather_temp_c = t; weather_code10 = code10; weather_have = 1;
+    wind_weather_pct = wind_pct_for_weather_code(code10 / 10); /* v60: real wind sway now follows real weather */
     int p = 0;
     if (t < 0) { weather_text[p++] = '-'; t = -t; }
     if (t >= 10) weather_text[p++] = '0' + t / 10;
