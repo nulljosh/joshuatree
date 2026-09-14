@@ -63,6 +63,24 @@
   container.addEventListener("touchstart", focusIn, { passive: true });
   container.addEventListener("keydown", focusIn);
 
+  // A real QA hook, not debug scaffolding left behind: "apps don't open on
+  // mobile" got reported and 'fixed' several times while every check was a
+  // human squinting at a phone, because nothing here is observable from
+  // outside this closure. mobiletest.mjs drives a real iPhone emulation
+  // against the real page and needs to see whether input is actually armed
+  // to tell "the tap missed" apart from "input was never enabled".
+  window.__jt = {
+    emu: emulator, /* mobiletest.mjs reads the kernel's own serial log through this: the guest's klog output is the only view into what the kernel actually thinks happened */
+    get ready() { return adaptersReady; },
+    get focused() { return focused; },
+    get mouseOn() { return !!(emulator.mouse_adapter && emulator.mouse_adapter.emu_enabled); },
+    click: function () {
+      emulator.bus.send("mouse-click", [true, false, false]);
+      setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 60);
+    },
+    move: function (dx, dy) { emulator.bus.send("mouse-delta", [dx, -dy]); }
+  };
+
   // Real bug, reported directly ("the cursor is really misplaced... ten
   // or twenty pixels off") and independently confirmed while testing: CSS
   // `object-fit: contain` on a canvas sized to 100%/100% of its container
@@ -114,7 +132,6 @@
     if (document.pointerLockElement) return; // pointer-locked play (a real click-drag drag) already reports device-independent deltas v86 handles correctly on its own
     var dx = ev.movementX / currentScale, dy = ev.movementY / currentScale;
     emulator.bus.send("mouse-delta", [dx, -dy]); // y inverted, matching v86's own convention exactly
-    trackDelta(dx, dy); // keep the shadow cursor (see tap-to-click below) in step with real mouse movement too
     ev.stopImmediatePropagation();
   }, true);
 
@@ -142,7 +159,6 @@
     if (lastTouchX !== null) {
       var dx = (t.clientX - lastTouchX) / currentScale, dy = (t.clientY - lastTouchY) / currentScale;
       emulator.bus.send("mouse-delta", [dx, -dy]);
-      trackDelta(dx, dy);
     }
     lastTouchX = t.clientX; lastTouchY = t.clientY;
     ev.stopImmediatePropagation();
@@ -165,16 +181,55 @@
   // mirroring both here keeps a shadow copy that stays in step with every
   // delta we send. A tap then becomes "move by the difference, then
   // click", which lands on the icon under the finger.
-  var shadowX = 400, shadowY = 300;
-  function moveCursorTo(kx, ky) {
-    var dx = kx - shadowX, dy = ky - shadowY;
-    shadowX = kx; shadowY = ky;
-    emulator.bus.send("mouse-delta", [dx, -dy]); // y inverted, same convention as every other send here
+  // A PS/2 packet carries a 9-bit signed delta, so anything bigger than
+  // ~255 has to go as several packets or the emulator clamps it and the
+  // cursor lands somewhere else entirely. Found the hard way: a single
+  // "jump 600px" send arrived as -256 and the cursor stuck to an edge.
+  function splitDelta(dx, dy, out) {
+    var step = 200;
+    while (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+      var px = Math.max(-step, Math.min(step, dx));
+      var py = Math.max(-step, Math.min(step, dy));
+      out.push([px, -py]); // y inverted, v86's convention
+      dx -= px; dy -= py;
+    }
+    return out;
   }
-  function trackDelta(dx, dy) {
-    shadowX += dx; shadowY += dy;
-    if (shadowX < 0) shadowX = 0; if (shadowX > 799) shadowX = 799;
-    if (shadowY < 0) shadowY = 0; if (shadowY > 599) shadowY = 599;
+
+  // Packets have to be *paced*, not fired in a burst. The guest reads one
+  // PS/2 packet per IRQ12, and firing ten at once overruns that queue: the
+  // tail is simply dropped, which showed up as the cursor homing to the
+  // corner correctly and then never travelling to the target at all,
+  // caught by screenshotting the real emulator mid-tap rather than
+  // trusting that "the sends all returned". One packet per frame is still
+  // far faster than any human moves a mouse.
+  function sendPaced(packets, done) {
+    var i = 0;
+    (function step() {
+      if (i >= packets.length) { if (done) done(); return; }
+      emulator.bus.send("mouse-delta", packets[i++]);
+      setTimeout(step, 16);
+    })();
+  }
+
+  // Tapping a specific icon means putting a *relative* cursor at an
+  // absolute place, which nothing on this page can do by asking: the
+  // kernel never reports where its cursor is. The first attempt tracked a
+  // shadow copy in JS, which desynced the moment anything else moved the
+  // cursor (v86's own touch handlers do exactly that) and then every tap
+  // landed somewhere wrong, confirmed by reading the kernel's real serial
+  // log: the cursor had been slammed to the bottom edge while the shadow
+  // still believed it was centred.
+  //
+  // Homing instead of tracking removes the whole class of bug: push far
+  // enough up-left that the kernel's own clamp pins the cursor at exactly
+  // (0,0) no matter where it was, then move to the target from a known
+  // origin. Self-correcting every single tap, no state to drift.
+  function moveCursorTo(kx, ky, done) {
+    var packets = [];
+    splitDelta(-1200, -1000, packets); // clamps to (0,0) from anywhere on an 800x600 screen
+    splitDelta(kx, ky, packets);
+    sendPaced(packets, done);
   }
   var tapStartX = 0, tapStartY = 0, tapStartT = 0;
   screenContainer.addEventListener("touchend", function (ev) {
@@ -182,6 +237,7 @@
     if (!focused || !emulator.mouse_adapter || !emulator.mouse_adapter.emu_enabled) return;
     var t = ev.changedTouches && ev.changedTouches[0];
     if (!t) return;
+    ev.stopImmediatePropagation(); // v86 attaches its own touch listeners and injects a second, unscaled delta otherwise, which is what desynced taps before
     var moved = Math.abs(t.clientX - tapStartX) + Math.abs(t.clientY - tapStartY);
     // A tap, not a drag: a short press that barely moved. Drags are the
     // cursor-steering gesture above and must not also fire a click.
@@ -190,12 +246,18 @@
     var kx = (t.clientX - rect.left) / currentScale;
     var ky = (t.clientY - rect.top) / currentScale;
     if (kx < 0 || ky < 0 || kx > 799 || ky > 599) return;
-    moveCursorTo(Math.round(kx), Math.round(ky));
-    // Down then up, with a real gap: the kernel samples the mouse from its
-    // own loop rather than an interrupt-driven queue, so a press and
-    // release in the same tick can be missed entirely.
-    emulator.bus.send("mouse-click", [true, false, false]);
-    setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 60);
+    // Click only once the cursor has actually finished travelling: the
+    // movement is paced across several frames now, and clicking before it
+    // lands means clicking wherever it happens to be partway there.
+    moveCursorTo(Math.round(kx), Math.round(ky), function () {
+      setTimeout(function () {
+        // Down then up, with a real gap: the kernel polls the mouse from
+        // its own loop, so a press and release inside one poll can be
+        // missed entirely.
+        emulator.bus.send("mouse-click", [true, false, false]);
+        setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 80);
+      }, 120);
+    });
   }, { capture: true, passive: true });
 
   // Toggle between the text and graphical screen elements: v86 keeps both

@@ -3,7 +3,7 @@
 # Joshua Tree
 
 ![version](https://img.shields.io/badge/version-v5-blue)
-![license](https://img.shields.io/badge/license-MIT-green) [![GitHub](https://img.shields.io/badge/GitHub-nulljosh%2Fjoshuatree-black?logo=github)](https://github.com/nulljosh/joshuatree)
+![license](https://img.shields.io/badge/license-Apache_2.0-green) [![GitHub](https://img.shields.io/badge/GitHub-nulljosh%2Fjoshuatree-black?logo=github)](https://github.com/nulljosh/joshuatree)
 ![language](https://img.shields.io/badge/language-C%20%2F%20x86%20asm-blue)
 ![platform](https://img.shields.io/badge/platform-i386-lightgrey)
 [![repo size](https://img.shields.io/github/repo-size/nulljosh/joshuatree)](https://github.com/nulljosh/joshuatree)
@@ -81,4 +81,4 @@ breakdown, boot sequence, and what's deliberately not built yet (and why):
 
 ## License
 
-MIT 2026, Joshua Trommel
+Apache License 2.0, © 2026 Joshua Trommel

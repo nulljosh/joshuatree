@@ -88,7 +88,7 @@
      for anything to drift across. */
   main { position: relative; }
   .hero-float { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-  .float { position: absolute; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; font-size: 13px; color: var(--accent); opacity: 0.16; white-space: nowrap; will-change: transform; animation: drift var(--dur, 18s) ease-in-out var(--delay, 0s) infinite alternate; }
+  .float { position: absolute; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 400; font-size: 30px; color: var(--accent); opacity: 0.13; white-space: nowrap; will-change: transform; animation: drift var(--dur, 18s) ease-in-out var(--delay, 0s) infinite alternate; }
   @keyframes drift { to { transform: translate(var(--dx, 0px), var(--dy, 0px)); } }
   @media (prefers-reduced-motion: reduce) { .float { animation: none; } }
   main > * { position: relative; z-index: 1; }
@@ -130,7 +130,14 @@
   }
 
 
-  footer { text-align: center; padding: 24px; color: var(--sub); font-size: 13px; background: var(--bg); }
+  footer { text-align: center; padding: 32px 20px 40px; color: var(--sub); font-size: 13px; background: var(--bg); border-top: 1px solid var(--border); }
+  .foot-links { display: flex; flex-wrap: wrap; gap: 8px 22px; justify-content: center; align-items: center; margin-bottom: 14px; }
+  .foot-links a { color: var(--fg); text-decoration: none; display: inline-flex; align-items: center; gap: 7px; font-size: 14px; padding: 6px 4px; }
+  .foot-links a:hover { color: var(--accent); }
+  .foot-links svg { width: 16px; height: 16px; fill: currentColor; }
+  .foot-meta { color: var(--sub); font-size: 12.5px; line-height: 1.9; }
+  .foot-meta a { color: var(--sub); }
+  .heart { color: #c0392b; }
   footer a { color: var(--accent2); }
 </style>
 </head>
@@ -173,7 +180,28 @@
 </main>
 
 <footer>
-  <a href="https://github.com/nulljosh/joshuatree">github.com/nulljosh/joshuatree</a>
+  <div class="foot-links">
+    <a href="https://github.com/nulljosh/joshuatree">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      Source
+    </a>
+    <a href="https://heyitsmejosh.com">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm5.9 7.3h-2.2a12.4 12.4 0 0 0-1-4.3 6.5 6.5 0 0 1 3.2 4.3ZM8 1.6c.7.9 1.6 2.7 1.8 5.7H6.2C6.4 4.3 7.3 2.5 8 1.6ZM1.7 8.7h2.2c.1 1.6.4 3.1 1 4.3a6.5 6.5 0 0 1-3.2-4.3Zm2.2-1.4H1.7a6.5 6.5 0 0 1 3.2-4.3c-.6 1.2-.9 2.7-1 4.3ZM8 14.4c-.7-.9-1.6-2.7-1.8-5.7h3.6c-.2 3-1.1 4.8-1.8 5.7Zm3.1-1.4c.6-1.2.9-2.7 1-4.3h2.2a6.5 6.5 0 0 1-3.2 4.3Z"/></svg>
+      Portfolio
+    </a>
+    <a href="https://github.com/nulljosh">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h5v5H2V2Zm7 0h5v5H9V2ZM2 9h5v5H2V9Zm7 0h5v5H9V9Z"/></svg>
+      Other projects
+    </a>
+    <a href="https://github.com/nulljosh/joshuatree/blob/main/roadmap.md">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h12v2H2V2Zm0 4h9v2H2V6Zm0 4h12v2H2v-2Zm0 4h7v2H2v-2Z"/></svg>
+      Roadmap
+    </a>
+  </div>
+  <div class="foot-meta">
+    Apache License 2.0 &middot; &copy; 2026 Joshua Trommel<br>
+    Made with <span class="heart">&hearts;</span> in Vancouver, BC
+  </div>
 </footer>
 
 <script>
@@ -185,15 +213,14 @@
   var field = document.getElementById('heroFloat');
   if (!field) return;
 
-  // What this OS *is*, not what its source looks like. Symbols a visitor
-  // recognizes (a desktop, a terminal, a network) land; raw hex addresses
-  // and function names only mean something to someone already reading the
-  // code, which is not who this page is for.
+  // Symbols, not sentences: at 16% opacity behind body copy, words compete
+  // with the text you're actually trying to read, while glyphs read as
+  // texture. Each one still stands for something this OS genuinely has, a
+  // terminal, a window, a disk, a network, a chip, not decoration.
   var items = [
-    'a desktop', 'a terminal', 'a text editor', 'a file browser',
-    'its own network stack', 'its own memory manager', 'talks to an LLM',
-    'boots in 2 seconds', 'no Linux', 'no macOS', 'written from nothing',
-    '15 apps', 'runs in this tab'
+    '⌘', '⌫', '▣', '⬚', '◉', '⌗',
+    '⇄', '⚙', '◰', '✇', '⎔', '⊞',
+    '≡', '⬡', '◩', '⬢'
   ];
 
   var rand = function (a, b) { return a + Math.random() * (b - a); };
