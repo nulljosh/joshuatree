@@ -27,6 +27,12 @@ the same way this kernel is. Also a nod to the U2 album, and my own name.
 | Tasks | `task.c` + `irq_stubs.S`'s irq0: preemptive round-robin off the PIT tick, `yield()` reaches the same path in software via `int $32` |
 | User mode | `ring3.c` + `ring3_asm.S`: real ring-3 privilege isolation, `ring3test` proves a privileged instruction faults instead of silently succeeding |
 | Storage | `ata.c` (disk driver), `fat.c` (FAT16 read), `exec.c` (load+run a flat binary) |
+| Filesystem abstraction | `vfs.c` + `blockdev.c`: real ops-table abstractions (v29, v33), each proven by a second, RAM-backed implementation (`ramfs.c`, `ramdisk.c`) |
+| Networking | `pci.c` (enumeration) + `rtl8139.c` (NIC driver) + `net.c`: Ethernet/ARP/IPv4/UDP/TCP built up from raw frames, no routing table, one /24 link assumed |
+| Browser | `http.c` + `html.c` + `json.c`: a plain-text HTTP client, a deliberately tiny HTML-to-text extractor, a JSON string-value grabber, glue over the two above (v8) |
+| Graphics | `vbe.c` (Bochs VBE mode switch + text-mode save/restore) + `font.c` (real CP437 font dumped from VGA hardware, DejaVu AA fallback) + `window.c` (the render-target abstraction everything draws through) |
+| Apps | 4 built-in, VFS-backed: Notes (`kernel/editor.h`), Reminders, Calendar, Mail. Plus 11 more ported natively from the fleet (`drivers/app_*.h`), served real over `serveapp <name>` and rendered as extracted text in the GUI |
+| Trash | `trash.c`: a real, recoverable delete (v39), RAM-only, gone on reboot |
 | Console | `kernel/kernel.c`: VGA text, keyboard, clock, the shell, a real mouse-driven GUI desktop (`gui`) |
 | Link | `linker.ld`: flat ELF32 at 1 MB |
 | Check | `check.sh`: boots it and checks the banner reached VGA memory |

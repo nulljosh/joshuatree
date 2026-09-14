@@ -36,8 +36,69 @@ that with the permanent, same-shaped tables.
 | `ata.c` | ATA PIO disk driver, LBA28, primary master only |
 | `fat.c` | FAT16, real subdirectories and file writes, 8.3 names |
 | `exec.c` | Loads a flat binary via `fat.c` and calls into it, ring 0, no isolation |
+| `drivers/vfs.c` | v29's real VFS: a `vfs_ops` table (`read_file`/`list`/`delete_`/`chdir`/`mkdir`/`write_file`/`replace_file`) so callers stop dialing `fat_*` directly, correctly deferred at v4 until a second backend actually existed to abstract over. `vfs_switch()` (the `fsuse` shell command) flips the active backend; `fat.c` and `ramfs.c` each register one at boot, first-registered wins by default |
+| `drivers/blockdev.c` | v33's block device abstraction, the same "second implementation, not an imagined future one" reasoning one layer down: a `blockdev_ops` table of `read_sector`/`write_sector` so `fat.c` no longer calls `ata_*` directly. `ata.c` and `ramdisk.c` each register a backend at boot |
+| `drivers/ramfs.c` + `drivers/ramdisk.c` | The real second implementations `vfs.c` and `blockdev.c` needed to prove each abstraction actually abstracts something. `ramfs.c`: 8 files, 4KB each, a flat namespace on purpose (`chdir`/`mkdir` honestly return failure, no subdirectory story exists). `ramdisk.c`: 256 512-byte sectors (128KB) of plain zeroed RAM, deliberately small, this proves the interface, it isn't meant to hold real data |
+| `drivers/trash.c` | v39's real, recoverable delete: before this, `rm` went straight to FAT's own `0xE5`-marks-the-entry removal, which doesn't even free the clusters (see `fat.c`'s own note), bytes gone with no way back. `trash_put` copies a file's bytes into an 8-item, 4KB-each RAM table before the caller deletes it; `trash_restore` writes it back through `vfs_write_file` and only drops the RAM copy if that write actually succeeds, so a failed restore never loses the file twice. RAM-only and gone on reboot, an honest tradeoff against a disk-backed trash's own reserved-directory and collision-naming problems, neither of which this kernel has an answer for yet |
+| `drivers/pci.c` | Legacy 0xCF8/0xCFC PCI config-space enumeration: an exhaustive bus/slot/function scan (`pci_find_device`, QEMU's device tree is tiny enough that this costs microseconds) plus the bus-master/IO/memory enable bits (`pci_enable_device`). Shared foundation under two later subsystems: v6's graphics (finds the VBE framebuffer's BAR0) and v7's networking (finds the RTL8139's I/O BAR) |
+| `drivers/rtl8139.c` | The real NIC driver behind v7's networking: register-level reset/init, one RX ring buffer, and 4 separate TX descriptor buffers cycled in order (reusing one descriptor for every send works exactly once, then stalls the card forever, found via a real pcap capture, not reasoning). Needed v2's higher-half fix (`KVIRT_TO_PHYS`) since the card DMAs to physical addresses with no concept of the CPU's page tables at all, a bug MMIO register reads (the MAC readout) never exposed, only an independent `tcpdump` capture of all-zero frames did |
+| `drivers/net.c` | Ethernet/ARP/IPv4/UDP/TCP built up from raw frames over `rtl8139.c`. Deliberately narrow: no routing table (assumes every destination is on the same /24 link, true for QEMU's SLIRP), no fragmentation, `tcp_get`/`tcp_serve_once` are one connection at a time with no retransmission or out-of-order reassembly. Extended post-v9 to chunk a response across multiple 536-byte segments stop-and-wait (the original single-segment cap silently truncated real pages); v10 replaced every wait's loop-iteration guess with a real `ticks()`-based deadline after proving under host load that a spin count isn't a real timeout; v30 added `tcp_probe_port`, a short-timeout SYN probe behind the `netscan` hacking-tools command |
+| `drivers/http.c` + `drivers/html.c` + `drivers/json.c` | v8's browser layer, mostly glue over v6+v7, the HTML parser deliberately tiny. `http.c`: `http_get`/`http_post` build a request over `net.c`'s `tcp_get` and strip the reply down to the body past the first blank line. `html.c`: `html_to_text` strips tags (skipping `<script>`/`<style>` element *content* instead of printing it as page text, a real bug found live against example.com's own stylesheet) and unescapes the five basic entities; bytes above 0x80 are dropped rather than mis-rendered, a real bug (multi-byte UTF-8 landing on CP437's line-drawing glyphs, reading as a screen-wide stripe pattern) caught the same way. `json.c`: `json_extract_string` is a key-value grabber, not a parser, string values only, no numbers/arrays/nesting, enough to read one field out of an LLM API's JSON reply |
+| `drivers/vbe.c` | The Bochs VBE register interface (ports 0x1CE/0x1CF), the only path QEMU's std VGA device actually exposes to a 32-bit kernel with no real-mode BIOS monitor. `vbe_set_mode`/`vbe_disable` switch graphics on and off at runtime, saving and restoring the real VGA Sequencer/CRTC/GC/Attribute-Controller register state around the switch (a real v6/v8 bug: `vbe_disable` alone left those registers in a graphics-mode state, breaking the shell it was supposed to return to). `vga_text_mode_init` (v16) programs mode 3 and the 16-color DAC palette from first principles, since v86 (no BIOS) never sets either up the way real hardware/QEMU do for free |
+| `drivers/font.c` | Dumps the real IBM CP437 8x16 font out of VGA hardware plane 2 (the OSDev-wiki technique), not hand-authored glyph bitmaps. Falls back to an embedded table (`vgafont.h`) when the dump comes back all zero (v38: v86 has no BIOS to have loaded a font for it to steal). `font_set_aa`'s hook (v44) lets the GUI swap this bitmap path for a real antialiased DejaVu Sans/Serif/Mono render at physical resolution wherever a scaled framebuffer exists, without disturbing the fixed 8px logical advance every layout in this kernel already measures against |
+| `drivers/window.c` | The one render-target abstraction every draw call in this kernel goes through: `window_pixel`/`window_rect`/`window_clear`, a viewport, an optional offscreen "screen band" for partial repaints, and a single redirectable supersample target (icons render into it at several times real size, then box-downsample for real anti-aliasing). v41's `window_open_scaled` opens a physical mode `s` times the logical one so `window_pixel` quietly fans out into an sxs block, the real fix for "the pixels are too big," not more vector polish on top of an 800x600 ceiling |
+| `drivers/serial.c` | Minimal polling COM1 (0x3F8) output, debug-only, not wired to any shell command: a live boot trace readable with `-serial stdio`, immune to whatever state a crash leaves the VGA framebuffer in. `klog()` mirrors every entry here too. The one channel that made v54/v56/v58/v59/v62/v63/v64's headless verification passes possible, a boot-time direct-call trick can dump real values to it without ever opening a display |
 | `drivers/mouse.c` + `drivers/vmmouse.c` | Pointer input. `mouse.c` is the PS/2 mouse on the 8042's second port (IRQ12, 3-byte relative packets). `vmmouse.c` (v62) probes the VMware absolute-pointer backdoor on I/O port 0x5658 at boot; where a host answers (QEMU's default pc machine, v86 in the browser) it switches the host to absolute mode and the GUI takes positions from it, PS/2 bytes still drained for phase but ignored. No backdoor (bare hardware, `-machine vmport=off`): PS/2 relative stays the only mouse |
 | `kernel/kernel.c` | VGA text console, PS/2 scancode table, RTC clock, the shell, and a mouse-driven GUI desktop (`gui`) built on v6's graphics/font/mouse primitives. The GUI runs at 960x540 logical, scaled 2x to 1920x1080 physical; dock geometry and app layout live here too |
+
+## Apps
+
+Two different shapes of app live in this kernel, both dock-mounted, both
+counted in `GUI_APP_COUNT` (18 real apps, plus the Apps-folder tile and
+Trash, `kernel/kernel.c`).
+
+**Four built-in apps, each its own header, each VFS-backed.** Same
+persistence pattern every time: a fixed-size static array in RAM, one plain
+text file on the real FAT disk (`vfs_replace_file`/`vfs_read_file`), manual
+line parsing (no `sscanf`, no libc), write-through on every mutation, no
+separate Save step.
+
+| App | File | Format |
+|---|---|---|
+| Notes | `kernel/editor.h` | `NOTES.TXT`, a single 4095-byte buffer. The one app with real typography: `editor_fonts.h`'s embedded DejaVu Sans/Serif/Mono glyph table, F1/F2/F3 pickers for family/size(4)/weight, a real caret with vertical up/down that tracks column across lines |
+| Reminders | `kernel/reminders.h` (v52 / 0.52.0) | `REMINDERS.TXT`, one line per item: `0`/`1` done flag, a space, the text. Up/down/select, `a` adds, `d` deletes, space toggles done |
+| Calendar | `kernel/calendar.h` (v54 / 0.54.0 grid, v55 / 0.55.0 events) | No file for the grid itself, today's date comes straight from the RTC's CMOS BCD registers each time; day-of-week is Zeller's congruence, swept against libc's own `timegm` for every day 1900-2099 (`tools/check-calendar.sh`, 0 mismatches) before shipping. Events: `EVENTS.TXT`, one `YYYY-MM-DD\|text` line per day, one event per date (a second add on the same day overwrites, doesn't append) |
+| Mail | `kernel/mail.h` (v59 / 0.58.0) | `MAIL.TXT`, `\|`-delimited `from\|subject\|body\|read`. Two starter messages compiled in so the inbox isn't blank before a real `MAIL.TXT` exists, which always wins once it does. No SMTP/IMAP client, deliberately: a local mail-shaped app, the same relationship Reminders has to a real to-do sync service |
+
+**Eleven apps ported natively from the fleet, thin ports on purpose.**
+`gen_app.sh` turns a sibling repo's real single-file static build
+(`~/Documents/Code/<app>/web/index.html`, this user's documented
+sibling-checkout convention) into a plain C byte array,
+`drivers/app_<name>.h` (`app_<name>_html`/`app_<name>_len`), no bundler, no
+multi-file apps, real content only. Every array is reachable two ways:
+`gui_launch_html` runs it through `html.c`'s `html_to_text` and renders the
+real extracted copy read-only in the desktop; `serve_app` (the `serveapp
+<name>` shell command) serves the exact original bytes over `net.c`'s
+`tcp_serve_once`, verified for real over the actual network per v9/v35, not
+assumed from a file check: a genuine `curl` through QEMU's `hostfwd` against
+`serveapp keyrate`/`serveapp bookrank` came back the real `<title>`/meta
+description, matching the actual repo content. v35 screened every candidate
+by that same `html_to_text` transform before porting it, correctly skipping
+apps whose real content only exists after client-side JS rendering this
+kernel can't run (epiphany, healstack, blockframe, numen, curvely, roost,
+monocode).
+
+- **Curbfind** — Craigslist browser
+- **Keyrate** — the one exception to "thin port": `gui_launch_html` originally just rendered the ported site's own marketing copy read-only, which meant the first keystroke anyone made to actually type closed the app (`gui_wait_close`'s "any key closes" contract). Fixed with a real native typing test in `kernel.c` itself: word list, a tiny LCG seeded from `irq.c`'s real `ticks()` (no `rand()`/no libc), a live input loop. `app_keyrate.h`'s ported HTML still exists, served only, not rendered in the GUI
+- **Bookrank** — book summaries
+- **Quotestreak** — quote-guessing game, no backend to begin with
+- **Plan** — a planning app, ported for its real static copy at v35
+- **Lexly** — gamified language learning
+- **Toroid** — Conway's Game of Life on a toroidal grid (ships under the Toroid name; the source repo is `conway`)
+- **Sparkjar** — idea forum
+- **Homeqi** — feng shui home-assessment tool
+- **Fieldbook** — every field of science and math explained plainly
+- **Weather** (served copy only) — the dock's own Weather app is native `kernel.c` logic against a live Open-Meteo fetch (temperature + WMO condition code, `weather_fetch`), not this file; `app_weather.h` is the ported static site, reachable only via `serveapp weather`
 
 ## Why things are ordered this way
 
