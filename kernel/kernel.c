@@ -30,6 +30,12 @@
 #include "app_keyrate.h"
 #include "app_bookrank.h"
 #include "app_quotestreak.h"
+#include "app_plan.h"
+#include "app_lexly.h"
+#include "app_toroid.h"
+#include "app_sparkjar.h"
+#include "app_homeqi.h"
+#include "app_fieldbook.h"
 #include "json.h"
 #include "html.h"
 
@@ -543,10 +549,11 @@ static void reboot(void){
    blending in this framebuffer, so "rounded" and "shadow" are both done by
    painting flat colors, corner pixels outside a quarter-circle get
    overwritten with whatever's behind them, not blended. ---- */
-#define GUI_ICON_COUNT 8
-static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes"};
+#define GUI_ICON_COUNT 14 /* v35 (0.35.0): was 8, +6 for the newly-ported apps */
+static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook"};
 static const unsigned int GUI_COLORS[GUI_ICON_COUNT] = {
-    0x0085144B, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x006B4423
+    0x0085144B, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x006B4423,
+    0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B
 };
 
 /* gui_order is a permutation of icon indices by dock slot: dragging an icon
@@ -559,11 +566,16 @@ static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_o
 
 #define GUI_BG          0x00FAF8F6
 #define GUI_MENUBAR_H   30
-#define DOCK_ICON       56
-#define DOCK_GAP        16
-#define DOCK_PAD        12
+/* v35 (0.35.0): shrunk from 56/16/12/12 when the dock grew from 8 to 14
+   icons, real overflow caught by actually looking at a screendump, not
+   assumed to fit: 14*56 + 13*16 + 2*12 = 1016px, wider than the real
+   800px screen. This size (14*44 + 13*8 + 2*10 = 740px) leaves real
+   margin on both sides at the full 14-icon count. */
+#define DOCK_ICON       44
+#define DOCK_GAP        8
+#define DOCK_PAD        10
 #define DOCK_MARGIN_BOT 24
-#define DOCK_MAGNIFY    12
+#define DOCK_MAGNIFY    9
 #define DOCK_LIFT       10
 
 static int gui_dock_w(void){ return GUI_ICON_COUNT * DOCK_ICON + (GUI_ICON_COUNT - 1) * DOCK_GAP + 2 * DOCK_PAD; }
@@ -1198,6 +1210,56 @@ static void gui_icon_notes(int cx, int cy, int s, unsigned int bg){
     gui_fill_triangle_down(tip_x, tip_y, s / 14, s / 8, ICON_FG);
 }
 
+/* v35 (0.35.0): six new icons for the six newly-ported apps, same vector-
+   only discipline as every icon above (no bitmap, no texture, this
+   kernel has no image decoder and that's deliberate, see v19's own
+   reasoning). Real, distinct shapes per app rather than one reused
+   placeholder, matching the bar the rest of this dock already holds. */
+static void gui_icon_plan(int cx, int cy, int s, unsigned int bg){
+    int half = s * 3 / 10;
+    for (int row = 0; row < 3; row++) {
+        int y = cy - half + row * half;
+        int len = half * (3 - row) / 2;
+        gui_fill_circle(cx - half - 3, y, s / 16, ICON_FG, bg);
+        gui_draw_capsule(cx - half + 4, y, cx - half + 4 + len, y, s / 20, ICON_FG, bg);
+    }
+}
+static void gui_icon_lexly(int cx, int cy, int s, unsigned int bg){
+    int r = s * 3 / 10;
+    gui_fill_circle(cx, cy, r, ICON_FG, bg);
+    gui_draw_capsule(cx - r, cy - r / 3, cx + r, cy - r / 3, s / 24, bg, ICON_FG); /* "latitude" lines punched through in bg color */
+    gui_draw_capsule(cx - r, cy + r / 3, cx + r, cy + r / 3, s / 24, bg, ICON_FG);
+    gui_draw_capsule(cx, cy - r, cx, cy + r, s / 24, bg, ICON_FG); /* "meridian" */
+}
+static void gui_icon_toroid(int cx, int cy, int s, unsigned int bg){
+    int step = s / 4, r = s / 10;
+    static const int alive[3][3] = {{0,1,0},{0,1,1},{1,1,0}}; /* a real small still-life pattern, not random noise */
+    for (int row = 0; row < 3; row++)
+        for (int col = 0; col < 3; col++)
+            gui_fill_circle(cx + (col - 1) * step, cy + (row - 1) * step, r, alive[row][col] ? ICON_FG : gui_blend(ICON_FG, bg), bg);
+}
+static void gui_icon_sparkjar(int cx, int cy, int s, unsigned int bg){
+    int r = s * 3 / 10, base_y = cy + r + s / 10;
+    unsigned int glow_top = 0x00FFF3B0, glow_bot = 0x00FFC93C; /* real warm bulb color */
+    gui_fill_circle_gradient(cx, cy, r, glow_top, glow_bot, bg);
+    window_rect(cx - r / 3, base_y, 2 * (r / 3) + 1, s / 12, gui_blend(ICON_FG, bg));
+    gui_draw_capsule(cx - r - 4, cy - r - 2, cx - r - r/2, cy - r - r/2, 2, ICON_FG, bg);
+    gui_draw_capsule(cx + r + 4, cy - r - 2, cx + r + r/2, cy - r - r/2, 2, ICON_FG, bg);
+}
+static void gui_icon_homeqi(int cx, int cy, int s, unsigned int bg){
+    int half = s * 3 / 10, roof_y = cy - half / 2;
+    gui_draw_capsule(cx - half, roof_y, cx, roof_y - half, s / 16, ICON_FG, bg);
+    gui_draw_capsule(cx + half, roof_y, cx, roof_y - half, s / 16, ICON_FG, bg);
+    window_rect(cx - half + 2, roof_y, 2 * (half - 2) + 1, half + 2, gui_blend(ICON_FG, bg));
+    window_rect(cx - s/14, roof_y + half - s/8, 2 * (s/14) + 1, s/8 + 2, ICON_FG);
+}
+static void gui_icon_fieldbook(int cx, int cy, int s, unsigned int bg){
+    int half = s * 3 / 10;
+    gui_draw_capsule(cx - half, cy - half / 3, cx - 2, cy + half, s / 18, ICON_FG, bg);
+    gui_draw_capsule(cx + half, cy - half / 3, cx + 2, cy + half, s / 18, ICON_FG, bg);
+    gui_draw_capsule(cx, cy - half / 3, cx, cy + half, s / 24, ICON_FG, bg); /* spine */
+}
+
 /* A soft lit band across the top of the icon, fading down into its flat
    base color: the same top-lit gloss treatment classic Aqua/iOS icons
    used for real dimension, real per-pixel colors computed with gui_lerp,
@@ -1268,6 +1330,12 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
         case 5: gui_icon_book(cx_center, cy, size, bg); break;
         case 6: gui_icon_quotes(cx_center, cy, size, bg); break;
         case 7: gui_icon_notes(cx_center, cy, size, bg); break;
+        case 8: gui_icon_plan(cx_center, cy, size, bg); break;
+        case 9: gui_icon_lexly(cx_center, cy, size, bg); break;
+        case 10: gui_icon_toroid(cx_center, cy, size, bg); break;
+        case 11: gui_icon_sparkjar(cx_center, cy, size, bg); break;
+        case 12: gui_icon_homeqi(cx_center, cy, size, bg); break;
+        case 13: gui_icon_fieldbook(cx_center, cy, size, bg); break;
     }
 }
 
@@ -1467,12 +1535,12 @@ static void gui_launch_html(const char *label, const unsigned char *data, unsign
        gen_app.sh, not null-terminated C strings; html_to_text expects one,
        so copy with an explicit terminator rather than let it scan past the
        real buffer into whatever memory follows. */
-    static char html[20480]; /* comfortably covers every embedded app (quotestreak is the largest at 18947 bytes) */
+    static char html[40960]; /* v35 (0.35.0): bumped from 20480 for the 6 newly-ported apps, homeqi is the largest at 39589 bytes */
     unsigned int copy_len = data_len < sizeof(html) - 1 ? data_len : sizeof(html) - 1;
     for (unsigned int i = 0; i < copy_len; i++) html[i] = (char)data[i];
     html[copy_len] = 0;
 
-    static char text[6144];
+    static char text[12288]; /* v35 (0.35.0): bumped from 6144, plan's real extracted copy alone runs over 1100 words */
     unsigned int n = html_to_text(html, text, sizeof(text) - 1);
     text[n] = 0;
     render_wrapped_text(text, 20, 44, (int)window_width() - 40, (int)window_height() - 90, 0x001C1C1E);
@@ -1672,6 +1740,12 @@ static void gui_launch(int icon){
     else if (icon == 5) gui_launch_html("Bookrank", app_bookrank_html, app_bookrank_len);
     else if (icon == 6) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
     else if (icon == 7) gui_launch_editor();
+    else if (icon == 8) gui_launch_html("Plan", app_plan_html, app_plan_len);
+    else if (icon == 9) gui_launch_html("Lexly", app_lexly_html, app_lexly_len);
+    else if (icon == 10) gui_launch_html("Toroid", app_toroid_html, app_toroid_len);
+    else if (icon == 11) gui_launch_html("Sparkjar", app_sparkjar_html, app_sparkjar_len);
+    else if (icon == 12) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
+    else if (icon == 13) gui_launch_html("Fieldbook", app_fieldbook_html, app_fieldbook_len);
 }
 
 /* A loop (octagon approximating a circle, 8 capsule segments) for the
@@ -2279,7 +2353,7 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "serveapp")) {
-        if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak\n"); }
+        if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak|plan|lexly|toroid|sparkjar|homeqi|fieldbook\n"); }
         else if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
         else {
             net_init(0x0A00020F);
@@ -2288,7 +2362,13 @@ static void run(char *line){
             else if (!strcmp(arg, "keyrate"))     serve_app("keyrate", app_keyrate_html, app_keyrate_len);
             else if (!strcmp(arg, "bookrank"))    serve_app("bookrank", app_bookrank_html, app_bookrank_len);
             else if (!strcmp(arg, "quotestreak")) serve_app("quotestreak", app_quotestreak_html, app_quotestreak_len);
-            else puts("unknown app, try weather, curbfind, keyrate, bookrank, or quotestreak\n");
+            else if (!strcmp(arg, "plan"))        serve_app("plan", app_plan_html, app_plan_len);
+            else if (!strcmp(arg, "lexly"))       serve_app("lexly", app_lexly_html, app_lexly_len);
+            else if (!strcmp(arg, "toroid"))      serve_app("toroid", app_toroid_html, app_toroid_len);
+            else if (!strcmp(arg, "sparkjar"))    serve_app("sparkjar", app_sparkjar_html, app_sparkjar_len);
+            else if (!strcmp(arg, "homeqi"))      serve_app("homeqi", app_homeqi_html, app_homeqi_len);
+            else if (!strcmp(arg, "fieldbook"))   serve_app("fieldbook", app_fieldbook_html, app_fieldbook_len);
+            else puts("unknown app, see usage\n");
         }
     }
     else if (!strcmp(line, "chat")) {

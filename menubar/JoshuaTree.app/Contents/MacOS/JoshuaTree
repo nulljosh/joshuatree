@@ -6,4 +6,10 @@
 # invocation kept in sync with `make run`'s own -rtc flag (see the
 # Makefile, the source of truth for how this kernel actually boots).
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
-exec qemu-system-i386 -kernel "$REPO_DIR/kernel.elf" -display cocoa -rtc base=localtime
+# v35 (0.35.0): rebuilds before every launch, so a login/Dock launch
+# always reflects the latest edit instead of whatever kernel.elf happened
+# to be sitting there. -net added so the networking commands (netscan,
+# ifconfig, web, serveapp) actually have a card to find, same flags
+# Makefile's own `run` target uses.
+cd "$REPO_DIR" && /usr/bin/make -s kernel.elf
+exec qemu-system-i386 -kernel "$REPO_DIR/kernel.elf" -display cocoa -rtc base=localtime -net nic,model=rtl8139 -net user

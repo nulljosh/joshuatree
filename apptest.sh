@@ -17,7 +17,16 @@ make -s kernel.elf
 WORKDIR=$(mktemp -d /tmp/jt-apptest-XXXX)
 trap 'rm -rf "$WORKDIR"' EXIT
 
-APPS=(Weather Curbfind Chat Files Keyrate Bookrank Quotestreak)
+APPS=(Weather Curbfind Chat Files Keyrate Bookrank Quotestreak Notes Plan Lexly Toroid Sparkjar Homeqi Fieldbook)
+# v35 (0.35.0): Notes (icon 7, gui_launch_editor) is included now, it was
+# missing before purely because this list has to stay in lockstep, index
+# for index, with `testapps`'s own single sequential loop over every dock
+# icon (0..GUI_ICON_COUNT-1); skipping it here would silently misalign
+# every screendump after it with the wrong app. Confirmed real, not
+# assumed: editor_draw() calls the same gui_draw_app_titlebar() every
+# other app uses, drawn in the same real accent color this script's own
+# color check looks for, so it closes on esc (scancode 1) exactly like
+# every other app here and is a real, checkable member of this list.
 
 (
     sleep 2
@@ -25,7 +34,7 @@ APPS=(Weather Curbfind Chat Files Keyrate Bookrank Quotestreak)
     for c in t e s t a p p s; do echo "sendkey $c"; done
     echo 'sendkey ret'; sleep 1.5  # window_open + gui_launch(0) draws Weather
     for i in "${!APPS[@]}"; do
-        sleep 0.5  # the larger apps (Bookrank/Quotestreak) take real, measurably longer to parse their bigger embedded HTML; a first pass at 0.3s missed them, caught by the test actually failing, not assumed safe
+        sleep 1  # v35 (0.35.0): bumped from 0.5s, homeqi's real embedded HTML (39589 bytes) is over 2x quotestreak's, the previous largest; the same "bigger app needs more real parse time, caught by the test actually failing" reasoning that set 0.5s in the first place
         echo "screendump $WORKDIR/app_$i.ppm"
         sleep 0.3
         echo 'sendkey esc'; sleep 1  # closes this app; the loop immediately opens the next one

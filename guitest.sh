@@ -7,8 +7,9 @@
 # actually changed each time instead of just trusting nothing hung.
 #
 # gui_run() starts the cursor at a fixed (400,300); dock icon centers are
-# computed from the same constants kernel.c itself uses (DOCK_ICON=56,
-# DOCK_GAP=16, DOCK_PAD=12, DOCK_MARGIN_BOT=24, GUI_ICON_COUNT=7), not
+# computed from the same constants kernel.c itself uses (DOCK_ICON=44,
+# DOCK_GAP=8, DOCK_PAD=10, DOCK_MARGIN_BOT=24, GUI_ICON_COUNT=14 as of
+# v35/0.35.0, this array only exercises the first 7), not
 # guessed pixel coordinates, so this stays correct if that layout changes.
 #
 # HONEST, UNRESOLVED GAP, re-diagnosed (Sep 2026): the original theory
@@ -37,7 +38,7 @@ WORKDIR=$(mktemp -d /tmp/jt-guitest-XXXX)
 trap 'rm -rf "$WORKDIR"' EXIT
 
 APPS=(Weather Curbfind Chat Files Keyrate Bookrank Quotestreak)
-DOCK_ICON=56; DOCK_GAP=16; DOCK_PAD=12; DOCK_MARGIN_BOT=24; ICON_COUNT=7
+DOCK_ICON=44; DOCK_GAP=8; DOCK_PAD=10; DOCK_MARGIN_BOT=24; ICON_COUNT=7
 DOCK_W=$(( ICON_COUNT*DOCK_ICON + (ICON_COUNT-1)*DOCK_GAP + 2*DOCK_PAD ))
 DOCK_X0=$(( (800-DOCK_W)/2 ))
 DOCK_Y0=$(( 600 - DOCK_ICON - 2*DOCK_PAD - DOCK_MARGIN_BOT ))
