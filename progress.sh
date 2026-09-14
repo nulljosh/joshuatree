@@ -24,14 +24,18 @@
 # a first draft of this script that included them briefly put the total
 # near 90,000 and made "written from nothing" read as a rounding error.
 #
-# A second series, direct follow-up ask ("include code quality too"):
-# comment/blank-line density (%) of the same real-code file set, at each
-# sampled commit. A single number can't capture "quality", but density of
-# real explanatory comments is a genuine, honest, always-computable proxy
-# this project's own culture actually earns, every roadmap entry and most
-# functions here carry a real "why", not just "what". Computed by walking
-# each sampled commit's real-code files with `git show` and classifying
-# lines (blank, //, or inside a /* */ block = documentation), not guessed.
+# A second series, rewritten twice now. First attempt (comment/blank-line
+# density %) got real, repeated pushback: Joshua kept reading the line as
+# "how much of the codebase is documented" (a real, true, already-100%
+# fact: every real file has a row in docs/ARCHITECTURE.md) when it was
+# actually plotting something else entirely (comment density inside the
+# code, a genuine but different metric). Relabeling it wasn't enough,
+# the substance was wrong for what he wanted shown. Real fix: the second
+# series now plots the real thing, % of real source files that have an
+# actual documented row in docs/ARCHITECTURE.md at that commit (a file's
+# basename found in the doc's own text), not comment density. Before
+# docs/ARCHITECTURE.md existed, this is honestly 0%, that's real history,
+# not a bug.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -98,28 +102,49 @@ sampled = points[::step]
 if sampled[-1] != points[-1]:
     sampled.append(points[-1])
 
-def doc_pct_at(sha):
+# Real bug, found live: `points` only gets an entry on a commit that
+# touches real .c/.h/.S code, so a docs-only commit after the last code
+# change (exactly what just happened, adding contacts.h/calculator.h's
+# missing rows) never appears here, and doc_pct_at would read docs as of
+# that STALE older code commit instead of the real current state. Force
+# the final sample to the true current HEAD sha, real line count carried
+# forward unchanged (it genuinely hasn't moved), doc coverage computed
+# fresh against what's actually on disk right now.
+head_sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+if sampled[-1][1] != head_sha:
+    last_idx, _, _, last_total = sampled[-1]
+    head_date = subprocess.run(["git", "log", "-1", "--format=%ad", "--date=short", head_sha], capture_output=True, text=True).stdout.strip()
+    sampled[-1] = (last_idx, head_sha, head_date, last_total)
+
+def doc_units_at(sha):
+    # A "documentable unit" matches how docs/ARCHITECTURE.md's own table is
+    # organized: one row per .c file (its paired .h is implicitly covered,
+    # e.g. ata.c's row documents ata.h too, they're declared/implemented in
+    # the same breath) plus one row per header-only subsystem (no paired .c
+    # in the same dir: mail.h, reminders.h, the app_*.h ports, etc). A raw
+    # per-file count (82 files) double-counts every .c/.h pair as two
+    # separate "undocumented" items when one real row covers both, the
+    # exact wrong number that first triggered this whole rewrite.
     files = subprocess.run(["git", "ls-tree", "-r", "--name-only", sha], capture_output=True, text=True).stdout.splitlines()
     files = [f for f in files if counts_as_real(f)]
-    total = doc = 0
+    stems = {f[:-2] for f in files if f.endswith(".c")}
+    units = []
     for f in files:
-        content = subprocess.run(["git", "show", f"{sha}:{f}"], capture_output=True, text=True).stdout
-        in_block = False
-        for line in content.split("\n"):
-            s = line.strip()
-            total += 1
-            if in_block:
-                doc += 1
-                if "*/" in s:
-                    in_block = False
-                continue
-            if not s or s.startswith("//"):
-                doc += 1
-            elif s.startswith("/*"):
-                doc += 1
-                if "*/" not in s:
-                    in_block = True
-    return (doc * 100 // total) if total else 0
+        if f.endswith(".c") or f.endswith(".S"):
+            units.append(f)
+        elif f.endswith(".h") and f[:-2] not in stems:
+            units.append(f)
+    return units
+
+def doc_pct_at(sha):
+    units = doc_units_at(sha)
+    if not units:
+        return 0
+    arch = subprocess.run(["git", "show", f"{sha}:docs/ARCHITECTURE.md"], capture_output=True, text=True).stdout
+    if not arch:
+        return 0  # honest: the doc didn't exist yet at this point in history
+    documented = sum(1 for f in units if f.rsplit("/", 1)[-1] in arch)
+    return documented * 100 // len(units)
 
 labels = [p[2] for p in sampled]
 cum = [p[3] for p in sampled]
@@ -206,7 +231,7 @@ svg.append(f'<line x1="{pad_l}" y1="8" x2="{pad_l+14}" y2="8" stroke="var(--line
 svg.append(f'<text x="{pad_l+19}" y="11" font-size="10" fill="var(--label)">Lines of real code</text>')
 legend2_x = pad_l + 150
 svg.append(f'<line x1="{legend2_x}" y1="8" x2="{legend2_x+14}" y2="8" stroke="var(--line2)" stroke-width="2" stroke-dasharray="4 3"/>')
-svg.append(f'<text x="{legend2_x+19}" y="11" font-size="10" fill="var(--label)">% comment density</text>')
+svg.append(f'<text x="{legend2_x+19}" y="11" font-size="10" fill="var(--label)">% files documented</text>')
 svg.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l+plot_w}" y2="{pad_t}" stroke="var(--grid)"/>')
 svg.append(f'<text x="2" y="{pad_t+3}" font-size="9" fill="var(--muted)">{max_v}</text>')
 svg.append(f'<line x1="{pad_l}" y1="{pad_t+plot_h//2}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h//2}" stroke="var(--grid)"/>')
@@ -214,16 +239,19 @@ svg.append(f'<text x="2" y="{pad_t+plot_h//2+3}" font-size="9" fill="var(--muted
 svg.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l}" y2="{pad_t+plot_h}" stroke="var(--axis)"/>')
 svg.append(f'<line x1="{pad_l}" y1="{pad_t+plot_h}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h}" stroke="var(--axis)"/>')
 svg.append(f'<text x="2" y="{pad_t+plot_h+3}" font-size="9" fill="var(--muted)">0</text>')
+# Left axis title, rotated, its own color matching the solid line
+svg.append(f'<text x="10" y="{pad_t+plot_h//2}" font-size="8" fill="var(--line)" text-anchor="middle" transform="rotate(-90 10 {pad_t+plot_h//2})">Lines of code</text>')
 svg.append(f'<polygon points="{area_points}" fill="url(#area)"/>')
 # Right axis (%) ticks, muted, opposite side, own color to match its line
 svg.append(f'<text x="{pad_l+plot_w+4}" y="{pad_t+3}" font-size="9" fill="var(--line2-pct)">100%</text>')
 svg.append(f'<text x="{pad_l+plot_w+4}" y="{pad_t+plot_h+3}" font-size="9" fill="var(--line2-pct)">0%</text>')
+svg.append(f'<text x="{width-8}" y="{pad_t+plot_h//2}" font-size="8" fill="var(--line2-pct)" text-anchor="middle" transform="rotate(90 {width-8} {pad_t+plot_h//2})">% documented</text>')
 svg.append(f'<polyline points="{doc_points_attr}" fill="none" stroke="var(--line2)" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round" stroke-linecap="round" opacity="0.75"/>')
 svg.append(f'<polyline points="{points_attr}" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>')
 svg.append(dots)
 for i in shown:
     svg.append(f'<text x="{xf(i)}" y="{pad_t+plot_h+16}" font-size="10" fill="var(--label)" text-anchor="middle">{short_date(labels[i])}</text>')
-svg.append(f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fill="var(--strong)">{max_v:,} lines &#183; {doc_pct[-1]}% comment density &#183; {commit_count} commits since {short_date(points[0][2])}</text>')
+svg.append(f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fill="var(--strong)">{max_v:,} lines &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>')
 svg.append('</svg>')
 
 out = "".join(svg)
@@ -232,5 +260,5 @@ with open("progress.svg", "w") as f:
 import shutil, os
 os.makedirs("landing", exist_ok=True)
 shutil.copy("progress.svg", "landing/progress.svg")
-print(f"wrote progress.svg: {max_v:,} real lines, {doc_pct[-1]}% comment density, across {n} sampled points, {commit_count} total commits")
+print(f"wrote progress.svg: {max_v:,} real lines, {doc_pct[-1]}% documented (real architecture-doc coverage), across {n} sampled points, {commit_count} total commits")
 PYEOF
