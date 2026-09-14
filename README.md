@@ -56,7 +56,8 @@ to refresh its allowlisted, readable copies from `../dotfiles`. Fish and macOS
 apps do not execute inside Joshua Tree yet.
 
 Commands: `help` `clear` `echo` `time` `uptime` `dmesg` `mem` `reboot` `crash`
-`pagefault` `heaptest` `heapgrow` `tasktest` `preempttest` `weathertest` `wind`
+`pagefault` `heaptest` `heapgrow` `tasktest` `preempttest` `weathertest`
+`weatherfxcliptest` `geotest` `wind`
 `isotest` `reaptest` `ring3test` `ps` `kill` `killtest` `sleep` `disktest`
 `diskuse` `fsuse` `ls` `cat` `exec` `rm` `cd` `mkdir` `write <file> <content>`
 `browse` `lspci` `gfxtest` `fonttest` `mousetest` `nettest` `ifconfig` `netscan`

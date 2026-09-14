@@ -1509,9 +1509,9 @@ static unsigned int weather_last_tick = 0;
 static int weather_tried_once = 0;
 /* v53: real fields behind the one-line summary, kept for the dropdown
    panel. Nothing fabricated: temp/code are exactly what weather_fetch
-   already parses out of the reply, lat/lon are the exact literals already
-   in the http_get() call below, not a place name that isn't really in the
-   data. */
+   already parses out of the reply; lat/lon (v71) are the exact text
+   ip-api.com returned for this machine's own public IP (geo_fetch below),
+   the same text the http_get() URL is built from, not a literal. */
 static int weather_temp_c = 0;
 static int weather_code10 = 0;
 static int weather_have = 0;
@@ -1621,6 +1621,27 @@ static void weather_particles_seed(int w){
    white (the dock tray's own cream) snow dot, never a saturated or cold-
    blue tone. `kind`/`w` passed explicitly rather than read from globals
    so weatherfxtest can drive this deterministically. */
+/* v71 (0.65.0): every particle pixel goes through this clip, and the
+   wrap-around check now runs BEFORE the draw, not after. The real bug
+   this fixes (Joshua's "dashed glitch bar at the horizon", reproduced
+   headlessly: 314 streak-coloured pixels on physical rows 790..804 after
+   ten idle seconds under a Rain reading, 12 above): a rain particle at
+   logical row 394 with speed 8 was advanced to 402, drawn there, and only
+   THEN wrapped back to the top. Rows 395..402 are below WIND_HORIZON_ROW,
+   outside the band the wind tick repaints every frame, so nothing ever
+   erased those stamps; each streak that crossed the horizon left a
+   permanent 4-pixel diagonal at a random x, accumulating into exactly the
+   dashed full-width bar seen live. Snow had the same leak one row deep
+   (y advanced to 395, dotted at physical 790). Clipping to the band is
+   the real contract the v65 entry already stated ("particles only ever
+   draw inside WIND_TOP_ROW..WIND_HORIZON_ROW"), now enforced per pixel
+   rather than assumed from the reset logic. */
+static inline void weather_fx_plot(int px, int py, int w, int sc, unsigned int color){
+    if (py < WIND_TOP_ROW * sc || py >= WIND_HORIZON_ROW * sc) return;
+    if (px < 0 || px >= w * sc) return;
+    window_pixel_phys(px, py, color);
+}
+
 static void weather_fx_tick_kind(int kind, int w){
     if (kind == WEATHER_FX_NONE) return;
     if (!weather_particles_seeded) weather_particles_seed(w);
@@ -1630,20 +1651,22 @@ static void weather_fx_tick_kind(int kind, int w){
         if (kind == WEATHER_FX_RAIN){
             p->y += p->speed;                       /* fast, mostly-vertical fall */
             p->x += 1;                               /* a slight real wind-blown slant */
-            int x0 = p->x * sc, y0 = p->y * sc;
-            for (int s = 0; s < 4; s++)
-                window_pixel_phys(x0 - s, y0 - s * sc, 0x00C9C0B4); /* light silvery-sand streak, in-palette */
         } else {
             p->y += 1;                               /* snow drifts, much slower than rain */
             if (weather_rand() & 1) p->x += ((i & 1) * 2 - 1); /* gentle side-to-side drift */
-            int x0 = p->x * sc, y0 = p->y * sc;
-            window_pixel_phys(x0, y0, 0x00EFEBE4);           /* off-white dot, the dock tray's own cream */
-            if (sc > 1) window_pixel_phys(x0 + 1, y0, 0x00EFEBE4);
         }
         if (p->y >= WIND_HORIZON_ROW || p->x < 0 || p->x >= w){
             p->x = (int)(weather_rand() % (unsigned int)(w > 0 ? w : 1));
             p->y = WIND_TOP_ROW;
             p->speed = 4 + (int)(weather_rand() % 5);
+        }
+        int x0 = p->x * sc, y0 = p->y * sc;
+        if (kind == WEATHER_FX_RAIN){
+            for (int s = 0; s < 4; s++)
+                weather_fx_plot(x0 - s, y0 - s * sc, w, sc, 0x00C9C0B4); /* light silvery-sand streak, in-palette */
+        } else {
+            weather_fx_plot(x0, y0, w, sc, 0x00EFEBE4);           /* off-white dot, the dock tray's own cream */
+            if (sc > 1) weather_fx_plot(x0 + 1, y0, w, sc, 0x00EFEBE4);
         }
     }
 }
@@ -1687,12 +1710,61 @@ static int json_current_number(const char *json, const char *key, int *out_x10){
     return 0;
 }
 
+/* v71 (0.65.0): real location, not a constant. weather_fetch used to hard-
+   code latitude=49.28&longitude=-123.12 (downtown Vancouver) in its Open-
+   Meteo URL, so every weather-derived effect in this file (menu bar text,
+   v56 dropdown, v60 wind amplitude, v65 particles and tint) reported a
+   place ~40km from where this machine actually sits (Langley, per both
+   Joshua's own phone and a real `curl http://ip-api.com/json/` from the
+   host, roadmap.md's "Real find" entry). Open-Meteo itself was never
+   wrong, it answered honestly for the coordinates it was given; the
+   coordinates were the bug. ip-api.com answers on plain HTTP (no TLS in
+   this kernel), so this is the same http_get shape the weather call
+   already uses. Looked up once per boot and cached (a public IP doesn't
+   move mid-session; a failed lookup is retried on the next ten-minute
+   weather cycle). The lat/lon are kept as the exact numeric TEXT ip-api
+   returned (json_extract_number_text) and spliced straight into the URL,
+   no float parse/format round trip to lose digits in. No fallback
+   constant on purpose: with no real location there is no weather fetch,
+   the same "nothing fabricated" contract v56/v60/v65 already hold to for
+   a NIC-less boot. Both values are mirrored to serial (`geo=`/`wxurl=`)
+   so tools/geo-check.sh can prove headlessly, against the host's own
+   ip-api answer, that the URL really carries the dynamic location. */
+static char geo_lat[16] = "", geo_lon[16] = "", geo_city[24] = "";
+static int geo_have = 0;
+static int geo_fetch(void){
+    static char body[1024];
+    int n = http_get("ip-api.com", "/json/", 80, body, sizeof(body) - 1);
+    if (n <= 0) return 0;
+    body[n] = 0;
+    char lat[16], lon[16];
+    if (!json_extract_number_text(body, "lat", lat, sizeof(lat))) return 0;
+    if (!json_extract_number_text(body, "lon", lon, sizeof(lon))) return 0;
+    int i;
+    for (i = 0; lat[i]; i++) geo_lat[i] = lat[i]; geo_lat[i] = 0;
+    for (i = 0; lon[i]; i++) geo_lon[i] = lon[i]; geo_lon[i] = 0;
+    if (!json_extract_string(body, "city", geo_city, sizeof(geo_city))) geo_city[0] = 0;
+    geo_have = 1;
+    serial_puts("geo="); serial_puts(geo_lat); serial_puts(","); serial_puts(geo_lon); serial_puts("\n");
+    return 1;
+}
+
 static void weather_fetch(void){
     weather_last_tick = ticks();
     if (!rtl8139_init()) return;
     net_init(0x0A00020F);
+    if (!geo_have && !geo_fetch()) return; /* v71: no real location, no fetch, nothing fabricated */
     static char body[2048];
-    int n = http_get("api.open-meteo.com", "/v1/forecast?latitude=49.28&longitude=-123.12&current=temperature_2m,weather_code", 80, body, sizeof(body) - 1);
+    static char path[128];
+    { int p = 0; const char *s;
+      for (s = "/v1/forecast?latitude="; *s; s++) path[p++] = *s;
+      for (s = geo_lat; *s; s++) path[p++] = *s;
+      for (s = "&longitude="; *s; s++) path[p++] = *s;
+      for (s = geo_lon; *s; s++) path[p++] = *s;
+      for (s = "&current=temperature_2m,weather_code"; *s; s++) path[p++] = *s;
+      path[p] = 0; }
+    serial_puts("wxurl="); serial_puts(path); serial_puts("\n");
+    int n = http_get("api.open-meteo.com", path, 80, body, sizeof(body) - 1);
     if (n <= 0) return;
     body[n] = 0;
     int t10 = 0, code10 = 0;
@@ -1709,6 +1781,7 @@ static void weather_fetch(void){
     weather_text[p++] = ' ';
     for (const char *w = weather_word(code10 / 10); *w; w++) weather_text[p++] = *w;
     weather_text[p] = 0;
+    serial_puts("wx="); serial_puts(weather_text); serial_puts("\n"); /* v71: tools/geo-check.sh asserts the fetch really landed, not just that the URL was built */
 }
 
 static void gui_draw_menubar(void){
@@ -3539,8 +3612,9 @@ static void gui_draw_notif_panel(void){
    dismiss-on-next-release contract as the clock's notif panel above, same
    panel chrome (colors, border-drawing, font). Shows only real fields the
    existing weather_fetch() already parses (temp, WMO code -> condition
-   word, the fixed lat/lon it queries) plus how long ago the fetch ran, no
-   invented humidity/wind/forecast rows the data doesn't have. */
+   word, and as of v71 the real ip-api.com city/lat/lon it queried, no
+   longer a fixed literal), no invented humidity/wind/forecast rows the
+   data doesn't have. */
 #define WEATHER_W 220
 static void gui_draw_weather_panel(void){
     int x0 = weather_hit_x0 >= 0 ? weather_hit_x0 : (int)window_width() - WEATHER_W - 200;
@@ -3548,7 +3622,7 @@ static void gui_draw_weather_panel(void){
     int y0 = GUI_MENUBAR_H;
     unsigned int bg = 0x002C2C2E, text = 0x00F5F5F7, dim = 0x00A0A0A6;
 
-    int total_h = 10 + 4 * 20 + 6;
+    int total_h = 10 + (geo_city[0] ? 5 : 4) * 20 + 6; /* v71: one extra row for the looked-up city name when ip-api gave one */
     gui_rounded_rect_on_wallpaper(x0, y0, WEATHER_W, total_h, bg, GUI_FLYOUT_RADIUS);
 
     int y = y0 + 8;
@@ -3567,8 +3641,14 @@ static void gui_draw_weather_panel(void){
     { int c = weather_code10 / 10; if (c >= 100) line[p++]='0'+c/100; if (c>=10) line[p++]='0'+(c/10)%10; line[p++]='0'+c%10; }
     line[p]=0; font_draw_string(line, x0 + 12, y, dim, -1); y += 20;
 
-    p = 0; const char *loc = "49.28, -123.12";
-    for (const char *s = loc; *s; s++) line[p++] = *s;
+    /* v71: the real, looked-up location (ip-api.com, see geo_fetch), not
+       the old fixed literal. City first when ip-api gave one, then the
+       exact lat/lon text the Open-Meteo URL was actually built from. */
+    if (geo_city[0]) { font_draw_string(geo_city, x0 + 12, y, dim, -1); y += 20; }
+    p = 0;
+    for (const char *s = geo_lat; *s && p < 16; s++) line[p++] = *s;
+    line[p++] = ','; line[p++] = ' ';
+    for (const char *s = geo_lon; *s && p < 36; s++) line[p++] = *s;
     line[p]=0; font_draw_string(line, x0 + 12, y, dim, -1);
 }
 
@@ -3805,7 +3885,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest weatherfxtest weatherpaneltest windweathertest cursortest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -4067,6 +4147,79 @@ static void run(char *line){
             wind_pct_for_weather_code(83) == 200 && wind_pct_for_weather_code(95) == 200;
         puts(ok ? "wind_pct_for_weather_code: every WMO bucket boundary maps to its real percent: ok\n"
                 : "wind_pct_for_weather_code: FAILED\n");
+    }
+    else if (!strcmp(line, "weatherfxcliptest")) {
+        /* v71 (0.65.0): regression test for the horizon glitch bar, per
+           CLAUDE.md's 4b. Real framebuffer, not just particle state: opens
+           the desktop's own 960x540 scale-2 window, clears it to a flat
+           colour, parks particles one logical row above WIND_HORIZON_ROW
+           (rain at max speed, then snow), ticks each kind ONCE, and scans
+           the physical rows from the horizon down. The pre-v71 tick drew a
+           particle at its advanced position (up to 8 rows past the
+           horizon) before wrapping it, so any streak/dot pixel found at or
+           below WIND_HORIZON_ROW*sc is exactly the leak that painted the
+           dashed bar on Joshua's live desktop. Also asserts the tick did
+           draw real particle pixels somewhere inside the band, so a
+           "fix" that simply stopped drawing would fail too. Particle
+           globals saved/restored like weatherfxtest. */
+        int save_seeded = weather_particles_seeded;
+        struct weather_particle save_particles[WEATHER_PARTICLE_COUNT];
+        for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++) save_particles[i] = weather_particles[i];
+        if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); }
+        else {
+            const unsigned int flat = 0x00202020;
+            int sc = (int)window_scale(), w = (int)window_width();
+            int leaked = 0, drawn = 0;
+            for (int kind = WEATHER_FX_RAIN; kind <= WEATHER_FX_SNOW; kind++) {
+                window_clear(flat);
+                weather_particles_seeded = 1;
+                for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++) {
+                    weather_particles[i].x = 40 + i * 24;
+                    weather_particles[i].y = WIND_HORIZON_ROW - 1;
+                    weather_particles[i].speed = 8;
+                }
+                weather_fx_tick_kind(kind, w);
+                for (int py = WIND_HORIZON_ROW * sc; py < (WIND_HORIZON_ROW + 12) * sc; py++)
+                    for (int px = 0; px < w * sc; px++)
+                        if (window_get_pixel_phys(px, py) != flat) leaked++;
+                for (int py = WIND_TOP_ROW * sc; py < WIND_HORIZON_ROW * sc; py++)
+                    for (int px = 0; px < w * sc; px++)
+                        if (window_get_pixel_phys(px, py) != flat) drawn++;
+            }
+            window_close();
+            puts(drawn > 0 ? "weatherfx clip: particles really drawn inside the sky band: ok\n" : "weatherfx clip: nothing drawn at all (test not discriminating): FAILED\n");
+            puts(leaked == 0 ? "weatherfx clip: zero particle pixels at or below the horizon: ok\n" : "weatherfx clip: FAILED, pixels leaked below WIND_HORIZON_ROW: ");
+            if (leaked) { putn((unsigned int)leaked); puts("\n"); }
+        }
+        weather_particles_seeded = save_seeded;
+        for (int i = 0; i < WEATHER_PARTICLE_COUNT; i++) weather_particles[i] = save_particles[i];
+    }
+    else if (!strcmp(line, "geotest")) {
+        /* v71 (0.65.0): the parser half of the real-location fix, pure and
+           offline (tools/geo-check.sh is the live-network half). A fixed
+           ip-api-shaped body, including the traps a sloppy match would
+           trip on: "latitude"/"longitude" keys earlier in the text (the
+           Open-Meteo reply's own key names, which "lat"/"lon" must NOT
+           match inside), a negative longitude, a string-valued key that
+           must be rejected as not-a-number, and a missing key. Asserts the
+           exact text ip-api returned comes back byte-for-byte, since that
+           text is what weather_fetch splices into its URL. */
+        const char *body = "{\"status\":\"success\",\"latitude\":\"trap\",\"longitude\":1,\"city\":\"Langley\",\"lat\":49.0983,\"lon\":-122.6498,\"zip\":\"V3A\"}";
+        char lat[16], lon[16], city[24], bad[16], none[16];
+        unsigned int nlat = json_extract_number_text(body, "lat", lat, sizeof(lat));
+        unsigned int nlon = json_extract_number_text(body, "lon", lon, sizeof(lon));
+        unsigned int nbad = json_extract_number_text(body, "zip", bad, sizeof(bad));
+        unsigned int nnone = json_extract_number_text(body, "isp", none, sizeof(none));
+        unsigned int ncity = json_extract_string(body, "city", city, sizeof(city));
+        int ok_lat = nlat == 7 && !strcmp(lat, "49.0983");
+        int ok_lon = nlon == 9 && !strcmp(lon, "-122.6498");
+        int ok_reject = nbad == 0 && nnone == 0;
+        int ok_city = ncity == 7 && !strcmp(city, "Langley");
+        puts(ok_lat ? "geo lat: exact text extracted, not matched inside \"latitude\": ok\n" : "geo lat: FAILED\n");
+        puts(ok_lon ? "geo lon: negative value extracted byte-exact: ok\n" : "geo lon: FAILED\n");
+        puts(ok_reject ? "geo: string value and missing key both rejected: ok\n" : "geo reject: FAILED\n");
+        puts(ok_city ? "geo city: ok\n" : "geo city: FAILED\n");
+        if (!(ok_lat && ok_lon)) { puts("  lat="); puts(lat); puts(" lon="); puts(lon); puts("\n"); }
     }
     else if (!strcmp(line, "weatherpaneltest")) {
         /* v56 gap fix: weathertest (above) proves weather_fetch's JSON

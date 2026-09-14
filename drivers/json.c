@@ -47,6 +47,34 @@ unsigned int json_extract_string(const char *json, const char *key, char *out, u
     return pos;
 }
 
+unsigned int json_extract_number_text(const char *json, const char *key, char *out, unsigned int maxlen) {
+    char pattern[64];
+    unsigned int pn = 0;
+    pattern[pn++] = '"';
+    for (const char *k = key; *k && pn < sizeof(pattern) - 3; k++) pattern[pn++] = *k;
+    pattern[pn++] = '"'; pattern[pn++] = ':';
+    pattern[pn] = 0;
+
+    const char *p = json;
+    const char *found = 0;
+    for (; *p; p++) {
+        if (starts_with(p, pattern)) { found = p + pn; break; }
+    }
+    if (!found) return 0;
+
+    p = found;
+    while (*p == ' ') p++;
+    unsigned int pos = 0;
+    int digits = 0;
+    while (pos < maxlen - 1 && (*p == '-' || *p == '+' || *p == '.' || *p == 'e' || *p == 'E' || (*p >= '0' && *p <= '9'))) {
+        if (*p >= '0' && *p <= '9') digits = 1;
+        out[pos++] = *p++;
+    }
+    out[pos] = 0;
+    if (!digits) { out[0] = 0; return 0; } /* "lat":"x" or "lat":null: not a number, out of scope */
+    return pos;
+}
+
 unsigned int json_escape(const char *s, char *out, unsigned int maxlen) {
     unsigned int pos = 0;
     for (; *s && pos < maxlen - 2; s++) {
