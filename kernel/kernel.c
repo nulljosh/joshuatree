@@ -665,6 +665,47 @@ static void gui_rounded_rect(int x, int y, int w, int h, unsigned int color, uns
     }
 }
 
+/* Same shape as gui_rounded_rect, flat fill color, but for something
+   sitting on top of the gradient wallpaper rather than a flat panel:
+   the corner AA blends toward the wallpaper's REAL color at each
+   corner's own row (gui_wallpaper_color(y+dy) for the top two corners,
+   y+h-1-dy for the bottom two), not one fixed sample.
+   Real, visible bug this fixes, caught with actual pixel values off a
+   screendump, not eyeballed: the dock tray used to pass one single
+   gui_wallpaper_color(y0+dock_h/2) (a row near the tray's own middle,
+   already fairly dark) as the blend target for ALL four corners. At the
+   top corners the true backdrop just outside the tray is much lighter
+   than that sample, so the AA falloff ended in a visibly dark blotch
+   right where it should have faded to a light warm tone, reading as a
+   strange dark "bubble" at the tray's own top-left and top-right
+   corners. Confirmed the exact wrong value directly: gui_wallpaper_color
+   at that mid-row really does compute to a dark R=62, correct for where
+   it was sampled, wrong for where it was actually used. */
+static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned int color, int r){
+    window_rect(x, y, w, h, color);
+    int outer2 = (r + AA_BAND) * (r + AA_BAND);
+    for (int dy = 0; dy <= r + AA_BAND; dy++){
+        unsigned int bg_top = gui_wallpaper_color(y + dy);
+        unsigned int bg_bot = gui_wallpaper_color(y + h - 1 - dy);
+        for (int dx = 0; dx <= r + AA_BAND; dx++){
+            int d2 = dx * dx + dy * dy;
+            if (d2 <= r * r) continue;
+            if (d2 > outer2) {
+                window_pixel(x + dx,         y + dy,         bg_top);
+                window_pixel(x + w - 1 - dx, y + dy,         bg_top);
+                window_pixel(x + dx,         y + h - 1 - dy, bg_bot);
+                window_pixel(x + w - 1 - dx, y + h - 1 - dy, bg_bot);
+                continue;
+            }
+            int t = gui_isqrt(d2) - r;
+            window_pixel(x + dx,         y + dy,         gui_lerp(color, bg_top, t, AA_BAND));
+            window_pixel(x + w - 1 - dx, y + dy,         gui_lerp(color, bg_top, t, AA_BAND));
+            window_pixel(x + dx,         y + h - 1 - dy, gui_lerp(color, bg_bot, t, AA_BAND));
+            window_pixel(x + w - 1 - dx, y + h - 1 - dy, gui_lerp(color, bg_bot, t, AA_BAND));
+        }
+    }
+}
+
 /* Same corner AA as gui_rounded_rect, but the fill itself is a real top-to-
    bottom gradient instead of one flat color, the classic glossy-icon look
    (lighter catching the light at top, darker at the bottom, real depth),
@@ -1010,6 +1051,43 @@ static void gui_draw_gloss(int x, int y, int w, int h, unsigned int bg, int corn
         window_rect(x + corner_r, y + row, w - 2 * corner_r, 1, gui_lerp(light, bg, row, gloss_h));
 }
 
+/* Real bug caught before shipping, not assumed fine: a first pass drew
+   this shadow as a plain gui_rounded_rect a few px wider than the icon,
+   which only anti-aliases its own corners, the straight left/right edges
+   are one flat hard-edged color. Made a wider rectangle peek out beside
+   every icon as a stark gray bar, worse than no shadow at all. A soft
+   contact shadow needs to fade on every side, which a rounded rect
+   fundamentally doesn't do off its flat edges, an ellipse does by
+   construction: every point's distance from center is real radial
+   distance, so gui_isqrt's same AA falloff fades smoothly all the way
+   around with no straight edge anywhere to look hard. */
+static void gui_fill_ellipse(int cx, int cy, int rx, int ry, unsigned int color, unsigned int into){
+    if (rx <= 0 || ry <= 0) return;
+    int outer2 = (ry + AA_BAND) * (ry + AA_BAND);
+    for (int dy = -ry - AA_BAND; dy <= ry + AA_BAND; dy++){
+        for (int dx = -rx - AA_BAND; dx <= rx + AA_BAND; dx++){
+            int sdx = dx * ry / rx; /* scale x into the same units as y, so it's a circle in transformed space */
+            int d2 = sdx * sdx + dy * dy;
+            if (d2 > outer2) continue;
+            if (d2 <= ry * ry) { window_pixel(cx + dx, cy + dy, color); continue; }
+            int t = gui_isqrt(d2) - ry;
+            window_pixel(cx + dx, cy + dy, gui_lerp(color, into, t, AA_BAND));
+        }
+    }
+}
+
+/* A soft contact shadow centered right at the icon's own bottom edge:
+   the icon (drawn after this) covers the top half of the ellipse, only
+   the bottom crescent peeks out, exactly the soft "floating above the
+   tray" cue a flat icon can't give on its own. `into` is the dock
+   tray's own flat color, icons sit on the tray, not the gradient
+   wallpaper behind it. */
+static void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
+    unsigned int dock_bg = 0x00EFEBE4;
+    unsigned int shadow = gui_blend(dock_bg, 0x00000000);
+    gui_fill_ellipse(cx_center, cy_bottom - 1, size / 2 - 2, size / 10, shadow, dock_bg);
+}
+
 static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
     int x = cx_center - size / 2, y = cy_bottom - size;
     unsigned int bg = GUI_COLORS[icon];
@@ -1053,13 +1131,11 @@ static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int dra
         window_rect(dock_x + 6, sy, dock_w - 12, 1, gui_lerp(dark, wall, row, 10));
     }
 
-    /* Corner-blend target is the wallpaper's real color at the dock's own
-       row, not the old flat GUI_BG constant: the background here is a
-       gradient now, and the dock sits low enough on screen that its actual
-       backdrop is much closer to the burgundy end than a fixed light
-       constant would assume, a mismatched blend would show as a visible
-       fringe around the tray's rounded corners. */
-    gui_rounded_rect(dock_x, y0, dock_w, dock_h, 0x00EFEBE4, gui_wallpaper_color(y0 + dock_h / 2), 20);
+    /* gui_rounded_rect_on_wallpaper, not gui_rounded_rect: the tray's top
+       and bottom corners sit against very different points on the
+       gradient, one fixed blend sample for both was the real dark-bubble
+       bug just found and fixed above. */
+    gui_rounded_rect_on_wallpaper(dock_x, y0, dock_w, dock_h, 0x00EFEBE4, 20);
 
     for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
         if (slot == drag_slot) continue; /* drawn last, floating at the cursor */
@@ -1068,6 +1144,7 @@ static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int dra
         int size = magnified ? DOCK_ICON + DOCK_MAGNIFY : DOCK_ICON;
         int cx_center = gui_slot_x(slot) + DOCK_ICON / 2;
         int cy_bottom = y0 + DOCK_PAD + DOCK_ICON - (magnified ? DOCK_LIFT : 0);
+        gui_draw_icon_shadow(cx_center, cy_bottom, size);
         gui_draw_one_icon(icon, cx_center, cy_bottom, size);
         if (magnified) {
             int label_w = (int)strlen(GUI_LABELS[icon]) * 8;
