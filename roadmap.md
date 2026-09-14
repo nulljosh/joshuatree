@@ -6,40 +6,61 @@ reboot`. Everything below is the standard bare-metal-to-usable-OS path
 (same order every OSDev-wiki "Bare Bones" -> "Meaty Skeleton" walkthrough
 takes, and roughly what xv6/ToaruOS/Linux 0.01 did in their first months).
 
-## Done
-<!-- progress.sh: done-items 10/10 -->
-- **v0** (Aug-Sep 2026): boots under QEMU/GRUB, VGA text, polled PS/2 keyboard, RTC clock, shell (`help clear echo time reboot`)
-- **v1** (Sep 2026): flat GDT, IDT + CPU exception handlers (`crash` command exercises it), PIC remap, IRQ-driven keyboard, PIT timer (`uptime`)
+## Shipped (full detail in git log / commit messages, not duplicated here)
 
-Full breakdown of what shipped in each: `git log --oneline` or the commit history, not here, this file is the queue, not the changelog.
-
-**Total remaining, roughly: 10-14 sessions (~30-45 active hours)** to v10, per-version ETAs below. These are active-work estimates, not calendar time, usage caps and check.sh-quality verification pace it across days, not one continuous run. Revised after each version actually ships, not predicted once and left stale.
-
-**Model routing on each open item** (refreshed Sep 2026, after v28-v35's real mix of both kinds of work): `[Haiku]` (Haiku 4.5) is mechanical work with a known-correct shape, glue between pieces that already exist, or scoped review/polish, cheap to run and low risk if it's slightly off since check.sh plus a quick look catches it, e.g. this session's VFS/blockdev call-site rewiring, app porting, icon drawing. `[Sonnet]` (Sonnet 5, this session's own default) is the general case: real feature work with a clear existing pattern to follow, most of v28-v35 (task reap, VFS, hacking tools, block devices, heap growth, app porting) landed here, verified live and shipped clean. `[Fable]` (Fable 5.1) is anything where a subtly wrong answer looks fine and boots fine, the class this session hit directly in v31 (per-task page directories, CR3 switching, a real race window closed with `cli`) and v32 (patching a suspended task's raw stack frame): privilege isolation, exact stack/register frame layouts, a wire protocol's exact byte layout, memory-model changes. Needs the deeper reasoning pass and fuller verification, not just "it booted." `[Joshua]` isn't code at all, a real design or scope call. Tags are a starting guess for whoever or whatever picks up an item next, not a lock, re-tag if an item turns out easier or harder once actually opened. The next real queued item in this shape, a syscall ABI + ring-3 integration (see v28's own deferred note and the "Later product ideas" section), is `[Fable]` from the start, not a guess: it's exactly privilege isolation plus an exact calling convention, the two things this legend already names.
-
-## v2, memory (from "one flat blob" to real address space)
-
-  Two real bugs, not glossed over, each the specific kind this item was deferred to avoid rushing into. First: page directory entries and CR3 are read by the MMU itself, which only ever walks physical memory, but every one of these tables is now a normal higher-half-linked C static whose own address, as far as C code is concerned, is a high virtual one. Storing that virtual address straight into a page-directory entry pointed the MMU at physical memory that happened to be unmapped garbage, producing an instant page fault immediately escalating to a double fault, caught via QEMU's own `-d int` interrupt trace, not a guess (`v=0e` then `v=08`, same faulting EIP both times). Fixed with a `phys()` helper subtracting the kernel's virtual base everywhere a table's own address gets stored into another table or into CR3. Second, found only because the full regression suite included real hardware, not just the shell's own boot check: the RTL8139 NIC does raw physical-memory DMA, no concept of the CPU's page tables at all, so handing it `(u32)rx_buffer` (now a high virtual address) meant the card was reading and writing a physical location nowhere near the real buffer. The shell's own MAC-address readout still looked correct (that path goes through the CPU normally, via ordinary MMIO register reads), which is exactly the trap: `check.sh` and a superficial look would have called this shipped. A real `tcpdump` capture of the actual wire traffic caught it, an all-zero frame instead of a real ARP request. Fixed the same way, a `KVIRT_TO_PHYS` subtraction at both DMA address registers (`rtl8139.c`, which had already left itself a note anticipating exactly this).
-
-  Verified against real artifacts across every subsystem this kernel has, not just a fresh boot: `check.sh`'s banner check; `heaptest`/`tasktest`/`preempttest`/`mem` (memory and scheduling untouched by the relocation); `ring3test`, including an independent QEMU-monitor read of the proof-of-execution marker at both its virtual and physical address, matching; a real FAT16 disk image exercising `disktest`, `mkdir`/`cd`/`ls`, and `cat`; `gfxtest` opening and cleanly closing graphics mode; and `nettest`'s full DNS+TCP+ARP round trip against the real internet, independently confirmed correct with a real `tcpdump` capture of the actual frames on the wire, not just what the shell printed about them.
-
-## v3, multitasking (more than one thing running)
-
-  A real regression this design would have shipped silently without catching: `tasktest`'s two demo tasks used to loop forever (`for(;;){puts("A");yield();}`), harmless under pure cooperative switching since they'd only ever run again if something explicitly called `yield()`. With the timer itself now driving rotation on every tick regardless of who calls what, those same infinite loops would have started spamming "A"/"B" onto the shell's own output every 10ms for the rest of the boot session, the first time anyone ran `tasktest`, forever. Fixed by bounding both demo tasks to their existing 10-iteration count then parking in `hlt` forever, silent and correct either way, not something spotted by `check.sh`, spotted by actually reasoning through what changes once every tick can reschedule.
-
-  Verified for real, three ways, not just "boots": a dedicated `preempttest` command runs two tasks that call neither `yield()` nor `hlt`, incrementing plain counters, while the shell's own wait loop also never yields or halts on purpose, so if preemption weren't real neither counter could ever move. Booted headless and let it run for real wall-clock time (`ticks()`-based, ~200ms): both counters came back in the tens of millions, real, substantial CPU time handed to tasks that never asked for it. Second, ran the exact same check with all 6 task slots exhausted by `tasktest` beforehand: one counter incremented in the tens of millions and the other stayed exactly 0, which is not a random failure, it is the exact signature `MAX_TASKS` running out predicts (confirmed by checking `task_create`'s return value), real evidence the mechanism is working exactly as designed rather than coincidentally. Third, ran the full realistic sequence, `tasktest` then `preempttest` then `sleep`, and confirmed the shell's own text output stayed completely clean afterward, no stray "A"/"B" characters, proving the hlt-forever fix actually closes the regression described above rather than just sounding right.
-
-  A real bug caught on the very first attempt, not glossed over: the payload's first version wrote its proof-of-execution marker to a plain C global by name, which the linker placed on a completely different page than the two pages actually marked user-accessible, faulting immediately with a page fault rather than ever reaching the intended privileged-instruction test. Fixed by moving the marker into the base of the already-mapped stack page instead of a third mapping, passed in via a register rather than referenced by symbol. A second real fix, not obvious until reasoning through it: DS/ES/FS/GS are not part of the CPU's automatic privilege-transition frame, so after a ring-3 fault the kernel's own exception handler would otherwise still be running with the ring-3 data selector loaded in those registers, harmless today only by accident of this GDT being flat (both data segments cover the same full 4GB), not by design; fixed by forcing them back to the kernel selector at the top of every CPU-exception entry point in `isr.S`.
-
-  Verified three independent ways: the kernel's own exception handler correctly named and reported `general-protection`, not a crash or hang; a direct QEMU-monitor memory read of the marker's physical address, independent of anything the kernel itself claims, came back exactly `0xabcdef01`, proving the ring-3 code really executed before it faulted; and the existing `heaptest`/`tasktest`/`preempttest`/`mem` regression suite still passed unchanged afterward, confirming the new GDT/TSS/paging permission bits didn't disturb anything already working. `int 0x80` syscall gate not added yet, nothing calls into the kernel from ring 3 today to need one; add it once something does. Same one-shot caveat as the graphics command before its restore was fixed: `ring3test` halts the kernel by design when the fault handler halts (no process kill/reap exists yet, see `task.c`'s own note on the same gap), reboot afterward.
+- Done
+- v2, memory (from "one flat blob" to real address space)
+- v3, multitasking (more than one thing running)
+- v5, the "file explorer", done (Sep 2026)
+- v7, networking (the "browser" part needs a network stack), done (Sep 2026)
+- v8, the actual browser (the point of all of this), done (Sep 2026)
+- v9, running real apps (the browser can now load something), done (Sep 2026)
+- v10, talking to it like gato does (this is the actual point), done (Sep 2026)
+- v11, a real desktop (this kernel gets a face), done (Sep 2026)
+- v12, voice mode: an LLM actually controlling this kernel, done (Sep 2026)
+- v13, real file writing (this kernel can create a file, not just a directory), done (Sep 2026)
+- v14, the GUI dock grows to fit the rest of the codebase's apps, done (Sep 2026)
+- v15, a real Dock, draggable icons, and a real rendering bug fixed, done (Sep 2026)
+- v16, the kernel sets up its own VGA text mode instead of inheriting it, done (Sep 2026)
+- v17, the kernel enables its own keyboard scanning, done (Sep 2026)
+- v18, the kernel gets a real DAC palette and a real live demo replaces the recorded video, done (Sep 2026)
+- v19, real Dock icons instead of letters, done (Sep 2026)
+- v19, killing the visible CLI flash on the live demo (Sep 2026)
+- v20, a real dmesg log, richer icons, and a desktop wallpaper (Sep 2026)
+- v21, a real close button for touch-only visitors, a Mac-not-Ubuntu palette, a real menu bar mark, and smoother icon edges (Sep 2026)
+- v22, the kernel boots straight to its own desktop, and the click-coordinate bug behind three separate reports (Sep 2026)
+- v23, the real cursor-drift bug behind "the mouse is inoperable" (Sep 2026)
+- v26, a real keyboard-only app test, and a real bug it immediately caught (Sep 2026)
+- v27, real gradient icons, a real menu bar clock timezone bug (Sep 2026)
+- v29, a real VFS (done Sep 2026)
+- v30, basic hacking tools (Kali/Mr. Robot flavored, done Sep 2026)
+- v31 / 0.31.0, real per-task memory isolation (done Sep 2026)
+- v32 / 0.32.0, real signals: SIGKILL-equivalent (done Sep 2026)
+- v33 / 0.33.0, a real block device abstraction (done Sep 2026)
+- v34 / 0.34.0, real heap growth past the old 4MB wall (done Sep 2026)
+- v35 / 0.35.0, six more real apps ported, and a real dock overflow bug (done Sep 2026)
+- 0.35.1, VFS migration call sites v29 missed, and a real 64KB leak (Sep 2026)
+- v36 / 0.36.0, a real terminal inside the desktop (Sep 2026)
+- v37 / 0.37.0, the dock becomes a choice, and two real rendering bugs behind it (Sep 2026)
+- 0.37.1, Terminal and Apps folder were unusable on a phone (Sep 2026)
+- v38 / 0.38.0, the browser demo had no font at all (Sep 2026)
+- v39 / 0.39.0, a real Trash, and the dock in a deliberate order (Sep 2026)
+- v40 / 0.40.0, the dock stopped flashing on hover (Sep 2026)
+- v41 / 0.41.0, 1600x1200: icons that are actually sharp (Sep 2026)
+- v42 / 0.42.0, 16:9 at native 1920x1080, a real wallpaper, bilinear, notifications, an arrow pointer (Sep 2026)
+- 0.42.1, the dock under a macro lens (Sep 2026)
+- v44 / 0.44.0, the typeface pass, and a demo that shows itself off (Sep 2026)
+- 0.44.1, the crunch (Sep 2026)
+- v45 / 0.45.0, wind (Sep 2026)
+- 0.45.1, the flashing cursor (Sep 2026)
+- v47 / 0.47.0, real settings, persisted (Sep 2026)
 
 ## v4, storage (data survives reboot), done (Sep 2026)
+
 - [ ] [Haiku] VFS layer so the shell's `open`/`read` don't care which fs backs them, lower priority now: FAT is the only filesystem that exists, so there's nothing to abstract over yet
 
-## v5, the "file explorer", done (Sep 2026)
-Mechanical once v4's VFS exists, mostly shell commands and a UI loop.
-
 ## v6, graphics (text mode won't carry a browser), mostly done (Sep 2026), font renderer deferred
+
 A real fork discovered mid-implementation: requesting a video mode via the multiboot header (the obvious first approach) makes QEMU boot straight into graphics mode with no way back to VGA text, breaking the working shell until the font renderer exists too, since text and framebuffer output can't coexist that way. The better path is switching graphics on and off at runtime via QEMU's Bochs VBE register interface (ports 0x1CE/0x1CF), which needs the framebuffer's real physical address first, only PCI config space knows that, not a fixed constant.
 
   Real, honest complication found along the way and worth recording, not smoothed over: a `screendump`/`screencapture` of the screen right after closing a graphics window still showed a garbled vertical-stripe pattern even once the register restore was proven byte-for-byte correct. Chased that as a second possible bug (tried resetting Bochs's own leftover bank/virtual-width/virtual-height/offset registers too, on the theory a stale wide pitch was the cause) before the keystroke-and-VGA-memory-dump test above showed the kernel's actual guest-visible text buffer was already completely correct the whole time. Conclusion: the visual artifact is a capture-tool-side rendering glitch around the text-to-graphics-to-text transition, not a guest bug, and it did not reappear in this final build's own verification. Recorded here rather than claimed silently fixed, in case a real display someday reproduces it and this note saves the next person from re-diagnosing the register path that was already proven correct.
@@ -50,114 +71,23 @@ A real fork discovered mid-implementation: requesting a video mode via the multi
 
 Once graphics exist, a lighter early win becomes possible without waiting for v7/v8's full network stack and browser: pure-logic apps from the codebase (no DOM, no network dependency, e.g. numen's calculator parser, keyrate's typing-test scoring, weather's forecast math minus the live fetch) can be ported natively in C and rendered straight to the framebuffer, no HTTP client or HTML parser needed. This is real groundwork for v9, not a replacement for it: the full vision (real web apps served and rendered by the real browser) still needs v7 and v8. Worth a small side-track once the framebuffer and font renderer above are solid, picking one simple app's core logic (not its whole UI) as the first native port.
 
-## v7, networking (the "browser" part needs a network stack), done (Sep 2026)
-The hardest version in the plan: a NIC driver plus a real TCP stack, both easy to get subtly wrong in ways that "sort of work."
-
-## v8, the actual browser (the point of all of this), done (Sep 2026)
-Mostly glue over v6+v7 once both exist; the HTML parser is deliberately tiny.
-
-  Found a second real bug chasing this one, since fixed: closing a graphics window (`window_close`, any command that opens one) did not actually restore working VGA text mode. `vbe_disable()` only cleared the Bochs enable bit, leaving the standard VGA CRTC/Sequencer/Attribute Controller registers in whatever state the graphics mode left them. See the v6 entry below for the full fix and its two-part verification (register-snapshot diff plus a real post-close keyboard/shell functional test).
-
-## v9, running real apps (the browser can now load something), done (Sep 2026)
-
-  Extended afterward to send a response across multiple TCP segments (stop-and-wait, one chunk outstanding at a time, ACKed before the next goes out), since the original single-segment cap silently truncated anything bigger than 536 bytes, real pages included. Logic reuses the already-verified `tcp_send_segment`/`tcp_match` pair from the client and receive paths, same pattern proven there. Honest gap, narrowed down properly rather than just re-asserted: a live multi-segment curl test hit `qemu-system-i386: Slirp: Failed to send packet`, reproduced identically with the untouched single-segment page too, so re-ran the already-proven client-side path (`nettest`'s ARP/DNS/TCP GET, no `hostfwd` involved) immediately after and it worked exactly as before, real ARP, real DNS, a real HTTP 200 from example.com. So this host's QEMU networking is healthy in general, the failure is specific to inbound connections through QEMU's `hostfwd` NAT path, not a broader regression and not this code. Still needs a live re-run to actually confirm the server side once that's sorted out, not claimed proven here.
-
-  Extended later the same way, three more real apps, not mockups: keyrate, bookrank, quotestreak. Realized along the way that the original "single-file self-containment" bar was stricter than this actually needs: every app in the fleet's landing page now carries the nimble-treatment demo iframe (external device-frame markup, a later fleet-wide rollout), which would matter if this kernel executed JavaScript or rendered CSS, it doesn't, `html_to_text` only ever extracts visible text, so an app's real hero copy and description come through clean regardless of an iframe or an external stylesheet sitting elsewhere in the same file. Verified for real over the actual network, not assumed from the file check alone: a genuine `curl` against `serveapp keyrate` (via QEMU `hostfwd`) returned the real title ("Keyrate, a typing test with nothing attached") and real meta description; `serveapp bookrank` returned its real `<title>` and `<h1>`, both matching the actual repo content exactly.
-
-## v10, talking to it like gato does (this is the actual point), done (Sep 2026)
-
-  Chasing why the live curl-fetch of a generated page kept coming back empty turned into the most valuable bug of the session, not a wasted one: every network wait in this stack (`arp_resolve`, `dns_resolve`, `tcp_get`, `tcp_serve_once`) was a plain loop-iteration count, tuned by guessing how many empty polls a wait "should" need. That's fundamentally broken, proven by direct measurement rather than assumed: added a temporary debug print inside the wait loop and watched `ticks()` (the real PIT-driven counter from v1) genuinely advance the whole time, just at roughly 40/sec instead of the nominal 100/sec, because QEMU's own process wasn't getting scheduled by the host often enough to deliver its virtual timer interrupt on time under heavy host CPU load (a local LLM generating text, concurrent with other heavy work on the same machine). Not a kernel bug, an environment one, but the fix is real: every wait in `net.c` now checks `ticks()` against a real deadline instead of counting meaningless loop spins, with the budgets themselves widened to have margin for a loaded host (`LAN/WAN/SLOW_REPLY/SERVE_TIMEOUT_TICKS`). This is strictly more correct regardless of host load, not just a bigger number.
-
-  Honest gap: under tonight's specific heavy host load, a full live curl round-trip against a `build`-generated page would need several real minutes per attempt with the widened budgets, too expensive to hammer repeatedly tonight. The generation and code-fence-stripping halves are confirmed real; the live serve-and-fetch half already worked earlier this session for `serveapp` (before this exact host-load spike) and rests on the exact same `tcp_serve_once`, so it is not a new, separately-broken path, just not re-confirmed live under tonight's specific conditions. Re-verify when the host isn't under unusual concurrent load.
-
-## v11, a real desktop (this kernel gets a face), done (Sep 2026)
-Everything v0-v10 built (graphics, font, mouse, HTML renderer, LLM chat, FAT) glued into one mouse-driven screen, no new subsystem needed.
-
-## v12, voice mode: an LLM actually controlling this kernel, done (Sep 2026)
-The v10 decision (voice stays a separate, gato-style host layer, no audio driver in the kernel) holds; this is that layer, one script, `tools/voice-control.sh`.
-
-  Two real bugs, not glossed over. First: QEMU's monitor `sendkey` only accepts plain lowercase key names, an uppercase letter needs an explicit shift combo and most punctuation has no single-key name at all. The very first real test proved this the hard way: the LLM correctly answered "chat What is the capital of France?", but what actually landed in the kernel was "chat hat is the capital of rance", every capital and the question mark silently dropped. None of this kernel's commands need capitalization or punctuation to function, so the fix lowercases the LLM's command and strips anything that isn't a letter, digit, or space before typing it in, rather than mistype the answer into the kernel. Second, a plain prompt without examples mapped an open-ended question ("what's the capital of France") to the fallback "echo not supported" instead of the kernel's own `chat` command; fixed with a few-shot prompt showing that pattern explicitly, re-verified against four different spoken requests (a memory query, opening the GUI, a file listing, and an open-ended question) all mapping correctly afterward.
-
-  Verified for real, twice over, end to end, not just the mapping step in isolation: since generating live human speech isn't something this session could do itself, used macOS's own `say` to synthesize real speech audio (a genuinely different, real signal, not a canned string), fed it through the real mic-recording-shaped pipeline. First run: synthesized "How much memory is free?" correctly became the kernel typing `mem` and printing the real, live frame count, confirmed by reading the kernel's actual VGA memory over the QEMU monitor, not by trusting the script's own printed claim. Second run, the more interesting one: synthesized "Ask the AI, what is the capital of France?" became the kernel typing `chat what is the capital of france`, which the kernel then ran for real, making its own separate network call to the same local Ollama server, and the real reply, "The capital of France is Paris.", appeared in the kernel's own VGA memory, an actual two-hop LLM chain (one model deciding what to run, a second one, inside the kernel, actually answering it), not a single call dressed up as two.
-
-## v13, real file writing (this kernel can create a file, not just a directory), done (Sep 2026)
-`mkdir` (v9) proved cluster allocation and directory-entry writing work; a real file needs the same machinery plus actual data clusters, no new concepts.
-
-## v14, the GUI dock grows to fit the rest of the codebase's apps, done (Sep 2026)
-Small on purpose: extends v11's desktop and the app roster v9/v11 already extended, not a new subsystem.
-
-## v15, a real Dock, draggable icons, and a real rendering bug fixed, done (Sep 2026)
-Requested directly: "add dock support like macos" and "user should be able to move the icons around". Replaces v14's card grid, not an addition alongside it.
-
-## v16, the kernel sets up its own VGA text mode instead of inheriting it, done (Sep 2026)
-Direct investigation into a real, repeated request for a genuinely interactive in-browser demo, not another video. The earlier documented v86 blocker ("kernel hangs before paging_install") turned out to be gone, superseded by v13's higher-half rewrite; this is the real gap found once that was retested.
-
-  Honest gap, not hidden: keyboard input doesn't reach the kernel under v86 yet, `keyboard_adapter.simulate_char()` calls don't advance the CPU past its `kbd_pop()` polling loop the way a real keypress does on QEMU, a distinct, narrower problem from the mode-detection gap this item fixed, likely a PIC/IRQ1 wiring difference between v86's and QEMU's 8042 emulation. A real, working, mouse-driven, click-to-launch demo embedded live on the landing page needs this solved too; tracked as the next concrete step, not glossed over as "basically done."
-
-## v17, the kernel enables its own keyboard scanning, done (Sep 2026)
-Direct continuation of v16: v86 booted and displayed correctly, but real keydown events in the browser never reached the kernel's `kbd_pop()`. Same root cause pattern, a different piece of state.
-
-## v18, the kernel gets a real DAC palette and a real live demo replaces the recorded video, done (Sep 2026)
-Direct continuation of v16/v17: the kernel booted, rendered, and took real keyboard input under v86, closing the last gap needed to embed it live on the landing page instead of a recorded video. Same root-cause pattern as v16/v17, one more piece of BIOS-inherited state this kernel had never needed to set itself.
-
-## v19, real Dock icons instead of letters, done (Sep 2026)
-Direct, repeated request: "the icons are really lackluster... they can't just be letters." No image decoder or asset pipeline exists in this kernel, on purpose (see the font/asset scope notes below), so this had to be real geometry, not a texture swap.
-
-## v19, killing the visible CLI flash on the live demo (Sep 2026)
-Direct bug report: the recorded-video-replacement demo (v18) still showed a real split-second flash of the text-mode boot banner before switching to GUI, because the embed's screen/text toggle defaulted to showing the text pane any time the kernel wasn't yet in graphical mode, exactly the boot-to-gui transition window.
-
-## v20, a real dmesg log, richer icons, and a desktop wallpaper (Sep 2026)
-Three real, separately-motivated pieces landed together: a Linux-inspired kernel feature requested directly ("use inspiration from Linux... and other operating systems"), a direct follow-up on v19's icons ("pretty detailed... enough to know what the app actually is"), and a direct request for the GUI's flat background ("a nice gradient wallpaper... lizard inspired... you choose").
-
-## v21, a real close button for touch-only visitors, a Mac-not-Ubuntu palette, a real menu bar mark, and smoother icon edges (Sep 2026)
-Four direct pieces of follow-up feedback in one pass. The most serious: a real, reported bug, "when we click the app, it just opens a white page that we can't close." `gui_wait_close()`'s only exit was `get_key()`, any keyboard key; a touch-only visitor (a phone, or the live v86 embed before real keystrokes reach it) has no keyboard at all, so the app screen was permanently stuck for them, not a v86 quirk, a real kernel-side gap.
-
-## v22, the kernel boots straight to its own desktop, and the click-coordinate bug behind three separate reports (Sep 2026)
-Direct question, "any way to get the GUI to boot instantly without typing gui into the CLI?", plus a real, independently-confirmed bug: "the cursor is really misplaced... ten or twenty pixels off," which turned out to also explain why clicking a specific dock icon was unreliable and very likely why mobile felt broken.
-
-## v23, the real cursor-drift bug behind "the mouse is inoperable" (Sep 2026)
-Direct, urgent bug report after v22's fix still wasn't enough: "the cursor is still really misplaced... maybe even twenty [pixels]... can't even control the mouse without it crashing." Two real, separate bugs, not one.
-
 ## v24, real window chrome and cleaning up redundant branding (Sep 2026)
+
 Direct follow-up requests after the mouse fix made the demo actually usable enough to notice these.
 - [ ] [Joshua] Honest, not-yet-solved gap, raised multiple times in two different forms that turn out to be the same root cause: the landing page still letterboxes (black bars) on most real viewports, and the real local QEMU window can't be resized at all. Confirmed the second one directly, not assumed: setting the window's size via System Events while it was running was silently ignored, the window snapped right back to exactly 800x632, since this kernel's GUI is a fixed, hardcoded 800x600 with no mechanism for the guest to negotiate a different resolution with whatever's actually displaying it, browser canvas or native QEMU window alike. A real fix exists (`vbe_set_mode` already accepts any width/height; the missing piece is threading the actual display size into the kernel at boot, most likely via the multiboot command line, which isn't currently parsed for anything custom), but it's a real, multi-file change (embed.js computing and passing the size, kmain parsing it, `gui_run`'s hardcoded `window_open(800,600,32)` and every layout constant built around it going dynamic instead), not a CSS tweak or a QEMU flag, deliberately not rushed into the same pass as the mouse fix. Separately, real macOS native fullscreen (the green button, a Spaces transition) on the QEMU window is a known QEMU cocoa-backend limitation with custom Bochs VBE modes, not something this kernel can fix or something that needs a custom QEMU build; the practical workaround for now is not using it.
 
 ## v25, a real menu bar flicker fix, and a real, unresolved gap in test infrastructure (Sep 2026)
+
 Direct bug report from actually running the OS locally for the first time this session, not the browser demo: "menu bar redraws and rerenders and flashes when we hover over any icon."
 - [ ] [Fable] Re-diagnosed (Sep 2026), gap still real but the cause isn't what was written here before. The USB-tablet theory was wrong, disproved directly: `info mice` lists only the real PS/2 mouse, and a temporary serial log at `mouse_get_delta`'s real call site proved IRQ12 packets do arrive and do decode, one clean callback per `mouse_move`. What's actually broken: the decoded dx/dy don't correspond to what was sent, at all, not scaled, not offset, just different every run including movement reported on an axis given 0. That's QEMU's HMP `mouse_move` and/or this headless config's IRQ timing, not this kernel's PS2 driver or `guitest.sh`'s dock-geometry math, both of which are correct. See `guitest.sh`'s own header for the full trace. Not wired into any regression flow, not claimed to work.
 
-## v26, a real keyboard-only app test, and a real bug it immediately caught (Sep 2026)
-Direct request: "make more automatic tests for QA," specifically for the local OS, not just the landing page.
-
-## v27, real gradient icons, a real menu bar clock timezone bug (Sep 2026)
-Two direct pieces of feedback from actually using the local OS.
-
 ## v28, real process exit and reap (task.c's half of the gap, done Sep 2026)
+
 `task.c` shipped preemptive round-robin but never closed the gap it flagged honestly at the time (see the file's own old header comment): a task couldn't safely `return` from its entry function, so every demo task (`task_a`/`task_b`/`preempt_task_a`/`preempt_task_b`) had to park in `hlt` forever once done, permanently burning a slot out of `MAX_TASKS=6`. Running `tasktest` then `preempttest` used to leave 4 of 6 slots dead until reboot, exactly the constraint `reaptest`'s own predecessor tests warned about ("no free task slots, run fewer other task tests first").
 - [ ] [Fable] Not done yet, deliberately scoped out of this pass: the real `int 0x80` syscall gate and giving `ring3_test` an actual exit path instead of halting the whole kernel on its ring-3 fault. `ring3_test` isn't a task in the scheduler at all today (it's a one-shot ring-0 function that manually enters ring 3), so this is a separate, larger change (a real syscall ISR, ring3 code that calls it instead of running off the end, and integrating ring-3 execution into the same task/task_exit machinery this pass just built) not a trivial follow-on.
 
-## v29, a real VFS (done Sep 2026)
-v4 shipped disk I/O straight against FAT16 because that was the only filesystem that existed, correctly deferring the VFS layer rather than build one for a single implementation to sit under. Real now: a second backend actually exists.
-
-## v30, basic hacking tools (Kali/Mr. Robot flavored, done Sep 2026)
-Direct request: a few small, real network-recon tools, not a security suite, exactly the "doesn't need to be anything crazy" scope asked for. Built on v7's existing real TCP stack, no new subsystem.
-
-## v31 / 0.31.0, real per-task memory isolation (done Sep 2026)
-Paging (v2) and ring 3 (v3) existed, but no task's page tables were actually distinct per task; ring-3 code proven to run at CPL 3 was a real, narrower claim than real process isolation. First real version under this project's new semver policy (see `VERSION`, `CLAUDE.md`): a genuinely new, backward-compatible capability, correctly a MINOR bump, no existing caller broke.
-
-## v32 / 0.32.0, real signals: SIGKILL-equivalent (done Sep 2026)
-Every task before this could only run to completion, fault, or be preempted-and-resumed at the exact instruction it left off; nothing could be told "stop" from outside itself short of tearing down the whole scheduler. This is what turns v28's reap from "cleans up after a task that already exited" into "can actually stop a runaway one." Real, backward-compatible new capability, correctly a MINOR bump.
-
-## v33 / 0.33.0, a real block device abstraction (done Sep 2026)
-`ata.c` was called directly by `fat.c`, the same "only one implementation exists, nothing to abstract yet" reasoning v4 correctly used for the VFS before v29. Real now: a second backend actually exists, same pattern as v29, applied one layer down.
-
-## v34 / 0.34.0, real heap growth past the old 4MB wall (done Sep 2026)
-`kheap.c` shipped with an honest, documented limit: it could only grow inside `paging.c`'s original identity-mapped first 4MB, refusing any frame at or past `0x400000` and just returning 0. That was correctly deferred, not an oversight, until something actually needed more, which v34's own `heapgrow` proof needed to actually happen (2048 real 4KB allocations, ~8MB, to cross the wall).
-
-## v35 / 0.35.0, six more real apps ported, and a real dock overflow bug (done Sep 2026)
-Direct request: scan the fleet and port every remaining app the existing single-static-file pipeline (`gen_app.sh`, v9) actually supports, not the whole 30+ app fleet (most are React/Vite or multi-file, a real separate project, see this file's own "Later product ideas" section). Screened every candidate's real extracted text (the exact `html_to_text` transform this kernel actually runs, not assumed from file size) rather than guessing from word count alone: `plan`, `lexly`, `conway` (ships as Toroid), `sparkjar`, `homeqi`, and `fieldbook` all have substantial real static copy; `epiphany`, `healstack`, `blockframe`, `numen`, `curvely`, `roost`, and `monocode` are JS-app shells whose real content only exists after client-side rendering this kernel can't run, correctly skipped rather than ported into a blank screen.
-
 ## Explicitly parked / non-goals
+
 - SMP (multi-core), one CPU is plenty until everything above works
 - A real filesystem journal / crash-consistency, FAT read support is enough for v4-v5
 - Wi-Fi, wired NIC only, QEMU doesn't emulate Wi-Fi hardware anyway
@@ -165,53 +95,9 @@ Direct request: scan the fleet and port every remaining app the existing single-
 - gato (the macOS voice kiosk, `~/Documents/Code/gato`), different project, different repo, on purpose. Voice control of this kernel is a real future idea but nowhere near the front of the queue.
 
 ## Later product ideas (real, not scheduled, revisit once v8's browser actually renders to the framebuffer)
+
 - Replace the landing page's recorded boot GIF with the real thing once there's something worth interacting with: an actual in-browser demo of this kernel, not a video of one.
 - User accounts on the landing page, each with their own space.
 - A downloadable, installable image so someone can put this on real hardware, not just QEMU, and actually boot into it (explicit north star, Joshua's own words). Real hardware brings its own driver-compatibility questions (this rtl8139 driver, the PCI enumeration, the ATA driver) that QEMU's emulated devices don't raise, worth its own pass when it's actually time, not assumed to just work.
 - Real support for the entire codebase's fleet of apps, not just the handful hand-picked so far (explicit north star, Joshua's own words). v9/v11's `gen_app.sh` pipeline only handles the single-static-file case; most of the fleet is React/Vite (needs a bundler this kernel doesn't have) or split across multiple files `serve_app`'s one-shot single-connection server can't serve together. Getting from "5 apps" to "the whole codebase" is a real, larger project on its own, not a rename of the existing pipeline.
 - A real text editor app for the GUI (Joshua's own request), with a font/typeface picker. `font.c` currently extracts exactly one embedded bitmap font (the real IBM CP437 dumped from VGA hardware); a picker needs at least a second real font to switch to, not a dropdown with one option, so this waits on that groundwork rather than shipping a fake selector.
-
-## 0.35.1, VFS migration call sites v29 missed, and a real 64KB leak (Sep 2026)
-PATCH, not MINOR: no new capability, three real bugs completing work v29 already claimed.
-
-## v36 / 0.36.0, a real terminal inside the desktop (Sep 2026)
-Direct request: "focus on terminal in our OS, as well as shell." Real new capability, MINOR bump.
-
-## v37 / 0.37.0, the dock becomes a choice, and two real rendering bugs behind it (Sep 2026)
-Direct request: "make the dock auto size and intelligently filter only important apps, otherwise the user opens the apps folder." Real new capability plus two genuine rendering bugs the work exposed.
-
-## 0.37.1, Terminal and Apps folder were unusable on a phone (Sep 2026)
-PATCH: two real bugs reported from an actual phone, both mine, both introduced in v36/v37.
-
-## v38 / 0.38.0, the browser demo had no font at all (Sep 2026)
-Reported as "the demo is missing the clock". It was missing every string it has ever drawn.
-
-## v39 / 0.39.0, a real Trash, and the dock in a deliberate order (Sep 2026)
-Direct requests: "add a trash feature, with the bin in dock", "the apps launchpad should be far left, Finder before it". Real new capability, MINOR bump.
-
-## v40 / 0.40.0, the dock stopped flashing on hover (Sep 2026)
-Direct bug report: "icons on dock are flashing when we hover them, redrawing every millisecond." Correct diagnosis in the report, too: it *was* redrawing constantly.
-
-## v41 / 0.41.0, 1600x1200: icons that are actually sharp (Sep 2026)
-Direct, repeated request: "keep looping on the icons until the screenshots have no big pixels." This is the honest fix; vector polish had hit the ceiling of 800 physical pixels stretched across a retina panel. The pixels themselves had to get smaller.
-
-## v42 / 0.42.0, 16:9 at native 1920x1080, a real wallpaper, bilinear, notifications, an arrow pointer (Sep 2026)
-Four direct reports in one pass: "skewed on full screen", "less pixels overall", "wallpaper needs a better pic, tree centered and focused", "clicking the date and time should show system notifications and warnings".
-
-## 0.42.1, the dock under a macro lens (Sep 2026)
-PATCH: three rendering defects, all caught in one macro photo of the real panel, none new capability.
-
-## v44 / 0.44.0, the typeface pass, and a demo that shows itself off (Sep 2026)
-Direct requests: "improve fonts across OS, no more bitmap", "the demo should auto show all features if the user doesn't interact". The Snow Leopard pass: nothing new to do, everything done properly.
-
-## 0.44.1, the crunch (Sep 2026)
-PATCH: three more sources of visible pixels, each named from a 2x nearest-neighbour zoom of the real dock, none new capability.
-
-## v45 / 0.45.0, wind (Sep 2026)
-Direct request: "make the wallpaper animated somehow, make the tree blow in the wind."
-
-## 0.45.1, the flashing cursor (Sep 2026)
-PATCH. Reported from a video within minutes of v45 shipping: the pointer flashed.
-
-## v47 / 0.47.0, real settings, persisted (Sep 2026)
-Direct request: customize the OS from inside the OS, and have it survive a reboot.
