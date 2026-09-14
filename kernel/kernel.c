@@ -9,6 +9,8 @@
 #include "ring3.h"
 #include "ata.h"
 #include "fat.h"
+#include "vfs.h"
+#include "ramfs.h"
 #include "exec.h"
 #include "libc.h"
 #include "pci.h"
@@ -282,7 +284,7 @@ static void browse_draw(int sel){
 
 static void browse(void){
     browse_count = 0;
-    fat_list(browse_collect_cb);
+    vfs_list(browse_collect_cb);
     int sel = 0;
     browse_draw(sel);
     for (;;) {
@@ -291,9 +293,9 @@ static void browse(void){
         if (k == KEY_UP)   { if (sel > 0) sel--; browse_draw(sel); }
         if (k == KEY_DOWN) { if (sel < browse_count - 1) sel++; browse_draw(sel); }
         if (k == KEY_ENTER && browse_count > 0 && browse_is_dir[sel]) {
-            fat_chdir(browse_names[sel]);
+            vfs_chdir(browse_names[sel]);
             browse_count = 0;
-            fat_list(browse_collect_cb);
+            vfs_list(browse_collect_cb);
             sel = 0;
             browse_draw(sel);
         }
@@ -301,7 +303,7 @@ static void browse(void){
             clear();
             puts(browse_names[sel]); puts(":\n\n");
             char buf[2048];
-            int n = fat_read_file(browse_names[sel], buf, sizeof(buf) - 1);
+            int n = vfs_read_file(browse_names[sel], buf, sizeof(buf) - 1);
             if (n < 0) puts("(couldn't read)\n");
             else { buf[n] = 0; puts(buf); }
             puts("\n\n-- press any key to go back --\n");
@@ -1470,7 +1472,7 @@ static void gui_launch_files(void){
     window_clear(0x00FAF8F6);
     gui_draw_app_titlebar("Files");
     gui_fat_count = 0;
-    fat_list(gui_fat_collect);
+    vfs_list(gui_fat_collect);
     if (gui_fat_count == 0) font_draw_string("(no files, or no FAT filesystem)", 20, 50, 0x001C1C1E, -1);
     for (int i = 0; i < gui_fat_count; i++) font_draw_string(gui_fat_names[i], 20, 50 + i * 18, 0x001C1C1E, -1);
     gui_wait_close();
@@ -1905,7 +1907,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest reaptest ring3test sleep disktest ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build gui testapps\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest reaptest ring3test sleep disktest fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build gui testapps\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -1989,13 +1991,17 @@ static void run(char *line){
         puts(ok ? "reap: freed slot really reused: ok\n" : "reap: FAILED\n");
         for (int i = 0; i < 12; i++) yield(); /* drain task_a's own A-printing + exit so the prompt doesn't land mid-output */
     }
-    else if (!strcmp(line, "ls"))    fat_list(ls_cb);
+    else if (!strcmp(line, "fsuse")) {
+        if (!*arg) { puts("current: "); puts(vfs_current_name()); puts(" (usage: fsuse fat|ramfs)\n"); }
+        else puts(vfs_switch(arg) ? "switched\n" : "no such backend\n");
+    }
+    else if (!strcmp(line, "ls"))    vfs_list(ls_cb);
     else if (!strcmp(line, "browse")) browse();
     else if (!strcmp(line, "cat")) {
         if (!*arg) { puts("usage: cat <file>\n"); }
         else {
             char buf[4096];
-            int n = fat_read_file(arg, buf, sizeof(buf) - 1);
+            int n = vfs_read_file(arg, buf, sizeof(buf) - 1);
             if (n < 0) { puts(arg); puts(": not found\n"); }
             else { buf[n] = 0; puts(buf); putc('\n'); }
         }
@@ -2006,15 +2012,15 @@ static void run(char *line){
     }
     else if (!strcmp(line, "rm")) {
         if (!*arg) { puts("usage: rm <file>\n"); }
-        else { puts(fat_delete(arg) ? "deleted\n" : "not found\n"); }
+        else { puts(vfs_delete(arg) ? "deleted\n" : "not found\n"); }
     }
     else if (!strcmp(line, "cd")) {
         if (!*arg) { puts("usage: cd <dir> (or ..)\n"); }
-        else { puts(fat_chdir(arg) ? "ok\n" : "not found or not a directory\n"); }
+        else { puts(vfs_chdir(arg) ? "ok\n" : "not found or not a directory\n"); }
     }
     else if (!strcmp(line, "mkdir")) {
         if (!*arg) { puts("usage: mkdir <name>\n"); }
-        else { puts(fat_mkdir(arg) ? "created\n" : "failed (name taken, disk full, or directory full)\n"); }
+        else { puts(vfs_mkdir(arg) ? "created\n" : "failed (name taken, disk full, or directory full)\n"); }
     }
     else if (!strcmp(line, "write")) {
         if (!*arg) { puts("usage: write <file> <content>\n"); }
@@ -2022,7 +2028,7 @@ static void run(char *line){
             char *content = arg;
             while (*content && *content != ' ') content++;
             if (*content) *content++ = 0;
-            puts(fat_write_file(arg, content, strlen(content)) ? "written\n" : "failed (name taken or disk full)\n");
+            puts(vfs_write_file(arg, content, strlen(content)) ? "written\n" : "failed (name taken or disk full)\n");
         }
     }
     else if (!strcmp(line, "lspci")) {
@@ -2316,6 +2322,9 @@ void kmain(unsigned int multiboot_info_addr){
     klog("tasks_init: scheduler ready");
     int fs_ok = fat_mount();
     klog(fs_ok ? "fat_mount: FAT16 filesystem mounted" : "fat_mount: no filesystem found");
+    fat_vfs_register(); /* registered regardless of fs_ok: an unmounted fat backend just returns real failures, same as before v29 */
+    ramfs_init();
+    klog("vfs: fat + ramfs backends registered, fat active");
     clear();
     boot_chime();
     puts("joshuatree v0 -- type help\n");

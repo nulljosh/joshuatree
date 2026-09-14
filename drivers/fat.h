@@ -41,4 +41,8 @@ int fat_mkdir(const char *name);
    same scope decision as fat_mkdir) or the disk is full. */
 int fat_write_file(const char *name, const void *data, unsigned int len);
 int fat_replace_file(const char *name, const void *data, unsigned int len);
+
+/* v29: registers fat's own functions with vfs.c as the "fat" backend.
+   Call once at boot, after fat_mount(). */
+void fat_vfs_register(void);
 #endif

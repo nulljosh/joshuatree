@@ -5,6 +5,7 @@
 #include "fat.h"
 #include "ata.h"
 #include "libc.h"
+#include "vfs.h"
 
 typedef unsigned int   u32;
 typedef unsigned short u16;
@@ -395,4 +396,14 @@ int fat_write_file(const char *name, const void *data, unsigned int len) {
 
 int fat_replace_file(const char *name, const void *data, unsigned int len) {
     return write_file(name, data, len, 1);
+}
+
+/* v29: fat's own functions already match struct vfs_ops's signatures
+   exactly, no adapter shims needed, just point the table at them. */
+static const struct vfs_ops fat_vfs_ops = {
+    "fat", fat_read_file, fat_list, fat_delete, fat_chdir, fat_mkdir, fat_write_file, fat_replace_file
+};
+
+void fat_vfs_register(void) {
+    vfs_register("fat", &fat_vfs_ops);
 }
