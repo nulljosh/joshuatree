@@ -4229,9 +4229,36 @@ static void run(char *line){
            weather_word()'s WMO-code bucket mapping, the same function the
            dropdown's condition word and v60's wind multiplier both depend
            on, every boundary named in roadmap.md's own table; (2)
-           gui_draw_weather_panel() actually paints its own bg/border
-           chrome and, only once weather_have is set, real antialiased
-           glyph ink for the line it claims to show, not a blank rect. */
+           gui_draw_weather_panel() actually paints its own bg chrome and,
+           only once weather_have is set, real antialiased glyph ink for
+           the line it claims to show, not a blank rect.
+
+           v72 gap fix, root-caused with a real DEBUG serial dump, not
+           guessed: both checks below failed on pristine v70/v71 HEAD, and
+           the panel itself was fine, painting real chrome both times
+           (confirmed: the interior point now used, x0+40/y0+20 or
+           x0+40/y0+40, read back the real fill color 0x002C2C2E in both
+           the no-data and live-data cases). Two real, separate causes,
+           both predating this test's own geometry:
+           (1) the old (x0+4, y0+4) corner probe predates v66's
+           GUI_FLYOUT_RADIUS=14 rounding of this panel. At radius 14 with
+           a 3px AA band, the point 4px in from each edge is genuinely
+           OUTSIDE the corner arc (distance from the arc centre (14,14) is
+           sqrt(200)=~14.14, past the 14px radius), so
+           gui_rounded_rect_on_wallpaper's own `continue` leaves it
+           untouched -- it read back whatever was there before the panel
+           drew (the test's own pre-clear color), not the panel's fault.
+           (2) the (x0, y0) "border" probe checked for a border color that
+           v66 deliberately removed from this exact panel: see
+           GUI_FLYOUT_RADIUS's own comment, "these three flyouts... were
+           the one place still... with a manually drawn 1px border...
+           zero separate stroke line" is the whole point of that pass.
+           There has been no border to find at (x0, y0) since v66; that
+           corner pixel is also outside the radius per (1) regardless.
+           Real fix is in this test, not the panel: probe a genuine
+           interior point clear of both the corner radius and the
+           top-edge AA band, and stop asserting a border this panel was
+           intentionally redesigned not to have. */
         int ok_word =
             !strcmp(weather_word(0),  "Clear")   && !strcmp(weather_word(3),  "Cloudy") &&
             !strcmp(weather_word(4),  "Fog")     && !strcmp(weather_word(48), "Fog")    &&
@@ -4243,7 +4270,7 @@ static void run(char *line){
 
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
         else {
-            unsigned int bg = 0x002C2C2E, border = 0x001C1C1E;
+            unsigned int bg = 0x002C2C2E;
             weather_hit_x0 = -1; /* force the fallback geometry branch, same formula gui_draw_weather_panel uses */
             int x0 = (int)window_width() - WEATHER_W - 200;
             if (x0 + WEATHER_W > (int)window_width() - 4) x0 = (int)window_width() - WEATHER_W - 4;
@@ -4252,7 +4279,7 @@ static void run(char *line){
             weather_have = 0;
             window_clear(0x00111111);
             gui_draw_weather_panel();
-            int chrome_empty = window_get_pixel(x0 + 4, y0 + 4) == bg;
+            int chrome_empty = window_get_pixel(x0 + 40, y0 + 20) == bg;
             puts(chrome_empty ? "weather panel (no data): chrome painted: ok\n" : "weather panel (no data): FAILED\n");
 
             weather_have = 1; weather_temp_c = -3; weather_code10 = 610;
@@ -4261,11 +4288,11 @@ static void run(char *line){
             weather_text[wi] = 0;
             window_clear(0x00111111);
             gui_draw_weather_panel();
-            int border_ok = window_get_pixel(x0, y0) == border;
+            int chrome_ok = window_get_pixel(x0 + 40, y0 + 40) == bg;
             int ink = 0;
             for (int dx = 0; dx < WEATHER_W - 24 && !ink; dx++)
-                if (window_get_pixel(x0 + 12 + dx, y0 + 10) != border && window_get_pixel(x0 + 12 + dx, y0 + 10) != bg) ink = 1;
-            puts((border_ok && ink) ? "weather panel (live data): chrome + real ink drawn: ok\n" : "weather panel (live data): FAILED\n");
+                if (window_get_pixel(x0 + 12 + dx, y0 + 10) != bg) ink = 1;
+            puts((chrome_ok && ink) ? "weather panel (live data): chrome + real ink drawn: ok\n" : "weather panel (live data): FAILED\n");
             window_close();
             weather_have = 0; weather_text[0] = 0; /* leave state clean for anything run after */
         }
@@ -4332,19 +4359,47 @@ static void run(char *line){
            gui_draw_icon_shadow (v58): before the fix it drew through the
            LOGICAL layer at a quarter the physical resolution, so every
            physical pixel pair came out identical (blocky); after, it
-           draws physical-resolution with real per-pixel falloff. */
+           draws physical-resolution with real per-pixel falloff.
+
+           v72 gap fix to check (1), root-caused with a real DEBUG serial
+           dump of the actual channel values, not guessed: this check used
+           to also assert `row0 != bg_before`, comparing row0 (the very
+           top physical row of the tray, py=0) against a real rendered
+           wallpaper pixel sampled 2 physical rows further up. At py=0,
+           `t = band - py` is exactly `band`, so gui_lerp's own math (t ==
+           max) returns its second argument outright: row0 IS, by design,
+           100% the real backdrop color at that exact pixel
+           (gui_wallpaper_sample(px0+px, py0+py, 0)), zero fill color
+           mixed in yet -- the softest point of the AA fringe, fading
+           fully into the wallpaper before solidifying by row `band`. A
+           real dump confirmed both are the honest, working blend, not a
+           regression: bg_before=0x170b06, row0=0x170b06 (equal, because
+           the wallpaper gradient barely moves over 2 physical rows at
+           this exact spot -- expected, not a bug), row1=0x5f5650 (a real
+           partial blend, matches gui_lerp(TRAY, 0x170b06, 2, 3) exactly),
+           row3=TRAY (full fill, past the band). Asserting `row0 !=
+           bg_before` was backwards: a correct edge blend is SUPPOSED to
+           read close to the true backdrop right at its outermost row, so
+           demanding it differ from a nearby real backdrop sample fails
+           exactly when the fix is working, wherever the gradient happens
+           to be locally flat. The two assertions that actually encode the
+           v61 regression (a raw, unblended top row) are `row0 !=
+           DOCK_TRAY_COLOR` and `row1 != row0`: reverting v61's fix (col =
+           color for every non-corner edge pixel, no blend) makes row0
+           AND row1 both equal DOCK_TRAY_COLOR outright, failing both;
+           restoring the fix, they pass. Dropped the incorrect third
+           condition, kept the two that really discriminate. */
         if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); }
         else {
             gui_draw_wallpaper_rows(0, (int)window_height());
             int y0 = gui_dock_y0(), dock_x = gui_dock_x0(), dock_w = gui_dock_w(), dock_h = DOCK_ICON + 2 * DOCK_PAD;
             int sc = (int)window_scale();
             int sample_x = (dock_x + dock_w / 2) * sc; /* dock centre: far from either rounded corner */
-            unsigned int bg_before = window_get_pixel_phys(sample_x, y0 * sc - 2);
             gui_rounded_rect_on_wallpaper(dock_x, y0, dock_w, dock_h, DOCK_TRAY_COLOR, 20);
             unsigned int row0 = window_get_pixel_phys(sample_x, y0 * sc + 0);
             unsigned int row1 = window_get_pixel_phys(sample_x, y0 * sc + 1);
             unsigned int row3 = window_get_pixel_phys(sample_x, y0 * sc + 3); /* one row past the v61 band (3 physical rows) */
-            int seam_ok = row0 != DOCK_TRAY_COLOR && row0 != bg_before && row1 != row0 && row3 == DOCK_TRAY_COLOR;
+            int seam_ok = row0 != DOCK_TRAY_COLOR && row1 != row0 && row3 == DOCK_TRAY_COLOR;
             puts(seam_ok ? "dock tray top edge: real multi-row blend, not a 1-row solid cut: ok\n" : "dock tray top edge: FAILED (single-row seam)\n");
 
             window_rect(0, 0, (int)window_width(), (int)window_height(), DOCK_TRAY_COLOR);

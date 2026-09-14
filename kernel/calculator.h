@@ -116,6 +116,23 @@ static expr_node* calc_primary(calc_lexer *lex) {
 }
 
 static expr_node* calc_unary(calc_lexer *lex) {
+    /* Root cause (found via calctest, "10/2 got 0"): this lookahead used to
+       rewind with a flat `lex->pos--`, which only undoes a single character.
+       That's correct by accident for a 1-char token (a single digit, or any
+       operator/paren, all exactly 1 char), which is why "2+3", "2+3*4",
+       "(2+3)*4" and "-2+3" (every number in them 1 digit) all passed. It's
+       wrong for any multi-character token: "10/2" tokenizes "10" as NUM with
+       num_val=10 and lex->pos left at 2 (just past it); pos-- only rewinds to
+       1, so the re-lex in calc_primary below starts mid-token, at the lone
+       '0', and reads NUM 0 instead of NUM 10. Real fix: save the lexer
+       position before peeking and restore that exact saved position, not an
+       assumed single-character step, so it rewinds correctly regardless of
+       the peeked token's width. calc_term/calc_expr had the identical
+       peek-then-`pos--` shape below; fixed the same way even though today's
+       failing case only exercises calc_unary's copy, since the next
+       multi-char boundary token (not tested yet) would trip the same bug
+       there. */
+    int save = lex->pos;
     calc_token tok = calc_next(lex);
     if (tok.kind == TOK_SYM && tok.sym_val == '-') {
         expr_node *e = calc_unary(lex);
@@ -126,7 +143,7 @@ static expr_node* calc_unary(calc_lexer *lex) {
         n->right = 0;
         return n;
     }
-    lex->pos--;
+    lex->pos = save;
     return calc_primary(lex);
 }
 
@@ -134,6 +151,7 @@ static expr_node* calc_term(calc_lexer *lex) {
     expr_node *left = calc_unary(lex);
 
     for (;;) {
+        int save = lex->pos;
         calc_token tok = calc_next(lex);
         if (tok.kind == TOK_SYM && (tok.sym_val == '*' || tok.sym_val == '/')) {
             expr_node *right = calc_unary(lex);
@@ -145,7 +163,7 @@ static expr_node* calc_term(calc_lexer *lex) {
             n->right = right;
             left = n;
         } else {
-            lex->pos--;
+            lex->pos = save;
             break;
         }
     }
@@ -157,6 +175,7 @@ static expr_node* calc_expr(calc_lexer *lex) {
     expr_node *left = calc_term(lex);
 
     for (;;) {
+        int save = lex->pos;
         calc_token tok = calc_next(lex);
         if (tok.kind == TOK_SYM && (tok.sym_val == '+' || tok.sym_val == '-')) {
             expr_node *right = calc_term(lex);
@@ -168,7 +187,7 @@ static expr_node* calc_expr(calc_lexer *lex) {
             n->right = right;
             left = n;
         } else {
-            lex->pos--;
+            lex->pos = save;
             break;
         }
     }
