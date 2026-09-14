@@ -628,13 +628,27 @@ static void reboot(void){
    everything else one click away in an Apps folder, the same split macOS
    makes between the Dock and Launchpad. GUI_APP_COUNT is every real app;
    GUI_ICON_COUNT is only what the dock shows. */
-#define GUI_APP_COUNT   19 /* 17 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 17 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       18
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Terminal", "Reminders", "Calendar", "Apps", "Trash"};
+/* v59 (0.58.0): direct request, two changes at once. First, Mail: this
+   codebase had every other stock-macOS core app (Files as Finder, Notes,
+   Reminders, Calendar) but no local mail-shaped app at all, the one real
+   gap; kernel/mail.h fills it, same file-per-app shape as reminders.h/
+   calendar.h. Second, GUI_LABELS itself is reordered (and every switch
+   below that keys off its indices moves with it) so both the Apps folder
+   grid and the pinned dock read as a real macOS-shaped grouping instead
+   of "whatever order things got built in": Files first (the Finder
+   equivalent), then Mail/Calendar/Notes/Reminders as one recognizable
+   core cluster, then the Terminal/Chat/Weather utility group, then every
+   fleet app after that, Apps and Trash still fixed at the very end
+   (that half was already right as of v39, untouched here). GUI_APP_COUNT
+   is now 20 (18 real apps + Apps + Trash), GUI_ICON_COUNT unaffected by
+   the reorder itself, see GUI_DOCK_DEFAULT below for why it did grow. */
+#define GUI_APP_COUNT   20 /* 18 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 18 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       19
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Apps", "Trash"};
 static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
-    0x0085144B, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x006B4423,
-    0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x002B2B2B, 0x00375A4A, 0x00A0553F, 0x004A4F57, 0x00566068
+    0x00707070, 0x00A13F3F, 0x00A0553F, 0x006B4423, 0x00375A4A, 0x002B2B2B, 0x00365E8C, 0x0085144B,
+    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x004A4F57, 0x00566068
 };
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
@@ -644,8 +658,23 @@ static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
 /* v39: Apps first and Files second, by direct request, then the rest in
    no particular order, then Trash pinned last, the one position every
    desktop has agreed on for thirty years. */
-#define GUI_ICON_COUNT 8
-static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 3, 14, 7, 2, 0, 1, GUI_TRASH};
+/* v59: grown from 8 to 10 and re-picked to actually mirror a stock macOS
+   dock's shape, direct request: Apps folder still first (v39's own call,
+   unchanged), then Files (Finder), then Mail/Calendar/Notes/Reminders as
+   one contiguous core-app cluster, then Terminal/Chat/Weather as the
+   utility group, Trash still fixed last. Curbfind, previously pinned
+   here as the one fleet app in an otherwise-utility dock, moves to
+   Apps-folder-only: with four more core apps now competing for pinned
+   slots, a single fleet app sitting in the dock read as arbitrary rather
+   than a deliberate "core macOS group" choice, and it's still one click
+   away exactly like every other fleet app. gui_dock_icon() (existing,
+   unchanged here) already auto-sizes every tile to fit DOCK_BUDGET
+   regardless of GUI_ICON_COUNT, so going from 8 to 10 icons needed no
+   layout changes at all, the "auto size" half of the standing v37 dock
+   request was already real before this pass, this is just the first
+   change to actually exercise it past 8 icons. */
+#define GUI_ICON_COUNT 10
+static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, GUI_TRASH};
 
 /* gui_order is a permutation of icon indices by dock slot: dragging an icon
    and dropping it on another slot swaps the two, so the arrangement is
@@ -1694,6 +1723,28 @@ static void gui_icon_calendar(int cx, int cy, int s, unsigned int bg){
             window_rect(gx + col * cell + (cell - sq) / 2, gy + row * cell + (cell - sq) / 2, sq, sq, today ? ICON_FG : bg);
         }
 }
+/* v59: Mail. An envelope, the one silhouette this glyph has to read as
+   before anything else: a rectangle body plus a real V-shaped flap, the
+   same open-flap mark every mail icon since System 7 has used. Same
+   primitives as Calendar right above it (window_rect for the flat body
+   and outline, gui_draw_capsule for the two flap strokes so the diagonal
+   edges get the same real AA every stroke in this dock already gets, not
+   a jagged Bresenham line), no bitmap. Body is wider than tall on
+   purpose, real envelope proportions, not a square with a triangle
+   dropped on it. */
+static void gui_icon_mail(int cx, int cy, int s, unsigned int bg){
+    int hw = s * 3 / 10, hh = s * 21 / 100;
+    int x0 = cx - hw, y0 = cy - hh, w = 2 * hw + 1, h = 2 * hh + 1;
+    unsigned int faint = gui_blend(ICON_FG, bg);
+    window_rect(x0, y0, w, h, faint);          /* envelope body, soft fill */
+    window_rect(x0, y0, w, 1, ICON_FG);        /* outline */
+    window_rect(x0, y0 + h - 1, w, 1, ICON_FG);
+    window_rect(x0, y0, 1, h, ICON_FG);
+    window_rect(x0 + w - 1, y0, 1, h, ICON_FG);
+    int t = s / 22 + 1;
+    gui_draw_capsule(x0, y0, cx, cy, t, ICON_FG, bg);         /* flap: left seam down to centre */
+    gui_draw_capsule(x0 + w - 1, y0, cx, cy, t, ICON_FG, bg); /* flap: right seam down to centre */
+}
 static void gui_icon_plan(int cx, int cy, int s, unsigned int bg){
     int half = s * 3 / 10;
     for (int row = 0; row < 3; row++) {
@@ -1875,23 +1926,24 @@ static void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
 
 static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsigned int bg){
     switch (icon) {
-        case 0: gui_icon_weather(cx_center, cy, size, bg); break;
-        case 1: gui_icon_pin(cx_center, cy, size, bg); break;
-        case 2: gui_icon_chat(cx_center, cy, size, bg); break;
-        case 3: gui_icon_folder(cx_center, cy, size, bg); break;
-        case 4: gui_icon_keyrate(cx_center, cy, size, bg); break;
-        case 5: gui_icon_book(cx_center, cy, size, bg); break;
-        case 6: gui_icon_quotes(cx_center, cy, size, bg); break;
-        case 7: gui_icon_notes(cx_center, cy, size, bg); break;
-        case 8: gui_icon_plan(cx_center, cy, size, bg); break;
-        case 9: gui_icon_lexly(cx_center, cy, size, bg); break;
-        case 10: gui_icon_toroid(cx_center, cy, size, bg); break;
-        case 11: gui_icon_sparkjar(cx_center, cy, size, bg); break;
-        case 12: gui_icon_homeqi(cx_center, cy, size, bg); break;
-        case 13: gui_icon_fieldbook(cx_center, cy, size, bg); break;
-        case 14: gui_icon_terminal(cx_center, cy, size, bg); break;
-        case 15: gui_icon_reminders(cx_center, cy, size, bg); break;
-        case 16: gui_icon_calendar(cx_center, cy, size, bg); break;
+        case 0: gui_icon_folder(cx_center, cy, size, bg); break;
+        case 1: gui_icon_mail(cx_center, cy, size, bg); break;
+        case 2: gui_icon_calendar(cx_center, cy, size, bg); break;
+        case 3: gui_icon_notes(cx_center, cy, size, bg); break;
+        case 4: gui_icon_reminders(cx_center, cy, size, bg); break;
+        case 5: gui_icon_terminal(cx_center, cy, size, bg); break;
+        case 6: gui_icon_chat(cx_center, cy, size, bg); break;
+        case 7: gui_icon_weather(cx_center, cy, size, bg); break;
+        case 8: gui_icon_pin(cx_center, cy, size, bg); break;
+        case 9: gui_icon_keyrate(cx_center, cy, size, bg); break;
+        case 10: gui_icon_book(cx_center, cy, size, bg); break;
+        case 11: gui_icon_quotes(cx_center, cy, size, bg); break;
+        case 12: gui_icon_plan(cx_center, cy, size, bg); break;
+        case 13: gui_icon_lexly(cx_center, cy, size, bg); break;
+        case 14: gui_icon_toroid(cx_center, cy, size, bg); break;
+        case 15: gui_icon_sparkjar(cx_center, cy, size, bg); break;
+        case 16: gui_icon_homeqi(cx_center, cy, size, bg); break;
+        case 17: gui_icon_fieldbook(cx_center, cy, size, bg); break;
         case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
         case GUI_TRASH: gui_icon_trash(cx_center, cy, size, bg); break;
     }
@@ -2411,6 +2463,7 @@ static void gui_launch_chat(void){
 #include "editor.h"
 #include "reminders.h"
 #include "calendar.h"
+#include "mail.h"
 
 /* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
    dock hover labels, titlebars) read as monospace/typewriter, not the
@@ -2847,23 +2900,24 @@ static void gui_launch_settings(void){
 static void gui_launch(int icon){
     if (icon == GUI_APPS_FOLDER) { gui_launch_apps(); return; }
     if (icon == GUI_TRASH) { gui_launch_trash(); return; }
-    if (icon == 0)      gui_launch_weather();
-    else if (icon == 1) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
-    else if (icon == 2) gui_launch_chat();
-    else if (icon == 3) gui_launch_files();
-    else if (icon == 4) gui_launch_keyrate();
-    else if (icon == 5) gui_launch_html("Bookrank", app_bookrank_html, app_bookrank_len);
-    else if (icon == 6) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
-    else if (icon == 7) gui_launch_editor();
-    else if (icon == 8) gui_launch_html("Plan", app_plan_html, app_plan_len);
-    else if (icon == 9) gui_launch_html("Lexly", app_lexly_html, app_lexly_len);
-    else if (icon == 10) gui_launch_html("Toroid", app_toroid_html, app_toroid_len);
-    else if (icon == 11) gui_launch_html("Sparkjar", app_sparkjar_html, app_sparkjar_len);
-    else if (icon == 12) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
-    else if (icon == 13) gui_launch_html("Fieldbook", app_fieldbook_html, app_fieldbook_len);
-    else if (icon == 14) gui_launch_terminal();
-    else if (icon == 15) gui_launch_reminders();
-    else if (icon == 16) gui_launch_calendar();
+    if (icon == 0)      gui_launch_files();
+    else if (icon == 1) gui_launch_mail();
+    else if (icon == 2) gui_launch_calendar();
+    else if (icon == 3) gui_launch_editor();
+    else if (icon == 4) gui_launch_reminders();
+    else if (icon == 5) gui_launch_terminal();
+    else if (icon == 6) gui_launch_chat();
+    else if (icon == 7) gui_launch_weather();
+    else if (icon == 8) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
+    else if (icon == 9) gui_launch_keyrate();
+    else if (icon == 10) gui_launch_html("Bookrank", app_bookrank_html, app_bookrank_len);
+    else if (icon == 11) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
+    else if (icon == 12) gui_launch_html("Plan", app_plan_html, app_plan_len);
+    else if (icon == 13) gui_launch_html("Lexly", app_lexly_html, app_lexly_len);
+    else if (icon == 14) gui_launch_html("Toroid", app_toroid_html, app_toroid_len);
+    else if (icon == 15) gui_launch_html("Sparkjar", app_sparkjar_html, app_sparkjar_len);
+    else if (icon == 16) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
+    else if (icon == 17) gui_launch_html("Fieldbook", app_fieldbook_html, app_fieldbook_len);
 }
 
 static void gui_launch_from_dock(int icon){
