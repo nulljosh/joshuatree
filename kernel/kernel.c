@@ -101,6 +101,27 @@ static char getch(void){
     }
 }
 
+/* Same as getch(), but a mouse click also wakes it up, returning -1: real,
+   reported request, every interactive GUI app (Notes, Keyrate) needs the
+   same "click anywhere to close" a touch-only or mouse-only visitor
+   already gets on the read-only viewers via gui_wait_close, not just a
+   keyboard escape hatch. */
+static int gui_getch_or_click(void){
+    for (;;) {
+        int sc = kbd_pop();
+        if (sc >= 0) {
+            if (sc & 0x80) continue;
+            char c = SC[sc & 0x7F];
+            if (c) return (int)(unsigned char)c;
+            continue;
+        }
+        int dx, dy, buttons;
+        mouse_get_delta(&dx, &dy, &buttons);
+        if (buttons) return -1;
+        __asm__ volatile ("hlt");
+    }
+}
+
 /* ---- extended keys (arrows) for the file browser. 0xE0 is the make-code
    prefix for the "extended" keyboard block; 0x48/0x50 are up/down within it. ---- */
 #define KEY_UP    256
@@ -1226,7 +1247,7 @@ static void gui_draw_cursor(int x, int y){
    input a mouse- or touch-only visitor can always produce, so it closes
    the app too now, not just a keypress. */
 static void gui_wait_close(void){
-    font_draw_string("any key or click to go back", 20, (int)window_height() - 30, 0x0075726E, -1);
+    font_draw_string("esc or click to go back", 20, (int)window_height() - 30, 0x0075726E, -1);
     /* Real hardware and real QEMU continuously re-scan actual VRAM, so any
        write shows up on the very next real refresh, confirmed directly: a
        real screendump of this exact draw sequence rendered perfectly. v86,
@@ -1242,7 +1263,14 @@ static void gui_wait_close(void){
     sleep_ticks(5);
     for (;;) {
         int sc = kbd_pop();
-        if (sc >= 0) return;
+        /* Real, reported bug: "any key" closed every read-only viewer,
+           including Keyrate once it became a real typing test, the first
+           keystroke anyone typed closed the app instead of registering.
+           Esc (or a click, unchanged) closes now; every other key is
+           just consumed and ignored, harmless on a page with nothing
+           else to do with a keypress, and no longer surprising on one
+           that does. */
+        if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) return;
         int dx, dy, buttons;
         mouse_get_delta(&dx, &dy, &buttons);
         if (buttons) return;
@@ -1386,8 +1414,9 @@ static void gui_launch_editor(void){
         render_wrapped_text(buf, 20, 44, (int)window_width() - 40, (int)window_height() - 90, 0x001C1C1E);
         buf[len] = 0;
 
-        char c = getch();
-        if (c == 27) break; /* esc */
+        int ci = gui_getch_or_click();
+        if (ci == -1 || ci == 27) break; /* click, or esc */
+        char c = (char)ci;
         if (c == '\b') { if (len > 0) len--; }
         else if (len < (int)sizeof(buf) - 2) buf[len++] = c;
     }
@@ -1395,12 +1424,58 @@ static void gui_launch_editor(void){
     fat_write_file("NOTES.TXT", buf, len);
 }
 
+/* Real, reported bug, not a style complaint: gui_wait_close's "any key
+   closes" is right for a page you only ever read (Weather, Curbfind,
+   Bookrank, Quotestreak), but Keyrate was wired to that same read-only
+   viewer despite being a TYPING TEST, its whole point is pressing keys.
+   The very first keystroke anyone made to try typing closed the app
+   instead. Root cause was the app itself: Keyrate was never actually a
+   typing test in this kernel, gui_launch_html just rendered the ported
+   site's own marketing copy as read-only text, same as every other
+   ported page. A real typing test needs its own real input loop, not a
+   different exit key bolted onto the read-only one. */
+static void gui_launch_keyrate(void){
+    window_clear(0x00FAF8F6);
+    gui_draw_app_titlebar("Keyrate");
+    const char *target = "the quick brown fox jumps over the lazy dog";
+    int tlen = (int)strlen(target);
+    int pos = 0, started = 0;
+    unsigned int start_tick = 0;
+
+    for (;;) {
+        window_rect(20, 60, (int)window_width() - 40, 40, 0x00FAF8F6);
+        for (int i = 0; i < tlen; i++)
+            font_draw_char((unsigned char)target[i], 20 + i * 8, 60, i < pos ? 0x00884B16 : 0x001C1C1E, -1);
+
+        if (pos >= tlen) {
+            unsigned int elapsed = ticks() - start_tick; /* real PIT ticks, ~100Hz */
+            int wpm = elapsed > 0 ? (tlen * 6000) / (5 * (int)elapsed) : 0; /* (chars/5 words) / (elapsed/100/60 min) */
+            char buf[32]; int n = 0;
+            if (wpm == 0) buf[n++] = '0';
+            else { char tmp[12]; int tn = 0; int v = wpm; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
+            buf[n++] = ' '; buf[n++] = 'w'; buf[n++] = 'p'; buf[n++] = 'm'; buf[n] = 0;
+            font_draw_string(buf, 20, 110, 0x00884B16, -1);
+            font_draw_string("r to retry, esc or click to close", 20, (int)window_height() - 30, 0x0075726E, -1);
+        } else {
+            window_rect(20, (int)window_height() - 30, (int)window_width() - 40, 16, 0x00FAF8F6);
+            font_draw_string("type the line above, esc or click to close", 20, (int)window_height() - 30, 0x0075726E, -1);
+        }
+
+        int ci = gui_getch_or_click();
+        if (ci == -1 || ci == 27) break;
+        char c = (char)ci;
+        if (pos >= tlen) { if (c == 'r' || c == 'R') { pos = 0; started = 0; } continue; }
+        if (!started) { started = 1; start_tick = ticks(); }
+        if (c == target[pos]) pos++;
+    }
+}
+
 static void gui_launch(int icon){
     if (icon == 0)      gui_launch_html("Weather", app_weather_html, app_weather_len);
     else if (icon == 1) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
     else if (icon == 2) gui_launch_chat();
     else if (icon == 3) gui_launch_files();
-    else if (icon == 4) gui_launch_html("Keyrate", app_keyrate_html, app_keyrate_len);
+    else if (icon == 4) gui_launch_keyrate();
     else if (icon == 5) gui_launch_html("Bookrank", app_bookrank_html, app_bookrank_len);
     else if (icon == 6) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
     else if (icon == 7) gui_launch_editor();
