@@ -2151,19 +2151,33 @@ static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_m
    single mouse packet. */
 #define CURSOR_W 13
 #define CURSOR_H 19
-static unsigned int cursor_backup[CURSOR_W * CURSOR_H];
+#define CURSOR_MAX_SCALE 2 /* window_open_scaled(..., 2) in gui_run; bump together */
+/* The backup is kept at PHYSICAL resolution (v56.1). It used to go through
+   the logical layer: window_get_pixel reads only the top-left physical
+   pixel of each scale x scale block and window_pixel writes the whole
+   block back, so every cursor pass silently pixel-doubled whatever
+   antialiased text it crossed. Surfaces that repaint on hover (menu bar,
+   dock) hid it; the notification panel, never repainted while open, kept
+   the damage and read as "still the old bitmap font" (roadmap, Sep 2026).
+   Reproduced headlessly with a scripted sweep + pmemsave, fixed here. */
+static unsigned int cursor_backup[CURSOR_W * CURSOR_MAX_SCALE * CURSOR_H * CURSOR_MAX_SCALE];
 static int cursor_saved_x = -1, cursor_saved_y = -1;
+static int gui_cursor_scale(void){ int sc = (int)window_scale(); return sc > CURSOR_MAX_SCALE ? CURSOR_MAX_SCALE : sc; }
 static void gui_cursor_restore(void){
     if (cursor_saved_x < 0) return;
-    for (int j = 0; j < CURSOR_H; j++)
-        for (int i = 0; i < CURSOR_W; i++)
-            window_pixel(cursor_saved_x + i, cursor_saved_y + j, cursor_backup[j * CURSOR_W + i]);
+    int sc = gui_cursor_scale(), pw = CURSOR_W * sc, ph = CURSOR_H * sc;
+    int px0 = cursor_saved_x * sc, py0 = cursor_saved_y * sc;
+    for (int j = 0; j < ph; j++)
+        for (int i = 0; i < pw; i++)
+            window_pixel_phys(px0 + i, py0 + j, cursor_backup[j * pw + i]);
     cursor_saved_x = cursor_saved_y = -1;
 }
 static void gui_cursor_save(int x, int y){
-    for (int j = 0; j < CURSOR_H; j++)
-        for (int i = 0; i < CURSOR_W; i++)
-            cursor_backup[j * CURSOR_W + i] = window_get_pixel(x + i, y + j);
+    int sc = gui_cursor_scale(), pw = CURSOR_W * sc, ph = CURSOR_H * sc;
+    int px0 = x * sc, py0 = y * sc;
+    for (int j = 0; j < ph; j++)
+        for (int i = 0; i < pw; i++)
+            cursor_backup[j * pw + i] = window_get_pixel_phys(px0 + i, py0 + j);
     cursor_saved_x = x; cursor_saved_y = y;
 }
 static void gui_draw_cursor(int x, int y){
@@ -2431,7 +2445,7 @@ static void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg
    45 characters, nothing like a real typing test (10fastfingers,
    monkeytype), which never run out of words. This freestanding build has
    no rand()/no libc, so a tiny LCG seeded from the real PIT tick count
-   (irq.c's ticks()) stands in — good enough for word order, not for
+   (irq.c's ticks()) stands in, good enough for word order, not for
    anything security-sensitive. */
 static const char *KEYRATE_WORDS[] = {
     "the","quick","brown","fox","jumps","over","lazy","dog","time","people",
@@ -3159,9 +3173,9 @@ static void gui_run(void){
                 else gui_draw_wallpaper_rows_sway(WIND_TOP_ROW, WIND_HORIZON_ROW, 1);
                 /* the backup under the cursor must track the sway too, or the
                    next real cursor move would restore a pre-wind patch */
-                if (cx0 >= 0)
-                    for (int j = 0; j < CURSOR_H; j++) { int ly = cy0 + j; if (ly < WIND_TOP_ROW || ly >= WIND_HORIZON_ROW) continue;
-                        for (int i = 0; i < CURSOR_W; i++) cursor_backup[j * CURSOR_W + i] = gui_wallpaper_sample((cx0 + i) * sc, ly * sc, 1); }
+                if (cx0 >= 0) { int csc = gui_cursor_scale(), pw = CURSOR_W * csc, ph = CURSOR_H * csc; /* physical-res backup, same layout as gui_cursor_save */
+                    for (int j = 0; j < ph; j++) { int py = cy0 * csc + j; int ly = py / csc; if (ly < WIND_TOP_ROW || ly >= WIND_HORIZON_ROW) continue;
+                        for (int i = 0; i < pw; i++) cursor_backup[j * pw + i] = gui_wallpaper_sample(cx0 * csc + i, py, 1); } }
                 /* two slow frames in a row, not one: the first frame under
                    QEMU includes the JIT translating this very loop and can
                    trip a single-frame gate falsely */
