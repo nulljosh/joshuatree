@@ -161,6 +161,16 @@ static int gui_getch_or_click(void){
 #define KEY_ENTER 258
 #define KEY_ESC   259
 
+/* v38: same shape as get_key below, but a click (or a tap, which reaches
+   the kernel as a real PS/2 click from the browser embed) also counts as
+   input. Every interactive app screen has to offer this, not just the
+   read-only viewers gui_wait_close covers: a phone visitor has no
+   keyboard at all, so a screen that only reads keys is a screen they can
+   open and then never leave. Terminal and the Apps folder both shipped
+   with exactly that bug in v36/v37, reported from a real phone. */
+#define KEY_CLICK 260
+static int get_key_or_click(void);
+
 static int get_key(void){
     for (;;) {
         int sc = kbd_pop();
@@ -177,6 +187,30 @@ static int get_key(void){
         if (c == '\n') return KEY_ENTER;
         if (c == 27)   return KEY_ESC;
         if (c) return c;
+    }
+}
+
+static int get_key_or_click(void){
+    for (;;) {
+        int sc = kbd_pop();
+        if (sc >= 0) {
+            if (sc == 0xE0) {
+                int sc2;
+                do { sc2 = kbd_pop(); if (sc2 < 0) __asm__ volatile ("hlt"); } while (sc2 < 0);
+                if (sc2 == 0x48) return KEY_UP;
+                if (sc2 == 0x50) return KEY_DOWN;
+                continue;
+            }
+            if (!(sc & 0x80)) {
+                char c = SC[sc & 0x7F];
+                if (c == '\n') return KEY_ENTER;
+                if (c == 27)   return KEY_ESC;
+                if (c) return c;
+            }
+            continue;
+        }
+        if (mouse_click_edge()) return KEY_CLICK;
+        __asm__ volatile ("hlt");
     }
 }
 
@@ -1944,8 +1978,13 @@ static void gui_launch_terminal(void){
     term_render(input, input_len);
 
     for (;;) {
-        int k = get_key();
-        if (k == KEY_ESC) return;
+        /* See gui_wait_close and the Apps folder: settle for v86's canvas
+           sampler, and treat a click/tap as a real way out for a visitor
+           with no keyboard. */
+        sleep_ticks(5);
+        mouse_click_edge_sync();
+        int k = get_key_or_click();
+        if (k == KEY_ESC || k == KEY_CLICK) return;
         if (k == KEY_ENTER) {
             input[input_len] = 0;
             term_puts("> "); term_puts(input); term_putc('\n');
@@ -2004,8 +2043,14 @@ static void gui_launch_apps(void){
         }
         (void)rows;
 
-        int k = get_key();
-        if (k == KEY_ESC) return;
+        /* The same two v86/touch accommodations gui_wait_close documents:
+           a few real ticks of settle time so the emulator's canvas sampler
+           actually catches this frame before we block, and a click/tap
+           counting as input so a phone can leave this screen at all. */
+        sleep_ticks(5);
+        mouse_click_edge_sync();
+        int k = get_key_or_click();
+        if (k == KEY_ESC || k == KEY_CLICK) return; /* a tap anywhere closes the folder: with no keyboard there is no other way out */
         if (k == KEY_ENTER) { gui_launch(sel); continue; } /* returns here when that app closes, folder still open, same as a real launcher */
         if (k == 'a' && sel > 0) sel--;                 /* left  */
         else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) sel++; /* right */

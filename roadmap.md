@@ -249,3 +249,9 @@ Direct request: "make the dock auto size and intelligently filter only important
 - [x] **Second real bug:** `gui_draw_icon_shadow` drew a flat dark ellipse with a 2px antialiased rim, which reads as a hard dark bar under every icon once icons are big enough to notice. Replaced with a real quadratic falloff from a contact-shadow core out to the dock's own color, pure per-pixel math, no alpha and no bitmap.
 - [x] Removed `gui_fill_ellipse`, now genuinely unused, rather than leaving dead code behind the fix.
 - [x] Verified: `check.sh`, `apptest.sh` (all 15 apps, `testapps` now walks every real app rather than only the pinned dock subset), and real zoomed screendumps before and after each fix.
+
+## 0.37.1, Terminal and Apps folder were unusable on a phone (Sep 2026)
+PATCH: two real bugs reported from an actual phone, both mine, both introduced in v36/v37.
+- [x] Both new screens blocked on `get_key()`, keyboard only. A touch visitor has no keyboard, so they could open Terminal or the Apps folder and then never leave, the exact bug v21 already fixed once for `gui_wait_close` and that I failed to carry into new screens. Added `get_key_or_click()` (a click or tap counts as input) and used it in both.
+- [x] Same omission caused the "doesn't render properly" half of the report: `gui_wait_close` sleeps a few real PIT ticks before blocking so v86's canvas sampler actually catches the frame, and neither new screen did, so they drew and immediately blocked, landing between v86's sampling points. Both settle now.
+- [x] The real lesson recorded, not just the fix: any new interactive screen needs both accommodations, and they were documented only inside `gui_wait_close`, where a new screen's author (me) never looked. Both now cross-reference each other.
