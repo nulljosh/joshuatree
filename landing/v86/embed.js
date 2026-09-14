@@ -90,14 +90,21 @@
   container.addEventListener("touchstart", focusIn, { passive: true });
   container.addEventListener("keydown", focusIn);
 
-  // Toggle between the text and graphical screen elements: v86 keeps
-  // both in the DOM and expects the embedder to show whichever is active.
+  // Toggle between the text and graphical screen elements: v86 keeps both
+  // in the DOM and expects the embedder to show whichever is active. The
+  // real boot banner is genuine and correct, but it isn't the demo, so it
+  // stays hidden through the whole boot-to-gui transition rather than
+  // flashing on screen for the few hundred ms that takes; it only ever
+  // surfaces as a fallback if graphical mode genuinely never arrives
+  // (auto-gui failed for some reason), not as the default path.
+  var bootStart = Date.now();
   setInterval(function () {
     var vga = emulator.v86 && emulator.v86.cpu.devices.vga;
     if (!vga) return;
     var graphical = !!vga.graphical_mode;
+    var stuckInText = !graphical && Date.now() - bootStart > 4000;
     if (screenCanvas) screenCanvas.style.display = graphical ? "block" : "none";
-    if (screenText) screenText.style.display = graphical ? "none" : "block";
+    if (screenText) screenText.style.display = graphical ? "none" : (stuckInText ? "block" : "none");
   }, 200);
 
   // stopAutoplay is kept as a no-op call site for focusIn() above; there's

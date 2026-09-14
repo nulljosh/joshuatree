@@ -464,7 +464,6 @@ static void reboot(void){
    overwritten with whatever's behind them, not blended. ---- */
 #define GUI_ICON_COUNT 7
 static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes"};
-static const char  GUI_GLYPHS[GUI_ICON_COUNT] = {'W', 'C', '@', 'F', 'K', 'B', 'Q'};
 static const unsigned int GUI_COLORS[GUI_ICON_COUNT] = {
     0x00C1502F, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C
 };
@@ -516,16 +515,29 @@ static int gui_dock_hit_test(int mx, int my){
 
 /* Paints a rect, then overwrites each corner's pixels outside a quarter
    circle of radius r with bg, faking a rounded rect with no alpha. */
+/* Channel-wise average of two 0x00RRGGBB colors. No alpha channel in this
+   framebuffer to composite with, so a real anti-aliased edge (a soft
+   transition band instead of one hard cutoff) has to be a genuine, solid,
+   precomputed color, not a blend against whatever's already drawn. */
+static unsigned int gui_blend(unsigned int a, unsigned int b){
+    unsigned int ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
+    unsigned int br = (b >> 16) & 0xFF, bg2 = (b >> 8) & 0xFF, bb = b & 0xFF;
+    return ((ar + br) / 2 << 16) | ((ag + bg2) / 2 << 8) | ((ab + bb) / 2);
+}
+
 static void gui_rounded_rect(int x, int y, int w, int h, unsigned int color, unsigned int bg, int r){
     window_rect(x, y, w, h, color);
-    for (int dy = 0; dy < r; dy++){
-        for (int dx = 0; dx < r; dx++){
-            if (dx * dx + dy * dy > r * r){
-                window_pixel(x + dx,         y + dy,         bg);
-                window_pixel(x + w - 1 - dx, y + dy,         bg);
-                window_pixel(x + dx,         y + h - 1 - dy, bg);
-                window_pixel(x + w - 1 - dx, y + h - 1 - dy, bg);
-            }
+    unsigned int edge = gui_blend(color, bg);
+    int inner = r * r, outer = (r + 1) * (r + 1);
+    for (int dy = 0; dy <= r; dy++){
+        for (int dx = 0; dx <= r; dx++){
+            int d2 = dx * dx + dy * dy;
+            if (d2 <= inner) continue; /* the corner's own quarter circle, already the right color */
+            unsigned int c = (d2 <= outer) ? edge : bg; /* one soft blended ring, then full background */
+            window_pixel(x + dx,         y + dy,         c);
+            window_pixel(x + w - 1 - dx, y + dy,         c);
+            window_pixel(x + dx,         y + h - 1 - dy, c);
+            window_pixel(x + w - 1 - dx, y + h - 1 - dy, c);
         }
     }
 }
@@ -543,10 +555,116 @@ static void gui_draw_menubar(void){
     font_draw_string(clock, (int)window_width() - 60, 7, 0x001C1C1E, -1);
 }
 
+/* Real pictograms, not letters: there's no image decoder or asset pipeline
+   in this kernel (deliberately, see roadmap.md's font/asset scope notes),
+   so each icon is drawn from the same primitives gui_rounded_rect already
+   uses (window_pixel/window_rect plus a circle-distance test), geometric
+   but genuinely representative of what each app actually is, the same way
+   a real dock icon reads as its app at a glance without needing a label. */
+#define ICON_FG 0x00FFFFFF
+
+/* `into` is whatever color surrounds this circle, so the one-pixel edge
+   band can blend toward it: the icon's own colored background for a solid
+   fill, or the fill color itself when punching a hole (the pin's eyelet)
+   into a shape that was drawn in that fill color. */
+static void gui_fill_circle(int cx, int cy, int r, unsigned int color, unsigned int into){
+    unsigned int edge = gui_blend(color, into);
+    int inner = r * r, outer = (r + 1) * (r + 1);
+    for (int dy = -r - 1; dy <= r + 1; dy++){
+        for (int dx = -r - 1; dx <= r + 1; dx++){
+            int d2 = dx * dx + dy * dy;
+            if (d2 <= inner) window_pixel(cx + dx, cy + dy, color);
+            else if (d2 <= outer) window_pixel(cx + dx, cy + dy, edge);
+        }
+    }
+}
+
+/* Fills a downward-pointing triangle: flat top of half-width `half_w` at
+   (cx, y0), narrowing to a point over `h` rows. Used for the map pin's tip
+   and the quote marks' tails. */
+static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned int color){
+    for (int row = 0; row < h; row++){
+        int w = half_w - (half_w * row) / h;
+        if (w < 0) w = 0;
+        window_rect(cx - w, y0 + row, 2 * w + 1, 1, color);
+    }
+}
+
+static void gui_icon_weather(int cx, int cy, int s, unsigned int bg){
+    int r = s / 6, ray = s / 8, gap = r + 2;
+    gui_fill_circle(cx, cy, r, ICON_FG, bg);
+    window_rect(cx - 1, cy - gap - ray, 2, ray, ICON_FG);
+    window_rect(cx - 1, cy + gap,       2, ray, ICON_FG);
+    window_rect(cx - gap - ray, cy - 1, ray, 2, ICON_FG);
+    window_rect(cx + gap,       cy - 1, ray, 2, ICON_FG);
+    for (int t = 0; t < ray; t++){
+        int d = ((gap + t) * 7) / 10; /* ~cos(45deg), diagonal ray projection */
+        window_pixel(cx - d, cy - d, ICON_FG);
+        window_pixel(cx + d, cy - d, ICON_FG);
+        window_pixel(cx - d, cy + d, ICON_FG);
+        window_pixel(cx + d, cy + d, ICON_FG);
+    }
+}
+
+static void gui_icon_pin(int cx, int cy, int s, unsigned int bg){
+    int r = s / 6, head_cy = cy - s / 10;
+    gui_fill_circle(cx, head_cy, r, ICON_FG, bg);
+    gui_fill_circle(cx, head_cy, r / 3, bg, ICON_FG); /* punch the pinhole */
+    gui_fill_triangle_down(cx, head_cy + r - 1, r, s / 4, ICON_FG);
+}
+
+static void gui_icon_chat(int cx, int cy, int s, unsigned int bg){
+    int w = (s * 7) / 10, h = (s * 5) / 10;
+    int x = cx - w / 2, y = cy - h / 2 - s / 12;
+    gui_rounded_rect(x, y, w, h, ICON_FG, bg, 5);
+    gui_fill_triangle_down(x + w / 5, y + h - 1, s / 10, s / 8, ICON_FG);
+}
+
+static void gui_icon_folder(int cx, int cy, int s){
+    int w = (s * 7) / 10, h = (s * 5) / 10;
+    int x = cx - w / 2, y = cy - h / 2 + s / 12;
+    window_rect(x, y, w / 3, s / 12, ICON_FG);
+    window_rect(x, y + s / 12, w, h, ICON_FG);
+}
+
+static void gui_icon_keyrate(int cx, int cy, int s){
+    int key = s / 6, gap = s / 14;
+    int total_w = 3 * key + 2 * gap, total_h = 2 * key + gap;
+    int x0 = cx - total_w / 2, y0 = cy - total_h / 2;
+    for (int row = 0; row < 2; row++)
+        for (int col = 0; col < 3; col++)
+            window_rect(x0 + col * (key + gap), y0 + row * (key + gap), key, key, ICON_FG);
+}
+
+static void gui_icon_book(int cx, int cy, int s, unsigned int bg){
+    int w = (s * 7) / 10, h = (s * 5) / 10;
+    int x = cx - w / 2, y = cy - h / 2;
+    window_rect(x, y, w, h, ICON_FG);
+    window_rect(cx - 1, y, 2, h, bg); /* spine split between the two pages */
+}
+
+static void gui_icon_quotes(int cx, int cy, int s, unsigned int bg){
+    int r = s / 9, off = s / 6, base_cy = cy - s / 10;
+    gui_fill_circle(cx - off, base_cy, r, ICON_FG, bg);
+    gui_fill_triangle_down(cx - off, base_cy + r - 1, r, s / 6, ICON_FG);
+    gui_fill_circle(cx + off, base_cy, r, ICON_FG, bg);
+    gui_fill_triangle_down(cx + off, base_cy + r - 1, r, s / 6, ICON_FG);
+}
+
 static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
     int x = cx_center - size / 2, y = cy_bottom - size;
-    gui_rounded_rect(x, y, size, size, GUI_COLORS[icon], GUI_BG, 12);
-    font_draw_char((unsigned char)GUI_GLYPHS[icon], x + size / 2 - 4, y + size / 2 - 8, 0x00FFFFFF, -1);
+    unsigned int bg = GUI_COLORS[icon];
+    gui_rounded_rect(x, y, size, size, bg, GUI_BG, 12);
+    int cy = y + size / 2;
+    switch (icon) {
+        case 0: gui_icon_weather(cx_center, cy, size, bg); break;
+        case 1: gui_icon_pin(cx_center, cy, size, bg); break;
+        case 2: gui_icon_chat(cx_center, cy, size, bg); break;
+        case 3: gui_icon_folder(cx_center, cy, size); break;
+        case 4: gui_icon_keyrate(cx_center, cy, size); break;
+        case 5: gui_icon_book(cx_center, cy, size, bg); break;
+        case 6: gui_icon_quotes(cx_center, cy, size, bg); break;
+    }
 }
 
 /* hover_slot: which slot shows the magnify+label (-1 none). drag_slot: the
