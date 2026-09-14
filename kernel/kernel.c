@@ -167,6 +167,36 @@ static void putn(unsigned int v){
     while (n) putc(buf[--n]);
 }
 
+/* A real, Linux-style dmesg ring buffer: fixed-size, overwrites its
+   oldest entry once full rather than growing, since this kernel has no
+   log rotation and a boot-time trace doesn't need one. Each entry is
+   tagged with the real PIT tick count (irq.c's ticks()) at the moment it
+   was logged, the closest thing to a timestamp available this early;
+   anything logged before irq_install() has actually run and interrupts
+   are enabled reads tick 0, an honest "no timer yet", not a bug. */
+#define KLOG_MAX     32
+#define KLOG_MSG_LEN 60
+static char klog_buf[KLOG_MAX][KLOG_MSG_LEN];
+static unsigned int klog_tick[KLOG_MAX];
+static int klog_count = 0, klog_next = 0;
+
+static void klog(const char *msg){
+    int i = 0;
+    while (msg[i] && i < KLOG_MSG_LEN - 1) { klog_buf[klog_next][i] = msg[i]; i++; }
+    klog_buf[klog_next][i] = 0;
+    klog_tick[klog_next] = ticks();
+    klog_next = (klog_next + 1) % KLOG_MAX;
+    if (klog_count < KLOG_MAX) klog_count++;
+}
+
+static void klog_dump(void){
+    int start = (klog_count < KLOG_MAX) ? 0 : klog_next;
+    for (int i = 0; i < klog_count; i++){
+        int idx = (start + i) % KLOG_MAX;
+        puts("[ "); putn(klog_tick[idx]); puts("] "); puts(klog_buf[idx]); putc('\n');
+    }
+}
+
 /* ---- task demo: two tasks that each print a letter and yield, round-robin,
    to prove context switching actually swaps stacks correctly. Bounded, then
    hlt forever: a task can't safely return (see task.c), and now that irq0
@@ -525,6 +555,45 @@ static unsigned int gui_blend(unsigned int a, unsigned int b){
     return ((ar + br) / 2 << 16) | ((ag + bg2) / 2 << 8) | ((ab + bb) / 2);
 }
 
+/* Channel-wise linear interpolation between two 0x00RRGGBB colors, `t/max`
+   of the way from `a` to `b`. */
+static unsigned int gui_lerp(unsigned int a, unsigned int b, int t, int max){
+    /* Every channel here as a signed int throughout: `a`/`b` are unsigned,
+       so `br - ar` promotes back to unsigned if either operand stays
+       unsigned, wrapping to a huge positive value whenever the channel is
+       decreasing (exactly the case going from sand to burgundy), which is
+       the real bug a first version of this shipped with, a genuinely
+       wrong saturated-magenta gradient, not the intended one, caught by
+       actually looking at a real screenshot instead of trusting the math. */
+    int ar = (int)((a >> 16) & 0xFF), ag = (int)((a >> 8) & 0xFF), ab = (int)(a & 0xFF);
+    int br = (int)((b >> 16) & 0xFF), bg2 = (int)((b >> 8) & 0xFF), bb = (int)(b & 0xFF);
+    int r = ar + (br - ar) * t / max;
+    int g = ag + (bg2 - ag) * t / max;
+    int bl = ab + (bb - ab) * t / max;
+    return ((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)bl;
+}
+
+/* A warm desert-dusk gradient for the desktop background, sand fading to
+   deep burgundy top to bottom: the same warm palette the landing page
+   already commits to (never matrix-green, never cold black-and-blue, see
+   CLAUDE.md), leaning into it a little further toward the desert/reptile
+   theme "Leopard Gecko" (this kernel's own reserved future distro name)
+   already carries, without drawing anything literal. */
+#define WALL_TOP 0x00E3C79A
+#define WALL_BOT 0x007A2048
+static unsigned int gui_wallpaper_color(int row){
+    int h = (int)window_height();
+    if (row < 0) row = 0;
+    if (row > h) row = h;
+    return gui_lerp(WALL_TOP, WALL_BOT, row, h);
+}
+
+static void gui_draw_wallpaper(void){
+    int w = (int)window_width(), h = (int)window_height();
+    for (int row = 0; row < h; row++)
+        window_rect(0, row, w, 1, gui_wallpaper_color(row));
+}
+
 static void gui_rounded_rect(int x, int y, int w, int h, unsigned int color, unsigned int bg, int r){
     window_rect(x, y, w, h, color);
     unsigned int edge = gui_blend(color, bg);
@@ -618,29 +687,72 @@ static void gui_icon_chat(int cx, int cy, int s, unsigned int bg){
     int x = cx - w / 2, y = cy - h / 2 - s / 12;
     gui_rounded_rect(x, y, w, h, ICON_FG, bg, 5);
     gui_fill_triangle_down(x + w / 5, y + h - 1, s / 10, s / 8, ICON_FG);
+    /* three typing dots, the same shorthand every real chat app uses for
+       "something is being said here", the detail that turns a blank
+       speech bubble into an unmistakable chat icon */
+    int dot_r = s / 24, dot_gap = s / 8, mid_y = y + h / 2;
+    gui_fill_circle(cx - dot_gap, mid_y, dot_r, bg, ICON_FG);
+    gui_fill_circle(cx,           mid_y, dot_r, bg, ICON_FG);
+    gui_fill_circle(cx + dot_gap, mid_y, dot_r, bg, ICON_FG);
 }
 
-static void gui_icon_folder(int cx, int cy, int s){
+/* A folder reads as a folder because of its silhouette (the tab breaking
+   the top edge) and a hint of the two-ply paper stock, not because of a
+   flat rectangle. A slightly darker back-panel shade behind the front
+   face fakes that fold without any alpha blending, just a second real
+   solid color. */
+static void gui_icon_folder(int cx, int cy, int s, unsigned int bg){
     int w = (s * 7) / 10, h = (s * 5) / 10;
     int x = cx - w / 2, y = cy - h / 2 + s / 12;
-    window_rect(x, y, w / 3, s / 12, ICON_FG);
-    window_rect(x, y + s / 12, w, h, ICON_FG);
+    unsigned int shade = gui_blend(ICON_FG, bg); /* the same blend used for AA edges doubles as a believable shadow tone */
+    window_rect(x, y, w / 3, s / 12, shade);          /* tab, sits behind the front face */
+    window_rect(x + 2, y + s / 12 - 2, w - 4, h, shade); /* back panel peeking out top/right */
+    window_rect(x, y + s / 12, w, h, ICON_FG); /* front face, on top; rounding this made the corners read as cut notches, not paper, tried and reverted */
 }
 
-static void gui_icon_keyrate(int cx, int cy, int s){
+/* Each key gets a light top-left / dark bottom-right bevel instead of one
+   flat fill, the cheapest real way to read as a raised, pressable key
+   rather than a flat tile, at this resolution a full 3D render buys
+   nothing a two-tone bevel doesn't already say. */
+static void gui_icon_keyrate(int cx, int cy, int s, unsigned int bg){
     int key = s / 6, gap = s / 14;
     int total_w = 3 * key + 2 * gap, total_h = 2 * key + gap;
     int x0 = cx - total_w / 2, y0 = cy - total_h / 2;
-    for (int row = 0; row < 2; row++)
-        for (int col = 0; col < 3; col++)
-            window_rect(x0 + col * (key + gap), y0 + row * (key + gap), key, key, ICON_FG);
+    /* The key body sits one step below pure white on purpose: a highlight
+       edge needs headroom to read as brighter than the key it's on, and
+       there's nowhere brighter to go than white itself. */
+    unsigned int base = gui_blend(ICON_FG, gui_blend(ICON_FG, bg));
+    unsigned int hi = ICON_FG;
+    unsigned int lo = gui_blend(base, bg);
+    for (int row = 0; row < 2; row++){
+        for (int col = 0; col < 3; col++){
+            int kx = x0 + col * (key + gap), ky = y0 + row * (key + gap);
+            window_rect(kx, ky, key, key, base);
+            window_rect(kx, ky, key, 1, hi);           /* top edge, lit */
+            window_rect(kx, ky, 1, key, hi);           /* left edge, lit */
+            window_rect(kx, ky + key - 1, key, 1, lo); /* bottom edge, shadowed */
+            window_rect(kx + key - 1, ky, 1, key, lo); /* right edge, shadowed */
+        }
+    }
 }
 
+/* An open book: two pages either side of a spine, each with a couple of
+   short "text lines" so it doesn't read as two blank cards, and the left
+   page shaded a shade darker the way a real open book's left page catches
+   less light than the right. */
 static void gui_icon_book(int cx, int cy, int s, unsigned int bg){
     int w = (s * 7) / 10, h = (s * 5) / 10;
     int x = cx - w / 2, y = cy - h / 2;
-    window_rect(x, y, w, h, ICON_FG);
+    unsigned int left_shade = gui_blend(ICON_FG, bg);
+    window_rect(x, y, w / 2 - 1, h, left_shade);
+    window_rect(cx + 1, y, w / 2 - 1, h, ICON_FG);
     window_rect(cx - 1, y, 2, h, bg); /* spine split between the two pages */
+    int line_w = w / 2 - 2 * (s / 20) - 1, line_x0 = x + s / 20, line_x1 = cx + 1 + s / 20;
+    for (int i = 1; i <= 3; i++){
+        int ly = y + (h * i) / 4;
+        window_rect(line_x0, ly, line_w, 1, bg);
+        window_rect(line_x1, ly, line_w, 1, left_shade);
+    }
 }
 
 static void gui_icon_quotes(int cx, int cy, int s, unsigned int bg){
@@ -660,8 +772,8 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
         case 0: gui_icon_weather(cx_center, cy, size, bg); break;
         case 1: gui_icon_pin(cx_center, cy, size, bg); break;
         case 2: gui_icon_chat(cx_center, cy, size, bg); break;
-        case 3: gui_icon_folder(cx_center, cy, size); break;
-        case 4: gui_icon_keyrate(cx_center, cy, size); break;
+        case 3: gui_icon_folder(cx_center, cy, size, bg); break;
+        case 4: gui_icon_keyrate(cx_center, cy, size, bg); break;
         case 5: gui_icon_book(cx_center, cy, size, bg); break;
         case 6: gui_icon_quotes(cx_center, cy, size, bg); break;
     }
@@ -671,12 +783,18 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
    slot currently being dragged, drawn separately so it can float free of
    the row under the cursor instead of at its slot position. */
 static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
-    window_clear(GUI_BG);
+    gui_draw_wallpaper();
     gui_draw_menubar();
-    font_draw_string("drag to rearrange -- click to open -- esc to quit", gui_dock_x0(), gui_dock_y0() - 44, 0x0075726E, -1);
+    font_draw_string("drag to rearrange -- click to open -- esc to quit", gui_dock_x0(), gui_dock_y0() - 44, 0x00FFF6EC, -1);
 
     int y0 = gui_dock_y0();
-    gui_rounded_rect(gui_dock_x0(), y0, gui_dock_w(), DOCK_ICON + 2 * DOCK_PAD, 0x00EFEBE4, GUI_BG, 20);
+    /* Corner-blend target is the wallpaper's real color at the dock's own
+       row, not the old flat GUI_BG constant: the background here is a
+       gradient now, and the dock sits low enough on screen that its actual
+       backdrop is much closer to the burgundy end than a fixed light
+       constant would assume, a mismatched blend would show as a visible
+       fringe around the tray's rounded corners. */
+    gui_rounded_rect(gui_dock_x0(), y0, gui_dock_w(), DOCK_ICON + 2 * DOCK_PAD, 0x00EFEBE4, gui_wallpaper_color(y0 + (DOCK_ICON + 2 * DOCK_PAD) / 2), 20);
 
     for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
         if (slot == drag_slot) continue; /* drawn last, floating at the cursor */
@@ -892,7 +1010,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime mem reboot crash pagefault heaptest tasktest preempttest ring3test sleep disktest ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build gui\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest ring3test sleep disktest ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build gui\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -920,6 +1038,7 @@ static void run(char *line){
         } else puts("kmalloc failed\n");
     }
     else if (!strcmp(line, "uptime")){ putn(ticks() / 100); puts("s\n"); }
+    else if (!strcmp(line, "dmesg")) klog_dump();
     else if (!strcmp(line, "mem")) {
         putn(pmm_free_frames() * 4); puts("K free / ");
         putn(pmm_total_frames() * 4); puts("K total (4K frames)\n");
@@ -1238,15 +1357,25 @@ static void run(char *line){
 
 void kmain(unsigned int multiboot_info_addr){
     vga_text_mode_init(); /* real hardware/QEMU already boot into text mode via their own BIOS; a BIOS-less multiboot path (v86) never sets it at all, so make it explicit rather than inherited */
+    klog("vga_text_mode_init: text mode 3 programmed");
     gdt_install();
+    klog("gdt_install: GDT loaded");
     idt_install();
+    klog("idt_install: IDT loaded");
     irq_install();
+    klog("irq_install: PIC remapped, PIT/keyboard IRQs live");
     mouse_init();
+    klog("mouse_init: PS/2 mouse enabled");
     font_init(); /* must run while still in plain VGA text mode, before any window_open */
+    klog("font_init: CP437 glyphs dumped from VGA hardware");
     pmm_init(multiboot_info_addr);
+    klog("pmm_init: physical memory map parsed");
     paging_install();
+    klog("paging_install: higher-half paging active");
     tasks_init();
+    klog("tasks_init: scheduler ready");
     int fs_ok = fat_mount();
+    klog(fs_ok ? "fat_mount: FAT16 filesystem mounted" : "fat_mount: no filesystem found");
     clear();
     boot_chime();
     puts("joshuatree v0 -- type help\n");
