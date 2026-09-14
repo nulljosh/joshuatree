@@ -1930,7 +1930,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -1956,6 +1956,29 @@ static void run(char *line){
             puts((big == x && after == before) ? "coalesced adjacent free blocks: ok\n" : "coalesce failed\n");
             kfree(big);
         } else puts("kmalloc failed\n");
+    }
+    else if (!strcmp(line, "heapgrow")) {
+        /* v34 (0.34.0): real proof the old 0x400000 wall is actually gone,
+           not just that the code compiles. Keeps allocating 4KB chunks
+           (small enough not to instantly exhaust real RAM, big enough to
+           cross the old wall in a bounded number of iterations) until one
+           lands at or past 0x400000, then writes and reads back a real
+           marker through it, real evidence the mapping isn't just
+           allocated but actually usable, not a bus error waiting to
+           happen. Bounded at 2048 iterations (8MB) so a genuinely broken
+           build fails fast instead of hanging. */
+        void *p = 0;
+        int crossed = 0;
+        for (int i = 0; i < 2048 && !crossed; i++) {
+            p = kmalloc(4096);
+            if (!p) { puts("kmalloc failed before crossing 0x400000 (real OOM or a real regression)\n"); break; }
+            if ((unsigned int)p >= 0x400000) crossed = 1;
+        }
+        if (crossed) {
+            *(volatile unsigned int *)p = 0xC0FFEE00;
+            unsigned int back = *(volatile unsigned int *)p;
+            puts(back == 0xC0FFEE00 ? "heap grew past 0x400000 and is real, writable memory: ok\n" : "heap grew past 0x400000 but readback FAILED\n");
+        }
     }
     else if (!strcmp(line, "uptime")){ putn(ticks() / 100); puts("s\n"); }
     else if (!strcmp(line, "dmesg")) klog_dump();

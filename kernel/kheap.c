@@ -1,14 +1,19 @@
 /* First-fit free-list heap, grown a physical frame at a time via pmm.
    ponytail: no splitting a larger free block on reuse, a whole block goes
    to a smaller request rather than being carved up, add real splitting if
-   a workload's block-size mix ever makes that waste matter. The heap can
-   only grow inside paging.c's identity-mapped first 4MB (a frame handed
-   back at or past 0x400000 isn't mapped yet, so growth just stops there
-   and kmalloc returns 0 -- fine until something above 4MB needs to be
-   heap-backed, which is exactly what the higher-half move later in v2 has
-   to fix). */
+   a workload's block-size mix ever makes that waste matter.
+   v34 (0.34.0): used to hard-stop at 0x400000 (a frame handed back at or
+   past there wasn't mapped by anything, so growth just stopped and
+   kmalloc silently returned 0). Real fix, not a bigger constant: a frame
+   past the base 4MB now gets identity-mapped on demand via
+   paging_map_region() (already built for exactly this, PCI framebuffers
+   used it first), the same real OOM only happening when pmm itself is
+   out of frames or paging.c is out of spare page tables for new regions
+   (MAX_EXTRA_TABLES, 16MB worth), not at an arbitrary 4MB line nothing
+   about physical memory actually enforces. */
 #include "kheap.h"
 #include "pmm.h"
+#include "paging.h"
 
 typedef unsigned int u32;
 
@@ -28,7 +33,11 @@ static u32 heap_limit = 0; /* end of the currently frame-backed region */
 static int grow_heap(u32 need) {
     while (heap_next + need > heap_limit) {
         u32 frame = pmm_alloc_frame();
-        if (frame == 0 || frame >= IDENTITY_MAP_LIMIT) return 0; /* OOM or unmapped */
+        if (frame == 0) return 0; /* real OOM, no physical memory left at all */
+        if (frame >= IDENTITY_MAP_LIMIT && !paging_map_region(frame, 4096)) {
+            pmm_free_frame(frame); /* out of spare page tables (see paging.c's MAX_EXTRA_TABLES), give the frame back rather than leak it */
+            return 0;
+        }
         if (heap_limit == 0) heap_next = frame;
         heap_limit = frame + 4096;
     }
