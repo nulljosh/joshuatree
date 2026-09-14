@@ -43,7 +43,7 @@ kernel/kernel.o: drivers/app_weather.h drivers/app_curbfind.h drivers/app_keyrat
 	$(CC) $(CFLAGS) -c $< -o $@
 
 run: kernel.elf
-	qemu-system-i386 -kernel kernel.elf
+	qemu-system-i386 -kernel kernel.elf -rtc base=localtime
 
 clean:
 	rm -f $(OBJS) kernel.elf
