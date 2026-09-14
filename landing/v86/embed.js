@@ -294,24 +294,32 @@
   // (starts at gui_run's own literal 400,300, the same value the old
   // homing comment already named) and updates after every send this file
   // makes, both taps and drags, so it can't fall out of sync with
-  // anything WE do. A periodic real re-home every 8th tap is cheap
-  // insurance against whatever's left uncounted for (the idle tour
-  // reusing this same function already keeps it in sync too, since it
-  // updates the same shared variable), not a sign this is expected to
-  // drift under normal use.
-  var tapsSinceResync = 0;
-  function moveCursorTo(kx, ky, done) {
+  // anything WE do.
+  //
+  // Drift insurance, made smarter after a direct follow-up ("work on
+  // drift insurance") rather than just tightened: the first version
+  // forced a real re-home (the visible corner-dart this whole change
+  // exists to avoid) every 8th call regardless of caller, which meant a
+  // real visitor tapping around could still hit that jarring resync on
+  // an ordinary tap, exactly the bug being fixed. Real taps (`allowResync`
+  // left false, the default) now NEVER force one, full stop, zero risk of
+  // the glitch for an actual visitor. Periodic resyncs still happen, just
+  // only from the idle tour's own calls (`allowResync: true`), where
+  // cursor motion is already the point of what's on screen, a resync
+  // dart there reads as part of the demo, not a bug in it.
+  var toursSinceResync = 0;
+  function moveCursorTo(kx, ky, done, allowResync) {
     kx = Math.max(0, Math.min(LOGICAL_W - 1, kx));
     ky = Math.max(0, Math.min(LOGICAL_H - 1, ky));
     var packets = [];
-    var forceResync = (tapsSinceResync >= 8);
+    var forceResync = allowResync && (toursSinceResync >= 4);
     if (forceResync) {
       splitDelta(-(LOGICAL_W + 400), -(LOGICAL_H + 400), packets); // clamps to (0,0) from anywhere on screen
       splitDelta(kx, ky, packets);
-      tapsSinceResync = 0;
+      toursSinceResync = 0;
     } else {
       splitDelta(kx - trackedKx, ky - trackedKy, packets);
-      tapsSinceResync++;
+      if (allowResync) toursSinceResync++;
     }
     trackedKx = kx; trackedKy = ky;
     sendPaced(packets, done);
@@ -416,6 +424,8 @@
     // Drive the emulator's own input even though the visitor hasn't
     // focused: the mouse adapter is gated for real people, not for us.
     emulator.mouse_adapter.emu_enabled = true;
+    // allowResync=true: this is the tour's own cursor motion, the one
+    // place a periodic real resync is invisible rather than a bug.
     moveCursorTo(kx, ky, function () {
       if (focused) return;
       tourTimer = setTimeout(function () {
@@ -441,7 +451,7 @@
           tourTimer = setTimeout(function () { tourStep(i + 1, order); }, 1500);
         }, dwell);
       }, 400);
-    });
+    }, true);
   }
   function startTourWhenReady() {
     if (focused) return;
