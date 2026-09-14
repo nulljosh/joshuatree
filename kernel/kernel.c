@@ -4689,6 +4689,7 @@ static void run(char *line){
            what was written (not corrupted parsing), (3) the count stays stable
            when we load again (file persistence works), (4) deleting it drops
            count back to 1. If any step fails, the test catches it. */
+        int pass = 0;
         contacts_count = 1;
         contacts_loaded = 1;
         contacts_str_copy(contacts[0].name, "Joshua", CONTACTS_NAME_MAX);
@@ -4707,7 +4708,7 @@ static void run(char *line){
         contacts_loaded = 0;
         contacts_load();
 
-        int pass = (contacts_count == 2) &&
+        pass = (contacts_count == 2) &&
                    (contacts[1].name[0] == 'A' && contacts[1].name[1] == 'l') &&
                    (contacts[1].phone[0] == '5' && contacts[1].phone[1] == '5');
 
