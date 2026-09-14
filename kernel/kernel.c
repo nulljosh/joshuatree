@@ -1042,7 +1042,29 @@ static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int 
 
 /* v40: a row band, so a partial repaint (the dock band on a hover change)
    doesn't have to blit the whole photo. Rows are screen rows. */
-static void gui_draw_wallpaper_rows(int y_from, int y_to){
+/* v45 (0.45.0): wind. A horizontal displacement applied to the wallpaper
+   sample, zero at the horizon and growing with the square of the height
+   above it, so the trunk barely moves and the crown sways. Driven by a
+   slow triangle wave on the PIT (no sin in this kernel, and a triangle
+   eased by its own square reads as a breath, not a metronome). Only the
+   rows above the horizon are ever redrawn, so the cached dock band is
+   never touched and the desktop's dirty-region scheme stays intact. */
+#define WIND_HORIZON_ROW 395   /* logical row of the photo's skyline */
+#define WIND_TOP_ROW      30   /* just under the menu bar */
+static int wind_enabled = 1;   /* self-disables if a frame measures slow (v86, the browser demo) */
+static int wind_phase = 0;     /* -256..256, current displacement scale */
+
+static int gui_wind_shift(int row){ /* source-pixel shift for this screen row, in 8.8 fixed point */
+    if (row >= WIND_HORIZON_ROW) return 0;
+    int h = WIND_HORIZON_ROW - row;                     /* 0..365 */
+    int amp = (h * h) / (365 * 365 / 14);               /* up to ~14 logical px at the very top, ~6 at the crown */
+    return amp * wind_phase;                            /* * (-256..256) */
+}
+
+static void gui_draw_wallpaper_rows_sway(int y_from, int y_to, int sway);
+static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway(y_from, y_to, 0); }
+
+static void gui_draw_wallpaper_rows_sway(int y_from, int y_to, int sway){
     /* v42: sampled bilinearly at PHYSICAL resolution, not nearest-neighbour
        through the logical layer. The old path picked one source pixel per
        logical pixel and window_pixel stamped it as a 2x2 block, so a 640px
@@ -1064,8 +1086,10 @@ static void gui_draw_wallpaper_rows(int y_from, int y_to){
         if (sy >= WALLPAPER_H - 1) { sy = WALLPAPER_H - 2; wy = 255; }
         const unsigned char *r0 = &wallpaper_rgb[sy * WALLPAPER_W * 3];
         const unsigned char *r1 = r0 + WALLPAPER_W * 3;
+        int shift = sway ? (gui_wind_shift(py / sc) * WALLPAPER_W / lw) >> 8 : 0; /* source px, 8.8 -> int */
         for (int px = 0; px < pw; px++){
-            int fx = px * (WALLPAPER_W - 1) * 256 / (pw > 1 ? pw - 1 : 1);
+            int fx = px * (WALLPAPER_W - 1) * 256 / (pw > 1 ? pw - 1 : 1) + shift * 256;
+            if (fx < 0) fx = 0; if (fx > (WALLPAPER_W - 1) * 256) fx = (WALLPAPER_W - 1) * 256;
             int sx = fx >> 8, wx = fx & 255;
             if (sx >= WALLPAPER_W - 1) { sx = WALLPAPER_W - 2; wx = 255; }
             const unsigned char *a = &r0[sx * 3], *b = a + 3, *c = &r1[sx * 3], *d = c + 3;
@@ -2626,6 +2650,22 @@ static void gui_run(void){
             char before[24]; for (int i = 0; i < 24; i++) before[i] = weather_text[i];
             weather_fetch();
             if (strcmp(before, weather_text) != 0) { gui_menubar_force_redraw(); gui_draw_menubar(); if (my < GUI_MENUBAR_H) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); } }
+        }
+        /* v45: wind, 4 frames a second, only while the desktop itself is
+           what's on screen. Timed on its first frame; if that frame took
+           longer than a tenth of a second the machine is too slow for
+           this (v86 in a browser) and it switches itself off for good. */
+        {
+            static unsigned int wind_last = 0; static int wind_dir = 1;
+            if (wind_enabled && !menu_open && !notif_open && drag_slot < 0 && ticks() - wind_last >= 25) {
+                wind_last = ticks();
+                wind_phase += wind_dir * 16; if (wind_phase >= 256 || wind_phase <= -256) wind_dir = -wind_dir;
+                unsigned int t0 = ticks();
+                gui_cursor_restore();
+                gui_draw_wallpaper_rows_sway(WIND_TOP_ROW, WIND_HORIZON_ROW, 1);
+                gui_cursor_save(mx, my); gui_draw_cursor(mx, my);
+                if (ticks() - t0 > 10) wind_enabled = 0;
+            }
         }
         int sc = kbd_pop();
         if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) break; /* esc, non-blocking */

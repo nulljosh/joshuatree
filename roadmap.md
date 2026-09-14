@@ -322,3 +322,10 @@ PATCH: three more sources of visible pixels, each named from a 2x nearest-neighb
 - [x] `gui_fill_triangle_down` never had antialiasing at all (the pencil tip, the pin's point, the chat bubble's tail). Exact half-width in 8.8 fixed point, edge pixels blended by fractional coverage.
 - [x] The glyph "shadow" was a hard, near-black offset copy, reading as a dark outline. 25% toward black now, a shadow.
 - [x] Verified: `check.sh`, `apptest.sh` (15 apps), 2x zoomed screendumps before and after each change.
+
+## v45 / 0.45.0, wind (Sep 2026)
+Direct request: "make the wallpaper animated somehow, make the tree blow in the wind."
+- [x] A sway warp on the wallpaper sampler: horizontal displacement zero at the skyline, growing with the square of the height above it, so the trunk barely moves and the crown sways (~6 logical px at the crown, ~14 at the very top). Driven by a triangle wave on the PIT eased by its own square: there is no sin in this kernel, and the eased triangle reads as a breath, not a metronome.
+- [x] Four frames a second, only the rows between the menu bar and the skyline, only while the desktop itself is what's on screen. The cached dock band below the horizon is never touched, so the v40/v43 dirty-region scheme stays intact and nothing else flickers.
+- [x] Self-timing: the first frame measures itself on the PIT; over a tenth of a second and the machine is too slow for this (v86 in a browser) and it switches itself off for good. Confirmed in the tour test: desktop samples flat at 6016 across seven seconds in v86, i.e. the wind never ran there, then the tour opened apps on cue.
+- [x] Verified: `check.sh`, `apptest.sh` (15 apps), `tourtest.mjs`, and a real two-frame screendump diff under QEMU: 41,390 pixels changed, bounding box rows 60..638 physical, zero below the skyline.
