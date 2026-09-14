@@ -22,6 +22,8 @@ static inline void outb(u16 p, u8 v) { __asm__ volatile ("outb %0,%1" :: "a"(v),
 #define GC_DATA   0x3CF
 
 static u8 glyphs[256 * 16];
+static int font_fallback_active = 0;
+int font_is_fallback(void) { return font_fallback_active; }
 
 void font_init(void) {
     outb(SEQ_INDEX, 0x02); u8 seq2 = inb(SEQ_DATA);
@@ -55,8 +57,9 @@ void font_init(void) {
        kernel has to set up itself. Detect-and-fall-back rather than always
        using the built-in font, because the real hardware CP437 font is
        still the better one wherever it genuinely exists. */
-    int have_hw_font = 0;
+    int have_hw_font = 0; /* also exported below: "no BIOS font" is the one reliable sign this kernel is running in v86 */
     for (int i = 0; i < 256 * 16 && !have_hw_font; i++) if (glyphs[i]) have_hw_font = 1;
+    font_fallback_active = !have_hw_font;
     if (!have_hw_font) {
         for (int ch = VGAFONT_FIRST; ch <= VGAFONT_LAST; ch++)
             for (int row = 0; row < 16; row++)

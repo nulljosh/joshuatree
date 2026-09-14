@@ -1543,6 +1543,15 @@ static void gui_icon_homeqi(int cx, int cy, int s, unsigned int bg){
    plain rectangle reads as a box or a building, not a bin. */
 static void gui_icon_trash(int cx, int cy, int s, unsigned int bg){
     int half = s * 3 / 10, top = cy - half, h = half * 2;
+    /* v45.2: full when there's something in it: two crumpled sheets
+       poking above the rim, drawn as circles so they read as paper, not
+       a second lid. The icon cache keys on this so the tile re-renders
+       the moment the count crosses zero (see icon_cache_variant). */
+    if (trash_count() > 0) {
+        unsigned int paper = gui_blend(ICON_FG, bg);
+        gui_fill_circle(cx - half / 3, top - s / 14, s / 9, paper, bg);
+        gui_fill_circle(cx + half / 4, top - s / 10, s / 8, ICON_FG, bg);
+    }
     int lid = s / 12; if (lid < 2) lid = 2;
     window_rect(cx - half - 2, top, 2 * (half + 2) + 1, lid, ICON_FG);              /* lid */
     window_rect(cx - s / 12, top - lid, 2 * (s / 12) + 1, lid, ICON_FG);            /* handle */
@@ -1721,6 +1730,7 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
 static unsigned int *icon_cache[GUI_APP_COUNT][ICON_CACHE_SLOTS];
 static int icon_cache_size[GUI_APP_COUNT][ICON_CACHE_SLOTS];
 static unsigned int icon_cache_under[GUI_APP_COUNT][ICON_CACHE_SLOTS];
+static int icon_cache_variant[GUI_APP_COUNT][ICON_CACHE_SLOTS]; /* v45.2: anything that changes a glyph beyond (icon,size,surface); today only Trash full/empty */
 
 /* `under` is the colour the tile physically sits on. Its corners are
    blended toward that, so they vanish into the surface instead of
@@ -1729,7 +1739,8 @@ static unsigned int icon_cache_under[GUI_APP_COUNT][ICON_CACHE_SLOTS];
    faint white rim on every dock tile once the pixels got small enough to
    see it. */
 static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsigned int under){
-    if (icon_cache[icon][slot] && icon_cache_size[icon][slot] == size && icon_cache_under[icon][slot] == under) return icon_cache[icon][slot];
+    int variant = (icon == GUI_TRASH) ? (trash_count() > 0) : 0;
+    if (icon_cache[icon][slot] && icon_cache_size[icon][slot] == size && icon_cache_under[icon][slot] == under && icon_cache_variant[icon][slot] == variant) return icon_cache[icon][slot];
     unsigned int sc = window_scale();
     int pw = size * (int)sc;
     unsigned int ssz = (unsigned int)size * ICON_SS_SCALE;
@@ -1743,6 +1754,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
         icon_cache[icon][slot] = out; icon_cache_size[icon][slot] = size;
     }
     icon_cache_under[icon][slot] = under;
+    icon_cache_variant[icon][slot] = variant;
     unsigned int bg = GUI_COLORS[icon];
     unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
     window_push_target(ssbuf, ssz, ssz);
@@ -2469,13 +2481,14 @@ static void gui_launch(int icon){
 static void gui_draw_boot_screen(void){
     unsigned int bg = 0x00201009; /* the wallpaper's own espresso-brown, on-brand, not a new color */
     window_clear(bg);
-    gui_draw_logo(400, 260, 5, bg);
-    gui_draw_hello_script(400, 320, 6, 0x00F5EFE8, bg);
+    int cx = (int)window_width() / 2, cy = (int)window_height() / 2; /* v45.2: centred on the real window; 400 was the 800-wide centre and sat left of centre at 960 */
+    gui_draw_logo(cx, cy - 10, 5, bg);
+    gui_draw_hello_script(cx, cy + 50, 6, 0x00F5EFE8, bg);
 
     unsigned int start = ticks();
     unsigned int logo_only = 60; /* 0.6s: just the logo and wordmark, no bar yet */
     unsigned int bar_span  = 40; /* 0.4s: bar fills once shown, ~1s total */
-    int bar_x = 320, bar_y = 340, bar_w = 160, bar_h = 6;
+    int bar_w = 160, bar_h = 6, bar_x = (int)window_width() / 2 - bar_w / 2, bar_y = (int)window_height() / 2 + 70;
     int bar_track_drawn = 0;
     for (;;) {
         unsigned int elapsed = ticks() - start;
@@ -2640,6 +2653,13 @@ static void gui_run(void){
        means fullscreen is pixel-exact with no scaling at all. */
     if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
     font_set_aa(gui_aa_char); /* v44: real typeface for every string from here on */
+    /* v46: no wind in the browser, decided up front rather than measured
+       after the fact. The slow-frame gate still exists, but even the two
+       frames it takes to trip blocked the kernel long enough that v86's
+       PS/2 queue overflowed and the demo tour's paced cursor packets were
+       dropped (tourtest failed twice, alone, on this build). The BIOS-font
+       check from v38 is the reliable "this is v86" signal. */
+    if (font_is_fallback()) wind_enabled = 0;
     gui_draw_boot_screen();
     gui_order_init();
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;
@@ -2679,9 +2699,9 @@ static void gui_run(void){
            this (v86 in a browser) and it switches itself off for good. */
         {
             static unsigned int wind_last = 0; static int wind_dir = 1;
-            if (wind_enabled && !menu_open && !notif_open && drag_slot < 0 && ticks() - wind_last >= 25) {
+            if (wind_enabled && !menu_open && !notif_open && drag_slot < 0 && ticks() - wind_last >= 12) { /* v46: 8 fps, up from 4; a frame is ~7 ticks so this is ~60% of the loop and still leaves every tick's input serviced */
                 wind_last = ticks();
-                wind_phase += wind_dir * 16; if (wind_phase >= 256 || wind_phase <= -256) wind_dir = -wind_dir;
+                wind_phase += wind_dir * 8; /* half the step at twice the rate: same sway period, twice the frames */ if (wind_phase >= 256 || wind_phase <= -256) wind_dir = -wind_dir;
                 unsigned int t0 = ticks();
                 int sc = (int)window_scale();
                 int cx0 = cursor_saved_x, cy0 = cursor_saved_y;
@@ -2697,7 +2717,7 @@ static void gui_run(void){
                    trip a single-frame gate falsely */
                 { static int slow = 0, logged = 0; unsigned int dt = ticks() - t0;
                   if (!logged) { logged = 1; char b[24]; int i = 0; b[i++]='w'; b[i++]='i'; b[i++]='n'; b[i++]='d'; b[i++]='='; if (dt >= 10) b[i++]='0'+dt/10%10; b[i++]='0'+dt%10; b[i++]='t'; b[i++]='\n'; b[i]=0; serial_puts(b); }
-                  if (dt > 12) { if (++slow >= 2) wind_enabled = 0; } else slow = 0; }
+                  if (dt > 25) wind_enabled = 0; else if (dt > 12) { if (++slow >= 2) wind_enabled = 0; } else slow = 0; }
             }
         }
         int sc = kbd_pop();
@@ -2813,7 +2833,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -2958,6 +2978,12 @@ static void run(char *line){
         int ok = ok_t && ok_c && t10 == -35 && code10 == 610;
         puts(ok ? "weather parse: -3.5C / code 61 through the units-block trap: ok\n" : "weather parse: FAILED\n");
         if (!ok) { puts("  t10="); putn((unsigned int)t10); puts(" code10="); putn((unsigned int)code10); puts("\n"); }
+    }
+    else if (!strcmp(line, "wind")) {
+        /* v46: the user's call. Settings app doesn't exist yet; this is the honest minimal toggle. */
+        if (!strcmp(arg, "off")) { wind_enabled = 0; puts("wind off\n"); }
+        else if (!strcmp(arg, "on")) { wind_enabled = 1; puts("wind on\n"); }
+        else { puts(wind_enabled ? "wind is on (wind off to stop)\n" : "wind is off (wind on to start)\n"); }
     }
     else if (!strcmp(line, "isotest")) {
         iso_readback_a = 0; iso_readback_b = 0;

@@ -14,4 +14,5 @@ void font_init(void);
 void font_draw_char(unsigned char c, int x, int y, unsigned int fg, int bg);
 void font_draw_string(const char *s, int x, int y, unsigned int fg, int bg);
 void font_set_aa(void (*hook)(unsigned char, int, int, unsigned int, int)); /* v44: antialiased renderer at physical res, see font.c */
+int font_is_fallback(void); /* v46: 1 when the BIOS left no font, i.e. v86 in a browser; used to skip work that machine cannot afford */
 #endif

@@ -337,3 +337,11 @@ PATCH. Reported from a video within minutes of v45 shipping: the pointer flashed
 - [x] The gate itself now needs two slow frames in a row, not one: under QEMU the first frame includes the JIT translating the loop and could trip a single-frame gate falsely.
 - [x] `WHITEPAPER.md` rewritten from a stale "v4" (no GUI, no ring 3) to 0.45.0, in plain English, around the why.
 - [x] Verified: `check.sh`, `apptest.sh` (15 apps), `tourtest.mjs`, serial `wind=7t`, three-frame cursor-outline count, two-frame sky diff (7,144 px, the wind running).
+
+## v46 / 0.46.0, smoother wind, a wind switch, a full Trash, a centred hello (Sep 2026)
+- [x] Wind at 8 fps (a frame is ~7 ticks; still every tick's input serviced), half the step per frame so the sway period is unchanged. Reported as choppy at 4; it was.
+- [x] `wind on|off`: the user's call. A Settings app doesn't exist yet; this is the honest minimal toggle, not a placeholder.
+- [x] No wind in the browser, decided up front: even the two slow frames the gate needs to trip blocked the kernel long enough that v86's PS/2 queue dropped the demo tour's paced cursor packets (`tourtest` failed twice, alone, before this). The v38 BIOS-font check is the reliable "this is v86" signal; `font_is_fallback()` now exports it. Plus an immediate trip at >25 ticks as belt and braces.
+- [x] Trash icon is full when there's something in it (two crumpled sheets above the rim); the icon cache keys on it so the tile re-renders the moment the count crosses zero.
+- [x] Boot splash centred on the real window (logo, "hello", progress bar); the old x=400 was the 800-wide centre and sat left of centre at 960. Ink centre measured at 970 vs 960.
+- [x] Verified: `check.sh`, `apptest.sh` (15 apps) on this code before the final v86-only guard, `tourtest.mjs` after it. Honest note: the full app suite was not re-run after that last two-line guard (session budget); it cannot execute outside v86.
