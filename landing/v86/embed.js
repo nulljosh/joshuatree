@@ -138,27 +138,40 @@
   // image the same rectangle, so coordinate math anywhere downstream
   // (this file or v86's own mouse adapter) is correct by construction.
   //
-  // v52.2: Math.max, not Math.min, direct request to close the remaining
-  // real letterbox once the demo became the hero's own background layer
-  // (a plain contain-fit strip inside a differently-shaped box always
-  // leaves a visible margin, an honest, accepted tradeoff right up until
-  // this ask to actually close it). Every downstream consumer of
-  // "where did this click/touch land" (touchmove, touchend, mousemove
-  // below) reads the canvas's own live getBoundingClientRect(), not the
-  // container, so this stays correct by the same construction as before:
-  // the canvas is now genuinely larger than its container and real
-  // overflow gets clipped by #screen_container's own overflow:hidden, but
-  // the DOM box and the visible (now-cropped) image are still the exact
-  // same rectangle from the canvas element's own point of view, nothing
-  // downstream needed to change. #screen_canvas gets flex-shrink:0 so the
-  // flex layout centering it never quietly shrinks it back down to fit,
-  // which would undo the cover and reintroduce the letterbox.
+  // v52.2: cover, not contain, direct request to close the remaining
+  // real letterbox once the demo became the hero's own background layer.
+  // Every downstream consumer of "where did this click/touch land"
+  // (touchmove, touchend, mousemove below) reads the canvas's own live
+  // getBoundingClientRect(), not the container, so this stays correct by
+  // the same construction as before regardless of which scale wins:
+  // whatever box the canvas actually ends up, cropped or not, is still
+  // the exact rectangle clicks get measured against, nothing downstream
+  // needed to change. #screen_canvas gets flex-shrink:0 so flex centering
+  // never quietly shrinks it back down and undoes whichever fit was
+  // chosen.
+  //
+  // v52.9: real regression caught live and fixed same day, not a second
+  // guess: unconditional cover cropped the menu bar's own clock/weather
+  // clean off the right edge on a real narrow phone screenshot, a much
+  // worse bug than the letterbox it replaced (illegible UI beats a black
+  // margin every time). Cover and contain are fundamentally at odds on an
+  // extreme aspect ratio (a 16:9 source in a much-taller-than-wide box
+  // has to either crop real content or leave real dead space, no CSS
+  // trick escapes that math), so this now picks per viewport instead of
+  // one global rule: cover only when it would still show at least 75% of
+  // the source on its cropped axis (true for a laptop/desktop window and
+  // most landscape-ish phones), contain otherwise (a real tall portrait
+  // phone), so a visitor never loses real UI to a crop just to avoid a
+  // margin.
   var currentScale = 1;
   function resizeCanvas() {
     if (!screenCanvas) return;
     var box = screenContainer.getBoundingClientRect();
     var w = screenCanvas.width || 800, h = screenCanvas.height || 600;
-    currentScale = Math.max(box.width / w, box.height / h) || 1;
+    var coverScale = Math.max(box.width / w, box.height / h) || 1;
+    var containScale = Math.min(box.width / w, box.height / h) || 1;
+    var visibleFrac = Math.min(box.width / (w * coverScale), box.height / (h * coverScale));
+    currentScale = visibleFrac >= 0.75 ? coverScale : containScale;
     screenCanvas.style.width = Math.round(w * currentScale) + "px";
     screenCanvas.style.height = Math.round(h * currentScale) + "px";
   }

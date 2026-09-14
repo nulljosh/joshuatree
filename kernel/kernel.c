@@ -667,7 +667,12 @@ static unsigned char dock_hover_extra[GUI_ICON_COUNT];
    that actually matters: whatever scale is asked for, the dock still has
    to fit on screen, which is exactly the arithmetic v35 and v36 each had
    to rediscover from a screendump. */
-static int dock_scale_pct = 10;
+/* v52: default trimmed 10 -> 7, direct feedback from a real photo of the
+   physical panel: the dock read as visibly oversized against the desktop
+   content at 10%. Still the same user-adjustable Settings knob, 5-25%,
+   nothing about the range or mechanism changed, just what a fresh
+   install starts at. */
+static int dock_scale_pct = 7;
 static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
 
 /* v47 (0.47.0): settings persisted through the VFS, so "customize the OS
