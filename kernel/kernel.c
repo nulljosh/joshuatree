@@ -7,6 +7,7 @@
 #include "kheap.h"
 #include "task.h"
 #include "ring3.h"
+#include "syscall.h"
 #include "ata.h"
 #include "fat.h"
 #include "vfs.h"
@@ -3575,7 +3576,7 @@ static void run(char *line){
         puts("\ndone (expect ABABAB...)\n");
     }
     else if (!strcmp(line, "ring3test")) {
-        ring3_test();
+        ring3_test(arg); /* v64: "", "fault", or "spin", see ring3.h; all three come back to the shell */
     }
     else if (!strcmp(line, "preempttest")) {
         preempt_a_count = 0; preempt_b_count = 0; preempt_stop = 0;
@@ -4093,6 +4094,8 @@ void kmain(unsigned int multiboot_info_addr){
     klog("gdt_install: GDT loaded");
     idt_install();
     klog("idt_install: IDT loaded");
+    syscall_install(); /* v64: int 0x80 gate, DPL 3 */
+    klog("syscall_install: int 0x80 gate live");
     irq_install();
     klog("irq_install: PIC remapped, PIT/keyboard IRQs live");
     mouse_init();

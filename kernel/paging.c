@@ -102,6 +102,25 @@ void paging_set_user(void *virt_addr) {
     __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
 }
 
+/* v64 (0.61.0): access_ok for syscalls. Only the base 4MB (either alias)
+   can hold user pages today (paging_set_user's own limit), so anything
+   outside it is a kernel-only address by construction. Within it, every
+   page in the range needs both present and U/S set in the one shared
+   first_page_table, which every task directory points at by value. */
+int paging_user_range_ok(unsigned int addr, unsigned int len) {
+    if (len == 0) return 1;
+    unsigned int end = addr + len;
+    if (end < addr) return 0; /* wrapped */
+    for (u32 p = addr & ~0xFFFu; p < end; p += 0x1000) {
+        u32 pde = p >> 22;
+        if (pde != 0 && pde != KERNEL_PDE_INDEX) return 0;
+        u32 pte = (p >> 12) & 0x3FF;
+        if ((first_page_table[pte] & 0x5) != 0x5) return 0; /* present + user */
+        if (p > 0xFFFFF000u - 0x1000) break; /* next += would wrap; end < addr already ruled the range in */
+    }
+    return 1;
+}
+
 /* v31 (0.31.0): real per-task memory isolation, see paging.h. A directory
    and its private table/frame are all plain physical frames from pmm,
    below IDENTITY_MAP_LIMIT (kheap.c's own limit, re-used here rather than

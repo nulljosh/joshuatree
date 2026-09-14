@@ -1,9 +1,12 @@
 /* Flat GDT: null, ring-0 code/data, ring-3 code/data, and a TSS whose only
    real job is telling the CPU which kernel stack (ss0:esp0) to switch to
-   when a ring-3->ring-0 privilege change happens, e.g. the general-
-   protection fault a ring-3 task gets for trying a privileged instruction
-   (see ring3.c). No per-task TSS switching, one static TSS is enough since
-   there's no ring-3 task scheduler yet, just the one demo transition. */
+   when a ring-3->ring-0 privilege change happens: an int 0x80 syscall, a
+   timer tick, or a fault (see ring3.c, syscall.c). Still one static TSS,
+   never task-switched through (no hardware task switching, same as Linux
+   and xv6), but v64 made esp0 a moving target: task.c's schedule() points
+   it at the next task's own kernel stack on every switch, because two
+   ring-3 tasks sharing one fixed kernel stack would have the second's
+   trap frame land on top of the first's saved one. */
 #include "gdt.h"
 
 typedef unsigned int  u32;
@@ -54,6 +57,14 @@ static void set_gate(int n, u32 base, u32 limit, u8 access, u8 gran) {
     gdt[n].limit_low = limit & 0xFFFF;
     gdt[n].gran      = ((limit >> 16) & 0x0F) | (gran & 0xF0);
     gdt[n].access    = access;
+}
+
+/* 0 means "back to the boot-time static stack", what task 0 (the shell,
+   which never runs at ring 3 and so never actually triggers the switch)
+   gets. Read by the CPU only at the moment of a ring-3->ring-0 transition,
+   so changing it while already in ring 0 is always safe. */
+void gdt_set_kernel_stack(u32 esp0) {
+    tss.esp0 = esp0 ? esp0 : (u32)(tss_kernel_stack + sizeof(tss_kernel_stack));
 }
 
 void gdt_install(void) {

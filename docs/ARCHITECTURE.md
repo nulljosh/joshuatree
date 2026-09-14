@@ -25,13 +25,14 @@ that with the permanent, same-shaped tables.
 | File | What it owns |
 |---|---|
 | `gdt.c` | Flat GDT: ring-0 and ring-3 code/data segments (both spanning 4GB) plus a TSS for ring-3-to-ring-0 stack switches |
-| `idt.c` + `isr.S` | IDT and the 32 CPU-exception handlers. An exception prints and halts, no recovery |
+| `idt.c` + `isr.S` | IDT, the 32 CPU-exception handlers, and the `int 0x80` entry. A ring-0 exception prints and halts (a kernel bug); a ring-3 one names itself, reaps the task, and the kernel keeps running (v64) |
+| `syscall.c` | `int 0x80` dispatch table, x86 Linux convention and numbers: `SYS_EXIT` (1), `SYS_WRITE` (4). User pointers are checked against the page tables before the kernel reads them (v64) |
 | `pic.c` | Remaps the 8259 PIC so IRQs land on vectors 32-47 instead of overlapping CPU exceptions |
 | `irq.c` + `irq_stubs.S` | IRQ0 (PIT tick counter) and IRQ1 (keyboard ring buffer) |
 | `pmm.c` | Physical memory: a bitmap over `mem_upper` from the multiboot info struct |
 | `paging.c` | Permanent page tables: identity-maps the first 4MB and double-maps it at 0xC0000000 for the kernel's own higher-half code/data |
 | `kheap.c` | `kmalloc`/`kfree`, a first-fit free list grown a frame at a time from `pmm.c` |
-| `task.c` + `irq_stubs.S`'s irq0 | Preemptive round-robin off the PIT tick. `yield()` reaches the same switch in software via `int $32`, same IDT gate as the hardware timer |
+| `task.c` + `irq_stubs.S`'s irq0 | Preemptive round-robin off the PIT tick. `yield()` reaches the same switch in software via `int $32`, same IDT gate as the hardware timer. Ring-3 tasks sit in the same table since v64 (`task_create_user`), each with its own kernel stack that the TSS `esp0` is repointed to on every switch; the saved frame carries DS/ES/FS/GS so a resume into ring 3 keeps its own selectors |
 | `ata.c` | ATA PIO disk driver, LBA28, primary master only |
 | `fat.c` | FAT16, real subdirectories and file writes, 8.3 names |
 | `exec.c` | Loads a flat binary via `fat.c` and calls into it, ring 0, no isolation |
@@ -55,13 +56,16 @@ physical-memory DMA and doesn't know what a page table is.
 Ring-3 user mode (v3) shipped: `gdt.c` adds ring-3 code/data segments and a
 TSS, `paging.c`'s `paging_set_user()` marks specific pages user-accessible
 while everything else stays supervisor-only, and `ring3.c`/`ring3_asm.S`
-run a one-shot demo payload in ring 3 that writes a proof-of-execution
-marker, then attempts a privileged instruction and faults, verified by an
-independent QEMU-monitor memory read of the marker and the kernel's own
-correctly-named general-protection fault report, not just "didn't crash".
-`ring3test` halts the kernel by design (no process kill/reap exists yet),
-reboot after running it. No `int 0x80` syscall gate yet, nothing calls into
-the kernel from ring 3 today to need one.
+copy a hand-written payload onto a user page and run it at CPL 3. As of
+v64 that payload is a real scheduled task (`task_create_user`) with a
+real `int 0x80` gate to call: `ring3test` writes a line through
+`SYS_WRITE`, stores the kernel's return value in a marker from ring 3, and
+ends with `SYS_EXIT`; `ring3test fault` keeps the v3 privileged-instruction
+payload and is reaped by `idt.c`'s ring-3 exception path instead of halting
+the machine; `ring3test spin` proves preemption and `task_kill` on a ring-3
+task. All three come back to the shell. Verified by independent
+QEMU-monitor reads of the marker plus the kernel's own correctly-named
+reports, not just "didn't crash"; see `roadmap.md`'s v3 and v64 entries.
 
 ## Verification
 

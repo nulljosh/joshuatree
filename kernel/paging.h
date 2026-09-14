@@ -18,6 +18,12 @@ int paging_map_region(unsigned int phys_addr, unsigned int length);
    paging_map_region mapped instead. */
 void paging_set_user(void *virt_addr);
 
+/* v64 (0.61.0): 1 if every page of [addr, addr+len) is mapped user-
+   accessible, the check a syscall makes on a ring-3 pointer before
+   dereferencing it (Linux's access_ok shape). Anything outside the base
+   4MB is kernel-only by construction and returns 0. */
+int paging_user_range_ok(unsigned int addr, unsigned int len);
+
 /* v31 (0.31.0): real per-task memory isolation. Every task gets its own
    page directory, cloned from the kernel's (so kernel code/data/stack
    stay shared and trusted, exactly as today) plus one private page table

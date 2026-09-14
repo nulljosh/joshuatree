@@ -58,6 +58,32 @@ static int grow_heap(u32 need) {
             return 0;
         }
         if (heap_limit == 0) heap_next = frame;
+        else if (frame != heap_limit) {
+            /* v64 (0.61.0): the frame pmm handed back is NOT the one right
+               after the current region, and this code used to bump
+               heap_limit anyway, as if it were. Real, found by a triple
+               fault, present on v62 too: task_create() interleaves a
+               stack kmalloc with paging_new_task_directory()'s three pmm
+               frames, so the second task's 4KB stack got carved across a
+               gap that was actually the first task's page directory, and
+               the fabricated frame (zeros plus task_b's EIP) landed on
+               PDE 0-3 of that directory; the first `pop` on the new task's
+               stack then faulted under a directory that no longer mapped
+               low memory. The bytes between heap_next and the old limit
+               can't join a block that continues into the new frame, so
+               park them as their own free block when there's room for a
+               header plus something usable, otherwise let them go, and
+               start the next carve at the new frame. */
+            u32 tail = heap_limit - heap_next;
+            if (tail >= sizeof(struct block) + MIN_SPLIT_PAYLOAD) {
+                struct block *t = (struct block *)heap_next;
+                t->size = tail - (u32)sizeof(struct block);
+                t->free = 1;
+                t->next = heap_head;
+                heap_head = t;
+            }
+            heap_next = frame;
+        }
         heap_limit = frame + 4096;
     }
     return 1;
@@ -114,12 +140,20 @@ void kfree(void *ptr) {
        memory-adjacent, higher address first. Merge into the lower-address
        side (its header is the one actually sitting at the merged block's
        start) whenever both sides of a boundary are free, walking the
-       whole list once so one free can close a run of several. */
+       whole list once so one free can close a run of several.
+       v64 (0.61.0): adjacency is checked, not assumed. grow_heap can now
+       start a fresh region when pmm hands back a non-contiguous frame
+       (its parked tail block breaks the strict decreasing-address order
+       for that one pair), and merging two list neighbours that aren't
+       memory neighbours would fold whatever sits in the gap, another
+       subsystem's page directory in the case that found this, into a
+       free block. Two blocks merge only when the lower one's payload ends
+       exactly at the higher one's header. */
     struct block *prev = 0;
     struct block *cur = heap_head;
     while (cur && cur->next) {
         struct block *nxt = cur->next;
-        if (cur->free && nxt->free) {
+        if (cur->free && nxt->free && (u32)nxt + sizeof(struct block) + nxt->size == (u32)cur) {
             nxt->size += (u32)sizeof(struct block) + cur->size;
             if (prev) prev->next = nxt; else heap_head = nxt;
             cur = nxt;

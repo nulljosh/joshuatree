@@ -1,9 +1,14 @@
-/* IDT + the 32 CPU-exception ISRs. ponytail: no recovery path, an exception
-   here means a real bug, so the handler prints and halts instead of trying
-   to resume. Add iret + register save/restore when IRQs (v1's next step)
-   need to return control to interrupted code. */
+/* IDT + the 32 CPU-exception ISRs. A ring-0 exception means a real kernel
+   bug, so the handler prints and halts, no recovery attempted. v64: an
+   exception from ring 3 is a user task's bug, not the kernel's, so that
+   path reports it and reaps the task through the same task_exit machinery
+   every other task ends through, and the kernel keeps running. The CS the
+   CPU pushed says which case this is (RPL 3 = came from ring 3), which is
+   why isr.S now hands the whole frame over instead of just the vector. */
 #include "idt.h"
 #include "console.h"
+#include "serial.h"
+#include "task.h"
 
 typedef unsigned int  u32;
 typedef unsigned short u16;
@@ -52,16 +57,33 @@ static const char *EXC_NAME[32] = {
     "security", "reserved"
 };
 
-void isr_handler(u32 vector) {
-    puts("\n!! CPU exception: ");
-    puts(EXC_NAME[vector < 32 ? vector : 31]);
-    if (vector == 14) {
-        u32 fault_addr;
-        __asm__ volatile ("mov %%cr2, %0" : "=r"(fault_addr));
-        puts(" at ");
-        puthex(fault_addr);
+void isr_handler(u32 vector, u32 err, u32 eip, u32 cs, u32 eflags) {
+    (void)err; (void)eflags;
+    const char *name = EXC_NAME[vector < 32 ? vector : 31];
+    u32 fault_addr = 0;
+    if (vector == 14) __asm__ volatile ("mov %%cr2, %0" : "=r"(fault_addr));
+
+    if ((cs & 3) == 3 && task_current() != 0) {
+        /* From ring 3, and not the shell's own slot (task 0 is the one
+           task that can't be reaped, it has no stack of its own to free).
+           Report exactly what happened, then end this task the way
+           task_exit ends any other: its kernel stack and page directory
+           freed, its slot skipped by the scheduler from here on. We're
+           already on this task's own kernel stack (the TSS esp0 switch
+           put us there), so task_exit's "free the stack you're standing
+           on, then int $32 away" reasoning applies unchanged. */
+        puts("\n!! ring-3 task hit "); puts(name);
+        if (vector == 14) { puts(" at "); puthex(fault_addr); }
+        puts(" (eip "); puthex(eip); puts(") -- task killed, kernel continues\n");
+        serial_puts("exception: ring-3 task hit "); serial_puts(name); serial_puts(", reaped\n");
+        task_exit_with(-(int)vector);
     }
+
+    puts("\n!! CPU exception: ");
+    puts(name);
+    if (vector == 14) { puts(" at "); puthex(fault_addr); }
     puts(" -- halted\n");
+    serial_puts("exception: ring-0 "); serial_puts(name); serial_puts(", halted\n");
     for (;;) __asm__ volatile ("cli; hlt");
 }
 
