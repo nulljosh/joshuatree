@@ -6,6 +6,5 @@ landing/kernel.elf
 .wrangler/
 menubar/JoshuaTreeMonitor.app/
 menubar/window-float
-drivers/app_*.h
 .claude/worktrees/
 dotfiles.img

@@ -17,8 +17,13 @@ OBJS := boot/boot.o $(KERNEL_ASM:.S=.o) $(KERNEL_SRCS:.c=.o) $(DRIVER_SRCS:.c=.o
 kernel.elf: $(OBJS) boot/linker.ld
 	$(LD) -m elf_i386 -T boot/linker.ld -o $@ $(OBJS)
 
-# Generated from a sibling repo (gen_app.sh), not checked in. Only built
-# once if missing; rerun gen_app.sh by hand to pick up a changed source app.
+# Generated from a sibling repo (gen_app.sh). Committed as a snapshot as of
+# v54 (they used to be gitignored): a fresh clone or an isolated agent
+# sandbox has no sibling repos to regenerate from, and the first parallel
+# agent to hit that had to hand-copy them to build at all. Same "committed
+# copy of a build artifact" relationship landing/v86/kernel.elf already has.
+# These rules still regenerate one if it's genuinely missing; rerun
+# gen_app.sh by hand to pick up a changed source app, then commit the result.
 drivers/app_weather.h:
 	./gen_app.sh
 
