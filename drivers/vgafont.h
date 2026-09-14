@@ -102,4 +102,7 @@ static const unsigned char vgafont_glyphs[] = {
     0,112,24,24,24,24,8,14,8,24,24,24,24,112,0,0, /* 125 '}' */
     0,0,0,0,0,0,0,121,14,0,0,0,0,0,0,0, /* 126 '~' */
 };
+/* 0xF8 (CP437 degree sign), the one glyph outside 32..126 the menu bar uses. */
+#define VGAFONT_DEGREE 0xF8
+static const unsigned char vgafont_degree[16] = {0,0,0x38,0x44,0x44,0x38,0,0,0,0,0,0,0,0,0,0};
 #endif

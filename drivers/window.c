@@ -48,6 +48,11 @@ int window_open(u32 width, u32 height, u32 bpp) {
 
 u32 window_scale(void) { return scale; }
 
+u32 window_get_pixel_phys(int px, int py) {
+    if (px < 0 || py < 0 || (u32)px >= phys_w || (u32)py >= win_h * scale) return 0;
+    return fb[(u32)py * phys_w + (u32)px];
+}
+
 void window_pixel_phys(int px, int py, u32 color) {
     if (px < 0 || py < 0 || (u32)px >= phys_w || (u32)py >= win_h * scale) return;
     fb[(u32)py * phys_w + (u32)px] = color;

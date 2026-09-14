@@ -673,6 +673,7 @@ static int gui_dock_icon(void){
 }
 #define DOCK_ICON (gui_dock_icon())
 #define DOCK_MARGIN_BOT 24
+#define DOCK_TRAY_COLOR 0x00EFEBE4 /* the one surface colour every dock tile is blended against */
 #define DOCK_MAGNIFY    9
 #define DOCK_LIFT       10
 
@@ -1146,6 +1147,85 @@ static void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; }
    emulation, confirmed against this exact machine's real wall clock the
    same way the earlier UTC-vs-local timezone fix was (a real screendump
    matching what `date` printed at that same moment). */
+/* v43 (0.43.0): live weather in the menu bar. Open-Meteo answers over
+   plain HTTP (checked: a real 200 on http://, no redirect), which is what
+   makes this possible at all in a kernel with no TLS. Vancouver by default,
+   the one place this machine actually sits. Honest limits, stated rather
+   than hidden: the fetch is synchronous inside the GUI loop, once after
+   the first frame and then every ten minutes, so on a NIC with no route
+   out it can stall the desktop for the WAN timeout; moving it into a
+   background task is the follow-up, held back only because net.c's
+   receive path was written single-caller and hasn't been audited for a
+   second one yet. No NIC (v86, the browser demo) means no attempt and
+   nothing drawn, not an error. */
+static char weather_text[24] = "";
+static unsigned int weather_last_tick = 0;
+static int weather_tried_once = 0;
+
+static const char *weather_word(int code){
+    if (code == 0) return "Clear";
+    if (code <= 3) return "Cloudy";
+    if (code <= 48) return "Fog";
+    if (code <= 67) return "Rain";
+    if (code <= 77) return "Snow";
+    if (code <= 82) return "Showers";
+    return "Storm";
+}
+
+/* Pulls a number for `key` from inside the "current":{...} object. The
+   units object earlier in the same reply has the same keys with string
+   values ("°C"), so the search has to start after "current":{ or it would
+   read the wrong one. */
+static int json_current_number(const char *json, const char *key, int *out_x10){
+    const char *p = json;
+    const char *cur = 0;
+    while (*p) { if (p[0]=='"' && p[1]=='c' && p[2]=='u' && p[3]=='r' && p[4]=='r' && p[5]=='e' && p[6]=='n' && p[7]=='t' && p[8]=='"' && p[9]==':' && p[10]=='{') { cur = p + 11; break; } p++; }
+    if (!cur) return 0;
+    for (p = cur; *p && *p != '}'; p++) {
+        const char *k = key; const char *q = p;
+        if (*q != '"') continue;
+        q++;
+        while (*k && *q == *k) { q++; k++; }
+        if (*k || *q != '"' || q[1] != ':') continue;
+        q += 2;
+        int neg = 0; if (*q == '-') { neg = 1; q++; }
+        int whole = 0, frac = 0, seen_dot = 0;
+        while ((*q >= '0' && *q <= '9') || *q == '.') {
+            if (*q == '.') { seen_dot = 1; q++; continue; }
+            if (!seen_dot) whole = whole * 10 + (*q - '0');
+            else if (frac == 0 && !seen_dot) {}
+            else if (frac == 0) { frac = (*q - '0'); }
+            q++;
+        }
+        int v = whole * 10 + frac;
+        *out_x10 = neg ? -v : v;
+        return 1;
+    }
+    return 0;
+}
+
+static void weather_fetch(void){
+    weather_last_tick = ticks();
+    if (!rtl8139_init()) return;
+    net_init(0x0A00020F);
+    static char body[2048];
+    int n = http_get("api.open-meteo.com", "/v1/forecast?latitude=49.28&longitude=-123.12&current=temperature_2m,weather_code", 80, body, sizeof(body) - 1);
+    if (n <= 0) return;
+    body[n] = 0;
+    int t10 = 0, code10 = 0;
+    if (!json_current_number(body, "temperature_2m", &t10)) return;
+    json_current_number(body, "weather_code", &code10);
+    int t = (t10 >= 0 ? t10 + 5 : t10 - 5) / 10; /* round to whole degrees */
+    int p = 0;
+    if (t < 0) { weather_text[p++] = '-'; t = -t; }
+    if (t >= 10) weather_text[p++] = '0' + t / 10;
+    weather_text[p++] = '0' + t % 10;
+    weather_text[p++] = (char)0xF8; /* CP437 degree sign, present in both the hardware font and the fallback */
+    weather_text[p++] = ' ';
+    for (const char *w = weather_word(code10 / 10); *w; w++) weather_text[p++] = *w;
+    weather_text[p] = 0;
+}
+
 static void gui_draw_menubar(void){
     u8 h = cmos(4), m = cmos(2), wd = cmos(6), dom = cmos(7), mon = cmos(8);
     u8 hv = (h & 0x0F) + ((h >> 4) * 10), mv = (m & 0x0F) + ((m >> 4) * 10);
@@ -1184,6 +1264,10 @@ static void gui_draw_menubar(void){
     clock[p] = 0;
 
     font_draw_string(clock, (int)window_width() - p * 8 - 16, 7, 0x001C1C1E, -1);
+    if (weather_text[0]) {
+        int wl = (int)strlen(weather_text);
+        font_draw_string(weather_text, (int)window_width() - p * 8 - 16 - wl * 8 - 28, 7, 0x00884B16, -1);
+    }
 }
 
 /* Real redesign, not a bigger version of the old one: side-by-side with
@@ -1493,7 +1577,7 @@ static void gui_draw_gloss(int x, int y, int w, int h, unsigned int bg, int corn
    under the icon, blending out to the dock's own color at the edge,
    which is exactly what a soft shadow is. */
 static void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
-    unsigned int dock_bg = 0x00EFEBE4;
+    unsigned int dock_bg = DOCK_TRAY_COLOR;
     unsigned int core = gui_lerp(dock_bg, 0x00000000, 45, 100); /* never full black: this is a contact shadow on a light surface */
     int rx = size / 2, ry = size / 9;
     if (rx <= 0 || ry <= 0) return;
@@ -1562,80 +1646,89 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
    2:1 box filter (240 -> 120) instead of a 1.5:1 one that would have to
    pick which sample to drop. */
 #define ICON_SS_SCALE 6 /* v43: 3 samples per physical pixel per axis (9 per pixel) at 2x, up from 2x2, visibly cleaner curves on the folder/pin/sun edges */
-static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
-    int x = cx_center - size / 2, y = cy_bottom - size;
-    unsigned int bg = GUI_COLORS[icon];
-    unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
+/* v43: icons are rendered ONCE per (icon, size) into a physical-res cache
+   and blitted from then on. Before this, every hover change re-rendered
+   all eight dock icons through the 6x supersample (eight 360x360 buffers,
+   ~4MB of pixel work) and that was the "flashes when I hover" report
+   after the v40 cursor fix had already removed the other cause. A blit is
+   pw*pw writes, hundreds of times cheaper, and the flash is gone because
+   the frame is now finished before anything can be seen mid-draw. */
+#define ICON_CACHE_SLOTS 2 /* normal, magnified */
+static unsigned int *icon_cache[GUI_APP_COUNT][ICON_CACHE_SLOTS];
+static int icon_cache_size[GUI_APP_COUNT][ICON_CACHE_SLOTS];
+static unsigned int icon_cache_under[GUI_APP_COUNT][ICON_CACHE_SLOTS];
 
+/* `under` is the colour the tile physically sits on. Its corners are
+   blended toward that, so they vanish into the surface instead of
+   leaving a pale halo: the dock tray is 0xEFEBE4, the Apps folder is
+   GUI_BG, and blending both toward GUI_BG (the old behaviour) put a
+   faint white rim on every dock tile once the pixels got small enough to
+   see it. */
+static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsigned int under){
+    if (icon_cache[icon][slot] && icon_cache_size[icon][slot] == size && icon_cache_under[icon][slot] == under) return icon_cache[icon][slot];
+    unsigned int sc = window_scale();
+    int pw = size * (int)sc;
     unsigned int ssz = (unsigned int)size * ICON_SS_SCALE;
     unsigned int *ssbuf = (unsigned int *)kmalloc(ssz * ssz * sizeof(unsigned int));
-    if (ssbuf) {
-        window_push_target(ssbuf, ssz, ssz);
-        /* v37, real latent bug, not a cosmetic tweak: this buffer comes
-           straight from kmalloc and gui_rounded_rect_gradient only paints
-           *inside* its rounded rect, so every pixel in the four corners
-           was whatever heap garbage happened to be there, scaled down and
-           drawn to screen. It went unnoticed while icons were small (tiny
-           corner area, and early-boot heap happened to be mostly zeros);
-           the v37 dock's much larger icons made it obvious as dark
-           notches on every tile. The direct path below never had this bug
-           because it draws onto the real framebuffer, which already has
-           the dock painted underneath. */
-        for (unsigned int i = 0; i < ssz * ssz; i++) ssbuf[i] = GUI_BG;
-        /* v37: radius is a *proportion* of the icon (22%, the ratio iOS
-           and macOS have used since the squircle), not a fixed 12px.
-           With the dock now showing 7 large icons instead of 15 small
-           ones, a flat 12px corner on a 97px tile read as a hard square
-           with odd dark notches, caught by looking at a real screendump. */
-        int r = (int)ssz * 22 / 100;
-        gui_rounded_rect_gradient(0, 0, (int)ssz, (int)ssz, bg_light, bg_dark, GUI_BG, r);
-        gui_draw_gloss(0, 0, (int)ssz, (int)ssz, bg, r + ICON_SS_SCALE);
-        int scy = (int)ssz / 2;
-        unsigned int real_fg = ICON_FG;
-        ICON_FG = gui_blend(bg, 0x00000000);
-        gui_draw_icon_glyph(icon, (int)ssz / 2 + ICON_SS_SCALE, scy + 2 * ICON_SS_SCALE, (int)ssz, bg);
-        ICON_FG = real_fg;
-        gui_draw_icon_glyph(icon, (int)ssz / 2, scy, (int)ssz, bg);
-        window_pop_target();
-
-        /* v41: downsample to *physical* pixels, not logical ones. At
-           window scale 2 each logical icon pixel is a 2x2 block on the
-           real framebuffer; writing those four physical pixels from four
-           different parts of the supersample buffer (instead of one
-           averaged colour stamped four times, which is what window_pixel
-           would do) is exactly what makes the icon genuinely sharper at
-           the higher resolution rather than just bigger. */
-        unsigned int sc = window_scale();
-        unsigned int per = ICON_SS_SCALE / sc;           /* supersamples per physical pixel, per axis */
-        if (per < 1) per = 1;
-        unsigned int samples = per * per;
-        int pw = size * (int)sc;                         /* physical icon size */
-        for (int py = 0; py < pw; py++){
-            for (int px = 0; px < pw; px++){
-                unsigned int rs = 0, gs = 0, bs = 0;
-                for (unsigned int sy = 0; sy < per; sy++){
-                    unsigned int *row = &ssbuf[((unsigned int)py * per + sy) * ssz + (unsigned int)px * per];
-                    for (unsigned int sx = 0; sx < per; sx++){
-                        unsigned int c = row[sx];
-                        rs += (c >> 16) & 0xFF; gs += (c >> 8) & 0xFF; bs += c & 0xFF;
-                    }
-                }
-                window_pixel_phys(x * (int)sc + px, y * (int)sc + py, ((rs / samples) << 16) | ((gs / samples) << 8) | (bs / samples));
-            }
-        }
-        kfree(ssbuf);
-        return;
+    if (!ssbuf) return 0;
+    unsigned int *out = icon_cache[icon][slot];
+    if (!out || icon_cache_size[icon][slot] != size) {
+        if (out) kfree(out);
+        out = (unsigned int *)kmalloc((unsigned int)(pw * pw) * sizeof(unsigned int));
+        if (!out) { kfree(ssbuf); return 0; }
+        icon_cache[icon][slot] = out; icon_cache_size[icon][slot] = size;
     }
-
-    gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, GUI_BG, size * 22 / 100);
-    gui_draw_gloss(x, y, size, size, bg, size * 22 / 100 + 1);
-    int cy = y + size / 2;
+    icon_cache_under[icon][slot] = under;
+    unsigned int bg = GUI_COLORS[icon];
+    unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
+    window_push_target(ssbuf, ssz, ssz);
+    for (unsigned int i = 0; i < ssz * ssz; i++) ssbuf[i] = under;
+    int r = (int)ssz * 22 / 100;
+    gui_rounded_rect_gradient(0, 0, (int)ssz, (int)ssz, bg_light, bg_dark, under, r);
+    gui_draw_gloss(0, 0, (int)ssz, (int)ssz, bg, r + ICON_SS_SCALE);
+    int scy = (int)ssz / 2;
     unsigned int real_fg = ICON_FG;
     ICON_FG = gui_blend(bg, 0x00000000);
-    gui_draw_icon_glyph(icon, cx_center + 1, cy + 2, size, bg);
+    gui_draw_icon_glyph(icon, (int)ssz / 2 + ICON_SS_SCALE, scy + 2 * ICON_SS_SCALE, (int)ssz, bg);
     ICON_FG = real_fg;
-    gui_draw_icon_glyph(icon, cx_center, cy, size, bg);
+    gui_draw_icon_glyph(icon, (int)ssz / 2, scy, (int)ssz, bg);
+    window_pop_target();
+    unsigned int per = ICON_SS_SCALE / sc; if (per < 1) per = 1;
+    unsigned int samples = per * per;
+    for (int py = 0; py < pw; py++){
+        for (int px = 0; px < pw; px++){
+            unsigned int rs = 0, gs = 0, bs = 0;
+            for (unsigned int sy = 0; sy < per; sy++){
+                unsigned int *row = &ssbuf[((unsigned int)py * per + sy) * ssz + (unsigned int)px * per];
+                for (unsigned int sx = 0; sx < per; sx++){ unsigned int c = row[sx]; rs += (c >> 16) & 0xFF; gs += (c >> 8) & 0xFF; bs += c & 0xFF; }
+            }
+            out[py * pw + px] = ((rs / samples) << 16) | ((gs / samples) << 8) | (bs / samples);
+        }
+    }
+    kfree(ssbuf);
+    return out;
 }
+
+static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int size, unsigned int under){
+    int x = cx_center - size / 2, y = cy_bottom - size;
+    int slot = (size == DOCK_ICON) ? 0 : 1;
+    unsigned int *tile = gui_render_icon_cached(icon, size, slot, under);
+    unsigned int sc = window_scale();
+    int pw = size * (int)sc;
+    if (tile) {
+        for (int py = 0; py < pw; py++)
+            for (int px = 0; px < pw; px++)
+                window_pixel_phys(x * (int)sc + px, y * (int)sc + py, tile[py * pw + px]);
+        return;
+    }
+    /* out of memory for the cache: draw directly, un-supersampled, rather than draw nothing */
+    unsigned int bg = GUI_COLORS[icon];
+    unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
+    gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, under, size * 22 / 100);
+    gui_draw_gloss(x, y, size, size, bg, size * 22 / 100 + 1);
+    gui_draw_icon_glyph(icon, cx_center, y + size / 2, size, bg);
+}
+static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){ gui_draw_one_icon_on(icon, cx_center, cy_bottom, size, DOCK_TRAY_COLOR); }
 
 /* hover_slot: which slot shows the magnify+label (-1 none). drag_slot: the
    slot currently being dragged, drawn separately so it can float free of
@@ -1656,8 +1749,29 @@ static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int dra
 /* v40: repaint only the dock band: the wallpaper rows behind it, then the
    dock itself. This is what a hover change costs now, instead of a full
    456,000-pixel photo blit plus eight supersampled icons. */
+static unsigned int *dock_band_cache = 0;
+static int dock_band_cache_top = -1;
 static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int drag_my){
-    gui_draw_wallpaper_rows(gui_dock_band_top(), (int)window_height());
+    /* v43: the wallpaper rows behind the dock never change, so bilinear
+       them once and copy thereafter. ~400k physical samples per hover
+       change was the other half of the flash. */
+    int sc = (int)window_scale();
+    int top = gui_dock_band_top(), h = (int)window_height() - top;
+    int pw = (int)window_width() * sc, ph = h * sc;
+    if (!dock_band_cache || dock_band_cache_top != top) {
+        if (dock_band_cache) kfree(dock_band_cache);
+        dock_band_cache = (unsigned int *)kmalloc((unsigned int)(pw * ph) * sizeof(unsigned int));
+        dock_band_cache_top = top;
+        gui_draw_wallpaper_rows(top, (int)window_height());
+        if (dock_band_cache)
+            for (int py = 0; py < ph; py++)
+                for (int px = 0; px < pw; px++)
+                    dock_band_cache[py * pw + px] = window_get_pixel_phys(px, top * sc + py);
+    } else {
+        for (int py = 0; py < ph; py++)
+            for (int px = 0; px < pw; px++)
+                window_pixel_phys(px, top * sc + py, dock_band_cache[py * pw + px]);
+    }
     gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
 }
 
@@ -1683,7 +1797,7 @@ static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_m
        and bottom corners sit against very different points on the
        gradient, one fixed blend sample for both was the real dark-bubble
        bug just found and fixed above. */
-    gui_rounded_rect_on_wallpaper(dock_x, y0, dock_w, dock_h, 0x00EFEBE4, 20);
+    gui_rounded_rect_on_wallpaper(dock_x, y0, dock_w, dock_h, DOCK_TRAY_COLOR, 20);
 
     for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
         if (slot == drag_slot) continue; /* drawn last, floating at the cursor */
@@ -2153,7 +2267,7 @@ static void gui_launch_apps(void){
             if (i == sel) /* selection plate, drawn under the icon so it reads as a highlight, not a border */
                 gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 14,
                                           0x00EDE6DC, 0x00DDD3C6, GUI_BG, 12);
-            gui_draw_one_icon(i, cx, cy + tile, tile);
+            gui_draw_one_icon_on(i, cx, cy + tile, tile, GUI_BG);
             int lw = (int)strlen(GUI_LABELS[i]) * 8;
             font_draw_string(GUI_LABELS[i], cx - lw / 2, cy + tile + 10, 0x001C1C1E, -1);
         }
@@ -2452,6 +2566,14 @@ static void gui_run(void){
     gui_draw_cursor(mx, my);
     for (;;) {
         __asm__ volatile ("hlt");
+        /* v43: weather, after the desktop is already on screen so the
+           fetch never delays the first frame, then every ten minutes. */
+        if (!weather_tried_once || ticks() - weather_last_tick > 100 * 600) {
+            weather_tried_once = 1;
+            char before[24]; for (int i = 0; i < 24; i++) before[i] = weather_text[i];
+            weather_fetch();
+            if (strcmp(before, weather_text) != 0) { gui_menubar_force_redraw(); gui_draw_menubar(); if (my < GUI_MENUBAR_H) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); } }
+        }
         int sc = kbd_pop();
         if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) break; /* esc, non-blocking */
         int dx = 0, dy = 0;
@@ -2565,7 +2687,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -2694,6 +2816,22 @@ static void run(char *line){
             while (ticks() < settle) { }
             puts(preempt_a_count == stopped_at ? "kill: task really stopped: ok\n" : "kill: FAILED (counter kept moving)\n");
         }
+    }
+    else if (!strcmp(line, "weathertest")) {
+        /* v43: the parser has one real trap, so it gets a real test: the
+           reply's "current_units" object carries the same keys with STRING
+           values ("°C") before the "current" object carries the numbers.
+           A naive key search reads the wrong one. Negative and fractional
+           temperatures are the other two edge cases a Vancouver winter
+           will actually exercise. */
+        static const char canned[] = "{\"latitude\":49.27,\"current_units\":{\"time\":\"iso8601\",\"temperature_2m\":\"\xb0" "C\",\"weather_code\":\"wmo code\"},"
+                                     "\"current\":{\"time\":\"2026-09-14T07:40\",\"interval\":900,\"temperature_2m\":-3.5,\"weather_code\":61}}";
+        int t10 = 999, code10 = 999;
+        int ok_t = json_current_number(canned, "temperature_2m", &t10);
+        int ok_c = json_current_number(canned, "weather_code", &code10);
+        int ok = ok_t && ok_c && t10 == -35 && code10 == 610;
+        puts(ok ? "weather parse: -3.5C / code 61 through the units-block trap: ok\n" : "weather parse: FAILED\n");
+        if (!ok) { puts("  t10="); putn((unsigned int)t10); puts(" code10="); putn((unsigned int)code10); puts("\n"); }
     }
     else if (!strcmp(line, "isotest")) {
         iso_readback_a = 0; iso_readback_b = 0;

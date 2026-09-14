@@ -61,6 +61,7 @@ void font_init(void) {
         for (int ch = VGAFONT_FIRST; ch <= VGAFONT_LAST; ch++)
             for (int row = 0; row < 16; row++)
                 glyphs[ch * 16 + row] = vgafont_glyphs[(ch - VGAFONT_FIRST) * 16 + row];
+        for (int row = 0; row < 16; row++) glyphs[VGAFONT_DEGREE * 16 + row] = vgafont_degree[row];
     }
 
     outb(SEQ_INDEX, 0x02); outb(SEQ_DATA, seq2);
