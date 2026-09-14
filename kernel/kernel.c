@@ -2302,6 +2302,41 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     gui_draw_icon_glyph(icon, (int)ssz / 2 + ICON_SS_SCALE, scy + 2 * ICON_SS_SCALE, (int)ssz, bg);
     ICON_FG = real_fg;
     gui_draw_icon_glyph(icon, (int)ssz / 2, scy, (int)ssz, bg);
+    /* v66: real, confirmed bug, not a guess: re-clip every supersample
+       pixel back to this same rounded-rect silhouette, now that every
+       glyph has drawn. Root-caused with a real headless dock capture,
+       zoomed 4x: the Weather icon's 8 sun rays (gui_icon_weather, by
+       design reaching toward every corner) showed a visible light halo
+       bled past all four rounded corners, and Mail's checkmark / Calendar's
+       binder rings showed the same, fainter, near their top corners, the
+       exact icons whose glyph primitives reach toward a corner. Files,
+       Trash, and the Apps grid, whose glyphs stay centered, showed none,
+       confirming it's geometry reaching past the curve, not a general AA
+       bug. Every gui_draw_capsule/gui_fill_circle call blends its own edge
+       toward `bg` (this icon's flat color), the right choice when it's
+       fully inside the tile, but wrong wherever the primitive's own reach
+       or AA fringe lands past the curve gui_rounded_rect_gradient already
+       carved pure `under` into; nothing after that first fill ever
+       reasserted the boundary. Same corner math gui_rounded_rect_gradient
+       itself uses (arithmetic mean, not a new rule), just applied as a
+       final mask instead of only a first pass, so it catches every icon's
+       glyph at once instead of patching each shape's own geometry. */
+    for (int cyy = 0; cyy <= r; cyy++){
+        for (int cxx = 0; cxx <= r; cxx++){
+            int ox = r - cxx, oy = r - cyy;
+            int d2 = ox * ox + oy * oy;
+            int inner = r - AA_BAND;
+            if (d2 <= inner * inner) continue;
+            int mx = (int)ssz - 1 - cxx, my = (int)ssz - 1 - cyy;
+            unsigned int *corners[4] = {
+                &ssbuf[cyy * ssz + cxx], &ssbuf[cyy * ssz + mx],
+                &ssbuf[my * ssz + cxx],  &ssbuf[my * ssz + mx],
+            };
+            if (d2 >= r * r) { for (int k = 0; k < 4; k++) *corners[k] = under; continue; }
+            int t = gui_isqrt(d2) - inner;
+            for (int k = 0; k < 4; k++) *corners[k] = gui_lerp(*corners[k], under, t, AA_BAND);
+        }
+    }
     aa_band = saved_band;
     window_pop_target();
     unsigned int per = ICON_SS_SCALE / sc; if (per < 1) per = 1;
@@ -3347,14 +3382,42 @@ static const char *GUI_MENU_LABELS[GUI_MENU_ITEM_COUNT] = {
 #define GUI_MENU_X0     4
 #define GUI_MENU_W      180
 
+/* v66, real restraint pass, not a new look: every other surface on this
+   desktop (the dock tray, the weather app's own card, the Apps folder
+   glass) is a soft rounded rect blended straight into whatever's behind
+   it, gui_rounded_rect_on_wallpaper, zero separate stroke line. These
+   three flyouts (this Apple menu, the notif panel, the weather dropdown)
+   were the one place still built as a flat, hard-cornered rectangle with
+   a manually drawn 1px border on all four sides, confirmed with a real
+   headless framebuffer dump: square corners sitting directly against the
+   dock's rounded ones read as two different chrome languages on one
+   desktop, not two different needs. One shared radius, reused by all
+   three, the same helper the dock already uses, is the fix: not a new
+   rule, the existing one applied to the surfaces that had been skipping
+   it. The three panels already shared bg/border/text colors with each
+   other; this just brings their shape in line with everything else too. */
+#define GUI_FLYOUT_RADIUS 14
+
 static int gui_menu_row_h(int i){ return GUI_MENU_LABELS[i][0] == '-' ? GUI_MENU_SEP_H : GUI_MENU_ROW_H; }
 static int gui_menu_total_h(void){ int h = 0; for (int i = 0; i < GUI_MENU_ITEM_COUNT; i++) h += gui_menu_row_h(i); return h; }
+/* v66: real padding, not a stray number. The hover highlight on the first
+   and last row is a plain rect inset only 2px from the panel's own edges;
+   drawn flush against the panel's new rounded top/bottom (GUI_FLYOUT_RADIUS
+   above), its hard corner visibly poked out past the panel's own curve,
+   confirmed with a real zoomed capture, a worse seam than the square panel
+   this pass just removed. The fix real menus use is exactly this: padding
+   above the first row and below the last so no highlightable row ever
+   reaches the curved part of the panel. 8px is the minimum that clears it:
+   solving the same circle gui_rounded_rect_on_wallpaper draws with for the
+   row where a 2px-inset flat edge first stays inside the curve gives 7,
+   rounded up. */
+#define GUI_MENU_PAD_V 8
 
 /* Returns the item index under (mx,my), -2 for a separator row (a real
    hit, but not an actionable one), or -1 if outside the menu entirely. */
 static int gui_menu_hit_test(int mx, int my){
-    int y = GUI_MENUBAR_H;
-    if (mx < GUI_MENU_X0 || mx >= GUI_MENU_X0 + GUI_MENU_W || my < y || my >= y + gui_menu_total_h()) return -1;
+    int y = GUI_MENUBAR_H + GUI_MENU_PAD_V, total_h = gui_menu_total_h();
+    if (mx < GUI_MENU_X0 || mx >= GUI_MENU_X0 + GUI_MENU_W || my < y || my >= y + total_h) return -1;
     for (int i = 0; i < GUI_MENU_ITEM_COUNT; i++){
         int rh = gui_menu_row_h(i);
         if (my < y + rh) return GUI_MENU_LABELS[i][0] == '-' ? -2 : i;
@@ -3364,14 +3427,10 @@ static int gui_menu_hit_test(int mx, int my){
 }
 
 static void gui_draw_apple_menu(int hover_item){
-    int y0 = GUI_MENUBAR_H, total_h = gui_menu_total_h();
-    unsigned int bg = 0x002C2C2E, border = 0x001C1C1E, text = 0x00F5F5F7;
-    window_rect(GUI_MENU_X0, y0, GUI_MENU_W, total_h, bg);
-    window_rect(GUI_MENU_X0, y0, GUI_MENU_W, 1, border);
-    window_rect(GUI_MENU_X0, y0 + total_h - 1, GUI_MENU_W, 1, border);
-    window_rect(GUI_MENU_X0, y0, 1, total_h, border);
-    window_rect(GUI_MENU_X0 + GUI_MENU_W - 1, y0, 1, total_h, border);
-    int ry = y0;
+    int y0 = GUI_MENUBAR_H, total_h = gui_menu_total_h() + 2 * GUI_MENU_PAD_V;
+    unsigned int bg = 0x002C2C2E, text = 0x00F5F5F7;
+    gui_rounded_rect_on_wallpaper(GUI_MENU_X0, y0, GUI_MENU_W, total_h, bg, GUI_FLYOUT_RADIUS);
+    int ry = y0 + GUI_MENU_PAD_V;
     for (int i = 0; i < GUI_MENU_ITEM_COUNT; i++){
         int rh = gui_menu_row_h(i);
         if (GUI_MENU_LABELS[i][0] == '-') { window_rect(GUI_MENU_X0 + 8, ry + rh / 2, GUI_MENU_W - 16, 1, 0x00545458); ry += rh; continue; }
@@ -3390,7 +3449,7 @@ static void gui_draw_apple_menu(int hover_item){
 #define NOTIF_ROWS  8
 static void gui_draw_notif_panel(void){
     int x0 = (int)window_width() - NOTIF_W - 4, y0 = GUI_MENUBAR_H;
-    unsigned int bg = 0x002C2C2E, border = 0x001C1C1E, text = 0x00F5F5F7, dim = 0x00A0A0A6, warn = 0x00FFB454;
+    unsigned int bg = 0x002C2C2E, text = 0x00F5F5F7, dim = 0x00A0A0A6, warn = 0x00FFB454;
 
     /* live warnings first: the part that's actually worth a glance */
     const char *warns[3]; int nw = 0;
@@ -3401,11 +3460,7 @@ static void gui_draw_notif_panel(void){
 
     int n = klog_count < NOTIF_ROWS ? klog_count : NOTIF_ROWS;
     int total_h = 10 + (nw + 1) * 18 + n * 34 + 8;
-    window_rect(x0, y0, NOTIF_W, total_h, bg);
-    window_rect(x0, y0, NOTIF_W, 1, border);
-    window_rect(x0, y0 + total_h - 1, NOTIF_W, 1, border);
-    window_rect(x0, y0, 1, total_h, border);
-    window_rect(x0 + NOTIF_W - 1, y0, 1, total_h, border);
+    gui_rounded_rect_on_wallpaper(x0, y0, NOTIF_W, total_h, bg, GUI_FLYOUT_RADIUS);
 
     int y = y0 + 8;
     for (int i = 0; i < nw; i++, y += 18) font_draw_string(warns[i], x0 + 12, y, nw == 1 && warns[0][0] == 'N' ? dim : warn, -1);
@@ -3446,14 +3501,10 @@ static void gui_draw_weather_panel(void){
     int x0 = weather_hit_x0 >= 0 ? weather_hit_x0 : (int)window_width() - WEATHER_W - 200;
     if (x0 + WEATHER_W > (int)window_width() - 4) x0 = (int)window_width() - WEATHER_W - 4;
     int y0 = GUI_MENUBAR_H;
-    unsigned int bg = 0x002C2C2E, border = 0x001C1C1E, text = 0x00F5F5F7, dim = 0x00A0A0A6;
+    unsigned int bg = 0x002C2C2E, text = 0x00F5F5F7, dim = 0x00A0A0A6;
 
     int total_h = 10 + 4 * 20 + 6;
-    window_rect(x0, y0, WEATHER_W, total_h, bg);
-    window_rect(x0, y0, WEATHER_W, 1, border);
-    window_rect(x0, y0 + total_h - 1, WEATHER_W, 1, border);
-    window_rect(x0, y0, 1, total_h, border);
-    window_rect(x0 + WEATHER_W - 1, y0, 1, total_h, border);
+    gui_rounded_rect_on_wallpaper(x0, y0, WEATHER_W, total_h, bg, GUI_FLYOUT_RADIUS);
 
     int y = y0 + 8;
     if (!weather_have) {
