@@ -887,33 +887,49 @@ static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int 
    block x block, no AA_BAND softening anywhere, that hard edge is the
    whole point here, the opposite treatment from every icon in this file. */
 /* A spiky tuft, the yucca-leaf cluster every one of this tree's three
-   arms ends in. Went through two real revisions, not shipped on the
-   first attempt: a plus-shaped 6-block cluster (both side blocks plus
-   both upper diagonals) was wide enough that with the arms spaced only
-   2 blocks apart, adjacent tufts' edges touched and merged into one
-   solid bar, the whole silhouette read as a mushroom or an anvil, not a
-   tree, caught by actually zooming into a real screendump. Narrower (no
-   side blocks, just up and the two upper diagonals) and the arms spread
-   further apart below fixes it without the tufts ever touching. */
+   arms ends in. Real revision, still not there on the last pass: three
+   attempts in, direct feedback was still "kind of shitty", the shape
+   read as a tree by then but a thin, spindly one, nothing like a real
+   yucca's dense, spiky pom-pom of leaves. Widened to a real 5-spike
+   starburst (up, both upper diagonals, and both sides pushed out an
+   extra block) instead of the previous 3-spike version. */
 static void gui_draw_pixel_tuft(int cx, int cy, int block, unsigned int color){
-    window_rect(cx,         cy,         block, block, color);
-    window_rect(cx - block, cy - block, block, block, color);
-    window_rect(cx + block, cy - block, block, block, color);
-    window_rect(cx,         cy - block, block, block, color);
+    window_rect(cx,             cy,         block, block, color);
+    window_rect(cx - block,     cy - block, block, block, color);
+    window_rect(cx + block,     cy - block, block, block, color);
+    window_rect(cx,             cy - block, block, block, color);
+    window_rect(cx - 2 * block, cy,         block, block, color); /* left spike, pushed further out */
+    window_rect(cx + 2 * block, cy,         block, block, color); /* right spike */
 }
 
+/* Real revision, not the first attempt: a thin single-block trunk with
+   one clean branch split read more like a candelabra or a stick figure
+   than a real Joshua tree's thick, gnarled trunk and irregular, staggered
+   branching. Trunk is 2 blocks wide now, and the branches fork at two
+   different heights instead of one single split point, closer to how a
+   real one actually grows. Tuft spacing widened to match the wider
+   starburst above, arms end 6 blocks out instead of 3 so neighboring
+   tufts (5 blocks wide each now) still never touch. */
 static void gui_draw_pixel_tree(int x0, int ground_y, int block, unsigned int color){
-    for (int i = 0; i < 4; i++) window_rect(x0, ground_y - (i + 1) * block, block, block, color); /* trunk */
-    int split = ground_y - 4 * block;
-    window_rect(x0 - block,     split - block,     block, block, color); /* left arm, 3 diagonal steps */
+    for (int i = 0; i < 5; i++) window_rect(x0 - block, ground_y - (i + 1) * block, 2 * block, block, color); /* thick trunk */
+    int low_split = ground_y - 3 * block;   /* a lower, secondary branch pair */
+    window_rect(x0 - 2 * block, low_split - block,     block, block, color);
+    window_rect(x0 - 3 * block, low_split - 2 * block, block, block, color);
+    gui_draw_pixel_tuft(x0 - 3 * block, low_split - 3 * block, block, color);
+    window_rect(x0 + 2 * block, low_split - block,     block, block, color);
+    window_rect(x0 + 3 * block, low_split - 2 * block, block, block, color);
+    gui_draw_pixel_tuft(x0 + 3 * block, low_split - 3 * block, block, color);
+
+    int split = ground_y - 5 * block;       /* the main, higher branch pair */
+    window_rect(x0 - block,     split - block,     block, block, color);
     window_rect(x0 - 2 * block, split - 2 * block, block, block, color);
-    window_rect(x0 - 3 * block, split - 3 * block, block, block, color);
-    gui_draw_pixel_tuft(x0 - 3 * block, split - 4 * block, block, color);
-    window_rect(x0 + block,     split - block,     block, block, color); /* right arm, mirrored */
+    window_rect(x0 - 4 * block, split - 3 * block, 2 * block, block, color);
+    gui_draw_pixel_tuft(x0 - 5 * block, split - 4 * block, block, color);
+    window_rect(x0 + block,     split - block,     block, block, color);
     window_rect(x0 + 2 * block, split - 2 * block, block, block, color);
-    window_rect(x0 + 3 * block, split - 3 * block, block, block, color);
-    gui_draw_pixel_tuft(x0 + 3 * block, split - 4 * block, block, color);
-    window_rect(x0, split - block,     block, block, color); /* center arm, continuing straight up */
+    window_rect(x0 + 2 * block, split - 3 * block, 2 * block, block, color);
+    gui_draw_pixel_tuft(x0 + 5 * block, split - 4 * block, block, color);
+    window_rect(x0, split - block,     block, block, color); /* center, continuing straight up */
     window_rect(x0, split - 2 * block, block, block, color);
     gui_draw_pixel_tuft(x0, split - 3 * block, block, color);
 }
@@ -932,8 +948,13 @@ static void gui_draw_wallpaper(void){
     int ground_y = gui_dock_y0() - 30;
     unsigned int silhouette = gui_wallpaper_color(ground_y);
     unsigned int dark = gui_blend(silhouette, 0x00000000);
-    gui_draw_pixel_tree(70,     ground_y, 13, dark);
-    gui_draw_pixel_tree(w - 70, ground_y, 15, dark);
+    /* Real clipping bug caught before shipping: the wider branch spread
+       from the last revision reaches 7 blocks out from center now (the
+       outer tuft's own spike included), which ran the left tree's arm
+       straight off the left edge of the screen at x0=70. Moved both
+       trees in enough to clear that at their own block size. */
+    gui_draw_pixel_tree(110,     ground_y, 13, dark);
+    gui_draw_pixel_tree(w - 120, ground_y, 15, dark);
 
     /* Real feedback: the desktop's own echo of the boot screen's "hello"
        should actually show, not just technically be there. A plain 50/50
