@@ -100,6 +100,9 @@ dependencies beyond clang, ld.lld and qemu.
   4. Verify against a real artifact before calling it done: `check.sh`, a
      real screenshot (this Mac's own attached display + `screencapture`,
      not QEMU's broken `screendump`), a real disk image, not "it booted."
+     `tools/check-refs.sh` after any rename/move/delete, real drift
+     insurance for `roadmap.md`/this file's own file-path references, not
+     assumed still accurate.
   5. Ship it: commit, push, `wrangler deploy` for the landing page, bump
      `VERSION` for kernel work, one clear TLDR back, then pick up step 1
      again. Constraints and rules (this file, `roadmap.md`'s own model-
