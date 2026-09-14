@@ -494,10 +494,10 @@ static void reboot(void){
    blending in this framebuffer, so "rounded" and "shadow" are both done by
    painting flat colors, corner pixels outside a quarter-circle get
    overwritten with whatever's behind them, not blended. ---- */
-#define GUI_ICON_COUNT 7
-static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes"};
+#define GUI_ICON_COUNT 8
+static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes"};
 static const unsigned int GUI_COLORS[GUI_ICON_COUNT] = {
-    0x00C1502F, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C
+    0x00C1502F, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x006B4423
 };
 
 /* gui_order is a permutation of icon indices by dock slot: dragging an icon
@@ -968,6 +968,25 @@ static void gui_icon_quotes(int cx, int cy, int s, unsigned int bg){
     gui_fill_triangle_down(cx + off, base_cy + r - 1, r, s / 6, ICON_FG);
 }
 
+/* A pencil, diagonal body via the same AA capsule every other line in this
+   file now uses, a small flat-cut tip triangle, a distinct eraser cap:
+   plain and legible at dock size without needing any fine detail a 56px
+   glyph can't actually resolve. */
+static void gui_icon_notes(int cx, int cy, int s, unsigned int bg){
+    int half = s * 3 / 10;
+    int x0 = cx - half, y0 = cy + half, x1 = cx + half, y1 = cy - half;
+    gui_draw_capsule(x0, y0, x1, y1, s / 11, ICON_FG, bg);
+    /* eraser cap: a short capsule segment at the pencil's own top end,
+       inset slightly so it reads as a separate band, not a color change
+       floating off the body */
+    int ex0 = x1 - (x1 - x0) / 6, ey0 = y1 - (y1 - y0) / 6;
+    gui_draw_capsule(ex0, ey0, x1, y1, s / 11, gui_blend(ICON_FG, bg), bg);
+    /* tip: a small triangle beyond the body's other end, pointing further
+       along the same diagonal */
+    int tip_x = x0 - (x1 - x0) / 6, tip_y = y0 - (y1 - y0) / 6;
+    gui_fill_triangle_down(tip_x, tip_y, s / 14, s / 8, ICON_FG);
+}
+
 /* A soft lit band across the top of the icon, fading down into its flat
    base color: the same top-lit gloss treatment classic Aqua/iOS icons
    used for real dimension, real per-pixel colors computed with gui_lerp,
@@ -1006,6 +1025,7 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
         case 4: gui_icon_keyrate(cx_center, cy, size, bg); break;
         case 5: gui_icon_book(cx_center, cy, size, bg); break;
         case 6: gui_icon_quotes(cx_center, cy, size, bg); break;
+        case 7: gui_icon_notes(cx_center, cy, size, bg); break;
     }
 }
 
@@ -1212,6 +1232,41 @@ static void gui_launch_chat(void){
     gui_wait_close();
 }
 
+/* A real, working plain-text notes app, in the spirit of this same
+   codebase's Plain editor (iOS/macOS/CLI): open a file, type into it,
+   save it, nothing else. Scoped down for a real, honest v1 rather than
+   half-building more: editing is append-only (typing adds at the end,
+   backspace removes from the end), no arrow-key cursor repositioning
+   into the middle of existing text yet, the same kind of deliberate,
+   noted-not-hidden gap this repo already uses for higher-half/ring-3
+   style deferrals rather than shipping a half-working line editor. One
+   fixed file (NOTES.TXT) rather than a file picker, Files already
+   covers browsing; this is the "type something down" app. */
+static void gui_launch_editor(void){
+    window_clear(0x00FAF8F6);
+    gui_draw_app_titlebar("Notes");
+    font_draw_string("esc saves and closes", 20, (int)window_height() - 30, 0x0075726E, -1);
+
+    static char buf[4096];
+    int n = fat_read_file("NOTES.TXT", buf, sizeof(buf) - 2);
+    if (n < 0) n = 0;
+    int len = n;
+
+    for (;;) {
+        window_rect(20, 44, (int)window_width() - 40, (int)window_height() - 90, 0x00FAF8F6);
+        buf[len] = '_'; buf[len + 1] = 0; /* a visible caret is just the next character in the same buffer, no separate draw pass needed */
+        render_wrapped_text(buf, 20, 44, (int)window_width() - 40, (int)window_height() - 90, 0x001C1C1E);
+        buf[len] = 0;
+
+        char c = getch();
+        if (c == 27) break; /* esc */
+        if (c == '\b') { if (len > 0) len--; }
+        else if (len < (int)sizeof(buf) - 2) buf[len++] = c;
+    }
+    fat_delete("NOTES.TXT"); /* fat_write_file doesn't overwrite; clear the old copy first, ignore a "didn't exist" result */
+    fat_write_file("NOTES.TXT", buf, len);
+}
+
 static void gui_launch(int icon){
     if (icon == 0)      gui_launch_html("Weather", app_weather_html, app_weather_len);
     else if (icon == 1) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
@@ -1220,6 +1275,7 @@ static void gui_launch(int icon){
     else if (icon == 4) gui_launch_html("Keyrate", app_keyrate_html, app_keyrate_len);
     else if (icon == 5) gui_launch_html("Bookrank", app_bookrank_html, app_bookrank_len);
     else if (icon == 6) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
+    else if (icon == 7) gui_launch_editor();
 }
 
 /* A brief boot splash instead of cutting straight to the desktop with no
