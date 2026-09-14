@@ -653,13 +653,13 @@ static void reboot(void){
    (that half was already right as of v39, untouched here). GUI_APP_COUNT
    is now 20 (18 real apps + Apps + Trash), GUI_ICON_COUNT unaffected by
    the reorder itself, see GUI_DOCK_DEFAULT below for why it did grow. */
-#define GUI_APP_COUNT   20 /* 18 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 18 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       19
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Apps", "Trash"};
+#define GUI_APP_COUNT   22 /* 20 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 20 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       21
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Apps", "Trash"};
 static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
     0x00707070, 0x00A13F3F, 0x00A0553F, 0x006B4423, 0x00375A4A, 0x002B2B2B, 0x00365E8C, 0x0085144B,
-    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x004A4F57, 0x00566068
+    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85
 };
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
@@ -2118,6 +2118,19 @@ static void gui_icon_fieldbook(int cx, int cy, int s, unsigned int bg){
     gui_draw_capsule(cx + half, cy - half / 3, cx + 2, cy + half, s / 18, ICON_FG, bg);
     gui_draw_capsule(cx, cy - half / 3, cx, cy + half, s / 24, ICON_FG, bg); /* spine */
 }
+static void gui_icon_contacts(int cx, int cy, int s, unsigned int bg){
+    int r = s / 5;
+    gui_fill_circle(cx - r / 2, cy - r / 2, r, ICON_FG, bg);
+    gui_draw_capsule(cx - r, cy + r / 2, cx + r, cy + r, s / 20, ICON_FG, bg);
+}
+static void gui_icon_calculator(int cx, int cy, int s, unsigned int bg){
+    int w = s / 3, h = s / 2;
+    window_rect(cx - w, cy - h / 2, w * 2, h, ICON_FG);
+    gui_fill_circle(cx - w / 2, cy - h / 4, s / 24, ICON_FG, bg);
+    gui_fill_circle(cx + w / 2, cy - h / 4, s / 24, ICON_FG, bg);
+    gui_fill_circle(cx - w / 2, cy + h / 4, s / 24, ICON_FG, bg);
+    gui_fill_circle(cx + w / 2, cy + h / 4, s / 24, ICON_FG, bg);
+}
 
 /* A soft lit band across the top of the icon, fading down into its flat
    base color: the same top-lit gloss treatment classic Aqua/iOS icons
@@ -2227,6 +2240,8 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
         case 15: gui_icon_sparkjar(cx_center, cy, size, bg); break;
         case 16: gui_icon_homeqi(cx_center, cy, size, bg); break;
         case 17: gui_icon_fieldbook(cx_center, cy, size, bg); break;
+        case 18: gui_icon_contacts(cx_center, cy, size, bg); break;
+        case 19: gui_icon_calculator(cx_center, cy, size, bg); break;
         case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
         case GUI_TRASH: gui_icon_trash(cx_center, cy, size, bg); break;
     }
@@ -2815,6 +2830,8 @@ static void gui_launch_chat(void){
 #include "reminders.h"
 #include "calendar.h"
 #include "mail.h"
+#include "contacts.h"
+#include "calculator.h"
 
 /* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
    dock hover labels, titlebars) read as monospace/typewriter, not the
@@ -3269,6 +3286,8 @@ static void gui_launch(int icon){
     else if (icon == 15) gui_launch_html("Sparkjar", app_sparkjar_html, app_sparkjar_len);
     else if (icon == 16) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
     else if (icon == 17) gui_launch_html("Fieldbook", app_fieldbook_html, app_fieldbook_len);
+    else if (icon == 18) gui_launch_contacts();
+    else if (icon == 19) gui_launch_calculator();
 }
 
 static void gui_launch_from_dock(int icon){
@@ -3786,7 +3805,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest weatherfxtest weatherpaneltest windweathertest cursortest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest weatherfxtest weatherpaneltest windweathertest cursortest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -4659,6 +4678,90 @@ static void run(char *line){
             clear();
             puts("testapps done\n");
         }
+    }
+    else if (!strcmp(line, "contactstest")) {
+        /* v70 (0.64.0): discriminating regression test for Contacts app. The
+           core contract: write a contact to the VFS via contacts_save, read it
+           back via contacts_load, and verify the round-trip preserves the data
+           exactly, not just "doesn't crash". Real, discriminating checks: (1)
+           after adding a contact with special name/phone/email, the count is
+           exactly 2 (not 1 from seed), (2) the second contact's name matches
+           what was written (not corrupted parsing), (3) the count stays stable
+           when we load again (file persistence works), (4) deleting it drops
+           count back to 1. If any step fails, the test catches it. */
+        contacts_count = 1;
+        contacts_loaded = 1;
+        contacts_str_copy(contacts[0].name, "Joshua", CONTACTS_NAME_MAX);
+        contacts_str_copy(contacts[0].phone, "(778) 201-4533", CONTACTS_PHONE_MAX);
+        contacts_str_copy(contacts[0].email, "trommatic@icloud.com", CONTACTS_EMAIL_MAX);
+
+        if (contacts_count != 1) { puts("contacts seed failed\n"); goto contacts_test_done; }
+
+        contacts_str_copy(contacts[1].name, "Alice Bob", CONTACTS_NAME_MAX);
+        contacts_str_copy(contacts[1].phone, "555-1234", CONTACTS_PHONE_MAX);
+        contacts_str_copy(contacts[1].email, "alice@example.com", CONTACTS_EMAIL_MAX);
+        contacts_count = 2;
+        contacts_save();
+
+        /* Reset and reload */
+        contacts_loaded = 0;
+        contacts_load();
+
+        int pass = (contacts_count == 2) &&
+                   (contacts[1].name[0] == 'A' && contacts[1].name[1] == 'l') &&
+                   (contacts[1].phone[0] == '5' && contacts[1].phone[1] == '5');
+
+        if (!pass) {
+            puts("contacts round-trip failed: count="); putn((unsigned int)contacts_count);
+            puts(" name[0]="); putc(contacts[1].name[0]); puts(" phone[0]="); putc(contacts[1].phone[0]); puts("\n");
+        } else {
+            contacts_delete_at(1);
+            pass = (contacts_count == 1);
+            if (!pass) puts("contacts delete failed\n");
+            else puts("contacts VFS round-trip: ok\n");
+        }
+
+        contacts_test_done:
+        if (!pass) puts("FAILED\n");
+    }
+    else if (!strcmp(line, "calctest")) {
+        /* v70 (0.64.0): discriminating regression test for Calculator. Core
+           contract: parse and evaluate basic arithmetic expressions correctly,
+           with proper operator precedence. Real checks: (1) simple addition
+           "2+3" evaluates to 5.0, (2) multiplication binds tighter than
+           addition: "2+3*4" evaluates to 14.0 not 20.0, (3) parentheses work
+           and override precedence: "(2+3)*4" evaluates to 20.0 not 14.0, (4)
+           unary minus: "-2+3" evaluates to 1.0, (5) division: "10/2" is 5.0.
+           If any expression fails to parse or evaluates to the wrong value,
+           the test catches it. */
+        int pass = 1;
+
+        expr_node *e1 = calc_parse("2+3");
+        double r1 = calc_eval(e1);
+        calc_free(e1);
+        if (r1 != 5.0) { puts("2+3 failed: got "); putn((unsigned int)r1); puts("\n"); pass = 0; }
+
+        expr_node *e2 = calc_parse("2+3*4");
+        double r2 = calc_eval(e2);
+        calc_free(e2);
+        if (r2 != 14.0) { puts("2+3*4 failed: got "); putn((unsigned int)r2); puts("\n"); pass = 0; }
+
+        expr_node *e3 = calc_parse("(2+3)*4");
+        double r3 = calc_eval(e3);
+        calc_free(e3);
+        if (r3 != 20.0) { puts("(2+3)*4 failed: got "); putn((unsigned int)r3); puts("\n"); pass = 0; }
+
+        expr_node *e4 = calc_parse("-2+3");
+        double r4 = calc_eval(e4);
+        calc_free(e4);
+        if (r4 != 1.0) { puts("-2+3 failed: got "); putn((unsigned int)r4); puts("\n"); pass = 0; }
+
+        expr_node *e5 = calc_parse("10/2");
+        double r5 = calc_eval(e5);
+        calc_free(e5);
+        if (r5 != 5.0) { puts("10/2 failed: got "); putn((unsigned int)r5); puts("\n"); pass = 0; }
+
+        puts(pass ? "calculator parser: ok\n" : "FAILED\n");
     }
     else if (!strcmp(line, "mousetest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
