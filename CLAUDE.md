@@ -138,6 +138,19 @@ dependencies beyond clang, ld.lld and qemu.
       `progress.svg`'s comment-density line (real comment/blank-line %
       inside the code itself, which has no sensible 100% target, chasing
       that number would mean writing worse code on purpose).
+  4d. Standing CI-improvement requirement (direct request, Sep 2026):
+      `.github/workflows/check.yml` (added Sep 2026, real gap found:
+      `deploy.yml` only ever shipped the landing page, nothing ran
+      `check.sh` or even built the kernel on push before this) runs the
+      real regression suite on every push. Keep improving it as real
+      gaps turn up, don't let it go stale the way `deploy.yml` did for
+      months. Candidates worth adding over time as real needs appear:
+      running more of the shell regression commands (`heaptest`,
+      `tasktest`, etc.) headlessly in CI, not just `check.sh`'s boot
+      check; caching the apt/qemu install step for faster runs; a
+      second job for `tools/check-refs.sh`. Add to it when a real gap
+      is found, the same discipline as every other standing rule here,
+      not a one-time setup task.
   5. Ship it: commit, push, `wrangler deploy` for the landing page, bump
      `VERSION` for kernel work, one clear TLDR back, then pick up step 1
      again. Constraints and rules (this file, `roadmap.md`'s own model-
