@@ -212,3 +212,10 @@ Direct request: "make the wallpaper animated somehow, make the tree blow in the 
 
 ## 0.45.1, the flashing cursor (Sep 2026)
 PATCH. Reported from a video within minutes of v45 shipping: the pointer flashed.
+
+## v47 / 0.47.0, real settings, persisted (Sep 2026)
+Direct request: customize the OS from inside the OS, and have it survive a reboot.
+- [x] `SETTINGS.TXT`, a flat key=value text file through the existing VFS, not a binary struct: readable from `cat` or the editor, and a missing or corrupt file just means defaults (every key has its own bounds check and a default already set before parsing starts), never a crash.
+- [x] `settings_load()` runs once at boot, right after the VFS backends are registered and before `gui_run()`. `settings_save()` runs immediately on every change, no separate Apply step, the same behaviour `fsuse`/`diskuse`/`wind` already had.
+- [x] A real Settings screen (Apple menu -> Settings): Wind on/off and Dock size as live rows, up/down to pick, left/right or a tap to change, same touch-first contract as Trash and the Apps folder. Also reachable from the shell (`wind on/off`, `dockscale <5-25>`), both paths write through the same `settings_save()`.
+- [x] Verified: `check.sh`, `apptest.sh` (15 apps, unchanged), a live round trip (`wind off`, `dockscale 20`, `ls` showing `SETTINGS.TXT 15 bytes`, matching the exact expected `wind=0\ndock=20\n` byte count).

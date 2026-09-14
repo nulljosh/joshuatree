@@ -663,6 +663,53 @@ static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_o
    to fit on screen, which is exactly the arithmetic v35 and v36 each had
    to rediscover from a screendump. */
 static int dock_scale_pct = 10;
+static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
+
+/* v47 (0.47.0): settings persisted through the VFS, so "customize the OS
+   from inside the OS" actually survives a reboot instead of resetting to
+   the compiled-in defaults every boot. Deliberately a flat key=value text
+   file (SETTINGS.TXT), not a binary struct: it's human-readable from any
+   app that can read a file (cat, the editor), and a corrupt or missing
+   file just means defaults, never a crash, since every key is parsed with
+   its own bounds check and a real default already set before parsing
+   starts. */
+#define SETTINGS_FILE "SETTINGS.TXT"
+static void settings_load(void){
+    static char buf[256];
+    int n = vfs_read_file(SETTINGS_FILE, buf, sizeof(buf) - 1);
+    if (n <= 0) return; /* no file yet: compiled-in defaults stand */
+    buf[n] = 0;
+    for (int i = 0; i < n; ){
+        int start = i;
+        while (i < n && buf[i] != '\n') i++;
+        int line_end = i;
+        if (i < n) i++; /* skip the newline */
+        int eq = -1;
+        for (int j = start; j < line_end; j++) if (buf[j] == '=') { eq = j; break; }
+        if (eq < 0) continue;
+        int val = 0, neg = 0, k = eq + 1;
+        if (k < line_end && buf[k] == '-') { neg = 1; k++; }
+        while (k < line_end && buf[k] >= '0' && buf[k] <= '9') { val = val * 10 + (buf[k] - '0'); k++; }
+        if (neg) val = -val;
+        int keylen = eq - start;
+        int is_wind = keylen == 4 && buf[start]=='w' && buf[start+1]=='i' && buf[start+2]=='n' && buf[start+3]=='d';
+        int is_dock = keylen == 4 && buf[start]=='d' && buf[start+1]=='o' && buf[start+2]=='c' && buf[start+3]=='k';
+        if (is_wind) wind_enabled = (val != 0);
+        else if (is_dock && val >= 5 && val <= 25) dock_scale_pct = val;
+    }
+}
+
+static void settings_save(void){
+    char buf[64];
+    int n = 0;
+    const char *k1 = "wind="; while (*k1) buf[n++] = *k1++;
+    buf[n++] = wind_enabled ? '1' : '0'; buf[n++] = '\n';
+    const char *k2 = "dock="; while (*k2) buf[n++] = *k2++;
+    if (dock_scale_pct >= 10) buf[n++] = '0' + dock_scale_pct / 10;
+    buf[n++] = '0' + dock_scale_pct % 10;
+    buf[n++] = '\n';
+    vfs_replace_file(SETTINGS_FILE, buf, (unsigned int)n);
+}
 
 static int gui_dock_icon(void){
     int by_height = (int)window_height() * dock_scale_pct / 100;
@@ -1051,7 +1098,7 @@ static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int 
    never touched and the desktop's dirty-region scheme stays intact. */
 #define WIND_HORIZON_ROW 395   /* logical row of the photo's skyline */
 #define WIND_TOP_ROW      30   /* just under the menu bar */
-static int wind_enabled = 1;   /* self-disables if a frame measures slow (v86, the browser demo) */
+/* wind_enabled itself now declared earlier (see settings_load), self-disables if a frame measures slow (v86, the browser demo) */
 static int wind_phase = 0;     /* -256..256, current displacement scale */
 
 static int gui_wind_shift(int row){ /* source-pixel shift for this screen row, in 8.8 fixed point */
@@ -2437,6 +2484,57 @@ static void gui_launch_trash(void){
     }
 }
 
+/* v47 (0.47.0): a real Settings screen, not a hidden shell command. Two
+   rows, each a live toggle/stepper that writes through settings_save()
+   immediately, the same "no separate Apply step" behaviour every setting
+   in this kernel already has (fsuse, diskuse, wind). up/down picks a row,
+   left/right (a/d, since there's no numpad here) changes it, a tap on a
+   row also toggles/steps it, matching the touch-first contract every
+   other screen in this GUI already keeps. */
+#define SETTINGS_ROW_COUNT 2
+static void gui_launch_settings(void){
+    int sel = 0;
+    for (;;) {
+        window_clear(GUI_BG);
+        gui_draw_app_titlebar("Settings");
+        font_draw_string("up/down to pick   left/right or tap to change   esc closes", 20, 52, 0x00807468, -1);
+
+        int rows_y[SETTINGS_ROW_COUNT] = {84, 116};
+        for (int i = 0; i < SETTINGS_ROW_COUNT; i++) {
+            int y = rows_y[i];
+            if (i == sel) window_rect(16, y - 6, (int)window_width() - 32, 28, 0x00EDE6DC);
+            if (i == 0) {
+                font_draw_string("Wind (swaying wallpaper)", 28, y, 0x001C1C1E, -1);
+                font_draw_string(wind_enabled ? "On" : "Off", 400, y, wind_enabled ? 0x002F7B4F : 0x00807468, -1);
+            } else {
+                font_draw_string("Dock size", 28, y, 0x001C1C1E, -1);
+                char sz[8]; int p = 0; int v = dock_scale_pct;
+                if (v >= 10) sz[p++] = '0' + v / 10;
+                sz[p++] = '0' + v % 10; sz[p++] = '%'; sz[p] = 0;
+                font_draw_string(sz, 400, y, 0x001C1C1E, -1);
+            }
+        }
+        font_draw_string("Settings are saved to disk and survive a reboot.", 20, (int)window_height() - 28, 0x00807468, -1);
+
+        sleep_ticks(5);
+        mouse_click_edge_sync();
+        int k = get_key_or_click();
+        if (k == KEY_ESC) return;
+        if (k == KEY_UP && sel > 0) sel--;
+        else if (k == KEY_DOWN && sel < SETTINGS_ROW_COUNT - 1) sel++;
+        else if (k == KEY_CLICK || k == 'a' || k == 'd') {
+            if (sel == 0) { wind_enabled = !wind_enabled; settings_save(); }
+            else {
+                int dir = (k == 'a') ? -1 : 1; /* a tap always steps up; a real direction only from the keyboard */
+                if (k == KEY_CLICK) dir = 1;
+                int v = dock_scale_pct + dir;
+                if (v > 25) v = 5; if (v < 5) v = 25; /* wraps, so a tap always does something visible */
+                dock_scale_pct = v; settings_save();
+            }
+        }
+    }
+}
+
 static void gui_launch(int icon){
     if (icon == GUI_APPS_FOLDER) { gui_launch_apps(); return; }
     if (icon == GUI_TRASH) { gui_launch_trash(); return; }
@@ -2542,9 +2640,9 @@ static void gui_launch_about(void){
    Restart calls this kernel's own real reboot() (the 8042 reset pulse,
    already used by the "reboot" shell command), Shut Down really halts
    the CPU. "-" is a separator row, not a real item. */
-#define GUI_MENU_ITEM_COUNT 6
+#define GUI_MENU_ITEM_COUNT 7
 static const char *GUI_MENU_LABELS[GUI_MENU_ITEM_COUNT] = {
-    "About Joshua Tree", "Files", "Notes", "-", "Restart", "Shut Down"
+    "About Joshua Tree", "Files", "Notes", "Settings", "-", "Restart", "Shut Down"
 };
 #define GUI_MENU_ROW_H  22
 #define GUI_MENU_SEP_H  9
@@ -2632,12 +2730,14 @@ static void gui_draw_notif_panel(void){
     }
 }
 
+static void gui_launch_settings(void);
 static void gui_menu_run_item(int item){
     if (item == 0) gui_launch_about();
     else if (item == 1) gui_launch_files();
     else if (item == 2) gui_launch_editor();
-    else if (item == 4) reboot();
-    else if (item == 5) {
+    else if (item == 3) gui_launch_settings();
+    else if (item == 5) reboot();
+    else if (item == 6) {
         window_clear(0x00111111);
         font_draw_string("It's now safe to turn off this computer.", 20, (int)window_height() / 2, 0x00F5F5F7, -1);
         __asm__ volatile ("cli");
@@ -2980,10 +3080,17 @@ static void run(char *line){
         if (!ok) { puts("  t10="); putn((unsigned int)t10); puts(" code10="); putn((unsigned int)code10); puts("\n"); }
     }
     else if (!strcmp(line, "wind")) {
-        /* v46: the user's call. Settings app doesn't exist yet; this is the honest minimal toggle. */
-        if (!strcmp(arg, "off")) { wind_enabled = 0; puts("wind off\n"); }
-        else if (!strcmp(arg, "on")) { wind_enabled = 1; puts("wind on\n"); }
+        if (!strcmp(arg, "off")) { wind_enabled = 0; settings_save(); puts("wind off\n"); }
+        else if (!strcmp(arg, "on")) { wind_enabled = 1; settings_save(); puts("wind on\n"); }
         else { puts(wind_enabled ? "wind is on (wind off to stop)\n" : "wind is off (wind on to start)\n"); }
+    }
+    else if (!strcmp(line, "dockscale")) {
+        if (!*arg) { puts("dock scale: "); putn((unsigned int)dock_scale_pct); puts("% (dockscale <5-25> to set)\n"); }
+        else {
+            int v = 0; const char *p = arg; while (*p >= '0' && *p <= '9') { v = v*10 + (*p-'0'); p++; }
+            if (v < 5 || v > 25) { puts("usage: dockscale <5-25>\n"); }
+            else { dock_scale_pct = v; settings_save(); puts("dock scale set\n"); }
+        }
     }
     else if (!strcmp(line, "isotest")) {
         iso_readback_a = 0; iso_readback_b = 0;
@@ -3439,6 +3546,7 @@ void kmain(unsigned int multiboot_info_addr){
     fat_vfs_register(); /* registered regardless of fs_ok: an unmounted fat backend just returns real failures, same as before v29 */
     ramfs_init();
     klog("vfs: fat + ramfs backends registered, fat active");
+    settings_load(); /* v47: real settings, saved defaults if SETTINGS.TXT doesn't exist yet */
     clear();
     boot_chime();
     puts("joshuatree v0 -- type help\n");
