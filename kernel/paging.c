@@ -34,9 +34,17 @@ static u32 first_page_table[1024] __attribute__((aligned(4096)));
 
 /* Extra page tables for regions outside the base 4MB, statically reserved
    (not kmalloc'd) because they need page alignment kheap's bump allocator
-   doesn't guarantee. 4 tables covers 16MB of extra mapping, comfortably
-   more than one graphics-mode framebuffer needs. */
-#define MAX_EXTRA_TABLES 4
+   doesn't guarantee. Was 4 (16MB), sized when the only extra region was
+   one graphics-mode framebuffer; v34 then made kheap grow through the same
+   pool, so it also caps the heap. v63: at 1920x1080 the LFB alone takes
+   two of the four (8.3MB spans two 4MB PDEs), leaving the heap 4MB base +
+   8MB, and the GUI's real working set at that size (wind_base 5.6MB, the
+   icon caches, the two 1.9MB dock-band buffers) no longer fit: the dock
+   band kmalloc failed on the first hover, every hover step silently fell
+   back to the direct on-screen repaint, and the tray read empty mid-frame
+   in a real framebuffer dump. 16 tables = 64MB of extra mapping, 64KB of
+   BSS. Physical memory is still the real ceiling (pmm), not this. */
+#define MAX_EXTRA_TABLES 16
 static u32 extra_page_tables[MAX_EXTRA_TABLES][1024] __attribute__((aligned(4096)));
 static int extra_tables_used = 0;
 

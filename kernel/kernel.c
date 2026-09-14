@@ -783,7 +783,13 @@ static int gui_slot_x(int slot){ return gui_dock_x0() + DOCK_PAD + slot * (DOCK_
    returning "none": once a drag has started, the icon should track the
    cursor even past the dock's own edge, the same way a real dock does. */
 static int gui_slot_at(int mx){
-    int rel = mx - (gui_dock_x0() + DOCK_PAD) - DOCK_ICON / 2;
+    /* v63: was `- DOCK_ICON / 2`, since v15. That put every slot boundary
+       at the CENTRE of a drawn tile, so the left half of each icon (and
+       the gap before it) hit-tested as the previous slot: the magnified
+       icon sat one tile to the left of the cursor half the time, caught
+       in a real framebuffer dump (cursor over Reminders, Notes lifted).
+       Half a gap either side of each tile now belongs to that tile. */
+    int rel = mx - (gui_dock_x0() + DOCK_PAD) + DOCK_GAP / 2;
     int slot = rel / (DOCK_ICON + DOCK_GAP);
     if (rel < 0) slot = 0;
     if (slot < 0) slot = 0;
