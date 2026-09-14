@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Joshua Tree, a kernel from nothing</title>
-<meta name="description" content="A freestanding kernel built from scratch, with its own GUI desktop, network stack, and voice-controlled LLM. No macOS, no Linux underneath.">
+<meta name="description" content="A freestanding i386 kernel built from scratch: its own GUI desktop, network stack, filesystem, and a real text editor. No macOS, no Linux underneath.">
 <link rel="icon" href="icon.svg">
 <style>
   :root { color-scheme: light dark; --bg:#faf8f6; --fg:#1c1c1e; --sub:#75726e; --border:rgba(0,0,0,0.08); --card:rgba(255,255,255,0.7); --accent:#b74c2c; --accent2:#7a2048; }
@@ -151,8 +151,8 @@
   <div class="hero-float" id="heroFloat" aria-hidden="true"></div>
   <p class="eyebrow">Joshua's kernel, built from nothing</p>
   <h1>What you just booted</h1>
-  <p class="tagline">No macOS, no Linux underneath it. Written from scratch,<br>with its own GUI desktop, its own network stack, and a real conversation with an LLM, by voice.</p>
-  <p class="note">It manages its own memory. It reads and writes its own filesystem. It talks over a real network stack, built from raw Ethernet frames up. The desktop opens real apps from this same codebase. A shell command talks to a local LLM, no internet needed. Nothing here is a mockup.</p>
+  <p class="tagline">No macOS, no Linux underneath it. Written from scratch,<br>with its own GUI desktop, its own network stack, and its own text editor.</p>
+  <p class="note">It manages its own memory. It reads and writes its own filesystem. It talks over a real network stack, built from raw Ethernet frames up. The desktop opens real apps from this same codebase, including a plain text editor that actually saves to disk. A shell command talks to a local LLM. Nothing here is a mockup.</p>
   <p class="note">Named after the tree that survives the Mojave on almost nothing. Also a nod to the U2 album, and my own name.</p>
 
   <div class="progress-card">
