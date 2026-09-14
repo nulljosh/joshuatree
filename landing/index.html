@@ -18,6 +18,14 @@
   @media (prefers-color-scheme: dark) { :root { --bg:#121212; --fg:#f2f0ee; --sub:#9c9894; --border:rgba(255,255,255,0.1); --card:rgba(30,30,30,0.6); --accent:#c3a58a; --accent2:#884b16; } }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
+  /* v51: section-by-section scroll snap, direct request. `proximity`, not
+     `mandatory`: mandatory snap fights the demo's own deliberate "never
+     trap a visitor" touchmove behavior (the stage lets a touch-drag keep
+     scrolling the page a little on purpose, see #v86-embed's own note),
+     forcing a snap mid-drag would undo that. Proximity only pulls the
+     page to rest at a section boundary near where it already stopped. */
+  html { scroll-snap-type: y proximity; }
+  .hero, .features, .progress-section, .grain-zone { scroll-snap-align: start; }
   body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
 
   /* Keyboard focus needs to be visible for anyone not using a mouse; the
@@ -38,17 +46,33 @@
      where the drifting-glyph field used to sit, and the glyph field
      moves further down still, past the demo, so the very first thing a
      visitor sees is the headline, not a black box or a field of symbols. */
-  .hero { text-align: center; padding: 96px 20px 64px; }
+  /* v52: the live demo moved behind the hero text instead of its own
+     section further down, direct request once the extra vertical room
+     from the graph/legend cleanup made it feel like there was space for
+     it. #stage-wrap sits absolutely behind .hero-copy, which gets a real
+     frosted scrim (the same backdrop-filter treatment #v86-overlay's own
+     pill already uses elsewhere on this page) so the headline stays
+     legible over a busy live desktop instead of relying on text-shadow
+     alone. */
+  .hero { position: relative; overflow: hidden; text-align: center; padding: 148px 20px 96px; min-height: 78vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; }
+  .hero-copy { position: relative; z-index: 2; background: rgba(10,8,6,0.42); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-radius: 24px; padding: 36px 32px; transition: opacity 0.4s ease, transform 0.4s ease; }
+  .hero .eyebrow { color: #e8b98a; }
+  .hero h1, .hero p.tagline { color: #fff; }
+  /* Direct request: click into the demo, the hero text gets out of the
+     way; click/tap/esc back out (embed.js's own real focus state, not a
+     second tracker) and it returns. */
+  .hero.demo-focused .hero-copy, .hero.demo-focused .scroll-hint { opacity: 0; transform: translateY(-8px); pointer-events: none; }
   .eyebrow { color: var(--accent); font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; margin: 0; font-weight: 600; }
   .hero h1 { font-size: 56px; margin: 14px 0 18px; letter-spacing: -0.03em; line-height: 1.05; }
   .hero p.tagline { color: var(--sub); font-size: 20px; margin: 0 auto; max-width: 520px; line-height: 1.5; }
-  .scroll-hint { margin-top: 44px; color: var(--sub); font-size: 13px; opacity: 0.8; }
+  .scroll-hint { display: inline-block; margin-top: 44px; color: var(--sub); font-size: 13px; opacity: 0.8; text-decoration: none; }
+  .scroll-hint:hover { opacity: 1; color: var(--accent); }
   .scroll-hint::after { content: ''; display: block; width: 1px; height: 28px; margin: 10px auto 0; background: linear-gradient(var(--sub), transparent); animation: scrolldown 1.8s ease-in-out infinite; }
   @keyframes scrolldown { 0%,100% { opacity: 0.2; transform: translateY(0); } 50% { opacity: 1; transform: translateY(6px); } }
   @media (prefers-reduced-motion: reduce) { .scroll-hint::after { animation: none; } }
 
   @media (max-width: 520px) {
-    .hero { padding: 64px 20px 40px; }
+    .hero { padding: 88px 20px 56px; min-height: 70vh; }
     .hero h1 { font-size: 34px; }
     .hero p.tagline { font-size: 16px; }
   }
@@ -71,9 +95,14 @@
      screenshot. Fixed 3 columns gives 3-then-2, a real balanced wrap
      instead of 4-then-1, at every width down to the 2-column tablet and
      1-column phone breakpoints below. */
-  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; text-align: left; max-width: 900px; margin: 0 auto; }
-  @media (max-width: 760px) { .steps { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 520px) { .steps { grid-template-columns: 1fr; } }
+  /* Direct request: 5 real cards (What/Who/When/Why/Where it's going),
+     equal, not 3-then-2. Five is prime, so any 2, 3, or 4-column grid
+     leaves a remainder card alone on its own row, the exact thing being
+     fixed, just relocated. The only two states that are actually equal
+     are all 5 in one row (room enough down to a real tablet width) or
+     all 5 stacked single-column (phone); nothing in between. */
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; text-align: left; max-width: 1100px; margin: 0 auto; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; max-width: 480px; } }
   .step { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
   .step .n { color: var(--sub); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
   .step p { margin: 8px 0 0; font-size: 14px; line-height: 1.5; }
@@ -85,25 +114,17 @@
      seam and a phantom second black box mid-animation. svh is a static
      floor (the height once the toolbar is fully expanded) that never
      animates, so the box never moves during a toolbar transition. */
-  .demo-section { text-align: center; padding-top: 56px; }
-  .demo-section .eyebrow { margin-bottom: 18px; }
-  #stage-wrap { background: #000; position: relative; margin-top: 18px; }
-  #stage { position: relative; width: 100%; height: 100vh; height: 100svh; max-height: 900px; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 1; }
-  /* Real, repeatedly-reported bug, root cause finally confirmed live: on a
-     narrow phone, a 100svh stage is far taller than the kernel's real 16:9
-     (1920x1080) output can ever fill at full width, so most of that height
-     was unavoidable black letterbox by simple geometry, not a centering
-     glitch, measured directly at 290px of pure black above AND below a
-     286px-tall canvas in an 866px box. Full-bleed 100svh only makes sense
-     when the viewport is roughly as wide as it is tall or wider; below
-     that, sizing the stage to the demo's own 4:3 shape instead removes
-     the dead space at the source rather than trying to center it better. */
-  /* v44: 16:9, not 4:3. The kernel opens 1920x1080 now (v42), and a 4:3
-     stage around a 16:9 image is the same black-bar bug the note above
-     describes, just rotated. */
-  @media (max-width: 700px) {
-    #stage { height: auto; max-height: none; aspect-ratio: 16 / 9; }
-  }
+  #stage-wrap { background: #000; position: absolute; inset: 0; z-index: 0; }
+  #stage { position: relative; width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 1; }
+  /* v52: the demo is a background layer behind real text now, not the
+     whole hero's content, so the older per-viewport letterbox tuning
+     (sizing #stage itself to the kernel's real 16:9 shape on a narrow
+     phone) no longer applies the same way: #stage fills whatever height
+     .hero has by design, and some visible black margin around the
+     centred, still letterboxed canvas is an acceptable, even expected,
+     part of "the demo is the backdrop" now rather than a bug to chase.
+     .hero's own min-height (mobile breakpoint above) is the real knob if
+     that ever needs retuning, not this element. */
   /* v47.1: real bug, reported as "clicking just spins the cursor around"
      on iOS. That's not the kernel's own drawn cursor, it's Safari's own
      text-selection loupe: a tap-and-hold on any element without these
@@ -167,7 +188,7 @@
   .float { position: absolute; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 400; font-size: 30px; color: var(--accent); opacity: 0.13; white-space: nowrap; will-change: transform; animation: drift var(--dur, 18s) ease-in-out var(--delay, 0s) infinite alternate; }
   @keyframes drift { to { transform: translate(var(--dx, 0px), var(--dy, 0px)); } }
   @media (prefers-reduced-motion: reduce) { .float { animation: none; } .hero-float { transform: none !important; } }
-  .closing { position: relative; z-index: 1; color: var(--sub); font-size: 18px; line-height: 1.6; max-width: 480px; text-align: center; margin: 0 auto; }
+  .closing { position: relative; z-index: 1; color: var(--sub); font-size: 18px; line-height: 1.65; max-width: 560px; text-align: center; margin: 0 auto; }
 
   footer { text-align: center; padding: 32px 20px 40px; color: var(--sub); font-size: 13px; background: var(--bg); border-top: 1px solid var(--border); }
   .foot-links { display: flex; flex-wrap: wrap; gap: 8px 22px; justify-content: center; align-items: center; margin-bottom: 14px; }
@@ -185,24 +206,6 @@
 <a class="skip-link" href="#main">Skip to content</a>
 
 <header class="hero" id="main">
-  <p class="eyebrow">An operating system, from scratch</p>
-  <h1>A fresh, custom OS. Yours to help build.</h1>
-  <p class="tagline">Its own desktop. Its own network stack. Its own text editor. Built in the open, still being written.</p>
-  <p class="scroll-hint">See it run</p>
-</header>
-
-<section class="features reveal">
-  <div class="steps">
-    <div class="step"><div class="n">What</div><p>A whole OS. Kernel, desktop, terminal, network stack, 15 apps, live weather. Runs at 1920×1080. Nothing borrowed.</p></div>
-    <div class="step"><div class="n">Who</div><p>Started solo, pairing with Claude. Open source, open to anyone who wants to add to it.</p></div>
-    <div class="step"><div class="n">When</div><p>Started August 2026. 50 versions since, each shipped only once proven working.</p></div>
-    <div class="step"><div class="n">Why</div><p>Already talking to AI to build things. That belongs native to the machine, not bolted onto someone else's OS.</p></div>
-    <div class="step"><div class="n">Where it's going</div><p>A real syscall interface next. Then voice control. Then real hardware.</p></div>
-  </div>
-</section>
-
-<section class="demo-section reveal">
-  <p class="eyebrow">See it running</p>
   <div id="stage-wrap">
     <div id="stage">
       <div id="v86-embed" tabindex="0" role="application" aria-label="A real, live boot of this exact kernel.elf, running in your browser. Click or tap to control it.">
@@ -213,6 +216,22 @@
         <div id="v86-overlay"></div>
       </div>
     </div>
+  </div>
+  <div class="hero-copy">
+    <p class="eyebrow">An operating system, from scratch</p>
+    <h1>Mi OS, tu OS.</h1>
+    <p class="tagline">A fresh, custom OS. Its own desktop, its own network stack, its own text editor. Built in the open, yours to help build. Running live behind this text, right now, click or tap it.</p>
+  </div>
+  <p class="scroll-hint">Keep scrolling</p>
+</header>
+
+<section class="features reveal">
+  <div class="steps">
+    <div class="step"><div class="n">What</div><p>A whole OS. Kernel, desktop, terminal, network stack, 15 apps, live weather. Runs at 1920×1080. Nothing borrowed.</p></div>
+    <div class="step"><div class="n">Who</div><p>Started solo, pairing with Claude. Open source, open to anyone who wants to add to it.</p></div>
+    <div class="step"><div class="n">When</div><p>Started August 2026. 50 versions since, each shipped only once proven working.</p></div>
+    <div class="step"><div class="n">Why</div><p>Already talking to AI to build things. That belongs native to the machine, not bolted onto someone else's OS.</p></div>
+    <div class="step"><div class="n">Where it's going</div><p>A real syscall interface next. Then voice control. Then real hardware. Still haven't found what I'm looking for.</p></div>
   </div>
 </section>
 
@@ -225,7 +244,7 @@
 
 <section class="grain-zone reveal">
   <div class="hero-float" id="heroFloat" aria-hidden="true"></div>
-  <p class="closing">Named for the tree that survives the Mojave on nothing. Open for whoever wants to help it grow.</p>
+  <p class="closing">Own memory manager. Own filesystem. TCP built up from raw Ethernet frames, not borrowed from anything underneath. Named for the tree that survives the Mojave on nothing, and for the album. Open for whoever wants to help it grow.</p>
 </section>
 
 <footer>

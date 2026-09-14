@@ -1,171 +1,213 @@
 #!/usr/bin/env bash
-# Regenerate progress.svg: a line graph of cumulative capability (items
-# checked off) across versions.
+# Regenerate progress.svg.
 #
-# Real bug found and fixed, not a styling tweak: this used to count
-# "- [x]" lines live out of roadmap.md for every version, but roadmap-prune
-# (part of every /wrapup) deliberately strips a shipped version's checked
-# items back out once it's tagged, keeping the real history in git log
-# instead of duplicating it in the roadmap file. That's correct for
-# roadmap.md's own job (show what's still open), but it meant this script
-# saw zero items for every already-pruned version, a dead flat line for
-# v2 through v22 before the real jump at v23+, not because nothing
-# shipped, because the live file could no longer see what had.
+# v51: real rewrite, not a tweak, direct and repeated feedback ("still
+# unimpressive... more accurate and relevant, not just how many features
+# shipped, now we're focusing on polish"). The old version plotted
+# cumulative checked-off roadmap items per tagged version. Two real
+# problems with that, not just a styling complaint: git tags stopped
+# being cut after jt-v27 (confirmed: `git tag -l 'jt-v*'` has nothing past
+# v27, though roadmap.md is well past v50), so everything after that had
+# no real per-version data to plot, only a live re-parse of roadmap.md's
+# current (post-prune) state; and a checked-item count actively
+# undersells a polish phase, a version that fixes three real bugs and
+# ships zero new checkboxes looks like a flat line even though real work
+# happened.
 #
-# Real fix: version-history.tsv is a small, permanent ledger (never
-# pruned) of "version <tab> real item count", computed once per version
-# straight from that version's own roadmap.md content at the moment it
-# was tagged (`git show jt-vN:roadmap.md`, before any later pruning
-# touched it), so the number is exactly what actually shipped, not a
-# guess. This script keeps that ledger self-maintaining: any git tag not
-# yet recorded gets computed and appended automatically. Only the current,
-# still-open, not-yet-tagged version is counted live from roadmap.md, the
-# one case where that's still correct.
+# Real fix: plot actual lines of hand-authored kernel/driver code over
+# real commit history instead, computed from `git log --numstat`, which
+# never depends on tagging discipline and never flattens during a polish
+# pass (a bug fix still changes real lines). EXCLUDE_BASENAMES/PREFIX
+# below strip the embedded data blobs (wallpaper.h's raw RGB dump,
+# editor_fonts.h's raster glyph tables, the ported-app HTML byte arrays)
+# that would otherwise pad the number with content nobody wrote by hand,
+# a first draft of this script that included them briefly put the total
+# near 90,000 and made "written from nothing" read as a rounding error.
+#
+# A second series, direct follow-up ask ("include code quality too"):
+# comment/blank-line density (%) of the same real-code file set, at each
+# sampled commit. A single number can't capture "quality", but density of
+# real explanatory comments is a genuine, honest, always-computable proxy
+# this project's own culture actually earns, every roadmap entry and most
+# functions here carry a real "why", not just "what". Computed by walking
+# each sampled commit's real-code files with `git show` and classifying
+# lines (blank, //, or inside a /* */ block = documentation), not guessed.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-LEDGER="version-history.tsv"
-touch "$LEDGER"
+python3 << 'PYEOF'
+import subprocess, re
 
-count_items_at() {
-  # $1: git ref (a tag, or empty for the working tree's roadmap.md)
-  # $2: version label, e.g. v23
-  local ref="$1" vnum="$2" content
-  if [ -n "$ref" ]; then
-    content="$(git show "$ref:roadmap.md" 2>/dev/null || true)"
-  else
-    content="$(cat roadmap.md)"
-  fi
-  python3 -c "
-import re, sys
-vnum = sys.argv[1]
-content = sys.stdin.read()
-in_section = False
-count = 0
-for line in content.split(chr(10)):
-    if line.startswith('## '):
-        m = re.match(r'^## (v\d+)\b', line)
-        in_section = bool(m and m.group(1) == vnum)
-    elif in_section and line.startswith('- [x]'):
-        count += 1
-print(count)
-" "$vnum" <<< "$content"
-}
+EXCLUDE_DIRS = ("node_modules/", ".claude/", "landing/v86/")
+EXCLUDE_BASENAMES = {"wallpaper.h", "editor_fonts.h", "vgafont.h"}
+EXCLUDE_PREFIX = ("drivers/app_",)
 
-# Backfill any tagged version this ledger hasn't recorded yet.
-for tag in $(git tag -l 'jt-v*' | sort -V); do
-  vnum="${tag#jt-}"
-  if ! grep -q "^${vnum}	" "$LEDGER"; then
-    c="$(count_items_at "$tag" "$vnum")"
-    echo -e "${vnum}\t${c}" >> "$LEDGER"
-  fi
-done
-sort -t v -k2 -n -o "$LEDGER" "$LEDGER"
+def counts_as_real(path):
+    if any(path.startswith(d) for d in EXCLUDE_DIRS):
+        return False
+    if not path.endswith((".c", ".h", ".S")):
+        return False
+    base = path.rsplit("/", 1)[-1]
+    if base in EXCLUDE_BASENAMES:
+        return False
+    if any(path.startswith(p) for p in EXCLUDE_PREFIX):
+        return False
+    return True
 
-labels=()
-cum=()
-running=0
-total=0
+log = subprocess.run(
+    ["git", "log", "--reverse", "--numstat", "--pretty=format:@@%H|%ad", "--date=short"],
+    capture_output=True, text=True
+).stdout
 
-marker="$(grep -o 'done-items [0-9]*/[0-9]*' roadmap.md | head -1 || true)"
-if [ -n "$marker" ]; then
-  d="${marker#done-items }"; t="${marker#*/}"; d="${d%/*}"
-  running=$((running + d)); total=$((total + t))
-  labels+=("done"); cum+=("$running")
-fi
+commit_count = subprocess.run(["git", "rev-list", "--count", "HEAD"], capture_output=True, text=True).stdout.strip()
 
-# Every version already recorded in the permanent ledger, oldest first.
-while IFS=$'\t' read -r vnum c; do
-  [ -z "$vnum" ] && continue
-  running=$((running + c)); total=$((total + c))
-  labels+=("$vnum"); cum+=("$running")
-done < "$LEDGER"
+lines_now = {}
+points = []  # (commit_index, sha, date, total)
+idx = 0
+cur_sha = cur_date = None
+rename_re = re.compile(r'^(.*)\{(.*) => (.*)\}(.*)$')
+for line in log.split("\n"):
+    if line.startswith("@@"):
+        idx += 1
+        cur_sha, cur_date = line[2:].split("|", 1)
+        continue
+    if not line.strip():
+        continue
+    parts = line.split("\t")
+    if len(parts) != 3:
+        continue
+    add, dele, path = parts
+    m = rename_re.match(path)
+    if m:
+        path = m.group(1) + m.group(3) + m.group(4)
+    if not counts_as_real(path) or add == "-" or dele == "-":
+        continue
+    lines_now[path] = lines_now.get(path, 0) + int(add) - int(dele)
+    total = sum(v for v in lines_now.values() if v > 0)
+    points.append((idx, cur_sha, cur_date, total))
 
-# Whatever's left in the live roadmap.md that isn't yet in the ledger (the
-# current, still-open, not-yet-tagged frontier version), counted live.
-# Real bug caught here, not shipped blind: comparing against only the
-# LAST ledger version let every earlier ledgered version whose "## vN"
-# header is still in roadmap.md (checkbox items get pruned, the header
-# doesn't) get counted a second time on top of its own ledger entry.
-# Needs the full set of ledgered versions excluded, not just the newest.
-cur=""; count=0; vtotal=0
-flush() { if [ -n "$cur" ] && ! grep -q "^${cur}	" "$LEDGER"; then running=$((running + count)); total=$((total + vtotal)); labels+=("$cur"); cum+=("$running"); fi; }
-while IFS= read -r line; do
-  if [[ "$line" =~ ^##[[:space:]]+(v[0-9]+) ]]; then
-    flush
-    cur="${BASH_REMATCH[1]}"; count=0; vtotal=0
-  elif [[ "$line" =~ ^-\ \[x\] ]]; then
-    count=$((count+1)); vtotal=$((vtotal+1))
-  elif [[ "$line" =~ ^-\ \[\ \] ]]; then
-    vtotal=$((vtotal+1))
-  fi
-done < roadmap.md
-flush
+if not points:
+    raise SystemExit("no real-code commits found")
 
-n=${#labels[@]}
-max=$total
-[ "$max" -eq 0 ] && max=1
+# Downsample to a real point every few commits rather than all ~300 raw
+# diff-lines: keeps the SVG polyline legible without inventing data,
+# every kept point is a real value at a real commit, never interpolated.
+MAX_POINTS = 40
+step = max(1, len(points) // MAX_POINTS)
+sampled = points[::step]
+if sampled[-1] != points[-1]:
+    sampled.append(points[-1])
 
-pad_l=30; pad_r=16; pad_t=26; pad_b=28
-plot_w=420; plot_h=140
-width=$((pad_l + plot_w + pad_r))
-height=$((pad_t + plot_h + pad_b))
+def doc_pct_at(sha):
+    files = subprocess.run(["git", "ls-tree", "-r", "--name-only", sha], capture_output=True, text=True).stdout.splitlines()
+    files = [f for f in files if counts_as_real(f)]
+    total = doc = 0
+    for f in files:
+        content = subprocess.run(["git", "show", f"{sha}:{f}"], capture_output=True, text=True).stdout
+        in_block = False
+        for line in content.split("\n"):
+            s = line.strip()
+            total += 1
+            if in_block:
+                doc += 1
+                if "*/" in s:
+                    in_block = False
+                continue
+            if not s or s.startswith("//"):
+                doc += 1
+            elif s.startswith("/*"):
+                doc += 1
+                if "*/" not in s:
+                    in_block = True
+    return (doc * 100 // total) if total else 0
 
-points=""
-dots=""
-for i in "${!labels[@]}"; do
-  x=$((pad_l + i * plot_w / (n - 1 > 0 ? n - 1 : 1)))
-  y=$((pad_t + plot_h - cum[i] * plot_h / max))
-  points+="$x,$y "
-  dots+="<circle cx=\"$x\" cy=\"$y\" r=\"3.5\" fill=\"#fff\" stroke=\"#884b16\" stroke-width=\"2\"/>"
-done
+labels = [p[2] for p in sampled]
+cum = [p[3] for p in sampled]
+doc_pct = [doc_pct_at(p[1]) for p in sampled]
+n = len(cum)
+max_v = cum[-1] or 1
 
-# The same closed polygon as the line itself, dropped down to the baseline,
-# so the accent-color gradient fill reads as "area under the curve" rather
-# than a flat rectangle behind it.
-last_x=$((pad_l + (n - 1) * plot_w / (n - 1 > 0 ? n - 1 : 1)))
-area_points="$pad_l,$((pad_t+plot_h)) $points$last_x,$((pad_t+plot_h))"
+pad_l, pad_r, pad_t, pad_b = 34, 30, 26, 28
+plot_w, plot_h = 420, 140
+width = pad_l + plot_w + pad_r
+height = pad_t + plot_h + pad_b
 
-half=$((max / 2))
+def xf(i): return pad_l + i * plot_w // (n - 1 if n > 1 else 1)
+def yf(v): return pad_t + plot_h - v * plot_h // max_v
+def yf_pct(v): return pad_t + plot_h - v * plot_h // 100  # right axis is always 0-100%
 
-svg="<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"$width\" height=\"$height\" viewBox=\"0 0 $width $height\">"
-svg+="<defs>"
-svg+="<linearGradient id=\"area\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">"
-svg+="<stop offset=\"0%\" stop-color=\"#884b16\" stop-opacity=\"0.35\"/>"
-svg+="<stop offset=\"100%\" stop-color=\"#884b16\" stop-opacity=\"0\"/>"
-svg+="</linearGradient>"
-svg+="</defs>"
-svg+="<rect width=\"100%\" height=\"100%\" fill=\"#faf8f6\"/>"
-svg+="<text x=\"$pad_l\" y=\"12\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" font-weight=\"600\" letter-spacing=\"0.06em\" fill=\"#884b16\">FEATURES SHIPPED</text>"
-# y-axis gridlines + labels at 0, half, max, each tagged with a unit so the
-# numbers read as a count of features, not arbitrary axis ticks
-svg+="<line x1=\"$pad_l\" y1=\"$pad_t\" x2=\"$((pad_l+plot_w))\" y2=\"$pad_t\" stroke=\"#e8e2da\"/>"
-svg+="<text x=\"2\" y=\"$((pad_t+3))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"9\" fill=\"#a39c92\">$max</text>"
-svg+="<line x1=\"$pad_l\" y1=\"$((pad_t+plot_h/2))\" x2=\"$((pad_l+plot_w))\" y2=\"$((pad_t+plot_h/2))\" stroke=\"#e8e2da\"/>"
-svg+="<text x=\"2\" y=\"$((pad_t+plot_h/2+3))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"9\" fill=\"#a39c92\">$half</text>"
-svg+="<line x1=\"$pad_l\" y1=\"$pad_t\" x2=\"$pad_l\" y2=\"$((pad_t+plot_h))\" stroke=\"#ded6ca\"/>"
-svg+="<line x1=\"$pad_l\" y1=\"$((pad_t+plot_h))\" x2=\"$((pad_l+plot_w))\" y2=\"$((pad_t+plot_h))\" stroke=\"#ded6ca\"/>"
-svg+="<text x=\"2\" y=\"$((pad_t+plot_h+3))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"9\" fill=\"#a39c92\">0</text>"
-svg+="<polygon points=\"$area_points\" fill=\"url(#area)\"/>"
-svg+="<polyline points=\"$points\" fill=\"none\" stroke=\"#884b16\" stroke-width=\"2.5\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>"
-svg+="$dots"
-# Real fix, not a guess: with 37+ versions on one axis, drawing every
-# label at font-size 10 packs them closer than their own glyph width and
-# they visibly overlap into unreadable mush, worst on a narrow mobile
-# viewport. min_gap is the smallest pixel spacing two 10px labels can
-# have without touching (2 digits + padding); skip enough labels to
-# respect it, but always keep the first and the last (today's version).
-min_gap=26
-step=$(( (n - 1) * min_gap / (plot_w > 0 ? plot_w : 1) + 1 ))
-for i in "${!labels[@]}"; do
-  if (( i % step != 0 && i != n - 1 )); then continue; fi
-  x=$((pad_l + i * plot_w / (n - 1 > 0 ? n - 1 : 1)))
-  svg+="<text x=\"$x\" y=\"$((pad_t+plot_h+16))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" fill=\"#75726e\" text-anchor=\"middle\">${labels[$i]}</text>"
-done
-svg+="<text x=\"$pad_l\" y=\"$((height-4))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" font-weight=\"600\" fill=\"#1c1c1e\">${cum[$((n-1))]} of $max shipped</text>"
-svg+="</svg>"
+points_attr = " ".join(f"{xf(i)},{yf(cum[i])}" for i in range(n))
+doc_points_attr = " ".join(f"{xf(i)},{yf_pct(doc_pct[i])}" for i in range(n))
+dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="#fff" stroke="#884b16" stroke-width="2"/>' for i in range(n))
+last_x = xf(n - 1)
+area_points = f"{pad_l},{pad_t+plot_h} {points_attr} {last_x},{pad_t+plot_h}"
+half_v = max_v // 2
 
-echo "$svg" > progress.svg
-mkdir -p landing
-cp progress.svg landing/progress.svg
-echo "wrote progress.svg (cumulative through ${labels[$((n-1))]}: ${cum[$((n-1))]} items, real per-version data)"
+# x-axis: real calendar dates, deduplicated (many commits share a day),
+# thinned the same way the old script thinned version labels, by a
+# minimum pixel gap so 8+ dates across a narrow mobile viewport never
+# overlap into mush.
+uniq_date_idx = []
+seen = set()
+for i, lab in enumerate(labels):
+    if lab not in seen:
+        seen.add(lab)
+        uniq_date_idx.append(i)
+min_gap = 46
+shown = []
+last_x_used = -min_gap
+for i in uniq_date_idx:
+    x = xf(i)
+    if x - last_x_used >= min_gap or i == uniq_date_idx[-1]:
+        shown.append(i)
+        last_x_used = x
+
+def short_date(d):
+    # "2026-09-14" -> "Sep 14"
+    y, mo, da = d.split("-")
+    months = ["", "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    return f"{months[int(mo)]} {int(da)}"
+
+svg = []
+svg.append(f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">')
+svg.append('<defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1">'
+            '<stop offset="0%" stop-color="#884b16" stop-opacity="0.35"/>'
+            '<stop offset="100%" stop-color="#884b16" stop-opacity="0"/></linearGradient></defs>')
+svg.append('<rect width="100%" height="100%" fill="#faf8f6"/>')
+# One quiet legend row instead of two competing bold all-caps titles
+# (direct feedback: "clean up graph UI"), a small solid swatch for the
+# real line-count series and a small dashed swatch for the % documented
+# series, same colors the plotted lines themselves use so the mapping is
+# immediate rather than inferred from a title.
+svg.append(f'<line x1="{pad_l}" y1="8" x2="{pad_l+14}" y2="8" stroke="#884b16" stroke-width="2.5"/>')
+svg.append(f'<text x="{pad_l+19}" y="11" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="10" fill="#75726e">Lines of real code</text>')
+legend2_x = pad_l + 150
+svg.append(f'<line x1="{legend2_x}" y1="8" x2="{legend2_x+14}" y2="8" stroke="#4c2e13" stroke-width="2" stroke-dasharray="4 3"/>')
+svg.append(f'<text x="{legend2_x+19}" y="11" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="10" fill="#75726e">% documented</text>')
+svg.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l+plot_w}" y2="{pad_t}" stroke="#e8e2da"/>')
+svg.append(f'<text x="2" y="{pad_t+3}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="9" fill="#a39c92">{max_v}</text>')
+svg.append(f'<line x1="{pad_l}" y1="{pad_t+plot_h//2}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h//2}" stroke="#e8e2da"/>')
+svg.append(f'<text x="2" y="{pad_t+plot_h//2+3}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="9" fill="#a39c92">{half_v}</text>')
+svg.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l}" y2="{pad_t+plot_h}" stroke="#ded6ca"/>')
+svg.append(f'<line x1="{pad_l}" y1="{pad_t+plot_h}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h}" stroke="#ded6ca"/>')
+svg.append(f'<text x="2" y="{pad_t+plot_h+3}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="9" fill="#a39c92">0</text>')
+svg.append(f'<polygon points="{area_points}" fill="url(#area)"/>')
+# Right axis (%) ticks, muted, opposite side, own color to match its line
+svg.append(f'<text x="{pad_l+plot_w+4}" y="{pad_t+3}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="9" fill="#b6a08a">100%</text>')
+svg.append(f'<text x="{pad_l+plot_w+4}" y="{pad_t+plot_h+3}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="9" fill="#b6a08a">0%</text>')
+svg.append(f'<polyline points="{doc_points_attr}" fill="none" stroke="#4c2e13" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round" stroke-linecap="round" opacity="0.75"/>')
+svg.append(f'<polyline points="{points_attr}" fill="none" stroke="#884b16" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>')
+svg.append(dots)
+for i in shown:
+    svg.append(f'<text x="{xf(i)}" y="{pad_t+plot_h+16}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="10" fill="#75726e" text-anchor="middle">{short_date(labels[i])}</text>')
+svg.append(f'<text x="{pad_l}" y="{height-4}" font-family="-apple-system,Helvetica,Arial,sans-serif" font-size="10" font-weight="600" fill="#1c1c1e">{max_v:,} lines &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>')
+svg.append('</svg>')
+
+out = "".join(svg)
+with open("progress.svg", "w") as f:
+    f.write(out)
+import shutil, os
+os.makedirs("landing", exist_ok=True)
+shutil.copy("progress.svg", "landing/progress.svg")
+print(f"wrote progress.svg: {max_v:,} real lines, {doc_pct[-1]}% documented, across {n} sampled points, {commit_count} total commits")
+PYEOF

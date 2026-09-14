@@ -66,6 +66,36 @@
   container.addEventListener("touchstart", focusIn, { passive: true });
   container.addEventListener("keydown", focusIn);
 
+  // v52: the demo now lives behind the hero text (direct request). This
+  // toggle is purely visual, separate from `focused` above on purpose:
+  // `focused` is one-way, once a real visitor has taken control the idle
+  // tour must never restart, so it can't double as "is the pointer
+  // currently inside the demo" for showing/hiding the headline, that
+  // needs to flip back and forth freely as someone clicks in and out.
+  var heroEl = document.querySelector(".hero");
+  var heroCopyEl = document.querySelector(".hero-copy");
+  if (heroEl) {
+    var showDemo = function () { heroEl.classList.add("demo-focused"); };
+    var showText = function () { heroEl.classList.remove("demo-focused"); };
+    container.addEventListener("mousedown", showDemo);
+    container.addEventListener("touchstart", showDemo, { passive: true });
+    // The frosted card sits visually on top of the canvas (z-index above
+    // it) but is a separate element, so a click on it never reaches
+    // #v86-embed at all, confirmed live: a click square in the middle of
+    // the card did nothing until this was added. Its own listener both
+    // hides the card AND stops the click there, a real, deliberate two-
+    // step interaction (dismiss, then click again on the now-revealed
+    // demo) rather than forwarding the same click into the kernel, which
+    // would fire whatever dock icon happened to be under the card.
+    if (heroCopyEl) {
+      heroCopyEl.addEventListener("mousedown", function (ev) { showDemo(); ev.stopPropagation(); });
+      heroCopyEl.addEventListener("touchstart", function (ev) { showDemo(); ev.stopPropagation(); }, { passive: true });
+    }
+    document.addEventListener("mousedown", function (ev) { if (!container.contains(ev.target)) showText(); });
+    document.addEventListener("touchstart", function (ev) { if (!container.contains(ev.target)) showText(); }, { passive: true });
+    document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") showText(); });
+  }
+
   // A real QA hook, not debug scaffolding left behind: "apps don't open on
   // mobile" got reported and 'fixed' several times while every check was a
   // human squinting at a phone, because nothing here is observable from
@@ -293,12 +323,40 @@
   // real input path works, not a separate animation that could drift from
   // it. The instant a visitor clicks, taps or types, focusIn() sets
   // `focused` and the tour stops between steps and never restarts.
+  //
+  // v51: each app now actually DOES something for 5-10s instead of just
+  // sitting open, direct request ("chat should type something... every
+  // other app"). Typing goes through emulator.keyboard_send_text, v86's
+  // own real string-to-scancodes API (the same simulate_char path a real
+  // keystroke takes), not a second hand-rolled input path.
+  //
+  // Chat is real but deliberately not sent here: gui_launch_chat's network
+  // call targets 10.0.2.2:11434 (QEMU user-mode networking's host
+  // gateway, the real Ollama server the native desktop app reaches over a
+  // real NIC). This browser embed has no network_relay_url configured at
+  // all, so there's no NIC for it to find, confirmed by reading this
+  // file's own v86 setup, not assumed. rtl8139_init() fails fast and
+  // gracefully in that case ("no RTL8139 found"), not a hang, but showing
+  // a visitor that message as the showcase of the chat feature is worse
+  // than not demoing the send at all. So the tour types the question into
+  // the real input field (proving the UI genuinely accepts live typed
+  // input) and deliberately never presses Enter, leaving the reply-over-
+  // network step for the real native app where a real Ollama server
+  // actually answers it.
+  var TOUR_APPS = [
+    { name: 'Files' },
+    { name: 'Terminal', text: 'help\n', settle: 500 },
+    { name: 'Notes', text: 'A real OS, from scratch.' },
+    { name: 'Chat', text: 'what can you do?' }, // no \n, see note above
+    { name: 'Weather' },
+    { name: 'Curbfind' }
+  ];
   var tourTimer = 0, tourRunning = false;
   function stopAutoplay() { if (tourTimer) { clearTimeout(tourTimer); tourTimer = 0; } tourRunning = false; }
   function tourStep(i, order) {
     if (focused || !adaptersReady) return;
     if (i >= order.length) i = 0;
-    var kx = order[i][0], ky = order[i][1];
+    var kx = order[i][0], ky = order[i][1], app = TOUR_APPS[i];
     tourRunning = true;
     // Drive the emulator's own input even though the visitor hasn't
     // focused: the mouse adapter is gated for real people, not for us.
@@ -309,13 +367,24 @@
         if (focused) return;
         emulator.bus.send("mouse-click", [true, false, false]);
         setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 80);
-        // let the app sit on screen, then a tap anywhere closes it
+        // The app is open. If it has something to type, wait for it to
+        // finish drawing (settle), then type at real typing speed, not
+        // instantly, so it reads as someone using it, not a paste.
+        if (app.text) {
+          tourTimer = setTimeout(function () {
+            if (focused || !emulator.keyboard_send_text) return;
+            emulator.keyboard_send_text(app.text, 55);
+          }, app.settle || 700);
+        }
+        // 5-10s of real dwell per app (longer when there's real typing to
+        // watch land), then a tap anywhere closes it, same as a real visitor.
+        var dwell = 5000 + (app.text ? app.text.length * 55 + 1500 : 0);
         tourTimer = setTimeout(function () {
           if (focused) return;
           emulator.bus.send("mouse-click", [true, false, false]);
           setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 80);
           tourTimer = setTimeout(function () { tourStep(i + 1, order); }, 1500);
-        }, 3500);
+        }, dwell);
       }, 400);
     });
   }
@@ -327,7 +396,8 @@
     var dockW = count * icon + (count - 1) * gap + 2 * pad;
     var x0 = Math.floor((LOGICAL_W - dockW) / 2) + pad + Math.floor(icon / 2);
     var cy = LOGICAL_H - marginBot - pad - Math.floor(icon / 2);
-    // slots 1..6: Files, Terminal, Notes, Chat, Weather, Curbfind (skip Apps and Trash)
+    // slots 1..6: Files, Terminal, Notes, Chat, Weather, Curbfind (skip
+    // Apps and Trash), same order TOUR_APPS above describes each step for.
     var order = [];
     for (var slot = 1; slot <= 6; slot++) order.push([x0 + slot * (icon + gap), cy]);
     tourStep(0, order);
