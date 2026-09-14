@@ -557,15 +557,17 @@ Two real, low-risk apps from the "stock-macOS app gap" roadmap entry. Both follo
 Verified: `make kernel.elf` clean, `./check.sh` passes, `./tools/check-refs.sh` clean, both test commands pass.
 
 ## Session task queue, intelligently ordered (Sep 2026)
-Real queue built up over one long session, reordered by actual priority/risk/dependency rather than the order requests arrived in, then persisted here so it survives past any one session's context. Fires in this order as agent slots free:
+Real queue built up over one long session, reordered by actual priority/risk/dependency rather than the order requests arrived in, then persisted here so it survives past any one session's context. Fires in this order as agent slots free. Contacts + Calculator already shipped (v70). Two real live bugs Joshua spotted directly (wallpaper horizon glitch-bar, weather using a hardcoded Vancouver location instead of his real Langley one) are in flight now, ahead of this list.
 
-1. **Systematic bug-hunt / stress-test pass** — audit before more feature code piles on top of what's here. Fable-tier (undiscovered-bug hunting is the "subtly wrong" class).
-2. **Security pass (claude-security skill)** — same audit spirit, sequenced right after the bug hunt so both land close together, real overlap likely (a memory-safety bug found by stress-testing and one found by security scanning could be the same bug from two angles).
-3. **Real chat app** (history, bigger buffers, GUI window) **+ global LLM config in Settings** — clear existing pattern to copy (Mail/Calendar/Reminders' app shape, Settings' existing persistence), real value, Sonnet-tier.
-4. **Icon sharpness, next iteration** — standing visual-polish loop, re-checks with fresh screenshots each pass, queues its own successor.
-5. **progress.svg rate-of-change series + README/landing badge refresh** — light, cosmetic, sequenced after the real feature/audit work rather than before it.
-6. **Native Stocks app** (static/demo data, no live source exists per the real curl checks above) — nice-to-have, lower urgency than chat.
-8. **Prerequisite bridge, part 1: minimal PNG decoder** — the biggest, riskiest item, standalone (doesn't block anything else currently queued), deliberately last. First of the three named app-gap prerequisites (image decoder, audio driver, TLS), most tractable of the three, unlocks the most (Photos + Maps rendering) once real.
+Reordered same day, direct request: PNG decoder moved to the front, it's the real blocker for the satellite-wallpaper idea Joshua's actively pushing on, not "deliberately last" anymore. Pacing note, also direct request: run conservatively while Joshua's away (fewer concurrent agents, not weaker models on genuinely risky work), and lean Haiku for anything that's actually mechanical.
+
+1. **Prerequisite bridge, part 1: minimal PNG decoder** — real blocker for the satellite-town wallpaper. Fable-tier, decompression/filter-reconstruction math is genuine correctness risk, not a place to cut corners for pacing.
+2. **Systematic bug-hunt / stress-test pass** — Fable-tier (undiscovered-bug hunting is the "subtly wrong" class), queued for while Joshua's asleep per his own framing.
+3. **Security pass (claude-security skill)** — same audit spirit, sequenced right after the bug hunt, real overlap likely.
+4. **Real chat app** (history, bigger buffers, GUI window) **+ global LLM config in Settings** — clear existing pattern to copy, Sonnet-tier.
+5. **Icon sharpness, next iteration** — standing visual-polish loop, Sonnet-tier.
+6. **progress.svg rate-of-change series + README/landing badge refresh** — light, cosmetic, Haiku-tier.
+7. **Native Stocks app** (static/demo data, no live source exists per the real curl checks above) — Haiku-tier, mechanical.
 
 Re-order this list honestly if a direct request jumps the queue, same as any other item here, this isn't a fixed contract.
 
