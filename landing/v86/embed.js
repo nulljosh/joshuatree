@@ -484,94 +484,163 @@
   }, 200);
 
   // v44: the idle tour. Left alone for a few seconds, the demo shows
-  // itself off: the cursor glides to each dock app, opens it, lets it sit,
+  // itself off: the cursor glides to a dock app, opens it, lets it sit,
   // closes it, moves on. Every step goes through the exact same bus path
   // a real tap uses (moveCursorTo + a click), so the tour is proof the
   // real input path works, not a separate animation that could drift from
   // it. The instant a visitor clicks, taps or types, focusIn() sets
   // `focused` and the tour stops between steps and never restarts.
   //
-  // v51: each app now actually DOES something for 5-10s instead of just
-  // sitting open, direct request ("chat should type something... every
-  // other app"). Typing goes through emulator.keyboard_send_text, v86's
-  // own real string-to-scancodes API (the same simulate_char path a real
-  // keystroke takes), not a second hand-rolled input path.
+  // v71: rebuilt around a direct request ("cycle through every real app,
+  // open it, use it for ~15s, close it from its own X, open the next,
+  // then restart"), the honest version of "show off every app" now that
+  // roadmap.md's "Multi-window, honestly scoped" entry confirms real
+  // window stacking does not exist yet: every app here is still a single,
+  // full takeover, and the dock stays live only to switch which ONE app
+  // is showing (v69), never to stack a second one on top. Sequential
+  // open/use/close/next is the real, buildable shape of that, not a
+  // simulated multi-window fake this kernel can't actually do.
   //
-  // Chat is real but deliberately not sent here: gui_launch_chat's network
-  // call targets 10.0.2.2:11434 (QEMU user-mode networking's host
-  // gateway, the real Ollama server the native desktop app reaches over a
-  // real NIC). This browser embed has no network_relay_url configured at
-  // all, so there's no NIC for it to find, confirmed by reading this
-  // file's own v86 setup, not assumed. rtl8139_init() fails fast and
-  // gracefully in that case ("no RTL8139 found"), not a hang, but showing
-  // a visitor that message as the showcase of the chat feature is worse
-  // than not demoing the send at all. So the tour types the question into
-  // the real input field (proving the UI genuinely accepts live typed
-  // input) and deliberately never presses Enter, leaving the reply-over-
-  // network step for the real native app where a real Ollama server
-  // actually answers it.
+  // Only the 8 apps really pinned to the dock (GUI_DOCK_DEFAULT in
+  // kernel.c: Files, Mail, Calendar, Notes, Reminders, Terminal, Chat,
+  // Weather) are toured. Every one of them gets real window chrome,
+  // including a real closable X, from gui_launch_from_dock. The rest of
+  // the real app roster (Contacts, Calculator, and 9 ported fleet-app
+  // viewers, 11 apps as of v70) lives behind the Apps-folder launchpad
+  // tile instead, and gui_launch_apps() opens those with gui_launch()
+  // directly, not gui_launch_from_dock, so they run full-screen with NO
+  // window chrome and no X at all, confirmed by reading kernel.c, not
+  // assumed. Scripting a close click for a button that doesn't exist
+  // there would misrepresent what this kernel can do, so those 11 stay
+  // out of the tour; see roadmap.md for the real trace.
   //
-  // v62: each step names its real dock SLOT. Found while verifying the
-  // absolute pointer, by arithmetic against kernel.c's own dock layout
-  // (v59 grew the dock to 10 tiles in the stock-macOS order Apps, Files,
-  // Mail, Calendar, Notes, Reminders, Terminal, Chat, Weather, Trash; v52
-  // trimmed tiles to 7% of the height): the old "slots 1..6 in this list's
-  // order" assumption had the tour typing `help` into Mail and "what can
-  // you do?" into Reminders. Curbfind is no longer pinned since v59, so
-  // it's out of the tour rather than aimed at a tile that isn't there.
+  // v71 real bug found and fixed here, not glossed over: the OLD tour
+  // always sent its "close" click at the exact dock-tile position it had
+  // just opened the app from, since it never moved the cursor between
+  // open and close. That used to just return to the desktop; since v69
+  // shipped (a click that lands on a dock tile while an app is open
+  // switches straight to that tile's app instead of returning to a
+  // neutral desktop), that same close click now instantly REOPENS the
+  // app that was just closed, and the tour only actually moved on once
+  // the NEXT step's own "open" click landed on the following app's tile
+  // and got read as ITS close. Confirmed live against the deployed site
+  // with no interaction injected at all (the real idle tour left running
+  // 150s, about 3 full loops, `tourwatch-qa.mjs`, a throwaway QA script
+  // built for this pass): every single transition showed the just-closed
+  // app flash back open for about 1.9s before the real switch landed
+  // (e.g. a full Files -> Terminal handoff took until t=14.2s across
+  // four separate screen states, t=7.5s open / t=12.0s close / t=12.5s
+  // Files reopens itself / t=14.2s Terminal finally opens, instead of a
+  // clean two-step open-then-open). Harmless in that it never got stuck
+  // (v69's tail-jump always resolves it eventually, and mouseOn/focused
+  // state stayed healthy the whole 150s run, no freeze, no page error),
+  // but it doubled the real work every transition did and put a visible
+  // glitch-flash in what's supposed to read as a clean demo. Closing via
+  // the fixed CLOSE_X/CLOSE_Y position below instead of the dock tile
+  // fixes it as a side effect, not a separate patch: that position is
+  // never inside gui_dock_hit_test's own rect (checked directly against
+  // its real bounds in kernel.c), so the close click genuinely reaches
+  // open desktop every time and v69's tail-jump never fires during the
+  // tour at all.
+  //
+  // Every app in this kernel closes on ANY click while it's open,
+  // regardless of where it lands (gui_wait_close / get_key_or_click's
+  // shared "click closes" contract, read directly out of kernel.c for
+  // Files/Mail/Calendar/Notes/Reminders/Terminal/Chat/Weather, not
+  // assumed), so a real per-app interaction here can never send a mouse
+  // click mid-dwell: it would close the app instantly. Real interaction
+  // is keyboard-only below, using exactly the keys each app's own loop
+  // actually reads (confirmed per app in kernel.c/mail.h/calendar.h/
+  // reminders.h before scripting it, not guessed): typed text for
+  // Notes/Chat/Terminal (unchanged since v51), 'c' + three Enter-
+  // confirmed fields for Mail's real compose flow, 'd'/']'/Enter for
+  // Calendar's real month/day navigation and event-add (a real day
+  // still can't be CLICKED in this kernel, there is no per-cell hit test
+  // in gui_launch_calendar, only keys move the day cursor; a click there
+  // closes Calendar same as everywhere else, so despite how this was
+  // first phrased, driving it by click would just close it before it
+  // could show anything), and 'a' + an Enter-confirmed line for
+  // Reminders' real add flow. Files and Weather have no interactive
+  // affordance in this kernel at all beyond gui_wait_close (confirmed
+  // the same way), so they get a real dwell with nothing scripted,
+  // exactly as honest as scripting a fake interaction would be dishonest.
   var TOUR_APPS = [
     { name: 'Files', slot: 1 },
-    { name: 'Terminal', slot: 6, text: 'help\n', settle: 500 },
-    { name: 'Notes', slot: 4, text: 'A real OS, from scratch.' },
-    { name: 'Chat', slot: 7, text: 'what can you do?' }, // no \n, see note above
+    { name: 'Mail', slot: 2, script: [
+      { type: 'keys', text: 'c', speed: 200 },
+      { type: 'wait', ms: 500 },
+      { type: 'keys', text: 'demo@joshuatree.os\n', speed: 55 },
+      { type: 'wait', ms: 350 },
+      { type: 'keys', text: 'A real OS, from scratch.\n', speed: 55 },
+      { type: 'wait', ms: 350 },
+      { type: 'keys', text: 'Every field here really writes to disk.\n', speed: 55 }
+    ] },
+    { name: 'Calendar', slot: 3, script: [
+      { type: 'keys', text: 'dd', speed: 400 }, // step forward two months, a real render each time
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: ']]', speed: 400 }, // move the day cursor
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: '\n', speed: 200 }, // opens cal_day_view for the selected day
+      { type: 'wait', ms: 500 },
+      { type: 'keys', text: 'Shipped by an AI, for real.\n', speed: 55 } // saves and returns to the month view
+    ] },
+    { name: 'Notes', slot: 4, script: [
+      { type: 'keys', text: 'A real OS, from scratch. Every keystroke here is real.', speed: 55 }
+    ] },
+    { name: 'Reminders', slot: 5, script: [
+      { type: 'keys', text: 'a', speed: 200 },
+      { type: 'wait', ms: 500 },
+      { type: 'keys', text: 'Ship the demo tour rework\n', speed: 55 }
+    ] },
+    { name: 'Terminal', slot: 6, script: [
+      { type: 'keys', text: 'help\n', speed: 55 },
+      { type: 'wait', ms: 900 },
+      { type: 'keys', text: 'uptime\n', speed: 55 }
+    ] },
+    { name: 'Chat', slot: 7, script: [
+      { type: 'keys', text: 'what can you do?', speed: 55 } // no \n: see the long-standing no-NIC-in-this-embed note above, unchanged since v51
+    ] },
     { name: 'Weather', slot: 8 }
   ];
-  var tourTimer = 0, tourRunning = false;
-  function stopAutoplay() { if (tourTimer) { clearTimeout(tourTimer); tourTimer = 0; } tourRunning = false; }
-  function tourStep(i, order) {
-    if (focused || !adaptersReady) return;
-    if (i >= order.length) i = 0;
-    var kx = order[i][0], ky = order[i][1], app = TOUR_APPS[i];
-    tourRunning = true;
-    // Drive the emulator's own input even though the visitor hasn't
-    // focused: the mouse adapter is gated for real people, not for us.
-    emulator.mouse_adapter.emu_enabled = true;
+  // gui_launch_from_dock's own fixed traffic-light X (x=70,y=40 non-apps-
+  // folder window, red circle at x+24,y+16), the same LOGICAL coordinate
+  // mobiletest.mjs already taps for its Notes-close check, identical for
+  // every dock-launched app since that rect never depends on which icon
+  // opened it. Never inside the dock's own hit-test rect (kernel.c's
+  // gui_dock_hit_test bounds its y range to the dock band near the
+  // bottom of a 540px-tall logical screen; 56 is nowhere near it), which
+  // is exactly what makes it the real fix for the v69 interaction above.
+  var CLOSE_X = 94, CLOSE_Y = 56;
+  var DWELL_MS = 15000; // "about 15 seconds" per app, direct request
+  var tourTimer = 0, tourRunning = false, tourGen = 0;
+  function stopAutoplay() { if (tourTimer) { clearTimeout(tourTimer); tourTimer = 0; } tourRunning = false; tourGen++; /* invalidates any in-flight tourLoop */ }
+  function sleep(ms) { return new Promise(function (res) { tourTimer = setTimeout(res, ms); }); }
+  function moveCursorToAsync(kx, ky, allowResync) { return new Promise(function (res) { moveCursorTo(kx, ky, res, allowResync); }); }
+  async function clickAt(kx, ky) {
     // allowResync=true: this is the tour's own cursor motion, the one
-    // place a periodic real resync is invisible rather than a bug.
-    moveCursorTo(kx, ky, function () {
-      if (focused) return;
-      tourTimer = setTimeout(function () {
-        if (focused) return;
-        emulator.bus.send("mouse-click", [true, false, false]);
-        setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 80);
-        // The app is open. If it has something to type, wait for it to
-        // finish drawing (settle), then type at real typing speed, not
-        // instantly, so it reads as someone using it, not a paste.
-        if (app.text) {
-          tourTimer = setTimeout(function () {
-            if (focused || !emulator.keyboard_send_text) return;
-            emulator.keyboard_send_text(app.text, 55);
-          }, app.settle || 700);
-        }
-        // 5-10s of real dwell per app (longer when there's real typing to
-        // watch land), then a tap anywhere closes it, same as a real visitor.
-        var dwell = 5000 + (app.text ? app.text.length * 55 + 1500 : 0);
-        tourTimer = setTimeout(function () {
-          if (focused) return;
-          emulator.bus.send("mouse-click", [true, false, false]);
-          setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 80);
-          tourTimer = setTimeout(function () { tourStep(i + 1, order); }, 1500);
-        }, dwell);
-      }, 400);
-    }, true);
+    // place a periodic real resync (relative-pointer fallback only) is
+    // invisible rather than a bug, unchanged from the pre-v71 tour.
+    await moveCursorToAsync(kx, ky, true);
+    await sleep(120);
+    emulator.bus.send("mouse-click", [true, false, false]);
+    await sleep(80);
+    emulator.bus.send("mouse-click", [false, false, false]);
   }
-  function startTourWhenReady() {
-    if (focused) return;
-    // Dock geometry in LOGICAL kernel pixels, the same arithmetic as
-    // kernel.c's gui_dock_icon/gui_dock_x0/gui_slot_x: 10 slots, tiles
-    // dock_scale_pct (default 7) percent of the height capped by the 740px
-    // DOCK_BUDGET, gap 6, pad 10, bottom margin 24. A fresh v86 boot has no
-    // SETTINGS.TXT, so the default scale is what's actually on screen.
+  async function runScript(script, gen) {
+    if (!script) return;
+    for (var i = 0; i < script.length; i++) {
+      if (focused || tourGen !== gen) return;
+      var step = script[i];
+      if (step.type === "wait") await sleep(step.ms);
+      else if (step.type === "keys" && emulator.keyboard_send_text) await emulator.keyboard_send_text(step.text, step.speed || 55);
+    }
+  }
+  // Dock geometry in LOGICAL kernel pixels, the same arithmetic as
+  // kernel.c's gui_dock_icon/gui_dock_x0/gui_slot_x: 10 slots, tiles
+  // dock_scale_pct (default 7) percent of the height capped by the 740px
+  // DOCK_BUDGET, gap 6, pad 10, bottom margin 24. A fresh v86 boot has no
+  // SETTINGS.TXT, so the default scale is what's actually on screen.
+  function dockSlotPos(slot) {
     var count = 10, gap = 6, pad = 10, marginBot = 24, budget = 740;
     var icon = Math.floor(LOGICAL_H * 7 / 100);
     var maxByWidth = Math.floor((budget - 2 * pad - (count - 1) * gap) / count);
@@ -580,8 +649,72 @@
     var dockW = count * icon + (count - 1) * gap + 2 * pad;
     var x0 = Math.floor((LOGICAL_W - dockW) / 2) + pad + Math.floor(icon / 2);
     var cy = LOGICAL_H - marginBot - pad - Math.floor(icon / 2);
-    var order = TOUR_APPS.map(function (a) { return [x0 + a.slot * (icon + gap), cy]; });
-    tourStep(0, order);
+    return [x0 + slot * (icon + gap), cy];
+  }
+  async function tourLoop(gen) {
+    tourRunning = true;
+    while (!focused && tourGen === gen) {
+      for (var i = 0; i < TOUR_APPS.length; i++) {
+        if (focused || tourGen !== gen || !adaptersReady) return;
+        var app = TOUR_APPS[i];
+        var pos = dockSlotPos(app.slot);
+        // Drive the emulator's own input even though the visitor hasn't
+        // focused: both adapters are gated for real people, not for us.
+        // v71 real bug found here, separate from the v69 one above and
+        // pre-dating this rework (present since v51, when typed-text tour
+        // steps were first added): libv86.js's keyboard adapter gates
+        // EVERY key it sends, including the programmatic
+        // simulate_char/simulate_press path keyboard_send_text calls
+        // (read directly out of libv86.js: `g()` calls `b(t)`, and `b(t)`
+        // returns false whenever `!x.emu_enabled`), on the same
+        // `emu_enabled` flag embed.js sets false on "emulator-ready" and
+        // only ever set true inside focusIn(). The tour already force-
+        // enables mouse_adapter.emu_enabled (the line below, present
+        // since v44) but never did the keyboard equivalent, so every
+        // scripted key the tour ever sent while unfocused was silently
+        // swallowed at the source, not a rendering or timing issue.
+        // Invisible until now because Terminal's static "Joshua Tree
+        // terminal. Type help." banner prints unconditionally on open
+        // (real content, but not evidence typed input landed) and Notes/
+        // Chat's typed text was never actually screenshotted mid-dwell in
+        // any prior pass. Confirmed two ways: `tracewatch.mjs` (a
+        // throwaway QA script built for this pass) screenshotted the
+        // instant after every `keyboard_send_text` call resolved and
+        // showed zero visible change across 8 real sends into Mail and
+        // Calendar; a second probe (`probe.mjs`) sending the identical
+        // 'c' key through a REAL focus tap first (`focused=true`, the
+        // same path a real visitor takes) opened Mail's real compose
+        // prompt immediately. Fixed by enabling both adapters here, the
+        // real fix, not a workaround: the tour is deliberately driving
+        // input as if it were a focused user, so it should hold the same
+        // two flags a focused user's first click sets.
+        emulator.mouse_adapter.emu_enabled = true;
+        emulator.keyboard_adapter.emu_enabled = true;
+        await clickAt(pos[0], pos[1]); // opens app i, a real dock click
+        if (focused || tourGen !== gen) return;
+        var dwellStart = Date.now();
+        await sleep(600); // let the app's first frame draw before typing into it
+        if (focused || tourGen !== gen) return;
+        await runScript(app.script, gen);
+        if (focused || tourGen !== gen) return;
+        var remaining = DWELL_MS - (Date.now() - dwellStart);
+        if (remaining > 0) await sleep(remaining);
+        if (focused || tourGen !== gen) return;
+        await clickAt(CLOSE_X, CLOSE_Y); // closes via the app's own real X, never the dock tile that opened it
+        if (focused || tourGen !== gen) return;
+        await sleep(1200); // a beat before the next app opens, reads as a real transition not a jump-cut
+      }
+      // Every app already closed itself before the next opened, the only
+      // real shape this kernel's single-window model supports (see the
+      // v71 header comment above), so the loop is already at "everything
+      // closed"; a slightly longer pause here just marks it as a
+      // deliberate loop boundary rather than app #9.
+      await sleep(2500);
+    }
+  }
+  function startTourWhenReady() {
+    if (focused) return;
+    tourLoop(tourGen).catch(function () { /* a torn-down emulator mid-await (e.g. a real navigation) shouldn't spam the console */ });
   }
   // Boot takes a few seconds; the tour waits for graphical mode plus a
   // beat, and never starts at all once the visitor has focused.
