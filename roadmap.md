@@ -557,19 +557,23 @@ Two real, low-risk apps from the "stock-macOS app gap" roadmap entry. Both follo
 Verified: `make kernel.elf` clean, `./check.sh` passes, `./tools/check-refs.sh` clean, both test commands pass.
 
 ## Session task queue, intelligently ordered (Sep 2026)
-Real queue built up over one long session, reordered by actual priority/risk/dependency rather than the order requests arrived in, then persisted here so it survives past any one session's context. Fires in this order as agent slots free. Contacts + Calculator already shipped (v70). Two real live bugs Joshua spotted directly (wallpaper horizon glitch-bar, weather using a hardcoded Vancouver location instead of his real Langley one) are in flight now, ahead of this list.
+Real queue, reordered by actual priority/risk/dependency rather than the order requests arrived in, persisted here so it survives past any one session's context. Refreshed at the end of a long session that shipped v56 through v72.
 
-Reordered same day, direct request: PNG decoder moved to the front, it's the real blocker for the satellite-wallpaper idea Joshua's actively pushing on, not "deliberately last" anymore. Pacing note, also direct request: run conservatively while Joshua's away (fewer concurrent agents, not weaker models on genuinely risky work), and lean Haiku for anything that's actually mechanical.
+Already shipped this session, not queued: Contacts + Calculator (v70), the weather-location and horizon-glitch fixes (v71, plus an rtl8139 RX bug found underneath), slimmer menu bar + cleaner progress graph (v72).
 
-1. **Prerequisite bridge, part 1: minimal PNG decoder**: real blocker for the satellite-town wallpaper. Fable-tier, decompression/filter-reconstruction math is genuine correctness risk, not a place to cut corners for pacing.
-2. **Systematic bug-hunt / stress-test pass**: Fable-tier (undiscovered-bug hunting is the "subtly wrong" class), queued for while Joshua's asleep per his own framing.
-3. **Security pass (claude-security skill)**: same audit spirit, sequenced right after the bug hunt, real overlap likely.
-4. **Real chat app** (history, bigger buffers, GUI window) **+ global LLM config in Settings**: clear existing pattern to copy, Sonnet-tier.
-5. **Icon sharpness, next iteration**: standing visual-polish loop, Sonnet-tier.
-6. **progress.svg rate-of-change series + README/landing badge refresh**: light, cosmetic, Haiku-tier.
-7. **Native Stocks app** (static/demo data, no live source exists per the real curl checks above): Haiku-tier, mechanical.
+Pacing note, direct request: run conservatively, fewer concurrent agents rather than weaker models on genuinely risky work, and lean Haiku for anything actually mechanical. Wind the session down around 90% usage rather than pushing to the limit, a big task started too late just gets killed mid-flight and leaves a half-finished worktree.
 
-Re-order this list honestly if a direct request jumps the queue, same as any other item here, this isn't a fixed contract.
+1. **Prerequisite bridge, part 1: minimal PNG decoder** - real blocker for the satellite-wallpaper goal. Fable-tier, decompression/filter-reconstruction math is genuine correctness risk, not a place to cut corners for pacing.
+2. **Wire up satellite wallpaper + QA it** - blocked on (1). Fetch a real tile for the real location (geolocation is already solved and shipped in v71, reuse it), decode with the new PNG decoder, render as wallpaper, switchable in Settings. Needs a real plain-HTTP tile source confirmed by a real curl test first, same standard the stock-API check used.
+3. **Systematic bug-hunt / stress-test pass** - Fable-tier. Note: v71's agent found three tests already failing on pristine v70 HEAD (`weatherpaneltest` both panel checks, `dockstyletest` "top edge", `calctest` `10/2 got 0`), order-independent. Those are real, known, and unfixed, start there.
+4. **Security pass (claude-security skill)** - same audit spirit, sequenced right after the bug hunt, real overlap likely.
+5. **Fix the menu bar logo sprite** - direct feedback, still open: "it doesn't look like a tree at all." `gui_draw_logo` in `kernel/kernel.c`, drawn at `GUI_MENUBAR_H / 2 + 2`. Needs real visual iteration (draw, screenshot, judge, adjust), not a blind one-shot redraw.
+6. **Real chat app** (history, bigger buffers, GUI window) **+ global LLM config in Settings** - clear existing pattern to copy, Sonnet-tier.
+7. **Icon sharpness, next iteration** - standing visual-polish loop, Sonnet-tier, re-check with fresh screenshots each pass.
+8. **progress.svg rate-of-change series + README badge refresh** - light, cosmetic, Haiku-tier. Note the doc-coverage line was deliberately cut (see the v72 notes), don't reintroduce it as a trend line.
+9. **Native Stocks app** (static/demo data, no live plain-HTTP source exists per the real curl checks above) - Haiku-tier, mechanical.
+
+Re-order honestly if a direct request jumps the queue, this isn't a fixed contract.
 
 ## Real direction, not a roadmap item yet: free OS, monetize custom hardware (Sep 2026)
 Direct statement from Joshua on the "what's the business plan" question: the OS stays free, monetization is custom hardware built to run it. Real, coherent shape (same model a lot of hobbyist single-board-computer kits use), worth recording accurately since it reframes what "real hardware" already means elsewhere in this file, not a new, separate idea.
