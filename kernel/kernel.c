@@ -1034,50 +1034,46 @@ static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int 
 /* v40: a row band, so a partial repaint (the dock band on a hover change)
    doesn't have to blit the whole photo. Rows are screen rows. */
 static void gui_draw_wallpaper_rows(int y_from, int y_to){
-    int w = (int)window_width(), h = (int)window_height();
-    int area_h = h - GUI_MENUBAR_H;
+    /* v42: sampled bilinearly at PHYSICAL resolution, not nearest-neighbour
+       through the logical layer. The old path picked one source pixel per
+       logical pixel and window_pixel stamped it as a 2x2 block, so a 640px
+       source became a 6x6 mosaic on a 1920px panel, glaring next to icons
+       that are now genuinely sharp. Interpolating between the four nearest
+       source pixels for every physical pixel gives smooth gradients from a
+       960x540 source with no blocks at all. Integer fixed-point (8 bits of
+       fraction): there is no float in this kernel and none is needed. */
+    int lw = (int)window_width(), lh = (int)window_height();
+    int sc = (int)window_scale();
+    int pw = lw * sc;
+    int area_h = lh - GUI_MENUBAR_H;
     if (y_from < GUI_MENUBAR_H) y_from = GUI_MENUBAR_H;
-    if (y_to > h) y_to = h;
-    for (int y = y_from; y < y_to; y++){
-        int row = y - GUI_MENUBAR_H;
-        int sy = row * WALLPAPER_H / (area_h > 0 ? area_h : 1);
-        if (sy >= WALLPAPER_H) sy = WALLPAPER_H - 1;
-        const unsigned char *src_row = &wallpaper_rgb[sy * WALLPAPER_W * 3];
-        for (int col = 0; col < w; col++){
-            int sx = col * WALLPAPER_W / w;
-            if (sx >= WALLPAPER_W) sx = WALLPAPER_W - 1;
-            const unsigned char *p = &src_row[sx * 3];
-            window_pixel(col, y, ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2]);
+    if (y_to > lh) y_to = lh;
+    for (int py = y_from * sc; py < y_to * sc; py++){
+        int row = py - GUI_MENUBAR_H * sc;                      /* physical row within the wallpaper area */
+        int fy = row * (WALLPAPER_H - 1) * 256 / (area_h * sc > 1 ? area_h * sc - 1 : 1);
+        int sy = fy >> 8, wy = fy & 255;
+        if (sy >= WALLPAPER_H - 1) { sy = WALLPAPER_H - 2; wy = 255; }
+        const unsigned char *r0 = &wallpaper_rgb[sy * WALLPAPER_W * 3];
+        const unsigned char *r1 = r0 + WALLPAPER_W * 3;
+        for (int px = 0; px < pw; px++){
+            int fx = px * (WALLPAPER_W - 1) * 256 / (pw > 1 ? pw - 1 : 1);
+            int sx = fx >> 8, wx = fx & 255;
+            if (sx >= WALLPAPER_W - 1) { sx = WALLPAPER_W - 2; wx = 255; }
+            const unsigned char *a = &r0[sx * 3], *b = a + 3, *c = &r1[sx * 3], *d = c + 3;
+            unsigned int col = 0;
+            for (int ch = 0; ch < 3; ch++){
+                int top = a[ch] * (256 - wx) + b[ch] * wx;
+                int bot = c[ch] * (256 - wx) + d[ch] * wx;
+                int v = (top * (256 - wy) + bot * wy) >> 16;
+                col = (col << 8) | (unsigned int)v;
+            }
+            window_pixel_phys(px, py, col);
         }
     }
 }
 
 static void gui_draw_wallpaper(void){
-    int w = (int)window_width(), h = (int)window_height();
-    int area_h = h - GUI_MENUBAR_H;
-    /* A real 2D blit of the embedded photo (nearest-neighbor, this
-       framebuffer has no scaling hardware and this kernel has no
-       resampling filter to spare), not the single-column sample
-       gui_wallpaper_color above uses for blend targets: this is what
-       actually shows on screen, that one only needs to be close. */
-    for (int row = 0; row < area_h; row++){
-        int sy = row * WALLPAPER_H / (area_h > 0 ? area_h : 1);
-        if (sy >= WALLPAPER_H) sy = WALLPAPER_H - 1;
-        const unsigned char *src_row = &wallpaper_rgb[sy * WALLPAPER_W * 3];
-        for (int col = 0; col < w; col++){
-            int sx = col * WALLPAPER_W / w;
-            if (sx >= WALLPAPER_W) sx = WALLPAPER_W - 1;
-            const unsigned char *p = &src_row[sx * 3];
-            window_pixel(col, GUI_MENUBAR_H + row, ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2]);
-        }
-    }
-
-    /* Direct feedback after living with both a while: the 8-bit pixel
-       trees and the desktop's own echo of "hello" are gone now, real
-       photo speaks for itself, and "hello" stays a one-time boot moment
-       (gui_draw_boot_screen) rather than repeating on every desktop
-       frame. Removed rather than left disabled behind a flag, nothing
-       here needs to come back on short notice. */
+    gui_draw_wallpaper_rows(GUI_MENUBAR_H, (int)window_height());
 }
 
 /* Fills a downward-pointing triangle: flat top of half-width `half_w` at
@@ -1707,7 +1703,7 @@ static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_m
    repaint, visible because there's no double buffer, triggered by every
    single mouse packet. */
 #define CURSOR_W 13
-#define CURSOR_H 13
+#define CURSOR_H 19
 static unsigned int cursor_backup[CURSOR_W * CURSOR_H];
 static int cursor_saved_x = -1, cursor_saved_y = -1;
 static void gui_cursor_restore(void){
@@ -1724,10 +1720,19 @@ static void gui_cursor_save(int x, int y){
     cursor_saved_x = x; cursor_saved_y = y;
 }
 static void gui_draw_cursor(int x, int y){
-    window_rect(x, y, 3, 13, 0x001C1C1E);
-    window_rect(x, y, 13, 3, 0x001C1C1E);
-    window_rect(x + 1, y + 1, 1, 11, 0x00FFFFFF);
-    window_rect(x + 1, y + 1, 11, 1, 0x00FFFFFF);
+    /* v42: the standard arrow pointer, black fill with a white outline so
+       it reads on both the dark sky and the light dock, replacing the
+       crosshair corner mark. Scanline widths of the classic 12x19 arrow
+       (tip at top-left, tail at the lower right), drawn as rows so it's
+       one vector-ish description, not a sprite. */
+    static const unsigned char rows[19] = {1,2,3,4,5,6,7,8,9,10,11,12,7,7,8,8,9,9,8};
+    static const unsigned char tail_x[19] = {0,0,0,0,0,0,0,0,0,0,0,0,4,5,6,6,7,7,8};
+    for (int r = 0; r < 19; r++){
+        int x0 = x + tail_x[r], w = rows[r] - tail_x[r];
+        if (w <= 0) continue;
+        window_rect(x0, y + r, w, 1, 0x00FFFFFF);                       /* white outline row */
+        if (w > 2 && r > 0 && r < 18) window_rect(x0 + 1, y + r, w - 2, 1, 0x00000000); /* black interior */
+    }
 }
 
 /* get_key() alone left a real, reported bug: a visitor with no physical
@@ -1997,7 +2002,7 @@ static void gui_launch_keyrate(void){
 static void run(char *line); /* defined after the GUI; one shell, called from both */
 
 #define TERM_COLS 96
-#define TERM_ROWS 28
+#define TERM_ROWS 24 /* v42: fits 540 logical rows (44 + 24*16 = 428 < 480) */
 #define TERM_SCROLLBACK 8192
 
 static char term_buf[TERM_SCROLLBACK];
@@ -2045,7 +2050,7 @@ static void term_render(const char *input, unsigned int input_len){
 
     unsigned int first = total_lines > TERM_ROWS ? total_lines - TERM_ROWS : 0;
     int y = 44;
-    for (unsigned int ln = first; ln < total_lines && y < 520; ln++) {
+    for (unsigned int ln = first; ln < total_lines && y < (int)window_height() - 80; ln++) {
         unsigned int p = starts[ln % (TERM_ROWS + 1)];
         int x = 16;
         for (unsigned int c = 0; c < TERM_COLS && p < term_len; c++, p++) {
@@ -2058,13 +2063,13 @@ static void term_render(const char *input, unsigned int input_len){
 
     /* Prompt line, pinned to the bottom so typing never scrolls out of
        view no matter how much output the last command produced. */
-    int py = 540;
+    int py = (int)window_height() - 60;
     font_draw_string("> ", 16, py, 0x00C98A3E, -1);
     int x = 32;
     for (unsigned int i = 0; i < input_len && x < 780; i++, x += 8)
         font_draw_char((unsigned char)input[i], x, py, 0x00F2E9D8, -1);
     window_rect(x, py, 8, 15, 0x00C98A3E); /* block cursor */
-    font_draw_string("esc closes   |   same shell as text mode", 16, 572, 0x00807468, -1);
+    font_draw_string("esc closes   |   same shell as text mode", 16, (int)window_height() - 28, 0x00807468, -1);
 }
 
 static void gui_launch_terminal(void){
@@ -2118,10 +2123,10 @@ static void gui_launch(int icon); /* mutually recursive with the folder: the fol
 static void gui_launch_apps(void){
     int sel = 0;
     int rows = (GUI_APPS_FOLDER + APPS_COLS - 1) / APPS_COLS;
-    int cell_w = 140, cell_h = 120, tile = 64;
+    int cell_w = 150, cell_h = 108, tile = 60;
     int grid_w = APPS_COLS * cell_w;
     int x0 = ((int)window_width() - grid_w) / 2;
-    int y0 = 90;
+    int y0 = 76;
 
     for (;;) {
         window_clear(GUI_BG);
@@ -2339,6 +2344,53 @@ static void gui_draw_apple_menu(int hover_item){
     }
 }
 
+/* v42: the clock opens a notification panel, the way clicking the clock
+   on a Mac does. Honest about what "notifications" means on a kernel with
+   no apps posting any: it's the system's own recent log (the same ring
+   buffer `dmesg` prints) plus live warnings computed right now (memory
+   running low, trash nearly full). Real state, not placeholder cards. */
+#define NOTIF_W     360
+#define NOTIF_ROWS  8
+static void gui_draw_notif_panel(void){
+    int x0 = (int)window_width() - NOTIF_W - 4, y0 = GUI_MENUBAR_H;
+    unsigned int bg = 0x002C2C2E, border = 0x001C1C1E, text = 0x00F5F5F7, dim = 0x00A0A0A6, warn = 0x00FFB454;
+
+    /* live warnings first: the part that's actually worth a glance */
+    const char *warns[3]; int nw = 0;
+    unsigned int free_k = pmm_free_frames() * 4;
+    if (free_k < 8192) warns[nw++] = "Memory is running low";
+    if (trash_count() >= TRASH_MAX_ITEMS - 1) warns[nw++] = "Trash is nearly full";
+    if (nw == 0) warns[nw++] = "No warnings";
+
+    int rows = nw + 1 + (klog_count < NOTIF_ROWS ? klog_count : NOTIF_ROWS);
+    int total_h = 10 + rows * 18 + 8;
+    window_rect(x0, y0, NOTIF_W, total_h, bg);
+    window_rect(x0, y0, NOTIF_W, 1, border);
+    window_rect(x0, y0 + total_h - 1, NOTIF_W, 1, border);
+    window_rect(x0, y0, 1, total_h, border);
+    window_rect(x0 + NOTIF_W - 1, y0, 1, total_h, border);
+
+    int y = y0 + 8;
+    for (int i = 0; i < nw; i++, y += 18) font_draw_string(warns[i], x0 + 12, y, nw == 1 && warns[0][0] == 'N' ? dim : warn, -1);
+    window_rect(x0 + 8, y + 6, NOTIF_W - 16, 1, 0x00545458); y += 18;
+
+    /* newest last, like every log ever, capped to the last NOTIF_ROWS */
+    int n = klog_count < NOTIF_ROWS ? klog_count : NOTIF_ROWS;
+    int start = (klog_count < KLOG_MAX) ? 0 : klog_next;
+    int skip = klog_count - n;
+    for (int i = 0; i < n; i++, y += 18) {
+        int idx = (start + skip + i) % KLOG_MAX;
+        char line[44]; int p = 0;
+        unsigned int t = klog_tick[idx] / 100; char tb[8]; int ti = 0;
+        if (!t) tb[ti++] = '0'; while (t) { tb[ti++] = '0' + t % 10; t /= 10; }
+        while (ti) line[p++] = tb[--ti];
+        line[p++] = 's'; line[p++] = ' ';
+        for (int k = 0; klog_buf[idx][k] && p < 42; k++) line[p++] = klog_buf[idx][k];
+        line[p] = 0;
+        font_draw_string(line, x0 + 12, y, text, -1);
+    }
+}
+
 static void gui_menu_run_item(int item){
     if (item == 0) gui_launch_about();
     else if (item == 1) gui_launch_files();
@@ -2353,7 +2405,12 @@ static void gui_menu_run_item(int item){
 }
 
 static void gui_run(void){
-    if (!window_open_scaled(800, 600, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
+    /* v42: 16:9, 960x540 logical at 2x = 1920x1080 physical, the native
+       size of the monitor this actually runs fullscreen on. QEMU's cocoa
+       zoom-to-fit stretches without preserving aspect, so a 4:3 mode on a
+       16:9 panel came out visibly skewed; matching the panel's own shape
+       means fullscreen is pixel-exact with no scaling at all. */
+    if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
     gui_draw_boot_screen();
     gui_order_init();
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;
@@ -2369,6 +2426,7 @@ static void gui_run(void){
        (open on press, stays open past that first release, a real
        second click either picks something or dismisses it). */
     int menu_open = 0, menu_opening = 0;
+    int notif_open = 0, notif_opening = 0, notif_draw_pending = 0; /* v42: the clock's panel, same open-on-press/dismiss-on-next-release contract as the Apple menu */
 
     int last_mx = mx, last_my = my, last_hover = -1, last_drag = -1, last_menu_open = 0, last_menu_hover = -2;
     gui_menubar_force_redraw(); /* this GUI session's first frame, the minute-change gate must not skip it */
@@ -2390,11 +2448,13 @@ static void gui_run(void){
         int held = buttons & 1;
         int just_pressed = held && !(prev_buttons & 1);
         int just_released = !held && (prev_buttons & 1);
-        int logo_here = !menu_open && mx >= 4 && mx <= 28 && my < GUI_MENUBAR_H;
-        int slot_here = menu_open ? -1 : gui_dock_hit_test(mx, my); /* the dock is inert while the menu covers it */
+        int logo_here = !menu_open && !notif_open && mx >= 4 && mx <= 28 && my < GUI_MENUBAR_H;
+        int clock_here = !menu_open && !notif_open && mx >= (int)window_width() - 200 && my < GUI_MENUBAR_H;
+        int slot_here = (menu_open || notif_open) ? -1 : gui_dock_hit_test(mx, my); /* the dock is inert while the menu covers it */
 
         if (just_pressed) {
             if (logo_here) { menu_open = 1; menu_opening = 1; }
+            else if (clock_here) { notif_open = 1; notif_opening = 1; notif_draw_pending = 1; }
             else if (slot_here >= 0) { press_slot = slot_here; press_x = mx; press_y = my; drag_slot = -1; }
         }
 
@@ -2403,9 +2463,12 @@ static void gui_run(void){
             if (moved > 8) drag_slot = press_slot; /* threshold crossed: this is a drag, not a click */
         }
 
-        int launched = 0;
+        int launched = notif_draw_pending; notif_draw_pending = 0;
         if (just_released) {
-            if (menu_open) {
+            if (notif_open) {
+                if (notif_opening) notif_opening = 0;
+                else { notif_open = 0; launched = 1; } /* any release dismisses; force the full redraw that erases the panel */
+            } else if (menu_open) {
                 if (menu_opening) {
                     menu_opening = 0; /* this release just finishes the click that opened the menu; a real second click picks something or dismisses it */
                 } else {
@@ -2469,6 +2532,7 @@ static void gui_run(void){
             cursor_saved_x = cursor_saved_y = -1; /* the full repaint replaces whatever the backup held */
             gui_draw_desktop(hover_slot, drag_slot, mx, my);
             if (menu_open) gui_draw_apple_menu(menu_hover);
+            if (notif_open) gui_draw_notif_panel();
             if (drag_slot < 0) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
             last_mx = mx; last_my = my; last_hover = hover_slot; last_drag = drag_slot;
             last_menu_open = menu_open; last_menu_hover = menu_hover;

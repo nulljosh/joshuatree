@@ -122,9 +122,9 @@ static void gui_launch_editor(void) {
         if (mouse_get_delta(&delta_x, &delta_y, &buttons)) {
             editor_mouse_x += delta_x; editor_mouse_y += delta_y;
             if (editor_mouse_x < 0) editor_mouse_x = 0;
-            if (editor_mouse_x > 799) editor_mouse_x = 799;
+            if (editor_mouse_x > (int)window_width() - 1) editor_mouse_x = (int)window_width() - 1;
             if (editor_mouse_y < 0) editor_mouse_y = 0;
-            if (editor_mouse_y > 599) editor_mouse_y = 599;
+            if (editor_mouse_y > (int)window_height() - 1) editor_mouse_y = (int)window_height() - 1;
             if ((buttons & 1) && !(previous_buttons & 1)) {
                 if (editor_mouse_y < 32 && editor_mouse_x < 38) close = 1;
                 if (editor_mouse_y >= 42 && editor_mouse_y < 76) {

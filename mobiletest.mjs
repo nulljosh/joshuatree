@@ -76,7 +76,7 @@ await page.waitForTimeout(5000); // let the paced homing+travel finish before th
 // Dock icons sit along the bottom of the kernel's own 800x600 output,
 // centred. Icon 0 (Terminal) is the leftmost of 7. Compute in kernel
 // coordinates, then map into the canvas's real on-screen box.
-const KW = 800, KH = 600;
+const KW = 960, KH = 540; // logical kernel space (physical is 2x)
 const ICON = 60, GAP = 6, PAD = 10, COUNT = 7, MARGIN_BOT = 24;
 const dockW = COUNT * ICON + (COUNT - 1) * GAP + 2 * PAD;
 const dockX0 = (KW - dockW) / 2;

@@ -12,4 +12,4 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 # ifconfig, web, serveapp) actually have a card to find, same flags
 # Makefile's own `run` target uses.
 cd "$REPO_DIR" && /usr/bin/make -s kernel.elf
-exec qemu-system-i386 -kernel "$REPO_DIR/kernel.elf" -display cocoa -rtc base=localtime -net nic,model=rtl8139 -net user
+exec qemu-system-i386 -kernel "$REPO_DIR/kernel.elf" -display cocoa,zoom-to-fit=on,full-screen=on -rtc base=localtime -net nic,model=rtl8139 -net user

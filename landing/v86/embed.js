@@ -22,6 +22,9 @@
   // wrapper (which also contains #v86-overlay) let it walk into the wrong
   // descendants; handing it #screen_container directly keeps that search
   // scoped to exactly our #screen_text div and #screen_canvas canvas.
+  // v42: the kernel's cursor and layout live in this LOGICAL space; the
+  // physical mode is 2x this. Keep in sync with gui_run's window_open_scaled.
+  var LOGICAL_W = 960, LOGICAL_H = 540;
   var screenContainer = document.getElementById("screen_container");
   var screenText = document.getElementById("screen_text");
   var screenCanvas = document.getElementById("screen_canvas");
@@ -130,7 +133,7 @@
   screenContainer.addEventListener("mousemove", function (ev) {
     if (!focused || !emulator.mouse_adapter || !emulator.mouse_adapter.emu_enabled) return;
     if (document.pointerLockElement) return; // pointer-locked play (a real click-drag drag) already reports device-independent deltas v86 handles correctly on its own
-    var lscale = screenCanvas.getBoundingClientRect().width / 800; // CSS px per LOGICAL kernel px (v41: canvas is 1600 physical, cursor is 800 logical)
+    var lscale = screenCanvas.getBoundingClientRect().width / LOGICAL_W; // CSS px per LOGICAL kernel px (v41: canvas is 1600 physical, cursor is 800 logical)
     var dx = ev.movementX / lscale, dy = ev.movementY / lscale;
     emulator.bus.send("mouse-delta", [dx, -dy]); // y inverted, matching v86's own convention exactly
     ev.stopImmediatePropagation();
@@ -158,7 +161,7 @@
     var t = ev.changedTouches && ev.changedTouches[ev.changedTouches.length - 1];
     if (!t) return;
     if (lastTouchX !== null) {
-      var lscale = screenCanvas.getBoundingClientRect().width / 800;
+      var lscale = screenCanvas.getBoundingClientRect().width / LOGICAL_W;
       var dx = (t.clientX - lastTouchX) / lscale, dy = (t.clientY - lastTouchY) / lscale;
       emulator.bus.send("mouse-delta", [dx, -dy]);
     }
@@ -229,7 +232,7 @@
   // origin. Self-correcting every single tap, no state to drift.
   function moveCursorTo(kx, ky, done) {
     var packets = [];
-    splitDelta(-1200, -1000, packets); // clamps to (0,0) from anywhere on an 800x600 screen
+    splitDelta(-(LOGICAL_W + 400), -(LOGICAL_H + 400), packets); // clamps to (0,0) from anywhere on screen
     splitDelta(kx, ky, packets);
     sendPaced(packets, done);
   }
@@ -248,9 +251,9 @@
     // matter what physical mode it opened (it's 1600x1200 now, drawn 2x),
     // so map by fraction of the canvas box, not by physical pixels.
     var rect = screenCanvas.getBoundingClientRect();
-    var kx = (t.clientX - rect.left) / rect.width * 800;
-    var ky = (t.clientY - rect.top) / rect.height * 600;
-    if (kx < 0 || ky < 0 || kx > 799 || ky > 599) return;
+    var kx = (t.clientX - rect.left) / rect.width * LOGICAL_W;
+    var ky = (t.clientY - rect.top) / rect.height * LOGICAL_H;
+    if (kx < 0 || ky < 0 || kx > LOGICAL_W - 1 || ky > LOGICAL_H - 1) return;
     // Click only once the cursor has actually finished travelling: the
     // movement is paced across several frames now, and clicking before it
     // lands means clicking wherever it happens to be partway there.
