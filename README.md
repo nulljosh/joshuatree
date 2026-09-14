@@ -2,12 +2,14 @@
 
 # Joshua Tree
 
-![version](https://img.shields.io/badge/version-v5-blue)
+![version](https://img.shields.io/badge/version-0.61.0-blue)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green) [![GitHub](https://img.shields.io/badge/GitHub-nulljosh%2Fjoshuatree-black?logo=github)](https://github.com/nulljosh/joshuatree)
 ![language](https://img.shields.io/badge/language-C%20%2F%20x86%20asm-blue)
 ![platform](https://img.shields.io/badge/platform-i386-lightgrey)
 [![repo size](https://img.shields.io/github/repo-size/nulljosh/joshuatree)](https://github.com/nulljosh/joshuatree)
 [![last commit](https://img.shields.io/github/last-commit/nulljosh/joshuatree)](https://github.com/nulljosh/joshuatree/commits/main)
+
+Live: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 
 A kernel. A small one, from nothing. It boots in QEMU, reads a real disk,
 runs code loaded off it. Full breakdown: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -47,11 +49,13 @@ The Mac launcher and `make run` attach `dotfiles.img`. Run `./sync_dotfiles.sh`
 to refresh its allowlisted, readable copies from `../dotfiles`. Fish and macOS
 apps do not execute inside Joshua Tree yet.
 
-Commands: `help` `clear` `echo` `time` `uptime` `mem` `reboot` `crash` `pagefault`
-`heaptest` `tasktest` `preempttest` `ring3test` `sleep` `disktest` `ls` `cat`
-`exec` `rm` `cd` `mkdir` `write <file> <content>` `browse` `lspci` `gfxtest` `fonttest` `mousetest`
-`nettest` `web <host> [path]` `serve` `serveapp` `chat <message>`
-`build <what>` `gui`, most exist to manually exercise a subsystem (see
+Commands: `help` `clear` `echo` `time` `uptime` `dmesg` `mem` `reboot` `crash`
+`pagefault` `heaptest` `heapgrow` `tasktest` `preempttest` `weathertest` `wind`
+`isotest` `reaptest` `ring3test` `ps` `kill` `killtest` `sleep` `disktest`
+`diskuse` `fsuse` `ls` `cat` `exec` `rm` `cd` `mkdir` `write <file> <content>`
+`browse` `lspci` `gfxtest` `fonttest` `mousetest` `nettest` `ifconfig` `netscan`
+`web <host> [path]` `serve` `serveapp` `chat <message>` `build <what>` `gui`
+`testapps`, most exist to manually exercise a subsystem (see
 `docs/ARCHITECTURE.md`), not just to be useful. `web` and `gui` are worth
 trying: `web` does a real DNS lookup and TCP connection over the network
 stack in this repo, no libc, no OS underneath; `gui` opens a real

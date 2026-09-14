@@ -1,13 +1,14 @@
 # Joshua Tree Technical Whitepaper
 
-**0.45.0** | September 2026
+**0.61.0** | September 2026
 
 An operating system, written from nothing. Not a Linux distribution. Not a
 layer on top of something else. Every part of it, from the first
 instruction the CPU runs to the pixels of the desktop, is in this
 repository. It boots in about two seconds, runs at 1920x1080, has a dock, a
-terminal, a text editor, a file browser, fifteen apps, live weather in the
-menu bar, and a tree that sways in the wind. It also runs in a browser tab.
+terminal, a text editor, a file browser, Mail, Calendar, Reminders, eighteen
+apps in all, live weather in the menu bar, and a tree that sways in the
+wind. It also runs in a browser tab.
 
 ## Why
 
@@ -29,13 +30,13 @@ backends (a real FAT16 disk and a RAM disk). It found the network card by
 reading the PCI bus itself and built Ethernet, ARP, IPv4, UDP, DNS, TCP and
 HTTP from raw bytes on the wire.
 
-On top of that sits a desktop. Fifteen apps live in an Apps folder; the
-dock shows the seven you reach for. Deleted files go to a Trash you can
-restore from. Clicking the clock shows the system's own log and any live
-warnings. The terminal is the same shell the machine boots into, just in a
-window. Text everywhere is a real antialiased typeface, not a bitmap. Icons
-are drawn as geometry at the panel's true resolution, never stored as
-images.
+On top of that sits a desktop. Eighteen apps live in an Apps folder; the
+dock pins the eight you reach for most, Apps and Trash bookending them.
+Deleted files go to a Trash you can restore from. Clicking the clock shows
+the system's own log and any live warnings. The terminal is the same shell
+the machine boots into, just in a window. Text everywhere is a real
+antialiased typeface, not a bitmap. Icons are drawn as geometry at the
+panel's true resolution, never stored as images.
 
 ## How the pieces work
 
@@ -50,20 +51,31 @@ repaint is visible. Moving the cursor repaints about 340 pixels. Hovering
 a dock icon repaints the dock strip from cached tiles. Only opening an app
 repaints the screen.
 
+**Pointer input.** A tap lands the cursor exactly where the finger is, not
+wherever a relative walk from the last position happens to land. The
+kernel probes the VMware absolute-pointer backdoor at boot; where a host
+answers (QEMU's default machine, v86 in the browser) the GUI takes
+positions straight from it. On real hardware, with no backdoor to answer,
+it falls back to the plain relative PS/2 protocol.
+
+**Chat.** `chat <message>` and the Chat app talk to a local Ollama server
+over this kernel's own TCP/HTTP stack, plain HTTP only, no TLS here yet.
+Someone else's model for now, but already running with no cloud in the
+loop, the one piece of the longer goal that already works.
+
 **The browser demo.** The landing page runs this exact kernel in a
 JavaScript x86 emulator. Four things a real BIOS normally sets up had to be
-done by the kernel itself before that worked: the text mode, keyboard
-scanning, the colour palette, and the font. The demo tours itself if you
-leave it alone.
-
-**Weather.** Fetched by the kernel's own TCP stack from Open-Meteo, which
-still answers plain HTTP. There is no TLS here, so that detail is the whole
-reason the feature exists.
+done by the kernel itself first: text mode, keyboard scanning, the colour
+palette, the font. The demo tours itself if you leave it alone. The same
+plain-HTTP TCP stack that talks to Ollama also pulls live weather from
+Open-Meteo into the menu bar.
 
 ## What it is not, yet
 
-There is no stable syscall interface for programs to target. That is the
-definition of 1.0. Apps are full-screen; there is no windowing. The Trash
+There is a real `int 0x80` gate now, but only two calls behind it, exit and
+write, no libc shim, no ELF loading, no wider surface yet. A real,
+general syscall interface for programs to target is still the definition
+of 1.0. Apps are full-screen; there is no windowing. The Trash
 is in RAM and empties on reboot. The weather fetch blocks the desktop for
 its duration on a machine with no route out. The wind measures its own
 first frame and turns itself off on slow machines, including the browser.
@@ -79,6 +91,6 @@ mattered most were found by instruments, not by reasoning: a serial probe
 found the missing font, a pixel dump found corners drawn from the wrong
 centre, a macro photo found a bezel nobody could see at normal size.
 
-## Licence
+## License
 
 Apache License 2.0. Copyright 2026 Joshua Trommel.

@@ -37,7 +37,7 @@ that with the permanent, same-shaped tables.
 | `fat.c` | FAT16, real subdirectories and file writes, 8.3 names |
 | `exec.c` | Loads a flat binary via `fat.c` and calls into it, ring 0, no isolation |
 | `drivers/mouse.c` + `drivers/vmmouse.c` | Pointer input. `mouse.c` is the PS/2 mouse on the 8042's second port (IRQ12, 3-byte relative packets). `vmmouse.c` (v62) probes the VMware absolute-pointer backdoor on I/O port 0x5658 at boot; where a host answers (QEMU's default pc machine, v86 in the browser) it switches the host to absolute mode and the GUI takes positions from it, PS/2 bytes still drained for phase but ignored. No backdoor (bare hardware, `-machine vmport=off`): PS/2 relative stays the only mouse |
-| `kernel/kernel.c` | VGA text console, PS/2 scancode table, RTC clock, the shell, and a mouse-driven GUI desktop (`gui`) built on v6's graphics/font/mouse primitives |
+| `kernel/kernel.c` | VGA text console, PS/2 scancode table, RTC clock, the shell, and a mouse-driven GUI desktop (`gui`) built on v6's graphics/font/mouse primitives. The GUI runs at 960x540 logical, scaled 2x to 1920x1080 physical; dock geometry and app layout live here too |
 
 ## Why things are ordered this way
 
