@@ -6,3 +6,4 @@ landing/kernel.elf
 .wrangler/
 menubar/JoshuaTreeMonitor.app/
 drivers/app_*.h
+.claude/worktrees/
