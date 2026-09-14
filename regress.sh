@@ -37,6 +37,11 @@ send() {
 
 (
     sleep 2
+    # The kernel now boots straight into the GUI (gui_run()) instead of the
+    # text shell; esc is gui_run()'s own real exit path (the same key a
+    # real visitor presses), so this drops back to the shell prompt before
+    # any of the existing text-mode checks below run.
+    echo 'sendkey esc'; sleep 1
     send "heaptest";              sleep 1
     send "tasktest";               sleep 1
     send "preempttest";           sleep 2

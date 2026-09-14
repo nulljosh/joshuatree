@@ -573,19 +573,46 @@ static unsigned int gui_lerp(unsigned int a, unsigned int b, int t, int max){
     return ((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)bl;
 }
 
+/* No libm in this freestanding build, and these icons are small enough
+   (radius well under 16px) that a plain increment-until-it-fits search is
+   plenty fast for something drawn on hover, not every frame. */
+static int gui_isqrt(int n){
+    if (n < 0) n = 0;
+    int r = 0;
+    while ((r + 1) * (r + 1) <= n) r++;
+    return r;
+}
+
 /* A warm desert-dusk gradient for the desktop background, sand fading to
    deep burgundy top to bottom: the same warm palette the landing page
    already commits to (never matrix-green, never cold black-and-blue, see
    CLAUDE.md), leaning into it a little further toward the desert/reptile
    theme "Leopard Gecko" (this kernel's own reserved future distro name)
    already carries, without drawing anything literal. */
-#define WALL_TOP 0x00E3C79A
-#define WALL_BOT 0x007A2048
+/* Direct follow-up: the first pass (sand to burgundy) read as Ubuntu's
+   aubergine desktop, not a Mac one, and a naive RGB lerp between an
+   orange-ish top and a magenta-ish bottom swings through a muddy pink at
+   the midpoint, exactly the "pink and white" complaint. Staying in one
+   hue family instead, warm terracotta fading straight down toward a near-
+   black espresso-brown, the same shape a real macOS default wallpaper
+   uses (bright at the horizon, dark and desaturated by the top), never
+   crossing into magenta since blue never becomes prominent relative to
+   red/green at any point along the gradient. */
+/* Direct follow-up again: a plain two-stop lerp still read as flat next to
+   a real macOS horizon wallpaper, which is never just two colors. Three
+   stops instead (warm gold catching the light, terracotta through the
+   middle, deep espresso at the bottom), still entirely inside this
+   repo's own warm-only rule, never touching teal or blue. */
+#define WALL_TOP 0x00F0B25C
+#define WALL_MID 0x00C6672E
+#define WALL_BOT 0x00201009
 static unsigned int gui_wallpaper_color(int row){
     int h = (int)window_height();
     if (row < 0) row = 0;
     if (row > h) row = h;
-    return gui_lerp(WALL_TOP, WALL_BOT, row, h);
+    int mid = h * 2 / 5; /* the warm midtone sits closer to the top, like a real sunset's brightest band */
+    if (row <= mid) return gui_lerp(WALL_TOP, WALL_MID, row, mid);
+    return gui_lerp(WALL_MID, WALL_BOT, row - mid, h - mid);
 }
 
 static void gui_draw_wallpaper(void){
@@ -594,34 +621,35 @@ static void gui_draw_wallpaper(void){
         window_rect(0, row, w, 1, gui_wallpaper_color(row));
 }
 
+/* AA_BAND pixels of smooth falloff instead of one hard blended ring: a
+   single step still read as "bitmap" on a curve this small (icon radii
+   are well under 16px), a real gradient across a few pixels using the
+   actual radial distance (gui_isqrt) reads meaningfully smoother, direct
+   follow-up feedback after the first AA pass still looked too bitmap. */
+#define AA_BAND 3
+
 static void gui_rounded_rect(int x, int y, int w, int h, unsigned int color, unsigned int bg, int r){
     window_rect(x, y, w, h, color);
-    unsigned int edge = gui_blend(color, bg);
-    int inner = r * r, outer = (r + 1) * (r + 1);
-    for (int dy = 0; dy <= r; dy++){
-        for (int dx = 0; dx <= r; dx++){
+    int outer2 = (r + AA_BAND) * (r + AA_BAND);
+    for (int dy = 0; dy <= r + AA_BAND; dy++){
+        for (int dx = 0; dx <= r + AA_BAND; dx++){
             int d2 = dx * dx + dy * dy;
-            if (d2 <= inner) continue; /* the corner's own quarter circle, already the right color */
-            unsigned int c = (d2 <= outer) ? edge : bg; /* one soft blended ring, then full background */
+            if (d2 <= r * r) continue; /* the corner's own quarter circle, already the right color */
+            if (d2 > outer2) { /* fully outside: paint bg directly, no need for isqrt */
+                window_pixel(x + dx,         y + dy,         bg);
+                window_pixel(x + w - 1 - dx, y + dy,         bg);
+                window_pixel(x + dx,         y + h - 1 - dy, bg);
+                window_pixel(x + w - 1 - dx, y + h - 1 - dy, bg);
+                continue;
+            }
+            int t = gui_isqrt(d2) - r;
+            unsigned int c = gui_lerp(color, bg, t, AA_BAND);
             window_pixel(x + dx,         y + dy,         c);
             window_pixel(x + w - 1 - dx, y + dy,         c);
             window_pixel(x + dx,         y + h - 1 - dy, c);
             window_pixel(x + w - 1 - dx, y + h - 1 - dy, c);
         }
     }
-}
-
-static void gui_draw_menubar(void){
-    window_rect(0, 0, (int)window_width(), GUI_MENUBAR_H, 0x00FFFFFF);
-    window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
-    font_draw_string("Joshua Tree", 14, 7, 0x001C1C1E, -1);
-
-    u8 h = cmos(4), m = cmos(2);
-    char clock[6];
-    u8 hv = (h & 0x0F) + ((h >> 4) * 10), mv = (m & 0x0F) + ((m >> 4) * 10);
-    clock[0] = '0' + hv / 10; clock[1] = '0' + hv % 10; clock[2] = ':';
-    clock[3] = '0' + mv / 10; clock[4] = '0' + mv % 10; clock[5] = 0;
-    font_draw_string(clock, (int)window_width() - 60, 7, 0x001C1C1E, -1);
 }
 
 /* Real pictograms, not letters: there's no image decoder or asset pipeline
@@ -632,18 +660,19 @@ static void gui_draw_menubar(void){
    a real dock icon reads as its app at a glance without needing a label. */
 #define ICON_FG 0x00FFFFFF
 
-/* `into` is whatever color surrounds this circle, so the one-pixel edge
-   band can blend toward it: the icon's own colored background for a solid
-   fill, or the fill color itself when punching a hole (the pin's eyelet)
-   into a shape that was drawn in that fill color. */
+/* `into` is whatever color surrounds this circle, so the AA_BAND-pixel
+   soft edge can fade toward it: the icon's own colored background for a
+   solid fill, or the fill color itself when punching a hole (the pin's
+   eyelet) into a shape that was drawn in that fill color. */
 static void gui_fill_circle(int cx, int cy, int r, unsigned int color, unsigned int into){
-    unsigned int edge = gui_blend(color, into);
-    int inner = r * r, outer = (r + 1) * (r + 1);
-    for (int dy = -r - 1; dy <= r + 1; dy++){
-        for (int dx = -r - 1; dx <= r + 1; dx++){
+    int outer2 = (r + AA_BAND) * (r + AA_BAND);
+    for (int dy = -r - AA_BAND; dy <= r + AA_BAND; dy++){
+        for (int dx = -r - AA_BAND; dx <= r + AA_BAND; dx++){
             int d2 = dx * dx + dy * dy;
-            if (d2 <= inner) window_pixel(cx + dx, cy + dy, color);
-            else if (d2 <= outer) window_pixel(cx + dx, cy + dy, edge);
+            if (d2 > outer2) continue;
+            if (d2 <= r * r) { window_pixel(cx + dx, cy + dy, color); continue; }
+            int t = gui_isqrt(d2) - r;
+            window_pixel(cx + dx, cy + dy, gui_lerp(color, into, t, AA_BAND));
         }
     }
 }
@@ -657,6 +686,46 @@ static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned i
         if (w < 0) w = 0;
         window_rect(cx - w, y0 + row, 2 * w + 1, 1, color);
     }
+}
+
+static void gui_draw_diag(int x0, int y0, int dx, int dy, int n, unsigned int c){
+    for (int i = 0; i < n; i++) window_pixel(x0 + dx * i, y0 + dy * i, c);
+}
+
+/* The real mark, not an approximation invented from scratch: this is the
+   same trunk/two-branch/tufted-yucca structure `icon.svg` actually draws
+   (M100 168 L100 108, then two branches, then a 3-line spiky tuft at the
+   trunk top and each branch tip), simplified to fit a ~16px menu-bar icon
+   instead of traced stroke-for-stroke, drawn with the same primitives
+   every dock icon already uses. A first attempt drew the crown as one
+   filled circle; a real screenshot showed it reading as a lollipop, not a
+   tree, caught by looking, not assumed correct from the code alone. */
+static void gui_draw_logo(int x, int cy){
+    unsigned int c = 0x00C1502F;
+    int split_y = cy - 1, top_y = cy - 7;
+    window_rect(x, split_y, 1, (cy + 5) - split_y + 1, c); /* trunk, base to branch split */
+    window_rect(x, top_y, 1, split_y - top_y + 1, c);      /* trunk continuing above the split */
+    gui_draw_diag(x - 1, split_y - 1, -1, -1, 4, c);        /* left branch */
+    gui_draw_diag(x + 1, split_y - 1,  1, -1, 4, c);        /* right branch */
+
+    int lx = x - 4, ly = split_y - 4, rx = x + 4, ry = split_y - 4;
+    gui_draw_diag(x,  top_y, -1, -1, 2, c); gui_draw_diag(x,  top_y, 0, -1, 3, c); gui_draw_diag(x,  top_y, 1, -1, 2, c);
+    gui_draw_diag(lx, ly,   -1, -1, 2, c); gui_draw_diag(lx, ly,   -1,  0, 2, c);  gui_draw_diag(lx, ly,   -1,  1, 2, c);
+    gui_draw_diag(rx, ry,    1, -1, 2, c); gui_draw_diag(rx, ry,    1,  0, 2, c);  gui_draw_diag(rx, ry,    1,  1, 2, c);
+}
+
+static void gui_draw_menubar(void){
+    window_rect(0, 0, (int)window_width(), GUI_MENUBAR_H, 0x00FFFFFF);
+    window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
+    gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2);
+    font_draw_string("Joshua Tree", 32, 7, 0x001C1C1E, -1);
+
+    u8 h = cmos(4), m = cmos(2);
+    char clock[6];
+    u8 hv = (h & 0x0F) + ((h >> 4) * 10), mv = (m & 0x0F) + ((m >> 4) * 10);
+    clock[0] = '0' + hv / 10; clock[1] = '0' + hv % 10; clock[2] = ':';
+    clock[3] = '0' + mv / 10; clock[4] = '0' + mv % 10; clock[5] = 0;
+    font_draw_string(clock, (int)window_width() - 60, 7, 0x001C1C1E, -1);
 }
 
 static void gui_icon_weather(int cx, int cy, int s, unsigned int bg){
@@ -763,10 +832,24 @@ static void gui_icon_quotes(int cx, int cy, int s, unsigned int bg){
     gui_fill_triangle_down(cx + off, base_cy + r - 1, r, s / 6, ICON_FG);
 }
 
+/* A soft lit band across the top of the icon, fading down into its flat
+   base color: the same top-lit gloss treatment classic Aqua/iOS icons
+   used for real dimension, real per-pixel colors computed with gui_lerp,
+   not an alpha overlay this framebuffer can't do. Inset from the edges by
+   the corner radius so it never overwrites gui_rounded_rect's own AA ring
+   with a hard rectangular edge. */
+static void gui_draw_gloss(int x, int y, int w, int h, unsigned int bg, int corner_r){
+    unsigned int light = gui_blend(bg, 0x00FFFFFF);
+    int gloss_h = h * 2 / 5;
+    for (int row = 0; row < gloss_h; row++)
+        window_rect(x + corner_r, y + row, w - 2 * corner_r, 1, gui_lerp(light, bg, row, gloss_h));
+}
+
 static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
     int x = cx_center - size / 2, y = cy_bottom - size;
     unsigned int bg = GUI_COLORS[icon];
     gui_rounded_rect(x, y, size, size, bg, GUI_BG, 12);
+    gui_draw_gloss(x, y, size, size, bg, 13);
     int cy = y + size / 2;
     switch (icon) {
         case 0: gui_icon_weather(cx_center, cy, size, bg); break;
@@ -806,7 +889,11 @@ static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int dra
         gui_draw_one_icon(icon, cx_center, cy_bottom, size);
         if (magnified) {
             int label_w = (int)strlen(GUI_LABELS[icon]) * 8;
-            font_draw_string(GUI_LABELS[icon], cx_center - label_w / 2, cy_bottom - size - 18, 0x001C1C1E, -1);
+            /* Dark text on the old flat light backdrop; the gradient
+               wallpaper makes the area right above the dock genuinely
+               dark now, dark-on-dark was unreadable, caught live by
+               actually hovering an icon on the real page, not assumed. */
+            font_draw_string(GUI_LABELS[icon], cx_center - label_w / 2, cy_bottom - size - 18, 0x00FFF6EC, -1);
         }
     }
     if (drag_slot >= 0) {
@@ -822,9 +909,22 @@ static void gui_draw_cursor(int x, int y){
     window_rect(x + 1, y + 1, 11, 1, 0x00FFFFFF);
 }
 
+/* get_key() alone left a real, reported bug: a visitor with no physical
+   keyboard (a touch-only phone, or the live v86 embed before real
+   keystrokes reach it) had no way to ever leave an app screen once
+   opened, since "any key" was the only exit. A real click is the one
+   input a mouse- or touch-only visitor can always produce, so it closes
+   the app too now, not just a keypress. */
 static void gui_wait_close(void){
-    font_draw_string("any key to go back", 20, (int)window_height() - 30, 0x0075726E, -1);
-    get_key();
+    font_draw_string("any key or click to go back", 20, (int)window_height() - 30, 0x0075726E, -1);
+    for (;;) {
+        int sc = kbd_pop();
+        if (sc >= 0) return;
+        int dx, dy, buttons;
+        mouse_get_delta(&dx, &dy, &buttons);
+        if (buttons) return;
+        __asm__ volatile ("hlt");
+    }
 }
 
 static void gui_launch_html(const char *label, const unsigned char *data, unsigned int data_len){
@@ -1380,7 +1480,23 @@ void kmain(unsigned int multiboot_info_addr){
     boot_chime();
     puts("joshuatree v0 -- type help\n");
     if (!fs_ok) puts("(no FAT filesystem found -- ls/cat unavailable)\n");
+    /* check.sh's only way to know the kernel reached this point: booting
+       straight into gui_run() below switches the VGA card into a real
+       graphics mode, which reprograms the Graphics Controller's memory-map
+       select register, changing what physical address 0xB8000 even means.
+       The old banner text is still real and still gets written above, it
+       just becomes unreadable moments later once graphics mode takes over,
+       confirmed directly (a real `xp` read after boot showed 0xffff, not
+       the banner) rather than assumed. A plain RAM address ordinary text
+       memory doesn't share survives the mode switch untouched. */
+    *(volatile unsigned int *)0x9000 = 0xB007C0DE;
     kbd_drain(); /* discard any stray byte queued during boot (keyboard_enable_scanning, mouse_init) before real input starts */
+    /* A real desktop OS boots to a desktop, not a command line: gui_run()
+       already has a clean way back to this exact shell (esc closes the
+       window, clears, prints "back in text mode", returns), so starting
+       there instead of making every visitor type "gui" themselves is a
+       straight improvement, not a special case for the browser demo. */
+    gui_run();
     char line[80];
     for (;;) {
         puts("> ");

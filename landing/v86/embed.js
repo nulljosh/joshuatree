@@ -8,11 +8,10 @@
 //   bar, scrolling with space, anything, as if it were meant for the
 //   emulator. Every real v86 embed handles this the same way: leave it off
 //   until the visitor has actually clicked in.
-// - The kernel boots into a real text-mode shell first, that's just how it
-//   works, but a visitor shouldn't have to look at a command line to see
-//   what this actually is. The instant the kernel can accept input, this
-//   drives it straight into "gui" through the same simulate_char path a
-//   real keystroke uses, real command, not a fake screen swap.
+// - The kernel itself boots straight into its GUI desktop now (kmain calls
+//   gui_run() before ever reaching the text shell loop), so this file no
+//   longer needs to script typing "gui" itself, that used to live here
+//   before the kernel grew that behavior on its own.
 (function () {
   var container = document.getElementById("v86-embed");
   if (!container) return;
@@ -49,32 +48,6 @@
     // "typing in the search bar" and "typing into someone else's kernel".
     emulator.keyboard_adapter.emu_enabled = false;
     emulator.mouse_adapter.emu_enabled = false;
-
-    // The visible demo is the GUI, not the shell it boots into first: the
-    // text-mode banner is real and correct, but a visitor landing on the
-    // page shouldn't have to look at a command line before seeing the
-    // thing this kernel actually does. Drive straight into "gui" through
-    // the exact same simulate_char path a real keystroke uses, same as any
-    // other command, but only once the shell's own prompt actually shows
-    // up: kbd_drain() (kernel/irq.c) deliberately discards anything typed
-    // before that point to swallow real stray boot-time PS/2 noise, and it
-    // was swallowing this too when sent the instant the CPU existed, well
-    // before the kernel had actually finished booting.
-    (function waitForPrompt() {
-      var lines = emulator.screen_adapter && emulator.screen_adapter.get_text_screen();
-      var ready = lines && lines.some(function (l) { return /^>\s*$/.test(l.replace(/\s+$/, "") + " "); });
-      if (!ready) { setTimeout(waitForPrompt, 100); return; }
-      emulator.keyboard_adapter.emu_enabled = true;
-      var chars = "gui\n".split("");
-      (function typeGui() {
-        if (!chars.length) {
-          if (!focused) emulator.keyboard_adapter.emu_enabled = false; // a real visitor may have clicked in during this, don't fight their focus
-          return;
-        }
-        emulator.keyboard_adapter.simulate_char(chars.shift());
-        setTimeout(typeGui, 60);
-      })();
-    })();
   });
 
   var focused = false;
@@ -89,6 +62,33 @@
   container.addEventListener("mousedown", focusIn);
   container.addEventListener("touchstart", focusIn, { passive: true });
   container.addEventListener("keydown", focusIn);
+
+  // Real bug, reported directly ("the cursor is really misplaced... ten
+  // or twenty pixels off") and independently confirmed while testing: CSS
+  // `object-fit: contain` on a canvas sized to 100%/100% of its container
+  // only changes what's *visually drawn*, the canvas element's own DOM
+  // box (what getBoundingClientRect reports, what mouse coordinates get
+  // measured against) still spans the full, un-letterboxed container.
+  // Any click or mouse move gets measured against the wrong box the
+  // instant the visible image and the DOM box disagree, which is
+  // whenever the viewport's aspect ratio isn't exactly 800x600, i.e.
+  // almost always, and worst on a portrait phone. Setting the canvas
+  // element's actual CSS size to the real letterboxed dimensions, not
+  // relying on object-fit at all, makes the DOM box and the visible
+  // image the same rectangle, so coordinate math anywhere downstream
+  // (this file or v86's own mouse adapter) is correct by construction
+  // instead of needing to know about letterboxing at all.
+  function resizeCanvas() {
+    if (!screenCanvas) return;
+    var box = screenContainer.getBoundingClientRect();
+    var w = screenCanvas.width || 800, h = screenCanvas.height || 600;
+    var scale = Math.min(box.width / w, box.height / h);
+    screenCanvas.style.width = Math.round(w * scale) + "px";
+    screenCanvas.style.height = Math.round(h * scale) + "px";
+  }
+  window.addEventListener("resize", resizeCanvas);
+  window.addEventListener("orientationchange", resizeCanvas);
+  resizeCanvas();
 
   // Toggle between the text and graphical screen elements: v86 keeps both
   // in the DOM and expects the embedder to show whichever is active. The
@@ -105,6 +105,7 @@
     var stuckInText = !graphical && Date.now() - bootStart > 4000;
     if (screenCanvas) screenCanvas.style.display = graphical ? "block" : "none";
     if (screenText) screenText.style.display = graphical ? "none" : (stuckInText ? "block" : "none");
+    resizeCanvas(); // the canvas's real pixel resolution only exists once graphical mode sets it, re-check every tick until it does
   }, 200);
 
   // stopAutoplay is kept as a no-op call site for focusIn() above; there's
