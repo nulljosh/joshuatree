@@ -809,14 +809,29 @@ static void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int
     }
 }
 
-static void gui_draw_script_loop(int cx, int cy, int r, int thick, unsigned int color, unsigned int bg, int skip_mask){
-    static const int px8[8] = {10, 7, 0, -7, -10, -7, 0, 7};
-    static const int py8[8] = {0, 7, 10, 7, 0, -7, -10, -7};
-    for (int i = 0; i < 8; i++){
+/* Real revision, not the first attempt: reported as reading like "tubes",
+   not cursive, and looking at it fresh the diagnosis is exactly that,
+   three real problems, not one. Thickness relative to letter height was
+   close to 20%, a script pen stroke reads closer to 8-10%; there was no
+   slant at all, upright strokes read as print, not script; and every
+   letter was fully disconnected, real cursive is one continuous stroke
+   with the pen barely leaving the page between letters. Fixed all three:
+   thinner strokes, a real rightward shear applied to every point (higher
+   above the baseline shifts further right, the standard italic
+   construction), and thin baseline connector strokes linking each
+   letter to the next. Loop letters ('e', 'o') moved from an 8-point to a
+   12-point circle approximation, rounder curves at this radius. */
+#define HELLO_SLANT_NUM 3
+#define HELLO_SLANT_DEN 10
+
+static void gui_draw_script_loop(int cx, int cy, int r, int thick, unsigned int color, unsigned int bg, int skip_mask, int shift){
+    static const int px12[12] = {10, 9, 5, 0, -5, -9, -10, -9, -5, 0, 5, 9};
+    static const int py12[12] = {0, 5, 9, 10, 9, 5, 0, -5, -9, -10, -9, -5};
+    for (int i = 0; i < 12; i++){
         if (skip_mask & (1 << i)) continue;
-        int j = (i + 1) % 8;
-        gui_draw_capsule(cx + px8[i] * r / 10, cy + py8[i] * r / 10,
-                          cx + px8[j] * r / 10, cy + py8[j] * r / 10, thick, color, bg);
+        int j = (i + 1) % 12;
+        gui_draw_capsule(cx + shift + px12[i] * r / 10, cy + py12[i] * r / 10,
+                          cx + shift + px12[j] * r / 10, cy + py12[j] * r / 10, thick, color, bg);
     }
 }
 
@@ -825,31 +840,49 @@ static void gui_draw_script_loop(int cx, int cy, int r, int thick, unsigned int 
    font: every stroke here is the same AA capsule/loop primitive already
    used elsewhere, curved letterforms instead of a monospace grid being
    the whole point. `cx` is the horizontal center of the whole word, not
-   a left edge, so the caller doesn't need to know its rendered width. */
+   a left edge, so the caller doesn't need to know its rendered width.
+   Every point is expressed as (dx, n): dx is a horizontal design offset
+   in scale units from the letter's own anchor, n is how many scale units
+   above the baseline it sits, real distance for the shear (SL) to work
+   from, not an arbitrary label. */
 static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int color, unsigned int bg){
-    int thick = scale > 2 ? scale / 2 : 1;
-    int total_w = 23 * scale;
+    int thick = scale >= 6 ? 2 : 1;
+    int total_w = 22 * scale;
     int x = cx - total_w / 2;
-    int asc = 10 * scale;
+#define SL(n) (((n) * scale * HELLO_SLANT_NUM) / HELLO_SLANT_DEN)
+#define PX(dx, n) (x + (dx) * scale + SL(n))
+#define PY(n) (baseline - (n) * scale)
 
-    gui_draw_capsule(x, baseline - asc, x, baseline, thick, color, bg); /* h: ascender stem */
-    gui_draw_capsule(x, baseline - 5 * scale, x + scale, baseline - 7 * scale, thick, color, bg);
-    gui_draw_capsule(x + scale, baseline - 7 * scale, x + 3 * scale, baseline - 7 * scale, thick, color, bg);
-    gui_draw_capsule(x + 3 * scale, baseline - 7 * scale, x + 4 * scale, baseline - 5 * scale, thick, color, bg);
-    gui_draw_capsule(x + 4 * scale, baseline - 5 * scale, x + 4 * scale, baseline, thick, color, bg);
+    /* h */
+    gui_draw_capsule(PX(0, 10), PY(10), PX(0, 0), PY(0), thick, color, bg);
+    gui_draw_capsule(PX(0, 5), PY(5), PX(1, 7), PY(7), thick, color, bg);
+    gui_draw_capsule(PX(1, 7), PY(7), PX(3, 7), PY(7), thick, color, bg);
+    gui_draw_capsule(PX(3, 7), PY(7), PX(4, 5), PY(5), thick, color, bg);
+    gui_draw_capsule(PX(4, 5), PY(5), PX(4, 0), PY(0), thick, color, bg);
+    gui_draw_capsule(PX(4, 0), PY(0), PX(6, 0), PY(0), thick, color, bg); /* connector into e */
     x += 6 * scale;
 
-    gui_draw_script_loop(x + 2 * scale, baseline - 3 * scale, 3 * scale, thick, color, bg, (1 << 7) | (1 << 0)); /* e, open at the right */
-    gui_draw_capsule(x - scale, baseline - 3 * scale, x + 5 * scale, baseline - 3 * scale, thick, color, bg); /* crossbar: a 'c' shape reads as 'e' with one */
+    /* e: loop centered (2,3), open on the right, crossbar completes it */
+    gui_draw_script_loop(x + 2 * scale, PY(3), 3 * scale, thick, color, bg, (1 << 11) | (1 << 0) | (1 << 1), SL(3));
+    gui_draw_capsule(PX(-1, 3), PY(3), PX(5, 3), PY(3), thick, color, bg);
+    gui_draw_capsule(PX(5, 0), PY(0), PX(7, 0), PY(0), thick, color, bg); /* connector into l */
     x += 6 * scale;
 
-    gui_draw_capsule(x, baseline - asc, x, baseline, thick, color, bg); /* l */
+    /* l */
+    gui_draw_capsule(PX(0, 10), PY(10), PX(0, 0), PY(0), thick, color, bg);
+    gui_draw_capsule(PX(0, 0), PY(0), PX(2, 0), PY(0), thick, color, bg); /* connector into l */
     x += 3 * scale;
 
-    gui_draw_capsule(x, baseline - asc, x, baseline, thick, color, bg); /* l */
+    /* l */
+    gui_draw_capsule(PX(0, 10), PY(10), PX(0, 0), PY(0), thick, color, bg);
+    gui_draw_capsule(PX(0, 0), PY(0), PX(2, 0), PY(0), thick, color, bg); /* connector into o */
     x += 3 * scale;
 
-    gui_draw_script_loop(x + 2 * scale, baseline - 3 * scale, 3 * scale, thick, color, bg, 0); /* o, closed */
+    /* o: closed loop centered (2,3) */
+    gui_draw_script_loop(x + 2 * scale, PY(3), 3 * scale, thick, color, bg, 0, SL(3));
+#undef PX
+#undef PY
+#undef SL
 }
 
 /* The same cursive "hello" from the boot screen, echoed faintly on the
