@@ -125,8 +125,10 @@ static const char SC[128] = {
     'z','x','c','v','b','n','m',',','.','/',0,'*',0,' '
 };
 
+static void gui_app_mouse_tick(void);
 static char getch(void){
     for (;;) {
+        gui_app_mouse_tick();
         int sc = kbd_pop();
         if (sc < 0) { __asm__ volatile ("hlt"); continue; }
         if (sc & 0x80) continue;            /* key release */
@@ -143,6 +145,7 @@ static char getch(void){
 static int gui_getch_or_click(void){
     mouse_click_edge_sync(); /* a button already held (e.g. the click that opened this app) is the baseline, not a fresh click */
     for (;;) {
+        gui_app_mouse_tick();
         int sc = kbd_pop();
         if (sc >= 0) {
             if (sc & 0x80) continue;
@@ -193,6 +196,7 @@ static int get_key(void){
 
 static int get_key_or_click(void){
     for (;;) {
+        gui_app_mouse_tick();
         int sc = kbd_pop();
         if (sc >= 0) {
             if (sc == 0xE0) {
@@ -1904,8 +1908,11 @@ static void gui_draw_dock_icon(int icon, int cx_center, int cy_bottom, int size)
     int sc = (int)window_scale(), src = (DOCK_ICON + DOCK_MAGNIFY) * sc, dst = size * sc;
     int x0 = (cx_center - size / 2) * sc, y0 = (cy_bottom - size) * sc;
     for (int y = 0; y < dst; y++)
-        for (int x = 0; x < dst; x++)
-            window_pixel_phys(x0 + x, y0 + y, tile[(y * src / dst) * src + x * src / dst]);
+        for (int x = 0; x < dst; x++) {
+            unsigned int color = tile[(y * src / dst) * src + x * src / dst];
+            if (color != DOCK_TRAY_COLOR)
+                window_pixel_phys(x0 + x, y0 + y, color);
+        }
 }
 
 /* hover_slot: which slot shows the magnify+label (-1 none). drag_slot: the
@@ -2078,6 +2085,29 @@ static void gui_draw_cursor(int x, int y){
     }
 }
 
+/* App viewers have their own input loops. Keep the pointer alive while one
+   is open, drawing it in screen coordinates outside the app viewport. */
+static int gui_app_windowed = 0;
+static int app_view_x, app_view_y, app_view_w, app_view_h;
+static int app_cursor_x, app_cursor_y;
+static void gui_app_mouse_tick(void){
+    if (!gui_app_windowed) return;
+    int dx = 0, dy = 0, buttons = 0;
+    int moved = mouse_get_delta(&dx, &dy, &buttons);
+    (void)buttons;
+    if (!moved && cursor_saved_x >= 0) return;
+    window_clear_viewport();
+    gui_cursor_restore();
+    app_cursor_x += dx; app_cursor_y += dy;
+    if (app_cursor_x < 0) app_cursor_x = 0;
+    if (app_cursor_y < 0) app_cursor_y = 0;
+    if (app_cursor_x > (int)window_width() - CURSOR_W) app_cursor_x = (int)window_width() - CURSOR_W;
+    if (app_cursor_y > (int)window_height() - CURSOR_H) app_cursor_y = (int)window_height() - CURSOR_H;
+    gui_cursor_save(app_cursor_x, app_cursor_y);
+    gui_draw_cursor(app_cursor_x, app_cursor_y);
+    window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
+}
+
 /* get_key() alone left a real, reported bug: a visitor with no physical
    keyboard (a touch-only phone, or the live v86 embed before real
    keystrokes reach it) had no way to ever leave an app screen once
@@ -2101,6 +2131,7 @@ static void gui_wait_close(void){
     sleep_ticks(5);
     mouse_click_edge_sync(); /* a button already held (e.g. the click that opened this app) is the baseline, not a fresh click */
     for (;;) {
+        gui_app_mouse_tick();
         int sc = kbd_pop();
         /* Real, reported bug: "any key" closed every read-only viewer,
            including Keyrate once it became a real typing test, the first
@@ -2125,7 +2156,6 @@ static void gui_wait_close(void){
    be a fake control that looks like it does something it doesn't. Real
    minimize/maximize wait on the actual windowing system already queued in
    roadmap.md's later product ideas, not a shortcut bolted on here. */
-static int gui_app_windowed = 0;
 static void gui_draw_app_titlebar(const char *title){
     if (!gui_app_windowed) {
         gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
@@ -2704,10 +2734,15 @@ static void gui_launch_from_dock(int icon){
     font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
     font_draw_string(GUI_LABELS[icon], x + 96, y + 8, 0x00403439, -1);
     window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
+    app_view_x = x + 8; app_view_y = y + 32;
+    app_view_w = w - 16; app_view_h = h - 40;
+    app_cursor_x = editor_mouse_x; app_cursor_y = editor_mouse_y;
+    cursor_saved_x = cursor_saved_y = -1;
     gui_app_windowed = 1;
     gui_launch(icon);
     gui_app_windowed = 0;
     window_clear_viewport();
+    gui_cursor_restore();
 }
 
 /* A loop (octagon approximating a circle, 8 capsule segments) for the
