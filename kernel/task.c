@@ -110,6 +110,24 @@ void yield(void) {
 /* Frees the calling task's own stack and removes it from the round-robin
    permanently, then reschedules away and never returns. See this file's
    header comment for why freeing the stack it's still standing on is safe. */
+int task_max(void) { return n_tasks; }
+int task_used(int id) { return (id >= 0 && id < MAX_TASKS) ? tasks[id].used : 0; }
+
+void task_kill(int id) {
+    if (id < 0 || id >= MAX_TASKS || !tasks[id].used || id == current) return;
+    /* Patches the saved EIP in that task's own suspended stack frame to
+       point at task_exit instead of wherever it actually was, so the next
+       time schedule() resumes it, it runs task_exit() on its own real
+       stack/context instead of continuing whatever it was doing. Safe
+       specifically because id != current was just checked: every OTHER
+       used task is, by definition, suspended right now with a valid saved
+       frame sitting in memory in exactly the pusha+EIP/CS/EFLAGS shape
+       task_create() documents, frame[8] is EIP (frame[0..7] are pusha's
+       EDI..EAX, popa's pop order). */
+    u32 *frame = (u32 *)tasks[id].esp;
+    frame[8] = (u32)task_exit;
+}
+
 void task_exit(void) {
     /* v31 (0.31.0): cli across the free-then-switch window, a real race
        this file didn't close before: a timer tick landing between

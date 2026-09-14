@@ -1928,7 +1928,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest isotest reaptest ring3test sleep disktest fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest isotest reaptest ring3test ps kill killtest sleep disktest fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -1994,6 +1994,45 @@ static void run(char *line){
             puts((preempt_a_count > 0 && preempt_b_count > 0) ? "preempted without yield: ok\n" : "no preemption (still cooperative-only)\n");
             preempt_stop = 1;
             for (int i = 0; i < 5; i++) yield(); /* let both tasks actually reach task_exit() and free their slots before returning */
+        }
+    }
+    else if (!strcmp(line, "ps")) {
+        for (int i = 0; i < task_max(); i++) {
+            char buf[16]; int n = 0; unsigned int v = (unsigned int)i;
+            char tmp[6]; int ti = 0; if (v==0) tmp[ti++]='0'; while (v) { tmp[ti++]='0'+v%10; v/=10; }
+            while (ti) buf[n++] = tmp[--ti];
+            buf[n++]=' '; buf[n]=0;
+            puts(buf);
+            puts(task_used(i) ? "used\n" : "free\n");
+        }
+    }
+    else if (!strcmp(line, "kill")) {
+        if (!*arg) { puts("usage: kill <task id>, see ps\n"); }
+        else {
+            int id = 0; const char *p = arg; while (*p >= '0' && *p <= '9') { id = id*10 + (*p-'0'); p++; }
+            task_kill(id);
+            puts("signal sent (takes effect next time that task is scheduled)\n");
+        }
+    }
+    else if (!strcmp(line, "killtest")) {
+        /* Real proof a killed task actually stops, not just that `kill`
+           didn't crash anything: preempt_task_a runs forever incrementing
+           a plain counter (same demo task preempttest already uses,
+           reused rather than writing a third almost-identical one). Kill
+           it mid-flight, let a few ticks pass, and confirm the counter
+           genuinely stopped moving instead of merely slowing down. */
+        preempt_a_count = 0; preempt_stop = 0;
+        int id = task_create(preempt_task_a);
+        if (id < 0) { puts("no free task slots\n"); }
+        else {
+            unsigned int warmup = ticks() + 5;
+            while (ticks() < warmup) { }
+            task_kill(id);
+            for (int i = 0; i < 3; i++) yield(); /* let the scheduler actually resume it into task_exit() */
+            int stopped_at = preempt_a_count;
+            unsigned int settle = ticks() + 10;
+            while (ticks() < settle) { }
+            puts(preempt_a_count == stopped_at ? "kill: task really stopped: ok\n" : "kill: FAILED (counter kept moving)\n");
         }
     }
     else if (!strcmp(line, "isotest")) {
