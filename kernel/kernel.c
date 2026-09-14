@@ -2584,6 +2584,17 @@ static void gui_app_mouse_tick(void){
     gui_draw_cursor(app_cursor_x, app_cursor_y);
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
+/* v67 (0.62.2): for an app that repaints its whole viewport itself on
+   every keystroke (Notes). Lift the pointer sprite before the repaint so
+   the backup under it can't go stale and get restored over fresh content
+   on the next move; the next gui_app_mouse_tick sees no saved cursor and
+   draws it again on top of whatever the app just painted. */
+static void gui_app_cursor_hide(void){
+    if (!gui_app_windowed) return;
+    window_clear_viewport();
+    gui_cursor_restore();
+    window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
+}
 
 /* get_key() alone left a real, reported bug: a visitor with no physical
    keyboard (a touch-only phone, or the live v86 embed before real
@@ -2703,13 +2714,18 @@ static void gui_launch_files(void){
 static void gui_launch_chat(void){
     window_clear(0x00FAF8F6);
     font_draw_string("Chat", 20, 16, 0x0085144B, -1);
-    font_draw_string("type a message, enter to send, esc to cancel:", 20, 44, 0x0075726E, -1);
+    font_draw_string("type a message, enter to send, esc or click to cancel:", 20, 44, 0x0075726E, -1);
 
     static char msg[200];
     unsigned int n = 0;
+    /* v67 (0.62.2): get_key() here was click-blind, the second real
+       "stuck" app after Notes: a visitor with no keyboard (a phone, the
+       landing page's idle tour) could open Chat and never leave it.
+       Same click-cancels contract the other text prompts now keep. */
+    mouse_click_edge_sync();
     for (;;) {
-        int k = get_key();
-        if (k == KEY_ESC) return;
+        int k = get_key_or_click();
+        if (k == KEY_ESC || k == KEY_CLICK) return;
         if (k == KEY_ENTER) break;
         if (k == '\b') { if (n > 0) n--; }
         else if (n < sizeof(msg) - 1 && k >= 32 && k < 127) msg[n++] = (char)k;

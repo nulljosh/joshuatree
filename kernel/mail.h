@@ -104,6 +104,7 @@ static void mail_save(void) {
 static int mail_prompt_line(const char *prompt, char *out, int max) {
     unsigned int n = 0;
     out[0] = 0;
+    mouse_click_edge_sync(); /* v67: a click cancels, same as esc, so no screen in this GUI is keyboard-only to leave */
     for (;;) {
         window_clear(GUI_BG);
         gui_draw_app_titlebar("Mail");
@@ -111,8 +112,8 @@ static int mail_prompt_line(const char *prompt, char *out, int max) {
         window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
         out[n] = 0;
         font_draw_string(out, 24, 78, 0x001C1C1E, -1);
-        int k = get_key();
-        if (k == KEY_ESC) return 0;
+        int k = get_key_or_click();
+        if (k == KEY_ESC || k == KEY_CLICK) return 0;
         if (k == KEY_ENTER) break;
         if (k == '\b') { if (n > 0) n--; }
         else if ((int)n < max - 1 && k >= 32 && k < 127) out[n++] = (char)k;

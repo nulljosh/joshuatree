@@ -135,6 +135,37 @@ console.log('kernel serial (vmmouse):', JSON.stringify(await serialLines('vmmous
 console.log('after tap:', await shot('2-after-tap'));
 console.log('  fingerprint', JSON.stringify(after));
 
+// v67 (0.62.2): the "stuck on Notes" report, on the real v86 path. Notes
+// ran its own relative-only mouse loop and never saw v86's absolute
+// pointer, so no tap could ever reach its close hitbox, and with the dock
+// still visible around the modal window every dock tap after it looked
+// dead ("all apps"). Close whatever the first tap opened (a tap anywhere
+// closes it), open Notes (dock slot 4), type real text through v86's own
+// keyboard_send_text (so the disk-less save path runs on close too, this
+// boot has no FAT), then tap the window's own red close button at kernel
+// (94,56): the desktop has to come back.
+let notesClosed = null;
+if (openedAt >= 0) {
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(1500);
+  const desk = await fingerprint();
+  const NOTES_SLOT = 4;
+  const notesCX = dockX0 + PAD + NOTES_SLOT * (ICON + GAP) + ICON / 2;
+  await page.touchscreen.tap(box.x + (notesCX / KW) * box.width, sy);
+  await page.waitForTimeout(1500);
+  const notes = await fingerprint();
+  const notesOpened = looksOpened(notes, desk);
+  await page.evaluate(() => { if (window.__jt && __jt.emu.keyboard_send_text) __jt.emu.keyboard_send_text('hello', 40); });
+  await page.waitForTimeout(900);
+  await shot('3-notes-open');
+  await page.touchscreen.tap(box.x + (94 / KW) * box.width, box.y + (56 / KH) * box.height);
+  await page.waitForTimeout(1500);
+  const afterX = await fingerprint();
+  notesClosed = notesOpened && !looksOpened(afterX, desk);
+  await shot('4-notes-closed');
+  console.log(`notes: opened=${notesOpened} (light ${desk.light} -> ${notes.light}), closed by its X=${notesClosed} (light ${afterX.light})`);
+}
+
 // An app view clears the whole screen to one flat colour, so a real
 // launch shows up as a large swing in how many sampled pixels are light,
 // in EITHER direction: most apps clear to near-white, but Terminal
@@ -149,10 +180,11 @@ console.log('  screen changed at all :', changed);
 console.log('  looks like an app view:', opened, `(light px ${before.light} -> ${after.light})`);
 console.log('  tap to app view       :', openedAt >= 0 ? openedAt + 'ms' : 'never');
 console.log('  guest absolute mode   :', absolute, guestSawAbsolute ? '(kernel logged a real absolute packet)' : '(kernel never logged an absolute packet)');
+console.log('  notes opens and closes:', notesClosed === null ? 'not reached' : notesClosed);
 if (logs.length) console.log('  console:', logs.slice(-8).join(' | '));
 if (process.env.JT_SERIAL) { console.log('--- full kernel serial log'); console.log(await page.evaluate(() => window.__jt ? __jt.serial : '')); }
-const pass = opened && (!absolute || guestSawAbsolute);
-console.log(pass ? '\nPASS: a tap on the dock opened an app' : '\nFAIL: tapping the dock did not open an app');
+const pass = opened && (!absolute || guestSawAbsolute) && notesClosed === true;
+console.log(pass ? '\nPASS: a tap on the dock opened an app, and Notes closed from its own X' : '\nFAIL: ' + (opened ? 'Notes did not open and close by tap' : 'tapping the dock did not open an app'));
 
 await browser.close();
 process.exit(pass ? 0 : 1);
