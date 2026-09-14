@@ -78,17 +78,68 @@
   // image the same rectangle, so coordinate math anywhere downstream
   // (this file or v86's own mouse adapter) is correct by construction
   // instead of needing to know about letterboxing at all.
+  var currentScale = 1;
   function resizeCanvas() {
     if (!screenCanvas) return;
     var box = screenContainer.getBoundingClientRect();
     var w = screenCanvas.width || 800, h = screenCanvas.height || 600;
-    var scale = Math.min(box.width / w, box.height / h);
-    screenCanvas.style.width = Math.round(w * scale) + "px";
-    screenCanvas.style.height = Math.round(h * scale) + "px";
+    currentScale = Math.min(box.width / w, box.height / h) || 1;
+    screenCanvas.style.width = Math.round(w * currentScale) + "px";
+    screenCanvas.style.height = Math.round(h * currentScale) + "px";
   }
   window.addEventListener("resize", resizeCanvas);
   window.addEventListener("orientationchange", resizeCanvas);
   resizeCanvas();
+
+  // A second, real bug behind the same "cursor is misplaced" report, found
+  // after the letterbox-vs-DOM-box fix above still didn't fully fix it:
+  // a real browser mousemove's movementX/movementY are always reported in
+  // CSS pixels of actual physical mouse travel, completely unaware of any
+  // CSS sizing this page applies. v86's own mouse adapter forwards that
+  // raw value straight into the kernel's relative PS/2-style cursor with
+  // no scale compensation at all (confirmed by reading its source: no
+  // division by any scale factor anywhere in that path), and neither does
+  // v86's own `set_scale`/CSS-transform display mechanism, so switching to
+  // it instead wouldn't have helped either. Displaying the kernel's real
+  // 800x600 output any size other than exactly 800x600 CSS pixels means
+  // real mouse travel and the kernel's own cursor travel at different
+  // rates, drifting apart the more the visitor actually moves the mouse,
+  // exactly the reported symptom. Fixed by intercepting real movement
+  // ourselves in the capture phase (before v86's own bubble-phase listener
+  // ever sees it), scaling it down to real kernel pixels, and sending the
+  // corrected delta over the same bus event v86's own adapter uses,
+  // `stopImmediatePropagation` so v86 never also sends the raw, wrong one.
+  screenContainer.addEventListener("mousemove", function (ev) {
+    if (!focused || !emulator.mouse_adapter || !emulator.mouse_adapter.emu_enabled) return;
+    if (document.pointerLockElement) return; // pointer-locked play (a real click-drag drag) already reports device-independent deltas v86 handles correctly on its own
+    var dx = ev.movementX / currentScale, dy = ev.movementY / currentScale;
+    emulator.bus.send("mouse-delta", [dx, -dy]); // y inverted, matching v86's own convention exactly
+    ev.stopImmediatePropagation();
+  }, true);
+
+  // Touch has no movementX/Y at all, v86 computes its own delta from
+  // consecutive touch positions (clientX/Y), which has the exact same
+  // unscaled-pixel problem as mouse movementX/Y above, worse on a phone
+  // where the display scale is usually larger. Same fix, our own tracked
+  // last-touch position instead of the browser-provided movement value.
+  var lastTouchX = null, lastTouchY = null;
+  screenContainer.addEventListener("touchmove", function (ev) {
+    if (!focused || !emulator.mouse_adapter || !emulator.mouse_adapter.emu_enabled) return;
+    var t = ev.changedTouches && ev.changedTouches[ev.changedTouches.length - 1];
+    if (!t) return;
+    if (lastTouchX !== null) {
+      var dx = (t.clientX - lastTouchX) / currentScale, dy = (t.clientY - lastTouchY) / currentScale;
+      emulator.bus.send("mouse-delta", [dx, -dy]);
+    }
+    lastTouchX = t.clientX; lastTouchY = t.clientY;
+    ev.stopImmediatePropagation();
+    ev.preventDefault();
+  }, { capture: true, passive: false });
+  screenContainer.addEventListener("touchstart", function (ev) {
+    var t = ev.changedTouches && ev.changedTouches[0];
+    if (t) { lastTouchX = t.clientX; lastTouchY = t.clientY; }
+  }, { capture: true, passive: true });
+  screenContainer.addEventListener("touchend", function () { lastTouchX = lastTouchY = null; }, { capture: true, passive: true });
 
   // Toggle between the text and graphical screen elements: v86 keeps both
   // in the DOM and expects the embedder to show whichever is active. The
