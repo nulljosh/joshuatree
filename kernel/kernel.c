@@ -222,21 +222,24 @@ static void klog_dump(void){
 
 /* ---- task demo: two tasks that each print a letter and yield, round-robin,
    to prove context switching actually swaps stacks correctly. Bounded, then
-   hlt forever: a task can't safely return (see task.c), and now that irq0
-   itself can round-robin into these on every tick regardless of who calls
-   yield(), letting them print forever would spam the shell's own output for
-   the rest of the boot session the first time anyone ran tasktest. ---- */
-static void task_a(void){ for (int i = 0; i < 10; i++) { puts("A"); yield(); } for (;;) __asm__ volatile ("hlt"); }
-static void task_b(void){ for (int i = 0; i < 10; i++) { puts("B"); yield(); } for (;;) __asm__ volatile ("hlt"); }
+   task_exit() (v28): a task can't safely `return` (see task.c), but now
+   that it can really exit instead of parking in `hlt` forever, running
+   tasktest repeatedly no longer permanently burns 2 of the 6 task slots. ---- */
+static void task_a(void){ for (int i = 0; i < 10; i++) { puts("A"); yield(); } task_exit(); }
+static void task_b(void){ for (int i = 0; i < 10; i++) { puts("B"); yield(); } task_exit(); }
 
 /* ---- preemption demo: two tasks that never call yield() or hlt, proving
    the timer itself forces a switch. The shell's own wait loop below also
    never yields/hlts on purpose, so if preemption weren't real this whole
-   command would just spin, and neither counter would ever move. ---- */
+   command would just spin, and neither counter would ever move.
+   preempt_stop (v28) lets the shell actually reap these once it's done
+   measuring, same reasoning as task_a/task_b above: without it these two
+   would spin forever and permanently hold 2 of the 6 task slots. ---- */
 static volatile int preempt_a_count = 0;
 static volatile int preempt_b_count = 0;
-static void preempt_task_a(void){ for (;;) preempt_a_count++; }
-static void preempt_task_b(void){ for (;;) preempt_b_count++; }
+static volatile int preempt_stop = 0;
+static void preempt_task_a(void){ while (!preempt_stop) preempt_a_count++; task_exit(); }
+static void preempt_task_b(void){ while (!preempt_stop) preempt_b_count++; task_exit(); }
 
 static void ls_cb(const char *name, unsigned int size, int is_dir) {
     puts(name); if (is_dir) putc('/');
@@ -1902,7 +1905,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest ring3test sleep disktest ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build gui testapps\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest tasktest preempttest reaptest ring3test sleep disktest ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest web serve serveapp chat build gui testapps\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -1958,7 +1961,7 @@ static void run(char *line){
         ring3_test();
     }
     else if (!strcmp(line, "preempttest")) {
-        preempt_a_count = 0; preempt_b_count = 0;
+        preempt_a_count = 0; preempt_b_count = 0; preempt_stop = 0;
         int ida = task_create(preempt_task_a);
         int idb = task_create(preempt_task_b);
         if (ida < 0 || idb < 0) { puts("no free task slots (run fewer other task tests first)\n"); }
@@ -1966,7 +1969,25 @@ static void run(char *line){
             unsigned int deadline = ticks() + 20; /* ~200ms real wall clock */
             while (ticks() < deadline) { } /* deliberately no yield()/hlt here */
             puts((preempt_a_count > 0 && preempt_b_count > 0) ? "preempted without yield: ok\n" : "no preemption (still cooperative-only)\n");
+            preempt_stop = 1;
+            for (int i = 0; i < 5; i++) yield(); /* let both tasks actually reach task_exit() and free their slots before returning */
         }
+    }
+    else if (!strcmp(line, "reaptest")) {
+        /* Real proof task_exit() actually frees its slot, not just that the
+           kernel doesn't hang: exhaust every slot, confirm the next create
+           fails, exit one, confirm a create then succeeds and reuses that
+           exact slot id, not a coincidence, the same id every time since
+           task_create always takes the lowest free slot. */
+        int ids[16]; /* well above task.c's real MAX_TASKS, just a safe bound for this loop */
+        int n = 0;
+        while (n < 16) { int id = task_create(task_exit); if (id < 0) break; ids[n++] = id; }
+        int full = (task_create(task_exit) < 0); /* every slot taken, including task 0 (the shell), so this must fail */
+        for (int i = 0; i < 5; i++) yield(); /* let the throwaway tasks actually reach task_exit() */
+        int reused = task_create(task_a);
+        int ok = full && reused == ids[0] && reused >= 0; /* task_create always takes the lowest free slot, so the first slot handed out above is the first one reused */
+        puts(ok ? "reap: freed slot really reused: ok\n" : "reap: FAILED\n");
+        for (int i = 0; i < 12; i++) yield(); /* drain task_a's own A-printing + exit so the prompt doesn't land mid-output */
     }
     else if (!strcmp(line, "ls"))    fat_list(ls_cb);
     else if (!strcmp(line, "browse")) browse();

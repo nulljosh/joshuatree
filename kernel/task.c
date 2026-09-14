@@ -4,10 +4,17 @@
    8 registers, then the CPU's own EIP/CS/EFLAGS), whether it got there by a
    real timer tick or by yield()'s `int $32` triggering that same path in
    software, so one restore sequence (popa; iret) resumes either case.
-   ponytail: no exit()/reap -- a task that returns from its entry function
-   still corrupts whatever real stack frame `ret` lands on next, so a task
-   that's done still has to loop forever (hlt is fine, it's silent and
-   nearly free) rather than actually return. */
+   v28: real exit()/reap. A task still can't just `return` from its entry
+   function (`ret` would land on whatever garbage is above the fabricated
+   frame), it must call task_exit() instead, which frees its own stack via
+   kfree() then immediately reschedules away via the same `int $32` gate
+   yield() uses. Freeing a stack while still executing on it is safe here:
+   kfree() only edits the kheap's free-list metadata, never unmaps or
+   scribbles the memory itself, and the one transient use afterward (the
+   int $32 trap frame, and schedule()'s own C call frame) is nothing but
+   more pushes onto memory nobody else can race to reallocate before this
+   single-threaded scheduler actually switches ESP over to the next task
+   at the very end of the asm stub, after schedule() has already returned. */
 #include "task.h"
 #include "kheap.h"
 #include "irq.h"
@@ -36,7 +43,9 @@ void tasks_init(void) {
 }
 
 int task_create(void (*entry)(void)) {
-    if (n_tasks >= MAX_TASKS) return -1;
+    int id = -1;
+    for (int i = 0; i < MAX_TASKS; i++) if (!tasks[i].used) { id = i; break; }
+    if (id < 0) return -1;
     void *stack = kmalloc(STACK_SIZE);
     if (!stack) return -1;
 
@@ -58,27 +67,48 @@ int task_create(void (*entry)(void)) {
     *(--sp) = 0;            /* ESI */
     *(--sp) = 0;            /* EDI */
 
-    int id = n_tasks++;
     tasks[id].esp = (u32)sp;
     tasks[id].stack_base = stack;
     tasks[id].used = 1;
+    if (id >= n_tasks) n_tasks = id + 1; /* n_tasks is a high-water mark for the round-robin scan below, not a live count */
     return id;
 }
 
 /* Called from irq0's asm stub with the interrupted task's esp (already
    pointing at the pusha+CPU-frame it just built). Returns the esp to
-   resume on: the next task's in round-robin order, or the same one
-   unchanged if there's nothing else to run. */
+   resume on: the next USED task in round-robin order (an exited task's
+   freed slot is skipped, not scheduled into), or the same one unchanged
+   if there's nothing else to run. */
 u32 schedule(u32 esp) {
-    if (n_tasks < 2) return esp;
     tasks[current].esp = esp;
-    current = (current + 1) % n_tasks;
+    int next = current;
+    for (int i = 0; i < n_tasks; i++) {
+        next = (next + 1) % n_tasks;
+        if (tasks[next].used) break;
+    }
+    current = next;
     return tasks[current].esp;
 }
 
+static int any_other_used(void) {
+    for (int i = 0; i < n_tasks; i++) if (i != current && tasks[i].used) return 1;
+    return 0;
+}
+
 void yield(void) {
-    if (n_tasks < 2) return;
+    if (!any_other_used()) return;
     __asm__ volatile ("int $32"); /* same IDT gate as the hardware timer: identical frame, identical schedule() */
+}
+
+/* Frees the calling task's own stack and removes it from the round-robin
+   permanently, then reschedules away and never returns. See this file's
+   header comment for why freeing the stack it's still standing on is safe. */
+void task_exit(void) {
+    int id = current;
+    if (tasks[id].stack_base) kfree(tasks[id].stack_base);
+    tasks[id].stack_base = 0;
+    tasks[id].used = 0;
+    for (;;) __asm__ volatile ("int $32"); /* loop in case of a spurious extra resume; schedule() will never pick this slot again */
 }
 
 /* ponytail: no sleep queue, this task keeps taking its round-robin turn and
@@ -88,7 +118,7 @@ void yield(void) {
 void sleep_ticks(unsigned int n) {
     unsigned int start = ticks();
     while (ticks() - start < n) {
-        if (n_tasks < 2) { __asm__ volatile ("hlt"); continue; }
+        if (!any_other_used()) { __asm__ volatile ("hlt"); continue; }
         yield();
     }
 }
