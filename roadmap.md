@@ -649,3 +649,14 @@ Deliberately out of the tour: the other 11 real apps (Contacts, Calculator, and 
 **Standing QA (CLAUDE.md's 4b).** New `tools/tourinput-check.mjs`: watches the real, unmodified idle tour open Mail on its own (no tap, no focus) and asserts a real 3rd list row of text pixels appears once the compose script has had time to run, the one visible signature only a landed keystroke can produce. Proven discriminating, not just "prints ok": reverted the `keyboard_adapter.emu_enabled` line, reran, got the exact predicted failure (`row2 (only real if compose landed)=0`, FAIL); restored it, reran, `row2=2424` vs `row1=1628`, PASS.
 
 Verified for real, headless throughout (no `-display cocoa` window opened, the worktree-agent standing policy): `node --check landing/v86/embed.js`; `mobiletest.mjs` against a locally served copy of the landing page (existing `landing/v86/kernel.elf`, untouched since `kernel.c` wasn't) still PASS, confirming no regression to the real focused-visitor path; a full 200s/~2-loop unattended watch (the same throwaway shape as Part 1's QA) showed all 8 apps opening, running their real script, and closing cleanly every cycle, dwell times landing consistently at ~15.0-15.2s per app, no JS errors, `mouseOn`/`focused` state healthy the entire run. Rebased onto `origin/main` at `b71c9b3` (v73/0.65.2, no overlap: that pass only touched `kernel/calculator.h` and three test files) before push.
+
+## Real bug reports from Joshua, not yet investigated (Sep 2026)
+Direct notes, ingested as-is, not yet root-caused or scoped, real user reports from actually using the live app:
+
+- Scroll wheel/mouse scroll doesn't work — can't scroll the Apps launchpad. Real gap: check whether this kernel's PS/2/vmmouse drivers even decode a scroll-wheel byte at all, or whether the launchpad UI just never wired one up.
+- Text rendering artifact: sometimes shows extra spacing between letters where there shouldn't be. Real, inconsistent (not every render), needs a repro before root-causing.
+- Launchpad doesn't actually open apps — clicking an app tile in the Apps folder closes the launchpad instead of launching the app. Real, broken core interaction, not a polish item.
+- Trash should show as empty by default when it's actually empty (currently may show a non-empty state at rest, or the empty state isn't the true default). Real, needs checking against `trash.c`'s actual state on a fresh boot.
+- Icons still read pixel-ish, with a pixely (not smooth) drop shadow, despite v58/v61/v68's real fixes to specific icon defects. Standing item, Joshua's own framing: "keep looping on it later" — matches the existing standing icon-sharpness loop item already in this file, not a new one-off.
+
+Not investigated yet, not scoped, no root cause assumed for any of these. Real next step for each: reproduce with real evidence before touching code, same standard as every other entry in this file.
