@@ -2285,12 +2285,22 @@ static void gui_launch_chat(void){
 
 #include "editor.h"
 
-/* v44: draws one character of DejaVu Sans Mono (the same antialiased
-   glyph tables the Notes editor already ships) into the 16x32 physical
-   cell that one logical 8x16 character occupies, alpha-blended over
-   whatever is already there. Mono, regular, the 24px size: at 2x a 24px
-   face fills the 32px cell the way the bitmap did, and its advance
-   (~14px) fits inside the 16px cell so glyphs never collide. */
+/* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
+   dock hover labels, titlebars) read as monospace/typewriter, not the
+   proportional humanist look real macOS chrome uses (SF/Helvetica);
+   turned out that was literally true, v44 hardcoded family index 2
+   (Mono) for every string in the OS, the exact "mono outside a char
+   grid" mismatch this project's own design rule warns about. DejaVu Sans
+   (family 0) is the closest already-embedded substitute for SF/Helvetica,
+   no new font asset needed, same glyph table the Notes editor's own
+   "Sans" option already ships and proves out. Positioning is unaffected
+   either way: font_draw_string's own fixed 8px-logical (16px physical)
+   advance per character, not the glyph's natural width, is what places
+   every character in this kernel, on purpose (see font_set_aa's own
+   note), so this is a pure typeface swap. Proportional Sans glyphs run
+   wider than Mono at a few characters ('M','W'); the existing `x >= px +
+   16` clamp below already clips rather than collides into the next
+   cell, same safety net Mono relied on, nothing new to add. */
 static void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg){
     if (c < 32 || c > 126) c = (c == 0xF8) ? 176 : '?'; /* 0xF8 is the CP437 degree sign the weather uses */
     const struct editor_glyph *g;
@@ -2299,7 +2309,7 @@ static void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg
         for (int j = 0; j < 9; j++) for (int i = 0; i < 9; i++) { int dx = i - 4, dy = j - 4; int d2 = dx*dx + dy*dy; if (d2 >= 5 && d2 <= 12) window_pixel_phys(px + 3 + i, py + 8 + j, fg); } /* a ring at cap height, where a degree sign sits */
         return;
     }
-    g = &editor_glyphs[((2 * 2 + 0) * 4 + 2) * 95 + (c - 32)];
+    g = &editor_glyphs[((0 * 2 + 0) * 4 + 2) * 95 + (c - 32)];
     if (bg >= 0) for (int j = 0; j < 32; j++) for (int i = 0; i < 16; i++) window_pixel_phys(px + i, py + j, (unsigned int)bg);
     int ox = px + 1 + g->left, oy = py + g->top - 2; /* `top` is measured from the line box's top (see editor_layout), not a baseline; the 24px face was sized for a 36px line box, ours is 32 */
     for (int row = 0; row < g->height; row++){
