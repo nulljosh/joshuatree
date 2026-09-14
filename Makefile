@@ -43,8 +43,11 @@ kernel/kernel.o: kernel/editor.h drivers/editor_fonts.h
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-run: kernel.elf
-	qemu-system-i386 -kernel kernel.elf -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user
+dotfiles.img:
+	./sync_dotfiles.sh
+
+run: kernel.elf dotfiles.img
+	qemu-system-i386 -kernel kernel.elf -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file=dotfiles.img,format=raw,if=ide,index=0
 
 clean:
 	rm -f $(OBJS) kernel.elf

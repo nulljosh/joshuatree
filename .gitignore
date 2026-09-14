@@ -7,3 +7,4 @@ landing/kernel.elf
 menubar/JoshuaTreeMonitor.app/
 drivers/app_*.h
 .claude/worktrees/
+dotfiles.img

@@ -29,10 +29,20 @@ int window_open_scaled(unsigned int width, unsigned int height, unsigned int bpp
 unsigned int window_scale(void);
 void window_pixel_phys(int px, int py, unsigned int color);
 unsigned int window_get_pixel_phys(int px, int py);
+unsigned int *window_phys_row(int py);
 int window_has_target(void);
 void window_rect(int x, int y, int w, int h, unsigned int color);
 unsigned int window_width(void);
 unsigned int window_height(void);
+
+/* Draw an app into a bounded rectangle of the existing framebuffer. The
+   desktop outside it stays visible; coordinates inside are app-local. */
+void window_set_viewport(int x, int y, unsigned int w, unsigned int h);
+void window_clear_viewport(void);
+
+/* Compose a physical row band offscreen, then present it in one copy. */
+void window_push_screen_band(unsigned int *buf, int top, unsigned int h);
+void window_pop_screen_band(void);
 
 /* Redirects window_pixel/window_rect/window_width/window_height to an
    offscreen buffer instead of the real screen, real supersampling for

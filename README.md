@@ -43,6 +43,10 @@ make run      # boots to the shell
 ./check.sh    # boot check
 ```
 
+The Mac launcher and `make run` attach `dotfiles.img`. Run `./sync_dotfiles.sh`
+to refresh its allowlisted, readable copies from `../dotfiles`. Fish and macOS
+apps do not execute inside Joshua Tree yet.
+
 Commands: `help` `clear` `echo` `time` `uptime` `mem` `reboot` `crash` `pagefault`
 `heaptest` `tasktest` `preempttest` `ring3test` `sleep` `disktest` `ls` `cat`
 `exec` `rm` `cd` `mkdir` `write <file> <content>` `browse` `lspci` `gfxtest` `fonttest` `mousetest`

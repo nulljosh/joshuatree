@@ -640,6 +640,7 @@ static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 3, 14, 7, 
    this whole desktop's one-screen, nothing-persisted scope). */
 static int gui_order[GUI_ICON_COUNT];
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = GUI_DOCK_DEFAULT[i]; }
+static unsigned char dock_hover_extra[GUI_ICON_COUNT];
 
 #define GUI_BG          0x00FAF8F6
 #define GUI_MENUBAR_H   30
@@ -1122,6 +1123,8 @@ static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_ro
    PIT ticks, tripping the slow-machine gate. Measured over serial, then
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
+static unsigned int *wind_base = 0;
+static int wind_base_width = 0;
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
     struct wp_row c;
     int lw = (int)window_width(), lh = (int)window_height();
@@ -1151,7 +1154,22 @@ static inline __attribute__((always_inline)) unsigned int gui_wallpaper_px(const
     }
     return col;
 }
-static unsigned int gui_wallpaper_sample(int px, int py, int sway){ struct wp_row c = gui_wallpaper_row(py, sway); return gui_wallpaper_px(&c, px); }
+static unsigned int gui_wind_cached_pixel(int px, int py){
+    int sc = (int)window_scale(), top = WIND_TOP_ROW * sc;
+    if (!wind_base || py < top || py >= WIND_HORIZON_ROW * sc) return 0;
+    int shift = gui_wind_shift(py / sc) * sc;
+    int sx = px + (shift >> 8), frac = shift & 255;
+    if (sx < 0) sx = 0;
+    if (sx >= wind_base_width) sx = wind_base_width - 1;
+    int sx1 = sx + 1 < wind_base_width ? sx + 1 : sx;
+    const unsigned int *row = wind_base + (py - top) * wind_base_width;
+    return frac ? gui_lerp(row[sx], row[sx1], frac, 256) : row[sx];
+}
+static unsigned int gui_wallpaper_sample(int px, int py, int sway){
+    if (sway && wind_base && py >= WIND_TOP_ROW * (int)window_scale() && py < WIND_HORIZON_ROW * (int)window_scale())
+        return gui_wind_cached_pixel(px, py);
+    struct wp_row c = gui_wallpaper_row(py, sway); return gui_wallpaper_px(&c, px);
+}
 
 /* ex/ey/ew/eh: a physical rect to leave untouched (the cursor). v45.1: the
    wind used to restore the cursor, repaint the band, and redraw it, which
@@ -1164,6 +1182,24 @@ static void gui_draw_wallpaper_rows_sway_ex(int y_from, int y_to, int sway, int 
     if (y_from < GUI_MENUBAR_H) y_from = GUI_MENUBAR_H;
     if (y_to > lh) y_to = lh;
     for (int py = y_from * sc; py < y_to * sc; py++){
+        if (sway && wind_base && py >= WIND_TOP_ROW * sc && py < WIND_HORIZON_ROW * sc) {
+            int in_rows = (eh > 0 && py >= ey && py < ey + eh);
+            int shift = gui_wind_shift(py / sc) * sc;
+            int whole = shift >> 8, frac = shift & 255;
+            const unsigned int *row = wind_base + (py - WIND_TOP_ROW * sc) * wind_base_width;
+            unsigned int *dst = window_phys_row(py);
+            for (int px = 0; px < wind_base_width; px++) {
+                if (in_rows && px >= ex && px < ex + ew) continue;
+                int sx = px + whole;
+                if (sx < 0) sx = 0;
+                if (sx >= wind_base_width) sx = wind_base_width - 1;
+                int sx1 = sx + 1 < wind_base_width ? sx + 1 : sx;
+                unsigned int color = frac ? gui_lerp(row[sx], row[sx1], frac, 256) : row[sx];
+                if (dst) dst[px] = color;
+                else window_pixel_phys(px, py, color);
+            }
+            continue;
+        }
         struct wp_row c = gui_wallpaper_row(py, sway);
         int in_rows = (eh > 0 && py >= ey && py < ey + eh);
         for (int px = 0; px < c.pw; px++){
@@ -1843,7 +1879,8 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
     if (tile) {
         for (int py = 0; py < pw; py++)
             for (int px = 0; px < pw; px++)
-                window_pixel_phys(x * (int)sc + px, y * (int)sc + py, tile[py * pw + px]);
+                if (tile[py * pw + px] != under)
+                    window_pixel_phys(x * (int)sc + px, y * (int)sc + py, tile[py * pw + px]);
         return;
     }
     /* out of memory for the cache: draw directly, un-supersampled, rather than draw nothing */
@@ -1854,6 +1891,22 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
     gui_draw_icon_glyph(icon, cx_center, y + size / 2, size, bg);
 }
 static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){ gui_draw_one_icon_on(icon, cx_center, cy_bottom, size, DOCK_TRAY_COLOR); }
+
+/* The hover transition reuses the fully rendered large tile. Rendering a
+   fresh supersampled icon for every intermediate size stalls the frame. */
+static void gui_draw_dock_icon(int icon, int cx_center, int cy_bottom, int size){
+    if (size == DOCK_ICON || size == DOCK_ICON + DOCK_MAGNIFY) {
+        gui_draw_one_icon(icon, cx_center, cy_bottom, size);
+        return;
+    }
+    unsigned int *tile = gui_render_icon_cached(icon, DOCK_ICON + DOCK_MAGNIFY, 1, DOCK_TRAY_COLOR);
+    if (!tile) { gui_draw_one_icon(icon, cx_center, cy_bottom, size); return; }
+    int sc = (int)window_scale(), src = (DOCK_ICON + DOCK_MAGNIFY) * sc, dst = size * sc;
+    int x0 = (cx_center - size / 2) * sc, y0 = (cy_bottom - size) * sc;
+    for (int y = 0; y < dst; y++)
+        for (int x = 0; x < dst; x++)
+            window_pixel_phys(x0 + x, y0 + y, tile[(y * src / dst) * src + x * src / dst]);
+}
 
 /* hover_slot: which slot shows the magnify+label (-1 none). drag_slot: the
    slot currently being dragged, drawn separately so it can float free of
@@ -1867,6 +1920,17 @@ static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_m
 
 static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     gui_draw_wallpaper();
+    if (wind_enabled && !wind_base) {
+        int sc = (int)window_scale();
+        int width = (int)window_width() * sc, height = (WIND_HORIZON_ROW - WIND_TOP_ROW) * sc;
+        wind_base = (unsigned int *)kmalloc((unsigned int)(width * height) * sizeof(unsigned int));
+        if (wind_base) {
+            wind_base_width = width;
+            for (int py = 0; py < height; py++)
+                for (int px = 0; px < width; px++)
+                    wind_base[py * width + px] = window_get_pixel_phys(px, WIND_TOP_ROW * sc + py);
+        }
+    }
     gui_draw_menubar();
     gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
 }
@@ -1875,7 +1939,9 @@ static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int dra
    dock itself. This is what a hover change costs now, instead of a full
    456,000-pixel photo blit plus eight supersampled icons. */
 static unsigned int *dock_band_cache = 0;
+static unsigned int *dock_band_frame = 0;
 static int dock_band_cache_top = -1;
+static unsigned char dock_presented_extra[GUI_ICON_COUNT];
 static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     /* v43: the wallpaper rows behind the dock never change, so bilinear
        them once and copy thereafter. ~400k physical samples per hover
@@ -1885,22 +1951,47 @@ static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int
     int pw = (int)window_width() * sc, ph = h * sc;
     if (!dock_band_cache || dock_band_cache_top != top) {
         if (dock_band_cache) kfree(dock_band_cache);
+        if (dock_band_frame) kfree(dock_band_frame);
         dock_band_cache = (unsigned int *)kmalloc((unsigned int)(pw * ph) * sizeof(unsigned int));
+        dock_band_frame = (unsigned int *)kmalloc((unsigned int)(pw * ph) * sizeof(unsigned int));
         dock_band_cache_top = top;
-        gui_draw_wallpaper_rows(top, (int)window_height());
-        if (dock_band_cache)
-            for (int py = 0; py < ph; py++)
-                for (int px = 0; px < pw; px++)
-                    dock_band_cache[py * pw + px] = window_get_pixel_phys(px, top * sc + py);
-    } else {
-        for (int py = 0; py < ph; py++)
-            for (int px = 0; px < pw; px++)
-                window_pixel_phys(px, top * sc + py, dock_band_cache[py * pw + px]);
+        if (dock_band_cache && dock_band_frame) {
+            window_push_screen_band(dock_band_cache, top * sc, (unsigned int)ph);
+            gui_draw_wallpaper_rows(top, (int)window_height());
+            window_pop_screen_band();
+        }
     }
-    gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
+    if (dock_band_cache && dock_band_frame) {
+        for (int i = 0; i < pw * ph; i++) dock_band_frame[i] = dock_band_cache[i];
+        window_push_screen_band(dock_band_frame, top * sc, (unsigned int)ph);
+        gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
+        window_pop_screen_band();
+        /* Only present slots whose icon size changed. Copying the whole
+           2 MB band on every hover step visibly exposed the half-drawn
+           frame even though composition itself was offscreen. */
+        for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
+            if (dock_presented_extra[slot] == dock_hover_extra[slot]) continue;
+            int left = (gui_slot_x(slot) - 25) * sc;
+            int right = (gui_slot_x(slot) + DOCK_ICON + 25) * sc;
+            if (left < 0) left = 0;
+            if (right > pw) right = pw;
+            for (int py = 0; py < ph; py++) {
+                unsigned int *dst = window_phys_row(top * sc + py);
+                for (int px = left; px < right; px++) {
+                    unsigned int next = dock_band_frame[py * pw + px];
+                    if (dst[px] != next) dst[px] = next;
+                }
+            }
+            dock_presented_extra[slot] = dock_hover_extra[slot];
+        }
+    } else {
+        gui_draw_wallpaper_rows(top, (int)window_height());
+        gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
+    }
 }
 
 static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my){
+    (void)hover_slot;
     int y0 = gui_dock_y0(), dock_h = DOCK_ICON + 2 * DOCK_PAD, dock_w = gui_dock_w(), dock_x = gui_dock_x0();
 
     /* A soft shadow beneath the tray, the same floating-panel look a real
@@ -1927,13 +2018,13 @@ static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_m
     for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
         if (slot == drag_slot) continue; /* drawn last, floating at the cursor */
         int icon = gui_order[slot];
-        int magnified = (slot == hover_slot);
-        int size = magnified ? DOCK_ICON + DOCK_MAGNIFY : DOCK_ICON;
+        int extra = dock_hover_extra[slot];
+        int size = DOCK_ICON + extra;
         int cx_center = gui_slot_x(slot) + DOCK_ICON / 2;
-        int cy_bottom = y0 + DOCK_PAD + DOCK_ICON - (magnified ? DOCK_LIFT : 0);
+        int cy_bottom = y0 + DOCK_PAD + DOCK_ICON - extra * DOCK_LIFT / DOCK_MAGNIFY;
         gui_draw_icon_shadow(cx_center, cy_bottom, size);
-        gui_draw_one_icon(icon, cx_center, cy_bottom, size);
-        if (magnified) {
+        gui_draw_dock_icon(icon, cx_center, cy_bottom, size);
+        if (extra > 0) {
             int label_w = (int)strlen(GUI_LABELS[icon]) * 8;
             /* Dark text on the old flat light backdrop; the gradient
                wallpaper makes the area right above the dock genuinely
@@ -2034,11 +2125,30 @@ static void gui_wait_close(void){
    be a fake control that looks like it does something it doesn't. Real
    minimize/maximize wait on the actual windowing system already queued in
    roadmap.md's later product ideas, not a shortcut bolted on here. */
+static int gui_app_windowed = 0;
 static void gui_draw_app_titlebar(const char *title){
-    gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
-    gui_fill_circle(46, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
-    gui_fill_circle(66, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
+    if (!gui_app_windowed) {
+        gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
+        gui_fill_circle(46, 20, 6, 0x00FFD64A, 0x00FAF8F6);
+        gui_fill_circle(66, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
+        font_draw_string("x", 23, 12, 0x00602B28, -1);
+        font_draw_string("-", 43, 12, 0x00624A20, -1);
+    }
     font_draw_string(title, 84, 12, 0x0085144B, -1);
+}
+
+static void gui_launch_weather(void){
+    if (!weather_text[0]) weather_fetch();
+    window_clear(0x00F5F0EB);
+    gui_draw_app_titlebar("Weather");
+    int w = (int)window_width(), x = (w - 520) / 2;
+    if (x < 16) x = 16;
+    gui_rounded_rect_gradient(x, 72, 520, 250, 0x00FFF7E7, 0x00E9D9DA, 0x00F5F0EB, 22);
+    gui_draw_one_icon_on(0, x + 95, 230, 100, 0x00F4E8E2);
+    font_draw_string("Vancouver", x + 188, 112, 0x00645057, -1);
+    font_draw_string(weather_text[0] ? weather_text : "Weather unavailable", x + 188, 158, 0x002A2226, -1);
+    font_draw_string("Current conditions", x + 188, 195, 0x00746B70, -1);
+    gui_wait_close();
 }
 
 static void gui_launch_html(const char *label, const unsigned char *data, unsigned int data_len){
@@ -2403,6 +2513,27 @@ static void gui_launch_terminal(void){
    reachable by mouse would be an app screen this project can never
    regression-test. */
 #define APPS_COLS 5
+/* The framebuffer has no alpha channel. Blend each glass pixel against the
+   wallpaper already underneath it, keeping the real photo visible. */
+static void gui_apps_glass(int x, int y, int w, int h){
+    int sc = (int)window_scale(), radius = 24 * sc;
+    int px0 = x * sc, py0 = y * sc, pw = w * sc, ph = h * sc;
+    for (int py = 0; py < ph; py++) {
+        for (int px = 0; px < pw; px++) {
+            int cx = px < radius ? radius : (px >= pw - radius ? pw - radius - 1 : -1);
+            int cy = py < radius ? radius : (py >= ph - radius ? ph - radius - 1 : -1);
+            if (cx >= 0 && cy >= 0) {
+                int dx = px - cx, dy = py - cy;
+                if (dx * dx + dy * dy > radius * radius) continue;
+            }
+            unsigned int below = window_get_pixel_phys(px0 + px, py0 + py);
+            unsigned int tint = gui_lerp(0x00F7F1EA, 0x00D8CAD0, py, ph);
+            unsigned int glass = gui_lerp(below, tint, 76, 100);
+            if (py < 2 * sc) glass = gui_lerp(glass, 0x00FFFFFF, 45, 100);
+            window_pixel_phys(px0 + px, py0 + py, glass);
+        }
+    }
+}
 static void gui_launch(int icon); /* mutually recursive with the folder: the folder launches apps, and the dock launches the folder */
 static void gui_launch_apps(void){
     int sel = 0;
@@ -2410,12 +2541,14 @@ static void gui_launch_apps(void){
     int cell_w = 150, cell_h = 108, tile = 60;
     int grid_w = APPS_COLS * cell_w;
     int x0 = ((int)window_width() - grid_w) / 2;
-    int y0 = 76;
+    int y0 = 95;
 
     for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Apps");
-        font_draw_string("arrow keys to move   enter opens   esc closes", 20, 52, 0x00807468, -1);
+        window_clear(0x00201922);
+        gui_draw_wallpaper();
+        gui_apps_glass(x0 - 28, 25, grid_w + 56, 375);
+        font_draw_string("Apps", x0, 40, 0x002A2226, -1);
+        font_draw_string("arrow keys to move   enter opens   esc closes", x0, 65, 0x006A6064, -1);
 
         for (int i = 0; i < GUI_APPS_FOLDER; i++) {
             int row = i / APPS_COLS, col = i % APPS_COLS;
@@ -2423,8 +2556,8 @@ static void gui_launch_apps(void){
             int cy = y0 + row * cell_h;
             if (i == sel) /* selection plate, drawn under the icon so it reads as a highlight, not a border */
                 gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 14,
-                                          0x00EDE6DC, 0x00DDD3C6, GUI_BG, 12);
-            gui_draw_one_icon_on(i, cx, cy + tile, tile, GUI_BG);
+                                          0x00FFF8F1, 0x00E5D8D0, 0x00E9DEE0, 12);
+            gui_draw_one_icon_on(i, cx, cy + tile, tile, 0x00E9DEE0);
             int lw = (int)strlen(GUI_LABELS[i]) * 8;
             font_draw_string(GUI_LABELS[i], cx - lw / 2, cy + tile + 10, 0x001C1C1E, -1);
         }
@@ -2538,7 +2671,7 @@ static void gui_launch_settings(void){
 static void gui_launch(int icon){
     if (icon == GUI_APPS_FOLDER) { gui_launch_apps(); return; }
     if (icon == GUI_TRASH) { gui_launch_trash(); return; }
-    if (icon == 0)      gui_launch_html("Weather", app_weather_html, app_weather_len);
+    if (icon == 0)      gui_launch_weather();
     else if (icon == 1) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
     else if (icon == 2) gui_launch_chat();
     else if (icon == 3) gui_launch_files();
@@ -2553,6 +2686,28 @@ static void gui_launch(int icon){
     else if (icon == 12) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
     else if (icon == 13) gui_launch_html("Fieldbook", app_fieldbook_html, app_fieldbook_len);
     else if (icon == 14) gui_launch_terminal();
+}
+
+static void gui_launch_from_dock(int icon){
+    /* Keep the desktop visible around the app. The framebuffer viewport
+       clips every app draw, including window_clear and physical AA text. */
+    gui_draw_desktop(-1, -1, 0, 0);
+    int apps = icon == GUI_APPS_FOLDER;
+    int x = apps ? 56 : 70, y = apps ? 30 : 40;
+    int w = apps ? 848 : 820, h = apps ? 490 : 385;
+    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
+    window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
+    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
+    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
+    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
+    font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
+    font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
+    font_draw_string(GUI_LABELS[icon], x + 96, y + 8, 0x00403439, -1);
+    window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
+    gui_app_windowed = 1;
+    gui_launch(icon);
+    gui_app_windowed = 0;
+    window_clear_viewport();
 }
 
 /* A loop (octagon approximating a circle, 8 capsule segments) for the
@@ -2701,8 +2856,8 @@ static void gui_draw_notif_panel(void){
     if (trash_count() >= TRASH_MAX_ITEMS - 1) warns[nw++] = "Trash is nearly full";
     if (nw == 0) warns[nw++] = "No warnings";
 
-    int rows = nw + 1 + (klog_count < NOTIF_ROWS ? klog_count : NOTIF_ROWS);
-    int total_h = 10 + rows * 18 + 8;
+    int n = klog_count < NOTIF_ROWS ? klog_count : NOTIF_ROWS;
+    int total_h = 10 + (nw + 1) * 18 + n * 34 + 8;
     window_rect(x0, y0, NOTIF_W, total_h, bg);
     window_rect(x0, y0, NOTIF_W, 1, border);
     window_rect(x0, y0 + total_h - 1, NOTIF_W, 1, border);
@@ -2714,19 +2869,26 @@ static void gui_draw_notif_panel(void){
     window_rect(x0 + 8, y + 6, NOTIF_W - 16, 1, 0x00545458); y += 18;
 
     /* newest last, like every log ever, capped to the last NOTIF_ROWS */
-    int n = klog_count < NOTIF_ROWS ? klog_count : NOTIF_ROWS;
     int start = (klog_count < KLOG_MAX) ? 0 : klog_next;
     int skip = klog_count - n;
-    for (int i = 0; i < n; i++, y += 18) {
+    for (int i = 0; i < n; i++, y += 34) {
         int idx = (start + skip + i) % KLOG_MAX;
         char line[44]; int p = 0;
         unsigned int t = klog_tick[idx] / 100; char tb[8]; int ti = 0;
         if (!t) tb[ti++] = '0'; while (t) { tb[ti++] = '0' + t % 10; t /= 10; }
         while (ti) line[p++] = tb[--ti];
         line[p++] = 's'; line[p++] = ' ';
-        for (int k = 0; klog_buf[idx][k] && p < 42; k++) line[p++] = klog_buf[idx][k];
+        int k = 0;
+        for (; klog_buf[idx][k] && p < 42; k++) line[p++] = klog_buf[idx][k];
         line[p] = 0;
         font_draw_string(line, x0 + 12, y, text, -1);
+        if (klog_buf[idx][k]) {
+            p = 0;
+            line[p++] = ' '; line[p++] = ' '; line[p++] = ' ';
+            for (; klog_buf[idx][k] && p < 42; k++) line[p++] = klog_buf[idx][k];
+            line[p] = 0;
+            font_draw_string(line, x0 + 12, y + 16, text, -1);
+        }
     }
 }
 
@@ -2762,6 +2924,7 @@ static void gui_run(void){
     if (font_is_fallback()) wind_enabled = 0;
     gui_draw_boot_screen();
     gui_order_init();
+    for (int i = 0; i < GUI_ICON_COUNT; i++) dock_hover_extra[i] = dock_presented_extra[i] = 0;
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;
     /* press_slot: the slot the mouse went down on, latched until release.
        drag_slot: only set once the mouse has actually moved past a small
@@ -2799,9 +2962,9 @@ static void gui_run(void){
            this (v86 in a browser) and it switches itself off for good. */
         {
             static unsigned int wind_last = 0; static int wind_dir = 1;
-            if (wind_enabled && !menu_open && !notif_open && drag_slot < 0 && ticks() - wind_last >= 12) { /* v46: 8 fps, up from 4; a frame is ~7 ticks so this is ~60% of the loop and still leaves every tick's input serviced */
+            if (wind_enabled && !menu_open && !notif_open && drag_slot < 0 && ticks() - wind_last >= 5) { /* cached wallpaper: ~3 ticks per frame, leaving input time at 20 fps */
                 wind_last = ticks();
-                wind_phase += wind_dir * 8; /* half the step at twice the rate: same sway period, twice the frames */ if (wind_phase >= 256 || wind_phase <= -256) wind_dir = -wind_dir;
+                wind_phase += wind_dir * 3; /* same slow sway period at the higher frame rate */ if (wind_phase >= 256 || wind_phase <= -256) wind_dir = -wind_dir;
                 unsigned int t0 = ticks();
                 int sc = (int)window_scale();
                 int cx0 = cursor_saved_x, cy0 = cursor_saved_y;
@@ -2867,7 +3030,7 @@ static void gui_run(void){
                 gui_order[target] = tmp;
             } else if (press_slot >= 0 && press_slot == slot_here) {
                 editor_mouse_x = mx; editor_mouse_y = my;
-                gui_launch(gui_order[press_slot]);
+                gui_launch_from_dock(gui_order[press_slot]);
                 launched = 1; /* the app view just took over the whole screen; force a redraw below even if the cursor never moved */
             }
             press_slot = -1; drag_slot = -1;
@@ -2875,6 +3038,18 @@ static void gui_run(void){
         prev_buttons = buttons;
 
         int hover_slot = (drag_slot < 0) ? slot_here : -1;
+        int dock_anim_changed = 0;
+        static unsigned int dock_anim_last_tick = 0;
+        if (ticks() - dock_anim_last_tick >= 3) {
+            dock_anim_last_tick = ticks();
+            for (int i = 0; i < GUI_ICON_COUNT; i++) {
+                int target = (i == hover_slot) ? DOCK_MAGNIFY : 0;
+                int next = dock_hover_extra[i];
+                if (next < target) { next += 3; if (next > target) next = target; }
+                else if (next > target) { next -= 3; if (next < target) next = target; }
+                if (next != dock_hover_extra[i]) { dock_hover_extra[i] = next; dock_anim_changed = 1; }
+            }
+        }
         int menu_hover = menu_open ? gui_menu_hit_test(mx, my) : -2;
         /* Redraw only when something actually visible changed. A real,
            user-visible bug this fixed, not just a cosmetic worry: redrawing
@@ -2893,12 +3068,12 @@ static void gui_run(void){
            icons) with no double buffer to hide it, which is exactly the
            "icons flash when I hover" report: the flashing was the
            repaint. */
-        int cursor_only = !launched && (mx != last_mx || my != last_my)
+        int cursor_only = !launched && !dock_anim_changed && (mx != last_mx || my != last_my)
                           && hover_slot == last_hover && drag_slot == last_drag
                           && menu_open == last_menu_open && menu_hover == last_menu_hover;
         int dock_only = !launched && !cursor_only && drag_slot < 0 && last_drag < 0
                         && !menu_open && !last_menu_open
-                        && hover_slot != last_hover;
+                        && (hover_slot != last_hover || dock_anim_changed);
         if (cursor_only) {
             gui_cursor_restore();
             if (my < GUI_MENUBAR_H || last_my < GUI_MENUBAR_H) { gui_menubar_force_redraw(); gui_draw_menubar(); }
@@ -2911,10 +3086,11 @@ static void gui_run(void){
             gui_cursor_save(mx, my);
             gui_draw_cursor(mx, my);
             last_mx = mx; last_my = my; last_hover = hover_slot;
-        } else if (launched || mx != last_mx || my != last_my || hover_slot != last_hover || drag_slot != last_drag || menu_open != last_menu_open || menu_hover != last_menu_hover) {
+        } else if (launched || mx != last_mx || my != last_my || hover_slot != last_hover || dock_anim_changed || drag_slot != last_drag || menu_open != last_menu_open || menu_hover != last_menu_hover) {
             if (my < GUI_MENUBAR_H || last_my < GUI_MENUBAR_H) gui_menubar_force_redraw();
             cursor_saved_x = cursor_saved_y = -1; /* the full repaint replaces whatever the backup held */
             gui_draw_desktop(hover_slot, drag_slot, mx, my);
+            for (int i = 0; i < GUI_ICON_COUNT; i++) dock_presented_extra[i] = dock_hover_extra[i];
             if (menu_open) gui_draw_apple_menu(menu_hover);
             if (notif_open) gui_draw_notif_panel();
             if (drag_slot < 0) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }

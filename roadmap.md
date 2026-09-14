@@ -213,5 +213,8 @@ Direct request: "make the wallpaper animated somehow, make the tree blow in the 
 ## 0.45.1, the flashing cursor (Sep 2026)
 PATCH. Reported from a video within minutes of v45 shipping: the pointer flashed.
 
+## Desktop QA follow-up (Sep 2026)
+Dock hover frames now compose offscreen and present only changed pixels in the affected slots; real-display confirmation is still pending. App launches use bounded windows with close and back controls. Launchpad uses a translucent panel, and Weather has a native card. The attached FAT16 disk carries readable dotfile copies, not a runnable Fish installation.
+
 ## v47 / 0.47.0, real settings, persisted (Sep 2026)
 Direct request: customize the OS from inside the OS, and have it survive a reboot.
