@@ -1,0 +1,20 @@
+name: Boot check
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang, lld, qemu
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld qemu-system-x86
+      - name: Build
+        run: make kernel.elf
+      - name: Boot check
+        run: ./check.sh
