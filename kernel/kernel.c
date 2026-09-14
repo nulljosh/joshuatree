@@ -19,6 +19,7 @@
 #include "rtl8139.h"
 #include "net.h"
 #include "http.h"
+#include "serial.h"
 #include "app_weather.h"
 #include "app_curbfind.h"
 #include "app_keyrate.h"
@@ -187,6 +188,7 @@ static void klog(const char *msg){
     klog_tick[klog_next] = ticks();
     klog_next = (klog_next + 1) % KLOG_MAX;
     if (klog_count < KLOG_MAX) klog_count++;
+    serial_puts(msg); serial_puts("\n"); /* live trace, survives a crash the ring buffer's own reset wouldn't */
 }
 
 static void klog_dump(void){
@@ -770,9 +772,20 @@ static void gui_draw_logo(int x, int cy){
 static int gui_menubar_last_min = -1;
 static void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; }
 
+/* Real macOS menu bar clock format: weekday, month, day, 12-hour time with
+   AM/PM, not the bare 24h HH:MM this used to show. Reads the CMOS weekday
+   (reg 6) and date (reg 7)/month (reg 8) registers the same BCD way
+   show_time() already reads hour/minute, no new decoding scheme. RTC
+   weekday numbering is 1=Sunday on every real PC and QEMU's own RTC
+   emulation, confirmed against this exact machine's real wall clock the
+   same way the earlier UTC-vs-local timezone fix was (a real screendump
+   matching what `date` printed at that same moment). */
 static void gui_draw_menubar(void){
-    u8 h = cmos(4), m = cmos(2);
+    u8 h = cmos(4), m = cmos(2), wd = cmos(6), dom = cmos(7), mon = cmos(8);
     u8 hv = (h & 0x0F) + ((h >> 4) * 10), mv = (m & 0x0F) + ((m >> 4) * 10);
+    u8 wdv = (wd & 0x0F) + ((wd >> 4) * 10);
+    u8 domv = (dom & 0x0F) + ((dom >> 4) * 10);
+    u8 monv = (mon & 0x0F) + ((mon >> 4) * 10);
     if (mv == gui_menubar_last_min) return;
     gui_menubar_last_min = mv;
 
@@ -781,10 +794,30 @@ static void gui_draw_menubar(void){
     gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2);
     font_draw_string("Joshua Tree", 32, 7, 0x001C1C1E, -1);
 
-    char clock[6];
-    clock[0] = '0' + hv / 10; clock[1] = '0' + hv % 10; clock[2] = ':';
-    clock[3] = '0' + mv / 10; clock[4] = '0' + mv % 10; clock[5] = 0;
-    font_draw_string(clock, (int)window_width() - 60, 7, 0x001C1C1E, -1);
+    static const char *WD[7] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+    static const char *MO[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+    int wdi = (wdv >= 1 && wdv <= 7) ? wdv - 1 : 0;
+    int moi = (monv >= 1 && monv <= 12) ? monv - 1 : 0;
+    int h12 = hv % 12; if (h12 == 0) h12 = 12;
+    const char *ampm = hv < 12 ? "AM" : "PM";
+
+    char clock[24];
+    int p = 0;
+    for (const char *s = WD[wdi]; *s; s++) clock[p++] = *s;
+    clock[p++] = ' ';
+    for (const char *s = MO[moi]; *s; s++) clock[p++] = *s;
+    clock[p++] = ' ';
+    if (domv >= 10) clock[p++] = '0' + domv / 10;
+    clock[p++] = '0' + domv % 10;
+    clock[p++] = ' '; clock[p++] = ' ';
+    if (h12 >= 10) clock[p++] = '0' + h12 / 10;
+    clock[p++] = '0' + h12 % 10;
+    clock[p++] = ':';
+    clock[p++] = '0' + mv / 10; clock[p++] = '0' + mv % 10;
+    clock[p++] = ' '; clock[p++] = ampm[0]; clock[p++] = ampm[1];
+    clock[p] = 0;
+
+    font_draw_string(clock, (int)window_width() - p * 8 - 16, 7, 0x001C1C1E, -1);
 }
 
 static void gui_icon_weather(int cx, int cy, int s, unsigned int bg){
@@ -1594,6 +1627,8 @@ static void run(char *line){
 }
 
 void kmain(unsigned int multiboot_info_addr){
+    serial_init();
+    serial_puts("=== kmain boot start ===\n");
     vga_text_mode_init(); /* real hardware/QEMU already boot into text mode via their own BIOS; a BIOS-less multiboot path (v86) never sets it at all, so make it explicit rather than inherited */
     klog("vga_text_mode_init: text mode 3 programmed");
     gdt_install();
