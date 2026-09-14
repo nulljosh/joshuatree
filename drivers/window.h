@@ -26,4 +26,13 @@ unsigned int window_get_pixel(int x, int y);
 void window_rect(int x, int y, int w, int h, unsigned int color);
 unsigned int window_width(void);
 unsigned int window_height(void);
+
+/* Redirects window_pixel/window_rect/window_width/window_height to an
+   offscreen buffer instead of the real screen, real supersampling for
+   anything that renders into it (draw bigger, downsample smaller, real
+   anti-aliasing from oversampling rather than a fixed-width color-step
+   band). One level, not a stack: pop always returns to the real screen,
+   nothing in this kernel needs to nest two offscreen targets. */
+void window_push_target(unsigned int *buf, unsigned int w, unsigned int h);
+void window_pop_target(void);
 #endif

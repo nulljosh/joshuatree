@@ -1255,14 +1255,60 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
    function already just draws in ICON_FG, now a real variable instead of
    a compile-time constant, so this needed zero changes to any of the 8
    glyph functions themselves. */
+/* Real supersampling, not another AA tweak: direct, repeated feedback
+   that the icons still show individual pixels under a close look, and
+   they're right, AA_BAND's discrete color-stepping has a real, visible
+   floor no amount of widening gets under (confirmed by testing AA_BAND
+   8, which just went blurry, not smoother, see the commit that reverted
+   it to 5). Real anti-aliasing from oversampling instead: render the
+   whole icon at SS_SCALE times its real size into a heap buffer via
+   window_push_target, then box-downsample every SS_SCALE x SS_SCALE
+   block back down to one real screen pixel, averaging real sub-pixel
+   coverage the same way a real renderer or a Retina display's own
+   downsampling does. Falls back to drawing at native resolution
+   directly (the old path) if the allocation fails, never a blank icon,
+   just a less-smooth one on a machine tight on heap. */
+#define ICON_SS_SCALE 3
 static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
     int x = cx_center - size / 2, y = cy_bottom - size;
     unsigned int bg = GUI_COLORS[icon];
     unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
+
+    unsigned int ssz = (unsigned int)size * ICON_SS_SCALE;
+    unsigned int *ssbuf = (unsigned int *)kmalloc(ssz * ssz * sizeof(unsigned int));
+    if (ssbuf) {
+        window_push_target(ssbuf, ssz, ssz);
+        gui_rounded_rect_gradient(0, 0, (int)ssz, (int)ssz, bg_light, bg_dark, GUI_BG, 12 * ICON_SS_SCALE);
+        gui_draw_gloss(0, 0, (int)ssz, (int)ssz, bg, 13 * ICON_SS_SCALE);
+        int scy = (int)ssz / 2;
+        unsigned int real_fg = ICON_FG;
+        ICON_FG = gui_blend(bg, 0x00000000);
+        gui_draw_icon_glyph(icon, (int)ssz / 2 + ICON_SS_SCALE, scy + 2 * ICON_SS_SCALE, (int)ssz, bg);
+        ICON_FG = real_fg;
+        gui_draw_icon_glyph(icon, (int)ssz / 2, scy, (int)ssz, bg);
+        window_pop_target();
+
+        unsigned int samples = ICON_SS_SCALE * ICON_SS_SCALE;
+        for (int oy = 0; oy < size; oy++){
+            for (int ox = 0; ox < size; ox++){
+                unsigned int rs = 0, gs = 0, bs = 0;
+                for (int sy = 0; sy < ICON_SS_SCALE; sy++){
+                    unsigned int *row = &ssbuf[(unsigned int)(oy * ICON_SS_SCALE + sy) * ssz + (unsigned int)ox * ICON_SS_SCALE];
+                    for (int sx = 0; sx < ICON_SS_SCALE; sx++){
+                        unsigned int c = row[sx];
+                        rs += (c >> 16) & 0xFF; gs += (c >> 8) & 0xFF; bs += c & 0xFF;
+                    }
+                }
+                window_pixel(x + ox, y + oy, ((rs / samples) << 16) | ((gs / samples) << 8) | (bs / samples));
+            }
+        }
+        kfree(ssbuf);
+        return;
+    }
+
     gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, GUI_BG, 12);
     gui_draw_gloss(x, y, size, size, bg, 13);
     int cy = y + size / 2;
-
     unsigned int real_fg = ICON_FG;
     ICON_FG = gui_blend(bg, 0x00000000);
     gui_draw_icon_glyph(icon, cx_center + 1, cy + 2, size, bg);
