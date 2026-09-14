@@ -144,6 +144,14 @@ static char getch(void){
    same "click anywhere to close" a touch-only or mouse-only visitor
    already gets on the read-only viewers via gui_wait_close, not just a
    keyboard escape hatch. */
+/* v68 (0.63.0): was the last input an app's wait loop handed out a click
+   (1) or a key (0)? Read by gui_launch_from_dock the moment an app
+   returns: if the app closed on a click and that click sits on a dock
+   tile, the dock click means "switch to that app", not just "close this
+   one". Set at every site that turns a mouse edge into an app-visible
+   event, cleared whenever a key is handed out instead, so it always
+   describes the event that actually caused the close. */
+static int gui_close_was_click = 0;
 static int gui_getch_or_click(void){
     mouse_click_edge_sync(); /* a button already held (e.g. the click that opened this app) is the baseline, not a fresh click */
     for (;;) {
@@ -152,10 +160,10 @@ static int gui_getch_or_click(void){
         if (sc >= 0) {
             if (sc & 0x80) continue;
             char c = SC[sc & 0x7F];
-            if (c) return (int)(unsigned char)c;
+            if (c) { gui_close_was_click = 0; return (int)(unsigned char)c; }
             continue;
         }
-        if (mouse_click_edge()) return -1;
+        if (mouse_click_edge()) { gui_close_was_click = 1; return -1; }
         __asm__ volatile ("hlt");
     }
 }
@@ -220,13 +228,14 @@ static int get_key_or_click(void){
             }
             if (!(sc & 0x80)) {
                 char c = SC[sc & 0x7F];
+                gui_close_was_click = 0;
                 if (c == '\n') return KEY_ENTER;
                 if (c == 27)   return KEY_ESC;
                 if (c) return c;
             }
             continue;
         }
-        if (mouse_click_edge()) return KEY_CLICK;
+        if (mouse_click_edge()) { gui_close_was_click = 1; return KEY_CLICK; }
         __asm__ volatile ("hlt");
     }
 }
@@ -2663,8 +2672,8 @@ static void gui_wait_close(void){
            just consumed and ignored, harmless on a page with nothing
            else to do with a keypress, and no longer surprising on one
            that does. */
-        if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) return;
-        if (mouse_click_edge()) return;
+        if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) { gui_close_was_click = 0; return; }
+        if (mouse_click_edge()) { gui_close_was_click = 1; return; }
         __asm__ volatile ("hlt");
     }
 }
@@ -3263,6 +3272,7 @@ static void gui_launch(int icon){
 }
 
 static void gui_launch_from_dock(int icon){
+again:
     /* Keep the desktop visible around the app. The framebuffer viewport
        clips every app draw, including window_clear and physical AA text. */
     gui_draw_desktop(-1, -1, 0, 0);
@@ -3283,10 +3293,26 @@ static void gui_launch_from_dock(int icon){
     app_cursor_x = editor_mouse_x; app_cursor_y = editor_mouse_y;
     cursor_saved_x = cursor_saved_y = -1;
     gui_app_windowed = 1;
+    gui_close_was_click = 0;
     gui_launch(icon);
     gui_app_windowed = 0;
     window_clear_viewport();
     gui_cursor_restore();
+    /* v68 (0.63.0): the dock stays visible around every app window, so a
+       click on another dock tile while an app is open reads, to anyone,
+       as "open that one instead". Before this it only closed the current
+       app (the "click anywhere closes" contract) and the visitor had to
+       click the tile a second time, direct feedback ("it should just
+       stack the windows", meaning the same close-and-open every other
+       app already does). If the click that closed this app sits on a
+       dock tile, open that tile's app in its place, from the pointer's
+       real position, no second click. Esc never switches: only a click
+       can name a tile. A tail call, not recursion, so a visitor hopping
+       across the dock all day never grows the kernel stack. */
+    if (gui_close_was_click) {
+        int slot = gui_dock_hit_test(app_cursor_x, app_cursor_y);
+        if (slot >= 0) { editor_mouse_x = app_cursor_x; editor_mouse_y = app_cursor_y; icon = gui_order[slot]; goto again; }
+    }
 }
 
 /* A loop (octagon approximating a circle, 8 capsule segments) for the
@@ -3680,6 +3706,7 @@ static void gui_run(void){
             } else if (press_slot >= 0 && press_slot == slot_here) {
                 editor_mouse_x = mx; editor_mouse_y = my;
                 gui_launch_from_dock(gui_order[press_slot]);
+                mx = app_cursor_x; my = app_cursor_y; /* v68: the app's own loop tracked the pointer while it was open; pick up where it really is, not where the launching click was */
                 launched = 1; /* the app view just took over the whole screen; force a redraw below even if the cursor never moved */
             }
             press_slot = -1; drag_slot = -1;

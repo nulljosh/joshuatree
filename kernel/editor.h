@@ -163,6 +163,7 @@ static void gui_launch_editor(void) {
             changed = 1;
         }
         if (mouse_click_edge()) {
+            gui_close_was_click = 1;
             int outside = editor_mouse_x < 0 || editor_mouse_y < 0
                        || editor_mouse_x >= (int)window_width() || editor_mouse_y >= (int)window_height();
             if (outside || (editor_mouse_y < 32 && editor_mouse_x < 38)) close = 1;
@@ -177,6 +178,7 @@ static void gui_launch_editor(void) {
         int scan = kbd_pop();
         if (scan == 0xE0) { extended = 1; continue; }
         if (scan >= 0) {
+            gui_close_was_click = 0;
             int released = scan & 0x80, code = scan & 0x7F;
             if (code == 0x2A) shift_left = !released;
             else if (code == 0x36) shift_right = !released;

@@ -57,8 +57,13 @@ q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 fails = []
 try:
-    time.sleep(1.0)
-    s = socket.create_connection(("127.0.0.1", PORT)); f = s.makefile("rw")
+    s = None
+    for _ in range(50):  # QEMU's QMP socket can take a few seconds to come up on a loaded machine
+        time.sleep(0.2)
+        try: s = socket.create_connection(("127.0.0.1", PORT)); break
+        except OSError: pass
+    if s is None: raise SystemExit("FAIL: QEMU's QMP socket never came up")
+    f = s.makefile("rw")
     def cmd(o):
         f.write(json.dumps(o) + "\n"); f.flush()
         while True:
@@ -126,18 +131,23 @@ try:
                 if window_open(): keys("esc"); time.sleep(0.8)
 
     # The reported "all apps" shape: Notes open, then a dock click on another app.
+    # v67 made that click close Notes; v68 (0.63.0) makes it open the clicked app
+    # in Notes' place, the "close-and-open" the report literally asked for.
+    # Terminal is the target because its content is unmistakable: it clears its
+    # viewport to 0x1A1512, so the viewport centre tells Terminal apart from Notes
+    # (cream), from the desktop (no red close button), and from any other app.
     open_slot(4)
     if not window_open(): fails.append("scenario: Notes did not open")
     else:
-        move(centre(5), ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.2)
+        move(centre(6), ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.2)
         move(*PARK); time.sleep(0.5)
-        # Either outcome is acceptable here (Notes closed, or Reminders opened in its place);
-        # what is NOT acceptable is the screen still being Notes: its toolbar strip is
-        # 0xEAE4DC at logical (78+400, 72+50) inside the viewport, no other app draws that there.
         p = pixel(78 + 400, 72 + 50)
         still_notes = max(abs(p[i] - (0xEA, 0xE4, 0xDC)[i]) for i in range(3)) <= 8
-        print(f"scenario  Notes open, click Reminders in dock: {'STUCK on Notes' if still_notes else 'not stuck'}")
+        c = pixel(78 + 402, 72 + 172)
+        terminal = window_open() and max(abs(c[i] - (0x1A, 0x15, 0x12)[i]) for i in range(3)) <= 8
+        print(f"scenario  Notes open, click Terminal in dock: {'STUCK on Notes' if still_notes else ('Terminal opened in its place' if terminal else 'Notes closed, Terminal NOT opened')}")
         if still_notes: fails.append("scenario: dock click with Notes open left the screen stuck on Notes")
+        elif not terminal: fails.append("scenario: dock click with Notes open closed Notes but did not open Terminal (v68 close-and-open)")
         if window_open(): close_via_x()
         for _ in range(2):
             if window_open(): keys("esc"); time.sleep(0.8)
