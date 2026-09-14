@@ -660,6 +660,40 @@ static void gui_rounded_rect(int x, int y, int w, int h, unsigned int color, uns
     }
 }
 
+/* Same corner AA as gui_rounded_rect, but the fill itself is a real top-to-
+   bottom gradient instead of one flat color, the classic glossy-icon look
+   (lighter catching the light at top, darker at the bottom, real depth),
+   direct follow-up after "rich... gradient with a bit of a 3D icon style,
+   like Apple" feedback on the flat-color first pass. Every pixel here is
+   still a genuine precomputed solid color (gui_lerp), no alpha channel
+   this framebuffer doesn't have, same technique the wallpaper and every
+   other AA edge in this file already uses. */
+static void gui_rounded_rect_gradient(int x, int y, int w, int h, unsigned int color_top, unsigned int color_bottom, unsigned int bg, int r){
+    for (int row = 0; row < h; row++)
+        window_rect(x, row + y, w, 1, gui_lerp(color_top, color_bottom, row, h));
+    int outer2 = (r + AA_BAND) * (r + AA_BAND);
+    for (int dy = 0; dy <= r + AA_BAND; dy++){
+        for (int dx = 0; dx <= r + AA_BAND; dx++){
+            int d2 = dx * dx + dy * dy;
+            if (d2 <= r * r) continue;
+            unsigned int top_local = gui_lerp(color_top, color_bottom, dy, h);
+            unsigned int bot_local = gui_lerp(color_top, color_bottom, h - 1 - dy, h);
+            if (d2 > outer2) {
+                window_pixel(x + dx,         y + dy,         bg);
+                window_pixel(x + w - 1 - dx, y + dy,         bg);
+                window_pixel(x + dx,         y + h - 1 - dy, bg);
+                window_pixel(x + w - 1 - dx, y + h - 1 - dy, bg);
+                continue;
+            }
+            int t = gui_isqrt(d2) - r;
+            window_pixel(x + dx,         y + dy,         gui_lerp(top_local, bg, t, AA_BAND));
+            window_pixel(x + w - 1 - dx, y + dy,         gui_lerp(top_local, bg, t, AA_BAND));
+            window_pixel(x + dx,         y + h - 1 - dy, gui_lerp(bot_local, bg, t, AA_BAND));
+            window_pixel(x + w - 1 - dx, y + h - 1 - dy, gui_lerp(bot_local, bg, t, AA_BAND));
+        }
+    }
+}
+
 /* Real pictograms, not letters: there's no image decoder or asset pipeline
    in this kernel (deliberately, see roadmap.md's font/asset scope notes),
    so each icon is drawn from the same primitives gui_rounded_rect already
@@ -870,7 +904,8 @@ static void gui_draw_gloss(int x, int y, int w, int h, unsigned int bg, int corn
 static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
     int x = cx_center - size / 2, y = cy_bottom - size;
     unsigned int bg = GUI_COLORS[icon];
-    gui_rounded_rect(x, y, size, size, bg, GUI_BG, 12);
+    unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
+    gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, GUI_BG, 12);
     gui_draw_gloss(x, y, size, size, bg, 13);
     int cy = y + size / 2;
     switch (icon) {
