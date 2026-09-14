@@ -5,6 +5,7 @@ landing/kernel.elf
 .DS_Store
 .wrangler/
 menubar/JoshuaTreeMonitor.app/
+menubar/window-float
 drivers/app_*.h
 .claude/worktrees/
 dotfiles.img

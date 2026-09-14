@@ -13,4 +13,17 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 # Makefile's own `run` target uses.
 cd "$REPO_DIR" && /usr/bin/make -s kernel.elf
 "$REPO_DIR/sync_dotfiles.sh"
-exec qemu-system-i386 -kernel "$REPO_DIR/kernel.elf" -display cocoa,zoom-to-fit=on,full-screen=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file="$REPO_DIR/dotfiles.img",format=raw,if=ide,index=0
+
+# v49: always-on-top, direct request. No QEMU -display flag for this and
+# no AppleScript/System Events window-level property either (see
+# roadmap.md's "Window-level requests" entry for why), so this can no
+# longer be a plain `exec` straight into qemu: it needs to keep running
+# just long enough to launch window-float.swift's compiled helper
+# alongside it, pointed at qemu's own PID. window-float itself is what
+# sets the level, this is just backgrounding both and waiting.
+"$REPO_DIR/menubar/build-window-float.sh"
+
+qemu-system-i386 -kernel "$REPO_DIR/kernel.elf" -display cocoa,zoom-to-fit=on,full-screen=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file="$REPO_DIR/dotfiles.img",format=raw,if=ide,index=0 &
+QEMU_PID=$!
+[ -x "$REPO_DIR/menubar/window-float" ] && "$REPO_DIR/menubar/window-float" "$QEMU_PID" &
+wait "$QEMU_PID"
