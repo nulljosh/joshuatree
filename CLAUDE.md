@@ -55,10 +55,17 @@ dependencies beyond clang, ld.lld and qemu.
 - Each version gets a `git tag -a jt-vN` + `gh release create jt-vN` once it
   ships. Earlier tags from before the rename (`os-v0` through `os-v4`) stay
   as-is on their original commits, don't rewrite history to relabel them.
-- Landing page theme: warm ("Her"-movie inspired), never matrix-green or
-  cold black-and-blue. The real VGA boot output is genuinely black-on-gray
-  text (can't be restyled, it's the actual kernel's real output), everything
-  *around* it (frame, accent color, copy) should stay warm.
+- Theme (kernel wallpaper, landing page, everywhere else this project shows
+  color): Mojave desert, real palette refresh from the earlier warm orange/
+  burgundy "Her"-movie look, which read as pumpkin/Halloween, not the
+  intended warmth. Brownish-silver now, sand and granite fading to a real
+  leather-brown at the dark end, built from clrs.cc (colors.css) named
+  colors (Silver #DDDDDD, Gray #AAAAAA, Orange #FF851B blended with Black
+  #111111 for the brown, see kernel.c's wall_bot comment for the exact
+  reasoning). Never matrix-green, never cold black-and-blue, never back to
+  bright/saturated orange. The real VGA boot output is genuinely black-on-
+  gray text (can't be restyled, it's the actual kernel's real output),
+  everything *around* it (frame, accent color, copy) follows this palette.
 - "Joshua Tree" is the kernel name, unchanging. "Leopard Gecko" is reserved
   for the eventual full-OS/distro name once this becomes a usable graphical
   system (v6+), the same relationship as Linux the kernel vs Ubuntu the

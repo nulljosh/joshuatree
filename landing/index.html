@@ -7,8 +7,15 @@
 <meta name="description" content="A freestanding i386 kernel built from scratch: its own GUI desktop, network stack, filesystem, and a real text editor. No macOS, no Linux underneath.">
 <link rel="icon" href="icon.svg">
 <style>
-  :root { color-scheme: light dark; --bg:#faf8f6; --fg:#1c1c1e; --sub:#75726e; --border:rgba(0,0,0,0.08); --card:rgba(255,255,255,0.7); --accent:#b74c2c; --accent2:#7a2048; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#121212; --fg:#f2f0ee; --sub:#9c9894; --border:rgba(255,255,255,0.1); --card:rgba(30,30,30,0.6); --accent:#d66a45; --accent2:#a8395f; } }
+  /* Real palette refresh, not a tweak: the old warm orange/burgundy read
+     as pumpkin, Halloween, not the actual target, the real Mojave desert
+     the real Joshua tree grows in, brownish-silver, not a sunset. Built
+     from clrs.cc (colors.css) named colors: Orange (#FF851B) blended
+     with Black (#111111) for a real leather-brown accent instead of the
+     bright orange itself, same technique and same reasoning as the
+     kernel's own wallpaper gradient (see kernel.c's wall_bot comment). */
+  :root { color-scheme: light dark; --bg:#faf8f6; --fg:#1c1c1e; --sub:#75726e; --border:rgba(0,0,0,0.08); --card:rgba(255,255,255,0.7); --accent:#884b16; --accent2:#4c2e13; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#121212; --fg:#f2f0ee; --sub:#9c9894; --border:rgba(255,255,255,0.1); --card:rgba(30,30,30,0.6); --accent:#c3a58a; --accent2:#884b16; } }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }

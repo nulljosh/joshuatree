@@ -117,7 +117,7 @@ for i in "${!labels[@]}"; do
   x=$((pad_l + i * plot_w / (n - 1 > 0 ? n - 1 : 1)))
   y=$((pad_t + plot_h - cum[i] * plot_h / max))
   points+="$x,$y "
-  dots+="<circle cx=\"$x\" cy=\"$y\" r=\"3.5\" fill=\"#fff\" stroke=\"#b74c2c\" stroke-width=\"2\"/>"
+  dots+="<circle cx=\"$x\" cy=\"$y\" r=\"3.5\" fill=\"#fff\" stroke=\"#884b16\" stroke-width=\"2\"/>"
 done
 
 # The same closed polygon as the line itself, dropped down to the baseline,
@@ -131,12 +131,12 @@ half=$((max / 2))
 svg="<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"$width\" height=\"$height\" viewBox=\"0 0 $width $height\">"
 svg+="<defs>"
 svg+="<linearGradient id=\"area\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">"
-svg+="<stop offset=\"0%\" stop-color=\"#c1502f\" stop-opacity=\"0.35\"/>"
-svg+="<stop offset=\"100%\" stop-color=\"#c1502f\" stop-opacity=\"0\"/>"
+svg+="<stop offset=\"0%\" stop-color=\"#884b16\" stop-opacity=\"0.35\"/>"
+svg+="<stop offset=\"100%\" stop-color=\"#884b16\" stop-opacity=\"0\"/>"
 svg+="</linearGradient>"
 svg+="</defs>"
 svg+="<rect width=\"100%\" height=\"100%\" fill=\"#faf8f6\"/>"
-svg+="<text x=\"$pad_l\" y=\"12\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" font-weight=\"600\" letter-spacing=\"0.06em\" fill=\"#b74c2c\">FEATURES SHIPPED</text>"
+svg+="<text x=\"$pad_l\" y=\"12\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"10\" font-weight=\"600\" letter-spacing=\"0.06em\" fill=\"#884b16\">FEATURES SHIPPED</text>"
 # y-axis gridlines + labels at 0, half, max, each tagged with a unit so the
 # numbers read as a count of features, not arbitrary axis ticks
 svg+="<line x1=\"$pad_l\" y1=\"$pad_t\" x2=\"$((pad_l+plot_w))\" y2=\"$pad_t\" stroke=\"#e8e2da\"/>"
@@ -147,7 +147,7 @@ svg+="<line x1=\"$pad_l\" y1=\"$pad_t\" x2=\"$pad_l\" y2=\"$((pad_t+plot_h))\" s
 svg+="<line x1=\"$pad_l\" y1=\"$((pad_t+plot_h))\" x2=\"$((pad_l+plot_w))\" y2=\"$((pad_t+plot_h))\" stroke=\"#ded6ca\"/>"
 svg+="<text x=\"2\" y=\"$((pad_t+plot_h+3))\" font-family=\"-apple-system,Helvetica,Arial,sans-serif\" font-size=\"9\" fill=\"#a39c92\">0</text>"
 svg+="<polygon points=\"$area_points\" fill=\"url(#area)\"/>"
-svg+="<polyline points=\"$points\" fill=\"none\" stroke=\"#b74c2c\" stroke-width=\"2.5\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>"
+svg+="<polyline points=\"$points\" fill=\"none\" stroke=\"#884b16\" stroke-width=\"2.5\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>"
 svg+="$dots"
 for i in "${!labels[@]}"; do
   x=$((pad_l + i * plot_w / (n - 1 > 0 ? n - 1 : 1)))

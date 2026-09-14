@@ -497,7 +497,7 @@ static void reboot(void){
 #define GUI_ICON_COUNT 8
 static const char *GUI_LABELS[GUI_ICON_COUNT] = {"Weather", "Curbfind", "Chat", "Files", "Keyrate", "Bookrank", "Quotes", "Notes"};
 static const unsigned int GUI_COLORS[GUI_ICON_COUNT] = {
-    0x00C1502F, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x006B4423
+    0x0085144B, 0x007A2048, 0x00365E8C, 0x00707070, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x006B4423
 };
 
 /* gui_order is a permutation of icon indices by dock slot: dragging an icon
@@ -585,32 +585,27 @@ static int gui_isqrt(int n){
     return r;
 }
 
-/* A warm desert-dusk gradient for the desktop background, sand fading to
-   deep burgundy top to bottom: the same warm palette the landing page
-   already commits to (never matrix-green, never cold black-and-blue, see
-   CLAUDE.md), leaning into it a little further toward the desert/reptile
-   theme "Leopard Gecko" (this kernel's own reserved future distro name)
-   already carries, without drawing anything literal. */
-/* Direct follow-up: the first pass (sand to burgundy) read as Ubuntu's
-   aubergine desktop, not a Mac one, and a naive RGB lerp between an
-   orange-ish top and a magenta-ish bottom swings through a muddy pink at
-   the midpoint, exactly the "pink and white" complaint. Staying in one
-   hue family instead, warm terracotta fading straight down toward a near-
-   black espresso-brown, the same shape a real macOS default wallpaper
-   uses (bright at the horizon, dark and desaturated by the top), never
-   crossing into magenta since blue never becomes prominent relative to
-   red/green at any point along the gradient. */
-/* Direct follow-up again: a plain two-stop lerp still read as flat next to
-   a real macOS horizon wallpaper, which is never just two colors. Three
-   stops instead (warm gold catching the light, terracotta through the
-   middle, deep espresso at the bottom), still entirely inside this
-   repo's own warm-only rule, never touching teal or blue. */
-/* Real variables, not #defines: a real Settings app (below) lets the user
-   actually change these, a customizable wallpaper needs somewhere real to
-   write the choice to, not a compile-time constant. */
-static unsigned int wall_top = 0x00F0B25C;
-static unsigned int wall_mid = 0x00C6672E;
-static unsigned int wall_bot = 0x00201009;
+/* Real palette refresh, not a tweak: direct feedback that the old warm
+   orange/burgundy gradient read as "pumpkin, Halloween", not the actual
+   target, the real Mojave desert the real Joshua tree grows in, sand and
+   granite and brush, brownish-silver, not a sunset. Colors pulled from
+   clrs.cc (colors.css), a real named palette, not eyeballed hexes: Silver
+   (#DDDDDD) catching the light like sun-bleached sand, Gray (#AAAAAA) for
+   the dusty middle distance.
+   The bottom stop went through a real revision, not assumed right on the
+   first try: plain Maroon (#85144b) on its own rendered and looked like
+   wine or plum, not the requested "brownish", its green channel is too
+   low relative to red/blue for that. Blending Maroon toward something
+   else isn't right either since it has no orange in it to lean on; used
+   clrs.cc's own Orange (#FF851B) blended with Black (#111111) instead, a
+   real leather-brown, still built entirely from named clrs.cc colors,
+   just darkened and desaturated well clear of "pumpkin" territory rather
+   than left at full brightness. Same three-stop shape as before (this
+   repo's own earlier finding that a flat two-stop lerp reads dead next
+   to a real horizon wallpaper still holds), new hues. */
+static unsigned int wall_top = 0x00DDDDDD;
+static unsigned int wall_mid = 0x00AAAAAA;
+static unsigned int wall_bot = 0x00884B16;
 static unsigned int gui_wallpaper_color(int row){
     int h = (int)window_height();
     if (row < 0) row = 0;
@@ -628,12 +623,6 @@ static unsigned int gui_wallpaper_color(int row){
    the menu bar visibly vanishing. Skipping the menu bar's own rows here
    makes the two draws correct independently of what order or how often
    either one runs, not just how they currently happen to interact. */
-static void gui_draw_wallpaper(void){
-    int w = (int)window_width(), h = (int)window_height();
-    for (int row = GUI_MENUBAR_H; row < h; row++)
-        window_rect(0, row, w, 1, gui_wallpaper_color(row));
-}
-
 /* AA_BAND pixels of smooth falloff instead of one hard blended ring: a
    single step still read as "bitmap" on a curve this small (icon radii
    are well under 16px), a real gradient across a few pixels using the
@@ -799,6 +788,68 @@ static void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int
     }
 }
 
+static void gui_draw_script_loop(int cx, int cy, int r, int thick, unsigned int color, unsigned int bg, int skip_mask){
+    static const int px8[8] = {10, 7, 0, -7, -10, -7, 0, 7};
+    static const int py8[8] = {0, 7, 10, 7, 0, -7, -10, -7};
+    for (int i = 0; i < 8; i++){
+        if (skip_mask & (1 << i)) continue;
+        int j = (i + 1) % 8;
+        gui_draw_capsule(cx + px8[i] * r / 10, cy + py8[i] * r / 10,
+                          cx + px8[j] * r / 10, cy + py8[j] * r / 10, thick, color, bg);
+    }
+}
+
+/* A small hand-plotted script "hello", a real nod to the original 1984
+   Macintosh boot screen rather than this file's usual blocky bitmap
+   font: every stroke here is the same AA capsule/loop primitive already
+   used elsewhere, curved letterforms instead of a monospace grid being
+   the whole point. `cx` is the horizontal center of the whole word, not
+   a left edge, so the caller doesn't need to know its rendered width. */
+static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int color, unsigned int bg){
+    int thick = scale > 2 ? scale / 2 : 1;
+    int total_w = 23 * scale;
+    int x = cx - total_w / 2;
+    int asc = 10 * scale;
+
+    gui_draw_capsule(x, baseline - asc, x, baseline, thick, color, bg); /* h: ascender stem */
+    gui_draw_capsule(x, baseline - 5 * scale, x + scale, baseline - 7 * scale, thick, color, bg);
+    gui_draw_capsule(x + scale, baseline - 7 * scale, x + 3 * scale, baseline - 7 * scale, thick, color, bg);
+    gui_draw_capsule(x + 3 * scale, baseline - 7 * scale, x + 4 * scale, baseline - 5 * scale, thick, color, bg);
+    gui_draw_capsule(x + 4 * scale, baseline - 5 * scale, x + 4 * scale, baseline, thick, color, bg);
+    x += 6 * scale;
+
+    gui_draw_script_loop(x + 2 * scale, baseline - 3 * scale, 3 * scale, thick, color, bg, (1 << 7) | (1 << 0)); /* e, open at the right */
+    gui_draw_capsule(x - scale, baseline - 3 * scale, x + 5 * scale, baseline - 3 * scale, thick, color, bg); /* crossbar: a 'c' shape reads as 'e' with one */
+    x += 6 * scale;
+
+    gui_draw_capsule(x, baseline - asc, x, baseline, thick, color, bg); /* l */
+    x += 3 * scale;
+
+    gui_draw_capsule(x, baseline - asc, x, baseline, thick, color, bg); /* l */
+    x += 3 * scale;
+
+    gui_draw_script_loop(x + 2 * scale, baseline - 3 * scale, 3 * scale, thick, color, bg, 0); /* o, closed */
+}
+
+/* The same cursive "hello" from the boot screen, echoed faintly on the
+   desktop itself, a real nod carried through rather than a one-off boot
+   moment: ink color is the local wallpaper tone blended toward white, so
+   it reads as a soft watermark pressed into the background, not a bold
+   second logo competing with the dock or menu bar. One row (the word's
+   own vertical middle) stands in for the wallpaper color across the
+   whole word's height: the gradient shifts little enough over the ~40px
+   the letters span that this reads as smooth, unlike the tray corner bug
+   found earlier this session, where the same shortcut spanned a much
+   wider color gap and showed. */
+static void gui_draw_wallpaper(void){
+    int w = (int)window_width(), h = (int)window_height();
+    for (int row = GUI_MENUBAR_H; row < h; row++)
+        window_rect(0, row, w, 1, gui_wallpaper_color(row));
+    int watermark_row = GUI_MENUBAR_H + 190;
+    unsigned int wall = gui_wallpaper_color(watermark_row);
+    gui_draw_hello_script(w / 2, watermark_row, 4, gui_blend(wall, 0x00FFFFFF), wall);
+}
+
 /* Fills a downward-pointing triangle: flat top of half-width `half_w` at
    (cx, y0), narrowing to a point over `h` rows. Used for the map pin's tip
    and the quote marks' tails. */
@@ -829,7 +880,7 @@ static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned i
    "8-bit" staircase problem the weather icon's rays had, now on the one
    piece of branding that appears everywhere including full-size at boot. */
 static void gui_draw_logo(int x, int cy, int scale, unsigned int bg){
-    unsigned int c = 0x00C1502F;
+    unsigned int c = 0x0085144B;
     int split_y = cy - scale, top_y = cy - 7 * scale;
     int r = scale > 1 ? scale - 1 : 0;
     window_rect(x, split_y, scale, (cy + 5 * scale) - split_y + 1, c); /* trunk, base to branch split */
@@ -1213,7 +1264,7 @@ static void gui_draw_app_titlebar(const char *title){
     gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
     gui_fill_circle(46, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
     gui_fill_circle(66, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
-    font_draw_string(title, 84, 12, 0x00C1502F, -1);
+    font_draw_string(title, 84, 12, 0x0085144B, -1);
 }
 
 static void gui_launch_html(const char *label, const unsigned char *data, unsigned int data_len){
@@ -1260,7 +1311,7 @@ static void gui_launch_files(void){
 
 static void gui_launch_chat(void){
     window_clear(0x00FAF8F6);
-    font_draw_string("Chat", 20, 16, 0x00C1502F, -1);
+    font_draw_string("Chat", 20, 16, 0x0085144B, -1);
     font_draw_string("type a message, enter to send, esc to cancel:", 20, 44, 0x0075726E, -1);
 
     static char msg[200];
@@ -1367,49 +1418,6 @@ static void gui_launch(int icon){
    thick rounded end-caps on the segments either side of the gap simply
    overlapped and covered it back up, two adjacent edges need to go for
    an opening actually wide enough to read at this size. */
-static void gui_draw_script_loop(int cx, int cy, int r, int thick, unsigned int color, unsigned int bg, int skip_mask){
-    static const int px8[8] = {10, 7, 0, -7, -10, -7, 0, 7};
-    static const int py8[8] = {0, 7, 10, 7, 0, -7, -10, -7};
-    for (int i = 0; i < 8; i++){
-        if (skip_mask & (1 << i)) continue;
-        int j = (i + 1) % 8;
-        gui_draw_capsule(cx + px8[i] * r / 10, cy + py8[i] * r / 10,
-                          cx + px8[j] * r / 10, cy + py8[j] * r / 10, thick, color, bg);
-    }
-}
-
-/* A small hand-plotted script "hello", a real nod to the original 1984
-   Macintosh boot screen rather than this file's usual blocky bitmap
-   font: every stroke here is the same AA capsule/loop primitive already
-   used elsewhere, curved letterforms instead of a monospace grid being
-   the whole point. `cx` is the horizontal center of the whole word, not
-   a left edge, so the caller doesn't need to know its rendered width. */
-static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int color, unsigned int bg){
-    int thick = scale > 2 ? scale / 2 : 1;
-    int total_w = 23 * scale;
-    int x = cx - total_w / 2;
-    int asc = 10 * scale;
-
-    gui_draw_capsule(x, baseline - asc, x, baseline, thick, color, bg); /* h: ascender stem */
-    gui_draw_capsule(x, baseline - 5 * scale, x + scale, baseline - 7 * scale, thick, color, bg);
-    gui_draw_capsule(x + scale, baseline - 7 * scale, x + 3 * scale, baseline - 7 * scale, thick, color, bg);
-    gui_draw_capsule(x + 3 * scale, baseline - 7 * scale, x + 4 * scale, baseline - 5 * scale, thick, color, bg);
-    gui_draw_capsule(x + 4 * scale, baseline - 5 * scale, x + 4 * scale, baseline, thick, color, bg);
-    x += 6 * scale;
-
-    gui_draw_script_loop(x + 2 * scale, baseline - 3 * scale, 3 * scale, thick, color, bg, (1 << 7) | (1 << 0)); /* e, open at the right */
-    gui_draw_capsule(x - scale, baseline - 3 * scale, x + 5 * scale, baseline - 3 * scale, thick, color, bg); /* crossbar: a 'c' shape reads as 'e' with one */
-    x += 6 * scale;
-
-    gui_draw_capsule(x, baseline - asc, x, baseline, thick, color, bg); /* l */
-    x += 3 * scale;
-
-    gui_draw_capsule(x, baseline - asc, x, baseline, thick, color, bg); /* l */
-    x += 3 * scale;
-
-    gui_draw_script_loop(x + 2 * scale, baseline - 3 * scale, 3 * scale, thick, color, bg, 0); /* o, closed */
-}
-
 /* A brief boot splash instead of cutting straight to the desktop with no
    transition at all, the same beat every real OS gives a fresh boot: the
    logo shows immediately, and a thin progress bar only appears once that
@@ -1436,7 +1444,7 @@ static void gui_draw_boot_screen(void){
             if (!bar_track_drawn) { window_rect(bar_x, bar_y, bar_w, bar_h, gui_blend(bg, 0x00FFFFFF)); bar_track_drawn = 1; }
             unsigned int since_bar = elapsed - logo_only;
             int fill = since_bar >= bar_span ? bar_w : (int)(bar_w * since_bar / bar_span);
-            window_rect(bar_x, bar_y, fill, bar_h, 0x00C1502F);
+            window_rect(bar_x, bar_y, fill, bar_h, 0x0085144B);
         }
         if (elapsed >= logo_only + bar_span) break;
         __asm__ volatile ("hlt");
@@ -1831,7 +1839,7 @@ static void run(char *line){
     else if (!strcmp(line, "gfxtest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
         else {
-            window_rect(0, 0, 800, 200, 0x00C1502F);
+            window_rect(0, 0, 800, 200, 0x0085144B);
             window_rect(0, 200, 800, 200, 0x007A2048);
             window_rect(0, 400, 800, 200, 0x00FAF8F6);
             get_key(); /* leave the picture up until a key is pressed */
@@ -1844,7 +1852,7 @@ static void run(char *line){
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
         else {
             window_clear(0x00FAF8F6);
-            font_draw_string("Joshua Tree", 20, 20, 0x00C1502F, -1);
+            font_draw_string("Joshua Tree", 20, 20, 0x0085144B, -1);
             font_draw_string("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 20, 60, 0x001C1C1E, -1);
             font_draw_string("abcdefghijklmnopqrstuvwxyz", 20, 80, 0x001C1C1E, -1);
             font_draw_string("0123456789 !?.,:;()", 20, 100, 0x001C1C1E, -1);
@@ -1883,7 +1891,7 @@ static void run(char *line){
             int buttons = 0;
             do {
                 window_clear(0x00FAF8F6);
-                window_rect(cx_pos - 5, cy_pos - 5, 10, 10, 0x00C1502F);
+                window_rect(cx_pos - 5, cy_pos - 5, 10, 10, 0x0085144B);
                 __asm__ volatile ("hlt"); /* wake on the next IRQ (timer, keyboard, or mouse) */
                 int dx, dy;
                 if (mouse_get_delta(&dx, &dy, &buttons)) {
