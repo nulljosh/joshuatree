@@ -108,6 +108,23 @@ dependencies beyond clang, ld.lld and qemu.
      `tools/check-refs.sh` after any rename/move/delete, real drift
      insurance for `roadmap.md`/this file's own file-path references, not
      assumed still accurate.
+  4b. Standing QA requirement (direct request, Sep 2026): a one-off
+      framebuffer dump or live screenshot proves a fix worked *today*, it
+      doesn't stop it from silently breaking again next pass. Every shipped
+      feature needs a permanent, discriminating regression test added to
+      the suite, not just ad-hoc verification thrown away after the pass:
+      either a new shell test command (the `heaptest`/`tasktest`/
+      `preempttest`/`killtest`/`reaptest`/`ring3test` pattern already in
+      `kernel.c`) or a standalone `tools/*-check.{sh,py}` script (the
+      `dockhover-check.py`/`vmmouse-check.sh`/`check-calendar.sh` pattern),
+      whichever fits the feature. "Discriminating" is the real bar, matching
+      every existing test in this suite: prove the test actually fails
+      when the fix is temporarily reverted, then prove it passes with the
+      fix restored, don't just add an assert that always prints "ok."
+      100% line coverage isn't a realistic bar for a freestanding kernel
+      with no coverage tooling, don't chase that number, chase "does this
+      feature have a real test that would catch a regression" for
+      everything that ships from here on, kernel and app code alike.
   5. Ship it: commit, push, `wrangler deploy` for the landing page, bump
      `VERSION` for kernel work, one clear TLDR back, then pick up step 1
      again. Constraints and rules (this file, `roadmap.md`'s own model-
