@@ -124,17 +124,32 @@
   // instant the visible image and the DOM box disagree, which is
   // whenever the viewport's aspect ratio isn't exactly 800x600, i.e.
   // almost always, and worst on a portrait phone. Setting the canvas
-  // element's actual CSS size to the real letterboxed dimensions, not
+  // element's actual CSS size to the real dimensions it's drawn at, not
   // relying on object-fit at all, makes the DOM box and the visible
   // image the same rectangle, so coordinate math anywhere downstream
-  // (this file or v86's own mouse adapter) is correct by construction
-  // instead of needing to know about letterboxing at all.
+  // (this file or v86's own mouse adapter) is correct by construction.
+  //
+  // v52.2: Math.max, not Math.min, direct request to close the remaining
+  // real letterbox once the demo became the hero's own background layer
+  // (a plain contain-fit strip inside a differently-shaped box always
+  // leaves a visible margin, an honest, accepted tradeoff right up until
+  // this ask to actually close it). Every downstream consumer of
+  // "where did this click/touch land" (touchmove, touchend, mousemove
+  // below) reads the canvas's own live getBoundingClientRect(), not the
+  // container, so this stays correct by the same construction as before:
+  // the canvas is now genuinely larger than its container and real
+  // overflow gets clipped by #screen_container's own overflow:hidden, but
+  // the DOM box and the visible (now-cropped) image are still the exact
+  // same rectangle from the canvas element's own point of view, nothing
+  // downstream needed to change. #screen_canvas gets flex-shrink:0 so the
+  // flex layout centering it never quietly shrinks it back down to fit,
+  // which would undo the cover and reintroduce the letterbox.
   var currentScale = 1;
   function resizeCanvas() {
     if (!screenCanvas) return;
     var box = screenContainer.getBoundingClientRect();
     var w = screenCanvas.width || 800, h = screenCanvas.height || 600;
-    currentScale = Math.min(box.width / w, box.height / h) || 1;
+    currentScale = Math.max(box.width / w, box.height / h) || 1;
     screenCanvas.style.width = Math.round(w * currentScale) + "px";
     screenCanvas.style.height = Math.round(h * currentScale) + "px";
   }
