@@ -884,6 +884,13 @@ static int aa_band = 5;
    corners. Confirmed the exact wrong value directly: gui_wallpaper_color
    at that mid-row really does compute to a dark R=62, correct for where
    it was sampled, wrong for where it was actually used. */
+/* Forward declaration: real per-pixel physical wallpaper sampler, defined
+   later in this file (the wind code's own sampler). v44.3 needs it here
+   so each corner's AA band can blend against the ACTUAL pixel behind
+   that corner instead of gui_wallpaper_color(row)'s centre-column sample,
+   which is wrong at the tray's own far left/right edges. */
+static unsigned int gui_wallpaper_sample(int px, int py, int sway);
+
 static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned int color, int r){
     /* v43: drawn at PHYSICAL resolution. Through the logical layer every
        corner step was a 2x2 block and the AA band two logical pixels wide,
@@ -894,7 +901,6 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
     int sc = (int)window_scale();
     int px0 = x * sc, py0 = y * sc, pw = w * sc, ph = h * sc, pr = r * sc, band = 3; /* v44.1: 3 physical px; AA_BAND*sc was 10 and read as a soft, blurry corner */
     for (int py = 0; py < ph; py++){
-        unsigned int bg = gui_wallpaper_color(y + py / sc);
         for (int px = 0; px < pw; px++){
             /* distance from the nearest corner arc centre, or 0 if this
                pixel isn't in a corner region at all */
@@ -908,7 +914,13 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
                 if (d2 > inner * inner){
                     if (d2 >= pr * pr) continue;            /* outside: leave the wallpaper alone */
                     int t = gui_isqrt(d2) - inner;
-                    col = gui_lerp(color, bg, t, band);
+                    /* v44.3: the real pixel behind THIS corner, not the
+                       row's centre-column sample (bg) used everywhere
+                       else in this loop, so the tray's top-left/top-right
+                       corners don't blend toward a color sampled from
+                       the middle of the row. */
+                    unsigned int corner_bg = gui_wallpaper_sample(px0 + px, py0 + py, 0);
+                    col = gui_lerp(color, corner_bg, t, band);
                 }
             }
             window_pixel_phys(px0 + px, py0 + py, col);
@@ -1832,9 +1844,20 @@ static void gui_draw_gloss(int x, int y, int w, int h, unsigned int bg, int corn
    under the icon, blending out to the dock's own color at the edge,
    which is exactly what a soft shadow is. */
 static void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
+    /* v44.2: drawn at PHYSICAL resolution, same fix shape as v43's dock
+       tray corners. Through the LOGICAL layer this was the one dock
+       element not matching every icon tile beside it, which renders at
+       physical res via the supersampled cache: at a ~38px icon ry was
+       only 4 logical rows, so the whole ellipse was 9 rows of 2x2 blocks
+       and sdx's integer division at ry=4 quantised the horizontal falloff
+       into visible bands, reading as boxy rather than round. Same math,
+       just in physical units, with real division headroom once ry
+       doubles (ry=8 typical). */
     unsigned int dock_bg = DOCK_TRAY_COLOR;
     unsigned int core = gui_lerp(dock_bg, 0x00000000, 45, 100); /* never full black: this is a contact shadow on a light surface */
-    int rx = size / 2, ry = size / 9;
+    int sc = (int)window_scale();
+    int cx_p = cx_center * sc, cy_p = cy_bottom * sc;
+    int rx = (size * sc) / 2, ry = (size * sc) / 9;
     if (rx <= 0 || ry <= 0) return;
     for (int dy = -ry; dy <= ry; dy++){
         for (int dx = -rx; dx <= rx; dx++){
@@ -1845,7 +1868,7 @@ static void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
                squared gives a soft centre and a fast fade at the rim,
                closer to a real penumbra than a linear ramp. */
             int t = d2 * 100 / (ry * ry);
-            window_pixel(cx_center + dx, cy_bottom - 1 + dy, gui_lerp(core, dock_bg, t, 100));
+            window_pixel_phys(cx_p + dx, cy_p - sc + dy, gui_lerp(core, dock_bg, t, 100));
         }
     }
 }
