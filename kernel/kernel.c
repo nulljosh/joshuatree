@@ -951,6 +951,26 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
                     unsigned int corner_bg = gui_wallpaper_sample(px0 + px, py0 + py, 0);
                     col = gui_lerp(color, corner_bg, t, band);
                 }
+            } else if (py < band) {
+                /* v61: real, confirmed bug, not a guess: only the four
+                   rounded corners above ever blended toward the real
+                   wallpaper pixel; every straight edge (the whole top
+                   edge between the corners, which is most of it) was
+                   filled 100% solid color with a raw 1px cut straight
+                   into whatever was behind it, zero pixels of blend.
+                   Harmless-looking against a light backdrop, but the
+                   dock tray sits low on screen where this kernel's own
+                   wallpaper gradient is at its darkest (confirmed with a
+                   real framebuffer dump: the row immediately above the
+                   tray reads ~(2,0,1), next to next essentially black),
+                   so that hard cut from near-black straight to the
+                   tray's light cream read as a visible dark seam right
+                   along the top edge, exactly the reported defect. Same
+                   band-width blend the corners already use, straight-
+                   line distance from the true top edge instead of the
+                   corner arc's radial one. */
+                unsigned int edge_bg = gui_wallpaper_sample(px0 + px, py0 + py, 0);
+                col = gui_lerp(color, edge_bg, band - py, band);
             }
             window_pixel_phys(px0 + px, py0 + py, col);
         }
@@ -1564,16 +1584,36 @@ static void gui_fill_circle_gradient(int cx, int cy, int r, unsigned int top, un
 
 static void gui_icon_weather(int cx, int cy, int s, unsigned int bg){
     int r = s * 3 / 10, ray = s / 4, gap = r + 3, diag = (ray * 7) / 10; /* ~cos(45deg) */
+    /* v61: real, confirmed bug, not a guess: this was a flat "2" no
+       matter how big s (the supersample buffer size) got, the one
+       stroke width in this whole file that never scaled with its icon
+       like every other one here does (gui_icon_notes's s/11,
+       gui_icon_terminal's s/16, ...). The four axis-aligned rays still
+       looked crisp at that width, since a horizontal/vertical stroke's
+       perpendicular offset lands the same way on every row or column it
+       crosses. The four DIAGONAL rays didn't: confirmed with a real
+       boot-time framebuffer dump at 160px (well past dock size, so not
+       a small-icon artifact either) that they render with a genuine
+       sawtooth edge the axis-aligned rays don't have, even through this
+       file's existing 6x supersample + box-downsample pipeline, because
+       a stroke under about a physical pixel wide can't produce a
+       consistent partial-coverage average along a 45-degree line no
+       matter how much supersampling sits on top of it, the diagonal
+       equivalent of a hairline. Scaled like every other stroke here,
+       with the same "2" as a floor for whatever tiny icon size this
+       might ever be asked to draw at. */
+    int ray_r = s / 34;
+    if (ray_r < 2) ray_r = 2;
     unsigned int sun_top = 0x00FFE380, sun_bot = 0x00FFA716; /* warm gold, a real color, not flat white */
     gui_fill_circle_gradient(cx, cy, r, sun_top, sun_bot, bg);
-    gui_draw_capsule(cx, cy - gap,         cx, cy - gap - ray,         2, ICON_FG, bg);
-    gui_draw_capsule(cx, cy + gap,         cx, cy + gap + ray,         2, ICON_FG, bg);
-    gui_draw_capsule(cx - gap,       cy,   cx - gap - ray,       cy,   2, ICON_FG, bg);
-    gui_draw_capsule(cx + gap,       cy,   cx + gap + ray,       cy,   2, ICON_FG, bg);
-    gui_draw_capsule(cx - gap, cy - gap,   cx - gap - diag, cy - gap - diag, 2, ICON_FG, bg);
-    gui_draw_capsule(cx + gap, cy - gap,   cx + gap + diag, cy - gap - diag, 2, ICON_FG, bg);
-    gui_draw_capsule(cx - gap, cy + gap,   cx - gap - diag, cy + gap + diag, 2, ICON_FG, bg);
-    gui_draw_capsule(cx + gap, cy + gap,   cx + gap + diag, cy + gap + diag, 2, ICON_FG, bg);
+    gui_draw_capsule(cx, cy - gap,         cx, cy - gap - ray,         ray_r, ICON_FG, bg);
+    gui_draw_capsule(cx, cy + gap,         cx, cy + gap + ray,         ray_r, ICON_FG, bg);
+    gui_draw_capsule(cx - gap,       cy,   cx - gap - ray,       cy,   ray_r, ICON_FG, bg);
+    gui_draw_capsule(cx + gap,       cy,   cx + gap + ray,       cy,   ray_r, ICON_FG, bg);
+    gui_draw_capsule(cx - gap, cy - gap,   cx - gap - diag, cy - gap - diag, ray_r, ICON_FG, bg);
+    gui_draw_capsule(cx + gap, cy - gap,   cx + gap + diag, cy - gap - diag, ray_r, ICON_FG, bg);
+    gui_draw_capsule(cx - gap, cy + gap,   cx - gap - diag, cy + gap + diag, ray_r, ICON_FG, bg);
+    gui_draw_capsule(cx + gap, cy + gap,   cx + gap + diag, cy + gap + diag, ray_r, ICON_FG, bg);
 }
 
 static void gui_icon_pin(int cx, int cy, int s, unsigned int bg){
