@@ -3342,6 +3342,29 @@ static void run(char *line){
             puts((big == x && after == before) ? "coalesced adjacent free blocks: ok\n" : "coalesce failed\n");
             kfree(big);
         } else puts("kmalloc failed\n");
+
+        /* v57: block splitting. Free one big block, then take two small
+           bites out of it. The real, distinguishing signature that
+           splitting is actually carving the leftover into its own reusable
+           block, not just "both allocs succeeded": p2 has to land just
+           past p1, close enough that it can only be the leftover carved
+           off p1's own block (one header's worth of gap), not a different
+           free block elsewhere or a fresh bump allocation. Without
+           splitting, the first small alloc claims the *whole* freed block
+           (same shape as the "reused freed block" check above), leaving no
+           free space behind inside it, so the second small alloc has to
+           come from wherever else the allocator finds space, nowhere near
+           p1's own address. */
+        char *big2 = kmalloc(200);
+        if (big2) {
+            kfree(big2);
+            char *p1 = kmalloc(20);
+            char *p2 = kmalloc(20);
+            unsigned int gap = (unsigned int)(p2 - p1);
+            int adjacent = p2 > p1 && gap < 64;
+            puts((p1 && p2 && adjacent) ? "split leftover reused: ok\n" : "split failed\n");
+            kfree(p1); kfree(p2);
+        } else puts("kmalloc failed\n");
     }
     else if (!strcmp(line, "heapgrow")) {
         /* v34 (0.34.0): real proof the old 0x400000 wall is actually gone,
