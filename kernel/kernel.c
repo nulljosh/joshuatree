@@ -927,13 +927,23 @@ static void gui_icon_quotes(int cx, int cy, int s, unsigned int bg){
 /* A soft lit band across the top of the icon, fading down into its flat
    base color: the same top-lit gloss treatment classic Aqua/iOS icons
    used for real dimension, real per-pixel colors computed with gui_lerp,
-   not an alpha overlay this framebuffer can't do. Inset from the edges by
-   the corner radius so it never overwrites gui_rounded_rect's own AA ring
-   with a hard rectangular edge. */
+   not an alpha overlay this framebuffer can't do.
+   Real, visible bug caught here, not assumed fixed by the inset alone:
+   a flat `corner_r` inset on every row approximates the rounded corner's
+   curve only at the very top row. gui_rounded_rect_gradient's own corner
+   is an actual quarter circle, narrower than that flat inset near the
+   very top and wider than it a few rows down, so the two never agreed:
+   a wedge of the plain (un-glossed) gradient color showed through between
+   the smooth AA corner and this band, at exactly the top two corners
+   (the only ones gloss touches). Fixed by skipping the gloss entirely for
+   rows still inside the curve (row < corner_r) instead of half-covering
+   them with the wrong width; the rounded rect's own correct AA already
+   owns that region, gloss only takes over once the shape is genuinely
+   flat-sided. */
 static void gui_draw_gloss(int x, int y, int w, int h, unsigned int bg, int corner_r){
     unsigned int light = gui_blend(bg, 0x00FFFFFF);
     int gloss_h = h * 2 / 5;
-    for (int row = 0; row < gloss_h; row++)
+    for (int row = corner_r; row < gloss_h; row++)
         window_rect(x + corner_r, y + row, w - 2 * corner_r, 1, gui_lerp(light, bg, row, gloss_h));
 }
 
