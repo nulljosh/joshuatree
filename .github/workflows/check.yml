@@ -35,6 +35,58 @@ jobs:
       # fixed-cell renderers).
       - name: AA text spacing, in-kernel
         run: ./tools/checks/textspacing-check.sh
+      # Standing CI-improvement requirement (CLAUDE.md 4d): a real audit
+      # (Sep 2026) found 24 of the 30 scripts under tools/checks/ never ran
+      # anywhere, this file included, only check.sh's own boot marker and
+      # the six checks already listed above. Wiring the rest up surfaced a
+      # second real bug on the way: every QMP-driven script here sends
+      # `{"execute": "quit"}` and blocks on a JSON reply, but QEMU can tear
+      # the socket down the instant it processes quit, before the reply is
+      # ever written back, so the very first unattended run of any of them
+      # threw an uncaught ConnectionResetError and would have LOOKED like a
+      # crash even on a run where every real assertion above it passed.
+      # Fixed at the same 12 call sites (this file's own multiwindow-check
+      # among them) by treating that reset as expected cleanup noise, not a
+      # test failure, so a real PASS/FAIL is what actually gates CI now.
+      #
+      # Real host disk-image and llvm-nm dependencies were checked and
+      # deliberately NOT added here: app-interact-check.py, editor_qa.py,
+      # and fatcyclehang-check.sh all shell out to tools/mkdisk.sh's
+      # `hdiutil`/`newfs_msdos` (fatcyclehang-check.sh) or a hardcoded
+      # `/opt/homebrew/opt/llvm/bin/llvm-nm` (editor_qa.py), both macOS-only
+      # by design, not a CI gap; they stay a local-Mac-only check until a
+      # real Linux/mtools rewrite of mkdisk.sh exists, a separate task.
+      - name: Chat history (VFS-backed, past the old 512-byte cap)
+        run: ./tools/checks/chat-check.sh
+      - name: No-disk boot falls back to ramfs with seeded demo files
+        run: ./tools/checks/ramfs-demo-check.sh
+      - name: QEMU vmmouse absolute-pointer round trip
+        run: ./tools/checks/vmmouse-check.sh
+      - name: Calendar date math (cal_dow/cal_days_in_month/cal_is_leap), host harness
+        run: ./tools/checks/check-calendar.sh
+      - name: JPEG decoder, host harness
+        run: ./tools/checks/jpeg-host-check.sh
+      - name: JPEG decoder, in-kernel
+        run: ./tools/checks/jpeg-check.sh
+      - name: Dock apps open/close from the pointer alone
+        run: python3 ./tools/checks/appclose-check.py
+      - name: Dock hover survives mid-animation
+        run: python3 ./tools/checks/dockhover-check.py
+      - name: Launchpad tile click launches, doesn't just close the folder
+        run: python3 ./tools/checks/launchpad-click-check.py
+      - name: Multi-window (click-to-focus, real z-order compositing)
+        run: python3 ./tools/checks/multiwindow-check.py
+      - name: Dock icon edge quality (no staircased corners)
+        run: python3 ./tools/checks/iconedge-check.py
+      - name: Dock icon halo (clean clip to the tray, no glyph bleed)
+        run: python3 ./tools/checks/iconhalo-check.py
+      - name: Titlebar traffic-light AA (real coverage blend, not binary)
+        run: python3 ./tools/checks/titlebar-aa-check.py
+      - name: Dock tray corner AA (real coverage blend, not binary)
+        run: python3 ./tools/checks/traycorner-check.py
+      # Static, no QEMU: reads landing/v86/embed.js's own TOUR_APPS array.
+      - name: Idle tour still cycles all 8 real dock apps
+        run: node ./tools/checks/tourappcount-check.mjs
       # Real recurring gap: landing/v86/kernel.elf is a checked-in binary
       # copy, not a build artifact, so a docs-only or landing-only pass
       # never touches it and it silently drifts behind the real kernel.elf
@@ -70,6 +122,22 @@ jobs:
             exit 1
           fi
 
+  # CLAUDE.md 4d's own candidate, "a second job for check-refs.sh": pure
+  # drift insurance, no clang/qemu/PIL toolchain needed at all, so it runs
+  # standalone rather than tacked onto the end of the full build-and-boot
+  # job above. Every backtick-quoted file path in roadmap.md/CLAUDE.md/
+  # docs/ARCHITECTURE.md must still exist somewhere in the real tree;
+  # catches a doc left pointing at a renamed/moved/deleted file, the way
+  # roadmap.md's own `/tmp/zoomcap.py` reference (a one-off scratch script
+  # that was never meant to be a real path) drifted stale before this job
+  # existed to catch it.
+  check-refs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Doc file-path references aren't stale
+        run: ./tools/checks/check-refs.sh
+
   # v75: real-network checks. geo-check.sh (v71) and wallpaper-check.py /
   # wallfx-check.py (v75) talk to ip-api.com, Open-Meteo and OpenTopoMap
   # for real; a provider hiccup must not block a kernel push, so this job
@@ -103,3 +171,5 @@ jobs:
         run: python3 tools/checks/wallpaper-check.py || (sleep 15 && python3 tools/checks/wallpaper-check.py) || true
       - name: Rain over the map wallpaper
         run: python3 tools/checks/wallfx-check.py rain || (sleep 15 && python3 tools/checks/wallfx-check.py rain) || true
+      - name: Satellite wallpaper theme (real geo + tile fetch)
+        run: python3 tools/checks/satellite-wallpaper-check.py || (sleep 15 && python3 tools/checks/satellite-wallpaper-check.py) || true

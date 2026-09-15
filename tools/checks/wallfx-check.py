@@ -61,7 +61,12 @@ try:
         if re.search(r"^wall=", log, re.M) or re.search(r"^wallerr=", log, re.M): break
     type_line("gui"); time.sleep(4.0)    # desktop again, wind tick drawing particles
     cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": RAW}})
-    cmd({"execute": "quit"})
+    # QEMU can tear down the QMP socket the instant it processes quit,
+    # before this side ever reads a reply -- a real race, not a bug in
+    # the assertions above (which already ran); a reset here must not
+    # mask a genuine PASS as a crash.
+    try: cmd({"execute": "quit"})
+    except (ConnectionResetError, BrokenPipeError, OSError): pass
 finally:
     try: q.wait(timeout=5)
     except subprocess.TimeoutExpired: q.kill()

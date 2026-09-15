@@ -88,7 +88,12 @@ try:
     move(*CURBFIND_CLICK); time.sleep(0.3)
     click(); time.sleep(0.8)
     dump(DUMP)
-    cmd({"execute": "quit"})
+    # QEMU can tear down the QMP socket the instant it processes quit,
+    # before this side ever reads a reply -- a real race, not a bug in
+    # the assertions above (which already ran); a reset here must not
+    # mask a genuine PASS as a crash.
+    try: cmd({"execute": "quit"})
+    except (ConnectionResetError, BrokenPipeError, OSError): pass
 finally:
     try: q.wait(timeout=5)
     except subprocess.TimeoutExpired: q.kill()

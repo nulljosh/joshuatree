@@ -225,7 +225,12 @@ try:
     print(f"after sweep, Mail open+close again: {'yes' if ok else 'NO'}")
     if not ok: fails.append("input dead after the app-interact sweep: Mail could not be reopened and closed")
 
-    cmd({"execute": "quit"})
+    # QEMU can tear down the QMP socket the instant it processes quit,
+    # before this side ever reads a reply -- a real race, not a bug in
+    # the assertions above (which already ran); a reset here must not
+    # mask a genuine PASS as a crash.
+    try: cmd({"execute": "quit"})
+    except (ConnectionResetError, BrokenPipeError, OSError): pass
 finally:
     try: q.wait(timeout=5)
     except subprocess.TimeoutExpired: q.kill()

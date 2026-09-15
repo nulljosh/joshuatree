@@ -253,7 +253,12 @@ try:
     print(f"input alive after multi-window sweep, Mail open+close: {'yes' if mail_ok else 'NO'}")
     if not mail_ok: fails.append("input dead after the multi-window sweep: Mail could not be opened and closed again")
 
-    cmd({"execute": "quit"})
+    # QEMU can tear down the QMP socket the instant it processes quit,
+    # before this side ever reads a reply -- a real race, not a bug in
+    # the assertions above (which already ran); a reset here must not
+    # mask a genuine PASS as a crash.
+    try: cmd({"execute": "quit"})
+    except (ConnectionResetError, BrokenPipeError, OSError): pass
 finally:
     try: q.wait(timeout=5)
     except subprocess.TimeoutExpired: q.kill()
