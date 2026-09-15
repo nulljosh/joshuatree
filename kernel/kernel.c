@@ -39,7 +39,7 @@
 static const unsigned char *wall_src = wallpaper_rgb;
 static unsigned char *wall_map = 0;        /* the fetched mosaic, kmalloc'd, kept while the session lives so Photo->Map needs no refetch */
 static int wall_map_tx = 0, wall_map_ty = 0, wall_map_cx = 0, wall_map_cy = 0; /* tile x/y of the mosaic's top-left tile, crop offset inside it */
-#define WALL_ZOOM 12
+#define WALL_ZOOM 14
 #define WALL_TILE 256   /* OpenTopoMap serves 256px tiles, no @2x variant */
 #define WALL_COLS 4     /* 4x3 grid = 1024x768, the smallest that covers a centered 960x540 crop */
 #define WALL_ROWS 3
