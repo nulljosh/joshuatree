@@ -1,16 +1,17 @@
 import json
 from pathlib import Path
 import re
+import shutil
 import socket
 import struct
 import subprocess
 import tempfile
 import time
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 ARTIFACTS = Path(tempfile.mkdtemp(prefix='jt-editor-qa-'))
 symbols = {}
-nm = '/opt/homebrew/opt/llvm/bin/llvm-nm'
+nm = shutil.which('llvm-nm') or '/opt/homebrew/opt/llvm/bin/llvm-nm'
 for line in subprocess.check_output([nm, str(ROOT / 'kernel.elf')], text=True).splitlines():
     fields = line.split()
     if len(fields) == 3:
