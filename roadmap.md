@@ -678,7 +678,7 @@ Direct notes, ingested as-is, not yet root-caused or scoped, real user reports f
 
 - Scroll wheel/mouse scroll doesn't work, can't scroll the Apps launchpad. Real gap: check whether this kernel's PS/2/vmmouse drivers even decode a scroll-wheel byte at all, or whether the launchpad UI just never wired one up.
 - ~~Text rendering artifact: sometimes shows extra spacing between letters where there shouldn't be. Real, inconsistent (not every render), needs a repro before root-causing.~~ Root-caused and fixed in v77 / 0.67.1 below (macro photo of "Cl oudy" in the menu bar was the repro; it was never random, it was the fixed 16px glyph cell ignoring each glyph's real advance).
-- Launchpad doesn't actually open apps, clicking an app tile in the Apps folder closes the launchpad instead of launching the app. Real, broken core interaction, not a polish item.
+- ~~Launchpad doesn't actually open apps, clicking an app tile in the Apps folder closes the launchpad instead of launching the app.~~ Root-caused and fixed in v0.71.0 below (every click was treated as "close folder" with zero hit test against grid cells, fixed with a real per-tile hit test against the click position; regression test tools/launchpad-click-check.py proven discriminating).
 - Trash should show as empty by default when it's actually empty (currently may show a non-empty state at rest, or the empty state isn't the true default). Real, needs checking against `trash.c`'s actual state on a fresh boot.
 - Icons still read pixel-ish, with a pixely (not smooth) drop shadow, despite v58/v61/v68's real fixes to specific icon defects. Standing item, Joshua's own framing: "keep looping on it later", matches the existing standing icon-sharpness loop item already in this file, not a new one-off.
 
