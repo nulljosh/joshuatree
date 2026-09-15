@@ -69,6 +69,8 @@ jobs:
         run: ./tools/checks/chat-check.sh
       - name: No-disk boot falls back to ramfs with seeded demo files
         run: ./tools/checks/ramfs-demo-check.sh
+      - name: Shell regression suite (heaptest, tasktest, preempttest, killtest, ring3test, ps)
+        run: ./tools/checks/shellregress-check.sh
       - name: QEMU vmmouse absolute-pointer round trip
         run: ./tools/checks/vmmouse-check.sh
       - name: Calendar date math (cal_dow/cal_days_in_month/cal_is_leap), host harness
