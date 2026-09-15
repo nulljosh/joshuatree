@@ -697,6 +697,68 @@
     var cy = LOGICAL_H - marginBot - pad - Math.floor(icon / 2);
     return [x0 + slot * (icon + gap), cy];
   }
+  // v0.72.3: real bug reported live ("every time it runs a demo and then
+  // restarts the demo, it adds like emails to the list, duplicate emails").
+  // Root cause: this kernel's browser demo has no real disk (v0.71.0), so
+  // Mail/Reminders/Notes/Calendar all live in an in-memory ramfs. The tour
+  // above never reboots the emulator between loops, it only closes and
+  // reopens app windows, so every full 8-app cycle composes another real
+  // email and adds another real reminder into the SAME ramfs the last
+  // cycle left behind, forever, for as long as the tab stays open.
+  //
+  // First attempt, reverted: calling `emulator.restart()` alone
+  // (`Q.prototype.restart=function(){this.v86.restart()}` -> `S.prototype.
+  // reboot_internal`, a real CPU reset + BIOS reload) looked like the fix,
+  // but `reboot_internal` (read directly in libv86.js) only resets CPU
+  // registers and a few specific devices, it never calls `S.prototype.
+  // reset_memory` (`this.mem8.fill(0)`). Proved live: a real 2-lap
+  // Playwright run (periodic screenshots, not just pixel heuristics) with
+  // only `restart()` showed lap 2's Files listing more files
+  // (README/NOTES/MAIL/EVENTS/REMINDERS/CHAT.TXT) than lap 1's fresh
+  // README/NOTES.TXT, i.e. ramfs's old content survived the "reboot"
+  // untouched. A follow-up kernel-side attempt (zeroing boot.S's .bss
+  // before kmain, the standard freestanding-kernel fix for code that
+  // implicitly relies on RAM starting zero) was ALSO reverted: it passed
+  // `check.sh` and a real QEMU `system_reset` cleanly, but hung the v86
+  // browser path specifically after lap 1 (confirmed with a live
+  // instruction-counter probe: the CPU kept executing, ~3.5B instructions
+  // counted, so it wasn't frozen, but `vga.graphical_mode` never returned
+  // and the framebuffer never changed again for 90+ seconds) -- some v86-
+  // specific interaction with the reboot's BIOS/option-ROM replay this
+  // session couldn't fully root-cause in the time available, so it was
+  // pulled rather than shipped half-working.
+  //
+  // Real, working fix: `emulator.v86.cpu` is the same live CPU object
+  // embed.js already reads elsewhere (`emulator.v86.cpu.devices.vga`
+  // above), and it exposes `reset_memory` directly (`S.prototype.
+  // reset_memory=function(){this.mem8.fill(0)}`), the one call
+  // `reboot_internal` skips. Calling it immediately before `restart()`
+  // zeroes guest RAM first, then the normal reboot reloads the BIOS/
+  // option-ROM/kernel image into that now-clean memory exactly like a
+  // real cold boot would, no kernel-side change needed at all: the true
+  // root cause was v86's own `restart()` never clearing memory, so the
+  // fix belongs at the point of restart, not a kernel workaround for a
+  // gap the emulator itself should have covered.
+  function currentGraphical() {
+    var vga = emulator.v86 && emulator.v86.cpu.devices.vga;
+    return vga ? !!vga.graphical_mode : false;
+  }
+  // Same signal the outer boot-detection setInterval below already polls
+  // (`vga.graphical_mode`), reused here rather than inventing a fixed
+  // sleep-and-hope: a reboot is not instant, and clicking a dock icon
+  // before the kernel is actually back in its GUI would either land on
+  // nothing or hit a stale/garbage framebuffer mid-boot. `timeoutMs` is a
+  // failsafe only (a slow/hung reboot shouldn't wedge the tour forever);
+  // the real completion signal is always the polled flag matching `want`.
+  async function waitForGraphicalMode(gen, want, timeoutMs) {
+    var start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      if (focused || tourGen !== gen) return false; // a real visitor clicked in mid-reboot: bail, don't fight them for control
+      if (currentGraphical() === want) return true;
+      await sleep(150);
+    }
+    return false;
+  }
   async function tourLoop(gen) {
     tourRunning = true;
     while (!focused && tourGen === gen) {
@@ -756,6 +818,19 @@
       // closed"; a slightly longer pause here just marks it as a
       // deliberate loop boundary rather than app #9.
       await sleep(2500);
+      if (focused || tourGen !== gen) return;
+      // The real fix (see the comment above waitForGraphicalMode): reboot
+      // the emulator here, at the loop boundary, so the next full cycle
+      // starts from a genuinely fresh ramfs instead of piling more mail/
+      // reminders onto what every prior cycle already left behind.
+      if (bootLogo) bootLogo.hidden = false; // same overlay the initial boot shows; a mid-restart black screen would otherwise look broken, not intentional
+      if (emulator.v86 && emulator.v86.cpu && emulator.v86.cpu.reset_memory) emulator.v86.cpu.reset_memory(); // the real fix: wipe RAM (ramfs included) before the reboot reloads the kernel into it
+      emulator.restart();
+      await waitForGraphicalMode(gen, false, 3000); // best-effort: the reboot leaving graphical mode (BIOS/kernel text-mode init) briefly, same transition the very first boot goes through
+      if (focused || tourGen !== gen) return;
+      await waitForGraphicalMode(gen, true, 20000); // the real wait: don't click a dock icon until the kernel has actually reached its GUI again
+      if (focused || tourGen !== gen) return;
+      await sleep(600); // let the fresh desktop's first frame draw, same beat already used after every dock click above
     }
   }
   function startTourWhenReady() {
