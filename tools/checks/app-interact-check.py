@@ -17,7 +17,7 @@ A stale/RAM-only save (the exact class of bug editor.h's own v67 comment
 describes for a no-disk boot) would pass every on-screen check here and
 still fail this file-content assertion, which is the point.
 
-Usage: tools/app-interact-check.py   (from the repo root, after make kernel.elf)
+Usage: tools/checks/app-interact-check.py   (from the repo root, after make kernel.elf)
 Needs: a real FAT16 test image at /tmp/jt-qa-test.img (see tools/mkdisk.sh
 if that doesn't exist -- hdiutil + newfs_msdos, same as sync_dotfiles.sh).
 """

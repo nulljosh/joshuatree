@@ -40,8 +40,8 @@ fi
 
 # To prove this is discriminating (run manually, not part of CI):
 #   git stash -- kernel/kernel.c   (or comment out the `if (!fs_ok) { ... }` block added in v86/0.71.0)
-#   make -s kernel.elf && ./tools/ramfs-demo-check.sh
+#   make -s kernel.elf && ./tools/checks/ramfs-demo-check.sh
 # -> FAILS: "no-disk boot never switched to ramfs (klog line missing)"
 #   git stash pop   (or uncomment)
-#   make -s kernel.elf && ./tools/ramfs-demo-check.sh
+#   make -s kernel.elf && ./tools/checks/ramfs-demo-check.sh
 # -> PASSES again

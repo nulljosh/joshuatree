@@ -47,7 +47,7 @@ kernel/kernel.o: kernel/editor.h drivers/editor_fonts.h drivers/png.h drivers/pn
 # the app_*.h snapshots above, regenerated only if genuinely missing or
 # after the wallpaper source itself changes.
 drivers/png_testdata.h:
-	python3 tools/gen_png_testdata.py
+	python3 tools/gen/gen_png_testdata.py
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@

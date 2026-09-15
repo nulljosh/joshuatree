@@ -24,7 +24,7 @@ Apps folder or something launched from inside it is currently showing).
 Proven discriminating below (temporarily reverting the kernel.c hit-test
 block makes this fail, restoring it makes it pass again).
 
-Usage: tools/launchpad-click-check.py   (from repo root, after make kernel.elf)
+Usage: tools/checks/launchpad-click-check.py   (from repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image

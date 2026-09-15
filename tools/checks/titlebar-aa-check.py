@@ -30,7 +30,7 @@ pixels instead: 4x4 = 16 subsamples per physical pixel, same box-filter
 idea as v79's tray-corner fix, via window_pixel_phys. Every icon-glyph
 caller is unaffected (window_has_target() is true there, unchanged path).
 
-Usage: tools/titlebar-aa-check.py   (from the repo root, after make kernel.elf)
+Usage: tools/checks/titlebar-aa-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image
