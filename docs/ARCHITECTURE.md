@@ -100,17 +100,17 @@ apps whose real content only exists after client-side JS rendering this
 kernel can't run (epiphany, healstack, blockframe, numen, curvely, roost,
 monocode).
 
-- **Curbfind**: Craigslist browser
-- **Keyrate**: the one exception to "thin port": `gui_launch_html` originally just rendered the ported site's own marketing copy read-only, which meant the first keystroke anyone made to actually type closed the app (`gui_wait_close`'s "any key closes" contract). Fixed with a real native typing test in `kernel.c` itself: word list, a tiny LCG seeded from `irq.c`'s real `ticks()` (no `rand()`/no libc), a live input loop. `app_keyrate.h`'s ported HTML still exists, served only, not rendered in the GUI
-- **Bookrank**: book summaries
-- **Quotestreak**: quote-guessing game, no backend to begin with
-- **Plan**: a planning app, ported for its real static copy at v35
-- **Lexly**: gamified language learning
-- **Toroid**: Conway's Game of Life on a toroidal grid (ships under the Toroid name; the source repo is `conway`)
-- **Sparkjar**: idea forum
-- **Homeqi**: feng shui home-assessment tool
-- **Fieldbook**: every field of science and math explained plainly
-- **Weather** (served copy only): the dock's own Weather app is native `kernel.c` logic against a live Open-Meteo fetch (temperature + WMO condition code, `weather_fetch`) for this machine's real location (v71 / 0.65.0: `geo_fetch` asks ip-api.com over plain HTTP once per boot, replacing a hardcoded downtown-Vancouver lat/lon; `tools/geo-check.sh` proves it headlessly against the host's own answer), not this file; v75 / 0.67.0: the same lat/lon drives the map wallpaper (`wall_fetch`, twelve OpenTopoMap tiles centered on the town, `tools/wallpaper-check.py`); `app_weather.h` is the ported static site, reachable only via `serveapp weather`
+- **Curbfind** (`drivers/app_curbfind.h`): Craigslist browser
+- **Keyrate** (`drivers/app_keyrate.h`): the one exception to "thin port": `gui_launch_html` originally just rendered the ported site's own marketing copy read-only, which meant the first keystroke anyone made to actually type closed the app (`gui_wait_close`'s "any key closes" contract). Fixed with a real native typing test in `kernel.c` itself: word list, a tiny LCG seeded from `irq.c`'s real `ticks()` (no `rand()`/no libc), a live input loop. `app_keyrate.h`'s ported HTML still exists, served only, not rendered in the GUI
+- **Bookrank** (`drivers/app_bookrank.h`): book summaries
+- **Quotestreak** (`drivers/app_quotestreak.h`): quote-guessing game, no backend to begin with
+- **Plan** (`drivers/app_plan.h`): a planning app, ported for its real static copy at v35
+- **Lexly** (`drivers/app_lexly.h`): gamified language learning
+- **Toroid** (`drivers/app_toroid.h`): Conway's Game of Life on a toroidal grid (ships under the Toroid name; the source repo is `conway`)
+- **Sparkjar** (`drivers/app_sparkjar.h`): idea forum
+- **Homeqi** (`drivers/app_homeqi.h`): feng shui home-assessment tool
+- **Fieldbook** (`drivers/app_fieldbook.h`): every field of science and math explained plainly
+- **Weather** (`drivers/app_weather.h`, served copy only): the dock's own Weather app is native `kernel.c` logic against a live Open-Meteo fetch (temperature + WMO condition code, `weather_fetch`) for this machine's real location (v71 / 0.65.0: `geo_fetch` asks ip-api.com over plain HTTP once per boot, replacing a hardcoded downtown-Vancouver lat/lon; `tools/geo-check.sh` proves it headlessly against the host's own answer), not this file; v75 / 0.67.0: the same lat/lon drives the map wallpaper (`wall_fetch`, twelve OpenTopoMap tiles centered on the town, `tools/wallpaper-check.py`); `app_weather.h` is the ported static site, reachable only via `serveapp weather`
 
 ## Why things are ordered this way
 

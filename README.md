@@ -21,7 +21,7 @@ the same way this kernel is. Also a nod to the U2 album, and my own name.
 |-------|-------|
 | Boot | `boot/boot.S`: multiboot1 header, temporary page tables to get into the higher half, jump to `kmain` (kernel runs at 0xC0000000+, loaded at 1MB) |
 | Segments | `gdt.c`: flat GDT (ring-0 + ring-3 code/data, 4GB, plus a TSS) |
-| Interrupts | `idt.c` + `isr.S`: IDT and the 32 CPU-exception handlers |
+| Interrupts | `idt.c` + `isr.S`: IDT and the 32 CPU-exception handlers; `syscall.c`: `int 0x80` dispatch table, x86 Linux convention and numbers (`SYS_EXIT`, `SYS_WRITE`) |
 | IRQs | `pic.c`, `irq.c` + `irq_stubs.S`: PIC remap, IRQ-driven keyboard, PIT timer |
 | Memory | `pmm.c` (physical frames), `paging.c` (identity + higher-half double-mapped paging), `kheap.c` (`kmalloc`/`kfree`) |
 | Tasks | `task.c` + `irq_stubs.S`'s irq0: preemptive round-robin off the PIT tick, `yield()` reaches the same path in software via `int $32` |
@@ -30,12 +30,12 @@ the same way this kernel is. Also a nod to the U2 album, and my own name.
 | Filesystem abstraction | `vfs.c` + `blockdev.c`: real ops-table abstractions (v29, v33), each proven by a second, RAM-backed implementation (`ramfs.c`, `ramdisk.c`) |
 | Networking | `pci.c` (enumeration) + `rtl8139.c` (real hardware/native QEMU NIC driver) + `ne2k.c` (NE2000/RTL8029, v86's own emulated NIC) + `net.c`: Ethernet/ARP/IPv4/UDP/TCP built up from raw frames, hardware-agnostic over whichever driver `net_init` finds a card for, no routing table, one /24 link assumed |
 | Browser | `http.c` + `html.c` + `json.c`: a plain-text HTTP client, a deliberately tiny HTML-to-text extractor, a JSON string-value grabber, glue over the two above (v8) |
-| Images | `png.c`: minimal PNG decoder (8-bit RGB/RGBA and, since v75, 8-bit indexed/PLTE, the shape every real map tile server serves; non-interlaced) over a real zlib/DEFLATE inflater and all five scanline filters, CRC-32 and Adler-32 checked; `pngtest` decodes real PNGs cut from the wallpaper and compares every pixel (v74) |
+| Images | `png.c` (minimal PNG decoder, 8-bit RGB/RGBA and 8-bit indexed/PLTE; non-interlaced, real RFC zlib/DEFLATE inflater, all five scanline filters, CRC-32/Adler-32 verified v74) and `jpeg.c` (minimal JPEG decoder, baseline 8-bit DCT only, 4:4:4 or 4:2:0 YCbCr, fixed-point IDCT, nearest-neighbor chroma upsampling v76) |
 | Wallpaper | `kernel.c` `wall_fetch`/`wall_apply`: a real topographic map of the machine's real location (ip-api.com lat/lon from v71, twelve OpenTopoMap tiles over plain HTTP, decoded by `png.c`, cropped centered on the town into the same 960x540 buffer the baked photo uses), the default since v75, with the photo as the fallback and a Settings/`wallpaper` toggle; `tools/checks/wallpaper-check.py` proves it byte-for-byte against the host's own download, `tools/checks/wallfx-check.py` proves rain still composites over it (v75) |
-| Graphics | `vbe.c` (Bochs VBE mode switch + text-mode save/restore) + `font.c` (real CP437 font dumped from VGA hardware, DejaVu AA fallback) + `window.c` (the render-target abstraction everything draws through) |
+| Graphics | `vbe.c` (Bochs VBE mode switch + text-mode save/restore) + `font.c` (real CP437 font dumped from VGA hardware, DejaVu AA fallback) + `window.c` (the render-target abstraction everything draws through); `mouse.c` (PS/2 mouse on 8042 IRQ12) + `vmmouse.c` (VMware absolute-pointer backdoor, v86/QEMU fallback) |
 | Apps | 7 built-in: Notes (`kernel/editor.h`), Reminders, Calendar, Mail, Contacts, Chat (`kernel/chat.h`, real Ollama `/api/chat` history) all VFS-backed; Calculator (`kernel/calculator.h`) pure logic; Stocks (`kernel/stocks.h`) static demo data. Plus 11 more ported natively from the fleet (`drivers/app_*.h`), served real over `serveapp <name>` and rendered as extracted text in the GUI |
 | Trash | `trash.c`: a real, recoverable delete (v39), RAM-only, gone on reboot |
-| Console | `kernel/kernel.c`: VGA text, keyboard, clock, the shell, a real mouse-driven GUI desktop (`gui`) |
+| Console | `kernel/kernel.c`: VGA text, keyboard, clock, the shell, a real mouse-driven GUI desktop (`gui`); `serial.c`: polling COM1 (0x3F8) debug output, readable with `-serial stdio` |
 | Link | `linker.ld`: flat ELF32 at 1 MB |
 | Check | `check.sh`: boots it and checks the banner reached VGA memory |
 
