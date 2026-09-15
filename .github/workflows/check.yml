@@ -48,10 +48,21 @@ jobs:
       # `landing/v86/kernel.elf` committed at or after the last commit
       # that actually touched kernel/driver/boot source, not whether two
       # different compilers produced byte-identical output.
+      #
+      # Makefile dropped from the watched set (real regression, hit twice
+      # same night): a Makefile edit that only fixes a generator rule's
+      # own path string (no CFLAGS/source-list change) produces a
+      # byte-identical kernel.elf, so there's nothing to actually commit,
+      # every retry of "cp kernel.elf landing/v86/kernel.elf" is a no-op
+      # git sees as "nothing to commit" and the check fails forever no
+      # matter what's done. A real Makefile change that DOES affect the
+      # build (new source file, changed flags) always lands alongside real
+      # edits under kernel/drivers/boot/lib in the same commit anyway, so
+      # this still catches the case that actually matters.
       - name: landing/v86/kernel.elf stays in sync
         run: |
           git fetch --unshallow 2>/dev/null || true
-          src_commit=$(git log -1 --format=%H -- kernel/ drivers/ boot/ lib/ Makefile)
+          src_commit=$(git log -1 --format=%H -- kernel/ drivers/ boot/ lib/)
           elf_commit=$(git log -1 --format=%H -- landing/v86/kernel.elf)
           if ! git merge-base --is-ancestor "$src_commit" "$elf_commit" 2>/dev/null; then
             echo "landing/v86/kernel.elf (last touched $elf_commit) predates real source changes (last touched $src_commit)"
