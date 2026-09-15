@@ -978,6 +978,52 @@ static unsigned int gui_daynight_tint_pct(unsigned int rgb, int night, int day){
 }
 static unsigned int gui_daynight_tint(unsigned int rgb){ return gui_daynight_tint_pct(rgb, daynight_night_pct, daynight_day_pct); }
 
+/* v79: the map wallpaper (wall_src pointed at wall_map instead of
+   wallpaper_rgb, see v75's comment at wall_src's declaration) is real
+   fetched OpenTopoMap pixel data, and OpenTopoMap ships its own neutral
+   cartographer's palette (grays for streets/contours, cold greens for
+   parks, flat blues for water) that never went through this file's own
+   Mojave desert grade the baked photo did. Sitting next to the sand/
+   granite/leather-brown dock and panels, it read as a foreign, cold
+   rectangle dropped onto a warm desktop, direct request to fix.
+   A grade toward this file's palette has to stay a MULTIPLY, not a lerp
+   toward one flat target color the way gui_daynight_tint blends toward
+   its espresso-brown/Silver floors: a lerp blend flattens every distinct
+   map color toward the same target as the blend percentage climbs, which
+   is exactly the "washes out detail" failure this was asked to avoid --
+   street-name glyphs are 1-2px of near-black on near-white, road/water
+   contrast is a gray line on a blue fill, and either one degrading toward
+   a shared target erases the very contrast that makes the map legible.
+   A per-channel multiply instead scales every pixel by the same warm
+   ratio, so two pixels that started different stay different (their
+   contrast ratio is preserved to within rounding), while the whole image
+   shifts toward this palette's warmth: reds pushed up (272/256, +6.25%,
+   toward Orange #FF851B's own red-forward hue), greens pulled down
+   slightly (248/256, -3.1%, so parkland reads sand-toward-olive rather
+   than postcard green), blues pulled down more (216/256, -15.6%, the
+   real driver of the warm shift, matching wall_bot's own brown recipe a
+   few hundred lines below: Orange blended with Black is red-heavy and
+   blue-starved). Deliberately mild (a 15.6% max single-channel move) so
+   near-white street-label backgrounds stay legibly near-white and near-
+   black glyph strokes stay legibly near-black, both ends of the contrast
+   range that has to survive; a heavier grade would gray-crush the whites
+   the way a heavy sepia overlay does. Applied at the two real per-pixel
+   choke points that read wall_src directly (gui_wallpaper_color below,
+   for the icon-shadow/dock-tray blend targets, and gui_wallpaper_px
+   further down, for the actual on-screen blit and the wind_base cache it
+   feeds), both gated on `wall_src != wallpaper_rgb` so the baked photo's
+   own already-correct palette is never touched, only the map is. Runs
+   before gui_daynight_tint, not after: daynight's night/day blend is
+   meant to read as "what hour it is" layered on top of whatever the base
+   wallpaper actually looks like, the same order the photo already uses. */
+static inline __attribute__((always_inline)) unsigned int gui_map_tint(unsigned int rgb){
+    int r = (int)((rgb >> 16) & 0xFF), g = (int)((rgb >> 8) & 0xFF), b = (int)(rgb & 0xFF);
+    r = (r * 272) >> 8; if (r > 255) r = 255;
+    g = (g * 248) >> 8;
+    b = (b * 216) >> 8;
+    return ((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)b;
+}
+
 /* Real photo now, not a procedural gradient: direct request for an
    actual, non-copyrighted image of the real park instead of drawn
    colors. wallpaper_rgb is a genuine public domain U.S. National Park
@@ -1012,6 +1058,7 @@ static unsigned int gui_wallpaper_color(int row){
     if (sy >= WALLPAPER_H) sy = WALLPAPER_H - 1;
     const unsigned char *p = &wall_src[(sy * WALLPAPER_W + WALLPAPER_W / 2) * 3];
     unsigned int rgb = ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2];
+    if (wall_src != wallpaper_rgb) rgb = gui_map_tint(rgb); /* v79: warm the map's neutral topo palette toward Mojave */
     return gui_daynight_tint(rgb);
 }
 
@@ -1390,6 +1437,7 @@ static inline __attribute__((always_inline)) unsigned int gui_wallpaper_px(const
         int bot = cc[ch] * (256 - wx) + d[ch] * wx;
         col = (col << 8) | (unsigned int)((top * (256 - c->wy) + bot * c->wy) >> 16);
     }
+    if (wall_src != wallpaper_rgb) col = gui_map_tint(col); /* v79: same warm grade as gui_wallpaper_color, real per-pixel blit path */
     return col;
 }
 static unsigned int gui_wind_cached_pixel(int px, int py){
@@ -4106,7 +4154,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -4303,6 +4351,35 @@ static void run(char *line){
         if (!ok) {
             puts("  c2="); puthex(c2); puts(" c14="); puthex(c14);
             puts(" sum2="); putn((unsigned int)sum2); puts(" sum14="); putn((unsigned int)sum14); puts("\n");
+        }
+    }
+    else if (!strcmp(line, "maptinttest")) {
+        /* v79 (0.68.0): standing QA per CLAUDE.md's 4b, for the map-only
+           warm color grade added above (gui_map_tint). Three real,
+           discriminating checks a reverted grade would fail: (1) a
+           neutral OpenTopoMap-style gray actually shifts warm (red ends
+           up strictly greater than blue, it started equal), (2) two
+           distinct source colors (a road gray and a water blue) stay
+           distinct after the grade -- proves this is a multiply, not a
+           lerp-to-one-target that would collapse them together, (3) a
+           near-white street-label background and a near-black label
+           glyph both stay on their own end of the range (white stays
+           above 200, black stays under 40) so the grade doesn't crush
+           the contrast a real label needs to read. */
+        unsigned int gray  = 0x00A0A0A0; /* plausible OpenTopoMap road/contour gray */
+        unsigned int water = 0x006E9BC7; /* plausible OpenTopoMap water blue */
+        unsigned int label_bg = 0x00F2F0E8;  /* near-white street-name background */
+        unsigned int label_fg = 0x00202020;  /* near-black street-name glyph */
+        unsigned int tg = gui_map_tint(gray), tw = gui_map_tint(water);
+        unsigned int tbg = gui_map_tint(label_bg), tfg = gui_map_tint(label_fg);
+        int gr = (int)((tg >> 16) & 0xFF), gb = (int)(tg & 0xFF);
+        int bg_r = (int)((tbg >> 16) & 0xFF);
+        int fg_r = (int)((tfg >> 16) & 0xFF);
+        int ok = (gr > gb) && (tg != tw) && (tg != gray) && (bg_r > 200) && (fg_r < 40);
+        puts(ok ? "maptint: neutral grays warmed, distinct colors stay distinct, label contrast survives: ok\n" : "maptint: FAILED\n");
+        if (!ok) {
+            puts("  tg="); puthex(tg); puts(" tw="); puthex(tw);
+            puts(" tbg="); puthex(tbg); puts(" tfg="); puthex(tfg); puts("\n");
         }
     }
     else if (!strcmp(line, "weatherfxtest")) {
