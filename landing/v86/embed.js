@@ -717,10 +717,13 @@
     tourLoop(tourGen).catch(function () { /* a torn-down emulator mid-await (e.g. a real navigation) shouldn't spam the console */ });
   }
   // Boot takes a few seconds; the tour waits for graphical mode plus a
-  // beat, and never starts at all once the visitor has focused.
+  // beat, and never starts at all once the visitor has focused. Also respects
+  // prefers-reduced-motion: autoplay motion should not start if the visitor
+  // has requested reduced motion.
   var tourArmed = false;
+  var prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   setInterval(function () {
-    if (tourArmed || focused) return;
+    if (tourArmed || focused || prefersReducedMotion) return;
     var vga = emulator.v86 && emulator.v86.cpu.devices.vga;
     if (vga && vga.graphical_mode) { tourArmed = true; tourTimer = setTimeout(startTourWhenReady, 6000); }
   }, 500);
