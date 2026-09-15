@@ -9,6 +9,13 @@ void paging_install(void);
    are no more spare page tables (see paging.c's MAX_EXTRA_TABLES). */
 int paging_map_region(unsigned int phys_addr, unsigned int length);
 
+/* v77 (0.66.x): Reverse paging_map_region -- unmap regions and reclaim their
+   page tables. Used by window_close() to free the framebuffer mapping budget
+   when the GUI exits, allowing the heap and other subsystems to grow again.
+   Unmaps the 4MB pages overlapping [phys_addr, phys_addr+length) and marks
+   their table slots available for reuse. */
+void paging_unmap_region(unsigned int phys_addr, unsigned int length);
+
 /* Marks one 4KB page (must fall in the base identity-mapped region, 8MB
    as of v74, either alias) as user-accessible (sets the U/S bit at both
    the page-table and page-directory level), so ring-3 code can actually

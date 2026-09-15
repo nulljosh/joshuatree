@@ -88,6 +88,17 @@ void window_pixel_phys(int px, int py, u32 color) {
 }
 
 void window_close(void) {
+    /* v77: unmap the framebuffer region, freeing its page tables for reuse.
+       This is critical on the browser demo where the GUI runs and exits
+       multiple times per session, or on systems where the heap needs to grow
+       for other work after the GUI closes. Without this, every window_open
+       consumes MAX_EXTRA_TABLES until all 16 are exhausted and nothing else
+       can map new regions. fb is a physical address (valid as virtual due to
+       identity mapping), so pass it directly to paging_unmap_region. */
+    if (fb) {
+        u32 size = phys_w * win_h * scale * 4; /* bytes per pixel = 4 */
+        paging_unmap_region((u32)fb, size);
+    }
     vbe_disable();
     fb = 0;
     win_w = win_h = 0;

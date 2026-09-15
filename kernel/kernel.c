@@ -4904,6 +4904,14 @@ static void gui_run(void){
         }
     }
     window_close();
+    /* v77: free GUI heap allocations (wind_base, dock_band cache/frame) when
+       exiting so the heap is available for other uses after gui_run() returns.
+       This is critical for heap growth after the GUI: without this, the large
+       allocations consume virtual address space and prevent paging_map_region
+       from mapping new heap frames beyond the base map. */
+    wall_caches_drop();
+    if (dock_band_cache) { kfree(dock_band_cache); dock_band_cache = 0; }
+    if (dock_band_frame) { kfree(dock_band_frame); dock_band_frame = 0; }
     clear();
     puts("back in text mode\n");
 }
@@ -5918,7 +5926,7 @@ static void run(char *line){
         if (settings_row_at(10,  148, 960) != -1) { puts("settingsclick: left of the row rect (x<16) should miss\n"); ok = 0; }
         if (settings_row_at(950, 148, 960) != -1) { puts("settingsclick: right of the row rect should miss\n"); ok = 0; }
         puts(ok ? "settingsclick: click hit-tests the row it actually landed on: ok\n" : "settingsclick: FAILED\n");
-        serial_puts(ok ? "settingsclick PASS\n" : "settingsclick FAIL\n"); /* mirrors texttest/chattest/jpegtest's own convention so tools/checks/*.sh can read the verdict headless */
+        serial_puts(ok ? "settingsclick PASS\n" : "settingsclick FAIL\n"); /* mirrors texttest/chattest/jpegtest's own convention so a tools/checks shell script can read the verdict headless */
     }
     else if (!strcmp(line, "nettest")) {
         if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
@@ -6670,12 +6678,14 @@ void kmain(unsigned int multiboot_info_addr){
        memory doesn't share survives the mode switch untouched. */
     *(volatile unsigned int *)0x9000 = 0xB007C0DE;
     kbd_drain(); /* discard any stray byte queued during boot (keyboard_enable_scanning, mouse_init) before real input starts */
+
     /* A real desktop OS boots to a desktop, not a command line: gui_run()
        already has a clean way back to this exact shell (esc closes the
        window, clears, prints "back in text mode", returns), so starting
        there instead of making every visitor type "gui" themselves is a
        straight improvement, not a special case for the browser demo. */
     gui_run();
+
     char line[80];
     for (;;) {
         puts("> ");

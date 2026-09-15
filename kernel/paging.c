@@ -70,6 +70,16 @@ static int base_table_index(u32 addr) {
 static u32 extra_page_tables[MAX_EXTRA_TABLES][1024] __attribute__((aligned(4096)));
 static int extra_tables_used = 0;
 
+/* Track which extra table (if any) is used by each PDE above the base map.
+   -1 means the PDE is not using an extra table. Allows paging_unmap_region
+   to free unused table slots. v77 (0.66.x): added to support window_close() */
+static int pde_to_extra_table[1024 - BASE_MAP_TABLES];
+
+/* Track which extra table slots are in use (1) or free (0), allowing reuse
+   when paging_unmap_region frees a table. This fixes the bug where unmapping
+   a framebuffer couldn't reclaim its table slot unless it was the last one. */
+static int extra_table_free[MAX_EXTRA_TABLES];
+
 void paging_install(void) {
     for (int t = 0; t < BASE_MAP_TABLES; t++)
         for (int i = 0; i < 1024; i++)
@@ -88,6 +98,17 @@ void paging_install(void) {
         page_directory[KERNEL_PDE_INDEX + t] = phys(base_page_tables[t]) | 0x3;
     }
 
+    /* Initialize the PDE-to-extra-table mapping (v77): allows paging_unmap_region
+       to track which extra tables are in use for which PDEs. */
+    for (int i = 0; i < (int)(1024 - BASE_MAP_TABLES); i++) {
+        pde_to_extra_table[i] = -1;
+    }
+
+    /* Initialize the free list for extra tables: all slots start free */
+    for (int i = 0; i < MAX_EXTRA_TABLES; i++) {
+        extra_table_free[i] = 1;
+    }
+
     __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
 
     u32 cr0;
@@ -102,19 +123,76 @@ int paging_map_region(u32 phys_addr, u32 length) {
 
     for (u32 pde = start_pde; pde <= end_pde; pde++) {
         if (page_directory[pde] & 0x1) continue; /* already mapped */
-        if (extra_tables_used >= MAX_EXTRA_TABLES) return 0;
 
-        u32 *table = extra_page_tables[extra_tables_used++];
+        /* Find the first free table slot, allowing reuse of tables freed by
+           paging_unmap_region, instead of always appending to the end. */
+        int table_idx = -1;
+        for (int i = 0; i < MAX_EXTRA_TABLES; i++) {
+            if (extra_table_free[i]) { table_idx = i; break; }
+        }
+        if (table_idx < 0) return 0; /* all tables in use */
+
+        u32 *table = extra_page_tables[table_idx];
+        extra_table_free[table_idx] = 0; /* mark slot as used */
+
+        /* Recalculate extra_tables_used: the highest index + 1 of used tables */
+        int new_max = 0;
+        for (int i = 0; i < MAX_EXTRA_TABLES; i++) {
+            if (!extra_table_free[i]) new_max = i + 1;
+        }
+        extra_tables_used = new_max;
+
         u32 base = pde * 0x400000;
         for (int i = 0; i < 1024; i++) {
             table[i] = (base + i * 0x1000) | 0x3;
         }
         page_directory[pde] = phys(table) | 0x3;
 
+        /* Track which table this PDE is using, for unmapping later */
+        if (pde >= BASE_MAP_TABLES) pde_to_extra_table[pde - BASE_MAP_TABLES] = table_idx;
+
         /* reload CR3 to flush the TLB now that the page directory changed */
         __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
     }
     return 1;
+}
+
+/* Reverse paging_map_region: unmap regions and free their page tables.
+   v77 (0.66.x): Real fix for GUI consuming all extra page tables. When
+   window_close() or other subsystems finish with large mappings
+   (framebuffers, etc.), they can now call this to reclaim the mapping
+   budget. Unmapped PDEs have their table slots freed for reuse. */
+void paging_unmap_region(u32 phys_addr, u32 length) {
+    u32 start_pde = phys_addr / 0x400000;
+    u32 end_pde   = (phys_addr + length - 1) / 0x400000;
+
+    for (u32 pde = start_pde; pde <= end_pde; pde++) {
+        if (!(page_directory[pde] & 0x1)) continue; /* not mapped, nothing to unmap */
+
+        /* Only unmap if this PDE is using an extra table (not the base map).
+           Base map PDEs stay permanently mapped. */
+        if (pde >= BASE_MAP_TABLES) {
+            int table_idx = pde_to_extra_table[pde - BASE_MAP_TABLES];
+            if (table_idx >= 0) {
+                page_directory[pde] = 0x00000002; /* not present, read/write, supervisor */
+                pde_to_extra_table[pde - BASE_MAP_TABLES] = -1;
+
+                /* Mark the table slot as free for reuse by paging_map_region.
+                   Recalculate extra_tables_used as the highest index + 1 of
+                   used tables. This allows any freed table to be reclaimed
+                   immediately, not just the last one. */
+                extra_table_free[table_idx] = 1;
+                int new_max = 0;
+                for (int i = 0; i < MAX_EXTRA_TABLES; i++) {
+                    if (!extra_table_free[i]) new_max = i + 1;
+                }
+                extra_tables_used = new_max;
+            }
+        }
+    }
+
+    /* reload CR3 to flush the TLB now that the page directory changed */
+    __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
 }
 
 void paging_set_user(void *virt_addr) {
