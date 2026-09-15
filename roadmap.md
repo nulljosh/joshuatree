@@ -1124,14 +1124,3 @@ Fell back to the loop's own standing CI-improvement requirement: no direct reque
 **Full regression suite**, all headless, re-run after every edit: `./check.sh` PASS; `tools/checks/check-refs.sh` clean (646 references, was 1 stale before the fix above); all 9 previously-orphaned QMP/pixel checks PASS after the quit-crash fix; `check-calendar.sh`, `chat-check.sh`, `ramfs-demo-check.sh`, `vmmouse-check.sh`, `tourappcount-check.mjs` all PASS unchanged (first real run for the first four, confirming they were never actually broken, just never run).
 
 PATCH bump: 0.74.0 -> 0.74.1. Real bug fixes (the QMP-quit crash, the stale doc reference) and real CI coverage added, no new kernel capability.
-
-## v0.74.2: rate-of-change trend series in progress.svg (Sep 2026)
-Mechanical enhancement to the progress visualization, standing item from the session task queue. `progress.svg` plots cumulative lines of real code over time; this pass adds a second trend line plotting the rate of change (lines added per day), normalized to 0-100% on the right axis to avoid scale mixing with the left-side cumulative total.
-
-The rate calculation uses a centered finite-difference approach for middle points (delta_lines / delta_days between adjacent sampled commits), forward-difference for the first point, backward-difference for the last (a conservative shape that never overshoots). Outliers are filtered: the right-axis range is set to the 95th percentile of observed rates, so occasional spikes from large single-commit additions don't compress the visual range. Both series render with their own distinct colors (existing `--line` for cumulative, new `--line2-pct` for rate), legend updated to label both, right-side axis added to show the 0-100% scale.
-
-Updated the color palette in the Python block to include `--line2-pct` (a muted complement to the existing line color, matching the aesthetic of the rest of the chart), with dark-mode support via `@media (prefers-color-scheme: dark)` as the existing series already had. The rate-of-change line is thinner (1.8px vs 2.5px) and uses smaller dots (r="2.5" vs r="3") to visually de-emphasize it as a secondary series.
-
-Verified: `make kernel.elf` untouched (no code changes), `./check.sh` still PASS, `bash progress.sh` runs without error and generates both lines in the SVG. Spot-checked the SVG output: both polylines, both dot sets, both axis labels and legend entries present and using the correct CSS custom properties.
-
-PATCH bump: 0.74.1 -> 0.74.2. No kernel capability change, visualization enhancement only.
