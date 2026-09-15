@@ -10,7 +10,11 @@ takes, and roughly what xv6/ToaruOS/Linux 0.01 did in their first months).
 <!-- progress.sh: done-items 10/10 -->
 - **v0** (Aug-Sep 2026): boots under QEMU/GRUB, VGA text, polled PS/2 keyboard, RTC clock, shell (`help clear echo time reboot`)
 - **v1** (Sep 2026): flat GDT, IDT + CPU exception handlers (`crash` command exercises it), PIC remap, IRQ-driven keyboard, PIT timer (`uptime`)
-- **v0.71.1** (Sep 2026): landing page layout fix, demo moved to normal document flow above header text instead of absolutely positioned overlay, header text now uses page background colors instead of white-on-black overlay treatment.
+- **v0.71.0** (Sep 2026): landing-demo bug fixes (empty Files app via ramfs fallback, launchpad click hit-testing)
+- **v0.71.1** (Sep 2026): landing page layout fix, demo moved to normal document flow above header text instead of absolutely positioned overlay, header text now uses page background colors instead of white-on-black overlay treatment
+- **v0.71.2** (Sep 2026): fixed letterbox regression from aspect-ratio CSS, pinned stage-wrap to 16:9
+- **v0.71.3** (Sep 2026): fixed boot-logo positioning (stage-wrap was missing position:relative after aspect-ratio change)
+- **v0.71.4** (Sep 2026): idle tour trimmed to 3 apps, autoplay non-start investigated and not reproduced
 - **v0.71.5** (Sep 2026): tools/ repo hygiene, reorganized into tools/checks/ (verification/regression tests) and tools/gen/ (generator/utility scripts), all references updated across documentation and CI workflows, check.sh still PASS, pure refactor.
 
 Full breakdown of what shipped in each: `git log --oneline` or the commit history, not here, this file is the queue, not the changelog.
