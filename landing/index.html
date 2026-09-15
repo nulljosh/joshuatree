@@ -137,7 +137,7 @@
      letterbox bars back. Real fix: pin this box to the kernel's own 16:9
      shape so cover and contain always agree exactly, no viewport aspect
      can ever produce a bar, instead of fighting the heuristic via height. */
-  #stage-wrap { background: #000; width: 100%; aspect-ratio: 16 / 9; max-height: 100svh; z-index: 0; }
+  #stage-wrap { background: #000; position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 100svh; z-index: 0; }
   /* v52.5: real boot moment instead of a blank black flash, direct
      request ("bridge the gap between css/html and the actual demo
      loading"). The logo shows immediately (it's a tiny inline SVG,
