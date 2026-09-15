@@ -28,8 +28,16 @@
 .align 4096
 boot_page_directory:
     .skip 4096
+/* v74 (0.66.0): two consecutive page tables, 8MB, not one. The kernel
+   image (1MB load address + text + the 1.5MB baked wallpaper + .bss)
+   crossed the 4MB line for the first time when the PNG decoder's test
+   fixtures landed: _kernel_end went to 0x40f000, and the first .bss touch
+   after irq_install page-faulted on memory no table covered. The image
+   had been sitting ~50KB under that cliff for several releases already,
+   so any next addition of static data would have tripped it. paging.c's
+   BASE_MAP_TABLES must match this count. */
 boot_page_table:
-    .skip 4096
+    .skip 8192
 
 .align 16
 boot_stack_bottom:
@@ -40,11 +48,11 @@ boot_stack_top:
 _start:
     mov $boot_stack_top, %esp
 
-    /* identity-map the first 4MB: entry i maps physical page i to virtual
-       page i, present + read/write */
+    /* identity-map the first 8MB: entry i maps physical page i to virtual
+       page i, present + read/write, across two back-to-back tables */
     mov $boot_page_table, %edi
     mov $0, %eax
-    mov $1024, %ecx
+    mov $2048, %ecx
 1:  mov %eax, %edx
     or $0x3, %edx
     mov %edx, (%edi)
@@ -52,15 +60,18 @@ _start:
     add $4, %edi
     loop 1b
 
-    /* one page table, mapped at two page-directory slots: entry 0 (the
-       identity range) and entry 768 (0xC0000000 / 4MB), the kernel's own
-       higher-half range. Same physical memory, reachable both ways during
-       the transition below. */
+    /* two page tables, each mapped at two page-directory slots: entries
+       0/1 (the identity range, 0..8MB) and entries 768/769 (0xC0000000 /
+       4MB and the next), the kernel's own higher-half range. Same
+       physical memory, reachable both ways during the transition below. */
     mov $boot_page_table, %eax
     or $0x3, %eax
     mov $boot_page_directory, %edi
     mov %eax, (%edi)
     mov %eax, 768*4(%edi)
+    add $4096, %eax
+    mov %eax, 4(%edi)
+    mov %eax, 769*4(%edi)
 
     mov $boot_page_directory, %eax
     mov %eax, %cr3

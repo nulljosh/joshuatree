@@ -13,8 +13,16 @@ jobs:
       - name: Install clang, lld, qemu
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang lld qemu-system-x86
+          sudo apt-get install -y clang lld qemu-system-x86 python3-pil
       - name: Build
         run: make kernel.elf
       - name: Boot check
         run: ./check.sh
+      # v74: the PNG decoder is the first subsystem with a host-native
+      # harness (tools/png-host-check.sh, seconds) AND an in-kernel one
+      # (tools/png-check.sh, decodes inside QEMU and matches the host's
+      # PIL decode hash for hash). Both run on every push.
+      - name: PNG decoder, host harness
+        run: ./tools/png-host-check.sh
+      - name: PNG decoder, in-kernel
+        run: ./tools/png-check.sh

@@ -9,7 +9,7 @@ KERNEL_SRCS := kernel/gdt.c kernel/idt.c kernel/pic.c kernel/irq.c kernel/pmm.c 
 KERNEL_ASM  := kernel/isr.S kernel/irq_stubs.S kernel/ring3_asm.S
 DRIVER_SRCS := drivers/ata.c drivers/blockdev.c drivers/ramdisk.c drivers/trash.c drivers/fat.c drivers/vfs.c drivers/ramfs.c drivers/pci.c drivers/vbe.c drivers/mouse.c drivers/vmmouse.c \
                drivers/window.c drivers/rtl8139.c drivers/net.c drivers/http.c drivers/html.c \
-               drivers/json.c drivers/font.c drivers/serial.c
+               drivers/json.c drivers/font.c drivers/serial.c drivers/png.c
 LIB_SRCS    := lib/libc.c
 
 OBJS := boot/boot.o $(KERNEL_ASM:.S=.o) $(KERNEL_SRCS:.c=.o) $(DRIVER_SRCS:.c=.o) $(LIB_SRCS:.c=.o)
@@ -40,7 +40,14 @@ drivers/app_quotestreak.h:
 	./gen_app.sh "$$HOME/Documents/Code/quotestreak/index.html" drivers/app_quotestreak.h app_quotestreak
 
 kernel/kernel.o: drivers/app_weather.h drivers/app_curbfind.h drivers/app_keyrate.h drivers/app_bookrank.h drivers/app_quotestreak.h
-kernel/kernel.o: kernel/editor.h drivers/editor_fonts.h
+kernel/kernel.o: kernel/editor.h drivers/editor_fonts.h drivers/png.h drivers/png_testdata.h
+
+# v74: pngtest's fixtures are real PNGs cut from drivers/wallpaper.h; the
+# generator also computes the host-side reference hashes. Committed like
+# the app_*.h snapshots above, regenerated only if genuinely missing or
+# after the wallpaper source itself changes.
+drivers/png_testdata.h:
+	python3 tools/gen_png_testdata.py
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@

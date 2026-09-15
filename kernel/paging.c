@@ -7,9 +7,19 @@
    it's deliberate: pmm.c hands out physical frame addresses that kheap.c
    and others still dereference directly as pointers, exactly as they did
    before the higher-half move, so nothing downstream needed to change.
-   ponytail: one page table, 4MB (reachable both ways) is everything the
-   kernel, its stack, and the pmm bitmap need right now. Add more page
-   tables (or 4MB pages) when something is allocated above 0x400000. */
+   ponytail: one page table, 4MB (reachable both ways) was everything the
+   kernel, its stack, and the pmm bitmap needed, with the note "add more
+   page tables when something is allocated above 0x400000." v74 (0.66.0)
+   is that day: the kernel image itself (1MB load + text + the 1.5MB baked
+   wallpaper + .bss) crossed 4MB once the PNG decoder's test fixtures
+   landed, _kernel_end 0x40f000, and the first .bss write after
+   irq_install faulted on unmapped memory. The base map is now
+   BASE_MAP_TABLES back-to-back tables (8MB), mirrored at both aliases,
+   and paging_set_user/paging_user_range_ok index whichever base table an
+   address falls in (ring3.c's user code/stack pages are static .bss
+   arrays, which is exactly what moved past 4MB; the old first-table-only
+   indexing would have flipped the U/S bit on the wrong page). boot.S's
+   temporary map carries the same count. */
 #include "paging.h"
 #include "pmm.h"
 
@@ -30,7 +40,19 @@ typedef unsigned int u32;
 static inline u32 phys(void *virt) { return (u32)virt - KERNEL_VIRTUAL_BASE; }
 
 static u32 page_directory[1024]   __attribute__((aligned(4096)));
-static u32 first_page_table[1024] __attribute__((aligned(4096)));
+/* The base map: BASE_MAP_TABLES * 4MB identity-mapped, and the same
+   physical range mirrored at KERNEL_VIRTUAL_BASE. Must match boot.S. */
+#define BASE_MAP_TABLES 2
+#define BASE_MAP_LIMIT  (BASE_MAP_TABLES * 0x400000u)
+static u32 base_page_tables[BASE_MAP_TABLES][1024] __attribute__((aligned(4096)));
+
+/* Which base table (0..BASE_MAP_TABLES-1) a virtual address lives in via
+   either alias, or -1 if it's outside the base map entirely. */
+static int base_table_index(u32 addr) {
+    u32 pde = addr >> 22;
+    if (pde >= KERNEL_PDE_INDEX) pde -= KERNEL_PDE_INDEX;
+    return pde < BASE_MAP_TABLES ? (int)pde : -1;
+}
 
 /* Extra page tables for regions outside the base 4MB, statically reserved
    (not kmalloc'd) because they need page alignment kheap's bump allocator
@@ -49,20 +71,22 @@ static u32 extra_page_tables[MAX_EXTRA_TABLES][1024] __attribute__((aligned(4096
 static int extra_tables_used = 0;
 
 void paging_install(void) {
-    for (int i = 0; i < 1024; i++) {
-        first_page_table[i] = (i * 0x1000) | 0x3; /* present, read/write */
-    }
+    for (int t = 0; t < BASE_MAP_TABLES; t++)
+        for (int i = 0; i < 1024; i++)
+            base_page_tables[t][i] = (t * 0x400000 + i * 0x1000) | 0x3; /* present, read/write */
     for (int i = 0; i < 1024; i++) {
         page_directory[i] = 0x00000002; /* not present, read/write, supervisor */
     }
-    page_directory[0] = phys(first_page_table) | 0x3;
-    /* also reachable at the high alias: this MUST be set before CR3 is
-       reloaded below, otherwise the instant the new table takes effect,
-       the CPU's own currently-executing EIP (a high address, the kernel is
-       already running up there via boot.S's temporary tables by the time
-       this function runs) would have nothing mapping it, and the very
-       next instruction fetch after the CR3 write would page-fault */
-    page_directory[KERNEL_PDE_INDEX] = phys(first_page_table) | 0x3;
+    for (int t = 0; t < BASE_MAP_TABLES; t++) {
+        page_directory[t] = phys(base_page_tables[t]) | 0x3;
+        /* also reachable at the high alias: this MUST be set before CR3 is
+           reloaded below, otherwise the instant the new table takes effect,
+           the CPU's own currently-executing EIP (a high address, the kernel is
+           already running up there via boot.S's temporary tables by the time
+           this function runs) would have nothing mapping it, and the very
+           next instruction fetch after the CR3 write would page-fault */
+        page_directory[KERNEL_PDE_INDEX + t] = phys(base_page_tables[t]) | 0x3;
+    }
 
     __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
 
@@ -95,27 +119,29 @@ int paging_map_region(u32 phys_addr, u32 length) {
 
 void paging_set_user(void *virt_addr) {
     u32 addr = (u32)virt_addr;
+    int t = base_table_index(addr);
+    if (t < 0) return; /* outside the base map: paging.h documents this as unsupported */
     u32 pte = (addr % 0x400000) / 0x1000;
-    first_page_table[pte] |= 0x4;
-    page_directory[0] |= 0x4;
-    page_directory[KERNEL_PDE_INDEX] |= 0x4;
+    base_page_tables[t][pte] |= 0x4;
+    page_directory[t] |= 0x4;
+    page_directory[KERNEL_PDE_INDEX + t] |= 0x4;
     __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
 }
 
-/* v64 (0.61.0): access_ok for syscalls. Only the base 4MB (either alias)
+/* v64 (0.61.0): access_ok for syscalls. Only the base map (either alias)
    can hold user pages today (paging_set_user's own limit), so anything
    outside it is a kernel-only address by construction. Within it, every
-   page in the range needs both present and U/S set in the one shared
-   first_page_table, which every task directory points at by value. */
+   page in the range needs both present and U/S set in the shared base
+   table for its 4MB slot, which every task directory points at by value. */
 int paging_user_range_ok(unsigned int addr, unsigned int len) {
     if (len == 0) return 1;
     unsigned int end = addr + len;
     if (end < addr) return 0; /* wrapped */
     for (u32 p = addr & ~0xFFFu; p < end; p += 0x1000) {
-        u32 pde = p >> 22;
-        if (pde != 0 && pde != KERNEL_PDE_INDEX) return 0;
+        int t = base_table_index(p);
+        if (t < 0) return 0;
         u32 pte = (p >> 12) & 0x3FF;
-        if ((first_page_table[pte] & 0x5) != 0x5) return 0; /* present + user */
+        if ((base_page_tables[t][pte] & 0x5) != 0x5) return 0; /* present + user */
         if (p > 0xFFFFF000u - 0x1000) break; /* next += would wrap; end < addr already ruled the range in */
     }
     return 1;
@@ -123,10 +149,11 @@ int paging_user_range_ok(unsigned int addr, unsigned int len) {
 
 /* v31 (0.31.0): real per-task memory isolation, see paging.h. A directory
    and its private table/frame are all plain physical frames from pmm,
-   below IDENTITY_MAP_LIMIT (kheap.c's own limit, re-used here rather than
-   redefined) so this file can dereference them directly as pointers, the
-   same established convention kheap.c already relies on. */
-#define IDENTITY_MAP_LIMIT 0x400000
+   below IDENTITY_MAP_LIMIT (the base map's end, the same value kheap.c
+   keys its on-demand mapping off) so this file can dereference them
+   directly as pointers, the same established convention kheap.c already
+   relies on. */
+#define IDENTITY_MAP_LIMIT BASE_MAP_LIMIT
 
 unsigned int paging_kernel_directory(void) {
     return phys(page_directory);

@@ -39,7 +39,10 @@ struct block {
     struct block *next;
 };
 
-#define IDENTITY_MAP_LIMIT 0x400000
+/* v74 (0.66.0): 8MB, matching paging.c's BASE_MAP_TABLES (2 tables) now
+   that the kernel image itself crosses 4MB; frames inside the base map
+   are already reachable, anything past it still gets mapped on demand. */
+#define IDENTITY_MAP_LIMIT 0x800000
 #define ALIGN(x) (((x) + 3u) & ~3u)
 /* Don't split off a remainder too small to ever satisfy a real request;
    its own header would outweigh what's left for a caller to actually use. */
