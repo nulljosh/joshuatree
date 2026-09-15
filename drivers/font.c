@@ -84,11 +84,17 @@ void font_init(void) {
    bitmap path. The 8px logical advance is untouched on purpose: every
    layout in this kernel measures text as strlen*8, and this changes what
    text looks like, not where it goes. */
-static void (*aa_hook)(unsigned char c, int px, int py, unsigned int fg, int bg) = 0;
-void font_set_aa(void (*hook)(unsigned char, int, int, unsigned int, int)) { aa_hook = hook; }
+static void (*aa_hook)(unsigned char c, int px, int py, unsigned int fg, int bg, int cell) = 0;
+static int  (*aa_adv)(unsigned char c) = 0;
+void font_set_aa(void (*hook)(unsigned char, int, int, unsigned int, int, int), int (*advance)(unsigned char)) { aa_hook = hook; aa_adv = advance; }
+static int aa_active(void) { return aa_hook && aa_adv && window_scale() > 1 && !window_has_target(); }
 
 void font_draw_char(unsigned char c, int x, int y, unsigned int fg, int bg) {
-    if (aa_hook && window_scale() > 1 && !window_has_target()) { aa_hook(c, x * (int)window_scale(), y * (int)window_scale(), fg, bg); return; }
+    /* Single-glyph callers (the terminal's character grid, Keyrate's
+       typing line) place each glyph themselves at x = col*8, so here the
+       cell stays the fixed 8-logical-px one and the glyph is clipped to
+       it exactly as before. */
+    if (aa_active()) { int s = (int)window_scale(); aa_hook(c, x * s, y * s, fg, bg, 8 * s); return; }
     const u8 *glyph = glyphs + (unsigned int)c * 16;
     for (int row = 0; row < 16; row++) {
         u8 bits = glyph[row];
@@ -100,11 +106,44 @@ void font_draw_char(unsigned char c, int x, int y, unsigned int fg, int bg) {
     }
 }
 
+/* v77 (0.67.1): real, photographed bug, "Cloudy" in the menu bar read as
+   "Cl oudy". Root cause was here: since v44 every string went through
+   font_draw_char one glyph at a time at a fixed 8-logical (16-physical)
+   px advance, and the AA hook left-aligned each DejaVu Sans glyph inside
+   that cell ignoring its own advance. At the 24px face the table says
+   'C' advances 17 (wider than the cell: clipped at 16, so it butts hard
+   against the next glyph), 'l' advances 7 (leaving 8 dead physical px
+   before the next glyph), 'o' 15. So the gap after every narrow glyph
+   (l, i, j, t, f, ', .) was ~8px while the gap after a wide one was
+   zero or negative: exactly the "extra gap only between some letters"
+   Joshua photographed, and it also chopped 'W'/'m' (advance 24/23) by
+   8-9px. Fix: on the AA path the string is laid out with a real pen,
+   each glyph advanced by its own metric, the same way every proportional
+   text renderer since the Macintosh Toolbox's DrawString has done it. The
+   bitmap (VGA font) path is untouched: strlen*8 there is still exact. */
 void font_draw_string(const char *s, int x, int y, unsigned int fg, int bg) {
+    if (aa_active()) {
+        int sc = (int)window_scale();
+        int pen = x * sc, py = y * sc;
+        for (; *s; s++) {
+            if (*s == '\n') { py += 16 * sc; pen = x * sc; continue; }
+            int adv = aa_adv((unsigned char)*s);
+            aa_hook((unsigned char)*s, pen, py, fg, bg, adv);
+            pen += adv;
+        }
+        return;
+    }
     int cx = x;
     for (; *s; s++) {
         if (*s == '\n') { y += 16; cx = x; continue; }
         font_draw_char((unsigned char)*s, cx, y, fg, bg);
         cx += 8;
     }
+}
+
+int font_string_width(const char *s) {
+    if (!aa_active()) { int n = 0; for (; *s && *s != '\n'; s++) n++; return n * 8; }
+    int sc = (int)window_scale(), w = 0;
+    for (; *s && *s != '\n'; s++) w += aa_adv((unsigned char)*s);
+    return (w + sc - 1) / sc; /* physical -> logical, rounded up so a box sized from this never clips */
 }

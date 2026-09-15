@@ -1983,12 +1983,13 @@ static void gui_draw_menubar(void){
     clock[p++] = ' '; clock[p++] = ampm[0]; clock[p++] = ampm[1];
     clock[p] = 0;
 
-    font_draw_string(clock, (int)window_width() - p * 8 - 16, 7, 0x001C1C1E, -1);
+    int cw = font_string_width(clock); /* v77: real proportional width, not p*8 */
+    font_draw_string(clock, (int)window_width() - cw - 16, 7, 0x001C1C1E, -1);
     if (weather_text[0]) {
-        int wl = (int)strlen(weather_text);
-        int wx = (int)window_width() - p * 8 - 16 - wl * 8 - 28;
+        int wl = font_string_width(weather_text);
+        int wx = (int)window_width() - cw - 16 - wl - 28;
         font_draw_string(weather_text, wx, 7, 0x00884B16, -1);
-        weather_hit_x0 = wx - 4; weather_hit_x1 = wx + wl * 8 + 4; /* v53: real click target, same padding feel as the clock's own */
+        weather_hit_x0 = wx - 4; weather_hit_x1 = wx + wl + 4; /* v53: real click target, same padding feel as the clock's own */
     } else {
         weather_hit_x0 = weather_hit_x1 = -1;
     }
@@ -2798,7 +2799,7 @@ static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_m
         gui_draw_icon_shadow(cx_center, cy_bottom, size);
         gui_draw_dock_icon(icon, cx_center, cy_bottom, size);
         if (extra > 0) {
-            int label_w = (int)strlen(GUI_LABELS[icon]) * 8;
+            int label_w = font_string_width(GUI_LABELS[icon]);
             /* Dark text on the old flat light backdrop; the gradient
                wallpaper makes the area right above the dock genuinely
                dark now, dark-on-dark was unreadable, caught live by
@@ -3094,23 +3095,34 @@ static void gui_launch_chat(void){
    wider than Mono at a few characters ('M','W'); the existing `x >= px +
    16` clamp below already clips rather than collides into the next
    cell, same safety net Mono relied on, nothing new to add. */
-static void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg){
+/* v77: texttest mirrors every line to serial so tools/textspacing-check.sh can read the verdict headless, the pngtest pattern. */
+static void tt_out(const char *s){ puts(s); serial_puts(s); }
+static void tt_num(int n){ char b[12]; int i = 0; if (n < 0) { tt_out("-"); n = -n; } if (n == 0) b[i++] = '0'; while (n) { b[i++] = (char)('0' + n % 10); n /= 10; } b[i] = 0; for (int j = 0; j < i / 2; j++) { char t = b[j]; b[j] = b[i - 1 - j]; b[i - 1 - j] = t; } tt_out(b); }
+#define GUI_AA_GLYPH(c) (&editor_glyphs[((0 * 2 + 0) * 4 + 2) * 95 + ((c) - 32)]) /* DejaVu Sans, regular, 24px */
+/* v77: the real per-glyph advance in physical px, the metric the fixed
+   16px cell ignored (see font_draw_string's own note). Degree ring and
+   anything outside 32..126 keep the old cell so nothing else moves. */
+static int gui_aa_advance(unsigned char c){
+    if (c < 32 || c > 126) return 16;
+    return GUI_AA_GLYPH(c)->advance;
+}
+static void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg, int cell){
     if (c < 32 || c > 126) c = (c == 0xF8) ? 176 : '?'; /* 0xF8 is the CP437 degree sign the weather uses */
     const struct editor_glyph *g;
     if (c == 176) { /* degree: DejaVu has it, but the table only carries 32..126; draw a small ring instead */
-        if (bg >= 0) for (int j = 0; j < 32; j++) for (int i = 0; i < 16; i++) window_pixel_phys(px + i, py + j, (unsigned int)bg);
+        if (bg >= 0) for (int j = 0; j < 32; j++) for (int i = 0; i < cell; i++) window_pixel_phys(px + i, py + j, (unsigned int)bg);
         for (int j = 0; j < 9; j++) for (int i = 0; i < 9; i++) { int dx = i - 4, dy = j - 4; int d2 = dx*dx + dy*dy; if (d2 >= 5 && d2 <= 12) window_pixel_phys(px + 3 + i, py + 8 + j, fg); } /* a ring at cap height, where a degree sign sits */
         return;
     }
-    g = &editor_glyphs[((0 * 2 + 0) * 4 + 2) * 95 + (c - 32)];
-    if (bg >= 0) for (int j = 0; j < 32; j++) for (int i = 0; i < 16; i++) window_pixel_phys(px + i, py + j, (unsigned int)bg);
-    int ox = px + 1 + g->left, oy = py + g->top - 2; /* `top` is measured from the line box's top (see editor_layout), not a baseline; the 24px face was sized for a 36px line box, ours is 32 */
+    g = GUI_AA_GLYPH(c);
+    if (bg >= 0) for (int j = 0; j < 32; j++) for (int i = 0; i < cell; i++) window_pixel_phys(px + i, py + j, (unsigned int)bg);
+    int ox = px + g->left, oy = py + g->top - 2; /* `top` is measured from the line box's top (see editor_layout), not a baseline; the 24px face was sized for a 36px line box, ours is 32 */
     for (int row = 0; row < g->height; row++){
         for (int col = 0; col < g->width; col++){
             int a = editor_pixels[g->offset + row * g->width + col];
             if (!a) continue;
             int x = ox + col, y = oy + row;
-            if (x < px || x >= px + 16) continue; /* keep inside the cell so neighbours never overdraw each other */
+            if (x < px || x >= px + cell) continue; /* keep inside the cell so neighbours never overdraw each other */
             unsigned int d = window_get_pixel_phys(x, y);
             unsigned int r = (((fg >> 16) & 0xFF) * a + ((d >> 16) & 0xFF) * (255 - a)) / 255;
             unsigned int gg = (((fg >> 8) & 0xFF) * a + ((d >> 8) & 0xFF) * (255 - a)) / 255;
@@ -3400,7 +3412,7 @@ static void gui_launch_apps(void){
                 gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 14,
                                           0x00FFF8F1, 0x00E5D8D0, 0x00E9DEE0, 12);
             gui_draw_one_icon_on(i, cx, cy + tile, tile, 0x00E9DEE0);
-            int lw = (int)strlen(GUI_LABELS[i]) * 8;
+            int lw = font_string_width(GUI_LABELS[i]);
             font_draw_string(GUI_LABELS[i], cx - lw / 2, cy + tile + 10, 0x001C1C1E, -1);
         }
         (void)rows;
@@ -3857,7 +3869,7 @@ static void gui_run(void){
        16:9 panel came out visibly skewed; matching the panel's own shape
        means fullscreen is pixel-exact with no scaling at all. */
     if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
-    font_set_aa(gui_aa_char); /* v44: real typeface for every string from here on */
+    font_set_aa(gui_aa_char, gui_aa_advance); /* v44: real typeface for every string from here on */
     /* v46: no wind in the browser, decided up front rather than measured
        after the fact. The slow-frame gate still exists, but even the two
        frames it takes to trip blocked the kernel long enough that v86's
@@ -4073,7 +4085,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -4505,7 +4517,7 @@ static void run(char *line){
         if (!window_open_scaled(400, 300, 32, 2)) { puts("no VGA device found or out of page tables\n"); }
         else {
             int mx = 40, my = 40;
-            font_set_aa(gui_aa_char); /* real physical-resolution AA text, the exact surface v56.1 fixed; gui_run() normally registers this but this test doesn't call gui_run() */
+            font_set_aa(gui_aa_char, gui_aa_advance); /* real physical-resolution AA text, the exact surface v56.1 fixed; gui_run() normally registers this but this test doesn't call gui_run() */
             window_clear(0x00202020);
             font_draw_string("Wg", mx, my, 0x00F5F5F7, -1);
 
@@ -4528,6 +4540,61 @@ static void run(char *line){
                     if (window_get_pixel_phys(px0 + i, py0 + j) != truth[j * pw + i]) mismatches++;
             puts(varied ? "cursor test area has real per-pixel AA variation: ok\n" : "cursor test area has NO variation (test not discriminating): FAILED\n");
             puts((varied && mismatches == 0) ? "cursor save/restore: AA text came back byte-exact through the physical layer: ok\n" : "cursor save/restore: FAILED (pixel-doubled or otherwise wrong)\n");
+            window_close();
+        }
+    }
+    else if (!strcmp(line, "texttest")) {
+        /* v77 (0.67.1): "Cl oudy". Real, photographed menu bar bug: an
+           extra gap between some letter pairs and not others. Root cause
+           was the fixed 16px physical cell per glyph on the AA path
+           (see font_draw_string's own note). Discriminating: renders the
+           exact photographed word through the real font_draw_string +
+           gui_aa_char path at scale 2, then measures where the ink
+           actually landed, column by column, through window_get_pixel_phys.
+           Six ink runs must come back (one per letter), and the spread
+           between the widest and narrowest inter-letter gap must be tiny:
+           with the bug the C-l gap is ~1 physical px (C overflows its cell
+           and is clipped) while l-o is ~9 (l fills 7 of 16), spread 8;
+           fixed, every gap is the glyphs own sidebearings, spread <= 3.
+           Second check: a lone 'W' (advance 24) must be at least 20 ink
+           columns wide; the bug clipped it to 16. */
+        if (!window_open_scaled(400, 300, 32, 2)) { tt_out("no VGA device found or out of page tables\n"); }
+        else {
+            font_set_aa(gui_aa_char, gui_aa_advance);
+            unsigned int bg = 0x00202020;
+            window_clear(bg);
+            font_draw_string("Cloudy", 20, 20, 0x00F5F5F7, -1);
+            font_draw_string("W", 20, 60, 0x00F5F5F7, -1);
+            int col_ink[200];
+            for (int i = 0; i < 200; i++) {
+                col_ink[i] = 0;
+                for (int j = 0; j < 32; j++) if (window_get_pixel_phys(40 + i, 40 + j) != bg) { col_ink[i] = 1; break; }
+            }
+            int runs = 0, run_start[16], run_end[16], in_run = 0;
+            for (int i = 0; i < 200; i++) {
+                if (col_ink[i] && !in_run) { if (runs < 16) run_start[runs] = i; in_run = 1; }
+                if (!col_ink[i] && in_run) { if (runs < 16) run_end[runs] = i - 1; runs++; in_run = 0; }
+            }
+            if (in_run) { if (runs < 16) run_end[runs] = 199; runs++; }
+            int gap_min = 999, gap_max = -1;
+            tt_out("texttest 'Cloudy' ink runs:");
+            for (int r = 0; r < runs && r < 16; r++) {
+                tt_out(" "); tt_num(run_start[r]); tt_out("-"); tt_num(run_end[r]);
+                if (r > 0) { int gap = run_start[r] - run_end[r - 1] - 1; if (gap < gap_min) gap_min = gap; if (gap > gap_max) gap_max = gap; }
+            }
+            tt_out("\n");
+            int spread = gap_max - gap_min;
+            tt_out("texttest: letter gap spread "); tt_num(spread); tt_out(" px (min "); tt_num(gap_min); tt_out(", max "); tt_num(gap_max); tt_out(")\n");
+            tt_out((runs == 6 && spread <= 3) ? "texttest 'Cloudy' spacing uniform: ok\n" : "texttest 'Cloudy' spacing uneven (the 'Cl oudy' bug): FAILED\n");
+            int w_first = -1, w_last = -1;
+            for (int i = 0; i < 64; i++) {
+                int ink = 0;
+                for (int j = 0; j < 32; j++) if (window_get_pixel_phys(40 + i, 120 + j) != bg) { ink = 1; break; }
+                if (ink) { if (w_first < 0) w_first = i; w_last = i; }
+            }
+            int w_width = w_last - w_first + 1;
+            tt_out("texttest: 'W' ink width "); tt_num(w_width); tt_out(" px\n");
+            tt_out((w_width >= 20) ? "texttest 'W' not clipped: ok\n" : "texttest 'W' clipped by the fixed cell: FAILED\n");
             window_close();
         }
     }

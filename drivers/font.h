@@ -13,6 +13,16 @@ void font_init(void);
    glyph's foreground bits). */
 void font_draw_char(unsigned char c, int x, int y, unsigned int fg, int bg);
 void font_draw_string(const char *s, int x, int y, unsigned int fg, int bg);
-void font_set_aa(void (*hook)(unsigned char, int, int, unsigned int, int)); /* v44: antialiased renderer at physical res, see font.c */
+/* v44: antialiased renderer at physical res, see font.c. v77: the hook
+   takes the cell width (physical px) it may fill and clip to, and a
+   second hook reports each glyph's real advance so font_draw_string can
+   place proportional glyphs by their own metrics instead of a fixed
+   cell. */
+void font_set_aa(void (*hook)(unsigned char, int, int, unsigned int, int, int), int (*advance)(unsigned char));
+/* Width of a string in LOGICAL pixels as font_draw_string will actually
+   draw it: proportional on the AA path, strlen*8 on the bitmap path.
+   Every alignment (right-aligned clock, centered dock label) must use
+   this, not strlen*8, now that the two can differ. */
+int font_string_width(const char *s);
 int font_is_fallback(void); /* v46: 1 when the BIOS left no font, i.e. v86 in a browser; used to skip work that machine cannot afford */
 #endif

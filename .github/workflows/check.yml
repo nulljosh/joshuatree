@@ -26,6 +26,12 @@ jobs:
         run: ./tools/png-host-check.sh
       - name: PNG decoder, in-kernel
         run: ./tools/png-check.sh
+      # v77: the "Cl oudy" letter-spacing regression. Renders real DejaVu
+      # text in-kernel at scale 2, measures actual ink columns per glyph,
+      # and fails if the inter-letter gaps are uneven or a wide glyph is
+      # clipped (both true under the old fixed-16px-cell renderer).
+      - name: AA text spacing, in-kernel
+        run: ./tools/textspacing-check.sh
 
   # v75: real-network checks. geo-check.sh (v71) and wallpaper-check.py /
   # wallfx-check.py (v75) talk to ip-api.com, Open-Meteo and OpenTopoMap
