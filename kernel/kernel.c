@@ -1780,6 +1780,19 @@ static void gui_draw_logo(int x, int cy, int scale, unsigned int bg){
     unsigned int c = 0x0085144B;
     int split_y = cy - scale, top_y = cy - 7 * scale;
     int r = scale > 1 ? scale - 1 : 0;
+    /* Real bug, found from a pixel dump not a guess: aa_band is a fixed
+       5px halo (see its definition above), never scaled to the primitive
+       it's softening. At menubar scale (1), every branch capsule is only
+       4-7px long with r=0, so a 5px halo on each side is wider than the
+       shape itself, every branch's halo overlaps its neighbors' and the
+       whole logo collapses into two blurry blobs, unrecognizable as a
+       tree (confirmed: a real macro-zoom pixel dump of the menubar at
+       this exact scale showed exactly that, not a subjective call).
+       Same fix pattern gui_render_icon_cached already uses to override
+       aa_band for its own scale: shrink it here too, only at scale=1,
+       so the branch geometry actually reads instead of drowning in AA. */
+    int saved_aa_band = aa_band;
+    if (scale == 1) aa_band = 1;
     window_rect(x, split_y, scale, (cy + 5 * scale) - split_y + 1, c); /* trunk, base to branch split */
     window_rect(x, top_y, scale, split_y - top_y + 1, c);              /* trunk continuing above the split */
     gui_draw_capsule(x, split_y, x - 4 * scale, split_y - 4 * scale, r, c, bg); /* left branch */
@@ -1795,6 +1808,7 @@ static void gui_draw_logo(int x, int cy, int scale, unsigned int bg){
     gui_draw_capsule(rx, ry, rx + 2 * scale, ry - 2 * scale, r, c, bg);
     gui_draw_capsule(rx, ry, rx + 2 * scale, ry,             r, c, bg);
     gui_draw_capsule(rx, ry, rx + 2 * scale, ry + 2 * scale, r, c, bg);
+    aa_band = saved_aa_band;
 }
 
 /* Real, user-reported flicker: this whole bar (a solid white rect, the

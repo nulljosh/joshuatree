@@ -948,3 +948,11 @@ Test: `rxclamptest` (`kernel/kernel.c`, `drivers/rtl8139.c`'s new `rtl8139_clamp
 Verified: `./check.sh` PASS, `tools/checks/check-refs.sh` clean (515 references), `tools/checks/fatcyclehang-check.sh` PASS, `tcpmatchtest` and `rxclamptest` both `ok`, `make kernel.elf` clean (pre-existing unrelated warnings only), `landing/v86/kernel.elf` auto-synced (identical MD5 to `kernel.elf`, confirming the new Makefile rule works). PATCH bump 0.72.0 -> 0.72.1, a fix with no new capability.
 
 `iconedge-check.py` asserts the base band (rows 55-57, x 24-52 of the Trash tile) is solid glyph white. Discriminating: the same assertion on the pre-fix capture fails with 27/87 non-white pixels; the post-fix build passes 0/87. `./check.sh` PASS, `iconhalo-check.py` PASS, `make` clean. PATCH bump 0.71.8 -> 0.71.9, no new capability. Headless throughout, no QEMU window opened.
+
+## v0.72.3, real menu bar icon bug: AA halo wider than the geometry itself (Sep 2026)
+
+Direct user report ("top left icon in menu bar doesn't look much like a Joshua tree"). Not a subjective call, found and confirmed with a real pixel dump: `gui_draw_logo`'s branch capsules are drawn via `gui_draw_capsule`, which softens every edge with `aa_band` (a fixed 5px halo, never scaled to the primitive it's softening). At menubar scale (`scale=1`), each branch capsule is only 4-7px long with `r=0` (`r = scale > 1 ? scale - 1 : 0`), so a 5px halo on both sides of a 4-7px shape is wider than the shape, every branch's halo overlapped its neighbors', and the whole logo collapsed into two blurry pink blobs, not a tree at all (a real 8x pixel crop before the fix showed exactly that, attached evidence, not assumed).
+
+Fix: `gui_draw_logo` now temporarily shrinks `aa_band` to 1 for the `scale == 1` case only (same override pattern `gui_render_icon_cached` already uses for its own scale, not a new technique), restoring the saved value after. A real 8x pixel crop after the fix shows a trunk and five real branches, unmistakably a tree.
+
+`./check.sh` PASS. PATCH bump 0.72.2 -> 0.72.3, bug fix only. Headless throughout (`-display none` + QMP `pmemsave`), no QEMU window opened, per the standing "verify headless, only relaunch the visible app if asked" rule.
