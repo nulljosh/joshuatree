@@ -2103,8 +2103,7 @@ static int geo_fetch(void){
 
 static void weather_fetch(void){
     weather_last_tick = ticks();
-    if (!rtl8139_init()) return;
-    net_init(0x0A00020F);
+    if (!net_init(0x0A00020F)) return;
     if (!geo_have && !geo_fetch()) return; /* v71: no real location, no fetch, nothing fabricated */
     static char body[2048];
     static char path[128];
@@ -5589,8 +5588,8 @@ static void run(char *line){
         else if (!strcmp(arg, "raw")) { wall_switch_theme(WALL_RAW); wall_apply(1); puts(wall_map ? "wallpaper: map (raw)\n" : "wallpaper: map (raw) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
         else if (!strcmp(arg, "sat") || !strcmp(arg, "satellite")) { wall_switch_theme(WALL_SAT); wall_apply(1); puts(wall_map ? "wallpaper: satellite\n" : "wallpaper: satellite (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
         else if (!strcmp(arg, "fetch")) {
-            if (!rtl8139_init()) { puts("no NIC\n"); }
-            else { net_init(0x0A00020F); if (!geo_have) geo_fetch();
+            if (!net_init(0x0A00020F)) { puts("no NIC\n"); }
+            else { if (!geo_have) geo_fetch();
                    if (wall_fetch()) { wall_apply(1); puts("wallpaper: map fetched (tiles "); putn((unsigned int)wall_map_tx); puts(","); putn((unsigned int)wall_map_ty); puts(" z"); putn(WALL_ZOOM); puts(")\n"); }
                    else puts("wallpaper: fetch failed, photo stays\n"); }
         }
@@ -5738,10 +5737,10 @@ static void run(char *line){
         puts(rtl8139_clamp_selftest() ? "rxclamp: oversized/runt NIC lengths clamp correctly: ok\n" : "rxclamp: FAILED\n");
     }
     else if (!strcmp(line, "nettest")) {
-        if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
             unsigned char mac[6];
-            rtl8139_get_mac(mac);
+            net_get_mac(mac);
             puts("MAC: ");
             for (int i = 0; i < 6; i++) { puthex(mac[i]); if (i < 5) putc(':'); }
             putc('\n');
@@ -5752,9 +5751,8 @@ static void run(char *line){
             unsigned char buf[64];
             for (int i = 0; i < 64; i++) buf[i] = frame[i];
             for (int i = 0; i < 6; i++) buf[6 + i] = mac[i];
-            puts(rtl8139_send(buf, sizeof(buf)) ? "send:ok\n" : "send:FAIL (timeout)\n");
+            puts(net_send_raw(buf, sizeof(buf)) ? "send:ok\n" : "send:FAIL (timeout)\n");
 
-            net_init(0x0A00020F); /* 10.0.2.15, QEMU SLIRP's default guest IP */
             unsigned char gw_mac[6];
             puts("arp 10.0.2.2: ");
             if (arp_resolve(0x0A000202, gw_mac)) { /* SLIRP's built-in gateway */
@@ -5789,10 +5787,10 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "ifconfig")) {
-        if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
-            unsigned char mac[6]; rtl8139_get_mac(mac);
-            puts("rtl0: 10.0.2.15\n  mac ");
+            unsigned char mac[6]; net_get_mac(mac);
+            puts("net0: 10.0.2.15\n  mac ");
             for (int i = 0; i < 6; i++) {
                 char hx[3]; const char *hexd = "0123456789abcdef";
                 hx[0] = hexd[mac[i] >> 4]; hx[1] = hexd[mac[i] & 0xF]; hx[2] = 0;
@@ -5808,9 +5806,8 @@ static void run(char *line){
            supports. Same "not a general tool, a real narrow proof" scope
            as everything else this session, see roadmap.md's v30 entry. */
         if (!*arg) { puts("usage: netscan <host, e.g. 10.0.2.2>\n"); }
-        else if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
-            net_init(0x0A00020F);
             unsigned int ip;
             int have_ip = 0;
             /* accept a bare dotted-quad directly, skip DNS for the common
@@ -5846,16 +5843,14 @@ static void run(char *line){
         while (*first_path && *first_path != ' ') first_path++;
         if (*first_path) *first_path++ = 0; else first_path = "/";
         if (!*first_host) { puts("usage: web <host> [path]\n"); }
-        else if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
-            net_init(0x0A00020F);
             browse_web(first_host, first_path);
         }
     }
     else if (!strcmp(line, "serve")) {
-        if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
-            net_init(0x0A00020F);
             /* Long enough on purpose: >536 bytes forces tcp_serve_once
                through its multi-segment path, not just the one-chunk case. */
             static const char page[] =
@@ -5877,9 +5872,8 @@ static void run(char *line){
     }
     else if (!strcmp(line, "serveapp")) {
         if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak|plan|lexly|toroid|sparkjar|homeqi|fieldbook\n"); }
-        else if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
-            net_init(0x0A00020F);
             if (!strcmp(arg, "weather"))          serve_app("weather", app_weather_html, app_weather_len);
             else if (!strcmp(arg, "curbfind"))    serve_app("curbfind", app_curbfind_html, app_curbfind_len);
             else if (!strcmp(arg, "keyrate"))     serve_app("keyrate", app_keyrate_html, app_keyrate_len);
@@ -5911,7 +5905,7 @@ static void run(char *line){
            same settings-persisted model/host/port (llm_model/llm_host/
            llm_port), not two independently hardcoded copies. */
         if (!*arg) { puts("usage: chat <message>\n"); }
-        else if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
             puts("asking "); puts(llm_model); puts(" (");
             puts(llm_host); puts(", local, on the host machine)...\n");
@@ -5926,9 +5920,8 @@ static void run(char *line){
            of what gato does on macOS, minus the file-editing part, there's
            no persistent app catalog to edit yet, just this one slot. */
         if (!*arg) { puts("usage: build <what to make>\n"); }
-        else if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
+        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
-            net_init(0x0A00020F);
             char escaped[256];
             json_escape(arg, escaped, sizeof(escaped));
 

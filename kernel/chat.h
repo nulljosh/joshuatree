@@ -183,8 +183,7 @@ static int chat_send(const char *user_msg, char *answer, unsigned int answer_cap
     chat_load();
     chat_push(CHAT_ROLE_USER, user_msg);
 
-    if (!rtl8139_init()) return 0;
-    net_init(0x0A00020F);
+    if (!net_init(0x0A00020F)) return 0;
 
     static char req_body[6144]; /* real growth from the old 768-byte cap; bounded to keep worst-case heap use (see http_post) sane */
     unsigned int rn = chat_build_request(req_body, sizeof(req_body));

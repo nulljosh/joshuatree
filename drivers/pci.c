@@ -33,6 +33,17 @@ static void pci_config_write32(u8 bus, u8 slot, u8 func, u8 offset, u32 value) {
     outl(PCI_CONFIG_DATA, value);
 }
 
+static void pci_fill_bar0(struct pci_device *dev, u8 bus, u8 slot, u8 func, u32 bar) {
+    dev->bus = bus; dev->slot = slot; dev->func = func;
+    if (bar & 0x1) { /* bit0 set = I/O space BAR */
+        dev->bar0_is_io = 1;
+        dev->bar0 = bar & 0xFFFFFFFC;
+    } else {
+        dev->bar0_is_io = 0;
+        dev->bar0 = bar & 0xFFFFFFF0;
+    }
+}
+
 /* ponytail: scans every bus/slot/func exhaustively (256*32*8 reads worst
    case) instead of walking capability lists or skipping absent buses.
    QEMU's device tree is tiny, this finishes in microseconds either way. */
@@ -49,14 +60,32 @@ int pci_find_device(u8 class_code, u8 subclass, struct pci_device *dev) {
 
                 if (found_class == class_code && found_subclass == subclass) {
                     u32 bar = pci_config_read32(bus, slot, func, 0x10);
-                    dev->bus = (u8)bus; dev->slot = (u8)slot; dev->func = (u8)func;
-                    if (bar & 0x1) { /* bit0 set = I/O space BAR */
-                        dev->bar0_is_io = 1;
-                        dev->bar0 = bar & 0xFFFFFFFC;
-                    } else {
-                        dev->bar0_is_io = 0;
-                        dev->bar0 = bar & 0xFFFFFFF0;
-                    }
+                    pci_fill_bar0(dev, (u8)bus, (u8)slot, (u8)func, bar);
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+/* Same exhaustive scan as pci_find_device, matching the exact
+   (vendor_id, device_id) pair instead of (class, subclass): needed for
+   drivers/ne2k.c, since RTL8139 and the RTL8029 (NE2000-compatible) clone
+   QEMU/v86 emulate share the same class/subclass and pci_find_device alone
+   can't tell them apart. */
+int pci_find_device_vid(u16 vendor_id, u16 device_id, struct pci_device *dev) {
+    for (u32 bus = 0; bus < 256; bus++) {
+        for (u32 slot = 0; slot < 32; slot++) {
+            for (u32 func = 0; func < 8; func++) {
+                u32 id = pci_config_read32(bus, slot, func, 0x00);
+                if ((id & 0xFFFF) == 0xFFFF) continue; /* no device here */
+
+                u16 found_vendor = (u16)(id & 0xFFFF);
+                u16 found_device = (u16)((id >> 16) & 0xFFFF);
+                if (found_vendor == vendor_id && found_device == device_id) {
+                    u32 bar = pci_config_read32(bus, slot, func, 0x10);
+                    pci_fill_bar0(dev, (u8)bus, (u8)slot, (u8)func, bar);
                     return 1;
                 }
             }

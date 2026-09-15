@@ -17,6 +17,16 @@ struct pci_device {
    address-decode bits stripped) for whichever BAR type it turned out to be. */
 int pci_find_device(unsigned char class_code, unsigned char subclass, struct pci_device *dev);
 
+/* Finds the first device matching an exact (vendor_id, device_id) pair,
+   same bar0 fill/masking as pci_find_device. Needed because RTL8139 and
+   the NE2000 clone QEMU/v86 emulate (RTL8029, PCI vendor 0x10EC device
+   0x8029, confirmed straight out of v86's own libv86.js pci_space table
+   rather than assumed) share the exact same PCI class/subclass (0x02/0x00,
+   "network controller/ethernet"), so drivers/ne2k.c can't use
+   pci_find_device alone to avoid grabbing whatever NIC happens to enumerate
+   first. */
+int pci_find_device_vid(unsigned short vendor_id, unsigned short device_id, struct pci_device *dev);
+
 /* Sets the I/O space, memory space, and bus-master enable bits in the
    device's PCI command register. Needed because a kernel entered directly
    via multiboot (no BIOS/SeaBIOS device-enumeration pass first) can't

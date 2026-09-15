@@ -78,6 +78,46 @@
     screen_container: screenContainer,
     multiboot: { url: "v86/kernel.elf" },
     autostart: true,
+    // Real network backend for the emulated NIC: without this, v86's NIC
+    // (ne2k by default, see drivers/ne2k.c) is wired to nothing, every
+    // packet the guest sends just vanishes, regardless of how correct the
+    // in-kernel driver is. "fetch" is v86's own browser-side relay mode
+    // (class Xb in the vendored libv86.js): it accepts any TCP connection
+    // to port 80, reads the guest's raw HTTP request text straight off
+    // the wire, and answers it with a real browser fetch() to whatever
+    // Host: header the guest actually sent, so the guest's own raw
+    // ARP/IP/TCP/HTTP stack (drivers/net.c, drivers/http.c) never has to
+    // change at all. roadmap.md's "fetch-mode network relay" entry
+    // investigated this exact flag back when the kernel had no driver for
+    // any NIC v86 emulates at all (RTL8139-only) and correctly called it
+    // a dead end at the time; drivers/ne2k.c is what closes that gap.
+    //
+    // vm_ip/router_ip matter here, not just cosmetic: Xb's own defaults
+    // are 192.168.86.100/192.168.86.1, but every address this kernel's
+    // network stack hardcodes (net_init's 0x0A00020F, drivers/net.c's
+    // DEFAULT_GATEWAY_IP) assumes QEMU SLIRP's 10.0.2.0/24, the same
+    // subnet native `make run`/geo-check.sh already boot into. Left at
+    // Xb's own defaults, the kernel's ARP request for its hardcoded
+    // gateway (10.0.2.2) never matches Xb's real router_ip and times out
+    // before any TCP even starts, confirmed by an earlier live headless
+    // run of this exact test: ne2k_init succeeded, net_init found the
+    // card, and the run still failed with no geo=/wxurl=/wx= serial
+    // lines, exactly what a dead ARP resolve looks like. Real DNS answers
+    // don't matter here either way (Xb's "static" dns_method answers
+    // every A-record query with the same fake 192.168.87.1, confirmed
+    // reading Nb's dns_method==="static" branch in libv86.js): the relay
+    // only cares about the Host: header the guest sends, not what it
+    // resolved, so the mismatch there is by design and not something to
+    // fix on the kernel side.
+    // type: "ne2k" has to be explicit here: libv86.js only defaults
+    // net_device to {type:"ne2k"} when net_device itself is falsy
+    // (`e.net_device=b.net_device||{type:"ne2k"}`), so passing our own
+    // net_device object without it left type undefined and silently
+    // dropped the emulated NIC from the PCI bus entirely, confirmed live:
+    // the very next run of this same test after adding relay_url/vm_ip/
+    // router_ip regressed from "net_init: ne2k found" back to "net_init:
+    // no NIC found".
+    net_device: { type: "ne2k", relay_url: "fetch", vm_ip: "10.0.2.15", router_ip: "10.0.2.2" },
   });
 
   // keyboard_adapter/mouse_adapter aren't attached synchronously: V86's

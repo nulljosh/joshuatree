@@ -6,6 +6,7 @@
    present benefit; split later if any one of them grows real complexity. */
 #include "net.h"
 #include "rtl8139.h"
+#include "ne2k.h"
 #include "irq.h"
 
 typedef unsigned int   u32;
@@ -17,6 +18,22 @@ static u32 htonl(u32 v) { return (v << 24) | ((v & 0xFF00) << 8) | ((v & 0xFF000
 
 static u8 our_mac[6];
 static u32 our_ip = 0;
+
+/* Everything below this file used to call rtl8139_send/rtl8139_receive
+   directly by name, the only NIC this kernel had a driver for. That's
+   exactly why the landing page's browser demo (v86, a JS/wasm x86
+   emulator) never showed live network activity: v86 doesn't emulate
+   RTL8139 hardware at all (confirmed by grep, zero hits anywhere in
+   landing/v86/libv86.js), it emulates an NE2000-compatible card instead
+   (drivers/ne2k.c). This indirection is the fix: every call site below
+   goes through active_send/active_receive, whichever driver net_init
+   actually found a card for, so the entire Ethernet/ARP/IP/TCP stack
+   above stays exactly as hardware-agnostic as it already was in spirit,
+   just not yet in fact. */
+typedef int (*nic_send_fn)(const void *data, u32 len);
+typedef u32 (*nic_receive_fn)(void *buf, u32 maxlen);
+static nic_send_fn    active_send = 0;
+static nic_receive_fn active_receive = 0;
 
 /* Every wait loop in this file used to be a plain iteration count, tuned
    by guessing how many empty polls a given wait "should" need. That's
@@ -81,9 +98,40 @@ static u16 checksum16(const void *data, u32 len) {
     return (u16)~sum;
 }
 
-void net_init(u32 ip) {
-    rtl8139_get_mac(our_mac);
+/* Probes for a real NIC and initializes whichever one it finds: RTL8139
+   first (real hardware, and what native QEMU's -net nic,model=rtl8139
+   path already uses), falling back to NE2000/RTL8029 (what v86 and QEMU's
+   own ne2k_pci model emulate) if no RTL8139 turns up. Every caller used to
+   have to call rtl8139_init() itself before net_init(ip); that two-step
+   dance is gone, net_init now owns NIC discovery so a single call site
+   works unchanged against real hardware, native QEMU, or the v86 browser
+   demo. Returns 1 if a NIC was found and initialized, 0 if neither driver
+   found a card (no NIC present at all). */
+int net_init(u32 ip) {
+    if (rtl8139_init()) {
+        rtl8139_get_mac(our_mac);
+        active_send = rtl8139_send;
+        active_receive = rtl8139_receive;
+    } else if (ne2k_init()) {
+        ne2k_get_mac(our_mac);
+        active_send = ne2k_send;
+        active_receive = ne2k_receive;
+    } else {
+        return 0;
+    }
     our_ip = ip;
+    return 1;
+}
+
+/* Hardware-agnostic single-frame send and MAC accessor, exposed so
+   kernel.c's low-level "nettest"/"ifconfig" diagnostics exercise whatever
+   NIC net_init actually found instead of assuming RTL8139. */
+int net_send_raw(const void *data, u32 len) {
+    return active_send ? active_send(data, len) : 0;
+}
+
+void net_get_mac(u8 mac_out[6]) {
+    for (int i = 0; i < 6; i++) mac_out[i] = our_mac[i];
 }
 
 int arp_resolve(u32 ip, u8 mac_out[6]) {
@@ -105,12 +153,12 @@ int arp_resolve(u32 ip, u8 mac_out[6]) {
     arp->sender_ip = htonl(our_ip);
     arp->target_ip = htonl(ip);
 
-    if (!rtl8139_send(frame, sizeof(frame))) return 0;
+    if (!active_send(frame, sizeof(frame))) return 0;
 
     u8 rx[1514];
     u32 deadline = ticks() + LAN_TIMEOUT_TICKS;
     while (ticks() < deadline) {
-        u32 n = rtl8139_receive(rx, sizeof(rx));
+        u32 n = active_receive(rx, sizeof(rx));
         if (n < sizeof(struct eth_header) + sizeof(struct arp_packet)) continue;
 
         struct eth_header *reth = (struct eth_header *)rx;
@@ -156,7 +204,7 @@ static void arp_maybe_reply(const u8 *rx, u32 n) {
     reply->sender_ip = htonl(our_ip);
     reply->target_ip = req->sender_ip;
 
-    rtl8139_send(frame, sizeof(frame));
+    active_send(frame, sizeof(frame));
 }
 
 /* ARP only ever answers for a host on the same physical link. A real
@@ -217,7 +265,7 @@ int udp_send(u32 dest_ip, u16 dest_port, u16 src_port, const void *data, u32 len
 
     u32 frame_len = sizeof(*eth) + ip_len;
     if (frame_len < 60) frame_len = 60; /* Ethernet minimum */
-    return rtl8139_send(frame, frame_len);
+    return active_send(frame, frame_len);
 }
 
 #define DNS_PORT     53
@@ -266,7 +314,7 @@ int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
     u8 rx[1514];
     u32 deadline = ticks() + WAN_TIMEOUT_TICKS;
     while (ticks() < deadline) {
-        u32 n = rtl8139_receive(rx, sizeof(rx));
+        u32 n = active_receive(rx, sizeof(rx));
         if (n < sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct udp_header)) continue;
 
         struct eth_header *eth = (struct eth_header *)rx;
@@ -379,7 +427,7 @@ static int tcp_send_segment(u32 dest_ip, const u8 dest_mac[6], u16 local_port, u
 
     u32 frame_len = sizeof(*eth) + ip_len;
     if (frame_len < 60) frame_len = 60;
-    return rtl8139_send(frame, frame_len);
+    return active_send(frame, frame_len);
 }
 
 /* Checks one already-received frame against an expected TCP connection;
@@ -474,7 +522,7 @@ int tcp_probe_port(u32 dest_ip, u16 dest_port) {
     u8 *payload; u32 paylen;
     u32 deadline = ticks() + SCAN_TIMEOUT_TICKS;
     while (ticks() < deadline) {
-        u32 n = rtl8139_receive(rx, sizeof(rx));
+        u32 n = active_receive(rx, sizeof(rx));
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
         if (tcp->flags & TCP_RST) return 0; /* closed: the target itself said so */
@@ -526,7 +574,7 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
     int got_synack = 0;
     u32 synack_deadline = ticks() + WAN_TIMEOUT_TICKS;
     while (ticks() < synack_deadline && !got_synack) {
-        u32 n = rtl8139_receive(rx, sizeof(rx));
+        u32 n = active_receive(rx, sizeof(rx));
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
         if ((tcp->flags & (TCP_SYN | TCP_ACK)) == (TCP_SYN | TCP_ACK) && htonl(tcp->ack) == our_seq) {
@@ -560,7 +608,7 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
     int got_fin = 0;
     u32 data_deadline = ticks() + SLOW_REPLY_TIMEOUT_TICKS;
     while (ticks() < data_deadline && !got_fin && total < response_maxlen) {
-        u32 n = rtl8139_receive(rx, sizeof(rx));
+        u32 n = active_receive(rx, sizeof(rx));
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
         u32 seg_seq = htonl(tcp->seq);
@@ -606,7 +654,7 @@ int tcp_serve_once(u16 port, const void *response, u32 response_len) {
     int got_syn = 0;
     u32 syn_deadline = ticks() + SERVE_TIMEOUT_TICKS;
     while (ticks() < syn_deadline && !got_syn) {
-        u32 n = rtl8139_receive(rx, sizeof(rx));
+        u32 n = active_receive(rx, sizeof(rx));
         if (n == 0) continue;
         arp_maybe_reply(rx, n); /* the gateway can't deliver anything to us until it knows our MAC */
         if (n < sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct tcp_header)) continue;
@@ -640,7 +688,7 @@ int tcp_serve_once(u16 port, const void *response, u32 response_len) {
     int got_request = 0;
     u32 request_deadline = ticks() + WAN_TIMEOUT_TICKS;
     while (ticks() < request_deadline && !got_request) {
-        u32 n = rtl8139_receive(rx, sizeof(rx));
+        u32 n = active_receive(rx, sizeof(rx));
         if (n == 0) continue;
         arp_maybe_reply(rx, n);
         if (!tcp_match(client_ip, local_port, client_port, rx, n, &tcp, &payload, &paylen)) continue;
@@ -668,7 +716,7 @@ int tcp_serve_once(u16 port, const void *response, u32 response_len) {
         int got_ack = 0;
         u32 ack_deadline = ticks() + WAN_TIMEOUT_TICKS;
         while (ticks() < ack_deadline && !got_ack) {
-            u32 n = rtl8139_receive(rx, sizeof(rx));
+            u32 n = active_receive(rx, sizeof(rx));
             if (n == 0) continue;
             if (!tcp_match(client_ip, local_port, client_port, rx, n, &tcp, &payload, &paylen)) continue;
             if ((tcp->flags & TCP_ACK) && htonl(tcp->ack) == expect_ack) got_ack = 1;
