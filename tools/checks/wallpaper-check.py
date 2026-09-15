@@ -39,7 +39,7 @@ LOG = "/tmp/jt-wall-serial.log"
 RAW = "/tmp/jt-wall-fb.raw"
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = 4451
-WALL_W, WALL_H, TILE, ZOOM, COLS, ROWS = 960, 540, 256, 12, 4, 3  # mirror kernel.c's WALL_* constants
+WALL_W, WALL_H, TILE, ZOOM, COLS, ROWS = 960, 540, 256, 14, 4, 3  # mirror kernel.c's WALL_* constants (WALL_ZOOM went 12->14 in v78/0.67.2, this constant was never updated to match)
 MENUBAR_H, WIND_TOP, WIND_HORIZON = 22, 30, 395
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))

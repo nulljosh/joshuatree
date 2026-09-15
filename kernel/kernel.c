@@ -39,6 +39,7 @@
 static const unsigned char *wall_src = wallpaper_rgb;
 static unsigned char *wall_map = 0;        /* the fetched mosaic, kmalloc'd, kept while the session lives so Photo->Map needs no refetch */
 static int wall_map_tx = 0, wall_map_ty = 0, wall_map_cx = 0, wall_map_cy = 0; /* tile x/y of the mosaic's top-left tile, crop offset inside it */
+static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels actually came from (OpenTopoMap PNG vs Google satellite JPEG). Warm/Cool/Raw all share ONE fetch, since they're just different grades of the same topo pixels -- Satellite is a genuinely different image, not a grade, so switching across this boundary must drop wall_map and refetch instead of reusing stale pixels from the other source. */
 #define WALL_ZOOM 14
 #define WALL_TILE 256   /* OpenTopoMap serves 256px tiles, no @2x variant */
 #define WALL_COLS 4     /* 4x3 grid = 1024x768, the smallest that covers a centered 960x540 crop */
@@ -779,14 +780,28 @@ static int dock_scale_pct = 7;
      3 = Map Raw, v81: the fetched map with no color grade at all, for
          comparison against OpenTopoMap's own neutral cartographer
          palette.
+   4 = Satellite, wired this pass: real photographic imagery (Google's
+         mt0.google.com/vt/lyrs=s slippy-map satellite tiles, plain HTTP,
+         same x/y/z convention as OpenTopoMap so wall_fetch's existing
+         tile math is untouched) decoded with drivers/jpeg.c's baseline
+         decoder (the JPEG source those tiles actually are) instead of
+         png_decode, then run through the exact same gui_wall_tint
+         dispatch as every other map theme -- it falls through to
+         gui_map_tint (Warm) since it isn't COOL or RAW, so satellite
+         imagery gets the same Mojave grade the topo map does, no special
+         case needed. Google was picked over Bing's virtualearth.net
+         specifically because it shares OpenTopoMap's x/y/z slippy-map
+         convention; Bing's quadkey addressing would have needed new tile
+         math, not just a new host/decoder.
    Any non-zero value still shows the baked photo until the fetch lands
    and keeps showing it if the fetch fails, never a blank desktop (same
-   contract v75 established). settings_load clamps to 0..3 so a hand-
+   contract v75 established). settings_load clamps to 0..4 so a hand-
    edited or stale SETTINGS.TXT can't select a theme that doesn't exist. */
 #define WALL_PHOTO 0
 #define WALL_WARM  1
 #define WALL_COOL  2
 #define WALL_RAW   3
+#define WALL_SAT   4
 static int wall_theme = WALL_WARM;
 static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
 
@@ -875,7 +890,7 @@ static void settings_load(void){
         if (neg) val = -val;
         if (is_wind) wind_enabled = (val != 0);
         else if (is_dock && val >= 5 && val <= 25) dock_scale_pct = val;
-        else if (is_wall && val >= WALL_PHOTO && val <= WALL_RAW) wall_theme = val;
+        else if (is_wall && val >= WALL_PHOTO && val <= WALL_SAT) wall_theme = val;
         else if (is_llmport && val > 0 && val <= 65535) llm_port = val;
     }
 }
@@ -2196,23 +2211,44 @@ static int wall_fetch(void){
     unsigned char *body = (unsigned char *)kmalloc(65536);
     if (!body) { if (!wall_map) kfree(dst); wall_serial_err("nomem", 1); return 0; }
     static char path[96];
+    /* v0.73: satellite pulls real JPEG tiles from Google's slippy-map
+       satellite endpoint instead of OpenTopoMap's PNG line-art. Same x/y/z
+       tile math above (Google uses the identical slippy-map convention,
+       unlike Bing's quadkey scheme), just a different host, path shape and
+       decoder. mt0.google.com/vt/lyrs=s&x=X&y=Y&z=Z was confirmed live
+       over plain HTTP, real baseline JPEG, before this was wired. */
+    int use_sat = (wall_theme == WALL_SAT);
     for (int i = 0; i < WALL_COLS * WALL_ROWS; i++) {
         int col = i % WALL_COLS, row = i / WALL_COLS;
         int ttx = tx + col, tty = ty + row;
         int p = 0; const char *s;
-        for (s = "/"; *s; s++) path[p++] = *s;
-        { char d[12]; int nd = 0; unsigned int u = WALL_ZOOM; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; path[p++] = '/'; }
-        { char d[12]; int nd = 0; unsigned int u = (unsigned int)ttx; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; path[p++] = '/'; }
-        { char d[12]; int nd = 0; unsigned int u = (unsigned int)tty; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; }
-        for (s = ".png"; *s; s++) path[p++] = *s;
-        path[p] = 0;
-        int n_bytes = http_get("a.tile.opentopomap.org", path, 80, body, 65536);
+        int n_bytes; const char *host;
+        if (use_sat) {
+            host = "mt0.google.com";
+            for (s = "/vt/lyrs=s&x="; *s; s++) path[p++] = *s;
+            { char d[12]; int nd = 0; unsigned int u = (unsigned int)ttx; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; }
+            for (s = "&y="; *s; s++) path[p++] = *s;
+            { char d[12]; int nd = 0; unsigned int u = (unsigned int)tty; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; }
+            for (s = "&z="; *s; s++) path[p++] = *s;
+            { char d[12]; int nd = 0; unsigned int u = WALL_ZOOM; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; }
+            path[p] = 0;
+        } else {
+            host = "a.tile.opentopomap.org";
+            for (s = "/"; *s; s++) path[p++] = *s;
+            { char d[12]; int nd = 0; unsigned int u = WALL_ZOOM; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; path[p++] = '/'; }
+            { char d[12]; int nd = 0; unsigned int u = (unsigned int)ttx; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; path[p++] = '/'; }
+            { char d[12]; int nd = 0; unsigned int u = (unsigned int)tty; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; }
+            for (s = ".png"; *s; s++) path[p++] = *s;
+            path[p] = 0;
+        }
+        n_bytes = http_get(host, path, 80, body, 65536);
         if (n_bytes <= 0) { kfree(body); if (!wall_map) kfree(dst); wall_serial_err("http", i); return 0; }
         unsigned char *px_out = 0; unsigned int w = 0, h = 0, ch = 0;
-        int r = png_decode(body, (unsigned int)n_bytes, &px_out, &w, &h, &ch);
+        int r = use_sat ? jpeg_decode(body, (unsigned int)n_bytes, &px_out, &w, &h, &ch)
+                         : png_decode(body, (unsigned int)n_bytes, &px_out, &w, &h, &ch);
         if (r != 0 || w != WALL_TILE || h != WALL_TILE || ch != 3) {
             if (px_out) kfree(px_out); kfree(body); if (!wall_map) kfree(dst);
-            wall_serial_err(r ? "png" : "tilesize", r ? r : (int)w); return 0;
+            wall_serial_err(r ? (use_sat ? "jpeg" : "png") : "tilesize", r ? r : (int)w); return 0;
         }
         /* copy the part of this tile that lands inside the crop window */
         int ox = col * WALL_TILE, oy = row * WALL_TILE; /* tile origin in mosaic coords */
@@ -2226,7 +2262,7 @@ static int wall_fetch(void){
         kfree(px_out);
     }
     kfree(body);
-    wall_map = dst; wall_map_tx = tx; wall_map_ty = ty; wall_map_cx = cx; wall_map_cy = cy;
+    wall_map = dst; wall_map_tx = tx; wall_map_ty = ty; wall_map_cx = cx; wall_map_cy = cy; wall_map_is_sat = use_sat;
     unsigned int fnv = 0x811c9dc5u;
     for (unsigned int i = 0; i < WALLPAPER_W * WALLPAPER_H * 3; i++) { fnv ^= dst[i]; fnv *= 0x01000193u; }
     { char b[96]; int i = 0; const char *s = "wall="; while (*s) b[i++] = *s++;
@@ -2235,6 +2271,20 @@ static int wall_fetch(void){
       for (int sh = 28; sh >= 0; sh -= 4) { int nib = (fnv >> sh) & 0xF; b[i++] = nib < 10 ? '0' + nib : 'a' + nib - 10; }
       b[i++] = '\n'; b[i] = 0; serial_puts(b); }
     return 1;
+}
+/* v0.73: the one place every wallpaper-theme setter goes through, so none
+   of them can forget the sat/topo source-boundary rule above. Warm/Cool/
+   Raw all reuse the same wall_map pixels (just a different grade), so
+   switching among them is free. Crossing into or out of Satellite means
+   the pixels on hand are from the wrong real source entirely, so wall_map
+   is dropped (forcing the next weather cycle or `wallpaper fetch` to pull
+   fresh tiles from the right host) instead of silently painting topo
+   pixels under a "Satellite" label or vice versa. */
+static void wall_switch_theme(int theme){
+    int want_sat = (theme == WALL_SAT);
+    if (wall_map && want_sat != wall_map_is_sat) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
+    wall_theme = theme;
+    settings_save();
 }
 /* Switch what the desktop paints from. Both directions drop every cache
    built from the old pixels (the wind crown band, the dock band) so the
@@ -3873,7 +3923,7 @@ static void gui_launch_settings(void){
                    what's actually up, say so instead of claiming a theme
                    that isn't really rendering. */
                 font_draw_string("Wallpaper", 28, y, 0x001C1C1E, -1);
-                const char *theme_name = wall_theme == WALL_COOL ? "Map (Cool)" : wall_theme == WALL_RAW ? "Map (Raw)" : (geo_city[0] ? geo_city : "Map (Warm)");
+                const char *theme_name = wall_theme == WALL_COOL ? "Map (Cool)" : wall_theme == WALL_RAW ? "Map (Raw)" : wall_theme == WALL_SAT ? "Satellite" : (geo_city[0] ? geo_city : "Map (Warm)");
                 const char *lbl = wall_theme == WALL_PHOTO ? "Photo" : (wall_map ? theme_name : "Map (fetching, photo until then)");
                 font_draw_string(lbl, 400, y, wall_theme != WALL_PHOTO && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
             } else if (i == 3) {
@@ -3909,8 +3959,7 @@ static void gui_launch_settings(void){
                    A tap (KEY_CLICK) always steps forward, same convention
                    dock size's tap already keeps. */
                 int dir = (k == 'a') ? -1 : 1;
-                wall_theme = (wall_theme + dir + 4) % 4;
-                settings_save();
+                wall_switch_theme((wall_theme + dir + 5) % 5);
                 wall_apply(wall_theme != WALL_PHOTO);
             }
             else if (sel == 3) {
@@ -4985,17 +5034,19 @@ static void run(char *line){
         wall_theme = WALL_WARM;  unsigned int wall_dispatch_warm = gui_wall_tint(gray);
         wall_theme = WALL_COOL;  unsigned int wall_dispatch_cool = gui_wall_tint(gray);
         wall_theme = WALL_RAW;   unsigned int wall_dispatch_raw  = gui_wall_tint(gray);
+        wall_theme = WALL_SAT;   unsigned int wall_dispatch_sat  = gui_wall_tint(gray); /* Satellite: same grade as Warm, no special case in gui_wall_tint */
         wall_src = wallpaper_rgb; wall_theme = WALL_COOL;
         unsigned int wall_dispatch_photo = gui_wall_tint(gray); /* Photo guard: must ignore wall_theme entirely */
         wall_src = saved_wall_src; wall_theme = saved_wall_theme;
         int ok3 = (wall_dispatch_warm == warm_g) && (wall_dispatch_cool == cool_g)
-                && (wall_dispatch_raw == gray) && (wall_dispatch_photo == gray);
+                && (wall_dispatch_raw == gray) && (wall_dispatch_photo == gray)
+                && (wall_dispatch_sat == warm_g);
 
         const char *prev_fs = vfs_current_name();
         char prev_fs_buf[16]; int pfi = 0; while (prev_fs[pfi] && pfi < 15) { prev_fs_buf[pfi] = prev_fs[pfi]; pfi++; } prev_fs_buf[pfi] = 0;
         vfs_switch("ramfs");
         int roundtrip_ok = 1;
-        for (int theme = WALL_PHOTO; theme <= WALL_RAW; theme++) {
+        for (int theme = WALL_PHOTO; theme <= WALL_SAT; theme++) {
             wall_theme = theme; settings_save();
             wall_theme = -1; /* clobber so settings_load has to actually set it, not coast on the old value */
             settings_load();
@@ -5532,10 +5583,11 @@ static void run(char *line){
            that already typed `wallpaper map` breaks. fetch forces the map
            download right now (its own NIC/net bring-up, same as
            weather_fetch), no argument reports state. */
-        if (!strcmp(arg, "photo")) { wall_theme = WALL_PHOTO; settings_save(); wall_apply(0); puts("wallpaper: photo\n"); }
-        else if (!strcmp(arg, "map") || !strcmp(arg, "warm")) { wall_theme = WALL_WARM; settings_save(); wall_apply(1); puts(wall_map ? "wallpaper: map (warm)\n" : "wallpaper: map (warm) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
-        else if (!strcmp(arg, "cool")) { wall_theme = WALL_COOL; settings_save(); wall_apply(1); puts(wall_map ? "wallpaper: map (cool)\n" : "wallpaper: map (cool) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
-        else if (!strcmp(arg, "raw")) { wall_theme = WALL_RAW; settings_save(); wall_apply(1); puts(wall_map ? "wallpaper: map (raw)\n" : "wallpaper: map (raw) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
+        if (!strcmp(arg, "photo")) { wall_switch_theme(WALL_PHOTO); wall_apply(0); puts("wallpaper: photo\n"); }
+        else if (!strcmp(arg, "map") || !strcmp(arg, "warm")) { wall_switch_theme(WALL_WARM); wall_apply(1); puts(wall_map ? "wallpaper: map (warm)\n" : "wallpaper: map (warm) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
+        else if (!strcmp(arg, "cool")) { wall_switch_theme(WALL_COOL); wall_apply(1); puts(wall_map ? "wallpaper: map (cool)\n" : "wallpaper: map (cool) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
+        else if (!strcmp(arg, "raw")) { wall_switch_theme(WALL_RAW); wall_apply(1); puts(wall_map ? "wallpaper: map (raw)\n" : "wallpaper: map (raw) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
+        else if (!strcmp(arg, "sat") || !strcmp(arg, "satellite")) { wall_switch_theme(WALL_SAT); wall_apply(1); puts(wall_map ? "wallpaper: satellite\n" : "wallpaper: satellite (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
         else if (!strcmp(arg, "fetch")) {
             if (!rtl8139_init()) { puts("no NIC\n"); }
             else { net_init(0x0A00020F); if (!geo_have) geo_fetch();
@@ -5543,7 +5595,7 @@ static void run(char *line){
                    else puts("wallpaper: fetch failed, photo stays\n"); }
         }
         else {
-            const char *tn = wall_theme == WALL_PHOTO ? "photo" : wall_theme == WALL_COOL ? "map (cool)" : wall_theme == WALL_RAW ? "map (raw)" : "map (warm)";
+            const char *tn = wall_theme == WALL_PHOTO ? "photo" : wall_theme == WALL_COOL ? "map (cool)" : wall_theme == WALL_RAW ? "map (raw)" : wall_theme == WALL_SAT ? "satellite" : "map (warm)";
             puts("wallpaper: "); puts(tn);
             puts(wall_src == wallpaper_rgb ? " (showing photo)\n" : " (showing map)\n");
         }
