@@ -671,13 +671,13 @@ static void reboot(void){
    (that half was already right as of v39, untouched here). GUI_APP_COUNT
    is now 20 (18 real apps + Apps + Trash), GUI_ICON_COUNT unaffected by
    the reorder itself, see GUI_DOCK_DEFAULT below for why it did grow. */
-#define GUI_APP_COUNT   22 /* 20 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 20 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       21
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Apps", "Trash"};
+#define GUI_APP_COUNT   23 /* 21 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 21 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       22
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Apps", "Trash"};
 static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
     0x00707070, 0x00A13F3F, 0x00A0553F, 0x006B4423, 0x00375A4A, 0x002B2B2B, 0x00365E8C, 0x0085144B,
-    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85
+    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F
 };
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
@@ -2357,6 +2357,18 @@ static void gui_icon_calculator(int cx, int cy, int s, unsigned int bg){
     gui_fill_circle(cx - w / 2, cy + h / 4, s / 24, ICON_FG, bg);
     gui_fill_circle(cx + w / 2, cy + h / 4, s / 24, ICON_FG, bg);
 }
+static void gui_icon_stocks(int cx, int cy, int s, unsigned int bg){
+    /* Bar chart icon: three bars of different heights representing stock prices */
+    (void)bg;
+    int bar_w = s / 8, gap = s / 20;
+    int base_y = cy + s / 6;
+    /* Left bar: short */
+    window_rect(cx - bar_w - gap, base_y - s / 8, bar_w, s / 8, ICON_FG);
+    /* Middle bar: medium */
+    window_rect(cx, base_y - s / 4, bar_w, s / 4, ICON_FG);
+    /* Right bar: tall */
+    window_rect(cx + bar_w + gap, base_y - s / 3, bar_w, s / 3, ICON_FG);
+}
 
 /* A soft lit band across the top of the icon, fading down into its flat
    base color: the same top-lit gloss treatment classic Aqua/iOS icons
@@ -3506,6 +3518,8 @@ static void gui_launch_settings(void){
     }
 }
 
+#include "stocks.h"
+
 static void gui_launch(int icon){
     if (icon == GUI_APPS_FOLDER) { gui_launch_apps(); return; }
     if (icon == GUI_TRASH) { gui_launch_trash(); return; }
@@ -3529,6 +3543,7 @@ static void gui_launch(int icon){
     else if (icon == 17) gui_launch_html("Fieldbook", app_fieldbook_html, app_fieldbook_len);
     else if (icon == 18) gui_launch_contacts();
     else if (icon == 19) gui_launch_calculator();
+    else if (icon == 20) gui_launch_stocks();
 }
 
 static void gui_launch_from_dock(int icon){
@@ -5168,6 +5183,22 @@ static void run(char *line){
         if (r5 != 5.0) { puts("10/2 failed: got "); putn((unsigned int)r5); puts("\n"); pass = 0; }
 
         puts(pass ? "calculator parser: ok\n" : "FAILED\n");
+    }
+    else if (!strcmp(line, "stockstest")) {
+        int pass = 1;
+        char price_str[16];
+        stocks_format_price(23800, price_str, sizeof(price_str));
+        if (price_str[0] != '2' || price_str[1] != '3') { puts("stocks price format failed\n"); pass = 0; }
+        int dollars, cents, sign;
+        stocks_format_change(-18000, &dollars, &cents, &sign);
+        if (sign != -1 || dollars != 180) { puts("stocks change format failed\n"); pass = 0; }
+        int has_positive = 0, has_negative = 0;
+        for (int i = 0; i < STOCKS_MAX; i++) {
+            if (stocks_entries[i].change_x100 > 0) has_positive = 1;
+            if (stocks_entries[i].change_x100 < 0) has_negative = 1;
+        }
+        if (!has_positive || !has_negative) { puts("stocks data integrity failed\n"); pass = 0; }
+        puts(pass ? "stocks demo data: ok\n" : "FAILED\n");
     }
     else if (!strcmp(line, "pngtest")) {
         /* v74 (0.66.0): discriminating regression test for drivers/png.c.
