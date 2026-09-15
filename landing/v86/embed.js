@@ -66,6 +66,37 @@
   // e.g. whether the backdoor probe found v86's vmmouse and whether an
   // absolute packet really arrived, not just whether the page sent one.
   var serialLog = "";
+  // v0.73.5: fetched once and reused by the idle tour's reboot sequence
+  // below (see the comment above the reboot block in tourLoop) to
+  // re-inject the kernel image after each lap's reset_memory(); this
+  // kernel boots with no BIOS ROM at all (`multiboot: {url: ...}` below,
+  // no `bios:`/`vga_bios:` options), and v86's own reboot path
+  // (`S.prototype.reboot_internal`, read directly in libv86.js) only ever
+  // calls `load_bios()`, which is a complete no-op with no BIOS main
+  // image set (`if(a){...}` where `a=this.bios.main`, undefined here).
+  // The multiboot ELF is only ever loaded once, by a one-shot
+  // `this.reg32[0]=this.io.port_read32(244)` trick that runs inline
+  // during `S.prototype.init` (the V86 constructor), never again on any
+  // later reboot. Confirmed with real instrumentation, not assumed: a
+  // live probe wrapping `reset_memory`/`restart` and sampling
+  // `emulator.v86.cpu.mem8` at the kernel's load address (0x100000)
+  // showed the region reads back all-zero after every `restart()` call
+  // (never reloaded), and the kernel's own serial log (`serialLog`)
+  // never printed a second "=== kmain boot start ===" line across two
+  // full reboot cycles, i.e. kmain, and therefore ramfs_init, truly never
+  // ran again after the first boot. `S.prototype.load_multiboot` (see
+  // libv86.js) is the same loader the constructor's one-shot trick calls
+  // internally, and it's exposed as a public method on the CPU object;
+  // calling it again after `reset_memory()`+`restart()` redoes exactly
+  // what the very first boot did, a real fix at the actual point of the
+  // gap (v86 has no repeatable "no-BIOS multiboot reboot" path of its
+  // own), not a kernel-side workaround for something the emulator itself
+  // never implemented.
+  var kernelElfBuffer = null;
+  var kernelElfFetch = fetch("v86/kernel.elf").then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
+    kernelElfBuffer = buf;
+    return buf;
+  }).catch(function () { return null; });
   var screenContainer = document.getElementById("screen_container");
   var screenText = document.getElementById("screen_text");
   var screenCanvas = document.getElementById("screen_canvas");
@@ -728,17 +759,34 @@
   // session couldn't fully root-cause in the time available, so it was
   // pulled rather than shipped half-working.
   //
-  // Real, working fix: `emulator.v86.cpu` is the same live CPU object
-  // embed.js already reads elsewhere (`emulator.v86.cpu.devices.vga`
-  // above), and it exposes `reset_memory` directly (`S.prototype.
+  // Third attempt (v0.73.4), real but incomplete: `emulator.v86.cpu`
+  // exposes `reset_memory` directly (`S.prototype.
   // reset_memory=function(){this.mem8.fill(0)}`), the one call
-  // `reboot_internal` skips. Calling it immediately before `restart()`
-  // zeroes guest RAM first, then the normal reboot reloads the BIOS/
-  // option-ROM/kernel image into that now-clean memory exactly like a
-  // real cold boot would, no kernel-side change needed at all: the true
-  // root cause was v86's own `restart()` never clearing memory, so the
-  // fix belongs at the point of restart, not a kernel workaround for a
-  // gap the emulator itself should have covered.
+  // `reboot_internal` skips, so it was called immediately before
+  // `restart()` to zero guest RAM first. This looked complete (a real,
+  // reliable non-hanging reboot, verified live) but a live 2-lap
+  // Playwright run still showed lap 2's Files listing carrying lap 1's
+  // accumulated content. Root-caused for real in the v0.73.5 pass with
+  // direct instrumentation (see the comment above `kernelElfBuffer`
+  // near the top of this file): this kernel boots with no BIOS ROM at
+  // all, and v86's own `reboot_internal` only ever calls `load_bios()`,
+  // which no-ops completely with no BIOS main image set. The multiboot
+  // kernel image is only ever loaded ONCE, by a one-shot trick that
+  // runs inline during the V86 constructor and is never re-run by any
+  // later reboot; `reset_memory()` genuinely zeroes RAM, but nothing
+  // ever puts the kernel back afterward, so `mem8` reads back all-zero
+  // forever after the first reboot (confirmed directly, not guessed:
+  // `emulator.v86.cpu.mem8` sampled at the kernel's 0x100000 load
+  // address after `restart()`, and the kernel's own serial log, which
+  // never printed a second "=== kmain boot start ===" across two full
+  // reboot cycles). The real fix: re-run the same loader v86's own
+  // constructor uses, `S.prototype.load_multiboot` (a public method on
+  // the CPU object), immediately after `reset_memory()` + `restart()`,
+  // using the kernel ELF bytes fetched once at page load
+  // (`kernelElfBuffer`/`kernelElfFetch` above). This is the actual root
+  // cause fix, at the real point of the gap (v86 has no built-in way to
+  // replay a no-BIOS multiboot boot on reset), not a kernel-side
+  // workaround for a gap the emulator itself never covered.
   function currentGraphical() {
     var vga = emulator.v86 && emulator.v86.cpu.devices.vga;
     return vga ? !!vga.graphical_mode : false;
@@ -824,8 +872,14 @@
       // starts from a genuinely fresh ramfs instead of piling more mail/
       // reminders onto what every prior cycle already left behind.
       if (bootLogo) bootLogo.hidden = false; // same overlay the initial boot shows; a mid-restart black screen would otherwise look broken, not intentional
-      if (emulator.v86 && emulator.v86.cpu && emulator.v86.cpu.reset_memory) emulator.v86.cpu.reset_memory(); // the real fix: wipe RAM (ramfs included) before the reboot reloads the kernel into it
-      emulator.restart();
+      if (!kernelElfBuffer) { try { kernelElfBuffer = await kernelElfFetch; } catch (e) { /* handled below: no buffer means the re-inject step is skipped, not fatal */ } }
+      if (emulator.v86 && emulator.v86.cpu && emulator.v86.cpu.reset_memory) emulator.v86.cpu.reset_memory(); // wipe RAM (ramfs included)
+      emulator.restart(); // resets CPU registers/devices; harmless no-op on the BIOS reload since there is no BIOS
+      // The real fix (see the header comment above `kernelElfBuffer`): v86's
+      // own reboot never reloads a no-BIOS multiboot kernel, so redo the
+      // same load the constructor's one-shot trick did, putting kmain back
+      // in memory so it actually runs again (and ramfs_init with it).
+      if (kernelElfBuffer && emulator.v86 && emulator.v86.cpu && emulator.v86.cpu.load_multiboot) emulator.v86.cpu.load_multiboot(kernelElfBuffer);
       await waitForGraphicalMode(gen, false, 3000); // best-effort: the reboot leaving graphical mode (BIOS/kernel text-mode init) briefly, same transition the very first boot goes through
       if (focused || tourGen !== gen) return;
       await waitForGraphicalMode(gen, true, 20000); // the real wait: don't click a dock icon until the kernel has actually reached its GUI again
