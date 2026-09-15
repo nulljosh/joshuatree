@@ -60,7 +60,7 @@ Two different shapes of app live in this kernel, both dock-mounted, both
 counted in `GUI_APP_COUNT` (20 real apps, plus the Apps-folder tile and
 Trash, `kernel/kernel.c`).
 
-**Four built-in apps, each its own header, each VFS-backed.** Same
+**Five built-in apps, each its own header, each VFS-backed.** Same
 persistence pattern every time: a fixed-size static array in RAM, one plain
 text file on the real FAT disk (`vfs_replace_file`/`vfs_read_file`), manual
 line parsing (no `sscanf`, no libc), write-through on every mutation, no

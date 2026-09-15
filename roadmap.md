@@ -700,3 +700,41 @@ Direct feedback after v75 shipped: (1) zoom in more, neighborhood-level (~10-15k
 Honest constraint on (1): ip-api.com's geolocation is typically city/ISP-node accurate, not household-precise, ~several km of real error is normal for IP geolocation. Zooming the slippy-map tiles deeper (zoom 12 today, could go to 14-15) is real and buildable, but landing precisely on "Brookwood" specifically may not happen even at max zoom if the underlying geolocation itself doesn't resolve that tightly. Ship the deeper zoom, don't promise neighborhood-name accuracy.
 
 (2) is real UI/UX design work on the existing chrome (dock, notif/weather panels, Settings), not wallpaper-fetch logic. v66 already unified panel corner-radius/blend; "Liquid Glass" implies real translucency/blur over the wallpaper, a bigger rendering change. Needs real visual iteration (screenshot, judge, adjust), best done by the main session directly or its own dedicated pass, not a blind one-shot.
+
+## Regression suite results, v75 build (Sep 2026)
+
+Headless full regression pass on v75 kernel (no new features attempted, status/accuracy verification only):
+
+**Shell test commands (via tools/shell-run.sh, 13/14 pass):**
+- heaptest: PASS
+- tasktest: PASS
+- preempttest: PASS
+- weathertest: PASS
+- weatherfxcliptest: PASS
+- geotest: PASS
+- reaptest: FAIL (output: "reap: FAILED")
+- ring3test: PASS
+- killtest: PASS
+- isotest: PASS
+- calctest: PASS
+- contactstest: PASS
+- mailtest: PASS
+- dockstyletest: PASS
+
+**Standalone regression test scripts (5/5 pass):**
+- tools/iconhalo-check.py: PASS
+- tools/dockhover-check.py: PASS
+- tools/vmmouse-check.sh: PASS
+- tools/png-check.sh: PASS
+- tools/appclose-check.py: PASS
+
+**Documentation verification (no gaps in coverage):**
+- tools/check-refs.sh: PASS (271 file-path references checked, all resolve)
+- docs/ARCHITECTURE.md Subsystems table: all .c/.S files documented, complete coverage
+- docs/ARCHITECTURE.md Apps section: 5 built-in VFS-backed apps documented (Notes, Reminders, Calendar, Mail, Contacts), Calculator, 11 ported apps listed. Three additional runtime apps (Files, Terminal, Chat) exist in kernel/kernel.c but not detailed in Apps section; documented in kernel/kernel.c row of Subsystems table.
+- README.md Piece|Where table: all subsystems covered, no missing rows
+
+**Reaptest failure, documented as-is, not investigated:** The test creates MAX_TASKS task slots with task_exit as entry (all exit immediately), checks the next create fails (full slots), yields to let tasks exit, then creates a new task and asserts the slot is reused as the lowest-free ID. Output "reap: FAILED" means one of three: the full check was false (create didn't fail when slots exhausted), the reused slot didn't match the first one allocated, or creation failed when it should have succeeded. Exercises task exit/reap machinery at kernel/task.c lines 193-212, specifically the `tasks[id].used = 0` mark and round-robin skip logic in schedule(). Real next step: snapshot task manager state at moment of failure via boot-time direct-call technique, not attempted blind. No other test is blocked by this; priority: lowest.
+
+**One documentation fix applied:** ARCHITECTURE.md "Four built-in apps" (line 64) corrected to "Five built-in apps", matching the five apps actually listed in the table (Notes, Reminders, Calendar, Mail, Contacts).
+
