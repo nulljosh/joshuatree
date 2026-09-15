@@ -16,6 +16,14 @@ OBJS := boot/boot.o $(KERNEL_ASM:.S=.o) $(KERNEL_SRCS:.c=.o) $(DRIVER_SRCS:.c=.o
 
 kernel.elf: $(OBJS) boot/linker.ld
 	$(LD) -m elf_i386 -T boot/linker.ld -o $@ $(OBJS)
+	@cp kernel.elf landing/v86/kernel.elf
+# Real recurring gap, hit three times in one night: a subagent bumps
+# VERSION, builds, verifies, commits, and forgets `cp kernel.elf
+# landing/v86/kernel.elf`, since it's a separate manual step CLAUDE.md
+# only documents, never enforces. Copying it here, every build, means
+# the working tree is always in sync before `git add` even runs, so
+# the only way to still ship a stale landing copy is to `git add` a
+# stale file over this fresh one, not just forget a step.
 
 # Real build artifact, not a snapshot: regenerated from VERSION on every
 # build (unlike png_testdata.h below, never committed, see .gitignore).
