@@ -33,6 +33,7 @@ that with the permanent, same-shaped tables.
 | `paging.c` | Permanent page tables: identity-maps the first 4MB and double-maps it at 0xC0000000 for the kernel's own higher-half code/data |
 | `kheap.c` | `kmalloc`/`kfree`, a first-fit free list grown a frame at a time from `pmm.c` |
 | `task.c` + `irq_stubs.S`'s irq0 | Preemptive round-robin off the PIT tick. `yield()` reaches the same switch in software via `int $32`, same IDT gate as the hardware timer. Ring-3 tasks sit in the same table since v64 (`task_create_user`), each with its own kernel stack that the TSS `esp0` is repointed to on every switch; the saved frame carries DS/ES/FS/GS so a resume into ring 3 keeps its own selectors |
+| `ring3.c` + `ring3_asm.S` | Ring-3 privilege isolation and user-mode task execution. Copies a payload onto a user page and runs it at CPL 3 with restricted instruction set (privileged instructions fault). Since v64, user tasks sit in the same task table as kernel tasks (`task_create_user`), with `int 0x80` as the syscall gate to write/exit. `ring3test` / `ring3test fault` / `ring3test spin` verify the three cases: normal syscall, privileged-instruction fault, and preemption on a ring-3 task (v3 / v64) |
 | `ata.c` | ATA PIO disk driver, LBA28, primary master only |
 | `fat.c` | FAT16, real subdirectories and file writes, 8.3 names |
 | `exec.c` | Loads a flat binary via `fat.c` and calls into it, ring 0, no isolation |
