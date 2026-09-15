@@ -45,8 +45,10 @@ struct block {
 #define IDENTITY_MAP_LIMIT 0x800000
 #define ALIGN(x) (((x) + 3u) & ~3u)
 /* Don't split off a remainder too small to ever satisfy a real request;
-   its own header would outweigh what's left for a caller to actually use. */
-#define MIN_SPLIT_PAYLOAD 8u
+   the minimum allocation is 4 bytes after ALIGN(), so splittable remainders
+   need at least 4 bytes of payload to ever be reused. Reduced from 8 in v76
+   to improve fragmentation recovery without sacrificing correctness. */
+#define MIN_SPLIT_PAYLOAD 4u
 
 static struct block *heap_head = 0;
 static u32 heap_next  = 0; /* next free byte to hand out */
