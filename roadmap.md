@@ -693,3 +693,10 @@ Queue item 2. The chain is now real end to end: `geo_fetch` (v71) gives the lat/
 
 ## Real macro-photo evidence, icon sharpness still open (Sep 2026)
 Direct photo from Joshua's phone, real macro zoom on the Apps-folder dock icon: dock chrome improved since yesterday (v68's icon-glyph corner-bleed fix, v72's cleaner rendering), but both the circular tray-icon chrome edge and the 3x3 grid glyph itself still show real jagged/pixel-stair edges under zoom, not smooth AA curves. Confirms the standing icon-sharpness item is real and not yet fully resolved despite v58/v61/v68's real fixes to specific defects. Next icon-sharpness pass (task queue item) should start from this real photo, not guess at what's still rough.
+
+## Real follow-up requests on the map wallpaper (Sep 2026)
+Direct feedback after v75 shipped: (1) zoom in more, neighborhood-level (~10-15km), Joshua lives in Brookwood not just broadly Langley City. (2) Make the chrome (dock/panels) more Apple "Liquid Glass" inspired, translucent/frosted glass aesthetic.
+
+Honest constraint on (1): ip-api.com's geolocation is typically city/ISP-node accurate, not household-precise, ~several km of real error is normal for IP geolocation. Zooming the slippy-map tiles deeper (zoom 12 today, could go to 14-15) is real and buildable, but landing precisely on "Brookwood" specifically may not happen even at max zoom if the underlying geolocation itself doesn't resolve that tightly. Ship the deeper zoom, don't promise neighborhood-name accuracy.
+
+(2) is real UI/UX design work on the existing chrome (dock, notif/weather panels, Settings), not wallpaper-fetch logic. v66 already unified panel corner-radius/blend; "Liquid Glass" implies real translucency/blur over the wallpaper, a bigger rendering change. Needs real visual iteration (screenshot, judge, adjust), best done by the main session directly or its own dedicated pass, not a blind one-shot.
