@@ -4175,18 +4175,28 @@ static void gui_multiwin_draw_all(void){
     for (int i = 0; i < gui_window_count; i++) gui_multiwin_draw_one(&gui_windows[i]);
 }
 
+/* v0.73.6 (phase 2): the one real choke point that moves a window to the
+   top of the z-order list. Both gui_multiwin_open's "already open, refocus
+   it" path and the new click-to-focus path below now go through this
+   instead of each keeping its own copy of the same shift loop, so draw
+   order (gui_multiwin_draw_all, back-to-front over the list) and input
+   hit-testing (gui_multiwin_hit_test, topmost-first over the same list)
+   can never disagree about which window is "on top": there is exactly one
+   piece of z-order state, gui_windows[0..count-1]'s own order. */
+static void gui_multiwin_focus(int idx){
+    if (idx < 0 || idx >= gui_window_count || idx == gui_window_count - 1) return;
+    gui_window_t tmp = gui_windows[idx];
+    for (int j = idx; j < gui_window_count - 1; j++) gui_windows[j] = gui_windows[j + 1];
+    gui_windows[gui_window_count - 1] = tmp;
+}
+
 static int gui_multiwin_open(int icon){
     for (int i = 0; i < gui_window_count; i++) {
         if (gui_windows[i].icon == icon) {
             /* Already open: focus it (move to the end of the list, so the
                back-to-front draw puts it on top) instead of opening a
-               duplicate. Most-recently-opened owns focus, this pass's
-               whole focus model. */
-            if (i != gui_window_count - 1) {
-                gui_window_t tmp = gui_windows[i];
-                for (int j = i; j < gui_window_count - 1; j++) gui_windows[j] = gui_windows[j + 1];
-                gui_windows[gui_window_count - 1] = tmp;
-            }
+               duplicate. */
+            gui_multiwin_focus(i);
             return gui_window_count - 1;
         }
     }
@@ -4198,17 +4208,21 @@ static int gui_multiwin_open(int icon){
     return slot;
 }
 
-/* Only the focused (topmost, most-recently-opened) window is interactive
-   at all in this phase, matching point 5 of the pass this shipped in: no
-   click-to-focus hit-testing against the background window yet. Any click
-   inside the focused window's full rect closes it, the same "click
-   anywhere in the app view closes it" contract gui_wait_close already
-   used for the old single-window model, just scoped to one entry in the
-   list instead of the one and only window. */
-static int gui_multiwin_focused_click_hit(int mx, int my){
-    if (gui_window_count == 0) return -1;
-    const gui_window_t *w = &gui_windows[gui_window_count - 1];
-    if (mx >= w->x && mx < w->x + w->w && my >= w->y && my < w->y + w->h) return gui_window_count - 1;
+/* v0.73.6 (phase 2): real click-to-focus hit-testing. Checks every open
+   window, topmost-drawn first (gui_windows[count-1] down to [0], the exact
+   reverse of gui_multiwin_draw_all's back-to-front draw order), and returns
+   the first (i.e. topmost) whose rect contains the click -- the same
+   "topmost visible thing wins" rule every real windowing system's hit
+   test uses (X11 stacking order, Win32 Z-order, etc). Replaces the old
+   phase-1 gui_multiwin_focused_click_hit, which only ever tested the
+   single most-recently-opened window and left a click on a visible
+   background window doing nothing. -1 means the click hit neither
+   window's rect at all. */
+static int gui_multiwin_hit_test(int mx, int my){
+    for (int i = gui_window_count - 1; i >= 0; i--) {
+        const gui_window_t *w = &gui_windows[i];
+        if (mx >= w->x && mx < w->x + w->w && my >= w->y && my < w->y + w->h) return i;
+    }
     return -1;
 }
 
@@ -4584,13 +4598,29 @@ static void gui_run(void){
         int clock_here = !menu_open && !notif_open && !weather_open && mx >= (int)window_width() - 200 && my < GUI_MENUBAR_H;
         int weather_here = !menu_open && !notif_open && !weather_open && weather_hit_x0 >= 0 && mx >= weather_hit_x0 && mx <= weather_hit_x1 && my < GUI_MENUBAR_H;
         int slot_here = (menu_open || notif_open || weather_open) ? -1 : gui_dock_hit_test(mx, my); /* the dock is inert while a panel covers it */
-        int win_close_here = (menu_open || notif_open || weather_open) ? -1 : gui_multiwin_focused_click_hit(mx, my); /* v0.73.0: only the focused (topmost) open multi-window app, see gui_multiwin_focused_click_hit */
+        int win_hit_here = (menu_open || notif_open || weather_open) ? -1 : gui_multiwin_hit_test(mx, my); /* v0.73.6: real hit test against every open window, topmost first, see gui_multiwin_hit_test */
+        int win_close_here = (win_hit_here >= 0 && win_hit_here == gui_window_count - 1) ? win_hit_here : -1; /* only the already-focused (topmost) window's own click-anywhere-closes contract; a click on a background window is click-to-focus, not close, handled below */
+        int win_focus_changed = 0; /* set below when a click raises a background window; folded into `launched` once it's declared, so the z-order change gets a real full repaint this same frame */
 
         if (just_pressed) {
             if (logo_here) { menu_open = 1; menu_opening = 1; }
             else if (weather_here) { weather_open = 1; weather_opening = 1; weather_draw_pending = 1; }
             else if (clock_here) { notif_open = 1; notif_opening = 1; notif_draw_pending = 1; }
             else if (win_close_here >= 0) { press_window = win_close_here; }
+            else if (win_hit_here >= 0) {
+                /* v0.73.6: real click-to-focus. The click landed inside a
+                   visible BACKGROUND window's rect (win_close_here above
+                   was -1, so it's not the topmost one). Raise it to the
+                   front of the real z-order list right now, on press, and
+                   swallow the click here -- it neither closes the window it
+                   hit (that's not the "click anywhere closes" contract
+                   until a SECOND click lands on it now that it's topmost)
+                   nor falls through to the dock/app-launch paths below.
+                   This is the one behavioural gap phase 1 explicitly left
+                   open: "clicking the background window does nothing yet." */
+                gui_multiwin_focus(win_hit_here);
+                win_focus_changed = 1; /* z-order changed; force the full repaint below so the newly-front window is genuinely redrawn on top */
+            }
             else if (slot_here >= 0) { press_slot = slot_here; press_x = mx; press_y = my; drag_slot = -1; }
         }
 
@@ -4599,7 +4629,7 @@ static void gui_run(void){
             if (moved > 8) drag_slot = press_slot; /* threshold crossed: this is a drag, not a click */
         }
 
-        int launched = notif_draw_pending || weather_draw_pending; notif_draw_pending = 0; weather_draw_pending = 0;
+        int launched = notif_draw_pending || weather_draw_pending || win_focus_changed; notif_draw_pending = 0; weather_draw_pending = 0;
         if (just_released) {
             if (notif_open) {
                 if (notif_opening) notif_opening = 0;

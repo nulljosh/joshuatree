@@ -179,6 +179,74 @@ try:
     print(f"After closing Files too, clean desktop: {'yes' if all_closed else 'NO'}")
     if not all_closed: fails.append("multi-window: Files' own X did not close it (or left a stray close button)")
 
+    # 5. v0.73.6 (phase 2): real click-to-focus + real z-order compositing.
+    #    Fresh open sequence, identical to steps 1-2: Files then Weather,
+    #    Weather ends up topmost (opened second). The overlap region
+    #    (330,220) sits inside BOTH windows' content rects; right now
+    #    Weather's real gradient panel is what's visible there.
+    open_slot(1)  # Files
+    open_slot(8)  # Weather, on top
+    img5a = dump()
+    overlap_before_focus = pixel(img5a, 330, 220)
+    weather_on_top_before = close(overlap_before_focus, weather_panel) <= 12
+    print(f"Fresh open, overlap pixel before any focus click: {overlap_before_focus} (Weather's own gradient was {weather_panel}); Weather on top={'yes' if weather_on_top_before else 'NO'}")
+    if not weather_on_top_before:
+        fails.append("z-order setup: freshly-opened Weather is not on top of the overlap region before the click-to-focus test even starts")
+
+    # Click Files' titlebar at W0_CLOSE=(94,56). Window 1 (Weather, rect
+    # x=130,y=100..) does NOT cover this point at all (y=56 < Weather's
+    # y=100), so this click can only land on window 0 (Files), and Files
+    # is a BACKGROUND window right now (Weather is topmost). The real
+    # assertion: this must NOT close Files (the old "any click on the
+    # focused window closes it" contract must not fire for a background
+    # window) and instead must raise Files to the front of the real
+    # z-order list.
+    click_at(*W0_CLOSE)
+    img5b = dump()
+    files_not_closed_by_focus_click = is_red(pixel(img5b, *W0_CLOSE))
+    print(f"Files still open after a click-to-focus click on its (background) titlebar: {'yes' if files_not_closed_by_focus_click else 'NO'}")
+    if not files_not_closed_by_focus_click:
+        fails.append("click-to-focus: clicking Files' background window closed it instead of focusing it")
+
+    # Real z-order proof: the SAME overlap pixel (330,220) that showed
+    # Weather's gradient a moment ago must now show Files' content instead,
+    # because draw order must follow the same z-order list input
+    # hit-testing just updated -- Files is now topmost, so it must win the
+    # overlapped region, not Weather. This is the exact naive
+    # back-to-front bug phase 2 was scoped to fix: on the pre-fix kernel,
+    # draw order never changes (always window 0 then window 1, Weather
+    # always drawn last/on top) regardless of which window a click
+    # focused, so this pixel would incorrectly still read as Weather's
+    # gradient even after this "focus" click.
+    overlap_after_focus = pixel(img5b, 330, 220)
+    overlap_now_files = close(overlap_after_focus, weather_panel) > 12
+    print(f"Overlap pixel (330,220) after focusing Files: {overlap_after_focus} (was Weather's {weather_panel}); Files now on top={'yes' if overlap_now_files else 'NO'}")
+    if not overlap_now_files:
+        fails.append("z-order: focusing Files did not bring it in front of Weather in the overlapped region (draw order still ignores real focus)")
+
+    # The close-button-close contract must still work once a window really
+    # is topmost: a SECOND click at the same spot, now that Files is
+    # genuinely focused, must close it -- proving click-to-focus only
+    # swallows the FIRST click on a background window, it doesn't disable
+    # closing altogether. Weather (still in the background, untouched by
+    # either click) must remain open throughout.
+    click_at(*W0_CLOSE)
+    img5c = dump()
+    files_closed_second_click = not is_red(pixel(img5c, *W0_CLOSE))
+    weather_still_open_after = is_red(pixel(img5c, *W1_CLOSE))
+    print(f"Files closes on a second click once genuinely focused: {'yes' if files_closed_second_click else 'NO'}   Weather still open throughout: {'yes' if weather_still_open_after else 'NO'}")
+    if not files_closed_second_click:
+        fails.append("click-to-focus: Files did not close on a second click after becoming the real focused/topmost window")
+    if not weather_still_open_after:
+        fails.append("click-to-focus: focusing/closing Files incorrectly also touched Weather")
+
+    # Clean up: close Weather too (it's the sole remaining window, topmost
+    # by definition) before the final Mail sanity check below.
+    click_at(*W1_CLOSE)
+    img5d = dump()
+    if is_red(pixel(img5d, *W1_CLOSE)):
+        fails.append("cleanup: Weather did not close after the click-to-focus test sequence")
+
     open_slot(2)  # Mail
     mail_ok = is_red(pixel(dump(), *W0_CLOSE))
     if mail_ok: click_at(*W0_CLOSE); mail_ok = not is_red(pixel(dump(), *W0_CLOSE))
