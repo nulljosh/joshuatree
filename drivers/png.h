@@ -2,12 +2,15 @@
 #define PNG_H
 /* v74 (0.66.0): minimal PNG decoder, the "prerequisite bridge, part 1" the
    satellite-wallpaper goal was blocked on. Deliberately narrow: 8-bit
-   truecolor (RGB, color type 2) and truecolor+alpha (RGBA, color type 6),
-   non-interlaced, one IHDR + any number of IDATs + IEND. Everything a
-   real map/satellite tile server or a PIL/libpng default RGB export
-   produces; nothing else (palette, grayscale, 16-bit, Adam7) is
-   attempted, those return PNG_E_UNSUPPORTED cleanly rather than
-   misdecoding.
+   truecolor (RGB, color type 2), truecolor+alpha (RGBA, color type 6)
+   and, since v75, 8-bit indexed (color type 3, PLTE looked up to RGB on
+   output), non-interlaced, one IHDR + any number of IDATs + IEND.
+   Indexed was added because every real plain-HTTP map tile server found
+   (CartoCDN, OpenTopoMap, OsmAnd) serves 8-bit paletted PNGs, not the
+   truecolor v74 assumed; nothing else (1/2/4-bit palettes, grayscale,
+   16-bit, Adam7) is attempted, those return PNG_E_UNSUPPORTED cleanly
+   rather than misdecoding. tRNS is ignored (indexed output is opaque
+   RGB).
 
    Underneath is a real zlib/DEFLATE inflater (stored, fixed-Huffman and
    dynamic-Huffman blocks, RFC 1951) plus the five PNG scanline filters

@@ -75,21 +75,23 @@ def chunk(tag, data):
     return struct.pack('>I', len(data)) + tag + data + struct.pack('>I', zlib.crc32(tag + data) & 0xffffffff)
 
 
-def encode(rows, w, h, alpha, level, filters):
-    bpp = 4 if alpha else 3
+def encode(rows, w, h, alpha, level, filters, palette=None):
+    # palette: list of (r,g,b) -> rows are 1-byte index rows, IHDR color type 3, PLTE emitted (v75)
+    bpp = 1 if palette else (4 if alpha else 3)
     raw = bytearray()
     prev = None
     for y, row in enumerate(rows):
         raw += filter_row(filters[y % len(filters)], row, prev, bpp)
         prev = row
     comp = zlib.compress(bytes(raw), level)
-    ihdr = struct.pack('>IIBBBBB', w, h, 8, 6 if alpha else 2, 0, 0, 0)
+    ihdr = struct.pack('>IIBBBBB', w, h, 8, 3 if palette else (6 if alpha else 2), 0, 0, 0)
+    plte = chunk(b'PLTE', b''.join(bytes(c) for c in palette)) if palette else b''
     # split IDAT into several chunks so the multi-IDAT concatenation path is real
     idats = b''
     step = max(1, len(comp) // 3 + 1)
     for i in range(0, len(comp), step):
         idats += chunk(b'IDAT', comp[i:i + step])
-    return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', ihdr) + idats + chunk(b'IEND', b''), comp
+    return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', ihdr) + plte + idats + chunk(b'IEND', b''), comp
 
 
 def first_block_type(comp):
@@ -110,6 +112,12 @@ images = [
     ('rgb_dyn',   320, 180, 320, 180, False, 9, [0, 1, 2, 3, 4], 2),
     ('rgba_stored', 40, 400, 64, 36, True, 0, [4, 3, 2, 1, 0], 0),
     ('rgb_fixed', 600, 20, 6, 5, False, 6, [1, 4, 2, 3, 0], 1),
+    # v75: 8-bit indexed (color type 3), the shape every real plain-HTTP map
+    # tile server serves. The crop is quantized to a 40-color palette
+    # (PIL median cut) so the expected pixels are PLTE lookups, NOT the
+    # wallpaper bytes: pngtest/png-host compare this one by the host hash
+    # only (CH 3 in the header, PAL 1 marks it). Filters cycled as before.
+    ('pal_dyn',   100, 300, 96, 64, 'pal', 9, [2, 4, 0, 1, 3], 2),
 ]
 
 out = ['#ifndef PNG_TESTDATA_H', '#define PNG_TESTDATA_H',
@@ -117,23 +125,42 @@ out = ['#ifndef PNG_TESTDATA_H', '#define PNG_TESTDATA_H',
        '   Real PNG files (crops of the baked wallpaper), every scanline filter',
        '   type and every DEFLATE block kind covered. Do not hand-edit. */']
 for name, x0, y0, w, h, alpha, level, filters, want_btype in images:
-    rows = crop(x0, y0, w, h, alpha)
-    png, comp = encode(rows, w, h, alpha, level, filters)
+    pal = None
+    if alpha == 'pal':
+        src = Image.frombytes('RGB', (w, h), b''.join(crop(x0, y0, w, h)))
+        q = src.quantize(colors=40, method=Image.Quantize.MEDIANCUT)
+        flat = q.getpalette()[:3 * len(set(q.tobytes()))]
+        # keep only the entries actually referenced so an index >= plte_n would be a real error
+        n_used = max(q.tobytes()) + 1
+        flat = q.getpalette()[:3 * n_used]
+        pal = [tuple(flat[i:i + 3]) for i in range(0, len(flat), 3)]
+        idx = q.tobytes()
+        rows = [idx[y * w:(y + 1) * w] for y in range(h)]
+        expect = b''.join(bytes(pal[i]) for i in idx)
+        alpha = False
+    else:
+        rows = crop(x0, y0, w, h, alpha)
+        expect = b''.join(rows)
+    png, comp = encode(rows, w, h, alpha, level, filters, pal)
     bt = first_block_type(comp)
     assert bt == want_btype, (name, bt, want_btype)
     # host-side reference decode of the exact bytes being embedded
     im = Image.open(io.BytesIO(png))
+    if pal:
+        assert im.mode == 'P' and im.size == (w, h), (im.size, im.mode)
+        im = im.convert('RGB')
     assert im.size == (w, h) and im.mode == ('RGBA' if alpha else 'RGB'), (im.size, im.mode)
     ref = im.tobytes()
-    assert ref == b''.join(rows), name
+    assert ref == expect, name
     hsh = fnv1a(ref)
-    print(f'{name}: {w}x{h} {"RGBA" if alpha else "RGB"} level={level} btype={bt} png={len(png)}B fnv1a=0x{hsh:08x}')
+    print(f'{name}: {w}x{h} {"PAL" if pal else ("RGBA" if alpha else "RGB")}{"("+str(len(pal))+")" if pal else ""} level={level} btype={bt} png={len(png)}B fnv1a=0x{hsh:08x}')
     up = name.upper()
     out.append(f'#define PNGT_{up}_X0 {x0}')
     out.append(f'#define PNGT_{up}_Y0 {y0}')
     out.append(f'#define PNGT_{up}_W {w}')
     out.append(f'#define PNGT_{up}_H {h}')
     out.append(f'#define PNGT_{up}_CH {4 if alpha else 3}')
+    out.append(f'#define PNGT_{up}_PAL {1 if pal else 0}')
     out.append(f'#define PNGT_{up}_FNV 0x{hsh:08x}u')
     out.append(f'static const unsigned char pngt_{name}[{len(png)}] = {{')
     for i in range(0, len(png), 24):

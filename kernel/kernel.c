@@ -27,6 +27,22 @@
 #include "net.h"
 #include "http.h"
 #include "wallpaper.h"
+/* v75 (0.67.0): the wallpaper is read through this pointer, not the baked
+   array directly, so a real fetched image (wall_fetch below: a 2x2 mosaic
+   of OpenTopoMap tiles around the ip-api location, decoded by
+   drivers/png.c) can replace it at runtime. Same 960x540x3 layout, so the
+   two real readers (gui_wallpaper_color, gui_wallpaper_row) only changed
+   which base address they index. Always points at something valid: the
+   baked photo until a fetch lands, and back to it if the user picks
+   Photo in Settings. pngtest keeps comparing against wallpaper_rgb by
+   name on purpose (its fixtures are crops of the baked photo). */
+static const unsigned char *wall_src = wallpaper_rgb;
+static unsigned char *wall_map = 0;        /* the fetched mosaic, kmalloc'd, kept while the session lives so Photo->Map needs no refetch */
+static int wall_map_tx = 0, wall_map_ty = 0, wall_map_cx = 0, wall_map_cy = 0; /* tile x/y of the mosaic's top-left tile, crop offset inside it */
+#define WALL_ZOOM 12
+#define WALL_TILE 256   /* OpenTopoMap serves 256px tiles, no @2x variant */
+#define WALL_COLS 4     /* 4x3 grid = 1024x768, the smallest that covers a centered 960x540 crop */
+#define WALL_ROWS 3
 #include "serial.h"
 #include "app_weather.h"
 #include "app_curbfind.h"
@@ -725,6 +741,11 @@ static unsigned char dock_hover_extra[GUI_ICON_COUNT];
    nothing about the range or mechanism changed, just what a fresh
    install starts at. */
 static int dock_scale_pct = 7;
+/* v75: wallpaper source. 1 = a real map of the real location (the default
+   once buildable, Joshua's own call in roadmap.md's satellite entry), 0 =
+   the baked photo. Map mode still shows the photo until the fetch lands
+   and keeps showing it if the fetch fails, never a blank desktop. */
+static int wall_mode = 1;
 static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
 
 /* v47 (0.47.0): settings persisted through the VFS, so "customize the OS
@@ -756,8 +777,10 @@ static void settings_load(void){
         int keylen = eq - start;
         int is_wind = keylen == 4 && buf[start]=='w' && buf[start+1]=='i' && buf[start+2]=='n' && buf[start+3]=='d';
         int is_dock = keylen == 4 && buf[start]=='d' && buf[start+1]=='o' && buf[start+2]=='c' && buf[start+3]=='k';
+        int is_wall = keylen == 4 && buf[start]=='w' && buf[start+1]=='a' && buf[start+2]=='l' && buf[start+3]=='l';
         if (is_wind) wind_enabled = (val != 0);
         else if (is_dock && val >= 5 && val <= 25) dock_scale_pct = val;
+        else if (is_wall) wall_mode = (val != 0);
     }
 }
 
@@ -770,6 +793,8 @@ static void settings_save(void){
     if (dock_scale_pct >= 10) buf[n++] = '0' + dock_scale_pct / 10;
     buf[n++] = '0' + dock_scale_pct % 10;
     buf[n++] = '\n';
+    const char *k3 = "wall="; while (*k3) buf[n++] = *k3++;
+    buf[n++] = wall_mode ? '1' : '0'; buf[n++] = '\n';
     vfs_replace_file(SETTINGS_FILE, buf, (unsigned int)n);
 }
 
@@ -964,7 +989,7 @@ static unsigned int gui_wallpaper_color(int row){
     if (r >= area_h) r = area_h - 1;
     int sy = r * WALLPAPER_H / area_h;
     if (sy >= WALLPAPER_H) sy = WALLPAPER_H - 1;
-    const unsigned char *p = &wallpaper_rgb[(sy * WALLPAPER_W + WALLPAPER_W / 2) * 3];
+    const unsigned char *p = &wall_src[(sy * WALLPAPER_W + WALLPAPER_W / 2) * 3];
     unsigned int rgb = ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2];
     return gui_daynight_tint(rgb);
 }
@@ -1293,6 +1318,7 @@ static int wind_phase = 0;     /* -256..256, current displacement scale */
 static int wind_weather_pct = 100;
 
 static int gui_wind_shift(int row){ /* source-pixel shift for this screen row, in 8.8 fixed point */
+    if (wall_src != wallpaper_rgb) return 0; /* v75: streets don't sway; the tick still runs (zero shift) so rain/snow keep compositing */
     if (row >= WIND_HORIZON_ROW) return 0;
     int h = WIND_HORIZON_ROW - row;                     /* 0..365 */
     int amp = (h * h) / (365 * 365 / 14);               /* up to ~14 logical px at the very top, ~6 at the crown */
@@ -1326,7 +1352,7 @@ static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int
     int fy = row * (WALLPAPER_H - 1) * 256 / (area_h * sc > 1 ? area_h * sc - 1 : 1);
     int sy = fy >> 8; c.wy = fy & 255;
     if (sy >= WALLPAPER_H - 1) { sy = WALLPAPER_H - 2; c.wy = 255; }
-    c.r0 = &wallpaper_rgb[sy * WALLPAPER_W * 3];
+    c.r0 = &wall_src[sy * WALLPAPER_W * 3];
     c.r1 = c.r0 + WALLPAPER_W * 3;
     c.shift = sway ? (gui_wind_shift(py / sc) * WALLPAPER_W / lw) >> 8 : 0;
     return c;
@@ -1784,6 +1810,131 @@ static void weather_fetch(void){
     for (const char *w = weather_word(code10 / 10); *w; w++) weather_text[p++] = *w;
     weather_text[p] = 0;
     serial_puts("wx="); serial_puts(weather_text); serial_puts("\n"); /* v71: tools/geo-check.sh asserts the fetch really landed, not just that the URL was built */
+}
+
+/* v75 (0.67.0): the real location-dynamic wallpaper, the item roadmap.md's
+   satellite entry was building toward. Honest naming first: this is a MAP
+   of the real town, not a satellite photo. Real curl checks (roadmap.md,
+   v75 entry) found every satellite/imagery source that answers on plain
+   HTTP at all (Google's mt0 `lyrs=s`, Bing virtualearth) serves JPEG,
+   and this kernel only has a PNG decoder; OSM's own tile servers, Esri
+   World Imagery and NASA GIBS all 301 straight to HTTPS. Of the PNG
+   sources that do answer plain HTTP (CartoCDN, Thunderforest, OsmAnd's
+   app proxy, OpenTopoMap), CartoCDN and Thunderforest stamp a huge "API
+   KEY REQUIRED" watermark across keyless tiles (found on the first real
+   framebuffer dump, not in the curl headers: 200, image/png, looked
+   fine until rendered), OsmAnd's is an undocumented proxy for their own
+   app, and OpenTopoMap (tile.opentopomap.org, CC-BY-SA, free with
+   attribution for light use) answers a bare HTTP/1.0 GET with a clean,
+   watermark-free 8-bit paletted PNG, no key, no User-Agent check, which
+   is exactly what http_get + png_decode can consume. Topographic style
+   (contours, hillshade), which suits a desert-named OS better than a
+   flat street map anyway.
+
+   Slippy-map tile math (the OSM wiki's "Slippy map tilenames", the same
+   formula every tile client uses): at zoom z, x = (lon+180)/360 * 2^z,
+   y = (1 - ln(tan(lat) + sec(lat)) / pi) / 2 * 2^z, with lat in radians.
+   No libm here, so ln/tan/pi come from the x87 directly (fyl2x, fptan,
+   fldpi), the same FPU the calculator's doubles already run on. The 4x3
+   mosaic of 256px tiles (1024x768) is picked so the location lands near
+   its middle (top-left tile = floor(x - 1.5), floor(y - 1.0)), then a
+   960x540 window is cut out centered on the location, clamped to the
+   mosaic, so the town is under the middle of the desktop, not at a tile
+   corner. Each tile is decoded and copied straight into the 960x540
+   buffer, never assembled into a full mosaic first: peak heap is the
+   1.5MB destination plus one decoded tile, not 2.3MB more on top.
+
+   Everything it does is mirrored to serial (`wall=` on success with the
+   tile coords, crop offset and an FNV-1a of the finished buffer;
+   `wallerr=` on any failure with the step that failed) so
+   tools/wallpaper-check.sh can prove the whole chain headlessly against
+   the host's own download of the same twelve tiles. */
+static double jt_tan(double x){ double r; __asm__ volatile ("fptan\n\tfstp %%st(0)" : "=t"(r) : "0"(x)); return r; }
+static double jt_ln(double x){ double r; __asm__ volatile ("fldln2\n\tfxch\n\tfyl2x" : "=t"(r) : "0"(x) : "st(1)"); return r; }
+static double jt_sqrt(double x){ double r; __asm__ volatile ("fsqrt" : "=t"(r) : "0"(x)); return r; }
+static double jt_pi(void){ double r; __asm__ volatile ("fldpi" : "=t"(r)); return r; }
+static double jt_parse_double(const char *s){ /* "-123.0456" -> double, the only shape ip-api's lat/lon text takes */
+    int neg = 0; double v = 0, scale = 0.1;
+    if (*s == '-') { neg = 1; s++; }
+    while (*s >= '0' && *s <= '9') { v = v * 10 + (*s - '0'); s++; }
+    if (*s == '.') { s++; while (*s >= '0' && *s <= '9') { v += (*s - '0') * scale; scale *= 0.1; s++; } }
+    return neg ? -v : v;
+}
+static void wall_serial_err(const char *step, int code){
+    char b[48]; int i = 0; const char *s = "wallerr="; while (*s) b[i++] = *s++;
+    while (*step && i < 40) b[i++] = *step++;
+    if (code) { b[i++] = ' '; unsigned int u = (unsigned int)(code < 0 ? -code : code); if (code < 0) b[i++] = '-'; char d[12]; int nd = 0; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) b[i++] = d[--nd]; }
+    b[i++] = '\n'; b[i] = 0; serial_puts(b);
+}
+static void wall_caches_drop(void); /* defined after the dock band code it invalidates */
+static int wall_fetch(void){
+    if (!geo_have) { wall_serial_err("nogeo", 0); return 0; }
+    double lat = jt_parse_double(geo_lat), lon = jt_parse_double(geo_lon);
+    double n = (double)(1 << WALL_ZOOM);
+    double latr = lat * jt_pi() / 180.0;
+    double t = jt_tan(latr);
+    double xf = (lon + 180.0) / 360.0 * n;
+    double yf = (1.0 - jt_ln(t + jt_sqrt(1.0 + t * t)) / jt_pi()) / 2.0 * n;
+    if (xf < 1.5 || yf < 1.0 || xf >= n - 2.5 || yf >= n - 2.0) { wall_serial_err("range", 0); return 0; }
+    int tx = (int)(xf - 1.5), ty = (int)(yf - 1.0);          /* top-left tile of the 4x3, location in its middle */
+    int px = (int)((xf - tx) * WALL_TILE), py = (int)((yf - ty) * WALL_TILE); /* location inside the 1024x768 mosaic: x 384..639, y 256..511 */
+    int cx = px - WALLPAPER_W / 2, cy = py - WALLPAPER_H / 2;   /* crop origin, clamped to the mosaic */
+    if (cx < 0) cx = 0; if (cx > WALL_COLS * WALL_TILE - WALLPAPER_W) cx = WALL_COLS * WALL_TILE - WALLPAPER_W;
+    if (cy < 0) cy = 0; if (cy > WALL_ROWS * WALL_TILE - WALLPAPER_H) cy = WALL_ROWS * WALL_TILE - WALLPAPER_H;
+
+    unsigned char *dst = wall_map ? wall_map : (unsigned char *)kmalloc(WALLPAPER_W * WALLPAPER_H * 3);
+    if (!dst) { wall_serial_err("nomem", 0); return 0; }
+    unsigned char *body = (unsigned char *)kmalloc(65536);
+    if (!body) { if (!wall_map) kfree(dst); wall_serial_err("nomem", 1); return 0; }
+    static char path[96];
+    for (int i = 0; i < WALL_COLS * WALL_ROWS; i++) {
+        int col = i % WALL_COLS, row = i / WALL_COLS;
+        int ttx = tx + col, tty = ty + row;
+        int p = 0; const char *s;
+        for (s = "/"; *s; s++) path[p++] = *s;
+        { char d[12]; int nd = 0; unsigned int u = WALL_ZOOM; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; path[p++] = '/'; }
+        { char d[12]; int nd = 0; unsigned int u = (unsigned int)ttx; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; path[p++] = '/'; }
+        { char d[12]; int nd = 0; unsigned int u = (unsigned int)tty; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; }
+        for (s = ".png"; *s; s++) path[p++] = *s;
+        path[p] = 0;
+        int n_bytes = http_get("a.tile.opentopomap.org", path, 80, body, 65536);
+        if (n_bytes <= 0) { kfree(body); if (!wall_map) kfree(dst); wall_serial_err("http", i); return 0; }
+        unsigned char *px_out = 0; unsigned int w = 0, h = 0, ch = 0;
+        int r = png_decode(body, (unsigned int)n_bytes, &px_out, &w, &h, &ch);
+        if (r != 0 || w != WALL_TILE || h != WALL_TILE || ch != 3) {
+            if (px_out) kfree(px_out); kfree(body); if (!wall_map) kfree(dst);
+            wall_serial_err(r ? "png" : "tilesize", r ? r : (int)w); return 0;
+        }
+        /* copy the part of this tile that lands inside the crop window */
+        int ox = col * WALL_TILE, oy = row * WALL_TILE; /* tile origin in mosaic coords */
+        for (int y = 0; y < WALL_TILE; y++) {
+            int my = oy + y - cy; if (my < 0 || my >= WALLPAPER_H) continue;
+            int x0 = cx - ox; if (x0 < 0) x0 = 0;
+            int x1 = cx + WALLPAPER_W - ox; if (x1 > WALL_TILE) x1 = WALL_TILE;
+            if (x1 <= x0) continue;
+            memcpy(dst + (my * WALLPAPER_W + (ox + x0 - cx)) * 3, px_out + (y * WALL_TILE + x0) * 3, (unsigned int)(x1 - x0) * 3);
+        }
+        kfree(px_out);
+    }
+    kfree(body);
+    wall_map = dst; wall_map_tx = tx; wall_map_ty = ty; wall_map_cx = cx; wall_map_cy = cy;
+    unsigned int fnv = 0x811c9dc5u;
+    for (unsigned int i = 0; i < WALLPAPER_W * WALLPAPER_H * 3; i++) { fnv ^= dst[i]; fnv *= 0x01000193u; }
+    { char b[96]; int i = 0; const char *s = "wall="; while (*s) b[i++] = *s++;
+      int vals[5] = { WALL_ZOOM, tx, ty, cx, cy };
+      for (int v = 0; v < 5; v++) { char d[12]; int nd = 0; unsigned int u = (unsigned int)vals[v]; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) b[i++] = d[--nd]; b[i++] = v < 4 ? ',' : ' '; }
+      for (int sh = 28; sh >= 0; sh -= 4) { int nib = (fnv >> sh) & 0xF; b[i++] = nib < 10 ? '0' + nib : 'a' + nib - 10; }
+      b[i++] = '\n'; b[i] = 0; serial_puts(b); }
+    return 1;
+}
+/* Switch what the desktop paints from. Both directions drop every cache
+   built from the old pixels (the wind crown band, the dock band) so the
+   next frame is honest, not a stale composite of the previous source. */
+static void wall_apply(int want_map){
+    const unsigned char *next = (want_map && wall_map) ? wall_map : wallpaper_rgb;
+    if (next == wall_src) return;
+    wall_src = next;
+    wall_caches_drop();
 }
 
 static void gui_draw_menubar(void){
@@ -2593,6 +2744,13 @@ static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int
     }
 }
 
+/* v75: see wall_apply. wind_base is rebuilt lazily by gui_draw_desktop,
+   the dock band by gui_redraw_dock_band's own top-mismatch check. */
+static void wall_caches_drop(void){
+    if (wind_base) { kfree(wind_base); wind_base = 0; }
+    dock_band_cache_top = -1;
+}
+
 static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     (void)hover_slot;
     int y0 = gui_dock_y0(), dock_h = DOCK_ICON + 2 * DOCK_PAD, dock_w = gui_dock_w(), dock_x = gui_dock_x0();
@@ -3296,7 +3454,7 @@ static void gui_launch_trash(void){
    left/right (a/d, since there's no numpad here) changes it, a tap on a
    row also toggles/steps it, matching the touch-first contract every
    other screen in this GUI already keeps. */
-#define SETTINGS_ROW_COUNT 2
+#define SETTINGS_ROW_COUNT 3 /* v75: + wallpaper source */
 static void gui_launch_settings(void){
     int sel = 0;
     for (;;) {
@@ -3304,19 +3462,26 @@ static void gui_launch_settings(void){
         gui_draw_app_titlebar("Settings");
         font_draw_string("up/down to pick   left/right or tap to change   esc closes", 20, 52, 0x00807468, -1);
 
-        int rows_y[SETTINGS_ROW_COUNT] = {84, 116};
+        int rows_y[SETTINGS_ROW_COUNT] = {84, 116, 148};
         for (int i = 0; i < SETTINGS_ROW_COUNT; i++) {
             int y = rows_y[i];
             if (i == sel) window_rect(16, y - 6, (int)window_width() - 32, 28, 0x00EDE6DC);
             if (i == 0) {
                 font_draw_string("Wind (swaying wallpaper)", 28, y, 0x001C1C1E, -1);
                 font_draw_string(wind_enabled ? "On" : "Off", 400, y, wind_enabled ? 0x002F7B4F : 0x00807468, -1);
-            } else {
+            } else if (i == 1) {
                 font_draw_string("Dock size", 28, y, 0x001C1C1E, -1);
                 char sz[8]; int p = 0; int v = dock_scale_pct;
                 if (v >= 10) sz[p++] = '0' + v / 10;
                 sz[p++] = '0' + v % 10; sz[p++] = '%'; sz[p] = 0;
                 font_draw_string(sz, 400, y, 0x001C1C1E, -1);
+            } else {
+                /* v75: honest label. "Map" only once a real tile mosaic is
+                   on screen; while it's still fetching, or when the fetch
+                   failed and the photo is what's actually up, say so. */
+                font_draw_string("Wallpaper", 28, y, 0x001C1C1E, -1);
+                const char *lbl = !wall_mode ? "Photo" : (wall_map ? (geo_city[0] ? geo_city : "Map") : "Map (fetching, photo until then)");
+                font_draw_string(lbl, 400, y, wall_mode && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
             }
         }
         font_draw_string("Settings are saved to disk and survive a reboot.", 20, (int)window_height() - 28, 0x00807468, -1);
@@ -3329,6 +3494,7 @@ static void gui_launch_settings(void){
         else if (k == KEY_DOWN && sel < SETTINGS_ROW_COUNT - 1) sel++;
         else if (k == KEY_CLICK || k == 'a' || k == 'd') {
             if (sel == 0) { wind_enabled = !wind_enabled; settings_save(); }
+            else if (sel == 2) { wall_mode = !wall_mode; settings_save(); wall_apply(wall_mode); }
             else {
                 int dir = (k == 'a') ? -1 : 1; /* a tap always steps up; a real direction only from the keyboard */
                 if (k == KEY_CLICK) dir = 1;
@@ -3718,6 +3884,11 @@ static void gui_run(void){
             char before[24]; for (int i = 0; i < 24; i++) before[i] = weather_text[i];
             weather_fetch();
             if (strcmp(before, weather_text) != 0) { gui_menubar_force_redraw(); gui_draw_menubar(); if (my < GUI_MENUBAR_H) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); } }
+            /* v75: the map wallpaper rides the same ten-minute cycle, right
+               after the geo lookup it depends on. One fetch per session
+               once it lands (the mosaic is kept), retried each cycle
+               until then; a failure leaves the photo up, never a blank. */
+            if (wall_mode && !wall_map && geo_have && wall_fetch()) { wall_apply(1); gui_draw_desktop(-1, -1, 0, 0); gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
         }
         /* v45: wind, 4 frames a second, only while the desktop itself is
            what's on screen. Timed on its first frame; if that frame took
@@ -4482,6 +4653,30 @@ static void run(char *line){
         else if (!strcmp(arg, "on")) { wind_enabled = 1; settings_save(); puts("wind on\n"); }
         else { puts(wind_enabled ? "wind is on (wind off to stop)\n" : "wind is off (wind on to start)\n"); }
     }
+    else if (!strcmp(line, "weatherfx")) {
+        /* v75: force the particle overlay's input (rain/snow/off) without
+           waiting for real weather, so tools/wallfx-check.py can prove
+           particles composite over a fetched map wallpaper headlessly.
+           Sets exactly the fields weather_fetch would, nothing else. */
+        if (!strcmp(arg, "rain")) { weather_have = 1; weather_code10 = 610; puts("weatherfx: rain\n"); }
+        else if (!strcmp(arg, "snow")) { weather_have = 1; weather_code10 = 710; puts("weatherfx: snow\n"); }
+        else if (!strcmp(arg, "off")) { weather_have = 0; puts("weatherfx: off\n"); }
+        else puts("usage: weatherfx rain|snow|off\n");
+    }
+    else if (!strcmp(line, "wallpaper")) {
+        /* v75: photo|map picks the source (persisted like wind/dockscale),
+           fetch forces the map download right now (its own NIC/net bring-
+           up, same as weather_fetch), no argument reports state. */
+        if (!strcmp(arg, "photo")) { wall_mode = 0; settings_save(); wall_apply(0); puts("wallpaper: photo\n"); }
+        else if (!strcmp(arg, "map")) { wall_mode = 1; settings_save(); wall_apply(1); puts(wall_map ? "wallpaper: map\n" : "wallpaper: map (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
+        else if (!strcmp(arg, "fetch")) {
+            if (!rtl8139_init()) { puts("no NIC\n"); }
+            else { net_init(0x0A00020F); if (!geo_have) geo_fetch();
+                   if (wall_fetch()) { wall_apply(1); puts("wallpaper: map fetched (tiles "); putn((unsigned int)wall_map_tx); puts(","); putn((unsigned int)wall_map_ty); puts(" z"); putn(WALL_ZOOM); puts(")\n"); }
+                   else puts("wallpaper: fetch failed, photo stays\n"); }
+        }
+        else { puts(wall_mode ? "wallpaper: map" : "wallpaper: photo"); puts(wall_src == wallpaper_rgb ? " (showing photo)\n" : " (showing map)\n"); }
+    }
     else if (!strcmp(line, "dockscale")) {
         if (!*arg) { puts("dock scale: "); putn((unsigned int)dock_scale_pct); puts("% (dockscale <5-25> to set)\n"); }
         else {
@@ -4991,22 +5186,31 @@ static void run(char *line){
            chunk CRC, and the same flip with the CRC recomputed must still
            fail inside inflate/Adler-32 instead of decoding to garbage. */
         int pass = 1;
+        /* v75: a fourth fixture, 8-bit indexed (PLTE), the shape every real
+           map tile server serves. Its pixels are palette lookups of a
+           quantized crop, not wallpaper bytes, so pal=1 skips the
+           wallpaper compare and the host hash alone is the oracle. */
         struct { const char *name; const unsigned char *png; unsigned int len;
-                 unsigned int x0, y0, w, h, ch, fnv; } cases[3] = {
+                 unsigned int x0, y0, w, h, ch, fnv; int pal; } cases[4] = {
             { "rgb_dyn", pngt_rgb_dyn, sizeof pngt_rgb_dyn, PNGT_RGB_DYN_X0, PNGT_RGB_DYN_Y0,
-              PNGT_RGB_DYN_W, PNGT_RGB_DYN_H, PNGT_RGB_DYN_CH, PNGT_RGB_DYN_FNV },
+              PNGT_RGB_DYN_W, PNGT_RGB_DYN_H, PNGT_RGB_DYN_CH, PNGT_RGB_DYN_FNV, PNGT_RGB_DYN_PAL },
             { "rgba_stored", pngt_rgba_stored, sizeof pngt_rgba_stored, PNGT_RGBA_STORED_X0, PNGT_RGBA_STORED_Y0,
-              PNGT_RGBA_STORED_W, PNGT_RGBA_STORED_H, PNGT_RGBA_STORED_CH, PNGT_RGBA_STORED_FNV },
+              PNGT_RGBA_STORED_W, PNGT_RGBA_STORED_H, PNGT_RGBA_STORED_CH, PNGT_RGBA_STORED_FNV, PNGT_RGBA_STORED_PAL },
             { "rgb_fixed", pngt_rgb_fixed, sizeof pngt_rgb_fixed, PNGT_RGB_FIXED_X0, PNGT_RGB_FIXED_Y0,
-              PNGT_RGB_FIXED_W, PNGT_RGB_FIXED_H, PNGT_RGB_FIXED_CH, PNGT_RGB_FIXED_FNV },
+              PNGT_RGB_FIXED_W, PNGT_RGB_FIXED_H, PNGT_RGB_FIXED_CH, PNGT_RGB_FIXED_FNV, PNGT_RGB_FIXED_PAL },
+            { "pal_dyn", pngt_pal_dyn, sizeof pngt_pal_dyn, PNGT_PAL_DYN_X0, PNGT_PAL_DYN_Y0,
+              PNGT_PAL_DYN_W, PNGT_PAL_DYN_H, PNGT_PAL_DYN_CH, PNGT_PAL_DYN_FNV, PNGT_PAL_DYN_PAL },
         };
-        for (int ci = 0; ci < 3; ci++) {
+        for (int ci = 0; ci < 4; ci++) {
             unsigned char *px = 0; unsigned int w = 0, h = 0, ch = 0;
             int r = png_decode(cases[ci].png, cases[ci].len, &px, &w, &h, &ch);
             puts("png "); puts(cases[ci].name); puts(": ");
             if (r != 0) { puts("decode error "); putn((unsigned int)(-r)); puts(" FAILED\n"); pass = 0; continue; }
             unsigned int mism = 0, fnv = 0x811c9dc5u;
             if (w != cases[ci].w || h != cases[ci].h || ch != cases[ci].ch) mism = 0xFFFFFFFFu;
+            else if (cases[ci].pal) {
+                for (unsigned int i = 0; i < w * h * ch; i++) { fnv ^= px[i]; fnv *= 0x01000193u; }
+            }
             else {
                 for (unsigned int y = 0; y < h; y++)
                     for (unsigned int x = 0; x < w; x++) {

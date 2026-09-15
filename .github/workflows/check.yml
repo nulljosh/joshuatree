@@ -26,3 +26,26 @@ jobs:
         run: ./tools/png-host-check.sh
       - name: PNG decoder, in-kernel
         run: ./tools/png-check.sh
+
+  # v75: real-network checks. geo-check.sh (v71) and wallpaper-check.py /
+  # wallfx-check.py (v75) talk to ip-api.com, Open-Meteo and OpenTopoMap
+  # for real; a provider hiccup must not block a kernel push, so this job
+  # reports rather than gates. Read its log when it goes red two runs in
+  # a row, that is a real regression or a provider change, not noise.
+  network:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang, lld, qemu
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld qemu-system-x86 python3-pil curl
+      - name: Build
+        run: make kernel.elf
+      - name: Weather location (ip-api + Open-Meteo)
+        run: ./tools/geo-check.sh
+      - name: Map wallpaper (OpenTopoMap, byte-for-byte vs host)
+        run: python3 tools/wallpaper-check.py
+      - name: Rain over the map wallpaper
+        run: python3 tools/wallfx-check.py rain

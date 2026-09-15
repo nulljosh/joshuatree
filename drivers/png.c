@@ -339,6 +339,10 @@ int png_decode(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *channels)
     u32 width = 0, height = 0, ch = 0;
     int have_ihdr = 0, have_iend = 0;
     u32 idat_total = 0;
+    /* v75: color type 3 (indexed). The PLTE chunk's RGB triples are
+       looked up per sample after unfiltering; bpp for the filters is 1. */
+    int paletted = 0;
+    const u8 *plte = 0; u32 plte_n = 0;
 
     /* Pass 1: validate every chunk's length + CRC, read IHDR, sum IDAT sizes. */
     while (pos + 12 <= len && !have_iend) {
@@ -353,11 +357,21 @@ int png_decode(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *channels)
             u32 depth = body[8], ctype = body[9], comp = body[10], filt = body[11], ilace = body[12];
             if (width == 0 || height == 0 || width > 16384 || height > 16384) return PNG_E_FORMAT;
             if (comp != 0 || filt != 0) return PNG_E_FORMAT;
-            if (depth != 8 || (ctype != 2 && ctype != 6) || ilace != 0) return PNG_E_UNSUPPORTED;
+            if (depth != 8 || (ctype != 2 && ctype != 6 && ctype != 3) || ilace != 0) return PNG_E_UNSUPPORTED;
             ch = ctype == 6 ? 4 : 3;
+            paletted = (ctype == 3);
             have_ihdr = 1;
+        } else if (!memcmp(tag, "PLTE", 4)) {
+            /* RFC 2083 4.1.2: 1..256 entries, length a multiple of 3, must
+               precede the first IDAT. Only meaningful for ctype 3 here
+               (a PLTE on an RGB image is a suggested-quantization hint
+               and is ignored). */
+            if (!have_ihdr || plte || idat_total) return PNG_E_FORMAT;
+            if (clen == 0 || clen > 768 || clen % 3 != 0) return PNG_E_FORMAT;
+            plte = body; plte_n = clen / 3;
         } else if (!memcmp(tag, "IDAT", 4)) {
             if (!have_ihdr) return PNG_E_FORMAT;
+            if (paletted && !plte) return PNG_E_FORMAT; /* indexed with no palette to index */
             idat_total += clen;
         } else if (!memcmp(tag, "IEND", 4)) {
             have_iend = 1;
@@ -367,10 +381,11 @@ int png_decode(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *channels)
     }
     if (!have_ihdr || !have_iend || idat_total == 0) return PNG_E_FORMAT;
 
-    u32 stride = width * ch;
+    u32 bpp = paletted ? 1 : ch;    /* bytes per pixel as the FILTERS see them */
+    u32 stride = width * bpp;        /* one scanline of encoded samples */
     u32 raw_len = height * (stride + 1);
     /* overflow guard: 16384*16384*4 fits u32 only barely, keep it honest */
-    if (stride / ch != width || raw_len / height != stride + 1) return PNG_E_FORMAT;
+    if (stride / bpp != width || raw_len / height != stride + 1) return PNG_E_FORMAT;
 
     /* Pass 2: concatenate IDAT bodies. PNG splits one zlib stream across
        IDAT chunks at arbitrary byte boundaries, so they must be joined
@@ -395,9 +410,26 @@ int png_decode(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *channels)
 
     u8 *px = kmalloc(height * stride);
     if (!px) { kfree(raw); return PNG_E_NOMEM; }
-    r = unfilter(raw, px, stride, height, ch);
+    r = unfilter(raw, px, stride, height, bpp);
     kfree(raw);
     if (r) { kfree(px); return r; }
+
+    if (paletted) {
+        /* Expand indices to RGB through PLTE. An index past the palette's
+           real length is a format error per the spec, not silently
+           clamped: a map tile with a 20-entry palette and a stray 200
+           would otherwise paint whatever bytes follow the chunk. */
+        u32 n = width * height;
+        u8 *rgb = kmalloc(n * 3);
+        if (!rgb) { kfree(px); return PNG_E_NOMEM; }
+        for (u32 i = 0; i < n; i++) {
+            u32 idx = px[i];
+            if (idx >= plte_n) { kfree(px); kfree(rgb); return PNG_E_FORMAT; }
+            rgb[i * 3] = plte[idx * 3]; rgb[i * 3 + 1] = plte[idx * 3 + 1]; rgb[i * 3 + 2] = plte[idx * 3 + 2];
+        }
+        kfree(px);
+        px = rgb;
+    }
 
     *out = px; *w = width; *h = height; *channels = ch;
     return 0;

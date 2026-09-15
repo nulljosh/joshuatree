@@ -18,11 +18,12 @@ static unsigned fnv(const unsigned char *p, unsigned n) {
 }
 
 static int check(const char *name, const unsigned char *png, unsigned len,
-                 unsigned x0, unsigned y0, unsigned ew, unsigned eh, unsigned ech, unsigned efnv) {
+                 unsigned x0, unsigned y0, unsigned ew, unsigned eh, unsigned ech, unsigned efnv, int pal) {
     unsigned char *out; unsigned w, h, ch;
     int r = png_decode(png, len, &out, &w, &h, &ch);
     if (r) { printf("%s: decode err %d FAIL\n", name, r); return 1; }
     unsigned mism = 0;
+    if (!pal) /* v75: the indexed fixture's pixels are palette lookups, the host hash alone is its oracle */
     for (unsigned y = 0; y < h; y++)
         for (unsigned x = 0; x < w; x++) {
             const unsigned char *e = &wallpaper_rgb[((y0 + y) * WALLPAPER_W + x0 + x) * 3];
@@ -57,9 +58,25 @@ static int corrupt_past_crc(void) {
 
 int main(void) {
     int bad = 0;
-    bad |= check("rgb_dyn", pngt_rgb_dyn, sizeof pngt_rgb_dyn, PNGT_RGB_DYN_X0, PNGT_RGB_DYN_Y0, PNGT_RGB_DYN_W, PNGT_RGB_DYN_H, 3, PNGT_RGB_DYN_FNV);
-    bad |= check("rgba_stored", pngt_rgba_stored, sizeof pngt_rgba_stored, PNGT_RGBA_STORED_X0, PNGT_RGBA_STORED_Y0, PNGT_RGBA_STORED_W, PNGT_RGBA_STORED_H, 4, PNGT_RGBA_STORED_FNV);
-    bad |= check("rgb_fixed", pngt_rgb_fixed, sizeof pngt_rgb_fixed, PNGT_RGB_FIXED_X0, PNGT_RGB_FIXED_Y0, PNGT_RGB_FIXED_W, PNGT_RGB_FIXED_H, 3, PNGT_RGB_FIXED_FNV);
+    bad |= check("rgb_dyn", pngt_rgb_dyn, sizeof pngt_rgb_dyn, PNGT_RGB_DYN_X0, PNGT_RGB_DYN_Y0, PNGT_RGB_DYN_W, PNGT_RGB_DYN_H, 3, PNGT_RGB_DYN_FNV, 0);
+    bad |= check("rgba_stored", pngt_rgba_stored, sizeof pngt_rgba_stored, PNGT_RGBA_STORED_X0, PNGT_RGBA_STORED_Y0, PNGT_RGBA_STORED_W, PNGT_RGBA_STORED_H, 4, PNGT_RGBA_STORED_FNV, 0);
+    bad |= check("rgb_fixed", pngt_rgb_fixed, sizeof pngt_rgb_fixed, PNGT_RGB_FIXED_X0, PNGT_RGB_FIXED_Y0, PNGT_RGB_FIXED_W, PNGT_RGB_FIXED_H, 3, PNGT_RGB_FIXED_FNV, 0);
+    bad |= check("pal_dyn", pngt_pal_dyn, sizeof pngt_pal_dyn, PNGT_PAL_DYN_X0, PNGT_PAL_DYN_Y0, PNGT_PAL_DYN_W, PNGT_PAL_DYN_H, 3, PNGT_PAL_DYN_FNV, 1);
+
+    /* v75: an indexed image whose palette is missing must be a clean format error, not a wild read */
+    {
+        unsigned n = sizeof pngt_pal_dyn;
+        unsigned char *c = malloc(n); memcpy(c, pngt_pal_dyn, n);
+        unsigned pos = 8 + 25; /* the PLTE chunk sits right after IHDR in this fixture */
+        memcpy(c + pos + 4, "pLTx", 4); /* rename it: an unknown ancillary chunk, CRC recomputed */
+        unsigned clen = (c[pos] << 24) | (c[pos+1] << 16) | (c[pos+2] << 8) | c[pos+3];
+        put_be32(c + pos + 8 + clen, png_crc32(c + pos + 4, clen + 4));
+        unsigned char *o; unsigned w, h, ch;
+        int r = png_decode(c, n, &o, &w, &h, &ch);
+        free(c); if (!r) free(o);
+        printf("indexed with no PLTE: r=%d %s\n", r, r == PNG_E_FORMAT ? "ok" : "FAIL");
+        bad |= (r != PNG_E_FORMAT);
+    }
 
     unsigned n = sizeof pngt_rgb_dyn;
     unsigned char *c = malloc(n); memcpy(c, pngt_rgb_dyn, n); c[5000] ^= 0x55;

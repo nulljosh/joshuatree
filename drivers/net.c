@@ -448,8 +448,17 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
     u8 dest_mac[6];
     if (!resolve_next_hop(dest_ip, dest_mac)) return -1;
 
-    u16 local_port = 44000;
-    u32 our_seq = 0x1000; /* toy ISN, no peer to confuse since we open the connection */
+    /* v75: a fresh local port per connection. A fixed 44000 was fine while
+       every caller spoke to a different host once per boot (ip-api, then
+       Open-Meteo); the map wallpaper opens four back-to-back connections
+       to the same server, and the fourth SYN on an identical 4-tuple hit
+       one SLIRP still held half-closed (this side sends its FIN and
+       never waits for the final ACK, by design), reproducibly failing
+       on tile 3 of 4 (`wallerr=http 3`). Ephemeral range, wraps. */
+    static u16 next_port = 44000;
+    u16 local_port = next_port++;
+    if (next_port >= 60000) next_port = 44000;
+    u32 our_seq = 0x1000 + ((u32)local_port << 8); /* toy ISN, varied per connection so a stale segment from the last one can't match */
     u32 their_seq = 0;
 
     if (!tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, 0, TCP_SYN, 0, 0)) return -1;

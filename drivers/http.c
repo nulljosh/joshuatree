@@ -1,4 +1,5 @@
 #include "http.h"
+#include "kheap.h"
 #include "net.h"
 
 typedef unsigned int u32;
@@ -70,8 +71,16 @@ int http_get(const char *host, const char *path, unsigned short port,
         while (*s && n < sizeof(req) - 1) req[n++] = *s++;
     }
 
-    char raw[2048];
-    return http_body_only(ip, port, req, n, body_out, body_maxlen, raw, sizeof(raw));
+    /* v75: heap-backed, sized to the caller's body cap. The old 2KB stack
+       buffer silently capped every reply (headers + body) at 2047 bytes,
+       fine for JSON one-liners, hopeless for a 37KB map tile. Headers
+       from a CDN run ~700 bytes; 2048 of slack keeps that honest. */
+    unsigned int raw_cap = body_maxlen + 2048;
+    char *raw = kmalloc(raw_cap);
+    if (!raw) return -1;
+    int r = http_body_only(ip, port, req, n, body_out, body_maxlen, raw, raw_cap);
+    kfree(raw);
+    return r;
 }
 
 static void putn_into(char *buf, u32 *pos, u32 cap, u32 v) {
