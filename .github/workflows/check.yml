@@ -77,6 +77,8 @@ jobs:
         run: ./tools/checks/check-calendar.sh
       - name: Settings click acts on the row actually clicked, not the last arrow-selected one
         run: ./tools/checks/settingsclick-check.sh
+      - name: Wallpaper defaults to Satellite on a fresh boot
+        run: ./tools/checks/walldefault-check.sh
       - name: JPEG decoder, host harness
         run: ./tools/checks/jpeg-host-check.sh
       - name: JPEG decoder, in-kernel

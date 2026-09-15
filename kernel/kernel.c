@@ -802,7 +802,20 @@ static int dock_scale_pct = 7;
 #define WALL_COOL  2
 #define WALL_RAW   3
 #define WALL_SAT   4
-static int wall_theme = WALL_WARM;
+/* v0.76.7: default flipped from WALL_WARM to WALL_SAT per Joshua's own
+   direct, previously-recorded request ("the real satellite-town wallpaper
+   should become the default once buildable", roadmap.md's "Later idea:
+   location-dynamic satellite wallpaper" entry) -- Satellite became real and
+   buildable in v0.73.1 but the compiled-in default was never actually
+   flipped, so every fresh boot (and, worse, the browser demo's every idle-
+   tour lap, which wipes SETTINGS.TXT via ramfs reset) kept showing the Warm
+   map until a user manually clicked through Settings. Safe by construction:
+   wall_apply() always falls back to the baked wallpaper_rgb photo whenever
+   wall_map is still null (fetch hasn't landed or failed), the exact same
+   fallback this default already relied on for WALL_WARM, so flipping the
+   default changes nothing about failure-mode safety, only which real image
+   a successful fetch shows. */
+static int wall_theme = WALL_SAT;
 static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
 
 /* v85 (chat rework): global LLM config, the same "one real setting, one
