@@ -564,14 +564,12 @@
   // affordance in this kernel at all beyond gui_wait_close (confirmed
   // the same way), so they get a real dwell with nothing scripted,
   // exactly as honest as scripting a fake interaction would be dishonest.
-  // v0.71.3: trimmed from all 8 dock apps to 3, direct request ("the
-  // autoplay demo should just be opening apps like one or two, or maybe
-  // three apps, and then closing them, and when they're open, just
-  // interact with them a little bit"). The full 8-app cycle ran forever
-  // rather than reading as a quick, repeating sample; Files (no script,
-  // a real dwell), Mail (real compose keystrokes) and Calendar (real
-  // month/day navigation) stay, giving one no-interaction app and two
-  // scripted ones inside a short loop instead of an 8-stop marathon.
+  // v0.72.2: restored to all 8 dock apps, direct request ("looks through
+  // every app properly, only the first half in the dock"), after v0.71.3
+  // had trimmed this to 3 (Files/Mail/Calendar) to stop the full cycle
+  // reading as a marathon. Reconciled both asks by keeping every app but
+  // cutting DWELL_MS well below, so the whole loop is still a quick,
+  // repeating sample rather than either extreme.
   var TOUR_APPS = [
     { name: 'Files', slot: 1 },
     { name: 'Mail', slot: 2, script: [
@@ -591,7 +589,24 @@
       { type: 'keys', text: '\n', speed: 200 }, // opens cal_day_view for the selected day
       { type: 'wait', ms: 500 },
       { type: 'keys', text: 'Shipped by an AI, for real.\n', speed: 55 } // saves and returns to the month view
-    ] }
+    ] },
+    { name: 'Notes', slot: 4, script: [
+      { type: 'keys', text: 'A real OS, from scratch. Every keystroke here is real.', speed: 55 }
+    ] },
+    { name: 'Reminders', slot: 5, script: [
+      { type: 'keys', text: 'a', speed: 200 },
+      { type: 'wait', ms: 500 },
+      { type: 'keys', text: 'Ship the demo tour rework\n', speed: 55 }
+    ] },
+    { name: 'Terminal', slot: 6, script: [
+      { type: 'keys', text: 'help\n', speed: 55 },
+      { type: 'wait', ms: 900 },
+      { type: 'keys', text: 'uptime\n', speed: 55 }
+    ] },
+    { name: 'Chat', slot: 7, script: [
+      { type: 'keys', text: 'what can you do?', speed: 55 } // no \n: see the long-standing no-NIC-in-this-embed note above, unchanged since v51
+    ] },
+    { name: 'Weather', slot: 8 }
   ];
   // gui_launch_from_dock's own fixed traffic-light X (x=70,y=40 non-apps-
   // folder window, red circle at x+24,y+16), the same LOGICAL coordinate
@@ -602,7 +617,7 @@
   // bottom of a 540px-tall logical screen; 56 is nowhere near it), which
   // is exactly what makes it the real fix for the v69 interaction above.
   var CLOSE_X = 94, CLOSE_Y = 56;
-  var DWELL_MS = 15000; // "about 15 seconds" per app, direct request
+  var DWELL_MS = 7000; // v0.72.2: cut from 15s once the app count went back to 8, keeps the full loop under a minute
   var tourTimer = 0, tourRunning = false, tourGen = 0;
   function stopAutoplay() { if (tourTimer) { clearTimeout(tourTimer); tourTimer = 0; } tourRunning = false; tourGen++; /* invalidates any in-flight tourLoop */ }
   function sleep(ms) { return new Promise(function (res) { tourTimer = setTimeout(res, ms); }); }

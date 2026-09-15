@@ -16,6 +16,7 @@ takes, and roughly what xv6/ToaruOS/Linux 0.01 did in their first months).
 - **v0.71.3** (Sep 2026): fixed boot-logo positioning (stage-wrap was missing position:relative after aspect-ratio change)
 - **v0.71.4** (Sep 2026): idle tour trimmed to 3 apps, autoplay non-start investigated and not reproduced
 - **v0.71.5** (Sep 2026): tools/ repo hygiene, reorganized into tools/checks/ (verification/regression tests) and tools/gen/ (generator/utility scripts), all references updated across documentation and CI workflows, check.sh still PASS, pure refactor.
+- **v0.72.2** (Sep 2026): idle tour restored to all 8 real dock apps (was trimmed to 3 in v0.71.4), DWELL_MS cut 15s -> 7s to keep the full loop under a minute instead of either the old marathon or the too-short 3-app sample. Also fixed tools/checks/tourappcount-check.mjs's own relative import path, broken by the v0.71.5 tools/ reorg the same way three other checks were that same night (`../landing/...` needed to become `../../landing/...`), and rewrote its assertion to require exactly the 8 real dock apps instead of a 1-3 cap that now contradicts the restored list.
 
 Full breakdown of what shipped in each: `git log --oneline` or the commit history, not here, this file is the queue, not the changelog.
 
