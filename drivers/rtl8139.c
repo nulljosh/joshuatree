@@ -112,6 +112,41 @@ void rtl8139_get_mac(u8 mac[6]) {
    tools/geo-check.sh is the permanent regression test: it needs both
    back-to-back connections to land (its `wx=` assertion) and fails on
    the old ROK gate. */
+/* Pure logic, no hardware I/O, so it's real unit-testable the same way
+   drivers/net.c's tcp_match_selftest tests tcp_match directly: given the
+   NIC's own raw length field for a queued frame and the caller's buffer
+   size, returns how many bytes rtl8139_receive will actually write into
+   that buffer.
+
+   Real bug this replaces (v0.72.x, found tracing net.c's own "n is the
+   actual number of bytes rtl8139_receive put in rx" comment against what
+   this function actually returned): rtl8139_receive used to return
+   data_len, the NIC's raw claimed length minus 4 for the CRC, completely
+   unclamped, while the copy loop right above it only ever wrote
+   min(data_len, maxlen) bytes into the caller's buffer. Every net.c
+   caller passes sizeof(rx) (1514) as maxlen and trusts the return value
+   as "how many bytes are actually valid in my rx[1514]" -- tcp_match's
+   own bound check (sizeof(eth)+ip_total>n, the fix for the earlier
+   tcp_match OOB bug) depends on that being true. A frame whose NIC-
+   reported length exceeds 1514 (or is < 4, underflowing data_len to
+   roughly 4 billion) made rtl8139_receive claim far more valid bytes
+   than it had written, defeating that exact check one layer down and
+   reopening the identical class of OOB stack read the tcp_match fix
+   was written to close, just moved from "ip_total lied" to "the NIC
+   length field lied (or underflowed)". Root cause: return what was
+   actually copied, not what the wire claimed. */
+static u32 rtl8139_clamp_len(u16 length, u32 maxlen) {
+    u32 data_len = length >= 4 ? (u32)length - 4 : 0; /* guard the CRC-strip underflow on a corrupt/runt length */
+    return data_len < maxlen ? data_len : maxlen;
+}
+
+int rtl8139_clamp_selftest(void) {
+    if (rtl8139_clamp_len(9000, 1514) != 1514) return 0; /* oversized claim must clamp to what's actually copied */
+    if (rtl8139_clamp_len(64, 1514) != 60) return 0;      /* honest small frame: 64 - 4 (CRC) = 60 */
+    if (rtl8139_clamp_len(2, 1514) != 0) return 0;        /* runt frame shorter than the CRC itself: no underflow */
+    return 1;
+}
+
 u32 rtl8139_receive(void *buf, u32 maxlen) {
     if (inb(io_base + REG_CR) & CR_BUFE) return 0; /* v71: ring really empty, see the comment above */
 
@@ -119,8 +154,7 @@ u32 rtl8139_receive(void *buf, u32 maxlen) {
     u16 length = *(volatile u16 *)(rx_buffer + rx_offset + 2);
     if (!(status & 0x01)) return 0; /* packet-level ROK bit not set, don't trust it */
 
-    u32 data_len = (u32)length - 4; /* strip the trailing CRC */
-    u32 copy_len = data_len < maxlen ? data_len : maxlen;
+    u32 copy_len = rtl8139_clamp_len(length, maxlen);
     u8 *out = buf;
     for (u32 i = 0; i < copy_len; i++) out[i] = rx_buffer[rx_offset + 4 + i];
 
@@ -129,7 +163,7 @@ u32 rtl8139_receive(void *buf, u32 maxlen) {
     outw(io_base + REG_CAPR, (u16)(rx_offset - 16));
     outw(io_base + REG_ISR, ISR_ROK); /* write-1-to-clear */
 
-    return data_len;
+    return copy_len;
 }
 
 int rtl8139_send(const void *data, u32 len) {

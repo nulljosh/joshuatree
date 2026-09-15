@@ -23,4 +23,7 @@ int rtl8139_send(const void *data, unsigned int len);
    nothing has arrived. Poll this in a loop with hlt between checks rather
    than busy-spinning. */
 unsigned int rtl8139_receive(void *buf, unsigned int maxlen);
+
+/* Selftest for the return-value clamp: no hardware needed, see rtl8139.c. */
+int rtl8139_clamp_selftest(void);
 #endif

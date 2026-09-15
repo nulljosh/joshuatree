@@ -5500,6 +5500,19 @@ static void run(char *line){
            local buffer and calls the exact same tcp_match(). */
         puts(tcp_match_selftest() ? "tcpmatch: honest frame accepted, lying frame rejected: ok\n" : "tcpmatch: FAILED\n");
     }
+    else if (!strcmp(line, "rxclamptest")) {
+        /* Regression test for a real bug: rtl8139_receive (rtl8139.c) used
+           to return the NIC's raw, unclamped claimed length instead of how
+           many bytes it actually copied into the caller's buffer. Every
+           net.c caller trusts that return value as ground truth for how
+           much of rx[1514] is valid, which is exactly what tcp_match's own
+           bound check depends on -- an oversized or underflowed NIC length
+           defeated that check one layer down, the same OOB-read class as
+           the already-fixed tcp_match bug. No hardware needed:
+           rtl8139_clamp_selftest calls the exact same clamp logic
+           rtl8139_receive uses. */
+        puts(rtl8139_clamp_selftest() ? "rxclamp: oversized/runt NIC lengths clamp correctly: ok\n" : "rxclamp: FAILED\n");
+    }
     else if (!strcmp(line, "nettest")) {
         if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
         else {
