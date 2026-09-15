@@ -1,14 +1,15 @@
 # Joshua Tree Technical Whitepaper
 
-**0.61.0** | September 2026
+**0.69.0** | September 2026
 
 An operating system, written from nothing. Not a Linux distribution. Not a
 layer on top of something else. Every part of it, from the first
 instruction the CPU runs to the pixels of the desktop, is in this
 repository. It boots in about two seconds, runs at 1920x1080, has a dock, a
-terminal, a text editor, a file browser, Mail, Calendar, Reminders, eighteen
-apps in all, live weather in the menu bar, and a tree that sways in the
-wind. It also runs in a browser tab.
+terminal, a text editor, a file browser, Mail, Calendar, Contacts,
+Calculator, Stocks, Reminders, twenty-one apps in all, live weather in the
+menu bar, and a tree that sways in the wind over a real map of your location.
+It also runs in a browser tab.
 
 ## Why
 
@@ -30,13 +31,15 @@ backends (a real FAT16 disk and a RAM disk). It found the network card by
 reading the PCI bus itself and built Ethernet, ARP, IPv4, UDP, DNS, TCP and
 HTTP from raw bytes on the wire.
 
-On top of that sits a desktop. Eighteen apps live in an Apps folder; the
-dock pins the eight you reach for most, Apps and Trash bookending them.
-Deleted files go to a Trash you can restore from. Clicking the clock shows
-the system's own log and any live warnings. The terminal is the same shell
-the machine boots into, just in a window. Text everywhere is a real
-antialiased typeface, not a bitmap. Icons are drawn as geometry at the
-panel's true resolution, never stored as images.
+On top of that sits a desktop. Twenty-one apps live in an Apps folder; the
+dock pins ten you reach for most, Apps and Trash bookending them. Deleted
+files go to a Trash you can restore from. Clicking the clock shows the
+system's own log and any live warnings. The terminal is the same shell the
+machine boots into, just in a window. Text everywhere is a real antialiased
+typeface, not a bitmap. Icons are drawn as geometry at the panel's true
+resolution, never stored as images. The wallpaper is a map of your real
+location, tinted warm or cool or left raw, pulled live from OpenTopoMap
+with its own PNG decoder built into the kernel.
 
 ## How the pieces work
 
@@ -62,6 +65,13 @@ it falls back to the plain relative PS/2 protocol.
 over this kernel's own TCP/HTTP stack, plain HTTP only, no TLS here yet.
 Someone else's model for now, but already running with no cloud in the
 loop, the one piece of the longer goal that already works.
+
+**Map wallpaper.** The desktop background is a real topographic map, pulled
+live from OpenTopoMap by IP geolocation. A real PNG decoder, built into the
+kernel, renders map tiles at boot and when you change themes. Four
+wallpaper styles are selectable: the original photo, the map tinted warm,
+tinted cool for higher contrast, or raw from the tiles themselves. The same
+TCP/HTTP stack fetches both the tiles and the geographic coordinates.
 
 **The browser demo.** The landing page runs this exact kernel in a
 JavaScript x86 emulator. Four things a real BIOS normally sets up had to be
