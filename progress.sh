@@ -173,6 +173,52 @@ last_x = xf(n - 1)
 area_points = f"{pad_l},{pad_t+plot_h} {points_attr} {last_x},{pad_t+plot_h}"
 half_v = max_v // 2
 
+# Calculate rate-of-change (lines per day) for a second series
+# For each sampled point, compute the rate as delta_lines / delta_days
+# Use a simple finite-difference approach, clamping to window of adjacent points
+rates = []
+for i in range(n):
+    if i == 0:
+        # First point: use forward difference to next point
+        delta_idx = sampled[i+1][0] - sampled[i][0] if i+1 < n else 1
+        delta_lines = sampled[i+1][3] - sampled[i][3] if i+1 < n else 0
+        date1 = sampled[i][2]
+        date2 = sampled[i+1][2] if i+1 < n else sampled[i][2]
+    elif i == n - 1:
+        # Last point: use backward difference from previous point
+        delta_lines = sampled[i][3] - sampled[i-1][3]
+        date1 = sampled[i-1][2]
+        date2 = sampled[i][2]
+    else:
+        # Middle points: use centered difference
+        delta_lines = sampled[i+1][3] - sampled[i-1][3]
+        date1 = sampled[i-1][2]
+        date2 = sampled[i+1][2]
+
+    # Calculate days difference (rough approximation from date strings)
+    try:
+        y1, m1, d1 = map(int, date1.split("-"))
+        y2, m2, d2 = map(int, date2.split("-"))
+        days_diff = (y2-y1)*365 + (m2-m1)*30 + (d2-d1)
+        if days_diff <= 0:
+            days_diff = 1  # Avoid division by zero
+        rate = delta_lines / days_diff
+        rates.append(max(0, rate))  # Clamp to non-negative
+    except:
+        rates.append(0)
+
+# Scale rates for visualization (use 90th percentile to avoid outliers)
+if rates:
+    sorted_rates = sorted(rates)
+    max_rate = sorted_rates[min(len(rates)-1, int(0.95*len(rates)))]
+    if max_rate == 0:
+        max_rate = 1
+else:
+    max_rate = 1
+
+rate_points_attr = " ".join(f"{xf(i)},{yf_pct(min(100, max(0, int(rates[i] * 100 / max_rate))))}" for i in range(n))
+rate_dots = "".join(f'<circle cx="{xf(i)}" cy="{yf_pct(min(100, max(0, int(rates[i] * 100 / max_rate))))}" r="2.5" fill="var(--bg)" stroke="var(--line2-pct)" stroke-width="1.5"/>' for i in dot_idx if i < len(rates))
+
 # x-axis: real calendar dates, deduplicated (many commits share a day),
 # thinned the same way the old script thinned version labels, by a
 # minimum pixel gap so 8+ dates across a narrow mobile viewport never
@@ -227,28 +273,33 @@ svg.append('<defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1">'
             '<stop offset="0%" stop-color="var(--line)" stop-opacity="0.35"/>'
             '<stop offset="100%" stop-color="var(--line)" stop-opacity="0"/></linearGradient></defs>')
 svg.append('<rect width="100%" height="100%" fill="var(--bg)"/>')
-# Single legend row, one series. The old second dashed line (doc
-# coverage over time) got cut entirely, third real attempt at this:
-# relabeling wasn't enough, plotting the right metric wasn't enough
-# either, the metric itself is fundamentally lumpy (jumps in one pass,
-# not a smooth trend) and just reads as a noisy, ugly zigzag as a line
-# chart, direct feedback ("still looks retarded"), fair. Doc coverage
-# is a real, current, mostly-binary fact, not a time series worth
-# fighting a chart to show, so it's a plain stat in the caption instead.
+# Two legend rows, two series. The rate-of-change line plots on the
+# right axis (0-100%, normalized per commit sample window) to avoid
+# mixing two very different scales. Distinct colors per series.
 svg.append(f'<line x1="{pad_l}" y1="8" x2="{pad_l+14}" y2="8" stroke="var(--line)" stroke-width="2.5"/>')
 svg.append(f'<text x="{pad_l+19}" y="11" font-size="10" fill="var(--label)">Lines of real code</text>')
+svg.append(f'<line x1="{pad_l+180}" y1="8" x2="{pad_l+194}" y2="8" stroke="var(--line2-pct)" stroke-width="2"/>')
+svg.append(f'<text x="{pad_l+199}" y="11" font-size="10" fill="var(--label)">Rate of change</text>')
 svg.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l+plot_w}" y2="{pad_t}" stroke="var(--grid)"/>')
 svg.append(f'<text x="2" y="{pad_t+3}" font-size="9" fill="var(--muted)">{max_v}</text>')
 svg.append(f'<line x1="{pad_l}" y1="{pad_t+plot_h//2}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h//2}" stroke="var(--grid)"/>')
 svg.append(f'<text x="2" y="{pad_t+plot_h//2+3}" font-size="9" fill="var(--muted)">{half_v}</text>')
 svg.append(f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l}" y2="{pad_t+plot_h}" stroke="var(--axis)"/>')
 svg.append(f'<line x1="{pad_l}" y1="{pad_t+plot_h}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h}" stroke="var(--axis)"/>')
+svg.append(f'<line x1="{pad_l+plot_w}" y1="{pad_t}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h}" stroke="var(--axis)"/>')
 svg.append(f'<text x="2" y="{pad_t+plot_h+3}" font-size="9" fill="var(--muted)">0</text>')
+svg.append(f'<text x="{pad_l+plot_w+4}" y="{pad_t+3}" font-size="9" fill="var(--muted)">100%</text>')
+svg.append(f'<text x="{pad_l+plot_w+4}" y="{pad_t+plot_h+3}" font-size="9" fill="var(--muted)">0%</text>')
 # Left axis title, rotated, its own color matching the solid line
 svg.append(f'<text x="10" y="{pad_t+plot_h//2}" font-size="8" fill="var(--line)" text-anchor="middle" transform="rotate(-90 10 {pad_t+plot_h//2})">Lines of code</text>')
+# Right axis title, rotated, color matching the rate line
+svg.append(f'<text x="{pad_l+plot_w+8}" y="{pad_t+plot_h//2}" font-size="8" fill="var(--line2-pct)" text-anchor="middle" transform="rotate(90 {pad_l+plot_w+8} {pad_t+plot_h//2})">Rate of change</text>')
 svg.append(f'<polygon points="{area_points}" fill="url(#area)"/>')
 svg.append(f'<polyline points="{points_attr}" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>')
+# Rate-of-change as a second line on the right axis (0-100% normalized)
+svg.append(f'<polyline points="{rate_points_attr}" fill="none" stroke="var(--line2-pct)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>')
 svg.append(dots)
+svg.append(rate_dots)
 for i in shown:
     svg.append(f'<text x="{xf(i)}" y="{pad_t+plot_h+16}" font-size="10" fill="var(--label)" text-anchor="middle">{short_date(labels[i])}</text>')
 svg.append(f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fill="var(--strong)">{max_v:,} lines &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>')
