@@ -28,7 +28,7 @@ subsample loop (back to the single-sample distance/band threshold) makes
 this pixel come back as pure (21, 10, 6) again, FAIL; with the fix
 restored it reads as a real intermediate blend, PASS.
 
-Usage: tools/traycorner-check.py   (from the repo root, after make kernel.elf)
+Usage: tools/checks/traycorner-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image

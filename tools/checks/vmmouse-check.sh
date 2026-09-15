@@ -20,7 +20,7 @@
 # headlessly. The backdoor changes that, so the native QEMU side can be
 # verified from a script for the first time.
 #
-# Usage: tools/vmmouse-check.sh   (from the repo root, after make kernel.elf)
+# Usage: tools/checks/vmmouse-check.sh   (from the repo root, after make kernel.elf)
 set -e
 cd "$(dirname "$0")/.."
 LOG=/tmp/jt-vmmouse-serial.log

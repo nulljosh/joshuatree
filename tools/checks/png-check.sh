@@ -5,7 +5,7 @@
 # regress.sh uses), and reads the result off the serial port. The kernel
 # prints one FNV-1a hash per decoded image; this script recomputes the
 # same hash from PIL's own decode of the identical embedded bytes (via
-# tools/gen_png_testdata.py's output) and demands they match, so the
+# tools/gen/gen_png_testdata.py's output) and demands they match, so the
 # comparison is genuinely kernel-decode vs host-decode, not kernel vs
 # itself. Also requires the two fault-injection lines and the final PASS.
 set -e

@@ -28,7 +28,7 @@ the whole sweep. Any app that stays open fails the run by name.
 Discriminating: on the v66 kernel Notes and Chat both fail step 2 (proven
 before the fix landed, see roadmap.md's v67 entry).
 
-Usage: tools/appclose-check.py   (from the repo root, after make kernel.elf)
+Usage: tools/checks/appclose-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image

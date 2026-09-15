@@ -105,7 +105,7 @@ dependencies beyond clang, ld.lld and qemu.
   4. Verify against a real artifact before calling it done: `check.sh`, a
      real screenshot (this Mac's own attached display + `screencapture`,
      not QEMU's broken `screendump`), a real disk image, not "it booted."
-     `tools/check-refs.sh` after any rename/move/delete, real drift
+     `tools/checks/check-refs.sh` after any rename/move/delete, real drift
      insurance for `roadmap.md`/this file's own file-path references, not
      assumed still accurate.
   4b. Standing QA requirement (direct request, Sep 2026): a one-off
@@ -115,8 +115,8 @@ dependencies beyond clang, ld.lld and qemu.
       the suite, not just ad-hoc verification thrown away after the pass:
       either a new shell test command (the `heaptest`/`tasktest`/
       `preempttest`/`killtest`/`reaptest`/`ring3test` pattern already in
-      `kernel.c`) or a standalone `tools/*-check.{sh,py}` script (the
-      `dockhover-check.py`/`vmmouse-check.sh`/`check-calendar.sh` pattern),
+      `kernel.c`) or a standalone `tools/checks/*-check.{sh,py}` script (the
+      `tools/checks/dockhover-check.py`/`tools/checks/vmmouse-check.sh`/`tools/checks/check-calendar.sh` pattern),
       whichever fits the feature. "Discriminating" is the real bar, matching
       every existing test in this suite: prove the test actually fails
       when the fix is temporarily reverted, then prove it passes with the
@@ -148,7 +148,7 @@ dependencies beyond clang, ld.lld and qemu.
       running more of the shell regression commands (`heaptest`,
       `tasktest`, etc.) headlessly in CI, not just `check.sh`'s boot
       check; caching the apt/qemu install step for faster runs; a
-      second job for `tools/check-refs.sh`. Add to it when a real gap
+      second job for `tools/checks/check-refs.sh`. Add to it when a real gap
       is found, the same discipline as every other standing rule here,
       not a one-time setup task.
   4e. Standing release-notes requirement (direct request, Sep 2026): a

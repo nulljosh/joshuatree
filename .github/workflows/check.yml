@@ -19,13 +19,13 @@ jobs:
       - name: Boot check
         run: ./check.sh
       # v74: the PNG decoder is the first subsystem with a host-native
-      # harness (tools/png-host-check.sh, seconds) AND an in-kernel one
-      # (tools/png-check.sh, decodes inside QEMU and matches the host's
+      # harness (tools/checks/png-host-check.sh, seconds) AND an in-kernel one
+      # (tools/checks/png-check.sh, decodes inside QEMU and matches the host's
       # PIL decode hash for hash). Both run on every push.
       - name: PNG decoder, host harness
-        run: ./tools/png-host-check.sh
+        run: ./tools/checks/png-host-check.sh
       - name: PNG decoder, in-kernel
-        run: ./tools/png-check.sh
+        run: ./tools/checks/png-check.sh
       # v77/v78: the "Cl oudy" / "Curbf ind" letter-spacing regressions.
       # Renders real DejaVu text in-kernel at scale 2 (v77's texttest,
       # through font_draw_string, plus v78's wraptest, through
@@ -34,7 +34,7 @@ jobs:
       # are uneven or a wide glyph is clipped (both true under the old
       # fixed-cell renderers).
       - name: AA text spacing, in-kernel
-        run: ./tools/textspacing-check.sh
+        run: ./tools/checks/textspacing-check.sh
       # Real recurring gap: landing/v86/kernel.elf is a checked-in binary
       # copy, not a build artifact, so a docs-only or landing-only pass
       # never touches it and it silently drifts behind the real kernel.elf
@@ -87,8 +87,8 @@ jobs:
       # visual alarm either. Read the step's own log for the real PASS/FAIL,
       # that's still accurate, just no longer painted red on a host hiccup.
       - name: Weather location (ip-api + Open-Meteo)
-        run: ./tools/geo-check.sh || (sleep 15 && ./tools/geo-check.sh) || true
+        run: ./tools/checks/geo-check.sh || (sleep 15 && ./tools/checks/geo-check.sh) || true
       - name: Map wallpaper (OpenTopoMap, byte-for-byte vs host)
-        run: python3 tools/wallpaper-check.py || (sleep 15 && python3 tools/wallpaper-check.py) || true
+        run: python3 tools/checks/wallpaper-check.py || (sleep 15 && python3 tools/checks/wallpaper-check.py) || true
       - name: Rain over the map wallpaper
-        run: python3 tools/wallfx-check.py rain || (sleep 15 && python3 tools/wallfx-check.py rain) || true
+        run: python3 tools/checks/wallfx-check.py rain || (sleep 15 && python3 tools/checks/wallfx-check.py rain) || true

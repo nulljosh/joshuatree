@@ -24,7 +24,7 @@ GUI_ICON_COUNT 10: DOCK_ICON 37, tray x 258..702, slot pitch 43, slot s
 tile spans x 268+43s .. 304+43s, icon row y 469..506, magnified+lifted
 top at y 450. Update the numbers below if any of those change.
 
-Usage: tools/dockhover-check.py   (from the repo root, after make kernel.elf)
+Usage: tools/checks/dockhover-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image

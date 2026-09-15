@@ -25,7 +25,7 @@ furthest into it. Confirmed discriminating: fails on the pre-fix code
 (gui_render_icon_cached without its final corner-clip pass), passes with
 it restored.
 
-Usage: tools/iconhalo-check.py   (from the repo root, after make kernel.elf)
+Usage: tools/checks/iconhalo-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image

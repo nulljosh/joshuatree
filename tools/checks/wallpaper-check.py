@@ -30,7 +30,7 @@ Writes /tmp/jt-wall-fb.png (the real screen) and /tmp/jt-wall-map.png
 (the host-composed reference) for eyeballing. Needs internet on the host,
 python3-pil, and curl.
 
-Usage: tools/wallpaper-check.py   (from the repo root, after make kernel.elf)
+Usage: tools/checks/wallpaper-check.py   (from the repo root, after make kernel.elf)
 """
 import io, json, math, os, re, socket, subprocess, sys, time
 from PIL import Image

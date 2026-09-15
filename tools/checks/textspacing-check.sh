@@ -2,7 +2,7 @@
 # v77 (0.67.1): headless check for the "Cl oudy" menu-bar spacing bug.
 # Boots kernel.elf under `-display none`, drops out of the GUI with esc,
 # types `texttest` through the monitor's sendkey path (the same one
-# tools/png-check.sh uses), and reads the verdict off the serial port.
+# tools/checks/png-check.sh uses), and reads the verdict off the serial port.
 # The kernel renders "Cloudy" through the real font_draw_string +
 # gui_aa_char path at scale 2, measures the actual ink columns per glyph
 # via window_get_pixel_phys, and prints the inter-letter gap spread and

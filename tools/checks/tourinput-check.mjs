@@ -15,7 +15,7 @@
 // to run, the one real, visible signature only a landed keystroke can
 // produce (Mail's own list count, not just "the screen changed color").
 //
-// Usage: node tools/tourinput-check.mjs [url]
+// Usage: node tools/checks/tourinput-check.mjs [url]
 import { chromium } from 'playwright';
 
 const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com';

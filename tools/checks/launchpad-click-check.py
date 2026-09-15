@@ -9,7 +9,7 @@ dismissed the launchpad; only the keyboard path (arrows+Enter, or digits
 '1'-'9' for the first 9 of 22 apps) could actually launch anything.
 
 Reproduces headlessly with the same QMP absolute-pointer pattern as
-tools/dockhover-check.py: open the dock's Apps-folder tile (dock slot 0),
+tools/checks/dockhover-check.py: open the dock's Apps-folder tile (dock slot 0),
 wait for the grid to render, click squarely on a fleet-app tile (Curbfind,
 grid index 8), then check a real, unambiguous pixel: the outer window's
 red traffic-light dot at (80,46) in 960x540 logical space (gui_launch_

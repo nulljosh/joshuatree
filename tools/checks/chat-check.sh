@@ -1,7 +1,7 @@
 #!/bin/bash
 # v85: headless in-kernel check for the Chat rework (real VFS-backed
 # history, /api/chat with full history in the request, buffer growth past
-# the old 512-byte input cap). Same shape as tools/png-check.sh: boots
+# the old 512-byte input cap). Same shape as tools/checks/png-check.sh: boots
 # kernel.elf under `-display none`, drops out of the GUI with esc, types
 # `chattest` through the monitor's sendkey path, and reads the pass/fail
 # marker off the serial port (chattest has no screen output of its own,

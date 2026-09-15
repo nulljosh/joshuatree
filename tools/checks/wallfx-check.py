@@ -16,7 +16,7 @@ drawn, with zero sway on a map), then pmemsaves the framebuffer and asserts:
      same run with `weatherfx off` counts ~0 (checked in the v75 pass).
 
 Writes /tmp/jt-wallfx-fb.png. Needs internet, python3-pil, curl.
-Usage: tools/wallfx-check.py   (from the repo root)
+Usage: tools/checks/wallfx-check.py   (from the repo root)
 """
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image
