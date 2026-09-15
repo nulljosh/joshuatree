@@ -10,3 +10,5 @@ menubar/JoshuaTreeMonitor.app/
 menubar/window-float
 .claude/worktrees/
 dotfiles.img
+__pycache__/
+*.pyc

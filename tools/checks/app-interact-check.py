@@ -19,9 +19,9 @@ still fail this file-content assertion, which is the point.
 
 Usage: tools/checks/app-interact-check.py   (from the repo root, after make kernel.elf)
 Needs: a real FAT16 test image at /tmp/jt-qa-test.img (see tools/mkdisk.sh
-if that doesn't exist -- hdiutil + newfs_msdos, same as sync_dotfiles.sh).
+if that doesn't exist -- mkfs.vfat on Linux, or hdiutil + newfs_msdos on macOS).
 """
-import json, os, socket, subprocess, sys, time, tempfile, shutil
+import json, os, socket, subprocess, sys, time, tempfile
 
 REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 os.chdir(REPO)
@@ -235,31 +235,53 @@ finally:
     try: q.wait(timeout=5)
     except subprocess.TimeoutExpired: q.kill()
 
-# ---- host-side verification: mount the real disk, read back what the kernel wrote ----
-mount = tempfile.mkdtemp(prefix="/tmp/jt-qa-mount-")
-try:
-    subprocess.run(["hdiutil", "attach", "-nobrowse", "-mountpoint", mount, DISK],
-                    check=True, capture_output=True)
-    checks = [
-        ("NOTES.TXT",     "qa-note-marker"),
-        ("REMINDER.TXT",  "qa-reminder-marker"),  # fat.c to_fat_name() truncates 8.3 base names to 8 chars: "REMINDERS" (9) -> "REMINDER" on disk, confirmed by mounting the real image; the kernel reads/writes this same truncated name consistently, so it round-trips correctly, just not under the literal name reminders.h writes in source
-        ("MAIL.TXT",      "qa-mail-marker"),
-        ("EVENTS.TXT",    "qa-cal-marker"),
-        ("CONTACTS.TXT",  "qa-contact-marker"),
-    ]
+# ---- host-side verification: read back what the kernel wrote from the real disk ----
+# v0.76.2: Linux path switched from `sudo mount -o loop` to mtools' own
+# `mtype` (userspace FAT reader, no kernel mount/vfat module, no sudo, no
+# loop device at all). Real reason, not a style preference: confirmed live
+# in this exact container that the Linux kernel here has no vfat module
+# and `/proc/filesystems` doesn't list it (`mount -o loop` fails with
+# ENODEV, exit 32, "unknown filesystem type 'vfat'"), so the prior
+# sudo-mount approach cannot work in every Linux environment this test
+# might run in, GitHub Actions' own ubuntu-latest included if it's ever
+# similarly restricted. mtools reads the FAT structures itself, entirely
+# in userspace, the same tool tools/mkdisk.sh's own dosfstools sibling
+# package already sits next to, so this needs no new dependency.
+is_macos = sys.platform == "darwin"
+checks = [
+    ("NOTES.TXT",     "qa-note-marker"),
+    ("REMINDER.TXT",  "qa-reminder-marker"),  # fat.c to_fat_name() truncates 8.3 base names to 8 chars: "REMINDERS" (9) -> "REMINDER" on disk, confirmed by mounting the real image; the kernel reads/writes this same truncated name consistently, so it round-trips correctly, just not under the literal name reminders.h writes in source
+    ("MAIL.TXT",      "qa-mail-marker"),
+    ("EVENTS.TXT",    "qa-cal-marker"),
+    ("CONTACTS.TXT",  "qa-contact-marker"),
+]
+if is_macos:
+    mount = tempfile.mkdtemp(prefix="/tmp/jt-qa-mount-")
+    try:
+        subprocess.run(["hdiutil", "attach", "-nobrowse", "-mountpoint", mount, DISK],
+                        check=True, capture_output=True)
+        for fname, marker in checks:
+            path = os.path.join(mount, fname)
+            if not os.path.exists(path):
+                fails.append(f"disk: {fname} does not exist on the real FAT disk after the session")
+                continue
+            content = open(path, "r", errors="replace").read()
+            if marker in content:
+                print(f"disk verified: {fname} contains {marker!r} (real VFS write, not just RAM)")
+            else:
+                fails.append(f"disk: {fname} exists but does not contain {marker!r} -- save did not reach the real disk")
+    finally:
+        subprocess.run(["hdiutil", "detach", mount], capture_output=True)
+else:
     for fname, marker in checks:
-        path = os.path.join(mount, fname)
-        if not os.path.exists(path):
-            fails.append(f"disk: {fname} does not exist on the real FAT disk after the session")
+        r = subprocess.run(["mtype", "-i", DISK, "::" + fname], capture_output=True, text=True)
+        if r.returncode != 0:
+            fails.append(f"disk: {fname} does not exist on the real FAT disk after the session ({r.stderr.strip()})")
             continue
-        content = open(path, "r", errors="replace").read()
-        if marker in content:
+        if marker in r.stdout:
             print(f"disk verified: {fname} contains {marker!r} (real VFS write, not just RAM)")
         else:
             fails.append(f"disk: {fname} exists but does not contain {marker!r} -- save did not reach the real disk")
-finally:
-    subprocess.run(["hdiutil", "detach", mount], capture_output=True)
-    shutil.rmtree(mount, ignore_errors=True)
 
 if fails:
     for x in fails: print("FAIL:", x)

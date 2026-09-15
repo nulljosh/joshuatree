@@ -46,7 +46,7 @@ vga_text() {
 import re, sys
 bytes_ = []
 for l in open(sys.argv[1]).readlines():
-    m = re.match(r'^[0-9a-f]{8}:\s+(.*)', l.strip())
+    m = re.match(r'^[0-9a-f]+:\s+(.*)', l.strip())
     if m: bytes_.extend(int(x, 16) for x in m.group(1).split())
 chars = bytes_[0::2]
 print(''.join(chr(c) if 32 <= c < 127 else '.' for c in chars))

@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install clang, lld, qemu
+      - name: Install clang, lld, qemu, FAT disk tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang lld qemu-system-x86 python3-pil
+          sudo apt-get install -y clang lld qemu-system-x86 python3-pil mtools dosfstools
       - name: Build
         run: make kernel.elf
       - name: Boot check
@@ -35,6 +35,11 @@ jobs:
       # fixed-cell renderers).
       - name: AA text spacing, in-kernel
         run: ./tools/checks/textspacing-check.sh
+      # FAT16 disk image tests: tools/mkdisk.sh now uses Linux-native mkfs.vfat
+      # instead of macOS-only hdiutil+newfs_msdos, so these can run on Linux CI.
+      # fatcyclehang-check.sh also had a regex fix to match Linux QEMU output.
+      - name: FAT filesystem cycle hang (regression test)
+        run: ./tools/checks/fatcyclehang-check.sh
       # Standing CI-improvement requirement (CLAUDE.md 4d): a real audit
       # (Sep 2026) found 24 of the 30 scripts under tools/checks/ never ran
       # anywhere, this file included, only check.sh's own boot marker and
@@ -49,13 +54,17 @@ jobs:
       # among them) by treating that reset as expected cleanup noise, not a
       # test failure, so a real PASS/FAIL is what actually gates CI now.
       #
-      # Real host disk-image and llvm-nm dependencies were checked and
-      # deliberately NOT added here: app-interact-check.py, editor_qa.py,
-      # and fatcyclehang-check.sh all shell out to tools/mkdisk.sh's
-      # `hdiutil`/`newfs_msdos` (fatcyclehang-check.sh) or a hardcoded
-      # `/opt/homebrew/opt/llvm/bin/llvm-nm` (editor_qa.py), both macOS-only
-      # by design, not a CI gap; they stay a local-Mac-only check until a
-      # real Linux/mtools rewrite of mkdisk.sh exists, a separate task.
+      # editor_qa.py remains macOS-only (hardcoded `/opt/homebrew/opt/llvm/bin/llvm-nm`).
+      # app-interact-check.py is now genuinely cross-platform too (mkdisk.sh's
+      # own Linux path plus mtools' `mtype` for the host-side read-back, no
+      # kernel mount/sudo/loop device needed on Linux at all -- see
+      # roadmap.md's v0.76.2 entry for why `sudo mount -o loop` specifically
+      # doesn't work in every Linux sandbox). Deliberately NOT added as a CI
+      # step here yet: it has one real, pre-existing, unrelated failure
+      # (CONTACTS.TXT's delete-then-save gap, logged since v0.73.0) that
+      # would make this job red for a reason this pass didn't cause and
+      # isn't in scope to fix, so wiring it in now would just be a
+      # permanently-red step, not a real safety net.
       - name: Chat history (VFS-backed, past the old 512-byte cap)
         run: ./tools/checks/chat-check.sh
       - name: No-disk boot falls back to ramfs with seeded demo files
