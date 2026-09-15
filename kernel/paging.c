@@ -159,19 +159,54 @@ unsigned int paging_kernel_directory(void) {
     return phys(page_directory);
 }
 
+/* v75 (0.66.x): task creation used to require dir_phys/table_phys to land
+   below the fixed 8MB IDENTITY_MAP_LIMIT, the only region guaranteed
+   directly dereferenceable as a plain pointer. Real bug, root-caused via
+   reaptest: pmm_alloc_frame() hands out the lowest free frame first, and
+   normal desktop use (wallpaper/weather/font/window buffers through
+   kheap, all long-lived, never freed) fills that entire 8MB region during
+   ordinary GUI use, not a pathological case. Once it's full,
+   pmm_alloc_frame() can only return frames above the limit, and every
+   later task_create() -- not just a 6th, ANY of them -- failed
+   permanently for the rest of the boot, exactly reaptest's real, scoped
+   symptom (n=0, "paging_new_task_directory failed", confirmed via a
+   temporary serial trace before this fix). The actual constraint was
+   narrower than the code enforced: dir_phys/table_phys only need to be
+   dereferenceable *while paging.c itself writes their initial entries*,
+   which paging_map_region() (already proven, kheap growth and window
+   framebuffers both escape the same original 8MB cap through it) can
+   guarantee for any physical frame by identity-mapping its whole 4MB PDE
+   on demand. page_phys never gets dereferenced by this code at all, it's
+   only ever stored as a physical address inside a page-table entry, so
+   it needs no mapping and no limit check either, that restriction was
+   never load-bearing to begin with. */
 unsigned int paging_new_task_directory(void) {
     u32 dir_phys = pmm_alloc_frame();
-    if (!dir_phys || dir_phys >= IDENTITY_MAP_LIMIT) return 0;
+    if (!dir_phys) return 0;
+    if (dir_phys >= IDENTITY_MAP_LIMIT && !paging_map_region(dir_phys, 0x1000)) { pmm_free_frame(dir_phys); return 0; }
+
+    u32 table_phys = pmm_alloc_frame();
+    if (!table_phys) { pmm_free_frame(dir_phys); return 0; }
+    /* Resolved BEFORE the dir[]=page_directory[] copy below, on purpose:
+       paging_map_region() can add a fresh entry to the shared kernel
+       page_directory (a new extra_page_tables slot) when table_phys falls
+       outside every region already mapped. If that happened after the
+       copy instead, this new task's own directory would silently miss
+       that entry, and the kernel could page-fault dereferencing it the
+       next time this specific task is current. Doing it first means
+       whatever the kernel's page_directory looks like by the time the
+       copy runs is exactly what this task inherits, same guarantee
+       paging_install's own ordering already relies on. */
+    if (table_phys >= IDENTITY_MAP_LIMIT && !paging_map_region(table_phys, 0x1000)) { pmm_free_frame(table_phys); pmm_free_frame(dir_phys); return 0; }
+
     u32 *dir = (u32 *)dir_phys;
     for (int i = 0; i < 1024; i++) dir[i] = page_directory[i]; /* share every existing mapping (kernel code/data/stack) by value */
 
-    u32 table_phys = pmm_alloc_frame();
-    if (!table_phys || table_phys >= IDENTITY_MAP_LIMIT) { pmm_free_frame(dir_phys); return 0; }
     u32 *table = (u32 *)table_phys;
     for (int i = 0; i < 1024; i++) table[i] = 0x00000002; /* not present, read/write, supervisor */
 
-    u32 page_phys = pmm_alloc_frame();
-    if (!page_phys || page_phys >= IDENTITY_MAP_LIMIT) { pmm_free_frame(table_phys); pmm_free_frame(dir_phys); return 0; }
+    u32 page_phys = pmm_alloc_frame(); /* never dereferenced here, only stored as a PTE value, no mapping/limit needed */
+    if (!page_phys) { pmm_free_frame(table_phys); pmm_free_frame(dir_phys); return 0; }
     table[0] = page_phys | 0x3; /* the one private page, PAGING_PRIVATE_VADDR's page-table index is 0 since it starts a fresh 4MB region */
 
     dir[PAGING_PRIVATE_PDE] = table_phys | 0x3;

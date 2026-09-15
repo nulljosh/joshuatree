@@ -1,7 +1,7 @@
 CC := clang
 CFLAGS := -target i386-unknown-none -ffreestanding -fno-stack-protector \
           -fno-pic -mno-sse -mno-mmx -Wall -Wextra -O2 \
-          -Iboot -Ikernel -Idrivers -Ilib
+          -Iboot -Ikernel -Idrivers -Ilib -MMD -MP
 LD := ld.lld
 
 KERNEL_SRCS := kernel/gdt.c kernel/idt.c kernel/pic.c kernel/irq.c kernel/pmm.c \
@@ -62,6 +62,17 @@ run: kernel.elf dotfiles.img
 	qemu-system-i386 -kernel kernel.elf -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file=dotfiles.img,format=raw,if=ide,index=0
 
 clean:
-	rm -f $(OBJS) kernel.elf
+	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf
+
+# v75 (0.66.x): real gap found root-causing the reaptest bug (paging.h's
+# PAGING_PRIVATE_PDE), the hard way -- a header-only edit left the stale
+# .o linked in twice in a row, silently "fixing" nothing and then
+# "reverting" nothing either, until `make clean` was used to force it.
+# -MMD -MP above makes clang emit a real per-object .d dependency file
+# (every header it actually #included, not a hand-maintained guess like
+# kernel.o's two explicit lines above), included here so `make` sees a
+# .h change and rebuilds exactly what depends on it, same as any normal
+# C project's incremental build.
+-include $(OBJS:.o=.d)
 
 .PHONY: run clean

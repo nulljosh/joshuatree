@@ -32,8 +32,25 @@ int paging_user_range_ok(unsigned int addr, unsigned int len);
    physical frame. Two different tasks both writing to the same virtual
    address, PAGING_PRIVATE_VADDR, land on two different physical frames,
    real isolation, not a shared scratch buffer with a reused name. */
-#define PAGING_PRIVATE_PDE   2
-#define PAGING_PRIVATE_VADDR (PAGING_PRIVATE_PDE * 0x400000) /* 0x00800000 */
+/* v75 (0.66.x): was PDE 2 (0x00800000), which is the exact same PDE
+   paging_map_region()'s general-purpose extra-mapping pool hands out
+   FIRST once anything (kheap growth included) needs memory past the 8MB
+   base map, a routine occurrence, not an edge case, under normal desktop
+   use. Root-caused via reaptest: paging_new_task_directory() clones the
+   kernel's page_directory by value, so a new task starts out sharing
+   whatever kheap already mapped at PDE 2 -- including, if the task's own
+   just-kmalloc'd kernel stack happened to land in that same 4MB region,
+   the mapping for its own stack -- and then unconditionally overwrites
+   dir[PAGING_PRIVATE_PDE] with its private table, destroying that shared
+   mapping in its own copy only. The very first context switch into such
+   a task then faults popping its own ESP: real, reproduced, and fixed by
+   giving the private slot a PDE the general pool can never reach instead
+   of one it reaches immediately. BASE_MAP_TABLES (2) + MAX_EXTRA_TABLES
+   (16) = PDEs 0..17 are the pool's whole reachable range (paging.c); PDE
+   19 leaves a one-PDE margin. Bump this again if either of those two
+   constants ever grows enough to reach it. */
+#define PAGING_PRIVATE_PDE   19
+#define PAGING_PRIVATE_VADDR (PAGING_PRIVATE_PDE * 0x400000) /* 0x04C00000 */
 
 /* Allocates a new page directory (cloned from the kernel's) plus its own
    private page table and one private physical frame mapped at
