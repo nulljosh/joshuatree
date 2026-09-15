@@ -2284,6 +2284,12 @@ static void wall_switch_theme(int theme){
     if (wall_map && want_sat != wall_map_is_sat) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
     wall_theme = theme;
     settings_save();
+    /* v0.75: the one real choke point every theme setter already goes
+       through, so this is the one place to log it -- lets a real browser
+       run (no serial port to read otherwise) confirm which theme actually
+       got switched to via window.__jt.serial, the same real-evidence
+       pattern ne2k-check.mjs already established for geo=/wx=. */
+    serial_puts("walltheme="); char tb[2] = { (char)('0' + wall_theme), 0 }; serial_puts(tb); serial_puts("\n");
 }
 /* Switch what the desktop paints from. Both directions drop every cache
    built from the old pixels (the wind crown band, the dock band) so the
@@ -3895,6 +3901,25 @@ static int settings_prompt_line(const char *prompt, char *out, int max) {
 }
 
 #define SETTINGS_ROW_COUNT 5 /* v75: + wallpaper source; v85: + LLM model, + LLM host:port */
+static const int SETTINGS_ROWS_Y[SETTINGS_ROW_COUNT] = {84, 116, 148, 180, 212};
+
+/* Pure, hardware/GUI-free: given a real click's full-screen logical
+   coordinates and the window's current width, returns which Settings row
+   (0..SETTINGS_ROW_COUNT-1) it lands in, or -1 if it misses every row's
+   own highlight rect (window_rect(16, y-6, ww-32, 28, ...), the exact
+   rect drawn below). Extracted into its own function so this real
+   hit-test math is unit-testable without a mouse or a boot, the same
+   shape rtl8139_clamp_len's own extraction used for exactly this reason
+   (v0.72.1: "so it's unit-testable without a NIC"). */
+static int settings_row_at(int cx, int cy, int ww){
+    if (cx < 16 || cx >= ww - 16) return -1;
+    for (int i = 0; i < SETTINGS_ROW_COUNT; i++) {
+        int ry = SETTINGS_ROWS_Y[i];
+        if (cy >= ry - 6 && cy < ry - 6 + 28) return i;
+    }
+    return -1;
+}
+
 static void gui_launch_settings(void){
     int sel = 0;
     for (;;) {
@@ -3902,7 +3927,7 @@ static void gui_launch_settings(void){
         gui_draw_app_titlebar("Settings");
         font_draw_string("up/down to pick   left/right or tap to change   esc closes", 20, 52, 0x00807468, -1);
 
-        int rows_y[SETTINGS_ROW_COUNT] = {84, 116, 148, 180, 212};
+        const int *rows_y = SETTINGS_ROWS_Y;
         for (int i = 0; i < SETTINGS_ROW_COUNT; i++) {
             int y = rows_y[i];
             if (i == sel) window_rect(16, y - 6, (int)window_width() - 32, 28, 0x00EDE6DC);
@@ -3950,6 +3975,19 @@ static void gui_launch_settings(void){
         if (k == KEY_UP && sel > 0) sel--;
         else if (k == KEY_DOWN && sel < SETTINGS_ROW_COUNT - 1) sel++;
         else if (k == KEY_CLICK || k == 'a' || k == 'd') {
+            /* A real click acts on whichever row it actually landed on, not
+               whichever row a PRIOR arrow-key press happened to leave
+               selected -- before this, a mouse/touch-only visitor with no
+               keyboard (this kernel's own browser-demo idle tour included)
+               could only ever toggle row 0 (Wind), since `sel` starts at 0
+               and a bare click never moved it. Scoped to k==KEY_CLICK only:
+               a real 'a'/'d' keypress must keep acting on whatever `sel`
+               already is, not get silently overridden by a stale cursor
+               position that has nothing to do with the keypress. */
+            if (k == KEY_CLICK) {
+                int hit = settings_row_at(app_cursor_x, app_cursor_y, (int)window_width());
+                if (hit >= 0) sel = hit;
+            }
             if (sel == 0) { wind_enabled = !wind_enabled; settings_save(); }
             else if (sel == 2) {
                 /* v81: cycles all four real themes (Photo -> Warm -> Cool
@@ -5860,6 +5898,27 @@ static void run(char *line){
            rtl8139_clamp_selftest calls the exact same clamp logic
            rtl8139_receive uses. */
         puts(rtl8139_clamp_selftest() ? "rxclamp: oversized/runt NIC lengths clamp correctly: ok\n" : "rxclamp: FAILED\n");
+    }
+    else if (!strcmp(line, "settingsclicktest")) {
+        /* Regression test for a real bug: Settings' own click handler used
+           to act on whatever row a PRIOR arrow-key press had left `sel`
+           on (starting at row 0, Wind), completely ignoring where the
+           click itself actually landed -- a mouse/touch-only visitor with
+           no keyboard (this kernel's own browser-demo idle tour included)
+           could therefore only ever toggle row 0, since a bare click never
+           moved `sel`. settings_row_at is the exact pure hit-test
+           gui_launch_settings' click branch now calls before touching
+           `sel`; no mouse, GUI, or boot state needed to exercise it. */
+        int ok = 1;
+        if (settings_row_at(300, 84,  960) != 0) { puts("settingsclick: row 0 (Wind) center missed\n"); ok = 0; }
+        if (settings_row_at(300, 148, 960) != 2) { puts("settingsclick: row 2 (Wallpaper) center missed\n"); ok = 0; }
+        if (settings_row_at(300, 212, 960) != 4) { puts("settingsclick: row 4 (LLM host) center missed\n"); ok = 0; }
+        if (settings_row_at(300, 70,  960) != -1) { puts("settingsclick: above row 0 should miss\n"); ok = 0; }
+        if (settings_row_at(300, 108, 960) != -1) { puts("settingsclick: real gap between row 0 and row 1 should miss\n"); ok = 0; }
+        if (settings_row_at(10,  148, 960) != -1) { puts("settingsclick: left of the row rect (x<16) should miss\n"); ok = 0; }
+        if (settings_row_at(950, 148, 960) != -1) { puts("settingsclick: right of the row rect should miss\n"); ok = 0; }
+        puts(ok ? "settingsclick: click hit-tests the row it actually landed on: ok\n" : "settingsclick: FAILED\n");
+        serial_puts(ok ? "settingsclick PASS\n" : "settingsclick FAIL\n"); /* mirrors texttest/chattest/jpegtest's own convention so tools/checks/*.sh can read the verdict headless */
     }
     else if (!strcmp(line, "nettest")) {
         if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }

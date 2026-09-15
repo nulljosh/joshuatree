@@ -787,6 +787,56 @@
   // cause fix, at the real point of the gap (v86 has no built-in way to
   // replay a no-BIOS multiboot boot on reset), not a kernel-side
   // workaround for a gap the emulator itself never covered.
+  // v0.75, direct user report: the landing page keeps showing the default
+  // warm-tinted map wallpaper, never the Satellite theme this demo is
+  // supposed to show off. Root cause: wall_theme defaults to WALL_WARM
+  // (kernel.c), Satellite is real and reachable but opt-in only, through
+  // Settings' own Wallpaper row -- and this tour never visited Settings at
+  // all, so a passive visitor had no way to ever see it. Blocked on a real
+  // kernel bug until now: Settings' click handler only ever acted on
+  // whichever row a keyboard arrow-key press had left selected (`sel`
+  // starts at row 0, Wind), so a click-only visitor -- this tour included,
+  // it never sends arrow keys -- could never reach the Wallpaper row by
+  // clicking alone. Fixed kernel-side (settings_row_at, see roadmap.md);
+  // this step is what actually uses that fix.
+  //
+  // Settings has no close-X chrome (only Escape closes it, kernel.c's
+  // gui_launch_settings), and Escape's ASCII code (27) isn't in
+  // libv86.js's own simulate_char lookup tables (confirmed by reading
+  // them directly: neither table B nor C has a key 27), so the usual
+  // `keys`/simulate_char script step this file uses everywhere else would
+  // silently no-op here. keyboard_send_keys([27], ...) sends the raw
+  // keyCode instead, through simulate_press's own keyCode-indexed
+  // scancode table (F[27]===1, the real PS/2 Escape scancode, confirmed
+  // by reading that table too), the same path already proven reliable
+  // for this file's existing '\n' (Enter) sends.
+  var LOGO_X = 16, LOGO_Y = 13; // gui_draw_logo(16, GUI_MENUBAR_H/2+2, ...); logo_here's own hit rect is x in [4,28], y < GUI_MENUBAR_H
+  var SETTINGS_MENU_X = 94, SETTINGS_MENU_Y = 111; // Apple-menu row 3 ("Settings"): y starts at GUI_MENUBAR_H+GUI_MENU_PAD_V=34, three prior 22px rows -> [100,122)
+  var WALLPAPER_ROW_X = 300, WALLPAPER_ROW_Y = 148; // Settings row 2 ("Wallpaper"), SETTINGS_ROWS_Y[2]
+  async function demoSatelliteWallpaper(gen) {
+    if (focused || tourGen !== gen || !adaptersReady) return;
+    emulator.mouse_adapter.emu_enabled = true;
+    emulator.keyboard_adapter.emu_enabled = true;
+    await clickAt(LOGO_X, LOGO_Y); // opens the Apple menu (first click only opens, matches a real user's press+release)
+    if (focused || tourGen !== gen) return;
+    await sleep(300);
+    await clickAt(SETTINGS_MENU_X, SETTINGS_MENU_Y); // selects "Settings"
+    if (focused || tourGen !== gen) return;
+    await sleep(700); // let the Settings screen draw
+    // Default theme is Warm (1); a tap always steps forward (kernel.c's own
+    // "tap always steps forward" convention, shared with dock size), so
+    // three clicks reach Cool(2) -> Raw(3) -> Satellite(4).
+    for (var s = 0; s < 3; s++) {
+      if (focused || tourGen !== gen) return;
+      await clickAt(WALLPAPER_ROW_X, WALLPAPER_ROW_Y);
+      await sleep(500);
+    }
+    if (focused || tourGen !== gen) return;
+    await sleep(2000); // real time for wall_fetch's own network round trip to actually land before Settings closes and the desktop redraws
+    if (focused || tourGen !== gen) return;
+    if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80); // Escape closes Settings
+    await sleep(800);
+  }
   function currentGraphical() {
     var vga = emulator.v86 && emulator.v86.cpu.devices.vga;
     return vga ? !!vga.graphical_mode : false;
@@ -866,6 +916,13 @@
       // closed"; a slightly longer pause here just marks it as a
       // deliberate loop boundary rather than app #9.
       await sleep(2500);
+      if (focused || tourGen !== gen) return;
+      // v0.75: show off the Satellite wallpaper theme once per lap, right
+      // before the reboot below wipes it back to the WALL_WARM default
+      // (reset_memory() zeroes RAM, ramfs' persisted SETTINGS.TXT
+      // included, so this genuinely has to run every lap, not just once).
+      await demoSatelliteWallpaper(gen);
+      if (focused || tourGen !== gen) return;
       if (focused || tourGen !== gen) return;
       // The real fix (see the comment above waitForGraphicalMode): reboot
       // the emulator here, at the loop boundary, so the next full cycle
