@@ -129,7 +129,15 @@
      seam and a phantom second black box mid-animation. svh is a static
      floor (the height once the toolbar is fully expanded) that never
      animates, so the box never moves during a toolbar transition. */
-  #stage-wrap { background: #000; width: 100%; height: 100svh; z-index: 0; }
+  /* v0.71.2: the header-below-demo move (v0.71.1) sized this to the full
+     100svh page height instead of .hero's old 56vh box, a much taller/
+     squarer shape on most desktop windows that tipped embed.js's own
+     cover-vs-contain heuristic (resizeCanvas, picks contain once cover
+     would crop over 25% of the source) into contain mode, bringing the
+     letterbox bars back. Real fix: pin this box to the kernel's own 16:9
+     shape so cover and contain always agree exactly, no viewport aspect
+     can ever produce a bar, instead of fighting the heuristic via height. */
+  #stage-wrap { background: #000; width: 100%; aspect-ratio: 16 / 9; max-height: 100svh; z-index: 0; }
   /* v52.5: real boot moment instead of a blank black flash, direct
      request ("bridge the gap between css/html and the actual demo
      loading"). The logo shows immediately (it's a tiny inline SVG,
@@ -249,7 +257,7 @@
         <div id="screen_text"></div>
         <canvas id="screen_canvas"></canvas>
       </div>
-      <div id="v86-overlay"></div>
+      <div id="v86-overlay"><span>Browser sandbox has no network, wallpaper/weather stay static here. Real on native.</span></div>
     </div>
   </div>
 </div>
