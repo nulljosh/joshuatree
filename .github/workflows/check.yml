@@ -75,9 +75,16 @@ jobs:
           sudo apt-get install -y clang lld qemu-system-x86 python3-pil curl
       - name: Build
         run: make kernel.elf
+      # Real one-off transient failures (a ConnectionResetError from
+      # GitHub's own runner reaching a real external host) were showing
+      # up as a plain red X on the repo's commit-status indicator, even
+      # though this job's own continue-on-error already kept them from
+      # blocking anything. A single retry after a short pause absorbs a
+      # real network blip without hiding a genuine, persistent regression
+      # (which still fails after the retry, same as before).
       - name: Weather location (ip-api + Open-Meteo)
-        run: ./tools/geo-check.sh
+        run: ./tools/geo-check.sh || (sleep 15 && ./tools/geo-check.sh)
       - name: Map wallpaper (OpenTopoMap, byte-for-byte vs host)
-        run: python3 tools/wallpaper-check.py
+        run: python3 tools/wallpaper-check.py || (sleep 15 && python3 tools/wallpaper-check.py)
       - name: Rain over the map wallpaper
-        run: python3 tools/wallfx-check.py rain
+        run: python3 tools/wallfx-check.py rain || (sleep 15 && python3 tools/wallfx-check.py rain)
