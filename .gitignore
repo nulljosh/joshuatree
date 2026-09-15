@@ -1,6 +1,7 @@
 *.o
 *.d
 kernel.elf
+drivers/version.h
 landing/kernel.elf
 !landing/v86/kernel.elf
 .DS_Store

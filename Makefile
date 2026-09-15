@@ -17,6 +17,19 @@ OBJS := boot/boot.o $(KERNEL_ASM:.S=.o) $(KERNEL_SRCS:.c=.o) $(DRIVER_SRCS:.c=.o
 kernel.elf: $(OBJS) boot/linker.ld
 	$(LD) -m elf_i386 -T boot/linker.ld -o $@ $(OBJS)
 
+# Real build artifact, not a snapshot: regenerated from VERSION on every
+# build (unlike png_testdata.h below, never committed, see .gitignore).
+# Bumping VERSION now always produces a genuinely different kernel.elf,
+# fixing a real CI false-fail: a source change that's only a comment (no
+# compiled-output difference) left kernel.elf byte-identical to what was
+# already committed, so landing/v86/kernel.elf's own sync-check could
+# never be satisfied, "cp kernel.elf landing/v86/kernel.elf" was a no-op
+# git saw as "nothing to commit" while the check kept demanding a new one.
+drivers/version.h: VERSION
+	printf '#define JT_VERSION_STR "%s"\n' "$$(cat VERSION)" > drivers/version.h
+
+kernel/kernel.o: drivers/version.h
+
 # Generated from a sibling repo (gen_app.sh). Committed as a snapshot as of
 # v54 (they used to be gitignored): a fresh clone or an isolated agent
 # sandbox has no sibling repos to regenerate from, and the first parallel

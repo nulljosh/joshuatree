@@ -57,6 +57,7 @@ static int wall_map_tx = 0, wall_map_ty = 0, wall_map_cx = 0, wall_map_cy = 0; /
 #include "app_fieldbook.h"
 #include "png.h"
 #include "png_testdata.h"
+#include "version.h"
 #include "json.h"
 #include "html.h"
 
@@ -6074,7 +6075,7 @@ static void run(char *line){
 
 void kmain(unsigned int multiboot_info_addr){
     serial_init();
-    serial_puts("=== kmain boot start ===\n");
+    serial_puts("=== kmain boot start === v" JT_VERSION_STR "\n");
     vga_text_mode_init(); /* real hardware/QEMU already boot into text mode via their own BIOS; a BIOS-less multiboot path (v86) never sets it at all, so make it explicit rather than inherited */
     klog("vga_text_mode_init: text mode 3 programmed");
     gdt_install();
