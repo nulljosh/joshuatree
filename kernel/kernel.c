@@ -1116,8 +1116,30 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
        macro photo). Same math as before, in physical units, with the AA
        band widened to match, blending each edge pixel against the actual
        wallpaper colour behind it. */
+    /* v79: real second staircase found and fixed. The corner arc here was
+       still single-sampled: one distance test per PHYSICAL output pixel,
+       thresholded into a `band`-wide linear ramp. That is one coverage
+       value per pixel, not a coverage fraction, so the arc's true boundary
+       (which crosses many physical pixels only partially) still rasterizes
+       as a hard staircase, just a softer-edged one, exactly what a real
+       macro photo of the tray's corner showed (confirmed with a real
+       pmemsave capture, tools/traycorner-check.py, blocky steps visible
+       at 6x zoom even after v44.1/v44.3's band-width and per-corner-sample
+       fixes). Every icon glyph avoids this by rendering into a 6x
+       oversampled buffer and box-downsampling (ICON_SS_SCALE); the tray
+       itself never went through that pipeline; it draws straight to
+       physical pixels with a single sample each. Same fix in spirit,
+       applied analytically instead of through a real offscreen buffer
+       (the tray spans the full dock width, an oversampled buffer for the
+       whole shape would be real wasted memory for two corners): SS x SS
+       subsamples per physical pixel, each tested against the true circle,
+       averaged into a real coverage fraction, then that fraction blends
+       color against the real wallpaper pixel behind it. This is the same
+       box-filter idea ICON_SS_SCALE uses, just evaluated per-pixel
+       instead of via a downsample pass. */
     int sc = (int)window_scale();
     int px0 = x * sc, py0 = y * sc, pw = w * sc, ph = h * sc, pr = r * sc, band = 3; /* v44.1: 3 physical px; AA_BAND*sc was 10 and read as a soft, blurry corner */
+    const int SS = 4; /* v79: 4x4 = 16 subsamples per physical pixel, real coverage AA on the corner arc */
     for (int py = 0; py < ph; py++){
         for (int px = 0; px < pw; px++){
             /* distance from the nearest corner arc centre, or 0 if this
@@ -1128,17 +1150,29 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
             if (cx >= 0 && cy >= 0){
                 int ox = px - cx, oy = py - cy;
                 int d2 = ox * ox + oy * oy;
-                int inner = pr - band;
-                if (d2 > inner * inner){
-                    if (d2 >= pr * pr) continue;            /* outside: leave the wallpaper alone */
-                    int t = gui_isqrt(d2) - inner;
-                    /* v44.3: the real pixel behind THIS corner, not the
-                       row's centre-column sample (bg) used everywhere
-                       else in this loop, so the tray's top-left/top-right
-                       corners don't blend toward a color sampled from
-                       the middle of the row. */
+                int outer_margin = 2; /* subsamples can land a touch past the whole-pixel test below */
+                if (d2 > (pr - band - outer_margin) * (pr - band - outer_margin)){
+                    if (d2 > (pr + outer_margin) * (pr + outer_margin)) continue; /* comfortably outside: wallpaper untouched */
+                    /* v79: real coverage fraction, not a single threshold.
+                       Sample SSxSS sub-points spread across this physical
+                       pixel's own area and count how many fall inside
+                       the true circle of radius pr; that fraction IS the
+                       pixel's real AA coverage, the same quantity a 6x
+                       supersample-then-box-downsample pass would produce,
+                       computed directly instead of through a buffer. */
+                    int inside = 0;
+                    for (int sy = 0; sy < SS; sy++){
+                        int subdy = oy * SS + sy * 2 + 1 - SS; /* sample point offset, in 1/SS-pixel units, centred in each sub-cell */
+                        for (int sx = 0; sx < SS; sx++){
+                            int subdx = ox * SS + sx * 2 + 1 - SS;
+                            long sd2 = (long)subdx * subdx + (long)subdy * subdy;
+                            if (sd2 <= (long)(pr * SS) * (pr * SS)) inside++;
+                        }
+                    }
+                    if (inside == 0) continue;               /* fully outside: leave the wallpaper alone */
                     unsigned int corner_bg = gui_wallpaper_sample(px0 + px, py0 + py, 0);
-                    col = gui_lerp(color, corner_bg, t, band);
+                    if (inside >= SS * SS) { col = color; }
+                    else col = gui_lerp(color, corner_bg, SS * SS - inside, SS * SS);
                 }
             } else if (py < band) {
                 /* v61: real, confirmed bug, not a guess: only the four
