@@ -161,6 +161,20 @@ dependencies beyond clang, ld.lld and qemu.
       verified. `roadmap.md`'s own entry for the version is usually the
       source to pull from, don't write a thinner summary than what
       already exists there.
+  4f. Standing MINOR-release bundling requirement (direct request, Sep
+      2026): every `x.Y.0` release (the MINOR position, a real new
+      capability, not a PATCH bug fix) should carry a stability pass,
+      a security-minded look, and a real UI/UX check alongside whatever
+      the headline feature is, not just the one feature in isolation.
+      Concretely: before tagging a MINOR version, re-run the regression
+      suite in full (not just the new feature's own test), do a quick
+      look for anything the new code touches that could be a real
+      security-relevant boundary (user input, untrusted network data,
+      a privilege edge), and take one real screenshot to confirm the
+      new feature's own chrome matches the established Mojave palette
+      and unified panel/window chrome (4b's testing standard, plus a
+      visual check, not a separate ceremony). Don't gold-plate a PATCH
+      release with this, it's specifically the MINOR/`.0` versions.
   5. Ship it: commit, push, `wrangler deploy` for the landing page, bump
      `VERSION` for kernel work, one clear TLDR back, then pick up step 1
      again. Constraints and rules (this file, `roadmap.md`'s own model-
