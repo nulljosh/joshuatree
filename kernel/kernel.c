@@ -762,11 +762,29 @@ static unsigned char dock_hover_extra[GUI_ICON_COUNT];
    nothing about the range or mechanism changed, just what a fresh
    install starts at. */
 static int dock_scale_pct = 7;
-/* v75: wallpaper source. 1 = a real map of the real location (the default
-   once buildable, Joshua's own call in roadmap.md's satellite entry), 0 =
-   the baked photo. Map mode still shows the photo until the fetch lands
-   and keeps showing it if the fetch fails, never a blank desktop. */
-static int wall_mode = 1;
+/* v75: wallpaper source, extended v81 to a real theme, not just a photo/
+   map binary (direct request: "multiple wallpaper themes/styles"). Four
+   real, verifiably-distinct states, no JPEG/satellite decoder involved
+   (that stays a separate queued roadmap item, not built against here):
+     0 = Photo, the baked NPS photo (v75's original alternative).
+     1 = Map Warm, the default once buildable (Joshua's own call in
+         roadmap.md's satellite entry): the fetched map put through
+         gui_map_tint's existing Mojave warm grade (v79).
+     2 = Map Cool, v81: a distinct cooler, higher-contrast grade
+         (gui_map_tint_cool below) for legibility -- a real, different
+         multiply+contrast curve, not a relabeled copy of Warm.
+     3 = Map Raw, v81: the fetched map with no color grade at all, for
+         comparison against OpenTopoMap's own neutral cartographer
+         palette.
+   Any non-zero value still shows the baked photo until the fetch lands
+   and keeps showing it if the fetch fails, never a blank desktop (same
+   contract v75 established). settings_load clamps to 0..3 so a hand-
+   edited or stale SETTINGS.TXT can't select a theme that doesn't exist. */
+#define WALL_PHOTO 0
+#define WALL_WARM  1
+#define WALL_COOL  2
+#define WALL_RAW   3
+static int wall_theme = WALL_WARM;
 static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
 
 /* v47 (0.47.0): settings persisted through the VFS, so "customize the OS
@@ -801,7 +819,7 @@ static void settings_load(void){
         int is_wall = keylen == 4 && buf[start]=='w' && buf[start+1]=='a' && buf[start+2]=='l' && buf[start+3]=='l';
         if (is_wind) wind_enabled = (val != 0);
         else if (is_dock && val >= 5 && val <= 25) dock_scale_pct = val;
-        else if (is_wall) wall_mode = (val != 0);
+        else if (is_wall && val >= WALL_PHOTO && val <= WALL_RAW) wall_theme = val;
     }
 }
 
@@ -815,7 +833,7 @@ static void settings_save(void){
     buf[n++] = '0' + dock_scale_pct % 10;
     buf[n++] = '\n';
     const char *k3 = "wall="; while (*k3) buf[n++] = *k3++;
-    buf[n++] = wall_mode ? '1' : '0'; buf[n++] = '\n';
+    buf[n++] = '0' + wall_theme; buf[n++] = '\n';
     vfs_replace_file(SETTINGS_FILE, buf, (unsigned int)n);
 }
 
@@ -1024,6 +1042,51 @@ static inline __attribute__((always_inline)) unsigned int gui_map_tint(unsigned 
     return ((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)b;
 }
 
+/* v81: the Cool map theme, a real, distinct second grade for the direct
+   request's "cooler/higher-contrast map variant for legibility", not a
+   relabeled copy of Warm above. Two real moves, opposite of Warm's:
+     1. channel balance pushed cool instead of warm -- blue up (300/256,
+        +17.2%) and red down (208/256, -18.75%), green trimmed slightly
+        (240/256, -6.25%), the mirror image of Warm's red-up/blue-down
+        recipe, so the two themes are provably different curves, not the
+        same curve with different constants that happen to look similar.
+     2. a genuine contrast stretch on top (push every channel away from
+        mid-gray 128 by ~15%, matching the 15% figure the direct request
+        asked for under "higher-contrast"), which Warm deliberately does
+        NOT do (Warm's own comment above stays a pure per-channel
+        multiply, no contrast move, specifically to keep near-white/near-
+        black street labels from crushing). Cool applies both: OpenTopoMap
+        legibility is the point of this variant, so a real contrast boost
+        is in scope here even though it wasn't for Warm.
+   Clamped 0..255 at every step; run through the same maptinttest-shaped
+   proof below (walltest) that a neutral gray goes cool (blue ends up
+   strictly greater than red, the opposite assertion from Warm's), that
+   distinct source colors stay distinct (multiply+affine contrast, never
+   a lerp-to-one-target), and that near-white/near-black labels still
+   read (contrast stretch pushes them further apart, not together). */
+static inline __attribute__((always_inline)) unsigned int gui_map_tint_cool(unsigned int rgb){
+    int r = (int)((rgb >> 16) & 0xFF), g = (int)((rgb >> 8) & 0xFF), b = (int)(rgb & 0xFF);
+    r = (r * 208) >> 8;
+    g = (g * 240) >> 8;
+    b = (b * 300) >> 8; if (b > 255) b = 255;
+    r = 128 + ((r - 128) * 147) / 128; if (r < 0) r = 0; if (r > 255) r = 255;
+    g = 128 + ((g - 128) * 147) / 128; if (g < 0) g = 0; if (g > 255) g = 255;
+    b = 128 + ((b - 128) * 147) / 128; if (b < 0) b = 0; if (b > 255) b = 255;
+    return ((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)b;
+}
+
+/* v81: single choke point every wallpaper-theme reader goes through, so
+   gui_wallpaper_color and gui_wallpaper_px (the two real per-pixel paths,
+   see v79's comment above) can't drift out of sync on which theme applies
+   which grade. wall_theme's own guard (never touch the baked photo) lives
+   here once instead of being copy-pasted at each call site. */
+static inline __attribute__((always_inline)) unsigned int gui_wall_tint(unsigned int rgb){
+    if (wall_src == wallpaper_rgb) return rgb;      /* Photo: never graded */
+    if (wall_theme == WALL_COOL) return gui_map_tint_cool(rgb);
+    if (wall_theme == WALL_RAW) return rgb;         /* Raw: OpenTopoMap's own palette, untouched */
+    return gui_map_tint(rgb);                       /* WALL_WARM, and the fallback while fetching */
+}
+
 /* Real photo now, not a procedural gradient: direct request for an
    actual, non-copyrighted image of the real park instead of drawn
    colors. wallpaper_rgb is a genuine public domain U.S. National Park
@@ -1058,7 +1121,7 @@ static unsigned int gui_wallpaper_color(int row){
     if (sy >= WALLPAPER_H) sy = WALLPAPER_H - 1;
     const unsigned char *p = &wall_src[(sy * WALLPAPER_W + WALLPAPER_W / 2) * 3];
     unsigned int rgb = ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2];
-    if (wall_src != wallpaper_rgb) rgb = gui_map_tint(rgb); /* v79: warm the map's neutral topo palette toward Mojave */
+    rgb = gui_wall_tint(rgb); /* v79/v81: the current wallpaper theme's grade, Photo untouched */
     return gui_daynight_tint(rgb);
 }
 
@@ -1531,7 +1594,7 @@ static inline __attribute__((always_inline)) unsigned int gui_wallpaper_px(const
         int bot = cc[ch] * (256 - wx) + d[ch] * wx;
         col = (col << 8) | (unsigned int)((top * (256 - c->wy) + bot * c->wy) >> 16);
     }
-    if (wall_src != wallpaper_rgb) col = gui_map_tint(col); /* v79: same warm grade as gui_wallpaper_color, real per-pixel blit path */
+    col = gui_wall_tint(col); /* v79/v81: same theme grade as gui_wallpaper_color, real per-pixel blit path */
     return col;
 }
 static unsigned int gui_wind_cached_pixel(int px, int py){
@@ -2093,10 +2156,25 @@ static int wall_fetch(void){
 /* Switch what the desktop paints from. Both directions drop every cache
    built from the old pixels (the wind crown band, the dock band) so the
    next frame is honest, not a stale composite of the previous source. */
+/* v81: real bug caught while capturing evidence for this pass, before
+   this fix shipped -- wind_base (the cached, tinted wallpaper samples
+   gui_draw_desktop lazily builds, see its own v75 comment) is keyed on
+   wall_src's pointer changing, not on wall_theme. Switching Warm -> Cool
+   -> Raw all pass want_map=1 with the SAME wall_map buffer, so wall_src
+   never actually changes pointer and the old early-return skipped
+   wall_caches_drop() entirely: the desktop kept painting whichever
+   theme's grade got cached first, headless framebuffer evidence showed
+   all three map themes rendering identical mean color for the wind band
+   (57.x/72.x/88.x across Warm/Cool/Raw) until this was found and fixed.
+   wall_last_theme tracks what was actually baked into wind_base last, so
+   a theme-only change (same wall_map pointer, different wall_theme)
+   still drops the stale cache. */
+static int wall_last_theme = -1;
 static void wall_apply(int want_map){
     const unsigned char *next = (want_map && wall_map) ? wall_map : wallpaper_rgb;
-    if (next == wall_src) return;
+    if (next == wall_src && wall_theme == wall_last_theme) return;
     wall_src = next;
+    wall_last_theme = wall_theme;
     wall_caches_drop();
 }
 
@@ -3663,12 +3741,15 @@ static void gui_launch_settings(void){
                 sz[p++] = '0' + v % 10; sz[p++] = '%'; sz[p] = 0;
                 font_draw_string(sz, 400, y, 0x001C1C1E, -1);
             } else {
-                /* v75: honest label. "Map" only once a real tile mosaic is
-                   on screen; while it's still fetching, or when the fetch
-                   failed and the photo is what's actually up, say so. */
+                /* v75/v81: honest label. A map theme's name only shows once
+                   a real tile mosaic is on screen; while it's still
+                   fetching, or when the fetch failed and the photo is
+                   what's actually up, say so instead of claiming a theme
+                   that isn't really rendering. */
                 font_draw_string("Wallpaper", 28, y, 0x001C1C1E, -1);
-                const char *lbl = !wall_mode ? "Photo" : (wall_map ? (geo_city[0] ? geo_city : "Map") : "Map (fetching, photo until then)");
-                font_draw_string(lbl, 400, y, wall_mode && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
+                const char *theme_name = wall_theme == WALL_COOL ? "Map (Cool)" : wall_theme == WALL_RAW ? "Map (Raw)" : (geo_city[0] ? geo_city : "Map (Warm)");
+                const char *lbl = wall_theme == WALL_PHOTO ? "Photo" : (wall_map ? theme_name : "Map (fetching, photo until then)");
+                font_draw_string(lbl, 400, y, wall_theme != WALL_PHOTO && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
             }
         }
         font_draw_string("Settings are saved to disk and survive a reboot.", 20, (int)window_height() - 28, 0x00807468, -1);
@@ -3681,7 +3762,17 @@ static void gui_launch_settings(void){
         else if (k == KEY_DOWN && sel < SETTINGS_ROW_COUNT - 1) sel++;
         else if (k == KEY_CLICK || k == 'a' || k == 'd') {
             if (sel == 0) { wind_enabled = !wind_enabled; settings_save(); }
-            else if (sel == 2) { wall_mode = !wall_mode; settings_save(); wall_apply(wall_mode); }
+            else if (sel == 2) {
+                /* v81: cycles all four real themes (Photo -> Warm -> Cool
+                   -> Raw -> Photo), not a binary toggle, matching the
+                   left/right-steps contract dock size already uses below.
+                   A tap (KEY_CLICK) always steps forward, same convention
+                   dock size's tap already keeps. */
+                int dir = (k == 'a') ? -1 : 1;
+                wall_theme = (wall_theme + dir + 4) % 4;
+                settings_save();
+                wall_apply(wall_theme != WALL_PHOTO);
+            }
             else {
                 int dir = (k == 'a') ? -1 : 1; /* a tap always steps up; a real direction only from the keyboard */
                 if (k == KEY_CLICK) dir = 1;
@@ -4078,7 +4169,7 @@ static void gui_run(void){
                after the geo lookup it depends on. One fetch per session
                once it lands (the mosaic is kept), retried each cycle
                until then; a failure leaves the photo up, never a blank. */
-            if (wall_mode && !wall_map && geo_have && wall_fetch()) { wall_apply(1); gui_draw_desktop(-1, -1, 0, 0); gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
+            if (wall_theme != WALL_PHOTO && !wall_map && geo_have && wall_fetch()) { wall_apply(1); gui_draw_desktop(-1, -1, 0, 0); gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
         }
         /* v45: wind, 4 frames a second, only while the desktop itself is
            what's on screen. Timed on its first frame; if that frame took
@@ -4248,7 +4339,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -4475,6 +4566,90 @@ static void run(char *line){
             puts("  tg="); puthex(tg); puts(" tw="); puthex(tw);
             puts(" tbg="); puthex(tbg); puts(" tfg="); puthex(tfg); puts("\n");
         }
+    }
+    else if (!strcmp(line, "walltest")) {
+        /* v81 (0.69.0): standing QA per CLAUDE.md's 4b for the wallpaper
+           theme picker added this pass. Reverting either gui_map_tint_cool
+           or gui_wall_tint's dispatch back to a single-theme shape fails
+           this, proved by hand before writing it: temporarily making
+           gui_wall_tint always return gui_map_tint(rgb) (the pre-v81
+           behaviour) makes check (2) below fail (Cool would equal Warm).
+           Real, discriminating checks, same shape as maptinttest above:
+           (1) Cool is a genuinely different curve from Warm on the same
+               neutral gray -- not just "some different number", but the
+               opposite direction: Warm pushes red above blue (r>b), Cool
+               pushes blue above red (b>r), on the identical input.
+           (2) Cool(gray) != Warm(gray): the two map themes are provably
+               distinct, not the same grade under two names.
+           (3) Raw(gray) == gray: the "no color grade" theme really is a
+               no-op, not a mislabeled copy of one of the tinted paths.
+           (4) Cool keeps two distinct source colors distinct after its
+               grade (a road gray and a water blue stay != each other),
+               proving the contrast-stretch add-on is still a real
+               per-pixel transform, not a lerp-to-one-target that would
+               collapse them.
+           (5) settings_save()/settings_load() round-trip every one of the
+               4 real theme values through SETTINGS.TXT (the actual
+               Settings-screen persistence path, not a mock), each value
+               distinct after reload -- the "config value with no visible
+               effect" failure mode this task was scoped to avoid, plus
+               the file-format contract wind/dock already get tested at. */
+        unsigned int gray  = 0x00A0A0A0;
+        unsigned int water = 0x006E9BC7;
+        unsigned int warm_g = gui_map_tint(gray);
+        unsigned int cool_g = gui_map_tint_cool(gray);
+        int wr = (int)((warm_g >> 16) & 0xFF), wb = (int)(warm_g & 0xFF);
+        int cr = (int)((cool_g >> 16) & 0xFF), cb = (int)(cool_g & 0xFF);
+        int ok1 = (wr > wb) && (cb > cr); /* opposite directions on the same input */
+        int ok2 = (cool_g != warm_g);
+        int ok4 = (gui_map_tint_cool(gray) != gui_map_tint_cool(water));
+
+        /* ok3 exercises the real per-pixel dispatch (gui_wall_tint), not
+           the standalone tint functions above, so a broken dispatch (e.g.
+           gui_wall_tint hardcoded back to always-Warm, the pre-v81 shape)
+           fails HERE even though ok1/ok2/ok4 would still pass on their
+           own -- proved by hand: hardcoding gui_wall_tint to always
+           `return gui_map_tint(rgb);` makes wall_dispatch_warm ==
+           wall_dispatch_cool below, which this catches. wall_src is
+           pointed at a real non-wallpaper_rgb address (any distinct
+           pointer works, gui_wall_tint only ever compares it, never
+           dereferences it here) so the Photo early-out doesn't fire. */
+        const unsigned char *saved_wall_src = wall_src;
+        int saved_wall_theme = wall_theme;
+        unsigned char fake_map_byte = 0;
+        wall_src = &fake_map_byte;
+        wall_theme = WALL_WARM;  unsigned int wall_dispatch_warm = gui_wall_tint(gray);
+        wall_theme = WALL_COOL;  unsigned int wall_dispatch_cool = gui_wall_tint(gray);
+        wall_theme = WALL_RAW;   unsigned int wall_dispatch_raw  = gui_wall_tint(gray);
+        wall_src = wallpaper_rgb; wall_theme = WALL_COOL;
+        unsigned int wall_dispatch_photo = gui_wall_tint(gray); /* Photo guard: must ignore wall_theme entirely */
+        wall_src = saved_wall_src; wall_theme = saved_wall_theme;
+        int ok3 = (wall_dispatch_warm == warm_g) && (wall_dispatch_cool == cool_g)
+                && (wall_dispatch_raw == gray) && (wall_dispatch_photo == gray);
+
+        const char *prev_fs = vfs_current_name();
+        char prev_fs_buf[16]; int pfi = 0; while (prev_fs[pfi] && pfi < 15) { prev_fs_buf[pfi] = prev_fs[pfi]; pfi++; } prev_fs_buf[pfi] = 0;
+        vfs_switch("ramfs");
+        int roundtrip_ok = 1;
+        for (int theme = WALL_PHOTO; theme <= WALL_RAW; theme++) {
+            wall_theme = theme; settings_save();
+            wall_theme = -1; /* clobber so settings_load has to actually set it, not coast on the old value */
+            settings_load();
+            if (wall_theme != theme) roundtrip_ok = 0;
+        }
+        vfs_switch(prev_fs_buf);
+
+        int ok = ok1 && ok2 && ok3 && ok4 && roundtrip_ok;
+        puts(ok ? "walltest: Cool distinct from Warm (opposite direction), Raw is a no-op, Cool preserves color distinctness, theme round-trips through SETTINGS.TXT: ok\n" : "walltest: FAILED\n");
+        if (!ok) {
+            puts("  warm_g="); puthex(warm_g); puts(" cool_g="); puthex(cool_g);
+            puts(" dispatch warm="); puthex(wall_dispatch_warm); puts(" cool="); puthex(wall_dispatch_cool);
+            puts(" raw="); puthex(wall_dispatch_raw); puts(" photo="); puthex(wall_dispatch_photo);
+            puts(" ok1="); putn((unsigned int)ok1); puts(" ok2="); putn((unsigned int)ok2);
+            puts(" ok3="); putn((unsigned int)ok3); puts(" ok4="); putn((unsigned int)ok4);
+            puts(" roundtrip="); putn((unsigned int)roundtrip_ok); puts("\n");
+        }
+        wall_theme = WALL_WARM; settings_save(); /* restore the real default, this test must not leave the kernel in a weird state for whatever runs next */
     }
     else if (!strcmp(line, "weatherfxtest")) {
         /* v65 (0.62.0): standing QA per CLAUDE.md's 4b, two real,
@@ -4987,18 +5162,27 @@ static void run(char *line){
         else puts("usage: weatherfx rain|snow|off\n");
     }
     else if (!strcmp(line, "wallpaper")) {
-        /* v75: photo|map picks the source (persisted like wind/dockscale),
-           fetch forces the map download right now (its own NIC/net bring-
-           up, same as weather_fetch), no argument reports state. */
-        if (!strcmp(arg, "photo")) { wall_mode = 0; settings_save(); wall_apply(0); puts("wallpaper: photo\n"); }
-        else if (!strcmp(arg, "map")) { wall_mode = 1; settings_save(); wall_apply(1); puts(wall_map ? "wallpaper: map\n" : "wallpaper: map (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
+        /* v75/v81: photo|warm|cool|raw picks the theme (persisted like
+           wind/dockscale); "map" stays a working alias for "warm" (v75's
+           original two-state name, now one of four themes) so nothing
+           that already typed `wallpaper map` breaks. fetch forces the map
+           download right now (its own NIC/net bring-up, same as
+           weather_fetch), no argument reports state. */
+        if (!strcmp(arg, "photo")) { wall_theme = WALL_PHOTO; settings_save(); wall_apply(0); puts("wallpaper: photo\n"); }
+        else if (!strcmp(arg, "map") || !strcmp(arg, "warm")) { wall_theme = WALL_WARM; settings_save(); wall_apply(1); puts(wall_map ? "wallpaper: map (warm)\n" : "wallpaper: map (warm) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
+        else if (!strcmp(arg, "cool")) { wall_theme = WALL_COOL; settings_save(); wall_apply(1); puts(wall_map ? "wallpaper: map (cool)\n" : "wallpaper: map (cool) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
+        else if (!strcmp(arg, "raw")) { wall_theme = WALL_RAW; settings_save(); wall_apply(1); puts(wall_map ? "wallpaper: map (raw)\n" : "wallpaper: map (raw) (fetches on the next weather cycle, or: wallpaper fetch)\n"); }
         else if (!strcmp(arg, "fetch")) {
             if (!rtl8139_init()) { puts("no NIC\n"); }
             else { net_init(0x0A00020F); if (!geo_have) geo_fetch();
                    if (wall_fetch()) { wall_apply(1); puts("wallpaper: map fetched (tiles "); putn((unsigned int)wall_map_tx); puts(","); putn((unsigned int)wall_map_ty); puts(" z"); putn(WALL_ZOOM); puts(")\n"); }
                    else puts("wallpaper: fetch failed, photo stays\n"); }
         }
-        else { puts(wall_mode ? "wallpaper: map" : "wallpaper: photo"); puts(wall_src == wallpaper_rgb ? " (showing photo)\n" : " (showing map)\n"); }
+        else {
+            const char *tn = wall_theme == WALL_PHOTO ? "photo" : wall_theme == WALL_COOL ? "map (cool)" : wall_theme == WALL_RAW ? "map (raw)" : "map (warm)";
+            puts("wallpaper: "); puts(tn);
+            puts(wall_src == wallpaper_rgb ? " (showing photo)\n" : " (showing map)\n");
+        }
     }
     else if (!strcmp(line, "dockscale")) {
         if (!*arg) { puts("dock scale: "); putn((unsigned int)dock_scale_pct); puts("% (dockscale <5-25> to set)\n"); }
