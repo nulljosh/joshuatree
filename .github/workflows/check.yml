@@ -5,11 +5,33 @@ on:
   pull_request:
     branches: [main, master]
 
+# v0.76.8: this session pushes to main frequently enough (several times an
+# hour some days) that back-to-back pushes were queuing overlapping runs on
+# the same ref -- wasted CI minutes, and a slower/earlier run finishing
+# after a newer one could paint a stale, misleading status on the commit
+# that's actually current. Only the latest push's result matters for a
+# status check, so superseding an in-flight run on the same ref is safe
+# here (this job has no side effects to leave half-done, unlike deploy.yml).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    # A wedged QEMU process (hung boot, a script waiting forever on a socket
+    # that will never answer) used to have no ceiling: the job would sit
+    # "in_progress" indefinitely, which reads the same as "still fine" on
+    # a status badge instead of the real failure it is. 20 minutes is
+    # comfortably above the real end-to-end time this job takes today.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-${{ runner.os }}-clang-lld-qemu-pil-mtools-dosfstools
       - name: Install clang, lld, qemu, FAT disk tools
         run: |
           sudo apt-get update
@@ -148,6 +170,7 @@ jobs:
   # existed to catch it.
   check-refs:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - name: Doc file-path references aren't stale
@@ -161,6 +184,7 @@ jobs:
   network:
     runs-on: ubuntu-latest
     continue-on-error: true
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Install clang, lld, qemu

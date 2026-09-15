@@ -2,6 +2,7 @@
 #include "gdt.h"
 #include "idt.h"
 #include "irq.h"
+#include "pic.h"
 #include "pmm.h"
 #include "paging.h"
 #include "kheap.h"
@@ -5027,10 +5028,34 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "tasktest")) {
+        /* v0.76.8: real, reproduced-on-demand CI flake fixed at the root.
+           yield()'s software `int $32` and the hardware PIT's own IRQ0 both
+           land on the identical IDT gate and both call schedule() (see
+           task.c's own comment on yield()), so this kernel has been truly,
+           continuously preemptive in the background since whatever version
+           first wired IRQ0 to it -- not just during preempttest's deliberate
+           no-yield demo. This test's strict "ABABAB..." expectation is only
+           true if NO hardware tick lands during its own tiny window, which
+           held by luck on a fast/idle machine but not on a slower or
+           shared CI runner: reproduced reliably here by temporarily
+           reconfiguring the PIT to 5000Hz (irq_install's pit_init call),
+           which corrupted the output on every single run (e.g.
+           "ABABAABABABABABABABB"), then confirmed clean again after adding
+           the mask below, even at that same artificially high rate; the
+           real PIT rate (100Hz) was restored unchanged after the repro.
+           Fix: mask IRQ0 at the PIC for the exact width of this test, so
+           only the tasks' own explicit yield() calls drive scheduling here
+           -- pic_set_mask holds across a task switch regardless of which
+           task's own EFLAGS.IF is active (unlike cli/sti, which only
+           affects the currently running task's own restored flags), unlike
+           preempttest/killtest elsewhere, which still rely on real IRQ0
+           ticks and are intentionally left untouched. */
+        pic_set_mask(0, 1);
         puts("\n");
         task_create(task_a);
         task_create(task_b);
         for (int i = 0; i < 10; i++) yield(); /* shell is task 0; let A/B interleave */
+        pic_set_mask(0, 0);
         puts("\ndone (expect ABABAB...)\n");
     }
     else if (!strcmp(line, "ring3test")) {

@@ -6,6 +6,7 @@ typedef unsigned char u8;
 typedef unsigned short u16;
 
 static inline void outb(u16 p, u8 v){ __asm__ volatile("outb %0,%1"::"a"(v),"Nd"(p)); }
+static inline u8 inb(u16 p){ u8 v; __asm__ volatile("inb %1,%0":"=a"(v):"Nd"(p)); return v; }
 static inline void io_wait(void){ outb(0x80, 0); } /* write to an unused port to burn a cycle */
 
 #define PIC1 0x20
@@ -33,4 +34,11 @@ void pic_remap(void) {
 void pic_eof(int irq) {
     if (irq >= 8) outb(PIC2, 0x20);
     outb(PIC1, 0x20);
+}
+
+void pic_set_mask(int irq, int masked) {
+    u16 port = irq < 8 ? PIC1_DATA : PIC2_DATA;
+    u8 bit = (u8)(1 << (irq < 8 ? irq : irq - 8));
+    u8 cur = inb(port);
+    outb(port, masked ? (u8)(cur | bit) : (u8)(cur & ~bit));
 }

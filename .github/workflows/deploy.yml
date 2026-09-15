@@ -8,6 +8,15 @@ name: Deploy landing page
 # same `wrangler deploy` for real whenever main gets a push that touches
 # what it serves (the static `landing/` tree wrangler.toml's [assets]
 # points at, or the config itself).
+# v0.76.8: serialize (never cancel) rather than cancel-in-progress like
+# check.yml -- a live `wrangler deploy` has a real external side effect
+# mid-flight, so superseding it partway through could leave the deployed
+# site in a half-updated state. Queuing a second push's deploy behind the
+# first is the safe version of the same fix.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 on:
   push:
     branches: [main, master]
@@ -19,6 +28,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Deploy to Cloudflare Workers
