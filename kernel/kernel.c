@@ -5471,6 +5471,18 @@ static void run(char *line){
             puthex(dev.bar0); putc('\n');
         } else puts("no NIC found\n");
     }
+    else if (!strcmp(line, "tcpmatchtest")) {
+        /* Regression test for a real bug: tcp_match (net.c) used to trust
+           ip->total_length outright with no check against the actual number
+           of bytes rtl8139_receive put in the frame, so a malicious/corrupt
+           remote peer could claim far more payload than it actually sent
+           and every caller (tcp_get/tcp_probe_port/tcp_serve_once) would
+           copy that many bytes starting past the real frame, an
+           out-of-bounds read and uninitialized-stack-memory disclosure.
+           No hardware needed: tcp_match_selftest builds real frames in a
+           local buffer and calls the exact same tcp_match(). */
+        puts(tcp_match_selftest() ? "tcpmatch: honest frame accepted, lying frame rejected: ok\n" : "tcpmatch: FAILED\n");
+    }
     else if (!strcmp(line, "nettest")) {
         if (!rtl8139_init()) { puts("no RTL8139 found or reset failed\n"); }
         else {

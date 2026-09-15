@@ -48,4 +48,12 @@ int tcp_serve_once(unsigned short port, const void *response, unsigned int respo
    own rather than tcp_get's WAN-scale one. Returns 1 open, 0 closed
    (a real RST came back), -1 filtered/unreachable (no answer in time). */
 int tcp_probe_port(unsigned int dest_ip, unsigned short dest_port);
+
+/* Regression test for the tcp_match bounds-check fix (see net.c): builds a
+   real Ethernet+IP+TCP frame, then a second copy whose ip->total_length
+   lies about carrying far more bytes than the frame actually has, exactly
+   what a hostile or corrupt remote peer could send. Returns 1 if tcp_match
+   accepts the honest frame and rejects the lying one, 0 if either check
+   fails (the lying one being accepted is the real bug this guards against). */
+int tcp_match_selftest(void);
 #endif

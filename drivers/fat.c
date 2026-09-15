@@ -110,16 +110,52 @@ static u16 alloc_cluster(void) {
     return 0;
 }
 
+/* Real bug, found by tracing what a corrupted FAT table (the honest result
+   of an abnormal shutdown mid-write, not just a hostile input) does to
+   every caller of this function: fat_list/find_entry_in/find_free_slot/
+   fat_delete/fat_chdir(".. ") all walk a subdirectory by calling this with
+   an ever-increasing index until it returns 0, and the only way it used to
+   return 0 for a real subdirectory was hitting an invalid/end-of-chain FAT
+   marker (<2 or >=0xFFF8). A cluster chain that cycles instead of properly
+   terminating (cluster N's FAT entry pointing back to an earlier cluster
+   in its own chain, exactly what a write interrupted between "allocate the
+   next cluster" and "link the previous one to it" can leave behind) never
+   produces that marker, so every one of those five callers spun forever
+   re-reading the same clusters, a real denial-of-service hang on `ls`/`cd`/
+   any FAT op inside a corrupted subdirectory. MAX_DIR_CLUSTER_HOPS is a
+   sanity cap, not a real directory-size limit. This kernel's own fat_mkdir
+   never grows a directory past its first cluster (no chain-growth support,
+   see its own comment), so every directory this kernel has ever created
+   needs zero hops past its own head cluster; the cap only matters for a
+   directory some other real FAT16 tool created with a real multi-cluster
+   chain, or a corrupted one. dir_get_sector restarts its walk from the
+   directory's head on every call (see the callers' own
+   `for (u32 s = 0; ; s++)` loops), so total work across a full directory
+   scan is quadratic in the cap, not linear, a pre-existing inefficiency
+   this fix doesn't take on fixing; measured directly against this kernel's
+   own QEMU/ATA path (tools/checks/fatcyclehang-check.sh), a cap of 16 was
+   still visibly grinding after 45 real seconds on a cyclic chain, an
+   improvement over never finishing at all but not the fast, bounded
+   failure this guard is supposed to be. 4 clusters (up to ~250 entries at
+   sectors_per_cluster*16 each) is still generous for anything a real
+   external tool would put in one directory on this scope of kernel, and
+   keeps the quadratic cost small enough that a corrupted/cyclic chain
+   fails within a couple of seconds instead of tens. */
+#define MAX_DIR_CLUSTER_HOPS 4
+
 /* The lba of the index'th sector of a directory, root (fixed area, can't
    grow) or a real subdirectory (cluster chain, walked via the FAT). 0 means
-   past the end: root is simply full, a subdirectory's chain ran out. */
+   past the end: root is simply full, a subdirectory's chain ran out (or,
+   per the guard above, looped instead of ending). */
 static u32 dir_get_sector(u16 dir_cluster, u32 index) {
     if (dir_cluster == 0) {
         if (index >= root_dir_sectors) return 0;
         return root_dir_start + index;
     }
+    u32 skip = index / sectors_per_cluster;
+    if (skip >= MAX_DIR_CLUSTER_HOPS) return 0;
     u16 cluster = dir_cluster;
-    for (u32 skip = index / sectors_per_cluster; skip > 0; skip--) {
+    for (; skip > 0; skip--) {
         cluster = fat_entry_read(cluster);
         if (cluster < 2 || cluster >= 0xFFF8) return 0;
     }

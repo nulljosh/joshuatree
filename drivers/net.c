@@ -398,10 +398,55 @@ static int tcp_match(u32 dest_ip, u16 local_port, u16 remote_port, u8 *rx, u32 n
     u32 tcp_hlen = (u32)((tcp->data_offset >> 4) & 0xF) * 4;
     u16 ip_total = htons(ip->total_length);
     if (ip_total < ip_hlen + tcp_hlen) return 0; /* malformed/truncated, ignore */
+    /* Real bug, found by tracing what a hostile/corrupt remote peer could
+       put in ip->total_length: this field is entirely attacker-controlled
+       and nothing above checked it against n, the actual number of bytes
+       rtl8139_receive put in rx. A peer claiming ip_total=1500 in a 60-byte
+       frame used to sail through: out_paylen came out ~1440 bytes too
+       large, and every caller (tcp_get, tcp_probe_port, tcp_serve_once)
+       trusted it, copying that many bytes starting at out_payload into the
+       caller's response buffer, reading far past the real rx[1514] frame
+       and into whatever stack memory happened to sit after it (a real
+       out-of-bounds read, and a real uninitialized-stack-memory disclosure
+       into the copied response on top of that). Reject any frame whose own
+       header claims more bytes than actually arrived, the one check that
+       makes every existing bound below it (out_payload/out_paylen) trustworthy. */
+    if ((u32)sizeof(struct eth_header) + ip_total > n) return 0;
 
     *out_tcp = tcp;
     *out_payload = (u8 *)tcp + tcp_hlen;
     *out_paylen = ip_total - ip_hlen - tcp_hlen;
+    return 1;
+}
+
+int tcp_match_selftest(void) {
+    u8 rx[64] = {0};
+    u32 n = sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct tcp_header); /* 54: the real, honest frame size */
+
+    struct eth_header *eth = (struct eth_header *)rx;
+    struct ip_header  *ip  = (struct ip_header *)(rx + sizeof(*eth));
+    struct tcp_header *tcp = (struct tcp_header *)(rx + sizeof(*eth) + sizeof(*ip));
+    eth->ethertype = htons(ETHERTYPE_IP);
+    ip->version_ihl = 0x45;
+    ip->protocol = 6;
+    ip->src_ip = htonl(0x0A000202u);
+    ip->total_length = htons((u16)(sizeof(*ip) + sizeof(*tcp))); /* honest: matches what n actually carries */
+    tcp->src_port = htons(80);
+    tcp->dst_port = htons(44000);
+    tcp->data_offset = 5 << 4;
+
+    struct tcp_header *out_tcp; u8 *out_payload; u32 out_paylen;
+    if (!tcp_match(0x0A000202u, 44000, 80, rx, n, &out_tcp, &out_payload, &out_paylen)) return 0; /* the honest frame must still be accepted */
+    if (out_paylen != 0) return 0;
+
+    /* Same physical bytes (n unchanged, still 54 real bytes received), but
+       the header now lies and claims 1500 bytes of IP payload. Before the
+       fix, tcp_match trusted ip->total_length outright and handed back
+       out_paylen ~= 1460, which every caller then copied from out_payload,
+       reading ~1460 bytes past this 64-byte rx buffer. */
+    ip->total_length = htons(1500);
+    if (tcp_match(0x0A000202u, 44000, 80, rx, n, &out_tcp, &out_payload, &out_paylen)) return 0; /* must now be rejected */
+
     return 1;
 }
 
