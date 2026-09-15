@@ -840,3 +840,6 @@ A real, computed WCAG AA contrast audit of `landing/index.html` across light and
 **Font sizes:** Body text 14px, headlines 18px+ (18px tagline, 34-56px h1), acceptable per WCAG for readability.
 
 **Verified:** Valid HTML (Python html.parser), CSS parses cleanly, no new validation errors introduced. No kernel changes needed; landing-only polish fix.
+
+## Real bug report: landing demo tour hangs on Files, stuck hover state (Sep 2026)
+Direct report, grade "B+" overall but real, currently-live: the idle tour's sequential app-cycling (v78's rework) opens Files (the dock's Finder-equivalent) and stops there, never advancing to the next app. Separately, the Files dock icon stays visually stuck in a hover/highlighted "title showing" state even after Files is closed and other apps opened afterward. Not yet root-caused. Real next step: reproduce with mobiletest.mjs against the live deployed site, check whether Files has a distinct code path from the other 7 apps the tour already cycles cleanly (Mail/Calendar/Notes/Reminders/Terminal/Chat/Weather per v78's own report), and whether the stuck-hover-highlight state ties back to the same dock-hover state machine v63 already fixed once for a different trigger.
