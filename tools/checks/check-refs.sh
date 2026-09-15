@@ -34,6 +34,24 @@ for root, dirs, filenames in os.walk("."):
     for fn in filenames:
         basenames.setdefault(fn, []).append(os.path.join(rel_root, fn))
 
+import subprocess
+def gitignored(path):
+    # A real gap this exact check caused (Sep 2026): drivers/version.h is a
+    # real, Makefile-generated file (.gitignore's own entry), so it exists
+    # locally after `make` has ever run but never on a fresh CI checkout
+    # that hasn't built yet. The standalone check-refs CI job (no build
+    # step, by design, see CLAUDE.md 4d) checked out a clean tree and
+    # correctly-by-its-old-logic, wrongly-in-reality flagged it as stale,
+    # breaking CI on every push since the job was added -- a doc reference
+    # to a real, gitignored, build-generated path is not drift, treat it
+    # the same as an existing file rather than assuming every build
+    # artifact has already been produced.
+    try:
+        return subprocess.run(["git", "check-ignore", "-q", path],
+                               capture_output=True).returncode == 0
+    except FileNotFoundError:
+        return False
+
 stale = []
 checked = 0
 for f in FILES_TO_SCAN:
@@ -43,7 +61,7 @@ for f in FILES_TO_SCAN:
     for m in PATTERN.finditer(text):
         ref = m.group(1)
         checked += 1
-        if os.path.exists(ref) or os.path.basename(ref) in basenames:
+        if os.path.exists(ref) or os.path.basename(ref) in basenames or gitignored(ref):
             continue
         stale.append((f, ref))
 
