@@ -63,10 +63,19 @@ int http_get(const char *host, const char *path, unsigned short port,
 
     char req[512];
     u32 n = 0;
-    const char *parts[5];
+    /* v0.73.2: real bug, found chasing the satellite-wallpaper task's
+       "wallerr=http" failure. A raw `nc` replay of this exact request
+       against Google's real tile server got a 403 "unusual traffic" bot
+       page; the same request with one added User-Agent header got a real
+       200. This kernel sent literally no User-Agent on any HTTP request,
+       ever, which plenty of hosts tolerate (OpenTopoMap, Open-Meteo,
+       ip-api all do) but Google's abuse detection doesn't. Real, honest
+       identification, not a spoofed browser string. */
+    const char *parts[6];
     parts[0] = "GET "; parts[1] = path; parts[2] = " HTTP/1.0\r\nHost: ";
-    parts[3] = host;   parts[4] = "\r\nConnection: close\r\n\r\n";
-    for (int p = 0; p < 5; p++) {
+    parts[3] = host;   parts[4] = "\r\nUser-Agent: JoshuaTree/1.0\r\nConnection: close\r\n\r\n";
+    parts[5] = 0;
+    for (int p = 0; parts[p]; p++) {
         const char *s = parts[p];
         while (*s && n < sizeof(req) - 1) req[n++] = *s++;
     }
