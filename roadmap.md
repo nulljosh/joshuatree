@@ -597,6 +597,14 @@ Honest technical gap this implies, checked against what's actually built: everyt
 
 Not a coding task, not queued as a task, a real direction recorded honestly for future prioritization calls.
 
+## Real direction, not a roadmap item yet: what 1.0.0 would actually mean here (Sep 2026)
+
+Direct question: now that VERSION is well past 0.75.0, what does reaching 1.0.0 actually require, not just "a bigger number"? Answered from this file's own semver rule, not invented fresh: "MAJOR only for a real breaking change (none yet; this kernel has no external callers to break)." That line is the real criterion. Semver's 1.0.0 signals a stable public contract exists, one an outside consumer can rely on without expecting it to shift underneath them. Today there is no such consumer: every app, the GUI, and the kernel are one compiled binary, nothing outside this repo depends on any fixed interface this kernel exposes, so there is nothing yet for a MAJOR bump to protect and nothing for a 1.0.0 to honestly promise.
+
+The real, concrete trigger already sitting in this file: a syscall ABI + ring-3 user-mode integration (named in v28's own deferred note and the "Later product ideas" section, tagged `[Fable]` from the start -- "exactly privilege isolation plus an exact calling convention, the two things this legend already names"). That is the first point in this project's own arc where a genuine external caller becomes possible: a real ring-3 program, written once against a fixed syscall interface, that this kernel would need to keep working across future versions without a MAJOR bump. Before that exists, "don't break user programs" has no user programs to break. After it ships and gets even one real reference program running against it, 1.0.0 has an honest, checkable meaning for the first time: the syscall ABI is the stable contract, and MAJOR is reserved for actually breaking it.
+
+This is a real technical answer to "what would 1.0.0 require," not a decision to ship it now or on any particular timeline -- whether/when to actually call something 1.0.0 once that contract exists is a real product/vision call, the same `[Joshua]` category this file already reserves for the "what is a Joshua Tree user account protecting against" question and the free-OS/custom-hardware direction above, not something to declare unilaterally from an architecture note. Recorded here so a future pass doesn't re-litigate this from scratch or, worse, bump MAJOR/1.0.0 on version-number momentum alone with no real contract behind it.
+
 ## Later idea: location-dynamic satellite wallpaper, switchable in Settings (Sep 2026)
 Direct request: wallpaper should be a real satellite image of the user's own town/city, dynamically, not the fixed baked photo, "not to spy on them but just because it's cool." Switchable between wallpaper styles in Settings.
 
