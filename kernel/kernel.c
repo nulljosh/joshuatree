@@ -1267,7 +1267,67 @@ static unsigned int ICON_FG = 0x00FFFFFF;
    soft edge can fade toward it: the icon's own colored background for a
    solid fill, or the fill color itself when punching a hole (the pin's
    eyelet) into a shape that was drawn in that fill color. */
+/* v82: real second instance of the v79 tray-corner staircase pattern,
+   found by following that entry's own "check for other things that draw
+   straight to physical pixels outside the 6x-supersampled icon pipeline"
+   guidance, not a re-check of the glyphs it already confirmed clean.
+   Every icon GLYPH calls this inside gui_render_icon_cached's offscreen
+   ICON_SS_SCALE buffer (window_push_target set), where window_pixel
+   writes straight into that buffer 1:1 and the later box-downsample does
+   the real AA; those calls were never broken, same as v79 already found
+   for the glyphs. But this function has three other real callers with no
+   target pushed at all: gui_draw_app_titlebar's traffic-light dots (every
+   single windowed app: Weather, Mail, Calendar, Contacts, Settings, ...)
+   and Settings' own duplicate traffic lights. Those go through plain
+   window_pixel, which at window_scale() 2 (every real dock-launched app)
+   replicates each LOGICAL pixel it's given into a flat 2x2 PHYSICAL
+   block, no interpolation. The AA ramp above is computed once per
+   logical pixel, so it produces a handful of correct logical-space grey
+   levels, but each one lands on screen as a hard-edged physical block:
+   real macro-visible staircasing, confirmed with an actual pmemsave
+   capture of the Weather window's red close dot (dock-clicked, real
+   mouse path via QMP abs+btn events, not the scale-1 `testapps` shell
+   diagnostic, which never hits this because it opens its own 800x600
+   scale-1 window): the AA fringe shows as distinct flat terraces, not a
+   smooth gradient, at physical (172..205, 96..129). Fix, same shape as
+   gui_rounded_rect_on_wallpaper's v79 fix: when there's no offscreen
+   target and the window is actually scaled, do the coverage math in
+   PHYSICAL pixels via window_pixel_phys (4x4 subsamples per physical
+   pixel, real coverage fraction) instead of letting window_pixel's
+   block-replication flatten a logical-space ramp. Every glyph caller is
+   unaffected (window_has_target() is true there, so this still takes the
+   original logical-space path with AA_BAND widened to 18 for that
+   buffer, exactly as before). */
 static void gui_fill_circle(int cx, int cy, int r, unsigned int color, unsigned int into){
+    if (!window_has_target() && window_scale() > 1){
+        int sc = (int)window_scale();
+        int pcx = cx * sc, pcy = cy * sc, pr = r * sc;
+        const int SS = 4;
+        int outer = pr + sc;
+        for (int dy = -outer; dy <= outer; dy++){
+            for (int dx = -outer; dx <= outer; dx++){
+                long d2 = (long)dx * dx + (long)dy * dy;
+                if (d2 > (long)(pr + 2) * (pr + 2)) continue;
+                unsigned int col;
+                if (d2 <= (long)(pr - 2) * (pr - 2)) { col = color; }
+                else {
+                    int inside = 0;
+                    for (int sy = 0; sy < SS; sy++){
+                        int subdy = dy * SS + sy * 2 + 1 - SS;
+                        for (int sx = 0; sx < SS; sx++){
+                            int subdx = dx * SS + sx * 2 + 1 - SS;
+                            long sd2 = (long)subdx * subdx + (long)subdy * subdy;
+                            if (sd2 <= (long)(pr * SS) * (pr * SS)) inside++;
+                        }
+                    }
+                    if (inside == 0) continue;
+                    col = inside >= SS * SS ? color : gui_lerp(color, into, SS * SS - inside, SS * SS);
+                }
+                window_pixel_phys(pcx + dx, pcy + dy, col);
+            }
+        }
+        return;
+    }
     int outer2 = (r + AA_BAND) * (r + AA_BAND);
     for (int dy = -r - AA_BAND; dy <= r + AA_BAND; dy++){
         for (int dx = -r - AA_BAND; dx <= r + AA_BAND; dx++){
