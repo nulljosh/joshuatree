@@ -2618,12 +2618,27 @@ static void gui_icon_trash(int cx, int cy, int s, unsigned int bg){
     int lid = s / 12; if (lid < 2) lid = 2;
     window_rect(cx - half - 2, top, 2 * (half + 2) + 1, lid, ICON_FG);              /* lid */
     window_rect(cx - s / 12, top - lid, 2 * (s / 12) + 1, lid, ICON_FG);            /* handle */
-    for (int row = 0; row < h - lid; row++) {
-        int w = half - (row * (half / 5)) / (h - lid);                              /* taper toward the base */
-        window_rect(cx - w, top + lid + 1 + row, 2 * w + 1, 1, ICON_FG);
+    /* v71.9: the two slanted sides carry a fractional edge pixel per row
+       (24.8 fixed point, the same per-pixel box-filter idea the tray corner
+       already uses) instead of stepping the integer width. Seen in a real
+       10x zoom of the headless framebuffer: the old integer taper stepped
+       one supersample pixel every ~9 rows, which the 3x3 box filter turned
+       into a visible half-tone staircase down both sides of the can. */
+    int rows = h - lid;
+    for (int row = 0; row < rows; row++) {
+        int wfp = (half << 8) - ((row * (half / 5)) << 8) / rows;                  /* taper toward the base */
+        int w = wfp >> 8, y = top + lid + 1 + row;
+        unsigned int edge = gui_lerp(bg, ICON_FG, wfp & 0xFF, 256);
+        window_rect(cx - w, y, 2 * w + 1, 1, ICON_FG);
+        window_pixel(cx - w - 1, y, edge);
+        window_pixel(cx + w + 1, y, edge);
     }
-    for (int r = -1; r <= 1; r++)                                                   /* ribs, punched through in the tile colour */
-        window_rect(cx + r * (half / 2), top + lid + 5, s / 26 + 1, h - lid - 9, bg);
+    /* ribs, punched through in the tile colour; they stop s/12 above the
+       base so the shadow pass's own ribs (offset 2*ICON_SS_SCALE down) stay
+       covered by the real body instead of poking out below it as three grey
+       stubs, the other defect the same 10x zoom showed. */
+    for (int r = -1; r <= 1; r++)
+        window_rect(cx + r * (half / 2), top + lid + 5, s / 26 + 1, h - lid - 5 - s / 12, bg);
 }
 
 /* v37: the Apps folder tile, a 3x3 grid of rounded tiles reading as
