@@ -824,3 +824,19 @@ Direct request: multiple wallpaper themes/styles, selectable in Settings, buildi
 **Verified:** `check.sh` and `tools/check-refs.sh` (319 refs) both clean on a `make clean` rebuild after rebasing onto `jt-v83`. `walltest`, `maptinttest`, `heaptest`, `daynighttest`, `weatherfxtest`, `mailtest`, `calctest`, `weathertest`, `geotest` all still pass via `tools/shell-run.sh`. `regress.sh`'s disk-image checks (`heaptest`/`tasktest`/`preempttest` through the QEMU+FAT harness) fail identically on unmodified `main` in this sandbox, confirmed via `git stash` before touching anything -- a pre-existing environment gap (this sandbox's `hdiutil`/`newfs_msdos` path), not a regression from this change.
 
 **Security-minded look (4f):** `wall_theme` parsed from `SETTINGS.TXT` is range-clamped (`WALL_PHOTO..WALL_RAW`) before use, same discipline the existing `dock_scale_pct` clamp already established for this same user-writable file; a corrupt or hand-edited `SETTINGS.TXT` can't select an out-of-range theme, and `gui_wall_tint` only ever compares `wall_theme` against the 4 known constants, no new indexing/pointer surface introduced.
+
+## Landing page accessibility audit and polish (Sep 2026)
+
+A real, computed WCAG AA contrast audit of `landing/index.html` across light and dark modes, not eyeballed. Tested real hex values from the CSS palette, computed relative luminance per WCAG formula, verified against 4.5:1 (normal text) and 3:1 (large text) targets.
+
+**Real failure found and fixed:** Secondary text color `--sub:#75726e` on light background `--bg:#faf8f6` yielded 4.16:1 (fail). The darker shade `#6f6c68` yields 4.58:1 (pass), staying within the Mojave desert palette's brownish-gray range and darkening evenly across both light and dark modes' accent/sub hierarchy. Verified all other combinations pass: primary text (15.87:1 light / 15.02:1 dark), accent colors (6.29:1 / 6.91:1), both modes' card backgrounds, footer elements.
+
+**Focus states:** `a:focus-visible, .skip-link:focus` (2px solid outline in `--accent`) present on every interactive element, high contrast on all tested backgrounds.
+
+**Semantics:** Alt text present on the progress.svg chart; boot-logo img correctly `aria-hidden="true"`; skip-link follows standard pattern.
+
+**Motion sensitivity:** All page animations (scroll hint arrow, reveal-on-scroll, drifting glyph field) already respect `prefers-reduced-motion: reduce`. Added a check to the v86 demo's autoplay tour: the idle cursor-motion/keyboard-simulation sequence (`embed.js` lines 722-726) now checks `window.matchMedia('(prefers-reduced-motion: reduce)')` and skips tour startup if set, letting motion-sensitive visitors see a static demo instead of automatic cursor movement.
+
+**Font sizes:** Body text 14px, headlines 18px+ (18px tagline, 34-56px h1), acceptable per WCAG for readability.
+
+**Verified:** Valid HTML (Python html.parser), CSS parses cleanly, no new validation errors introduced. No kernel changes needed; landing-only polish fix.
