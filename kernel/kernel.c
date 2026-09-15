@@ -3681,7 +3681,52 @@ static void gui_launch_apps(void){
         sleep_ticks(5);
         mouse_click_edge_sync();
         int k = get_key_or_click();
-        if (k == KEY_ESC || k == KEY_CLICK) return; /* a tap anywhere closes the folder: with no keyboard there is no other way out */
+        if (k == KEY_ESC) return;
+        if (k == KEY_CLICK) {
+            /* v86 (0.71.0) real bug, confirmed by reading this function:
+               unlike the dock (whose tile clicks are hit-tested by
+               gui_dock_hit_test in gui_run's main loop) or the Apps-folder
+               TILE itself on the dock (also hit-tested the same way),
+               every click reaching this screen used to be treated as
+               "close the folder" unconditionally, with zero hit test
+               against the grid cells drawn just above. Clicking a fleet
+               app tile inside the launchpad therefore never opened it,
+               it just dismissed the launchpad, matching the exact report
+               ("clicking a fleet app inside it does nothing except
+               dismiss the launchpad"). Only the keyboard path
+               (arrows+Enter, or digits '1'-'9' for the first 9 of 22
+               apps) ever actually launched anything from here. Real fix:
+               hit-test app_cursor_x/y (already tracked live by
+               gui_app_mouse_tick, the same position get_key_or_click's
+               own KEY_CLICK just fired from) against each cell's real
+               drawn bounds (same cx/cy/tile/cell_w/cell_h math as the
+               draw loop above) and launch that app on a hit, exactly
+               the same "click a tile to open it" contract the dock
+               already has; a click outside every cell still closes the
+               folder, unchanged behavior for the "tap anywhere to leave"
+               phone case. */
+            /* app_cursor_x/y are FULL-SCREEN logical coordinates (see
+               gui_app_mouse_tick: it calls mouse_get_absolute() in the
+               brief window between window_clear_viewport() and the
+               matching window_set_viewport(), when window_width()/
+               window_height() report the full screen, the same
+               convention CLOSE_X/CLOSE_Y in landing/v86/embed.js already
+               rely on), while x0/y0/cx/cy below are VIEWPORT-relative
+               (this function draws through the viewport gui_launch_from_
+               dock already set up). Subtract the viewport origin before
+               comparing, or every hit test here silently misses. */
+            int click_vx = app_cursor_x - app_view_x, click_vy = app_cursor_y - app_view_y;
+            int hit = -1;
+            for (int i = 0; i < GUI_APPS_FOLDER; i++) {
+                int row = i / APPS_COLS, col = i % APPS_COLS;
+                int cx = x0 + col * cell_w + cell_w / 2;
+                int cy = y0 + row * cell_h;
+                int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
+                if (click_vx >= cell_x0 && click_vx < cell_x1 && click_vy >= cell_y0 && click_vy < cell_y1) { hit = i; break; }
+            }
+            if (hit >= 0) { sel = hit; gui_launch(hit); continue; }
+            return; /* a tap outside every tile still closes the folder: with no keyboard there is no other way out */
+        }
         if (k == KEY_ENTER) { gui_launch(sel); continue; } /* returns here when that app closes, folder still open, same as a real launcher */
         if (k == 'a' && sel > 0) sel--;                 /* left  */
         else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) sel++; /* right */
@@ -4362,6 +4407,33 @@ static void gui_run(void){
                 editor_mouse_x = mx; editor_mouse_y = my;
                 gui_launch_from_dock(gui_order[press_slot]);
                 mx = app_cursor_x; my = app_cursor_y; /* v68: the app's own loop tracked the pointer while it was open; pick up where it really is, not where the launching click was */
+                /* v86 (0.71.0), a real but narrow staleness bug found
+                   while investigating the "Files dock icon stuck
+                   hovering" report: slot_here above was computed from the
+                   mouse position BEFORE this entire blocking app session
+                   (the dock tile that was clicked to open it), and
+                   nothing recomputed it against the cursor's real
+                   post-close position before hover_slot (below) consumes
+                   it this same frame. Confirmed harmless in the common
+                   case only because dock_hover_extra was usually already
+                   saturated at DOCK_MAGNIFY from hovering the tile before
+                   the click, so the stale target rarely causes a visible
+                   *increase*; it only delays this frame's decay-start by
+                   one redraw, self-correcting on the very next frame once
+                   slot_here is recomputed fresh at the top of the loop.
+                   Fixed anyway (correctness, not cosmetics: a delayed
+                   decay-start IS a real one-frame staleness bug) by
+                   recomputing here with the same call already used to
+                   build slot_here in the first place (line ~4326).
+                   Headless pixel verification (QMP abs-pointer + a
+                   settled pmemsave, the dockhover-check.py pattern) could
+                   NOT reproduce a PERSISTENT stuck-lifted tile either
+                   before or after this fix, dropped as a non-discriminating
+                   test rather than kept as false evidence; see roadmap.md
+                   for the honest state of the underlying report, this fix
+                   narrows a real gap but is not confirmed to be the full
+                   explanation for a hang lasting more than one frame. */
+                slot_here = (menu_open || notif_open || weather_open) ? -1 : gui_dock_hit_test(mx, my);
                 launched = 1; /* the app view just took over the whole screen; force a redraw below even if the cursor never moved */
             }
             press_slot = -1; drag_slot = -1;
@@ -6036,6 +6108,38 @@ void kmain(unsigned int multiboot_info_addr){
     fat_vfs_register(); /* registered regardless of fs_ok: an unmounted fat backend just returns real failures, same as before v29 */
     ramfs_init();
     klog("vfs: fat + ramfs backends registered, fat active");
+    /* v86 (0.71.0): real root cause of "Files shows no files" on the
+       browser demo, confirmed by reading vfs_register (drivers/vfs.c):
+       the FIRST backend registered wins by default (fat, line above), and
+       fat_mount() only ever finds a real disk when native QEMU boots off
+       dotfiles.img; v86 has no disk image wired into its boot path at
+       all (nothing in landing/v86/embed.js ever attaches a virtual disk),
+       so fs_ok is always 0 there and Files/`ls` genuinely have nothing to
+       show, not a bug in the FAT code itself. Native boots with a real
+       disk are completely unaffected: this only swaps the default
+       backend when fat_mount() itself already reported failure, which on
+       real hardware/QEMU-with-a-disk it doesn't. Seed a few real demo
+       files so a browser visitor sees something real to click, same
+       honesty bar as everything else on this page (no fake data, no
+       recording): a short note that names this exact fact. */
+    if (!fs_ok) {
+        static const char demo_readme[] =
+            "This is a live demo.\r\n\r\n"
+            "No real disk is attached in your browser (v86 has no way to\r\n"
+            "mount the native dotfiles.img this kernel boots from on real\r\n"
+            "hardware), so these are ramfs files, kept in memory only for\r\n"
+            "this tab. Try the Terminal app: ls, cat README.TXT, echo.\r\n";
+        static const char demo_notes[] =
+            "Sample note.\r\n\r\n"
+            "Everything else in Joshua Tree (the shell, GUI, TCP/IP stack,\r\n"
+            "the apps in the Apps folder) is the real kernel, not a mock.\r\n"
+            "Clone the repo and run make && ./check.sh for a real boot\r\n"
+            "with a real FAT16 disk image and real files.\r\n";
+        vfs_switch("ramfs"); /* switch first: vfs_write_file always targets the active backend, and fat's own write would just fail with no disk anyway */
+        vfs_write_file("README.TXT", demo_readme, strlen(demo_readme));
+        vfs_write_file("NOTES.TXT", demo_notes, strlen(demo_notes));
+        klog("vfs: no FAT disk (v86 has none to mount), switched default backend to ramfs with demo files");
+    }
     settings_load(); /* v47: real settings, saved defaults if SETTINGS.TXT doesn't exist yet */
     clear();
     boot_chime();
