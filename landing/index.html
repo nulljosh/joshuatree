@@ -60,29 +60,12 @@
 
   .wrap { max-width: 640px; margin: 0 auto; padding: 0 20px; }
 
-  /* v51: Apple-inspired restructure, direct request (apple.com/os/macos
-     as the reference). That page opens on a clean, text-only headline
-     moment, no product shot competing with it, then reveals the actual
-     product further down as its own section. Direct request here was the
-     same shape in this page's own terms: the demo moves down to roughly
-     where the drifting-glyph field used to sit, and the glyph field
-     moves further down still, past the demo, so the very first thing a
-     visitor sees is the headline, not a black box or a field of symbols. */
-  /* v52: the live demo moved behind the hero text instead of its own
-     section further down. v52.1: dropped the frosted glass card a pass
-     later (direct request, "remove the Liquid Glass overlay, blend the
-     text into the demo, make it the wallpaper"), back to the plain
-     text-shadow treatment this page's very first version used for
-     .hint/.links, just scaled up for real display type. This also fixed
-     the real dead-black-space bug reported right before it: the card's
-     own fixed padding was most of what forced the hero taller than its
-     content, gone now that there's no card, so min-height could come
-     down a lot too, not just get capped smaller as the first attempt at
-     that bug did. */
-  .hero { position: relative; overflow: hidden; text-align: center; padding: 96px 20px 64px; min-height: 56vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000; }
-  .hero-copy { position: relative; z-index: 2; transition: opacity 0.4s ease, transform 0.4s ease; }
-  .hero .eyebrow { color: #f0cba0; text-shadow: 0 2px 16px rgba(0,0,0,0.85), 0 1px 3px rgba(0,0,0,0.9); }
-  .hero h1, .hero p.tagline { color: #fff; text-shadow: 0 4px 28px rgba(0,0,0,0.85), 0 2px 8px rgba(0,0,0,0.9); }
+  /* v71.1: demo moved to normal flow above header. The hero header is now
+     a clean, text-only moment without the demo overlay. */
+  .hero { position: relative; text-align: center; padding: 96px 20px 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .hero-copy { position: relative; }
+  .hero .eyebrow { color: var(--accent); }
+  .hero h1, .hero p.tagline { color: var(--fg); }
   /* Direct request: click into the demo, the hero text gets out of the
      way; click/tap/esc back out (embed.js's own real focus state, not a
      second tracker) and it returns. scroll-hint no longer lives inside
@@ -104,7 +87,7 @@
   @media (prefers-reduced-motion: reduce) { .scroll-hint::after { animation: none; } }
 
   @media (max-width: 520px) {
-    .hero { padding: 56px 20px 40px; min-height: 40vh; }
+    .hero { padding: 56px 20px 40px; }
     .hero h1 { font-size: 34px; }
     .hero p.tagline { font-size: 15px; }
   }
@@ -146,7 +129,7 @@
      seam and a phantom second black box mid-animation. svh is a static
      floor (the height once the toolbar is fully expanded) that never
      animates, so the box never moves during a toolbar transition. */
-  #stage-wrap { background: #000; position: absolute; inset: 0; z-index: 0; }
+  #stage-wrap { background: #000; width: 100%; height: 100svh; z-index: 0; }
   /* v52.5: real boot moment instead of a blank black flash, direct
      request ("bridge the gap between css/html and the actual demo
      loading"). The logo shows immediately (it's a tiny inline SVG,
@@ -255,28 +238,28 @@
 
 <a class="skip-link" href="#main">Skip to content</a>
 
-<header class="hero" id="main">
-  <div id="stage-wrap">
-    <div id="boot-logo" aria-hidden="true">
-      <img src="icon.svg" alt="">
-      <span>Booting...</span>
-    </div>
-    <div id="stage">
-      <div id="v86-embed" tabindex="0" role="application" aria-label="A real, live boot of this exact kernel.elf, running in your browser. Click or tap to control it.">
-        <div id="screen_container">
-          <div id="screen_text"></div>
-          <canvas id="screen_canvas"></canvas>
-        </div>
-        <div id="v86-overlay"></div>
+<div id="stage-wrap">
+  <div id="boot-logo" aria-hidden="true">
+    <img src="icon.svg" alt="">
+    <span>Booting...</span>
+  </div>
+  <div id="stage">
+    <div id="v86-embed" tabindex="0" role="application" aria-label="A real, live boot of this exact kernel.elf, running in your browser. Click or tap to control it.">
+      <div id="screen_container">
+        <div id="screen_text"></div>
+        <canvas id="screen_canvas"></canvas>
       </div>
+      <div id="v86-overlay"></div>
     </div>
   </div>
+</div>
+
+<header class="hero" id="main">
   <div class="hero-copy">
     <p class="eyebrow">An operating system, from scratch</p>
     <h1>Mi OS, tu OS.</h1>
     <p class="tagline">Click or tap. It's really running.</p>
   </div>
-
 </header>
 
 <p class="scroll-hint">Keep scrolling</p>

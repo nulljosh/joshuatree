@@ -10,6 +10,7 @@ takes, and roughly what xv6/ToaruOS/Linux 0.01 did in their first months).
 <!-- progress.sh: done-items 10/10 -->
 - **v0** (Aug-Sep 2026): boots under QEMU/GRUB, VGA text, polled PS/2 keyboard, RTC clock, shell (`help clear echo time reboot`)
 - **v1** (Sep 2026): flat GDT, IDT + CPU exception handlers (`crash` command exercises it), PIC remap, IRQ-driven keyboard, PIT timer (`uptime`)
+- **v0.71.1** (Sep 2026): landing page layout fix, demo moved to normal document flow above header text instead of absolutely positioned overlay, header text now uses page background colors instead of white-on-black overlay treatment.
 
 Full breakdown of what shipped in each: `git log --oneline` or the commit history, not here, this file is the queue, not the changelog.
 
