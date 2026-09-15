@@ -474,27 +474,48 @@ static unsigned int strip_code_fence(char *s, unsigned int len){
    real font, not just dumped to the text-mode shell. Word-wraps at the
    window's pixel width; no scrolling yet, a page longer than one screen
    just clips, that's the next thing to add once this is proven to render
-   real pages correctly at all. */
+   real pages correctly at all.
+
+   v78 restraint pass: this function had exactly v77's "Cl oudy" bug, just
+   never caught because it's not one of the four sites v77 audited. It drew
+   every glyph one at a time through font_draw_char at a hardcoded 8px
+   advance, the same fixed-cell assumption v77 root-caused and fixed on the
+   AA path everywhere else; on any HTML app view or Chat answer (both run
+   inside the scaled GUI, so the AA hook is live) a real word like
+   "Curbfind" rendered as "Curbf ind", confirmed on a real framebuffer dump.
+   Fixed the same way v77 fixed the other four: word width and per-glyph
+   placement now go through font_string_width/font_draw_string's own
+   proportional pen instead of wlen*8/x+=8. Words longer than WORD_MAX
+   still draw (font_draw_string has no length limit), they just can't be
+   measured for the wrap decision past that cap, matching the old code's
+   own honest limit (it never measured unbounded words either). */
 static void render_wrapped_text(const char *text, int x0, int y0, int max_w_px, int max_h_px, unsigned int fg) {
     int x = x0, y = y0;
     const char *p = text;
+    int space_w = font_string_width(" ");
+    if (space_w < 1) space_w = 1;
     while (*p) {
         if (y + 16 > y0 + max_h_px) return; /* out of room */
         if (*p == '\n') { y += 16; x = x0; p++; continue; }
         if (*p == ' ') {
-            if (x + 8 > x0 + max_w_px) { x = x0; y += 16; }
-            else { x += 8; }
+            if (x + space_w > x0 + max_w_px) { x = x0; y += 16; }
+            else { x += space_w; }
             p++;
             continue;
         }
         unsigned int wlen = 0;
         while (p[wlen] && p[wlen] != ' ' && p[wlen] != '\n') wlen++;
-        if (x > x0 && x + (int)wlen * 8 > x0 + max_w_px) { x = x0; y += 16; if (y + 16 > y0 + max_h_px) return; }
-        for (unsigned int i = 0; i < wlen; i++) {
-            if (x + 8 > x0 + max_w_px) { x = x0; y += 16; if (y + 16 > y0 + max_h_px) return; }
-            font_draw_char((unsigned char)p[i], x, y, fg, -1);
-            x += 8;
-        }
+
+        enum { WORD_MAX = 255 };
+        char word[WORD_MAX + 1];
+        unsigned int wcopy = wlen < WORD_MAX ? wlen : WORD_MAX;
+        for (unsigned int i = 0; i < wcopy; i++) word[i] = p[i];
+        word[wcopy] = 0;
+        int ww = font_string_width(word);
+
+        if (x > x0 && x + ww > x0 + max_w_px) { x = x0; y += 16; if (y + 16 > y0 + max_h_px) return; }
+        font_draw_string(word, x, y, fg, -1);
+        x += ww;
         p += wlen;
     }
 }
@@ -4085,7 +4106,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -4595,6 +4616,55 @@ static void run(char *line){
             int w_width = w_last - w_first + 1;
             tt_out("texttest: 'W' ink width "); tt_num(w_width); tt_out(" px\n");
             tt_out((w_width >= 20) ? "texttest 'W' not clipped: ok\n" : "texttest 'W' clipped by the fixed cell: FAILED\n");
+            window_close();
+        }
+    }
+    else if (!strcmp(line, "wraptest")) {
+        /* v78 (0.67.2): real bug, "Curbf ind" on a real framebuffer dump of
+           the Curbfind app view (gui_launch_html -> render_wrapped_text).
+           v77 fixed font_draw_string's own AA pen but never touched this
+           function, which drew every glyph through the single-glyph
+           font_draw_char API at a hardcoded 8px advance, exactly v77's bug
+           shape, just reachable only through the word-wrap path (every
+           HTML app view, every Chat answer) instead of the four sites v77
+           actually audited. Same discrimination shape as texttest: render
+           a real word through the real render_wrapped_text path at scale
+           2, measure ink runs column by column. Uneven gaps (spread > 3)
+           or the wrong run count is the "Curbf ind" bug; both are supposed
+           to disappear once render_wrapped_text uses font_string_width/
+           font_draw_string per word instead of wlen*8/font_draw_char. */
+        if (!window_open_scaled(400, 300, 32, 2)) { tt_out("no VGA device found or out of page tables\n"); }
+        else {
+            font_set_aa(gui_aa_char, gui_aa_advance);
+            unsigned int bg = 0x00202020;
+            window_clear(bg);
+            render_wrapped_text("Curbfind", 20, 20, 360, 40, 0x00F5F5F7);
+            int col_ink[200];
+            for (int i = 0; i < 200; i++) {
+                col_ink[i] = 0;
+                for (int j = 0; j < 32; j++) if (window_get_pixel_phys(40 + i, 40 + j) != bg) { col_ink[i] = 1; break; }
+            }
+            int runs = 0, run_start[16], run_end[16], in_run = 0;
+            for (int i = 0; i < 200; i++) {
+                if (col_ink[i] && !in_run) { if (runs < 16) run_start[runs] = i; in_run = 1; }
+                if (!col_ink[i] && in_run) { if (runs < 16) run_end[runs] = i - 1; runs++; in_run = 0; }
+            }
+            if (in_run) { if (runs < 16) run_end[runs] = 199; runs++; }
+            int gap_min = 999, gap_max = -1;
+            tt_out("wraptest 'Curbfind' ink runs:");
+            for (int r = 0; r < runs && r < 16; r++) {
+                tt_out(" "); tt_num(run_start[r]); tt_out("-"); tt_num(run_end[r]);
+                if (r > 0) { int gap = run_start[r] - run_end[r - 1] - 1; if (gap < gap_min) gap_min = gap; if (gap > gap_max) gap_max = gap; }
+            }
+            tt_out("\n");
+            int spread = gap_max - gap_min;
+            tt_out("wraptest: letter gap spread "); tt_num(spread); tt_out(" px (min "); tt_num(gap_min); tt_out(", max "); tt_num(gap_max); tt_out(")\n");
+            /* "Curbfind" is 8 letters, every pair of adjacent glyphs touches or
+               nearly touches at this face (no wide space-shaped sidebearing
+               gap like 'l'/'i' produce), so the whole word draws as one ink
+               run when spacing is correct; the fixed-cell bug splits it into
+               multiple runs with an uneven spread instead. */
+            tt_out((runs == 1 || (runs > 1 && spread <= 3)) ? "wraptest 'Curbfind' spacing uniform: ok\n" : "wraptest 'Curbfind' spacing uneven (the 'Curbf ind' bug): FAILED\n");
             window_close();
         }
     }

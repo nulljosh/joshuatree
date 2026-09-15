@@ -9,6 +9,14 @@
 # the lone-'W' ink width. Both lines must say ok. Discriminating: with the
 # fixed-16px-cell renderer this fails with spread 8 (C-l gap 1, l-o gap 9)
 # and W clipped to 16; see roadmap.md's v77 entry for the reverted run.
+#
+# v78 (0.67.2): also runs `wraptest`, the same shape for the sibling bug
+# v77 missed: render_wrapped_text (every HTML app view, every Chat answer)
+# drew each glyph through font_draw_char at a hardcoded 8px advance
+# instead of going through font_draw_string's real pen, so a real word
+# like "Curbfind" rendered as "Curbf ind" on a real framebuffer dump. Same
+# ink-run measurement, this time through render_wrapped_text itself. See
+# roadmap.md's v78 entry for the reverted run (spread 11 vs 3, FAILED).
 set -e
 cd "$(dirname "$0")/.."
 make -s kernel.elf
@@ -33,11 +41,14 @@ send() {
     sleep 3
     echo 'sendkey esc'; sleep 1
     send "texttest"; sleep 4
+    send "wraptest"; sleep 4
     echo quit
 ) | qemu-system-i386 -kernel kernel.elf -display none -monitor stdio -serial "file:$LOG" >/dev/null 2>&1
 
 grep -a "texttest" "$LOG" || { echo "FAIL: no texttest output on serial"; exit 1; }
-if grep -aq "FAILED" "$LOG"; then echo "FAIL: texttest reported a failure"; exit 1; fi
+grep -a "wraptest" "$LOG" || { echo "FAIL: no wraptest output on serial"; exit 1; }
+if grep -aq "FAILED" "$LOG"; then echo "FAIL: texttest/wraptest reported a failure"; exit 1; fi
 grep -aq "spacing uniform: ok" "$LOG" && grep -aq "'W' not clipped: ok" "$LOG" \
-  && echo "PASS: proportional AA text spacing uniform, wide glyphs unclipped" \
-  || { echo "FAIL: expected both ok lines"; exit 1; }
+  && grep -aq "wraptest 'Curbfind' spacing uniform: ok" "$LOG" \
+  && echo "PASS: proportional AA text spacing uniform (font_draw_string and render_wrapped_text both), wide glyphs unclipped" \
+  || { echo "FAIL: expected all three ok lines"; exit 1; }

@@ -26,10 +26,13 @@ jobs:
         run: ./tools/png-host-check.sh
       - name: PNG decoder, in-kernel
         run: ./tools/png-check.sh
-      # v77: the "Cl oudy" letter-spacing regression. Renders real DejaVu
-      # text in-kernel at scale 2, measures actual ink columns per glyph,
-      # and fails if the inter-letter gaps are uneven or a wide glyph is
-      # clipped (both true under the old fixed-16px-cell renderer).
+      # v77/v78: the "Cl oudy" / "Curbf ind" letter-spacing regressions.
+      # Renders real DejaVu text in-kernel at scale 2 (v77's texttest,
+      # through font_draw_string, plus v78's wraptest, through
+      # render_wrapped_text, the word-wrap path v77 didn't touch), measures
+      # actual ink columns per glyph, and fails if the inter-letter gaps
+      # are uneven or a wide glyph is clipped (both true under the old
+      # fixed-cell renderers).
       - name: AA text spacing, in-kernel
         run: ./tools/textspacing-check.sh
 
