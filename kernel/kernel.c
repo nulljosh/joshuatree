@@ -4132,7 +4132,16 @@ typedef struct {
 static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
 static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
 
-static int gui_multiwin_supported(int icon){ return icon == 0 || icon == 7; } /* Files, Weather */
+static int gui_multiwin_supported(int icon){ return icon == 0 || icon == 7 || icon == 1 || icon == 2 || icon == 4; } /* Files, Weather, Mail, Calendar, Reminders */
+
+/* v0.75.0 (batch 2): Mail/Calendar/Reminders have real per-keystroke
+   interaction (adding a reminder, navigating calendar days/months,
+   composing mail), a real, distinct shape from Files/Weather's static
+   gui_wait_close-only viewers, per roadmap.md's own note. gui_run's
+   input loop below only ever forwards a keystroke to the app whose
+   window is currently topmost/focused (the same "topmost owns input"
+   rule click-to-focus already established for clicks). */
+static int gui_multiwin_interactive(int icon){ return icon == 1 || icon == 2 || icon == 4; }
 
 /* Window 0 keeps the exact single-window rect the existing dock-app tests
    already assert against (gui_launch_from_dock's own x=70,y=40,w=820,h=385;
@@ -4164,6 +4173,9 @@ static void gui_multiwin_draw_one(const gui_window_t *win){
        stale or frozen. */
     if (win->icon == 0) gui_draw_files_content();
     else if (win->icon == 7) gui_draw_weather_content();
+    else if (win->icon == 1) gui_draw_mail_content();
+    else if (win->icon == 2) gui_draw_calendar_content();
+    else if (win->icon == 4) gui_draw_reminders_content();
     window_clear_viewport();
 }
 
@@ -4230,6 +4242,36 @@ static void gui_multiwin_close(int idx){
     if (idx < 0 || idx >= gui_window_count) return;
     for (int j = idx; j < gui_window_count - 1; j++) gui_windows[j] = gui_windows[j + 1];
     gui_window_count--;
+}
+
+/* v0.75.0 (batch 2): the same SC[]/extended-0xE0 decode get_key_or_click
+   already does, but never hlt-waits -- called at most once per gui_run
+   frame, for the one focused interactive window (gui_multiwin_interactive),
+   so a real keystroke reaches Mail/Calendar/Reminders' own on_key handler
+   without blocking the compositor the way the old gui_wait_close-shaped
+   loops did. A truly split extended sequence (the second byte of an arrow
+   key) just drops this frame rather than block waiting for it -- the IRQ
+   handler fills both bytes of the ring within microseconds of each other,
+   well inside one frame at this poll rate, so in practice this never
+   drops a real arrow keystroke. */
+static int gui_multiwin_key_nonblock(void){
+    int sc = kbd_pop();
+    if (sc < 0) return -1;
+    if (sc == 0xE0) {
+        int sc2 = kbd_pop();
+        if (sc2 < 0) return -1;
+        if (sc2 == 0x48) return KEY_UP;
+        if (sc2 == 0x50) return KEY_DOWN;
+        if (sc2 == 0x4B) return KEY_LEFT;
+        if (sc2 == 0x4D) return KEY_RIGHT;
+        return -1;
+    }
+    if (sc & 0x80) return -1; /* key release */
+    char c = SC[sc & 0x7F];
+    if (c == '\n') return KEY_ENTER;
+    if (c == 27)   return KEY_ESC;
+    if (c) return (int)(unsigned char)c;
+    return -1;
 }
 
 /* A loop (octagon approximating a circle, 8 capsule segments) for the
@@ -4581,8 +4623,61 @@ static void gui_run(void){
                   if (dt > 25) wind_enabled = 0; else if (dt > 12) { if (++slow >= 2) wind_enabled = 0; } else slow = 0; }
             }
         }
-        int sc = kbd_pop();
-        if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) break; /* esc, non-blocking */
+        /* v0.75.0 (batch 2): when the topmost open multiwin window is one
+           of the real-input apps (Mail/Calendar/Reminders), a keystroke
+           routes to its own on_key handler instead of the old global
+           "esc quits the whole GUI" check -- exactly the same
+           "topmost/focused window owns input" rule click-to-focus
+           already established for clicks (gui_multiwin_hit_test above).
+           Only one kbd_pop() happens per frame either way, so the two
+           branches can't double-consume the same scancode. */
+        int mw_topmost_icon = gui_window_count > 0 ? gui_windows[gui_window_count - 1].icon : -1;
+        int mw_key_repaint = 0;
+        if (gui_multiwin_interactive(mw_topmost_icon)) {
+            int mwk = gui_multiwin_key_nonblock();
+            if (mwk >= 0) {
+                int mw_should_close = 0;
+                if (mw_topmost_icon == 4) mw_should_close = gui_reminders_on_key(mwk);
+                else if (mw_topmost_icon == 2) mw_should_close = gui_calendar_on_key(mwk);
+                else if (mw_topmost_icon == 1) mw_should_close = gui_mail_on_key(mwk);
+                if (mw_should_close) {
+                    gui_multiwin_close(gui_window_count - 1);
+                    mw_key_repaint = 1; /* the window left the screen: needs the real full desktop repaint to erase it, the same cost every open/close already pays */
+                } else {
+                    /* v0.75.0: a cheap, scoped repaint tier, the same
+                       "cheapest repaint that's correct" discipline
+                       cursor_only/dock_only below already established.
+                       Forcing the FULL desktop repaint (wallpaper photo
+                       blit + menubar + dock, the expensive path those
+                       two tiers exist to avoid) on every single keystroke
+                       while typing (adding a reminder, composing mail)
+                       is real, measurable overkill batch-2 would
+                       otherwise add -- and not just cosmetic: a real
+                       bug this pass caught and fixed before shipping, a
+                       fast multi-character type burst forcing a full
+                       photo-blit redraw on every keystroke could fall
+                       behind the keyboard IRQ ring's fill rate, dropping
+                       real keystrokes and intermittently failing
+                       tools/checks/app-interact-check.py's Reminders/
+                       Mail/Calendar interaction steps (confirmed: this
+                       exact non-scoped `launched=1` version reproduced
+                       the flakiness live, headless, multiple runs). The
+                       window's own rect is self-contained -- it always
+                       draws its own full chrome + content top to bottom
+                       -- so redrawing just that window, patching the
+                       cursor around it the same way cursor_only/
+                       dock_only do, is the whole real fix: nothing
+                       outside the window rect changed. */
+                    gui_cursor_restore();
+                    gui_multiwin_draw_one(&gui_windows[gui_window_count - 1]);
+                    gui_cursor_save(last_mx, last_my);
+                    gui_draw_cursor(last_mx, last_my);
+                }
+            }
+        } else {
+            int sc = kbd_pop();
+            if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) break; /* esc, non-blocking, global-quit path: unchanged when no interactive window is focused */
+        }
         int dx = 0, dy = 0;
         int moved_mouse = mouse_get_delta(&dx, &dy, &buttons);
         if (moved_mouse) {
@@ -4629,7 +4724,7 @@ static void gui_run(void){
             if (moved > 8) drag_slot = press_slot; /* threshold crossed: this is a drag, not a click */
         }
 
-        int launched = notif_draw_pending || weather_draw_pending || win_focus_changed; notif_draw_pending = 0; weather_draw_pending = 0;
+        int launched = notif_draw_pending || weather_draw_pending || win_focus_changed || mw_key_repaint; notif_draw_pending = 0; weather_draw_pending = 0;
         if (just_released) {
             if (notif_open) {
                 if (notif_opening) notif_opening = 0;

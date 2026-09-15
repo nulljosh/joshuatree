@@ -275,4 +275,115 @@ static void gui_launch_calendar(void){
     }
 }
 
+/* v0.75.0 (multi-window batch 2): same real-state split reminders.h just
+   established -- gui_launch_calendar above is untouched, this is a
+   second, separate state machine over the same shared data functions
+   (cal_read_today/cal_events_*), so month/day-cursor position and
+   day-view-edit-mode persist across repaints and across losing focus to
+   another open window. */
+static int cal_mw_loaded = 0;
+static int cal_mw_ty, cal_mw_tm, cal_mw_td;
+static int cal_mw_vy, cal_mw_vm, cal_mw_sel_d;
+static int cal_mw_dayview = 0;
+static char cal_mw_buf[CAL_EVENT_TEXT_MAX];
+static unsigned int cal_mw_buflen = 0;
+
+static void cal_mw_init(void){
+    if (cal_mw_loaded) return;
+    cal_mw_loaded = 1;
+    cal_read_today(&cal_mw_ty, &cal_mw_tm, &cal_mw_td);
+    cal_mw_vy = cal_mw_ty; cal_mw_vm = cal_mw_tm; cal_mw_sel_d = cal_mw_td;
+    cal_events_load();
+}
+
+static void gui_draw_calendar_content(void){
+    cal_mw_init();
+    window_clear(GUI_BG);
+    gui_draw_app_titlebar("Calendar");
+    const unsigned int accent = 0x00A0553F, ink = 0x001C1C1E, dim = 0x00A39C92, hint = 0x00807468;
+    if (cal_mw_dayview) {
+        char datestr[CAL_DATE_LEN + 1];
+        cal_date_str(cal_mw_vy, cal_mw_vm, cal_mw_sel_d, datestr);
+        font_draw_string(datestr, 20, 52, hint, -1);
+        font_draw_string("type the event, enter saves, esc cancels:", 20, 72, hint, -1);
+        window_rect(20, 96, (int)window_width() - 40, 20, 0x00FFFFFF);
+        cal_mw_buf[cal_mw_buflen] = 0;
+        font_draw_string(cal_mw_buf, 24, 98, ink, -1);
+        return;
+    }
+    font_draw_string("left/right month   [ ] pick a day   enter opens it   t today   esc closes", 20, 52, hint, -1);
+    int cell_w = 72, cell_h = 44, grid_w = 7 * cell_w;
+    int x0 = ((int)window_width() - grid_w) / 2;
+    int y0 = 150;
+    char title[24]; int p = 0;
+    for (const char *s = CAL_MONTHS[cal_mw_vm - 1]; *s; s++) title[p++] = *s;
+    title[p++] = ' ';
+    title[p++] = '0' + (cal_mw_vy / 1000) % 10; title[p++] = '0' + (cal_mw_vy / 100) % 10;
+    title[p++] = '0' + (cal_mw_vy / 10) % 10;   title[p++] = '0' + cal_mw_vy % 10;
+    title[p] = 0;
+    font_draw_string(title, x0 + (grid_w - p * 8) / 2, 92, 0x0085144B, -1);
+    for (int c = 0; c < 7; c++)
+        font_draw_string(CAL_WD[c], x0 + c * cell_w + (cell_w - 24) / 2, 122, (c == 0 || c == 6) ? dim : hint, -1);
+    window_rect(x0, 142, grid_w, 1, 0x00DDD9D3);
+    int first = cal_dow(cal_mw_vy, cal_mw_vm, 1), n = cal_days_in_month(cal_mw_vy, cal_mw_vm);
+    for (int d = 1; d <= n; d++) {
+        int idx = first + d - 1, row = idx / 7, col = idx % 7;
+        int cx = x0 + col * cell_w + cell_w / 2, cy = y0 + row * cell_h + cell_h / 2;
+        int today = (cal_mw_vy == cal_mw_ty && cal_mw_vm == cal_mw_tm && d == cal_mw_td);
+        char num[3]; int len = 0;
+        if (d >= 10) num[len++] = '0' + d / 10;
+        num[len++] = '0' + d % 10;
+        num[len] = 0;
+        if (d == cal_mw_sel_d) window_rect(x0 + col * cell_w + 2, y0 + row * cell_h + 2, cell_w - 4, cell_h - 4, 0x00EDE6DC);
+        if (today) gui_fill_circle(cx, cy, 15, accent, GUI_BG);
+        font_draw_string(num, cx - len * 4, cy - 8, today ? 0x00FFFFFF : ((col == 0 || col == 6) ? dim : ink), -1);
+        char datestr[CAL_DATE_LEN + 1];
+        cal_date_str(cal_mw_vy, cal_mw_vm, d, datestr);
+        if (cal_events_find(datestr) >= 0) gui_fill_circle(cx, cy + 14, 2, today ? 0x00FFFFFF : accent, GUI_BG);
+    }
+}
+
+/* Returns 1 when this window should close (esc from the month grid); esc
+   from day-view just cancels back to the grid, matching cal_day_view's
+   own esc contract, not a whole-window close. */
+static int gui_calendar_on_key(int k){
+    cal_mw_init();
+    if (cal_mw_dayview) {
+        if (k == KEY_ESC) { cal_mw_dayview = 0; return 0; }
+        if (k == KEY_ENTER) {
+            cal_mw_buf[cal_mw_buflen] = 0;
+            if (cal_mw_buflen > 0) {
+                char datestr[CAL_DATE_LEN + 1];
+                cal_date_str(cal_mw_vy, cal_mw_vm, cal_mw_sel_d, datestr);
+                cal_events_set(datestr, cal_mw_buf);
+            }
+            cal_mw_dayview = 0;
+            return 0;
+        }
+        if (k == '\b') { if (cal_mw_buflen > 0) cal_mw_buflen--; return 0; }
+        if (k >= 32 && k < 127 && cal_mw_buflen < CAL_EVENT_TEXT_MAX - 1) cal_mw_buf[cal_mw_buflen++] = (char)k;
+        return 0;
+    }
+    if (k == KEY_ESC) return 1;
+    int n = cal_days_in_month(cal_mw_vy, cal_mw_vm);
+    if (k == KEY_LEFT || k == KEY_UP || k == 'a') {
+        if (--cal_mw_vm < 1) { cal_mw_vm = 12; cal_mw_vy--; }
+        if (cal_mw_sel_d > cal_days_in_month(cal_mw_vy, cal_mw_vm)) cal_mw_sel_d = cal_days_in_month(cal_mw_vy, cal_mw_vm);
+    } else if (k == KEY_RIGHT || k == KEY_DOWN || k == 'd') {
+        if (++cal_mw_vm > 12) { cal_mw_vm = 1; cal_mw_vy++; }
+        if (cal_mw_sel_d > cal_days_in_month(cal_mw_vy, cal_mw_vm)) cal_mw_sel_d = cal_days_in_month(cal_mw_vy, cal_mw_vm);
+    } else if (k == 't') {
+        cal_read_today(&cal_mw_ty, &cal_mw_tm, &cal_mw_td);
+        cal_mw_vy = cal_mw_ty; cal_mw_vm = cal_mw_tm; cal_mw_sel_d = cal_mw_td;
+    } else if (k == '[') { if (cal_mw_sel_d > 1) cal_mw_sel_d--; }
+    else if (k == ']') { if (cal_mw_sel_d < n) cal_mw_sel_d++; }
+    else if (k == KEY_ENTER) {
+        cal_mw_dayview = 1; cal_mw_buflen = 0; cal_mw_buf[0] = 0;
+        char datestr[CAL_DATE_LEN + 1]; cal_date_str(cal_mw_vy, cal_mw_vm, cal_mw_sel_d, datestr);
+        int existing = cal_events_find(datestr);
+        if (existing >= 0) { unsigned int c = 0; while (cal_event_text[existing][c] && c < CAL_EVENT_TEXT_MAX - 1) { cal_mw_buf[c] = cal_event_text[existing][c]; c++; } cal_mw_buflen = c; }
+    }
+    return 0;
+}
+
 #endif /* CALENDAR_MATH_ONLY */

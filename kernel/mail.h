@@ -220,3 +220,116 @@ static void gui_launch_mail(void) {
         }
     }
 }
+
+/* v0.75.0 (multi-window batch 2): same real-state split reminders.h/
+   calendar.h just established -- gui_launch_mail above is untouched,
+   this is a second, separate state machine (list/read/three-stage
+   compose) over the same shared data functions (mail_load/save/
+   delete_at, mail_str_copy), so which message is selected, whether a
+   message is being read, and an in-progress compose all persist across
+   repaints and across losing focus to another open window. */
+#define MAIL_MW_LIST            0
+#define MAIL_MW_READ            1
+#define MAIL_MW_COMPOSE_FROM    2
+#define MAIL_MW_COMPOSE_SUBJECT 3
+#define MAIL_MW_COMPOSE_BODY    4
+
+static int mail_mw_sel = 0;
+static int mail_mw_mode = MAIL_MW_LIST;
+static char mail_mw_from[MAIL_FROM_MAX];
+static char mail_mw_subject[MAIL_SUBJECT_MAX];
+static char mail_mw_body[MAIL_BODY_MAX];
+static unsigned int mail_mw_len = 0; /* length of whichever compose field is currently being typed */
+
+static void gui_draw_mail_content(void){
+    mail_load();
+    window_clear(GUI_BG);
+    gui_draw_app_titlebar("Mail");
+    if (mail_mw_mode == MAIL_MW_READ) {
+        mail_msg_t *m = &mail_msgs[mail_mw_sel];
+        font_draw_string(m->from, 20, 48, 0x00807468, -1);
+        font_draw_string(m->subject, 20, 68, 0x001C1C1E, -1);
+        window_rect(20, 92, (int)window_width() - 40, 1, 0x00E0D8CE);
+        render_wrapped_text(m->body, 20, 106, (int)window_width() - 40, (int)window_height() - 150, 0x001C1C1E);
+        return;
+    }
+    if (mail_mw_mode == MAIL_MW_COMPOSE_FROM || mail_mw_mode == MAIL_MW_COMPOSE_SUBJECT || mail_mw_mode == MAIL_MW_COMPOSE_BODY) {
+        const char *prompt = mail_mw_mode == MAIL_MW_COMPOSE_FROM ? "from (enter confirms, esc cancels):" :
+                              mail_mw_mode == MAIL_MW_COMPOSE_SUBJECT ? "subject:" : "body:";
+        char *buf = mail_mw_mode == MAIL_MW_COMPOSE_FROM ? mail_mw_from : mail_mw_mode == MAIL_MW_COMPOSE_SUBJECT ? mail_mw_subject : mail_mw_body;
+        font_draw_string(prompt, 20, 52, 0x0075726E, -1);
+        window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
+        buf[mail_mw_len] = 0;
+        font_draw_string(buf, 24, 78, 0x001C1C1E, -1);
+        return;
+    }
+    if (!mail_count) {
+        font_draw_string("No mail yet.", 20, 70, 0x001C1C1E, -1);
+        font_draw_string("Press c to compose one.", 20, 94, 0x00807468, -1);
+        return;
+    }
+    font_draw_string("up/down to pick   enter reads   c composes   d deletes   esc closes", 20, 52, 0x00807468, -1);
+    if (mail_mw_sel >= mail_count) mail_mw_sel = mail_count - 1;
+    for (int i = 0; i < mail_count; i++) {
+        int y = 84 + i * 22;
+        if (i == mail_mw_sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);
+        unsigned int fg = mail_msgs[i].read ? 0x00A39C92 : 0x001C1C1E;
+        font_draw_string(mail_msgs[i].read ? "   " : "  *", 28, y, fg, -1);
+        font_draw_string(mail_msgs[i].from, 60, y, fg, -1);
+        font_draw_string(mail_msgs[i].subject, 220, y, fg, -1);
+    }
+}
+
+/* Returns 1 when this window should close (esc from the list view); esc
+   from read/compose just cancels back to the list, matching
+   mail_read_message/mail_prompt_line's own esc contracts, not a
+   whole-window close. */
+static int gui_mail_on_key(int k){
+    if (mail_mw_mode == MAIL_MW_READ) {
+        if (k == KEY_ESC) { mail_mw_mode = MAIL_MW_LIST; return 0; }
+        return 0;
+    }
+    if (mail_mw_mode == MAIL_MW_COMPOSE_FROM || mail_mw_mode == MAIL_MW_COMPOSE_SUBJECT || mail_mw_mode == MAIL_MW_COMPOSE_BODY) {
+        char *buf = mail_mw_mode == MAIL_MW_COMPOSE_FROM ? mail_mw_from : mail_mw_mode == MAIL_MW_COMPOSE_SUBJECT ? mail_mw_subject : mail_mw_body;
+        int max = mail_mw_mode == MAIL_MW_COMPOSE_FROM ? MAIL_FROM_MAX : mail_mw_mode == MAIL_MW_COMPOSE_SUBJECT ? MAIL_SUBJECT_MAX : MAIL_BODY_MAX;
+        if (k == KEY_ESC) { mail_mw_mode = MAIL_MW_LIST; return 0; }
+        if (k == KEY_ENTER) {
+            buf[mail_mw_len] = 0;
+            if (mail_mw_mode == MAIL_MW_COMPOSE_FROM) {
+                if (mail_mw_from[0] == 0) { mail_mw_mode = MAIL_MW_LIST; return 0; }
+                mail_mw_mode = MAIL_MW_COMPOSE_SUBJECT; mail_mw_len = 0; mail_mw_subject[0] = 0;
+            } else if (mail_mw_mode == MAIL_MW_COMPOSE_SUBJECT) {
+                mail_mw_mode = MAIL_MW_COMPOSE_BODY; mail_mw_len = 0; mail_mw_body[0] = 0;
+            } else {
+                if (mail_count < MAIL_MAX) {
+                    mail_msg_t *m = &mail_msgs[mail_count];
+                    mail_str_copy(m->from, mail_mw_from, MAIL_FROM_MAX);
+                    mail_str_copy(m->subject, mail_mw_subject, MAIL_SUBJECT_MAX);
+                    mail_str_copy(m->body, mail_mw_body, MAIL_BODY_MAX);
+                    m->read = 0;
+                    mail_count++;
+                    mail_save();
+                }
+                mail_mw_mode = MAIL_MW_LIST;
+            }
+            return 0;
+        }
+        if (k == '\b') { if (mail_mw_len > 0) mail_mw_len--; return 0; }
+        if (k >= 32 && k < 127 && (int)mail_mw_len < max - 1) buf[mail_mw_len++] = (char)k;
+        return 0;
+    }
+    /* list mode */
+    if (k == KEY_ESC) return 1;
+    if (k == 'c') { mail_mw_mode = MAIL_MW_COMPOSE_FROM; mail_mw_len = 0; mail_mw_from[0] = 0; return 0; }
+    if (!mail_count) return 0;
+    if (k == KEY_UP && mail_mw_sel > 0) mail_mw_sel--;
+    else if (k == KEY_DOWN && mail_mw_sel < mail_count - 1) mail_mw_sel++;
+    else if (k == KEY_ENTER) {
+        if (!mail_msgs[mail_mw_sel].read) { mail_msgs[mail_mw_sel].read = 1; mail_save(); }
+        mail_mw_mode = MAIL_MW_READ;
+    } else if (k == 'd') {
+        mail_delete_at(mail_mw_sel);
+        if (mail_mw_sel >= mail_count && mail_mw_sel > 0) mail_mw_sel--;
+    }
+    return 0;
+}
