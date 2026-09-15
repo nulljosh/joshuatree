@@ -3299,7 +3299,12 @@ static void gui_draw_app_titlebar(const char *title){
     font_draw_string(title, 84, 12, 0x0085144B, -1);
 }
 
-static void gui_launch_weather(void){
+/* Split into a content-only draw plus the old blocking entry point: the
+   multi-window compositor (gui_multiwin_draw_one, near gui_launch_from_dock)
+   calls the content draw directly, every repaint, with no gui_wait_close in
+   the way; the Apps-folder/test-harness single-window path keeps calling
+   gui_launch_weather() exactly as before, same pixels either way. */
+static void gui_draw_weather_content(void){
     if (!weather_text[0]) weather_fetch();
     window_clear(0x00F5F0EB);
     gui_draw_app_titlebar("Weather");
@@ -3310,8 +3315,8 @@ static void gui_launch_weather(void){
     font_draw_string("Vancouver", x + 188, 112, 0x00645057, -1);
     font_draw_string(weather_text[0] ? weather_text : "Weather unavailable", x + 188, 158, 0x002A2226, -1);
     font_draw_string("Current conditions", x + 188, 195, 0x00746B70, -1);
-    gui_wait_close();
 }
+static void gui_launch_weather(void){ gui_draw_weather_content(); gui_wait_close(); }
 
 static void gui_launch_html(const char *label, const unsigned char *data, unsigned int data_len){
     window_clear(0x00FAF8F6);
@@ -3345,15 +3350,16 @@ static void gui_fat_collect(const char *name, unsigned int size, int is_dir){
     gui_fat_count++;
 }
 
-static void gui_launch_files(void){
+/* Same split as gui_draw_weather_content above. */
+static void gui_draw_files_content(void){
     window_clear(0x00FAF8F6);
     gui_draw_app_titlebar("Files");
     gui_fat_count = 0;
     vfs_list(gui_fat_collect);
     if (gui_fat_count == 0) font_draw_string("(no files, or no FAT filesystem)", 20, 50, 0x001C1C1E, -1);
     for (int i = 0; i < gui_fat_count; i++) font_draw_string(gui_fat_names[i], 20, 50 + i * 18, 0x001C1C1E, -1);
-    gui_wait_close();
 }
+static void gui_launch_files(void){ gui_draw_files_content(); gui_wait_close(); }
 
 /* v85: the old one-shot gui_launch_chat (no history, /api/generate, a
    200-byte message cap) lived here; replaced by chat.h's real GUI app
@@ -4035,6 +4041,135 @@ again:
     }
 }
 
+/* v0.73.0: phase 1 of real multi-window, per roadmap.md's "Multi-window,
+   honestly scoped" entry (grep for it: real windows were estimated as
+   "3-5 sessions of unstarted work" before this pass, and confirmed still
+   unstarted immediately before this one, every app a blocking function and
+   window_open() called exactly once at boot). This is real, not cosmetic:
+   a genuine window list, and two windows genuinely open and drawn on
+   screen at the same time, each redrawn from its own real state on every
+   repaint, neither frozen nor a fake snapshot.
+
+   Deliberately NOT attempted here, the real reasons this stays phase 1:
+   - Only Files and Weather are wired to this path. They're the two
+     simplest gui_wait_close-shaped read-only viewers (roadmap.md's own
+     staggering plan calls this batch 1 of the app conversion). Every
+     other dock app (Mail, Calendar, Notes, Reminders, Terminal, Chat) has
+     real per-keystroke state and keeps the old blocking
+     gui_launch_from_dock path untouched, on purpose: converting an app
+     with a real input loop into a non-blocking draw()/on_key() handler
+     with no shared-state hazard is real work per app, not a bulk
+     find/replace, and roadmap.md is explicit that this is the multi-
+     session part.
+   - No real z-order/overlap compositing: the naive back-to-front redraw
+     draws window 0 then window 1, and a click always tests only the
+     most-recently-opened (topmost) window's full rect. Real
+     click-through-to-lower-window hit testing is phase 2, not attempted.
+   - No click-to-focus: opening a window focuses it (the same
+     "most-recently-opened owns input" model the single-window kernel
+     already had, just no longer tearing the previous window down first).
+     Clicking the background window does nothing yet; that's real
+     click-to-focus, phase 2's job.
+   - Capped at 2 concurrent windows (GUI_MULTIWIN_MAX): exactly what this
+     pass needs to prove and no more; a real 4-6 slot cap is a phase-2
+     decision once more apps are converted and the memory cost (each
+     window drawing straight into the shared framebuffer today, no
+     per-window backing store yet, see roadmap.md's sizing note) is
+     actually being paid by something that needs it. */
+#define GUI_MULTIWIN_MAX 2
+typedef struct {
+    int icon;
+    int x, y, w, h;
+} gui_window_t;
+static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
+static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
+
+static int gui_multiwin_supported(int icon){ return icon == 0 || icon == 7; } /* Files, Weather */
+
+/* Window 0 keeps the exact single-window rect the existing dock-app tests
+   already assert against (gui_launch_from_dock's own x=70,y=40,w=820,h=385;
+   appclose-check.py/app-interact-check.py hard-code CLOSE_X,CLOSE_Y=94,56,
+   which is this same rect's close-circle centre, x+24,y+16). A second,
+   concurrently-open window is offset so both titlebars and both close
+   buttons stay fully on screen and visually distinct, not stacked exactly
+   on top of each other. */
+static void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
+    if (slot_index == 0) { *x = 70; *y = 40; *w = 820; *h = 385; }
+    else { *x = 70 + 60; *y = 40 + 60; *w = 820; *h = 385; }
+}
+
+static void gui_multiwin_draw_one(const gui_window_t *win){
+    int x = win->x, y = win->y, w = win->w, h = win->h;
+    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
+    window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
+    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
+    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
+    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
+    font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
+    font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
+    font_draw_string(GUI_LABELS[win->icon], x + 96, y + 8, 0x00403439, -1);
+    window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
+    /* Real per-repaint content, not a cached bitmap: each call re-derives
+       the window's content from the same live state its single-window
+       counterpart reads (vfs_list for Files, weather_text for Weather),
+       so a second window opening never leaves the first one's content
+       stale or frozen. */
+    if (win->icon == 0) gui_draw_files_content();
+    else if (win->icon == 7) gui_draw_weather_content();
+    window_clear_viewport();
+}
+
+/* Called from gui_run's own full-repaint branch, right alongside the
+   menu/notif/weather overlay draws it already does there, so every open
+   window is genuinely redrawn on top of the desktop on every real repaint
+   this kernel does, back-to-front, list order. */
+static void gui_multiwin_draw_all(void){
+    for (int i = 0; i < gui_window_count; i++) gui_multiwin_draw_one(&gui_windows[i]);
+}
+
+static int gui_multiwin_open(int icon){
+    for (int i = 0; i < gui_window_count; i++) {
+        if (gui_windows[i].icon == icon) {
+            /* Already open: focus it (move to the end of the list, so the
+               back-to-front draw puts it on top) instead of opening a
+               duplicate. Most-recently-opened owns focus, this pass's
+               whole focus model. */
+            if (i != gui_window_count - 1) {
+                gui_window_t tmp = gui_windows[i];
+                for (int j = i; j < gui_window_count - 1; j++) gui_windows[j] = gui_windows[j + 1];
+                gui_windows[gui_window_count - 1] = tmp;
+            }
+            return gui_window_count - 1;
+        }
+    }
+    if (gui_window_count >= GUI_MULTIWIN_MAX) return -1; /* the real cap this pass proves, see the comment above */
+    int slot = gui_window_count;
+    gui_windows[slot].icon = icon;
+    gui_multiwin_geom(slot, &gui_windows[slot].x, &gui_windows[slot].y, &gui_windows[slot].w, &gui_windows[slot].h);
+    gui_window_count++;
+    return slot;
+}
+
+/* Only the focused (topmost, most-recently-opened) window is interactive
+   at all in this phase, matching point 5 of the pass this shipped in: no
+   click-to-focus hit-testing against the background window yet. Any click
+   inside the focused window's full rect closes it, the same "click
+   anywhere in the app view closes it" contract gui_wait_close already
+   used for the old single-window model, just scoped to one entry in the
+   list instead of the one and only window. */
+static int gui_multiwin_focused_click_hit(int mx, int my){
+    if (gui_window_count == 0) return -1;
+    const gui_window_t *w = &gui_windows[gui_window_count - 1];
+    if (mx >= w->x && mx < w->x + w->w && my >= w->y && my < w->y + w->h) return gui_window_count - 1;
+    return -1;
+}
+
+static void gui_multiwin_close(int idx){
+    if (idx < 0 || idx >= gui_window_count) return;
+    for (int j = idx; j < gui_window_count - 1; j++) gui_windows[j] = gui_windows[j + 1];
+    gui_window_count--;
+}
+
 /* A loop (octagon approximating a circle, 8 capsule segments) for the
    round parts of a script letter: no sin/cos in this freestanding build,
    an 8-point table scaled by the target radius reads as smoothly round
@@ -4318,7 +4453,7 @@ static void gui_run(void){
        drag_slot: only set once the mouse has actually moved past a small
        threshold while held, so a plain click (down, no movement, up)
        never gets mistaken for a drag onto its own slot. */
-    int press_slot = -1, press_x = 0, press_y = 0, drag_slot = -1;
+    int press_slot = -1, press_x = 0, press_y = 0, drag_slot = -1, press_window = -1;
     /* menu_open: the Apple-menu-style dropdown off the tree logo.
        menu_opening: true for exactly the one release that completes the
        same click that opened it, so that release doesn't also count as
@@ -4356,7 +4491,7 @@ static void gui_run(void){
            this (v86 in a browser) and it switches itself off for good. */
         {
             static unsigned int wind_last = 0; static int wind_dir = 1;
-            if (wind_enabled && !menu_open && !notif_open && !weather_open && drag_slot < 0 && ticks() - wind_last >= 5) { /* cached wallpaper: ~3 ticks per frame, leaving input time at 20 fps */
+            if (wind_enabled && !menu_open && !notif_open && !weather_open && drag_slot < 0 && gui_window_count == 0 && ticks() - wind_last >= 5) { /* cached wallpaper: ~3 ticks per frame, leaving input time at 20 fps; v0.73.0: also off while a multi-window app is open, same reason as the other overlay states, its wallpaper-row redraw would paint straight over an open window's content since neither the wind sway path nor the window list know about each other yet */
                 wind_last = ticks();
                 wind_phase += wind_dir * 3; /* same slow sway period at the higher frame rate */ if (wind_phase >= 256 || wind_phase <= -256) wind_dir = -wind_dir;
                 unsigned int t0 = ticks();
@@ -4401,11 +4536,13 @@ static void gui_run(void){
         int clock_here = !menu_open && !notif_open && !weather_open && mx >= (int)window_width() - 200 && my < GUI_MENUBAR_H;
         int weather_here = !menu_open && !notif_open && !weather_open && weather_hit_x0 >= 0 && mx >= weather_hit_x0 && mx <= weather_hit_x1 && my < GUI_MENUBAR_H;
         int slot_here = (menu_open || notif_open || weather_open) ? -1 : gui_dock_hit_test(mx, my); /* the dock is inert while a panel covers it */
+        int win_close_here = (menu_open || notif_open || weather_open) ? -1 : gui_multiwin_focused_click_hit(mx, my); /* v0.73.0: only the focused (topmost) open multi-window app, see gui_multiwin_focused_click_hit */
 
         if (just_pressed) {
             if (logo_here) { menu_open = 1; menu_opening = 1; }
             else if (weather_here) { weather_open = 1; weather_opening = 1; weather_draw_pending = 1; }
             else if (clock_here) { notif_open = 1; notif_opening = 1; notif_draw_pending = 1; }
+            else if (win_close_here >= 0) { press_window = win_close_here; }
             else if (slot_here >= 0) { press_slot = slot_here; press_x = mx; press_y = my; drag_slot = -1; }
         }
 
@@ -4430,11 +4567,31 @@ static void gui_run(void){
                     if (item >= 0) { gui_menu_run_item(item); launched = 1; } /* every real item takes over the screen or reboots/halts; force a fresh desktop redraw either way */
                     menu_open = 0;
                 }
+            } else if (press_window >= 0) {
+                /* v0.73.0: closing this window is exactly it, no reopen/
+                   switch behaviour (that's v68's dock-tile close-and-open,
+                   which only applies to the old blocking single-window
+                   path); the other open window, if any, stays open and
+                   drawn, proven by gui_multiwin_draw_all below still
+                   iterating whatever's left in the list. */
+                gui_multiwin_close(press_window);
+                launched = 1;
             } else if (drag_slot >= 0) {
                 int target = gui_slot_at(mx);
                 int tmp = gui_order[drag_slot];
                 gui_order[drag_slot] = gui_order[target];
                 gui_order[target] = tmp;
+            } else if (press_slot >= 0 && press_slot == slot_here && gui_multiwin_supported(gui_order[press_slot])) {
+                /* v0.73.0: real phase-1 multi-window path for Files/Weather,
+                   see the big comment above gui_multiwin_open. Non-blocking
+                   on purpose: adds/focuses the window in the real list and
+                   returns immediately, so this same gui_run loop keeps
+                   running (dock hover, the other open window's redraw,
+                   everything) instead of blocking inside gui_wait_close the
+                   way every other app still does. */
+                editor_mouse_x = mx; editor_mouse_y = my;
+                gui_multiwin_open(gui_order[press_slot]);
+                launched = 1;
             } else if (press_slot >= 0 && press_slot == slot_here) {
                 editor_mouse_x = mx; editor_mouse_y = my;
                 gui_launch_from_dock(gui_order[press_slot]);
@@ -4468,7 +4625,7 @@ static void gui_run(void){
                 slot_here = (menu_open || notif_open || weather_open) ? -1 : gui_dock_hit_test(mx, my);
                 launched = 1; /* the app view just took over the whole screen; force a redraw below even if the cursor never moved */
             }
-            press_slot = -1; drag_slot = -1;
+            press_slot = -1; drag_slot = -1; press_window = -1;
         }
         prev_buttons = buttons;
 
@@ -4526,6 +4683,7 @@ static void gui_run(void){
             cursor_saved_x = cursor_saved_y = -1; /* the full repaint replaces whatever the backup held */
             gui_draw_desktop(hover_slot, drag_slot, mx, my);
             for (int i = 0; i < GUI_ICON_COUNT; i++) dock_presented_extra[i] = dock_hover_extra[i];
+            if (gui_window_count > 0) gui_multiwin_draw_all(); /* v0.73.0: real simultaneous redraw of every open window, back-to-front, on top of the desktop just drawn above */
             if (menu_open) gui_draw_apple_menu(menu_hover);
             if (notif_open) gui_draw_notif_panel();
             if (weather_open) gui_draw_weather_panel();
