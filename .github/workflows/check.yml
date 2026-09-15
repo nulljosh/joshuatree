@@ -39,12 +39,25 @@ jobs:
       # copy, not a build artifact, so a docs-only or landing-only pass
       # never touches it and it silently drifts behind the real kernel.elf
       # (caught live via md5, the demo was missing several real versions'
-      # worth of features). Any push that changes real kernel source now
-      # fails loudly instead of shipping a stale demo.
+      # worth of features). First version of this check compared a
+      # CI-fresh build's md5 against the checked-in copy directly, a real
+      # bug found within a day: clang/lld builds aren't bit-reproducible
+      # across machines/toolchain versions (Ubuntu CI vs whoever's Mac
+      # built the checked-in copy), so that false-failed on a genuinely
+      # in-sync tree. Real fix: compare git history instead of bytes, was
+      # `landing/v86/kernel.elf` committed at or after the last commit
+      # that actually touched kernel/driver/boot source, not whether two
+      # different compilers produced byte-identical output.
       - name: landing/v86/kernel.elf stays in sync
         run: |
-          diff <(md5sum kernel.elf | cut -d' ' -f1) <(md5sum landing/v86/kernel.elf | cut -d' ' -f1) \
-            || { echo "landing/v86/kernel.elf is stale, run: cp kernel.elf landing/v86/kernel.elf"; exit 1; }
+          git fetch --unshallow 2>/dev/null || true
+          src_commit=$(git log -1 --format=%H -- kernel/ drivers/ boot/ lib/ Makefile)
+          elf_commit=$(git log -1 --format=%H -- landing/v86/kernel.elf)
+          if ! git merge-base --is-ancestor "$src_commit" "$elf_commit" 2>/dev/null; then
+            echo "landing/v86/kernel.elf (last touched $elf_commit) predates real source changes (last touched $src_commit)"
+            echo "run: cp kernel.elf landing/v86/kernel.elf"
+            exit 1
+          fi
 
   # v75: real-network checks. geo-check.sh (v71) and wallpaper-check.py /
   # wallfx-check.py (v75) talk to ip-api.com, Open-Meteo and OpenTopoMap
