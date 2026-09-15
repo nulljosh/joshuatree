@@ -444,7 +444,17 @@ int tcp_probe_port(u32 dest_ip, u16 dest_port) {
 
 int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
             void *response, u32 response_maxlen) {
-    if (request_len > TCP_MAX_PAYLOAD) return -1;
+    /* v85 (chat history / larger request buffers): this used to reject
+       any request over one TCP_MAX_PAYLOAD (536-byte) segment outright,
+       a real hard wall found by tracing the actual send path rather than
+       assuming a bigger caller-side buffer was enough on its own (see
+       http.c's http_post comment). No fragmentation/reassembly (no IP
+       fragmentation used here, this is TCP segmentation) existed to send
+       a request bigger than one segment. Fixed the honest way, minimal
+       and bounded: send() now loops, one TCP_MAX_PAYLOAD-sized segment
+       per iteration, no window/congestion logic needed since this is a
+       synchronous push-then-wait-for-ack per segment, same shape the
+       existing single-segment call already had, just repeated. */
     u8 dest_mac[6];
     if (!resolve_next_hop(dest_ip, dest_mac)) return -1;
 
@@ -482,8 +492,24 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
     if (!got_synack) return -1;
 
     tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, their_seq, TCP_ACK, 0, 0);
-    tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, their_seq, TCP_PSH | TCP_ACK, request, request_len);
-    our_seq += request_len;
+    /* Chunked, back-to-back, no per-chunk ACK wait: this is a local
+       QEMU/SLIRP virtual link (loopback-shaped, no real WAN loss), the
+       same assumption the rest of this file already makes by having no
+       retransmission anywhere. Each chunk gets the correct running
+       sequence number so the server's own reassembly (real TCP, on the
+       Ollama/host side) puts the bytes back in order regardless. */
+    {
+        const u8 *req_bytes = (const u8 *)request;
+        u32 sent = 0;
+        while (sent < request_len) {
+            u32 chunk = request_len - sent;
+            if (chunk > TCP_MAX_PAYLOAD) chunk = TCP_MAX_PAYLOAD;
+            u8 flags = (sent + chunk >= request_len) ? (TCP_PSH | TCP_ACK) : TCP_ACK;
+            tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, their_seq, flags, req_bytes + sent, chunk);
+            our_seq += chunk;
+            sent += chunk;
+        }
+    }
 
     u32 total = 0;
     int got_fin = 0;

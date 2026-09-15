@@ -96,21 +96,45 @@ int http_post(const char *host, const char *path, unsigned short port,
     u32 ip;
     if (!resolve_host(host, &ip)) return -1;
 
-    char req[1024];
+    /* v85 (chat history / /api/chat): this used to be a fixed 1024-byte
+       stack buffer, which silently truncated ANY POST body over roughly
+       900 bytes (headers eat the rest) regardless of how big a buffer the
+       caller passed to json/kernel.c above it — growing kernel.c's own
+       req_body was a no-op against this real second cap, found by
+       actually tracing the call chain rather than assuming a bigger
+       caller buffer alone was enough. Heap-backed now, sized to the
+       caller's real body_len plus a fixed small allowance for the
+       request-line/header bytes this function itself writes (path can be
+       long; ~200 bytes of slack covers any realistic path plus headers),
+       the same pattern http_get already uses for its own raw response
+       buffer just below. */
+    u32 req_cap = body_len + 256;
+    char *req = kmalloc(req_cap);
+    if (!req) return -1;
     u32 n = 0;
     const char *parts[4];
     parts[0] = "POST "; parts[1] = path; parts[2] = " HTTP/1.0\r\nHost: "; parts[3] = host;
     for (int p = 0; p < 4; p++) {
         const char *s = parts[p];
-        while (*s && n < sizeof(req) - 1) req[n++] = *s++;
+        while (*s && n < req_cap - 1) req[n++] = *s++;
     }
     const char *ct = "\r\nContent-Type: application/json\r\nContent-Length: ";
-    while (*ct && n < sizeof(req) - 1) req[n++] = *ct++;
-    putn_into(req, &n, sizeof(req) - 1, body_len);
+    while (*ct && n < req_cap - 1) req[n++] = *ct++;
+    putn_into(req, &n, req_cap - 1, body_len);
     const char *tail = "\r\nConnection: close\r\n\r\n";
-    while (*tail && n < sizeof(req) - 1) req[n++] = *tail++;
-    for (unsigned int i = 0; i < body_len && n < sizeof(req) - 1; i++) req[n++] = body[i];
+    while (*tail && n < req_cap - 1) req[n++] = *tail++;
+    for (unsigned int i = 0; i < body_len && n < req_cap - 1; i++) req[n++] = body[i];
 
-    char raw[8192]; /* headroom for a generated-HTML response, not just a short chat reply */
-    return http_body_only(ip, port, req, n, response_out, response_maxlen, raw, sizeof(raw));
+    /* Same heap-backed raw-response sizing http_get uses: big enough for
+       the caller's response_maxlen plus real header overhead, not a fixed
+       8192 that used to cap every POST reply (a longer chat answer or a
+       bigger generated page) regardless of what the caller actually
+       asked for. */
+    u32 raw_cap = response_maxlen + 2048;
+    char *raw = kmalloc(raw_cap);
+    if (!raw) { kfree(req); return -1; }
+    int r = http_body_only(ip, port, req, n, response_out, response_maxlen, raw, raw_cap);
+    kfree(req);
+    kfree(raw);
+    return r;
 }
