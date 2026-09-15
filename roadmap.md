@@ -653,10 +653,10 @@ Verified for real, headless throughout (no `-display cocoa` window opened, the w
 ## Real bug reports from Joshua, not yet investigated (Sep 2026)
 Direct notes, ingested as-is, not yet root-caused or scoped, real user reports from actually using the live app:
 
-- Scroll wheel/mouse scroll doesn't work — can't scroll the Apps launchpad. Real gap: check whether this kernel's PS/2/vmmouse drivers even decode a scroll-wheel byte at all, or whether the launchpad UI just never wired one up.
+- Scroll wheel/mouse scroll doesn't work, can't scroll the Apps launchpad. Real gap: check whether this kernel's PS/2/vmmouse drivers even decode a scroll-wheel byte at all, or whether the launchpad UI just never wired one up.
 - Text rendering artifact: sometimes shows extra spacing between letters where there shouldn't be. Real, inconsistent (not every render), needs a repro before root-causing.
-- Launchpad doesn't actually open apps — clicking an app tile in the Apps folder closes the launchpad instead of launching the app. Real, broken core interaction, not a polish item.
+- Launchpad doesn't actually open apps, clicking an app tile in the Apps folder closes the launchpad instead of launching the app. Real, broken core interaction, not a polish item.
 - Trash should show as empty by default when it's actually empty (currently may show a non-empty state at rest, or the empty state isn't the true default). Real, needs checking against `trash.c`'s actual state on a fresh boot.
-- Icons still read pixel-ish, with a pixely (not smooth) drop shadow, despite v58/v61/v68's real fixes to specific icon defects. Standing item, Joshua's own framing: "keep looping on it later" — matches the existing standing icon-sharpness loop item already in this file, not a new one-off.
+- Icons still read pixel-ish, with a pixely (not smooth) drop shadow, despite v58/v61/v68's real fixes to specific icon defects. Standing item, Joshua's own framing: "keep looping on it later", matches the existing standing icon-sharpness loop item already in this file, not a new one-off.
 
 Not investigated yet, not scoped, no root cause assumed for any of these. Real next step for each: reproduce with real evidence before touching code, same standard as every other entry in this file.
