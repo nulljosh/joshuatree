@@ -17,7 +17,7 @@
 # for the revert command used to confirm that), and passes with it
 # restored.
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 make -s kernel.elf
 
 out=$( (sleep 2; \

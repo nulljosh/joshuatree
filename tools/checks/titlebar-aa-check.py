@@ -51,7 +51,7 @@ PX, PY = 187, 98
 RED = (0xFF, 0x5F, 0x57)          # the traffic-light dot's own fill color
 BG = (0xFA, 0xF8, 0xF6)           # gui_launch_weather's window background
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
     try: os.remove(f)
     except FileNotFoundError: pass

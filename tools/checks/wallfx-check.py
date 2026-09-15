@@ -27,7 +27,7 @@ WIND_TOP, WIND_HORIZON, SC = 30, 395, 2
 RAIN = (0xC9, 0xC0, 0xB4)
 MODE = sys.argv[1] if len(sys.argv) > 1 else "rain"
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 subprocess.check_call(["make", "-s", "kernel.elf"])
 for f in (LOG, RAW):
     try: os.remove(f)

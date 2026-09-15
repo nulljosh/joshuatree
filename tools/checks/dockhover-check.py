@@ -40,7 +40,7 @@ ICON_ROW_Y = 487      # inside the normal-size tile
 LIFTED_Y = 455        # above a normal tile's top (469), inside a magnified+lifted one (450..)
 TRAY = (239, 235, 228)
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, MID, END):
     try: os.remove(f)
     except FileNotFoundError: pass

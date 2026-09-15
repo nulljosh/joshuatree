@@ -47,7 +47,7 @@ RED_DOT = (56 + 24, 30 + 16)  # gui_launch_from_dock's fixed traffic-light red c
 # inside that cell's hit box).
 CURBFIND_CLICK = (64 + 566, 62 + 240)
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
     try: os.remove(f)
     except FileNotFoundError: pass

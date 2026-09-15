@@ -17,7 +17,7 @@
 # does against the same stored/rendered strings) so a prefix collision
 # like "2026-09-1" wrongly lighting up day 14 would actually fail this.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 cat > "$tmp/t.c" << 'EOF'

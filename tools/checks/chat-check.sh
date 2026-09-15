@@ -14,7 +14,7 @@
 # live Ollama host, not by this fast, network-independent regression
 # check.
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 make -s kernel.elf
 
 WORKDIR=$(mktemp -d /tmp/jt-chat-XXXX)

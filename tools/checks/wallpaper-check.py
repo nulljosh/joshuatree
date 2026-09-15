@@ -42,7 +42,7 @@ PORT = 4451
 WALL_W, WALL_H, TILE, ZOOM, COLS, ROWS = 960, 540, 256, 12, 4, 3  # mirror kernel.c's WALL_* constants
 MENUBAR_H, WIND_TOP, WIND_HORIZON = 22, 30, 395
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 subprocess.check_call(["make", "-s", "kernel.elf"])
 for f in (LOG, RAW):
     try: os.remove(f)

@@ -22,8 +22,8 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "..", "drivers", "vgafont.h")
-TTF = os.path.join(HERE, "fonts", "DejaVuSansMono.ttf")
+OUT = os.path.join(HERE, "..", "..", "drivers", "vgafont.h")
+TTF = os.path.join(HERE, "..", "fonts", "DejaVuSansMono.ttf")
 
 FIRST, LAST, W, H = 32, 126, 8, 16
 

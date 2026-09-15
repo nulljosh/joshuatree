@@ -46,7 +46,7 @@ PITCH = DOCK_ICON + DOCK_GAP
 ICON_TOP_Y = 469          # logical y of the tray's icon row (matches dockhover-check.py)
 TRAY = (239, 235, 228)
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
     try: os.remove(f)
     except FileNotFoundError: pass

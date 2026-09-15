@@ -47,7 +47,7 @@ CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)                  # open wallpaper, away from every hit target
 SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Trash"]
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
     try: os.remove(f)
     except FileNotFoundError: pass

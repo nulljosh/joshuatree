@@ -23,7 +23,7 @@ if that doesn't exist -- hdiutil + newfs_msdos, same as sync_dotfiles.sh).
 """
 import json, os, socket, subprocess, sys, time, tempfile, shutil
 
-REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 os.chdir(REPO)
 DISK = "/tmp/jt-qa-test.img"
 LOG = "/tmp/jt-appinteract-serial.log"

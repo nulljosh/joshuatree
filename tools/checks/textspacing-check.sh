@@ -18,7 +18,7 @@
 # ink-run measurement, this time through render_wrapped_text itself. See
 # roadmap.md's v78 entry for the reverted run (spread 11 vs 3, FAILED).
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 make -s kernel.elf
 
 WORKDIR=$(mktemp -d /tmp/jt-text-XXXX)

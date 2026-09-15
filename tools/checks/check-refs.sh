@@ -11,7 +11,7 @@
 # loop's own verification step; a real hit here means a doc genuinely
 # points at something that no longer exists.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 python3 << 'PYEOF'
 import re, os, sys

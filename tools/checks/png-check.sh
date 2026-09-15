@@ -9,7 +9,7 @@
 # comparison is genuinely kernel-decode vs host-decode, not kernel vs
 # itself. Also requires the two fault-injection lines and the final PASS.
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 make -s kernel.elf
 
 WORKDIR=$(mktemp -d /tmp/jt-png-XXXX)

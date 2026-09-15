@@ -20,7 +20,7 @@ can compare the two.
 import re, struct, sys, zlib, io
 from PIL import Image
 
-ROOT = __import__('os').path.dirname(__import__('os').path.dirname(__import__('os').path.abspath(__file__)))
+ROOT = __import__('os').path.dirname(__import__('os').path.dirname(__import__('os').path.dirname(__import__('os').path.abspath(__file__))))
 hdr = open(f'{ROOT}/drivers/wallpaper.h').read()
 W = int(re.search(r'#define WALLPAPER_W (\d+)', hdr).group(1))
 H = int(re.search(r'#define WALLPAPER_H (\d+)', hdr).group(1))

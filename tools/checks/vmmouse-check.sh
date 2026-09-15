@@ -22,7 +22,7 @@
 #
 # Usage: tools/checks/vmmouse-check.sh   (from the repo root, after make kernel.elf)
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 LOG=/tmp/jt-vmmouse-serial.log
 rm -f "$LOG"
 out=$( ( echo '{"execute":"qmp_capabilities"}'; sleep 5;

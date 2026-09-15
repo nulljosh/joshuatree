@@ -12,7 +12,7 @@
 # internet access on the host and python3 (json parse of the curl body).
 set -e
 export LC_ALL=C # the kernel's weather text carries a CP437 degree byte (0xF8); BSD grep/cut/tr under a UTF-8 locale truncate or choke on it
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 make -s kernel.elf
 LOG=/tmp/jt-geo-serial.log
 rm -f "$LOG"

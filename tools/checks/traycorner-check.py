@@ -45,7 +45,7 @@ PX, PY = 549, 918
 DARK = (21, 10, 6)     # pre-fix: this pixel reads as pure corner color, zero coverage blend
 CREAM = (239, 235, 228)  # the tray's own fill color, for sanity (this pixel should never be fully tray-colored either)
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
     try: os.remove(f)
     except FileNotFoundError: pass
