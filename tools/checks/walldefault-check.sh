@@ -15,8 +15,18 @@ set -e
 cd "$(dirname "$0")/../.."
 make -s kernel.elf
 
-NM=$(command -v llvm-nm || echo /opt/homebrew/opt/llvm/bin/llvm-nm)
-ADDR=$("$NM" kernel.elf | awk '$3 == "wall_theme" { print $1 }')
+# v0.76.9: plain `nm` (binutils), not `llvm-nm`. The first version of this
+# script fell into the exact same portability trap editor_qa.py's llvm-nm
+# path already got caught in once this session: it worked here because this
+# dev container happens to have the separate `llvm` apt package installed,
+# but CI's own runner only installs clang/lld (see check.yml's own apt line),
+# which does NOT pull in llvm-nm -- CI failed with "No such file or
+# directory" on the macOS-only fallback path the first version had. `nm`
+# ships with `binutils`, already present on every Ubuntu image and every
+# macOS Xcode CLT install with no extra apt line needed, and reads this
+# freestanding ELF's symbol table identically (verified: same address/type/
+# name fields for wall_theme from both llvm-nm and nm on this exact binary).
+ADDR=$(nm kernel.elf | awk '$3 == "wall_theme" { print $1 }')
 if [ -z "$ADDR" ]; then
     echo "FAIL: wall_theme symbol not found in kernel.elf"
     exit 1

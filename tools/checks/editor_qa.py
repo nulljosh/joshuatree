@@ -11,7 +11,14 @@ import time
 ROOT = Path(__file__).resolve().parent.parent.parent
 ARTIFACTS = Path(tempfile.mkdtemp(prefix='jt-editor-qa-'))
 symbols = {}
-nm = shutil.which('llvm-nm') or '/opt/homebrew/opt/llvm/bin/llvm-nm'
+# v0.76.9: plain `nm` (binutils), not `llvm-nm`. The macOS-homebrew
+# fallback here was never actually exercised on Linux CI (this script isn't
+# wired into check.yml yet), but walldefault-check.sh hit the identical
+# trap for real once it was: `llvm-nm` comes from the separate `llvm` apt
+# package, which check.yml's own install line never pulls in, only
+# clang/lld. `nm` ships with `binutils`, already present on every Ubuntu
+# image and every macOS Xcode CLT install, no extra fallback path needed.
+nm = shutil.which('nm') or 'nm'
 for line in subprocess.check_output([nm, str(ROOT / 'kernel.elf')], text=True).splitlines():
     fields = line.split()
     if len(fields) == 3:
