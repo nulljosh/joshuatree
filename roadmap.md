@@ -1941,3 +1941,15 @@ PATCH bump: 0.76.43 -> 0.76.44.
 ## Queued for next session
 
 - "Where it's going" card on the landing page is static hand-written copy; owner wants it dynamic, auto-summarized from roadmap.md's real open queue instead. Needs a small generator step (like progress.svg's own generation) that reads roadmap.md's open items and produces a short summary at build/deploy time, not a runtime fetch+parse in the browser. Real feature, deferred given usage constraints.
+
+## Icons only covered bottom 60%, demo blend too subtle (v0.76.46)
+
+Direct report: floating background icons still sparse/slow and only visible in the bottom ~60% of the page. Real cause: `#demo-frame` (the hero/demo section, roughly the page's top 40%) had its own opaque `background: var(--bg)` painted over it, blocking the fixed `.page-float-bg` icon layer sitting behind everything at `z-index: -1` -- any opaque sibling in normal flow paints over a negative-z-index fixed element regardless of where it sits in the DOM.
+
+**Fix**: dropped the opaque background from `#demo-frame` (the actual demo box, `#stage-wrap`, still has its own solid black fill, so the live emulator content is unaffected); icons now show through the padding area around the demo too. Also bumped icon count 36 -> 56, drift duration 4-9s (was 7-14s), and widened the demo's blend shadow 80px/30px -> 140px/60px per direct feedback that it "didn't blend that well."
+
+Queued for next session: the "Where it's going" landing card is static copy, owner wants it auto-summarized from roadmap.md's real open items -- needs a small generator step, not attempted tonight given usage.
+
+**Verified**: `./check.sh` PASS, `tools/checks/check-refs.sh` clean.
+
+PATCH bump: 0.76.45 -> 0.76.46.
