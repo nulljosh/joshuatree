@@ -1715,3 +1715,15 @@ All four now emit `serial_puts("guiprompt\n")` in the content-redraw loop for re
 **Verified**: `make -s kernel.elf` clean (no errors, signed/unsigned comparison warning fixed), `./check.sh` PASS. Added `tools/checks/gui-prompt-keystroke-check.sh` regression test (parametrized to cover all four apps); simpler focused test `tools/checks/gui-prompt-reminders-check.sh` for Reminders since it's most accessible from the dock. All existing regression tests remain runnable.
 
 PATCH bump: 0.76.23 -> 0.76.24. One root-cause fix applied to four files by extracting shared helper, no new capability.
+
+## Chat app keystroke redraw: applied shared gui_prompt.h helper (v0.76.25, Sep 2026)
+
+Direct follow-up: Chat app was missed in the v0.76.24 fleet-wide keystroke-redraw fix.
+
+**Root cause**: `chat_prompt_line()` had the same bug as Notes/Contacts/Mail/Calendar/Reminders before their fix: `window_rect(0, 40, ...)` on every keystroke, redrawing the entire content band instead of just the text input box. The code even had a comment acknowledging it should have been fixed ("This loop had the identical full-window_clear-plus-titlebar-on-every-keystroke shape").
+
+**Fix**: Replaced `chat_prompt_line()` with a call to the shared `gui_prompt_line_input()` helper from `kernel/gui_prompt.h`, the same pattern that fixed the identical bug in Mail, Reminders, and Calculator in v0.76.24. Removed the old broken `chat_prompt_line()` function entirely.
+
+**Verified**: `make -s kernel.elf` clean, `check.sh` PASS, `check-refs.sh` clean (1032 refs).
+
+PATCH bump: 0.76.24 -> 0.76.25. One real bug fix (keystroke redraw), no new capability.

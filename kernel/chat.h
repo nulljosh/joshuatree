@@ -205,38 +205,9 @@ static int chat_send(const char *user_msg, char *answer, unsigned int answer_cap
     return 1;
 }
 
-/* Same lightweight get_key_or_click prompt loop contacts.h/mail.h/
-   settings_prompt_line already established (live render, backspace,
-   enter confirms, esc or a click cancels). Real growth from the old
-   200-byte shell-command cap / GUI popup's own 200-byte cap: this one
-   accepts up to CHAT_CONTENT_MAX-1 characters, matching the history
-   buffer it feeds. */
-/* v0.76.11: direct report, "every keystroke causes page to re-render"
-   still reproducing after v0.76.10's Notes-only fix. This loop had the
-   identical full-window_clear-plus-titlebar-on-every-keystroke shape;
-   the caller (gui_launch_chat_app) already draws the "Chat" titlebar
-   before entering here and it never changes while this prompt is open,
-   so this now only clears/redraws its own content band (the prompt text
-   and input box), matching term_render's own fix in kernel.c. */
-static int chat_prompt_line(const char *prompt, char *out, int max) {
-    unsigned int n = 0;
-    out[0] = 0;
-    mouse_click_edge_sync();
-    for (;;) {
-        window_rect(0, 40, (int)window_width(), (int)window_height() - 40, GUI_BG);
-        font_draw_string(prompt, 20, 52, 0x0075726E, -1);
-        window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
-        out[n] = 0;
-        font_draw_string(out, 24, 78, 0x001C1C1E, -1);
-        int k = get_key_or_click();
-        if (k == KEY_ESC || k == KEY_CLICK) return 0;
-        if (k == KEY_ENTER) break;
-        if (k == '\b') { if (n > 0) n--; }
-        else if ((int)n < max - 1 && k >= 32 && k < 127) out[n++] = (char)k;
-    }
-    out[n] = 0;
-    return 1;
-}
+/* Uses the shared gui_prompt.h helper to avoid the per-keystroke full-redraw
+   bug (v0.76.24). The helper already implements the correct pattern:
+   draw chrome once before the loop, redraw content only per keystroke. */
 
 /* Real scrollback: the last few turns rendered top-to-bottom, wrapped,
    user/assistant told apart by color the same way Mail tells read/
@@ -295,7 +266,7 @@ static void gui_launch_chat_app(void) {
         if (k == 'c') { chat_clear(); continue; }
         if (k == 'n') {
             char msg[CHAT_CONTENT_MAX];
-            if (!chat_prompt_line("type a message (enter to send, esc to cancel):", msg, sizeof(msg))) continue;
+            if (!gui_prompt_line_input("Chat", "type a message (enter to send, esc to cancel):", msg, sizeof(msg))) continue;
             if (msg[0] == 0) continue;
 
             window_rect(0, 40, (int)window_width(), (int)window_height() - 40, GUI_BG);
