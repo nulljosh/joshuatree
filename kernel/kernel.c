@@ -4672,6 +4672,32 @@ static void gui_draw_apple_menu(int hover_item){
    running low, trash nearly full). Real state, not placeholder cards. */
 #define NOTIF_W     360
 #define NOTIF_ROWS  8
+/* v0.76.20: the notif panel used to echo klog's raw boot-log lines verbatim
+   ("vmmouse_init: VMware backdoor answered, absolute pointer on"), which
+   reads like `dmesg`, not Notification Center. Translate to plain text here,
+   at render time only -- klog_buf itself is untouched, so vmmouse-check.sh's
+   grep against the stored strings still passes. Falls back to the raw line
+   for anything not in the table, so a message added later is never dropped. */
+static const char *notif_friendly(const char *raw){
+    if (web_starts_with(raw, "vmmouse_init: VMware backdoor answered")) return "Mouse: precise tracking on";
+    if (web_starts_with(raw, "vmmouse_init: no backdoor")) return "Mouse connected";
+    if (web_starts_with(raw, "font_init:")) return "Fonts loaded";
+    if (web_starts_with(raw, "pmm_init:")) return "Memory initialized";
+    if (web_starts_with(raw, "paging_install:")) return "Memory protection enabled";
+    if (web_starts_with(raw, "tasks_init:")) return "Task scheduler ready";
+    if (web_starts_with(raw, "fat_mount: FAT16")) return "Disk mounted";
+    if (web_starts_with(raw, "fat_mount:")) return "No disk found";
+    if (web_starts_with(raw, "vfs: fat + ramfs")) return "Storage ready";
+    if (web_starts_with(raw, "vfs: no FAT disk")) return "Using built-in storage";
+    if (web_starts_with(raw, "vga_text_mode_init:")) return "Display initialized";
+    if (web_starts_with(raw, "gdt_install:")) return "System tables loaded";
+    if (web_starts_with(raw, "idt_install:")) return "Interrupts configured";
+    if (web_starts_with(raw, "syscall_install:")) return "System calls ready";
+    if (web_starts_with(raw, "irq_install:")) return "Timers and input ready";
+    if (web_starts_with(raw, "mouse_init:")) return "Mouse connected";
+    return raw;
+}
+
 static void gui_draw_notif_panel(void){
     int x0 = (int)window_width() - NOTIF_W - 4, y0 = GUI_MENUBAR_H;
     unsigned int bg = 0x002C2C2E, text = 0x00F5F5F7, dim = 0x00A0A0A6, warn = 0x00FFB454;
@@ -4696,19 +4722,20 @@ static void gui_draw_notif_panel(void){
     int skip = klog_count - n;
     for (int i = 0; i < n; i++, y += 34) {
         int idx = (start + skip + i) % KLOG_MAX;
+        const char *msg = notif_friendly(klog_buf[idx]);
         char line[44]; int p = 0;
         unsigned int t = klog_tick[idx] / 100; char tb[8]; int ti = 0;
         if (!t) tb[ti++] = '0'; while (t) { tb[ti++] = '0' + t % 10; t /= 10; }
         while (ti) line[p++] = tb[--ti];
         line[p++] = 's'; line[p++] = ' ';
         int k = 0;
-        for (; klog_buf[idx][k] && p < 42; k++) line[p++] = klog_buf[idx][k];
+        for (; msg[k] && p < 42; k++) line[p++] = msg[k];
         line[p] = 0;
         font_draw_string(line, x0 + 12, y, text, -1);
-        if (klog_buf[idx][k]) {
+        if (msg[k]) {
             p = 0;
             line[p++] = ' '; line[p++] = ' '; line[p++] = ' ';
-            for (; klog_buf[idx][k] && p < 42; k++) line[p++] = klog_buf[idx][k];
+            for (; msg[k] && p < 42; k++) line[p++] = msg[k];
             line[p] = 0;
             font_draw_string(line, x0 + 12, y + 16, text, -1);
         }
