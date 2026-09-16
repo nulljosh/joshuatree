@@ -6,7 +6,9 @@ reboot`. Everything below is the standard bare-metal-to-usable-OS path
 (same order every OSDev-wiki "Bare Bones" -> "Meaty Skeleton" walkthrough
 takes, and roughly what xv6/ToaruOS/Linux 0.01 did in their first months).
 
-**Latest**: Weather icons now display correctly.
+**Latest**: Real-Time Memory Monitor.
+
+<!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1 banner. Must read as a real feature announcement ("Introducing X."), never as a bug-fix changelog line. Update alongside version bumps with the most user-visible new capability, not a bug report. The inject-landing-headline.sh script reads this line and updates landing/index.html automatically. -->
 
 ## Done
 <!-- progress.sh: done-items 10/10 -->

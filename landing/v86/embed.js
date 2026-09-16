@@ -232,12 +232,15 @@ if (typeof document !== "undefined") (function () {
 
   var focused = false;
   var idleRestartTimeout = 0;
+  var lastInteractionTime = Date.now();
   function resetIdleRestart() {
     if (idleRestartTimeout) clearTimeout(idleRestartTimeout);
     if (!focused) return; // only auto-reset if visitor has taken control
     idleRestartTimeout = setTimeout(async function () {
-      // Retail-kiosk style: after 4 seconds of inactivity, close windows and restart the tour
-      if (focused && !tourRunning) { // only if still focused and not already running the tour
+      // Retail-kiosk style: after 4 seconds of inactivity, close windows and restart the tour.
+      // Only trigger if 4+ seconds have passed since the last user interaction (click, movement, key).
+      var timeSinceActivity = Date.now() - lastInteractionTime;
+      if (focused && !tourRunning && timeSinceActivity >= 4000) { // only if still focused, tour not running, and truly idle
         // Trigger a soft reset: close any open windows by rebooting the emulator
         // then restart the tour
         if (bootLogo) bootLogo.hidden = false;
@@ -259,10 +262,19 @@ if (typeof document !== "undefined") (function () {
     emulator.mouse_adapter.emu_enabled = true;
     if (overlay) overlay.classList.add("hidden");
     stopAutoplay();
+    lastInteractionTime = Date.now();
     resetIdleRestart();
   }
   function trackActivity() {
+    lastInteractionTime = Date.now();
     if (focused) resetIdleRestart();
+  }
+  function trackClick() {
+    // Track when a click is sent to the kernel so the idle-restart doesn't trigger mid-interaction
+    if (focused) {
+      lastInteractionTime = Date.now();
+      resetIdleRestart();
+    }
   }
   container.addEventListener("mousedown", focusIn);
   container.addEventListener("touchstart", focusIn, { passive: true });
@@ -314,6 +326,7 @@ if (typeof document !== "undefined") (function () {
     get absolute() { return absoluteMouse; }, /* v62: did the kernel enable v86's vmmouse backdoor */
     get serial() { return serialLog; },
     click: function () {
+      trackClick();
       emulator.bus.send("mouse-click", [true, false, false]);
       setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 60);
     },
@@ -606,6 +619,7 @@ if (typeof document !== "undefined") (function () {
     // lands means clicking wherever it happens to be partway there.
     moveCursorTo(Math.round(kx), Math.round(ky), function () {
       setTimeout(function () {
+        trackClick();
         // Down then up, with a real gap: the kernel polls the mouse from
         // its own loop, so a press and release inside one poll can be
         // missed entirely.
@@ -847,6 +861,7 @@ if (typeof document !== "undefined") (function () {
     // invisible rather than a bug, unchanged from the pre-v71 tour.
     await moveCursorToAsync(kx, ky, true);
     await sleep(120);
+    trackClick();
     emulator.bus.send("mouse-click", [true, false, false]);
     await sleep(80);
     emulator.bus.send("mouse-click", [false, false, false]);
