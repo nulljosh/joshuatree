@@ -330,8 +330,17 @@ if (typeof document !== "undefined") (function () {
     // demo) rather than forwarding the same click into the kernel, which
     // would fire whatever dock icon happened to be under the card.
     if (heroCopyEl) {
-      heroCopyEl.addEventListener("mousedown", function (ev) { showDemo(); ev.stopPropagation(); });
-      heroCopyEl.addEventListener("touchstart", function (ev) { showDemo(); ev.stopPropagation(); }, { passive: true });
+      // v0.76.28: the H1 headline itself became a real <a href="#changelog">
+      // link; a click on it was being swallowed by this same handler,
+      // which calls showDemo() unconditionally -- showDemo() adds
+      // "demo-focused", and the CSS rule right above (.hero.demo-focused
+      // .hero-copy { opacity: 0 !important }) hides hero-copy itself,
+      // including the link that was just clicked, before the browser's
+      // own navigation to #changelog ever completes. Skip the
+      // dismiss-card behavior for a real link click; let it navigate.
+      var heroCopyClickThrough = function (ev) { return !!(ev.target.closest && ev.target.closest("a")); };
+      heroCopyEl.addEventListener("mousedown", function (ev) { if (heroCopyClickThrough(ev)) return; showDemo(); ev.stopPropagation(); });
+      heroCopyEl.addEventListener("touchstart", function (ev) { if (heroCopyClickThrough(ev)) return; showDemo(); ev.stopPropagation(); }, { passive: true });
     }
     document.addEventListener("mousedown", function (ev) { if (!container.contains(ev.target)) showText(); });
     document.addEventListener("touchstart", function (ev) { if (!container.contains(ev.target)) showText(); }, { passive: true });
