@@ -1728,6 +1728,33 @@ Direct follow-up: Chat app was missed in the v0.76.24 fleet-wide keystroke-redra
 
 PATCH bump: 0.76.24 -> 0.76.25. One real bug fix (keystroke redraw), no new capability.
 
+## Retail-kiosk idle-reset false-trigger fix: third real regression pass (v0.76.26, Sep 2026)
+
+Direct, repeated user report (third time): "landing page is restarting while user is interacting. it should only restart after like four seconds of inaction." The idle-reset feature itself (v0.76.22) was solid conceptually, but v0.76.22's interaction tracking had a real implementation gap that caused false triggers during genuine active use.
+
+**Root cause, found on third pass**: `focusIn()` is registered as a listener for mousedown/touchstart/keydown to take focus and start the idle timer. But `focusIn()` has an early return: `if (focused || !adaptersReady) return;`. After the initial focus click sets `focused = true`, any subsequent keydown event (e.g., a visitor typing) would trigger `focusIn()` but return immediately without updating `lastInteractionTime`. Combined with missing listeners for other interaction types (click, keyup, wheel), this created a gap: a visitor typing for several seconds without mouse movement would see `lastInteractionTime` stay at the initial click timestamp, and after 4 seconds the idle timer would fire and reset the demo mid-interaction. The bug manifested exactly as reported: "restarting while user is interacting."
+
+Previous attempts (v0.76.22 "supposedly" fixed tracking, v0.76.24 was orthogonal keystroke-redraw fix) didn't root-cause this specific gap because they focused on whether the timer-check arithmetic was correct, missing that the timestamp wasn't being updated in the first place for certain interaction types.
+
+**Fix**: Added event listeners for all interaction types that should reset the idle timer:
+- `keydown` -> `trackActivity()` (second listener, after `focusIn`)
+- `keyup` -> `trackActivity()`
+- `click` -> `trackActivity()`
+- `wheel` -> `trackActivity()`
+
+All call `trackActivity()` which updates `lastInteractionTime` and resets the timer if already focused, ensuring the timer never fires during genuine activity.
+
+**Bonus fix, same pass**: Escape key intercept. Real visitor report found that pressing Escape (either out of habit or trying to exit fullscreen) would reach the kernel's own gui_run shell-exit feature, leaving the demo stuck at a bare "> " shell prompt with no visible way back. Added an Escape keydown handler (capture phase, before v86's global listener) that prevents default and stops propagation, so visitor Escape presses never reach the kernel. The tour's own intentional Escape sends (to close Settings) use `keyboard_send_keys()` which bypasses normal event listeners, so they still work correctly.
+
+Discriminating test added: `tools/checks/idle-reset-regression-check.mjs` (Playwright-based):
+- Test 1: 10s of continuous mousemove every 1s -> verifies NO restart
+- Test 2: 5s of genuine inactivity -> verifies restart DOES happen
+- Test 3: 10s of continuous keydown/keyup every 1s -> verifies NO restart
+
+**Verified**: `check.sh` PASS, JavaScript syntax OK, all listeners correctly attached.
+
+PATCH bump: 0.76.25 -> 0.76.26. Two real bug fixes (idle-reset tracking + Escape intercept), no new capability.
+
 ## Live browser QA findings, open queue (Sep 2026, real repro, not yet fixed)
 
 Direct live-site testing (real Chrome against joshuatree.heyitsmejosh.com, not headless) surfaced real bugs the headless subagent passes missed:

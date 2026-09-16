@@ -281,6 +281,26 @@ if (typeof document !== "undefined") (function () {
   container.addEventListener("keydown", focusIn);
   container.addEventListener("mousemove", trackActivity);
   container.addEventListener("touchmove", trackActivity, { passive: true });
+  // v0.76.26: after focusIn() sets focused=true, subsequent keydown events
+  // would return early from focusIn() without updating lastInteractionTime,
+  // causing the idle-reset to fire after 4s of typing without mouse movement.
+  // These listeners ensure ALL continued interaction updates the activity
+  // timestamp, regardless of what focusIn() does.
+  container.addEventListener("keydown", trackActivity);
+  container.addEventListener("keyup", trackActivity);
+  container.addEventListener("click", trackActivity);
+  container.addEventListener("wheel", trackActivity, { passive: true });
+  // v0.76.26: prevent Escape key from reaching the kernel when a visitor
+  // presses it (which triggers kernel.c's gui_run shell-exit feature, leaving
+  // the demo stuck at a bare shell prompt). The tour's own intentional Escape
+  // sends use keyboard_send_keys() which bypasses normal event listeners,
+  // so this only blocks real visitor keypresses, not scripted tour automation.
+  container.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" || ev.keyCode === 27 || ev.code === "Escape") {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }
+  }, true); // capture phase, before v86's own global listener
 
   // v52: the demo now lives behind the hero text (direct request). This
   // toggle is purely visual, separate from `focused` above on purpose:
