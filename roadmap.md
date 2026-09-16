@@ -1957,3 +1957,13 @@ PATCH bump: 0.76.45 -> 0.76.46.
 ## Queued for next session
 
 - Owner target: release 1.0.0 by this weekend (2026-09-19/20), once weekly Claude usage resets Sat 22:00. Per CLAUDE.md's versioning rule, 1.0.0 needs a real stable contract first (this kernel has none yet) and a codename picked at that time, not before -- worth a real scoping pass on what "1.0" actually means for this project before bumping, not just a version-number milestone.
+
+## Boot logo and menu bar icon were hardcoded maroon, ignored caller color (v0.76.47)
+
+Direct report: "boot logo still pink/purple" even after v0.76.43's landing-page SVG fix -- because that fix only touched the browser demo's HTML boot moment, not the real kernel-native boot screen. Root cause: `gui_draw_logo()` took a `bg` parameter (used only for anti-aliasing blend) but hardcoded its actual drawing color to `0x0085144B` (Maroon) regardless of what any caller wanted, silently ignoring the white the menu bar call site already thought it was passing.
+
+**Fix**: `gui_draw_logo()` now takes an explicit `color` parameter. Boot screen (`gui_draw_boot_screen`, pure black background) now draws white. Menu bar call corrected per direct follow-up ("menu bar icon shouldn't be pink either, should be black on the semi-translucent bar") to black, matching that chrome's own light theme.
+
+**Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean, `landing/v86/kernel.elf` resynced.
+
+PATCH bump: 0.76.46 -> 0.76.47.

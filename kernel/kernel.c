@@ -1930,8 +1930,7 @@ static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned i
    raw single-pixel window_pixel dots approximating a line, the same
    "8-bit" staircase problem the weather icon's rays had, now on the one
    piece of branding that appears everywhere including full-size at boot. */
-static void gui_draw_logo(int x, int cy, int scale, unsigned int bg){
-    unsigned int c = 0x0085144B;
+static void gui_draw_logo(int x, int cy, int scale, unsigned int bg, unsigned int c){
     int split_y = cy - scale, top_y = cy - 7 * scale;
     int r = scale > 1 ? scale - 1 : 0;
     /* Real bug, found from a pixel dump not a guess: aa_band is a fixed
@@ -2503,7 +2502,7 @@ static void gui_draw_menubar(void){
     for (int row = 0; row < GUI_MENUBAR_H; row++)
         window_rect(0, row, (int)window_width(), 1, gui_lerp(gui_wallpaper_color(row), 0x00FFFFFF, 5, 10));
     window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
-    gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2, 1, 0x00FFFFFF);
+    gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2, 1, 0x00FFFFFF, 0x00000000); /* v0.76.47: menu bar is semi-translucent light chrome, direct correction -- black reads here, not white */
     font_draw_string("Joshua Tree", 32, 7, 0x001C1C1E, -1);
 
     static const char *WD[7] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
@@ -4613,7 +4612,7 @@ static void gui_draw_boot_screen(void){
     unsigned int bg = 0x00000000; /* pure black boot background, direct request */
     window_clear(bg);
     int cx = (int)window_width() / 2, cy = (int)window_height() / 2; /* v45.2: centred on the real window; 400 was the 800-wide centre and sat left of centre at 960 */
-    gui_draw_logo(cx, cy - 10, 5, bg); /* v48: dropped the "hello" wordmark, direct request, logo alone reads cleaner */
+    gui_draw_logo(cx, cy - 10, 5, bg, 0x00FFFFFF); /* v0.76.47: was a hardcoded maroon (0x0085144B) the function used to bake in regardless of caller, direct report ("boot logo still pink/purple") -- gui_draw_logo now takes color explicitly, white here to match the plain-black boot screen. v48: dropped the "hello" wordmark, direct request, logo alone reads cleaner */
 
     unsigned int start = ticks();
     unsigned int logo_only = 60; /* 0.6s: just the logo and wordmark, no bar yet */
