@@ -1937,3 +1937,7 @@ Direct feedback: icons were still sparse and the drift too slow to register as m
 **Verified**: `./check.sh` PASS, `tools/checks/check-refs.sh` clean, live browser screenshot confirms denser spread.
 
 PATCH bump: 0.76.43 -> 0.76.44.
+
+## Queued for next session
+
+- "Where it's going" card on the landing page is static hand-written copy; owner wants it dynamic, auto-summarized from roadmap.md's real open queue instead. Needs a small generator step (like progress.svg's own generation) that reads roadmap.md's open items and produces a short summary at build/deploy time, not a runtime fetch+parse in the browser. Real feature, deferred given usage constraints.

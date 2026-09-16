@@ -158,8 +158,8 @@
      auto) lets the aspect-ratio compute width from height instead of the
      other way around, so the demo actually shrinks on wide/short viewports
      instead of just filling whatever width is available. */
-  #demo-frame { background: var(--bg); position: relative; width: 100%; padding: 3% 8%; z-index: 0; display: flex; align-items: center; justify-content: center; }
-  #stage-wrap { background: #000; position: relative; width: auto; max-width: 100%; height: 58vh; max-height: 640px; aspect-ratio: 16 / 9; z-index: 0; border-radius: 2%; overflow: hidden; box-shadow: 0 0 80px 30px var(--bg); }
+  #demo-frame { position: relative; width: 100%; padding: 3% 8%; z-index: 0; display: flex; align-items: center; justify-content: center; }
+  #stage-wrap { background: #000; position: relative; width: auto; max-width: 100%; height: 58vh; max-height: 640px; aspect-ratio: 16 / 9; z-index: 0; border-radius: 2%; overflow: hidden; box-shadow: 0 0 140px 60px var(--bg); }
   @media (max-width: 600px) { #stage-wrap { width: 100%; height: auto; } }
   @media (max-width: 600px) { #demo-frame { padding: 2% 4%; } }
   /* v52.5: real boot moment instead of a blank black flash, direct
@@ -401,21 +401,21 @@
 
   var rand = function (a, b) { return a + Math.random() * (b - a); };
 
-  // Populate page-wide background icons (36 icons spread across full viewport)
+  // Populate page-wide background icons (56 icons spread across full viewport)
   if (pageField) {
-    for (var i = 0; i < 36; i++) {
+    for (var i = 0; i < 56; i++) {
       var text = items[i % items.length];
       var el = document.createElement('span');
       el.className = 'float';
       el.textContent = text;
       el.style.left = rand(1, 99).toFixed(1) + '%';
       el.style.top = rand(1, 99).toFixed(1) + '%';
-      var dx = rand(14, 34) * (Math.random() < 0.5 ? -1 : 1);
-      var dy = rand(12, 28) * (Math.random() < 0.5 ? -1 : 1);
+      var dx = rand(20, 44) * (Math.random() < 0.5 ? -1 : 1);
+      var dy = rand(16, 36) * (Math.random() < 0.5 ? -1 : 1);
       el.style.setProperty('--dx', dx.toFixed(1) + 'px');
       el.style.setProperty('--dy', dy.toFixed(1) + 'px');
-      el.style.setProperty('--dur', rand(7, 14).toFixed(1) + 's');
-      el.style.setProperty('--delay', (-rand(0, 14)).toFixed(1) + 's');
+      el.style.setProperty('--dur', rand(4, 9).toFixed(1) + 's');
+      el.style.setProperty('--delay', (-rand(0, 9)).toFixed(1) + 's');
       pageField.appendChild(el);
     }
   }
