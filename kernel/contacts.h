@@ -76,18 +76,29 @@ static void contacts_save(void) {
 }
 
 /* Same lightweight get_key() text-capture loop reminders_add_new already
-   established (renders live, backspace, enter confirms, esc cancels). */
+   established (renders live, backspace, enter confirms, esc cancels).
+   v0.76.23: split chrome (titlebar + prompt label) from content (text box +
+   typed text) to avoid redrawn-screen flashes on every keystroke, following
+   the same fix pattern editor.h adopted at v0.76.10. The prompt and titlebar
+   never change inside this loop, only the typed text does, so redrawing them
+   every keystroke was unnecessary visual waste on a framebuffer with no double
+   buffer. */
 static int contacts_prompt_line(const char *prompt, char *out, int max) {
     unsigned int n = 0;
     out[0] = 0;
     mouse_click_edge_sync();
+
+    /* Draw chrome only once, before the loop. */
+    window_clear(GUI_BG);
+    gui_draw_app_titlebar("Contacts");
+    font_draw_string(prompt, 20, 52, 0x0075726E, -1);
+
     for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Contacts");
-        font_draw_string(prompt, 20, 52, 0x0075726E, -1);
+        /* Redraw only the content area (text box and typed text), not the chrome. */
         window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
         out[n] = 0;
         font_draw_string(out, 24, 78, 0x001C1C1E, -1);
+        serial_puts("contactsprompt\n"); /* discriminating marker for regression test */
         int k = get_key_or_click();
         if (k == KEY_ESC || k == KEY_CLICK) return 0;
         if (k == KEY_ENTER) break;
