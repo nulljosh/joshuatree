@@ -12,3 +12,4 @@ menubar/window-float
 dotfiles.img
 __pycache__/
 *.pyc
+node_modules/

@@ -1,0 +1,8 @@
+{
+  "name": "joshuatree",
+  "private": true,
+  "description": "Dev dependencies for the landing-page/browser-based check scripts under tools/checks/",
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}
