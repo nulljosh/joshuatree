@@ -139,7 +139,13 @@
      letterbox bars back. Real fix: pin this box to the kernel's own 16:9
      shape so cover and contain always agree exactly, no viewport aspect
      can ever produce a bar, instead of fighting the heuristic via height. */
-  #stage-wrap { background: #000; position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 100svh; z-index: 0; }
+  /* v0.76.33: demo framing with padding around the demo container, a real
+     visual frame rather than edge-to-edge backdrop. 10% padding on desktop,
+     scales down for mobile viewports. The demo box stays 16:9 within this
+     padded container. */
+  #demo-frame { background: var(--bg); position: relative; width: 100%; padding: 5% 10%; z-index: 0; display: flex; align-items: center; justify-content: center; min-height: 100svh; }
+  #stage-wrap { background: #000; position: relative; width: 100%; aspect-ratio: 16 / 9; z-index: 0; }
+  @media (max-width: 600px) { #demo-frame { padding: 3% 5%; } }
   /* v52.5: real boot moment instead of a blank black flash, direct
      request ("bridge the gap between css/html and the actual demo
      loading"). The logo shows immediately (it's a tiny inline SVG,
@@ -251,18 +257,20 @@
 
 <a class="skip-link" href="#main">Skip to content</a>
 
-<div id="stage-wrap">
-  <div id="boot-logo" aria-hidden="true">
-    <img src="icon.svg" alt="">
-    <span>Booting...</span>
-  </div>
-  <div id="stage">
-    <div id="v86-embed" tabindex="0" role="application" aria-label="A real, live boot of this exact kernel.elf, running in your browser. Click or tap to control it.">
-      <div id="screen_container">
-        <div id="screen_text"></div>
-        <canvas id="screen_canvas"></canvas>
+<div id="demo-frame">
+  <div id="stage-wrap">
+    <div id="boot-logo" aria-hidden="true">
+      <img src="icon.svg" alt="">
+      <span>Booting...</span>
+    </div>
+    <div id="stage">
+      <div id="v86-embed" tabindex="0" role="application" aria-label="A real, live boot of this exact kernel.elf, running in your browser. Click or tap to control it.">
+        <div id="screen_container">
+          <div id="screen_text"></div>
+          <canvas id="screen_canvas"></canvas>
+        </div>
+        <div id="v86-overlay"></div>
       </div>
-      <div id="v86-overlay"></div>
     </div>
   </div>
 </div>

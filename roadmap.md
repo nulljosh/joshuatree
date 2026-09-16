@@ -1816,3 +1816,13 @@ Also removed the hero H1's `text-shadow` (added in v0.76.27's contrast fix): liv
 **Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `python3 tools/checks/editor_qa.py` PASS locally (all three previously-failing assertions covered), `tools/checks/check-refs.sh` clean.
 
 PATCH bump: 0.76.31 -> 0.76.32.
+
+## Demo landing page padding frame (v0.76.33)
+
+The live v86 demo was full-bleed edge-to-edge on the landing page, reading as the entire page background rather than a framed, contained demo. Direct visual request: add padding around it so it reads as a distinct, framed showcase instead.
+
+**Fix**: Wrapped `#stage-wrap` in a new `#demo-frame` container with 10% horizontal, 5% vertical padding on desktop (scales to 5% / 3% on narrow mobile), maintaining the demo's own 16:9 aspect ratio inside the padded frame. The frame background uses the page's real background color, creating a real visual separation. Media query ensures responsive behavior down to phone widths without breaking layout.
+
+**Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean (1043 refs), `tools/checks/versionsync-check.sh` PASS.
+
+PATCH bump: 0.76.32 -> 0.76.33. Pure visual polish, no new capability.
