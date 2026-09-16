@@ -279,6 +279,7 @@ if (typeof document !== "undefined") (function () {
     emulator.mouse_adapter.emu_enabled = true;
     if (overlay) overlay.classList.add("hidden");
     stopAutoplay();
+    resetHeadline(); // v0.76.29: reset headline when visitor takes control
     lastInteractionTime = Date.now();
     resetIdleRestart();
   }
@@ -948,6 +949,7 @@ if (typeof document !== "undefined") (function () {
   var MW_TOP_POINT_X = 154, MW_TOP_POINT_Y = 116;
   async function multiWindowRound(gen, first, second) {
     if (focused || tourGen !== gen || !adaptersReady) return;
+    updateHeadline(first.name); // v0.76.29: update headline as multi-window round starts with first app
     emulator.mouse_adapter.emu_enabled = true;
     emulator.keyboard_adapter.emu_enabled = true;
     var posA = dockSlotPos(first.slot), posB = dockSlotPos(second.slot);
@@ -960,6 +962,8 @@ if (typeof document !== "undefined") (function () {
 
     await clickAt(posB[0], posB[1]); // opens `second` as window 1 ALONGSIDE it -- first stays open, the real point being demonstrated
     if (focused || tourGen !== gen) return;
+    // v0.76.29: update headline when second app comes to the foreground
+    updateHeadline(second.name);
     await sleep(600);
     await runScript(second.script, gen); // real interaction with the now-topmost window, first still genuinely on screen behind it
     if (focused || tourGen !== gen) return;
@@ -1188,8 +1192,53 @@ if (typeof document !== "undefined") (function () {
   // solo below, just no longer inline in a for-loop so it can be
   // interleaved with the multi-window rounds instead of run as one block
   // after them.
+  // v0.76.30: typewriter effect for dynamic headlines. Lightweight manual implementation
+  // (no external library dependency, vanilla JS, works in the landing page's static context).
+  var typewriterInterval = null;
+  function typewriterEffect(element, text, callback) {
+    if (!element) { if (callback) callback(); return; }
+    // Clear existing interval
+    if (typewriterInterval) clearInterval(typewriterInterval);
+
+    element.textContent = '';
+    var index = 0;
+    var chars = text.split('');
+
+    // Type out the text at 60ms per character (~1000ms for a short headline)
+    typewriterInterval = setInterval(function() {
+      if (index < chars.length) {
+        element.textContent += chars[index];
+        index++;
+      } else {
+        clearInterval(typewriterInterval);
+        typewriterInterval = null;
+        if (callback) callback();
+      }
+    }, 60);
+  }
+
+  function updateHeadline(appName) {
+    // v0.76.30: dynamic headline with typewriter animation.
+    // Types out "Introducing <AppName>." when app opens, creating a real sense
+    // of discovery rather than instant replacement. Lightweight effect, no external deps.
+    var h1Link = document.querySelector('h1 a');
+    var newHeadline = 'Introducing ' + appName + '.';
+    if (h1Link) {
+      typewriterEffect(h1Link, newHeadline);
+    }
+  }
+  function resetHeadline() {
+    // Default headline when no tour is running or before the tour starts.
+    // Uses typewriter effect for visual consistency.
+    var h1Link = document.querySelector('h1 a');
+    if (h1Link) {
+      typewriterEffect(h1Link, 'Introducing Joshua Tree.');
+    }
+  }
+
   async function runSoloApp(gen, app) {
     if (focused || tourGen !== gen || !adaptersReady) return;
+    updateHeadline(app.name); // Update headline as app opens
     var pos = dockSlotPos(app.slot);
     // Drive the emulator's own input even though the visitor hasn't
     // focused: both adapters are gated for real people, not for us. v71
@@ -1219,6 +1268,9 @@ if (typeof document !== "undefined") (function () {
   async function tourLoop(gen) {
     tourRunning = true;
     while (!focused && tourGen === gen) {
+      // v0.76.29: reset headline at the start of each lap to a default
+      resetHeadline();
+      await sleep(800); // brief pause before the first app shows, so the headline is visible
       // Direct report (Sep 2026): "the demo doesn't show much application
       // interaction anymore -- it's too focused on the multi window."
       // Real: leading with both multi-window rounds back to back (2
