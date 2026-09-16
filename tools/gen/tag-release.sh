@@ -15,6 +15,13 @@ if git rev-parse "$ver" >/dev/null 2>&1; then
   exit 0
 fi
 
+cp VERSION landing/version.txt
+if ! git diff --quiet -- landing/version.txt; then
+  git add landing/version.txt
+  git commit -m "sync landing/version.txt to $ver"
+  git push origin HEAD
+fi
+
 git tag -a "$ver" -m "$msg"
 git push origin "$ver"
 
