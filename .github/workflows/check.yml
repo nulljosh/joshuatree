@@ -107,6 +107,8 @@ jobs:
         run: ./tools/checks/editorflash-check.sh
       - name: Terminal and Chat chrome don't redraw on plain keystrokes
         run: ./tools/checks/termchatflash-check.sh
+      - name: Apple-menu hover stays cheap, clock redraws on a real minute change
+        run: ./tools/checks/menuclock-check.sh
       - name: JPEG decoder, host harness
         run: ./tools/checks/jpeg-host-check.sh
       - name: JPEG decoder, in-kernel

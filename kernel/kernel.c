@@ -297,6 +297,40 @@ static int get_key_or_click(void){
    needs wall-clock, and this needs no interrupt handler. ---- */
 static u8 cmos(u8 reg){ outb(0x70, reg); return inb(0x71); }
 
+/* v0.76.17: real, standard erratum, applied proactively by this same
+   version's own clock-live-update fix, not from a torn read actually
+   captured in this repo's QEMU (a first attempt at reproducing one here
+   misread a long-lived stray QEMU process's several real minute
+   rollovers as spurious redraws -- caught before shipping by rereading
+   the log's actual elapsed wall time, not left as a real finding). The
+   real MC146818-family RTC does update its time registers once a second,
+   and any register read that lands inside that update window (Status
+   Register A bit 7, "Update In Progress") can come back torn/garbage --
+   documented RTC behavior, independent of whether QEMU's own CMOS model
+   reproduces it (this session's build of QEMU did not, across repeated
+   runs). Every caller here used to read cmos(2) (minutes) directly, at
+   most once per mouse movement or once per ten-minute weather cycle;
+   gui_draw_menubar() now runs every single gui_run loop iteration
+   (~100Hz) to fix clock staleness, which makes this standing hazard far
+   more likely to matter than it used to be, on real hardware or a
+   different emulator, even though it wasn't observed to bite here. Guard
+   is the standard one: don't read while UIP is set, and re-check UIP
+   right after; if an update started mid-read, the bytes just read are
+   suspect, retry (bounded, this chip's update window is under 2ms on
+   real hardware). */
+static int cmos_update_in_progress(void){ outb(0x70, 0x0A); return inb(0x71) & 0x80; }
+static void cmos_read_time_stable(u8 *h, u8 *m, u8 *wd, u8 *dom, u8 *mon){
+    for (int tries = 0; tries < 8; tries++) {
+        while (cmos_update_in_progress()) {}
+        u8 hh = cmos(4), mm = cmos(2), wdv = cmos(6), domv = cmos(7), monv = cmos(8);
+        if (!cmos_update_in_progress()) { *h = hh; *m = mm; *wd = wdv; *dom = domv; *mon = monv; return; }
+    }
+    /* every retry raced an update; fall back to one plain read rather than
+       spin forever -- worst case one stale/torn frame, self-corrects next
+       loop iteration since this function runs continuously now. */
+    *h = cmos(4); *m = cmos(2); *wd = cmos(6); *dom = cmos(7); *mon = cmos(8);
+}
+
 static void print2(u8 bcd){
     u8 v = (bcd & 0x0F) + ((bcd >> 4) * 10);
     putc('0' + v / 10); putc('0' + v % 10);
@@ -2361,24 +2395,28 @@ static void wall_apply(int want_map){
 }
 
 static void gui_draw_menubar(void){
-    u8 h = cmos(4), m = cmos(2), wd = cmos(6), dom = cmos(7), mon = cmos(8);
+    u8 h, m, wd, dom, mon;
+    cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
     u8 hv = (h & 0x0F) + ((h >> 4) * 10), mv = (m & 0x0F) + ((m >> 4) * 10);
     u8 wdv = (wd & 0x0F) + ((wd >> 4) * 10);
     u8 domv = (dom & 0x0F) + ((dom >> 4) * 10);
     u8 monv = (mon & 0x0F) + ((mon >> 4) * 10);
     if (mv == gui_menubar_last_min) return;
     gui_menubar_last_min = mv;
+    serial_puts("menubarredraw\n"); /* discriminating marker for tools/checks/menuclock-check.sh: a real minute-change redraw */
 
     /* v48: Liquid Glass, direct request. No real alpha compositing in this
        framebuffer (see gui_blend's own note), so "translucent" here means
        the same trick the dock shadow already uses: a real, solid,
        precomputed blend of white toward whatever wallpaper color sits
        behind this row, sampled per-row (gui_wallpaper_color already does
-       exactly this, reused, not a second sampler). Mostly white so text
-       stays legible, just enough wallpaper bleeding through to read as
-       glass instead of a flat opaque bar. */
+       exactly this, reused, not a second sampler).
+       v0.76.17: direct request ("menu bar transparency like 50%"), moved
+       from 7:10 (70% white / 30% wallpaper) to a genuine 5:10 (50/50)
+       blend -- still just a precomputed solid color per row, no real
+       blur/alpha, but honestly a 50% mix now instead of mostly-white. */
     for (int row = 0; row < GUI_MENUBAR_H; row++)
-        window_rect(0, row, (int)window_width(), 1, gui_lerp(gui_wallpaper_color(row), 0x00FFFFFF, 7, 10));
+        window_rect(0, row, (int)window_width(), 1, gui_lerp(gui_wallpaper_color(row), 0x00FFFFFF, 5, 10));
     window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
     gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2, 1, 0x00FFFFFF);
     font_draw_string("Joshua Tree", 32, 7, 0x001C1C1E, -1);
@@ -4737,6 +4775,22 @@ static void gui_run(void){
     gui_draw_cursor(mx, my);
     for (;;) {
         __asm__ volatile ("hlt");
+        /* v0.76.17: direct request ("time in top right needs live reload
+           accuracy, right now it doesn't load when the minute or hour
+           changes"). Root cause: gui_draw_menubar() already self-gates on
+           a real minute change (gui_menubar_last_min below), but it was
+           only ever CALLED from mouse-in-menubar paths or this loop's own
+           ten-minute weather cycle -- an idle desktop with the cursor
+           elsewhere could sit with a stale clock for up to ten minutes.
+           Calling it unconditionally every iteration (~100Hz, this hlt
+           wakes on the PIT) is cheap: cmos() reads plus an integer
+           compare on every frame but the one where the minute actually
+           ticks over, where it does the real (already-existing) redraw. */
+        {
+            int min_before = gui_menubar_last_min;
+            gui_draw_menubar();
+            if (gui_menubar_last_min != min_before && my < GUI_MENUBAR_H) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
+        }
         /* v43: weather, after the desktop is already on screen so the
            fetch never delays the first frame, then every ten minutes. */
         if (!weather_tried_once || ticks() - weather_last_tick > 100 * 600) {
@@ -5000,6 +5054,22 @@ static void gui_run(void){
         int dock_only = !launched && !cursor_only && drag_slot < 0 && last_drag < 0
                         && !menu_open && !last_menu_open
                         && (hover_slot != last_hover || dock_anim_changed);
+        /* v0.76.17: direct report, the exact "icons flash when I hover"
+           shape v40's own three tiers above were built to fix, just never
+           extended to the Apple menu's own hover highlight -- switching
+           which row is highlighted while the dropdown is open fell through
+           to the full-repaint branch below (whole photo blit + dock +
+           every open window redrawn) on every single row hovered, since
+           cursor_only explicitly excludes any menu_hover change and
+           dock_only requires the menu to be closed. gui_draw_apple_menu is
+           already fully self-contained (its own rounded-rect background
+           fill covers its whole rect every call, same "cheapest repaint
+           that's correct" shape gui_redraw_dock_band already established
+           for the dock band), so this is a direct copy of that same
+           pattern, not a new mechanism. */
+        int menu_only = !launched && !cursor_only && !dock_only && drag_slot < 0 && last_drag < 0
+                        && menu_open && last_menu_open
+                        && (menu_hover != last_menu_hover || mx != last_mx || my != last_my);
         if (cursor_only) {
             gui_cursor_restore();
             if (my < GUI_MENUBAR_H || last_my < GUI_MENUBAR_H) { gui_menubar_force_redraw(); gui_draw_menubar(); }
@@ -5012,7 +5082,15 @@ static void gui_run(void){
             gui_cursor_save(mx, my);
             gui_draw_cursor(mx, my);
             last_mx = mx; last_my = my; last_hover = hover_slot;
+        } else if (menu_only) {
+            serial_puts("menuonly\n"); /* discriminating marker for tools/checks/menuclock-check.sh */
+            gui_cursor_restore();
+            gui_draw_apple_menu(menu_hover);
+            gui_cursor_save(mx, my);
+            gui_draw_cursor(mx, my);
+            last_mx = mx; last_my = my; last_menu_hover = menu_hover;
         } else if (launched || mx != last_mx || my != last_my || hover_slot != last_hover || dock_anim_changed || drag_slot != last_drag || menu_open != last_menu_open || menu_hover != last_menu_hover) {
+            serial_puts("fullrepaint\n"); /* discriminating marker for tools/checks/menuclock-check.sh */
             if (my < GUI_MENUBAR_H || last_my < GUI_MENUBAR_H) gui_menubar_force_redraw();
             cursor_saved_x = cursor_saved_y = -1; /* the full repaint replaces whatever the backup held */
             gui_draw_desktop(hover_slot, drag_slot, mx, my);
