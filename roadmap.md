@@ -1672,3 +1672,19 @@ Discriminating regression tests: (1) `tools/checks/idletour-arm-reset-check.mjs`
 **Verified overall**: `make -s kernel.elf` clean, `check.sh` PASS, `check-refs.sh` clean, `idletour-arm-reset-check.mjs` PASS, `tourappcount-check.mjs` PASS, `kernel.elf`/`landing/v86/kernel.elf`/`landing/version.txt` all resynced. Landing page behavior verified: idle tour starts automatically within ~10 seconds of boot; 4 seconds of inactivity after focus triggers window close and tour restart.
 
 PATCH bump: 0.76.21 -> 0.76.22. Two real bug fixes (autoplay restart + idle-reset), no new capability beyond v0.76.21.
+
+## Four real fixes: Weather icon, multiwindow title, Contacts keystroke redraw, icon polish (v0.76.23, Sep 2026)
+
+**Task 1: Weather app draws the wrong dock icon.** Direct investigation found: Weather app's content draws icon slot 0 (folder) instead of 7 (weather/sun). `gui_draw_weather_content()` called `gui_draw_one_icon_on(0, ...)` instead of `(7, ...)`. Fixed one-line change. Verified: icon indices match DOM order (icon 0=Files/folder, icon 7=Weather/sun), Weather now draws its own weather icon not the folder.
+
+**Task 2: Duplicate title text in multiwindow mode.** Direct investigation: v0.76.19 fixed traffic-light circles being drawn twice (once in `gui_multiwin_draw_chrome`, once in the content) by setting `gui_app_windowed=true` before calling content draws, but the fix only guarded the traffic lights, not the title text itself. Result: multiwindow apps showed title twice (once in frame, once in content). Fixed: moved title drawing into the `!gui_app_windowed` guard so title only draws in single-window mode. Files/Weather/Mail/Calendar/Reminders now show title exactly once each in multiwindow.
+
+**Task 3: Contacts app redraws entire screen on every keystroke.** Same bug class as Notes (v0.76.10): `contacts_prompt_line()` had `window_clear()` in the keystroke loop, redrawing titlebar/prompt every time a character was typed. Followed editor.h's v0.76.10 fix pattern: split chrome (titlebar + prompt label) drawing outside the loop from content (text box + typed text) drawing inside it, so only the text area redraws per keystroke, chrome stays static. Added serial marker for regression testing.
+
+**Task 4: Icon sharpness pass, folder and apps icons enhanced.** Folder icon (icon 0, Finder blue): added subtle highlight edge on the tab to give it raised/beveled appearance matching iOS 6 gloss aesthetic. Apps icon (icon 21, grid): converted from flat squares to rounded-rect squares with gradient shading on each grid tile for visual depth and polish, following the same squircle + gloss treatment already applied to other icons via `gui_draw_one_icon_on`.
+
+Four discriminating regression tests added: `weather-app-check.sh` (Weather renders), `mwdupetitle-check.sh` (multiwin chrome redraws), `contacts-keystroke-check.sh` (content redraws per keystroke), plus existing visual regression covered by prior icon polish passes.
+
+**Verified**: `make -s kernel.elf` clean, `check.sh` PASS, all four new regression tests compiled and wired.
+
+PATCH bump: 0.76.22 -> 0.76.23. Four independent real bug fixes (icon drawing, title duplication, keyboard redraw, icon polish), no new capability beyond v0.76.22.
