@@ -41,7 +41,25 @@ static const unsigned char *wall_src = wallpaper_rgb;
 static unsigned char *wall_map = 0;        /* the fetched mosaic, kmalloc'd, kept while the session lives so Photo->Map needs no refetch */
 static int wall_map_tx = 0, wall_map_ty = 0, wall_map_cx = 0, wall_map_cy = 0; /* tile x/y of the mosaic's top-left tile, crop offset inside it */
 static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels actually came from (OpenTopoMap PNG vs Google satellite JPEG). Warm/Cool/Raw all share ONE fetch, since they're just different grades of the same topo pixels -- Satellite is a genuinely different image, not a grade, so switching across this boundary must drop wall_map and refetch instead of reusing stale pixels from the other source. */
-#define WALL_ZOOM 14
+/* v0.76.14: direct follow-up ("satellite finally working, let's
+   strengthen it") -- honest scope check first: the actual complaint
+   underneath ("showing Vancouver, not Langley/Brookswood") is a real,
+   hard ceiling of free IP geolocation (ip-api.com resolves to whatever
+   ISP network node/exchange the connection routes through, not a street
+   address; Lower Mainland ISPs commonly route Langley/Brookswood
+   traffic through a Vancouver PoP), not something this constant or any
+   other code change here can fix. What IS real and buildable: sharper,
+   more zoomed-in tiles around whatever point IS resolved. Same fetch
+   count (WALL_COLS*WALL_ROWS tiles, unchanged), each tile just covers
+   half the geographic area of the previous zoom level, confirmed real
+   coverage at both OpenTopoMap and Google's satellite endpoint for any
+   populated area (both comfortably support z18-20 in cities; z15 is
+   nowhere near their real ceiling). Went 12->14 in v78/0.67.2 the same
+   way; that pass's own mirrored ZOOM constants in
+   tools/checks/wallpaper-check.py / satellite-wallpaper-check.py went
+   stale then and needed a manual sync -- updated here in the same pass
+   this time so it doesn't repeat. */
+#define WALL_ZOOM 15
 #define WALL_TILE 256   /* OpenTopoMap serves 256px tiles, no @2x variant */
 #define WALL_COLS 4     /* 4x3 grid = 1024x768, the smallest that covers a centered 960x540 crop */
 #define WALL_ROWS 3
