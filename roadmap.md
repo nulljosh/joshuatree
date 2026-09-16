@@ -2045,3 +2045,7 @@ Direct request: the small eyebrow line below the H1 should cycle through recent 
 **Verified**: live browser check confirms both the flush-top demo and the cycling typed text.
 
 PATCH bump: 0.76.53 -> 0.76.54.
+
+## Queued for next session
+
+- Apps folder wheel-scroll works (v0.77.1) but redraws the entire screen on every scroll tick instead of just the icon grid, the same class of bug the shared gui_prompt.h scoped-redraw helper fixed for text inputs earlier. Worth the same treatment: redraw only the Apps folder's own rect, not gui_draw_desktop(-1,-1,0,0) wholesale.
