@@ -4417,9 +4417,15 @@ static void gui_launch_about(void){
     { char tmp[12]; int tn = 0; unsigned int v = secs; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
     buf[n++] = 's'; buf[n] = 0;
     font_draw_string(buf, 20, 100, 0x00884B16, -1);
-    /* v0.42.x: the version string, plus the one joke this release earns.
-       It's a Joshua tree. Different tree. */
-    font_draw_string("Version 0.42.1, the 4:20 release. It's a Joshua tree. Different tree.", 20, 130, 0x0075726E, -1);
+    /* v0.76.12: direct report -- this string was hardcoded to "0.42.1"
+       and had been for dozens of real version bumps since, even though
+       JT_VERSION_STR (drivers/version.h, generated from the real VERSION
+       file at build time by the Makefile) already existed and was
+       already used elsewhere (the boot serial log). This is the one
+       other place a version number is shown to a real user; it should
+       never have drifted from the real build. */
+    { char vbuf[32]; int p = 0; const char *v = "Version " JT_VERSION_STR; while (*v && p < (int)sizeof(vbuf) - 1) vbuf[p++] = *v++; vbuf[p] = 0;
+      font_draw_string(vbuf, 20, 130, 0x0075726E, -1); }
 
     gui_wait_close();
 }

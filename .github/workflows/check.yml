@@ -188,6 +188,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Doc file-path references aren't stale
         run: ./tools/checks/check-refs.sh
+      - name: landing/version.txt stays in sync with VERSION
+        run: ./tools/checks/versionsync-check.sh
 
   # v75: real-network checks. geo-check.sh (v71) and wallpaper-check.py /
   # wallfx-check.py (v75) talk to ip-api.com, Open-Meteo and OpenTopoMap

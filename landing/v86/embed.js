@@ -991,6 +991,36 @@ if (typeof document !== "undefined") (function () {
   // for this file's existing '\n' (Enter) sends.
   var LOGO_X = 16, LOGO_Y = 13; // gui_draw_logo(16, GUI_MENUBAR_H/2+2, ...); logo_here's own hit rect is x in [4,28], y < GUI_MENUBAR_H
   var SETTINGS_MENU_X = 94, SETTINGS_MENU_Y = 111; // Apple-menu row 3 ("Settings"): y starts at GUI_MENUBAR_H+GUI_MENU_PAD_V=34, three prior 22px rows -> [100,122)
+  var ABOUT_MENU_X = 94, ABOUT_MENU_Y = 45; // Apple-menu row 0 ("About Joshua Tree"): y starts at GUI_MENUBAR_H+GUI_MENU_PAD_V=34, centre of the first 22px row
+  // v0.76.12: direct request ("at the end, after showing all the apps,
+  // click 'About this computer' and show basic CPU/storage stats, like
+  // About This Mac"). kernel.c's gui_launch_about() already exists and
+  // already shows real stats read straight out of the running kernel
+  // (pmm_total_frames/pmm_free_frames for memory, ticks() for uptime,
+  // gui_wait_close's own "any click closes" contract) -- this was never
+  // in the tour at all, so a real visitor had no way to discover it.
+  // Real bug found and fixed alongside this (kernel.c): the panel's own
+  // version line was hardcoded to "Version 0.42.1" and had been for
+  // dozens of real releases since, even though a real build-time
+  // JT_VERSION_STR macro already existed and was already used elsewhere
+  // (the boot serial log) -- just never wired into this one other place
+  // a version number is shown to a real visitor. Fixed to use the same
+  // macro, so this dwell now shows the real current version, not a
+  // 30-versions-stale one.
+  async function demoAboutPanel(gen) {
+    if (focused || tourGen !== gen || !adaptersReady) return;
+    emulator.mouse_adapter.emu_enabled = true;
+    emulator.keyboard_adapter.emu_enabled = true;
+    await clickAt(LOGO_X, LOGO_Y); // opens the Apple menu
+    if (focused || tourGen !== gen) return;
+    await sleep(300);
+    await clickAt(ABOUT_MENU_X, ABOUT_MENU_Y); // selects "About Joshua Tree"
+    if (focused || tourGen !== gen) return;
+    await sleep(3500); // real dwell showing real memory/uptime/version stats
+    if (focused || tourGen !== gen) return;
+    await clickAt(400, 300); // any click closes (gui_wait_close's own contract), same as every other single-view app
+    await sleep(800);
+  }
   // v0.76.13: direct report ("landing page still shows no satellite
   // wallpaper"), root-caused for real this time -- not the CORS proxy
   // (already proven live, see roadmap.md's live-smoke entry), this
@@ -1116,6 +1146,11 @@ if (typeof document !== "undefined") (function () {
         if (focused || tourGen !== gen || !adaptersReady) return;
         await runSoloApp(gen, TOUR_APPS[i]);
       }
+      // Direct request: "after showing all the apps", so this runs right
+      // here, once every real dock app has had its turn and before the
+      // satellite wallpaper reveal below.
+      await demoAboutPanel(gen);
+      if (focused || tourGen !== gen) return;
       // Every app already closed itself before the next opened, the only
       // real shape this kernel's single-window model supports (see
       // runSoloApp above), so the loop is already at "everything closed";

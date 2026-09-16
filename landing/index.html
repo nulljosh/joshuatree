@@ -79,6 +79,7 @@
      above on purpose, see that rule's own comment. */
   .hero.demo-focused .hero-copy { opacity: 0 !important; transform: translateY(-8px) !important; pointer-events: none; }
   .eyebrow { color: var(--accent); font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; margin: 0; font-weight: 600; }
+  .kernel-version { opacity: 0.55; font-weight: 500; letter-spacing: 0.04em; text-transform: none; }
   .hero h1 { font-size: 56px; margin: 14px 0 10px; letter-spacing: -0.03em; line-height: 1.05; }
   .hero p.tagline { font-size: 18px; margin: 0 auto; max-width: 480px; line-height: 1.5; opacity: 0.92; }
   @media (max-width: 520px) {
@@ -259,7 +260,7 @@
 
 <header class="hero" id="main">
   <div class="hero-copy">
-    <h2 class="eyebrow">Joshua Tree</h2>
+    <h2 class="eyebrow">Joshua Tree <span id="kernel-version" class="kernel-version"></span></h2>
     <!-- Sep 2026, direct urgent correction -- this line briefly named
          Satellite Wallpaper (v0.76.7), but a real headless test of this
          exact deployed page found the browser demo can never actually show
@@ -328,10 +329,23 @@
 </footer>
 
 <script>
-// Field of real kernel fragments drifting behind the closing line, the same
-// treatment nimble's landing page uses for its own hero. Every one of these
-// is something this exact kernel actually does or actually is, not
-// decoration invented for the page.
+// Direct request: a dynamic version number next to the "Joshua Tree"
+// header, sourced from the same VERSION file every real release already
+// bumps (see roadmap.md/CLAUDE.md's own semver rule), not hand-typed
+// into this HTML where it would drift the same way kernel.c's About
+// panel version string just did (hardcoded, found 30+ versions stale).
+// version.txt is a real static file, kept in sync with the repo-root
+// VERSION the same way landing/v86/kernel.elf is already kept in sync
+// with the repo-root kernel.elf after every kernel change -- a plain
+// `cp VERSION landing/version.txt`. tools/checks/check-refs.sh's own
+// sibling, versionsync-check.sh, asserts the two never drift apart.
+(function () {
+  var el = document.getElementById('kernel-version');
+  if (!el) return;
+  fetch('version.txt').then(function (r) { return r.ok ? r.text() : null; }).then(function (v) {
+    if (v) el.textContent = 'v' + v.trim();
+  }).catch(function () { /* real fallback: no version shown rather than a stale guess */ });
+})();
 (function () {
   var field = document.getElementById('heroFloat');
   if (!field) return;
