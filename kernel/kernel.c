@@ -1573,8 +1573,56 @@ static void gui_fill_circle(int cx, int cy, int r, unsigned int color, unsigned 
    the single most "8-bit" looking thing on the whole dock. Point-to-segment
    distance stays in plain 32-bit int math (icon coordinates never exceed a
    few hundred px, nowhere near overflow), no 64-bit division helper this
-   freestanding build doesn't link. */
+   freestanding build doesn't link.
+   v83: same staircasing fix gui_fill_circle received in v82: when rendering
+   at scaled resolution outside an offscreen target, use physical-pixel
+   coverage sampling (4x4 subsamples per physical pixel) instead of logical-
+   space AA_BAND that window_pixel's block replication flattens into visible
+   terraces. Glyphs (inside gui_render_icon_cached's window_push_target) are
+   unaffected; app title-bar and other scaled non-glyph uses of this primitive
+   get the coverage fix. */
 static void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color, unsigned int into){
+    if (!window_has_target() && window_scale() > 1){
+        int sc = (int)window_scale();
+        int pcx0 = x0 * sc, pcy0 = y0 * sc, pcx1 = x1 * sc, pcy1 = y1 * sc, pr = r * sc;
+        int pdx = pcx1 - pcx0, pdy = pcy1 - pcy0;
+        long plen2 = (long)pdx * pdx + (long)pdy * pdy;
+        int minx = (pcx0 < pcx1 ? pcx0 : pcx1) - pr - sc, maxx = (pcx0 > pcx1 ? pcx0 : pcx1) + pr + sc;
+        int miny = (pcy0 < pcy1 ? pcy0 : pcy1) - pr - sc, maxy = (pcy0 > pcy1 ? pcy0 : pcy1) + pr + sc;
+        const int SS = 4;
+        for (int py = miny; py <= maxy; py++){
+            for (int px = minx; px <= maxx; px++){
+                int vx = px - pcx0, vy = py - pcy0;
+                int ex, ey;
+                if (plen2 == 0) { ex = vx; ey = vy; }
+                else {
+                    long dot = (long)vx * pdx + (long)vy * pdy;
+                    if (dot < 0) dot = 0; else if (dot > plen2) dot = plen2;
+                    int cxp = pcx0 + (int)(dot * pdx / plen2), cyp = pcy0 + (int)(dot * pdy / plen2);
+                    ex = px - cxp; ey = py - cyp;
+                }
+                long d2 = (long)ex * ex + (long)ey * ey;
+                if (d2 > (long)(pr + 2) * (pr + 2)) continue;
+                unsigned int col;
+                if (d2 <= (long)(pr - 2) * (pr - 2)) { col = color; }
+                else {
+                    int inside = 0;
+                    for (int sy = 0; sy < SS; sy++){
+                        int subdy = ey * SS + sy * 2 + 1 - SS;
+                        for (int sx = 0; sx < SS; sx++){
+                            int subdx = ex * SS + sx * 2 + 1 - SS;
+                            long sd2 = (long)subdx * subdx + (long)subdy * subdy;
+                            if (sd2 <= (long)(pr * SS) * (pr * SS)) inside++;
+                        }
+                    }
+                    if (inside == 0) continue;
+                    col = inside >= SS * SS ? color : gui_lerp(color, into, SS * SS - inside, SS * SS);
+                }
+                window_pixel_phys(px, py, col);
+            }
+        }
+        return;
+    }
     int dx = x1 - x0, dy = y1 - y0;
     int len2 = dx * dx + dy * dy;
     int minx = (x0 < x1 ? x0 : x1) - r - AA_BAND, maxx = (x0 > x1 ? x0 : x1) + r + AA_BAND;
@@ -3098,6 +3146,12 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     window_pop_target();
     unsigned int per = ICON_SS_SCALE / sc; if (per < 1) per = 1;
     unsigned int samples = per * per;
+    /* v83: real downsampling improvement, not a guess: box-averaging per-channel
+       colors without rounding loses precision through truncation, especially
+       visible in smooth gloss/gradient regions where each channel should fade
+       smoothly. Integer division of sums loses 0.5 LSB per sample on average,
+       visible banding in smooth AA gradients over 9+ sample averages. Proper
+       rounding via (sum + samples/2) / samples preserves smooth transitions. */
     for (int py = 0; py < pw; py++){
         for (int px = 0; px < pw; px++){
             unsigned int rs = 0, gs = 0, bs = 0;
@@ -3105,7 +3159,8 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
                 unsigned int *row = &ssbuf[((unsigned int)py * per + sy) * ssz + (unsigned int)px * per];
                 for (unsigned int sx = 0; sx < per; sx++){ unsigned int c = row[sx]; rs += (c >> 16) & 0xFF; gs += (c >> 8) & 0xFF; bs += c & 0xFF; }
             }
-            out[py * pw + px] = ((rs / samples) << 16) | ((gs / samples) << 8) | (bs / samples);
+            unsigned int half = samples / 2;
+            out[py * pw + px] = (((rs + half) / samples) << 16) | (((gs + half) / samples) << 8) | ((bs + half) / samples);
         }
     }
     kfree(ssbuf);
