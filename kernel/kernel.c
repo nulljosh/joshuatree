@@ -4397,37 +4397,88 @@ static void gui_draw_boot_screen(void){
    straight from pmm (the same real physical memory manager the rest of
    this kernel allocates through) and real uptime off ticks(), the same
    PIT tick counter every other real-time feature in this file already
-   uses. Closes the same way every other app view does. */
-static void gui_launch_about(void){
-    window_clear(0x00FAF8F6);
-    gui_draw_app_titlebar("About Joshua Tree");
-    font_draw_string("A freestanding i386 kernel, written from scratch.", 20, 50, 0x001C1C1E, -1);
-    char buf[64]; int n;
+   uses.
 
+   v0.76.13: direct request -- a real macOS "About This Mac" dialog is a
+   small, centered card, not a full-screen takeover; this used to
+   window_clear() the entire desktop and left-align every line from the
+   screen edge. Now draws a real small floating card (ABOUT_W x ABOUT_H,
+   centered both ways on screen, matching gui_multiwin_draw_one's own
+   rounded-card style for visual consistency with the rest of this
+   kernel's real floating windows) over the live desktop -- gui_draw_desktop
+   is called first to clear the Apple-menu dropdown and show the real
+   wallpaper/dock behind the card, the same way a real dialog sits over a
+   real desktop. Every line of text is centered horizontally within the
+   card via font_string_width, and the whole text block is centered
+   vertically within the card too, not just left-pinned under the
+   titlebar. Doesn't call the shared gui_wait_close() (its own hint text
+   is hardcoded to the full screen's bottom-left, which would float
+   oddly outside this small card) -- a local close-wait loop mirrors its
+   exact same real mechanics (mouse_click_edge/kbd_pop/Escape) instead. */
+static void gui_launch_about(void){
+    int ABOUT_W = 360, ABOUT_H = 220;
+    int bx = ((int)window_width() - ABOUT_W) / 2;
+    int by = ((int)window_height() - ABOUT_H) / 2;
+
+    gui_draw_desktop(-1, -1, 0, 0); /* clears the Apple-menu dropdown, real wallpaper+dock behind the card */
+    gui_rounded_rect_on_wallpaper(bx, by, ABOUT_W, ABOUT_H, 0x00FAF8F6, 18);
+    gui_fill_circle(bx + 26, by + 20, 6, 0x00FF5F57, 0x00FAF8F6);
+    gui_fill_circle(bx + 46, by + 20, 6, 0x00FFD64A, 0x00FAF8F6);
+    gui_fill_circle(bx + 66, by + 20, 6, 0x00D8D4CE, 0x00FAF8F6);
+    font_draw_string("x", bx + 23, by + 12, 0x00602B28, -1);
+    font_draw_string("-", bx + 43, by + 12, 0x00624A20, -1);
+    { const char *title = "About Joshua Tree";
+      font_draw_string(title, bx + (ABOUT_W - font_string_width(title)) / 2, by + 12, 0x0085144B, -1); }
+
+    char buf[64]; int n;
     unsigned int total_kb = pmm_total_frames() * 4, free_kb = pmm_free_frames() * 4;
     n = 0; buf[n++] = 'M'; buf[n++] = 'e'; buf[n++] = 'm'; buf[n++] = 'o'; buf[n++] = 'r'; buf[n++] = 'y'; buf[n++] = ':'; buf[n++] = ' ';
     { char tmp[12]; int tn = 0; unsigned int v = free_kb; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
     buf[n++] = 'K'; buf[n++] = ' '; buf[n++] = 'f'; buf[n++] = 'r'; buf[n++] = 'e'; buf[n++] = 'e'; buf[n++] = ' '; buf[n++] = 'o'; buf[n++] = 'f'; buf[n++] = ' ';
     { char tmp[12]; int tn = 0; unsigned int v = total_kb; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
     buf[n++] = 'K'; buf[n] = 0;
-    font_draw_string(buf, 20, 80, 0x00884B16, -1);
+    char mem_line[64]; { int p = 0; const char *s = buf; while (*s) mem_line[p++] = *s++; mem_line[p] = 0; }
 
     unsigned int secs = ticks() / 100;
     n = 0; buf[n++] = 'U'; buf[n++] = 'p'; buf[n++] = 't'; buf[n++] = 'i'; buf[n++] = 'm'; buf[n++] = 'e'; buf[n++] = ':'; buf[n++] = ' ';
     { char tmp[12]; int tn = 0; unsigned int v = secs; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
     buf[n++] = 's'; buf[n] = 0;
-    font_draw_string(buf, 20, 100, 0x00884B16, -1);
-    /* v0.76.12: direct report -- this string was hardcoded to "0.42.1"
-       and had been for dozens of real version bumps since, even though
-       JT_VERSION_STR (drivers/version.h, generated from the real VERSION
-       file at build time by the Makefile) already existed and was
-       already used elsewhere (the boot serial log). This is the one
-       other place a version number is shown to a real user; it should
-       never have drifted from the real build. */
-    { char vbuf[32]; int p = 0; const char *v = "Version " JT_VERSION_STR; while (*v && p < (int)sizeof(vbuf) - 1) vbuf[p++] = *v++; vbuf[p] = 0;
-      font_draw_string(vbuf, 20, 130, 0x0075726E, -1); }
+    char uptime_line[64]; { int p = 0; const char *s = buf; while (*s) uptime_line[p++] = *s++; uptime_line[p] = 0; }
 
-    gui_wait_close();
+    /* v0.76.12: real bug, this line was hardcoded to "Version 0.42.1"
+       for 30+ real version bumps despite JT_VERSION_STR (drivers/version.h,
+       generated from the real VERSION file at build time) already
+       existing and already used elsewhere (the boot serial log). */
+    char version_line[32]; { int p = 0; const char *v = "Version " JT_VERSION_STR; while (*v && p < (int)sizeof(version_line) - 1) version_line[p++] = *v++; version_line[p] = 0; }
+
+    const char *tagline = "A freestanding i386 kernel, written from scratch.";
+    const char *lines[4] = { tagline, mem_line, uptime_line, version_line };
+    unsigned int colors[4] = { 0x001C1C1E, 0x00884B16, 0x00884B16, 0x0075726E };
+    int line_h = 24;
+    int text_top = by + (ABOUT_H - 4 * line_h) / 2 + 6; /* real vertical centering of the whole text block within the card */
+    for (int i = 0; i < 4; i++) {
+        int x = bx + (ABOUT_W - font_string_width(lines[i])) / 2; /* real horizontal centering per line */
+        font_draw_string(lines[i], x, text_top + i * line_h, colors[i], -1);
+    }
+
+    { const char *hint = "esc or click to go back";
+      font_draw_string(hint, bx + (ABOUT_W - font_string_width(hint)) / 2, by + ABOUT_H - 26, 0x0075726E, -1); }
+
+    /* Local close-wait, not the shared gui_wait_close(): its own hint
+       text is hardcoded to the full screen's bottom-left, which would
+       float outside this small card. Same real mechanics otherwise
+       (mouse_click_edge_sync/kbd_pop/Escape), copied rather than
+       parameterized since this is the only call site that needs its own
+       hint position. */
+    sleep_ticks(5);
+    mouse_click_edge_sync();
+    for (;;) {
+        gui_app_mouse_tick();
+        int sc = kbd_pop();
+        if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) { gui_close_was_click = 0; return; }
+        if (mouse_click_edge()) { gui_close_was_click = 1; return; }
+        __asm__ volatile ("hlt");
+    }
 }
 
 /* A real Apple-menu-style dropdown off the tree logo, macOS-shaped (dark
