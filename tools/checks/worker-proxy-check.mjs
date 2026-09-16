@@ -77,6 +77,48 @@ try {
   globalThis.fetch = realFetch;
 }
 
+// v0.76.15: real regression guard. libv86.js upgrades a guest's plain-
+// HTTP target to https:// whenever the page itself is https (a real,
+// deliberate mixed-content fix in v86 -- confirmed by reading its own
+// source), so a real browser visitor's geo request reaches this Worker
+// as `url=https://ip-api.com/...`, not http, regardless of what the
+// kernel's own http_get() call asked for. ip-api.com's free tier 403s
+// over HTTPS (confirmed live against production -- the identical
+// proxied request returns 200 over HTTP, 403 over HTTPS, nothing else
+// differs), so this Worker must force ip-api.com's own scheme back to
+// http before fetching, or every real visitor's geo lookup silently
+// fails forever (and with it, kernel.c's own geo_have-gated wall_fetch()
+// auto-satellite-load never fires -- the actual final root cause behind
+// "stale wallpaper" surviving the CORS-proxy fix and the Settings-click
+// regression fix, both real, both necessary, neither sufficient alone).
+{
+  const realFetch = globalThis.fetch;
+  let fetchedUrl = null;
+  globalThis.fetch = async (url) => { fetchedUrl = url; return new Response("{}", { status: 200 }); };
+  try {
+    const httpsTarget = "https://ip-api.com/json/";
+    await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(httpsTarget)));
+    check("ip-api.com forced back to http:// even when the browser relayed https://", fetchedUrl === "http://ip-api.com/json/");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+// The other two allowed hosts are untouched -- real map/tile services,
+// no known scheme restriction, so forcing a scheme there would be an
+// unjustified special case, not a fix for a real, confirmed problem.
+{
+  const realFetch = globalThis.fetch;
+  let fetchedUrl = null;
+  globalThis.fetch = async (url) => { fetchedUrl = url; return new Response("tile", { status: 200 }); };
+  try {
+    const httpsTarget = "https://a.tile.opentopomap.org/14/1234/5678.png";
+    await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(httpsTarget)));
+    check("a.tile.opentopomap.org's own scheme left untouched", fetchedUrl === httpsTarget);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 if (failures > 0) {
   console.log(`FAIL: ${failures} check(s) failed`);
   process.exit(1);

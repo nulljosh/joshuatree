@@ -51,6 +51,31 @@ async function handleProxy(request) {
     return new Response("Host not allowed", { status: 403 });
   }
 
+  // v0.76.15: real root cause of "stale wallpaper" surviving every
+  // earlier fix (the CORS proxy itself, and the Settings-click
+  // regression) -- found by reading libv86.js directly rather than
+  // guessing again: `if (typeof window !== "undefined" && d.protocol ===
+  // "http:" && window.location.protocol === "https:") d.protocol =
+  // "https:";`. This page is served over HTTPS, so v86's own network
+  // relay silently upgrades the guest's plain-HTTP geo request (real
+  // kernel code: `http_get("ip-api.com", "/json/", 80, ...)`, no TLS
+  // anywhere in this kernel) to `https://ip-api.com/...` before it ever
+  // reaches this Worker -- a real, deliberate mixed-content fix in v86
+  // itself, just wrong for this one target. ip-api.com's own real,
+  // documented API policy requires a paid key for HTTPS access; the free
+  // tier returns a real 403 over HTTPS (confirmed directly: the exact
+  // same proxied request that returns 200 with real geo JSON over HTTP
+  // returns 403 over HTTPS, live, in production, nothing else differs).
+  // geo_fetch never succeeding meant `geo_have` never became true, which
+  // meant kernel.c's own automatic `wall_fetch()` call (gated on
+  // `geo_have`) never fired for a real browser visitor, ever -- despite
+  // the CORS fix being real and despite the Settings-click regression
+  // fix being real, this is the actual reason satellite tiles never
+  // painted. This Worker fully controls the real outbound scheme
+  // regardless of what the browser-relayed URL says, so it corrects it
+  // here rather than trying to patch vendored, unowned v86 source.
+  if (targetUrl.hostname === "ip-api.com") targetUrl.protocol = "http:";
+
   // Only forward a plain GET with no guest-controlled headers/body: every
   // real caller here (geo_fetch/weather_fetch/wall_fetch) only ever issues
   // a bare GET, so there's nothing legitimate to lose by not forwarding
