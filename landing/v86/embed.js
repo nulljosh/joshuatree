@@ -621,13 +621,35 @@ if (typeof document !== "undefined") (function () {
   //
   // v71: rebuilt around a direct request ("cycle through every real app,
   // open it, use it for ~15s, close it from its own X, open the next,
-  // then restart"), the honest version of "show off every app" now that
-  // roadmap.md's "Multi-window, honestly scoped" entry confirms real
-  // window stacking does not exist yet: every app here is still a single,
-  // full takeover, and the dock stays live only to switch which ONE app
-  // is showing (v69), never to stack a second one on top. Sequential
-  // open/use/close/next is the real, buildable shape of that, not a
-  // simulated multi-window fake this kernel can't actually do.
+  // then restart"), the honest version of "show off every app" at a time
+  // when roadmap.md's "Multi-window, honestly scoped" entry still
+  // confirmed real window stacking did not exist yet: every app was a
+  // single, full takeover, and the dock stayed live only to switch which
+  // ONE app was showing (v69), never to stack a second one on top.
+  // Sequential open/use/close/next was the real, buildable shape of that
+  // at the time, not a simulated multi-window fake this kernel couldn't
+  // actually do.
+  //
+  // STALE AS OF v0.73.0-v0.75.0: real multi-window shipped (gui_multiwin_*
+  // in kernel.c, GUI_MULTIWIN_MAX=2, real click-to-focus/z-order,
+  // tools/checks/multiwindow-check.py). Direct report (Sep 2026): the
+  // landing header now says "Introducing Multi-Window." but this tour
+  // still only ever showed one window at a time, closing each before the
+  // next opened -- the header claimed a real capability the demo never
+  // actually demonstrated. multiWindowRound() below (added the same pass)
+  // fixes that for the 3 dock apps that are genuinely multi-window
+  // capable in this kernel (Files/Weather/Reminders; see
+  // gui_multiwin_supported in kernel.c) by opening two of them together,
+  // without closing the first, and driving the exact real click-to-focus
+  // switch tools/checks/multiwindow-check.py already proves against the
+  // real kernel. GUI_MULTIWIN_MAX is a real, current cap of 2 concurrent
+  // windows, not 3 -- this tour never asks for a 3rd, since the kernel
+  // itself has no 3rd slot to give it. TOUR_APPS below keeps only the
+  // genuinely single-window-only apps (Notes/Terminal/Chat; confirmed via
+  // gui_multiwin_supported returning false for their icons) plus Mail and
+  // Calendar solo (real multiwin apps too, but shown one at a time here
+  // since the 2-window slots are spent on the Files/Weather/Reminders
+  // rounds -- still real, just not simultaneous in every lap).
   //
   // Only the 8 apps really pinned to the dock (GUI_DOCK_DEFAULT in
   // kernel.c: Files, Mail, Calendar, Notes, Reminders, Terminal, Chat,
@@ -699,7 +721,6 @@ if (typeof document !== "undefined") (function () {
   // cutting DWELL_MS well below, so the whole loop is still a quick,
   // repeating sample rather than either extreme.
   var TOUR_APPS = [
-    { name: 'Files', slot: 1 },
     { name: 'Mail', slot: 2, script: [
       { type: 'keys', text: 'c', speed: 200 },
       { type: 'wait', ms: 500 },
@@ -721,11 +742,6 @@ if (typeof document !== "undefined") (function () {
     { name: 'Notes', slot: 4, script: [
       { type: 'keys', text: 'A real OS, from scratch. Every keystroke here is real.', speed: 55 }
     ] },
-    { name: 'Reminders', slot: 5, script: [
-      { type: 'keys', text: 'a', speed: 200 },
-      { type: 'wait', ms: 500 },
-      { type: 'keys', text: 'Ship the demo tour rework\n', speed: 55 }
-    ] },
     { name: 'Terminal', slot: 6, script: [
       { type: 'keys', text: 'help\n', speed: 55 },
       { type: 'wait', ms: 900 },
@@ -733,9 +749,24 @@ if (typeof document !== "undefined") (function () {
     ] },
     { name: 'Chat', slot: 7, script: [
       { type: 'keys', text: 'what can you do?', speed: 55 } // no \n: see the long-standing no-NIC-in-this-embed note above, unchanged since v51
-    ] },
-    { name: 'Weather', slot: 8 }
+    ] }
   ];
+  // v0.76.12: the real multi-window demo. Files (slot 1) and Weather
+  // (slot 8) have no per-app keyboard interaction in this kernel (both are
+  // gui_wait_close-only static viewers, confirmed by reading kernel.c --
+  // scripting a fake keystroke into either would be exactly the dishonest
+  // "simulated interaction" this tour has never done for any app), so
+  // their entries carry no `script`; Reminders (slot 5) is real-input
+  // capable and keeps the exact same add-a-reminder script the old
+  // sequential entry used, just now run while a second window (Files) is
+  // genuinely open alongside it, not before/after it.
+  var MW_FILES = { name: 'Files', slot: 1 };
+  var MW_WEATHER = { name: 'Weather', slot: 8 };
+  var MW_REMINDERS = { name: 'Reminders', slot: 5, script: [
+    { type: 'keys', text: 'a', speed: 200 },
+    { type: 'wait', ms: 500 },
+    { type: 'keys', text: 'Ship the demo tour rework\n', speed: 55 }
+  ] };
   // gui_launch_from_dock's own fixed traffic-light X (x=70,y=40 non-apps-
   // folder window, red circle at x+24,y+16), the same LOGICAL coordinate
   // mobiletest.mjs already taps for its Notes-close check, identical for
@@ -768,6 +799,58 @@ if (typeof document !== "undefined") (function () {
       if (step.type === "wait") await sleep(step.ms);
       else if (step.type === "keys" && emulator.keyboard_send_text) await emulator.keyboard_send_text(step.text, step.speed || 55);
     }
+  }
+  // v0.76.12: real two-window demo, the exact click sequence
+  // tools/checks/multiwindow-check.py already proves against the real
+  // kernel (gui_multiwin_open/gui_multiwin_focus/gui_multiwin_hit_test in
+  // kernel.c), not a new/unverified interaction shape. Two fixed points
+  // do all of it, both real consequences of gui_multiwin_geom's own fixed
+  // per-window rects (window 0 = x70,y40,w820,h385; window 1 = offset
+  // +60,+60, never recomputed after either window opens):
+  //   MW_A_POINT  (94,56)   sits ONLY inside window 0's rect (94<130, the
+  //               start of window 1's rect), so a click there always
+  //               targets "whichever app opened first" regardless of
+  //               which is currently on top -- closes it if it's topmost,
+  //               otherwise raises it to the front (gui_multiwin_focus).
+  //   MW_TOP_POINT (154,116) sits inside BOTH windows' overlap, so a click
+  //               there always resolves (topmost-first hit test) to
+  //               whichever window is currently on top, and closes it.
+  // first opens as window 0, second opens as window 1 alongside it --
+  // both genuinely on screen together, the real thing the old sequential
+  // open/close/open/close tour could never show. Only 2 concurrent
+  // windows is the real, current kernel cap (GUI_MULTIWIN_MAX in
+  // kernel.c); this never asks for a 3rd.
+  var MW_A_POINT_X = CLOSE_X, MW_A_POINT_Y = CLOSE_Y; // = 94,56, same rect appclose-check.py/app-interact-check.py already depend on
+  var MW_TOP_POINT_X = 154, MW_TOP_POINT_Y = 116;
+  async function multiWindowRound(gen, first, second) {
+    if (focused || tourGen !== gen || !adaptersReady) return;
+    emulator.mouse_adapter.emu_enabled = true;
+    emulator.keyboard_adapter.emu_enabled = true;
+    var posA = dockSlotPos(first.slot), posB = dockSlotPos(second.slot);
+
+    await clickAt(posA[0], posA[1]); // opens `first` as window 0
+    if (focused || tourGen !== gen) return;
+    await sleep(600);
+    await runScript(first.script, gen); // real interaction while it's the only (topmost) window
+    if (focused || tourGen !== gen) return;
+
+    await clickAt(posB[0], posB[1]); // opens `second` as window 1 ALONGSIDE it -- first stays open, the real point being demonstrated
+    if (focused || tourGen !== gen) return;
+    await sleep(600);
+    await runScript(second.script, gen); // real interaction with the now-topmost window, first still genuinely on screen behind it
+    if (focused || tourGen !== gen) return;
+    await sleep(900); // a beat with both windows visibly open together
+
+    await clickAt(MW_A_POINT_X, MW_A_POINT_Y); // `first` is background right now: real click-to-focus, raises it, does NOT close it
+    if (focused || tourGen !== gen) return;
+    await sleep(900); // dwell with `first` genuinely back on top, proving the z-order switch actually redrew it there
+
+    await clickAt(MW_A_POINT_X, MW_A_POINT_Y); // `first` is topmost again now: the same point closes it this time (click-anywhere-on-topmost-closes)
+    if (focused || tourGen !== gen) return;
+    await sleep(700);
+    await clickAt(MW_TOP_POINT_X, MW_TOP_POINT_Y); // only `second` is left open, and it's topmost by definition: closes it too
+    if (focused || tourGen !== gen) return;
+    await sleep(1200);
   }
   // Dock geometry in LOGICAL kernel pixels, the same arithmetic as
   // kernel.c's gui_dock_icon/gui_dock_x0/gui_slot_x: 10 slots, tiles
@@ -917,6 +1000,22 @@ if (typeof document !== "undefined") (function () {
   async function tourLoop(gen) {
     tourRunning = true;
     while (!focused && tourGen === gen) {
+      // Real multi-window rounds first, right after boot: this is the
+      // actual claim the landing header makes ("Introducing
+      // Multi-Window."), so it leads the tour instead of being buried
+      // after five single-window apps. Two rounds cover all 3 dock apps
+      // this kernel can genuinely multi-window (Files/Weather/Reminders);
+      // Mail and Calendar are real multiwin apps too but get their turn
+      // solo below, in TOUR_APPS, since the kernel's own 2-window cap is
+      // already spent on these two rounds.
+      if (focused || tourGen !== gen || !adaptersReady) return;
+      await multiWindowRound(gen, MW_FILES, MW_WEATHER);
+      if (focused || tourGen !== gen) return;
+      await sleep(1500);
+      if (focused || tourGen !== gen) return;
+      await multiWindowRound(gen, MW_FILES, MW_REMINDERS);
+      if (focused || tourGen !== gen) return;
+      await sleep(1500);
       for (var i = 0; i < TOUR_APPS.length; i++) {
         if (focused || tourGen !== gen || !adaptersReady) return;
         var app = TOUR_APPS[i];
