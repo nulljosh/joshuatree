@@ -23,6 +23,7 @@ on:
     paths:
       - 'landing/**'
       - 'wrangler.toml'
+      - 'worker.js'
       - '.github/workflows/deploy.yml'
 
 jobs:
