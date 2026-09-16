@@ -131,6 +131,8 @@ jobs:
       # Playwright/Chromium, not wired into this CI yet).
       - name: RTC local-time shift math (v86's CMOS always answers in UTC)
         run: node ./tools/checks/rtc-timezone-check.mjs
+      - name: Worker /api/proxy allowlist (real Cloudflare deploy not spun up in CI)
+        run: node ./tools/checks/worker-proxy-check.mjs
       # Real recurring gap: landing/v86/kernel.elf is a checked-in binary
       # copy, not a build artifact, so a docs-only or landing-only pass
       # never touches it and it silently drifts behind the real kernel.elf

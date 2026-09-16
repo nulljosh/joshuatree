@@ -168,7 +168,18 @@ if (typeof document !== "undefined") (function () {
     // the very next run of this same test after adding relay_url/vm_ip/
     // router_ip regressed from "net_init: ne2k found" back to "net_init:
     // no NIC found".
-    net_device: { type: "ne2k", relay_url: "fetch", vm_ip: "10.0.2.15", router_ip: "10.0.2.2" },
+    // v0.76.10: cors_proxy is Xb's own first-class option for exactly the
+    // CORS block found root-causing why satellite/map/geo never rendered
+    // (roadmap.md has the full trace) -- Xb.prototype.fetch already does
+    // `this.cors_proxy && (a = this.cors_proxy + encodeURIComponent(a))`
+    // before fetching, read directly in the vendored libv86.js, not
+    // guessed. Routes every guest HTTP request through this same origin's
+    // own /api/proxy Worker route (worker.js, allowlisted to exactly the
+    // three real hosts this kernel ever asks for), which fetches
+    // server-to-server -- never CORS-limited -- instead of the browser
+    // fetching ip-api.com/opentopomap.org/google directly and getting
+    // rejected before the request even leaves the page.
+    net_device: { type: "ne2k", relay_url: "fetch", vm_ip: "10.0.2.15", router_ip: "10.0.2.2", cors_proxy: "/api/proxy?url=" },
   });
 
   // keyboard_adapter/mouse_adapter aren't attached synchronously: V86's
