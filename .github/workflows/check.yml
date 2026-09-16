@@ -76,7 +76,6 @@ jobs:
       # among them) by treating that reset as expected cleanup noise, not a
       # test failure, so a real PASS/FAIL is what actually gates CI now.
       #
-      # editor_qa.py remains macOS-only (hardcoded `/opt/homebrew/opt/llvm/bin/llvm-nm`).
       # app-interact-check.py is now genuinely cross-platform too (mkdisk.sh's
       # own Linux path plus mtools' `mtype` for the host-side read-back, no
       # kernel mount/sudo/loop device needed on Linux at all -- see
@@ -105,6 +104,8 @@ jobs:
         run: python3 ./tools/checks/walldemo-regression-check.py
       - name: Notes editor chrome doesn't redraw on plain keystrokes
         run: ./tools/checks/editorflash-check.sh
+      - name: Notes typing, typography, pointer controls, and persistence across reboots
+        run: python3 ./tools/checks/editor_qa.py
       - name: Terminal and Chat chrome don't redraw on plain keystrokes
         run: ./tools/checks/termchatflash-check.sh
       - name: Apple-menu hover stays cheap, clock redraws on a real minute change

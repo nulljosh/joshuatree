@@ -18,18 +18,19 @@ describes for a no-disk boot) would pass every on-screen check here and
 still fail this file-content assertion, which is the point.
 
 Usage: tools/checks/app-interact-check.py   (from the repo root, after make kernel.elf)
-Needs: a real FAT16 test image at /tmp/jt-qa-test.img (see tools/mkdisk.sh
-if that doesn't exist -- mkfs.vfat on Linux, or hdiutil + newfs_msdos on macOS).
+Creates its own fresh FAT16 image with tools/mkdisk.sh. Requires mkfs.vfat
+and mtools on Linux, or hdiutil and newfs_msdos on macOS.
 """
-import json, os, socket, subprocess, sys, time, tempfile
+import json, os, re, socket, subprocess, sys, time, tempfile
 
 REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 os.chdir(REPO)
-DISK = "/tmp/jt-qa-test.img"
-LOG = "/tmp/jt-appinteract-serial.log"
-DUMP = "/tmp/jt-appinteract.raw"
+ARTIFACTS = tempfile.mkdtemp(prefix="jt-appinteract-")
+DISK = os.path.join(ARTIFACTS, "disk.img")
+LOG = os.path.join(ARTIFACTS, "serial.log")
+DUMP = os.path.join(ARTIFACTS, "framebuffer.raw")
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4452
+SOCKET = os.path.join(ARTIFACTS, "qmp.sock")
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 268
 PITCH = DOCK_ICON + DOCK_GAP
@@ -41,15 +42,14 @@ CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 DOCK_SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Trash"]
 
-if not os.path.exists(DISK):
-    sys.exit("FAIL: no test disk at %s -- run tools/mkdisk.sh first" % DISK)
+subprocess.run(["./tools/mkdisk.sh", DISK], check=True)
 
 for f in (LOG, DUMP):
     try: os.remove(f)
     except FileNotFoundError: pass
 
 q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
-                      "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG,
+                      "-qmp", f"unix:{SOCKET},server,nowait", "-serial", "file:" + LOG,
                       "-drive", f"file={DISK},format=raw,if=ide,index=0"],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 fails = []
@@ -57,15 +57,22 @@ try:
     s = None
     for _ in range(50):
         time.sleep(0.2)
-        try: s = socket.create_connection(("127.0.0.1", PORT)); break
-        except OSError: pass
+        candidate = socket.socket(socket.AF_UNIX)
+        try:
+            candidate.connect(SOCKET)
+            candidate.settimeout(10)
+            s = candidate
+            break
+        except OSError:
+            candidate.close()
     if s is None: raise SystemExit("FAIL: QEMU's QMP socket never came up")
     f = s.makefile("rw")
     def cmd(o):
         f.write(json.dumps(o) + "\n"); f.flush()
         while True:
             r = json.loads(f.readline())
-            if "return" in r or "error" in r: return r
+            if "error" in r: raise RuntimeError(r["error"])
+            if "return" in r: return r
     f.readline()
     cmd({"execute": "qmp_capabilities"})
     time.sleep(5.0)
@@ -92,18 +99,37 @@ try:
     def window_open(): return close_button() is not None
     centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
 
-    QCODE = {" ": "spc", ".": "dot", "-": "minus", "/": "slash", "@": "shift-2",
+    QCODE = {" ": "spc", ".": "dot", "-": "minus", "/": "slash", "@": "shift-2", "]": "bracket_right", "+": "shift-equal",
              "\n": "ret", "\b": "backspace"}
     def key(c):
-        if c in QCODE: cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": QCODE[c]}]}})
-        elif c.isupper(): cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": "shift"}, {"type": "qcode", "data": c.lower()}]}})
-        else: cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": c}]}})
+        codes = QCODE.get(c, 'shift-' + c.lower() if c.isupper() else c).split('-')
+        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": code} for code in codes], "hold-time": 30}})
         time.sleep(0.08)
     def keys(*qcodes):
-        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in qcodes]}})
+        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in qcodes], "hold-time": 30}})
         time.sleep(0.15)
     def type_str(s):
         for c in s: key(c)
+
+    symbols = {fields[2]: int(fields[0], 16) - 0xC0000000
+               for line in subprocess.check_output(['nm', 'kernel.elf'], text=True).splitlines()
+               if len(fields := line.split()) == 3}
+
+    def memory(name, count):
+        result = cmd({'execute': 'human-monitor-command', 'arguments': {
+            'command-line': f'xp /{count}xb 0x{symbols[name]:x}'}})['return']
+        return bytes(int(value, 16) for line in result.splitlines() if ':' in line
+                     for value in re.findall(r'0x([0-9a-f]{2})\b', line.split(':', 1)[1]))
+
+    def wait_value(name, expected):
+        for attempt in range(100):
+            if int.from_bytes(memory(name, 4), 'little') == expected:
+                return
+            time.sleep(.1)
+        pixel(*PARK)
+        from PIL import Image
+        Image.frombytes('RGB', (W, H), open(DUMP, 'rb').read(), 'raw', 'BGRX').save(os.path.join(ARTIFACTS, 'failure.png'))
+        raise AssertionError(f'{name} did not reach {expected}; artifacts: {ARTIFACTS}')
 
     def open_slot(slot):
         move(centre(slot), ICON_ROW_Y); time.sleep(0.3)
@@ -187,10 +213,13 @@ try:
     else:
         for _ in range(18): key("d")  # sel 0 -> 18 (Contacts)
         keys("ret"); time.sleep(0.8)
+        wait_value('contacts_loaded', 1)
         key("a"); time.sleep(0.4)
         type_str("qa-contact-marker"); keys("ret"); time.sleep(0.3)  # name
         type_str("555-0100"); keys("ret"); time.sleep(0.3)           # phone
         type_str("qa@test.local"); keys("ret"); time.sleep(0.6)      # email, saves
+        wait_value('contacts_count', 2)
+        assert memory('contacts', 192)[96:128].split(b'\0')[0] == b'qa-contact-marker'
         # delete the DEFAULT "Joshua" row (sel starts at 0 after an add),
         # not the one just added -- deleting the marker contact would make
         # the disk check below fail by construction (checking for text
@@ -200,6 +229,8 @@ try:
         # the other row, and leaves the marker contact as the one the
         # disk check below actually needs to find.
         key("d"); time.sleep(0.6)  # sel is already 0 (Joshua) right after an add
+        wait_value('contacts_count', 1)
+        assert memory('contacts', 32).split(b'\0')[0] == b'qa-contact-marker'
         keys("esc"); time.sleep(1.0)  # back to the folder grid
         print("Contacts : added a real contact, deleted the default one, esc back to the folder (see disk check below)")
 

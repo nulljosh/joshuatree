@@ -7,6 +7,7 @@ import struct
 import subprocess
 import tempfile
 import time
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 ARTIFACTS = Path(tempfile.mkdtemp(prefix='jt-editor-qa-'))
@@ -56,8 +57,14 @@ class Machine:
         self.stream = self.connection.makefile('rwb', buffering=0)
         self.stream.readline()
         self.command('qmp_capabilities')
+        for attempt in range(100):
+            if 'b007c0de' in self.monitor('xp /1xw 0x9000'):
+                break
+            time.sleep(.1)
+        else:
+            self.close()
+            raise AssertionError('Boot marker not reached')
         time.sleep(2)
-        assert 'b007c0de' in self.monitor('xp /1xw 0x9000')
 
     def command(self, name, arguments=None):
         self.stream.write((json.dumps({'execute': name, 'arguments': arguments or {}}) + '\n').encode())
@@ -75,16 +82,16 @@ class Machine:
         self.monitor(f'sendkey {key} 30')
         time.sleep(.065)
 
-    def move(self, delta_x, delta_y):
-        while delta_x or delta_y:
-            step_x = max(-80, min(80, delta_x))
-            step_y = max(-80, min(80, delta_y))
-            self.command('input-send-event', {'events': [
-                {'type': 'rel', 'data': {'axis': 'x', 'value': step_x}},
-                {'type': 'rel', 'data': {'axis': 'y', 'value': step_y}}]})
-            delta_x -= step_x
-            delta_y -= step_y
-            time.sleep(.1)
+    def move(self, target_x, target_y):
+        self.command('input-send-event', {'events': [
+            {'type': 'abs', 'data': {'axis': 'x', 'value': target_x * 32768 // 960}},
+            {'type': 'abs', 'data': {'axis': 'y', 'value': target_y * 32768 // 540}}]})
+        time.sleep(.2)
+
+    def toolbar(self, local_x):
+        self.move(self.integer('app_view_x') + local_x, self.integer('app_view_y') + 56)
+        self.click()
+        time.sleep(.3)
 
     def click(self):
         for down in (True, False):
@@ -118,18 +125,35 @@ class Machine:
         raise AssertionError('Save did not complete')
 
     def screenshot(self, name):
-        self.monitor(f'screendump {ARTIFACTS / (name + ".ppm")}')
+        raw = ARTIFACTS / 'framebuffer.raw'
+        self.command('pmemsave', {'val': 0xfd000000, 'size': 1920 * 1080 * 4, 'filename': str(raw)})
+        frame = Image.frombytes('RGB', (1920, 1080), raw.read_bytes(), 'raw', 'BGRX')
+        frame.save(ARTIFACTS / (name + '.png'))
+        return frame
 
     def open_notes(self):
-        self.key('esc')
-        self.type('notes\n')
-        time.sleep(.3)
+        self.move(458, 487)
+        self.click()
+        for attempt in range(50):
+            if self.integer('editor_loaded') and self.integer('gui_app_windowed'):
+                time.sleep(.5)
+                return
+            time.sleep(.1)
+        raise AssertionError('Notes dock click did not launch editor')
 
     def close(self):
-        self.command('quit')
-        self.process.wait(timeout=5)
-        self.stream.close()
-        self.connection.close()
+        try:
+            self.command('quit')
+        except (OSError, ValueError):
+            pass
+        finally:
+            try:
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait()
+            self.stream.close()
+            self.connection.close()
 
 
 disk = ARTIFACTS / 'disk.img'
@@ -137,25 +161,21 @@ make_disk(disk)
 machine = Machine(disk)
 try:
     machine.screenshot('boot-desktop')
-    machine.move(252, 236)
-    machine.click()
+    machine.open_notes()
     machine.screenshot('dock-open')
     assert machine.integer('editor_loaded') == 1, 'Notes dock click did not launch editor'
-    machine.move(-540, -480)
-    machine.click()
-    assert machine.integer('editor_family') == 1, 'Font toolbar click failed'
+    machine.toolbar(112)
+    assert machine.integer('editor_family') == 1, 'One font click must advance exactly one family'
     machine.key('f1')
     machine.key('f1')
-    machine.move(200, 0)
-    machine.click()
+    machine.toolbar(312)
     assert machine.integer('editor_size') == 2, 'Size toolbar click failed'
     for repeat in range(3):
         machine.key('f2')
-    machine.move(230, 0)
-    machine.click()
+    machine.toolbar(542)
     assert machine.integer('editor_weight') == 1, 'Weight toolbar click failed'
     machine.key('f3')
-    machine.move(-142, 244)
+    machine.move(480, 300)
     machine.click()
     machine.type('Hello, Joshua Tree!\nBeautiful type.\n')
     expected = 'Hello, Joshua Tree!\nBeautiful type.\n'
@@ -177,13 +197,22 @@ try:
     machine.key('caps_lock')
     expected += '\n\tQA'
     machine.expect(expected)
+    rendered_styles = set()
     for family in range(3):
         for size in range(4):
             for weight in range(2):
-                machine.screenshot(f'type-{family}-{size}-{weight}')
+                assert machine.integer('editor_family') == family
+                assert machine.integer('editor_size') == (size + 1) % 4
+                assert machine.integer('editor_weight') == weight
+                frame = machine.screenshot(f'type-{family}-{size}-{weight}')
+                origin_x, origin_y = machine.integer('app_view_x'), machine.integer('app_view_y')
+                crop = frame.crop(((origin_x + 40) * 2, (origin_y + 92) * 2,
+                                   (origin_x + 740) * 2, (origin_y + 210) * 2))
+                rendered_styles.add(crop.tobytes())
                 machine.key('f3')
             machine.key('f2')
         machine.key('f1')
+    assert len(rendered_styles) == 24, 'Typography controls did not produce 24 distinct text renderings'
     machine.expect(expected)
     machine.key('ctrl-s')
     machine.saved()
@@ -220,17 +249,17 @@ finally:
 machine = Machine()
 try:
     machine.open_notes()
+    initial = machine.memory('editor_buffer', machine.integer('editor_length')).decode()
     machine.type('No disk. Keep this text!')
     machine.key('ctrl-s')
-    assert machine.integer('editor_dirty') == 1
-    machine.expect('No disk. Keep this text!')
-    machine.screenshot('save-failure')
+    machine.saved()
+    machine.expect(initial + 'No disk. Keep this text!')
+    machine.screenshot('ramfs-save')
     machine.key('esc')
-    machine.key('esc')
-    machine.type('notes\n')
-    machine.expect('No disk. Keep this text!')
+    machine.open_notes()
+    machine.expect(initial + 'No disk. Keep this text!')
 finally:
     machine.close()
 
-print('PASS: boot, typing, Shift, Caps Lock, Enter, Tab, insertion, deletion, 24 typography combinations, scrolling, save/reboot/overwrite, no-disk recovery')
+print('PASS: boot, dock and toolbar clicks, typing, Shift, Caps Lock, Enter, Tab, insertion, deletion, 24 distinct typography renderings, scrolling, save/reboot/overwrite, ramfs reopen')
 print(f'Artifacts: {ARTIFACTS}')

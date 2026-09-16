@@ -133,7 +133,8 @@ int mouse_click_edge(void) {
        driver counted in its packet stream: the latter is what survives a
        press+release landing in one poll, see vmmouse_pump. Never both for
        the same press: a press the sample sees is the same one counted. */
-    int fired = (now && !edge_baseline) || vmmouse_take_presses() > 0;
+    int presses = vmmouse_take_presses();
+    int fired = (now && !edge_baseline) || presses > 0;
     edge_baseline = now;
     return fired;
 }
