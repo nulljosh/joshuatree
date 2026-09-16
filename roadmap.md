@@ -1953,3 +1953,7 @@ Queued for next session: the "Where it's going" landing card is static copy, own
 **Verified**: `./check.sh` PASS, `tools/checks/check-refs.sh` clean.
 
 PATCH bump: 0.76.45 -> 0.76.46.
+
+## Queued for next session
+
+- Owner target: release 1.0.0 by this weekend (2026-09-19/20), once weekly Claude usage resets Sat 22:00. Per CLAUDE.md's versioning rule, 1.0.0 needs a real stable contract first (this kernel has none yet) and a codename picked at that time, not before -- worth a real scoping pass on what "1.0" actually means for this project before bumping, not just a version-number milestone.
