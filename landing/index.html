@@ -72,7 +72,13 @@
      click-into-the-demo hide behavior. */
   .hero-copy { position: relative; opacity: var(--recede-o, 1); transform: translateY(var(--recede-y, 0)) scale(var(--recede-s, 1)); }
   .hero .eyebrow { color: var(--accent); }
-  .hero h1, .hero p.tagline { color: var(--fg); }
+  /* Fixed, not var(--fg): the hero always sits over the live demo's dark
+     photo/wallpaper background regardless of the visitor's OS light/dark
+     preference, so --fg's light-mode value (near-black) rendered
+     near-invisible dark-on-dark here even though it's perfectly readable
+     everywhere else on the page that actually has --bg behind it. A real
+     text-shadow gives it a legible edge over the photo's own busy detail. */
+  .hero h1, .hero p.tagline { color: #f5f3f0; text-shadow: 0 2px 16px rgba(0,0,0,0.6); }
   /* Direct request: click into the demo, the hero text gets out of the
      way; click/tap/esc back out (embed.js's own real focus state, not a
      second tracker) and it returns. !important over the recede effect
