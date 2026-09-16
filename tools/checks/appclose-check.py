@@ -100,10 +100,24 @@ try:
         move(centre(slot), ICON_ROW_Y); time.sleep(0.3)
         click(); time.sleep(1.2)
     def close_via_x():
+        # v0.76.18: real CI flake found and fixed, not hand-waved. Run 111
+        # (GitHub Actions, not reproduced in ~10 local runs) failed here on
+        # the very first slot with "still open after clicking its close
+        # button" -- then the sweep's own esc-key recovery immediately
+        # closed it and every remaining slot passed clean, proving the
+        # window really did close, just not within this function's old
+        # single fixed 0.8s wait on a more loaded/slower CI runner. A fixed
+        # sleep-then-check has no way to tell "genuinely stuck" from "closed
+        # one frame later than usual" apart; polling does, without weakening
+        # the real assertion (still fails if truly stuck after the same
+        # ~2s worst case this used to allow only 0.8s of).
         at = close_button()
         if at is None: return
         move(*at); time.sleep(0.3)
-        click(); time.sleep(0.8)
+        click()
+        for _ in range(20):
+            time.sleep(0.1)
+            if not window_open(): break
         move(*PARK); time.sleep(0.5)
 
     move(*PARK); time.sleep(0.5)

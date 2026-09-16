@@ -4297,7 +4297,24 @@ static void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
     else { *x = 70 + 60; *y = 40 + 60; *w = 820; *h = 385; }
 }
 
-static void gui_multiwin_draw_one(const gui_window_t *win){
+/* v0.76.18: split out of what used to be one gui_multiwin_draw_one, direct
+   report ("keystroke re-rendering glitch still present" after the earlier
+   Notes/Terminal/Chat chrome fixes). Root cause, same bug shape those
+   fixes already established, just never extended here: every keystroke
+   into a multi-window Mail/Calendar/Reminders window went through the
+   v0.75.0 "cheap tier" at gui_run's mw_key_repaint path, which called the
+   OLD gui_multiwin_draw_one every time -- and that function unconditionally
+   redrew this window's ENTIRE chrome (gui_rounded_rect_on_wallpaper's real
+   per-row alpha blend across the whole ~820x385 rect, plus all three
+   traffic lights and the title) before ever touching content, on every
+   single character typed. None of that chrome depends on what's being
+   typed; only the content viewport does. With no double buffer in this
+   framebuffer (this kernel's own standing, tracked limitation), redrawing
+   that much unchanged chrome on every keystroke is exactly the kind of
+   real mid-scan tear the dock/menu cheap tiers already exist to avoid,
+   just never plugged into this path. */
+static void gui_multiwin_draw_chrome(const gui_window_t *win){
+    serial_puts("mwchrome\n"); /* discriminating marker for tools/checks/mwkeyflash-check.sh */
     int x = win->x, y = win->y, w = win->w, h = win->h;
     gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
     window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
@@ -4307,6 +4324,9 @@ static void gui_multiwin_draw_one(const gui_window_t *win){
     font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
     font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
     font_draw_string(GUI_LABELS[win->icon], x + 96, y + 8, 0x00403439, -1);
+}
+static void gui_multiwin_draw_content_only(const gui_window_t *win){
+    int x = win->x, y = win->y, w = win->w, h = win->h;
     window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
     /* Real per-repaint content, not a cached bitmap: each call re-derives
        the window's content from the same live state its single-window
@@ -4319,6 +4339,10 @@ static void gui_multiwin_draw_one(const gui_window_t *win){
     else if (win->icon == 2) gui_draw_calendar_content();
     else if (win->icon == 4) gui_draw_reminders_content();
     window_clear_viewport();
+}
+static void gui_multiwin_draw_one(const gui_window_t *win){
+    gui_multiwin_draw_chrome(win);
+    gui_multiwin_draw_content_only(win);
 }
 
 /* Called from gui_run's own full-repaint branch, right alongside the
@@ -4882,9 +4906,22 @@ static void gui_run(void){
                        -- so redrawing just that window, patching the
                        cursor around it the same way cursor_only/
                        dock_only do, is the whole real fix: nothing
-                       outside the window rect changed. */
+                       outside the window rect changed.
+
+                       v0.76.18: tightened further, direct report ("keystroke
+                       re-rendering glitch still present"). This tier was
+                       already scoped to one window instead of the whole
+                       desktop, but still called the OLD gui_multiwin_draw_one,
+                       which redrew that window's full chrome (the rounded-
+                       rect wallpaper blend + all three traffic lights + the
+                       title) on every keystroke even though none of it
+                       changes while typing -- only the content viewport
+                       does. gui_multiwin_draw_content_only skips exactly
+                       that unchanged part, the same "cheapest repaint that's
+                       correct" cut cursor_only/dock_only/menu_only already
+                       make for their own chrome. */
                     gui_cursor_restore();
-                    gui_multiwin_draw_one(&gui_windows[gui_window_count - 1]);
+                    gui_multiwin_draw_content_only(&gui_windows[gui_window_count - 1]);
                     gui_cursor_save(last_mx, last_my);
                     gui_draw_cursor(last_mx, last_my);
                 }

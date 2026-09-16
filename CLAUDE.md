@@ -194,9 +194,24 @@ dependencies beyond clang, ld.lld and qemu.
   (`gh secret set CLOUDFLARE_API_TOKEN --repo nulljosh/joshuatree`) before
   this workflow does anything. Every other repo in the fleet keeps the
   manual `wrangler deploy` default.
-- "Joshua Tree" is the kernel name, unchanging. "Leopard Gecko" is reserved
-  for the eventual full-OS/distro name once this becomes a usable graphical
-  system (v6+), the same relationship as Linux the kernel vs Ubuntu the
-  distro. Not to be confused with gato (`~/Documents/Code/gato`), a
-  completely separate macOS voice app whose product name reverted to plain
-  "Gato" after briefly borrowing "Leopard Gecko" (Sep 2026).
+- "Joshua Tree" is the project's name, full stop -- direct call (Sep 2026):
+  the earlier "Leopard Gecko" idea (a separate full-OS/distro name once
+  this became a usable graphical system, Linux-kernel-vs-Ubuntu-distro
+  style) is dropped, dead, not coming back. There is one name, and it
+  covers the kernel and everything built on it, now and going forward.
+  Not to be confused with gato (`~/Documents/Code/gato`), a completely
+  separate macOS voice app whose product name reverted to plain "Gato"
+  after briefly borrowing "Leopard Gecko" earlier in Sep 2026 -- moot now
+  that this project isn't using it either.
+  The real, new convention going forward: each MAJOR version (the first
+  number in `VERSION`'s `MAJOR.MINOR.PATCH`, real semver since v31, still
+  `0.x.y` today since nothing here has a stable contract yet) gets its own
+  codename when it ships, the same relationship Ubuntu's numbered releases
+  have to their own codenames (Focal, Jammy, ...) or macOS's version
+  numbers have to Sonoma/Sequoia/etc -- "Joshua Tree" stays the project's
+  one real name throughout, the codename is a per-major label alongside
+  it, not a replacement for it. No codename exists yet for `1.0.0`
+  (nothing to name until there's a real MAJOR bump to attach it to, and
+  CLAUDE.md's own versioning rule above is explicit that `0.x.y` is
+  deliberate for now); picking one is a task for whenever that day
+  actually comes, not a placeholder to invent early.

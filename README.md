@@ -2,7 +2,7 @@
 
 # Joshua Tree
 
-![version](https://img.shields.io/badge/version-0.69.0-blue)
+![version](https://img.shields.io/badge/version-0.76.18-blue)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green) [![GitHub](https://img.shields.io/badge/GitHub-nulljosh%2Fjoshuatree-black?logo=github)](https://github.com/nulljosh/joshuatree)
 ![language](https://img.shields.io/badge/language-C%20%2F%20x86%20asm-blue)
 ![platform](https://img.shields.io/badge/platform-i386-lightgrey)
