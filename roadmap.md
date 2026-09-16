@@ -1989,3 +1989,13 @@ PATCH bump: 0.76.48 -> 0.76.49.
 ## Queued for next session
 
 - Owner asked for a comparative analysis of apple.com/ca/os/macos against this landing page's own elements/animation, to find what's missing. Real research task (fetch + compare page structure, section-by-section), not attempted tonight given usage was already critical when asked.
+
+## Remove pink/purple system chrome accent, neutral gray instead (v0.76.50)
+
+Direct request: the maroon accent color used for menu-hover highlight, window titles, and the boot fallback screen ("too Linux/Ubuntu", wants silver/black/white only) reads as pink/purple in the actual chrome. Replaced `0x0085144B` with a neutral `0x00555555` gray at every UI-chrome call site: window titlebar text, the About-panel title, the Apple-menu hover highlight, and the text-cursor blink box.
+
+Left untouched: the per-app dock icon color table (`GUI_COLORS`), which uses varied earth-tone/jewel accents deliberately for icon distinguishability, a different concern from system chrome; and the hidden `gfxtest`/`fonttest` debug shell commands' color swatches, not user-facing chrome.
+
+**Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean.
+
+PATCH bump: 0.76.49 -> 0.76.50.

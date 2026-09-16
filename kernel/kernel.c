@@ -3541,7 +3541,7 @@ static void gui_draw_app_titlebar(const char *title){
         gui_fill_circle(66, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
         font_draw_string("x", 23, 12, 0x00602B28, -1);
         font_draw_string("-", 43, 12, 0x00624A20, -1);
-        font_draw_string(title, 84, 12, 0x0085144B, -1);
+        font_draw_string(title, 84, 12, 0x00555555, -1);
     }
 }
 
@@ -4667,7 +4667,7 @@ static void gui_launch_about(void){
     font_draw_string("x", bx + 23, by + 12, 0x00602B28, -1);
     font_draw_string("-", bx + 43, by + 12, 0x00624A20, -1);
     { const char *title = "About Joshua Tree";
-      font_draw_string(title, bx + (ABOUT_W - font_string_width(title)) / 2, by + 12, 0x0085144B, -1); }
+      font_draw_string(title, bx + (ABOUT_W - font_string_width(title)) / 2, by + 12, 0x00555555, -1); }
 
     char buf[64]; int n;
     unsigned int total_kb = pmm_total_frames() * 4, free_kb = pmm_free_frames() * 4;
@@ -4789,7 +4789,7 @@ static void gui_draw_apple_menu(int hover_item){
     for (int i = 0; i < GUI_MENU_ITEM_COUNT; i++){
         int rh = gui_menu_row_h(i);
         if (GUI_MENU_LABELS[i][0] == '-') { window_rect(GUI_MENU_X0 + 8, ry + rh / 2, GUI_MENU_W - 16, 1, 0x00545458); ry += rh; continue; }
-        if (i == hover_item) window_rect(GUI_MENU_X0 + 2, ry, GUI_MENU_W - 4, rh, 0x0085144B);
+        if (i == hover_item) window_rect(GUI_MENU_X0 + 2, ry, GUI_MENU_W - 4, rh, 0x00555555);
         font_draw_string(GUI_MENU_LABELS[i], GUI_MENU_X0 + 12, ry + 5, text, -1);
         ry += rh;
     }
@@ -6640,7 +6640,7 @@ static void run(char *line){
     else if (!strcmp(line, "gfxtest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
         else {
-            window_rect(0, 0, 800, 200, 0x0085144B);
+            window_rect(0, 0, 800, 200, 0x00555555);
             window_rect(0, 200, 800, 200, 0x007A2048);
             window_rect(0, 400, 800, 200, 0x00FAF8F6);
             get_key(); /* leave the picture up until a key is pressed */
@@ -6653,7 +6653,7 @@ static void run(char *line){
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
         else {
             window_clear(0x00FAF8F6);
-            font_draw_string("Joshua Tree", 20, 20, 0x0085144B, -1);
+            font_draw_string("Joshua Tree", 20, 20, 0x00555555, -1);
             font_draw_string("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 20, 60, 0x001C1C1E, -1);
             font_draw_string("abcdefghijklmnopqrstuvwxyz", 20, 80, 0x001C1C1E, -1);
             font_draw_string("0123456789 !?.,:;()", 20, 100, 0x001C1C1E, -1);
@@ -7060,7 +7060,7 @@ static void run(char *line){
             int buttons = 0;
             do {
                 window_clear(0x00FAF8F6);
-                window_rect(cx_pos - 5, cy_pos - 5, 10, 10, 0x0085144B);
+                window_rect(cx_pos - 5, cy_pos - 5, 10, 10, 0x00555555);
                 __asm__ volatile ("hlt"); /* wake on the next IRQ (timer, keyboard, or mouse) */
                 int dx, dy;
                 if (mouse_get_delta(&dx, &dy, &buttons)) {
