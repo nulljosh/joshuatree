@@ -70,7 +70,11 @@ try:
     def cmd(o):
         f.write(json.dumps(o) + "\n"); f.flush()
         while True:
-            r = json.loads(f.readline())
+            line = f.readline()
+            if not line:
+                if o['execute'] == 'quit': return {}
+                raise ConnectionError('QEMU disconnected before replying')
+            r = json.loads(line)
             if "error" in r: raise RuntimeError(r["error"])
             if "return" in r: return r
     f.readline()
@@ -238,7 +242,7 @@ try:
         keys("ret"); time.sleep(0.8)
         type_str("2+2"); keys("ret"); time.sleep(0.4)
         keys("esc"); time.sleep(1.0)
-        print("Calculator: evaluated 2+2, esc back to the folder")
+        print("Calculator: entered an expression, esc back to the folder (result not asserted)")
 
         key("d"); time.sleep(0.3)  # sel 19 -> 20 (Stocks)
         keys("ret"); time.sleep(0.8)
@@ -317,4 +321,5 @@ else:
 if fails:
     for x in fails: print("FAIL:", x)
     sys.exit(1)
-print("PASS: every built-in app opens, real-interacts, saves to the real disk where applicable, closes via its real X, and the desktop stays responsive")
+print("PASS: seven app interaction flows; all five expected files verified on disk; Contacts add/delete verified in memory; desktop remains responsive")
+print(f"Artifacts: {ARTIFACTS}")
