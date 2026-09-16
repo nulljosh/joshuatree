@@ -260,16 +260,30 @@
 <header class="hero" id="main">
   <div class="hero-copy">
     <h2 class="eyebrow">Joshua Tree</h2>
-    <!-- v0.76.9: direct request, real Apple macOS-page structure (a small
-         product-name line above a bigger "Introducing X" headline, see
-         apple.com/os/macos). The headline names whatever the newest real,
-         demoable capability is, not just the newest version number -- a
-         CI fix or a PATCH bump isn't a visitor-facing feature, so this
-         should track the latest entry in roadmap.md that actually is one
-         (currently v0.76.7's Satellite wallpaper default), updated by hand
-         alongside future feature releases the same deliberate way VERSION
-         itself is, not templated. -->
-    <h1>Introducing Satellite Wallpaper.</h1>
+    <!-- Sep 2026, direct urgent correction -- this line briefly named
+         Satellite Wallpaper (v0.76.7), but a real headless test of this
+         exact deployed page found the browser demo can never actually show
+         it: window.__jt.serial's own console log surfaces a real CORS
+         rejection ("Access to fetch at 'http://ip-api.com/json/' ...
+         blocked by CORS policy"), since v86's relay_url:"fetch" network
+         mode makes the GUEST's HTTP requests through the BROWSER's own
+         fetch(), and none of ip-api.com/opentopomap.org/mt0.google.com
+         send an Access-Control-Allow-Origin header. That's not this
+         session's own sandboxed network policy (a different, previously
+         suspected culprit) -- it's a real, structural, every-visitor
+         limitation of the fetch-relay approach, confirmed independent of
+         any one environment. The kernel feature itself is real and proven
+         (`check.sh`/`walldefault-check.sh` boot the kernel with a real
+         network stack, no browser fetch() involved), so this isn't
+         reverting the kernel fix, only what the landing page claims a
+         browser visitor will see today. Real follow-up logged in
+         roadmap.md: a same-origin Cloudflare Worker proxy route would
+         fix this for real (server-to-server fetches aren't CORS-limited),
+         scoped carefully to avoid becoming an open proxy -- not done in
+         this pass. Headline swapped to Multi-Window, a real, CI-verified
+         (`tools/checks/multiwindow-check.py`), actually-visible-on-load
+         capability instead. -->
+    <h1>Introducing Multi-Window.</h1>
     <p class="tagline">Click or tap. It's really running.</p>
   </div>
 </header>

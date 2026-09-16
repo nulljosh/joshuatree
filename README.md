@@ -14,9 +14,6 @@ Live: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 A kernel. A small one, from nothing. It boots in QEMU, reads a real disk,
 runs code loaded off it. Full breakdown: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-Renamed from `os`. The tree survives the Mojave on almost nothing, built
-the same way this kernel is. Also a nod to the U2 album, and my own name.
-
 | Piece | Where |
 |-------|-------|
 | Boot | `boot/boot.S`: multiboot1 header, temporary page tables to get into the higher half, jump to `kmain` (kernel runs at 0xC0000000+, loaded at 1MB) |
