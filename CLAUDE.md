@@ -85,6 +85,16 @@ dependencies beyond clang, ld.lld and qemu.
   bright/saturated orange. The real VGA boot output is genuinely black-on-
   gray text (can't be restyled, it's the actual kernel's real output),
   everything *around* it (frame, accent color, copy) follows this palette.
+- Task routing (direct request, Sep 2026): the main session directs
+  (Sonnet/Opus, Fable for anything privilege/security/exact-layout
+  shaped per the model-routing legend below), not the sole executor.
+  For mechanical, well-scoped work with a known-correct shape (a UI
+  tweak, a glue fix, a scoped bug with an obvious pattern to follow --
+  exactly what the legend already tags `[Haiku]`), spawn one or two
+  Haiku subagents with full sub-instructions (root cause, fix, required
+  discriminating test, verification steps, commit/push) instead of
+  doing it directly. Saves Claude usage; the main session stays free
+  for direction and review.
 - The loop (direct request, tightened to exactly this, Sep 2026): this
   project has no finish line. Each pass:
   1. Check for a direct request first; only fall back to `roadmap.md`'s
