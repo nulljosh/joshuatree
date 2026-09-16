@@ -1195,16 +1195,19 @@ if (typeof document !== "undefined") (function () {
   // v0.76.30: typewriter effect for dynamic headlines. Lightweight manual implementation
   // (no external library dependency, vanilla JS, works in the landing page's static context).
   var typewriterInterval = null;
-  function typewriterEffect(element, text, callback) {
+  var HEADLINE_PREFIX = 'Introducing ';
+  function typewriterEffect(element, variablePart, callback) {
+    // v0.76.31: direct request, "Introducing" is static, only the
+    // variable part (app name + period) animates -- retyping the whole
+    // fixed prefix every app switch was noisy and pointless motion.
     if (!element) { if (callback) callback(); return; }
-    // Clear existing interval
     if (typewriterInterval) clearInterval(typewriterInterval);
 
-    element.textContent = '';
+    element.textContent = HEADLINE_PREFIX;
     var index = 0;
-    var chars = text.split('');
+    var chars = variablePart.split('');
 
-    // Type out the text at 60ms per character (~1000ms for a short headline)
+    // Type out the variable part at 60ms per character
     typewriterInterval = setInterval(function() {
       if (index < chars.length) {
         element.textContent += chars[index];
@@ -1222,9 +1225,8 @@ if (typeof document !== "undefined") (function () {
     // Types out "Introducing <AppName>." when app opens, creating a real sense
     // of discovery rather than instant replacement. Lightweight effect, no external deps.
     var h1Link = document.querySelector('h1 a');
-    var newHeadline = 'Introducing ' + appName + '.';
     if (h1Link) {
-      typewriterEffect(h1Link, newHeadline);
+      typewriterEffect(h1Link, appName + '.');
     }
   }
   function resetHeadline() {
@@ -1232,7 +1234,7 @@ if (typeof document !== "undefined") (function () {
     // Uses typewriter effect for visual consistency.
     var h1Link = document.querySelector('h1 a');
     if (h1Link) {
-      typewriterEffect(h1Link, 'Introducing Joshua Tree.');
+      typewriterEffect(h1Link, 'Joshua Tree.');
     }
   }
 
