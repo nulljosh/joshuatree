@@ -159,7 +159,17 @@
      other way around, so the demo actually shrinks on wide/short viewports
      instead of just filling whatever width is available. */
   #demo-frame { position: relative; width: 100%; padding: 3% 8%; z-index: 0; display: flex; align-items: center; justify-content: center; }
-  #stage-wrap { background: #000; position: relative; width: auto; max-width: 100%; height: 58vh; max-height: 640px; aspect-ratio: 16 / 9; z-index: 0; border-radius: 2%; overflow: hidden; box-shadow: 0 0 140px 60px var(--bg); }
+  /* v0.76.51: real bug, direct report ("demo cut off when window rescales")
+     -- explicit height (65vh/max-height) combined with width:auto and a
+     separate max-width:100% clamp fight each other whenever the viewport
+     is narrow relative to its height: width gets capped, but the explicit
+     height doesn't shrink to match, so the box's aspect-ratio breaks and
+     the canvas (clipped by overflow:hidden) overflows past the top of its
+     box. Single source of truth instead: width is the smaller of 100% or
+     what 58vh-at-16:9 would need, height:auto lets aspect-ratio derive the
+     matching height from whichever width actually won, no competing
+     explicit height to disagree with it. */
+  #stage-wrap { background: #000; position: relative; width: min(100%, calc(58vh * 16 / 9)); height: auto; max-height: 640px; aspect-ratio: 16 / 9; z-index: 0; border-radius: 2%; overflow: hidden; box-shadow: 0 0 140px 60px var(--bg); }
   @media (max-width: 600px) { #stage-wrap { width: 100%; height: auto; } }
   @media (max-width: 600px) { #demo-frame { padding: 2% 4%; } }
   /* v52.5: real boot moment instead of a blank black flash, direct

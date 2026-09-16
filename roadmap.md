@@ -1999,3 +1999,15 @@ Left untouched: the per-app dock icon color table (`GUI_COLORS`), which uses var
 **Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean.
 
 PATCH bump: 0.76.49 -> 0.76.50.
+
+## Tree wallpaper still flashed on startup, real gap in v0.76.45's fix (v0.76.51)
+
+Direct follow-up, real gap found: v0.76.45 made `wall_apply()` fall back to a dark solid color instead of the tree photo whenever a map theme is wanted but the satellite fetch hasn't landed yet -- but `gui_run()`'s very first desktop paint ran before `wall_apply()` had EVER been called this session, so `wall_src` still held its static initial value (`wallpaper_rgb`, the tree photo) regardless of `wall_theme`'s real default (`WALL_SAT`). The dark-fallback logic was correct, it just never ran before the one frame that mattered most.
+
+**Fix**: one `wall_apply(wall_theme != WALL_PHOTO)` call added immediately before `gui_run()`'s first `gui_draw_desktop()`, so the very first paint already respects the same want-map-but-no-fetch-yet logic every later paint already got.
+
+Also fixed, same pass: the landing page demo box overflowed its clipped container on narrow/rescaled viewports (explicit `height: 65vh` fought a separate `max-width: 100%` clamp on `width: auto`, so the two dimensions could disagree and break the aspect ratio) -- resized to a single-source-of-truth `width: min(100%, calc(58vh * 16/9)); height: auto`, letting `aspect-ratio` derive the matching dimension from whichever one actually won, confirmed fixed live at a 1000x1160 resized viewport.
+
+**Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean, live browser check at a resized viewport confirms the demo's titlebar and menu bar are no longer cropped.
+
+PATCH bump: 0.76.50 -> 0.76.51.

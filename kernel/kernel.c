@@ -5017,6 +5017,16 @@ static void gui_run(void){
 
     int last_mx = mx, last_my = my, last_hover = -1, last_drag = -1, last_menu_open = 0, last_menu_hover = -2;
     gui_menubar_force_redraw(); /* this GUI session's first frame, the minute-change gate must not skip it */
+    /* v0.76.51: real bug, direct report ("tree shows for a second on
+       startup/login") -- the very first desktop paint below ran before
+       wall_apply() had EVER been called this session, so wall_src still
+       held its static initial value (wallpaper_rgb, the tree photo)
+       regardless of wall_theme's real default (WALL_SAT). v0.76.45's dark-
+       fallback fix only kicked in once something later called wall_apply,
+       which never happened before this first frame. One call here applies
+       the same want-map-but-no-fetch-yet logic to the actual first paint,
+       not just every paint after it. */
+    wall_apply(wall_theme != WALL_PHOTO);
     gui_draw_desktop(-1, -1, 0, 0);
     cursor_saved_x = cursor_saved_y = -1;
     gui_cursor_save(mx, my);
