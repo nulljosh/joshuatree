@@ -3522,7 +3522,7 @@ static void gui_draw_weather_content(void){
     if (x < 16) x = 16;
     gui_rounded_rect_gradient(x, 72, 520, 250, 0x00FFF7E7, 0x00E9D9DA, 0x00F5F0EB, 22);
     gui_draw_one_icon_on(7, x + 95, 230, 100, 0x00F4E8E2);
-    font_draw_string("Vancouver", x + 188, 112, 0x00645057, -1);
+    font_draw_string(geo_city[0] ? geo_city : "Location unavailable", x + 188, 112, 0x00645057, -1);
     font_draw_string(weather_text[0] ? weather_text : "Weather unavailable", x + 188, 158, 0x002A2226, -1);
     font_draw_string("Current conditions", x + 188, 195, 0x00746B70, -1);
 }

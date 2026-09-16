@@ -1782,3 +1782,15 @@ Root cause of failed fix: v0.76.26 added an Escape interceptor to the `container
 This is fixing a fix that didn't work, not fixing a new regression. Real trust cost from the previous failed attempt.
 
 PATCH bump: 0.76.26 -> 0.76.27. No new capability, fixing an interceptor that silently failed to work despite code review and deployment.
+
+## Weather app's real hardcode, finally fixed (v0.76.28)
+
+Real bug, flagged three separate times tonight (first in a live-QA session, logged to roadmap, then found still unfixed twice more) before actually getting fixed: `gui_draw_weather_content()` hardcoded `font_draw_string("Vancouver", ...)` for the location label, completely ignoring `geo_city` -- the real IP-geolocated city name the kernel already fetches and correctly uses elsewhere in this same file (the wallpaper theme label at line ~4128, the notif panel's location row at line ~4897). The city label was always "Vancouver" regardless of what `geo_fetch()` actually resolved, contradicting the real geolocation work already shipped (v56-era `geo_fetch`/`ip-api.com` integration).
+
+**Fix**: one line, `font_draw_string(geo_city[0] ? geo_city : "Location unavailable", ...)`, matching the exact fallback pattern the notif panel already uses for the same variable. No new capability, just wiring the Weather app's label to data the kernel already has.
+
+**Honest note on "Weather unavailable" still showing in the live v86 browser demo**: this is a separate, real limitation, not a bug -- v86 (the JS/wasm emulator running in-browser) has no real network path to the internet the way a real QEMU boot with `-net user` does, so `weather_fetch()`/`geo_fetch()` genuinely cannot reach `ip-api.com`/Open-Meteo from inside the browser demo. The city label fix above will correctly show "Location unavailable" there instead of a wrong hardcoded city, but real weather data in the browser demo specifically would need a real backend proxy, out of scope for this fix.
+
+**Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean (1037 refs).
+
+PATCH bump: 0.76.27 -> 0.76.28.
