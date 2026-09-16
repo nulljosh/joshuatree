@@ -111,6 +111,21 @@ class Machine:
     def integer(self, symbol):
         return int.from_bytes(self.memory(symbol, 4), 'little')
 
+    def wait_int(self, symbol, predicate, desc=''):
+        # v0.76.32: the same buffer-settle race expect() already fixed
+        # (v0.76.26/27) also hits every raw `assert machine.integer(...)`
+        # in this file -- 3 separate CI runs failed on 3 different
+        # assertions here, each passing locally every time. One shared
+        # poll instead of patching each of the 8 call sites separately.
+        value = None
+        for _ in range(20):
+            value = self.integer(symbol)
+            if predicate(value):
+                return value
+            time.sleep(0.1)
+        assert predicate(value), (desc or symbol, value)
+        return value
+
     def expect(self, expected):
         # v0.76.27: the buffer read can race the keyboard event that
         # produced `expected` on a slower/CI runner -- proven real by two
@@ -183,17 +198,17 @@ try:
     machine.screenshot('boot-desktop')
     machine.open_notes()
     machine.screenshot('dock-open')
-    assert machine.integer('editor_loaded') == 1, 'Notes dock click did not launch editor'
+    machine.wait_int('editor_loaded', lambda v: v == 1, 'Notes dock click did not launch editor')
     machine.toolbar(112)
-    assert machine.integer('editor_family') == 1, 'One font click must advance exactly one family'
+    machine.wait_int('editor_family', lambda v: v == 1, 'One font click must advance exactly one family')
     machine.key('f1')
     machine.key('f1')
     machine.toolbar(312)
-    assert machine.integer('editor_size') == 2, 'Size toolbar click failed'
+    machine.wait_int('editor_size', lambda v: v == 2, 'Size toolbar click failed')
     for repeat in range(3):
         machine.key('f2')
     machine.toolbar(542)
-    assert machine.integer('editor_weight') == 1, 'Weight toolbar click failed'
+    machine.wait_int('editor_weight', lambda v: v == 1, 'Weight toolbar click failed')
     machine.key('f3')
     machine.move(480, 300)
     machine.click()
@@ -221,9 +236,9 @@ try:
     for family in range(3):
         for size in range(4):
             for weight in range(2):
-                assert machine.integer('editor_family') == family
-                assert machine.integer('editor_size') == (size + 1) % 4
-                assert machine.integer('editor_weight') == weight
+                machine.wait_int('editor_family', lambda v, family=family: v == family)
+                machine.wait_int('editor_size', lambda v, size=size: v == (size + 1) % 4)
+                machine.wait_int('editor_weight', lambda v, weight=weight: v == weight)
                 frame = machine.screenshot(f'type-{family}-{size}-{weight}')
                 origin_x, origin_y = machine.integer('app_view_x'), machine.integer('app_view_y')
                 crop = frame.crop(((origin_x + 40) * 2, (origin_y + 92) * 2,
@@ -259,10 +274,10 @@ try:
     machine.expect(expected)
     machine.key('ctrl-end')
     machine.type('\n' * 24 + 'Still visible.')
-    assert machine.integer('editor_scroll') > 0
+    machine.wait_int('editor_scroll', lambda v: v > 0)
     machine.screenshot('scrolled-note')
     machine.key('ctrl-home')
-    assert machine.integer('editor_scroll') == 0
+    machine.wait_int('editor_scroll', lambda v: v == 0)
 finally:
     machine.close()
 

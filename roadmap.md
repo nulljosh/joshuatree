@@ -1804,3 +1804,13 @@ PATCH bump: 0.76.30 -> 0.76.31.
 ## Queued for next session (Sep 2026, end-of-session, usage-limited)
 
 - Give the live demo container some real padding (owner's suggestion: ~8-15%) instead of full-bleed edge-to-edge, so it reads more like a framed demo than the whole page background.
+
+## editor_qa.py hardened for real this time (v0.76.32)
+
+Third failure in this same file, third distinct assertion, all the same root cause: `expect()`'s own buffer-settle race (v0.76.26/27) was fixed in ONE method, but 8 other raw `assert machine.integer(...)` calls throughout this file had no such tolerance and could hit the identical "assert before the kernel finishes processing the last input event" race on a slower CI runner. Added `Machine.wait_int(symbol, predicate)`, a shared poll helper, and routed all 8 sites through it instead of patching each individually -- same "fix once where every caller routes through" discipline as `expect()` itself.
+
+Also removed the hero H1's `text-shadow` (added in v0.76.27's contrast fix): live testing showed the blurred, dark, semi-opaque shadow was visually muddying the text on this section's solid dark background, working against the very contrast fix it was meant to reinforce. Color alone (`#ffffff`, computed-style-verified) needs no shadow here.
+
+**Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `python3 tools/checks/editor_qa.py` PASS locally (all three previously-failing assertions covered), `tools/checks/check-refs.sh` clean.
+
+PATCH bump: 0.76.31 -> 0.76.32.
