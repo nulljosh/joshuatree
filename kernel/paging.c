@@ -72,13 +72,16 @@ static int extra_tables_used = 0;
 
 /* Track which extra table (if any) is used by each PDE above the base map.
    -1 means the PDE is not using an extra table. Allows paging_unmap_region
-   to free unused table slots. v77 (0.66.x): added to support window_close() */
-static int pde_to_extra_table[1024 - BASE_MAP_TABLES];
+   to free unused table slots. v77 (0.66.x): added to support window_close()
+   v78+ (0.67.3): uses signed char instead of int since values range only from
+   -1 to 15 (MAX_EXTRA_TABLES), saving ~3KB of kernel BSS per (1022 entries). */
+static signed char pde_to_extra_table[1024 - BASE_MAP_TABLES];
 
 /* Track which extra table slots are in use (1) or free (0), allowing reuse
    when paging_unmap_region frees a table. This fixes the bug where unmapping
-   a framebuffer couldn't reclaim its table slot unless it was the last one. */
-static int extra_table_free[MAX_EXTRA_TABLES];
+   a framebuffer couldn't reclaim its table slot unless it was the last one.
+   v78+ (0.67.3): uses unsigned char instead of int, saving 48 bytes of BSS. */
+static unsigned char extra_table_free[MAX_EXTRA_TABLES];
 
 void paging_install(void) {
     for (int t = 0; t < BASE_MAP_TABLES; t++)
