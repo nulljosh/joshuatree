@@ -7094,11 +7094,11 @@ void kmain(unsigned int multiboot_info_addr){
             "hardware), so these are ramfs files, kept in memory only for\r\n"
             "this tab. Try the Terminal app: ls, cat README.TXT, echo.\r\n";
         static const char demo_notes[] =
-            "Sample note.\r\n\r\n"
-            "Everything else in Joshua Tree (the shell, GUI, TCP/IP stack,\r\n"
-            "the apps in the Apps folder) is the real kernel, not a mock.\r\n"
-            "Clone the repo and run make && ./check.sh for a real boot\r\n"
-            "with a real FAT16 disk image and real files.\r\n";
+            "Joshua Tree\r\n\r\n"
+            "A freestanding kernel, built from scratch.\r\n\r\n"
+            "This desktop, the file manager, mail, calendar, terminal,\r\n"
+            "even this note you're reading, all real, all running on that\r\n"
+            "kernel right now in your browser.\r\n";
         vfs_switch("ramfs"); /* switch first: vfs_write_file always targets the active backend, and fat's own write would just fail with no disk anyway */
         vfs_write_file("README.TXT", demo_readme, strlen(demo_readme));
         vfs_write_file("NOTES.TXT", demo_notes, strlen(demo_notes));

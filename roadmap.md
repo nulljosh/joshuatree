@@ -1794,3 +1794,9 @@ Real bug, flagged three separate times tonight (first in a live-QA session, logg
 **Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean (1037 refs).
 
 PATCH bump: 0.76.27 -> 0.76.28.
+
+## Notes demo content, trimmed and refocused (v0.76.31)
+
+Real content request, twice: the Notes app's seed demo text (`demo_notes` in `kernel.c`, ramfs-only content shown when there's no real disk to mount, e.g. inside the v86 browser demo) read like dry technical README prose ("Clone the repo and run make && ./check.sh for a real boot with a real FAT16 disk image"), not something a landing-page visitor skimming a note actually cares about. First pass swapped it for real project description but kept OS-nerd specifics ("i386", "no Linux, no libc") the owner found corny and unnecessary for a general audience. Trimmed to a short opener plus one real, concrete claim (the apps around it are genuinely running on this kernel right now), cutting every acronym/jargon term that needed explaining.
+
+PATCH bump: 0.76.30 -> 0.76.31.
