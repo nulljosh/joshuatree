@@ -1804,6 +1804,8 @@ PATCH bump: 0.76.30 -> 0.76.31.
 ## Queued for next session (Sep 2026, end-of-session, usage-limited)
 
 - Give the live demo container some real padding (owner's suggestion: ~8-15%) instead of full-bleed edge-to-edge, so it reads more like a framed demo than the whole page background.
+- Remove the redundant small "JOSHUA TREE vX.X.X" eyebrow line above the H1 (now redundant with the dynamic "Introducing X." headline itself).
+- Boot-loader screen background is brown/dark-red, owner wants plain black.
 
 ## editor_qa.py hardened for real this time (v0.76.32)
 
