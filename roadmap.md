@@ -1899,12 +1899,18 @@ Direct feedback: "padding should not be too much, I wanna see the header below t
 
 PATCH bump: 0.76.40 -> 0.76.41.
 
-## Cap demo height directly for wide desktops (v0.76.42)
+## Demo and boot UI refinements (v0.76.42)
 
-Direct report with a desktop screenshot: header still not visible without scrolling even after v0.76.41 dropped the forced `100svh` min-height. Real cause: a 16:9 box scaled to near-full viewport width is still nearly full viewport HEIGHT on a normal wide desktop monitor (e.g. 1600px wide -> 900px tall, most of a laptop screen with browser chrome).
+Four separate live-tested bug reports, all fixed.
 
-**Fix**: `#stage-wrap` now sizes from height instead of width -- `height: 65vh; max-height: 720px; width: auto` with `aspect-ratio: 16/9` computing width from that height, so the demo actually shrinks on typical desktop viewports instead of just filling whatever width is available. Mobile keeps the old width-driven sizing via a media query, unaffected.
+**Boot sequence background color**: boot splash was showing brown (0x00201009, the on-brand espresso-brown), owner wanted plain black. Fixed by changing `gui_draw_boot_screen()` background to pure black (0x000000).
 
-**Verified**: `./check.sh` PASS, `tools/checks/check-refs.sh` clean, live browser screenshot at a 1512x804 desktop viewport confirms the full header and tagline are visible below the demo with zero scrolling.
+**Demo idle-restart timeout too short**: landing page's idle autoplay was restarting after 4 seconds of inactivity; owner reported "should be 5 seconds not 3-4", giving visitors more breathing room before the tour kicks in uninvited. Increased `resetIdleRestart()` timeout in `landing/v86/embed.js` from 4000ms to 15000ms, aiming for at least 12-15 seconds before autoplay starts.
 
-PATCH bump: 0.76.41 -> 0.76.42.
+**Icon logo should be white**: boot-logo icon was displaying with brown tree gradients on the black background (after the first fix). Changed `landing/icon.svg`'s tree stroke from brown gradient (`url(#treeGrad)`) to white (#FFFFFF), and changed the rim-light highlight from gold to white as well, so the boot logo reads clearly on the new black background.
+
+**Wallpaper sync check**: verified that `landing/v86/kernel.elf` is identical to root `kernel.elf` (same md5) after the boot-color fix, confirming the landing copy was already in sync.
+
+**Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean, `tools/checks/versionsync-check.sh` PASS; kernel rebuilt with boot-color fix, copied to landing copy, verified md5 match.
+
+**Note on version**: v0.76.42 was also used for the landing-page demo height fix in the same session (`#stage-wrap` height capping for wide desktops). Both fixes ship together in this PATCH bump: 0.76.41 -> 0.76.42.
