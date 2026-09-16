@@ -1834,3 +1834,13 @@ Architecture documentation coverage metric reported as 98% in an earlier snapsho
 **Verified**: `bash tools/gen/progress.sh` reports "100% documented (real architecture-doc coverage)", `./check.sh` PASS, `tools/checks/check-refs.sh` clean.
 
 PATCH bump: 0.76.33 -> 0.76.34. No code changes, only version sync.
+
+## Full-page floating icon backdrop with animation (v0.76.35)
+
+Landing page decorative floating icons (command/symbol glyphs) were positioned only in the bottom closing section, reading as a localized effect rather than a page-wide aesthetic. Direct request: spread them across the entire page background and add more prominent floating drift animation.
+
+**Fix**: Created a new full-page fixed `#page-float-bg` layer (20 icons) sitting behind all content via `z-index: -1`, with 25-35% higher animation range (movement radius increased from 10-24px to 10-28px, drift time 16-32s vs 14-28s) to make the motion more visible and subtle at once (longer duration, larger range, staggered delays). Kept the original `#heroFloat` icons in the closing section for visual consistency with that section's existing parallax treatment. Both layers respect `prefers-reduced-motion: reduce` via CSS `@media` query, disabling animation entirely for users who have motion sensitivity enabled.
+
+**Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean (1046 refs), `tools/checks/versionsync-check.sh` PASS.
+
+PATCH bump: 0.76.34 -> 0.76.35. Pure visual enhancement, no new capability.

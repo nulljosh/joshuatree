@@ -225,6 +225,15 @@
   .progress-tooltip { position: absolute; background: var(--accent); color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; z-index: 10; opacity: 0; transition: opacity 0.2s; transform: translateX(-50%); }
   .progress-tooltip.visible { opacity: 1; }
 
+  /* v0.76.35: full-page floating icons backdrop, spread across the entire
+     page wallpaper area, not just the closing section. Gentle floating
+     drift animation via CSS keyframes with varied duration/delay per icon
+     for visual depth. Respects prefers-reduced-motion per house standards. */
+  .page-float-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; will-change: transform; }
+  .float { position: absolute; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 400; font-size: 30px; color: var(--accent); opacity: 0.08; white-space: nowrap; will-change: transform; animation: drift var(--dur, 18s) ease-in-out var(--delay, 0s) infinite alternate; }
+  @keyframes drift { to { transform: translate(var(--dx, 0px), var(--dy, 0px)); } }
+  @media (prefers-reduced-motion: reduce) { .float { animation: none; } }
+
   /* A field of real kernel fragments (shell commands, real addresses this
      kernel actually uses) drifting behind the closing line, the same
      treatment nimble's landing page uses for its own hero, now the
@@ -237,9 +246,7 @@
      run in), rAF-throttled so it costs nothing between frames. */
   .grain-zone { min-height: 60vh; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 80px 20px; }
   .hero-float { position: absolute; inset: -10% 0; z-index: 0; pointer-events: none; overflow: hidden; will-change: transform; }
-  .float { position: absolute; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 400; font-size: 30px; color: var(--accent); opacity: 0.13; white-space: nowrap; will-change: transform; animation: drift var(--dur, 18s) ease-in-out var(--delay, 0s) infinite alternate; }
-  @keyframes drift { to { transform: translate(var(--dx, 0px), var(--dy, 0px)); } }
-  @media (prefers-reduced-motion: reduce) { .float { animation: none; } .hero-float { transform: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .hero-float { transform: none !important; } }
   .closing { position: relative; z-index: 1; color: var(--sub); font-size: 18px; line-height: 1.65; max-width: 560px; text-align: center; margin: 0 auto; }
 
   footer { text-align: center; padding: 32px 20px 40px; color: var(--sub); font-size: 13px; background: var(--bg); border-top: 1px solid var(--border); }
@@ -254,6 +261,8 @@
 </style>
 </head>
 <body>
+
+<div class="page-float-bg" id="pageFloatBg" aria-hidden="true"></div>
 
 <a class="skip-link" href="#main">Skip to content</a>
 
@@ -364,8 +373,9 @@
   }).catch(function () { /* real fallback: no version shown rather than a stale guess */ });
 })();
 (function () {
-  var field = document.getElementById('heroFloat');
-  if (!field) return;
+  // v0.76.35: populate full-page floating icons backdrop
+  var pageField = document.getElementById('pageFloatBg');
+  var grainField = document.getElementById('heroFloat');
 
   var items = [
     '⌘', '⌫', '▣', '⬚', '◉', '⌗',
@@ -374,20 +384,43 @@
   ];
 
   var rand = function (a, b) { return a + Math.random() * (b - a); };
-  items.forEach(function (text) {
-    var el = document.createElement('span');
-    el.className = 'float';
-    el.textContent = text;
-    el.style.left = rand(2, 90).toFixed(1) + '%';
-    el.style.top = rand(2, 92).toFixed(1) + '%';
-    var dx = rand(10, 24) * (Math.random() < 0.5 ? -1 : 1);
-    var dy = rand(8, 18) * (Math.random() < 0.5 ? -1 : 1);
-    el.style.setProperty('--dx', dx.toFixed(1) + 'px');
-    el.style.setProperty('--dy', dy.toFixed(1) + 'px');
-    el.style.setProperty('--dur', rand(14, 28).toFixed(1) + 's');
-    el.style.setProperty('--delay', (-rand(0, 20)).toFixed(1) + 's');
-    field.appendChild(el);
-  });
+
+  // Populate page-wide background icons (20 icons spread across full viewport)
+  if (pageField) {
+    for (var i = 0; i < 20; i++) {
+      var text = items[i % items.length];
+      var el = document.createElement('span');
+      el.className = 'float';
+      el.textContent = text;
+      el.style.left = rand(1, 99).toFixed(1) + '%';
+      el.style.top = rand(1, 99).toFixed(1) + '%';
+      var dx = rand(10, 28) * (Math.random() < 0.5 ? -1 : 1);
+      var dy = rand(8, 22) * (Math.random() < 0.5 ? -1 : 1);
+      el.style.setProperty('--dx', dx.toFixed(1) + 'px');
+      el.style.setProperty('--dy', dy.toFixed(1) + 'px');
+      el.style.setProperty('--dur', rand(16, 32).toFixed(1) + 's');
+      el.style.setProperty('--delay', (-rand(0, 28)).toFixed(1) + 's');
+      pageField.appendChild(el);
+    }
+  }
+
+  // Populate grain-zone closing section icons (original placement, kept for compatibility)
+  if (grainField) {
+    items.forEach(function (text) {
+      var el = document.createElement('span');
+      el.className = 'float';
+      el.textContent = text;
+      el.style.left = rand(2, 90).toFixed(1) + '%';
+      el.style.top = rand(2, 92).toFixed(1) + '%';
+      var dx = rand(10, 24) * (Math.random() < 0.5 ? -1 : 1);
+      var dy = rand(8, 18) * (Math.random() < 0.5 ? -1 : 1);
+      el.style.setProperty('--dx', dx.toFixed(1) + 'px');
+      el.style.setProperty('--dy', dy.toFixed(1) + 'px');
+      el.style.setProperty('--dur', rand(14, 28).toFixed(1) + 's');
+      el.style.setProperty('--delay', (-rand(0, 20)).toFixed(1) + 's');
+      grainField.appendChild(el);
+    });
+  }
 })();
 
 // v51: reveal-on-scroll + one parallax layer, direct request ("add scroll
