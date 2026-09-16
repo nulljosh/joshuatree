@@ -1260,7 +1260,7 @@ if (typeof document !== "undefined") (function () {
     // v0.76.30: dynamic headline with typewriter animation.
     // Types out "Introducing <AppName>." when app opens, creating a real sense
     // of discovery rather than instant replacement. Lightweight effect, no external deps.
-    var h1Link = document.querySelector('h1 a');
+    var h1Link = document.querySelector('h1');
     if (h1Link) {
       typewriterEffect(h1Link, appName + '.');
     }
@@ -1268,7 +1268,7 @@ if (typeof document !== "undefined") (function () {
   function resetHeadline() {
     // Default headline when no tour is running or before the tour starts.
     // Uses typewriter effect for visual consistency.
-    var h1Link = document.querySelector('h1 a');
+    var h1Link = document.querySelector('h1');
     if (h1Link) {
       typewriterEffect(h1Link, 'Joshua Tree.');
     }

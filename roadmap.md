@@ -2049,3 +2049,13 @@ PATCH bump: 0.76.53 -> 0.76.54.
 ## Queued for next session
 
 - Apps folder wheel-scroll works (v0.77.1) but redraws the entire screen on every scroll tick instead of just the icon grid, the same class of bug the shared gui_prompt.h scoped-redraw helper fixed for text inputs earlier. Worth the same treatment: redraw only the Apps folder's own rect, not gui_draw_desktop(-1,-1,0,0) wholesale.
+
+## Releases link moved to H2, demo full viewport width (v0.76.55)
+
+Direct requests: the releases link should live on the H2/eyebrow, not the H1, and the demo should use the full viewport width, keeping the padding below it that separates it from the header.
+
+**Fix**: H1 is now plain text; the releases `<a>` wraps the H2's version/feature span instead. Fixed embed.js's dynamic-headline code (`updateHeadline`/`resetHeadline`), which selected `h1 a` to type into -- would have silently stopped animating once H1 lost its link -- now selects `h1` directly. `#demo-frame`'s side padding dropped to 0 (bottom padding kept), `#stage-wrap`'s own width-capping already handles the rest.
+
+**Verified**: live browser check confirms full-width demo and working H2 link, `tools/checks/check-refs.sh` clean.
+
+PATCH bump: 0.76.54 -> 0.76.55.

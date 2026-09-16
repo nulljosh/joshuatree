@@ -162,7 +162,7 @@
      instead of just filling whatever width is available. */
   /* v0.76.54: direct request, demo flush with the very top of the page,
      keeping the side/bottom padding that separates it from the header. */
-  #demo-frame { position: relative; width: 100%; padding: 0 8% 3%; z-index: 0; display: flex; align-items: center; justify-content: center; }
+  #demo-frame { position: relative; width: 100%; padding: 0 0 3%; z-index: 0; display: flex; align-items: center; justify-content: center; }
   /* v0.76.51: real bug, direct report ("demo cut off when window rescales")
      -- explicit height (65vh/max-height) combined with width:auto and a
      separate max-width:100% clamp fight each other whenever the viewport
@@ -339,8 +339,8 @@
          this pass. Headline swapped to Multi-Window, a real, CI-verified
          (`tools/checks/multiwindow-check.py`), actually-visible-on-load
          capability instead. -->
-<h1><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;">Introducing Joshua Tree.</a></h1>
-    <h2 class="eyebrow"><span id="kernel-version" class="kernel-version"></span></h2>
+<h1>Introducing Joshua Tree.</h1>
+    <h2 class="eyebrow"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
   </div>
 </header>
 
