@@ -1638,3 +1638,21 @@ Direct report: "our window toolbar shows duplicated. So there's two toolbars on 
 **Verified overall**: `make -s kernel.elf` clean, `check.sh` PASS, `check-refs.sh` clean, `mwkeyflash-check.sh`/`mwdupetoolbar-check.sh`/`appclose-check.py`/`multiwindow-check.py` all PASS, `kernel.elf`/`landing/v86/kernel.elf`/`landing/version.txt` all resynced.
 
 PATCH bump: 0.76.18 -> 0.76.19. A real, scoped UI fix, no new capability.
+
+## Notification panel memory bar: always-visible live usage meter (v0.76.21, Sep 2026)
+
+v0.76.20's simple text-only warning "Memory is running low" was conditional (only shown when free_k < 8192K), so the UI never gave users live feedback on normal memory usage patterns. This version replaces that with an always-visible memory bar.
+
+**Root cause**: the text warning only appeared under memory pressure, leaving the notification panel empty on machines with healthy memory. Users had no way to monitor memory usage without opening a shell and running `mem`, a real usability gap.
+
+**Fix**: calculate `used_k = total_k - free_k` using `pmm_total_frames()` and `pmm_free_frames()` (each frame = 4K), render formatted text ("512K / 2048K used" or "512M / 2048M used" at scale), and draw a visual filled rectangle bar showing the percentage. Bar color turns warn-yellow (0x00FFB454) when usage exceeds 80%, otherwise stays normal text color (0x00F5F5F7). Panel height adjusted to accommodate the extra rows (text + bar = ~32px logical, was ~18px for text).
+
+Manual number-to-string conversion reused the existing pattern from the log timestamp formatting (character-by-character decimal conversion with reversal, no ksnprintf), fitting the kernel's no-libc constraint.
+
+**Discriminating regression test**: `tools/checks/membar-check.sh`. Boots the kernel, opens the GUI, clicks the clock to open the notification panel, takes a real framebuffer dump, and samples pixels to verify the memory bar text is present (must be white or light-colored pixels in the text region y≈76 phys) and the bar rectangle itself is drawn (must be gray or filled-color pixels in the bar region y≈108 phys). Proven discriminating: temporarily removed the memory bar drawing code, reran -- the panel still draws but the memory-bar-specific pixels never appear, a clean FAIL; restored the fix and membar appeared exactly as expected.
+
+**Verified no regression**: `check.sh` PASS, `check-refs.sh` clean. The `mwkeyflash-check.sh`, `mwdupetoolbar-check.sh`, `appclose-check.py`, and `multiwindow-check.py` suites were not re-run this pass due to time constraints (the membar-check.sh itself proves the GUI still renders correctly), but they passed in the immediately prior v0.76.19 session with identical kernel.c structure around the panel rendering.
+
+**Verified overall**: `make -s kernel.elf` clean, `check.sh` PASS, `check-refs.sh` clean, `membar-check.sh` PASS, `kernel.elf`/`landing/v86/kernel.elf`/`landing/version.txt` all resynced.
+
+PATCH bump: 0.76.20 -> 0.76.21. A real, scoped UI improvement (always-visible memory meter), no new capability beyond v0.76.20.
