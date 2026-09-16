@@ -144,7 +144,7 @@
      scales down for mobile viewports. The demo box stays 16:9 within this
      padded container. */
   #demo-frame { background: var(--bg); position: relative; width: 100%; padding: 5% 10%; z-index: 0; display: flex; align-items: center; justify-content: center; min-height: 100svh; }
-  #stage-wrap { background: #000; position: relative; width: 100%; aspect-ratio: 16 / 9; z-index: 0; }
+  #stage-wrap { background: #000; position: relative; width: 100%; aspect-ratio: 16 / 9; z-index: 0; border-radius: 3%; overflow: hidden; }
   @media (max-width: 600px) { #demo-frame { padding: 3% 5%; } }
   /* v52.5: real boot moment instead of a blank black flash, direct
      request ("bridge the gap between css/html and the actual demo

@@ -1854,3 +1854,15 @@ Every "faint header" report all session (~20 by the owner's own count) traced to
 **Verified**: `tools/checks/check-refs.sh` clean, `tools/checks/versionsync-check.sh` PASS, live repro before/after via a local server + real scroll position matching the owner's screenshot.
 
 PATCH bump: 0.76.35 -> 0.76.36.
+
+## Demo corner radius + device-frame chrome (v0.76.37)
+
+Direct request: minor rounded corners on the live demo container. Added `border-radius: 3%` + `overflow: hidden` on `#stage-wrap` (doesn't affect click math, canvas geometry read via `getBoundingClientRect` is unchanged by a visual clip on the wrapper).
+
+**Verified**: `tools/checks/check-refs.sh` clean.
+
+PATCH bump: 0.76.36 -> 0.76.37.
+
+## Queued for next session
+
+- Device-frame chrome for the live demo matched to visitor user-agent (iPhone/Android/Mac window/Windows window), per this repo's own CLAUDE.md "Landing pages" house standard already applied fleet-wide (see nimble's landing page as the reference). Real feature build, not a tweak, deferred given usage constraints tonight.
