@@ -720,25 +720,32 @@ if (typeof document !== "undefined") (function () {
   // reading as a marathon. Reconciled both asks by keeping every app but
   // cutting DWELL_MS well below, so the whole loop is still a quick,
   // repeating sample rather than either extreme.
+  // Mail and Calendar pulled out to named vars (not TOUR_APPS entries)
+  // so tourLoop can interleave them with the multi-window rounds instead
+  // of running the whole array as one block after both rounds -- direct
+  // feedback that leading with pure window-management read as "not much
+  // interaction". TOUR_APPS keeps only the genuinely single-window-only
+  // apps (Notes/Terminal/Chat; gui_multiwin_supported in kernel.c is
+  // false for all three).
+  var MAIL_APP = { name: 'Mail', slot: 2, script: [
+    { type: 'keys', text: 'c', speed: 200 },
+    { type: 'wait', ms: 500 },
+    { type: 'keys', text: 'demo@joshuatree.os\n', speed: 55 },
+    { type: 'wait', ms: 350 },
+    { type: 'keys', text: 'A real OS, from scratch.\n', speed: 55 },
+    { type: 'wait', ms: 350 },
+    { type: 'keys', text: 'Every field here really writes to disk.\n', speed: 55 }
+  ] };
+  var CALENDAR_APP = { name: 'Calendar', slot: 3, script: [
+    { type: 'keys', text: 'dd', speed: 400 }, // step forward two months, a real render each time
+    { type: 'wait', ms: 400 },
+    { type: 'keys', text: ']]', speed: 400 }, // move the day cursor
+    { type: 'wait', ms: 400 },
+    { type: 'keys', text: '\n', speed: 200 }, // opens cal_day_view for the selected day
+    { type: 'wait', ms: 500 },
+    { type: 'keys', text: 'Shipped by an AI, for real.\n', speed: 55 } // saves and returns to the month view
+  ] };
   var TOUR_APPS = [
-    { name: 'Mail', slot: 2, script: [
-      { type: 'keys', text: 'c', speed: 200 },
-      { type: 'wait', ms: 500 },
-      { type: 'keys', text: 'demo@joshuatree.os\n', speed: 55 },
-      { type: 'wait', ms: 350 },
-      { type: 'keys', text: 'A real OS, from scratch.\n', speed: 55 },
-      { type: 'wait', ms: 350 },
-      { type: 'keys', text: 'Every field here really writes to disk.\n', speed: 55 }
-    ] },
-    { name: 'Calendar', slot: 3, script: [
-      { type: 'keys', text: 'dd', speed: 400 }, // step forward two months, a real render each time
-      { type: 'wait', ms: 400 },
-      { type: 'keys', text: ']]', speed: 400 }, // move the day cursor
-      { type: 'wait', ms: 400 },
-      { type: 'keys', text: '\n', speed: 200 }, // opens cal_day_view for the selected day
-      { type: 'wait', ms: 500 },
-      { type: 'keys', text: 'Shipped by an AI, for real.\n', speed: 55 } // saves and returns to the month view
-    ] },
     { name: 'Notes', slot: 4, script: [
       { type: 'keys', text: 'A real OS, from scratch. Every keystroke here is real.', speed: 55 }
     ] },
@@ -952,7 +959,33 @@ if (typeof document !== "undefined") (function () {
   // for this file's existing '\n' (Enter) sends.
   var LOGO_X = 16, LOGO_Y = 13; // gui_draw_logo(16, GUI_MENUBAR_H/2+2, ...); logo_here's own hit rect is x in [4,28], y < GUI_MENUBAR_H
   var SETTINGS_MENU_X = 94, SETTINGS_MENU_Y = 111; // Apple-menu row 3 ("Settings"): y starts at GUI_MENUBAR_H+GUI_MENU_PAD_V=34, three prior 22px rows -> [100,122)
-  var WALLPAPER_ROW_X = 300, WALLPAPER_ROW_Y = 148; // Settings row 2 ("Wallpaper"), SETTINGS_ROWS_Y[2]
+  // v0.76.13: direct report ("landing page still shows no satellite
+  // wallpaper"), root-caused for real this time -- not the CORS proxy
+  // (already proven live, see roadmap.md's live-smoke entry), this
+  // function itself. It was written when kernel.c's own wall_theme
+  // defaulted to WALL_WARM(1): "a tap always steps forward" through
+  // Photo(0)->Warm(1)->Cool(2)->Raw(3)->Sat(4)->wraps to Photo, so 3
+  // clicks from Warm correctly landed on Satellite. v0.76.7 flipped the
+  // real kernel default to WALL_SAT(4) (confirmed directly in kernel.c)
+  // -- this function's own 3-click loop was never updated to match, so
+  // every single tour lap since v0.76.7 shipped has been starting
+  // already ON Satellite and clicking 3 times PAST it: 4->0(Photo)->
+  // 1(Warm)->2(Cool), leaving the real desktop on the Cool map theme, not
+  // Satellite, every lap, this whole time. A real, silent regression a
+  // kernel-side default change caused in landing-side script, not caught
+  // because no test ever asserted what theme the tour's OWN clicking
+  // leaves the desktop on afterward.
+  //
+  // The fix is to stop clicking the theme forward at all: kernel.c's own
+  // gui_run loop already calls wall_fetch()/wall_apply() automatically on
+  // its very first hlt-loop tick once geo_have is true (right after the
+  // same weather_fetch() this loop already runs unconditionally on
+  // first pass), so as of the real, live CORS proxy fix, Satellite tiles
+  // now load on their own within seconds of boot with ZERO settings
+  // interaction required. This step now just opens Settings long enough
+  // to show the Wallpaper row genuinely already reading "Satellite" (real
+  // proof the automatic default+fetch worked), then closes -- it no
+  // longer touches the theme at all.
   async function demoSatelliteWallpaper(gen) {
     if (focused || tourGen !== gen || !adaptersReady) return;
     emulator.mouse_adapter.emu_enabled = true;
@@ -962,17 +995,7 @@ if (typeof document !== "undefined") (function () {
     await sleep(300);
     await clickAt(SETTINGS_MENU_X, SETTINGS_MENU_Y); // selects "Settings"
     if (focused || tourGen !== gen) return;
-    await sleep(700); // let the Settings screen draw
-    // Default theme is Warm (1); a tap always steps forward (kernel.c's own
-    // "tap always steps forward" convention, shared with dock size), so
-    // three clicks reach Cool(2) -> Raw(3) -> Satellite(4).
-    for (var s = 0; s < 3; s++) {
-      if (focused || tourGen !== gen) return;
-      await clickAt(WALLPAPER_ROW_X, WALLPAPER_ROW_Y);
-      await sleep(500);
-    }
-    if (focused || tourGen !== gen) return;
-    await sleep(2000); // real time for wall_fetch's own network round trip to actually land before Settings closes and the desktop redraws
+    await sleep(2000); // real dwell showing the pane -- long enough to actually read the Wallpaper row's real live label, no clicks needed since Satellite is the real default now
     if (focused || tourGen !== gen) return;
     if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80); // Escape closes Settings
     await sleep(800);
@@ -997,86 +1020,84 @@ if (typeof document !== "undefined") (function () {
     }
     return false;
   }
+  // Extracted from the old flat sequential loop (v71-v0.76.11 shape):
+  // open a single-window app, run its own script, dwell, close via its
+  // own real X. Still the only shape Notes/Terminal/Chat support (not
+  // gui_multiwin_supported in kernel.c), and still used for Mail/Calendar
+  // solo below, just no longer inline in a for-loop so it can be
+  // interleaved with the multi-window rounds instead of run as one block
+  // after them.
+  async function runSoloApp(gen, app) {
+    if (focused || tourGen !== gen || !adaptersReady) return;
+    var pos = dockSlotPos(app.slot);
+    // Drive the emulator's own input even though the visitor hasn't
+    // focused: both adapters are gated for real people, not for us. v71
+    // real bug found here: libv86.js's keyboard adapter gates EVERY key
+    // it sends, including programmatic keyboard_send_text calls, on the
+    // same `emu_enabled` flag embed.js sets false on "emulator-ready" and
+    // only ever true inside focusIn(). The tour already force-enables
+    // mouse_adapter.emu_enabled but never did the keyboard equivalent, so
+    // every scripted key the tour ever sent while unfocused was silently
+    // swallowed at the source. Fixed by enabling both here.
+    emulator.mouse_adapter.emu_enabled = true;
+    emulator.keyboard_adapter.emu_enabled = true;
+    await clickAt(pos[0], pos[1]); // opens the app, a real dock click
+    if (focused || tourGen !== gen) return;
+    var dwellStart = Date.now();
+    await sleep(600); // let the app's first frame draw before typing into it
+    if (focused || tourGen !== gen) return;
+    await runScript(app.script, gen);
+    if (focused || tourGen !== gen) return;
+    var remaining = DWELL_MS - (Date.now() - dwellStart);
+    if (remaining > 0) await sleep(remaining);
+    if (focused || tourGen !== gen) return;
+    await clickAt(CLOSE_X, CLOSE_Y); // closes via the app's own real X, never the dock tile that opened it
+    if (focused || tourGen !== gen) return;
+    await sleep(1200); // a beat before the next app opens, reads as a real transition not a jump-cut
+  }
   async function tourLoop(gen) {
     tourRunning = true;
     while (!focused && tourGen === gen) {
-      // Real multi-window rounds first, right after boot: this is the
-      // actual claim the landing header makes ("Introducing
-      // Multi-Window."), so it leads the tour instead of being buried
-      // after five single-window apps. Two rounds cover all 3 dock apps
-      // this kernel can genuinely multi-window (Files/Weather/Reminders);
-      // Mail and Calendar are real multiwin apps too but get their turn
-      // solo below, in TOUR_APPS, since the kernel's own 2-window cap is
-      // already spent on these two rounds.
+      // Direct report (Sep 2026): "the demo doesn't show much application
+      // interaction anymore -- it's too focused on the multi window."
+      // Real: leading with both multi-window rounds back to back (2
+      // rounds x 5 window-management clicks each, zero typed content in
+      // the Files+Weather round since neither app takes keyboard input)
+      // put ~13 real seconds of pure window-shuffling in front of any
+      // actual typing, every single lap. Fixed by interleaving instead of
+      // blocking: a real interactive solo app leads, then a multi-window
+      // round, then another solo app, then the second (quieter) round,
+      // then the rest. Real content is never more than one scene away.
       if (focused || tourGen !== gen || !adaptersReady) return;
-      await multiWindowRound(gen, MW_FILES, MW_WEATHER);
+      await runSoloApp(gen, MAIL_APP);
+      if (focused || tourGen !== gen) return;
+      await multiWindowRound(gen, MW_FILES, MW_REMINDERS); // has real typed interaction (Reminders)
       if (focused || tourGen !== gen) return;
       await sleep(1500);
       if (focused || tourGen !== gen) return;
-      await multiWindowRound(gen, MW_FILES, MW_REMINDERS);
+      await runSoloApp(gen, CALENDAR_APP);
+      if (focused || tourGen !== gen) return;
+      await multiWindowRound(gen, MW_FILES, MW_WEATHER); // both static viewers, no typed interaction -- kept short, see multiWindowRound's own dwell timings
       if (focused || tourGen !== gen) return;
       await sleep(1500);
       for (var i = 0; i < TOUR_APPS.length; i++) {
         if (focused || tourGen !== gen || !adaptersReady) return;
-        var app = TOUR_APPS[i];
-        var pos = dockSlotPos(app.slot);
-        // Drive the emulator's own input even though the visitor hasn't
-        // focused: both adapters are gated for real people, not for us.
-        // v71 real bug found here, separate from the v69 one above and
-        // pre-dating this rework (present since v51, when typed-text tour
-        // steps were first added): libv86.js's keyboard adapter gates
-        // EVERY key it sends, including the programmatic
-        // simulate_char/simulate_press path keyboard_send_text calls
-        // (read directly out of libv86.js: `g()` calls `b(t)`, and `b(t)`
-        // returns false whenever `!x.emu_enabled`), on the same
-        // `emu_enabled` flag embed.js sets false on "emulator-ready" and
-        // only ever set true inside focusIn(). The tour already force-
-        // enables mouse_adapter.emu_enabled (the line below, present
-        // since v44) but never did the keyboard equivalent, so every
-        // scripted key the tour ever sent while unfocused was silently
-        // swallowed at the source, not a rendering or timing issue.
-        // Invisible until now because Terminal's static "Joshua Tree
-        // terminal. Type help." banner prints unconditionally on open
-        // (real content, but not evidence typed input landed) and Notes/
-        // Chat's typed text was never actually screenshotted mid-dwell in
-        // any prior pass. Confirmed two ways: `tracewatch.mjs` (a
-        // throwaway QA script built for this pass) screenshotted the
-        // instant after every `keyboard_send_text` call resolved and
-        // showed zero visible change across 8 real sends into Mail and
-        // Calendar; a second probe (`probe.mjs`) sending the identical
-        // 'c' key through a REAL focus tap first (`focused=true`, the
-        // same path a real visitor takes) opened Mail's real compose
-        // prompt immediately. Fixed by enabling both adapters here, the
-        // real fix, not a workaround: the tour is deliberately driving
-        // input as if it were a focused user, so it should hold the same
-        // two flags a focused user's first click sets.
-        emulator.mouse_adapter.emu_enabled = true;
-        emulator.keyboard_adapter.emu_enabled = true;
-        await clickAt(pos[0], pos[1]); // opens app i, a real dock click
-        if (focused || tourGen !== gen) return;
-        var dwellStart = Date.now();
-        await sleep(600); // let the app's first frame draw before typing into it
-        if (focused || tourGen !== gen) return;
-        await runScript(app.script, gen);
-        if (focused || tourGen !== gen) return;
-        var remaining = DWELL_MS - (Date.now() - dwellStart);
-        if (remaining > 0) await sleep(remaining);
-        if (focused || tourGen !== gen) return;
-        await clickAt(CLOSE_X, CLOSE_Y); // closes via the app's own real X, never the dock tile that opened it
-        if (focused || tourGen !== gen) return;
-        await sleep(1200); // a beat before the next app opens, reads as a real transition not a jump-cut
+        await runSoloApp(gen, TOUR_APPS[i]);
       }
       // Every app already closed itself before the next opened, the only
-      // real shape this kernel's single-window model supports (see the
-      // v71 header comment above), so the loop is already at "everything
-      // closed"; a slightly longer pause here just marks it as a
-      // deliberate loop boundary rather than app #9.
+      // real shape this kernel's single-window model supports (see
+      // runSoloApp above), so the loop is already at "everything closed";
+      // a slightly longer pause here just marks it as a deliberate loop
+      // boundary rather than app #9.
       await sleep(2500);
       if (focused || tourGen !== gen) return;
       // v0.75: show off the Satellite wallpaper theme once per lap, right
-      // before the reboot below wipes it back to the WALL_WARM default
-      // (reset_memory() zeroes RAM, ramfs' persisted SETTINGS.TXT
-      // included, so this genuinely has to run every lap, not just once).
+      // before the reboot below wipes state back to kernel.c's own
+      // compiled-in default (reset_memory() zeroes RAM, ramfs' persisted
+      // SETTINGS.TXT included, so this genuinely has to run every lap,
+      // not just once). That default has been WALL_SAT since v0.76.7 --
+      // see this function's own header comment for the real v0.76.13 fix
+      // to a regression that default change caused here.
       await demoSatelliteWallpaper(gen);
       if (focused || tourGen !== gen) return;
       if (focused || tourGen !== gen) return;
