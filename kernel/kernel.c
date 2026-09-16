@@ -3640,9 +3640,30 @@ static void term_puts(const char *s){ while (*s) term_putc(*s++); }
    (count, then draw from the right offset) keeps this one source of truth
    for where a line breaks, instead of a separate wrap calculation that
    could disagree with what actually gets drawn. */
-static void term_render(const char *input, unsigned int input_len){
+#define TERM_CONTENT_TOP 40
+
+/* v0.76.11: direct report, still reproducing after v0.76.10's Notes fix
+   ("every keystroke causes page to re-render") -- that fix only touched
+   editor.h's own chrome/text split; term_render here had the identical
+   shape (a full window_clear + titlebar redraw on every single
+   keystroke, not just Notes' one dirty-flag flip) and was never fixed.
+   Terminal's titlebar text never changes (no dirty-flag toggle Notes
+   needed), so this is simpler: chrome draws exactly once, in
+   term_draw_chrome() below, called before the loop in
+   gui_launch_terminal, never again per keystroke. */
+static void term_draw_chrome(void){
+    serial_puts("termchrome\n"); /* discriminating marker for tools/checks/termchatflash-check.sh, same convention editor.h's "editorchrome" already established */
     window_clear(0x001A1512); /* warm near-black, the Mojave palette's dark end, not a cold pure black */
     gui_draw_app_titlebar("Terminal");
+}
+
+static void term_render(const char *input, unsigned int input_len){
+    /* Content-only redraw now, scoped below the titlebar band
+       (TERM_CONTENT_TOP=40; every real content y-coordinate below in
+       this function is already >= 44, confirmed by reading them, so this
+       clears exactly the region that can change and nothing the chrome
+       occupies). */
+    window_rect(0, TERM_CONTENT_TOP, (int)window_width(), (int)window_height() - TERM_CONTENT_TOP, 0x001A1512);
 
     unsigned int starts[TERM_ROWS + 1];
     unsigned int total_lines = 0, col = 0, line_start = 0;
@@ -3689,6 +3710,7 @@ static void gui_launch_terminal(void){
     static char out[4096];
     unsigned int input_len = 0;
 
+    term_draw_chrome(); /* once per open, never again per keystroke -- see term_draw_chrome's own comment */
     if (term_len == 0) term_puts("Joshua Tree terminal. Type help.\n");
     term_render(input, input_len);
 

@@ -754,8 +754,34 @@ if (typeof document !== "undefined") (function () {
       { type: 'wait', ms: 900 },
       { type: 'keys', text: 'uptime\n', speed: 55 }
     ] },
+    // v0.76.11: real bug found and fixed here, present since v51 and never
+    // actually looked at on screen (per the v71 rework's own header
+    // comment: "Notes/Chat's typed text was never actually screenshotted
+    // mid-dwell in any prior pass"). Sending the raw string straight into
+    // Chat's OUTER inbox view (no leading 'n') let two of its own letters
+    // get read as real commands mid-string: the kernel's gui_launch_chat_app
+    // only recognizes bare 'n' (compose) and 'c' (clear history) at that
+    // screen -- "what CAN you do?" hits 'c' first (chat_clear(), a real,
+    // unintended side effect on every single tour lap) then immediately
+    // 'n' (enters the compose prompt), silently swallowing every character
+    // typed after that point ("you do?") as if it were a real draft, not
+    // display text. Confirmed live: a real screenshot after this exact
+    // script showed the compose prompt open with "you do" typed into it,
+    // never the intended on-screen text. Real fix: press 'n' FIRST (a
+    // clean, deliberate entry into the compose prompt, where every
+    // character just appends to the buffer -- no collision risk once
+    // inside it), type the same real sentence, then a real Escape (not
+    // Enter -- preserving the original "no \n" intent: this embed has no
+    // NIC route to a real LLM host, so completing an actual send was
+    // never safe to attempt) cancels back to the outer inbox view, the
+    // same clean state runSoloApp's own single CLOSE_X click already
+    // expects to close from.
     { name: 'Chat', slot: 7, script: [
-      { type: 'keys', text: 'what can you do?', speed: 55 } // no \n: see the long-standing no-NIC-in-this-embed note above, unchanged since v51
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: 'what can you do?', speed: 55 },
+      { type: 'wait', ms: 500 },
+      { type: 'raw', codes: [27], speed: 80 } // Escape cancels back to the outer inbox view
     ] }
   ];
   // v0.76.12: the real multi-window demo. Files (slot 1) and Weather
@@ -805,6 +831,12 @@ if (typeof document !== "undefined") (function () {
       var step = script[i];
       if (step.type === "wait") await sleep(step.ms);
       else if (step.type === "keys" && emulator.keyboard_send_text) await emulator.keyboard_send_text(step.text, step.speed || 55);
+      // v0.76.11: a raw keyCode send, the same path demoSatelliteWallpaper's
+      // own Escape send already uses (simulate_char's tables have no entry
+      // for Escape, so the usual "keys" step would silently no-op for it).
+      // Added for Chat's own fix below: cancelling out of its compose
+      // prompt with a real Escape, not a typed character.
+      else if (step.type === "raw" && emulator.keyboard_send_keys) await emulator.keyboard_send_keys(step.codes, step.speed || 80);
     }
   }
   // v0.76.12: real two-window demo, the exact click sequence

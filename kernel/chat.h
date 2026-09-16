@@ -211,13 +211,19 @@ static int chat_send(const char *user_msg, char *answer, unsigned int answer_cap
    200-byte shell-command cap / GUI popup's own 200-byte cap: this one
    accepts up to CHAT_CONTENT_MAX-1 characters, matching the history
    buffer it feeds. */
+/* v0.76.11: direct report, "every keystroke causes page to re-render"
+   still reproducing after v0.76.10's Notes-only fix. This loop had the
+   identical full-window_clear-plus-titlebar-on-every-keystroke shape;
+   the caller (gui_launch_chat_app) already draws the "Chat" titlebar
+   before entering here and it never changes while this prompt is open,
+   so this now only clears/redraws its own content band (the prompt text
+   and input box), matching term_render's own fix in kernel.c. */
 static int chat_prompt_line(const char *prompt, char *out, int max) {
     unsigned int n = 0;
     out[0] = 0;
     mouse_click_edge_sync();
     for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Chat");
+        window_rect(0, 40, (int)window_width(), (int)window_height() - 40, GUI_BG);
         font_draw_string(prompt, 20, 52, 0x0075726E, -1);
         window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
         out[n] = 0;
@@ -241,9 +247,11 @@ static int chat_prompt_line(const char *prompt, char *out, int max) {
    esc closes. */
 static void gui_launch_chat_app(void) {
     chat_load();
+    serial_puts("chatchrome\n"); /* discriminating marker for tools/checks/termchatflash-check.sh, same convention editor.h's "editorchrome" already established */
+    window_clear(GUI_BG);
+    gui_draw_app_titlebar("Chat"); /* v0.76.11: drawn once, not every keystroke -- see chat_prompt_line's own comment */
     for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Chat");
+        window_rect(0, 40, (int)window_width(), (int)window_height() - 40, GUI_BG);
         font_draw_string("n sends a message   c clears history   esc closes", 20, 52, 0x00807468, -1);
 
         int y = 76;
@@ -290,8 +298,7 @@ static void gui_launch_chat_app(void) {
             if (!chat_prompt_line("type a message (enter to send, esc to cancel):", msg, sizeof(msg))) continue;
             if (msg[0] == 0) continue;
 
-            window_clear(GUI_BG);
-            gui_draw_app_titlebar("Chat");
+            window_rect(0, 40, (int)window_width(), (int)window_height() - 40, GUI_BG);
             char asking[LLM_MODEL_MAX + LLM_HOST_MAX + 32];
             { int p = 0; const char *a1 = "asking "; while (*a1) asking[p++] = *a1++;
               const char *m = llm_model; while (*m && p < (int)sizeof(asking) - 2) asking[p++] = *m++;
@@ -301,8 +308,7 @@ static void gui_launch_chat_app(void) {
 
             static char answer[4096]; /* real growth from the old 2048-byte cap */
             if (!chat_send(msg, answer, sizeof(answer))) {
-                window_clear(GUI_BG);
-                gui_draw_app_titlebar("Chat");
+                window_rect(0, 40, (int)window_width(), (int)window_height() - 40, GUI_BG);
                 font_draw_string("FAIL (couldn't reach the LLM host, or no reply)", 20, 76, 0x001C1C1E, -1);
                 gui_wait_close();
             }

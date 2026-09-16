@@ -101,8 +101,12 @@ jobs:
         run: ./tools/checks/settingsclick-check.sh
       - name: Wallpaper defaults to Satellite on a fresh boot
         run: ./tools/checks/walldefault-check.sh
+      - name: Idle tour's Settings visit doesn't change the wallpaper theme
+        run: python3 ./tools/checks/walldemo-regression-check.py
       - name: Notes editor chrome doesn't redraw on plain keystrokes
         run: ./tools/checks/editorflash-check.sh
+      - name: Terminal and Chat chrome don't redraw on plain keystrokes
+        run: ./tools/checks/termchatflash-check.sh
       - name: JPEG decoder, host harness
         run: ./tools/checks/jpeg-host-check.sh
       - name: JPEG decoder, in-kernel
