@@ -76,7 +76,7 @@ def key(qcode):
 test_results = []
 
 # Test 1: Reminders (in dock, easiest to access)
-REMINDERS_SLOT = 3
+REMINDERS_SLOT = 4
 centre = SLOT0_X + REMINDERS_SLOT * PITCH + DOCK_ICON // 2
 move(centre, ICON_ROW_Y); time.sleep(0.3)
 click(); time.sleep(0.8)

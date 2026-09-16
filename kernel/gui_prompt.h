@@ -20,13 +20,13 @@ static int gui_prompt_line_input(const char *title, const char *prompt, char *ou
     window_clear(GUI_BG);
     gui_draw_app_titlebar(title);
     font_draw_string(prompt, 20, 52, 0x0075726E, -1);
-    serial_puts("guiprompt\n"); /* discriminating marker for regression tests */
 
     for (;;) {
         /* Redraw only the content area (text box and typed text), not the chrome. */
         window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
         out[n] = 0;
         font_draw_string(out, 24, 78, 0x001C1C1E, -1);
+        serial_puts("guiprompt\n"); /* discriminating marker for regression tests */
         int k = get_key_or_click();
         if (k == KEY_ESC || k == KEY_CLICK) return 0;
         if (k == KEY_ENTER) break;
@@ -50,13 +50,13 @@ static int gui_prompt_line_input_with_date(const char *title, const char *date_s
     gui_draw_app_titlebar(title);
     font_draw_string(date_str, 20, 52, 0x0075726E, -1);
     font_draw_string(prompt, 20, 72, 0x0075726E, -1);
-    serial_puts("guiprompt\n"); /* discriminating marker for regression tests */
 
     for (;;) {
         /* Redraw only the content area (text box and typed text), not the chrome. */
         window_rect(20, 96, (int)window_width() - 40, 20, 0x00FFFFFF);
         out[n] = 0;
         font_draw_string(out, 24, 98, 0x001C1C1E, -1);
+        serial_puts("guiprompt\n"); /* discriminating marker for regression tests */
         int k = get_key_or_click();
         if (k == KEY_ESC || k == KEY_CLICK) return 0;
         if (k == KEY_ENTER) break;
