@@ -112,8 +112,28 @@ class Machine:
         return int.from_bytes(self.memory(symbol, 4), 'little')
 
     def expect(self, expected):
-        length = self.integer('editor_length')
-        actual = self.memory('editor_buffer', length).decode()
+        # v0.76.27: the buffer read can race the keyboard event that
+        # produced `expected` on a slower/CI runner -- proven real by two
+        # separate failures on two separate assertions in this same file
+        # (a missing trailing '\n', then later a dropped space), both
+        # passing locally every time. Same "settle time varies by
+        # environment" shape appclose-check.py's own v0.76.18 flake fix
+        # already established. Poll for the buffer to match before
+        # asserting, instead of patching each of this file's 9 call
+        # sites individually -- fix it once, where every caller routes
+        # through.
+        target_len = len(expected.encode())
+        actual = None
+        for attempt in range(20):
+            length = self.integer('editor_length')
+            if length == target_len:
+                actual = self.memory('editor_buffer', length).decode()
+                if actual == expected:
+                    return
+            time.sleep(0.1)
+        if actual is None:
+            length = self.integer('editor_length')
+            actual = self.memory('editor_buffer', length).decode()
         assert actual == expected, (actual, expected)
 
     def saved(self):
@@ -179,16 +199,6 @@ try:
     machine.click()
     machine.type('Hello, Joshua Tree!\nBeautiful type.\n')
     expected = 'Hello, Joshua Tree!\nBeautiful type.\n'
-    # v0.76.26: the buffer read can race the final keystroke's own
-    # processing on a slower/CI runner (same "settle time varies by
-    # environment" shape appclose-check.py's own v0.76.18 flake fix
-    # already established) -- observed locally as a clean PASS but failed
-    # on GitHub's runner missing exactly the trailing '\n'. Poll instead
-    # of asserting once immediately after typing.
-    for attempt in range(20):
-        if machine.integer('editor_length') == len(expected.encode()):
-            break
-        time.sleep(0.1)
     machine.expect(expected)
     machine.key('backspace')
     machine.key('left')
