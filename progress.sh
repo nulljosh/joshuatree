@@ -169,8 +169,6 @@ DOT_TARGET = 10
 dot_step = max(1, (n - 1) // (DOT_TARGET - 1)) if n > 1 else 1
 dot_idx = sorted(set(list(range(0, n, dot_step)) + [n - 1]))
 dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/>' for i in dot_idx)
-last_x = xf(n - 1)
-area_points = f"{pad_l},{pad_t+plot_h} {points_attr} {last_x},{pad_t+plot_h}"
 half_v = max_v // 2
 
 # x-axis: real calendar dates, deduplicated (many commits share a day),
@@ -223,9 +221,6 @@ svg.append('''<style>
   }
   text { font-family: -apple-system, Helvetica, Arial, sans-serif; }
 </style>''')
-svg.append('<defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1">'
-            '<stop offset="0%" stop-color="var(--line)" stop-opacity="0.35"/>'
-            '<stop offset="100%" stop-color="var(--line)" stop-opacity="0"/></linearGradient></defs>')
 svg.append('<rect width="100%" height="100%" fill="var(--bg)"/>')
 # Single legend row, one series. The old second dashed line (doc
 # coverage over time) got cut entirely, third real attempt at this:
@@ -246,7 +241,6 @@ svg.append(f'<line x1="{pad_l}" y1="{pad_t+plot_h}" x2="{pad_l+plot_w}" y2="{pad
 svg.append(f'<text x="2" y="{pad_t+plot_h+3}" font-size="9" fill="var(--muted)">0</text>')
 # Left axis title, rotated, its own color matching the solid line
 svg.append(f'<text x="10" y="{pad_t+plot_h//2}" font-size="8" fill="var(--line)" text-anchor="middle" transform="rotate(-90 10 {pad_t+plot_h//2})">Lines of code</text>')
-svg.append(f'<polygon points="{area_points}" fill="url(#area)"/>')
 svg.append(f'<polyline points="{points_attr}" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>')
 svg.append(dots)
 for i in shown:
