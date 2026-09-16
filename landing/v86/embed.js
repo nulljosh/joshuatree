@@ -231,6 +231,27 @@ if (typeof document !== "undefined") (function () {
   });
 
   var focused = false;
+  var idleRestartTimeout = 0;
+  function resetIdleRestart() {
+    if (idleRestartTimeout) clearTimeout(idleRestartTimeout);
+    if (!focused) return; // only auto-reset if visitor has taken control
+    idleRestartTimeout = setTimeout(async function () {
+      // Retail-kiosk style: after 4 seconds of inactivity, close windows and restart the tour
+      if (focused && !tourRunning) { // only if still focused and not already running the tour
+        // Trigger a soft reset: close any open windows by rebooting the emulator
+        // then restart the tour
+        if (bootLogo) bootLogo.hidden = false;
+        if (!kernelElfBuffer) { try { kernelElfBuffer = await kernelElfFetch; } catch (e) {} }
+        if (emulator.v86 && emulator.v86.cpu && emulator.v86.cpu.reset_memory) emulator.v86.cpu.reset_memory();
+        emulator.restart();
+        if (kernelElfBuffer && emulator.v86 && emulator.v86.cpu && emulator.v86.cpu.load_multiboot) emulator.v86.cpu.load_multiboot(kernelElfBuffer);
+        // Reset focused and tourArmed to allow the idle tour to restart
+        focused = false;
+        tourArmed = false;
+      }
+      idleRestartTimeout = 0;
+    }, 4000);
+  }
   function focusIn() {
     if (focused || !adaptersReady) return;
     focused = true;
@@ -238,10 +259,16 @@ if (typeof document !== "undefined") (function () {
     emulator.mouse_adapter.emu_enabled = true;
     if (overlay) overlay.classList.add("hidden");
     stopAutoplay();
+    resetIdleRestart();
+  }
+  function trackActivity() {
+    if (focused) resetIdleRestart();
   }
   container.addEventListener("mousedown", focusIn);
   container.addEventListener("touchstart", focusIn, { passive: true });
   container.addEventListener("keydown", focusIn);
+  container.addEventListener("mousemove", trackActivity);
+  container.addEventListener("touchmove", trackActivity, { passive: true });
 
   // v52: the demo now lives behind the hero text (direct request). This
   // toggle is purely visual, separate from `focused` above on purpose:
@@ -1204,7 +1231,9 @@ if (typeof document !== "undefined") (function () {
   }
   function startTourWhenReady() {
     if (focused) return;
-    tourLoop(tourGen).catch(function () { /* a torn-down emulator mid-await (e.g. a real navigation) shouldn't spam the console */ });
+    tourLoop(tourGen)
+      .finally(function () { tourArmed = false; }) // reset tourArmed if tourLoop exits for any reason, so the tour can restart
+      .catch(function () { /* a torn-down emulator mid-await (e.g. a real navigation) shouldn't spam the console */ });
   }
   // Boot takes a few seconds; the tour waits for graphical mode plus a
   // beat, and never starts at all once the visitor has focused. Also respects

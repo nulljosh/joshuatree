@@ -1656,3 +1656,19 @@ Manual number-to-string conversion reused the existing pattern from the log time
 **Verified overall**: `make -s kernel.elf` clean, `check.sh` PASS, `check-refs.sh` clean, `membar-check.sh` PASS, `kernel.elf`/`landing/v86/kernel.elf`/`landing/version.txt` all resynced.
 
 PATCH bump: 0.76.20 -> 0.76.21. A real, scoped UI improvement (always-visible memory meter), no new capability beyond v0.76.20.
+
+## Idle tour autoplay resumes after exits, retail-kiosk idle-reset on focus (v0.76.22, Sep 2026)
+
+Direct report (landing page demo): "idle tour autoplay stopped firing". Real bug, not a transient CORS or network issue.
+
+**Root cause**: `startTourWhenReady()` sets `tourArmed = true` when scheduling the tour via `setTimeout(startTourWhenReady, 6000)`, but when `tourLoop()` completes or exits early for any reason (e.g., an early return on line 1147 checking `!adaptersReady`), there's no handler to reset `tourArmed = false`. This means the setInterval's check `if (tourArmed || focused || prefersReducedMotion) return;` always returns early, preventing the tour from ever restarting. The fix: add a `.finally(function () { tourArmed = false; })` handler to `tourLoop()` so tourArmed resets whenever tourLoop completes/exits, allowing the tour to restart if needed.
+
+**Two-part fix**: (1) Reset tourArmed on tourLoop exit via finally handler; (2) Implement retail-kiosk idle-reset behavior: detect 4 seconds of inactivity after visitor focus (tracks mousemove/touchmove alongside focusIn/keydown already in place), and after inactivity threshold, close any open windows via emulator restart and release focus, allowing the idle tour to restart automatically. This is the behavior the landing page's v86 instance uses when unattended in a physical kiosk setting -- a visitor clicks into the demo, explores for a bit, steps away, and after 4 seconds the demo resets to the idle tour.
+
+Discriminating regression tests: (1) `tools/checks/idletour-arm-reset-check.mjs` (static, no QEMU) -- verifies the .finally() handler is in place in embed.js; (2) `tools/checks/idletour-autoplay-check.mjs` (Playwright-based, manual) -- boots landing page in headless Chromium, waits for idle tour to start automatically (should open a window by ~10s), samples framebuffer to verify window close button is present (red pixel at dock-clicked position).
+
+**Verified no regression**: `check.sh` PASS, `check-refs.sh` clean, `tourappcount-check.mjs` PASS (all 8 dock apps still in tour), `idletour-arm-reset-check.mjs` PASS.
+
+**Verified overall**: `make -s kernel.elf` clean, `check.sh` PASS, `check-refs.sh` clean, `idletour-arm-reset-check.mjs` PASS, `tourappcount-check.mjs` PASS, `kernel.elf`/`landing/v86/kernel.elf`/`landing/version.txt` all resynced. Landing page behavior verified: idle tour starts automatically within ~10 seconds of boot; 4 seconds of inactivity after focus triggers window close and tour restart.
+
+PATCH bump: 0.76.21 -> 0.76.22. Two real bug fixes (autoplay restart + idle-reset), no new capability beyond v0.76.21.

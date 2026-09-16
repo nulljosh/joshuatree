@@ -136,6 +136,8 @@ jobs:
       # Static, no QEMU: reads landing/v86/embed.js's own TOUR_APPS array.
       - name: Idle tour still cycles all 8 real dock apps
         run: node ./tools/checks/tourappcount-check.mjs
+      - name: Idle tour autoplay fix is in place (tourArmed reset)
+        run: node ./tools/checks/idletour-arm-reset-check.mjs
       # Static, no QEMU/browser: unit-tests embed.js's own localRtcTime()
       # timezone-shift math directly (a full browser+v86 boot check needs
       # Playwright/Chromium, not wired into this CI yet).
