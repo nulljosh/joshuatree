@@ -160,7 +160,9 @@
      auto) lets the aspect-ratio compute width from height instead of the
      other way around, so the demo actually shrinks on wide/short viewports
      instead of just filling whatever width is available. */
-  #demo-frame { position: relative; width: 100%; padding: 3% 8%; z-index: 0; display: flex; align-items: center; justify-content: center; }
+  /* v0.76.54: direct request, demo flush with the very top of the page,
+     keeping the side/bottom padding that separates it from the header. */
+  #demo-frame { position: relative; width: 100%; padding: 0 8% 3%; z-index: 0; display: flex; align-items: center; justify-content: center; }
   /* v0.76.51: real bug, direct report ("demo cut off when window rescales")
      -- explicit height (65vh/max-height) combined with width:auto and a
      separate max-width:100% clamp fight each other whenever the viewport
@@ -393,11 +395,42 @@
 // `cp VERSION landing/version.txt`. tools/checks/check-refs.sh's own
 // sibling, versionsync-check.sh, asserts the two never drift apart.
 (function () {
+  // v0.76.54: direct request, the eyebrow now cycles through recent real
+  // shipped work with a typewriter effect (same manual implementation
+  // embed.js's headline already uses), not a static version number. Hand-
+  // curated, not fetched from GitHub's API at runtime: a live API call
+  // from every visitor's browser would need auth to avoid rate-limiting
+  // and a CORS-safe proxy, real scope beyond a landing-page cycling
+  // caption. Updated by hand alongside real roadmap.md entries.
   var el = document.getElementById('kernel-version');
   if (!el) return;
+  var items = [
+    'Real root-cause fixes, not timeouts',
+    'Mouse wheel scrolling in Launchpad',
+    'Multi-window, real click-to-focus',
+    'A real JPEG decoder, from scratch',
+    'NE2000 driver, real networking',
+    'Live in-browser boot via v86',
+    '15 regression tests wired into CI',
+    'Own filesystem, own memory manager'
+  ];
+  var i = 0, typing = null;
+  function typeOut(text, cb) {
+    if (typing) clearInterval(typing);
+    el.textContent = '';
+    var idx = 0, chars = text.split('');
+    typing = setInterval(function () {
+      if (idx < chars.length) { el.textContent += chars[idx]; idx++; }
+      else { clearInterval(typing); typing = null; if (cb) cb(); }
+    }, 45);
+  }
+  function cycle() {
+    typeOut(items[i], function () { setTimeout(cycle, 2600); });
+    i = (i + 1) % items.length;
+  }
   fetch('version.txt').then(function (r) { return r.ok ? r.text() : null; }).then(function (v) {
-    if (v) el.textContent = 'v' + v.trim();
-  }).catch(function () { /* real fallback: no version shown rather than a stale guess */ });
+    if (v) items.unshift('v' + v.trim());
+  }).catch(function () {}).then(cycle);
 })();
 (function () {
   // v0.76.35: populate full-page floating icons backdrop

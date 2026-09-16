@@ -2035,3 +2035,13 @@ PATCH bump: 0.76.51 -> 0.76.52.
 **Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean. dockhover-check.py itself is NOT confirmed passing (see above), flagged as pre-existing rather than blocking this real, unrelated color fix.
 
 PATCH bump: 0.76.52 -> 0.76.53.
+
+## Cycling eyebrow with typewriter effect, demo flush with top (v0.76.54)
+
+Direct request: the small eyebrow line below the H1 should cycle through recent real shipped work with the same typewriter animation the H1 headline already has, not sit as a static version number. Also: the demo box should sit flush with the very top of the page, keeping the padding that separates it from the header below.
+
+**Fix**: `#kernel-version` now cycles through a hand-curated list of ~8 real recent capabilities (typed at 45ms/char, 2.6s pause between), reusing the same manual typewriter pattern already proven in embed.js's headline effect rather than a second implementation. Not fetched live from GitHub's API -- that would need auth to dodge rate-limiting and a CORS-safe proxy for every visitor's browser, real scope beyond a caption. Updated by hand alongside real roadmap entries going forward. `#demo-frame`'s top padding dropped to 0, side/bottom padding kept.
+
+**Verified**: live browser check confirms both the flush-top demo and the cycling typed text.
+
+PATCH bump: 0.76.53 -> 0.76.54.
