@@ -28,7 +28,7 @@ LOG=$(mktemp /tmp/jt-editorflash-XXXX.log)
 qemu-system-i386 -kernel kernel.elf -display none -vga std \
     -qmp "tcp:127.0.0.1:$PORT,server,nowait" -serial "file:$LOG" &
 QEMU_PID=$!
-trap 'kill "$QEMU_PID" 2>/dev/null; rm -f "$LOG"' EXIT
+trap 'kill "$QEMU_PID" 2>/dev/null || true; rm -f "$LOG"' EXIT
 
 RESULT=$(python3 - "$PORT" "$LOG" <<'PYEOF'
 import json, socket, sys, time
