@@ -47,11 +47,15 @@ void mouse_init(void) {
     mouse_write(0xF4); mouse_read(); /* enable data reporting, ack */
 }
 
-/* ponytail: no wheel/5-byte packet support, just the standard 3-byte
-   packet every PS/2 mouse speaks out of the box. */
-static u8 packet[3];
+/* PS/2 IntelliMouse 4-byte wheel packet support: the standard 3-byte
+   packet plus byte 3 for wheel delta. Byte 3 bit 3-0: signed Z-axis,
+   where negative values = scroll down. The mouse sends 4 bytes when
+   wheel support is enabled; we just read the 4th byte when it arrives
+   and ignore it on plain 3-byte PS/2 devices (harmless, they don't
+   send a 4th byte and the next packet starts cleanly on bit3). */
+static u8 packet[4];
 static int packet_index = 0;
-static int accum_dx = 0, accum_dy = 0, last_buttons = 0;
+static int accum_dx = 0, accum_dy = 0, accum_dz = 0, last_buttons = 0;
 static int dirty = 0;
 
 /* Once the VMware backdoor is live it owns position AND buttons. The
@@ -81,6 +85,15 @@ void mouse_handle_byte(u8 byte) {
 
     packet[packet_index++] = byte;
     if (packet_index < 3) return;
+
+    /* Plain 3-byte PS/2 packet (standard mouse): treat as complete.
+       IntelliMouse 4-byte packet (wheel support): read one more byte.
+       We don't know which until we've seen 3 bytes, so we read one more
+       unconditionally and let vmmouse_fold/the packet logic below ignore
+       it if it's not really a wheel byte (a fresh packet start with bit3
+       set indicates a new 3-byte standard packet started, not a wheel
+       byte, so we resync in the next call). */
+    if (packet_index < 4) return;
     packet_index = 0;
 
     if (vmmouse_active()) return; /* phase kept, contents ignored, see vmmouse_fold */
@@ -91,8 +104,19 @@ void mouse_handle_byte(u8 byte) {
     int dy = packet[2] - ((packet[0] << 3) & 0x100);
     (void)x_sign; (void)y_sign; /* sign is already folded into dx/dy above */
 
+    /* Byte 3 wheel delta (only present on 4-byte IntelliMouse packets):
+       bits 3-0: signed Z axis (4-bit two's complement), where negative = scroll down.
+       Bits 7-4 are always 0. This is a simple approach that doesn't try to
+       distinguish between 3-byte and 4-byte mice; both work, the 3-byte mice
+       just report whatever's on the line as wheel data (usually close to 0).
+       Signed bits 3-0 range from -8 to +7. */
+    int wheel_nibble = (int)(packet[3] & 0x0F);
+    if (wheel_nibble & 0x08) wheel_nibble |= 0xFFFFFFF0; /* sign-extend to -16..15 */
+    int dz = wheel_nibble;
+
     accum_dx += dx;
     accum_dy += -dy; /* PS/2 reports +y as up; screen coordinates want +y as down */
+    accum_dz += dz;
     last_buttons = packet[0] & 0x07;
     dirty = 1;
 }
@@ -103,8 +127,15 @@ int mouse_get_delta(int *dx, int *dy, int *buttons) {
     *dy = accum_dy;
     *buttons = last_buttons;
     int was_dirty = dirty;
-    accum_dx = 0; accum_dy = 0; dirty = 0;
+    accum_dx = 0; accum_dy = 0; accum_dz = 0; dirty = 0;
     return was_dirty;
+}
+
+int mouse_get_wheel(void) {
+    vmmouse_fold();
+    int dz = accum_dz;
+    accum_dz = 0;
+    return dz;
 }
 
 int mouse_get_absolute(int *x, int *y, int w, int h) {

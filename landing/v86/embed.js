@@ -874,7 +874,15 @@ if (typeof document !== "undefined") (function () {
   var MW_REMINDERS = { name: 'Reminders', slot: 5, script: [
     { type: 'keys', text: 'a', speed: 200 },
     { type: 'wait', ms: 500 },
-    { type: 'keys', text: 'Ship the demo tour rework\n', speed: 55 }
+    { type: 'keys', text: 'Ship the demo tour rework\n', speed: 55 },
+    { type: 'wait', ms: 400 },
+    { type: 'keys', text: 'a', speed: 200 },
+    { type: 'wait', ms: 400 },
+    { type: 'keys', text: 'Add mouse wheel support to the Apps folder\n', speed: 55 },
+    { type: 'wait', ms: 400 },
+    { type: 'keys', text: 'a', speed: 200 },
+    { type: 'wait', ms: 400 },
+    { type: 'keys', text: 'Real hardware port of the kernel\n', speed: 55 }
   ] };
   // gui_launch_from_dock's own fixed traffic-light X (x=70,y=40 non-apps-
   // folder window, red circle at x+24,y+16), the same LOGICAL coordinate

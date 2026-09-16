@@ -9,10 +9,18 @@ void mouse_init(void);
    Called from irq.c's irq_handler, not meant to be called directly. */
 void mouse_handle_byte(unsigned char byte);
 
-/* Fetches accumulated movement since the last call and clears it. Returns
-   1 if the mouse moved or a button changed since the last call, 0 if
-   nothing happened (dx/dy/buttons are still written either way, just 0). */
+/* Fetches accumulated movement and wheel since the last call and clears it.
+   Returns 1 if the mouse moved, a button changed, or the wheel scrolled since
+   the last call; 0 if nothing happened (dx/dy/dz/buttons are still written
+   either way, just 0). */
 int mouse_get_delta(int *dx, int *dy, int *buttons);
+
+/* Fetches accumulated wheel delta since the last call and clears it. Returns
+   the signed wheel delta (-16 to +15 on each call, negative = scroll down).
+   Called independently, doesn't clear dx/dy; call mouse_get_delta to get
+   those and clear the entire accumulator. This is here so callers that only
+   care about wheel scroll don't need a dummy dx/dy buffer. */
+int mouse_get_wheel(void);
 
 /* Absolute position, only when the VMware backdoor (vmmouse.h) is live
    and a new packet arrived since the last call: writes the pointer's

@@ -3924,6 +3924,7 @@ static void gui_launch_apps(void){
     int grid_w = APPS_COLS * cell_w;
     int x0 = ((int)window_width() - grid_w) / 2;
     int y0 = 95;
+    int scroll_offset = 0; /* v0.77.0: mouse wheel scroll support, apps offset by row */
 
     for (;;) {
         window_clear(0x00201922);
@@ -3933,7 +3934,10 @@ static void gui_launch_apps(void){
         font_draw_string("arrow keys to move   enter opens   esc closes", x0, 65, 0x006A6064, -1);
 
         for (int i = 0; i < GUI_APPS_FOLDER; i++) {
-            int row = i / APPS_COLS, col = i % APPS_COLS;
+            int row = i / APPS_COLS - scroll_offset;
+            int col = i % APPS_COLS;
+            /* Skip rows that are scrolled off-screen */
+            if (row < 0 || row * cell_h >= 375) continue;
             int cx = x0 + col * cell_w + cell_w / 2;
             int cy = y0 + row * cell_h;
             if (i == sel) /* selection plate, drawn under the icon so it reads as a highlight, not a border */
@@ -3951,6 +3955,19 @@ static void gui_launch_apps(void){
            counting as input so a phone can leave this screen at all. */
         sleep_ticks(5);
         mouse_click_edge_sync();
+        /* v0.77.0: mouse wheel scroll to browse all apps, one row per scroll. */
+        int wheel = mouse_get_wheel();
+        if (wheel != 0) {
+            scroll_offset -= wheel; /* wheel < 0 = scroll down = move view up = increase offset */
+            int max_scroll = rows - 3; /* show at least 3 rows on screen (375 / 108 ≈ 3.5 rows fit) */
+            if (max_scroll < 0) max_scroll = 0;
+            if (scroll_offset < 0) scroll_offset = 0;
+            if (scroll_offset > max_scroll) scroll_offset = max_scroll;
+            /* Keep selection visible, adjusting if needed */
+            int sel_row = sel / APPS_COLS;
+            if (sel_row < scroll_offset) scroll_offset = sel_row;
+            if (sel_row >= scroll_offset + 3) scroll_offset = sel_row - 3 + 1;
+        }
         int k = get_key_or_click();
         if (k == KEY_ESC) return;
         if (k == KEY_CLICK) {
@@ -3989,7 +4006,10 @@ static void gui_launch_apps(void){
             int click_vx = app_cursor_x - app_view_x, click_vy = app_cursor_y - app_view_y;
             int hit = -1;
             for (int i = 0; i < GUI_APPS_FOLDER; i++) {
-                int row = i / APPS_COLS, col = i % APPS_COLS;
+                int row = i / APPS_COLS - scroll_offset;
+                int col = i % APPS_COLS;
+                /* Skip rows that are scrolled off-screen */
+                if (row < 0 || row * cell_h >= 375) continue;
                 int cx = x0 + col * cell_w + cell_w / 2;
                 int cy = y0 + row * cell_h;
                 int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
