@@ -476,7 +476,12 @@
   function updateHeroRecede() {
     if (!heroEl || !heroCopy) return;
     var heroHeight = heroEl.offsetHeight || 1;
-    var progress = Math.min(1, Math.max(0, window.scrollY / heroHeight));
+    // v0.76.36: real bug, not a color bug -- .hero sits below the full-height
+    // demo section, so scrollY already exceeds heroHeight the instant the
+    // hero scrolls into view at all, pinning it at its most-receded (0.15
+    // opacity) state from the moment it's visible. Progress has to be
+    // measured from where .hero itself starts, not from the raw page top.
+    var progress = Math.min(1, Math.max(0, (window.scrollY - heroEl.offsetTop) / heroHeight));
     heroCopy.style.setProperty('--recede-o', (1 - progress * 0.85).toFixed(3));
     heroCopy.style.setProperty('--recede-y', (progress * -24).toFixed(1) + 'px');
     heroCopy.style.setProperty('--recede-s', (1 - progress * 0.04).toFixed(3));

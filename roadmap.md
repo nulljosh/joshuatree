@@ -1844,3 +1844,13 @@ Landing page decorative floating icons (command/symbol glyphs) were positioned o
 **Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean (1046 refs), `tools/checks/versionsync-check.sh` PASS.
 
 PATCH bump: 0.76.34 -> 0.76.35. Pure visual enhancement, no new capability.
+
+## Real root cause of the H1 fade, finally (v0.76.36)
+
+Every "faint header" report all session (~20 by the owner's own count) traced to color/shadow fixes that verified correct in isolation, yet the fade kept reappearing live. Root cause found by reproducing it directly in a live browser at the exact scroll position the owner's screenshots showed: `updateHeroRecede()`'s scroll-fade math computed `progress = window.scrollY / heroHeight`, but `.hero` sits below the full-height live demo section (`v71.1`), so `window.scrollY` already exceeds `heroHeight` the instant `.hero` scrolls into view at all. The header rendered pinned at its most-receded state (`--recede-o` floor of 0.15) from the moment a visitor could see it, not a color or shadow problem at all -- every earlier "fix" (removing the text-shadow, flattening to plain white) was real and correct, just aimed at a bug that wasn't the one actually visible.
+
+**Fix**: `progress` now measures scroll distance from `.hero`'s own `offsetTop`, not from the raw page top: `(window.scrollY - heroEl.offsetTop) / heroHeight`. Confirmed live at the same scroll position that reproduced the bug (local server against the exact deployed HTML): full white H1, no fade, "Introducing Joshua Tree." fully legible.
+
+**Verified**: `tools/checks/check-refs.sh` clean, `tools/checks/versionsync-check.sh` PASS, live repro before/after via a local server + real scroll position matching the owner's screenshot.
+
+PATCH bump: 0.76.35 -> 0.76.36.
