@@ -307,7 +307,35 @@ if (typeof document !== "undefined") (function () {
   container.addEventListener("keydown", trackActivity);
   container.addEventListener("keyup", trackActivity);
   container.addEventListener("click", trackActivity);
-  container.addEventListener("wheel", trackActivity, { passive: true });
+  // v0.77.1: wheel scrolling for Apps folder. Normalize browser wheel events
+  // (deltaY, wheelDelta, detail across different browsers) to the emulator's
+  // expected convention: positive delta = scroll down = negative wheel value
+  // for the kernel's scroll_offset (see kernel.c's gui_launch_apps_folder).
+  screenContainer.addEventListener("wheel", function (ev) {
+    if (!focused || !emulator.mouse_adapter || !emulator.mouse_adapter.emu_enabled) {
+      trackActivity();
+      return;
+    }
+    trackActivity();
+    // Modern wheel events use deltaY (positive=down), older ones use wheelDelta
+    // (positive=up, opposite sign). Normalize to a -1/0/+1 scale matching
+    // what v86's own mouse adapter does (see libv86.js's mouse_adapter init).
+    var delta = 0;
+    if ("deltaY" in ev) {
+      // Wheel event (modern), deltaY > 0 = down
+      delta = ev.deltaY > 0 ? -1 : (ev.deltaY < 0 ? 1 : 0);
+    } else if ("wheelDelta" in ev) {
+      // Legacy mousewheel event, wheelDelta > 0 = up (opposite)
+      delta = ev.wheelDelta > 0 ? 1 : (ev.wheelDelta < 0 ? -1 : 0);
+    } else if ("detail" in ev) {
+      // Older Netscape-style, detail > 0 = down
+      delta = ev.detail > 0 ? -1 : (ev.detail < 0 ? 1 : 0);
+    }
+    if (delta !== 0) {
+      emulator.bus.send("mouse-wheel", [delta, 0]);
+      ev.preventDefault();
+    }
+  }, { capture: true, passive: false });
 
   // v52: the demo now lives behind the hero text (direct request). This
   // toggle is purely visual, separate from `focused` above on purpose:
