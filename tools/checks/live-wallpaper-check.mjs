@@ -20,6 +20,7 @@ const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com';
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 page.on('console', msg => console.log('[page]', msg.text()));
+page.on('response', r => { if (r.status() >= 400) console.log('[http ' + r.status() + ']', r.url()); });
 await page.goto(url, { waitUntil: 'load' });
 
 const canvas = page.locator('#screen_canvas');
