@@ -1967,3 +1967,13 @@ Direct report: "boot logo still pink/purple" even after v0.76.43's landing-page 
 **Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean, `landing/v86/kernel.elf` resynced.
 
 PATCH bump: 0.76.46 -> 0.76.47.
+
+## Boot loading bar was the same hardcoded maroon (v0.76.48)
+
+Direct follow-up right after v0.76.47's logo fix: the boot screen's progress bar fill was hardcoded to the same maroon (`0x0085144B`) the logo used to be, same bug shape, different call site.
+
+**Fix**: bar fill now draws white (`0x00FFFFFF`), matching the plain black boot background and the now-white logo above it. Other real uses of that maroon elsewhere (menu highlight, About-panel title, etc, all deliberate accent color) left untouched.
+
+**Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean.
+
+PATCH bump: 0.76.47 -> 0.76.48.

@@ -4625,7 +4625,7 @@ static void gui_draw_boot_screen(void){
             if (!bar_track_drawn) { window_rect(bar_x, bar_y, bar_w, bar_h, gui_blend(bg, 0x00FFFFFF)); bar_track_drawn = 1; }
             unsigned int since_bar = elapsed - logo_only;
             int fill = since_bar >= bar_span ? bar_w : (int)(bar_w * since_bar / bar_span);
-            window_rect(bar_x, bar_y, fill, bar_h, 0x0085144B);
+            window_rect(bar_x, bar_y, fill, bar_h, 0x00FFFFFF); /* v0.76.48: was the same hardcoded maroon as the old logo, direct report, white to match the boot screen */
         }
         if (elapsed >= logo_only + bar_span) break;
         __asm__ volatile ("hlt");
