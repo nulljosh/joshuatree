@@ -37,7 +37,7 @@
 # docs/ARCHITECTURE.md existed, this is honestly 0%, that's real history,
 # not a bug.
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/../.."
 
 python3 << 'PYEOF'
 import subprocess, re
