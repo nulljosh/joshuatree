@@ -401,21 +401,21 @@
 
   var rand = function (a, b) { return a + Math.random() * (b - a); };
 
-  // Populate page-wide background icons (20 icons spread across full viewport)
+  // Populate page-wide background icons (36 icons spread across full viewport)
   if (pageField) {
-    for (var i = 0; i < 20; i++) {
+    for (var i = 0; i < 36; i++) {
       var text = items[i % items.length];
       var el = document.createElement('span');
       el.className = 'float';
       el.textContent = text;
       el.style.left = rand(1, 99).toFixed(1) + '%';
       el.style.top = rand(1, 99).toFixed(1) + '%';
-      var dx = rand(10, 28) * (Math.random() < 0.5 ? -1 : 1);
-      var dy = rand(8, 22) * (Math.random() < 0.5 ? -1 : 1);
+      var dx = rand(14, 34) * (Math.random() < 0.5 ? -1 : 1);
+      var dy = rand(12, 28) * (Math.random() < 0.5 ? -1 : 1);
       el.style.setProperty('--dx', dx.toFixed(1) + 'px');
       el.style.setProperty('--dy', dy.toFixed(1) + 'px');
-      el.style.setProperty('--dur', rand(16, 32).toFixed(1) + 's');
-      el.style.setProperty('--delay', (-rand(0, 28)).toFixed(1) + 's');
+      el.style.setProperty('--dur', rand(7, 14).toFixed(1) + 's');
+      el.style.setProperty('--delay', (-rand(0, 14)).toFixed(1) + 's');
       pageField.appendChild(el);
     }
   }

@@ -1926,3 +1926,13 @@ Also bumped `.float` background-icon opacity 0.08 -> 0.16 (direct report the exi
 **Verified**: `./check.sh` PASS, `tools/checks/check-refs.sh` clean, boot-logo.svg confirmed pure white/transparent by direct inspection.
 
 PATCH bump: 0.76.42 -> 0.76.43.
+
+## Denser, faster floating background icons (v0.76.44)
+
+Direct feedback: icons were still sparse and the drift too slow to register as motion even after the v0.76.43 opacity bump.
+
+**Fix**: `#page-float-bg` icon count 20 -> 36, drift duration range 16-32s -> 7-14s (roughly 2-3x faster), movement radius widened slightly (10-28px/8-22px -> 14-34px/12-28px) so the faster cycle still reads as a real float, not a jitter.
+
+**Verified**: `./check.sh` PASS, `tools/checks/check-refs.sh` clean, live browser screenshot confirms denser spread.
+
+PATCH bump: 0.76.43 -> 0.76.44.
