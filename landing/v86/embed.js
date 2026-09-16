@@ -122,6 +122,23 @@ if (typeof document !== "undefined") (function () {
   var screenCanvas = document.getElementById("screen_canvas");
   var overlay = document.getElementById("v86-overlay");
 
+  // v0.76.26 fix: prevent Escape key from reaching the kernel when a visitor
+  // presses it (which triggers kernel.c's gui_run shell-exit feature, leaving
+  // the demo stuck at a bare shell prompt). This listener must be registered on
+  // `window` (not `container`), in capture phase, and BEFORE the V86 constructor
+  // attaches its own keyboard listener -- all capture-phase listeners on the same
+  // element (`window`) fire in FIFO registration order, so registering here first
+  // ensures this intercepts Escape before v86's listener processes it.
+  // The tour's own intentional Escape sends use keyboard_send_keys() which bypasses
+  // normal event listeners, so this only blocks real visitor keypresses, not
+  // scripted tour automation.
+  window.addEventListener("keydown", function (ev) {
+    if (ev.key === "Escape" || ev.keyCode === 27 || ev.code === "Escape") {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }
+  }, true); // capture phase, BEFORE v86's own global listener (both on window, FIFO order)
+
   var emulator = new V86({
     wasm_path: "v86/v86.wasm",
     memory_size: 32 * 1024 * 1024,
@@ -290,17 +307,6 @@ if (typeof document !== "undefined") (function () {
   container.addEventListener("keyup", trackActivity);
   container.addEventListener("click", trackActivity);
   container.addEventListener("wheel", trackActivity, { passive: true });
-  // v0.76.26: prevent Escape key from reaching the kernel when a visitor
-  // presses it (which triggers kernel.c's gui_run shell-exit feature, leaving
-  // the demo stuck at a bare shell prompt). The tour's own intentional Escape
-  // sends use keyboard_send_keys() which bypasses normal event listeners,
-  // so this only blocks real visitor keypresses, not scripted tour automation.
-  container.addEventListener("keydown", function (ev) {
-    if (ev.key === "Escape" || ev.keyCode === 27 || ev.code === "Escape") {
-      ev.preventDefault();
-      ev.stopImmediatePropagation();
-    }
-  }, true); // capture phase, before v86's own global listener
 
   // v52: the demo now lives behind the hero text (direct request). This
   // toggle is purely visual, separate from `focused` above on purpose:

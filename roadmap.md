@@ -1765,3 +1765,20 @@ Direct live-site testing (real Chrome against joshuatree.heyitsmejosh.com, not h
 4. **Real feature request, not a bug**: owner asked whether the kernel's memory ceiling (currently 15M total per the new memory bar, "8M / 15M used" observed live) can be raised if it's frequently near the top -- check `pmm_total_frames()`'s real source (how much memory this kernel is actually given at boot, likely a QEMU `-m` flag or a hardcoded reservation) and whether raising it is a real, safe, buildable change or has a real constraint (freestanding/no-paging-swap headroom, real QEMU boot memory argument, etc).
 
 None of these four are fixed yet. Deferred here, end of session, rather than rushed under critical usage pressure -- pick up next pass in this priority order (1 and 2 are real regressions/bugs, 3 is a confirmed-twice-deferred fix, 4 is a real scoping question before any code changes).
+
+## Escape-key intercept: fix the failed v0.76.26 fix (v0.76.27, Sep 2026)
+
+Root cause of failed fix: v0.76.26 added an Escape interceptor to the `container` element in capture phase, but v86's own keyboard listener is attached to `window` globally. Event capture phase runs outer-to-inner (window first, then document, then container, then target), so v86's window-level listener fires and forwards Escape to the kernel BEFORE the container-scoped listener ever gets a chance to run, rendering the interceptor a complete no-op despite being logically correct in isolation.
+
+**Real fix**: Move the Escape interceptor from `container` to `window` (matching where v86's own listener actually lives), in capture phase, and register it BEFORE the V86 constructor runs. Both listeners are now on `window` in capture phase -- since they're registered on the same element with the same phase, the first-registered listener fires first (FIFO order), so our Escape interceptor executes before v86's listener processes the key.
+
+**Verified**: Playwright test (`tools/checks/escape-intercept-check.mjs`) confirms:
+- Demo boots and enters graphical mode ✓
+- Click to focus the demo ✓
+- Press Escape key ✓
+- Demo remains in graphical mode (not dropped to shell) ✓
+- No shell prompt appears in serial log ✓
+
+This is fixing a fix that didn't work, not fixing a new regression. Real trust cost from the previous failed attempt.
+
+PATCH bump: 0.76.26 -> 0.76.27. No new capability, fixing an interceptor that silently failed to work despite code review and deployment.
