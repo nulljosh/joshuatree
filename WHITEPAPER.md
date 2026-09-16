@@ -61,10 +61,15 @@ answers (QEMU's default machine, v86 in the browser) the GUI takes
 positions straight from it. On real hardware, with no backdoor to answer,
 it falls back to the plain relative PS/2 protocol.
 
-**Chat.** `chat <message>` and the Chat app talk to a local Ollama server
+**Chat and voice control.** `chat <message>` and the Chat app talk to a local Ollama server
 over this kernel's own TCP/HTTP stack, plain HTTP only, no TLS here yet.
 Someone else's model for now, but already running with no cloud in the
-loop, the one piece of the longer goal that already works.
+loop, the one piece of the longer goal that already works. Voice mode is a
+host-side script (`tools/voice-control.sh`): speak a request into your
+microphone, a local Ollama model maps it onto one of the kernel's real
+commands, and it gets typed into a running QEMU instance through its
+monitor socket. Needs `sox` for recording, `whisper-cpp` for speech
+recognition, and Ollama running locally with a model like `llama3.1:8b`.
 
 **Map wallpaper.** The desktop background is a real topographic map, pulled
 live from OpenTopoMap by IP geolocation. A real PNG decoder, built into the

@@ -11,7 +11,7 @@ set -e
 SRC="${1:-$HOME/Documents/Code/weather/web/index.html}"
 OUT="${2:-drivers/app_weather.h}"
 NAME="${3:-app_weather}"
-# Second app: ./gen_app.sh "$HOME/Documents/Code/curbfind/web/index.html" drivers/app_curbfind.h app_curbfind
+# Second app: ./tools/gen/gen_app.sh "$HOME/Documents/Code/curbfind/web/index.html" drivers/app_curbfind.h app_curbfind
 
 python3 - "$SRC" "$OUT" "$NAME" <<'EOF'
 import sys

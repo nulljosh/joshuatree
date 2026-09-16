@@ -14,7 +14,7 @@
 # eyeballed "probably fine to use" guess.
 set -e
 cd "$(dirname "$0")"
-SRC="${1:?usage: ./gen_wallpaper.sh <source-image> [out-w] [out-h]}"
+SRC="${1:?usage: ./tools/gen/gen_wallpaper.sh <source-image> [out-w] [out-h]}"
 OUT_W="${2:-240}"
 OUT_H="${3:-171}"
 

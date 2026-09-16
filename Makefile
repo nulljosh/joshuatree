@@ -38,27 +38,27 @@ drivers/version.h: VERSION
 
 kernel/kernel.o: drivers/version.h
 
-# Generated from a sibling repo (gen_app.sh). Committed as a snapshot as of
+# Generated from a sibling repo (tools/gen/gen_app.sh). Committed as a snapshot as of
 # v54 (they used to be gitignored): a fresh clone or an isolated agent
 # sandbox has no sibling repos to regenerate from, and the first parallel
 # agent to hit that had to hand-copy them to build at all. Same "committed
 # copy of a build artifact" relationship landing/v86/kernel.elf already has.
 # These rules still regenerate one if it's genuinely missing; rerun
-# gen_app.sh by hand to pick up a changed source app, then commit the result.
+# tools/gen/gen_app.sh by hand to pick up a changed source app, then commit the result.
 drivers/app_weather.h:
-	./gen_app.sh
+	./tools/gen/gen_app.sh
 
 drivers/app_curbfind.h:
-	./gen_app.sh "$$HOME/Documents/Code/curbfind/web/index.html" drivers/app_curbfind.h app_curbfind
+	./tools/gen/gen_app.sh "$$HOME/Documents/Code/curbfind/web/index.html" drivers/app_curbfind.h app_curbfind
 
 drivers/app_keyrate.h:
-	./gen_app.sh "$$HOME/Documents/Code/keyrate/index.html" drivers/app_keyrate.h app_keyrate
+	./tools/gen/gen_app.sh "$$HOME/Documents/Code/keyrate/index.html" drivers/app_keyrate.h app_keyrate
 
 drivers/app_bookrank.h:
-	./gen_app.sh "$$HOME/Documents/Code/bookrank/index.html" drivers/app_bookrank.h app_bookrank
+	./tools/gen/gen_app.sh "$$HOME/Documents/Code/bookrank/index.html" drivers/app_bookrank.h app_bookrank
 
 drivers/app_quotestreak.h:
-	./gen_app.sh "$$HOME/Documents/Code/quotestreak/index.html" drivers/app_quotestreak.h app_quotestreak
+	./tools/gen/gen_app.sh "$$HOME/Documents/Code/quotestreak/index.html" drivers/app_quotestreak.h app_quotestreak
 
 kernel/kernel.o: drivers/app_weather.h drivers/app_curbfind.h drivers/app_keyrate.h drivers/app_bookrank.h drivers/app_quotestreak.h
 kernel/kernel.o: kernel/editor.h drivers/editor_fonts.h drivers/png.h drivers/png_testdata.h drivers/jpeg.h drivers/jpeg_testdata.h
@@ -85,7 +85,7 @@ drivers/jpeg_testdata.h:
 	$(CC) $(CFLAGS) -c $< -o $@
 
 dotfiles.img:
-	./sync_dotfiles.sh
+	./tools/gen/sync_dotfiles.sh
 
 run: kernel.elf dotfiles.img
 	qemu-system-i386 -kernel kernel.elf -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file=dotfiles.img,format=raw,if=ide,index=0

@@ -84,7 +84,7 @@ separate Save step.
 **Stocks** (`kernel/stocks.h`, v71+ / 0.67.0) is a static demo-data app with no network backend: a fixed list of five real tickers (AAPL, MSFT, GOOGL, AMZN, TSLA) with plausible baked-in prices and daily changes, clearly labeled as demo data. No live market data or API calls (roadmap.md's real curl tests proved all plain-HTTP stock quote sources force HTTPS). List view with up/down selection, enter for details, esc closes—the same app-shape pattern Weather/Mail/Calendar established.
 
 **Eleven apps ported natively from the fleet, thin ports on purpose.**
-`gen_app.sh` turns a sibling repo's real single-file static build
+`tools/gen/gen_app.sh` turns a sibling repo's real single-file static build
 (`~/Documents/Code/<app>/web/index.html`, this user's documented
 sibling-checkout convention) into a plain C byte array,
 `drivers/app_<name>.h` (`app_<name>_html`/`app_<name>_len`), no bundler, no
