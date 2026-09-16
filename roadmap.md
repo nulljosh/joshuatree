@@ -1888,3 +1888,13 @@ v0.76.38's device-frame treatment (iPhone/Android/Mac/Windows chrome around the 
 **Verified**: `./check.sh` PASS, `tools/checks/check-refs.sh` clean, live browser check via local server confirms plain rectangular demo renders correctly with no broken frame on both a full-width and narrow viewport.
 
 PATCH bump: 0.76.39 -> 0.76.40.
+
+## Demo no longer forces full viewport height (v0.76.41)
+
+Direct feedback: "padding should not be too much, I wanna see the header below the demo without scrolling." The demo section wasn't actually the padding percentage's fault -- `#demo-frame` still carried `min-height: 100svh` from the original full-bleed design, forcing the section to fill the entire viewport regardless of how small the padding got, pushing the header below the fold no matter what.
+
+**Fix**: dropped `min-height: 100svh` from `#demo-frame`. The section now sizes to its actual content (the 16:9 demo plus padding), letting the header sit visible right below it on a normal viewport.
+
+**Verified**: `./check.sh` PASS, `tools/checks/check-refs.sh` clean, live browser check confirms the demo no longer fills the screen and the section below is reachable without scrolling.
+
+PATCH bump: 0.76.40 -> 0.76.41.
