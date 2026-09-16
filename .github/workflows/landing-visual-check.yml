@@ -1,0 +1,38 @@
+name: Landing visual capture
+
+# Direct request: "figure out a display to verify" the satellite
+# wallpaper and the new multi-window demo actually paint correctly for a
+# real visitor. This session runs in a cloud sandbox with no physical
+# display attached, and its own network egress policy blocks
+# joshuatree.heyitsmejosh.com directly (confirmed repeatedly, see
+# roadmap.md's CORS-fix entries) -- there is no way to screenshot the
+# real live site from in here. GitHub Actions runners have real,
+# unrestricted internet access (already proven by check.yml's own
+# `network` job and live-smoke.yml), so this installs a real Chromium
+# there and runs tools/checks/live-visual-capture.mjs against the live
+# production URL, uploading real screenshots plus a real .webm video as a
+# downloadable run artifact -- the actual "display" a session without one
+# can still get real pixel evidence from.
+#
+# workflow_dispatch only, same reasoning as live-smoke.yml: never race
+# deploy.yml's own push trigger; trigger this manually a few seconds
+# after a deploy is confirmed done.
+on:
+  workflow_dispatch:
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install a real Chromium for the vendored playwright package
+        run: npx playwright install --with-deps chromium
+      - name: Capture screenshots + video of the live idle tour
+        run: node tools/checks/live-visual-capture.mjs https://joshuatree.heyitsmejosh.com capture
+      - name: Upload capture as a run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: landing-visual-capture
+          path: capture/
+          retention-days: 14
