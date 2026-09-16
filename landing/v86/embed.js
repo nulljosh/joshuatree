@@ -312,6 +312,15 @@ if (typeof document !== "undefined") (function () {
   // expected convention: positive delta = scroll down = negative wheel value
   // for the kernel's scroll_offset (see kernel.c's gui_launch_apps_folder).
   screenContainer.addEventListener("wheel", function (ev) {
+    // v0.76.45: real bug, live-repro'd -- preventDefault only ran inside
+    // the focused/enabled branch below, so a wheel event over the demo
+    // while that state was still false (e.g. right after opening the Apps
+    // folder, before a click had fully registered focus) fell through to
+    // the browser's own native scroll and moved the whole PAGE instead of
+    // the app grid. Suppress default unconditionally whenever the pointer
+    // is over the demo; only the actual forwarding to the emulator stays
+    // gated on focus/enabled.
+    ev.preventDefault();
     if (!focused || !emulator.mouse_adapter || !emulator.mouse_adapter.emu_enabled) {
       trackActivity();
       return;
@@ -333,7 +342,6 @@ if (typeof document !== "undefined") (function () {
     }
     if (delta !== 0) {
       emulator.bus.send("mouse-wheel", [delta, 0]);
-      ev.preventDefault();
     }
   }, { capture: true, passive: false });
 

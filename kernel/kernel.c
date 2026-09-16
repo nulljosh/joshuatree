@@ -33,11 +33,24 @@
    of OpenTopoMap tiles around the ip-api location, decoded by
    drivers/png.c) can replace it at runtime. Same 960x540x3 layout, so the
    two real readers (gui_wallpaper_color, gui_wallpaper_row) only changed
-   which base address they index. Always points at something valid: the
-   baked photo until a fetch lands, and back to it if the user picks
-   Photo in Settings. pngtest keeps comparing against wallpaper_rgb by
-   name on purpose (its fixtures are crops of the baked photo). */
+   which base address they index. Always points at something valid.
+   pngtest keeps comparing against wallpaper_rgb by name on purpose (its
+   fixtures are crops of the baked photo).
+
+   v0.76.45: direct request ("don't show tree on boot, show dark until
+   satellite loads") -- when wall_theme is a map (WALL_WARM/COOL/RAW/SAT)
+   but wall_map hasn't loaded yet, wall_src now falls back to a solid
+   Mojave espresso-brown (0x00201009) instead of wallpaper_rgb (the Joshua
+   Tree photo). The tree photo is still available as WALL_PHOTO, so users
+   who want it can select it in Settings; it never appears by default or
+   during satellite fetch. */
 static const unsigned char *wall_src = wallpaper_rgb;
+/* Solid dark fallback (Mojave espresso-brown 0x00201009 = RGB 32,16,9):
+   960x540x3 bytes. Allocated once and reused; never freed (lives for the
+   kernel's entire lifetime). Used as wall_src fallback while satellite/map
+   images are fetching, keeping the boot/idle screen neutral dark instead
+   of showing the tree photo. */
+static unsigned char *wall_dark_fallback = 0;
 static unsigned char *wall_map = 0;        /* the fetched mosaic, kmalloc'd, kept while the session lives so Photo->Map needs no refetch */
 static int wall_map_tx = 0, wall_map_ty = 0, wall_map_cx = 0, wall_map_cy = 0; /* tile x/y of the mosaic's top-left tile, crop offset inside it */
 static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels actually came from (OpenTopoMap PNG vs Google satellite JPEG). Warm/Cool/Raw all share ONE fetch, since they're just different grades of the same topo pixels -- Satellite is a genuinely different image, not a grade, so switching across this boundary must drop wall_map and refetch instead of reusing stale pixels from the other source. */
@@ -2434,8 +2447,32 @@ static void wall_switch_theme(int theme){
    a theme-only change (same wall_map pointer, different wall_theme)
    still drops the stale cache. */
 static int wall_last_theme = -1;
+/* Initialize dark fallback buffer (Mojave espresso-brown) on first use.
+   Lazy allocation: only allocate and fill once, never freed. */
+static void wall_dark_fallback_init(void){
+    if (wall_dark_fallback) return; /* already allocated */
+    wall_dark_fallback = (unsigned char *)kmalloc(WALLPAPER_W * WALLPAPER_H * 3);
+    if (!wall_dark_fallback) { wall_serial_err("dark fallback nomem", 1); return; }
+    /* Fill with Mojave espresso-brown: 0x00201009 = RGB(32, 16, 9) */
+    unsigned int px_count = WALLPAPER_W * WALLPAPER_H;
+    for (unsigned int i = 0; i < px_count; i++){
+        unsigned int base = i * 3;
+        wall_dark_fallback[base + 0] = 32;  /* R */
+        wall_dark_fallback[base + 1] = 16;  /* G */
+        wall_dark_fallback[base + 2] = 9;   /* B */
+    }
+}
 static void wall_apply(int want_map){
-    const unsigned char *next = (want_map && wall_map) ? wall_map : wallpaper_rgb;
+    const unsigned char *next;
+    if (want_map && !wall_map){
+        /* Satellite/map fetch hasn't completed yet; use dark fallback
+           instead of the tree photo, so the boot/idle screen is neutral
+           dark, not the Joshua Tree silhouette. */
+        wall_dark_fallback_init();
+        next = wall_dark_fallback ? wall_dark_fallback : wallpaper_rgb;
+    } else {
+        next = (want_map && wall_map) ? wall_map : wallpaper_rgb;
+    }
     if (next == wall_src && wall_theme == wall_last_theme) return;
     wall_src = next;
     wall_last_theme = wall_theme;
@@ -7088,17 +7125,17 @@ void kmain(unsigned int multiboot_info_addr){
        recording): a short note that names this exact fact. */
     if (!fs_ok) {
         static const char demo_readme[] =
-            "This is a live demo.\r\n\r\n"
-            "No real disk is attached in your browser (v86 has no way to\r\n"
-            "mount the native dotfiles.img this kernel boots from on real\r\n"
-            "hardware), so these are ramfs files, kept in memory only for\r\n"
-            "this tab. Try the Terminal app: ls, cat README.TXT, echo.\r\n";
+            "This is a live demo.\n\n"
+            "No real disk is attached in your browser (v86 has no way to\n"
+            "mount the native dotfiles.img this kernel boots from on real\n"
+            "hardware), so these are ramfs files, kept in memory only for\n"
+            "this tab. Try the Terminal app: ls, cat README.TXT, echo.\n";
         static const char demo_notes[] =
-            "Joshua Tree\r\n\r\n"
-            "A freestanding kernel, built from scratch.\r\n\r\n"
-            "This desktop, the file manager, mail, calendar, terminal,\r\n"
-            "even this note you're reading, all real, all running on that\r\n"
-            "kernel right now in your browser.\r\n";
+            "Joshua Tree\n\n"
+            "A freestanding kernel, built from scratch.\n\n"
+            "This desktop, the file manager, mail, calendar, terminal,\n"
+            "even this note you're reading, all real, all running on that\n"
+            "kernel right now in your browser.\n";
         vfs_switch("ramfs"); /* switch first: vfs_write_file always targets the active backend, and fat's own write would just fail with no disk anyway */
         vfs_write_file("README.TXT", demo_readme, strlen(demo_readme));
         vfs_write_file("NOTES.TXT", demo_notes, strlen(demo_notes));
