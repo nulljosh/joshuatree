@@ -1863,6 +1863,16 @@ Direct request: minor rounded corners on the live demo container. Added `border-
 
 PATCH bump: 0.76.36 -> 0.76.37.
 
+## Live demo wrapped in device-frame chrome (v0.76.38)
+
+Landing page demo was displaying as a bare black box without any device frame context, leaving visitors uncertain whether they were looking at a phone, a desktop, or something else. House standard (from nimble's landing page, fleet-wide) wraps interactive demos in device-specific frames matched to the visitor's user agent: iPhone (Dynamic Island, titanium band), Android (punch-hole camera), Mac (traffic lights and titlebar), or Windows (system buttons). Device detection via UA sniff, pure CSS styling (no transforms) so canvas click math stays accurate, caption below naming the detected device.
+
+Real implementation path: copied `devices.css` from nimble (canonical reference), added UA detection script at page top, restructured demo HTML from `#demo-frame` wrapper to `<div class="demo-frame-wrapper"><div id="demoFrame" class="device"><div class="device-screen">...` nesting, added JavaScript to apply device-specific class and update caption text dynamically. Canvas click math unaffected: `#screen_canvas.getBoundingClientRect()` still reports the real visible geometry, no CSS transforms added to the canvas or its ancestors.
+
+**Verified**: `make` builds without changes to kernel, `tools/checks/check-refs.sh` clean, `tools/checks/versionsync-check.sh` PASS (0.76.38 in VERSION, landing/version.txt, and version.txt all synced), landing page structure verified (demo-frame-wrapper > demoFrame.device > device-screen > stage-wrap, caption element below with dynamic device name).
+
+PATCH bump: 0.76.37 -> 0.76.38.
+
 ## Queued for next session
 
 - Device-frame chrome for the live demo matched to visitor user-agent (iPhone/Android/Mac window/Windows window), per this repo's own CLAUDE.md "Landing pages" house standard already applied fleet-wide (see nimble's landing page as the reference). Real feature build, not a tweak, deferred given usage constraints tonight.
