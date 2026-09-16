@@ -1977,3 +1977,15 @@ Direct follow-up right after v0.76.47's logo fix: the boot screen's progress bar
 **Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean.
 
 PATCH bump: 0.76.47 -> 0.76.48.
+
+## Memory panel now shows percent used (v0.76.49)
+
+Direct request: notification-centre memory info should show more than raw M/K used. Added a percent-used figure alongside the existing "9M / 15M used" line, e.g. "9M / 15M used (60%)".
+
+**Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean.
+
+PATCH bump: 0.76.48 -> 0.76.49.
+
+## Queued for next session
+
+- Owner asked for a comparative analysis of apple.com/ca/os/macos against this landing page's own elements/animation, to find what's missing. Real research task (fetch + compare page structure, section-by-section), not attempted tonight given usage was already critical when asked.

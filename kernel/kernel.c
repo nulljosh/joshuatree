@@ -4877,6 +4877,14 @@ static void gui_draw_notif_panel(void){
         mem_str[p++] = 'K';
     }
     mem_str[p++] = ' '; mem_str[p++] = 'u'; mem_str[p++] = 's'; mem_str[p++] = 'e'; mem_str[p++] = 'd';
+    /* v0.76.49: direct request, "more memory information" -- percent used
+       alongside the raw M/K figures already shown, same buffer (still well
+       under its 40-byte size at max: "999M / 999M used (100%)" is 24). */
+    mem_str[p++] = ' '; mem_str[p++] = '(';
+    { unsigned int v = usage_percent; char tb[4]; int ti = 0;
+      if (!v) tb[ti++] = '0'; while (v) { tb[ti++] = '0' + v % 10; v /= 10; }
+      while (ti) mem_str[p++] = tb[--ti]; }
+    mem_str[p++] = '%'; mem_str[p++] = ')';
     mem_str[p] = 0;
     font_draw_string(mem_str, x0 + 12, y, mem_bar_color, -1); y += 18;
 
