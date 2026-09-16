@@ -4328,6 +4328,22 @@ static void gui_multiwin_draw_chrome(const gui_window_t *win){
 static void gui_multiwin_draw_content_only(const gui_window_t *win){
     int x = win->x, y = win->y, w = win->w, h = win->h;
     window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
+    /* v0.76.19: real, standing bug, direct report ("two toolbars on
+       windows, two x buttons two minimize buttons") -- present since
+       multi-window Files/Weather shipped (v0.73.0) and Mail/Calendar/
+       Reminders (v0.75.0), not something this pass's chrome/content split
+       introduced. Every one of the five *_content functions below calls
+       the shared gui_draw_app_titlebar(), which only skips drawing its
+       OWN traffic-light circles + "x"/"-" when the global gui_app_windowed
+       flag is set -- but that flag was only ever set by the OLD single-
+       window gui_launch_from_dock path (bracketing its blocking
+       gui_launch() call), never by this multi-window content path. So
+       every multiwin content redraw drew a second, real, viewport-
+       relative (26,20)/(46,20)/(66,20) set of traffic lights on top of
+       gui_multiwin_draw_chrome's own real ones -- two visibly offset
+       toolbars, exactly as reported, not a rendering glitch, a real
+       missing flag. */
+    gui_app_windowed = 1;
     /* Real per-repaint content, not a cached bitmap: each call re-derives
        the window's content from the same live state its single-window
        counterpart reads (vfs_list for Files, weather_text for Weather),
@@ -4338,6 +4354,7 @@ static void gui_multiwin_draw_content_only(const gui_window_t *win){
     else if (win->icon == 1) gui_draw_mail_content();
     else if (win->icon == 2) gui_draw_calendar_content();
     else if (win->icon == 4) gui_draw_reminders_content();
+    gui_app_windowed = 0;
     window_clear_viewport();
 }
 static void gui_multiwin_draw_one(const gui_window_t *win){

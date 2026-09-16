@@ -111,6 +111,8 @@ jobs:
         run: ./tools/checks/menuclock-check.sh
       - name: Multi-window Mail/Calendar/Reminders chrome doesn't redraw on plain keystrokes
         run: ./tools/checks/mwkeyflash-check.sh
+      - name: Multi-window apps draw exactly one toolbar, not two
+        run: ./tools/checks/mwdupetoolbar-check.sh
       - name: JPEG decoder, host harness
         run: ./tools/checks/jpeg-host-check.sh
       - name: JPEG decoder, in-kernel
