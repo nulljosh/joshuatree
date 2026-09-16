@@ -1,0 +1,64 @@
+name: Live site smoke test
+
+# Direct, real gap this closes: every dev session working on this repo runs
+# in a sandboxed container whose own network policy blocks the live
+# deployed domain outright (confirmed repeatedly, see roadmap.md's CORS-fix
+# entries) -- there was previously no way for a session to check what a
+# real visitor actually sees without asking a human to open DevTools.
+# GitHub's own hosted runners have ordinary internet access (already proven
+# by check.yml's `network` job reaching ip-api.com/opentopomap.org/etc
+# directly), so this job runs the same checks against the REAL production
+# URL instead, and any session (or human) can trigger it on demand and read
+# the real result back from the Actions log.
+#
+# workflow_dispatch only, deliberately not on every push: a push to main
+# also triggers deploy.yml in a separate workflow file with no ordering
+# guarantee between the two, so running this automatically on push could
+# race a not-yet-finished deploy and report a false negative against the
+# previous version. Trigger this manually a few seconds after a deploy is
+# confirmed done instead.
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Landing page loads
+        run: |
+          code=$(curl -s -o /tmp/index.html -w "%{http_code}" https://joshuatree.heyitsmejosh.com/)
+          echo "GET / -> $code"
+          echo "--- hero headline (h1) ---"
+          grep -o '<h1>[^<]*</h1>' /tmp/index.html || echo "(no h1 found)"
+          if [ "$code" != "200" ]; then echo "FAIL: landing page did not return 200"; exit 1; fi
+
+      - name: /api/proxy allowlist sanity (disallowed host must 403)
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" "https://joshuatree.heyitsmejosh.com/api/proxy?url=http://evil.example.com/")
+          echo "GET /api/proxy?url=http://evil.example.com/ -> $code (expect 403)"
+          if [ "$code" != "403" ]; then echo "FAIL: disallowed host was not rejected"; exit 1; fi
+
+      - name: /api/proxy -> ip-api.com (real geolocation fetch, real network)
+        run: |
+          code=$(curl -s -o /tmp/geo.json -w "%{http_code}" "https://joshuatree.heyitsmejosh.com/api/proxy?url=$(python3 -c "import urllib.parse;print(urllib.parse.quote('http://ip-api.com/json/'))")")
+          echo "status: $code"
+          echo "body:"
+          cat /tmp/geo.json
+          echo
+
+      - name: /api/proxy -> a.tile.opentopomap.org (real map tile fetch, real network)
+        run: |
+          code=$(curl -s -o /tmp/topo.bin -w "%{http_code}" "https://joshuatree.heyitsmejosh.com/api/proxy?url=$(python3 -c "import urllib.parse;print(urllib.parse.quote('http://a.tile.opentopomap.org/14/2622/6336.png'))")")
+          echo "status: $code"
+          echo "bytes: $(wc -c < /tmp/topo.bin)"
+          file /tmp/topo.bin || true
+          head -c 300 /tmp/topo.bin | xxd | head -5 || true
+
+      - name: /api/proxy -> mt0.google.com (real satellite tile fetch, real network)
+        run: |
+          code=$(curl -s -o /tmp/sat.bin -w "%{http_code}" "https://joshuatree.heyitsmejosh.com/api/proxy?url=$(python3 -c "import urllib.parse;print(urllib.parse.quote('http://mt0.google.com/vt/lyrs=s&x=2622&y=6336&z=14'))")")
+          echo "status: $code"
+          echo "bytes: $(wc -c < /tmp/sat.bin)"
+          file /tmp/sat.bin || true
+          head -c 300 /tmp/sat.bin | xxd | head -5 || true
