@@ -254,10 +254,10 @@ if (typeof document !== "undefined") (function () {
     if (idleRestartTimeout) clearTimeout(idleRestartTimeout);
     if (!focused) return; // only auto-reset if visitor has taken control
     idleRestartTimeout = setTimeout(async function () {
-      // Retail-kiosk style: after 4 seconds of inactivity, close windows and restart the tour.
-      // Only trigger if 4+ seconds have passed since the last user interaction (click, movement, key).
+      // Retail-kiosk style: after 15 seconds of inactivity, close windows and restart the tour.
+      // Only trigger if 15+ seconds have passed since the last user interaction (click, movement, key).
       var timeSinceActivity = Date.now() - lastInteractionTime;
-      if (focused && !tourRunning && timeSinceActivity >= 4000) { // only if still focused, tour not running, and truly idle
+      if (focused && !tourRunning && timeSinceActivity >= 15000) { // only if still focused, tour not running, and truly idle
         // Trigger a soft reset: close any open windows by rebooting the emulator
         // then restart the tour
         if (bootLogo) bootLogo.hidden = false;
@@ -270,7 +270,7 @@ if (typeof document !== "undefined") (function () {
         tourArmed = false;
       }
       idleRestartTimeout = 0;
-    }, 4000);
+    }, 15000);
   }
   function focusIn() {
     if (focused || !adaptersReady) return;

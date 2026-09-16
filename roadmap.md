@@ -1898,3 +1898,13 @@ Direct feedback: "padding should not be too much, I wanna see the header below t
 **Verified**: `./check.sh` PASS, `tools/checks/check-refs.sh` clean, live browser check confirms the demo no longer fills the screen and the section below is reachable without scrolling.
 
 PATCH bump: 0.76.40 -> 0.76.41.
+
+## Cap demo height directly for wide desktops (v0.76.42)
+
+Direct report with a desktop screenshot: header still not visible without scrolling even after v0.76.41 dropped the forced `100svh` min-height. Real cause: a 16:9 box scaled to near-full viewport width is still nearly full viewport HEIGHT on a normal wide desktop monitor (e.g. 1600px wide -> 900px tall, most of a laptop screen with browser chrome).
+
+**Fix**: `#stage-wrap` now sizes from height instead of width -- `height: 65vh; max-height: 720px; width: auto` with `aspect-ratio: 16/9` computing width from that height, so the demo actually shrinks on typical desktop viewports instead of just filling whatever width is available. Mobile keeps the old width-driven sizing via a media query, unaffected.
+
+**Verified**: `./check.sh` PASS, `tools/checks/check-refs.sh` clean, live browser screenshot at a 1512x804 desktop viewport confirms the full header and tagline are visible below the demo with zero scrolling.
+
+PATCH bump: 0.76.41 -> 0.76.42.

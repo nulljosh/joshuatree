@@ -4573,7 +4573,7 @@ static int gui_multiwin_key_nonblock(void){
    frame-counted loop, so it holds the same real duration regardless of
    how fast this machine happens to render each frame. */
 static void gui_draw_boot_screen(void){
-    unsigned int bg = 0x00201009; /* the wallpaper's own espresso-brown, on-brand, not a new color */
+    unsigned int bg = 0x00000000; /* pure black boot background, direct request */
     window_clear(bg);
     int cx = (int)window_width() / 2, cy = (int)window_height() / 2; /* v45.2: centred on the real window; 400 was the 800-wide centre and sat left of centre at 960 */
     gui_draw_logo(cx, cy - 10, 5, bg); /* v48: dropped the "hello" wordmark, direct request, logo alone reads cleaner */

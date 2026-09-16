@@ -151,8 +151,16 @@
      for a fixed-ratio screenshot/video, not a live 16:9 canvas that also
      needs its own aspect ratio kept exact for click math -- not a fit for
      this demo, dropped rather than patched further. */
+  /* v0.76.42: a 16:9 box at near-full viewport width is still nearly full
+     viewport HEIGHT on a normal wide desktop monitor, direct report ("can't
+     see header without scrolling" persisted even after dropping the forced
+     100svh min-height). Capping height directly (max-height: 65vh, width:
+     auto) lets the aspect-ratio compute width from height instead of the
+     other way around, so the demo actually shrinks on wide/short viewports
+     instead of just filling whatever width is available. */
   #demo-frame { background: var(--bg); position: relative; width: 100%; padding: 3% 8%; z-index: 0; display: flex; align-items: center; justify-content: center; }
-  #stage-wrap { background: #000; position: relative; width: 100%; aspect-ratio: 16 / 9; z-index: 0; border-radius: 3%; overflow: hidden; }
+  #stage-wrap { background: #000; position: relative; width: auto; max-width: 100%; height: 65vh; max-height: 720px; aspect-ratio: 16 / 9; z-index: 0; border-radius: 3%; overflow: hidden; }
+  @media (max-width: 600px) { #stage-wrap { width: 100%; height: auto; } }
   @media (max-width: 600px) { #demo-frame { padding: 2% 4%; } }
   /* v52.5: real boot moment instead of a blank black flash, direct
      request ("bridge the gap between css/html and the actual demo
