@@ -101,6 +101,8 @@ jobs:
         run: ./tools/checks/settingsclick-check.sh
       - name: Wallpaper defaults to Satellite on a fresh boot
         run: ./tools/checks/walldefault-check.sh
+      - name: Notes editor chrome doesn't redraw on plain keystrokes
+        run: ./tools/checks/editorflash-check.sh
       - name: JPEG decoder, host harness
         run: ./tools/checks/jpeg-host-check.sh
       - name: JPEG decoder, in-kernel
@@ -124,6 +126,11 @@ jobs:
       # Static, no QEMU: reads landing/v86/embed.js's own TOUR_APPS array.
       - name: Idle tour still cycles all 8 real dock apps
         run: node ./tools/checks/tourappcount-check.mjs
+      # Static, no QEMU/browser: unit-tests embed.js's own localRtcTime()
+      # timezone-shift math directly (a full browser+v86 boot check needs
+      # Playwright/Chromium, not wired into this CI yet).
+      - name: RTC local-time shift math (v86's CMOS always answers in UTC)
+        run: node ./tools/checks/rtc-timezone-check.mjs
       # Real recurring gap: landing/v86/kernel.elf is a checked-in binary
       # copy, not a build artifact, so a docs-only or landing-only pass
       # never touches it and it silently drifts behind the real kernel.elf

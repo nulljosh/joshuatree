@@ -12,7 +12,27 @@
 //   gui_run() before ever reaching the text shell loop), so this file no
 //   longer needs to script typing "gui" itself, that used to live here
 //   before the kernel grew that behavior on its own.
-(function () {
+// v0.76.10: pure, tested separately from the emulator wiring below (see
+// tools/checks/rtc-timezone-check.mjs) since a real end-to-end check needs
+// a real browser + v86 boot this CI doesn't have. libv86.js's own CMOS/RTC
+// device answers every read in UTC, hardcoded, no local-time option --
+// confirmed by reading its cmos_port_read directly, which always calls
+// getUTCHours/getUTCDate/etc. Shifts a UTC-based epoch ms value by the
+// browser's own local UTC offset so that reading the RESULT's UTC fields
+// (exactly what the RTC device does) reports the real local wall clock
+// instead. tzOffsetMinutes defaults to the real browser's own
+// Date.getTimezoneOffset(); the test passes it explicitly since Node has
+// no visitor to ask.
+function localRtcTime(epochMs, tzOffsetMinutes) {
+  if (tzOffsetMinutes === undefined) tzOffsetMinutes = new Date().getTimezoneOffset();
+  return epochMs - tzOffsetMinutes * 60000;
+}
+if (typeof module !== "undefined") module.exports = { localRtcTime: localRtcTime };
+
+// Guarded so rtc-timezone-check.mjs can import this file under plain Node
+// (to unit-test localRtcTime above) without executing the real emulator
+// wiring below, which assumes a real DOM.
+if (typeof document !== "undefined") (function () {
   var container = document.getElementById("v86-embed");
   if (!container) return;
 
@@ -163,6 +183,32 @@
     // "typing in the search bar" and "typing into someone else's kernel".
     emulator.keyboard_adapter.emu_enabled = false;
     emulator.mouse_adapter.emu_enabled = false;
+    // Direct report: the menu bar clock shows the wrong day, "should say
+    // today but says tomorrow." Real, root-caused, not a kernel bug:
+    // libv86.js's own CMOS/RTC device (class hb) answers every read with
+    // getUTCHours/getUTCDate/getUTCMonth/etc, hardcoded, no config option
+    // to make it answer in local time instead (confirmed by reading hb's
+    // own cmos_port_read directly). Real hardware and QEMU's CLI usually
+    // hand the guest local time (inherited from the host's own RTC/BIOS
+    // config), but v86 has no host machine's RTC to inherit from, so it
+    // always reports UTC no matter what timezone the visitor is actually
+    // in. kernel.c's own cmos() reads those raw registers and displays
+    // them as-is (a fair assumption on real hardware, where that's just
+    // what a real BIOS-set RTC means), with no timezone layer of its own
+    // to correct a browser-only quirk in what the RTC hands back -- for
+    // anyone west of UTC, from roughly (24 - their own UTC offset in
+    // hours) local time onward each evening, UTC has already rolled to
+    // the next calendar day while it's still today for them, showing
+    // "tomorrow" exactly as reported.
+    // Fix: shift the live RTC counter once, right after boot, by the
+    // browser's own local UTC offset (Date.getTimezoneOffset(), the one
+    // API that actually knows the visitor's real timezone -- the kernel
+    // has no way to learn this on its own, there's no NTP/timezone
+    // protocol wired up). Every later CMOS read stays live off this same
+    // shifted counter (hb's own timer() just keeps adding real elapsed
+    // time to it), so it doesn't drift back to UTC after the first read.
+    var rtc = emulator.v86 && emulator.v86.cpu && emulator.v86.cpu.devices && emulator.v86.cpu.devices.rtc;
+    if (rtc) rtc.rtc_time = localRtcTime(rtc.rtc_time);
   });
   // v62: both registered here, after the constructor, because add_listener
   // is the emulator's own bus. Registering before "emulator-ready" is fine

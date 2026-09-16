@@ -54,22 +54,65 @@ static void editor_layout(int draw, int *caret_x, int *caret_line) {
     }
 }
 
-static void editor_draw(void) {
-    static const char *families[] = {"Sans", "Serif", "Mono"};
-    static const char *sizes[] = {"16 px", "20 px", "24 px", "28 px"};
-    window_clear(0x00FAF8F6);
+static const char *EDITOR_FAMILIES[] = {"Sans", "Serif", "Mono"};
+static const char *EDITOR_SIZES[] = {"16 px", "20 px", "24 px", "28 px"};
+
+/* v0.76.10: direct report + real screen recording, "redraws the entire
+   screen on every keystroke" -- confirmed real. editor_draw() used to
+   window_clear() the WHOLE window and repaint the titlebar and toolbar
+   labels on every single character typed, even though none of that chrome
+   changes between keystrokes (family/size/weight/dirty-state only change
+   on a toolbar click or the dirty-flag's one 0->1 flip). This kernel has
+   no double buffer yet (a real, already-tracked architectural gap, see
+   the "Multi-window, honestly scoped" roadmap entry's own backing-store
+   box, still unchecked) -- window_* calls draw straight into the shared
+   framebuffer, so a bigger redraw is a longer visible flash, especially
+   once v86's own JS/WASM per-pixel drawing overhead is added on top of a
+   real browser's own frame timing. Splitting chrome (titlebar + toolbar,
+   drawn only when its own state actually changed) from the text region
+   (redrawn every keystroke, since content genuinely changes) cuts the
+   redrawn area to roughly the text region alone for the overwhelmingly
+   common case of "just typed a character," which is most of what a real
+   visitor's keystrokes are. This does not add real double buffering --
+   that's the compositor rewrite the roadmap already scopes as its own
+   multi-session project -- it only shrinks how much of the screen a
+   single keystroke has to repaint under the current no-buffer model. */
+static int editor_chrome_family = -1, editor_chrome_size = -1, editor_chrome_weight = -1, editor_chrome_dirty = -1;
+
+static void editor_draw_chrome(void) {
+    /* Real, discriminating regression coverage per CLAUDE.md 4b:
+       editorflash-check.sh counts these lines to prove the chrome band
+       redraws once on open and again only on an actual toolbar-relevant
+       change, never once per plain keystroke. */
+    serial_puts("editorchrome\n");
+    /* Clears the whole chrome band first: gui_draw_app_titlebar and the
+       toolbar's own window_rect below don't necessarily cover every pixel
+       between them (there's real gap space at their seams), and this is
+       the one thing the old single window_clear() used to guarantee that
+       splitting the redraw could otherwise silently lose. */
+    window_rect(0, 0, (int)window_width(), EDITOR_TEXT_TOP, 0x00FAF8F6);
     gui_draw_app_titlebar(editor_dirty ? "Notes *" : "Notes");
     window_rect(20, 42, 760, 34, 0x00EAE4DC);
     font_draw_string("F1 Font:", 32, 51, 0x0075726E, -1);
-    font_draw_string(families[editor_family], 108, 51, 0x001C1C1E, -1);
+    font_draw_string(EDITOR_FAMILIES[editor_family], 108, 51, 0x001C1C1E, -1);
     font_draw_string("F2 Size:", 236, 51, 0x0075726E, -1);
-    font_draw_string(sizes[editor_size], 312, 51, 0x001C1C1E, -1);
+    font_draw_string(EDITOR_SIZES[editor_size], 312, 51, 0x001C1C1E, -1);
     font_draw_string("F3 Weight:", 450, 51, 0x0075726E, -1);
     font_draw_string(editor_weight ? "Bold" : "Regular", 540, 51, 0x001C1C1E, -1);
     font_draw_string("Save", 708, 51, 0x0085144B, -1);
+}
+
+static void editor_draw(void) {
+    if (editor_family != editor_chrome_family || editor_size != editor_chrome_size
+     || editor_weight != editor_chrome_weight || editor_dirty != editor_chrome_dirty) {
+        editor_draw_chrome();
+        editor_chrome_family = editor_family; editor_chrome_size = editor_size;
+        editor_chrome_weight = editor_weight; editor_chrome_dirty = editor_dirty;
+    }
     int caret_x = 56, caret_line = 0;
     int line_height = 26 + editor_size * 5;
     int visible_lines = editor_visible_lines(line_height);
+    window_rect(0, EDITOR_TEXT_TOP, (int)window_width(), (int)window_height() - EDITOR_TEXT_TOP, 0x00FAF8F6);
     editor_layout(0, &caret_x, &caret_line);
     if (caret_line < editor_scroll) editor_scroll = caret_line;
     if (caret_line >= editor_scroll + visible_lines) editor_scroll = caret_line - visible_lines + 1;
@@ -146,6 +189,14 @@ static void gui_launch_editor(void) {
        with no keyboard; inside it the toolbar keeps working. */
     mouse_click_edge_sync();
     if (gui_app_windowed) gui_app_cursor_hide();
+    /* Forces editor_draw()'s very next call to redraw the chrome band
+       unconditionally: family/size/weight/dirty are static and persist
+       across a close+reopen, so without this a reopen could skip
+       repainting the titlebar/toolbar under the (wrong, for a fresh
+       window) assumption that nothing chrome-related changed, leaving
+       whatever the framebuffer happened to hold there from a different
+       app in between. */
+    editor_chrome_family = -1;
     editor_draw();
     for (;;) {
         int changed = 0, close = 0, save = 0;
