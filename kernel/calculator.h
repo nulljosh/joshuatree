@@ -281,10 +281,16 @@ static void gui_launch_calculator(void) {
     input[0] = 0;
     output[0] = 0;
 
+    /* v0.76.24: Draw chrome (titlebar + help text) once before the loop,
+       then redraw only content (input/output display) per keystroke,
+       fixing the per-keystroke window_clear bug. */
+    window_clear(GUI_BG);
+    gui_draw_app_titlebar("Calculator");
+    font_draw_string("expr: + - * / ( ) enter evaluate  esc closes", 20, 52, 0x00807468, -1);
+    serial_puts("guiprompt\n"); /* discriminating marker for regression tests */
+
     for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Calculator");
-        font_draw_string("expr: + - * / ( ) enter evaluate  esc closes", 20, 52, 0x00807468, -1);
+        /* Redraw only the content area (input and output), not the chrome. */
         window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
         input[input_len] = 0;
         font_draw_string(input, 24, 78, 0x001C1C1E, -1);

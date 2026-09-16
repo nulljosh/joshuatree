@@ -164,11 +164,13 @@ static void cal_events_set(const char *datestr, const char *text){
     cal_events_save();
 }
 
-/* Full-screen view/add for one day, same takeover-then-return shape as
+/* v0.76.24: Full-screen view/add for one day, same takeover-then-return shape as
    reminders_add_new (copied almost verbatim): pre-fills the edit line
    with that date's existing event text if there is one, so enter with
    no changes is a no-op re-save and typing overwrites it, one event per
-   day. Esc cancels without writing anything, even over existing text. */
+   day. Esc cancels without writing anything, even over existing text.
+   Now uses shared gui_prompt_line_input_with_date to fix per-keystroke
+   window_clear bug. */
 static void cal_day_view(int y, int m, int d){
     char datestr[CAL_DATE_LEN + 1];
     cal_date_str(y, m, d, datestr);
@@ -176,23 +178,10 @@ static void cal_day_view(int y, int m, int d){
     static char msg[CAL_EVENT_TEXT_MAX];
     unsigned int n = 0;
     if (existing >= 0) while (cal_event_text[existing][n] && n < sizeof(msg) - 1) { msg[n] = cal_event_text[existing][n]; n++; }
-    mouse_click_edge_sync(); /* v67: a click cancels, same as esc, so no screen in this GUI is keyboard-only to leave */
-    for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Calendar");
-        font_draw_string(datestr, 20, 52, 0x0075726E, -1);
-        font_draw_string("type the event, enter to save, esc or click to cancel:", 20, 72, 0x0075726E, -1);
-        window_rect(20, 96, (int)window_width() - 40, 20, 0x00FFFFFF);
-        msg[n] = 0;
-        font_draw_string(msg, 24, 98, 0x001C1C1E, -1);
-        int k = get_key_or_click();
-        if (k == KEY_ESC || k == KEY_CLICK) return;
-        if (k == KEY_ENTER) break;
-        if (k == '\b') { if (n > 0) n--; }
-        else if (n < sizeof(msg) - 1 && k >= 32 && k < 127) msg[n++] = (char)k;
-    }
     msg[n] = 0;
-    if (n == 0) return;
+    if (!gui_prompt_line_input_with_date("Calendar", datestr,
+                                        "type the event, enter to save, esc or click to cancel:", msg, CAL_EVENT_TEXT_MAX)) return;
+    if (msg[0] == 0) return;
     cal_events_set(datestr, msg);
 }
 

@@ -45,29 +45,15 @@ static void reminders_save(void) {
     vfs_replace_file("REMINDERS.TXT", buf, (unsigned int)n);
 }
 
-/* Same lightweight get_key() text-capture loop gui_launch_chat already
-   uses for its one-line message box, not editor.h's fuller caret/
-   scroll/font-picker machinery, this only ever needs one short line. */
+/* v0.76.24: Uses shared gui_prompt_line_input from gui_prompt.h,
+   which splits chrome (titlebar+prompt) drawn once before the loop
+   from content (text box+text) redrawn per keystroke, fixing the
+   per-keystroke window_clear bug. */
 static void reminders_add_new(void) {
     static char msg[REMINDERS_TEXT_MAX];
-    unsigned int n = 0;
-    mouse_click_edge_sync(); /* v67: a click cancels, same as esc, so no screen in this GUI is keyboard-only to leave */
-    for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Reminders");
-        font_draw_string("type the reminder, enter to add, esc or click to cancel:", 20, 52, 0x0075726E, -1);
-        window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
-        msg[n] = 0;
-        font_draw_string(msg, 24, 78, 0x001C1C1E, -1);
-        int k = get_key_or_click();
-        if (k == KEY_ESC || k == KEY_CLICK) return;
-        if (k == KEY_ENTER) break;
-        if (k == '\b') { if (n > 0) n--; }
-        else if (n < sizeof(msg) - 1 && k >= 32 && k < 127) msg[n++] = (char)k;
-    }
-    msg[n] = 0;
-    if (n == 0) return;
-    for (unsigned int c = 0; c <= n; c++) reminders_text[reminders_count][c] = msg[c];
+    if (!gui_prompt_line_input("Reminders", "type the reminder, enter to add, esc or click to cancel:", msg, REMINDERS_TEXT_MAX)) return;
+    if (msg[0] == 0) return;
+    for (unsigned int c = 0; c <= REMINDERS_TEXT_MAX - 1; c++) reminders_text[reminders_count][c] = msg[c];
     reminders_done[reminders_count] = 0;
     reminders_count++;
     reminders_save();

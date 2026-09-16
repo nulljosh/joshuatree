@@ -3521,6 +3521,7 @@ static void gui_launch_files(void){ gui_draw_files_content(); gui_wait_close(); 
    with scrollback and VFS-backed history, included below alongside the
    rest of the app headers. */
 
+#include "gui_prompt.h"
 #include "editor.h"
 #include "reminders.h"
 #include "calendar.h"

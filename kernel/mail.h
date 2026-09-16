@@ -97,29 +97,12 @@ static void mail_save(void) {
     vfs_replace_file("MAIL.TXT", buf, (unsigned int)n);
 }
 
-/* Same lightweight get_key() text-capture loop reminders_add_new already
-   established (renders live, backspace, enter confirms, esc cancels),
-   pulled out here so composing a message (three fields) doesn't
-   duplicate it three times. */
+/* v0.76.24: Uses shared gui_prompt_line_input from gui_prompt.h,
+   which splits chrome (titlebar+prompt) drawn once before the loop
+   from content (text box+text) redrawn per keystroke, fixing the
+   per-keystroke window_clear bug. Same three-field composition flow. */
 static int mail_prompt_line(const char *prompt, char *out, int max) {
-    unsigned int n = 0;
-    out[0] = 0;
-    mouse_click_edge_sync(); /* v67: a click cancels, same as esc, so no screen in this GUI is keyboard-only to leave */
-    for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Mail");
-        font_draw_string(prompt, 20, 52, 0x0075726E, -1);
-        window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
-        out[n] = 0;
-        font_draw_string(out, 24, 78, 0x001C1C1E, -1);
-        int k = get_key_or_click();
-        if (k == KEY_ESC || k == KEY_CLICK) return 0;
-        if (k == KEY_ENTER) break;
-        if (k == '\b') { if (n > 0) n--; }
-        else if ((int)n < max - 1 && k >= 32 && k < 127) out[n++] = (char)k;
-    }
-    out[n] = 0;
-    return 1;
+    return gui_prompt_line_input("Mail", prompt, out, max);
 }
 
 static void mail_compose(void) {

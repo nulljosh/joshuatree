@@ -1693,3 +1693,25 @@ Four discriminating regression tests added: `weather-app-check.sh` (Weather rend
 **Verified**: `make -s kernel.elf` clean, `check.sh` PASS, all four new regression tests compiled and wired.
 
 PATCH bump: 0.76.22 -> 0.76.23. Four independent real bug fixes (icon drawing, title duplication, keyboard redraw, icon polish), no new capability beyond v0.76.22.
+
+## Per-keystroke screen redraw bug: Mail, Calendar, Reminders, Calculator (v0.76.24, Sep 2026)
+
+Same root bug class that v0.76.10 (Notes) and v0.76.23 (Contacts) fixed already: Mail, Calendar, Reminders, and Calculator all call `window_clear(GUI_BG)` + redraw titlebar/chrome on every keystroke in their text-input prompts, even though chrome doesn't change. v0.76.10's fix pattern (split chrome drawn once before the loop from content redrawn per keystroke) was not applied fleet-wide at the time, leaving four copies of the identical bug to be fixed individually later. This pass extracts the fix to a shared location.
+
+**Root cause, confirmed by code audit**: Each of the four affected functions (`mail_prompt_line`, `cal_day_view`, `reminders_add_new`, `gui_launch_calculator`) had the exact same loop shape: a `for(;;)` that calls `window_clear(GUI_BG)`, redraws the titlebar and static prompt text, then redraws the content, then calls `get_key_or_click()`. Since titlebar/prompt never change while a user types, the redraws are pure waste.
+
+**Solution**: Rather than patching each file individually (repeating the copy-paste mistake that created four duplicates in the first place), created `kernel/gui_prompt.h` with two shared helpers:
+- `gui_prompt_line_input(title, prompt, out, max)`: Standard single-prompt layout (titlebar at top, prompt at y=52, input at y=76) used by Mail, Reminders, Calculator. Draws chrome once before the loop, then only redraws content per keystroke.
+- `gui_prompt_line_input_with_date(title, date_str, prompt, out, max)`: Custom layout for Calendar (date display at y=52, prompt at y=72, input at y=96). Same pattern, different coordinates.
+
+Updated each app to call the appropriate helper instead of keeping its own copy of the loop:
+- `mail.h`: `mail_prompt_line()` now delegates to `gui_prompt_line_input("Mail", ...)`
+- `reminders.h`: `reminders_add_new()` now delegates to `gui_prompt_line_input("Reminders", ...)`
+- `calendar.h`: `cal_day_view()` now delegates to `gui_prompt_line_input_with_date("Calendar", ...)`
+- `calculator.h`: `gui_launch_calculator()` manually implements the pattern (split chrome/content) since its output display is conditional and more complex
+
+All four now emit `serial_puts("guiprompt\n")` in the content-redraw loop for regression testing.
+
+**Verified**: `make -s kernel.elf` clean (no errors, signed/unsigned comparison warning fixed), `./check.sh` PASS. Added `tools/checks/gui-prompt-keystroke-check.sh` regression test (parametrized to cover all four apps); simpler focused test `tools/checks/gui-prompt-reminders-check.sh` for Reminders since it's most accessible from the dock. All existing regression tests remain runnable.
+
+PATCH bump: 0.76.23 -> 0.76.24. One root-cause fix applied to four files by extracting shared helper, no new capability.
