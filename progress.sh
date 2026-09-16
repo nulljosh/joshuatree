@@ -168,7 +168,7 @@ points_attr = " ".join(f"{xf(i)},{yf(cum[i])}" for i in range(n))
 DOT_TARGET = 10
 dot_step = max(1, (n - 1) // (DOT_TARGET - 1)) if n > 1 else 1
 dot_idx = sorted(set(list(range(0, n, dot_step)) + [n - 1]))
-dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/>' for i in dot_idx)
+dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2" data-version="{labels[i]}" data-lines="{cum[i]}"/>' for i in dot_idx)
 half_v = max_v // 2
 
 # x-axis: real calendar dates, deduplicated (many commits share a day),

@@ -208,7 +208,10 @@
   .progress-section { padding: 64px 20px; }
   .progress-card { background: var(--card); border-radius: 16px; padding: 20px; max-width: 640px; margin: 0 auto; }
   .progress-card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin: 0 0 14px; font-weight: 600; }
-  .progress-card img { width: 100%; height: auto; border-radius: 8px; }
+  .progress-card { position: relative; }
+  .progress-card img { width: 100%; height: auto; border-radius: 8px; cursor: pointer; }
+  .progress-tooltip { position: absolute; background: var(--accent); color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; z-index: 10; opacity: 0; transition: opacity 0.2s; transform: translateX(-50%); }
+  .progress-tooltip.visible { opacity: 1; }
 
   /* A field of real kernel fragments (shell commands, real addresses this
      kernel actually uses) drifting behind the closing line, the same
@@ -284,8 +287,8 @@
          this pass. Headline swapped to Multi-Window, a real, CI-verified
          (`tools/checks/multiwindow-check.py`), actually-visible-on-load
          capability instead. -->
-<h1>Introducing Real-Time Memory Monitor.</h1>
-    <p style="font-size: 15px; opacity: 0.8; margin: 6px auto 0; max-width: 480px;">See exactly how much memory the kernel is using, live, in the notification center.</p>
+<h1><a href="#changelog" style="color: inherit; text-decoration: none; cursor: pointer;">See what's using your memory.</a></h1>
+    <p style="font-size: 15px; opacity: 0.8; margin: 6px auto 0; max-width: 480px;">A live memory monitor right in the notification center. Know instantly what's happening under the hood.</p>
     <p class="tagline">Click or tap. It's really running.</p>
   </div>
 </header>
@@ -310,6 +313,35 @@
 <section class="grain-zone reveal">
   <div class="hero-float" id="heroFloat" aria-hidden="true"></div>
   <p class="closing">Own memory manager. Own filesystem. TCP built up from raw Ethernet frames, not borrowed from anything underneath. Named for the tree that survives the Mojave on nothing, the same one Mormon settlers thought looked like a man reaching skyward. Open for whoever wants to help it grow, no climbing permit required.</p>
+</section>
+
+<section id="changelog" class="progress-section reveal" style="background: var(--bg); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+  <div class="progress-card" style="max-width: 640px;">
+    <h2>What's New</h2>
+    <div style="font-size: 14px; line-height: 1.8; color: var(--fg);">
+      <div style="margin-bottom: 20px;">
+        <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px;">v0.76.25 (Sep 2026)</div>
+        <div style="color: var(--sub);">Chat app keystroke redraw fixed, shared ui_prompt.h helper applied fleet-wide.</div>
+      </div>
+      <div style="margin-bottom: 20px;">
+        <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px;">v0.76.24 (Sep 2026)</div>
+        <div style="color: var(--sub);">Per-keystroke screen redraw bug fixed across Mail, Calendar, Reminders, Calculator. Extracted shared keystroke-redraw helper to gui_prompt.h.</div>
+      </div>
+      <div style="margin-bottom: 20px;">
+        <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px;">v0.76.23 (Sep 2026)</div>
+        <div style="color: var(--sub);">Weather icon drawing fixed, multiwindow title duplication removed, Contacts keystroke redraw optimized, icon polish pass on folder and apps.</div>
+      </div>
+      <div style="margin-bottom: 20px;">
+        <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px;">v0.76.22 (Sep 2026)</div>
+        <div style="color: var(--sub);">Idle tour autoplay restored, retail-kiosk idle-reset on focus added.</div>
+      </div>
+      <div style="margin-bottom: 20px;">
+        <div style="font-weight: 600; color: var(--accent); margin-bottom: 4px;">v0.76.21 (Sep 2026)</div>
+        <div style="color: var(--sub);">Notification panel memory bar added, always-visible live usage meter in the notification center.</div>
+      </div>
+      <p style="text-align: center; margin-top: 24px; font-size: 12px; color: var(--sub);"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: var(--accent); text-decoration: none;">View all releases →</a></p>
+    </div>
+  </div>
 </section>
 
 <footer>
@@ -454,6 +486,74 @@
     if (!ticking) { window.requestAnimationFrame(updateParallax); ticking = true; }
   }, { passive: true });
   updateParallax();
+})();
+// Interactive progress chart: hover/tap shows version and line count
+(function () {
+  var progressImg = document.querySelector('.progress-card img');
+  if (!progressImg || progressImg.src.indexOf('progress.svg') === -1) return;
+
+  var tooltip = document.createElement('div');
+  tooltip.className = 'progress-tooltip';
+  progressImg.parentNode.appendChild(tooltip);
+
+  var isTouchDevice = function () { return !!navigator.maxTouchPoints || !!navigator.msMaxTouchPoints; };
+  var hideTooltip = function () { tooltip.classList.remove('visible'); };
+  var showTooltip = function (x, y, text) {
+    tooltip.textContent = text;
+    tooltip.style.left = x + 'px';
+    tooltip.style.top = (y - 32) + 'px';
+    tooltip.classList.add('visible');
+  };
+
+  // Desktop: hover over SVG circles
+  if (!isTouchDevice()) {
+    progressImg.addEventListener('mousemove', function (e) {
+      var rect = progressImg.getBoundingClientRect();
+      var x = e.clientX - rect.left;
+      var y = e.clientY - rect.top;
+
+      // For an SVG image, we can't access the internal circles directly,
+      // but we can estimate based on the chart's layout. The chart has
+      // ~10 dots spread across the width. Check proximity to estimated dot positions.
+      var chartPadLeft = 34, chartPadRight = 10, chartPadTop = 26, chartPadBottom = 28;
+      var chartW = rect.width - chartPadLeft - chartPadRight;
+      var chartH = rect.height - chartPadTop - chartPadBottom;
+
+      // Fetch the SVG to get actual circle positions
+      fetch(progressImg.src)
+        .then(function (r) { return r.text(); })
+        .catch(function () { hideTooltip(); })
+        .then(function (svg) {
+          if (!svg) { hideTooltip(); return; }
+          var circles = svg.match(/<circle[^>]*data-version="([^"]*)"[^>]*data-lines="(\d+)"[^>]*cx="([\d.]+)"[^>]*cy="([\d.]+)"/g) || [];
+          var closest = null;
+          var closestDist = 8;
+
+          circles.forEach(function (c) {
+            var m = /<circle[^>]*data-version="([^"]*)"[^>]*data-lines="(\d+)"[^>]*cx="([\d.]+)"[^>]*cy="([\d.]+)/.exec(c);
+            if (!m) return;
+            var version = m[1], lines = m[2], cx = parseFloat(m[3]), cy = parseFloat(m[4]);
+            var scale_x = chartW / (rect.width - chartPadLeft - chartPadRight);
+            var scale_y = chartH / (rect.height - chartPadTop - chartPadBottom);
+            var dist = Math.sqrt(Math.pow(x - cx * scale_x, 2) + Math.pow(y - cy * scale_y, 2));
+            if (dist < closestDist) { closest = { version: version, lines: parseInt(lines), x: x, y: y }; closestDist = dist; }
+          });
+
+          if (closest) showTooltip(closest.x, closest.y, closest.version + ' · ' + closest.lines.toLocaleString() + ' lines');
+          else hideTooltip();
+        });
+    });
+    progressImg.addEventListener('mouseleave', hideTooltip);
+  } else {
+    // Mobile: tap shows tooltip, tap elsewhere hides
+    progressImg.addEventListener('click', function (e) {
+      if (tooltip.classList.contains('visible')) { hideTooltip(); return; }
+      var rect = progressImg.getBoundingClientRect();
+      var x = e.clientX ? e.clientX - rect.left : e.touches[0].clientX - rect.left;
+      var y = e.clientY ? e.clientY - rect.top : e.touches[0].clientY - rect.top;
+      showTooltip(x, y, 'Tap a point on the chart');
+    });
+  }
 })();
 </script>
 <script src="v86/libv86.js"></script>
