@@ -878,16 +878,30 @@ if (typeof document !== "undefined") (function () {
     await sleep(600);
     await runScript(second.script, gen); // real interaction with the now-topmost window, first still genuinely on screen behind it
     if (focused || tourGen !== gen) return;
-    await sleep(900); // a beat with both windows visibly open together
+    await sleep(1400); // a real beat with both windows visibly open together -- the actual point of this round
 
-    await clickAt(MW_A_POINT_X, MW_A_POINT_Y); // `first` is background right now: real click-to-focus, raises it, does NOT close it
+    // v0.76.14: direct report, "landing page demo still flashing" --
+    // real root cause, no double buffer in this kernel yet (a known,
+    // already-tracked architecture gap, roadmap.md's own "compositor in
+    // gui_run" entry), so every multiwin open/close/focus event forces a
+    // full desktop repaint (kernel.c's `launched=1` path: wallpaper photo
+    // blit + dock + every open window, every time). This round used to
+    // also click-to-focus `first` back to the top before closing it --
+    // a real, legitimate demonstration of z-order switching, but a 5th
+    // full-desktop repaint packed into the same ~13s window, on top of
+    // the 4 this round already needs. Cut here: `second` closes first
+    // (MW_TOP_POINT always resolves to whichever window is currently
+    // topmost), which leaves `first` as the sole remaining window --
+    // and the sole remaining window is topmost by definition, so
+    // MW_A_POINT correctly closes it next without ever needing the
+    // focus step. Real click-to-focus/z-order switching is still proven
+    // by tools/checks/multiwindow-check.py against the real kernel; this
+    // tour just no longer re-demonstrates it at the cost of an extra
+    // flash every single lap.
+    await clickAt(MW_TOP_POINT_X, MW_TOP_POINT_Y); // closes whichever of the two is currently topmost (`second`)
     if (focused || tourGen !== gen) return;
-    await sleep(900); // dwell with `first` genuinely back on top, proving the z-order switch actually redrew it there
-
-    await clickAt(MW_A_POINT_X, MW_A_POINT_Y); // `first` is topmost again now: the same point closes it this time (click-anywhere-on-topmost-closes)
-    if (focused || tourGen !== gen) return;
-    await sleep(700);
-    await clickAt(MW_TOP_POINT_X, MW_TOP_POINT_Y); // only `second` is left open, and it's topmost by definition: closes it too
+    await sleep(900);
+    await clickAt(MW_A_POINT_X, MW_A_POINT_Y); // `first` is now the sole open window, topmost by definition: closes it too
     if (focused || tourGen !== gen) return;
     await sleep(1200);
   }
