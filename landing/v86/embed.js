@@ -823,7 +823,7 @@ if (typeof document !== "undefined") (function () {
   ] };
   var TOUR_APPS = [
     { name: 'Notes', slot: 4, script: [
-      { type: 'keys', text: 'A real OS, from scratch. Every keystroke here is real.', speed: 55 }
+      { type: 'keys', text: 'Kernel, GUI, browser, terminal, and a dozen real apps, none of it borrowed.', speed: 55 }
     ] },
     { name: 'Terminal', slot: 6, script: [
       { type: 'keys', text: 'help\n', speed: 55 },
