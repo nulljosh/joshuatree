@@ -32,6 +32,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Sync landing page headline to latest roadmap feature
+        run: ./tools/gen/inject-landing-headline.sh
       - name: Deploy to Cloudflare Workers
         run: npx wrangler deploy
         env:
