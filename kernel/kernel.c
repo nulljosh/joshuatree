@@ -49,17 +49,26 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
    address; Lower Mainland ISPs commonly route Langley/Brookswood
    traffic through a Vancouver PoP), not something this constant or any
    other code change here can fix. What IS real and buildable: sharper,
-   more zoomed-in tiles around whatever point IS resolved. Same fetch
-   count (WALL_COLS*WALL_ROWS tiles, unchanged), each tile just covers
-   half the geographic area of the previous zoom level, confirmed real
-   coverage at both OpenTopoMap and Google's satellite endpoint for any
-   populated area (both comfortably support z18-20 in cities; z15 is
-   nowhere near their real ceiling). Went 12->14 in v78/0.67.2 the same
-   way; that pass's own mirrored ZOOM constants in
-   tools/checks/wallpaper-check.py / satellite-wallpaper-check.py went
-   stale then and needed a manual sync -- updated here in the same pass
-   this time so it doesn't repeat. */
-#define WALL_ZOOM 15
+   more zoomed-in tiles around whatever point IS resolved. Went 12->14
+   in v78/0.67.2 the same way; that pass's own mirrored ZOOM constants
+   in tools/checks/wallpaper-check.py / satellite-wallpaper-check.py
+   went stale then and needed a manual sync -- kept in sync here too.
+
+   v0.76.15: direct same-day follow-up ("figure the zoom level etc, fix
+   it, to town not local city") -- 14->15 wasn't zoomed in enough for
+   what was being asked. Pushed one more level, 15->16: still real,
+   confirmed headroom at both providers (Google's satellite endpoint
+   comfortably covers z18-20 in any populated area; OpenTopoMap's own
+   documented maximum is z17, so 16 keeps a real margin below their
+   actual ceiling rather than risking blank/404 tiles for the Warm/
+   Cool/Raw themes, which still use OpenTopoMap, not Google). Same real
+   fetch count either way (WALL_COLS*WALL_ROWS, unchanged); each level
+   halves the geographic area a tile covers, so this is a genuine
+   town/neighborhood-scale crop now, not a city-scale one -- it still
+   cannot move WHERE that crop is centered, only how tight the frame
+   around that point is; see the v0.76.14 note above for why the
+   center point itself has a real, separate ceiling this can't touch. */
+#define WALL_ZOOM 16
 #define WALL_TILE 256   /* OpenTopoMap serves 256px tiles, no @2x variant */
 #define WALL_COLS 4     /* 4x3 grid = 1024x768, the smallest that covers a centered 960x540 crop */
 #define WALL_ROWS 3

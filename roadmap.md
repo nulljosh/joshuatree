@@ -1545,3 +1545,17 @@ Direct follow-up, good news first: "Satellite finally working on landing page! L
 **Verified**: `check.sh` PASS, `check-refs.sh` clean (930 refs), `kernel.elf`/`landing/v86/kernel.elf`/`landing/version.txt` all resynced. The two real-network wallpaper checks (`wallpaper-check.py`/`satellite-wallpaper-check.py`) need real internet to a.tile.opentopomap.org/mt0.google.com/ip-api.com, which this session's own sandbox doesn't have -- they'll get their real, full verification (host-composed reference mosaic vs. kernel's own FNV hash, byte-for-byte) the next time `check.yml`'s `network` job runs, the same real-network CI job that already covers them.
 
 PATCH bump: 0.76.13 -> 0.76.14. A real, scoped visual improvement plus an honest limitation explained, not a new capability.
+
+## Zoom pushed further: town-scale, not city-scale (v0.76.15, Sep 2026)
+
+Direct same-day follow-up: "figure the zoom level etc. fix it. To town, not local city." The 14->15 bump from the previous pass wasn't zoomed in enough for what was being asked.
+
+**Fix**: `WALL_ZOOM` 15 -> 16. Real headroom check first, since this affects both real hosts differently: Google's satellite endpoint comfortably covers z18-20 in any populated area, but `a.tile.opentopomap.org` (the Warm/Cool/Raw themes' real source) documents its own maximum as z17 -- 16 keeps a real margin below that ceiling instead of risking blank/404 tiles for the non-Satellite themes. Same real fetch count either way (`WALL_COLS*WALL_ROWS`, unchanged); each level halves the geographic area a tile covers, so 16 is a genuine town/neighborhood-scale crop, meaningfully tighter than 14's city-scale one.
+
+**Repeated, deliberately, from the previous entry**: this still cannot move *where* the crop is centered, only how tight the frame around that point is. The center point itself is set by `ip-api.com`'s IP geolocation, which has its own real, separate ceiling (city/ISP-node accuracy, not street-level) that no zoom setting touches. Told straight again rather than letting a zoom change quietly stand in for a fix that doesn't exist.
+
+**Same real drift risk closed again**: `tools/checks/wallpaper-check.py` and `satellite-wallpaper-check.py`'s mirrored `ZOOM` constants updated to 16 in the same pass, continuing the running note in both files' own comments (12->14->15->16) so a future pass has the full real history at a glance instead of one silent number.
+
+**Verified**: `check.sh` PASS, `check-refs.sh` clean, `kernel.elf`/`landing/v86/kernel.elf`/`landing/version.txt` all resynced. Real end-to-end verification (host-composed reference mosaic vs. kernel's own FNV hash at z16) happens the next time `check.yml`'s real-network `network` job runs, same as the z15 change.
+
+PATCH bump: 0.76.14 -> 0.76.15.
