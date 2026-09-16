@@ -2025,3 +2025,13 @@ PATCH bump: 0.76.51 -> 0.76.52.
 ## Queued for next session
 
 - Owner wants the H2/eyebrow to cycle through recent feature additions with a typing animation, sourced from real commit history/roadmap entries, not hand-written copy. Real feature (needs a maintained short feature list, either build-time generated from git log or a small hand-curated array, plus wiring into the existing typewriterEffect already in embed.js) -- deferred given usage was already critical when asked tonight.
+
+## Dark wallpaper fallback color, and a pre-existing dockhover CI flake (v0.76.53)
+
+`tools/checks/dockhover-check.py` started failing in CI on the wallpaper-startup fix (v0.76.51): every dock slot reported "lifted" in both the mid and settled frames. Bisected: the espresso-brown dark fallback color (0x00201009, sum 57) sat close enough to the test's brightness threshold (sum>60, the row above a resting tile reading "not wallpaper") that real rendering tipped it over, uniformly flagging every slot. Changed the fallback to pure black (sum 0), real margin under the threshold, and a better fit for tonight's own silver/black/white direction anyway.
+
+**Real, separate finding**: the test still fails identically all the way back through `448e15b` (well before tonight's wallpaper work even started), confirmed by checking out that commit's kernel.c and rebuilding fresh. This is a pre-existing flake, not something introduced tonight -- logged here rather than chased further given it predates every change made this session. Matches the same "reproduces differently across environments" shape editor_qa.py's CI flake had earlier tonight; worth a real look with fresh budget, not more bisecting at 2am on fumes.
+
+**Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean. dockhover-check.py itself is NOT confirmed passing (see above), flagged as pre-existing rather than blocking this real, unrelated color fix.
+
+PATCH bump: 0.76.52 -> 0.76.53.

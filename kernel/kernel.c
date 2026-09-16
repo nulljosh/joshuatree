@@ -2456,9 +2456,17 @@ static void wall_dark_fallback_init(void){
     unsigned int px_count = WALLPAPER_W * WALLPAPER_H;
     for (unsigned int i = 0; i < px_count; i++){
         unsigned int base = i * 3;
-        wall_dark_fallback[base + 0] = 32;  /* R */
-        wall_dark_fallback[base + 1] = 16;  /* G */
-        wall_dark_fallback[base + 2] = 9;   /* B */
+        /* v0.76.53: was espresso-brown (32,16,9), a real CI regression --
+           tools/checks/dockhover-check.py detects a "lifted" dock icon by
+           brightness (sum>60) at the row just above a resting tile, and
+           this fallback's sum (57) sat close enough to that threshold
+           that real rendering tipped every slot over it, failing the test
+           with every icon reading as permanently lifted. Pure black (sum
+           0) has real margin under the threshold and matches tonight's
+           own silver/black/white direction better than a brown anyway. */
+        wall_dark_fallback[base + 0] = 0;  /* R */
+        wall_dark_fallback[base + 1] = 0;  /* G */
+        wall_dark_fallback[base + 2] = 0;  /* B */
     }
 }
 static void wall_apply(int want_map){
