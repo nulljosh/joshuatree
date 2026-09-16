@@ -62,7 +62,7 @@
 
   /* v71.1: demo moved to normal flow above header. The hero header is now
      a clean, text-only moment without the demo overlay. */
-  .hero { position: relative; text-align: center; padding: 96px 20px 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .hero { position: relative; text-align: center; padding: 32px 20px 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   /* v0.76.9: opacity/transform read from custom properties the scroll
      recede effect below sets via setProperty, never assigned directly, so
      the demo-focused rule just below (a plain class selector) can still
@@ -71,27 +71,29 @@
      the page had been scrolled even once, silently breaking the existing
      click-into-the-demo hide behavior. */
   .hero-copy { position: relative; opacity: var(--recede-o, 1); transform: translateY(var(--recede-y, 0)) scale(var(--recede-s, 1)); }
-  .hero .eyebrow { color: var(--accent); }
   /* Fixed, not var(--fg): the hero always sits over the live demo's dark
      photo/wallpaper background regardless of the visitor's OS light/dark
      preference, so --fg's light-mode value (near-black) rendered
      near-invisible dark-on-dark here even though it's perfectly readable
      everywhere else on the page that actually has --bg behind it. A real
      text-shadow gives it a legible edge over the photo's own busy detail. */
-  .hero h1, .hero p.tagline { color: #ffffff; }
+  .hero h1 { color: #ffffff; }
   /* Direct request: click into the demo, the hero text gets out of the
      way; click/tap/esc back out (embed.js's own real focus state, not a
      second tracker) and it returns. !important over the recede effect
      above on purpose, see that rule's own comment. */
   .hero.demo-focused .hero-copy { opacity: 0 !important; transform: translateY(-8px) !important; pointer-events: none; }
-  .eyebrow { color: var(--accent); font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; margin: 0; font-weight: 600; }
+  /* v0.76.52: eyebrow moved below the H1 (direct request) and recolored
+     white instead of --accent, which reads yellow-ish here against the
+     dark demo backdrop -- the tagline it used to pair with is gone too,
+     "it's really running" is already implied by the live thing sitting
+     right above it. */
+  .eyebrow { color: #ffffff; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; margin: 10px 0 0; font-weight: 600; opacity: 0.7; }
   .kernel-version { opacity: 0.55; font-weight: 500; letter-spacing: 0.04em; text-transform: none; }
-  .hero h1 { font-size: 56px; margin: 14px 0 10px; letter-spacing: -0.03em; line-height: 1.05; }
-  .hero p.tagline { font-size: 18px; margin: 0 auto; max-width: 480px; line-height: 1.5; opacity: 0.92; }
+  .hero h1 { font-size: 56px; margin: 14px 0 0; letter-spacing: -0.03em; line-height: 1.05; }
   @media (max-width: 520px) {
     .hero { padding: 56px 20px 40px; }
     .hero h1 { font-size: 34px; }
-    .hero p.tagline { font-size: 15px; }
   }
 
   /* Sections reveal on scroll, the same "content arrives as you get to
@@ -312,7 +314,6 @@
 
 <header class="hero" id="main">
   <div class="hero-copy">
-    <h2 class="eyebrow"><span id="kernel-version" class="kernel-version"></span></h2>
     <!-- Sep 2026, direct urgent correction -- this line briefly named
          Satellite Wallpaper (v0.76.7), but a real headless test of this
          exact deployed page found the browser demo can never actually show
@@ -337,7 +338,7 @@
          (`tools/checks/multiwindow-check.py`), actually-visible-on-load
          capability instead. -->
 <h1><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;">Introducing Joshua Tree.</a></h1>
-    <p class="tagline">Click or tap. It's really running.</p>
+    <h2 class="eyebrow"><span id="kernel-version" class="kernel-version"></span></h2>
   </div>
 </header>
 

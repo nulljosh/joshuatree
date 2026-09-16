@@ -2011,3 +2011,17 @@ Also fixed, same pass: the landing page demo box overflowed its clipped containe
 **Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean, live browser check at a resized viewport confirms the demo's titlebar and menu bar are no longer cropped.
 
 PATCH bump: 0.76.50 -> 0.76.51.
+
+## Hero layout reorder, eyebrow color, drop redundant tagline (v0.76.52)
+
+Direct requests: reduce the padding gap between the demo and the header below it, move the small version eyebrow below the H1 instead of above it, recolor it white (was --accent, reads yellow against the dark demo backdrop), and drop the "Click or tap. It's really running." tagline (the live thing sitting right above it already implies this).
+
+**Fix**: reordered hero markup so H1 comes first, eyebrow (version number only) follows below it in white at reduced opacity; removed the tagline paragraph and its now-orphaned CSS; trimmed `.hero`'s top padding 96px -> 32px.
+
+**Verified**: live browser check confirms new order/color/padding, `tools/checks/check-refs.sh` clean.
+
+PATCH bump: 0.76.51 -> 0.76.52.
+
+## Queued for next session
+
+- Owner wants the H2/eyebrow to cycle through recent feature additions with a typing animation, sourced from real commit history/roadmap entries, not hand-written copy. Real feature (needs a maintained short feature list, either build-time generated from git log or a small hand-curated array, plus wiring into the existing typewriterEffect already in embed.js) -- deferred given usage was already critical when asked tonight.
