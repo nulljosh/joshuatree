@@ -1826,3 +1826,11 @@ The live v86 demo was full-bleed edge-to-edge on the landing page, reading as th
 **Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean (1043 refs), `tools/checks/versionsync-check.sh` PASS.
 
 PATCH bump: 0.76.32 -> 0.76.33. Pure visual polish, no new capability.
+
+## Docs coverage already at 100% (v0.76.34)
+
+Architecture documentation coverage metric reported as 98% in an earlier snapshot, but current real state is 100% -- every documented subsystem in this kernel has a row in `docs/ARCHITECTURE.md` (measured by file basename matching). No additional comments needed, metric is already accurate.
+
+**Verified**: `bash tools/gen/progress.sh` reports "100% documented (real architecture-doc coverage)", `./check.sh` PASS, `tools/checks/check-refs.sh` clean.
+
+PATCH bump: 0.76.33 -> 0.76.34. No code changes, only version sync.
