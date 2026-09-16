@@ -179,6 +179,16 @@ try:
     machine.click()
     machine.type('Hello, Joshua Tree!\nBeautiful type.\n')
     expected = 'Hello, Joshua Tree!\nBeautiful type.\n'
+    # v0.76.26: the buffer read can race the final keystroke's own
+    # processing on a slower/CI runner (same "settle time varies by
+    # environment" shape appclose-check.py's own v0.76.18 flake fix
+    # already established) -- observed locally as a clean PASS but failed
+    # on GitHub's runner missing exactly the trailing '\n'. Poll instead
+    # of asserting once immediately after typing.
+    for attempt in range(20):
+        if machine.integer('editor_length') == len(expected.encode()):
+            break
+        time.sleep(0.1)
     machine.expect(expected)
     machine.key('backspace')
     machine.key('left')
