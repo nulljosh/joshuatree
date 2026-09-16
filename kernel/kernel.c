@@ -2560,7 +2560,13 @@ static void gui_icon_folder(int cx, int cy, int s, unsigned int bg){
     int x = cx - w / 2, y = cy - h / 2 + s / 12;
     unsigned int face_top = 0x006FC6FF, face_bot = 0x000A84FF; /* real Finder blue, a color, not white */
     unsigned int shade = gui_blend(face_bot, 0x00000000); /* back panel/tab a real shadow tone of the same blue, not a generic gray */
-    window_rect(x, y - s / 12, w / 3, s / 12, shade);  /* tab, sits behind the front face */
+    unsigned int tab_highlight = gui_blend(face_top, 0x00FFFFFF); /* light highlight on tab for dimension */
+    /* v0.76.23: icon sharpness pass, folder icon enhanced with better visual
+       separation and depth. Tab now has a highlight edge to read as raised,
+       and the layering has more visual hierarchy through edge treatment. */
+    int tab_w = w / 3, tab_h = s / 12;
+    window_rect(x, y - tab_h, tab_w, tab_h, shade);  /* tab shadow base */
+    window_rect(x, y - tab_h, tab_w, 1, tab_highlight); /* tab top edge, lit */
     window_rect(x + 2, y - 2, w - 4, h, shade);        /* back panel peeking out top/right */
     gui_rounded_rect_gradient(x, y, w, h, face_top, face_bot, bg, 6);
 }
@@ -2801,9 +2807,21 @@ static void gui_icon_apps(int cx, int cy, int s, unsigned int bg){
     (void)bg;
     int t = s / 5, gap = s / 16, span = 3 * t + 2 * gap;
     int x0 = cx - span / 2, y0 = cy - span / 2;
-    for (int row = 0; row < 3; row++)
-        for (int col = 0; col < 3; col++)
-            window_rect(x0 + col * (t + gap), y0 + row * (t + gap), t, t, ICON_FG);
+    /* v0.76.23: icon sharpness pass, apps icon enhanced with rounded corners
+       on each grid square and subtle shading to create visual depth and lift.
+       Each square is now a small rounded rect instead of a hard square. */
+    unsigned int square_base = ICON_FG;
+    unsigned int square_light = gui_blend(square_base, 0x00FFFFFF);
+    unsigned int square_shadow = gui_blend(square_base, 0x00000000);
+    int corner = t / 6; /* rounded corner radius for each grid square */
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 3; col++) {
+            int sx = x0 + col * (t + gap);
+            int sy = y0 + row * (t + gap);
+            /* Draw each grid square as a small rounded rect with subtle shading */
+            gui_rounded_rect_gradient(sx, sy, t, t, square_light, square_shadow, bg, corner);
+        }
+    }
 }
 
 /* v36: a real prompt, the ">_" every terminal since the VT100 has worn,
@@ -3432,8 +3450,8 @@ static void gui_draw_app_titlebar(const char *title){
         gui_fill_circle(66, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
         font_draw_string("x", 23, 12, 0x00602B28, -1);
         font_draw_string("-", 43, 12, 0x00624A20, -1);
+        font_draw_string(title, 84, 12, 0x0085144B, -1);
     }
-    font_draw_string(title, 84, 12, 0x0085144B, -1);
 }
 
 /* Split into a content-only draw plus the old blocking entry point: the
@@ -3448,7 +3466,7 @@ static void gui_draw_weather_content(void){
     int w = (int)window_width(), x = (w - 520) / 2;
     if (x < 16) x = 16;
     gui_rounded_rect_gradient(x, 72, 520, 250, 0x00FFF7E7, 0x00E9D9DA, 0x00F5F0EB, 22);
-    gui_draw_one_icon_on(0, x + 95, 230, 100, 0x00F4E8E2);
+    gui_draw_one_icon_on(7, x + 95, 230, 100, 0x00F4E8E2);
     font_draw_string("Vancouver", x + 188, 112, 0x00645057, -1);
     font_draw_string(weather_text[0] ? weather_text : "Weather unavailable", x + 188, 158, 0x002A2226, -1);
     font_draw_string("Current conditions", x + 188, 195, 0x00746B70, -1);
