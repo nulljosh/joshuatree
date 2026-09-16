@@ -1559,3 +1559,19 @@ Direct same-day follow-up: "figure the zoom level etc. fix it. To town, not loca
 **Verified**: `check.sh` PASS, `check-refs.sh` clean, `kernel.elf`/`landing/v86/kernel.elf`/`landing/version.txt` all resynced. Real end-to-end verification (host-composed reference mosaic vs. kernel's own FNV hash at z16) happens the next time `check.yml`'s real-network `network` job runs, same as the z15 change.
 
 PATCH bump: 0.76.14 -> 0.76.15.
+
+## Zoom reasoning was backwards: reverted to town-scale (v0.76.16, Sep 2026)
+
+Direct, sharp follow-up: "The zoom is too much now. It's some random city. It should be the whole town they live in. Brookswood for example."
+
+**Real mistake, owned directly**: the previous two passes (14->15->16) reasoned about "town, not city" backwards. Higher zoom means a *smaller* real geographic area per pixel, not a bigger one -- at 960px wide and this kernel's real latitude band (~49N, using the real formula `156543*cos(lat)/2^z` meters/pixel, not the bare equatorial number), z16 covers roughly 1.5km across: a handful of anonymous blocks, exactly what "it's some random city now" describes. A whole town the size of Brookswood (a few km across) needs a *wider* frame, i.e. a *lower* zoom, not a higher one.
+
+**Fix**: `WALL_ZOOM` reverted 16 -> 14 (the same value this project shipped with before tonight's zoom churn started). At this kernel's real latitude, z14 covers roughly 6km across -- a real town-plus-context scale, not a street-level crop.
+
+**Repeated once more, since it's still true regardless of zoom direction**: the actual "Vancouver, not Langley/Brookswood" complaint from earlier tonight was never a zoom problem at all -- that's `ip-api.com`'s own IP-geolocation ceiling (resolves to an ISP network node, not a street address), a separate, real limitation no zoom setting touches in either direction.
+
+**Same real drift risk closed a third time**: `wallpaper-check.py`/`satellite-wallpaper-check.py`'s mirrored `ZOOM` constants reverted to 14 too, with the full real history (12->14->15->16->14) now in both files' own comments.
+
+**Verified**: `check.sh` PASS, `check-refs.sh` clean (945 refs), `kernel.elf`/`landing/v86/kernel.elf`/`landing/version.txt` all resynced.
+
+PATCH bump: 0.76.15 -> 0.76.16.

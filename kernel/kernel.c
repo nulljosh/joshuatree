@@ -48,27 +48,30 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
    ISP network node/exchange the connection routes through, not a street
    address; Lower Mainland ISPs commonly route Langley/Brookswood
    traffic through a Vancouver PoP), not something this constant or any
-   other code change here can fix. What IS real and buildable: sharper,
-   more zoomed-in tiles around whatever point IS resolved. Went 12->14
-   in v78/0.67.2 the same way; that pass's own mirrored ZOOM constants
-   in tools/checks/wallpaper-check.py / satellite-wallpaper-check.py
-   went stale then and needed a manual sync -- kept in sync here too.
+   other code change here can fix. Went 12->14 in v78/0.67.2 the same
+   way; that pass's own mirrored ZOOM constants in
+   tools/checks/wallpaper-check.py / satellite-wallpaper-check.py went
+   stale then and needed a manual sync -- kept in sync here too.
 
-   v0.76.15: direct same-day follow-up ("figure the zoom level etc, fix
-   it, to town not local city") -- 14->15 wasn't zoomed in enough for
-   what was being asked. Pushed one more level, 15->16: still real,
-   confirmed headroom at both providers (Google's satellite endpoint
-   comfortably covers z18-20 in any populated area; OpenTopoMap's own
-   documented maximum is z17, so 16 keeps a real margin below their
-   actual ceiling rather than risking blank/404 tiles for the Warm/
-   Cool/Raw themes, which still use OpenTopoMap, not Google). Same real
-   fetch count either way (WALL_COLS*WALL_ROWS, unchanged); each level
-   halves the geographic area a tile covers, so this is a genuine
-   town/neighborhood-scale crop now, not a city-scale one -- it still
-   cannot move WHERE that crop is centered, only how tight the frame
-   around that point is; see the v0.76.14 note above for why the
-   center point itself has a real, separate ceiling this can't touch. */
-#define WALL_ZOOM 16
+   v0.76.15 pushed this to 16 on "figure the zoom level, to town not
+   local city", reasoning backwards: higher zoom means a SMALLER real
+   area per pixel, not a bigger one. At 960px wide and this kernel's
+   real latitude band (~49N, so real meters/pixel = 156543*cos(lat)/2^z,
+   not the bare equatorial number), z16 covers roughly 1.5km across --
+   a handful of anonymous blocks, not a recognizable town, exactly the
+   real follow-up report ("it's some random city now"). A whole town the
+   size of Brookswood (a few km across) needs a WIDER frame, i.e. a
+   LOWER zoom, not a higher one.
+
+   v0.76.16: reverted 16 back to 14 (~6km across at this latitude,
+   confirmed by the same real formula above), a real town-plus-context
+   scale, not a street-level crop. This is the same value the project
+   shipped with before today's zoom churn -- the actual, real fix for
+   "showing Vancouver, not Langley/Brookswood" was never a zoom number
+   at all (see the v0.76.14 note above: that's IP geolocation's own
+   ceiling, a different, separate limitation zoom cannot touch either
+   direction). */
+#define WALL_ZOOM 14
 #define WALL_TILE 256   /* OpenTopoMap serves 256px tiles, no @2x variant */
 #define WALL_COLS 4     /* 4x3 grid = 1024x768, the smallest that covers a centered 960x540 crop */
 #define WALL_ROWS 3

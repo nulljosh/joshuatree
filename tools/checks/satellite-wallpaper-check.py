@@ -45,7 +45,7 @@ LOG = "/tmp/jt-sat-serial.log"
 RAW = "/tmp/jt-sat-fb.raw"
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = 4453
-WALL_W, WALL_H, TILE, ZOOM, COLS, ROWS = 960, 540, 256, 16, 4, 3  # mirror kernel.c's WALL_* constants (WALL_ZOOM 14->15 in v0.76.14, 15->16 in v0.76.15 -- keep this in sync by hand, it drifted stale once already)
+WALL_W, WALL_H, TILE, ZOOM, COLS, ROWS = 960, 540, 256, 14, 4, 3  # mirror kernel.c's WALL_* constants (WALL_ZOOM 14->15->16 across v0.76.14-15, reverted back to 14 in v0.76.16 (higher zoom was the wrong direction for "whole town" framing) -- keep this in sync by hand, it drifted stale once already)
 MENUBAR_H, WIND_TOP, WIND_HORIZON = 22, 30, 395
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
