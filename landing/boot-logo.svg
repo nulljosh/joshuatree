@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- v0.76.43: the boot-time logo was reusing icon.svg, the full-color
+       favicon with its own desert-gradient rounded-square background.
+       Direct report: at 64px against the boot screen's plain black
+       background, that warm silver-to-brown gradient read as purple, not
+       the intended plain white glyph. This is the same tree geometry with
+       no background rect/gradients at all, pure white strokes on
+       transparent, meant only for the boot moment. -->
+  <defs>
+    <g id="rosette">
+      <line x1="0" y1="0" x2="0"   y2="-22" stroke-width="4.5"/>
+      <line x1="0" y1="0" x2="-9"  y2="-20" stroke-width="4.5"/>
+      <line x1="0" y1="0" x2="9"   y2="-20" stroke-width="4.5"/>
+      <line x1="0" y1="0" x2="-17" y2="-13" stroke-width="4"/>
+      <line x1="0" y1="0" x2="17"  y2="-13" stroke-width="4"/>
+      <line x1="0" y1="0" x2="-20" y2="-2"  stroke-width="4"/>
+      <line x1="0" y1="0" x2="20"  y2="-2"  stroke-width="4"/>
+    </g>
+  </defs>
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round">
+    <path d="M100 176 L98 140 L102 108 L100 88" stroke-width="13"/>
+    <path d="M100 152 Q72 140 60 100" stroke-width="10"/>
+    <path d="M101 124 Q128 108 138 76" stroke-width="9"/>
+  </g>
+  <g stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.6">
+    <line x1="94" y1="168" x2="97" y2="160"/>
+    <line x1="103" y1="155" x2="100" y2="147"/>
+    <line x1="95" y1="132" x2="98" y2="124"/>
+    <line x1="104" y1="118" x2="101" y2="110"/>
+  </g>
+  <g stroke="#FFFFFF" stroke-linecap="round">
+    <use href="#rosette" transform="translate(100 88) scale(1.05)"/>
+    <use href="#rosette" transform="translate(60 100) rotate(-18) scale(0.85)"/>
+    <use href="#rosette" transform="translate(138 76) rotate(16) scale(0.9)"/>
+  </g>
+</svg>

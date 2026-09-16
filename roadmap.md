@@ -1914,3 +1914,15 @@ Four separate live-tested bug reports, all fixed.
 **Verified**: `make -s kernel.elf` clean, `./check.sh` PASS, `tools/checks/check-refs.sh` clean, `tools/checks/versionsync-check.sh` PASS; kernel rebuilt with boot-color fix, copied to landing copy, verified md5 match.
 
 **Note on version**: v0.76.42 was also used for the landing-page demo height fix in the same session (`#stage-wrap` height capping for wide desktops). Both fixes ship together in this PATCH bump: 0.76.41 -> 0.76.42.
+
+## Boot logo was reusing the full-color favicon, read as purple (v0.76.43)
+
+Direct report: "boot logo should be white; not purple." The boot screen's `#boot-logo` img reused `icon.svg`, the full-color app favicon with its own rounded-square desert gradient background (silver through tan to leather-brown) plus a warm sun-glow overlay. At 64px against the boot screen's plain black background, that warm gradient patch read as purple, not the plain white tree glyph intended.
+
+**Fix**: added `landing/boot-logo.svg`, the same tree geometry with no background rect or gradients at all -- pure white strokes on a transparent canvas, meant only for the boot moment. `#boot-logo`'s `<img>` now points at it; the page favicon (`<link rel="icon">`) still uses the real `icon.svg`, untouched.
+
+Also bumped `.float` background-icon opacity 0.08 -> 0.16 (direct report the existing drift animation was too subtle to register as motion) and capped `#stage-wrap` height to 58vh/640px max (was 65vh/720px) plus a soft `box-shadow` blending its edges into the page background, both per direct feedback ("header needs to be further up a smidge", "blend the demo into the page a bit better").
+
+**Verified**: `./check.sh` PASS, `tools/checks/check-refs.sh` clean, boot-logo.svg confirmed pure white/transparent by direct inspection.
+
+PATCH bump: 0.76.42 -> 0.76.43.
