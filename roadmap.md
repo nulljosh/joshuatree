@@ -1876,3 +1876,15 @@ PATCH bump: 0.76.37 -> 0.76.38.
 ## Queued for next session
 
 - Device-frame chrome for the live demo matched to visitor user-agent (iPhone/Android/Mac window/Windows window), per this repo's own CLAUDE.md "Landing pages" house standard already applied fleet-wide (see nimble's landing page as the reference). Real feature build, not a tweak, deferred given usage constraints tonight.
+
+## Revert broken device-frame chrome, trim demo padding (v0.76.40)
+
+v0.76.38's device-frame treatment (iPhone/Android/Mac/Windows chrome around the live demo, matched to visitor user-agent) broke live on both mobile and desktop, reported directly with screenshots: on mobile the demo collapsed to a tiny sliver inside a broken phone outline with a huge dead-space gap above it; on desktop the demo rendered as a small floating traffic-light window fragment.
+
+**Root cause**: nimble's device-frame CSS (`devices.css`) forces a fixed `aspect-ratio: 9/19.5` on `.device-iphone .device-screen` (designed for a static screenshot/video sized to a phone silhouette), but this repo's `#stage-wrap` inside it still forces its own `aspect-ratio: 16/9` for the live emulator canvas. Two conflicting nested aspect-ratio constraints on the same box fight each other, collapsing the layout. That chrome pattern fits a fixed-ratio screenshot; it doesn't fit a live 16:9 canvas that also needs exact click-coordinate math preserved.
+
+**Fix**: reverted the device-frame wrapper entirely (`landing/devices.css` deleted, UA-sniff script and device-class JS removed, HTML restructured back to the plain `#demo-frame > #stage-wrap` tree). Kept the real fixes from that same pass (rounded corners, eyebrow simplification). Also trimmed demo padding per direct feedback ("too much padding around hero"): desktop 5%/10% -> 3%/8%, mobile 3%/5% -> 2%/4%.
+
+**Verified**: `./check.sh` PASS, `tools/checks/check-refs.sh` clean, live browser check via local server confirms plain rectangular demo renders correctly with no broken frame on both a full-width and narrow viewport.
+
+PATCH bump: 0.76.39 -> 0.76.40.

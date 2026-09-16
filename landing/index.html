@@ -6,10 +6,6 @@
 <title>Joshua Tree, a new custom OS</title>
 <meta name="description" content="A fresh, custom operating system built from scratch: its own GUI desktop, network stack, filesystem, and a real text editor. Open, and open to help build.">
 <link rel="icon" href="icon.svg">
-<!-- Device detection for the live demo frame styling -->
-<script>
-(function(u,d){d=/Android/.test(u)?'android':/iPhone|iPad/.test(u)?'iphone':/Windows/.test(u)?'windows':/Mac/.test(u)?'mac':'mac';document.documentElement.dataset.device=d})(navigator.userAgent);
-</script>
 <!-- v52: real perf request ("demo takes half a second, can we make it
      instant?"). The floor is real WASM instantiation + this kernel's own
      boot-to-GUI time, not shrinkable from the page side, but the browser
@@ -21,7 +17,6 @@
 <link rel="preload" href="v86/v86.wasm" as="fetch">
 <link rel="preload" href="v86/kernel.elf" as="fetch">
 <link rel="preload" href="v86/libv86.js" as="script">
-<link rel="stylesheet" href="devices.css">
 <style>
   /* Real palette refresh, not a tweak: the old warm orange/burgundy read
      as pumpkin, Halloween, not the actual target, the real Mojave desert
@@ -147,15 +142,18 @@
   /* v0.76.33: demo framing with padding around the demo container, a real
      visual frame rather than edge-to-edge backdrop. 10% padding on desktop,
      scales down for mobile viewports. The demo box stays 16:9 within this
-     padded container. v0.76.38: device frame treatment applied, with
-     viewport-matched device chrome (iPhone, Android, Mac, Windows) wrapping
-     the emulator. The frame is added via CSS only, preserving the canvas's
-     getBoundingClientRect accuracy for click math. */
-  .demo-frame-wrapper { position: relative; width: 100%; padding: 5% 10%; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100svh; background: var(--bg); gap: 8px; }
-  #demoFrame { position: relative; width: auto; max-width: 100%; z-index: 0; }
-  #demoFrame .device-screen { background: #000; }
+     padded container. v0.76.38 briefly wrapped this in nimble-style device
+     chrome (iPhone/Android/Mac/Windows silhouettes); reverted in v0.76.40,
+     real bug found live: the phone frame forces a 9/19.5 aspect-ratio on
+     its screen while #stage-wrap below still forces 16/9, the two fight
+     and collapse the whole frame to a sliver on mobile, with the padding
+     reading as a huge dead zone on top of it. That chrome pattern is built
+     for a fixed-ratio screenshot/video, not a live 16:9 canvas that also
+     needs its own aspect ratio kept exact for click math -- not a fit for
+     this demo, dropped rather than patched further. */
+  #demo-frame { background: var(--bg); position: relative; width: 100%; padding: 3% 8%; z-index: 0; display: flex; align-items: center; justify-content: center; min-height: 100svh; }
   #stage-wrap { background: #000; position: relative; width: 100%; aspect-ratio: 16 / 9; z-index: 0; border-radius: 3%; overflow: hidden; }
-  @media (max-width: 600px) { .demo-frame-wrapper { padding: 3% 5%; } }
+  @media (max-width: 600px) { #demo-frame { padding: 2% 4%; } }
   /* v52.5: real boot moment instead of a blank black flash, direct
      request ("bridge the gap between css/html and the actual demo
      loading"). The logo shows immediately (it's a tiny inline SVG,
@@ -227,8 +225,6 @@
   #v86-overlay span { background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: 0.01em; }
   #v86-overlay.hidden { opacity: 0; }
 
-  .demo-caption { font-size: 0.9rem; color: var(--sub); margin-top: -4px; }
-
   .progress-section { padding: 64px 20px; }
   .progress-card { background: var(--card); border-radius: 16px; padding: 20px; max-width: 640px; margin: 0 auto; }
   .progress-card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin: 0 0 14px; font-weight: 600; }
@@ -278,27 +274,22 @@
 
 <a class="skip-link" href="#main">Skip to content</a>
 
-<div class="demo-frame-wrapper">
-  <div id="demoFrame" class="device">
-    <div class="device-screen">
-      <div id="stage-wrap">
-        <div id="boot-logo" aria-hidden="true">
-          <img src="icon.svg" alt="">
-          <span>Booting...</span>
+<div id="demo-frame">
+  <div id="stage-wrap">
+    <div id="boot-logo" aria-hidden="true">
+      <img src="icon.svg" alt="">
+      <span>Booting...</span>
+    </div>
+    <div id="stage">
+      <div id="v86-embed" tabindex="0" role="application" aria-label="A real, live boot of this exact kernel.elf, running in your browser. Click or tap to control it.">
+        <div id="screen_container">
+          <div id="screen_text"></div>
+          <canvas id="screen_canvas"></canvas>
         </div>
-        <div id="stage">
-          <div id="v86-embed" tabindex="0" role="application" aria-label="A real, live boot of this exact kernel.elf, running in your browser. Click or tap to control it.">
-            <div id="screen_container">
-              <div id="screen_text"></div>
-              <canvas id="screen_canvas"></canvas>
-            </div>
-            <div id="v86-overlay"></div>
-          </div>
-        </div>
+        <div id="v86-overlay"></div>
       </div>
     </div>
   </div>
-  <p class="demo-caption">Running on your <span id="demoDev">Mac</span></p>
 </div>
 
 <header class="hero" id="main">
@@ -593,15 +584,6 @@
       showTooltip(x, y, 'Tap a point on the chart');
     });
   }
-})();
-// Device frame detection and caption update: match the visitor's user agent
-// to the appropriate device frame styling (iPhone, Android, Mac, Windows).
-(function () {
-  var names = { iphone: 'iPhone', android: 'Android', mac: 'Mac', windows: 'Windows' };
-  var dev = document.documentElement.dataset.device;
-  var devName = names[dev] || 'Mac';
-  document.getElementById('demoDev').textContent = devName;
-  document.getElementById('demoFrame').className = 'device device-' + (names[dev] ? dev : 'mac');
 })();
 </script>
 <script src="v86/libv86.js"></script>
