@@ -24,6 +24,8 @@ on:
       - 'landing/**'
       - 'wrangler.toml'
       - 'worker.js'
+      - 'roadmap.md'
+      - 'tools/gen/landing-roadmap.py'
       - '.github/workflows/deploy.yml'
 
 jobs:
@@ -34,6 +36,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Sync landing page headline to latest roadmap feature
         run: ./tools/gen/inject-landing-headline.sh
+      - name: Generate landing roadmap summary
+        run: python3 tools/gen/landing-roadmap.py
       - name: Deploy to Cloudflare Workers
         run: npx wrangler deploy
         env:
