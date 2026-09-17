@@ -225,3 +225,12 @@ dependencies beyond clang, ld.lld and qemu.
   CLAUDE.md's own versioning rule above is explicit that `0.x.y` is
   deliberate for now); picking one is a task for whenever that day
   actually comes, not a placeholder to invent early.
+
+## Landing roadmap copy
+
+`python3 tools/gen/landing-roadmap.py` updates the landing page’s “Where it’s
+going” card from the first three open, numbered bold titles in roadmap.md’s
+Session task queue. Strike through completed entries; keep task titles short
+and suitable for public display. Deployment runs the generator automatically.
+Run `python3 tools/checks/landing-roadmap-check.py` to check generation and
+`python3 tools/gen/landing-roadmap.py --check` to check the saved HTML.

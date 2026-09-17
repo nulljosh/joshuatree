@@ -27,6 +27,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Landing roadmap summary regression checks
+        run: python3 tools/checks/landing-roadmap-check.py
       - name: Cache apt packages
         uses: actions/cache@v4
         with:

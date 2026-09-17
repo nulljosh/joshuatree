@@ -2059,3 +2059,14 @@ Direct requests: the releases link should live on the H2/eyebrow, not the H1, an
 **Verified**: live browser check confirms full-width demo and working H2 link, `tools/checks/check-refs.sh` clean.
 
 PATCH bump: 0.76.54 -> 0.76.55.
+
+## Landing roadmap summary (PR, pending review)
+
+The “Where it’s going” card now comes from the open entries in the ordered
+Session task queue above. A build-time generator takes up to three task titles,
+skips completed entries, and escapes the result for HTML. Roadmap changes now
+trigger the landing deploy workflow, which regenerates the card before upload.
+This resolves the static-card requests recorded above. No browser fetch needed.
+
+Permanent regression checks cover completion, new tasks, ordering, escaping,
+empty queues, malformed markers, and the real page. Kernel code is unchanged.
