@@ -54,3 +54,21 @@ anyone with ring-0 code execution or raw access to the disk image. The
 honest framing, and the one this implementation uses: a desktop lock for
 the person in front of the machine, backed by a real password hash instead
 of a fake one, nothing else.
+
+## The gate is opt-in, not on by default
+
+The login screen only engages once at least one account actually exists
+in `USERS.TXT`; an unconfigured system (no `USERS.TXT`, or an empty one)
+boots straight to the desktop, exactly as it did before this feature
+existed. That is deliberate, not a gap in the implementation, and follows
+directly from the framing above: with no account configured there is
+nothing for a login screen to protect, so a gate that blocked boot anyway
+would be exactly the false sense of security this document already warns
+against, a lock on a door with no one behind it. It also matches this
+kernel's one real deployment that a login prompt cannot be sprung on:
+`landing/index.html`'s live v86 demo boots this exact `kernel.elf` for an
+anonymous browser visitor with no keyboard focus guaranteed and no one
+able to create an account first, so that build is, and stays,
+unconfigured by design. Creating the first account is a deliberate,
+in-desktop action (Settings' "Add user" row) rather than something the
+boot path forces on every visitor.
