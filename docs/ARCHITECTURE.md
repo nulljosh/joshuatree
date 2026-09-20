@@ -94,7 +94,9 @@ separate Save step.
 
 **Calculator** (`kernel/calculator.h`, v70 / 0.64.0) doesn't fit the VFS-backed table above, it has no persistence at all on purpose: a recursive-descent parser over `+ - * / ()` and numbers, one-line input evaluated on enter. Ported from numen's real calculator parser (the v6 roadmap note that first flagged it as portable, pure logic, no network dependency).
 
-**Stocks** (`kernel/stocks.h`, v71+ / 0.67.0) is a static demo-data app with no network backend: a fixed list of five real tickers (AAPL, MSFT, GOOGL, AMZN, TSLA) with plausible baked-in prices and daily changes, clearly labeled as demo data. No live market data or API calls (roadmap.md's real curl tests proved all plain-HTTP stock quote sources force HTTPS). List view with up/down selection, enter for details, esc closes, the same app-shape pattern Weather/Mail/Calendar established.
+**Stocks** (`kernel/stocks.h`) is the basic native one, shaped like macOS Stocks: a scrolling watchlist sidebar (sparkline, price, colored change pill) beside a detail pane with 1D/1W/1M/3M/1Y range tabs, a line chart and an Open/High/Low/Mkt Cap/P/E grid. Baked-in demo data (all plain-HTTP quote sources force HTTPS, no TLS here); chart history is a deterministic seeded walk pinned to the real baked-in price. Its drawing helpers (`stx_*`) are reused by Epiphany.
+
+**Epiphany** (`kernel/epiphany.h`) is our own, richer take, a deliberately separate app from Stocks: the offline slice of github.com/nulljosh/epiphany. Tabs: Markets (editable watchlist, `a` add / `d` remove, plus crypto, commodities, fear/greed), Portfolio (holdings valued off live-ticking prices, P/L, allocation bar, +/- shares), Simulator (ticking random-walk market you trade against), Situation (macro pulse, brief). The real app's map, People graph and accounts/billing/sync need HTTPS and cannot run here. Dock/Apps icon 22; Apps folder and Trash moved to 23/24.
 
 **Search** (`kernel/search.h`, v0.86.0), Apps-folder-only like Contacts/
 Calculator/Stocks, no persistence of its own since it mirrors the real
