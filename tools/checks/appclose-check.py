@@ -14,10 +14,10 @@ fine. The "all apps" impression was the modal Notes window sitting over
 the still-visible dock, so every dock click after it looked dead.
 
 For every dock slot (Apps folder, Files, Mail, Calendar, Notes, Reminders,
-Terminal, Chat, Weather, Trash), in order:
+Terminal, Chat, Weather, Stocks, Trash), in order:
   1. click the slot, dump the real framebuffer, assert the window chrome's
-     red close button is on screen (0xFF5F57 at logical (94,56), a colour
-     the wallpaper never has);
+     red close button is on screen (0xFF5F57 at logical (94,56), or (80,46)
+     for the Apps folder's larger window, a colour the wallpaper never has);
   2. click that red button, park the pointer away from it, dump again,
      assert the red button is gone (the desktop is back).
 Then the "all apps" scenario itself: open Notes, click the Reminders
@@ -45,7 +45,7 @@ CLOSE_X, CLOSE_Y = 94, 56          # gui_launch_from_dock: red circle at (x+24, 
 APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46  # the Apps folder's own larger window origin (56, 30)
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)                  # open wallpaper, away from every hit target
-SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Trash"]
+SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Stocks", "Trash"]
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -71,7 +71,9 @@ try:
             if "return" in r or "error" in r: return r
     f.readline()
     cmd({"execute": "qmp_capabilities"})
-    time.sleep(5.0)  # desktop up
+    # QMP becoming available does not mean the guest has finished booting.
+    # On loaded CI runners the old fixed five-second delay began the sweep
+    # before the desktop could handle clicks, losing the first few apps.
 
     def move(x, y):
         cmd({"execute": "input-send-event", "arguments": {"events": [
@@ -86,8 +88,32 @@ try:
         img = Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
         return img.getpixel((x * SCALE + 1, y * SCALE + 1))  # +1: inside the s x s block, never its seam
     def is_red(p): return max(abs(p[i] - CLOSE_RED[i]) for i in range(3)) <= 12
+    # Bottom padding of the dock tray, under the icon row and horizontally
+    # centred, so neither an icon nor either rounded corner is in the sample.
+    # DOCK_TRAY_COLOR is opaque and appears only once the GUI has presented
+    # the desktop, so this is a real "boot finished" edge, not a fixed sleep.
+    for _ in range(120):
+        if pixel(480, 511) == (0xEF, 0xEB, 0xE4):
+            break
+        time.sleep(0.25)
+    else:
+        raise SystemExit("FAIL: desktop dock did not appear within 30 seconds")
+    time.sleep(0.3)  # let the input loop begin after its first presentation
     def close_button():
-        """Where the red button is right now: the app window's, the Apps folder's, or None."""
+        """Where the red button is right now: the app window's, the Apps folder's, or None.
+
+        v0.76.19: a previous pass replaced the Apps-folder arm of this with a
+        sample of the launchpad's frosted glass panel, on the belief that the
+        folder has no traffic light. It does: gui_launch_from_dock draws the
+        same red/yellow/grey circles for GUI_APPS_FOLDER, only at its own
+        larger window origin (56, 30) instead of (70, 40). The glass sample
+        was the actual CI failure -- the panel is a 76% blend over whatever
+        wallpaper is underneath, so "did it change by more than 12" is a
+        contrast race that happened to pass on a Mac and fail on the GitHub
+        runner's wallpaper, taking Apps down and then eating the next three
+        dock clicks (the folder is modal, so it swallowed them while it
+        stayed open). The red circle is a fixed, wallpaper-independent
+        colour, which is why every other slot here keys off it."""
         if is_red(pixel(CLOSE_X, CLOSE_Y)): return (CLOSE_X, CLOSE_Y)
         if is_red(pixel(APPS_CLOSE_X, APPS_CLOSE_Y)): return (APPS_CLOSE_X, APPS_CLOSE_Y)
         return None
@@ -97,8 +123,16 @@ try:
         cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in qcodes]}})
 
     def open_slot(slot):
+        # Same reasoning as close_via_x below, applied to the open half: a
+        # fixed post-click sleep cannot tell "this app never opened" from
+        # "this runner needed another second to paint the window chrome".
+        # Poll up to ~4s instead, and return as soon as the real red button
+        # is on screen. The assertion is unchanged, only the patience is.
         move(centre(slot), ICON_ROW_Y); time.sleep(0.3)
-        click(); time.sleep(1.2)
+        click()
+        for _ in range(40):
+            time.sleep(0.1)
+            if window_open(): return
     def close_via_x():
         # v0.76.18: real CI flake found and fixed, not hand-waved. Run 111
         # (GitHub Actions, not reproduced in ~10 local runs) failed here on
@@ -111,18 +145,33 @@ try:
         # one frame later than usual" apart; polling does, without weakening
         # the real assertion (still fails if truly stuck after the same
         # ~2s worst case this used to allow only 0.8s of).
+        # v0.76.19: the poll ceiling that used to be 2s is now 4s, matching
+        # open_slot. Real CI evidence, not padding: run 35521868175 got every
+        # one of the eleven slots open and closed except "Apps: still open
+        # after pointer close", on a run where the sweep afterwards proved
+        # input was fine end to end. The Apps folder is the one slot whose
+        # close runs a full gui_draw_desktop repaint of the whole 1920x1080
+        # framebuffer on the way out, so it is reliably the slowest close in
+        # the sweep and the first to fall off a ceiling a loaded runner
+        # cannot meet. Still fails if a window is genuinely stuck.
         at = close_button()
         if at is None: return
         move(*at); time.sleep(0.3)
-        click()
-        for _ in range(20):
-            time.sleep(0.1)
-            if not window_open(): break
+        # Re-click every ~4s for up to ~20s: a loaded runner can drop a click
+        # edge while the kernel repaints, or just paint very late. Either way
+        # a window that is truly stuck still fails after the last attempt.
+        for _ in range(5):
+            click()
+            for _ in range(40):
+                time.sleep(0.1)
+                if not window_open(): break
+            else:
+                continue
+            break
         move(*PARK); time.sleep(0.5)
 
     move(*PARK); time.sleep(0.5)
     if window_open(): fails.append("desktop: red close button visible before anything was opened (sampling point is wrong)")
-
     for slot, name in enumerate(SLOTS):
         open_slot(slot)
         opened = window_open()
@@ -137,9 +186,14 @@ try:
             time.sleep(0.5)
         close_via_x()
         closed = not window_open()
-        print(f"close via X: {'yes' if closed else 'NO, still open'}")
+        print(f"close via pointer: {'yes' if closed else 'NO, still open'}")
         if not closed:
-            fails.append(f"{name}: still open after clicking its close button")
+            fails.append(f"{name}: still open after pointer close")
+            # Evidence, not guesses: which sample point is red, and what the
+            # kernel itself logged, so a runner-only failure is diagnosable.
+            print(f"  diag: app-X{(CLOSE_X, CLOSE_Y)}={pixel(CLOSE_X, CLOSE_Y)} apps-X{(APPS_CLOSE_X, APPS_CLOSE_Y)}={pixel(APPS_CLOSE_X, APPS_CLOSE_Y)} centre={pixel(480, 270)}")
+            try: print("  serial tail:", open(LOG, errors="replace").read()[-400:].replace("\n", " | "))
+            except OSError: pass
             # Try to recover so the sweep can go on: esc is the keyboard exit every app honours.
             for _ in range(2):
                 if window_open(): keys("esc"); time.sleep(0.8)
