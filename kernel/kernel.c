@@ -3642,6 +3642,7 @@ static void gui_launch_files(void){ gui_draw_files_content(); gui_wait_close(); 
    rest of the app headers. */
 
 #include "gui_prompt.h"
+#include "auth.h"
 #include "editor.h"
 #include "reminders.h"
 #include "calendar.h"
@@ -4197,8 +4198,8 @@ static int settings_prompt_line(const char *prompt, char *out, int max) {
     return 1;
 }
 
-#define SETTINGS_ROW_COUNT 5 /* v75: + wallpaper source; v85: + LLM model, + LLM host:port */
-static const int SETTINGS_ROWS_Y[SETTINGS_ROW_COUNT] = {84, 116, 148, 180, 212};
+#define SETTINGS_ROW_COUNT 7 /* v75: + wallpaper source; v85: + LLM model, + LLM host:port; v0.77: + Account (change password), + Add user */
+static const int SETTINGS_ROWS_Y[SETTINGS_ROW_COUNT] = {84, 116, 148, 180, 212, 252, 284};
 
 /* Pure, hardware/GUI-free: given a real click's full-screen logical
    coordinates and the window's current width, returns which Settings row
@@ -4250,7 +4251,7 @@ static void gui_launch_settings(void){
             } else if (i == 3) {
                 font_draw_string("LLM model", 28, y, 0x001C1C1E, -1);
                 font_draw_string(llm_model, 400, y, 0x001C1C1E, -1);
-            } else {
+            } else if (i == 4) {
                 font_draw_string("LLM host:port", 28, y, 0x001C1C1E, -1);
                 char hp[LLM_HOST_MAX + 8]; int p = 0;
                 const char *s = llm_host; while (*s && p < (int)sizeof(hp) - 8) hp[p++] = *s++;
@@ -4261,6 +4262,19 @@ static void gui_launch_settings(void){
                 while (nd) hp[p++] = digits[--nd];
                 hp[p] = 0;
                 font_draw_string(hp, 400, y, 0x001C1C1E, -1);
+            } else if (i == 5) {
+                /* v0.77: real accounts. Tap/enter here walks old-password
+                   ->new-password->confirm through settings_prompt_line
+                   (masking not needed for that shared shell-style prompt,
+                   the dedicated masked auth_field_input is only used by
+                   the login/first-run screens themselves, kept separate on
+                   purpose so Settings doesn't need its own copy of the
+                   dot-echo loop for one row). */
+                font_draw_string("Account", 28, y, 0x001C1C1E, -1);
+                font_draw_string(auth_current_user[0] ? auth_current_user : "(none)", 400, y, 0x001C1C1E, -1);
+            } else {
+                font_draw_string("Add user (new account)", 28, y, 0x001C1C1E, -1);
+                font_draw_string("tap or enter", 400, y, 0x00807468, -1);
             }
         }
         font_draw_string("Settings are saved to disk and survive a reboot.", 20, (int)window_height() - 28, 0x00807468, -1);
@@ -4341,7 +4355,68 @@ static void gui_launch_settings(void){
                     settings_save();
                 }
             }
-            else {
+            else if (sel == 5 && k != 'a' && k != 'd') {
+                /* Change password for the account that's actually logged
+                   in this session, not a free-text username field: there
+                   is exactly one real "current user" concept in this
+                   kernel today (auth_current_user, set by auth_gate at
+                   boot), matching the single-machine/single-visitor
+                   threat model docs/THREAT-MODEL.md lays out. 'a'/'d'
+                   (left/right, the stepper convention every other row
+                   uses) don't apply to this row, only a real tap/enter. */
+                if (auth_current_user[0]) {
+                    char oldbuf[AUTH_PASSWORD_MAX + 1]; oldbuf[0] = 0;
+                    if (settings_prompt_line("Current password (enter to confirm, esc to cancel):", oldbuf, sizeof(oldbuf))) {
+                        char newbuf[AUTH_PASSWORD_MAX + 1]; newbuf[0] = 0;
+                        if (settings_prompt_line("New password (enter to confirm, esc to cancel):", newbuf, sizeof(newbuf))) {
+                            char confirmbuf[AUTH_PASSWORD_MAX + 1]; confirmbuf[0] = 0;
+                            if (settings_prompt_line("Confirm new password (enter to confirm, esc to cancel):", confirmbuf, sizeof(confirmbuf))) {
+                                int ok = !strcmp(newbuf, confirmbuf) && auth_change_password(auth_current_user, oldbuf, newbuf);
+                                font_draw_string(ok ? "Password changed." : "That didn't work -- wrong current password or mismatch.",
+                                                  20, (int)window_height() - 48, ok ? 0x002F7B4F : 0x00A33B3B, -1);
+                                sleep_ticks(60);
+                            }
+                            memset(newbuf, 0, sizeof(newbuf));
+                            memset(confirmbuf, 0, sizeof(confirmbuf));
+                        }
+                        memset(oldbuf, 0, sizeof(oldbuf));
+                    }
+                }
+            }
+            else if (sel == 6 && k != 'a' && k != 'd') {
+                /* Adding a second local account. No admin/role concept
+                   exists in this kernel (real, honest gap, not modeled
+                   here since the direct request scoped this to "create a
+                   user, change your own password", not a permissions
+                   system) -- any logged-in session can add another
+                   account. auth_create_user already refuses a duplicate
+                   name, an empty name/password, or a full table (8 max). */
+                char ubuf[AUTH_USERNAME_MAX + 1]; ubuf[0] = 0;
+                if (settings_prompt_line("New username (enter to confirm, esc to cancel):", ubuf, sizeof(ubuf))) {
+                    char pbuf[AUTH_PASSWORD_MAX + 1]; pbuf[0] = 0;
+                    if (settings_prompt_line("Password for that user (enter to confirm, esc to cancel):", pbuf, sizeof(pbuf))) {
+                        int ok = auth_create_user(ubuf, pbuf);
+                        /* v0.77.1: the gate is opt-in (auth_gate is a no-op
+                           on an unconfigured system, see kernel/auth.h),
+                           so a session that reaches this row with nobody
+                           logged in yet is exactly the "creating the very
+                           first account" case that used to be the
+                           first-run screen's job. Treat this account as
+                           the current session's own from here on, the
+                           same real effect the old first-run flow had,
+                           just moved to Settings instead of gating boot. */
+                        if (ok && !auth_current_user[0]) {
+                            unsigned int p = 0; while (ubuf[p] && p < AUTH_USERNAME_MAX) { auth_current_user[p] = ubuf[p]; p++; } auth_current_user[p] = 0;
+                            auth_logged_in = 1;
+                        }
+                        font_draw_string(ok ? "Account created." : "Couldn't create that account (name taken, empty, or table full).",
+                                          20, (int)window_height() - 48, ok ? 0x002F7B4F : 0x00A33B3B, -1);
+                        sleep_ticks(60);
+                    }
+                    memset(pbuf, 0, sizeof(pbuf));
+                }
+            }
+            else if (sel != 5 && sel != 6) {
                 int dir = (k == 'a') ? -1 : 1; /* a tap always steps up; a real direction only from the keyboard */
                 if (k == KEY_CLICK) dir = 1;
                 int v = dock_scale_pct + dir;
@@ -5059,6 +5134,7 @@ static void gui_run(void){
        dropped (tourtest failed twice, alone, on this build). The BIOS-font
        check from v38 is the reliable "this is v86" signal. */
     if (font_is_fallback()) wind_enabled = 0;
+    auth_gate(); /* v0.77: real login/first-run account screen, once per session, before the desktop ever paints */
     gui_draw_boot_screen();
     gui_order_init();
     for (int i = 0; i < GUI_ICON_COUNT; i++) dock_hover_extra[i] = dock_presented_extra[i] = 0;
