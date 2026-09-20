@@ -29,11 +29,14 @@ make run      # boots to the shell, type gui for the desktop
 
 `gui` opens the desktop. `web example.com` does a real DNS lookup and a real
 TCP connection over the network stack in this repo, with no operating system
-underneath it. `ls`, `cat`, `write` and `exec` work on a real FAT disk.
+underneath it. `ls`, `cat` and `write` work on a real FAT disk. `usertest` runs the ring-3
+reference program (`user/hello.c`), which is compiled against
+[`docs/SYSCALL-ABI.md`](docs/SYSCALL-ABI.md) and nothing else, loaded off the
+filesystem and run at CPL 3; `exec <file>` runs any flat binary the same way.
 
 The rest, mostly there to exercise one subsystem at a time: `help` `dmesg`
 `mem` `ps` `kill` `sleep` `heaptest` `heapgrow` `tasktest` `preempttest`
-`ring3test` `isotest` `reaptest` `killtest` `disktest` `diskuse` `fsuse`
+`ring3test` `usertest` `isotest` `reaptest` `killtest` `disktest` `diskuse` `fsuse`
 `mkdir` `rm` `cd` `browse` `lspci` `gfxtest` `fonttest` `mousetest`
 `nettest` `ifconfig` `netscan` `serve` `serveapp` `chat` `weathertest`
 `geotest` `wind` `testapps` `crash` `pagefault` `reboot`.
