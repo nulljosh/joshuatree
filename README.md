@@ -2,7 +2,7 @@
 
 # Joshua Tree
 
-![version](https://img.shields.io/badge/version-0.80.0-blue)
+![version](https://img.shields.io/badge/version-0.81.0-blue)
 ![platform](https://img.shields.io/badge/platform-i386-lightgrey)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
