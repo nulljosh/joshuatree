@@ -23,6 +23,47 @@
 #   fixed hop per poll (v0.78.0): 11 ticks  (110 ms)
 #   time-based (this fix)       :  6 ticks  ( 60 ms)
 #
+# v0.79.x: duration alone turned out not to be enough, and the same
+# report came back ("dock hover on icons still janky, choppy, smooth zoom
+# animation should be there") while this check was passing at a 50 ms
+# median. Measured with an rdtsc probe calibrated against the PIT rather
+# than guessed at: a wind sway frame costs 65 ms and fires every 5 ticks,
+# so the whole gui_run loop was turning over at about 15 fps, and a
+# magnify written to take six ticks got exactly one frame. It snapped from
+# resting to fully lifted in a single jump while still finishing "on
+# time", which is precisely the failure a duration assertion cannot see.
+#
+# So the kernel also reports dockstep=, the number of distinct sizes a
+# magnify really passed through, and this asserts on that too. Real
+# numbers, 18 magnifies over 3 boots at each stage:
+#
+#   before                          dockmag 5, dockstep 2   [1..3]
+#   sway suppressed during a hover  dockmag 6, dockstep 3   [2..3]
+#   + tray cached out of the frame  dockmag 6, dockstep 3   (frame 11ms -> 3.4ms)
+#   + sub-pixel time ramp           dockmag 5, dockstep 6   [3..6]
+#
+# Two assertions, because a raw step count is a property of the machine as
+# much as of the code. A box that only turns over three frames in sixty
+# milliseconds cannot show six sizes however the animation is written, and
+# a first attempt at "median distinct sizes >= 4" duly went red on this
+# very machine the moment it was busy, which is a flake, not a finding.
+#
+#   1. the median magnify shows at least 3 distinct sizes. That is the
+#      floor the report was below: measured 2, with hovers collapsing to a
+#      single snap, because the sway had the frame rate down at 15 fps.
+#   2. the median magnify shows a fresh size on all but at most one of the
+#      frames it was given (dockstep vs dockframe). This is the part that
+#      is purely the code's doing and does not move with machine speed,
+#      and it is exactly what a quantum coarser than the frame rate
+#      breaks: the old 3-tick gate advanced on one frame in three and left
+#      the other two drawing nothing new. Measured side by side on the
+#      same busy machine, same six hovers: the ramp shows 3 sizes in 2
+#      frames and 6 in 5, the old quantum shows 3 in 5.
+#
+# Proven discriminating by actually reverting the ramp to the whole-pixel
+# quantum of 3, with everything else left in place: real FAIL, while the
+# duration assertion below went on passing at a 60 ms median.
+#
 # This asserts the median stays at or under 10 ticks. 8 was the original
 # threshold, picked from this machine's own local numbers (6 vs 11), but
 # CI's shared runner is slower and a genuinely time-based animation lands
@@ -88,14 +129,22 @@ def size():
     except FileNotFoundError: return 0
 
 durations = []
+steps = []
+frames = []
 for slot in (2, 4, 6, 8, 3, 5):
     move(480, 200); time.sleep(1.2)          # off the dock, let every slot decay to 0
     mark = size()
     move(SLOT0_X + slot * PITCH + DOCK_ICON // 2, ICON_ROW_Y)
     time.sleep(1.5)
-    got = [int(l.split("=")[1]) for l in read_from(mark).splitlines() if l.startswith("dockmag=")]
+    block = read_from(mark).splitlines()
+    got = [int(l.split("=")[1]) for l in block if l.startswith("dockmag=")]
+    sizes = [int(l.split("=")[1]) for l in block if l.startswith("dockstep=")]
+    got_frames = [int(l.split("=")[1]) for l in block if l.startswith("dockframe=")]
     if got:
         durations.append(got[0])
+    if sizes and got_frames:
+        steps.append(sizes[0])
+        frames.append(got_frames[0])
 
 cmd({"execute": "quit"})
 
@@ -109,8 +158,25 @@ print("magnify durations (PIT ticks, 10ms each): %s  median=%d (%d ms)"
 if median > 10:
     print("FAIL: the dock magnify takes %d ticks (%d ms), back to advancing by a fixed hop per "
           "poll instead of by elapsed time" % (median, median * 10)); sys.exit(1)
-print("PASS: the dock magnify finishes in %d ticks (%d ms), time-based and independent of frame rate"
-      % (median, median * 10))
+if len(steps) < 4:
+    print("FAIL: only %d of 6 hovers produced a dockstep=/dockframe= pair, the smoothness markers "
+          "are missing" % len(steps)); sys.exit(1)
+st = sorted(steps)
+st_median = st[len(st) // 2]
+fr = sorted(frames)
+fr_median = fr[len(fr) // 2]
+print("distinct sizes per magnify: %s  median=%d" % (st, st_median))
+print("frames per magnify:         %s  median=%d" % (fr, fr_median))
+if st_median < 3:
+    print("FAIL: the dock magnify shows only %d distinct sizes, so it reads as a jump rather than a "
+          "zoom however fast it finishes" % st_median); sys.exit(1)
+if st_median + 1 < fr_median:
+    print("FAIL: the dock magnify showed %d distinct sizes across the %d frames it was given, so the "
+          "animation's own quantum is coarser than the frame rate and frames go by redrawing nothing "
+          "new" % (st_median, fr_median)); sys.exit(1)
+print("PASS: the dock magnify finishes in %d ticks (%d ms) and shows %d distinct sizes across the "
+      "%d frames it gets, time-based and as fine as the frame rate allows"
+      % (median, median * 10, st_median, fr_median))
 PYEOF
 STATUS=$?
 set -e
