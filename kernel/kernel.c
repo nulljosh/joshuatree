@@ -2535,6 +2535,17 @@ static void wall_apply(int want_map){
         next = (want_map && wall_map) ? wall_map : wallpaper_rgb;
     }
     if (next == wall_src && wall_theme == wall_last_theme) return;
+    /* Real-evidence marker for tools/checks/wallboot-check.sh, the same
+       "log it at the one real choke point" pattern wall_switch_theme's
+       own walltheme= line already uses. Fires every
+       time wall_src actually changes buffer, which includes the very
+       first call (wall_src's static initializer is wallpaper_rgb and
+       wall_last_theme starts at -1, so the first real assignment always
+       logs), letting a headless boot prove what buffer the first real
+       desktop paint used without guessing from timing alone. */
+    serial_puts("wallsrc=");
+    serial_puts(next == wallpaper_rgb ? "photo" : (next == wall_dark_fallback ? "dark" : "map"));
+    serial_puts("\n");
     wall_src = next;
     wall_last_theme = wall_theme;
     wall_caches_drop();
