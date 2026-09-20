@@ -8,6 +8,16 @@ Freestanding i386 kernel, no libc. This file is the forward plan: what's still o
 
 **Model routing on each open item**: `[Haiku]` -- mechanical work with a known-correct shape, cheap and low-risk. `[Sonnet]` -- the general case, real feature work with a clear existing pattern to follow. `[Fable]` -- anything where a subtly wrong answer looks fine and boots fine: privilege isolation, exact stack/register frame layouts, wire-protocol byte layout, memory-model changes, needs the deeper reasoning pass. `[Joshua]` -- a real design or scope call, not code. Tags are a starting guess, re-tag if an item turns out easier or harder once opened.
 
+## Engraving design system (Sep 2026, from Joshua)
+One ink on one paper, tone by hatching, from the Joshua Tree Co. mark. Full rule in `CLAUDE.md`'s Theme bullet.
+- [x] [Sonnet] Landing page: tokens, spec-sheet rules, plates, badge, ink chart.
+- [ ] [Fable] Kernel goes 1-bit, sequenced AFTER the lag item above, since it is partly the fix for it. Ordered dither fills (25/50/75%, a 4x4 Bayer table) stand in for every grey and every alpha blend: desktop, title bars, disabled states. Flat fills and no blending means smaller damage rects and no per-pixel AA cost. Prior art: Atkinson's QuickDraw patterns on the 1984 Mac, same problem, same answer.
+- [ ] [Sonnet] Paper desktop with a hairline horizon landscape along the bottom, replacing the satellite wallpaper as the default (the map themes stay as options).
+- [ ] [Sonnet] Window chrome: 1px ink border, hatched title bar, no shadows. The arched badge outline (R120/R80/R40) on About and login only.
+- [ ] [Sonnet] 18 dock icons redrawn as 1-bit line glyphs; the simplified tree is the launcher.
+- [ ] [Haiku] Boot splash: the badge drawn scanline by scanline.
+- [ ] [Haiku] `landing/icon.svg` (plus root `icon.svg` and the app `.icns`, `iconsync-check.sh` ties all three) redrawn as the simplified tree. The favicon already uses `landing/mark.png`.
+
 ## Explicitly parked / non-goals
 - SMP (multi-core), one CPU is plenty until everything above works
 - A real filesystem journal / crash-consistency, FAT read support is enough for v4-v5
