@@ -318,7 +318,7 @@ caption = f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fi
 def color_vars(scope):
     return f'''
   {scope} {{
-    --bg: #faf8f6; --grid: #e8e2da; --axis: #ded6ca; --muted: #a39c92;
+    --bg: #faf8f6; --grid: #e8e2da; --axis: #ded6ca; --muted: #78736c;
     --label: #75726e; --strong: #1c1c1e; --line: #884b16; --line2: #4c2e13; --line2-pct: #b6a08a;
   }}
   @media (prefers-color-scheme: dark) {{

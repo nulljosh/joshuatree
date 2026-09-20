@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="479" height="200" viewBox="0 0 479 200"><style>
   :root {
-    --bg: #faf8f6; --grid: #e8e2da; --axis: #ded6ca; --muted: #a39c92;
+    --bg: #faf8f6; --grid: #e8e2da; --axis: #ded6ca; --muted: #78736c;
     --label: #75726e; --strong: #1c1c1e; --line: #884b16; --line2: #4c2e13; --line2-pct: #b6a08a;
   }
   @media (prefers-color-scheme: dark) {
