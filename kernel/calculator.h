@@ -287,7 +287,6 @@ static void gui_launch_calculator(void) {
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Calculator");
     font_draw_string("expr: + - * / ( ) enter evaluate  esc closes", 20, 52, 0x00807468, -1);
-    serial_puts("guiprompt\n"); /* discriminating marker for regression tests */
 
     for (;;) {
         /* Redraw only the content area (input and output), not the chrome. */
@@ -300,6 +299,16 @@ static void gui_launch_calculator(void) {
             font_draw_string("= ", 20, 136, 0x00807468, -1);
             font_draw_string(output, 40, 136, 0x001C1C1E, -1);
         }
+        /* v0.76.58: moved from a single call before the loop (which only
+           ever proved the chrome drew once) to here, one call per real
+           content redraw, matching the exact place gui_prompt_line_input
+           already emits its own "guiprompt" marker (gui_prompt.h). The
+           old placement meant this marker could never grow with real
+           typing no matter how correct the per-keystroke redraw above
+           was, since it fired exactly once, before get_key_or_click was
+           even called for the first time. tools/checks/gui-prompt-
+           keystroke-check.sh asserts this grows with real keystrokes. */
+        serial_puts("guiprompt\n"); /* discriminating marker for regression tests */
 
         sleep_ticks(5);
         mouse_click_edge_sync();

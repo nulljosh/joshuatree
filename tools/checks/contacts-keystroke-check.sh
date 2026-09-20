@@ -11,7 +11,34 @@
 # serial markers to verify that the content redraw loop is called multiple times
 # (once per keystroke plus the initial render, ~8+ times for 8 keystrokes), proving
 # the draw loop is working without measuring the reduced screen flashing.
-
+#
+# v0.76.58: this test was itself broken, real bug found by reading the
+# actual kernel code (kernel.c's gui_launch_apps, contacts.h), not by
+# trusting the earlier "Expected multiple prompt redraws, got 0" report:
+#   It opened the Apps folder, then immediately pressed 'a'. gui_launch_apps
+#   (kernel.c) navigates the grid with a/d/w/s (left/right/up/down) plus
+#   Enter to launch, or digits '1'-'9' for the first 9 of 21 apps; 'a' there
+#   means "move left" (a no-op at the leftmost cell), not "add a contact".
+#   Contacts (icon 18) was never launched at all, so the typed characters
+#   after it landed on the still-open grid, where they do nothing (no letter
+#   shortcuts exist), and contacts_add/contacts_prompt_line (the only place
+#   that emits "contactsprompt") never ran.
+#
+#   Contacts has no dock icon (GUI_DOCK_DEFAULT only covers icons 0-7) and
+#   isn't in gui_multiwin_supported's list either, so the Apps-folder grid is
+#   the only way to reach it -- no multi-window complication to route around
+#   here, unlike Reminders/Mail in gui-prompt-keystroke-check.sh.
+#
+# Real flow now driven: open the Apps folder (dock slot 0), navigate the
+# grid to icon 18 (row 3, col 3: right x3, down x3 from the top-left cell,
+# the same cell math gui_launch_apps itself uses), press Enter to launch
+# Contacts, press 'a' to open the add-contact name prompt (contacts.h:
+# "if (k == 'a') { contacts_add(); continue; }"), then type real characters
+# and verify "contactsprompt" grows once per keystroke.
+#
+# Proven discriminating: reverted contacts.h's 'a' gate so contacts_add()
+# never ran (renamed the key check to an unreachable key) and reran --
+# real FAIL, 0 redraws, since the prompt never opened; restored, real PASS.
 set -e
 cd "$(dirname "$0")/../.."
 make -s kernel.elf
@@ -19,10 +46,12 @@ make -s kernel.elf
 PORT=4457
 LOG=$(mktemp /tmp/jt-contactskeypress-XXXX.log)
 
+cleanup() { kill "$QEMU_PID" 2>/dev/null || true; rm -f "$LOG"; }
+trap cleanup EXIT
+
 qemu-system-i386 -kernel kernel.elf -display none -vga std \
-    -qmp "tcp:127.0.0.1:$PORT,server,nowait" -serial "file:$LOG" &
+    -qmp "tcp:127.0.0.1:$PORT,server,nowait" -serial "file:$LOG" -name jt-contactskeypress &
 QEMU_PID=$!
-trap 'kill "$QEMU_PID" 2>/dev/null || true; rm -f "$LOG"' EXIT
 
 RESULT=$(python3 - "$PORT" "$LOG" <<'PYEOF'
 import json, socket, sys, time
@@ -59,7 +88,6 @@ LOGICAL_W, LOGICAL_H = 960, 540
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 268
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-CONTACTS_SLOT = 5  # Reminders is in dock, need to open Contacts from Apps folder
 
 def move(x, y):
     cmd({"execute": "input-send-event", "arguments": {"events": [
@@ -73,15 +101,19 @@ def key(qcode):
     cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qcode}]}})
     time.sleep(0.1)
 
-# Open Contacts from Apps folder via the dock Apps icon (first slot)
+# Open the Apps folder from the dock (first slot).
 apps_centre = SLOT0_X + 0 * PITCH + DOCK_ICON // 2
 move(apps_centre, ICON_ROW_Y); time.sleep(0.3)
 click(); time.sleep(0.8)
 
-# Click on Contacts app (index 18, should be in the grid somewhere)
-# For simplicity, just try pressing 'c' for Contacts (app grid has digit shortcuts)
-# But Contacts isn't in the digit 1-9 range, so use arrow keys or 'a' for add
-key("a")  # Try 'a' for add
+# Navigate the grid to Contacts (icon 18, row 3 col 3): right x3, down x3
+# from the top-left cell (index 0), the same layout math gui_launch_apps
+# itself uses (row = i / APPS_COLS, col = i % APPS_COLS, APPS_COLS = 5).
+for c in ("d", "d", "d", "s", "s", "s"):
+    key(c)
+key("ret"); time.sleep(0.6)  # launch Contacts
+
+key("a")  # open the add-contact name prompt (contacts.h's real shortcut)
 time.sleep(0.5)
 
 before_prompt = prompt_count()
@@ -93,9 +125,9 @@ for c in "testname":
 
 after_typing = prompt_count()
 
-# Press ESC to cancel
-key("escape")
-time.sleep(0.5)
+# Press ESC to cancel the prompt, then ESC again to close Contacts.
+key("esc"); time.sleep(0.3)
+key("esc"); time.sleep(0.5)
 
 cmd({"execute": "quit"})
 
@@ -106,9 +138,6 @@ else:
     sys.exit(0)
 PYEOF
 )
-
-kill "$QEMU_PID" 2>/dev/null || true
-wait "$QEMU_PID" 2>/dev/null || true
 
 echo "$RESULT"
 echo "$RESULT" | grep -q "^PASS:" && exit 0

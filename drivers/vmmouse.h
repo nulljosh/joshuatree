@@ -37,4 +37,8 @@ int vmmouse_buttons(void);
    even when its press and release were drained by the same poll, which
    a sampled "is it down right now" check would miss entirely. */
 int vmmouse_take_presses(void);
+/* Accumulated wheel steps (the backdoor's EDX/z word on every packet,
+   always a relative step even while x/y are absolute), PS/2 sign
+   convention (positive = scroll up), cleared on take. */
+int vmmouse_take_wheel(void);
 #endif

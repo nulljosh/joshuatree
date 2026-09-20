@@ -3,6 +3,7 @@
    0xD4 "write to the mouse, not the keyboard" prefix. */
 #include "mouse.h"
 #include "vmmouse.h"
+#include "serial.h"
 
 typedef unsigned char  u8;
 typedef unsigned short u16;
@@ -44,6 +45,34 @@ void mouse_init(void) {
     outb(CTRL_DATA, status);
 
     mouse_write(0xF6); mouse_read(); /* set defaults, ack */
+
+    /* v0.76.58: IntelliMouse wheel negotiation, the real magic sequence
+       (Microsoft's original, documented on OSDev's "Mouse Input" page and
+       matched by Linux's psmouse driver): set the sample rate to 200, then
+       100, then 80 in a row via three separate 0xF3 commands, each ACKed,
+       nothing else in between. A real 3-byte-only mouse just treats these
+       as three ordinary sample-rate changes and answers ACK each time,
+       harmless. A wheel-capable mouse recognizes the exact sequence and
+       switches into 4-byte IntelliMouse packet mode. 0xF2 (get device ID)
+       then reports 3 instead of the plain 0 if the switch worked; this
+       kernel doesn't gate anything on that ID today (mouse_handle_byte
+       already always reads a 4th byte and a plain 3-byte mouse's phantom
+       4th byte is harmless per its own comment), but read and discard it
+       anyway so the transaction completes cleanly and a future caller has
+       a real place to check it. Previously entirely missing: this driver
+       only ever sent 0xF6/0xF4, so a real PS/2 wheel mouse never got the
+       one handshake that makes it start sending byte 4 at all -- on real
+       hardware this was likely why the wheel looked dead even once the
+       backdoor-side accum_dz bug (vmmouse.c / mouse_get_delta above) was
+       also fixed, a real hardware-only bug this build can't reproduce
+       under QEMU's vmmouse backdoor (which owns the pointer here and
+       ignores the raw PS/2 stream's contents once active), but real per
+       protocol documentation, not guessed. */
+    mouse_write(0xF3); mouse_read(); mouse_write(200); mouse_read();
+    mouse_write(0xF3); mouse_read(); mouse_write(100); mouse_read();
+    mouse_write(0xF3); mouse_read(); mouse_write(80);  mouse_read();
+    mouse_write(0xF2); mouse_read(); mouse_read(); /* ack, then the device ID byte */
+
     mouse_write(0xF4); mouse_read(); /* enable data reporting, ack */
 }
 
@@ -73,6 +102,7 @@ static void vmmouse_fold(void) {
     if (!vmmouse_pump()) return;
     int rdx, rdy;
     if (vmmouse_take_relative(&rdx, &rdy)) { accum_dx += rdx; accum_dy += -rdy; }
+    accum_dz += vmmouse_take_wheel();
     last_buttons = vmmouse_buttons();
     dirty = 1;
 }
@@ -127,7 +157,17 @@ int mouse_get_delta(int *dx, int *dy, int *buttons) {
     *dy = accum_dy;
     *buttons = last_buttons;
     int was_dirty = dirty;
-    accum_dx = 0; accum_dy = 0; accum_dz = 0; dirty = 0;
+    /* v0.76.58: this used to zero accum_dz too, even though it neither
+       takes nor returns it. gui_app_mouse_tick calls this every single
+       get_key_or_click poll tick (for cursor tracking, nothing to do
+       with the wheel), so a real wheel step landing in accum_dz got
+       wiped here before mouse_get_wheel() -- called later in the very
+       same loop -- ever got a turn to read it. Confirmed live: with the
+       vmmouse z-word now wired into accum_dz (see vmmouse.c), a real
+       QMP wheel-down still produced zero scrolling in the Apps folder
+       until this line was removed; accum_dz is exclusively mouse_get_
+       wheel's own to clear now. */
+    accum_dx = 0; accum_dy = 0; dirty = 0;
     return was_dirty;
 }
 
