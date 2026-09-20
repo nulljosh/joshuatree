@@ -5312,7 +5312,29 @@ static void gui_run(void){
                    everything) instead of blocking inside gui_wait_close the
                    way every other app still does. */
                 editor_mouse_x = mx; editor_mouse_y = my;
-                gui_multiwin_open(gui_order[press_slot]);
+                /* v0.76.56: real bug, confirmed headless (three windows
+                   opened back to back, gui_window_count dumped via the
+                   QEMU monitor): once GUI_MULTIWIN_MAX (2) windows are
+                   already open, gui_multiwin_open silently returns -1 and
+                   this click does NOTHING -- no window opens, nothing
+                   closes, no error, the previously-topmost window just
+                   stays exactly as it was. From the outside that reads as
+                   "I clicked App X's dock icon and got App Y" (whatever
+                   was already on top), the same symptom class the
+                   roadmap's live-QA pass reported for Calendar/Reminders,
+                   even though the real cause is a swallowed click at the
+                   window cap, not a wrong icon index (gui_order/gui_launch
+                   dispatch were re-verified correct via the same headless
+                   harness and are not the bug). Real fix: when the cap
+                   blocks the multi-window path, fall through to the
+                   existing blocking single-window path below instead of
+                   dropping the click, so the user's click always does
+                   *something* visible. */
+                if (gui_multiwin_open(gui_order[press_slot]) < 0) {
+                    serial_puts("mwcapfallback\n"); /* discriminating marker for tools/checks/dockcap-fallback-check.py */
+                    gui_launch_from_dock(gui_order[press_slot]);
+                    mx = app_cursor_x; my = app_cursor_y;
+                }
                 launched = 1;
             } else if (press_slot >= 0 && press_slot == slot_here) {
                 editor_mouse_x = mx; editor_mouse_y = my;
