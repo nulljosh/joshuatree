@@ -51,7 +51,7 @@ LOGICAL_W, LOGICAL_H = 960, 540
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-REMINDERS_SLOT = 4
+REMINDERS_SLOT = 5
 
 def move(x, y):
     cmd({"execute": "input-send-event", "arguments": {"events": [

@@ -35,10 +35,22 @@ static int resolve_host(const char *host, u32 *ip) {
 /* Both http_get and http_post send a request buffer then strip the status
    line and headers down to just the body; shared here since that part is
    identical either way. */
+static int last_status = 0;
+int http_last_status(void) { return last_status; }
+
 static int http_body_only(u32 ip, unsigned short port, const char *req, u32 req_len,
-                           void *body_out, u32 body_maxlen, char *raw, u32 raw_cap) {
-    int total = tcp_get(ip, port, req, req_len, raw, raw_cap - 1);
+                           void *body_out, u32 body_maxlen, char *raw, u32 raw_cap, u32 reply_timeout_ticks) {
+    last_status = 0;
+    int total = tcp_get_timeout(ip, port, req, req_len, raw, raw_cap - 1, reply_timeout_ticks);
     if (total < 0) return -1;
+
+    /* "HTTP/1.x NNN": the three digits after the first space. */
+    if (total >= 12 && raw[0] == 'H' && raw[1] == 'T' && raw[2] == 'T' && raw[3] == 'P') {
+        int i = 4;
+        while (i < total && raw[i] != ' ' && raw[i] != '\r') i++;
+        if (i + 3 < total && raw[i] == ' ' && raw[i+1] >= '0' && raw[i+1] <= '9' && raw[i+2] >= '0' && raw[i+2] <= '9' && raw[i+3] >= '0' && raw[i+3] <= '9')
+            last_status = (raw[i+1] - '0') * 100 + (raw[i+2] - '0') * 10 + (raw[i+3] - '0');
+    }
 
     int body_start = -1;
     for (int i = 0; i + 3 < total; i++) {
@@ -58,7 +70,13 @@ static int http_body_only(u32 ip, unsigned short port, const char *req, u32 req_
 
 int http_get(const char *host, const char *path, unsigned short port,
              void *body_out, unsigned int body_maxlen) {
+    return http_get_timeout(host, path, port, body_out, body_maxlen, 0);
+}
+
+int http_get_timeout(const char *host, const char *path, unsigned short port,
+                     void *body_out, unsigned int body_maxlen, unsigned int reply_timeout_ticks) {
     u32 ip;
+    last_status = 0;
     if (!resolve_host(host, &ip)) return -1;
 
     char req[512];
@@ -87,7 +105,7 @@ int http_get(const char *host, const char *path, unsigned short port,
     unsigned int raw_cap = body_maxlen + 2048;
     char *raw = kmalloc(raw_cap);
     if (!raw) return -1;
-    int r = http_body_only(ip, port, req, n, body_out, body_maxlen, raw, raw_cap);
+    int r = http_body_only(ip, port, req, n, body_out, body_maxlen, raw, raw_cap, reply_timeout_ticks);
     kfree(raw);
     return r;
 }
@@ -108,7 +126,7 @@ int http_post(const char *host, const char *path, unsigned short port,
     /* v85 (chat history / /api/chat): this used to be a fixed 1024-byte
        stack buffer, which silently truncated ANY POST body over roughly
        900 bytes (headers eat the rest) regardless of how big a buffer the
-       caller passed to json/kernel.c above it — growing kernel.c's own
+       caller passed to json/kernel.c above it, so growing kernel.c's own
        req_body was a no-op against this real second cap, found by
        actually tracing the call chain rather than assuming a bigger
        caller buffer alone was enough. Heap-backed now, sized to the
@@ -142,7 +160,7 @@ int http_post(const char *host, const char *path, unsigned short port,
     u32 raw_cap = response_maxlen + 2048;
     char *raw = kmalloc(raw_cap);
     if (!raw) { kfree(req); return -1; }
-    int r = http_body_only(ip, port, req, n, response_out, response_maxlen, raw, raw_cap);
+    int r = http_body_only(ip, port, req, n, response_out, response_maxlen, raw, raw_cap, 0);
     kfree(req);
     kfree(raw);
     return r;
