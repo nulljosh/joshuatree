@@ -853,38 +853,7 @@ static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3
    this whole desktop's one-screen, nothing-persisted scope). */
 static int gui_order[GUI_ICON_COUNT];
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = GUI_DOCK_DEFAULT[i]; }
-static unsigned char dock_hover_extra[GUI_ICON_COUNT];
-/* dock_hover_extra in DOCK_ANIM_SUB-ths of a pixel: the real animation
-   state, of which dock_hover_extra is the rounded, drawable view. */
-static short dock_anim_pos[GUI_ICON_COUNT];
-static unsigned int dock_grow_start[GUI_ICON_COUNT]; /* tick a slot started growing, for the dockmag= timing marker */
-/* How many distinct sizes a magnify actually passed through, counted the
-   same way the eye sees them: one per real change to dock_hover_extra
-   between "resting" and "fully magnified". Duration alone cannot tell a
-   smooth zoom from a single snap, and a single snap is exactly what a
-   starved frame rate produces while dockmag= still reads fast. Reported
-   as dockstep= next to dockmag=; see tools/checks/dockanim-check.sh. */
-static unsigned char dock_grow_steps[GUI_ICON_COUNT];
-/* And how many frames the magnify was actually given to do it in. Step
-   count on its own is a property of the machine as much as of the code: a
-   box that only turns over three frames in sixty milliseconds cannot show
-   six sizes however the animation is written. The ratio of the two is the
-   part that is purely the code's doing, and it is exactly what a quantum
-   coarser than the frame rate breaks: the old 3-tick gate advanced on one
-   frame in three and let the other two draw nothing new. */
-static unsigned char dock_grow_frames[GUI_ICON_COUNT];
-/* True while any dock icon is still travelling toward its hover target.
-   Read by the wind sway's own gate in gui_run: measured, a single sway
-   frame costs ~65 ms (the "~3 ticks" its comment claims was true when it
-   was written and is not any more), and it fires every 5 ticks, so while
-   it runs the whole GUI loop turns over at roughly 15 fps. A magnify that
-   is meant to take 6 ticks then gets exactly one frame and snaps from
-   resting to fully lifted in a single jump, which is what "choppy, should
-   be a smooth zoom" actually describes. The sway is ambient decoration on
-   the far side of the screen from the dock; a hover is direct feedback the
-   pointer is asking for, so the hover wins for the ~60 ms it lasts and the
-   sway picks straight back up afterwards. */
-static int dock_anim_busy = 0;
+static int dock_hover = -1; /* slot whose label is showing */
 
 #define GUI_BG          0x00FAF8F6
 #define GUI_MENUBAR_H   26
@@ -1091,23 +1060,6 @@ static int gui_dock_icon(void){
 #define DOCK_ICON (gui_dock_icon())
 #define DOCK_MARGIN_BOT 24
 #define DOCK_TRAY_COLOR 0x00EFEBE4 /* the one surface colour every dock tile is blended against */
-#define DOCK_MAGNIFY    9
-/* How long a full magnify takes, in PIT ticks, and how finely it is
-   tracked in between. The animation used to move in a whole-pixel quantum
-   of 3 gated on 3 ticks, so DOCK_MAGNIFY's nine pixels could only ever be
-   shown as three sizes no matter how many frames were available. Keeping
-   the position in DOCK_ANIM_SUB-ths of a pixel and advancing it by real
-   elapsed time decouples how far the icon moves from how coarse a hop the
-   code happens to take: the duration stays DOCK_ANIM_TICKS whatever the
-   frame rate, and every frame that does arrive inside it gets to show a
-   distinct size. Six ticks is the length that was already measured on the
-   real machine, deliberately unchanged; this is about the steps in
-   between, not the speed. */
-#define DOCK_ANIM_TICKS 6
-#define DOCK_ANIM_SUB   16
-#define DOCK_LIFT       10
-#include "dock_anim.h"
-
 static int gui_dock_w(void){ return GUI_ICON_COUNT * DOCK_ICON + (GUI_ICON_COUNT - 1) * DOCK_GAP + 2 * DOCK_PAD; }
 static int gui_dock_x0(void){ return ((int)window_width() - gui_dock_w()) / 2; }
 static int gui_dock_y0(void){ return (int)window_height() - DOCK_ICON - 2 * DOCK_PAD - DOCK_MARGIN_BOT; }
@@ -1136,7 +1088,7 @@ static int gui_slot_at(int mx){
    dragged icon should keep tracking the cursor even briefly outside it). */
 static int gui_dock_hit_test(int mx, int my){
     int y0 = gui_dock_y0(), h = DOCK_ICON + 2 * DOCK_PAD;
-    if (my < y0 - DOCK_MAGNIFY - 20 || my >= y0 + h) return -1;
+    if (my < y0 - 20 || my >= y0 + h) return -1;
     int x0 = gui_dock_x0(), w = gui_dock_w();
     if (mx < x0 || mx >= x0 + w) return -1;
     return gui_slot_at(mx);
@@ -2347,6 +2299,7 @@ static int geo_fetch(void){
 
 static void weather_fetch(void){
     weather_last_tick = ticks();
+    serial_puts("wxfetch\n"); /* tools/checks/weather-app-check.sh counts these: a failed fetch must not re-run on every repaint */
     if (!net_init(0x0A00020F)) return;
     if (!geo_have && !geo_fetch()) return; /* v71: no real location, no fetch, nothing fabricated */
     static char body[2048];
@@ -3545,32 +3498,13 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
 }
 static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){ gui_draw_one_icon_on(icon, cx_center, cy_bottom, size, DOCK_TRAY_COLOR); }
 
-/* The hover transition reuses the fully rendered large tile. Rendering a
-   fresh supersampled icon for every intermediate size stalls the frame. */
-static void gui_draw_dock_icon(int icon, int cx_center, int cy_bottom, int size){
-    if (size == DOCK_ICON || size == DOCK_ICON + DOCK_MAGNIFY) {
-        gui_draw_one_icon(icon, cx_center, cy_bottom, size);
-        return;
-    }
-    unsigned int *tile = gui_render_icon_cached(icon, DOCK_ICON + DOCK_MAGNIFY, 1, DOCK_TRAY_COLOR);
-    if (!tile) { gui_draw_one_icon(icon, cx_center, cy_bottom, size); return; }
-    int sc = (int)window_scale(), src = (DOCK_ICON + DOCK_MAGNIFY) * sc, dst = size * sc;
-    int x0 = (cx_center - size / 2) * sc, y0 = (cy_bottom - size) * sc;
-    for (int y = 0; y < dst; y++)
-        for (int x = 0; x < dst; x++) {
-            unsigned int color = tile[(y * src / dst) * src + x * src / dst];
-            if (color != DOCK_TRAY_COLOR)
-                window_pixel_phys(x0 + x, y0 + y, color);
-        }
-}
-
 /* hover_slot: which slot shows the magnify+label (-1 none). drag_slot: the
    slot currently being dragged, drawn separately so it can float free of
    the row under the cursor instead of at its slot position. */
 /* v40: the dock band's top edge, high enough to cover a magnified,
    lifted icon and its label, so repainting this band alone is enough to
    erase any previous hover state. */
-static int gui_dock_band_top(void){ return gui_dock_y0() - DOCK_MAGNIFY - DOCK_LIFT - 24; }
+static int gui_dock_band_top(void){ return gui_dock_y0() - 24; }
 
 static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my);
 /* v0.79.x: the dock splits into the half that never changes while the
@@ -3625,7 +3559,7 @@ static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int dra
 static unsigned int *dock_band_cache = 0;
 static unsigned int *dock_band_frame = 0;
 static int dock_band_cache_top = -1;
-static unsigned char dock_presented_extra[GUI_ICON_COUNT];
+static int dock_presented_hover = -1;
 static void gui_dock_band_cache_build(void){
     int sc = (int)window_scale();
     int top = gui_dock_band_top(), h = (int)window_height() - top;
@@ -3655,8 +3589,6 @@ static void gui_dock_band_cache_build(void){
    a hover sweep would not have allocated seconds later anyway. */
 static void gui_dock_prewarm(void){
     gui_dock_band_cache_build();
-    for (int slot = 0; slot < GUI_ICON_COUNT; slot++)
-        gui_render_icon_cached(gui_order[slot], DOCK_ICON + DOCK_MAGNIFY, 1, DOCK_TRAY_COLOR);
 }
 
 static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int drag_my){
@@ -3676,7 +3608,7 @@ static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int
            2 MB band on every hover step visibly exposed the half-drawn
            frame even though composition itself was offscreen. */
         for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
-            if (dock_presented_extra[slot] == dock_hover_extra[slot]) continue;
+            if ((slot == dock_presented_hover) == (slot == dock_hover)) continue;
             int left = (gui_slot_x(slot) - 25) * sc;
             int right = (gui_slot_x(slot) + DOCK_ICON + 25) * sc;
             if (left < 0) left = 0;
@@ -3694,8 +3626,8 @@ static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int
                to change the ~174 this actually writes, which is what made a
                dock hover present 1.96M pixels instead of ~86k. */
             window_damage(left, top * sc, right - left, ph);
-            dock_presented_extra[slot] = dock_hover_extra[slot];
-        }
+            }
+        dock_presented_hover = dock_hover;
     } else {
         gui_draw_wallpaper_rows(top, (int)window_height());
         gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
@@ -3740,13 +3672,12 @@ static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
     for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
         if (slot == drag_slot) continue; /* drawn last, floating at the cursor */
         int icon = gui_order[slot];
-        int extra = dock_hover_extra[slot];
-        int size = DOCK_ICON + extra;
+        int size = DOCK_ICON;
         int cx_center = gui_slot_x(slot) + DOCK_ICON / 2;
-        int cy_bottom = y0 + DOCK_PAD + DOCK_ICON - extra * DOCK_LIFT / DOCK_MAGNIFY;
+        int cy_bottom = y0 + DOCK_PAD + DOCK_ICON;
         gui_draw_icon_shadow(cx_center, cy_bottom, size);
-        gui_draw_dock_icon(icon, cx_center, cy_bottom, size);
-        if (extra > 0) {
+        gui_draw_one_icon(icon, cx_center, cy_bottom, size);
+        if (slot == dock_hover) {
             int label_w = font_string_width(GUI_LABELS[icon]);
             /* Dark text on the old flat light backdrop; the gradient
                wallpaper makes the area right above the dock genuinely
@@ -3757,7 +3688,7 @@ static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
     }
     if (drag_slot >= 0) {
         int icon = gui_order[drag_slot];
-        gui_draw_one_icon(icon, drag_mx, drag_my + (DOCK_ICON + DOCK_MAGNIFY) / 2, DOCK_ICON + DOCK_MAGNIFY);
+        gui_draw_one_icon(icon, drag_mx, drag_my + DOCK_ICON / 2, DOCK_ICON);
     }
 }
 
@@ -3920,7 +3851,11 @@ static void gui_draw_app_titlebar(const char *title){
    the way; the Apps-folder/test-harness single-window path keeps calling
    gui_launch_weather() exactly as before, same pixels either way. */
 static void gui_draw_weather_content(void){
-    if (!weather_text[0]) weather_fetch();
+    /* Root cause of issue #13: a failed fetch left weather_text empty, so
+       every repaint (each mouse move, focus change, tick) re-ran the
+       blocking DNS/TCP fetch and froze the window. Try once per session
+       here; the ten-minute cycle in gui_run does the retrying. */
+    if (!weather_text[0] && !weather_tried_once) { weather_tried_once = 1; weather_fetch(); }
     window_clear(0x00F5F0EB);
     gui_draw_app_titlebar("Weather");
     int w = (int)window_width(), x = (w - 520) / 2;
@@ -5490,7 +5425,7 @@ static void gui_run(void){
     auth_gate(); /* v0.77: real login screen, once per session, before the desktop ever paints */
     gui_draw_boot_screen();
     gui_order_init();
-    for (int i = 0; i < GUI_ICON_COUNT; i++) { dock_hover_extra[i] = dock_presented_extra[i] = 0; dock_anim_pos[i] = 0; }
+    dock_hover = dock_presented_hover = -1;
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;
     /* press_slot: the slot the mouse went down on, latched until release.
        drag_slot: only set once the mouse has actually moved past a small
@@ -5561,7 +5496,7 @@ static void gui_run(void){
            this (v86 in a browser) and it switches itself off for good. */
         {
             static unsigned int wind_last = 0; static int wind_dir = 1;
-            if (wind_enabled && !dock_anim_busy && !menu_open && !notif_open && !weather_open && drag_slot < 0 && gui_window_count == 0 && ticks() - wind_last >= 5) { /* cached wallpaper: ~3 ticks per frame, leaving input time at 20 fps; v0.73.0: also off while a multi-window app is open, same reason as the other overlay states, its wallpaper-row redraw would paint straight over an open window's content since neither the wind sway path nor the window list know about each other yet */
+            if (wind_enabled && !menu_open && !notif_open && !weather_open && drag_slot < 0 && gui_window_count == 0 && ticks() - wind_last >= 5) { /* cached wallpaper: ~3 ticks per frame, leaving input time at 20 fps; v0.73.0: also off while a multi-window app is open, same reason as the other overlay states, its wallpaper-row redraw would paint straight over an open window's content since neither the wind sway path nor the window list know about each other yet */
                 wind_last = ticks();
                 wind_phase += wind_dir * 3; /* same slow sway period at the higher frame rate */ if (wind_phase >= 256 || wind_phase <= -256) wind_dir = -wind_dir;
                 unsigned int t0 = ticks();
@@ -5804,114 +5739,7 @@ static void gui_run(void){
         prev_buttons = buttons;
 
         int hover_slot = (drag_slot < 0) ? slot_here : -1;
-        /* Recomputed every frame, before anything expensive runs next
-           iteration, so the wind gate above sees a hover that started this
-           frame rather than one frame late. */
-        dock_anim_busy = 0;
-        for (int i = 0; i < GUI_ICON_COUNT; i++)
-            if (dock_hover_extra[i] != ((i == hover_slot) ? DOCK_MAGNIFY : 0)) { dock_anim_busy = 1; break; }
-        int dock_anim_changed = 0;
-        /* v0.78.x: time-based, not one fixed hop per poll. This used to
-           advance dock_hover_extra by exactly 3 every time the 3-tick gate
-           opened, and reset dock_anim_last_tick to ticks(), throwing away
-           the overshoot. So the magnify took 3 hops no matter what, and its
-           real duration was 3 frames rather than the 9 ticks it was written
-           to take: at 33fps that is the intended 90ms, but at 18fps it
-           stretches to 165ms and at 12fps to 250ms, in three visible jumps.
-           That is exactly the "choppy and slow" report, and it gets worse
-           with every frame-rate cost anything else adds.
-
-           Advancing by however many ticks actually elapsed, and carrying
-           the remainder instead of resetting to now, makes the animation
-           take the same wall-clock time at any frame rate. A slow frame now
-           means fewer, larger steps, never a longer animation.
-
-           v0.79.x: that fixed the duration and left the motion coarse. The
-           position was still a whole-pixel integer moved in a quantum of 3,
-           so DOCK_MAGNIFY's nine pixels could only ever be shown as 0, 3, 6
-           and 9 however many frames the animation got. Tried once at a
-           quantum of 1 to get nine steps, and measured, it was worse, not
-           better: 110-130 ms instead of 60, because a hover frame cost more
-           than a whole tick, so the gate could not keep up and the carry
-           ran behind. Both halves are real. The position lives in
-           DOCK_ANIM_SUB-ths of a pixel now, and the distance covered scales
-           with elapsed ticks rather than with a fixed hop, so the animation
-           shows a fresh size on every frame it gets without ever taking
-           longer than DOCK_ANIM_TICKS. The frames themselves were made
-           affordable first (the sway no longer runs during a hover, and the
-           dock tray is cached rather than recomposed), which is why this
-           lands smoother now and did not before. */
-        static unsigned int dock_anim_last_tick = 0;
-        unsigned int anim_now = ticks();
-        /* Resync rather than try to catch up, in the two cases where the
-           gap is not a real frame: the first frame of the session (the
-           static starts at 0 while ticks() is already thousands in, and a
-           naive catch-up would then spend a second snapping every icon
-           straight to its target every frame, which broke dock hit-testing
-           badly enough to fail appclose-check), and the return from a
-           blocking app that owned the screen for seconds. */
-        if (!dock_anim_last_tick || anim_now - dock_anim_last_tick > 100) dock_anim_last_tick = anim_now;
-        unsigned int anim_elapsed = anim_now - dock_anim_last_tick;
-        for (int i = 0; i < GUI_ICON_COUNT; i++)
-            if (dock_grow_start[i] && dock_grow_frames[i] < 255) dock_grow_frames[i]++;
-        if (anim_elapsed >= 1) {
-            /* one frame never advances more than a whole magnify; past that
-               the extra distance buys nothing and only overshoots the clamp */
-            if (anim_elapsed > DOCK_ANIM_TICKS) anim_elapsed = DOCK_ANIM_TICKS;
-            dock_anim_last_tick += anim_elapsed; /* carry the remainder */
-            for (int i = 0; i < GUI_ICON_COUNT; i++) {
-                int target = (i == hover_slot) ? DOCK_MAGNIFY * DOCK_ANIM_SUB : 0;
-                int pos = dock_anim_pos[i];
-                pos = dock_anim_advance(pos, target, anim_elapsed,
-                                        DOCK_MAGNIFY, DOCK_ANIM_SUB, DOCK_ANIM_TICKS);
-                dock_anim_pos[i] = (short)pos;
-                int next = pos / DOCK_ANIM_SUB;
-                if (next != dock_hover_extra[i]) {
-                    if (dock_hover_extra[i] == 0 && next > 0) { dock_grow_start[i] = anim_now; dock_grow_steps[i] = 0; dock_grow_frames[i] = 0; }
-                    dock_hover_extra[i] = next;
-                    if (next > 0 && dock_grow_steps[i] < 255) dock_grow_steps[i]++;
-                    dock_anim_changed = 1;
-                    /* How long this magnify actually took, in PIT ticks, so
-                       "the dock animation got slow again" is a number a
-                       check can assert on rather than something only a
-                       human watching the real screen can notice. See
-                       tools/checks/dockanim-check.sh. */
-                    if (next == DOCK_MAGNIFY && dock_grow_start[i]) {
-                        char b[24]; int j = 0;
-                        const char *k = "dockmag=";
-                        while (*k) b[j++] = *k++;
-                        unsigned int el = anim_now - dock_grow_start[i];
-                        char q[12]; int n = 0;
-                        if (!el) q[n++] = '0';
-                        while (el) { q[n++] = (char)('0' + el % 10); el /= 10; }
-                        while (n) b[j++] = q[--n];
-                        b[j++] = '\n'; b[j] = 0;
-                        serial_puts(b);
-                        j = 0;
-                        k = "dockstep=";
-                        while (*k) b[j++] = *k++;
-                        unsigned int st = dock_grow_steps[i];
-                        n = 0;
-                        if (!st) q[n++] = '0';
-                        while (st) { q[n++] = (char)('0' + st % 10); st /= 10; }
-                        while (n) b[j++] = q[--n];
-                        b[j++] = '\n'; b[j] = 0;
-                        serial_puts(b);
-                        j = 0;
-                        k = "dockframe=";
-                        while (*k) b[j++] = *k++;
-                        unsigned int fr = dock_grow_frames[i];
-                        n = 0;
-                        if (!fr) q[n++] = '0';
-                        while (fr) { q[n++] = (char)('0' + fr % 10); fr /= 10; }
-                        while (n) b[j++] = q[--n];
-                        b[j++] = '\n'; b[j] = 0;
-                        serial_puts(b);
-                        dock_grow_start[i] = 0;
-                    }
-                }
-            }
-        }
+        dock_hover = hover_slot;
         int menu_hover = menu_open ? gui_menu_hit_test(mx, my) : -2;
         /* Redraw only when something actually visible changed. A real,
            user-visible bug this fixed, not just a cosmetic worry: redrawing
@@ -5930,12 +5758,12 @@ static void gui_run(void){
            icons) with no double buffer to hide it, which is exactly the
            "icons flash when I hover" report: the flashing was the
            repaint. */
-        int cursor_only = !launched && !dock_anim_changed && (mx != last_mx || my != last_my)
+        int cursor_only = !launched && (mx != last_mx || my != last_my)
                           && hover_slot == last_hover && drag_slot == last_drag
                           && menu_open == last_menu_open && menu_hover == last_menu_hover;
         int dock_only = !launched && !cursor_only && drag_slot < 0 && last_drag < 0
                         && !menu_open && !last_menu_open
-                        && (hover_slot != last_hover || dock_anim_changed);
+                        && hover_slot != last_hover;
         /* v0.76.17: direct report, the exact "icons flash when I hover"
            shape v40's own three tiers above were built to fix, just never
            extended to the Apple menu's own hover highlight -- switching
@@ -5971,12 +5799,12 @@ static void gui_run(void){
             gui_cursor_save(mx, my);
             gui_draw_cursor(mx, my);
             last_mx = mx; last_my = my; last_menu_hover = menu_hover;
-        } else if (launched || mx != last_mx || my != last_my || hover_slot != last_hover || dock_anim_changed || drag_slot != last_drag || menu_open != last_menu_open || menu_hover != last_menu_hover) {
+        } else if (launched || mx != last_mx || my != last_my || hover_slot != last_hover || drag_slot != last_drag || menu_open != last_menu_open || menu_hover != last_menu_hover) {
             serial_puts("fullrepaint\n"); /* discriminating marker for tools/checks/menuclock-check.sh */
             if (my < GUI_MENUBAR_H || last_my < GUI_MENUBAR_H) gui_menubar_force_redraw();
             cursor_saved_x = cursor_saved_y = -1; /* the full repaint replaces whatever the backup held */
             gui_draw_desktop(hover_slot, drag_slot, mx, my);
-            for (int i = 0; i < GUI_ICON_COUNT; i++) dock_presented_extra[i] = dock_hover_extra[i];
+            dock_presented_hover = dock_hover;
             if (gui_window_count > 0) gui_multiwin_draw_all(); /* v0.73.0: real simultaneous redraw of every open window, back-to-front, on top of the desktop just drawn above */
             if (menu_open) gui_draw_apple_menu(menu_hover);
             if (notif_open) gui_draw_notif_panel();
