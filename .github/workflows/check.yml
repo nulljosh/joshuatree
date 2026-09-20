@@ -114,6 +114,8 @@ jobs:
         run: ./tools/checks/menuclock-check.sh
       - name: Multi-window Mail/Calendar/Reminders chrome doesn't redraw on plain keystrokes
         run: ./tools/checks/mwkeyflash-check.sh
+      - name: Drawing lands offscreen and window_present puts the real desktop on screen
+        run: ./tools/checks/backbuffer-check.sh
       - name: Multi-window apps draw exactly one toolbar, not two
         run: ./tools/checks/mwdupetoolbar-check.sh
       - name: JPEG decoder, host harness
