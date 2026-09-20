@@ -83,6 +83,14 @@ have "jt-hello: pid="         || fail "getpid() line missing; close()/double-clo
 have "jt-hello: time ok"      || fail "time() did not return a plausible epoch, or did not write through its pointer"
 have "jt-hello: yielded"      || fail "sched_yield() did not return 0"
 have "jt-hello: nosys=-38"    || fail "an unassigned syscall number did not return -ENOSYS"
+# The security shape, tested from ring 3 where it counts. 0xC0000000 is
+# mapped but supervisor-only, so a check that only rejected unmapped
+# addresses would pass these; -14 is -EFAULT.
+have "jt-hello: openfault=-14"  || fail "open() accepted a kernel pointer as a path instead of returning -EFAULT"
+have "jt-hello: readfault=-14"  || fail "read() accepted a kernel destination buffer instead of returning -EFAULT"
+have "jt-hello: writefault=-14" || fail "write() accepted an unmapped source buffer instead of returning -EFAULT"
+have "jt-hello: timefault=-14"  || fail "time() wrote through a kernel pointer instead of returning -EFAULT"
+have "jt-hello: badfd=-9"       || fail "read() on an unopened descriptor did not return -EBADF"
 have "jt-hello: done"         || fail "the program did not reach its last line"
 # And the exit status the kernel itself observed, not something the
 # program printed about itself.
@@ -98,4 +106,10 @@ echo "PASS: ring-3 reference program ran the whole v1 syscall set off the VFS an
 #      -> FAIL: "a second read() did not report end of file; the per-fd
 #         offset is not advancing"
 #   2. Restore the line, rebuild, rerun -> PASS again.
-# Both halves were actually run when this check was written, not assumed.
+#   3. Same again for the security shape: delete sys_read's
+#      `if (!paging_user_range_ok(buf, len)) return -EFAULT;`
+#      -> FAIL: "read() accepted a kernel destination buffer instead of
+#         returning -EFAULT"
+#      Restore it -> PASS again.
+# All four halves were actually run when this check was written, not
+# assumed, and both lines are restored in this tree.

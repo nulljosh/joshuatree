@@ -104,6 +104,24 @@ void _start(void) {
     int bad = jt_syscall(99, 0, 0, 0);
     put_num("jt-hello: nosys=", bad);
 
+    /* The part of the contract that matters most, exercised from the only
+       side that can actually test it. Each of these hands the kernel a
+       pointer this program has no mapping for and must come back -EFAULT
+       (-14) with nothing read, nothing written, and no kernel address
+       touched on this program's behalf.
+
+       0xC0000000 is deliberate and is the real test: it is mapped, it is
+       the kernel's own base, and it is supervisor-only. A check that only
+       rejected unmapped addresses would let it through. NULL covers the
+       plainly-unmapped case alongside it. */
+    put_num("jt-hello: openfault=",  jt_open((const char *)0xC0000000u, 0));
+    put_num("jt-hello: readfault=",  jt_read(0, (void *)0xC0000000u, 16));
+    put_num("jt-hello: writefault=", jt_write(STDOUT, (const void *)0, 16));
+    put_num("jt-hello: timefault=",  jt_time((unsigned *)0xC0000000u));
+
+    /* Descriptors are checked too, not just pointers. */
+    put_num("jt-hello: badfd=", jt_read(6, buf, 8));
+
     put("jt-hello: done\n");
     jt_exit(9);
 }
