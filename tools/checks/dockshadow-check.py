@@ -40,8 +40,8 @@ FB = 0xfd000000; W, H = 1920, 1080
 PORT = 4455
 
 # Same geometry every other dock check here already derived and verified for
-# this 960x540@2x boot config (dock_scale_pct 7, GUI_ICON_COUNT 10).
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE, SLOTS = 37, 6, 268, 469, 2, 10
+# this 960x540@2x boot config (dock_scale_pct 7, GUI_ICON_COUNT 11).
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE, SLOTS = 37, 6, 247, 469, 2, 11
 PITCH = DOCK_ICON + DOCK_GAP
 ROWS = (2, 3, 4)          # physical rows below the icon's own bottom edge
 HALF = 38                 # sample half-width, just past the ellipse's rx of 37

@@ -20,7 +20,7 @@ and again after it has settled, and asserts on actual pixels:
 
 Geometry is derived from the kernel's own constants for a 960x540 logical
 window at scale 2 (gui_run's window_open_scaled), dock_scale_pct 7,
-GUI_ICON_COUNT 10: DOCK_ICON 37, tray x 258..702, slot pitch 43, slot s
+GUI_ICON_COUNT 11: DOCK_ICON 37, tray x 258..702, slot pitch 43, slot s
 tile spans x 268+43s .. 304+43s, icon row y 469..506, magnified+lifted
 top at y 450. Update the numbers below if any of those change.
 
@@ -34,7 +34,7 @@ MID, END = "/tmp/jt-dockhover-mid.raw", "/tmp/jt-dockhover-end.raw"
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = 4449
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICONS = 37, 6, 268, 10
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICONS = 37, 6, 247, 11
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487      # inside the normal-size tile
 LIFTED_Y = 455        # above a normal tile's top (469), inside a magnified+lifted one (450..)
