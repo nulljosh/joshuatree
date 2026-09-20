@@ -22,10 +22,10 @@ on:
 
 jobs:
   capture:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install a real Chromium for the vendored playwright package
         run: npx playwright install --with-deps chromium
       - name: Capture screenshots + video of the live idle tour

@@ -18,7 +18,13 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest`. `latest` silently rolls to the next LTS
+    # image, which swaps the clang/qemu/PIL versions underneath every check
+    # in this file at a moment GitHub picks, not one this repo picks -- the
+    # exact shape of "it was green yesterday and red today with no commit
+    # in between". Bump this line deliberately when the toolchain should
+    # move, so the bump is a commit that CI itself proves out.
+    runs-on: ubuntu-24.04
     # A wedged QEMU process (hung boot, a script waiting forever on a socket
     # that will never answer) used to have no ceiling: the job would sit
     # "in_progress" indefinitely, which reads the same as "still fine" on
@@ -26,20 +32,46 @@ jobs:
     # comfortably above the real end-to-end time this job takes today.
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      # fetch-depth: 0 for the kernel.elf sync step at the end of this job,
+      # which compares real commit ancestry. It used to paper over the
+      # default shallow clone with `git fetch --unshallow || true`, which
+      # cannot fail loudly: if the unshallow did not happen, merge-base
+      # just answered from a truncated history and the check quietly
+      # stopped meaning anything.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Landing roadmap summary regression checks
         run: python3 tools/checks/landing-roadmap-check.py
-      - name: Cache apt packages
-        uses: actions/cache@v4
-        with:
-          path: /var/cache/apt/archives
-          key: apt-${{ runner.os }}-clang-lld-qemu-pil-mtools-dosfstools
       - name: Install clang, lld, qemu, FAT disk tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang lld qemu-system-x86 python3-pil mtools dosfstools
+          sudo apt-get install -y --no-install-recommends \
+            clang lld qemu-system-x86 python3-pil mtools dosfstools ccache
+      # The old cache step pointed at /var/cache/apt/archives, which apt on
+      # the runner empties after a successful install, so it restored an
+      # empty directory every run and saved an empty one back: a cache that
+      # never held anything. ccache is the real build cache here -- the
+      # kernel is ~25 translation units rebuilt from scratch on every run,
+      # and a docs-only or checks-only push (most pushes to this repo)
+      # recompiles all of them byte-identically. Ubuntu's ccache package
+      # ships /usr/lib/ccache/clang, so putting it first on PATH makes the
+      # Makefile's own `CC := clang` resolve through it with no Makefile
+      # change and no behaviour change on a cache miss.
+      - name: Cache compiled objects (ccache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-ubuntu-24.04-${{ hashFiles('kernel/**', 'drivers/**', 'boot/**', 'lib/**', 'Makefile') }}
+          restore-keys: |
+            ccache-ubuntu-24.04-
       - name: Build
-        run: make kernel.elf
+        run: |
+          echo "/usr/lib/ccache" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/ccache:$PATH"
+          ccache --zero-stats
+          make kernel.elf
+          ccache --show-stats
       - name: Boot check
         run: ./check.sh
       # v74: the PNG decoder is the first subsystem with a host-native
@@ -191,7 +223,6 @@ jobs:
       # this still catches the case that actually matters.
       - name: landing/v86/kernel.elf stays in sync
         run: |
-          git fetch --unshallow 2>/dev/null || true
           src_commit=$(git log -1 --format=%H -- kernel/ drivers/ boot/ lib/)
           elf_commit=$(git log -1 --format=%H -- landing/v86/kernel.elf)
           if ! git merge-base --is-ancestor "$src_commit" "$elf_commit" 2>/dev/null; then
@@ -210,10 +241,10 @@ jobs:
   # that was never meant to be a real path) drifted stale before this job
   # existed to catch it.
   check-refs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Doc file-path references aren't stale
         run: ./tools/checks/check-refs.sh
       - name: landing/version.txt stays in sync with VERSION
@@ -225,15 +256,15 @@ jobs:
   # reports rather than gates. Read its log when it goes red two runs in
   # a row, that is a real regression or a provider change, not noise.
   network:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install clang, lld, qemu
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang lld qemu-system-x86 python3-pil curl
+          sudo apt-get install -y --no-install-recommends clang lld qemu-system-x86 python3-pil curl
       - name: Build
         run: make kernel.elf
       # Real one-off transient failures (a ConnectionResetError from
@@ -255,3 +286,35 @@ jobs:
         run: python3 tools/checks/wallfx-check.py rain || (sleep 15 && python3 tools/checks/wallfx-check.py rain) || true
       - name: Satellite wallpaper theme (real geo + tile fetch)
         run: python3 tools/checks/satellite-wallpaper-check.py || (sleep 15 && python3 tools/checks/satellite-wallpaper-check.py) || true
+
+  # One status, one gate. main's branch protection used to require three
+  # separate contexts: `check`, `check-refs` and `network`. Two real
+  # problems with that. First, `network` is continue-on-error by design
+  # (it talks to ip-api.com and OpenTopoMap for real, and a provider
+  # hiccup must never block a kernel push) -- a required context that is
+  # structurally incapable of failing is not a gate, it is 2.5 minutes of
+  # waiting painted to look like one. Second, every time a job is added,
+  # renamed or split here, protection silently keeps requiring the old
+  # name and the new job gates nothing, which is how a job can go red for
+  # days without anything noticing.
+  #
+  # So: protection requires exactly `ci`, and `ci` is this job. It runs no
+  # tests of its own, it only reports whether the jobs that actually gate
+  # merges passed. Adding or renaming a gating job is a `needs:` edit here
+  # and nothing else. `network` is deliberately absent -- read its log,
+  # don't merge on it.
+  ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    if: always()
+    needs: [check, check-refs]
+    steps:
+      - name: Gating jobs all passed
+        run: |
+          echo "check:      ${{ needs.check.result }}"
+          echo "check-refs: ${{ needs.check-refs.result }}"
+          if [ "${{ needs.check.result }}" != "success" ] || [ "${{ needs.check-refs.result }}" != "success" ]; then
+            echo "FAIL: a gating job did not succeed"
+            exit 1
+          fi
+          echo "PASS: every gating job succeeded"
