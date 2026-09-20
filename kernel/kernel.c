@@ -2352,18 +2352,88 @@ static int geo_fetch(void){
     return 1;
 }
 
+/* Weather window extras, all from the same single Open-Meteo reply the
+   menu bar reading comes from. wx_extra_have / wx_day_count stay 0 when a
+   reply lacks them, and the window then leaves those cells out rather than
+   inventing a value. A later failed fetch returns before touching any of
+   this, so the stale face shows the whole last good reading. */
+#define WX_DAYS 5
+static int wx_extra_have = 0, wx_feels_c = 0, wx_humidity = 0, wx_wind_kmh = 0;
+static int wx_day_count = 0;
+static int wx_day_code[WX_DAYS], wx_day_hi[WX_DAYS], wx_day_lo[WX_DAYS], wx_day_wd[WX_DAYS];
+static int wx_round10(int v){ return (v >= 0 ? v + 5 : v - 5) / 10; }
+/* Points just past the '[' of "key":[ inside the real "daily":{ object.
+   Same trap as json_current_number: "daily_units" repeats every key first,
+   with string values, so the search has to start inside "daily":{ itself. */
+static const char *json_daily_array(const char *json, const char *key){
+    const char *p = json, *d = 0;
+    static const char tag[] = "\"daily\":{";
+    for (; *p; p++) { int i = 0; while (tag[i] && p[i] == tag[i]) i++; if (!tag[i]) { d = p + i; break; } }
+    if (!d) return 0;
+    for (p = d; *p && *p != '}'; p++) {
+        if (*p != '"') continue;
+        const char *q = p + 1, *k = key;
+        while (*k && *q == *k) { q++; k++; }
+        if (!*k && q[0] == '"' && q[1] == ':' && q[2] == '[') return q + 3;
+    }
+    return 0;
+}
+/* Up to `max` numbers from a JSON array body, each times ten with one
+   decimal kept, the same fixed-point json_current_number uses. */
+static int json_array_x10(const char *p, int *out, int max){
+    int n = 0;
+    while (p && *p && *p != ']' && n < max) {
+        while (*p == ' ' || *p == ',') p++;
+        int neg = 0, whole = 0, frac = 0, dot = 0, digits = 0;
+        if (*p == '-') { neg = 1; p++; }
+        while ((*p >= '0' && *p <= '9') || *p == '.') {
+            if (*p == '.') dot = 1;
+            else if (!dot) { whole = whole * 10 + (*p - '0'); digits = 1; }
+            else if (dot == 1) { frac = *p - '0'; dot = 2; }
+            p++;
+        }
+        if (!digits) break; /* null or a string: stop, keep what was real */
+        out[n++] = neg ? -(whole * 10 + frac) : whole * 10 + frac;
+    }
+    return n;
+}
+/* Weekday (0 = Sunday) for each "YYYY-MM-DD" in the daily time array,
+   Sakamoto's method. */
+static int json_array_weekdays(const char *p, int *out, int max){
+    static const int t[12] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+    int n = 0;
+    while (p && *p && *p != ']' && n < max) {
+        while (*p == ' ' || *p == ',') p++;
+        if (*p != '"') break;
+        p++;
+        int ok = 1; for (int i = 0; i < 10; i++) if (i == 4 || i == 7 ? p[i] != '-' : (p[i] < '0' || p[i] > '9')) ok = 0;
+        if (!ok) break;
+        int y = (p[0]-'0')*1000 + (p[1]-'0')*100 + (p[2]-'0')*10 + (p[3]-'0');
+        int m = (p[5]-'0')*10 + (p[6]-'0'), d = (p[8]-'0')*10 + (p[9]-'0');
+        if (m < 1 || m > 12) break;
+        if (m < 3) y -= 1;
+        out[n++] = (y + y/4 - y/100 + y/400 + t[m-1] + d) % 7;
+        p += 10; if (*p == '"') p++;
+    }
+    return n;
+}
+
 static int weather_fetch_inner(void){
     weather_err[0] = 0;
     if (!net_init(0x0A00020F)) { weather_set_error(WX_OFFLINE, "no network card", ""); return 0; }
     if (!geo_have && !geo_fetch()) return 0; /* v71: no real location, no fetch, nothing fabricated */
     static char body[2048];
-    static char path[128];
+    static char path[320]; /* was 128: the longer field list below needs ~235 bytes; http.c's own 512-byte request buffer still holds it */
     { int p = 0; const char *s;
       for (s = "/v1/forecast?latitude="; *s; s++) path[p++] = *s;
       for (s = geo_lat; *s; s++) path[p++] = *s;
       for (s = "&longitude="; *s; s++) path[p++] = *s;
       for (s = geo_lon; *s; s++) path[p++] = *s;
-      for (s = "&current=temperature_2m,weather_code"; *s; s++) path[p++] = *s;
+      /* One request for everything the Weather window shows. Daily only,
+         five days, no hourly arrays: the real reply is ~860 bytes, well
+         inside the 2048-byte body buffer above. */
+      for (s = "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code"
+               "&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=5&timezone=auto"; *s && p < 318; s++) path[p++] = *s;
       path[p] = 0; }
     serial_puts("wxurl="); serial_puts(path); serial_puts("\n");
     int n = wx_override_host[0] ? http_get_timeout(wx_override_host, path, wx_override_port, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS)
@@ -2376,6 +2446,18 @@ static int weather_fetch_inner(void){
     int t = (t10 >= 0 ? t10 + 5 : t10 - 5) / 10; /* round to whole degrees */
     weather_temp_c = t; weather_code10 = code10; weather_have = 1;
     wind_weather_pct = wind_pct_for_weather_code(code10 / 10); /* v60: real wind sway now follows real weather */
+    { int f10 = 0, h10 = 0, w10 = 0;
+      wx_extra_have = json_current_number(body, "apparent_temperature", &f10)
+                   && json_current_number(body, "relative_humidity_2m", &h10)
+                   && json_current_number(body, "wind_speed_10m", &w10);
+      wx_feels_c = wx_round10(f10); wx_humidity = wx_round10(h10); wx_wind_kmh = wx_round10(w10);
+      int nw = json_array_weekdays(json_daily_array(body, "time"), wx_day_wd, WX_DAYS);
+      int nc = json_array_x10(json_daily_array(body, "weather_code"), wx_day_code, WX_DAYS);
+      int nh = json_array_x10(json_daily_array(body, "temperature_2m_max"), wx_day_hi, WX_DAYS);
+      int nl = json_array_x10(json_daily_array(body, "temperature_2m_min"), wx_day_lo, WX_DAYS);
+      int nd = nw; if (nc < nd) nd = nc; if (nh < nd) nd = nh; if (nl < nd) nd = nl;
+      for (int i = 0; i < nd; i++) { wx_day_code[i] /= 10; wx_day_hi[i] = wx_round10(wx_day_hi[i]); wx_day_lo[i] = wx_round10(wx_day_lo[i]); }
+      wx_day_count = nd; }
     int p = 0;
     if (t < 0) { weather_text[p++] = '-'; t = -t; }
     if (t >= 10) weather_text[p++] = '0' + t / 10;
@@ -2385,6 +2467,9 @@ static int weather_fetch_inner(void){
     for (const char *w = weather_word(code10 / 10); *w; w++) weather_text[p++] = *w;
     weather_text[p] = 0;
     weather_state = WX_OK;
+    /* What the window's secondary row and forecast row will be built from. */
+    serial_puts("wxextra="); serial_puts(wx_extra_have ? "yes" : "no");
+    serial_puts(" days="); { char d[2] = { (char)('0' + wx_day_count), 0 }; serial_puts(d); } serial_puts("\n");
     serial_puts("wx="); serial_puts(weather_text); serial_puts("\n"); /* v71: tools/geo-check.sh asserts the fetch really landed, not just that the URL was built */
     return 1;
 }
@@ -3917,46 +4002,7 @@ static void gui_draw_app_titlebar(const char *title){
    the way; the Apps-folder/test-harness single-window path keeps calling
    gui_launch_weather() exactly as before, same pixels either way. */
 static int weather_fetching = 0; /* set around a retry so the window can say so before the blocking fetch starts */
-static void gui_draw_weather_content(void){
-    /* Root cause of issue #13: a failed fetch left weather_text empty, so
-       every repaint (mouse move, focus change, tick) re-ran the blocking
-       DNS/TCP fetch and froze the window. Try once per session here; the
-       ten-minute cycle in gui_run and the R key do the retrying. */
-    if (!weather_text[0] && !weather_tried_once) { weather_tried_once = 1; weather_fetch(); }
-    window_clear(0x00F5F0EB);
-    gui_draw_app_titlebar("Weather");
-    int w = (int)window_width(), x = (w - 520) / 2;
-    if (x < 16) x = 16;
-    gui_rounded_rect_gradient(x, 72, 520, 250, 0x00FFF7E7, 0x00E9D9DA, 0x00F5F0EB, 22);
-    gui_draw_one_icon_on(7, x + 95, 230, 100, 0x00F4E8E2);
-    /* Never empty. Three honest faces for the big line: the live reading,
-       the last good reading (kept across a later failure, labelled stale),
-       or a fixed sample that says it is a sample. */
-    int live = weather_state == WX_OK && weather_have;
-    int stale = !live && weather_have;
-    static const char sample[] = { '1', '8', (char)0xF8, ' ', 'C', 'l', 'e', 'a', 'r', 0 };
-    font_draw_string(geo_city[0] ? geo_city : (live || stale ? "Your location" : "Sample location"), x + 188, 104, 0x00645057, -1);
-    font_draw_string(live || stale ? weather_text : sample, x + 188, 146, 0x002A2226, -1);
-    font_draw_string(live ? "Current conditions, live" : stale ? "Last good reading, may be out of date" : "Sample data, not a live reading", x + 188, 180, 0x00746B70, -1);
-    if (weather_fetching) {
-        font_draw_string("Fetching...", x + 188, 222, 0x00645057, -1);
-    } else if (!live) {
-        const char *head = weather_state == WX_OFFLINE ? "Offline" : weather_state == WX_TIMEOUT ? "Timed out" : weather_state == WX_BAD ? "Bad response" : weather_state == WX_FAILED ? "Request failed" : "Not fetched yet";
-        char line[72]; int p = 0;
-        for (const char *c = head; *c; c++) line[p++] = *c;
-        if (weather_err[0]) { line[p++] = ' '; line[p++] = '('; for (const char *c = weather_err; *c && p < 69; c++) line[p++] = *c; line[p++] = ')'; }
-        line[p] = 0;
-        font_draw_string(line, x + 188, 222, 0x009A3B2E, -1);
-        font_draw_string("Press R to retry", x + 188, 256, 0x00645057, -1);
-    }
-    /* Headless proof of what the window actually showed, only when it
-       changes (this draws on every repaint). */
-    { static int last_sig = -1;
-      int sig = weather_state * 8 + (live ? 0 : stale ? 1 : 2) * 2 + weather_fetching;
-      if (sig != last_sig) { last_sig = sig;
-          serial_puts("wxwin="); serial_puts(weather_fetching ? "fetching" : weather_state_name(weather_state));
-          serial_puts(live ? " live\n" : stale ? " stale\n" : " sample\n"); } }
-}
+static void gui_draw_weather_content(void); /* defined below the glyph table it draws with, see "Weather window, redesigned" */
 /* R retries right now. Returns 1 when the key should close the window. */
 static int gui_weather_key(int k, void (*repaint)(void)){
     if (k == KEY_ESC) return 1;
@@ -4098,6 +4144,294 @@ static void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg
             window_pixel_phys(x, y, (r << 16) | (gg << 8) | b);
         }
     }
+}
+
+/* Weather window, redesigned. Everything below draws at physical
+   resolution through the same DejaVu Sans coverage glyphs the rest of the
+   GUI text uses (editor_glyphs), so the window gets a real size hierarchy:
+   16/20/24/28 px faces drawn 1:1, and the hero numeral scaled up from the
+   28 px face. No gradient anywhere: flat cream surface, flat cards. */
+#define WX_BG     0x00F5F0EB /* window surface, same cream as every app */
+#define WX_CARD   0x00ECE5DC /* flat card tone, one step down from the surface */
+#define WX_TEXT   0x00403439 /* dark warm text */
+#define WX_MID    0x00645057
+#define WX_DIM    0x00857A7C
+#define WX_ACCENT 0x00C2772B /* the one accent: warm ochre, sun and storm bolt only */
+#define WX_CLOUD  0x00B9AEA6
+#define WX_ERR    0x009A3B2E
+static const int WX_CAPTOP[4] = {3, 4, 5, 6}; /* line-box top to cap top, per face size, physical px */
+static int wx_font_px(int size, int mul){ return (16 + 4 * size) * mul; }
+static int wx_char_adv(unsigned char c, int size, int bold, int mul){
+    if (c == 0xF8) return wx_font_px(size, mul) * 2 / 5;
+    if (c < 32 || c > 126) c = '?';
+    return editor_glyphs[((0 * 2 + bold) * 4 + size) * 95 + (c - 32)].advance * mul;
+}
+/* Width in physical px. */
+static int wx_text_w(const char *s, int size, int bold, int mul){
+    int w = 0; for (; *s; s++) w += wx_char_adv((unsigned char)*s, size, bold, mul); return w;
+}
+static void wx_blend(int x, int y, unsigned int fg, int a){
+    if (a <= 0) return;
+    if (a >= 255) { window_pixel_phys(x, y, fg); return; }
+    unsigned int d = window_get_pixel_phys(x, y);
+    unsigned int r = (((fg >> 16) & 0xFF) * a + ((d >> 16) & 0xFF) * (255 - a)) / 255;
+    unsigned int g = (((fg >> 8) & 0xFF) * a + ((d >> 8) & 0xFF) * (255 - a)) / 255;
+    unsigned int b = ((fg & 0xFF) * a + (d & 0xFF) * (255 - a)) / 255;
+    window_pixel_phys(x, y, (r << 16) | (g << 8) | b);
+}
+/* Degree sign: the glyph table stops at 126, so draw a supersampled ring
+   sized to the face, sitting at cap height. px,py = cap top left, physical. */
+static void wx_degree(int px, int py, int fpx, unsigned int fg){
+    int ro = fpx * 13 / 100, ri = fpx * 7 / 100;
+    if (ro < 3) ro = 3;
+    if (ri >= ro - 1) ri = ro - 2;
+    if (ri < 1) ri = 1;
+    int cx = px + ro + fpx / 20, cy = py + ro;
+    for (int y = -ro - 1; y <= ro + 1; y++) for (int x = -ro - 1; x <= ro + 1; x++) {
+        int in = 0;
+        for (int sy = 0; sy < 4; sy++) for (int sx = 0; sx < 4; sx++) {
+            int ux = x * 8 + sx * 2 - 3, uy = y * 8 + sy * 2 - 3; /* eighths of a pixel */
+            int d2 = ux * ux + uy * uy;
+            if (d2 <= ro * ro * 64 && d2 >= ri * ri * 64) in++;
+        }
+        wx_blend(cx + x, cy + y, fg, in * 255 / 16);
+    }
+}
+/* Draws s with its cap top at logical (lx, ly). size 0..3 = 16/20/24/28 px
+   face, mul = integer upscale (1 = the face's own pixels). Upscaled glyphs
+   are bilinear-sampled from the coverage bitmap and then re-thresholded
+   around 50% with a slope of `mul`, which puts a one-pixel anti-aliased
+   edge back on the enlarged outline instead of a blur. Returns the width
+   in logical px, rounded up. */
+static int wx_text(const char *s, int lx, int ly, int size, int bold, int mul, unsigned int fg){
+    int sc = (int)window_scale();
+    int px = lx * sc, py = ly * sc, x0 = px;
+    for (; *s; s++) {
+        unsigned char c = (unsigned char)*s;
+        if (c == 0xF8) { wx_degree(px, py, wx_font_px(size, mul), fg); px += wx_char_adv(c, size, bold, mul); continue; }
+        if (c < 32 || c > 126) c = '?';
+        const struct editor_glyph *g = &editor_glyphs[((0 * 2 + bold) * 4 + size) * 95 + (c - 32)];
+        const unsigned char *src = &editor_pixels[g->offset];
+        int ox = px + g->left * mul, oy = py + (g->top - WX_CAPTOP[size]) * mul;
+        if (mul == 1) {
+            for (int r = 0; r < g->height; r++) for (int q = 0; q < g->width; q++) wx_blend(ox + q, oy + r, fg, src[r * g->width + q]);
+        } else {
+            for (int dy = -mul; dy < (g->height + 1) * mul; dy++) for (int dx = -mul; dx < (g->width + 1) * mul; dx++) {
+                int u = (dx * 256 + 128) / mul - 128, v = (dy * 256 + 128) / mul - 128; /* source coords, 24.8 */
+                int ux = u >> 8, vy = v >> 8, fx = u & 255, fy = v & 255;
+                int a00 = (ux >= 0 && ux < g->width && vy >= 0 && vy < g->height) ? src[vy * g->width + ux] : 0;
+                int a10 = (ux + 1 >= 0 && ux + 1 < g->width && vy >= 0 && vy < g->height) ? src[vy * g->width + ux + 1] : 0;
+                int a01 = (ux >= 0 && ux < g->width && vy + 1 >= 0 && vy + 1 < g->height) ? src[(vy + 1) * g->width + ux] : 0;
+                int a11 = (ux + 1 >= 0 && ux + 1 < g->width && vy + 1 >= 0 && vy + 1 < g->height) ? src[(vy + 1) * g->width + ux + 1] : 0;
+                int a = ((a00 * (256 - fx) + a10 * fx) * (256 - fy) + (a01 * (256 - fx) + a11 * fx) * fy) >> 16;
+                a = 128 + (a - 128) * mul;
+                if (a > 255) a = 255;
+                wx_blend(ox + dx, oy + dy, fg, a);
+            }
+        }
+        px += g->advance * mul;
+    }
+    return (px - x0 + sc - 1) / sc;
+}
+static int wx_text_lw(const char *s, int size, int bold, int mul){ int sc = (int)window_scale(); return (wx_text_w(s, size, bold, mul) + sc - 1) / sc; }
+static void wx_text_center(const char *s, int cx, int ly, int size, int bold, unsigned int fg){ wx_text(s, cx - wx_text_lw(s, size, bold, 1) / 2, ly, size, bold, 1, fg); }
+static void wx_text_right(const char *s, int rx, int ly, int size, int bold, unsigned int fg){ wx_text(s, rx - wx_text_lw(s, size, bold, 1), ly, size, bold, 1, fg); }
+
+/* Flat rounded card: four anti-aliased corner discs plus two rects. */
+static void wx_card(int x, int y, int w, int h, int r, unsigned int color, unsigned int bg){
+    gui_fill_circle(x + r, y + r, r, color, bg); gui_fill_circle(x + w - r - 1, y + r, r, color, bg);
+    gui_fill_circle(x + r, y + h - r - 1, r, color, bg); gui_fill_circle(x + w - r - 1, y + h - r - 1, r, color, bg);
+    window_rect(x + r, y, w - 2 * r, h, color);
+    window_rect(x, y + r, w, h - 2 * r, color);
+}
+
+/* "18°" style degrees into out. */
+static char *wx_put_int(char *o, int v){
+    if (v < 0) { *o++ = '-'; v = -v; }
+    char d[8]; int n = 0; if (!v) d[n++] = '0'; while (v && n < 7) { d[n++] = (char)('0' + v % 10); v /= 10; }
+    while (n) *o++ = d[--n];
+    return o;
+}
+static void wx_deg(char *out, int v){ char *o = wx_put_int(out, v); *o++ = (char)0xF8; *o = 0; }
+
+/* Condition glyphs, vector only, built from the two anti-aliased
+   primitives the dock icons use. u = one eighth of the glyph's half size,
+   so u = 2 is a ~32 px glyph and u = 5 an ~80 px one. */
+#define WX_G_SUN 0
+#define WX_G_PARTLY 1
+#define WX_G_CLOUD 2
+#define WX_G_FOG 3
+#define WX_G_RAIN 4
+#define WX_G_SNOW 5
+#define WX_G_STORM 6
+static int wx_glyph_kind(int code){
+    if (code == 0) return WX_G_SUN;
+    if (code <= 2) return WX_G_PARTLY;
+    if (code == 3) return WX_G_CLOUD;
+    if (code <= 48) return WX_G_FOG;
+    if (code <= 67) return WX_G_RAIN;
+    if (code <= 77) return WX_G_SNOW;
+    if (code <= 82) return WX_G_RAIN;
+    if (code <= 86) return WX_G_SNOW;
+    return WX_G_STORM;
+}
+static void wx_g_sun(int cx, int cy, int u, int r8, unsigned int bg){
+    /* r8: disc radius in u; rays run from r8+2 to r8+4 */
+    gui_fill_circle(cx, cy, r8 * u, WX_ACCENT, bg);
+    int a = (r8 + 2) * u, b = (r8 + 4) * u, t = u > 2 ? u / 2 : 1;
+    int ad = a * 707 / 1000, bd = b * 707 / 1000;
+    gui_draw_capsule(cx + a, cy, cx + b, cy, t, WX_ACCENT, bg); gui_draw_capsule(cx - a, cy, cx - b, cy, t, WX_ACCENT, bg);
+    gui_draw_capsule(cx, cy + a, cx, cy + b, t, WX_ACCENT, bg); gui_draw_capsule(cx, cy - a, cx, cy - b, t, WX_ACCENT, bg);
+    gui_draw_capsule(cx + ad, cy + ad, cx + bd, cy + bd, t, WX_ACCENT, bg); gui_draw_capsule(cx - ad, cy - ad, cx - bd, cy - bd, t, WX_ACCENT, bg);
+    gui_draw_capsule(cx + ad, cy - ad, cx + bd, cy - bd, t, WX_ACCENT, bg); gui_draw_capsule(cx - ad, cy + ad, cx - bd, cy + bd, t, WX_ACCENT, bg);
+}
+/* Flat-bottomed cloud, bottom edge at cy + 4u. grow pads every part, used
+   once in the background colour to cut a clean gap out of the sun behind. */
+static void wx_g_cloud(int cx, int cy, int u, int grow, unsigned int color, unsigned int bg){
+    gui_fill_circle(cx - 4 * u, cy + u, 3 * u + grow, color, bg);
+    gui_fill_circle(cx + 5 * u, cy + 2 * u, 2 * u + grow, color, bg);
+    gui_fill_circle(cx, cy - u, 5 * u + grow, color, bg);
+    window_rect(cx - 4 * u, cy + u, 9 * u, 3 * u + grow + 1, color);
+}
+static void wx_glyph(int kind, int cx, int cy, int u, unsigned int bg){
+    int t = u > 2 ? u / 2 : 1;
+    if (kind == WX_G_SUN) { wx_g_sun(cx, cy, u, 3, bg); return; }
+    if (kind == WX_G_PARTLY) {
+        wx_g_sun(cx + 3 * u, cy - 3 * u, u, 2, bg);
+        wx_g_cloud(cx - u, cy + 2 * u, u, t + 1, bg, bg);
+        wx_g_cloud(cx - u, cy + 2 * u, u, 0, WX_CLOUD, bg);
+        return;
+    }
+    if (kind == WX_G_CLOUD) { wx_g_cloud(cx, cy, u, 0, WX_CLOUD, bg); return; }
+    if (kind == WX_G_FOG) {
+        wx_g_cloud(cx, cy - 3 * u, u, 0, WX_CLOUD, bg);
+        gui_draw_capsule(cx - 6 * u, cy + 4 * u, cx + 6 * u, cy + 4 * u, t, WX_DIM, bg);
+        gui_draw_capsule(cx - 4 * u, cy + 7 * u, cx + 4 * u, cy + 7 * u, t, WX_DIM, bg);
+        return;
+    }
+    wx_g_cloud(cx, cy - 2 * u, u, 0, WX_CLOUD, bg);
+    if (kind == WX_G_RAIN) {
+        for (int i = -1; i <= 1; i++) gui_draw_capsule(cx + i * 4 * u + u, cy + 4 * u, cx + i * 4 * u - u, cy + 7 * u, t, WX_MID, bg);
+    } else if (kind == WX_G_SNOW) {
+        for (int i = -1; i <= 1; i++) gui_fill_circle(cx + i * 4 * u, cy + (i ? 5 : 7) * u, t + 1, WX_DIM, bg);
+    } else {
+        gui_draw_capsule(cx + u, cy + 3 * u, cx - 2 * u, cy + 6 * u, t, WX_ACCENT, bg);
+        gui_draw_capsule(cx - 2 * u, cy + 6 * u, cx + u, cy + 6 * u, t, WX_ACCENT, bg);
+        gui_draw_capsule(cx + u, cy + 6 * u, cx - u, cy + 9 * u, t, WX_ACCENT, bg);
+    }
+}
+
+static const char *WX_WEEKDAY[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
+static void gui_draw_weather_content(void){
+    /* Root cause of issue #13: a failed fetch left weather_text empty, so
+       every repaint (mouse move, focus change, tick) re-ran the blocking
+       DNS/TCP fetch and froze the window. Try once per session here; the
+       ten-minute cycle in gui_run and the R key do the retrying. */
+    if (!weather_text[0] && !weather_tried_once) { weather_tried_once = 1; weather_fetch(); }
+    window_clear(WX_BG);
+    gui_draw_app_titlebar("Weather");
+    /* Never empty. Three honest faces: the live reading, the last good
+       reading (kept across a later failure, labelled stale), or a fixed
+       sample that says it is a sample, on the header line AND on the
+       forecast heading, so no part of the window passes for live data. */
+    int live = weather_state == WX_OK && weather_have;
+    int stale = !live && weather_have;
+    int real = live || stale;
+    static const int s_code[WX_DAYS] = {0, 2, 3, 61, 2}, s_hi[WX_DAYS] = {21, 19, 17, 15, 18}, s_lo[WX_DAYS] = {12, 11, 10, 9, 10}, s_wd[WX_DAYS] = {1, 2, 3, 4, 5};
+    int temp = real ? weather_temp_c : 18, code = real ? weather_code10 / 10 : 0;
+    int have_extra = real ? wx_extra_have : 1;
+    int feels = real ? wx_feels_c : 17, hum = real ? wx_humidity : 55, wind = real ? wx_wind_kmh : 9;
+    int nd = real ? wx_day_count : WX_DAYS;
+    const int *d_code = real ? wx_day_code : s_code, *d_hi = real ? wx_day_hi : s_hi, *d_lo = real ? wx_day_lo : s_lo, *d_wd = real ? wx_day_wd : s_wd;
+
+    int vw = (int)window_width(), vh = (int)window_height();
+    int top = gui_app_windowed ? 0 : 40;          /* the full-screen path draws its own title bar above */
+    int cw = vw - 72 > 760 ? 760 : vw - 72;         /* content column */
+    int x0 = (vw - cw) / 2, x1 = x0 + cw;
+    int y = top + 22;
+    char buf[80];
+
+    /* Header: city left, state right. */
+    wx_text(geo_city[0] ? geo_city : (real ? "Your location" : "Sample location"), x0, y, 3, 1, 1, WX_TEXT);
+    wx_text(live ? "Current conditions, live" : stale ? "Last good reading, may be out of date" : "Sample data, not a live reading", x0, y + 20, 1, 0, 1, live ? WX_DIM : WX_MID);
+    if (weather_fetching) {
+        wx_text_right("Fetching...", x1, y + 1, 2, 1, WX_MID);
+    } else if (!live) {
+        const char *head = weather_state == WX_OFFLINE ? "Offline" : weather_state == WX_TIMEOUT ? "Timed out" : weather_state == WX_BAD ? "Bad response" : weather_state == WX_FAILED ? "Request failed" : "Not fetched yet";
+        int p = 0;
+        for (const char *c = head; *c; c++) buf[p++] = *c;
+        if (weather_err[0]) { buf[p++] = ' '; buf[p++] = '('; for (const char *c = weather_err; *c && p < 76; c++) buf[p++] = *c; buf[p++] = ')'; }
+        buf[p] = 0;
+        wx_text_right(buf, x1, y + 1, 2, 1, WX_ERR);
+        wx_text_right("Press R to retry", x1, y + 21, 1, 0, WX_MID);
+    } else {
+        wx_text_right("Press R to refresh", x1, y + 3, 1, 0, WX_DIM);
+    }
+
+    /* Hero: the temperature, 28 px face at 5x (cap height 50 logical). */
+    int hy = y + 50;
+    wx_deg(buf, temp);
+    int tw = wx_text(buf, x0 - 2, hy, 3, 0, 5, WX_TEXT);
+    int bx = x0 + tw + 22;
+    wx_text(weather_word(code), bx, hy + 8, 3, 1, 1, WX_TEXT);
+    if (nd > 0) {
+        char *o = buf; const char *s;
+        for (s = "High "; *s; s++) *o++ = *s; o = wx_put_int(o, d_hi[0]); *o++ = (char)0xF8;
+        for (s = "   Low "; *s; s++) *o++ = *s; o = wx_put_int(o, d_lo[0]); *o++ = (char)0xF8; *o = 0;
+        wx_text(buf, bx, hy + 31, 2, 0, 1, WX_MID);
+    }
+    wx_glyph(wx_glyph_kind(code), x1 - 52, hy + 24, 5, WX_BG);
+
+    /* Secondary facts: three flat cards. */
+    int fy = hy + 72, fh = 50, gap = 12, fw = (cw - 2 * gap) / 3;
+    for (int i = 0; i < 3; i++) {
+        int fx = x0 + i * (fw + gap);
+        wx_card(fx, fy, fw, fh, 10, WX_CARD, WX_BG);
+        wx_text(i == 0 ? "Feels like" : i == 1 ? "Humidity" : "Wind", fx + 16, fy + 11, 1, 0, 1, WX_DIM);
+        if (!have_extra) { wx_text("Not reported", fx + 16, fy + 28, 2, 0, 1, WX_MID); continue; }
+        char *o = buf;
+        if (i == 0) { o = wx_put_int(o, feels); *o++ = (char)0xF8; }
+        else if (i == 1) { o = wx_put_int(o, hum); *o++ = '%'; }
+        else { o = wx_put_int(o, wind); for (const char *s = " km/h"; *s; s++) *o++ = *s; }
+        *o = 0;
+        wx_text(buf, fx + 16, fy + 27, 3, 1, 1, WX_TEXT);
+    }
+
+    /* Forecast row. */
+    int ry = fy + fh + 16;
+    wx_text(live ? "5-day forecast" : stale ? "5-day forecast, last good reading" : "5-day forecast, sample data", x0, ry, 1, 1, 1, WX_MID);
+    int cy0 = ry + 16, ch = vh - cy0 - 14;
+    if (ch > 118) ch = 118;
+    int drawn = 0;
+    if (nd <= 0) {
+        wx_card(x0, cy0, cw, ch, 10, WX_CARD, WX_BG);
+        wx_text("No forecast in the last reply", x0 + 16, cy0 + ch / 2 - 5, 2, 0, 1, WX_MID);
+    } else {
+        int dw = (cw - (WX_DAYS - 1) * gap) / WX_DAYS;
+        for (int i = 0; i < nd && i < WX_DAYS; i++) {
+            int dx = x0 + i * (dw + gap), mx = dx + dw / 2;
+            wx_card(dx, cy0, dw, ch, 10, WX_CARD, WX_BG);
+            wx_text_center(i == 0 && real ? "Today" : WX_WEEKDAY[d_wd[i] % 7], mx, cy0 + 11, 1, 1, WX_TEXT);
+            wx_glyph(wx_glyph_kind(d_code[i]), mx, cy0 + ch / 2 - 4, 2, WX_CARD);
+            char hi[8], lo[8]; wx_deg(hi, d_hi[i]); wx_deg(lo, d_lo[i]);
+            int hw = wx_text_lw(hi, 2, 1, 1), lw = wx_text_lw(lo, 2, 0, 1);
+            int sx = mx - (hw + 8 + lw) / 2;
+            wx_text(hi, sx, cy0 + ch - 22, 2, 1, 1, WX_TEXT);
+            wx_text(lo, sx + hw + 8, cy0 + ch - 22, 2, 0, 1, WX_DIM);
+            drawn++;
+        }
+    }
+    /* Headless proof of what the window actually showed, only when it
+       changes (this draws on every repaint). wxrow= is the forecast row:
+       how many day cards were really drawn, and which weekdays. */
+    { static int last_sig = -1;
+      int sig = ((weather_state * 8 + (live ? 0 : stale ? 1 : 2) * 2 + weather_fetching) * 8 + drawn) * 2 + have_extra;
+      if (sig != last_sig) { last_sig = sig;
+          serial_puts("wxwin="); serial_puts(weather_fetching ? "fetching" : weather_state_name(weather_state));
+          serial_puts(live ? " live\n" : stale ? " stale\n" : " sample\n");
+          serial_puts("wxrow="); { char d[2] = { (char)('0' + drawn), 0 }; serial_puts(d); }
+          for (int i = 0; i < drawn; i++) { serial_puts(i ? "," : " "); serial_puts(WX_WEEKDAY[d_wd[i] % 7]); }
+          serial_puts(have_extra ? " facts=yes\n" : " facts=no\n"); } }
 }
 
 /* Real, reported bug, not a style complaint: gui_wait_close's "any key
