@@ -2500,10 +2500,19 @@ static void wall_dark_fallback_init(void){
 }
 static void wall_apply(int want_map){
     const unsigned char *next;
-    if (want_map && !wall_map){
+    if (want_map && !wall_map && !font_is_fallback()){
         /* Satellite/map fetch hasn't completed yet; use dark fallback
            instead of the tree photo, so the boot/idle screen is neutral
-           dark, not the Joshua Tree silhouette. */
+           dark, not the Joshua Tree silhouette.
+
+           The font_is_fallback() guard is the v86 browser demo, the same
+           real signal v46 already uses to disable the wind there. Inside
+           v86 there is no network at all, so the map fetch is not pending,
+           it is never going to arrive, and a fallback meant to cover a
+           few seconds of fetching became a permanently black desktop. A
+           real report: "the landing page wallpaper doesn't load anymore."
+           Where a map can never come, the baked photo is the real
+           wallpaper, not a placeholder. */
         wall_dark_fallback_init();
         next = wall_dark_fallback ? wall_dark_fallback : wallpaper_rgb;
     } else {
