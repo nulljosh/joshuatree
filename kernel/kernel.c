@@ -3969,16 +3969,8 @@ static void gui_launch_apps(void){
     int x0 = ((int)window_width() - grid_w) / 2;
     int y0 = 95;
     int scroll_offset = 0; /* v0.77.0: mouse wheel scroll support, apps offset by row */
-    /* Redraw only when something actually changed. The loop below runs every
-       few ticks polling the mouse, and repainting the wallpaper + glass panel
-       on every one of those idle passes is what made scrolling and typing
-       flash the whole screen. */
-    int dirty = 1;
 
     for (;;) {
-      serial_puts("appsdraw\n");
-      if (dirty) {
-        dirty = 0;
         window_clear(0x00201922);
         gui_draw_wallpaper();
         gui_apps_glass(x0 - 28, 25, grid_w + 56, 375);
@@ -4000,7 +3992,6 @@ static void gui_launch_apps(void){
             font_draw_string(GUI_LABELS[i], cx - lw / 2, cy + tile + 10, 0x001C1C1E, -1);
         }
         (void)rows;
-      }
 
         /* The same two v86/touch accommodations gui_wait_close documents:
            a few real ticks of settle time so the emulator's canvas sampler
@@ -4020,7 +4011,6 @@ static void gui_launch_apps(void){
             int sel_row = sel / APPS_COLS;
             if (sel_row < scroll_offset) scroll_offset = sel_row;
             if (sel_row >= scroll_offset + 3) scroll_offset = sel_row - 3 + 1;
-            dirty = 1;
         }
         int k = get_key_or_click();
         if (k == KEY_ESC) return;
@@ -4069,15 +4059,15 @@ static void gui_launch_apps(void){
                 int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
                 if (click_vx >= cell_x0 && click_vx < cell_x1 && click_vy >= cell_y0 && click_vy < cell_y1) { hit = i; break; }
             }
-            if (hit >= 0) { sel = hit; gui_launch(hit); dirty = 1; continue; }
+            if (hit >= 0) { sel = hit; gui_launch(hit); continue; }
             return; /* a tap outside every tile still closes the folder: with no keyboard there is no other way out */
         }
-        if (k == KEY_ENTER) { gui_launch(sel); dirty = 1; continue; } /* returns here when that app closes, folder still open, same as a real launcher */
-        if (k == 'a' && sel > 0) { sel--; dirty = 1; }                 /* left  */
-        else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) { sel++; dirty = 1; } /* right */
-        else if (k == 'w' && sel >= APPS_COLS) { sel -= APPS_COLS; dirty = 1; }
-        else if (k == 's' && sel + APPS_COLS < GUI_APPS_FOLDER) { sel += APPS_COLS; dirty = 1; }
-        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_launch(sel); dirty = 1; }
+        if (k == KEY_ENTER) { gui_launch(sel); continue; } /* returns here when that app closes, folder still open, same as a real launcher */
+        if (k == 'a' && sel > 0) sel--;                 /* left  */
+        else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) sel++; /* right */
+        else if (k == 'w' && sel >= APPS_COLS) sel -= APPS_COLS;
+        else if (k == 's' && sel + APPS_COLS < GUI_APPS_FOLDER) sel += APPS_COLS;
+        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_launch(sel); }
     }
 }
 
