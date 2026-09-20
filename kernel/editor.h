@@ -304,6 +304,15 @@ static void gui_launch_editor(void) {
             if (gui_app_windowed) gui_app_cursor_hide();
             editor_draw();
         }
-        else window_present(); __asm__ volatile ("hlt");
+        /* Present on EVERY pass, redraw or not. This was written as
+           `else window_present(); __asm__ ("hlt");`, where the else binds
+           to the present alone, so the one case that actually had something
+           new to show (changed, so editor_draw just ran) was the one case
+           that never reached the screen. A typography or font change drew
+           into the back buffer and sat there until some later idle pass
+           happened to present it. Caught by editor_qa.py in CI, which
+           sampled a frame the kernel had drawn and not yet shown. */
+        window_present();
+        __asm__ volatile ("hlt");
     }
 }

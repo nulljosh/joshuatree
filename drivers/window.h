@@ -48,6 +48,11 @@ void window_clear_viewport(void);
    and free when there is no back buffer (allocation failed, e.g. v86's
    32MB browser demo), which is exactly the pre-back-buffer behaviour. */
 void window_present(void);
+/* Real frames shown, incremented by every window_present. Host-side checks
+   read this by symbol to wait for a frame to actually reach the screen
+   before sampling the framebuffer, since a kernel variable changing no
+   longer implies the screen has. */
+extern volatile unsigned int window_present_count;
 int window_has_back_buffer(void);
 /* 1 if a draw really lands offscreen and only window_present() moves it to
    the visible framebuffer. See window.c. */

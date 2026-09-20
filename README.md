@@ -2,55 +2,50 @@
 
 # Joshua Tree
 
-![version](https://img.shields.io/badge/version-0.76.19-blue)
+![version](https://img.shields.io/badge/version-0.78.0-blue)
 ![platform](https://img.shields.io/badge/platform-i386-lightgrey)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-Live: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
+An operating system written from nothing.
 
-A kernel. A small one, from nothing. It boots in QEMU, reads a real disk,
-runs code loaded off it, drives a real mouse-driven GUI desktop with real
-apps. No libc, no bootloader beyond multiboot, no external dependencies
-beyond clang/lld/qemu. Full subsystem breakdown, every file mapped to what
-it does: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Plan and what's
-next: [`roadmap.md`](roadmap.md).
+It boots, reads a real disk, talks to the network, and opens a desktop you
+can click around with a mouse. Eighteen apps, a terminal, live weather.
+No libc, no bootloader, nothing borrowed. Clang, lld and QEMU are the only
+things it needs.
 
-## Progress
+Try it in your browser, running for real: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 
 <img src="progress.svg" width="460">
 
-Regenerate after checking off `roadmap.md`: `./tools/gen/progress.sh`
-
-## Build
+## Build it
 
 ```sh
 brew install lld qemu
-make run      # boots to the shell
-./check.sh    # boot check
+make run      # boots to the shell, type gui for the desktop
+./check.sh    # does it still boot
 ```
 
-`make run` attaches `dotfiles.img`. Use `./tools/gen/sync_dotfiles.sh` to sync them.
+## Poke at it
 
-Commands: `help` `clear` `echo` `time` `uptime` `dmesg` `mem` `reboot` `crash`
-`pagefault` `heaptest` `heapgrow` `tasktest` `preempttest` `weathertest`
-`weatherfxcliptest` `geotest` `wind`
-`isotest` `reaptest` `ring3test` `ps` `kill` `killtest` `sleep` `disktest`
-`diskuse` `fsuse` `ls` `cat` `exec` `rm` `cd` `mkdir` `write <file> <content>`
-`browse` `lspci` `gfxtest` `fonttest` `mousetest` `nettest` `ifconfig` `netscan`
-`web <host> [path]` `serve` `serveapp` `chat <message>` `build <what>` `gui`
-`testapps`, most exist to manually exercise a subsystem (see
-`docs/ARCHITECTURE.md`), not just to be useful. `web` and `gui` are worth
-trying: `web` does a real DNS lookup and TCP connection over the network
-stack in this repo, no libc, no OS underneath; `gui` opens a real
-mouse-driven desktop with working apps.
+`gui` opens the desktop. `web example.com` does a real DNS lookup and a real
+TCP connection over the network stack in this repo, with no operating system
+underneath it. `ls`, `cat`, `write` and `exec` work on a real FAT disk.
 
-## Architecture
+The rest, mostly there to exercise one subsystem at a time: `help` `dmesg`
+`mem` `ps` `kill` `sleep` `heaptest` `heapgrow` `tasktest` `preempttest`
+`ring3test` `isotest` `reaptest` `killtest` `disktest` `diskuse` `fsuse`
+`mkdir` `rm` `cd` `browse` `lspci` `gfxtest` `fonttest` `mousetest`
+`nettest` `ifconfig` `netscan` `serve` `serveapp` `chat` `weathertest`
+`geotest` `wind` `testapps` `crash` `pagefault` `reboot`.
+
+## How it fits together
 
 <img src="architecture.svg" width="600">
 
-QEMU's `-kernel` loads it directly. No bootloader, no ISO. Full subsystem
-breakdown, boot sequence, and what's deliberately not built yet (and why):
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Plan and ETAs: `roadmap.md`.
+Every file, what it does, and what is deliberately missing:
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+The contract a program can rely on: [`docs/SYSCALL-ABI.md`](docs/SYSCALL-ABI.md).
+What is next: [`roadmap.md`](roadmap.md).
 
 ## License
 

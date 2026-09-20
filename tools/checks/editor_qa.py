@@ -159,6 +159,22 @@ class Machine:
         self.screenshot('save-timeout')
         raise AssertionError('Save did not complete')
 
+    def presented(self):
+        """Wait for a real frame to reach the visible framebuffer.
+
+        Since v0.78.0 drawing lands in a back buffer and only window_present
+        copies it to the screen, so a kernel variable changing no longer
+        means the screen has changed. Sampling on the variable alone raced
+        the present and read the previous frame, which is exactly how this
+        check started failing in CI."""
+        before = self.integer('window_present_count')
+        for attempt in range(100):
+            if self.integer('window_present_count') != before:
+                time.sleep(.05)
+                return
+            time.sleep(.05)
+        raise AssertionError('No frame was presented, the screen never updated')
+
     def screenshot(self, name):
         raw = ARTIFACTS / 'framebuffer.raw'
         self.command('pmemsave', {'val': 0xfd000000, 'size': 1920 * 1080 * 4, 'filename': str(raw)})
@@ -239,6 +255,11 @@ try:
                 machine.wait_int('editor_family', lambda v, family=family: v == family)
                 machine.wait_int('editor_size', lambda v, size=size: v == (size + 1) % 4)
                 machine.wait_int('editor_weight', lambda v, weight=weight: v == weight)
+                # Since v0.78.0 drawing lands in a back buffer, so a kernel
+                # variable changing no longer means the screen has changed
+                # yet. Give the editor's own loop a real pass to present
+                # before sampling the framebuffer.
+                time.sleep(.4)
                 frame = machine.screenshot(f'type-{family}-{size}-{weight}')
                 origin_x, origin_y = machine.integer('app_view_x'), machine.integer('app_view_y')
                 crop = frame.crop(((origin_x + 40) * 2, (origin_y + 92) * 2,

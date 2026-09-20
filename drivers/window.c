@@ -39,6 +39,17 @@ static u32 *back = 0;
 static int dmg_x0 = 0, dmg_y0 = 0, dmg_x1 = 0, dmg_y1 = 0; /* damage bbox, x1/y1 exclusive; empty when x1 <= x0 */
 
 static int present_logged = 0;
+/* Not debug state: a real frame counter the host-side checks read by symbol.
+   With drawing offscreen, a kernel variable changing no longer means the
+   screen has changed, so a check that samples the framebuffer has to wait
+   for a real present first. editor_qa.py hit exactly that race and failed
+   in CI, sampling a frame the kernel had drawn but not yet shown. */
+/* Initialized non-zero deliberately, so it lands in .data next to the other
+   symbols the host-side checks read rather than out in .bss past the 4MB
+   line, where the "physical = virtual - 0xC0000000" address math those
+   checks use stops holding. Callers compare it for change, never for an
+   absolute value, so the starting number does not matter. */
+volatile unsigned int window_present_count = 1;
 static void damage_reset(void) { dmg_x0 = dmg_y0 = 0x7FFFFFFF; dmg_x1 = dmg_y1 = 0; }
 static void damage_all(void) { dmg_x0 = 0; dmg_y0 = 0; dmg_x1 = (int)phys_w; dmg_y1 = (int)(win_h * scale); }
 static void damage_add(int x, int y) {
@@ -163,6 +174,7 @@ void window_present(void) {
        bytes out the serial port forever and buries every other check's own
        markers under megabytes of log. The cap is far above what any check
        needs to tell "presenting" from "not presenting". */
+    window_present_count++;
     if (present_logged < 256) { present_logged++; serial_puts("present\n"); }
 }
 
