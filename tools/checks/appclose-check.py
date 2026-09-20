@@ -145,11 +145,20 @@ try:
         # one frame later than usual" apart; polling does, without weakening
         # the real assertion (still fails if truly stuck after the same
         # ~2s worst case this used to allow only 0.8s of).
+        # v0.76.19: the poll ceiling that used to be 2s is now 4s, matching
+        # open_slot. Real CI evidence, not padding: run 35521868175 got every
+        # one of the eleven slots open and closed except "Apps: still open
+        # after pointer close", on a run where the sweep afterwards proved
+        # input was fine end to end. The Apps folder is the one slot whose
+        # close runs a full gui_draw_desktop repaint of the whole 1920x1080
+        # framebuffer on the way out, so it is reliably the slowest close in
+        # the sweep and the first to fall off a ceiling a loaded runner
+        # cannot meet. Still fails if a window is genuinely stuck.
         at = close_button()
         if at is None: return
         move(*at); time.sleep(0.3)
         click()
-        for _ in range(20):
+        for _ in range(40):
             time.sleep(0.1)
             if not window_open(): break
         move(*PARK); time.sleep(0.5)
