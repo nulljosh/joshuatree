@@ -18,6 +18,7 @@
 #include "ramfs.h"
 #include "exec.h"
 #include "user_hello.h"
+#include "user_note.h"
 #include "libc.h"
 #include "pci.h"
 #include "vbe.h"
@@ -5812,7 +5813,8 @@ static void usertest(void){
     }
     puts("running HELLO.BIN at ring 3...\n");
     int status = -1;
-    if (!exec_user("HELLO.BIN", &status)) {
+    const char *hello_argv[] = { "HELLO.BIN" };
+    if (!exec_user("HELLO.BIN", hello_argv, 1, &status)) {
         puts("usertest: exec_user failed (not found, too big, or no free task slot)\n");
         serial_puts("usertest: FAILED (exec_user)\n");
         return;
@@ -5828,13 +5830,98 @@ static void usertest(void){
     serial_puts(ok ? "usertest: ok\n" : "usertest: FAILED\n");
 }
 
+/* ---- notetest: the v2 reference program, end to end -----------------------
+   Same shape as usertest above and the same reason for existing, one
+   version later. user/note.c is the first thing in this repo that can
+   change a file from ring 3, so this is the proof that v2's write path,
+   its seek and its argv are real rather than documented.
+
+   Three runs of one program, with three different argv vectors, against
+   one file:
+     note NOTE.TXT buy milk    creates it (O_CREAT|O_APPEND)
+     note NOTE.TXT call mum    appends to it
+     note NOTE.TXT @4 MILK     seeks into the middle and overwrites
+   and then the kernel reads NOTE.TXT back itself and compares the bytes.
+   That last step is the assertion that matters: the program's own output
+   is the program's claim about what it did, while vfs_read_file() here is
+   the filesystem's answer. A write path that printed the right thing and
+   stored nothing would pass the first and fail the second. */
+#define NOTETEST_EXPECT "buy MILK\ncall mum\n"
+#define NOTETEST_EXPECT2 "buy MILK\ncall mum\nand one more\n"
+static void run(char *line); /* the shell's own dispatcher, used below to test its argv splitting for real */
+static int notetest_run(const char *a1, const char *a2, const char *a3) {
+    const char *argv[4];
+    int argc = 0;
+    argv[argc++] = "NOTE.BIN";
+    argv[argc++] = "NOTE.TXT";
+    if (a1) argv[argc++] = a1;
+    if (a2) argv[argc++] = a2;
+    if (a3) argv[argc++] = a3;
+    int status = -1;
+    if (!exec_user("NOTE.BIN", argv, argc, &status)) {
+        puts("notetest: exec_user failed\n");
+        serial_puts("notetest: FAILED (exec_user)\n");
+        return -1;
+    }
+    return status;
+}
+static void notetest(void){
+    if (!vfs_write_file("NOTE.BIN", user_note, USER_NOTE_LEN) &&
+        !vfs_replace_file("NOTE.BIN", user_note, USER_NOTE_LEN)) {
+        puts("notetest: could not write NOTE.BIN to the active filesystem\n");
+        serial_puts("notetest: FAILED (seed NOTE.BIN)\n");
+        return;
+    }
+    /* Start from no file at all, so the O_CREAT run really creates. */
+    vfs_delete("NOTE.TXT");
+
+    int s1 = notetest_run("buy", "milk", 0);
+    int s2 = notetest_run("call", "mum", 0);
+    int s3 = notetest_run("@4", "MILK", 0);
+    if (s1 < 0 || s2 < 0 || s3 < 0) return;
+    puts("notetest: exit codes "); putdec(s1); putc(' '); putdec(s2); putc(' '); putdec(s3); putc('\n');
+    serial_puts("notetest: exit codes ");
+    { char d[7] = { (char)('0' + (s1 >= 0 && s1 <= 9 ? s1 : 9)), ' ',
+                    (char)('0' + (s2 >= 0 && s2 <= 9 ? s2 : 9)), ' ',
+                    (char)('0' + (s3 >= 0 && s3 <= 9 ? s3 : 9)), '\n', 0 };
+      serial_puts(d); }
+
+    /* The filesystem's own answer, not the program's. */
+    static char back[256];
+    int n = vfs_read_file("NOTE.TXT", back, sizeof(back) - 1);
+    int ok = (s1 == 0 && s2 == 0 && s3 == 0) && n == (int)strlen(NOTETEST_EXPECT);
+    if (ok) { back[n] = 0; ok = !strcmp(back, NOTETEST_EXPECT); }
+    if (n > 0) { back[n] = 0; puts("notetest: file now holds: "); puts(back); }
+    puts(ok ? "ring-3 program created, appended to and patched a real file: ok\n"
+            : "notetest: FAILED (the file on the filesystem is not what the program wrote)\n");
+    serial_puts(ok ? "notetest: ok\n" : "notetest: FAILED\n");
+    if (!ok) return;
+
+    /* The same program again, this time through the shell's own `exec`,
+       so the words a person would type really do become argv. run() is
+       the exact dispatcher a typed line reaches, handed a mutable buffer
+       the way the line reader hands it one, so this is the real splitter
+       and not a re-implementation of it. Driving it from here rather than
+       from QEMU keystrokes is deliberate: the monitor's sendkey cannot
+       produce the shifted characters an uppercase filename needs, so a
+       keystroke-driven version of this would be testing the harness. */
+    char cmd[] = "exec NOTE.BIN NOTE.TXT and one more";
+    run(cmd);
+    n = vfs_read_file("NOTE.TXT", back, sizeof(back) - 1);
+    int ok2 = n == (int)strlen(NOTETEST_EXPECT2);
+    if (ok2) { back[n] = 0; ok2 = !strcmp(back, NOTETEST_EXPECT2); }
+    puts(ok2 ? "the shell's own exec passed its words through as argv: ok\n"
+             : "notetest: FAILED (exec did not hand the shell's words to the program as argv)\n");
+    serial_puts(ok2 ? "notetest argv: ok\n" : "notetest argv: FAILED\n");
+}
+
 static void run(char *line){
     char *arg = line;
     while (*arg && *arg != ' ') arg++;
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -5960,6 +6047,7 @@ static void run(char *line){
         ring3_test(arg); /* v64: "", "fault", or "spin", see ring3.h; all three come back to the shell */
     }
     else if (!strcmp(line, "usertest")) usertest();
+    else if (!strcmp(line, "notetest")) notetest();
     else if (!strcmp(line, "preempttest")) {
         preempt_a_count = 0; preempt_b_count = 0; preempt_stop = 0;
         int ida = task_create(preempt_task_a);
@@ -6762,11 +6850,32 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "exec")) {
-        if (!*arg) { puts("usage: exec <file> (a flat binary, run as a real ring-3 task)\n"); }
+        if (!*arg) { puts("usage: exec <file> [args...] (a flat binary, run as a real ring-3 task)\n"); }
         else {
-            int status = -1;
-            if (!exec_user(arg, &status)) { puts(arg); puts(": exec failed (not found, too big, or no free task slot)\n"); }
-            else { puts("exit code "); putdec(status); putc('\n'); }
+            /* v2: the words after the filename become the program's real
+               argv. Split in place, the way every shell does it: runs of
+               spaces are separators, argv[0] is the filename itself, and
+               anything past JT_ARGC_MAX is refused rather than dropped,
+               because a program handed a silently shortened argv has no
+               way to tell. There are no quotes and no escapes here; a
+               word is a run of non-space characters, which is the whole
+               of what this shell's own line reader can express. */
+            const char *uargv[JT_ARGC_MAX];
+            int uargc = 0, overflow = 0;
+            char *p = arg;
+            while (*p) {
+                while (*p == ' ') *p++ = 0;
+                if (!*p) break;
+                if (uargc >= JT_ARGC_MAX) { overflow = 1; break; }
+                uargv[uargc++] = p;
+                while (*p && *p != ' ') p++;
+            }
+            if (overflow) { puts("exec: too many arguments (max "); putdec(JT_ARGC_MAX); puts(" including the program name)\n"); }
+            else {
+                int status = -1;
+                if (!exec_user(uargv[0], uargv, uargc, &status)) { puts(uargv[0]); puts(": exec failed (not found, too big, argv too large, or no free task slot)\n"); }
+                else { puts("exit code "); putdec(status); putc('\n'); }
+            }
         }
     }
     else if (!strcmp(line, "rm")) {

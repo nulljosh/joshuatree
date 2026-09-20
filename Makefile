@@ -98,12 +98,22 @@ user/hello.o: user/hello.c user/jtsys.h
 user/hello.bin: user/hello.o user/hello.ld
 	$(LD) -m elf_i386 -T user/hello.ld --oformat binary -o $@ user/hello.o
 
-# The built binary, embedded so `usertest` can seed it into the VFS on a
-# machine with no disk (every headless check boot, and the browser embed).
+user/note.o: user/note.c user/jtsys.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/note.bin: user/note.o user/note.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/note.o
+
+# The built binaries, embedded so `usertest`/`notetest` can seed them into
+# the VFS on a machine with no disk (every headless check boot, and the
+# browser embed).
 drivers/user_hello.h: user/hello.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/hello.bin drivers/user_hello.h user_hello
 
-kernel/kernel.o: drivers/user_hello.h
+drivers/user_note.h: user/note.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/note.bin drivers/user_note.h user_note
+
+kernel/kernel.o: drivers/user_hello.h drivers/user_note.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -118,7 +128,8 @@ run: kernel.elf dotfiles.img
 	qemu-system-i386 -kernel kernel.elf -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file=dotfiles.img,format=raw,if=ide,index=0
 
 clean:
-	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf user/hello.o user/hello.bin drivers/user_hello.h
+	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf user/hello.o user/hello.bin drivers/user_hello.h \
+	      user/note.o user/note.bin drivers/user_note.h
 
 # v75 (0.66.x): real gap found root-causing the reaptest bug (paging.h's
 # PAGING_PRIVATE_PDE), the hard way -- a header-only edit left the stale

@@ -28,12 +28,16 @@ typedef unsigned int u32;
 typedef unsigned char u8;
 typedef int (*syscall_fn)(u32 a, u32 b, u32 c);
 
+#define EIO      5
 #define EBADF   9
 #define EAGAIN  11
 #define ENOMEM  12
 #define EFAULT  14
 #define EINVAL  22
 #define EMFILE  24
+#define ENOSPC  28
+#define EFBIG   27
+#define ESPIPE  29
 #define ENOSYS  38
 #define ENOENT   2
 
@@ -52,11 +56,16 @@ static int sys_exit(u32 code, u32 b, u32 c) {
    before copy_from_user: every page of [buf, buf+len) must actually be
    user-accessible, otherwise a user program could hand the kernel any
    kernel address and have it echoed back. Bounded to one line per call
-   so the copy has a fixed on-stack buffer; longer output is more calls. */
+   so the copy has a fixed on-stack buffer; longer output is more calls.
+
+   This function is v1 frozen behaviour, character for character, including
+   the stop-at-first-NUL that makes it a text sink rather than a byte sink.
+   v2's file writes do NOT stop at NUL (see write_file_fd below); the
+   inconsistency is deliberate, because changing what a v1 write to fd 1
+   does would be a MAJOR break for no gain, and a file descriptor has no v1
+   behaviour to preserve. */
 #define WRITE_MAX 255
-static int sys_write(u32 fd, u32 buf, u32 len) {
-    if (fd != 1 && fd != 2) return -EBADF;
-    if (len > WRITE_MAX) len = WRITE_MAX;
+static int console_write(u32 fd, u32 buf, u32 len) {
     if (!paging_user_range_ok(buf, len)) return -EFAULT;
     char tmp[WRITE_MAX + 1];
     const char *src = (const char *)buf;
@@ -95,8 +104,29 @@ struct open_file {
     char *data;
     u32   size;
     u32   pos;
+    u32   flags;                /* the open() flags this descriptor was created with */
+    int   dirty;                /* 1 once a write has landed in data that the backend has not seen */
+    char  name[PATH_MAX + 1];   /* kept so close() knows which file to write the buffer back to */
 };
 static struct open_file fds[TASK_SLOTS][MAX_FDS];
+
+/* v2: writing.
+
+   The VFS layer has exactly two write primitives, vfs_write_file() and
+   vfs_replace_file(), and both take a whole file at once. There is no
+   partial write, no truncate-to-length, no per-backend cursor. So a
+   writable descriptor here is the read snapshot run backwards: the file
+   is loaded whole into the same kmalloc'd buffer, write() edits that
+   buffer at the descriptor's own offset, and close() hands the whole
+   buffer back through vfs_replace_file(). Nothing else the VFS offers
+   could implement write() honestly, and pretending otherwise would mean
+   re-writing the entire file on every 16-byte write() call.
+
+   The real, contractual consequence is that the file on the backend does
+   not change until close() (or task exit, which closes for you). Two
+   descriptors open on the same file will not see each other, and the last
+   one closed wins the whole file. That is in docs/SYSCALL-ABI.md, not
+   hidden here. */
 
 /* Copies a NUL-terminated string out of user space into a fixed kernel
    buffer, one byte at a time with the mapping checked ahead of each read.
@@ -117,7 +147,20 @@ static int copy_path_from_user(u32 addr, char *out) {
 
 static int sys_open(u32 path, u32 flags, u32 c) {
     (void)c;
-    if (flags != 0) return -EINVAL; /* v1 is read-only: O_RDONLY is the only accepted flag word */
+    /* Only bits this kernel actually implements are accepted. An
+       unrecognised bit is -EINVAL rather than ignored, so a program can
+       never believe it asked for something that did not happen. v1's rule
+       was "flags must be 0", which is exactly O_RDONLY with no modifiers,
+       so every v1 open still means what it meant. */
+    if (flags & ~(u32)(JT_O_ACCMODE | JT_O_CREAT | JT_O_TRUNC | JT_O_APPEND)) return -EINVAL;
+    u32 acc = flags & JT_O_ACCMODE;
+    if (acc == JT_O_ACCMODE) return -EINVAL; /* 3 is not an access mode */
+    /* O_CREAT/O_TRUNC/O_APPEND only mean something on a descriptor that
+       can write, because nothing is ever written back from a read-only
+       one. Asking for them read-only is a program bug, so it is an error
+       rather than a silent no-op. */
+    if (acc == JT_O_RDONLY && (flags & (JT_O_CREAT | JT_O_TRUNC | JT_O_APPEND))) return -EINVAL;
+
     int id = task_current();
     if (id < 0 || id >= TASK_SLOTS) return -EBADF;
 
@@ -132,14 +175,86 @@ static int sys_open(u32 path, u32 flags, u32 c) {
     char *buf = (char *)kmalloc(OPEN_MAX_FILE + 1);
     if (!buf) return -ENOMEM;
     int n = vfs_read_file(name, buf, OPEN_MAX_FILE + 1);
-    if (n <= 0) { kfree(buf); return -ENOENT; }
     if (n > OPEN_MAX_FILE) { kfree(buf); return -EINVAL; } /* bigger than one open can hold; refused, never truncated */
+    /* A backend read returns a byte count and nothing else, so a
+       zero-length file and a missing file are the same answer here. v1
+       already resolved that ambiguity as "missing" and this keeps it. */
+    int exists = (n > 0);
+    if (!exists && !(flags & JT_O_CREAT)) { kfree(buf); return -ENOENT; }
 
-    fds[id][fd].data = buf;
-    fds[id][fd].size = (u32)n;
-    fds[id][fd].pos  = 0;
+    u32 size = exists ? (u32)n : 0;
+    if (flags & JT_O_TRUNC) size = 0;
+
+    /* O_CREAT and O_TRUNC take effect now, not at close: the file exists,
+       and is empty, the moment open() returns. Only the bytes a program
+       goes on to write are deferred to close. Doing half of it at open and
+       half at close would be the confusing shape. */
+    if (!exists || (flags & JT_O_TRUNC)) {
+        if (!vfs_replace_file(name, "", 0)) { kfree(buf); return -ENOSPC; }
+    }
+
+    fds[id][fd].data  = buf;
+    fds[id][fd].size  = size;
+    fds[id][fd].pos   = (flags & JT_O_APPEND) ? size : 0;
+    fds[id][fd].flags = flags;
+    fds[id][fd].dirty = 0;
+    for (int i = 0; i <= PATH_MAX; i++) { fds[id][fd].name[i] = name[i]; if (!name[i]) break; }
     serial_puts("syscall: open ok\n");
     return fd;
+}
+
+/* The file half of write(). Binary clean on purpose: unlike the console
+   path above it does not stop at a NUL, because a file is a byte store and
+   there is no v1 behaviour here to preserve. Bounded by OPEN_MAX_FILE
+   rather than by the backend, because the backend cannot be asked how much
+   room it has; a write past the buffer is -EFBIG and writes nothing, never
+   a short write the caller has to notice. */
+static int write_file_fd(int id, u32 fd, u32 buf, u32 len) {
+    if (fd >= MAX_FDS || !fds[id][fd].data) return -EBADF;
+    struct open_file *f = &fds[id][fd];
+    if ((f->flags & JT_O_ACCMODE) == JT_O_RDONLY) return -EBADF;
+    if (f->flags & JT_O_APPEND) f->pos = f->size; /* O_APPEND ignores the seek offset, Linux's own rule */
+    if (len == 0) return 0;
+    if (f->pos + len > OPEN_MAX_FILE) return -EFBIG;
+    if (!paging_user_range_ok(buf, len)) return -EFAULT;
+    const char *src = (const char *)buf;
+    for (u32 i = 0; i < len; i++) f->data[f->pos + i] = src[i];
+    f->pos += len;
+    if (f->pos > f->size) f->size = f->pos;
+    f->dirty = 1;
+    return (int)len;
+}
+
+static int sys_write(u32 fd, u32 buf, u32 len) {
+    if (len > WRITE_MAX) len = WRITE_MAX;
+    if (fd == 1 || fd == 2) return console_write(fd, buf, len);
+    if (fd == 0) return -EBADF; /* stdin, as in v1 */
+    int id = task_current();
+    if (id < 0 || id >= TASK_SLOTS) return -EBADF;
+    return write_file_fd(id, fd, buf, len);
+}
+
+/* lseek(fd, offset, whence). Meaningful here precisely because a
+   descriptor is a whole-file buffer: pos is a real index into it, so a
+   seek followed by a write really does overwrite bytes in the middle of a
+   file. Seeking to exactly size is legal (that is end of file, where an
+   append lands); past it is -EINVAL rather than a hole, because a hole
+   would mean inventing zero bytes the program never wrote. */
+static int sys_lseek(u32 fd, u32 off, u32 whence) {
+    if (fd < FIRST_FD) return -ESPIPE; /* 0/1/2 are streams, not files */
+    int id = task_current();
+    if (id < 0 || id >= TASK_SLOTS) return -EBADF;
+    if (fd >= MAX_FDS || !fds[id][fd].data) return -EBADF;
+    struct open_file *f = &fds[id][fd];
+    int base;
+    if      (whence == JT_SEEK_SET) base = 0;
+    else if (whence == JT_SEEK_CUR) base = (int)f->pos;
+    else if (whence == JT_SEEK_END) base = (int)f->size;
+    else return -EINVAL;
+    int np = base + (int)off;
+    if (np < 0 || (u32)np > f->size) return -EINVAL;
+    f->pos = (u32)np;
+    return np;
 }
 
 /* read(fd, buf, len). fd 0 is the keyboard and is non-blocking by
@@ -170,6 +285,7 @@ static int sys_read(u32 fd, u32 buf, u32 len) {
     if (fd >= MAX_FDS || !fds[id][fd].data) return -EBADF;
 
     struct open_file *f = &fds[id][fd];
+    if ((f->flags & JT_O_ACCMODE) == JT_O_WRONLY) return -EBADF; /* v2: write-only means write-only */
     u32 left = f->size - f->pos;
     if (left == 0) return 0; /* real end of file, the one case that is 0 rather than an errno */
     u32 n = len < left ? len : left;
@@ -178,12 +294,46 @@ static int sys_read(u32 fd, u32 buf, u32 len) {
     return (int)n;
 }
 
+/* Writes a dirty descriptor's buffer back through the VFS, then reads it
+   straight back and compares.
+
+   The readback is not belt and braces, it is the only way this layer can
+   tell the truth. vfs_replace_file() answers "1" or "0" and nothing else,
+   and a backend whose own per-file cap is smaller than OPEN_MAX_FILE
+   (ramfs: 4096 bytes, see drivers/ramfs.c) truncates to that cap and still
+   answers 1. Without the readback, close() would report success for a file
+   that lost its tail. With it, that case is -EIO, a real error a program
+   can act on. The cost is one extra whole-file read and one extra
+   OPEN_MAX_FILE allocation per close of a descriptor that was written to,
+   and it is paid only then. */
+static int flush_fd(struct open_file *f) {
+    if (!f->dirty) return 0;
+    if (!vfs_replace_file(f->name, f->data, f->size)) return -EIO;
+    char *back = (char *)kmalloc(OPEN_MAX_FILE + 1);
+    if (!back) return -ENOMEM;
+    int n = vfs_read_file(f->name, back, OPEN_MAX_FILE + 1);
+    int ok = (n >= 0) && ((u32)n == f->size);
+    for (u32 i = 0; ok && i < f->size; i++) if (back[i] != f->data[i]) ok = 0;
+    kfree(back);
+    if (!ok) return -EIO;
+    f->dirty = 0;
+    return 0;
+}
+
+/* The descriptor is released whether or not the flush worked. A close that
+   returns -EIO has still closed: leaving a half-open fd behind would mean
+   a program that ignores the error slowly runs out of descriptors, which
+   is a worse failure than the one being reported. */
 static int close_fd(int id, u32 fd) {
     if (fd < FIRST_FD || fd >= MAX_FDS || !fds[id][fd].data) return -EBADF;
+    int err = flush_fd(&fds[id][fd]);
     kfree(fds[id][fd].data);
     fds[id][fd].data = 0;
     fds[id][fd].size = fds[id][fd].pos = 0;
-    return 0;
+    fds[id][fd].flags = 0;
+    fds[id][fd].dirty = 0;
+    fds[id][fd].name[0] = 0;
+    return err;
 }
 
 static int sys_close(u32 fd, u32 b, u32 c) {
@@ -195,7 +345,15 @@ static int sys_close(u32 fd, u32 b, u32 c) {
 
 void syscall_release_task(int id) {
     if (id < 0 || id >= TASK_SLOTS) return;
-    for (int i = FIRST_FD; i < MAX_FDS; i++) close_fd(id, (u32)i);
+    for (int i = FIRST_FD; i < MAX_FDS; i++) {
+        /* v2: this also flushes. A program that writes and then exits
+           without closing still gets its bytes out, which is what a caller
+           expects and what Linux does. Nobody is left to receive an error
+           at this point, so a failed exit-time flush is reported on the
+           serial log rather than swallowed entirely. */
+        int err = close_fd(id, (u32)i);
+        if (err && err != -EBADF) serial_puts("syscall: exit-time flush failed, file not written\n");
+    }
 }
 
 /* ---- time ---------------------------------------------------------------
@@ -295,6 +453,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_WRITE]       = sys_write,
     [SYS_OPEN]        = sys_open,
     [SYS_CLOSE]       = sys_close,
+    [SYS_LSEEK]       = sys_lseek,
     [SYS_TIME]        = sys_time,
     [SYS_GETPID]      = sys_getpid,
     [SYS_SCHED_YIELD] = sys_sched_yield,
