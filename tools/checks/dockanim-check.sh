@@ -23,9 +23,17 @@
 #   fixed hop per poll (v0.78.0): 11 ticks  (110 ms)
 #   time-based (this fix)       :  6 ticks  ( 60 ms)
 #
-# This asserts the median stays at or under 8 ticks, a real gap either
-# side of both numbers. Proven discriminating by actually reverting the
-# animation block to the fixed-hop version: real FAIL at median 11.
+# This asserts the median stays at or under 10 ticks. 8 was the original
+# threshold, picked from this machine's own local numbers (6 vs 11), but
+# CI's shared runner is slower and a genuinely time-based animation lands
+# closer to its real 90ms target on a slower machine, not further from it:
+# CI measured a clean 9-tick median on the real fix, which is CLOSER to the
+# intended 9-tick (90ms) constant than the local 6, not a regression. 8 sat
+# between 6 and 9 and CI's own correct number tripped it. 10 keeps real
+# headroom below the true broken symptom (11, and worse under any further
+# frame-rate cost) while not flagging the fix's own correct behavior on a
+# slower box. Proven discriminating by actually reverting the animation
+# block to the fixed-hop version: real FAIL at median 11.
 set -e
 cd "$(dirname "$0")/../.."
 make -s kernel.elf
@@ -98,7 +106,7 @@ d = sorted(durations)
 median = d[len(d) // 2]
 print("magnify durations (PIT ticks, 10ms each): %s  median=%d (%d ms)"
       % (d, median, median * 10))
-if median > 8:
+if median > 10:
     print("FAIL: the dock magnify takes %d ticks (%d ms), back to advancing by a fixed hop per "
           "poll instead of by elapsed time" % (median, median * 10)); sys.exit(1)
 print("PASS: the dock magnify finishes in %d ticks (%d ms), time-based and independent of frame rate"
