@@ -38,6 +38,7 @@ static u32 screen_band_h = 0;
 static u32 *back = 0;
 static int dmg_x0 = 0, dmg_y0 = 0, dmg_x1 = 0, dmg_y1 = 0; /* damage bbox, x1/y1 exclusive; empty when x1 <= x0 */
 
+static int present_logged = 0;
 static void damage_reset(void) { dmg_x0 = dmg_y0 = 0x7FFFFFFF; dmg_x1 = dmg_y1 = 0; }
 static void damage_all(void) { dmg_x0 = 0; dmg_y0 = 0; dmg_x1 = (int)phys_w; dmg_y1 = (int)(win_h * scale); }
 static void damage_add(int x, int y) {
@@ -157,7 +158,12 @@ void window_present(void) {
         for (int x = x0; x < x1; x++) dst[x] = src[x];
     }
     damage_reset();
-    serial_puts("present\n"); /* discriminating marker for tools/checks/backbuffer-check.sh */
+    /* Discriminating marker for tools/checks/backbuffer-check.sh. Capped:
+       this fires at every frame boundary, so left uncapped it writes eight
+       bytes out the serial port forever and buries every other check's own
+       markers under megabytes of log. The cap is far above what any check
+       needs to tell "presenting" from "not presenting". */
+    if (present_logged < 256) { present_logged++; serial_puts("present\n"); }
 }
 
 int window_has_back_buffer(void) { return back != 0; }
