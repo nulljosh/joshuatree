@@ -30,10 +30,10 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Sync landing page headline to latest roadmap feature
         run: ./tools/gen/inject-landing-headline.sh
       - name: Generate landing roadmap summary
