@@ -48,7 +48,7 @@ cp roadmap.md roadmap.md.bak
 
 # Temporarily modify roadmap.md - replace line 8 which has the Latest line
 awk -v new="**Latest**: ${test_headline}" '
-  NR == 8 {print new; next}
+  /^\*\*Latest\*\*:/ {print new; next}
   {print}
 ' roadmap.md.bak > roadmap.md
 
