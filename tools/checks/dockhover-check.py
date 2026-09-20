@@ -101,9 +101,17 @@ def tile_present(img, slot):
     return non_tray > n * n // 2
 def lifted(img, slot):
     """Lifted when the row above a normal tile's top, across the tile's own
-    width, is mostly not wallpaper (near-black there)."""
+    width, is mostly not wallpaper.
+
+    Threshold sits well clear of both real readings, not just above the old
+    one: the desktop's dark fallback isn't literally (0,0,0), it measures a
+    flat sum of 66 across every non-lifted slot (some tint/floor short of
+    pure black, real but not this check's concern), while a genuinely
+    lifted icon measures 325, a 5x gap. 150 sits in the middle of that gap
+    with room either side, so a real wallpaper tone shift doesn't flip this
+    false again the way 60 did once the fallback stopped being pure black."""
     x0 = (SLOT0_X + slot * PITCH) * SCALE; y = LIFTED_Y * SCALE
-    bright = sum(1 for x in range(x0, x0 + DOCK_ICON * SCALE) if sum(img.getpixel((x, y))) > 60)
+    bright = sum(1 for x in range(x0, x0 + DOCK_ICON * SCALE) if sum(img.getpixel((x, y))) > 150)
     return bright > DOCK_ICON * SCALE // 3
 
 for tag, path in (("mid", MID), ("end", END)):
