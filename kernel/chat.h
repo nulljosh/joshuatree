@@ -209,80 +209,112 @@ static int chat_send(const char *user_msg, char *answer, unsigned int answer_cap
    bug (v0.76.24). The helper already implements the correct pattern:
    draw chrome once before the loop, redraw content only per keystroke. */
 
-/* Real scrollback: the last few turns rendered top-to-bottom, wrapped,
-   user/assistant told apart by color the same way Mail tells read/
-   unread apart by weight. Only the tail that fits the window is shown
-   (this kernel has no scroll-offset input yet, same honest limit
-   render_wrapped_text's own "out of room, stop drawing" already has for
-   every other long-text view); n adds a new message, c clears history,
-   esc closes. */
+/* An LLM console in the spirit of `ollama run`, not a messenger: one status
+   line naming the real model and host every request goes to (llm_model /
+   llm_host / llm_port, the same globals chat_send uses, nothing invented),
+   each prompt echoed after a plain ">>> ", and the reply as plain wrapped
+   text under it. No bubbles, no sender labels, no contact framing. Only
+   the tail that fits the window is shown (this kernel has no scroll-offset
+   input yet, same honest limit render_wrapped_text's own "out of room,
+   stop drawing" already has for every other long-text view); n opens the
+   prompt, c clears the context, esc closes. */
+#define CHAT_PROMPT ">>> "
+#define CHAT_DIM 0x0075726E
+#define CHAT_INK 0x001C1C1E
+
+/* Rows render_wrapped_text will use for this text at this width, same wrap
+   rule, so a long reply pushes the next prompt down instead of being drawn
+   over (the old per-'\n' count ignored word wrap entirely). */
+static int chat_wrapped_rows(const char *p, int max_w) {
+    int rows = 1, x = 0;
+    int space_w = font_string_width(" ");
+    if (space_w < 1) space_w = 1;
+    while (*p) {
+        if (*p == '\n') { rows++; x = 0; p++; continue; }
+        if (*p == ' ') { if (x + space_w > max_w) { x = 0; rows++; } else x += space_w; p++; continue; }
+        char word[256]; unsigned int n = 0;
+        while (*p && *p != ' ' && *p != '\n') { if (n < sizeof(word) - 1) word[n++] = *p; p++; }
+        word[n] = 0;
+        int ww = font_string_width(word);
+        if (x > 0 && x + ww > max_w) { x = 0; rows++; }
+        x += ww;
+    }
+    return rows;
+}
+
+/* "<model>   <host>:<port>   <state>", the console's one status line. */
+static void chat_draw_status(const char *state) {
+    char line[LLM_MODEL_MAX + LLM_HOST_MAX + 48];
+    int p = 0;
+    const char *s = llm_model; while (*s && p < (int)sizeof(line) - 40) line[p++] = *s++;
+    s = "   "; while (*s) line[p++] = *s++;
+    s = llm_host; while (*s && p < (int)sizeof(line) - 32) line[p++] = *s++;
+    line[p++] = ':';
+    char digits[8]; int nd = 0; int v = llm_port;
+    do { digits[nd++] = (char)('0' + v % 10); v /= 10; } while (v && nd < 8);
+    while (nd) line[p++] = digits[--nd];
+    s = "   "; while (*s) line[p++] = *s++;
+    while (*state && p < (int)sizeof(line) - 1) line[p++] = *state++;
+    line[p] = 0;
+    window_rect(0, 40, (int)window_width(), 32, GUI_BG);
+    font_draw_string(line, 20, 52, CHAT_DIM, -1);
+}
+
 static void gui_launch_chat_app(void) {
     chat_load();
     serial_puts("chatchrome\n"); /* discriminating marker for tools/checks/termchatflash-check.sh, same convention editor.h's "editorchrome" already established */
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Chat"); /* v0.76.11: drawn once, not every keystroke -- see chat_prompt_line's own comment */
+    const char *state = "ready";
     for (;;) {
         window_rect(0, 40, (int)window_width(), (int)window_height() - 40, GUI_BG);
-        font_draw_string("n sends a message   c clears history   esc closes", 20, 52, 0x00807468, -1);
+        chat_draw_status(state);
+        serial_puts("chatconsole\n"); /* marker for tools/checks/chat-check.sh: the console view drew, status line included */
 
-        int y = 76;
-        int bottom = (int)window_height() - 20;
-        if (chat_count == 0) {
-            font_draw_string("No messages yet. Press n to start.", 20, y, 0x00807468, -1);
-        } else {
-            /* Render from the newest message backward, stopping once we've
-               filled the visible area, then draw what fit top-down: the
-               same "show the tail, not a silent overflow" contract every
-               other unbounded-content view here already keeps. */
-            int start = 0;
-            int used = 0;
-            for (int i = chat_count - 1; i >= 0; i--) {
-                int lines = 1;
-                for (const char *p = chat_msgs[i].content; *p; p++) if (*p == '\n') lines++;
-                int block_h = 16 + lines * 16 + 6; /* label line + wrapped body + gap */
-                if (used + block_h > bottom - y && i != chat_count - 1) { start = i + 1; break; }
-                used += block_h;
-                start = i;
-            }
-            int cy = y;
-            for (int i = start; i < chat_count && cy < bottom; i++) {
-                const char *label = (chat_msgs[i].role == CHAT_ROLE_ASSISTANT) ? llm_model : "you";
-                unsigned int label_color = (chat_msgs[i].role == CHAT_ROLE_ASSISTANT) ? 0x0085144B : 0x007A2048;
-                font_draw_string(label, 20, cy, label_color, -1);
-                cy += 16;
-                int avail_h = bottom - cy;
-                if (avail_h < 16) break;
-                render_wrapped_text(chat_msgs[i].content, 20, cy, (int)window_width() - 40, avail_h, 0x001C1C1E);
-                int lines = 1;
-                for (const char *p = chat_msgs[i].content; *p; p++) if (*p == '\n') lines++;
-                cy += lines * 16 + 6;
-            }
+        int x = 20, y = 76;
+        int bottom = (int)window_height() - 40;
+        int prompt_w = font_string_width(CHAT_PROMPT);
+        int body_w = (int)window_width() - 40;
+        /* Walk back from the newest turn until the visible area is full,
+           then draw what fit top-down: show the tail, never a silent
+           overflow. */
+        int start = chat_count, used = 0;
+        for (int i = chat_count - 1; i >= 0; i--) {
+            int user = chat_msgs[i].role != CHAT_ROLE_ASSISTANT;
+            int h = chat_wrapped_rows(chat_msgs[i].content, user ? body_w - prompt_w : body_w) * 16 + (user ? 4 : 12);
+            if (used + h > bottom - y && i != chat_count - 1) break;
+            used += h;
+            start = i;
         }
+        int cy = y;
+        for (int i = start; i < chat_count && cy + 16 <= bottom; i++) {
+            int user = chat_msgs[i].role != CHAT_ROLE_ASSISTANT;
+            int tx = user ? x + prompt_w : x;
+            int tw = user ? body_w - prompt_w : body_w;
+            if (user) font_draw_string(CHAT_PROMPT, x, cy, CHAT_DIM, -1);
+            render_wrapped_text(chat_msgs[i].content, tx, cy, tw, bottom - cy, CHAT_INK);
+            cy += chat_wrapped_rows(chat_msgs[i].content, tw) * 16 + (user ? 4 : 12);
+        }
+        if (cy + 16 <= bottom) font_draw_string(CHAT_PROMPT, x, cy, CHAT_DIM, -1); /* the idle prompt, waiting for n */
+        font_draw_string("n prompt   c clear context   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
 
         sleep_ticks(5);
         mouse_click_edge_sync();
         int k = get_key_or_click();
         if (k == KEY_ESC || k == KEY_CLICK) return;
-        if (k == 'c') { chat_clear(); continue; }
+        if (k == 'c') { chat_clear(); state = "ready"; continue; }
         if (k == 'n') {
             char msg[CHAT_CONTENT_MAX];
-            if (!gui_prompt_line_input("Chat", "type a message (enter to send, esc to cancel):", msg, sizeof(msg))) continue;
+            if (!gui_prompt_line_input("Chat", CHAT_PROMPT "send a message (enter sends, esc cancels)", msg, sizeof(msg))) continue;
             if (msg[0] == 0) continue;
 
             window_rect(0, 40, (int)window_width(), (int)window_height() - 40, GUI_BG);
-            char asking[LLM_MODEL_MAX + LLM_HOST_MAX + 32];
-            { int p = 0; const char *a1 = "asking "; while (*a1) asking[p++] = *a1++;
-              const char *m = llm_model; while (*m && p < (int)sizeof(asking) - 2) asking[p++] = *m++;
-              const char *a2 = " ..."; while (*a2 && p < (int)sizeof(asking) - 1) asking[p++] = *a2++;
-              asking[p] = 0; }
-            font_draw_string(asking, 20, 76, 0x0075726E, -1);
+            chat_draw_status("generating ...");
+            font_draw_string(CHAT_PROMPT, x, 76, CHAT_DIM, -1);
+            render_wrapped_text(msg, x + prompt_w, 76, body_w - prompt_w, 64, CHAT_INK);
 
             static char answer[4096]; /* real growth from the old 2048-byte cap */
-            if (!chat_send(msg, answer, sizeof(answer))) {
-                window_rect(0, 40, (int)window_width(), (int)window_height() - 40, GUI_BG);
-                font_draw_string("FAIL (couldn't reach the LLM host, or no reply)", 20, 76, 0x001C1C1E, -1);
-                gui_wait_close();
-            }
+            state = chat_send(msg, answer, sizeof(answer)) ? "ready" : "error: couldn't reach the host, or no reply";
         }
     }
 }
