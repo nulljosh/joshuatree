@@ -427,48 +427,6 @@ static int auth_field_input(char *out, int max, int y, int masked) {
     return 1;
 }
 
-/* First-run: no accounts exist yet. Walks username -> password ->
-   confirm, creates the account, loops back to the same prompt on any
-   mismatch/cancel rather than falling through to a broken login. */
-static void auth_first_run_screen(void) {
-    char username[AUTH_USERNAME_MAX + 1];
-    char password[AUTH_PASSWORD_MAX + 1];
-    char confirm[AUTH_PASSWORD_MAX + 1];
-    for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Welcome to Joshua Tree");
-        font_draw_string("No account yet. Create one to use this desktop.", 20, 52, 0x0075726E, -1);
-        font_draw_string("Username:", 20, 76, 0x0075726E, -1);
-        if (!auth_field_input(username, AUTH_USERNAME_MAX + 1, 100, 0)) continue;
-        if (username[0] == 0) continue;
-
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Welcome to Joshua Tree");
-        font_draw_string("Choose a password:", 20, 52, 0x0075726E, -1);
-        if (!auth_field_input(password, AUTH_PASSWORD_MAX + 1, 76, 1)) continue;
-        if (password[0] == 0) continue;
-
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Welcome to Joshua Tree");
-        font_draw_string("Confirm password:", 20, 52, 0x0075726E, -1);
-        if (!auth_field_input(confirm, AUTH_PASSWORD_MAX + 1, 76, 1)) continue;
-
-        if (!strcmp(password, confirm) && auth_create_user(username, password)) {
-            unsigned int p = 0; while (username[p] && p < AUTH_USERNAME_MAX) { auth_current_user[p] = username[p]; p++; } auth_current_user[p] = 0;
-            auth_logged_in = 1;
-            memset(password, 0, sizeof(password));
-            memset(confirm, 0, sizeof(confirm));
-            return;
-        }
-        memset(password, 0, sizeof(password));
-        memset(confirm, 0, sizeof(confirm));
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Welcome to Joshua Tree");
-        font_draw_string("Passwords didn't match or that name is taken. Try again.", 20, 52, 0x00A33B3B, -1);
-        sleep_ticks(60);
-    }
-}
-
 /* Real login: wrong credentials refuse and re-prompt (no lockout/rate
    limiting -- there's exactly one local user in front of the keyboard in
    this threat model, and adding a fake-looking lockout would be exactly
@@ -513,10 +471,38 @@ static void auth_login_screen(void) {
    after esc'ing back out) doesn't re-prompt every time -- the same
    "lock the desktop once per session, not once per window" behavior a
    real OS login has, matching this kernel's existing per-boot (not
-   per-window) state for things like settings_load. */
+   per-window) state for things like settings_load.
+
+   Opt-in gate, direct design call: the login screen only engages when
+   USERS.TXT actually has at least one account in it. An unconfigured
+   system (no USERS.TXT, or an empty one) boots straight to the desktop,
+   no first-run account-creation screen blocking the gate -- creating
+   the first account lives in Settings ("Add user", already built)
+   instead. Two real reasons, not just a preference: (1) the public
+   landing demo runs this exact kernel inside v86 in a browser, where a
+   visitor can't be handed a password prompt and there's no one present
+   to create an account against -- a wall there kills the demo outright;
+   (2) it means every existing headless GUI check script (the ~40 under
+   tools/checks/ that drive "gui" straight through to desktop
+   interaction, none of which know this feature exists) keeps working
+   unmodified on a fresh image with no USERS.TXT, since the gate is a
+   pure no-op in that case. It's also the honest reading of
+   docs/THREAT-MODEL.md's own scope: with no accounts configured there
+   is nothing to protect, so there's nothing for the gate to do. */
+/* Pure, GUI-free: whether auth_gate would actually show the blocking
+   login screen (at least one account exists) or no-op straight to the
+   desktop (unconfigured system, nothing to protect). Extracted into its
+   own function so the gating *rule* is unit-testable without invoking
+   the real interactive GUI loop, the same "extract the decision so it's
+   testable without a mouse/keyboard/boot" shape settings_row_at's own
+   extraction already established in kernel.c for exactly this reason. */
+static int auth_gate_would_prompt(void) {
+    auth_users_load();
+    return auth_user_count > 0;
+}
+
 static void auth_gate(void) {
     if (auth_logged_in) return;
-    auth_users_load();
-    if (auth_user_count == 0) auth_first_run_screen();
-    else auth_login_screen();
+    if (!auth_gate_would_prompt()) return; /* unconfigured system: no accounts, no gate, straight to desktop */
+    auth_login_screen();
 }

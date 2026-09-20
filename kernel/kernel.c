@@ -4341,6 +4341,19 @@ static void gui_launch_settings(void){
                     char pbuf[AUTH_PASSWORD_MAX + 1]; pbuf[0] = 0;
                     if (settings_prompt_line("Password for that user (enter to confirm, esc to cancel):", pbuf, sizeof(pbuf))) {
                         int ok = auth_create_user(ubuf, pbuf);
+                        /* v0.77.1: the gate is opt-in (auth_gate is a no-op
+                           on an unconfigured system, see kernel/auth.h),
+                           so a session that reaches this row with nobody
+                           logged in yet is exactly the "creating the very
+                           first account" case that used to be the
+                           first-run screen's job. Treat this account as
+                           the current session's own from here on, the
+                           same real effect the old first-run flow had,
+                           just moved to Settings instead of gating boot. */
+                        if (ok && !auth_current_user[0]) {
+                            unsigned int p = 0; while (ubuf[p] && p < AUTH_USERNAME_MAX) { auth_current_user[p] = ubuf[p]; p++; } auth_current_user[p] = 0;
+                            auth_logged_in = 1;
+                        }
                         font_draw_string(ok ? "Account created." : "Couldn't create that account (name taken, empty, or table full).",
                                           20, (int)window_height() - 48, ok ? 0x002F7B4F : 0x00A33B3B, -1);
                         sleep_ticks(60);
