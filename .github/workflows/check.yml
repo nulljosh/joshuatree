@@ -94,6 +94,14 @@ jobs:
         run: ./tools/checks/ramfs-demo-check.sh
       - name: Shell regression suite (heaptest, tasktest, preempttest, killtest, ring3test, ps)
         run: ./tools/checks/shellregress-check.sh
+      # The v1 syscall ABI's own regression: builds user/hello.c as a real
+      # flat ring-3 binary, seeds it and its data file through the VFS,
+      # runs it at CPL 3 and asserts its actual output and the exit code
+      # the kernel observed. This is the check that makes
+      # docs/SYSCALL-ABI.md a contract instead of a document, so it runs on
+      # every push alongside everything else.
+      - name: Ring-3 reference program against the v1 syscall ABI
+        run: ./tools/checks/usertest-check.sh
       - name: QEMU vmmouse absolute-pointer round trip
         run: ./tools/checks/vmmouse-check.sh
       - name: Calendar date math (cal_dow/cal_days_in_month/cal_is_leap), host harness
