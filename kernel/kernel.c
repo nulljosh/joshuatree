@@ -255,6 +255,8 @@ static int gui_getch_or_click(void){
    open and then never leave. Terminal and the Apps folder both shipped
    with exactly that bug in v36/v37, reported from a real phone. */
 #define KEY_CLICK 260
+#define KEY_WHEEL_UP 300
+#define KEY_WHEEL_DOWN 301
 static int get_key_or_click(void);
 
 static int get_key(void){
@@ -302,6 +304,8 @@ static int get_key_or_click(void){
             continue;
         }
         if (mouse_click_edge()) { gui_close_was_click = 1; return KEY_CLICK; }
+        int wheel = mouse_get_wheel();
+        if (wheel) return wheel > 0 ? KEY_WHEEL_UP : KEY_WHEEL_DOWN;
         __asm__ volatile ("hlt");
     }
 }
@@ -1888,6 +1892,23 @@ static void gui_draw_wallpaper_rows_sway(int y_from, int y_to, int sway){ gui_dr
 
 static void gui_draw_wallpaper(void){
     gui_draw_wallpaper_rows(GUI_MENUBAR_H, (int)window_height());
+}
+
+/* Redraw one app-local wallpaper rectangle. Apps can repaint their own
+   changing surface without blitting the surrounding viewport. */
+static void gui_draw_wallpaper_rect(int x, int y, int w, int h){
+    int sc = (int)window_scale();
+    int x0 = x * sc, x1 = (x + w) * sc;
+    int y0 = y * sc, y1 = (y + h) * sc;
+    if (x0 < 0) x0 = 0;
+    if (y0 < GUI_MENUBAR_H * sc) y0 = GUI_MENUBAR_H * sc;
+    if (x1 > (int)window_width() * sc) x1 = (int)window_width() * sc;
+    if (y1 > (int)window_height() * sc) y1 = (int)window_height() * sc;
+    for (int py = y0; py < y1; py++) {
+        struct wp_row c = gui_wallpaper_row(py, 0);
+        for (int px = x0; px < x1; px++)
+            window_pixel_phys(px, py, gui_wallpaper_px(&c, px));
+    }
 }
 
 /* Fills a downward-pointing triangle: flat top of half-width `half_w` at
@@ -3939,6 +3960,9 @@ static void gui_launch_terminal(void){
    reachable by mouse would be an app screen this project can never
    regression-test. */
 #define APPS_COLS 5
+/* Rows that fit in the 375px panel at a 108px cell: 3 whole ones. Scroll
+   limits and keyboard selection follow this, not a repeated literal. */
+#define APPS_VIS_ROWS 3
 /* The framebuffer has no alpha channel. Blend each glass pixel against the
    wallpaper already underneath it, keeping the real photo visible. */
 static void gui_apps_glass(int x, int y, int w, int h){
@@ -3961,6 +3985,29 @@ static void gui_apps_glass(int x, int y, int w, int h){
     }
 }
 static void gui_launch(int icon); /* mutually recursive with the folder: the folder launches apps, and the dock launches the folder */
+static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int cell_w, int cell_h, int tile){
+    for (int i = 0; i < GUI_APPS_FOLDER; i++) {
+        int row = i / APPS_COLS - scroll_offset;
+        int col = i % APPS_COLS;
+        if (row < 0 || row * cell_h >= 375) continue;
+        int cx = x0 + col * cell_w + cell_w / 2;
+        int cy = y0 + row * cell_h;
+        if (i == sel) gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 14,
+                                                 0x00FFF8F1, 0x00E5D8D0, 0x00E9DEE0, 12);
+        gui_draw_one_icon_on(i, cx, cy + tile, tile, 0x00E9DEE0);
+        int lw = font_string_width(GUI_LABELS[i]);
+        font_draw_string(GUI_LABELS[i], cx - lw / 2, cy + tile + 10, 0x001C1C1E, -1);
+    }
+}
+static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, int cell_w, int cell_h, int tile, int grid_w){
+    int panel_x = x0 - 28, panel_y = 25, panel_w = grid_w + 56, panel_h = 375;
+    gui_draw_wallpaper_rect(panel_x, panel_y, panel_w, panel_h);
+    gui_apps_glass(panel_x, panel_y, panel_w, panel_h);
+    font_draw_string("Apps", x0, 40, 0x002A2226, -1);
+    font_draw_string("arrow keys to move   enter opens   esc closes", x0, 65, 0x006A6064, -1);
+    gui_apps_draw_grid(scroll_offset, sel, x0, y0, cell_w, cell_h, tile);
+    serial_puts("appsgridrepaint\n");
+}
 static void gui_launch_apps(void){
     int sel = 0;
     int rows = (GUI_APPS_FOLDER + APPS_COLS - 1) / APPS_COLS;
@@ -3970,28 +4017,22 @@ static void gui_launch_apps(void){
     int y0 = 95;
     int scroll_offset = 0; /* v0.77.0: mouse wheel scroll support, apps offset by row */
 
-    for (;;) {
-        window_clear(0x00201922);
-        gui_draw_wallpaper();
-        gui_apps_glass(x0 - 28, 25, grid_w + 56, 375);
-        font_draw_string("Apps", x0, 40, 0x002A2226, -1);
-        font_draw_string("arrow keys to move   enter opens   esc closes", x0, 65, 0x006A6064, -1);
+    /* The wallpaper behind this folder never changes while it is open, so it
+       is painted once here and again only after an app has drawn over the
+       screen. Every other change (selection, scroll) repaints the panel rect
+       alone through gui_apps_redraw_panel. Repainting the wallpaper on every
+       poll tick is what made this screen flash while scrolling or typing. */
+    int full = 1;
+    (void)rows;
 
-        for (int i = 0; i < GUI_APPS_FOLDER; i++) {
-            int row = i / APPS_COLS - scroll_offset;
-            int col = i % APPS_COLS;
-            /* Skip rows that are scrolled off-screen */
-            if (row < 0 || row * cell_h >= 375) continue;
-            int cx = x0 + col * cell_w + cell_w / 2;
-            int cy = y0 + row * cell_h;
-            if (i == sel) /* selection plate, drawn under the icon so it reads as a highlight, not a border */
-                gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 14,
-                                          0x00FFF8F1, 0x00E5D8D0, 0x00E9DEE0, 12);
-            gui_draw_one_icon_on(i, cx, cy + tile, tile, 0x00E9DEE0);
-            int lw = font_string_width(GUI_LABELS[i]);
-            font_draw_string(GUI_LABELS[i], cx - lw / 2, cy + tile + 10, 0x001C1C1E, -1);
+    for (;;) {
+        if (full) {
+            full = 0;
+            serial_puts("appsfullrepaint\n");
+            window_clear(0x00201922);
+            gui_draw_wallpaper();
+            gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w);
         }
-        (void)rows;
 
         /* The same two v86/touch accommodations gui_wait_close documents:
            a few real ticks of settle time so the emulator's canvas sampler
@@ -4000,19 +4041,23 @@ static void gui_launch_apps(void){
         sleep_ticks(5);
         mouse_click_edge_sync();
         /* v0.77.0: mouse wheel scroll to browse all apps, one row per scroll. */
-        int wheel = mouse_get_wheel();
-        if (wheel != 0) {
-            scroll_offset -= wheel; /* wheel < 0 = scroll down = move view up = increase offset */
-            int max_scroll = rows - 3; /* show at least 3 rows on screen (375 / 108 ≈ 3.5 rows fit) */
+        int k = get_key_or_click();
+        if (k == KEY_WHEEL_UP || k == KEY_WHEEL_DOWN) {
+            /* The view scrolls where the wheel says, full stop. Snapping the
+               offset back to keep the selection on screen (what the first cut
+               of this did) made the wheel look broken: one notch scrolled and
+               the next frame jumped right back. Selection follows the view on
+               the keyboard path below, not the other way round. */
+            int old_offset = scroll_offset;
+            int max_scroll = rows - APPS_VIS_ROWS;
             if (max_scroll < 0) max_scroll = 0;
+            scroll_offset += (k == KEY_WHEEL_UP) ? -1 : 1;
             if (scroll_offset < 0) scroll_offset = 0;
             if (scroll_offset > max_scroll) scroll_offset = max_scroll;
-            /* Keep selection visible, adjusting if needed */
-            int sel_row = sel / APPS_COLS;
-            if (sel_row < scroll_offset) scroll_offset = sel_row;
-            if (sel_row >= scroll_offset + 3) scroll_offset = sel_row - 3 + 1;
+            if (scroll_offset != old_offset)
+                gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w);
+            continue;
         }
-        int k = get_key_or_click();
         if (k == KEY_ESC) return;
         if (k == KEY_CLICK) {
             /* v86 (0.71.0) real bug, confirmed by reading this function:
@@ -4059,15 +4104,25 @@ static void gui_launch_apps(void){
                 int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
                 if (click_vx >= cell_x0 && click_vx < cell_x1 && click_vy >= cell_y0 && click_vy < cell_y1) { hit = i; break; }
             }
-            if (hit >= 0) { sel = hit; gui_launch(hit); continue; }
+            if (hit >= 0) { sel = hit; gui_launch(hit); full = 1; continue; } /* the app drew over the screen, so the folder needs a real full repaint */
             return; /* a tap outside every tile still closes the folder: with no keyboard there is no other way out */
         }
-        if (k == KEY_ENTER) { gui_launch(sel); continue; } /* returns here when that app closes, folder still open, same as a real launcher */
+        if (k == KEY_ENTER) { gui_launch(sel); full = 1; continue; } /* returns here when that app closes, folder still open, same as a real launcher */
+        int old_sel = sel;
         if (k == 'a' && sel > 0) sel--;                 /* left  */
         else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) sel++; /* right */
         else if (k == 'w' && sel >= APPS_COLS) sel -= APPS_COLS;
         else if (k == 's' && sel + APPS_COLS < GUI_APPS_FOLDER) sel += APPS_COLS;
-        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_launch(sel); }
+        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_launch(sel); full = 1; continue; }
+        if (sel != old_sel) {
+            /* Keyboard selection drags the view with it, the direction that is
+               not surprising: move past the last visible row and the grid
+               follows. */
+            int sel_row = sel / APPS_COLS;
+            if (sel_row < scroll_offset) scroll_offset = sel_row;
+            if (sel_row >= scroll_offset + APPS_VIS_ROWS) scroll_offset = sel_row - APPS_VIS_ROWS + 1;
+        }
+        if (sel != old_sel) gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w);
     }
 }
 
