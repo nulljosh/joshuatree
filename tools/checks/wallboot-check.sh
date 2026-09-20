@@ -10,10 +10,12 @@
 #
 # On native QEMU (real font, font_is_fallback()==0) with the compiled-in
 # default theme (WALL_SAT) and no accounts configured (auth_gate is a
-# no-op), the very first real desktop paint must use the dark fallback,
-# never the baked tree photo -- the map hasn't fetched yet at that point.
-# The FIRST `wallsrc=` line on serial must therefore read `wallsrc=dark`,
-# not `wallsrc=photo`.
+# no-op), the very first real desktop paint must use the baked satellite
+# capture, never the tree photo -- the map hasn't fetched yet at that point.
+# The FIRST `wallsrc=` line on serial must therefore read
+# `wallsrc=satfallback`, not `wallsrc=photo`. (It read `wallsrc=dark` until
+# the solid black placeholder was removed: the browser demo could land on it
+# permanently, see wall_apply's own comment.)
 #
 # Proven discriminating (not just "prints ok"): temporarily commenting out
 # the `wall_apply(wall_theme != WALL_PHOTO);` call right before gui_run()'s
@@ -44,7 +46,7 @@ while [ $i -lt 15 ]; do
     if [ -f "$LOG" ]; then
         # QEMU's chardev file backend writes the serial port's real \r\n
         # line endings verbatim; strip the \r; a bare == compare against
-        # "wallsrc=dark" below would otherwise silently always fail.
+        # "wallsrc=satfallback" below would otherwise silently always fail.
         FIRST=$(grep -m1 '^wallsrc=' "$LOG" 2>/dev/null | tr -d '\r' || true)
         [ -n "$FIRST" ] && break
     fi
@@ -60,11 +62,11 @@ if [ -z "$FIRST" ]; then
     exit 1
 fi
 
-if [ "$FIRST" = "wallsrc=dark" ]; then
-    echo "PASS: first desktop paint used the dark fallback ($FIRST), never the tree photo"
+if [ "$FIRST" = "wallsrc=satfallback" ]; then
+    echo "PASS: first desktop paint used the baked satellite capture ($FIRST), never the tree photo"
     exit 0
 else
-    echo "FAIL: first desktop paint was $FIRST, expected wallsrc=dark -- the tree photo flashed on boot"
+    echo "FAIL: first desktop paint was $FIRST, expected wallsrc=satfallback -- the tree photo flashed on boot"
     cat "$LOG"
     exit 1
 fi
