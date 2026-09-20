@@ -1256,6 +1256,29 @@ if (typeof document !== "undefined") (function () {
     }, 60);
   }
 
+  // One line per app, so the eyebrow says something about the SAME app the
+  // H1 just named instead of cycling through unrelated captions underneath
+  // it. Direct request: the two headings should read as one thought.
+  var APP_CAPTION = {
+    'Files': 'Real FAT16, real reads and writes',
+    'Weather': 'Live data over its own network stack',
+    'Mail': 'A real mailbox on a real filesystem',
+    'Calendar': 'Real events, persisted across reboots',
+    'Notes': 'Written straight to disk, no save step',
+    'Reminders': 'A checklist that survives a reboot',
+    'Terminal': 'A real shell, talking to a real kernel',
+    'Chat': 'Talk to the machine, natively',
+    'Trash': 'Deleted files, really recoverable',
+    'Contacts': 'Its own records, its own format',
+    'Calculator': 'Small, and it actually adds up'
+  };
+  function setEyebrow(appName) {
+    if (!window.jtEyebrow) return;
+    var caption = APP_CAPTION[appName];
+    if (caption) window.jtEyebrow.hold(caption);
+    else window.jtEyebrow.resume();
+  }
+
   function updateHeadline(appName) {
     // v0.76.30: dynamic headline with typewriter animation.
     // Types out "Introducing <AppName>." when app opens, creating a real sense
@@ -1264,13 +1287,13 @@ if (typeof document !== "undefined") (function () {
     if (h1Link) {
       typewriterEffect(h1Link, appName + '.');
     }
+    setEyebrow(appName);
   }
-  // The H1 that ships in the HTML is the real announcement line, injected at
-  // deploy time from roadmap.md's **Latest** field by
-  // tools/gen/inject-landing-headline.sh. Capture it once, before any
-  // typewriter run overwrites it, and reset to THAT rather than a hardcoded
-  // 'Joshua Tree.' -- hardcoding meant every visitor saw the real headline
-  // load and then get silently replaced by a different one a second later.
+  // The H1 that ships in the HTML is the brand line, and the tour resets to
+  // exactly that, so nothing a visitor reads on load is replaced a second
+  // later by something different. The roadmap's **Latest** announcement now
+  // leads the eyebrow's own cycle instead of living here, which is what
+  // removed the swap for real rather than papering over it.
   var DEFAULT_HEADLINE = (function () {
     var h1 = document.querySelector('h1');
     var text = h1 ? h1.textContent.trim() : '';
@@ -1285,6 +1308,7 @@ if (typeof document !== "undefined") (function () {
     if (h1Link) {
       typewriterEffect(h1Link, DEFAULT_HEADLINE);
     }
+    if (window.jtEyebrow) window.jtEyebrow.resume();
   }
 
   async function runSoloApp(gen, app) {

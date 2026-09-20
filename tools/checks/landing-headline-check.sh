@@ -1,6 +1,13 @@
 #!/bin/sh
-# Verify that the landing page's h1 banner is in sync with roadmap.md's **Latest** field,
-# and that it actually changes when the field changes.
+# Verify that the landing page's announcement is in sync with roadmap.md's
+# **Latest** field, and that it actually changes when the field changes.
+#
+# The announcement lives on the eyebrow's data-latest attribute, not the H1.
+# It used to be injected into the H1, which meant every visitor watched the
+# announcement render and then get replaced a second later by the demo tour's
+# own reset to the brand line. So this also asserts the H1 IS the brand line:
+# if a future pass moves the announcement back into it, that swap comes back
+# and this check fails.
 set -e
 
 cd "$(dirname "$0")/../.."
@@ -14,20 +21,22 @@ fi
 
 # Extract the expected headline
 expected=$(echo "$original_latest" | awk -F '\\*\\*Latest\\*\\*: ' '{print $2}' | sed 's/\.$//')
-expected_heading="Introducing ${expected}."
 
-# Read what's currently in landing/index.html
-current_h1=$(grep -o '<h1>Introducing [^<]*</h1>' landing/index.html | head -1)
-if [ -z "$current_h1" ]; then
-  echo "FAIL: No <h1>Introducing...</h1> found in landing/index.html"
+
+# The H1 must be the brand line, nothing else.
+current_h1=$(grep -o '<h1>[^<]*</h1>' landing/index.html | head -1)
+if [ "$current_h1" != "<h1>Introducing Joshua Tree.</h1>" ]; then
+  echo "FAIL: the H1 should be the brand line, not an announcement"
+  echo "  Expected: <h1>Introducing Joshua Tree.</h1>"
+  echo "  Got: $current_h1"
   exit 1
 fi
 
-# Check it matches
-if [ "$current_h1" != "<h1>${expected_heading}</h1>" ]; then
-  echo "FAIL: landing h1 mismatch"
-  echo "  Expected: <h1>${expected_heading}</h1>"
-  echo "  Got: $current_h1"
+current_latest=$(grep -o 'data-latest="[^"]*"' landing/index.html | head -1)
+if [ "$current_latest" != "data-latest=\"${expected}\"" ]; then
+  echo "FAIL: eyebrow announcement mismatch"
+  echo "  Expected: data-latest=\"${expected}\""
+  echo "  Got: $current_latest"
   exit 1
 fi
 
@@ -49,12 +58,12 @@ trap "mv roadmap.md.bak roadmap.md" EXIT
 ./tools/gen/inject-landing-headline.sh >/dev/null 2>&1
 
 # Verify it changed
-new_h1=$(grep -o '<h1>Introducing [^<]*</h1>' landing/index.html | head -1)
-expected_new="Introducing ${test_headline}"
-if [ "$new_h1" != "<h1>${expected_new}</h1>" ]; then
-  echo "FAIL: banner did not change when Latest field changed"
-  echo "  Expected: <h1>${expected_new}</h1>"
-  echo "  Got: $new_h1"
+new_latest=$(grep -o 'data-latest="[^"]*"' landing/index.html | head -1)
+expected_new=$(echo "$test_headline" | sed 's/\.$//')
+if [ "$new_latest" != "data-latest=\"${expected_new}\"" ]; then
+  echo "FAIL: announcement did not change when Latest field changed"
+  echo "  Expected: data-latest=\"${expected_new}\""
+  echo "  Got: $new_latest"
   exit 1
 fi
 
@@ -65,12 +74,12 @@ trap - EXIT  # Clear the trap
 ./tools/gen/inject-landing-headline.sh >/dev/null 2>&1
 
 # Verify it changed back
-restored_h1=$(grep -o '<h1>Introducing [^<]*</h1>' landing/index.html | head -1)
-if [ "$restored_h1" != "<h1>${expected_heading}</h1>" ]; then
-  echo "FAIL: banner did not restore when Latest field restored"
-  echo "  Expected: <h1>${expected_heading}</h1>"
-  echo "  Got: $restored_h1"
+restored_latest=$(grep -o 'data-latest="[^"]*"' landing/index.html | head -1)
+if [ "$restored_latest" != "data-latest=\"${expected}\"" ]; then
+  echo "FAIL: announcement did not restore when Latest field restored"
+  echo "  Expected: data-latest=\"${expected}\""
+  echo "  Got: $restored_latest"
   exit 1
 fi
 
-echo "PASS: landing page banner tracks roadmap Latest field"
+echo "PASS: the H1 is the brand line and the eyebrow announcement tracks roadmap Latest"

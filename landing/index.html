@@ -342,8 +342,14 @@
          this pass. Headline swapped to Multi-Window, a real, CI-verified
          (`tools/checks/multiwindow-check.py`), actually-visible-on-load
          capability instead. -->
-<h1>Introducing Real-Time Memory Monitor.</h1>
-    <h2 class="eyebrow"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
+<!-- The H1 is the brand line and nothing else. It used to carry the
+     roadmap's **Latest** announcement, injected at deploy time, which meant
+     every visitor watched the announcement render and then get replaced a
+     second later by the tour's own reset. The announcement now rides the
+     eyebrow below (data-latest, same injector), where it belongs: H1 says
+     what this is, H2 says what is new about it. -->
+<h1>Introducing Joshua Tree.</h1>
+    <h2 class="eyebrow" data-latest="Real-Time Memory Monitor"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
   </div>
 </header>
 
@@ -407,6 +413,7 @@
   // caption. Updated by hand alongside real roadmap.md entries.
   var el = document.getElementById('kernel-version');
   if (!el) return;
+  var eyebrow = el.closest('.eyebrow');
   var items = [
     'Real root-cause fixes, not timeouts',
     'Mouse wheel scrolling in Launchpad',
@@ -431,6 +438,22 @@
     typeOut(items[i], function () { setTimeout(cycle, 2600); });
     i = (i + 1) % items.length;
   }
+  // The roadmap's own **Latest** line leads the cycle: it is the newest real
+  // thing shipped, so it should be the first thing read, just not in the H1.
+  var latest = eyebrow && eyebrow.getAttribute('data-latest');
+  if (latest) items.unshift(latest);
+
+  // The demo tour drives the H1 as it opens each app. These two let it keep
+  // the eyebrow saying something about the SAME app rather than cycling
+  // through unrelated captions underneath it.
+  var paused = false;
+  window.jtEyebrow = {
+    hold: function (text) { paused = true; typeOut(text); },
+    resume: function () { if (paused) { paused = false; cycle(); } }
+  };
+  var baseCycle = cycle;
+  cycle = function () { if (!paused) baseCycle(); };
+
   fetch('version.txt').then(function (r) { return r.ok ? r.text() : null; }).then(function (v) {
     if (v) items.unshift('v' + v.trim());
   }).catch(function () {}).then(cycle);

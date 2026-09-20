@@ -19,21 +19,26 @@ fi
 
 # Remove trailing period if present
 headline_clean=$(echo "$headline" | sed 's/\.$//')
-full_heading="Introducing ${headline_clean}."
 
-# Replace the h1 in landing/index.html using a portable approach
-# Create a temporary file with the replacement
+# The announcement rides the eyebrow's data-latest attribute, not the H1.
+# The H1 is the brand line and stays put: injecting the announcement there
+# meant every visitor watched it render and then get replaced a second later
+# by the demo tour's own reset, which is the swap this moved to fix.
 tmp_file=$(mktemp)
 trap "rm -f $tmp_file" EXIT
 
-awk -v heading="<h1>${full_heading}</h1>" '
-  /<h1>Introducing [^<]*<\/h1>/ {
-    print heading
-    next
+awk -v latest="$headline_clean" '
+  /data-latest="[^"]*"/ {
+    sub(/data-latest="[^"]*"/, "data-latest=\"" latest "\"")
   }
   {print}
 ' landing/index.html > "$tmp_file"
 
 mv "$tmp_file" landing/index.html
 
-echo "Updated landing/index.html h1 to: $full_heading"
+if ! grep -q "data-latest=\"${headline_clean}\"" landing/index.html; then
+  echo "Error: could not find the eyebrow's data-latest attribute to update"
+  exit 1
+fi
+
+echo "Updated landing/index.html eyebrow data-latest to: $headline_clean"
