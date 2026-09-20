@@ -1,77 +1,67 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <!-- v0.77: rebuilt for the real macOS-native idiom (compared side by
-       side against /System/Applications/Maps.app, Podcasts.app,
-       Freeform.app), direct request that the previous pass here read as
-       a painted illustration, not an app icon. Dropped: the four-stop
-       desert gradient, the userSpaceOnUse tree gradient, the radial sun
-       glow, the radial ground shadow, the top gloss ellipse and the
-       vignette overlay, five separate painterly layers stacked on one
-       small tile. What's left is the real Apple shape: one flat rounded
-       squircle (rx=44 of 200, unchanged, already the correct ~22%
-       ratio), a single subtle two-stop vertical gradient for depth (the
-       same trick Maps/Freeform use, light catching the top edge), one
-       bold filled silhouette for the subject, and a hairline rim light
-       tracing the tile's own edge. No second gradient on the subject
-       itself, no glow, no shadow baked into the art.
-
-       Palette is still this repo's real Mojave palette (CLAUDE.md), nothing
-       invented: silver #EDEDEA at the top, straight to the exact
-       leather-brown #6B4423 that's already one of the kernel dock's own
-       accent colors (kernel.c's dock_colors table) at the bottom. Tree
-       fill is the dock's darkest neutral, #2B2B2B (also already in that
-       same table), for a legible dark-on-warm silhouette instead of a
-       third hue. No purple, no teal, no rainbow gradient anywhere here.
-
-       Subject stays true to Yucca brevifolia (this file's own long-
-       standing reference note): a stout, irregularly-branching trunk,
-       each branch capped with a dense rosette of radiating spikes, not
-       antlers. Redrawn as solid filled shapes instead of thin strokes
-       specifically so it reads at 16x16, checked by rendering to PNG
-       at 16/32/128/512 and looking at each one, not assumed from the
-       path data. -->
+  <!-- v0.85: simplified tree engraving theme. One ink #000000 on one paper
+       #ece8df, no greys, no gradients, no accent colour. Tone from line
+       density, not colour. Simplified tree mark (landing/mark.png) with
+       clean vector paths, readable at all sizes from 16px up. -->
   <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#EDEDEA"/>
-      <stop offset="100%" stop-color="#6B4423"/>
-    </linearGradient>
     <clipPath id="roundedSquare">
       <rect width="200" height="200" rx="44"/>
     </clipPath>
-    <!-- One rosette, filled wedges instead of thin lines so the crown
-         reads as a solid mass rather than a hairline scribble once
-         scaled down to menu-bar/dock sizes. -->
-    <g id="rosette">
-      <path d="M0 0 L-4 -1 L0 -23 L4 -1 Z"/>
-      <path d="M0 0 L-4 -1 L-10 -21 L2.5 -3 Z"/>
-      <path d="M0 0 L4 -1 L10 -21 L-2.5 -3 Z"/>
-      <path d="M0 0 L-3 0 L-19 -14 L1 -3 Z"/>
-      <path d="M0 0 L3 0 L19 -14 L-1 -3 Z"/>
-      <path d="M0 0 L-2 1 L-22 -3 L0 -2 Z"/>
-      <path d="M0 0 L2 1 L22 -3 L0 -2 Z"/>
-    </g>
   </defs>
 
   <g clip-path="url(#roundedSquare)">
-    <rect width="200" height="200" fill="url(#tile)"/>
+    <!-- cream paper background -->
+    <rect width="200" height="200" fill="#ece8df"/>
 
-    <!-- trunk and two arms, bold filled capsules instead of thin
-         strokes, the "less gradient, more native" note also meant
-         "more legible at 16px", and a single dark silhouette wins there
-         over fine linework every time -->
-    <g fill="#2B2B2B">
-      <path d="M93 178 L91 140 L96 108 L93 84 L107 84 L104 108 L109 140 L107 178 Z"/>
-      <path d="M96 156 Q70 142 58 102 L67 96 Q78 130 101 145 Z"/>
-      <path d="M104 128 Q130 110 140 74 L148 79 Q138 116 110 137 Z"/>
-    </g>
+    <!-- simplified tree: trunk and three branches with sparse rosette crowns -->
+    <g fill="#000000">
+      <!-- main trunk -->
+      <path d="M93 175 L91 145 L96 110 L93 85 L107 85 L104 110 L109 145 L107 175 Z"/>
 
-    <g fill="#2B2B2B">
-      <use href="#rosette" transform="translate(100 84) scale(1.15)"/>
-      <use href="#rosette" transform="translate(58 102) rotate(-18) scale(0.95)"/>
-      <use href="#rosette" transform="translate(140 74) rotate(16) scale(1)"/>
+      <!-- left branch -->
+      <path d="M96 155 Q75 145 60 110 L70 105 Q85 135 100 148 Z"/>
+
+      <!-- right branch -->
+      <path d="M104 130 Q125 115 145 80 L152 86 Q132 120 108 140 Z"/>
+
+      <!-- left crown (top branch) - simplified radial spikes -->
+      <g transform="translate(100 85)">
+        <path d="M0 0 L-2 -8 L-1 -3 Z"/>
+        <path d="M0 0 L-6 -6 L-3 -2 Z"/>
+        <path d="M0 0 L-8 0 L-3 -1 Z"/>
+        <path d="M0 0 L-6 5 L-2 1 Z"/>
+        <path d="M0 0 L0 8 L0 2 Z"/>
+        <path d="M0 0 L6 5 L2 1 Z"/>
+        <path d="M0 0 L8 0 L3 -1 Z"/>
+        <path d="M0 0 L6 -6 L3 -2 Z"/>
+        <path d="M0 0 L2 -8 L1 -3 Z"/>
+      </g>
+
+      <!-- left branch crown - simplified spikes -->
+      <g transform="translate(60 110)">
+        <path d="M0 0 L-2 -7 L-1 -2 Z"/>
+        <path d="M0 0 L-5 -5 L-2 -1 Z"/>
+        <path d="M0 0 L-7 0 L-2 -1 Z"/>
+        <path d="M0 0 L-5 4 L-1 1 Z"/>
+        <path d="M0 0 L0 7 L0 2 Z"/>
+        <path d="M0 0 L5 4 L1 1 Z"/>
+        <path d="M0 0 L7 0 L2 -1 Z"/>
+        <path d="M0 0 L5 -5 L2 -1 Z"/>
+        <path d="M0 0 L2 -7 L1 -2 Z"/>
+      </g>
+
+      <!-- right branch crown - simplified spikes -->
+      <g transform="translate(145 80)">
+        <path d="M0 0 L-2 -7 L-1 -2 Z"/>
+        <path d="M0 0 L-5 -5 L-2 -1 Z"/>
+        <path d="M0 0 L-7 0 L-2 -1 Z"/>
+        <path d="M0 0 L-5 4 L-1 1 Z"/>
+        <path d="M0 0 L0 7 L0 2 Z"/>
+        <path d="M0 0 L5 4 L1 1 Z"/>
+        <path d="M0 0 L7 0 L2 -1 Z"/>
+        <path d="M0 0 L5 -5 L2 -1 Z"/>
+        <path d="M0 0 L2 -7 L1 -2 Z"/>
+      </g>
     </g>
   </g>
-  <!-- inner rim light tracing the tile's own edge, outside the clip so
-       it isn't half-cut by the rect it traces, the one non-flat touch
-       every real Dock icon carries, a hairline, not a glow -->
-  <rect x="1" y="1" width="198" height="198" rx="43" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="1.5"/>
 </svg>
