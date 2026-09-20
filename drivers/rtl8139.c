@@ -73,6 +73,18 @@ int rtl8139_init(void) {
     while ((inb(io_base + REG_CR) & 0x10) && timeout--) {}
     if (timeout <= 0) return 0;
 
+    /* The reset just put the chip's own TX descriptor pointer and RX ring
+       write pointer back to 0; the driver's cursors have to follow. They
+       did not: every caller re-runs net_init (so this) before its request,
+       so from the second request of a session on, tx_cur pointed at
+       descriptor 1-3 while the chip only transmits from descriptor 0, TOK
+       never came, and rtl8139_send reported failure. The first weather
+       fetch of a boot worked and every later one (the ten-minute refresh,
+       a retry) died with "send". tools/checks/weather-app-check.sh's
+       retry steps are the regression test. */
+    tx_cur = 0;
+    rx_offset = 0;
+
     outl(io_base + REG_RBSTART, KVIRT_TO_PHYS(rx_buffer));
     outb(io_base + REG_CR, 0x0C);       /* enable RX and TX */
     outl(io_base + REG_RCR, 0x0F | 0x80); /* accept all packet types, wrap the RX ring */
