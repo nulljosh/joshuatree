@@ -94,6 +94,14 @@ print(f"total {total}")
 # deliberately drawn as one FLAT fill in the artwork rather than sharing the
 # can's left-to-right gradient, so "solid" stays a fixed luminance claim
 # instead of depending on where in the band the check happens to sample.
+#
+# The glossy-tile pass gave every glyph its own top-light gradient, and that
+# gradient is white-only with no darkening term at the bottom specifically so
+# this band survives it: the band sits about 73% of the way down the glyph, so
+# any black term there would land on it directly and drag it under 240.
+# tools/gen/restyle_icons.py says the same thing next to LIFT. Re-measured on
+# a real capture after that pass rather than argued: still 0 of 95 pixels
+# under 240, the same result as before it.
 TRASH_SLOT = 9
 TRASH_ROWS, TRASH_COLS = range(52, 57), range(28, 47)
 x0 = (SLOT0_X + TRASH_SLOT * PITCH) * SCALE; y0 = ICON_TOP_Y * SCALE
