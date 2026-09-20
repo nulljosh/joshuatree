@@ -56,11 +56,12 @@ static u32 backdoor(u32 cmd, u32 arg, u32 *out_ebx, u32 *out_ecx, u32 *out_edx) 
 static int active = 0;
 static int have_abs = 0;
 static u32 abs_x = 0, abs_y = 0;
-static int rel_dx = 0, rel_dy = 0;
+static int rel_dx = 0, rel_dy = 0, rel_dz = 0;
 static int buttons = 0;
 static int presses = 0;   /* left-button 0->1 transitions seen in the packet stream, not yet taken */
 static u32 prev_st = 0;   /* button bits of the previous packet, for the transition checks */
 static int logged_first = 0;
+static int logged_first_wheel = 0;
 
 /* Linux vmmouse_enable(): enable, confirm the ID word the enable queued,
    then ask for absolute mode. Returns 1 only if every step answered as
@@ -114,6 +115,33 @@ int vmmouse_pump(void) {
         if ((status & 0xFFFF) < 4) break;
         u32 x = 0, y = 0, z = 0;
         u32 st = backdoor(CMD_ABSPOINTER_DATA, 4, &x, &y, &z);
+        /* v0.76.58: the EDX word of every absolute-pointer packet (both
+           hosts, real VMware, QEMU's hw/input/vmmouse.c and v86's own
+           src/vmware.js) is always the wheel's signed relative step, even
+           while x/y are absolute -- confirmed live: a QMP "wheel-up"
+           button event landed here as z=-1 (0xFFFFFFFF) on every one of
+           5 real presses sent, while pure motion packets carried z=0.
+           This code read it into a local and threw it away, so
+           mouse_get_wheel() never had anything to return whenever
+           vmmouse is active (the default under QEMU: mouse_handle_byte
+           already drops the raw PS/2 packet contents once vmmouse takes
+           over, see its own "phase kept, contents ignored" comment), and
+           real PS/2 hardware has its own separate bug (mouse_init below
+           never sends the IntelliMouse 0xF3 magic sequence, so a real
+           3-byte mouse never emits a 4th/wheel byte at all either). Sign
+           flips relative to the raw z: the PS/2 path's own convention
+           (mouse.c, wheel_nibble folded straight into accum_dz) is
+           "negative dz = scroll down", i.e. positive = up, while this
+           backdoor's z came back -1 for a wheel-UP press, the opposite
+           sign. Negate here so both input paths feed accum_dz the same
+           polarity. */
+        rel_dz += -(int)z;
+        if (z && !logged_first_wheel) {
+            /* One line, once: the real artifact tools/checks/vmmouse-wheel-check.sh
+               asserts on, proof a real wheel step reached this driver at all. */
+            logged_first_wheel = 1;
+            serial_puts("vmmouse: first wheel step z="); put_u32(z); serial_puts("\n");
+        }
         if (st & VMMOUSE_RELATIVE_PACKET) {
             rel_dx += (int)x; rel_dy += (int)y;
         } else {
@@ -169,6 +197,13 @@ int vmmouse_take_relative(int *dx, int *dy) {
     if (!rel_dx && !rel_dy) return 0;
     *dx = rel_dx; *dy = rel_dy; rel_dx = rel_dy = 0;
     return 1;
+}
+
+/* v0.76.58: wheel steps accumulated in vmmouse_pump above, taken the same
+   drain-and-reset shape vmmouse_take_relative already uses. */
+int vmmouse_take_wheel(void) {
+    int z = rel_dz; rel_dz = 0;
+    return z;
 }
 
 int vmmouse_buttons(void) { return buttons; }
