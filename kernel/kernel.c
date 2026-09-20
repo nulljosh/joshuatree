@@ -3084,16 +3084,30 @@ static void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
     int cx_p = cx_center * sc, cy_p = cy_bottom * sc;
     int rx = (size * sc) / 2, ry = (size * sc) / 9;
     if (rx <= 0 || ry <= 0) return;
+    /* The falloff is normalised per axis in fixed point, NOT by squashing
+       dx into dy's scale first. The old line was `int sdx = dx * ry / rx`,
+       integer division, and that is what made this shadow read as blocky
+       right up to v0.79. rx is 37 and ry is 8 at dock size, so sdx could
+       only ever take 17 distinct values across 75 real columns: the whole
+       shadow collapsed into 9 flat plateaus about 4.5px wide with a hard
+       step between each. Measured on a real 1920x1080 capture before this
+       change, the row two pixels under an icon read 9 distinct luminances
+       with single-step jumps of 21. v58 had already moved this loop to
+       physical resolution and doubled ry, which halved the plateau width
+       but left the integer division, and therefore the banding, in place.
+       Normalising each axis against its own radius keeps full precision in
+       both, and 1024 levels rather than 100 leaves real headroom for the
+       lerp so the quantisation is the framebuffer's 8 bits and not ours. */
     for (int dy = -ry; dy <= ry; dy++){
         for (int dx = -rx; dx <= rx; dx++){
-            int sdx = dx * ry / rx;
-            int d2 = sdx * sdx + dy * dy;
-            if (d2 > ry * ry) continue;
-            /* Quadratic-ish falloff: distance squared against radius
-               squared gives a soft centre and a fast fade at the rim,
-               closer to a real penumbra than a linear ramp. */
-            int t = d2 * 100 / (ry * ry);
-            window_pixel_phys(cx_p + dx, cy_p - sc + dy, gui_lerp(core, dock_bg, t, 100));
+            /* Quadratic falloff: normalised squared radius gives a soft
+               centre and a faster fade at the rim, closer to a real
+               penumbra than a linear ramp. t == 1024 is the ellipse edge,
+               where the colour is exactly the tray, so there is no hard
+               cutoff to see. */
+            int t = (dx * dx * 1024) / (rx * rx) + (dy * dy * 1024) / (ry * ry);
+            if (t > 1024) continue;
+            window_pixel_phys(cx_p + dx, cy_p - sc + dy, gui_lerp(core, dock_bg, t, 1024));
         }
     }
 }
@@ -3260,18 +3274,40 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     if (icon_cache[icon][slot] && icon_cache_size[icon][slot] == size && icon_cache_under[icon][slot] == under && icon_cache_variant[icon][slot] == variant) return icon_cache[icon][slot];
     unsigned int sc = window_scale();
     int pw = size * (int)sc;
-    const unsigned char *art = (icon >= 0 && icon < ICON_ART_COUNT) ? ICON_ART[icon] : 0;
-    if (art && pw > 0) {
+    /* Variant artwork first where one exists (Trash full vs empty), so
+       converting an icon to artwork cannot quietly drop a real runtime
+       state indicator; fall back to the base artwork when it does not. */
+    const unsigned char *png = 0;
+    unsigned int png_len = 0;
+    if (icon >= 0 && icon < ICON_ART_COUNT) {
+        if (variant && ICON_ART_VARIANT[icon]) { png = ICON_ART_VARIANT[icon]; png_len = ICON_ART_VARIANT_LEN[icon]; }
+        else                                   { png = ICON_ART[icon];         png_len = ICON_ART_LEN[icon]; }
+    }
+    /* The artwork is stored as PNG, not as decoded RGBA: 24 artworks of
+       128x128 RGBA is 1.5MB, which runs into the ring-3 program window
+       boot/linker.ld pins at 0xC0500000, and docs/SYSCALL-ABI.md names that
+       address as part of the published v1 contract. As PNG the same 24 are
+       141KB. Decoding here rather than once at boot costs nothing in
+       practice: this function is the icon cache's own miss path, so it runs
+       on first draw and on a real size or variant change, not per frame. */
+    unsigned char *art = 0;
+    if (png && pw > 0) {
+        unsigned int aw = 0, ah = 0, ach = 0;
+        if (png_decode(png, png_len, &art, &aw, &ah, &ach) != 0) art = 0;
+        else if (aw != ICON_ART_SIZE || ah != ICON_ART_SIZE || ach != 4) { kfree(art); art = 0; }
+    }
+    if (art) {
         unsigned int *dst = icon_cache[icon][slot];
         if (!dst || icon_cache_size[icon][slot] != size) {
             if (dst) kfree(dst);
             dst = (unsigned int *)kmalloc((unsigned int)(pw * pw) * sizeof(unsigned int));
-            if (!dst) return 0;
+            if (!dst) { kfree(art); return 0; }   /* the decode buffer is ours, free it on every exit */
             icon_cache[icon][slot] = dst; icon_cache_size[icon][slot] = size;
         }
         icon_cache_under[icon][slot] = under;
         icon_cache_variant[icon][slot] = variant;
         gui_icon_art_scale(art, dst, pw, under);
+        kfree(art);
         return dst;
     }
     unsigned int ssz = (unsigned int)size * ICON_SS_SCALE;

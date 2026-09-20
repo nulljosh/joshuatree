@@ -29,7 +29,7 @@ they are expected to cross the threshold as each one gets its own artwork.
 
 Usage: tools/checks/iconart-check.py   (from the repo root, after make kernel.elf)
 """
-import json, os, socket, subprocess, sys, time
+import json, os, re, shutil, socket, subprocess, sys, time
 from PIL import Image
 
 LOG = "/tmp/jt-iconart-serial.log"
@@ -45,7 +45,7 @@ PITCH = DOCK_ICON + DOCK_GAP
 # GUI_DOCK_DEFAULT order.
 SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Trash"]
 # The slots whose icon index has authored artwork in tools/gen/gen_icon_art.py.
-AUTHORED = {"Files", "Mail", "Calendar", "Notes", "Terminal", "Weather"}
+AUTHORED = set(SLOTS)  # all ten dock slots are authored artwork as of this pass
 RIM_MIN = 25
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -61,6 +61,26 @@ print(gen.stdout.strip() or gen.stderr.strip())
 if gen.returncode != 0:
     sys.exit(1)
 
+# v0.78.0 put a real back buffer under every draw: a frame only reaches the
+# visible framebuffer when window_present() copies it across. Sampling on a
+# fixed sleep alone races that present and can read the previous frame, so
+# resolve window_present_count out of the ELF and wait for it to actually
+# move, the same technique editor_qa.py's presented() already uses.
+# This kernel is higher-half (linked at 0xC0000000+, loaded physically at
+# 1MB) and QMP's `xp` reads PHYSICAL memory, so the nm address has to have
+# the offset taken off it, exactly as editor_qa.py already does. Without
+# that subtraction the read lands on unrelated physical memory that can
+# change on its own, which would let this wait pass for the wrong reason.
+# `nm` (binutils), not `llvm-nm`: the latter comes from an apt package CI's
+# install line does not pull in, the trap walldefault-check.sh already hit.
+syms = {}
+nm = shutil.which("nm") or "nm"
+for line in subprocess.run([nm, "kernel.elf"], capture_output=True, text=True).stdout.splitlines():
+    parts = line.split()
+    if len(parts) == 3:
+        syms[parts[2]] = int(parts[0], 16) - 0xC0000000
+PRESENT = syms.get("window_present_count")
+
 q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                       "-qmp", "tcp:127.0.0.1:%d,server,nowait" % PORT, "-serial", "file:" + LOG],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -72,9 +92,35 @@ try:
         while True:
             r = json.loads(f.readline())
             if "return" in r or "error" in r: return r
+
+    def presents():
+        """Read window_present_count out of guest memory, or None."""
+        if PRESENT is None:
+            return None
+        r = cmd({"execute": "human-monitor-command",
+                 "arguments": {"command-line": "xp /4xb 0x%x" % PRESENT}})
+        out = r.get("return", "")
+        vals = [int(v, 16) for line in out.splitlines() if ":" in line
+                for v in re.findall(r"0x([0-9a-f]{2})\b", line.split(":", 1)[1])]
+        return int.from_bytes(bytes(vals[:4]), "little") if len(vals) >= 4 else None
+
     f.readline()
     cmd({"execute": "qmp_capabilities"})
     time.sleep(5.0)  # desktop up, same margin dockhover-check.py uses
+    # Then wait for a real present, so the bytes sampled below are a frame
+    # that actually reached the screen and not the one before it.
+    before = presents()
+    if before is None:
+        print("note: window_present_count not in this build, sampling on the sleep alone")
+    else:
+        for _ in range(100):
+            if presents() != before:
+                time.sleep(0.05)
+                break
+            time.sleep(0.05)
+        else:
+            print("FAIL: no frame was presented, the screen never updated")
+            sys.exit(1)
     cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
     # QEMU can tear the QMP socket down the instant it processes quit,
     # before this side reads a reply; a reset on cleanup is expected, not a
