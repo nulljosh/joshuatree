@@ -184,14 +184,13 @@ band_fb = fb.crop((0, WIND_TOP * sc, W, WIND_HORIZON * sc))
 area_h = 540 - MENUBAR_H
 src_y0 = (WIND_TOP - MENUBAR_H) * WALL_H // area_h; src_y1 = (WIND_HORIZON - MENUBAR_H) * WALL_H // area_h
 # Satellite goes through gui_engrave before the day/night tint (kernel.c):
-# luminance, stretched ENGRAVE_LO..ENGRAVE_HI, laid on the ink-to-paper axis.
-# Mirrored per pixel, not on the mean, because the stretch clamps.
-ENGRAVE_LO, ENGRAVE_HI = 40, 176
+# 3/4 colour + 1/4 luminance, multiplied by paper (#ece8df).
+# Mirrored per pixel so the integer rounding matches.
 def engrave(im):
     out = []
     for r, g, b in im.getdata():
-        t = max(0, min(255, (((r * 77 + g * 150 + b * 29) >> 8) - ENGRAVE_LO) * 255 // (ENGRAVE_HI - ENGRAVE_LO)))
-        out.append((0xEC * t // 255, 0xE8 * t // 255, 0xDF * t // 255))
+        l = (r * 77 + g * 150 + b * 29) >> 8
+        out.append((0xEC * ((r * 3 + l) // 4) // 255, 0xE8 * ((g * 3 + l) // 4) // 255, 0xDF * ((b * 3 + l) // 4) // 255))
     res = Image.new("RGB", im.size); res.putdata(out); return res
 m_sat = tint(mean(engrave(ref.crop((0, src_y0, WALL_W, src_y1)))))
 hdr = open("drivers/wallpaper.h").read()
