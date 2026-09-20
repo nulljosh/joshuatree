@@ -940,8 +940,15 @@ if (typeof document !== "undefined") (function () {
       { type: 'keys', text: 'Kernel, GUI, browser, terminal, and a dozen real apps, none of it borrowed.', speed: 55 }
     ] },
     { name: 'Terminal', slot: 6, script: [
-      { type: 'keys', text: 'help\n', speed: 55 },
+      // Real shell commands (see run() in kernel.c). Root cause of the old
+      // garbage-typing: dockSlotPos() still assumed a 10-tile dock after
+      // Stocks became the 11th pinned tile, so every tour click landed
+      // about half a tile off, opening the wrong app and typing each
+      // app's script into its neighbour (Reminders text into Terminal).
+      { type: 'keys', text: 'ls\n', speed: 55 },
       { type: 'wait', ms: 900 },
+      { type: 'keys', text: 'echo hello from joshua tree\n', speed: 55 },
+      { type: 'wait', ms: 700 },
       { type: 'keys', text: 'uptime\n', speed: 55 }
     ] },
     // v0.76.11: real bug found and fixed here, present since v51 and never
@@ -1107,12 +1114,12 @@ if (typeof document !== "undefined") (function () {
     await sleep(1200);
   }
   // Dock geometry in LOGICAL kernel pixels, the same arithmetic as
-  // kernel.c's gui_dock_icon/gui_dock_x0/gui_slot_x: 10 slots, tiles
+  // kernel.c's gui_dock_icon/gui_dock_x0/gui_slot_x: GUI_ICON_COUNT (11) slots, tiles
   // dock_scale_pct (default 7) percent of the height capped by the 740px
   // DOCK_BUDGET, gap 6, pad 10, bottom margin 24. A fresh v86 boot has no
   // SETTINGS.TXT, so the default scale is what's actually on screen.
   function dockSlotPos(slot) {
-    var count = 10, gap = 6, pad = 10, marginBot = 24, budget = 740;
+    var count = 11, gap = 6, pad = 10, marginBot = 24, budget = 740;
     var icon = Math.floor(LOGICAL_H * 7 / 100);
     var maxByWidth = Math.floor((budget - 2 * pad - (count - 1) * gap) / count);
     if (icon > maxByWidth) icon = maxByWidth;
