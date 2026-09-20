@@ -37,11 +37,11 @@ PORT = 4451
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 
 # Same geometry dockhover-check.py already derived and verified for this
-# exact 960x540@2x boot config (dock_scale_pct 7, GUI_ICON_COUNT 10):
-# DOCK_ICON 37, slot 0 tray x 268, slot pitch 43. Weather is dock slot 8
+# exact 960x540@2x boot config (dock_scale_pct 7, GUI_ICON_COUNT 11):
+# DOCK_ICON 37, slot 0 tray x 247, slot pitch 43. Weather is dock slot 8
 # (GUI_DOCK_DEFAULT = {Apps, Files, Mail, Calendar, Notes, Reminders,
-# Terminal, Chat, Weather, Trash}). Update these if dock geometry changes.
-DOCK_ICON, DOCK_GAP, SLOT0_X, WEATHER_SLOT = 37, 6, 268, 8
+# Terminal, Chat, Weather, Stocks, Trash}). Update these if dock geometry changes.
+DOCK_ICON, DOCK_GAP, SLOT0_X, WEATHER_SLOT = 37, 6, 247, 8
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_TOP_Y = 469          # logical y of the tray's icon row (matches dockhover-check.py)
 TRAY = (239, 235, 228)

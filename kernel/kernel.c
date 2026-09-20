@@ -843,8 +843,8 @@ static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
    layout changes at all, the "auto size" half of the standing v37 dock
    request was already real before this pass, this is just the first
    change to actually exercise it past 8 icons. */
-#define GUI_ICON_COUNT 10
-static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, GUI_TRASH};
+#define GUI_ICON_COUNT 11
+static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 20, GUI_TRASH};
 
 /* gui_order is a permutation of icon indices by dock slot: dragging an icon
    and dropping it on another slot swaps the two, so the arrangement is

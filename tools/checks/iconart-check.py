@@ -65,13 +65,13 @@ PORT = 4453
 
 # Same geometry dockhover-check.py / iconhalo-check.py already derived and
 # verified for this exact 960x540@2x boot config (dock_scale_pct 7,
-# GUI_ICON_COUNT 10). Update these together if dock geometry changes.
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 268, 469, 2
+# GUI_ICON_COUNT 11). Update these together if dock geometry changes.
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 247, 469, 2
 PITCH = DOCK_ICON + DOCK_GAP
 # GUI_DOCK_DEFAULT order.
-SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Trash"]
+SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Stocks", "Trash"]
 # The slots whose icon index has authored artwork in tools/gen/gen_icon_art.py.
-AUTHORED = set(SLOTS)  # all ten dock slots are authored artwork as of this pass
+AUTHORED = set(SLOTS)  # all eleven dock slots are authored artwork as of this pass
 RIM_MIN = 25
 DEPTH_MIN = 85            # before 54-64 on the eight non-black tiles, after 104-109
 DEPTH_INSET = 3           # rows in from each edge: clear of the rim stroke and of every glyph
