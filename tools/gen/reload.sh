@@ -10,6 +10,10 @@
 set -e
 cd "$(dirname "$0")"
 make -s kernel.elf
-pkill -f "qemu-system-i386 -kernel .*kernel.elf" 2>/dev/null && sleep 0.5 || true
+# Scoped to the visible dev VM only. This used to match every
+# qemu-system-i386 booting kernel.elf, which on a machine running headless
+# checks in parallel killed those mid-run and produced a long trail of fake
+# JSONDecodeError and ConnectionReset failures that read as kernel bugs.
+pkill -f "qemu-system-i386 .*-display cocoa" 2>/dev/null && sleep 0.5 || true
 open menubar/JoshuaTree.app
 echo "rebuilt and relaunched"
