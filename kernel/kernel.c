@@ -806,13 +806,19 @@ static void reboot(void){
    (that half was already right as of v39, untouched here). GUI_APP_COUNT
    is now 20 (18 real apps + Apps + Trash), GUI_ICON_COUNT unaffected by
    the reorder itself, see GUI_DOCK_DEFAULT below for why it did grow. */
-#define GUI_APP_COUNT   23 /* 21 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 21 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       22
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Apps", "Trash"};
+/* v0.86.0: Search, an Apps-folder-only app (same launch shape as Contacts/
+   Calculator/Stocks, never pinned to the dock), grew GUI_APP_COUNT from 23
+   to 24 (22 real apps + Apps folder + Trash) and pushed GUI_APPS_FOLDER/
+   GUI_TRASH up by one each. Every dispatch below keys off these #defines
+   rather than a hardcoded 21/22, so this is the only place the shift needed
+   to happen. */
+#define GUI_APP_COUNT   24 /* 22 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 22 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       23
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Apps", "Trash"};
 static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
     0x00707070, 0x00A13F3F, 0x00A0553F, 0x006B4423, 0x00375A4A, 0x002B2B2B, 0x00365E8C, 0x0085144B,
-    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F
+    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078
 };
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
@@ -3113,6 +3119,20 @@ static void gui_icon_stocks(int cx, int cy, int s, unsigned int bg){
     /* Right bar: tall */
     window_rect(cx + bar_w + gap, base_y - s / 3, bar_w, s / 3, ICON_FG);
 }
+/* v0.86.0: Search. A real magnifying glass, not a repurposed shape: a ring
+   (a filled circle with a smaller same-bg circle punched through its
+   middle, the same "fill then punch a hole" technique every donut/ring
+   glyph in this file already uses) plus a diagonal capsule handle, the
+   one silhouette that reads as "search" at dock size without a label. */
+static void gui_icon_search(int cx, int cy, int s, unsigned int bg){
+    int r = s * 3 / 10, t = s / 10;
+    int gx = cx - s / 12, gy = cy - s / 12;
+    gui_fill_circle(gx, gy, r, ICON_FG, bg);
+    gui_fill_circle(gx, gy, r - t, bg, bg);
+    int hx0 = gx + (r * 707) / 1000, hy0 = gy + (r * 707) / 1000; /* ring edge at 45 degrees */
+    int hx1 = cx + s * 2 / 5, hy1 = cy + s * 2 / 5;
+    gui_draw_capsule(hx0, hy0, hx1, hy1, t / 2 + 1, ICON_FG, bg);
+}
 
 /* A soft lit band across the top of the icon, fading down into its flat
    base color: the same top-lit gloss treatment classic Aqua/iOS icons
@@ -3238,6 +3258,8 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
         case 17: gui_icon_fieldbook(cx_center, cy, size, bg); break;
         case 18: gui_icon_contacts(cx_center, cy, size, bg); break;
         case 19: gui_icon_calculator(cx_center, cy, size, bg); break;
+        case 20: gui_icon_stocks(cx_center, cy, size, bg); break;
+        case 21: gui_icon_search(cx_center, cy, size, bg); break;
         case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
         case GUI_TRASH: gui_icon_trash(cx_center, cy, size, bg); break;
     }
@@ -3967,6 +3989,7 @@ static void gui_launch_files(void){ gui_draw_files_content(); gui_wait_close(); 
 #include "contacts.h"
 #include "calculator.h"
 #include "chat.h"
+#include "search.h"
 
 /* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
    dock hover labels, titlebars) read as monospace/typewriter, not the
@@ -4775,6 +4798,7 @@ static void gui_launch(int icon){
     else if (icon == 18) gui_launch_contacts();
     else if (icon == 19) gui_launch_calculator();
     else if (icon == 20) gui_launch_stocks();
+    else if (icon == 21) gui_launch_search();
 }
 
 static void gui_launch_from_dock(int icon){
