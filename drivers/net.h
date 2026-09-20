@@ -49,6 +49,30 @@ int tcp_get(unsigned int dest_ip, unsigned short dest_port,
             const void *request, unsigned int request_len,
             void *response, unsigned int response_maxlen);
 
+/* Same as tcp_get with a caller-chosen reply deadline (ticks to wait for
+   the first/next data after the request went out) instead of the default
+   SLOW_REPLY budget sized for a local LLM. 0 means the default. A weather
+   JSON one-liner that has not answered in 15 seconds is not going to. */
+int tcp_get_timeout(unsigned int dest_ip, unsigned short dest_port,
+                    const void *request, unsigned int request_len,
+                    void *response, unsigned int response_maxlen,
+                    unsigned int reply_timeout_ticks);
+
+/* Why the last dns_resolve/tcp_get failed. Every failure path in net.c
+   used to collapse into the same 0/-1, so a caller could not tell "no
+   route" from "the server never answered" from "no such host", and the
+   Weather window could only say "unavailable". Reset to NET_ERR_NONE at
+   the start of each call. */
+#define NET_ERR_NONE            0
+#define NET_ERR_SEND            1  /* NIC refused the frame */
+#define NET_ERR_ARP_TIMEOUT     2  /* gateway never answered ARP: no link/route */
+#define NET_ERR_DNS_TIMEOUT     3  /* resolver never answered */
+#define NET_ERR_DNS_NXDOMAIN    4  /* resolver answered: no such host / no A record */
+#define NET_ERR_CONNECT_TIMEOUT 5  /* SYN never got its SYN-ACK */
+#define NET_ERR_REPLY_TIMEOUT   6  /* connected, request sent, no data before the deadline */
+int net_last_error(void);
+const char *net_error_name(int err);
+
 /* Passive open: waits for one inbound connection on port, discards
    whatever request it sends (there's only one thing being served),
    sends response (chunked and stop-and-wait ACKed if bigger than one

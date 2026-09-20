@@ -1,97 +1,165 @@
 #!/bin/bash
-# v0.76.23: Weather app icon fix (icon index 7 instead of 0).
-# This test opens Weather app in single-window mode (via the Apps folder)
-# and checks that the app successfully renders (serial output shows it reached
-# the content draw) without crashing. The icon fix is verified by code inspection:
-# gui_draw_weather_content now calls gui_draw_one_icon_on(7, ...) instead of (0, ...),
-# drawing the weather sun icon instead of the folder icon.
+# Weather app, headless, no real internet needed. Four boots of the real
+# kernel against a local fake ip-api/Open-Meteo server (the kernel is pointed
+# at it with the multiboot command line, -append "wxhost=10.0.2.2:PORT"):
 #
-# Discriminating test: reverts to gui_draw_one_icon_on(0, ...) would render
-# the folder icon in its place, but the app itself still boots and draws,
-# so this is a code-inspection test that the fix was applied correctly.
+#   success   valid JSON            -> wxstate=ok,      window "ok live";
+#             then the server turns bad and R is pressed -> "bad stale"
+#             (the last good reading stays up, labelled, never a blank)
+#   bad       403 "Host not allowed" (the exact reply the demo's proxy gave
+#             Open-Meteo, the real cause of the empty Weather window)
+#                                   -> wxstate=bad,     window "bad sample";
+#             then the server turns good and R is pressed -> "ok live"
+#   timeout   server accepts, never answers
+#                                   -> wxstate=timeout, window "timeout sample"
+#   offline   no NIC at all         -> wxstate=offline, window "offline sample";
+#             opened three times, still exactly one wxfetch (issue #13: a
+#             failed fetch must not re-run on every open/repaint)
+#
+# The kernel mirrors what it fetched (wxstate=) and what the window actually
+# drew (wxwin=<state> live|stale|sample) to serial; this reads those lines.
+# Never opens a window: -display none, input over QMP.
 
 set -e
 cd "$(dirname "$0")/../.."
 make -s kernel.elf
 
-PORT=4455
-LOG=$(mktemp /tmp/jt-weatherapp-XXXX.log)
+python3 - <<'PYEOF'
+import http.server, json, os, socket, subprocess, sys, tempfile, threading, time
 
-qemu-system-i386 -kernel kernel.elf -display none -vga std \
-    -qmp "tcp:127.0.0.1:$PORT,server,nowait" -serial "file:$LOG" &
-QEMU_PID=$!
-trap 'kill "$QEMU_PID" 2>/dev/null || true; rm -f "$LOG"' EXIT
+GEO = b'{"status":"success","country":"Canada","city":"Langley","zip":"V3A","lat":49.0983,"lon":-122.6498,"isp":"test"}'
+# Carries the real reply's trap: current_units repeats the keys with string values first.
+WX = (b'{"latitude":49.09,"longitude":-122.57,"current_units":{"time":"iso8601","temperature_2m":"\xc2\xb0C","weather_code":"wmo code"},'
+      b'"current":{"time":"2026-09-20T16:15","interval":900,"temperature_2m":14.2,"weather_code":3}}')
 
-RESULT=$(python3 - "$PORT" "$LOG" <<'PYEOF'
-import json, socket, sys, time
-port = int(sys.argv[1])
-log_path = sys.argv[2]
-
-def check_weather_rendered():
-    try:
-        with open(log_path) as f:
-            content = f.read()
-            # weather_fetch is called from gui_draw_weather_content
-            return "weather_fetch" in content or len(content) > 100
-    except FileNotFoundError:
-        return False
-
-s = None
-for _ in range(50):
-    time.sleep(0.2)
-    try:
-        s = socket.create_connection(("127.0.0.1", port)); break
-    except OSError:
-        pass
-if s is None:
-    print("FAIL: QEMU's QMP socket never came up"); sys.exit(0)
-f = s.makefile("rw")
-def cmd(o):
-    f.write(json.dumps(o) + "\n"); f.flush()
-    while True:
-        r = json.loads(f.readline())
-        if "return" in r or "error" in r: return r
-f.readline()
-cmd({"execute": "qmp_capabilities"})
-time.sleep(5.0)
+def make_server(state):
+    class H(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def send(self, code, body, ctype="application/json"):
+            self.send_response(code); self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+        def do_GET(self):
+            if self.path.startswith("/json/"): return self.send(200, GEO)
+            mode = state["mode"]
+            if mode == "ok": return self.send(200, WX)
+            if mode == "bad": return self.send(403, b"Host not allowed", "text/plain")
+            if mode == "hang": time.sleep(300); return
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    srv.daemon_threads = True
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
 
 LOGICAL_W, LOGICAL_H = 960, 540
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
-PITCH = DOCK_ICON + DOCK_GAP
-ICON_ROW_Y = 487
-WEATHER_SLOT = 8
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y, WEATHER_SLOT = 37, 6, 247, 487, 8
+WEATHER_X = SLOT0_X + WEATHER_SLOT * (DOCK_ICON + DOCK_GAP) + DOCK_ICON // 2
 
-def move(x, y):
-    cmd({"execute": "input-send-event", "arguments": {"events": [
-        {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
-        {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
-def click():
-    cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
-    time.sleep(0.1)
-    cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
+class Boot:
+    def __init__(self, name, mode):
+        self.name, self.state = name, {"mode": mode}
+        self.dir = tempfile.mkdtemp(prefix="jt-wx-" + name + "-")
+        self.log, self.sock = os.path.join(self.dir, "serial.log"), os.path.join(self.dir, "qmp.sock")
+        args = ["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
+                "-qmp", "unix:%s,server,nowait" % self.sock, "-serial", "file:" + self.log]
+        if mode == "offline":
+            args += ["-nic", "none"]
+        else:
+            self.srv = make_server(self.state)
+            args += ["-net", "nic,model=rtl8139", "-net", "user",
+                     "-append", "wxhost=10.0.2.2:%d" % self.srv.server_address[1]]
+        self.q = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        s = None
+        for _ in range(100):
+            time.sleep(0.1)
+            try:
+                s = socket.socket(socket.AF_UNIX); s.connect(self.sock); break
+            except OSError: s = None
+        if s is None: raise RuntimeError("QMP socket never came up")
+        self.f = s.makefile("rw"); self.f.readline(); self.cmd({"execute": "qmp_capabilities"})
+    def cmd(self, o):
+        self.f.write(json.dumps(o) + "\n"); self.f.flush()
+        while True:
+            r = json.loads(self.f.readline())
+            if "return" in r or "error" in r: return r
+    def serial(self):
+        try: return open(self.log, "rb").read().decode("latin-1")
+        except FileNotFoundError: return ""
+    def wait(self, needle, secs):
+        end = time.time() + secs
+        while time.time() < end:
+            if needle in self.serial(): return True
+            time.sleep(0.25)
+        return False
+    def click_weather(self):
+        self.cmd({"execute": "input-send-event", "arguments": {"events": [
+            {"type": "abs", "data": {"axis": "x", "value": int(WEATHER_X * 32768 / LOGICAL_W)}},
+            {"type": "abs", "data": {"axis": "y", "value": int(ICON_ROW_Y * 32768 / LOGICAL_H)}}]}})
+        time.sleep(0.4)
+        for down in (True, False):
+            self.cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": down, "button": "left"}}]}})
+            time.sleep(0.15)
+    def key(self, k):
+        self.cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k}]}})
+    def close(self):
+        try: self.cmd({"execute": "quit"})
+        except Exception: pass
+        try: self.q.wait(timeout=5)
+        except Exception: self.q.kill()
 
-# Click Weather in dock
-centre = SLOT0_X + WEATHER_SLOT * PITCH + DOCK_ICON // 2
-move(centre, ICON_ROW_Y); time.sleep(0.3)
-click(); time.sleep(1.2)
+results = {}
+def scenario(name, mode, steps):
+    b = None
+    try:
+        b = Boot(name, mode)
+        err = steps(b)
+        results[name] = err or "ok"
+        if err: results[name] += "\n      serial: " + " | ".join(l for l in b.serial().splitlines() if l.startswith("wx"))[-400:]
+    except Exception as e:
+        results[name] = "exception: %r" % (e,)
+    finally:
+        if b: b.close()
 
-# Close the app
-cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": "q"}]}})
-time.sleep(0.5)
+def s_success(b):
+    if not b.wait("wxstate=ok", 120): return "never reached wxstate=ok against a valid reply"
+    if "wx=14" not in b.serial(): return "parsed reading is not the served 14.2C"
+    b.click_weather()
+    if not b.wait("wxwin=ok live", 20): return "window did not show the live reading"
+    b.state["mode"] = "bad"; b.key("r")
+    if not b.wait("wxstate=bad", 60): return "R did not trigger a refetch"
+    if not b.wait("wxwin=bad stale", 20): return "after a failed retry the window did not fall back to the last good reading"
 
-cmd({"execute": "quit"})
+def s_bad(b):
+    if not b.wait("wxstate=bad forecast: HTTP 403", 120): return "a 403 reply was not reported as a bad response"
+    b.click_weather()
+    if not b.wait("wxwin=bad sample", 20): return "window did not show the bad-response state over labelled sample data"
+    b.state["mode"] = "ok"; b.key("r")
+    if not b.wait("wxwin=fetching", 20): return "R did not show the fetching state"
+    if not b.wait("wxwin=ok live", 60): return "retry against a now-good server did not land a live reading"
 
-if check_weather_rendered():
-    print("PASS: Weather app renders successfully")
-else:
-    print("FAIL: Weather app did not render (check log)")
-    sys.exit(0)
+def s_timeout(b):
+    if not b.wait("wxstate=timeout forecast: reply timeout", 240): return "a server that never answers was not reported as a timeout"
+    b.click_weather()
+    if not b.wait("wxwin=timeout sample", 20): return "window did not show the timeout state"
+
+def s_offline(b):
+    if not b.wait("wxstate=offline", 120): return "a NIC-less boot was not reported as offline"
+    for i in range(3):
+        b.click_weather(); time.sleep(1.5)
+        if i == 0 and not b.wait("wxwin=offline sample", 20): return "window did not show the offline state"
+        b.key("esc"); time.sleep(1.0)
+    n = b.serial().count("wxfetch")
+    if n != 1: return "weather_fetch ran %d times across 3 opens (want 1): a failed fetch re-runs per open" % n
+
+threads = [threading.Thread(target=scenario, args=a) for a in (
+    ("success", "ok", s_success), ("bad-response", "bad", s_bad),
+    ("timeout", "hang", s_timeout), ("offline", "offline", s_offline))]
+for t in threads: t.start()
+for t in threads: t.join()
+
+failed = False
+for name in ("success", "bad-response", "timeout", "offline"):
+    r = results.get(name, "did not run")
+    print(("ok:   " if r == "ok" else "FAIL: ") + name + ("" if r == "ok" else ": " + r))
+    failed |= r != "ok"
+if failed: sys.exit(1)
+print("PASS: Weather shows live data, and a labelled fallback plus the reason for offline, bad response and timeout; R retries")
 PYEOF
-)
-
-kill "$QEMU_PID" 2>/dev/null || true
-wait "$QEMU_PID" 2>/dev/null || true
-
-echo "$RESULT"
-echo "$RESULT" | grep -q "^PASS:" && exit 0
-exit 1
