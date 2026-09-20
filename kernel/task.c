@@ -29,10 +29,11 @@
 #include "irq.h"
 #include "paging.h"
 #include "gdt.h"
+#include "syscall.h"
 
 typedef unsigned int u32;
 
-#define MAX_TASKS  6
+#define MAX_TASKS  TASK_SLOTS
 #define STACK_SIZE 4096
 
 /* Saved-frame layout, u32 indices from the saved esp upward. Exactly what
@@ -204,6 +205,12 @@ void task_exit_with(int code) {
     __asm__ volatile ("cli");
     int id = current;
     last_exit_code = code;
+    /* Before the slot is freed for reuse: anything this task still had
+       open through the syscall gate is closed and its buffers returned to
+       the heap. A ring-3 program that exits without closing (the normal
+       case for a crashing one) must not leak, and the next task to get
+       this slot must not inherit its descriptors. */
+    syscall_release_task(id);
     if (tasks[id].stack_base) kfree(tasks[id].stack_base);
     if (tasks[id].page_dir && tasks[id].page_dir != paging_kernel_directory()) paging_free_task_directory(tasks[id].page_dir);
     tasks[id].stack_base = 0;

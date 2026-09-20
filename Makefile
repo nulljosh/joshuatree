@@ -78,6 +78,33 @@ drivers/png_testdata.h:
 drivers/jpeg_testdata.h:
 	python3 tools/gen/gen_jpeg_testdata.py
 
+# ---- Ring-3 user space ------------------------------------------------------
+# user/ is not kernel code and is built with its own flags: no kernel
+# include paths at all, so it physically cannot reach a kernel header, and
+# nothing links against the kernel. Its only interface is user/jtsys.h's
+# int 0x80 wrappers, which is the whole point -- docs/SYSCALL-ABI.md is the
+# contract, and the reference program is a real external consumer of it,
+# not a kernel file in a different directory.
+#
+# --oformat binary gives a headerless flat image (there is no objcopy in
+# this toolchain and none is needed). user/hello.ld pins the link address
+# to the window boot/linker.ld reserves.
+USER_CFLAGS := -target i386-unknown-none -ffreestanding -fno-stack-protector \
+               -fno-pic -mno-sse -mno-mmx -Wall -Wextra -Os -Iuser
+
+user/hello.o: user/hello.c user/jtsys.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/hello.bin: user/hello.o user/hello.ld
+	$(LD) -m elf_i386 -T user/hello.ld --oformat binary -o $@ user/hello.o
+
+# The built binary, embedded so `usertest` can seed it into the VFS on a
+# machine with no disk (every headless check boot, and the browser embed).
+drivers/user_hello.h: user/hello.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/hello.bin drivers/user_hello.h user_hello
+
+kernel/kernel.o: drivers/user_hello.h
+
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -91,7 +118,7 @@ run: kernel.elf dotfiles.img
 	qemu-system-i386 -kernel kernel.elf -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file=dotfiles.img,format=raw,if=ide,index=0
 
 clean:
-	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf
+	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf user/hello.o user/hello.bin drivers/user_hello.h
 
 # v75 (0.66.x): real gap found root-causing the reaptest bug (paging.h's
 # PAGING_PRIVATE_PDE), the hard way -- a header-only edit left the stale

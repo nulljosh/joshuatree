@@ -2,6 +2,11 @@
 *.d
 kernel.elf
 drivers/version.h
+# Built from user/hello.c by the Makefile on every build, same
+# relationship drivers/version.h has to VERSION. The source is in the
+# tree; the flat binary and its embedded copy are not.
+user/hello.bin
+drivers/user_hello.h
 landing/kernel.elf
 !landing/v86/kernel.elf
 .DS_Store
