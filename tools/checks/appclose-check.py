@@ -110,12 +110,15 @@ try:
         # sleep-then-check has no way to tell "genuinely stuck" from "closed
         # one frame later than usual" apart; polling does, without weakening
         # the real assertion (still fails if truly stuck after the same
-        # ~2s worst case this used to allow only 0.8s of).
+        # ~2s worst case this used to allow only 0.8s of). The Apps grid
+        # takes longer to repaint than the other windows on GitHub's shared
+        # runner, so allow five seconds for its input loop to consume the
+        # click; the same framebuffer assertion still has to turn false.
         at = close_button()
         if at is None: return
         move(*at); time.sleep(0.3)
         click()
-        for _ in range(20):
+        for _ in range(50):
             time.sleep(0.1)
             if not window_open(): break
         move(*PARK); time.sleep(0.5)
