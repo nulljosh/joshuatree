@@ -985,7 +985,6 @@ if (typeof document !== "undefined") (function () {
   var MW_TOP_POINT_X = 154, MW_TOP_POINT_Y = 116;
   async function multiWindowRound(gen, first, second) {
     if (focused || tourGen !== gen || !adaptersReady) return;
-    updateHeadline(first.name); // v0.76.29: update headline as multi-window round starts with first app
     emulator.mouse_adapter.emu_enabled = true;
     emulator.keyboard_adapter.emu_enabled = true;
     var posA = dockSlotPos(first.slot), posB = dockSlotPos(second.slot);
@@ -993,14 +992,14 @@ if (typeof document !== "undefined") (function () {
     await clickAt(posA[0], posA[1]); // opens `first` as window 0
     if (focused || tourGen !== gen) return;
     await sleep(600);
+    updateHeadline(first.name); // named once its window is really drawn, not when the click was sent
     await runScript(first.script, gen); // real interaction while it's the only (topmost) window
     if (focused || tourGen !== gen) return;
 
     await clickAt(posB[0], posB[1]); // opens `second` as window 1 ALONGSIDE it -- first stays open, the real point being demonstrated
     if (focused || tourGen !== gen) return;
-    // v0.76.29: update headline when second app comes to the foreground
-    updateHeadline(second.name);
     await sleep(600);
+    updateHeadline(second.name); // the second window is now really on top
     await runScript(second.script, gen); // real interaction with the now-topmost window, first still genuinely on screen behind it
     if (focused || tourGen !== gen) return;
     await sleep(1400); // a real beat with both windows visibly open together -- the actual point of this round
@@ -1313,7 +1312,6 @@ if (typeof document !== "undefined") (function () {
 
   async function runSoloApp(gen, app) {
     if (focused || tourGen !== gen || !adaptersReady) return;
-    updateHeadline(app.name); // Update headline as app opens
     var pos = dockSlotPos(app.slot);
     // Drive the emulator's own input even though the visitor hasn't
     // focused: both adapters are gated for real people, not for us. v71
@@ -1331,6 +1329,11 @@ if (typeof document !== "undefined") (function () {
     var dwellStart = Date.now();
     await sleep(600); // let the app's first frame draw before typing into it
     if (focused || tourGen !== gen) return;
+    // Direct request: the headline should say what the demo is actually
+    // showing. It used to be typed before the click had even travelled, so
+    // it named an app that was not on screen yet and led the demo by about
+    // a second. Now it lands once the app's first frame is really drawn.
+    updateHeadline(app.name);
     await runScript(app.script, gen);
     if (focused || tourGen !== gen) return;
     var remaining = DWELL_MS - (Date.now() - dwellStart);
@@ -1338,6 +1341,7 @@ if (typeof document !== "undefined") (function () {
     if (focused || tourGen !== gen) return;
     await clickAt(CLOSE_X, CLOSE_Y); // closes via the app's own real X, never the dock tile that opened it
     if (focused || tourGen !== gen) return;
+    resetHeadline(); // the app is gone, so stop announcing it over an empty desktop
     await sleep(1200); // a beat before the next app opens, reads as a real transition not a jump-cut
   }
   async function tourLoop(gen) {
