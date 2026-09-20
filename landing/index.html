@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Joshua Tree, a new custom OS</title>
 <meta name="description" content="A fresh, custom operating system built from scratch: its own GUI desktop, network stack, filesystem, and a real text editor. Open, and open to help build.">
-<link rel="icon" href="icon.svg">
+<link rel="icon" type="image/png" href="mark.png">
 <!-- v52 preloaded v86.wasm/kernel.elf here to start their ~5MB fetch the
      instant the HTML parsed, a real head start on first-boot time back when
      the demo was expected to start immediately regardless of scroll
@@ -22,15 +22,16 @@
      fetch and the V86 constructor itself. -->
 <link rel="preload" href="v86/libv86.js" as="script">
 <style>
-  /* Real palette refresh, not a tweak: the old warm orange/burgundy read
-     as pumpkin, Halloween, not the actual target, the real Mojave desert
-     the real Joshua tree grows in, brownish-silver, not a sunset. Built
-     from clrs.cc (colors.css) named colors: Orange (#FF851B) blended
-     with Black (#111111) for a real leather-brown accent instead of the
-     bright orange itself, same technique and same reasoning as the
-     kernel's own wallpaper gradient (see kernel.c's wall_bot comment). */
-  :root { color-scheme: light dark; --bg:#faf8f6; --fg:#1c1c1e; --sub:#6f6c68; --border:rgba(0,0,0,0.08); --card:rgba(255,255,255,0.7); --accent:#884b16; --accent2:#4c2e13; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#121212; --fg:#f2f0ee; --sub:#9c9894; --border:rgba(255,255,255,0.1); --card:rgba(30,30,30,0.6); --accent:#c3a58a; --accent2:#884b16; } }
+  /* Engraving design system (Sep 2026), taken from the Joshua Tree Co. mark:
+     one ink on one paper, no greys, no accent colour. Tone comes from line
+     density (--hatch), never from opacity or a second colour. Dark mode is
+     the same sheet inverted. The old names (--accent, --sub, --card) stay as
+     aliases so every existing rule keeps working off the two real tokens. */
+  :root { color-scheme: light dark; --paper:#ece8df; --ink:#000000;
+    --bg:var(--paper); --fg:var(--ink); --sub:var(--ink); --border:var(--ink); --card:transparent; --accent:var(--ink); --accent2:var(--ink);
+    /* hard stops on purpose: this is a hatch, not a gradient */
+    --hatch: repeating-linear-gradient(135deg, var(--ink) 0 1px, transparent 1px 5px); }
+  @media (prefers-color-scheme: dark) { :root { --paper:#0e0d0b; --ink:#ece8df; } }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   /* v51: section-by-section scroll snap, direct request. `proximity`, not
@@ -64,6 +65,21 @@
 
   .wrap { max-width: 640px; margin: 0 auto; padding: 0 20px; }
 
+  /* Spec-sheet furniture: tracked caps labels and hairline rules, the same
+     chrome the logo's own construction sheet uses top and bottom. */
+  .label, .sheet-rule, .plate-cap { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 500; }
+  .sheet-rule { display: flex; align-items: center; gap: 16px; padding: 12px 20px 0; color: var(--fg); white-space: nowrap; }
+  .sheet-rule::before { content: ""; order: 1; flex: 1; height: 1px; background: var(--fg); }
+  .sheet-rule > :first-child { order: 0; }
+  .sheet-rule > :last-child { order: 2; }
+  .sheet-rule a { color: inherit; text-decoration: none; }
+  .sheet-rule a:hover { text-decoration: underline; }
+  @media (max-width: 520px) { .sheet-rule { font-size: 9px; letter-spacing: 0.16em; gap: 10px; } }
+  /* The mark is a single-ink alpha PNG used as a mask, so it takes the exact
+     --ink token in both schemes instead of an inverted-filter approximation. */
+  .ink-img { display: block; background: var(--fg); -webkit-mask: var(--src) center / contain no-repeat; mask: var(--src) center / contain no-repeat; }
+  .plate-cap { margin: 14px 0 0; text-align: center; }
+
   /* v71.1: demo moved to normal flow above header. The hero header is now
      a clean, text-only moment without the demo overlay. */
   .hero { position: relative; text-align: center; padding: 32px 20px 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
@@ -90,13 +106,14 @@
      dark demo backdrop -- the tagline it used to pair with is gone too,
      "it's really running" is already implied by the live thing sitting
      right above it. */
-  .eyebrow { color: var(--fg); font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; margin: 10px 0 0; font-weight: 600; opacity: 0.7; }
+  .eyebrow { color: var(--fg); font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; margin: 10px 0 0; font-weight: 600; }
   /* The eyebrow's typewriter rewrites its text every few seconds, and the
      items aren't the same length. Left to size itself the h2 changed height
      between items (measured 18px vs 21px at 1440px wide) and pushed every
      section below it up and down on every cycle. Fixed box, no wrap. */
   .eyebrow { height: 22px; line-height: 22px; white-space: nowrap; overflow: hidden; }
-  .kernel-version { opacity: 0.55; font-weight: 500; letter-spacing: 0.04em; text-transform: none; }
+  .kernel-version { font-weight: 500; letter-spacing: 0.04em; text-transform: none; }
+  .hero-mark { width: 56px; height: 61px; margin: 0 auto; --src: url(mark.png); }
   .hero h1 { font-size: 56px; margin: 14px 0 0; letter-spacing: -0.03em; line-height: 1.05; }
   @media (max-width: 520px) {
     .hero { padding: 56px 20px 40px; }
@@ -128,8 +145,11 @@
      all 5 stacked single-column (phone); nothing in between. */
   .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; text-align: left; max-width: 1100px; margin: 0 auto; }
   @media (max-width: 760px) { .steps { grid-template-columns: 1fr; max-width: 480px; } }
-  .step { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
-  .step .n { color: var(--sub); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .steps { counter-reset: plate; }
+  .step { background: var(--card); border: 1px solid var(--border); padding: 0 18px 18px; counter-increment: plate; }
+  .step::before { content: ""; display: block; height: 8px; margin: 0 -18px 14px; background: var(--hatch); border-bottom: 1px solid var(--border); }
+  .step .n { color: var(--fg); font-size: 11px; text-transform: uppercase; letter-spacing: 0.22em; font-weight: 600; }
+  .step .n::before { content: "0" counter(plate) " / "; }
   .step p { margin: 8px 0 0; font-size: 14px; line-height: 1.5; }
 
   /* Full-bleed at every width, no framed-window card: the demo is edge
@@ -171,7 +191,7 @@
   /* Top padding so the demo is not jammed against the window chrome:
      it sat flush with the very top edge, which read as cut off rather than
      deliberate. Bottom padding still separates it from the header below. */
-  #demo-frame { position: relative; width: 100%; padding: 2.5% 0 3%; z-index: 0; display: flex; align-items: center; justify-content: center; }
+  #demo-frame { position: relative; width: 100%; padding: 22px 0 3%; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   /* v0.76.51: real bug, direct report ("demo cut off when window rescales")
      -- explicit height (65vh/max-height) combined with width:auto and a
      separate max-width:100% clamp fight each other whenever the viewport
@@ -182,7 +202,7 @@
      what 58vh-at-16:9 would need, height:auto lets aspect-ratio derive the
      matching height from whichever width actually won, no competing
      explicit height to disagree with it. */
-  #stage-wrap { background: #000; position: relative; width: min(100%, calc(58vh * 16 / 9)); height: auto; max-height: 640px; aspect-ratio: 16 / 9; z-index: 0; border-radius: 2%; overflow: hidden; box-shadow: 0 0 140px 60px var(--bg); }
+  #stage-wrap { background: #000; position: relative; width: min(100%, calc(58vh * 16 / 9)); height: auto; max-height: 640px; aspect-ratio: 16 / 9; z-index: 0; border-radius: 6px; overflow: hidden; outline: 1px solid var(--fg); outline-offset: 5px; }
   @media (max-width: 600px) { #stage-wrap { width: 100%; height: auto; } }
   @media (max-width: 600px) { #demo-frame { padding: 4% 4% 2%; } }
   /* v52.5: real boot moment instead of a blank black flash, direct
@@ -198,7 +218,7 @@
      rather than a small 72px icon someone could miss at a glance on a
      mostly-black hero, not re-shipping something that was never live. */
   #boot-logo { position: absolute; inset: 0; margin: auto; width: 140px; height: 100px; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; animation: bootpulse 1.6s ease-in-out infinite; transition: opacity 0.3s ease; }
-  #boot-logo img { width: 64px; height: 64px; }
+  #boot-logo .ink-img { width: 64px; height: 70px; background: #ece8df; --src: url(mark.png); }
   #boot-logo span { color: #fff; font-size: 13px; letter-spacing: 0.04em; opacity: 0.8; text-shadow: 0 2px 10px rgba(0,0,0,0.85); }
   #boot-logo[hidden] { display: none; }
   @keyframes bootpulse { 0%,100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
@@ -253,62 +273,45 @@
      line of text, direct feedback that it read as "ugly". Now it's one
      small pill near the bottom, out of the way of the dock and desktop. */
   #v86-overlay { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 140px; color: #fff; transition: opacity 0.2s; pointer-events: none; }
-  #v86-overlay span { background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: 0.01em; }
+  #v86-overlay span { background: #ece8df; color: #000; border: 1px solid #000; padding: 6px 14px; font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; }
   #v86-overlay.hidden { opacity: 0; }
 
   .progress-section { padding: 64px 20px; }
-  .progress-card { background: var(--card); border-radius: 16px; padding: 20px; max-width: 640px; margin: 0 auto; }
-  .progress-card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent); margin: 0 0 14px; font-weight: 600; }
+  .progress-card { background: var(--card); border: 1px solid var(--border); padding: 20px; max-width: 640px; margin: 0 auto; }
+  .progress-card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.22em; color: var(--accent); margin: 0 0 14px; font-weight: 600; }
   .progress-card { position: relative; }
-  .progress-card svg { width: 100%; height: auto; border-radius: 8px; display: block; }
-  .progress-tooltip { position: absolute; background: var(--accent); color: #fff; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; z-index: 10; opacity: 0; transition: opacity 0.2s; transform: translate(-50%, -100%); }
+  .progress-card svg { width: 100%; height: auto; display: block; }
+  .progress-tooltip { position: absolute; background: var(--fg); color: var(--bg); padding: 6px 12px; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; z-index: 10; opacity: 0; transition: opacity 0.2s; transform: translate(-50%, -100%); }
   .progress-tooltip.visible { opacity: 1; }
 
-  /* v0.76.35: full-page floating icons backdrop, spread across the entire
-     page wallpaper area, not just the closing section. Gentle floating
-     drift animation via CSS keyframes with varied duration/delay per icon
-     for visual depth. Respects prefers-reduced-motion per house standards. */
-  .page-float-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; will-change: transform; }
-  .float { position: absolute; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 400; font-size: 30px; color: var(--accent); opacity: 0.16; white-space: nowrap; will-change: transform; animation: drift var(--dur, 18s) ease-in-out var(--delay, 0s) infinite alternate; }
-  @keyframes drift { to { transform: translate(var(--dx, 0px), var(--dy, 0px)); } }
-  @media (prefers-reduced-motion: reduce) { .float { animation: none; } }
+  /* Closing plate: the full engraving at the one size it is meant to be
+     read at, then the closing line under it. */
+  .grain-zone { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px 80px; }
+  .badge { width: min(420px, 78vw); aspect-ratio: 620 / 900; --src: url(badge.png); margin-bottom: 40px; }
+  .closing { color: var(--fg); font-size: 18px; line-height: 1.65; max-width: 560px; text-align: center; margin: 0 auto; }
 
-  /* A field of real kernel fragments (shell commands, real addresses this
-     kernel actually uses) drifting behind the closing line, the same
-     treatment nimble's landing page uses for its own hero, now the
-     page's closing beat instead of its opening one (direct request: move
-     the demo down to roughly here, and push this field further down
-     still, past the demo). Parallax: the field scrolls at a fraction of
-     real scroll speed via one scroll listener translating its own layer,
-     the plain, broadly-supported way to do this (CSS scroll-driven
-     animations still aren't universal in every engine this page needs to
-     run in), rAF-throttled so it costs nothing between frames. */
-  .grain-zone { min-height: 60vh; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 80px 20px; }
-  .hero-float { position: absolute; inset: -10% 0; z-index: 0; pointer-events: none; overflow: hidden; will-change: transform; }
-  @media (prefers-reduced-motion: reduce) { .hero-float { transform: none !important; } }
-  .closing { position: relative; z-index: 1; color: var(--sub); font-size: 18px; line-height: 1.65; max-width: 560px; text-align: center; margin: 0 auto; }
-
-  footer { text-align: center; padding: 32px 20px 40px; color: var(--sub); font-size: 13px; background: var(--bg); border-top: 1px solid var(--border); }
+  footer { text-align: center; padding: 0 0 40px; color: var(--sub); font-size: 13px; background: var(--bg); }
+  footer .sheet-rule { padding: 14px 20px 28px; }
+  @media (max-width: 520px) { footer .sheet-rule { flex-wrap: wrap; justify-content: center; white-space: normal; gap: 10px 16px; } footer .sheet-rule::before { order: -1; flex-basis: 100%; } }
   .foot-links { display: flex; flex-wrap: wrap; gap: 8px 22px; justify-content: center; align-items: center; margin-bottom: 14px; }
   .foot-links a { color: var(--fg); text-decoration: none; display: inline-flex; align-items: center; gap: 7px; font-size: 14px; padding: 6px 4px; }
-  .foot-links a:hover { color: var(--accent); }
+  .foot-links a:hover { text-decoration: underline; }
   .foot-links svg { width: 16px; height: 16px; fill: currentColor; }
   .foot-meta { color: var(--sub); font-size: 12.5px; line-height: 1.9; }
   .foot-meta a { color: var(--sub); }
-  .heart { color: #c0392b; }
   footer a { color: var(--accent2); }
 </style>
 </head>
 <body>
 
-<div class="page-float-bg" id="pageFloatBg" aria-hidden="true"></div>
-
 <a class="skip-link" href="#main">Skip to content</a>
+
+<div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Co.</span><span>Est. 2026</span></div>
 
 <div id="demo-frame">
   <div id="stage-wrap">
     <div id="boot-logo" aria-hidden="true">
-      <img src="boot-logo.svg" alt="">
+      <div class="ink-img"></div>
       <span>Booting...</span>
     </div>
     <div id="stage">
@@ -321,10 +324,12 @@
       </div>
     </div>
   </div>
+  <p class="plate-cap">Fig. 1 &middot; This exact kernel.elf, booting live in your browser</p>
 </div>
 
 <header class="hero" id="main">
   <div class="hero-copy">
+    <div class="ink-img hero-mark" aria-hidden="true"></div>
     <!-- Sep 2026, direct urgent correction -- this line briefly named
          Satellite Wallpaper (v0.76.7), but a real headless test of this
          exact deployed page found the browser demo can never actually show
@@ -385,13 +390,14 @@
     <!-- progress-chart:start -->
 <svg xmlns="http://www.w3.org/2000/svg" width="479" height="200" viewBox="0 0 479 200" id="progress-chart-live" role="img" aria-label="Real lines of code over time, 25,650 lines as of Sep 20"><style>
   #progress-chart-live {
-    --bg: #faf8f6; --grid: #e8e2da; --axis: #ded6ca; --muted: #78736c;
-    --label: #75726e; --strong: #1c1c1e; --line: #884b16; --line2: #4c2e13; --line2-pct: #b6a08a;
+    --bg: #ece8df; --grid: #000000; --axis: #000000; --muted: #000000;
+    --label: #000000; --strong: #000000; --line: #000000; --line2: #000000; --line2-pct: #000000;
   }
   @media (prefers-color-scheme: dark) {
-    #progress-chart-live { --bg: #161412; --grid: #2c2724; --axis: #3a332e; --muted: #8a8177;
-             --label: #b3aa9f; --strong: #f2f0ee; --line: #d99a5b; --line2: #e8b98a; --line2-pct: #c3a58a; }
+    #progress-chart-live { --bg: #0e0d0b; --grid: #ece8df; --axis: #ece8df; --muted: #ece8df;
+             --label: #ece8df; --strong: #ece8df; --line: #ece8df; --line2: #ece8df; --line2-pct: #ece8df; }
   }
+  #progress-chart-live line[stroke="var(--grid)"] { stroke-dasharray: 1 4; }
   #progress-chart-live text { font-family: -apple-system, Helvetica, Arial, sans-serif; }
 
   #progress-chart-live .progress-pt { cursor: pointer; }
@@ -406,11 +412,12 @@
 </section>
 
 <section class="grain-zone reveal">
-  <div class="hero-float" id="heroFloat" aria-hidden="true"></div>
+  <div class="ink-img badge" role="img" aria-label="Joshua Tree Co. engraved badge: a Joshua tree in the Mojave, framed by two ribbons"></div>
   <p class="closing">Own memory manager. Own filesystem. TCP built up from raw Ethernet frames, not borrowed from anything underneath. Named for the tree that survives the Mojave on nothing, the same one Mormon settlers thought looked like a man reaching skyward. Open for whoever wants to help it grow, no climbing permit required.</p>
 </section>
 
 <footer>
+  <div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Company</span><span>Rooted ideas. Bolder tomorrows.</span></div>
   <div class="foot-links">
     <a href="https://github.com/nulljosh/joshuatree">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
@@ -500,57 +507,6 @@
     if (count && minor) count.textContent = Number(minor) + ' versions';
   }).catch(function () {}).then(cycle);
 })();
-(function () {
-  // v0.76.35: populate full-page floating icons backdrop
-  var pageField = document.getElementById('pageFloatBg');
-  var grainField = document.getElementById('heroFloat');
-
-  var items = [
-    '⌘', '⌫', '▣', '⬚', '◉', '⌗',
-    '⇄', '⚙', '◰', '✇', '⎔', '⊞',
-    '≡', '⬡', '◩', '⬢'
-  ];
-
-  var rand = function (a, b) { return a + Math.random() * (b - a); };
-
-  // Populate page-wide background icons (56 icons spread across full viewport)
-  if (pageField) {
-    for (var i = 0; i < 56; i++) {
-      var text = items[i % items.length];
-      var el = document.createElement('span');
-      el.className = 'float';
-      el.textContent = text;
-      el.style.left = rand(1, 99).toFixed(1) + '%';
-      el.style.top = rand(1, 99).toFixed(1) + '%';
-      var dx = rand(20, 44) * (Math.random() < 0.5 ? -1 : 1);
-      var dy = rand(16, 36) * (Math.random() < 0.5 ? -1 : 1);
-      el.style.setProperty('--dx', dx.toFixed(1) + 'px');
-      el.style.setProperty('--dy', dy.toFixed(1) + 'px');
-      el.style.setProperty('--dur', rand(4, 9).toFixed(1) + 's');
-      el.style.setProperty('--delay', (-rand(0, 9)).toFixed(1) + 's');
-      pageField.appendChild(el);
-    }
-  }
-
-  // Populate grain-zone closing section icons (original placement, kept for compatibility)
-  if (grainField) {
-    items.forEach(function (text) {
-      var el = document.createElement('span');
-      el.className = 'float';
-      el.textContent = text;
-      el.style.left = rand(2, 90).toFixed(1) + '%';
-      el.style.top = rand(2, 92).toFixed(1) + '%';
-      var dx = rand(10, 24) * (Math.random() < 0.5 ? -1 : 1);
-      var dy = rand(8, 18) * (Math.random() < 0.5 ? -1 : 1);
-      el.style.setProperty('--dx', dx.toFixed(1) + 'px');
-      el.style.setProperty('--dy', dy.toFixed(1) + 'px');
-      el.style.setProperty('--dur', rand(14, 28).toFixed(1) + 's');
-      el.style.setProperty('--delay', (-rand(0, 20)).toFixed(1) + 's');
-      grainField.appendChild(el);
-    });
-  }
-})();
-
 // v51: reveal-on-scroll + one parallax layer, direct request ("add scroll
 // animation with parallax"). IntersectionObserver for the reveal (a real,
 // universally-supported API, nothing to add for it); the grain field's
@@ -585,9 +541,6 @@
   // position exactly (see embed.js's own resizeCanvas note), a CSS
   // transform offset on it would desync clicks from where they land.
   var layers = [];
-  var grainZone = document.querySelector('.grain-zone');
-  var field = document.getElementById('heroFloat');
-  if (grainZone && field) layers.push({ zone: grainZone, el: field, range: 180 });
   var progressZone = document.querySelector('.progress-section');
   var progressCard = document.querySelector('.progress-card');
   if (progressZone && progressCard) layers.push({ zone: progressZone, el: progressCard, range: 70 });

@@ -49,19 +49,12 @@
    who want it can select it in Settings; it never appears by default or
    during satellite fetch. */
 static const unsigned char *wall_src = wallpaper_rgb;
-/* Solid dark fallback (Mojave espresso-brown 0x00201009 = RGB 32,16,9):
-   960x540x3 bytes. Allocated once and reused; never freed (lives for the
-   kernel's entire lifetime). Used as wall_src fallback while satellite/map
-   images are fetching, keeping the boot/idle screen neutral dark instead
-   of showing the tree photo. */
-static unsigned char *wall_dark_fallback = 0;
 /* v0.83.x: a REAL, once-captured satellite photograph (kernel/wall_sat.h,
    tools/gen/gen_wall_sat.py -- the same real mt0.google.com tiles
    wall_fetch() itself pulls for WALL_SAT, baked in at build time), decoded
-   lazily on first need and kept for the session, same permanent-buffer
-   lifetime as wall_dark_fallback above. Direct owner request: the v86
-   browser demo (font_is_fallback(), no network ever, see wall_apply's own
-   comment) should show a satellite look, not the baked tree photo -- the
+   lazily on first need and kept for the kernel's lifetime. Direct owner
+   request: with no live map (yet, or ever, see wall_apply's own comment)
+   the desktop shows a satellite look, not the baked tree photo -- the
    tree stays reachable from Settings (WALL_PHOTO, an explicit user pick),
    it is only the no-network AUTOMATIC fallback that changes. */
 static unsigned char *wall_sat_rgb = 0;
@@ -1285,6 +1278,30 @@ static inline __attribute__((always_inline)) unsigned int gui_map_tint_cool(unsi
     return ((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)b;
 }
 
+/* Engraving grade (Sep 2026, direct request: "keep the wallpaper but make
+   it work with the style"). The design system is one ink on one paper
+   (CLAUDE.md's Theme rule), so the satellite photo stays the wallpaper and
+   goes through the press: luminance only, stretched across the range this
+   imagery really occupies, then laid along the ink (#000000) to paper
+   (#ece8df) axis. Reads as an aerial survey plate.
+   Continuous tone on purpose, not a 1-bit line screen or an ordered
+   dither. Both were prototyped against the real wall_sat bytes first: any
+   fixed-period 1-bit pattern moires on the landing page, where v86's
+   1920x1080 canvas is squeezed into ~1000 CSS px at a non-integer ratio,
+   and it also fights the wind sway's horizontal lerp and every AA blend
+   target gui_wallpaper_color feeds. A tone survives all three.
+   ENGRAVE_LO/HI are the measured 5th/95th luminance percentiles of
+   wall_sat (49/164) opened up a little, the calibration knob if the
+   imagery ever changes. */
+#define ENGRAVE_LO 40
+#define ENGRAVE_HI 176
+static inline __attribute__((always_inline)) unsigned int gui_engrave(unsigned int rgb){
+    int l = (int)((((rgb >> 16) & 0xFF) * 77 + ((rgb >> 8) & 0xFF) * 150 + (rgb & 0xFF) * 29) >> 8);
+    int t = (l - ENGRAVE_LO) * 255 / (ENGRAVE_HI - ENGRAVE_LO);
+    if (t < 0) t = 0; if (t > 255) t = 255;
+    return ((unsigned int)(0xEC * t / 255) << 16) | ((unsigned int)(0xE8 * t / 255) << 8) | (unsigned int)(0xDF * t / 255);
+}
+
 /* v81: single choke point every wallpaper-theme reader goes through, so
    gui_wallpaper_color and gui_wallpaper_px (the two real per-pixel paths,
    see v79's comment above) can't drift out of sync on which theme applies
@@ -1294,6 +1311,7 @@ static inline __attribute__((always_inline)) unsigned int gui_wall_tint(unsigned
     if (wall_src == wallpaper_rgb) return rgb;      /* Photo: never graded */
     if (wall_theme == WALL_COOL) return gui_map_tint_cool(rgb);
     if (wall_theme == WALL_RAW) return rgb;         /* Raw: OpenTopoMap's own palette, untouched */
+    if (wall_theme == WALL_SAT) return gui_engrave(rgb); /* Satellite, the default: ink on paper, see gui_engrave */
     return gui_map_tint(rgb);                       /* WALL_WARM, and the fallback while fetching */
 }
 
@@ -2656,32 +2674,8 @@ static void wall_switch_theme(int theme){
    a theme-only change (same wall_map pointer, different wall_theme)
    still drops the stale cache. */
 static int wall_last_theme = -1;
-/* Initialize dark fallback buffer (Mojave espresso-brown) on first use.
-   Lazy allocation: only allocate and fill once, never freed. */
-static void wall_dark_fallback_init(void){
-    if (wall_dark_fallback) return; /* already allocated */
-    wall_dark_fallback = (unsigned char *)kmalloc(WALLPAPER_W * WALLPAPER_H * 3);
-    if (!wall_dark_fallback) { wall_serial_err("dark fallback nomem", 1); return; }
-    /* Fill with Mojave espresso-brown: 0x00201009 = RGB(32, 16, 9) */
-    unsigned int px_count = WALLPAPER_W * WALLPAPER_H;
-    for (unsigned int i = 0; i < px_count; i++){
-        unsigned int base = i * 3;
-        /* v0.76.53: was espresso-brown (32,16,9), a real CI regression --
-           tools/checks/dockhover-check.py detects a "lifted" dock icon by
-           brightness (sum>60) at the row just above a resting tile, and
-           this fallback's sum (57) sat close enough to that threshold
-           that real rendering tipped every slot over it, failing the test
-           with every icon reading as permanently lifted. Pure black (sum
-           0) has real margin under the threshold and matches tonight's
-           own silver/black/white direction better than a brown anyway. */
-        wall_dark_fallback[base + 0] = 0;  /* R */
-        wall_dark_fallback[base + 1] = 0;  /* G */
-        wall_dark_fallback[base + 2] = 0;  /* B */
-    }
-}
 /* Decode the baked satellite capture (kernel/wall_sat.h) once, lazily, and
-   keep it for the session -- the same lazy-allocate-and-keep shape as
-   wall_dark_fallback_init() just above, except the source bytes are a real
+   keep it for the session. The source bytes are a real
    photograph stored as an indexed PNG (drivers/png.c has decoded 8-bit
    indexed/PLTE images since v75) instead of a solid fill, so this one goes
    through png_decode instead of a fill loop. Decoding ~277KB of PNG once
@@ -2705,29 +2699,21 @@ static void wall_sat_init(void){
 }
 static void wall_apply(int want_map){
     const unsigned char *next;
-    if (want_map && !wall_map && !font_is_fallback()){
-        /* Satellite/map fetch hasn't completed yet; use dark fallback
-           instead of the tree photo, so the boot/idle screen is neutral
-           dark, not the Joshua Tree silhouette.
-
-           The font_is_fallback() guard is the v86 browser demo, the same
-           real signal v46 already uses to disable the wind there. Inside
-           v86 there is no network at all, so the map fetch is not pending,
-           it is never going to arrive -- handled in the branch below,
-           not here. */
-        wall_dark_fallback_init();
-        next = wall_dark_fallback ? wall_dark_fallback : wallpaper_rgb;
-    } else if (want_map && !wall_map && font_is_fallback()){
-        /* v86 with no network, ever: a live fetch can never land, so this
-           is not a "few seconds of loading" case, it is permanent for the
-           whole session. Direct owner request, Sep 2026: show the real
-           baked satellite capture here, not the tree photo -- the tree
-           stays reachable as an explicit Settings pick (WALL_PHOTO, the
-           !want_map branch below), only this automatic no-network default
-           changes. wall_sat_init() decodes lazily on first need; if the
-           decode ever fails (corrupt asset, out of memory) this falls
-           back to the tree photo exactly like before, never a blank
-           desktop. */
+    if (want_map && !wall_map){
+        /* No live map yet, and maybe never: show the baked satellite
+           capture, the same kind of imagery the fetch will bring, so a
+           landed fetch reads as a refresh rather than a reveal.
+           This used to be two branches split on font_is_fallback() as a
+           stand-in for "this is the v86 browser demo": v86 got the bake,
+           everything else got a solid black placeholder until the fetch
+           landed. Real bug, direct report ("the demo isn't showing the
+           wallpaper reliably, it's falling back to black"): that signal is
+           a VGA font-plane quirk, not a network fact. Whenever it read 0
+           inside the browser the demo took the "fetch is pending" branch,
+           and a browser fetch to the tile hosts never lands (CORS, see the
+           landing page's own note), so black was permanent. One branch, no
+           guess about where we are running. If the decode ever fails this
+           still falls back to the tree photo, never a blank desktop. */
         wall_sat_init();
         next = wall_sat_rgb ? wall_sat_rgb : wallpaper_rgb;
     } else {
@@ -2747,7 +2733,7 @@ static void wall_apply(int want_map){
        cannot tell them apart could not prove the v86 fallback bake-in
        actually took effect. */
     serial_puts("wallsrc=");
-    serial_puts(next == wallpaper_rgb ? "photo" : (next == wall_dark_fallback ? "dark" : (next == wall_sat_rgb ? "satfallback" : "map")));
+    serial_puts(next == wallpaper_rgb ? "photo" : (next == wall_sat_rgb ? "satfallback" : "map"));
     serial_puts("\n");
     wall_src = next;
     wall_last_theme = wall_theme;
@@ -6750,13 +6736,24 @@ static void run(char *line){
         wall_theme = WALL_WARM;  unsigned int wall_dispatch_warm = gui_wall_tint(gray);
         wall_theme = WALL_COOL;  unsigned int wall_dispatch_cool = gui_wall_tint(gray);
         wall_theme = WALL_RAW;   unsigned int wall_dispatch_raw  = gui_wall_tint(gray);
-        wall_theme = WALL_SAT;   unsigned int wall_dispatch_sat  = gui_wall_tint(gray); /* Satellite: same grade as Warm, no special case in gui_wall_tint */
+        wall_theme = WALL_SAT;   unsigned int wall_dispatch_sat  = gui_wall_tint(gray); /* Satellite: the engraving grade, not Warm's */
         wall_src = wallpaper_rgb; wall_theme = WALL_COOL;
         unsigned int wall_dispatch_photo = gui_wall_tint(gray); /* Photo guard: must ignore wall_theme entirely */
         wall_src = saved_wall_src; wall_theme = saved_wall_theme;
         int ok3 = (wall_dispatch_warm == warm_g) && (wall_dispatch_cool == cool_g)
                 && (wall_dispatch_raw == gray) && (wall_dispatch_photo == gray)
-                && (wall_dispatch_sat == warm_g);
+                && (wall_dispatch_sat == gui_engrave(gray)) && (wall_dispatch_sat != warm_g);
+        /* The engraving grade itself: black stays ink, white lands exactly on
+           paper, tone is monotonic, and hue is gone (a saturated green and a
+           gray of the same luminance must come out identical). Revert
+           gui_engrave to `return rgb;` and the green/gray pair diverges. */
+        unsigned int eg_green = gui_engrave(0x00208020);
+        int eg_l = (0x20 * 77 + 0x80 * 150 + 0x20 * 29) >> 8;
+        unsigned int eg_gray = gui_engrave(((unsigned int)eg_l << 16) | ((unsigned int)eg_l << 8) | (unsigned int)eg_l);
+        int ok5 = (gui_engrave(0x00000000) == 0x00000000) && (gui_engrave(0x00FFFFFF) == 0x00ECE8DF)
+                && (eg_green == eg_gray)
+                && ((gui_engrave(0x00606060) & 0xFF) < (gui_engrave(0x00909090) & 0xFF));
+        ok3 = ok3 && ok5;
 
         const char *prev_fs = vfs_current_name();
         char prev_fs_buf[16]; int pfi = 0; while (prev_fs[pfi] && pfi < 15) { prev_fs_buf[pfi] = prev_fs[pfi]; pfi++; } prev_fs_buf[pfi] = 0;

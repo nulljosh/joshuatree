@@ -30,7 +30,7 @@ import json, os, socket, subprocess, sys, time
 from PIL import Image
 
 LOG = "/tmp/jt-dockhover-serial.log"
-MID, END = "/tmp/jt-dockhover-mid.raw", "/tmp/jt-dockhover-end.raw"
+REST, MID, END = "/tmp/jt-dockhover-rest.raw", "/tmp/jt-dockhover-mid.raw", "/tmp/jt-dockhover-end.raw"
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = 4449
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
@@ -68,7 +68,7 @@ try:
         cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": path}})
     centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
 
-    move(480, 200); time.sleep(0.3)
+    move(480, 200); time.sleep(0.3); dump(REST)           # cursor nowhere near the dock: nothing lifted
     move(centre(1), ICON_ROW_Y); time.sleep(0.6)          # Files fully lifted
     for slot in (2, 3, 4, 5):
         move(centre(slot), ICON_ROW_Y); time.sleep(0.12)  # hop across four more
@@ -101,19 +101,21 @@ def tile_present(img, slot):
     return non_tray > n * n // 2
 def lifted(img, slot):
     """Lifted when the row above a normal tile's top, across the tile's own
-    width, is mostly not wallpaper.
+    width, differs from the same row in the resting frame.
 
-    Threshold sits well clear of both real readings, not just above the old
-    one: the desktop's dark fallback isn't literally (0,0,0), it measures a
-    flat sum of 66 across every non-lifted slot (some tint/floor short of
-    pure black, real but not this check's concern), while a genuinely
-    lifted icon measures 325, a 5x gap. 150 sits in the middle of that gap
-    with room either side, so a real wallpaper tone shift doesn't flip this
-    false again the way 60 did once the fallback stopped being pure black."""
+    Measured against the rest frame, not against a brightness threshold.
+    The threshold version assumed a dark wallpaper and broke every time the
+    wallpaper changed tone (60, then 150, then for good once the pending-map
+    placeholder became the baked satellite capture and every slot read as
+    lifted). Row 455 is below the wind band (WIND_HORIZON_ROW 395), so with
+    nothing lifted it is pixel-stable between frames; 24 clears any AA
+    shimmer while a real lifted tile changes nearly every pixel."""
     x0 = (SLOT0_X + slot * PITCH) * SCALE; y = LIFTED_Y * SCALE
-    bright = sum(1 for x in range(x0, x0 + DOCK_ICON * SCALE) if sum(img.getpixel((x, y))) > 150)
-    return bright > DOCK_ICON * SCALE // 3
+    changed = sum(1 for x in range(x0, x0 + DOCK_ICON * SCALE)
+                  if max(abs(a - b) for a, b in zip(img.getpixel((x, y)), rest.getpixel((x, y)))) > 24)
+    return changed > DOCK_ICON * SCALE // 3
 
+rest = load(REST)
 for tag, path in (("mid", MID), ("end", END)):
     img = load(path)
     missing = [s_ for s_ in range(ICONS) if not tile_present(img, s_)]
