@@ -18,185 +18,73 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest`. `latest` silently rolls to the next LTS
+    # image, which swaps the clang/qemu/PIL versions underneath every check
+    # in this file at a moment GitHub picks, not one this repo picks -- the
+    # exact shape of "it was green yesterday and red today with no commit
+    # in between". Bump this line deliberately when the toolchain should
+    # move, so the bump is a commit that CI itself proves out.
+    runs-on: ubuntu-24.04
     # A wedged QEMU process (hung boot, a script waiting forever on a socket
     # that will never answer) used to have no ceiling: the job would sit
     # "in_progress" indefinitely, which reads the same as "still fine" on
-    # a status badge instead of the real failure it is. 20 minutes is
-    # comfortably above the real end-to-end time this job takes today.
-    timeout-minutes: 20
+    # a status badge instead of the real failure it is. The suite also
+    # gives each individual check its own 5-minute ceiling, so a single
+    # wedged QEMU is one named FAIL rather than a job-level timeout that
+    # takes every check after it down with no result. 30 minutes leaves
+    # room for the suite's one automatic retry of timing-sensitive checks
+    # on top of the ~6 minutes it really takes.
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      # fetch-depth: 0 for the kernel.elf sync step at the end of this job,
+      # which compares real commit ancestry. It used to paper over the
+      # default shallow clone with `git fetch --unshallow || true`, which
+      # cannot fail loudly: if the unshallow did not happen, merge-base
+      # just answered from a truncated history and the check quietly
+      # stopped meaning anything.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Landing roadmap summary regression checks
         run: python3 tools/checks/landing-roadmap-check.py
-      - name: Cache apt packages
-        uses: actions/cache@v4
-        with:
-          path: /var/cache/apt/archives
-          key: apt-${{ runner.os }}-clang-lld-qemu-pil-mtools-dosfstools
       - name: Install clang, lld, qemu, FAT disk tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang lld qemu-system-x86 python3-pil mtools dosfstools
+          sudo apt-get install -y --no-install-recommends \
+            clang lld qemu-system-x86 python3-pil mtools dosfstools ccache
+      # The old cache step pointed at /var/cache/apt/archives, which apt on
+      # the runner empties after a successful install, so it restored an
+      # empty directory every run and saved an empty one back: a cache that
+      # never held anything. ccache is the real build cache here -- the
+      # kernel is ~25 translation units rebuilt from scratch on every run,
+      # and a docs-only or checks-only push (most pushes to this repo)
+      # recompiles all of them byte-identically. Ubuntu's ccache package
+      # ships /usr/lib/ccache/clang, so putting it first on PATH makes the
+      # Makefile's own `CC := clang` resolve through it with no Makefile
+      # change and no behaviour change on a cache miss.
+      - name: Cache compiled objects (ccache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-ubuntu-24.04-${{ hashFiles('kernel/**', 'drivers/**', 'boot/**', 'lib/**', 'Makefile') }}
+          restore-keys: |
+            ccache-ubuntu-24.04-
       - name: Build
-        run: make kernel.elf
-      - name: Boot check
-        run: ./check.sh
-      # v74: the PNG decoder is the first subsystem with a host-native
-      # harness (tools/checks/png-host-check.sh, seconds) AND an in-kernel one
-      # (tools/checks/png-check.sh, decodes inside QEMU and matches the host's
-      # PIL decode hash for hash). Both run on every push.
-      - name: PNG decoder, host harness
-        run: ./tools/checks/png-host-check.sh
-      - name: PNG decoder, in-kernel
-        run: ./tools/checks/png-check.sh
-      # v77/v78: the "Cl oudy" / "Curbf ind" letter-spacing regressions.
-      # Renders real DejaVu text in-kernel at scale 2 (v77's texttest,
-      # through font_draw_string, plus v78's wraptest, through
-      # render_wrapped_text, the word-wrap path v77 didn't touch), measures
-      # actual ink columns per glyph, and fails if the inter-letter gaps
-      # are uneven or a wide glyph is clipped (both true under the old
-      # fixed-cell renderers).
-      - name: AA text spacing, in-kernel
-        run: ./tools/checks/textspacing-check.sh
-      # FAT16 disk image tests: tools/mkdisk.sh now uses Linux-native mkfs.vfat
-      # instead of macOS-only hdiutil+newfs_msdos, so these can run on Linux CI.
-      # fatcyclehang-check.sh also had a regex fix to match Linux QEMU output.
-      - name: FAT filesystem cycle hang (regression test)
-        run: ./tools/checks/fatcyclehang-check.sh
-      # Standing CI-improvement requirement (CLAUDE.md 4d): a real audit
-      # (Sep 2026) found 24 of the 30 scripts under tools/checks/ never ran
-      # anywhere, this file included, only check.sh's own boot marker and
-      # the six checks already listed above. Wiring the rest up surfaced a
-      # second real bug on the way: every QMP-driven script here sends
-      # `{"execute": "quit"}` and blocks on a JSON reply, but QEMU can tear
-      # the socket down the instant it processes quit, before the reply is
-      # ever written back, so the very first unattended run of any of them
-      # threw an uncaught ConnectionResetError and would have LOOKED like a
-      # crash even on a run where every real assertion above it passed.
-      # Fixed at the same 12 call sites (this file's own multiwindow-check
-      # among them) by treating that reset as expected cleanup noise, not a
-      # test failure, so a real PASS/FAIL is what actually gates CI now.
-      #
-      # app-interact-check.py is now genuinely cross-platform too (mkdisk.sh's
-      # own Linux path plus mtools' `mtype` for the host-side read-back, no
-      # kernel mount/sudo/loop device needed on Linux at all -- see
-      # roadmap.md's v0.76.2 entry for why `sudo mount -o loop` specifically
-      # doesn't work in every Linux sandbox). Deliberately NOT added as a CI
-      # step here yet: it has one real, pre-existing, unrelated failure
-      # (CONTACTS.TXT's delete-then-save gap, logged since v0.73.0) that
-      # would make this job red for a reason this pass didn't cause and
-      # isn't in scope to fix, so wiring it in now would just be a
-      # permanently-red step, not a real safety net.
-      - name: Chat history (VFS-backed, past the old 512-byte cap)
-        run: ./tools/checks/chat-check.sh
-      - name: No-disk boot falls back to ramfs with seeded demo files
-        run: ./tools/checks/ramfs-demo-check.sh
-      - name: Shell regression suite (heaptest, tasktest, preempttest, killtest, ring3test, ps)
-        run: ./tools/checks/shellregress-check.sh
-      # The v1 syscall ABI's own regression: builds user/hello.c as a real
-      # flat ring-3 binary, seeds it and its data file through the VFS,
-      # runs it at CPL 3 and asserts its actual output and the exit code
-      # the kernel observed. This is the check that makes
-      # docs/SYSCALL-ABI.md a contract instead of a document, so it runs on
-      # every push alongside everything else.
-      - name: Ring-3 reference program against the v1 syscall ABI
-        run: ./tools/checks/usertest-check.sh
-      # The v2 half: user/note.c writes, seeks and reads a real file with
-      # real argv, and the kernel reads that file back off the VFS itself
-      # to check the bytes rather than trusting what the program printed.
-      - name: Ring-3 program writing a real file against the v2 syscall ABI
-        run: ./tools/checks/notetest-check.sh
-      - name: QEMU vmmouse absolute-pointer round trip
-        run: ./tools/checks/vmmouse-check.sh
-      - name: Calendar date math (cal_dow/cal_days_in_month/cal_is_leap), host harness
-        run: ./tools/checks/check-calendar.sh
-      - name: Settings click acts on the row actually clicked, not the last arrow-selected one
-        run: ./tools/checks/settingsclick-check.sh
-      - name: Wallpaper defaults to Satellite on a fresh boot
-        run: ./tools/checks/walldefault-check.sh
-      - name: Idle tour's Settings visit doesn't change the wallpaper theme
-        run: python3 ./tools/checks/walldemo-regression-check.py
-      - name: Notes editor chrome doesn't redraw on plain keystrokes
-        run: ./tools/checks/editorflash-check.sh
-      - name: Notes typing, typography, pointer controls, and persistence across reboots
-        run: python3 ./tools/checks/editor_qa.py
-      - name: Terminal and Chat chrome don't redraw on plain keystrokes
-        run: ./tools/checks/termchatflash-check.sh
-      - name: Apple-menu hover stays cheap, clock redraws on a real minute change
-        run: ./tools/checks/menuclock-check.sh
-      - name: Multi-window Mail/Calendar/Reminders chrome doesn't redraw on plain keystrokes
-        run: ./tools/checks/mwkeyflash-check.sh
-      - name: Drawing lands offscreen and window_present puts the real desktop on screen
-        run: ./tools/checks/backbuffer-check.sh
-      - name: Multi-window apps draw exactly one toolbar, not two
-        run: ./tools/checks/mwdupetoolbar-check.sh
-      - name: JPEG decoder, host harness
-        run: ./tools/checks/jpeg-host-check.sh
-      - name: JPEG decoder, in-kernel
-        run: ./tools/checks/jpeg-check.sh
-      - name: Dock apps open/close from the pointer alone
-        run: python3 ./tools/checks/appclose-check.py
-      - name: Dock hover survives mid-animation
-        run: python3 ./tools/checks/dockhover-check.py
-      - name: Launchpad tile click launches, doesn't just close the folder
-        run: python3 ./tools/checks/launchpad-click-check.py
-      - name: Multi-window (click-to-focus, real z-order compositing)
-        run: python3 ./tools/checks/multiwindow-check.py
-      - name: Dock icon edge quality (no staircased corners)
-        run: python3 ./tools/checks/iconedge-check.py
-      - name: Dock icon halo (clean clip to the tray, no glyph bleed)
-        run: python3 ./tools/checks/iconhalo-check.py
-      - name: Titlebar traffic-light AA (real coverage blend, not binary)
-        run: python3 ./tools/checks/titlebar-aa-check.py
-      - name: Dock tray corner AA (real coverage blend, not binary)
-        run: python3 ./tools/checks/traycorner-check.py
-      # Static, no QEMU: reads landing/v86/embed.js's own TOUR_APPS array.
-      - name: Idle tour still cycles all 8 real dock apps
-        run: node ./tools/checks/tourappcount-check.mjs
-      - name: Idle tour autoplay fix is in place (tourArmed reset)
-        run: node ./tools/checks/idletour-arm-reset-check.mjs
-      # Static, no QEMU/browser: unit-tests embed.js's own localRtcTime()
-      # timezone-shift math directly (a full browser+v86 boot check needs
-      # Playwright/Chromium, not wired into this CI yet).
-      - name: RTC local-time shift math (v86's CMOS always answers in UTC)
-        run: node ./tools/checks/rtc-timezone-check.mjs
-      - name: Worker /api/proxy allowlist (real Cloudflare deploy not spun up in CI)
-        run: node ./tools/checks/worker-proxy-check.mjs
-      # Real recurring gap: landing/v86/kernel.elf is a checked-in binary
-      # copy, not a build artifact, so a docs-only or landing-only pass
-      # never touches it and it silently drifts behind the real kernel.elf
-      # (caught live via md5, the demo was missing several real versions'
-      # worth of features). First version of this check compared a
-      # CI-fresh build's md5 against the checked-in copy directly, a real
-      # bug found within a day: clang/lld builds aren't bit-reproducible
-      # across machines/toolchain versions (Ubuntu CI vs whoever's Mac
-      # built the checked-in copy), so that false-failed on a genuinely
-      # in-sync tree. Real fix: compare git history instead of bytes, was
-      # `landing/v86/kernel.elf` committed at or after the last commit
-      # that actually touched kernel/driver/boot source, not whether two
-      # different compilers produced byte-identical output.
-      #
-      # Makefile dropped from the watched set (real regression, hit twice
-      # same night): a Makefile edit that only fixes a generator rule's
-      # own path string (no CFLAGS/source-list change) produces a
-      # byte-identical kernel.elf, so there's nothing to actually commit,
-      # every retry of "cp kernel.elf landing/v86/kernel.elf" is a no-op
-      # git sees as "nothing to commit" and the check fails forever no
-      # matter what's done. A real Makefile change that DOES affect the
-      # build (new source file, changed flags) always lands alongside real
-      # edits under kernel/drivers/boot/lib in the same commit anyway, so
-      # this still catches the case that actually matters.
-      - name: landing/v86/kernel.elf stays in sync
         run: |
-          git fetch --unshallow 2>/dev/null || true
-          src_commit=$(git log -1 --format=%H -- kernel/ drivers/ boot/ lib/)
-          elf_commit=$(git log -1 --format=%H -- landing/v86/kernel.elf)
-          if ! git merge-base --is-ancestor "$src_commit" "$elf_commit" 2>/dev/null; then
-            echo "landing/v86/kernel.elf (last touched $elf_commit) predates real source changes (last touched $src_commit)"
-            echo "run: cp kernel.elf landing/v86/kernel.elf"
-            exit 1
-          fi
+          echo "/usr/lib/ccache" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/ccache:$PATH"
+          ccache --zero-stats
+          make kernel.elf
+          ccache --show-stats
+      # One step, the whole suite. tools/checks/ci-suite.sh holds the
+      # manifest and the per-check comments that used to live here as ~40
+      # separate workflow steps. That shape stopped the job at the first
+      # failure, so one timing flake hid the real state of every check
+      # after it and each fix revealed only the next failure, one six
+      # minute run at a time. The suite now runs everything, prints a full
+      # pass/fail summary, and fails the job if any check failed.
+      - name: Regression suite (all checks, full summary)
+        run: ./tools/checks/ci-suite.sh
 
   # CLAUDE.md 4d's own candidate, "a second job for check-refs.sh": pure
   # drift insurance, no clang/qemu/PIL toolchain needed at all, so it runs
@@ -208,10 +96,10 @@ jobs:
   # that was never meant to be a real path) drifted stale before this job
   # existed to catch it.
   check-refs:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Doc file-path references aren't stale
         run: ./tools/checks/check-refs.sh
       - name: landing/version.txt stays in sync with VERSION
@@ -223,15 +111,15 @@ jobs:
   # reports rather than gates. Read its log when it goes red two runs in
   # a row, that is a real regression or a provider change, not noise.
   network:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install clang, lld, qemu
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang lld qemu-system-x86 python3-pil curl
+          sudo apt-get install -y --no-install-recommends clang lld qemu-system-x86 python3-pil curl
       - name: Build
         run: make kernel.elf
       # Real one-off transient failures (a ConnectionResetError from
@@ -253,3 +141,35 @@ jobs:
         run: python3 tools/checks/wallfx-check.py rain || (sleep 15 && python3 tools/checks/wallfx-check.py rain) || true
       - name: Satellite wallpaper theme (real geo + tile fetch)
         run: python3 tools/checks/satellite-wallpaper-check.py || (sleep 15 && python3 tools/checks/satellite-wallpaper-check.py) || true
+
+  # One status, one gate. main's branch protection used to require three
+  # separate contexts: `check`, `check-refs` and `network`. Two real
+  # problems with that. First, `network` is continue-on-error by design
+  # (it talks to ip-api.com and OpenTopoMap for real, and a provider
+  # hiccup must never block a kernel push) -- a required context that is
+  # structurally incapable of failing is not a gate, it is 2.5 minutes of
+  # waiting painted to look like one. Second, every time a job is added,
+  # renamed or split here, protection silently keeps requiring the old
+  # name and the new job gates nothing, which is how a job can go red for
+  # days without anything noticing.
+  #
+  # So: protection requires exactly `ci`, and `ci` is this job. It runs no
+  # tests of its own, it only reports whether the jobs that actually gate
+  # merges passed. Adding or renaming a gating job is a `needs:` edit here
+  # and nothing else. `network` is deliberately absent -- read its log,
+  # don't merge on it.
+  ci:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    if: always()
+    needs: [check, check-refs]
+    steps:
+      - name: Gating jobs all passed
+        run: |
+          echo "check:      ${{ needs.check.result }}"
+          echo "check-refs: ${{ needs.check-refs.result }}"
+          if [ "${{ needs.check.result }}" != "success" ] || [ "${{ needs.check-refs.result }}" != "success" ]; then
+            echo "FAIL: a gating job did not succeed"
+            exit 1
+          fi
+          echo "PASS: every gating job succeeded"
