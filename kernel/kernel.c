@@ -28,6 +28,7 @@
 #include "net.h"
 #include "http.h"
 #include "wallpaper.h"
+#include "icon_art.h"
 /* v75 (0.67.0): the wallpaper is read through this pointer, not the baked
    array directly, so a real fetched image (wall_fetch below: a 2x2 mosaic
    of OpenTopoMap tiles around the ip-api location, decoded by
@@ -3141,11 +3142,107 @@ static int icon_cache_variant[GUI_APP_COUNT][ICON_CACHE_SLOTS]; /* v45.2: anythi
    GUI_BG, and blending both toward GUI_BG (the old behaviour) put a
    faint white rim on every dock tile once the pixels got small enough to
    see it. */
+/* v0.77.x: authored artwork instead of runtime primitive assembly, for
+   the icons that have it (see tools/gen/gen_icon_art.py and art/icons/).
+   Area-average ICON_ART_SIZE x ICON_ART_SIZE straight RGBA down to pw x pw
+   and composite over `under`, which is exactly the opaque tile the rest of
+   this file already expects out of the cache, so nothing downstream
+   changes. Colour is averaged weighted by alpha (and alpha averaged on its
+   own) rather than straight, because a straight average of RGB across the
+   icon's transparent border would drag real edge pixels toward whatever
+   the rasterizer happened to leave in the fully-transparent ones, the
+   classic dark/light fringe. Integer only, no FPU in this kernel. */
+/* The upscale half. A box filter degenerates to nearest-neighbour the
+   moment the destination is bigger than the source (every destination pixel
+   covers less than one source pixel), which is exactly the blocky staircase
+   this whole pass exists to remove, and there are real call sites past 128:
+   the Weather app's own 100-logical card (200 physical), and the dock itself
+   once dock_scale_pct is turned up past 20 in Settings. Bilinear there, on
+   premultiplied colour so the transparent border cannot bleed into an edge,
+   then the same source-over onto the surface colour. Fixed point, 8
+   fractional bits, no FPU in this kernel. */
+static void gui_icon_art_bilinear(const unsigned char *art, unsigned int *out, int pw, unsigned int under){
+    unsigned int ur = (under >> 16) & 0xFF, ug = (under >> 8) & 0xFF, ub = under & 0xFF;
+    for (int py = 0; py < pw; py++){
+        int fy = (py * 2 + 1) * ICON_ART_SIZE * 128 / pw - 128; /* pixel-centre mapping */
+        if (fy < 0) fy = 0;
+        int sy = fy >> 8, wy = fy & 255;
+        if (sy >= ICON_ART_SIZE - 1) { sy = ICON_ART_SIZE - 2; wy = 255; }
+        for (int px = 0; px < pw; px++){
+            int fx = (px * 2 + 1) * ICON_ART_SIZE * 128 / pw - 128;
+            if (fx < 0) fx = 0;
+            int sx = fx >> 8, wx = fx & 255;
+            if (sx >= ICON_ART_SIZE - 1) { sx = ICON_ART_SIZE - 2; wx = 255; }
+            unsigned int cr = 0, cg = 0, cb = 0, ca = 0;
+            for (int k = 0; k < 4; k++){
+                int ox = k & 1, oy = k >> 1;
+                unsigned int w = (unsigned int)(ox ? wx : 255 - wx) * (unsigned int)(oy ? wy : 255 - wy);
+                const unsigned char *p = art + ((unsigned int)(sy + oy) * ICON_ART_SIZE + (unsigned int)(sx + ox)) * 4;
+                unsigned int a = p[3];
+                cr += w * p[0] * a / 255; cg += w * p[1] * a / 255; cb += w * p[2] * a / 255;
+                ca += w * a;
+            }
+            /* cr/cg/cb are premultiplied colour, ca is alpha, all scaled by 255*255 */
+            unsigned int a = (ca + 32512) / 65025;
+            unsigned int r = (cr + 32512) / 65025, g = (cg + 32512) / 65025, b = (cb + 32512) / 65025;
+            r += ur * (255 - a) / 255; g += ug * (255 - a) / 255; b += ub * (255 - a) / 255;
+            if (r > 255) r = 255;
+            if (g > 255) g = 255;
+            if (b > 255) b = 255;
+            out[py * pw + px] = (r << 16) | (g << 8) | b;
+        }
+    }
+}
+
+static void gui_icon_art_scale(const unsigned char *art, unsigned int *out, int pw, unsigned int under){
+    if (pw > ICON_ART_SIZE) { gui_icon_art_bilinear(art, out, pw, under); return; }
+    unsigned int ur = (under >> 16) & 0xFF, ug = (under >> 8) & 0xFF, ub = under & 0xFF;
+    for (int py = 0; py < pw; py++){
+        int sy0 = py * ICON_ART_SIZE / pw, sy1 = (py + 1) * ICON_ART_SIZE / pw;
+        if (sy1 <= sy0) sy1 = sy0 + 1;
+        for (int px = 0; px < pw; px++){
+            int sx0 = px * ICON_ART_SIZE / pw, sx1 = (px + 1) * ICON_ART_SIZE / pw;
+            if (sx1 <= sx0) sx1 = sx0 + 1;
+            unsigned int rs = 0, gs = 0, bs = 0, as = 0, n = 0;
+            for (int sy = sy0; sy < sy1; sy++){
+                const unsigned char *row = art + ((unsigned int)sy * ICON_ART_SIZE + (unsigned int)sx0) * 4;
+                for (int sx = sx0; sx < sx1; sx++, row += 4){
+                    unsigned int a = row[3];
+                    rs += row[0] * a; gs += row[1] * a; bs += row[2] * a; as += a; n++;
+                }
+            }
+            unsigned int a = (as + n / 2) / n;              /* mean coverage over the source block */
+            unsigned int r, g, b;
+            if (as) { r = (rs + as / 2) / as; g = (gs + as / 2) / as; b = (bs + as / 2) / as; }
+            else    { r = ur; g = ug; b = ub; }
+            /* source-over onto the surface colour, 0..255 alpha, rounded */
+            r = (r * a + ur * (255 - a) + 127) / 255;
+            g = (g * a + ug * (255 - a) + 127) / 255;
+            b = (b * a + ub * (255 - a) + 127) / 255;
+            out[py * pw + px] = (r << 16) | (g << 8) | b;
+        }
+    }
+}
+
 static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsigned int under){
     int variant = (icon == GUI_TRASH) ? (trash_count() > 0) : 0;
     if (icon_cache[icon][slot] && icon_cache_size[icon][slot] == size && icon_cache_under[icon][slot] == under && icon_cache_variant[icon][slot] == variant) return icon_cache[icon][slot];
     unsigned int sc = window_scale();
     int pw = size * (int)sc;
+    const unsigned char *art = (icon >= 0 && icon < ICON_ART_COUNT) ? ICON_ART[icon] : 0;
+    if (art && pw > 0) {
+        unsigned int *dst = icon_cache[icon][slot];
+        if (!dst || icon_cache_size[icon][slot] != size) {
+            if (dst) kfree(dst);
+            dst = (unsigned int *)kmalloc((unsigned int)(pw * pw) * sizeof(unsigned int));
+            if (!dst) return 0;
+            icon_cache[icon][slot] = dst; icon_cache_size[icon][slot] = size;
+        }
+        icon_cache_under[icon][slot] = under;
+        icon_cache_variant[icon][slot] = variant;
+        gui_icon_art_scale(art, dst, pw, under);
+        return dst;
+    }
     unsigned int ssz = (unsigned int)size * ICON_SS_SCALE;
     unsigned int *ssbuf = (unsigned int *)kmalloc(ssz * ssz * sizeof(unsigned int));
     if (!ssbuf) return 0;
