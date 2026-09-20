@@ -128,6 +128,7 @@ click_at(centre(CHAT_SLOT), ICON_ROW_Y)
 wait_for("chatchrome\n", 1)
 time.sleep(0.5)
 after_chat_open = count("chatchrome\n")
+chat_console = count("chatconsole\n")  # the LLM console view (status line + ">>> " prompt) drew, not the old labelled-message list
 key("n"); time.sleep(0.3)
 for c in "yes":
     key(c)
@@ -146,6 +147,8 @@ if after_term_typing != 1:
     print("FAIL: expected Terminal chrome draw count to stay at 1 after typing 'help', got %d" % after_term_typing); sys.exit(0)
 if after_chat_open != 1:
     print("FAIL: expected exactly 1 Chat chrome draw right after opening, got %d" % after_chat_open); sys.exit(0)
+if chat_console < 1:
+    print("FAIL: Chat opened but never drew its LLM console view (no chatconsole marker)"); sys.exit(0)
 if after_chat_typing != 1:
     print("FAIL: expected Chat chrome draw count to stay at 1 after entering compose and typing, got %d" % after_chat_typing); sys.exit(0)
 print("PASS: Terminal and Chat chrome each drew exactly once on open and stayed flat through real typing")

@@ -20,8 +20,15 @@ IRQ(8) IRQ(9) IRQ(10) IRQ(11) IRQ(12) IRQ(13) IRQ(14) IRQ(15)
 
 static volatile unsigned int tick_count = 0;
 
-/* small ring buffer: IRQ1 writes, kernel.c's getch() reads via kbd_pop() */
-#define KBD_BUF_SIZE 32
+/* ring buffer: IRQ1 writes, kernel.c's getch() reads via kbd_pop().
+   512 scancodes, about 250 keystrokes. It was 32 (16 keystrokes), and a full
+   ring drops the scancode silently: Notes repaints its whole growing line on
+   every key, which under v86 is slower than a typist (or the landing tour's
+   55 ms per character), so halfway through a sentence letters went missing
+   ("and a dozen real apps" arrived as "ad a oen ral ap"). Half a kilobyte
+   buys enough slack that input lags behind a slow repaint instead of being
+   lost. Must stay a power of two only by preference, the modulo is general. */
+#define KBD_BUF_SIZE 512
 static volatile u8 kbd_buf[KBD_BUF_SIZE];
 static volatile int kbd_head = 0, kbd_tail = 0;
 
