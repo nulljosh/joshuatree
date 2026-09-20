@@ -3277,22 +3277,37 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     /* Variant artwork first where one exists (Trash full vs empty), so
        converting an icon to artwork cannot quietly drop a real runtime
        state indicator; fall back to the base artwork when it does not. */
-    const unsigned char *art = 0;
+    const unsigned char *png = 0;
+    unsigned int png_len = 0;
     if (icon >= 0 && icon < ICON_ART_COUNT) {
-        art = variant ? ICON_ART_VARIANT[icon] : 0;
-        if (!art) art = ICON_ART[icon];
+        if (variant && ICON_ART_VARIANT[icon]) { png = ICON_ART_VARIANT[icon]; png_len = ICON_ART_VARIANT_LEN[icon]; }
+        else                                   { png = ICON_ART[icon];         png_len = ICON_ART_LEN[icon]; }
     }
-    if (art && pw > 0) {
+    /* The artwork is stored as PNG, not as decoded RGBA: 24 artworks of
+       128x128 RGBA is 1.5MB, which runs into the ring-3 program window
+       boot/linker.ld pins at 0xC0500000, and docs/SYSCALL-ABI.md names that
+       address as part of the published v1 contract. As PNG the same 24 are
+       141KB. Decoding here rather than once at boot costs nothing in
+       practice: this function is the icon cache's own miss path, so it runs
+       on first draw and on a real size or variant change, not per frame. */
+    unsigned char *art = 0;
+    if (png && pw > 0) {
+        unsigned int aw = 0, ah = 0, ach = 0;
+        if (png_decode(png, png_len, &art, &aw, &ah, &ach) != 0) art = 0;
+        else if (aw != ICON_ART_SIZE || ah != ICON_ART_SIZE || ach != 4) { kfree(art); art = 0; }
+    }
+    if (art) {
         unsigned int *dst = icon_cache[icon][slot];
         if (!dst || icon_cache_size[icon][slot] != size) {
             if (dst) kfree(dst);
             dst = (unsigned int *)kmalloc((unsigned int)(pw * pw) * sizeof(unsigned int));
-            if (!dst) return 0;
+            if (!dst) { kfree(art); return 0; }   /* the decode buffer is ours, free it on every exit */
             icon_cache[icon][slot] = dst; icon_cache_size[icon][slot] = size;
         }
         icon_cache_under[icon][slot] = under;
         icon_cache_variant[icon][slot] = variant;
         gui_icon_art_scale(art, dst, pw, under);
+        kfree(art);
         return dst;
     }
     unsigned int ssz = (unsigned int)size * ICON_SS_SCALE;
