@@ -12,7 +12,7 @@ Freestanding i386 kernel, no libc. This file is the forward plan: what's still o
 One ink on one paper, tone by hatching, from the Joshua Tree Co. mark. Full rule in `CLAUDE.md`'s Theme bullet.
 - [x] [Sonnet] Landing page: tokens, spec-sheet rules, plates, badge, ink chart.
 - [ ] [Fable] Kernel goes 1-bit, sequenced AFTER the lag item above, since it is partly the fix for it. Ordered dither fills (25/50/75%, a 4x4 Bayer table) stand in for every grey and every alpha blend: desktop, title bars, disabled states. Flat fills and no blending means smaller damage rects and no per-pixel AA cost. Prior art: Atkinson's QuickDraw patterns on the 1984 Mac, same problem, same answer.
-- [ ] [Sonnet] Paper desktop with a hairline horizon landscape along the bottom, replacing the satellite wallpaper as the default (the map themes stay as options).
+- [x] [Sonnet] Wallpaper (v0.85.2): the satellite photo stays (direct call, it is the wallpaper) and goes through `gui_engrave`, luminance laid on the ink-to-paper axis, an aerial survey plate. Continuous tone, not 1-bit: a line screen and an ordered dither were both prototyped on the real `wall_sat` bytes and both moire on the landing page's non-integer canvas downscale. That finding applies to the 1-bit item above too: prove any fixed-period pattern on the scaled v86 canvas before building on it. `walltest` covers the grade (ink stays ink, white lands on paper, hue is gone, tone is monotonic).
 - [ ] [Sonnet] Window chrome: 1px ink border, hatched title bar, no shadows. The arched badge outline (R120/R80/R40) on About and login only.
 - [ ] [Sonnet] 18 dock icons redrawn as 1-bit line glyphs; the simplified tree is the launcher.
 - [ ] [Haiku] Boot splash: the badge drawn scanline by scanline.
