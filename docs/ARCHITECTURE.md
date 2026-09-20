@@ -73,9 +73,9 @@ that with the permanent, same-shaped tables.
 
 ## Apps
 
-Two different shapes of app live in this kernel, both dock-mounted, both
-counted in `GUI_APP_COUNT` (20 real apps, plus the Apps-folder tile and
-Trash, `kernel/kernel.c`).
+Two different shapes of app live in this kernel, both dock-mounted or
+Apps-folder-mounted, both counted in `GUI_APP_COUNT` (22 real apps, plus
+the Apps-folder tile and Trash, `kernel/kernel.c`).
 
 **Five built-in apps, each its own header, each VFS-backed.** Same
 persistence pattern every time: a fixed-size static array in RAM, one plain
@@ -95,6 +95,22 @@ separate Save step.
 **Calculator** (`kernel/calculator.h`, v70 / 0.64.0) doesn't fit the VFS-backed table above, it has no persistence at all on purpose: a recursive-descent parser over `+ - * / ()` and numbers, one-line input evaluated on enter. Ported from numen's real calculator parser (the v6 roadmap note that first flagged it as portable, pure logic, no network dependency).
 
 **Stocks** (`kernel/stocks.h`, v71+ / 0.67.0) is a static demo-data app with no network backend: a fixed list of five real tickers (AAPL, MSFT, GOOGL, AMZN, TSLA) with plausible baked-in prices and daily changes, clearly labeled as demo data. No live market data or API calls (roadmap.md's real curl tests proved all plain-HTTP stock quote sources force HTTPS). List view with up/down selection, enter for details, esc closes, the same app-shape pattern Weather/Mail/Calendar established.
+
+**Search** (`kernel/search.h`, v0.86.0), Apps-folder-only like Contacts/
+Calculator/Stocks, no persistence of its own since it mirrors the real
+filesystem rather than owning a file. Scoped honestly against what the VFS
+actually supports: `vfs_list` (`drivers/vfs.h`) is a real driver-level
+directory listing, the same call Files (`gui_draw_files_content`) already
+uses, but there is no recursive whole-disk index anywhere in this kernel,
+kernel or ring-3, so Search lists and filters the current directory of
+whichever backend `fsuse` has active, exactly Files' own scope, not a
+fabricated global index. Real-time substring filter, case-insensitive, as
+you type (`gui_prompt.h`'s chrome/content split, so filtering never redraws
+the whole window). Enter or a click on a match does something real: a
+directory result `vfs_chdir`s into it and reloads a fresh real listing
+(the same primitive the shell's own `cd` uses); a file result shows its
+real bytes via `vfs_read_file` + `render_wrapped_text`, the same pair the
+shell's own `cat` command and `gui_launch_html` already use.
 
 **Eleven apps ported natively from the fleet, thin ports on purpose.**
 `tools/gen/gen_app.sh` turns a sibling repo's real single-file static build
