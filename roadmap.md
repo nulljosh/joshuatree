@@ -488,12 +488,58 @@ A dense run of directly-reported visual/UX bugs, each real, each fixed the same 
 - **H1 fade, real root cause (v0.76.36).** ~20 "faint header" reports across the session all traced to color/shadow fixes that verified correct in isolation, because none of them were the actual bug: the hero-recede scroll math measured `window.scrollY` from the raw page top instead of the hero section's own `offsetTop`, so the header rendered pinned at its most-faded state from the moment it scrolled into view at all, regardless of what color it was set to. Fixed by measuring from the section's own offset.
 - **Everything else** (repeated demo padding/corner-radius/full-bleed-vs-framed churn across v0.76.33/37/41/51/52/55; floating background-icon density/speed/opacity tuning across v0.76.35/44/46; the pink/purple system-chrome accent replaced with neutral gray, v0.76.50; a stale wallpaper-fallback color colliding with a CI brightness threshold, v0.76.53, alongside a real, still-unresolved pre-existing `dockhover-check.py` flake that predates this whole session; the cycling-eyebrow typewriter effect, v0.76.54; three real, separately root-caused UI bugs in one report -- a hardcoded second headline silently overwriting the real deployed one every tour lap, a light-mode-only H1 contrast failure, and a reflowing eyebrow box with no fixed height, v0.76.56) shipped clean, verified live, no code-level gotcha worth carrying forward beyond what's already captured above.
 
-## Open, queued (not yet done, Sep 2026)
-- Apps folder wheel-scroll works but redraws the entire screen on every scroll tick instead of just the icon grid -- needs the same scoped-rect treatment `gui_prompt.h` already gave text inputs.
-- A real comparative pass against apple.com/os/macos's own page structure/animation, to find what this landing page is still missing. Not attempted, real research task.
-- Device-frame chrome for the demo (see v0.76.38/40 above): genuinely still undone, needs a redesign that doesn't fight the live 16:9 canvas.
-- The three still-open live-browser QA findings above (Mail blank content, Calendar dock icon opening Reminders, the memory-ceiling scoping question).
-- 1.0.0 target: owner wants to hit it soon; per this file's own "what 1.0.0 would mean" note, needs a real decision to formally adopt the v64 syscall ABI as the stable contract, plus a codename, before the version bump, not after.
+## Open, queued (Sep 2026, refreshed against what actually shipped since)
+Several items below this line were resolved later the same session and are marked as such rather than silently dropped, so the history stays honest.
+- ~~Apps folder wheel-scroll full-screen redraw~~ -- fixed, v0.79.x's per-row damage tracking pass.
+- ~~Mail blank content / Calendar dock icon opening Reminders~~ -- root-caused (v0.76.58): the real bug was the 2-window multi-window cap silently dropping the third dock click instead of falling back to a single window. Mail's own "blank content" report could not be reproduced under any real scenario tried; flagged as possibly stale, not confirmed fixed on its own.
+- ~~1.0.0's syscall-ABI precondition~~ -- done. v1 shipped frozen (exit/read/write/open/close/time/getpid/sched_yield) with a real ring-3 reference program (`user/hello.c`) compiled against nothing but the ABI. v2 added real file writes, lseek, argv, and a second real program (`user/note.c`). See `docs/SYSCALL-ABI.md`.
+- A real comparative pass against apple.com/os/macos's own page structure/animation, to find what the landing page is still missing. Not attempted, real research task.
+- Device-frame chrome for the demo (v0.76.38/40 above): still genuinely undone, needs a redesign that doesn't fight the live 16:9 canvas.
+- The real, still-open memory-ceiling question: can `pmm_total_frames()`'s ~15M default be raised safely. Not attempted.
+
+## Priority queue, Sep 20 2026 brain dump (handwritten notes, transcribed and triaged)
+Owner's own notebook pages, organized here by real priority tier rather than the order they were written in. "Priority" means: how much it moves the OS toward feeling real and finished, weighed against what this kernel can actually do. Items already shipped tonight are marked, not silently dropped. A few items are real misconceptions given this kernel's actual architecture (no libc, no dynamic linker, no real hardware yet) -- flagged plainly with the honest buildable alternative, not silently reinterpreted.
+
+### P0, real bugs worth a look soon
+- [ ] [Haiku] The boot sequence briefly shows "memory management" text before the boot screen proper. Possibly stale/leftover debug text from an earlier pass -- worth a real grep-and-confirm, likely a one-line fix once found.
+- [ ] [Haiku] Confirm `write`/save genuinely round-trips in the Files app end to end (real report, no specific repro given -- verify rather than assume broken).
+- [ ] [Haiku] Landing page contrast in light mode -- `hero-contrast-check.mjs` already asserts one contrast case; audit whether a real gap remains beyond what it covers.
+
+### P1, real and buildable, high value
+- [ ] [Sonnet] Lazy-load the boot loading image itself (separate from the already-fixed demo lazy-load), so the loading image never shows visibly pixelated while scaling in.
+- [ ] [Sonnet] A real Activity Monitor-style app: this kernel already has real `ps`/`kill`/`mem` primitives at the shell, a GUI window around them is real, scoped, valuable.
+- [ ] [Sonnet] File search (Spotlight-style): real, valuable, a real feature gap against "what makes an OS feel finished." Needs a real index-or-scan design, not a stub.
+- [ ] [Sonnet] Security basics: a real lock/screen-lock state (distinct from the existing login-at-boot auth), and a real, confirmed shutdown path (verify `reboot`'s own real behavior first, a shutdown may already effectively exist).
+- [ ] [Fable] Accounts: sudo/admin privilege levels. Real accounts already exist (v0.77-v0.82); a second privilege tier is a real, scoped extension, not a rebuild.
+- [ ] [Sonnet] Custom hotkey rebinding, a real screensaver, dictation/accessibility basics, clipboard support, screenshot hotkeys. Each individually small and real.
+- [ ] [Sonnet] Moveable dock position, menu bar customization, a real network-configuration panel in Settings (the wired NIC's real state -- IP, link -- surfaced in the GUI, not a WiFi panel; see reframe below).
+- [ ] [Fable] Window/workspace management, tiling: this is NOT a new item, it is the existing "Multi-window, honestly scoped" work already tracked above (compositor, input routing by focus, apps converted off their blocking loop). Route any new tiling/workspace ask through that existing plan, don't fork a second one.
+- [ ] [Sonnet] Kernel code cleanup pass, now that `kernel.c` is confirmed the real god file at ~7,800 lines (everyone else large in the tree is generated data, not code) -- splitting it into real per-subsystem files is genuinely worth doing, carefully, once no other agent has it mid-edit.
+- [ ] [Fable] Fonts/typography: real per-report follow-up, text still reads as somewhat pixel-ish despite the real typeface/AA work already shipped (v44+). Worth a dedicated look at the AA quality itself, separate from the app-level typography (family/size/weight) that already exists in the editor.
+
+### P2, real, bigger scope, queued behind P0/P1
+- [ ] [Sonnet] A real Word/Pages-style rich document app, distinct from Notes (which stays a plain text editor): real paragraph/run-level formatting stored in a real file format, not just live cursor style toggles. Already agreed tonight as a real, scoped, native project.
+- [ ] [Sonnet] A native syntax-highlighting code editor, and a native fetch-and-install tool over this kernel's own HTTP client (the honest, buildable version of "a code editor" and "a package manager" -- see the VS Code/Homebrew reframe below). Already agreed tonight, queued behind the kernel.c cleanup.
+- [ ] [Joshua] ISO-based install-to-disk flow with real install-speed benchmarks. Real, but currently this kernel only boots via QEMU `-kernel`/multiboot direct load; a general BIOS-bootable ISO installer is a genuinely large, separate project, most relevant once real-hardware boot (below) is underway.
+- [ ] [Sonnet] Native app ports (Epiphany etc.) as real ring-3 programs against the syscall ABI. Directly downstream of tonight's v2 ABI work; genuinely buildable now that argv/file-write exist, still a real per-app scoping exercise each time.
+- [ ] [Joshua] Plugins system. Real, but needs a design pass first (what a plugin can touch, how it's loaded) before it's a schedulable task.
+- [ ] [Sonnet] tmux-equivalent: real tmux itself needs pty/job-control semantics this kernel doesn't have. The honest buildable version is a native split/multiplexed terminal using the windowing system already being built for tiling, not a port.
+- [ ] [Joshua] AI agent settings, customizing, bootstrapping, and agent auth/login. Real direction (ties to the already-shipped Chat/LLM host-config work), but too undefined to schedule yet -- needs a real spec of what "an agent account" means on this kernel before it's buildable.
+
+### Reframed: real hardware/userland limits, not bugs to fix
+These read as simple asks but hit real architectural walls this kernel has by design. Noted honestly rather than silently built as something else:
+- **WiFi drivers, Bluetooth, mic input, camera/selfies, battery/power/display controls, audio.** All need real hardware this kernel doesn't have a driver for yet (WiFi and Bluetooth need real chipsets; audio needs HDA/AC97; camera needs USB host controller + USB video class). This is exactly the existing "free OS, monetize on custom hardware" direction and the v100 voice north star's own prerequisite chain, not a new ask -- see those sections above. Meaningful once this kernel targets real hardware, not before.
+- **Default Homebrew install + dotfiles.** Homebrew is a Ruby package manager built around macOS/Linux binaries, a POSIX shell, dynamic linking -- none of which exists here (flat binaries only, no dynamic linker). The honest equivalent is the native fetch-and-install tool queued above under P2.
+- **Gaming support (Steam etc).** Steam needs OpenGL/Vulkan, a huge existing userland, and anti-cheat compatibility most real OSes struggle with. Off the table for a freestanding hobby kernel; not reframed, just out of scope.
+- **Fully native drivers for real hardware.** Not a new item -- this is the existing, already-documented "free OS, monetize on custom hardware" direction. Real, large, ongoing, not a single task.
+- **"Best of Kali/Ubuntu" apps and features.** Partially already true -- v30 already shipped real "basic hacking tools (Kali/Mr. Robot flavored)." Extend that existing set rather than starting a new "which distro to imitate" track.
+
+### Research, not a build task
+Real, good questions, but they belong in a design/reference note, not roadmap.md's execution format: how a kernel differs from the OS/GUI layered on it, what marks a genuinely good OS, what makes Apple's experience read as better than Windows/Linux, UNIX vs Linux certification landscape, ideas from Omarchy's own aesthetic choices, a real comparative pass against apple.com's own macOS marketing page structure (also listed above as a landing-page task). Worth a real write-up session, not a checkbox.
+
+### Needs clarification before scoping
+- "Golden gate, new features?" -- unclear reference (a specific competing project? a codename?), needs a real answer from Joshua before this can be triaged at all.
+- Proprietary filesystem / server mode / GPU framework -- three real but very different-sized ideas compressed into one note line; needs unpacking into separate, real asks before scoping.
 
 ## Landing roadmap summary (Sep 2026)
 The "Where it's going" card on the landing page now comes from the open entries in the Session task queue above, not static hand-written copy: a build-time generator (`tools/gen/landing-roadmap.py`) takes up to three open, numbered task titles, skips completed entries, and escapes the result for HTML; a roadmap change now triggers the landing deploy workflow, which regenerates the card before upload. Permanent regression checks (`tools/checks/landing-roadmap-check.py`, plus `--check` on the generator itself) cover completion, new tasks, ordering, escaping, empty queues, and malformed markers. No kernel change.
