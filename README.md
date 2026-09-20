@@ -32,11 +32,14 @@ TCP connection over the network stack in this repo, with no operating system
 underneath it. `ls`, `cat` and `write` work on a real FAT disk. `usertest` runs the ring-3
 reference program (`user/hello.c`), which is compiled against
 [`docs/SYSCALL-ABI.md`](docs/SYSCALL-ABI.md) and nothing else, loaded off the
-filesystem and run at CPL 3; `exec <file>` runs any flat binary the same way.
+filesystem and run at CPL 3. `notetest` runs the second one (`user/note.c`), a
+tiny file scratchpad that creates, appends to and seek-patches a real file from
+ring 3 with real command-line arguments. `exec <file> [args...]` runs any flat
+binary the same way, and the words after the filename become its `argv`.
 
 The rest, mostly there to exercise one subsystem at a time: `help` `dmesg`
 `mem` `ps` `kill` `sleep` `heaptest` `heapgrow` `tasktest` `preempttest`
-`ring3test` `usertest` `isotest` `reaptest` `killtest` `disktest` `diskuse` `fsuse`
+`ring3test` `usertest` `notetest` `isotest` `reaptest` `killtest` `disktest` `diskuse` `fsuse`
 `mkdir` `rm` `cd` `browse` `lspci` `gfxtest` `fonttest` `mousetest`
 `nettest` `ifconfig` `netscan` `serve` `serveapp` `chat` `weathertest`
 `geotest` `wind` `testapps` `crash` `pagefault` `reboot`.
