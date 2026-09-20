@@ -812,13 +812,13 @@ static void reboot(void){
    GUI_TRASH up by one each. Every dispatch below keys off these #defines
    rather than a hardcoded 21/22, so this is the only place the shift needed
    to happen. */
-#define GUI_APP_COUNT   24 /* 22 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 22 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       23
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Apps", "Trash"};
+#define GUI_APP_COUNT   25 /* 23 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 23 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       24
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany", "Apps", "Trash"};
 static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
     0x00707070, 0x00A13F3F, 0x00A0553F, 0x006B4423, 0x00375A4A, 0x002B2B2B, 0x00365E8C, 0x0085144B,
-    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078
+    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078, 0x001F5FA8
 };
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
@@ -3280,6 +3280,7 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
         case 19: gui_icon_calculator(cx_center, cy, size, bg); break;
         case 20: gui_icon_stocks(cx_center, cy, size, bg); break;
         case 21: gui_icon_search(cx_center, cy, size, bg); break;
+        case 22: gui_icon_stocks(cx_center, cy, size, bg); break; /* art covers it; primitive fallback only */
         case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
         case GUI_TRASH: gui_icon_trash(cx_center, cy, size, bg); break;
     }
@@ -4836,6 +4837,7 @@ static void gui_launch_settings(void){
 }
 
 #include "stocks.h"
+#include "epiphany.h"
 
 static void gui_launch(int icon){
     if (icon == GUI_APPS_FOLDER) { gui_launch_apps(); return; }
@@ -4862,6 +4864,7 @@ static void gui_launch(int icon){
     else if (icon == 19) gui_launch_calculator();
     else if (icon == 20) gui_launch_stocks();
     else if (icon == 21) gui_launch_search();
+    else if (icon == 22) gui_launch_epiphany();
 }
 
 static void gui_launch_from_dock(int icon){
