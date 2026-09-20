@@ -107,6 +107,21 @@ static u16 checksum16(const void *data, u32 len) {
    works unchanged against real hardware, native QEMU, or the v86 browser
    demo. Returns 1 if a NIC was found and initialized, 0 if neither driver
    found a card (no NIC present at all). */
+static int net_err = NET_ERR_NONE;
+int net_last_error(void) { return net_err; }
+const char *net_error_name(int err) {
+    switch (err) {
+        case NET_ERR_NONE: return "ok";
+        case NET_ERR_SEND: return "send";
+        case NET_ERR_ARP_TIMEOUT: return "no route";
+        case NET_ERR_DNS_TIMEOUT: return "dns timeout";
+        case NET_ERR_DNS_NXDOMAIN: return "no such host";
+        case NET_ERR_CONNECT_TIMEOUT: return "connect timeout";
+        case NET_ERR_REPLY_TIMEOUT: return "reply timeout";
+        default: return "unknown";
+    }
+}
+
 int net_init(u32 ip) {
     if (rtl8139_init()) {
         rtl8139_get_mac(our_mac);
@@ -153,7 +168,7 @@ int arp_resolve(u32 ip, u8 mac_out[6]) {
     arp->sender_ip = htonl(our_ip);
     arp->target_ip = htonl(ip);
 
-    if (!active_send(frame, sizeof(frame))) return 0;
+    if (!active_send(frame, sizeof(frame))) { net_err = NET_ERR_SEND; return 0; }
 
     u8 rx[1514];
     u32 deadline = ticks() + LAN_TIMEOUT_TICKS;
@@ -170,6 +185,7 @@ int arp_resolve(u32 ip, u8 mac_out[6]) {
         for (int i = 0; i < 6; i++) mac_out[i] = rarp->sender_mac[i];
         return 1;
     }
+    net_err = NET_ERR_ARP_TIMEOUT;
     return 0;
 }
 
@@ -342,7 +358,8 @@ int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
     u8 query[256];
     u16 txid = (u16)(ticks() & 0xFFFF); if (!txid) txid = 1;
     u32 qlen = dns_build_query(query, hostname, txid);
-    if (!udp_send(dns_server_ip, DNS_PORT, DNS_SRC_PORT, query, qlen)) return 0;
+    net_err = NET_ERR_NONE;
+    if (!udp_send(dns_server_ip, DNS_PORT, DNS_SRC_PORT, query, qlen)) { if (!net_err) net_err = NET_ERR_SEND; return 0; }
 
     u8 rx[1514];
     u32 deadline = ticks() + WAN_TIMEOUT_TICKS;
@@ -362,7 +379,7 @@ int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
         u16 resp_id = htons(*(const u16 *)dns);
         if (resp_id != txid) continue; /* a stray/late answer to a DIFFERENT query, not this one: keep waiting */
         u16 ancount = htons(*(u16 *)(dns + 6));
-        if (ancount == 0) return 0; /* NXDOMAIN or no A record, not a timeout */
+        if (ancount == 0) { net_err = NET_ERR_DNS_NXDOMAIN; return 0; } /* NXDOMAIN or no A record, not a timeout */
 
         const u8 *p = dns + 12;
         p = dns_skip_name(p); /* question name */
@@ -380,8 +397,10 @@ int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
             }
             p += rdlength;
         }
+        net_err = NET_ERR_DNS_NXDOMAIN;
         return 0; /* answers present but none were an A record */
     }
+    net_err = NET_ERR_DNS_TIMEOUT;
     return 0;
 }
 
@@ -572,6 +591,11 @@ int tcp_probe_port(u32 dest_ip, u16 dest_port) {
 
 int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
             void *response, u32 response_maxlen) {
+    return tcp_get_timeout(dest_ip, dest_port, request, request_len, response, response_maxlen, 0);
+}
+
+int tcp_get_timeout(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
+                    void *response, u32 response_maxlen, u32 reply_timeout_ticks) {
     /* v85 (chat history / larger request buffers): this used to reject
        any request over one TCP_MAX_PAYLOAD (536-byte) segment outright,
        a real hard wall found by tracing the actual send path rather than
@@ -584,6 +608,7 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
        synchronous push-then-wait-for-ack per segment, same shape the
        existing single-segment call already had, just repeated. */
     u8 dest_mac[6];
+    net_err = NET_ERR_NONE;
     if (!resolve_next_hop(dest_ip, dest_mac)) return -1;
 
     /* v75: a fresh local port per connection. A fixed 44000 was fine while
@@ -599,7 +624,7 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
     u32 our_seq = 0x1000 + ((u32)local_port << 8); /* toy ISN, varied per connection so a stale segment from the last one can't match */
     u32 their_seq = 0;
 
-    if (!tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, 0, TCP_SYN, 0, 0)) return -1;
+    if (!tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, 0, TCP_SYN, 0, 0)) { net_err = NET_ERR_SEND; return -1; }
     our_seq++;
 
     u8 rx[1514];
@@ -617,7 +642,7 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
             got_synack = 1;
         }
     }
-    if (!got_synack) return -1;
+    if (!got_synack) { net_err = NET_ERR_CONNECT_TIMEOUT; return -1; }
 
     tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, their_seq, TCP_ACK, 0, 0);
     /* Chunked, back-to-back, no per-chunk ACK wait: this is a local
@@ -641,7 +666,7 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
 
     u32 total = 0;
     int got_fin = 0;
-    u32 data_deadline = ticks() + SLOW_REPLY_TIMEOUT_TICKS;
+    u32 data_deadline = ticks() + (reply_timeout_ticks ? reply_timeout_ticks : SLOW_REPLY_TIMEOUT_TICKS);
     while (ticks() < data_deadline && !got_fin && total < response_maxlen) {
         u32 n = active_receive(rx, sizeof(rx));
         if (n == 0) continue;
@@ -670,6 +695,9 @@ int tcp_get(u32 dest_ip, u16 dest_port, const void *request, u32 request_len,
        side down regardless once it sees this FIN. */
     tcp_send_segment(dest_ip, dest_mac, local_port, dest_port, our_seq, their_seq, TCP_FIN | TCP_ACK, 0, 0);
 
+    /* Ran out the clock with no FIN and nothing (or not everything) read:
+       a real timeout, not an empty reply. Callers still get the bytes. */
+    if (!got_fin && total < response_maxlen) net_err = NET_ERR_REPLY_TIMEOUT;
     return (int)total;
 }
 

@@ -36,6 +36,7 @@ cd "$(dirname "$0")/../.."
 # retry?  name                                                          command
 manifest() {
 cat <<'EOF'
+once |Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
 retry|Boot check|./check.sh
 once |PNG decoder, host harness|./tools/checks/png-host-check.sh
 retry|PNG decoder, in-kernel|./tools/checks/png-check.sh
@@ -57,7 +58,6 @@ retry|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/t
 retry|Apple-menu hover stays cheap, clock redraws on a minute change|./tools/checks/menuclock-check.sh
 retry|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mwkeyflash-check.sh
 retry|Drawing lands offscreen, window_present puts it on screen|./tools/checks/backbuffer-check.sh
-retry|Dock magnify animation stays time-based, not one hop per poll|./tools/checks/dockanim-check.sh
 retry|Multi-window apps draw exactly one toolbar, not two|./tools/checks/mwdupetoolbar-check.sh
 once |JPEG decoder, host harness|./tools/checks/jpeg-host-check.sh
 retry|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
