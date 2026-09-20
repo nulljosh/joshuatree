@@ -113,10 +113,23 @@ if (typeof document !== "undefined") (function () {
   // own), not a kernel-side workaround for something the emulator itself
   // never implemented.
   var kernelElfBuffer = null;
-  var kernelElfFetch = fetch("v86/kernel.elf").then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
-    kernelElfBuffer = buf;
-    return buf;
-  }).catch(function () { return null; });
+  // v0.82.x: real report, "landing page demo is taking a while to load even
+  // when the rest of the page already finishes loading, especially on
+  // mobile." Root cause: this fetch (2.9MB) used to start right here,
+  // unconditionally, the instant this script was parsed, racing the rest
+  // of the page's own load (hero fonts, CSS, feature-section images) for
+  // the same real, often mobile-constrained, pipe, whether or not the
+  // visitor could even see the demo yet -- same story for `new V86(...)`
+  // a bit further down, which itself fetches v86.wasm (2MB). Both now
+  // start inside startEmulator() below, only once the demo container is
+  // visible or nearly so (see the IntersectionObserver gate right after
+  // it), the same "don't do the expensive thing until it's relevant"
+  // pattern index.html's own reveal-on-scroll already uses for its
+  // sections. `kernelElfFetch` stays declared here (not inside
+  // startEmulator) since a couple of far-later call sites
+  // (idleRestartTimeout's soft-reset, tourLoop's own reboot) read it by
+  // closure and only ever run once startEmulator has actually set it.
+  var kernelElfFetch = null;
   var screenContainer = document.getElementById("screen_container");
   var screenText = document.getElementById("screen_text");
   var screenCanvas = document.getElementById("screen_canvas");
@@ -132,6 +145,14 @@ if (typeof document !== "undefined") (function () {
   // The tour's own intentional Escape sends use keyboard_send_keys() which bypasses
   // normal event listeners, so this only blocks real visitor keypresses, not
   // scripted tour automation.
+  // v0.82.x: still correct now that `new V86()` itself is deferred (see
+  // startEmulator below) -- "before v86's own listener" only ever meant
+  // "before v86 attaches ITS listener", not "before this script finishes
+  // running". v86 has no listener to race against until its own
+  // constructor actually executes, whenever that turns out to be, and this
+  // one is still registered here, eagerly, at parse time, so it's always
+  // first in `window`'s capture-phase FIFO order no matter how much later
+  // construction happens.
   window.addEventListener("keydown", function (ev) {
     if (ev.key === "Escape" || ev.keyCode === 27 || ev.code === "Escape") {
       ev.preventDefault();
@@ -139,7 +160,23 @@ if (typeof document !== "undefined") (function () {
     }
   }, true); // capture phase, BEFORE v86's own global listener (both on window, FIFO order)
 
-  var emulator = new V86({
+  // Deferred, real construction: everything below used to run right here,
+  // unconditionally, at parse time. It's now wrapped in startEmulator(),
+  // called for real once (see the IntersectionObserver right after it,
+  // and the `emulator` v0.82.x comment above `kernelElfFetch` for the
+  // real report and root cause this whole gate exists for).
+  var emulator = null;
+  var adaptersReady = false;
+  var bootStart = 0; // set inside startEmulator, not here: the boot-detection setInterval's own "stuck in text mode" fallback measures elapsed time since boot actually STARTED, and boot no longer starts at page load
+  function startEmulator() {
+    if (emulator) return; // idempotent: the observer below only fires this once anyway, but this stays safe if that ever changes
+    bootStart = Date.now();
+    kernelElfFetch = fetch("v86/kernel.elf").then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
+      kernelElfBuffer = buf;
+      return buf;
+    }).catch(function () { return null; });
+
+    emulator = new V86({
     wasm_path: "v86/v86.wasm",
     memory_size: 32 * 1024 * 1024,
     vga_memory_size: 16 * 1024 * 1024, // v41: 1600x1200x32bpp is 7.68MB, 8 was one bad rounding away from failing
@@ -197,14 +234,14 @@ if (typeof document !== "undefined") (function () {
     // fetching ip-api.com/opentopomap.org/google directly and getting
     // rejected before the request even leaves the page.
     net_device: { type: "ne2k", relay_url: "fetch", vm_ip: "10.0.2.15", router_ip: "10.0.2.2", cors_proxy: "/api/proxy?url=" },
-  });
+    });
+    window.__joshuaTreeEmulator = emulator; // for debugging from the console, harmless to leave; moved here (was a bottom-of-file assignment) since construction itself now happens in here, not synchronously as this script parses
 
-  // keyboard_adapter/mouse_adapter aren't attached synchronously: V86's
-  // constructor kicks off the wasm load and only wires them up once the
-  // CPU is actually built, so touching them right after `new V86()` throws.
-  // "emulator-ready" fires once they exist.
-  var adaptersReady = false;
-  emulator.add_listener("emulator-ready", function () {
+    // keyboard_adapter/mouse_adapter aren't attached synchronously: V86's
+    // constructor kicks off the wasm load and only wires them up once the
+    // CPU is actually built, so touching them right after `new V86()` throws.
+    // "emulator-ready" fires once they exist.
+    emulator.add_listener("emulator-ready", function () {
     adaptersReady = true;
     // Keyboard stays disabled until the visitor clicks in; v86 listens
     // globally on `window`, so this is the only thing standing between
@@ -238,14 +275,45 @@ if (typeof document !== "undefined") (function () {
     var rtc = emulator.v86 && emulator.v86.cpu && emulator.v86.cpu.devices && emulator.v86.cpu.devices.rtc;
     if (rtc) rtc.rtc_time = localRtcTime(rtc.rtc_time);
   });
-  // v62: both registered here, after the constructor, because add_listener
-  // is the emulator's own bus. Registering before "emulator-ready" is fine
-  // and necessary: the serial log starts at the first boot byte, and the
-  // kernel enables the backdoor a few ms into boot, long before ready.
-  emulator.add_listener("vmware-absolute-mouse", function (on) { absoluteMouse = !!on; });
-  emulator.add_listener("serial0-output-byte", function (b) {
-    if (serialLog.length < 65536) serialLog += String.fromCharCode(b);
-  });
+    // v62: both registered here, after the constructor, because add_listener
+    // is the emulator's own bus. Registering before "emulator-ready" is fine
+    // and necessary: the serial log starts at the first boot byte, and the
+    // kernel enables the backdoor a few ms into boot, long before ready.
+    emulator.add_listener("vmware-absolute-mouse", function (on) { absoluteMouse = !!on; });
+    emulator.add_listener("serial0-output-byte", function (b) {
+      if (serialLog.length < 65536) serialLog += String.fromCharCode(b);
+    });
+  }
+
+  // Start a little before the visitor actually scrolls to it (600px
+  // rootMargin, roughly a full extra phone-screen of lead time), not the
+  // instant it's 100% in view -- a visitor scrolling normally should
+  // already have a booting kernel by the time the demo settles on screen,
+  // not a blank box that only then starts fetching. On the common case
+  // here (the demo fills the hero, the very top of the page -- see
+  // index.html's #v86-embed) this observer's first callback fires within
+  // the same frame it starts observing, so nothing here delays the demo
+  // at all when it's already the first thing a visitor sees; the gate
+  // only ever matters for whatever pushed the container further down (a
+  // narrower/taller hero variant, a deep link, etc). Same real,
+  // already-established pattern index.html's own reveal-on-scroll uses
+  // for its sections (IntersectionObserver, "don't do the expensive thing
+  // until it's relevant"), applied here to the actual heavy work instead
+  // of a CSS class toggle.
+  if ("IntersectionObserver" in window) {
+    var startObserver = new IntersectionObserver(function (entries) {
+      for (var oi = 0; oi < entries.length; oi++) {
+        if (entries[oi].isIntersecting) {
+          startEmulator();
+          startObserver.disconnect();
+          break;
+        }
+      }
+    }, { rootMargin: "600px 0px" });
+    startObserver.observe(container);
+  } else {
+    startEmulator(); // no IntersectionObserver support: fail open rather than never booting the demo at all
+  }
 
   var focused = false;
   var idleRestartTimeout = 0;
@@ -391,22 +459,31 @@ if (typeof document !== "undefined") (function () {
   // against the real page and needs to see whether input is actually armed
   // to tell "the tap missed" apart from "input was never enabled".
   window.__jt = {
-    emu: emulator, /* mobiletest.mjs reads the kernel's own serial log through this: the guest's klog output is the only view into what the kernel actually thinks happened */
+    // v0.82.x: `emu` is a getter now, not a plain snapshot -- `emulator` is
+    // deferred (see startEmulator/IntersectionObserver above) and is still
+    // null at the moment this object literal is created whenever the demo
+    // starts out off-screen; a plain `emu: emulator` would have frozen at
+    // that null forever. A getter reads the live variable on every access,
+    // same as `ready`/`focused` below already did.
+    get emu() { return emulator; }, /* mobiletest.mjs reads the kernel's own serial log through this: the guest's klog output is the only view into what the kernel actually thinks happened */
     get ready() { return adaptersReady; },
     get focused() { return focused; },
-    get mouseOn() { return !!(emulator.mouse_adapter && emulator.mouse_adapter.emu_enabled); },
+    get mouseOn() { return !!(emulator && emulator.mouse_adapter && emulator.mouse_adapter.emu_enabled); },
     get absolute() { return absoluteMouse; }, /* v62: did the kernel enable v86's vmmouse backdoor */
     get serial() { return serialLog; },
+    get started() { return !!emulator; }, /* v0.82.x: true once startEmulator() has actually run (construction kicked off, not necessarily finished) -- lets a check script tell "gated, not yet started" apart from "started", the real signal lazy-boot-check.mjs asserts on */
     click: function () {
+      if (!emulator) return;
       trackClick();
       emulator.bus.send("mouse-click", [true, false, false]);
-      setTimeout(function () { emulator.bus.send("mouse-click", [false, false, false]); }, 60);
+      setTimeout(function () { if (emulator) emulator.bus.send("mouse-click", [false, false, false]); }, 60);
     },
     move: function (dx, dy) {
+      if (!emulator) return;
       if (absoluteMouse) { sendAbsolute(trackedKx + dx, trackedKy + dy); return; }
       emulator.bus.send("mouse-delta", [dx, -dy]);
     },
-    moveTo: function (kx, ky) { sendAbsolute(kx, ky); }
+    moveTo: function (kx, ky) { if (emulator) sendAbsolute(kx, ky); }
   };
 
   // Real bug, reported directly ("the cursor is really misplaced... ten
@@ -708,10 +785,10 @@ if (typeof document !== "undefined") (function () {
   // flashing on screen for the few hundred ms that takes; it only ever
   // surfaces as a fallback if graphical mode genuinely never arrives
   // (auto-gui failed for some reason), not as the default path.
-  var bootStart = Date.now();
-  var bootLogo = document.getElementById("boot-logo");
+  var bootLogo = document.getElementById("boot-logo"); // cheap DOM ref, stays eager; `bootStart` itself is set inside startEmulator now, see its own comment
   setInterval(function () {
-    var vga = emulator.v86 && emulator.v86.cpu.devices.vga;
+    // `emulator` may not exist yet (construction is deferred, see startEmulator/IntersectionObserver above): guard rather than assume.
+    var vga = emulator && emulator.v86 && emulator.v86.cpu.devices.vga;
     if (!vga) return;
     var graphical = !!vga.graphical_mode;
     var stuckInText = !graphical && Date.now() - bootStart > 4000;
@@ -1201,7 +1278,7 @@ if (typeof document !== "undefined") (function () {
     await sleep(800);
   }
   function currentGraphical() {
-    var vga = emulator.v86 && emulator.v86.cpu.devices.vga;
+    var vga = emulator && emulator.v86 && emulator.v86.cpu.devices.vga; // guarded: only ever called from the tour, which never runs before emulator exists, but cheap to be defensive
     return vga ? !!vga.graphical_mode : false;
   }
   // Same signal the outer boot-detection setInterval below already polls
@@ -1432,9 +1509,9 @@ if (typeof document !== "undefined") (function () {
   var prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   setInterval(function () {
     if (tourArmed || focused || prefersReducedMotion) return;
-    var vga = emulator.v86 && emulator.v86.cpu.devices.vga;
+    // `emulator` doesn't exist until startEmulator() has actually run (deferred, see above); this interval is itself
+    // part of what naturally waits for that, same as the boot-detection interval's own guard.
+    var vga = emulator && emulator.v86 && emulator.v86.cpu.devices.vga;
     if (vga && vga.graphical_mode) { tourArmed = true; tourTimer = setTimeout(startTourWhenReady, 6000); }
   }, 500);
-
-  window.__joshuaTreeEmulator = emulator; // for debugging from the console, harmless to leave
 })();
