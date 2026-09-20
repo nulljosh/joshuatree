@@ -14,12 +14,10 @@ fine. The "all apps" impression was the modal Notes window sitting over
 the still-visible dock, so every dock click after it looked dead.
 
 For every dock slot (Apps folder, Files, Mail, Calendar, Notes, Reminders,
-Terminal, Chat, Weather, Trash), in order:
-  1. click the slot, dump the real framebuffer, assert the window chrome's
-     red close button is on screen (0xFF5F57 at logical (94,56), a colour
-     the wallpaper never has);
-  2. click that red button, park the pointer away from it, dump again,
-     assert the red button is gone (the desktop is back).
+Terminal, Chat, Weather, Stocks, Trash), in order:
+  1. click the slot and assert its window opened; regular windows have a
+     red close button, while Apps has a glass panel instead;
+  2. close it from the pointer and assert the desktop is back.
 Then the "all apps" scenario itself: open Notes, click the Reminders
 dock slot with Notes still open, and assert the screen is no longer stuck
 on Notes. Finally open and close Mail once more to prove input survived
@@ -42,10 +40,10 @@ DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 CLOSE_X, CLOSE_Y = 94, 56          # gui_launch_from_dock: red circle at (x+24, y+16) for x=70, y=40
-APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46  # the Apps folder's own larger window origin (56, 30)
+APPS_PANEL_X, APPS_PANEL_Y = 480, 95  # glass panel, above its grid tiles
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)                  # open wallpaper, away from every hit target
-SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Trash"]
+SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Stocks", "Trash"]
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -87,9 +85,8 @@ try:
         return img.getpixel((x * SCALE + 1, y * SCALE + 1))  # +1: inside the s x s block, never its seam
     def is_red(p): return max(abs(p[i] - CLOSE_RED[i]) for i in range(3)) <= 12
     def close_button():
-        """Where the red button is right now: the app window's, the Apps folder's, or None."""
+        """Regular app window's red button, or None."""
         if is_red(pixel(CLOSE_X, CLOSE_Y)): return (CLOSE_X, CLOSE_Y)
-        if is_red(pixel(APPS_CLOSE_X, APPS_CLOSE_Y)): return (APPS_CLOSE_X, APPS_CLOSE_Y)
         return None
     def window_open(): return close_button() is not None
     centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
@@ -110,25 +107,37 @@ try:
         # sleep-then-check has no way to tell "genuinely stuck" from "closed
         # one frame later than usual" apart; polling does, without weakening
         # the real assertion (still fails if truly stuck after the same
-        # ~2s worst case this used to allow only 0.8s of). The Apps grid
-        # takes longer to repaint than the other windows on GitHub's shared
-        # runner, so allow five seconds for its input loop to consume the
-        # click; the same framebuffer assertion still has to turn false.
+        # ~2s worst case this used to allow only 0.8s of).
         at = close_button()
         if at is None: return
         move(*at); time.sleep(0.3)
         click()
-        for _ in range(50):
+        for _ in range(20):
             time.sleep(0.1)
             if not window_open(): break
         move(*PARK); time.sleep(0.5)
 
     move(*PARK); time.sleep(0.5)
     if window_open(): fails.append("desktop: red close button visible before anything was opened (sampling point is wrong)")
+    apps_desktop_pixel = pixel(APPS_PANEL_X, APPS_PANEL_Y)
+
+    def apps_open():
+        p = pixel(APPS_PANEL_X, APPS_PANEL_Y)
+        return max(abs(p[i] - apps_desktop_pixel[i]) for i in range(3)) > 12
+
+    def close_apps():
+        # The Apps folder has no traffic-light button. A click outside its
+        # grid closes it; check the panel itself disappears from framebuffer.
+        move(900, 250); time.sleep(0.3)
+        click()
+        for _ in range(20):
+            time.sleep(0.1)
+            if not apps_open(): break
+        move(*PARK); time.sleep(0.5)
 
     for slot, name in enumerate(SLOTS):
         open_slot(slot)
-        opened = window_open()
+        opened = apps_open() if name == "Apps" else window_open()
         print(f"{name:9s} open: {'yes' if opened else 'NO'}", end="  ")
         if not opened:
             fails.append(f"{name}: dock click did not open a window"); print(); continue
@@ -138,11 +147,12 @@ try:
             # fails; the close must still go through, text kept in RAM.
             for k in ("h", "i"): keys(k); time.sleep(0.15)
             time.sleep(0.5)
-        close_via_x()
-        closed = not window_open()
-        print(f"close via X: {'yes' if closed else 'NO, still open'}")
+        if name == "Apps": close_apps()
+        else: close_via_x()
+        closed = not (apps_open() if name == "Apps" else window_open())
+        print(f"close via pointer: {'yes' if closed else 'NO, still open'}")
         if not closed:
-            fails.append(f"{name}: still open after clicking its close button")
+            fails.append(f"{name}: still open after pointer close")
             # Try to recover so the sweep can go on: esc is the keyboard exit every app honours.
             for _ in range(2):
                 if window_open(): keys("esc"); time.sleep(0.8)
