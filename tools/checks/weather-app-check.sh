@@ -1,14 +1,9 @@
 #!/bin/bash
-# v0.76.23: Weather app icon fix (icon index 7 instead of 0).
-# This test opens Weather app in single-window mode (via the Apps folder)
-# and checks that the app successfully renders (serial output shows it reached
-# the content draw) without crashing. The icon fix is verified by code inspection:
-# gui_draw_weather_content now calls gui_draw_one_icon_on(7, ...) instead of (0, ...),
-# drawing the weather sun icon instead of the folder icon.
-#
-# Discriminating test: reverts to gui_draw_one_icon_on(0, ...) would render
-# the folder icon in its place, but the app itself still boots and draws,
-# so this is a code-inspection test that the fix was applied correctly.
+# Issue #13: Weather app broken. Root cause: when the fetch failed (NIC up,
+# no route/DNS), gui_draw_weather_content re-ran the blocking fetch on EVERY
+# repaint, freezing the window. Headless proof: boot with a NIC whose SLIRP
+# has no outside access (restrict=on), open Weather from the dock three times, and count "wxfetch" serial lines. Fixed kernel:
+# 1 (boot cycle only). Old kernel: 4 (one per open).
 
 set -e
 cd "$(dirname "$0")/../.."
@@ -18,7 +13,7 @@ PORT=4455
 LOG=$(mktemp /tmp/jt-weatherapp-XXXX.log)
 
 qemu-system-i386 -kernel kernel.elf -display none -vga std \
-    -qmp "tcp:127.0.0.1:$PORT,server,nowait" -serial "file:$LOG" &
+    -net nic,model=rtl8139 -net user,restrict=on -qmp "tcp:127.0.0.1:$PORT,server,nowait" -serial "file:$LOG" &
 QEMU_PID=$!
 trap 'kill "$QEMU_PID" 2>/dev/null || true; rm -f "$LOG"' EXIT
 
@@ -27,14 +22,11 @@ import json, socket, sys, time
 port = int(sys.argv[1])
 log_path = sys.argv[2]
 
-def check_weather_rendered():
+def fetch_count():
     try:
-        with open(log_path) as f:
-            content = f.read()
-            # weather_fetch is called from gui_draw_weather_content
-            return "weather_fetch" in content or len(content) > 100
+        return open(log_path).read().count("wxfetch")
     except FileNotFoundError:
-        return False
+        return 0
 
 s = None
 for _ in range(50):
@@ -53,7 +45,7 @@ def cmd(o):
         if "return" in r or "error" in r: return r
 f.readline()
 cmd({"execute": "qmp_capabilities"})
-time.sleep(5.0)
+time.sleep(15.0)
 
 LOGICAL_W, LOGICAL_H = 960, 540
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
@@ -70,22 +62,21 @@ def click():
     time.sleep(0.1)
     cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
 
-# Click Weather in dock
+# Open and close Weather three times; each open repaints the content
 centre = SLOT0_X + WEATHER_SLOT * PITCH + DOCK_ICON // 2
-move(centre, ICON_ROW_Y); time.sleep(0.3)
-click(); time.sleep(1.2)
-
-# Close the app
-cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": "q"}]}})
-time.sleep(0.5)
+for _ in range(3):
+    move(centre, ICON_ROW_Y); time.sleep(0.3)
+    click(); time.sleep(2.0)
+    cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": "q"}]}})
+    time.sleep(1.0)
 
 cmd({"execute": "quit"})
 
-if check_weather_rendered():
-    print("PASS: Weather app renders successfully")
+n = fetch_count()
+if n == 1:
+    print("PASS: Weather fetch attempted %d time(s) across 3 opens" % n)
 else:
-    print("FAIL: Weather app did not render (check log)")
-    sys.exit(0)
+    print("FAIL: weather_fetch ran %d times (want 1): failed fetch retried per repaint" % n)
 PYEOF
 )
 

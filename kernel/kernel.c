@@ -2346,6 +2346,7 @@ static int geo_fetch(void){
 
 static void weather_fetch(void){
     weather_last_tick = ticks();
+    serial_puts("wxfetch\n"); /* tools/checks/weather-app-check.sh counts these: a failed fetch must not re-run on every repaint */
     if (!net_init(0x0A00020F)) return;
     if (!geo_have && !geo_fetch()) return; /* v71: no real location, no fetch, nothing fabricated */
     static char body[2048];
@@ -3919,7 +3920,11 @@ static void gui_draw_app_titlebar(const char *title){
    the way; the Apps-folder/test-harness single-window path keeps calling
    gui_launch_weather() exactly as before, same pixels either way. */
 static void gui_draw_weather_content(void){
-    if (!weather_text[0]) weather_fetch();
+    /* Root cause of issue #13: a failed fetch left weather_text empty, so
+       every repaint (mouse move, focus change, tick) re-ran the blocking
+       DNS/TCP fetch and froze the window. Try once per session here; the
+       ten-minute cycle in gui_run does the retrying. */
+    if (!weather_text[0] && !weather_tried_once) { weather_tried_once = 1; weather_fetch(); }
     window_clear(0x00F5F0EB);
     gui_draw_app_titlebar("Weather");
     int w = (int)window_width(), x = (w - 520) / 2;
