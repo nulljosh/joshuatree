@@ -838,6 +838,25 @@ static int gui_order[GUI_ICON_COUNT];
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = GUI_DOCK_DEFAULT[i]; }
 static unsigned char dock_hover_extra[GUI_ICON_COUNT];
 static unsigned int dock_grow_start[GUI_ICON_COUNT]; /* tick a slot started growing, for the dockmag= timing marker */
+/* How many distinct sizes a magnify actually passed through, counted the
+   same way the eye sees them: one per real change to dock_hover_extra
+   between "resting" and "fully magnified". Duration alone cannot tell a
+   smooth zoom from a single snap, and a single snap is exactly what a
+   starved frame rate produces while dockmag= still reads fast. Reported
+   as dockstep= next to dockmag=; see tools/checks/dockanim-check.sh. */
+static unsigned char dock_grow_steps[GUI_ICON_COUNT];
+/* True while any dock icon is still travelling toward its hover target.
+   Read by the wind sway's own gate in gui_run: measured, a single sway
+   frame costs ~65 ms (the "~3 ticks" its comment claims was true when it
+   was written and is not any more), and it fires every 5 ticks, so while
+   it runs the whole GUI loop turns over at roughly 15 fps. A magnify that
+   is meant to take 6 ticks then gets exactly one frame and snaps from
+   resting to fully lifted in a single jump, which is what "choppy, should
+   be a smooth zoom" actually describes. The sway is ambient decoration on
+   the far side of the screen from the dock; a hover is direct feedback the
+   pointer is asking for, so the hover wins for the ~60 ms it lasts and the
+   sway picks straight back up afterwards. */
+static int dock_anim_busy = 0;
 
 #define GUI_BG          0x00FAF8F6
 #define GUI_MENUBAR_H   26
@@ -5384,7 +5403,7 @@ static void gui_run(void){
            this (v86 in a browser) and it switches itself off for good. */
         {
             static unsigned int wind_last = 0; static int wind_dir = 1;
-            if (wind_enabled && !menu_open && !notif_open && !weather_open && drag_slot < 0 && gui_window_count == 0 && ticks() - wind_last >= 5) { /* cached wallpaper: ~3 ticks per frame, leaving input time at 20 fps; v0.73.0: also off while a multi-window app is open, same reason as the other overlay states, its wallpaper-row redraw would paint straight over an open window's content since neither the wind sway path nor the window list know about each other yet */
+            if (wind_enabled && !dock_anim_busy && !menu_open && !notif_open && !weather_open && drag_slot < 0 && gui_window_count == 0 && ticks() - wind_last >= 5) { /* cached wallpaper: ~3 ticks per frame, leaving input time at 20 fps; v0.73.0: also off while a multi-window app is open, same reason as the other overlay states, its wallpaper-row redraw would paint straight over an open window's content since neither the wind sway path nor the window list know about each other yet */
                 wind_last = ticks();
                 wind_phase += wind_dir * 3; /* same slow sway period at the higher frame rate */ if (wind_phase >= 256 || wind_phase <= -256) wind_dir = -wind_dir;
                 unsigned int t0 = ticks();
@@ -5627,6 +5646,12 @@ static void gui_run(void){
         prev_buttons = buttons;
 
         int hover_slot = (drag_slot < 0) ? slot_here : -1;
+        /* Recomputed every frame, before anything expensive runs next
+           iteration, so the wind gate above sees a hover that started this
+           frame rather than one frame late. */
+        dock_anim_busy = 0;
+        for (int i = 0; i < GUI_ICON_COUNT; i++)
+            if (dock_hover_extra[i] != ((i == hover_slot) ? DOCK_MAGNIFY : 0)) { dock_anim_busy = 1; break; }
         int dock_anim_changed = 0;
         /* v0.78.x: time-based, not one fixed hop per poll. This used to
            advance dock_hover_extra by exactly 3 every time the 3-tick gate
@@ -5666,8 +5691,9 @@ static void gui_run(void){
                 if (next < target) { next += delta; if (next > target) next = target; }
                 else if (next > target) { next -= delta; if (next < target) next = target; }
                 if (next != dock_hover_extra[i]) {
-                    if (dock_hover_extra[i] == 0 && next > 0) dock_grow_start[i] = anim_now;
+                    if (dock_hover_extra[i] == 0 && next > 0) { dock_grow_start[i] = anim_now; dock_grow_steps[i] = 0; }
                     dock_hover_extra[i] = next;
+                    if (next > 0 && dock_grow_steps[i] < 255) dock_grow_steps[i]++;
                     dock_anim_changed = 1;
                     /* How long this magnify actually took, in PIT ticks, so
                        "the dock animation got slow again" is a number a
@@ -5682,6 +5708,16 @@ static void gui_run(void){
                         char q[12]; int n = 0;
                         if (!el) q[n++] = '0';
                         while (el) { q[n++] = (char)('0' + el % 10); el /= 10; }
+                        while (n) b[j++] = q[--n];
+                        b[j++] = '\n'; b[j] = 0;
+                        serial_puts(b);
+                        j = 0;
+                        k = "dockstep=";
+                        while (*k) b[j++] = *k++;
+                        unsigned int st = dock_grow_steps[i];
+                        n = 0;
+                        if (!st) q[n++] = '0';
+                        while (st) { q[n++] = (char)('0' + st % 10); st /= 10; }
                         while (n) b[j++] = q[--n];
                         b[j++] = '\n'; b[j] = 0;
                         serial_puts(b);
