@@ -142,6 +142,20 @@ int main(void) {
     check("malformed USERS.TXT lines are skipped, not crashed on or trusted",
           auth_user_count == 0); /* every one of the 3 lines above is deliberately malformed (missing field, bad hex, hash field one char short) */
 
+    /* --- opt-in gate: no accounts = no prompt, straight to desktop;
+       one account = the gate really does engage --- */
+    fake_vfs_len = -1; /* fresh "disk", no USERS.TXT at all */
+    auth_users_loaded = 0; auth_user_count = 0; auth_logged_in = 0;
+    check("auth_gate_would_prompt is false with no USERS.TXT (unconfigured system)",
+          !auth_gate_would_prompt());
+
+    auth_users_loaded = 0; auth_user_count = 0; auth_logged_in = 0;
+    check("auth_create_user succeeds against an empty/no USERS.TXT",
+          auth_create_user("first", "somepassword"));
+    auth_users_loaded = 0; /* force a real reload from the "disk" auth_create_user just wrote, not the in-memory table */
+    check("auth_gate_would_prompt is true once a real account exists",
+          auth_gate_would_prompt());
+
     /* --- constant-time compare, real behavioral check not just a name --- */
     unsigned char a[4] = {1,2,3,4}, b[4] = {1,2,3,4}, c[4] = {1,2,3,5};
     check("auth_const_time_eq: identical buffers compare equal",
