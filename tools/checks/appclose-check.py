@@ -69,7 +69,9 @@ try:
             if "return" in r or "error" in r: return r
     f.readline()
     cmd({"execute": "qmp_capabilities"})
-    time.sleep(5.0)  # desktop up
+    # QMP becoming available does not mean the guest has finished booting.
+    # On loaded CI runners the old fixed five-second delay began the sweep
+    # before the desktop could handle clicks, losing the first few apps.
 
     def move(x, y):
         cmd({"execute": "input-send-event", "arguments": {"events": [
@@ -84,6 +86,15 @@ try:
         img = Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
         return img.getpixel((x * SCALE + 1, y * SCALE + 1))  # +1: inside the s x s block, never its seam
     def is_red(p): return max(abs(p[i] - CLOSE_RED[i]) for i in range(3)) <= 12
+    # Left padding of the dock tray, away from icons and rounded corners.
+    # Its opaque color appears only once the GUI has presented the desktop.
+    for _ in range(120):
+        if pixel(239, 500) == (0xEF, 0xEB, 0xE4):
+            break
+        time.sleep(0.25)
+    else:
+        raise SystemExit("FAIL: desktop dock did not appear within 30 seconds")
+    time.sleep(0.3)  # let the input loop begin after its first presentation
     def close_button():
         """Regular app window's red button, or None."""
         if is_red(pixel(CLOSE_X, CLOSE_Y)): return (CLOSE_X, CLOSE_Y)
