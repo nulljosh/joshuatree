@@ -74,17 +74,22 @@ dependencies beyond clang, ld.lld and qemu.
   real breaking change (none yet; this kernel has no external callers to
   break). `0.x.y` is deliberate, not an oversight: nothing here has a
   stable contract yet for a 1.0.0 to actually mean.
-- Theme (kernel wallpaper, landing page, everywhere else this project shows
-  color): Mojave desert, real palette refresh from the earlier warm orange/
-  burgundy "Her"-movie look, which read as pumpkin/Halloween, not the
-  intended warmth. Brownish-silver now, sand and granite fading to a real
-  leather-brown at the dark end, built from clrs.cc (colors.css) named
-  colors (Silver #DDDDDD, Gray #AAAAAA, Orange #FF851B blended with Black
-  #111111 for the brown, see kernel.c's wall_bot comment for the exact
-  reasoning). Never matrix-green, never cold black-and-blue, never back to
-  bright/saturated orange. The real VGA boot output is genuinely black-on-
-  gray text (can't be restyled, it's the actual kernel's real output),
-  everything *around* it (frame, accent color, copy) follows this palette.
+- Theme (direct request, Sep 2026, replaces the earlier Mojave brown
+  palette): the engraving system, taken from the Joshua Tree Co. mark
+  (`landing/badge.png`, itself a nod to Apple's 1977 Newton engraving). One
+  ink on one paper, `#000000` on `#ece8df`, inverted for dark. No greys, no
+  accent colour, no opacity tricks: tone comes from line density (the
+  `--hatch` token, dotted chart grids), never a second colour. Hairline
+  1px rules, tracked-caps Helvetica labels, square plates with a hatched
+  header band, spec-sheet rules top and bottom. Sans-serif everywhere; the
+  slab serif lives inside the logo artwork only. The full badge is for
+  hero sizes only, `landing/mark.png` (the simplified tree) covers
+  everything small, the same reason Apple dropped its own engraving.
+  Landing page is converted. The kernel is not yet: its wallpaper and
+  chrome still carry the old palette until the 1-bit reskin in
+  `roadmap.md` lands, so don't "fix" the mismatch piecemeal before then.
+  The real VGA boot output is genuinely black-on-gray text (can't be
+  restyled, it's the actual kernel's real output).
 - Task routing (direct request, Sep 2026): the main session directs
   (Sonnet/Opus, Fable for anything privilege/security/exact-layout
   shaped per the model-routing legend below), not the sole executor.

@@ -318,13 +318,14 @@ caption = f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fi
 def color_vars(scope):
     return f'''
   {scope} {{
-    --bg: #faf8f6; --grid: #e8e2da; --axis: #ded6ca; --muted: #78736c;
-    --label: #75726e; --strong: #1c1c1e; --line: #884b16; --line2: #4c2e13; --line2-pct: #b6a08a;
+    --bg: #ece8df; --grid: #000000; --axis: #000000; --muted: #000000;
+    --label: #000000; --strong: #000000; --line: #000000; --line2: #000000; --line2-pct: #000000;
   }}
   @media (prefers-color-scheme: dark) {{
-    {scope} {{ --bg: #161412; --grid: #2c2724; --axis: #3a332e; --muted: #8a8177;
-             --label: #b3aa9f; --strong: #f2f0ee; --line: #d99a5b; --line2: #e8b98a; --line2-pct: #c3a58a; }}
-  }}'''
+    {scope} {{ --bg: #0e0d0b; --grid: #ece8df; --axis: #ece8df; --muted: #ece8df;
+             --label: #ece8df; --strong: #ece8df; --line: #ece8df; --line2: #ece8df; --line2-pct: #ece8df; }}
+  }}
+  {'' if scope == ':root' else scope + ' '}line[stroke="var(--grid)"] {{ stroke-dasharray: 1 4; }}'''
 
 def build_svg(dots_markup, svg_id=None, extra_style="", extra_root_attrs=""):
     # svg_id=None -> the plain, standalone progress.svg (README embed via
