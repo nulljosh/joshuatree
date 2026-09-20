@@ -41,25 +41,14 @@
    pngtest keeps comparing against wallpaper_rgb by name on purpose (its
    fixtures are crops of the baked photo).
 
-   v0.76.45: direct request ("don't show tree on boot, show dark until
-   satellite loads") -- when wall_theme is a map (WALL_WARM/COOL/RAW/SAT)
-   but wall_map hasn't loaded yet, wall_src now falls back to a solid
-   Mojave espresso-brown (0x00201009) instead of wallpaper_rgb (the Joshua
-   Tree photo). The tree photo is still available as WALL_PHOTO, so users
-   who want it can select it in Settings; it never appears by default or
-   during satellite fetch. */
+   Never-black rule: wall_src only ever points at a REAL image (a live
+   wall_map, the baked satellite capture, or the baked photo). The solid
+   black "loading" buffer v0.76.45 introduced is gone, see wall_apply. */
 static const unsigned char *wall_src = wallpaper_rgb;
-/* Solid dark fallback (Mojave espresso-brown 0x00201009 = RGB 32,16,9):
-   960x540x3 bytes. Allocated once and reused; never freed (lives for the
-   kernel's entire lifetime). Used as wall_src fallback while satellite/map
-   images are fetching, keeping the boot/idle screen neutral dark instead
-   of showing the tree photo. */
-static unsigned char *wall_dark_fallback = 0;
 /* v0.83.x: a REAL, once-captured satellite photograph (kernel/wall_sat.h,
    tools/gen/gen_wall_sat.py -- the same real mt0.google.com tiles
    wall_fetch() itself pulls for WALL_SAT, baked in at build time), decoded
-   lazily on first need and kept for the session, same permanent-buffer
-   lifetime as wall_dark_fallback above. Direct owner request: the v86
+   lazily on first need and kept for the session, never freed. Direct owner request: the v86
    browser demo (font_is_fallback(), no network ever, see wall_apply's own
    comment) should show a satellite look, not the baked tree photo -- the
    tree stays reachable from Settings (WALL_PHOTO, an explicit user pick),
@@ -2468,10 +2457,15 @@ static int wall_fetch(void){
     if (cx < 0) cx = 0; if (cx > WALL_COLS * WALL_TILE - WALLPAPER_W) cx = WALL_COLS * WALL_TILE - WALLPAPER_W;
     if (cy < 0) cy = 0; if (cy > WALL_ROWS * WALL_TILE - WALLPAPER_H) cy = WALL_ROWS * WALL_TILE - WALLPAPER_H;
 
-    unsigned char *dst = wall_map ? wall_map : (unsigned char *)kmalloc(WALLPAPER_W * WALLPAPER_H * 3);
+    /* Never-black rule: tiles always land in a FRESH buffer, never in the
+       live wall_map. The old in-place refetch left a half-new, half-old
+       mosaic on screen whenever tile N of 12 failed. Any failure below
+       frees only `dst`; the last good wall_map (and whatever wall_src
+       points at) is untouched, and the ten-minute cycle retries later. */
+    unsigned char *dst = (unsigned char *)kmalloc(WALLPAPER_W * WALLPAPER_H * 3);
     if (!dst) { wall_serial_err("nomem", 0); return 0; }
     unsigned char *body = (unsigned char *)kmalloc(65536);
-    if (!body) { if (!wall_map) kfree(dst); wall_serial_err("nomem", 1); return 0; }
+    if (!body) { kfree(dst); wall_serial_err("nomem", 1); return 0; }
     static char path[96];
     /* v0.73: satellite pulls real JPEG tiles from Google's slippy-map
        satellite endpoint instead of OpenTopoMap's PNG line-art. Same x/y/z
@@ -2504,12 +2498,12 @@ static int wall_fetch(void){
             path[p] = 0;
         }
         n_bytes = http_get(host, path, 80, body, 65536);
-        if (n_bytes <= 0) { kfree(body); if (!wall_map) kfree(dst); wall_serial_err("http", i); return 0; }
+        if (n_bytes <= 0) { kfree(body); kfree(dst); wall_serial_err("http", i); return 0; }
         unsigned char *px_out = 0; unsigned int w = 0, h = 0, ch = 0;
         int r = use_sat ? jpeg_decode(body, (unsigned int)n_bytes, &px_out, &w, &h, &ch)
                          : png_decode(body, (unsigned int)n_bytes, &px_out, &w, &h, &ch);
         if (r != 0 || w != WALL_TILE || h != WALL_TILE || ch != 3) {
-            if (px_out) kfree(px_out); kfree(body); if (!wall_map) kfree(dst);
+            if (px_out) kfree(px_out); kfree(body); kfree(dst);
             wall_serial_err(r ? (use_sat ? "jpeg" : "png") : "tilesize", r ? r : (int)w); return 0;
         }
         /* copy the part of this tile that lands inside the crop window */
@@ -2524,7 +2518,11 @@ static int wall_fetch(void){
         kfree(px_out);
     }
     kfree(body);
-    wall_map = dst; wall_map_tx = tx; wall_map_ty = ty; wall_map_cx = cx; wall_map_cy = cy; wall_map_is_sat = use_sat;
+    { unsigned char *old_map = wall_map;
+      if (old_map && wall_src == old_map) wall_src = dst; /* same-theme refetch: repoint before the old pixels are freed, wall_apply's own early return would otherwise leave wall_src dangling */
+      wall_map = dst;
+      if (old_map) { kfree(old_map); wall_caches_drop(); } }
+    wall_map_tx = tx; wall_map_ty = ty; wall_map_cx = cx; wall_map_cy = cy; wall_map_is_sat = use_sat;
     unsigned int fnv = 0x811c9dc5u;
     for (unsigned int i = 0; i < WALLPAPER_W * WALLPAPER_H * 3; i++) { fnv ^= dst[i]; fnv *= 0x01000193u; }
     { char b[96]; int i = 0; const char *s = "wall="; while (*s) b[i++] = *s++;
@@ -2542,9 +2540,19 @@ static int wall_fetch(void){
    is dropped (forcing the next weather cycle or `wallpaper fetch` to pull
    fresh tiles from the right host) instead of silently painting topo
    pixels under a "Satellite" label or vice versa. */
+static void wall_apply(int want_map);
 static void wall_switch_theme(int theme){
     int want_sat = (theme == WALL_SAT);
-    if (wall_map && want_sat != wall_map_is_sat) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
+    if (wall_map && want_sat != wall_map_is_sat) {
+        /* wall_src may still point at these pixels: repoint it at a real
+           image BEFORE they are freed, never leave it dangling for a
+           caller to fix up. wall_map = 0 first so wall_apply picks the
+           baked fallback. */
+        unsigned char *old_map = wall_map; wall_map = 0;
+        wall_theme = theme;
+        wall_apply(theme != WALL_PHOTO);
+        kfree(old_map); wall_caches_drop();
+    }
     wall_theme = theme;
     settings_save();
     /* v0.75: the one real choke point every theme setter already goes
@@ -2571,32 +2579,8 @@ static void wall_switch_theme(int theme){
    a theme-only change (same wall_map pointer, different wall_theme)
    still drops the stale cache. */
 static int wall_last_theme = -1;
-/* Initialize dark fallback buffer (Mojave espresso-brown) on first use.
-   Lazy allocation: only allocate and fill once, never freed. */
-static void wall_dark_fallback_init(void){
-    if (wall_dark_fallback) return; /* already allocated */
-    wall_dark_fallback = (unsigned char *)kmalloc(WALLPAPER_W * WALLPAPER_H * 3);
-    if (!wall_dark_fallback) { wall_serial_err("dark fallback nomem", 1); return; }
-    /* Fill with Mojave espresso-brown: 0x00201009 = RGB(32, 16, 9) */
-    unsigned int px_count = WALLPAPER_W * WALLPAPER_H;
-    for (unsigned int i = 0; i < px_count; i++){
-        unsigned int base = i * 3;
-        /* v0.76.53: was espresso-brown (32,16,9), a real CI regression --
-           tools/checks/dockhover-check.py detects a "lifted" dock icon by
-           brightness (sum>60) at the row just above a resting tile, and
-           this fallback's sum (57) sat close enough to that threshold
-           that real rendering tipped every slot over it, failing the test
-           with every icon reading as permanently lifted. Pure black (sum
-           0) has real margin under the threshold and matches tonight's
-           own silver/black/white direction better than a brown anyway. */
-        wall_dark_fallback[base + 0] = 0;  /* R */
-        wall_dark_fallback[base + 1] = 0;  /* G */
-        wall_dark_fallback[base + 2] = 0;  /* B */
-    }
-}
 /* Decode the baked satellite capture (kernel/wall_sat.h) once, lazily, and
-   keep it for the session -- the same lazy-allocate-and-keep shape as
-   wall_dark_fallback_init() just above, except the source bytes are a real
+   keep it for the session. The source bytes are a real
    photograph stored as an indexed PNG (drivers/png.c has decoded 8-bit
    indexed/PLTE images since v75) instead of a solid fill, so this one goes
    through png_decode instead of a fill loop. Decoding ~277KB of PNG once
@@ -2620,29 +2604,24 @@ static void wall_sat_init(void){
 }
 static void wall_apply(int want_map){
     const unsigned char *next;
-    if (want_map && !wall_map && !font_is_fallback()){
-        /* Satellite/map fetch hasn't completed yet; use dark fallback
-           instead of the tree photo, so the boot/idle screen is neutral
-           dark, not the Joshua Tree silhouette.
+    /* The never-black rule, enforced here because every theme setter, the
+       first desktop paint and the fetch cycle all route through this one
+       function: wall_src is only ever a REAL image. Wanted a map but no
+       live mosaic on hand (fetch pending, failed, out of memory, or no
+       network at all) means the baked satellite capture, and if even that
+       cannot be decoded, the baked photo. A later wall_fetch() that lands
+       upgrades it; one that fails changes nothing.
 
-           The font_is_fallback() guard is the v86 browser demo, the same
-           real signal v46 already uses to disable the wind there. Inside
-           v86 there is no network at all, so the map fetch is not pending,
-           it is never going to arrive -- handled in the branch below,
-           not here. */
-        wall_dark_fallback_init();
-        next = wall_dark_fallback ? wall_dark_fallback : wallpaper_rgb;
-    } else if (want_map && !wall_map && font_is_fallback()){
-        /* v86 with no network, ever: a live fetch can never land, so this
-           is not a "few seconds of loading" case, it is permanent for the
-           whole session. Direct owner request, Sep 2026: show the real
-           baked satellite capture here, not the tree photo -- the tree
-           stays reachable as an explicit Settings pick (WALL_PHOTO, the
-           !want_map branch below), only this automatic no-network default
-           changes. wall_sat_init() decodes lazily on first need; if the
-           decode ever fails (corrupt asset, out of memory) this falls
-           back to the tree photo exactly like before, never a blank
-           desktop. */
+       Real root cause this replaces, proven with
+       tools/checks/wall-neverblack-v86-probe.mjs against the live proxy:
+       this used to branch on font_is_fallback() ("am I in v86?") and paint
+       a solid BLACK buffer while a fetch was "pending" everywhere else.
+       font_is_fallback() is only true on a cold v86 boot; after the landing
+       tour's in-place reboot VGA plane 2 is no longer all zeros, so the
+       second boot logged wallsrc=dark, and inside the 32MB guest the fetch
+       it was waiting for dies every cycle with wallerr=nomem, so the black
+       desktop was permanent. No environment guess is left in this path. */
+    if (want_map && !wall_map){
         wall_sat_init();
         next = wall_sat_rgb ? wall_sat_rgb : wallpaper_rgb;
     } else {
@@ -2662,7 +2641,7 @@ static void wall_apply(int want_map){
        cannot tell them apart could not prove the v86 fallback bake-in
        actually took effect. */
     serial_puts("wallsrc=");
-    serial_puts(next == wallpaper_rgb ? "photo" : (next == wall_dark_fallback ? "dark" : (next == wall_sat_rgb ? "satfallback" : "map")));
+    serial_puts(next == wallpaper_rgb ? "photo" : (next == wall_sat_rgb ? "satfallback" : "map"));
     serial_puts("\n");
     wall_src = next;
     wall_last_theme = wall_theme;
@@ -4654,7 +4633,7 @@ static void gui_launch_settings(void){
                    fallback became the baked satellite capture instead of
                    the tree -- font_is_fallback() is the same real v86
                    signal wall_apply() itself branches on. */
-                const char *lbl = wall_theme == WALL_PHOTO ? "Photo" : (wall_map ? theme_name : (font_is_fallback() ? "Satellite (offline demo)" : "Map (fetching, photo until then)"));
+                const char *lbl = wall_theme == WALL_PHOTO ? "Photo" : (wall_map ? theme_name : "Satellite (baked, live pending)");
                 font_draw_string(lbl, 400, y, wall_theme != WALL_PHOTO && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
             } else if (i == 3) {
                 font_draw_string("LLM model", 28, y, 0x001C1C1E, -1);
