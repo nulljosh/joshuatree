@@ -54,6 +54,9 @@ void window_present(void);
    longer implies the screen has. */
 extern volatile unsigned int window_present_count;
 int window_has_back_buffer(void);
+/* Declare that [x,y,w,h) in physical pixels was written directly, for a
+   caller that bypassed window_pixel_phys (window_phys_row). */
+void window_damage(int x, int y, int w, int h);
 /* 1 if a draw really lands offscreen and only window_present() moves it to
    the visible framebuffer. See window.c. */
 int window_backbuffer_selftest(void);

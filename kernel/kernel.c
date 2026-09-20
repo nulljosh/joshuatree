@@ -266,7 +266,7 @@ static int get_key(void){
         if (sc < 0) { window_present(); __asm__ volatile ("hlt"); continue; }
         if (sc == 0xE0) {
             int sc2;
-            do { sc2 = kbd_pop(); if (sc2 < 0) window_present(); __asm__ volatile ("hlt"); } while (sc2 < 0);
+            do { sc2 = kbd_pop(); if (sc2 < 0) { window_present(); __asm__ volatile ("hlt"); } } while (sc2 < 0);
             if (sc2 == 0x48) return KEY_UP;
             if (sc2 == 0x50) return KEY_DOWN;
             if (sc2 == 0x4B) return KEY_LEFT;
@@ -288,7 +288,7 @@ static int get_key_or_click(void){
         if (sc >= 0) {
             if (sc == 0xE0) {
                 int sc2;
-                do { sc2 = kbd_pop(); if (sc2 < 0) window_present(); __asm__ volatile ("hlt"); } while (sc2 < 0);
+                do { sc2 = kbd_pop(); if (sc2 < 0) { window_present(); __asm__ volatile ("hlt"); } } while (sc2 < 0);
                 if (sc2 == 0x48) return KEY_UP;
                 if (sc2 == 0x50) return KEY_DOWN;
                 if (sc2 == 0x4B) return KEY_LEFT;
@@ -821,6 +821,7 @@ static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3
 static int gui_order[GUI_ICON_COUNT];
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = GUI_DOCK_DEFAULT[i]; }
 static unsigned char dock_hover_extra[GUI_ICON_COUNT];
+static unsigned int dock_grow_start[GUI_ICON_COUNT]; /* tick a slot started growing, for the dockmag= timing marker */
 
 #define GUI_BG          0x00FAF8F6
 #define GUI_MENUBAR_H   26
@@ -1879,6 +1880,12 @@ static void gui_draw_wallpaper_rows_sway_ex(int y_from, int y_to, int sway, int 
                 if (dst) dst[px] = color;
                 else window_pixel_phys(px, py, color);
             }
+            /* v0.78.x: the second real window_phys_row caller. Writing
+               through a raw row pointer skips the per-pixel damage path
+               entirely, so this row has to declare itself or the sway
+               would draw into the back buffer and never reach the screen
+               (caught here before shipping, the wallpaper simply froze). */
+            if (dst) window_damage(0, py, wind_base_width, 1);
             continue;
         }
         struct wp_row c = gui_wallpaper_row(py, sway);
@@ -3460,6 +3467,12 @@ static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int
                     if (dst[px] != next) dst[px] = next;
                 }
             }
+            /* v0.78.x: this is the one caller that writes through a raw row
+               pointer, so it has to declare what it touched. Measured: the
+               old "assume the whole row" guess damaged 1920 columns per row
+               to change the ~174 this actually writes, which is what made a
+               dock hover present 1.96M pixels instead of ~86k. */
+            window_damage(left, top * sc, right - left, ph);
             dock_presented_extra[slot] = dock_hover_extra[slot];
         }
     } else {
@@ -5554,15 +5567,66 @@ static void gui_run(void){
 
         int hover_slot = (drag_slot < 0) ? slot_here : -1;
         int dock_anim_changed = 0;
+        /* v0.78.x: time-based, not one fixed hop per poll. This used to
+           advance dock_hover_extra by exactly 3 every time the 3-tick gate
+           opened, and reset dock_anim_last_tick to ticks(), throwing away
+           the overshoot. So the magnify took 3 hops no matter what, and its
+           real duration was 3 frames rather than the 9 ticks it was written
+           to take: at 33fps that is the intended 90ms, but at 18fps it
+           stretches to 165ms and at 12fps to 250ms, in three visible jumps.
+           That is exactly the "choppy and slow" report, and it gets worse
+           with every frame-rate cost anything else adds.
+
+           Advancing by however many 3-tick steps actually elapsed, and
+           carrying the remainder instead of resetting to now, makes the
+           animation take the same wall-clock time at any frame rate. A slow
+           frame now means fewer, larger steps, never a longer animation. */
         static unsigned int dock_anim_last_tick = 0;
-        if (ticks() - dock_anim_last_tick >= 3) {
-            dock_anim_last_tick = ticks();
+        unsigned int anim_now = ticks();
+        /* Resync rather than try to catch up, in the two cases where the
+           gap is not a real frame: the first frame of the session (the
+           static starts at 0 while ticks() is already thousands in, and a
+           naive catch-up would then spend a second snapping every icon
+           straight to its target every frame, which broke dock hit-testing
+           badly enough to fail appclose-check), and the return from a
+           blocking app that owned the screen for seconds. */
+        if (!dock_anim_last_tick || anim_now - dock_anim_last_tick > 100) dock_anim_last_tick = anim_now;
+        unsigned int anim_elapsed = anim_now - dock_anim_last_tick;
+        if (anim_elapsed >= 3) {
+            int steps = (int)(anim_elapsed / 3);
+            /* one frame never advances more than a whole magnify; past that
+               the extra steps buy nothing and only overshoot the clamp */
+            if (steps > DOCK_MAGNIFY / 3) steps = DOCK_MAGNIFY / 3;
+            dock_anim_last_tick += (unsigned int)steps * 3; /* carry the remainder */
+            int delta = 3 * steps;
             for (int i = 0; i < GUI_ICON_COUNT; i++) {
                 int target = (i == hover_slot) ? DOCK_MAGNIFY : 0;
                 int next = dock_hover_extra[i];
-                if (next < target) { next += 3; if (next > target) next = target; }
-                else if (next > target) { next -= 3; if (next < target) next = target; }
-                if (next != dock_hover_extra[i]) { dock_hover_extra[i] = next; dock_anim_changed = 1; }
+                if (next < target) { next += delta; if (next > target) next = target; }
+                else if (next > target) { next -= delta; if (next < target) next = target; }
+                if (next != dock_hover_extra[i]) {
+                    if (dock_hover_extra[i] == 0 && next > 0) dock_grow_start[i] = anim_now;
+                    dock_hover_extra[i] = next;
+                    dock_anim_changed = 1;
+                    /* How long this magnify actually took, in PIT ticks, so
+                       "the dock animation got slow again" is a number a
+                       check can assert on rather than something only a
+                       human watching the real screen can notice. See
+                       tools/checks/dockanim-check.sh. */
+                    if (next == DOCK_MAGNIFY && dock_grow_start[i]) {
+                        char b[24]; int j = 0;
+                        const char *k = "dockmag=";
+                        while (*k) b[j++] = *k++;
+                        unsigned int el = anim_now - dock_grow_start[i];
+                        char q[12]; int n = 0;
+                        if (!el) q[n++] = '0';
+                        while (el) { q[n++] = (char)('0' + el % 10); el /= 10; }
+                        while (n) b[j++] = q[--n];
+                        b[j++] = '\n'; b[j] = 0;
+                        serial_puts(b);
+                        dock_grow_start[i] = 0;
+                    }
+                }
             }
         }
         int menu_hover = menu_open ? gui_menu_hit_test(mx, my) : -2;
