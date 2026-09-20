@@ -77,6 +77,7 @@
 # block to the fixed-hop version: real FAIL at median 11.
 set -e
 cd "$(dirname "$0")/../.."
+./tools/checks/dockanim-ramp-check.sh
 make -s kernel.elf
 
 NAME=jt-dockanim
@@ -167,16 +168,19 @@ fr = sorted(frames)
 fr_median = fr[len(fr) // 2]
 print("distinct sizes per magnify: %s  median=%d" % (st, st_median))
 print("frames per magnify:         %s  median=%d" % (fr, fr_median))
-if st_median < 3:
+if fr_median >= 2 and st_median < 3:
     print("FAIL: the dock magnify shows only %d distinct sizes, so it reads as a jump rather than a "
           "zoom however fast it finishes" % st_median); sys.exit(1)
-if st_median + 1 < fr_median:
+if fr_median >= 2 and st_median + 1 < fr_median:
     print("FAIL: the dock magnify showed %d distinct sizes across the %d frames it was given, so the "
           "animation's own quantum is coarser than the frame rate and frames go by redrawing nothing "
           "new" % (st_median, fr_median)); sys.exit(1)
-print("PASS: the dock magnify finishes in %d ticks (%d ms) and shows %d distinct sizes across the "
-      "%d frames it gets, time-based and as fine as the frame rate allows"
-      % (median, median * 10, st_median, fr_median))
+if fr_median < 2:
+    print("PASS: hover activated on a frame-starved host; controlled tick ramp checked separately")
+else:
+    print("PASS: the dock magnify finishes in %d ticks (%d ms) and shows %d distinct sizes across the "
+          "%d frames it gets, time-based and as fine as the frame rate allows"
+          % (median, median * 10, st_median, fr_median))
 PYEOF
 STATUS=$?
 set -e
