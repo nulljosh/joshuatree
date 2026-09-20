@@ -10,7 +10,12 @@
    needs to speak it.
    v64 (0.61.0) shipped exit and write. The rest of the v1 set (read, open,
    close, time, getpid, sched_yield) lands here alongside user/hello.c, the
-   first real external caller of any of it. */
+   first real external caller of any of it.
+
+   v2 adds file writing (open flags, write to a descriptor from open,
+   write-back on close), lseek, and argv. It adds numbers and flag bits
+   and never changes what a v1 number means: v1 is frozen, and
+   tools/checks/usertest-check.sh still runs user/hello.c unmodified. */
 
 #define SYS_EXIT         1   /* ebx = exit code; ends the calling task, never returns */
 #define SYS_READ         3   /* ebx = fd, ecx = buf, edx = len; bytes read, 0 at end of file */
@@ -18,8 +23,29 @@
 #define SYS_OPEN         5   /* ebx = path, ecx = flags (0 only); returns a per-task fd >= 3 */
 #define SYS_CLOSE        6   /* ebx = fd; 0, or -EBADF */
 #define SYS_TIME        13   /* ebx = 0, or a user unsigned* to store into; returns seconds since the epoch */
+#define SYS_LSEEK       19   /* v2: ebx = fd, ecx = offset, edx = whence; returns the new position */
 #define SYS_GETPID      20   /* returns the calling task's slot id */
 #define SYS_SCHED_YIELD 158  /* gives up the rest of this quantum; returns 0 */
+
+/* v2 open() flags. Linux i386's own values, the same borrow the call
+   numbers are: O_RDONLY/O_WRONLY/O_RDWR are the low two bits, the rest
+   are independent bits. v1 froze "flags must be 0", which is exactly
+   O_RDONLY with no modifiers, so every v1 open still means what it meant.
+   Only these bits are understood; any other bit set is -EINVAL rather
+   than silently ignored, so a program cannot think it asked for
+   something this kernel did not do. */
+#define JT_O_RDONLY  0x0000
+#define JT_O_WRONLY  0x0001
+#define JT_O_RDWR    0x0002
+#define JT_O_ACCMODE 0x0003
+#define JT_O_CREAT   0x0040
+#define JT_O_TRUNC   0x0200
+#define JT_O_APPEND  0x0400
+
+/* lseek whence values, Linux's own. */
+#define JT_SEEK_SET 0
+#define JT_SEEK_CUR 1
+#define JT_SEEK_END 2
 
 /* Sized by the highest number in the v1 set (158, sched_yield) rounded up
    to the next multiple of 32, which is the only real reason to pick 160
