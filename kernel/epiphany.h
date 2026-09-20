@@ -246,9 +246,10 @@ static void gui_launch_epiphany(void) {
             else if (tab == 2 && k == ' ') epi_sim_paused = !epi_sim_paused;
             else if (tab == 2 && k == 'r') epi_sim_reset();
             else if (k == KEY_CLICK) {
-                int mx = app_cursor_x, my = app_cursor_y;
-                if (!gui_app_windowed && mx < 80 && my < 36) return;
-                if (my >= stx_top() && my < stx_top() + 28) for (int i = 0; i < EPI_TABS; i++) if (mx >= 16 + i * 110 && mx < 116 + i * 110) { tab = i; sel = 0; }
+                if (!gui_app_windowed) return;
+                int mx = app_cursor_x - app_view_x, my = app_cursor_y - app_view_y;
+                if (mx < 0 || my < 0 || mx >= (int)window_width() || my >= (int)window_height()) return; /* chrome X or dock */
+                if (my >= stx_top() && my < stx_top() + 28) for (int i = 0; i < EPI_TABS; i++) if (mx >= 16 + i * 110 && mx < 116 + i * 110) { tab = i; sel = 0; epi_adding = 0; }
             }
         }
         if (tab == 2 && !epi_sim_paused && ++frame % 3 == 0) epi_sim_step();

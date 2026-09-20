@@ -254,8 +254,11 @@ static void gui_launch_stocks(void) {
         else if (k == KEY_LEFT && range > 0) range--;
         else if (k == KEY_RIGHT && range < STX_RANGES - 1) range++;
         else if (k == KEY_CLICK) {
-            int mx = app_cursor_x, my = app_cursor_y;
-            if (!gui_app_windowed && mx < 80 && my < 36) return; /* the red dot */
+            /* app_cursor_x/y are full-screen; content draws through the viewport, so convert.
+               A click off the content (window chrome X, the dock) closes, as everywhere else. */
+            if (!gui_app_windowed) return;
+            int mx = app_cursor_x - app_view_x, my = app_cursor_y - app_view_y;
+            if (mx < 0 || my < 0 || mx >= (int)window_width() || my >= (int)window_height()) return;
             if (mx < STX_SIDE_W && my >= stx_row_y0()) {
                 int i = first + (my - stx_row_y0()) / STX_ROW_H;
                 if (i < STOCKS_MAX) sel = i;
