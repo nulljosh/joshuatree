@@ -31,6 +31,7 @@
 #include "http.h"
 #include "wallpaper.h"
 #include "icon_art.h"
+#include "wall_sat.h"
 /* v75 (0.67.0): the wallpaper is read through this pointer, not the baked
    array directly, so a real fetched image (wall_fetch below: a 2x2 mosaic
    of OpenTopoMap tiles around the ip-api location, decoded by
@@ -54,6 +55,16 @@ static const unsigned char *wall_src = wallpaper_rgb;
    images are fetching, keeping the boot/idle screen neutral dark instead
    of showing the tree photo. */
 static unsigned char *wall_dark_fallback = 0;
+/* v0.83.x: a REAL, once-captured satellite photograph (kernel/wall_sat.h,
+   tools/gen/gen_wall_sat.py -- the same real mt0.google.com tiles
+   wall_fetch() itself pulls for WALL_SAT, baked in at build time), decoded
+   lazily on first need and kept for the session, same permanent-buffer
+   lifetime as wall_dark_fallback above. Direct owner request: the v86
+   browser demo (font_is_fallback(), no network ever, see wall_apply's own
+   comment) should show a satellite look, not the baked tree photo -- the
+   tree stays reachable from Settings (WALL_PHOTO, an explicit user pick),
+   it is only the no-network AUTOMATIC fallback that changes. */
+static unsigned char *wall_sat_rgb = 0;
 static unsigned char *wall_map = 0;        /* the fetched mosaic, kmalloc'd, kept while the session lives so Photo->Map needs no refetch */
 static int wall_map_tx = 0, wall_map_ty = 0, wall_map_cx = 0, wall_map_cy = 0; /* tile x/y of the mosaic's top-left tile, crop offset inside it */
 static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels actually came from (OpenTopoMap PNG vs Google satellite JPEG). Warm/Cool/Raw all share ONE fetch, since they're just different grades of the same topo pixels -- Satellite is a genuinely different image, not a grade, so switching across this boundary must drop wall_map and refetch instead of reusing stale pixels from the other source. */
@@ -2514,6 +2525,30 @@ static void wall_dark_fallback_init(void){
         wall_dark_fallback[base + 2] = 0;  /* B */
     }
 }
+/* Decode the baked satellite capture (kernel/wall_sat.h) once, lazily, and
+   keep it for the session -- the same lazy-allocate-and-keep shape as
+   wall_dark_fallback_init() just above, except the source bytes are a real
+   photograph stored as an indexed PNG (drivers/png.c has decoded 8-bit
+   indexed/PLTE images since v75) instead of a solid fill, so this one goes
+   through png_decode instead of a fill loop. Decoding ~277KB of PNG once
+   per boot is cheap; the decoded 960x540x3 buffer is what wall_src actually
+   points readers at, same layout wallpaper_rgb and wall_map already use.
+   On any decode failure this leaves wall_sat_rgb null and the caller falls
+   back to wallpaper_rgb, never a null wall_src. */
+static void wall_sat_init(void){
+    if (wall_sat_rgb) return; /* already decoded */
+    unsigned char *out = 0; unsigned int w = 0, h = 0, ch = 0;
+    if (png_decode(wall_sat_png, WALL_SAT_PNG_LEN, &out, &w, &h, &ch) != 0) {
+        wall_serial_err("wallsat decode", 0);
+        return;
+    }
+    if (w != WALLPAPER_W || h != WALLPAPER_H || ch != 3) {
+        wall_serial_err("wallsat dims", (int)w);
+        kfree(out);
+        return;
+    }
+    wall_sat_rgb = out; /* ours now; never freed, lives for the kernel's lifetime */
+}
 static void wall_apply(int want_map){
     const unsigned char *next;
     if (want_map && !wall_map && !font_is_fallback()){
@@ -2524,13 +2559,23 @@ static void wall_apply(int want_map){
            The font_is_fallback() guard is the v86 browser demo, the same
            real signal v46 already uses to disable the wind there. Inside
            v86 there is no network at all, so the map fetch is not pending,
-           it is never going to arrive, and a fallback meant to cover a
-           few seconds of fetching became a permanently black desktop. A
-           real report: "the landing page wallpaper doesn't load anymore."
-           Where a map can never come, the baked photo is the real
-           wallpaper, not a placeholder. */
+           it is never going to arrive -- handled in the branch below,
+           not here. */
         wall_dark_fallback_init();
         next = wall_dark_fallback ? wall_dark_fallback : wallpaper_rgb;
+    } else if (want_map && !wall_map && font_is_fallback()){
+        /* v86 with no network, ever: a live fetch can never land, so this
+           is not a "few seconds of loading" case, it is permanent for the
+           whole session. Direct owner request, Sep 2026: show the real
+           baked satellite capture here, not the tree photo -- the tree
+           stays reachable as an explicit Settings pick (WALL_PHOTO, the
+           !want_map branch below), only this automatic no-network default
+           changes. wall_sat_init() decodes lazily on first need; if the
+           decode ever fails (corrupt asset, out of memory) this falls
+           back to the tree photo exactly like before, never a blank
+           desktop. */
+        wall_sat_init();
+        next = wall_sat_rgb ? wall_sat_rgb : wallpaper_rgb;
     } else {
         next = (want_map && wall_map) ? wall_map : wallpaper_rgb;
     }
@@ -2542,9 +2587,13 @@ static void wall_apply(int want_map){
        first call (wall_src's static initializer is wallpaper_rgb and
        wall_last_theme starts at -1, so the first real assignment always
        logs), letting a headless boot prove what buffer the first real
-       desktop paint used without guessing from timing alone. */
+       desktop paint used without guessing from timing alone. "satfallback"
+       is its own distinct value, not folded into "map": it is the baked
+       v86 satellite capture, not a live wall_map fetch, and a check that
+       cannot tell them apart could not prove the v86 fallback bake-in
+       actually took effect. */
     serial_puts("wallsrc=");
-    serial_puts(next == wallpaper_rgb ? "photo" : (next == wall_dark_fallback ? "dark" : "map"));
+    serial_puts(next == wallpaper_rgb ? "photo" : (next == wall_dark_fallback ? "dark" : (next == wall_sat_rgb ? "satfallback" : "map")));
     serial_puts("\n");
     wall_src = next;
     wall_last_theme = wall_theme;
@@ -4428,7 +4477,12 @@ static void gui_launch_settings(void){
                    that isn't really rendering. */
                 font_draw_string("Wallpaper", 28, y, 0x001C1C1E, -1);
                 const char *theme_name = wall_theme == WALL_COOL ? "Map (Cool)" : wall_theme == WALL_RAW ? "Map (Raw)" : wall_theme == WALL_SAT ? "Satellite" : (geo_city[0] ? geo_city : "Map (Warm)");
-                const char *lbl = wall_theme == WALL_PHOTO ? "Photo" : (wall_map ? theme_name : "Map (fetching, photo until then)");
+                /* v0.83.x: the v86 demo's own honest label. "photo until
+                   then" stopped being true the moment the no-network
+                   fallback became the baked satellite capture instead of
+                   the tree -- font_is_fallback() is the same real v86
+                   signal wall_apply() itself branches on. */
+                const char *lbl = wall_theme == WALL_PHOTO ? "Photo" : (wall_map ? theme_name : (font_is_fallback() ? "Satellite (offline demo)" : "Map (fetching, photo until then)"));
                 font_draw_string(lbl, 400, y, wall_theme != WALL_PHOTO && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
             } else if (i == 3) {
                 font_draw_string("LLM model", 28, y, 0x001C1C1E, -1);
