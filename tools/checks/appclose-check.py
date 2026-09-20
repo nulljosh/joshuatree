@@ -189,6 +189,11 @@ try:
         print(f"close via pointer: {'yes' if closed else 'NO, still open'}")
         if not closed:
             fails.append(f"{name}: still open after pointer close")
+            # Evidence, not guesses: which sample point is red, and what the
+            # kernel itself logged, so a runner-only failure is diagnosable.
+            print(f"  diag: app-X{(CLOSE_X, CLOSE_Y)}={pixel(CLOSE_X, CLOSE_Y)} apps-X{(APPS_CLOSE_X, APPS_CLOSE_Y)}={pixel(APPS_CLOSE_X, APPS_CLOSE_Y)} centre={pixel(480, 270)}")
+            try: print("  serial tail:", open(LOG, errors="replace").read()[-400:].replace("\n", " | "))
+            except OSError: pass
             # Try to recover so the sweep can go on: esc is the keyboard exit every app honours.
             for _ in range(2):
                 if window_open(): keys("esc"); time.sleep(0.8)
