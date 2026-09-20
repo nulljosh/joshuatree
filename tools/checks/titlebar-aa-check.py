@@ -40,7 +40,7 @@ DUMP = "/tmp/jt-titlebaraa.raw"
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = 4462
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 268
+DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 DOCK_SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Trash"]

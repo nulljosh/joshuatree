@@ -15,7 +15,7 @@ from PIL import Image
 out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/jt-iconedge"
 LOG = "/tmp/jt-iconedge-serial.log"; DUMP = "/tmp/jt-iconedge.raw"
 FB = 0xfd000000; W, H = 1920, 1080; PORT = 4461
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE, SLOTS = 37, 6, 268, 469, 2, 10
+DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE, SLOTS = 37, 6, 247, 469, 2, 11
 PITCH = DOCK_ICON + DOCK_GAP
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))

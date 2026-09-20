@@ -64,7 +64,7 @@ cmd({"execute": "qmp_capabilities"})
 time.sleep(5.0)
 
 LOGICAL_W, LOGICAL_H = 960, 540
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 286
+DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 488
 TERMINAL_SLOT, CHAT_SLOT = 6, 7

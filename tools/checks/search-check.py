@@ -49,7 +49,7 @@ DUMP = "/tmp/jt-search.raw"
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = 4460
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 268
+DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46  # the Apps folder's own outer window red dot (56+24, 30+16)

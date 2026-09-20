@@ -79,7 +79,7 @@ def click():
     time.sleep(0.1)
     cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
 
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 268  # same dock constants as appclose-check.py
+DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247  # same dock constants as appclose-check.py
 FILES_SLOT = 1
 centre = SLOT0_X + FILES_SLOT * (DOCK_ICON + DOCK_GAP) + DOCK_ICON // 2
 move(centre, 487); time.sleep(0.3); click(); time.sleep(1.2)  # open Files (multi-window)
