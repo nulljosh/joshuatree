@@ -1265,12 +1265,25 @@ if (typeof document !== "undefined") (function () {
       typewriterEffect(h1Link, appName + '.');
     }
   }
+  // The H1 that ships in the HTML is the real announcement line, injected at
+  // deploy time from roadmap.md's **Latest** field by
+  // tools/gen/inject-landing-headline.sh. Capture it once, before any
+  // typewriter run overwrites it, and reset to THAT rather than a hardcoded
+  // 'Joshua Tree.' -- hardcoding meant every visitor saw the real headline
+  // load and then get silently replaced by a different one a second later.
+  var DEFAULT_HEADLINE = (function () {
+    var h1 = document.querySelector('h1');
+    var text = h1 ? h1.textContent.trim() : '';
+    return text.indexOf(HEADLINE_PREFIX) === 0
+      ? text.slice(HEADLINE_PREFIX.length)
+      : 'Joshua Tree.';
+  })();
   function resetHeadline() {
     // Default headline when no tour is running or before the tour starts.
     // Uses typewriter effect for visual consistency.
     var h1Link = document.querySelector('h1');
     if (h1Link) {
-      typewriterEffect(h1Link, 'Joshua Tree.');
+      typewriterEffect(h1Link, DEFAULT_HEADLINE);
     }
   }
 

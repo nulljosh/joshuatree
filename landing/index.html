@@ -71,13 +71,11 @@
      the page had been scrolled even once, silently breaking the existing
      click-into-the-demo hide behavior. */
   .hero-copy { position: relative; opacity: var(--recede-o, 1); transform: translateY(var(--recede-y, 0)) scale(var(--recede-s, 1)); }
-  /* Fixed, not var(--fg): the hero always sits over the live demo's dark
-     photo/wallpaper background regardless of the visitor's OS light/dark
-     preference, so --fg's light-mode value (near-black) rendered
-     near-invisible dark-on-dark here even though it's perfectly readable
-     everywhere else on the page that actually has --bg behind it. A real
-     text-shadow gives it a legible edge over the photo's own busy detail. */
-  .hero h1 { color: #ffffff; }
+  /* Was a fixed #ffffff back when the hero copy sat on top of the demo's
+     own dark photo. It doesn't anymore (v0.76.52 moved it below the demo,
+     onto the page background), so white-on-#faf8f6 was invisible for any
+     visitor in light mode. Follows --fg like the rest of the page now. */
+  .hero h1 { color: var(--fg); }
   /* Direct request: click into the demo, the hero text gets out of the
      way; click/tap/esc back out (embed.js's own real focus state, not a
      second tracker) and it returns. !important over the recede effect
@@ -88,7 +86,12 @@
      dark demo backdrop -- the tagline it used to pair with is gone too,
      "it's really running" is already implied by the live thing sitting
      right above it. */
-  .eyebrow { color: #ffffff; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; margin: 10px 0 0; font-weight: 600; opacity: 0.7; }
+  .eyebrow { color: var(--fg); font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; margin: 10px 0 0; font-weight: 600; opacity: 0.7; }
+  /* The eyebrow's typewriter rewrites its text every few seconds, and the
+     items aren't the same length. Left to size itself the h2 changed height
+     between items (measured 18px vs 21px at 1440px wide) and pushed every
+     section below it up and down on every cycle. Fixed box, no wrap. */
+  .eyebrow { height: 22px; line-height: 22px; white-space: nowrap; overflow: hidden; }
   .kernel-version { opacity: 0.55; font-weight: 500; letter-spacing: 0.04em; text-transform: none; }
   .hero h1 { font-size: 56px; margin: 14px 0 0; letter-spacing: -0.03em; line-height: 1.05; }
   @media (max-width: 520px) {
@@ -339,7 +342,7 @@
          this pass. Headline swapped to Multi-Window, a real, CI-verified
          (`tools/checks/multiwindow-check.py`), actually-visible-on-load
          capability instead. -->
-<h1>Introducing Joshua Tree.</h1>
+<h1>Introducing Real-Time Memory Monitor.</h1>
     <h2 class="eyebrow"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
   </div>
 </header>

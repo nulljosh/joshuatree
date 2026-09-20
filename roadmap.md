@@ -2046,6 +2046,54 @@ Direct request: the small eyebrow line below the H1 should cycle through recent 
 
 PATCH bump: 0.76.53 -> 0.76.54.
 
+## Three landing-page UI bugs, all real (v0.76.56, Sep 2026)
+
+Direct report, with a real screenshot of the live site:
+
+1. **The headline visibly changed itself a second after load.** The `<h1>`
+   that ships in the HTML is the real announcement line, injected at deploy
+   time from this file's own `**Latest**:` field by
+   `tools/gen/inject-landing-headline.sh` ("Introducing Real-Time Memory
+   Monitor." live today). `embed.js`'s `resetHeadline()` then overwrote it
+   with a hardcoded `'Joshua Tree.'` at the start of every idle-tour lap, so
+   every visitor watched the real headline load and get silently replaced by
+   a different one. Fix: capture the injected text once at script eval
+   (`DEFAULT_HEADLINE`, parsed off the h1 before any typewriter run touches
+   it) and reset to that. No hardcoded second headline anywhere.
+2. **Light mode had no H1 contrast.** `.hero h1` was a fixed `#ffffff`, and
+   its own comment explained why: the hero copy used to sit on top of the
+   demo's dark photo. It hasn't since v0.76.52 moved it below the demo onto
+   the page background, so a light-mode visitor got white text on `#faf8f6`,
+   measured 1.06:1. Follows `var(--fg)` now, 16.06:1 measured.
+3. **The eyebrow shifted the whole page every few seconds.** The cycling
+   typewriter rewrites the h2's text on a timer and the items aren't the
+   same length, so the h2 resized between them (measured 18px vs 21px at
+   1440 wide, and 0px mid-cycle with the text cleared), pushing every section
+   below it up and down. Fixed box now: `height: 22px`, `white-space:
+   nowrap`, no reflow possible.
+
+**Test**: `tools/checks/hero-contrast-check.mjs`, one Playwright check
+covering all three (serves `landing/` over a throwaway local HTTP server, so
+it needs no deploy). Real WCAG contrast math against the actual computed
+colors, a 14-second sample of the eyebrow's height across several typewriter
+items, and a source assert that the hardcoded reset headline is gone.
+**Proven discriminating**: reverted each fix in turn, each produced a real
+FAIL (`1.06:1` contrast; `heights seen: 16, 0`), then restored for a clean
+PASS.
+
+**Not fixed, honest finding**: the queued "Apps folder redraws the entire
+screen on every scroll tick" item was attempted this pass and reverted. The
+first idea (a dirty flag around `gui_launch_apps`'s draw block) turned out to
+change nothing real: its loop blocks in `get_key_or_click()`, so there are no
+idle passes to skip, and a new QEMU marker test proved it (draw count stayed
+flat at 1 with AND without the flag, i.e. the test was not discriminating,
+the "fix" was a no-op). The real flash is one full repaint per scroll event,
+so the real fix is the scoped-rect redraw the original entry called for, not
+loop gating. Left in the queue, unstarted, rather than shipping a change that
+measures as doing nothing.
+
+PATCH bump: 0.76.55 -> 0.76.56.
+
 ## Queued for next session
 
 - Apps folder wheel-scroll works (v0.77.1) but redraws the entire screen on every scroll tick instead of just the icon grid, the same class of bug the shared gui_prompt.h scoped-redraw helper fixed for text inputs earlier. Worth the same treatment: redraw only the Apps folder's own rect, not gui_draw_desktop(-1,-1,0,0) wholesale.
