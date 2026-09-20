@@ -1,5 +1,11 @@
 #ifndef TASK_H
 #define TASK_H
+
+/* How many task slots exist, total. Exported (task.c's MAX_TASKS is
+   defined from it) because syscall.c keeps a per-task file-descriptor
+   table indexed by slot id and has to be exactly as wide as this. */
+#define TASK_SLOTS 6
+
 void tasks_init(void);
 int  task_create(void (*entry)(void));
 void yield(void);
