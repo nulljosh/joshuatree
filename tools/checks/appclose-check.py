@@ -157,10 +157,17 @@ try:
         at = close_button()
         if at is None: return
         move(*at); time.sleep(0.3)
-        click()
-        for _ in range(40):
-            time.sleep(0.1)
-            if not window_open(): break
+        # Re-click every ~4s for up to ~20s: a loaded runner can drop a click
+        # edge while the kernel repaints, or just paint very late. Either way
+        # a window that is truly stuck still fails after the last attempt.
+        for _ in range(5):
+            click()
+            for _ in range(40):
+                time.sleep(0.1)
+                if not window_open(): break
+            else:
+                continue
+            break
         move(*PARK); time.sleep(0.5)
 
     move(*PARK); time.sleep(0.5)
