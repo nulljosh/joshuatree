@@ -102,8 +102,8 @@ print(f"total {total}")
 # tools/gen/restyle_icons.py says the same thing next to LIFT. Re-measured on
 # a real capture after that pass rather than argued: still 0 of 95 pixels
 # under 240, the same result as before it.
-TRASH_SLOT = 9
-TRASH_ROWS, TRASH_COLS = range(52, 57), range(28, 47)
+TRASH_SLOT = 10
+TRASH_ROWS, TRASH_COLS = range(52, 57), range(30, 45)  # 2px inside the rim each side: the AA edge column is not a rib
 x0 = (SLOT0_X + TRASH_SLOT * PITCH) * SCALE; y0 = ICON_TOP_Y * SCALE
 bad = [(x, y, lum(img.getpixel((x0 + x, y0 + y)))) for y in TRASH_ROWS for x in TRASH_COLS
        if lum(img.getpixel((x0 + x, y0 + y))) < 240]

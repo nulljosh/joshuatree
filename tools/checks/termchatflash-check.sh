@@ -61,7 +61,32 @@ def cmd(o):
         if "return" in r or "error" in r: return r
 f.readline()
 cmd({"execute": "qmp_capabilities"})
-time.sleep(5.0)
+
+# v0.76.19: every wait in this script used to be a fixed sleep, and on a
+# shared runner that is a guess, not a wait. The real CI failure was
+# "expected exactly 1 Terminal chrome draw right after opening, got 0":
+# the click landed and Terminal really did open, the script just looked at
+# the serial log before the kernel had written its marker to it. A fixed
+# sleep cannot tell "the app never opened" from "the app opened a moment
+# after we looked", which is exactly the distinction this check exists to
+# make. Both waits below now block on a kernel-visible condition -- the
+# marker the kernel itself writes -- so the assertion that follows is
+# about the kernel's behaviour and not about how loaded the runner was.
+def wait_for(marker, want, timeout=20.0):
+    """Block until the serial log holds at least `want` of `marker`.
+
+    Returns as soon as the kernel has written it, so a fast runner pays
+    nothing and a slow one gets the time it actually needs. Returns False
+    on timeout rather than raising, so the assertion below still reports
+    the real observed count and the real FAIL message."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if count(marker) >= want:
+            return True
+        time.sleep(0.1)
+    return False
+
+time.sleep(5.0)  # boot settle: no serial marker for "desktop is up" exists yet
 
 LOGICAL_W, LOGICAL_H = 960, 540
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
@@ -87,7 +112,9 @@ def key(qcode):
 centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
 
 # Terminal: open, type "help" (4 plain keystrokes), check chrome count.
-click_at(centre(TERMINAL_SLOT), ICON_ROW_Y); time.sleep(1.0)
+click_at(centre(TERMINAL_SLOT), ICON_ROW_Y)
+wait_for("termchrome\n", 1)   # the kernel's own "I drew the chrome" marker, not a guess
+time.sleep(0.5)               # and a beat after it, so a spurious SECOND draw would show up too
 after_term_open = count("termchrome\n")
 for c in "help":
     key(c)
@@ -97,7 +124,9 @@ click_at(94, 56)  # close via its own X
 time.sleep(0.5)
 
 # Chat: open, 'n' (enters compose), type 3 plain characters, check chrome count.
-click_at(centre(CHAT_SLOT), ICON_ROW_Y); time.sleep(1.0)
+click_at(centre(CHAT_SLOT), ICON_ROW_Y)
+wait_for("chatchrome\n", 1)
+time.sleep(0.5)
 after_chat_open = count("chatchrome\n")
 key("n"); time.sleep(0.3)
 for c in "yes":

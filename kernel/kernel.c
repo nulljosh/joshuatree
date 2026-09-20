@@ -1106,6 +1106,7 @@ static int gui_dock_icon(void){
 #define DOCK_ANIM_TICKS 6
 #define DOCK_ANIM_SUB   16
 #define DOCK_LIFT       10
+#include "dock_anim.h"
 
 static int gui_dock_w(void){ return GUI_ICON_COUNT * DOCK_ICON + (GUI_ICON_COUNT - 1) * DOCK_GAP + 2 * DOCK_PAD; }
 static int gui_dock_x0(void){ return ((int)window_width() - gui_dock_w()) / 2; }
@@ -5858,12 +5859,11 @@ static void gui_run(void){
                the extra distance buys nothing and only overshoots the clamp */
             if (anim_elapsed > DOCK_ANIM_TICKS) anim_elapsed = DOCK_ANIM_TICKS;
             dock_anim_last_tick += anim_elapsed; /* carry the remainder */
-            int delta = (int)anim_elapsed * DOCK_MAGNIFY * DOCK_ANIM_SUB / DOCK_ANIM_TICKS;
             for (int i = 0; i < GUI_ICON_COUNT; i++) {
                 int target = (i == hover_slot) ? DOCK_MAGNIFY * DOCK_ANIM_SUB : 0;
                 int pos = dock_anim_pos[i];
-                if (pos < target) { pos += delta; if (pos > target) pos = target; }
-                else if (pos > target) { pos -= delta; if (pos < target) pos = target; }
+                pos = dock_anim_advance(pos, target, anim_elapsed,
+                                        DOCK_MAGNIFY, DOCK_ANIM_SUB, DOCK_ANIM_TICKS);
                 dock_anim_pos[i] = (short)pos;
                 int next = pos / DOCK_ANIM_SUB;
                 if (next != dock_hover_extra[i]) {
