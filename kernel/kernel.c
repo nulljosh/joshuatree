@@ -198,7 +198,7 @@ static char getch(void){
     for (;;) {
         gui_app_mouse_tick();
         int sc = kbd_pop();
-        if (sc < 0) { __asm__ volatile ("hlt"); continue; }
+        if (sc < 0) { window_present(); __asm__ volatile ("hlt"); continue; }
         if (sc & 0x80) continue;            /* key release */
         char c = SC[sc & 0x7F];
         if (c) return c;
@@ -230,7 +230,7 @@ static int gui_getch_or_click(void){
             continue;
         }
         if (mouse_click_edge()) { gui_close_was_click = 1; return -1; }
-        __asm__ volatile ("hlt");
+        window_present(); __asm__ volatile ("hlt");
     }
 }
 
@@ -262,10 +262,10 @@ static int get_key_or_click(void);
 static int get_key(void){
     for (;;) {
         int sc = kbd_pop();
-        if (sc < 0) { __asm__ volatile ("hlt"); continue; }
+        if (sc < 0) { window_present(); __asm__ volatile ("hlt"); continue; }
         if (sc == 0xE0) {
             int sc2;
-            do { sc2 = kbd_pop(); if (sc2 < 0) __asm__ volatile ("hlt"); } while (sc2 < 0);
+            do { sc2 = kbd_pop(); if (sc2 < 0) window_present(); __asm__ volatile ("hlt"); } while (sc2 < 0);
             if (sc2 == 0x48) return KEY_UP;
             if (sc2 == 0x50) return KEY_DOWN;
             if (sc2 == 0x4B) return KEY_LEFT;
@@ -287,7 +287,7 @@ static int get_key_or_click(void){
         if (sc >= 0) {
             if (sc == 0xE0) {
                 int sc2;
-                do { sc2 = kbd_pop(); if (sc2 < 0) __asm__ volatile ("hlt"); } while (sc2 < 0);
+                do { sc2 = kbd_pop(); if (sc2 < 0) window_present(); __asm__ volatile ("hlt"); } while (sc2 < 0);
                 if (sc2 == 0x48) return KEY_UP;
                 if (sc2 == 0x50) return KEY_DOWN;
                 if (sc2 == 0x4B) return KEY_LEFT;
@@ -306,7 +306,7 @@ static int get_key_or_click(void){
         if (mouse_click_edge()) { gui_close_was_click = 1; return KEY_CLICK; }
         int wheel = mouse_get_wheel();
         if (wheel) return wheel > 0 ? KEY_WHEEL_UP : KEY_WHEEL_DOWN;
-        __asm__ volatile ("hlt");
+        window_present(); __asm__ volatile ("hlt");
     }
 }
 
@@ -3535,7 +3535,7 @@ static void gui_wait_close(void){
        settle time here, comfortably more than one real display frame,
        gives it that gap without real hardware/QEMU visitors ever noticing
        an unnecessary pause, they didn't need it in the first place. */
-    sleep_ticks(5);
+    window_present(); sleep_ticks(5);
     mouse_click_edge_sync(); /* a button already held (e.g. the click that opened this app) is the baseline, not a fresh click */
     for (;;) {
         gui_app_mouse_tick();
@@ -3549,7 +3549,7 @@ static void gui_wait_close(void){
            that does. */
         if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) { gui_close_was_click = 0; return; }
         if (mouse_click_edge()) { gui_close_was_click = 1; return; }
-        __asm__ volatile ("hlt");
+        window_present(); __asm__ volatile ("hlt");
     }
 }
 
@@ -3926,7 +3926,7 @@ static void gui_launch_terminal(void){
         /* See gui_wait_close and the Apps folder: settle for v86's canvas
            sampler, and treat a click/tap as a real way out for a visitor
            with no keyboard. */
-        sleep_ticks(5);
+        window_present(); sleep_ticks(5);
         mouse_click_edge_sync();
         int k = get_key_or_click();
         if (k == KEY_ESC || k == KEY_CLICK) return;
@@ -4039,7 +4039,7 @@ static void gui_launch_apps(void){
            a few real ticks of settle time so the emulator's canvas sampler
            actually catches this frame before we block, and a click/tap
            counting as input so a phone can leave this screen at all. */
-        sleep_ticks(5);
+        window_present(); sleep_ticks(5);
         mouse_click_edge_sync();
         /* v0.77.0: mouse wheel scroll to browse all apps, one row per scroll. */
         int k = get_key_or_click();
@@ -4152,7 +4152,7 @@ static void gui_launch_trash(void){
                 font_draw_string(sz, 300, y, 0x00807468, -1);
             }
         }
-        sleep_ticks(5);
+        window_present(); sleep_ticks(5);
         mouse_click_edge_sync();
         int k = get_key_or_click();
         if (k == KEY_ESC || k == KEY_CLICK) return;
@@ -4279,7 +4279,7 @@ static void gui_launch_settings(void){
         }
         font_draw_string("Settings are saved to disk and survive a reboot.", 20, (int)window_height() - 28, 0x00807468, -1);
 
-        sleep_ticks(5);
+        window_present(); sleep_ticks(5);
         mouse_click_edge_sync();
         int k = get_key_or_click();
         if (k == KEY_ESC) return;
@@ -4766,7 +4766,7 @@ static void gui_draw_boot_screen(void){
             window_rect(bar_x, bar_y, fill, bar_h, 0x00FFFFFF); /* v0.76.48: was the same hardcoded maroon as the old logo, direct report, white to match the boot screen */
         }
         if (elapsed >= logo_only + bar_span) break;
-        __asm__ volatile ("hlt");
+        window_present(); __asm__ volatile ("hlt");
     }
 }
 
@@ -4847,14 +4847,14 @@ static void gui_launch_about(void){
        (mouse_click_edge_sync/kbd_pop/Escape), copied rather than
        parameterized since this is the only call site that needs its own
        hint position. */
-    sleep_ticks(5);
+    window_present(); sleep_ticks(5);
     mouse_click_edge_sync();
     for (;;) {
         gui_app_mouse_tick();
         int sc = kbd_pop();
         if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) { gui_close_was_click = 0; return; }
         if (mouse_click_edge()) { gui_close_was_click = 1; return; }
-        __asm__ volatile ("hlt");
+        window_present(); __asm__ volatile ("hlt");
     }
 }
 
@@ -5134,7 +5134,13 @@ static void gui_run(void){
        dropped (tourtest failed twice, alone, on this build). The BIOS-font
        check from v38 is the reliable "this is v86" signal. */
     if (font_is_fallback()) wind_enabled = 0;
-    auth_gate(); /* v0.77: real login/first-run account screen, once per session, before the desktop ever paints */
+    /* One real check that the back buffer is both present and actually
+       interposed, reported over serial rather than assumed; the
+       "backbuffer=none" case is the honest, still-correct fallback a
+       machine too small to allocate one (v86's 32MB demo) takes. */
+    serial_puts(window_backbuffer_selftest() ? "backbuffer=ok\n"
+                : (window_has_back_buffer() ? "backbuffer=broken\n" : "backbuffer=none\n"));
+    auth_gate(); /* v0.77: real login screen, once per session, before the desktop ever paints */
     gui_draw_boot_screen();
     gui_order_init();
     for (int i = 0; i < GUI_ICON_COUNT; i++) dock_hover_extra[i] = dock_presented_extra[i] = 0;
@@ -5171,7 +5177,7 @@ static void gui_run(void){
     gui_cursor_save(mx, my);
     gui_draw_cursor(mx, my);
     for (;;) {
-        __asm__ volatile ("hlt");
+        window_present(); __asm__ volatile ("hlt");
         /* v0.76.17: direct request ("time in top right needs live reload
            accuracy, right now it doesn't load when the minute or hour
            changes"). Root cause: gui_draw_menubar() already self-gates on
@@ -7232,7 +7238,7 @@ static void run(char *line){
             do {
                 window_clear(0x00FAF8F6);
                 window_rect(cx_pos - 5, cy_pos - 5, 10, 10, 0x00555555);
-                __asm__ volatile ("hlt"); /* wake on the next IRQ (timer, keyboard, or mouse) */
+                window_present(); __asm__ volatile ("hlt"); /* wake on the next IRQ (timer, keyboard, or mouse) */
                 int dx, dy;
                 if (mouse_get_delta(&dx, &dy, &buttons)) {
                     cx_pos += dx; cy_pos += dy;

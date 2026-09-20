@@ -304,6 +304,6 @@ static void gui_launch_editor(void) {
             if (gui_app_windowed) gui_app_cursor_hide();
             editor_draw();
         }
-        else __asm__ volatile ("hlt");
+        else window_present(); __asm__ volatile ("hlt");
     }
 }

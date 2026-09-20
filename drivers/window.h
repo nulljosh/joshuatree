@@ -40,6 +40,19 @@ unsigned int window_height(void);
 void window_set_viewport(int x, int y, unsigned int w, unsigned int h);
 void window_clear_viewport(void);
 
+/* v0.77.x: the real back buffer. When window_open* succeeded in
+   allocating one, every draw lands offscreen and nothing reaches the
+   visible framebuffer until window_present() copies the damaged
+   rectangle across. Call it at a frame boundary: the point a loop has
+   finished drawing and is about to wait for input. Both calls are safe
+   and free when there is no back buffer (allocation failed, e.g. v86's
+   32MB browser demo), which is exactly the pre-back-buffer behaviour. */
+void window_present(void);
+int window_has_back_buffer(void);
+/* 1 if a draw really lands offscreen and only window_present() moves it to
+   the visible framebuffer. See window.c. */
+int window_backbuffer_selftest(void);
+
 /* Compose a physical row band offscreen, then present it in one copy. */
 void window_push_screen_band(unsigned int *buf, int top, unsigned int h);
 void window_pop_screen_band(void);

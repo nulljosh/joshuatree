@@ -1,6 +1,8 @@
 #include "window.h"
 #include "vbe.h"
 #include "paging.h"
+#include "kheap.h"
+#include "serial.h"
 
 typedef unsigned int u32;
 
@@ -13,23 +15,62 @@ static u32 *screen_band = 0;
 static int screen_band_top = 0;
 static u32 screen_band_h = 0;
 
+/* v0.77.x: the real back buffer the roadmap's "a compositor in gui_run"
+   item has been waiting on, and the systemic fix for the whole "every
+   click or keystroke redraws the page" class of report. Every drawing
+   call in this kernel already funnels through exactly three writers
+   (window_pixel_phys, window_clear, window_phys_row), so pointing those
+   three at an offscreen buffer of the same physical geometry makes every
+   repaint invisible: the viewer only ever sees window_present() copy the
+   damaged rectangle across in one pass, never the erase-then-redraw in
+   between. Apps that still repaint their whole window stay just as
+   wasteful as they were, but they stop flashing, which is the part the
+   owner actually sees.
+
+   Cost at the real mode this runs at (960x540 logical, scale 2, so
+   1920x1080 physical): 1920*1080*4 = 8,294,400 bytes. QEMU's default is
+   128MB of RAM and paging.c's MAX_EXTRA_TABLES (16) gives 64MB of
+   mapping headroom, against a GUI working set that was ~19MB before
+   this, so no ceiling needs raising. On a machine where the kmalloc
+   fails (v86's 32MB browser demo is the real one) back stays 0 and every
+   path below falls straight through to the framebuffer, i.e. exactly the
+   behaviour that shipped before this change, no new failure mode. */
+static u32 *back = 0;
+static int dmg_x0 = 0, dmg_y0 = 0, dmg_x1 = 0, dmg_y1 = 0; /* damage bbox, x1/y1 exclusive; empty when x1 <= x0 */
+
+static void damage_reset(void) { dmg_x0 = dmg_y0 = 0x7FFFFFFF; dmg_x1 = dmg_y1 = 0; }
+static void damage_all(void) { dmg_x0 = 0; dmg_y0 = 0; dmg_x1 = (int)phys_w; dmg_y1 = (int)(win_h * scale); }
+static void damage_add(int x, int y) {
+    if (x < dmg_x0) dmg_x0 = x;
+    if (y < dmg_y0) dmg_y0 = y;
+    if (x + 1 > dmg_x1) dmg_x1 = x + 1;
+    if (y + 1 > dmg_y1) dmg_y1 = y + 1;
+}
+
 void window_set_viewport(int x, int y, u32 w, u32 h) { view_x = x; view_y = y; view_w = w; view_h = h; }
 void window_clear_viewport(void) { view_w = view_h = 0; view_x = view_y = 0; }
 void window_push_screen_band(u32 *buf, int top, u32 h) { screen_band = buf; screen_band_top = top; screen_band_h = h; }
 void window_pop_screen_band(void) { screen_band = 0; screen_band_top = 0; screen_band_h = 0; }
 
-static u32 *screen_pixel(int px, int py) {
+static u32 *screen_pixel_ex(int px, int py, int write) {
     if (view_w) {
         if (px < 0 || py < 0 || (u32)px >= view_w * scale || (u32)py >= view_h * scale) return 0;
         px += view_x * (int)scale; py += view_y * (int)scale;
     }
     if (px < 0 || py < 0 || (u32)px >= phys_w || (u32)py >= win_h * scale) return 0;
     if (screen_band) {
+        /* an offscreen band compose: this write never touches the screen
+           or the back buffer, so it damages neither */
         if (py < screen_band_top || (u32)(py - screen_band_top) >= screen_band_h) return 0;
         return &screen_band[(u32)(py - screen_band_top) * phys_w + (u32)px];
     }
+    if (back) {
+        if (write) damage_add(px, py);
+        return &back[(u32)py * phys_w + (u32)px];
+    }
     return &fb[(u32)py * phys_w + (u32)px];
 }
+static u32 *screen_pixel(int px, int py) { return screen_pixel_ex(px, py, 0); }
 
 /* A single redirectable render target, real supersampling for anything
    that wants it (icons, first user: gui_draw_one_icon renders each one
@@ -63,6 +104,10 @@ int window_open_scaled(u32 width, u32 height, u32 bpp, u32 s) {
     win_h = height;
     phys_w = width * s;
     scale = s;
+    back = (u32 *)kmalloc(phys_w * height * s * 4);
+    if (back) for (u32 i = 0; i < phys_w * height * s; i++) back[i] = 0;
+    damage_reset();
+    if (back) damage_all();
     return 1;
 }
 
@@ -79,12 +124,68 @@ u32 window_get_pixel_phys(int px, int py) {
 
 u32 *window_phys_row(int py) {
     if (view_w || screen_band || py < 0 || (u32)py >= win_h * scale) return 0;
+    if (back) {
+        /* a raw row pointer can be written anywhere along its width, so
+           damage the whole row rather than guess; the one real caller
+           (gui_redraw_dock_band) is already row-banded anyway */
+        damage_add(0, py); damage_add((int)phys_w - 1, py);
+        return back + (u32)py * phys_w;
+    }
     return fb + (u32)py * phys_w;
 }
 
 void window_pixel_phys(int px, int py, u32 color) {
-    u32 *p = screen_pixel(px, py);
+    u32 *p = screen_pixel_ex(px, py, 1);
     if (p) *p = color;
+}
+
+/* Copies the damaged rectangle of the back buffer onto the real
+   framebuffer in one pass, then clears the damage. This is the only
+   moment anything a caller drew becomes visible, so it belongs at a real
+   frame boundary (every place a loop has finished drawing and is about
+   to wait for input), never in the middle of one. A no-op when there is
+   no back buffer, and a no-op when nothing was drawn since the last
+   call, which is what makes the ~100Hz idle loop free. */
+void window_present(void) {
+    if (!back || !fb) return;
+    if (dmg_x1 <= dmg_x0 || dmg_y1 <= dmg_y0) return;
+    int x0 = dmg_x0 < 0 ? 0 : dmg_x0, y0 = dmg_y0 < 0 ? 0 : dmg_y0;
+    int x1 = dmg_x1 > (int)phys_w ? (int)phys_w : dmg_x1;
+    int y1 = dmg_y1 > (int)(win_h * scale) ? (int)(win_h * scale) : dmg_y1;
+    for (int y = y0; y < y1; y++) {
+        u32 *src = back + (u32)y * phys_w, *dst = fb + (u32)y * phys_w;
+        for (int x = x0; x < x1; x++) dst[x] = src[x];
+    }
+    damage_reset();
+    serial_puts("present\n"); /* discriminating marker for tools/checks/backbuffer-check.sh */
+}
+
+int window_has_back_buffer(void) { return back != 0; }
+
+/* A real, self-contained proof that drawing is genuinely offscreen, not a
+   claim about it: write a known value through the normal drawing path,
+   read the VISIBLE framebuffer back directly (not window_get_pixel_phys,
+   which now reads the back buffer), and require it to still hold the old
+   value. Then present, and require it to have changed. Restores the pixel
+   it borrowed either way. Returns 1 only when the whole sequence holds.
+   Checked once from gui_run and reported over serial; see
+   tools/checks/backbuffer-check.sh. */
+int window_backbuffer_selftest(void) {
+    if (!back || !fb) return 0;
+    int px = (int)phys_w - 1, py = (int)(win_h * scale) - 1;
+    u32 was_fb = fb[(u32)py * phys_w + (u32)px];
+    u32 was_back = back[(u32)py * phys_w + (u32)px];
+    u32 probe = was_fb ^ 0x00FFFFFF;
+    int sx0 = dmg_x0, sy0 = dmg_y0, sx1 = dmg_x1, sy1 = dmg_y1;
+    damage_reset();
+    window_pixel_phys(px, py, probe);
+    int offscreen = (fb[(u32)py * phys_w + (u32)px] == was_fb); /* the screen must NOT have moved yet */
+    window_present();
+    int presented = (fb[(u32)py * phys_w + (u32)px] == probe);
+    back[(u32)py * phys_w + (u32)px] = was_back;
+    fb[(u32)py * phys_w + (u32)px] = was_fb;
+    dmg_x0 = sx0; dmg_y0 = sy0; dmg_x1 = sx1; dmg_y1 = sy1;
+    return offscreen && presented;
 }
 
 void window_close(void) {
@@ -100,6 +201,8 @@ void window_close(void) {
         paging_unmap_region((u32)fb, size);
     }
     vbe_disable();
+    if (back) { kfree(back); back = 0; }
+    damage_reset();
     fb = 0;
     win_w = win_h = 0;
     phys_w = 0; scale = 1;
@@ -111,7 +214,9 @@ void window_clear(u32 color) {
         for (u32 y = 0; y < view_h * scale; y++)
             for (u32 x = 0; x < view_w * scale; x++) window_pixel_phys((int)x, (int)y, color);
     } else {
-        for (u32 i = 0; i < phys_w * win_h * scale; i++) fb[i] = color;
+        u32 *dst = back ? back : fb;
+        for (u32 i = 0; i < phys_w * win_h * scale; i++) dst[i] = color;
+        if (back) damage_all();
     }
 }
 
