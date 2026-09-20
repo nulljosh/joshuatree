@@ -36,6 +36,7 @@ cd "$(dirname "$0")/../.."
 # retry?  name                                                          command
 manifest() {
 cat <<'EOF'
+once |Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
 retry|Boot check|./check.sh
 once |PNG decoder, host harness|./tools/checks/png-host-check.sh
 retry|PNG decoder, in-kernel|./tools/checks/png-check.sh
