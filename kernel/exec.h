@@ -25,16 +25,46 @@
  * window and one user stack page, so a second exec_user() while one is
  * running would load over the first. The shell waits for the task it
  * started, which is what keeps that true today.
+ *
+ * v2 adds argv. A flat binary has no crt0 to unpack a Linux-shaped
+ * initial stack, so the loader builds the stack a plain C function would
+ * expect to find, and that is the whole mechanism: at the moment the CPU
+ * lands on the entry point, esp points at a fake return address, with
+ * argc at 4(%esp) and argv at 8(%esp). That is the i386 cdecl frame, so
+ * `void _start(int argc, char **argv)` compiles to code that reads the
+ * right two words with no assembly shim anywhere. The fake return address
+ * is 0 and is not a mistake: _start has no caller, and returning from it
+ * jumps to an unmapped address, which idt.c's ring-3 fault path reaps
+ * like any other faulting program rather than wandering into whatever
+ * happened to be on the stack.
+ *
+ * The strings and the pointer array live at the top of the program's own
+ * stack page, which exec_user() has already zeroed and made user
+ * accessible. argv[argc] is NULL.
  */
 
 #define JT_USER_BASE       0xC0500000u /* must match user/hello.ld and boot/linker.ld's .userimg */
 #define JT_USER_IMAGE_MAX  (7 * 4096)  /* 28KB of code+data; page 8 of the window is the stack */
 #define JT_USER_STACK_TOP  (JT_USER_BASE + 8 * 4096)
 
-/* Runs `name` at ring 3 and waits for it to end. Returns 1 if the program
-   ran (its exit status, as recorded by task_exit_with, goes in *status),
-   0 if the file could not be read or no task slot was free. A program
-   that faults instead of exiting is still reaped by idt.c's ring-3 path
-   and still returns 1, with whatever status that path recorded. */
-int exec_user(const char *name, int *status);
+/* Bounds on the argument block, small on purpose: it is carved out of the
+   top of the one 4KB stack page the program also runs on, so every byte
+   spent here is a byte of stack the program does not get. A request past
+   either limit fails the exec outright rather than handing the program a
+   quietly truncated argv it has no way to detect. */
+#define JT_ARGC_MAX   8    /* including argv[0] */
+#define JT_ARGV_BYTES 256  /* total bytes of argument text, NULs included */
+
+/* Runs `name` at ring 3 with `argc`/`argv` on its stack and waits for it
+   to end. Returns 1 if the program ran (its exit status, as recorded by
+   task_exit_with, goes in *status), 0 if the file could not be read, the
+   argument block did not fit, or no task slot was free. A program that
+   faults instead of exiting is still reaped by idt.c's ring-3 path and
+   still returns 1, with whatever status that path recorded.
+
+   argv[0] is the program's own name by convention, and it is the caller's
+   job to put it there; nothing here invents one. argc may be 0, in which
+   case the program gets argc == 0 and an argv holding only its NULL
+   terminator. */
+int exec_user(const char *name, const char *const *argv, int argc, int *status);
 #endif

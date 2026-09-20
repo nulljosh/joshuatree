@@ -7,6 +7,8 @@ drivers/version.h
 # tree; the flat binary and its embedded copy are not.
 user/hello.bin
 drivers/user_hello.h
+user/note.bin
+drivers/user_note.h
 landing/kernel.elf
 !landing/v86/kernel.elf
 .DS_Store
