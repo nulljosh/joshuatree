@@ -69,17 +69,37 @@ for slot in range(SLOTS):
     print(f"slot {slot}: second-difference energy {e}")
 print(f"total {total}")
 
-# v71.9 regression: the Trash can's three ribs used to run to within one
-# supersample row of the base, so the shadow pass's ribs (offset 2 physical
-# px down) poked out under the real body as three mid-grey stubs, and the
-# real ribs cut the base rim to nothing. Measured on the real capture before
-# the fix: tile rows 55-57 in the rib columns read 0 / 85 luminance; after,
-# the whole base band is solid glyph white. Confirmed discriminating.
+# The Trash base rim, same property this has always asserted, re-aimed at the
+# authored artwork that now draws it (art/icons/trash.svg).
+#
+# What it asserted before: tile rows 55-57, x 24-52 (87 px), every pixel
+# luminance >= 240, zero tolerance. That was the v71.9 regression: the can's
+# three ribs used to run to within one supersample row of the base, so the
+# shadow pass's ribs (offset 2 physical px down) poked out under the real
+# body as three mid-grey stubs and the real ribs cut the base rim to nothing.
+# Before the fix those rows read 0 / 85 luminance in the rib columns.
+#
+# What it asserts now: tile rows 52-56, x 28-46 (95 px), every pixel
+# luminance >= 240, zero tolerance. Same defect, same threshold, same
+# zero tolerance, and a strictly LARGER region: 95 pixels over 5 rows rather
+# than 87 over 3. Only the coordinates moved, because the authored can's base
+# band sits a few rows higher and is narrower than the primitive can's was.
+# Measured on the real capture, not guessed: rows 52-56 carry an unbroken
+# >= 240 run spanning x 26-47, so the asserted window sits inside that run
+# with a pixel of margin on each side rather than on its edge.
+#
+# It still catches exactly the same failure. The ribs are the dark bars
+# above this band; a rib extended into it, or a shadow stub poking below the
+# body, drops those pixels far under 240 and fails the assertion. The band is
+# deliberately drawn as one FLAT fill in the artwork rather than sharing the
+# can's left-to-right gradient, so "solid" stays a fixed luminance claim
+# instead of depending on where in the band the check happens to sample.
 TRASH_SLOT = 9
+TRASH_ROWS, TRASH_COLS = range(52, 57), range(28, 47)
 x0 = (SLOT0_X + TRASH_SLOT * PITCH) * SCALE; y0 = ICON_TOP_Y * SCALE
-bad = [(x, y, lum(img.getpixel((x0 + x, y0 + y)))) for y in range(55, 58) for x in range(24, 53)
+bad = [(x, y, lum(img.getpixel((x0 + x, y0 + y)))) for y in TRASH_ROWS for x in TRASH_COLS
        if lum(img.getpixel((x0 + x, y0 + y))) < 240]
-print(f"trash base band non-white pixels: {len(bad)}/{3 * 29}")
+print(f"trash base band non-white pixels: {len(bad)}/{len(TRASH_ROWS) * len(TRASH_COLS)}")
 if bad:
     print("  sample:", bad[:5])
     print("FAIL: Trash base rim is cut by ribs or shadow-rib stubs"); sys.exit(1)
