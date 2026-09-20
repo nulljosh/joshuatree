@@ -1,39 +1,61 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- hue #725238 : this icon's own base colour, the one thing here that is
+       per-icon. Everything below is the shared tile technique, written by
+       tools/gen/restyle_icons.py; re-running it reads this line back, so
+       tuning the technique never drifts the colour. -->
   <defs>
+    <!-- The tile's own body: lit face on top, turning away from the light
+         toward the bottom. Three stops, not two, so the falloff is a curve. -->
     <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#8C6D53"/><stop offset="1" stop-color="#58381D"/>
+      <stop offset="0" stop-color="#AD9B8C"/><stop offset="0.58" stop-color="#80634C"/><stop offset="1" stop-color="#443122"/>
     </linearGradient>
-    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"/>
-      <stop offset="0.62" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
+    <!-- Top sheen, radial so it has no outline of its own anywhere. -->
+    <radialGradient id="gloss" gradientUnits="userSpaceOnUse" cx="64" cy="-18" r="106">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0.06"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Edge light: bright along the top edge, shaded along the bottom. -->
     <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.60"/>
-      <stop offset="0.42" stop-color="#ffffff" stop-opacity="0"/>
-      <stop offset="1" stop-color="#000000" stop-opacity="0.22"/>
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="0.3" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.26"/>
     </linearGradient>
     <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#E9E2DC"/>
     </linearGradient>
+    <!-- The glyph's own top-light, painted through the glyph's alpha. -->
+    <linearGradient id="lift" gradientUnits="userSpaceOnUse" x1="0" y1="16" x2="0" y2="102">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.32"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0.07"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
     <filter id="drop" x="-40%" y="-40%" width="180%" height="190%">
-      <feDropShadow dx="0" dy="2.4" stdDeviation="2.6" flood-color="#000000" flood-opacity="0.40"/>
+      <feDropShadow dx="0" dy="2.6" stdDeviation="2.9" flood-color="#000000" flood-opacity="0.42"/>
+    </filter>
+    <!-- Flattens whatever it is given to solid white, keeping alpha, so the
+         glyph can be its own mask without a hand-drawn duplicate of it. -->
+    <filter id="flat" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/>
     </filter>
     <clipPath id="tile"><rect x="0" y="0" width="128" height="128" rx="28"/></clipPath>
+    <g id="glyph">
+      <linearGradient id="wood" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#FFE39B"/><stop offset="0.5" stop-color="#FFC94F"/>
+        <stop offset="1" stop-color="#E79A28"/>
+      </linearGradient>
+      <g transform="rotate(-45 64 64)">
+        <rect x="54" y="26" width="20" height="9" rx="3" fill="#E9736F"/>
+        <rect x="54" y="34" width="20" height="5" fill="#CFCFCF"/>
+        <rect x="54" y="38" width="20" height="46" fill="url(#wood)"/>
+        <path d="M54 84 h20 l-10 18 z" fill="#F4DCAE"/>
+        <path d="M59.6 94 h8.8 l-4.4 8 z" fill="#3A3A3A"/>
+      </g></g>
+    <mask id="gmask" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+      <use href="#glyph" filter="url(#flat)"/>
+    </mask>
   </defs>
   <rect x="0" y="0" width="128" height="128" rx="28" fill="url(#base)"/>
   <g clip-path="url(#tile)">
-    <ellipse cx="64" cy="6" rx="86" ry="54" fill="url(#gloss)"/>
-    <linearGradient id="wood" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#FFE39B"/><stop offset="0.5" stop-color="#FFC94F"/>
-      <stop offset="1" stop-color="#E79A28"/>
-    </linearGradient>
-    <g filter="url(#drop)" transform="rotate(-45 64 64)">
-      <rect x="54" y="26" width="20" height="9" rx="3" fill="#E9736F"/>
-      <rect x="54" y="34" width="20" height="5" fill="#CFCFCF"/>
-      <rect x="54" y="38" width="20" height="46" fill="url(#wood)"/>
-      <path d="M54 84 h20 l-10 18 z" fill="#F4DCAE"/>
-      <path d="M59.6 94 h8.8 l-4.4 8 z" fill="#3A3A3A"/>
-    </g>
+    <rect x="0" y="0" width="128" height="128" fill="url(#gloss)"/>
+    <use href="#glyph" filter="url(#drop)"/>
+    <rect x="0" y="0" width="128" height="128" fill="url(#lift)" mask="url(#gmask)"/>
   </g>
   <rect x="0.7" y="0.7" width="126.6" height="126.6" rx="27.3" fill="none" stroke="url(#rim)" stroke-width="1.4"/>
 </svg>
