@@ -2063,6 +2063,34 @@ static int weather_tried_once = 0;
 static int weather_temp_c = 0;
 static int weather_code10 = 0;
 static int weather_have = 0;
+/* Why the last fetch ended the way it did. The Weather window used to have
+   exactly one failure face ("Weather unavailable") for five different
+   causes, and no way to try again short of waiting ten minutes.
+   weather_have/weather_text keep the last GOOD reading across a later
+   failure on purpose: the window labels it stale instead of going blank. */
+#define WX_NONE    0 /* never tried */
+#define WX_OK      1
+#define WX_OFFLINE 2 /* no NIC, or the gateway never answered ARP */
+#define WX_TIMEOUT 3 /* DNS, connect or reply deadline ran out */
+#define WX_FAILED  4 /* resolver said no such host, or the NIC refused the frame */
+#define WX_BAD     5 /* non-200, empty, or a body the parser could not read */
+static int weather_state = WX_NONE;
+static char weather_err[48] = "";
+static const char *weather_state_name(int st){
+    return st == WX_OK ? "ok" : st == WX_OFFLINE ? "offline" : st == WX_TIMEOUT ? "timeout" : st == WX_FAILED ? "failed" : st == WX_BAD ? "bad" : "none";
+}
+/* Test/diagnostic override, read once from the multiboot command line
+   (`-append "wxhost=10.0.2.2:8099"`, see kmain): both the location and the
+   forecast request go to this literal IP:port instead of ip-api.com and
+   api.open-meteo.com. tools/checks/weather-app-check.sh points it at a
+   local fake server to drive success, bad-response and timeout without
+   the real internet. Empty (every normal boot) means the real hosts. */
+static char wx_override_host[20] = "";
+static unsigned short wx_override_port = 80;
+/* A weather one-liner that has not started answering in ~15s will not.
+   net.c's default reply budget (sized for local LLM generation, minutes)
+   froze the whole desktop that long on a half-open connection. */
+#define WX_REPLY_TIMEOUT_TICKS 1200
 /* Hit box for the menu-bar weather text, recomputed by gui_draw_menubar
    every time it actually redraws that text (same cadence the clock hit
    test already tolerates: coarse, minute-granularity, matching how often
@@ -2280,14 +2308,41 @@ static int json_current_number(const char *json, const char *key, int *out_x10){
    ip-api answer, that the URL really carries the dynamic location. */
 static char geo_lat[16] = "", geo_lon[16] = "", geo_city[24] = "";
 static int geo_have = 0;
+/* Turns the net/http layer's last failure into a window state plus a short
+   human detail. `what` names the request ("location" / "forecast"). */
+static void weather_set_error(int st, const char *what, const char *detail){
+    weather_state = st;
+    int p = 0;
+    for (const char *c = what; *c && p < 46; c++) weather_err[p++] = *c;
+    if (*detail && p < 45) { weather_err[p++] = ':'; weather_err[p++] = ' '; }
+    for (const char *c = detail; *c && p < 47; c++) weather_err[p++] = *c;
+    weather_err[p] = 0;
+}
+static void weather_classify_http_failure(const char *what, int n){
+    int e = net_last_error();
+    if (n < 0 || e == NET_ERR_REPLY_TIMEOUT) {
+        if (e == NET_ERR_ARP_TIMEOUT) weather_set_error(WX_OFFLINE, what, "no route to the network");
+        else if (e == NET_ERR_DNS_TIMEOUT || e == NET_ERR_CONNECT_TIMEOUT || e == NET_ERR_REPLY_TIMEOUT) weather_set_error(WX_TIMEOUT, what, net_error_name(e));
+        else weather_set_error(WX_FAILED, what, net_error_name(e));
+        return;
+    }
+    int st = http_last_status();
+    if (st && st != 200) {
+        char d[12] = "HTTP "; int q = 5;
+        d[q++] = '0' + (st / 100) % 10; d[q++] = '0' + (st / 10) % 10; d[q++] = '0' + st % 10; d[q] = 0;
+        weather_set_error(WX_BAD, what, d);
+    } else weather_set_error(WX_BAD, what, n == 0 ? "empty reply" : "unreadable reply");
+}
+
 static int geo_fetch(void){
     static char body[1024];
-    int n = http_get("ip-api.com", "/json/", 80, body, sizeof(body) - 1);
-    if (n <= 0) return 0;
+    int n = wx_override_host[0] ? http_get_timeout(wx_override_host, "/json/", wx_override_port, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS)
+                                : http_get_timeout("ip-api.com", "/json/", 80, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS);
+    if (n <= 0 || http_last_status() != 200) { weather_classify_http_failure("location", n); return 0; }
     body[n] = 0;
     char lat[16], lon[16];
-    if (!json_extract_number_text(body, "lat", lat, sizeof(lat))) return 0;
-    if (!json_extract_number_text(body, "lon", lon, sizeof(lon))) return 0;
+    if (!json_extract_number_text(body, "lat", lat, sizeof(lat)) ||
+        !json_extract_number_text(body, "lon", lon, sizeof(lon))) { weather_set_error(WX_BAD, "location", "unreadable reply"); return 0; }
     int i;
     for (i = 0; lat[i]; i++) geo_lat[i] = lat[i]; geo_lat[i] = 0;
     for (i = 0; lon[i]; i++) geo_lon[i] = lon[i]; geo_lon[i] = 0;
@@ -2297,11 +2352,10 @@ static int geo_fetch(void){
     return 1;
 }
 
-static void weather_fetch(void){
-    weather_last_tick = ticks();
-    serial_puts("wxfetch\n"); /* tools/checks/weather-app-check.sh counts these: a failed fetch must not re-run on every repaint */
-    if (!net_init(0x0A00020F)) return;
-    if (!geo_have && !geo_fetch()) return; /* v71: no real location, no fetch, nothing fabricated */
+static int weather_fetch_inner(void){
+    weather_err[0] = 0;
+    if (!net_init(0x0A00020F)) { weather_set_error(WX_OFFLINE, "no network card", ""); return 0; }
+    if (!geo_have && !geo_fetch()) return 0; /* v71: no real location, no fetch, nothing fabricated */
     static char body[2048];
     static char path[128];
     { int p = 0; const char *s;
@@ -2312,11 +2366,12 @@ static void weather_fetch(void){
       for (s = "&current=temperature_2m,weather_code"; *s; s++) path[p++] = *s;
       path[p] = 0; }
     serial_puts("wxurl="); serial_puts(path); serial_puts("\n");
-    int n = http_get("api.open-meteo.com", path, 80, body, sizeof(body) - 1);
-    if (n <= 0) return;
+    int n = wx_override_host[0] ? http_get_timeout(wx_override_host, path, wx_override_port, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS)
+                                : http_get_timeout("api.open-meteo.com", path, 80, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS);
+    if (n <= 0 || http_last_status() != 200) { weather_classify_http_failure("forecast", n); return 0; }
     body[n] = 0;
     int t10 = 0, code10 = 0;
-    if (!json_current_number(body, "temperature_2m", &t10)) return;
+    if (!json_current_number(body, "temperature_2m", &t10)) { weather_set_error(WX_BAD, "forecast", "unreadable reply"); return 0; }
     json_current_number(body, "weather_code", &code10);
     int t = (t10 >= 0 ? t10 + 5 : t10 - 5) / 10; /* round to whole degrees */
     weather_temp_c = t; weather_code10 = code10; weather_have = 1;
@@ -2329,7 +2384,18 @@ static void weather_fetch(void){
     weather_text[p++] = ' ';
     for (const char *w = weather_word(code10 / 10); *w; w++) weather_text[p++] = *w;
     weather_text[p] = 0;
+    weather_state = WX_OK;
     serial_puts("wx="); serial_puts(weather_text); serial_puts("\n"); /* v71: tools/geo-check.sh asserts the fetch really landed, not just that the URL was built */
+    return 1;
+}
+static void weather_fetch(void){
+    weather_last_tick = ticks();
+    serial_puts("wxfetch\n"); /* tools/checks/weather-app-check.sh counts these: a failed fetch must not re-run on every repaint */
+    weather_fetch_inner();
+    /* One line per attempt, the state the window will show and why. */
+    serial_puts("wxstate="); serial_puts(weather_state_name(weather_state));
+    if (weather_err[0]) { serial_puts(" "); serial_puts(weather_err); }
+    serial_puts("\n");
 }
 
 /* v75 (0.67.0): the real location-dynamic wallpaper, the item roadmap.md's
@@ -3850,11 +3916,12 @@ static void gui_draw_app_titlebar(const char *title){
    calls the content draw directly, every repaint, with no gui_wait_close in
    the way; the Apps-folder/test-harness single-window path keeps calling
    gui_launch_weather() exactly as before, same pixels either way. */
+static int weather_fetching = 0; /* set around a retry so the window can say so before the blocking fetch starts */
 static void gui_draw_weather_content(void){
     /* Root cause of issue #13: a failed fetch left weather_text empty, so
-       every repaint (each mouse move, focus change, tick) re-ran the
-       blocking DNS/TCP fetch and froze the window. Try once per session
-       here; the ten-minute cycle in gui_run does the retrying. */
+       every repaint (mouse move, focus change, tick) re-ran the blocking
+       DNS/TCP fetch and froze the window. Try once per session here; the
+       ten-minute cycle in gui_run and the R key do the retrying. */
     if (!weather_text[0] && !weather_tried_once) { weather_tried_once = 1; weather_fetch(); }
     window_clear(0x00F5F0EB);
     gui_draw_app_titlebar("Weather");
@@ -3862,11 +3929,64 @@ static void gui_draw_weather_content(void){
     if (x < 16) x = 16;
     gui_rounded_rect_gradient(x, 72, 520, 250, 0x00FFF7E7, 0x00E9D9DA, 0x00F5F0EB, 22);
     gui_draw_one_icon_on(7, x + 95, 230, 100, 0x00F4E8E2);
-    font_draw_string(geo_city[0] ? geo_city : "Location unavailable", x + 188, 112, 0x00645057, -1);
-    font_draw_string(weather_text[0] ? weather_text : "Weather unavailable", x + 188, 158, 0x002A2226, -1);
-    font_draw_string("Current conditions", x + 188, 195, 0x00746B70, -1);
+    /* Never empty. Three honest faces for the big line: the live reading,
+       the last good reading (kept across a later failure, labelled stale),
+       or a fixed sample that says it is a sample. */
+    int live = weather_state == WX_OK && weather_have;
+    int stale = !live && weather_have;
+    static const char sample[] = { '1', '8', (char)0xF8, ' ', 'C', 'l', 'e', 'a', 'r', 0 };
+    font_draw_string(geo_city[0] ? geo_city : (live || stale ? "Your location" : "Sample location"), x + 188, 104, 0x00645057, -1);
+    font_draw_string(live || stale ? weather_text : sample, x + 188, 146, 0x002A2226, -1);
+    font_draw_string(live ? "Current conditions, live" : stale ? "Last good reading, may be out of date" : "Sample data, not a live reading", x + 188, 180, 0x00746B70, -1);
+    if (weather_fetching) {
+        font_draw_string("Fetching...", x + 188, 222, 0x00645057, -1);
+    } else if (!live) {
+        const char *head = weather_state == WX_OFFLINE ? "Offline" : weather_state == WX_TIMEOUT ? "Timed out" : weather_state == WX_BAD ? "Bad response" : weather_state == WX_FAILED ? "Request failed" : "Not fetched yet";
+        char line[72]; int p = 0;
+        for (const char *c = head; *c; c++) line[p++] = *c;
+        if (weather_err[0]) { line[p++] = ' '; line[p++] = '('; for (const char *c = weather_err; *c && p < 69; c++) line[p++] = *c; line[p++] = ')'; }
+        line[p] = 0;
+        font_draw_string(line, x + 188, 222, 0x009A3B2E, -1);
+        font_draw_string("Press R to retry", x + 188, 256, 0x00645057, -1);
+    }
+    /* Headless proof of what the window actually showed, only when it
+       changes (this draws on every repaint). */
+    { static int last_sig = -1;
+      int sig = weather_state * 8 + (live ? 0 : stale ? 1 : 2) * 2 + weather_fetching;
+      if (sig != last_sig) { last_sig = sig;
+          serial_puts("wxwin="); serial_puts(weather_fetching ? "fetching" : weather_state_name(weather_state));
+          serial_puts(live ? " live\n" : stale ? " stale\n" : " sample\n"); } }
 }
-static void gui_launch_weather(void){ gui_draw_weather_content(); gui_wait_close(); }
+/* R retries right now. Returns 1 when the key should close the window. */
+static int gui_weather_key(int k, void (*repaint)(void)){
+    if (k == KEY_ESC) return 1;
+    if (k == 'r' || k == 'R') {
+        weather_fetching = 1; repaint(); window_present();
+        weather_tried_once = 1;
+        weather_fetch();
+        weather_fetching = 0;
+        gui_menubar_force_redraw();
+        repaint();
+    }
+    return 0;
+}
+static void gui_launch_weather(void){
+    gui_draw_weather_content();
+    /* gui_wait_close, plus the retry key: esc or a click leaves. */
+    font_draw_string("esc or click to go back", 20, (int)window_height() - 30, 0x0075726E, -1);
+    window_present(); sleep_ticks(5);
+    mouse_click_edge_sync();
+    for (;;) {
+        gui_app_mouse_tick();
+        int sc = kbd_pop();
+        if (sc >= 0 && !(sc & 0x80)) {
+            char c = SC[sc & 0x7F];
+            if (gui_weather_key(c == 27 ? KEY_ESC : c, gui_draw_weather_content)) { gui_close_was_click = 0; return; }
+        }
+        if (mouse_click_edge()) { gui_close_was_click = 1; return; }
+        window_present(); __asm__ volatile ("hlt");
+    }
+}
 
 static void gui_launch_html(const char *label, const unsigned char *data, unsigned int data_len){
     window_clear(0x00FAF8F6);
@@ -4309,6 +4429,14 @@ static void gui_launch_apps(void){
             window_clear(0x00201922);
             gui_draw_wallpaper();
             gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w);
+            /* The click that opened this folder (or closed the app launched
+               from it) is the baseline, not a fresh click. Synced here, once
+               per real repaint, never per loop pass: a per-pass sync threw
+               away every click that landed during the present+sleep below,
+               so on a host where wheel/selection events kept the loop
+               turning, the folder could not be closed by the pointer at all
+               (CI run 35523..., Apps: still open after 5 clicks over 20s). */
+            mouse_click_edge_sync();
         }
 
         /* The same two v86/touch accommodations gui_wait_close documents:
@@ -4316,7 +4444,6 @@ static void gui_launch_apps(void){
            actually catches this frame before we block, and a click/tap
            counting as input so a phone can leave this screen at all. */
         window_present(); sleep_ticks(5);
-        mouse_click_edge_sync();
         /* v0.77.0: mouse wheel scroll to browse all apps, one row per scroll. */
         int k = get_key_or_click();
         if (k == KEY_WHEEL_UP || k == KEY_WHEEL_DOWN) {
@@ -4833,7 +4960,7 @@ static int gui_multiwin_supported(int icon){ return icon == 0 || icon == 7 || ic
    input loop below only ever forwards a keystroke to the app whose
    window is currently topmost/focused (the same "topmost owns input"
    rule click-to-focus already established for clicks). */
-static int gui_multiwin_interactive(int icon){ return icon == 1 || icon == 2 || icon == 4; }
+static int gui_multiwin_interactive(int icon){ return icon == 1 || icon == 2 || icon == 4 || icon == 7; } /* 7: Weather, for its R-to-retry key */
 
 /* Window 0 keeps the exact single-window rect the existing dock-app tests
    already assert against (gui_launch_from_dock's own x=70,y=40,w=820,h=385;
@@ -4910,6 +5037,12 @@ static void gui_multiwin_draw_content_only(const gui_window_t *win){
 static void gui_multiwin_draw_one(const gui_window_t *win){
     gui_multiwin_draw_chrome(win);
     gui_multiwin_draw_content_only(win);
+}
+
+/* Weather's retry repaints its own (topmost) window content before and
+   after the blocking fetch, so "Fetching..." is on screen while it runs. */
+static void gui_weather_mw_repaint(void){
+    if (gui_window_count > 0 && gui_windows[gui_window_count - 1].icon == 7) gui_multiwin_draw_content_only(&gui_windows[gui_window_count - 1]);
 }
 
 /* Called from gui_run's own full-repaint branch, right alongside the
@@ -5541,6 +5674,7 @@ static void gui_run(void){
                 if (mw_topmost_icon == 4) mw_should_close = gui_reminders_on_key(mwk);
                 else if (mw_topmost_icon == 2) mw_should_close = gui_calendar_on_key(mwk);
                 else if (mw_topmost_icon == 1) mw_should_close = gui_mail_on_key(mwk);
+                else if (mw_topmost_icon == 7) mw_should_close = gui_weather_key(mwk, gui_weather_mw_repaint);
                 if (mw_should_close) {
                     gui_multiwin_close(gui_window_count - 1);
                     mw_key_repaint = 1; /* the window left the screen: needs the real full desktop repaint to erase it, the same cost every open/close already pays */
@@ -7697,6 +7831,22 @@ static void run(char *line){
 void kmain(unsigned int multiboot_info_addr){
     serial_init();
     serial_puts("=== kmain boot start === v" JT_VERSION_STR "\n");
+    /* Multiboot command line (flags bit 2, pointer at +16), read here while
+       the bootloader's low memory is still identity-reachable. Only one
+       option exists: wxhost=A.B.C.D[:PORT], see wx_override_host. */
+    if (multiboot_info_addr && (*(unsigned int *)multiboot_info_addr & 0x4)) {
+        const char *cl = (const char *)*(unsigned int *)(multiboot_info_addr + 16);
+        for (; cl && *cl; cl++) {
+            if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
+                cl += 7; int hp = 0;
+                while (((*cl >= '0' && *cl <= '9') || *cl == '.') && hp < 19) wx_override_host[hp++] = *cl++;
+                wx_override_host[hp] = 0;
+                if (*cl == ':') { unsigned int pt = 0; cl++; while (*cl >= '0' && *cl <= '9') pt = pt * 10 + (unsigned int)(*cl++ - '0'); if (pt && pt < 65536) wx_override_port = (unsigned short)pt; }
+                serial_puts("wxhost="); serial_puts(wx_override_host); serial_puts("\n");
+                break;
+            }
+        }
+    }
     vga_text_mode_init(); /* real hardware/QEMU already boot into text mode via their own BIOS; a BIOS-less multiboot path (v86) never sets it at all, so make it explicit rather than inherited */
     klog("vga_text_mode_init: text mode 3 programmed");
     gdt_install();

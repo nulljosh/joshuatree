@@ -20,12 +20,18 @@
    let anyone hit this Worker with an arbitrary `url=` and have it fetch
    server-side on their behalf (a real SSRF/abuse vector) if left
    unchecked. isAllowedTarget() below is a strict allowlist of exactly
-   the three real hosts this kernel's own code (drivers/http.c's callers
+   the real hosts this kernel's own code (drivers/http.c's callers
    in kernel.c: geo_fetch, weather_fetch, wall_fetch) ever asks for,
    nothing else is ever proxied. */
 
+// api.open-meteo.com was missing from this list from the day the proxy
+// shipped: geo_fetch (ip-api.com) got through, weather_fetch's forecast
+// request got this Worker's own 403 "Host not allowed", the kernel could
+// not parse that as weather JSON, and the demo's Weather window and menu
+// bar never showed a reading. The real cause of "Weather shows no data".
 const ALLOWED_HOSTS = new Set([
   "ip-api.com",
+  "api.open-meteo.com",
   "a.tile.opentopomap.org",
   "mt0.google.com",
 ]);
