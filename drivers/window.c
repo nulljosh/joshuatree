@@ -36,15 +36,59 @@ static u32 screen_band_h = 0;
    path below falls straight through to the framebuffer, i.e. exactly the
    behaviour that shipped before this change, no new failure mode. */
 static u32 *back = 0;
-static int dmg_x0 = 0, dmg_y0 = 0, dmg_x1 = 0, dmg_y1 = 0; /* damage bbox, x1/y1 exclusive; empty when x1 <= x0 */
 
-static void damage_reset(void) { dmg_x0 = dmg_y0 = 0x7FFFFFFF; dmg_x1 = dmg_y1 = 0; }
-static void damage_all(void) { dmg_x0 = 0; dmg_y0 = 0; dmg_x1 = (int)phys_w; dmg_y1 = (int)(win_h * scale); }
+/* v0.78.x: per-row damage spans, not one screen-wide bounding box.
+   The first cut tracked a single union bbox, and a real measurement of a
+   dock hover showed why that was wrong: 91 of 112 presents covered rows
+   60..1080, 1020 of the 1080 rows on screen. Nothing had drawn most of
+   that. The wind sway band repaints near the top and the dock band
+   repaints at the bottom, and a single bbox of two disjoint regions
+   swallows everything between them, so a hover frame pushed 1.96M pixels
+   (7.8MB) to the framebuffer to show maybe 86k pixels of real change.
+
+   One span per row fixes it exactly, with no heuristics and no rect-list
+   merging to get wrong: two compares per pixel on the write path (down
+   from four), and a present that copies precisely the columns each row
+   actually touched. Disjoint regions stay disjoint both vertically (rows
+   nothing drew into are skipped) and horizontally (a row only copies its
+   own dirty span). Costs 2 ints per physical row, 8.6KB at 1080p. */
+static int *row_x0 = 0, *row_x1 = 0;
+static int dmg_y0 = 0, dmg_y1 = 0;   /* row range to scan; empty when y1 <= y0 */
+#define DMG_EMPTY 0x7FFFFFFF
+
+static void damage_reset(void) {
+    dmg_y0 = DMG_EMPTY; dmg_y1 = 0;
+    if (row_x0) for (u32 y = 0; y < win_h * scale; y++) { row_x0[y] = DMG_EMPTY; row_x1[y] = 0; }
+}
+static void damage_all(void) {
+    if (!row_x0) return;
+    dmg_y0 = 0; dmg_y1 = (int)(win_h * scale);
+    for (int y = 0; y < dmg_y1; y++) { row_x0[y] = 0; row_x1[y] = (int)phys_w; }
+}
 static void damage_add(int x, int y) {
-    if (x < dmg_x0) dmg_x0 = x;
+    if (x < row_x0[y]) row_x0[y] = x;
+    if (x + 1 > row_x1[y]) row_x1[y] = x + 1;
     if (y < dmg_y0) dmg_y0 = y;
-    if (x + 1 > dmg_x1) dmg_x1 = x + 1;
     if (y + 1 > dmg_y1) dmg_y1 = y + 1;
+}
+
+/* Precise damage for a caller that writes a known rectangle directly,
+   instead of letting the per-pixel path infer it. window_phys_row's one
+   real caller needs this: it hands out a raw row pointer, so without it
+   the only safe assumption is the whole row width. */
+void window_damage(int x, int y, int w, int h) {
+    if (!back || !row_x0) return;
+    int x0 = x < 0 ? 0 : x, y0 = y < 0 ? 0 : y;
+    int x1 = x + w, y1 = y + h;
+    if (x1 > (int)phys_w) x1 = (int)phys_w;
+    if (y1 > (int)(win_h * scale)) y1 = (int)(win_h * scale);
+    if (x1 <= x0 || y1 <= y0) return;
+    for (int yy = y0; yy < y1; yy++) {
+        if (x0 < row_x0[yy]) row_x0[yy] = x0;
+        if (x1 > row_x1[yy]) row_x1[yy] = x1;
+    }
+    if (y0 < dmg_y0) dmg_y0 = y0;
+    if (y1 > dmg_y1) dmg_y1 = y1;
 }
 
 void window_set_viewport(int x, int y, u32 w, u32 h) { view_x = x; view_y = y; view_w = w; view_h = h; }
@@ -105,6 +149,15 @@ int window_open_scaled(u32 width, u32 height, u32 bpp, u32 s) {
     phys_w = width * s;
     scale = s;
     back = (u32 *)kmalloc(phys_w * height * s * 4);
+    row_x0 = (int *)kmalloc(height * s * sizeof(int));
+    row_x1 = (int *)kmalloc(height * s * sizeof(int));
+    if (!back || !row_x0 || !row_x1) {
+        /* all or nothing: a back buffer with no damage tracking would be a
+           screen nothing ever updates, which is worse than no back buffer */
+        if (back) { kfree(back); back = 0; }
+        if (row_x0) { kfree(row_x0); row_x0 = 0; }
+        if (row_x1) { kfree(row_x1); row_x1 = 0; }
+    }
     if (back) for (u32 i = 0; i < phys_w * height * s; i++) back[i] = 0;
     damage_reset();
     if (back) damage_all();
@@ -125,10 +178,11 @@ u32 window_get_pixel_phys(int px, int py) {
 u32 *window_phys_row(int py) {
     if (view_w || screen_band || py < 0 || (u32)py >= win_h * scale) return 0;
     if (back) {
-        /* a raw row pointer can be written anywhere along its width, so
-           damage the whole row rather than guess; the one real caller
-           (gui_redraw_dock_band) is already row-banded anyway */
-        damage_add(0, py); damage_add((int)phys_w - 1, py);
+        /* No damage is recorded here: a raw row pointer says nothing about
+           which columns the caller will touch, and assuming the whole row
+           was the measured cost of the dock hover path (1920 columns
+           damaged to change ~174). Callers that take a row pointer declare
+           what they wrote with window_damage. */
         return back + (u32)py * phys_w;
     }
     return fb + (u32)py * phys_w;
@@ -147,16 +201,23 @@ void window_pixel_phys(int px, int py, u32 color) {
    no back buffer, and a no-op when nothing was drawn since the last
    call, which is what makes the ~100Hz idle loop free. */
 void window_present(void) {
-    if (!back || !fb) return;
-    if (dmg_x1 <= dmg_x0 || dmg_y1 <= dmg_y0) return;
-    int x0 = dmg_x0 < 0 ? 0 : dmg_x0, y0 = dmg_y0 < 0 ? 0 : dmg_y0;
-    int x1 = dmg_x1 > (int)phys_w ? (int)phys_w : dmg_x1;
+    if (!back || !fb || !row_x0) return;
+    if (dmg_y1 <= dmg_y0) return;
+    int y0 = dmg_y0 < 0 ? 0 : dmg_y0;
     int y1 = dmg_y1 > (int)(win_h * scale) ? (int)(win_h * scale) : dmg_y1;
     for (int y = y0; y < y1; y++) {
-        u32 *src = back + (u32)y * phys_w, *dst = fb + (u32)y * phys_w;
-        for (int x = x0; x < x1; x++) dst[x] = src[x];
+        int x0 = row_x0[y], x1 = row_x1[y];
+        row_x0[y] = DMG_EMPTY; row_x1[y] = 0;
+        if (x1 <= x0) continue;                      /* nothing drew into this row */
+        if (x0 < 0) x0 = 0;
+        if (x1 > (int)phys_w) x1 = (int)phys_w;
+        /* a tight run copy over the row's own dirty span, the shape a real
+           memcpy compiles to, rather than an indexed per-pixel loop */
+        const u32 *src = back + (u32)y * phys_w + (u32)x0;
+        u32 *dst = fb + (u32)y * phys_w + (u32)x0;
+        for (int n = x1 - x0; n > 0; n--) *dst++ = *src++;
     }
-    damage_reset();
+    dmg_y0 = DMG_EMPTY; dmg_y1 = 0;
     serial_puts("present\n"); /* discriminating marker for tools/checks/backbuffer-check.sh */
 }
 
@@ -176,7 +237,6 @@ int window_backbuffer_selftest(void) {
     u32 was_fb = fb[(u32)py * phys_w + (u32)px];
     u32 was_back = back[(u32)py * phys_w + (u32)px];
     u32 probe = was_fb ^ 0x00FFFFFF;
-    int sx0 = dmg_x0, sy0 = dmg_y0, sx1 = dmg_x1, sy1 = dmg_y1;
     damage_reset();
     window_pixel_phys(px, py, probe);
     int offscreen = (fb[(u32)py * phys_w + (u32)px] == was_fb); /* the screen must NOT have moved yet */
@@ -184,7 +244,7 @@ int window_backbuffer_selftest(void) {
     int presented = (fb[(u32)py * phys_w + (u32)px] == probe);
     back[(u32)py * phys_w + (u32)px] = was_back;
     fb[(u32)py * phys_w + (u32)px] = was_fb;
-    dmg_x0 = sx0; dmg_y0 = sy0; dmg_x1 = sx1; dmg_y1 = sy1;
+    damage_all(); /* the caller's own first real frame repaints everything anyway */
     return offscreen && presented;
 }
 
@@ -202,7 +262,9 @@ void window_close(void) {
     }
     vbe_disable();
     if (back) { kfree(back); back = 0; }
-    damage_reset();
+    if (row_x0) { kfree(row_x0); row_x0 = 0; }
+    if (row_x1) { kfree(row_x1); row_x1 = 0; }
+    dmg_y0 = DMG_EMPTY; dmg_y1 = 0;
     fb = 0;
     win_w = win_h = 0;
     phys_w = 0; scale = 1;
