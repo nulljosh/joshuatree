@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5C82AE"/><stop offset="1" stop-color="#22456B"/>
+    </linearGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"/>
+      <stop offset="0.62" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.60"/>
+      <stop offset="0.42" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.22"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#E9E2DC"/>
+    </linearGradient>
+    <filter id="drop" x="-40%" y="-40%" width="180%" height="190%">
+      <feDropShadow dx="0" dy="2.4" stdDeviation="2.6" flood-color="#000000" flood-opacity="0.40"/>
+    </filter>
+    <clipPath id="tile"><rect x="0" y="0" width="128" height="128" rx="28"/></clipPath>
+  </defs>
+  <rect x="0" y="0" width="128" height="128" rx="28" fill="url(#base)"/>
+  <g clip-path="url(#tile)">
+    <ellipse cx="64" cy="6" rx="86" ry="54" fill="url(#gloss)"/>
+    <linearGradient id="bub" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6FE85C"/><stop offset="1" stop-color="#2FAF2A"/>
+    </linearGradient>
+    <g filter="url(#drop)">
+      <path d="M30 32 h68 a10 10 0 0 1 10 10 v36 a10 10 0 0 1 -10 10 H57 l-13 14 v-14 h-14
+               a10 10 0 0 1 -10 -10 V42 a10 10 0 0 1 10 -10 z" fill="url(#bub)"/>
+      <g fill="#FFFFFF">
+        <circle cx="46" cy="60" r="6"/>
+        <circle cx="64" cy="60" r="6"/>
+        <circle cx="82" cy="60" r="6"/>
+      </g>
+    </g>
+  </g>
+  <rect x="0.7" y="0.7" width="126.6" height="126.6" rx="27.3" fill="none" stroke="url(#rim)" stroke-width="1.4"/>
+</svg>

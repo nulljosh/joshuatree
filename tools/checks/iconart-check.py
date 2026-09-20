@@ -45,7 +45,7 @@ PITCH = DOCK_ICON + DOCK_GAP
 # GUI_DOCK_DEFAULT order.
 SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Trash"]
 # The slots whose icon index has authored artwork in tools/gen/gen_icon_art.py.
-AUTHORED = {"Files", "Mail", "Calendar", "Notes", "Terminal", "Weather"}
+AUTHORED = set(SLOTS)  # all ten dock slots are authored artwork as of this pass
 RIM_MIN = 25
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))

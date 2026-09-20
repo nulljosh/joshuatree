@@ -48,8 +48,21 @@ ART = {
     1: "mail",
     2: "calendar",
     3: "notes",
+    4: "reminders",
     5: "terminal",
+    6: "chat",
     7: "weather",
+    21: "apps",
+    22: "trash",
+}
+
+# Icons whose glyph depends on runtime state get a second artwork keyed by
+# gui_render_icon_cached's existing `variant`. Trash is the only one today:
+# the primitive gui_icon_trash draws two crumpled sheets above the rim when
+# trash_count() > 0, and converting it to a single static artwork would have
+# silently thrown that away, turning a real state indicator into decoration.
+VARIANT = {
+    22: "trash_full",
 }
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
@@ -91,18 +104,26 @@ def build():
 #define ICON_ART_SIZE %d
 """ % (SIZE, SIZE, SIZE)]
 
-    for idx in sorted(ART):
-        name = ART[idx]
+    for name in [ART[i] for i in sorted(ART)] + [VARIANT[i] for i in sorted(VARIANT)]:
         parts.append(c_array(name, rasterize(name)))
         parts.append("")
 
+    n = max(max(ART), max(VARIANT)) + 1
     parts.append("/* Icon index -> artwork, 0 where no authored art exists yet (that icon")
     parts.append("   keeps the runtime primitive path). Sized by the caller's GUI_APP_COUNT. */")
-    parts.append("static const unsigned char *const ICON_ART[%d] = {" % (max(ART) + 1))
-    for i in range(max(ART) + 1):
+    parts.append("static const unsigned char *const ICON_ART[%d] = {" % n)
+    for i in range(n):
         parts.append("    %s," % ("icon_art_" + ART[i] if i in ART else "0"))
     parts.append("};")
-    parts.append("#define ICON_ART_COUNT %d" % (max(ART) + 1))
+    parts.append("")
+    parts.append("/* The variant-1 artwork for the icons that have runtime state, 0 for")
+    parts.append("   the rest. Indexed the same way, selected by gui_render_icon_cached's")
+    parts.append("   own `variant` so the empty/full Trash distinction survives. */")
+    parts.append("static const unsigned char *const ICON_ART_VARIANT[%d] = {" % n)
+    for i in range(n):
+        parts.append("    %s," % ("icon_art_" + VARIANT[i] if i in VARIANT else "0"))
+    parts.append("};")
+    parts.append("#define ICON_ART_COUNT %d" % n)
     parts.append("")
     parts.append("#endif")
     parts.append("")
@@ -112,7 +133,7 @@ def build():
 def main():
     text = build()
     if "--budget" in sys.argv:
-        print("%d icons x %d bytes = %d bytes of .rodata" % (len(ART), SIZE * SIZE * 4, len(ART) * SIZE * SIZE * 4))
+        print("%d artworks x %d bytes = %d bytes of .rodata" % (len(ART) + len(VARIANT), SIZE * SIZE * 4, (len(ART) + len(VARIANT)) * SIZE * SIZE * 4))
         return 0
     if "--check" in sys.argv:
         have = open(OUT).read() if os.path.exists(OUT) else ""
@@ -122,7 +143,7 @@ def main():
         print("PASS: kernel/icon_art.h matches art/icons/*.svg")
         return 0
     open(OUT, "w").write(text)
-    print("wrote %s (%d icons, %d bytes of artwork)" % (OUT, len(ART), len(ART) * SIZE * SIZE * 4))
+    print("wrote %s (%d artworks, %d bytes)" % (OUT, len(ART) + len(VARIANT), (len(ART) + len(VARIANT)) * SIZE * SIZE * 4))
     return 0
 
 

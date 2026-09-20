@@ -3260,7 +3260,14 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     if (icon_cache[icon][slot] && icon_cache_size[icon][slot] == size && icon_cache_under[icon][slot] == under && icon_cache_variant[icon][slot] == variant) return icon_cache[icon][slot];
     unsigned int sc = window_scale();
     int pw = size * (int)sc;
-    const unsigned char *art = (icon >= 0 && icon < ICON_ART_COUNT) ? ICON_ART[icon] : 0;
+    /* Variant artwork first where one exists (Trash full vs empty), so
+       converting an icon to artwork cannot quietly drop a real runtime
+       state indicator; fall back to the base artwork when it does not. */
+    const unsigned char *art = 0;
+    if (icon >= 0 && icon < ICON_ART_COUNT) {
+        art = variant ? ICON_ART_VARIANT[icon] : 0;
+        if (!art) art = ICON_ART[icon];
+    }
     if (art && pw > 0) {
         unsigned int *dst = icon_cache[icon][slot];
         if (!dst || icon_cache_size[icon][slot] != size) {
