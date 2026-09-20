@@ -527,10 +527,14 @@ if (typeof document !== "undefined") (function () {
   // phone), so a visitor never loses real UI to a crop just to avoid a
   // margin.
   var currentScale = 1;
+  var lastRsW = -1, lastRsH = -1, lastRsCW = -1, lastRsCH = -1;
   function resizeCanvas() {
     if (!screenCanvas) return;
-    var box = screenContainer.getBoundingClientRect();
     var w = screenCanvas.width || 800, h = screenCanvas.height || 600;
+    var cw = screenContainer.clientWidth, ch = screenContainer.clientHeight;
+    if (cw === lastRsW && ch === lastRsH && w === lastRsCW && h === lastRsCH) return; // nothing changed: skip forced layout + style writes (was every 200ms)
+    lastRsW = cw; lastRsH = ch; lastRsCW = w; lastRsCH = h;
+    var box = screenContainer.getBoundingClientRect();
     var coverScale = Math.max(box.width / w, box.height / h) || 1;
     var containScale = Math.min(box.width / w, box.height / h) || 1;
     var visibleFrac = Math.min(box.width / (w * coverScale), box.height / (h * coverScale));
@@ -1326,7 +1330,7 @@ if (typeof document !== "undefined") (function () {
     var index = 0;
     var chars = variablePart.split('');
 
-    // Type out the variable part at 60ms per character
+    // Type out the variable part at 20ms (fast, so the H1 tracks the demo) per character
     typewriterInterval = setInterval(function() {
       if (index < chars.length) {
         element.textContent += chars[index];
@@ -1336,7 +1340,7 @@ if (typeof document !== "undefined") (function () {
         typewriterInterval = null;
         if (callback) callback();
       }
-    }, 60);
+    }, 20);
   }
 
   // One line per app, so the eyebrow says something about the SAME app the

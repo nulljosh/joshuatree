@@ -25,6 +25,7 @@ function check(label, cond) {
 for (const host of ALLOWED_HOSTS) {
   check(`allows the real host ${host}`, isAllowedTarget(new URL(`http://${host}/`)));
 }
+check("allows Open-Meteo, the forecast host weather_fetch asks for (its absence left the demo's Weather empty)", isAllowedTarget(new URL("https://api.open-meteo.com/v1/forecast?latitude=49.1&longitude=-122.6&current=temperature_2m,weather_code")));
 check("rejects an arbitrary host", !isAllowedTarget(new URL("http://evil.example.com/")));
 check("rejects localhost (no SSRF to the Worker's own network)", !isAllowedTarget(new URL("http://localhost/")));
 check("rejects a private IP", !isAllowedTarget(new URL("http://169.254.169.254/")));
@@ -123,4 +124,4 @@ if (failures > 0) {
   console.log(`FAIL: ${failures} check(s) failed`);
   process.exit(1);
 }
-console.log("PASS: /api/proxy allowlists exactly the three real hosts this kernel uses, rejects everything else, and handles the success path correctly");
+console.log("PASS: /api/proxy allowlists exactly the real hosts this kernel uses, rejects everything else, and handles the success path correctly");

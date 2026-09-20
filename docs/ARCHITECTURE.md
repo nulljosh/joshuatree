@@ -24,7 +24,6 @@ that with the permanent, same-shaped tables.
 
 | File | What it owns |
 |---|---|
-| `kernel/dock_anim.h` | The dock's tick-to-subpixel ramp, shared by the GUI and a deterministic host check so slow QEMU frames cannot make the timing test inconclusive |
 | `gdt.c` | Flat GDT: ring-0 and ring-3 code/data segments (both spanning 4GB) plus a TSS for ring-3-to-ring-0 stack switches |
 | `idt.c` + `isr.S` | IDT, the 32 CPU-exception handlers, and the `int 0x80` entry. A ring-0 exception prints and halts (a kernel bug); a ring-3 one names itself, reaps the task, and the kernel keeps running (v64) |
 | `syscall.c` | `int 0x80` dispatch table, x86 Linux convention and numbers. The v1 set: `exit` (1), `read` (3), `write` (4), `open` (5), `close` (6), `time` (13), `getpid` (20), `sched_yield` (158), plus the per-task file-descriptor table `open` hands out of. v2 adds `lseek` (19), `open` flags (`O_WRONLY`/`O_RDWR`/`O_CREAT`/`O_TRUNC`/`O_APPEND`) and `write` to a descriptor from `open`. A writable descriptor is the read snapshot run backwards: the whole file is buffered at `open`, `write` edits the buffer, `close` hands it back through `vfs_replace_file()` and then reads it straight back to check the bytes landed, because the VFS has no partial-write primitive and ramfs truncates past 4096 bytes while still reporting success. Every user pointer is checked with `paging_user_range_ok` before the kernel touches it, every copy is bounded, every failure is a negative errno. `docs/SYSCALL-ABI.md` is the contract (v1 at v64, frozen; v2 alongside `user/note.c`) |
