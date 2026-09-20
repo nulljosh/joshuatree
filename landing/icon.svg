@@ -1,116 +1,77 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <!-- Real Mojave desert palette (this repo's CLAUDE.md, same colors the
-       kernel wallpaper/dock already use): silver sky fading through
-       granite gray to the exact leather-brown (#6B4423) already used as
-       one of the dock's own real accent colors. Warm sun glow reuses the
-       exact gold (#FFE380/#FFA716) the in-kernel Weather icon already
-       draws, one real palette, not a second one invented for this file.
+  <!-- v0.77: rebuilt for the real macOS-native idiom (compared side by
+       side against /System/Applications/Maps.app, Podcasts.app,
+       Freeform.app), direct request that the previous pass here read as
+       a painted illustration, not an app icon. Dropped: the four-stop
+       desert gradient, the userSpaceOnUse tree gradient, the radial sun
+       glow, the radial ground shadow, the top gloss ellipse and the
+       vignette overlay, five separate painterly layers stacked on one
+       small tile. What's left is the real Apple shape: one flat rounded
+       squircle (rx=44 of 200, unchanged, already the correct ~22%
+       ratio), a single subtle two-stop vertical gradient for depth (the
+       same trick Maps/Freeform use, light catching the top edge), one
+       bold filled silhouette for the subject, and a hairline rim light
+       tracing the tile's own edge. No second gradient on the subject
+       itself, no glow, no shadow baked into the art.
 
-       Redrawn against real reference (Yucca brevifolia): a stout,
-       irregularly-branching trunk (Mormon settlers named it for a figure
-       "praying with uplifted arms"), each branch capped with a DENSE
-       rosette of many sharp, radiating spikes, not the sparse 3-line
-       tuft the previous pass here drew, which read as antlers instead of
-       a yucca crown once actually looked at, not assumed correct from
-       the path data alone. -->
+       Palette is still this repo's real Mojave palette (CLAUDE.md), nothing
+       invented: silver #EDEDEA at the top, straight to the exact
+       leather-brown #6B4423 that's already one of the kernel dock's own
+       accent colors (kernel.c's dock_colors table) at the bottom. Tree
+       fill is the dock's darkest neutral, #2B2B2B (also already in that
+       same table), for a legible dark-on-warm silhouette instead of a
+       third hue. No purple, no teal, no rainbow gradient anywhere here.
+
+       Subject stays true to Yucca brevifolia (this file's own long-
+       standing reference note): a stout, irregularly-branching trunk,
+       each branch capped with a dense rosette of radiating spikes, not
+       antlers. Redrawn as solid filled shapes instead of thin strokes
+       specifically so it reads at 16x16, checked by rendering to PNG
+       at 16/32/128/512 and looking at each one, not assumed from the
+       path data. -->
   <defs>
-    <linearGradient id="desert" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#EDEDEA"/>
-      <stop offset="35%" stop-color="#C7BCA8"/>
-      <stop offset="68%" stop-color="#8C6A3E"/>
-      <stop offset="100%" stop-color="#4A2E14"/>
-    </linearGradient>
-    <!-- userSpaceOnUse, not the default per-shape bounding box: this tree
-         is drawn as many separate path/line elements, and an
-         objectBoundingBox gradient recomputes independently for each
-         one's own tiny bbox, a real bug caught here on an earlier pass
-         (the lower trunk nearly vanished into the background). Fixed
-         coordinates make it one continuous light-from-above gradient
-         across the whole tree regardless of how many shapes draw it. -->
-    <linearGradient id="treeGrad" gradientUnits="userSpaceOnUse" x1="0" y1="40" x2="0" y2="176">
-      <stop offset="0%" stop-color="#4A3A26"/>
-      <stop offset="100%" stop-color="#1C130A"/>
-    </linearGradient>
-    <radialGradient id="sunGlow" cx="68%" cy="20%" r="45%">
-      <stop offset="0%" stop-color="#FFE380" stop-opacity="0.55"/>
-      <stop offset="60%" stop-color="#FFA716" stop-opacity="0.15"/>
-      <stop offset="100%" stop-color="#FFA716" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="groundShadow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#0A0602" stop-opacity="0.7"/>
-      <stop offset="100%" stop-color="#0A0602" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="vignette" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#000000" stop-opacity="0.08"/>
-      <stop offset="18%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="82%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.18"/>
-    </linearGradient>
-    <!-- Real macOS Dock icons (see reference screenshot) all carry a
-         glossy top sheen and a crisp 1px inner rim light, not just a flat
-         gradient fill; the roundedSquare clip alone (already the correct
-         ~22% squircle ratio) read as flat next to real ones once compared
-         side by side. Two more overlays, no new shape language. -->
-    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32"/>
-      <stop offset="45%" stop-color="#FFFFFF" stop-opacity="0.06"/>
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#6B4423"/>
     </linearGradient>
     <clipPath id="roundedSquare">
       <rect width="200" height="200" rx="44"/>
     </clipPath>
-    <!-- One rosette: 7 spikes radiating from a point, real fullness
-         instead of 3 sparse lines. Reused at the trunk top and both
-         branch tips via <use>, rotated/scaled to fit each. -->
+    <!-- One rosette, filled wedges instead of thin lines so the crown
+         reads as a solid mass rather than a hairline scribble once
+         scaled down to menu-bar/dock sizes. -->
     <g id="rosette">
-      <line x1="0" y1="0" x2="0"   y2="-22" stroke-width="4.5"/>
-      <line x1="0" y1="0" x2="-9"  y2="-20" stroke-width="4.5"/>
-      <line x1="0" y1="0" x2="9"   y2="-20" stroke-width="4.5"/>
-      <line x1="0" y1="0" x2="-17" y2="-13" stroke-width="4"/>
-      <line x1="0" y1="0" x2="17"  y2="-13" stroke-width="4"/>
-      <line x1="0" y1="0" x2="-20" y2="-2"  stroke-width="4"/>
-      <line x1="0" y1="0" x2="20"  y2="-2"  stroke-width="4"/>
+      <path d="M0 0 L-4 -1 L0 -23 L4 -1 Z"/>
+      <path d="M0 0 L-4 -1 L-10 -21 L2.5 -3 Z"/>
+      <path d="M0 0 L4 -1 L10 -21 L-2.5 -3 Z"/>
+      <path d="M0 0 L-3 0 L-19 -14 L1 -3 Z"/>
+      <path d="M0 0 L3 0 L19 -14 L-1 -3 Z"/>
+      <path d="M0 0 L-2 1 L-22 -3 L0 -2 Z"/>
+      <path d="M0 0 L2 1 L22 -3 L0 -2 Z"/>
     </g>
   </defs>
 
   <g clip-path="url(#roundedSquare)">
-    <rect width="200" height="200" fill="url(#desert)"/>
-    <rect width="200" height="200" fill="url(#sunGlow)"/>
-    <ellipse cx="100" cy="174" rx="44" ry="9" fill="url(#groundShadow)"/>
+    <rect width="200" height="200" fill="url(#tile)"/>
 
-    <g fill="none" stroke="#FFFFFF" stroke-linecap="round">
-      <!-- trunk, a slight organic kink instead of one dead-straight line -->
-      <path d="M100 176 L98 140 L102 108 L100 88" stroke-width="13"/>
-      <!-- two irregular arms at different heights, "uplifted", not a
-           mirrored pair -->
-      <path d="M100 152 Q72 140 60 100" stroke-width="10"/>
-      <path d="M101 124 Q128 108 138 76" stroke-width="9"/>
-    </g>
-    <!-- fibrous bark texture (real reference: Yucca brevifolia's trunk is
-         famously shaggy/plated, not smooth), a few short dark strokes
-         along the trunk rather than one flat-looking pipe -->
-    <g stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.6">
-      <line x1="94" y1="168" x2="97" y2="160"/>
-      <line x1="103" y1="155" x2="100" y2="147"/>
-      <line x1="95" y1="132" x2="98" y2="124"/>
-      <line x1="104" y1="118" x2="101" y2="110"/>
+    <!-- trunk and two arms, bold filled capsules instead of thin
+         strokes, the "less gradient, more native" note also meant
+         "more legible at 16px", and a single dark silhouette wins there
+         over fine linework every time -->
+    <g fill="#2B2B2B">
+      <path d="M93 178 L91 140 L96 108 L93 84 L107 84 L104 108 L109 140 L107 178 Z"/>
+      <path d="M96 156 Q70 142 58 102 L67 96 Q78 130 101 145 Z"/>
+      <path d="M104 128 Q130 110 140 74 L148 79 Q138 116 110 137 Z"/>
     </g>
 
-    <g stroke="#FFFFFF" stroke-linecap="round">
-      <use href="#rosette" transform="translate(100 88) scale(1.05)"/>
-      <use href="#rosette" transform="translate(60 100) rotate(-18) scale(0.85)"/>
-      <use href="#rosette" transform="translate(138 76) rotate(16) scale(0.9)"/>
+    <g fill="#2B2B2B">
+      <use href="#rosette" transform="translate(100 84) scale(1.15)"/>
+      <use href="#rosette" transform="translate(58 102) rotate(-18) scale(0.95)"/>
+      <use href="#rosette" transform="translate(140 74) rotate(16) scale(1)"/>
     </g>
-
-    <!-- a thin rim light on the trunk's sun-facing edge -->
-    <path d="M96 172 L94 141 L98 109" fill="none" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
-
-    <rect width="200" height="200" fill="url(#vignette)"/>
-    <ellipse cx="100" cy="6" rx="130" ry="70" fill="url(#gloss)"/>
   </g>
-  <!-- inner rim light, outside the clip so it traces the squircle's own
-       edge (a stroked rect inside a clip of the same rect gets half-cut
-       by the clip itself); every real Dock icon has this crisp hairline,
-       the flat clip alone reads like a screenshot crop, not an icon -->
+  <!-- inner rim light tracing the tile's own edge, outside the clip so
+       it isn't half-cut by the rect it traces, the one non-flat touch
+       every real Dock icon carries, a hairline, not a glow -->
   <rect x="1" y="1" width="198" height="198" rx="43" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="1.5"/>
 </svg>
