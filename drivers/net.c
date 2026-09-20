@@ -306,9 +306,42 @@ static const u8 *dns_skip_name(const u8 *p) {
     return p + 1;
 }
 
+/* v0.76.58: real bug, found root-causing "Weather shows the city but every
+   other field is missing" (owner report on the real running OS with real
+   networking). weather_fetch does two dns_resolve calls back to back in
+   one pass, first for ip-api.com (inside geo_fetch), then for api.open-
+   meteo.com -- and this function always sent the exact same hardcoded
+   transaction ID (0x1234) for every single query, then accepted the
+   first UDP packet on src port 53 / dst port 53000 as the answer with NO
+   check that its ID (or its question name) actually matched the query
+   this call just sent. A late duplicate/retransmitted answer to the
+   FIRST query (real, ordinary DNS behavior under real network latency,
+   which this sandbox's fast local SLIRP round trip doesn't reproduce,
+   which is why tools/checks/geo-check.sh passed clean every time it was
+   run here) arriving while the SECOND dns_resolve call is listening gets
+   silently accepted as if it answered api.open-meteo.com, handing
+   weather_fetch ip-api.com's real IP address instead. http_get then
+   sends "Host: api.open-meteo.com" to ip-api.com's server, gets back
+   whatever that server does with an unrecognized Host header (not a
+   real Open-Meteo JSON body either way), json_current_number's search
+   for "current":{ never matches, weather_fetch returns before setting
+   weather_have -- while geo_city is already populated and stays that
+   way from the FIRST, genuinely successful ip-api.com fetch moments
+   earlier. Exactly the reported symptom: city correct, everything
+   downstream of it "unknown"/unavailable.
+   Real fix, the standard one (RFC 1035 section 4.1.1's whole point of
+   having a query ID): a real, per-call ID (ticks()-derived, cheap and
+   different enough call to call that two dns_resolve calls in the same
+   weather_fetch pass never collide) and a real check that a candidate
+   answer's ID matches it, continuing to wait rather than accepting a
+   stray packet. tools/checks/dns-txid-check.sh proves this the same way
+   appsfolder-mousescroll-check.sh already proves the wheel-byte parser:
+   a small host-side program replicating this exact check, fed a real
+   correct-ID answer (accepted) and a real wrong-ID answer (rejected). */
 int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
     u8 query[256];
-    u32 qlen = dns_build_query(query, hostname, 0x1234);
+    u16 txid = (u16)(ticks() & 0xFFFF); if (!txid) txid = 1;
+    u32 qlen = dns_build_query(query, hostname, txid);
     if (!udp_send(dns_server_ip, DNS_PORT, DNS_SRC_PORT, query, qlen)) return 0;
 
     u8 rx[1514];
@@ -326,6 +359,8 @@ int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
         if (udp->src_port != htons(DNS_PORT) || udp->dst_port != htons(DNS_SRC_PORT)) continue;
 
         const u8 *dns = rx + sizeof(*eth) + ip_hlen + sizeof(*udp);
+        u16 resp_id = htons(*(const u16 *)dns);
+        if (resp_id != txid) continue; /* a stray/late answer to a DIFFERENT query, not this one: keep waiting */
         u16 ancount = htons(*(u16 *)(dns + 6));
         if (ancount == 0) return 0; /* NXDOMAIN or no A record, not a timeout */
 
