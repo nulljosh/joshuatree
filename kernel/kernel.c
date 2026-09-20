@@ -3152,7 +3152,50 @@ static int icon_cache_variant[GUI_APP_COUNT][ICON_CACHE_SLOTS]; /* v45.2: anythi
    icon's transparent border would drag real edge pixels toward whatever
    the rasterizer happened to leave in the fully-transparent ones, the
    classic dark/light fringe. Integer only, no FPU in this kernel. */
+/* The upscale half. A box filter degenerates to nearest-neighbour the
+   moment the destination is bigger than the source (every destination pixel
+   covers less than one source pixel), which is exactly the blocky staircase
+   this whole pass exists to remove, and there are real call sites past 128:
+   the Weather app's own 100-logical card (200 physical), and the dock itself
+   once dock_scale_pct is turned up past 20 in Settings. Bilinear there, on
+   premultiplied colour so the transparent border cannot bleed into an edge,
+   then the same source-over onto the surface colour. Fixed point, 8
+   fractional bits, no FPU in this kernel. */
+static void gui_icon_art_bilinear(const unsigned char *art, unsigned int *out, int pw, unsigned int under){
+    unsigned int ur = (under >> 16) & 0xFF, ug = (under >> 8) & 0xFF, ub = under & 0xFF;
+    for (int py = 0; py < pw; py++){
+        int fy = (py * 2 + 1) * ICON_ART_SIZE * 128 / pw - 128; /* pixel-centre mapping */
+        if (fy < 0) fy = 0;
+        int sy = fy >> 8, wy = fy & 255;
+        if (sy >= ICON_ART_SIZE - 1) { sy = ICON_ART_SIZE - 2; wy = 255; }
+        for (int px = 0; px < pw; px++){
+            int fx = (px * 2 + 1) * ICON_ART_SIZE * 128 / pw - 128;
+            if (fx < 0) fx = 0;
+            int sx = fx >> 8, wx = fx & 255;
+            if (sx >= ICON_ART_SIZE - 1) { sx = ICON_ART_SIZE - 2; wx = 255; }
+            unsigned int cr = 0, cg = 0, cb = 0, ca = 0;
+            for (int k = 0; k < 4; k++){
+                int ox = k & 1, oy = k >> 1;
+                unsigned int w = (unsigned int)(ox ? wx : 255 - wx) * (unsigned int)(oy ? wy : 255 - wy);
+                const unsigned char *p = art + ((unsigned int)(sy + oy) * ICON_ART_SIZE + (unsigned int)(sx + ox)) * 4;
+                unsigned int a = p[3];
+                cr += w * p[0] * a / 255; cg += w * p[1] * a / 255; cb += w * p[2] * a / 255;
+                ca += w * a;
+            }
+            /* cr/cg/cb are premultiplied colour, ca is alpha, all scaled by 255*255 */
+            unsigned int a = (ca + 32512) / 65025;
+            unsigned int r = (cr + 32512) / 65025, g = (cg + 32512) / 65025, b = (cb + 32512) / 65025;
+            r += ur * (255 - a) / 255; g += ug * (255 - a) / 255; b += ub * (255 - a) / 255;
+            if (r > 255) r = 255;
+            if (g > 255) g = 255;
+            if (b > 255) b = 255;
+            out[py * pw + px] = (r << 16) | (g << 8) | b;
+        }
+    }
+}
+
 static void gui_icon_art_scale(const unsigned char *art, unsigned int *out, int pw, unsigned int under){
+    if (pw > ICON_ART_SIZE) { gui_icon_art_bilinear(art, out, pw, under); return; }
     unsigned int ur = (under >> 16) & 0xFF, ug = (under >> 8) & 0xFF, ub = under & 0xFF;
     for (int py = 0; py < pw; py++){
         int sy0 = py * ICON_ART_SIZE / pw, sy1 = (py + 1) * ICON_ART_SIZE / pw;
@@ -3187,7 +3230,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     unsigned int sc = window_scale();
     int pw = size * (int)sc;
     const unsigned char *art = (icon >= 0 && icon < ICON_ART_COUNT) ? ICON_ART[icon] : 0;
-    if (art && pw > 0 && pw <= ICON_ART_SIZE) {
+    if (art && pw > 0) {
         unsigned int *dst = icon_cache[icon][slot];
         if (!dst || icon_cache_size[icon][slot] != size) {
             if (dst) kfree(dst);
