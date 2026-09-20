@@ -6,16 +6,20 @@
 <title>Joshua Tree, a new custom OS</title>
 <meta name="description" content="A fresh, custom operating system built from scratch: its own GUI desktop, network stack, filesystem, and a real text editor. Open, and open to help build.">
 <link rel="icon" href="icon.svg">
-<!-- v52: real perf request ("demo takes half a second, can we make it
-     instant?"). The floor is real WASM instantiation + this kernel's own
-     boot-to-GUI time, not shrinkable from the page side, but the browser
-     was previously discovering these three files only once it parsed the
-     script tags at the very bottom of body, after everything else
-     loaded. preload starts the fetch the instant the HTML itself parses,
-     in parallel with every other page asset, not free but a real,
-     measurable head start on the only part actually addressable here. -->
-<link rel="preload" href="v86/v86.wasm" as="fetch">
-<link rel="preload" href="v86/kernel.elf" as="fetch">
+<!-- v52 preloaded v86.wasm/kernel.elf here to start their ~5MB fetch the
+     instant the HTML parsed, a real head start on first-boot time back when
+     the demo was expected to start immediately regardless of scroll
+     position. embed.js now gates that same fetch (and the V86 construction
+     that follows it) behind a real IntersectionObserver on the demo
+     container, so it only starts once the visitor is actually near it (a
+     later real report: "the demo is taking a while to load even when the
+     rest of the page already finishes loading, especially on mobile", the
+     ~5MB competing with everything else regardless of relevance). A preload
+     here would fire unconditionally at parse time and defeat that gate
+     outright, the two are a direct contradiction, not a stack. libv86.js
+     stays preloaded: it is loaded eagerly either way (a plain non-deferred
+     <script> tag below), the gate only ever deferred the wasm/kernel.elf
+     fetch and the V86 constructor itself. -->
 <link rel="preload" href="v86/libv86.js" as="script">
 <style>
   /* Real palette refresh, not a tweak: the old warm orange/burgundy read
