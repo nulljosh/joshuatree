@@ -5811,6 +5811,8 @@ static void usertest(void){
    the filesystem's answer. A write path that printed the right thing and
    stored nothing would pass the first and fail the second. */
 #define NOTETEST_EXPECT "buy MILK\ncall mum\n"
+#define NOTETEST_EXPECT2 "buy MILK\ncall mum\nand one more\n"
+static void run(char *line); /* the shell's own dispatcher, used below to test its argv splitting for real */
 static int notetest_run(const char *a1, const char *a2, const char *a3) {
     const char *argv[4];
     int argc = 0;
@@ -5857,6 +5859,24 @@ static void notetest(void){
     puts(ok ? "ring-3 program created, appended to and patched a real file: ok\n"
             : "notetest: FAILED (the file on the filesystem is not what the program wrote)\n");
     serial_puts(ok ? "notetest: ok\n" : "notetest: FAILED\n");
+    if (!ok) return;
+
+    /* The same program again, this time through the shell's own `exec`,
+       so the words a person would type really do become argv. run() is
+       the exact dispatcher a typed line reaches, handed a mutable buffer
+       the way the line reader hands it one, so this is the real splitter
+       and not a re-implementation of it. Driving it from here rather than
+       from QEMU keystrokes is deliberate: the monitor's sendkey cannot
+       produce the shifted characters an uppercase filename needs, so a
+       keystroke-driven version of this would be testing the harness. */
+    char cmd[] = "exec NOTE.BIN NOTE.TXT and one more";
+    run(cmd);
+    n = vfs_read_file("NOTE.TXT", back, sizeof(back) - 1);
+    int ok2 = n == (int)strlen(NOTETEST_EXPECT2);
+    if (ok2) { back[n] = 0; ok2 = !strcmp(back, NOTETEST_EXPECT2); }
+    puts(ok2 ? "the shell's own exec passed its words through as argv: ok\n"
+             : "notetest: FAILED (exec did not hand the shell's words to the program as argv)\n");
+    serial_puts(ok2 ? "notetest argv: ok\n" : "notetest argv: FAILED\n");
 }
 
 static void run(char *line){

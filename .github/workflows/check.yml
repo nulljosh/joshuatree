@@ -102,6 +102,11 @@ jobs:
       # every push alongside everything else.
       - name: Ring-3 reference program against the v1 syscall ABI
         run: ./tools/checks/usertest-check.sh
+      # The v2 half: user/note.c writes, seeks and reads a real file with
+      # real argv, and the kernel reads that file back off the VFS itself
+      # to check the bytes rather than trusting what the program printed.
+      - name: Ring-3 program writing a real file against the v2 syscall ABI
+        run: ./tools/checks/notetest-check.sh
       - name: QEMU vmmouse absolute-pointer round trip
         run: ./tools/checks/vmmouse-check.sh
       - name: Calendar date math (cal_dow/cal_days_in_month/cal_is_leap), host harness
