@@ -57,6 +57,7 @@ retry|Idle tour's Settings visit doesn't change the wallpaper theme|python3 ./to
 retry|Notes editor chrome doesn't redraw on plain keystrokes|./tools/checks/editorflash-check.sh
 retry|Notes typing, typography, pointer controls, persistence|python3 ./tools/checks/editor_qa.py
 retry|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/termchatflash-check.sh
+retry|Terminal grid draws the mono face at its true advance|python3 ./tools/checks/termmono-check.py
 retry|Apple-menu hover stays cheap, clock redraws on a minute change|./tools/checks/menuclock-check.sh
 retry|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mwkeyflash-check.sh
 retry|Drawing lands offscreen, window_present puts it on screen|./tools/checks/backbuffer-check.sh
