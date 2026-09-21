@@ -83,6 +83,14 @@ fail = 0
 if not bb or bb[2] - bb[0] < 60:
     print(f"FAIL: no boot logo found on the splash frame (bbox {bb})"); sys.exit(1)
 px = g.load()
+# the splash also carries a progress bar under the logo; keep only the logo, which
+# ends at the first empty row below its top
+for y in range(bb[1], bb[3]):
+    if not any(px[x, y] > 40 for x in range(bb[0], bb[2])):
+        ox, oy = bb[0], bb[1]
+        c = g.crop((ox, oy, bb[2], y)).point(lambda v: 255 if v > 40 else 0).getbbox()
+        bb = (ox + c[0], oy + c[1], ox + c[2], oy + c[3])
+        break
 solid = mid = holes = doubled = edges = 0
 for y in range(bb[1], bb[3]):
     for x in range(bb[0], bb[2]):
