@@ -69,21 +69,7 @@ yet for 1.0.0.
 
 ## Theme
 
-The engraving system, from the Joshua Tree Co. mark (`landing/badge.png`,
-itself a nod to Apple's 1977 Newton engraving). One ink on one paper,
-`#000000` on `#ece8df`, inverted for dark. No greys, no accent colour, no
-opacity tricks: tone comes from line density (the `--hatch` token, dotted
-chart grids), never a second colour. Hairline 1px rules, tracked-caps
-Helvetica labels, square plates with a hatched header band, spec-sheet
-rules top and bottom. Sans-serif everywhere; the slab serif lives inside
-the logo artwork only. The full badge is for hero sizes only;
-`landing/mark.png` (the simplified tree) covers everything small.
-
-The landing page is converted. The kernel desktop is not: its wallpaper
-and chrome still carry the old palette until the 1-bit reskin in
-`roadmap.md` lands. Don't "fix" the mismatch piecemeal before then. The
-VGA boot text is black-on-gray, the kernel's actual output, and can't be
-restyled.
+Keep the Satellite wallpaper in color. The former engraving filter made it black and white, while the cream, hatched landing page felt too much like paper or a blueprint. The landing page now uses a clean light surface, slate text, blue and teal accents, simple rules, and rounded cards. Dark mode uses those colors on a navy surface. Keep the engraved tree artwork as a logo, with `landing/mark.png` for small sizes and `landing/badge.png` for large artwork. The VGA boot text is the kernel's actual black-on-gray output.
 
 ## Landing page / v86 demo
 

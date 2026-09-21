@@ -894,11 +894,8 @@ static int dock_scale_pct = 7;
          same x/y/z convention as OpenTopoMap so wall_fetch's existing
          tile math is untouched) decoded with drivers/jpeg.c's baseline
          decoder (the JPEG source those tiles actually are) instead of
-         png_decode, then run through the exact same gui_wall_tint
-         dispatch as every other map theme -- it falls through to
-         gui_map_tint (Warm) since it isn't COOL or RAW, so satellite
-         imagery gets the same Mojave grade the topo map does, no special
-         case needed. Google was picked over Bing's virtualearth.net
+         png_decode. It now keeps its real color with a small saturation
+         lift through gui_wall_tint. Google was picked over Bing's virtualearth.net
          specifically because it shares OpenTopoMap's x/y/z slippy-map
          convention; Bing's quadkey addressing would have needed new tile
          math, not just a new host/decoder.
@@ -1278,28 +1275,15 @@ static inline __attribute__((always_inline)) unsigned int gui_map_tint_cool(unsi
     return ((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)b;
 }
 
-/* Engraving grade (Sep 2026, direct request: "keep the wallpaper but make
-   it work with the style"). The design system is one ink on one paper
-   (CLAUDE.md's Theme rule), so the satellite photo stays the wallpaper and
-   goes through the press: luminance only, stretched across the range this
-   imagery really occupies, then laid along the ink (#000000) to paper
-   (#ece8df) axis. Reads as an aerial survey plate.
-   Continuous tone on purpose, not a 1-bit line screen or an ordered
-   dither. Both were prototyped against the real wall_sat bytes first: any
-   fixed-period 1-bit pattern moires on the landing page, where v86's
-   1920x1080 canvas is squeezed into ~1000 CSS px at a non-integer ratio,
-   and it also fights the wind sway's horizontal lerp and every AA blend
-   target gui_wallpaper_color feeds. A tone survives all three.
-   ENGRAVE_LO/HI are the measured 5th/95th luminance percentiles of
-   wall_sat (49/164) opened up a little, the calibration knob if the
-   imagery ever changes. */
-#define ENGRAVE_LO 40
-#define ENGRAVE_HI 176
-static inline __attribute__((always_inline)) unsigned int gui_engrave(unsigned int rgb){
-    int l = (int)((((rgb >> 16) & 0xFF) * 77 + ((rgb >> 8) & 0xFF) * 150 + (rgb & 0xFF) * 29) >> 8);
-    int t = (l - ENGRAVE_LO) * 255 / (ENGRAVE_HI - ENGRAVE_LO);
-    if (t < 0) t = 0; if (t > 255) t = 255;
-    return ((unsigned int)(0xEC * t / 255) << 16) | ((unsigned int)(0xE8 * t / 255) << 8) | (unsigned int)(0xDF * t / 255);
+/* Keep the satellite photograph in color. A modest saturation lift makes
+   trees, roofs, and roads readable without flattening their detail. */
+static inline __attribute__((always_inline)) unsigned int gui_sat_color(unsigned int rgb){
+    int r = (int)((rgb >> 16) & 0xFF), g = (int)((rgb >> 8) & 0xFF), b = (int)(rgb & 0xFF);
+    int l = (r * 77 + g * 150 + b * 29) >> 8;
+    r = l + (r - l) * 5 / 4; if (r < 0) r = 0; if (r > 255) r = 255;
+    g = l + (g - l) * 5 / 4; if (g < 0) g = 0; if (g > 255) g = 255;
+    b = l + (b - l) * 5 / 4; if (b < 0) b = 0; if (b > 255) b = 255;
+    return ((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)b;
 }
 
 /* v81: single choke point every wallpaper-theme reader goes through, so
@@ -1311,7 +1295,7 @@ static inline __attribute__((always_inline)) unsigned int gui_wall_tint(unsigned
     if (wall_src == wallpaper_rgb) return rgb;      /* Photo: never graded */
     if (wall_theme == WALL_COOL) return gui_map_tint_cool(rgb);
     if (wall_theme == WALL_RAW) return rgb;         /* Raw: OpenTopoMap's own palette, untouched */
-    if (wall_theme == WALL_SAT) return gui_engrave(rgb); /* Satellite, the default: ink on paper, see gui_engrave */
+    if (wall_theme == WALL_SAT) return gui_sat_color(rgb);
     return gui_map_tint(rgb);                       /* WALL_WARM, and the fallback while fetching */
 }
 
@@ -6750,23 +6734,23 @@ static void run(char *line){
         wall_theme = WALL_WARM;  unsigned int wall_dispatch_warm = gui_wall_tint(gray);
         wall_theme = WALL_COOL;  unsigned int wall_dispatch_cool = gui_wall_tint(gray);
         wall_theme = WALL_RAW;   unsigned int wall_dispatch_raw  = gui_wall_tint(gray);
-        wall_theme = WALL_SAT;   unsigned int wall_dispatch_sat  = gui_wall_tint(gray); /* Satellite: the engraving grade, not Warm's */
+        wall_theme = WALL_SAT;   unsigned int wall_dispatch_sat  = gui_wall_tint(gray);
+        unsigned int wall_dispatch_sat_green = gui_wall_tint(0x00208020);
         wall_src = wallpaper_rgb; wall_theme = WALL_COOL;
         unsigned int wall_dispatch_photo = gui_wall_tint(gray); /* Photo guard: must ignore wall_theme entirely */
         wall_src = saved_wall_src; wall_theme = saved_wall_theme;
         int ok3 = (wall_dispatch_warm == warm_g) && (wall_dispatch_cool == cool_g)
                 && (wall_dispatch_raw == gray) && (wall_dispatch_photo == gray)
-                && (wall_dispatch_sat == gui_engrave(gray)) && (wall_dispatch_sat != warm_g);
-        /* The engraving grade itself: black stays ink, white lands exactly on
-           paper, tone is monotonic, and hue is gone (a saturated green and a
-           gray of the same luminance must come out identical). Revert
-           gui_engrave to `return rgb;` and the green/gray pair diverges. */
-        unsigned int eg_green = gui_engrave(0x00208020);
-        int eg_l = (0x20 * 77 + 0x80 * 150 + 0x20 * 29) >> 8;
-        unsigned int eg_gray = gui_engrave(((unsigned int)eg_l << 16) | ((unsigned int)eg_l << 8) | (unsigned int)eg_l);
-        int ok5 = (gui_engrave(0x00000000) == 0x00000000) && (gui_engrave(0x00FFFFFF) == 0x00ECE8DF)
-                && (eg_green == eg_gray)
-                && ((gui_engrave(0x00606060) & 0xFF) < (gui_engrave(0x00909090) & 0xFF));
+                && (wall_dispatch_sat == gui_sat_color(gray)) && (wall_dispatch_sat != warm_g);
+        /* Satellite must preserve hue and lift saturation. Returning raw
+           pixels or restoring the old luminance-only grade fails here. */
+        unsigned int sg = gui_sat_color(0x00208020);
+        int ok5 = (gui_sat_color(0x00000000) == 0x00000000)
+                && (gui_sat_color(0x00FFFFFF) == 0x00FFFFFF)
+                && (((sg >> 8) & 0xFF) > ((sg >> 16) & 0xFF))
+                && (((sg >> 8) & 0xFF) > (sg & 0xFF))
+                && (((sg >> 8) & 0xFF) - (sg & 0xFF) > 0x60)
+                && (wall_dispatch_sat_green == sg);
         ok3 = ok3 && ok5;
 
         const char *prev_fs = vfs_current_name();
