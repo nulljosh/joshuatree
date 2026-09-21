@@ -298,7 +298,14 @@ axis_lines = (
 # Left axis title, rotated, its own dedicated column (title_x), well clear
 # of the tick-number column (tick_x, right-aligned into the axis line) so
 # the two never share pixels regardless of how many digits max_v has.
-title_label = f'<text x="{title_x}" y="{pad_t+plot_h//2}" font-size="8" fill="var(--line)" text-anchor="middle" transform="rotate(-90 {title_x} {pad_t+plot_h//2})">Lines of code</text>'
+# Sep 2026 colour pass: --line became a real hue (clrs.cc blue) for the
+# stroke/marks below, so this axis-title TEXT was moved off it onto
+# --label (plain ink, already verified AA-safe both schemes by
+# hero-contrast-check.mjs) -- a graphic stroke only needs the 3:1
+# non-text bar, but real SVG <text> needs the full 4.5:1 text bar, and
+# clrs.cc blue clears 4.5:1 on light paper but not by much (~3.8:1),
+# so text stays off it entirely rather than riding that margin.
+title_label = f'<text x="{title_x}" y="{pad_t+plot_h//2}" font-size="8" fill="var(--label)" text-anchor="middle" transform="rotate(-90 {title_x} {pad_t+plot_h//2})">Lines of code</text>'
 polyline = f'<polyline points="{points_attr}" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
 date_labels = "".join(f'<text x="{xf(i)}" y="{pad_t+plot_h+16}" font-size="10" fill="var(--label)" text-anchor="middle">{short_date(labels[i])}</text>' for i in shown)
 caption = f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fill="var(--strong)">{max_v:,} lines &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>'
@@ -315,15 +322,25 @@ caption = f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fi
 # prefers-color-scheme:dark, same technique index.html's own :root
 # already uses for the rest of the page, every fill/stroke reads via
 # var(--x) instead of a literal hex.
+# Sep 2026 colour pass (direct owner request, "no real color... multiple
+# colours, clrs.cc"): --line (the polyline, its dots, and the legend
+# swatch, all graphic strokes, never text) is real clrs.cc blue now,
+# #0074D9, one value in both schemes -- it only has to clear the 3:1
+# non-text bar (3.82:1 on the light paper, 4.16:1 on the dark paper, both
+# checked), not the 4.5:1 text bar, so one hex works for both instead of
+# needing a lighter dark-mode swap the way --accent/--accent2 in
+# index.html's :root do. Every actual SVG <text> element here (grid
+# labels, ticks, the axis title, the caption) stays on --grid/--axis/
+# --muted/--label/--strong, all still plain ink, unchanged.
 def color_vars(scope):
     return f'''
   {scope} {{
     --bg: #ece8df; --grid: #000000; --axis: #000000; --muted: #000000;
-    --label: #000000; --strong: #000000; --line: #000000; --line2: #000000; --line2-pct: #000000;
+    --label: #000000; --strong: #000000; --line: #0074D9; --line2: #000000; --line2-pct: #000000;
   }}
   @media (prefers-color-scheme: dark) {{
     {scope} {{ --bg: #0e0d0b; --grid: #ece8df; --axis: #ece8df; --muted: #ece8df;
-             --label: #ece8df; --strong: #ece8df; --line: #ece8df; --line2: #ece8df; --line2-pct: #ece8df; }}
+             --label: #ece8df; --strong: #ece8df; --line: #0074D9; --line2: #ece8df; --line2-pct: #ece8df; }}
   }}
   {'' if scope == ':root' else scope + ' '}line[stroke="var(--grid)"] {{ stroke-dasharray: 1 4; }}'''
 
