@@ -1,77 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <!-- v0.77: rebuilt for the real macOS-native idiom (compared side by
-       side against /System/Applications/Maps.app, Podcasts.app,
-       Freeform.app), direct request that the previous pass here read as
-       a painted illustration, not an app icon. Dropped: the four-stop
-       desert gradient, the userSpaceOnUse tree gradient, the radial sun
-       glow, the radial ground shadow, the top gloss ellipse and the
-       vignette overlay, five separate painterly layers stacked on one
-       small tile. What's left is the real Apple shape: one flat rounded
-       squircle (rx=44 of 200, unchanged, already the correct ~22%
-       ratio), a single subtle two-stop vertical gradient for depth (the
-       same trick Maps/Freeform use, light catching the top edge), one
-       bold filled silhouette for the subject, and a hairline rim light
-       tracing the tile's own edge. No second gradient on the subject
-       itself, no glow, no shadow baked into the art.
-
-       Palette is still this repo's real Mojave palette (CLAUDE.md), nothing
-       invented: silver #EDEDEA at the top, straight to the exact
-       leather-brown #6B4423 that's already one of the kernel dock's own
-       accent colors (kernel.c's dock_colors table) at the bottom. Tree
-       fill is the dock's darkest neutral, #2B2B2B (also already in that
-       same table), for a legible dark-on-warm silhouette instead of a
-       third hue. No purple, no teal, no rainbow gradient anywhere here.
-
-       Subject stays true to Yucca brevifolia (this file's own long-
-       standing reference note): a stout, irregularly-branching trunk,
-       each branch capped with a dense rosette of radiating spikes, not
-       antlers. Redrawn as solid filled shapes instead of thin strokes
-       specifically so it reads at 16x16, checked by rendering to PNG
-       at 16/32/128/512 and looking at each one, not assumed from the
-       path data. -->
-  <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#EDEDEA"/>
-      <stop offset="100%" stop-color="#6B4423"/>
-    </linearGradient>
-    <clipPath id="roundedSquare">
-      <rect width="200" height="200" rx="44"/>
-    </clipPath>
-    <!-- One rosette, filled wedges instead of thin lines so the crown
-         reads as a solid mass rather than a hairline scribble once
-         scaled down to menu-bar/dock sizes. -->
-    <g id="rosette">
-      <path d="M0 0 L-4 -1 L0 -23 L4 -1 Z"/>
-      <path d="M0 0 L-4 -1 L-10 -21 L2.5 -3 Z"/>
-      <path d="M0 0 L4 -1 L10 -21 L-2.5 -3 Z"/>
-      <path d="M0 0 L-3 0 L-19 -14 L1 -3 Z"/>
-      <path d="M0 0 L3 0 L19 -14 L-1 -3 Z"/>
-      <path d="M0 0 L-2 1 L-22 -3 L0 -2 Z"/>
-      <path d="M0 0 L2 1 L22 -3 L0 -2 Z"/>
-    </g>
-  </defs>
-
-  <g clip-path="url(#roundedSquare)">
-    <rect width="200" height="200" fill="url(#tile)"/>
-
-    <!-- trunk and two arms, bold filled capsules instead of thin
-         strokes, the "less gradient, more native" note also meant
-         "more legible at 16px", and a single dark silhouette wins there
-         over fine linework every time -->
-    <g fill="#2B2B2B">
-      <path d="M93 178 L91 140 L96 108 L93 84 L107 84 L104 108 L109 140 L107 178 Z"/>
-      <path d="M96 156 Q70 142 58 102 L67 96 Q78 130 101 145 Z"/>
-      <path d="M104 128 Q130 110 140 74 L148 79 Q138 116 110 137 Z"/>
-    </g>
-
-    <g fill="#2B2B2B">
-      <use href="#rosette" transform="translate(100 84) scale(1.15)"/>
-      <use href="#rosette" transform="translate(58 102) rotate(-18) scale(0.95)"/>
-      <use href="#rosette" transform="translate(140 74) rotate(16) scale(1)"/>
-    </g>
+  <!-- The simplified tree (landing/mark.png) as vector: one ink #000000 on
+       one paper #ece8df, no greys, no gradients. A forked trunk and three
+       spiked crowns, the read that survives down to 16px. Hand-tuned
+       geometry; edit the numbers, keep the two colours. -->
+  <rect width="200" height="200" rx="44" fill="#ece8df"/>
+  <g fill="none" stroke="#000000" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M100 172 C99 150 101 132 100 112 C100 96 100 84 100 66" stroke-width="11"/>
+    <path d="M100 128 C86 118 70 108 54 94" stroke-width="9"/>
+    <path d="M101 120 C116 114 134 106 149 97" stroke-width="9"/>
   </g>
-  <!-- inner rim light tracing the tile's own edge, outside the clip so
-       it isn't half-cut by the rect it traces, the one non-flat touch
-       every real Dock icon carries, a hairline, not a glow -->
-  <rect x="1" y="1" width="198" height="198" rx="43" fill="none" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="1.5"/>
+  <path d="M84 174 C92 169 108 169 118 174 Z" fill="#000000"/>
+  <g fill="#000000">
+    <path d="M119.7 51.8 L133.6 54.0 L119.7 56.2 L119.7 56.3 L125.1 59.7 L118.7 60.5 L118.7 60.6 L131.3 69.1 L116.8 64.5 L116.7 64.6 L119.9 69.9 L114.0 68.0 L114.0 68.0 L121.4 80.8 L110.6 70.7 L110.5 70.8 L111.4 77.7 L106.6 72.7 L106.5 72.7 L107.3 85.8 L102.3 73.7 L102.2 73.7 L100.0 80.7 L97.8 73.7 L97.7 73.7 L92.8 85.7 L93.5 72.7 L93.4 72.7 L88.5 77.9 L89.5 70.8 L89.4 70.7 L79.6 79.5 L86.0 68.0 L86.0 68.0 L80.0 69.9 L83.3 64.6 L83.2 64.5 L69.4 68.7 L81.3 60.6 L81.3 60.5 L73.1 60.1 L80.3 56.3 L80.3 56.2 L67.2 54.0 L80.3 51.8 L80.3 51.7 L74.8 48.2 L81.3 47.5 L81.3 47.4 L68.8 39.0 L83.2 43.5 L83.3 43.4 L78.2 36.6 L86.0 40.0 L86.0 40.0 L78.5 27.0 L89.4 37.3 L89.5 37.2 L88.6 30.2 L93.4 35.3 L93.5 35.3 L92.0 19.0 L97.7 34.3 L97.8 34.3 L100.0 28.6 L102.2 34.3 L102.3 34.3 L107.9 19.4 L106.5 35.3 L106.6 35.3 L111.3 30.5 L110.5 37.2 L110.6 37.3 L120.5 28.3 L114.0 40.0 L114.0 40.0 L120.0 38.0 L116.7 43.4 L116.8 43.5 L130.2 39.5 L118.7 47.4 L118.7 47.5 L126.9 47.9 L119.7 51.7Z"/>
+    <path d="M65.5 86.1 L77.4 88.0 L65.5 89.9 L65.5 90.0 L71.3 93.3 L64.6 93.8 L64.6 93.9 L75.8 101.4 L62.9 97.3 L62.9 97.4 L66.3 102.6 L60.5 100.4 L60.4 100.5 L67.0 111.9 L57.4 102.9 L57.3 102.9 L57.8 108.4 L53.9 104.6 L53.8 104.6 L54.5 116.3 L50.0 105.5 L49.9 105.5 L48.0 111.0 L46.1 105.5 L46.0 105.5 L41.1 118.2 L42.2 104.6 L42.1 104.6 L37.8 109.2 L38.7 102.9 L38.6 102.9 L29.4 111.3 L35.6 100.5 L35.5 100.4 L29.3 102.9 L33.1 97.4 L33.1 97.3 L20.7 101.1 L31.4 93.9 L31.4 93.8 L25.4 93.2 L30.5 90.0 L30.5 89.9 L16.7 88.0 L30.5 86.1 L30.5 86.0 L24.4 82.6 L31.4 82.2 L31.4 82.1 L21.3 75.2 L33.1 78.7 L33.1 78.6 L29.3 73.1 L35.5 75.6 L35.6 75.5 L29.0 64.2 L38.6 73.1 L38.7 73.1 L37.3 65.8 L42.1 71.4 L42.2 71.4 L41.1 57.6 L46.0 70.5 L46.1 70.5 L48.0 64.8 L49.9 70.5 L50.0 70.5 L55.1 56.9 L53.8 71.4 L53.9 71.4 L57.9 67.5 L57.3 73.1 L57.4 73.1 L66.8 64.4 L60.4 75.5 L60.5 75.6 L67.0 72.8 L62.9 78.6 L62.9 78.7 L74.4 75.3 L64.6 82.1 L64.6 82.2 L71.1 82.7 L65.5 86.0Z"/>
+    <path d="M171.5 90.1 L182.9 92.0 L171.5 93.9 L171.5 94.0 L177.5 97.4 L170.6 97.8 L170.6 97.9 L182.2 105.6 L168.9 101.3 L168.9 101.4 L172.7 106.9 L166.5 104.4 L166.4 104.5 L173.7 116.7 L163.4 106.9 L163.3 106.9 L164.1 112.9 L159.9 108.6 L159.8 108.6 L160.9 122.2 L156.0 109.5 L155.9 109.5 L154.0 115.9 L152.1 109.5 L152.0 109.5 L147.2 121.9 L148.2 108.6 L148.1 108.6 L143.8 113.3 L144.7 106.9 L144.6 106.9 L134.4 116.6 L141.6 104.5 L141.5 104.4 L134.6 107.5 L139.1 101.4 L139.1 101.3 L126.7 105.2 L137.4 97.9 L137.4 97.8 L130.5 97.4 L136.5 94.0 L136.5 93.9 L125.0 92.0 L136.5 90.1 L136.5 90.0 L130.4 86.6 L137.4 86.2 L137.4 86.1 L126.2 78.6 L139.1 82.7 L139.1 82.6 L134.5 76.4 L141.5 79.6 L141.6 79.5 L134.4 67.4 L144.6 77.1 L144.7 77.1 L143.9 71.1 L148.1 75.4 L148.2 75.4 L147.3 62.7 L152.0 74.5 L152.1 74.5 L154.0 67.9 L155.9 74.5 L156.0 74.5 L160.4 63.9 L159.8 75.4 L159.9 75.4 L164.2 70.7 L163.3 77.1 L163.4 77.1 L172.3 69.1 L166.4 79.5 L166.5 79.6 L171.8 77.8 L168.9 82.6 L168.9 82.7 L180.1 79.4 L170.6 86.1 L170.6 86.2 L177.8 86.6 L171.5 90.0Z"/>
+  </g>
 </svg>
