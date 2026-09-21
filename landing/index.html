@@ -184,7 +184,7 @@
      min-height on the frame plus a much taller #stage-wrap formula below
      (94svh instead of 58vh, no fixed 640px cap) fill the first screen a
      visitor sees with the live boot. */
-  #demo-frame { position: relative; width: 100%; padding: 14px 0 3%; min-height: 92svh; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #demo-frame { position: relative; width: 100%; padding: 0; min-height: 100svh; background: #000; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   /* v0.76.51: real bug, direct report ("demo cut off when window rescales")
      -- explicit height (65vh/max-height) combined with width:auto and a
      separate max-width:100% clamp fight each other whenever the viewport
@@ -195,8 +195,8 @@
      what 58vh-at-16:9 would need, height:auto lets aspect-ratio derive the
      matching height from whichever width actually won, no competing
      explicit height to disagree with it. */
-  #stage-wrap { background: #000; position: relative; width: min(100%, calc(92svh * 16 / 9)); height: auto; max-height: 92svh; aspect-ratio: 16 / 9; z-index: 0; border-radius: 6px; overflow: hidden; outline: 1px solid var(--fg); outline-offset: 5px; }
-  @media (max-width: 600px) { #stage-wrap { width: 100%; height: auto; max-height: none; } #demo-frame { padding: 4% 4% 2%; min-height: 70svh; } }
+  #stage-wrap { background: #000; position: relative; width: min(100vw, calc(100svh * 16 / 9)); height: auto; max-height: 100svh; aspect-ratio: 16 / 9; z-index: 0; overflow: hidden; }
+  @media (max-width: 600px) { #stage-wrap { width: 100%; height: auto; max-height: none; } #demo-frame { min-height: 0; } }
   /* The visible way out once a visitor has taken control of the demo:
      direct request, "obvious way out", both a tap target and Esc (wired
      in the script below). Hidden until #demo-frame gains .demo-focused. */
@@ -265,7 +265,7 @@
      since real PS/2-style relative deltas never perfectly match native
      screen movement, is exactly what read as "the cursor is offset", a
      real, reported, confusing bug, not a rendering glitch to tune away. */
-  #screen_canvas { width: 100%; height: 100%; flex-shrink: 0; image-rendering: pixelated; cursor: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  #screen_canvas { width: 100%; height: 100%; flex-shrink: 0; cursor: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
   /* A small badge, not a dark veil over the whole demo: the earlier full-
      screen `inset:0` dark overlay dimmed the entire GUI just to show one
      line of text, direct feedback that it read as "ugly". Now it's one
@@ -305,8 +305,6 @@
 
 <a class="skip-link" href="#main">Skip to content</a>
 
-<div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Co.</span><span>Est. 2026</span></div>
-
 <div id="demo-frame">
   <div id="stage-wrap">
     <div id="boot-logo" aria-hidden="true">
@@ -326,6 +324,8 @@
   </div>
   <p class="plate-cap">Fig. 1 &middot; This exact kernel.elf, booting live in your browser</p>
 </div>
+
+<div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Co.</span><span>Est. 2026</span></div>
 
 <header class="hero" id="main">
   <div class="hero-copy">
@@ -493,12 +493,12 @@
   }, true);
 
   if (reduced || !bootLogo) return; // prefers-reduced-motion: no auto-scroll at all
-  var armed = false;
-  new MutationObserver(function () {
-    if (armed || !bootLogo.hidden) return; // boot-logo hides once embed.js reaches graphical mode
-    armed = true;
-    autoScrollTimer = setTimeout(function () { if (!tookOver) scrollToContent(); }, 1400);
-  }).observe(bootLogo, { attributes: true, attributeFilter: ['hidden'] });
+  // embed.js fires this once the idle tour has played every app through once.
+  // Booting alone is not "the demo finishing"; scrolling at boot skipped the whole show.
+  window.addEventListener('jt-tour-lap-done', function () {
+    if (tookOver || window.scrollY > 40) return; // they took over, or already scrolled on their own
+    autoScrollTimer = setTimeout(function () { if (!tookOver) scrollToContent(); }, 1200);
+  }, { once: true });
 })();
 // Direct request: a dynamic version number next to the "Joshua Tree"
 // header, sourced from the same VERSION file every real release already
