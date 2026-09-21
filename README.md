@@ -52,7 +52,7 @@ The remaining commands mostly exercise one subsystem at a time: `help`
 
 Full subsystem breakdown: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 The syscall contract: [`docs/SYSCALL-ABI.md`](docs/SYSCALL-ABI.md).
-Current plan: [`roadmap.md`](roadmap.md).
+Current plan: [`docs/roadmap.md`](docs/roadmap.md).
 
 ## License
 

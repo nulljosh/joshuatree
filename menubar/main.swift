@@ -23,7 +23,7 @@ final class ProgressPoller: ObservableObject {
     }
 
     func poll() {
-        let roadmapPath = "\(repoPath)/roadmap.md"
+        let roadmapPath = "\(repoPath)/docs/roadmap.md"
         guard let text = try? String(contentsOfFile: roadmapPath, encoding: .utf8) else { return }
 
         var done = 0, total = 0

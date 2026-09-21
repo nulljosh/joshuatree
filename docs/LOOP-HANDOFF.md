@@ -13,7 +13,7 @@ One main session directs, workers do the building. Each round:
 4. Review every worker's output yourself (look at the screenshot, read the test) before trusting it. Twice today a Haiku shipped something wrong: a save test that rewrote the file it was meant to read back, and an icon with no crowns.
 5. Short progress ping to Joshua, in his voice.
 
-Rules: hand-made worktrees under `/tmp/jt-loop/<branch>` (the session cwd is not a git repo, so `isolation: worktree` fails). Headless only, never a visible QEMU window. Workers never edit `roadmap.md` and never sit polling CI. No em dashes. Joshua approved merging PRs on 2026-09-20 ("merge the pull requests, please handle it"); before that the permission guard blocked `gh pr merge --auto`.
+Rules: hand-made worktrees under `/tmp/jt-loop/<branch>` (the session cwd is not a git repo, so `isolation: worktree` fails). Headless only, never a visible QEMU window. Workers never edit `docs/roadmap.md` and never sit polling CI. No em dashes. Joshua approved merging PRs on 2026-09-20 ("merge the pull requests, please handle it"); before that the permission guard blocked `gh pr merge --auto`.
 
 ## Where things stand
 

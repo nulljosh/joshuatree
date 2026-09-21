@@ -1,6 +1,6 @@
 # Architecture
 
-What each file does and how boot actually proceeds. `roadmap.md` is the plan;
+What each file does and how boot actually proceeds. `docs/roadmap.md` is the plan;
 this is the map of what exists right now.
 
 ## Boot sequence
@@ -170,7 +170,7 @@ payload and is reaped by `idt.c`'s ring-3 exception path instead of halting
 the machine; `ring3test spin` proves preemption and `task_kill` on a ring-3
 task. All three come back to the shell. Verified by independent
 QEMU-monitor reads of the marker plus the kernel's own correctly-named
-reports, not just "didn't crash"; see `roadmap.md`'s v3 and v64 entries.
+reports, not just "didn't crash"; see `docs/roadmap.md`'s v3 and v64 entries.
 
 ## Verification
 
@@ -179,5 +179,5 @@ asserts the startup banner reached VGA memory. That catches "does it boot
 at all." Everything beyond that, does paging actually work, does the disk
 driver actually read what it wrote, does the context switch actually swap
 stacks correctly, gets verified manually per change (see commit messages
-and `roadmap.md`'s per-item notes) against real QEMU-attached disks and
+and `docs/roadmap.md`'s per-item notes) against real QEMU-attached disks and
 boot-time output, not just "it compiled."

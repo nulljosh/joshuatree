@@ -1,12 +1,12 @@
 #!/bin/sh
-# Injects the latest feature headline from roadmap.md into landing/index.html.
+# Injects the latest feature headline from docs/roadmap.md into landing/index.html.
 # Run this before wrangler deploy to keep the landing page's banner in sync.
 set -e
 
-# Extract the Latest line from roadmap.md using awk to avoid sed regex issues
-latest_line=$(awk '/^\*\*Latest\*\*:/ {print; exit}' roadmap.md)
+# Extract the Latest line from docs/roadmap.md using awk to avoid sed regex issues
+latest_line=$(awk '/^\*\*Latest\*\*:/ {print; exit}' docs/roadmap.md)
 if [ -z "$latest_line" ]; then
-  echo "Error: No **Latest**: line found in roadmap.md"
+  echo "Error: No **Latest**: line found in docs/roadmap.md"
   exit 1
 fi
 
