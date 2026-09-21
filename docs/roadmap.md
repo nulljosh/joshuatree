@@ -31,7 +31,20 @@ Everything a stranger needs to use it for an hour in the browser or an emulator 
 - [ ] [Haiku] Docs refresh: README, WHITEPAPER and ARCHITECTURE reworded and filled out to mirror the structure of the better fleet docs (nimble and tripwire are the reference).
 
 ## 1.0.0
-A release that can be defended. On top of the beta and the frozen syscall ABI (`docs/SYSCALL-ABI.md`):
+Joshua's call, 2026-09-21: 1.0.0 is a super thorough QA release. Every feature works, nothing crashes, all text and icons are sharp, and the icons have taste, not a Microsoft look. Real hardware is trusted for now and proven after.
+- [ ] [Haiku] QA gallery: one headless script opens every app from the dock and the Apps folder, uses it, closes it, saves a full resolution screenshot of each, and fails on any crash text in the serial log. Runs in `tools/checks/ci-suite.sh`.
+- [ ] [Fable] Main session reviews every gallery screenshot by eye: blurry text, clipped labels, misaligned chrome, soft icons. Each finding becomes a bug line below and gets fixed before the tag.
+- [ ] [Sonnet] Every feature exercised once: each app's main action (add a reminder, save a note, send the chat prompt, search, change wallpaper, snap a window), each menu item, each Settings row, each shell command in `help`.
+- [ ] [Sonnet] Nothing crashes: bad input in every text field, long lines, empty files, missing disk, no network. Each case gets a check.
+- [ ] [Sonnet] Icons with taste: depth, soft light, real materials, consistent corner and light direction across all of them. Judged from the gallery at dock, hover and Apps grid sizes.
+- [ ] [Sonnet] Text sharp everywhere: no bitmap fallback font where the antialiased one should draw, no uneven letter gaps, baselines level.
+- [ ] [Haiku] Release notes that say what is missing: no sound, no secure web of its own, one core, no install to disk.
+- [ ] [Joshua] Codename for the release. The name stays Joshua Tree, domain `joshuatreeos.com`.
+
+Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk), and moving the landing page to a `gh-pages` branch.
+
+## After 1.0
+What other small operating systems needed before people used them day to day.
 - [ ] [Fable] The lag (issue #14) profiled, fixed and measured, with frame time numbers in the release notes.
 - [ ] [Joshua] One real PC booted from the USB stick, keyboard and mouse working, photographed. The USB image and non-emulator graphics are only proven in QEMU so far.
 - [ ] [Fable] Keyboards on real PCs: a USB keyboard driver, or release notes that say plainly it needs the BIOS legacy keyboard mode.
@@ -42,13 +55,6 @@ A release that can be defended. On top of the beta and the frozen syscall ABI (`
 - [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
 - [ ] [Fable] Better multitasking: more than two windows at once, an app switcher, apps that keep running in the background. This is the Multi-window section; snapping lands first on the windows that exist.
 - [ ] [Fable] Dual monitor support: a second framebuffer (QEMU `-device secondary-vga`), the desktop across both, windows dragged between them. Needs the compositor.
-- [ ] [Haiku] Release notes that say what is missing: no sound, no secure web of its own, one core, no install to disk.
-- [ ] [Joshua] Codename for the release. The name stays Joshua Tree, domain `joshuatreeos.com`.
-
-Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk), and moving the landing page to a `gh-pages` branch.
-
-## After 1.0
-What other small operating systems needed before people used them day to day.
 - [ ] [Fable] A web browser, which needs secure connections first.
 - [ ] [Fable] Install to disk from the USB stick.
 - [ ] [Fable] Wi-Fi.
