@@ -1,0 +1,20 @@
+#!/bin/sh
+# Fast, no-QEMU-window pre-push gate. Runs the two checks cheap enough to
+# do on every push without slowing anyone down: doc references still
+# resolve, and the kernel still compiles. Neither pops a window (headless
+# only, see CLAUDE.md). Anything that needs a real boot (./check.sh, the
+# full tools/checks/ci-suite.sh) stays CI's job, not this hook's.
+#
+# Installed per-repo via `make hooks` (core.hooksPath is set globally on
+# this machine to ~/.git-hooks, so this repo opts in on its own).
+# Skip once with `git push --no-verify`.
+set -e
+cd "$(dirname "$0")/../.."
+
+echo "pre-push: doc references..."
+./tools/checks/check-refs.sh
+
+echo "pre-push: kernel compiles..."
+make -s kernel.elf
+
+echo "pre-push: OK"

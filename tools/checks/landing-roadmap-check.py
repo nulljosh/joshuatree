@@ -51,7 +51,7 @@ class RoadmapTests(unittest.TestCase):
                 generator.render(QUEUE, page)
 
     def test_real_page_can_be_regenerated(self):
-        roadmap = (ROOT / 'roadmap.md').read_text()
+        roadmap = (ROOT / 'docs/roadmap.md').read_text()
         page = (ROOT / 'landing/index.html').read_text()
         updated = generator.render(roadmap, page)
         self.assertIn(generator.summarize(roadmap), updated)
