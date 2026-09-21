@@ -2,14 +2,14 @@
 
 # Joshua Tree
 
-![version](https://img.shields.io/badge/version-0.85.0-blue)
+![version](https://img.shields.io/badge/version-0.85.3-blue)
 ![platform](https://img.shields.io/badge/platform-i386-lightgrey)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
 A freestanding operating system, written from scratch.
 
 It boots, reads a real disk, talks to the network, and runs a mouse-driven
-desktop with 22 applications, a terminal, and live weather. No libc, no
+desktop with 23 applications, a terminal, and live weather. No libc, no
 bootloader, no external dependencies beyond Clang, lld and QEMU.
 
 Live demo, running the real kernel in your browser: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
@@ -55,7 +55,7 @@ The remaining commands mostly exercise one subsystem at a time: `help`
 
 Full subsystem breakdown: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 The syscall contract: [`docs/SYSCALL-ABI.md`](docs/SYSCALL-ABI.md).
-Current plan: [`roadmap.md`](roadmap.md).
+Current plan: [`docs/roadmap.md`](docs/roadmap.md).
 
 ## License
 

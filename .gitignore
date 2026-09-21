@@ -10,7 +10,7 @@ drivers/user_hello.h
 user/note.bin
 drivers/user_note.h
 landing/kernel.elf
-!landing/v86/kernel.elf
+landing/v86/kernel.elf
 .DS_Store
 .wrangler/
 menubar/JoshuaTreeMonitor.app/
