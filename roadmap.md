@@ -10,6 +10,23 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
+## Dump, 2026-09-20
+Worked easiest and most relevant first.
+- [ ] [Sonnet] Landing: black and white again on an off-white page, one splash of colour, auto light and dark. "Where" reads "On your desktop, in your pocket..." Fresh bottom copy.
+- [ ] [Sonnet] Landing demo starts full screen, auto-scrolls on once it finishes or until the visitor takes over; Esc or a visible button leaves full screen and scrolls.
+- [ ] [Sonnet] Repo tidy: `money.md`, `WHITEPAPER.md`, `roadmap.md` and friends move into `docs/`; `landing/v86/kernel.elf` stops being tracked and is built in the deploy workflow.
+- [ ] [Haiku] A pre-push hook that runs the fast part of `check.sh`, so a red push never leaves the machine.
+- [ ] [Haiku] Mac app (`menubar/`) and its icon refreshed to match the current tree icon and version.
+- [ ] [Sonnet] Boot logo drawn sharp at native resolution, no 8-bit look.
+- [ ] [Sonnet] Bootable ISO (GRUB or Limine, `make iso`), booted headless in CI. Needed for 1.0.
+- [ ] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts (the kernel is i386, so it runs native on any x86 and under QEMU on ARM).
+- [ ] [Sonnet] Chat QA: open Chat, switch between models, sign-in gate for subscription models.
+- [ ] [Sonnet] Native Bible app (public-domain KJV on the disk image, book/chapter picker, search).
+- [ ] [Sonnet] Default terminal tools: what a fresh shell ships with (`cat`, `wc`, `grep`, `calc`, then a tiny C compiler as a stretch).
+- [ ] [Haiku] Audit that every fleet app has a native port or a roadmap line.
+
+Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk), and moving the landing page to a `gh-pages` branch (deploy reads `roadmap.md` and the kernel build from main; 11 files are not the mess, the tracked kernel binary is).
+
 ## 1.0 gate
 What "1.0" actually needs, on top of the frozen syscall ABI (`docs/SYSCALL-ABI.md`):
 - [ ] [Sonnet] Shell launches a program by name, not just `exec <exact path>`. In progress.
@@ -43,7 +60,6 @@ Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Fable] Window resize, minimize, and maximize. Needs the compositor below.
 - [ ] [Fable] Drivers for physical hardware, not just QEMU's emulated devices (AHCI, e1000).
 - [ ] [Fable] Multi-core (SMP).
-- [ ] [Joshua] Installable ISO.
 - [ ] [Sonnet] Software update path.
 - [ ] [Haiku] Accessibility: text size and high contrast.
 - [ ] In progress: Chat wired to a local Qwen/Bonsai model. Currently talks to Ollama.
