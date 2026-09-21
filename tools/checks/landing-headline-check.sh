@@ -82,4 +82,11 @@ if [ "$restored_latest" != "data-latest=\"${expected}\"" ]; then
   exit 1
 fi
 
+# The headline must never hide on click again: it sits below the demo and
+# covers nothing, so nothing may toggle it away.
+if grep -q "demo-focused" landing/v86/embed.js landing/index.html; then
+  echo "FAIL: something still hides the hero copy on click (demo-focused is back)"
+  exit 1
+fi
+
 echo "PASS: the H1 is the brand line and the eyebrow announcement tracks roadmap Latest"
