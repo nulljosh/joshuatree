@@ -23,7 +23,9 @@ final class ProgressPoller: ObservableObject {
     }
 
     func poll() {
-        let roadmapPath = "\(repoPath)/roadmap.md"
+        let docsRoadmapPath = "\(repoPath)/docs/roadmap.md"
+        let rootRoadmapPath = "\(repoPath)/roadmap.md"
+        let roadmapPath = FileManager.default.fileExists(atPath: docsRoadmapPath) ? docsRoadmapPath : rootRoadmapPath
         guard let text = try? String(contentsOfFile: roadmapPath, encoding: .utf8) else { return }
 
         var done = 0, total = 0
@@ -96,7 +98,7 @@ struct JoshuaTreeMonitorApp: App {
             .frame(width: 240)
         } label: {
             Text(labelText)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.system(size: 12))
         }
         .menuBarExtraStyle(.window)
     }
