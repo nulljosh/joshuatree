@@ -60,12 +60,12 @@ SERIAL2="$WORKDIR/serial2"
 (
     sleep 3
     echo 'sendkey esc'; sleep 1
-    send "filetest"; sleep 8
+    send "filetest read"; sleep 8
     echo quit
 ) | qemu-system-i386 -kernel "$KERNEL" -display none -monitor stdio -serial "file:$SERIAL2" \
     -drive "file=$DISK,format=raw,if=ide,index=0" > /dev/null 2>&1
 
-if grep -q "filetest: write+read ok" "$SERIAL2"; then
+if grep -q "filetest: persisted read ok" "$SERIAL2"; then
     echo "  OK: File persisted across reboot and still readable"
 else
     echo "FAIL: Phase 2 - File did not persist or became unreadable"
