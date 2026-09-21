@@ -68,10 +68,12 @@ retry|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.p
 retry|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
 retry|Apps folder layout (no black band, no row spill, no ghost icons)|python3 ./tools/checks/appsfolder-layout-check.py
 retry|Multi-window (click-to-focus, real z-order compositing)|python3 ./tools/checks/multiwindow-check.py
+retry|Window snapping (title-bar drag to edge/corner, real pixel proof)|python3 ./tools/checks/windowsnap-check.py
 retry|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
 retry|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
 retry|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py
 retry|Dock tray corner AA (real coverage blend, not binary)|python3 ./tools/checks/traycorner-check.py
+retry|Portfolio catalog opens, lists the fleet, and the list scrolls|python3 ./tools/checks/portfolio-check.py
 retry|Boot logo AA (no false interior seams at overlapping capsule joints)|python3 ./tools/checks/bootlogo-check.py
 once |Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcount-check.mjs
 once |Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
