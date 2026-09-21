@@ -98,7 +98,7 @@ separate Save step.
 
 **Stocks** (`kernel/stocks.h`) is the basic native one, shaped like macOS Stocks: a scrolling watchlist sidebar (sparkline, price, colored change pill) beside a detail pane with 1D/1W/1M/3M/1Y range tabs, a line chart and an Open/High/Low/Mkt Cap/P/E grid. Baked-in demo data (all plain-HTTP quote sources force HTTPS, no TLS here); chart history is a deterministic seeded walk pinned to the real baked-in price. Its drawing helpers (`stx_*`) are reused by Epiphany.
 
-**Epiphany** (`kernel/epiphany.h`) is our own, richer take, a deliberately separate app from Stocks: the offline slice of github.com/nulljosh/epiphany. Tabs: Markets (editable watchlist, `a` add / `d` remove, plus crypto, commodities, fear/greed), Portfolio (holdings valued off live-ticking prices, P/L, allocation bar, +/- shares), Simulator (ticking random-walk market you trade against), Situation (macro pulse, brief). The real app's map, People graph and accounts/billing/sync need HTTPS and cannot run here. Dock/Apps icon 22; Apps folder and Trash moved to 23/24.
+**Epiphany** (`kernel/epiphany.h`) is our own, richer take, a deliberately separate app from Stocks: the offline slice of github.com/nulljosh/epiphany. Tabs: Markets (editable watchlist, `a` add / `d` remove, plus crypto, commodities, fear/greed), Portfolio (holdings valued off live-ticking prices, P/L, allocation bar, +/- shares), Simulator (ticking random-walk market you trade against), Situation (macro pulse, brief). The real app's map, People graph and accounts/billing/sync need HTTPS and cannot run here. Dock/Apps icon 22.
 
 **Search** (`kernel/search.h`, v0.86.0), Apps-folder-only like Contacts/
 Calculator/Stocks, no persistence of its own since it mirrors the real
@@ -115,6 +115,20 @@ directory result `vfs_chdir`s into it and reloads a fresh real listing
 (the same primitive the shell's own `cd` uses); a file result shows its
 real bytes via `vfs_read_file` + `render_wrapped_text`, the same pair the
 shell's own `cat` command and `gui_launch_html` already use.
+
+**Portfolio** (`kernel/portfolio.h`, v0.87.0), Apps-folder-only like
+Search/Contacts/Calculator/Stocks. A static, compiled-in catalog of the
+whole heyitsmejosh.com fleet (35 apps across Life/Read/Make/Play/Dev),
+each with a one-line description and its `<name>.heyitsmejosh.com` URL
+where one exists. Same fixed-size-table shape and `gui_prompt.h`
+chrome/content split as Search, plus a scrollable, keyboard/mouse-driven
+list (`pf_scroll`, up/down and the mouse wheel, same row-clamping shape
+`gui_apps_draw_grid`'s Apps folder scroll already uses). This kernel has
+no general "open any URL live" hook: the fleet apps already ported in as
+`gui_launch_html` are baked static snapshots, not a browser, and Search's
+own scope is the local filesystem, not the network. So selecting an
+entry shows its URL on a detail line rather than trying to open it. Apps
+folder and Trash moved to 24/25 to make room.
 
 **Eleven apps ported natively from the fleet, thin ports on purpose.**
 `tools/gen/gen_app.sh` turns a sibling repo's real single-file static build
