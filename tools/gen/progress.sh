@@ -318,14 +318,14 @@ caption = f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fi
 def color_vars(scope):
     return f'''
   {scope} {{
-    --bg: #ece8df; --grid: #000000; --axis: #000000; --muted: #000000;
-    --label: #000000; --strong: #000000; --line: #000000; --line2: #000000; --line2-pct: #000000;
+    --bg: #ffffff; --grid: #d7dfe9; --axis: #526174; --muted: #526174;
+    --label: #526174; --strong: #172334; --line: #2869c7; --line2: #159b9a; --line2-pct: #159b9a;
   }}
   @media (prefers-color-scheme: dark) {{
-    {scope} {{ --bg: #0e0d0b; --grid: #ece8df; --axis: #ece8df; --muted: #ece8df;
-             --label: #ece8df; --strong: #ece8df; --line: #ece8df; --line2: #ece8df; --line2-pct: #ece8df; }}
+    {scope} {{ --bg: #192637; --grid: #344354; --axis: #a8b8cb; --muted: #a8b8cb;
+             --label: #a8b8cb; --strong: #f1f5fa; --line: #83b5ff; --line2: #5ed0c7; --line2-pct: #5ed0c7; }}
   }}
-  {'' if scope == ':root' else scope + ' '}line[stroke="var(--grid)"] {{ stroke-dasharray: 1 4; }}'''
+  {'' if scope == ':root' else scope + ' '}line[stroke="var(--grid)"] {{ stroke-dasharray: none; }}'''
 
 def build_svg(dots_markup, svg_id=None, extra_style="", extra_root_attrs=""):
     # svg_id=None -> the plain, standalone progress.svg (README embed via

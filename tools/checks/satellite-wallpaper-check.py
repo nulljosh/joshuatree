@@ -183,17 +183,14 @@ sc = 2
 band_fb = fb.crop((0, WIND_TOP * sc, W, WIND_HORIZON * sc))
 area_h = 540 - MENUBAR_H
 src_y0 = (WIND_TOP - MENUBAR_H) * WALL_H // area_h; src_y1 = (WIND_HORIZON - MENUBAR_H) * WALL_H // area_h
-# Satellite goes through gui_engrave before the day/night tint (kernel.c):
-# luminance, stretched ENGRAVE_LO..ENGRAVE_HI, laid on the ink-to-paper axis.
-# Mirrored per pixel, not on the mean, because the stretch clamps.
-ENGRAVE_LO, ENGRAVE_HI = 40, 176
-def engrave(im):
+# Mirror gui_sat_color per pixel before the day/night tint.
+def satellite_color(im):
     out = []
     for r, g, b in im.getdata():
-        t = max(0, min(255, (((r * 77 + g * 150 + b * 29) >> 8) - ENGRAVE_LO) * 255 // (ENGRAVE_HI - ENGRAVE_LO)))
-        out.append((0xEC * t // 255, 0xE8 * t // 255, 0xDF * t // 255))
+        l = (r * 77 + g * 150 + b * 29) >> 8
+        out.append(tuple(max(0, min(255, l + (v - l) * 5 // 4 if v >= l else l - ((l - v) * 5 // 4))) for v in (r, g, b)))
     res = Image.new("RGB", im.size); res.putdata(out); return res
-m_sat = tint(mean(engrave(ref.crop((0, src_y0, WALL_W, src_y1)))))
+m_sat = tint(mean(satellite_color(ref.crop((0, src_y0, WALL_W, src_y1)))))
 hdr = open("drivers/wallpaper.h").read()
 body = hdr[hdr.index("{") + 1:hdr.rindex("}")]
 photo = Image.frombytes("RGB", (WALL_W, WALL_H), bytes(int(t) for t in body.replace("\n", "").split(",") if t.strip()))
@@ -202,5 +199,5 @@ m_fb = mean(band_fb)
 d_sat = max(abs(a - b) for a, b in zip(m_fb, m_sat)); d_photo = max(abs(a - b) for a, b in zip(m_fb, m_photo))
 print(f"screen band mean {tuple(round(v) for v in m_fb)}  tinted satellite {tuple(round(v) for v in m_sat)} (d={d_sat:.1f})  tinted photo {tuple(round(v) for v in m_photo)} (d={d_photo:.1f})  hour={hour}")
 if d_sat > 12 or d_photo < 25:
-    print("FAIL: the framebuffer's wind band is not the engraved satellite map (still the photo, or the engrave/tint/compose is off)"); sys.exit(1)
+    print("FAIL: the framebuffer's wind band is not the color satellite map (still the photo, or the color/tint/compose is off)"); sys.exit(1)
 print(f"PASS: real satellite imagery of ({lat},{lon}) fetched over plain HTTP from Google, decoded in-kernel with jpeg_decode byte-for-byte equal to the host's PIL decode, distinguishably more textured than the topo style, and on screen with the hour's tint")

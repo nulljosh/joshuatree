@@ -74,20 +74,14 @@ dependencies beyond clang, ld.lld and qemu.
   real breaking change (none yet; this kernel has no external callers to
   break). `0.x.y` is deliberate, not an oversight: nothing here has a
   stable contract yet for a 1.0.0 to actually mean.
-- Theme (direct request, Sep 2026, replaces the earlier Mojave brown
-  palette): the engraving system, taken from the Joshua Tree Co. mark
-  (`landing/badge.png`, itself a nod to Apple's 1977 Newton engraving). One
-  ink on one paper, `#000000` on `#ece8df`, inverted for dark. No greys, no
-  accent colour, no opacity tricks: tone comes from line density (the
-  `--hatch` token, dotted chart grids), never a second colour. Hairline
-  1px rules, tracked-caps Helvetica labels, square plates with a hatched
-  header band, spec-sheet rules top and bottom. Sans-serif everywhere; the
-  slab serif lives inside the logo artwork only. The full badge is for
-  hero sizes only, `landing/mark.png` (the simplified tree) covers
-  everything small, the same reason Apple dropped its own engraving.
-  Landing page is converted. The kernel is not yet: its wallpaper and
-  chrome still carry the old palette until the 1-bit reskin in
-  `roadmap.md` lands, so don't "fix" the mismatch piecemeal before then.
+- Theme (direct correction, Sep 2026): keep the satellite wallpaper in
+  color. The earlier engraving filter made it black and white and the
+  cream, hatched landing page felt too much like paper or a blueprint.
+  The page now uses a clean light surface, slate text, blue and teal
+  accents, simple rules and rounded cards. Dark mode uses the same colors
+  on a navy surface. The engraved tree artwork stays as a logo only.
+  `landing/mark.png` is the small mark; `landing/badge.png` is the large
+  artwork. Keep future chrome and imagery aligned with the colored UI.
   The real VGA boot output is genuinely black-on-gray text (can't be
   restyled, it's the actual kernel's real output).
 - Task routing (direct request, Sep 2026): the main session directs
