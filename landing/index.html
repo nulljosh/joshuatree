@@ -177,7 +177,7 @@
      below need it to. --hatch itself is unused now (no second consumer
      exists to reintroduce this same bug against), kept defined on :root
      as what any future default (uncoloured) hatch should read. */
-  .step::before { content: ""; display: block; height: 8px; margin: 0 -18px 14px; background: repeating-linear-gradient(135deg, var(--hatch-color) 0 1px, transparent 1px 5px); border-bottom: 1px solid var(--border); }
+  .step::before { content: ""; display: block; height: 16px; margin: 0 -18px 14px; background: repeating-linear-gradient(135deg, var(--hatch-color) 0 2px, transparent 2px 5px); border-bottom: 1px solid var(--border); }
   /* Sep 2026 colour pass: each of the 5 plates gets its own clrs.cc hue on
      its hatched header band only, --hatch-color overridden per tile
      below, the gradient above (still a real line pattern, no tonal
