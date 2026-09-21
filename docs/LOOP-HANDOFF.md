@@ -1,3 +1,11 @@
+# State at stop, 2026-09-21 about 01:50 (usage ran out)
+
+Merged tonight: Magnet-style window snapping (#82), the QA-only 1.0 roadmap and the Hidden Valley codename (#80, #84). The Dock launcher fix is in `joshuatree-monitor`.
+Queued with auto-merge, waiting on checks: Esc closes the window not the desktop (#83), decoder fuzzing plus the password wipe (#86), Terminal in the Mono face (#87, looked at by eye, clean), Activity Monitor (#62), Chat default (#65).
+Pushed as WIP branches, NOT verified, no PR yet: `layout-polish` (blank strip gone in five apps, Calendar rows scale; builds, boots, appclose and multiwindow pass, windowsnap and calendar checks not finished, no calendar-rows check written) and `apps-window-cleanup` (worker's uncommitted fix, never reviewed). Look at a screenshot of each before opening a PR.
+Still open from the plan below: steps 3 (tour driver), 5, 6, 7. PR #85 (Portfolio app) belongs to another session.
+The drive was 100% full mid-run and stopped every worker. Run /cleanup before the next loop.
+
 # Tonight's plan to 1.0.0 (written 2026-09-21, about 01:20)
 
 One worker at a time, each run is a batch, main session reviews every result by eye before it merges. Stop spawning at 85% weekly usage; tag 1.0.0 only if the gate below is met, otherwise tag 0.9.0 and say why.
