@@ -199,7 +199,7 @@
      what 58vh-at-16:9 would need, height:auto lets aspect-ratio derive the
      matching height from whichever width actually won, no competing
      explicit height to disagree with it. */
-  #stage-wrap { background: #000; position: relative; width: min(100%, calc(62svh * 16 / 9)); height: auto; max-height: 62svh; aspect-ratio: 16 / 9; z-index: 0; overflow: hidden; border-radius: 6px; }
+  #stage-wrap { background: #000; position: relative; --stage-h: min(80svh, calc(100svh - 270px)); width: min(100%, calc(var(--stage-h) * 16 / 9)); height: auto; max-height: var(--stage-h); aspect-ratio: 16 / 9; z-index: 0; overflow: hidden; border-radius: 6px; }
   #demo-frame.demo-full #stage-wrap { width: min(100vw, calc(100dvh * 16 / 9)); max-height: 100dvh; border-radius: 0; }
   @media (max-width: 600px) { #stage-wrap { width: 100%; max-height: none; } }
   /* The visible way out once a visitor has taken control of the demo:
