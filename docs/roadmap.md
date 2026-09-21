@@ -24,6 +24,11 @@ Everything a stranger needs to use it for an hour in the browser or an emulator 
 - [ ] [Sonnet] A headless test for every app (open, use, close) in `tools/checks/ci-suite.sh`.
 - [ ] [Fable] Error handling audit: corrupt or oversized files, full disk, bad input in every text field, missing disk, network or mouse. Each case gets a check.
 - [ ] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts.
+- [ ] [Sonnet] Magnet-style window snapping, like the Magnet Mac app (dump, 2026-09-21): drag a window to a screen edge for a half, to a corner for a quarter, to the top for full. Show the target outline while dragging. Keyboard shortcuts for the same zones.
+- [ ] [Sonnet] Settings as a real native app in the dock: wallpaper, text size, system typeface, location, accounts, network status, about. One place, not scattered panels.
+- [ ] [Sonnet] Photos app: grid of the images on disk, click for full view, arrow keys to move. Built on `drivers/png.c`, plus baseline JPEG if the wallpaper decoder can be reused. Covers the image viewer gap.
+- [ ] [Sonnet] Typeface support: proportional fonts beyond DejaVu, loaded from disk, picked in Settings. Reference look from Joshua: a tight grotesque sans for body and headlines, one display face for titles, hairline rules, flat colour blocks. Sans only in the UI chrome.
+- [ ] [Haiku] Docs refresh: README, WHITEPAPER and ARCHITECTURE reworded and filled out to mirror the structure of the better fleet docs (nimble and tripwire are the reference).
 
 ## 1.0.0
 A release that can be defended. On top of the beta and the frozen syscall ABI (`docs/SYSCALL-ABI.md`):
@@ -32,6 +37,11 @@ A release that can be defended. On top of the beta and the frozen syscall ABI (`
 - [ ] [Fable] Keyboards on real PCs: a USB keyboard driver, or release notes that say plainly it needs the BIOS legacy keyboard mode.
 - [ ] [Sonnet] Saving on real PCs stated plainly: today only old IDE disks work.
 - [ ] [Fable] User profiles and sign-in done properly: login screen at boot, a home folder and settings per person, passwords stored hashed and never in the clear, lock screen, an admin level for risky actions (issue #28). Accounts exist today; this is the pass that makes them trustworthy.
+- [ ] [Fable] Sound: AC97 driver under QEMU, PCM out. Step one of v100 too.
+- [ ] [Sonnet] Music app: WAV playback from disk, playlist, play, pause, skip, volume. Needs the sound driver.
+- [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
+- [ ] [Fable] Better multitasking: more than two windows at once, an app switcher, apps that keep running in the background. This is the Multi-window section; snapping lands first on the windows that exist.
+- [ ] [Fable] Dual monitor support: a second framebuffer (QEMU `-device secondary-vga`), the desktop across both, windows dragged between them. Needs the compositor.
 - [ ] [Haiku] Release notes that say what is missing: no sound, no secure web of its own, one core, no install to disk.
 - [ ] [Joshua] Codename for the release. The name stays Joshua Tree, domain `joshuatreeos.com`.
 
