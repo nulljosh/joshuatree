@@ -2806,7 +2806,7 @@ static void gui_draw_menubar(void){
         window_rect(0, row, (int)window_width(), 1, gui_lerp(gui_wallpaper_color(row), 0x00FFFFFF, 5, 10));
     window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
     gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2, 1, 0x00FFFFFF, 0x00000000); /* v0.76.47: menu bar is semi-translucent light chrome, direct correction -- black reads here, not white */
-    font_draw_string("Joshua Tree", 32, 7, 0x001C1C1E, -1);
+    font_draw_string(portfolio_dock ? "Joshua Trommel" : "Joshua Tree", 32, 7, 0x001C1C1E, -1); /* portfolio mode is his site, so the corner carries his name */
 
     static const char *WD[7] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
     static const char *MO[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
