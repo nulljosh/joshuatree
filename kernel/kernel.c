@@ -5236,6 +5236,7 @@ static void gui_launch_settings(void){
 }
 
 #include "stocks.h"
+#include "toroid.h"
 #include "epiphany.h"
 
 static void gui_launch(int icon){
@@ -5255,7 +5256,7 @@ static void gui_launch(int icon){
     else if (icon == 11) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
     else if (icon == 12) gui_launch_html("Plan", app_plan_html, app_plan_len);
     else if (icon == 13) gui_launch_html("Lexly", app_lexly_html, app_lexly_len);
-    else if (icon == 14) gui_launch_html("Toroid", app_toroid_html, app_toroid_len);
+    else if (icon == 14) gui_launch_toroid();
     else if (icon == 15) gui_launch_html("Sparkjar", app_sparkjar_html, app_sparkjar_len);
     else if (icon == 16) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
     else if (icon == 17) gui_launch_html("Fieldbook", app_fieldbook_html, app_fieldbook_len);

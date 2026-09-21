@@ -116,6 +116,8 @@ directory result `vfs_chdir`s into it and reloads a fresh real listing
 real bytes via `vfs_read_file` + `render_wrapped_text`, the same pair the
 shell's own `cat` command and `gui_launch_html` already use.
 
+**Toroid** (`kernel/toroid.h`, v0.88.0), Conway's Game of Life on a torus, native: both edges wrap, space pauses, r reseeds, c clears, a click toggles a cell. Replaces the one-line HTML card the dock tile used to open.
+
 **Portfolio** (`kernel/portfolio.h`, v0.87.0), Apps-folder-only like
 Search/Contacts/Calculator/Stocks. A static, compiled-in catalog of the
 whole heyitsmejosh.com fleet (35 apps across Life/Read/Make/Play/Dev),
