@@ -453,6 +453,9 @@
 (function () {
   // The demo sits framed above the headline by default. Full screen is the
   // visitor's call: the button (or Esc, or the browser's own exit) toggles it.
+  // A reload used to restore the old scroll position, which looked like the page
+  // scrolling itself past the demo on load. Always start at the top.
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   var demoFrame = document.getElementById('demo-frame');
   var btn = document.getElementById('demo-exit');
   if (!demoFrame || !btn) return;
