@@ -174,7 +174,10 @@ static void auth_hash_password(const unsigned char salt[AUTH_SALT_LEN], const ch
     memcpy(msg, salt, AUTH_SALT_LEN);
     memcpy(msg + AUTH_SALT_LEN, password, pwlen);
     sha256_digest(msg, AUTH_SALT_LEN + pwlen, out);
-    memset(msg, 0, sizeof(msg)); /* msg held a plaintext copy of the password: don't leave it on the stack */
+    /* msg held a plaintext copy of the password. Wipe through a volatile
+       pointer: a plain memset of a dying stack buffer is a dead store the
+       compiler is allowed to delete, and at -O2 it did. */
+    { volatile unsigned char *vp = msg; for (unsigned int i = 0; i < sizeof(msg); i++) vp[i] = 0; }
     for (int i = 1; i < AUTH_HASH_ROUNDS; i++) {
         unsigned char next[AUTH_HASH_LEN];
         sha256_digest(out, AUTH_HASH_LEN, next);
