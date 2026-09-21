@@ -31,3 +31,17 @@ boot_and_check() {
 boot_and_check "CD-ROM boot (-cdrom)" -cdrom joshuatree.iso
 boot_and_check "USB/raw-disk boot (-drive format=raw, same file, isohybrid MBR)" \
     -drive file=joshuatree.iso,format=raw
+
+# A video card that is NOT the Bochs adapter, the stand-in for a real PC's GPU:
+# the kernel cannot set a mode there itself, so the desktop only appears if it
+# picked up the framebuffer Limine set (multiboot info, flag bit 12). "present"
+# is klog's line for a frame actually reaching the screen.
+log=$(mktemp)
+(sleep 20; echo quit) | qemu-system-i386 -cdrom joshuatree.iso -display none -vga virtio \
+    -serial "file:$log" -monitor stdio >/dev/null 2>&1
+if grep -q '^present' "$log"; then
+    echo "PASS: non-Bochs video (-vga virtio) drew the desktop from the bootloader's framebuffer"
+else
+    echo "FAIL: non-Bochs video never presented a frame"; tail -5 "$log"; rm -f "$log"; exit 1
+fi
+rm -f "$log"

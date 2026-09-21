@@ -80,13 +80,11 @@ real machines:
   ever sees the FAT disk if it is wired up the old IDE/ATA way (real,
   modern PCs mostly don't have that bus anymore). This is a real gap,
   not a soft one, and it's on the roadmap.
-- Graphics needs a Bochs/QEMU-compatible virtual VGA adapter (the
-  `1234:1111` PCI ID QEMU's `-vga std` and most VMs expose). Real
-  hardware GPUs, and other virtual adapters like Cirrus or VMware SVGA,
-  don't implement that interface, so the kernel currently falls back to
-  no graphics rather than guessing at a driver it doesn't have. It
-  still boots and logs over serial either way, it just can't paint a
-  screen.
+- Graphics on any other card (a real GPU, VMware SVGA, virtio) come from
+  the framebuffer the bootloader sets up, and only when the card offers
+  exactly 1920x1080 at 32 bits. Verified in QEMU on `-vga vmware` and
+  `-vga virtio`. A screen that cannot do that mode gets no desktop yet,
+  it still boots and logs over serial.
 - USB keyboards only work through a real PC's BIOS/CSM legacy PS/2
   emulation; nothing here talks to USB HID directly.
 - Real hardware hasn't actually been tried yet. Everything above is

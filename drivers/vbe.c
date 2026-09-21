@@ -103,8 +103,29 @@ static void restore_vga_text_state(void) {
     outb(AC_INDEX_DATA, 0x20);
 }
 
+/* The framebuffer the bootloader already set up (multiboot info, flag bit 12),
+   recorded by kmain before anything else touches video. Zero when there is none. */
+static unsigned int boot_fb_addr, boot_fb_pitch, boot_fb_w, boot_fb_h, boot_fb_bpp;
+static int using_boot_fb;
+void vbe_set_boot_framebuffer(unsigned int addr, unsigned int pitch, unsigned int w, unsigned int h, unsigned int bpp) {
+    boot_fb_addr = addr; boot_fb_pitch = pitch; boot_fb_w = w; boot_fb_h = h; boot_fb_bpp = bpp;
+}
+
 int vbe_set_mode(unsigned int width, unsigned int height, unsigned int bpp, unsigned int *fb_addr) {
     struct pci_device dev;
+    using_boot_fb = 0;
+    if (!pci_find_device_vid(0x1234, 0x1111, &dev)) {
+        /* Not the Bochs adapter, so this kernel cannot switch modes itself. Use the
+           bootloader's framebuffer when it is exactly the mode asked for.
+           ponytail: exact match only (same size, 32bpp, no row padding); window.c
+           assumes stride == width. Add a pitch-aware blit and a scaler when real
+           machines turn up that cannot do 1920x1080x32. */
+        if (boot_fb_addr && boot_fb_w == width && boot_fb_h == height && boot_fb_bpp == bpp
+            && bpp == 32 && boot_fb_pitch == width * 4) {
+            *fb_addr = boot_fb_addr; using_boot_fb = 1; return 1;
+        }
+        return 0;
+    }
     /* v0.x (ISO/real-hardware audit): matching any class-0x03/0x00 PCI
        device used to be enough, because every machine this kernel had
        ever booted on (QEMU's default -vga std) happened to be the Bochs
@@ -126,8 +147,6 @@ int vbe_set_mode(unsigned int width, unsigned int height, unsigned int bpp, unsi
        framebuffer. No driver for cirrus/vmware/real GPUs is added here;
        this only makes the existing code honest about which hardware it
        actually supports. */
-    if (!pci_find_device_vid(0x1234, 0x1111, &dev)) return 0;
-
     save_vga_text_state(); /* must happen while still in real text mode */
 
     vbe_write(VBE_INDEX_ENABLE, 0); /* disable before changing resolution, per spec */
@@ -141,6 +160,7 @@ int vbe_set_mode(unsigned int width, unsigned int height, unsigned int bpp, unsi
 }
 
 void vbe_disable(void) {
+    if (using_boot_fb) return; /* nothing of ours to undo, and the VGA register pokes below mean nothing to a GOP framebuffer */
     vbe_write(VBE_INDEX_ENABLE, 0);
 
     /* Bochs's own virtual-scanline-width/bank/offset registers, separate
