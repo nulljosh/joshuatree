@@ -6094,7 +6094,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -6183,6 +6183,23 @@ static void run(char *line){
             int ok = 1;
             for (int i = 0; i < 512; i++) if (rbuf[i] != wbuf[i]) { ok = 0; break; }
             puts(ok ? "wrote+read sector 100: ok\n" : "wrote+read sector 100: MISMATCH\n");
+        }
+    }
+    else if (!strcmp(line, "filetest")) {
+        const char *content = "JT_TESTCONTENT_001";
+        const char *filename = "JT_TEST.TXT";
+        vfs_delete(filename);  /* start fresh each time */
+        if (!vfs_write_file(filename, (char *)content, 18)) {
+            serial_puts("filetest: write failed\n");
+        } else {
+            char rbuf[32];
+            if (!vfs_read_file(filename, rbuf, sizeof(rbuf))) {
+                serial_puts("filetest: read failed\n");
+            } else if (rbuf[0] == 'J' && rbuf[1] == 'T' && rbuf[17] == '1') {
+                serial_puts("filetest: write+read ok\n");
+            } else {
+                serial_puts("filetest: content mismatch\n");
+            }
         }
     }
     else if (!strcmp(line, "tasktest")) {
