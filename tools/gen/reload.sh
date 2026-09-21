@@ -15,5 +15,5 @@ make -s kernel.elf
 # checks in parallel killed those mid-run and produced a long trail of fake
 # JSONDecodeError and ConnectionReset failures that read as kernel bugs.
 pkill -f "qemu-system-i386 .*-display cocoa" 2>/dev/null && sleep 0.5 || true
-open menubar/JoshuaTree.app
+open ~/Documents/Code/joshuatree-monitor/JoshuaTree.app
 echo "rebuilt and relaunched"

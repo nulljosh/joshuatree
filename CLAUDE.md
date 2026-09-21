@@ -19,7 +19,7 @@ dependencies beyond clang, ld.lld and qemu.
   actual artifacts (disk images, flat binaries), not `check.sh` alone.
 - A pixel-level screenshot is possible only when a session has this
   Mac's own attached display: launch `-display cocoa` (the same window
-  `menubar/JoshuaTree.app`'s launcher opens), bring it frontmost, then use
+  the JoshuaTree.app launcher in `nulljosh/joshuatree-monitor` opens), bring it frontmost, then use
   macOS's own `screencapture` CLI. QEMU's own `screendump` is broken
   headless and should not be used for visual verification.
 - **HEADLESS ONLY. Never open a visible QEMU window and never open a

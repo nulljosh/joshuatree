@@ -25,7 +25,7 @@ trap 'stop; exit 0' INT TERM
 
 launch() {
     stop
-    # Same flags the Makefile's `run` target and menubar/JoshuaTree.app use.
+    # Same flags the Makefile's `run` target and the JoshuaTree.app launcher (joshuatree-monitor repo) use.
     qemu-system-i386 -kernel kernel.elf $DISPLAY_ARGS -rtc base=localtime \
         -net nic,model=rtl8139 -net user \
         -drive file=dotfiles.img,format=raw,if=ide,index=0 &

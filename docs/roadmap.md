@@ -14,7 +14,6 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 Worked easiest and most relevant first.
 - [ ] [Sonnet] Landing: black and white again on an off-white page, one splash of colour, auto light and dark. "Where" reads "On your desktop, in your pocket..." Fresh bottom copy.
 - [ ] [Sonnet] Landing demo starts full screen, auto-scrolls on once it finishes or until the visitor takes over; Esc or a visible button leaves full screen and scrolls.
-- [ ] [Haiku] Mac app (`menubar/`) and its icon refreshed to match the current tree icon and version.
 - [ ] [Sonnet] Boot logo drawn sharp at native resolution, no 8-bit look.
 - [ ] [Sonnet] Bootable ISO (GRUB or Limine, `make iso`), booted headless in CI. Needed for 1.0.
 - [ ] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts (the kernel is i386, so it runs native on any x86 and under QEMU on ARM).
@@ -61,6 +60,14 @@ Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Sonnet] Software update path.
 - [ ] [Haiku] Accessibility: text size and high contrast.
 - [ ] In progress: Chat wired to a local Qwen/Bonsai model. Currently talks to Ollama.
+
+## Real hardware
+1.0 ships a USB-bootable ISO with a PS/2 fallback. USB is the 1.1 headline, built in this order.
+- [ ] [Fable] xHCI USB host controller. Everything below hangs off it.
+- [ ] [Fable] USB keyboard and mouse (HID). Also covers "Bluetooth" keyboards that ship with a USB dongle.
+- [ ] [Fable] USB storage, so an external SSD mounts.
+- [ ] [Fable] USB audio in, so a microphone works. Needs the sound work under Gaps too.
+- [ ] [Fable] True Bluetooth: radio over USB, pairing, keyboard and mouse. Hardest, last.
 
 ## Multi-window
 5 of 23 apps (Files, Weather, Mail, Calendar, Reminders) can open in their own window, capped at 2 at once. Full multi-window still needs:
