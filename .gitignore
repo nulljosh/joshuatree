@@ -13,8 +13,6 @@ landing/kernel.elf
 landing/v86/kernel.elf
 .DS_Store
 .wrangler/
-menubar/JoshuaTreeMonitor.app/
-menubar/window-float
 .claude/worktrees/
 dotfiles.img
 __pycache__/
@@ -22,3 +20,8 @@ __pycache__/
 node_modules/
 package-lock.json
 *.o.tmp
+# ISO/USB image and its fetched bootloader (build/limine, cloned from
+# limine-bootloader/limine at build time, never committed) plus the
+# staging tree make iso assembles it from.
+*.iso
+build/

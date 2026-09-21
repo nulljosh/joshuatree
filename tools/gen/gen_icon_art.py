@@ -13,7 +13,7 @@ that fades along the squircle's own curve, which is exactly what makes a
 real macOS icon read as an object rather than as pixel art. Those are
 authoring decisions, so they belong in authored artwork.
 
-rsvg-convert (already a dependency of menubar/build-app-icon.sh) does the
+rsvg-convert does the
 rasterizing on the host, at build time, at one size. The kernel png_decode()s
 an icon on a cache miss, area-averages it down to whatever physical size the
 dock is actually drawing at, composites it over the surface colour and frees
