@@ -5360,6 +5360,61 @@ static void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
     else { *x = 70 + 60; *y = 40 + 60; *w = 820; *h = 385; }
 }
 
+/* Magnet-style window snapping (title-bar drag to an edge/corner). All five
+   multi-window apps draw their content through window_set_viewport(x+8,
+   y+32, w-16, h-40) and lay it out with window_width()/window_height(),
+   not hard-coded 820x385 numbers, so any w/h this hands them is real, not
+   clipped or scaled after the fact.
+
+   Zones, checked corners-first so a near-corner drag never mistakenly
+   reads as a plain edge: 0=left half, 1=right half, 2..5=quarters (TL,
+   TR, BL, BR), 6=full (top edge, like Magnet's maximize), -1=no zone. The
+   playable area is the desktop strip between the menu bar and the dock,
+   the same area gui_multiwin_geom's own windows already live inside. */
+static int gui_snap_area(int *top, int *bottom){
+    *top = GUI_MENUBAR_H;
+    *bottom = gui_dock_y0() - 10;
+    return (int)window_width();
+}
+static int gui_snap_zone(int mx, int my){
+    int top, bottom; int w = gui_snap_area(&top, &bottom);
+    const int corner = 40, edge = 12;
+    if (mx <= corner && my <= top + corner) return 2;
+    if (mx >= w - corner && my <= top + corner) return 3;
+    if (mx <= corner && my >= bottom - corner) return 4;
+    if (mx >= w - corner && my >= bottom - corner) return 5;
+    if (my <= top + edge) return 6;
+    if (mx <= edge) return 0;
+    if (mx >= w - edge) return 1;
+    return -1;
+}
+static void gui_snap_target(int zone, int *x, int *y, int *w, int *h){
+    int top, bottom; int sw = gui_snap_area(&top, &bottom);
+    int areaH = bottom - top;
+    switch (zone) {
+        case 0: *x = 0;      *y = top;             *w = sw / 2;      *h = areaH; break;
+        case 1: *x = sw / 2; *y = top;             *w = sw - sw / 2; *h = areaH; break;
+        case 2: *x = 0;      *y = top;             *w = sw / 2;      *h = areaH / 2; break;
+        case 3: *x = sw / 2; *y = top;             *w = sw - sw / 2; *h = areaH / 2; break;
+        case 4: *x = 0;      *y = top + areaH / 2; *w = sw / 2;      *h = areaH - areaH / 2; break;
+        case 5: *x = sw / 2; *y = top + areaH / 2; *w = sw - sw / 2; *h = areaH - areaH / 2; break;
+        default:*x = 0;      *y = top;             *w = sw;          *h = areaH; break; /* 6: full */
+    }
+}
+/* One-pixel border, drawn straight onto the framebuffer, never onto a
+   window (there's nothing under it to preserve while dragging: the
+   dragged window itself isn't moved live, only this preview outline is
+   drawn, see gui_run's drag_win handling). */
+static void gui_snap_outline(int zone){
+    if (zone < 0) return;
+    int x, y, w, h; gui_snap_target(zone, &x, &y, &w, &h);
+    unsigned int c = 0x00307FE2;
+    window_rect(x, y, w, 1, c);
+    window_rect(x, y + h - 1, w, 1, c);
+    window_rect(x, y, 1, h, c);
+    window_rect(x + w - 1, y, 1, h, c);
+}
+
 /* v0.76.18: split out of what used to be one gui_multiwin_draw_one, direct
    report ("keystroke re-rendering glitch still present" after the earlier
    Notes/Terminal/Chat chrome fixes). Root cause, same bug shape those
@@ -5951,6 +6006,17 @@ static void gui_run(void){
        threshold while held, so a plain click (down, no movement, up)
        never gets mistaken for a drag onto its own slot. */
     int press_slot = -1, press_x = 0, press_y = 0, drag_slot = -1, press_window = -1;
+    /* Window title-bar drag: win_drag_armed latches on a title-bar press
+       (the same "record it, only promote to a real drag past a small
+       threshold" shape drag_slot above already uses for dock reordering).
+       drag_win is only set once the threshold is crossed, so a plain
+       click on the title bar still falls through to press_window's
+       existing click-anywhere-closes contract instead of being eaten by
+       a drag that never really happened. drag_zone/last_drag_zone track
+       which snap zone (if any) the pointer is over, redrawn only on a
+       real zone change, not on every mouse-moved event. */
+    int win_drag_armed = 0, drag_win = -1, drag_grab_dx = 0, drag_grab_dy = 0;
+    int drag_zone = -1;
     /* menu_open: the Apple-menu-style dropdown off the tree logo.
        menu_opening: true for exactly the one release that completes the
        same click that opened it, so that release doesn't also count as
@@ -6143,7 +6209,22 @@ static void gui_run(void){
             if (logo_here) { menu_open = 1; menu_opening = 1; }
             else if (weather_here) { weather_open = 1; weather_opening = 1; weather_draw_pending = 1; }
             else if (clock_here) { notif_open = 1; notif_opening = 1; notif_draw_pending = 1; }
-            else if (win_close_here >= 0) { press_window = win_close_here; }
+            else if (win_close_here >= 0) {
+                press_window = win_close_here;
+                /* A press inside the topmost window's title bar (chrome
+                   band, not the close circle itself) is also a drag
+                   candidate; press_window stays set so a plain click
+                   (no movement past the threshold below) still closes
+                   the window exactly as it always has. */
+                const gui_window_t *pw = &gui_windows[win_close_here];
+                int in_titlebar = my >= pw->y && my < pw->y + 30;
+                int cx = pw->x + 24, cy = pw->y + 16, ddx = mx - cx, ddy = my - cy;
+                int on_close = (ddx * ddx + ddy * ddy) <= 9 * 9;
+                if (in_titlebar && !on_close) {
+                    win_drag_armed = 1; press_x = mx; press_y = my;
+                    drag_grab_dx = mx - pw->x; drag_grab_dy = my - pw->y;
+                }
+            }
             else if (win_hit_here >= 0) {
                 /* v0.73.6: real click-to-focus. The click landed inside a
                    visible BACKGROUND window's rect (win_close_here above
@@ -6165,6 +6246,10 @@ static void gui_run(void){
             int moved = (mx > press_x ? mx - press_x : press_x - mx) + (my > press_y ? my - press_y : press_y - my);
             if (moved > 8) drag_slot = press_slot; /* threshold crossed: this is a drag, not a click */
         }
+        if (held && win_drag_armed && drag_win < 0) {
+            int moved = (mx > press_x ? mx - press_x : press_x - mx) + (my > press_y ? my - press_y : press_y - my);
+            if (moved > 8) { drag_win = press_window; press_window = -1; } /* real drag now: the release logic below moves/snaps instead of closing */
+        }
 
         int launched = notif_draw_pending || weather_draw_pending || win_focus_changed || mw_key_repaint; notif_draw_pending = 0; weather_draw_pending = 0;
         if (just_released) {
@@ -6182,6 +6267,27 @@ static void gui_run(void){
                     if (item >= 0) { gui_menu_run_item(item); launched = 1; } /* every real item takes over the screen or reboots/halts; force a fresh desktop redraw either way */
                     menu_open = 0;
                 }
+            } else if (drag_win >= 0) {
+                /* Magnet-style drop: inside a zone, snap to that target
+                   rect (the window's own w/h really change, re-derived
+                   from the new size on the very next content redraw
+                   below, not clipped or faked). Outside any zone, a real
+                   free move to wherever it was dropped, same w/h -- safe
+                   because every content function lays out from
+                   window_width()/window_height(), not a hard-coded
+                   position, so moving x/y alone never breaks layout. */
+                int zone = gui_snap_zone(mx, my);
+                gui_window_t *dw = &gui_windows[drag_win];
+                if (zone >= 0) {
+                    gui_snap_target(zone, &dw->x, &dw->y, &dw->w, &dw->h);
+                } else {
+                    int top, bottom; int sw = gui_snap_area(&top, &bottom);
+                    int nx = mx - drag_grab_dx, ny = my - drag_grab_dy;
+                    if (nx < 0) nx = 0; if (nx + dw->w > sw) nx = sw - dw->w;
+                    if (ny < top) ny = top; if (ny + dw->h > bottom) ny = bottom - dw->h;
+                    dw->x = nx; dw->y = ny;
+                }
+                launched = 1;
             } else if (press_window >= 0) {
                 /* v0.73.0: closing this window is exactly it, no reopen/
                    switch behaviour (that's v68's dock-tile close-and-open,
@@ -6263,6 +6369,7 @@ static void gui_run(void){
                 launched = 1; /* the app view just took over the whole screen; force a redraw below even if the cursor never moved */
             }
             press_slot = -1; drag_slot = -1; press_window = -1;
+            win_drag_armed = 0; drag_win = -1; drag_zone = -1;
         }
         prev_buttons = buttons;
 
@@ -6286,7 +6393,24 @@ static void gui_run(void){
            icons) with no double buffer to hide it, which is exactly the
            "icons flash when I hover" report: the flashing was the
            repaint. */
-        int cursor_only = !launched && (mx != last_mx || my != last_my)
+        /* Window drag preview: only redraws when the snap zone the
+           pointer is over actually changes (entering/leaving/switching a
+           zone), never on every mouse-moved event -- the window itself
+           is left exactly where it started until release, so this is the
+           whole cost of the live preview. */
+        int cur_snap_zone = drag_win >= 0 ? gui_snap_zone(mx, my) : -1;
+        int drag_zone_only = drag_win >= 0 && !launched && cur_snap_zone != drag_zone;
+        if (drag_zone_only) {
+            gui_cursor_restore();
+            gui_draw_desktop(-1, -1, 0, 0);
+            if (gui_window_count > 0) gui_multiwin_draw_all();
+            gui_snap_outline(cur_snap_zone);
+            gui_cursor_save(mx, my);
+            gui_draw_cursor(mx, my);
+            drag_zone = cur_snap_zone;
+            last_mx = mx; last_my = my;
+        }
+        int cursor_only = !launched && !drag_zone_only && (mx != last_mx || my != last_my)
                           && hover_slot == last_hover && drag_slot == last_drag
                           && menu_open == last_menu_open && menu_hover == last_menu_hover;
         int dock_only = !launched && !cursor_only && drag_slot < 0 && last_drag < 0
