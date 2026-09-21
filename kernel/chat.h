@@ -242,6 +242,11 @@ static int chat_wrapped_rows(const char *p, int max_w) {
     return rows;
 }
 
+/* Windowed apps have no titlebar strip to clear (the compositor draws
+   real window chrome), so the status line sits right under it instead
+   of leaving the old full-screen 40px title band empty above it. */
+static int chat_top(void) { return gui_app_windowed ? 8 : 40; }
+
 /* "<model>   <host>:<port>   <state>", the console's one status line. */
 static void chat_draw_status(const char *state) {
     char line[LLM_MODEL_MAX + LLM_HOST_MAX + 48];
@@ -256,8 +261,9 @@ static void chat_draw_status(const char *state) {
     s = "   "; while (*s) line[p++] = *s++;
     while (*state && p < (int)sizeof(line) - 1) line[p++] = *state++;
     line[p] = 0;
-    window_rect(0, 40, (int)window_width(), 32, GUI_BG);
-    font_draw_string(line, 20, 52, CHAT_DIM, -1);
+    int T = chat_top();
+    window_rect(0, T, (int)window_width(), 32, GUI_BG);
+    font_draw_string(line, 20, T + 12, CHAT_DIM, -1);
 }
 
 static void gui_launch_chat_app(void) {
@@ -266,13 +272,14 @@ static void gui_launch_chat_app(void) {
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Chat"); /* v0.76.11: drawn once, not every keystroke -- see chat_prompt_line's own comment */
     const char *state = "ready";
+    int T = chat_top();
     for (;;) {
-        window_rect(0, 40, (int)window_width(), (int)window_height() - 40, GUI_BG);
+        window_rect(0, T, (int)window_width(), (int)window_height() - T, GUI_BG);
         chat_draw_status(state);
         serial_puts("chatconsole\n"); /* marker for tools/checks/chat-check.sh: the console view drew, status line included */
 
-        int x = 20, y = 76;
-        int bottom = (int)window_height() - 40;
+        int x = 20, y = T + 36;
+        int bottom = (int)window_height() - 40; /* fixed footer reserve, independent of T */
         int prompt_w = font_string_width(CHAT_PROMPT);
         int body_w = (int)window_width() - 40;
         /* Walk back from the newest turn until the visible area is full,

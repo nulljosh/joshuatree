@@ -118,26 +118,31 @@ static int reminders_mw_adding = 0;
 static char reminders_mw_buf[REMINDERS_TEXT_MAX];
 static unsigned int reminders_mw_len = 0;
 
+/* Windowed apps have no titlebar strip to clear, same as Stocks'
+   stx_top(); content starts right under the real window chrome. */
+static int reminders_top(void) { return gui_app_windowed ? 8 : 40; }
+
 static void gui_draw_reminders_content(void){
     reminders_load();
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Reminders");
+    int T = reminders_top();
     if (reminders_mw_adding) {
-        font_draw_string("type the reminder, enter adds, esc cancels:", 20, 52, 0x0075726E, -1);
-        window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
+        font_draw_string("type the reminder, enter adds, esc cancels:", 20, T + 12, 0x0075726E, -1);
+        window_rect(20, T + 36, (int)window_width() - 40, 20, 0x00FFFFFF);
         reminders_mw_buf[reminders_mw_len] = 0;
-        font_draw_string(reminders_mw_buf, 24, 78, 0x001C1C1E, -1);
+        font_draw_string(reminders_mw_buf, 24, T + 38, 0x001C1C1E, -1);
         return;
     }
     if (!reminders_count) {
-        font_draw_string("No reminders yet.", 20, 70, 0x001C1C1E, -1);
-        font_draw_string("Press a to add one.", 20, 94, 0x00807468, -1);
+        font_draw_string("No reminders yet.", 20, T + 30, 0x001C1C1E, -1);
+        font_draw_string("Press a to add one.", 20, T + 54, 0x00807468, -1);
         return;
     }
-    font_draw_string("up/down to pick   space toggles done   d deletes   a adds   esc closes", 20, 52, 0x00807468, -1);
+    font_draw_string("up/down to pick   space toggles done   d deletes   a adds   esc closes", 20, T + 12, 0x00807468, -1);
     if (reminders_mw_sel >= reminders_count) reminders_mw_sel = reminders_count - 1;
     for (int i = 0; i < reminders_count; i++) {
-        int y = 84 + i * 22;
+        int y = T + 44 + i * 22;
         if (i == reminders_mw_sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);
         font_draw_string(reminders_done[i] ? "[x]" : "[ ]", 28, y, reminders_done[i] ? 0x002F7B4F : 0x001C1C1E, -1);
         font_draw_string(reminders_text[i], 60, y, reminders_done[i] ? 0x00A39C92 : 0x001C1C1E, -1);

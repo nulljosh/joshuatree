@@ -285,36 +285,48 @@ static void cal_mw_init(void){
     cal_events_load();
 }
 
+/* Windowed apps have no titlebar strip to clear (the compositor draws
+   real window chrome), so content starts right under it, same idea as
+   Stocks' stx_top(). T anchors every y below. Row pitch is then scaled
+   from window_height() (not a fixed 44px) so all 5-6 week rows a month
+   can need always land fully inside the window, even snapped to a
+   quarter tile with a shorter window_height(). */
 static void gui_draw_calendar_content(void){
     cal_mw_init();
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Calendar");
+    int T = gui_app_windowed ? 8 : 40;
     const unsigned int accent = 0x00A0553F, ink = 0x001C1C1E, dim = 0x00A39C92, hint = 0x00807468;
     if (cal_mw_dayview) {
         char datestr[CAL_DATE_LEN + 1];
         cal_date_str(cal_mw_vy, cal_mw_vm, cal_mw_sel_d, datestr);
-        font_draw_string(datestr, 20, 52, hint, -1);
-        font_draw_string("type the event, enter saves, esc cancels:", 20, 72, hint, -1);
-        window_rect(20, 96, (int)window_width() - 40, 20, 0x00FFFFFF);
+        font_draw_string(datestr, 20, T + 12, hint, -1);
+        font_draw_string("type the event, enter saves, esc cancels:", 20, T + 32, hint, -1);
+        window_rect(20, T + 56, (int)window_width() - 40, 20, 0x00FFFFFF);
         cal_mw_buf[cal_mw_buflen] = 0;
-        font_draw_string(cal_mw_buf, 24, 98, ink, -1);
+        font_draw_string(cal_mw_buf, 24, T + 58, ink, -1);
         return;
     }
-    font_draw_string("left/right month   [ ] pick a day   enter opens it   t today   esc closes", 20, 52, hint, -1);
-    int cell_w = 72, cell_h = 44, grid_w = 7 * cell_w;
+    font_draw_string("left/right month   [ ] pick a day   enter opens it   t today   esc closes", 20, T + 12, hint, -1);
+    int cell_w = 72, grid_w = 7 * cell_w;
     int x0 = ((int)window_width() - grid_w) / 2;
-    int y0 = 150;
+    int y0 = T + 78;
+    int first = cal_dow(cal_mw_vy, cal_mw_vm, 1), n = cal_days_in_month(cal_mw_vy, cal_mw_vm);
+    int rows = (first + n + 6) / 7; /* week rows this month actually needs, up to 6 */
+    int avail = (int)window_height() - y0 - 6;
+    int cell_h = avail / rows;
+    if (cell_h > 44) cell_h = 44; /* never grow past the usual size on short months */
+    if (cell_h < 24) cell_h = 24; /* floor so digits stay legible even in a tiny snapped window */
     char title[24]; int p = 0;
     for (const char *s = CAL_MONTHS[cal_mw_vm - 1]; *s; s++) title[p++] = *s;
     title[p++] = ' ';
     title[p++] = '0' + (cal_mw_vy / 1000) % 10; title[p++] = '0' + (cal_mw_vy / 100) % 10;
     title[p++] = '0' + (cal_mw_vy / 10) % 10;   title[p++] = '0' + cal_mw_vy % 10;
     title[p] = 0;
-    font_draw_string(title, x0 + (grid_w - p * 8) / 2, 92, 0x0085144B, -1);
+    font_draw_string(title, x0 + (grid_w - p * 8) / 2, T + 34, 0x0085144B, -1);
     for (int c = 0; c < 7; c++)
-        font_draw_string(CAL_WD[c], x0 + c * cell_w + (cell_w - 24) / 2, 122, (c == 0 || c == 6) ? dim : hint, -1);
-    window_rect(x0, 142, grid_w, 1, 0x00DDD9D3);
-    int first = cal_dow(cal_mw_vy, cal_mw_vm, 1), n = cal_days_in_month(cal_mw_vy, cal_mw_vm);
+        font_draw_string(CAL_WD[c], x0 + c * cell_w + (cell_w - 24) / 2, T + 58, (c == 0 || c == 6) ? dim : hint, -1);
+    window_rect(x0, T + 70, grid_w, 1, 0x00DDD9D3);
     for (int d = 1; d <= n; d++) {
         int idx = first + d - 1, row = idx / 7, col = idx % 7;
         int cx = x0 + col * cell_w + cell_w / 2, cy = y0 + row * cell_h + cell_h / 2;

@@ -30,10 +30,14 @@ static void editor_draw_glyph(unsigned char character, int origin_x, int origin_
    viewport, where the old fixed 450px area and a status line at y=570
    were both clipped clean off, and the caret's scroll logic believed
    lines were visible that nothing ever drew. */
-#define EDITOR_TEXT_TOP 92
+/* Windowed apps have no titlebar strip to clear (the compositor draws
+   real window chrome), so the toolbar sits right under it instead of
+   leaving the old full-screen 40px title band empty above it. */
+static int editor_toolbar_y(void) { return gui_app_windowed ? 8 : 42; }
+static int editor_text_top(void) { return editor_toolbar_y() + 50; }
 #define EDITOR_STATUS_H 30
 static int editor_visible_lines(int line_height) {
-    int n = ((int)window_height() - EDITOR_TEXT_TOP - EDITOR_STATUS_H) / line_height;
+    int n = ((int)window_height() - editor_text_top() - EDITOR_STATUS_H) / line_height;
     return n < 1 ? 1 : n;
 }
 
@@ -49,7 +53,7 @@ static void editor_layout(int draw, int *caret_x, int *caret_line) {
         if (index == editor_length) break;
         if (character == '\n') { text_x = 56; line++; continue; }
         if (draw && character != '\t' && line >= editor_scroll && line < editor_scroll + visible_lines)
-            editor_draw_glyph(character, text_x, EDITOR_TEXT_TOP + (line - editor_scroll) * line_height);
+            editor_draw_glyph(character, text_x, editor_text_top() + (line - editor_scroll) * line_height);
         text_x += advance;
     }
 }
@@ -90,16 +94,17 @@ static void editor_draw_chrome(void) {
        between them (there's real gap space at their seams), and this is
        the one thing the old single window_clear() used to guarantee that
        splitting the redraw could otherwise silently lose. */
-    window_rect(0, 0, (int)window_width(), EDITOR_TEXT_TOP, 0x00FAF8F6);
+    window_rect(0, 0, (int)window_width(), editor_text_top(), 0x00FAF8F6);
     gui_draw_app_titlebar(editor_dirty ? "Notes *" : "Notes");
-    window_rect(20, 42, 760, 34, 0x00EAE4DC);
-    font_draw_string("F1 Font:", 32, 51, 0x0075726E, -1);
-    font_draw_string(EDITOR_FAMILIES[editor_family], 108, 51, 0x001C1C1E, -1);
-    font_draw_string("F2 Size:", 236, 51, 0x0075726E, -1);
-    font_draw_string(EDITOR_SIZES[editor_size], 312, 51, 0x001C1C1E, -1);
-    font_draw_string("F3 Weight:", 450, 51, 0x0075726E, -1);
-    font_draw_string(editor_weight ? "Bold" : "Regular", 540, 51, 0x001C1C1E, -1);
-    font_draw_string("Save", 708, 51, 0x0085144B, -1);
+    int ty = editor_toolbar_y(), ly = ty + 9;
+    window_rect(20, ty, 760, 34, 0x00EAE4DC);
+    font_draw_string("F1 Font:", 32, ly, 0x0075726E, -1);
+    font_draw_string(EDITOR_FAMILIES[editor_family], 108, ly, 0x001C1C1E, -1);
+    font_draw_string("F2 Size:", 236, ly, 0x0075726E, -1);
+    font_draw_string(EDITOR_SIZES[editor_size], 312, ly, 0x001C1C1E, -1);
+    font_draw_string("F3 Weight:", 450, ly, 0x0075726E, -1);
+    font_draw_string(editor_weight ? "Bold" : "Regular", 540, ly, 0x001C1C1E, -1);
+    font_draw_string("Save", 708, ly, 0x0085144B, -1);
 }
 
 static void editor_draw(void) {
@@ -112,12 +117,12 @@ static void editor_draw(void) {
     int caret_x = 56, caret_line = 0;
     int line_height = 26 + editor_size * 5;
     int visible_lines = editor_visible_lines(line_height);
-    window_rect(0, EDITOR_TEXT_TOP, (int)window_width(), (int)window_height() - EDITOR_TEXT_TOP, 0x00FAF8F6);
+    window_rect(0, editor_text_top(), (int)window_width(), (int)window_height() - editor_text_top(), 0x00FAF8F6);
     editor_layout(0, &caret_x, &caret_line);
     if (caret_line < editor_scroll) editor_scroll = caret_line;
     if (caret_line >= editor_scroll + visible_lines) editor_scroll = caret_line - visible_lines + 1;
     editor_layout(1, &caret_x, &caret_line);
-    window_rect(caret_x, EDITOR_TEXT_TOP + 2 + (caret_line - editor_scroll) * line_height, 2, 20 + editor_size * 4, 0x0085144B);
+    window_rect(caret_x, editor_text_top() + 2 + (caret_line - editor_scroll) * line_height, 2, 20 + editor_size * 4, 0x0085144B);
     font_draw_string(editor_status, 20, (int)window_height() - EDITOR_STATUS_H, 0x0075726E, -1);
     /* Windowed (dock-launched): gui_app_mouse_tick owns the pointer sprite,
        in screen coordinates outside this viewport. Drawing a second one
