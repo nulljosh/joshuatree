@@ -13,67 +13,83 @@
    launch anything; it shows the entry's URL on a detail line, same
    fallback the request itself called for when no clean hook exists. */
 
+#define PF_KIND_APP    0 /* real fleet app: name + description + optional URL, selectable */
+#define PF_KIND_HEADER 1 /* a group header ("Life", "Read", ...), not selectable */
+#define PF_KIND_TEXT   2 /* the About block: a plain line or a link row, not selectable */
+
 typedef struct {
-    const char *name;   /* NULL for a header row */
-    const char *desc;   /* header text when name is NULL, else one-liner */
+    const char *name;   /* NULL for a header/text row */
+    const char *desc;   /* header/text content when name is NULL, else one-liner */
     const char *url;    /* "" when the app has no web app */
-    int is_header;
+    int kind;
 } pf_row_t;
 
 static const pf_row_t PF_ROWS[] = {
-    {0, "Life", "", 1},
-    {"Epiphany",  "finance dashboard",         "epiphany.heyitsmejosh.com", 0},
-    {"Healstack", "health and supplement tracker", "healstack.heyitsmejosh.com", 0},
-    {"Windgate",  "guided breathing",          "windgate.heyitsmejosh.com", 0},
-    {"Talli",     "benefits admin",            "talli.heyitsmejosh.com", 0},
-    {"Homeward",  "lost and found pets",       "homeward.heyitsmejosh.com", 0},
-    {"Roost",     "real estate browsing",      "roost.heyitsmejosh.com", 0},
-    {"HomeQi",    "feng shui home check",      "homeqi.heyitsmejosh.com", 0},
-    {"Weather",   "forecast and live conditions", "weather.heyitsmejosh.com", 0},
+    /* v0.87.0: the About block Joshua asked for, direct request, same
+       static table as the rest of the app rather than a second widget.
+       Text rows (PF_KIND_TEXT) are display-only, same as headers, since
+       this kernel still has no live "open a URL" hook: the link rows
+       below are exactly the fallback the original Portfolio spec already
+       called for, shown here up front instead of only after a click. */
+    {"Joshua Trommel", "", "", PF_KIND_TEXT},
+    {0, "I build apps, and the operating system this is running on.", "", PF_KIND_TEXT},
+    {0, "github.com/nulljosh", "github.com/nulljosh", PF_KIND_TEXT},
+    {0, "journal.heyitsmejosh.com", "journal.heyitsmejosh.com", PF_KIND_TEXT},
+    {0, "heyitsmejosh.com/docs.html (Docs)", "heyitsmejosh.com/docs.html", PF_KIND_TEXT},
 
-    {0, "Read", "", 1},
-    {"Bookrank",  "book summaries",            "bookrank.heyitsmejosh.com", 0},
-    {"Inkpress",  "RSS reader",                "", 0},
-    {"Sidewise",  "news bias reader",          "sidewise.heyitsmejosh.com", 0},
-    {"Wordroot",  "etymology",                 "wordroot.heyitsmejosh.com", 0},
-    {"Fieldbook", "science explained plainly", "fieldbook.heyitsmejosh.com", 0},
-    {"Lexly",     "language learning",         "lexly.heyitsmejosh.com", 0},
+    {0, "Life", "", PF_KIND_HEADER},
+    {"Epiphany",  "finance dashboard",         "epiphany.heyitsmejosh.com", PF_KIND_APP},
+    {"Healstack", "health and supplement tracker", "healstack.heyitsmejosh.com", PF_KIND_APP},
+    {"Windgate",  "guided breathing",          "windgate.heyitsmejosh.com", PF_KIND_APP},
+    {"Talli",     "benefits admin",            "talli.heyitsmejosh.com", PF_KIND_APP},
+    {"Homeward",  "lost and found pets",       "homeward.heyitsmejosh.com", PF_KIND_APP},
+    {"Roost",     "real estate browsing",      "roost.heyitsmejosh.com", PF_KIND_APP},
+    {"HomeQi",    "feng shui home check",      "homeqi.heyitsmejosh.com", PF_KIND_APP},
+    {"Weather",   "forecast and live conditions", "weather.heyitsmejosh.com", PF_KIND_APP},
 
-    {0, "Make", "", 1},
-    {"Block Frame", "wireframes in text",      "wiretext.heyitsmejosh.com", 0},
-    {"Curvely",   "equation grapher",          "curvely.heyitsmejosh.com", 0},
-    {"Numen",     "calculator canvas",         "numen.heyitsmejosh.com", 0},
-    {"Plain",     "text editor",               "", 0},
-    {"Voxprint",  "on-device transcription",   "", 0},
-    {"Dream",     "dream journal",             "dream.heyitsmejosh.com", 0},
-    {"Costanza",  "poetry",                    "costanza.heyitsmejosh.com", 0},
-    {"Sparkjar",  "idea forum",                "sparkjar.heyitsmejosh.com", 0},
+    {0, "Read", "", PF_KIND_HEADER},
+    {"Bookrank",  "book summaries",            "bookrank.heyitsmejosh.com", PF_KIND_APP},
+    {"Inkpress",  "RSS reader",                "", PF_KIND_APP},
+    {"Sidewise",  "news bias reader",          "sidewise.heyitsmejosh.com", PF_KIND_APP},
+    {"Wordroot",  "etymology",                 "wordroot.heyitsmejosh.com", PF_KIND_APP},
+    {"Fieldbook", "science explained plainly", "fieldbook.heyitsmejosh.com", PF_KIND_APP},
+    {"Lexly",     "language learning",         "lexly.heyitsmejosh.com", PF_KIND_APP},
 
-    {0, "Play", "", 1},
-    {"Quotestreak", "quote guessing",          "quotestreak.heyitsmejosh.com", 0},
-    {"Keyrate",   "typing test",               "keyrate.heyitsmejosh.com", 0},
-    {"NYC",       "Times Square sim",          "nyc.heyitsmejosh.com", 0},
-    {"Conway",    "Game of Life on a torus",   "toroid.heyitsmejosh.com", 0},
-    {"Swing",     "random video chat",         "swing.heyitsmejosh.com", 0},
+    {0, "Make", "", PF_KIND_HEADER},
+    {"Block Frame", "wireframes in text",      "wiretext.heyitsmejosh.com", PF_KIND_APP},
+    {"Curvely",   "equation grapher",          "curvely.heyitsmejosh.com", PF_KIND_APP},
+    {"Numen",     "calculator canvas",         "numen.heyitsmejosh.com", PF_KIND_APP},
+    {"Plain",     "text editor",               "", PF_KIND_APP},
+    {"Voxprint",  "on-device transcription",   "", PF_KIND_APP},
+    {"Dream",     "dream journal",             "dream.heyitsmejosh.com", PF_KIND_APP},
+    {"Costanza",  "poetry",                    "costanza.heyitsmejosh.com", PF_KIND_APP},
+    {"Sparkjar",  "idea forum",                "sparkjar.heyitsmejosh.com", PF_KIND_APP},
 
-    {0, "Dev", "", 1},
-    {"Nimble",    "instant answers",           "nimble.heyitsmejosh.com", 0},
-    {"Cadence",   "commit tracker",            "cadence.heyitsmejosh.com", 0},
-    {"Tripwire",  "API drift watcher",         "tripwire.heyitsmejosh.com", 0},
-    {"Seamark",   "read values off charts",    "seamark.heyitsmejosh.com", 0},
-    {"Siftbox",   "inbox triage",              "siftbox.heyitsmejosh.com", 0},
-    {"Curbfind",  "Craigslist browser",        "curbfind.heyitsmejosh.com", 0},
-    {"Turing",    "local LLM",                 "", 0},
-    {"Conveyer",  "AI plays Factorio",         "", 0},
+    {0, "Play", "", PF_KIND_HEADER},
+    {"Quotestreak", "quote guessing",          "quotestreak.heyitsmejosh.com", PF_KIND_APP},
+    {"Keyrate",   "typing test",               "keyrate.heyitsmejosh.com", PF_KIND_APP},
+    {"NYC",       "Times Square sim",          "nyc.heyitsmejosh.com", PF_KIND_APP},
+    {"Conway",    "Game of Life on a torus",   "toroid.heyitsmejosh.com", PF_KIND_APP},
+    {"Swing",     "random video chat",         "swing.heyitsmejosh.com", PF_KIND_APP},
+
+    {0, "Dev", "", PF_KIND_HEADER},
+    {"Nimble",    "instant answers",           "nimble.heyitsmejosh.com", PF_KIND_APP},
+    {"Cadence",   "commit tracker",            "cadence.heyitsmejosh.com", PF_KIND_APP},
+    {"Tripwire",  "API drift watcher",         "tripwire.heyitsmejosh.com", PF_KIND_APP},
+    {"Seamark",   "read values off charts",    "seamark.heyitsmejosh.com", PF_KIND_APP},
+    {"Siftbox",   "inbox triage",              "siftbox.heyitsmejosh.com", PF_KIND_APP},
+    {"Curbfind",  "Craigslist browser",        "curbfind.heyitsmejosh.com", PF_KIND_APP},
+    {"Turing",    "local LLM",                 "", PF_KIND_APP},
+    {"Conveyer",  "AI plays Factorio",         "", PF_KIND_APP},
 };
 #define PF_ROW_COUNT (int)(sizeof(PF_ROWS) / sizeof(PF_ROWS[0]))
 #define PF_ROW_H 20
 
-static int pf_sel; /* index into PF_ROWS, always a non-header row */
+static int pf_sel; /* index into PF_ROWS, always a PF_KIND_APP row */
 static int pf_scroll; /* first visible row */
 
 static int pf_first_app_row(void) {
-    for (int i = 0; i < PF_ROW_COUNT; i++) if (!PF_ROWS[i].is_header) return i;
+    for (int i = 0; i < PF_ROW_COUNT; i++) if (PF_ROWS[i].kind == PF_KIND_APP) return i;
     return 0;
 }
 
@@ -105,8 +121,17 @@ static void pf_draw_content(void) {
         if (i >= PF_ROW_COUNT) break;
         int y = list_top + r * PF_ROW_H;
         const pf_row_t *row = &PF_ROWS[i];
-        if (row->is_header) {
+        if (row->kind == PF_KIND_HEADER) {
             font_draw_string(row->desc, 20, y + 2, 0x00807468, -1);
+            continue;
+        }
+        if (row->kind == PF_KIND_TEXT) {
+            /* About block: a title (name set, no desc), a plain line (desc
+               only), or a link row (desc == url, drawn in the same blue
+               the detail line below uses for a real app's URL). */
+            if (row->name) font_draw_string(row->name, 20, y + 2, 0x001C1C1E, -1);
+            else if (row->url[0]) font_draw_string(row->desc, 20, y + 2, 0x00234A78, -1);
+            else font_draw_string(row->desc, 20, y + 2, 0x00403439, -1);
             continue;
         }
         if (i == pf_sel) window_rect(20, y - 2, w - 40, PF_ROW_H - 2, 0x00EDE6DC);
@@ -149,7 +174,7 @@ static void gui_launch_portfolio(void) {
             for (int r = 0; r < vis_rows; r++) {
                 int i = pf_scroll + r;
                 if (i >= PF_ROW_COUNT) break;
-                if (PF_ROWS[i].is_header) continue;
+                if (PF_ROWS[i].kind != PF_KIND_APP) continue;
                 int y = list_top + r * PF_ROW_H;
                 if (click_vx >= 20 && click_vx < (int)window_width() - 20 && click_vy >= y - 2 && click_vy < y + PF_ROW_H - 4) { hit = i; break; }
             }
@@ -157,10 +182,10 @@ static void gui_launch_portfolio(void) {
             pf_sel = hit;
         } else if (k == KEY_UP || k == KEY_WHEEL_UP) {
             int i = pf_sel;
-            while (--i >= 0) if (!PF_ROWS[i].is_header) { pf_sel = i; break; }
+            while (--i >= 0) if (PF_ROWS[i].kind == PF_KIND_APP) { pf_sel = i; break; }
         } else if (k == KEY_DOWN || k == KEY_WHEEL_DOWN) {
             int i = pf_sel;
-            while (++i < PF_ROW_COUNT) if (!PF_ROWS[i].is_header) { pf_sel = i; break; }
+            while (++i < PF_ROW_COUNT) if (PF_ROWS[i].kind == PF_KIND_APP) { pf_sel = i; break; }
         }
         /* Enter is a no-op on purpose: no live browser hook to open into,
            the detail line already shows the URL for the selected row. */

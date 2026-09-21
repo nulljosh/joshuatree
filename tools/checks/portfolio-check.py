@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Headless proof that the Portfolio app (kernel/portfolio.h, v0.86.0) is
-real: it opens from the Apps folder, lists the real compiled-in fleet
-catalog (grouped headers + app rows, PF_ROWS in kernel/portfolio.h), the
-initially-selected row highlights and shows its URL on the bottom detail
-line, and the list actually scrolls with the keyboard rather than being a
-static screenshot. Same QMP absolute-pointer + qcode-keyboard + pmemsave
-shape as search-check.py / contacts-keystroke-check.sh.
+"""Headless proof that the Portfolio app (kernel/portfolio.h, v0.87.0) is
+real: it opens from the Apps folder, shows the real About block up top
+(name, plain line, link rows) plus the compiled-in fleet catalog (grouped
+headers + app rows, PF_ROWS in kernel/portfolio.h), the initially-selected
+row highlights and shows its URL on the bottom detail line, and the list
+actually scrolls with the keyboard rather than being a static screenshot.
+Same QMP absolute-pointer + qcode-keyboard + pmemsave shape as
+search-check.py / contacts-keystroke-check.sh.
 
 Coordinates below match search-check.py's own apps=1 geometry
 (x=56,y=30,w=848,h=490 -> viewport 64,62), confirmed against a real
@@ -117,28 +118,31 @@ try:
     else:
         print("Portfolio opened (outer window chrome present)")
 
-    header_px = row_dark_px(img, ROW0_Y)          # row 0: "Life" header
-    first_app_px = row_dark_px(img, ROW0_Y + 20)   # row 1: Epiphany, selected by default
-    print(f"before scrolling: header row dark-px={header_px}  first app row dark-px={first_app_px}")
-    if header_px < 4:
-        fails.append("Life header row shows no text")
+    # PF_ROWS layout (kernel/portfolio.h): 5 About rows (title, plain line,
+    # 3 links), then Life header (row 5), then Epiphany (row 6, selected by
+    # default: the first PF_KIND_APP row).
+    title_px = row_dark_px(img, ROW0_Y)            # row 0: "Joshua Trommel"
+    first_app_px = row_dark_px(img, ROW0_Y + 6 * 20)  # row 6: Epiphany, selected by default
+    print(f"before scrolling: About title row dark-px={title_px}  first app row dark-px={first_app_px}")
+    if title_px < 4:
+        fails.append("About block title row shows no text")
     if first_app_px < 10:
         fails.append("Epiphany row (name + description) shows too little text to be real")
 
     # Fourteen downs walks the real header-skipping selection from Epiphany
-    # (row 1) to Block Frame (row 17, the first Make entry), past the
+    # (row 6) to Block Frame (row 22, the first Make entry), past the
     # 17-row visible window (vis_rows = (490-40-34-68)//20 = 17 at this
     # window's real content height), so pf_clamp_scroll has to move
-    # pf_scroll by 1 for the selection to still be on screen: the Life
-    # header (row 0) scrolls off the top.
+    # pf_scroll for the selection to still be on screen: the About title
+    # (row 0) scrolls off the top.
     for _ in range(14):
         key("down")
 
     img2 = dump()
-    header_px_after = row_dark_px(img2, ROW0_Y)
-    print(f"after 14 downs: row-0 dark-px={header_px_after} (was the Life header, should now be a different row)")
-    if abs(header_px_after - header_px) < 6:
-        fails.append("list did not scroll: the top row still looks like the untouched Life header after 10 downs past the visible window")
+    title_px_after = row_dark_px(img2, ROW0_Y)
+    print(f"after 14 downs: row-0 dark-px={title_px_after} (was the About title, should now be a different row)")
+    if abs(title_px_after - title_px) < 6:
+        fails.append("list did not scroll: the top row still looks like the untouched About title after 14 downs past the visible window")
     else:
         print("list scrolled: top row content changed as the selection moved past it")
 

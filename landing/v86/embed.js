@@ -321,6 +321,7 @@ if (typeof document !== "undefined") (function () {
   function resetIdleRestart() {
     if (idleRestartTimeout) clearTimeout(idleRestartTimeout);
     if (!focused) return; // only auto-reset if visitor has taken control
+    if (PORTFOLIO_MODE) return; // portfolio mode is no kiosk: never reboot the visitor out of what they were reading
     idleRestartTimeout = setTimeout(async function () {
       // Retail-kiosk style: after 15 seconds of inactivity, close windows and restart the tour.
       // Only trigger if 15+ seconds have passed since the last user interaction (click, movement, key).
@@ -1479,6 +1480,31 @@ if (typeof document !== "undefined") (function () {
       .finally(function () { tourArmed = false; }) // reset tourArmed if tourLoop exits for any reason, so the tour can restart
       .catch(function () { /* a torn-down emulator mid-await (e.g. a real navigation) shouldn't spam the console */ });
   }
+  // Portfolio mode (?portfolio in the URL, wired up from os.html): the
+  // generic kiosk tour above is the wrong demo when the whole point of the
+  // page is showing off Joshua's own apps, not a random Mail/Calendar
+  // loop. Same real input path as the tour (clickAt + runScript, the exact
+  // ones proven against the real kernel above), just one real action
+  // instead of a forever loop: open the Apps folder (dock slot 0) and
+  // navigate the real launchpad grid to Portfolio (icon 23, row 4 col 3 of
+  // the 5-column grid gui_launch_apps itself uses, the same 'd'/'s' step
+  // keys tools/checks/portfolio-check.py already proves land there), then
+  // Enter launches it. No idle reboot, no kiosk loop: the visitor lands on
+  // their portfolio already open and can drive it normally from there.
+  var PORTFOLIO_MODE = /[?&]portfolio\b/.test(location.search);
+  var portfolioOpened = false;
+  async function openPortfolioOnce() {
+    if (focused || !adaptersReady || portfolioOpened) return;
+    portfolioOpened = true;
+    emulator.mouse_adapter.emu_enabled = true;
+    emulator.keyboard_adapter.emu_enabled = true;
+    var appsPos = dockSlotPos(0); // GUI_DOCK_DEFAULT[0] = GUI_APPS_FOLDER
+    await clickAt(appsPos[0], appsPos[1]); // opens the real Apps folder
+    if (focused) return;
+    await sleep(600);
+    if (focused) return;
+    await runScript([{ type: 'keys', text: 'dddssss\n', speed: 180 }], tourGen); // 3 right, 4 down, Enter opens Portfolio
+  }
   // Boot takes a few seconds; the tour waits for graphical mode plus a
   // beat, and never starts at all once the visitor has focused. Also respects
   // prefers-reduced-motion: autoplay motion should not start if the visitor
@@ -1490,6 +1516,10 @@ if (typeof document !== "undefined") (function () {
     // `emulator` doesn't exist until startEmulator() has actually run (deferred, see above); this interval is itself
     // part of what naturally waits for that, same as the boot-detection interval's own guard.
     var vga = emulator && emulator.v86 && emulator.v86.cpu.devices.vga;
-    if (vga && vga.graphical_mode) { tourArmed = true; tourTimer = setTimeout(startTourWhenReady, 6000); }
+    if (vga && vga.graphical_mode) {
+      tourArmed = true;
+      if (PORTFOLIO_MODE) tourTimer = setTimeout(openPortfolioOnce, 1200);
+      else tourTimer = setTimeout(startTourWhenReady, 6000);
+    }
   }, 500);
 })();
