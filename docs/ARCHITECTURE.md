@@ -96,7 +96,7 @@ separate Save step.
 
 **Stocks** (`kernel/stocks.h`) is the basic native one, shaped like macOS Stocks: a scrolling watchlist sidebar (sparkline, price, colored change pill) beside a detail pane with 1D/1W/1M/3M/1Y range tabs, a line chart and an Open/High/Low/Mkt Cap/P/E grid. Baked-in demo data (all plain-HTTP quote sources force HTTPS, no TLS here); chart history is a deterministic seeded walk pinned to the real baked-in price. Its drawing helpers (`stx_*`) are reused by Epiphany.
 
-**Epiphany** (`kernel/epiphany.h`) is our own, richer take, a deliberately separate app from Stocks: the offline slice of github.com/nulljosh/epiphany. Tabs: Markets (editable watchlist, `a` add / `d` remove, plus crypto, commodities, fear/greed), Portfolio (holdings valued off live-ticking prices, P/L, allocation bar, +/- shares), Simulator (ticking random-walk market you trade against), Situation (macro pulse, brief). The real app's map, People graph and accounts/billing/sync need HTTPS and cannot run here. Dock/Apps icon 22; Apps folder and Trash moved to 23/24.
+**Epiphany** (`kernel/epiphany.h`) is our own, richer take, a deliberately separate app from Stocks: the offline slice of github.com/nulljosh/epiphany. Tabs: Markets (editable watchlist, `a` add / `d` remove, plus crypto, commodities, fear/greed), Portfolio (holdings valued off live-ticking prices, P/L, allocation bar, +/- shares), Simulator (ticking random-walk market you trade against), Situation (macro pulse, brief). The real app's map, People graph and accounts/billing/sync need HTTPS and cannot run here. Dock/Apps icon 22; Apps folder and Trash moved to 24/25 (see Activity below, icon 23).
 
 **Search** (`kernel/search.h`, v0.86.0), Apps-folder-only like Contacts/
 Calculator/Stocks, no persistence of its own since it mirrors the real
@@ -113,6 +113,23 @@ directory result `vfs_chdir`s into it and reloads a fresh real listing
 (the same primitive the shell's own `cd` uses); a file result shows its
 real bytes via `vfs_read_file` + `render_wrapped_text`, the same pair the
 shell's own `cat` command and `gui_launch_html` already use.
+
+**Activity** (`kernel/activity.h`, v0.88.0), Apps-folder-only like Search
+(icon 23; Apps folder/Trash at 24/25), a real Activity Monitor-shaped
+window over the exact primitives the shell's own `ps`/`kill`/`mem`
+commands already call (`task_used`/`task_max`/`task_kill`/`task_current`,
+`kernel/task.c`; `pmm_free_frames`/`pmm_total_frames`, `kernel/pmm.c`),
+never reimplemented. Shows all `TASK_SLOTS` (6) real scheduler slots (pid,
+a synthesized name since `struct task` has no name field -- "Shell/GUI"
+for slot 0, "Task N" otherwise -- and state: running/free), real free/
+total memory and uptime, refreshing about once a second off the PIT tick
+independent of keyboard/mouse input (its own inlined event loop, not the
+shared blocking `get_key_or_click`, since it's the one app here that has
+to redraw on a timer with nobody touching it). Up/down selects a row;
+`k` or the Kill button calls `task_kill` on the selection, refusing (with
+a real on-screen message) to kill the current task, the kernel/GUI's own
+slot. `spawntest` (a shell command added alongside it) spawns a real,
+persistent task for `tools/checks/activity-check.py` to select and kill.
 
 **Eleven apps ported natively from the fleet, thin ports on purpose.**
 `tools/gen/gen_app.sh` turns a sibling repo's real single-file static build
