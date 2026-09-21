@@ -100,12 +100,23 @@ try {
     if (tickRatio < 4.5) fail(`progress chart tick label fails WCAG AA in light mode (${tickRatio.toFixed(2)}:1, need 4.5:1)`);
   }
 
-  // 3. the eyebrow keeps its height across a full typewriter cycle
+  // 3. the eyebrow keeps its height across a full typewriter cycle.
+  // offsetHeight, not boundingBox()/getBoundingClientRect(): the hero's
+  // own scroll-recede effect (.hero-copy's --recede-s transform: scale())
+  // legitimately shrinks the *rendered* box a fraction of a pixel once the
+  // page scrolls (including the demo's own post-boot auto-scroll, added
+  // v0.85.4), which getBoundingClientRect reports and rounds differently
+  // -- a real, intentional, cosmetic effect, not the layout-shift bug this
+  // assertion exists to catch. offsetHeight is the element's own CSS box
+  // (height:22px, line-height:22px, fixed), never affected by an ancestor's
+  // transform, so it still catches the real bug (the box's own height
+  // varying between differently-sized typewriter items) without false-
+  // failing on an unrelated, expected scroll-driven scale change.
   const heights = new Set();
   // Long enough to cover several typewriter items: the height difference
   // only shows up between items of different length, not within one.
   for (let i = 0; i < 120; i++) {
-    heights.add(Math.round((await page.locator('h2.eyebrow').boundingBox()).height));
+    heights.add(await page.locator('h2.eyebrow').evaluate((el) => el.offsetHeight));
     await page.waitForTimeout(120);
   }
   console.log('eyebrow heights seen: ' + [...heights].join(', '));
