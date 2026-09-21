@@ -22,16 +22,10 @@
      fetch and the V86 constructor itself. -->
 <link rel="preload" href="v86/libv86.js" as="script">
 <style>
-  /* Engraving design system (Sep 2026), taken from the Joshua Tree Co. mark:
-     one ink on one paper, no greys, no accent colour. Tone comes from line
-     density (--hatch), never from opacity or a second colour. Dark mode is
-     the same sheet inverted. The old names (--accent, --sub, --card) stay as
-     aliases so every existing rule keeps working off the two real tokens. */
-  :root { color-scheme: light dark; --paper:#ece8df; --ink:#000000;
-    --bg:var(--paper); --fg:var(--ink); --sub:var(--ink); --border:var(--ink); --card:transparent; --accent:var(--ink); --accent2:var(--ink);
-    /* hard stops on purpose: this is a hatch, not a gradient */
-    --hatch: repeating-linear-gradient(135deg, var(--ink) 0 1px, transparent 1px 5px); }
-  @media (prefers-color-scheme: dark) { :root { --paper:#0e0d0b; --ink:#ece8df; } }
+  /* Clean interface around the live, colorful desktop. */
+  :root { color-scheme: light dark; --bg:#f6f8fb; --fg:#172334;
+    --sub:#526174; --border:#d7dfe9; --card:#ffffff; --accent:#2869c7; --accent2:#159b9a; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#101925; --fg:#f1f5fa; --sub:#a8b8cb; --border:#344354; --card:#192637; --accent:#83b5ff; --accent2:#5ed0c7; } }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   /* v51: section-by-section scroll snap, direct request. `proximity`, not
@@ -68,8 +62,8 @@
   /* Spec-sheet furniture: tracked caps labels and hairline rules, the same
      chrome the logo's own construction sheet uses top and bottom. */
   .label, .sheet-rule, .plate-cap { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 500; }
-  .sheet-rule { display: flex; align-items: center; gap: 16px; padding: 12px 20px 0; color: var(--fg); white-space: nowrap; }
-  .sheet-rule::before { content: ""; order: 1; flex: 1; height: 1px; background: var(--fg); }
+  .sheet-rule { display: flex; align-items: center; gap: 16px; padding: 12px 20px 0; color: var(--sub); white-space: nowrap; }
+  .sheet-rule::before { content: ""; order: 1; flex: 1; height: 1px; background: var(--border); }
   .sheet-rule > :first-child { order: 0; }
   .sheet-rule > :last-child { order: 2; }
   .sheet-rule a { color: inherit; text-decoration: none; }
@@ -136,8 +130,8 @@
   .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; text-align: left; max-width: 1100px; margin: 0 auto; }
   @media (max-width: 760px) { .steps { grid-template-columns: 1fr; max-width: 480px; } }
   .steps { counter-reset: plate; }
-  .step { background: var(--card); border: 1px solid var(--border); padding: 0 18px 18px; counter-increment: plate; }
-  .step::before { content: ""; display: block; height: 8px; margin: 0 -18px 14px; background: var(--hatch); border-bottom: 1px solid var(--border); }
+  .step { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 0 18px 18px; counter-increment: plate; }
+  .step::before { content: ""; display: block; height: 4px; margin: 0 -18px 14px; background: var(--accent); border-radius: 12px 12px 0 0; }
   .step .n { color: var(--fg); font-size: 11px; text-transform: uppercase; letter-spacing: 0.22em; font-weight: 600; }
   .step .n::before { content: "0" counter(plate) " / "; }
   .step p { margin: 8px 0 0; font-size: 14px; line-height: 1.5; }
@@ -263,11 +257,11 @@
      line of text, direct feedback that it read as "ugly". Now it's one
      small pill near the bottom, out of the way of the dock and desktop. */
   #v86-overlay { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 140px; color: #fff; transition: opacity 0.2s; pointer-events: none; }
-  #v86-overlay span { background: #ece8df; color: #000; border: 1px solid #000; padding: 6px 14px; font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; }
+  #v86-overlay span { background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 999px; padding: 8px 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; }
   #v86-overlay.hidden { opacity: 0; }
 
   .progress-section { padding: 64px 20px; }
-  .progress-card { background: var(--card); border: 1px solid var(--border); padding: 20px; max-width: 640px; margin: 0 auto; }
+  .progress-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; max-width: 640px; margin: 0 auto; }
   .progress-card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.22em; color: var(--accent); margin: 0 0 14px; font-weight: 600; }
   .progress-card { position: relative; }
   .progress-card svg { width: 100%; height: auto; display: block; }
@@ -350,7 +344,7 @@
      eyebrow below (data-latest, same injector), where it belongs: H1 says
      what this is, H2 says what is new about it. -->
 <h1>Introducing Joshua Tree.</h1>
-    <h2 class="eyebrow" data-latest="Real-Time Memory Monitor"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
+    <h2 class="eyebrow" data-latest="Weather forecast window, five-day outlook and live conditions"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
   </div>
 </header>
 
@@ -363,7 +357,7 @@
          dozens of real releases. -->
     <div class="step"><div class="n">When</div><p>Started August 2026. <span id="release-count">Every version</span> since, each shipped only once proven working.</p></div>
     <div class="step"><div class="n">Why</div><p>Already talking to AI to build things. That belongs native to the machine, not bolted onto someone else's OS.</p></div>
-    <div class="step"><div class="n">Where</div><!-- roadmap-summary:start --><p>The current task queue is complete. More plans soon.</p><!-- roadmap-summary:end --></div>
+    <div class="step"><div class="n">Where</div><!-- roadmap-summary:start --><p>On the roadmap: Split kernel.c into per-subsystem files; Rich document app; Native code editor and package tool.</p><!-- roadmap-summary:end --></div>
   </div>
 </section>
 
@@ -378,16 +372,16 @@
          fetched-and-reparsed image. Hover a point (or tap it on touch)
          to see its real date and real line count. -->
     <!-- progress-chart:start -->
-<svg xmlns="http://www.w3.org/2000/svg" width="479" height="200" viewBox="0 0 479 200" id="progress-chart-live" role="img" aria-label="Real lines of code over time, 25,650 lines as of Sep 20"><style>
+<svg xmlns="http://www.w3.org/2000/svg" width="479" height="200" viewBox="0 0 479 200" id="progress-chart-live" role="img" aria-label="Real lines of code over time, 44,784 lines as of Sep 20"><style>
   #progress-chart-live {
-    --bg: #ece8df; --grid: #000000; --axis: #000000; --muted: #000000;
-    --label: #000000; --strong: #000000; --line: #000000; --line2: #000000; --line2-pct: #000000;
+    --bg: #ffffff; --grid: #d7dfe9; --axis: #526174; --muted: #526174;
+    --label: #526174; --strong: #172334; --line: #2869c7; --line2: #159b9a; --line2-pct: #159b9a;
   }
   @media (prefers-color-scheme: dark) {
-    #progress-chart-live { --bg: #0e0d0b; --grid: #ece8df; --axis: #ece8df; --muted: #ece8df;
-             --label: #ece8df; --strong: #ece8df; --line: #ece8df; --line2: #ece8df; --line2-pct: #ece8df; }
+    #progress-chart-live { --bg: #192637; --grid: #344354; --axis: #a8b8cb; --muted: #a8b8cb;
+             --label: #a8b8cb; --strong: #f1f5fa; --line: #83b5ff; --line2: #5ed0c7; --line2-pct: #5ed0c7; }
   }
-  #progress-chart-live line[stroke="var(--grid)"] { stroke-dasharray: 1 4; }
+  #progress-chart-live line[stroke="var(--grid)"] { stroke-dasharray: none; }
   #progress-chart-live text { font-family: -apple-system, Helvetica, Arial, sans-serif; }
 
   #progress-chart-live .progress-pt { cursor: pointer; }
@@ -396,7 +390,7 @@
   #progress-chart-live .progress-pt:focus .progress-dot,
   #progress-chart-live .progress-pt.is-active .progress-dot { r: 5.5; stroke-width: 2.5; }
   #progress-chart-live .progress-pt:focus { outline: none; }
-</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="49" y1="8" x2="63" y2="8" stroke="var(--line)" stroke-width="2.5"/><text x="68" y="11" font-size="10" fill="var(--label)">Lines of real code</text><line x1="49" y1="26" x2="469" y2="26" stroke="var(--grid)"/><line x1="49" y1="96" x2="469" y2="96" stroke="var(--grid)"/><text x="45" y="29" font-size="9" fill="var(--muted)" text-anchor="end">25650</text><text x="45" y="99" font-size="9" fill="var(--muted)" text-anchor="end">12825</text><text x="45" y="169" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="49" y1="26" x2="49" y2="166" stroke="var(--axis)"/><line x1="49" y1="166" x2="469" y2="166" stroke="var(--axis)"/><text x="6" y="96" font-size="8" fill="var(--line)" text-anchor="middle" transform="rotate(-90 6 96)">Lines of code</text><polyline points="49,166 59,164 69,163 79,162 89,160 100,158 110,157 120,155 130,155 141,155 151,153 161,152 171,150 182,146 192,144 202,141 212,139 223,137 233,134 243,132 253,131 264,127 274,126 284,123 294,119 305,115 315,114 325,109 335,105 346,76 356,72 366,66 376,49 387,44 397,41 407,39 417,38 428,37 438,33 448,31 458,30 469,26" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 26 lines of real code" data-tooltip="Aug 31 &#183; 26 lines"><circle class="progress-hit" cx="49" cy="166" r="11" fill="transparent"/><circle class="progress-dot" cx="49" cy="166" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 1,252 lines of real code" data-tooltip="Sep 13 &#183; 1,252 lines"><circle class="progress-hit" cx="89" cy="160" r="11" fill="transparent"/><circle class="progress-dot" cx="89" cy="160" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 2,025 lines of real code" data-tooltip="Sep 13 &#183; 2,025 lines"><circle class="progress-hit" cx="130" cy="155" r="11" fill="transparent"/><circle class="progress-dot" cx="130" cy="155" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 3,103 lines of real code" data-tooltip="Sep 13 &#183; 3,103 lines"><circle class="progress-hit" cx="171" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="171" cy="150" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 4,985 lines of real code" data-tooltip="Sep 13 &#183; 4,985 lines"><circle class="progress-hit" cx="212" cy="139" r="11" fill="transparent"/><circle class="progress-dot" cx="212" cy="139" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 6,557 lines of real code" data-tooltip="Sep 13 &#183; 6,557 lines"><circle class="progress-hit" cx="253" cy="131" r="11" fill="transparent"/><circle class="progress-dot" cx="253" cy="131" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 8,689 lines of real code" data-tooltip="Sep 14 &#183; 8,689 lines"><circle class="progress-hit" cx="294" cy="119" r="11" fill="transparent"/><circle class="progress-dot" cx="294" cy="119" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 11,201 lines of real code" data-tooltip="Sep 14 &#183; 11,201 lines"><circle class="progress-hit" cx="335" cy="105" r="11" fill="transparent"/><circle class="progress-dot" cx="335" cy="105" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 21,604 lines of real code" data-tooltip="Sep 15 &#183; 21,604 lines"><circle class="progress-hit" cx="376" cy="49" r="11" fill="transparent"/><circle class="progress-dot" cx="376" cy="49" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 23,574 lines of real code" data-tooltip="Sep 15 &#183; 23,574 lines"><circle class="progress-hit" cx="417" cy="38" r="11" fill="transparent"/><circle class="progress-dot" cx="417" cy="38" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 25,086 lines of real code" data-tooltip="Sep 20 &#183; 25,086 lines"><circle class="progress-hit" cx="458" cy="30" r="11" fill="transparent"/><circle class="progress-dot" cx="458" cy="30" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 25,650 lines of real code" data-tooltip="Sep 20 &#183; 25,650 lines"><circle class="progress-hit" cx="469" cy="26" r="11" fill="transparent"/><circle class="progress-dot" cx="469" cy="26" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><text x="49" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="264" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="376" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 15</text><text x="458" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 20</text><text x="49" y="196" font-size="10" font-weight="600" fill="var(--strong)">25,650 lines &#183; 100% documented &#183; 522 commits since Aug 31</text></svg>
+</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="49" y1="8" x2="63" y2="8" stroke="var(--line)" stroke-width="2.5"/><text x="68" y="11" font-size="10" fill="var(--label)">Lines of real code</text><line x1="49" y1="26" x2="469" y2="26" stroke="var(--grid)"/><line x1="49" y1="96" x2="469" y2="96" stroke="var(--grid)"/><text x="45" y="29" font-size="9" fill="var(--muted)" text-anchor="end">44784</text><text x="45" y="99" font-size="9" fill="var(--muted)" text-anchor="end">22392</text><text x="45" y="169" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="49" y1="26" x2="49" y2="166" stroke="var(--axis)"/><line x1="49" y1="166" x2="469" y2="166" stroke="var(--axis)"/><text x="6" y="96" font-size="8" fill="var(--line)" text-anchor="middle" transform="rotate(-90 6 96)">Lines of code</text><polyline points="49,166 59,165 69,164 79,163 89,162 100,161 110,161 120,160 130,160 141,160 151,158 161,157 171,155 182,153 192,152 202,151 212,149 223,148 233,146 243,146 253,143 264,142 274,141 284,138 294,137 305,134 315,131 325,115 335,112 346,109 356,98 366,96 376,94 387,93 397,93 407,92 417,89 428,88 438,86 448,30 458,28 469,26" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 26 lines of real code" data-tooltip="Aug 31 &#183; 26 lines"><circle class="progress-hit" cx="49" cy="166" r="11" fill="transparent"/><circle class="progress-dot" cx="49" cy="166" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 1,297 lines of real code" data-tooltip="Sep 13 &#183; 1,297 lines"><circle class="progress-hit" cx="89" cy="162" r="11" fill="transparent"/><circle class="progress-dot" cx="89" cy="162" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 2,034 lines of real code" data-tooltip="Sep 13 &#183; 2,034 lines"><circle class="progress-hit" cx="130" cy="160" r="11" fill="transparent"/><circle class="progress-dot" cx="130" cy="160" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 3,669 lines of real code" data-tooltip="Sep 13 &#183; 3,669 lines"><circle class="progress-hit" cx="171" cy="155" r="11" fill="transparent"/><circle class="progress-dot" cx="171" cy="155" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 5,574 lines of real code" data-tooltip="Sep 13 &#183; 5,574 lines"><circle class="progress-hit" cx="212" cy="149" r="11" fill="transparent"/><circle class="progress-dot" cx="212" cy="149" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 7,379 lines of real code" data-tooltip="Sep 14 &#183; 7,379 lines"><circle class="progress-hit" cx="253" cy="143" r="11" fill="transparent"/><circle class="progress-dot" cx="253" cy="143" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 9,594 lines of real code" data-tooltip="Sep 14 &#183; 9,594 lines"><circle class="progress-hit" cx="294" cy="137" r="11" fill="transparent"/><circle class="progress-dot" cx="294" cy="137" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 17,426 lines of real code" data-tooltip="Sep 14 &#183; 17,426 lines"><circle class="progress-hit" cx="335" cy="112" r="11" fill="transparent"/><circle class="progress-dot" cx="335" cy="112" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 23,111 lines of real code" data-tooltip="Sep 15 &#183; 23,111 lines"><circle class="progress-hit" cx="376" cy="94" r="11" fill="transparent"/><circle class="progress-dot" cx="376" cy="94" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 19, 24,694 lines of real code" data-tooltip="Sep 19 &#183; 24,694 lines"><circle class="progress-hit" cx="417" cy="89" r="11" fill="transparent"/><circle class="progress-dot" cx="417" cy="89" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 44,351 lines of real code" data-tooltip="Sep 20 &#183; 44,351 lines"><circle class="progress-hit" cx="458" cy="28" r="11" fill="transparent"/><circle class="progress-dot" cx="458" cy="28" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 44,784 lines of real code" data-tooltip="Sep 20 &#183; 44,784 lines"><circle class="progress-hit" cx="469" cy="26" r="11" fill="transparent"/><circle class="progress-dot" cx="469" cy="26" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><text x="49" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="253" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="356" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 15</text><text x="428" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 20</text><text x="49" y="196" font-size="10" font-weight="600" fill="var(--strong)">44,784 lines &#183; 98% documented &#183; 582 commits since Aug 31</text></svg>
 <!-- progress-chart:end -->
   </div>
 </section>

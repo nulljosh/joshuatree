@@ -24,9 +24,15 @@ on:
       - 'landing/**'
       - 'wrangler.toml'
       - 'worker.js'
-      - 'roadmap.md'
+      - 'docs/roadmap.md'
       - 'tools/gen/landing-roadmap.py'
       - '.github/workflows/deploy.yml'
+      - 'kernel/**'
+      - 'drivers/**'
+      - 'boot/**'
+      - 'lib/**'
+      - 'user/**'
+      - 'Makefile'
 
 jobs:
   deploy:
@@ -34,6 +40,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
+      # landing/v86/kernel.elf is no longer a committed file (it used to
+      # conflict on every kernel PR); build it fresh here, same toolchain
+      # as check.yml, before the site that embeds it gets deployed.
+      - name: Install clang, lld
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang lld
+      - name: Build kernel.elf (Makefile also copies it to landing/v86/kernel.elf)
+        run: make kernel.elf
       - name: Sync landing page headline to latest roadmap feature
         run: ./tools/gen/inject-landing-headline.sh
       - name: Generate landing roadmap summary

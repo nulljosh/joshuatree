@@ -2,7 +2,7 @@
 
 # Joshua Tree
 
-![version](https://img.shields.io/badge/version-0.85.0-blue)
+![version](https://img.shields.io/badge/version-0.85.3-blue)
 ![platform](https://img.shields.io/badge/platform-i386-lightgrey)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
@@ -52,7 +52,7 @@ The remaining commands mostly exercise one subsystem at a time: `help`
 
 Full subsystem breakdown: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 The syscall contract: [`docs/SYSCALL-ABI.md`](docs/SYSCALL-ABI.md).
-Current plan: [`roadmap.md`](roadmap.md).
+Current plan: [`docs/roadmap.md`](docs/roadmap.md).
 
 ## License
 

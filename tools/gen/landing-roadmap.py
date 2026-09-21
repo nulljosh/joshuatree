@@ -45,7 +45,7 @@ def main():
     args = parser.parse_args()
     page_path = ROOT / "landing/index.html"
     page = page_path.read_text()
-    updated = render((ROOT / "roadmap.md").read_text(), page)
+    updated = render((ROOT / "docs/roadmap.md").read_text(), page)
     if args.check:
         if page != updated:
             parser.exit(1, "Landing roadmap summary is stale; run python3 tools/gen/landing-roadmap.py\n")
