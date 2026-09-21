@@ -116,6 +116,8 @@ directory result `vfs_chdir`s into it and reloads a fresh real listing
 real bytes via `vfs_read_file` + `render_wrapped_text`, the same pair the
 shell's own `cat` command and `gui_launch_html` already use.
 
+**Fleet icons** (`tools/gen/import_fleet_icons.py`, v0.90.0), copies each project's real `icon.svg` into `art/icons/`, clipped to the shared dock tile shape, so the dock shows the icon the app actually ships with. Run it, then `gen_icon_art.py`.
+
 **Quotes** (`kernel/quotes.h`, v0.89.0), Quotestreak native: a film line, four titles, 1-4 or a click answers, streak and best kept for the session. Replaces the one-line HTML card the dock tile used to open.
 
 **Toroid** (`kernel/toroid.h`, v0.88.0), Conway's Game of Life on a torus, native: both edges wrap, space pauses, r reseeds, c clears, a click toggles a cell. Replaces the one-line HTML card the dock tile used to open.
