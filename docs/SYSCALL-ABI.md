@@ -365,10 +365,14 @@ Honest scope again, and the list is still long.
   stack page, and the shell blocks on the program it started. There is no
   `fork`, no `wait`, no job control, no way for two user programs to be
   alive at once.
-- **No shell that runs programs by name.** `exec NOTE.BIN args...` is a
-  shell command that takes a filename, not a `$PATH` lookup, and the kernel
-  shell is still a kernel `if`-ladder with a handful of built-ins. Typing
-  `note` does nothing.
+- ~~No shell that runs programs by name.~~ Fixed for 1.0.0: an unknown
+  command now falls through to the same lookup `exec` uses
+  (`exec_resolve_name()` in `kernel/exec.c`), case-insensitive and trying
+  the real on-disk extension, before the shell reports it unknown. `exec
+  NOTE.BIN args...` still works exactly as before; typing `note buy milk`
+  does too. The kernel shell is still an `if`-ladder of built-ins, and
+  built-ins still win over a program of the same name -- there is no
+  `$PATH`, just one lookup against the active VFS backend.
 - **No `unlink`, no `rename`, no `mkdir`, no directory enumeration, no
   `stat`.** A program can read and write files it already knows the names
   of. Removing one is still a kernel-side `rm`.

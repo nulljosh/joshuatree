@@ -1451,6 +1451,7 @@ if (typeof document !== "undefined") (function () {
       // to a regression that default change caused here.
       await demoSatelliteWallpaper(gen);
       if (focused || tourGen !== gen) return;
+      window.dispatchEvent(new Event('jt-tour-lap-done')); // index.html scrolls on from here, first lap only
       if (focused || tourGen !== gen) return;
       // The real fix (see the comment above waitForGraphicalMode): reboot
       // the emulator here, at the loop boundary, so the next full cycle

@@ -67,4 +67,25 @@
    case the program gets argc == 0 and an argv holding only its NULL
    terminator. */
 int exec_user(const char *name, const char *const *argv, int argc, int *status);
+
+/* 1.0.0: a real shell launches a program by name, not just exec's exact
+ * on-disk spelling. Resolves `typed` to a filename that actually exists
+ * on the active VFS backend, trying in order: `typed` as-is, an
+ * upper-cased copy, and the upper-cased copy with JT_RESOLVE_EXT appended
+ * if `typed` has no '.' of its own. That's the real shape flat binaries
+ * land on disk in (see tools/gen/gen_user_bin.py and how usertest/notetest
+ * seed HELLO.BIN/NOTE.BIN): FAT already folds case on lookup (to_fat_name
+ * in drivers/fat.c), but ramfs -- the disk-less backend every headless
+ * check boots under -- does not, so the shell does the folding here
+ * instead of teaching ramfs about case for one caller.
+ *
+ * `out` must be at least JT_RESOLVE_NAME_MAX bytes. On a match, writes
+ * the resolved name into `out` and returns 1; on no match, returns 0 and
+ * `out` is unspecified. Existence is probed with a 1-byte read, not a
+ * real exec, so both `exec` and the shell's bare-name fallthrough can
+ * call this before running anything, and the actual run still goes
+ * through exec_user() -- there is only the one exec path. */
+#define JT_RESOLVE_NAME_MAX 32
+#define JT_RESOLVE_EXT      ".BIN"
+int exec_resolve_name(const char *typed, char *out);
 #endif
