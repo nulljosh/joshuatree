@@ -805,13 +805,21 @@ static void reboot(void){
    GUI_TRASH up by one each. Every dispatch below keys off these #defines
    rather than a hardcoded 21/22, so this is the only place the shift needed
    to happen. */
-#define GUI_APP_COUNT   25 /* 23 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 23 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       24
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany", "Apps", "Trash"};
+/* v0.87.0: Portfolio, an Apps-folder-only catalog of the fleet apps that
+   live outside this kernel (heyitsmejosh.com), same launch shape as
+   Search/Contacts/Calculator/Stocks. Inserted before GUI_APPS_FOLDER, so
+   it grew GUI_APP_COUNT from 25 to 26 and pushed GUI_APPS_FOLDER/GUI_TRASH
+   up by one each, same shift the v0.86.0 comment above describes for
+   Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
+   it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
+   it keeps the primitive glyph path like every other unart'd icon. */
+#define GUI_APP_COUNT   26 /* 24 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 24 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       25
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany", "Portfolio", "Apps", "Trash"};
 static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
     0x00707070, 0x00A13F3F, 0x00A0553F, 0x006B4423, 0x00375A4A, 0x002B2B2B, 0x00365E8C, 0x0085144B,
-    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078, 0x001F5FA8
+    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078, 0x001F5FA8, 0x004A5A3E
 };
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
@@ -845,7 +853,13 @@ static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3
    next time `gui` runs; nothing about layout is saved to disk, matching
    this whole desktop's one-screen, nothing-persisted scope). */
 static int gui_order[GUI_ICON_COUNT];
-static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = GUI_DOCK_DEFAULT[i]; }
+/* Portfolio mode ("portfolio" on the multiboot command line, sent by the
+   landing's embed.js when heyitsmejosh.com/os.html frames it): the dock is
+   Joshua's own apps instead of the system set. Same slot count, Apps folder
+   and Trash stay at the ends; everything left out is still in the Apps folder. */
+static int portfolio_dock;
+static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
+static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 static int dock_hover = -1; /* slot whose label is showing */
 
 #define GUI_BG          0x00FAF8F6
@@ -3379,6 +3393,7 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
         case 20: gui_icon_stocks(cx_center, cy, size, bg); break;
         case 21: gui_icon_search(cx_center, cy, size, bg); break;
         case 22: gui_icon_stocks(cx_center, cy, size, bg); break; /* art covers it; primitive fallback only */
+        case 23: gui_icon_apps(cx_center, cy, size, bg); break; /* Portfolio: no authored art yet, reuses the grid-of-tiles glyph */
         case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
         case GUI_TRASH: gui_icon_trash(cx_center, cy, size, bg); break;
     }
@@ -4142,6 +4157,7 @@ static void gui_launch_files(void){ gui_draw_files_content(); gui_wait_close(); 
 #include "calculator.h"
 #include "chat.h"
 #include "search.h"
+#include "portfolio.h"
 
 /* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
    dock hover labels, titlebars) read as monospace/typewriter, not the
@@ -5248,6 +5264,7 @@ static void gui_launch(int icon){
     else if (icon == 20) gui_launch_stocks();
     else if (icon == 21) gui_launch_search();
     else if (icon == 22) gui_launch_epiphany();
+    else if (icon == 23) gui_launch_portfolio();
 }
 
 static void gui_launch_from_dock(int icon){
@@ -8418,6 +8435,8 @@ void kmain(unsigned int multiboot_info_addr){
     }
     if (multiboot_info_addr && (*(unsigned int *)multiboot_info_addr & 0x4)) {
         const char *cl = (const char *)*(unsigned int *)(multiboot_info_addr + 16);
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='p' && pc[1]=='o' && pc[2]=='r' && pc[3]=='t' && pc[4]=='f' && pc[5]=='o' && pc[6]=='l' && pc[7]=='i' && pc[8]=='o') { portfolio_dock = 1; serial_puts("portfolio dock\n"); break; }
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;
