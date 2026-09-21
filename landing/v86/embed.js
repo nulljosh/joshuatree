@@ -182,6 +182,7 @@ if (typeof document !== "undefined") (function () {
     vga_memory_size: 16 * 1024 * 1024, // v41: 1600x1200x32bpp is 7.68MB, 8 was one bad rounding away from failing
     screen_container: screenContainer,
     multiboot: { url: "v86/kernel.elf" },
+    cmdline: /[?&]portfolio\b/.test(location.search) ? "portfolio" : undefined, // kmain reads this and puts Joshua's own apps on the dock
     autostart: true,
     // Real network backend for the emulated NIC: without this, v86's NIC
     // (ne2k by default, see drivers/ne2k.c) is wired to nothing, every
@@ -1481,30 +1482,10 @@ if (typeof document !== "undefined") (function () {
       .catch(function () { /* a torn-down emulator mid-await (e.g. a real navigation) shouldn't spam the console */ });
   }
   // Portfolio mode (?portfolio in the URL, wired up from os.html): the
-  // generic kiosk tour above is the wrong demo when the whole point of the
-  // page is showing off Joshua's own apps, not a random Mail/Calendar
-  // loop. Same real input path as the tour (clickAt + runScript, the exact
-  // ones proven against the real kernel above), just one real action
-  // instead of a forever loop: open the Apps folder (dock slot 0) and
-  // navigate the real launchpad grid to Portfolio (icon 23, row 4 col 3 of
-  // the 5-column grid gui_launch_apps itself uses, the same 'd'/'s' step
-  // keys tools/checks/portfolio-check.py already proves land there), then
-  // Enter launches it. No idle reboot, no kiosk loop: the visitor lands on
-  // their portfolio already open and can drive it normally from there.
+  // kernel gets "portfolio" on its command line (see the V86 config above)
+  // and boots with Joshua's own apps on the dock. The generic kiosk tour is
+  // the wrong demo there, so it never starts: the visitor just gets the desktop.
   var PORTFOLIO_MODE = /[?&]portfolio\b/.test(location.search);
-  var portfolioOpened = false;
-  async function openPortfolioOnce() {
-    if (focused || !adaptersReady || portfolioOpened) return;
-    portfolioOpened = true;
-    emulator.mouse_adapter.emu_enabled = true;
-    emulator.keyboard_adapter.emu_enabled = true;
-    var appsPos = dockSlotPos(0); // GUI_DOCK_DEFAULT[0] = GUI_APPS_FOLDER
-    await clickAt(appsPos[0], appsPos[1]); // opens the real Apps folder
-    if (focused) return;
-    await sleep(600);
-    if (focused) return;
-    await runScript([{ type: 'keys', text: 'dddssss\n', speed: 180 }], tourGen); // 3 right, 4 down, Enter opens Portfolio
-  }
   // Boot takes a few seconds; the tour waits for graphical mode plus a
   // beat, and never starts at all once the visitor has focused. Also respects
   // prefers-reduced-motion: autoplay motion should not start if the visitor
@@ -1518,8 +1499,7 @@ if (typeof document !== "undefined") (function () {
     var vga = emulator && emulator.v86 && emulator.v86.cpu.devices.vga;
     if (vga && vga.graphical_mode) {
       tourArmed = true;
-      if (PORTFOLIO_MODE) tourTimer = setTimeout(openPortfolioOnce, 1200);
-      else tourTimer = setTimeout(startTourWhenReady, 6000);
+      if (!PORTFOLIO_MODE) tourTimer = setTimeout(startTourWhenReady, 6000);
     }
   }, 500);
 })();

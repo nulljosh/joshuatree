@@ -853,7 +853,13 @@ static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3
    next time `gui` runs; nothing about layout is saved to disk, matching
    this whole desktop's one-screen, nothing-persisted scope). */
 static int gui_order[GUI_ICON_COUNT];
-static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = GUI_DOCK_DEFAULT[i]; }
+/* Portfolio mode ("portfolio" on the multiboot command line, sent by the
+   landing's embed.js when heyitsmejosh.com/os.html frames it): the dock is
+   Joshua's own apps instead of the system set. Same slot count, Apps folder
+   and Trash stay at the ends; everything left out is still in the Apps folder. */
+static int portfolio_dock;
+static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
+static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 static int dock_hover = -1; /* slot whose label is showing */
 
 #define GUI_BG          0x00FAF8F6
@@ -8429,6 +8435,8 @@ void kmain(unsigned int multiboot_info_addr){
     }
     if (multiboot_info_addr && (*(unsigned int *)multiboot_info_addr & 0x4)) {
         const char *cl = (const char *)*(unsigned int *)(multiboot_info_addr + 16);
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='p' && pc[1]=='o' && pc[2]=='r' && pc[3]=='t' && pc[4]=='f' && pc[5]=='o' && pc[6]=='l' && pc[7]=='i' && pc[8]=='o') { portfolio_dock = 1; serial_puts("portfolio dock\n"); break; }
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;
