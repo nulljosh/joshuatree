@@ -1,241 +1,163 @@
 # Joshua Tree
 
-Freestanding i386 kernel, renamed from `os` (Sep 2026). No libc, no
+Freestanding i386 kernel (renamed from `os` in Sep 2026). No libc, no
 dependencies beyond clang, ld.lld and qemu.
 
-- `make` links `kernel.elf`; `make run` boots it; `./check.sh` is the only automated test.
+- `make` links `kernel.elf`. `make run` boots it. `./check.sh` is the only
+  automated boot test.
 - Cross-compiles with stock Apple clang via `-target i386-unknown-none`. No
-  cross-toolchain needed, do not add one.
-- Full subsystem map: `docs/ARCHITECTURE.md`. Plan and per-item verification notes: `roadmap.md`.
+  cross-toolchain needed; do not add one.
+- Full subsystem map: `docs/ARCHITECTURE.md`. Plan and verification notes:
+  `roadmap.md`.
+
+## Verification rules
+
 - `check.sh` asserts on raw VGA memory through the QEMU monitor, because a
-  headless `screendump` renders black even when the kernel is running fine.
-  It only proves "boots without crashing", real subsystem correctness (paging,
-  disk I/O, context switches) is verified manually against real artifacts
-  (real disk images, real flat binaries) before each commit, not by `check.sh`
-  alone. A real pixel-level screenshot IS possible when a session has this
-  Mac's own attached display, though, a different mechanism than QEMU's own
-  broken `screendump`: launch the real `-display cocoa` window (the same one
-  `menubar/JoshuaTree.app`'s launcher opens), bring it frontmost via
-  `osascript`/System Events, then macOS's own `screencapture` CLI. Confirmed
-  working end to end in the v50/v51 passes (verified the DejaVu Sans font
-  swap and the landing page's restructured layout this way, both against
-  real captured PNGs, not assumed). Only available when this session is
-  actually running on hardware with a display attached, not every context.
-  disk I/O, context switches) is verified manually against real artifacts
-  (real disk images, real flat binaries) before each commit, not by `check.sh` alone.
+  headless `screendump` renders black even though the kernel is running
+  fine. It only proves "boots without crashing." Subsystem correctness
+  (paging, disk I/O, context switches) needs manual verification against
+  actual artifacts (disk images, flat binaries), not `check.sh` alone.
+- A pixel-level screenshot is possible only when a session has this
+  Mac's own attached display: launch `-display cocoa` (the same window
+  `menubar/JoshuaTree.app`'s launcher opens), bring it frontmost, then use
+  macOS's own `screencapture` CLI. QEMU's own `screendump` is broken
+  headless and should not be used for visual verification.
+- **HEADLESS ONLY. Never open a visible QEMU window and never open a
+  browser to verify anything.** Every check in this repo must run without
+  popping a window.
 - The QEMU monitor's `sendkey ret` does not reliably deliver Enter to this
-  kernel's keyboard driver (known harness limitation, not a kernel bug,
-  reproduces identically before and after the IRQ-driven keyboard rewrite).
-  Typing individual letters works and proves the keyboard path; verifying a
-  command's *output* needs the boot-time direct-call trick instead (temporarily
-  call the function from `kmain` before `clear()`, dump VGA memory, revert).
-- Higher-half kernel (v2) and ring-3/TSS user mode (v3) are both shipped.
-  Kernel runs at 0xC0000000+, loaded physically at 1MB; see `roadmap.md`
-  for the two real virtual/physical bugs that shipping them caught.
-- Landing page (`landing/index.html`, deployed to joshuatree.heyitsmejosh.com)
-  as of v18 embeds a real, live v86 (JS/wasm x86 emulator) instance booting
-  this exact `kernel.elf` in-browser (`landing/v86/embed.js`), not a
-  recording. Three real, narrow "inherited from a BIOS that never ran"
-  bugs had to be found and fixed first, each the same shape: v16 (VGA text
-  mode was never set, since real hardware/QEMU inherit it from their own
-  BIOS), v17 (keyboard scanning was never enabled, same reason), v18 (the
-  DAC color palette was never programmed, real hardware/QEMU get a
-  standard default palette burned into the card at power-on, v86 has no
-  "power-on" to inherit that from and starts every register at zero,
-  rendering real text as black-on-black until fixed). Keyboard/mouse
-  capture is gated behind click/tap-to-focus (`emu_enabled` starts false
-  on both adapters) because v86 attaches its own input listeners to
-  `window` globally with no container scoping, confirmed by reading
-  `libv86.js` itself; leaving them enabled by default would pick up any
-  unrelated keystroke or click anywhere on the page. An idle timer (8s)
-  starts a scripted autoplay that types real commands through the same
-  `simulate_char` path a real keystroke uses, and hands control back the
-  instant a real visitor clicks or types. `landing/v86/` holds the vendored
-  `v86.wasm`/`libv86.js` build and a copy of `kernel.elf`; keep that copy
-  in sync with the repo-root build (`cp kernel.elf landing/v86/kernel.elf`)
-  whenever a change could affect what the embed shows, since it's a real
-  binary being served, not a symlink. The old recorded-video approach
-  (`demo.mp4`, `#stage video.boot`) is gone as of v18; if it's ever needed
-  again for reference, the recording process (two-segment capture across
-  the text/graphics mode window resize, `ffmpeg -f concat`) is preserved in
-  git history rather than re-documented here.
-- `progress.svg` is a cumulative line chart generated by `progress.sh` from
-  `roadmap.md`'s checkboxes (including a `<!-- progress.sh: done-items D/T -->`
-  marker for collapsed/archived versions); regenerate and redeploy after
-  checking items off.
-- Each version gets a `git tag -a jt-vN` + `gh release create jt-vN` once it
-  ships. Earlier tags from before the rename (`os-v0` through `os-v4`) stay
-  as-is on their original commits, don't rewrite history to relabel them.
-- Real semver from `v31` on (Sep 2026, Joshua's own call): `VERSION` holds
-  the current `MAJOR.MINOR.PATCH`, starting at `0.30.0` to match what v30
-  shipped. `v1`-`v30` keep their existing labels and tags, not rewritten.
-  Going forward, bump MINOR for a new capability (nearly every roadmap
-  item so far), PATCH for a fix that adds no capability, MAJOR only for a
-  real breaking change (none yet; this kernel has no external callers to
-  break). `0.x.y` is deliberate, not an oversight: nothing here has a
-  stable contract yet for a 1.0.0 to actually mean.
-- Theme (direct request, Sep 2026, replaces the earlier Mojave brown
-  palette): the engraving system, taken from the Joshua Tree Co. mark
-  (`landing/badge.png`, itself a nod to Apple's 1977 Newton engraving). One
-  ink on one paper, `#000000` on `#ece8df`, inverted for dark. No greys, no
-  accent colour, no opacity tricks: tone comes from line density (the
-  `--hatch` token, dotted chart grids), never a second colour. Hairline
-  1px rules, tracked-caps Helvetica labels, square plates with a hatched
-  header band, spec-sheet rules top and bottom. Sans-serif everywhere; the
-  slab serif lives inside the logo artwork only. The full badge is for
-  hero sizes only, `landing/mark.png` (the simplified tree) covers
-  everything small, the same reason Apple dropped its own engraving.
-  Landing page is converted. The kernel is not yet: its wallpaper and
-  chrome still carry the old palette until the 1-bit reskin in
-  `roadmap.md` lands, so don't "fix" the mismatch piecemeal before then.
-  The real VGA boot output is genuinely black-on-gray text (can't be
-  restyled, it's the actual kernel's real output).
-- Task routing (direct request, Sep 2026): the main session directs
-  (Sonnet/Opus, Fable for anything privilege/security/exact-layout
-  shaped per the model-routing legend below), not the sole executor.
-  For mechanical, well-scoped work with a known-correct shape (a UI
-  tweak, a glue fix, a scoped bug with an obvious pattern to follow --
-  exactly what the legend already tags `[Haiku]`), spawn one or two
-  Haiku subagents with full sub-instructions (root cause, fix, required
-  discriminating test, verification steps, commit/push) instead of
-  doing it directly. Saves Claude usage; the main session stays free
-  for direction and review.
-- The loop (direct request, tightened to exactly this, Sep 2026): this
-  project has no finish line. Each pass:
-  1. Check for a direct request first; only fall back to `roadmap.md`'s
-     open queue (one real item) when there isn't one. Re-read `roadmap.md`
-     fresh from disk every single pass, never from memory of an earlier
-     read this session: `/split-roadmap` can have parallel agents
-     committing real changes to it while this loop is also running, and a
-     stale in-context copy is exactly how two passes trip over the same
-     item or miss that it's already done.
-  2. Current standing focus, absent a direct request: typeface/font
-     rendering and icon sharpening, both real, ongoing, re-checked against
-     actual screenshots each time, not assumed fixed from a prior pass.
-  3. Pull technique from real prior art (OSDev wiki, xv6, ToaruOS, real
-     Linux/BSD source) for anything with a well-known solved shape, rather
-     than reinventing a wire protocol or register sequence; cite what was
-     borrowed the same way existing roadmap entries cite their own
-     root-cause traces.
-  4. Verify against a real artifact before calling it done: `check.sh`, a
-     real screenshot (this Mac's own attached display + `screencapture`,
-     not QEMU's broken `screendump`), a real disk image, not "it booted."
-     `tools/checks/check-refs.sh` after any rename/move/delete, real drift
-     insurance for `roadmap.md`/this file's own file-path references, not
-     assumed still accurate.
-  4b. Standing QA requirement (direct request, Sep 2026): a one-off
-      framebuffer dump or live screenshot proves a fix worked *today*, it
-      doesn't stop it from silently breaking again next pass. Every shipped
-      feature needs a permanent, discriminating regression test added to
-      the suite, not just ad-hoc verification thrown away after the pass:
-      either a new shell test command (the `heaptest`/`tasktest`/
-      `preempttest`/`killtest`/`reaptest`/`ring3test` pattern already in
-      `kernel.c`) or a standalone `tools/checks/*-check.{sh,py}` script (the
-      `tools/checks/dockhover-check.py`/`tools/checks/vmmouse-check.sh`/`tools/checks/check-calendar.sh` pattern),
-      whichever fits the feature. "Discriminating" is the real bar, matching
-      every existing test in this suite: prove the test actually fails
-      when the fix is temporarily reverted, then prove it passes with the
-      fix restored, don't just add an assert that always prints "ok."
-      100% line coverage isn't a realistic bar for a freestanding kernel
-      with no coverage tooling, don't chase that number, chase "does this
-      feature have a real test that would catch a regression" for
-      everything that ships from here on, kernel and app code alike.
-  4c. Standing docs-completeness requirement (direct request, Sep 2026):
-      `docs/ARCHITECTURE.md`'s Subsystems table and README.md's `Piece |
-      Where` table reached full real coverage of every `.c`/header-only
-      subsystem in this repo once (Sep 2026, 32/32 files + 15/15 apps).
-      Don't let that decay back into a stale v0-v6-era snapshot the way it
-      did before that pass. Any change that adds a new real file (a new
-      `drivers/*.c`, a new `kernel/*.h` app) gets a real row in both
-      tables in the same pass that ships it, not deferred to a later
-      cleanup sweep. This is architecture-doc coverage (does every real
-      file have a documented row), a different, achievable metric from
-      `progress.svg`'s comment-density line (real comment/blank-line %
-      inside the code itself, which has no sensible 100% target, chasing
-      that number would mean writing worse code on purpose).
-  4d. Standing CI-improvement requirement (direct request, Sep 2026):
-      `.github/workflows/check.yml` (added Sep 2026, real gap found:
-      `deploy.yml` only ever shipped the landing page, nothing ran
-      `check.sh` or even built the kernel on push before this) runs the
-      real regression suite on every push. Keep improving it as real
-      gaps turn up, don't let it go stale the way `deploy.yml` did for
-      months. Candidates worth adding over time as real needs appear:
-      running more of the shell regression commands (`heaptest`,
-      `tasktest`, etc.) headlessly in CI, not just `check.sh`'s boot
-      check; caching the apt/qemu install step for faster runs; a
-      second job for `tools/checks/check-refs.sh`. Add to it when a real gap
-      is found, the same discipline as every other standing rule here,
-      not a one-time setup task.
-  4e. Standing release-notes requirement (direct request, Sep 2026): a
-      real gap found doing a quick audit, `jt-v70`'s release notes were
-      one generic line ("Two real, low-risk apps...") while sibling
-      releases the same session carried the full real story (root
-      cause, evidence, what was verified). `gh release create`/`edit`
-      always gets substantial notes, not a placeholder: what shipped,
-      the real bug/finding behind it if there was one, how it was
-      verified. `roadmap.md`'s own entry for the version is usually the
-      source to pull from, don't write a thinner summary than what
-      already exists there.
-  4f. Standing MINOR-release bundling requirement (direct request, Sep
-      2026): every `x.Y.0` release (the MINOR position, a real new
-      capability, not a PATCH bug fix) should carry a stability pass,
-      a security-minded look, and a real UI/UX check alongside whatever
-      the headline feature is, not just the one feature in isolation.
-      Concretely: before tagging a MINOR version, re-run the regression
-      suite in full (not just the new feature's own test), do a quick
-      look for anything the new code touches that could be a real
-      security-relevant boundary (user input, untrusted network data,
-      a privilege edge), and take one real screenshot to confirm the
-      new feature's own chrome matches the established Mojave palette
-      and unified panel/window chrome (4b's testing standard, plus a
-      visual check, not a separate ceremony). Don't gold-plate a PATCH
-      release with this, it's specifically the MINOR/`.0` versions.
-  5. Ship it: commit, push, `wrangler deploy` for the landing page, bump
-     `VERSION` for kernel work, one clear TLDR back, then pick up step 1
-     again. Constraints and rules (this file, `roadmap.md`'s own model-
-     routing legend) get tightened in place as real gaps in them turn up,
-     not left to drift.
-- Exception to the fleet-wide "a push deploys nothing" rule
-  (`~/Documents/Code/CLAUDE.md`): direct request, this repo now has
-  `.github/workflows/deploy.yml`, which runs `wrangler deploy` for real on
-  every push to `main`/`master` that touches `landing/**` or
-  `wrangler.toml`. Needs a real `CLOUDFLARE_API_TOKEN` repo secret with
-  Workers deploy permission to actually fire; neither Cloudflare token
-  already in `secrets.fish` works for this (`CLOUDFLARE_DNS_TOKEN` is
-  DNS-only by design; `CLOUDFLARE_PAGES_DEPLOY_TOKEN` returned zero
-  accounts when probed here, it's very likely an app-level secret litigate
-  reads for its own Basic Auth gate, not a real Cloudflare API bearer
-  token, despite the name), so a real token still needs adding
-  (`gh secret set CLOUDFLARE_API_TOKEN --repo nulljosh/joshuatree`) before
-  this workflow does anything. Every other repo in the fleet keeps the
-  manual `wrangler deploy` default.
-- "Joshua Tree" is the project's name, full stop -- direct call (Sep 2026):
-  the earlier "Leopard Gecko" idea (a separate full-OS/distro name once
-  this became a usable graphical system, Linux-kernel-vs-Ubuntu-distro
-  style) is dropped, dead, not coming back. There is one name, and it
-  covers the kernel and everything built on it, now and going forward.
-  Not to be confused with gato (`~/Documents/Code/gato`), a completely
-  separate macOS voice app whose product name reverted to plain "Gato"
-  after briefly borrowing "Leopard Gecko" earlier in Sep 2026 -- moot now
-  that this project isn't using it either.
-  The real, new convention going forward: each MAJOR version (the first
-  number in `VERSION`'s `MAJOR.MINOR.PATCH`, real semver since v31, still
-  `0.x.y` today since nothing here has a stable contract yet) gets its own
-  codename when it ships, the same relationship Ubuntu's numbered releases
-  have to their own codenames (Focal, Jammy, ...) or macOS's version
-  numbers have to Sonoma/Sequoia/etc -- "Joshua Tree" stays the project's
-  one real name throughout, the codename is a per-major label alongside
-  it, not a replacement for it. No codename exists yet for `1.0.0`
-  (nothing to name until there's a real MAJOR bump to attach it to, and
-  CLAUDE.md's own versioning rule above is explicit that `0.x.y` is
-  deliberate for now); picking one is a task for whenever that day
-  actually comes, not a placeholder to invent early.
+  kernel's keyboard driver (a harness limitation, not a kernel bug).
+  Typing individual letters works. Verifying a command's *output*
+  needs the boot-time direct-call trick instead: temporarily call the
+  function from `kmain` before `clear()`, dump VGA memory, revert.
+- After any rename/move/delete, run `tools/checks/check-refs.sh`. It scans
+  `roadmap.md`, `CLAUDE.md` and `docs/ARCHITECTURE.md` for backtick file
+  paths and fails if one points at something that no longer exists.
+- Every shipped feature needs a permanent, discriminating regression
+  test, not just a one-off screenshot: either a new shell command (the
+  `heaptest`/`tasktest`/`ring3test` pattern in `kernel.c`) or a
+  `tools/checks/*-check.{sh,py,mjs}` script. Prove the test fails when
+  the fix is reverted and passes when it's restored.
+- `docs/ARCHITECTURE.md`'s Subsystems table should have a row for every
+  real `.c` file and header-only subsystem in the repo. Add a row in the
+  same pass that adds the file.
+- `.github/workflows/check.yml` runs the regression suite on every push.
+  Keep it current as real gaps turn up.
+- `gh release create`/`edit` gets substantive release notes (what shipped,
+  the root cause if there was one, how it was verified), not a placeholder
+  line. `roadmap.md`'s own entry for the version is usually the source.
+- Before tagging a MINOR (`x.Y.0`) release: re-run the full regression
+  suite, look for any security-relevant boundary the new code touches
+  (user input, untrusted network data, a privilege edge), and take one
+  screenshot to confirm the new chrome matches the house theme below.
+  Skip this for PATCH releases.
 
-## Landing roadmap copy
+## Versioning
 
-`python3 tools/gen/landing-roadmap.py` updates the landing page’s “Where it’s
-going” card from the first three open, numbered bold titles in roadmap.md’s
-Session task queue. Strike through completed entries; keep task titles short
-and suitable for public display. Deployment runs the generator automatically.
-Run `python3 tools/checks/landing-roadmap-check.py` to check generation and
-`python3 tools/gen/landing-roadmap.py --check` to check the saved HTML.
+`VERSION` holds `MAJOR.MINOR.PATCH`, semver since v31 (`v1`-`v30` keep
+their original tags, not rewritten). Bump MINOR for a new capability,
+PATCH for a fix that adds no capability, MAJOR only for an actual
+breaking change (none yet: this kernel has no external callers to
+break). `0.x.y` is deliberate: nothing here has a stable contract yet for
+a 1.0.0 to mean something.
+
+Each version gets `git tag -a jt-vN` (or `jt-vX.Y.Z` post-semver) plus
+`gh release create`. Each MAJOR version gets its own codename once it
+ships (the Ubuntu/macOS relationship: "Joshua Tree" stays the one project
+name, the codename is a per-major label alongside it). No codename exists
+yet for 1.0.0.
+
+## Theme
+
+The engraving system, from the Joshua Tree Co. mark (`landing/badge.png`,
+itself a nod to Apple's 1977 Newton engraving). One ink on one paper,
+`#000000` on `#ece8df`, inverted for dark. No greys, no accent colour, no
+opacity tricks: tone comes from line density (the `--hatch` token, dotted
+chart grids), never a second colour. Hairline 1px rules, tracked-caps
+Helvetica labels, square plates with a hatched header band, spec-sheet
+rules top and bottom. Sans-serif everywhere; the slab serif lives inside
+the logo artwork only. The full badge is for hero sizes only;
+`landing/mark.png` (the simplified tree) covers everything small.
+
+The landing page is converted. The kernel desktop is not: its wallpaper
+and chrome still carry the old palette until the 1-bit reskin in
+`roadmap.md` lands. Don't "fix" the mismatch piecemeal before then. The
+VGA boot text is black-on-gray, the kernel's actual output, and can't be
+restyled.
+
+## Landing page / v86 demo
+
+`landing/index.html` (deployed to joshuatree.heyitsmejosh.com) embeds a
+live v86 (JS/wasm x86 emulator) instance booting this exact `kernel.elf`
+in-browser (`landing/v86/embed.js`), not a recording.
+Keyboard/mouse capture is gated behind click/tap-to-focus, because v86
+attaches its own input listeners to `window` globally. An idle timer (8s)
+starts a scripted autoplay tour and hands control back the instant a
+visitor clicks or types.
+
+`landing/v86/kernel.elf` is a committed copy kept in sync with the
+repo-root build; the Makefile's `kernel.elf` rule copies it automatically
+on every build (`cp kernel.elf landing/v86/kernel.elf`), so this should
+never drift on its own.
+
+`.github/workflows/deploy.yml` runs `wrangler deploy` on every push to
+`main` that touches `landing/**` or `wrangler.toml`, using the
+`CLOUDFLARE_API_TOKEN` repo secret (already set). This is this repo's
+exception to the fleet-wide "a push deploys nothing" rule.
+
+`progress.svg` is a line chart of hand-authored kernel/driver lines over
+commit history, generated by `tools/gen/progress.sh` from `git log`.
+Regenerate it (`./tools/gen/progress.sh`) after any commit that should
+move the line, and redeploy.
+
+`python3 tools/gen/landing-roadmap.py` updates the landing page's "Where
+it's going" card from the first three open, numbered, bold-titled items
+in `roadmap.md`'s Session task queue. Run `python3
+tools/checks/landing-roadmap-check.py` to check the generator itself, and
+`python3 tools/gen/landing-roadmap.py --check` to check the saved HTML is
+current. Deployment runs the generator automatically.
+
+## Task routing
+
+Main session directs (Sonnet/Opus, Fable for anything privilege/security/
+exact-layout shaped: wire protocols, register frames, memory-model
+changes). For mechanical, well-scoped work with a known-correct shape
+(a UI tweak, a glue fix, a bug with an obvious pattern to follow, tagged
+`[Haiku]` in `roadmap.md`), spawn a Haiku subagent with full
+sub-instructions (root cause, fix, required test, verification, commit/
+push) instead of doing it directly.
+
+## The loop
+
+This project has no finish line. Each pass:
+
+1. Check for a direct request first; fall back to `roadmap.md`'s open
+   queue only when there isn't one. Re-read `roadmap.md` fresh from disk
+   every pass, never from memory: other agents can be committing to it
+   in parallel.
+2. Absent a direct request, standing focus is typeface/font rendering
+   and icon sharpening, re-checked against real screenshots each pass.
+3. Pull technique from prior art (OSDev wiki, xv6, ToaruOS, Linux/BSD
+   source) for anything with a known-solved shape, rather than
+   reinventing a wire protocol or register sequence.
+4. Verify against an artifact before calling it done: `check.sh`, a
+   screenshot, a disk image. Run `tools/checks/check-refs.sh` after any
+   rename/move/delete.
+5. Ship it: commit, push, `wrangler deploy` for landing-page-only
+   changes (or let `deploy.yml` do it), bump `VERSION` for kernel work,
+   one clear TLDR back, then pick up step 1 again.
+
+Constraints in this file and in `roadmap.md`'s model-routing legend get
+tightened in place as gaps turn up, not left to drift.
+
+## Naming
+
+"Joshua Tree" is the project's name, full stop. The earlier "Leopard
+Gecko" idea is dropped and not coming back. Not to be confused with gato
+(`~/Documents/Code/gato`), a separate macOS voice app.
+
+## Upcoming, not yet on main
+
+An Activity Monitor app is in PR #62. A file write/read round-trip check
+across reboots is in PR #61. Do not document either as shipped until
+merged to `main`.
