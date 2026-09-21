@@ -184,7 +184,11 @@
      min-height on the frame plus a much taller #stage-wrap formula below
      (94svh instead of 58vh, no fixed 640px cap) fill the first screen a
      visitor sees with the live boot. */
-  #demo-frame { position: relative; width: 100%; padding: 0; min-height: 100svh; background: #000; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #demo-frame { position: relative; width: 100%; padding: 14px 16px 0; box-sizing: border-box; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  /* Full screen is opt-in (the button, bottom right). A fixed full-viewport box rather than only the Fullscreen API, because iPhone Safari has no element fullscreen. */
+  #demo-frame.demo-full { position: fixed; inset: 0; z-index: 50; padding: 0; background: #000; height: 100dvh; }
+  body.demo-full-open { overflow: hidden; }
+  #demo-frame.demo-full .plate-cap { display: none; }
   /* v0.76.51: real bug, direct report ("demo cut off when window rescales")
      -- explicit height (65vh/max-height) combined with width:auto and a
      separate max-width:100% clamp fight each other whenever the viewport
@@ -195,14 +199,15 @@
      what 58vh-at-16:9 would need, height:auto lets aspect-ratio derive the
      matching height from whichever width actually won, no competing
      explicit height to disagree with it. */
-  #stage-wrap { background: #000; position: relative; width: min(100vw, calc(100svh * 16 / 9)); height: auto; max-height: 100svh; aspect-ratio: 16 / 9; z-index: 0; overflow: hidden; }
-  @media (max-width: 600px) { #stage-wrap { width: 100%; height: auto; max-height: none; } #demo-frame { min-height: 0; } }
+  #stage-wrap { background: #000; position: relative; --stage-h: min(80svh, calc(100svh - 270px)); width: min(100%, calc(var(--stage-h) * 16 / 9)); height: auto; max-height: var(--stage-h); aspect-ratio: 16 / 9; z-index: 0; overflow: hidden; border-radius: 6px; }
+  #demo-frame.demo-full #stage-wrap { width: min(100vw, calc(100dvh * 16 / 9)); max-height: 100dvh; border-radius: 0; }
+  @media (max-width: 600px) { #stage-wrap { width: 100%; max-height: none; } }
   /* The visible way out once a visitor has taken control of the demo:
      direct request, "obvious way out", both a tap target and Esc (wired
      in the script below). Hidden until #demo-frame gains .demo-focused. */
   #demo-exit { position: absolute; right: 14px; bottom: 14px; z-index: 6; background: var(--fg); color: var(--bg); border: none; border-radius: 999px; padding: 10px 18px; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; cursor: pointer; font-family: inherit; }
-  #demo-exit[hidden] { display: none; }
-  @media (max-width: 600px) { #demo-exit { right: 16px; bottom: 16px; padding: 12px 18px; } }
+  /* Small on a phone so it does not sit on the dock; the ::after keeps a 44px tap target. */
+  @media (max-width: 600px) { #demo-exit { right: 8px; bottom: 8px; padding: 6px 11px; font-size: 11px; opacity: 0.92; } #demo-exit::after { content: ""; position: absolute; inset: -10px; } }
   /* v52.5: real boot moment instead of a blank black flash, direct
      request ("bridge the gap between css/html and the actual demo
      loading"). The logo shows immediately (it's a tiny inline SVG,
@@ -320,7 +325,7 @@
         <div id="v86-overlay"></div>
       </div>
     </div>
-    <button id="demo-exit" type="button" hidden aria-label="Exit the demo and scroll down to the rest of the page">Exit demo &darr;</button>
+    <button id="demo-exit" type="button" aria-pressed="false">Full screen</button>
   </div>
   <p class="plate-cap">Fig. 1 &middot; This exact kernel.elf, booting live in your browser</p>
 </div>
@@ -446,59 +451,31 @@
 // mousedown/keydown/touchstart takeover gesture embed.js's own focusIn()
 // reacts to, not any of embed.js's internal emulator state.
 (function () {
+  // The demo sits framed above the headline by default. Full screen is the
+  // visitor's call: the button (or Esc, or the browser's own exit) toggles it.
+  // A reload used to restore the old scroll position, which looked like the page
+  // scrolling itself past the demo on load. Always start at the top.
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   var demoFrame = document.getElementById('demo-frame');
-  var v86embed = document.getElementById('v86-embed');
-  var bootLogo = document.getElementById('boot-logo');
-  var exitBtn = document.getElementById('demo-exit');
-  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (!demoFrame || !v86embed || !exitBtn) return;
-
-  var tookOver = false;
-  var autoScrollTimer = 0;
-
-  function scrollToContent() {
-    var target = document.querySelector('.features') || document.getElementById('main');
-    if (!target) return;
-    target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+  var btn = document.getElementById('demo-exit');
+  if (!demoFrame || !btn) return;
+  function isFull() { return demoFrame.classList.contains('demo-full'); }
+  function setFull(on) {
+    demoFrame.classList.toggle('demo-full', on);
+    document.body.classList.toggle('demo-full-open', on);
+    btn.textContent = on ? 'Exit full screen' : 'Full screen';
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    var el = document.documentElement;
+    try {
+      if (on && el.requestFullscreen) el.requestFullscreen().catch(function () {});
+      else if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(function () {});
+    } catch (e) { /* the fixed-position box already did the job */ }
+    window.dispatchEvent(new Event('resize')); // embed.js re-letterboxes the canvas on resize
   }
-
-  function takeOver() {
-    if (tookOver) return;
-    tookOver = true;
-    if (autoScrollTimer) { clearTimeout(autoScrollTimer); autoScrollTimer = 0; }
-    demoFrame.classList.add('demo-focused');
-    exitBtn.hidden = false;
-  }
-  ['mousedown', 'keydown', 'touchstart'].forEach(function (name) {
-    v86embed.addEventListener(name, takeOver, { passive: true });
-  });
-
-  function exitDemo() {
-    v86embed.blur();
-    demoFrame.classList.remove('demo-focused');
-    exitBtn.hidden = true;
-    scrollToContent();
-  }
-  exitBtn.addEventListener('click', exitDemo);
-  // Registered on window, capture phase, before the <script> tags below
-  // load: same FIFO reasoning embed.js's own Escape interceptor documents
-  // (both listeners are on window in capture phase, so registration order
-  // decides who runs first, and this script tag runs first in document
-  // order). Never calls preventDefault/stopPropagation, so embed.js's own
-  // Escape interceptor still runs right after and keeps Escape from ever
-  // reaching the kernel; this just adds the "scroll me out" behavior on
-  // top once a visitor who took over wants out.
-  window.addEventListener('keydown', function (ev) {
-    if (tookOver && (ev.key === 'Escape' || ev.keyCode === 27 || ev.code === 'Escape')) exitDemo();
-  }, true);
-
-  if (reduced || !bootLogo) return; // prefers-reduced-motion: no auto-scroll at all
-  // embed.js fires this once the idle tour has played every app through once.
-  // Booting alone is not "the demo finishing"; scrolling at boot skipped the whole show.
-  window.addEventListener('jt-tour-lap-done', function () {
-    if (tookOver || window.scrollY > 40) return; // they took over, or already scrolled on their own
-    autoScrollTimer = setTimeout(function () { if (!tookOver) scrollToContent(); }, 1200);
-  }, { once: true });
+  btn.addEventListener('click', function () { setFull(!isFull()); });
+  // capture phase, never preventDefault: embed.js's own Escape interceptor still runs after this
+  window.addEventListener('keydown', function (ev) { if (isFull() && ev.key === 'Escape') setFull(false); }, true);
+  document.addEventListener('fullscreenchange', function () { if (!document.fullscreenElement && isFull()) setFull(false); });
 })();
 // Direct request: a dynamic version number next to the "Joshua Tree"
 // header, sourced from the same VERSION file every real release already
