@@ -105,7 +105,28 @@ static void restore_vga_text_state(void) {
 
 int vbe_set_mode(unsigned int width, unsigned int height, unsigned int bpp, unsigned int *fb_addr) {
     struct pci_device dev;
-    if (!pci_find_device(0x03, 0x00, &dev)) return 0;
+    /* v0.x (ISO/real-hardware audit): matching any class-0x03/0x00 PCI
+       device used to be enough, because every machine this kernel had
+       ever booted on (QEMU's default -vga std) happened to be the Bochs
+       display adapter too. Booting the ISO on other backends (QEMU
+       -vga cirrus/-vga vmware, or a real GPU on real hardware) breaks
+       that assumption: pci_find_device still matches (any of those is
+       still PCI class 0x03/0x00), but the writes below only mean
+       anything to the specific Bochs/"QEMU stdvga" DISPI interface
+       (I/O ports 0x1CE/0x1CF). On anything else those writes land on
+       nothing, *fb_addr still gets set to that device's BAR0 (which may
+       not even be a linear framebuffer, or may be a different size/
+       format than requested), and the caller would go on to map and
+       write into it as if the requested mode had actually been set.
+       Matching the exact vendor:device (0x1234:0x1111, QEMU/Bochs-VBE,
+       the same ID real Bochs and every "std" VGA QEMU machine type
+       exposes) makes this fail cleanly instead: gui_run's own
+       `if (!window_open_scaled(...))` check already turns that into a
+       graceful "no VGA device found" instead of a crash or garbage
+       framebuffer. No driver for cirrus/vmware/real GPUs is added here;
+       this only makes the existing code honest about which hardware it
+       actually supports. */
+    if (!pci_find_device_vid(0x1234, 0x1111, &dev)) return 0;
 
     save_vga_text_state(); /* must happen while still in real text mode */
 
