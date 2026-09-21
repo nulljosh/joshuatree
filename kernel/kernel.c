@@ -6110,7 +6110,15 @@ static void gui_run(void){
             }
         } else {
             int sc = kbd_pop();
-            if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) break; /* esc, non-blocking, global-quit path: unchanged when no interactive window is focused */
+            if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) {
+                /* Esc closes the focused window first. Only a bare desktop
+                   quits to the shell. Files has no key handler of its own,
+                   so before this Esc with Files open dropped the whole
+                   desktop to text mode. */
+                if (gui_window_count == 0) break;
+                gui_multiwin_close(gui_window_count - 1);
+                mw_key_repaint = 1;
+            }
         }
         int dx = 0, dy = 0;
         int moved_mouse = mouse_get_delta(&dx, &dy, &buttons);
