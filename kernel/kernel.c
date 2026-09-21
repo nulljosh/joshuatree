@@ -1630,7 +1630,23 @@ static void gui_fill_circle(int cx, int cy, int r, unsigned int color, unsigned 
    space AA_BAND that window_pixel's block replication flattens into visible
    terraces. Glyphs (inside gui_render_icon_cached's window_push_target) are
    unaffected; app title-bar and other scaled non-glyph uses of this primitive
-   get the coverage fix. */
+   get the coverage fix.
+   v0.86.x: real bug found from an actual headless boot-splash capture, not
+   a guess: the boot logo (gui_draw_logo) draws its crown out of several
+   overlapping capsules that share joints (trunk top, each branch split),
+   and this partial-coverage blend faded every edge pixel toward the flat
+   `into` background regardless of what was already drawn there. Where a
+   later capsule's own edge band crossed a spot an earlier capsule had
+   already painted solid, it punched a visible dark hairline crack through
+   what should have read as solid fill, the thing that actually made the
+   logo look "8-bit" up close, not the AA itself (a zoomed pmemsave capture
+   showed real multi-level AA ramps on the true outer silhouette, just
+   these false seams cutting across the interior). Real fix: sample the
+   pixel that is already there and blend toward it instead of toward the
+   caller's flat backdrop; coverage 0 then reproduces the old into-blend
+   exactly (nothing else has been drawn there), and coverage 0 < inside <
+   full over already-opaque neighboring geometry now blends toward that
+   geometry's own color instead of carving a false notch into it. */
 static void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color, unsigned int into){
     if (!window_has_target() && window_scale() > 1){
         int sc = (int)window_scale();
@@ -1666,7 +1682,11 @@ static void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int
                         }
                     }
                     if (inside == 0) continue;
-                    col = inside >= SS * SS ? color : gui_lerp(color, into, SS * SS - inside, SS * SS);
+                    if (inside >= SS * SS) col = color;
+                    else {
+                        unsigned int backdrop = window_get_pixel_phys(px, py);
+                        col = gui_lerp(color, backdrop, SS * SS - inside, SS * SS);
+                    }
                 }
                 window_pixel_phys(px, py, col);
             }
