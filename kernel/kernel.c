@@ -8245,6 +8245,16 @@ void kmain(unsigned int multiboot_info_addr){
     /* Multiboot command line (flags bit 2, pointer at +16), read here while
        the bootloader's low memory is still identity-reachable. Only one
        option exists: wxhost=A.B.C.D[:PORT], see wx_override_host. */
+    /* Multiboot info flag bit 12: the bootloader set a framebuffer. Offsets per the
+       multiboot1 spec: addr 88 (u64, low half used), pitch 96, width 100, height 104,
+       bpp 108, type 109 (1 = direct RGB). Read only while the info block sits inside
+       the boot identity map. */
+    if (multiboot_info_addr && multiboot_info_addr < 0x400000 && (*(unsigned int *)multiboot_info_addr & (1u << 12))) {
+        const unsigned char *mb = (const unsigned char *)multiboot_info_addr;
+        if (mb[109] == 1 && *(const unsigned int *)(mb + 92) == 0)
+            vbe_set_boot_framebuffer(*(const unsigned int *)(mb + 88), *(const unsigned int *)(mb + 96),
+                                     *(const unsigned int *)(mb + 100), *(const unsigned int *)(mb + 104), mb[108]);
+    }
     if (multiboot_info_addr && (*(unsigned int *)multiboot_info_addr & 0x4)) {
         const char *cl = (const char *)*(unsigned int *)(multiboot_info_addr + 16);
         for (; cl && *cl; cl++) {

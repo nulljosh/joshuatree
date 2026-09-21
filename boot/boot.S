@@ -15,7 +15,12 @@
    (paging.c) throws this away and builds the kernel's permanent page
    tables once kmain is running for real. */
 .set MAGIC,    0x1BADB002
-.set FLAGS,    0
+/* Bit 2: ask the bootloader for a linear framebuffer (the fields after the
+   checksum). QEMU's -kernel loader and v86 ignore the request and the Bochs
+   VBE path still sets the mode; Limine on a real PC honours it through the
+   card's own VBE/GOP, which is the only way this kernel gets pixels on
+   hardware that is not the Bochs adapter. */
+.set FLAGS,    0x4
 .set CHECKSUM, -(MAGIC + FLAGS)
 
 .section .multiboot, "a"
@@ -23,6 +28,9 @@
 .long MAGIC
 .long FLAGS
 .long CHECKSUM
+.long 0, 0, 0, 0, 0   /* header/load/bss/entry addresses: unused, bit 16 is clear */
+.long 0               /* mode_type: linear graphics */
+.long 1920, 1080, 32  /* matches gui_run's 960x540 at scale 2 */
 
 .section .text.boot, "ax"
 .align 4096

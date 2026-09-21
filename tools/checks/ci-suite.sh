@@ -38,6 +38,7 @@ manifest() {
 cat <<'EOF'
 once |Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
 retry|Boot check|./check.sh
+retry|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
 once |PNG decoder, host harness|./tools/checks/png-host-check.sh
 retry|PNG decoder, in-kernel|./tools/checks/png-check.sh
 retry|AA text spacing, in-kernel|./tools/checks/textspacing-check.sh

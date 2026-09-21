@@ -47,11 +47,11 @@ jobs:
           fetch-depth: 0
       - name: Landing roadmap summary regression checks
         run: python3 tools/checks/landing-roadmap-check.py
-      - name: Install clang, lld, qemu, FAT disk tools
+      - name: Install clang, lld, qemu, FAT disk tools, ISO tools
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang lld qemu-system-x86 python3-pil mtools dosfstools ccache
+            clang lld qemu-system-x86 python3-pil mtools dosfstools ccache xorriso
       # The old cache step pointed at /var/cache/apt/archives, which apt on
       # the runner empties after a successful install, so it restored an
       # empty directory every run and saved an empty one back: a cache that
