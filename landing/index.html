@@ -83,24 +83,14 @@
   /* v71.1: demo moved to normal flow above header. The hero header is now
      a clean, text-only moment without the demo overlay. */
   .hero { position: relative; text-align: center; padding: 32px 20px 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  /* v0.76.9: opacity/transform read from custom properties the scroll
-     recede effect below sets via setProperty, never assigned directly, so
-     the demo-focused rule just below (a plain class selector) can still
-     always win over them with !important -- setting these two properties
-     inline instead would out-specificity that class rule permanently once
-     the page had been scrolled even once, silently breaking the existing
-     click-into-the-demo hide behavior. */
+  /* opacity/transform come from custom properties the scroll recede
+     effect below sets via setProperty. */
   .hero-copy { position: relative; opacity: var(--recede-o, 1); transform: translateY(var(--recede-y, 0)) scale(var(--recede-s, 1)); }
   /* Was a fixed #ffffff back when the hero copy sat on top of the demo's
      own dark photo. It doesn't anymore (v0.76.52 moved it below the demo,
      onto the page background), so white-on-#faf8f6 was invisible for any
      visitor in light mode. Follows --fg like the rest of the page now. */
   .hero h1 { color: var(--fg); }
-  /* Direct request: click into the demo, the hero text gets out of the
-     way; click/tap/esc back out (embed.js's own real focus state, not a
-     second tracker) and it returns. !important over the recede effect
-     above on purpose, see that rule's own comment. */
-  .hero.demo-focused .hero-copy { opacity: 0 !important; transform: translateY(-8px) !important; pointer-events: none; }
   /* v0.76.52: eyebrow moved below the H1 (direct request) and recolored
      white instead of --accent, which reads yellow-ish here against the
      dark demo backdrop -- the tagline it used to pair with is gone too,
@@ -548,10 +538,7 @@
   // v0.76.9: direct request, "more scrolling animations, maybe some
   // parallax", styled after apple.com/os/macos's own hero, which fades
   // and settles back as the page scrolls into the content below instead
-  // of just scrolling off screen inertly. Skipped while embed.js has
-  // .hero in its own "demo-focused" state (clicking into the live demo
-  // already hides .hero-copy via that CSS class): an inline style set
-  // here would win over that class rule at equal specificity and fight it.
+  // of just scrolling off screen inertly.
   var heroEl = document.querySelector('.hero');
   var heroCopy = document.querySelector('.hero-copy');
   function updateHeroRecede() {

@@ -413,44 +413,10 @@ if (typeof document !== "undefined") (function () {
     }
   }, { capture: true, passive: false });
 
-  // v52: the demo now lives behind the hero text (direct request). This
-  // toggle is purely visual, separate from `focused` above on purpose:
-  // `focused` is one-way, once a real visitor has taken control the idle
-  // tour must never restart, so it can't double as "is the pointer
-  // currently inside the demo" for showing/hiding the headline, that
-  // needs to flip back and forth freely as someone clicks in and out.
-  var heroEl = document.querySelector(".hero");
-  var heroCopyEl = document.querySelector(".hero-copy");
-  if (heroEl) {
-    var showDemo = function () { heroEl.classList.add("demo-focused"); };
-    var showText = function () { heroEl.classList.remove("demo-focused"); };
-    container.addEventListener("mousedown", showDemo);
-    container.addEventListener("touchstart", showDemo, { passive: true });
-    // The frosted card sits visually on top of the canvas (z-index above
-    // it) but is a separate element, so a click on it never reaches
-    // #v86-embed at all, confirmed live: a click square in the middle of
-    // the card did nothing until this was added. Its own listener both
-    // hides the card AND stops the click there, a real, deliberate two-
-    // step interaction (dismiss, then click again on the now-revealed
-    // demo) rather than forwarding the same click into the kernel, which
-    // would fire whatever dock icon happened to be under the card.
-    if (heroCopyEl) {
-      // v0.76.28: the H1 headline itself became a real <a href="#changelog">
-      // link; a click on it was being swallowed by this same handler,
-      // which calls showDemo() unconditionally -- showDemo() adds
-      // "demo-focused", and the CSS rule right above (.hero.demo-focused
-      // .hero-copy { opacity: 0 !important }) hides hero-copy itself,
-      // including the link that was just clicked, before the browser's
-      // own navigation to #changelog ever completes. Skip the
-      // dismiss-card behavior for a real link click; let it navigate.
-      var heroCopyClickThrough = function (ev) { return !!(ev.target.closest && ev.target.closest("a")); };
-      heroCopyEl.addEventListener("mousedown", function (ev) { if (heroCopyClickThrough(ev)) return; showDemo(); ev.stopPropagation(); });
-      heroCopyEl.addEventListener("touchstart", function (ev) { if (heroCopyClickThrough(ev)) return; showDemo(); ev.stopPropagation(); }, { passive: true });
-    }
-    document.addEventListener("mousedown", function (ev) { if (!container.contains(ev.target)) showText(); });
-    document.addEventListener("touchstart", function (ev) { if (!container.contains(ev.target)) showText(); }, { passive: true });
-    document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") showText(); });
-  }
+  // The headline used to sit on top of the demo, so a click into the demo
+  // hid it. It has lived below the demo since v0.76.52, where it covers
+  // nothing; the hide-on-click was a leftover that only made the text
+  // vanish. Removed, the headline always stays.
 
   // A real QA hook, not debug scaffolding left behind: "apps don't open on
   // mobile" got reported and 'fixed' several times while every check was a
