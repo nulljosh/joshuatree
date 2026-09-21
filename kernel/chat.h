@@ -147,7 +147,15 @@ static unsigned int chat_build_request(char *out, unsigned int out_cap) {
     const char *head1 = "{\"model\":\"";
     while (*head1 && n < out_cap) out[n++] = *head1++;
     { const char *s = llm_model; while (*s && n < out_cap) out[n++] = *s++; }
-    const char *head2 = "\",\"stream\":false,\"messages\":[";
+    /* v0.85.4: qwen3:8b (the new default) emits a <think>...</think>
+       reasoning block ahead of its real answer by default; Ollama's own
+       /api/chat takes a "think":false field to turn that off at the
+       model level (supported since Ollama added reasoning-model support,
+       confirmed against this host's ollama 0.34.2), the smallest correct
+       fix, no client-side tag stripping needed. llama3.1:8b (a non-
+       reasoning model) just ignores the field, same as it already
+       ignores any option it doesn't understand. */
+    const char *head2 = "\",\"stream\":false,\"think\":false,\"messages\":[";
     while (*head2 && n < out_cap) out[n++] = *head2++;
 
     static char escaped[CHAT_CONTENT_MAX * 2];
@@ -201,6 +209,23 @@ static int chat_send(const char *user_msg, char *answer, unsigned int answer_cap
     unsigned int an = json_extract_string(resp, "content", answer, answer_cap);
     if (an == 0) return 0;
     answer[an] = 0;
+
+    /* v0.85.4: mirror a bounded prefix of the real reply to serial, the
+       same real-fetch-proof convention weather_fetch's wx=/geo= lines
+       already establish (net.c v71): a headless QEMU boot can prove a
+       real model reply actually arrived without a screen, the same gap
+       chattest's own comment names as out of scope for a network-free
+       regression test. Newlines/CRs flattened to spaces so the marker
+       stays one line; capped well under a full reply, this is a proof
+       marker, not a render path. */
+    { char mirror[300]; unsigned int mi = 0;
+      for (const char *s = answer; *s && mi < sizeof(mirror) - 1; s++) {
+          char c = *s; if (c == '\n' || c == '\r') c = ' '; mirror[mi++] = c;
+      }
+      mirror[mi] = 0;
+      serial_puts("chatreply="); serial_puts(mirror); serial_puts("\n");
+    }
+
     chat_push(CHAT_ROLE_ASSISTANT, answer);
     return 1;
 }
