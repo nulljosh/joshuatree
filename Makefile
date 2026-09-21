@@ -130,6 +130,8 @@ run: kernel.elf dotfiles.img
 clean:
 	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf user/hello.o user/hello.bin drivers/user_hello.h \
 	      user/note.o user/note.bin drivers/user_note.h
+	rm -f joshuatree.iso
+	rm -rf build/iso_root
 
 # This machine has a global core.hooksPath (~/.git-hooks); this opts THIS
 # repo into its own fast pre-push gate (tools/hooks/pre-push) instead.
@@ -145,6 +147,42 @@ hooks:
 # kernel.o's two explicit lines above), included here so `make` sees a
 # .h change and rebuilds exactly what depends on it, same as any normal
 # C project's incremental build.
+# ISO/USB image via Limine. Limine (not grub-mkrescue) because it ships
+# prebuilt binaries (bios stage, uefi stubs, the `limine` deploy tool's
+# source) that build with a plain host `cc`, on both this Mac (no
+# grub-mkrescue, no brew installs allowed) and CI's ubuntu-24.04 runner
+# alike -- one path instead of two. Fetched at build time into build/limine,
+# gitignored, never committed. `xorriso` (already at /opt/homebrew/bin on
+# this Mac, installed via apt on CI) does the actual ISO packing.
+LIMINE_BRANCH := v9.x-binary
+LIMINE_DIR := build/limine
+
+$(LIMINE_DIR)/limine.h:
+	rm -rf $(LIMINE_DIR)
+	mkdir -p build
+	git clone --depth 1 --branch $(LIMINE_BRANCH) https://github.com/limine-bootloader/limine.git $(LIMINE_DIR)
+
+$(LIMINE_DIR)/limine: $(LIMINE_DIR)/limine.h
+	$(MAKE) -C $(LIMINE_DIR)
+
+# Multiboot1 needs no long-mode UEFI trampoline of its own; Limine's
+# prebuilt BOOTX64.EFI/BOOTIA32.EFI do the UEFI side, its bios-cd stage
+# does BIOS. Same kernel.elf either way, boot/boot.S never changes.
+joshuatree.iso: kernel.elf $(LIMINE_DIR)/limine tools/iso/limine.conf
+	rm -rf build/iso_root
+	mkdir -p build/iso_root/boot/limine build/iso_root/EFI/BOOT
+	cp kernel.elf build/iso_root/boot/kernel.elf
+	cp tools/iso/limine.conf build/iso_root/limine.conf
+	cp $(LIMINE_DIR)/limine-bios.sys $(LIMINE_DIR)/limine-bios-cd.bin $(LIMINE_DIR)/limine-uefi-cd.bin build/iso_root/boot/limine/
+	cp $(LIMINE_DIR)/BOOTX64.EFI $(LIMINE_DIR)/BOOTIA32.EFI build/iso_root/EFI/BOOT/
+	xorriso -as mkisofs -R -r -J \
+	  -b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table \
+	  --efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label \
+	  build/iso_root -o joshuatree.iso
+	$(LIMINE_DIR)/limine bios-install joshuatree.iso
+
+iso: joshuatree.iso
+
 -include $(OBJS:.o=.d)
 
-.PHONY: run clean hooks
+.PHONY: run clean hooks iso

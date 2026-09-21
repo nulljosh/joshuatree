@@ -38,6 +38,7 @@ manifest() {
 cat <<'EOF'
 once |Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
 retry|Boot check|./check.sh
+retry|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
 once |PNG decoder, host harness|./tools/checks/png-host-check.sh
 retry|PNG decoder, in-kernel|./tools/checks/png-check.sh
 retry|AA text spacing, in-kernel|./tools/checks/textspacing-check.sh
@@ -47,6 +48,7 @@ retry|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ram
 retry|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh
 retry|Ring-3 reference program against the v1 syscall ABI|./tools/checks/usertest-check.sh
 retry|Ring-3 program writing a real file against the v2 syscall ABI|./tools/checks/notetest-check.sh
+retry|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
 retry|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
 once |Calendar date math, host harness|./tools/checks/check-calendar.sh
 retry|Settings click acts on the row actually clicked|./tools/checks/settingsclick-check.sh
@@ -69,6 +71,7 @@ retry|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/icon
 retry|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
 retry|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py
 retry|Dock tray corner AA (real coverage blend, not binary)|python3 ./tools/checks/traycorner-check.py
+retry|Boot logo AA (no false interior seams at overlapping capsule joints)|python3 ./tools/checks/bootlogo-check.py
 once |Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcount-check.mjs
 once |Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
 once |RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs

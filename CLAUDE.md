@@ -19,7 +19,7 @@ dependencies beyond clang, ld.lld and qemu.
   actual artifacts (disk images, flat binaries), not `check.sh` alone.
 - A pixel-level screenshot is possible only when a session has this
   Mac's own attached display: launch `-display cocoa` (the same window
-  `menubar/JoshuaTree.app`'s launcher opens), bring it frontmost, then use
+  the JoshuaTree.app launcher in `nulljosh/joshuatree-monitor` opens), bring it frontmost, then use
   macOS's own `screencapture` CLI. QEMU's own `screendump` is broken
   headless and should not be used for visual verification.
 - **HEADLESS ONLY. Never open a visible QEMU window and never open a
@@ -55,6 +55,8 @@ dependencies beyond clang, ld.lld and qemu.
   (user input, untrusted network data, a privilege edge), and take one
   screenshot to confirm the new chrome matches the house theme below.
   Skip this for PATCH releases.
+
+- **Docs stay at 100%.** Every source file the progress graph counts needs a row in `docs/ARCHITECTURE.md` in the same PR that adds it. The landing graph shows the number, so a dip is public.
 
 ## Versioning
 

@@ -10,32 +10,46 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
-## Dump, 2026-09-20
-Worked easiest and most relevant first.
-- [ ] [Sonnet] Landing: black and white again on an off-white page, one splash of colour, auto light and dark. "Where" reads "On your desktop, in your pocket..." Fresh bottom copy.
-- [ ] [Sonnet] Landing demo starts full screen, auto-scrolls on once it finishes or until the visitor takes over; Esc or a visible button leaves full screen and scrolls.
-- [ ] [Haiku] Mac app (`menubar/`) and its icon refreshed to match the current tree icon and version.
-- [ ] [Sonnet] Boot logo drawn sharp at native resolution, no 8-bit look.
-- [ ] [Sonnet] Bootable ISO (GRUB or Limine, `make iso`), booted headless in CI. Needed for 1.0.
-- [ ] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts (the kernel is i386, so it runs native on any x86 and under QEMU on ARM).
+## Beta, 0.9.0
+Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck.
+- [ ] [Sonnet] Shell launches a program by name (PR #64).
+- [ ] [Sonnet] Ring-3 programs a fresh shell ships with: `cat`, `wc`, `grep`, `calc`. A tiny C compiler is a stretch.
+- [ ] [Sonnet] Landing hero, Joshua's spec: demo full width and about 85% of the screen tall, headline and its typewriter line squeezed into the strip under it, sections snap like magnets on scroll, no full screen mode needed. Test on phone and desktop, including reload and the old exit button scrolling too far.
+- [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
+- [ ] [Joshua] Icon set redrawn to Mac-grade taste: depth, soft light, real materials. The current set is sharp but reads like Windows.
+- [ ] [Sonnet] Boot splash shows the real engraved tree mark at full resolution, not the stick tree.
+- [ ] [Fable] Typography QA across Notes, the document app and the Terminal: spacing between letters, baselines, sizes and weights, every printable character, long lines, wrapping, selection. This kernel is a word processor from scratch, so text gets its own checks.
+- [ ] [Sonnet] Settings gets a Location field (city or postal code), saved, used by weather and the wallpaper map. Location from the internet address says Vancouver for Langley and cannot do better.
 - [ ] [Sonnet] Chat QA: open Chat, switch between models, sign-in gate for subscription models.
-- [ ] [Sonnet] Native Bible app (public-domain KJV on the disk image, book/chapter picker, search).
-- [ ] [Sonnet] Default terminal tools: what a fresh shell ships with (`cat`, `wc`, `grep`, `calc`, then a tiny C compiler as a stretch).
-- [ ] [Haiku] Audit that every fleet app has a native port or a roadmap line.
+- [ ] [Sonnet] A headless test for every app (open, use, close) in `tools/checks/ci-suite.sh`.
+- [ ] [Fable] Error handling audit: corrupt or oversized files, full disk, bad input in every text field, missing disk, network or mouse. Each case gets a check.
+- [ ] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts.
 
-Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk), and moving the landing page to a `gh-pages` branch (deploy reads `roadmap.md` and the kernel build from main; 11 files are not the mess, the tracked kernel binary is).
+## 1.0.0
+A release that can be defended. On top of the beta and the frozen syscall ABI (`docs/SYSCALL-ABI.md`):
+- [ ] [Fable] The lag (issue #14) profiled, fixed and measured, with frame time numbers in the release notes.
+- [ ] [Joshua] One real PC booted from the USB stick, keyboard and mouse working, photographed. The USB image and non-emulator graphics are only proven in QEMU so far.
+- [ ] [Fable] Keyboards on real PCs: a USB keyboard driver, or release notes that say plainly it needs the BIOS legacy keyboard mode.
+- [ ] [Sonnet] Saving on real PCs stated plainly: today only old IDE disks work.
+- [ ] [Fable] User profiles and sign-in done properly: login screen at boot, a home folder and settings per person, passwords stored hashed and never in the clear, lock screen, an admin level for risky actions (issue #28). Accounts exist today; this is the pass that makes them trustworthy.
+- [ ] [Haiku] Release notes that say what is missing: no sound, no secure web of its own, one core, no install to disk.
+- [ ] [Joshua] Codename for the release. The name stays Joshua Tree, domain `joshuatreeos.com`.
 
-## 1.0 gate
-What "1.0" actually needs, on top of the frozen syscall ABI (`docs/SYSCALL-ABI.md`):
-- [ ] [Sonnet] Shell launches a program by name, not just `exec <exact path>`. In progress.
-- [ ] [Sonnet] More ring-3 programs using the ABI: `cat`, `wc`, `grep`, `calc`.
-- [ ] [Joshua] Name and codename decision for the 1.0 release.
+Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk), and moving the landing page to a `gh-pages` branch.
+
+## After 1.0
+What other small operating systems needed before people used them day to day.
+- [ ] [Fable] A web browser, which needs secure connections first.
+- [ ] [Fable] Install to disk from the USB stick.
+- [ ] [Fable] Wi-Fi.
+- [ ] [Sonnet] Installing and updating apps from inside the OS.
+- [ ] [Sonnet] Laptop basics: battery level, trackpad, lid close.
+- [ ] [Sonnet] Native Bible app (public-domain KJV on the disk image, book and chapter picker, search).
+- [ ] [Haiku] Audit that every fleet app has a native port or a line here.
 
 ## Bugs
 - [ ] [Sonnet] Apps opened from the Apps folder show "Apps" in the window frame instead of their own name (`GUI_LABELS[GUI_APPS_FOLDER]`).
 - [ ] [Haiku] "Memory management" boot text isn't in kernel/boot/drivers/landing source; `klog` is serial-only. Confirm with a boot frame capture.
-- [ ] [Haiku] Confirm `write`/save round-trips in the Files app end to end; no repro given, verify don't assume. (PR #61 adds this check, not merged.)
-- [ ] [Haiku] Landing page light-mode contrast: `hero-contrast-check.mjs` covers one case, audit for more.
 - [ ] [Sonnet] Lazy-load the boot loading image itself so it never shows visibly pixelated while scaling in.
 
 ## Gaps vs macOS / Linux / Windows
@@ -61,6 +75,14 @@ Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Sonnet] Software update path.
 - [ ] [Haiku] Accessibility: text size and high contrast.
 - [ ] In progress: Chat wired to a local Qwen/Bonsai model. Currently talks to Ollama.
+
+## Real hardware
+1.0 ships a USB-bootable ISO with a PS/2 fallback. USB is the 1.1 headline, built in this order.
+- [ ] [Fable] xHCI USB host controller. Everything below hangs off it.
+- [ ] [Fable] USB keyboard and mouse (HID). Also covers "Bluetooth" keyboards that ship with a USB dongle.
+- [ ] [Fable] USB storage, so an external SSD mounts.
+- [ ] [Fable] USB audio in, so a microphone works. Needs the sound work under Gaps too.
+- [ ] [Fable] True Bluetooth: radio over USB, pairing, keyboard and mouse. Hardest, last.
 
 ## Multi-window
 5 of 23 apps (Files, Weather, Mail, Calendar, Reminders) can open in their own window, capped at 2 at once. Full multi-window still needs:
