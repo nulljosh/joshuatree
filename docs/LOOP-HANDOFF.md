@@ -63,3 +63,19 @@ JoshuaTree.com is taken. Wanted: simple, two syllables at most, rolls off the to
 ## Restart prompt
 
 Drive joshuatree to a defensible 1.0.0 following docs/LOOP-HANDOFF.md: read it first, check usage and taper, land the open PRs one at a time, then work the Beta list in docs/roadmap.md top down. One Haiku worker at a time at most, review output yourself from zoomed headless frames, all GitHub checks green, every fix a PR at once, one-line pings in Joshua's voice. Stop at about 90% usage, on cancel, or at 1.0.0.
+
+## Portfolio dock loop (paused 2026-09-21)
+
+A separate loop from the main Joshua Tree roadmap loop. Fills the dock with real native apps instead of one-line HTML cards.
+
+Done: Portfolio (v0.25), Epiphany (finance dashboard), Keyrate (typing test), Toroid (Game of Life).
+
+Next in order: Curbfind, Bookrank, Lexly, Sparkjar, Quotes, then rest of Apps folder.
+
+Pattern: one native app per iteration as a small kernel header (copy `kernel/toroid.h` loop shape). Add ARCHITECTURE row, bump VERSION and landing/version.txt in the same PR. Test headless by clicking the dock tile against static landing with ?full&portfolio. QA pass every few apps.
+
+Restart prompt:
+
+```
+/loop until our main apps are filled in the docks, then remainder apps in the launchpad
+```
