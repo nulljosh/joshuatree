@@ -1,4 +1,4 @@
-# Joshua Tree loop handoff (2026-09-20, evening)
+# Joshua Tree loop handoff (2026-09-20, late)
 
 Paste this to restart: `/loop` followed by the "Restart prompt" at the bottom.
 
@@ -15,38 +15,28 @@ One main session directs, workers do the building. Each round:
 
 Rules: hand-made worktrees under `/tmp/jt-loop/<branch>` (the session cwd is not a git repo, so `isolation: worktree` fails). Headless only, never a visible QEMU window. Workers never edit `docs/roadmap.md` and never sit polling CI. No em dashes. Joshua approved merging PRs on 2026-09-20 ("merge the pull requests, please handle it"); before that the permission guard blocked `gh pr merge --auto`.
 
-## Where things stand
+## Where things stand (2026-09-20, late)
 
-Merged today: new spiky-crown icon (#60), Weather window (#53), save round-trip check (#61), landing headline no longer vanishes on click (#63), roadmap prune (#59). #51 closed as superseded. Releases `jt-v0.85.2` and `jt-v0.85.3` published.
+Merged: roadmap dump (#70), repo tidy with the demo kernel untracked and a pre-push hook (#72), black and white landing (#73), boot logo seams (#74), demo plays its tour before the page scrolls and the hero is edge to edge (#77, checked on the live site).
 
-Open, auto-merge armed:
+Open, auto-merge armed, none failing: #78 logo and pointer drawn at full resolution, #76 USB-bootable ISO plus drawing on the bootloader's framebuffer (desktop proven on `-vga vmware` and `-vga virtio`), #75 menu bar app out and this roadmap, #64 run by name, #65 Chat default, #62 Activity Monitor (fixed the icon table that made Apps draw a trash can).
 
-| PR | What | Worktree |
-|---|---|---|
-| #67 | Colour wallpaper + seamless boot logo (this missed #52's merge, main still ships B&W) | `wallpaper-colour` |
-| #62 | Activity Monitor app | `activity-monitor-app` |
-| #64 | Shell runs programs by bare name (1.0 gap one) | `shell-launch-by-name` |
-| #65 | Chat defaults to qwen3:8b | `chat-qwen-default` |
-| #66 | Repo and docs cleanup, human-readable roadmap | `repo-docs-cleanup` |
-| #68 | Landing page colour (clrs.cc palette) | `landing-colour` |
+Main requires branches to be current, so they land one at a time: each round run `gh pr update-branch <n>` on the next one that is BEHIND. A kernel PR that conflicts after a squash merge: merge `origin/main`, keep the superset side, rebuild, `./check.sh`, push.
 
-A Bonsai worker (`chat-bonsai`, stacked on #65) was still running at close: Chat moves to the OpenAI-style API for every backend, Bonsai 2 on `10.0.2.2:8080` as default with fallback to Qwen. Check whether it opened a PR; review before arming.
+The menu bar app lives in `~/Documents/Code/joshuatree-monitor` (private repo `nulljosh/joshuatree-monitor`); the Dock pin and the login launcher point there.
 
-The conflict tax: every kernel PR commits `landing/v86/kernel.elf`, so each merge leaves the others conflicted. Land them one at a time with `tools/resync-pr.sh <worktree-dir>` (merges the remote branch and main, rebuilds the demo kernel, runs `check.sh`, pushes; stops and lists files if anything other than the binary conflicts, most likely the shell help line in `kernel/kernel.c`). If `/tmp/jt-loop` is gone after a reboot, recreate a worktree with `git worktree add /tmp/jt-loop/<name> origin/<branch>`.
+Verdict given to Joshua: this is not 1.0 yet. The plan is 0.9.0 beta, then 1.0.0. Both gates are in `docs/roadmap.md`.
+
+Rules that changed today: one subagent at a time, Haiku, sequential, two only when asked. `wrangler deploy` by hand is blocked, deploys happen on merge. PR bodies are 3 to 5 punchy lines. Status pings are one or two lines, and any /yo or /hoe goes last in the reply.
+
+Tools: `python3 /tmp/jt-dump.py 0.3` from a worktree with `kernel.elf` dumps the splash and the desktop to `/tmp/jt-q-*.png` (recreate it from `tools/checks/dockhover-check.py`'s QMP pattern if `/tmp` was wiped). Look at 3x nearest-neighbour crops before trusting any visual fix.
 
 ## Next, in order
 
-1. Land the six PRs, then the Bonsai PR.
-2. One PR that stops tracking `landing/v86/kernel.elf` in git and builds it in the deploy workflow. Ends the conflict tax.
-3. Apply the landing-colour worker's Theme rule wording to `CLAUDE.md` (it is in PR #68's description or the worker report).
-4. Release 0.86.0: full regression suite first, real notes, `jt-v0.86.0` tag plus `gh release create`, landing changelog updated (colour wallpaper, Activity app, launch by name, Qwen and Bonsai chat).
-5. 1.0 gap two: ring-3 programs in `user/` (cat, wc, grep, calc), stacked on `shell-launch-by-name`. Sonnet.
-6. Reconcile GitHub issues with the rewritten roadmap (titles changed; close stale, re-sync, no duplicates).
-7. Roadmap items to add: multi-provider Chat (ChatGPT, Claude, Gemini, DeepSeek, MiniMax, Qwen, Kimi, GLM, Grok, Mistral; needs keys and TLS), night tint colour check, Apps-folder window title bug.
-8. 1.0 also needs Joshua's name and codename call.
-
-Blocked on Joshua: deleting merged remote branches is permission-blocked. Run
-`git -C ~/Documents/Code/joshuatree push origin --delete chat-llm-console engraving-os roadmap-prune-0920 stocks-epiphany`.
+1. Land the queue.
+2. Dock polish PR (first Beta item in the roadmap). Branch from main after #62 and #78 are in. Dock changes also need the geometry constants in `tools/checks` and the tour's click targets in `landing/v86/embed.js`.
+3. Work down the Beta list, then the 1.0.0 list. Lag (issue #14) and a real PC boot are the two that make it defensible.
+4. Reconcile GitHub issues with the rewritten roadmap.
 
 ## Naming
 
@@ -54,4 +44,4 @@ JoshuaTree.com is taken. Wanted: simple, two syllables at most, rolls off the to
 
 ## Restart prompt
 
-Drive joshuatree to 1.0.0 following docs/LOOP-HANDOFF.md: read it first, check usage and taper, land the open PRs one at a time with tools/resync-pr.sh, review the Bonsai worker's PR, then work the "Next, in order" list. Max 2 to 3 workers, review their output yourself, headless only, all GitHub checks green, short pings in Joshua's voice. Stop at about 90% usage, on cancel, or at 1.0.
+Drive joshuatree to a defensible 1.0.0 following docs/LOOP-HANDOFF.md: read it first, check usage and taper, land the open PRs one at a time, then work the Beta list in docs/roadmap.md top down. One Haiku worker at a time at most, review output yourself from zoomed headless frames, all GitHub checks green, every fix a PR at once, one-line pings in Joshua's voice. Stop at about 90% usage, on cancel, or at 1.0.0.
