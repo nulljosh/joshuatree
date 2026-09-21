@@ -56,6 +56,8 @@ dependencies beyond clang, ld.lld and qemu.
   screenshot to confirm the new chrome matches the house theme below.
   Skip this for PATCH releases.
 
+- **Docs stay at 100%.** Every source file the progress graph counts needs a row in `docs/ARCHITECTURE.md` in the same PR that adds it. The landing graph shows the number, so a dip is public.
+
 ## Versioning
 
 `VERSION` holds `MAJOR.MINOR.PATCH`, semver since v31 (`v1`-`v30` keep
