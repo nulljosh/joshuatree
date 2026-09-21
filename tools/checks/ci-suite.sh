@@ -66,6 +66,7 @@ retry|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
 retry|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclose-check.py
 retry|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
 retry|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
+retry|Apps folder layout (no black band, no row spill, no ghost icons)|python3 ./tools/checks/appsfolder-layout-check.py
 retry|Multi-window (click-to-focus, real z-order compositing)|python3 ./tools/checks/multiwindow-check.py
 retry|Window snapping (title-bar drag to edge/corner, real pixel proof)|python3 ./tools/checks/windowsnap-check.py
 retry|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py

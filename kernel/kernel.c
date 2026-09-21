@@ -1867,13 +1867,26 @@ static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_ro
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
 static int wind_base_width = 0;
+static int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
     struct wp_row c;
     int lw = (int)window_width(), lh = (int)window_height();
     int sc = (int)window_scale();
     c.pw = lw * sc;
-    int area_h = lh - GUI_MENUBAR_H;
-    int row = py - GUI_MENUBAR_H * sc; if (row < 0) row = 0;
+    /* GUI_MENUBAR_H is the real desktop's system menu bar, reserved out
+       of the photo's vertical scale so the wallpaper starts right under
+       it. A windowed app (gui_app_windowed) has no menu bar inside its
+       own clipped viewport -- local y=0 is the viewport's own top edge --
+       so it gets the full window height instead. Without this, every
+       physical row above GUI_MENUBAR_H inside a window sampled row 0
+       unconditionally (see the row<0 clamp below), painting a thin
+       sliver of the wallpaper photo's own top edge stretched across that
+       whole strip instead of the correctly scaled continuation of the
+       photo -- confirmed live, striped farmland from row 0 of the source
+       image where a smooth gradient was expected. */
+    int top = gui_app_windowed ? 0 : GUI_MENUBAR_H;
+    int area_h = lh - top;
+    int row = py - top * sc; if (row < 0) row = 0;
     int fy = row * (WALLPAPER_H - 1) * 256 / (area_h * sc > 1 ? area_h * sc - 1 : 1);
     int sy = fy >> 8; c.wy = fy & 255;
     if (sy >= WALLPAPER_H - 1) { sy = WALLPAPER_H - 2; c.wy = 255; }
@@ -1928,7 +1941,16 @@ static void gui_draw_wallpaper_rows_sway_ex(int y_from, int y_to, int sway, int 
     daynight_update(); /* v65: the one real choke point every wallpaper draw funnels through, see its own comment above */
     int lh = (int)window_height();
     int sc = (int)window_scale();
-    if (y_from < GUI_MENUBAR_H) y_from = GUI_MENUBAR_H;
+    /* GUI_MENUBAR_H reserves room for the desktop's own system menu bar,
+       which only exists when this is painting the real desktop. A
+       windowed app (gui_app_windowed) draws inside gui_launch_from_dock's
+       clipped viewport instead, which already excludes that window's own
+       title bar and has no menu bar of its own -- local y=0 there is real
+       content. Without this check the clamp silently pulled y_from back
+       up to GUI_MENUBAR_H for every windowed app too, leaving a dead
+       unpainted strip (whatever window_clear had set) right under the
+       title bar. Confirmed live: the Apps folder's own black band. */
+    if (!gui_app_windowed && y_from < GUI_MENUBAR_H) y_from = GUI_MENUBAR_H;
     if (y_to > lh) y_to = lh;
     for (int py = y_from * sc; py < y_to * sc; py++){
         if (sway && wind_base && py >= WIND_TOP_ROW * sc && py < WIND_HORIZON_ROW * sc) {
@@ -4786,7 +4808,21 @@ static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int c
     for (int i = 0; i < GUI_APPS_FOLDER; i++) {
         int row = i / APPS_COLS - scroll_offset;
         int col = i % APPS_COLS;
-        if (row < 0 || row * cell_h >= 375) continue;
+        /* Bounded by row count, not a pixel guess: row*cell_h (324) still
+           clears the 375px panel_h even for the row that doesn't fit, so
+           that stray row used to get drawn anyway, spilling past the
+           panel's bottom edge and getting sliced by the window's own
+           bottom (measured: kernel/kernel.c's own APPS_VIS_ROWS=3 already
+           states the true count, "3 whole ones" -- this just enforces it
+           instead of re-deriving a looser bound from cell_h). Because that
+           spillover row was never inside the 375px rect gui_apps_redraw_
+           panel repaints on every scroll/selection change, its pixels
+           also never got cleared on a later repaint -- confirmed live: a
+           scroll from offset 0 to 1 left index 18/19's (Contacts,
+           Calculator) icons drawn at 0's row 3 sitting there under the
+           freshly drawn row 3 of the new offset, stale pixels, not a
+           second draw and not an index past GUI_APPS_FOLDER. */
+        if (row < 0 || row >= APPS_VIS_ROWS) continue;
         int cx = x0 + col * cell_w + cell_w / 2;
         int cy = y0 + row * cell_h;
         if (i == sel) gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 14,
@@ -4800,8 +4836,11 @@ static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, in
     int panel_x = x0 - 28, panel_y = 25, panel_w = grid_w + 56, panel_h = 375;
     gui_draw_wallpaper_rect(panel_x, panel_y, panel_w, panel_h);
     gui_apps_glass(panel_x, panel_y, panel_w, panel_h);
-    font_draw_string("Apps", x0, 40, 0x002A2226, -1);
-    font_draw_string("arrow keys to move   enter opens   esc closes", x0, 65, 0x006A6064, -1);
+    /* The window's own title bar already reads "Apps" (gui_launch_from_
+       dock draws GUI_LABELS[icon] there); a second "Apps" heading here
+       just repeated it. Keep the key-hint line, moved up into the space
+       the heading used to take. */
+    font_draw_string("arrow keys to move   enter opens   esc closes", x0, 40, 0x006A6064, -1);
     gui_apps_draw_grid(scroll_offset, sel, x0, y0, cell_w, cell_h, tile);
     serial_puts("appsgridrepaint\n");
 }
@@ -4827,7 +4866,16 @@ static void gui_launch_apps(void){
             full = 0;
             serial_puts("appsfullrepaint\n");
             window_clear(0x00201922);
-            gui_draw_wallpaper();
+            /* Not gui_draw_wallpaper(): that helper starts at GUI_MENUBAR_H,
+               skipping the top strip to leave room for the desktop's own
+               system menu bar. This folder runs inside gui_launch_from_
+               dock's viewport, which already excludes the window's own
+               title bar (drawn outside the viewport) and has no menu bar
+               of its own, so local y=0 is real content, not chrome.
+               Starting at GUI_MENUBAR_H left that strip as whatever
+               window_clear above set it to: a dead black band under the
+               title bar, never painted with wallpaper at all. */
+            gui_draw_wallpaper_rows(0, (int)window_height());
             gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w);
             /* The click that opened this folder (or closed the app launched
                from it) is the baseline, not a fresh click. Synced here, once
