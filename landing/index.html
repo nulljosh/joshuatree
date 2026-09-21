@@ -22,10 +22,14 @@
      fetch and the V86 constructor itself. -->
 <link rel="preload" href="v86/libv86.js" as="script">
 <style>
-  /* Clean interface around the live, colorful desktop. */
-  :root { color-scheme: light dark; --bg:#f6f8fb; --fg:#172334;
-    --sub:#526174; --border:#d7dfe9; --card:#ffffff; --accent:#2869c7; --accent2:#159b9a; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#101925; --fg:#f1f5fa; --sub:#a8b8cb; --border:#344354; --card:#192637; --accent:#83b5ff; --accent2:#5ed0c7; } }
+  /* Black and white, off-white paper in light mode, near-black ink in dark,
+     both automatic off prefers-color-scheme. One restrained accent color,
+     a warm terracotta, used sparingly (the step-card top rule, focus
+     rings, footer link color) -- direct request, "too much blue", no
+     teal/purple/gradients anywhere on the page. */
+  :root { color-scheme: light dark; --bg:#faf8f4; --fg:#161513;
+    --sub:#5c584f; --border:#ded9cd; --card:#ffffff; --accent:#b5502c; --accent2:#b5502c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141311; --fg:#f3f0e9; --sub:#b3ada0; --border:#3a362e; --card:#1d1b17; --accent:#e08a5f; --accent2:#e08a5f; } }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   /* v51: section-by-section scroll snap, direct request. `proximity`, not
@@ -175,7 +179,12 @@
   /* Top padding so the demo is not jammed against the window chrome:
      it sat flush with the very top edge, which read as cut off rather than
      deliberate. Bottom padding still separates it from the header below. */
-  #demo-frame { position: relative; width: 100%; padding: 22px 0 3%; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  /* v0.85.4: direct request, the demo is the hero now, full viewport
+     height on load rather than a modest 58vh box above a text header.
+     min-height on the frame plus a much taller #stage-wrap formula below
+     (94svh instead of 58vh, no fixed 640px cap) fill the first screen a
+     visitor sees with the live boot. */
+  #demo-frame { position: relative; width: 100%; padding: 14px 0 3%; min-height: 92svh; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   /* v0.76.51: real bug, direct report ("demo cut off when window rescales")
      -- explicit height (65vh/max-height) combined with width:auto and a
      separate max-width:100% clamp fight each other whenever the viewport
@@ -186,9 +195,14 @@
      what 58vh-at-16:9 would need, height:auto lets aspect-ratio derive the
      matching height from whichever width actually won, no competing
      explicit height to disagree with it. */
-  #stage-wrap { background: #000; position: relative; width: min(100%, calc(58vh * 16 / 9)); height: auto; max-height: 640px; aspect-ratio: 16 / 9; z-index: 0; border-radius: 6px; overflow: hidden; outline: 1px solid var(--fg); outline-offset: 5px; }
-  @media (max-width: 600px) { #stage-wrap { width: 100%; height: auto; } }
-  @media (max-width: 600px) { #demo-frame { padding: 4% 4% 2%; } }
+  #stage-wrap { background: #000; position: relative; width: min(100%, calc(92svh * 16 / 9)); height: auto; max-height: 92svh; aspect-ratio: 16 / 9; z-index: 0; border-radius: 6px; overflow: hidden; outline: 1px solid var(--fg); outline-offset: 5px; }
+  @media (max-width: 600px) { #stage-wrap { width: 100%; height: auto; max-height: none; } #demo-frame { padding: 4% 4% 2%; min-height: 70svh; } }
+  /* The visible way out once a visitor has taken control of the demo:
+     direct request, "obvious way out", both a tap target and Esc (wired
+     in the script below). Hidden until #demo-frame gains .demo-focused. */
+  #demo-exit { position: absolute; right: 14px; bottom: 14px; z-index: 6; background: var(--fg); color: var(--bg); border: none; border-radius: 999px; padding: 10px 18px; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; cursor: pointer; font-family: inherit; }
+  #demo-exit[hidden] { display: none; }
+  @media (max-width: 600px) { #demo-exit { right: 16px; bottom: 16px; padding: 12px 18px; } }
   /* v52.5: real boot moment instead of a blank black flash, direct
      request ("bridge the gap between css/html and the actual demo
      loading"). The logo shows immediately (it's a tiny inline SVG,
@@ -263,6 +277,7 @@
   .progress-section { padding: 64px 20px; }
   .progress-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; max-width: 640px; margin: 0 auto; }
   .progress-card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.22em; color: var(--accent); margin: 0 0 14px; font-weight: 600; }
+  .progress-card > p { color: var(--sub); font-size: 13px; line-height: 1.5; margin: 0 0 16px; }
   .progress-card { position: relative; }
   .progress-card svg { width: 100%; height: auto; display: block; }
   .progress-tooltip { position: absolute; background: var(--fg); color: var(--bg); padding: 6px 12px; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; z-index: 10; opacity: 0; transition: opacity 0.2s; transform: translate(-50%, -100%); }
@@ -307,6 +322,7 @@
         <div id="v86-overlay"></div>
       </div>
     </div>
+    <button id="demo-exit" type="button" hidden aria-label="Exit the demo and scroll down to the rest of the page">Exit demo &darr;</button>
   </div>
   <p class="plate-cap">Fig. 1 &middot; This exact kernel.elf, booting live in your browser</p>
 </div>
@@ -350,20 +366,21 @@
 
 <section class="features reveal">
   <div class="steps">
-    <div class="step"><div class="n">What</div><p>A whole OS. Kernel, desktop, terminal, network stack, 18 apps, live weather. Runs at 1920×1080. Nothing borrowed.</p></div>
+    <div class="step"><div class="n">What</div><p>A whole OS. Kernel, desktop, terminal, network stack, 23 apps, live weather. Runs at 1920×1080. Nothing borrowed.</p></div>
     <div class="step"><div class="n">Who</div><p>Started solo, pairing with Claude. Open source, open to anyone who wants to add to it.</p></div>
     <!-- The release count reads itself from version.txt at load rather than
          being hand-typed: it was written as "64 versions" and sat there for
          dozens of real releases. -->
     <div class="step"><div class="n">When</div><p>Started August 2026. <span id="release-count">Every version</span> since, each shipped only once proven working.</p></div>
     <div class="step"><div class="n">Why</div><p>Already talking to AI to build things. That belongs native to the machine, not bolted onto someone else's OS.</p></div>
-    <div class="step"><div class="n">Where</div><!-- roadmap-summary:start --><p>On the roadmap: Split kernel.c into per-subsystem files; Rich document app; Native code editor and package tool.</p><!-- roadmap-summary:end --></div>
+    <div class="step"><div class="n">Where</div><p>On your desktop, in your pocket, on a machine that's never heard of it. Runs in any browser through v86, or boots for real in QEMU on whatever hardware you point it at.</p></div>
   </div>
 </section>
 
 <section class="progress-section reveal">
   <div class="progress-card">
     <h2>Where it's at</h2>
+    <!-- roadmap-summary:start --><p>On the roadmap: Split kernel.c into per-subsystem files; Rich document app; Native code editor and package tool.</p><!-- roadmap-summary:end -->
     <!-- Real interactive version for this page specifically, not the same
          static image README.md embeds (README can't run JS). Generated
          and spliced in by tools/gen/progress.sh, same source data as
@@ -374,12 +391,12 @@
     <!-- progress-chart:start -->
 <svg xmlns="http://www.w3.org/2000/svg" width="479" height="200" viewBox="0 0 479 200" id="progress-chart-live" role="img" aria-label="Real lines of code over time, 44,784 lines as of Sep 20"><style>
   #progress-chart-live {
-    --bg: #ffffff; --grid: #d7dfe9; --axis: #526174; --muted: #526174;
-    --label: #526174; --strong: #172334; --line: #2869c7; --line2: #159b9a; --line2-pct: #159b9a;
+    --bg: #ffffff; --grid: #ded9cd; --axis: #5c584f; --muted: #78736c;
+    --label: #5c584f; --strong: #161513; --line: #b5502c; --line2: #b5502c; --line2-pct: #b5502c;
   }
   @media (prefers-color-scheme: dark) {
-    #progress-chart-live { --bg: #192637; --grid: #344354; --axis: #a8b8cb; --muted: #a8b8cb;
-             --label: #a8b8cb; --strong: #f1f5fa; --line: #83b5ff; --line2: #5ed0c7; --line2-pct: #5ed0c7; }
+    #progress-chart-live { --bg: #1d1b17; --grid: #3a362e; --axis: #b3ada0; --muted: #b3ada0;
+             --label: #b3ada0; --strong: #f3f0e9; --line: #e08a5f; --line2: #e08a5f; --line2-pct: #e08a5f; }
   }
   #progress-chart-live line[stroke="var(--grid)"] { stroke-dasharray: none; }
   #progress-chart-live text { font-family: -apple-system, Helvetica, Arial, sans-serif; }
@@ -397,7 +414,7 @@
 
 <section class="grain-zone reveal">
   <div class="ink-img badge" role="img" aria-label="Joshua Tree Co. engraved badge: a Joshua tree in the Mojave, framed by two ribbons"></div>
-  <p class="closing">Own memory manager. Own filesystem. TCP built up from raw Ethernet frames, not borrowed from anything underneath. Named for the tree that survives the Mojave on nothing, the same one Mormon settlers thought looked like a man reaching skyward. Open for whoever wants to help it grow, no climbing permit required.</p>
+  <p class="closing">Joshua Tree is a real graphical desktop built from scratch: its own kernel, filesystem, and network stack, a working terminal, 23 apps, and a chat window talking to a local LLM. You can boot the actual kernel above right now, live in your browser, no download. It's free, open source, and headed toward a 1.0 release and real hardware next. Named for the tree that survives on nothing.</p>
 </section>
 
 <footer>
@@ -419,6 +436,70 @@
 </footer>
 
 <script>
+// Direct request: the demo now fills the first screen as the hero, so once
+// its boot finishes the page should carry the visitor on down to the rest
+// of the content on its own -- unless they've actually taken the demo
+// over, in which case auto-scrolling out from under their hands would be
+// its own bug. Lives here, not in embed.js, since it only needs to watch
+// #boot-logo (already the public signal embed.js flips once graphical
+// mode is reached, see its own comment above that element) and the same
+// mousedown/keydown/touchstart takeover gesture embed.js's own focusIn()
+// reacts to, not any of embed.js's internal emulator state.
+(function () {
+  var demoFrame = document.getElementById('demo-frame');
+  var v86embed = document.getElementById('v86-embed');
+  var bootLogo = document.getElementById('boot-logo');
+  var exitBtn = document.getElementById('demo-exit');
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!demoFrame || !v86embed || !exitBtn) return;
+
+  var tookOver = false;
+  var autoScrollTimer = 0;
+
+  function scrollToContent() {
+    var target = document.querySelector('.features') || document.getElementById('main');
+    if (!target) return;
+    target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+  }
+
+  function takeOver() {
+    if (tookOver) return;
+    tookOver = true;
+    if (autoScrollTimer) { clearTimeout(autoScrollTimer); autoScrollTimer = 0; }
+    demoFrame.classList.add('demo-focused');
+    exitBtn.hidden = false;
+  }
+  ['mousedown', 'keydown', 'touchstart'].forEach(function (name) {
+    v86embed.addEventListener(name, takeOver, { passive: true });
+  });
+
+  function exitDemo() {
+    v86embed.blur();
+    demoFrame.classList.remove('demo-focused');
+    exitBtn.hidden = true;
+    scrollToContent();
+  }
+  exitBtn.addEventListener('click', exitDemo);
+  // Registered on window, capture phase, before the <script> tags below
+  // load: same FIFO reasoning embed.js's own Escape interceptor documents
+  // (both listeners are on window in capture phase, so registration order
+  // decides who runs first, and this script tag runs first in document
+  // order). Never calls preventDefault/stopPropagation, so embed.js's own
+  // Escape interceptor still runs right after and keeps Escape from ever
+  // reaching the kernel; this just adds the "scroll me out" behavior on
+  // top once a visitor who took over wants out.
+  window.addEventListener('keydown', function (ev) {
+    if (tookOver && (ev.key === 'Escape' || ev.keyCode === 27 || ev.code === 'Escape')) exitDemo();
+  }, true);
+
+  if (reduced || !bootLogo) return; // prefers-reduced-motion: no auto-scroll at all
+  var armed = false;
+  new MutationObserver(function () {
+    if (armed || !bootLogo.hidden) return; // boot-logo hides once embed.js reaches graphical mode
+    armed = true;
+    autoScrollTimer = setTimeout(function () { if (!tookOver) scrollToContent(); }, 1400);
+  }).observe(bootLogo, { attributes: true, attributeFilter: ['hidden'] });
+})();
 // Direct request: a dynamic version number next to the "Joshua Tree"
 // header, sourced from the same VERSION file every real release already
 // bumps (see roadmap.md/CLAUDE.md's own semver rule), not hand-typed
