@@ -70,6 +70,7 @@ retry|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/icon
 retry|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
 retry|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py
 retry|Dock tray corner AA (real coverage blend, not binary)|python3 ./tools/checks/traycorner-check.py
+retry|Boot logo AA (no false interior seams at overlapping capsule joints)|python3 ./tools/checks/bootlogo-check.py
 once |Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcount-check.mjs
 once |Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
 once |RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
