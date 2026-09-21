@@ -5237,6 +5237,7 @@ static void gui_launch_settings(void){
 
 #include "stocks.h"
 #include "toroid.h"
+#include "quotes.h"
 #include "epiphany.h"
 
 static void gui_launch(int icon){
@@ -5253,7 +5254,7 @@ static void gui_launch(int icon){
     else if (icon == 8) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
     else if (icon == 9) gui_launch_keyrate();
     else if (icon == 10) gui_launch_html("Bookrank", app_bookrank_html, app_bookrank_len);
-    else if (icon == 11) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
+    else if (icon == 11) gui_launch_quotes();
     else if (icon == 12) gui_launch_html("Plan", app_plan_html, app_plan_len);
     else if (icon == 13) gui_launch_html("Lexly", app_lexly_html, app_lexly_len);
     else if (icon == 14) gui_launch_toroid();
