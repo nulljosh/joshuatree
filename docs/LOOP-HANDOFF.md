@@ -1,3 +1,21 @@
+# Tonight's plan to 1.0.0 (written 2026-09-21, about 01:20)
+
+One worker at a time, each run is a batch, main session reviews every result by eye before it merges. Stop spawning at 85% weekly usage; tag 1.0.0 only if the gate below is met, otherwise tag 0.9.0 and say why.
+
+1. Apps window cleanup. In flight.
+2. Text batch: Terminal draws the Mono face at its real advance (today "m" is crushed and "i" floats); a typography sweep over every app at full resolution; a system typeface picker in Settings using the faces already embedded. Fonts loaded from disk wait for 1.1.
+3. Layout batch: Calendar's clipped last week, the blank strip under the title bar in five apps, dock hover label backing, and `tools/qa_demo_drive.py` fixed so the tour covers Weather, Trash and every Apps-folder app.
+4. Security batch: fuzz the PNG and JPEG decoders on the host (`tools/png-host`, `tools/jpeg-host`) and the HTTP, DNS and FAT parsers with hostile input; bounds audit of every text field; audit `kernel/auth.h` (salted iterated SHA-256 and the boot login already exist) for lockout, empty passwords and timing; add a lock screen from the menu.
+5. Stability batch: every one of the 25 apps opened, used and closed in one headless gallery with panic detection; bad input, long lines, empty files, no disk, no network.
+6. Main session watches the full gallery at full resolution, files what is ugly, one fix batch.
+7. Docs refresh and honest release notes (Haiku). Full suite green. Tag `jt-v1.0.0`, release, landing updated.
+
+Moved to 1.1: Photos app, fonts from disk, Settings consolidation beyond the typeface picker, snap keyboard shortcuts, icon redraws unless the gallery shows a bad one.
+
+Gate for the 1.0.0 tag: full suite green, gallery reviewed with no open visual bug, fuzzers clean, no panic in any stability case.
+
+Machine etiquette learned tonight: checks must never run a broad `pkill -f qemu-system-i386`; it kills other sessions' runs. Kill by PID or unique `-name`. Run QEMU checks one at a time.
+
 # Joshua Tree loop handoff (2026-09-20, late)
 
 Paste this to restart: `/loop` followed by the "Restart prompt" at the bottom.
