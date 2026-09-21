@@ -75,28 +75,42 @@ finally:
     except subprocess.TimeoutExpired: q.kill()
 
 img = Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
-seam = img.getpixel((SEAM_PX, SEAM_PY))
-edge = img.getpixel((EDGE_PX, EDGE_PY))
-
-print(f"seam pixel ({SEAM_PX},{SEAM_PY}) = {seam}")
-print(f"edge pixel ({EDGE_PX},{EDGE_PY}) = {edge}")
-
+# Geometry-free on purpose: the logo has been redrawn more than once, and a
+# check pinned to two pixel coordinates broke every time without catching anything.
+g = img.convert("L")
+bb = g.point(lambda v: 255 if v > 40 else 0).getbbox()
 fail = 0
-d_notch = max(abs(seam[i] - SOLID_NOTCH[i]) for i in range(3))
-if d_notch <= 12:
-    print("FAIL: trunk-top seam pixel reads as the pre-fix partial-black notch, capsule joints are blending toward a flat backdrop again")
-    fail = 1
-elif sum(seam) < 650:
-    print(f"FAIL: trunk-top seam pixel is not solid white ({seam}), some other seam/coverage regression")
-    fail = 1
-else:
-    print("PASS: trunk-top seam pixel is solid, no false interior notch")
-
-edge_lum = sum(edge) / 3
-if edge_lum < 20 or edge_lum > 235:
-    print(f"FAIL: crown outer-edge pixel has no real AA blend ({edge}), coverage sampling looks disabled or the geometry moved")
-    fail = 1
-else:
-    print("PASS: crown outer edge shows a real intermediate AA blend")
-
+if not bb or bb[2] - bb[0] < 60:
+    print(f"FAIL: no boot logo found on the splash frame (bbox {bb})"); sys.exit(1)
+px = g.load()
+# the splash also carries a progress bar under the logo; keep only the logo, which
+# ends at the first empty row below its top
+for y in range(bb[1], bb[3]):
+    if not any(px[x, y] > 40 for x in range(bb[0], bb[2])):
+        ox, oy = bb[0], bb[1]
+        c = g.crop((ox, oy, bb[2], y)).point(lambda v: 255 if v > 40 else 0).getbbox()
+        bb = (ox + c[0], oy + c[1], ox + c[2], oy + c[3])
+        break
+solid = mid = holes = doubled = edges = 0
+for y in range(bb[1], bb[3]):
+    for x in range(bb[0], bb[2]):
+        v = px[x, y]
+        if v >= 225: solid += 1
+        elif v > 30: mid += 1
+        # a dark pixel boxed in by white two pixels away on all four sides is a seam crack
+        if v < 128 and all(px[x + dx, y + dy] >= 225 for dx, dy in ((2, 0), (-2, 0), (0, 2), (0, -2))): holes += 1
+for y in range(bb[1] & ~1, bb[3] - 1, 2):
+    for x in range(bb[0] & ~1, bb[2] - 1, 2):
+        blk = (px[x, y], px[x + 1, y], px[x, y + 1], px[x + 1, y + 1])
+        if min(blk) < 225 and max(blk) > 30:          # an edge block
+            edges += 1
+            if len(set(blk)) == 1: doubled += 1
+print(f"logo bbox {bb}: solid {solid}, antialiased {mid}, seam holes {holes}, edge blocks {edges}, pixel-doubled {doubled}")
+if holes:
+    fail = 1; print("FAIL: dark cracks inside the logo, capsule joints are blending toward a flat backdrop again")
+if mid * 20 < solid:
+    fail = 1; print("FAIL: almost no intermediate tones, the logo edge is not antialiased")
+if edges and doubled * 4 > edges:
+    fail = 1; print("FAIL: edges are 2x2 identical blocks, the logo is being pixel-doubled from logical resolution")
+if not fail: print("PASS: boot logo is solid, antialiased and drawn at physical resolution")
 sys.exit(fail)
