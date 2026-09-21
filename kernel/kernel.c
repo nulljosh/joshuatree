@@ -6422,13 +6422,32 @@ static void notetest(void){
     serial_puts(ok2 ? "notetest argv: ok\n" : "notetest argv: FAILED\n");
 }
 
+/* Splits `s` in place at runs of spaces into `argv`, the same way every
+   argument list in this shell is built: no quotes, no escapes, just
+   words, argv[i] pointing back into `s` itself. Shared by `exec` and the
+   bare-name fallthrough in run() below so there is one splitter, not two.
+   Returns the word count, or -1 if there were more than `max`. */
+static int split_argv(char *s, const char **argv, int max) {
+    int argc = 0;
+    char *p = s;
+    while (*p) {
+        while (*p == ' ') *p++ = 0;
+        if (!*p) break;
+        if (argc >= max) return -1;
+        argv[argc++] = p;
+        while (*p && *p != ' ') p++;
+    }
+    return argc;
+}
+
 static void run(char *line){
     char *arg = line;
     while (*arg && *arg != ' ') arg++;
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest\n");
+    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest\n");
+                                        puts("a name that isn't one of the above runs a program by that name too, e.g. \"hello\" or \"note buy milk\" (same as exec, case-insensitive)\n"); }
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -7368,28 +7387,25 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "exec")) {
-        if (!*arg) { puts("usage: exec <file> [args...] (a flat binary, run as a real ring-3 task)\n"); }
+        if (!*arg) { puts("usage: exec <file> [args...] (a flat binary, run as a real ring-3 task; a bare program name works too, see help)\n"); }
         else {
             /* v2: the words after the filename become the program's real
-               argv. Split in place, the way every shell does it: runs of
-               spaces are separators, argv[0] is the filename itself, and
-               anything past JT_ARGC_MAX is refused rather than dropped,
-               because a program handed a silently shortened argv has no
-               way to tell. There are no quotes and no escapes here; a
-               word is a run of non-space characters, which is the whole
-               of what this shell's own line reader can express. */
+               argv, argv[0] is the filename itself, and anything past
+               JT_ARGC_MAX is refused rather than dropped, because a
+               program handed a silently shortened argv has no way to
+               tell. There are no quotes and no escapes here; a word is a
+               run of non-space characters, which is the whole of what
+               this shell's own line reader can express. */
             const char *uargv[JT_ARGC_MAX];
-            int uargc = 0, overflow = 0;
-            char *p = arg;
-            while (*p) {
-                while (*p == ' ') *p++ = 0;
-                if (!*p) break;
-                if (uargc >= JT_ARGC_MAX) { overflow = 1; break; }
-                uargv[uargc++] = p;
-                while (*p && *p != ' ') p++;
-            }
-            if (overflow) { puts("exec: too many arguments (max "); putdec(JT_ARGC_MAX); puts(" including the program name)\n"); }
+            int uargc = split_argv(arg, uargv, JT_ARGC_MAX);
+            if (uargc < 0) { puts("exec: too many arguments (max "); putdec(JT_ARGC_MAX); puts(" including the program name)\n"); }
             else {
+                /* 1.0.0: resolved through the same bare-name lookup as
+                   the fallthrough below, so `exec hello` and typing
+                   `hello` land on the same file. uargv[0] still names
+                   the failure if nothing resolves. */
+                char resolved[JT_RESOLVE_NAME_MAX];
+                if (exec_resolve_name(uargv[0], resolved)) uargv[0] = resolved;
                 int status = -1;
                 if (!exec_user(uargv[0], uargv, uargc, &status)) { puts(uargv[0]); puts(": exec failed (not found, too big, argv too large, or no free task slot)\n"); }
                 else { puts("exit code "); putdec(status); putc('\n'); }
@@ -8159,7 +8175,28 @@ static void run(char *line){
     }
     else if (!strcmp(line, "time"))  show_time();
     else if (!strcmp(line, "reboot"))reboot();
-    else { puts("? "); puts(line); putc('\n'); }
+    else {
+        /* 1.0.0: before calling `line` an unknown command, try it as a
+           program name -- the real shell gap the roadmap calls out.
+           `arg` (everything after the first space, already split off
+           above) becomes argv[1..] the same way exec's own argv[1..]
+           does, through the same split_argv() and exec_user(); this is
+           not a second exec path, just a second way to reach the first
+           one's name. */
+        char resolved[JT_RESOLVE_NAME_MAX];
+        if (exec_resolve_name(line, resolved)) {
+            const char *pargv[JT_ARGC_MAX];
+            pargv[0] = resolved;
+            int rest = split_argv(arg, pargv + 1, JT_ARGC_MAX - 1);
+            if (rest < 0) { puts("exec: too many arguments (max "); putdec(JT_ARGC_MAX); puts(" including the program name)\n"); }
+            else {
+                int status = -1;
+                if (!exec_user(resolved, pargv, rest + 1, &status)) { puts(resolved); puts(": exec failed (not found, too big, argv too large, or no free task slot)\n"); }
+                else { puts("exit code "); putdec(status); putc('\n'); }
+            }
+        }
+        else { puts("? "); puts(line); putc('\n'); }
+    }
 }
 
 void kmain(unsigned int multiboot_info_addr){

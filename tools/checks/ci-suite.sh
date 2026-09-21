@@ -47,6 +47,7 @@ retry|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ram
 retry|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh
 retry|Ring-3 reference program against the v1 syscall ABI|./tools/checks/usertest-check.sh
 retry|Ring-3 program writing a real file against the v2 syscall ABI|./tools/checks/notetest-check.sh
+retry|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
 retry|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
 once |Calendar date math, host harness|./tools/checks/check-calendar.sh
 retry|Settings click acts on the row actually clicked|./tools/checks/settingsclick-check.sh

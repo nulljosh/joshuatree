@@ -72,6 +72,47 @@ static u32 build_user_stack(const char *const *argv, int argc) {
     return sp;
 }
 
+static int is_lower(char c) { return c >= 'a' && c <= 'z'; }
+static int has_dot(const char *s) { for (; *s; s++) if (*s == '.') return 1; return 0; }
+
+static void upper_copy(const char *in, char *out, unsigned int outsize) {
+    unsigned int i = 0;
+    for (; in[i] && i < outsize - 1; i++) out[i] = is_lower(in[i]) ? (char)(in[i] - 32) : in[i];
+    out[i] = 0;
+}
+
+/* Existence only, no real read: bufsize 1 is enough to tell "found" (>= 0,
+   however many bytes actually came back) from "no such file" (-1) on
+   both backends, without disturbing anything exec_user() itself owns. */
+static int vfs_exists(const char *name) {
+    u8 probe[1];
+    return vfs_read_file(name, probe, sizeof probe) >= 0;
+}
+
+int exec_resolve_name(const char *typed, char *out) {
+    if (vfs_exists(typed)) {
+        unsigned int i = 0;
+        for (; typed[i] && i < JT_RESOLVE_NAME_MAX - 1; i++) out[i] = typed[i];
+        out[i] = 0;
+        return 1;
+    }
+
+    char upper[JT_RESOLVE_NAME_MAX];
+    upper_copy(typed, upper, sizeof upper);
+    if (vfs_exists(upper)) { u32 i = 0; while (upper[i]) { out[i] = upper[i]; i++; } out[i] = 0; return 1; }
+
+    if (!has_dot(upper)) {
+        char withext[JT_RESOLVE_NAME_MAX];
+        unsigned int i = 0;
+        for (; upper[i] && i < sizeof(withext) - sizeof(JT_RESOLVE_EXT); i++) withext[i] = upper[i];
+        const char *ext = JT_RESOLVE_EXT;
+        for (unsigned int j = 0; ext[j]; j++) withext[i++] = ext[j];
+        withext[i] = 0;
+        if (vfs_exists(withext)) { for (unsigned int k = 0; k <= i; k++) out[k] = withext[k]; return 1; }
+    }
+    return 0;
+}
+
 int exec_user(const char *name, const char *const *argv, int argc, int *status) {
     if (status) *status = -1;
 

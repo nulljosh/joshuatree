@@ -36,7 +36,10 @@ loaded from the filesystem and executed at CPL 3. `notetest` runs a second
 program (`user/note.c`), a small file utility that creates, appends to and
 seek-patches a file from ring 3 with real command-line arguments.
 `exec <file> [args...]` runs any flat binary the same way, passing the
-remaining words as `argv`.
+remaining words as `argv`. Typing a program's name directly (`hello`,
+`note buy milk`) does the same thing without `exec`: the shell tries it as
+a filename, case-insensitively and with the real on-disk extension, before
+reporting an unknown command.
 
 The remaining commands mostly exercise one subsystem at a time: `help`
 `dmesg` `mem` `ps` `kill` `sleep` `heaptest` `heapgrow` `tasktest`
