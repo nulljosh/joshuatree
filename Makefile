@@ -131,6 +131,11 @@ clean:
 	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf user/hello.o user/hello.bin drivers/user_hello.h \
 	      user/note.o user/note.bin drivers/user_note.h
 
+# This machine has a global core.hooksPath (~/.git-hooks); this opts THIS
+# repo into its own fast pre-push gate (tools/hooks/pre-push) instead.
+hooks:
+	git config core.hooksPath tools/hooks
+
 # v75 (0.66.x): real gap found root-causing the reaptest bug (paging.h's
 # PAGING_PRIVATE_PDE), the hard way -- a header-only edit left the stale
 # .o linked in twice in a row, silently "fixing" nothing and then
@@ -142,4 +147,4 @@ clean:
 # C project's incremental build.
 -include $(OBJS:.o=.d)
 
-.PHONY: run clean
+.PHONY: run clean hooks

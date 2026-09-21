@@ -14,8 +14,6 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 Worked easiest and most relevant first.
 - [ ] [Sonnet] Landing: black and white again on an off-white page, one splash of colour, auto light and dark. "Where" reads "On your desktop, in your pocket..." Fresh bottom copy.
 - [ ] [Sonnet] Landing demo starts full screen, auto-scrolls on once it finishes or until the visitor takes over; Esc or a visible button leaves full screen and scrolls.
-- [ ] [Sonnet] Repo tidy: `money.md`, `WHITEPAPER.md`, `roadmap.md` and friends move into `docs/`; `landing/v86/kernel.elf` stops being tracked and is built in the deploy workflow.
-- [ ] [Haiku] A pre-push hook that runs the fast part of `check.sh`, so a red push never leaves the machine.
 - [ ] [Haiku] Mac app (`menubar/`) and its icon refreshed to match the current tree icon and version.
 - [ ] [Sonnet] Boot logo drawn sharp at native resolution, no 8-bit look.
 - [ ] [Sonnet] Bootable ISO (GRUB or Limine, `make iso`), booted headless in CI. Needed for 1.0.
