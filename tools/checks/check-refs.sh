@@ -16,7 +16,7 @@ cd "$(dirname "$0")/../.."
 python3 << 'PYEOF'
 import re, os, sys
 
-FILES_TO_SCAN = ["roadmap.md", "CLAUDE.md", "docs/ARCHITECTURE.md"]
+FILES_TO_SCAN = ["docs/roadmap.md", "CLAUDE.md", "docs/ARCHITECTURE.md"]
 PATTERN = re.compile(r'`([A-Za-z0-9_./-]+\.(?:c|h|S|md|sh|py|js|html|svg|json|toml|tsv|txt|yml))`')
 # node_modules/.claude are noise (thousands of irrelevant basenames);
 # landing/v86/ (the vendored v86.wasm build) is real and indexed like
