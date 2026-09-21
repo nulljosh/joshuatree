@@ -1647,50 +1647,56 @@ static void gui_fill_circle(int cx, int cy, int r, unsigned int color, unsigned 
    exactly (nothing else has been drawn there), and coverage 0 < inside <
    full over already-opaque neighboring geometry now blends toward that
    geometry's own color instead of carving a false notch into it. */
+/* One antialiased capsule in PHYSICAL pixels. gui_draw_capsule scales logical
+   input into this; gui_draw_logo calls it directly so thin strokes keep a real
+   radius instead of rounding to zero at logical resolution. */
+static void gui_capsule_phys(int pcx0, int pcy0, int pcx1, int pcy1, int pr, unsigned int color){
+        int pdx = pcx1 - pcx0, pdy = pcy1 - pcy0;
+    long plen2 = (long)pdx * pdx + (long)pdy * pdy;
+    int minx = (pcx0 < pcx1 ? pcx0 : pcx1) - pr - 2, maxx = (pcx0 > pcx1 ? pcx0 : pcx1) + pr + 2;
+    int miny = (pcy0 < pcy1 ? pcy0 : pcy1) - pr - 2, maxy = (pcy0 > pcy1 ? pcy0 : pcy1) + pr + 2;
+    const int SS = 4;
+    for (int py = miny; py <= maxy; py++){
+        for (int px = minx; px <= maxx; px++){
+            int vx = px - pcx0, vy = py - pcy0;
+            int ex, ey;
+            if (plen2 == 0) { ex = vx; ey = vy; }
+            else {
+                long dot = (long)vx * pdx + (long)vy * pdy;
+                if (dot < 0) dot = 0; else if (dot > plen2) dot = plen2;
+                int cxp = pcx0 + (int)(dot * pdx / plen2), cyp = pcy0 + (int)(dot * pdy / plen2);
+                ex = px - cxp; ey = py - cyp;
+            }
+            long d2 = (long)ex * ex + (long)ey * ey;
+            if (d2 > (long)(pr + 2) * (pr + 2)) continue;
+            unsigned int col;
+            if (d2 <= (long)(pr - 2) * (pr - 2)) { col = color; }
+            else {
+                int inside = 0;
+                for (int sy = 0; sy < SS; sy++){
+                    int subdy = ey * SS + sy * 2 + 1 - SS;
+                    for (int sx = 0; sx < SS; sx++){
+                        int subdx = ex * SS + sx * 2 + 1 - SS;
+                        long sd2 = (long)subdx * subdx + (long)subdy * subdy;
+                        if (sd2 <= (long)(pr * SS) * (pr * SS)) inside++;
+                    }
+                }
+                if (inside == 0) continue;
+                if (inside >= SS * SS) col = color;
+                else {
+                    unsigned int backdrop = window_get_pixel_phys(px, py);
+                    col = gui_lerp(color, backdrop, SS * SS - inside, SS * SS);
+                }
+            }
+            window_pixel_phys(px, py, col);
+        }
+    }
+}
+
 static void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color, unsigned int into){
     if (!window_has_target() && window_scale() > 1){
         int sc = (int)window_scale();
-        int pcx0 = x0 * sc, pcy0 = y0 * sc, pcx1 = x1 * sc, pcy1 = y1 * sc, pr = r * sc;
-        int pdx = pcx1 - pcx0, pdy = pcy1 - pcy0;
-        long plen2 = (long)pdx * pdx + (long)pdy * pdy;
-        int minx = (pcx0 < pcx1 ? pcx0 : pcx1) - pr - sc, maxx = (pcx0 > pcx1 ? pcx0 : pcx1) + pr + sc;
-        int miny = (pcy0 < pcy1 ? pcy0 : pcy1) - pr - sc, maxy = (pcy0 > pcy1 ? pcy0 : pcy1) + pr + sc;
-        const int SS = 4;
-        for (int py = miny; py <= maxy; py++){
-            for (int px = minx; px <= maxx; px++){
-                int vx = px - pcx0, vy = py - pcy0;
-                int ex, ey;
-                if (plen2 == 0) { ex = vx; ey = vy; }
-                else {
-                    long dot = (long)vx * pdx + (long)vy * pdy;
-                    if (dot < 0) dot = 0; else if (dot > plen2) dot = plen2;
-                    int cxp = pcx0 + (int)(dot * pdx / plen2), cyp = pcy0 + (int)(dot * pdy / plen2);
-                    ex = px - cxp; ey = py - cyp;
-                }
-                long d2 = (long)ex * ex + (long)ey * ey;
-                if (d2 > (long)(pr + 2) * (pr + 2)) continue;
-                unsigned int col;
-                if (d2 <= (long)(pr - 2) * (pr - 2)) { col = color; }
-                else {
-                    int inside = 0;
-                    for (int sy = 0; sy < SS; sy++){
-                        int subdy = ey * SS + sy * 2 + 1 - SS;
-                        for (int sx = 0; sx < SS; sx++){
-                            int subdx = ex * SS + sx * 2 + 1 - SS;
-                            long sd2 = (long)subdx * subdx + (long)subdy * subdy;
-                            if (sd2 <= (long)(pr * SS) * (pr * SS)) inside++;
-                        }
-                    }
-                    if (inside == 0) continue;
-                    if (inside >= SS * SS) col = color;
-                    else {
-                        unsigned int backdrop = window_get_pixel_phys(px, py);
-                        col = gui_lerp(color, backdrop, SS * SS - inside, SS * SS);
-                    }
-                }
-                window_pixel_phys(px, py, col);
-            }
-        }
+        gui_capsule_phys(x0 * sc, y0 * sc, x1 * sc, y1 * sc, r * sc, color);
         return;
     }
     int dx = x1 - x0, dy = y1 - y0;
@@ -2011,6 +2017,23 @@ static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned i
    "8-bit" staircase problem the weather icon's rays had, now on the one
    piece of branding that appears everywhere including full-size at boot. */
 static void gui_draw_logo(int x, int cy, int scale, unsigned int bg, unsigned int c){
+    if (!window_has_target() && window_scale() > 1){
+        /* Drawn in physical pixels: u is one logo unit, every limb a round-ended
+           stroke. The logical path below rounds the menu bar's stroke radius to 0
+           and pixel-doubles its diagonals, which is what read as 8-bit. */
+        int sc = (int)window_scale(), u = scale * sc;
+        int pr = u * 2 / 5; if (pr < 1) pr = 1;
+        int ox = x * sc + u / 2, oy = cy * sc;
+        #define LG(ax, ay, bx, by) gui_capsule_phys(ox + (ax) * u, oy + (ay) * u, ox + (bx) * u, oy + (by) * u, pr, c)
+        LG(0, 5, 0, -7);                                   /* trunk */
+        LG(0, -1, -4, -5); LG(0, -1, 4, -5);               /* two main branches */
+        LG(0, -7, -3, -10); LG(0, -7, 0, -10); LG(0, -7, 3, -10);      /* crown */
+        LG(-4, -5, -6, -7); LG(-4, -5, -6, -5); LG(-4, -5, -6, -3);    /* left tuft */
+        LG(4, -5, 6, -7); LG(4, -5, 6, -5); LG(4, -5, 6, -3);          /* right tuft */
+        #undef LG
+        (void)bg;
+        return;
+    }
     int split_y = cy - scale, top_y = cy - 7 * scale;
     int r = scale > 1 ? scale - 1 : 0;
     /* Real bug, found from a pixel dump not a guess: aa_band is a fixed
@@ -3877,19 +3900,55 @@ static void gui_cursor_save(int x, int y){
             cursor_backup[j * pw + i] = window_get_pixel_phys(px0 + i, py0 + j);
     cursor_saved_x = x; cursor_saved_y = y;
 }
+/* The arrow as two convex polygons in 1/8 logical-pixel units (no FPU here).
+   v42 drew it as logical scanlines, so at scale 2 every edge was a 2x2
+   staircase. Now it is sampled 4x4 per PHYSICAL pixel into a coverage mask,
+   once per scale, and each draw is one blend per pixel. */
+static const int cur_head[] = {0,0, 100,100, 0,100};           /* tip, lower right, lower left */
+static const int cur_tail[] = {32,96, 56,96, 74,134, 52,134};  /* slanted stem under the head */
+static int cur_in_convex(const int *p, int n, int x, int y){
+    int pos = 0, neg = 0;
+    for (int k = 0; k < n; k++){
+        int ax = p[2*k], ay = p[2*k+1], bx = p[2*((k+1)%n)], by = p[2*((k+1)%n)+1];
+        int c = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+        if (c > 0) pos = 1; else if (c < 0) neg = 1;
+    }
+    return !(pos && neg);
+}
+static int cur_in_shape(int x, int y){ return cur_in_convex(cur_head, 3, x, y) || cur_in_convex(cur_tail, 4, x, y); }
+static unsigned char cur_cov_w[CURSOR_W * CURSOR_MAX_SCALE * CURSOR_H * CURSOR_MAX_SCALE];
+static unsigned char cur_cov_b[CURSOR_W * CURSOR_MAX_SCALE * CURSOR_H * CURSOR_MAX_SCALE];
+static int cur_mask_scale = 0;
+static void gui_cursor_build_mask(int sc){
+    static const int ox[8] = {7,-7,0,0,5,5,-5,-5}, oy[8] = {0,0,7,-7,5,-5,5,-5}; /* 7/8 px: the white outline's width */
+    int pw = CURSOR_W * sc, ph = CURSOR_H * sc;
+    for (int j = 0; j < ph; j++) for (int i = 0; i < pw; i++){
+        int w = 0, b = 0;
+        for (int sj = 0; sj < 4; sj++) for (int si = 0; si < 4; si++){
+            /* subsample centre in 1/8 logical px, shifted so the outline is not clipped at the tip */
+            int x = (i * 8 + si * 2 + 1) / sc - 8, y = (j * 8 + sj * 2 + 1) / sc - 8;
+            if (!cur_in_shape(x, y)){
+                int near = 0;
+                for (int k = 0; k < 8 && !near; k++) near = cur_in_shape(x + ox[k], y + oy[k]);
+                if (near) w++;
+            } else b++;
+        }
+        cur_cov_w[j * pw + i] = (unsigned char)w; cur_cov_b[j * pw + i] = (unsigned char)b;
+    }
+    cur_mask_scale = sc;
+}
 static void gui_draw_cursor(int x, int y){
-    /* v42: the standard arrow pointer, black fill with a white outline so
-       it reads on both the dark sky and the light dock, replacing the
-       crosshair corner mark. Scanline widths of the classic 12x19 arrow
-       (tip at top-left, tail at the lower right), drawn as rows so it's
-       one vector-ish description, not a sprite. */
-    static const unsigned char rows[19] = {1,2,3,4,5,6,7,8,9,10,11,12,7,7,8,8,9,9,8};
-    static const unsigned char tail_x[19] = {0,0,0,0,0,0,0,0,0,0,0,0,4,5,6,6,7,7,8};
-    for (int r = 0; r < 19; r++){
-        int x0 = x + tail_x[r], w = rows[r] - tail_x[r];
-        if (w <= 0) continue;
-        window_rect(x0, y + r, w, 1, 0x00FFFFFF);                       /* white outline row */
-        if (w > 2 && r > 0 && r < 18) window_rect(x0 + 1, y + r, w - 2, 1, 0x00000000); /* black interior */
+    int sc = gui_cursor_scale(), pw = CURSOR_W * sc, ph = CURSOR_H * sc;
+    if (cur_mask_scale != sc) gui_cursor_build_mask(sc);
+    for (int j = 0; j < ph; j++) for (int i = 0; i < pw; i++){
+        int w = cur_cov_w[j * pw + i], b = cur_cov_b[j * pw + i];
+        if (!w && !b) continue;
+        unsigned int bg = window_get_pixel_phys(x * sc + i, y * sc + j);
+        int keep = 16 - w - b;
+        unsigned int r = (((bg >> 16) & 0xFF) * keep + 255 * w) / 16;
+        unsigned int g = (((bg >> 8) & 0xFF) * keep + 255 * w) / 16;
+        unsigned int bl = ((bg & 0xFF) * keep + 255 * w) / 16;
+        window_pixel_phys(x * sc + i, y * sc + j, (r << 16) | (g << 8) | bl);
     }
 }
 
@@ -8186,6 +8245,16 @@ void kmain(unsigned int multiboot_info_addr){
     /* Multiboot command line (flags bit 2, pointer at +16), read here while
        the bootloader's low memory is still identity-reachable. Only one
        option exists: wxhost=A.B.C.D[:PORT], see wx_override_host. */
+    /* Multiboot info flag bit 12: the bootloader set a framebuffer. Offsets per the
+       multiboot1 spec: addr 88 (u64, low half used), pitch 96, width 100, height 104,
+       bpp 108, type 109 (1 = direct RGB). Read only while the info block sits inside
+       the boot identity map. */
+    if (multiboot_info_addr && multiboot_info_addr < 0x400000 && (*(unsigned int *)multiboot_info_addr & (1u << 12))) {
+        const unsigned char *mb = (const unsigned char *)multiboot_info_addr;
+        if (mb[109] == 1 && *(const unsigned int *)(mb + 92) == 0)
+            vbe_set_boot_framebuffer(*(const unsigned int *)(mb + 88), *(const unsigned int *)(mb + 96),
+                                     *(const unsigned int *)(mb + 100), *(const unsigned int *)(mb + 104), mb[108]);
+    }
     if (multiboot_info_addr && (*(unsigned int *)multiboot_info_addr & 0x4)) {
         const char *cl = (const char *)*(unsigned int *)(multiboot_info_addr + 16);
         for (; cl && *cl; cl++) {
