@@ -30,6 +30,7 @@ A release that can be defended. On top of the beta and the frozen syscall ABI (`
 - [ ] [Joshua] One real PC booted from the USB stick, keyboard and mouse working, photographed. The USB image and non-emulator graphics are only proven in QEMU so far.
 - [ ] [Fable] Keyboards on real PCs: a USB keyboard driver, or release notes that say plainly it needs the BIOS legacy keyboard mode.
 - [ ] [Sonnet] Saving on real PCs stated plainly: today only old IDE disks work.
+- [ ] [Fable] User profiles and sign-in done properly: login screen at boot, a home folder and settings per person, passwords stored hashed and never in the clear, lock screen, an admin level for risky actions (issue #28). Accounts exist today; this is the pass that makes them trustworthy.
 - [ ] [Haiku] Release notes that say what is missing: no sound, no secure web of its own, one core, no install to disk.
 - [ ] [Joshua] Codename for the release. The name stays Joshua Tree, domain `joshuatreeos.com`.
 
