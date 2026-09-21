@@ -138,6 +138,11 @@ clean:
 hooks:
 	git config core.hooksPath tools/hooks
 
+# This machine has a global core.hooksPath (~/.git-hooks); this opts THIS
+# repo into its own fast pre-push gate (tools/hooks/pre-push) instead.
+hooks:
+	git config core.hooksPath tools/hooks
+
 # v75 (0.66.x): real gap found root-causing the reaptest bug (paging.h's
 # PAGING_PRIVATE_PDE), the hard way -- a header-only edit left the stale
 # .o linked in twice in a row, silently "fixing" nothing and then
