@@ -14,6 +14,7 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck.
 - [ ] [Sonnet] Shell launches a program by name (PR #64).
 - [ ] [Sonnet] Ring-3 programs a fresh shell ships with: `cat`, `wc`, `grep`, `calc`. A tiny C compiler is a stretch.
+- [ ] [Sonnet] Landing hero, Joshua's spec: demo full width and about 85% of the screen tall, headline and its typewriter line squeezed into the strip under it, sections snap like magnets on scroll, no full screen mode needed. Test on phone and desktop, including reload and the old exit button scrolling too far.
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
 - [ ] [Joshua] Icon set redrawn to Mac-grade taste: depth, soft light, real materials. The current set is sharp but reads like Windows.
 - [ ] [Sonnet] Boot splash shows the real engraved tree mark at full resolution, not the stick tree.
