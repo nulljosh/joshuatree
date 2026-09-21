@@ -1,9 +1,10 @@
 # Architecture
 
-What each file does and how boot actually proceeds. `docs/roadmap.md` is the plan;
-this is the map of what exists right now.
+Joshua Tree is an operating system written from scratch. Not a Linux remix, not a theme on top of someone else's kernel: every line that runs after power-on is in this repo. It boots on a plain PC, reads a real disk, talks to the network, and puts up a mouse-driven desktop with a dock, a terminal and a shelf of apps.
 
-## Boot sequence
+There is no standard library underneath it and nothing borrowed at run time. The only outside tools are the compiler, the linker and QEMU to boot it in. `docs/roadmap.md` is the plan; this page is the map of what exists right now.
+
+## How it runs
 
 Higher-half kernel: everything from `kmain` on runs at 0xC0000000+, loaded
 physically at 1MB. `boot/boot.S`'s `_start` (deliberately unrelocated, it
@@ -20,7 +21,7 @@ that with the permanent, same-shaped tables.
    `gdt_install` → `idt_install` → `irq_install` → `pmm_init` →
    `paging_install` → `tasks_init` → `fat_mount` → the shell loop.
 
-## Subsystems
+## Files
 
 | File | What it owns |
 |---|---|
@@ -170,7 +171,7 @@ out of order is the fastest way to a silent, hard-to-diagnose bug.
 
 ## What's here now that used to be deferred
 
-Higher-half kernel (v2) shipped: see the Boot sequence section above.
+Higher-half kernel (v2) shipped: see How it runs above.
 `paging.c`/`pmm.c` are the two files that needed physical-vs-virtual care;
 `rtl8139.c` needed the same care for a different reason, the NIC does raw
 physical-memory DMA and doesn't know what a page table is.
