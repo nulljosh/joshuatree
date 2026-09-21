@@ -6425,7 +6425,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest\n");
+    if (!strcmp(line, "help"))       puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest\n");
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
@@ -6515,6 +6515,20 @@ static void run(char *line){
             for (int i = 0; i < 512; i++) if (rbuf[i] != wbuf[i]) { ok = 0; break; }
             puts(ok ? "wrote+read sector 100: ok\n" : "wrote+read sector 100: MISMATCH\n");
         }
+    }
+    else if (!strcmp(line, "filetest")) {
+        /* `filetest` writes a known file and reads it back; `filetest read`
+           only reads, never writes, so files-roundtrip-check.sh can prove
+           the bytes written before a reboot are still on the disk after it. */
+        const char *content = "JT_TESTCONTENT_001";
+        const char *filename = "JT_TEST.TXT";
+        int read_only = !strcmp(arg, "read");
+        char rbuf[32]; for (int i = 0; i < 32; i++) rbuf[i] = 0;
+        if (!read_only) vfs_delete(filename);  /* start fresh each time */
+        if (!read_only && !vfs_write_file(filename, (char *)content, 18)) serial_puts("filetest: write failed\n");
+        else if (!vfs_read_file(filename, rbuf, sizeof(rbuf))) serial_puts("filetest: read failed\n");
+        else if (strcmp(rbuf, content)) serial_puts("filetest: content mismatch\n");
+        else serial_puts(read_only ? "filetest: persisted read ok\n" : "filetest: write+read ok\n");
     }
     else if (!strcmp(line, "tasktest")) {
         /* v0.76.8: real, reproduced-on-demand CI flake fixed at the root.
