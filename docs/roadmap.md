@@ -76,7 +76,7 @@ Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at f
 - [x] `tools/qa_demo_drive.py` was stale: dock geometry from before the eleventh icon, `.` sent as an invalid qcode (the driver, not the keymap), esc-closing Files quit the desktop (PR #83) so the rest of the tour recorded one still, and `screendump` drew stripes headless. It now reads the dock from `kernel/kernel.c`, maps `.` to `dot`, closes each app from its red button and captures with `pmemsave`; `tools/checks/dockslots-check.py` guards the derivation. Weather and Trash reviewed: both clean.
 - [x] Esc with Files open quit the whole desktop to text mode (PR #83).
 - [x] Apps opened from the Apps folder showed "Apps" in the window frame instead of their own name. `gui_apps_launch` retitles the frame and restores it (`tools/checks/apptop-check.py`).
-- [ ] [Haiku] "Memory management" boot text isn't in kernel/boot/drivers/landing source; `klog` is serial-only. Confirm with a boot frame capture.
+- [x] The "Memory" text isn't boot output. A VGA text capture every 50 ms through boot shows only SeaBIOS and iPXE; the wording is the clock's notification panel, where `notif_friendly` in `kernel/kernel.c` renders klog's `pmm_init:` and `paging_install:` lines as "Memory initialized" and "Memory protection enabled".
 - [ ] [Sonnet] Lazy-load the boot loading image itself so it never shows visibly pixelated while scaling in.
 
 ## Gaps vs macOS / Linux / Windows
