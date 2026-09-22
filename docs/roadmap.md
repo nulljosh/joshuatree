@@ -66,9 +66,10 @@ What other small operating systems needed before people used them day to day.
 ## Bugs
 Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at full resolution):
 - [ ] [Sonnet] Terminal text is unreadable in places: proportional antialiased letters are drawn into fixed-width cells, so "m" is crushed to look like "n" and "i" and "l" float with wide gaps ("hel p", "nen" for "mem"). The Terminal grid needs the Mono face at its real advance.
-- [ ] [Sonnet] Calendar cuts the last week of a five-row month in half at the bottom of the window.
+- [x] Calendar cut the last week of a five-row month in half at the bottom of the window, and never drew a sixth. Rows now size to the window (`tools/checks/apptop-check.py`).
 - [ ] [Sonnet] Apps window: black band under the title bar, a fourth row drawn outside the panel and cut in half, two extra icons after Epiphany, "Apps" heading shown twice. In progress.
-- [ ] [Sonnet] Mail, Calendar, Notes, Reminders and Chat leave a blank strip about 50px tall between the title bar and their content, left over from the old full-screen title. Stocks does not, and looks right. Make them match Stocks.
+- [x] Mail, Calendar, Notes, Reminders and Chat left a blank strip about 50px tall under the title bar. They now shift up by `gui_app_dy()` in a window, like Stocks (`tools/checks/apptop-check.py`).
+- [ ] [Haiku] Contacts, Calculator, Search, Trash and Settings still draw their first line at y=52 in a window. Same fix: add `gui_app_dy()` to each content y, then add them to `tools/checks/apptop-check.py`.
 - [ ] [Haiku] Dock hover label has no backing and collides with the bottom edge of an open window.
 - [ ] [Haiku] `tools/qa_demo_drive.py` is stale: its dock geometry predates the eleventh icon, so every click lands on the right edge of a tile and the "Weather" and "Trash" steps both open Stocks. It also cannot type a period ("ship 1.0.0" arrives as "ship 100"); confirm whether that is the driver or the keyboard map. Weather and Trash were not reviewed because of this.
 - [x] Esc with Files open quit the whole desktop to text mode (PR #83).

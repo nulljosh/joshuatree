@@ -185,6 +185,56 @@ static void cal_day_view(int y, int m, int d){
     cal_events_set(datestr, msg);
 }
 
+/* The month grid both Calendar paths draw (the blocking one below and the
+   multi-window gui_draw_calendar_content). Rows are sized from the real
+   window height, capped at the original 44px: a six-week month needs six
+   of them, and at a fixed 44px from y=150 the fifth week was cut in half
+   by the bottom of a 385px dock window and the sixth never drawn. Text is
+   centred by its real rendered width, not 8px per character. */
+static void cal_draw_month(int vy, int vm, int sel_d, int ty, int tm, int td){
+    const unsigned int accent = 0x00A0553F, ink = 0x001C1C1E, dim = 0x00A39C92, hint = 0x00807468;
+    int T = gui_app_dy();
+    font_draw_string("left/right month   [ ] pick a day   enter opens it   t today   esc closes", 20, T + 52, hint, -1);
+    int first = cal_dow(vy, vm, 1), n = cal_days_in_month(vy, vm);
+    int rows = (first + n + 6) / 7;
+    int cell_w = 72, grid_w = 7 * cell_w;
+    int x0 = ((int)window_width() - grid_w) / 2;
+    int y0 = T + 150;
+    int cell_h = ((int)window_height() - y0 - 6) / rows;
+    if (cell_h > 44) cell_h = 44;
+    if (cell_h < 32) cell_h = 32;
+
+    /* "September 2026", centred over the grid */
+    char title[24]; int p = 0;
+    for (const char *s = CAL_MONTHS[vm - 1]; *s; s++) title[p++] = *s;
+    title[p++] = ' ';
+    title[p++] = '0' + (vy / 1000) % 10; title[p++] = '0' + (vy / 100) % 10;
+    title[p++] = '0' + (vy / 10) % 10;   title[p++] = '0' + vy % 10;
+    title[p] = 0;
+    font_draw_string(title, x0 + (grid_w - font_string_width(title)) / 2, T + 92, 0x0085144B, -1);
+
+    for (int c = 0; c < 7; c++)
+        font_draw_string(CAL_WD[c], x0 + c * cell_w + (cell_w - font_string_width(CAL_WD[c])) / 2, T + 122, (c == 0 || c == 6) ? dim : hint, -1);
+    window_rect(x0, T + 142, grid_w, 1, 0x00DDD9D3);
+
+    for (int d = 1; d <= n; d++) {
+        int idx = first + d - 1, row = idx / 7, col = idx % 7;
+        int cx = x0 + col * cell_w + cell_w / 2, cy = y0 + row * cell_h + cell_h / 2;
+        int today = (vy == ty && vm == tm && d == td);
+        char num[3]; int len = 0;
+        if (d >= 10) num[len++] = '0' + d / 10;
+        num[len++] = '0' + d % 10;
+        num[len] = 0;
+        if (d == sel_d) window_rect(x0 + col * cell_w + 2, y0 + row * cell_h + 2, cell_w - 4, cell_h - 4, 0x00EDE6DC);
+        if (today) gui_fill_circle(cx, cy, 15, accent, GUI_BG);
+        font_draw_string(num, cx - font_string_width(num) / 2, cy - 8, today ? 0x00FFFFFF : ((col == 0 || col == 6) ? dim : ink), -1);
+
+        char datestr[CAL_DATE_LEN + 1];
+        cal_date_str(vy, vm, d, datestr);
+        if (cal_events_find(datestr) >= 0) gui_fill_circle(cx, cy + 14, 2, today ? 0x00FFFFFF : accent, GUI_BG);
+    }
+}
+
 /* Left/right (or up/down, or the Apps folder's own a/d) step a month at
    a time, rolling the year over at either end; t jumps back to today.
    Today is a filled disc behind the day number, the one shape every
@@ -204,46 +254,11 @@ static void gui_launch_calendar(void){
     cal_read_today(&ty, &tm, &td);
     int vy = ty, vm = tm, sel_d = td;
     cal_events_load();
-    const unsigned int accent = 0x00A0553F, ink = 0x001C1C1E, dim = 0x00A39C92, hint = 0x00807468;
     for (;;) {
         window_clear(GUI_BG);
         gui_draw_app_titlebar("Calendar");
-        font_draw_string("left/right month   [ ] pick a day   enter opens it   t today   esc closes", 20, 52, hint, -1);
-
-        int cell_w = 72, cell_h = 44, grid_w = 7 * cell_w;
-        int x0 = ((int)window_width() - grid_w) / 2;
-        int y0 = 150;
-
-        /* "September 2026", centered over the grid */
-        char title[24]; int p = 0;
-        for (const char *s = CAL_MONTHS[vm - 1]; *s; s++) title[p++] = *s;
-        title[p++] = ' ';
-        title[p++] = '0' + (vy / 1000) % 10; title[p++] = '0' + (vy / 100) % 10;
-        title[p++] = '0' + (vy / 10) % 10;   title[p++] = '0' + vy % 10;
-        title[p] = 0;
-        font_draw_string(title, x0 + (grid_w - p * 8) / 2, 92, 0x0085144B, -1);
-
-        for (int c = 0; c < 7; c++)
-            font_draw_string(CAL_WD[c], x0 + c * cell_w + (cell_w - 24) / 2, 122, (c == 0 || c == 6) ? dim : hint, -1);
-        window_rect(x0, 142, grid_w, 1, 0x00DDD9D3);
-
-        int first = cal_dow(vy, vm, 1), n = cal_days_in_month(vy, vm);
-        for (int d = 1; d <= n; d++) {
-            int idx = first + d - 1, row = idx / 7, col = idx % 7;
-            int cx = x0 + col * cell_w + cell_w / 2, cy = y0 + row * cell_h + cell_h / 2;
-            int today = (vy == ty && vm == tm && d == td);
-            char num[3]; int len = 0;
-            if (d >= 10) num[len++] = '0' + d / 10;
-            num[len++] = '0' + d % 10;
-            num[len] = 0;
-            if (d == sel_d) window_rect(x0 + col * cell_w + 2, y0 + row * cell_h + 2, cell_w - 4, cell_h - 4, 0x00EDE6DC);
-            if (today) gui_fill_circle(cx, cy, 15, accent, GUI_BG);
-            font_draw_string(num, cx - len * 4, cy - 8, today ? 0x00FFFFFF : ((col == 0 || col == 6) ? dim : ink), -1);
-
-            char datestr[CAL_DATE_LEN + 1];
-            cal_date_str(vy, vm, d, datestr);
-            if (cal_events_find(datestr) >= 0) gui_fill_circle(cx, cy + 14, 2, today ? 0x00FFFFFF : accent, GUI_BG);
-        }
+        cal_draw_month(vy, vm, sel_d, ty, tm, td);
+        int n = cal_days_in_month(vy, vm);
 
         sleep_ticks(5);
         mouse_click_edge_sync();
@@ -289,47 +304,19 @@ static void gui_draw_calendar_content(void){
     cal_mw_init();
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Calendar");
-    const unsigned int accent = 0x00A0553F, ink = 0x001C1C1E, dim = 0x00A39C92, hint = 0x00807468;
     if (cal_mw_dayview) {
+        const unsigned int ink = 0x001C1C1E, hint = 0x00807468;
+        int T = gui_app_dy();
         char datestr[CAL_DATE_LEN + 1];
         cal_date_str(cal_mw_vy, cal_mw_vm, cal_mw_sel_d, datestr);
-        font_draw_string(datestr, 20, 52, hint, -1);
-        font_draw_string("type the event, enter saves, esc cancels:", 20, 72, hint, -1);
-        window_rect(20, 96, (int)window_width() - 40, 20, 0x00FFFFFF);
+        font_draw_string(datestr, 20, T + 52, hint, -1);
+        font_draw_string("type the event, enter saves, esc cancels:", 20, T + 72, hint, -1);
+        window_rect(20, T + 96, (int)window_width() - 40, 20, 0x00FFFFFF);
         cal_mw_buf[cal_mw_buflen] = 0;
-        font_draw_string(cal_mw_buf, 24, 98, ink, -1);
+        font_draw_string(cal_mw_buf, 24, T + 98, ink, -1);
         return;
     }
-    font_draw_string("left/right month   [ ] pick a day   enter opens it   t today   esc closes", 20, 52, hint, -1);
-    int cell_w = 72, cell_h = 44, grid_w = 7 * cell_w;
-    int x0 = ((int)window_width() - grid_w) / 2;
-    int y0 = 150;
-    char title[24]; int p = 0;
-    for (const char *s = CAL_MONTHS[cal_mw_vm - 1]; *s; s++) title[p++] = *s;
-    title[p++] = ' ';
-    title[p++] = '0' + (cal_mw_vy / 1000) % 10; title[p++] = '0' + (cal_mw_vy / 100) % 10;
-    title[p++] = '0' + (cal_mw_vy / 10) % 10;   title[p++] = '0' + cal_mw_vy % 10;
-    title[p] = 0;
-    font_draw_string(title, x0 + (grid_w - p * 8) / 2, 92, 0x0085144B, -1);
-    for (int c = 0; c < 7; c++)
-        font_draw_string(CAL_WD[c], x0 + c * cell_w + (cell_w - 24) / 2, 122, (c == 0 || c == 6) ? dim : hint, -1);
-    window_rect(x0, 142, grid_w, 1, 0x00DDD9D3);
-    int first = cal_dow(cal_mw_vy, cal_mw_vm, 1), n = cal_days_in_month(cal_mw_vy, cal_mw_vm);
-    for (int d = 1; d <= n; d++) {
-        int idx = first + d - 1, row = idx / 7, col = idx % 7;
-        int cx = x0 + col * cell_w + cell_w / 2, cy = y0 + row * cell_h + cell_h / 2;
-        int today = (cal_mw_vy == cal_mw_ty && cal_mw_vm == cal_mw_tm && d == cal_mw_td);
-        char num[3]; int len = 0;
-        if (d >= 10) num[len++] = '0' + d / 10;
-        num[len++] = '0' + d % 10;
-        num[len] = 0;
-        if (d == cal_mw_sel_d) window_rect(x0 + col * cell_w + 2, y0 + row * cell_h + 2, cell_w - 4, cell_h - 4, 0x00EDE6DC);
-        if (today) gui_fill_circle(cx, cy, 15, accent, GUI_BG);
-        font_draw_string(num, cx - len * 4, cy - 8, today ? 0x00FFFFFF : ((col == 0 || col == 6) ? dim : ink), -1);
-        char datestr[CAL_DATE_LEN + 1];
-        cal_date_str(cal_mw_vy, cal_mw_vm, d, datestr);
-        if (cal_events_find(datestr) >= 0) gui_fill_circle(cx, cy + 14, 2, today ? 0x00FFFFFF : accent, GUI_BG);
-    }
+    cal_draw_month(cal_mw_vy, cal_mw_vm, cal_mw_sel_d, cal_mw_ty, cal_mw_tm, cal_mw_td);
 }
 
 /* Returns 1 when this window should close (esc from the month grid); esc

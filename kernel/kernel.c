@@ -3992,6 +3992,12 @@ static void gui_draw_cursor(int x, int y){
 /* App viewers have their own input loops. Keep the pointer alive while one
    is open, drawing it in screen coordinates outside the app viewport. */
 static int gui_app_windowed = 0;
+/* Vertical shift for an app's own content. Full screen, an app draws its
+   own title strip across the top 40px and starts content at y=52. In a
+   dock window the frame already draws the title bar above the viewport,
+   so the same layout moves up by that strip, the same 32px Stocks has
+   always saved through stx_top(). Add it to every content y. */
+static int gui_app_dy(void){ return gui_app_windowed ? -32 : 0; }
 static int app_view_x, app_view_y, app_view_w, app_view_h;
 static int app_cursor_x, app_cursor_y;
 static void gui_app_mouse_tick(void){

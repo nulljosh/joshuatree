@@ -69,6 +69,7 @@ retry|Launchpad tile click launches, doesn't just close the folder|python3 ./too
 retry|Apps folder layout (no black band, no row spill, no ghost icons)|python3 ./tools/checks/appsfolder-layout-check.py
 retry|Multi-window (click-to-focus, real z-order compositing)|python3 ./tools/checks/multiwindow-check.py
 retry|Window snapping (title-bar drag to edge/corner, real pixel proof)|python3 ./tools/checks/windowsnap-check.py
+retry|Windowed apps start under the title bar, Calendar fits six weeks|python3 ./tools/checks/apptop-check.py
 retry|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
 retry|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
 retry|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py

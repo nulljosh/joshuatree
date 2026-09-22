@@ -256,8 +256,9 @@ static void chat_draw_status(const char *state) {
     s = "   "; while (*s) line[p++] = *s++;
     while (*state && p < (int)sizeof(line) - 1) line[p++] = *state++;
     line[p] = 0;
-    window_rect(0, 40, (int)window_width(), 32, GUI_BG);
-    font_draw_string(line, 20, 52, CHAT_DIM, -1);
+    int T = gui_app_dy();
+    window_rect(0, T + 40, (int)window_width(), 32, GUI_BG);
+    font_draw_string(line, 20, T + 52, CHAT_DIM, -1);
 }
 
 static void gui_launch_chat_app(void) {
@@ -266,12 +267,13 @@ static void gui_launch_chat_app(void) {
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Chat"); /* v0.76.11: drawn once, not every keystroke -- see chat_prompt_line's own comment */
     const char *state = "ready";
+    int T = gui_app_dy();
     for (;;) {
-        window_rect(0, 40, (int)window_width(), (int)window_height() - 40, GUI_BG);
+        window_rect(0, T + 40, (int)window_width(), (int)window_height() - 40 - T, GUI_BG);
         chat_draw_status(state);
         serial_puts("chatconsole\n"); /* marker for tools/checks/chat-check.sh: the console view drew, status line included */
 
-        int x = 20, y = 76;
+        int x = 20, y = T + 76;
         int bottom = (int)window_height() - 40;
         int prompt_w = font_string_width(CHAT_PROMPT);
         int body_w = (int)window_width() - 40;
@@ -308,10 +310,10 @@ static void gui_launch_chat_app(void) {
             if (!gui_prompt_line_input("Chat", CHAT_PROMPT "send a message (enter sends, esc cancels)", msg, sizeof(msg))) continue;
             if (msg[0] == 0) continue;
 
-            window_rect(0, 40, (int)window_width(), (int)window_height() - 40, GUI_BG);
+            window_rect(0, T + 40, (int)window_width(), (int)window_height() - 40 - T, GUI_BG);
             chat_draw_status("generating ...");
-            font_draw_string(CHAT_PROMPT, x, 76, CHAT_DIM, -1);
-            render_wrapped_text(msg, x + prompt_w, 76, body_w - prompt_w, 64, CHAT_INK);
+            font_draw_string(CHAT_PROMPT, x, T + 76, CHAT_DIM, -1);
+            render_wrapped_text(msg, x + prompt_w, T + 76, body_w - prompt_w, 64, CHAT_INK);
 
             static char answer[4096]; /* real growth from the old 2048-byte cap */
             state = chat_send(msg, answer, sizeof(answer)) ? "ready" : "error: couldn't reach the host, or no reply";
