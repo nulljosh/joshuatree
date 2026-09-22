@@ -31,7 +31,7 @@ from PIL import Image
 LOG = "/tmp/jt-apptop-serial.log"
 DUMP = "/tmp/jt-apptop.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4461
+PORT = 4471
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP

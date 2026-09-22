@@ -4,7 +4,7 @@ Freestanding i386 kernel, no libc. This is the forward plan. What already
 shipped lives in `git log`, `git tag -l "jt-v*"`, and the [GitHub
 releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
-**Latest**: Portfolio, a catalog of every app in the fleet, right on the desktop.
+**Latest**: Calendar, now in Day, Week, Month and Year views.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -69,6 +69,7 @@ Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at f
 - [x] Calendar cut the last week of a five-row month in half at the bottom of the window, and never drew a sixth. Rows now size to the window (`tools/checks/apptop-check.py`).
 - [ ] [Sonnet] Apps window: black band under the title bar, a fourth row drawn outside the panel and cut in half, two extra icons after Epiphany, "Apps" heading shown twice. In progress.
 - [x] Mail, Calendar, Notes, Reminders and Chat left a blank strip about 50px tall under the title bar. They now shift up by `gui_app_dy()` in a window, like Stocks (`tools/checks/apptop-check.py`).
+- [ ] [Haiku] `tools/checks/landing-headline-check.sh` fails on `demo-focused` still hiding the hero copy on click in `landing/index.html`. It was silently dead before (it read `roadmap.md` from the repo root); not in `tools/checks/ci-suite.sh` yet.
 - [ ] [Haiku] Contacts, Calculator, Search, Trash and Settings still draw their first line at y=52 in a window. Same fix: add `gui_app_dy()` to each content y, then add them to `tools/checks/apptop-check.py`.
 - [ ] [Haiku] Dock hover label has no backing and collides with the bottom edge of an open window.
 - [ ] [Haiku] `tools/qa_demo_drive.py` is stale: its dock geometry predates the eleventh icon, so every click lands on the right edge of a tile and the "Weather" and "Trash" steps both open Stocks. It also cannot type a period ("ship 1.0.0" arrives as "ship 100"); confirm whether that is the driver or the keyboard map. Weather and Trash were not reviewed because of this.

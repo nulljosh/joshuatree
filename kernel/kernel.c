@@ -4175,6 +4175,10 @@ static void gui_launch_files(void){ gui_draw_files_content(); gui_wait_close(); 
    with scrollback and VFS-backed history, included below alongside the
    rest of the app headers. */
 
+/* Physical-resolution text (defined with the Weather window below); the
+   Calendar year view draws its mini-month digits with it. */
+static int wx_text(const char *s, int lx, int ly, int size, int bold, int mul, unsigned int fg);
+static int wx_text_lw(const char *s, int size, int bold, int mul);
 #include "gui_prompt.h"
 #include "auth.h"
 #include "editor.h"
