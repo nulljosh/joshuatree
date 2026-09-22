@@ -3707,6 +3707,9 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
    lifted icon and its label, so repainting this band alone is enough to
    erase any previous hover state. */
 static int gui_dock_band_top(void){ return gui_dock_y0() - 24; }
+#define DOCK_LABEL_BG   0x00F4F1EC /* hover label capsule fill */
+#define DOCK_LABEL_EDGE 0x00BDB4A8 /* its hairline edge */
+#define DOCK_LABEL_SPAN 48         /* px either side of a slot a hover change repaints: the widest label plus its capsule */
 
 static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my);
 /* v0.79.x: the dock splits into the half that never changes while the
@@ -3811,8 +3814,8 @@ static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int
            frame even though composition itself was offscreen. */
         for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
             if ((slot == dock_presented_hover) == (slot == dock_hover)) continue;
-            int left = (gui_slot_x(slot) - 25) * sc;
-            int right = (gui_slot_x(slot) + DOCK_ICON + 25) * sc;
+            int left = (gui_slot_x(slot) - DOCK_LABEL_SPAN) * sc;
+            int right = (gui_slot_x(slot) + DOCK_ICON + DOCK_LABEL_SPAN) * sc;
             if (left < 0) left = 0;
             if (right > pw) right = pw;
             for (int py = 0; py < ph; py++) {
@@ -3881,11 +3884,18 @@ static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
         gui_draw_one_icon(icon, cx_center, cy_bottom, size);
         if (slot == dock_hover) {
             int label_w = font_string_width(GUI_LABELS[icon]);
-            /* Dark text on the old flat light backdrop; the gradient
-               wallpaper makes the area right above the dock genuinely
-               dark now, dark-on-dark was unreadable, caught live by
-               actually hovering an icon on the real page, not assumed. */
-            font_draw_string(GUI_LABELS[icon], cx_center - label_w / 2, cy_bottom - size - 18, 0x00FFF6EC, -1);
+            int ly = y0 - 21; /* capsule spans ly-3 .. ly+19: clear of the tray's top edge, inside the band (y0 - 24) */
+            /* Dark text on a light capsule with a hairline edge, the macOS
+               dock tooltip, in the tray's own cream. Bare light text read
+               on dark wallpaper but vanished on bright map tiles and
+               collided with an open window's bottom edge (QA tour,
+               2026-09-21); the hairline keeps the capsule distinct over a
+               light window. It stays inside the band gui_dock_band_top()
+               composes and the per-slot present span DOCK_LABEL_SPAN. */
+            int lx0 = cx_center - label_w / 2 - 2, lx1 = cx_center + label_w / 2 + 2;
+            gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 11, DOCK_LABEL_EDGE, DOCK_LABEL_EDGE);
+            gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 10, DOCK_LABEL_BG, DOCK_LABEL_BG);
+            font_draw_string(GUI_LABELS[icon], cx_center - label_w / 2, ly, 0x001C1C1E, -1);
         }
     }
     if (drag_slot >= 0) {
