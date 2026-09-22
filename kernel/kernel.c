@@ -4854,6 +4854,25 @@ static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, in
     gui_apps_draw_grid(scroll_offset, sel, x0, y0, cell_w, cell_h, tile);
     serial_puts("appsgridrepaint\n");
 }
+/* The window frame's title while an app runs inside the Apps folder's
+   window. The frame is drawn once by gui_launch_from_dock with the folder's
+   own label; an app launched from the grid used to leave "Apps" up there.
+   The title sits outside the content viewport, so the viewport is lifted
+   just for this draw. */
+static void gui_app_frame_title(const char *label){
+    if (!gui_app_windowed) return;
+    int x = app_view_x - 8, y = app_view_y - 32;
+    window_clear_viewport();
+    window_rect(x + 90, y + 4, 320, 22, 0x00F5F0EB);
+    font_draw_string(label, x + 96, y + 8, 0x00403439, -1);
+    window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
+}
+static void gui_apps_launch(int icon){
+    gui_app_frame_title(GUI_LABELS[icon]);
+    gui_launch(icon);
+    gui_app_frame_title(GUI_LABELS[GUI_APPS_FOLDER]);
+}
+
 static void gui_launch_apps(void){
     int sel = 0;
     int rows = (GUI_APPS_FOLDER + APPS_COLS - 1) / APPS_COLS;
@@ -4966,16 +4985,16 @@ static void gui_launch_apps(void){
                 int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
                 if (click_vx >= cell_x0 && click_vx < cell_x1 && click_vy >= cell_y0 && click_vy < cell_y1) { hit = i; break; }
             }
-            if (hit >= 0) { sel = hit; gui_launch(hit); full = 1; continue; } /* the app drew over the screen, so the folder needs a real full repaint */
+            if (hit >= 0) { sel = hit; gui_apps_launch(hit); full = 1; continue; } /* the app drew over the screen, so the folder needs a real full repaint */
             return; /* a tap outside every tile still closes the folder: with no keyboard there is no other way out */
         }
-        if (k == KEY_ENTER) { gui_launch(sel); full = 1; continue; } /* returns here when that app closes, folder still open, same as a real launcher */
+        if (k == KEY_ENTER) { gui_apps_launch(sel); full = 1; continue; } /* returns here when that app closes, folder still open, same as a real launcher */
         int old_sel = sel;
         if (k == 'a' && sel > 0) sel--;                 /* left  */
         else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) sel++; /* right */
         else if (k == 'w' && sel >= APPS_COLS) sel -= APPS_COLS;
         else if (k == 's' && sel + APPS_COLS < GUI_APPS_FOLDER) sel += APPS_COLS;
-        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_launch(sel); full = 1; continue; }
+        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_apps_launch(sel); full = 1; continue; }
         if (sel != old_sel) {
             /* Keyboard selection drags the view with it, the direction that is
                not surprising: move past the last visible row and the grid

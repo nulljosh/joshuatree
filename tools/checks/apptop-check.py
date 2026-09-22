@@ -20,7 +20,9 @@ dock, dumps the framebuffer, and checks:
      viewport is at most MAX_GAP logical pixels below the viewport's top.
      Before the fix every one of the five apps sits at ~20px + the 32px
      blank band, well over the limit.
-  2. Calendar: below the weekday rule there are exactly six bands of day
+  2. Apps-folder apps put their own name in the window frame, and the
+     folder's "Apps" comes back when they close.
+  3. Calendar: below the weekday rule there are exactly six bands of day
      numbers, and the bottom few rows of the viewport are clear of ink
      (nothing cut off by the window edge).
 
@@ -136,16 +138,21 @@ try:
             if rows[-1] >= VY1 - 3: fails.append(f"Calendar: ink touches the bottom of the window (y={rows[-1]}), last week is clipped")
         click_at(*CLOSE, 1.0)
         move(*PARK); time.sleep(0.5)
+    def title(img):
+        # The folder window's frame title strip, x+90..x+410, y+4..y+26 (gui_app_frame_title).
+        return img.crop(((56 + 90) * SCALE, (30 + 4) * SCALE, (56 + 410) * SCALE, (30 + 26) * SCALE)).tobytes()
     def key(qc):
         cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qc}]}}); time.sleep(0.35)  # search-check.py: faster drops scancodes
     for name, idx in FOLDER_APPS.items():
         click_at(SLOT0_X + DOCK_ICON // 2, ICON_ROW_Y, 1.2)
         move(*PARK); time.sleep(0.3)
+        title_apps = title(dump())
         for _ in range(idx % 5): key("d")
         for _ in range(idx // 5): key("s")
         key("ret"); time.sleep(1.2)
         img = dump()
         img.save(f"/tmp/jt-apptop-{name.lower()}.png")
+        if title(img) == title_apps: fails.append(f"{name}: window frame still says Apps, not the app's own name")
         fx0, fy0, fx1, fy1 = FOLDER_VIEW
         samples = [img.getpixel((x * SCALE, y * SCALE)) for y in range(fy0, fy1, 9) for x in range(fx0, fx1, 9)]
         bg = sum(1 for p in samples if p == (0xFA, 0xF8, 0xF6)) * 100 // len(samples)
@@ -159,6 +166,7 @@ try:
             print(f"{name}: first ink {gap}px below the title bar")
             if gap > MAX_GAP: fails.append(f"{name}: blank strip under the title bar, first ink {gap}px down (max {MAX_GAP})")
         key("esc"); time.sleep(0.6)
+        if title(dump()) != title_apps: fails.append(f"{name}: frame title not restored to Apps after closing it")
         click_at(*FOLDER_CLOSE, 1.0)
         move(*PARK); time.sleep(0.4)
     try: cmd({"execute": "quit"})
