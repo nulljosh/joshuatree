@@ -3,7 +3,8 @@
 the title bar, and that Calendar fits a six-week month inside its window.
 
 Bug (2026-09-21 QA tour, docs/roadmap.md "Bugs"): Mail, Calendar, Notes,
-Reminders and Chat drew their first line at y=52, left over from the
+Reminders and Chat (and, found after, Trash, Contacts, Calculator and
+Search) drew their first line at y=52, left over from the
 full-screen layout where the app drew its own title strip across the top.
 Inside a dock window the frame already draws the title bar, so each app
 left a blank band about 50px tall under it. Stocks switches its top margin
@@ -40,7 +41,13 @@ PARK = (930, 300)          # right of the window: the pointer sprite must not re
 CLOSE = (94, 56)             # window 0's red traffic light (gui_multiwin_geom slot 0 / gui_launch_from_dock)
 VX0, VY0, VX1, VY1 = 78, 72, 890, 417  # content viewport: (x+8, y+32, w-16, h-40) for x=70,y=40,w=820,h=385
 MAX_GAP = 30
-SLOTS = {"Mail": 2, "Calendar": 3, "Notes": 4, "Reminders": 5, "Chat": 7}
+SLOTS = {"Mail": 2, "Calendar": 3, "Notes": 4, "Reminders": 5, "Chat": 7, "Trash": 10}
+# Apps-folder apps open inside the folder window (x=56,y=30,w=848,h=490, see
+# gui_launch_from_dock), viewport (x+8, y+32, w-16, h-40). Grid index i sits
+# at row i/5, col i%5 (APPS_COLS); d moves right, s moves down.
+FOLDER_APPS = {"Contacts": 18, "Calculator": 19, "Search": 21}
+FOLDER_VIEW = (64, 62, 896, 512)
+FOLDER_CLOSE = (80, 46)
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for p in (LOG, DUMP):
@@ -85,12 +92,13 @@ try:
         return Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
     centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
 
-    def ink_rows(img):
+    def ink_rows(img, view=(VX0, VY0, VX1, VY1)):
         """Logical rows inside the content viewport holding dark (text) ink."""
+        x0, y0, x1, y1 = view
         px = img.load(); rows = []
-        for ly in range(VY0, VY1):
+        for ly in range(y0, y1):
             y = ly * SCALE
-            if any(sum(px[lx * SCALE, y]) < 520 or sum(px[lx * SCALE + 1, y + 1]) < 520 for lx in range(VX0 + 4, VX1 - 4)):
+            if any(sum(px[lx * SCALE, y]) < 520 or sum(px[lx * SCALE + 1, y + 1]) < 520 for lx in range(x0 + 4, x1 - 4)):
                 rows.append(ly)
         return rows
     def bands(rows):
@@ -128,6 +136,31 @@ try:
             if rows[-1] >= VY1 - 3: fails.append(f"Calendar: ink touches the bottom of the window (y={rows[-1]}), last week is clipped")
         click_at(*CLOSE, 1.0)
         move(*PARK); time.sleep(0.5)
+    def key(qc):
+        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qc}]}}); time.sleep(0.35)  # search-check.py: faster drops scancodes
+    for name, idx in FOLDER_APPS.items():
+        click_at(SLOT0_X + DOCK_ICON // 2, ICON_ROW_Y, 1.2)
+        move(*PARK); time.sleep(0.3)
+        for _ in range(idx % 5): key("d")
+        for _ in range(idx // 5): key("s")
+        key("ret"); time.sleep(1.2)
+        img = dump()
+        img.save(f"/tmp/jt-apptop-{name.lower()}.png")
+        fx0, fy0, fx1, fy1 = FOLDER_VIEW
+        samples = [img.getpixel((x * SCALE, y * SCALE)) for y in range(fy0, fy1, 9) for x in range(fx0, fx1, 9)]
+        bg = sum(1 for p in samples if p == (0xFA, 0xF8, 0xF6)) * 100 // len(samples)
+        rows = ink_rows(img, FOLDER_VIEW)
+        if bg < 80:
+            fails.append(f"{name}: did not open from the Apps folder (viewport only {bg}% app background)")
+        elif not rows:
+            fails.append(f"{name}: no ink in the Apps-folder viewport (did it open?)")
+        else:
+            gap = rows[0] - FOLDER_VIEW[1]
+            print(f"{name}: first ink {gap}px below the title bar")
+            if gap > MAX_GAP: fails.append(f"{name}: blank strip under the title bar, first ink {gap}px down (max {MAX_GAP})")
+        key("esc"); time.sleep(0.6)
+        click_at(*FOLDER_CLOSE, 1.0)
+        move(*PARK); time.sleep(0.4)
     try: cmd({"execute": "quit"})
     except (ConnectionResetError, BrokenPipeError, json.JSONDecodeError): pass
 finally:

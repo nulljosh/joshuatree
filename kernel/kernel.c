@@ -4992,18 +4992,19 @@ static void gui_launch_apps(void){
    Same keyboard-and-click contract every screen here uses (see
    gui_wait_close): a phone has no keyboard, so every action has a tap. */
 static void gui_launch_trash(void){
+    int T = gui_app_dy();
     int sel = 0;
     for (;;) {
         window_clear(GUI_BG);
         gui_draw_app_titlebar("Trash");
         int n = trash_count();
         if (!n) {
-            font_draw_string("Trash is empty.", 20, 70, 0x001C1C1E, -1);
-            font_draw_string("Deleting a file with rm puts it here first.", 20, 94, 0x00807468, -1);
+            font_draw_string("Trash is empty.", 20, T + 52, 0x001C1C1E, -1);
+            font_draw_string("Deleting a file with rm puts it here first.", 20, T + 76, 0x00807468, -1);
         } else {
-            font_draw_string("up/down to pick   r restores   e empties   esc closes", 20, 52, 0x00807468, -1);
+            font_draw_string("up/down to pick   r restores   e empties   esc closes", 20, T + 52, 0x00807468, -1);
             for (int i = 0; i < n; i++) {
-                int y = 84 + i * 22;
+                int y = T + 84 + i * 22;
                 if (i == sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);
                 font_draw_string(trash_name(i), 28, y, 0x001C1C1E, -1);
                 char sz[16]; int p = 0; unsigned int v = trash_size(i);

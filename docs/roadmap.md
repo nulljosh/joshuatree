@@ -70,7 +70,8 @@ Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at f
 - [ ] [Sonnet] Apps window: black band under the title bar, a fourth row drawn outside the panel and cut in half, two extra icons after Epiphany, "Apps" heading shown twice. In progress.
 - [x] Mail, Calendar, Notes, Reminders and Chat left a blank strip about 50px tall under the title bar. They now shift up by `gui_app_dy()` in a window, like Stocks (`tools/checks/apptop-check.py`).
 - [ ] [Haiku] `tools/checks/landing-headline-check.sh` fails on `demo-focused` still hiding the hero copy on click in `landing/index.html`. It was silently dead before (it read `roadmap.md` from the repo root); not in `tools/checks/ci-suite.sh` yet.
-- [ ] [Haiku] Contacts, Calculator, Search, Trash and Settings still draw their first line at y=52 in a window. Same fix: add `gui_app_dy()` to each content y, then add them to `tools/checks/apptop-check.py`.
+- [x] Contacts, Calculator, Search and Trash drew their first line at y=52 in a window too; now on `gui_app_dy()` and covered by `tools/checks/apptop-check.py`. Settings only opens full screen from the menu, so it has no window title bar to sit under.
+- [ ] [Haiku] `tools/checks/gui-prompt-keystroke-check.sh` fails its Calculator case (0 redraws seen) on 0.88.0 as well, so not a layout regression; not in `tools/checks/ci-suite.sh` yet.
 - [ ] [Haiku] Dock hover label has no backing and collides with the bottom edge of an open window.
 - [ ] [Haiku] `tools/qa_demo_drive.py` is stale: its dock geometry predates the eleventh icon, so every click lands on the right edge of a tile and the "Weather" and "Trash" steps both open Stocks. It also cannot type a period ("ship 1.0.0" arrives as "ship 100"); confirm whether that is the driver or the keyboard map. Weather and Trash were not reviewed because of this.
 - [x] Esc with Files open quit the whole desktop to text mode (PR #83).
