@@ -202,8 +202,11 @@ key("esc"); time.sleep(0.5)  # close Mail, back to the Apps folder grid
 # needs real a/d/w/s navigation. The digit '2' launch above left the grid
 # selection on index 1 (row 0, col 1); right x3, down x3 reaches row 3
 # col 4 = index 19, the same cell math gui_launch_apps itself uses.
+# 0.35 s per grid step, not key()'s 0.1 s: faster sends drop scancodes in
+# the grid (search-check.py measured it), which is what left this test
+# typing into the Apps folder instead of Calculator.
 for c in ("d", "d", "d", "s", "s", "s"):
-    key(c)
+    key(c); time.sleep(0.25)
 key("ret"); time.sleep(0.5)
 
 before = prompt_count()

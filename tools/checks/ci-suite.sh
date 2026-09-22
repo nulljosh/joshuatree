@@ -55,6 +55,7 @@ retry|Settings click acts on the row actually clicked|./tools/checks/settingscli
 retry|Wallpaper defaults to Satellite on a fresh boot|./tools/checks/walldefault-check.sh
 retry|Idle tour's Settings visit doesn't change the wallpaper theme|python3 ./tools/checks/walldemo-regression-check.py
 retry|Notes editor chrome doesn't redraw on plain keystrokes|./tools/checks/editorflash-check.sh
+retry|Mail, Reminders and Calculator prompts redraw content, not chrome, per keystroke|./tools/checks/gui-prompt-keystroke-check.sh
 retry|Notes typing, typography, pointer controls, persistence|python3 ./tools/checks/editor_qa.py
 retry|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/termchatflash-check.sh
 retry|Apple-menu hover stays cheap, clock redraws on a minute change|./tools/checks/menuclock-check.sh
