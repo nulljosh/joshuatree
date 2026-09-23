@@ -12,42 +12,26 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 ## Beta, 0.9.0
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck.
-- [x] Shell launches a program by name (#64).
-- [ ] [Sonnet] Landing hero, Joshua's spec: demo full width and about 85% of the screen tall, headline and its typewriter line squeezed into the strip under it, sections snap like magnets on scroll, no full screen mode needed. Test on phone and desktop, including reload and the old exit button scrolling too far.
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
-- [x] Icon set redrawn to Mac-grade taste (#96): depth, soft light, real materials. The current set is sharp but reads like Windows.
 - [ ] [Sonnet] Boot splash shows the real engraved tree mark at full resolution, not the stick tree.
 - [ ] [Fable] Typography QA across Notes, the document app and the Terminal: spacing between letters, baselines, sizes and weights, every printable character, long lines, wrapping, selection. This kernel is a word processor from scratch, so text gets its own checks.
 - [ ] [Sonnet] Chat QA: open Chat, switch between models, sign-in gate for subscription models.
 - [ ] [Sonnet] A headless test for every app (open, use, close) in `tools/checks/ci-suite.sh`.
 - [ ] [Fable] Error handling audit: corrupt or oversized files, full disk, bad input in every text field, missing disk, network or mouse. Each case gets a check.
 - [ ] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts.
-- [x] Magnet-style window snapping (#82): drag a window to a screen edge for a half, to a corner for a quarter, to the top for full, with the target outline shown while dragging.
-- [ ] [Haiku] Docs refresh: README, WHITEPAPER and ARCHITECTURE reworded and filled out to mirror the structure of the better fleet docs (nimble and tripwire are the reference).
 
 ## 1.0.0
 Joshua's call, 2026-09-22: **1.0 is a Snow Leopard release.** No new features. Stability, reliability and speed only: every item below makes what already exists crash less, lose less and run faster. New apps and features wait for 1.1 (see After 1.0).
 Joshua's call, 2026-09-21: 1.0.0 is a super thorough QA release. Every feature works, nothing crashes, all text and icons are sharp, and the icons have taste, not a Microsoft look. Real hardware is trusted for now and proven after.
-- [x] QA gallery (#104, `tools/checks/qa-gallery.py`): one headless script opens every app from the dock and the Apps folder, uses it, closes it, saves a full resolution screenshot of each, and fails on any crash text in the serial log. Runs in `tools/checks/ci-suite.sh`.
-- [x] Main session reviewed every gallery and feature-drive screenshot by eye (2026-09-22): the seven blank cards became native apps, Plan's raw entity, the dock band, the 10. rank, the teal bar, mid-word wrap, Shift outside Notes. blurry text, clipped labels, misaligned chrome, soft icons. Each finding becomes a bug line below and gets fixed before the tag.
-- [x] QA gallery runs in `tools/checks/ci-suite.sh` on every PR, so a crash in any app blocks the merge.
-- [x] Soak test (20 passes by hand, 3 in CI): open and close every app 20 times in one boot, then assert free memory (`pmm_free_frames`) is back where it started and no task slot leaked. Catches leaks the single-pass gallery never sees.
-- [x] Fuzz the HTTP, JSON and FAT parsers (DNS has no host entry point yet) on the host with hostile input, the way `tools/fuzz-host` already does the image decoders.
 - [ ] [Fable] The lag (issue #14) profiled, fixed and measured, with frame time numbers in the release notes.
-- [x] Every feature exercised once (`tools/checks/feature-drive.py`): each app's main action (add a reminder, save a note, send the chat prompt, search, change wallpaper, snap a window), each menu item, each Settings row, each shell command in `help`.
 - [ ] [Sonnet] Nothing crashes: bad input in every text field, long lines, empty files, missing disk, no network. Each case gets a check.
 - [ ] [Sonnet] Icons with taste: depth, soft light, real materials, consistent corner and light direction across all of them. Judged from the gallery at dock, hover and Apps grid sizes.
   - 0.89.0: the 11 dock icons redrawn Big Sur style (one top light, no outlines, 148px art at an exact 2:1); `tools/checks/iconlight-check.py`. Still to do: the 15 Apps-folder fleet icons, and a live date on Calendar's tile.
 - [ ] [Sonnet] Text sharp everywhere: no bitmap fallback font where the antialiased one should draw, no uneven letter gaps, baselines level.
   - 0.89.0: coverage-to-ink curve (stem darkening) sharpens every AA text path; `tools/checks/textsharp-check.py`.
-- [x] Security QA: every text field bounds-audited (Notes, Reminders, Mail, Contacts, Calculator, Search, Chat, Terminal, Settings, login), auth.h checked for empty passwords, constant-time compare, a delay after failed attempts and plaintext wiped; a host bounds check left behind in ci-suite.
-- [x] Every release ships `joshuatree-<version>.iso` and `SHA256SUMS` as assets, built by the release workflow, with dd instructions in the notes and README.
-- [x] Accessibility floor: every app opens and closes by keyboard alone (`tools/checks/keyboard-only-check.py`, 25/25; Enter on the desktop opens the Apps folder).
-- [x] Shift and Caps Lock work in every app, not only Notes (#117). Notes wraps at word boundaries.
+- [ ] [Haiku] Accessibility floor: every app opens and closes by keyboard alone. In progress in #127 (Enter on the desktop opens the Apps folder; the check still has to prove all 25). Ships as 1.0.x, not a blocker for the tag.
 - [ ] [Fable] Wired internet on real PCs: an Intel e1000 driver next to rtl8139 and ne2k, proven with QEMU `-device e1000`. Most PCs from the last 15 years have an Intel or Realtek chip, so this is what makes the network real off the emulator. Stretch for 1.0; if it slips, the release notes say wired internet is QEMU-only.
 - [ ] [Joshua] Decided for 1.0, stated in the release notes: no Wi-Fi, no Bluetooth (both need firmware blobs and a full 802.11 or BT stack, months of work each), English only (every UI string is compiled in; a language table is a 1.1 project), no screen reader (no sound yet). Keyboard-only use and large text in Notes are the accessibility floor.
-- [x] Release notes that say what is missing (the 1.0.0 release): no sound, no secure web of its own, one core, no install to disk.
-- [x] Codename: 1.0 is **Hidden Valley**. Joshua Tree is the name of the computer and the company, the way Apple is; each major release is named after a real place in Joshua Tree National Park. Next in line: Skull Rock, Keys View, Cottonwood, Wonderland. Mojave is skipped, Apple used it. Domain `joshuatreeos.com`.
 
 Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk), and moving the landing page to a `gh-pages` branch.
 
@@ -80,18 +64,6 @@ What other small operating systems needed before people used them day to day.
 
 ## Bugs
 Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at full resolution):
-- [x] Terminal text was unreadable in places (fixed in #87, `tools/checks/termmono-check.py`): proportional antialiased letters are drawn into fixed-width cells, so "m" is crushed to look like "n" and "i" and "l" float with wide gaps ("hel p", "nen" for "mem"). The Terminal grid needs the Mono face at its real advance.
-- [x] Calendar cut the last week of a five-row month in half at the bottom of the window, and never drew a sixth. Rows now size to the window (`tools/checks/apptop-check.py`).
-- [x] Apps window: black band under the title bar, a fourth row drawn outside the panel and cut in half, two extra icons after Epiphany, "Apps" heading shown twice. Fixed in #91, `tools/checks/appsfolder-layout-check.py`.
-- [x] Mail, Calendar, Notes, Reminders and Chat left a blank strip about 50px tall under the title bar. They now shift up by `gui_app_dy()` in a window, like Stocks (`tools/checks/apptop-check.py`).
-- [x] `tools/checks/landing-headline-check.sh` failed on a stale `demo-focused` CSS comment in `landing/index.html` (the class is gone; the button is the full screen toggle). Comment fixed; the check now runs in `tools/checks/ci-suite.sh`.
-- [x] Contacts, Calculator, Search and Trash drew their first line at y=52 in a window too; now on `gui_app_dy()` and covered by `tools/checks/apptop-check.py`. Settings only opens full screen from the menu, so it has no window title bar to sit under.
-- [x] `tools/checks/gui-prompt-keystroke-check.sh` failed its Calculator case: grid keys sent 0.1 s apart were dropped, so it typed into the Apps folder. Paced at 0.35 s and added to `tools/checks/ci-suite.sh`.
-- [x] Dock hover label had no backing and collided with the bottom edge of an open window. Now a cream capsule with a hairline edge, clear of the tray (`tools/checks/dockhover-check.py`).
-- [x] `tools/qa_demo_drive.py` was stale: dock geometry from before the eleventh icon, `.` sent as an invalid qcode (the driver, not the keymap), esc-closing Files quit the desktop (PR #83) so the rest of the tour recorded one still, and `screendump` drew stripes headless. It now reads the dock from `kernel/kernel.c`, maps `.` to `dot`, closes each app from its red button and captures with `pmemsave`; `tools/checks/dockslots-check.py` guards the derivation. Weather and Trash reviewed: both clean.
-- [x] Esc with Files open quit the whole desktop to text mode (PR #83).
-- [x] Apps opened from the Apps folder showed "Apps" in the window frame instead of their own name. `gui_apps_launch` retitles the frame and restores it (`tools/checks/apptop-check.py`).
-- [x] The "Memory" text isn't boot output. A VGA text capture every 50 ms through boot shows only SeaBIOS and iPXE; the wording is the clock's notification panel, where `notif_friendly` in `kernel/kernel.c` renders klog's `pmm_init:` and `paging_install:` lines as "Memory initialized" and "Memory protection enabled".
 - [ ] [Sonnet] Lazy-load the boot loading image itself so it never shows visibly pixelated while scaling in.
 
 ## Gaps vs macOS / Linux / Windows
