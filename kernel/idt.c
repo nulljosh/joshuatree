@@ -84,6 +84,11 @@ void isr_handler(u32 vector, u32 err, u32 eip, u32 cs, u32 eflags) {
     if (vector == 14) { puts(" at "); puthex(fault_addr); }
     puts(" -- halted\n");
     serial_puts("exception: ring-0 "); serial_puts(name); serial_puts(", halted\n");
+
+    /* Display panic screen on GUI if active */
+    extern void gui_panic_screen(const char *name, unsigned int fault_addr, unsigned int eip);
+    gui_panic_screen(name, fault_addr, eip);
+
     for (;;) __asm__ volatile ("cli; hlt");
 }
 
