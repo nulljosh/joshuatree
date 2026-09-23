@@ -115,9 +115,18 @@ try:
     key("esc"); time.sleep(0.5)
 
     # Step 2: spawn a real, persistent task and learn its real slot id.
+    # Keys dropped on slow runners if sent in burst; poll for result after typing
     for c in "spawntest":
         key(c)
-    key("ret"); time.sleep(0.5)
+    key("ret")
+    for _ in range(50):
+        time.sleep(0.1)
+        try:
+            with open(LOG, errors="replace") as lf:
+                if "spawntest id=" in lf.read():
+                    break
+        except FileNotFoundError:
+            pass
 
     spawn_id = None
     try:

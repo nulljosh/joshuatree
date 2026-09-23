@@ -133,7 +133,8 @@ try:
         if c in QCODE: cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": QCODE[c]}]}})
         elif c.isupper(): cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": "shift"}, {"type": "qcode", "data": c.lower()}]}})
         else: cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": c}]}})
-        time.sleep(0.08)
+        # Keys dropped on slow runners if sent in burst; increase wait to be safe
+        time.sleep(0.15)
     def keys(*qcodes):
         cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in qcodes]}})
         time.sleep(0.15)

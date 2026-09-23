@@ -79,11 +79,17 @@ time.sleep(0.5)
 before = prompt_count()
 
 # Type 6 characters to trigger multiple content redraws
+# Keys dropped on slow runners if sent in burst; poll for redraw markers
 for c in "buydog":
     key(c)
     time.sleep(0.15)
 
-after = prompt_count()
+after = 0
+for _ in range(50):
+    after = prompt_count()
+    if after > before + 3:
+        break
+    time.sleep(0.1)
 
 # Press ESC to close
 key("escape")
