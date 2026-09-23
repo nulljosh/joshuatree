@@ -96,6 +96,7 @@ once |Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/i
 once |RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
 once |Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
 once |Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
+once |Landing facts match the source|python3 ./tools/checks/landing-facts-check.py
 EOF
 }
 
