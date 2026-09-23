@@ -146,16 +146,33 @@ try:
     for name, idx in FOLDER_APPS.items():
         click_at(SLOT0_X + DOCK_ICON // 2, ICON_ROW_Y, 1.2)
         move(*PARK); time.sleep(0.3)
-        title_apps = title(dump())
+        # Reference "Apps" title: wait until the strip holds still across two
+        # dumps, so a slow runner's half-drawn folder isn't the reference.
+        prev, deadline = None, time.time() + 8
+        while True:
+            title_apps = title(dump())
+            if title_apps == prev or time.time() > deadline: break
+            prev = title_apps; time.sleep(0.5)
         for _ in range(idx % 5): key("d")
         for _ in range(idx // 5): key("s")
-        key("ret"); time.sleep(1.2)
-        img = dump()
+        # Wait for the app itself, not a fixed sleep: on a loaded CI runner the
+        # grid's scroll repaint is slow enough that a 1.2 s wait (or the ret
+        # itself) can be lost. One more ret only if it never showed up.
+        fx0, fy0, fx1, fy1 = FOLDER_VIEW
+        def app_bg(img):
+            samples = [img.getpixel((x * SCALE, y * SCALE)) for y in range(fy0, fy1, 9) for x in range(fx0, fx1, 9)]
+            return sum(1 for p in samples if p == (0xFA, 0xF8, 0xF6)) * 100 // len(samples)
+        key("ret")
+        for attempt in range(2):
+            deadline = time.time() + 8
+            while True:
+                time.sleep(0.5); img = dump(); bg = app_bg(img)
+                if bg >= 80 or time.time() > deadline: break
+            if bg >= 80: break
+            key("ret")
+        time.sleep(0.5); img = dump(); bg = app_bg(img)
         img.save(f"/tmp/jt-apptop-{name.lower()}.png")
         if title(img) == title_apps: fails.append(f"{name}: window frame still says Apps, not the app's own name")
-        fx0, fy0, fx1, fy1 = FOLDER_VIEW
-        samples = [img.getpixel((x * SCALE, y * SCALE)) for y in range(fy0, fy1, 9) for x in range(fx0, fx1, 9)]
-        bg = sum(1 for p in samples if p == (0xFA, 0xF8, 0xF6)) * 100 // len(samples)
         rows = ink_rows(img, FOLDER_VIEW)
         if bg < 80:
             fails.append(f"{name}: did not open from the Apps folder (viewport only {bg}% app background)")
@@ -165,7 +182,9 @@ try:
             gap = rows[0] - FOLDER_VIEW[1]
             print(f"{name}: first ink {gap}px below the title bar")
             if gap > MAX_GAP: fails.append(f"{name}: blank strip under the title bar, first ink {gap}px down (max {MAX_GAP})")
-        key("esc"); time.sleep(0.6)
+        key("esc")
+        deadline = time.time() + 8
+        while title(dump()) != title_apps and time.time() < deadline: time.sleep(0.5)
         if title(dump()) != title_apps: fails.append(f"{name}: frame title not restored to Apps after closing it")
         click_at(*FOLDER_CLOSE, 1.0)
         move(*PARK); time.sleep(0.4)

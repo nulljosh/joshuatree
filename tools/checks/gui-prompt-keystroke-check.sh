@@ -207,7 +207,17 @@ key("esc"); time.sleep(0.5)  # close Mail, back to the Apps folder grid
 # typing into the Apps folder instead of Calculator.
 for c in ("d", "d", "d", "s", "s", "s"):
     key(c); time.sleep(0.25)
-key("ret"); time.sleep(0.5)
+# Wait for Calculator's own first draw (one "guiprompt" line) instead of a
+# fixed 0.5 s: on a loaded CI runner the grid's scroll repaint can swallow
+# the ret or outlast the sleep. One more ret only if it never opened.
+opened_at = prompt_count()
+key("ret")
+for attempt in range(2):
+    deadline = time.time() + 8
+    while prompt_count() == opened_at and time.time() < deadline: time.sleep(0.3)
+    if prompt_count() > opened_at: break
+    key("ret")
+time.sleep(0.5)
 
 before = prompt_count()
 for c in "2+3+4":
