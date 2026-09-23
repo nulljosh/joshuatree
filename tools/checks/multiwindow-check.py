@@ -51,7 +51,7 @@ now boots QEMU with that disk attached too.
 Usage: tools/checks/multiwindow-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time, tempfile, shutil
-from PIL import Image
+from PIL import Image, ImageChops
 
 LOG = "/tmp/jt-multiwindow-serial.log"
 DUMP = "/tmp/jt-multiwindow.raw"
@@ -120,13 +120,16 @@ try:
     def open_slot(slot, ready=None):
         # With `ready`, poll until the window is really there instead of
         # trusting a fixed 1.2 s, which a slow CI runner outran.
+        # Without `ready`, the signal is the window area changing at all.
         move(centre(slot), ICON_ROW_Y); time.sleep(0.3)
+        before = dump().crop((0, 60, W, H - 200))
         click()
-        if ready is None: time.sleep(1.2); return
         for _ in range(60):
             time.sleep(0.1)
-            if ready(dump()): break
-        time.sleep(0.3)
+            now = dump()
+            if ready(now) if ready else ImageChops.difference(before, now.crop((0, 60, W, H - 200))).getbbox():
+                break
+        time.sleep(0.5)
     def click_at(x, y):
         move(x, y); time.sleep(0.3)
         click(); time.sleep(0.8)
