@@ -2499,8 +2499,9 @@ static int loc_geocode(const char *query){
     int p = 0; const char *s;
     for (s = "/v1/search?name="; *s; s++) path[p++] = *s;
     for (const char *c = query; *c && p < 96; c++) {
-        if (*c == ' ') { path[p++]='%'; path[p++]='2'; path[p++]='0'; }
-        else path[p++] = *c;
+        unsigned char ch = (unsigned char)*c; /* percent-encode all but [A-Za-z0-9] so '&', '#', '%' can't reshape the query */
+        if ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) path[p++] = (char)ch;
+        else { path[p++]='%'; path[p++]="0123456789ABCDEF"[ch >> 4]; path[p++]="0123456789ABCDEF"[ch & 15]; }
     }
     for (s = "&count=1"; *s; s++) path[p++] = *s;
     path[p] = 0;
