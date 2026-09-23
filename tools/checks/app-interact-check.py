@@ -108,8 +108,7 @@ try:
     def key(c):
         codes = QCODE.get(c, 'shift-' + c.lower() if c.isupper() else c).split('-')
         cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": code} for code in codes], "hold-time": 30}})
-        # Keys dropped on slow runners if sent in burst; increase wait time to be safe
-        time.sleep(0.15)
+        time.sleep(0.08)
     def keys(*qcodes):
         cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in qcodes], "hold-time": 30}})
         time.sleep(0.15)
