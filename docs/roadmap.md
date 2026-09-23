@@ -46,8 +46,8 @@ Joshua's call, 2026-09-21: 1.0.0 is a super thorough QA release. Every feature w
 Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk), and moving the landing page to a `gh-pages` branch.
 
 ## After 1.0
-- [ ] [Sonnet] Keyboard shortcuts for the snap zones (halves, quarters, full), split out of the snapping item that shipped in #82.
 What other small operating systems needed before people used them day to day.
+- [ ] [Sonnet] Keyboard shortcuts for the snap zones (halves, quarters, full), split out of the snapping item that shipped in #82.
 - [ ] [Fable] The lag (issue #14) profiled, fixed and measured, with frame time numbers in the release notes.
 - [ ] [Joshua] One real PC booted from the USB stick, keyboard and mouse working, photographed. The USB image and non-emulator graphics are only proven in QEMU so far.
 - [ ] [Fable] Keyboards on real PCs: a USB keyboard driver, or release notes that say plainly it needs the BIOS legacy keyboard mode.
