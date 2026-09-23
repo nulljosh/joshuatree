@@ -55,6 +55,7 @@ retry|Settings click acts on the row actually clicked|./tools/checks/settingscli
 retry|Wallpaper defaults to Satellite on a fresh boot|./tools/checks/walldefault-check.sh
 retry|Idle tour's Settings visit doesn't change the wallpaper theme|python3 ./tools/checks/walldemo-regression-check.py
 retry|Notes editor chrome doesn't redraw on plain keystrokes|./tools/checks/editorflash-check.sh
+retry|Mail, Reminders and Calculator prompts redraw content, not chrome, per keystroke|./tools/checks/gui-prompt-keystroke-check.sh
 retry|Notes typing, typography, pointer controls, persistence|python3 ./tools/checks/editor_qa.py
 retry|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/termchatflash-check.sh
 retry|Apple-menu hover stays cheap, clock redraws on a minute change|./tools/checks/menuclock-check.sh
@@ -66,13 +67,18 @@ retry|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
 retry|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclose-check.py
 retry|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
 retry|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
+retry|Apps folder layout (no black band, no row spill, no ghost icons)|python3 ./tools/checks/appsfolder-layout-check.py
 retry|Multi-window (click-to-focus, real z-order compositing)|python3 ./tools/checks/multiwindow-check.py
 retry|Window snapping (title-bar drag to edge/corner, real pixel proof)|python3 ./tools/checks/windowsnap-check.py
+retry|Windowed apps start under the title bar, Calendar fits six weeks|python3 ./tools/checks/apptop-check.py
+retry|Calendar Day, Week, Month and Year views|python3 ./tools/checks/calviews-check.py
 retry|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
 retry|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
 retry|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py
 retry|Dock tray corner AA (real coverage blend, not binary)|python3 ./tools/checks/traycorner-check.py
+retry|Portfolio catalog opens, lists the fleet, and the list scrolls|python3 ./tools/checks/portfolio-check.py
 retry|Boot logo AA (no false interior seams at overlapping capsule joints)|python3 ./tools/checks/bootlogo-check.py
+once |Landing eyebrow tracks roadmap Latest, H1 stays the brand line|./tools/checks/landing-headline-check.sh
 once |Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcount-check.mjs
 once |Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
 once |RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
