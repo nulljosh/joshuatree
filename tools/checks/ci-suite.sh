@@ -66,6 +66,7 @@ retry|Drawing lands offscreen, window_present puts it on screen|./tools/checks/b
 retry|Multi-window apps draw exactly one toolbar, not two|./tools/checks/mwdupetoolbar-check.sh
 once |JPEG decoder, host harness|./tools/checks/jpeg-host-check.sh
 retry|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
+once |PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/decoder-fuzz-check.sh
 retry|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclose-check.py
 retry|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
 retry|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py

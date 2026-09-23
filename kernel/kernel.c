@@ -959,17 +959,20 @@ static int wind_enabled = 1; /* real definition; forward of the v45 declaration 
    that could silently drift apart); now one source of truth both read. */
 #define LLM_MODEL_MAX 32
 #define LLM_HOST_MAX 40
-static char llm_model[LLM_MODEL_MAX] = "llama3.1:8b";
+static char llm_model[LLM_MODEL_MAX] = "qwen3:8b";
 static char llm_host[LLM_HOST_MAX] = "10.0.2.2";
 static int llm_port = 11434;
 /* v85: real chat models actually installed on the host (checked via
    `ollama list`), not a free-text field a typo can point at nothing.
    nomic-embed-text is also installed but is embedding-only, deliberately
    left off. Settings' LLM-model row cycles this list; a stale/hand-edited
-   SETTINGS.TXT with anything else falls back to index 0 (llama3.1:8b)
-   the next time the cycle runs, since the cycle only ever writes one of
-   these two strings back out. */
-static const char *LLM_MODELS[] = { "llama3.1:8b", "qwen3:8b" };
+   SETTINGS.TXT with anything else falls back to index 0 (qwen3:8b) the
+   next time the cycle runs, since the cycle only ever writes one of
+   these two strings back out.
+   v0.85.4 (direct owner request): qwen3:8b promoted to the real default,
+   llama3.1:8b kept as the second choice, checked against the same
+   `ollama list` on the host, both actually installed. */
+static const char *LLM_MODELS[] = { "qwen3:8b", "llama3.1:8b" };
 #define LLM_MODEL_COUNT 2
 
 /* v47 (0.47.0): settings persisted through the VFS, so "customize the OS
@@ -5334,17 +5337,17 @@ static void gui_launch_settings(void){
                    every chat. Real fix, checked against `ollama list` on
                    this machine rather than guessed: a bounded cycle over
                    the two real chat models actually installed
-                   (llama3.1:8b, the existing default; qwen3:8b, also
-                   installed). nomic-embed-text is on the host too but is
-                   an embedding-only model, not a chat model, deliberately
-                   left off this list, the same "don't offer what
-                   wouldn't work" call the wallpaper theme cycle already
-                   makes for its own four real options. A live /api/tags
-                   probe (Ollama's own model-list endpoint, same plain-
-                   HTTP shape chat_send already uses) would be the more
-                   general fix and is a real, scoped-out next step, not
-                   done here to keep this pass's actual shipped surface
-                   honest about what it covers. */
+                   (qwen3:8b, the real default as of v0.85.4; llama3.1:8b,
+                   the second choice). nomic-embed-text is on the host too
+                   but is an embedding-only model, not a chat model,
+                   deliberately left off this list, the same "don't offer
+                   what wouldn't work" call the wallpaper theme cycle
+                   already makes for its own four real options. A live
+                   /api/tags probe (Ollama's own model-list endpoint, same
+                   plain-HTTP shape chat_send already uses) would be the
+                   more general fix and is a real, scoped-out next step,
+                   not done here to keep this pass's actual shipped
+                   surface honest about what it covers. */
                 int cur = strcmp(llm_model, LLM_MODELS[0]) == 0 ? 0 : 1;
                 int dir = (k == 'a') ? -1 : 1;
                 int next = (cur + dir + LLM_MODEL_COUNT) % LLM_MODEL_COUNT;
