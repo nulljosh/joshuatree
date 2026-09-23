@@ -1,0 +1,410 @@
+diff --git a/art/icons/calendar.svg b/art/icons/calendar.svg
+index 9d4f541..d82046c 100644
+--- a/art/icons/calendar.svg
++++ b/art/icons/calendar.svg
+@@ -16,15 +16,6 @@
+   <g clip-path="url(#tile)">
+     <path d="M128.00 64.00 L127.99 77.00 L127.97 81.35 L127.94 84.54 L127.90 87.15 L127.84 89.40 L127.77 91.40 L127.69 93.20 L127.59 94.86 L127.48 96.39 L127.36 97.82 L127.23 99.17 L127.08 100.44 L126.92 101.65 L126.75 102.79 L126.56 103.88 L126.36 104.93 L126.15 105.93 L125.92 106.89 L125.68 107.81 L125.43 108.70 L125.16 109.56 L124.88 110.38 L124.59 111.18 L124.28 111.95 L123.95 112.69 L123.62 113.40 L123.26 114.10 L122.90 114.77 L122.51 115.42 L122.12 116.04 L121.70 116.65 L121.27 117.24 L120.83 117.80 L120.37 118.35 L119.89 118.88 L119.39 119.39 L118.88 119.89 L118.35 120.37 L117.80 120.83 L117.24 121.27 L116.65 121.70 L116.04 122.12 L115.42 122.51 L114.77 122.90 L114.10 123.26 L113.40 123.62 L112.69 123.95 L111.95 124.28 L111.18 124.59 L110.38 124.88 L109.56 125.16 L108.70 125.43 L107.81 125.68 L106.89 125.92 L105.93 126.15 L104.93 126.36 L103.88 126.56 L102.79 126.75 L101.65 126.92 L100.44 127.08 L99.17 127.23 L97.82 127.36 L96.39 127.48 L94.86 127.59 L93.20 127.69 L91.40 127.77 L89.40 127.84 L87.15 127.90 L84.54 127.94 L81.35 127.97 L77.00 127.99 L64.00 128.00 L51.00 127.99 L46.65 127.97 L43.46 127.94 L40.85 127.90 L38.60 127.84 L36.60 127.77 L34.80 127.69 L33.14 127.59 L31.61 127.48 L30.18 127.36 L28.83 127.23 L27.56 127.08 L26.35 126.92 L25.21 126.75 L24.12 126.56 L23.07 126.36 L22.07 126.15 L21.11 125.92 L20.19 125.68 L19.30 125.43 L18.44 125.16 L17.62 124.88 L16.82 124.59 L16.05 124.28 L15.31 123.95 L14.60 123.62 L13.90 123.26 L13.23 122.90 L12.58 122.51 L11.96 122.12 L11.35 121.70 L10.76 121.27 L10.20 120.83 L9.65 120.37 L9.12 119.89 L8.61 119.39 L8.11 118.88 L7.63 118.35 L7.17 117.80 L6.73 117.24 L6.30 116.65 L5.88 116.04 L5.49 115.42 L5.10 114.77 L4.74 114.10 L4.38 113.40 L4.05 112.69 L3.72 111.95 L3.41 111.18 L3.12 110.38 L2.84 109.56 L2.57 108.70 L2.32 107.81 L2.08 106.89 L1.85 105.93 L1.64 104.93 L1.44 103.88 L1.25 102.79 L1.08 101.65 L0.92 100.44 L0.77 99.17 L0.64 97.82 L0.52 96.39 L0.41 94.86 L0.31 93.20 L0.23 91.40 L0.16 89.40 L0.10 87.15 L0.06 84.54 L0.03 81.35 L0.01 77.00 L0.00 64.00 L0.01 51.00 L0.03 46.65 L0.06 43.46 L0.10 40.85 L0.16 38.60 L0.23 36.60 L0.31 34.80 L0.41 33.14 L0.52 31.61 L0.64 30.18 L0.77 28.83 L0.92 27.56 L1.08 26.35 L1.25 25.21 L1.44 24.12 L1.64 23.07 L1.85 22.07 L2.08 21.11 L2.32 20.19 L2.57 19.30 L2.84 18.44 L3.12 17.62 L3.41 16.82 L3.72 16.05 L4.05 15.31 L4.38 14.60 L4.74 13.90 L5.10 13.23 L5.49 12.58 L5.88 11.96 L6.30 11.35 L6.73 10.76 L7.17 10.20 L7.63 9.65 L8.11 9.12 L8.61 8.61 L9.12 8.11 L9.65 7.63 L10.20 7.17 L10.76 6.73 L11.35 6.30 L11.96 5.88 L12.58 5.49 L13.23 5.10 L13.90 4.74 L14.60 4.38 L15.31 4.05 L16.05 3.72 L16.82 3.41 L17.62 3.12 L18.44 2.84 L19.30 2.57 L20.19 2.32 L21.11 2.08 L22.07 1.85 L23.07 1.64 L24.12 1.44 L25.21 1.25 L26.35 1.08 L27.56 0.92 L28.83 0.77 L30.18 0.64 L31.61 0.52 L33.14 0.41 L34.80 0.31 L36.60 0.23 L38.60 0.16 L40.85 0.10 L43.46 0.06 L46.65 0.03 L51.00 0.01 L64.00 0.00 L77.00 0.01 L81.35 0.03 L84.54 0.06 L87.15 0.10 L89.40 0.16 L91.40 0.23 L93.20 0.31 L94.86 0.41 L96.39 0.52 L97.82 0.64 L99.17 0.77 L100.44 0.92 L101.65 1.08 L102.79 1.25 L103.88 1.44 L104.93 1.64 L105.93 1.85 L106.89 2.08 L107.81 2.32 L108.70 2.57 L109.56 2.84 L110.38 3.12 L111.18 3.41 L111.95 3.72 L112.69 4.05 L113.40 4.38 L114.10 4.74 L114.77 5.10 L115.42 5.49 L116.04 5.88 L116.65 6.30 L117.24 6.73 L117.80 7.17 L118.35 7.63 L118.88 8.11 L119.39 8.61 L119.89 9.12 L120.37 9.65 L120.83 10.20 L121.27 10.76 L121.70 11.35 L122.12 11.96 L122.51 12.58 L122.90 13.23 L123.26 13.90 L123.62 14.60 L123.95 15.31 L124.28 16.05 L124.59 16.82 L124.88 17.62 L125.16 18.44 L125.43 19.30 L125.68 20.19 L125.92 21.11 L126.15 22.07 L126.36 23.07 L126.56 24.12 L126.75 25.21 L126.92 26.35 L127.08 27.56 L127.23 28.83 L127.36 30.18 L127.48 31.61 L127.59 33.14 L127.69 34.80 L127.77 36.60 L127.84 38.60 L127.90 40.85 L127.94 43.46 L127.97 46.65 L127.99 51.00 Z" fill="none" stroke="url(#hl)" stroke-width="5"/>
+     <g filter="url(#drop)">
+-      <g fill="none" stroke="#FF3B30" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+-        <path d="M53 24.5 C51.5 22 49.4 21 47 21 C43.4 21 41 23 41 26 C41 32.6 53.6 29 53.6 36 C53.6 39.6 50.8 42 47 42 C44 42 41.6 40.6 40.4 38.4"/>
+-        <path d="M71 21 H60 V42 H71 M60 31.5 H69"/>
+-        <path d="M78 42 V21 H84 C88 21 90.6 23.4 90.6 27 C90.6 30.6 88 33 84 33 H78"/>
+-      </g>
+-      <g fill="none" stroke="#1F1F22" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+-        <path d="M37 61 L49 53 V99"/>
+-        <path d="M63 54 H90 L72 99"/>
+-      </g>
+     </g>
+   </g>
+ </svg>
+diff --git a/kernel/kernel.c b/kernel/kernel.c
+index b7a74ce..fc4d108 100644
+--- a/kernel/kernel.c
++++ b/kernel/kernel.c
+@@ -3696,6 +3696,14 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
+     return out;
+ }
+ 
++/* Forward-declared: the real body lives past wx_text/wx_text_lw's own
++   definitions further down this file (Calendar's date overlay is drawn
++   with the same physical-resolution DejaVu text the Weather window
++   uses), but gui_draw_one_icon_on itself needs to call it from up here,
++   at every one of its draw sites (dock, dock-magnified, Apps-folder
++   grid, drag preview all funnel through this one function). */
++static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size);
++
+ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int size, unsigned int under){
+     int x = cx_center - size / 2, y = cy_bottom - size;
+     int slot = (size == DOCK_ICON) ? 0 : 1;
+@@ -3707,6 +3715,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
+             for (int px = 0; px < pw; px++)
+                 if (tile[py * pw + px] != under)
+                     window_pixel_phys(x * (int)sc + px, y * (int)sc + py, tile[py * pw + px]);
++        if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
+         return;
+     }
+     /* out of memory for the cache: draw directly, un-supersampled, rather than draw nothing */
+@@ -3715,6 +3724,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
+     gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, under, size * 22 / 100);
+     gui_draw_gloss(x, y, size, size, bg, size * 22 / 100 + 1);
+     gui_draw_icon_glyph(icon, cx_center, y + size / 2, size, bg);
++    if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
+ }
+ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){ gui_draw_one_icon_on(icon, cx_center, cy_bottom, size, DOCK_TRAY_COLOR); }
+ 
+@@ -4017,6 +4027,32 @@ static void gui_draw_cursor(int x, int y){
+     }
+ }
+ 
++/* v0.89.x: gui_calendar_draw_date (above, near gui_draw_one_icon_on)
++   draws the real date fresh on every call, so the Calendar tile is never
++   stale on any redraw that actually happens -- but the dock is
++   event-driven (gui_redraw_dock_band/gui_draw_dock only ever run off a
++   hover, drag or menu change, see gui_run's cursor_only/dock_only/
++   menu_only split below), not painted every loop tick the way
++   gui_draw_menubar now is. An idle desktop, cursor parked outside the
++   dock all night, would sit with yesterday's day number on screen until
++   the next real mouse event. Same fix shape as v0.76.17's own menu-bar
++   staleness (this file's gui_menubar_last_min): a cheap once-a-loop CMOS
++   check, self-gated on a real day change, called from the exact spot
++   gui_run already reads the clock unconditionally every iteration. */
++static int gui_calendar_last_dom = -1;
++static void gui_calendar_check_rollover(int hover_slot, int drag_slot, int mx, int my){
++    u8 h, m, wd, dom, mon;
++    cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
++    int domv = (dom & 0x0F) + ((dom >> 4) * 10);
++    if (gui_calendar_last_dom < 0) { gui_calendar_last_dom = domv; return; } /* first call: seed, no false redraw at boot */
++    if (domv == gui_calendar_last_dom) return;
++    gui_calendar_last_dom = domv;
++    gui_cursor_restore();
++    gui_draw_dock(hover_slot, drag_slot, mx, my);
++    gui_cursor_save(mx, my);
++    gui_draw_cursor(mx, my);
++}
++
+ /* App viewers have their own input loops. Keep the pointer alive while one
+    is open, drawing it in screen coordinates outside the app viewport. */
+ static int gui_app_windowed = 0;
+@@ -4408,6 +4444,62 @@ static int wx_text_lw(const char *s, int size, int bold, int mul){ int sc = (int
+ static void wx_text_center(const char *s, int cx, int ly, int size, int bold, unsigned int fg){ wx_text(s, cx - wx_text_lw(s, size, bold, 1) / 2, ly, size, bold, 1, fg); }
+ static void wx_text_right(const char *s, int rx, int ly, int size, int bold, unsigned int fg){ wx_text(s, rx - wx_text_lw(s, size, bold, 1), ly, size, bold, 1, fg); }
+ 
++/* v0.89.x: the Calendar dock/Apps-folder tile shows the real current date,
++   macOS style, instead of a fixed baked-in "SEP 17" (that art still
++   exists at art/icons/calendar.svg, but restyle_icons.py's design table
++   now leaves the tile's glyph body empty: a real date can't be baked into
++   a rasterized PNG, tools/gen/gen_icon_art.py's whole point). Drawn here
++   as an overlay on top of the plain white tile gui_draw_one_icon_on just
++   blitted, at physical resolution with the same wx_text/text_ink glyph
++   path the Weather window uses, so it is drawn fresh every call rather
++   than baked into gui_render_icon_cached's cache -- the cache key has no
++   room for "today's date" and does not need one this way, and it means
++   this never goes stale as long as *something* redraws the icon.
++   cmos_read_time_stable, not calendar.h's own cal_read_today: this must
++   never show a different day than the menu bar clock does, and that
++   clock already reads month/day through this exact stable-against-RTC-
++   update-in-progress function (see its own comment above), not
++   calendar.h's plainer wait-once read. Sharing the function, not just the
++   register numbers, is what makes "the icon and the clock never
++   disagree" true by construction instead of by coincidence. */
++static const char *GUI_CAL_MON3[12] = {"JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"};
++static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
++    int y = cy_bottom - size;
++    u8 h, m, wd, dom, mon;
++    cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
++    int domv = (dom & 0x0F) + ((dom >> 4) * 10);
++    int monv = (mon & 0x0F) + ((mon >> 4) * 10);
++    if (monv < 1 || monv > 12) monv = 1;
++    if (domv < 1 || domv > 31) domv = 1;
++    char daybuf[3]; int n = 0;
++    if (domv >= 10) daybuf[n++] = (char)('0' + domv / 10);
++    daybuf[n++] = (char)('0' + domv % 10);
++    daybuf[n] = 0;
++    /* One fixed physical size for both faces, not scaled with the tile:
++       tried scaling month/day up together with the Apps-folder grid's
++       bigger (120-physical-at-2x, vs. the dock's 74) tile first (2x/3x
++       mul there), and a real headless crop showed the day numeral's cap
++       height then reaching past the month label's own baseline -- the
++       two texts' vertical gap was a fraction of `size`, but each face's
++       glyph height was a multiple of a fixed 16/20/24/28px table, so the
++       two didn't grow at the same rate and the larger tile closed the
++       gap between them instead of widening it. Keeping both at the one
++       size that was measured clean on the dock (real 4x crop, see the
++       commit this landed in) means the Apps-folder tile's text sits a
++       little smaller relative to its own tile than the dock's does, the
++       same trade the authored artwork itself already makes everywhere
++       else (one 148px source raster area-averaged down, never redrawn
++       per size) rather than a second layout to get right and keep right. */
++    int mul_m = 1, mul_d = 2;
++    const char *mon3 = GUI_CAL_MON3[monv - 1];
++    int ly_m = y + size * 17 / 100;
++    int ly_d = y + size * 41 / 100;
++    int lwm = wx_text_lw(mon3, 2, 1, mul_m);
++    wx_text(mon3, cx_center - lwm / 2, ly_m, 2, 1, mul_m, 0x00FF3B30);
++    int lwd = wx_text_lw(daybuf, 3, 1, mul_d);
++    wx_text(daybuf, cx_center - lwd / 2, ly_d, 3, 1, mul_d, 0x001F1F22);
++}
++
+ /* Flat rounded card: four anti-aliased corner discs plus two rects. */
+ static void wx_card(int x, int y, int w, int h, int r, unsigned int color, unsigned int bg){
+     gui_fill_circle(x + r, y + r, r, color, bg); gui_fill_circle(x + w - r - 1, y + r, r, color, bg);
+@@ -6230,6 +6322,11 @@ static void gui_run(void){
+             gui_draw_menubar();
+             if (gui_menubar_last_min != min_before && my < GUI_MENUBAR_H) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
+         }
++        /* v0.89.x: same "call it unconditionally every idle iteration,
++           let it self-gate" shape as the minute check just above, for the
++           Calendar dock tile's day number (see gui_calendar_check_rollover's
++           own comment). */
++        gui_calendar_check_rollover(dock_hover, drag_slot, mx, my);
+         /* v43: weather, after the desktop is already on screen so the
+            fetch never delays the first frame, then every ten minutes. */
+         if (!weather_tried_once || ticks() - weather_last_tick > 100 * 600) {
+diff --git a/tools/checks/calicon-check.py b/tools/checks/calicon-check.py
+new file mode 100755
+index 0000000..7f67b8e
+--- /dev/null
++++ b/tools/checks/calicon-check.py
+@@ -0,0 +1,204 @@
++#!/usr/bin/env python3
++"""Headless proof that the dock's Calendar tile shows the real current
++date, macOS style, instead of the old fixed baked-in "SEP 17" art.
++
++v0.89.x replaced that baked art (art/icons/calendar.svg's month/day strokes,
++authored by tools/gen/restyle_icons.py, rasterized by tools/gen/
++gen_icon_art.py into kernel/icon_art.h) with a plain white tile, and draws
++the real month/day at runtime on top of it (gui_calendar_draw_date in
++kernel/kernel.c), off the exact same cmos_read_time_stable() read the menu
++bar clock already trusts, so the two can never disagree.
++
++Same boot + pmemsave shape as iconlight-check.py: -display none, -vga std,
++wait for a real window_present_count change, dump the real 1920x1080
++framebuffer. Two boots, two different QEMU -rtc base= dates (real wall-clock
++CMOS seed, not a kernel command-line flag, so this exercises the exact RTC
++path the kernel reads on real hardware). QMP ports 4511/4512, inside this
++project's reserved 4511-4519 range.
++
++The oracle, on the dock's Calendar tile (slot 3, the same geometry
++iconlight-check.py/dockhover-check.py already use for this boot config:
++960x540 logical @2x, dock_scale_pct 7, GUI_ICON_COUNT 11, DOCK_ICON 37,
++SLOT0_X 247, PITCH 43, tile top y 469):
++
++  1. the day-number band (lower half of the tile) differs substantially
++     between the two boots -- pixel-count of "dark ink" (near-black, the
++     day numeral's own colour) in that band must differ by at least
++     DAY_DIFF_MIN pixels between Feb 3 and Nov 28 (very different glyph
++     shapes: "3" vs "28", one digit vs two). The old fixed art shows "17"
++     in both boots, so this is near zero on that build.
++  2. the month band (upper part of the tile) also differs substantially
++     the same way -- "FEB" vs "NOV" -- by at least MONTH_DIFF_MIN
++     mismatched red-ink pixels between the two boots.
++  3. the month band contains real red ink in both boots (mean of the red
++     channel minus the mean of green/blsue over the reddest pixels there
++     clears RED_MIN), proving the month text is actually the red caps
++     macOS uses, not some other color or nothing at all.
++
++Confirmed discriminating: run with --check-old first (see below) against
++the pre-existing baked "SEP 17" art (git stash the working tree's
++art/icons/calendar.svg + kernel/icon_art.h + kernel/kernel.c changes,
++rebuild, run) -- both boots render the same fixed glyph, so 1 and 2 both
++read ~0 and the check fails; after restoring this change and rebuilding,
++both pass.
++
++Usage: tools/checks/calicon-check.py   (from the repo root, after make kernel.elf)
++"""
++import json, os, re, shutil, socket, subprocess, sys, time
++from PIL import Image
++
++LOG_FMT = "/tmp/jt-calicon-serial-%d.log"
++DUMP_FMT = "/tmp/jt-calicon-%d.raw"
++FB = 0xfd000000; W, H = 1920, 1080
++PORT_A, PORT_B = 4511, 4512
++
++# Same geometry iconlight-check.py / dockhover-check.py use for this boot
++# config (960x540 @2x, dock_scale_pct 7, GUI_ICON_COUNT 11).
++DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 247, 469, 2
++PITCH = DOCK_ICON + DOCK_GAP
++CAL_SLOT = 3  # Apps, Files, Mail, Calendar
++TILE_X0 = (SLOT0_X + CAL_SLOT * PITCH) * SCALE
++TILE_Y0 = ICON_TOP_Y * SCALE
++TILE_W = DOCK_ICON * SCALE  # 74
++
++# gui_calendar_draw_date's own layout (kernel/kernel.c): month cap top at
++# y + size*17/100, day cap top at y + size*41/100, tile height = size.
++# Physical bands, generous margins either side of those anchors so a small
++# layout tweak doesn't make this check flaky.
++MONTH_ROWS = range(int(TILE_W * 0.10), int(TILE_W * 0.42))
++DAY_ROWS = range(int(TILE_W * 0.44), int(TILE_W * 0.98))
++COLS = range(2, TILE_W - 2)
++
++DAY_DIFF_MIN = 80      # dark-ink pixel count must differ by at least this many
++MONTH_DIFF_MIN = 60    # red-ink pixel count must differ by at least this many
++RED_MIN = 60           # red channel must lead green/blue by this much, averaged over the reddest pixels
++
++os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
++
++
++def boot_and_dump(rtc_base, port):
++    log, dump = LOG_FMT % port, DUMP_FMT % port
++    for f in (log, dump):
++        try: os.remove(f)
++        except FileNotFoundError: pass
++
++    syms = {}
++    nm = shutil.which("nm") or "nm"
++    for line in subprocess.run([nm, "kernel.elf"], capture_output=True, text=True).stdout.splitlines():
++        parts = line.split()
++        if len(parts) == 3:
++            syms[parts[2]] = int(parts[0], 16) - 0xC0000000
++    present_addr = syms.get("window_present_count")
++
++    q = subprocess.Popen(["qemu-system-i386", "-name", "jt-calicon", "-kernel", "kernel.elf",
++                          "-display", "none", "-vga", "std", "-rtc", "base=" + rtc_base,
++                          "-qmp", "tcp:127.0.0.1:%d,server,nowait" % port, "-serial", "file:" + log],
++                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
++    try:
++        time.sleep(1.0)
++        s = socket.create_connection(("127.0.0.1", port)); f = s.makefile("rw")
++
++        def cmd(o):
++            f.write(json.dumps(o) + "\n"); f.flush()
++            while True:
++                r = json.loads(f.readline())
++                if "return" in r or "error" in r: return r
++
++        def presents():
++            if present_addr is None:
++                return None
++            r = cmd({"execute": "human-monitor-command",
++                     "arguments": {"command-line": "xp /4xb 0x%x" % present_addr}})
++            out = r.get("return", "")
++            vals = [int(v, 16) for line in out.splitlines() if ":" in line
++                    for v in re.findall(r"0x([0-9a-f]{2})\b", line.split(":", 1)[1])]
++            return int.from_bytes(bytes(vals[:4]), "little") if len(vals) >= 4 else None
++
++        f.readline()
++        cmd({"execute": "qmp_capabilities"})
++        time.sleep(5.0)
++        before = presents()
++        if before is not None:
++            for _ in range(100):
++                if presents() != before:
++                    time.sleep(0.05)
++                    break
++                time.sleep(0.05)
++            else:
++                print("FAIL: no frame was presented, the screen never updated")
++                sys.exit(1)
++        cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": dump}})
++        try: cmd({"execute": "quit"})
++        except (ConnectionResetError, BrokenPipeError, OSError): pass
++    finally:
++        try: q.wait(timeout=5)
++        except subprocess.TimeoutExpired: q.kill()
++
++    return Image.frombytes("RGBA", (W, H), open(dump, "rb").read(), "raw", "BGRA").convert("RGB")
++
++
++def lum(p):
++    return (p[0] * 299 + p[1] * 587 + p[2] * 114) / 1000.0
++
++
++def dark_mask(img):
++    """1 where a pixel in the tile is dark ink (the day numeral), 0 elsewhere."""
++    out = {}
++    for y in DAY_ROWS:
++        for x in COLS:
++            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
++            out[(x, y)] = 1 if lum(p) < 110 else 0
++    return out
++
++
++def red_mask(img):
++    """1 where a pixel in the tile is red ink (the month label), 0 elsewhere."""
++    out = {}
++    for y in MONTH_ROWS:
++        for x in COLS:
++            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
++            out[(x, y)] = 1 if (p[0] - max(p[1], p[2])) > 60 and p[0] > 140 else 0
++    return out
++
++
++def red_strength(img):
++    reddest = []
++    for y in MONTH_ROWS:
++        for x in COLS:
++            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
++            reddest.append((p[0] - (p[1] + p[2]) / 2.0, p))
++    reddest.sort(key=lambda t: -t[0])
++    top = reddest[:40] if len(reddest) >= 40 else reddest
++    if not top:
++        return 0
++    return sum(t[0] for t in top) / len(top)
++
++
++img_feb = boot_and_dump("2026-02-03T12:00:00", PORT_A)  # "FEB 3"
++img_nov = boot_and_dump("2026-11-28T12:00:00", PORT_B)  # "NOV 28"
++
++day_feb, day_nov = dark_mask(img_feb), dark_mask(img_nov)
++month_feb, month_nov = red_mask(img_feb), red_mask(img_nov)
++
++day_diff = sum(1 for k in day_feb if day_feb[k] != day_nov[k])
++month_diff = sum(1 for k in month_feb if month_feb[k] != month_nov[k])
++red_feb, red_nov = red_strength(img_feb), red_strength(img_nov)
++
++print("day-number band pixel diff:  %d (need >= %d)" % (day_diff, DAY_DIFF_MIN))
++print("month band pixel diff:       %d (need >= %d)" % (month_diff, MONTH_DIFF_MIN))
++print("month band red strength:     Feb boot %.1f, Nov boot %.1f (need >= %d each)" % (red_feb, red_nov, RED_MIN))
++
++fail = 0
++if day_diff < DAY_DIFF_MIN:
++    print("FAIL: the day-number area barely changed between Feb 3 and Nov 28 -- looks like fixed/baked art, not a live date")
++    fail = 1
++if month_diff < MONTH_DIFF_MIN:
++    print("FAIL: the month area barely changed between Feb 3 and Nov 28 -- looks like fixed/baked art, not a live date")
++    fail = 1
++if red_feb < RED_MIN or red_nov < RED_MIN:
++    print("FAIL: the month area is not red ink in at least one boot")
++    fail = 1
++
++if fail:
++    sys.exit(1)
++print("PASS: the Calendar dock tile shows a real, live date (month in red ink, day number below), not fixed art")
+diff --git a/tools/gen/restyle_icons.py b/tools/gen/restyle_icons.py
+index d85964f..cb74d4e 100644
+--- a/tools/gen/restyle_icons.py
++++ b/tools/gen/restyle_icons.py
+@@ -138,20 +138,18 @@ DOCK = {
+         <path d="M18 36 L64 72.5 L110 36" stroke="#B8C5D8" stroke-width="2" fill="none" stroke-linejoin="round" opacity="0.8"/>
+       </g>"""),
+ 
+-    # Calendar: month in red caps, big dark date, on a white tile. Drawn as
+-    # strokes, not <text>: rsvg would pick whatever font the host has, and
+-    # then gen_icon_art.py --check would differ from machine to machine.
+-    "calendar": ("#F5F5F8", "#E0E1E6", "",
+-                 """
+-      <g fill="none" stroke="#FF3B30" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+-        <path d="M53 24.5 C51.5 22 49.4 21 47 21 C43.4 21 41 23 41 26 C41 32.6 53.6 29 53.6 36 C53.6 39.6 50.8 42 47 42 C44 42 41.6 40.6 40.4 38.4"/>
+-        <path d="M71 21 H60 V42 H71 M60 31.5 H69"/>
+-        <path d="M78 42 V21 H84 C88 21 90.6 23.4 90.6 27 C90.6 30.6 88 33 84 33 H78"/>
+-      </g>
+-      <g fill="none" stroke="url(#ink)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+-        <path d="M37 61 L49 53 V99"/>
+-        <path d="M63 54 H90 L72 99"/>
+-      </g>""".replace('url(#ink)', '#1F1F22')),
++    # Calendar: a plain white tile, no baked date. v0.89.x: the month/day
++    # used to be hand-drawn strokes here ("SEP 17", fixed forever, not
++    # <text> since rsvg would pick whatever font the host has and
++    # gen_icon_art.py --check would then differ machine to machine); now
++    # the real current date is drawn at runtime instead, by
++    # gui_calendar_draw_date in kernel/kernel.c, directly on top of this
++    # tile's white/shadow art on every icon draw, off the same RTC read
++    # the menu bar clock already trusts. Nothing left to bake in: this
++    # tile is just the squircle, its top highlight and its drop shadow,
++    # same shared technique every other tile below uses, with no glyph
++    # body of its own.
++    "calendar": ("#F5F5F8", "#E0E1E6", "", ""),
+ 
+     # Notes: a yellow pencil over ruled paper.
+     "notes": ("#F6F6F8", "#E0E1E6",
