@@ -1,0 +1,861 @@
+diff --git a/tools/checks/apptop-check.py b/tools/checks/apptop-check.py
+index 8e07d4a..77eae8a 100755
+--- a/tools/checks/apptop-check.py
++++ b/tools/checks/apptop-check.py
+@@ -28,19 +28,14 @@ dock, dumps the framebuffer, and checks:
+ 
+ Usage: tools/checks/apptop-check.py   (from the repo root, after make kernel.elf)
+ """
+-import json, os, socket, subprocess, sys, time
+-from PIL import Image
++import os
++import sys
++import time
++
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++from jtqmp import Machine
+ 
+-LOG = "/tmp/jt-apptop-serial.log"
+-DUMP = "/tmp/jt-apptop.raw"
+-FB = 0xfd000000; W, H = 1920, 1080
+ PORT = 4471
+-LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
+-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
+-PITCH = DOCK_ICON + DOCK_GAP
+-ICON_ROW_Y = 487
+-PARK = (930, 300)          # right of the window: the pointer sprite must not read as ink
+-CLOSE = (94, 56)             # window 0's red traffic light (gui_multiwin_geom slot 0 / gui_launch_from_dock)
+ VX0, VY0, VX1, VY1 = 78, 72, 890, 417  # content viewport: (x+8, y+32, w-16, h-40) for x=70,y=40,w=820,h=385
+ MAX_GAP = 30
+ SLOTS = {"Mail": 2, "Calendar": 3, "Notes": 4, "Reminders": 5, "Chat": 7, "Trash": 10}
+@@ -50,59 +45,27 @@ SLOTS = {"Mail": 2, "Calendar": 3, "Notes": 4, "Reminders": 5, "Chat": 7, "Trash
+ FOLDER_APPS = {"Contacts": 18, "Calculator": 19, "Search": 21}
+ FOLDER_VIEW = (64, 62, 896, 512)
+ FOLDER_CLOSE = (80, 46)
++CLOSE = (94, 56)  # window 0's red traffic light (gui_multiwin_geom slot 0 / gui_launch_from_dock)
++PARK = (930, 300)  # right of the window: the pointer sprite must not read as ink
+ 
+-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+-for p in (LOG, DUMP):
+-    try: os.remove(p)
+-    except FileNotFoundError: pass
+-
+-q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
+-                      "-rtc", "base=2026-08-15T12:00:00",
+-                      "-name", "jt-apptop-check",
+-                      "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG],
+-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+ fails = []
+-try:
+-    s = None
+-    for _ in range(50):
+-        time.sleep(0.2)
+-        try: s = socket.create_connection(("127.0.0.1", PORT)); break
+-        except OSError: pass
+-    if s is None: raise SystemExit("FAIL: QEMU's QMP socket never came up")
+-    f = s.makefile("rw")
+-    def cmd(o):
+-        f.write(json.dumps(o) + "\n"); f.flush()
+-        while True:
+-            r = json.loads(f.readline())
+-            if "return" in r or "error" in r: return r
+-    f.readline()
+-    cmd({"execute": "qmp_capabilities"})
+-    time.sleep(5.0)  # desktop up
+-
+-    def move(x, y):
+-        cmd({"execute": "input-send-event", "arguments": {"events": [
+-            {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
+-            {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
+-    def click():
+-        cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
+-        time.sleep(0.1)
+-        cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
+-    def click_at(x, y, settle=1.2):
+-        move(x, y); time.sleep(0.3); click(); time.sleep(settle)
+-    def dump():
+-        cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
+-        return Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
+-    centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
++
++with Machine(PORT, "jt-apptop-check", rtc="base=2026-08-15T12:00:00") as m:
++    def dump(name):
++        img = m.dump()
++        img.save(f"/tmp/jt-apptop-{name.lower()}.png")
++        return img
+ 
+     def ink_rows(img, view=(VX0, VY0, VX1, VY1)):
+         """Logical rows inside the content viewport holding dark (text) ink."""
+         x0, y0, x1, y1 = view
+         px = img.load(); rows = []
+         for ly in range(y0, y1):
+-            y = ly * SCALE
+-            if any(sum(px[lx * SCALE, y]) < 520 or sum(px[lx * SCALE + 1, y + 1]) < 520 for lx in range(x0 + 4, x1 - 4)):
++            y = ly * 2
++            if any(sum(px[lx * 2, y]) < 520 or sum(px[lx * 2 + 1, y + 1]) < 520 for lx in range(x0 + 4, x1 - 4)):
+                 rows.append(ly)
+         return rows
++
+     def bands(rows):
+         out = []
+         for r in rows:
+@@ -110,12 +73,12 @@ try:
+             else: out.append([r, r])
+         return out
+ 
+-    move(*PARK); time.sleep(0.5)
++    m.move(*PARK); time.sleep(0.5)
+     for name, slot in SLOTS.items():
+-        click_at(centre(slot), ICON_ROW_Y, 2.0 if name == "Chat" else 1.2)
+-        move(*PARK); time.sleep(0.6)
+-        img = dump()
+-        img.save(f"/tmp/jt-apptop-{name.lower()}.png")
++        x = m.SLOT0_X + slot * m.DOCK_PITCH + m.DOCK_ICON // 2
++        m.click_at(x, m.ICON_ROW_Y, settle=2.0 if name == "Chat" else 1.2)
++        m.move(*PARK); time.sleep(0.6)
++        img = dump(name)
+         rows = ink_rows(img)
+         if not rows:
+             fails.append(f"{name}: no ink in the content viewport at all (did the window open?)")
+@@ -127,7 +90,7 @@ try:
+             # The weekday rule: a long run of the rule colour across the grid.
+             px = img.load(); rule = None
+             for ly in range(VY0, VY1):
+-                run = sum(1 for lx in range(VX0, VX1) if px[lx * SCALE, ly * SCALE] == (0xDD, 0xD9, 0xD3))
++                run = sum(1 for lx in range(VX0, VX1) if px[lx * 2, ly * 2] == (0xDD, 0xD9, 0xD3))
+                 if run > 300: rule = ly; break
+             if rule is None:
+                 fails.append("Calendar: weekday rule not found")
+@@ -136,41 +99,46 @@ try:
+                 print(f"Calendar: {len(weeks)} week rows under the rule (want 6), bands {weeks}")
+                 if len(weeks) != 6: fails.append(f"Calendar: August 2026 shows {len(weeks)} week rows, want 6")
+             if rows[-1] >= VY1 - 3: fails.append(f"Calendar: ink touches the bottom of the window (y={rows[-1]}), last week is clipped")
+-        click_at(*CLOSE, 1.0)
+-        move(*PARK); time.sleep(0.5)
++        m.click_at(*CLOSE, settle=1.0)
++        m.move(*PARK); time.sleep(0.5)
++
+     def title(img):
+         # The folder window's frame title strip, x+90..x+410, y+4..y+26 (gui_app_frame_title).
+-        return img.crop(((56 + 90) * SCALE, (30 + 4) * SCALE, (56 + 410) * SCALE, (30 + 26) * SCALE)).tobytes()
+-    def key(qc):
+-        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qc}]}}); time.sleep(0.35)  # search-check.py: faster drops scancodes
++        return img.crop(((56 + 90) * 2, (30 + 4) * 2, (56 + 410) * 2, (30 + 26) * 2)).tobytes()
++
+     for name, idx in FOLDER_APPS.items():
+-        click_at(SLOT0_X + DOCK_ICON // 2, ICON_ROW_Y, 1.2)
+-        move(*PARK); time.sleep(0.3)
++        m.click_at(m.SLOT0_X + m.DOCK_ICON // 2, m.ICON_ROW_Y, settle=1.2)
++        m.move(*PARK); time.sleep(0.3)
+         # Reference "Apps" title: wait until the strip holds still across two
+         # dumps, so a slow runner's half-drawn folder isn't the reference.
+         prev, deadline = None, time.time() + 8
+         while True:
+-            title_apps = title(dump())
++            title_apps = title(m.dump())
+             if title_apps == prev or time.time() > deadline: break
+             prev = title_apps; time.sleep(0.5)
+-        for _ in range(idx % 5): key("d")
+-        for _ in range(idx // 5): key("s")
++        for _ in range(idx % 5): m.key("d")
++        for _ in range(idx // 5): m.key("s")
+         # Wait for the app itself, not a fixed sleep: on a loaded CI runner the
+         # grid's scroll repaint is slow enough that a 1.2 s wait (or the ret
+         # itself) can be lost. One more ret only if it never showed up.
+         fx0, fy0, fx1, fy1 = FOLDER_VIEW
++
+         def app_bg(img):
+-            samples = [img.getpixel((x * SCALE, y * SCALE)) for y in range(fy0, fy1, 9) for x in range(fx0, fx1, 9)]
++            samples = [img.getpixel((x * 2, y * 2)) for y in range(fy0, fy1, 9) for x in range(fx0, fx1, 9)]
+             return sum(1 for p in samples if p == (0xFA, 0xF8, 0xF6)) * 100 // len(samples)
+-        key("ret")
++
++        m.key("ret")
++        state = {"bg": 0}
++
++        def app_open():
++            state["bg"] = app_bg(m.dump())
++            return state["bg"] >= 80
++
+         for attempt in range(2):
+-            deadline = time.time() + 8
+-            while True:
+-                time.sleep(0.5); img = dump(); bg = app_bg(img)
+-                if bg >= 80 or time.time() > deadline: break
+-            if bg >= 80: break
+-            key("ret")
+-        time.sleep(0.5); img = dump(); bg = app_bg(img)
++            m.wait_until(app_open, timeout=8, interval=0.5)
++            if state["bg"] >= 80: break
++            m.key("ret")
++        time.sleep(0.5); img = m.dump(); bg = app_bg(img)
+         img.save(f"/tmp/jt-apptop-{name.lower()}.png")
+         if title(img) == title_apps: fails.append(f"{name}: window frame still says Apps, not the app's own name")
+         rows = ink_rows(img, FOLDER_VIEW)
+@@ -182,19 +150,15 @@ try:
+             gap = rows[0] - FOLDER_VIEW[1]
+             print(f"{name}: first ink {gap}px below the title bar")
+             if gap > MAX_GAP: fails.append(f"{name}: blank strip under the title bar, first ink {gap}px down (max {MAX_GAP})")
+-        key("esc")
++        m.key("esc")
+         deadline = time.time() + 8
+-        while title(dump()) != title_apps and time.time() < deadline: time.sleep(0.5)
+-        if title(dump()) != title_apps: fails.append(f"{name}: frame title not restored to Apps after closing it")
+-        click_at(*FOLDER_CLOSE, 1.0)
+-        move(*PARK); time.sleep(0.4)
+-    try: cmd({"execute": "quit"})
+-    except (ConnectionResetError, BrokenPipeError, json.JSONDecodeError): pass
+-finally:
+-    try: q.wait(timeout=5)
+-    except subprocess.TimeoutExpired: q.kill()
+-
+-serial = open(LOG, errors="replace").read() if os.path.exists(LOG) else ""
++        while title(m.dump()) != title_apps and time.time() < deadline: time.sleep(0.5)
++        if title(m.dump()) != title_apps: fails.append(f"{name}: frame title not restored to Apps after closing it")
++        m.click_at(*FOLDER_CLOSE, settle=1.0)
++        m.move(*PARK); time.sleep(0.4)
++
++    serial = m.serial()
++
+ for bad in ("PANIC", "panic", "Page fault", "EXCEPTION"):
+     if bad in serial: fails.append(f"serial log contains {bad!r}")
+ 
+diff --git a/tools/checks/calviews-check.py b/tools/checks/calviews-check.py
+index 549f4d2..2919a50 100755
+--- a/tools/checks/calviews-check.py
++++ b/tools/checks/calviews-check.py
+@@ -24,73 +24,38 @@ segment and every per-view assertion fail.
+ 
+ Usage: tools/checks/calviews-check.py   (from the repo root, after make kernel.elf)
+ """
+-import json, os, socket, subprocess, sys, time
+-from PIL import Image
++import os
++import sys
++import time
++
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++from jtqmp import Machine
+ 
+-LOG = "/tmp/jt-calviews-serial.log"
+-DUMP = "/tmp/jt-calviews.raw"
+-FB = 0xfd000000; W, H = 1920, 1080
+ PORT = 4472
+-LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
+-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
+-PITCH = DOCK_ICON + DOCK_GAP
+-ICON_ROW_Y = 487
+-PARK = (930, 300)
+-CLOSE = (94, 56)
+ VX0, VY0, VX1, VY1 = 78, 72, 890, 417   # window 0's content viewport, logical
+ T = -32                                  # gui_app_dy() inside a dock window
+ ACCENT = (0xA0, 0x55, 0x3F)
+ SEP = (0xEC, 0xE6, 0xDE)
+ 
++
+ def vx(x): return VX0 + x
+ def vy(y): return VY0 + y
+ 
+-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+-for p in (LOG, DUMP):
+-    try: os.remove(p)
+-    except FileNotFoundError: pass
+ 
+-q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
+-                      "-rtc", "base=2026-08-15T12:00:00", "-name", "jt-calviews-check",
+-                      "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG],
+-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+ fails = []
+-try:
+-    s = None
+-    for _ in range(50):
+-        time.sleep(0.2)
+-        try: s = socket.create_connection(("127.0.0.1", PORT)); break
+-        except OSError: pass
+-    if s is None: raise SystemExit("FAIL: QEMU's QMP socket never came up")
+-    f = s.makefile("rw")
+-    def cmd(o):
+-        f.write(json.dumps(o) + "\n"); f.flush()
+-        while True:
+-            r = json.loads(f.readline())
+-            if "return" in r or "error" in r: return r
+-    f.readline()
+-    cmd({"execute": "qmp_capabilities"})
+-    time.sleep(5.0)
+-
+-    def move(x, y):
+-        cmd({"execute": "input-send-event", "arguments": {"events": [
+-            {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
+-            {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
+-    def click():
+-        cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
+-        time.sleep(0.1)
+-        cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
+-    def key(qc):
+-        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qc}]}})
+-        time.sleep(0.35)
++
++with Machine(PORT, "jt-calviews-check", rtc="base=2026-08-15T12:00:00") as m:
+     def dump(name):
+         time.sleep(0.4)
+-        cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
+-        img = Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
++        img = m.dump()
+         img.save(f"/tmp/jt-calviews-{name}.png")
+         return img
+-    def px(img, x, y): return img.getpixel((x * SCALE, y * SCALE))
++
++    def px(img, x, y):
++        return m.px(img, x, y)
++
+     def near(a, b, tol=14): return max(abs(a[i] - b[i]) for i in range(3)) <= tol
++
+     def accent_count(img, x0, y0, x1, y1):
+         return sum(1 for y in range(y0, y1) for x in range(x0, x1) if near(px(img, x, y), ACCENT))
+ 
+@@ -99,28 +64,27 @@ try:
+         hits = [i for i in range(4) if near(px(img, vx(20 + 64 * i + 6), vy(T + 59)), ACCENT)]
+         return hits
+ 
+-    move(*PARK)
+-    move(SLOT0_X + 3 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.5)
+-    move(*PARK); time.sleep(0.4)
++    m.click_at(*m.dock_centre("Calendar"), settle=1.5)
++    m.move(930, 300); time.sleep(0.4)  # park away from the window
+ 
+     img = dump("month0")
+     if active_segment(img) != [2]: fails.append(f"default view: active segment {active_segment(img)}, want [2] (Month)")
+ 
+     # ---- Day ----
+-    key("1"); img = dump("day")
++    m.key("1"); img = dump("day")
+     seg = active_segment(img)
+     if seg != [0]: fails.append(f"Day: active segment {seg}, want [0]")
+     tag = accent_count(img, vx(360), vy(T + 116), vx(444), vy(T + 138))
+     print(f"Day: segment {seg}, Today tag accent px {tag}")
+     if tag < 200: fails.append(f"Day: no Today tag on today ({tag} accent px)")
+-    key("right"); img = dump("day-next")
++    m.key("right"); img = dump("day-next")
+     tag2 = accent_count(img, vx(360), vy(T + 116), vx(444), vy(T + 138))
+     if tag2 > 20: fails.append(f"Day: Today tag still shown after stepping a day ({tag2} px)")
+-    key("t"); img = dump("day-today")
++    m.key("t"); img = dump("day-today")
+     if accent_count(img, vx(360), vy(T + 116), vx(444), vy(T + 138)) < 200: fails.append("Day: t did not return to today")
+ 
+     # ---- Week ----
+-    key("2"); img = dump("week")
++    m.key("2"); img = dump("week")
+     seg = active_segment(img)
+     if seg != [1]: fails.append(f"Week: active segment {seg}, want [1]")
+     col_w = (804 - 40) // 7; x0 = (804 - col_w * 7) // 2
+@@ -128,15 +92,15 @@ try:
+     print(f"Week: segment {seg}, column separators {seps}/6")
+     if seps != 6: fails.append(f"Week: {seps} column separators, want 6")
+     # Save an event on the selected day (Saturday the 15th, last column).
+-    key("ret")
+-    for c in "wk": key(c)
+-    key("ret"); img = dump("week-event")
++    m.key("ret")
++    for c in "wk": m.key(c)
++    m.key("ret"); img = dump("week-event")
+     bar = accent_count(img, vx(x0 + 6 * col_w + 6), vy(T + 190), vx(x0 + 6 * col_w + 9), vy(T + 208))
+     print(f"Week: event bar accent px in Saturday's column {bar}")
+     if bar < 30: fails.append(f"Week: saved event's bar not drawn in the selected column ({bar} px)")
+ 
+     # ---- Year ----
+-    key("4"); img = dump("year")
++    m.key("4"); img = dump("year")
+     seg = active_segment(img)
+     if seg != [3]: fails.append(f"Year: active segment {seg}, want [3]")
+     mw = (804 - 40) // 4; top = T + 116; mh = (345 - 6 - top) // 3
+@@ -151,24 +115,19 @@ try:
+         for ly in range(top + row * mh + 20, top + (row + 1) * mh):
+             if any(sum(px(img, vx(x), vy(ly))) < 450 for x in range(24, 780, 2)): ink_rows += 1
+         if ink_rows < 20: fails.append(f"Year: mini-month row {row} has only {ink_rows} ink rows (no digits?)")
+-    key("right"); img = dump("year-next")
++    m.key("right"); img = dump("year-next")
+     if accent_count(img, vx(20 + 3 * mw), vy(top + mh + 18), vx(20 + 4 * mw), vy(top + 2 * mh)) > 10:
+         fails.append("Year: right did not step to the next year (today's disc still drawn)")
+-    key("t")
++    m.key("t")
+ 
+     # ---- Month again ----
+-    key("3"); img = dump("month")
++    m.key("3"); img = dump("month")
+     seg = active_segment(img)
+     if seg != [2]: fails.append(f"Month: active segment {seg}, want [2]")
+ 
+-    move(*CLOSE); time.sleep(0.3); click(); time.sleep(0.8)
+-    try: cmd({"execute": "quit"})
+-    except (ConnectionResetError, BrokenPipeError, json.JSONDecodeError): pass
+-finally:
+-    try: q.wait(timeout=5)
+-    except subprocess.TimeoutExpired: q.kill()
++    m.click_at(94, 56, settle=0.8)  # window 0's red traffic light
++    serial = m.serial()
+ 
+-serial = open(LOG, errors="replace").read() if os.path.exists(LOG) else ""
+ for bad in ("PANIC", "panic", "Page fault", "EXCEPTION"):
+     if bad in serial: fails.append(f"serial log contains {bad!r}")
+ 
+diff --git a/tools/checks/dockcap-fallback-check.sh b/tools/checks/dockcap-fallback-check.sh
+index 7ef23bb..0882361 100755
+--- a/tools/checks/dockcap-fallback-check.sh
++++ b/tools/checks/dockcap-fallback-check.sh
+@@ -111,7 +111,14 @@ open_slot(MAIL_SLOT)  # cap already hit: must fall back, not drop the click
+ after_three = window_count()
+ after_marker = count("mwcapfallback\n")
+ 
+-cmd({"execute": "quit"})
++# QEMU can tear down the QMP socket the instant it processes quit, before
++# this side ever reads a reply -- a real race (see dockhover-check.py's own
++# comment on the same thing), not a bug in the assertions below, which
++# already ran; a reset here must not mask a genuine PASS as a crash.
++try:
++    cmd({"execute": "quit"})
++except (ConnectionResetError, BrokenPipeError, OSError, json.JSONDecodeError):
++    pass
+ print("after_two=%d after_three=%d marker_before=%d marker_after=%d" % (after_two, after_three, before_marker, after_marker))
+ if after_two != 2:
+     print("FAIL: expected exactly 2 multi-window windows open (Files, Reminders), got %d" % after_two); sys.exit(1)
+diff --git a/tools/checks/dockhover-check.py b/tools/checks/dockhover-check.py
+index 1c8ae15..5ec6733 100755
+--- a/tools/checks/dockhover-check.py
++++ b/tools/checks/dockhover-check.py
+@@ -18,89 +18,56 @@ and again after it has settled, and asserts on actual pixels:
+      cursor is still lifted mid-animation (the original report's claim,
+      which the kernel's own animation state never actually did).
+ 
+-Geometry is derived from the kernel's own constants for a 960x540 logical
+-window at scale 2 (gui_run's window_open_scaled), dock_scale_pct 7,
+-GUI_ICON_COUNT 11: DOCK_ICON 37, tray x 258..702, slot pitch 43, slot s
+-tile spans x 268+43s .. 304+43s, icon row y 469..506, magnified+lifted
+-top at y 450. Update the numbers below if any of those change.
++Geometry comes from tools/checks/jtqmp.py's dock derivation (kernel.c's own
++GUI_LABELS/GUI_DOCK_DEFAULT), the same numbers this check used to hardcode:
++DOCK_ICON 37, tray x 258..702, slot pitch 43, slot s tile spans
++x 268+43s .. 304+43s, icon row y 469..506, magnified+lifted top at y 450.
+ 
+ Usage: tools/checks/dockhover-check.py   (from the repo root, after make kernel.elf)
+ """
+-import json, os, socket, subprocess, sys, time
+-from PIL import Image
++import os
++import sys
++import time
++
++sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
++from jtqmp import Machine
+ 
+-LOG = "/tmp/jt-dockhover-serial.log"
+-REST, MID, END = "/tmp/jt-dockhover-rest.raw", "/tmp/jt-dockhover-mid.raw", "/tmp/jt-dockhover-end.raw"
+-FB = 0xfd000000; W, H = 1920, 1080
+ PORT = 4449
+-LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
+-DOCK_ICON, DOCK_GAP, SLOT0_X, ICONS = 37, 6, 247, 11
+-PITCH = DOCK_ICON + DOCK_GAP
+-ICON_ROW_Y = 487      # inside the normal-size tile
+ LIFTED_Y = 455        # above a normal tile's top (469), inside a magnified+lifted one (450..)
+ TRAY = (239, 235, 228)
+ LABEL_BG = (0xF4, 0xF1, 0xEC)  # DOCK_LABEL_BG in kernel.c
+ LABEL_Y = 446                  # hover label capsule centre line: gui_dock_y0() (459) - 21 + 8
+ 
+-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+-for f in (LOG, MID, END):
+-    try: os.remove(f)
+-    except FileNotFoundError: pass
+-
+-q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
+-                      "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG],
+-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+-try:
+-    time.sleep(1.0)
+-    s = socket.create_connection(("127.0.0.1", PORT)); f = s.makefile("rw")
+-    def cmd(o):
+-        f.write(json.dumps(o) + "\n"); f.flush()
+-        while True:
+-            r = json.loads(f.readline())
+-            if "return" in r or "error" in r: return r
+-    f.readline()
+-    cmd({"execute": "qmp_capabilities"})
+-    time.sleep(5.0)  # desktop up
+-
+-    def move(x, y):
+-        cmd({"execute": "input-send-event", "arguments": {"events": [
+-            {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
+-            {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
+-    def dump(path):
+-        cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": path}})
+-    centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
+-
+-    move(480, 200); time.sleep(0.3); dump(REST)           # cursor nowhere near the dock: nothing lifted
+-    move(centre(1), ICON_ROW_Y); time.sleep(0.6)          # Files fully lifted
++with Machine(PORT, "jt-dockhover-check") as m:
++    m.move(480, 200); time.sleep(0.3); rest = m.dump()             # cursor nowhere near the dock: nothing lifted
++    m.move(*m.dock_centre("Files")); time.sleep(0.6)                # Files fully lifted
+     for slot in (2, 3, 4, 5):
+-        move(centre(slot), ICON_ROW_Y); time.sleep(0.12)  # hop across four more
+-    time.sleep(0.05); dump(MID)                           # slot 5 still growing, 4 still shrinking
+-    time.sleep(0.8);  dump(END)                           # settled
+-    # QEMU can tear down the QMP socket the instant it processes quit,
+-    # before this side ever reads a reply -- a real race, not a bug in
+-    # the assertions above (which already ran); a reset here must not
+-    # mask a genuine PASS as a crash.
+-    try: cmd({"execute": "quit"})
+-    except (ConnectionResetError, BrokenPipeError, OSError): pass
+-finally:
+-    try: q.wait(timeout=5)
+-    except subprocess.TimeoutExpired: q.kill()
++        x = m.SLOT0_X + slot * m.DOCK_PITCH + m.DOCK_ICON // 2
++        m.move(x, m.ICON_ROW_Y); time.sleep(0.12)                  # hop across four more
++    time.sleep(0.05); mid = m.dump()                                # slot 5 still growing, 4 still shrinking
++    time.sleep(0.8);  end = m.dump()                                # settled
++    serial = m.serial()
++
++fails = []
++
+ 
+-fail = 0
+-def load(path):
+-    return Image.frombytes("RGBA", (W, H), open(path, "rb").read(), "raw", "BGRA").convert("RGB")
+ def tile_present(img, slot):
+     """A tile is present when most of its 37x37 box is not tray colour. An
+     absent tile is exactly tray (0 pixels differ); a drawn one is >90%. The
+     threshold is tight (12) because white glyph pixels sit within ~27 of
+     the cream tray in every channel."""
+-    x0 = (SLOT0_X + slot * PITCH) * SCALE; y0 = 469 * SCALE
+-    n = DOCK_ICON * SCALE; non_tray = 0
++    x0 = (Machine.SLOT0_X + slot * Machine.DOCK_PITCH) * 2
++    y0 = 469 * 2
++    n = Machine.DOCK_ICON * 2
++    non_tray = 0
+     for y in range(y0, y0 + n):
+         for x in range(x0, x0 + n):
+             p = img.getpixel((x, y))
+-            if max(abs(p[i] - TRAY[i]) for i in range(3)) > 12: non_tray += 1
++            if max(abs(p[i] - TRAY[i]) for i in range(3)) > 12:
++                non_tray += 1
+     return non_tray > n * n // 2
++
++
+ def lifted(img, slot):
+     """Lifted when the row above a normal tile's top, across the tile's own
+     width, differs from the same row in the resting frame.
+@@ -112,32 +79,33 @@ def lifted(img, slot):
+     lifted). Row 455 is below the wind band (WIND_HORIZON_ROW 395), so with
+     nothing lifted it is pixel-stable between frames; 24 clears any AA
+     shimmer while a real lifted tile changes nearly every pixel."""
+-    x0 = (SLOT0_X + slot * PITCH) * SCALE; y = LIFTED_Y * SCALE
+-    changed = sum(1 for x in range(x0, x0 + DOCK_ICON * SCALE)
++    x0 = (Machine.SLOT0_X + slot * Machine.DOCK_PITCH) * 2
++    y = LIFTED_Y * 2
++    changed = sum(1 for x in range(x0, x0 + Machine.DOCK_ICON * 2)
+                   if max(abs(a - b) for a, b in zip(img.getpixel((x, y)), rest.getpixel((x, y)))) > 24)
+-    return changed > DOCK_ICON * SCALE // 3
++    return changed > Machine.DOCK_ICON * 2 // 3
++
+ 
+-rest = load(REST)
+-for tag, path in (("mid", MID), ("end", END)):
+-    img = load(path)
+-    missing = [s_ for s_ in range(ICONS) if not tile_present(img, s_)]
+-    lifted_slots = [s_ for s_ in range(ICONS) if lifted(img, s_)]
++fail = 0
++for tag, img in (("mid", mid), ("end", end)):
++    missing = [s for s in range(len(Machine.DOCK)) if not tile_present(img, s)]
++    lifted_slots = [s for s in range(len(Machine.DOCK)) if lifted(img, s)]
+     print(f"{tag}: missing tiles {missing}, lifted slots {lifted_slots}")
+     if missing:
+         print(f"FAIL: {tag} frame has tiles missing from the tray (direct-repaint fallback caught mid-step)"); fail = 1
+-    if tag == "mid" and any(s_ < 4 for s_ in lifted_slots):
++    if tag == "mid" and any(s < 4 for s in lifted_slots):
+         print("FAIL: mid frame still shows an icon lifted more than one hop behind the cursor"); fail = 1
+     if tag == "end":
+         # The hover label's capsule is wider than one slot, so "which slots
+         # changed" is 4..6 for a long name; what must hold is that the mark
+         # is centred on the slot under the cursor.
+-        y = LABEL_Y * SCALE
+-        xs = [x for x in range(SLOT0_X * SCALE, (SLOT0_X + ICONS * PITCH) * SCALE)
++        y = LABEL_Y * 2
++        xs = [x for x in range(Machine.SLOT0_X * 2, (Machine.SLOT0_X + len(Machine.DOCK) * Machine.DOCK_PITCH) * 2)
+               if max(abs(a - b) for a, b in zip(img.getpixel((x, y)), rest.getpixel((x, y)))) > 24]
+-        want = (SLOT0_X + 5 * PITCH + DOCK_ICON // 2) * SCALE
++        want = (Machine.SLOT0_X + 5 * Machine.DOCK_PITCH + Machine.DOCK_ICON // 2) * 2
+         got = (min(xs) + max(xs)) // 2 if xs else -1
+-        print(f"end: hover mark centred at x={got // SCALE}, slot 5 centre {want // SCALE}")
+-        if not xs or abs(got - want) > PITCH * SCALE // 2:
++        print(f"end: hover mark centred at x={got // 2}, slot 5 centre {want // 2}")
++        if not xs or abs(got - want) > Machine.DOCK_PITCH * 2 // 2:
+             print("FAIL: settled frame's hover label is not over the slot under the cursor (5)"); fail = 1
+         # The label has a backing (DOCK_LABEL_BG capsule), not bare text on
+         # the wallpaper: its light fill shows on both sides of the text.
+@@ -146,5 +114,10 @@ for tag, path in (("mid", MID), ("end", END)):
+         if backing < 60:
+             print("FAIL: hover label has no backing"); fail = 1
+ 
+-if not fail: print("PASS: dock hover, tray intact mid-animation, lifted icon is the one under the cursor")
++for bad in ("PANIC", "panic", "Page fault", "EXCEPTION"):
++    if bad in serial:
++        print(f"FAIL: serial log contains {bad!r}"); fail = 1
++
++if not fail:
++    print("PASS: dock hover, tray intact mid-animation, lifted icon is the one under the cursor")
+ sys.exit(fail)
+diff --git a/tools/checks/jtqmp.py b/tools/checks/jtqmp.py
+new file mode 100644
+index 0000000..7874510
+--- /dev/null
++++ b/tools/checks/jtqmp.py
+@@ -0,0 +1,252 @@
++"""Shared QMP harness for tools/checks/*.py headless pixel checks.
++
++Every check used to hand-roll its own copy of: boot QEMU with -display
++none, connect to QMP, wait for the desktop, move/click/drag/key/type
++helpers, a pmemsave-based framebuffer dump, and the dock's pixel geometry
++(icon size, gap, slot-0 x, icon row y). ~40 checks copy-pasted this, and
++the copies drifted: one check sent keys 0.35s apart (measured safe, see
++search-check.py) while another used a faster gap and dropped scancodes;
++two checks hardcoded dock/window coordinates that went stale when the
++dock or a window's layout changed; some checks used a fixed sleep where
++waiting for an on-screen condition was the real fix (apptop-check.py's
++Apps-folder open/close waits, needed on a slower CI runner).
++
++This module is that harness, factored out once, so a fix (a longer key
++gap, a geometry change, a smarter wait) lands in one place. It is a
++helper module, not a check itself: suite-coverage-check.py's ALLOW set
++excludes it, and dockslots-check.py's drift guard already special-cases
++it by name.
++
++Usage:
++
++    from jtqmp import Machine
++
++    with Machine(4501, "jt-mycheck", rtc="base=2026-08-15T12:00:00") as m:
++        m.move(*m.dock_centre("Calendar"))
++        m.click()
++        m.wait_until(lambda: m.dump() is not None, timeout=2)
++        img = m.dump()
++        img.save("/tmp/jt-mycheck.png")
++        print(m.px(img, 100, 100))
++    print(m.serial())
++
++Dock geometry (`Machine.dock_centre`, `Machine.DOCK`, `Machine.SLOT0_X`,
++etc.) is derived from `kernel/kernel.c`'s own `GUI_LABELS`/
++`GUI_DOCK_DEFAULT`, the same way `tools/qa_demo_drive.py` and
++`tools/checks/dockslots-check.py` do it, so it can never itself go stale
++independently of the kernel.
++"""
++import json
++import os
++import re
++import socket
++import subprocess
++import time
++
++try:
++    from PIL import Image
++except ImportError:  # pragma: no cover - PIL is a documented dependency
++    Image = None
++
++REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
++
++# Logical/physical framebuffer geometry: 960x540 logical GUI, scaled 2x to
++# a real 1920x1080 physical framebuffer (gui_run's window_open_scaled).
++LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
++FB_ADDR, FB_W, FB_H = 0xfd000000, 1920, 1080
++
++# Default key gap: measured real minimum, see search-check.py and
++# apptop-check.py's own comments. Sending keys faster drops scancodes.
++DEFAULT_KEY_GAP = 0.35
++
++QCODE = {
++    " ": "spc", ".": "dot", "-": "minus", "/": "slash", ",": "comma",
++    "@": "shift-2", "]": "bracket_right", "+": "shift-equal",
++    "\n": "ret", "\b": "backspace",
++}
++
++
++def _dock_geometry():
++    """Dock order + pixel geometry, derived from kernel/kernel.c, the way
++    tools/qa_demo_drive.py and tools/checks/dockslots-check.py do it, so
++    this module can never itself hold a stale copy."""
++    k = open(os.path.join(REPO_ROOT, "kernel", "kernel.c")).read()
++    labels = re.findall(r'"([^"]+)"', re.search(r"GUI_LABELS\[GUI_APP_COUNT\] = \{(.*?)\};", k, re.S).group(1))
++    sym = {"GUI_APPS_FOLDER": labels.index("Apps"), "GUI_TRASH": labels.index("Trash")}
++    order = [labels[sym[t] if t in sym else int(t)]
++             for t in re.search(r"GUI_DOCK_DEFAULT\[GUI_ICON_COUNT\] = \{(.*?)\};", k).group(1).replace(" ", "").split(",")]
++    dock_icon, dock_gap, dock_pad = 37, 6, 10
++    slot0_x = (LOGICAL_W - (len(order) * dock_icon + (len(order) - 1) * dock_gap + 2 * dock_pad)) // 2 + dock_pad
++    return order, dock_icon, dock_gap, slot0_x
++
++
++class Machine:
++    """A single headless QEMU instance, driven over QMP.
++
++    Context-manager: `with Machine(port, name) as m:` boots kernel.elf,
++    waits for the QMP socket, sends qmp_capabilities, and waits for the
++    desktop to come up; on exit it asks QEMU to quit and, failing that,
++    kills the process by PID (never pkill: other checks may have their
++    own QEMU running concurrently).
++    """
++
++    DOCK, DOCK_ICON, DOCK_GAP, SLOT0_X = _dock_geometry()
++    DOCK_PITCH = DOCK_ICON + DOCK_GAP
++    ICON_ROW_Y = 487
++
++    def __init__(self, port, name, extra_args=None, rtc=None, kernel="kernel.elf",
++                 log=None, boot_wait=5.0):
++        self.port = port
++        self.name = name
++        self.kernel = kernel
++        self.log = log or f"/tmp/jt-{name}-serial.log"
++        self.dump_path = f"/tmp/jt-{name}.raw"
++        self.boot_wait = boot_wait
++        self._proc = None
++        self._sock = None
++        self._f = None
++        args = ["qemu-system-i386", "-kernel", self.kernel, "-display", "none", "-vga", "std",
++                "-name", self.name, "-qmp", f"tcp:127.0.0.1:{self.port},server,nowait",
++                "-serial", "file:" + self.log]
++        if rtc:
++            args += ["-rtc", rtc]
++        if extra_args:
++            args += list(extra_args)
++        self._args = args
++
++    # -- lifecycle ---------------------------------------------------
++    def __enter__(self):
++        os.chdir(REPO_ROOT)
++        for p in (self.log, self.dump_path):
++            try:
++                os.remove(p)
++            except FileNotFoundError:
++                pass
++        self._proc = subprocess.Popen(self._args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
++        s = None
++        for _ in range(50):
++            time.sleep(0.2)
++            try:
++                s = socket.create_connection(("127.0.0.1", self.port))
++                break
++            except OSError:
++                pass
++        if s is None:
++            self._kill()
++            raise SystemExit("FAIL: QEMU's QMP socket never came up")
++        self._sock = s
++        self._f = s.makefile("rw")
++        self._f.readline()  # greeting
++        self._cmd({"execute": "qmp_capabilities"})
++        time.sleep(self.boot_wait)  # desktop up
++        return self
++
++    def __exit__(self, exc_type, exc, tb):
++        try:
++            self._cmd({"execute": "quit"})
++        except (ConnectionResetError, BrokenPipeError, OSError, json.JSONDecodeError):
++            pass
++        self._kill()
++        return False
++
++    def _kill(self):
++        if self._proc is None:
++            return
++        try:
++            self._proc.wait(timeout=5)
++        except subprocess.TimeoutExpired:
++            self._proc.kill()  # by PID only, never pkill: another check's QEMU may be running
++
++    # -- QMP plumbing --------------------------------------------------
++    def _cmd(self, obj):
++        self._f.write(json.dumps(obj) + "\n")
++        self._f.flush()
++        while True:
++            r = json.loads(self._f.readline())
++            if "return" in r or "error" in r:
++                return r
++
++    # -- input -----------------------------------------------------
++    def move(self, x, y):
++        self._cmd({"execute": "input-send-event", "arguments": {"events": [
++            {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
++            {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
++
++    def button(self, down):
++        self._cmd({"execute": "input-send-event", "arguments": {
++            "events": [{"type": "btn", "data": {"down": down, "button": "left"}}]}})
++
++    def click(self, settle=0.1):
++        self.button(True)
++        time.sleep(settle)
++        self.button(False)
++
++    def click_at(self, x, y, settle=1.2, move_settle=0.3):
++        self.move(x, y)
++        time.sleep(move_settle)
++        self.click()
++        time.sleep(settle)
++
++    def drag(self, sx, sy, tx, ty, steps=8, step_delay=0.05):
++        self.move(sx, sy)
++        time.sleep(0.2)
++        self.button(True)
++        time.sleep(0.1)
++        for i in range(1, steps + 1):
++            self.move(sx + (tx - sx) * i // steps, sy + (ty - sy) * i // steps)
++            time.sleep(step_delay)
++        time.sleep(0.1)
++        self.button(False)
++
++    def key(self, qcode, gap=DEFAULT_KEY_GAP):
++        self._cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qcode}]}})
++        time.sleep(gap)
++
++    def type(self, text, gap=DEFAULT_KEY_GAP):
++        for ch in text:
++            if ch.isupper():
++                self._cmd({"execute": "send-key", "arguments": {"keys": [
++                    {"type": "qcode", "data": "shift"}, {"type": "qcode", "data": ch.lower()}]}})
++                time.sleep(gap)
++            else:
++                self.key(QCODE.get(ch, ch), gap=gap)
++
++    # -- framebuffer -------------------------------------------------
++    def dump(self):
++        self._cmd({"execute": "pmemsave", "arguments": {"val": FB_ADDR, "size": FB_W * FB_H * 4, "filename": self.dump_path}})
++        return Image.frombytes("RGBA", (FB_W, FB_H), open(self.dump_path, "rb").read(), "raw", "BGRA").convert("RGB")
++
++    @staticmethod
++    def px(img, x, y):
++        """Physical pixel at a logical (x, y) coordinate."""
++        return img.getpixel((x * SCALE, y * SCALE))
++
++    # -- waiting -------------------------------------------------------
++    def wait_until(self, predicate, timeout=8, interval=0.5):
++        """Poll predicate() (no args) until it's true or timeout elapses.
++        Returns the last value of predicate(). Prefer this over a fixed
++        sleep for any on-screen condition (apptop-check.py's Apps-folder
++        open/close waits are the pattern this generalizes)."""
++        deadline = time.time() + timeout
++        result = predicate()
++        while not result and time.time() < deadline:
++            time.sleep(interval)
++            result = predicate()
++        return result
++
++    def serial(self):
++        if not os.path.exists(self.log):
++            return ""
++        return open(self.log, errors="replace").read()
++
++    # -- dock geometry -------------------------------------------------
++    @classmethod
++    def dock_centre(cls, name):
++        """Logical (x, y) of the dock icon labelled `name`, or raises
++        ValueError if it's not in the current dock order."""
++        slot = cls.DOCK.index(name)
++        return (cls.SLOT0_X + slot * cls.DOCK_PITCH + cls.DOCK_ICON // 2, cls.ICON_ROW_Y)
++
++    @classmethod
++    def dock_slot(cls, name):
++        return cls.DOCK.index(name)

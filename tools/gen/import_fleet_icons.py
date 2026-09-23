@@ -12,7 +12,7 @@ CODE = os.path.dirname(ROOT) if os.path.isdir(os.path.join(os.path.dirname(ROOT)
 # art/icons name -> repo folder
 FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank", "lexly": "lexly", "sparkjar": "sparkjar",
          "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "homeqi": "homeqi", "fieldbook": "fieldbook",
-         "plan": "plan", "weather": "weather"}
+         "plan": "plan"}  # Weather is a system app, it keeps the restyled icon from restyle_icons.py
 for name, repo in FLEET.items():
     src = os.path.join(CODE, repo, "icon.svg")
     if not os.path.isfile(src):

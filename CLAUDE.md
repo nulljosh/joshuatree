@@ -42,7 +42,7 @@ dependencies beyond clang, ld.lld and qemu.
   `heaptest`/`tasktest`/`ring3test` pattern in `kernel.c`) or a
   `tools/checks/*-check.{sh,py,mjs}` script. Prove the test fails when
   the fix is reverted and passes when it's restored.
-- `docs/ARCHITECTURE.md`'s Subsystems table should have a row for every
+- `docs/ARCHITECTURE.md`'s Files table should have a row for every
   real `.c` file and header-only subsystem in the repo. Add a row in the
   same pass that adds the file.
 - `.github/workflows/check.yml` runs the regression suite on every push.

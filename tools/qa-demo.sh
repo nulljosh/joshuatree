@@ -31,10 +31,10 @@ STATUS=$?
 
 # Frames are PPM at whatever the kernel's real mode is; ffmpeg reads them
 # directly. 6fps keeps the file small and still shows every real transition.
-if ls "$OUT"/frames/*.ppm >/dev/null 2>&1; then
-    ffmpeg -y -loglevel error -framerate 6 -pattern_type glob -i "$OUT/frames/*.ppm" \
+if ls "$OUT"/frames/*.png >/dev/null 2>&1; then
+    ffmpeg -y -loglevel error -framerate 6 -pattern_type glob -i "$OUT/frames/*.png" \
         -vf "scale=960:-2:flags=lanczos" -pix_fmt yuv420p "$OUT/jt-qa.mp4"
-    ffmpeg -y -loglevel error -framerate 6 -pattern_type glob -i "$OUT/frames/*.ppm" \
+    ffmpeg -y -loglevel error -framerate 6 -pattern_type glob -i "$OUT/frames/*.png" \
         -vf "fps=6,scale=720:-2:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse" \
         "$OUT/jt-qa.gif"
     echo "video: $OUT/jt-qa.mp4"

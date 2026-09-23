@@ -1,202 +1,280 @@
 #!/usr/bin/env python3
-"""One-shot restyler: rewrite every art/icons/*.svg into the glossy tile
-technique (rich base gradient + soft top sheen + glyph top-light and drop
-shadow), keeping each icon's own glyph geometry and base hue.
+"""Authoring tool for the dock's icon artwork: writes the eleven dock icons
+(plus Trash's full variant) in art/icons/ from the design table below, in
+one shared macOS Big Sur-style tile technique.
 
 This is an authoring tool, not part of the build: gen_icon_art.py still
-rasterizes whatever the SVGs say. Kept in-tree so the technique's numbers
-live in one readable place instead of being smeared across 24 hand-edited
-files, and so a future tuning pass is an edit here plus one re-run rather
-than 24 careful search-and-replaces.
+rasterizes whatever the SVGs say. It is kept in-tree so the technique's
+numbers, and every dock glyph, live in one readable place instead of being
+smeared across twelve hand-edited files. A tuning pass is an edit here plus
+one re-run.
 
-Usage: python3 tools/gen/restyle_icons.py
+Why this replaced the glossy technique (owner feedback: "icons still look
+too Windows or Linux"). The previous pass gave every tile a heavy three-stop
+ramp, 42% toward white at the top to 40% toward black at the bottom (about
+100 luminance top to bottom), a radial top sheen, and a rim stroke that went
+black along the bottom edge. That is the Aqua/Vista-era glass look: a dark,
+vignetted chip with a hard dark outline, and a small flat clip-art plate
+floating in the middle of it. Big Sur and later do the opposite:
+
+  * the tile is mostly its own colour, lit from the top by a few percent
+    (about 20-30 luminance of spread, not 100), with no sheen;
+  * a soft inner highlight along the top edge only, no outline anywhere
+    and certainly no dark one;
+  * a squircle (continuous-curvature corner), not a circular rounded rect;
+  * the glyph is a material object that fills the tile: gradient fills lit
+    from the same top light, and one gentle contact shadow under it.
+
+Icons NOT in DOCK below (the fleet apps shown only in the Apps folder)
+still carry the earlier glossy technique an older revision of this script
+wrote; this one leaves those files alone rather than restyling artwork it
+has no design for.
+
+Usage: python3 tools/gen/restyle_icons.py && python3 tools/gen/gen_icon_art.py
 """
+import math
 import os
-import re
 import sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 SVG_DIR = os.path.join(ROOT, "art", "icons")
 
-# --- the technique's numbers, all in one place -------------------------------
+# --- the shared technique's numbers ------------------------------------------
 #
-# Base tile gradient. The old art ran a single two-stop ramp of roughly
-# +22% white to -18% black around the app's own hue, ~50 luminance top to
-# bottom, which reads as a flat chip. This widens it to a real convex-body
-# ramp and puts a third stop just past the midpoint so the top half falls
-# slowly (the lit face) and the bottom half falls fast (the turn away from
-# the light), instead of one straight line.
-TOP_WHITE = 0.42      # top stop: this far from the hue toward white
-MID_WHITE = 0.10      # stop at MID_AT: still a touch above the hue itself
-MID_AT = 0.58         # where that stop sits: past halfway, so the lit face is
-                      # the larger share and the turn into shade is the smaller
-BOT_BLACK = 0.40      # bottom stop: this far from the hue toward black
+# Squircle: a superellipse |x|^n + |y|^n = 1 over the whole 128 canvas.
+# n=4.8 puts the diagonal inset at 8.6 units, a hair past the old rx=28
+# (21.9%) rounded rect's 8.2, but the curvature ramps in gradually from the
+# flat side instead of switching on at a tangent point. That ramp is what
+# makes the Apple tile read as one soft object instead of a rectangle with
+# its corners cut off. Not 5: measured on a real capture, n=5 leaves ~6%
+# coverage in the corner block iconhalo-check.py requires to be pure tray
+# (it samples physical x 2..5 of the tile, not 0..3, since the check's slot
+# origin sits one logical pixel right of where the tile really starts), and
+# 4.8 clears it with the curve otherwise indistinguishable at dock size.
+SQUIRCLE_N = 4.8
+SQUIRCLE_PTS = 288
 
-# Top sheen. A radial, not a clipped ellipse, deliberately: an ellipse
-# filled with a vertical gradient has a real edge wherever its own outline
-# crosses the tile while the gradient is still above zero, and at 128px
-# that edge survives the downsample as a faint seam. A radial centred above
-# the tile falls off in every direction at once, so the highlight is
-# brightest at the top centre, dimmer at the top corners and gone by the
-# middle, with no geometry anywhere.
-SHEEN = [(0.0, 0.14), (0.5, 0.06), (1.0, 0.0)]
-SHEEN_CY, SHEEN_R = -18, 106
+# Inner top highlight: the squircle's own outline, stroked white, clipped to
+# the tile (so only the inner half shows) and faded out HL_FADE units down,
+# so it is a lit top lip and never a frame round the sides or bottom.
+HL_WIDTH, HL_ALPHA, HL_FADE = 5.0, 0.5, 22
 
-# Edge light. The top edge of a glossy body catches the most light; the
-# bottom edge is in its own shade. This is the one hard, bright line in the
-# icon and it is what iconart-check.py's rim-falloff oracle measures.
-RIM_TOP, RIM_TOP_END, RIM_BOT = 0.95, 0.30, 0.26
-
-# Glyph top-light. Masked to the glyph's own alpha so it lights the symbol
-# and nothing else. White-only on purpose, with no black term at the
-# bottom: a darkening term here would drag the Trash can's base band (a
-# deliberately flat fill that iconedge-check.py asserts stays >= 240) down
-# through that threshold, and weakening a real assertion to make a
-# decoration work is the wrong trade.
-LIFT = [(0.0, 0.32), (0.5, 0.07), (1.0, 0.0)]
-LIFT_Y0, LIFT_Y1 = 16, 102
-
-# Glyph drop shadow: what makes the symbol sit above the surface rather
-# than be printed on it.
-DROP_DY, DROP_BLUR, DROP_ALPHA = 2.6, 2.9, 0.42
+# Glyph contact shadow: small offset, small blur, low alpha. A soft
+# grounding under the object, not the old 0.42-alpha drop halo.
+DROP_DY, DROP_BLUR, DROP_ALPHA = 1.8, 1.6, 0.30
 
 
-def parse(c):
-    return tuple(int(c[i:i + 2], 16) for i in (1, 3, 5))
+def squircle_path():
+    pts = []
+    for i in range(SQUIRCLE_PTS):
+        t = 2 * math.pi * i / SQUIRCLE_PTS
+        c, s = math.cos(t), math.sin(t)
+        x = 64 + 64 * math.copysign(abs(c) ** (2 / SQUIRCLE_N), c)
+        y = 64 + 64 * math.copysign(abs(s) ** (2 / SQUIRCLE_N), s)
+        pts.append("%.2f %.2f" % (x, y))
+    return "M" + " L".join(pts) + " Z"
 
 
-def fmt(t):
-    return "#%02X%02X%02X" % tuple(max(0, min(255, int(round(v)))) for v in t)
+def lg(id_, *stops, x2=0, y2=1):
+    """A linear gradient, top-to-bottom by default (the shared light)."""
+    s = "".join('<stop offset="%g" stop-color="%s"/>' % (o, c) for o, c in stops)
+    return '<linearGradient id="%s" x1="0" y1="0" x2="%g" y2="%g">%s</linearGradient>' % (id_, x2, y2, s)
 
 
-def toward(c, t, target):
-    return tuple(v + (target - v) * t for v in c)
+# --- the dock designs ----------------------------------------------------------
+#
+# Each entry: tile top colour, tile bottom colour, extra <defs>, glyph body.
+# Every glyph keeps out of the top 16 and bottom 20 units of the canvas: that
+# is the tile's own lit band and shaded band, which iconlight-check.py
+# measures, and a glyph crossing them would make the check measure the glyph.
+# Stroke weights are shared: 8 units for primary strokes, 5 for secondary.
 
+TRASH_DEFS = (
+    lg("metal", (0, "#C4C7CE"), (1, "#9A9EA7"))
+    + lg("can", (0, "#FFFFFF"), (0.55, "#F4F5F7"), (1, "#C9CCD3"), x2=1, y2=0)
+)
+TRASH_CAN = """
+      <rect x="52" y="22" width="24" height="9" rx="3.5" fill="url(#metal)"/>
+      <rect x="29" y="31" width="70" height="11" rx="5" fill="url(#metal)"/>
+      <path d="M36 46 H92 L86 90 H42 Z" fill="url(#can)"/>
+      <g fill="#8A8F99">
+        <rect x="50.5" y="54" width="5" height="28" rx="2.5"/>
+        <rect x="61.5" y="54" width="5" height="28" rx="2.5"/>
+        <rect x="72.5" y="54" width="5" height="28" rx="2.5"/>
+      </g>
+      <path d="M41.6 87 H86.4 L85.3 95.4 A3.4 3.4 0 0 1 81.9 98.4 H46.1 A3.4 3.4 0 0 1 42.7 95.4 Z" fill="#FFFFFF"/>"""
 
-def stops(items, color="#ffffff"):
-    return "".join(
-        '<stop offset="%g" stop-color="%s" stop-opacity="%g"/>' % (o, color, a)
-        for o, a in items)
+DOCK = {
+    # Launchpad-style grid: nine colour chips on a light tile.
+    "apps": ("#F3F3F6", "#DADBE0",
+             lg("chip", (0, "#FFFFFF"), (1, "#000000")),
+             "".join(
+                 '<rect x="%d" y="%d" width="20" height="20" rx="5.5" fill="%s"/>'
+                 '<rect x="%d" y="%d" width="20" height="20" rx="5.5" fill="url(#chip)" opacity="0.16"/>'
+                 % (26 + 28 * (i % 3), 26 + 28 * (i // 3), c, 26 + 28 * (i % 3), 26 + 28 * (i // 3))
+                 for i, c in enumerate(["#FF5F57", "#FF9F0A", "#FFD60A",
+                                        "#32D74B", "#40C8E0", "#0A84FF",
+                                        "#5E5CE6", "#BF5AF2", "#FF375F"]))),
 
+    # Files: a blue folder on a white tile.
+    "files": ("#F4F6F9", "#DEE1E8",
+              lg("fback", (0, "#3D97F0"), (1, "#1D66CC"))
+              + lg("ffront", (0, "#86CBFF"), (1, "#3B93EE")),
+              """
+      <path d="M20 40 A6 6 0 0 1 26 34 H48 C51 34 52.6 35 54.4 37.4 L57.6 41.6 H102 A6 6 0 0 1 108 47.6 V94 H20 Z" fill="url(#fback)"/>
+      <rect x="18" y="50" width="92" height="48" rx="7" fill="url(#ffront)"/>
+      <rect x="21" y="50.6" width="86" height="2" rx="1" fill="#FFFFFF" opacity="0.55"/>"""),
 
-HEAD = """<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <!-- hue %(hue)s : this icon's own base colour, the one thing here that is
-       per-icon. Everything below is the shared tile technique, written by
-       tools/gen/restyle_icons.py; re-running it reads this line back, so
-       tuning the technique never drifts the colour. -->
+    # Mail: a white envelope on a blue tile.
+    "mail": ("#34A6FF", "#157FF3",
+             lg("env", (0, "#FFFFFF"), (1, "#E4EAF3"))
+             + lg("flap", (0, "#F6F8FB"), (1, "#D7DFEA"))
+             + '<clipPath id="envclip"><rect x="18" y="34" width="92" height="62" rx="8"/></clipPath>',
+             """
+      <rect x="18" y="34" width="92" height="62" rx="8" fill="url(#env)"/>
+      <g clip-path="url(#envclip)">
+        <path d="M18 96 L56 64 M110 96 L72 64" stroke="#CBD5E3" stroke-width="2.4" fill="none"/>
+        <path d="M14 32 L64 72 L114 32 Z" fill="url(#flap)"/>
+        <path d="M18 36 L64 72.5 L110 36" stroke="#B8C5D8" stroke-width="2" fill="none" stroke-linejoin="round" opacity="0.8"/>
+      </g>"""),
+
+    # Calendar: month in red caps, big dark date, on a white tile. Drawn as
+    # strokes, not <text>: rsvg would pick whatever font the host has, and
+    # then gen_icon_art.py --check would differ from machine to machine.
+    "calendar": ("#F5F5F8", "#E0E1E6", "",
+                 """
+      <g fill="none" stroke="#FF3B30" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M53 24.5 C51.5 22 49.4 21 47 21 C43.4 21 41 23 41 26 C41 32.6 53.6 29 53.6 36 C53.6 39.6 50.8 42 47 42 C44 42 41.6 40.6 40.4 38.4"/>
+        <path d="M71 21 H60 V42 H71 M60 31.5 H69"/>
+        <path d="M78 42 V21 H84 C88 21 90.6 23.4 90.6 27 C90.6 30.6 88 33 84 33 H78"/>
+      </g>
+      <g fill="none" stroke="url(#ink)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M37 61 L49 53 V99"/>
+        <path d="M63 54 H90 L72 99"/>
+      </g>""".replace('url(#ink)', '#1F1F22')),
+
+    # Notes: a yellow pencil over ruled paper.
+    "notes": ("#F6F6F8", "#E0E1E6",
+              lg("wood", (0, "#FFE27A"), (0.5, "#FFC928"), (1, "#E9A400"))
+              + lg("ferrule", (0, "#F2F3F5"), (0.5, "#C3C6CC"), (1, "#8E929A"))
+              + lg("eraser", (0, "#FFA9B6"), (1, "#EE6A82"))
+              + lg("cone", (0, "#F9E2BE"), (1, "#E2BD88")),
+              """
+      <g stroke="#D5D6DC" stroke-width="3" stroke-linecap="round">
+        <path d="M24 38 H104 M24 54 H104 M24 70 H104 M24 86 H104"/>
+      </g>
+      <g transform="rotate(-45 64 64)">
+        <path d="M31 56 L15 64 L31 72 Z" fill="url(#cone)"/>
+        <path d="M20.6 61.2 L15 64 L20.6 66.8 Z" fill="#3A3A3E"/>
+        <rect x="31" y="56" width="56" height="16" fill="url(#wood)"/>
+        <rect x="31" y="61.3" width="56" height="1.6" fill="#FFFFFF" opacity="0.35"/>
+        <rect x="87" y="56" width="9" height="16" fill="url(#ferrule)"/>
+        <path d="M96 56 H102 A5 5 0 0 1 107 61 V67 A5 5 0 0 1 102 72 H96 Z" fill="url(#eraser)"/>
+      </g>"""),
+
+    # Reminders: three coloured rings and their list lines, on a white tile.
+    "reminders": ("#F5F5F8", "#E0E1E6", "",
+                  "".join(
+                      '<circle cx="36" cy="%d" r="9.5" fill="none" stroke="%s" stroke-width="3.2"/>'
+                      '<circle cx="36" cy="%d" r="5.2" fill="%s"/>'
+                      '<rect x="54" y="%d" width="50" height="5" rx="2.5" fill="#C7C8CE"/>'
+                      % (y, c, y, c, y - 2.5)
+                      for y, c in ((38, "#0A84FF"), (64, "#FF453A"), (90, "#FF9F0A")))),
+
+    # Terminal: a dark screen with a white prompt, set in an aluminium tile.
+    "terminal": ("#EEEEF1", "#D2D3D8",
+                 lg("screen", (0, "#3A3A40"), (1, "#1A1A1D")),
+                 """
+      <rect x="16" y="20" width="96" height="80" rx="11" fill="url(#screen)"/>
+      <rect x="18" y="21" width="92" height="1.6" rx="0.8" fill="#FFFFFF" opacity="0.16"/>
+      <g fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M36 46 L52 59 L36 72"/>
+        <path d="M61 76 H84"/>
+      </g>"""),
+
+    # Chat: a white speech bubble on a green tile.
+    "chat": ("#62DE72", "#33C54D",
+             lg("bub", (0, "#FFFFFF"), (1, "#E8F1E9")),
+             """
+      <g fill="url(#bub)">
+        <ellipse cx="64" cy="59" rx="42" ry="34"/>
+        <path d="M34 78 C34 88 29 94 22 98 C34 99 44 95 50 88 Z"/>
+      </g>"""),
+
+    # Weather: a sun half behind a cloud, on a sky-blue tile.
+    "weather": ("#47A8F8", "#2A86EC",
+                lg("sun", (0, "#FFE96E"), (1, "#FFAE1F"))
+                + lg("cloud", (0, "#FFFFFF"), (1, "#DCE6F3")),
+                """
+      <circle cx="50" cy="50" r="23" fill="url(#sun)"/>
+      <g fill="url(#cloud)">
+        <circle cx="56" cy="78" r="16"/>
+        <circle cx="77" cy="69" r="20"/>
+        <circle cx="96" cy="81" r="13"/>
+        <rect x="38" y="76" width="70" height="18" rx="9"/>
+      </g>"""),
+
+    # Stocks: a green trend line over a faint grid, on a graphite tile.
+    "stocks": ("#3B3B40", "#1E1E22",
+               '<linearGradient id="area" x1="0" y1="0" x2="0" y2="1">'
+               '<stop offset="0" stop-color="#32D74B" stop-opacity="0.42"/>'
+               '<stop offset="1" stop-color="#32D74B" stop-opacity="0"/></linearGradient>',
+               """
+      <g stroke="#FFFFFF" stroke-opacity="0.10" stroke-width="2">
+        <path d="M18 40 H110 M18 60 H110 M18 80 H110"/>
+      </g>
+      <path d="M18 86 L36 72 L50 79 L66 55 L80 63 L96 38 L110 45 V100 H18 Z" fill="url(#area)"/>
+      <path d="M18 86 L36 72 L50 79 L66 55 L80 63 L96 38 L110 45" fill="none" stroke="#34DA4F" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>"""),
+
+    # Trash: a white can with grey lid and ribs, on a light metal tile. The
+    # flat white base band at y 87-98 is load-bearing: iconedge-check.py
+    # asserts every pixel of it stays >= 240 luminance (the v71.9 rib-stub
+    # regression), so it is deliberately one flat fill, not the can gradient.
+    "trash": ("#ECEDF0", "#D3D5DB", TRASH_DEFS, TRASH_CAN),
+    "trash_full": ("#ECEDF0", "#D3D5DB",
+                   TRASH_DEFS + lg("paper", (0, "#FFFFFF"), (1, "#E3DED6")),
+                   """
+      <circle cx="51" cy="26" r="10" fill="url(#paper)"/>
+      <circle cx="73" cy="22" r="11" fill="url(#paper)"/>""" + TRASH_CAN.replace(
+                       '<rect x="52" y="22" width="24" height="9" rx="3.5" fill="url(#metal)"/>', "")),
+}
+
+TEMPLATE = """<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Written by tools/gen/restyle_icons.py (the "%(name)s" entry): edit
+       that, not this file. Tile %(top)s -> %(bot)s, lit from the top. -->
   <defs>
-    <!-- The tile's own body: lit face on top, turning away from the light
-         toward the bottom. Three stops, not two, so the falloff is a curve. -->
-    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="%(top)s"/><stop offset="%(midat)g" stop-color="%(mid)s"/><stop offset="1" stop-color="%(bot)s"/>
+    %(tilegrad)s
+    <linearGradient id="hl" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="%(fade)d">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="%(hla)g"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
-    <!-- Top sheen, radial so it has no outline of its own anywhere. -->
-    <radialGradient id="gloss" gradientUnits="userSpaceOnUse" cx="64" cy="%(scy)d" r="%(sr)d">
-      %(sheen)s
-    </radialGradient>
-    <!-- Edge light: bright along the top edge, shaded along the bottom. -->
-    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="%(rimtop)g"/>
-      <stop offset="%(rimend)g" stop-color="#ffffff" stop-opacity="0"/>
-      <stop offset="1" stop-color="#000000" stop-opacity="%(rimbot)g"/>
-    </linearGradient>
-    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#E9E2DC"/>
-    </linearGradient>
-    <!-- The glyph's own top-light, painted through the glyph's alpha. -->
-    <linearGradient id="lift" gradientUnits="userSpaceOnUse" x1="0" y1="%(lifty0)d" x2="0" y2="%(lifty1)d">
-      %(lift)s
-    </linearGradient>
-    <filter id="drop" x="-40%%" y="-40%%" width="180%%" height="190%%">
+    <clipPath id="tile"><path d="%(sq)s"/></clipPath>
+    <filter id="drop" x="-30%%" y="-30%%" width="160%%" height="170%%">
       <feDropShadow dx="0" dy="%(dy)g" stdDeviation="%(blur)g" flood-color="#000000" flood-opacity="%(alpha)g"/>
     </filter>
-    <!-- Flattens whatever it is given to solid white, keeping alpha, so the
-         glyph can be its own mask without a hand-drawn duplicate of it. -->
-    <filter id="flat" x="-20%%" y="-20%%" width="140%%" height="140%%" color-interpolation-filters="sRGB">
-      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/>
-    </filter>
-    <clipPath id="tile"><rect x="0" y="0" width="128" height="128" rx="28"/></clipPath>
-    <g id="glyph">%(body)s</g>
-    <mask id="gmask" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
-      <use href="#glyph" filter="url(#flat)"/>
-    </mask>
+    %(defs)s
   </defs>
-  <rect x="0" y="0" width="128" height="128" rx="28" fill="url(#base)"/>
+  <path d="%(sq)s" fill="url(#base)"/>
   <g clip-path="url(#tile)">
-    <rect x="0" y="0" width="128" height="128" fill="url(#gloss)"/>
-    <use href="#glyph" filter="url(#drop)"/>
-    <rect x="0" y="0" width="128" height="128" fill="url(#lift)" mask="url(#gmask)"/>
+    <path d="%(sq)s" fill="none" stroke="url(#hl)" stroke-width="%(hlw)g"/>
+    <g filter="url(#drop)">%(body)s
+    </g>
   </g>
-  <rect x="0.7" y="0.7" width="126.6" height="126.6" rx="27.3" fill="none" stroke="url(#rim)" stroke-width="1.4"/>
 </svg>
 """
 
-BASE_RE = re.compile(
-    r'<linearGradient id="base".*?stop-color="(#[0-9A-Fa-f]{6})".*?'
-    r'stop-color="(#[0-9A-Fa-f]{6})".*?</linearGradient>', re.S)
-HUE_RE = re.compile(r'<!-- hue (#[0-9A-Fa-f]{6})')
-GLOSS_RE = re.compile(r'<ellipse cx="64" cy="6" rx="86" ry="54" fill="url\(#gloss\)"/>')
-TAIL_RE = re.compile(r'\n\s*</g>\s*\n\s*<rect x="0\.7"')
-GLYPH_RE = re.compile(r'<g id="glyph">(.*)</g>\s*\n\s*<mask id="gmask"', re.S)
-
-
-def read(path):
-    """(hue, glyph body) from a file in either the old or the restyled form.
-
-    Re-runnable on purpose. Tuning the numbers at the top of this file and
-    re-running is the whole point of keeping it in-tree, and a tool that
-    only works once on pristine input is not that.
-    """
-    src = open(path).read()
-    g = GLYPH_RE.search(src)
-    if g:
-        # Already restyled. The hue is read back from the marker the last run
-        # wrote, not reverse-engineered out of a gradient stop: deriving it
-        # from a stop means every tuning pass re-derives it through whatever
-        # the constants happen to be now, and the colour walks.
-        h = HUE_RE.search(src)
-        if not h:
-            raise SystemExit("%s: restyled but carries no hue marker" % path)
-        return parse(h.group(1)), g.group(1)
-
-    m = BASE_RE.search(src)
-    if not m:
-        raise SystemExit("%s: no #base gradient to read the hue from" % path)
-    hue = tuple((a + b) / 2.0 for a, b in zip(parse(m.group(1)), parse(m.group(2))))
-    a, b = GLOSS_RE.search(src), TAIL_RE.search(src)
-    if not a or not b:
-        raise SystemExit("%s: could not find the glyph block" % path)
-    body = src[a.end():b.start()]
-    # Each glyph used to carry the drop filter itself, sometimes on two
-    # separate elements (Terminal), which double-shadowed where they
-    # overlapped. One filtered <use> of the whole glyph replaces all of it.
-    body = body.replace(' filter="url(#drop)"', "")
-    return hue, "\n".join("  " + ln if ln.strip() else ln for ln in body.split("\n"))
-
-
-def restyle(path):
-    hue, body = read(path)
-
-    out = HEAD % dict(
-        hue=fmt(hue),
-        top=fmt(toward(hue, TOP_WHITE, 255)),
-        mid=fmt(toward(hue, MID_WHITE, 255)),
-        bot=fmt(toward(hue, BOT_BLACK, 0)),
-        midat=MID_AT, scy=SHEEN_CY, sr=SHEEN_R, sheen=stops(SHEEN),
-        rimtop=RIM_TOP, rimend=RIM_TOP_END, rimbot=RIM_BOT,
-        lifty0=LIFT_Y0, lifty1=LIFT_Y1, lift=stops(LIFT),
-        dy=DROP_DY, blur=DROP_BLUR, alpha=DROP_ALPHA,
-        body=body)
-    open(path, "w").write(out)
-    return fmt(toward(hue, TOP_WHITE, 255)), fmt(toward(hue, BOT_BLACK, 0))
-
 
 def main():
-    names = sorted(n for n in os.listdir(SVG_DIR) if n.endswith(".svg"))
-    for n in names:
-        top, bot = restyle(os.path.join(SVG_DIR, n))
-        print("%-14s %s -> %s" % (n[:-4], top, bot))
-    print("restyled %d icons" % len(names))
+    sq = squircle_path()
+    for name, (top, bot, defs, body) in DOCK.items():
+        out = TEMPLATE % dict(
+            name=name, top=top, bot=bot, sq=sq,
+            tilegrad=lg("base", (0, top), (1, bot)),
+            fade=HL_FADE, hla=HL_ALPHA, hlw=HL_WIDTH,
+            dy=DROP_DY, blur=DROP_BLUR, alpha=DROP_ALPHA,
+            defs=defs, body=body)
+        open(os.path.join(SVG_DIR, name + ".svg"), "w").write(out)
+        print("%-11s %s -> %s" % (name, top, bot))
+    print("wrote %d icons" % len(DOCK))
     return 0
 
 
