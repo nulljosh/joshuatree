@@ -5461,6 +5461,7 @@ static void gui_launch_settings(void){
 #include "fieldbook.h"
 #include "plan.h"
 #include "homeqi.h"
+#include "curbfind.h"
 #include "sparkjar.h"
 #include "epiphany.h"
 #include "activity.h"
@@ -5476,7 +5477,7 @@ static void gui_launch(int icon){
     else if (icon == 5) gui_launch_terminal();
     else if (icon == 6) gui_launch_chat_app();
     else if (icon == 7) gui_launch_weather();
-    else if (icon == 8) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
+    else if (icon == 8) gui_launch_curbfind();
     else if (icon == 9) gui_launch_keyrate();
     else if (icon == 10) gui_launch_bookrank();
     else if (icon == 11) gui_launch_quotes();

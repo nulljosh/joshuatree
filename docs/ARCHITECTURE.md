@@ -129,6 +129,8 @@ shell's own `cat` command and `gui_launch_html` already use.
 
 **Bookrank** (`kernel/bookrank.h`, v0.93.0), curated non-fiction rankings, native: left side shows ranked list (1-10) with selected row highlighted, up/down or click to select; right side shows title, author and 2-3 sentence summary wrapped to fit. Replaces the one-line HTML card the dock tile used to open.
 
+**Curbfind** (`kernel/curbfind.h`), Craigslist deal rankings for Vancouver, native: left side shows ranked list (1-10 sample listings) sorted by deal score descending, selected row highlighted, price right-aligned in each row; up/down or click to select; right side shows listing title, price and neighbourhood, a 10-segment bar visualizing the deal score, and a brief reason why it is a good deal. Sample listings compiled in, labeled not live.
+
 **Lexly** (`kernel/lexly.h`, v0.94.0), Spanish vocabulary drill: a word in Spanish, four English choices, 1-4 or a click answers, streak and best kept for the session. Replaces the one-line HTML card the dock tile used to open.
 
 **Fieldbook** (`kernel/fieldbook.h`, v0.95.0), every field of science and math explained plainly, native: left side shows ranked list (1-12) with selected row highlighted, up/down or click to select; right side shows field name, studies line, and 2-3 sentence explanation wrapped to fit. Replaces the one-line HTML card the dock tile used to open.
@@ -136,6 +138,12 @@ shell's own `cat` command and `gui_launch_html` already use.
 **Plan** (`kernel/plan.h`), Joshua's ten-year education and career roadmap, native: left side shows milestone timeline with selected row highlighted, up/down or click to select; right side shows "The next ten years" heading and detailed plan wrapped to fit. Same structure and interaction as Fieldbook. Replaces the one-line HTML card the dock tile used to open.
 
 **Sparkjar** (`kernel/sparkjar.h`), a jar of ideas people post and vote on, native: left side shows list (1-10 ideas) sorted by votes descending, selected row highlighted, vote count displayed right-aligned in each row; up/down or click to select; u key upvotes the selected idea, re-sorts, and keeps it selected; right side shows idea name, one-line pitch, and 3-step build plan wrapped to fit. Vote counts are session-only. Replaces the one-line HTML card the dock tile used to open.
+
+**Homeqi** (`kernel/homeqi.h`), Feng shui home assessment condensed from Eva Wong's *Good Fengshui*, native: eight yes/no questions about your home (front door, natural light, bed position, clutter, water, power lines, neighborhood, windows), asked one at a time with 1/2 key choices. After each answer shows a one-line reasoning line and "any key for next". After all eight, displays final score (0-8) and a verdict message (0-3: work to do; 4-6: pleasant; 7-8: excellent). Score accumulated through the assessment, restarts on the results screen. Replaces the one-line HTML card the dock tile used to open.
+
+**Sparkjar** (`kernel/sparkjar.h`), a jar of ideas people post and vote on, native: left side shows list (1-10 ideas) sorted by votes descending, selected row highlighted, vote count displayed right-aligned in each row; up/down or click to select; u key upvotes the selected idea, re-sorts, and keeps it selected; right side shows idea name, one-line pitch, and 3-step build plan wrapped to fit. Vote counts are session-only. Replaces the one-line HTML card the dock tile used to open.
+
+**Fieldbook** (`kernel/fieldbook.h`), every field of science and math explained plainly, native: left side shows ranked list (1-12) with selected row highlighted, up/down or click to select; right side shows field name, studies line, and 2-3 sentence explanation wrapped to fit. Replaces the one-line HTML card the dock tile used to open.
 
 **Homeqi** (`kernel/homeqi.h`), Feng shui home assessment condensed from Eva Wong's *Good Fengshui*, native: eight yes/no questions about your home (front door, natural light, bed position, clutter, water, power lines, neighborhood, windows), asked one at a time with 1/2 key choices. After each answer shows a one-line reasoning line and "any key for next". After all eight, displays final score (0-8) and a verdict message (0-3: work to do; 4-6: pleasant; 7-8: excellent). Score accumulated through the assessment, restarts on the results screen. Replaces the one-line HTML card the dock tile used to open.
 
@@ -196,7 +204,6 @@ apps whose real content only exists after client-side JS rendering this
 kernel can't run (epiphany, healstack, blockframe, numen, curvely, roost,
 monocode).
 
-- **Curbfind** (`drivers/app_curbfind.h`): Craigslist browser
 - **Keyrate** (`drivers/app_keyrate.h`): the one exception to "thin port": `gui_launch_html` originally just rendered the ported site's own marketing copy read-only, which meant the first keystroke anyone made to actually type closed the app (`gui_wait_close`'s "any key closes" contract). Fixed with a real native typing test in `kernel.c` itself: word list, a tiny LCG seeded from `irq.c`'s real `ticks()` (no `rand()`/no libc), a live input loop. `app_keyrate.h`'s ported HTML still exists, served only, not rendered in the GUI
 - **Sparkjar** (`drivers/app_sparkjar.h`): idea forum
 - **Homeqi** (`drivers/app_homeqi.h`): feng shui home-assessment tool
