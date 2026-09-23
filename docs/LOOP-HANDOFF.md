@@ -1,3 +1,15 @@
+# Loop state, 2026-09-23 06:10 (read this first)
+
+**1.0.0 Hidden Valley shipped** (jt-v1.0.0, ISO and SHA256SUMS attached, CI green). 1.0.1 is PR #134: keyboard-only navigation (25/25), Lock Screen in the Apple menu (proven: locks, Esc and a wrong password cannot bypass, password unlocks), the pre-push hook that runs every fast check, CodeRabbit config that keeps only actionable comments.
+
+In flight: `lag-profile` (Sonnet, issue #14: instrument frame time, find the top costs, fix, measure, 1.0.2) and `readme-short` (Haiku, README to 45 lines, details moved to the other docs).
+
+Rules that now hold by machine, not memory: every code PR must bump VERSION (version-bump-check.sh in CI and in the pre-push hook) so every merge cuts a release with its ISO; the landing page's numbers are generated from the source at deploy and guarded by landing-facts-check.py; the README badge is the live release badge. Keep "require branches up to date" ON; land PRs one at a time, or fold several into one integration PR when the queue is long (that is how 1.0.0 went out: one CI run instead of five).
+
+Every worker report is verified from real frames before merging. Tonight's false claims caught on review: a "no clipping" over a ":." rank, every "yes" scored as good, a teal bar, a lock-screen PASS with the account half never run, a panic check that exited to text mode first, a keyboard check reporting 0/25 because of a close-dot coordinate. Sonnet workers were reliable; Haiku ones need a frame to prove each claim.
+
+Next: land 1.0.1, review the lag PR's before/after numbers by eye, then docs/roadmap.md's After 1.0 list top down (Bluetooth and languages are 1.1 design items for Joshua).
+
 # Loop state, 2026-09-23 about 00:00 (read this first)
 
 Stopped at 100% session usage. 1.0 is a Snow Leopard release (docs/roadmap.md): stability, security, speed, no features.
