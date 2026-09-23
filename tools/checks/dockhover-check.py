@@ -39,6 +39,8 @@ PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487      # inside the normal-size tile
 LIFTED_Y = 455        # above a normal tile's top (469), inside a magnified+lifted one (450..)
 TRAY = (239, 235, 228)
+LABEL_BG = (0xF4, 0xF1, 0xEC)  # DOCK_LABEL_BG in kernel.c
+LABEL_Y = 446                  # hover label capsule centre line: gui_dock_y0() (459) - 21 + 8
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, MID, END):
@@ -125,8 +127,24 @@ for tag, path in (("mid", MID), ("end", END)):
         print(f"FAIL: {tag} frame has tiles missing from the tray (direct-repaint fallback caught mid-step)"); fail = 1
     if tag == "mid" and any(s_ < 4 for s_ in lifted_slots):
         print("FAIL: mid frame still shows an icon lifted more than one hop behind the cursor"); fail = 1
-    if tag == "end" and lifted_slots != [5]:
-        print("FAIL: settled frame should lift exactly the slot under the cursor (5)"); fail = 1
+    if tag == "end":
+        # The hover label's capsule is wider than one slot, so "which slots
+        # changed" is 4..6 for a long name; what must hold is that the mark
+        # is centred on the slot under the cursor.
+        y = LABEL_Y * SCALE
+        xs = [x for x in range(SLOT0_X * SCALE, (SLOT0_X + ICONS * PITCH) * SCALE)
+              if max(abs(a - b) for a, b in zip(img.getpixel((x, y)), rest.getpixel((x, y)))) > 24]
+        want = (SLOT0_X + 5 * PITCH + DOCK_ICON // 2) * SCALE
+        got = (min(xs) + max(xs)) // 2 if xs else -1
+        print(f"end: hover mark centred at x={got // SCALE}, slot 5 centre {want // SCALE}")
+        if not xs or abs(got - want) > PITCH * SCALE // 2:
+            print("FAIL: settled frame's hover label is not over the slot under the cursor (5)"); fail = 1
+        # The label has a backing (DOCK_LABEL_BG capsule), not bare text on
+        # the wallpaper: its light fill shows on both sides of the text.
+        backing = sum(1 for x in xs if max(abs(img.getpixel((x, y))[i] - LABEL_BG[i]) for i in range(3)) <= 10)
+        print(f"end: label backing pixels on row {LABEL_Y}: {backing}")
+        if backing < 60:
+            print("FAIL: hover label has no backing"); fail = 1
 
 if not fail: print("PASS: dock hover, tray intact mid-animation, lifted icon is the one under the cursor")
 sys.exit(fail)

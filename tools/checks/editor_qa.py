@@ -89,7 +89,9 @@ class Machine:
         time.sleep(.2)
 
     def toolbar(self, local_x):
-        self.move(self.integer('app_view_x') + local_x, self.integer('app_view_y') + 56)
+        # Windowed Notes draws its toolbar at EDITOR_BAR_Y = 42 + gui_app_dy()
+        # = 10 .. 44 viewport-local (editor.h); 27 is its centre line.
+        self.move(self.integer('app_view_x') + local_x, self.integer('app_view_y') + 27)
         self.click()
         time.sleep(.3)
 

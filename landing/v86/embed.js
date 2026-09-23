@@ -182,6 +182,7 @@ if (typeof document !== "undefined") (function () {
     vga_memory_size: 16 * 1024 * 1024, // v41: 1600x1200x32bpp is 7.68MB, 8 was one bad rounding away from failing
     screen_container: screenContainer,
     multiboot: { url: "v86/kernel.elf" },
+    cmdline: /[?&]portfolio\b/.test(location.search) ? "portfolio" : undefined, // kmain reads this and puts Joshua's own apps on the dock
     autostart: true,
     // Real network backend for the emulated NIC: without this, v86's NIC
     // (ne2k by default, see drivers/ne2k.c) is wired to nothing, every
@@ -332,7 +333,7 @@ if (typeof document !== "undefined") (function () {
         if (!kernelElfBuffer) { try { kernelElfBuffer = await kernelElfFetch; } catch (e) {} }
         if (emulator.v86 && emulator.v86.cpu && emulator.v86.cpu.reset_memory) emulator.v86.cpu.reset_memory();
         emulator.restart();
-        if (kernelElfBuffer && emulator.v86 && emulator.v86.cpu && emulator.v86.cpu.load_multiboot) emulator.v86.cpu.load_multiboot(kernelElfBuffer);
+        reinjectKernel();
         // Reset focused and tourArmed to allow the idle tour to restart
         focused = false;
         tourArmed = false;
@@ -986,6 +987,16 @@ if (typeof document !== "undefined") (function () {
   var CLOSE_X = 94, CLOSE_Y = 56;
   var DWELL_MS = 7000; // v0.72.2: cut from 15s once the app count went back to 8, keeps the full loop under a minute
   var tourTimer = 0, tourRunning = false, tourGen = 0;
+  // Every soft reboot re-injects the kernel. v86's own load_multiboot() hardcodes an
+  // empty command line, so portfolio mode calls the same two steps it does (read from
+  // the vendored libv86.js) with "portfolio" passed through, or the dock would reset
+  // to the system set after the first reboot.
+  function reinjectKernel() {
+    var cpu = emulator.v86 && emulator.v86.cpu;
+    if (!kernelElfBuffer || !cpu || !cpu.load_multiboot) return;
+    if (PORTFOLIO_MODE && cpu.load_multiboot_option_rom) { if (cpu.load_multiboot_option_rom(kernelElfBuffer, undefined, "portfolio")) cpu.reg32[0] = cpu.io.port_read32(244); }
+    else cpu.load_multiboot(kernelElfBuffer);
+  }
   function stopAutoplay() { if (tourTimer) { clearTimeout(tourTimer); tourTimer = 0; } tourRunning = false; tourGen++; /* invalidates any in-flight tourLoop */ }
   function sleep(ms) { return new Promise(function (res) { tourTimer = setTimeout(res, ms); }); }
   function moveCursorToAsync(kx, ky, allowResync) { return new Promise(function (res) { moveCursorTo(kx, ky, res, allowResync); }); }
@@ -1390,7 +1401,7 @@ if (typeof document !== "undefined") (function () {
     updateHeadline(app.name);
     await runScript(app.script, gen);
     if (focused || tourGen !== gen) return;
-    var remaining = DWELL_MS - (Date.now() - dwellStart);
+    var remaining = (app.dwell || DWELL_MS) - (Date.now() - dwellStart);
     if (remaining > 0) await sleep(remaining);
     if (focused || tourGen !== gen) return;
     await clickAt(CLOSE_X, CLOSE_Y); // closes via the app's own real X, never the dock tile that opened it
@@ -1400,6 +1411,15 @@ if (typeof document !== "undefined") (function () {
   }
   async function tourLoop(gen) {
     tourRunning = true;
+    // Portfolio mode: the dock is Joshua's own apps (GUI_DOCK_PORTFOLIO in kernel.c,
+    // same slot order), so the show is just that, each one opened from its real dock
+    // tile and closed by its real X. No reboot between laps, nothing here writes state.
+    while (PORTFOLIO_MODE && !focused && tourGen === gen) {
+      for (var p = 0; p < PORTFOLIO_TOUR.length; p++) {
+        if (focused || tourGen !== gen || !adaptersReady) return;
+        await runSoloApp(gen, PORTFOLIO_TOUR[p]);
+      }
+    }
     while (!focused && tourGen === gen) {
       // v0.76.29: reset headline at the start of each lap to a default
       resetHeadline();
@@ -1465,7 +1485,7 @@ if (typeof document !== "undefined") (function () {
       // own reboot never reloads a no-BIOS multiboot kernel, so redo the
       // same load the constructor's one-shot trick did, putting kmain back
       // in memory so it actually runs again (and ramfs_init with it).
-      if (kernelElfBuffer && emulator.v86 && emulator.v86.cpu && emulator.v86.cpu.load_multiboot) emulator.v86.cpu.load_multiboot(kernelElfBuffer);
+      reinjectKernel();
       await waitForGraphicalMode(gen, false, 3000); // best-effort: the reboot leaving graphical mode (BIOS/kernel text-mode init) briefly, same transition the very first boot goes through
       if (focused || tourGen !== gen) return;
       await waitForGraphicalMode(gen, true, 20000); // the real wait: don't click a dock icon until the kernel has actually reached its GUI again
@@ -1479,6 +1499,15 @@ if (typeof document !== "undefined") (function () {
       .finally(function () { tourArmed = false; }) // reset tourArmed if tourLoop exits for any reason, so the tour can restart
       .catch(function () { /* a torn-down emulator mid-await (e.g. a real navigation) shouldn't spam the console */ });
   }
+  // Portfolio mode (?portfolio in the URL, wired up from os.html): the
+  // kernel gets "portfolio" on its command line (see the V86 config above)
+  // and boots with Joshua's own apps on the dock. The generic kiosk tour is
+  // the wrong demo there, so tourLoop runs PORTFOLIO_TOUR instead, four idle seconds in.
+  var PORTFOLIO_MODE = /[?&]portfolio\b/.test(location.search);
+  var PORTFOLIO_TOUR = ['Portfolio', 'Epiphany', 'Curbfind', 'Bookrank', 'Lexly', 'Sparkjar', 'Quotes', 'Keyrate', 'Toroid']
+    // Portfolio, Epiphany and Keyrate are full apps and get the full dwell. The rest are still
+    // one-line cards in the kernel, so they get a short beat instead of seven seconds of blank window.
+    .map(function (name, i) { return { name: name, slot: i + 1, script: [], dwell: /^(Portfolio|Epiphany|Keyrate)$/.test(name) ? 0 : 3000 }; });
   // Boot takes a few seconds; the tour waits for graphical mode plus a
   // beat, and never starts at all once the visitor has focused. Also respects
   // prefers-reduced-motion: autoplay motion should not start if the visitor
@@ -1490,6 +1519,9 @@ if (typeof document !== "undefined") (function () {
     // `emulator` doesn't exist until startEmulator() has actually run (deferred, see above); this interval is itself
     // part of what naturally waits for that, same as the boot-detection interval's own guard.
     var vga = emulator && emulator.v86 && emulator.v86.cpu.devices.vga;
-    if (vga && vga.graphical_mode) { tourArmed = true; tourTimer = setTimeout(startTourWhenReady, 6000); }
+    if (vga && vga.graphical_mode) {
+      tourArmed = true;
+      tourTimer = setTimeout(startTourWhenReady, PORTFOLIO_MODE ? 4000 : 6000);
+    }
   }, 500);
 })();

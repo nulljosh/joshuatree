@@ -23,9 +23,15 @@ has shipped since v74 and rsvg emits exactly its supported subset.
 One size, not a size ladder, on purpose: the real physical sizes this
 kernel draws an icon at are 74 (dock, dock_scale_pct 7 at 960x540@2x), 92
 (dock magnified) and 120 (Apps folder grid). All three are DOWNsamples of
-128, which is where authored art wins and where an area filter is exact
-and cheap. A ladder of pre-rendered sizes would cost 3x the kernel image
-for pixels the box filter already reproduces.
+the stored size, which is where authored art wins and where an area filter
+is exact and cheap. A ladder of pre-rendered sizes would cost 3x the kernel
+image for pixels the box filter already reproduces.
+
+148, not 128: exactly twice the dock's 74 physical pixels. 128 -> 74 is a
+1.73:1 ratio, so every dock pixel averaged an uneven 1-or-2 source pixels
+per axis and edges came out alternately crisp and soft (the "sharpen them
+up a tad" feedback). At 148 the resting dock is an exact 2x2 box average,
+and gui_icon_art_scale's exact area weights handle the other sizes.
 
 Kernel-image budget. Storing decoded RGBA was the first design: 24 artworks
 at 128*128*4 is 1.5MB, and that collided with the ring-3 program window
@@ -42,7 +48,7 @@ import struct
 import subprocess
 import sys
 
-SIZE = 128
+SIZE = 148  # 2 x the dock's 74 physical px, see the docstring
 
 # Icon index in kernel.c's GUI_LABELS / GUI_COLORS order -> SVG basename.
 # Only the icons that have real authored art are listed; every other index
@@ -71,8 +77,8 @@ ART = {
     20: "stocks",
     21: "search",
     22: "epiphany",
-    23: "apps",
-    24: "trash",
+    24: "apps",
+    25: "trash",
 }
 
 # Icons whose glyph depends on runtime state get a second artwork keyed by
@@ -81,7 +87,7 @@ ART = {
 # trash_count() > 0, and converting it to a single static artwork would have
 # silently thrown that away, turning a real state indicator into decoration.
 VARIANT = {
-    24: "trash_full",
+    25: "trash_full",
 }
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
@@ -101,7 +107,7 @@ def rasterize(name):
     a 10.9x saving, and they need no new decoder: drivers/png.c has shipped
     since v74 with byte-exact regression tests, and rsvg-convert emits
     precisely the subset it supports. Verified, not assumed: every file's
-    IHDR reads 128x128, 8-bit, colour type 6 (RGBA), compression 0,
+    IHDR reads SIZE x SIZE, 8-bit, colour type 6 (RGBA), compression 0,
     filter 0, interlace 0, and the assertions below re-check that on every
     regeneration rather than trusting rsvg to keep doing it.
     """

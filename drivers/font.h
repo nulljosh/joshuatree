@@ -19,6 +19,16 @@ void font_draw_string(const char *s, int x, int y, unsigned int fg, int bg);
    place proportional glyphs by their own metrics instead of a fixed
    cell. */
 void font_set_aa(void (*hook)(unsigned char, int, int, unsigned int, int, int), int (*advance)(unsigned char));
+/* Mono variant: same fixed 8-logical-px cell as font_draw_char, but the
+   GUI registers a hook (font_set_aa_mono) that draws from the real
+   monospace face instead of the proportional Sans one. Every mono glyph
+   shares the same left-bearing, so left-aligning it in the fixed cell
+   keeps columns aligned the way the proportional face could not. Used
+   only by the two fixed-width character grids in this kernel, the
+   terminal and Keyrate's typed line; every other string is still
+   proportional Sans through font_draw_char/font_draw_string. */
+void font_set_aa_mono(void (*hook)(unsigned char, int, int, unsigned int, int, int));
+void font_draw_char_mono(unsigned char c, int x, int y, unsigned int fg, int bg);
 /* Width of a string in LOGICAL pixels as font_draw_string will actually
    draw it: proportional on the AA path, strlen*8 on the bitmap path.
    Every alignment (right-aligned clock, centered dock label) must use

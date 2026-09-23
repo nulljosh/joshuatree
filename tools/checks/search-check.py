@@ -58,8 +58,8 @@ CLOSE_RED = (0xFF, 0x5F, 0x57)
 # the apps=1 window (x=56,y=30,w=848,h=490 -> viewport (64,62)), the same
 # derivation launchpad-click-check.py already used for its own click target.
 VX, VY = 64, 62
-ROW0_Y = VY + 110   # search_draw_content's first result row, content-relative y=110
-ROW1_Y = VY + 132   # second row, y=110+22
+ROW0_Y = VY + 110 - 32   # search_draw_content's first result row: y=110 + gui_app_dy() (-32 in a window)
+ROW1_Y = VY + 132 - 32   # second row, 22px below
 ROW_X0, ROW_X1 = VX + 26, VX + 300  # generous span past any real filename's width
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
