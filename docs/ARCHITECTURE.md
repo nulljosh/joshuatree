@@ -133,6 +133,23 @@ own scope is the local filesystem, not the network. So selecting an
 entry shows its URL on a detail line rather than trying to open it. Apps
 folder and Trash moved to 24/25 to make room.
 
+**Activity** (`kernel/activity.h`, v0.88.0), Apps-folder-only like Search
+(icon 24; Apps folder/Trash at 25/26, after Portfolio took 23), a real Activity Monitor-shaped
+window over the exact primitives the shell's own `ps`/`kill`/`mem`
+commands already call (`task_used`/`task_max`/`task_kill`/`task_current`,
+`kernel/task.c`; `pmm_free_frames`/`pmm_total_frames`, `kernel/pmm.c`),
+never reimplemented. Shows all `TASK_SLOTS` (6) real scheduler slots (pid,
+a synthesized name since `struct task` has no name field -- "Shell/GUI"
+for slot 0, "Task N" otherwise -- and state: running/free), real free/
+total memory and uptime, refreshing about once a second off the PIT tick
+independent of keyboard/mouse input (its own inlined event loop, not the
+shared blocking `get_key_or_click`, since it's the one app here that has
+to redraw on a timer with nobody touching it). Up/down selects a row;
+`k` or the Kill button calls `task_kill` on the selection, refusing (with
+a real on-screen message) to kill the current task, the kernel/GUI's own
+slot. `spawntest` (a shell command added alongside it) spawns a real,
+persistent task for `tools/checks/activity-check.py` to select and kill.
+
 **Eleven apps ported natively from the fleet, thin ports on purpose.**
 `tools/gen/gen_app.sh` turns a sibling repo's real single-file static build
 (`~/Documents/Code/<app>/web/index.html`, this user's documented

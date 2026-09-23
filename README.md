@@ -9,7 +9,7 @@
 A freestanding operating system, written from scratch.
 
 It boots, reads a real disk, talks to the network, and runs a mouse-driven
-desktop with 23 applications, a terminal, and live weather. No libc, no
+desktop with 24 applications, a terminal, and live weather. No libc, no
 external dependencies beyond Clang, lld and QEMU. The kernel itself needs
 no bootloader at all when QEMU loads it directly (`-kernel`); an ISO/USB
 image for booting on other machines uses a small third-party bootloader
