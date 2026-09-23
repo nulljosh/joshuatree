@@ -63,6 +63,7 @@ retry|Notes typing, typography, pointer controls, persistence|python3 ./tools/ch
 retry|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/termchatflash-check.sh
 retry|Terminal grid draws the mono face at its true advance|python3 ./tools/checks/termmono-check.py
 retry|Apple-menu hover stays cheap, clock redraws on a minute change|./tools/checks/menuclock-check.sh
+retry|Lock Screen: menu item locks, Esc cannot bypass, password unlocks|python3 ./tools/checks/lockscreen-check.py
 retry|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mwkeyflash-check.sh
 retry|Drawing lands offscreen, window_present puts it on screen|./tools/checks/backbuffer-check.sh
 retry|Multi-window apps draw exactly one toolbar, not two|./tools/checks/mwdupetoolbar-check.sh
@@ -96,6 +97,7 @@ once |Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcou
 once |Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
 once |RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
 once |Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
+retry|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py
 once |Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
 retry|Accounts: create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py
 once |Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py

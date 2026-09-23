@@ -1,0 +1,12 @@
+# CodeRabbit: actionable inline comments only. No summaries, no poems, no
+# walkthroughs; those were the noise in Joshua's inbox.
+language: en-US
+reviews:
+  profile: chill
+  high_level_summary: false
+  poem: false
+  review_status: false
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
