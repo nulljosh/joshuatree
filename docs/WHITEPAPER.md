@@ -85,6 +85,16 @@ palette, the font. The demo tours itself if you leave it alone. The same
 plain-HTTP TCP stack that talks to Ollama also pulls live weather from
 Open-Meteo into the menu bar.
 
+## How to boot
+
+**In QEMU:** The kernel runs directly under QEMU's `-kernel` loader without needing a bootloader at all. `make run` boots it to the shell; type `gui` for the desktop.
+
+**ISO/USB on other machines:** `make iso` builds a bootable hybrid disk image (works as both CD-ROM and raw USB). It fetches Limine, a small BIOS/UEFI bootloader, and packs it with `kernel.elf` using `xorriso`. The result works in VirtualBox, on real USB sticks, and on physical hardware, booting to the desktop with no extra disk.
+
+**Real machine limitations:** UEFI-only machines without legacy BIOS/CSM are untested. The bootloader can initialize graphics at 1920x1080 on Bochs VGA, VMware SVGA, and QEMU virtio (any other GPU gets text only). No USB storage or AHCI/NVMe driver exists, so real hardware only sees FAT16 disks wired as IDE/ATA. USB keyboards work only through BIOS legacy PS/2 emulation. Real hardware hasn't been tried yet; verification is headless in QEMU only.
+
+**Shell usage:** After booting to the shell, type `gui` to open the desktop, `web example.com` for DNS/TCP, `ls`/`cat`/`write` for the filesystem, and `help` for a full command list. `exec file [args]` runs flat binaries as ring-3 programs compiled against `docs/SYSCALL-ABI.md`.
+
 ## What it is not, yet
 
 There is a real `int 0x80` gate now, with file I/O, seek and argv behind
