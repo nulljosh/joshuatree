@@ -11,7 +11,7 @@ every text field that already accepts typed input, respecting that
 field's own max length -- never overflowing it.
 
 Three real scenarios, each verified by grepping a discriminating serial
-marker ("CLIPCOPY:<text>" / "CLIPPASTE:<text>" / "CLIPTRUNC") that
+marker ("CLIPCOPY:<len>:<hash>" / "CLIPPASTE:<len>:<hash>" / "CLIPTRUNC", never the text) that
 kernel/kernel.c's clipboard_set()/clip_serial_dump() emit at the exact
 moment the clipboard is set or a paste lands -- proof the text actually
 arrived, not just that a key was sent:
@@ -55,6 +55,12 @@ for f in (LOG, DUMP):
 q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                       "-qmp", f"unix:{SOCKET},server,nowait", "-serial", "file:" + LOG],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+def m(t):  # matches clip_serial_dump: "<len>:<fnv1a32 hex>", never the text
+    h = 2166136261
+    for c in t.encode(): h = ((h ^ c) * 16777619) & 0xFFFFFFFF
+    return f"{len(t)}:{h:08x}"
+
 fails = []
 try:
     s = None
@@ -137,9 +143,9 @@ try:
         ctrl("v")
         time.sleep(0.3)
         log = serial_text()
-        if "CLIPCOPY:clip-roundtrip" not in log:
+        if "CLIPCOPY:" + m("clip-roundtrip") not in log:
             fails.append("Notes Ctrl+C: CLIPCOPY marker with the typed line not found in serial log")
-        elif "CLIPPASTE:clip-roundtrip" not in log:
+        elif "CLIPPASTE:" + m("clip-roundtrip") not in log:
             fails.append("Notes Ctrl+V: CLIPPASTE marker with the copied text not found in serial log")
         else:
             print("Notes    : typed a line, Ctrl+C copied it, Ctrl+V pasted it back (serial-verified)")
@@ -158,7 +164,7 @@ try:
         ctrl("x")
         time.sleep(0.2)
         log = serial_text()
-        if "CLIPCOPY:echo cross-app-clip" not in log:
+        if "CLIPCOPY:" + m("echo cross-app-clip") not in log:
             fails.append("Notes Ctrl+X: CLIPCOPY marker with the cut line not found in serial log")
         close_via_x()
 
@@ -168,7 +174,7 @@ try:
         ctrl("v")
         time.sleep(0.3)
         log = serial_text()
-        if "CLIPPASTE:echo cross-app-clip" not in log:
+        if "CLIPPASTE:" + m("echo cross-app-clip") not in log:
             fails.append("Terminal Ctrl+V: CLIPPASTE marker with the cut Notes line not found in serial log")
         else:
             print("Terminal : cut a line in Notes, pasted it into Terminal's input line (serial-verified)")
@@ -190,7 +196,7 @@ try:
         ctrl("c")
         time.sleep(0.2)
         log = serial_text()
-        if ("CLIPCOPY:" + long_text[:200]) not in log:
+        if ("CLIPCOPY:" + m(long_text)) not in log:
             fails.append("Notes Ctrl+C: CLIPCOPY marker with the long line not found in serial log")
         close_via_x()
 
@@ -200,10 +206,10 @@ try:
         ctrl("v")
         time.sleep(0.3)
         log = serial_text()
-        expect_paste = "CLIPPASTE:" + "x" * (TERM_COLS - 1)
+        expect_paste = "CLIPPASTE:" + m("x" * (TERM_COLS - 1))
         if expect_paste not in log:
             fails.append(f"Terminal Ctrl+V: expected a clean {TERM_COLS - 1}-byte truncated paste, marker not found")
-        elif "CLIPPASTE:" + "x" * TERM_COLS in log:
+        elif "CLIPPASTE:" + m("x" * TERM_COLS) in log:
             fails.append("Terminal Ctrl+V: pasted text was NOT truncated at TERM_COLS-1 -- overflow risk")
         elif "CLIPTRUNC" not in log.split(expect_paste, 1)[1][:40]:
             fails.append("Terminal Ctrl+V: truncation marker (CLIPTRUNC) missing right after the paste")

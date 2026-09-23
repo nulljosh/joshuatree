@@ -316,14 +316,18 @@ static unsigned int clipboard_len = 0;
    serial_puts needs a null terminator and neither clipboard_buf nor an
    app's own text buffer is guaranteed to have one at an arbitrary slice. */
 static void clip_serial_dump(const char *tag, const char *s, unsigned int n) {
-    char scratch[224];
-    unsigned int cap = sizeof(scratch) - 1;
-    unsigned int m = n < cap ? n : cap;
-    for (unsigned int i = 0; i < m; i++) scratch[i] = s[i];
-    scratch[m] = 0;
+    /* length + FNV-1a hash only, never the text: the clipboard can hold a
+       pasted password and the serial log is readable by anyone at the host */
+    unsigned int h = 2166136261u;
+    for (unsigned int i = 0; i < n; i++) { h ^= (unsigned char)s[i]; h *= 16777619u; }
+    char out[24]; int k = 0; char d[10]; int dn = 0; unsigned int v = n;
+    do { d[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
+    while (dn) out[k++] = d[--dn];
+    out[k++] = ':';
+    for (int sh = 28; sh >= 0; sh -= 4) out[k++] = "0123456789abcdef"[(h >> sh) & 15];
+    out[k++] = '\n'; out[k] = 0;
     serial_puts(tag);
-    serial_puts(scratch);
-    serial_puts("\n");
+    serial_puts(out);
 }
 static void clipboard_set(const char *s, unsigned int n) {
     if (n > CLIPBOARD_CAP) n = CLIPBOARD_CAP;
