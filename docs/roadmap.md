@@ -70,7 +70,7 @@ Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at f
 Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Fable] No sound at all. Needs an audio driver (AC97 or SB16 under QEMU).
 - [ ] [Fable] No native TLS. HTTPS only works through the worker's proxy.
-- [ ] [Sonnet] Clipboard copy/paste.
+- [x] [Sonnet] Clipboard copy/paste. Shipped 1.0.6: one global 4KB buffer, Ctrl+C/X/V in Notes, Terminal, and every field built on `gui_prompt.h` (Mail, Reminders, Calculator, Calendar). No selection model exists yet (see the item below), so Ctrl+C/X act on the current line/field, not an arbitrary range.
 - [ ] [Sonnet] Right-click context menus.
 - [ ] [Sonnet] App switcher and global hotkeys.
 - [ ] [Sonnet] Lock screen, sleep, and ACPI shutdown.
