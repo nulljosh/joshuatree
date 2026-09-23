@@ -1,14 +1,27 @@
-# Loop state, 2026-09-23 06:10 (read this first)
+# Joshua Tree loop handoff (2026-09-23, morning)
 
-**1.0.0 Hidden Valley shipped** (jt-v1.0.0, ISO and SHA256SUMS attached, CI green). 1.0.1 is PR #134: keyboard-only navigation (25/25), Lock Screen in the Apple menu (proven: locks, Esc and a wrong password cannot bypass, password unlocks), the pre-push hook that runs every fast check, CodeRabbit config that keeps only actionable comments.
+## What the loop is
+One main session directs, subagents build in hand-made worktrees under /tmp/jt-loop, every result is verified from real headless frames before it merges, every code PR bumps VERSION so its merge cuts a release with an ISO. Up to 4 Haiku or 2 Sonnet subagents at once. Never a visible QEMU window. Keep "require branches up to date" on and land PRs one at a time, or fold several into one integration PR when the queue is long.
 
-In flight: `lag-profile` (Sonnet, issue #14: instrument frame time, find the top costs, fix, measure, 1.0.2) and `readme-short` (Haiku, README to 45 lines, details moved to the other docs).
+## Where things stand
+1.0.0 Hidden Valley is released (jt-v1.0.0, ISO attached). Open at stop:
+- #134, 1.0.1: keyboard-only navigation (25/25), Lock Screen (proven), pre-push hook that runs every fast check and regenerates the landing facts, CodeRabbit config. Auto-merge armed, was rerunning on current main.
+- #136, roadmap prune (prose only). Auto-merge armed.
+- #137, 1.0.2: the lag (issue #14) instrumented and the first fix: window open went from 440-680 ms to 280-460 ms per present; frametime-check.py in ci-suite. Auto-merge armed; it goes BEHIND when #134 merges, so `gh pr update-branch 137` first.
+Known trap: landing-facts-check.py in ci-suite fails whenever a PR is rebased through GitHub (the pre-push hook cannot run there) even though deploy regenerates the facts anyway. Move that guard to the hook only and drop it from ci-suite (1.0.3, one line).
 
-Rules that now hold by machine, not memory: every code PR must bump VERSION (version-bump-check.sh in CI and in the pre-push hook) so every merge cuts a release with its ISO; the landing page's numbers are generated from the source at deploy and guarded by landing-facts-check.py; the README badge is the live release badge. Keep "require branches up to date" ON; land PRs one at a time, or fold several into one integration PR when the queue is long (that is how 1.0.0 went out: one CI run instead of five).
+## Next, in order
+1. Land #134, then `gh pr update-branch 136` and `137` and land them.
+2. Drop landing-facts-check from ci-suite (keep it in the pre-push hook), 1.0.3.
+3. Issue #14 round two: the wallpaper redraw (about 200 ms of the remaining cost) with the numbers frametime-check.py prints.
+4. docs/roadmap.md After 1.0, top down. Bluetooth and languages are Joshua's design calls.
 
-Every worker report is verified from real frames before merging. Tonight's false claims caught on review: a "no clipping" over a ":." rank, every "yes" scored as good, a teal bar, a lock-screen PASS with the account half never run, a panic check that exited to text mode first, a keyboard check reporting 0/25 because of a close-dot coordinate. Sonnet workers were reliable; Haiku ones need a frame to prove each claim.
+## Restart prompt
+```
+/loop Keep the joshuatree loop running (this session is Joshua Tree only): read docs/LOOP-HANDOFF.md, land the open PRs one at a time (update-branch the next BEHIND one), then work docs/roadmap.md's After 1.0 list top down starting with the lag (issue #14), keeping the landing page, docs and releases synced on every merge (VERSION bump per code PR, pre-push gate). Subagents for code work, few and sharp (up to 4 Haiku or 2 Sonnet), verify every result yourself from headless frames, never a visible QEMU window, short pings in Joshua's voice, report session and Fable usage each round. Taper at 95% session usage or near the Fable weekly cap: land what is open, write the handoff, stop.
+```
 
-Next: land 1.0.1, review the lag PR's before/after numbers by eye, then docs/roadmap.md's After 1.0 list top down (Bluetooth and languages are 1.1 design items for Joshua).
+---
 
 # Loop state, 2026-09-23 about 00:00 (read this first)
 
