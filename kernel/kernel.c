@@ -1980,16 +1980,19 @@ static inline __attribute__((always_inline)) unsigned int gui_wallpaper_px(const
    active, so the memcpy path only ever fires for the real desktop
    compositing straight to fb/back. */
 static unsigned int *wall_full_cache = 0;
-static int wall_full_pw = 0, wall_full_ph = 0;
+static int wall_full_pw = 0, wall_full_ph = 0, wall_full_night = -1, wall_full_day = -1;
 static void gui_wall_full_cache_build(void){
     int sc = (int)window_scale();
     int pw = (int)window_width() * sc;
     int top = GUI_MENUBAR_H * sc;
     int ph = (int)window_height() * sc - top;
     if (pw <= 0 || ph <= 0) return;
-    if (wall_full_cache && wall_full_pw == pw && wall_full_ph == ph) return;
+    /* keyed on the tint too, so an hour boundary crossed mid-session repaints */
+    if (wall_full_cache && wall_full_pw == pw && wall_full_ph == ph
+        && wall_full_night == daynight_night_pct && wall_full_day == daynight_day_pct) return;
     if (wall_full_cache) { kfree(wall_full_cache); wall_full_cache = 0; }
     wall_full_pw = pw; wall_full_ph = ph;
+    wall_full_night = daynight_night_pct; wall_full_day = daynight_day_pct;
     wall_full_cache = (unsigned int *)kmalloc((unsigned int)(pw * ph) * sizeof(unsigned int));
     if (!wall_full_cache) return;
     for (int py = 0; py < ph; py++){
