@@ -30,6 +30,25 @@ static int gui_prompt_line_input(const char *title, const char *prompt, char *ou
         if (k == KEY_ESC || k == KEY_CLICK) return 0;
         if (k == KEY_ENTER) break;
         if (k == '\b') { if (n > 0) n--; }
+        /* No selection model exists yet (see docs/roadmap.md), so Ctrl+C/X
+           act on the whole field -- the same "current line" contract Notes
+           and Terminal use, since a single-line field only ever has one
+           line. Ctrl+V pastes at the end (the only cursor position this
+           field has) and stops at max - 1, the same bound plain typing
+           already respects, so a paste can never overflow out[]. */
+        else if (k == KEY_COPY || k == KEY_CUT) {
+            clipboard_set(out, n);
+            if (k == KEY_CUT) n = 0;
+        }
+        else if (k == KEY_PASTE) {
+            unsigned int before = n, inserted = 0;
+            for (unsigned int i = 0; i < clipboard_len && (int)n < max - 1; i++) {
+                char pc = clipboard_buf[i];
+                if (pc >= 32 && pc < 127) { out[n++] = pc; inserted++; }
+            }
+            clip_serial_dump("CLIPPASTE:", &out[before], inserted);
+            if (inserted < clipboard_len) serial_puts("CLIPTRUNC\n");
+        }
         else if ((int)n < max - 1 && k >= 32 && k < 127) out[n++] = (char)k;
     }
     out[n] = 0;

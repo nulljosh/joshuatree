@@ -293,6 +293,48 @@ static int gui_getch_or_click(void){
 #define KEY_CLICK 260
 #define KEY_WHEEL_UP 300
 #define KEY_WHEEL_DOWN 301
+/* v1.0.6: one system-wide clipboard. Every text field that reads through
+   get_key/get_key_or_click gets Ctrl+C/X/V for free instead of each app
+   decoding scancodes itself: kbd_ctrl (irq.c) plus the plain character scan
+   codes for C/X/V (0x2E/0x2D/0x2F) turn into these three synthetic keys.
+   editor.h reads raw scancodes below get_key, not through it, so it tests
+   kbd_ctrl and the same three scancodes directly. One 4KB buffer plus its
+   length is the whole clipboard; every consumer copies at most
+   CLIPBOARD_CAP bytes in and truncates a paste at its own field's max
+   length, so nothing here can overflow a caller's buffer. */
+#define KEY_COPY  302
+#define KEY_CUT   303
+#define KEY_PASTE 304
+#define CLIPBOARD_CAP 4096
+static char clipboard_buf[CLIPBOARD_CAP];
+static unsigned int clipboard_len = 0;
+/* Serial markers, same convention "editorchrome"/"termchrome" already use:
+   a discriminating line a headless check can grep out of the serial log,
+   here proving exactly what text the clipboard held or a paste actually
+   inserted (not just that some copy/paste code path ran). Bounded to a
+   small scratch buffer -- plenty for what any check types -- because
+   serial_puts needs a null terminator and neither clipboard_buf nor an
+   app's own text buffer is guaranteed to have one at an arbitrary slice. */
+static void clip_serial_dump(const char *tag, const char *s, unsigned int n) {
+    /* length + FNV-1a hash only, never the text: the clipboard can hold a
+       pasted password and the serial log is readable by anyone at the host */
+    unsigned int h = 2166136261u;
+    for (unsigned int i = 0; i < n; i++) { h ^= (unsigned char)s[i]; h *= 16777619u; }
+    char out[24]; int k = 0; char d[10]; int dn = 0; unsigned int v = n;
+    do { d[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
+    while (dn) out[k++] = d[--dn];
+    out[k++] = ':';
+    for (int sh = 28; sh >= 0; sh -= 4) out[k++] = "0123456789abcdef"[(h >> sh) & 15];
+    out[k++] = '\n'; out[k] = 0;
+    serial_puts(tag);
+    serial_puts(out);
+}
+static void clipboard_set(const char *s, unsigned int n) {
+    if (n > CLIPBOARD_CAP) n = CLIPBOARD_CAP;
+    for (unsigned int i = 0; i < n; i++) clipboard_buf[i] = s[i];
+    clipboard_len = n;
+    clip_serial_dump("CLIPCOPY:", clipboard_buf, clipboard_len);
+}
 static int get_key_or_click(void);
 
 static int get_key(void){
@@ -309,6 +351,12 @@ static int get_key(void){
             continue; /* other extended keys: ignore */
         }
         if (sc & 0x80) continue;
+        if (kbd_ctrl) {
+            int code = sc & 0x7F;
+            if (code == 0x2E) return KEY_COPY;
+            if (code == 0x2D) return KEY_CUT;
+            if (code == 0x2F) return KEY_PASTE;
+        }
         char c = kbd_map(sc);
         if (c == '\n') return KEY_ENTER;
         if (c == 27)   return KEY_ESC;
@@ -331,8 +379,14 @@ static int get_key_or_click(void){
                 continue;
             }
             if (!(sc & 0x80)) {
-                char c = kbd_map(sc);
                 gui_close_was_click = 0;
+                if (kbd_ctrl) {
+                    int code = sc & 0x7F;
+                    if (code == 0x2E) return KEY_COPY;
+                    if (code == 0x2D) return KEY_CUT;
+                    if (code == 0x2F) return KEY_PASTE;
+                }
+                char c = kbd_map(sc);
                 if (c == '\n') return KEY_ENTER;
                 if (c == 27)   return KEY_ESC;
                 if (c) return c;
@@ -5229,6 +5283,23 @@ static void gui_launch_terminal(void){
             continue;
         }
         if (k == '\b') { if (input_len) input_len--; }
+        /* Same "one line, no selection" contract as gui_prompt_line_input:
+           Ctrl+C/X act on the whole current input line, Ctrl+V pastes at
+           the end and stops at TERM_COLS - 1, the same bound plain typing
+           already respects. */
+        else if (k == KEY_COPY || k == KEY_CUT) {
+            clipboard_set(input, input_len);
+            if (k == KEY_CUT) input_len = 0;
+        }
+        else if (k == KEY_PASTE) {
+            unsigned int before = input_len, inserted = 0;
+            for (unsigned int i = 0; i < clipboard_len && input_len < TERM_COLS - 1; i++) {
+                char pc = clipboard_buf[i];
+                if (pc >= 32 && pc < 127) { input[input_len++] = pc; inserted++; }
+            }
+            clip_serial_dump("CLIPPASTE:", &input[before], inserted);
+            if (inserted < clipboard_len) serial_puts("CLIPTRUNC\n");
+        }
         else if (k >= 32 && k < 127 && input_len < TERM_COLS - 1) input[input_len++] = (char)k;
         else continue;
         term_render(input, input_len);

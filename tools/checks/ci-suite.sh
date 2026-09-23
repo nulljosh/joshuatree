@@ -59,6 +59,7 @@ retry|Settings Location geocodes, persists, and fails clean|python3 ./tools/chec
 retry|Wallpaper defaults to Satellite on a fresh boot|./tools/checks/walldefault-check.sh
 retry|Idle tour's Settings visit doesn't change the wallpaper theme|python3 ./tools/checks/walldemo-regression-check.py
 retry|Notes editor chrome doesn't redraw on plain keystrokes|./tools/checks/editorflash-check.sh
+retry|System-wide clipboard: Ctrl+C/X/V round-trips real text within Notes, across Notes->Terminal, truncates a too-long paste cleanly|python3 ./tools/checks/clipboard-check.py
 retry|Mail, Reminders and Calculator prompts redraw content, not chrome, per keystroke|./tools/checks/gui-prompt-keystroke-check.sh
 retry|Notes typing, typography, pointer controls, persistence|python3 ./tools/checks/editor_qa.py
 retry|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/termchatflash-check.sh
