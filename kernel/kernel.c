@@ -5459,6 +5459,7 @@ static void gui_launch_settings(void){
 #include "bookrank.h"
 #include "lexly.h"
 #include "fieldbook.h"
+#include "plan.h"
 #include "homeqi.h"
 #include "curbfind.h"
 #include "sparkjar.h"
@@ -5480,7 +5481,7 @@ static void gui_launch(int icon){
     else if (icon == 9) gui_launch_keyrate();
     else if (icon == 10) gui_launch_bookrank();
     else if (icon == 11) gui_launch_quotes();
-    else if (icon == 12) gui_launch_html("Plan", app_plan_html, app_plan_len);
+    else if (icon == 12) gui_launch_plan();
     else if (icon == 13) gui_launch_lexly();
     else if (icon == 14) gui_launch_toroid();
     else if (icon == 15) gui_launch_sparkjar();
