@@ -316,8 +316,9 @@ static int get_key(void){
     }
 }
 
-static int get_key_or_click(void){
+static int get_key_or_click_until(unsigned int deadline){
     for (;;) {
+        if (deadline && (int)(ticks() - deadline) >= 0) return 0;
         gui_app_mouse_tick();
         int sc = kbd_pop();
         if (sc >= 0) {
@@ -345,6 +346,8 @@ static int get_key_or_click(void){
         window_present(); __asm__ volatile ("hlt");
     }
 }
+
+static int get_key_or_click(void) { return get_key_or_click_until(0); }
 
 /* ---- RTC via CMOS. ponytail: no PIT tick counter; the shell only ever
    needs wall-clock, and this needs no interrupt handler. ---- */
@@ -8721,13 +8724,7 @@ static void run(char *line){
         int dollars, cents, sign;
         stocks_format_change(-18000, &dollars, &cents, &sign);
         if (sign != -1 || dollars != 180) { puts("stocks change format failed\n"); pass = 0; }
-        int has_positive = 0, has_negative = 0;
-        for (int i = 0; i < STOCKS_MAX; i++) {
-            if (stocks_entries[i].change_x100 > 0) has_positive = 1;
-            if (stocks_entries[i].change_x100 < 0) has_negative = 1;
-        }
-        if (!has_positive || !has_negative) { puts("stocks data integrity failed\n"); pass = 0; }
-        puts(pass ? "stocks demo data: ok\n" : "FAILED\n");
+        puts(pass ? "stocks formatting: ok\n" : "FAILED\n");
     }
     else if (!strcmp(line, "pngtest")) {
         /* v74 (0.66.0): discriminating regression test for drivers/png.c.

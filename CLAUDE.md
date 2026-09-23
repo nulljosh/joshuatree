@@ -124,6 +124,8 @@ push) instead of doing it directly.
 
 ## The loop
 
+Current resume state: `docs/LOOP-HANDOFF.md`. Its PR approval requirement remains in force.
+
 This project has no finish line. Each pass:
 
 1. Check for a direct request first; fall back to `docs/roadmap.md`'s open
