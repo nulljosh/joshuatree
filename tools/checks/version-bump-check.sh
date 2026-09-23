@@ -6,7 +6,10 @@
 set -e
 cd "$(dirname "$0")/../.."
 base=${1:-origin/main}
-files=$(git diff --name-only "$base"...HEAD)
+# Two-dot on purpose: in CI HEAD is the PR merge commit, whose first parent
+# is the base, so base..HEAD is exactly the PR. Three-dot needs a merge base
+# a shallow clone may not have.
+files=$(git diff --name-only "$base" HEAD)
 [ -z "$files" ] && { echo "PASS: no changes"; exit 0; }
 if ! echo "$files" | grep -qvE '\.md$'; then echo "PASS: prose-only change, no version bump needed"; exit 0; fi
 old=$(git show "$base":VERSION | tr -d ' \n'); new=$(tr -d ' \n' < VERSION)

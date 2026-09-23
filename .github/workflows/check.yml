@@ -157,15 +157,15 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - name: Doc file-path references aren't stale
         run: ./tools/checks/check-refs.sh
       - name: landing/version.txt stays in sync with VERSION
         run: ./tools/checks/versionsync-check.sh
       - name: A code PR bumps VERSION, so its merge cuts a release
         if: github.event_name == 'pull_request'
-        run: |
-          git fetch --no-tags origin "${{ github.base_ref }}" --depth=200
-          ./tools/checks/version-bump-check.sh "origin/${{ github.base_ref }}"
+        run: ./tools/checks/version-bump-check.sh "origin/${{ github.base_ref }}"
 
   # v75: real-network checks. geo-check.sh (v71) and wallpaper-check.py /
   # wallfx-check.py (v75) talk to ip-api.com, Open-Meteo and OpenTopoMap
