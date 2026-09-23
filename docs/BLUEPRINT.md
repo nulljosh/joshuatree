@@ -44,8 +44,8 @@ KolibriOS) and phased as small PRs, each keeping headless CI green.
 | [Haiku](https://www.haiku-os.org/) (BeOS lineage) | Hybrid kernel (fork of NewOS) | Userland processes, client/server | `app_server`, message-based IPC (`BMessage`s over ports); every app is a client of `app_server`, which is a client of the kernel | Own libroot (POSIX + BeOS API) | `src/system/kernel/`, `src/servers/app/`, `src/kits/` (client-side API), `src/apps/` | Jam (custom build tool predating this project) | `haiku-run-tests`, a real test suite plus boot images tested in CI/QEMU | Kernel + libroot first, `app_server` + the interface kit next (this was BeOS's original order too), then apps |
 | [Redox](https://redox-os.org/) | True microkernel, Rust | Userland processes | `Orbital` window manager, no bespoke IPC primitive: everything, including drivers and the window manager, is a `scheme` (a namespace mounted at `/scheme/name`) accessed through ordinary file operations | `relibc`, own Rust-first libc | `kernel/` (tiny), `cookbook/` (every userspace package as its own recipe), `programs/` | Custom Rust build + a "cookbook" packaging system, everything else out-of-tree | `redox_tester`/CI boots a QEMU image and runs an integration suite | Microkernel (memory, scheduling, IPC) first, minimal drivers as schemes, then a shell, then Orbital, then ports of real userspace software |
 | [Essence](https://github.com/nakst/essence) (nakst) | Monolithic, solo-authored | Userland processes | Compositor built into the kernel/OS core; a documented syscall surface for windows/surfaces, message queues per process | Own libc-like base library, not POSIX | Single repo: `kernel/`, `desktop/`, `apps/`, `drivers/` all in one tree, no separate ports collection | Own build scripts, one-command build | Manual/visual QA plus a scripting/test framework nakst built for UI regression | Kernel + a minimal syscall layer first, then the compositor and a window/message-passing API, then a handful of apps as its own dogfood |
-| [xv6](https://github.com/mit-pdos/xv6-public) (MIT teaching OS) | Monolithic, minimal, no GUI at all | N/A — no GUI, console only | N/A | A tiny teaching libc | `kernel/`, `user/` | Make | A handful of shell-driven user programs as the "tests" | Boot, memory, processes, syscalls (fork/exec/wait), a console shell, then the trivial user programs. Relevant here only as the cleanest reference for "how few syscalls (~20) a real fork/exec Unix needs" |
-| [KolibriOS](https://kolibrios.org/) | Monolithic, x86, pure assembly | **Ring 0** — apps import the kernel's function table directly, same address space, same ring as the kernel; ring-3 segments exist but every app shares one address space | No window server process: a compositor exists but lives inside the kernel; the "IPC" is direct syscall calls, not messages between processes | No libc: apps call kernel functions directly (or `libGUIc`, a thin C wrapper) | One flat assembly tree, `kernel/`, `programs/` | FASM (flat assembler), extremely fast full-system builds (~seconds) | Mostly manual QEMU boot testing | Kernel + graphics driver + a window manager built into the kernel from day one; apps came after, never separated into their own ring. This is Joshua Tree's current shape today, and Kolibri is the closest live counterexample: it works, but never gets fault isolation between apps, exactly the tradeoff this blueprint moves away from |
+| [xv6](https://github.com/mit-pdos/xv6-public) (MIT teaching OS) | Monolithic, minimal, no GUI at all | N/A, no GUI, console only | N/A | A tiny teaching libc | `kernel/`, `user/` | Make | A handful of shell-driven user programs as the "tests" | Boot, memory, processes, syscalls (fork/exec/wait), a console shell, then the trivial user programs. Relevant here only as the cleanest reference for "how few syscalls (~20) a real fork/exec Unix needs" |
+| [KolibriOS](https://kolibrios.org/) | Monolithic, x86, pure assembly | **Ring 0**, apps import the kernel's function table directly, same address space, same ring as the kernel; ring-3 segments exist but every app shares one address space | No window server process: a compositor exists but lives inside the kernel; the "IPC" is direct syscall calls, not messages between processes | No libc: apps call kernel functions directly (or `libGUIc`, a thin C wrapper) | One flat assembly tree, `kernel/`, `programs/` | FASM (flat assembler), extremely fast full-system builds (~seconds) | Mostly manual QEMU boot testing | Kernel + graphics driver + a window manager built into the kernel from day one; apps came after, never separated into their own ring. This is Joshua Tree's current shape today, and Kolibri is the closest live counterexample: it works, but never gets fault isolation between apps, exactly the tradeoff this blueprint moves away from |
 | [MenuetOS](http://www.menuetos.net/) | Monolithic, pure assembly (like Kolibri, its ancestor) | Ring 0, same as Kolibri | Kernel-resident window manager | None | Flat tree | FASM | Manual | Same order as Kolibri: kernel, graphics, window manager, apps, all ring 0 from the start |
 
 The pattern across every OS that ships isolation (Serenity, ToaruOS,
@@ -77,7 +77,7 @@ is this blueprint's spine, not a rewrite of the kernel philosophy.
 |         INPUT_POLL / INPUT_WAIT           IPC (shared-memory
 |         MMAP_SHARED                        surface + a small
 | fat.c / vfs.c / net.c / ...              message queue, not
-| drivers/window.c (kept, becomes         sockets — no network
+| drivers/window.c (kept, becomes         sockets, no network
 |   the server's own backing store)        stack needed for this)
 +-------------------------------+                    |
                                           +------------+-----------+
@@ -98,18 +98,20 @@ server process through a handful of new syscalls. The window server can
 itself start out as a privileged ring-0 component (it already is, today,
 as `gui_run`) and only needs to become a separate ring-3 process once
 apps are the thing being isolated from *it*, not from the kernel. That
-ordering — isolate apps from the kernel first, then isolate the
-compositor from apps — is deliberate: SerenityOS and Haiku both separated
+ordering, isolate apps from the kernel first, then isolate the
+compositor from apps, is deliberate: SerenityOS and Haiku both separated
 kernel/driver crashes from userland years before they hardened
 `WindowServer`/`app_server` itself.
 
 ## Phased plan
 
+Precedent notes are summaries of how those projects are laid out today, not verified project history. Read them as direction, not fact.
+
 Each phase is a sequence of small PRs. Every PR must pass `make`,
 `./check.sh`, and `tools/checks/ci-suite.sh` headless, no visible QEMU
 window, ever (per `CLAUDE.md`).
 
-### Phase 1 — finish extracting in-kernel apps out of `kernel.c`
+### Phase 1, finish extracting in-kernel apps out of `kernel.c`
 
 - **Goal.** Every app that already has GUI-app shape (its own draw/input
   functions) moves to its own `kernel/<app>.h` or `drivers/app_<name>.h`,
@@ -120,20 +122,17 @@ window, ever (per `CLAUDE.md`).
   `tools/checks/feature-drive.py` pass unchanged after each move, proving
   behavior didn't shift.
 - **Size.** One app per PR, small.
-- **Model.** [Haiku] — mechanical file-split, the pattern already exists
+- **Model.** [Haiku], mechanical file-split, the pattern already exists
   11 times in this repo to copy.
-- **Precedent.** SerenityOS and ToaruOS both started as one-giant-file
-  kernels during early development and split userland pieces out file by
-  file as each stabilized; neither did it as one big rewrite. The lesson
-  from both: extracting by app boundary (not by "layer") kept each PR
-  independently testable, same shape this phase uses.
+- **Precedent.** None cited; this is housekeeping. Splitting by app boundary
+  (not by layer) keeps each PR small and independently testable.
 
-### Phase 2 — fault isolation for ring-3 tasks (hardening what exists)
+### Phase 2, fault isolation for ring-3 tasks (hardening what exists)
 
 - **Goal.** The exception-reap path (`kernel/idt.c`) already isolates a
   ring-3 fault from the kernel. This phase hardens it for GUI-shaped
   workloads: multiple concurrent ring-3 tasks (today `ring3.c` has one
-  static code page and one stack page — "one ring-3 task at a time"),
+  static code page and one stack page, "one ring-3 task at a time"),
   per-task cleanup of any window-server resources on reap, and a
   regression test that two ring-3 tasks can run and one can fault without
   disturbing the other.
@@ -141,9 +140,9 @@ window, ever (per `CLAUDE.md`).
   similar) starts two ring-3 tasks, kills one with a fault, and proves
   the second's marker keeps advancing and the kernel serial log shows no
   panic. `ring3test fault` still passes unmodified (v1 ABI frozen).
-- **Size.** Medium — touches `ring3.c`'s single-code-page assumption and
+- **Size.** Medium, touches `ring3.c`'s single-code-page assumption and
   `task.c`'s per-task resource teardown.
-- **Model.** [Fable] — exactly the class of "subtly wrong still boots
+- **Model.** [Fable], exactly the class of "subtly wrong still boots
   fine" work `docs/roadmap.md`'s own model-tag rule calls out: a missed
   page-table teardown or a wrong TSS `esp0` swap won't crash on the happy
   path, only under a fault the tests must specifically trigger.
@@ -151,12 +150,12 @@ window, ever (per `CLAUDE.md`).
   minimal version of this: free the page table, close every fd, reparent
   children, wake the parent. Redox's microkernel treats "a process died"
   as a first-class scheduler event for the same reason. The lesson: test
-  the *cleanup* path explicitly, not just the crash path — that's where
+  the *cleanup* path explicitly, not just the crash path, that's where
   xv6 and Redox both put their process-death test coverage, and it's
   exactly what's missing from `ring3test fault` today (it proves the
   kernel survives, not that resources were freed).
 
-### Phase 3 — the syscalls a GUI app needs
+### Phase 3, the syscalls a GUI app needs
 
 - **Goal.** Extend `kernel/syscall.h`/`syscall.c` with the minimum surface
   a windowed app needs: a surface/framebuffer handle scoped to one
@@ -172,27 +171,26 @@ window, ever (per `CLAUDE.md`).
   draws into it via the shared mapping, and calls `SURFACE_PRESENT`; a
   `tools/checks/*-check` boots it headless and confirms real pixels
   landed via `pmemsave`, the same technique `qa-gallery.py` already uses.
-- **Size.** Medium-large — new syscalls, new paging work for shared
+- **Size.** Medium-large, new syscalls, new paging work for shared
   mappings, no change to existing ones.
-- **Model.** [Fable] — shared-memory mapping between two address spaces
+- **Model.** [Fable], shared-memory mapping between two address spaces
   is exactly the register/page-table-layout class of bug that boots fine
   and corrupts quietly.
 - **Precedent.** Essence's syscall surface for windows is deliberately
   small (create surface, blit, message queue) rather than a full POSIX
-  `mmap`+`ioctl` story, and nakst has written about keeping it that way
-  on purpose so the ABI stays auditable. Haiku's `BWindow`/`BView` API
+  `mmap`+`ioctl` story, which keeps the ABI auditable. Haiku's `BWindow`/`BView` API
   hides a much richer IPC (`BMessage`s over ports) behind a small
   syscall-adjacent surface, but the *syscalls themselves* (`_kern_*`) are
-  narrow — the richness lives in userland library code on top, not in the
+  narrow, the richness lives in userland library code on top, not in the
   kernel entry points. Same shape this phase should take: narrow kernel
   syscalls, any convenience API added later lives in a userland shim, not
   the ABI.
 
-### Phase 4 — one pilot app moved to ring 3
+### Phase 4, one pilot app moved to ring 3
 
-- **Goal.** Pick the smallest, most self-contained app — Calculator is
+- **Goal.** Pick the smallest, most self-contained app, Calculator is
   the obvious candidate (`kernel/calculator.h`, no VFS persistence, no
-  network, a recursive-descent parser and a one-line input) — and port it
+  network, a recursive-descent parser and a one-line input), and port it
   to run as a real ring-3 process against Phase 3's syscalls, talking to
   the still-ring-0 window manager for this phase.
 - **Exit criterion.** Calculator opens, computes, and closes identically
@@ -202,7 +200,7 @@ window, ever (per `CLAUDE.md`).
   it on purpose and confirms the kernel survives and reports the task
   name, the same proof `ring3test fault` already establishes for the
   synthetic demo).
-- **Size.** Medium — first real end-to-end proof, expect surprises in
+- **Size.** Medium, first real end-to-end proof, expect surprises in
   Phase 3's syscalls that only show up under a real app.
 - **Model.** [Sonnet] for the app port itself (a scoped feature with a
   clear pattern once Phase 3 lands); [Fable] for anything that touches
@@ -213,10 +211,10 @@ window, ever (per `CLAUDE.md`).
   porting anything that mattered. ToaruOS did the same with an early
   terminal before Yutani carried real apps. The lesson both share: the
   pilot's job is to break the new ABI cheaply, not to prove the concept
-  works — expect to revise Phase 3's syscalls after this phase, not
+  works, expect to revise Phase 3's syscalls after this phase, not
   before it.
 
-### Phase 5 — a window server / compositor process
+### Phase 5, a window server / compositor process
 
 - **Goal.** Move the window-manager logic currently in `kernel.c`'s
   `gui_run` (dock, title bars, snapping, focus, the desktop) into its own
@@ -229,12 +227,12 @@ window, ever (per `CLAUDE.md`).
 - **Exit criterion.** Every app from Phase 4 (just Calculator, at this
   point) renders through the window-server process, not direct
   framebuffer calls from `gui_run`. `tools/checks/frametime-check.py`
-  still meets its budget — a compositor indirection must not regress the
+  still meets its budget, a compositor indirection must not regress the
   Issue #14 lag fix.
-- **Size.** Large — this is the real architectural cut, expect it to span
+- **Size.** Large, this is the real architectural cut, expect it to span
   several PRs (own process, IPC/message queue, damage tracking, input
   routing by focus, each separately testable).
-- **Model.** [Fable] throughout — this is the highest-risk phase, most of
+- **Model.** [Fable] throughout, this is the highest-risk phase, most of
   `docs/roadmap.md`'s Multi-window section is tagged [Fable] for the same
   reason.
 - **Precedent.** Every researched OS with real multi-window support
@@ -243,12 +241,12 @@ window, ever (per `CLAUDE.md`).
   every window a client of it, never a peer. All four also report the
   same lesson in their own docs/discussions: damage tracking (repaint
   only what changed) was retrofitted after the first working version
-  did full repaints, not designed in from day one — this kernel already
+  did full repaints, not designed in from day one, this kernel already
   has partial-repaint discipline in `drivers/window.c` today (the
   "screen band" and `window_fill_rect_phys`), so Phase 5 should carry
   that forward into the compositor rather than reinvent it.
 
-### Phase 6 — the rest of the apps
+### Phase 6, the rest of the apps
 
 - **Goal.** Port every remaining app from Phase 1's extracted files to
   ring 3 against Phase 5's window server, one PR per app or small group,
@@ -266,7 +264,7 @@ window, ever (per `CLAUDE.md`).
   any app with real state-machine complexity (Chat, Epiphany); [Fable]
   only if an app's port surfaces a new ABI gap.
 - **Precedent.** This is the "long tail" every researched OS went
-  through — Haiku's own app catalog and ToaruOS's userspace both grew
+  through, Haiku's own app catalog and ToaruOS's userspace both grew
   this way, one port at a time, well after the window server itself was
   solid, never as a single flag-day migration. The corresponding failure
   mode to watch for, per Haiku's own community discussion of its early
@@ -283,9 +281,9 @@ window, ever (per `CLAUDE.md`).
   microkernel tradeoff explicit (driver crashes are isolated, at a real
   IPC-overhead cost); Joshua Tree's drivers are trusted, in-tree, and
   reviewed the same way the kernel is, so there's no analogous payoff
-  today. The hybrid shape Haiku and ToaruOS both settled on — a
+  today. The hybrid shape Haiku and ToaruOS both settled on, a
   monolithic-ish kernel plus userland servers for the things that
-  actually benefit from isolation (the compositor, apps) — is the closer
+  actually benefit from isolation (the compositor, apps), is the closer
   match and is what Phases 4-6 build toward.
 - It does not add a GUI toolkit (retained widgets, layout, scene graph).
   `docs/roadmap.md` already parks this explicitly; ring-3 apps in Phase 4
