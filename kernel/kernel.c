@@ -6766,7 +6766,9 @@ void gui_panic_screen(const char *name, unsigned int fault_addr, unsigned int ei
     /* Check if GUI is active by seeing if window dimensions are non-zero */
     if (window_width() == 0 || window_height() == 0) return;
 
-    /* Fill screen with cream background */
+    /* Whole screen, not whatever app viewport was current when it faulted
+       (the first version painted inside the Terminal's window). */
+    window_clear_viewport();
     window_clear(0x00FAF8F6);
 
     int h = (int)window_height();
