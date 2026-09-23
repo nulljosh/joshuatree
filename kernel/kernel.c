@@ -4314,6 +4314,35 @@ static void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg
     }
 }
 
+/* Mono glyph for the two real character grids (terminal, keyrate). Family
+   2 is DejaVu Sans Mono (see EDITOR_FAMILIES in editor.h); every glyph in
+   it shares left=0 and the same advance, unlike the proportional Sans
+   table GUI_AA_GLYPH draws everywhere else, so left-aligning it in the
+   fixed 8-logical/16-physical-px cell keeps every column lined up instead
+   of "m" crushing into "n" and "i"/"l" floating in dead space. Size 2
+   (24px face, same size GUI_AA_GLYPH uses) is the closest already-baked
+   mono size to the 16-physical-px cell. */
+#define GUI_AA_GLYPH_MONO(c) (&editor_glyphs[((2 * 2 + 0) * 4 + 2) * 95 + ((c) - 32)])
+static void gui_aa_char_mono(unsigned char c, int px, int py, unsigned int fg, int bg, int cell){
+    if (c < 32 || c > 126) c = '?';
+    if (bg >= 0) for (int j = 0; j < 32; j++) for (int i = 0; i < cell; i++) window_pixel_phys(px + i, py + j, (unsigned int)bg);
+    const struct editor_glyph *g = GUI_AA_GLYPH_MONO(c);
+    int ox = px + g->left, oy = py + g->top - 2;
+    for (int row = 0; row < g->height; row++){
+        for (int col = 0; col < g->width; col++){
+            int a = editor_pixels[g->offset + row * g->width + col];
+            if (!a) continue;
+            int x = ox + col, y = oy + row;
+            if (x < px || x >= px + cell) continue; /* keep inside the cell so neighbours never overdraw each other */
+            unsigned int d = window_get_pixel_phys(x, y);
+            unsigned int r = (((fg >> 16) & 0xFF) * a + ((d >> 16) & 0xFF) * (255 - a)) / 255;
+            unsigned int gg = (((fg >> 8) & 0xFF) * a + ((d >> 8) & 0xFF) * (255 - a)) / 255;
+            unsigned int b = ((fg & 0xFF) * a + (d & 0xFF) * (255 - a)) / 255;
+            window_pixel_phys(x, y, (r << 16) | (gg << 8) | b);
+        }
+    }
+}
+
 /* Weather window, redesigned. Everything below draws at physical
    resolution through the same DejaVu Sans coverage glyphs the rest of the
    GUI text uses (editor_glyphs), so the window gets a real size hierarchy:
@@ -4682,7 +4711,7 @@ static void gui_launch_keyrate(void){
         int x = 20, y = 60, max_x = (int)window_width() - 20;
         for (int i = 0; i < tlen; i++) {
             if (x + 8 > max_x) { x = 20; y += 16; }
-            font_draw_char((unsigned char)target[i], x, y, i < pos ? 0x00884B16 : 0x001C1C1E, -1);
+            font_draw_char_mono((unsigned char)target[i], x, y, i < pos ? 0x00884B16 : 0x001C1C1E, -1);
             x += 8;
         }
 
@@ -4797,7 +4826,7 @@ static void term_render(const char *input, unsigned int input_len){
         int x = 16;
         for (unsigned int c = 0; c < TERM_COLS && p < term_len; c++, p++) {
             if (term_buf[p] == '\n') break;
-            font_draw_char((unsigned char)term_buf[p], x, y, 0x00D8CFC4, -1);
+            font_draw_char_mono((unsigned char)term_buf[p], x, y, 0x00D8CFC4, -1);
             x += 8;
         }
         y += 16;
@@ -4809,7 +4838,7 @@ static void term_render(const char *input, unsigned int input_len){
     font_draw_string("> ", 16, py, 0x00C98A3E, -1);
     int x = 32;
     for (unsigned int i = 0; i < input_len && x < 780; i++, x += 8)
-        font_draw_char((unsigned char)input[i], x, py, 0x00F2E9D8, -1);
+        font_draw_char_mono((unsigned char)input[i], x, py, 0x00F2E9D8, -1);
     window_rect(x, py, 8, 15, 0x00C98A3E); /* block cursor */
     font_draw_string("esc closes   |   same shell as text mode", 16, (int)window_height() - 28, 0x00807468, -1);
 }
@@ -6151,6 +6180,7 @@ static void gui_run(void){
        means fullscreen is pixel-exact with no scaling at all. */
     if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
     font_set_aa(gui_aa_char, gui_aa_advance); /* v44: real typeface for every string from here on */
+    font_set_aa_mono(gui_aa_char_mono); /* term-mono: mono face for the terminal grid and Keyrate's typed line */
     /* v46: no wind in the browser, decided up front rather than measured
        after the fact. The slow-frame gate still exists, but even the two
        frames it takes to trip blocked the kernel long enough that v86's
