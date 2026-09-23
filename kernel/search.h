@@ -83,15 +83,16 @@ static void search_refilter(void) {
    the content. gui_wait_close's contract (esc or click returns) is
    reused as-is; the caller redraws the search screen fresh on return. */
 static void search_open_file(const char *name) {
+    int T = gui_app_dy();
     window_clear(GUI_BG);
     gui_draw_app_titlebar(name);
     static char buf[4096];
     int n = vfs_read_file(name, buf, sizeof(buf) - 1);
     if (n < 0) {
-        font_draw_string("Could not read this file.", 20, 50, 0x00A33B3B, -1);
+        font_draw_string("Could not read this file.", 20, T + 50, 0x00A33B3B, -1);
     } else {
         buf[n] = 0;
-        render_wrapped_text(buf, 20, 44, (int)window_width() - 40, (int)window_height() - 90, 0x001C1C1E);
+        render_wrapped_text(buf, 20, T + 44, (int)window_width() - 40, (int)window_height() - 90 - T, 0x001C1C1E);
     }
     gui_wait_close();
 }
@@ -100,24 +101,25 @@ static void search_open_file(const char *name) {
    content split: the titlebar and the "type to filter" instructions above
    it are chrome, drawn once by gui_launch_search below, never here. */
 static void search_draw_content(void) {
+    int T = gui_app_dy();
     int w = (int)window_width();
-    window_rect(20, 76, w - 40, 20, 0x00FFFFFF);
+    window_rect(20, T + 76, w - 40, 20, 0x00FFFFFF);
     search_query[search_query_len] = 0;
-    font_draw_string(search_query, 24, 78, 0x001C1C1E, -1);
-    int list_h = (int)window_height() - 120;
+    font_draw_string(search_query, 24, T + 78, 0x001C1C1E, -1);
+    int list_h = (int)window_height() - 120 - T;
     if (list_h < 0) list_h = 0;
-    window_rect(16, 104, w - 32, list_h, GUI_BG);
+    window_rect(16, T + 104, w - 32, list_h, GUI_BG);
     if (!search_file_count) {
-        font_draw_string("(no files, or no filesystem mounted)", 20, 110, 0x00807468, -1);
+        font_draw_string("(no files, or no filesystem mounted)", 20, T + 110, 0x00807468, -1);
         return;
     }
     if (!search_match_count) {
-        font_draw_string("No matches.", 20, 110, 0x00807468, -1);
+        font_draw_string("No matches.", 20, T + 110, 0x00807468, -1);
         return;
     }
     for (int r = 0; r < search_match_count; r++) {
-        int y = 110 + r * 22;
-        if (y + 20 > 104 + list_h) break; /* real, honest cap: no scroll in this v1, same as Reminders/Contacts */
+        int y = T + 110 + r * 22;
+        if (y + 20 > T + 104 + list_h) break; /* real, honest cap: no scroll in this v1, same as Reminders/Contacts */
         search_file_t *f = &search_files[search_matches[r]];
         if (r == search_sel) window_rect(16, y - 4, w - 32, 20, 0x00EDE6DC);
         char label[SEARCH_NAME_MAX + 1];
@@ -130,6 +132,7 @@ static void search_draw_content(void) {
 }
 
 static void gui_launch_search(void) {
+    int T = gui_app_dy();
     search_reload();
     search_query_len = 0;
     search_sel = 0;
@@ -139,7 +142,7 @@ static void gui_launch_search(void) {
     /* Chrome drawn once: titlebar + instructions never change while typing. */
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Search");
-    font_draw_string("type to filter   up/down to pick   enter opens   esc closes", 20, 52, 0x0075726E, -1);
+    font_draw_string("type to filter   up/down to pick   enter opens   esc closes", 20, T + 52, 0x0075726E, -1);
 
     for (;;) {
         search_draw_content();
@@ -160,8 +163,8 @@ static void gui_launch_search(void) {
             int click_vx = app_cursor_x - app_view_x, click_vy = app_cursor_y - app_view_y;
             int hit = -1;
             for (int r = 0; r < search_match_count; r++) {
-                int y = 110 + r * 22;
-                if (y + 20 > 104 + ((int)window_height() - 120)) break;
+                int y = T + 110 + r * 22;
+                if (y + 20 > T + 104 + ((int)window_height() - 120 - T)) break;
                 if (click_vx >= 16 && click_vx < (int)window_width() - 16 && click_vy >= y - 4 && click_vy < y + 16) { hit = r; break; }
             }
             if (hit < 0) return;
@@ -188,7 +191,7 @@ static void gui_launch_search(void) {
             search_open_file(f->name);
             window_clear(GUI_BG);
             gui_draw_app_titlebar("Search");
-            font_draw_string("type to filter   up/down to pick   enter opens   esc closes", 20, 52, 0x0075726E, -1);
+            font_draw_string("type to filter   up/down to pick   enter opens   esc closes", 20, T + 52, 0x0075726E, -1);
         }
     }
 }

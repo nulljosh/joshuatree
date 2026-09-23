@@ -805,13 +805,21 @@ static void reboot(void){
    GUI_TRASH up by one each. Every dispatch below keys off these #defines
    rather than a hardcoded 21/22, so this is the only place the shift needed
    to happen. */
-#define GUI_APP_COUNT   25 /* 23 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 23 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       24
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany", "Apps", "Trash"};
+/* v0.87.0: Portfolio, an Apps-folder-only catalog of the fleet apps that
+   live outside this kernel (heyitsmejosh.com), same launch shape as
+   Search/Contacts/Calculator/Stocks. Inserted before GUI_APPS_FOLDER, so
+   it grew GUI_APP_COUNT from 25 to 26 and pushed GUI_APPS_FOLDER/GUI_TRASH
+   up by one each, same shift the v0.86.0 comment above describes for
+   Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
+   it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
+   it keeps the primitive glyph path like every other unart'd icon. */
+#define GUI_APP_COUNT   26 /* 24 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 24 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       25
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany", "Portfolio", "Apps", "Trash"};
 static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
     0x00707070, 0x00A13F3F, 0x00A0553F, 0x006B4423, 0x00375A4A, 0x002B2B2B, 0x00365E8C, 0x0085144B,
-    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078, 0x001F5FA8
+    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078, 0x001F5FA8, 0x004A5A3E
 };
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
@@ -845,7 +853,13 @@ static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3
    next time `gui` runs; nothing about layout is saved to disk, matching
    this whole desktop's one-screen, nothing-persisted scope). */
 static int gui_order[GUI_ICON_COUNT];
-static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = GUI_DOCK_DEFAULT[i]; }
+/* Portfolio mode ("portfolio" on the multiboot command line, sent by the
+   landing's embed.js when heyitsmejosh.com/os.html frames it): the dock is
+   Joshua's own apps instead of the system set. Same slot count, Apps folder
+   and Trash stay at the ends; everything left out is still in the Apps folder. */
+static int portfolio_dock;
+static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
+static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 static int dock_hover = -1; /* slot whose label is showing */
 
 #define GUI_BG          0x00FAF8F6
@@ -1853,13 +1867,26 @@ static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_ro
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
 static int wind_base_width = 0;
+static int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
     struct wp_row c;
     int lw = (int)window_width(), lh = (int)window_height();
     int sc = (int)window_scale();
     c.pw = lw * sc;
-    int area_h = lh - GUI_MENUBAR_H;
-    int row = py - GUI_MENUBAR_H * sc; if (row < 0) row = 0;
+    /* GUI_MENUBAR_H is the real desktop's system menu bar, reserved out
+       of the photo's vertical scale so the wallpaper starts right under
+       it. A windowed app (gui_app_windowed) has no menu bar inside its
+       own clipped viewport -- local y=0 is the viewport's own top edge --
+       so it gets the full window height instead. Without this, every
+       physical row above GUI_MENUBAR_H inside a window sampled row 0
+       unconditionally (see the row<0 clamp below), painting a thin
+       sliver of the wallpaper photo's own top edge stretched across that
+       whole strip instead of the correctly scaled continuation of the
+       photo -- confirmed live, striped farmland from row 0 of the source
+       image where a smooth gradient was expected. */
+    int top = gui_app_windowed ? 0 : GUI_MENUBAR_H;
+    int area_h = lh - top;
+    int row = py - top * sc; if (row < 0) row = 0;
     int fy = row * (WALLPAPER_H - 1) * 256 / (area_h * sc > 1 ? area_h * sc - 1 : 1);
     int sy = fy >> 8; c.wy = fy & 255;
     if (sy >= WALLPAPER_H - 1) { sy = WALLPAPER_H - 2; c.wy = 255; }
@@ -1914,7 +1941,16 @@ static void gui_draw_wallpaper_rows_sway_ex(int y_from, int y_to, int sway, int 
     daynight_update(); /* v65: the one real choke point every wallpaper draw funnels through, see its own comment above */
     int lh = (int)window_height();
     int sc = (int)window_scale();
-    if (y_from < GUI_MENUBAR_H) y_from = GUI_MENUBAR_H;
+    /* GUI_MENUBAR_H reserves room for the desktop's own system menu bar,
+       which only exists when this is painting the real desktop. A
+       windowed app (gui_app_windowed) draws inside gui_launch_from_dock's
+       clipped viewport instead, which already excludes that window's own
+       title bar and has no menu bar of its own -- local y=0 there is real
+       content. Without this check the clamp silently pulled y_from back
+       up to GUI_MENUBAR_H for every windowed app too, leaving a dead
+       unpainted strip (whatever window_clear had set) right under the
+       title bar. Confirmed live: the Apps folder's own black band. */
+    if (!gui_app_windowed && y_from < GUI_MENUBAR_H) y_from = GUI_MENUBAR_H;
     if (y_to > lh) y_to = lh;
     for (int py = y_from * sc; py < y_to * sc; py++){
         if (sway && wind_base && py >= WIND_TOP_ROW * sc && py < WIND_HORIZON_ROW * sc) {
@@ -3379,6 +3415,7 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
         case 20: gui_icon_stocks(cx_center, cy, size, bg); break;
         case 21: gui_icon_search(cx_center, cy, size, bg); break;
         case 22: gui_icon_stocks(cx_center, cy, size, bg); break; /* art covers it; primitive fallback only */
+        case 23: gui_icon_apps(cx_center, cy, size, bg); break; /* Portfolio: no authored art yet, reuses the grid-of-tiles glyph */
         case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
         case GUI_TRASH: gui_icon_trash(cx_center, cy, size, bg); break;
     }
@@ -3670,6 +3707,9 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
    lifted icon and its label, so repainting this band alone is enough to
    erase any previous hover state. */
 static int gui_dock_band_top(void){ return gui_dock_y0() - 24; }
+#define DOCK_LABEL_BG   0x00F4F1EC /* hover label capsule fill */
+#define DOCK_LABEL_EDGE 0x00BDB4A8 /* its hairline edge */
+#define DOCK_LABEL_SPAN 48         /* px either side of a slot a hover change repaints: the widest label plus its capsule */
 
 static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my);
 /* v0.79.x: the dock splits into the half that never changes while the
@@ -3774,8 +3814,8 @@ static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int
            frame even though composition itself was offscreen. */
         for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
             if ((slot == dock_presented_hover) == (slot == dock_hover)) continue;
-            int left = (gui_slot_x(slot) - 25) * sc;
-            int right = (gui_slot_x(slot) + DOCK_ICON + 25) * sc;
+            int left = (gui_slot_x(slot) - DOCK_LABEL_SPAN) * sc;
+            int right = (gui_slot_x(slot) + DOCK_ICON + DOCK_LABEL_SPAN) * sc;
             if (left < 0) left = 0;
             if (right > pw) right = pw;
             for (int py = 0; py < ph; py++) {
@@ -3844,11 +3884,18 @@ static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
         gui_draw_one_icon(icon, cx_center, cy_bottom, size);
         if (slot == dock_hover) {
             int label_w = font_string_width(GUI_LABELS[icon]);
-            /* Dark text on the old flat light backdrop; the gradient
-               wallpaper makes the area right above the dock genuinely
-               dark now, dark-on-dark was unreadable, caught live by
-               actually hovering an icon on the real page, not assumed. */
-            font_draw_string(GUI_LABELS[icon], cx_center - label_w / 2, cy_bottom - size - 18, 0x00FFF6EC, -1);
+            int ly = y0 - 21; /* capsule spans ly-3 .. ly+19: clear of the tray's top edge, inside the band (y0 - 24) */
+            /* Dark text on a light capsule with a hairline edge, the macOS
+               dock tooltip, in the tray's own cream. Bare light text read
+               on dark wallpaper but vanished on bright map tiles and
+               collided with an open window's bottom edge (QA tour,
+               2026-09-21); the hairline keeps the capsule distinct over a
+               light window. It stays inside the band gui_dock_band_top()
+               composes and the per-slot present span DOCK_LABEL_SPAN. */
+            int lx0 = cx_center - label_w / 2 - 2, lx1 = cx_center + label_w / 2 + 2;
+            gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 11, DOCK_LABEL_EDGE, DOCK_LABEL_EDGE);
+            gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 10, DOCK_LABEL_BG, DOCK_LABEL_BG);
+            font_draw_string(GUI_LABELS[icon], cx_center - label_w / 2, ly, 0x001C1C1E, -1);
         }
     }
     if (drag_slot >= 0) {
@@ -3955,6 +4002,12 @@ static void gui_draw_cursor(int x, int y){
 /* App viewers have their own input loops. Keep the pointer alive while one
    is open, drawing it in screen coordinates outside the app viewport. */
 static int gui_app_windowed = 0;
+/* Vertical shift for an app's own content. Full screen, an app draws its
+   own title strip across the top 40px and starts content at y=52. In a
+   dock window the frame already draws the title bar above the viewport,
+   so the same layout moves up by that strip, the same 32px Stocks has
+   always saved through stx_top(). Add it to every content y. */
+static int gui_app_dy(void){ return gui_app_windowed ? -32 : 0; }
 static int app_view_x, app_view_y, app_view_w, app_view_h;
 static int app_cursor_x, app_cursor_y;
 static void gui_app_mouse_tick(void){
@@ -4132,6 +4185,10 @@ static void gui_launch_files(void){ gui_draw_files_content(); gui_wait_close(); 
    with scrollback and VFS-backed history, included below alongside the
    rest of the app headers. */
 
+/* Physical-resolution text (defined with the Weather window below); the
+   Calendar year view draws its mini-month digits with it. */
+static int wx_text(const char *s, int lx, int ly, int size, int bold, int mul, unsigned int fg);
+static int wx_text_lw(const char *s, int size, int bold, int mul);
 #include "gui_prompt.h"
 #include "auth.h"
 #include "editor.h"
@@ -4142,6 +4199,7 @@ static void gui_launch_files(void){ gui_draw_files_content(); gui_wait_close(); 
 #include "calculator.h"
 #include "chat.h"
 #include "search.h"
+#include "portfolio.h"
 
 /* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
    dock hover labels, titlebars) read as monospace/typewriter, not the
@@ -4799,7 +4857,21 @@ static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int c
     for (int i = 0; i < GUI_APPS_FOLDER; i++) {
         int row = i / APPS_COLS - scroll_offset;
         int col = i % APPS_COLS;
-        if (row < 0 || row * cell_h >= 375) continue;
+        /* Bounded by row count, not a pixel guess: row*cell_h (324) still
+           clears the 375px panel_h even for the row that doesn't fit, so
+           that stray row used to get drawn anyway, spilling past the
+           panel's bottom edge and getting sliced by the window's own
+           bottom (measured: kernel/kernel.c's own APPS_VIS_ROWS=3 already
+           states the true count, "3 whole ones" -- this just enforces it
+           instead of re-deriving a looser bound from cell_h). Because that
+           spillover row was never inside the 375px rect gui_apps_redraw_
+           panel repaints on every scroll/selection change, its pixels
+           also never got cleared on a later repaint -- confirmed live: a
+           scroll from offset 0 to 1 left index 18/19's (Contacts,
+           Calculator) icons drawn at 0's row 3 sitting there under the
+           freshly drawn row 3 of the new offset, stale pixels, not a
+           second draw and not an index past GUI_APPS_FOLDER. */
+        if (row < 0 || row >= APPS_VIS_ROWS) continue;
         int cx = x0 + col * cell_w + cell_w / 2;
         int cy = y0 + row * cell_h;
         if (i == sel) gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 14,
@@ -4813,11 +4885,33 @@ static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, in
     int panel_x = x0 - 28, panel_y = 25, panel_w = grid_w + 56, panel_h = 375;
     gui_draw_wallpaper_rect(panel_x, panel_y, panel_w, panel_h);
     gui_apps_glass(panel_x, panel_y, panel_w, panel_h);
-    font_draw_string("Apps", x0, 40, 0x002A2226, -1);
-    font_draw_string("arrow keys to move   enter opens   esc closes", x0, 65, 0x006A6064, -1);
+    /* The window's own title bar already reads "Apps" (gui_launch_from_
+       dock draws GUI_LABELS[icon] there); a second "Apps" heading here
+       just repeated it. Keep the key-hint line, moved up into the space
+       the heading used to take. */
+    font_draw_string("arrow keys to move   enter opens   esc closes", x0, 40, 0x006A6064, -1);
     gui_apps_draw_grid(scroll_offset, sel, x0, y0, cell_w, cell_h, tile);
     serial_puts("appsgridrepaint\n");
 }
+/* The window frame's title while an app runs inside the Apps folder's
+   window. The frame is drawn once by gui_launch_from_dock with the folder's
+   own label; an app launched from the grid used to leave "Apps" up there.
+   The title sits outside the content viewport, so the viewport is lifted
+   just for this draw. */
+static void gui_app_frame_title(const char *label){
+    if (!gui_app_windowed) return;
+    int x = app_view_x - 8, y = app_view_y - 32;
+    window_clear_viewport();
+    window_rect(x + 90, y + 4, 320, 22, 0x00F5F0EB);
+    font_draw_string(label, x + 96, y + 8, 0x00403439, -1);
+    window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
+}
+static void gui_apps_launch(int icon){
+    gui_app_frame_title(GUI_LABELS[icon]);
+    gui_launch(icon);
+    gui_app_frame_title(GUI_LABELS[GUI_APPS_FOLDER]);
+}
+
 static void gui_launch_apps(void){
     int sel = 0;
     int rows = (GUI_APPS_FOLDER + APPS_COLS - 1) / APPS_COLS;
@@ -4840,7 +4934,16 @@ static void gui_launch_apps(void){
             full = 0;
             serial_puts("appsfullrepaint\n");
             window_clear(0x00201922);
-            gui_draw_wallpaper();
+            /* Not gui_draw_wallpaper(): that helper starts at GUI_MENUBAR_H,
+               skipping the top strip to leave room for the desktop's own
+               system menu bar. This folder runs inside gui_launch_from_
+               dock's viewport, which already excludes the window's own
+               title bar (drawn outside the viewport) and has no menu bar
+               of its own, so local y=0 is real content, not chrome.
+               Starting at GUI_MENUBAR_H left that strip as whatever
+               window_clear above set it to: a dead black band under the
+               title bar, never painted with wallpaper at all. */
+            gui_draw_wallpaper_rows(0, (int)window_height());
             gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w);
             /* The click that opened this folder (or closed the app launched
                from it) is the baseline, not a fresh click. Synced here, once
@@ -4921,16 +5024,16 @@ static void gui_launch_apps(void){
                 int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
                 if (click_vx >= cell_x0 && click_vx < cell_x1 && click_vy >= cell_y0 && click_vy < cell_y1) { hit = i; break; }
             }
-            if (hit >= 0) { sel = hit; gui_launch(hit); full = 1; continue; } /* the app drew over the screen, so the folder needs a real full repaint */
+            if (hit >= 0) { sel = hit; gui_apps_launch(hit); full = 1; continue; } /* the app drew over the screen, so the folder needs a real full repaint */
             return; /* a tap outside every tile still closes the folder: with no keyboard there is no other way out */
         }
-        if (k == KEY_ENTER) { gui_launch(sel); full = 1; continue; } /* returns here when that app closes, folder still open, same as a real launcher */
+        if (k == KEY_ENTER) { gui_apps_launch(sel); full = 1; continue; } /* returns here when that app closes, folder still open, same as a real launcher */
         int old_sel = sel;
         if (k == 'a' && sel > 0) sel--;                 /* left  */
         else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) sel++; /* right */
         else if (k == 'w' && sel >= APPS_COLS) sel -= APPS_COLS;
         else if (k == 's' && sel + APPS_COLS < GUI_APPS_FOLDER) sel += APPS_COLS;
-        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_launch(sel); full = 1; continue; }
+        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_apps_launch(sel); full = 1; continue; }
         if (sel != old_sel) {
             /* Keyboard selection drags the view with it, the direction that is
                not surprising: move past the last visible row and the grid
@@ -4947,18 +5050,19 @@ static void gui_launch_apps(void){
    Same keyboard-and-click contract every screen here uses (see
    gui_wait_close): a phone has no keyboard, so every action has a tap. */
 static void gui_launch_trash(void){
+    int T = gui_app_dy();
     int sel = 0;
     for (;;) {
         window_clear(GUI_BG);
         gui_draw_app_titlebar("Trash");
         int n = trash_count();
         if (!n) {
-            font_draw_string("Trash is empty.", 20, 70, 0x001C1C1E, -1);
-            font_draw_string("Deleting a file with rm puts it here first.", 20, 94, 0x00807468, -1);
+            font_draw_string("Trash is empty.", 20, T + 52, 0x001C1C1E, -1);
+            font_draw_string("Deleting a file with rm puts it here first.", 20, T + 76, 0x00807468, -1);
         } else {
-            font_draw_string("up/down to pick   r restores   e empties   esc closes", 20, 52, 0x00807468, -1);
+            font_draw_string("up/down to pick   r restores   e empties   esc closes", 20, T + 52, 0x00807468, -1);
             for (int i = 0; i < n; i++) {
-                int y = 84 + i * 22;
+                int y = T + 84 + i * 22;
                 if (i == sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);
                 font_draw_string(trash_name(i), 28, y, 0x001C1C1E, -1);
                 char sz[16]; int p = 0; unsigned int v = trash_size(i);
@@ -5277,6 +5381,7 @@ static void gui_launch(int icon){
     else if (icon == 20) gui_launch_stocks();
     else if (icon == 21) gui_launch_search();
     else if (icon == 22) gui_launch_epiphany();
+    else if (icon == 23) gui_launch_portfolio();
 }
 
 static void gui_launch_from_dock(int icon){
@@ -6206,7 +6311,15 @@ static void gui_run(void){
             }
         } else {
             int sc = kbd_pop();
-            if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) break; /* esc, non-blocking, global-quit path: unchanged when no interactive window is focused */
+            if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) {
+                /* Esc closes the focused window first. Only a bare desktop
+                   quits to the shell. Files has no key handler of its own,
+                   so before this Esc with Files open dropped the whole
+                   desktop to text mode. */
+                if (gui_window_count == 0) break;
+                gui_multiwin_close(gui_window_count - 1);
+                mw_key_repaint = 1;
+            }
         }
         int dx = 0, dy = 0;
         int moved_mouse = mouse_get_delta(&dx, &dy, &buttons);
@@ -8448,6 +8561,8 @@ void kmain(unsigned int multiboot_info_addr){
     }
     if (multiboot_info_addr && (*(unsigned int *)multiboot_info_addr & 0x4)) {
         const char *cl = (const char *)*(unsigned int *)(multiboot_info_addr + 16);
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='p' && pc[1]=='o' && pc[2]=='r' && pc[3]=='t' && pc[4]=='f' && pc[5]=='o' && pc[6]=='l' && pc[7]=='i' && pc[8]=='o') { portfolio_dock = 1; serial_puts("portfolio dock\n"); break; }
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;

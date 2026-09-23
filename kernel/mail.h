@@ -132,10 +132,11 @@ static void mail_read_message(int idx) {
     for (;;) {
         window_clear(GUI_BG);
         gui_draw_app_titlebar("Mail");
-        font_draw_string(m->from, 20, 48, 0x00807468, -1);
-        font_draw_string(m->subject, 20, 68, 0x001C1C1E, -1);
-        window_rect(20, 92, (int)window_width() - 40, 1, 0x00E0D8CE);
-        render_wrapped_text(m->body, 20, 106, (int)window_width() - 40, (int)window_height() - 150, 0x001C1C1E);
+        int T = gui_app_dy();
+        font_draw_string(m->from, 20, T + 48, 0x00807468, -1);
+        font_draw_string(m->subject, 20, T + 68, 0x001C1C1E, -1);
+        window_rect(20, T + 92, (int)window_width() - 40, 1, 0x00E0D8CE);
+        render_wrapped_text(m->body, 20, T + 106, (int)window_width() - 40, (int)window_height() - 150 - T, 0x001C1C1E);
         gui_wait_close();
         return;
     }
@@ -170,17 +171,18 @@ static void mail_delete_at(int sel) {
    same de-emphasized gray Reminders gives a checked-off item. */
 static void gui_launch_mail(void) {
     mail_load();
+    int T = gui_app_dy();
     int sel = 0;
     for (;;) {
         window_clear(GUI_BG);
         gui_draw_app_titlebar("Mail");
         if (!mail_count) {
-            font_draw_string("No mail yet.", 20, 70, 0x001C1C1E, -1);
-            font_draw_string("Press c to compose one.", 20, 94, 0x00807468, -1);
+            font_draw_string("No mail yet.", 20, T + 52, 0x001C1C1E, -1);
+            font_draw_string("Press c to compose one.", 20, T + 76, 0x00807468, -1);
         } else {
-            font_draw_string("up/down to pick   enter reads   c composes   d deletes   esc closes", 20, 52, 0x00807468, -1);
+            font_draw_string("up/down to pick   enter reads   c composes   d deletes   esc closes", 20, T + 52, 0x00807468, -1);
             for (int i = 0; i < mail_count; i++) {
-                int y = 84 + i * 22;
+                int y = T + 84 + i * 22;
                 if (i == sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);
                 unsigned int fg = mail_msgs[i].read ? 0x00A39C92 : 0x001C1C1E;
                 font_draw_string(mail_msgs[i].read ? "   " : "  *", 28, y, fg, -1); /* unread dot, same idea as a real inbox's bold row */
@@ -226,35 +228,36 @@ static unsigned int mail_mw_len = 0; /* length of whichever compose field is cur
 
 static void gui_draw_mail_content(void){
     mail_load();
+    int T = gui_app_dy();
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Mail");
     if (mail_mw_mode == MAIL_MW_READ) {
         mail_msg_t *m = &mail_msgs[mail_mw_sel];
-        font_draw_string(m->from, 20, 48, 0x00807468, -1);
-        font_draw_string(m->subject, 20, 68, 0x001C1C1E, -1);
-        window_rect(20, 92, (int)window_width() - 40, 1, 0x00E0D8CE);
-        render_wrapped_text(m->body, 20, 106, (int)window_width() - 40, (int)window_height() - 150, 0x001C1C1E);
+        font_draw_string(m->from, 20, T + 48, 0x00807468, -1);
+        font_draw_string(m->subject, 20, T + 68, 0x001C1C1E, -1);
+        window_rect(20, T + 92, (int)window_width() - 40, 1, 0x00E0D8CE);
+        render_wrapped_text(m->body, 20, T + 106, (int)window_width() - 40, (int)window_height() - 150 - T, 0x001C1C1E);
         return;
     }
     if (mail_mw_mode == MAIL_MW_COMPOSE_FROM || mail_mw_mode == MAIL_MW_COMPOSE_SUBJECT || mail_mw_mode == MAIL_MW_COMPOSE_BODY) {
         const char *prompt = mail_mw_mode == MAIL_MW_COMPOSE_FROM ? "from (enter confirms, esc cancels):" :
                               mail_mw_mode == MAIL_MW_COMPOSE_SUBJECT ? "subject:" : "body:";
         char *buf = mail_mw_mode == MAIL_MW_COMPOSE_FROM ? mail_mw_from : mail_mw_mode == MAIL_MW_COMPOSE_SUBJECT ? mail_mw_subject : mail_mw_body;
-        font_draw_string(prompt, 20, 52, 0x0075726E, -1);
-        window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
+        font_draw_string(prompt, 20, T + 52, 0x0075726E, -1);
+        window_rect(20, T + 76, (int)window_width() - 40, 20, 0x00FFFFFF);
         buf[mail_mw_len] = 0;
-        font_draw_string(buf, 24, 78, 0x001C1C1E, -1);
+        font_draw_string(buf, 24, T + 78, 0x001C1C1E, -1);
         return;
     }
     if (!mail_count) {
-        font_draw_string("No mail yet.", 20, 70, 0x001C1C1E, -1);
-        font_draw_string("Press c to compose one.", 20, 94, 0x00807468, -1);
+        font_draw_string("No mail yet.", 20, T + 52, 0x001C1C1E, -1);
+        font_draw_string("Press c to compose one.", 20, T + 76, 0x00807468, -1);
         return;
     }
-    font_draw_string("up/down to pick   enter reads   c composes   d deletes   esc closes", 20, 52, 0x00807468, -1);
+    font_draw_string("up/down to pick   enter reads   c composes   d deletes   esc closes", 20, T + 52, 0x00807468, -1);
     if (mail_mw_sel >= mail_count) mail_mw_sel = mail_count - 1;
     for (int i = 0; i < mail_count; i++) {
-        int y = 84 + i * 22;
+        int y = T + 84 + i * 22;
         if (i == mail_mw_sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);
         unsigned int fg = mail_msgs[i].read ? 0x00A39C92 : 0x001C1C1E;
         font_draw_string(mail_msgs[i].read ? "   " : "  *", 28, y, fg, -1);
