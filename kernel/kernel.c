@@ -5456,6 +5456,7 @@ static void gui_launch_settings(void){
 #include "stocks.h"
 #include "toroid.h"
 #include "quotes.h"
+#include "lexly.h"
 #include "epiphany.h"
 #include "activity.h"
 
@@ -5475,7 +5476,7 @@ static void gui_launch(int icon){
     else if (icon == 10) gui_launch_html("Bookrank", app_bookrank_html, app_bookrank_len);
     else if (icon == 11) gui_launch_quotes();
     else if (icon == 12) gui_launch_html("Plan", app_plan_html, app_plan_len);
-    else if (icon == 13) gui_launch_html("Lexly", app_lexly_html, app_lexly_len);
+    else if (icon == 13) gui_launch_lexly();
     else if (icon == 14) gui_launch_toroid();
     else if (icon == 15) gui_launch_html("Sparkjar", app_sparkjar_html, app_sparkjar_len);
     else if (icon == 16) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);

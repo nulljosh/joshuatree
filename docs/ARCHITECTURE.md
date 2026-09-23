@@ -124,6 +124,8 @@ shell's own `cat` command and `gui_launch_html` already use.
 
 **Toroid** (`kernel/toroid.h`, v0.88.0), Conway's Game of Life on a torus, native: both edges wrap, space pauses, r reseeds, c clears, a click toggles a cell. Replaces the one-line HTML card the dock tile used to open.
 
+**Lexly** (`kernel/lexly.h`, v0.92.0), Spanish vocabulary drill: a word in Spanish, four English choices, 1-4 or a click answers, streak and best kept for the session. Replaces the one-line HTML card the dock tile used to open.
+
 **Portfolio** (`kernel/portfolio.h`, v0.87.0), Apps-folder-only like
 Search/Contacts/Calculator/Stocks. A static, compiled-in catalog of the
 whole heyitsmejosh.com fleet (35 apps across Life/Read/Make/Play/Dev),
@@ -178,7 +180,6 @@ monocode).
 - **Bookrank** (`drivers/app_bookrank.h`): book summaries
 - **Quotestreak** (`drivers/app_quotestreak.h`): quote-guessing game, no backend to begin with
 - **Plan** (`drivers/app_plan.h`): a planning app, ported for its real static copy at v35
-- **Lexly** (`drivers/app_lexly.h`): gamified language learning
 - **Toroid** (`drivers/app_toroid.h`): Conway's Game of Life on a toroidal grid (ships under the Toroid name; the source repo is `conway`)
 - **Sparkjar** (`drivers/app_sparkjar.h`): idea forum
 - **Homeqi** (`drivers/app_homeqi.h`): feng shui home-assessment tool
