@@ -84,6 +84,7 @@ static void contacts_save(void) {
    every keystroke was unnecessary visual waste on a framebuffer with no double
    buffer. */
 static int contacts_prompt_line(const char *prompt, char *out, int max) {
+    int T = gui_app_dy();
     unsigned int n = 0;
     out[0] = 0;
     mouse_click_edge_sync();
@@ -91,13 +92,13 @@ static int contacts_prompt_line(const char *prompt, char *out, int max) {
     /* Draw chrome only once, before the loop. */
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Contacts");
-    font_draw_string(prompt, 20, 52, 0x0075726E, -1);
+    font_draw_string(prompt, 20, T + 52, 0x0075726E, -1);
 
     for (;;) {
         /* Redraw only the content area (text box and typed text), not the chrome. */
-        window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
+        window_rect(20, T + 76, (int)window_width() - 40, 20, 0x00FFFFFF);
         out[n] = 0;
-        font_draw_string(out, 24, 78, 0x001C1C1E, -1);
+        font_draw_string(out, 24, T + 78, 0x001C1C1E, -1);
         serial_puts("contactsprompt\n"); /* discriminating marker for regression test */
         int k = get_key_or_click();
         if (k == KEY_ESC || k == KEY_CLICK) return 0;
@@ -125,13 +126,14 @@ static void contacts_add(void) {
 }
 
 static void contacts_view(int idx) {
+    int T = gui_app_dy();
     contact_t *c = &contacts[idx];
     for (;;) {
         window_clear(GUI_BG);
         gui_draw_app_titlebar("Contacts");
-        font_draw_string(c->name, 20, 48, 0x001C1C1E, -1);
-        font_draw_string(c->phone, 20, 68, 0x00807468, -1);
-        font_draw_string(c->email, 20, 88, 0x00807468, -1);
+        font_draw_string(c->name, 20, T + 48, 0x001C1C1E, -1);
+        font_draw_string(c->phone, 20, T + 68, 0x00807468, -1);
+        font_draw_string(c->email, 20, T + 88, 0x00807468, -1);
         gui_wait_close();
         return;
     }
@@ -150,18 +152,19 @@ static void contacts_delete_at(int sel) {
 }
 
 static void gui_launch_contacts(void) {
+    int T = gui_app_dy();
     contacts_load();
     int sel = 0;
     for (;;) {
         window_clear(GUI_BG);
         gui_draw_app_titlebar("Contacts");
         if (!contacts_count) {
-            font_draw_string("No contacts yet.", 20, 70, 0x001C1C1E, -1);
-            font_draw_string("Press a to add one.", 20, 94, 0x00807468, -1);
+            font_draw_string("No contacts yet.", 20, T + 52, 0x001C1C1E, -1);
+            font_draw_string("Press a to add one.", 20, T + 76, 0x00807468, -1);
         } else {
-            font_draw_string("up/down to pick   enter views   a adds   d deletes   esc closes", 20, 52, 0x00807468, -1);
+            font_draw_string("up/down to pick   enter views   a adds   d deletes   esc closes", 20, T + 52, 0x00807468, -1);
             for (int i = 0; i < contacts_count; i++) {
-                int y = 84 + i * 22;
+                int y = T + 84 + i * 22;
                 if (i == sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);
                 font_draw_string(contacts[i].name, 28, y, 0x001C1C1E, -1);
                 font_draw_string(contacts[i].phone, 220, y, 0x00807468, -1);

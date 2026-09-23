@@ -275,6 +275,7 @@ static void calc_format_result(double result, char *buf, int max) {
 }
 
 static void gui_launch_calculator(void) {
+    int T = gui_app_dy();
     static char input[CALC_INPUT_MAX];
     static char output[CALC_OUTPUT_MAX];
     int input_len = 0;
@@ -286,18 +287,18 @@ static void gui_launch_calculator(void) {
        fixing the per-keystroke window_clear bug. */
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Calculator");
-    font_draw_string("expr: + - * / ( ) enter evaluate  esc closes", 20, 52, 0x00807468, -1);
+    font_draw_string("expr: + - * / ( ) enter evaluate  esc closes", 20, T + 52, 0x00807468, -1);
 
     for (;;) {
         /* Redraw only the content area (input and output), not the chrome. */
-        window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
+        window_rect(20, T + 76, (int)window_width() - 40, 20, 0x00FFFFFF);
         input[input_len] = 0;
-        font_draw_string(input, 24, 78, 0x001C1C1E, -1);
+        font_draw_string(input, 24, T + 78, 0x001C1C1E, -1);
 
         if (output[0]) {
-            window_rect(20, 120, (int)window_width() - 40, 1, 0x00E0D8CE);
-            font_draw_string("= ", 20, 136, 0x00807468, -1);
-            font_draw_string(output, 40, 136, 0x001C1C1E, -1);
+            window_rect(20, T + 120, (int)window_width() - 40, 1, 0x00E0D8CE);
+            font_draw_string("= ", 20, T + 136, 0x00807468, -1);
+            font_draw_string(output, 40, T + 136, 0x001C1C1E, -1);
         }
         /* v0.76.58: moved from a single call before the loop (which only
            ever proved the chrome drew once) to here, one call per real
