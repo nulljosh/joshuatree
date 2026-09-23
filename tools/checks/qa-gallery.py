@@ -16,7 +16,7 @@ contains panic/exception strings (grep appclose-check.py for the list).
 Usage: tools/checks/qa-gallery.py [outdir]   (from the repo root, after make kernel.elf)
 """
 import json, os, re, socket, subprocess, sys, time
-from PIL import Image
+from PIL import Image, ImageChops
 
 LOG = "/tmp/jt-qa-gallery-serial.log"
 DUMP = "/tmp/jt-qa-gallery.raw"
@@ -158,14 +158,20 @@ try:
                 key("d")  # right
             for _ in range(row):
                 key("s")  # down
-            key("ret"); time.sleep(1.2)  # launch app
-
-            # Check if the app window opened (red close button visible)
-            for _ in range(40):
+            # The folder's own close dot sits where a launched app's does, so
+            # a red dot alone cannot tell "app opened" from "Enter did nothing".
+            # App-only signal: the window area stops looking like the grid.
+            grid = dump().crop((200, 120, 1720, 900))
+            key("ret")  # launch app
+            for _ in range(60):
                 time.sleep(0.1)
-                if window_open():
+                now = dump().crop((200, 120, 1720, 900))
+                hist = ImageChops.difference(grid, now).convert('L').histogram()
+                changed = sum(hist) - hist[0]
+                if window_open() and changed > 0.05 * grid.width * grid.height:
                     opened = True
                     break
+            time.sleep(0.5)  # let the first content frame finish
 
             if opened:
                 # Dump framebuffer and save PNG
@@ -232,7 +238,7 @@ try:
         with open(LOG, errors="replace") as lf:
             log_content = lf.read()
             for pattern in CRASH_PATTERNS:
-                if re.search(pattern, log_content):
+                if re.search(pattern, log_content, re.IGNORECASE):  # kernel/idt.c prints lowercase "exception:"
                     fails.append(f"kernel crash detected: {pattern}")
     except FileNotFoundError:
         pass
