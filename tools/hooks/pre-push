@@ -1,9 +1,18 @@
 #!/bin/sh
-# Fast, no-QEMU-window pre-push gate. Runs the two checks cheap enough to
-# do on every push without slowing anyone down: doc references still
-# resolve, and the kernel still compiles. Neither pops a window (headless
-# only, see CLAUDE.md). Anything that needs a real boot (./check.sh, the
-# full tools/checks/ci-suite.sh) stays CI's job, not this hook's.
+# Fast, no-QEMU-window pre-push gate. Runs the checks cheap enough to do
+# on every push without slowing anyone down: doc references still
+# resolve, the kernel still compiles, and the landing page facts still
+# match the source. None of them pop a window (headless only, see
+# CLAUDE.md). Anything that needs a real boot (./check.sh, the full
+# tools/checks/ci-suite.sh) stays CI's job, not this hook's.
+#
+# landing-facts-check moved here from ci-suite.sh (issue #14 round two):
+# it reads counts out of the source tree, so it fails every time GitHub
+# rebases a PR onto a main that already moved those numbers, even though
+# nothing in the PR's own diff touched them. Pre-push runs against the
+# real local tree right before the push, which is the only point that
+# check's assumption (source and landing page, read together, right now)
+# actually holds.
 #
 # Installed per-repo via `make hooks` (core.hooksPath is set globally on
 # this machine to ~/.git-hooks, so this repo opts in on its own).
@@ -16,5 +25,8 @@ echo "pre-push: doc references..."
 
 echo "pre-push: kernel compiles..."
 make -s kernel.elf
+
+echo "pre-push: landing facts match the source..."
+python3 ./tools/checks/landing-facts-check.py
 
 echo "pre-push: OK"

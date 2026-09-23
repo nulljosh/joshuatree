@@ -98,9 +98,9 @@ once |RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/
 once |Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
 retry|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py
 once |Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
-once |Landing facts match the source|python3 ./tools/checks/landing-facts-check.py
 retry|Accounts: create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py
 once |Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py
+once |Frame time: idle, dock hover and window open stay within budget|python3 ./tools/checks/frametime-check.py
 EOF
 }
 

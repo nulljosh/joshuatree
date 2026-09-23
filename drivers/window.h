@@ -28,6 +28,11 @@ unsigned int window_get_pixel(int x, int y);
 int window_open_scaled(unsigned int width, unsigned int height, unsigned int bpp, unsigned int scale);
 unsigned int window_scale(void);
 void window_pixel_phys(int px, int py, unsigned int color);
+/* Fast solid-fill path for a whole rectangle, same viewport/back/
+   screen_band routing window_pixel_phys does but paid once for the rect
+   instead of once per pixel. Only correct for a flat color with no per-
+   pixel blending; see window.c's own comment. */
+void window_fill_rect_phys(int px, int py, int w, int h, unsigned int color);
 unsigned int window_get_pixel_phys(int px, int py);
 unsigned int *window_phys_row(int py);
 int window_has_target(void);
@@ -53,6 +58,13 @@ void window_present(void);
    before sampling the framebuffer, since a kernel variable changing no
    longer implies the screen has. */
 extern volatile unsigned int window_present_count;
+/* Issue #14: PIT ticks (100Hz, kernel/irq.h's ticks()) the last real
+   present took from the first damaging draw call of that frame to the
+   copy finishing, plus a running max. See window.c's own comment next to
+   window_present_count. tools/checks/frametime-check.py reads both by
+   symbol. */
+extern volatile unsigned int window_present_ticks_last;
+extern volatile unsigned int window_present_ticks_max;
 int window_has_back_buffer(void);
 /* Declare that [x,y,w,h) in physical pixels was written directly, for a
    caller that bypassed window_pixel_phys (window_phys_row). */

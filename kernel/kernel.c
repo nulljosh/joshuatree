@@ -1461,7 +1461,24 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
     int sc = (int)window_scale();
     int px0 = x * sc, py0 = y * sc, pw = w * sc, ph = h * sc, pr = r * sc, band = 3; /* v44.1: 3 physical px; AA_BAND*sc was 10 and read as a soft, blurry corner */
     const int SS = 4; /* v79: 4x4 = 16 subsamples per physical pixel, real coverage AA on the corner arc */
+    /* Issue #14 ("everything super laggy"): every row outside the top
+       band and outside a corner block (py in [pr, ph-pr)) always falls
+       through the loop below to col=color with no wallpaper sample and
+       no AA -- cy ends up -1 there so the `cx>=0&&cy>=0` corner branch
+       never runs, and py>=pr>band so the top-edge branch never runs
+       either, provably true for any r with a non-degenerate band. That
+       is the whole middle of the shape, the vast majority of its area
+       for any real window/panel/tray size. Bulk-filling it once with
+       window_fill_rect_phys (same routing screen_pixel_ex does, paid
+       once for the rect instead of once per pixel; see its own comment)
+       and skipping those rows below leaves the loop doing exactly what
+       it always did for the corner rows, just not for rows that were
+       always going to end up flat `color` anyway. Measured on opening
+       Files (~820x385 logical, tools/checks/frametime-check.py): this
+       call's own share of a ~400ms open frame was ~120ms. */
+    if (ph > 2 * pr) window_fill_rect_phys(px0, py0 + pr, pw, ph - 2 * pr, color);
     for (int py = 0; py < ph; py++){
+        if (py >= pr && py < ph - pr) continue; /* the solid middle band, already filled above */
         for (int px = 0; px < pw; px++){
             /* distance from the nearest corner arc centre, or 0 if this
                pixel isn't in a corner region at all */
@@ -1899,6 +1916,7 @@ static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_ro
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
 static int wind_base_width = 0;
+
 static int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
     struct wp_row c;
@@ -1941,6 +1959,56 @@ static inline __attribute__((always_inline)) unsigned int gui_wallpaper_px(const
     }
     col = gui_wall_tint(col); /* v79/v81: same theme grade as gui_wallpaper_color, real per-pixel blit path */
     return col;
+}
+
+/* Issue #14 round two: the ~200ms left after PR #137's window-chrome fix
+   was every physical pixel of the desktop wallpaper (menubar to bottom,
+   about 1.9M pixels at 1920x1080) running through gui_wallpaper_px's
+   bilinear sample plus a daynight tint blend, per pixel, on every single
+   window open (gui_launch_from_dock -> gui_draw_desktop -> gui_draw_
+   wallpaper). The photo, scale and tint don't change between one present
+   and the next, so there's nothing to recompute: this caches the fully
+   sampled and tinted result once, keyed on physical size, and later
+   draws become a memcpy per row. Same tradeoff gui_dock_band_cache_build
+   already makes for the dock tray (this file's own comment on it): tint
+   is baked in at build time, not re-sampled live forever, so a real hour
+   boundary crossed mid-session won't repaint until wall_caches_drop runs
+   (theme switch) or the physical size changes. Windowed apps never use
+   this path (gui_app_windowed draws into a clipped viewport with its own
+   scale of the photo, not the desktop's), and window_phys_row itself
+   already refuses a raw pointer whenever a screen_band or viewport is
+   active, so the memcpy path only ever fires for the real desktop
+   compositing straight to fb/back. */
+static unsigned int *wall_full_cache = 0;
+static int wall_full_pw = 0, wall_full_ph = 0, wall_full_night = -1, wall_full_day = -1;
+static void gui_wall_full_cache_build(void){
+    int sc = (int)window_scale();
+    int pw = (int)window_width() * sc;
+    int top = GUI_MENUBAR_H * sc;
+    int ph = (int)window_height() * sc - top;
+    if (pw <= 0 || ph <= 0) return;
+    /* keyed on the tint too, so an hour boundary crossed mid-session repaints */
+    if (wall_full_cache && wall_full_pw == pw && wall_full_ph == ph
+        && wall_full_night == daynight_night_pct && wall_full_day == daynight_day_pct) return;
+    if (wall_full_cache) { kfree(wall_full_cache); wall_full_cache = 0; }
+    wall_full_pw = pw; wall_full_ph = ph;
+    wall_full_night = daynight_night_pct; wall_full_day = daynight_day_pct;
+    wall_full_cache = (unsigned int *)kmalloc((unsigned int)(pw * ph) * sizeof(unsigned int));
+    if (!wall_full_cache) return;
+    for (int py = 0; py < ph; py++){
+        struct wp_row c = gui_wallpaper_row(top + py, 0);
+        unsigned int *row = wall_full_cache + py * pw;
+        for (int px = 0; px < pw; px++)
+            row[px] = gui_daynight_tint(gui_wallpaper_px(&c, px));
+    }
+}
+/* Dropped alongside the dock band and wind caches (wall_caches_drop,
+   below): a theme switch or resolution change means the baked pixels are
+   stale, and a lazy rebuild on next use is cheap (this is a one-time
+   compositing cost, not a per-frame one). */
+static void gui_wall_full_cache_drop(void){
+    if (wall_full_cache) { kfree(wall_full_cache); wall_full_cache = 0; }
+    wall_full_pw = 0; wall_full_ph = 0;
 }
 static unsigned int gui_wind_cached_pixel(int px, int py){
     int sc = (int)window_scale(), top = WIND_TOP_ROW * sc;
@@ -2013,8 +2081,30 @@ static void gui_draw_wallpaper_rows_sway_ex(int y_from, int y_to, int sway, int 
             if (dst) window_damage(0, py, wind_base_width, 1);
             continue;
         }
-        struct wp_row c = gui_wallpaper_row(py, sway);
         int in_rows = (eh > 0 && py >= ey && py < ey + eh);
+        /* The cached full-desktop path: only for the real desktop (never
+           gui_app_windowed's own clipped viewport), never mid-exclusion
+           (sway is the only caller that ever passes a real exclude rect,
+           see gui_wall_full_cache_build's own comment), and only when
+           window_phys_row actually hands back a raw pointer (it refuses
+           one whenever a screen_band or viewport is active, e.g. the dock
+           band cache build or a windowed app -- those keep sampling
+           fresh, correctly, through the fallback below). */
+        if (!sway && !gui_app_windowed && !in_rows) {
+            gui_wall_full_cache_build();
+            int top = GUI_MENUBAR_H * sc;
+            int pw = (int)window_width() * sc;
+            if (wall_full_cache && wall_full_pw == pw && py >= top && py - top < wall_full_ph) {
+                unsigned int *dst = window_phys_row(py);
+                if (dst) {
+                    unsigned int *src = wall_full_cache + (py - top) * wall_full_pw;
+                    memcpy(dst, src, (unsigned int)pw * sizeof(unsigned int));
+                    window_damage(0, py, pw, 1);
+                    continue;
+                }
+            }
+        }
+        struct wp_row c = gui_wallpaper_row(py, sway);
         for (int px = 0; px < c.pw; px++){
             if (in_rows && px >= ex && px < ex + ew) continue;
             window_pixel_phys(px, py, gui_daynight_tint(gui_wallpaper_px(&c, px)));
@@ -3909,6 +3999,7 @@ static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int
 static void wall_caches_drop(void){
     if (wind_base) { kfree(wind_base); wind_base = 0; }
     dock_band_cache_top = -1;
+    gui_wall_full_cache_drop();
 }
 
 static void gui_draw_dock_tray(void){
