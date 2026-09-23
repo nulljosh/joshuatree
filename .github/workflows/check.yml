@@ -116,6 +116,19 @@ jobs:
       # pass/fail summary, and fails the job if any check failed.
       - name: Regression suite (all checks, full summary)
         run: SHARD=${{ matrix.shard }} SHARDS=4 ./tools/checks/ci-suite.sh
+      # A check that fails only on the runner is unreadable from the log
+      # alone. Keep what every check leaves in /tmp (serial logs, raw
+      # framebuffer dumps, PNGs) so the failure can be looked at, not guessed.
+      - name: Keep serial logs and screen dumps from a failed shard
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}-evidence
+          path: |
+            /tmp/jt-*
+            /tmp/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
   check:
     runs-on: ubuntu-24.04
