@@ -469,6 +469,16 @@ static void auth_login_screen(void) {
         window_clear(GUI_BG);
         gui_draw_app_titlebar("Joshua Tree");
         font_draw_string("Wrong username or password. Try again.", 20, 52, 0x00A33B3B, -1);
+        /* Real bug, found by tools/checks/auth-flow-check.py: drawing lands
+           in a back buffer (drivers/window.c) and only window_present()
+           ever copies it to the visible framebuffer, "at a real frame
+           boundary... about to wait for input" per that file's own header
+           comment. This branch had no such boundary of its own -- it fell
+           straight into sleep_ticks(), and the outer loop's next
+           window_clear() erased the error text before it was ever
+           presented, so a real person typing a wrong password saw the
+           screen pause and silently reset with no message at all. */
+        window_present();
         sleep_ticks(100); /* fixed 1-second throttle per failed attempt, see comment above auth_login_screen */
     }
 }
