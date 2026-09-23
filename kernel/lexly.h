@@ -44,7 +44,7 @@ static int lx_cur(void){ return (lx_round * 7) % LX_COUNT; } /* 7 is coprime wit
 /* Option slot -> deck index. The right answer sits in slot (round % 4); the
    other three are the next deck rows that are not the answer. */
 static int lx_option(int slot){
-    int right = lx_round % 4, cur = lx_cur();
+    int right = (lx_round * 3 + lx_cur()) % 4, cur = lx_cur();
     if (slot == right) return cur;
     int n = slot < right ? slot : slot - 1;
     return (cur + 3 + n * 5) % LX_COUNT == cur ? (cur + 1) % LX_COUNT : (cur + 3 + n * 5) % LX_COUNT;
@@ -54,7 +54,7 @@ static void lx_draw(void){
     gui_draw_app_titlebar("Lexly");
     font_draw_string("What is this Spanish word?", 20, 56, 0x0075726E, -1);
     font_draw_string(LX_DECK[lx_cur()].spanish, 20, 96, 0x001C1C1E, -1);
-    int right = lx_round % 4;
+    int right = (lx_round * 3 + lx_cur()) % 4;
     for (int s = 0; s < 4; s++) {
         int y = LX_OPT_Y0 + s * LX_OPT_H;
         unsigned int bg = 0x00F1EDE7;
