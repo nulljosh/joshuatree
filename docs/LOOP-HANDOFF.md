@@ -13,6 +13,8 @@ How the loop runs now:
 
 Next after the queue: QA gallery (1.0 list), then the Beta list top down (landing hero, dock polish, boot splash mark).
 
+Restart prompt (current): `/loop Drive joshuatree to a defensible 1.0.0 following docs/LOOP-HANDOFF.md: land the open PRs one at a time, then work the Beta list in docs/roadmap.md top down. One Haiku worker at a time, review output yourself from zoomed headless frames, never a visible QEMU window, every fix a PR, short pings.`
+
 # Handoff, 2026-09-23 about 00:55 UTC (cloud session, moving to desktop)
 
 ## Landed on main
@@ -40,8 +42,12 @@ Next after the queue: QA gallery (1.0 list), then the Beta list top down (landin
 - Joshua's standing rule: merge any PR once CI is green. Arm auto-merge (squash).
 - CodeRabbit: red and Major findings are bugs to fix; Minor ones get a one-line reply and ride the next push.
 
-## Restart prompt
+## Restart prompt (historical, use the current one at the top)
 Continue joshuatree from docs/LOOP-HANDOFF.md's top section: land #96/#87/#86, open the follow-up PR from docs/wip/, then work the old PR queue and Joshua's priorities. Main session manages, workers build in worktrees, review every screenshot and check yourself, auto-merge when CI is green, one-line TLDR per pass.
+
+---
+
+Everything below is history, kept for context. The current state and restart prompt are at the top.
 
 # Tonight's plan to 1.0.0 (written 2026-09-21, about 01:20)
 
