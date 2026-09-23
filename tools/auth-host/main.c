@@ -46,6 +46,13 @@ int vfs_replace_file(const char *name, const void *data, unsigned int len) {
    a way that requires real behavior. */
 void window_clear(unsigned int color) { (void)color; }
 void window_rect(int x, int y, int w, int h, unsigned int color) { (void)x; (void)y; (void)w; (void)h; (void)color; }
+/* v0.77.x auth-flow fix: the login-rejection screen now calls this (see
+   auth.h) so its message actually reaches the visible framebuffer before
+   sleep_ticks -- a real in-kernel bug tools/checks/auth-flow-check.py
+   found, drivers/window.c's own header comment already required this
+   call at exactly that kind of frame boundary. Declared here so this
+   host harness keeps compiling. */
+void window_present(void) {}
 unsigned int window_width(void) { return 960; }
 unsigned int window_height(void) { return 540; }
 void font_draw_string(const char *s, int x, int y, unsigned int fg, int bg) { (void)s; (void)x; (void)y; (void)fg; (void)bg; }

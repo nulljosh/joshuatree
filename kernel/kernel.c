@@ -5354,6 +5354,23 @@ static void gui_launch_settings(void){
                already is, not get silently overridden by a stale cursor
                position that has nothing to do with the keypress. */
             if (k == KEY_CLICK) {
+                /* Real bug, found by tools/checks/auth-flow-check.py driving a real
+                   synthetic pointer click (the exact gap walldemo-regression-check.py's
+                   own comment already flagged as unconfirmed): app_cursor_x/y is only
+                   kept live by gui_app_mouse_tick(), which is gated on gui_app_windowed
+                   and therefore only ticks for apps opened through gui_launch_from_dock.
+                   gui_launch_settings() is entered straight from the Apple menu
+                   (gui_menu_run_item), never through that wrapper, so gui_app_windowed
+                   stays 0 the whole time Settings is open and app_cursor_x/y is never
+                   seeded or updated -- every click here hit-tested wherever the cursor
+                   happened to be frozen at (0,0 if no windowed app had run yet this
+                   boot), so settings_row_at() always missed and every click silently
+                   fell through to acting on whatever `sel` already was, exactly the
+                   pre-fix settingsclick bug this same block's own comment describes,
+                   just reachable a different way than that fix covered. Query the real
+                   position directly at the moment of the click instead of trusting the
+                   stale global. */
+                mouse_get_absolute(&app_cursor_x, &app_cursor_y, (int)window_width(), (int)window_height());
                 int hit = settings_row_at(app_cursor_x, app_cursor_y, (int)window_width());
                 if (hit >= 0) sel = hit;
             }
@@ -5432,6 +5449,12 @@ static void gui_launch_settings(void){
                                 int ok = !strcmp(newbuf, confirmbuf) && auth_change_password(auth_current_user, oldbuf, newbuf);
                                 font_draw_string(ok ? "Password changed." : "That didn't work -- wrong current password or mismatch.",
                                                   20, (int)window_height() - 48, ok ? 0x002F7B4F : 0x00A33B3B, -1);
+                                /* Same real bug tools/checks/auth-flow-check.py found in
+                                   kernel/auth.h's login rejection: drawing lands in a back
+                                   buffer and only window_present() ever flips it visible, and
+                                   this status line had no frame boundary of its own before
+                                   sleep_ticks -- the next redraw erased it unseen. */
+                                window_present();
                                 sleep_ticks(60);
                             }
                             memset(newbuf, 0, sizeof(newbuf));
@@ -5469,6 +5492,10 @@ static void gui_launch_settings(void){
                         }
                         font_draw_string(ok ? "Account created." : "Couldn't create that account (name taken, empty, or table full).",
                                           20, (int)window_height() - 48, ok ? 0x002F7B4F : 0x00A33B3B, -1);
+                        /* Same missing-present bug as the Change password status line
+                           above and kernel/auth.h's login rejection: without this call
+                           the message never reaches the visible framebuffer. */
+                        window_present();
                         sleep_ticks(60);
                     }
                     memset(pbuf, 0, sizeof(pbuf));
@@ -6757,6 +6784,80 @@ static void gui_run(void){
     if (dock_band_frame) { kfree(dock_band_frame); dock_band_frame = 0; }
     clear();
     puts("back in text mode\n");
+}
+
+/* Draw a readable panic screen on the GUI when a ring-0 exception occurs.
+   Called from kernel/idt.c's exception handler. Displays the exception name,
+   fault address (for page faults), EIP, kernel version, and system message. */
+void gui_panic_screen(const char *name, unsigned int fault_addr, unsigned int eip) {
+    /* Check if GUI is active by seeing if window dimensions are non-zero */
+    if (window_width() == 0 || window_height() == 0) return;
+
+    /* Whole screen, not whatever app viewport was current when it faulted
+       (the first version painted inside the Terminal's window). */
+    window_clear_viewport();
+    window_clear(0x00FAF8F6);
+
+    int h = (int)window_height();
+    int text_color = 0x001C1C1E;  /* dark text */
+
+    /* Title: exception name at 1/4 down the screen */
+    font_draw_string(name, 32, h / 4, text_color, -1);
+
+    /* Exception details */
+    int y = h / 4 + 32;
+
+    /* For page faults, show the fault address */
+    if (fault_addr != 0) {
+        char buf[80];
+        int i = 0;
+        const char *prefix = "Page fault at: 0x";
+        while (*prefix) buf[i++] = *prefix++;
+        /* Inline hex conversion */
+        unsigned int val = fault_addr;
+        for (int j = 0; j < 8; j++) {
+            unsigned int nib = (val >> (28 - j * 4)) & 0xF;
+            buf[i++] = nib < 10 ? '0' + nib : 'A' + (nib - 10);
+        }
+        buf[i] = '\0';
+        font_draw_string(buf, 32, y, text_color, -1);
+        y += 24;
+    }
+
+    /* EIP (instruction pointer) */
+    {
+        char buf[80];
+        int i = 0;
+        const char *prefix = "EIP: 0x";
+        while (*prefix) buf[i++] = *prefix++;
+        unsigned int val = eip;
+        for (int j = 0; j < 8; j++) {
+            unsigned int nib = (val >> (28 - j * 4)) & 0xF;
+            buf[i++] = nib < 10 ? '0' + nib : 'A' + (nib - 10);
+        }
+        buf[i] = '\0';
+        font_draw_string(buf, 32, y, text_color, -1);
+    }
+
+    /* Kernel version */
+    {
+        char buf[80];
+        int i = 0;
+        const char *prefix = "Joshua Tree ";
+        while (*prefix) buf[i++] = *prefix++;
+        const char *ver = JT_VERSION_STR;
+        while (*ver) buf[i++] = *ver++;
+        buf[i] = '\0';
+        font_draw_string(buf, 32, y + 32, text_color, -1);
+    }
+
+    /* Main message lines */
+    int message_y = h / 2 + 60;
+    font_draw_string("Joshua Tree stopped to protect your files.", 32, message_y, text_color, -1);
+    font_draw_string("Hold the power button to restart.", 32, message_y + 32, text_color, -1);
+
+    /* Display the panic screen */
+    window_present();
 }
 
 /* ---- usertest: the ring-3 reference program, end to end -------------------

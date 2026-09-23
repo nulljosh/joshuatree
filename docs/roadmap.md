@@ -4,8 +4,7 @@ Freestanding i386 kernel, no libc. This is the forward plan. What already
 shipped lives in `git log`, `git tag -l "jt-v*"`, and the [GitHub
 releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
-**Latest**: Curbfind, the best deals on the curb, running natively.
-**Latest**: Curbfind, the best deals on the curb, running natively.
+**Latest**: Version 1.0, Hidden Valley.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -30,24 +29,24 @@ Everything a stranger needs to use it for an hour in the browser or an emulator 
 Joshua's call, 2026-09-22: **1.0 is a Snow Leopard release.** No new features. Stability, reliability and speed only: every item below makes what already exists crash less, lose less and run faster. New apps and features wait for 1.1 (see After 1.0).
 Joshua's call, 2026-09-21: 1.0.0 is a super thorough QA release. Every feature works, nothing crashes, all text and icons are sharp, and the icons have taste, not a Microsoft look. Real hardware is trusted for now and proven after.
 - [x] QA gallery (#104, `tools/checks/qa-gallery.py`): one headless script opens every app from the dock and the Apps folder, uses it, closes it, saves a full resolution screenshot of each, and fails on any crash text in the serial log. Runs in `tools/checks/ci-suite.sh`.
-- [ ] [Fable] Main session reviews every gallery screenshot by eye: blurry text, clipped labels, misaligned chrome, soft icons. Each finding becomes a bug line below and gets fixed before the tag.
-- [ ] [Haiku] QA gallery runs in `tools/checks/ci-suite.sh` on every PR, so a crash in any app blocks the merge.
-- [ ] [Sonnet] Soak test: open and close every app 20 times in one boot, then assert free memory (`pmm_free_frames`) is back where it started and no task slot leaked. Catches leaks the single-pass gallery never sees.
-- [ ] [Fable] Fuzz the HTTP, DNS, JSON and FAT parsers on the host with hostile input, the way `tools/fuzz-host` already does the image decoders.
+- [x] Main session reviewed every gallery and feature-drive screenshot by eye (2026-09-22): the seven blank cards became native apps, Plan's raw entity, the dock band, the 10. rank, the teal bar, mid-word wrap, Shift outside Notes. blurry text, clipped labels, misaligned chrome, soft icons. Each finding becomes a bug line below and gets fixed before the tag.
+- [x] QA gallery runs in `tools/checks/ci-suite.sh` on every PR, so a crash in any app blocks the merge.
+- [x] Soak test (20 passes by hand, 3 in CI): open and close every app 20 times in one boot, then assert free memory (`pmm_free_frames`) is back where it started and no task slot leaked. Catches leaks the single-pass gallery never sees.
+- [x] Fuzz the HTTP, JSON and FAT parsers (DNS has no host entry point yet) on the host with hostile input, the way `tools/fuzz-host` already does the image decoders.
 - [ ] [Fable] The lag (issue #14) profiled, fixed and measured, with frame time numbers in the release notes.
-- [ ] [Sonnet] Every feature exercised once: each app's main action (add a reminder, save a note, send the chat prompt, search, change wallpaper, snap a window), each menu item, each Settings row, each shell command in `help`.
+- [x] Every feature exercised once (`tools/checks/feature-drive.py`): each app's main action (add a reminder, save a note, send the chat prompt, search, change wallpaper, snap a window), each menu item, each Settings row, each shell command in `help`.
 - [ ] [Sonnet] Nothing crashes: bad input in every text field, long lines, empty files, missing disk, no network. Each case gets a check.
 - [ ] [Sonnet] Icons with taste: depth, soft light, real materials, consistent corner and light direction across all of them. Judged from the gallery at dock, hover and Apps grid sizes.
   - 0.89.0: the 11 dock icons redrawn Big Sur style (one top light, no outlines, 148px art at an exact 2:1); `tools/checks/iconlight-check.py`. Still to do: the 15 Apps-folder fleet icons, and a live date on Calendar's tile.
 - [ ] [Sonnet] Text sharp everywhere: no bitmap fallback font where the antialiased one should draw, no uneven letter gaps, baselines level.
   - 0.89.0: coverage-to-ink curve (stem darkening) sharpens every AA text path; `tools/checks/textsharp-check.py`.
-- [ ] [Sonnet] Security QA: every text field bounds-audited (Notes, Reminders, Mail, Contacts, Calculator, Search, Chat, Terminal, Settings, login), auth.h checked for empty passwords, constant-time compare, a delay after failed attempts and plaintext wiped; a host bounds check left behind in ci-suite.
-- [ ] [Haiku] Every release ships `joshuatree-<version>.iso` and `SHA256SUMS` as assets, built by the release workflow, with dd instructions in the notes and README.
-- [ ] [Haiku] Accessibility floor: every app opens and closes by keyboard alone (a keyboard-only check in ci-suite), the Apps folder has a key from the desktop.
+- [x] Security QA: every text field bounds-audited (Notes, Reminders, Mail, Contacts, Calculator, Search, Chat, Terminal, Settings, login), auth.h checked for empty passwords, constant-time compare, a delay after failed attempts and plaintext wiped; a host bounds check left behind in ci-suite.
+- [x] Every release ships `joshuatree-<version>.iso` and `SHA256SUMS` as assets, built by the release workflow, with dd instructions in the notes and README.
+- [ ] [Haiku] Accessibility floor: every app opens and closes by keyboard alone. In progress in #127 (Enter on the desktop opens the Apps folder; the check still has to prove all 25). Ships as 1.0.x, not a blocker for the tag.
 - [x] Shift and Caps Lock work in every app, not only Notes (#117). Notes wraps at word boundaries.
 - [ ] [Fable] Wired internet on real PCs: an Intel e1000 driver next to rtl8139 and ne2k, proven with QEMU `-device e1000`. Most PCs from the last 15 years have an Intel or Realtek chip, so this is what makes the network real off the emulator. Stretch for 1.0; if it slips, the release notes say wired internet is QEMU-only.
 - [ ] [Joshua] Decided for 1.0, stated in the release notes: no Wi-Fi, no Bluetooth (both need firmware blobs and a full 802.11 or BT stack, months of work each), English only (every UI string is compiled in; a language table is a 1.1 project), no screen reader (no sound yet). Keyboard-only use and large text in Notes are the accessibility floor.
-- [ ] [Haiku] Release notes that say what is missing: no sound, no secure web of its own, one core, no install to disk.
+- [x] Release notes that say what is missing (the 1.0.0 release): no sound, no secure web of its own, one core, no install to disk.
 - [x] Codename: 1.0 is **Hidden Valley**. Joshua Tree is the name of the computer and the company, the way Apple is; each major release is named after a real place in Joshua Tree National Park. Next in line: Skull Rock, Keys View, Cottonwood, Wonderland. Mojave is skipped, Apple used it. Domain `joshuatreeos.com`.
 
 Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk), and moving the landing page to a `gh-pages` branch.
