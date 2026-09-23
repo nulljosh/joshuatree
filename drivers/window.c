@@ -49,6 +49,12 @@ static int present_logged = 0;
    Callers compare it for change, never for an absolute value. */
 volatile unsigned int window_present_count = 1;
 
+/* Soak-check leak detection: free frames at last window_present(). */
+extern unsigned int pmm_free_frames(void);
+extern int task_used(int id);
+volatile unsigned int pmm_free_frames_last = 0;
+volatile unsigned int task_used_last = 0;
+
 /* v0.78.x: per-row damage spans, not one screen-wide bounding box.
    The first cut tracked a single union bbox, and a real measurement of a
    dock hover showed why that was wrong: 91 of 112 presents covered rows
@@ -231,6 +237,13 @@ void window_present(void) {
     }
     dmg_y0 = DMG_EMPTY; dmg_y1 = 0;
     window_present_count++;
+    /* Soak-check leak detection: snapshot free frames and used task count. */
+    pmm_free_frames_last = pmm_free_frames();
+    unsigned int task_count = 0;
+    for (int i = 0; i < 6; i++) { /* TASK_SLOTS from kernel/task.h */
+        if (task_used(i)) task_count++;
+    }
+    task_used_last = task_count;
     /* Discriminating marker for tools/checks/backbuffer-check.sh. Capped:
        this fires at every frame boundary, so left uncapped it writes eight
        bytes out the serial port forever and buries every other check's own
