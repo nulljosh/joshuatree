@@ -102,8 +102,16 @@ class Machine:
 
     def type(self, text):
         punctuation = {' ': 'spc', '\n': 'ret', '\t': 'tab', '.': 'dot', ',': 'comma', '!': 'shift-1', '?': 'shift-slash'}
+        # Each key waits for the buffer to take it before the next goes out.
+        # A burst at a fixed pace dropped trailing keys on a slow CI runner
+        # ('Beautiful typ'); a person watching the screen never outruns it.
         for character in text:
+            before = self.integer('editor_length')
             self.key(punctuation.get(character, 'shift-' + character.lower() if character.isupper() else character))
+            for _ in range(50):
+                if self.integer('editor_length') != before:
+                    break
+                time.sleep(0.05)
 
     def memory(self, symbol, count):
         result = self.monitor(f'xp /{count}xb 0x{symbols[symbol]:x}')
@@ -120,7 +128,7 @@ class Machine:
         # assertions here, each passing locally every time. One shared
         # poll instead of patching each of the 8 call sites separately.
         value = None
-        for _ in range(20):
+        for _ in range(50):
             value = self.integer(symbol)
             if predicate(value):
                 return value
@@ -141,7 +149,7 @@ class Machine:
         # through.
         target_len = len(expected.encode())
         actual = None
-        for attempt in range(20):
+        for attempt in range(50):
             length = self.integer('editor_length')
             if length == target_len:
                 actual = self.memory('editor_buffer', length).decode()
