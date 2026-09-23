@@ -133,6 +133,10 @@ shell's own `cat` command and `gui_launch_html` already use.
 
 **Fieldbook** (`kernel/fieldbook.h`, v0.95.0), every field of science and math explained plainly, native: left side shows ranked list (1-12) with selected row highlighted, up/down or click to select; right side shows field name, studies line, and 2-3 sentence explanation wrapped to fit. Replaces the one-line HTML card the dock tile used to open.
 
+**Fieldbook** (`kernel/fieldbook.h`), every field of science and math explained plainly, native: left side shows ranked list (1-12) with selected row highlighted, up/down or click to select; right side shows field name, studies line, and 2-3 sentence explanation wrapped to fit. Replaces the one-line HTML card the dock tile used to open.
+
+**Sparkjar** (`kernel/sparkjar.h`), a jar of ideas people post and vote on, native: left side shows list (1-10 ideas) sorted by votes descending, selected row highlighted, vote count displayed right-aligned in each row; up/down or click to select; u key upvotes the selected idea, re-sorts, and keeps it selected; right side shows idea name, one-line pitch, and 3-step build plan wrapped to fit. Vote counts are session-only. Replaces the one-line HTML card the dock tile used to open.
+
 **Portfolio** (`kernel/portfolio.h`, v0.87.0), Apps-folder-only like
 Search/Contacts/Calculator/Stocks. A static, compiled-in catalog of the
 whole heyitsmejosh.com fleet (35 apps across Life/Read/Make/Play/Dev),
