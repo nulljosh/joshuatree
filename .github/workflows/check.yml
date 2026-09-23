@@ -17,10 +17,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A PR that only touches prose (any .md except docs/roadmap.md, which the
+  # landing checks read) skips the QEMU suite; `check` still reports green.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: diff
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo code=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          echo "$files"
+          if echo "$files" | grep -qvE '\.md$' || echo "$files" | grep -qx 'docs/roadmap.md'; then
+            echo code=true >> "$GITHUB_OUTPUT"
+          else
+            echo code=false >> "$GITHUB_OUTPUT"
+          fi
+
   # The suite runs as four parallel shards (ci-suite.sh SHARD/SHARDS),
   # about a quarter of the wall time each. `check` below stays the one
   # required status and passes only when every shard did.
   suite:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     # Pinned, not `ubuntu-latest`. `latest` silently rolls to the next LTS
     # image, which swaps the clang/qemu/PIL versions underneath every check
     # in this file at a moment GitHub picks, not one this repo picks -- the
@@ -97,12 +121,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     if: always()
-    needs: [suite]
+    needs: [changes, suite]
     steps:
       - name: Every suite shard passed
         run: |
-          echo "suite: ${{ needs.suite.result }}"
-          [ "${{ needs.suite.result }}" = "success" ]
+          echo "changes: ${{ needs.changes.result }} code=${{ needs.changes.outputs.code }}"
+          echo "suite:   ${{ needs.suite.result }}"
+          [ "${{ needs.changes.result }}" = "success" ] || exit 1
+          [ "${{ needs.suite.result }}" = "success" ] || { [ "${{ needs.suite.result }}" = "skipped" ] && [ "${{ needs.changes.outputs.code }}" = "false" ]; }
 
   # CLAUDE.md 4d's own candidate, "a second job for check-refs.sh": pure
   # drift insurance, no clang/qemu/PIL toolchain needed at all, so it runs
