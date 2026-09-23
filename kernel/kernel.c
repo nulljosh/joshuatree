@@ -3907,11 +3907,17 @@ static void gui_draw_dock_tray(void){
        solid colors, same technique every AA edge in this file already
        uses. Inset a little past the tray's own rounded corners so it
        reads as a shadow, not a second, darker rectangle. */
-    for (int row = 0; row < 10; row++){
-        int sy = y0 + dock_h + row;
-        unsigned int wall = gui_wallpaper_color(sy);
-        unsigned int dark = gui_blend(wall, 0x00000000);
-        window_rect(dock_x + 6, sy, dock_w - 12, 1, gui_lerp(dark, wall, row, 10));
+    /* Per physical pixel against the real photo. gui_wallpaper_color is one
+       colour per row (the centre column), fine for the old gradient but on
+       the photo it drew a flat striped bar under the tray. */
+    int sc = (int)window_scale();
+    int sy0 = (y0 + dock_h) * sc, rows = 10 * sc;
+    int sx0 = (dock_x + 6) * sc, sx1 = (dock_x + dock_w - 6) * sc;
+    for (int row = 0; row < rows; row++){
+        for (int px = sx0; px < sx1; px++){
+            unsigned int wall = gui_wallpaper_sample(px, sy0 + row, 0);
+            window_pixel_phys(px, sy0 + row, gui_lerp(gui_blend(wall, 0x00000000), wall, row, rows));
+        }
     }
 
     /* gui_rounded_rect_on_wallpaper, not gui_rounded_rect: the tray's top

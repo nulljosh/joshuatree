@@ -80,6 +80,7 @@ retry|Calendar Day, Week, Month and Year views|python3 ./tools/checks/calviews-c
 retry|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
 retry|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
 retry|Dock icon lighting (one soft top light, top highlight, no dark outline)|python3 ./tools/checks/iconlight-check.py
+retry|Shadow under the dock darkens the photo, no flat bands|python3 ./tools/checks/dockband-check.py
 retry|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py
 retry|Dock tray corner AA (real coverage blend, not binary)|python3 ./tools/checks/traycorner-check.py
 retry|Portfolio catalog opens, lists the fleet, and the list scrolls|python3 ./tools/checks/portfolio-check.py
