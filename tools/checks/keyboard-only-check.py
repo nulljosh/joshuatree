@@ -19,7 +19,9 @@ DUMP = "/tmp/jt-keyboard-only.raw"
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = 4631
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-CLOSE_X, CLOSE_Y = 94, 56
+# Close button coordinates for app windows opened via keyboard (top-left corner)
+# Scanned from actual framebuffer: red pixels at logical ~26, 15
+CLOSE_X, CLOSE_Y = 26, 15
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 
 # App names from kernel/kernel.c GUI_LABELS (indices 0-24, then Apps folder, then Trash)
