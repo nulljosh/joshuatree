@@ -3482,7 +3482,8 @@ static int icon_cache_variant[GUI_APP_COUNT][ICON_CACHE_SLOTS]; /* v45.2: anythi
 /* The upscale half. A box filter degenerates to nearest-neighbour the
    moment the destination is bigger than the source (every destination pixel
    covers less than one source pixel), which is exactly the blocky staircase
-   this whole pass exists to remove, and there are real call sites past 128:
+   this whole pass exists to remove, and there are real call sites past the
+   stored ICON_ART_SIZE:
    the Weather app's own 100-logical card (200 physical), and the dock itself
    once dock_scale_pct is turned up past 20 in Settings. Bilinear there, on
    premultiplied colour so the transparent border cannot bleed into an edge,
@@ -3521,35 +3522,52 @@ static void gui_icon_art_bilinear(const unsigned char *art, unsigned int *out, i
     }
 }
 
+/* Exact area filter: every destination pixel is the coverage-weighted mean
+   of the source pixels it overlaps, fractional edges included. The old
+   loop snapped each block to whole source pixels (py*S/pw .. (py+1)*S/pw),
+   which at the old 128 -> 74 dock ratio averaged an uneven mix of 1 and 2
+   source rows/columns per pixel, so neighbouring edge pixels came out
+   alternately crisp and soft and every straight edge picked up a faint
+   beat. Weights here are in units where a destination pixel spans S
+   (ICON_ART_SIZE) and a source pixel spans pw, so they are exact integers
+   and each axis sums to S. At the resting dock (148 -> 74) this reduces
+   to an exact 2x2 box. Premultiplied, so the transparent border contributes
+   no colour; the per-pixel weight product is at most S*S = 21904 and the
+   premultiplied channel at most 255, so every sum fits in 32 bits. */
 static void gui_icon_art_scale(const unsigned char *art, unsigned int *out, int pw, unsigned int under){
     if (pw > ICON_ART_SIZE) { gui_icon_art_bilinear(art, out, pw, under); return; }
     unsigned int ur = (under >> 16) & 0xFF, ug = (under >> 8) & 0xFF, ub = under & 0xFF;
+    const int S = ICON_ART_SIZE;
+    const unsigned int total = (unsigned int)(S * S), half = total / 2;
     for (int py = 0; py < pw; py++){
-        int sy0 = py * ICON_ART_SIZE / pw, sy1 = (py + 1) * ICON_ART_SIZE / pw;
-        if (sy1 <= sy0) sy1 = sy0 + 1;
+        int y0 = py * S, y1 = y0 + S;                  /* destination row, in source-pixel = pw units */
         for (int px = 0; px < pw; px++){
-            int sx0 = px * ICON_ART_SIZE / pw, sx1 = (px + 1) * ICON_ART_SIZE / pw;
-            if (sx1 <= sx0) sx1 = sx0 + 1;
-            unsigned int rs = 0, gs = 0, bs = 0, as = 0, n = 0;
-            for (int sy = sy0; sy < sy1; sy++){
-                const unsigned char *row = art + ((unsigned int)sy * ICON_ART_SIZE + (unsigned int)sx0) * 4;
-                for (int sx = sx0; sx < sx1; sx++, row += 4){
-                    unsigned int a = row[3];
-                    rs += row[0] * a; gs += row[1] * a; bs += row[2] * a; as += a; n++;
+            int x0 = px * S, x1 = x0 + S;
+            unsigned int rs = 0, gs = 0, bs = 0, as = 0;
+            for (int sy = y0 / pw; sy * pw < y1; sy++){
+                int wy = (y1 < (sy + 1) * pw ? y1 : (sy + 1) * pw) - (y0 > sy * pw ? y0 : sy * pw);
+                const unsigned char *row = art + ((unsigned int)sy * (unsigned int)S) * 4;
+                for (int sx = x0 / pw; sx * pw < x1; sx++){
+                    int wx = (x1 < (sx + 1) * pw ? x1 : (sx + 1) * pw) - (x0 > sx * pw ? x0 : sx * pw);
+                    const unsigned char *p = row + (unsigned int)sx * 4;
+                    unsigned int w = (unsigned int)(wx * wy), a = p[3];
+                    if (!a) continue;
+                    rs += w * ((p[0] * a + 127) / 255); gs += w * ((p[1] * a + 127) / 255); bs += w * ((p[2] * a + 127) / 255);
+                    as += w * a;
                 }
             }
-            unsigned int a = (as + n / 2) / n;              /* mean coverage over the source block */
-            unsigned int r, g, b;
-            if (as) { r = (rs + as / 2) / as; g = (gs + as / 2) / as; b = (bs + as / 2) / as; }
-            else    { r = ur; g = ug; b = ub; }
-            /* source-over onto the surface colour, 0..255 alpha, rounded */
-            r = (r * a + ur * (255 - a) + 127) / 255;
-            g = (g * a + ug * (255 - a) + 127) / 255;
-            b = (b * a + ub * (255 - a) + 127) / 255;
+            unsigned int a = (as + half) / total;
+            unsigned int r = (rs + half) / total, g = (gs + half) / total, b = (bs + half) / total;
+            /* premultiplied source-over onto the surface colour, rounded */
+            r += (ur * (255 - a) + 127) / 255; g += (ug * (255 - a) + 127) / 255; b += (ub * (255 - a) + 127) / 255;
+            if (r > 255) r = 255;
+            if (g > 255) g = 255;
+            if (b > 255) b = 255;
             out[py * pw + px] = (r << 16) | (g << 8) | b;
         }
     }
 }
+
 
 static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsigned int under){
     int variant = (icon == GUI_TRASH) ? (trash_count() > 0) : 0;
@@ -4189,6 +4207,46 @@ static void gui_launch_files(void){ gui_draw_files_content(); gui_wait_close(); 
    Calendar year view draws its mini-month digits with it. */
 static int wx_text(const char *s, int lx, int ly, int size, int bold, int mul, unsigned int fg);
 static int wx_text_lw(const char *s, int size, int bold, int mul);
+/* Text ink curve, shared by every coverage-glyph path (gui_aa_char,
+   wx_text, the Notes editor's editor_draw_glyph). Owner feedback on the
+   AA text: "A-, sharpen them up a tad". Root cause of the softness: the
+   DejaVu coverage bitmaps (FreeType via PIL, tools/gen/gen_editor_fonts.py)
+   were blended as raw linear coverage in sRGB. A 24px vertical stem is
+   ~2.2 physical px, e.g. 'l' rasterises as 188,255,108, so on a light
+   surface only one column reaches full ink and the two flanking columns
+   read as mid grey: the stem looks thin and fuzzy rather than inked.
+   macOS gets its dense look from stem darkening plus a steep coverage
+   curve; this does the same thing with a lookup, no layout change:
+     dark on light:  a' = S(1 - (1-a)^1.3), S(x) = 128 + 1.2(x-128), clamped
+     light on dark:  a' = S(a) only
+   The first adds a little weight to thin dark stems so their cores hit
+   full ink (188 -> 226, 108 -> 130); the second only steepens edges, so
+   light-on-dark text (dock labels, dark chrome), which linear sRGB
+   blending already makes look heavier, does not bloat. Both still pass
+   through a smooth ramp of intermediate values: edges stay antialiased,
+   just a shorter ramp. Faint fringes below ~8% coverage drop to zero,
+   which is most of the visible "haze" around each glyph. */
+static const unsigned char text_ink_dark[256] = {
+    0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,4,5,7,8,10,11,13,14,16,17,19,20,22,
+    23,25,26,28,29,31,32,34,35,37,38,40,41,43,44,46,47,49,50,51,53,54,56,57,59,60,62,63,64,66,67,69,
+    70,72,73,75,76,77,79,80,82,83,84,86,87,89,90,91,93,94,96,97,98,100,101,103,104,105,107,108,109,111,112,113,
+    115,116,118,119,120,122,123,124,126,127,128,130,131,132,134,135,136,137,139,140,141,143,144,145,147,148,149,150,152,153,154,155,
+    157,158,159,161,162,163,164,166,167,168,169,170,172,173,174,175,177,178,179,180,181,183,184,185,186,187,189,190,191,192,193,194,
+    196,197,198,199,200,201,203,204,205,206,207,208,209,210,211,213,214,215,216,217,218,219,220,221,222,223,224,226,227,228,229,230,
+    231,232,233,234,235,236,237,238,239,240,241,242,243,244,245,245,246,247,248,249,250,251,252,253,254,255,255,255,255,255,255,255,
+    255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+};
+static int text_luma(unsigned int c){ return (int)(((c >> 16) & 0xFF) * 77 + ((c >> 8) & 0xFF) * 150 + (c & 0xFF) * 29) >> 8; }
+/* Coverage a (0..255) of a glyph pixel in colour fg over destination
+   colour dst -> the alpha to actually blend with. */
+static int text_ink(int a, unsigned int fg, unsigned int dst){
+    if (a <= 0) return 0;
+    if (a >= 255) return 255;
+    if (text_luma(fg) <= text_luma(dst)) return text_ink_dark[a];
+    a = 128 + (a - 128) * 6 / 5;
+    return a < 0 ? 0 : a > 255 ? 255 : a;
+}
+
 #include "gui_prompt.h"
 #include "auth.h"
 #include "editor.h"
@@ -4246,6 +4304,8 @@ static void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg
             int x = ox + col, y = oy + row;
             if (x < px || x >= px + cell) continue; /* keep inside the cell so neighbours never overdraw each other */
             unsigned int d = window_get_pixel_phys(x, y);
+            a = text_ink(a, fg, d);
+            if (!a) continue;
             unsigned int r = (((fg >> 16) & 0xFF) * a + ((d >> 16) & 0xFF) * (255 - a)) / 255;
             unsigned int gg = (((fg >> 8) & 0xFF) * a + ((d >> 8) & 0xFF) * (255 - a)) / 255;
             unsigned int b = ((fg & 0xFF) * a + (d & 0xFF) * (255 - a)) / 255;
@@ -4351,7 +4411,10 @@ static int wx_text(const char *s, int lx, int ly, int size, int bold, int mul, u
         const unsigned char *src = &editor_pixels[g->offset];
         int ox = px + g->left * mul, oy = py + (g->top - WX_CAPTOP[size]) * mul;
         if (mul == 1) {
-            for (int r = 0; r < g->height; r++) for (int q = 0; q < g->width; q++) wx_blend(ox + q, oy + r, fg, src[r * g->width + q]);
+            for (int r = 0; r < g->height; r++) for (int q = 0; q < g->width; q++) {
+                int a = src[r * g->width + q];
+                if (a) wx_blend(ox + q, oy + r, fg, text_ink(a, fg, window_get_pixel_phys(ox + q, oy + r)));
+            }
         } else {
             for (int dy = -mul; dy < (g->height + 1) * mul; dy++) for (int dx = -mul; dx < (g->width + 1) * mul; dx++) {
                 int u = (dx * 256 + 128) / mul - 128, v = (dy * 256 + 128) / mul - 128; /* source coords, 24.8 */

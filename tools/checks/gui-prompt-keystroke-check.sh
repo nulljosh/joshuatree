@@ -215,8 +215,8 @@ key("ret")
 for attempt in range(2):
     deadline = time.time() + 8
     while prompt_count() == opened_at and time.time() < deadline: time.sleep(0.3)
-    if prompt_count() > opened_at: break
-    key("ret")
+    if prompt_count() > opened_at or attempt: break
+    key("ret")  # exactly one retry
 time.sleep(0.5)
 
 before = prompt_count()
