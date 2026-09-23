@@ -1504,10 +1504,10 @@ if (typeof document !== "undefined") (function () {
   // and boots with Joshua's own apps on the dock. The generic kiosk tour is
   // the wrong demo there, so tourLoop runs PORTFOLIO_TOUR instead, four idle seconds in.
   var PORTFOLIO_MODE = /[?&]portfolio\b/.test(location.search);
-  var PORTFOLIO_TOUR = ['Portfolio', 'Epiphany', 'Curbfind', 'Bookrank', 'Lexly', 'Sparkjar', 'Quotes', 'Keyrate', 'Toroid']
+  var PORTFOLIO_TOUR = ['Epiphany', 'Curbfind', 'Bookrank', 'Lexly', 'Sparkjar', 'Quotes', 'Keyrate', 'Toroid']
     // Portfolio, Epiphany and Keyrate are full apps and get the full dwell. The rest are still
     // one-line cards in the kernel, so they get a short beat instead of seven seconds of blank window.
-    .map(function (name, i) { return { name: name, slot: i + 1, script: [], dwell: /^(Portfolio|Epiphany|Keyrate)$/.test(name) ? 0 : 3000 }; });
+    .map(function (name, i) { return { name: name, slot: i + 2, script: [], dwell: /^(Epiphany|Keyrate|Quotes|Toroid)$/.test(name) ? 0 : 3000 }; }); // slot 1 is the Portfolio list, the show opens the apps themselves, never the list
   // Boot takes a few seconds; the tour waits for graphical mode plus a
   // beat, and never starts at all once the visitor has focused. Also respects
   // prefers-reduced-motion: autoplay motion should not start if the visitor

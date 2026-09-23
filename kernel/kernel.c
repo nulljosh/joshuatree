@@ -2845,7 +2845,7 @@ static void gui_draw_menubar(void){
         window_rect(0, row, (int)window_width(), 1, gui_lerp(gui_wallpaper_color(row), 0x00FFFFFF, 5, 10));
     window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
     gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2, 1, 0x00FFFFFF, 0x00000000); /* v0.76.47: menu bar is semi-translucent light chrome, direct correction -- black reads here, not white */
-    font_draw_string("Joshua Tree", 32, 7, 0x001C1C1E, -1);
+    font_draw_string(portfolio_dock ? "Joshua Trommel" : "Joshua Tree", 32, 7, 0x001C1C1E, -1); /* portfolio mode is his site, so the corner carries his name */
 
     static const char *WD[7] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
     static const char *MO[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
@@ -5454,6 +5454,8 @@ static void gui_launch_settings(void){
 }
 
 #include "stocks.h"
+#include "toroid.h"
+#include "quotes.h"
 #include "epiphany.h"
 #include "activity.h"
 
@@ -5471,10 +5473,10 @@ static void gui_launch(int icon){
     else if (icon == 8) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
     else if (icon == 9) gui_launch_keyrate();
     else if (icon == 10) gui_launch_html("Bookrank", app_bookrank_html, app_bookrank_len);
-    else if (icon == 11) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
+    else if (icon == 11) gui_launch_quotes();
     else if (icon == 12) gui_launch_html("Plan", app_plan_html, app_plan_len);
     else if (icon == 13) gui_launch_html("Lexly", app_lexly_html, app_lexly_len);
-    else if (icon == 14) gui_launch_html("Toroid", app_toroid_html, app_toroid_len);
+    else if (icon == 14) gui_launch_toroid();
     else if (icon == 15) gui_launch_html("Sparkjar", app_sparkjar_html, app_sparkjar_len);
     else if (icon == 16) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
     else if (icon == 17) gui_launch_html("Fieldbook", app_fieldbook_html, app_fieldbook_len);
