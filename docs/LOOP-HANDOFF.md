@@ -1,3 +1,20 @@
+# Loop state, 2026-09-22 evening (read this first)
+
+Main is 0.89.0, released as `jt-v0.89.0`. Merged tonight: #95 Calendar views, #83 Esc, #87 Terminal mono, #96 icon redraw, #86 decoder fuzzing, #65 Chat default, #62 Activity, #97 landing copy. #88 and #92 were closed because #93 carries them.
+
+Open, in landing order: #99 (typing checks wait for each key), #93 (Toroid and Quotes native, real fleet icons; its only CI failure was the flake #99 fixes), #98 (dock shadow follows the photo), #100 (CI in four parallel shards, auto-release on VERSION bump), then this ledger PR.
+
+How the loop runs now:
+- One Monitor on the open PRs is the wake signal, a 30 minute ScheduleWakeup is the fallback. Land one PR at a time; after each merge, `git pull` the local main and merge the new main into the next PR's worktree under `/tmp/jt-loop`.
+- Conflicts in `kernel/icon_art.h`: never re-rasterize on a Mac to resolve them (rsvg bytes differ from the cloud session's). Keep main's bytes and only re-index the tables, then diff the table layout against a local `gen_icon_art.py` run.
+- A check that fails only in CI is usually a timing flake. Reproduce with the slow QEMU shim (`taskpolicy -c background` in front of `qemu-system-i386` on PATH) before touching kernel code, and fix it by waiting on a real signal, never a longer sleep.
+- Never push a speculative CI run: every failure emails Joshua.
+- After #100: releases cut themselves on a VERSION bump. Pending Joshua: turn off "require branches up to date" so green PRs merge without queueing.
+
+Next after the queue: QA gallery (1.0 list), then the Beta list top down (landing hero, dock polish, boot splash mark).
+
+Restart prompt (current): `/loop Drive joshuatree to a defensible 1.0.0 following docs/LOOP-HANDOFF.md: land the open PRs one at a time, then work the Beta list in docs/roadmap.md top down. One Haiku worker at a time, review output yourself from zoomed headless frames, never a visible QEMU window, every fix a PR, short pings.`
+
 # Handoff, 2026-09-23 about 00:55 UTC (cloud session, moving to desktop)
 
 ## Landed on main
@@ -25,8 +42,12 @@
 - Joshua's standing rule: merge any PR once CI is green. Arm auto-merge (squash).
 - CodeRabbit: red and Major findings are bugs to fix; Minor ones get a one-line reply and ride the next push.
 
-## Restart prompt
+## Restart prompt (historical, use the current one at the top)
 Continue joshuatree from docs/LOOP-HANDOFF.md's top section: land #96/#87/#86, open the follow-up PR from docs/wip/, then work the old PR queue and Joshua's priorities. Main session manages, workers build in worktrees, review every screenshot and check yourself, auto-merge when CI is green, one-line TLDR per pass.
+
+---
+
+Everything below is history, kept for context. The current state and restart prompt are at the top.
 
 # Tonight's plan to 1.0.0 (written 2026-09-21, about 01:20)
 
@@ -93,3 +114,19 @@ JoshuaTree.com is taken. Wanted: simple, two syllables at most, rolls off the to
 ## Restart prompt
 
 Drive joshuatree to a defensible 1.0.0 following docs/LOOP-HANDOFF.md: read it first, check usage and taper, land the open PRs one at a time, then work the Beta list in docs/roadmap.md top down. One Haiku worker at a time at most, review output yourself from zoomed headless frames, all GitHub checks green, every fix a PR at once, one-line pings in Joshua's voice. Stop at about 90% usage, on cancel, or at 1.0.0.
+
+## Portfolio dock loop (paused 2026-09-21)
+
+A separate loop from the main Joshua Tree roadmap loop. Fills the dock with real native apps instead of one-line HTML cards.
+
+Done: Portfolio (v0.25), Epiphany (finance dashboard), Keyrate (typing test), Toroid (Game of Life).
+
+Next in order: Curbfind, Bookrank, Lexly, Sparkjar, Quotes, then rest of Apps folder.
+
+Pattern: one native app per iteration as a small kernel header (copy `kernel/toroid.h` loop shape). Add ARCHITECTURE row, bump VERSION and landing/version.txt in the same PR. Test headless by clicking the dock tile against static landing with ?full&portfolio. QA pass every few apps.
+
+Restart prompt:
+
+```
+/loop until our main apps are filled in the docks, then remainder apps in the launchpad
+```

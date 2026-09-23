@@ -2845,7 +2845,7 @@ static void gui_draw_menubar(void){
         window_rect(0, row, (int)window_width(), 1, gui_lerp(gui_wallpaper_color(row), 0x00FFFFFF, 5, 10));
     window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
     gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2, 1, 0x00FFFFFF, 0x00000000); /* v0.76.47: menu bar is semi-translucent light chrome, direct correction -- black reads here, not white */
-    font_draw_string("Joshua Tree", 32, 7, 0x001C1C1E, -1);
+    font_draw_string(portfolio_dock ? "Joshua Trommel" : "Joshua Tree", 32, 7, 0x001C1C1E, -1); /* portfolio mode is his site, so the corner carries his name */
 
     static const char *WD[7] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
     static const char *MO[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
@@ -3907,11 +3907,17 @@ static void gui_draw_dock_tray(void){
        solid colors, same technique every AA edge in this file already
        uses. Inset a little past the tray's own rounded corners so it
        reads as a shadow, not a second, darker rectangle. */
-    for (int row = 0; row < 10; row++){
-        int sy = y0 + dock_h + row;
-        unsigned int wall = gui_wallpaper_color(sy);
-        unsigned int dark = gui_blend(wall, 0x00000000);
-        window_rect(dock_x + 6, sy, dock_w - 12, 1, gui_lerp(dark, wall, row, 10));
+    /* Per physical pixel against the real photo. gui_wallpaper_color is one
+       colour per row (the centre column), fine for the old gradient but on
+       the photo it drew a flat striped bar under the tray. */
+    int sc = (int)window_scale();
+    int sy0 = (y0 + dock_h) * sc, rows = 10 * sc;
+    int sx0 = (dock_x + 6) * sc, sx1 = (dock_x + dock_w - 6) * sc;
+    for (int row = 0; row < rows; row++){
+        for (int px = sx0; px < sx1; px++){
+            unsigned int wall = gui_wallpaper_sample(px, sy0 + row, 0);
+            window_pixel_phys(px, sy0 + row, gui_lerp(gui_blend(wall, 0x00000000), wall, row, rows));
+        }
     }
 
     /* gui_rounded_rect_on_wallpaper, not gui_rounded_rect: the tray's top
@@ -5448,6 +5454,8 @@ static void gui_launch_settings(void){
 }
 
 #include "stocks.h"
+#include "toroid.h"
+#include "quotes.h"
 #include "epiphany.h"
 #include "activity.h"
 
@@ -5465,10 +5473,10 @@ static void gui_launch(int icon){
     else if (icon == 8) gui_launch_html("Curbfind", app_curbfind_html, app_curbfind_len);
     else if (icon == 9) gui_launch_keyrate();
     else if (icon == 10) gui_launch_html("Bookrank", app_bookrank_html, app_bookrank_len);
-    else if (icon == 11) gui_launch_html("Quotestreak", app_quotestreak_html, app_quotestreak_len);
+    else if (icon == 11) gui_launch_quotes();
     else if (icon == 12) gui_launch_html("Plan", app_plan_html, app_plan_len);
     else if (icon == 13) gui_launch_html("Lexly", app_lexly_html, app_lexly_len);
-    else if (icon == 14) gui_launch_html("Toroid", app_toroid_html, app_toroid_len);
+    else if (icon == 14) gui_launch_toroid();
     else if (icon == 15) gui_launch_html("Sparkjar", app_sparkjar_html, app_sparkjar_len);
     else if (icon == 16) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
     else if (icon == 17) gui_launch_html("Fieldbook", app_fieldbook_html, app_fieldbook_len);
