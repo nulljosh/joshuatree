@@ -4665,12 +4665,12 @@ static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
        per size) rather than a second layout to get right and keep right. */
     int mul_m = 1, mul_d = 2;
     const char *mon3 = GUI_CAL_MON3[monv - 1];
-    int ly_m = y + size * 17 / 100;
-    int ly_d = y + size * 41 / 100;
+    int ly_m = y + size * 13 / 100;
+    int ly_d = y + size * 38 / 100;
     int lwm = wx_text_lw(mon3, 2, 1, mul_m);
     wx_text(mon3, cx_center - lwm / 2, ly_m, 2, 1, mul_m, 0x00FF3B30);
-    int lwd = wx_text_lw(daybuf, 3, 1, mul_d);
-    wx_text(daybuf, cx_center - lwd / 2, ly_d, 3, 1, mul_d, 0x001F1F22);
+    int lwd = wx_text_lw(daybuf, 2, 1, mul_d);
+    wx_text(daybuf, cx_center - lwd / 2, ly_d, 2, 1, mul_d, 0x001F1F22);
 }
 
 /* Flat rounded card: four anti-aliased corner discs plus two rects. */
