@@ -28,6 +28,24 @@ make run      # boots to the shell; type gui for the desktop
 ./check.sh    # boot regression check
 ```
 
+## Boot from USB
+
+Download `joshuatree-vX.Y.Z.iso` from [Releases](https://github.com/nulljosh/joshuatree/releases), then write it to a USB stick:
+
+macOS:
+```sh
+diskutil list                         # find the disk (e.g. disk2)
+sudo dd if=joshuatree-vX.Y.Z.iso of=/dev/rdiskN bs=4m
+```
+
+Linux:
+```sh
+lsblk                                 # find the device (e.g. sdb)
+sudo dd if=joshuatree-vX.Y.Z.iso of=/dev/sdX bs=4M status=progress conv=fsync
+```
+
+This erases the stick. Double-check the device path, then boot from USB (F12/F10/Esc/Del at power-on).
+
 ## Booting from a CD, USB stick, or another VM
 
 `make iso` builds `joshuatree.iso`, a real bootable disk image, not just
