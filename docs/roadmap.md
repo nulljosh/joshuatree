@@ -12,11 +12,11 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 ## Beta, 0.9.0
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck.
-- [ ] [Sonnet] Shell launches a program by name (PR #64).
+- [x] Shell launches a program by name (#64).
 - [ ] [Sonnet] Ring-3 programs a fresh shell ships with: `cat`, `wc`, `grep`, `calc`. A tiny C compiler is a stretch.
 - [ ] [Sonnet] Landing hero, Joshua's spec: demo full width and about 85% of the screen tall, headline and its typewriter line squeezed into the strip under it, sections snap like magnets on scroll, no full screen mode needed. Test on phone and desktop, including reload and the old exit button scrolling too far.
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
-- [ ] [Joshua] Icon set redrawn to Mac-grade taste: depth, soft light, real materials. The current set is sharp but reads like Windows.
+- [x] Icon set redrawn to Mac-grade taste (#96): depth, soft light, real materials. The current set is sharp but reads like Windows.
 - [ ] [Sonnet] Boot splash shows the real engraved tree mark at full resolution, not the stick tree.
 - [ ] [Fable] Typography QA across Notes, the document app and the Terminal: spacing between letters, baselines, sizes and weights, every printable character, long lines, wrapping, selection. This kernel is a word processor from scratch, so text gets its own checks.
 - [ ] [Sonnet] Settings gets a Location field (city or postal code), saved, used by weather and the wallpaper map. Location from the internet address says Vancouver for Langley and cannot do better.
@@ -24,7 +24,7 @@ Everything a stranger needs to use it for an hour in the browser or an emulator 
 - [ ] [Sonnet] A headless test for every app (open, use, close) in `tools/checks/ci-suite.sh`.
 - [ ] [Fable] Error handling audit: corrupt or oversized files, full disk, bad input in every text field, missing disk, network or mouse. Each case gets a check.
 - [ ] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts.
-- [ ] [Sonnet] Magnet-style window snapping, like the Magnet Mac app (dump, 2026-09-21): drag a window to a screen edge for a half, to a corner for a quarter, to the top for full. Show the target outline while dragging. Keyboard shortcuts for the same zones.
+- [x] Magnet-style window snapping (#82; keyboard shortcuts moved to 1.1), like the Magnet Mac app (dump, 2026-09-21): drag a window to a screen edge for a half, to a corner for a quarter, to the top for full. Show the target outline while dragging. Keyboard shortcuts for the same zones.
 - [ ] [Sonnet] Settings as a real native app in the dock: wallpaper, text size, system typeface, location, accounts, network status, about. One place, not scattered panels.
 - [ ] [Sonnet] Photos app: grid of the images on disk, click for full view, arrow keys to move. Built on `drivers/png.c`, plus baseline JPEG if the wallpaper decoder can be reused. Covers the image viewer gap.
 - [ ] [Sonnet] Typeface support: proportional fonts beyond DejaVu, loaded from disk, picked in Settings. Reference look from Joshua: a tight grotesque sans for body and headlines, one display face for titles, hairline rules, flat colour blocks. Sans only in the UI chrome.
@@ -67,9 +67,9 @@ What other small operating systems needed before people used them day to day.
 
 ## Bugs
 Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at full resolution):
-- [ ] [Sonnet] Terminal text is unreadable in places: proportional antialiased letters are drawn into fixed-width cells, so "m" is crushed to look like "n" and "i" and "l" float with wide gaps ("hel p", "nen" for "mem"). The Terminal grid needs the Mono face at its real advance.
+- [x] Terminal text was unreadable in places (fixed in #87, `tools/checks/termmono-check.py`): proportional antialiased letters are drawn into fixed-width cells, so "m" is crushed to look like "n" and "i" and "l" float with wide gaps ("hel p", "nen" for "mem"). The Terminal grid needs the Mono face at its real advance.
 - [x] Calendar cut the last week of a five-row month in half at the bottom of the window, and never drew a sixth. Rows now size to the window (`tools/checks/apptop-check.py`).
-- [ ] [Sonnet] Apps window: black band under the title bar, a fourth row drawn outside the panel and cut in half, two extra icons after Epiphany, "Apps" heading shown twice. In progress.
+- [x] Apps window: black band under the title bar, a fourth row drawn outside the panel and cut in half, two extra icons after Epiphany, "Apps" heading shown twice. Fixed in #91, `tools/checks/appsfolder-layout-check.py`.
 - [x] Mail, Calendar, Notes, Reminders and Chat left a blank strip about 50px tall under the title bar. They now shift up by `gui_app_dy()` in a window, like Stocks (`tools/checks/apptop-check.py`).
 - [x] `tools/checks/landing-headline-check.sh` failed on a stale `demo-focused` CSS comment in `landing/index.html` (the class is gone; the button is the full screen toggle). Comment fixed; the check now runs in `tools/checks/ci-suite.sh`.
 - [x] Contacts, Calculator, Search and Trash drew their first line at y=52 in a window too; now on `gui_app_dy()` and covered by `tools/checks/apptop-check.py`. Settings only opens full screen from the menu, so it has no window title bar to sit under.
