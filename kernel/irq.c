@@ -45,10 +45,19 @@ void irq_handler(u32 irq_no) {
     pic_eof((int)irq_no);
 }
 
+/* Modifier state, tracked here at the one place every scancode passes
+   through, so Shift and Caps Lock work in every app, not only in Notes
+   (which decoded them itself). Left/right Shift make 0x2A/0x36, break
+   0xAA/0xB6; Caps Lock make 0x3A toggles. kbd_map() applies them. */
+int kbd_shift = 0, kbd_caps = 0;
+
 int kbd_pop(void) {
     if (kbd_head == kbd_tail) return -1;
     u8 sc = kbd_buf[kbd_tail];
     kbd_tail = (kbd_tail + 1) % KBD_BUF_SIZE;
+    if (sc == 0x2A || sc == 0x36) kbd_shift = 1;
+    else if (sc == 0xAA || sc == 0xB6) kbd_shift = 0;
+    else if (sc == 0x3A) kbd_caps = !kbd_caps;
     return sc;
 }
 

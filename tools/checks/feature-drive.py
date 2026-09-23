@@ -130,7 +130,9 @@ try:
         time.sleep(0.1)
         cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
     def key(qcode):
-        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qcode}]}})
+        # "shift-equal" style combos are several qcodes in one send-key, not
+        # one qcode string (QMP rejects that and the key silently vanishes).
+        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in qcode.split("-")]}})
         time.sleep(0.35)
     def type_text(text):
         """Type a text string character by character."""
@@ -143,6 +145,8 @@ try:
                 qcode = "dot"
             elif c == ',':
                 qcode = "comma"
+            elif c == '+':
+                qcode = "shift-equal"
             else:
                 qcode = c.lower()
             key(qcode)
@@ -192,23 +196,22 @@ try:
         png_path = None
 
         try:
-            # Open the Apps folder if not already open
             move(*PARK); time.sleep(0.2)
-            apps_centre = SLOT0_X + 0 * PITCH + DOCK_ICON // 2
-            move(apps_centre, ICON_ROW_Y); time.sleep(0.3)
-            click(); time.sleep(1.0)
-
-            # Navigate to the app within the grid
-            row = app_idx // 5
-            col = app_idx % 5
-            for _ in range(col):
-                key("d")  # right
-            for _ in range(row):
-                key("s")  # down
-
-            # Capture the grid state before launch
             grid = dump().crop((200, 120, 1720, 900))
-            key("ret")  # launch app
+            if app_idx == 26:
+                # Trash is not in the Apps folder grid; it is dock slot 10.
+                move(SLOT0_X + 10 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3)
+                click()
+            else:
+                apps_centre = SLOT0_X + 0 * PITCH + DOCK_ICON // 2
+                move(apps_centre, ICON_ROW_Y); time.sleep(0.3)
+                click(); time.sleep(1.0)
+                for _ in range(app_idx % 5):
+                    key("d")  # right
+                for _ in range(app_idx // 5):
+                    key("s")  # down
+                grid = dump().crop((200, 120, 1720, 900))
+                key("ret")  # launch app
 
             # Wait for window to open
             for _ in range(60):
@@ -240,7 +243,7 @@ try:
                 # Check if the screen changed
                 hist = ImageChops.difference(before_action, after_action).convert('L').histogram()
                 diff_pixels = sum(hist) - hist[0]
-                action_changed = diff_pixels > 0.02 * before_action.width * before_action.height
+                action_changed = diff_pixels > 300  # a changed digit is a few hundred pixels; 2% of the pane was far too coarse
 
                 # Dump framebuffer and save PNG
                 img = dump()
