@@ -3,6 +3,7 @@
 #include "paging.h"
 #include "kheap.h"
 #include "serial.h"
+#include "irq.h"
 
 typedef unsigned int u32;
 
@@ -49,6 +50,23 @@ static int present_logged = 0;
    Callers compare it for change, never for an absolute value. */
 volatile unsigned int window_present_count = 1;
 
+/* Issue #14 ("everything super laggy"): the permanent frame-time
+   instrument. frame_start_tick is stamped by whichever damage call is the
+   FIRST to mark the (until-then-empty) damage range dirty -- damage_add,
+   window_damage or damage_all, all three checked below -- so it lands at
+   the real start of a redraw, not at some arbitrary earlier point in the
+   ~100Hz idle loop. window_present() then reads ticks() again right
+   before it clears the damage and stamps the delta here: ticks() is
+   irq.c's PIT counter at 100Hz (kernel/irq.h), so this is coarse (10ms
+   per count) but free and always on, unlike a one-off timed run.
+   tools/checks/frametime-check.py reads both by symbol the same way
+   window_present_count already is read (editor_qa.py's Machine.integer).
+   Never reset except by a reboot, same lifetime as window_present_count,
+   so the max survives across whatever scenario drove it highest. */
+volatile unsigned int window_present_ticks_last = 0;
+volatile unsigned int window_present_ticks_max = 0;
+static unsigned int frame_start_tick = 0;
+
 /* Soak-check leak detection: free frames at last window_present(). */
 extern unsigned int pmm_free_frames(void);
 extern int task_used(int id);
@@ -80,10 +98,12 @@ static void damage_reset(void) {
 }
 static void damage_all(void) {
     if (!row_x0) return;
+    if (dmg_y1 <= dmg_y0) frame_start_tick = ticks();
     dmg_y0 = 0; dmg_y1 = (int)(win_h * scale);
     for (int y = 0; y < dmg_y1; y++) { row_x0[y] = 0; row_x1[y] = (int)phys_w; }
 }
 static void damage_add(int x, int y) {
+    if (dmg_y1 <= dmg_y0) frame_start_tick = ticks();
     if (x < row_x0[y]) row_x0[y] = x;
     if (x + 1 > row_x1[y]) row_x1[y] = x + 1;
     if (y < dmg_y0) dmg_y0 = y;
@@ -101,6 +121,7 @@ void window_damage(int x, int y, int w, int h) {
     if (x1 > (int)phys_w) x1 = (int)phys_w;
     if (y1 > (int)(win_h * scale)) y1 = (int)(win_h * scale);
     if (x1 <= x0 || y1 <= y0) return;
+    if (dmg_y1 <= dmg_y0) frame_start_tick = ticks();
     for (int yy = y0; yy < y1; yy++) {
         if (x0 < row_x0[yy]) row_x0[yy] = x0;
         if (x1 > row_x1[yy]) row_x1[yy] = x1;
@@ -211,6 +232,51 @@ void window_pixel_phys(int px, int py, u32 color) {
     if (p) *p = color;
 }
 
+/* Issue #14 ("everything super laggy"): a solid-color rectangle fast
+   path. A caller filling a whole rect one pixel at a time through
+   window_pixel_phys pays screen_pixel_ex's viewport/bounds/screen_band/
+   back checks and damage_add's four compares on every single pixel, even
+   though every one of them gets the exact same color. Measured opening
+   Files (tools/checks/frametime-check.py): the window chrome fill alone
+   (gui_rounded_rect_on_wallpaper's solid interior, kernel.c) cost ~120ms
+   of a ~400ms open. This does the same viewport-offset and target
+   routing screen_pixel_ex does, once for the whole rect instead of once
+   per pixel, then a tight per-row fill, then one damage declaration
+   (window_damage, already the established pattern for a caller that
+   knows its own rect) instead of one damage_add per pixel. Same pixels a
+   loop of window_pixel_phys(px,py,color) calls would have written. */
+void window_fill_rect_phys(int px, int py, int w, int h, u32 color) {
+    if (w <= 0 || h <= 0) return;
+    if (view_w) {
+        if (px < 0) { w += px; px = 0; }
+        if (py < 0) { h += py; py = 0; }
+        if (px + w > (int)(view_w * scale)) w = (int)(view_w * scale) - px;
+        if (py + h > (int)(view_h * scale)) h = (int)(view_h * scale) - py;
+        if (w <= 0 || h <= 0) return;
+        px += view_x * (int)scale; py += view_y * (int)scale;
+    }
+    if (px < 0) { w += px; px = 0; }
+    if (py < 0) { h += py; py = 0; }
+    if (px + w > (int)phys_w) w = (int)phys_w - px;
+    if (py + h > (int)(win_h * scale)) h = (int)(win_h * scale) - py;
+    if (w <= 0 || h <= 0) return;
+    if (screen_band) {
+        int y0 = py < screen_band_top ? screen_band_top : py;
+        int y1 = py + h > screen_band_top + (int)screen_band_h ? screen_band_top + (int)screen_band_h : py + h;
+        for (int y = y0; y < y1; y++) {
+            u32 *row = &screen_band[(u32)(y - screen_band_top) * phys_w + (u32)px];
+            for (int x = 0; x < w; x++) row[x] = color;
+        }
+        return;
+    }
+    u32 *target = back ? back : fb;
+    for (int y = py; y < py + h; y++) {
+        u32 *row = &target[(u32)y * phys_w + (u32)px];
+        for (int x = 0; x < w; x++) row[x] = color;
+    }
+    if (back) window_damage(px, py, w, h);
+}
+
 /* Copies the damaged rectangle of the back buffer onto the real
    framebuffer in one pass, then clears the damage. This is the only
    moment anything a caller drew becomes visible, so it belongs at a real
@@ -221,6 +287,8 @@ void window_pixel_phys(int px, int py, u32 color) {
 void window_present(void) {
     if (!back || !fb || !row_x0) return;
     if (dmg_y1 <= dmg_y0) return;
+    window_present_ticks_last = ticks() - frame_start_tick;
+    if (window_present_ticks_last > window_present_ticks_max) window_present_ticks_max = window_present_ticks_last;
     int y0 = dmg_y0 < 0 ? 0 : dmg_y0;
     int y1 = dmg_y1 > (int)(win_h * scale) ? (int)(win_h * scale) : dmg_y1;
     for (int y = y0; y < y1; y++) {
@@ -304,8 +372,13 @@ void window_close(void) {
 
 void window_clear(u32 color) {
     if (view_w) {
-        for (u32 y = 0; y < view_h * scale; y++)
-            for (u32 x = 0; x < view_w * scale; x++) window_pixel_phys((int)x, (int)y, color);
+        /* Issue #14: this used to be a per-pixel window_pixel_phys loop
+           across the whole viewport. Measured opening Files, whose
+           content draw clears its ~800x345 logical viewport, this alone
+           cost ~60ms (tools/checks/frametime-check.py). Always a flat
+           fill, so window_fill_rect_phys (see its own comment) is exactly
+           the same pixels for far less overhead. */
+        window_fill_rect_phys(0, 0, (int)(view_w * scale), (int)(view_h * scale), color);
     } else {
         u32 *dst = back ? back : fb;
         for (u32 i = 0; i < phys_w * win_h * scale; i++) dst[i] = color;

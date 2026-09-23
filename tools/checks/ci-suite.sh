@@ -99,6 +99,7 @@ once |Soak: every app opened and closed once each in one boot, no leak, no crash
 once |Landing facts match the source|python3 ./tools/checks/landing-facts-check.py
 retry|Accounts: create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py
 once |Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py
+once |Frame time: idle, dock hover and window open stay within budget|python3 ./tools/checks/frametime-check.py
 EOF
 }
 

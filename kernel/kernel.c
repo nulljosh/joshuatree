@@ -1461,7 +1461,24 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
     int sc = (int)window_scale();
     int px0 = x * sc, py0 = y * sc, pw = w * sc, ph = h * sc, pr = r * sc, band = 3; /* v44.1: 3 physical px; AA_BAND*sc was 10 and read as a soft, blurry corner */
     const int SS = 4; /* v79: 4x4 = 16 subsamples per physical pixel, real coverage AA on the corner arc */
+    /* Issue #14 ("everything super laggy"): every row outside the top
+       band and outside a corner block (py in [pr, ph-pr)) always falls
+       through the loop below to col=color with no wallpaper sample and
+       no AA -- cy ends up -1 there so the `cx>=0&&cy>=0` corner branch
+       never runs, and py>=pr>band so the top-edge branch never runs
+       either, provably true for any r with a non-degenerate band. That
+       is the whole middle of the shape, the vast majority of its area
+       for any real window/panel/tray size. Bulk-filling it once with
+       window_fill_rect_phys (same routing screen_pixel_ex does, paid
+       once for the rect instead of once per pixel; see its own comment)
+       and skipping those rows below leaves the loop doing exactly what
+       it always did for the corner rows, just not for rows that were
+       always going to end up flat `color` anyway. Measured on opening
+       Files (~820x385 logical, tools/checks/frametime-check.py): this
+       call's own share of a ~400ms open frame was ~120ms. */
+    if (ph > 2 * pr) window_fill_rect_phys(px0, py0 + pr, pw, ph - 2 * pr, color);
     for (int py = 0; py < ph; py++){
+        if (py >= pr && py < ph - pr) continue; /* the solid middle band, already filled above */
         for (int px = 0; px < pw; px++){
             /* distance from the nearest corner arc centre, or 0 if this
                pixel isn't in a corner region at all */
