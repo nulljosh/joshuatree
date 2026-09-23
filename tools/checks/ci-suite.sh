@@ -71,6 +71,7 @@ once |HTML entities decode to ASCII, host harness|./tools/checks/html-host-check
 retry|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
 once |PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/decoder-fuzz-check.sh
 once |HTTP/JSON/FAT16 parser fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/parser-fuzz-check.sh
+once |Text-input bounds: json.c maxlen 0/1/truncation + auth const-time compare (ASan/UBSan)|./tools/checks/input-bounds-check.sh
 retry|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclose-check.py
 retry|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
 retry|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
@@ -94,6 +95,7 @@ once |Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcou
 once |Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
 once |RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
 once |Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
+once |Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
 once |Landing facts match the source|python3 ./tools/checks/landing-facts-check.py
 EOF
 }
@@ -102,7 +104,7 @@ EOF
 # never answer) must not eat the job's whole 20-minute budget and take
 # every check after it down with a timeout instead of a result. Each check
 # gets its own ceiling, so a hang is one named FAIL and the suite moves on.
-PER_CHECK_TIMEOUT=${PER_CHECK_TIMEOUT:-300}
+PER_CHECK_TIMEOUT=${PER_CHECK_TIMEOUT:-600}
 if command -v timeout >/dev/null 2>&1; then
     TIMEOUT_BIN=timeout
 elif command -v gtimeout >/dev/null 2>&1; then
