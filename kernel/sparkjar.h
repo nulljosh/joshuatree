@@ -28,9 +28,9 @@ static const SjIdea SJ_IDEAS[] = {
 #define SJ_INFO_X  260
 #define SJ_INFO_W  ((int)window_width() - SJ_INFO_X - 24)
 
-/* Vote counts, mutable in this session. Initialize all to 0, then upvote
-   counts are stored in the original idea order, not the sorted order. */
-static int sj_votes[SJ_COUNT] = {0};
+/* Vote counts in the original idea order (not the sorted order), seeded so
+   the jar opens with a real ranking; 'u' adds to them for the session. */
+static int sj_votes[SJ_COUNT] = {24, 19, 15, 12, 11, 9, 7, 5, 3, 2};
 
 /* Sorted indices: sj_order[0] is the index of the top-voted idea,
    sj_order[1] is the next, etc. */
