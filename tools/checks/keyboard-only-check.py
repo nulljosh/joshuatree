@@ -105,17 +105,12 @@ try:
             row = app_idx // 5
             col = app_idx % 5
 
-            # Move to top-left (position 0)
-            for _ in range(5):
-                key("w")  # up
-            for _ in range(5):
-                key("a")  # left
-
-            # Navigate to the target position
+            # A freshly opened folder selects tile 0; navigate to the target position
             for _ in range(col):
                 key("d")  # right
             for _ in range(row):
                 key("s")  # down
+                time.sleep(0.2)  # wait for scroll animation to render
 
             # Capture the current grid view for change detection
             grid = dump().crop((200, 120, 1720, 900))
