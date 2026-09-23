@@ -6483,14 +6483,20 @@ static void gui_run(void){
             }
         } else {
             int sc = kbd_pop();
-            if (sc >= 0 && !(sc & 0x80) && kbd_map(sc) == 27) {
-                /* Esc closes the focused window first. Only a bare desktop
-                   quits to the shell. Files has no key handler of its own,
-                   so before this Esc with Files open dropped the whole
-                   desktop to text mode. */
-                if (gui_window_count == 0) break;
-                gui_multiwin_close(gui_window_count - 1);
-                mw_key_repaint = 1;
+            if (sc >= 0 && !(sc & 0x80)) {
+                char c = SC[sc & 0x7F];
+                if (c == 27) {
+                    /* Esc closes the focused window first. Only a bare desktop
+                       quits to the shell. Files has no key handler of its own,
+                       so before this Esc with Files open dropped the whole
+                       desktop to text mode. */
+                    if (gui_window_count == 0) break;
+                    gui_multiwin_close(gui_window_count - 1);
+                    mw_key_repaint = 1;
+                } else if (c == '\n' && gui_window_count == 0) {
+                    /* Enter on the bare desktop opens the Apps folder */
+                    gui_launch_apps();
+                }
             }
         }
         int dx = 0, dy = 0;
