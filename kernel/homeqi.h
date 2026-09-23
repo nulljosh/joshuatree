@@ -6,25 +6,26 @@
 typedef struct {
     const char *question;
     const char *reasoning;
+    int yes_is_good; /* 1: "yes" is the healthy answer, 0: "no" is */
 } HqQuestion;
 
 static const HqQuestion HQ_QUESTIONS[] = {
     {"Does your front door face a busy road head-on?",
-     "A direct road creates rushing energy. Ideally, the entrance protects you."},
+     "A direct road creates rushing energy. Ideally, the entrance protects you.", 0},
     {"Is there natural light in your main living room?",
-     "Light brings clarity, warmth, and good chi. Rooms without it feel heavy."},
+     "Light brings clarity, warmth, and good chi. Rooms without it feel heavy.", 1},
     {"Is your bed against a solid wall?",
-     "A solid wall behind supports rest. Open sides make sleep restless."},
+     "A solid wall behind supports rest. Open sides make sleep restless.", 1},
     {"Is there clutter at your entry or main pathway?",
-     "Blocked pathways block opportunities. Clear spaces welcome good energy."},
+     "Blocked pathways block opportunities. Clear spaces welcome good energy.", 0},
     {"Can you see water (stream, pond, or fountain) from your home?",
-     "Water attracts wealth and calm. Still water near home is auspicious."},
+     "Water attracts wealth and calm. Still water near home is auspicious.", 1},
     {"Are there high-voltage power lines or towers nearby?",
-     "Electric fields disrupt chi. Distance and barriers help protect health."},
+     "Electric fields disrupt chi. Distance and barriers help protect health.", 0},
     {"Does your neighborhood feel safe and well-maintained?",
-     "Neglected areas have stagnant chi. Care in public spaces lifts the whole block."},
+     "Neglected areas have stagnant chi. Care in public spaces lifts the whole block.", 1},
     {"Can you open windows for fresh air and views?",
-     "Open windows bring life and connection. Blocked views trap you in a box."},
+     "Open windows bring life and connection. Blocked views trap you in a box.", 1},
 };
 #define HQ_COUNT ((int)(sizeof(HQ_QUESTIONS) / sizeof(HQ_QUESTIONS[0])))
 
@@ -109,10 +110,8 @@ static void gui_launch_homeqi(void){
 
         if (hq_q < HQ_COUNT) {
             if (!hq_show_reasoning) {
-                if (k == '1') {
-                    hq_score++;
-                    hq_show_reasoning = 1;
-                } else if (k == '2') {
+                if (k == '1' || k == '2') {
+                    if ((k == '1') == HQ_QUESTIONS[hq_q].yes_is_good) hq_score++;
                     hq_show_reasoning = 1;
                 }
             } else {
