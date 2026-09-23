@@ -42,6 +42,7 @@ retry|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
 once |PNG decoder, host harness|./tools/checks/png-host-check.sh
 retry|PNG decoder, in-kernel|./tools/checks/png-check.sh
 retry|AA text spacing, in-kernel|./tools/checks/textspacing-check.sh
+retry|AA text stems are dense but still antialiased|python3 ./tools/checks/textsharp-check.py
 retry|FAT filesystem cycle hang (regression test)|./tools/checks/fatcyclehang-check.sh
 retry|Chat history (VFS-backed, past the old 512-byte cap)|./tools/checks/chat-check.sh
 retry|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ramfs-demo-check.sh
