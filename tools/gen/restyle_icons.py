@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Authoring tool for the dock's icon artwork: writes the eleven dock icons
-(plus Trash's full variant) in art/icons/ from the design table below, in
-one shared macOS Big Sur-style tile technique.
+(plus Trash's full variant) and three Apps-folder-only icons (Calculator,
+Search, Contacts -- APPS_ONLY below) in art/icons/ from the design tables
+below, in one shared macOS Big Sur-style tile technique.
 
 This is an authoring tool, not part of the build: gen_icon_art.py still
 rasterizes whatever the SVGs say. It is kept in-tree so the technique's
@@ -239,6 +240,44 @@ DOCK = {
                        '<rect x="52" y="22" width="24" height="9" rx="3.5" fill="url(#metal)"/>', "")),
 }
 
+# Apps-folder-only tiles that still carried the pre-Big-Sur "glossy" technique
+# (commit 9db67b9, a plain rx=28 rect, a radial sheen and a rim stroke bright
+# at the top and dark at the bottom): the exact look the Big Sur pass moved
+# every DOCK tile away from on owner feedback ("still looks too Windows or
+# Linux"). These three never got migrated because they only show in the Apps
+# folder grid, not the dock, so DOCK above never touched them. Same shared
+# template, same squircle, same soft top light, no dark rim; only the glyph
+# bodies (unchanged shapes, ported byte-for-byte from the old files) and
+# their own hue differ. Written by the same main() loop as DOCK, into the
+# same art/icons/ files, just not shown in the dock tray.
+APPS_ONLY = {
+    "calculator": ("#A3ADB9", "#3A4450", "",
+                   """
+      <rect x="26" y="22" width="76" height="84" rx="10" fill="#ECEFF3"/>
+      <rect x="34" y="30" width="60" height="18" rx="5" fill="#2E3A49"/>
+      <g fill="#7C8899">
+        <rect x="34" y="55" width="16" height="13" rx="4"/>
+        <rect x="56" y="55" width="16" height="13" rx="4"/>
+        <rect x="34" y="73" width="16" height="13" rx="4"/>
+        <rect x="56" y="73" width="16" height="13" rx="4"/>
+        <rect x="34" y="91" width="38" height="8" rx="4"/>
+      </g>
+      <rect x="78" y="55" width="16" height="44" rx="4" fill="#E8913C"/>"""),
+
+    "search": ("#9AA3B1", "#303A48", "",
+               """
+      <circle cx="52" cy="52" r="23" fill="none" stroke="#ECEFF3" stroke-width="11"/>
+      <line x1="69" y1="69" x2="93" y2="93" stroke="#ECEFF3" stroke-width="12" stroke-linecap="round"/>"""),
+
+    "contacts": ("#C9B4A5", "#614C3C",
+                 lg("paper", (0, "#FFFFFF"), (1, "#E9E2DC")),
+                 """
+      <rect x="24" y="26" width="80" height="76" rx="10" fill="url(#paper)"/>
+      <rect x="24" y="26" width="9" height="76" fill="#C7B39F"/>
+      <circle cx="68" cy="55" r="14" fill="#A87C5B"/>
+      <path d="M46 92 a22 22 0 0 1 44 0 z" fill="#A87C5B"/>"""),
+}
+
 TEMPLATE = """<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <!-- Written by tools/gen/restyle_icons.py (the "%(name)s" entry): edit
        that, not this file. Tile %(top)s -> %(bot)s, lit from the top. -->
@@ -265,7 +304,8 @@ TEMPLATE = """<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" v
 
 def main():
     sq = squircle_path()
-    for name, (top, bot, defs, body) in DOCK.items():
+    all_tiles = {**DOCK, **APPS_ONLY}
+    for name, (top, bot, defs, body) in all_tiles.items():
         out = TEMPLATE % dict(
             name=name, top=top, bot=bot, sq=sq,
             tilegrad=lg("base", (0, top), (1, bot)),
@@ -274,7 +314,7 @@ def main():
             defs=defs, body=body)
         open(os.path.join(SVG_DIR, name + ".svg"), "w").write(out)
         print("%-11s %s -> %s" % (name, top, bot))
-    print("wrote %d icons" % len(DOCK))
+    print("wrote %d icons (%d dock, %d apps-folder-only)" % (len(all_tiles), len(DOCK), len(APPS_ONLY)))
     return 0
 
 
