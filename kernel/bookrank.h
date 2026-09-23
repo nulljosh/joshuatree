@@ -23,9 +23,9 @@ static const BrBook BR_BOOKS[] = {
 };
 #define BR_COUNT ((int)(sizeof(BR_BOOKS) / sizeof(BR_BOOKS[0])))
 #define BR_LIST_X  20
-#define BR_LIST_W  140
-#define BR_INFO_X  180
-#define BR_INFO_W  420
+#define BR_LIST_W  220
+#define BR_INFO_X  260
+#define BR_INFO_W  ((int)window_width() - BR_INFO_X - 24)
 
 static int br_sel = 0; /* currently selected book index */
 
@@ -39,24 +39,29 @@ static void br_draw(void){
 
     for (int i = 0; i < items_shown; i++) {
         int y = list_top + i * item_h;
-        unsigned int bg = (i == br_sel) ? 0x00FCCBDC : 0x00F1EDE7;
-        unsigned int fg = (i == br_sel) ? 0x00C41E6C : 0x0075726E;
+        unsigned int bg = (i == br_sel) ? 0x00E2D8CC : 0x00F1EDE7;
+        unsigned int fg = (i == br_sel) ? 0x001C1C1E : 0x0075726E;
         window_rect(BR_LIST_X, y, BR_LIST_W, item_h - 2, bg);
 
-        char rank[4];
-        rank[0] = (char)('1' + i);
-        rank[1] = '.';
-        rank[2] = ' ';
-        rank[3] = 0;
+        char rank[4]; int r = 0, n = i + 1;
+        if (n >= 10) rank[r++] = (char)('0' + n / 10);
+        rank[r++] = (char)('0' + n % 10);
+        rank[r++] = '.'; rank[r] = 0;
         font_draw_string(rank, BR_LIST_X + 6, y + 6, fg, -1);
 
+        /* Trim by real pixel width, not character count, so a long title
+           ends in "..." inside its row instead of running into the summary. */
         const char *title = BR_BOOKS[i].title;
-        int title_len = 0;
-        while (title[title_len] && title_len < 24) title_len++;
-        char short_title[25];
-        for (int j = 0; j < title_len; j++) short_title[j] = title[j];
-        short_title[title_len] = 0;
-        font_draw_string(short_title, BR_LIST_X + 28, y + 6, fg, -1);
+        char short_title[52]; int len = 0;
+        while (title[len] && len < 47) { short_title[len] = title[len]; len++; }
+        short_title[len] = 0;
+        int room = BR_LIST_W - 36;
+        if (font_string_width(short_title) > room) {
+            while (len > 0 && (short_title[len] = 0, font_string_width(short_title) + font_string_width("...") > room)) len--;
+            while (len > 0 && short_title[len - 1] == ' ') len--;
+            short_title[len] = '.'; short_title[len + 1] = '.'; short_title[len + 2] = '.'; short_title[len + 3] = 0;
+        }
+        font_draw_string(short_title, BR_LIST_X + 30, y + 6, fg, -1);
     }
 
     /* Right: book info */
