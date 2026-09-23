@@ -3833,6 +3833,14 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     return out;
 }
 
+/* Forward-declared: the real body lives past wx_text/wx_text_lw's own
+   definitions further down this file (Calendar's date overlay is drawn
+   with the same physical-resolution DejaVu text the Weather window
+   uses), but gui_draw_one_icon_on itself needs to call it from up here,
+   at every one of its draw sites (dock, dock-magnified, Apps-folder
+   grid, drag preview all funnel through this one function). */
+static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size);
+
 static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int size, unsigned int under){
     int x = cx_center - size / 2, y = cy_bottom - size;
     int slot = (size == DOCK_ICON) ? 0 : 1;
@@ -3844,6 +3852,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
             for (int px = 0; px < pw; px++)
                 if (tile[py * pw + px] != under)
                     window_pixel_phys(x * (int)sc + px, y * (int)sc + py, tile[py * pw + px]);
+        if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
         return;
     }
     /* out of memory for the cache: draw directly, un-supersampled, rather than draw nothing */
@@ -3852,6 +3861,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
     gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, under, size * 22 / 100);
     gui_draw_gloss(x, y, size, size, bg, size * 22 / 100 + 1);
     gui_draw_icon_glyph(icon, cx_center, y + size / 2, size, bg);
+    if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
 }
 static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){ gui_draw_one_icon_on(icon, cx_center, cy_bottom, size, DOCK_TRAY_COLOR); }
 
@@ -4159,6 +4169,32 @@ static void gui_draw_cursor(int x, int y){
         unsigned int bl = ((bg & 0xFF) * keep + 255 * w) / 16;
         window_pixel_phys(x * sc + i, y * sc + j, (r << 16) | (g << 8) | bl);
     }
+}
+
+/* v0.89.x: gui_calendar_draw_date (above, near gui_draw_one_icon_on)
+   draws the real date fresh on every call, so the Calendar tile is never
+   stale on any redraw that actually happens -- but the dock is
+   event-driven (gui_redraw_dock_band/gui_draw_dock only ever run off a
+   hover, drag or menu change, see gui_run's cursor_only/dock_only/
+   menu_only split below), not painted every loop tick the way
+   gui_draw_menubar now is. An idle desktop, cursor parked outside the
+   dock all night, would sit with yesterday's day number on screen until
+   the next real mouse event. Same fix shape as v0.76.17's own menu-bar
+   staleness (this file's gui_menubar_last_min): a cheap once-a-loop CMOS
+   check, self-gated on a real day change, called from the exact spot
+   gui_run already reads the clock unconditionally every iteration. */
+static int gui_calendar_last_dom = -1;
+static void gui_calendar_check_rollover(int hover_slot, int drag_slot, int mx, int my){
+    u8 h, m, wd, dom, mon;
+    cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
+    int domv = (dom & 0x0F) + ((dom >> 4) * 10);
+    if (gui_calendar_last_dom < 0) { gui_calendar_last_dom = domv; return; } /* first call: seed, no false redraw at boot */
+    if (domv == gui_calendar_last_dom) return;
+    gui_calendar_last_dom = domv;
+    gui_cursor_restore();
+    gui_draw_dock(hover_slot, drag_slot, mx, my);
+    gui_cursor_save(mx, my);
+    gui_draw_cursor(mx, my);
 }
 
 /* App viewers have their own input loops. Keep the pointer alive while one
@@ -4580,6 +4616,62 @@ static int wx_text(const char *s, int lx, int ly, int size, int bold, int mul, u
 static int wx_text_lw(const char *s, int size, int bold, int mul){ int sc = (int)window_scale(); return (wx_text_w(s, size, bold, mul) + sc - 1) / sc; }
 static void wx_text_center(const char *s, int cx, int ly, int size, int bold, unsigned int fg){ wx_text(s, cx - wx_text_lw(s, size, bold, 1) / 2, ly, size, bold, 1, fg); }
 static void wx_text_right(const char *s, int rx, int ly, int size, int bold, unsigned int fg){ wx_text(s, rx - wx_text_lw(s, size, bold, 1), ly, size, bold, 1, fg); }
+
+/* v0.89.x: the Calendar dock/Apps-folder tile shows the real current date,
+   macOS style, instead of a fixed baked-in "SEP 17" (that art still
+   exists at art/icons/calendar.svg, but restyle_icons.py's design table
+   now leaves the tile's glyph body empty: a real date can't be baked into
+   a rasterized PNG, tools/gen/gen_icon_art.py's whole point). Drawn here
+   as an overlay on top of the plain white tile gui_draw_one_icon_on just
+   blitted, at physical resolution with the same wx_text/text_ink glyph
+   path the Weather window uses, so it is drawn fresh every call rather
+   than baked into gui_render_icon_cached's cache -- the cache key has no
+   room for "today's date" and does not need one this way, and it means
+   this never goes stale as long as *something* redraws the icon.
+   cmos_read_time_stable, not calendar.h's own cal_read_today: this must
+   never show a different day than the menu bar clock does, and that
+   clock already reads month/day through this exact stable-against-RTC-
+   update-in-progress function (see its own comment above), not
+   calendar.h's plainer wait-once read. Sharing the function, not just the
+   register numbers, is what makes "the icon and the clock never
+   disagree" true by construction instead of by coincidence. */
+static const char *GUI_CAL_MON3[12] = {"JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"};
+static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
+    int y = cy_bottom - size;
+    u8 h, m, wd, dom, mon;
+    cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
+    int domv = (dom & 0x0F) + ((dom >> 4) * 10);
+    int monv = (mon & 0x0F) + ((mon >> 4) * 10);
+    if (monv < 1 || monv > 12) monv = 1;
+    if (domv < 1 || domv > 31) domv = 1;
+    char daybuf[3]; int n = 0;
+    if (domv >= 10) daybuf[n++] = (char)('0' + domv / 10);
+    daybuf[n++] = (char)('0' + domv % 10);
+    daybuf[n] = 0;
+    /* One fixed physical size for both faces, not scaled with the tile:
+       tried scaling month/day up together with the Apps-folder grid's
+       bigger (120-physical-at-2x, vs. the dock's 74) tile first (2x/3x
+       mul there), and a real headless crop showed the day numeral's cap
+       height then reaching past the month label's own baseline -- the
+       two texts' vertical gap was a fraction of `size`, but each face's
+       glyph height was a multiple of a fixed 16/20/24/28px table, so the
+       two didn't grow at the same rate and the larger tile closed the
+       gap between them instead of widening it. Keeping both at the one
+       size that was measured clean on the dock (real 4x crop, see the
+       commit this landed in) means the Apps-folder tile's text sits a
+       little smaller relative to its own tile than the dock's does, the
+       same trade the authored artwork itself already makes everywhere
+       else (one 148px source raster area-averaged down, never redrawn
+       per size) rather than a second layout to get right and keep right. */
+    int mul_m = 1, mul_d = 2;
+    const char *mon3 = GUI_CAL_MON3[monv - 1];
+    int ly_m = y + size * 17 / 100;
+    int ly_d = y + size * 41 / 100;
+    int lwm = wx_text_lw(mon3, 2, 1, mul_m);
+    wx_text(mon3, cx_center - lwm / 2, ly_m, 2, 1, mul_m, 0x00FF3B30);
+    int lwd = wx_text_lw(daybuf, 3, 1, mul_d);
+    wx_text(daybuf, cx_center - lwd / 2, ly_d, 3, 1, mul_d, 0x001F1F22);
+}
 
 /* Flat rounded card: four anti-aliased corner discs plus two rects. */
 static void wx_card(int x, int y, int w, int h, int r, unsigned int color, unsigned int bg){
@@ -6460,6 +6552,11 @@ static void gui_run(void){
             gui_draw_menubar();
             if (gui_menubar_last_min != min_before && my < GUI_MENUBAR_H) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
         }
+        /* v0.89.x: same "call it unconditionally every idle iteration,
+           let it self-gate" shape as the minute check just above, for the
+           Calendar dock tile's day number (see gui_calendar_check_rollover's
+           own comment). */
+        gui_calendar_check_rollover(dock_hover, drag_slot, mx, my);
         /* v43: weather, after the desktop is already on screen so the
            fetch never delays the first frame, then every ten minutes. */
         if (!weather_tried_once || ticks() - weather_last_tick > 100 * 600) {
