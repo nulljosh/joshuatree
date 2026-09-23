@@ -3482,7 +3482,8 @@ static int icon_cache_variant[GUI_APP_COUNT][ICON_CACHE_SLOTS]; /* v45.2: anythi
 /* The upscale half. A box filter degenerates to nearest-neighbour the
    moment the destination is bigger than the source (every destination pixel
    covers less than one source pixel), which is exactly the blocky staircase
-   this whole pass exists to remove, and there are real call sites past 128:
+   this whole pass exists to remove, and there are real call sites past the
+   stored ICON_ART_SIZE:
    the Weather app's own 100-logical card (200 physical), and the dock itself
    once dock_scale_pct is turned up past 20 in Settings. Bilinear there, on
    premultiplied colour so the transparent border cannot bleed into an edge,
@@ -3521,35 +3522,52 @@ static void gui_icon_art_bilinear(const unsigned char *art, unsigned int *out, i
     }
 }
 
+/* Exact area filter: every destination pixel is the coverage-weighted mean
+   of the source pixels it overlaps, fractional edges included. The old
+   loop snapped each block to whole source pixels (py*S/pw .. (py+1)*S/pw),
+   which at the old 128 -> 74 dock ratio averaged an uneven mix of 1 and 2
+   source rows/columns per pixel, so neighbouring edge pixels came out
+   alternately crisp and soft and every straight edge picked up a faint
+   beat. Weights here are in units where a destination pixel spans S
+   (ICON_ART_SIZE) and a source pixel spans pw, so they are exact integers
+   and each axis sums to S. At the resting dock (148 -> 74) this reduces
+   to an exact 2x2 box. Premultiplied, so the transparent border contributes
+   no colour; the per-pixel weight product is at most S*S = 21904 and the
+   premultiplied channel at most 255, so every sum fits in 32 bits. */
 static void gui_icon_art_scale(const unsigned char *art, unsigned int *out, int pw, unsigned int under){
     if (pw > ICON_ART_SIZE) { gui_icon_art_bilinear(art, out, pw, under); return; }
     unsigned int ur = (under >> 16) & 0xFF, ug = (under >> 8) & 0xFF, ub = under & 0xFF;
+    const int S = ICON_ART_SIZE;
+    const unsigned int total = (unsigned int)(S * S), half = total / 2;
     for (int py = 0; py < pw; py++){
-        int sy0 = py * ICON_ART_SIZE / pw, sy1 = (py + 1) * ICON_ART_SIZE / pw;
-        if (sy1 <= sy0) sy1 = sy0 + 1;
+        int y0 = py * S, y1 = y0 + S;                  /* destination row, in source-pixel = pw units */
         for (int px = 0; px < pw; px++){
-            int sx0 = px * ICON_ART_SIZE / pw, sx1 = (px + 1) * ICON_ART_SIZE / pw;
-            if (sx1 <= sx0) sx1 = sx0 + 1;
-            unsigned int rs = 0, gs = 0, bs = 0, as = 0, n = 0;
-            for (int sy = sy0; sy < sy1; sy++){
-                const unsigned char *row = art + ((unsigned int)sy * ICON_ART_SIZE + (unsigned int)sx0) * 4;
-                for (int sx = sx0; sx < sx1; sx++, row += 4){
-                    unsigned int a = row[3];
-                    rs += row[0] * a; gs += row[1] * a; bs += row[2] * a; as += a; n++;
+            int x0 = px * S, x1 = x0 + S;
+            unsigned int rs = 0, gs = 0, bs = 0, as = 0;
+            for (int sy = y0 / pw; sy * pw < y1; sy++){
+                int wy = (y1 < (sy + 1) * pw ? y1 : (sy + 1) * pw) - (y0 > sy * pw ? y0 : sy * pw);
+                const unsigned char *row = art + ((unsigned int)sy * (unsigned int)S) * 4;
+                for (int sx = x0 / pw; sx * pw < x1; sx++){
+                    int wx = (x1 < (sx + 1) * pw ? x1 : (sx + 1) * pw) - (x0 > sx * pw ? x0 : sx * pw);
+                    const unsigned char *p = row + (unsigned int)sx * 4;
+                    unsigned int w = (unsigned int)(wx * wy), a = p[3];
+                    if (!a) continue;
+                    rs += w * ((p[0] * a + 127) / 255); gs += w * ((p[1] * a + 127) / 255); bs += w * ((p[2] * a + 127) / 255);
+                    as += w * a;
                 }
             }
-            unsigned int a = (as + n / 2) / n;              /* mean coverage over the source block */
-            unsigned int r, g, b;
-            if (as) { r = (rs + as / 2) / as; g = (gs + as / 2) / as; b = (bs + as / 2) / as; }
-            else    { r = ur; g = ug; b = ub; }
-            /* source-over onto the surface colour, 0..255 alpha, rounded */
-            r = (r * a + ur * (255 - a) + 127) / 255;
-            g = (g * a + ug * (255 - a) + 127) / 255;
-            b = (b * a + ub * (255 - a) + 127) / 255;
+            unsigned int a = (as + half) / total;
+            unsigned int r = (rs + half) / total, g = (gs + half) / total, b = (bs + half) / total;
+            /* premultiplied source-over onto the surface colour, rounded */
+            r += (ur * (255 - a) + 127) / 255; g += (ug * (255 - a) + 127) / 255; b += (ub * (255 - a) + 127) / 255;
+            if (r > 255) r = 255;
+            if (g > 255) g = 255;
+            if (b > 255) b = 255;
             out[py * pw + px] = (r << 16) | (g << 8) | b;
         }
     }
 }
+
 
 static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsigned int under){
     int variant = (icon == GUI_TRASH) ? (trash_count() > 0) : 0;
