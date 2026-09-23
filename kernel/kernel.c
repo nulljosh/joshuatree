@@ -458,6 +458,18 @@ static volatile int preempt_stop = 0;
 static void preempt_task_a(void){ while (!preempt_stop) preempt_a_count++; task_exit(); }
 static void preempt_task_b(void){ while (!preempt_stop) preempt_b_count++; task_exit(); }
 
+/* ---- v0.88.0: spawntest. The Activity app (kernel/activity.h) shows and
+   kills real scheduler tasks through the exact same task_used/task_kill
+   primitives `ps`/`kill` already use, but nothing in the shell so far
+   leaves a task running indefinitely for a test to observe from the GUI
+   side -- every existing demo (task_a/b, preempt_task_a/b, iso_task_a/b)
+   cleans itself up within a handful of yields. spawntest_task is the one
+   deliberately long-lived task: it just spins until killed, real and
+   idle, the same shape preempt_task_a already has minus the self-stop
+   flag, so tools/checks/activity-check.py has a real, persistent task to
+   select and kill through the app instead of a synthetic fixture. ---- */
+static void spawntest_task(void){ for (;;) yield(); }
+
 /* ---- v31 (0.31.0) isolation demo: two tasks write different markers to
    the SAME virtual address, PAGING_PRIVATE_VADDR. If page directories were
    still shared (the pre-v31 world), the second write would clobber the
@@ -813,13 +825,15 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-#define GUI_APP_COUNT   26 /* 24 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 24 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       25
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany", "Portfolio", "Apps", "Trash"};
+/* v0.89.x: Activity landed after Portfolio took slot 23, so it sits at
+   24 and GUI_APPS_FOLDER/GUI_TRASH moved to 25/26, same shift again. */
+#define GUI_APP_COUNT   27 /* 25 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 25 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       26
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Apps", "Trash"};
 static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
     0x00707070, 0x00A13F3F, 0x00A0553F, 0x006B4423, 0x00375A4A, 0x002B2B2B, 0x00365E8C, 0x0085144B,
-    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078, 0x001F5FA8, 0x004A5A3E
+    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078, 0x001F5FA8, 0x004A5A3E, 0x003E4C58
 };
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
@@ -3290,6 +3304,20 @@ static void gui_icon_search(int cx, int cy, int s, unsigned int bg){
     int hx1 = cx + s * 2 / 5, hy1 = cy + s * 2 / 5;
     gui_draw_capsule(hx0, hy0, hx1, hy1, t / 2 + 1, ICON_FG, bg);
 }
+/* v0.88.0: Activity. A heartbeat/pulse trace, the one silhouette that
+   reads as "live system vitals" at dock size: a flat baseline that jumps
+   up, spikes down, then settles flat again, built from the same capsule
+   segments every other line-based icon here (Stocks' bars, Search's
+   handle) already uses, no new drawing primitive needed. */
+static void gui_icon_activity(int cx, int cy, int s, unsigned int bg){
+    int t = s / 14;
+    int y = cy, half = s * 2 / 5;
+    gui_draw_capsule(cx - half, y, cx - half / 3, y, t, ICON_FG, bg);            /* leading flat */
+    gui_draw_capsule(cx - half / 3, y, cx - half / 6, y - half, t, ICON_FG, bg); /* up-spike */
+    gui_draw_capsule(cx - half / 6, y - half, cx + half / 6, y + half / 2, t, ICON_FG, bg); /* down through baseline */
+    gui_draw_capsule(cx + half / 6, y + half / 2, cx + half / 2, y, t, ICON_FG, bg);        /* back to baseline */
+    gui_draw_capsule(cx + half / 2, y, cx + half, y, t, ICON_FG, bg);            /* trailing flat */
+}
 
 /* A soft lit band across the top of the icon, fading down into its flat
    base color: the same top-lit gloss treatment classic Aqua/iOS icons
@@ -3419,6 +3447,7 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
         case 21: gui_icon_search(cx_center, cy, size, bg); break;
         case 22: gui_icon_stocks(cx_center, cy, size, bg); break; /* art covers it; primitive fallback only */
         case 23: gui_icon_apps(cx_center, cy, size, bg); break; /* Portfolio: no authored art yet, reuses the grid-of-tiles glyph */
+        case 24: gui_icon_activity(cx_center, cy, size, bg); break;
         case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
         case GUI_TRASH: gui_icon_trash(cx_center, cy, size, bg); break;
     }
@@ -5422,6 +5451,7 @@ static void gui_launch_settings(void){
 #include "toroid.h"
 #include "quotes.h"
 #include "epiphany.h"
+#include "activity.h"
 
 static void gui_launch(int icon){
     if (icon == GUI_APPS_FOLDER) { gui_launch_apps(); return; }
@@ -5450,6 +5480,7 @@ static void gui_launch(int icon){
     else if (icon == 21) gui_launch_search();
     else if (icon == 22) gui_launch_epiphany();
     else if (icon == 23) gui_launch_portfolio();
+    else if (icon == 24) gui_launch_activity();
 }
 
 static void gui_launch_from_dock(int icon){
@@ -7036,6 +7067,22 @@ static void run(char *line){
             unsigned int settle = ticks() + 10;
             while (ticks() < settle) { }
             puts(preempt_a_count == stopped_at ? "kill: task really stopped: ok\n" : "kill: FAILED (counter kept moving)\n");
+        }
+    }
+    else if (!strcmp(line, "spawntest")) {
+        /* Real, persistent task for tools/checks/activity-check.py: prints
+           its own slot id over serial so the script can compute which
+           Activity row to select, the same "serial marker for a headless
+           check" idiom search.h's "searchcontent" line already uses. */
+        int id = task_create(spawntest_task);
+        if (id < 0) puts("no free task slots\n");
+        else {
+            char buf[16]; int n = 0; unsigned int v = (unsigned int)id;
+            char tmp[6]; int ti = 0; if (v==0) tmp[ti++]='0'; while (v) { tmp[ti++]='0'+v%10; v/=10; }
+            while (ti) buf[n++] = tmp[--ti];
+            buf[n] = 0;
+            serial_puts("spawntest id="); serial_puts(buf); serial_puts("\n");
+            puts("spawned task "); puts(buf); puts(" (runs until killed)\n");
         }
     }
     else if (!strcmp(line, "weathertest")) {
