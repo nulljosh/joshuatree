@@ -1,3 +1,4 @@
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // Direct report (Sep 2026): the landing header says "Introducing
 // Multi-Window." but the idle demo tour still opened one dock app at a
 // time, closing each via its own X before the next one opened -- the
