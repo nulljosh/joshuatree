@@ -106,6 +106,20 @@ void font_draw_char(unsigned char c, int x, int y, unsigned int fg, int bg) {
     }
 }
 
+/* Mono AA path: a separate hook, so the GUI can point the two real
+   character grids (terminal, keyrate) at the mono face while every other
+   string stays on the proportional Sans hook above. Falls back to the
+   same bitmap glyph as font_draw_char when there is no scaled framebuffer
+   to draw into, so it is always safe to call. */
+static void (*aa_mono_hook)(unsigned char c, int px, int py, unsigned int fg, int bg, int cell) = 0;
+void font_set_aa_mono(void (*hook)(unsigned char, int, int, unsigned int, int, int)) { aa_mono_hook = hook; }
+static int aa_mono_active(void) { return aa_mono_hook && window_scale() > 1 && !window_has_target(); }
+
+void font_draw_char_mono(unsigned char c, int x, int y, unsigned int fg, int bg) {
+    if (aa_mono_active()) { int s = (int)window_scale(); aa_mono_hook(c, x * s, y * s, fg, bg, 8 * s); return; }
+    font_draw_char(c, x, y, fg, bg);
+}
+
 /* v77 (0.67.1): real, photographed bug, "Cloudy" in the menu bar read as
    "Cl oudy". Root cause was here: since v44 every string went through
    font_draw_char one glyph at a time at a fixed 8-logical (16-physical)
