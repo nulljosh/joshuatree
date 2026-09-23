@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 """Headless proof that the authored icon artwork is actually what the dock
 is drawing, the same shape as iconhalo-check.py / iconedge-check.py: boot
 kernel.elf with -display none, wait for the desktop's first frame, pmemsave

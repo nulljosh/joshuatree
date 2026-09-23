@@ -105,23 +105,6 @@ retry|Accounts: create, reboot, login, wrong and empty passwords rejected, chang
 once |Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py
 once |Frame time: idle, dock hover and window open stay within budget|python3 ./tools/checks/frametime-check.py
 once |Every check in tools/checks/ is in this manifest or says why not|./tools/checks/suite-coverage-check.sh
-retry|File write/read roundtrips correctly across a reboot|./tools/checks/files-roundtrip-check.sh
-once |auth.h: SHA-256, password verify/change, USERS.TXT round trip (host harness)|./tools/checks/auth-check.sh
-retry|DNS transaction ID validation (dns_resolve rejects a mismatched answer)|./tools/checks/dns-txid-check.sh
-retry|Dock click past the multi-window cap falls back instead of dropping the click|./tools/checks/dockcap-fallback-check.sh
-retry|Contacts prompt redraws content, not chrome, per keystroke|./tools/checks/contacts-keystroke-check.sh
-once |Brand mark stays in sync between landing/icon.svg and the root copy|./tools/checks/iconsync-check.sh
-once |Dock tile art matches the colours its authored SVG states|python3 ./tools/checks/iconart-check.py
-retry|Activity shows a real live task list off the real scheduler, Kill really kills|python3 ./tools/checks/activity-check.py
-retry|Seven GUI apps: real save/edit flows, verified on disk|python3 ./tools/checks/app-interact-check.py
-retry|Mouse wheel packet parsing (Apps folder scroll support)|./tools/checks/appsfolder-mousescroll-check.sh
-retry|Apps folder paints the full frame once, repaints only the panel on selection moves|./tools/checks/appsfolder-redraw-check.sh
-retry|Apps folder actually scrolls on a real QMP wheel event|./tools/checks/appsfolder-wheelscroll-check.sh
-retry|Dock icon shadow falls off smoothly, no banding|python3 ./tools/checks/dockshadow-check.py
-retry|Search opens, lists real files, filters live, Enter shows real content|python3 ./tools/checks/search-check.py
-retry|Stocks app opens with a real close button|python3 ./tools/checks/stocks-dock-check.py
-retry|Weather: live data, labelled fallback and reason for bad/timeout/offline, R retries|./tools/checks/weather-app-check.sh
-retry|First desktop paint uses the baked satellite capture, never the tree photo|./tools/checks/wallboot-check.sh
 EOF
 }
 

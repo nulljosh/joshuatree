@@ -118,6 +118,7 @@ try:
     def type_str(s):
         for c in s: key(c)
     def ctrl(letter):
+        seen[0] = len(serial_text())
         keys("ctrl", letter); time.sleep(0.15)
 
     def open_slot(slot):
@@ -131,6 +132,21 @@ try:
     def serial_text():
         with open(LOG, "rb") as fh:
             return fh.read().decode("latin1")
+    seen = [0]
+    def serial_after_key():
+        """Wait for the kernel to write something new to the serial log
+        (up to 10 s), then let it settle. A fixed sleep failed on the CI
+        runner, where the key had not even been processed yet."""
+        deadline = time.time() + 10.0
+        while time.time() < deadline:
+            log = serial_text()
+            if len(log) > seen[0]:
+                time.sleep(0.3)
+                log = serial_text()
+                seen[0] = len(log)
+                return log
+            time.sleep(0.1)
+        log = serial_text(); seen[0] = len(log); return log
 
     move(*PARK); time.sleep(0.5)
 
@@ -141,8 +157,7 @@ try:
         type_str("clip-roundtrip")
         ctrl("c")
         ctrl("v")
-        time.sleep(0.3)
-        log = serial_text()
+        log = serial_after_key()
         if "CLIPCOPY:" + m("clip-roundtrip") not in log:
             fails.append("Notes Ctrl+C: CLIPCOPY marker with the typed line not found in serial log")
         elif "CLIPPASTE:" + m("clip-roundtrip") not in log:
@@ -162,8 +177,7 @@ try:
         keys("ret")
         type_str("echo cross-app-clip")
         ctrl("x")
-        time.sleep(0.2)
-        log = serial_text()
+        log = serial_after_key()
         if "CLIPCOPY:" + m("echo cross-app-clip") not in log:
             fails.append("Notes Ctrl+X: CLIPCOPY marker with the cut line not found in serial log")
         close_via_x()
@@ -172,8 +186,7 @@ try:
     if not window_open(): fails.append("Terminal: dock click did not open a window")
     else:
         ctrl("v")
-        time.sleep(0.3)
-        log = serial_text()
+        log = serial_after_key()
         if "CLIPPASTE:" + m("echo cross-app-clip") not in log:
             fails.append("Terminal Ctrl+V: CLIPPASTE marker with the cut Notes line not found in serial log")
         else:
@@ -194,8 +207,7 @@ try:
         keys("ret")
         type_str(long_text)
         ctrl("c")
-        time.sleep(0.2)
-        log = serial_text()
+        log = serial_after_key()
         if ("CLIPCOPY:" + m(long_text)) not in log:
             fails.append("Notes Ctrl+C: CLIPCOPY marker with the long line not found in serial log")
         close_via_x()
@@ -204,8 +216,7 @@ try:
     if not window_open(): fails.append("Terminal: dock click did not open a window (scenario 3)")
     else:
         ctrl("v")
-        time.sleep(0.3)
-        log = serial_text()
+        log = serial_after_key()
         expect_paste = "CLIPPASTE:" + m("x" * (TERM_COLS - 1))
         if expect_paste not in log:
             fails.append(f"Terminal Ctrl+V: expected a clean {TERM_COLS - 1}-byte truncated paste, marker not found")

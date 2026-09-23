@@ -1,4 +1,5 @@
 #!/bin/sh
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 # Real regression guard for the "tree shows for a second on startup" class
 # of bug (first fixed v0.76.51, see the comment at wall_apply()'s call site
 # in gui_run()). Boots the real kernel headlessly with REAL networking

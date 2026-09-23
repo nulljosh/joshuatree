@@ -1,4 +1,5 @@
 #!/bin/bash
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 # The Apps folder repainted the wallpaper and its glass panel on every pass
 # of its poll loop, not just when something changed, which is what made
 # scrolling and moving the selection flash the whole screen. The loop now
