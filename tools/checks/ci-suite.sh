@@ -63,6 +63,7 @@ retry|Notes typing, typography, pointer controls, persistence|python3 ./tools/ch
 retry|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/termchatflash-check.sh
 retry|Terminal grid draws the mono face at its true advance|python3 ./tools/checks/termmono-check.py
 retry|Apple-menu hover stays cheap, clock redraws on a minute change|./tools/checks/menuclock-check.sh
+retry|Lock Screen: menu item locks, Esc cannot bypass, password unlocks|python3 ./tools/checks/lockscreen-check.py
 retry|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mwkeyflash-check.sh
 retry|Drawing lands offscreen, window_present puts it on screen|./tools/checks/backbuffer-check.sh
 retry|Multi-window apps draw exactly one toolbar, not two|./tools/checks/mwdupetoolbar-check.sh

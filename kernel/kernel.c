@@ -6001,9 +6001,9 @@ static void gui_launch_about(void){
    Restart calls this kernel's own real reboot() (the 8042 reset pulse,
    already used by the "reboot" shell command), Shut Down really halts
    the CPU. "-" is a separator row, not a real item. */
-#define GUI_MENU_ITEM_COUNT 7
+#define GUI_MENU_ITEM_COUNT 8
 static const char *GUI_MENU_LABELS[GUI_MENU_ITEM_COUNT] = {
-    "About Joshua Tree", "Files", "Notes", "Settings", "-", "Restart", "Shut Down"
+    "About Joshua Tree", "Files", "Notes", "Settings", "Lock Screen", "-", "Restart", "Shut Down"
 };
 #define GUI_MENU_ROW_H  22
 #define GUI_MENU_SEP_H  9
@@ -6240,13 +6240,38 @@ static void gui_draw_weather_panel(void){
 }
 
 static void gui_launch_settings(void);
+
+static void gui_lock_screen(void){
+    if (!auth_gate_would_prompt()) {
+        /* No accounts to lock with. Close menu, show brief message, return to desktop. */
+        gui_draw_desktop(-1, -1, 0, 0);
+        /* Display message for ~1 second: show a notification-style message on screen */
+        int msg_w = font_string_width("No accounts to lock with");
+        int msg_x = ((int)window_width() - msg_w) / 2;
+        int msg_y = (int)window_height() / 2;
+        window_rect(msg_x - 10, msg_y - 10, msg_w + 20, 25, 0x00FAF8F6);
+        window_rect(msg_x - 10, msg_y - 10, msg_w + 20, 25, 0x00555555);  /* border */
+        font_draw_string("No accounts to lock with", msg_x, msg_y, 0x00555555, -1);
+        window_present();
+        sleep_ticks(100);  /* 1 second at 100 ticks/sec */
+        gui_draw_boot_screen();
+    } else {
+        /* Account exists. Force the login screen even though already logged in. */
+        serial_puts("auth: locked\n");
+        auth_logged_in = 0;  /* Reset the flag to force re-authentication */
+        auth_login_screen();
+        gui_draw_boot_screen();
+    }
+}
+
 static void gui_menu_run_item(int item){
     if (item == 0) gui_launch_about();
     else if (item == 1) gui_launch_files();
     else if (item == 2) gui_launch_editor();
     else if (item == 3) gui_launch_settings();
-    else if (item == 5) reboot();
-    else if (item == 6) {
+    else if (item == 4) gui_lock_screen();
+    else if (item == 6) reboot();
+    else if (item == 7) {
         window_clear(0x00111111);
         font_draw_string("It's now safe to turn off this computer.", 20, (int)window_height() / 2, 0x00F5F5F7, -1);
         __asm__ volatile ("cli");
