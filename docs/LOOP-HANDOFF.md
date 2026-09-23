@@ -1,3 +1,19 @@
+# Loop state, 2026-09-23 about 00:00 (read this first)
+
+Stopped at 100% session usage. 1.0 is a Snow Leopard release (docs/roadmap.md): stability, security, speed, no features.
+
+Open PRs, all auto-merge armed, land in this order with `gh pr update-branch` as each goes BEHIND: #116 Curbfind (0.99.0), #117 Shift everywhere + Notes word wrap + gallery and feature drive in CI (0.99.1), #118 parser fuzz + FAT mount DoS fix, #119 roadmap scope, #120 ISO and SHA256SUMS on every release, #121 security QA (masked Settings passwords, json.c bound, 1 s login delay, input-bounds-check.sh).
+
+Pushed branches, no PR yet, need a look first:
+- `soak-test`: soak-check.py (3 passes in CI, 20 by hand) plus pmm_free_frames_last/task_used_last in drivers/window.c. The 20-pass run was started in the background at /tmp/jt-loop/soak20.log; read its last lines before trusting it.
+- `keyboard-a11y`: Enter on the bare desktop opens the Apps folder (kernel change) and keyboard-only-check.py, but the check FAILS for apps 19 to 24 (the fifth grid row never opens). Likely the script's row navigation, not the kernel. Fix, rerun, then PR.
+
+Verified tonight by eye from headless frames: every dock and Apps-folder app is native (26/26 open, feature drive 16 actions change the screen), typography in Notes at 3 faces x 4 sizes x 2 weights is clean, all 95 printable characters draw in Notes and Terminal, Notes wraps at word boundaries.
+
+Still open for the 1.0 gate: release notes (Haiku), e1000 driver stretch, lag issue #14, `gui-prompt-reminders-check.sh` is an orphan that fails on main. Joshua's decisions for 1.0 are in the roadmap: no Wi-Fi, no Bluetooth, English only.
+
+Rules that held tonight: up to 4 Haiku workers or 2 Sonnet at once, every worker report verified from real frames before merging (workers claimed clean layouts over real bugs four times), never push a speculative CI run, keep "require branches up to date" ON (turning it off tripped the safety classifier).
+
 # Loop state, 2026-09-22 evening (read this first)
 
 Main is 0.89.0, released as `jt-v0.89.0`. Merged tonight: #95 Calendar views, #83 Esc, #87 Terminal mono, #96 icon redraw, #86 decoder fuzzing, #65 Chat default, #62 Activity, #97 landing copy. #88 and #92 were closed because #93 carries them.

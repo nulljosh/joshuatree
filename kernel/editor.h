@@ -45,10 +45,26 @@ static void editor_layout(int draw, int *caret_x, int *caret_line) {
     int text_x = 56, line = 0;
     int line_height = 26 + editor_size * 5;
     int visible_lines = editor_visible_lines(line_height);
+    int limit = (int)window_width() - 56, word_start = 1;
     for (int index = 0; index <= editor_length; index++) {
         unsigned char character = editor_buffer[index];
         int advance = character == '\t' ? editor_glyph_for(' ')->advance * 4 : editor_glyph_for(character)->advance;
-        if (text_x + advance > (int)window_width() - 56 && character != '\n') { text_x = 56; line++; }
+        /* Wrap at word boundaries: at the first letter of a word, measure
+           the whole word and move it down if it will not fit on this line.
+           Used to break mid-word ("fox j" / "umps"). A word wider than a
+           line still breaks by character below. */
+        if (word_start && text_x > 56 && character != ' ' && character != '\n' && character != '\t') {
+            int w = 0;
+            for (int j = index; j < editor_length; j++) {
+                unsigned char cj = editor_buffer[j];
+                if (cj == ' ' || cj == '\n' || cj == '\t') break;
+                w += editor_glyph_for(cj)->advance;
+                if (text_x + w > limit) break;
+            }
+            if (text_x + w > limit && w <= limit - 56) { text_x = 56; line++; }
+        }
+        word_start = (character == ' ' || character == '\t');
+        if (text_x + advance > limit && character != '\n') { text_x = 56; line++; }
         if (index == editor_position) { *caret_x = text_x; *caret_line = line; }
         if (index == editor_length) break;
         if (character == '\n') { text_x = 56; line++; continue; }
