@@ -365,7 +365,7 @@
      eyebrow below (data-latest, same injector), where it belongs: H1 says
      what this is, H2 says what is new about it. -->
 <h1>Introducing Joshua Tree.</h1>
-    <h2 class="eyebrow" data-latest="A redrawn icon set and crisper text, in the spirit of macOS"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
+    <h2 class="eyebrow" data-latest="Toroid and Quotes, running natively"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
   </div>
 </header>
 
@@ -476,7 +476,7 @@
   // ?full: the portfolio's /os page frames this site and wants only the machine, no landing page around it.
   if (/[?&]full\b/.test(location.search)) { setFull(true); btn.hidden = true; }
   // capture phase, never preventDefault: embed.js's own Escape interceptor still runs after this
-  window.addEventListener('keydown', function (ev) { if (isFull() && ev.key === 'Escape') setFull(false); }, true);
+  window.addEventListener('keydown', function (ev) { if (isFull() && ev.key === 'Escape' && !/[?&]full\b/.test(location.search)) setFull(false); }, true); // ?full has no page to fall back to, Escape belongs to the OS there
   document.addEventListener('fullscreenchange', function () { if (!document.fullscreenElement && isFull()) setFull(false); });
 })();
 // Direct request: a dynamic version number next to the "Joshua Tree"
