@@ -6119,9 +6119,9 @@ static void gui_launch_about(void){
    Restart calls this kernel's own real reboot() (the 8042 reset pulse,
    already used by the "reboot" shell command), Shut Down really halts
    the CPU. "-" is a separator row, not a real item. */
-#define GUI_MENU_ITEM_COUNT 7
+#define GUI_MENU_ITEM_COUNT 8
 static const char *GUI_MENU_LABELS[GUI_MENU_ITEM_COUNT] = {
-    "About Joshua Tree", "Files", "Notes", "Settings", "-", "Restart", "Shut Down"
+    "About Joshua Tree", "Files", "Notes", "Settings", "Lock Screen", "-", "Restart", "Shut Down"
 };
 #define GUI_MENU_ROW_H  22
 #define GUI_MENU_SEP_H  9
@@ -6358,13 +6358,48 @@ static void gui_draw_weather_panel(void){
 }
 
 static void gui_launch_settings(void);
+
+static void gui_lock_screen(void){
+    if (!auth_gate_would_prompt()) {
+        /* No accounts to lock with. Close menu, show brief message, return to desktop. */
+        gui_draw_desktop(-1, -1, 0, 0);
+        /* Display message for ~1 second: show a notification-style message on screen */
+        int msg_w = font_string_width("No accounts to lock with");
+        int msg_x = ((int)window_width() - msg_w) / 2;
+        int msg_y = (int)window_height() / 2;
+        int box_x = msg_x - 10, box_y = msg_y - 10, box_w = msg_w + 20, box_h = 25;
+        window_rect(box_x, box_y, box_w, box_h, 0x00FAF8F6);  /* fill */
+        /* v0.85.3: a second full-size window_rect in the border color used to
+           sit directly on top of this fill (same x/y/w/h), painting the whole
+           box grey and burying the grey message text on a now-identical grey
+           background -- a real headless dump showed the box with no text at
+           all. A 1px outline on all four edges reads as a border without
+           erasing the fill underneath it. */
+        window_rect(box_x, box_y, box_w, 1, 0x00555555);              /* top */
+        window_rect(box_x, box_y + box_h - 1, box_w, 1, 0x00555555);  /* bottom */
+        window_rect(box_x, box_y, 1, box_h, 0x00555555);              /* left */
+        window_rect(box_x + box_w - 1, box_y, 1, box_h, 0x00555555);  /* right */
+        font_draw_string("No accounts to lock with", msg_x, msg_y, 0x00555555, -1);
+        window_present();
+        sleep_ticks(100);  /* 1 second at 100 ticks/sec */
+        gui_draw_boot_screen();
+    } else {
+        /* Account exists. Force the login screen even though already logged in. */
+        serial_puts("auth: locked\n");
+        auth_logged_in = 0;  /* Reset the flag to force re-authentication */
+        auth_login_screen();
+        gui_draw_boot_screen();
+    }
+}
+
 static void gui_menu_run_item(int item){
     if (item == 0) gui_launch_about();
     else if (item == 1) gui_launch_files();
     else if (item == 2) gui_launch_editor();
     else if (item == 3) gui_launch_settings();
-    else if (item == 5) reboot();
-    else if (item == 6) {
+    else if (item == 4) gui_lock_screen();
+    else if (item == 6) reboot();
+    else if (item == 7) {
         window_clear(0x00111111);
         font_draw_string("It's now safe to turn off this computer.", 20, (int)window_height() / 2, 0x00F5F5F7, -1);
         __asm__ volatile ("cli");
@@ -6574,14 +6609,20 @@ static void gui_run(void){
             }
         } else {
             int sc = kbd_pop();
-            if (sc >= 0 && !(sc & 0x80) && kbd_map(sc) == 27) {
-                /* Esc closes the focused window first. Only a bare desktop
-                   quits to the shell. Files has no key handler of its own,
-                   so before this Esc with Files open dropped the whole
-                   desktop to text mode. */
-                if (gui_window_count == 0) break;
-                gui_multiwin_close(gui_window_count - 1);
-                mw_key_repaint = 1;
+            if (sc >= 0 && !(sc & 0x80)) {
+                char c = SC[sc & 0x7F];
+                if (c == 27) {
+                    /* Esc closes the focused window first. Only a bare desktop
+                       quits to the shell. Files has no key handler of its own,
+                       so before this Esc with Files open dropped the whole
+                       desktop to text mode. */
+                    if (gui_window_count == 0) break;
+                    gui_multiwin_close(gui_window_count - 1);
+                    mw_key_repaint = 1;
+                } else if (c == '\n' && gui_window_count == 0) {
+                    /* Enter on the bare desktop opens the Apps folder */
+                    gui_launch_apps();
+                }
             }
         }
         int dx = 0, dy = 0;
