@@ -129,7 +129,7 @@ static void cf_draw(void) {
 
         /* Filled bar based on score */
         if (score > 0 && score <= 10) {
-            window_rect(bar_x, bar_y, segment_width * score, bar_height, 0x001C9B8A);
+            window_rect(bar_x, bar_y, segment_width * score, bar_height, 0x002F7B4F);
         }
 
         /* Score text (e.g., "9/10") */
