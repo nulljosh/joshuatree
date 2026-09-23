@@ -211,7 +211,7 @@ static int epi_poll(void) {
             int s2; do { s2 = kbd_pop(); } while (s2 < 0);
             return s2 == 0x48 ? KEY_UP : s2 == 0x50 ? KEY_DOWN : s2 == 0x4B ? KEY_LEFT : s2 == 0x4D ? KEY_RIGHT : -1;
         }
-        if (!(sc & 0x80)) { char c = SC[sc & 0x7F]; if (c == 27) return KEY_ESC; if (c) return c; }
+        if (!(sc & 0x80)) { char c = kbd_map(sc); if (c == 27) return KEY_ESC; if (c) return c; }
         return -1;
     }
     if (mouse_click_edge()) return KEY_CLICK;

@@ -199,6 +199,21 @@ static const char SC[128] = {
     'a','s','d','f','g','h','j','k','l',';','\'','`',0,'\\',
     'z','x','c','v','b','n','m',',','.','/',0,'*',0,' '
 };
+/* The same keys with Shift held (US layout). */
+static const char SCS[128] = {
+    0,27,'!','@','#','$','%','^','&','*','(',')','_','+','\b','\t',
+    'Q','W','E','R','T','Y','U','I','O','P','{','}','\n',0,
+    'A','S','D','F','G','H','J','K','L',':','"','~',0,'|',
+    'Z','X','C','V','B','N','M','<','>','?',0,'*',0,' '
+};
+/* Scancode to ASCII with the modifier state kbd_pop tracks. Caps Lock
+   flips letters only, the way a real keyboard does. */
+static char kbd_map(int sc){
+    int i = sc & 0x7F;
+    char c = kbd_shift ? SCS[i] : SC[i];
+    if (kbd_caps && ((SC[i] >= 'a' && SC[i] <= 'z'))) c = kbd_shift ? SC[i] : SCS[i];
+    return c;
+}
 
 /* Non-blocking ASCII read off the same IRQ ring getch() drains, for
    sys_read(fd 0). Declared in console.h; lives here because SC[] and the
@@ -209,7 +224,7 @@ int console_read_key(void){
         int sc = kbd_pop();
         if (sc < 0) return -1;
         if (sc & 0x80) continue;        /* key release */
-        char c = SC[sc & 0x7F];
+        char c = kbd_map(sc);
         if (c) return (int)(unsigned char)c;
     }
 }
@@ -221,7 +236,7 @@ static char getch(void){
         int sc = kbd_pop();
         if (sc < 0) { window_present(); __asm__ volatile ("hlt"); continue; }
         if (sc & 0x80) continue;            /* key release */
-        char c = SC[sc & 0x7F];
+        char c = kbd_map(sc);
         if (c) return c;
     }
 }
@@ -246,7 +261,7 @@ static int gui_getch_or_click(void){
         int sc = kbd_pop();
         if (sc >= 0) {
             if (sc & 0x80) continue;
-            char c = SC[sc & 0x7F];
+            char c = kbd_map(sc);
             if (c) { gui_close_was_click = 0; return (int)(unsigned char)c; }
             continue;
         }
@@ -294,7 +309,7 @@ static int get_key(void){
             continue; /* other extended keys: ignore */
         }
         if (sc & 0x80) continue;
-        char c = SC[sc & 0x7F];
+        char c = kbd_map(sc);
         if (c == '\n') return KEY_ENTER;
         if (c == 27)   return KEY_ESC;
         if (c) return c;
@@ -316,7 +331,7 @@ static int get_key_or_click(void){
                 continue;
             }
             if (!(sc & 0x80)) {
-                char c = SC[sc & 0x7F];
+                char c = kbd_map(sc);
                 gui_close_was_click = 0;
                 if (c == '\n') return KEY_ENTER;
                 if (c == 27)   return KEY_ESC;
@@ -4128,7 +4143,7 @@ static void gui_wait_close(void){
            just consumed and ignored, harmless on a page with nothing
            else to do with a keypress, and no longer surprising on one
            that does. */
-        if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) { gui_close_was_click = 0; return; }
+        if (sc >= 0 && !(sc & 0x80) && kbd_map(sc) == 27) { gui_close_was_click = 0; return; }
         if (mouse_click_edge()) { gui_close_was_click = 1; return; }
         window_present(); __asm__ volatile ("hlt");
     }
@@ -4185,7 +4200,7 @@ static void gui_launch_weather(void){
         gui_app_mouse_tick();
         int sc = kbd_pop();
         if (sc >= 0 && !(sc & 0x80)) {
-            char c = SC[sc & 0x7F];
+            char c = kbd_map(sc);
             if (gui_weather_key(c == 27 ? KEY_ESC : c, gui_draw_weather_content)) { gui_close_was_click = 0; return; }
         }
         if (mouse_click_edge()) { gui_close_was_click = 1; return; }
@@ -5821,7 +5836,7 @@ static int gui_multiwin_key_nonblock(void){
         return -1;
     }
     if (sc & 0x80) return -1; /* key release */
-    char c = SC[sc & 0x7F];
+    char c = kbd_map(sc);
     if (c == '\n') return KEY_ENTER;
     if (c == 27)   return KEY_ESC;
     if (c) return (int)(unsigned char)c;
@@ -5955,7 +5970,7 @@ static void gui_launch_about(void){
     for (;;) {
         gui_app_mouse_tick();
         int sc = kbd_pop();
-        if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) { gui_close_was_click = 0; return; }
+        if (sc >= 0 && !(sc & 0x80) && kbd_map(sc) == 27) { gui_close_was_click = 0; return; }
         if (mouse_click_edge()) { gui_close_was_click = 1; return; }
         window_present(); __asm__ volatile ("hlt");
     }
@@ -6424,7 +6439,7 @@ static void gui_run(void){
             }
         } else {
             int sc = kbd_pop();
-            if (sc >= 0 && !(sc & 0x80) && SC[sc & 0x7F] == 27) {
+            if (sc >= 0 && !(sc & 0x80) && kbd_map(sc) == 27) {
                 /* Esc closes the focused window first. Only a bare desktop
                    quits to the shell. Files has no key handler of its own,
                    so before this Esc with Files open dropped the whole
