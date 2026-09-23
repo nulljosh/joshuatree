@@ -4,7 +4,8 @@ Freestanding i386 kernel, no libc. This is the forward plan. What already
 shipped lives in `git log`, `git tag -l "jt-v*"`, and the [GitHub
 releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
-**Latest**: Plan, the next ten years, running natively.
+**Latest**: Curbfind, the best deals on the curb, running natively.
+**Latest**: Curbfind, the best deals on the curb, running natively.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -13,33 +14,39 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 ## Beta, 0.9.0
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck.
 - [x] Shell launches a program by name (#64).
-- [ ] [Sonnet] Ring-3 programs a fresh shell ships with: `cat`, `wc`, `grep`, `calc`. A tiny C compiler is a stretch.
 - [ ] [Sonnet] Landing hero, Joshua's spec: demo full width and about 85% of the screen tall, headline and its typewriter line squeezed into the strip under it, sections snap like magnets on scroll, no full screen mode needed. Test on phone and desktop, including reload and the old exit button scrolling too far.
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
 - [x] Icon set redrawn to Mac-grade taste (#96): depth, soft light, real materials. The current set is sharp but reads like Windows.
 - [ ] [Sonnet] Boot splash shows the real engraved tree mark at full resolution, not the stick tree.
 - [ ] [Fable] Typography QA across Notes, the document app and the Terminal: spacing between letters, baselines, sizes and weights, every printable character, long lines, wrapping, selection. This kernel is a word processor from scratch, so text gets its own checks.
-- [ ] [Sonnet] Settings gets a Location field (city or postal code), saved, used by weather and the wallpaper map. Location from the internet address says Vancouver for Langley and cannot do better.
 - [ ] [Sonnet] Chat QA: open Chat, switch between models, sign-in gate for subscription models.
 - [ ] [Sonnet] A headless test for every app (open, use, close) in `tools/checks/ci-suite.sh`.
 - [ ] [Fable] Error handling audit: corrupt or oversized files, full disk, bad input in every text field, missing disk, network or mouse. Each case gets a check.
 - [ ] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts.
 - [x] Magnet-style window snapping (#82): drag a window to a screen edge for a half, to a corner for a quarter, to the top for full, with the target outline shown while dragging.
-- [ ] [Sonnet] Settings as a real native app in the dock: wallpaper, text size, system typeface, location, accounts, network status, about. One place, not scattered panels.
-- [ ] [Sonnet] Photos app: grid of the images on disk, click for full view, arrow keys to move. Built on `drivers/png.c`, plus baseline JPEG if the wallpaper decoder can be reused. Covers the image viewer gap.
-- [ ] [Sonnet] Typeface support: proportional fonts beyond DejaVu, loaded from disk, picked in Settings. Reference look from Joshua: a tight grotesque sans for body and headlines, one display face for titles, hairline rules, flat colour blocks. Sans only in the UI chrome.
 - [ ] [Haiku] Docs refresh: README, WHITEPAPER and ARCHITECTURE reworded and filled out to mirror the structure of the better fleet docs (nimble and tripwire are the reference).
 
 ## 1.0.0
+Joshua's call, 2026-09-22: **1.0 is a Snow Leopard release.** No new features. Stability, reliability and speed only: every item below makes what already exists crash less, lose less and run faster. New apps and features wait for 1.1 (see After 1.0).
 Joshua's call, 2026-09-21: 1.0.0 is a super thorough QA release. Every feature works, nothing crashes, all text and icons are sharp, and the icons have taste, not a Microsoft look. Real hardware is trusted for now and proven after.
-- [ ] [Haiku] QA gallery: one headless script opens every app from the dock and the Apps folder, uses it, closes it, saves a full resolution screenshot of each, and fails on any crash text in the serial log. Runs in `tools/checks/ci-suite.sh`.
+- [x] QA gallery (#104, `tools/checks/qa-gallery.py`): one headless script opens every app from the dock and the Apps folder, uses it, closes it, saves a full resolution screenshot of each, and fails on any crash text in the serial log. Runs in `tools/checks/ci-suite.sh`.
 - [ ] [Fable] Main session reviews every gallery screenshot by eye: blurry text, clipped labels, misaligned chrome, soft icons. Each finding becomes a bug line below and gets fixed before the tag.
+- [ ] [Haiku] QA gallery runs in `tools/checks/ci-suite.sh` on every PR, so a crash in any app blocks the merge.
+- [ ] [Sonnet] Soak test: open and close every app 20 times in one boot, then assert free memory (`pmm_free_frames`) is back where it started and no task slot leaked. Catches leaks the single-pass gallery never sees.
+- [ ] [Fable] Fuzz the HTTP, DNS, JSON and FAT parsers on the host with hostile input, the way `tools/fuzz-host` already does the image decoders.
+- [ ] [Fable] The lag (issue #14) profiled, fixed and measured, with frame time numbers in the release notes.
 - [ ] [Sonnet] Every feature exercised once: each app's main action (add a reminder, save a note, send the chat prompt, search, change wallpaper, snap a window), each menu item, each Settings row, each shell command in `help`.
 - [ ] [Sonnet] Nothing crashes: bad input in every text field, long lines, empty files, missing disk, no network. Each case gets a check.
 - [ ] [Sonnet] Icons with taste: depth, soft light, real materials, consistent corner and light direction across all of them. Judged from the gallery at dock, hover and Apps grid sizes.
   - 0.89.0: the 11 dock icons redrawn Big Sur style (one top light, no outlines, 148px art at an exact 2:1); `tools/checks/iconlight-check.py`. Still to do: the 15 Apps-folder fleet icons, and a live date on Calendar's tile.
 - [ ] [Sonnet] Text sharp everywhere: no bitmap fallback font where the antialiased one should draw, no uneven letter gaps, baselines level.
   - 0.89.0: coverage-to-ink curve (stem darkening) sharpens every AA text path; `tools/checks/textsharp-check.py`.
+- [ ] [Sonnet] Security QA: every text field bounds-audited (Notes, Reminders, Mail, Contacts, Calculator, Search, Chat, Terminal, Settings, login), auth.h checked for empty passwords, constant-time compare, a delay after failed attempts and plaintext wiped; a host bounds check left behind in ci-suite.
+- [ ] [Haiku] Every release ships `joshuatree-<version>.iso` and `SHA256SUMS` as assets, built by the release workflow, with dd instructions in the notes and README.
+- [ ] [Haiku] Accessibility floor: every app opens and closes by keyboard alone (a keyboard-only check in ci-suite), the Apps folder has a key from the desktop.
+- [x] Shift and Caps Lock work in every app, not only Notes (#117). Notes wraps at word boundaries.
+- [ ] [Fable] Wired internet on real PCs: an Intel e1000 driver next to rtl8139 and ne2k, proven with QEMU `-device e1000`. Most PCs from the last 15 years have an Intel or Realtek chip, so this is what makes the network real off the emulator. Stretch for 1.0; if it slips, the release notes say wired internet is QEMU-only.
+- [ ] [Joshua] Decided for 1.0, stated in the release notes: no Wi-Fi, no Bluetooth (both need firmware blobs and a full 802.11 or BT stack, months of work each), English only (every UI string is compiled in; a language table is a 1.1 project), no screen reader (no sound yet). Keyboard-only use and large text in Notes are the accessibility floor.
 - [ ] [Haiku] Release notes that say what is missing: no sound, no secure web of its own, one core, no install to disk.
 - [x] Codename: 1.0 is **Hidden Valley**. Joshua Tree is the name of the computer and the company, the way Apple is; each major release is named after a real place in Joshua Tree National Park. Next in line: Skull Rock, Keys View, Cottonwood, Wonderland. Mojave is skipped, Apple used it. Domain `joshuatreeos.com`.
 
@@ -47,8 +54,14 @@ Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk)
 
 ## After 1.0
 What other small operating systems needed before people used them day to day.
+- [ ] [Fable] Bluetooth: a USB HCI transport and enough of the stack for a keyboard and mouse.
+- [ ] [Sonnet] Languages: every UI string through one table, a Settings language picker, Latin-1 accents drawn (the DejaVu faces have the glyphs; the text paths drop bytes above 0x7F today).
+- [ ] [Sonnet] Ring-3 programs a fresh shell ships with: `cat`, `wc`, `grep`, `calc`. A tiny C compiler is a stretch.
+- [ ] [Sonnet] Settings gets a Location field (city or postal code), saved, used by weather and the wallpaper map. Location from the internet address says Vancouver for Langley and cannot do better.
+- [ ] [Sonnet] Settings as a real native app in the dock: wallpaper, text size, system typeface, location, accounts, network status, about. One place, not scattered panels.
+- [ ] [Sonnet] Photos app: grid of the images on disk, click for full view, arrow keys to move. Built on `drivers/png.c`, plus baseline JPEG if the wallpaper decoder can be reused. Covers the image viewer gap.
+- [ ] [Sonnet] Typeface support: proportional fonts beyond DejaVu, loaded from disk, picked in Settings. Reference look from Joshua: a tight grotesque sans for body and headlines, one display face for titles, hairline rules, flat colour blocks. Sans only in the UI chrome.
 - [ ] [Sonnet] Keyboard shortcuts for the snap zones (halves, quarters, full), split out of the snapping item that shipped in #82.
-- [ ] [Fable] The lag (issue #14) profiled, fixed and measured, with frame time numbers in the release notes.
 - [ ] [Joshua] One real PC booted from the USB stick, keyboard and mouse working, photographed. The USB image and non-emulator graphics are only proven in QEMU so far.
 - [ ] [Fable] Keyboards on real PCs: a USB keyboard driver, or release notes that say plainly it needs the BIOS legacy keyboard mode.
 - [ ] [Sonnet] Saving on real PCs stated plainly: today only old IDE disks work.

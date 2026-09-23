@@ -431,10 +431,14 @@ static int auth_field_input(char *out, int max, int y, int masked) {
     return 1;
 }
 
-/* Real login: wrong credentials refuse and re-prompt (no lockout/rate
-   limiting -- there's exactly one local user in front of the keyboard in
-   this threat model, and adding a fake-looking lockout would be exactly
-   the overclaiming docs/THREAT-MODEL.md warns against). esc on the
+/* Real login: wrong credentials refuse and re-prompt. No lockout table
+   (there's exactly one local user in front of the keyboard in this threat
+   model, and a fake-looking account-lockout screen would be exactly the
+   overclaiming docs/THREAT-MODEL.md warns against), but a fixed 1-second
+   delay (100 PIT ticks at 100/sec, see kernel/irq.h) after every rejected
+   attempt below -- security pass: a real throttle against an automated
+   guesser is worth having even in a single-user threat model, and unlike
+   a lockout it can't be used to lock the real owner out. esc on the
    username field is the one way out of the loop, matching every other
    esc-closes-and-does-nothing-destructive contract this GUI already
    keeps, and just re-shows the same screen since there's no desktop to
@@ -465,7 +469,7 @@ static void auth_login_screen(void) {
         window_clear(GUI_BG);
         gui_draw_app_titlebar("Joshua Tree");
         font_draw_string("Wrong username or password. Try again.", 20, 52, 0x00A33B3B, -1);
-        sleep_ticks(60);
+        sleep_ticks(100); /* fixed 1-second throttle per failed attempt, see comment above auth_login_screen */
     }
 }
 

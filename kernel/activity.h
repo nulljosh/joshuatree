@@ -159,7 +159,7 @@ static void gui_launch_activity(void) {
                 else if (sc2 == 0x4B) k = KEY_LEFT;
                 else if (sc2 == 0x4D) k = KEY_RIGHT;
             } else if (!(sc & 0x80)) {
-                char c = SC[sc & 0x7F];
+                char c = kbd_map(sc);
                 gui_close_was_click = 0;
                 if (c == '\n') k = KEY_ENTER;
                 else if (c == 27) k = KEY_ESC;
