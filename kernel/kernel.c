@@ -5197,8 +5197,17 @@ static void gui_launch_trash(void){
    confirms, esc or a click cancels), pulled in here rather than shared
    across files since every app in this kernel keeps its own copy of this
    small loop already. Used to edit the two string LLM settings, since a
-   toggle/stepper doesn't fit free text the way it fits wind/dock/wall. */
-static int settings_prompt_line(const char *prompt, char *out, int max) {
+   toggle/stepper doesn't fit free text the way it fits wind/dock/wall.
+
+   security pass: added a `masked` parameter. The password-change and
+   add-user rows below used to call this with the typed password rendered
+   in the clear on screen, the exact thing auth_field_input's dot-echo in
+   auth.h was built to avoid for the login/first-run screens -- a real gap
+   (shoulder-surfing, screen recording, the v86 landing demo) since this is
+   the same secret, just entered through a different door. Masked draws a
+   fixed-width dot per character, same convention, same length-not-content
+   leak trade-off already accepted for login. */
+static int settings_prompt_line(const char *prompt, char *out, int max, int masked) {
     unsigned int n = 0;
     while (out[n] && (int)n < max - 1) n++; /* start from the current value, not empty, so editing is a tweak not a retype */
     mouse_click_edge_sync();
@@ -5208,7 +5217,15 @@ static int settings_prompt_line(const char *prompt, char *out, int max) {
         font_draw_string(prompt, 20, 52, 0x0075726E, -1);
         window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
         out[n] = 0;
-        font_draw_string(out, 24, 78, 0x001C1C1E, -1);
+        if (masked) {
+            char dots[AUTH_PASSWORD_MAX + 1];
+            unsigned int dn = n; if (dn > AUTH_PASSWORD_MAX) dn = AUTH_PASSWORD_MAX;
+            for (unsigned int i = 0; i < dn; i++) dots[i] = '*';
+            dots[dn] = 0;
+            font_draw_string(dots, 24, 78, 0x001C1C1E, -1);
+        } else {
+            font_draw_string(out, 24, 78, 0x001C1C1E, -1);
+        }
         int k = get_key_or_click();
         if (k == KEY_ESC || k == KEY_CLICK) return 0;
         if (k == KEY_ENTER) break;
@@ -5366,7 +5383,7 @@ static void gui_launch_settings(void){
                 char hostbuf[LLM_HOST_MAX];
                 int hn = 0; while (llm_host[hn] && hn < LLM_HOST_MAX - 1) { hostbuf[hn] = llm_host[hn]; hn++; }
                 hostbuf[hn] = 0;
-                if (settings_prompt_line("LLM host (hostname or IP, enter to confirm, esc to cancel):", hostbuf, LLM_HOST_MAX)) {
+                if (settings_prompt_line("LLM host (hostname or IP, enter to confirm, esc to cancel):", hostbuf, LLM_HOST_MAX, 0)) {
                     int j = 0; while (hostbuf[j] && j < LLM_HOST_MAX - 1) { llm_host[j] = hostbuf[j]; j++; } llm_host[j] = 0;
                     char portbuf[8]; int pn = 0; int v = llm_port;
                     char digits[8]; int nd = 0;
@@ -5374,7 +5391,7 @@ static void gui_launch_settings(void){
                     while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
                     while (nd) portbuf[pn++] = digits[--nd];
                     portbuf[pn] = 0;
-                    if (settings_prompt_line("LLM port (enter to confirm, esc to cancel):", portbuf, sizeof(portbuf))) {
+                    if (settings_prompt_line("LLM port (enter to confirm, esc to cancel):", portbuf, sizeof(portbuf), 0)) {
                         int nv = 0; for (int c = 0; portbuf[c]; c++) if (portbuf[c] >= '0' && portbuf[c] <= '9') nv = nv * 10 + (portbuf[c] - '0');
                         if (nv > 0 && nv <= 65535) llm_port = nv;
                     }
@@ -5392,11 +5409,11 @@ static void gui_launch_settings(void){
                    uses) don't apply to this row, only a real tap/enter. */
                 if (auth_current_user[0]) {
                     char oldbuf[AUTH_PASSWORD_MAX + 1]; oldbuf[0] = 0;
-                    if (settings_prompt_line("Current password (enter to confirm, esc to cancel):", oldbuf, sizeof(oldbuf))) {
+                    if (settings_prompt_line("Current password (enter to confirm, esc to cancel):", oldbuf, sizeof(oldbuf), 1)) {
                         char newbuf[AUTH_PASSWORD_MAX + 1]; newbuf[0] = 0;
-                        if (settings_prompt_line("New password (enter to confirm, esc to cancel):", newbuf, sizeof(newbuf))) {
+                        if (settings_prompt_line("New password (enter to confirm, esc to cancel):", newbuf, sizeof(newbuf), 1)) {
                             char confirmbuf[AUTH_PASSWORD_MAX + 1]; confirmbuf[0] = 0;
-                            if (settings_prompt_line("Confirm new password (enter to confirm, esc to cancel):", confirmbuf, sizeof(confirmbuf))) {
+                            if (settings_prompt_line("Confirm new password (enter to confirm, esc to cancel):", confirmbuf, sizeof(confirmbuf), 1)) {
                                 int ok = !strcmp(newbuf, confirmbuf) && auth_change_password(auth_current_user, oldbuf, newbuf);
                                 font_draw_string(ok ? "Password changed." : "That didn't work -- wrong current password or mismatch.",
                                                   20, (int)window_height() - 48, ok ? 0x002F7B4F : 0x00A33B3B, -1);
@@ -5418,9 +5435,9 @@ static void gui_launch_settings(void){
                    account. auth_create_user already refuses a duplicate
                    name, an empty name/password, or a full table (8 max). */
                 char ubuf[AUTH_USERNAME_MAX + 1]; ubuf[0] = 0;
-                if (settings_prompt_line("New username (enter to confirm, esc to cancel):", ubuf, sizeof(ubuf))) {
+                if (settings_prompt_line("New username (enter to confirm, esc to cancel):", ubuf, sizeof(ubuf), 0)) {
                     char pbuf[AUTH_PASSWORD_MAX + 1]; pbuf[0] = 0;
-                    if (settings_prompt_line("Password for that user (enter to confirm, esc to cancel):", pbuf, sizeof(pbuf))) {
+                    if (settings_prompt_line("Password for that user (enter to confirm, esc to cancel):", pbuf, sizeof(pbuf), 1)) {
                         int ok = auth_create_user(ubuf, pbuf);
                         /* v0.77.1: the gate is opt-in (auth_gate is a no-op
                            on an unconfigured system, see kernel/auth.h),
@@ -6990,7 +7007,13 @@ static void run(char *line){
         char rbuf[32]; for (int i = 0; i < 32; i++) rbuf[i] = 0;
         if (!read_only) vfs_delete(filename);  /* start fresh each time */
         if (!read_only && !vfs_write_file(filename, (char *)content, 18)) serial_puts("filetest: write failed\n");
-        else if (!vfs_read_file(filename, rbuf, sizeof(rbuf))) serial_puts("filetest: read failed\n");
+        /* security pass: sizeof(rbuf) - 1, not sizeof(rbuf) -- reserves the
+           last byte so the strcmp below always finds a real NUL even if
+           JT_TEST.TXT on disk is >= 32 bytes (a crafted disk image, not
+           just this command's own 18-byte write), matching the
+           sizeof(buf)-1 convention every other vfs_read_file call in this
+           kernel already follows. */
+        else if (!vfs_read_file(filename, rbuf, sizeof(rbuf) - 1)) serial_puts("filetest: read failed\n");
         else if (strcmp(rbuf, content)) serial_puts("filetest: content mismatch\n");
         else serial_puts(read_only ? "filetest: persisted read ok\n" : "filetest: write+read ok\n");
     }

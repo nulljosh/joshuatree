@@ -70,6 +70,7 @@ once |JPEG decoder, host harness|./tools/checks/jpeg-host-check.sh
 once |HTML entities decode to ASCII, host harness|./tools/checks/html-host-check.sh
 retry|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
 once |PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/decoder-fuzz-check.sh
+once |Text-input bounds: json.c maxlen 0/1/truncation + auth const-time compare (ASan/UBSan)|./tools/checks/input-bounds-check.sh
 retry|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclose-check.py
 retry|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
 retry|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
