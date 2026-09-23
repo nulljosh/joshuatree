@@ -148,8 +148,20 @@ try:
     # only. get_key_or_click's case-insensitive match (search_contains_ci)
     # means the exact case typed here doesn't matter, only that it's a
     # genuine substring, not a fixture-matching hack.
+    # Keys dropped on slow runners if sent in burst; poll for each redraw marker
+    def get_redraw_count():
+        try:
+            with open(LOG) as lf: return lf.read().count("searchcontent\n")
+        except FileNotFoundError: return 0
+
+    before_typing = get_redraw_count()
     for c in "readme":
         key(c)
+        for _ in range(50):
+            if get_redraw_count() > before_typing:
+                before_typing = get_redraw_count()
+                break
+            time.sleep(0.1)
 
     img2 = dump()
     readme_after = row_has_text(img2, ROW0_Y)

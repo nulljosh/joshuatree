@@ -91,8 +91,12 @@ time.sleep(0.3)
 after_typing = chrome_count()
 
 key("f1")
-time.sleep(0.3)
-after_f1 = chrome_count()
+# Wait for F1's redraw to land instead of reading after a fixed 0.3 s:
+# on a slow CI runner the read beat the redraw and saw 2.
+for _ in range(50):
+    time.sleep(0.1)
+    after_f1 = chrome_count()
+    if after_f1 != after_typing: break
 
 cmd({"execute": "quit"})
 
