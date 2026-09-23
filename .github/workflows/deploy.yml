@@ -26,6 +26,9 @@ on:
       - 'worker.js'
       - 'docs/roadmap.md'
       - 'tools/gen/landing-roadmap.py'
+      - 'tools/gen/inject-landing-facts.py'
+      - 'tools/checks/ci-suite.sh'
+      - 'VERSION'
       - '.github/workflows/deploy.yml'
       - 'kernel/**'
       - 'drivers/**'
@@ -51,6 +54,8 @@ jobs:
         run: make kernel.elf
       - name: Sync landing page headline to latest roadmap feature
         run: ./tools/gen/inject-landing-headline.sh
+      - name: Sync landing page facts (apps, checks, lines, version)
+        run: python3 tools/gen/inject-landing-facts.py
       - name: Generate landing roadmap summary
         run: python3 tools/gen/landing-roadmap.py
       - name: Deploy to Cloudflare Workers
