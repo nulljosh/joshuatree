@@ -6,6 +6,13 @@ static int starts_with(const char *p, const char *needle) {
 }
 
 unsigned int json_extract_string(const char *json, const char *key, char *out, unsigned int maxlen) {
+    /* security pass: every call site today passes a real sizeof(), but
+       maxlen==0 would underflow the `maxlen - 1` bound checks below
+       (unsigned) into a huge value and turn this into an unbounded write
+       into `out` -- untrusted network JSON (weather/geo/chat replies)
+       lands here, so this is worth guarding even with no current caller
+       that triggers it. */
+    if (maxlen == 0) return 0;
     /* build the "key": pattern to search for (with the opening quote) */
     char pattern[64];
     unsigned int pn = 0;
@@ -48,6 +55,7 @@ unsigned int json_extract_string(const char *json, const char *key, char *out, u
 }
 
 unsigned int json_extract_number_text(const char *json, const char *key, char *out, unsigned int maxlen) {
+    if (maxlen == 0) return 0; /* same unsigned-underflow guard as json_extract_string above */
     char pattern[64];
     unsigned int pn = 0;
     pattern[pn++] = '"';
@@ -76,6 +84,7 @@ unsigned int json_extract_number_text(const char *json, const char *key, char *o
 }
 
 unsigned int json_escape(const char *s, char *out, unsigned int maxlen) {
+    if (maxlen < 2) { if (maxlen == 1) out[0] = 0; return 0; } /* same unsigned-underflow guard, `maxlen - 2` below */
     unsigned int pos = 0;
     for (; *s && pos < maxlen - 2; s++) {
         if (*s == '"' || *s == '\\') { if (pos < maxlen - 2) out[pos++] = '\\'; out[pos++] = *s; }

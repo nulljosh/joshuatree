@@ -66,6 +66,27 @@ int fat_mount(void) {
     u32 total_sectors = total_sectors_16 ? total_sectors_16 : total_sectors_32;
     total_clusters = total_sectors > data_start ? (total_sectors - data_start) / sectors_per_cluster : 0;
 
+    /* Real bug, found by host-fuzzing a boot sector whose total_sectors_16
+       was 0 and total_sectors_32 was 0xFFFFFFFF (both entirely attacker-
+       controlled, unrelated to fat_size_sectors, the field that actually
+       sizes the on-disk FAT table): total_clusters came out near 4.3
+       billion, and alloc_cluster's free-cluster search (`for c=2; c<
+       total_clusters+2; c++`) has no other bound, so any write on a
+       mounted disk that hostile/corrupted (real risk on its own, not just
+       a crafted attack: an interrupted format or a torn write can leave a
+       BPB whose total_sectors disagrees with its own FAT size) hung for
+       the whole search, a real denial of service (tools/fuzz-host/
+       fuzz_parsers.c's "fat_alloc_cluster_dos" case reproduces it host-
+       side under a 1-second alarm). A FAT16 table only ever has room to
+       describe as many clusters as its own sectors can hold 2-byte
+       entries for (minus the 2 reserved low entries), regardless of what
+       total_sectors claims; clamping here fixes every consumer of
+       total_clusters (alloc_cluster, release_chain) at the one place that
+       computes it, not just the write path that happened to find it. */
+    u32 max_clusters_from_fat = (u32)fat_size_sectors * (512 / 2);
+    if (max_clusters_from_fat >= 2) max_clusters_from_fat -= 2; else max_clusters_from_fat = 0;
+    if (total_clusters > max_clusters_from_fat) total_clusters = max_clusters_from_fat;
+
     current_dir_cluster = 0;
     mounted = 1;
     return 1;
