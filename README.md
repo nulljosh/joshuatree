@@ -33,7 +33,7 @@ make iso              # build bootable ISO
 
 ## Read more
 
-- [WHITEPAPER.md](WHITEPAPER.md) - why and how
+- [docs/WHITEPAPER.md](docs/WHITEPAPER.md) - why and how
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - every file
 - [SECURITY.md](SECURITY.md) - security model
 - [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) - threat model
