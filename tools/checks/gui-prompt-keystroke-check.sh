@@ -169,7 +169,13 @@ before = prompt_count()
 for c in "hello":
     key(c)
     time.sleep(0.1)
-after = prompt_count()
+# Keys dropped on slow runners if sent in burst; poll for redraw markers
+after = 0
+for _ in range(50):
+    after = prompt_count()
+    if after > before + 2:
+        break
+    time.sleep(0.1)
 
 if after > before + 3:
     test_results.append(f"Reminders: OK ({after - before} redraws for ~5 keystrokes)")
@@ -188,7 +194,13 @@ before = prompt_count()
 for c in "Alice":
     key(c)
     time.sleep(0.1)
-after = prompt_count()
+# Keys dropped on slow runners if sent in burst; poll for redraw markers
+after = 0
+for _ in range(50):
+    after = prompt_count()
+    if after > before + 2:
+        break
+    time.sleep(0.1)
 
 if after > before + 3:
     test_results.append(f"Mail: OK ({after - before} redraws for ~5 keystrokes)")
@@ -222,7 +234,13 @@ time.sleep(0.5)
 before = prompt_count()
 for c in "2+3+4":
     key_char(c)
-after = prompt_count()
+# Keys dropped on slow runners if sent in burst; poll for redraw markers
+after = 0
+for _ in range(50):
+    after = prompt_count()
+    if after > before + 2:
+        break
+    time.sleep(0.1)
 
 if after > before + 3:
     test_results.append(f"Calculator: OK ({after - before} redraws for ~5 keystrokes)")
