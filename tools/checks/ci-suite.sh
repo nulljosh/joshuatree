@@ -70,6 +70,7 @@ once |JPEG decoder, host harness|./tools/checks/jpeg-host-check.sh
 once |HTML entities decode to ASCII, host harness|./tools/checks/html-host-check.sh
 retry|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
 once |PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/decoder-fuzz-check.sh
+once |HTTP/JSON/FAT16 parser fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/parser-fuzz-check.sh
 once |Text-input bounds: json.c maxlen 0/1/truncation + auth const-time compare (ASan/UBSan)|./tools/checks/input-bounds-check.sh
 retry|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclose-check.py
 retry|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
@@ -79,6 +80,8 @@ retry|Multi-window (click-to-focus, real z-order compositing)|python3 ./tools/ch
 retry|Window snapping (title-bar drag to edge/corner, real pixel proof)|python3 ./tools/checks/windowsnap-check.py
 retry|Windowed apps start under the title bar, Calendar fits six weeks|python3 ./tools/checks/apptop-check.py
 retry|Calendar Day, Week, Month and Year views|python3 ./tools/checks/calviews-check.py
+retry|QA gallery: every app opens, screenshots, closes, no crash|python3 ./tools/checks/qa-gallery.py /tmp/jt-gallery
+retry|Every app's main action, headless|python3 ./tools/checks/feature-drive.py
 retry|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
 retry|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
 retry|Dock icon lighting (one soft top light, top highlight, no dark outline)|python3 ./tools/checks/iconlight-check.py
