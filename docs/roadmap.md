@@ -24,7 +24,7 @@ Everything a stranger needs to use it for an hour in the browser or an emulator 
 - [ ] [Sonnet] A headless test for every app (open, use, close) in `tools/checks/ci-suite.sh`.
 - [ ] [Fable] Error handling audit: corrupt or oversized files, full disk, bad input in every text field, missing disk, network or mouse. Each case gets a check.
 - [ ] [Haiku] Build and run documented and checked on Apple Silicon, Intel and AMD hosts.
-- [x] Magnet-style window snapping (#82; keyboard shortcuts moved to 1.1), like the Magnet Mac app (dump, 2026-09-21): drag a window to a screen edge for a half, to a corner for a quarter, to the top for full. Show the target outline while dragging. Keyboard shortcuts for the same zones.
+- [x] Magnet-style window snapping (#82): drag a window to a screen edge for a half, to a corner for a quarter, to the top for full, with the target outline shown while dragging.
 - [ ] [Sonnet] Settings as a real native app in the dock: wallpaper, text size, system typeface, location, accounts, network status, about. One place, not scattered panels.
 - [ ] [Sonnet] Photos app: grid of the images on disk, click for full view, arrow keys to move. Built on `drivers/png.c`, plus baseline JPEG if the wallpaper decoder can be reused. Covers the image viewer gap.
 - [ ] [Sonnet] Typeface support: proportional fonts beyond DejaVu, loaded from disk, picked in Settings. Reference look from Joshua: a tight grotesque sans for body and headlines, one display face for titles, hairline rules, flat colour blocks. Sans only in the UI chrome.
@@ -46,6 +46,7 @@ Joshua's call, 2026-09-21: 1.0.0 is a super thorough QA release. Every feature w
 Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk), and moving the landing page to a `gh-pages` branch.
 
 ## After 1.0
+- [ ] [Sonnet] Keyboard shortcuts for the snap zones (halves, quarters, full), split out of the snapping item that shipped in #82.
 What other small operating systems needed before people used them day to day.
 - [ ] [Fable] The lag (issue #14) profiled, fixed and measured, with frame time numbers in the release notes.
 - [ ] [Joshua] One real PC booted from the USB stick, keyboard and mouse working, photographed. The USB image and non-emulator graphics are only proven in QEMU so far.
