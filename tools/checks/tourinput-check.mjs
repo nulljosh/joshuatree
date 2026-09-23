@@ -1,3 +1,4 @@
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // Regression test for the v71 idle-tour bug: keyboard_send_text calls the
 // tour makes while nobody has focused the demo were silently swallowed by
 // libv86.js's own keyboard_adapter.emu_enabled gate (embed.js sets it

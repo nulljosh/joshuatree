@@ -1,4 +1,7 @@
 #!/bin/bash
+# MANUAL: needs a real Ollama server reachable at the host's SLIRP gateway
+# address, which no CI runner has. Passes on this machine because Ollama
+# is running locally; run by hand, not in ci-suite.sh.
 # v0.85.4: headless, real-network proof that the shell `chat` command really
 # reaches the host's Ollama server and gets a real reply back, the same
 # "real fetch, not just a built URL" bar geo-check.sh already holds weather

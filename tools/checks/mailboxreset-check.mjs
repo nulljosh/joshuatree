@@ -1,3 +1,4 @@
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // Regression test for the real user-reported v0.72.3 bug: "every time it
 // runs a demo and then restarts the demo, it adds like emails to the list,
 // so there's duplicate emails." Root cause: this kernel's browser demo has
