@@ -30,7 +30,11 @@ static void editor_draw_glyph(unsigned char character, int origin_x, int origin_
    viewport, where the old fixed 450px area and a status line at y=570
    were both clipped clean off, and the caret's scroll logic believed
    lines were visible that nothing ever drew. */
-#define EDITOR_TEXT_TOP 92
+/* Toolbar and text top follow gui_app_dy(): a dock window's frame already
+   draws the title bar, so both move up by the strip a full-screen Notes
+   keeps for its own. */
+#define EDITOR_BAR_Y (42 + gui_app_dy())
+#define EDITOR_TEXT_TOP (92 + gui_app_dy())
 #define EDITOR_STATUS_H 30
 static int editor_visible_lines(int line_height) {
     int n = ((int)window_height() - EDITOR_TEXT_TOP - EDITOR_STATUS_H) / line_height;
@@ -92,14 +96,14 @@ static void editor_draw_chrome(void) {
        splitting the redraw could otherwise silently lose. */
     window_rect(0, 0, (int)window_width(), EDITOR_TEXT_TOP, 0x00FAF8F6);
     gui_draw_app_titlebar(editor_dirty ? "Notes *" : "Notes");
-    window_rect(20, 42, 760, 34, 0x00EAE4DC);
-    font_draw_string("F1 Font:", 32, 51, 0x0075726E, -1);
-    font_draw_string(EDITOR_FAMILIES[editor_family], 108, 51, 0x001C1C1E, -1);
-    font_draw_string("F2 Size:", 236, 51, 0x0075726E, -1);
-    font_draw_string(EDITOR_SIZES[editor_size], 312, 51, 0x001C1C1E, -1);
-    font_draw_string("F3 Weight:", 450, 51, 0x0075726E, -1);
-    font_draw_string(editor_weight ? "Bold" : "Regular", 540, 51, 0x001C1C1E, -1);
-    font_draw_string("Save", 708, 51, 0x0085144B, -1);
+    window_rect(20, EDITOR_BAR_Y, 760, 34, 0x00EAE4DC);
+    font_draw_string("F1 Font:", 32, EDITOR_BAR_Y + 9, 0x0075726E, -1);
+    font_draw_string(EDITOR_FAMILIES[editor_family], 108, EDITOR_BAR_Y + 9, 0x001C1C1E, -1);
+    font_draw_string("F2 Size:", 236, EDITOR_BAR_Y + 9, 0x0075726E, -1);
+    font_draw_string(EDITOR_SIZES[editor_size], 312, EDITOR_BAR_Y + 9, 0x001C1C1E, -1);
+    font_draw_string("F3 Weight:", 450, EDITOR_BAR_Y + 9, 0x0075726E, -1);
+    font_draw_string(editor_weight ? "Bold" : "Regular", 540, EDITOR_BAR_Y + 9, 0x001C1C1E, -1);
+    font_draw_string("Save", 708, EDITOR_BAR_Y + 9, 0x0085144B, -1);
 }
 
 static void editor_draw(void) {
@@ -162,7 +166,7 @@ static void gui_launch_editor(void) {
         if (editor_length >= (int)sizeof(editor_buffer)) {
             window_clear(0x00FAF8F6);
             gui_draw_app_titlebar("Notes");
-            font_draw_string("File exceeds 4095 bytes. Editing disabled to protect it.", 20, 60, 0x001C1C1E, -1);
+            font_draw_string("File exceeds 4095 bytes. Editing disabled to protect it.", 20, 60 + gui_app_dy(), 0x001C1C1E, -1);
             gui_wait_close();
             return;
         }
@@ -217,8 +221,8 @@ static void gui_launch_editor(void) {
             gui_close_was_click = 1;
             int outside = editor_mouse_x < 0 || editor_mouse_y < 0
                        || editor_mouse_x >= (int)window_width() || editor_mouse_y >= (int)window_height();
-            if (outside || (editor_mouse_y < 32 && editor_mouse_x < 38)) close = 1;
-            else if (editor_mouse_y >= 42 && editor_mouse_y < 76) {
+            if (outside || (!gui_app_windowed && editor_mouse_y < 32 && editor_mouse_x < 38)) close = 1;
+            else if (editor_mouse_y >= EDITOR_BAR_Y && editor_mouse_y < EDITOR_BAR_Y + 34) {
                 if (editor_mouse_x < 220) editor_family = (editor_family + 1) % 3;
                 else if (editor_mouse_x < 430) editor_size = (editor_size + 1) % 4;
                 else if (editor_mouse_x < 680) editor_weight ^= 1;
