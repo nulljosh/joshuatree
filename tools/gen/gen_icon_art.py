@@ -77,8 +77,10 @@ ART = {
     20: "stocks",
     21: "search",
     22: "epiphany",
-    24: "apps",
-    25: "trash",
+    # 23 Portfolio and 24 Activity have no authored artwork yet, they keep
+    # the primitive glyph paths (see the icon index table in kernel/kernel.c).
+    25: "apps",
+    26: "trash",
 }
 
 # Icons whose glyph depends on runtime state get a second artwork keyed by
@@ -87,7 +89,7 @@ ART = {
 # trash_count() > 0, and converting it to a single static artwork would have
 # silently thrown that away, turning a real state indicator into decoration.
 VARIANT = {
-    25: "trash_full",
+    26: "trash_full",
 }
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
