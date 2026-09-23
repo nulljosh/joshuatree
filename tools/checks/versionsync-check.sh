@@ -19,15 +19,16 @@ if [ ! -f landing/version.txt ]; then
     exit 1
 fi
 
-if diff -q VERSION landing/version.txt > /dev/null; then
-    # The README's version badge is a live shields.io release badge, never a
+# The README's version badge is a live shields.io release badge, never a
 # hand-typed number: it sat at 0.85.3 while main was on 0.99.
 if grep -q 'shields.io/badge/version-' README.md; then
     echo "FAIL: README.md hardcodes a version badge; use the github/v/release badge so it cannot go stale"
     exit 1
 fi
 echo "PASS: README version badge is the live release badge"
-echo "PASS: landing/version.txt matches the real VERSION file ($(cat VERSION))"
+
+if diff -q VERSION landing/version.txt > /dev/null; then
+    echo "PASS: landing/version.txt matches the real VERSION file ($(cat VERSION))"
     exit 0
 else
     echo "FAIL: landing/version.txt ($(cat landing/version.txt)) does not match VERSION ($(cat VERSION)) -- run: cp VERSION landing/version.txt"
