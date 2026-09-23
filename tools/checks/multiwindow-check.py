@@ -117,9 +117,16 @@ try:
     def is_red(p): return close(p, CLOSE_RED) <= 12
 
     centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
-    def open_slot(slot):
+    def open_slot(slot, ready=None):
+        # With `ready`, poll until the window is really there instead of
+        # trusting a fixed 1.2 s, which a slow CI runner outran.
         move(centre(slot), ICON_ROW_Y); time.sleep(0.3)
-        click(); time.sleep(1.2)
+        click()
+        if ready is None: time.sleep(1.2); return
+        for _ in range(60):
+            time.sleep(0.1)
+            if ready(dump()): break
+        time.sleep(0.3)
     def click_at(x, y):
         move(x, y); time.sleep(0.3)
         click(); time.sleep(0.8)
@@ -161,7 +168,7 @@ try:
     #    step: on a pre-fix kernel this either closes Files (any-click-closes
     #    inside its own blocking loop) or does nothing; on this kernel it
     #    opens a real second window and keeps the first.
-    open_slot(8)
+    open_slot(8, lambda im: is_red(pixel(im, *W1_CLOSE)))
     img2 = dump()
     w0_still_here = is_red(pixel(img2, *W0_CLOSE))
     w1_here = is_red(pixel(img2, *W1_CLOSE))
