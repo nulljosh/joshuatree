@@ -5354,6 +5354,23 @@ static void gui_launch_settings(void){
                already is, not get silently overridden by a stale cursor
                position that has nothing to do with the keypress. */
             if (k == KEY_CLICK) {
+                /* Real bug, found by tools/checks/auth-flow-check.py driving a real
+                   synthetic pointer click (the exact gap walldemo-regression-check.py's
+                   own comment already flagged as unconfirmed): app_cursor_x/y is only
+                   kept live by gui_app_mouse_tick(), which is gated on gui_app_windowed
+                   and therefore only ticks for apps opened through gui_launch_from_dock.
+                   gui_launch_settings() is entered straight from the Apple menu
+                   (gui_menu_run_item), never through that wrapper, so gui_app_windowed
+                   stays 0 the whole time Settings is open and app_cursor_x/y is never
+                   seeded or updated -- every click here hit-tested wherever the cursor
+                   happened to be frozen at (0,0 if no windowed app had run yet this
+                   boot), so settings_row_at() always missed and every click silently
+                   fell through to acting on whatever `sel` already was, exactly the
+                   pre-fix settingsclick bug this same block's own comment describes,
+                   just reachable a different way than that fix covered. Query the real
+                   position directly at the moment of the click instead of trusting the
+                   stale global. */
+                mouse_get_absolute(&app_cursor_x, &app_cursor_y, (int)window_width(), (int)window_height());
                 int hit = settings_row_at(app_cursor_x, app_cursor_y, (int)window_width());
                 if (hit >= 0) sel = hit;
             }
@@ -5432,6 +5449,12 @@ static void gui_launch_settings(void){
                                 int ok = !strcmp(newbuf, confirmbuf) && auth_change_password(auth_current_user, oldbuf, newbuf);
                                 font_draw_string(ok ? "Password changed." : "That didn't work -- wrong current password or mismatch.",
                                                   20, (int)window_height() - 48, ok ? 0x002F7B4F : 0x00A33B3B, -1);
+                                /* Same real bug tools/checks/auth-flow-check.py found in
+                                   kernel/auth.h's login rejection: drawing lands in a back
+                                   buffer and only window_present() ever flips it visible, and
+                                   this status line had no frame boundary of its own before
+                                   sleep_ticks -- the next redraw erased it unseen. */
+                                window_present();
                                 sleep_ticks(60);
                             }
                             memset(newbuf, 0, sizeof(newbuf));
@@ -5469,6 +5492,10 @@ static void gui_launch_settings(void){
                         }
                         font_draw_string(ok ? "Account created." : "Couldn't create that account (name taken, empty, or table full).",
                                           20, (int)window_height() - 48, ok ? 0x002F7B4F : 0x00A33B3B, -1);
+                        /* Same missing-present bug as the Change password status line
+                           above and kernel/auth.h's login rejection: without this call
+                           the message never reaches the visible framebuffer. */
+                        window_present();
                         sleep_ticks(60);
                     }
                     memset(pbuf, 0, sizeof(pbuf));
