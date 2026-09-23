@@ -131,6 +131,8 @@ shell's own `cat` command and `gui_launch_html` already use.
 
 **Lexly** (`kernel/lexly.h`, v0.94.0), Spanish vocabulary drill: a word in Spanish, four English choices, 1-4 or a click answers, streak and best kept for the session. Replaces the one-line HTML card the dock tile used to open.
 
+**Fieldbook** (`kernel/fieldbook.h`, v0.95.0), every field of science and math explained plainly, native: left side shows ranked list (1-12) with selected row highlighted, up/down or click to select; right side shows field name, studies line, and 2-3 sentence explanation wrapped to fit. Replaces the one-line HTML card the dock tile used to open.
+
 **Portfolio** (`kernel/portfolio.h`, v0.87.0), Apps-folder-only like
 Search/Contacts/Calculator/Stocks. A static, compiled-in catalog of the
 whole heyitsmejosh.com fleet (35 apps across Life/Read/Make/Play/Dev),
@@ -185,7 +187,6 @@ monocode).
 - **Plan** (`drivers/app_plan.h`): a planning app, ported for its real static copy at v35
 - **Sparkjar** (`drivers/app_sparkjar.h`): idea forum
 - **Homeqi** (`drivers/app_homeqi.h`): feng shui home-assessment tool
-- **Fieldbook** (`drivers/app_fieldbook.h`): every field of science and math explained plainly
 - **Weather** (`drivers/app_weather.h`, served copy only): the dock's own Weather app is native `kernel.c` logic against a live Open-Meteo fetch (temperature + WMO condition code, `weather_fetch`) for this machine's real location (v71 / 0.65.0: `geo_fetch` asks ip-api.com over plain HTTP once per boot, replacing a hardcoded downtown-Vancouver lat/lon; `tools/geo-check.sh` proves it headlessly against the host's own answer), not this file; v75 / 0.67.0: the same lat/lon drives the map wallpaper (`wall_fetch`, twelve OpenTopoMap tiles centered on the town, `tools/wallpaper-check.py`); `app_weather.h` is the ported static site, reachable only via `serveapp weather`
 
 ## Why things are ordered this way
