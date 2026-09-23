@@ -1,3 +1,33 @@
+# Handoff, 2026-09-23 about 00:55 UTC (cloud session, moving to desktop)
+
+## Landed on main
+- #95 (0.88.3): Calendar Day/Week/Month/Year views, title-bar gap fixed in 9 windowed apps, Apps-folder apps named in their frame, dock hover label capsule, QA tour driver fixed, three dead checks revived.
+- #83: Esc closes the focused window instead of quitting the desktop.
+
+## In flight, auto-merge armed (lands by itself when CI is green)
+- #96 (0.89.0): Big Sur dock icons (`tools/gen/restyle_icons.py`, `tools/checks/iconlight-check.py`), text stem darkening (`text_ink`, `tools/checks/textsharp-check.py` covering Mail, Notes and Weather), Calendar fits a snapped half window. Full `tools/checks/ci-suite.sh` 49/49 locally.
+- #87 (Terminal mono face) and #86 (decoder fuzz + auth.h pass): both merge cleanly on main + #96 and pass their checks locally (19,760 fuzz cases). Main requires up-to-date branches, so after #96 lands run "Update branch" on #87, then on #86 after #87 lands.
+
+## Saved, not yet a PR (patches from two stopped workers)
+- `docs/wip/calendar-date-icon.patch`: Calendar dock tile draws today's date from the RTC instead of a fixed "SEP 17", plus `tools/checks/calicon-check.py` (proven fail-before/pass-after). Apply with `git apply`, then regenerate the icon art: `python3 tools/gen/restyle_icons.py` and `python3 tools/gen/gen_icon_art.py` (needs `rsvg-convert`). Run its check and the icon checks before shipping.
+- `docs/wip/qmp-harness.patch`: shared `tools/checks/jtqmp.py` (boot, move/click/key with the 0.35 s gap, dump, wait_until, dock geometry from kernel.c) with apptop, calviews and dockhover migrated. Unfinished: the suite-coverage guard (fail when a check isn't in `tools/checks/ci-suite.sh`) and the ARCHITECTURE rows. Verify each migrated check still fails on reverted code.
+- Delete `docs/wip/` once both are applied.
+
+## Next, in order
+1. Land #96, #87, #86 (update branch, let auto-merge run).
+2. Follow-up PR: apply the two patches; `.coderabbit.yaml` (drop docstring coverage, skip `kernel/icon_art.h` and generated files, review on PR open only); run `text_ink` through `gui_aa_char_mono` too, so Terminal text gets the same sharpening, with a Terminal row in textsharp-check.
+3. Remaining old PRs, one at a time: #65 Chat qwen default, #62 Activity Monitor, the #88 -> #92 -> #93 stack (Toroid, Quotes, real fleet icons; #93 conflicts on `kernel/icon_art.h`: regenerate it with `gen_icon_art.py`, never hand-merge), then the #89/#90 handoff docs (probably superseded by this one; close if so).
+4. Joshua's priorities: icons more macOS (the 15 Apps-folder fleet icons are next, same restyle table), sharper text everywhere, then QA and a headless test for every app, then roadmap bugs.
+
+## Rules learned this session
+- Never edit a tree while `ci-suite.sh` runs in it; use a worktree.
+- Apps-folder keyboard checks need 0.35 s between keys and must wait for the app on screen, not sleep: the CI runner is slower (reproduce by loading every core).
+- Joshua's standing rule: merge any PR once CI is green. Arm auto-merge (squash).
+- CodeRabbit: red and Major findings are bugs to fix; Minor ones get a one-line reply and ride the next push.
+
+## Restart prompt
+Continue joshuatree from docs/LOOP-HANDOFF.md's top section: land #96/#87/#86, open the follow-up PR from docs/wip/, then work the old PR queue and Joshua's priorities. Main session manages, workers build in worktrees, review every screenshot and check yourself, auto-merge when CI is green, one-line TLDR per pass.
+
 # Tonight's plan to 1.0.0 (written 2026-09-21, about 01:20)
 
 One worker at a time, each run is a batch, main session reviews every result by eye before it merges. Stop spawning at 85% weekly usage; tag 1.0.0 only if the gate below is met, otherwise tag 0.9.0 and say why.

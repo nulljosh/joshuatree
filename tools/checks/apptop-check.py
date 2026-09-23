@@ -168,8 +168,8 @@ try:
             while True:
                 time.sleep(0.5); img = dump(); bg = app_bg(img)
                 if bg >= 80 or time.time() > deadline: break
-            if bg >= 80: break
-            key("ret")
+            if bg >= 80 or attempt: break
+            key("ret")  # exactly one retry
         time.sleep(0.5); img = dump(); bg = app_bg(img)
         img.save(f"/tmp/jt-apptop-{name.lower()}.png")
         if title(img) == title_apps: fails.append(f"{name}: window frame still says Apps, not the app's own name")

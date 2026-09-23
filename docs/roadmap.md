@@ -4,7 +4,7 @@ Freestanding i386 kernel, no libc. This is the forward plan. What already
 shipped lives in `git log`, `git tag -l "jt-v*"`, and the [GitHub
 releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
-**Latest**: Calendar, now in Day, Week, Month and Year views.
+**Latest**: A redrawn icon set and crisper text, in the spirit of macOS.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -37,7 +37,9 @@ Joshua's call, 2026-09-21: 1.0.0 is a super thorough QA release. Every feature w
 - [ ] [Sonnet] Every feature exercised once: each app's main action (add a reminder, save a note, send the chat prompt, search, change wallpaper, snap a window), each menu item, each Settings row, each shell command in `help`.
 - [ ] [Sonnet] Nothing crashes: bad input in every text field, long lines, empty files, missing disk, no network. Each case gets a check.
 - [ ] [Sonnet] Icons with taste: depth, soft light, real materials, consistent corner and light direction across all of them. Judged from the gallery at dock, hover and Apps grid sizes.
+  - 0.89.0: the 11 dock icons redrawn Big Sur style (one top light, no outlines, 148px art at an exact 2:1); `tools/checks/iconlight-check.py`. Still to do: the 15 Apps-folder fleet icons, and a live date on Calendar's tile.
 - [ ] [Sonnet] Text sharp everywhere: no bitmap fallback font where the antialiased one should draw, no uneven letter gaps, baselines level.
+  - 0.89.0: coverage-to-ink curve (stem darkening) sharpens every AA text path; `tools/checks/textsharp-check.py`.
 - [ ] [Haiku] Release notes that say what is missing: no sound, no secure web of its own, one core, no install to disk.
 - [x] Codename: 1.0 is **Hidden Valley**. Joshua Tree is the name of the computer and the company, the way Apple is; each major release is named after a real place in Joshua Tree National Park. Next in line: Skull Rock, Keys View, Cottonwood, Wonderland. Mojave is skipped, Apple used it. Domain `joshuatreeos.com`.
 

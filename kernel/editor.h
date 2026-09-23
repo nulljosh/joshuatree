@@ -15,7 +15,7 @@ static void editor_draw_glyph(unsigned char character, int origin_x, int origin_
     const struct editor_glyph *glyph = editor_glyph_for(character);
     for (int row = 0; row < glyph->height; row++) {
         for (int column = 0; column < glyph->width; column++) {
-            int alpha = editor_pixels[glyph->offset + row * glyph->width + column];
+            int alpha = text_ink_dark[editor_pixels[glyph->offset + row * glyph->width + column]]; /* dark ink on the light page: same curve as gui_aa_char (see text_ink) */
             int red = (28 * alpha + 250 * (255 - alpha)) / 255;
             int green = (28 * alpha + 248 * (255 - alpha)) / 255;
             int blue = (30 * alpha + 246 * (255 - alpha)) / 255;

@@ -253,8 +253,11 @@ static void cal_draw_header(int T){
         if (on) gui_draw_capsule(sx + seg_h / 2, y + seg_h / 2, sx + seg_w - seg_h / 2, y + seg_h / 2, seg_h / 2 - 2, CAL_ACCENT, 0x00ECE6DE);
         font_draw_string(CAL_VIEW_NAMES[i], sx + (seg_w - font_string_width(CAL_VIEW_NAMES[i])) / 2, y + 3, on ? 0x00FFFFFF : CAL_HINT, -1);
     }
+    /* Right-aligned beside the control; dropped when a narrow (snapped)
+       window leaves no room, rather than drawn over the control. */
     const char *hint = "1-4 view   left/right step   [ ] day   enter edits   t today";
-    font_draw_string(hint, (int)window_width() - 20 - font_string_width(hint), y + 3, CAL_HINT, -1);
+    int hint_x = (int)window_width() - 20 - font_string_width(hint);
+    if (hint_x >= x + seg_w * 4 + 12) font_draw_string(hint, hint_x, y + 3, CAL_HINT, -1);
 }
 
 static void cal_draw_title(const char *title, int T){
@@ -269,7 +272,11 @@ static void cal_draw_month_view(int T){
     int vy = cal_mw_vy, vm = cal_mw_vm;
     int first = cal_dow(vy, vm, 1), n = cal_days_in_month(vy, vm);
     int rows = (first + n + 6) / 7;
-    int cell_w = 72, grid_w = 7 * cell_w;
+    /* 72px columns, narrower when a snapped half window (464px) can't fit
+       the 504px grid. */
+    int cell_w = ((int)window_width() - 16) / 7;
+    if (cell_w > 72) cell_w = 72;
+    int grid_w = 7 * cell_w;
     int x0 = ((int)window_width() - grid_w) / 2;
     int y0 = T + 150;
     int cell_h = ((int)window_height() - y0 - 6) / rows;
