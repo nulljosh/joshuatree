@@ -135,10 +135,18 @@ try:
     # window's real content height), so pf_clamp_scroll has to move
     # pf_scroll for the selection to still be on screen: the About title
     # (row 0) scrolls off the top.
+    # Keys dropped on slow runners if sent in burst; poll for list to scroll
     for _ in range(14):
         key("down")
 
-    img2 = dump()
+    for _ in range(50):
+        img2 = dump()
+        title_px_check = row_dark_px(img2, ROW0_Y)
+        if abs(title_px_check - title_px) >= 6:
+            break
+        time.sleep(0.1)
+    else:
+        img2 = dump()
     title_px_after = row_dark_px(img2, ROW0_Y)
     print(f"after 14 downs: row-0 dark-px={title_px_after} (was the About title, should now be a different row)")
     if abs(title_px_after - title_px) < 6:

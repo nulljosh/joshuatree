@@ -115,12 +115,6 @@ try:
     if not opened:
         raise SystemExit("FAIL: Terminal did not open from the dock")
 
-    for ch in "mmmmiiii":
-        keys(ch)
-        time.sleep(0.1)
-    time.sleep(0.3)
-    img = dump()
-
     def cell_has_ink(cell_index):
         """True if any non-background pixel sits inside this cell's own
         physical box, i.e. the glyph did not get fully clipped out of it."""
@@ -130,6 +124,17 @@ try:
             for x in range(x0, x0 + CELL_P):
                 if not is_bg(pixel(img, x, y)): return True
         return False
+
+    # Type like a person watching the screen: each key waits for its own
+    # cell to ink before the next goes out. A fixed sleep after the burst
+    # passed on a fast Mac and dropped the last keys on a slow CI runner.
+    for i, ch in enumerate("mmmmiiii"):
+        keys(ch)
+        for _ in range(50):
+            time.sleep(0.1)
+            img = dump()
+            if cell_has_ink(i): break
+    img = dump()
 
     def span(lo_cell, hi_cell):
         """Leftmost/rightmost inked physical x across cells [lo, hi)."""
