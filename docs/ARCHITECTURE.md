@@ -137,6 +137,12 @@ shell's own `cat` command and `gui_launch_html` already use.
 
 **Sparkjar** (`kernel/sparkjar.h`), a jar of ideas people post and vote on, native: left side shows list (1-10 ideas) sorted by votes descending, selected row highlighted, vote count displayed right-aligned in each row; up/down or click to select; u key upvotes the selected idea, re-sorts, and keeps it selected; right side shows idea name, one-line pitch, and 3-step build plan wrapped to fit. Vote counts are session-only. Replaces the one-line HTML card the dock tile used to open.
 
+**Fieldbook** (`kernel/fieldbook.h`), every field of science and math explained plainly, native: left side shows ranked list (1-12) with selected row highlighted, up/down or click to select; right side shows field name, studies line, and 2-3 sentence explanation wrapped to fit. Replaces the one-line HTML card the dock tile used to open.
+
+**Homeqi** (`kernel/homeqi.h`), Feng shui home assessment condensed from Eva Wong's *Good Fengshui*, native: eight yes/no questions about your home (front door, natural light, bed position, clutter, water, power lines, neighborhood, windows), asked one at a time with 1/2 key choices. After each answer shows a one-line reasoning line and "any key for next". After all eight, displays final score (0-8) and a verdict message (0-3: work to do; 4-6: pleasant; 7-8: excellent). Score accumulated through the assessment, restarts on the results screen. Replaces the one-line HTML card the dock tile used to open.
+
+**Sparkjar** (`kernel/sparkjar.h`), a jar of ideas people post and vote on, native: left side shows list (1-10 ideas) sorted by votes descending, selected row highlighted, vote count displayed right-aligned in each row; up/down or click to select; u key upvotes the selected idea, re-sorts, and keeps it selected; right side shows idea name, one-line pitch, and 3-step build plan wrapped to fit. Vote counts are session-only. Replaces the one-line HTML card the dock tile used to open.
+
 **Portfolio** (`kernel/portfolio.h`, v0.87.0), Apps-folder-only like
 Search/Contacts/Calculator/Stocks. A static, compiled-in catalog of the
 whole heyitsmejosh.com fleet (35 apps across Life/Read/Make/Play/Dev),

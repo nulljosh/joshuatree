@@ -5459,6 +5459,7 @@ static void gui_launch_settings(void){
 #include "bookrank.h"
 #include "lexly.h"
 #include "fieldbook.h"
+#include "homeqi.h"
 #include "sparkjar.h"
 #include "epiphany.h"
 #include "activity.h"
@@ -5483,6 +5484,7 @@ static void gui_launch(int icon){
     else if (icon == 14) gui_launch_toroid();
     else if (icon == 15) gui_launch_sparkjar();
     else if (icon == 16) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
+    else if (icon == 16) gui_launch_homeqi();
     else if (icon == 17) gui_launch_fieldbook();
     else if (icon == 18) gui_launch_contacts();
     else if (icon == 19) gui_launch_calculator();
