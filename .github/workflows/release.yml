@@ -1,0 +1,33 @@
+name: Release on version bump
+
+# A merge to main that changes VERSION gets its tag and GitHub release at
+# once, with the merged PR's own description as the notes. Before this,
+# releases were cut by hand and fell four versions behind (0.85.3 while
+# main was on 0.89.0).
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag and release if this version has none yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(tr -d ' \n' < VERSION)
+          tag="jt-v$v"
+          if gh release view "$tag" >/dev/null 2>&1; then echo "$tag exists"; exit 0; fi
+          pr=$(gh pr list --state merged --search "$GITHUB_SHA" --json title,body -q '.[0]')
+          title=$(echo "$pr" | jq -r '.title // empty' | sed 's/ (#[0-9]*)$//; s/ ([0-9.v]*)$//')
+          echo "$pr" | jq -r '.body // empty' | sed '/Generated with \[Claude Code\]/,$d' > notes.md
+          [ -s notes.md ] || git log -1 --format=%B > notes.md
+          gh release create "$tag" --target "$GITHUB_SHA" -t "v$v: ${title:-$(git log -1 --format=%s)}" -F notes.md

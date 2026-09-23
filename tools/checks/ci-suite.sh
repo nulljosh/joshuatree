@@ -31,6 +31,8 @@
 # Nothing in .github/ needs to change either way.
 
 set -uo pipefail
+# SHARD=i SHARDS=n runs every n-th check starting at i, so CI can split the
+# suite across parallel runners. Unset, it runs everything, same as before.
 cd "$(dirname "$0")/../.."
 
 # retry?  name                                                          command
@@ -151,7 +153,7 @@ while IFS='|' read -r mode name command; do
         failed_names="${failed_names}  - ${name}"$'\n'
         fail=$((fail + 1))
     fi
-done < <(manifest)
+done < <(manifest | grep -v '^[[:space:]]*$' | awk -v n="${SHARDS:-1}" -v i="${SHARD:-0}" '(NR - 1) % n == i')
 
 echo
 echo "================ regression suite summary ================"

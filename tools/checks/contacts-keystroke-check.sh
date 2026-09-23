@@ -119,11 +119,17 @@ time.sleep(0.5)
 before_prompt = prompt_count()
 
 # Type 8 characters (should trigger 8+ prompt redraws)
+# Keys dropped on slow runners if sent in burst; poll for redraw markers
+before_typing_count = prompt_count()
 for c in "testname":
     key(c)
-    time.sleep(0.15)
 
-after_typing = prompt_count()
+after_typing = 0
+for _ in range(50):
+    after_typing = prompt_count()
+    if after_typing > before_typing_count + 3:
+        break
+    time.sleep(0.1)
 
 # Press ESC to cancel the prompt, then ESC again to close Contacts.
 key("esc"); time.sleep(0.3)

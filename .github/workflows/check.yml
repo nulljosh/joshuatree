@@ -17,7 +17,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  # A PR that only touches prose (any .md except docs/roadmap.md, which the
+  # landing checks read) skips the QEMU suite; `check` still reports green.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: diff
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo code=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          echo "$files"
+          if echo "$files" | grep -qvE '\.md$' || echo "$files" | grep -qx 'docs/roadmap.md'; then
+            echo code=true >> "$GITHUB_OUTPUT"
+          else
+            echo code=false >> "$GITHUB_OUTPUT"
+          fi
+
+  # The suite runs as four parallel shards (ci-suite.sh SHARD/SHARDS),
+  # about a quarter of the wall time each. `check` below stays the one
+  # required status and passes only when every shard did.
+  suite:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
     # Pinned, not `ubuntu-latest`. `latest` silently rolls to the next LTS
     # image, which swaps the clang/qemu/PIL versions underneath every check
     # in this file at a moment GitHub picks, not one this repo picks -- the
@@ -35,6 +62,10 @@ jobs:
     # room for the suite's one automatic retry of timing-sensitive checks
     # on top of the ~6 minutes it really takes.
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     steps:
       # fetch-depth: 0 for the kernel.elf sync step at the end of this job,
       # which compares real commit ancestry. It used to paper over the
@@ -84,7 +115,20 @@ jobs:
       # minute run at a time. The suite now runs everything, prints a full
       # pass/fail summary, and fails the job if any check failed.
       - name: Regression suite (all checks, full summary)
-        run: ./tools/checks/ci-suite.sh
+        run: SHARD=${{ matrix.shard }} SHARDS=4 ./tools/checks/ci-suite.sh
+
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    if: always()
+    needs: [changes, suite]
+    steps:
+      - name: Every suite shard passed
+        run: |
+          echo "changes: ${{ needs.changes.result }} code=${{ needs.changes.outputs.code }}"
+          echo "suite:   ${{ needs.suite.result }}"
+          [ "${{ needs.changes.result }}" = "success" ] || exit 1
+          [ "${{ needs.suite.result }}" = "success" ] || { [ "${{ needs.suite.result }}" = "skipped" ] && [ "${{ needs.changes.outputs.code }}" = "false" ]; }
 
   # CLAUDE.md 4d's own candidate, "a second job for check-refs.sh": pure
   # drift insurance, no clang/qemu/PIL toolchain needed at all, so it runs
