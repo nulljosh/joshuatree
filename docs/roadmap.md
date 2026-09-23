@@ -40,6 +40,12 @@ Joshua's call, 2026-09-21: 1.0.0 is a super thorough QA release. Every feature w
   - 0.89.0: the 11 dock icons redrawn Big Sur style (one top light, no outlines, 148px art at an exact 2:1); `tools/checks/iconlight-check.py`. Still to do: the 15 Apps-folder fleet icons, and a live date on Calendar's tile.
 - [ ] [Sonnet] Text sharp everywhere: no bitmap fallback font where the antialiased one should draw, no uneven letter gaps, baselines level.
   - 0.89.0: coverage-to-ink curve (stem darkening) sharpens every AA text path; `tools/checks/textsharp-check.py`.
+- [ ] [Sonnet] Security QA: every text field bounds-audited (Notes, Reminders, Mail, Contacts, Calculator, Search, Chat, Terminal, Settings, login), auth.h checked for empty passwords, constant-time compare, a delay after failed attempts and plaintext wiped; `tools/checks/input-bounds-check.sh` left behind.
+- [ ] [Haiku] Every release ships `joshuatree-<version>.iso` and `SHA256SUMS` as assets, built by the release workflow, with dd instructions in the notes and README.
+- [ ] [Haiku] Accessibility floor: every app opens and closes by keyboard alone (`tools/checks/keyboard-only-check.py`), the Apps folder has a key from the desktop.
+- [x] Shift and Caps Lock work in every app, not only Notes (#117). Notes wraps at word boundaries.
+- [ ] [Fable] Wired internet on real PCs: an Intel e1000 driver next to rtl8139 and ne2k, proven with QEMU `-device e1000`. Most PCs from the last 15 years have an Intel or Realtek chip, so this is what makes the network real off the emulator. Stretch for 1.0; if it slips, the release notes say wired internet is QEMU-only.
+- [ ] [Joshua] Decided for 1.0, stated in the release notes: no Wi-Fi, no Bluetooth (both need firmware blobs and a full 802.11 or BT stack, months of work each), English only (every UI string is compiled in; a language table is a 1.1 project), no screen reader (no sound yet). Keyboard-only use and large text in Notes are the accessibility floor.
 - [ ] [Haiku] Release notes that say what is missing: no sound, no secure web of its own, one core, no install to disk.
 - [x] Codename: 1.0 is **Hidden Valley**. Joshua Tree is the name of the computer and the company, the way Apple is; each major release is named after a real place in Joshua Tree National Park. Next in line: Skull Rock, Keys View, Cottonwood, Wonderland. Mojave is skipped, Apple used it. Domain `joshuatreeos.com`.
 
@@ -47,6 +53,8 @@ Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk)
 
 ## After 1.0
 What other small operating systems needed before people used them day to day.
+- [ ] [Fable] Bluetooth: a USB HCI transport and enough of the stack for a keyboard and mouse.
+- [ ] [Sonnet] Languages: every UI string through one table, a Settings language picker, Latin-1 accents drawn (the DejaVu faces have the glyphs; the text paths drop bytes above 0x7F today).
 - [ ] [Sonnet] Ring-3 programs a fresh shell ships with: `cat`, `wc`, `grep`, `calc`. A tiny C compiler is a stretch.
 - [ ] [Sonnet] Settings gets a Location field (city or postal code), saved, used by weather and the wallpaper map. Location from the internet address says Vancouver for Langley and cannot do better.
 - [ ] [Sonnet] Settings as a real native app in the dock: wallpaper, text size, system typeface, location, accounts, network status, about. One place, not scattered panels.
