@@ -127,7 +127,9 @@ shell's own `cat` command and `gui_launch_html` already use.
 
 **Toroid** (`kernel/toroid.h`, v0.88.0), Conway's Game of Life on a torus, native: both edges wrap, space pauses, r reseeds, c clears, a click toggles a cell. Replaces the one-line HTML card the dock tile used to open.
 
-**Bookrank** (`kernel/bookrank.h`, v0.85.3), curated non-fiction rankings, native: left side shows ranked list (1-10) with selected row highlighted, up/down or click to select; right side shows title, author and 2-3 sentence summary wrapped to fit. Replaces the one-line HTML card the dock tile used to open.
+**Bookrank** (`kernel/bookrank.h`, v0.93.0), curated non-fiction rankings, native: left side shows ranked list (1-10) with selected row highlighted, up/down or click to select; right side shows title, author and 2-3 sentence summary wrapped to fit. Replaces the one-line HTML card the dock tile used to open.
+
+**Lexly** (`kernel/lexly.h`, v0.94.0), Spanish vocabulary drill: a word in Spanish, four English choices, 1-4 or a click answers, streak and best kept for the session. Replaces the one-line HTML card the dock tile used to open.
 
 **Portfolio** (`kernel/portfolio.h`, v0.87.0), Apps-folder-only like
 Search/Contacts/Calculator/Stocks. A static, compiled-in catalog of the
@@ -181,7 +183,6 @@ monocode).
 - **Curbfind** (`drivers/app_curbfind.h`): Craigslist browser
 - **Keyrate** (`drivers/app_keyrate.h`): the one exception to "thin port": `gui_launch_html` originally just rendered the ported site's own marketing copy read-only, which meant the first keystroke anyone made to actually type closed the app (`gui_wait_close`'s "any key closes" contract). Fixed with a real native typing test in `kernel.c` itself: word list, a tiny LCG seeded from `irq.c`'s real `ticks()` (no `rand()`/no libc), a live input loop. `app_keyrate.h`'s ported HTML still exists, served only, not rendered in the GUI
 - **Plan** (`drivers/app_plan.h`): a planning app, ported for its real static copy at v35
-- **Lexly** (`drivers/app_lexly.h`): gamified language learning
 - **Sparkjar** (`drivers/app_sparkjar.h`): idea forum
 - **Homeqi** (`drivers/app_homeqi.h`): feng shui home-assessment tool
 - **Fieldbook** (`drivers/app_fieldbook.h`): every field of science and math explained plainly
