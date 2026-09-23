@@ -68,7 +68,7 @@ static void gui_launch_toroid(void){
         gui_app_mouse_tick();
         int sc = kbd_pop();
         if (sc >= 0 && !(sc & 0x80)) {
-            char c = SC[sc & 0x7F];
+            char c = kbd_map(sc);
             if (c == 27) { gui_close_was_click = 0; return; }
             if (c == ' ') tr_paused = !tr_paused;
             else if (c == 'r') tr_reseed();
