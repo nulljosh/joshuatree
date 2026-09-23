@@ -4,7 +4,7 @@ Freestanding i386 kernel, no libc. This is the forward plan. What already
 shipped lives in `git log`, `git tag -l "jt-v*"`, and the [GitHub
 releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
-**Latest**: Bookrank, a ranked shelf with summaries, running natively.
+**Latest**: Fieldbook, every field of science on one page, running natively.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
