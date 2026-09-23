@@ -23,11 +23,28 @@ unsigned int html_to_text(const char *html, char *out, unsigned int maxlen) {
             continue;
         }
         if (*p == '&') {
-            if      (starts_with(p, "&lt;"))   { out[pos++] = '<';  p += 4; continue; }
-            else if (starts_with(p, "&gt;"))   { out[pos++] = '>';  p += 4; continue; }
-            else if (starts_with(p, "&amp;"))  { out[pos++] = '&';  p += 5; continue; }
-            else if (starts_with(p, "&quot;")) { out[pos++] = '"';  p += 6; continue; }
-            else if (starts_with(p, "&#39;"))  { out[pos++] = '\''; p += 5; continue; }
+            /* Named entities map to their closest ASCII, same rule as the
+               UTF-8 skip below. Plan's page printed a raw "&middot;". An
+               entity not in the table is dropped whole, never shown raw. */
+            static const struct { const char *name; char ch; } ENT[] = {
+                {"&lt;", '<'}, {"&gt;", '>'}, {"&amp;", '&'}, {"&quot;", '"'},
+                {"&#39;", '\''}, {"&apos;", '\''}, {"&nbsp;", ' '},
+                {"&middot;", '-'}, {"&bull;", '-'}, {"&ndash;", '-'}, {"&mdash;", '-'},
+                {"&lsquo;", '\''}, {"&rsquo;", '\''}, {"&ldquo;", '"'}, {"&rdquo;", '"'},
+                {"&hellip;", '.'},
+            };
+            int hit = 0;
+            for (unsigned int i = 0; i < sizeof ENT / sizeof ENT[0]; i++) {
+                if (starts_with(p, ENT[i].name)) {
+                    out[pos++] = ENT[i].ch;
+                    for (const char *n = ENT[i].name; *n; n++) p++;
+                    hit = 1; break;
+                }
+            }
+            if (hit) continue;
+            const char *q = p + 1;
+            while ((*q >= 'a' && *q <= 'z') || (*q >= 'A' && *q <= 'Z') || (*q >= '0' && *q <= '9') || *q == '#') q++;
+            if (*q == ';' && q - p <= 10) { p = q + 1; continue; }
         }
         /* Real bug, not a theory: found via a screendump that looked like
            memory corruption (a perfectly regular vertical-stripe pattern

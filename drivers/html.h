@@ -1,7 +1,7 @@
 #ifndef HTML_H
 #define HTML_H
 /* Tag-soup, not a parser: strips everything between < and >, decodes the
-   five entities anything actually uses, copies the rest through as-is.
+   common named entities to ASCII (drops unknown ones), copies the rest.
    No DOM, no CSS, no nesting awareness, Lynx-level v1, matches the
    roadmap's own scope for this item. Returns the number of text bytes
    written (excluding the trailing NUL). */

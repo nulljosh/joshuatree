@@ -67,6 +67,7 @@ retry|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mwke
 retry|Drawing lands offscreen, window_present puts it on screen|./tools/checks/backbuffer-check.sh
 retry|Multi-window apps draw exactly one toolbar, not two|./tools/checks/mwdupetoolbar-check.sh
 once |JPEG decoder, host harness|./tools/checks/jpeg-host-check.sh
+once |HTML entities decode to ASCII, host harness|./tools/checks/html-host-check.sh
 retry|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
 once |PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/decoder-fuzz-check.sh
 retry|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclose-check.py
