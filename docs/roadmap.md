@@ -4,7 +4,7 @@ Freestanding i386 kernel, no libc. This is the forward plan. What already
 shipped lives in `git log`, `git tag -l "jt-v*"`, and the [GitHub
 releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
-**Latest**: Portfolio, a catalog of every app in the fleet, right on the desktop.
+**Latest**: Calendar, now in Day, Week, Month and Year views.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -66,14 +66,17 @@ What other small operating systems needed before people used them day to day.
 ## Bugs
 Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at full resolution):
 - [ ] [Sonnet] Terminal text is unreadable in places: proportional antialiased letters are drawn into fixed-width cells, so "m" is crushed to look like "n" and "i" and "l" float with wide gaps ("hel p", "nen" for "mem"). The Terminal grid needs the Mono face at its real advance.
-- [ ] [Sonnet] Calendar cuts the last week of a five-row month in half at the bottom of the window.
+- [x] Calendar cut the last week of a five-row month in half at the bottom of the window, and never drew a sixth. Rows now size to the window (`tools/checks/apptop-check.py`).
 - [ ] [Sonnet] Apps window: black band under the title bar, a fourth row drawn outside the panel and cut in half, two extra icons after Epiphany, "Apps" heading shown twice. In progress.
-- [ ] [Sonnet] Mail, Calendar, Notes, Reminders and Chat leave a blank strip about 50px tall between the title bar and their content, left over from the old full-screen title. Stocks does not, and looks right. Make them match Stocks.
-- [ ] [Haiku] Dock hover label has no backing and collides with the bottom edge of an open window.
-- [ ] [Haiku] `tools/qa_demo_drive.py` is stale: its dock geometry predates the eleventh icon, so every click lands on the right edge of a tile and the "Weather" and "Trash" steps both open Stocks. It also cannot type a period ("ship 1.0.0" arrives as "ship 100"); confirm whether that is the driver or the keyboard map. Weather and Trash were not reviewed because of this.
+- [x] Mail, Calendar, Notes, Reminders and Chat left a blank strip about 50px tall under the title bar. They now shift up by `gui_app_dy()` in a window, like Stocks (`tools/checks/apptop-check.py`).
+- [x] `tools/checks/landing-headline-check.sh` failed on a stale `demo-focused` CSS comment in `landing/index.html` (the class is gone; the button is the full screen toggle). Comment fixed; the check now runs in `tools/checks/ci-suite.sh`.
+- [x] Contacts, Calculator, Search and Trash drew their first line at y=52 in a window too; now on `gui_app_dy()` and covered by `tools/checks/apptop-check.py`. Settings only opens full screen from the menu, so it has no window title bar to sit under.
+- [x] `tools/checks/gui-prompt-keystroke-check.sh` failed its Calculator case: grid keys sent 0.1 s apart were dropped, so it typed into the Apps folder. Paced at 0.35 s and added to `tools/checks/ci-suite.sh`.
+- [x] Dock hover label had no backing and collided with the bottom edge of an open window. Now a cream capsule with a hairline edge, clear of the tray (`tools/checks/dockhover-check.py`).
+- [x] `tools/qa_demo_drive.py` was stale: dock geometry from before the eleventh icon, `.` sent as an invalid qcode (the driver, not the keymap), esc-closing Files quit the desktop (PR #83) so the rest of the tour recorded one still, and `screendump` drew stripes headless. It now reads the dock from `kernel/kernel.c`, maps `.` to `dot`, closes each app from its red button and captures with `pmemsave`; `tools/checks/dockslots-check.py` guards the derivation. Weather and Trash reviewed: both clean.
 - [x] Esc with Files open quit the whole desktop to text mode (PR #83).
-- [ ] [Sonnet] Apps opened from the Apps folder show "Apps" in the window frame instead of their own name (`GUI_LABELS[GUI_APPS_FOLDER]`).
-- [ ] [Haiku] "Memory management" boot text isn't in kernel/boot/drivers/landing source; `klog` is serial-only. Confirm with a boot frame capture.
+- [x] Apps opened from the Apps folder showed "Apps" in the window frame instead of their own name. `gui_apps_launch` retitles the frame and restores it (`tools/checks/apptop-check.py`).
+- [x] The "Memory" text isn't boot output. A VGA text capture every 50 ms through boot shows only SeaBIOS and iPXE; the wording is the clock's notification panel, where `notif_friendly` in `kernel/kernel.c` renders klog's `pmm_init:` and `paging_install:` lines as "Memory initialized" and "Memory protection enabled".
 - [ ] [Sonnet] Lazy-load the boot loading image itself so it never shows visibly pixelated while scaling in.
 
 ## Gaps vs macOS / Linux / Windows

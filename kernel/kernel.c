@@ -3707,6 +3707,9 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
    lifted icon and its label, so repainting this band alone is enough to
    erase any previous hover state. */
 static int gui_dock_band_top(void){ return gui_dock_y0() - 24; }
+#define DOCK_LABEL_BG   0x00F4F1EC /* hover label capsule fill */
+#define DOCK_LABEL_EDGE 0x00BDB4A8 /* its hairline edge */
+#define DOCK_LABEL_SPAN 48         /* px either side of a slot a hover change repaints: the widest label plus its capsule */
 
 static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my);
 /* v0.79.x: the dock splits into the half that never changes while the
@@ -3811,8 +3814,8 @@ static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int
            frame even though composition itself was offscreen. */
         for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
             if ((slot == dock_presented_hover) == (slot == dock_hover)) continue;
-            int left = (gui_slot_x(slot) - 25) * sc;
-            int right = (gui_slot_x(slot) + DOCK_ICON + 25) * sc;
+            int left = (gui_slot_x(slot) - DOCK_LABEL_SPAN) * sc;
+            int right = (gui_slot_x(slot) + DOCK_ICON + DOCK_LABEL_SPAN) * sc;
             if (left < 0) left = 0;
             if (right > pw) right = pw;
             for (int py = 0; py < ph; py++) {
@@ -3881,11 +3884,18 @@ static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
         gui_draw_one_icon(icon, cx_center, cy_bottom, size);
         if (slot == dock_hover) {
             int label_w = font_string_width(GUI_LABELS[icon]);
-            /* Dark text on the old flat light backdrop; the gradient
-               wallpaper makes the area right above the dock genuinely
-               dark now, dark-on-dark was unreadable, caught live by
-               actually hovering an icon on the real page, not assumed. */
-            font_draw_string(GUI_LABELS[icon], cx_center - label_w / 2, cy_bottom - size - 18, 0x00FFF6EC, -1);
+            int ly = y0 - 21; /* capsule spans ly-3 .. ly+19: clear of the tray's top edge, inside the band (y0 - 24) */
+            /* Dark text on a light capsule with a hairline edge, the macOS
+               dock tooltip, in the tray's own cream. Bare light text read
+               on dark wallpaper but vanished on bright map tiles and
+               collided with an open window's bottom edge (QA tour,
+               2026-09-21); the hairline keeps the capsule distinct over a
+               light window. It stays inside the band gui_dock_band_top()
+               composes and the per-slot present span DOCK_LABEL_SPAN. */
+            int lx0 = cx_center - label_w / 2 - 2, lx1 = cx_center + label_w / 2 + 2;
+            gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 11, DOCK_LABEL_EDGE, DOCK_LABEL_EDGE);
+            gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 10, DOCK_LABEL_BG, DOCK_LABEL_BG);
+            font_draw_string(GUI_LABELS[icon], cx_center - label_w / 2, ly, 0x001C1C1E, -1);
         }
     }
     if (drag_slot >= 0) {
@@ -3992,6 +4002,12 @@ static void gui_draw_cursor(int x, int y){
 /* App viewers have their own input loops. Keep the pointer alive while one
    is open, drawing it in screen coordinates outside the app viewport. */
 static int gui_app_windowed = 0;
+/* Vertical shift for an app's own content. Full screen, an app draws its
+   own title strip across the top 40px and starts content at y=52. In a
+   dock window the frame already draws the title bar above the viewport,
+   so the same layout moves up by that strip, the same 32px Stocks has
+   always saved through stx_top(). Add it to every content y. */
+static int gui_app_dy(void){ return gui_app_windowed ? -32 : 0; }
 static int app_view_x, app_view_y, app_view_w, app_view_h;
 static int app_cursor_x, app_cursor_y;
 static void gui_app_mouse_tick(void){
@@ -4169,6 +4185,10 @@ static void gui_launch_files(void){ gui_draw_files_content(); gui_wait_close(); 
    with scrollback and VFS-backed history, included below alongside the
    rest of the app headers. */
 
+/* Physical-resolution text (defined with the Weather window below); the
+   Calendar year view draws its mini-month digits with it. */
+static int wx_text(const char *s, int lx, int ly, int size, int bold, int mul, unsigned int fg);
+static int wx_text_lw(const char *s, int size, int bold, int mul);
 #include "gui_prompt.h"
 #include "auth.h"
 #include "editor.h"
@@ -4844,6 +4864,25 @@ static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, in
     gui_apps_draw_grid(scroll_offset, sel, x0, y0, cell_w, cell_h, tile);
     serial_puts("appsgridrepaint\n");
 }
+/* The window frame's title while an app runs inside the Apps folder's
+   window. The frame is drawn once by gui_launch_from_dock with the folder's
+   own label; an app launched from the grid used to leave "Apps" up there.
+   The title sits outside the content viewport, so the viewport is lifted
+   just for this draw. */
+static void gui_app_frame_title(const char *label){
+    if (!gui_app_windowed) return;
+    int x = app_view_x - 8, y = app_view_y - 32;
+    window_clear_viewport();
+    window_rect(x + 90, y + 4, 320, 22, 0x00F5F0EB);
+    font_draw_string(label, x + 96, y + 8, 0x00403439, -1);
+    window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
+}
+static void gui_apps_launch(int icon){
+    gui_app_frame_title(GUI_LABELS[icon]);
+    gui_launch(icon);
+    gui_app_frame_title(GUI_LABELS[GUI_APPS_FOLDER]);
+}
+
 static void gui_launch_apps(void){
     int sel = 0;
     int rows = (GUI_APPS_FOLDER + APPS_COLS - 1) / APPS_COLS;
@@ -4956,16 +4995,16 @@ static void gui_launch_apps(void){
                 int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
                 if (click_vx >= cell_x0 && click_vx < cell_x1 && click_vy >= cell_y0 && click_vy < cell_y1) { hit = i; break; }
             }
-            if (hit >= 0) { sel = hit; gui_launch(hit); full = 1; continue; } /* the app drew over the screen, so the folder needs a real full repaint */
+            if (hit >= 0) { sel = hit; gui_apps_launch(hit); full = 1; continue; } /* the app drew over the screen, so the folder needs a real full repaint */
             return; /* a tap outside every tile still closes the folder: with no keyboard there is no other way out */
         }
-        if (k == KEY_ENTER) { gui_launch(sel); full = 1; continue; } /* returns here when that app closes, folder still open, same as a real launcher */
+        if (k == KEY_ENTER) { gui_apps_launch(sel); full = 1; continue; } /* returns here when that app closes, folder still open, same as a real launcher */
         int old_sel = sel;
         if (k == 'a' && sel > 0) sel--;                 /* left  */
         else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) sel++; /* right */
         else if (k == 'w' && sel >= APPS_COLS) sel -= APPS_COLS;
         else if (k == 's' && sel + APPS_COLS < GUI_APPS_FOLDER) sel += APPS_COLS;
-        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_launch(sel); full = 1; continue; }
+        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_apps_launch(sel); full = 1; continue; }
         if (sel != old_sel) {
             /* Keyboard selection drags the view with it, the direction that is
                not surprising: move past the last visible row and the grid
@@ -4982,18 +5021,19 @@ static void gui_launch_apps(void){
    Same keyboard-and-click contract every screen here uses (see
    gui_wait_close): a phone has no keyboard, so every action has a tap. */
 static void gui_launch_trash(void){
+    int T = gui_app_dy();
     int sel = 0;
     for (;;) {
         window_clear(GUI_BG);
         gui_draw_app_titlebar("Trash");
         int n = trash_count();
         if (!n) {
-            font_draw_string("Trash is empty.", 20, 70, 0x001C1C1E, -1);
-            font_draw_string("Deleting a file with rm puts it here first.", 20, 94, 0x00807468, -1);
+            font_draw_string("Trash is empty.", 20, T + 52, 0x001C1C1E, -1);
+            font_draw_string("Deleting a file with rm puts it here first.", 20, T + 76, 0x00807468, -1);
         } else {
-            font_draw_string("up/down to pick   r restores   e empties   esc closes", 20, 52, 0x00807468, -1);
+            font_draw_string("up/down to pick   r restores   e empties   esc closes", 20, T + 52, 0x00807468, -1);
             for (int i = 0; i < n; i++) {
-                int y = 84 + i * 22;
+                int y = T + 84 + i * 22;
                 if (i == sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);
                 font_draw_string(trash_name(i), 28, y, 0x001C1C1E, -1);
                 char sz[16]; int p = 0; unsigned int v = trash_size(i);

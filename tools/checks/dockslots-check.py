@@ -31,6 +31,16 @@ for f in sorted(glob.glob("tools/checks/*")) + ["landing/v86/embed.js"]:
     if f.endswith("embed.js"):
         m = re.search(r"var count = (\d+), gap", s)
         if m and int(m.group(1)) != len(order): bad.append(f"{f}: dockSlotPos count = {m.group(1)}, the dock has {len(order)} tiles")
+# tools/qa_demo_drive.py derives its dock from kernel.c at run time; prove the
+# derivation still yields this order and a first-slot x the pixel checks agree
+# with (they click SLOT0_X = 247, the tile spans 246..283).
+src = open("tools/qa_demo_drive.py").read()
+geo = {"__file__": os.path.abspath("tools/qa_demo_drive.py"), "re": re, "os": os}
+exec(src[src.index("LOGICAL_W"):src.index("def move")], geo)
+if geo["DOCK"] != order: bad.append(f"tools/qa_demo_drive.py: derived dock {geo['DOCK']} != {order}")
+if not 246 <= geo["SLOT0_X"] <= 248: bad.append(f"tools/qa_demo_drive.py: SLOT0_X {geo['SLOT0_X']}, tiles start at 246")
+qc = re.search(r"QCODE = (\{.*?\})", src)
+if not qc or eval(qc.group(1)).get(".") != "dot": bad.append("tools/qa_demo_drive.py: type_text must map '.' to the dot qcode")
 print("dock order:", order)
 if bad:
     print("\n".join("STALE  " + b for b in bad)); print(f"FAIL: {len(bad)} stale dock slot constant(s)"); sys.exit(1)
