@@ -94,6 +94,7 @@ once |Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcou
 once |Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
 once |RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
 once |Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
+once |Landing facts match the source|python3 ./tools/checks/landing-facts-check.py
 EOF
 }
 

@@ -119,26 +119,21 @@
 
   section { position: relative; }
 
-  .features { padding: 8px 20px 72px; }
-  /* A real 3-column grid, not auto-fit: auto-fit packed 4 across at wide
-     viewports (900px / 210px minimum), leaving the 5th card ("Where") stranded alone on its own row, reported directly from a
-     screenshot. Fixed 3 columns gives 3-then-2, a real balanced wrap
-     instead of 4-then-1, at every width down to the 2-column tablet and
-     1-column phone breakpoints below. */
-  /* Direct request: 5 real cards (What/Who/When/Why/Where),
-     equal, not 3-then-2. Five is prime, so any 2, 3, or 4-column grid
-     leaves a remainder card alone on its own row, the exact thing being
-     fixed, just relocated. The only two states that are actually equal
-     are all 5 in one row (room enough down to a real tablet width) or
-     all 5 stacked single-column (phone); nothing in between. */
-  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; text-align: left; max-width: 1100px; margin: 0 auto; }
-  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; max-width: 480px; } }
-  .steps { counter-reset: plate; }
-  .step { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 0 18px 18px; counter-increment: plate; }
-  .step::before { content: ""; display: block; height: 4px; margin: 0 -18px 14px; background: var(--accent); border-radius: 12px 12px 0 0; }
-  .step .n { color: var(--fg); font-size: 11px; text-transform: uppercase; letter-spacing: 0.22em; font-weight: 600; }
-  .step .n::before { content: "0" counter(plate) " / "; }
-  .step p { margin: 8px 0 0; font-size: 14px; line-height: 1.5; }
+  /* Replaces the old "5 Ws" walkthrough (What/Who/When/Why/Where), direct
+     request to simplify: those five cards mostly repeated the closing
+     paragraph below in more words. Four real, generated facts instead,
+     same reasoning the old grid used for column counts -- 4 is not prime,
+     so it wraps clean at 2-then-2 on a phone instead of stranding a card
+     alone on its own row. */
+  .facts { padding: 8px 20px 56px; }
+  .facts-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 16px; max-width: 720px; margin: 0 auto; text-align: center; }
+  .fact { display: flex; flex-direction: column; gap: 4px; }
+  .fact strong { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; color: var(--fg); font-style: normal; }
+  .fact .label { color: var(--sub); }
+  @media (max-width: 600px) { .facts-row { grid-template-columns: repeat(2, 1fr); gap: 24px 16px; } .fact strong { font-size: 26px; } }
+  .boot-line { text-align: center; color: var(--sub); font-size: 14px; line-height: 1.5; max-width: 420px; margin: 28px auto 0; }
+  .boot-line a { color: var(--accent2); text-decoration: none; font-weight: 600; }
+  .boot-line a:hover { text-decoration: underline; }
 
   /* Full-bleed at every width, no framed-window card: the demo is edge
      to edge, same on a phone and a 27" display. Height off 100svh not
@@ -366,21 +361,23 @@
      what this is, H2 says what is new about it. -->
 <h1>Introducing Joshua Tree.</h1>
     <h2 class="eyebrow" data-latest="Curbfind, the best deals on the curb, running natively"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
-    <h2 class="eyebrow" data-latest="Curbfind, the best deals on the curb, running natively"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
   </div>
 </header>
 
-<section class="features reveal">
-  <div class="steps">
-    <div class="step"><div class="n">What</div><p>A whole OS. Kernel, desktop, terminal, network stack, 25 apps, live weather. Runs at 1920×1080. Nothing borrowed.</p></div>
-    <div class="step"><div class="n">Who</div><p>Started solo, pairing with Claude. Open source, open to anyone who wants to add to it.</p></div>
-    <!-- The release count reads itself from version.txt at load rather than
-         being hand-typed: it was written as "64 versions" and sat there for
-         dozens of real releases. -->
-    <div class="step"><div class="n">When</div><p>Started August 2026. <span id="release-count">Every version</span> since, each shipped only once proven working.</p></div>
-    <div class="step"><div class="n">Why</div><p>Already talking to AI to build things. That belongs native to the machine, not bolted onto someone else's OS.</p></div>
-    <div class="step"><div class="n">Where</div><p>On your desktop, in your pocket, on a machine that's never heard of it. Runs in any browser through v86, or boots for real in QEMU on whatever hardware you point it at.</p></div>
+<!-- Real facts, not marketing copy: every number here is read straight off
+     the source at deploy time by tools/gen/inject-landing-facts.py (the
+     data-fact spans below), the same "can't drift" contract the eyebrow's
+     data-latest and the version number already keep. tools/checks/
+     landing-facts-check.py fails CI if a span ever disagrees with the
+     source it names. -->
+<section class="facts reveal" aria-label="Joshua Tree by the numbers">
+  <div class="facts-row">
+    <div class="fact"><strong><span data-fact="apps">25</span></strong><span class="label">Apps</span></div>
+    <div class="fact"><strong><span data-fact="checks">57</span></strong><span class="label">Regression checks</span></div>
+    <div class="fact"><strong><span data-fact="lines">47,909</span></strong><span class="label">Lines of kernel code</span></div>
+    <div class="fact"><strong>v<span data-fact="version">0.99.1</span></strong><span class="label">Latest release</span></div>
   </div>
+  <p class="boot-line">Boot it yourself: <a href="https://github.com/nulljosh/joshuatree/releases">grab the latest release from GitHub</a>, or scroll up, it's already running above.</p>
 </section>
 
 <section class="progress-section reveal">
@@ -395,14 +392,14 @@
          fetched-and-reparsed image. Hover a point (or tap it on touch)
          to see its real date and real line count. -->
     <!-- progress-chart:start -->
-<svg xmlns="http://www.w3.org/2000/svg" width="479" height="200" viewBox="0 0 479 200" id="progress-chart-live" role="img" aria-label="Real lines of code over time, 44,784 lines as of Sep 20"><style>
+<svg xmlns="http://www.w3.org/2000/svg" width="479" height="200" viewBox="0 0 479 200" id="progress-chart-live" role="img" aria-label="Real lines of code over time, 47,920 lines as of Sep 23"><style>
   #progress-chart-live {
-    --bg: #ffffff; --grid: #ded9cd; --axis: #5c584f; --muted: #78736c;
-    --label: #5c584f; --strong: #161513; --line: #b5502c; --line2: #b5502c; --line2-pct: #b5502c;
+    --bg: #ffffff; --grid: #d7dfe9; --axis: #526174; --muted: #526174;
+    --label: #526174; --strong: #172334; --line: #2869c7; --line2: #159b9a; --line2-pct: #159b9a;
   }
   @media (prefers-color-scheme: dark) {
-    #progress-chart-live { --bg: #1d1b17; --grid: #3a362e; --axis: #b3ada0; --muted: #b3ada0;
-             --label: #b3ada0; --strong: #f3f0e9; --line: #e08a5f; --line2: #e08a5f; --line2-pct: #e08a5f; }
+    #progress-chart-live { --bg: #192637; --grid: #344354; --axis: #a8b8cb; --muted: #a8b8cb;
+             --label: #a8b8cb; --strong: #f1f5fa; --line: #83b5ff; --line2: #5ed0c7; --line2-pct: #5ed0c7; }
   }
   #progress-chart-live line[stroke="var(--grid)"] { stroke-dasharray: none; }
   #progress-chart-live text { font-family: -apple-system, Helvetica, Arial, sans-serif; }
@@ -413,7 +410,7 @@
   #progress-chart-live .progress-pt:focus .progress-dot,
   #progress-chart-live .progress-pt.is-active .progress-dot { r: 5.5; stroke-width: 2.5; }
   #progress-chart-live .progress-pt:focus { outline: none; }
-</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="49" y1="8" x2="63" y2="8" stroke="var(--line)" stroke-width="2.5"/><text x="68" y="11" font-size="10" fill="var(--label)">Lines of real code</text><line x1="49" y1="26" x2="469" y2="26" stroke="var(--grid)"/><line x1="49" y1="96" x2="469" y2="96" stroke="var(--grid)"/><text x="45" y="29" font-size="9" fill="var(--muted)" text-anchor="end">44784</text><text x="45" y="99" font-size="9" fill="var(--muted)" text-anchor="end">22392</text><text x="45" y="169" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="49" y1="26" x2="49" y2="166" stroke="var(--axis)"/><line x1="49" y1="166" x2="469" y2="166" stroke="var(--axis)"/><text x="6" y="96" font-size="8" fill="var(--line)" text-anchor="middle" transform="rotate(-90 6 96)">Lines of code</text><polyline points="49,166 59,165 69,164 79,163 89,162 100,161 110,161 120,160 130,160 141,160 151,158 161,157 171,155 182,153 192,152 202,151 212,149 223,148 233,146 243,146 253,143 264,142 274,141 284,138 294,137 305,134 315,131 325,115 335,112 346,109 356,98 366,96 376,94 387,93 397,93 407,92 417,89 428,88 438,86 448,30 458,28 469,26" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 26 lines of real code" data-tooltip="Aug 31 &#183; 26 lines"><circle class="progress-hit" cx="49" cy="166" r="11" fill="transparent"/><circle class="progress-dot" cx="49" cy="166" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 1,297 lines of real code" data-tooltip="Sep 13 &#183; 1,297 lines"><circle class="progress-hit" cx="89" cy="162" r="11" fill="transparent"/><circle class="progress-dot" cx="89" cy="162" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 2,034 lines of real code" data-tooltip="Sep 13 &#183; 2,034 lines"><circle class="progress-hit" cx="130" cy="160" r="11" fill="transparent"/><circle class="progress-dot" cx="130" cy="160" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 3,669 lines of real code" data-tooltip="Sep 13 &#183; 3,669 lines"><circle class="progress-hit" cx="171" cy="155" r="11" fill="transparent"/><circle class="progress-dot" cx="171" cy="155" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 5,574 lines of real code" data-tooltip="Sep 13 &#183; 5,574 lines"><circle class="progress-hit" cx="212" cy="149" r="11" fill="transparent"/><circle class="progress-dot" cx="212" cy="149" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 7,379 lines of real code" data-tooltip="Sep 14 &#183; 7,379 lines"><circle class="progress-hit" cx="253" cy="143" r="11" fill="transparent"/><circle class="progress-dot" cx="253" cy="143" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 9,594 lines of real code" data-tooltip="Sep 14 &#183; 9,594 lines"><circle class="progress-hit" cx="294" cy="137" r="11" fill="transparent"/><circle class="progress-dot" cx="294" cy="137" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 17,426 lines of real code" data-tooltip="Sep 14 &#183; 17,426 lines"><circle class="progress-hit" cx="335" cy="112" r="11" fill="transparent"/><circle class="progress-dot" cx="335" cy="112" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 23,111 lines of real code" data-tooltip="Sep 15 &#183; 23,111 lines"><circle class="progress-hit" cx="376" cy="94" r="11" fill="transparent"/><circle class="progress-dot" cx="376" cy="94" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 19, 24,694 lines of real code" data-tooltip="Sep 19 &#183; 24,694 lines"><circle class="progress-hit" cx="417" cy="89" r="11" fill="transparent"/><circle class="progress-dot" cx="417" cy="89" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 44,351 lines of real code" data-tooltip="Sep 20 &#183; 44,351 lines"><circle class="progress-hit" cx="458" cy="28" r="11" fill="transparent"/><circle class="progress-dot" cx="458" cy="28" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 44,784 lines of real code" data-tooltip="Sep 20 &#183; 44,784 lines"><circle class="progress-hit" cx="469" cy="26" r="11" fill="transparent"/><circle class="progress-dot" cx="469" cy="26" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><text x="49" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="253" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="356" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 15</text><text x="428" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 20</text><text x="49" y="196" font-size="10" font-weight="600" fill="var(--strong)">44,784 lines &#183; 98% documented &#183; 582 commits since Aug 31</text></svg>
+</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="49" y1="8" x2="63" y2="8" stroke="var(--line)" stroke-width="2.5"/><text x="68" y="11" font-size="10" fill="var(--label)">Lines of real code</text><line x1="49" y1="26" x2="469" y2="26" stroke="var(--grid)"/><line x1="49" y1="96" x2="469" y2="96" stroke="var(--grid)"/><text x="45" y="29" font-size="9" fill="var(--muted)" text-anchor="end">47920</text><text x="45" y="99" font-size="9" fill="var(--muted)" text-anchor="end">23960</text><text x="45" y="169" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="49" y1="26" x2="49" y2="166" stroke="var(--axis)"/><line x1="49" y1="166" x2="469" y2="166" stroke="var(--axis)"/><text x="6" y="96" font-size="8" fill="var(--line)" text-anchor="middle" transform="rotate(-90 6 96)">Lines of code</text><polyline points="49,166 58,165 68,164 78,163 88,162 97,162 107,161 117,161 127,161 136,159 146,158 156,156 166,154 175,153 185,152 195,150 205,149 215,148 224,146 234,145 244,143 254,141 263,139 273,136 283,134 293,118 302,116 312,112 322,103 332,100 342,99 351,98 361,97 371,95 381,94 390,92 400,90 410,38 420,36 429,33 439,33 449,30 459,28 469,26" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 26 lines of real code" data-tooltip="Aug 31 &#183; 26 lines"><circle class="progress-hit" cx="49" cy="166" r="11" fill="transparent"/><circle class="progress-dot" cx="49" cy="166" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 1,385 lines of real code" data-tooltip="Sep 13 &#183; 1,385 lines"><circle class="progress-hit" cx="88" cy="162" r="11" fill="transparent"/><circle class="progress-dot" cx="88" cy="162" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 2,034 lines of real code" data-tooltip="Sep 13 &#183; 2,034 lines"><circle class="progress-hit" cx="127" cy="161" r="11" fill="transparent"/><circle class="progress-dot" cx="127" cy="161" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 4,143 lines of real code" data-tooltip="Sep 13 &#183; 4,143 lines"><circle class="progress-hit" cx="166" cy="154" r="11" fill="transparent"/><circle class="progress-dot" cx="166" cy="154" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 6,073 lines of real code" data-tooltip="Sep 13 &#183; 6,073 lines"><circle class="progress-hit" cx="205" cy="149" r="11" fill="transparent"/><circle class="progress-dot" cx="205" cy="149" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 7,918 lines of real code" data-tooltip="Sep 14 &#183; 7,918 lines"><circle class="progress-hit" cx="244" cy="143" r="11" fill="transparent"/><circle class="progress-dot" cx="244" cy="143" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 11,140 lines of real code" data-tooltip="Sep 14 &#183; 11,140 lines"><circle class="progress-hit" cx="283" cy="134" r="11" fill="transparent"/><circle class="progress-dot" cx="283" cy="134" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 21,758 lines of real code" data-tooltip="Sep 15 &#183; 21,758 lines"><circle class="progress-hit" cx="322" cy="103" r="11" fill="transparent"/><circle class="progress-dot" cx="322" cy="103" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 16, 23,629 lines of real code" data-tooltip="Sep 16 &#183; 23,629 lines"><circle class="progress-hit" cx="361" cy="97" r="11" fill="transparent"/><circle class="progress-dot" cx="361" cy="97" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 26,259 lines of real code" data-tooltip="Sep 20 &#183; 26,259 lines"><circle class="progress-hit" cx="400" cy="90" r="11" fill="transparent"/><circle class="progress-dot" cx="400" cy="90" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 22, 45,701 lines of real code" data-tooltip="Sep 22 &#183; 45,701 lines"><circle class="progress-hit" cx="439" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="439" cy="33" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 23, 47,920 lines of real code" data-tooltip="Sep 23 &#183; 47,920 lines"><circle class="progress-hit" cx="469" cy="26" r="11" fill="transparent"/><circle class="progress-dot" cx="469" cy="26" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><text x="49" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="234" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="322" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 15</text><text x="371" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 19</text><text x="459" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 23</text><text x="49" y="196" font-size="10" font-weight="600" fill="var(--strong)">47,920 lines &#183; 100% documented &#183; 636 commits since Aug 31</text></svg>
 <!-- progress-chart:end -->
   </div>
 </section>
@@ -501,16 +498,17 @@
   var el = document.getElementById('kernel-version');
   if (!el) return;
   var eyebrow = el.closest('.eyebrow');
+  // Trimmed to the six strongest, direct request to simplify. The
+  // regression-check count used to live here as a hand-typed number
+  // ("51 regression checks gate every change") and drifted stale
+  // almost immediately; that fact now lives in the generated facts
+  // row below instead, where inject-landing-facts.py keeps it honest.
   var items = [
     'Real root-cause fixes, not timeouts',
     'Decoders fuzzed against hostile input',
-    'Big Sur style icons, one soft top light',
-    'Mouse wheel scrolling in Launchpad',
     'Multi-window, real click-to-focus',
     'A real JPEG decoder, from scratch',
     'NE2000 driver, real networking',
-    'Live in-browser boot via v86',
-    '51 regression checks gate every change',
     'Own filesystem, own memory manager'
   ];
   var i = 0, typing = null;
@@ -545,13 +543,7 @@
 
   fetch('version.txt').then(function (r) { return r.ok ? r.text() : null; }).then(function (v) {
     if (!v) return;
-    v = v.trim();
-    items.unshift('v' + v);
-    // "0.78.0" means 78 real releases. MINOR is the release counter here,
-    // since MAJOR is still 0 and PATCH resets with every MINOR.
-    var count = document.getElementById('release-count');
-    var minor = v.split('.')[1];
-    if (count && minor) count.textContent = Number(minor) + ' versions';
+    items.unshift('v' + v.trim());
   }).catch(function () {}).then(cycle);
 })();
 // v51: reveal-on-scroll + one parallax layer, direct request ("add scroll
