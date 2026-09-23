@@ -220,6 +220,20 @@ try:
         for _ in range(2):
             if window_open(): keys("esc"); time.sleep(0.8)
 
+    # Esc closes the focused window and nothing else. Found by eye in the QA
+    # tour: Esc with Files open quit the whole desktop to text mode, because
+    # Files has no key handler and fell into the bare-desktop quit path. The
+    # next open in the loop proves the desktop is still alive after each Esc.
+    for slot, name in enumerate(SLOTS):
+        open_slot(slot)
+        if not window_open():
+            fails.append(f"esc sweep, {name}: did not open (desktop dead after the previous esc?)"); continue
+        keys("esc"); time.sleep(1.0)
+        closed = not window_open()
+        print(f"{name:9s} close via esc: {'yes' if closed else 'NO'}")
+        if not closed:
+            fails.append(f"{name}: still open after esc"); close_via_x()
+
     open_slot(2)
     ok = window_open()
     if ok: close_via_x(); ok = not window_open()
@@ -238,4 +252,4 @@ finally:
 if fails:
     for x in fails: print("FAIL:", x)
     sys.exit(1)
-print("PASS: every dock app opens and closes from the pointer alone, input intact afterwards")
+print("PASS: every dock app opens and closes from the pointer alone and on esc, input intact afterwards")
