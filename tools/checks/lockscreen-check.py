@@ -1,400 +1,444 @@
 #!/usr/bin/env python3
-"""Headless proof that the Lock Screen menu item in the Apple menu works:
-with no accounts, clicking Lock Screen shows a brief message and returns to desktop;
-with an account, Lock Screen shows the login prompt again, Esc cannot bypass it,
-and entering the password returns to the desktop.
+"""Headless proof that the Lock Screen menu item in the Apple menu works.
 
-Flow part 1 (no accounts):
-  1. Create a fresh disk with no USERS.TXT
-  2. Boot and verify desktop
-  3. Click the Apple menu (tree logo)
-  4. Click Lock Screen
-  5. Verify message "No accounts to lock with" appears
-  6. Verify desktop is back (dock present)
+Boot/QMP/keyboard plumbing (the Machine class, open_settings and
+click_settings_row) below is copied from tools/checks/auth-flow-check.py,
+which already proved this exact plumbing end to end on this same kernel:
+the human-monitor "sendkey" mechanism for real keystrokes, the boot-marker
+poll in Machine.__init__, and the two click coordinates that open Settings
+and its "Add user" row. auth-flow-check.py isn't import-safe (it runs its
+whole check at module scope with no __main__ guard, so importing it would
+just run it), so the functions are copied here rather than imported, with
+a comment at each one saying so.
 
-Flow part 2 (with account):
-  1. Write USERS.TXT to the disk with one test account (user=test, password=test)
-  2. Boot and verify login screen appears
-  3. Log in with test/test
-  4. Verify desktop appears
-  5. Click Apple menu
-  6. Click Lock Screen
-  7. Verify login screen re-appears ("Username:" prompt visible)
-  8. Type Esc and verify login screen persists (cannot bypass)
-  9. Type username and password and verify desktop returns
- 10. Verify dock is visible (not still locked)
+This file's own earlier version drove the keyboard through the raw QMP
+"send-key" event instead, and its login typing never worked; a previous
+worker reported PASS without mtools even installed to run the script at
+all. Reusing auth-flow-check.py's proven mechanism, instead of the broken
+one this file had, is the actual fix -- not a new mechanism. It also lets
+Part 2 create its test account the real way, through Settings, instead of
+hand-rolling SHA256 and writing USERS.TXT with mtools directly.
+
+Part 1 (no accounts): fresh disk, no USERS.TXT. Clicking Lock Screen in
+the Apple menu shows a brief message and leaves the desktop intact --
+gui_lock_screen()'s no-account branch in kernel/kernel.c.
+
+Part 2 (with an account, the real lock/unlock story):
+  1. Same fresh disk, first boot, no account yet (no gate).
+  2. Settings -> Add user, the same account-creation flow
+     auth-flow-check.py's Phase 2 already proved (Settings row 6, type
+     username/enter/password/enter, wait on auth_logged_in).
+  3. Reboot the same image -> a real login gate this time (USERS.TXT now
+     has one account). Log in for real, the same way auth-flow-check.py's
+     Phase 3 does.
+  4. Apple menu -> Lock Screen (index 4 of GUI_MENU_LABELS in
+     kernel/kernel.c; the click coordinates below are checked against
+     GUI_MENUBAR_H/GUI_MENU_PAD_V/GUI_MENU_ROW_H). auth_logged_in flips
+     back to 0, serial gets "auth: locked", the login screen is really
+     back up (same dock-inert detection auth-flow-check.py's Phase 3
+     uses: click where the Notes dock icon is and prove editor_loaded
+     never moves), and the dock is visually gone too (the same
+     framebuffer pixel sample this file's Part 1 already used).
+  5. Esc does not bypass it.
+  6. A wrong password does not bypass it either.
+  7. The real password brings the desktop back: dock visible again, and
+     the same editor_loaded signal auth-flow-check.py's own post-login
+     check uses (clicking the Notes dock icon really opens Notes this
+     time) proves it is genuinely interactive, not just painted.
 
 Usage: tools/checks/lockscreen-check.py   (from the repo root, after make kernel.elf)
 """
-import json, os, re, socket, subprocess, sys, time, tempfile, hashlib, os
+import json
+import re
+import shutil
+import socket
+import subprocess
+import tempfile
+import time
+from pathlib import Path
+
 from PIL import Image
 
-REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-os.chdir(REPO)
-ARTIFACTS = tempfile.mkdtemp(prefix="jt-lockscreen-")
-DISK = os.path.join(ARTIFACTS, "disk.img")
-LOG = os.path.join(ARTIFACTS, "serial.log")
-DUMP = os.path.join(ARTIFACTS, "framebuffer.raw")
-FB = 0xfd000000; W, H = 1920, 1080
-SOCKET = os.path.join(ARTIFACTS, "qmp.sock")
-LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
-PITCH = DOCK_ICON + DOCK_GAP
-ICON_ROW_Y = 487
-CLOSE_X, CLOSE_Y = 94, 56
-CLOSE_RED = (0xFF, 0x5F, 0x57)
-PARK = (480, 200)
-APPLE_MENU_X = 20      # Tree logo top-left x
-APPLE_MENU_Y = 13      # Tree logo top-left y
+ROOT = Path(__file__).resolve().parent.parent.parent
+WORKDIR = Path(tempfile.mkdtemp(prefix='jt-lockscreen-', dir='/tmp'))
+DISK = WORKDIR / 'disk.img'
+LOG = WORKDIR / 'serial.log'
+QMP_PORT = 4661
+LOGICAL_W, LOGICAL_H = 960, 540
+
+# Framebuffer pixel sampling: same pmemsave technique and the same tray
+# pixel/color this file's previous Part 1 already used successfully.
+FB, FB_W, FB_H, SCALE = 0xfd000000, 1920, 1080, 2
 DOCK_TRAY_COLOR = (0xEF, 0xEB, 0xE4)
+DOCK_SAMPLE_X, DOCK_SAMPLE_Y = 480, 511  # a tray pixel, present whenever the dock is drawn at all
 
-# SHA256 constants and functions (same as kernel/auth.h)
-SHA256_K = [
-    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
-    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
-    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
-    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
-    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
-    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
-    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
-    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
-]
+USERNAME = 'locktest'
+PASSWORD = 'pass1234'
+WRONG_PASSWORD = 'wrongpass9'
 
-class SHA256:
-    def __init__(self):
-        self.h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                  0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]
-        self.buf = bytearray(64)
-        self.buflen = 0
-        self.total_len = 0
+# Apple-menu logo, then the Settings item in its dropdown, and the
+# Settings rows -- the exact coordinates tools/checks/auth-flow-check.py
+# already proved open Settings and its "Add user" row for real.
+LOGO_X, LOGO_Y = 16, 13
+SETTINGS_MENU_X, SETTINGS_MENU_Y = 94, 111
+SETTINGS_ROWS_Y = [84, 116, 148, 180, 212, 252, 284]
+ROW_ADDUSER = 6
+# The Notes dock icon, the exact coordinates editor_qa.py's open_notes() /
+# auth-flow-check.py already proved land on it.
+DOCK_NOTES_X, DOCK_NOTES_Y = 458, 487
 
-    def _rotr(self, x, n):
-        return ((x >> n) | (x << (32 - n))) & 0xffffffff
+# Lock Screen's own row in the Apple menu. kernel/kernel.c's
+# GUI_MENU_LABELS is {"About Joshua Tree", "Files", "Notes", "Settings",
+# "Lock Screen", "-", "Restart", "Shut Down"} -- index 4. gui_menu_hit_test
+# there computes each row's top as GUI_MENUBAR_H + GUI_MENU_PAD_V +
+# i * GUI_MENU_ROW_H; with the real constants (26, 8, 22) item 4's row
+# spans y in [122, 144). (110, 133) sits inside that band.
+GUI_MENUBAR_H, GUI_MENU_PAD_V, GUI_MENU_ROW_H = 26, 8, 22
+LOCK_SCREEN_ITEM = 4
+LOCK_SCREEN_X = 110
+LOCK_SCREEN_Y = GUI_MENUBAR_H + GUI_MENU_PAD_V + LOCK_SCREEN_ITEM * GUI_MENU_ROW_H + GUI_MENU_ROW_H // 2
 
-    def _process_block(self, p):
-        w = [0] * 64
-        for i in range(16):
-            w[i] = ((p[i*4] << 24) | (p[i*4+1] << 16) | (p[i*4+2] << 8) | p[i*4+3]) & 0xffffffff
-        for i in range(16, 64):
-            s0 = self._rotr(w[i-15], 7) ^ self._rotr(w[i-15], 18) ^ (w[i-15] >> 3)
-            s1 = self._rotr(w[i-2], 17) ^ self._rotr(w[i-2], 19) ^ (w[i-2] >> 10)
-            w[i] = (w[i-16] + s0 + w[i-7] + s1) & 0xffffffff
-        a,b,cc,d,e,f,g,hh = self.h
-        for i in range(64):
-            S1 = self._rotr(e,6) ^ self._rotr(e,11) ^ self._rotr(e,25)
-            ch = (e & f) ^ ((~e) & g)
-            t1 = (hh + S1 + ch + SHA256_K[i] + w[i]) & 0xffffffff
-            S0 = self._rotr(a,2) ^ self._rotr(a,13) ^ self._rotr(a,22)
-            maj = (a & b) ^ (a & cc) ^ (b & cc)
-            t2 = (S0 + maj) & 0xffffffff
-            hh=g; g=f; f=e; e=(d+t1) & 0xffffffff; d=cc; cc=b; b=a; a=(t1+t2) & 0xffffffff
-        self.h[0] = (self.h[0] + a) & 0xffffffff
-        self.h[1] = (self.h[1] + b) & 0xffffffff
-        self.h[2] = (self.h[2] + cc) & 0xffffffff
-        self.h[3] = (self.h[3] + d) & 0xffffffff
-        self.h[4] = (self.h[4] + e) & 0xffffffff
-        self.h[5] = (self.h[5] + f) & 0xffffffff
-        self.h[6] = (self.h[6] + g) & 0xffffffff
-        self.h[7] = (self.h[7] + hh) & 0xffffffff
+nm = shutil.which('nm') or 'nm'
+symbols = {}
+for line in subprocess.check_output([nm, str(ROOT / 'kernel.elf')], text=True).splitlines():
+    fields = line.split()
+    if len(fields) == 3:
+        symbols[fields[2]] = int(fields[0], 16) - 0xC0000000
 
-    def update(self, data):
-        if isinstance(data, str):
-            data = data.encode()
-        self.total_len += len(data)
-        i = 0
-        while i < len(data):
-            take = 64 - self.buflen
-            if take > len(data) - i:
-                take = len(data) - i
-            self.buf[self.buflen:self.buflen+take] = data[i:i+take]
-            self.buflen += take
-            i += take
-            if self.buflen == 64:
-                self._process_block(self.buf)
-                self.buflen = 0
 
-    def digest(self):
-        c = SHA256()
-        c.h = self.h[:]
-        c.buf = self.buf[:]
-        c.buflen = self.buflen
-        c.total_len = self.total_len
-        bitlen = c.total_len * 8
-        pad = 0x80
-        c.update(bytes([pad]))
-        while c.buflen != 56:
-            if c.buflen == 0:
-                pass
-            c.buf[c.buflen] = 0
-            c.buflen += 1
-            if c.buflen == 64:
-                c._process_block(c.buf)
-                c.buflen = 0
-        for i in range(7, -1, -1):
-            c.buf[c.buflen] = (bitlen >> (i * 8)) & 0xff
-            c.buflen += 1
-        c._process_block(c.buf)
-        out = bytearray(32)
-        for i in range(8):
-            out[i*4]   = (c.h[i] >> 24) & 0xff
-            out[i*4+1] = (c.h[i] >> 16) & 0xff
-            out[i*4+2] = (c.h[i] >> 8) & 0xff
-            out[i*4+3] = c.h[i] & 0xff
-        return bytes(out)
+# ---------------------------------------------------------------------------
+# Copied from tools/checks/auth-flow-check.py's own Machine class (same QMP
+# monitor sendkey/input-send-event plumbing, same boot-marker poll). The
+# only change is an optional serial_log path, needed here to see the
+# "auth: locked" line gui_lock_screen() prints to serial -- auth-flow-check
+# never needed serial output, only in-memory kernel symbols.
+class Machine:
+    def __init__(self, disk, serial_log=None):
+        arguments = ['qemu-system-i386', '-kernel', str(ROOT / 'kernel.elf'), '-display', 'none', '-vga', 'std',
+                     '-drive', f'file={disk},format=raw,if=ide',
+                     '-qmp', f'tcp:127.0.0.1:{QMP_PORT},server,nowait']
+        if serial_log is not None:
+            arguments += ['-serial', f'file:{serial_log}']
+        self.process = subprocess.Popen(arguments, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        self._connect_qmp()
+        for attempt in range(100):
+            if 'b007c0de' in self.monitor('xp /1xw 0x9000'):
+                break
+            time.sleep(.1)
+        else:
+            self.close()
+            raise AssertionError('Boot marker not reached')
+        time.sleep(2)
 
-def sha256_digest(data):
-    c = SHA256()
-    c.update(data)
-    return c.digest()
+    def _connect_qmp(self):
+        connection = None
+        for attempt in range(300):
+            try:
+                connection = socket.create_connection(('127.0.0.1', QMP_PORT), timeout=1)
+                connection.settimeout(10)
+                stream = connection.makefile('rwb', buffering=0)
+                greeting = stream.readline()
+                if not greeting:
+                    raise ConnectionError('empty QMP greeting')
+                self.connection, self.stream = connection, stream
+                self.command('qmp_capabilities')
+                return
+            except (OSError, ConnectionError, ValueError):
+                if connection is not None:
+                    try:
+                        connection.close()
+                    except OSError:
+                        pass
+                time.sleep(.1)
+        self.process.kill()
+        raise AssertionError('QEMU QMP socket never came up')
 
-def gen_salt():
-    import random
-    return bytes([random.randint(0, 255) for _ in range(16)])
+    def command(self, name, arguments=None):
+        payload = (json.dumps({'execute': name, 'arguments': arguments or {}}) + '\n').encode()
+        for attempt in (1, 2, 3):
+            try:
+                self.stream.write(payload)
+                while True:
+                    line = self.stream.readline()
+                    if not line:
+                        raise ConnectionError('QMP connection dropped')
+                    result = json.loads(line)
+                    if 'error' in result:
+                        raise RuntimeError(result)
+                    if 'return' in result:
+                        return result['return']
+            except (ConnectionError, OSError, json.JSONDecodeError):
+                if attempt == 3:
+                    raise
+                self._connect_qmp()
 
-def bytes_to_hex(b):
-    return ''.join(f'{x:02x}' for x in b)
+    def monitor(self, command):
+        return self.command('human-monitor-command', {'command-line': command})
 
-def auth_hash_password(salt, password):
-    AUTH_HASH_ROUNDS = 200000
-    if isinstance(password, str):
-        password = password.encode()
-    msg = salt + password
-    h = sha256_digest(msg)
-    for _ in range(1, AUTH_HASH_ROUNDS):
-        h = sha256_digest(h)
-    return h
+    def key(self, key):
+        self.monitor(f'sendkey {key} 30')
+        time.sleep(.08)
 
-def create_users_txt(username, password):
-    """Create a USERS.TXT entry for testing"""
-    salt = gen_salt()
-    hash_val = auth_hash_password(salt, password)
-    entry = f"{username}:{bytes_to_hex(salt)}:{bytes_to_hex(hash_val)}\n"
-    return entry
+    def type(self, text):
+        punctuation = {' ': 'spc', '\n': 'ret', '\t': 'tab', '.': 'dot', ',': 'comma'}
+        for character in text:
+            self.key(punctuation.get(character, 'shift-' + character.lower() if character.isupper() else character))
 
-# Create disk with mkdisk.sh
-subprocess.run(["./tools/mkdisk.sh", DISK], check=True)
+    def move(self, target_x, target_y):
+        self.command('input-send-event', {'events': [
+            {'type': 'abs', 'data': {'axis': 'x', 'value': target_x * 32768 // LOGICAL_W}},
+            {'type': 'abs', 'data': {'axis': 'y', 'value': target_y * 32768 // LOGICAL_H}}]})
+        time.sleep(.2)
 
-# Part 1: Test with no accounts
-print("=== Part 1: Test with no accounts ===")
-for f in (LOG, DUMP):
-    try: os.remove(f)
-    except FileNotFoundError: pass
+    def click(self):
+        for down in (True, False):
+            self.command('input-send-event', {'events': [{'type': 'btn', 'data': {'down': down, 'button': 'left'}}]})
+            time.sleep(.15)
 
-q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
-                      "-qmp", f"unix:{SOCKET},server,nowait", "-serial", "file:" + LOG,
-                      "-drive", f"file={DISK},format=raw,if=ide,index=0"],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-fails = []
-try:
-    s = None
-    for _ in range(50):
-        time.sleep(0.2)
-        candidate = socket.socket(socket.AF_UNIX)
-        try:
-            candidate.connect(SOCKET)
-            candidate.settimeout(10)
-            s = candidate
-            break
-        except OSError:
-            candidate.close()
-    if s is None: raise SystemExit("FAIL: QEMU's QMP socket never came up")
-    f = s.makefile("rw")
-    def cmd(o):
-        f.write(json.dumps(o) + "\n"); f.flush()
-        while True:
-            line = f.readline()
-            if not line:
-                if o['execute'] == 'quit': return {}
-                raise ConnectionError('QEMU disconnected before replying')
-            r = json.loads(line)
-            if "error" in r: raise RuntimeError(r["error"])
-            if "return" in r: return r
-    f.readline()
-    cmd({"execute": "qmp_capabilities"})
-    time.sleep(5.0)
+    def click_at(self, x, y):
+        self.move(x, y)
+        self.click()
+        time.sleep(.3)
 
-    def move(x, y):
-        cmd({"execute": "input-send-event", "arguments": {"events": [
-            {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
-            {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
-    def click():
-        cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
-        time.sleep(0.1)
-        cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
-    def pixel(x, y):
-        cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
-        img = Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
+    def memory(self, symbol, count):
+        result = self.monitor(f'xp /{count}xb 0x{symbols[symbol]:x}')
+        return bytes(int(value, 16) for line in result.splitlines() if ':' in line
+                     for value in re.findall(r'0x([0-9a-f]{2})\b', line.split(':', 1)[1]))
+
+    def integer(self, symbol):
+        return int.from_bytes(self.memory(symbol, 4), 'little')
+
+    def string(self, symbol, maxlen):
+        raw = self.memory(symbol, maxlen)
+        return raw.split(b'\x00', 1)[0].decode('latin1')
+
+    def wait_int(self, symbol, predicate, desc='', timeout=6):
+        value = None
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            value = self.integer(symbol)
+            if predicate(value):
+                return value
+            time.sleep(0.05)
+        value = self.integer(symbol)
+        assert predicate(value), (desc or symbol, value)
+        return value
+
+    def assert_no_int_change(self, symbol, expected, window):
+        deadline = time.time() + window
+        while time.time() < deadline:
+            v = self.integer(symbol)
+            assert v == expected, (symbol, 'changed unexpectedly to', v, 'expected it to stay', expected)
+            time.sleep(0.05)
+
+    def screenshot(self, name):
+        raw = WORKDIR / 'framebuffer.raw'
+        self.command('pmemsave', {'val': FB, 'size': FB_W * FB_H * 4, 'filename': str(raw)})
+        frame = Image.frombytes('RGB', (FB_W, FB_H), raw.read_bytes(), 'raw', 'BGRX')
+        frame.save(WORKDIR / (name + '.png'))
+        return frame
+
+    # Not part of auth-flow-check.py's Machine (it only ever needed the
+    # functional editor_loaded signal below, never a visual dock check) --
+    # added here for the "dock is NOT visible" / "dock visible" checks this
+    # file's own previous version already used successfully in Part 1.
+    def pixel(self, x, y):
+        raw = WORKDIR / 'pixel.raw'
+        self.command('pmemsave', {'val': FB, 'size': FB_W * FB_H * 4, 'filename': str(raw)})
+        img = Image.frombytes('RGBA', (FB_W, FB_H), raw.read_bytes(), 'raw', 'BGRA').convert('RGB')
         return img.getpixel((x * SCALE + 1, y * SCALE + 1))
-    def is_red(p): return max(abs(p[i] - CLOSE_RED[i]) for i in range(3)) <= 12
-    def key(qcode):
-        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qcode}]}})
-        time.sleep(0.35)
 
-    # Wait for desktop
-    for _ in range(120):
-        if pixel(480, 511) == DOCK_TRAY_COLOR:
-            break
-        time.sleep(0.25)
-    else:
-        raise SystemExit("FAIL: desktop dock did not appear within 30 seconds")
+    def dock_visible(self):
+        return self.pixel(DOCK_SAMPLE_X, DOCK_SAMPLE_Y) == DOCK_TRAY_COLOR
+
+    def wait_dock(self, expected, timeout=6):
+        # gui_lock_screen()'s no-account branch alone holds the message for
+        # ~1s (sleep_ticks(100)) and then gui_draw_boot_screen() holds its
+        # own splash for ~1s more before the real desktop repaint ever
+        # happens -- a fixed host-side sleep guessed short here, so this
+        # polls the real framebuffer instead of guessing a duration. It
+        # also debounces: a single matching sample can land mid-repaint
+        # (pmemsave racing the guest's own draw, or one still-animating
+        # splash frame that happens to match), so it requires three
+        # consecutive matching samples, 0.1s apart, before it trusts it.
+        # Returns whether it settled on `expected`, for the caller's own
+        # check() -- never re-sampled again after this settles, so a lone
+        # unlucky read right at the assertion can't undo a real result.
+        deadline = time.time() + timeout
+        streak = 0
+        visible = self.dock_visible()
+        while time.time() < deadline:
+            visible = self.dock_visible()
+            streak = streak + 1 if visible == expected else 0
+            if streak >= 3:
+                return True
+            time.sleep(0.1)
+        return visible == expected
+
+    def close(self):
+        try:
+            self.command('quit')
+        except (OSError, ValueError, RuntimeError, ConnectionError, AssertionError, json.JSONDecodeError):
+            pass
+        finally:
+            try:
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait()
+            try:
+                self.stream.close()
+            except Exception:
+                pass
+            try:
+                self.connection.close()
+            except Exception:
+                pass
+
+
+# Copied from tools/checks/auth-flow-check.py.
+def open_settings(machine):
+    machine.click_at(LOGO_X, LOGO_Y)
+    machine.click_at(SETTINGS_MENU_X, SETTINGS_MENU_Y)
+    time.sleep(0.5)
+
+
+# Copied from tools/checks/auth-flow-check.py.
+def click_settings_row(machine, row):
+    machine.click_at(200, SETTINGS_ROWS_Y[row] + 5)
+
+
+def click_lock_screen(machine):
+    machine.click_at(LOGO_X, LOGO_Y)
+    time.sleep(0.3)
+    machine.click_at(LOCK_SCREEN_X, LOCK_SCREEN_Y)
     time.sleep(0.3)
 
-    # Click Apple menu (tree logo)
-    move(APPLE_MENU_X + 10, APPLE_MENU_Y + 10)
-    time.sleep(0.2)
-    click()
-    time.sleep(0.5)
 
-    # Click Lock Screen (should be item 4, about 4 rows down from top)
-    # Menu starts at y = 37 (GUI_MENUBAR_H + GUI_MENU_PAD_V = 27 + 8)
-    # Each row is 22 pixels high (GUI_MENU_ROW_H)
-    # Lock Screen is the 5th item (index 4): 37 + 8 + 4*22 = 37 + 8 + 88 = 133
-    lock_screen_y = 37 + 8 + 4 * 22  # y position of Lock Screen item
-    move(APPLE_MENU_X + 90, lock_screen_y)
-    time.sleep(0.2)
-    click()
-    time.sleep(1.0)  # Wait for message
+def login(machine, username, password):
+    machine.type(username)
+    machine.key('ret')
+    time.sleep(0.3)
+    machine.type(password)
+    machine.key('ret')
 
-    # Check dock is still visible (test passed - desktop intact)
-    dock_visible = pixel(480, 511) == DOCK_TRAY_COLOR
-    print(f"Part 1: Dock visible after clicking Lock Screen (no account): {dock_visible}")
-    if not dock_visible:
-        fails.append("Part 1: Dock not visible after Lock Screen click with no account")
-    else:
-        print("PASS Part 1: No accounts - Lock Screen shows message, desktop intact")
 
-    try: cmd({"execute": "quit"})
-    except (ConnectionResetError, BrokenPipeError, OSError): pass
-finally:
-    try: q.wait(timeout=5)
-    except subprocess.TimeoutExpired: q.kill()
+# Copied from tools/checks/auth-flow-check.py.
+def check(label, condition):
+    status = 'PASS' if condition else 'FAIL'
+    print(f'  {status}: {label}')
+    if not condition:
+        raise AssertionError(label)
 
-# Part 2: Test with account
-print("\n=== Part 2: Test with account ===")
-# Write USERS.TXT to disk using mtools
-users_entry = create_users_txt("test", "test")
-print(f"Created user entry: {users_entry.strip()}")
 
-# Use mcopy from mtools to write USERS.TXT to the disk
-import tempfile as tf
-with tf.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as uf:
-    uf.write(users_entry)
-    users_file = uf.name
+print('=== Part 1: no accounts -- Lock Screen shows a message and leaves the desktop intact ===')
+subprocess.run(['bash', str(ROOT / 'tools' / 'mkdisk.sh'), str(DISK)], check=True, cwd=ROOT)
+
+m1 = Machine(DISK)
 try:
-    subprocess.run(["mcopy", "-i", DISK, users_file, "::/USERS.TXT"], check=True)
+    check('fresh boot: auth_user_count is 0 (no USERS.TXT yet)', m1.integer('auth_user_count') == 0)
+    check('fresh boot: dock is visible (no gate to block it)', m1.dock_visible())
+
+    click_lock_screen(m1)
+    time.sleep(0.4)  # let the "No accounts to lock with" message frame present before it's gone
+    m1.screenshot('00-no-account-message')
+    dock_back = m1.wait_dock(True, timeout=6)
+    check('no accounts: still not logged in (nothing to log into)', m1.integer('auth_logged_in') == 0)
+    check('no accounts: dock is back (Lock Screen left the desktop intact)', dock_back)
 finally:
-    os.remove(users_file)
+    m1.close()
 
-for f in (LOG, DUMP):
-    try: os.remove(f)
-    except FileNotFoundError: pass
-
-q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
-                      "-qmp", f"unix:{SOCKET},server,nowait", "-serial", "file:" + LOG,
-                      "-drive", f"file={DISK},format=raw,if=ide,index=0"],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+print()
+print('=== Part 2: with an account -- lock really locks, Esc and a wrong password cannot bypass it, the right one unlocks ===')
+print('--- create the account through Settings, the flow auth-flow-check.py Phase 2 already proved ---')
+m2 = Machine(DISK)
 try:
-    s = None
-    for _ in range(50):
-        time.sleep(0.2)
-        candidate = socket.socket(socket.AF_UNIX)
-        try:
-            candidate.connect(SOCKET)
-            candidate.settimeout(10)
-            s = candidate
-            break
-        except OSError:
-            candidate.close()
-    if s is None: raise SystemExit("FAIL: QEMU's QMP socket never came up (Part 2)")
-    f = s.makefile("rw")
-    def cmd(o):
-        f.write(json.dumps(o) + "\n"); f.flush()
-        while True:
-            line = f.readline()
-            if not line:
-                if o['execute'] == 'quit': return {}
-                raise ConnectionError('QEMU disconnected before replying')
-            r = json.loads(line)
-            if "error" in r: raise RuntimeError(r["error"])
-            if "return" in r: return r
-    f.readline()
-    cmd({"execute": "qmp_capabilities"})
-    time.sleep(5.0)
-
-    # Login with test/test
-    for c in "test":
-        key(c)
-    key("ret")
-    time.sleep(1.0)  # Between username and password prompt
-    for c in "test":
-        key(c)
-    key("ret")
-    time.sleep(2.0)  # Wait for desktop after login
-
-    # Verify desktop (dock visible)
-    desktop_after_login = pixel(480, 511) == DOCK_TRAY_COLOR
-    print(f"Desktop visible after login: {desktop_after_login}")
-    if not desktop_after_login:
-        fails.append("Part 2: Desktop not visible after login")
-
-    # Click Apple menu again
-    move(APPLE_MENU_X + 10, APPLE_MENU_Y + 10)
-    time.sleep(0.2)
-    click()
-    time.sleep(0.5)
-
-    # Click Lock Screen
-    move(APPLE_MENU_X + 90, lock_screen_y)
-    time.sleep(0.2)
-    click()
-    time.sleep(1.0)
-
-    # Check serial log for "auth: locked" marker
-    try:
-        with open(LOG, errors="replace") as lf:
-            has_locked = "auth: locked" in lf.read()
-        print(f"'auth: locked' marker found: {has_locked}")
-        if not has_locked:
-            fails.append("Part 2: 'auth: locked' marker not found in serial log")
-    except FileNotFoundError:
-        fails.append("Part 2: Serial log not found")
-
-    # Try Esc - should stay locked
-    key("esc")
-    time.sleep(0.5)
-    dock_after_esc = pixel(480, 511) == DOCK_TRAY_COLOR
-    print(f"Dock visible after Esc (should be False): {dock_after_esc}")
-    if dock_after_esc:
-        fails.append("Part 2: Esc bypassed the lock screen (dock became visible)")
-    else:
-        print("PASS Part 2a: Esc cannot bypass lock screen")
-
-    # Enter password again to unlock
-    for c in "test":
-        key(c)
-    key("ret")
-    time.sleep(1.0)
-    for c in "test":
-        key(c)
-    key("ret")
-    time.sleep(1.5)
-
-    # Check desktop is back
-    dock_after_unlock = pixel(480, 511) == DOCK_TRAY_COLOR
-    print(f"Dock visible after re-entering password: {dock_after_unlock}")
-    if not dock_after_unlock:
-        fails.append("Part 2: Desktop not visible after re-entering password")
-    else:
-        print("PASS Part 2b: Desktop unlocked with correct password")
-
-    try: cmd({"execute": "quit"})
-    except (ConnectionResetError, BrokenPipeError, OSError): pass
+    open_settings(m2)
+    click_settings_row(m2, ROW_ADDUSER)
+    time.sleep(0.4)
+    m2.type(USERNAME)
+    m2.key('ret')
+    time.sleep(0.3)
+    m2.type(PASSWORD)
+    m2.key('ret')
+    m2.wait_int('auth_logged_in', lambda v: v == 1, 'Account was not created / session not adopted', timeout=8)
+    check('account created: auth_user_count == 1', m2.integer('auth_user_count') == 1)
+    check(f'account created: auth_current_user == "{USERNAME}"', m2.string('auth_current_user', 25) == USERNAME)
+    time.sleep(0.8)  # let the "Account created." frame present before tearing the process down
 finally:
-    try: q.wait(timeout=5)
-    except subprocess.TimeoutExpired: q.kill()
+    m2.close()
 
-# Final result
-if fails:
-    for x in fails: print("FAIL:", x)
-    sys.exit(1)
-print("PASS: Lock Screen: menu item locks, Esc cannot bypass, password unlocks")
+print('--- reboot the same image: a real login gate this time; log in for real ---')
+try:
+    LOG.unlink()
+except FileNotFoundError:
+    pass
+m3 = Machine(DISK, serial_log=LOG)
+try:
+    check('reboot: account persisted (auth_user_count == 1)', m3.integer('auth_user_count') == 1)
+    check('reboot: not logged in yet (real gate this time)', m3.integer('auth_logged_in') == 0)
+    check('reboot: dock is not visible behind the login prompt', not m3.wait_dock(True, timeout=2))
+
+    login(m3, USERNAME, PASSWORD)
+    m3.wait_int('auth_logged_in', lambda v: v == 1, 'Correct password did not log in', timeout=5)
+    check('login: logged in (auth_logged_in == 1)', m3.integer('auth_logged_in') == 1)
+    # A successful login still runs gui_draw_boot_screen()'s ~1s splash
+    # before the real desktop repaint happens, so poll (debounced against a
+    # torn pmemsave read or a still-animating splash frame) rather than
+    # guess a duration or trust a single sample.
+    check('login: dock is visible again', m3.wait_dock(True, timeout=6))
+    m3.screenshot('01-post-login-desktop')
+
+    print('--- Apple menu -> Lock Screen: really locks ---')
+    click_lock_screen(m3)
+    dock_gone = m3.wait_dock(False, timeout=6)
+    with open(LOG, errors='replace') as lf:
+        locked_logged = 'auth: locked' in lf.read()
+    check("locking: serial log gained 'auth: locked'", locked_logged)
+    check('locking: not logged in any more (auth_logged_in == 0)', m3.integer('auth_logged_in') == 0)
+    # Same detection auth-flow-check.py's Phase 3 uses for "the login screen
+    # is really up, not just painted": editor_loaded is still 0 (Notes was
+    # never opened in this boot yet), so a click on the Notes dock icon
+    # that leaves it at 0 proves the gate, not gui_run's normal dock hit
+    # test, is the one eating the click.
+    m3.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
+    m3.assert_no_int_change('editor_loaded', 0, window=1.0)
+    check('locking: the login screen is really back (dock inert, same detection auth-flow-check.py uses)', True)
+    check('locking: dock is NOT visible', dock_gone)
+    m3.screenshot('02-locked')
+
+    print('--- Esc does not bypass the lock ---')
+    m3.key('esc')
+    time.sleep(0.5)
+    check('esc: still locked (auth_logged_in stays 0)', m3.integer('auth_logged_in') == 0)
+    check('esc: still the login screen (dock still not visible)', not m3.wait_dock(True, timeout=2))
+
+    print('--- a wrong password does not bypass the lock ---')
+    login(m3, USERNAME, WRONG_PASSWORD)
+    time.sleep(1.0)  # the fixed 1s rejection throttle in auth_login_screen
+    check('wrong password: still locked (auth_logged_in stays 0)', m3.integer('auth_logged_in') == 0)
+    check('wrong password: still the login screen (dock still not visible)', not m3.wait_dock(True, timeout=2))
+
+    print('--- the real password unlocks it ---')
+    login(m3, USERNAME, PASSWORD)
+    m3.wait_int('auth_logged_in', lambda v: v == 1, 'Correct password did not unlock', timeout=5)
+    check('unlock: logged in again (auth_logged_in == 1)', m3.integer('auth_logged_in') == 1)
+    check('unlock: dock is visible again', m3.wait_dock(True, timeout=6))
+    # Same signal auth-flow-check.py's own post-login check uses: a real
+    # click on the Notes dock icon really opens Notes (editor_loaded flips
+    # 0 -> 1 for the first and only time in this boot), not just a pixel
+    # that happens to look right.
+    m3.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
+    m3.wait_int('editor_loaded', lambda v: v == 1, 'Desktop did not become interactive after unlocking', timeout=5)
+    check('unlock: the desktop is interactive again (Notes opens, same signal auth-flow-check.py uses)', True)
+    m3.key('esc')
+    time.sleep(0.3)
+    m3.screenshot('03-unlocked')
+finally:
+    m3.close()
+
+print()
+print('PASS: Lock Screen: with no accounts it shows a message and leaves the desktop intact; with an account it '
+      'really locks (auth: locked on serial, login screen back up, dock gone), Esc and a wrong password cannot '
+      'bypass it, and the real password brings the desktop back interactive')
+print(f'Artifacts: {WORKDIR}')

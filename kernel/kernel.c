@@ -6276,8 +6276,18 @@ static void gui_lock_screen(void){
         int msg_w = font_string_width("No accounts to lock with");
         int msg_x = ((int)window_width() - msg_w) / 2;
         int msg_y = (int)window_height() / 2;
-        window_rect(msg_x - 10, msg_y - 10, msg_w + 20, 25, 0x00FAF8F6);
-        window_rect(msg_x - 10, msg_y - 10, msg_w + 20, 25, 0x00555555);  /* border */
+        int box_x = msg_x - 10, box_y = msg_y - 10, box_w = msg_w + 20, box_h = 25;
+        window_rect(box_x, box_y, box_w, box_h, 0x00FAF8F6);  /* fill */
+        /* v0.85.3: a second full-size window_rect in the border color used to
+           sit directly on top of this fill (same x/y/w/h), painting the whole
+           box grey and burying the grey message text on a now-identical grey
+           background -- a real headless dump showed the box with no text at
+           all. A 1px outline on all four edges reads as a border without
+           erasing the fill underneath it. */
+        window_rect(box_x, box_y, box_w, 1, 0x00555555);              /* top */
+        window_rect(box_x, box_y + box_h - 1, box_w, 1, 0x00555555);  /* bottom */
+        window_rect(box_x, box_y, 1, box_h, 0x00555555);              /* left */
+        window_rect(box_x + box_w - 1, box_y, 1, box_h, 0x00555555);  /* right */
         font_draw_string("No accounts to lock with", msg_x, msg_y, 0x00555555, -1);
         window_present();
         sleep_ticks(100);  /* 1 second at 100 ticks/sec */
