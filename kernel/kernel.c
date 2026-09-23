@@ -967,6 +967,22 @@ static int dock_scale_pct = 7;
 static int wall_theme = WALL_SAT;
 static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
 
+/* v71: real location for weather/map, looked up from the public IP
+   (ip-api.com, see geo_fetch further down). Forward of that same v71
+   declaration, same reason wind_enabled is forward here: settings_load
+   needs it and has to precede it in the file.
+   v0.85.5: loc_* is the Settings-entered override (see loc_geocode
+   further down) that settings_load copies straight into these three
+   fields plus geo_have, so weather_fetch_inner and the map wallpaper
+   fetch pick it up through the exact same path as the IP lookup, no
+   separate "which source" branch anywhere downstream. */
+static char geo_lat[16] = "", geo_lon[16] = "", geo_city[24] = "";
+static int geo_have = 0;
+#define LOC_NAME_MAX 24
+static char loc_name[LOC_NAME_MAX] = "", loc_lat[16] = "", loc_lon[16] = "";
+static int loc_have = 0;
+static char loc_err[48] = "";
+
 /* v85 (chat rework): global LLM config, the same "one real setting, one
    real default, survives a reboot" contract wind/dock/wall already keep.
    Was hardcoded inline in the shell `chat` command and duplicated again
@@ -1024,6 +1040,40 @@ static void settings_load(void){
         int is_llmmodel = keylen == 8 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='m' && buf[start+4]=='o' && buf[start+5]=='d' && buf[start+6]=='e' && buf[start+7]=='l';
         int is_llmhost  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='h' && buf[start+4]=='o' && buf[start+5]=='s' && buf[start+6]=='t';
         int is_llmport  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='p' && buf[start+4]=='o' && buf[start+5]=='r' && buf[start+6]=='t';
+        int is_loc = keylen == 3 && buf[start]=='l' && buf[start+1]=='o' && buf[start+2]=='c';
+        if (is_loc) {
+            /* value shape: name;lat;lon -- the same three fields
+               loc_geocode fills in, ';'-joined since '=' is already the
+               key/value separator and none of the three ever contain a
+               ';' (json_extract_string strips escapes, json_extract_number_text
+               is digits/./- only). A malformed line (missing a ';', an
+               empty lat/lon) is treated as "no override" rather than
+               guessed at. */
+            int k = eq + 1;
+            int f = 0; /* which field: 0=name 1=lat 2=lon */
+            char nbuf[LOC_NAME_MAX]; int ni = 0;
+            char latbuf[16]; int lai = 0;
+            char lonbuf[16]; int loi = 0;
+            while (k < line_end) {
+                char c = buf[k++];
+                if (c == ';') { f++; continue; }
+                if (f == 0 && ni < LOC_NAME_MAX - 1) nbuf[ni++] = c;
+                else if (f == 1 && lai < 15) latbuf[lai++] = c;
+                else if (f == 2 && loi < 15) lonbuf[loi++] = c;
+            }
+            nbuf[ni] = 0; latbuf[lai] = 0; lonbuf[loi] = 0;
+            if (f == 2 && lai > 0 && loi > 0) {
+                int j = 0; while (nbuf[j]) { loc_name[j] = nbuf[j]; j++; } loc_name[j] = 0;
+                j = 0; while (latbuf[j]) { loc_lat[j] = latbuf[j]; j++; } loc_lat[j] = 0;
+                j = 0; while (lonbuf[j]) { loc_lon[j] = lonbuf[j]; j++; } loc_lon[j] = 0;
+                loc_have = 1;
+                j = 0; while (loc_lat[j]) { geo_lat[j] = loc_lat[j]; j++; } geo_lat[j] = 0;
+                j = 0; while (loc_lon[j]) { geo_lon[j] = loc_lon[j]; j++; } geo_lon[j] = 0;
+                j = 0; while (loc_name[j] && j < 23) { geo_city[j] = loc_name[j]; j++; } geo_city[j] = 0;
+                geo_have = 1;
+            }
+            continue;
+        }
         if (is_llmmodel) {
             char parsed[LLM_MODEL_MAX];
             int j = 0, k = eq + 1;
@@ -1061,7 +1111,7 @@ static void settings_load(void){
 }
 
 static void settings_save(void){
-    char buf[256];
+    char buf[320];
     int n = 0;
     const char *k1 = "wind="; while (*k1) buf[n++] = *k1++;
     buf[n++] = wind_enabled ? '1' : '0'; buf[n++] = '\n';
@@ -1083,6 +1133,15 @@ static void settings_save(void){
       while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
       while (nd) buf[n++] = digits[--nd]; }
     buf[n++] = '\n';
+    if (loc_have) {
+        const char *k7 = "loc="; while (*k7) buf[n++] = *k7++;
+        { const char *s = loc_name; while (*s && n < (int)sizeof(buf) - 34) buf[n++] = *s++; }
+        buf[n++] = ';';
+        { const char *s = loc_lat; while (*s && n < (int)sizeof(buf) - 18) buf[n++] = *s++; }
+        buf[n++] = ';';
+        { const char *s = loc_lon; while (*s && n < (int)sizeof(buf) - 2) buf[n++] = *s++; }
+        buf[n++] = '\n';
+    }
     vfs_replace_file(SETTINGS_FILE, buf, (unsigned int)n);
 }
 
@@ -2418,9 +2477,65 @@ static int json_current_number(const char *json, const char *key, int *out_x10){
    the same "nothing fabricated" contract v56/v60/v65 already hold to for
    a NIC-less boot. Both values are mirrored to serial (`geo=`/`wxurl=`)
    so tools/geo-check.sh can prove headlessly, against the host's own
-   ip-api answer, that the URL really carries the dynamic location. */
-static char geo_lat[16] = "", geo_lon[16] = "", geo_city[24] = "";
-static int geo_have = 0;
+   ip-api answer, that the URL really carries the dynamic location.
+   (geo_lat/geo_lon/geo_city/geo_have and the loc_* Settings-location
+   override are declared earlier, alongside wind_enabled, since
+   settings_load needs them and settings_load has to come before this
+   point in the file.) */
+/* Open-Meteo's own geocoding endpoint (the same house the weather forecast
+   already comes from), through the exact http_get_timeout/wx_override_host
+   plumbing geo_fetch and weather_fetch_inner already use -- one more host
+   name, same request shape, nothing new. `query` is bounded the same way
+   every other Settings text field is (settings_prompt_line's max param);
+   spaces are percent-encoded since a city name is likely to have one.
+   No result, a bad reply, or no network all fail cleanly with loc_err set
+   and loc_have/geo_have untouched -- never a fabricated coordinate, never
+   a panic. */
+static int loc_geocode(const char *query){
+    loc_err[0] = 0;
+    if (!query[0]) { const char *m = "empty"; int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0; return 0; }
+    if (!net_init(0x0A00020F)) { const char *m = "no network card"; int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0; return 0; }
+    static char path[112];
+    int p = 0; const char *s;
+    for (s = "/v1/search?name="; *s; s++) path[p++] = *s;
+    for (const char *c = query; *c && p < 96; c++) {
+        if (*c == ' ') { path[p++]='%'; path[p++]='2'; path[p++]='0'; }
+        else path[p++] = *c;
+    }
+    for (s = "&count=1"; *s; s++) path[p++] = *s;
+    path[p] = 0;
+    static char body[1024];
+    int n = wx_override_host[0] ? http_get_timeout(wx_override_host, path, wx_override_port, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS)
+                                 : http_get_timeout("geocoding-api.open-meteo.com", path, 80, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS);
+    if (n <= 0 || http_last_status() != 200) {
+        int e = net_last_error();
+        const char *m = (n < 0 || e == NET_ERR_REPLY_TIMEOUT || e == NET_ERR_ARP_TIMEOUT || e == NET_ERR_DNS_TIMEOUT || e == NET_ERR_CONNECT_TIMEOUT) ? "network unreachable" : "geocoding request failed";
+        int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0;
+        return 0;
+    }
+    body[n] = 0;
+    char lat[16], lon[16], name[LOC_NAME_MAX];
+    if (!json_extract_number_text(body, "latitude", lat, sizeof(lat)) ||
+        !json_extract_number_text(body, "longitude", lon, sizeof(lon))) {
+        const char *m = "location not found"; int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0;
+        return 0;
+    }
+    if (!json_extract_string(body, "name", name, sizeof(name))) name[0] = 0;
+    int i;
+    for (i = 0; lat[i]; i++) loc_lat[i] = lat[i]; loc_lat[i] = 0;
+    for (i = 0; lon[i]; i++) loc_lon[i] = lon[i]; loc_lon[i] = 0;
+    for (i = 0; name[i] && i < LOC_NAME_MAX - 1; i++) loc_name[i] = name[i]; loc_name[i] = 0;
+    loc_have = 1;
+    /* Same fields weather_fetch_inner/wall_fetch already read -- setting
+       these here means neither one needs to know a manual override even
+       exists. */
+    for (i = 0; loc_lat[i]; i++) geo_lat[i] = loc_lat[i]; geo_lat[i] = 0;
+    for (i = 0; loc_lon[i]; i++) geo_lon[i] = loc_lon[i]; geo_lon[i] = 0;
+    for (i = 0; loc_name[i] && i < 23; i++) geo_city[i] = loc_name[i]; geo_city[i] = 0;
+    geo_have = 1;
+    serial_puts("locgeo="); serial_puts(loc_lat); serial_puts(","); serial_puts(loc_lon); serial_puts(" name="); serial_puts(loc_name); serial_puts("\n");
+    return 1;
+}
 /* Turns the net/http layer's last failure into a window state plus a short
    human detail. `what` names the request ("location" / "forecast"). */
 static void weather_set_error(int st, const char *what, const char *detail){
@@ -5251,8 +5366,8 @@ static int settings_prompt_line(const char *prompt, char *out, int max, int mask
     return 1;
 }
 
-#define SETTINGS_ROW_COUNT 7 /* v75: + wallpaper source; v85: + LLM model, + LLM host:port; v0.77: + Account (change password), + Add user */
-static const int SETTINGS_ROWS_Y[SETTINGS_ROW_COUNT] = {84, 116, 148, 180, 212, 252, 284};
+#define SETTINGS_ROW_COUNT 8 /* v75: + wallpaper source; v85: + LLM model, + LLM host:port; v0.77: + Account (change password), + Add user; v0.85.5: + Location */
+static const int SETTINGS_ROWS_Y[SETTINGS_ROW_COUNT] = {84, 116, 148, 180, 212, 252, 284, 316};
 
 /* Pure, hardware/GUI-free: given a real click's full-screen logical
    coordinates and the window's current width, returns which Settings row
@@ -5330,9 +5445,16 @@ static void gui_launch_settings(void){
                    dot-echo loop for one row). */
                 font_draw_string("Account", 28, y, 0x001C1C1E, -1);
                 font_draw_string(auth_current_user[0] ? auth_current_user : "(none)", 400, y, 0x001C1C1E, -1);
-            } else {
+            } else if (i == 6) {
                 font_draw_string("Add user (new account)", 28, y, 0x001C1C1E, -1);
                 font_draw_string("tap or enter", 400, y, 0x00807468, -1);
+            } else {
+                /* v0.85.5: the Location field roadmap.md asked for. Empty
+                   means "no override", the same honest-label convention
+                   Wallpaper's own row just above already uses: say what's
+                   actually in effect, not what was typed. */
+                font_draw_string("Location", 28, y, 0x001C1C1E, -1);
+                font_draw_string(loc_have ? loc_name : "(auto, from IP address)", 400, y, loc_have ? 0x002F7B4F : 0x00807468, -1);
             }
         }
         font_draw_string("Settings are saved to disk and survive a reboot.", 20, (int)window_height() - 28, 0x00807468, -1);
@@ -5501,7 +5623,47 @@ static void gui_launch_settings(void){
                     memset(pbuf, 0, sizeof(pbuf));
                 }
             }
-            else if (sel != 5 && sel != 6) {
+            else if (sel == 7 && k != 'a' && k != 'd') {
+                /* v0.85.5: Location, city or postal code, resolved through
+                   Open-Meteo's own geocoding endpoint (loc_geocode above),
+                   the same house the forecast itself already comes from.
+                   Bounded the same way every other free-text Settings row
+                   is: settings_prompt_line's max param (LOC_NAME_MAX,
+                   matching geo_city's own bound). Empty input clears the
+                   override and goes back to the IP lookup; a bad or
+                   unknown location shows loc_geocode's own short error and
+                   never panics or writes a fabricated coordinate. */
+                char lbuf[LOC_NAME_MAX]; int li = 0; while (loc_name[li] && li < LOC_NAME_MAX - 1) { lbuf[li] = loc_name[li]; li++; } lbuf[li] = 0;
+                if (settings_prompt_line("Location (city or postal code, enter to confirm, esc to cancel):", lbuf, sizeof(lbuf), 0)) {
+                    if (!lbuf[0]) {
+                        loc_have = 0; loc_name[0] = 0; loc_lat[0] = 0; loc_lon[0] = 0;
+                        geo_have = 0; geo_lat[0] = 0; geo_lon[0] = 0; geo_city[0] = 0;
+                        settings_save();
+                        font_draw_string("Location cleared (using your IP address instead).", 20, (int)window_height() - 48, 0x00807468, -1);
+                    } else if (loc_geocode(lbuf)) {
+                        settings_save();
+                        /* Drop whatever weather/map already have cached so
+                           the desktop loop's own ten-minute cycle (the
+                           same one that would normally re-check the IP
+                           lookup) picks up the new coordinates on its very
+                           next tick instead of waiting out the old cache,
+                           through the exact same weather_fetch/wall_fetch
+                           paths it already runs, nothing called directly
+                           from here. */
+                        weather_tried_once = 0; weather_have = 0;
+                        if (wall_map) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
+                        char msg[48] = "Location set: "; int mp = 15;
+                        for (const char *c = loc_name; *c && mp < 47; c++) msg[mp++] = *c;
+                        msg[mp] = 0;
+                        font_draw_string(msg, 20, (int)window_height() - 48, 0x002F7B4F, -1);
+                    } else {
+                        font_draw_string(loc_err[0] ? loc_err : "Couldn't find that location.", 20, (int)window_height() - 48, 0x00A33B3B, -1);
+                    }
+                    window_present();
+                    sleep_ticks(60);
+                }
+            }
+            else if (sel != 5 && sel != 6 && sel != 7) {
                 int dir = (k == 'a') ? -1 : 1; /* a tap always steps up; a real direction only from the keyboard */
                 if (k == KEY_CLICK) dir = 1;
                 int v = dock_scale_pct + dir;
@@ -7587,6 +7749,51 @@ static void run(char *line){
         puts(ok_reject ? "geo: string value and missing key both rejected: ok\n" : "geo reject: FAILED\n");
         puts(ok_city ? "geo city: ok\n" : "geo city: FAILED\n");
         if (!(ok_lat && ok_lon)) { puts("  lat="); puts(lat); puts(" lon="); puts(lon); puts("\n"); }
+    }
+    else if (!strcmp(line, "loctest")) {
+        /* v0.85.5: Settings Location, headless and deterministic --
+           tools/checks/location-check.py boots this against a local fake
+           geocoding-api.open-meteo.com server (same wxhost= override
+           weather-app-check.sh's mock already uses for ip-api/Open-Meteo),
+           never real internet, so this never flakes on CI's own network.
+           Three real things proven: one, a real geocode through
+           loc_geocode lands in the loc and geo globals exactly the way a
+           Settings save would; two, settings_save and settings_load
+           round-trip it through SETTINGS.TXT, the same file wind/dock/wall
+           already prove elsewhere, simulating a reboot the same way the
+           shell's own mail round trip test above simulates one for
+           MAIL.TXT; three, an unresolvable query fails cleanly (loc_err
+           set, nothing overwritten, no crash) rather than fabricating a
+           coordinate. */
+        serial_puts("loctest start\n");
+        char save_name[LOC_NAME_MAX]; int si=0; while (loc_name[si]) { save_name[si]=loc_name[si]; si++; } save_name[si]=0;
+        int ok1 = loc_geocode("Langley");
+        int ok1b = ok1 && loc_have && loc_lat[0] && loc_lon[0] && loc_name[0]
+                   && !strcmp(geo_lat, loc_lat) && !strcmp(geo_lon, loc_lon) && !strcmp(geo_city, loc_name) && geo_have;
+        serial_puts(ok1b ? "loc geocode: real lookup lands in loc_*/geo_*: ok\n" : "loc geocode: FAILED\n");
+
+        char want_name[LOC_NAME_MAX], want_lat[16], want_lon[16];
+        { int i=0; while (loc_name[i]) { want_name[i]=loc_name[i]; i++; } want_name[i]=0; }
+        { int i=0; while (loc_lat[i]) { want_lat[i]=loc_lat[i]; i++; } want_lat[i]=0; }
+        { int i=0; while (loc_lon[i]) { want_lon[i]=loc_lon[i]; i++; } want_lon[i]=0; }
+        settings_save();
+        loc_have = 0; loc_name[0] = 0; loc_lat[0] = 0; loc_lon[0] = 0;
+        geo_have = 0; geo_lat[0] = 0; geo_lon[0] = 0; geo_city[0] = 0;
+        settings_load();
+        int ok2 = loc_have && !strcmp(loc_name, want_name) && !strcmp(loc_lat, want_lat) && !strcmp(loc_lon, want_lon)
+                  && geo_have && !strcmp(geo_lat, want_lat) && !strcmp(geo_lon, want_lon) && !strcmp(geo_city, want_name);
+        serial_puts(ok2 ? "loc persist: settings_save/settings_load round trip (simulated reboot): ok\n" : "loc persist: FAILED\n");
+
+        loc_err[0] = 0;
+        int ok3 = !loc_geocode("Nowhereville") && loc_err[0] && loc_have && !strcmp(loc_name, want_name);
+        serial_puts(ok3 ? "loc not-found: fails clean, error set, nothing overwritten: ok\n" : "loc not-found: FAILED\n");
+
+        loc_err[0] = 0;
+        int ok4 = !loc_geocode("");
+        serial_puts(ok4 ? "loc empty input: rejected, no crash: ok\n" : "loc empty input: FAILED\n");
+
+        int p=0; while (save_name[p]) { loc_name[p]=save_name[p]; p++; } loc_name[p]=0; /* restore whatever was there before this test ran */
+        serial_puts((ok1b && ok2 && ok3 && ok4) ? "loctest PASS\n" : "loctest FAIL\n");
     }
     else if (!strcmp(line, "weatherpaneltest")) {
         /* v56 gap fix: weathertest (above) proves weather_fetch's JSON

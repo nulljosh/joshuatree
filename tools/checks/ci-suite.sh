@@ -55,6 +55,7 @@ retry|Shell launches a ring-3 program by bare name, case-insensitively|./tools/c
 retry|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
 once |Calendar date math, host harness|./tools/checks/check-calendar.sh
 retry|Settings click acts on the row actually clicked|./tools/checks/settingsclick-check.sh
+retry|Settings Location geocodes, persists, and fails clean|python3 ./tools/checks/location-check.py
 retry|Wallpaper defaults to Satellite on a fresh boot|./tools/checks/walldefault-check.sh
 retry|Idle tour's Settings visit doesn't change the wallpaper theme|python3 ./tools/checks/walldemo-regression-check.py
 retry|Notes editor chrome doesn't redraw on plain keystrokes|./tools/checks/editorflash-check.sh
