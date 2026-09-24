@@ -2448,6 +2448,21 @@ static const char *weather_state_name(int st){
    the real internet. Empty (every normal boot) means the real hosts. */
 static char wx_override_host[20] = "";
 static unsigned short wx_override_port = 80;
+/* 1.1.1: tilehost=/tileport=, the wall_fetch equivalent of wxhost= above --
+   for tools/checks/wallcompose-check.py to point BOTH tile hosts
+   (a.tile.opentopomap.org for map themes, mt0.google.com for Satellite)
+   at one local fake server instead of the real internet, headlessly.
+   Root cause this exists for: wallpaper-check.py/satellite-wallpaper-
+   check.py/wallfx-check.py all fetch over the real internet with no way
+   to fake the tile bytes, so a hermetic proof of wall_fetch's compose
+   path (independent of whether a1.tile.opentopomap.org/mt0.google.com
+   are reachable from a given CI runner) needed its own override, the
+   same shape as wxhost's. Empty (every normal boot) means the real
+   hosts; set means BOTH hosts point here, since a fake server tells map
+   and satellite tiles apart by path (png vs jpeg-shaped bytes), not by
+   host. */
+static char tile_override_host[20] = "";
+static unsigned short tile_override_port = 80;
 /* A weather one-liner that has not started answering in ~15s will not.
    net.c's default reply budget (sized for local LLM generation, minutes)
    froze the whole desktop that long on a half-open connection. */
@@ -2989,7 +3004,7 @@ static int wall_fetch(void){
         int p = 0; const char *s;
         int n_bytes; const char *host;
         if (use_sat) {
-            host = "mt0.google.com";
+            host = tile_override_host[0] ? tile_override_host : "mt0.google.com";
             for (s = "/vt/lyrs=s&x="; *s; s++) path[p++] = *s;
             { char d[12]; int nd = 0; unsigned int u = (unsigned int)ttx; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; }
             for (s = "&y="; *s; s++) path[p++] = *s;
@@ -2998,7 +3013,7 @@ static int wall_fetch(void){
             { char d[12]; int nd = 0; unsigned int u = WALL_ZOOM; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; }
             path[p] = 0;
         } else {
-            host = "a.tile.opentopomap.org";
+            host = tile_override_host[0] ? tile_override_host : "a.tile.opentopomap.org";
             for (s = "/"; *s; s++) path[p++] = *s;
             { char d[12]; int nd = 0; unsigned int u = WALL_ZOOM; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; path[p++] = '/'; }
             { char d[12]; int nd = 0; unsigned int u = (unsigned int)ttx; do { d[nd++] = '0' + u % 10; u /= 10; } while (u); while (nd) path[p++] = d[--nd]; path[p++] = '/'; }
@@ -3006,7 +3021,7 @@ static int wall_fetch(void){
             for (s = ".png"; *s; s++) path[p++] = *s;
             path[p] = 0;
         }
-        n_bytes = http_get(host, path, 80, body, 65536);
+        n_bytes = http_get(host, path, tile_override_host[0] ? tile_override_port : 80, body, 65536);
         if (n_bytes <= 0) { kfree(body); if (!wall_map) kfree(dst); wall_serial_err("http", i); return 0; }
         unsigned char *px_out = 0; unsigned int w = 0, h = 0, ch = 0;
         int r = use_sat ? jpeg_decode(body, (unsigned int)n_bytes, &px_out, &w, &h, &ch)
@@ -9591,6 +9606,17 @@ void kmain(unsigned int multiboot_info_addr){
                 break;
             }
         }
+        /* 1.1.1: tilehost=A.B.C.D[:PORT], the wall_fetch equivalent of
+           wxhost= right above -- see tile_override_host's own comment. */
+        for (const char *pc = cl0; pc && *pc; pc++)
+            if (pc[0]=='t' && pc[1]=='i' && pc[2]=='l' && pc[3]=='e' && pc[4]=='h' && pc[5]=='o' && pc[6]=='s' && pc[7]=='t' && pc[8]=='=') {
+                pc += 9; int hp = 0;
+                while (((*pc >= '0' && *pc <= '9') || *pc == '.') && hp < 19) tile_override_host[hp++] = *pc++;
+                tile_override_host[hp] = 0;
+                if (*pc == ':') { unsigned int pt = 0; pc++; while (*pc >= '0' && *pc <= '9') pt = pt * 10 + (unsigned int)(*pc++ - '0'); if (pt && pt < 65536) tile_override_port = (unsigned short)pt; }
+                serial_puts("tilehost="); serial_puts(tile_override_host); serial_puts("\n");
+                break;
+            }
         /* 1.0.12: llmhost=HOST / llmport=PORT, the Chat equivalent of
            wxhost= above -- for tools/checks/chat-samantha-check.py to point
            chat_send at a local fake HTTP server instead of the real,
