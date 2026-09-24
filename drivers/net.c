@@ -6,6 +6,7 @@
    present benefit; split later if any one of them grows real complexity. */
 #include "net.h"
 #include "rtl8139.h"
+#include "e1000.h"
 #include "ne2k.h"
 #include "irq.h"
 
@@ -127,6 +128,10 @@ int net_init(u32 ip) {
         rtl8139_get_mac(our_mac);
         active_send = rtl8139_send;
         active_receive = rtl8139_receive;
+    } else if (e1000_init()) {
+        e1000_get_mac(our_mac);
+        active_send = e1000_send;
+        active_receive = e1000_receive;
     } else if (ne2k_init()) {
         ne2k_get_mac(our_mac);
         active_send = ne2k_send;

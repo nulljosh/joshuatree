@@ -8260,7 +8260,7 @@ static void run(char *line){
         serial_puts(ok ? "settingsclick PASS\n" : "settingsclick FAIL\n"); /* mirrors texttest/chattest/jpegtest's own convention so a tools/checks shell script can read the verdict headless */
     }
     else if (!strcmp(line, "nettest")) {
-        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
+        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, e1000, NE2000)\n"); }
         else {
             unsigned char mac[6];
             net_get_mac(mac);
@@ -8310,7 +8310,7 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "ifconfig")) {
-        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
+        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, e1000, NE2000)\n"); }
         else {
             unsigned char mac[6]; net_get_mac(mac);
             puts("net0: 10.0.2.15\n  mac ");
@@ -8329,7 +8329,7 @@ static void run(char *line){
            supports. Same "not a general tool, a real narrow proof" scope
            as everything else this session, see roadmap.md's v30 entry. */
         if (!*arg) { puts("usage: netscan <host, e.g. 10.0.2.2>\n"); }
-        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
+        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, e1000, NE2000)\n"); }
         else {
             unsigned int ip;
             int have_ip = 0;
@@ -8366,13 +8366,13 @@ static void run(char *line){
         while (*first_path && *first_path != ' ') first_path++;
         if (*first_path) *first_path++ = 0; else first_path = "/";
         if (!*first_host) { puts("usage: web <host> [path]\n"); }
-        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
+        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, e1000, NE2000)\n"); }
         else {
             browse_web(first_host, first_path);
         }
     }
     else if (!strcmp(line, "serve")) {
-        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
+        if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, e1000, NE2000)\n"); }
         else {
             /* Long enough on purpose: >536 bytes forces tcp_serve_once
                through its multi-segment path, not just the one-chunk case. */
@@ -8395,7 +8395,7 @@ static void run(char *line){
     }
     else if (!strcmp(line, "serveapp")) {
         if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak|plan|lexly|toroid|sparkjar|homeqi|fieldbook\n"); }
-        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
+        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, e1000, NE2000)\n"); }
         else {
             if (!strcmp(arg, "weather"))          serve_app("weather", app_weather_html, app_weather_len);
             else if (!strcmp(arg, "curbfind"))    serve_app("curbfind", app_curbfind_html, app_curbfind_len);
@@ -8428,7 +8428,7 @@ static void run(char *line){
            same settings-persisted model/host/port (llm_model/llm_host/
            llm_port), not two independently hardcoded copies. */
         if (!*arg) { puts("usage: chat <message>\n"); }
-        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
+        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, e1000, NE2000)\n"); }
         else {
             puts("asking "); puts(llm_model); puts(" (");
             puts(llm_host); puts(", local, on the host machine)...\n");
@@ -8443,7 +8443,7 @@ static void run(char *line){
            of what gato does on macOS, minus the file-editing part, there's
            no persistent app catalog to edit yet, just this one slot. */
         if (!*arg) { puts("usage: build <what to make>\n"); }
-        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
+        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, e1000, NE2000)\n"); }
         else {
             char escaped[256];
             json_escape(arg, escaped, sizeof(escaped));

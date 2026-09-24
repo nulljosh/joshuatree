@@ -7,7 +7,7 @@ Money comes from hardware:
 - Voice-control reference device, tied to the v100 roadmap goal
 - Support/consulting for embedded teams who want a tiny, fully auditable stack, no Linux, no libc
 
-Real chips already supported: rtl8139 NIC, ATA, PCI. Gap: mouse driver is QEMU-only, needs real PS/2/USB HID before "hardware-ready" is true.
+Real chips already supported: rtl8139 NIC, Intel e1000 NIC (`drivers/e1000.c`, most PCs from the last 15 years carry one or the other), ATA, PCI. Gap: mouse driver is QEMU-only, needs real PS/2/USB HID before "hardware-ready" is true.
 
 Long-term bet: port Joshua's own apps (epiphany, curvely, etc) to run natively on JT, zero runtime between app and bare metal. Wire in Turing (local LLM) so the OS eventually builds and extends itself from voice/chat, not hand-written C. That's the real end state of the v100 roadmap item.
 
