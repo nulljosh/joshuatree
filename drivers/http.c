@@ -120,6 +120,13 @@ static void putn_into(char *buf, u32 *pos, u32 cap, u32 v) {
 int http_post(const char *host, const char *path, unsigned short port,
               const char *body, unsigned int body_len,
               void *response_out, unsigned int response_maxlen) {
+    return http_post_timeout(host, path, port, body, body_len, response_out, response_maxlen, 0);
+}
+
+int http_post_timeout(const char *host, const char *path, unsigned short port,
+                       const char *body, unsigned int body_len,
+                       void *response_out, unsigned int response_maxlen,
+                       unsigned int reply_timeout_ticks) {
     u32 ip;
     if (!resolve_host(host, &ip)) return -1;
 
@@ -160,7 +167,7 @@ int http_post(const char *host, const char *path, unsigned short port,
     u32 raw_cap = response_maxlen + 2048;
     char *raw = kmalloc(raw_cap);
     if (!raw) { kfree(req); return -1; }
-    int r = http_body_only(ip, port, req, n, response_out, response_maxlen, raw, raw_cap, 0);
+    int r = http_body_only(ip, port, req, n, response_out, response_maxlen, raw, raw_cap, reply_timeout_ticks);
     kfree(req);
     kfree(raw);
     return r;

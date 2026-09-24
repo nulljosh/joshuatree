@@ -81,6 +81,34 @@ static int chat_loaded = 0;
 static char chat_last_error[CHAT_ERR_MAX] = "";
 static const char *chat_error(void) { return chat_last_error; }
 
+/* CodeRabbit review of the 1.1.0 Chat work: http_post used to hand
+   chat_send/chat_pick net.c's SLOW_REPLY_TIMEOUT_TICKS default (15000
+   ticks at irq.c's 100Hz PIT, ~150s), sized for a slow local LLM
+   generating under load. A connected-but-silent host -- TCP handshake
+   completes, then nothing ever arrives -- held that full default before
+   returning, which holds the whole GUI (this app blocks its own input
+   loop waiting on chat_send/chat_pick, see gui_app_mouse_tick's own
+   comment in kernel.c) for minutes over one bad reply.
+   Bounded instead of host-conditional: this repo's only headless way to
+   test a "connected but silent" host (tools/checks/chat-samantha-check.py)
+   is a Python fake server reached through SLIRP's private 10.0.2.2
+   gateway, the exact same address a real local Ollama would also use --
+   so a "shorter timeout unless the host looks private (10.x/192.168.x)"
+   rule would make the one behaviour this fix exists for untestable here,
+   and would do nothing for the compiled-in default host besides (Turing,
+   a public host, real replies land in a few seconds either way). Applied
+   everywhere instead: 45s for /api/chat, comfortably above every real
+   Turing reply observed and still enough for a short local-Ollama answer;
+   10s for /api/pick, a small classifier call that should never legitimately
+   take that long. Worse case for a genuinely slow local model (net.c's own
+   comment cites up to 6 minutes under load) now surfaces the existing
+   "error: couldn't reach the host, or no reply" status instead of hanging
+   -- a bounded, clearly-reported failure beats an indefinite GUI freeze;
+   a per-host or Settings-configurable timeout is a fair follow-up if a
+   real local box needs longer. */
+#define CHAT_SEND_TIMEOUT_TICKS 4500  /* ~45s at 100Hz: /api/chat */
+#define CHAT_PICK_TIMEOUT_TICKS 1000  /* ~10s at 100Hz: /api/pick, a small classifier call */
+
 /* Same field-boundary contract contacts.h/mail.h already use: stored
    content can't contain '|' or '\n', so a plain scan for either is a
    real, unambiguous boundary, no escaping needed on disk (JSON escaping
@@ -229,8 +257,8 @@ static int chat_send(const char *user_msg, char *answer, unsigned int answer_cap
     unsigned int rn = chat_build_request(req_body, sizeof(req_body));
 
     static char resp[8192]; /* real growth from the old 4096-byte cap */
-    int respn = http_post(llm_host, "/api/chat", (unsigned short)llm_port, req_body, rn, resp, sizeof(resp) - 1);
-    if (respn == -1) return 0; /* resolve/connect failure, no HTTP reply at all: http_last_status is stale, don't trust it */
+    int respn = http_post_timeout(llm_host, "/api/chat", (unsigned short)llm_port, req_body, rn, resp, sizeof(resp) - 1, CHAT_SEND_TIMEOUT_TICKS);
+    if (respn == -1) { serial_puts("chatfail=connect\n"); return 0; } /* resolve/connect failure, no HTTP reply at all: http_last_status is stale, don't trust it */
 
     /* 1.0.12: a host that upgrades plain HTTP to HTTPS (Cloudflare's
        "Always Use HTTPS" default in front of turing.heyitsmejosh.com would)
@@ -252,7 +280,7 @@ static int chat_send(const char *user_msg, char *answer, unsigned int answer_cap
       }
     }
 
-    if (respn <= 0) return 0;
+    if (respn <= 0) { serial_puts("chatfail=noreply\n"); return 0; } /* discriminating marker for tools/checks/chat-samantha-check.py's silent-host case: CHAT_SEND_TIMEOUT_TICKS ran out with no data */
     resp[respn] = 0;
 
     /* /api/chat's reply shape is {"message":{"role":"assistant","content":"..."},...},
@@ -319,13 +347,13 @@ static int chat_pick(const char *msg, char *tool, int toolsz, char *arg, int arg
     while (*tail && n < sizeof(req_body)) req_body[n++] = *tail++;
 
     static char resp[512];
-    int respn = http_post(llm_host, "/api/pick", (unsigned short)llm_port, req_body, n, resp, sizeof(resp) - 1);
-    if (respn == -1) return 0; /* resolve/connect failure: falls through to chat_send the same way chat_send itself would fail */
+    int respn = http_post_timeout(llm_host, "/api/pick", (unsigned short)llm_port, req_body, n, resp, sizeof(resp) - 1, CHAT_PICK_TIMEOUT_TICKS);
+    if (respn == -1) { serial_puts("chatpickfail=connect\n"); return 0; } /* resolve/connect failure: falls through to chat_send the same way chat_send itself would fail */
 
     { int st = http_last_status();
       if (st == 301 || st == 302 || st == 307 || st == 308) return 0; /* same HTTPS-upgrade case chat_send names explicitly; here it's silent, the pick is only an optimisation */
     }
-    if (respn <= 0) return 0;
+    if (respn <= 0) { serial_puts("chatpickfail=noreply\n"); return 0; } /* CHAT_PICK_TIMEOUT_TICKS ran out with no data; falls through to chat_send, same as any other pick failure */
     resp[respn] = 0;
 
     unsigned int tn = json_extract_string(resp, "tool", tool, (unsigned int)toolsz);
