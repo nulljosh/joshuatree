@@ -103,6 +103,7 @@ Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Sonnet] Software update path.
 - [ ] [Haiku] Accessibility: text size and high contrast.
 - [x] [Sonnet] Chat talks to Samantha (Turing's Ollama-compatible `/api/chat` at `turing.heyitsmejosh.com`) by default, natively over HTTP and in the browser demo through the worker proxy. `tools/checks/chat-samantha-check.py`.
+- [x] 1.1.0: Samantha's tools work from the Chat app. Every message goes through Turing's small-model picker (`POST /api/pick`) first; when it names a tool this kernel can do locally (`new_reminder`, `new_note`, `weather`, `calendar_today`, `say`, `open_app`), `chat_pick`/`chat_run_tool` (`kernel/chat.h`) handle it against this kernel's own Reminders/Notes/weather-cache/Calendar state and skip `/api/chat` entirely; opening another app (`open_app`) closes Chat and hands off to it with no extra click. An ordinary question (the picker answers `tool: null`) still falls straight through to `chat_send`/Samantha exactly as in 1.0.12, and every other tool on Turing's list (`open_url`, `web_search`, `screenshot`, `music`, `set_volume`, `theme`, `timer`, ...) is left unhandled the same way. `worker.js`'s narrow Samantha exception now forwards `/api/pick` alongside `/api/chat`. `tools/checks/chattools-check.py`.
 
 ## Real hardware
 1.0 ships a USB-bootable ISO with a PS/2 fallback. USB is the 1.1 headline, built in this order.
