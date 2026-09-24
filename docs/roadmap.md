@@ -4,11 +4,23 @@ Freestanding i386 kernel, no libc. This is the forward plan. What already
 shipped lives in `git log`, `git tag -l "jt-v*"`, and the [GitHub
 releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
+See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
+
 **Latest**: Version 1.0, Hidden Valley.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
+
+## Biggest gaps vs a shipping OS (set 2026-09-23)
+Measured against SerenityOS, the closest one-person-scale peer, and macOS/Linux. Ranked; the loop works top down. Each line points at the items below that close it.
+
+1. **Real hardware.** Boots only in QEMU: no xHCI USB, no AHCI, no e1000; keyboard needs legacy BIOS mode, saving needs an old IDE disk. The hardware business depends on this. See Real hardware, e1000 under 1.0.0.
+2. **A compositor.** Apps draw straight to the framebuffer in blocking loops: at most two windows, no resize or minimize, nothing runs in the background. See Multi-window.
+3. **Native TLS.** HTTPS goes through the worker proxy, so a browser can't happen yet.
+4. **Sound.** None at all; Music, video and a screen reader wait on AC97.
+5. **Desktop basics.** Undo, text selection, right-click menus, drag and drop, app switcher (clipboard lands in 1.0.7).
+6. **Apps from outside the kernel.** All 25 apps compile into the kernel; two ring-3 programs exist. No installer, no update path.
 
 ## Beta, 0.9.0
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck.
@@ -40,7 +52,7 @@ What other small operating systems needed before people used them day to day.
 - [ ] [Fable] Bluetooth: a USB HCI transport and enough of the stack for a keyboard and mouse.
 - [ ] [Sonnet] Languages: every UI string through one table, a Settings language picker, Latin-1 accents drawn (the DejaVu faces have the glyphs; the text paths drop bytes above 0x7F today).
 - [ ] [Sonnet] Ring-3 programs a fresh shell ships with: `cat`, `wc`, `grep`, `calc`. A tiny C compiler is a stretch.
-- [ ] [Sonnet] Settings gets a Location field (city or postal code), saved, used by weather and the wallpaper map. Location from the internet address says Vancouver for Langley and cannot do better.
+- [x] [Sonnet] Settings gets a Location field (city or postal code), saved, used by weather and the wallpaper map. Location from the internet address says Vancouver for Langley and cannot do better. Done in v1.0.5: `loc_geocode` resolves the typed text through Open-Meteo's own geocoding endpoint and writes straight into the same `geo_lat`/`geo_lon`/`geo_city` fields `weather_fetch_inner` and the map's `wall_fetch` already read, persisted through `SETTINGS.TXT` alongside wind/dock/wall; `tools/checks/location-check.py` proves the geocode, the save/reload round trip, and the not-found/empty fallback headlessly against a local mock server, never real internet.
 - [ ] [Sonnet] Settings as a real native app in the dock: wallpaper, text size, system typeface, location, accounts, network status, about. One place, not scattered panels.
 - [ ] [Sonnet] Photos app: grid of the images on disk, click for full view, arrow keys to move. Built on `drivers/png.c`, plus baseline JPEG if the wallpaper decoder can be reused. Covers the image viewer gap.
 - [ ] [Sonnet] Typeface support: proportional fonts beyond DejaVu, loaded from disk, picked in Settings. Reference look from Joshua: a tight grotesque sans for body and headlines, one display face for titles, hairline rules, flat colour blocks. Sans only in the UI chrome.
@@ -70,7 +82,7 @@ Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at f
 Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Fable] No sound at all. Needs an audio driver (AC97 or SB16 under QEMU).
 - [ ] [Fable] No native TLS. HTTPS only works through the worker's proxy.
-- [ ] [Sonnet] Clipboard copy/paste.
+- [x] [Sonnet] Clipboard copy/paste. Shipped 1.0.6: one global 4KB buffer, Ctrl+C/X/V in Notes, Terminal, and every field built on `gui_prompt.h` (Mail, Reminders, Calculator). No selection model exists yet (see the item below), so Ctrl+C/X act on the current line/field, not an arbitrary range.
 - [ ] [Sonnet] Right-click context menus.
 - [ ] [Sonnet] App switcher and global hotkeys.
 - [ ] [Sonnet] Lock screen, sleep, and ACPI shutdown.
@@ -161,3 +173,7 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 
 ## Landing roadmap summary
 `tools/gen/landing-roadmap.py` reads this file's Session task queue and takes up to three open, numbered, bold task titles for the landing page's "Where it's going" card, skipping completed entries and escaping for HTML. `tools/checks/landing-roadmap-check.py` and `tools/gen/landing-roadmap.py --check` are the regression checks. A roadmap change triggers the landing deploy workflow, which regenerates the card before upload.
+
+## 1.0.4: Stocks uses market data
+
+The fixed watchlist now fetches real quotes and chart closes through the existing Worker. This covers native Joshua Tree and the same kernel embedded in the portfolio. Prices refresh once a minute while Stocks is open, with R for retry, UTC quote timestamps and stale/unavailable states. The provider may delay quotes; closed markets show the last session. Synthetic charts and invented daily statistics are removed. Epiphany's sample portfolio is kept separate. Worker route checks, an ASan/UBSan harness of the actual C parser, a live upstream request and a headless boot verify the path.

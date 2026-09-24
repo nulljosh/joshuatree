@@ -1,15 +1,12 @@
 /* v0.87+: Stocks, rebuilt in the shape of macOS's own Stocks app: a watchlist
    sidebar (symbol, name, sparkline, price, colored change pill) beside a
    detail pane (big price, range tabs 1D/1W/1M/3M/1Y, a real line chart, and
-   the Open/High/Low/Mkt Cap/P/E stats grid). Epiphany (epiphany.h) is the
+   provider timestamp). Epiphany (epiphany.h) is the
    other, richer take on the same data; this one stays the basic native one.
 
-   Data is baked-in demo data, clearly labeled, not live: every plain-HTTP
-   quote source forces HTTPS and this kernel has no TLS (roadmap.md has the
-   real curl tests). Chart history is not stored either: each range is a
-   deterministic seeded random walk pinned to the stock's real baked-in price
-   at the right edge (and, for 1D, to price minus change at the left edge), so
-   the picture is stable across opens and always agrees with the numbers.
+   Quotes and chart closes come from the same site's HTTPS Worker bridge.
+   Both native HTTP and the v86 proxy reach the same Worker endpoint.
+   R refreshes; the quote timestamp is shown in UTC. Provider delays apply.
 
    Keys: up/down pick a stock, left/right change range, esc closes. Clicking
    a watchlist row or a range tab does the same; the red dot closes. */
@@ -28,15 +25,62 @@ typedef struct {
 } stocks_entry_t;
 
 static stocks_entry_t stocks_entries[STOCKS_MAX] = {
-    {"AAPL", "Apple Inc.", 23800, 250, 3600, 312},
-    {"MSFT", "Microsoft", 41900, -180, 3100, 350},
-    {"GOOGL", "Alphabet Inc.", 14200, 350, 1750, 245},
-    {"AMZN", "Amazon.com", 19100, -320, 2000, 340},
-    {"TSLA", "Tesla Inc.", 24200, 870, 780, 610},
-    {"NVDA", "NVIDIA", 12800, 410, 3100, 550},
-    {"META", "Meta Platforms", 58000, -640, 1480, 280},
-    {"NFLX", "Netflix", 66000, 1180, 290, 470},
+    {"AAPL", "Apple Inc.", 0, 0, 0, 0}, {"MSFT", "Microsoft", 0, 0, 0, 0},
+    {"GOOGL", "Alphabet Inc.", 0, 0, 0, 0}, {"AMZN", "Amazon.com", 0, 0, 0, 0},
+    {"TSLA", "Tesla Inc.", 0, 0, 0, 0}, {"NVDA", "NVIDIA", 0, 0, 0, 0},
+    {"META", "Meta Platforms", 0, 0, 0, 0}, {"NFLX", "Netflix", 0, 0, 0, 0},
 };
+#define STX_RANGES 5
+#define STX_MAXPTS 64
+static const char *stx_range_name[STX_RANGES] = {"1D", "1W", "1M", "3M", "1Y"};
+static struct { int price, prev, time, n, points[STX_MAXPTS], stale; } stx_data[STX_RANGES][STOCKS_MAX];
+static int stx_loading;
+static unsigned int stx_refresh_tick;
+
+/* Strict bounded integers; a partial/malformed reply never replaces a quote. */
+static int stx_number(const char **p, int *out) {
+    int v = 0, n = 0;
+    while (**p >= '0' && **p <= '9') {
+        int d = *(*p)++ - '0';
+        if (v > (2147483647 - d) / 10) return 0;
+        v = v * 10 + d; n++;
+    }
+    if (!n || (**p != ' ' && **p != '\n')) return 0;
+    *out = v; return 1;
+}
+static int stx_parse_row(const char *p, int range, int i) {
+    int values[4 + STX_MAXPTS], count = 0;
+    while (count < 4 + STX_MAXPTS) {
+        if (!stx_number(&p, &values[count++])) return 0;
+        if (*p++ == '\n') break;
+    }
+    if (p[-1] != '\n' || count < 5 || values[3] < 1 || values[3] > STX_MAXPTS || count != 4 + values[3]) return 0;
+    if (values[0] < 1 || values[0] > 10000000 || values[1] < 1 || values[1] > 10000000 || values[2] < 1) return 0;
+    for (int j = 4; j < count; j++) if (values[j] < 1 || values[j] > 10000000) return 0;
+    stx_data[range][i].price = values[0]; stx_data[range][i].prev = values[1];
+    stx_data[range][i].time = values[2]; stx_data[range][i].n = values[3];
+    for (int j = 4; j < count; j++) stx_data[range][i].points[j - 4] = values[j];
+    stx_data[range][i].stale = 0;
+    stocks_entries[i].price_x100 = values[0];
+    stocks_entries[i].change_x100 = values[0] - values[1];
+    return 1;
+}
+static void stocks_fetch(int range) {
+    static char body[8192];
+    char path[] = "/api/stocks?range=0";
+    path[sizeof(path) - 2] = '0' + range;
+    int n = net_init(0x0A00020F) ? http_get_timeout("joshuatree.heyitsmejosh.com", path, 80, body, sizeof(body) - 1, 1000) : -1;
+    for (int i = 0; i < STOCKS_MAX; i++) stx_data[range][i].stale = 1;
+    if (n > 0 && n < (int)sizeof(body) - 1 && http_last_status() == 200) {
+        body[n] = 0; const char *p = body;
+        for (int i = 0; i < STOCKS_MAX && *p; i++) {
+            stx_parse_row(p, range, i);
+            while (*p && *p != '\n') p++;
+            if (*p) p++;
+        }
+    }
+    stx_refresh_tick = ticks();
+}
 
 static void stocks_format_price(int x100, char *buf, int max) {
     /* Format 15042 as "150.42" */
@@ -92,7 +136,7 @@ static void stx_pct(int bp, char *b) {
 }
 static int stx_bp(int change_x100, int price_x100) {
     int prev = price_x100 - change_x100;
-    return prev > 0 ? (int)(change_x100 * 10000 / prev) : 0;
+    return prev > 0 ? (int)((double)change_x100 * 10000 / prev) : 0;
 }
 static void stx_line(int x0, int y0, int x1, int y1, unsigned int c) {
     int dx = x1 > x0 ? x1 - x0 : x0 - x1, sx = x0 < x1 ? 1 : -1;
@@ -108,49 +152,19 @@ static void stx_line(int x0, int y0, int x1, int y1, unsigned int c) {
 }
 /* Line chart of v[0..n) scaled into the box; lo/hi padded so a flat series still draws. */
 static void stx_chart(int x, int y, int w, int h, const int *v, int n, unsigned int c) {
+    if (n < 2) return;
     int lo = v[0], hi = v[0];
     for (int i = 1; i < n; i++) { if (v[i] < lo) lo = v[i]; if (v[i] > hi) hi = v[i]; }
     if (hi - lo < 4) { hi += 2; lo -= 2; }
-    int px = x, py = y + h - 1 - (int)((v[0] - lo) * (h - 1) / (hi - lo));
+    int px = x, py = y + h - 1 - (int)((double)(v[0] - lo) * (h - 1) / (hi - lo));
     for (int i = 1; i < n; i++) {
         int cx = x + i * (w - 1) / (n - 1);
-        int cy = y + h - 1 - (int)((v[i] - lo) * (h - 1) / (hi - lo));
+        int cy = y + h - 1 - (int)((double)(v[i] - lo) * (h - 1) / (hi - lo));
         stx_line(px, py, cx, cy, c); px = cx; py = cy;
     }
 }
 static unsigned int stx_rng;
 static int stx_rand(int m) { stx_rng = stx_rng * 1103515245u + 12345u; return (int)((stx_rng >> 16) & 0x7FFF) % m; }
-
-#define STX_RANGES 5
-#define STX_MAXPTS 64
-static const char *stx_range_name[STX_RANGES] = {"1D", "1W", "1M", "3M", "1Y"};
-static const int stx_range_n[STX_RANGES]   = {48, 35, 30, 45, 60};
-static const int stx_range_vol[STX_RANGES] = {25, 60, 90, 120, 150};   /* per-step move, basis points */
-static const int stx_range_drift[STX_RANGES] = {0, 300, 800, 1500, 3500}; /* max start-vs-now swing, basis points */
-
-/* Deterministic history for one stock and range; last point is exactly the
-   baked-in price. Returns the point count. */
-static int stx_series(int idx, int range, int *out) {
-    stocks_entry_t *s = &stocks_entries[idx];
-    int n = stx_range_n[range];
-    stx_rng = (unsigned)(idx * 7919 + range * 104729 + 17);
-    int start = s->price_x100 - s->change_x100;
-    if (range > 0) {
-        int d = stx_rand(2 * stx_range_drift[range] + 1) - stx_range_drift[range] / 2;
-        start = (int)(s->price_x100 * (10000 - d) / 10000);
-    }
-    int vol = (int)(s->price_x100 * stx_range_vol[range] / 10000);
-    if (vol < 2) vol = 2;
-    int v = start;
-    for (int i = 0; i < n; i++) { out[i] = v; v += stx_rand(2 * vol + 1) - vol; }
-    int last = out[n - 1];
-    for (int i = 0; i < n; i++) {
-        out[i] += (int)((s->price_x100 - last) * i / (n - 1));
-        if (out[i] < 100) out[i] = 100;
-    }
-    out[n - 1] = s->price_x100;
-    return n;
-}
 
 #define STX_SIDE_W 300
 #define STX_ROW_H  54
@@ -170,7 +184,7 @@ static void stocks_draw(int sel, int range, int first) {
     window_rect(0, T - 4, STX_SIDE_W, HH - T + 4, 0x00F1ECE6);
     window_rect(STX_SIDE_W, T - 4, 1, HH - T + 4, 0x00E0D8CE);
     font_draw_string("Watchlist", 20, T, STX_INK, -1);
-    font_draw_string("demo data", STX_SIDE_W - 16 - font_string_width("demo data"), T, STX_MUTED, -1);
+    font_draw_string(stx_loading ? "Updating..." : "R refresh", 190, T, STX_MUTED, -1);
 
     for (int r = 0; r < stx_rows_visible() && first + r < STOCKS_MAX; r++) {
         int i = first + r;
@@ -179,12 +193,16 @@ static void stocks_draw(int sel, int range, int first) {
         if (i == sel) window_rect(8, y, STX_SIDE_W - 16, STX_ROW_H - 4, 0x00E2D9CC);
         font_draw_string(s->symbol, 20, y + 8, STX_INK, -1);
         font_draw_string(s->name, 20, y + 28, STX_MUTED, -1);
-        int pts[STX_MAXPTS]; int n = stx_series(i, 0, pts);
-        unsigned int col = s->change_x100 >= 0 ? STX_GREEN : STX_RED;
+        if (!stx_data[range][i].n) {
+            font_draw_string("--", STX_SIDE_W - 40, y + 6, STX_MUTED, -1); continue;
+        }
+        int *pts = stx_data[range][i].points, n = stx_data[range][i].n;
+        unsigned int col = stx_data[range][i].price >= stx_data[range][i].prev ? STX_GREEN : STX_RED;
         stx_chart(118, y + 10, 60, 26, pts, n, col);
-        char b[64]; stocks_format_price(s->price_x100, b, sizeof b);
+        char b[64]; stocks_format_price(stx_data[range][i].price, b, sizeof b);
         font_draw_string(b, STX_SIDE_W - 16 - font_string_width(b), y + 6, STX_INK, -1);
-        stx_pct(stx_bp(s->change_x100, s->price_x100), b);
+        stx_pct(stx_bp(stx_data[0][i].price - stx_data[0][i].prev, stx_data[0][i].price), b);
+        if (range != 0 || stx_data[range][i].stale) stx_cat(b, 0, stx_data[range][i].stale ? "stale" : "USD");
         int pw = font_string_width(b) + 12;
         window_rect(STX_SIDE_W - 16 - pw, y + 26, pw, 20, col);
         font_draw_string(b, STX_SIDE_W - 16 - pw + 6, y + 28, 0x00FFFFFF, -1);
@@ -195,16 +213,17 @@ static void stocks_draw(int sel, int range, int first) {
     font_draw_string(s->symbol, px, T, STX_MUTED, -1);
     font_draw_string(s->name, px, T + 22, STX_INK, -1);
 
-    int pts[STX_MAXPTS]; int n = stx_series(sel, range, pts);
-    int delta = pts[n - 1] - pts[0];
+    int *pts = stx_data[range][sel].points, n = stx_data[range][sel].n;
+    int delta = n ? (range == 0 ? stx_data[range][sel].price - stx_data[range][sel].prev : pts[n - 1] - pts[0]) : 0;
     unsigned int col = delta >= 0 ? STX_GREEN : STX_RED;
     char b[64];
-    stocks_format_price(s->price_x100, b, sizeof b);
-    font_draw_string(b, px, T + 50, STX_INK, -1);
-    stx_signed(delta, 1, b);
-    font_draw_string(b, px + 120, T + 50, col, -1);
-    stx_pct(stx_bp(delta, pts[n - 1]), b);
-    font_draw_string(b, px + 220, T + 50, col, -1);
+    if (n) {
+        stocks_format_price(stx_data[range][sel].price, b, sizeof b);
+        font_draw_string(b, px, T + 50, STX_INK, -1);
+        stx_signed(delta, 1, b); font_draw_string(b, px + 120, T + 50, col, -1);
+        stx_pct(stx_bp(delta, range == 0 ? stx_data[range][sel].price : pts[n - 1]), b);
+        font_draw_string(b, px + 220, T + 50, col, -1);
+    } else font_draw_string("Prices unavailable", px, T + 50, STX_MUTED, -1);
 
     int ty = stx_tab_y();
     for (int r = 0; r < STX_RANGES; r++) {
@@ -217,37 +236,40 @@ static void stocks_draw(int sel, int range, int first) {
     stx_chart(px, cy0, pw, ch, pts, n, col);
     window_rect(px, cy0 + ch + 4, pw, 1, 0x00E0D8CE);
 
-    /* stats grid from the 1D series */
-    int d1[STX_MAXPTS]; int dn = stx_series(sel, 0, d1);
-    int lo = d1[0], hi = d1[0];
-    for (int i = 1; i < dn; i++) { if (d1[i] < lo) lo = d1[i]; if (d1[i] > hi) hi = d1[i]; }
-    int sy = cy0 + ch + 14, colw = pw / 3;
-    const char *lab[6] = {"Open", "High", "Low", "Mkt Cap", "P/E", "Prev close"};
-    char val[6][32];
-    stocks_format_price(d1[0], val[0], 32);
-    stocks_format_price(hi, val[1], 32);
-    stocks_format_price(lo, val[2], 32);
-    { char q[16]; stocks_format_price(s->cap_b * 100, q, sizeof q); q[font_strlen_local(q) - 3] = 0; int p = stx_cat(val[3], 0, "$"); p = stx_cat(val[3], p, q); stx_cat(val[3], p, "B"); }
-    stocks_format_price(s->pe_x10 * 10, val[4], 32);
-    stocks_format_price(s->price_x100 - s->change_x100, val[5], 32);
-    for (int i = 0; i < 6; i++) {
-        int x = px + (i % 3) * colw, y = sy + (i / 3) * 40;
-        font_draw_string(lab[i], x, y, STX_MUTED, -1);
-        font_draw_string(val[i], x, y + 16, STX_INK, -1);
+    int sy = cy0 + ch + 14;
+    font_draw_string(n ? (stx_data[range][sel].stale ? "Stale quote. R to retry." : "Yahoo Finance / USD / may be delayed") : "R to retry. Quote service unavailable.", px, sy, STX_MUTED, -1);
+    if (n) {
+        int stamp = stx_data[range][sel].time, days = stamp / 86400, y = 1970, m = 1;
+        while (days >= 365 + cal_is_leap(y)) { days -= 365 + cal_is_leap(y); y++; }
+        while (days >= cal_days_in_month(y, m)) { days -= cal_days_in_month(y, m); m++; }
+        char date[11]; cal_date_str(y, m, days + 1, date);
+        int k = stx_cat(b, 0, "As of "); k = stx_cat(b, k, date);
+        int hour = stamp / 3600 % 24, minute = stamp / 60 % 60;
+        char clock[] = " 00:00 UTC";
+        clock[1] += hour / 10; clock[2] += hour % 10;
+        clock[4] += minute / 10; clock[5] += minute % 10;
+        stx_cat(b, k, clock);
+        font_draw_string(b, px, sy + 22, STX_MUTED, -1);
     }
     window_present();
 }
 
 static void gui_launch_stocks(void) {
-    int sel = 0, range = 0, first = 0;
+    int sel = 0, range = 0, first = 0, fetched_range = -1;
+
     for (;;) {
+        if (fetched_range != range || ticks() - stx_refresh_tick >= 6000) {
+            stx_loading = 1; stocks_draw(sel, range, first);
+            stocks_fetch(range); stx_loading = 0; fetched_range = range;
+        }
         int vis = stx_rows_visible();
         if (sel < first) first = sel;
         if (sel >= first + vis) first = sel - vis + 1;
         stocks_draw(sel, range, first);
         sleep_ticks(5);
         mouse_click_edge_sync();
-        int k = get_key_or_click();
+        int k = get_key_or_click_until(stx_refresh_tick + 6000);
+        if (k == 'r' || k == 'R') fetched_range = -1;
         if (k == KEY_ESC) return;
         if (k == KEY_UP && sel > 0) sel--;
         else if (k == KEY_DOWN && sel < STOCKS_MAX - 1) sel++;

@@ -1,4 +1,5 @@
 #!/bin/sh
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 # Regression test: mouse wheel scroll support in the Apps folder.
 # The Apps folder (gui_launch_apps) v0.77.0 adds scroll_offset support
 # via mouse wheel scrolling, along with mouse_get_wheel() in the driver.

@@ -1,3 +1,4 @@
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // Regression check for progress.svg's (and its landing-page twin's) text
 // layout: no two real <text> element boxes may overlap on screen.
 //

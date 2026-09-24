@@ -1,4 +1,5 @@
 #!/bin/sh
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 # Compiles kernel/auth.h natively (host clang, a tiny in-memory VFS + GUI
 # stand-ins in tools/auth-host/main.c) and runs a real, discriminating
 # test suite against it. Same fast-inner-loop relationship

@@ -55,9 +55,11 @@ retry|Shell launches a ring-3 program by bare name, case-insensitively|./tools/c
 retry|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
 once |Calendar date math, host harness|./tools/checks/check-calendar.sh
 retry|Settings click acts on the row actually clicked|./tools/checks/settingsclick-check.sh
+retry|Settings Location geocodes, persists, and fails clean|python3 ./tools/checks/location-check.py
 retry|Wallpaper defaults to Satellite on a fresh boot|./tools/checks/walldefault-check.sh
 retry|Idle tour's Settings visit doesn't change the wallpaper theme|python3 ./tools/checks/walldemo-regression-check.py
 retry|Notes editor chrome doesn't redraw on plain keystrokes|./tools/checks/editorflash-check.sh
+retry|System-wide clipboard: Ctrl+C/X/V round-trips real text within Notes, across Notes->Terminal, truncates a too-long paste cleanly|python3 ./tools/checks/clipboard-check.py
 retry|Mail, Reminders and Calculator prompts redraw content, not chrome, per keystroke|./tools/checks/gui-prompt-keystroke-check.sh
 retry|Notes typing, typography, pointer controls, persistence|python3 ./tools/checks/editor_qa.py
 retry|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/termchatflash-check.sh
@@ -86,7 +88,11 @@ retry|Every app's main action, headless|python3 ./tools/checks/feature-drive.py
 retry|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
 retry|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
 retry|Dock icon lighting (one soft top light, top highlight, no dark outline)|python3 ./tools/checks/iconlight-check.py
+<<<<<<< HEAD
 once |Every authored icon shares one tile silhouette, AA edges, glyph margin|python3 ./tools/checks/iconinset-check.py
+=======
+retry|Calendar dock tile shows today's date, not fixed art|python3 ./tools/checks/calicon-check.py
+>>>>>>> origin/main
 retry|Shadow under the dock darkens the photo, no flat bands|python3 ./tools/checks/dockband-check.py
 retry|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py
 retry|Dock tray corner AA (real coverage blend, not binary)|python3 ./tools/checks/traycorner-check.py
@@ -96,12 +102,15 @@ once |Landing eyebrow tracks roadmap Latest, H1 stays the brand line|./tools/che
 once |Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcount-check.mjs
 once |Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
 once |RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
+retry|Stocks opens without a supported network card|python3 ./tools/checks/stocks-dock-check.py
+once |Stocks live quotes and kernel parsing|node ./tools/checks/stocks-live-check.mjs
 once |Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
 retry|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py
 once |Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
 retry|Accounts: create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py
 once |Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py
 once |Frame time: idle, dock hover and window open stay within budget|python3 ./tools/checks/frametime-check.py
+once |Every check in tools/checks/ is in this manifest or says why not|./tools/checks/suite-coverage-check.sh
 EOF
 }
 

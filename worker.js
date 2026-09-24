@@ -53,6 +53,10 @@ async function handleProxy(request) {
     return new Response("Invalid url parameter", { status: 400 });
   }
 
+  if (targetUrl.hostname === "joshuatree.heyitsmejosh.com" && targetUrl.pathname === "/api/stocks"
+      && ["http:", "https:"].includes(targetUrl.protocol) && !targetUrl.port && !targetUrl.username && !targetUrl.password)
+    return handleStocks(targetUrl);
+
   if (!isAllowedTarget(targetUrl)) {
     return new Response("Host not allowed", { status: 403 });
   }
@@ -103,9 +107,45 @@ async function handleProxy(request) {
   });
 }
 
+// A small, bounded wire format keeps market JSON parsing out of the kernel.
+const STOCK_SYMBOLS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "NFLX"];
+const STOCK_RANGES = [["1d", "5m"], ["5d", "30m"], ["1mo", "1d"], ["3mo", "1d"], ["1y", "1wk"]];
+function stockWire(data, symbol) {
+  const r = data?.chart?.result?.[0], m = r?.meta;
+  const cents = v => typeof v === "number" && Number.isFinite(v) && v > 0 && v <= 100000 ? Math.round(v * 100) : 0;
+  if (m?.symbol !== symbol || m.currency !== "USD") throw Error("Invalid quote");
+  const price = cents(m.regularMarketPrice), prev = cents(m.previousClose ?? m.chartPreviousClose);
+  const time = m.regularMarketTime;
+  const raw = (r.indicators?.quote?.[0]?.close ?? []).map(cents).filter(Boolean);
+  if (!price || !prev || !Number.isInteger(time) || time < 1 || time > 2147483647 || !raw.length) throw Error("Missing quote");
+  const n = Math.min(raw.length, 64);
+  const points = Array.from({length: n}, (_, i) => raw[n === 1 ? 0 : Math.round(i * (raw.length - 1) / (n - 1))]);
+  return [price, prev, time, n, ...points].join(" ");
+}
+async function handleStocks(url) {
+  const range = url.searchParams.get("range") ?? "0";
+  if (!/^[0-4]$/.test(range)) return new Response("Invalid range", {status: 400});
+  const [period, interval] = STOCK_RANGES[Number(range)];
+  const lines = await Promise.all(STOCK_SYMBOLS.map(async symbol => {
+    try {
+      const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=${period}&interval=${interval}`, {
+        headers: {"User-Agent": "Mozilla/5.0"},
+        signal: AbortSignal.timeout(8000),
+        cf: {cacheTtl: 60, cacheEverything: true},
+      });
+      if (!response.ok) throw Error("Quote unavailable");
+      return stockWire(await response.json(), symbol);
+    } catch { return "0"; }
+  }));
+  return new Response(lines.join("\n") + "\n", {headers: {
+    "Content-Type": "text/plain", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store",
+  }});
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/api/stocks") return handleStocks(url);
     if (url.pathname === "/api/proxy") {
       return handleProxy(request);
     }
@@ -117,3 +157,5 @@ export default {
 // Worker isn't spun up in this CI; the allowlist logic and request/
 // response handling are still real, plain JS testable directly under Node.
 export { isAllowedTarget, handleProxy, ALLOWED_HOSTS };
+
+export { stockWire, handleStocks };

@@ -139,20 +139,18 @@ DOCK = {
         <path d="M18 36 L64 72.5 L110 36" stroke="#B8C5D8" stroke-width="2" fill="none" stroke-linejoin="round" opacity="0.8"/>
       </g>"""),
 
-    # Calendar: month in red caps, big dark date, on a white tile. Drawn as
-    # strokes, not <text>: rsvg would pick whatever font the host has, and
-    # then gen_icon_art.py --check would differ from machine to machine.
-    "calendar": ("#F5F5F8", "#E0E1E6", "",
-                 """
-      <g fill="none" stroke="#FF3B30" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M53 24.5 C51.5 22 49.4 21 47 21 C43.4 21 41 23 41 26 C41 32.6 53.6 29 53.6 36 C53.6 39.6 50.8 42 47 42 C44 42 41.6 40.6 40.4 38.4"/>
-        <path d="M71 21 H60 V42 H71 M60 31.5 H69"/>
-        <path d="M78 42 V21 H84 C88 21 90.6 23.4 90.6 27 C90.6 30.6 88 33 84 33 H78"/>
-      </g>
-      <g fill="none" stroke="url(#ink)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M37 61 L49 53 V99"/>
-        <path d="M63 54 H90 L72 99"/>
-      </g>""".replace('url(#ink)', '#1F1F22')),
+    # Calendar: a plain white tile, no baked date. v0.89.x: the month/day
+    # used to be hand-drawn strokes here ("SEP 17", fixed forever, not
+    # <text> since rsvg would pick whatever font the host has and
+    # gen_icon_art.py --check would then differ machine to machine); now
+    # the real current date is drawn at runtime instead, by
+    # gui_calendar_draw_date in kernel/kernel.c, directly on top of this
+    # tile's white/shadow art on every icon draw, off the same RTC read
+    # the menu bar clock already trusts. Nothing left to bake in: this
+    # tile is just the squircle, its top highlight and its drop shadow,
+    # same shared technique every other tile below uses, with no glyph
+    # body of its own.
+    "calendar": ("#F5F5F8", "#E0E1E6", "", ""),
 
     # Notes: a yellow pencil over ruled paper.
     "notes": ("#F6F6F8", "#E0E1E6",
