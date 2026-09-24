@@ -398,13 +398,14 @@ def main():
                    "oversized (20KB) file truncates to the 4095-byte cat buffer, no overflow",
                    big_hits[0] if big_hits else "no 'cat big.txt' marker in serial log")
 
-            # Any bounded marker at all (a length, or "not found") proves
-            # fat_read_file's bufsize clamp kept the self-looping chain and
-            # the multi-gigabyte lying size from ever hanging the read; only
-            # a boot that never got here (the read_log is None branch above)
-            # would fail this.
-            report(bool(loop_hits),
-                   "corrupt file (file_size far exceeding the volume + a self-looping FAT chain) fails/reads cleanly, no hang",
+            # The exact bounded result, not just "some marker": the lying
+            # 4.29 GB size clamps to cat's 4095-byte buffer and the
+            # self-looping chain feeds it the same cluster over and over,
+            # so a correct read is exactly n=4095. "not found" would mean
+            # the directory walk rejected the entry instead of reading it,
+            # which is not the path this case exists to prove.
+            report(bool(loop_hits) and loop_hits[0] == "cat loop.txt: n=4095",
+                   "corrupt file (file_size far exceeding the volume + a self-looping FAT chain) reads exactly the 4095-byte bound, no hang",
                    loop_hits[0] if loop_hits else "no 'cat loop.txt' marker in serial log at all")
 
             # The real proof `ls` survived the garbage-attribute root entry:
