@@ -43,6 +43,11 @@ unsigned int window_height(void);
 /* Draw an app into a bounded rectangle of the existing framebuffer. The
    desktop outside it stays visible; coordinates inside are app-local. */
 void window_set_viewport(int x, int y, unsigned int w, unsigned int h);
+/* Moves a logical rectangle of the current frame by (dx, dy), pixels and
+   all, in place (the live window drag's one primitive). Ignores the
+   viewport on purpose: the caller is moving a whole window, chrome
+   included. Both footprints are damaged; clipped to the frame. */
+void window_move_rect(int x, int y, int w, int h, int dx, int dy);
 void window_clear_viewport(void);
 
 /* v0.77.x: the real back buffer. When window_open* succeeded in

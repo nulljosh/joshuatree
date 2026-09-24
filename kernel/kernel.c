@@ -2137,6 +2137,24 @@ static void gui_draw_wallpaper_rect(int x, int y, int w, int h){
     }
 }
 
+/* Same rectangle repaint with the day/night tint the desktop itself
+   applies (gui_draw_wallpaper_rows_sway_ex's own per-pixel path), so a
+   strip uncovered by a window drag matches the wallpaper around it. */
+static void gui_daynight_wallpaper_rect(int x, int y, int w, int h){
+    int sc = (int)window_scale();
+    int x0 = x * sc, x1 = (x + w) * sc;
+    int y0 = y * sc, y1 = (y + h) * sc;
+    if (x0 < 0) x0 = 0;
+    if (y0 < GUI_MENUBAR_H * sc) y0 = GUI_MENUBAR_H * sc;
+    if (x1 > (int)window_width() * sc) x1 = (int)window_width() * sc;
+    if (y1 > (int)window_height() * sc) y1 = (int)window_height() * sc;
+    for (int py = y0; py < y1; py++) {
+        struct wp_row c = gui_wallpaper_row(py, 0);
+        for (int px = x0; px < x1; px++)
+            window_pixel_phys(px, py, gui_daynight_tint(gui_wallpaper_px(&c, px)));
+    }
+}
+
 /* Fills a downward-pointing triangle: flat top of half-width `half_w` at
    (cx, y0), narrowing to a point over `h` rows. Used for the map pin's tip
    and the quote marks' tails. */
@@ -4173,13 +4191,33 @@ static int gui_app_windowed = 0;
    so the same layout moves up by that strip, the same 32px Stocks has
    always saved through stx_top(). Add it to every content y. */
 static int gui_app_dy(void){ return gui_app_windowed ? -32 : 0; }
+/* Live title-bar drag for the blocking single-window apps (everything
+   that opens through gui_launch_from_dock: Notes, Terminal, Chat, the
+   fleet apps, Settings...). Direct request: "app windows should be
+   draggable". Only the five multi-window apps could move before, and
+   only as a snap-preview outline. These apps block inside their own
+   input loops, so the one place that runs while they wait is
+   gui_app_mouse_tick below: it watches the left button, arms on a press
+   in the title band right of the traffic lights, and on every pointer
+   move shifts the whole window (chrome and content) inside the back
+   buffer with window_move_rect, repaints the one or two wallpaper strips
+   the window just uncovered, and slides the app's own viewport along, so
+   whatever the app draws next lands at the new place. The press that
+   starts a drag is swallowed from mouse_click_edge, so it is never also
+   the app's "click anywhere closes"; a press on the lights or the
+   content keeps every contract it had. Clamped to the desktop strip
+   (below the menu bar, above the dock band) so the uncovered area is
+   always plain wallpaper, nothing else needs redrawing. */
+static int app_win_x = 0, app_win_y = 0, app_win_w = 0, app_win_h = 0;
+static int app_drag_held = 0, app_drag_on = 0, app_drag_gx = 0, app_drag_gy = 0;
+static int gui_dock_band_top(void);
+static void gui_daynight_wallpaper_rect(int x, int y, int w, int h);
 static int app_view_x, app_view_y, app_view_w, app_view_h;
 static int app_cursor_x, app_cursor_y;
 static void gui_app_mouse_tick(void){
     if (!gui_app_windowed) return;
     int dx = 0, dy = 0, buttons = 0;
     int moved = mouse_get_delta(&dx, &dy, &buttons);
-    (void)buttons;
     if (!moved && cursor_saved_x >= 0) return;
     window_clear_viewport();
     gui_cursor_restore();
@@ -4189,6 +4227,39 @@ static void gui_app_mouse_tick(void){
     if (app_cursor_y < 0) app_cursor_y = 0;
     if (app_cursor_x > (int)window_width() - CURSOR_W) app_cursor_x = (int)window_width() - CURSOR_W;
     if (app_cursor_y > (int)window_height() - CURSOR_H) app_cursor_y = (int)window_height() - CURSOR_H;
+    /* Live window drag (see app_win_x's comment). Press edge: arm only in
+       the title band, right of the three lights (x + 80 on), so the red
+       close light and the app's own content keep their click semantics. */
+    int held = buttons & 1;
+    if (held && !app_drag_held) {
+        app_drag_held = 1;
+        if (app_win_w > 0 && app_cursor_y >= app_win_y && app_cursor_y < app_win_y + 30
+            && app_cursor_x >= app_win_x + 80 && app_cursor_x < app_win_x + app_win_w) {
+            app_drag_on = 1;
+            app_drag_gx = app_cursor_x - app_win_x; app_drag_gy = app_cursor_y - app_win_y;
+            mouse_click_edge(); /* consumed: this press is a grab, not the app's click */
+        }
+    } else if (!held && app_drag_held) {
+        app_drag_held = 0; app_drag_on = 0;
+    }
+    if (app_drag_on) {
+        int nx = app_cursor_x - app_drag_gx, ny = app_cursor_y - app_drag_gy;
+        int max_x = (int)window_width() - app_win_w, max_y = gui_dock_band_top() - app_win_h;
+        if (nx > max_x) nx = max_x;  if (nx < 0) nx = 0;
+        if (ny > max_y) ny = max_y;  if (ny < GUI_MENUBAR_H) ny = GUI_MENUBAR_H;
+        int mdx = nx - app_win_x, mdy = ny - app_win_y;
+        if (mdx || mdy) {
+            window_move_rect(app_win_x, app_win_y, app_win_w, app_win_h, mdx, mdy);
+            /* the strips the window no longer covers: one per axis moved */
+            if (mdx > 0)      gui_daynight_wallpaper_rect(app_win_x, app_win_y, mdx, app_win_h);
+            else if (mdx < 0) gui_daynight_wallpaper_rect(app_win_x + app_win_w + mdx, app_win_y, -mdx, app_win_h);
+            if (mdy > 0)      gui_daynight_wallpaper_rect(app_win_x, app_win_y, app_win_w, mdy);
+            else if (mdy < 0) gui_daynight_wallpaper_rect(app_win_x, app_win_y + app_win_h + mdy, app_win_w, -mdy);
+            app_win_x = nx; app_win_y = ny;
+            app_view_x += mdx; app_view_y += mdy;
+            serial_puts("windrag\n"); /* marker for tools/checks/windowdrag-check.py */
+        }
+    }
     gui_cursor_save(app_cursor_x, app_cursor_y);
     gui_draw_cursor(app_cursor_x, app_cursor_y);
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
@@ -5671,10 +5742,13 @@ again:
     app_view_w = w - 16; app_view_h = h - 40;
     app_cursor_x = editor_mouse_x; app_cursor_y = editor_mouse_y;
     cursor_saved_x = cursor_saved_y = -1;
+    app_win_x = x; app_win_y = y; app_win_w = w; app_win_h = h;
+    app_drag_held = 1; app_drag_on = 0; /* the click that opened this app is still down; it is not a grab */
     gui_app_windowed = 1;
     gui_close_was_click = 0;
     gui_launch(icon);
     gui_app_windowed = 0;
+    app_win_w = app_win_h = 0; app_drag_on = 0;
     window_clear_viewport();
     gui_cursor_restore();
     /* v68 (0.63.0): the dock stays visible around every app window, so a
@@ -6841,7 +6915,22 @@ static void gui_run(void){
            is left exactly where it started until release, so this is the
            whole cost of the live preview. */
         int cur_snap_zone = drag_win >= 0 ? gui_snap_zone(mx, my) : -1;
-        int drag_zone_only = drag_win >= 0 && !launched && cur_snap_zone != drag_zone;
+        /* Live move (direct request, "app windows should be draggable"):
+           the window itself follows the pointer now, redrawn from its own
+           state at the new x/y on every pointer move, with the snap
+           outline still drawn on top when a zone is in reach. The clamp
+           is the same one the release path applies, so what the visitor
+           sees mid-drag is exactly where the window lands. */
+        int drag_moved = drag_win >= 0 && !launched && (mx != last_mx || my != last_my);
+        if (drag_moved) {
+            gui_window_t *dw = &gui_windows[drag_win];
+            int top, bottom; int sw = gui_snap_area(&top, &bottom);
+            int nx = mx - drag_grab_dx, ny = my - drag_grab_dy;
+            if (nx < 0) nx = 0; if (nx + dw->w > sw) nx = sw - dw->w;
+            if (ny < top) ny = top; if (ny + dw->h > bottom) ny = bottom - dw->h;
+            dw->x = nx; dw->y = ny;
+        }
+        int drag_zone_only = drag_win >= 0 && !launched && (cur_snap_zone != drag_zone || drag_moved);
         if (drag_zone_only) {
             gui_cursor_restore();
             gui_draw_desktop(-1, -1, 0, 0);
