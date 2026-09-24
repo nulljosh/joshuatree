@@ -58,6 +58,16 @@ dependencies beyond clang, ld.lld and qemu.
 
 - **Docs stay at 100%.** Every source file the progress graph counts needs a row in `docs/ARCHITECTURE.md` in the same PR that adds it. The landing graph shows the number, so a dip is public.
 
+## Writing docs
+
+Docs are for people first. Plain words, short sentences, one idea per
+sentence. A roadmap entry says what changed and why it matters in two
+or three lines, then names the check that proves it. Put the long story
+(root cause, what was tried, file and line detail) in the commit message
+or the PR, not in `docs/roadmap.md` or `docs/ARCHITECTURE.md`. Name a
+file, function or flag only when the reader has to go there. No walls of
+text. Read it back as someone who has never seen the code.
+
 ## Versioning
 
 `VERSION` holds `MAJOR.MINOR.PATCH`, semver since v31 (`v1`-`v30` keep
