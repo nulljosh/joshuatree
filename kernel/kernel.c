@@ -2463,6 +2463,12 @@ static unsigned short wx_override_port = 80;
    host. */
 static char tile_override_host[20] = "";
 static unsigned short tile_override_port = 80;
+/* 1.1.2: walltheme=map|sat|photo, a one-boot theme override applied AFTER
+   settings_load() (same reasoning as llmhost=): the default has been
+   WALL_SAT since v0.76.7, and tools/checks/wallpaper-check.py compares
+   the first automatic fetch against OpenTopoMap PNGs, so it boots with
+   walltheme=map instead of assuming the default. -1 = not given. */
+static int wall_theme_override = -1;
 /* A weather one-liner that has not started answering in ~15s will not.
    net.c's default reply budget (sized for local LLM generation, minutes)
    froze the whole desktop that long on a half-open connection. */
@@ -9617,6 +9623,14 @@ void kmain(unsigned int multiboot_info_addr){
                 serial_puts("tilehost="); serial_puts(tile_override_host); serial_puts("\n");
                 break;
             }
+        for (const char *pc = cl0; pc && *pc; pc++)
+            if (pc[0]=='w' && pc[1]=='a' && pc[2]=='l' && pc[3]=='l' && pc[4]=='t' && pc[5]=='h' && pc[6]=='e' && pc[7]=='m' && pc[8]=='e' && pc[9]=='=') {
+                pc += 10;
+                if (pc[0]=='m' && pc[1]=='a' && pc[2]=='p') wall_theme_override = WALL_WARM;
+                else if (pc[0]=='s' && pc[1]=='a' && pc[2]=='t') wall_theme_override = WALL_SAT;
+                else if (pc[0]=='p' && pc[1]=='h' && pc[2]=='o') wall_theme_override = WALL_PHOTO;
+                break;
+            }
         /* 1.0.12: llmhost=HOST / llmport=PORT, the Chat equivalent of
            wxhost= above -- for tools/checks/chat-samantha-check.py to point
            chat_send at a local fake HTTP server instead of the real,
@@ -9720,6 +9734,7 @@ void kmain(unsigned int multiboot_info_addr){
        to what Settings remembers. */
     if (llm_host_override[0]) { int p = 0; while (llm_host_override[p] && p < LLM_HOST_MAX - 1) { llm_host[p] = llm_host_override[p]; p++; } llm_host[p] = 0; }
     if (llm_port_override) llm_port = llm_port_override;
+    if (wall_theme_override >= 0) { wall_theme = wall_theme_override; serial_puts("wallthemeoverride="); { char d[2] = { (char)(48 + wall_theme), 0 }; serial_puts(d); } serial_puts("\n"); }
     clear();
     boot_chime();
     puts("joshuatree v0 -- type help\n");
