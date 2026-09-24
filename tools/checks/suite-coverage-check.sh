@@ -30,8 +30,10 @@ for f in tools/checks/*-check.*; do
 
     # Executed entries only, matched as literal text (the basename has
     # dots): a check named in a comment of ci-suite.sh, a hook or a
-    # workflow is not wired, and must not count as if it were.
-    if grep -E '^[[:space:]]*(once|retry)[[:space:]]*\|' tools/checks/ci-suite.sh | grep -qF "$b"; then
+    # workflow is not wired, and must not count as if it were. In the
+    # manifest only the command field (after the second `|`) counts, so
+    # a description that merely mentions another check doesn't wire it.
+    if grep -E '^[[:space:]]*(once|retry)[[:space:]]*\|' tools/checks/ci-suite.sh | cut -d'|' -f3- | grep -qF "$b"; then
         continue
     fi
     if grep -rhs -v '^[[:space:]]*#' tools/hooks .github | grep -qF "$b"; then
