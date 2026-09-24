@@ -37,7 +37,22 @@
    editable from Settings), one source of truth instead of two copies
    that could silently drift apart, the same class of bug the mail/
    contacts/calendar apps already avoid by sharing their own load/save
-   pair. */
+   pair.
+
+   1.0.12 (direct owner request, "hook Chat up to our Samantha LLM"): the
+   compiled-in defaults (kernel.c) point at the Turing project's own
+   Cloudflare Worker (turing.heyitsmejosh.com:80, model "samantha"), not
+   a local Ollama server on the host Mac -- Settings still lets anyone
+   point this at a real local Ollama install instead, nothing here
+   assumes the default is the only valid target. Turing's own `/api/chat`
+   is deliberately Ollama-shaped (same request/response fields this file
+   already builds/parses), so no wire-format change was needed, just the
+   defaults. One real gap that default change exposed: turing.heyitsmejosh.com
+   forces HTTPS, which this kernel cannot speak (no TLS anywhere in this
+   stack); chat_send below now recognizes a 3xx off `http_last_status()`
+   and reports it as a clear, specific status instead of the old generic
+   "no reply" (which read exactly like a dead host or a typo, not "you
+   need a different port/host"), via chat_error() below. */
 
 #define CHAT_MAX 8            /* messages kept (4 user/assistant exchanges); oldest drop first once full */
 #define CHAT_CONTENT_MAX 640  /* raw stored content per message; real growth from the old 512-byte input cap */
@@ -52,6 +67,16 @@ typedef struct {
 static chat_msg_t chat_msgs[CHAT_MAX];
 static int chat_count = 0;
 static int chat_loaded = 0;
+
+/* 1.0.12: the specific, actionable failure chat_send hit last time, empty
+   string when the last failure (if any) was the old generic kind (no
+   route, timeout, no reply) that already had a fine generic message.
+   Callers (the shell `chat` command and the GUI app below) check this
+   right after a chat_send() failure and prefer it over their own
+   generic text when it's non-empty. */
+#define CHAT_ERR_MAX 96
+static char chat_last_error[CHAT_ERR_MAX] = "";
+static const char *chat_error(void) { return chat_last_error; }
 
 /* Same field-boundary contract contacts.h/mail.h already use: stored
    content can't contain '|' or '\n', so a plain scan for either is a
@@ -147,14 +172,17 @@ static unsigned int chat_build_request(char *out, unsigned int out_cap) {
     const char *head1 = "{\"model\":\"";
     while (*head1 && n < out_cap) out[n++] = *head1++;
     { const char *s = llm_model; while (*s && n < out_cap) out[n++] = *s++; }
-    /* v0.85.4: qwen3:8b (the new default) emits a <think>...</think>
-       reasoning block ahead of its real answer by default; Ollama's own
-       /api/chat takes a "think":false field to turn that off at the
-       model level (supported since Ollama added reasoning-model support,
-       confirmed against this host's ollama 0.34.2), the smallest correct
-       fix, no client-side tag stripping needed. llama3.1:8b (a non-
-       reasoning model) just ignores the field, same as it already
-       ignores any option it doesn't understand. */
+    /* v0.85.4: qwen3:8b, then the local-Ollama default, emits a
+       <think>...</think> reasoning block ahead of its real answer by
+       default; Ollama's own /api/chat takes a "think":false field to turn
+       that off at the model level (supported since Ollama added
+       reasoning-model support, confirmed against this host's ollama
+       0.34.2), the smallest correct fix, no client-side tag stripping
+       needed. Kept sending unconditionally in 1.0.12 now that the
+       compiled-in default is "samantha" against Turing's own Worker:
+       llama3.1:8b and Samantha both just ignore a field they don't
+       understand, same as any Ollama-compatible server already does for
+       any option it doesn't recognize. */
     const char *head2 = "\",\"stream\":false,\"think\":false,\"messages\":[";
     while (*head2 && n < out_cap) out[n++] = *head2++;
 
@@ -190,6 +218,7 @@ static unsigned int chat_build_request(char *out, unsigned int out_cap) {
 static int chat_send(const char *user_msg, char *answer, unsigned int answer_cap) {
     chat_load();
     chat_push(CHAT_ROLE_USER, user_msg);
+    chat_last_error[0] = 0; /* clear any stale message from a previous send before this one runs */
 
     if (!net_init(0x0A00020F)) return 0;
 
@@ -198,6 +227,27 @@ static int chat_send(const char *user_msg, char *answer, unsigned int answer_cap
 
     static char resp[8192]; /* real growth from the old 4096-byte cap */
     int respn = http_post(llm_host, "/api/chat", (unsigned short)llm_port, req_body, rn, resp, sizeof(resp) - 1);
+    if (respn == -1) return 0; /* resolve/connect failure, no HTTP reply at all: http_last_status is stale, don't trust it */
+
+    /* 1.0.12: turing.heyitsmejosh.com (the new default host) forces HTTPS,
+       which this kernel cannot speak (no TLS anywhere in this stack, see
+       docs/THREAT-MODEL.md); the plain-HTTP request above lands on a real
+       redirect (301/302/307/308) instead of a JSON body. The old code
+       just fell through to json_extract_string finding nothing and
+       reported the same generic "no reply" as a dead host or a typo'd
+       port -- a real, specific, fixable cause deserves a real, specific
+       message instead of that generic one. Checked before the body-length
+       branch below since a redirect's own tiny body ("Moved
+       Permanently") can still make respn > 0. */
+    { int st = http_last_status();
+      if (st == 301 || st == 302 || st == 307 || st == 308) {
+          const char *msg = "host redirects to HTTPS; this kernel speaks HTTP only, set another host in Settings";
+          int i = 0; while (msg[i] && i < CHAT_ERR_MAX - 1) { chat_last_error[i] = msg[i]; i++; } chat_last_error[i] = 0;
+          serial_puts("chathttps=1\n"); /* discriminating marker for tools/checks/chat-samantha-check.py's redirect case */
+          return 0;
+      }
+    }
+
     if (respn <= 0) return 0;
     resp[respn] = 0;
 
@@ -341,7 +391,13 @@ static void gui_launch_chat_app(void) {
             render_wrapped_text(msg, x + prompt_w, T + 76, body_w - prompt_w, 64, CHAT_INK);
 
             static char answer[4096]; /* real growth from the old 2048-byte cap */
-            state = chat_send(msg, answer, sizeof(answer)) ? "ready" : "error: couldn't reach the host, or no reply";
+            /* 1.0.12: chat_error() carries a specific message (currently
+               just the HTTPS-redirect case) when chat_send knows exactly
+               why it failed; the generic text stands for every other
+               failure (DNS/connect failure, timeout, no reply, no "content"
+               field in the reply). */
+            if (chat_send(msg, answer, sizeof(answer))) state = "ready";
+            else state = chat_error()[0] ? chat_error() : "error: couldn't reach the host, or no reply";
         }
     }
 }
