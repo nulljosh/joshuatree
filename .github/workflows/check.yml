@@ -173,7 +173,13 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    if: always()
+    # `!cancelled()`, not `always()`: when a newer push supersedes this run
+    # (concurrency above cancels the suite/demo jobs), an always() gate still
+    # ran, saw "cancelled" and reported FAILURE -- two failure emails per
+    # superseded push, for a run nobody cares about. With !cancelled() the
+    # gates are skipped and the run ends as cancelled, which GitHub does not
+    # email about. A real failed or skipped job still runs the gate.
+    if: ${{ !cancelled() }}
     needs: [changes, suite, demo]
     steps:
       - name: Every suite shard (and the demo check) passed
@@ -286,7 +292,7 @@ jobs:
   ci:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    if: always()
+    if: ${{ !cancelled() }}  # same reasoning as `check` above: no failure email for a superseded run
     needs: [check, check-refs]
     steps:
       - name: Gating jobs all passed
