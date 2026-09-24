@@ -1,9 +1,14 @@
 name: Boot check
+# 1.1.2: pull_request only. Branch protection requires every PR to be green
+# AND up to date with main before it merges, so the push-to-main run was a
+# second run of the exact same tree: no new information, twice the CI
+# minutes, and the only thing it ever produced on its own was a failure
+# email whenever a check flaked on the repeat. release.yml and deploy.yml
+# have their own push triggers and are unaffected.
 on:
-  push:
-    branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
 
 # v0.76.8: this session pushes to main frequently enough (several times an
 # hour some days) that back-to-back pushes were queuing overlapping runs on
@@ -245,12 +250,43 @@ jobs:
       # that's still accurate, just no longer painted red on a host hiccup.
       - name: Weather location (ip-api + Open-Meteo)
         run: ./tools/checks/geo-check.sh || (sleep 15 && ./tools/checks/geo-check.sh) || true
+      # 1.1.1: these three were failing on every real run for over a week
+      # (found by bisecting network job logs 2026-09-15..2026-09-24) with
+      # the trailing `|| true` hiding it completely -- root cause was
+      # kernel.c's WALL_SAT default (v0.76.7, commit 1088065) outrunning
+      # wallpaper-check.py, which never issues an explicit `wallpaper map`
+      # and so silently captured whatever the first automatic weather-cycle
+      # fetch produced. That code path is fixed in 1.1.1 (see docs/
+      # roadmap.md's 1.1.1 entry and tools/checks/wallcompose-check.py, the
+      # new hermetic proof of it in the `suite` job above), but this exact
+      # step still can't be proven green from here: this repo's own dev
+      # sandbox has no route to a.tile.opentopomap.org/mt0.google.com/
+      # ip-api.com at all (confirmed directly -- see the PR/commit this
+      # comment shipped with), so the real proof is this job's own next
+      # run. Until that's confirmed, `|| true` stays (a provider hiccup
+      # still must not block a push) but a silent red-herring PASS is no
+      # longer possible either: each step now prints a loud ::warning::
+      # annotation (shows up in the run's own Summary tab, not just deep in
+      # a step's log) the moment it fails twice, so a real regression here
+      # is visible again instead of swallowed whole.
       - name: Map wallpaper (OpenTopoMap, byte-for-byte vs host)
-        run: python3 tools/checks/wallpaper-check.py || (sleep 15 && python3 tools/checks/wallpaper-check.py) || true
+        run: |
+          python3 tools/checks/wallpaper-check.py && exit 0
+          sleep 15
+          python3 tools/checks/wallpaper-check.py && exit 0
+          echo "::warning::Map wallpaper check (wallpaper-check.py) failed twice against the real internet -- see this step's own log for the PASS/FAIL detail. Not fatal to the push (continue-on-error), but read it: this job's whole point is catching a real regression here."
       - name: Rain over the map wallpaper
-        run: python3 tools/checks/wallfx-check.py rain || (sleep 15 && python3 tools/checks/wallfx-check.py rain) || true
+        run: |
+          python3 tools/checks/wallfx-check.py rain && exit 0
+          sleep 15
+          python3 tools/checks/wallfx-check.py rain && exit 0
+          echo "::warning::Rain-over-map wallpaper check (wallfx-check.py rain) failed twice against the real internet -- see this step's own log for the PASS/FAIL detail. Not fatal to the push (continue-on-error), but read it: this job's whole point is catching a real regression here."
       - name: Satellite wallpaper theme (real geo + tile fetch)
-        run: python3 tools/checks/satellite-wallpaper-check.py || (sleep 15 && python3 tools/checks/satellite-wallpaper-check.py) || true
+        run: |
+          python3 tools/checks/satellite-wallpaper-check.py && exit 0
+          sleep 15
+          python3 tools/checks/satellite-wallpaper-check.py && exit 0
+          echo "::warning::Satellite wallpaper check (satellite-wallpaper-check.py) failed twice against the real internet -- see this step's own log for the PASS/FAIL detail. Not fatal to the push (continue-on-error), but read it: this job's whole point is catching a real regression here."
       # 1.0.12: real proof that Chat's compiled-in default (turing.heyitsmejosh.com,
       # port 80, model "samantha") actually answers over plain HTTP -- the
       # sandbox this kernel is normally developed in has that host blocked
