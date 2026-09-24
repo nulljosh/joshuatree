@@ -92,7 +92,8 @@ Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Haiku] Clock app with timer and alarm.
 - [ ] [Sonnet] Maps app. The wallpaper already fetches map tiles.
 - [ ] [Haiku] Screenshot tool.
-- [ ] [Sonnet] Text selection and undo in editors.
+- [x] 1.2.0: Text selection in Notes. Shift+arrow extends it, Ctrl+A selects everything, a light-blue band highlights it, Ctrl+C/X/typing/Backspace/Delete act on it, Escape or a plain arrow clears it. `tools/checks/textselect-check.py`. The landing demo's Notes scene now selects its last word, copies it, and clears the selection before its own drag-the-window beat, real Shift+Left/Ctrl+C scancode chords, not a recording (`landing/v86/embed.js`).
+- [ ] [Sonnet] Undo in editors.
 - [ ] [Sonnet] Shell pipes, redirection, and environment variables.
 - [ ] [Sonnet] File associations, opening a file in the right app.
 - [ ] [Sonnet] Drag and drop.

@@ -7,7 +7,7 @@
 ![platform](https://img.shields.io/badge/platform-i386-lightgrey)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-A desktop built from nothing in C: bootloader, kernel, memory manager, filesystem, network stack, window system, typeface renderer, and 25 native apps. No libc, no external dependencies beyond Clang, lld, and QEMU. Run live in the browser: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
+A desktop built from nothing in C: bootloader, kernel, memory manager, filesystem, network stack, window system, typeface renderer, and 25 native apps, with real text selection in Notes. No libc, no external dependencies beyond Clang, lld, and QEMU. Run live in the browser: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 
 ## Boot it
 
