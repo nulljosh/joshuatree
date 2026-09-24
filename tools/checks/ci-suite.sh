@@ -98,6 +98,8 @@ once |Landing eyebrow tracks roadmap Latest, H1 stays the brand line|./tools/che
 once |Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcount-check.mjs
 once |Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
 once |RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
+retry|Stocks opens without a supported network card|python3 ./tools/checks/stocks-dock-check.py
+once |Stocks live quotes and kernel parsing|node ./tools/checks/stocks-live-check.mjs
 once |Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
 retry|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py
 once |Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
