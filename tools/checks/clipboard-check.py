@@ -134,14 +134,34 @@ try:
     def serial_text():
         with open(LOG, "rb") as fh:
             return fh.read().decode("latin1")
-    def wait_marker(marker, timeout=15.0):
+    def wait_marker(marker, timeout=30.0):
         """Poll the serial log until the exact marker this step expects
         has landed (or give up after `timeout` s). Notes processes queued
-        keystrokes one redraw at a time, so by the time Ctrl+C/X/V is sent
-        the editor can still be a second behind the typing on a laptop and
-        several seconds behind on a shared CI runner; a fixed sleep, or
-        waiting for "any new serial output" (window_present logs a line per
-        frame), both read the log before the marker exists."""
+        keystrokes one redraw at a time (kernel/editor.h's main loop pops
+        exactly one scancode per iteration before redrawing), so by the
+        time Ctrl+C/X/V is sent the editor can still be a second behind
+        the typing on a laptop and several seconds behind on a shared,
+        loaded CI runner; a fixed sleep, or waiting for "any new serial
+        output" (window_present logs a line per frame), both read the log
+        before the marker exists.
+        The scancode ring (irq.c's kbd_buf) preserves strict FIFO order
+        and every keystroke this check sends (including Ctrl+C/X/V) goes
+        through the same QMP connection one at a time, so the marker is
+        never in doubt, only *when* it lands: on GitHub's shared runners a
+        real run (CI job 107600495751, 2026-09-24) sent scenario 3's
+        116-character line, then Ctrl+C, and the exact CLIPCOPY marker for
+        the full line still hadn't appeared after the old flat 15s here --
+        not a dropped or reordered keystroke, just a loaded host taking
+        longer to drain 116 queued scancodes (each with its own line
+        redraw) than a quiet one. 15s was tuned against short (~15-19
+        char) lines in scenarios 1-2 and never re-checked against
+        scenario 3's much longer one. Doubled as a general floor, and
+        scenario 3 below passes an explicit larger timeout on top of
+        that scaled to its own line length -- never a shorter one, so
+        this can only get slower to fail, not more likely to pass on a
+        real bug (a wrong hash, or a marker that plain never gets
+        written, still exhausts the deadline and fails exactly as
+        before)."""
         deadline = time.time() + timeout
         while time.time() < deadline:
             log = serial_text()
@@ -203,13 +223,22 @@ try:
     # ---- 3: paste bigger than Terminal's input limit truncates cleanly ----
     TERM_COLS = 96  # kernel/kernel.c's own #define; input[] holds TERM_COLS-1 chars plus the trailing nul
     long_text = "x" * (TERM_COLS + 20)
+    # Scaled, not just bumped: scenario 1-2's lines are ~15-19 chars and the
+    # 30s default (see wait_marker's own comment) already covers those with
+    # real room to spare. This line is 116 chars, each its own editor.h
+    # keystroke + full-line redraw before Ctrl+C is even in the ring buffer
+    # -- proportionally more real guest-side work to drain on a loaded
+    # runner, so it gets proportionally more patience: 0.3s/char on top of
+    # the 30s floor is 15s of extra slack here, comfortably above the ~9s
+    # this check's own per-key typing delay already spends sending it.
+    long_timeout = 30.0 + len(long_text) * 0.3
     open_slot(NOTES_SLOT)
     if not window_open(): fails.append("Notes: dock click did not open a window (scenario 3)")
     else:
         keys("ret")
         type_str(long_text)
         ctrl("c")
-        log = wait_marker("CLIPCOPY:" + m(long_text))
+        log = wait_marker("CLIPCOPY:" + m(long_text), timeout=long_timeout)
         if ("CLIPCOPY:" + m(long_text)) not in log:
             fails.append("Notes Ctrl+C: CLIPCOPY marker with the long line not found in serial log")
         close_via_x()
@@ -219,7 +248,7 @@ try:
     else:
         ctrl("v")
         expect_paste = "CLIPPASTE:" + m("x" * (TERM_COLS - 1))
-        log = wait_marker(expect_paste)
+        log = wait_marker(expect_paste, timeout=long_timeout)
         time.sleep(0.3); log = serial_text()  # let CLIPTRUNC, written right after, land too
         if expect_paste not in log:
             fails.append(f"Terminal Ctrl+V: expected a clean {TERM_COLS - 1}-byte truncated paste, marker not found")
