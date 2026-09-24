@@ -57,6 +57,55 @@ async function handleProxy(request) {
       && ["http:", "https:"].includes(targetUrl.protocol) && !targetUrl.port && !targetUrl.username && !targetUrl.password)
     return handleStocks(targetUrl);
 
+  // 1.0.12: a tight, deliberately narrow exception for Chat talking to the
+  // Turing project's own Ollama-compatible /api/chat (kernel/chat.h's
+  // chat_send). turing.heyitsmejosh.com is NOT added to ALLOWED_HOSTS --
+  // every other request to it, or to this exact path with a different
+  // method/content-type/size, falls straight through to the ordinary
+  // isAllowedTarget() check below and gets the same 403 any other
+  // unlisted host gets. This branch only ever matches the one real shape
+  // chat_send actually sends (POST, application/json, the guest's typed
+  // message plus history, capped by CHAT_SAMANTHA_MAX_BODY well under
+  // chat.h's own 6144-byte request buffer), and forwards exactly that:
+  // method, body and content-type, nothing else guest-controlled. Every
+  // other allowed host keeps the GET-only, no-body behaviour below
+  // unchanged -- this is the one and only route that ever forwards a
+  // guest-supplied body anywhere.
+  const isSamanthaChat = targetUrl.hostname === "turing.heyitsmejosh.com" && targetUrl.pathname === "/api/chat"
+      && ["http:", "https:"].includes(targetUrl.protocol) && !targetUrl.port && !targetUrl.username && !targetUrl.password;
+  const CHAT_SAMANTHA_MAX_BODY = 8192; // 8 KB, the task's own stated cap
+  if (isSamanthaChat && request.method === "POST") {
+    const contentType = (request.headers.get("content-type") || "").toLowerCase();
+    if (!contentType.startsWith("application/json")) {
+      return new Response("Unsupported content-type", { status: 415 });
+    }
+    const declaredLength = Number(request.headers.get("content-length") || "0");
+    if (declaredLength > CHAT_SAMANTHA_MAX_BODY) {
+      return new Response("Body too large", { status: 413 });
+    }
+    const bodyBuffer = await request.arrayBuffer();
+    if (bodyBuffer.byteLength > CHAT_SAMANTHA_MAX_BODY) {
+      return new Response("Body too large", { status: 413 });
+    }
+    const upstreamResponse = await fetch(targetUrl.toString(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": "JoshuaTree-kernel-demo/1 (+https://joshuatree.heyitsmejosh.com)",
+      },
+      body: bodyBuffer,
+    });
+    const headers = new Headers(upstreamResponse.headers);
+    headers.set("Access-Control-Allow-Origin", "*");
+    headers.delete("content-security-policy");
+    headers.delete("set-cookie");
+    return new Response(upstreamResponse.body, {
+      status: upstreamResponse.status,
+      statusText: upstreamResponse.statusText,
+      headers,
+    });
+  }
+
   if (!isAllowedTarget(targetUrl)) {
     return new Response("Host not allowed", { status: 403 });
   }
@@ -89,7 +138,11 @@ async function handleProxy(request) {
   // Only forward a plain GET with no guest-controlled headers/body: every
   // real caller here (geo_fetch/weather_fetch/wall_fetch) only ever issues
   // a bare GET, so there's nothing legitimate to lose by not forwarding
-  // arbitrary request headers/methods through to the upstream host.
+  // arbitrary request headers/methods through to the upstream host. This
+  // is deliberately unconditional -- even a POST from the guest lands
+  // here as a bare GET with no body, the one exception being the
+  // Samantha-chat branch above, which returns before ever reaching this
+  // line.
   const upstreamResponse = await fetch(targetUrl.toString(), {
     method: "GET",
     headers: { "User-Agent": "JoshuaTree-kernel-demo/1 (+https://joshuatree.heyitsmejosh.com)" },
