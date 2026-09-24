@@ -938,18 +938,30 @@ if (typeof document !== "undefined") (function () {
     // never the intended on-screen text. Real fix: press 'n' FIRST (a
     // clean, deliberate entry into the compose prompt, where every
     // character just appends to the buffer -- no collision risk once
-    // inside it), type the same real sentence, then a real Escape (not
-    // Enter -- preserving the original "no \n" intent: this embed has no
-    // NIC route to a real LLM host, so completing an actual send was
-    // never safe to attempt) cancels back to the outer inbox view, the
-    // same clean state runSoloApp's own single CLOSE_X click already
-    // expects to close from.
-    { name: 'Chat', slot: 7, script: [
+    // inside it), then type the real sentence.
+    //
+    // 1.0.12 (direct owner request, "hook Chat up to our Samantha LLM"):
+    // the trailing Escape here used to be deliberate -- this embed had no
+    // NIC route to a real LLM host, so completing an actual send was never
+    // safe to attempt, and cancelling out was the only honest option. Now
+    // that kernel.c's own llm_host/llm_port default to the Turing project's
+    // real Cloudflare Worker (turing.heyitsmejosh.com) and worker.js's
+    // /api/proxy carries a tight POST exception for exactly that host+path
+    // (v86's own fetch relay turns the guest's plain-HTTP request into a
+    // real, same-origin, server-to-server fetch, same as every other proxied
+    // request this demo already makes), a real send is real and safe: a
+    // trailing newline (gui_prompt_line_input's own "enter sends" contract,
+    // kernel/chat.h) submits it instead of cancelling. chat_send's real
+    // network round trip needs real wall-clock time to land before the app
+    // closes, so this entry overrides the default 7s dwell with a longer
+    // one (default + ~4s) on top of an explicit ~4s post-send wait, giving
+    // the reply room to actually render on screen rather than being
+    // interrupted mid-fetch by the tour's own close click.
+    { name: 'Chat', slot: 7, dwell: 11000, script: [ // DWELL_MS (7000, defined below) + ~4s for chat_send's real network round trip; a literal since DWELL_MS isn't assigned yet at this point in the file
       { type: 'keys', text: 'n', speed: 200 },
       { type: 'wait', ms: 400 },
-      { type: 'keys', text: 'what can you do?', speed: 55 },
-      { type: 'wait', ms: 500 },
-      { type: 'raw', codes: [27], speed: 80 } // Escape cancels back to the outer inbox view
+      { type: 'keys', text: 'what can you do?\n', speed: 55 }, // trailing \n submits (enter sends, chat/chat.h), a real request to Samantha
+      { type: 'wait', ms: 4200 } // real network round trip: worker.js's proxy -> Turing's own /api/chat -> the reply rendering in the console
     ] }
   ];
   // v0.76.12: the real multi-window demo. Files (slot 1) and Weather

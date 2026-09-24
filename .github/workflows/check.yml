@@ -203,6 +203,19 @@ jobs:
         run: python3 tools/checks/wallfx-check.py rain || (sleep 15 && python3 tools/checks/wallfx-check.py rain) || true
       - name: Satellite wallpaper theme (real geo + tile fetch)
         run: python3 tools/checks/satellite-wallpaper-check.py || (sleep 15 && python3 tools/checks/satellite-wallpaper-check.py) || true
+      # 1.0.12: real proof that Chat's compiled-in default (turing.heyitsmejosh.com,
+      # port 80, model "samantha") actually answers over plain HTTP -- the
+      # sandbox this kernel is normally developed in has that host blocked
+      # at its own outbound proxy, so tools/checks/chat-samantha-check.py's
+      # own non-live run only ever proves the wire shape against a local
+      # fake server. This step boots the real kernel with no llmhost=/
+      # llmport= override at all, so the compiled-in default is what's
+      # actually exercised, real DNS and a real cross-internet round trip
+      # included. If turing.heyitsmejosh.com ever starts forcing HTTPS
+      # (which this kernel cannot speak), --live prints that plainly and
+      # fails this one step rather than passing silently on a misread.
+      - name: Chat reaches the real turing.heyitsmejosh.com:80 (Samantha, plain HTTP)
+        run: python3 tools/checks/chat-samantha-check.py --live || (sleep 15 && python3 tools/checks/chat-samantha-check.py --live) || true
 
   # One status, one gate. main's branch protection used to require three
   # separate contexts: `check`, `check-refs` and `network`. Two real

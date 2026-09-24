@@ -120,8 +120,122 @@ try {
   }
 }
 
+// 1.0.12: Chat's Samantha route (kernel/chat.h's chat_send -> Turing's own
+// /api/chat). Deliberately NOT part of ALLOWED_HOSTS/isAllowedTarget --
+// this is a separate, tight exception checked directly, since it is the
+// one and only route that ever forwards a guest-supplied method/body
+// anywhere.
+{
+  const realFetch = globalThis.fetch;
+  let fetchedUrl = null, fetchedInit = null;
+  globalThis.fetch = async (url, init) => { fetchedUrl = url; fetchedInit = init; return new Response(
+    JSON.stringify({ model: "samantha", message: { role: "assistant", content: "hi" }, done: true }),
+    { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    const target = "https://turing.heyitsmejosh.com/api/chat";
+    const body = JSON.stringify({ model: "samantha", stream: false, think: false, messages: [{ role: "user", content: "hello" }] });
+    const req = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+    const resp = await handleProxy(req);
+    check("Samantha POST forwarded to the real target URL", fetchedUrl === target);
+    check("Samantha POST forwarded with method POST (not downgraded to GET)", fetchedInit && fetchedInit.method === "POST");
+    check("Samantha POST forwarded with the real request body", fetchedInit && new TextDecoder().decode(fetchedInit.body) === body);
+    check("Samantha POST forwarded with a JSON content-type", fetchedInit && (fetchedInit.headers["Content-Type"] || fetchedInit.headers["content-type"]) === "application/json");
+    check("Samantha POST reply passed straight through, status 200", resp.status === 200);
+    check("Samantha POST reply carries Access-Control-Allow-Origin", resp.headers.get("access-control-allow-origin") === "*");
+    const replyBody = await resp.json();
+    check("Samantha POST reply body reached the guest unmodified", replyBody.message && replyBody.message.content === "hi");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+// A POST to any OTHER allowed host must still be downgraded to a bare GET
+// with no body -- the Samantha exception must not have loosened the
+// existing GET-only contract for every real target this kernel already
+// asks for (geo_fetch/weather_fetch/wall_fetch never POST, so there is
+// nothing legitimate this could ever forward).
+{
+  const realFetch = globalThis.fetch;
+  let fetchedInit = null;
+  globalThis.fetch = async (url, init) => { fetchedInit = init; return new Response("tile", { status: 200 }); };
+  try {
+    const target = "http://a.tile.opentopomap.org/14/1234/5678.png";
+    const req = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "should never be forwarded",
+    });
+    await handleProxy(req);
+    check("a POST to any other allowed host is still downgraded to GET", fetchedInit && fetchedInit.method === "GET");
+    check("...with no body forwarded", fetchedInit && fetchedInit.body === undefined);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+// An oversized body is refused before ever reaching fetch.
+{
+  const realFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = async () => { fetchCalled = true; return new Response("should never be reached"); };
+  try {
+    const target = "https://turing.heyitsmejosh.com/api/chat";
+    const oversized = "x".repeat(8193);
+    const req = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: oversized,
+    });
+    const resp = await handleProxy(req);
+    check("an oversized Samantha body is refused (413)", resp.status === 413);
+    check("an oversized body never reaches the real fetch call", !fetchCalled);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+// The Origin/host checks still hold: the exception is scoped to exactly
+// this host+path+method+content-type, nothing wider slipped in with it.
+{
+  const realFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = async () => { fetchCalled = true; return new Response("should never be reached"); };
+  try {
+    // A GET to the same host+path is not the exception (wrong method) and
+    // turing.heyitsmejosh.com is still not in ALLOWED_HOSTS, so it 403s
+    // exactly like any other unlisted host, same as before this pass.
+    const getReq = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://turing.heyitsmejosh.com/api/chat"));
+    const getResp = await handleProxy(getReq);
+    check("a bare GET to turing.heyitsmejosh.com/api/chat still 403s (not part of the allowlist)", getResp.status === 403);
+
+    // A POST to a different path on the same host is not the exception either.
+    const wrongPathReq = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://turing.heyitsmejosh.com/api/other"), {
+      method: "POST", headers: { "content-type": "application/json" }, body: "{}",
+    });
+    const wrongPathResp = await handleProxy(wrongPathReq);
+    check("a POST to a different path on turing.heyitsmejosh.com still 403s", wrongPathResp.status === 403);
+
+    // Wrong content-type on the real chat path is rejected, not silently forwarded.
+    const wrongTypeReq = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://turing.heyitsmejosh.com/api/chat"), {
+      method: "POST", headers: { "content-type": "text/plain" }, body: "{}",
+    });
+    const wrongTypeResp = await handleProxy(wrongTypeReq);
+    check("a non-JSON content-type on the Samantha route is rejected (415)", wrongTypeResp.status === 415);
+
+    check("none of the above reached the real fetch call", !fetchCalled);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the exception is narrow, checked separately)", !isAllowedTarget(new URL("https://turing.heyitsmejosh.com/api/chat")));
+
 if (failures > 0) {
   console.log(`FAIL: ${failures} check(s) failed`);
   process.exit(1);
 }
-console.log("PASS: /api/proxy allowlists exactly the real hosts this kernel uses, rejects everything else, and handles the success path correctly");
+console.log("PASS: /api/proxy allowlists exactly the real hosts this kernel uses, rejects everything else, handles the success path correctly, and forwards Samantha's POST /api/chat body only for that exact host/path/content-type/size");

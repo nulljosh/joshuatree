@@ -1054,24 +1054,38 @@ static char loc_err[48] = "";
    real default, survives a reboot" contract wind/dock/wall already keep.
    Was hardcoded inline in the shell `chat` command and duplicated again
    in gui_launch_chat (two copies of "llama3.1:8b" / "10.0.2.2" / 11434
-   that could silently drift apart); now one source of truth both read. */
+   that could silently drift apart); now one source of truth both read.
+   1.0.12 (direct owner request, "hook Chat up to our Samantha LLM, the
+   Turing project"): the compiled-in default is now the Turing project's
+   own Cloudflare Worker (turing.heyitsmejosh.com, plain HTTP port 80,
+   model "samantha"), reachable both natively (this file, straight over
+   the internet, no VPN/gateway address involved) and from the v86 browser
+   demo through worker.js's own `/api/proxy` exception for exactly this
+   host+path. Settings (sel == 3/4 below) stays fully editable, same as
+   before: anyone who'd rather run a local Ollama server on their own
+   machine just points host/port/model back at it. */
 #define LLM_MODEL_MAX 32
 #define LLM_HOST_MAX 40
-static char llm_model[LLM_MODEL_MAX] = "qwen3:8b";
-static char llm_host[LLM_HOST_MAX] = "10.0.2.2";
-static int llm_port = 11434;
+static char llm_model[LLM_MODEL_MAX] = "samantha";
+static char llm_host[LLM_HOST_MAX] = "turing.heyitsmejosh.com";
+static int llm_port = 80;
 /* v85: real chat models actually installed on the host (checked via
    `ollama list`), not a free-text field a typo can point at nothing.
    nomic-embed-text is also installed but is embedding-only, deliberately
    left off. Settings' LLM-model row cycles this list; a stale/hand-edited
-   SETTINGS.TXT with anything else falls back to index 0 (qwen3:8b) the
+   SETTINGS.TXT with anything else falls back to index 0 (samantha) the
    next time the cycle runs, since the cycle only ever writes one of
-   these two strings back out.
+   these three strings back out.
    v0.85.4 (direct owner request): qwen3:8b promoted to the real default,
    llama3.1:8b kept as the second choice, checked against the same
-   `ollama list` on the host, both actually installed. */
-static const char *LLM_MODELS[] = { "qwen3:8b", "llama3.1:8b" };
-#define LLM_MODEL_COUNT 2
+   `ollama list` on the host, both actually installed.
+   1.0.12 (direct owner request): "samantha" (Turing's own Ollama-
+   compatible model name, confirmed against its own `/api/chat` reply's
+   "model" field) added as the new default, index 0; qwen3:8b and
+   llama3.1:8b kept as the local-Ollama alternatives for anyone who sets
+   Settings' host back to their own machine. */
+static const char *LLM_MODELS[] = { "samantha", "qwen3:8b", "llama3.1:8b" };
+#define LLM_MODEL_COUNT 3
 
 /* v47 (0.47.0): settings persisted through the VFS, so "customize the OS
    from inside the OS" actually survives a reboot instead of resetting to
@@ -1163,7 +1177,7 @@ static void settings_load(void){
             int j = 0, k = eq + 1;
             while (k < line_end && j < LLM_HOST_MAX - 1) llm_host[j++] = buf[k++];
             llm_host[j] = 0;
-            if (j == 0) { const char *d = "10.0.2.2"; int p=0; while (d[p]) llm_host[p]=d[p], p++; llm_host[p]=0; }
+            if (j == 0) { const char *d = "turing.heyitsmejosh.com"; int p=0; while (d[p]) llm_host[p]=d[p], p++; llm_host[p]=0; }
             continue;
         }
         int val = 0, neg = 0, k = eq + 1;
@@ -5874,19 +5888,27 @@ static void gui_launch_settings(void){
                    isn't actually installed on the host, silently failing
                    every chat. Real fix, checked against `ollama list` on
                    this machine rather than guessed: a bounded cycle over
-                   the two real chat models actually installed
-                   (qwen3:8b, the real default as of v0.85.4; llama3.1:8b,
-                   the second choice). nomic-embed-text is on the host too
-                   but is an embedding-only model, not a chat model,
-                   deliberately left off this list, the same "don't offer
-                   what wouldn't work" call the wallpaper theme cycle
-                   already makes for its own four real options. A live
-                   /api/tags probe (Ollama's own model-list endpoint, same
-                   plain-HTTP shape chat_send already uses) would be the
-                   more general fix and is a real, scoped-out next step,
-                   not done here to keep this pass's actual shipped
-                   surface honest about what it covers. */
-                int cur = strcmp(llm_model, LLM_MODELS[0]) == 0 ? 0 : 1;
+                   real, known-working models, not free text.
+                   nomic-embed-text is on the host too but is an
+                   embedding-only model, not a chat model, deliberately
+                   left off this list, the same "don't offer what wouldn't
+                   work" call the wallpaper theme cycle already makes for
+                   its own four real options. A live /api/tags probe
+                   (Ollama's own model-list endpoint, same plain-HTTP shape
+                   chat_send already uses) would be the more general fix
+                   and is a real, scoped-out next step, not done here to
+                   keep this pass's actual shipped surface honest about
+                   what it covers.
+                   1.0.12: "samantha" (Turing's model, the new default) is
+                   now index 0 of LLM_MODELS; qwen3:8b/llama3.1:8b (the
+                   local-Ollama-on-the-host alternatives) fill the other
+                   two slots. `cur` is found by real lookup, not a
+                   two-way strcmp against index 0 -- the old shape assumed
+                   exactly two entries and silently treated anything past
+                   index 0 as "the other one," which broke the moment a
+                   third real model joined the list. */
+                int cur = 0;
+                for (int mi = 0; mi < LLM_MODEL_COUNT; mi++) if (!strcmp(llm_model, LLM_MODELS[mi])) { cur = mi; break; }
                 int dir = (k == 'a') ? -1 : 1;
                 int next = (cur + dir + LLM_MODEL_COUNT) % LLM_MODEL_COUNT;
                 int p = 0; const char *m = LLM_MODELS[next];
@@ -8951,26 +8973,40 @@ static void run(char *line){
     else if (!strcmp(line, "chat")) {
         /* v10: this kernel's own shell talking to an LLM. No TLS anywhere
            in this stack (a real, separate project on its own), so this
-           reaches a local Ollama server on the host machine over plain
-           HTTP via QEMU's gateway address, not the real Anthropic/OpenAI
-           APIs, which are HTTPS-only. Real design tradeoff, not a default
-           picked blind: building TLS from scratch to talk to a hosted API
-           is its own multi-session project; a local model over plain HTTP
-           is what "talking to it" can actually mean before that exists.
+           only ever speaks plain HTTP, not the real Anthropic/OpenAI APIs
+           (HTTPS-only). Real design tradeoff, not a default picked blind:
+           building TLS from scratch to talk to a hosted API is its own
+           multi-session project; an Ollama-compatible server over plain
+           HTTP is what "talking to it" can actually mean before that
+           exists.
 
            v85: switched to /api/chat with real VFS-backed history
            (chat_send, kernel/chat.h) instead of a fresh one-shot
            /api/generate prompt every time, so the shell `chat` command
            and the GUI Chat app share both the same conversation and the
            same settings-persisted model/host/port (llm_model/llm_host/
-           llm_port), not two independently hardcoded copies. */
+           llm_port), not two independently hardcoded copies.
+
+           1.0.12: the default host is now the Turing project's own
+           Cloudflare Worker over the real internet (turing.heyitsmejosh.com,
+           model "samantha"), not a local Ollama server reached over QEMU's
+           SLIRP gateway -- Settings can still point this back at a local
+           host, so the status line below names whatever host/model are
+           actually configured rather than assuming either. */
         if (!*arg) { puts("usage: chat <message>\n"); }
         else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
             puts("asking "); puts(llm_model); puts(" (");
-            puts(llm_host); puts(", local, on the host machine)...\n");
+            puts(llm_host); puts(")...\n");
             static char answer[4096]; /* real growth from the old 2048-byte cap */
-            if (!chat_send(arg, answer, sizeof(answer))) puts("FAIL (couldn't reach the LLM host, or no reply)\n");
+            /* 1.0.12: chat_error() names the specific reason (currently
+               just the HTTPS-redirect case) when chat_send knows one;
+               the generic message stands for every other failure. */
+            if (!chat_send(arg, answer, sizeof(answer))) {
+                const char *em = chat_error();
+                if (em[0]) { puts(em); putc('\n'); }
+                else puts("FAIL (couldn't reach the LLM host, or no reply)\n");
+            }
             else { puts(answer); putc('\n'); }
         }
     }
@@ -9480,6 +9516,16 @@ static void run(char *line){
 void kmain(unsigned int multiboot_info_addr){
     serial_init();
     serial_puts("=== kmain boot start === v" JT_VERSION_STR "\n");
+    /* 1.0.12: llmhost=/llmport= command-line overrides for llm_host/llm_port
+       (declared way below), parsed alongside wxhost= but applied AFTER
+       settings_load() runs (see its call site) so a stale/persisted
+       SETTINGS.TXT can never silently win over an override the boot
+       command line explicitly asked for -- the same problem wxhost=
+       never has to solve since it feeds a variable settings_load() never
+       touches. Empty/zero means "no override," the ordinary compiled-in
+       default or whatever Settings has saved stands. */
+    char llm_host_override[LLM_HOST_MAX] = "";
+    int llm_port_override = 0;
     /* Multiboot command line (flags bit 2, pointer at +16), read here while
        the bootloader's low memory is still identity-reachable. Only one
        option exists: wxhost=A.B.C.D[:PORT], see wx_override_host. */
@@ -9495,6 +9541,7 @@ void kmain(unsigned int multiboot_info_addr){
     }
     if (multiboot_info_addr && (*(unsigned int *)multiboot_info_addr & 0x4)) {
         const char *cl = (const char *)*(unsigned int *)(multiboot_info_addr + 16);
+        const char *cl0 = cl; /* the loop below mutates cl directly; llmhost=/llmport= (further down) need the untouched start */
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='p' && pc[1]=='o' && pc[2]=='r' && pc[3]=='t' && pc[4]=='f' && pc[5]=='o' && pc[6]=='l' && pc[7]=='i' && pc[8]=='o') { portfolio_dock = 1; serial_puts("portfolio dock\n"); break; }
         for (const char *pc = cl; pc && *pc; pc++)
@@ -9509,6 +9556,31 @@ void kmain(unsigned int multiboot_info_addr){
                 break;
             }
         }
+        /* 1.0.12: llmhost=HOST / llmport=PORT, the Chat equivalent of
+           wxhost= above -- for tools/checks/chat-samantha-check.py to point
+           chat_send at a local fake HTTP server instead of the real,
+           internet-facing Turing default, headlessly and without touching
+           SETTINGS.TXT. Unlike wxhost's dotted-quad-only host, this takes
+           any hostname byte up to the next space or end of string, the
+           same real hostnames (turing.heyitsmejosh.com) llm_host itself
+           already accepts, not just an IP literal. Applied to llm_host/
+           llm_port after settings_load() runs, not here -- see that call
+           site for why. */
+        for (const char *pc = cl0; pc && *pc; pc++)
+            if (pc[0]=='l' && pc[1]=='l' && pc[2]=='m' && pc[3]=='h' && pc[4]=='o' && pc[5]=='s' && pc[6]=='t' && pc[7]=='=') {
+                pc += 8; int hp = 0;
+                while (*pc && *pc != ' ' && hp < LLM_HOST_MAX - 1) llm_host_override[hp++] = *pc++;
+                llm_host_override[hp] = 0;
+                serial_puts("llmhostcli="); serial_puts(llm_host_override); serial_puts("\n");
+                break;
+            }
+        for (const char *pc = cl0; pc && *pc; pc++)
+            if (pc[0]=='l' && pc[1]=='l' && pc[2]=='m' && pc[3]=='p' && pc[4]=='o' && pc[5]=='r' && pc[6]=='t' && pc[7]=='=') {
+                pc += 8; unsigned int pt = 0;
+                while (*pc >= '0' && *pc <= '9') pt = pt * 10 + (unsigned int)(*pc++ - '0');
+                if (pt && pt < 65536) llm_port_override = (int)pt;
+                break;
+            }
     }
     vga_text_mode_init(); /* real hardware/QEMU already boot into text mode via their own BIOS; a BIOS-less multiboot path (v86) never sets it at all, so make it explicit rather than inherited */
     klog("vga_text_mode_init: text mode 3 programmed");
@@ -9576,6 +9648,17 @@ void kmain(unsigned int multiboot_info_addr){
         klog("vfs: no FAT disk (v86 has none to mount), switched default backend to ramfs with demo files");
     }
     settings_load(); /* v47: real settings, saved defaults if SETTINGS.TXT doesn't exist yet */
+    /* 1.0.12: apply llmhost=/llmport= AFTER settings_load(), not before --
+       a boot-time command-line override has to win over whatever a real
+       persisted SETTINGS.TXT says, the same way wxhost= always wins for
+       weather because it feeds a variable settings_load() never touches
+       at all. llm_host/llm_port ARE settings_load()'s own variables, so
+       applying this any earlier would just get silently overwritten by a
+       real settings file the moment one exists. Deliberately never
+       settings_save()'d: this is a one-boot test override, not a change
+       to what Settings remembers. */
+    if (llm_host_override[0]) { int p = 0; while (llm_host_override[p] && p < LLM_HOST_MAX - 1) { llm_host[p] = llm_host_override[p]; p++; } llm_host[p] = 0; }
+    if (llm_port_override) llm_port = llm_port_override;
     clear();
     boot_chime();
     puts("joshuatree v0 -- type help\n");
