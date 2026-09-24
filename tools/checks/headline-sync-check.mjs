@@ -1,3 +1,4 @@
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // Direct request: the H1 should say what the demo is actually showing.
 //
 // It did not. updateHeadline(app.name) fired at the TOP of runSoloApp and

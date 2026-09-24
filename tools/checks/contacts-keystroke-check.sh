@@ -1,4 +1,5 @@
 #!/bin/bash
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 # v0.76.23: Contacts app keystroke redraw fix.
 # v0.76.10 fixed this same bug in Notes (editor.h): redraws the entire screen
 # on every keystroke even though only the typed text changes. This was carried

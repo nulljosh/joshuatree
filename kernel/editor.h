@@ -156,6 +156,19 @@ static int editor_save(void) {
     return 1;
 }
 
+/* v1.0.6: no selection model exists yet (see docs/roadmap.md), so Ctrl+C/X
+   act on "the current line" -- the run of editor_buffer between the
+   newlines either side of editor_position, same contract the single-line
+   fields (gui_prompt_line_input, Terminal) use for their one line. */
+static int editor_line_start(int pos) {
+    while (pos > 0 && editor_buffer[pos - 1] != '\n') pos--;
+    return pos;
+}
+static int editor_line_end(int pos) {
+    while (pos < editor_length && editor_buffer[pos] != '\n') pos++;
+    return pos;
+}
+
 static void editor_vertical(int direction) {
     int start = editor_position;
     while (start > 0 && editor_buffer[start - 1] != '\n') start--;
@@ -262,6 +275,32 @@ static void gui_launch_editor(void) {
                 else if (code == 0x3C) editor_size = (editor_size + 1) % 4;
                 else if (code == 0x3D) editor_weight ^= 1;
                 else if (control && code == 0x1F) save = 1;
+                else if (control && (code == 0x2E || code == 0x2D)) {
+                    /* Ctrl+C / Ctrl+X: copy (or cut) the current line. */
+                    int ls = editor_line_start(editor_position), le = editor_line_end(editor_position);
+                    clipboard_set(&editor_buffer[ls], (unsigned int)(le - ls));
+                    if (code == 0x2D) {
+                        for (int index = ls; index <= editor_length - (le - ls); index++)
+                            editor_buffer[index] = editor_buffer[index + (le - ls)];
+                        editor_length -= (le - ls); editor_position = ls; editor_dirty = 1;
+                    }
+                }
+                else if (control && code == 0x2F) {
+                    /* Ctrl+V: paste at the cursor, truncated cleanly at the
+                       4095-byte buffer limit -- never overflows
+                       editor_buffer, same bound plain typing enforces
+                       below. */
+                    unsigned int room = (unsigned int)sizeof(editor_buffer) - 1 - (unsigned int)editor_length;
+                    unsigned int take = clipboard_len < room ? clipboard_len : room;
+                    if (take) {
+                        for (int index = editor_length + (int)take - 1; index >= editor_position + (int)take; index--)
+                            editor_buffer[index] = editor_buffer[index - (int)take];
+                        for (unsigned int i = 0; i < take; i++) editor_buffer[editor_position + (int)i] = clipboard_buf[i];
+                        clip_serial_dump("CLIPPASTE:", &editor_buffer[editor_position], take);
+                        if (take < clipboard_len) { serial_puts("CLIPTRUNC\n"); editor_status = "Pasted; rest didn't fit the 4095-byte limit."; }
+                        editor_position += (int)take; editor_length += (int)take; editor_dirty = 1;
+                    }
+                }
                 else if (extended) {
                     if (code == 0x4B && editor_position > 0) editor_position--;
                     if (code == 0x4D && editor_position < editor_length) editor_position++;

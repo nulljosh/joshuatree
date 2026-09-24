@@ -293,6 +293,58 @@ static int gui_getch_or_click(void){
 #define KEY_CLICK 260
 #define KEY_WHEEL_UP 300
 #define KEY_WHEEL_DOWN 301
+/* v1.0.6: one system-wide clipboard. Every text field that reads through
+   get_key/get_key_or_click gets Ctrl+C/X/V for free instead of each app
+   decoding scancodes itself: kbd_ctrl (irq.c) plus the plain character scan
+   codes for C/X/V (0x2E/0x2D/0x2F) turn into these three synthetic keys.
+   editor.h reads raw scancodes below get_key, not through it, so it tests
+   kbd_ctrl and the same three scancodes directly. One 4KB buffer plus its
+   length is the whole clipboard; every consumer copies at most
+   CLIPBOARD_CAP bytes in and truncates a paste at its own field's max
+   length, so nothing here can overflow a caller's buffer. */
+#define KEY_COPY  302
+#define KEY_CUT   303
+#define KEY_PASTE 304
+#define CLIPBOARD_CAP 4096
+static char clipboard_buf[CLIPBOARD_CAP];
+static unsigned int clipboard_len = 0;
+/* "cliptrace" on the multiboot command line (tools/checks/clipboard-check.py
+   passes it) adds a content hash to the CLIPCOPY/CLIPPASTE serial lines so
+   a check can prove which text moved. A normal boot logs the length only:
+   the serial log is host-readable (v86 exposes it as window.__jt.serial)
+   and an unkeyed 32-bit hash of a short pasted password is dictionary-
+   recoverable. */
+static int clip_trace = 0;
+/* Serial markers, same convention "editorchrome"/"termchrome" already use:
+   a discriminating line a headless check can grep out of the serial log,
+   here proving exactly what text the clipboard held or a paste actually
+   inserted (not just that some copy/paste code path ran). Bounded to a
+   small scratch buffer -- plenty for what any check types -- because
+   serial_puts needs a null terminator and neither clipboard_buf nor an
+   app's own text buffer is guaranteed to have one at an arbitrary slice. */
+static void clip_serial_dump(const char *tag, const char *s, unsigned int n) {
+    /* length, plus an FNV-1a hash only under cliptrace (see clip_trace);
+       never the text: the clipboard can hold a pasted password and the
+       serial log is readable by anyone at the host */
+    char out[24]; int k = 0; char d[10]; int dn = 0; unsigned int v = n;
+    do { d[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
+    while (dn) out[k++] = d[--dn];
+    if (clip_trace) {
+        unsigned int h = 2166136261u;
+        for (unsigned int i = 0; i < n; i++) { h ^= (unsigned char)s[i]; h *= 16777619u; }
+        out[k++] = ':';
+        for (int sh = 28; sh >= 0; sh -= 4) out[k++] = "0123456789abcdef"[(h >> sh) & 15];
+    }
+    out[k++] = '\n'; out[k] = 0;
+    serial_puts(tag);
+    serial_puts(out);
+}
+static void clipboard_set(const char *s, unsigned int n) {
+    if (n > CLIPBOARD_CAP) n = CLIPBOARD_CAP;
+    for (unsigned int i = 0; i < n; i++) clipboard_buf[i] = s[i];
+    clipboard_len = n;
+    clip_serial_dump("CLIPCOPY:", clipboard_buf, clipboard_len);
+}
 static int get_key_or_click(void);
 
 static int get_key(void){
@@ -309,6 +361,12 @@ static int get_key(void){
             continue; /* other extended keys: ignore */
         }
         if (sc & 0x80) continue;
+        if (kbd_ctrl) {
+            int code = sc & 0x7F;
+            if (code == 0x2E) return KEY_COPY;
+            if (code == 0x2D) return KEY_CUT;
+            if (code == 0x2F) return KEY_PASTE;
+        }
         char c = kbd_map(sc);
         if (c == '\n') return KEY_ENTER;
         if (c == 27)   return KEY_ESC;
@@ -332,8 +390,14 @@ static int get_key_or_click_until(unsigned int deadline){
                 continue;
             }
             if (!(sc & 0x80)) {
-                char c = kbd_map(sc);
                 gui_close_was_click = 0;
+                if (kbd_ctrl) {
+                    int code = sc & 0x7F;
+                    if (code == 0x2E) return KEY_COPY;
+                    if (code == 0x2D) return KEY_CUT;
+                    if (code == 0x2F) return KEY_PASTE;
+                }
+                char c = kbd_map(sc);
                 if (c == '\n') return KEY_ENTER;
                 if (c == 27)   return KEY_ESC;
                 if (c) return c;
@@ -970,6 +1034,22 @@ static int dock_scale_pct = 7;
 static int wall_theme = WALL_SAT;
 static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
 
+/* v71: real location for weather/map, looked up from the public IP
+   (ip-api.com, see geo_fetch further down). Forward of that same v71
+   declaration, same reason wind_enabled is forward here: settings_load
+   needs it and has to precede it in the file.
+   v0.85.5: loc_* is the Settings-entered override (see loc_geocode
+   further down) that settings_load copies straight into these three
+   fields plus geo_have, so weather_fetch_inner and the map wallpaper
+   fetch pick it up through the exact same path as the IP lookup, no
+   separate "which source" branch anywhere downstream. */
+static char geo_lat[16] = "", geo_lon[16] = "", geo_city[24] = "";
+static int geo_have = 0;
+#define LOC_NAME_MAX 24
+static char loc_name[LOC_NAME_MAX] = "", loc_lat[16] = "", loc_lon[16] = "";
+static int loc_have = 0;
+static char loc_err[48] = "";
+
 /* v85 (chat rework): global LLM config, the same "one real setting, one
    real default, survives a reboot" contract wind/dock/wall already keep.
    Was hardcoded inline in the shell `chat` command and duplicated again
@@ -1027,6 +1107,40 @@ static void settings_load(void){
         int is_llmmodel = keylen == 8 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='m' && buf[start+4]=='o' && buf[start+5]=='d' && buf[start+6]=='e' && buf[start+7]=='l';
         int is_llmhost  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='h' && buf[start+4]=='o' && buf[start+5]=='s' && buf[start+6]=='t';
         int is_llmport  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='p' && buf[start+4]=='o' && buf[start+5]=='r' && buf[start+6]=='t';
+        int is_loc = keylen == 3 && buf[start]=='l' && buf[start+1]=='o' && buf[start+2]=='c';
+        if (is_loc) {
+            /* value shape: name;lat;lon -- the same three fields
+               loc_geocode fills in, ';'-joined since '=' is already the
+               key/value separator and none of the three ever contain a
+               ';' (json_extract_string strips escapes, json_extract_number_text
+               is digits/./- only). A malformed line (missing a ';', an
+               empty lat/lon) is treated as "no override" rather than
+               guessed at. */
+            int k = eq + 1;
+            int f = 0; /* which field: 0=name 1=lat 2=lon */
+            char nbuf[LOC_NAME_MAX]; int ni = 0;
+            char latbuf[16]; int lai = 0;
+            char lonbuf[16]; int loi = 0;
+            while (k < line_end) {
+                char c = buf[k++];
+                if (c == ';') { f++; continue; }
+                if (f == 0 && ni < LOC_NAME_MAX - 1) nbuf[ni++] = c;
+                else if (f == 1 && lai < 15) latbuf[lai++] = c;
+                else if (f == 2 && loi < 15) lonbuf[loi++] = c;
+            }
+            nbuf[ni] = 0; latbuf[lai] = 0; lonbuf[loi] = 0;
+            if (f == 2 && lai > 0 && loi > 0) {
+                int j = 0; while (nbuf[j]) { loc_name[j] = nbuf[j]; j++; } loc_name[j] = 0;
+                j = 0; while (latbuf[j]) { loc_lat[j] = latbuf[j]; j++; } loc_lat[j] = 0;
+                j = 0; while (lonbuf[j]) { loc_lon[j] = lonbuf[j]; j++; } loc_lon[j] = 0;
+                loc_have = 1;
+                j = 0; while (loc_lat[j]) { geo_lat[j] = loc_lat[j]; j++; } geo_lat[j] = 0;
+                j = 0; while (loc_lon[j]) { geo_lon[j] = loc_lon[j]; j++; } geo_lon[j] = 0;
+                j = 0; while (loc_name[j] && j < 23) { geo_city[j] = loc_name[j]; j++; } geo_city[j] = 0;
+                geo_have = 1;
+            }
+            continue;
+        }
         if (is_llmmodel) {
             char parsed[LLM_MODEL_MAX];
             int j = 0, k = eq + 1;
@@ -1064,7 +1178,7 @@ static void settings_load(void){
 }
 
 static void settings_save(void){
-    char buf[256];
+    char buf[320];
     int n = 0;
     const char *k1 = "wind="; while (*k1) buf[n++] = *k1++;
     buf[n++] = wind_enabled ? '1' : '0'; buf[n++] = '\n';
@@ -1086,6 +1200,15 @@ static void settings_save(void){
       while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
       while (nd) buf[n++] = digits[--nd]; }
     buf[n++] = '\n';
+    if (loc_have) {
+        const char *k7 = "loc="; while (*k7) buf[n++] = *k7++;
+        { const char *s = loc_name; while (*s && n < (int)sizeof(buf) - 34) buf[n++] = *s++; }
+        buf[n++] = ';';
+        { const char *s = loc_lat; while (*s && n < (int)sizeof(buf) - 18) buf[n++] = *s++; }
+        buf[n++] = ';';
+        { const char *s = loc_lon; while (*s && n < (int)sizeof(buf) - 2) buf[n++] = *s++; }
+        buf[n++] = '\n';
+    }
     vfs_replace_file(SETTINGS_FILE, buf, (unsigned int)n);
 }
 
@@ -2529,9 +2652,66 @@ static int json_current_number(const char *json, const char *key, int *out_x10){
    the same "nothing fabricated" contract v56/v60/v65 already hold to for
    a NIC-less boot. Both values are mirrored to serial (`geo=`/`wxurl=`)
    so tools/geo-check.sh can prove headlessly, against the host's own
-   ip-api answer, that the URL really carries the dynamic location. */
-static char geo_lat[16] = "", geo_lon[16] = "", geo_city[24] = "";
-static int geo_have = 0;
+   ip-api answer, that the URL really carries the dynamic location.
+   (geo_lat/geo_lon/geo_city/geo_have and the loc_* Settings-location
+   override are declared earlier, alongside wind_enabled, since
+   settings_load needs them and settings_load has to come before this
+   point in the file.) */
+/* Open-Meteo's own geocoding endpoint (the same house the weather forecast
+   already comes from), through the exact http_get_timeout/wx_override_host
+   plumbing geo_fetch and weather_fetch_inner already use -- one more host
+   name, same request shape, nothing new. `query` is bounded the same way
+   every other Settings text field is (settings_prompt_line's max param);
+   spaces are percent-encoded since a city name is likely to have one.
+   No result, a bad reply, or no network all fail cleanly with loc_err set
+   and loc_have/geo_have untouched -- never a fabricated coordinate, never
+   a panic. */
+static int loc_geocode(const char *query){
+    loc_err[0] = 0;
+    if (!query[0]) { const char *m = "empty"; int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0; return 0; }
+    if (!net_init(0x0A00020F)) { const char *m = "no network card"; int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0; return 0; }
+    static char path[112];
+    int p = 0; const char *s;
+    for (s = "/v1/search?name="; *s; s++) path[p++] = *s;
+    for (const char *c = query; *c && p < 96; c++) {
+        unsigned char ch = (unsigned char)*c; /* percent-encode all but [A-Za-z0-9] so '&', '#', '%' can't reshape the query */
+        if ((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) path[p++] = (char)ch;
+        else { path[p++]='%'; path[p++]="0123456789ABCDEF"[ch >> 4]; path[p++]="0123456789ABCDEF"[ch & 15]; }
+    }
+    for (s = "&count=1"; *s; s++) path[p++] = *s;
+    path[p] = 0;
+    static char body[1024];
+    int n = wx_override_host[0] ? http_get_timeout(wx_override_host, path, wx_override_port, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS)
+                                 : http_get_timeout("geocoding-api.open-meteo.com", path, 80, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS);
+    if (n <= 0 || http_last_status() != 200) {
+        int e = net_last_error();
+        const char *m = (n < 0 || e == NET_ERR_REPLY_TIMEOUT || e == NET_ERR_ARP_TIMEOUT || e == NET_ERR_DNS_TIMEOUT || e == NET_ERR_CONNECT_TIMEOUT) ? "network unreachable" : "geocoding request failed";
+        int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0;
+        return 0;
+    }
+    body[n] = 0;
+    char lat[16], lon[16], name[LOC_NAME_MAX];
+    if (!json_extract_number_text(body, "latitude", lat, sizeof(lat)) ||
+        !json_extract_number_text(body, "longitude", lon, sizeof(lon))) {
+        const char *m = "location not found"; int i=0; while (m[i]) { loc_err[i]=m[i]; i++; } loc_err[i]=0;
+        return 0;
+    }
+    if (!json_extract_string(body, "name", name, sizeof(name))) name[0] = 0;
+    int i;
+    for (i = 0; lat[i]; i++) loc_lat[i] = lat[i]; loc_lat[i] = 0;
+    for (i = 0; lon[i]; i++) loc_lon[i] = lon[i]; loc_lon[i] = 0;
+    for (i = 0; name[i] && i < LOC_NAME_MAX - 1; i++) loc_name[i] = name[i]; loc_name[i] = 0;
+    loc_have = 1;
+    /* Same fields weather_fetch_inner/wall_fetch already read -- setting
+       these here means neither one needs to know a manual override even
+       exists. */
+    for (i = 0; loc_lat[i]; i++) geo_lat[i] = loc_lat[i]; geo_lat[i] = 0;
+    for (i = 0; loc_lon[i]; i++) geo_lon[i] = loc_lon[i]; geo_lon[i] = 0;
+    for (i = 0; loc_name[i] && i < 23; i++) geo_city[i] = loc_name[i]; geo_city[i] = 0;
+    geo_have = 1;
+    serial_puts("locgeo="); serial_puts(loc_lat); serial_puts(","); serial_puts(loc_lon); serial_puts(" name="); serial_puts(loc_name); serial_puts("\n");
+    return 1;
+}
 /* Turns the net/http layer's last failure into a window state plus a short
    human detail. `what` names the request ("location" / "forecast"). */
 static void weather_set_error(int st, const char *what, const char *detail){
@@ -3854,6 +4034,14 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     return out;
 }
 
+/* Forward-declared: the real body lives past wx_text/wx_text_lw's own
+   definitions further down this file (Calendar's date overlay is drawn
+   with the same physical-resolution DejaVu text the Weather window
+   uses), but gui_draw_one_icon_on itself needs to call it from up here,
+   at every one of its draw sites (dock, dock-magnified, Apps-folder
+   grid, drag preview all funnel through this one function). */
+static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size);
+
 static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int size, unsigned int under){
     int x = cx_center - size / 2, y = cy_bottom - size;
     int slot = (size == DOCK_ICON) ? 0 : 1;
@@ -3865,6 +4053,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
             for (int px = 0; px < pw; px++)
                 if (tile[py * pw + px] != under)
                     window_pixel_phys(x * (int)sc + px, y * (int)sc + py, tile[py * pw + px]);
+        if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
         return;
     }
     /* out of memory for the cache: draw directly, un-supersampled, rather than draw nothing */
@@ -3873,6 +4062,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
     gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, under, size * 22 / 100);
     gui_draw_gloss(x, y, size, size, bg, size * 22 / 100 + 1);
     gui_draw_icon_glyph(icon, cx_center, y + size / 2, size, bg);
+    if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
 }
 static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){ gui_draw_one_icon_on(icon, cx_center, cy_bottom, size, DOCK_TRAY_COLOR); }
 
@@ -4180,6 +4370,32 @@ static void gui_draw_cursor(int x, int y){
         unsigned int bl = ((bg & 0xFF) * keep + 255 * w) / 16;
         window_pixel_phys(x * sc + i, y * sc + j, (r << 16) | (g << 8) | bl);
     }
+}
+
+/* v0.89.x: gui_calendar_draw_date (above, near gui_draw_one_icon_on)
+   draws the real date fresh on every call, so the Calendar tile is never
+   stale on any redraw that actually happens -- but the dock is
+   event-driven (gui_redraw_dock_band/gui_draw_dock only ever run off a
+   hover, drag or menu change, see gui_run's cursor_only/dock_only/
+   menu_only split below), not painted every loop tick the way
+   gui_draw_menubar now is. An idle desktop, cursor parked outside the
+   dock all night, would sit with yesterday's day number on screen until
+   the next real mouse event. Same fix shape as v0.76.17's own menu-bar
+   staleness (this file's gui_menubar_last_min): a cheap once-a-loop CMOS
+   check, self-gated on a real day change, called from the exact spot
+   gui_run already reads the clock unconditionally every iteration. */
+static int gui_calendar_last_dom = -1;
+static void gui_calendar_check_rollover(int hover_slot, int drag_slot, int mx, int my){
+    u8 h, m, wd, dom, mon;
+    cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
+    int domv = (dom & 0x0F) + ((dom >> 4) * 10);
+    if (gui_calendar_last_dom < 0) { gui_calendar_last_dom = domv; return; } /* first call: seed, no false redraw at boot */
+    if (domv == gui_calendar_last_dom) return;
+    gui_calendar_last_dom = domv;
+    gui_cursor_restore();
+    gui_draw_dock(hover_slot, drag_slot, mx, my);
+    gui_cursor_save(mx, my);
+    gui_draw_cursor(mx, my);
 }
 
 /* App viewers have their own input loops. Keep the pointer alive while one
@@ -4655,6 +4871,62 @@ static int wx_text_lw(const char *s, int size, int bold, int mul){ int sc = (int
 static void wx_text_center(const char *s, int cx, int ly, int size, int bold, unsigned int fg){ wx_text(s, cx - wx_text_lw(s, size, bold, 1) / 2, ly, size, bold, 1, fg); }
 static void wx_text_right(const char *s, int rx, int ly, int size, int bold, unsigned int fg){ wx_text(s, rx - wx_text_lw(s, size, bold, 1), ly, size, bold, 1, fg); }
 
+/* v0.89.x: the Calendar dock/Apps-folder tile shows the real current date,
+   macOS style, instead of a fixed baked-in "SEP 17" (that art still
+   exists at art/icons/calendar.svg, but restyle_icons.py's design table
+   now leaves the tile's glyph body empty: a real date can't be baked into
+   a rasterized PNG, tools/gen/gen_icon_art.py's whole point). Drawn here
+   as an overlay on top of the plain white tile gui_draw_one_icon_on just
+   blitted, at physical resolution with the same wx_text/text_ink glyph
+   path the Weather window uses, so it is drawn fresh every call rather
+   than baked into gui_render_icon_cached's cache -- the cache key has no
+   room for "today's date" and does not need one this way, and it means
+   this never goes stale as long as *something* redraws the icon.
+   cmos_read_time_stable, not calendar.h's own cal_read_today: this must
+   never show a different day than the menu bar clock does, and that
+   clock already reads month/day through this exact stable-against-RTC-
+   update-in-progress function (see its own comment above), not
+   calendar.h's plainer wait-once read. Sharing the function, not just the
+   register numbers, is what makes "the icon and the clock never
+   disagree" true by construction instead of by coincidence. */
+static const char *GUI_CAL_MON3[12] = {"JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"};
+static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
+    int y = cy_bottom - size;
+    u8 h, m, wd, dom, mon;
+    cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
+    int domv = (dom & 0x0F) + ((dom >> 4) * 10);
+    int monv = (mon & 0x0F) + ((mon >> 4) * 10);
+    if (monv < 1 || monv > 12) monv = 1;
+    if (domv < 1 || domv > 31) domv = 1;
+    char daybuf[3]; int n = 0;
+    if (domv >= 10) daybuf[n++] = (char)('0' + domv / 10);
+    daybuf[n++] = (char)('0' + domv % 10);
+    daybuf[n] = 0;
+    /* One fixed physical size for both faces, not scaled with the tile:
+       tried scaling month/day up together with the Apps-folder grid's
+       bigger (120-physical-at-2x, vs. the dock's 74) tile first (2x/3x
+       mul there), and a real headless crop showed the day numeral's cap
+       height then reaching past the month label's own baseline -- the
+       two texts' vertical gap was a fraction of `size`, but each face's
+       glyph height was a multiple of a fixed 16/20/24/28px table, so the
+       two didn't grow at the same rate and the larger tile closed the
+       gap between them instead of widening it. Keeping both at the one
+       size that was measured clean on the dock (real 4x crop, see the
+       commit this landed in) means the Apps-folder tile's text sits a
+       little smaller relative to its own tile than the dock's does, the
+       same trade the authored artwork itself already makes everywhere
+       else (one 148px source raster area-averaged down, never redrawn
+       per size) rather than a second layout to get right and keep right. */
+    int mul_m = 1, mul_d = 2;
+    const char *mon3 = GUI_CAL_MON3[monv - 1];
+    int ly_m = y + size * 13 / 100;
+    int ly_d = y + size * 38 / 100;
+    int lwm = wx_text_lw(mon3, 2, 1, mul_m);
+    wx_text(mon3, cx_center - lwm / 2, ly_m, 2, 1, mul_m, 0x00FF3B30);
+    int lwd = wx_text_lw(daybuf, 2, 1, mul_d);
+    wx_text(daybuf, cx_center - lwd / 2, ly_d, 2, 1, mul_d, 0x001F1F22);
+}
+
 /* Flat rounded card: four anti-aliased corner discs plus two rects. */
 static void wx_card(int x, int y, int w, int h, int r, unsigned int color, unsigned int bg){
     gui_fill_circle(x + r, y + r, r, color, bg); gui_fill_circle(x + w - r - 1, y + r, r, color, bg);
@@ -5095,6 +5367,23 @@ static void gui_launch_terminal(void){
             continue;
         }
         if (k == '\b') { if (input_len) input_len--; }
+        /* Same "one line, no selection" contract as gui_prompt_line_input:
+           Ctrl+C/X act on the whole current input line, Ctrl+V pastes at
+           the end and stops at TERM_COLS - 1, the same bound plain typing
+           already respects. */
+        else if (k == KEY_COPY || k == KEY_CUT) {
+            clipboard_set(input, input_len);
+            if (k == KEY_CUT) input_len = 0;
+        }
+        else if (k == KEY_PASTE) {
+            unsigned int before = input_len, inserted = 0;
+            for (unsigned int i = 0; i < clipboard_len && input_len < TERM_COLS - 1; i++) {
+                char pc = clipboard_buf[i];
+                if (pc >= 32 && pc < 127) { input[input_len++] = pc; inserted++; }
+            }
+            clip_serial_dump("CLIPPASTE:", &input[before], inserted);
+            if (inserted < clipboard_len) serial_puts("CLIPTRUNC\n");
+        }
         else if (k >= 32 && k < 127 && input_len < TERM_COLS - 1) input[input_len++] = (char)k;
         else continue;
         term_render(input, input_len);
@@ -5416,8 +5705,8 @@ static int settings_prompt_line(const char *prompt, char *out, int max, int mask
     return 1;
 }
 
-#define SETTINGS_ROW_COUNT 7 /* v75: + wallpaper source; v85: + LLM model, + LLM host:port; v0.77: + Account (change password), + Add user */
-static const int SETTINGS_ROWS_Y[SETTINGS_ROW_COUNT] = {84, 116, 148, 180, 212, 252, 284};
+#define SETTINGS_ROW_COUNT 8 /* v75: + wallpaper source; v85: + LLM model, + LLM host:port; v0.77: + Account (change password), + Add user; v0.85.5: + Location */
+static const int SETTINGS_ROWS_Y[SETTINGS_ROW_COUNT] = {84, 116, 148, 180, 212, 252, 284, 316};
 
 /* Pure, hardware/GUI-free: given a real click's full-screen logical
    coordinates and the window's current width, returns which Settings row
@@ -5495,9 +5784,16 @@ static void gui_launch_settings(void){
                    dot-echo loop for one row). */
                 font_draw_string("Account", 28, y, 0x001C1C1E, -1);
                 font_draw_string(auth_current_user[0] ? auth_current_user : "(none)", 400, y, 0x001C1C1E, -1);
-            } else {
+            } else if (i == 6) {
                 font_draw_string("Add user (new account)", 28, y, 0x001C1C1E, -1);
                 font_draw_string("tap or enter", 400, y, 0x00807468, -1);
+            } else {
+                /* v0.85.5: the Location field roadmap.md asked for. Empty
+                   means "no override", the same honest-label convention
+                   Wallpaper's own row just above already uses: say what's
+                   actually in effect, not what was typed. */
+                font_draw_string("Location", 28, y, 0x001C1C1E, -1);
+                font_draw_string(loc_have ? loc_name : "(auto, from IP address)", 400, y, loc_have ? 0x002F7B4F : 0x00807468, -1);
             }
         }
         font_draw_string("Settings are saved to disk and survive a reboot.", 20, (int)window_height() - 28, 0x00807468, -1);
@@ -5666,7 +5962,57 @@ static void gui_launch_settings(void){
                     memset(pbuf, 0, sizeof(pbuf));
                 }
             }
-            else if (sel != 5 && sel != 6) {
+            else if (sel == 7 && k != 'a' && k != 'd') {
+                /* v0.85.5: Location, city or postal code, resolved through
+                   Open-Meteo's own geocoding endpoint (loc_geocode above),
+                   the same house the forecast itself already comes from.
+                   Bounded the same way every other free-text Settings row
+                   is: settings_prompt_line's max param (LOC_NAME_MAX,
+                   matching geo_city's own bound). Empty input clears the
+                   override and goes back to the IP lookup; a bad or
+                   unknown location shows loc_geocode's own short error and
+                   never panics or writes a fabricated coordinate. */
+                char lbuf[LOC_NAME_MAX]; int li = 0; while (loc_name[li] && li < LOC_NAME_MAX - 1) { lbuf[li] = loc_name[li]; li++; } lbuf[li] = 0;
+                if (settings_prompt_line("Location (city or postal code, enter to confirm, esc to cancel):", lbuf, sizeof(lbuf), 0)) {
+                    if (!lbuf[0]) {
+                        loc_have = 0; loc_name[0] = 0; loc_lat[0] = 0; loc_lon[0] = 0;
+                        geo_have = 0; geo_lat[0] = 0; geo_lon[0] = 0; geo_city[0] = 0;
+                        settings_save();
+                        /* Same cache drop as the set path below: the old
+                           override's weather and map must not outlive it. */
+                        weather_tried_once = 0; weather_have = 0;
+                        if (wall_map) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
+                        wall_apply(wall_theme != WALL_PHOTO);
+                        font_draw_string("Location cleared (using your IP address instead).", 20, (int)window_height() - 48, 0x00807468, -1);
+                    } else if (loc_geocode(lbuf)) {
+                        settings_save();
+                        /* Drop whatever weather/map already have cached so
+                           the desktop loop's own ten-minute cycle (the
+                           same one that would normally re-check the IP
+                           lookup) picks up the new coordinates on its very
+                           next tick instead of waiting out the old cache,
+                           through the exact same weather_fetch/wall_fetch
+                           paths it already runs, nothing called directly
+                           from here. */
+                        weather_tried_once = 0; weather_have = 0;
+                        if (wall_map) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
+                        /* wall_src still pointed at the buffer just freed;
+                           wall_apply repoints it (baked satellite or the
+                           photo) until the refetch lands, the same way
+                           wall_switch_theme is always followed by one. */
+                        wall_apply(wall_theme != WALL_PHOTO);
+                        char msg[48] = "Location set: "; int mp = 14; /* strlen("Location set: ") */
+                        for (const char *c = loc_name; *c && mp < 47; c++) msg[mp++] = *c;
+                        msg[mp] = 0;
+                        font_draw_string(msg, 20, (int)window_height() - 48, 0x002F7B4F, -1);
+                    } else {
+                        font_draw_string(loc_err[0] ? loc_err : "Couldn't find that location.", 20, (int)window_height() - 48, 0x00A33B3B, -1);
+                    }
+                    window_present();
+                    sleep_ticks(60);
+                }
+            }
+            else if (sel != 5 && sel != 6 && sel != 7) {
                 int dir = (k == 'a') ? -1 : 1; /* a tap always steps up; a real direction only from the keyboard */
                 if (k == KEY_CLICK) dir = 1;
                 int v = dock_scale_pct + dir;
@@ -6572,6 +6918,11 @@ static void gui_run(void){
             gui_draw_menubar();
             if (gui_menubar_last_min != min_before && my < GUI_MENUBAR_H) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
         }
+        /* v0.89.x: same "call it unconditionally every idle iteration,
+           let it self-gate" shape as the minute check just above, for the
+           Calendar dock tile's day number (see gui_calendar_check_rollover's
+           own comment). */
+        gui_calendar_check_rollover(dock_hover, drag_slot, mx, my);
         /* v43: weather, after the desktop is already on screen so the
            fetch never delays the first frame, then every ten minutes. */
         if (!weather_tried_once || ticks() - weather_last_tick > 100 * 600) {
@@ -7770,6 +8121,51 @@ static void run(char *line){
         puts(ok_reject ? "geo: string value and missing key both rejected: ok\n" : "geo reject: FAILED\n");
         puts(ok_city ? "geo city: ok\n" : "geo city: FAILED\n");
         if (!(ok_lat && ok_lon)) { puts("  lat="); puts(lat); puts(" lon="); puts(lon); puts("\n"); }
+    }
+    else if (!strcmp(line, "loctest")) {
+        /* v0.85.5: Settings Location, headless and deterministic --
+           tools/checks/location-check.py boots this against a local fake
+           geocoding-api.open-meteo.com server (same wxhost= override
+           weather-app-check.sh's mock already uses for ip-api/Open-Meteo),
+           never real internet, so this never flakes on CI's own network.
+           Three real things proven: one, a real geocode through
+           loc_geocode lands in the loc and geo globals exactly the way a
+           Settings save would; two, settings_save and settings_load
+           round-trip it through SETTINGS.TXT, the same file wind/dock/wall
+           already prove elsewhere, simulating a reboot the same way the
+           shell's own mail round trip test above simulates one for
+           MAIL.TXT; three, an unresolvable query fails cleanly (loc_err
+           set, nothing overwritten, no crash) rather than fabricating a
+           coordinate. */
+        serial_puts("loctest start\n");
+        char save_name[LOC_NAME_MAX]; int si=0; while (loc_name[si]) { save_name[si]=loc_name[si]; si++; } save_name[si]=0;
+        int ok1 = loc_geocode("Langley");
+        int ok1b = ok1 && loc_have && loc_lat[0] && loc_lon[0] && loc_name[0]
+                   && !strcmp(geo_lat, loc_lat) && !strcmp(geo_lon, loc_lon) && !strcmp(geo_city, loc_name) && geo_have;
+        serial_puts(ok1b ? "loc geocode: real lookup lands in loc_*/geo_*: ok\n" : "loc geocode: FAILED\n");
+
+        char want_name[LOC_NAME_MAX], want_lat[16], want_lon[16];
+        { int i=0; while (loc_name[i]) { want_name[i]=loc_name[i]; i++; } want_name[i]=0; }
+        { int i=0; while (loc_lat[i]) { want_lat[i]=loc_lat[i]; i++; } want_lat[i]=0; }
+        { int i=0; while (loc_lon[i]) { want_lon[i]=loc_lon[i]; i++; } want_lon[i]=0; }
+        settings_save();
+        loc_have = 0; loc_name[0] = 0; loc_lat[0] = 0; loc_lon[0] = 0;
+        geo_have = 0; geo_lat[0] = 0; geo_lon[0] = 0; geo_city[0] = 0;
+        settings_load();
+        int ok2 = loc_have && !strcmp(loc_name, want_name) && !strcmp(loc_lat, want_lat) && !strcmp(loc_lon, want_lon)
+                  && geo_have && !strcmp(geo_lat, want_lat) && !strcmp(geo_lon, want_lon) && !strcmp(geo_city, want_name);
+        serial_puts(ok2 ? "loc persist: settings_save/settings_load round trip (simulated reboot): ok\n" : "loc persist: FAILED\n");
+
+        loc_err[0] = 0;
+        int ok3 = !loc_geocode("Nowhereville") && loc_err[0] && loc_have && !strcmp(loc_name, want_name);
+        serial_puts(ok3 ? "loc not-found: fails clean, error set, nothing overwritten: ok\n" : "loc not-found: FAILED\n");
+
+        loc_err[0] = 0;
+        int ok4 = !loc_geocode("");
+        serial_puts(ok4 ? "loc empty input: rejected, no crash: ok\n" : "loc empty input: FAILED\n");
+
+        int p=0; while (save_name[p]) { loc_name[p]=save_name[p]; p++; } loc_name[p]=0; /* restore whatever was there before this test ran */
+        serial_puts((ok1b && ok2 && ok3 && ok4) ? "loctest PASS\n" : "loctest FAIL\n");
     }
     else if (!strcmp(line, "weatherpaneltest")) {
         /* v56 gap fix: weathertest (above) proves weather_fetch's JSON
@@ -9049,6 +9445,8 @@ void kmain(unsigned int multiboot_info_addr){
         const char *cl = (const char *)*(unsigned int *)(multiboot_info_addr + 16);
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='p' && pc[1]=='o' && pc[2]=='r' && pc[3]=='t' && pc[4]=='f' && pc[5]=='o' && pc[6]=='l' && pc[7]=='i' && pc[8]=='o') { portfolio_dock = 1; serial_puts("portfolio dock\n"); break; }
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='c' && pc[1]=='l' && pc[2]=='i' && pc[3]=='p' && pc[4]=='t' && pc[5]=='r' && pc[6]=='a' && pc[7]=='c' && pc[8]=='e') { clip_trace = 1; serial_puts("cliptrace\n"); break; }
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;

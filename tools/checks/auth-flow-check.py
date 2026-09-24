@@ -417,7 +417,20 @@ try:
     time.sleep(0.3)
     m2.type(PASSWORD2)
     m2.key('ret')
-    time.sleep(1.0)  # in-kernel status message + its delay
+    # Wait for the evidence itself, not a guessed duration: the rotated
+    # line has to be hashed (a deliberately slow iterated SHA-256) and
+    # written through FAT before the image is read back, and a fixed 1 s
+    # was enough on a laptop but not on a loaded CI runner, where this
+    # phase failed twice in a row with the write still in flight. The
+    # raw image is readable while QEMU runs (cache=writeback lands guest
+    # writes in the host page cache), so poll it for a new "joshua" line.
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        found = re.findall(rb'joshua:([0-9a-f]{32}):([0-9a-f]{64})', DISK.read_bytes())
+        if any(h != original_hash for _, h in found):
+            break
+        time.sleep(0.2)
+    time.sleep(1.0)  # in-kernel status message + its delay, before tearing the process down
 finally:
     m2.close()
 
