@@ -33,10 +33,10 @@ for f in tools/checks/*-check.*; do
     # workflow is not wired, and must not count as if it were. In the
     # manifest only the command field (after the second `|`) counts, so
     # a description that merely mentions another check doesn't wire it.
-    if grep -E '^[[:space:]]*(once|retry)[[:space:]]*\|' tools/checks/ci-suite.sh | cut -d'|' -f3- | grep -qF "$b"; then
+    if grep -E '^[[:space:]]*(once|retry)[[:space:]]*\|' tools/checks/ci-suite.sh | cut -d'|' -f3- | grep -F "$b" >/dev/null; then
         continue
     fi
-    if grep -rhs -v '^[[:space:]]*#' tools/hooks .github | grep -qF "$b"; then
+    if grep -rhs -v '^[[:space:]]*#' tools/hooks .github | grep -F "$b" >/dev/null; then
         continue
     fi
     if grep -qE "^\s*(#|//|\"\"\")\s*(MANUAL|HELPER):" "$f"; then
@@ -45,7 +45,7 @@ for f in tools/checks/*-check.*; do
     called=0
     for other in $(grep -rlF "$b" tools/checks --include='*.sh' --include='*.py' --include='*.mjs' 2>/dev/null); do
         [ "$other" = "tools/checks/$b" ] && continue
-        if grep -v '^[[:space:]]*#' "$other" | grep -qF "$b"; then called=1; break; fi
+        if grep -v '^[[:space:]]*#' "$other" | grep -F "$b" >/dev/null; then called=1; break; fi
     done
     if [ "$called" -eq 1 ]; then
         continue
