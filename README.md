@@ -3,7 +3,7 @@
 # Joshua Tree
 
 ![version](https://img.shields.io/github/v/release/nulljosh/joshuatree?label=version&color=blue)
-![ci](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/check.yml?branch=main&label=ci)
+![ci](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/check.yml?event=pull_request&label=ci)
 ![platform](https://img.shields.io/badge/platform-i386-lightgrey)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
