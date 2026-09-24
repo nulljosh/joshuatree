@@ -17,14 +17,28 @@ highlight to draw. This proves the real thing landed:
      would fail this just as loudly as no highlight at all. The kernel's
      own `edsel=<start>,<end>` serial marker must report exactly that
      4-character range.
-  2. Ctrl+C copies the selection (`edcopy=4`), End clears the selection
-     and returns the caret to the true end of the line, Ctrl+V pastes the
-     copied text back on -- real new ink appears just past the old end of
-     line, where the framebuffer was plain background a moment before.
-  3. Ctrl+A selects the whole (now-longer) buffer (`edsel=0,<total>`),
-     Backspace deletes it all -- the body is real background again, no
-     leftover glyph ink anywhere (the caret's own maroon bar is not
-     glyph ink and is excluded from that check on purpose).
+     The band must start at the caret (the maroon bar now sits before
+     the 4th-last glyph) and end at the line's last ink, so a band over
+     the wrong four glyphs fails even if the marker is right.
+  2. Ctrl+C copies the selection: `edcopy=4` plus the clipboard's own
+     `CLIPCOPY:4:<fnv1a>` marker (booted with `cliptrace`), whose hash
+     must be exactly the hash of the four selected characters, not of
+     the whole line. End clears the selection and returns the caret to
+     the true end of the line, Ctrl+V pastes the copied text back on
+     (`CLIPPASTE:4:<same hash>`) -- real new ink appears just past the
+     old end of line, where the framebuffer was plain background.
+  3. Shift+Left x4 again, Ctrl+X: `edcut=4`, the same clipboard hash,
+     and the pasted ink is gone again (the row is back to how it looked
+     before the paste).
+  4. Shift+Left x5 selects "chars"; typing one letter replaces all five.
+     Shift+Left x1, Delete removes that letter. Two more letters typed.
+     Then the collapsed-anchor regression: End, Shift+Right at the very
+     end (anchor lands on the caret, no real selection), then two more
+     letters. Before the fix the second one replaced the first. Ctrl+A's
+     `edsel=0,<n>` marker is the exact-length witness for every step.
+  5. Backspace on that select-all empties the note -- the body is real
+     background again, no leftover glyph ink anywhere (the caret's own
+     maroon bar is not glyph ink and is excluded on purpose).
 
 Discriminating: none of edsel/edcopy exist on main, window_rect never
 gets a 0xB4D5FE call anywhere in editor.h, and Shift+Left is read no
@@ -52,9 +66,17 @@ NOTES_SLOT = 4
 CLOSE_X, CLOSE_Y = 94, 56
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
-SENTENCE = "select four chars"          # 18 characters, no shift/digits needed
+SENTENCE = "select four chars"          # 17 characters, no shift/digits needed
 HILITE = (0xB4, 0xD5, 0xFE)
+CARET = (0x85, 0x14, 0x4B)
 BG = (0xFA, 0xF8, 0xF6)
+
+def fnv1a(text):
+    h = 2166136261
+    for b in text.encode():
+        h = ((h ^ b) * 16777619) & 0xFFFFFFFF
+    return f"{h:08x}"
+
 # Notes' own text area (kernel/editor.h EDITOR_TEXT_TOP/text_x=56), dock-
 # launched at x=70,y=40 (gui_launch_from_dock), viewport at (x+8,y+32):
 # absolute logical y = 40+32+92-32 = 132, x = 70+8+56 = 134.
@@ -68,6 +90,7 @@ BODY_TOP, BODY_BOTTOM = 132, 300          # scanned for the "note is empty" proo
 WIN_CONTENT_RIGHT = 875
 
 q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
+                      "-append", "cliptrace",
                       "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 fails = []
@@ -191,10 +214,15 @@ try:
     else: ok("no highlight before a selection exists")
 
     shift_left(4)
-    time.sleep(0.3)
-    img_sel = dump()
-    log = wait_marker("edsel=")
+    # Wait for the kernel's own marker for THIS range (the seeded-note
+    # clear above already left an earlier edsel= line in the log), then
+    # give the redraw a moment before sampling the framebuffer: on a
+    # loaded runner the four Shift+Left presses can land later than the
+    # sleeps in shift_left assume.
     expect_sel = f"edsel={len(SENTENCE) - 4},{len(SENTENCE)}"
+    log = wait_marker(expect_sel)
+    time.sleep(0.4)
+    img_sel = dump()
     if expect_sel in log: ok(f"serial reported {expect_sel}")
     else: fail(f"expected '{expect_sel}' in the serial log, got: " + ", ".join(l for l in log.splitlines() if l.startswith("edsel=")))
 
@@ -214,6 +242,28 @@ try:
             fail(f"highlight spans {span}px, far wider than 4 glyphs -- looks like it covers more than the selection")
         else:
             ok(f"highlight band present, {len(hits)} px, {span}px wide (roughly 4 glyphs)")
+        # WHERE it sits: the caret now stands at position 14, just left of
+        # the four selected glyphs, and the line's last ink marks their
+        # right edge. Both come from the framebuffer, not a font table.
+        caret_xs = [x for x, _ in find_color(img_sel, CARET, tol=12, x0=TEXT_LEFT - 4, x1=WIN_CONTENT_RIGHT, y0=TEXT_TOP - 2, y1=ROW_BOTTOM + 2)]
+        # Measured on img_sel, not img_typed: the glyph cores stay dark and
+        # neutral under the band, and img_typed may predate the last few
+        # keystrokes landing on a slow runner.
+        typed_ink_xs = [x for y in range(TEXT_TOP, ROW_BOTTOM) for x in range(TEXT_LEFT - 4, WIN_CONTENT_RIGHT) if is_text_ink(pixel(img_sel, x, y))]
+        if not caret_xs or not typed_ink_xs:
+            fail("could not find the caret or the typed line's ink to anchor the highlight position against")
+        else:
+            caret_x, line_end = min(caret_xs), max(typed_ink_xs)
+            if line_end <= caret_x:
+                fail(f"the line's last ink (x={line_end}) is not right of the caret (x={caret_x}); the selected glyphs did not render")
+            if min(xs) < caret_x - 4:
+                fail(f"highlight starts at x={min(xs)}, left of the caret at x={caret_x}: it covers glyphs before the selection")
+            elif min(xs) > caret_x + 4:
+                fail(f"highlight starts at x={min(xs)}, well right of the caret at x={caret_x}: the first selected glyph is not highlighted")
+            elif max(xs) < line_end - 4:
+                fail(f"highlight ends at x={max(xs)}, short of the line's last ink at x={line_end}: the last selected glyph is not highlighted")
+            else:
+                ok(f"highlight runs from the caret (x={caret_x}) to the line's last ink (x={line_end})")
         # Nothing highlighted anywhere else on screen at all (menu bar,
         # dock, chrome, or any other line).
         # Scoped to the Notes window's own rect (70..890, 40..425), not the
@@ -231,6 +281,11 @@ try:
     log = wait_marker("edcopy=4")
     if "edcopy=4" in log: ok("serial reported edcopy=4")
     else: fail("expected 'edcopy=4' in the serial log after Ctrl+C on a 4-char selection")
+    TAIL = SENTENCE[-4:]
+    copy_marker = f"CLIPCOPY:4:{fnv1a(TAIL)}"
+    log = wait_marker(copy_marker, timeout=3.0)
+    if copy_marker in log: ok(f"clipboard holds exactly '{TAIL}' ({copy_marker})")
+    else: fail(f"expected '{copy_marker}' (the hash of the 4 selected characters), got: " + ", ".join(l for l in log.splitlines() if l.startswith("CLIPCOPY:")))
 
     keys("end"); time.sleep(0.2)
     img_before_paste = dump()
@@ -251,7 +306,10 @@ try:
     before_ink = ink_count(img_before_paste)
 
     keys("ctrl", "v"); time.sleep(0.3)
-    log = wait_marker("CLIPPASTE:")
+    paste_marker = f"CLIPPASTE:4:{fnv1a(TAIL)}"
+    log = wait_marker(paste_marker)
+    if paste_marker in log: ok(f"pasted exactly '{TAIL}' ({paste_marker})")
+    else: fail(f"expected '{paste_marker}' after Ctrl+V, got: " + ", ".join(l for l in log.splitlines() if l.startswith("CLIPPASTE:")))
     img_after_paste = dump()
     after_ink = ink_count(img_after_paste)
     print(f"ink pixels just past the old line end: before paste={before_ink} after paste={after_ink}")
@@ -260,14 +318,46 @@ try:
     else:
         fail("no real new ink appeared past the old end of line after Ctrl+V")
 
-    # ---- 3: Ctrl+A selects everything, Backspace empties the note ----
-    total_len = len(SENTENCE) + 4  # the 4 pasted characters
-    keys("ctrl", "a"); time.sleep(0.2)
-    log = wait_marker(f"edsel=0,{total_len}")
-    expect_all = f"edsel=0,{total_len}"
-    if expect_all in log: ok(f"serial reported {expect_all} (select all)")
-    else: fail(f"expected '{expect_all}' in the serial log after Ctrl+A, got: " + ", ".join(l for l in log.splitlines() if l.startswith("edsel=")))
+    # ---- 3: select the pasted tail again, Ctrl+X cuts it back out ----
+    n = len(SENTENCE) + 4  # "select four charshars"
+    shift_left(4); time.sleep(0.2)
+    log = wait_marker(f"edsel={n - 4},{n}")
+    if f"edsel={n - 4},{n}" in log: ok(f"serial reported edsel={n - 4},{n} (the pasted tail)")
+    else: fail(f"expected 'edsel={n - 4},{n}' after Shift+Left x4 on the pasted line")
+    copies_before = serial_text().count(copy_marker)
+    keys("ctrl", "x"); time.sleep(0.3)
+    log = wait_marker("edcut=4")
+    if "edcut=4" in log: ok("serial reported edcut=4")
+    else: fail("expected 'edcut=4' after Ctrl+X on a 4-char selection")
+    if serial_text().count(copy_marker) == copies_before + 1: ok(f"cut put exactly '{TAIL}' on the clipboard")
+    else: fail(f"expected one more '{copy_marker}' after Ctrl+X")
+    img_after_cut = dump()
+    cut_ink = ink_count(img_after_cut)
+    print(f"ink pixels just past the old line end after cut={cut_ink}")
+    if cut_ink <= before_ink + 15: ok("cut removed the pasted ink from the screen")
+    else: fail(f"ink past the old line end is still {cut_ink} px after Ctrl+X (was {before_ink} before the paste)")
+    n -= 4
 
+    # ---- 4: typing and Delete over a selection; the collapsed-anchor bug ----
+    shift_left(5); time.sleep(0.2)
+    log = wait_marker(f"edsel={n - 5},{n}")
+    if f"edsel={n - 5},{n}" in log: ok(f"serial reported edsel={n - 5},{n} (the last word)")
+    else: fail(f"expected 'edsel={n - 5},{n}' after Shift+Left x5")
+    key("x"); n = n - 5 + 1                      # typing replaces the 5 selected chars
+    shift_left(1); time.sleep(0.2)
+    keys("delete"); n -= 1                       # Delete removes the 1 selected char
+    type_str("ab"); n += 2
+    keys("end"); time.sleep(0.1)
+    keys("shift", "right"); time.sleep(0.15)     # at the end: anchor == caret, not a selection
+    type_str("yz"); n += 2                       # the buggy kernel replaced 'y' with 'z' here
+    time.sleep(0.2)
+    keys("ctrl", "a"); time.sleep(0.2)
+    expect_all = f"edsel=0,{n}"
+    log = wait_marker(expect_all)
+    if expect_all in log: ok(f"serial reported {expect_all}: type-over, Delete and typing after a collapsed anchor all kept the exact length")
+    else: fail(f"expected '{expect_all}' after Ctrl+A, got: " + ", ".join(l for l in log.splitlines() if l.startswith("edsel=0,")))
+
+    # ---- 5: Backspace on the select-all empties the note ----
     keys("backspace"); time.sleep(0.4)
     img_empty = dump()
     ink_left = sum(1 for y in range(BODY_TOP, BODY_BOTTOM) for x in range(TEXT_LEFT - 4, WIN_CONTENT_RIGHT) if is_text_ink(pixel(img_empty, x, y)))
@@ -288,4 +378,4 @@ if fails:
     for m in fails: print("  - " + m)
     print(f"artifacts: {ART}")
     sys.exit(1)
-print("PASS: Shift+Left selects exactly the last 4 characters (highlight + edsel marker), Ctrl+C/End/Ctrl+V round-trips the selection as real new ink, and Ctrl+A + Backspace empties the note")
+print("PASS: Shift+Left highlights exactly the last 4 characters where the caret says, Ctrl+C/V/X move exactly those bytes (clipboard hashes), typing/Delete replace a selection, a collapsed anchor never eats a character, and Ctrl+A + Backspace empties the note")

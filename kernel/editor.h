@@ -67,7 +67,14 @@ static void editor_serial_count(const char *tag, unsigned int n) {
    selection. */
 static void editor_delete_selection(void) {
     int lo, hi;
-    if (!editor_selection_range(&lo, &hi)) return;
+    if (!editor_selection_range(&lo, &hi)) {
+        /* A collapsed anchor (Shift+Right at the very end, say) is not a
+           selection: drop it here too, or the next typed character would
+           sit "selected" between the stale anchor and the caret and the
+           one after it would replace it instead of appending. */
+        editor_sel_anchor = -1;
+        return;
+    }
     int n = hi - lo;
     for (int index = lo; index <= editor_length - n; index++) editor_buffer[index] = editor_buffer[index + n];
     editor_length -= n;
@@ -76,19 +83,38 @@ static void editor_delete_selection(void) {
     editor_dirty = 1;
 }
 
+/* Every selection-replacing edit (typing, Backspace, Delete, a paste)
+   calls this first: returns 1 after removing a real selection, 0 (with
+   any collapsed anchor dropped) when there was nothing to remove and the
+   plain single-character edit should run instead. */
+static int editor_take_selection(void) {
+    int lo, hi;
+    int had = editor_selection_range(&lo, &hi);
+    editor_delete_selection();
+    return had;
+}
+
+#define EDITOR_PAGE_BG 0x00FAF8F6
+#define EDITOR_SEL_BG 0x00B4D5FE
+
 static const struct editor_glyph *editor_glyph_for(unsigned char character) {
     if (character < 32 || character > 126) character = '?';
     return &editor_glyphs[((editor_family * 2 + editor_weight) * 4 + editor_size) * 95 + character - 32];
 }
 
-static void editor_draw_glyph(unsigned char character, int origin_x, int origin_y) {
+/* `background` is the colour already under the glyph (the page, or the
+   selection band): each bitmap pixel is blended against it, so a selected
+   glyph keeps its band showing through instead of punching a page-
+   coloured box out of the highlight. */
+static void editor_draw_glyph(unsigned char character, int origin_x, int origin_y, unsigned int background) {
     const struct editor_glyph *glyph = editor_glyph_for(character);
+    int bg_red = (int)(background >> 16) & 255, bg_green = (int)(background >> 8) & 255, bg_blue = (int)background & 255;
     for (int row = 0; row < glyph->height; row++) {
         for (int column = 0; column < glyph->width; column++) {
             int alpha = text_ink_dark[editor_pixels[glyph->offset + row * glyph->width + column]]; /* dark ink on the light page: same curve as gui_aa_char (see text_ink) */
-            int red = (28 * alpha + 250 * (255 - alpha)) / 255;
-            int green = (28 * alpha + 248 * (255 - alpha)) / 255;
-            int blue = (30 * alpha + 246 * (255 - alpha)) / 255;
+            int red = (28 * alpha + bg_red * (255 - alpha)) / 255;
+            int green = (28 * alpha + bg_green * (255 - alpha)) / 255;
+            int blue = (30 * alpha + bg_blue * (255 - alpha)) / 255;
             window_pixel(origin_x + glyph->left + column, origin_y + glyph->top + row,
                          (red << 16) | (green << 8) | blue);
         }
@@ -137,17 +163,23 @@ static void editor_layout(int draw, int *caret_x, int *caret_line) {
         if (text_x + advance > limit && character != '\n') { text_x = 56; line++; }
         if (index == editor_position) { *caret_x = text_x; *caret_line = line; }
         if (index == editor_length) break;
-        if (character == '\n') { text_x = 56; line++; continue; }
-        if (draw && character != '\t' && line >= editor_scroll && line < editor_scroll + visible_lines) {
+        if (draw && line >= editor_scroll && line < editor_scroll + visible_lines) {
             /* v1.2.0: the selection highlight, a light-blue band drawn
                BEHIND the glyph so the ink still reads on top of it, only
                over the exact columns actually selected on this line --
-               never a whole-line bar, never drawn for an unselected run. */
+               never a whole-line bar, never drawn for an unselected run.
+               A selected tab gets its full width; a selected newline gets
+               one space's width at the line end, so a whitespace-only
+               selection is still visible before Cut or Delete eats it. */
             int sel_lo, sel_hi;
-            if (editor_selection_range(&sel_lo, &sel_hi) && index >= sel_lo && index < sel_hi)
-                window_rect(text_x, EDITOR_TEXT_TOP + 2 + (line - editor_scroll) * line_height, advance, 20 + editor_size * 4, 0x00B4D5FE);
-            editor_draw_glyph(character, text_x, EDITOR_TEXT_TOP + (line - editor_scroll) * line_height);
+            int selected = editor_selection_range(&sel_lo, &sel_hi) && index >= sel_lo && index < sel_hi;
+            int origin_y = EDITOR_TEXT_TOP + (line - editor_scroll) * line_height;
+            if (selected)
+                window_rect(text_x, origin_y + 2, character == '\n' ? editor_glyph_for(' ')->advance : advance, 20 + editor_size * 4, EDITOR_SEL_BG);
+            if (character != '\t' && character != '\n')
+                editor_draw_glyph(character, text_x, origin_y, selected ? EDITOR_SEL_BG : EDITOR_PAGE_BG);
         }
+        if (character == '\n') { text_x = 56; line++; continue; }
         text_x += advance;
     }
 }
@@ -356,7 +388,7 @@ static void gui_launch_editor(void) {
                        clear) closes Notes, so a selection never eats the
                        one key every read-only viewer already relies on to
                        leave the app. */
-                    if (editor_sel_anchor >= 0) editor_sel_anchor = -1; else close = 1;
+                    { int lo, hi; if (!editor_selection_range(&lo, &hi)) close = 1; editor_sel_anchor = -1; }
                 }
                 else if (code == 0x3B) editor_family = (editor_family + 1) % 3;
                 else if (code == 0x3C) editor_size = (editor_size + 1) % 4;
@@ -398,7 +430,7 @@ static void gui_launch_editor(void) {
                        editor_buffer, same bound plain typing enforces
                        below. v1.2.0: an active selection is replaced by
                        the paste, same as typing a character over it. */
-                    if (editor_sel_anchor >= 0) editor_delete_selection();
+                    editor_take_selection();
                     unsigned int room = (unsigned int)sizeof(editor_buffer) - 1 - (unsigned int)editor_length;
                     unsigned int take = clipboard_len < room ? clipboard_len : room;
                     if (take) {
@@ -438,8 +470,7 @@ static void gui_launch_editor(void) {
                         else while (editor_position < editor_length && editor_buffer[editor_position] != '\n') editor_position++;
                     }
                     if (code == 0x53) {
-                        if (editor_sel_anchor >= 0) editor_delete_selection();
-                        else if (editor_position < editor_length) {
+                        if (!editor_take_selection() && editor_position < editor_length) {
                             for (int index = editor_position; index < editor_length; index++) editor_buffer[index] = editor_buffer[index + 1];
                             editor_length--; editor_dirty = 1;
                         }
@@ -460,8 +491,7 @@ static void gui_launch_editor(void) {
                         /* v1.2.0: Backspace with an active selection removes
                            the selection instead of the one char behind the
                            caret. */
-                        if (editor_sel_anchor >= 0) editor_delete_selection();
-                        else if (editor_position > 0) {
+                        if (!editor_take_selection() && editor_position > 0) {
                             for (int index = editor_position - 1; index < editor_length; index++) editor_buffer[index] = editor_buffer[index + 1];
                             editor_position--; editor_length--; editor_dirty = 1;
                         }
@@ -469,7 +499,7 @@ static void gui_launch_editor(void) {
                         /* v1.2.0: typing over an active selection replaces
                            it, the same "typing eats the selection" contract
                            every other real text editor keeps. */
-                        if (editor_sel_anchor >= 0) editor_delete_selection();
+                        editor_take_selection();
                         if (editor_length < (int)sizeof(editor_buffer) - 1) {
                             for (int index = editor_length; index > editor_position; index--) editor_buffer[index] = editor_buffer[index - 1];
                             editor_buffer[editor_position++] = character;

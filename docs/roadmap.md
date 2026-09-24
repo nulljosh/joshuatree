@@ -19,7 +19,7 @@ Measured against SerenityOS, the closest one-person-scale peer, and macOS/Linux.
 2. **A compositor.** Apps draw straight to the framebuffer in blocking loops: at most two windows, no resize or minimize, nothing runs in the background. See Multi-window.
 3. **Native TLS.** HTTPS goes through the worker proxy, so a browser can't happen yet.
 4. **Sound.** None at all; Music, video and a screen reader wait on AC97.
-5. **Desktop basics.** Undo, text selection, right-click menus, drag and drop, app switcher (clipboard lands in 1.0.7).
+5. **Desktop basics.** Undo, right-click menus, drag and drop, app switcher (the clipboard landed in 1.0.6, text selection in 1.2.0).
 6. **Apps from outside the kernel.** All 25 apps compile into the kernel; two ring-3 programs exist. No installer, no update path.
 
 ## Beta, 0.9.0
@@ -84,7 +84,7 @@ Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at f
 Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Fable] No sound at all. Needs an audio driver (AC97 or SB16 under QEMU).
 - [ ] [Fable] No native TLS. HTTPS only works through the worker's proxy.
-- [x] [Sonnet] Clipboard copy/paste. Shipped 1.0.6: one global 4KB buffer, Ctrl+C/X/V in Notes, Terminal, and every field built on `gui_prompt.h` (Mail, Reminders, Calculator). No selection model exists yet (see the item below), so Ctrl+C/X act on the current line/field, not an arbitrary range.
+- [x] [Sonnet] Clipboard copy/paste. Shipped 1.0.6: one global 4KB buffer, Ctrl+C/X/V in Notes, Terminal, and every field built on `gui_prompt.h` (Mail, Reminders, Calculator). Until 1.2.0 there was no selection model, so Ctrl+C/X acted on the current line or field. Notes now uses its selection when one is active and falls back to the line otherwise.
 - [ ] [Sonnet] Right-click context menus.
 - [ ] [Sonnet] App switcher and global hotkeys.
 - [ ] [Sonnet] Lock screen, sleep, and ACPI shutdown.
@@ -92,7 +92,7 @@ Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Haiku] Clock app with timer and alarm.
 - [ ] [Sonnet] Maps app. The wallpaper already fetches map tiles.
 - [ ] [Haiku] Screenshot tool.
-- [x] 1.2.0: Text selection in Notes. Shift+arrow extends it, Ctrl+A selects everything, a light-blue band highlights it, Ctrl+C/X/typing/Backspace/Delete act on it, Escape or a plain arrow clears it. `tools/checks/textselect-check.py`. The landing demo's Notes scene now selects its last word, copies it, and clears the selection before its own drag-the-window beat, real Shift+Left/Ctrl+C scancode chords, not a recording (`landing/v86/embed.js`).
+- [x] 1.2.0: Text selection in Notes. Shift+arrow extends it, Ctrl+A selects everything, a light-blue band highlights it, Ctrl+C/X/typing/Backspace/Delete act on it, Escape or a plain arrow clears it. The landing demo's Notes scene selects and copies its last word for real. Check: `tools/checks/textselect-check.py` (highlight position, clipboard hashes, cut, type-over, and a collapsed selection that must not eat the next character).
 - [ ] [Sonnet] Undo in editors.
 - [ ] [Sonnet] Shell pipes, redirection, and environment variables.
 - [ ] [Sonnet] File associations, opening a file in the right app.
