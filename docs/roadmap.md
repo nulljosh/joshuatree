@@ -100,7 +100,7 @@ Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Fable] Multi-core (SMP).
 - [ ] [Sonnet] Software update path.
 - [ ] [Haiku] Accessibility: text size and high contrast.
-- [ ] In progress: Chat wired to a local Qwen/Bonsai model. Currently talks to Ollama.
+- [x] [Sonnet] Chat talks to Samantha (Turing's Ollama-compatible `/api/chat` at `turing.heyitsmejosh.com`) by default, natively over HTTP and in the browser demo through the worker proxy. `tools/checks/chat-samantha-check.py`.
 
 ## Real hardware
 1.0 ships a USB-bootable ISO with a PS/2 fallback. USB is the 1.1 headline, built in this order.
