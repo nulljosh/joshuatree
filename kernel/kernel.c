@@ -5327,9 +5327,26 @@ static void gui_launch_terminal(void){
    reachable by mouse would be an app screen this project can never
    regression-test. */
 #define APPS_COLS 5
-/* Rows that fit in the 375px panel at a 108px cell: 3 whole ones. Scroll
-   limits and keyboard selection follow this, not a repeated literal. */
+/* Three grid rows are visible at once (108px cell each); the panel height
+   below (APPS_PANEL_H) is sized to actually hold them, see its own note.
+   Scroll limits and keyboard selection follow this row count, not a
+   repeated literal. */
 #define APPS_VIS_ROWS 3
+/* Real typography QA bug, confirmed with a real headless pmemsave crop
+   (tools/checks/baseline-check.py, /tmp/jt-loop/typography-crops/before): the old
+   375px panel height was sized as if the grid started at the panel's own
+   top edge (APPS_VIS_ROWS*108 = 324 < 375, "3 whole rows fit"), but the
+   grid actually starts 70px lower, at y0=95, to leave room for the "arrow
+   keys to move" hint line above it (panel top is 25). The real bottom
+   needed is 70 + 324 = 394, 19px past the old 375, so the last visible
+   row's labels ("Bookrank", "Quotes", "Plan", "Lexly", "Toroid" at the
+   default scroll offset) landed only ~8 logical px above the glass
+   panel's true bottom edge -- title-bar-tight everywhere else in this UI,
+   here almost touching. 410 gives that row the same order of breathing
+   room the top hint line gets, while staying inside the window's own
+   450px content viewport (gui_launch_from_dock's `h - 40` for the Apps
+   folder), 15px of margin above the window's own bottom edge. */
+#define APPS_PANEL_H 410
 /* The framebuffer has no alpha channel. Blend each glass pixel against the
    wallpaper already underneath it, keeping the real photo visible. */
 static void gui_apps_glass(int x, int y, int w, int h){
@@ -5381,7 +5398,7 @@ static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int c
     }
 }
 static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, int cell_w, int cell_h, int tile, int grid_w){
-    int panel_x = x0 - 28, panel_y = 25, panel_w = grid_w + 56, panel_h = 375;
+    int panel_x = x0 - 28, panel_y = 25, panel_w = grid_w + 56, panel_h = APPS_PANEL_H;
     gui_draw_wallpaper_rect(panel_x, panel_y, panel_w, panel_h);
     gui_apps_glass(panel_x, panel_y, panel_w, panel_h);
     /* The window's own title bar already reads "Apps" (gui_launch_from_
@@ -5516,8 +5533,13 @@ static void gui_launch_apps(void){
             for (int i = 0; i < GUI_APPS_FOLDER; i++) {
                 int row = i / APPS_COLS - scroll_offset;
                 int col = i % APPS_COLS;
-                /* Skip rows that are scrolled off-screen */
-                if (row < 0 || row * cell_h >= 375) continue;
+                /* Skip rows that are scrolled off-screen. Bounded by row
+                   count (APPS_VIS_ROWS), not a repeated pixel-height
+                   literal: this hit test used to compare against the
+                   panel's old, wrong 375px height (see APPS_PANEL_H's own
+                   note), a second copy of the exact bug class
+                   gui_apps_draw_grid's row bound was already fixed for. */
+                if (row < 0 || row >= APPS_VIS_ROWS) continue;
                 int cx = x0 + col * cell_w + cell_w / 2;
                 int cy = y0 + row * cell_h;
                 int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
