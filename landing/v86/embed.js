@@ -906,9 +906,45 @@ if (typeof document !== "undefined") (function () {
     { type: 'wait', ms: 500 },
     { type: 'keys', text: 'Shipped by an AI, for real.\n', speed: 55 } // saves and returns to the month view
   ] };
+  // 1.0.13: real live window-drag scene, direct request ("the tour should
+  // show off the new title-bar drag, not just mention it exists"). Every
+  // app window drags live by its title bar since 1.0.11
+  // (gui_app_mouse_tick in kernel.c, tools/checks/windowdrag-check.py's
+  // own QMP proof), but the tour itself never actually did it -- it only
+  // ever sent the same open/type/dwell/close shape every other single-
+  // window app gets. Notes gets a real 'drag' script step here (see
+  // runScript's own handling of it, and dragWindow() below) using the
+  // exact geometry windowdrag-check.py already proves against the real
+  // kernel: gui_launch_from_dock's window rect is x=70,y=40,w=820,h=385,
+  // so its title band (gui_app_mouse_tick's own press-arm test: y in
+  // [win_y, win_y+30), x >= win_x+80) runs from (150,40) to (890,70).
+  // Press at (400,52), comfortably inside it and clear of the traffic
+  // lights, then a few small absolute moves (+50,+6, well inside the
+  // kernel's own clamp: x in [0,140], y in [menubar height, dock band
+  // top - 385]) so the window visibly slides right and down, then the
+  // same drag run backwards so the close light is back at CLOSE_X/
+  // CLOSE_Y (94,56) for runSoloApp's own close click below -- proves the
+  // drag twice (there and back) instead of once, and never requires a
+  // one-off "moved close position" special case. `dwell` is raised past
+  // DWELL_MS (7000) since the typed sentence plus two real ~600ms drags
+  // and their settling pauses run past the default single-app budget,
+  // the same reasoning the Chat entry below already uses for its own
+  // real network round trip.
+  var NOTES_TITLE_X = 400, NOTES_TITLE_Y = 52; // inside win_y..win_y+30 (40..70) and >= win_x+80 (150)
+  var NOTES_DRAG_DX = 50, NOTES_DRAG_DY = 6;   // safely inside gui_app_mouse_tick's own clamp
   var TOUR_APPS = [
-    { name: 'Notes', slot: 4, script: [
-      { type: 'keys', text: 'Kernel, GUI, browser, terminal, and a dozen real apps, none of it borrowed.', speed: 55 }
+    { name: 'Notes', slot: 4, dwell: 13000, script: [
+      { type: 'keys', text: 'Kernel, GUI, browser, terminal, and a dozen real apps, none of it borrowed.', speed: 55 },
+      { type: 'wait', ms: 500 },
+      { type: 'drag', from: [NOTES_TITLE_X, NOTES_TITLE_Y], to: [NOTES_TITLE_X + NOTES_DRAG_DX, NOTES_TITLE_Y + NOTES_DRAG_DY], steps: 8, ms: 600 },
+      { type: 'wait', ms: 900 },
+      // Drag it back: the press point is wherever the pointer already is
+      // (the moved title band, now at x>=200 since the window itself
+      // moved by NOTES_DRAG_DX), the same real click-to-arm gesture, run
+      // in reverse so the window (and its close light) lands back at its
+      // original rect for the close click at the end of runSoloApp.
+      { type: 'drag', from: [NOTES_TITLE_X + NOTES_DRAG_DX, NOTES_TITLE_Y + NOTES_DRAG_DY], to: [NOTES_TITLE_X, NOTES_TITLE_Y], steps: 8, ms: 600 },
+      { type: 'wait', ms: 500 }
     ] },
     { name: 'Terminal', slot: 6, script: [
       // Real shell commands (see run() in kernel.c). Root cause of the old
@@ -1023,6 +1059,37 @@ if (typeof document !== "undefined") (function () {
     await sleep(80);
     emulator.bus.send("mouse-click", [false, false, false]);
   }
+  // 1.0.13: real live title-bar drag, the same bus calls clickAt already
+  // uses (mouse-absolute via moveCursorToAsync, then a raw mouse-click
+  // bus send) but held down across several moves instead of one
+  // press-release pair -- exactly the QMP sequence
+  // tools/checks/windowdrag-check.py already proves live against the real
+  // kernel (move to the title band, press, several small absolute moves,
+  // release), never a new/unproven interaction shape. One press, N
+  // absolute moves, one release: gui_app_mouse_tick (kernel.c) arms the
+  // drag on the press if it lands in the title band and moves the window
+  // on every later pointer move while the button stays down, so nothing
+  // here needs to resend the click between moves. `gen`/`focused` are
+  // checked between every move so a real visitor taking over mid-drag
+  // doesn't fight them for the pointer with the button stuck down.
+  async function dragWindow(from, to, steps, ms, gen) {
+    var n = steps || 8, totalMs = ms || 600;
+    await moveCursorToAsync(from[0], from[1], true);
+    if (focused || tourGen !== gen) return;
+    await sleep(150);
+    trackClick();
+    emulator.bus.send("mouse-click", [true, false, false]); // press inside the title band arms the drag
+    await sleep(150);
+    for (var s = 1; s <= n; s++) {
+      if (focused || tourGen !== gen) break;
+      var kx = from[0] + (to[0] - from[0]) * s / n;
+      var ky = from[1] + (to[1] - from[1]) * s / n;
+      await moveCursorToAsync(kx, ky, true); // every move while the button is down slides the window along, live
+      await sleep(totalMs / n);
+    }
+    emulator.bus.send("mouse-click", [false, false, false]); // release ends the drag
+    await sleep(150);
+  }
   async function runScript(script, gen) {
     if (!script) return;
     for (var i = 0; i < script.length; i++) {
@@ -1036,6 +1103,10 @@ if (typeof document !== "undefined") (function () {
       // Added for Chat's own fix below: cancelling out of its compose
       // prompt with a real Escape, not a typed character.
       else if (step.type === "raw" && emulator.keyboard_send_keys) await emulator.keyboard_send_keys(step.codes, step.speed || 80);
+      // 1.0.13: press/move.../release on a window's title band, data like
+      // every other step (see the Notes entry in TOUR_APPS and
+      // dragWindow's own comment above).
+      else if (step.type === "drag") await dragWindow(step.from, step.to, step.steps, step.ms, gen);
     }
   }
   // v0.76.12: real two-window demo, the exact click sequence
@@ -1340,7 +1411,7 @@ if (typeof document !== "undefined") (function () {
     'Weather': 'Live data over its own network stack',
     'Mail': 'A real mailbox on a real filesystem',
     'Calendar': 'Real events, persisted across reboots',
-    'Notes': 'Written straight to disk, no save step',
+    'Notes': 'Written straight to disk. Drag it by its title bar.',
     'Reminders': 'A checklist that survives a reboot',
     'Terminal': 'A real shell, talking to a real kernel',
     'Chat': 'Talk to the machine, natively',

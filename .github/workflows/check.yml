@@ -130,18 +130,60 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # 1.0.13: the one browser-driven check in this repo that actually gates
+  # merges, so it gets its own job rather than a spot in ci-suite.sh's
+  # shards (those are plain qemu+PIL, no Node/Playwright toolchain at
+  # all). demochat-check.mjs proves the landing demo's real Chat app
+  # talks to Samantha through the proxied fetch and renders her reply on
+  # screen -- hermetic (page.route intercepts /api/proxy, real internet
+  # is never touched), so unlike the `network` job below this one is not
+  # continue-on-error and does gate `check`.
+  #
+  # package-lock.json is intentionally gitignored (see .gitignore) --
+  # `npm ci` has nothing to lock against, so this uses a plain
+  # `npm install` instead, same as any other lockfile-less Node checkout.
+  demo:
+    needs: [changes]
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install clang, lld, qemu
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang lld qemu-system-x86
+      - name: Build kernel.elf (also copies to landing/v86/kernel.elf)
+        run: make kernel.elf
+      - name: Install Node dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install a real Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Landing demo Chat check (retries once on a timing flake)
+        run: node tools/checks/demochat-check.mjs || (sleep 10 && node tools/checks/demochat-check.mjs)
+      - name: Keep the after-reply screenshot from a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demochat-evidence
+          path: /tmp/jt-demochat-*.png
+          retention-days: 7
+          if-no-files-found: ignore
+
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     if: always()
-    needs: [changes, suite]
+    needs: [changes, suite, demo]
     steps:
-      - name: Every suite shard passed
+      - name: Every suite shard (and the demo check) passed
         run: |
           echo "changes: ${{ needs.changes.result }} code=${{ needs.changes.outputs.code }}"
           echo "suite:   ${{ needs.suite.result }}"
+          echo "demo:    ${{ needs.demo.result }}"
           [ "${{ needs.changes.result }}" = "success" ] || exit 1
           [ "${{ needs.suite.result }}" = "success" ] || { [ "${{ needs.suite.result }}" = "skipped" ] && [ "${{ needs.changes.outputs.code }}" = "false" ]; }
+          [ "${{ needs.demo.result }}" = "success" ] || { [ "${{ needs.demo.result }}" = "skipped" ] && [ "${{ needs.changes.outputs.code }}" = "false" ]; }
 
   # CLAUDE.md 4d's own candidate, "a second job for check-refs.sh": pure
   # drift insurance, no clang/qemu/PIL toolchain needed at all, so it runs
