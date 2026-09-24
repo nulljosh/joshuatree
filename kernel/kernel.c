@@ -6156,6 +6156,22 @@ again:
         int slot = gui_dock_hit_test(app_cursor_x, app_cursor_y);
         if (slot >= 0) { editor_mouse_x = app_cursor_x; editor_mouse_y = app_cursor_y; icon = gui_order[slot]; goto again; }
     }
+    /* v1.1.0: Chat's "open notes"/"open the weather app" tool (chat.h's
+       chat_run_tool, tool "open_app") sets chat_launch_after and returns
+       out of gui_launch_chat_app so control lands back here, the same
+       tail-call reopen shape the dock-tile-click case just above already
+       established. Scoped to icon == 6 (Chat) alone, not checked
+       unconditionally: chat_launch_after can also be set (and then
+       deliberately cleared straight back to -1) by the text-shell `chat`
+       command, which has no dock of its own to hand this off to -- if
+       that clear were ever missed, this check must not misfire on some
+       later, unrelated app's own close. */
+    if (icon == 6 && chat_launch_after >= 0) {
+        int next_icon = chat_launch_after;
+        chat_launch_after = -1;
+        icon = next_icon;
+        goto again;
+    }
 }
 
 /* v0.73.0: phase 1 of real multi-window, per roadmap.md's "Multi-window,
@@ -8996,18 +9012,37 @@ static void run(char *line){
         if (!*arg) { puts("usage: chat <message>\n"); }
         else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
-            puts("asking "); puts(llm_model); puts(" (");
-            puts(llm_host); puts(")...\n");
-            static char answer[4096]; /* real growth from the old 2048-byte cap */
-            /* 1.0.12: chat_error() names the specific reason (currently
-               just the HTTPS-redirect case) when chat_send knows one;
-               the generic message stands for every other failure. */
-            if (!chat_send(arg, answer, sizeof(answer))) {
-                const char *em = chat_error();
-                if (em[0]) { puts(em); putc('\n'); }
-                else puts("FAIL (couldn't reach the LLM host, or no reply)\n");
+            /* v1.1.0: chat_pick first, same as the GUI Chat app -- see
+               chat.h's own comment above chat_pick/chat_run_tool. The text
+               shell has no dock to hand an open_app request off to, so it
+               just reports what would have opened and clears
+               chat_launch_after right back to -1 rather than leaving it
+               set for some later, unrelated GUI dock launch to pick up. */
+            static char pick_tool[CHAT_TOOL_MAX], pick_arg[CHAT_ARG_MAX], tool_reply[256];
+            int handled = 0;
+            if (chat_pick(arg, pick_tool, sizeof(pick_tool), pick_arg, sizeof(pick_arg))
+                && chat_run_tool(pick_tool, pick_arg, tool_reply, sizeof(tool_reply))) {
+                handled = 1;
+                chat_launch_after = -1;
+                chat_load();
+                chat_push(CHAT_ROLE_USER, arg);
+                chat_push(CHAT_ROLE_ASSISTANT, tool_reply);
+                puts(tool_reply); putc('\n');
             }
-            else { puts(answer); putc('\n'); }
+            if (!handled) {
+                puts("asking "); puts(llm_model); puts(" (");
+                puts(llm_host); puts(")...\n");
+                static char answer[4096]; /* real growth from the old 2048-byte cap */
+                /* 1.0.12: chat_error() names the specific reason (currently
+                   just the HTTPS-redirect case) when chat_send knows one;
+                   the generic message stands for every other failure. */
+                if (!chat_send(arg, answer, sizeof(answer))) {
+                    const char *em = chat_error();
+                    if (em[0]) { puts(em); putc('\n'); }
+                    else puts("FAIL (couldn't reach the LLM host, or no reply)\n");
+                }
+                else { puts(answer); putc('\n'); }
+            }
         }
     }
     else if (!strcmp(line, "build")) {
