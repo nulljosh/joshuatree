@@ -13,6 +13,16 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
+# Tree hygiene: a symlink from a worktree (1.1.4 committed a stray
+# `node_modules -> ../tour/node_modules`) must never be tracked, since a
+# dangling link breaks `npm install` in the demo job.
+links="$(git ls-files -s | awk '$1 == "120000" { print $4 }')"
+if [ -n "$links" ]; then
+    echo "check-refs: tracked symlink(s), remove them:"
+    echo "$links" | sed 's/^/  /'
+    exit 1
+fi
+
 python3 << 'PYEOF'
 import re, os, sys
 

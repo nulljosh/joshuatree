@@ -166,6 +166,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Landing demo Chat check (retries once on a timing flake)
         run: node tools/checks/demochat-check.mjs || (sleep 10 && node tools/checks/demochat-check.mjs)
+      - name: Landing demo cursor glides, never teleports (retries once)
+        run: node tools/checks/cursorglide-check.mjs || (sleep 10 && node tools/checks/cursorglide-check.mjs)
       - name: Keep the after-reply screenshot from a failed run
         if: failure()
         uses: actions/upload-artifact@v4
