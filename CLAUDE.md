@@ -67,8 +67,9 @@ breaking change (none yet: this kernel has no external callers to
 break). `0.x.y` is deliberate: nothing here has a stable contract yet for
 a 1.0.0 to mean something.
 
-Each version gets `git tag -a jt-vN` (or `jt-vX.Y.Z` post-semver) plus
-`gh release create`. Each MAJOR version gets its own codename once it
+Each version gets a bare `X.Y.Z` tag and GitHub release, cut by
+`.github/workflows/release.yml` on merge (from 1.0.13 on; earlier tags
+keep their `jt-v` prefix, not rewritten). No letters in version names. Each MAJOR version gets its own codename once it
 ships (the Ubuntu/macOS relationship: "Joshua Tree" stays the one project
 name, the codename is a per-major label alongside it). No codename exists
 yet for 1.0.0.

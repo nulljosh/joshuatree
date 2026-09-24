@@ -28,19 +28,19 @@ jobs:
         run: |
           make iso
           v=$(tr -d ' \n' < VERSION)
-          cp joshuatree.iso "joshuatree-v$v.iso"
-          shasum -a 256 "joshuatree-v$v.iso" > SHA256SUMS
-          echo "ISO_FILE=joshuatree-v$v.iso" >> "$GITHUB_ENV"
+          cp joshuatree.iso "joshuatree-$v.iso"
+          shasum -a 256 "joshuatree-$v.iso" > SHA256SUMS
+          echo "ISO_FILE=joshuatree-$v.iso" >> "$GITHUB_ENV"
       - name: Tag and release if this version has none yet
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           v=$(tr -d ' \n' < VERSION)
-          tag="jt-v$v"
+          tag="$v"
           if gh release view "$tag" >/dev/null 2>&1; then echo "$tag exists"; exit 0; fi
           pr=$(gh pr list --state merged --search "$GITHUB_SHA" --json title,body -q '.[0]')
           title=$(echo "$pr" | jq -r '.title // empty' | sed 's/ (#[0-9]*)$//; s/ ([0-9.v]*)$//')
           echo "$pr" | jq -r '.body // empty' | sed '/Generated with \[Claude Code\]/,$d' > notes.md
           [ -s notes.md ] || git log -1 --format=%B > notes.md
           printf '%s\n' '' '## Boot it' '' 'The release above includes `joshuatree-'"$v"'.iso`, a bootable disk image. Write it to a USB stick to boot on real hardware:' '' 'macOS:' '```sh' 'diskutil list                    # find the disk (e.g. disk2)' 'sudo dd if=joshuatree-'"$v"'.iso of=/dev/rdiskN bs=4m' '```' '' 'Linux:' '```sh' 'lsblk                            # find the device (e.g. sdb)' 'sudo dd if=joshuatree-'"$v"'.iso of=/dev/sdX bs=4M status=progress conv=fsync' '```' '' 'This will erase the stick. Double-check the device path first. Boot the machine from the USB stick (F12/F10/Esc/Del at power-on for most PCs) to start the kernel.' '' 'The ISO is proven to boot in QEMU (CD-ROM and USB-style raw disk) via the CI regression suite. Real hardware testing is ongoing.' >> notes.md
-          gh release create "$tag" --target "$GITHUB_SHA" -t "v$v: ${title:-$(git log -1 --format=%s)}" -F notes.md "${{ env.ISO_FILE }}" SHA256SUMS
+          gh release create "$tag" --target "$GITHUB_SHA" -t "$v: ${title:-$(git log -1 --format=%s)}" -F notes.md "${{ env.ISO_FILE }}" SHA256SUMS
