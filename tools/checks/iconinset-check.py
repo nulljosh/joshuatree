@@ -151,7 +151,12 @@ def silhouette_check(name, img):
                         hard_steps += 1
                 break
         if got_r is None:
-            continue  # fully opaque or fully transparent this ray (shouldn't happen near the squircle band)
+            # No silhouette crossing anywhere in the band: an empty or
+            # full-canvas icon, which is a miss, not a free pass. A ray
+            # that runs into the raster frame is the one legitimate case.
+            if not near_frame:
+                worst = float("inf")
+            continue
         worst = max(worst, abs(got_r - want_r))
     return worst, hard_steps
 
