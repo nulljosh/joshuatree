@@ -46,6 +46,7 @@ retry|PNG decoder, in-kernel|./tools/checks/png-check.sh
 retry|AA text spacing, in-kernel|./tools/checks/textspacing-check.sh
 retry|AA text stems are dense but still antialiased|python3 ./tools/checks/textsharp-check.py
 retry|FAT filesystem cycle hang (regression test)|./tools/checks/fatcyclehang-check.sh
+retry|File robustness: empty, oversized, corrupt-FAT and full-disk cases|python3 ./tools/checks/filerobust-check.py
 retry|Chat history (VFS-backed, past the old 512-byte cap)|./tools/checks/chat-check.sh
 retry|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ramfs-demo-check.sh
 retry|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh
