@@ -1,4 +1,5 @@
 #!/bin/bash
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 # Weather app, headless, no real internet needed. Four boots of the real
 # kernel against a local fake ip-api/Open-Meteo server (the kernel is pointed
 # at it with the multiboot command line, -append "wxhost=10.0.2.2:PORT"):

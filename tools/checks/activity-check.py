@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 """Headless proof that the Activity app (kernel/activity.h, v0.88.0) is
 real: it reads real scheduler state through the exact same primitives the
 shell's own `ps`/`kill`/`mem` commands already call (task_used/task_kill/

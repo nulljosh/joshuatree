@@ -1,4 +1,5 @@
 #!/bin/sh
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 # The brand mark exists in two real places and they drift: landing/icon.svg
 # is the source, icon.svg at the repo root is what README.md renders.
 # (The Mac app and its .icns live in nulljosh/joshuatree-monitor now.)

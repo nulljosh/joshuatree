@@ -1,3 +1,4 @@
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // The v86 half of wallboot-check.sh's guarantee: on the browser demo
 // (font_is_fallback()==1, no real network ever, see wall_apply()'s own
 // comment in kernel/kernel.c), the desktop's automatic no-network

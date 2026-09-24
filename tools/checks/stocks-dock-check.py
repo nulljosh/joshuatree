@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 """Headless proof that the Stocks app opens when clicked from the dock.
 Models appclose-check.py's pattern: boots kernel.elf with -display none,
 uses QMP absolute pointer to click the Stocks dock slot, pmemsaves the

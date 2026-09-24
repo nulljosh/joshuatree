@@ -1,3 +1,4 @@
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // Direct report: "Landing page demo is taking a while to load even when the
 // rest of the page already finishes loading, especially on mobile." Root
 // cause, confirmed by reading embed.js and by real Playwright/CDP network

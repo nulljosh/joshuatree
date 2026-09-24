@@ -1,3 +1,4 @@
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // Idle-tour QA: load the demo, touch NOTHING, and confirm the tour opens an app on its own.
 import { chromium } from 'playwright';
 const b = await chromium.launch();

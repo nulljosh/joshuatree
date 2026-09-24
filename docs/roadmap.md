@@ -52,7 +52,7 @@ What other small operating systems needed before people used them day to day.
 - [ ] [Fable] Bluetooth: a USB HCI transport and enough of the stack for a keyboard and mouse.
 - [ ] [Sonnet] Languages: every UI string through one table, a Settings language picker, Latin-1 accents drawn (the DejaVu faces have the glyphs; the text paths drop bytes above 0x7F today).
 - [ ] [Sonnet] Ring-3 programs a fresh shell ships with: `cat`, `wc`, `grep`, `calc`. A tiny C compiler is a stretch.
-- [ ] [Sonnet] Settings gets a Location field (city or postal code), saved, used by weather and the wallpaper map. Location from the internet address says Vancouver for Langley and cannot do better.
+- [x] [Sonnet] Settings gets a Location field (city or postal code), saved, used by weather and the wallpaper map. Location from the internet address says Vancouver for Langley and cannot do better. Done in v1.0.5: `loc_geocode` resolves the typed text through Open-Meteo's own geocoding endpoint and writes straight into the same `geo_lat`/`geo_lon`/`geo_city` fields `weather_fetch_inner` and the map's `wall_fetch` already read, persisted through `SETTINGS.TXT` alongside wind/dock/wall; `tools/checks/location-check.py` proves the geocode, the save/reload round trip, and the not-found/empty fallback headlessly against a local mock server, never real internet.
 - [ ] [Sonnet] Settings as a real native app in the dock: wallpaper, text size, system typeface, location, accounts, network status, about. One place, not scattered panels.
 - [ ] [Sonnet] Photos app: grid of the images on disk, click for full view, arrow keys to move. Built on `drivers/png.c`, plus baseline JPEG if the wallpaper decoder can be reused. Covers the image viewer gap.
 - [ ] [Sonnet] Typeface support: proportional fonts beyond DejaVu, loaded from disk, picked in Settings. Reference look from Joshua: a tight grotesque sans for body and headlines, one display face for titles, hairline rules, flat colour blocks. Sans only in the UI chrome.
@@ -82,7 +82,7 @@ Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at f
 Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Fable] No sound at all. Needs an audio driver (AC97 or SB16 under QEMU).
 - [ ] [Fable] No native TLS. HTTPS only works through the worker's proxy.
-- [ ] [Sonnet] Clipboard copy/paste.
+- [x] [Sonnet] Clipboard copy/paste. Shipped 1.0.6: one global 4KB buffer, Ctrl+C/X/V in Notes, Terminal, and every field built on `gui_prompt.h` (Mail, Reminders, Calculator). No selection model exists yet (see the item below), so Ctrl+C/X act on the current line/field, not an arbitrary range.
 - [ ] [Sonnet] Right-click context menus.
 - [ ] [Sonnet] App switcher and global hotkeys.
 - [ ] [Sonnet] Lock screen, sleep, and ACPI shutdown.
