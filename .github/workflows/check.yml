@@ -258,6 +258,14 @@ jobs:
       # fails this one step rather than passing silently on a misread.
       - name: Chat reaches the real turing.heyitsmejosh.com:80 (Samantha, plain HTTP)
         run: python3 tools/checks/chat-samantha-check.py --live || (sleep 15 && python3 tools/checks/chat-samantha-check.py --live) || true
+      # 1.1.0: same real-network proof for the tool picker, chat_pick's own
+      # /api/pick. No host override, so this exercises the real, deployed
+      # Turing Worker and its real small-model picker, not a scripted fake
+      # answer -- informational only (chat_pick failing outright, or the
+      # real picker just not naming new_reminder for this exact phrasing,
+      # is not this kernel's bug), so this never fails the job.
+      - name: Chat's tool picker reaches the real turing.heyitsmejosh.com:80 (/api/pick)
+        run: python3 tools/checks/chattools-check.py --live || (sleep 15 && python3 tools/checks/chattools-check.py --live) || true
 
   # One status, one gate. main's branch protection used to require three
   # separate contexts: `check`, `check-refs` and `network`. Two real

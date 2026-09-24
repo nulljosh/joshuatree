@@ -71,7 +71,17 @@ async function handleProxy(request) {
   // other allowed host keeps the GET-only, no-body behaviour below
   // unchanged -- this is the one and only route that ever forwards a
   // guest-supplied body anywhere.
-  const isSamanthaChat = targetUrl.hostname === "turing.heyitsmejosh.com" && targetUrl.pathname === "/api/chat"
+  //
+  // 1.1.0: /api/pick joins /api/chat here, same host, same exact
+  // guest-controlled shape (POST, application/json, a small body well
+  // under the same cap) -- kernel/chat.h's new chat_pick asks it before
+  // every chat_send, so it needs the identical narrow forwarding /api/chat
+  // already has, nothing wider. Still not part of ALLOWED_HOSTS/
+  // isAllowedTarget: every other path on this host, or either of these
+  // two paths with a different method/content-type/size, still falls
+  // through to the ordinary 403 below exactly as before this pass.
+  const SAMANTHA_PATHS = new Set(["/api/chat", "/api/pick"]);
+  const isSamanthaChat = targetUrl.hostname === "turing.heyitsmejosh.com" && SAMANTHA_PATHS.has(targetUrl.pathname)
       && ["http:", "https:"].includes(targetUrl.protocol) && !targetUrl.port && !targetUrl.username && !targetUrl.password;
   const CHAT_SAMANTHA_MAX_BODY = 8192; // 8 KB, the task's own stated cap
   if (isSamanthaChat && request.method === "POST") {
