@@ -47,9 +47,12 @@
    assumes the default is the only valid target. Turing's own `/api/chat`
    is deliberately Ollama-shaped (same request/response fields this file
    already builds/parses), so no wire-format change was needed, just the
-   defaults. One real gap that default change exposed: turing.heyitsmejosh.com
-   forces HTTPS, which this kernel cannot speak (no TLS anywhere in this
-   stack); chat_send below now recognizes a 3xx off `http_last_status()`
+   defaults. One real gap that default change exposed: a Cloudflare-fronted host
+   like turing.heyitsmejosh.com can answer plain HTTP with a redirect to
+   HTTPS (Cloudflare's "Always Use HTTPS" zone setting), which this kernel
+   cannot speak (no TLS anywhere in this stack); whether the real host does
+   is settled by check.yml's `network` job, not assumed here. chat_send
+   below now recognizes a 3xx off `http_last_status()`
    and reports it as a clear, specific status instead of the old generic
    "no reply" (which read exactly like a dead host or a typo, not "you
    need a different port/host"), via chat_error() below. */
@@ -229,10 +232,11 @@ static int chat_send(const char *user_msg, char *answer, unsigned int answer_cap
     int respn = http_post(llm_host, "/api/chat", (unsigned short)llm_port, req_body, rn, resp, sizeof(resp) - 1);
     if (respn == -1) return 0; /* resolve/connect failure, no HTTP reply at all: http_last_status is stale, don't trust it */
 
-    /* 1.0.12: turing.heyitsmejosh.com (the new default host) forces HTTPS,
-       which this kernel cannot speak (no TLS anywhere in this stack, see
-       docs/THREAT-MODEL.md); the plain-HTTP request above lands on a real
-       redirect (301/302/307/308) instead of a JSON body. The old code
+    /* 1.0.12: a host that upgrades plain HTTP to HTTPS (Cloudflare's
+       "Always Use HTTPS" default in front of turing.heyitsmejosh.com would)
+       answers the plain-HTTP request above with a real redirect
+       (301/302/307/308) instead of a JSON body, and this kernel cannot
+       follow it (no TLS anywhere in this stack, see docs/THREAT-MODEL.md). The old code
        just fell through to json_extract_string finding nothing and
        reported the same generic "no reply" as a dead host or a typo'd
        port -- a real, specific, fixable cause deserves a real, specific

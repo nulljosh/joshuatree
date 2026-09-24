@@ -48,6 +48,7 @@ retry|AA text stems are dense but still antialiased|python3 ./tools/checks/texts
 retry|FAT filesystem cycle hang (regression test)|./tools/checks/fatcyclehang-check.sh
 retry|Chat history (VFS-backed, past the old 512-byte cap)|./tools/checks/chat-check.sh
 retry|Chat defaults to Samantha (Turing) and surfaces an HTTPS-redirect host clearly|python3 ./tools/checks/chat-samantha-check.py
+retry|GUI Chat app asks Samantha and renders the reply on screen|python3 ./tools/checks/chatapp-check.py
 retry|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ramfs-demo-check.sh
 retry|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh
 retry|Ring-3 reference program against the v1 syscall ABI|./tools/checks/usertest-check.sh
