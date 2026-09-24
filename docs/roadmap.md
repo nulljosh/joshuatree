@@ -6,7 +6,7 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
-**Latest**: Version 1.0, Hidden Valley.
+**Latest**: Introducing Chat with Samantha. Ask her anything, or tell her to add a reminder, take a note, open an app, or check the weather.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -135,7 +135,7 @@ One ink on one paper, tone by hatching. Full rule in `CLAUDE.md`'s Theme section
 - [ ] [Haiku] `landing/icon.svg`, root `icon.svg`, and the app `.icns` redrawn as the simplified tree.
 
 ## Bigger, not yet scheduled
-- [ ] [Fable] Samantha on-device: run the Turing project's model inside this kernel instead of over the network. Honest sizing: Samantha is a LoRA on Qwen2.5-0.5B, about 500 MB at int8 and 1 GB at fp16, with a 32-bit address space, no SIMD path and integer-only math in this kernel today; a first step is a much smaller distilled model (tens of MB) with an int8 matmul kernel, proven by a headless check that answers one fixed question offline. Until then Chat keeps using Turing's hosted `/api/chat` and `/api/pick` (1.0.12, 1.1.0).
+- [ ] [Fable] Samantha on-device: run the Turing project's model inside this kernel instead of over the network. Today she is far too big for a 32-bit kernel with integer-only math, so the first step is a much smaller model and an int8 matmul path. Proof: a headless check that answers one fixed question offline.
 - [ ] [Sonnet] File search, Spotlight-style. Needs an index-or-scan design, not a stub.
 - [ ] [Sonnet] An Activity Monitor app over the shell's `ps`/`kill`/`mem`. (In PR #62, not merged.)
 - [ ] [Fable] A second privilege tier (sudo/admin) on top of the accounts that already exist.
