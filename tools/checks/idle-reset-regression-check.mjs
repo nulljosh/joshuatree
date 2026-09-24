@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // Discriminating regression test for idle-reset behavior (v0.76.26)
 // Verifies:
 // 1. Continuous small interactions (mousemove every 1s) for 10s -> NO restart

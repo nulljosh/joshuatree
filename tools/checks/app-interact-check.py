@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 """Real interaction-level QA for every built-in app, not just "opens and
 closes" (that's appclose-check.py's job, and this script still runs that
 same close-via-X + input-stays-alive check for every dock app). This one

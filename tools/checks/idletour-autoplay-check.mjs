@@ -1,3 +1,4 @@
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // v0.76.22: real bug found where tourArmed is never reset if tourLoop exits early,
 // preventing the idle tour from ever restarting. This regression test verifies
 // that the idle tour DOES start automatically after boot without any user

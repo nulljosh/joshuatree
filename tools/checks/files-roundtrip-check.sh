@@ -1,4 +1,5 @@
 #!/bin/bash
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 # Regression test for file write/read roundtrip persistence across reboots.
 # Proves that files written through the VFS persist correctly across
 # a kernel reboot with the same FAT16 disk image.

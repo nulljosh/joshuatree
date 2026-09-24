@@ -82,7 +82,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang lld qemu-system-x86 python3-pil mtools dosfstools ccache xorriso
+            clang lld qemu-system-x86 python3-pil librsvg2-bin mtools dosfstools ccache xorriso
       # The old cache step pointed at /var/cache/apt/archives, which apt on
       # the runner empties after a successful install, so it restored an
       # empty directory every run and saved an empty one back: a cache that
@@ -181,7 +181,7 @@ jobs:
       - name: Install clang, lld, qemu
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang lld qemu-system-x86 python3-pil curl
+          sudo apt-get install -y --no-install-recommends clang lld qemu-system-x86 python3-pil librsvg2-bin curl
       - name: Build
         run: make kernel.elf
       # Real one-off transient failures (a ConnectionResetError from

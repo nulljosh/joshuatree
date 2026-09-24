@@ -1,3 +1,4 @@
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // Real, headless proof that v86 (the landing page's in-browser x86
 // emulator) can now reach a real network endpoint through the new NE2000
 // driver (drivers/ne2k.c). v86 has never emulated RTL8139 (confirmed by

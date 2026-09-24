@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# MANUAL: one-off visual proof for a human to look at, not a pass/fail
+# regression check; never belongs in ci-suite.sh.
 """One-off visual proof (not part of the regression suite) that
 joshuatree.iso reaches the real desktop when booted -cdrom, same
 QMP + pmemsave pattern the app-interact checks use. Writes a PNG next

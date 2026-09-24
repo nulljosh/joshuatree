@@ -1,4 +1,5 @@
 #!/bin/sh
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 # Regression test: DNS transaction ID validation in dns_resolve (drivers/net.c).
 #
 # Real bug, root-caused from a direct report: "Weather shows the city

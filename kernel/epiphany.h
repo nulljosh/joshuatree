@@ -13,6 +13,18 @@
    Keys: left/right or 1-4 switch tab, up/down select, + / - shares, b/s/space in
    the simulator, esc closes. Clicking a tab switches to it; the red dot closes. */
 
+/* Fixed sample holdings stay separate from Stocks' network quotes. */
+static stocks_entry_t epi_demo_entries[STOCKS_MAX] = {
+    {"AAPL", "Apple Inc.", 23800, 250, 3600, 312},
+    {"MSFT", "Microsoft", 41900, -180, 3100, 350},
+    {"GOOGL", "Alphabet Inc.", 14200, 350, 1750, 245},
+    {"AMZN", "Amazon.com", 19100, -320, 2000, 340},
+    {"TSLA", "Tesla Inc.", 24200, 870, 780, 610},
+    {"NVDA", "NVIDIA", 12800, 410, 3100, 550},
+    {"META", "Meta Platforms", 58000, -640, 1480, 280},
+    {"NFLX", "Netflix", 66000, 1180, 290, 470},
+};
+
 #define EPI_TABS 4
 static const char *epi_tab_name[EPI_TABS] = {"Markets", "Portfolio", "Simulator", "Situation"};
 #define EPI_ACCENT 0x000A84FF
@@ -111,7 +123,7 @@ static void epi_tab_portfolio(int x, int y, int w, int sel) {
     for (int i = 0; i < 4; i++) epi_right(hd[i], cx[i], y, STX_MUTED);
     int total = 0, cost = 0;
     for (int i = 0; i < EPI_HOLD_N; i++) {
-        stocks_entry_t *s = &stocks_entries[epi_hold[i].stock];
+        stocks_entry_t *s = &epi_demo_entries[epi_hold[i].stock];
         int val = epi_hold[i].shares * s->price_x100, cb = epi_hold[i].shares * epi_hold[i].cost_x100;
         total += val; cost += cb;
         int ry = y + 24 + i * 22;
@@ -133,7 +145,7 @@ static void epi_tab_portfolio(int x, int y, int w, int sel) {
     static const unsigned int seg[EPI_HOLD_N] = {0x000A84FF, 0x0041854B, 0x00C98A1B, 0x00B51616, 0x00707070};
     int ax = x;
     for (int i = 0; i < EPI_HOLD_N && total > 0; i++) {
-        int sw = (int)(epi_hold[i].shares * stocks_entries[epi_hold[i].stock].price_x100 * w / total);
+        int sw = (int)(epi_hold[i].shares * epi_demo_entries[epi_hold[i].stock].price_x100 * w / total);
         window_rect(ax, ty + 70, sw, 12, seg[i]); ax += sw;
     }
     font_draw_string("up/down pick   + / - shares", x, ty + 90, STX_MUTED, -1);
