@@ -1,9 +1,14 @@
 name: Boot check
+# 1.1.2: pull_request only. Branch protection requires every PR to be green
+# AND up to date with main before it merges, so the push-to-main run was a
+# second run of the exact same tree: no new information, twice the CI
+# minutes, and the only thing it ever produced on its own was a failure
+# email whenever a check flaked on the repeat. release.yml and deploy.yml
+# have their own push triggers and are unaffected.
 on:
-  push:
-    branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
 
 # v0.76.8: this session pushes to main frequently enough (several times an
 # hour some days) that back-to-back pushes were queuing overlapping runs on
