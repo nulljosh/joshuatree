@@ -6,6 +6,76 @@ static int editor_family, editor_size = 1, editor_weight, editor_scroll;
 static int editor_mouse_x = 400, editor_mouse_y = 300;
 static const char *editor_status = "NOTES.TXT   |   Ctrl+S saves   Esc closes";
 
+/* v1.2.0: real text selection. -1 means no selection; otherwise this is
+   the position Shift+arrow/Ctrl+A started extending from, and the active
+   range is always [min(anchor,editor_position), max(...)) -- there is no
+   separate "which end is the caret" flag because editor_position IS the
+   caret, the same way every other editor's selection follows its caret. */
+static int editor_sel_anchor = -1;
+
+/* True only when the anchor and the caret actually differ: an anchor left
+   sitting exactly on the caret (Shift pressed, then released with no net
+   movement) is not a real, drawable/copyable selection. */
+static int editor_selection_range(int *lo, int *hi) {
+    if (editor_sel_anchor < 0 || editor_sel_anchor == editor_position) return 0;
+    if (editor_sel_anchor < editor_position) { *lo = editor_sel_anchor; *hi = editor_position; }
+    else { *lo = editor_position; *hi = editor_sel_anchor; }
+    return 1;
+}
+
+/* Shared decimal-append, same shape clip_serial_dump already uses for its
+   own length field: no libc, no sprintf. */
+static void editor_append_uint(char *out, int *k, unsigned int v) {
+    char d[10]; int dn = 0;
+    do { d[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
+    while (dn) out[(*k)++] = d[--dn];
+}
+
+/* "edsel=<start>,<end>": fired only when a real (non-empty) selection's
+   bounds change, never on every keystroke, so a check can grep for the
+   exact range Shift+arrow/Ctrl+A just produced. */
+static void editor_serial_sel(void) {
+    int lo, hi;
+    if (!editor_selection_range(&lo, &hi)) return;
+    char out[40]; int k = 0;
+    const char *tag = "edsel=";
+    for (const char *p = tag; *p; p++) out[k++] = *p;
+    editor_append_uint(out, &k, (unsigned int)lo);
+    out[k++] = ',';
+    editor_append_uint(out, &k, (unsigned int)hi);
+    out[k++] = '\n'; out[k] = 0;
+    serial_puts(out);
+}
+
+/* "edcopy=<n>" / "edcut=<n>": fired only for a selection-driven Ctrl+C/X
+   (the pre-1.2.0 whole-line Ctrl+C/X path keeps CLIPCOPY's own marker,
+   see clipboard_set below), so a check can prove the count matches
+   exactly the range that was highlighted, not just that some copy ran. */
+static void editor_serial_count(const char *tag, unsigned int n) {
+    char out[24]; int k = 0;
+    for (const char *p = tag; *p; p++) out[k++] = *p;
+    editor_append_uint(out, &k, n);
+    out[k++] = '\n'; out[k] = 0;
+    serial_puts(out);
+}
+
+/* Removes the active selection from the buffer, leaves the caret at its
+   start, and clears the anchor -- the one real choke point every
+   selection-replacing action (typing, Backspace, Delete, Ctrl+X, a paste
+   over a selection) below goes through, so none of them can forget to
+   clear the anchor or drop a byte off the shift. No-op with no active
+   selection. */
+static void editor_delete_selection(void) {
+    int lo, hi;
+    if (!editor_selection_range(&lo, &hi)) return;
+    int n = hi - lo;
+    for (int index = lo; index <= editor_length - n; index++) editor_buffer[index] = editor_buffer[index + n];
+    editor_length -= n;
+    editor_position = lo;
+    editor_sel_anchor = -1;
+    editor_dirty = 1;
+}
+
 static const struct editor_glyph *editor_glyph_for(unsigned char character) {
     if (character < 32 || character > 126) character = '?';
     return &editor_glyphs[((editor_family * 2 + editor_weight) * 4 + editor_size) * 95 + character - 32];
@@ -68,8 +138,16 @@ static void editor_layout(int draw, int *caret_x, int *caret_line) {
         if (index == editor_position) { *caret_x = text_x; *caret_line = line; }
         if (index == editor_length) break;
         if (character == '\n') { text_x = 56; line++; continue; }
-        if (draw && character != '\t' && line >= editor_scroll && line < editor_scroll + visible_lines)
+        if (draw && character != '\t' && line >= editor_scroll && line < editor_scroll + visible_lines) {
+            /* v1.2.0: the selection highlight, a light-blue band drawn
+               BEHIND the glyph so the ink still reads on top of it, only
+               over the exact columns actually selected on this line --
+               never a whole-line bar, never drawn for an unselected run. */
+            int sel_lo, sel_hi;
+            if (editor_selection_range(&sel_lo, &sel_hi) && index >= sel_lo && index < sel_hi)
+                window_rect(text_x, EDITOR_TEXT_TOP + 2 + (line - editor_scroll) * line_height, advance, 20 + editor_size * 4, 0x00B4D5FE);
             editor_draw_glyph(character, text_x, EDITOR_TEXT_TOP + (line - editor_scroll) * line_height);
+        }
         text_x += advance;
     }
 }
@@ -230,6 +308,7 @@ static void gui_launch_editor(void) {
        whatever the framebuffer happened to hold there from a different
        app in between. */
     editor_chrome_family = -1;
+    editor_sel_anchor = -1; /* v1.2.0: a fresh window session starts with no selection, even if a prior close/reopen this boot left one set */
     editor_draw();
     for (;;) {
         int changed = 0, close = 0, save = 0;
@@ -270,26 +349,56 @@ static void gui_launch_editor(void) {
             else if (!released) {
                 changed = 1;
                 if (code == 0x3A) caps ^= 1;
-                else if (code == 1) close = 1;
+                else if (code == 1) {
+                    /* v1.2.0: Escape clears an active selection first, the
+                       same "navigate deselects" contract a plain arrow
+                       gets below; only a SECOND Escape (nothing left to
+                       clear) closes Notes, so a selection never eats the
+                       one key every read-only viewer already relies on to
+                       leave the app. */
+                    if (editor_sel_anchor >= 0) editor_sel_anchor = -1; else close = 1;
+                }
                 else if (code == 0x3B) editor_family = (editor_family + 1) % 3;
                 else if (code == 0x3C) editor_size = (editor_size + 1) % 4;
                 else if (code == 0x3D) editor_weight ^= 1;
                 else if (control && code == 0x1F) save = 1;
+                else if (control && code == 0x1E) {
+                    /* Ctrl+A: select the whole buffer, caret at the end,
+                       the same convention Ctrl+A's own select-all keeps
+                       everywhere else it exists. */
+                    editor_sel_anchor = 0;
+                    editor_position = editor_length;
+                    editor_serial_sel();
+                }
                 else if (control && (code == 0x2E || code == 0x2D)) {
-                    /* Ctrl+C / Ctrl+X: copy (or cut) the current line. */
-                    int ls = editor_line_start(editor_position), le = editor_line_end(editor_position);
+                    /* v1.2.0: Ctrl+C/X now prefer a real selection when one
+                       is active. With none, this is exactly the pre-1.2.0
+                       "current line" fallback (docs/roadmap.md's own
+                       "no selection model exists yet" note, now stale) --
+                       same clipboard_set/CLIPCOPY choke point either way,
+                       so Ctrl+V and every other existing consumer of the
+                       one global clipboard keep working unchanged. */
+                    int sel_lo, sel_hi, has_sel = editor_selection_range(&sel_lo, &sel_hi);
+                    int ls = has_sel ? sel_lo : editor_line_start(editor_position);
+                    int le = has_sel ? sel_hi : editor_line_end(editor_position);
                     clipboard_set(&editor_buffer[ls], (unsigned int)(le - ls));
+                    if (has_sel) editor_serial_count(code == 0x2D ? "edcut=" : "edcopy=", (unsigned int)(le - ls));
                     if (code == 0x2D) {
-                        for (int index = ls; index <= editor_length - (le - ls); index++)
-                            editor_buffer[index] = editor_buffer[index + (le - ls)];
-                        editor_length -= (le - ls); editor_position = ls; editor_dirty = 1;
+                        if (has_sel) editor_delete_selection();
+                        else {
+                            for (int index = ls; index <= editor_length - (le - ls); index++)
+                                editor_buffer[index] = editor_buffer[index + (le - ls)];
+                            editor_length -= (le - ls); editor_position = ls; editor_dirty = 1;
+                        }
                     }
                 }
                 else if (control && code == 0x2F) {
                     /* Ctrl+V: paste at the cursor, truncated cleanly at the
                        4095-byte buffer limit -- never overflows
                        editor_buffer, same bound plain typing enforces
-                       below. */
+                       below. v1.2.0: an active selection is replaced by
+                       the paste, same as typing a character over it. */
+                    if (editor_sel_anchor >= 0) editor_delete_selection();
                     unsigned int room = (unsigned int)sizeof(editor_buffer) - 1 - (unsigned int)editor_length;
                     unsigned int take = clipboard_len < room ? clipboard_len : room;
                     if (take) {
@@ -302,6 +411,20 @@ static void gui_launch_editor(void) {
                     }
                 }
                 else if (extended) {
+                    /* v1.2.0: Shift+Left/Right/Up/Down/Home/End extends a
+                       selection from wherever the caret already was; the
+                       same keys with no Shift held clear whatever
+                       selection existed instead of moving it, the
+                       standard "navigating deselects" contract. Delete
+                       (0x53) is handled on its own below it, since with an
+                       active selection it removes the selection instead
+                       of moving the caret forward a character. */
+                    int shift = shift_left || shift_right;
+                    int is_nav = (code == 0x4B || code == 0x4D || code == 0x48 || code == 0x50 || code == 0x47 || code == 0x4F);
+                    if (is_nav) {
+                        if (shift) { if (editor_sel_anchor < 0) editor_sel_anchor = editor_position; }
+                        else editor_sel_anchor = -1;
+                    }
                     if (code == 0x4B && editor_position > 0) editor_position--;
                     if (code == 0x4D && editor_position < editor_length) editor_position++;
                     if (code == 0x48) editor_vertical(-1);
@@ -314,10 +437,14 @@ static void gui_launch_editor(void) {
                         if (control) editor_position = editor_length;
                         else while (editor_position < editor_length && editor_buffer[editor_position] != '\n') editor_position++;
                     }
-                    if (code == 0x53 && editor_position < editor_length) {
-                        for (int index = editor_position; index < editor_length; index++) editor_buffer[index] = editor_buffer[index + 1];
-                        editor_length--; editor_dirty = 1;
+                    if (code == 0x53) {
+                        if (editor_sel_anchor >= 0) editor_delete_selection();
+                        else if (editor_position < editor_length) {
+                            for (int index = editor_position; index < editor_length; index++) editor_buffer[index] = editor_buffer[index + 1];
+                            editor_length--; editor_dirty = 1;
+                        }
                     }
+                    if (is_nav && shift) editor_serial_sel();
                 } else if (!control) {
                     char character = SC[code];
                     int shift = shift_left || shift_right;
@@ -329,10 +456,20 @@ static void gui_launch_editor(void) {
                         for (int index = 0; normal[index]; index++)
                             if (character == normal[index]) { character = shifted[index]; break; }
                     }
-                    if (character == '\b' && editor_position > 0) {
-                        for (int index = editor_position - 1; index < editor_length; index++) editor_buffer[index] = editor_buffer[index + 1];
-                        editor_position--; editor_length--; editor_dirty = 1;
+                    if (character == '\b') {
+                        /* v1.2.0: Backspace with an active selection removes
+                           the selection instead of the one char behind the
+                           caret. */
+                        if (editor_sel_anchor >= 0) editor_delete_selection();
+                        else if (editor_position > 0) {
+                            for (int index = editor_position - 1; index < editor_length; index++) editor_buffer[index] = editor_buffer[index + 1];
+                            editor_position--; editor_length--; editor_dirty = 1;
+                        }
                     } else if (character == '\n' || character == '\t' || (character >= 32 && character <= 126)) {
+                        /* v1.2.0: typing over an active selection replaces
+                           it, the same "typing eats the selection" contract
+                           every other real text editor keeps. */
+                        if (editor_sel_anchor >= 0) editor_delete_selection();
                         if (editor_length < (int)sizeof(editor_buffer) - 1) {
                             for (int index = editor_length; index > editor_position; index--) editor_buffer[index] = editor_buffer[index - 1];
                             editor_buffer[editor_position++] = character;
