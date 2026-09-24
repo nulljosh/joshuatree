@@ -308,6 +308,13 @@ static int gui_getch_or_click(void){
 #define CLIPBOARD_CAP 4096
 static char clipboard_buf[CLIPBOARD_CAP];
 static unsigned int clipboard_len = 0;
+/* "cliptrace" on the multiboot command line (tools/checks/clipboard-check.py
+   passes it) adds a content hash to the CLIPCOPY/CLIPPASTE serial lines so
+   a check can prove which text moved. A normal boot logs the length only:
+   the serial log is host-readable (v86 exposes it as window.__jt.serial)
+   and an unkeyed 32-bit hash of a short pasted password is dictionary-
+   recoverable. */
+static int clip_trace = 0;
 /* Serial markers, same convention "editorchrome"/"termchrome" already use:
    a discriminating line a headless check can grep out of the serial log,
    here proving exactly what text the clipboard held or a paste actually
@@ -316,15 +323,18 @@ static unsigned int clipboard_len = 0;
    serial_puts needs a null terminator and neither clipboard_buf nor an
    app's own text buffer is guaranteed to have one at an arbitrary slice. */
 static void clip_serial_dump(const char *tag, const char *s, unsigned int n) {
-    /* length + FNV-1a hash only, never the text: the clipboard can hold a
-       pasted password and the serial log is readable by anyone at the host */
-    unsigned int h = 2166136261u;
-    for (unsigned int i = 0; i < n; i++) { h ^= (unsigned char)s[i]; h *= 16777619u; }
+    /* length, plus an FNV-1a hash only under cliptrace (see clip_trace);
+       never the text: the clipboard can hold a pasted password and the
+       serial log is readable by anyone at the host */
     char out[24]; int k = 0; char d[10]; int dn = 0; unsigned int v = n;
     do { d[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
     while (dn) out[k++] = d[--dn];
-    out[k++] = ':';
-    for (int sh = 28; sh >= 0; sh -= 4) out[k++] = "0123456789abcdef"[(h >> sh) & 15];
+    if (clip_trace) {
+        unsigned int h = 2166136261u;
+        for (unsigned int i = 0; i < n; i++) { h ^= (unsigned char)s[i]; h *= 16777619u; }
+        out[k++] = ':';
+        for (int sh = 28; sh >= 0; sh -= 4) out[k++] = "0123456789abcdef"[(h >> sh) & 15];
+    }
     out[k++] = '\n'; out[k] = 0;
     serial_puts(tag);
     serial_puts(out);
@@ -5897,6 +5907,11 @@ static void gui_launch_settings(void){
                         loc_have = 0; loc_name[0] = 0; loc_lat[0] = 0; loc_lon[0] = 0;
                         geo_have = 0; geo_lat[0] = 0; geo_lon[0] = 0; geo_city[0] = 0;
                         settings_save();
+                        /* Same cache drop as the set path below: the old
+                           override's weather and map must not outlive it. */
+                        weather_tried_once = 0; weather_have = 0;
+                        if (wall_map) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
+                        wall_apply(wall_theme != WALL_PHOTO);
                         font_draw_string("Location cleared (using your IP address instead).", 20, (int)window_height() - 48, 0x00807468, -1);
                     } else if (loc_geocode(lbuf)) {
                         settings_save();
@@ -5910,7 +5925,12 @@ static void gui_launch_settings(void){
                            from here. */
                         weather_tried_once = 0; weather_have = 0;
                         if (wall_map) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
-                        char msg[48] = "Location set: "; int mp = 15;
+                        /* wall_src still pointed at the buffer just freed;
+                           wall_apply repoints it (baked satellite or the
+                           photo) until the refetch lands, the same way
+                           wall_switch_theme is always followed by one. */
+                        wall_apply(wall_theme != WALL_PHOTO);
+                        char msg[48] = "Location set: "; int mp = 14; /* strlen("Location set: ") */
                         for (const char *c = loc_name; *c && mp < 47; c++) msg[mp++] = *c;
                         msg[mp] = 0;
                         font_draw_string(msg, 20, (int)window_height() - 48, 0x002F7B4F, -1);
@@ -9336,6 +9356,8 @@ void kmain(unsigned int multiboot_info_addr){
         const char *cl = (const char *)*(unsigned int *)(multiboot_info_addr + 16);
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='p' && pc[1]=='o' && pc[2]=='r' && pc[3]=='t' && pc[4]=='f' && pc[5]=='o' && pc[6]=='l' && pc[7]=='i' && pc[8]=='o') { portfolio_dock = 1; serial_puts("portfolio dock\n"); break; }
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='c' && pc[1]=='l' && pc[2]=='i' && pc[3]=='p' && pc[4]=='t' && pc[5]=='r' && pc[6]=='a' && pc[7]=='c' && pc[8]=='e') { clip_trace = 1; serial_puts("cliptrace\n"); break; }
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;

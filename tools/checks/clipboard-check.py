@@ -52,7 +52,10 @@ for f in (LOG, DUMP):
     try: os.remove(f)
     except FileNotFoundError: pass
 
+# "cliptrace" makes the kernel add the content hash to its CLIPCOPY/CLIPPASTE
+# lines (a normal boot logs the length only, see clip_trace in kernel.c).
 q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
+                      "-append", "cliptrace",
                       "-qmp", f"unix:{SOCKET},server,nowait", "-serial", "file:" + LOG],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

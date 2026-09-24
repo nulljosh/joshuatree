@@ -28,14 +28,24 @@ for f in tools/checks/*-check.*; do
     [ -e "$f" ] || continue
     b=$(basename "$f")
 
-    if grep -rqs "$b" tools/checks/ci-suite.sh tools/hooks .github; then
+    # Executed entries only, matched as literal text (the basename has
+    # dots): a check named in a comment of ci-suite.sh, a hook or a
+    # workflow is not wired, and must not count as if it were.
+    if grep -E '^[[:space:]]*(once|retry)[[:space:]]*\|' tools/checks/ci-suite.sh | grep -qF "$b"; then
+        continue
+    fi
+    if grep -rhs -v '^[[:space:]]*#' tools/hooks .github | grep -qF "$b"; then
         continue
     fi
     if grep -qE "^\s*(#|//|\"\"\")\s*(MANUAL|HELPER):" "$f"; then
         continue
     fi
-    if grep -rl "$b" tools/checks --include='*.sh' --include='*.py' --include='*.mjs' 2>/dev/null \
-        | grep -qv "^tools/checks/$b\$"; then
+    called=0
+    for other in $(grep -rlF "$b" tools/checks --include='*.sh' --include='*.py' --include='*.mjs' 2>/dev/null); do
+        [ "$other" = "tools/checks/$b" ] && continue
+        if grep -v '^[[:space:]]*#' "$other" | grep -qF "$b"; then called=1; break; fi
+    done
+    if [ "$called" -eq 1 ]; then
         continue
     fi
 
