@@ -106,6 +106,7 @@ Things a modern desktop OS has that this kernel doesn't yet.
 - [x] 1.0.12: Chat talks to Samantha, the model from the Turing project, over the network by default. If a host answers with a redirect to HTTPS (this kernel has no TLS), Chat says so instead of failing quietly. Proven against the real host in CI. Checks: `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`.
 - [x] 1.1.0: Samantha can act, not just answer. Chat asks Turing's picker first; when it names something this OS can do (a reminder, a note, opening an app, the cached weather, today's calendar), the kernel does it locally and skips the model. Plain questions go to Samantha as before. Proven against the real picker in CI. Check: `tools/checks/chattools-check.py`.
 - [x] 1.1.1: CI hygiene. A run superseded by a newer push now ends as cancelled instead of failed, so it stops emailing. Version names are bare numbers (`1.0.13`, not `jt-v1.0.13`). Two checks that a leftover merge conflict had silently skipped run again.
+- [x] 1.1.2: The CI network job's wallpaper checks had been failing silently since the default theme became Satellite: they compared satellite tiles against map tiles. They now boot in the theme they test, the map compose matches the host byte for byte on a real runner, and an offline compose check runs in the suite. CI runs on pull requests only, so there is no duplicate run on main. Check: `tools/checks/wallcompose-check.py`.
 
 ## Real hardware
 1.0 ships a USB-bootable ISO with a PS/2 fallback. USB is the 1.1 headline, built in this order.

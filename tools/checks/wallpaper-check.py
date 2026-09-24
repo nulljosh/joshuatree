@@ -59,6 +59,10 @@ print(f"host ip-api: {lat},{lon} -> z{ZOOM} tiles from ({want_tx},{want_ty})")
 
 q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                       "-rtc", "base=localtime",
+                      # 1.1.2: the default theme has been Satellite since v0.76.7, so the
+                      # first automatic fetch is JPEG satellite tiles; this check compares
+                      # against OpenTopoMap PNGs, so boot in the Map theme explicitly.
+                      "-append", "walltheme=map",
                       "-net", "nic,model=rtl8139", "-net", "user",
                       "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
