@@ -8614,6 +8614,28 @@ static void run(char *line){
         else {
             char buf[4096];
             int n = vfs_read_file(arg, buf, sizeof(buf) - 1);
+            /* v1.0.10: a named serial marker with the real returned length,
+               so tools/checks/filerobust-check.py can prove an empty file
+               reads back as n=0 and an oversized (or corrupted: a lying
+               file_size field plus a FAT chain that loops back on itself)
+               file comes back clamped to this buffer's own 4095-byte
+               capacity, not whatever its directory entry or cluster chain
+               claims -- headless, with no screen to scrape. fat_read_file's
+               own `remaining = min(file_size, bufsize)` already bounds the
+               copy regardless of what the on-disk metadata says, so this
+               is a proof marker, not a fix; see that function's own
+               comments in drivers/fat.c for why a corrupted size/chain
+               can't run past bufsize here. */
+            serial_puts("cat "); serial_puts(arg); serial_puts(": ");
+            if (n < 0) serial_puts("not found\n");
+            else {
+                char nb[8]; int ni = 0; unsigned int un = (unsigned int)n;
+                if (un == 0) nb[ni++] = '0';
+                while (un) { nb[ni++] = (char)('0' + un % 10); un /= 10; }
+                nb[ni] = 0;
+                for (int j = 0; j < ni / 2; j++) { char t = nb[j]; nb[j] = nb[ni - 1 - j]; nb[ni - 1 - j] = t; }
+                serial_puts("n="); serial_puts(nb); serial_puts("\n");
+            }
             if (n < 0) { puts(arg); puts(": not found\n"); }
             else { buf[n] = 0; puts(buf); putc('\n'); }
         }
@@ -8686,7 +8708,15 @@ static void run(char *line){
             char *content = arg;
             while (*content && *content != ' ') content++;
             if (*content) *content++ = 0;
-            puts(vfs_write_file(arg, content, strlen(content)) ? "written\n" : "failed (name taken or disk full)\n");
+            int ok = vfs_write_file(arg, content, strlen(content));
+            /* v1.0.10: named serial marker so a full-disk write failure
+               (alloc_cluster's free-cluster scan in drivers/fat.c coming up
+               empty) can be told apart from a hang, headless, and so the
+               very next command in the same boot can be checked for a real
+               "ok" -- proof the shell is still responsive, not just that
+               this one call returned. See tools/checks/filerobust-check.py. */
+            serial_puts("write "); serial_puts(arg); serial_puts(ok ? ": ok\n" : ": failed\n");
+            puts(ok ? "written\n" : "failed (name taken or disk full)\n");
         }
     }
     else if (!strcmp(line, "lspci")) {
