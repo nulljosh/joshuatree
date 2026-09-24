@@ -154,6 +154,59 @@ try {
   }
 }
 
+// 1.1.0: Chat's tool picker (kernel/chat.h's new chat_pick -> Turing's own
+// /api/pick) gets the exact same narrow forwarding /api/chat already has,
+// on the same host, nothing wider. Mirrors the /api/chat POST test above.
+{
+  const realFetch = globalThis.fetch;
+  let fetchedUrl = null, fetchedInit = null;
+  globalThis.fetch = async (url, init) => { fetchedUrl = url; fetchedInit = init; return new Response(
+    JSON.stringify({ tool: "new_reminder", arg: "buy milk" }),
+    { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    const target = "https://turing.heyitsmejosh.com/api/pick";
+    const body = JSON.stringify({ q: "remind me to buy milk", sections: [] });
+    const req = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+    });
+    const resp = await handleProxy(req);
+    check("Samantha /api/pick POST forwarded to the real target URL", fetchedUrl === target);
+    check("Samantha /api/pick POST forwarded with method POST (not downgraded to GET)", fetchedInit && fetchedInit.method === "POST");
+    check("Samantha /api/pick POST forwarded with the real request body", fetchedInit && new TextDecoder().decode(fetchedInit.body) === body);
+    check("Samantha /api/pick POST reply passed straight through, status 200", resp.status === 200);
+    check("Samantha /api/pick POST reply carries Access-Control-Allow-Origin", resp.headers.get("access-control-allow-origin") === "*");
+    const replyBody = await resp.json();
+    check("Samantha /api/pick POST reply body reached the guest unmodified", replyBody.tool === "new_reminder" && replyBody.arg === "buy milk");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+// A POST to any OTHER path on turing.heyitsmejosh.com -- not /api/chat, not
+// /api/pick -- is still refused: the exception is exactly these two paths,
+// nothing wider slipped in with /api/pick joining it.
+{
+  const realFetch = globalThis.fetch;
+  let fetchCalled = false;
+  globalThis.fetch = async () => { fetchCalled = true; return new Response("should never be reached"); };
+  try {
+    const target = "https://turing.heyitsmejosh.com/api/anything-else";
+    const req = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    const resp = await handleProxy(req);
+    check("a POST to turing.heyitsmejosh.com/api/anything-else still 403s (not part of the two-path exception)", resp.status === 403);
+    check("...and never reaches the real fetch call", !fetchCalled);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 // A POST to any OTHER allowed host must still be downgraded to a bare GET
 // with no body -- the Samantha exception must not have loosened the
 // existing GET-only contract for every real target this kernel already
