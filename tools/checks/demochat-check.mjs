@@ -62,7 +62,11 @@ if (!fs.existsSync(kernelElf)) {
 // own default lookup expects (see the environment's PLAYWRIGHT_BROWSERS_PATH);
 // the plain symlink resolves regardless of which exact revision folder it
 // happens to point at.
-const CHROMIUM_PATH = '/opt/pw-browsers/chromium';
+// This sandbox preinstalls a Chromium at /opt/pw-browsers/chromium whose revision
+// does not match playwright's pinned one, so it is used only when it exists;
+// CI (`npx playwright install --with-deps chromium`) and a laptop use
+// Playwright's own download. JT_CHROMIUM overrides either.
+const CHROMIUM_PATH = process.env.JT_CHROMIUM || (fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
 const EMPTY_REPLY = process.env.DEMOCHAT_EMPTY_REPLY === '1'; // discriminating-proof toggle only, see this file's own report
 
 const LOGICAL_W = 960, LOGICAL_H = 540;
@@ -106,7 +110,7 @@ const fails = [];
 function fail(msg) { fails.push(msg); console.log('  FAIL: ' + msg); }
 function ok(msg) { console.log('  ok:   ' + msg); }
 
-const browser = await chromium.launch({ executablePath: CHROMIUM_PATH });
+const browser = await chromium.launch(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {});
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 
 // Never arms the idle tour for this page load at all (embed.js reads
