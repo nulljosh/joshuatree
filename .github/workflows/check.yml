@@ -197,6 +197,16 @@ jobs:
       # that's still accurate, just no longer painted red on a host hiccup.
       - name: Weather location (ip-api + Open-Meteo)
         run: ./tools/checks/geo-check.sh || (sleep 15 && ./tools/checks/geo-check.sh) || true
+      # e1000-check.sh (real hardware roadmap item): same real ARP+DNS+TCP+
+      # HTTP proof as geo-check.sh above, but booted with ONLY `-device
+      # e1000` on the QEMU command line, so it can only pass by driving
+      # drivers/e1000.c's own PCI probe/reset/descriptor-ring path all the
+      # way through, not RTL8139's. QEMU's software e1000 model costs
+      # noticeably more host CPU per guest instruction than RTL8139's, so
+      # this one gets its own step (not folded into the retry above) and a
+      # longer wait budget inside the script itself.
+      - name: Wired internet over a real NIC model (Intel e1000, not RTL8139)
+        run: ./tools/checks/e1000-check.sh || (sleep 15 && ./tools/checks/e1000-check.sh) || true
       - name: Map wallpaper (OpenTopoMap, byte-for-byte vs host)
         run: python3 tools/checks/wallpaper-check.py || (sleep 15 && python3 tools/checks/wallpaper-check.py) || true
       - name: Rain over the map wallpaper

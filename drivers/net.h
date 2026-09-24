@@ -1,18 +1,19 @@
 #ifndef NET_H
 #define NET_H
 /* Minimal Ethernet/ARP/IPv4/UDP, hardware-agnostic over whichever NIC
-   driver net_init finds a card for (drivers/rtl8139.c for real hardware,
-   drivers/ne2k.c for v86/QEMU's NE2000-compatible emulation). ponytail: no
+   driver net_init finds a card for (drivers/rtl8139.c and drivers/e1000.c
+   for real hardware, drivers/ne2k.c for v86/QEMU's NE2000-compatible
+   emulation). ponytail: no
    routing table, assumes every destination is on the same link (true for
    QEMU's user-mode SLIRP network, a single /24), no fragmentation, no
    options. Enough to resolve a MAC and get one UDP datagram onto the wire,
    which is what a DNS lookup and a raw HTTP-over-TCP handshake both need
    as a foundation. */
 
-/* Probes for a NIC (RTL8139 first, NE2000/RTL8029 as fallback, see net.c)
-   and initializes it. Returns 1 on success, 0 if neither driver found a
-   card. Replaces the old two-step "rtl8139_init() then net_init(ip)"
-   pattern every call site used to need. */
+/* Probes for a NIC (RTL8139 first, then e1000, then NE2000/RTL8029 as a
+   last-resort fallback, see net.c) and initializes it. Returns 1 on
+   success, 0 if no driver found a card. Replaces the old two-step
+   "rtl8139_init() then net_init(ip)" pattern every call site used to need. */
 int net_init(unsigned int our_ip);
 
 /* Hardware-agnostic single raw-frame send and MAC accessor, for low-level
