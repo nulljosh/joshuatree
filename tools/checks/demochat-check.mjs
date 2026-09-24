@@ -194,7 +194,23 @@ try {
   await page.waitForFunction(() => window.__jt.serial.includes('chatconsole'), null, { timeout: 20000 });
   ok('chatchrome/chatconsole markers seen: the real Chat app opened');
 
-  await page.waitForTimeout(300);
+  // The chatconsole serial marker fires when the kernel has DRAWN the
+  // console into its framebuffer, but v86 presents that framebuffer to
+  // the canvas on its own schedule, so a fixed wait after the marker can
+  // still sample the desktop (whose satellite photo has near-INK pixels;
+  // seen on CI as "3661 ink px before sending"). Wait for the window's
+  // own red close light and its GUI_BG body to be on the canvas first,
+  // the same "poll for the real chrome" shape appclose-check.py uses.
+  await page.waitForFunction(([cx, cy, bx, by]) => {
+    const c = document.querySelector('#screen_canvas');
+    if (!c || !c.width) return false;
+    const scale = c.width / 960, ctx = c.getContext('2d');
+    const px = (x, y) => ctx.getImageData(Math.round(x * scale) + 1, Math.round(y * scale) + 1, 1, 1).data;
+    const near = (p, r, g, b, t) => Math.abs(p[0] - r) <= t && Math.abs(p[1] - g) <= t && Math.abs(p[2] - b) <= t;
+    return near(px(cx, cy), 0xFF, 0x5F, 0x57, 12) && near(px(bx, by), 0xFA, 0xF8, 0xF6, 4);
+  }, [94, 56, VX + 10, REPLY_TOP + 4], { timeout: 20000 });
+  ok('Chat window chrome and body are on the canvas');
+  await page.waitForTimeout(200);
   const before = await ink();
   console.log(`ink below reply line before sending: ${before ? before.replyBelow : '(no canvas)'} (canvas ${before ? before.canvasW + 'x' + before.canvasH + ' scale=' + before.scale : '?'})`);
   if (!before) fail('could not read the v86 canvas at all');
