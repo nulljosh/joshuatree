@@ -1,4 +1,5 @@
 #!/bin/bash
+# MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 # v0.76.56: real bug, found while investigating the roadmap's "clicking
 # Calendar opens Reminders" / "Mail renders blank" live-QA reports.
 # Re-verified via the QEMU monitor (gui_window_count/gui_windows dumped

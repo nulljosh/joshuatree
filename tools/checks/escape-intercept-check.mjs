@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // Discriminating regression test for Escape-key interception (v0.76.26 fix attempt)
 // Verifies that pressing Escape in the demo does NOT drop into the kernel's raw text shell.
 //

@@ -1,3 +1,4 @@
+// MANUAL: needs Playwright's Chromium browser binaries plus a local dev server at localhost:3000 (landing/), neither installed in CI (.github/workflows/check.yml has no npm/playwright step). Run by hand after npm install && npx playwright install.
 // Real mobile QA for the live landing-page demo, using a real iPhone
 // emulation (real touch events, real iOS user agent, real viewport), not a
 // desktop browser with a narrow window. This exists because "apps don't
