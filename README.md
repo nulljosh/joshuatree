@@ -9,6 +9,8 @@
 
 A desktop built from nothing in C: bootloader, kernel, memory manager, filesystem, network stack, window system, typeface renderer, and 25 native apps. No libc, no external dependencies beyond Clang, lld, and QEMU. Run live in the browser: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 
+What it does today: windows drag live by their title bar, two apps can sit side by side, and the Chat app talks to [Samantha](https://turing.heyitsmejosh.com), a small language model that answers questions and acts inside the OS from a sentence ("remind me to buy milk", "note the meeting is at 3", "open notes", "weather", "what's on today"). Weather, a satellite wallpaper of where you are, stocks, mail, calendar, reminders and notes all persist to a real FAT16 disk. Every feature ships with a headless regression check (more than 70 of them) that CI runs on every pull request, plus a browser check that boots the kernel in v86 and proves the landing demo's Chat really renders a reply.
+
 ## Boot it
 
 **Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
@@ -16,9 +18,9 @@ A desktop built from nothing in C: bootloader, kernel, memory manager, filesyste
 **USB stick:** Download from [Releases](https://github.com/nulljosh/joshuatree/releases), then:
 ```sh
 # macOS: find the disk with `diskutil list`, then
-sudo dd if=joshuatree-vX.Y.Z.iso of=/dev/rdiskN bs=4m
+sudo dd if=joshuatree-X.Y.Z.iso of=/dev/rdiskN bs=4m
 # Linux: find the device with `lsblk`, then
-sudo dd if=joshuatree-vX.Y.Z.iso of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=joshuatree-X.Y.Z.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 Boot from USB (F12/F10/Esc/Del at power-on).
 
