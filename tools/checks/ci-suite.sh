@@ -46,6 +46,7 @@ retry|PNG decoder, in-kernel|./tools/checks/png-check.sh
 retry|AA text spacing, in-kernel|./tools/checks/textspacing-check.sh
 retry|AA text stems are dense but still antialiased|python3 ./tools/checks/textsharp-check.py
 retry|FAT filesystem cycle hang (regression test)|./tools/checks/fatcyclehang-check.sh
+retry|File robustness: empty, oversized, corrupt-FAT and full-disk cases|python3 ./tools/checks/filerobust-check.py
 retry|Chat history (VFS-backed, past the old 512-byte cap)|./tools/checks/chat-check.sh
 retry|Chat defaults to Samantha (Turing) and surfaces an HTTPS-redirect host clearly|python3 ./tools/checks/chat-samantha-check.py
 retry|GUI Chat app asks Samantha and renders the reply on screen|python3 ./tools/checks/chatapp-check.py
@@ -81,8 +82,10 @@ retry|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclos
 retry|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
 retry|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
 retry|Apps folder layout (no black band, no row spill, no ghost icons)|python3 ./tools/checks/appsfolder-layout-check.py
+retry|Typography: baseline flatness, letter-gap variance, container padding|python3 ./tools/checks/baseline-check.py
 retry|Multi-window (click-to-focus, real z-order compositing)|python3 ./tools/checks/multiwindow-check.py
 retry|Window snapping (title-bar drag to edge/corner, real pixel proof)|python3 ./tools/checks/windowsnap-check.py
+retry|Windows drag live by their title bar (single-window Notes and multi-window Files)|python3 ./tools/checks/windowdrag-check.py
 retry|Windowed apps start under the title bar, Calendar fits six weeks|python3 ./tools/checks/apptop-check.py
 retry|Calendar Day, Week, Month and Year views|python3 ./tools/checks/calviews-check.py
 retry|QA gallery: every app opens, screenshots, closes, no crash|python3 ./tools/checks/qa-gallery.py /tmp/jt-gallery

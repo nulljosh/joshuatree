@@ -2274,6 +2274,24 @@ static void gui_draw_wallpaper_rect(int x, int y, int w, int h){
     }
 }
 
+/* Same rectangle repaint with the day/night tint the desktop itself
+   applies (gui_draw_wallpaper_rows_sway_ex's own per-pixel path), so a
+   strip uncovered by a window drag matches the wallpaper around it. */
+static void gui_daynight_wallpaper_rect(int x, int y, int w, int h){
+    int sc = (int)window_scale();
+    int x0 = x * sc, x1 = (x + w) * sc;
+    int y0 = y * sc, y1 = (y + h) * sc;
+    if (x0 < 0) x0 = 0;
+    if (y0 < GUI_MENUBAR_H * sc) y0 = GUI_MENUBAR_H * sc;
+    if (x1 > (int)window_width() * sc) x1 = (int)window_width() * sc;
+    if (y1 > (int)window_height() * sc) y1 = (int)window_height() * sc;
+    for (int py = y0; py < y1; py++) {
+        struct wp_row c = gui_wallpaper_row(py, 0);
+        for (int px = x0; px < x1; px++)
+            window_pixel_phys(px, py, gui_daynight_tint(gui_wallpaper_px(&c, px)));
+    }
+}
+
 /* Fills a downward-pointing triangle: flat top of half-width `half_w` at
    (cx, y0), narrowing to a point over `h` rows. Used for the map pin's tip
    and the quote marks' tails. */
@@ -4403,13 +4421,33 @@ static int gui_app_windowed = 0;
    so the same layout moves up by that strip, the same 32px Stocks has
    always saved through stx_top(). Add it to every content y. */
 static int gui_app_dy(void){ return gui_app_windowed ? -32 : 0; }
+/* Live title-bar drag for the blocking single-window apps (everything
+   that opens through gui_launch_from_dock: Notes, Terminal, Chat, the
+   fleet apps, Settings...). Direct request: "app windows should be
+   draggable". Only the five multi-window apps could move before, and
+   only as a snap-preview outline. These apps block inside their own
+   input loops, so the one place that runs while they wait is
+   gui_app_mouse_tick below: it watches the left button, arms on a press
+   in the title band right of the traffic lights, and on every pointer
+   move shifts the whole window (chrome and content) inside the back
+   buffer with window_move_rect, repaints the one or two wallpaper strips
+   the window just uncovered, and slides the app's own viewport along, so
+   whatever the app draws next lands at the new place. The press that
+   starts a drag is swallowed from mouse_click_edge, so it is never also
+   the app's "click anywhere closes"; a press on the lights or the
+   content keeps every contract it had. Clamped to the desktop strip
+   (below the menu bar, above the dock band) so the uncovered area is
+   always plain wallpaper, nothing else needs redrawing. */
+static int app_win_x = 0, app_win_y = 0, app_win_w = 0, app_win_h = 0;
+static int app_drag_held = 0, app_drag_on = 0, app_drag_gx = 0, app_drag_gy = 0;
+static int gui_dock_band_top(void);
+static void gui_daynight_wallpaper_rect(int x, int y, int w, int h);
 static int app_view_x, app_view_y, app_view_w, app_view_h;
 static int app_cursor_x, app_cursor_y;
 static void gui_app_mouse_tick(void){
     if (!gui_app_windowed) return;
     int dx = 0, dy = 0, buttons = 0;
     int moved = mouse_get_delta(&dx, &dy, &buttons);
-    (void)buttons;
     if (!moved && cursor_saved_x >= 0) return;
     window_clear_viewport();
     gui_cursor_restore();
@@ -4419,6 +4457,39 @@ static void gui_app_mouse_tick(void){
     if (app_cursor_y < 0) app_cursor_y = 0;
     if (app_cursor_x > (int)window_width() - CURSOR_W) app_cursor_x = (int)window_width() - CURSOR_W;
     if (app_cursor_y > (int)window_height() - CURSOR_H) app_cursor_y = (int)window_height() - CURSOR_H;
+    /* Live window drag (see app_win_x's comment). Press edge: arm only in
+       the title band, right of the three lights (x + 80 on), so the red
+       close light and the app's own content keep their click semantics. */
+    int held = buttons & 1;
+    if (held && !app_drag_held) {
+        app_drag_held = 1;
+        if (app_win_w > 0 && app_cursor_y >= app_win_y && app_cursor_y < app_win_y + 30
+            && app_cursor_x >= app_win_x + 80 && app_cursor_x < app_win_x + app_win_w) {
+            app_drag_on = 1;
+            app_drag_gx = app_cursor_x - app_win_x; app_drag_gy = app_cursor_y - app_win_y;
+            mouse_click_edge(); /* consumed: this press is a grab, not the app's click */
+        }
+    } else if (!held && app_drag_held) {
+        app_drag_held = 0; app_drag_on = 0;
+    }
+    if (app_drag_on) {
+        int nx = app_cursor_x - app_drag_gx, ny = app_cursor_y - app_drag_gy;
+        int max_x = (int)window_width() - app_win_w, max_y = gui_dock_band_top() - app_win_h;
+        if (nx > max_x) nx = max_x;  if (nx < 0) nx = 0;
+        if (ny > max_y) ny = max_y;  if (ny < GUI_MENUBAR_H) ny = GUI_MENUBAR_H;
+        int mdx = nx - app_win_x, mdy = ny - app_win_y;
+        if (mdx || mdy) {
+            window_move_rect(app_win_x, app_win_y, app_win_w, app_win_h, mdx, mdy);
+            /* the strips the window no longer covers: one per axis moved */
+            if (mdx > 0)      gui_daynight_wallpaper_rect(app_win_x, app_win_y, mdx, app_win_h);
+            else if (mdx < 0) gui_daynight_wallpaper_rect(app_win_x + app_win_w + mdx, app_win_y, -mdx, app_win_h);
+            if (mdy > 0)      gui_daynight_wallpaper_rect(app_win_x, app_win_y, app_win_w, mdy);
+            else if (mdy < 0) gui_daynight_wallpaper_rect(app_win_x, app_win_y + app_win_h + mdy, app_win_w, -mdy);
+            app_win_x = nx; app_win_y = ny;
+            app_view_x += mdx; app_view_y += mdy;
+            serial_puts("windrag\n"); /* marker for tools/checks/windowdrag-check.py */
+        }
+    }
     gui_cursor_save(app_cursor_x, app_cursor_y);
     gui_draw_cursor(app_cursor_x, app_cursor_y);
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
@@ -5341,9 +5412,26 @@ static void gui_launch_terminal(void){
    reachable by mouse would be an app screen this project can never
    regression-test. */
 #define APPS_COLS 5
-/* Rows that fit in the 375px panel at a 108px cell: 3 whole ones. Scroll
-   limits and keyboard selection follow this, not a repeated literal. */
+/* Three grid rows are visible at once (108px cell each); the panel height
+   below (APPS_PANEL_H) is sized to actually hold them, see its own note.
+   Scroll limits and keyboard selection follow this row count, not a
+   repeated literal. */
 #define APPS_VIS_ROWS 3
+/* Real typography QA bug, confirmed with a real headless pmemsave crop
+   (tools/checks/baseline-check.py, /tmp/jt-loop/typography-crops/before): the old
+   375px panel height was sized as if the grid started at the panel's own
+   top edge (APPS_VIS_ROWS*108 = 324 < 375, "3 whole rows fit"), but the
+   grid actually starts 70px lower, at y0=95, to leave room for the "arrow
+   keys to move" hint line above it (panel top is 25). The real bottom
+   needed is 70 + 324 = 394, 19px past the old 375, so the last visible
+   row's labels ("Bookrank", "Quotes", "Plan", "Lexly", "Toroid" at the
+   default scroll offset) landed only ~8 logical px above the glass
+   panel's true bottom edge -- title-bar-tight everywhere else in this UI,
+   here almost touching. 410 gives that row the same order of breathing
+   room the top hint line gets, while staying inside the window's own
+   450px content viewport (gui_launch_from_dock's `h - 40` for the Apps
+   folder), 15px of margin above the window's own bottom edge. */
+#define APPS_PANEL_H 410
 /* The framebuffer has no alpha channel. Blend each glass pixel against the
    wallpaper already underneath it, keeping the real photo visible. */
 static void gui_apps_glass(int x, int y, int w, int h){
@@ -5395,7 +5483,7 @@ static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int c
     }
 }
 static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, int cell_w, int cell_h, int tile, int grid_w){
-    int panel_x = x0 - 28, panel_y = 25, panel_w = grid_w + 56, panel_h = 375;
+    int panel_x = x0 - 28, panel_y = 25, panel_w = grid_w + 56, panel_h = APPS_PANEL_H;
     gui_draw_wallpaper_rect(panel_x, panel_y, panel_w, panel_h);
     gui_apps_glass(panel_x, panel_y, panel_w, panel_h);
     /* The window's own title bar already reads "Apps" (gui_launch_from_
@@ -5530,8 +5618,13 @@ static void gui_launch_apps(void){
             for (int i = 0; i < GUI_APPS_FOLDER; i++) {
                 int row = i / APPS_COLS - scroll_offset;
                 int col = i % APPS_COLS;
-                /* Skip rows that are scrolled off-screen */
-                if (row < 0 || row * cell_h >= 375) continue;
+                /* Skip rows that are scrolled off-screen. Bounded by row
+                   count (APPS_VIS_ROWS), not a repeated pixel-height
+                   literal: this hit test used to compare against the
+                   panel's old, wrong 375px height (see APPS_PANEL_H's own
+                   note), a second copy of the exact bug class
+                   gui_apps_draw_grid's row bound was already fixed for. */
+                if (row < 0 || row >= APPS_VIS_ROWS) continue;
                 int cx = x0 + col * cell_w + cell_w / 2;
                 int cy = y0 + row * cell_h;
                 int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
@@ -6039,10 +6132,13 @@ again:
     app_view_w = w - 16; app_view_h = h - 40;
     app_cursor_x = editor_mouse_x; app_cursor_y = editor_mouse_y;
     cursor_saved_x = cursor_saved_y = -1;
+    app_win_x = x; app_win_y = y; app_win_w = w; app_win_h = h;
+    app_drag_held = 1; app_drag_on = 0; /* the click that opened this app is still down; it is not a grab */
     gui_app_windowed = 1;
     gui_close_was_click = 0;
     gui_launch(icon);
     gui_app_windowed = 0;
+    app_win_w = app_win_h = 0; app_drag_on = 0;
     window_clear_viewport();
     gui_cursor_restore();
     /* v68 (0.63.0): the dock stays visible around every app window, so a
@@ -7214,7 +7310,22 @@ static void gui_run(void){
            is left exactly where it started until release, so this is the
            whole cost of the live preview. */
         int cur_snap_zone = drag_win >= 0 ? gui_snap_zone(mx, my) : -1;
-        int drag_zone_only = drag_win >= 0 && !launched && cur_snap_zone != drag_zone;
+        /* Live move (direct request, "app windows should be draggable"):
+           the window itself follows the pointer now, redrawn from its own
+           state at the new x/y on every pointer move, with the snap
+           outline still drawn on top when a zone is in reach. The clamp
+           is the same one the release path applies, so what the visitor
+           sees mid-drag is exactly where the window lands. */
+        int drag_moved = drag_win >= 0 && !launched && (mx != last_mx || my != last_my);
+        if (drag_moved) {
+            gui_window_t *dw = &gui_windows[drag_win];
+            int top, bottom; int sw = gui_snap_area(&top, &bottom);
+            int nx = mx - drag_grab_dx, ny = my - drag_grab_dy;
+            if (nx < 0) nx = 0; if (nx + dw->w > sw) nx = sw - dw->w;
+            if (ny < top) ny = top; if (ny + dw->h > bottom) ny = bottom - dw->h;
+            dw->x = nx; dw->y = ny;
+        }
+        int drag_zone_only = drag_win >= 0 && !launched && (cur_snap_zone != drag_zone || drag_moved);
         if (drag_zone_only) {
             gui_cursor_restore();
             gui_draw_desktop(-1, -1, 0, 0);
@@ -8547,6 +8658,28 @@ static void run(char *line){
         else {
             char buf[4096];
             int n = vfs_read_file(arg, buf, sizeof(buf) - 1);
+            /* v1.0.10: a named serial marker with the real returned length,
+               so tools/checks/filerobust-check.py can prove an empty file
+               reads back as n=0 and an oversized (or corrupted: a lying
+               file_size field plus a FAT chain that loops back on itself)
+               file comes back clamped to this buffer's own 4095-byte
+               capacity, not whatever its directory entry or cluster chain
+               claims -- headless, with no screen to scrape. fat_read_file's
+               own `remaining = min(file_size, bufsize)` already bounds the
+               copy regardless of what the on-disk metadata says, so this
+               is a proof marker, not a fix; see that function's own
+               comments in drivers/fat.c for why a corrupted size/chain
+               can't run past bufsize here. */
+            serial_puts("cat "); serial_puts(arg); serial_puts(": ");
+            if (n < 0) serial_puts("not found\n");
+            else {
+                char nb[8]; int ni = 0; unsigned int un = (unsigned int)n;
+                if (un == 0) nb[ni++] = '0';
+                while (un) { nb[ni++] = (char)('0' + un % 10); un /= 10; }
+                nb[ni] = 0;
+                for (int j = 0; j < ni / 2; j++) { char t = nb[j]; nb[j] = nb[ni - 1 - j]; nb[ni - 1 - j] = t; }
+                serial_puts("n="); serial_puts(nb); serial_puts("\n");
+            }
             if (n < 0) { puts(arg); puts(": not found\n"); }
             else { buf[n] = 0; puts(buf); putc('\n'); }
         }
@@ -8619,7 +8752,15 @@ static void run(char *line){
             char *content = arg;
             while (*content && *content != ' ') content++;
             if (*content) *content++ = 0;
-            puts(vfs_write_file(arg, content, strlen(content)) ? "written\n" : "failed (name taken or disk full)\n");
+            int ok = vfs_write_file(arg, content, strlen(content));
+            /* v1.0.10: named serial marker so a full-disk write failure
+               (alloc_cluster's free-cluster scan in drivers/fat.c coming up
+               empty) can be told apart from a hang, headless, and so the
+               very next command in the same boot can be checked for a real
+               "ok" -- proof the shell is still responsive, not just that
+               this one call returned. See tools/checks/filerobust-check.py. */
+            serial_puts("write "); serial_puts(arg); serial_puts(ok ? ": ok\n" : ": failed\n");
+            puts(ok ? "written\n" : "failed (name taken or disk full)\n");
         }
     }
     else if (!strcmp(line, "lspci")) {
