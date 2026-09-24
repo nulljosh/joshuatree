@@ -88,7 +88,11 @@ retry|Every app's main action, headless|python3 ./tools/checks/feature-drive.py
 retry|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
 retry|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
 retry|Dock icon lighting (one soft top light, top highlight, no dark outline)|python3 ./tools/checks/iconlight-check.py
+<<<<<<< HEAD
+once |Every authored icon shares one tile silhouette, AA edges, glyph margin|python3 ./tools/checks/iconinset-check.py
+=======
 retry|Calendar dock tile shows today's date, not fixed art|python3 ./tools/checks/calicon-check.py
+>>>>>>> origin/main
 retry|Shadow under the dock darkens the photo, no flat bands|python3 ./tools/checks/dockband-check.py
 retry|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py
 retry|Dock tray corner AA (real coverage blend, not binary)|python3 ./tools/checks/traycorner-check.py
