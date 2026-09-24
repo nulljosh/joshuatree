@@ -37,6 +37,7 @@ Joshua's call, 2026-09-22: **1.0 is a Snow Leopard release.** No new features. S
 Joshua's call, 2026-09-21: 1.0.0 is a super thorough QA release. Every feature works, nothing crashes, all text and icons are sharp, and the icons have taste, not a Microsoft look. Real hardware is trusted for now and proven after.
 - [ ] [Fable] The lag (issue #14) profiled, fixed and measured, with frame time numbers in the release notes.
 - [ ] [Sonnet] Nothing crashes: bad input in every text field, long lines, empty files, missing disk, no network. Each case gets a check.
+  - 1.0.10: empty, oversized, corrupt-FAT and full-disk cases; `tools/checks/filerobust-check.py`.
 - [ ] [Sonnet] Icons with taste: depth, soft light, real materials, consistent corner and light direction across all of them. Judged from the gallery at dock, hover and Apps grid sizes.
   - 0.89.0: the 11 dock icons redrawn Big Sur style (one top light, no outlines, 148px art at an exact 2:1); `tools/checks/iconlight-check.py`. Still to do: the 15 Apps-folder fleet icons, and a live date on Calendar's tile.
 - [ ] [Sonnet] Text sharp everywhere: no bitmap fallback font where the antialiased one should draw, no uneven letter gaps, baselines level.
@@ -118,6 +119,7 @@ Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Fable] Input routing by focus instead of the current global key/click pull.
 - [ ] [Fable] Every app converted from a blocking loop to open/draw/on_key/on_click handlers, or its own task.
 - [ ] [Haiku] Once that lands, wire up the two unlit traffic-light dots (minimize/maximize).
+- [x] 1.0.11: every app window drags live by its title bar, the blocking single-window apps included (the window's pixels move inside the back buffer, only the uncovered wallpaper strips repaint, the app's viewport slides along); the five multi-window apps move live too instead of showing an outline until release. `tools/checks/windowdrag-check.py`.
 
 ## Engraving design system
 One ink on one paper, tone by hatching. Full rule in `CLAUDE.md`'s Theme section.

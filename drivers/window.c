@@ -131,6 +131,37 @@ void window_damage(int x, int y, int w, int h) {
 }
 
 void window_set_viewport(int x, int y, u32 w, u32 h) { view_x = x; view_y = y; view_w = w; view_h = h; }
+
+void window_move_rect(int x, int y, int w, int h, int dx, int dy) {
+    u32 *buf = back ? back : fb;
+    if (!buf || (!dx && !dy) || w <= 0 || h <= 0) return;
+    int s = (int)scale;
+    int sx0 = x * s, sy0 = y * s, sw = w * s, sh = h * s;
+    int tx0 = sx0 + dx * s, ty0 = sy0 + dy * s;
+    int pw = (int)phys_w, ph = (int)(win_h * scale);
+    /* rows/cols copyable: inside the frame at both the source and the destination */
+    int r0 = 0, r1 = sh, c0 = 0, c1 = sw;
+    if (-sy0 > r0) r0 = -sy0;  if (-ty0 > r0) r0 = -ty0;
+    if (ph - sy0 < r1) r1 = ph - sy0;  if (ph - ty0 < r1) r1 = ph - ty0;
+    if (-sx0 > c0) c0 = -sx0;  if (-tx0 > c0) c0 = -tx0;
+    if (pw - sx0 < c1) c1 = pw - sx0;  if (pw - tx0 < c1) c1 = pw - tx0;
+    if (r1 <= r0 || c1 <= c0) return;
+    int n = c1 - c0;
+    /* Overlapping copy: walk rows away from the direction of travel so a
+       source row is never overwritten before it has been read, and within
+       a row copy backwards when moving right for the same reason. */
+    int rstep = dy > 0 ? -1 : 1;
+    for (int r = (dy > 0 ? r1 - 1 : r0); r >= r0 && r < r1; r += rstep) {
+        const u32 *src = buf + (u32)(sy0 + r) * phys_w + (u32)(sx0 + c0);
+        u32 *dst = buf + (u32)(ty0 + r) * phys_w + (u32)(tx0 + c0);
+        if (dx > 0) { for (int i = n - 1; i >= 0; i--) dst[i] = src[i]; }
+        else        { for (int i = 0; i < n; i++) dst[i] = src[i]; }
+    }
+    if (back) {
+        window_damage(sx0, sy0, sw, sh);
+        window_damage(tx0, ty0, sw, sh);
+    }
+}
 void window_clear_viewport(void) { view_w = view_h = 0; view_x = view_y = 0; }
 void window_push_screen_band(u32 *buf, int top, u32 h) { screen_band = buf; screen_band_top = top; screen_band_h = h; }
 void window_pop_screen_band(void) { screen_band = 0; screen_band_top = 0; screen_band_h = 0; }
