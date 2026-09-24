@@ -78,7 +78,14 @@ for f in (DUMP, LOG):
     try: os.remove(f)
     except FileNotFoundError: pass
 
-q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
+# The RTC is pinned to a daytime hour: the panel-edge walk below tells
+# glass from wallpaper by the wallpaper reading green, and the desktop's
+# day/night tint (gui_daynight_tint) pulls the night wallpaper far enough
+# off green that the edge is never found. This check is about typography
+# and padding, not the hour, so it measures the same daytime frame every
+# run (it went red on CI at 04:36 UTC after passing at 19:29 UTC on the
+# very same code). Same -rtc base= pinning calicon-check.py already uses.
+q = subprocess.Popen(["qemu-system-i386", "-rtc", "base=2026-09-23T19:30:00", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                       "-name", "jt-baseline", "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 img = None
