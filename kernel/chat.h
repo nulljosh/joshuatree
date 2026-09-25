@@ -525,6 +525,27 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
 #define CHAT_DIM 0x0075726E
 #define CHAT_INK 0x001C1C1E
 
+/* 1.3.0 ("Chat's empty state"): a blank console plus "n prompt" told a
+   first-time visitor nothing about what Samantha can actually do here, and
+   made them press n before they could even try. This table is every tool
+   chat_run_tool above handles that a plain typed sentence can trigger
+   (new_reminder, new_note, weather, calendar_today, open_app -- "say" is
+   the picker's own internal echo tool, not something a visitor asks for
+   by name, so it has no row here), each phrased as the exact sentence
+   that names it. Shown as a selectable list when chat_count is 0; picking
+   one sends that exact text through the same chat_process_message path a
+   typed message takes. */
+typedef struct { const char *text; } chat_suggestion_t;
+static const chat_suggestion_t CHAT_SUGGESTIONS[] = {
+    { "Remind me to call mom at 5" },
+    { "Note: pick up dry cleaning" },
+    { "What's the weather like" },
+    { "What's on my calendar today" },
+    { "Open calculator" },
+};
+#define CHAT_SUGGEST_COUNT ((int)(sizeof(CHAT_SUGGESTIONS) / sizeof(CHAT_SUGGESTIONS[0])))
+static int chat_suggest_sel = 0;
+
 /* Rows render_wrapped_text will use for this text at this width, same wrap
    rule, so a long reply pushes the next prompt down instead of being drawn
    over (the old per-'\n' count ignored word wrap entirely). */
@@ -565,6 +586,38 @@ static void chat_draw_status(const char *state) {
     font_draw_string(line, 20, T + 52, CHAT_DIM, -1);
 }
 
+/* Shared by every way a message can be sent now (n's prompt, a suggestion
+   row, or just typing) so all three run chat_pick/chat_run_tool/chat_send
+   exactly the same way. Returns the new status line text, or NULL when
+   chat_run_tool picked open_app -- the caller must return immediately, the
+   same chat_launch_after contract gui_launch_chat_app's caller relied on
+   before this was pulled out into its own function. */
+static const char *chat_process_message(char *msg, int T, int x, int you_w, int body_w) {
+    window_rect(0, T + 40, (int)window_width(), (int)window_height() - 40 - T, GUI_BG);
+    chat_draw_status("checking for a tool ...");
+    font_draw_string(CHAT_YOU, x, T + 76, CHAT_DIM, -1);
+    render_wrapped_text(msg, x + you_w, T + 76, body_w - you_w, 64, CHAT_INK);
+
+    int handled = 0;
+    static char pick_tool[CHAT_TOOL_MAX], pick_arg[CHAT_ARG_MAX], tool_reply[256];
+    if (chat_pick(msg, pick_tool, sizeof(pick_tool), pick_arg, sizeof(pick_arg))
+        && chat_run_tool(pick_tool, pick_arg, tool_reply, sizeof(tool_reply))) {
+        handled = 1;
+        if (chat_launch_after >= 0) return 0; /* open_app: caller returns, again: reopens the picked app */
+        chat_push(CHAT_ROLE_USER, msg);
+        chat_push(CHAT_ROLE_ASSISTANT, tool_reply);
+    }
+
+    if (!handled) {
+        chat_draw_status("generating ...");
+        static char answer[4096];
+        if (chat_send(msg, answer, sizeof(answer))) return "ready";
+        const char *e = chat_error();
+        return e[0] ? e : "error: couldn't reach the host, or no reply";
+    }
+    return "ready";
+}
+
 static void gui_launch_chat_app(void) {
     chat_load();
     serial_puts("chatchrome\n"); /* discriminating marker for tools/checks/termchatflash-check.sh, same convention editor.h's "editorchrome" already established */
@@ -582,71 +635,107 @@ static void gui_launch_chat_app(void) {
         int you_w = font_string_width(CHAT_YOU);
         int sam_w = font_string_width(CHAT_SAM);
         int body_w = (int)window_width() - 40;
-        /* Walk back from the newest turn until the visible area is full,
-           then draw what fit top-down: show the tail, never a silent
-           overflow. */
-        int start = chat_count, used = 0;
-        for (int i = chat_count - 1; i >= 0; i--) {
-            int user = chat_msgs[i].role != CHAT_ROLE_ASSISTANT;
-            int label_w = user ? you_w : sam_w;
-            int h = chat_wrapped_rows(chat_msgs[i].content, body_w - label_w) * 16 + (user ? 4 : 12);
-            if (used + h > bottom - y && i != chat_count - 1) break;
-            used += h;
-            start = i;
+
+        if (chat_count == 0) {
+            /* 1.3.0: empty state -- a short line from Samantha plus every
+               tool chat_run_tool can honour, phrased as the exact sentence
+               that names it. Up/down or a click picks a row, enter or a
+               click sends it -- no need to press n first. */
+            render_wrapped_text("Ask me to remind you, jot a note, check the weather, look at today's calendar, or open an app. Or just type your own message below.",
+                                 x, y, body_w, 48, CHAT_DIM);
+            for (int i = 0; i < CHAT_SUGGEST_COUNT; i++) {
+                int ry = y + 60 + i * 24;
+                if (i == chat_suggest_sel) window_rect(x - 4, ry - 4, body_w, 20, 0x00EDE6DC);
+                font_draw_string(CHAT_SUGGESTIONS[i].text, x, ry, CHAT_INK, -1);
+            }
+            font_draw_string("up/down select   enter sends   or just type   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
+        } else {
+            /* Walk back from the newest turn until the visible area is full,
+               then draw what fit top-down: show the tail, never a silent
+               overflow. */
+            int start = chat_count, used = 0;
+            for (int i = chat_count - 1; i >= 0; i--) {
+                int user = chat_msgs[i].role != CHAT_ROLE_ASSISTANT;
+                int label_w = user ? you_w : sam_w;
+                int h = chat_wrapped_rows(chat_msgs[i].content, body_w - label_w) * 16 + (user ? 4 : 12);
+                if (used + h > bottom - y && i != chat_count - 1) break;
+                used += h;
+                start = i;
+            }
+            int cy = y;
+            for (int i = start; i < chat_count && cy + 16 <= bottom; i++) {
+                int user = chat_msgs[i].role != CHAT_ROLE_ASSISTANT;
+                int label_w = user ? you_w : sam_w;
+                int tx = x + label_w;
+                int tw = body_w - label_w;
+                font_draw_string(user ? CHAT_YOU : CHAT_SAM, x, cy, CHAT_DIM, -1);
+                render_wrapped_text(chat_msgs[i].content, tx, cy, tw, bottom - cy, CHAT_INK);
+                cy += chat_wrapped_rows(chat_msgs[i].content, tw) * 16 + (user ? 4 : 12);
+            }
+            font_draw_string("type to send   n prompt   c clear   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
         }
-        int cy = y;
-        for (int i = start; i < chat_count && cy + 16 <= bottom; i++) {
-            int user = chat_msgs[i].role != CHAT_ROLE_ASSISTANT;
-            int label_w = user ? you_w : sam_w;
-            int tx = x + label_w;
-            int tw = body_w - label_w;
-            font_draw_string(user ? CHAT_YOU : CHAT_SAM, x, cy, CHAT_DIM, -1);
-            render_wrapped_text(chat_msgs[i].content, tx, cy, tw, bottom - cy, CHAT_INK);
-            cy += chat_wrapped_rows(chat_msgs[i].content, tw) * 16 + (user ? 4 : 12);
-        }
-        font_draw_string("n prompt   c clear   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
 
         sleep_ticks(5);
         mouse_click_edge_sync();
         int k = get_key_or_click();
-        if (k == KEY_ESC || k == KEY_CLICK) return;
-        if (k == 'c') { chat_clear(); state = "ready"; continue; }
+        if (k == KEY_ESC) return;
+        if (k == KEY_CLICK) {
+            if (chat_count == 0) {
+                int click_vx = app_cursor_x - app_view_x, click_vy = app_cursor_y - app_view_y;
+                int hit = -1;
+                for (int i = 0; i < CHAT_SUGGEST_COUNT; i++) {
+                    int ry = y + 60 + i * 24;
+                    if (click_vx >= x - 4 && click_vx < x - 4 + body_w && click_vy >= ry - 4 && click_vy < ry + 16) { hit = i; break; }
+                }
+                if (hit >= 0) {
+                    chat_suggest_sel = hit;
+                    char msg[CHAT_CONTENT_MAX];
+                    int n = 0; const char *p = CHAT_SUGGESTIONS[hit].text;
+                    while (*p && n < (int)sizeof(msg) - 1) msg[n++] = *p++;
+                    msg[n] = 0;
+                    const char *ns = chat_process_message(msg, T, x, you_w, body_w);
+                    if (!ns) return;
+                    state = ns;
+                    continue;
+                }
+            }
+            return;
+        }
+        if (chat_count == 0 && k == KEY_UP) { if (chat_suggest_sel > 0) chat_suggest_sel--; continue; }
+        if (chat_count == 0 && k == KEY_DOWN) { if (chat_suggest_sel < CHAT_SUGGEST_COUNT - 1) chat_suggest_sel++; continue; }
+        if (chat_count == 0 && k == KEY_ENTER) {
+            char msg[CHAT_CONTENT_MAX];
+            int n = 0; const char *p = CHAT_SUGGESTIONS[chat_suggest_sel].text;
+            while (*p && n < (int)sizeof(msg) - 1) msg[n++] = *p++;
+            msg[n] = 0;
+            const char *ns = chat_process_message(msg, T, x, you_w, body_w);
+            if (!ns) return;
+            state = ns;
+            continue;
+        }
+        if (k == 'c') { chat_clear(); chat_suggest_sel = 0; state = "ready"; continue; }
         if (k == 'n') {
             char msg[CHAT_CONTENT_MAX];
             if (!gui_prompt_line_input("Chat", CHAT_YOU "send a message (enter sends, esc cancels)", msg, sizeof(msg))) continue;
             if (msg[0] == 0) continue;
-
-            window_rect(0, T + 40, (int)window_width(), (int)window_height() - 40 - T, GUI_BG);
-            chat_draw_status("checking for a tool ...");
-            font_draw_string(CHAT_YOU, x, T + 76, CHAT_DIM, -1);
-            render_wrapped_text(msg, x + you_w, T + 76, body_w - you_w, 64, CHAT_INK);
-
-            /* v1.1.0: chat_pick first (see chat.h's own comment above
-               chat_pick/chat_run_tool) -- a tool this OS can honour
-               skips /api/chat entirely; anything else falls straight
-               through to chat_send below, unchanged. */
-            int handled = 0;
-            static char pick_tool[CHAT_TOOL_MAX], pick_arg[CHAT_ARG_MAX], tool_reply[256];
-            if (chat_pick(msg, pick_tool, sizeof(pick_tool), pick_arg, sizeof(pick_arg))
-                && chat_run_tool(pick_tool, pick_arg, tool_reply, sizeof(tool_reply))) {
-                handled = 1;
-                if (chat_launch_after >= 0) return; /* open_app: Chat closes, gui_launch_from_dock's again: label reopens the picked app next -- no reply to show */
-                chat_push(CHAT_ROLE_USER, msg);
-                chat_push(CHAT_ROLE_ASSISTANT, tool_reply);
-                state = "ready";
-            }
-
-            if (!handled) {
-                chat_draw_status("generating ...");
-                static char answer[4096]; /* real growth from the old 2048-byte cap */
-                /* 1.0.12: chat_error() carries a specific message (currently
-                   just the HTTPS-redirect case) when chat_send knows exactly
-                   why it failed; the generic text stands for every other
-                   failure (DNS/connect failure, timeout, no reply, no "content"
-                   field in the reply). */
-                if (chat_send(msg, answer, sizeof(answer))) state = "ready";
-                else state = chat_error()[0] ? chat_error() : "error: couldn't reach the host, or no reply";
-            }
+            const char *ns = chat_process_message(msg, T, x, you_w, body_w);
+            if (!ns) return;
+            state = ns;
+            continue;
+        }
+        /* 1.3.0: typing any printable key starts a prompt directly, seeded
+           with that character -- no need to press n first (n still works,
+           handled above; the two shortcut letters that would otherwise be
+           swallowed as a message's first character, n and c, are handled
+           above this branch so they keep their own meaning). */
+        if (k >= 32 && k < 127) {
+            char msg[CHAT_CONTENT_MAX];
+            if (!gui_prompt_line_input_seeded("Chat", CHAT_YOU "send a message (enter sends, esc cancels)", msg, sizeof(msg), k)) continue;
+            if (msg[0] == 0) continue;
+            const char *ns = chat_process_message(msg, T, x, you_w, body_w);
+            if (!ns) return;
+            state = ns;
+            continue;
         }
     }
 }

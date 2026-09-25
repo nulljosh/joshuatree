@@ -34,8 +34,10 @@
 // for the ">>> " prompt glyphs and the status/footer lines -- so counting
 // exact CHAT_INK pixels in the band strictly below the question row is a
 // real, discriminating signal for "did an answer actually render", not a
-// guess: it's 0 before anything is sent (nothing there yet) and stays 0 if
-// a reply with empty content ever rendered (proved live below, temporarily,
+// guess: it's nonzero before anything is sent (1.3.0's empty-state
+// suggestion rows draw in CHAT_INK there) and, once a message is sent and
+// the transcript replaces that empty state, stays 0 if a reply with empty
+// content ever rendered (proved live below, temporarily,
 // then reverted). VX/VY/VW/VH/QROW_TOP/REPLY_TOP below are the exact same
 // geometry tools/checks/chatapp-check.py already derives and proves against
 // the real kernel (dock-launched window viewport at logical (78,72), size
@@ -248,8 +250,12 @@ try {
   const before = await ink();
   console.log(`ink below reply line before sending: ${before ? before.replyBelow : '(no canvas)'} (canvas ${before ? before.canvasW + 'x' + before.canvasH + ' scale=' + before.scale : '?'})`);
   if (!before) fail('could not read the v86 canvas at all');
-  else if (before.replyBelow !== 0) fail(`ink present below the reply line before anything was sent (${before.replyBelow})`);
-  else ok('zero CHAT_INK pixels below the reply line before sending');
+  // 1.3.0: Chat's empty state now shows a greeting plus a clickable list of
+  // example prompts (one per tool chat_run_tool handles) instead of a blank
+  // void, so this band is expected to carry ink even before anything is
+  // sent -- proof the empty state actually rendered the suggestion rows.
+  else if (before.replyBelow === 0) fail('empty state shows no suggestion rows (0 ink below the question row before anything was sent)');
+  else ok(`empty-state suggestion rows rendered (${before.replyBelow} ink px below the question row before sending)`);
 
   await page.evaluate(async () => { await window.__jt.emu.keyboard_send_text('n', 200); });
   await page.waitForTimeout(400);
