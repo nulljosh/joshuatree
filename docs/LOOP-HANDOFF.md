@@ -1,23 +1,26 @@
-# Joshua Tree loop handoff (2026-09-25, afternoon)
+# Joshua Tree loop handoff (2026-09-25, late evening)
 
 ## What the loop is
 
-Continue scoped Joshua Tree work headlessly. Work on a branch and open a PR; merge or deploy only after Joshua explicitly approves the PR. No subagents unless he asks. Weekly Claude usage was at 93 percent on 2026-09-25 and resets Saturday at 22:00, so heavy work waits for the reset.
+Keep building Joshua Tree headlessly toward 2.0. Stability, usability and performance come before feature count. Merge on green CI, never ask. Sonnet subagents max 4 at 15 minutes each; code changes only via visible subagents, never background shells. Subagents run every related check before pushing a PR. Fix CI, never mute notifications. Main session watches CI, merges, handles next item. Stop at 90% session or weekly usage with /checkpoint.
+
+A+ is the bar: everything spotless, every line in Joshua's voice mixed with Apple and Steve Jobs. No lines of code or check counts as public metrics.
 
 ## Where things stand
 
-PR #203, branch `fix/portfolio-inapp-boot`, version 1.5.6, open and not merged. It does two things. Portfolio mode (`?full`, what heyitsmejosh.com frames) boots right away instead of waiting on an IntersectionObserver, the fix for the page not loading in X's in-app browser. Epiphany prices its holdings and first eight watchlist symbols off Stocks' live `/api/stocks` quotes, refreshed on open, once a minute and on r; crypto, commodities and macro stay sample. The kernel builds, `lazy-boot-check.mjs` passes, the pre-push suite passed. Not yet booted headlessly into Epiphany, and not checked on a real phone in X.
-
-PRs #201 (libjt) and #202 (boot splash) are open from other sessions. The main checkout sits on the old `fix/stocks-live-data` branch with an uncommitted edit to `kernel/kernel.c` that drops the uptime line from About; it is not from this session, leave it alone until Joshua says.
+Main is 1.5.3+. Shipped eight releases: 1.3.0 Notes text selection and Chat showing every Samantha tool, 1.3.1 Calendar padding and menu color (CI 12 to 8 min), 1.4.0 engraved tree and smooth corners, 1.4.1 landing unified on one design system with Meet Samantha and app sections plus privacy page (8s weather timeout), 1.4.2 landing QA and stb_truetype font engine, 1.5.0 Notes on real typeface (six fonts, 12 to 200), 1.5.1 Terminal on same engine, 1.5.2 Files List/Icons views, 1.5.3 landing A+ pass. Added userland libjt (string, malloc arena, printf, FILE) and built WC.BIN; found clang malloc-builtin miscompile (version check in pre-push). In flight: 1.5.6 boot splash with engraved tree, 1.5.7 landing screenshots with new type, 1.5.8 demo canvas 1:1 device pixels (pixely fix), 1.5.9 antialiased Stocks lines.
 
 ## Next, in order
 
-1. Check PR #203 CI. Boot it headlessly and open Epiphany to confirm live prices draw. Recheck VERSION against main before merge, other PRs are in flight.
-2. After Joshua approves, merge and deploy, then ask him to open heyitsmejosh.com from a post in the X app.
-3. Roadmap Session task queue item 1: real app demos in portfolio mode. Picking an app should play a short walkthrough, starting with the five homepage picks.
+0. Rewrite docs in plain English: ARCHITECTURE.md, SYSCALL-ABI.md, WHITEPAPER.md intros. Joshua says they still read like dev notes. Every row one or two short sentences a 20-year-old follows, what it does and why, jargon only where unavoidable and then explained. Keep file names and one-row-per-file for coverage. Voice: tripwire README.
+1. Land 1.5.6 through 1.5.9 (boot splash, landing screenshots, pixel-perfect demo, antialiased charts).
+2. UI text (menu bar, titles, labels) onto the TTF engine. Polish pass.
+3. Browser demo lag profiling in v86. Measure frame time.
+4. Put WC.BIN on the disk image and port hello, note to libjt.
+5. ELF loading from disk, apps outside the kernel, tiny C compiler (2.0 spine).
 
 ## Restart prompt
 
 ```
-/loop Resume Joshua Tree from docs/LOOP-HANDOFF.md. First check PR #203's CI, boot it headlessly and confirm Epiphany shows live prices. Do not merge or deploy without Joshua's explicit approval. Then build real app demos for portfolio mode (roadmap Session task queue item 1), on a branch, one PR. No subagents. Watch Claude usage and stop heavy work above 95 percent weekly.
+/loop Joshua Tree loop toward 2.0: docs rewrite first (ARCHITECTURE, SYSCALL-ABI, WHITEPAPER plain English), then land 1.5.6-1.5.9, UI text on TTF, v86 lag profile, WC.BIN on disk, ELF loading. Merge on green, visible subagents 15 min max, fix CI never mute, every check before push, A+ bar, headless only, stop at 90% session or weekly with /checkpoint.
 ```
