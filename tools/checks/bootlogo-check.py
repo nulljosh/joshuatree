@@ -51,10 +51,11 @@ try:
     f.readline()
     cmd({"execute": "qmp_capabilities"})
 
-    # Wait for the desktop to appear. The boot splash holds for ~1s, then
-    # the desktop appears. We want to capture after the desktop is up and
-    # the menu bar is drawn, so wait ~1.5s total from boot.
-    time.sleep(0.5)  # We already waited 1.0s before connecting
+    # Wait for the desktop to appear. The boot splash holds for ~0.6s, then desktop
+    # initialization and idle tour startup. The menu bar is drawn once the desktop
+    # is fully active (~2-3s from boot start). We've already waited 1.0s, so wait
+    # an additional 2.5s to be safe.
+    time.sleep(2.5)
 
     # Pmemsave the entire framebuffer
     cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
