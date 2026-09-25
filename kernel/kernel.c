@@ -3216,7 +3216,7 @@ static void gui_draw_menubar(void){
     if (weather_text[0]) {
         int wl = font_string_width(weather_text);
         int wx = (int)window_width() - cw - 16 - wl - 28;
-        font_draw_string(weather_text, wx, 7, 0x00884B16, -1);
+        font_draw_string(weather_text, wx, 7, 0x001C1C1E, -1); /* match the clock's own ink and weight, not a warm brown -- must read on every wallpaper theme, not just the default */
         weather_hit_x0 = wx - 4; weather_hit_x1 = wx + wl + 4; /* v53: real click target, same padding feel as the clock's own */
     } else {
         weather_hit_x0 = weather_hit_x1 = -1;
@@ -4952,14 +4952,26 @@ static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
        same trade the authored artwork itself already makes everywhere
        else (one 148px source raster area-averaged down, never redrawn
        per size) rather than a second layout to get right and keep right. */
-    int mul_m = 1, mul_d = 2;
+    /* v0.89.x follow-up: mul_d=2 (48 physical px) was sized against the
+       Apps-folder grid's own bigger tile (see the comment above) and
+       never actually checked against the dock's own 74-physical-px
+       tile -- a real headless crop there showed "25" running edge to
+       edge with almost no side margin and its descender crossing the
+       tile's own bottom curve, tighter than every other dock glyph's
+       shared inset (gui_icon_calendar's vector siblings all keep a real
+       margin off the squircle, see restyle_icons.py's top-16/bottom-20
+       band). mul_d=1 (24px, same face as the month label) leaves real
+       breathing room on both axes at dock size; the day face is a size
+       class up (3 vs 2) so it still reads as the bigger of the two
+       lines without the old overflow. */
+    int mul_m = 1, mul_d = 1;
     const char *mon3 = GUI_CAL_MON3[monv - 1];
-    int ly_m = y + size * 13 / 100;
-    int ly_d = y + size * 38 / 100;
+    int ly_m = y + size * 16 / 100;
+    int ly_d = y + size * 42 / 100;
     int lwm = wx_text_lw(mon3, 2, 1, mul_m);
     wx_text(mon3, cx_center - lwm / 2, ly_m, 2, 1, mul_m, 0x00FF3B30);
-    int lwd = wx_text_lw(daybuf, 2, 1, mul_d);
-    wx_text(daybuf, cx_center - lwd / 2, ly_d, 2, 1, mul_d, 0x001F1F22);
+    int lwd = wx_text_lw(daybuf, 3, 1, mul_d);
+    wx_text(daybuf, cx_center - lwd / 2, ly_d, 3, 1, mul_d, 0x001F1F22);
 }
 
 /* Flat rounded card: four anti-aliased corner discs plus two rects. */
