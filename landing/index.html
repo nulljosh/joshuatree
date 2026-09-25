@@ -98,10 +98,14 @@
   /* The eyebrow's typewriter rewrites its text every few seconds, and the
      items aren't the same length. Left to size itself the h2 changed height
      between items (measured 18px vs 21px at 1440px wide) and pushed every
-     section below it up and down on every cycle. Fixed box, no wrap. */
-  .eyebrow { height: 22px; line-height: 22px; white-space: nowrap; overflow: hidden; }
+     section below it up and down on every cycle. Fixed box sized for the
+     longest item: it wraps (a nowrap box clipped long announcements) and
+     clamps past that, so height never changes between items. */
+  .eyebrow { height: 44px; line-height: 22px; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+  @media (max-width: 520px) { .eyebrow { height: 66px; -webkit-line-clamp: 3; line-clamp: 3; } }
   .kernel-version { font-weight: 500; letter-spacing: 0.04em; text-transform: none; }
   .hero-mark { width: 56px; height: 61px; margin: 0 auto; --src: url(mark.png); }
+  .hero h1 .brand { display: block; white-space: nowrap; }
   .hero h1 { font-size: 56px; margin: 14px 0 0; letter-spacing: -0.03em; line-height: 1.05; }
   @media (max-width: 520px) {
     .hero { padding: 56px 20px 40px; }
@@ -286,7 +290,10 @@
   /* Closing plate: the full engraving at the one size it is meant to be
      read at, then the closing line under it. */
   .grain-zone { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px 80px; }
-  .badge { width: min(420px, 78vw); aspect-ratio: 620 / 900; --src: url(badge.png); margin-bottom: 40px; }
+  .badge { position: relative; width: min(320px, 70vw); aspect-ratio: 432 / 460; margin-bottom: 40px; }
+  .badge .ink-img { position: absolute; inset: 0; }
+  .mark-tree { --src: url(mark-tree.svg); }
+  .mark-roots { --src: url(mark-roots.svg); background: #d97757; }
   .closing { color: var(--fg); font-size: 18px; line-height: 1.65; max-width: 560px; text-align: center; margin: 0 auto; }
 
   footer { text-align: center; padding: 0 0 40px; color: var(--sub); font-size: 13px; background: var(--bg); }
@@ -312,7 +319,7 @@
       <span>Booting...</span>
     </div>
     <div id="stage">
-      <div id="v86-embed" tabindex="0" role="application" aria-label="A real, live boot of this exact kernel.elf, running in your browser. Click or tap to control it.">
+      <div id="v86-embed" tabindex="0" role="application" aria-label="A real, live boot of Joshua Tree, running in your browser. Click or tap to control it.">
         <div id="screen_container">
           <div id="screen_text"></div>
           <canvas id="screen_canvas"></canvas>
@@ -322,7 +329,7 @@
     </div>
     <button id="demo-exit" type="button" aria-pressed="false">Full screen</button>
   </div>
-  <p class="plate-cap">Fig. 1 &middot; This exact kernel.elf, booting live in your browser</p>
+  <p class="plate-cap">Fig. 1 &middot; Joshua Tree, booting live in your browser</p>
 </div>
 
 <div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Co.</span><span>Est. 2026</span></div>
@@ -359,8 +366,8 @@
      second later by the tour's own reset. The announcement now rides the
      eyebrow below (data-latest, same injector), where it belongs: H1 says
      what this is, H2 says what is new about it. -->
-<h1>Introducing Joshua Tree.</h1>
-    <h2 class="eyebrow" data-latest="Introducing Samantha with hands. She adds reminders, takes notes, checks the weather, reads your calendar and opens apps, right from Chat"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
+<h1>Introducing <span class="brand">Joshua Tree.</span></h1>
+    <h2 class="eyebrow" data-latest="Introducing a friendlier Chat. Samantha greets you with things to try, and you just start typing"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
   </div>
 </header>
 
@@ -373,9 +380,9 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row">
     <div class="fact"><strong><span data-fact="apps">25</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong><span data-fact="checks">79</span></strong><span class="label">Regression checks</span></div>
-    <div class="fact"><strong><span data-fact="lines">49,623</span></strong><span class="label">Lines of kernel code</span></div>
-    <div class="fact"><strong>v<span data-fact="version">1.3.1</span></strong><span class="label">Latest release</span></div>
+    <div class="fact"><strong><span data-fact="checks">80</span></strong><span class="label">Regression checks</span></div>
+    <div class="fact"><strong><span data-fact="lines">49,741</span></strong><span class="label">Lines of kernel code</span></div>
+    <div class="fact"><strong>v<span data-fact="version">1.4.0</span></strong><span class="label">Latest release</span></div>
   </div>
   <p class="boot-line">Boot it yourself: <a href="https://github.com/nulljosh/joshuatree/releases">grab the latest release from GitHub</a>, or scroll up, it's already running above.</p>
 </section>
@@ -416,7 +423,7 @@
 </section>
 
 <section class="grain-zone reveal">
-  <div class="ink-img badge" role="img" aria-label="Joshua Tree Co. engraved badge: a Joshua tree in the Mojave, framed by two ribbons"></div>
+  <div class="badge" role="img" aria-label="Joshua Tree: an engraved Joshua tree whose roots turn into circuit traces"><span class="ink-img mark-tree"></span><span class="ink-img mark-roots"></span></div>
   <p class="closing">Joshua Tree is a real graphical desktop built from scratch: its own kernel, filesystem, and network stack, a working terminal, 25 apps, and a chat window talking to a local LLM. You can boot the actual kernel above right now, live in your browser, no download. It's free, open source, and headed toward a 1.0 release and real hardware next. Named for the tree that survives on nothing.</p>
 </section>
 
@@ -504,12 +511,12 @@
   // almost immediately; that fact now lives in the generated facts
   // row below instead, where inject-landing-facts.py keeps it honest.
   var items = [
-    'Real root-cause fixes, not timeouts',
-    'Decoders fuzzed against hostile input',
-    'Multi-window, real click-to-focus',
-    'A real JPEG decoder, from scratch',
-    'NE2000 driver, real networking',
-    'Own filesystem, own memory manager'
+    'A whole computer, built from scratch',
+    'Ask Samantha, and she does it',
+    'Your notes, reminders and calendar, saved for real',
+    'Live weather and a map of where you are',
+    'Two apps side by side, drag them anywhere',
+    'Running right here in your browser'
   ];
   var i = 0, typing = null;
   function typeOut(text, cb) {

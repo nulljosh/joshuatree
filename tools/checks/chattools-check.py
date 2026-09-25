@@ -17,6 +17,11 @@ running kernel, in the order below, since Reminders/NOTES.TXT state left
 by an earlier scenario is exactly what the later ones check.
 
 Scenarios:
+  (0) Chat opens to its 1.3.0 empty state (a greeting plus a clickable list
+      of example prompts, one per tool chat_run_tool handles); clicking
+      the "Note: pick up dry cleaning" row sends that exact text with no
+      `n` press. Asserts `chattool=new_note:pick up dry cleaning` fires
+      from the click alone.
   (a) "remind me to buy milk" -> pick answers new_reminder/"buy milk".
       Asserts `chattool=new_reminder:` fires on serial, the confirmation
       ("Reminder added: buy milk") renders as ink in the Chat body, and
@@ -73,6 +78,7 @@ REPLY_CHAT = "The capital of France is Paris, a city famous for the Eiffel Tower
 # model plus strict validation server-side, is out of scope for a
 # network-free regression test; this stands in for "the picker said X".
 PICK_ANSWERS = [
+    ("pick up dry cleaning", {"tool": "new_note", "arg": "pick up dry cleaning"}),
     ("buy milk", {"tool": "new_reminder", "arg": "buy milk"}),
     ("capital of france", {"tool": None, "arg": ""}),
     ("open notes", {"tool": "open_app", "arg": "notes"}),
@@ -203,6 +209,28 @@ def main():
             time.sleep(0.25)
         else: raise SystemExit("FAIL: desktop never appeared")
         time.sleep(0.5)
+
+        # --- scenario (0): clicking an empty-state suggestion row sends it
+        # straight through chat_run_tool, no `n` press at all. Must run
+        # before any other scenario opens a prompt: chat_count > 0 switches
+        # the console over to its transcript view, which is exactly the
+        # thing that stops showing the suggestion list this proves.
+        click_dock(DOCK_CHAT)
+        for _ in range(40):
+            time.sleep(0.1)
+            if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
+        else: fails.append("Chat window never opened from dock slot %d (scenario 0)" % DOCK_CHAT)
+        time.sleep(0.4)
+        suggest_row1_y = QROW_TOP + 60 + 1 * 24 + 6  # row 1: "Note: pick up dry cleaning" (QROW_TOP = screen y of chat.h's own "y" local var, where the suggestion list's y+60+i*24 rows are anchored)
+        move(VX + 60, suggest_row1_y); time.sleep(0.2); click()
+        wait_for("chattool=new_note:", 20, "no chattool=new_note: marker after clicking the empty-state suggestion row")
+        sl0 = serial()
+        if "chattool=new_note:pick up dry cleaning" not in sl0:
+            fails.append("scenario 0: clicking the suggestion row ran the wrong tool/arg: %r" %
+                         [l for l in sl0.splitlines() if l.startswith("chattool=")])
+        else:
+            print("scenario 0: clicking an empty-state suggestion row fired chattool=new_note: with no `n` press")
+        move(CLOSE_X, CLOSE_Y); time.sleep(0.2); click(); time.sleep(0.6)
 
         # --- baseline: Reminders, empty, before scenario (a) ever runs ---
         click_dock(DOCK_REMINDERS)
