@@ -1,29 +1,10 @@
-// 1.5.8: real report on a Retina Mac in Safari, "the live demo is still
-// pretty pixely." Root cause: the guest framebuffer is a fixed pixel
-// resolution, but embed.js's resizeCanvas used to size the canvas's CSS
-// box purely against the container's CSS-pixel box (cover/contain), with
-// no regard for the real DEVICE pixel grid a Retina screen draws to,
-// forcing a fractional resample that smears every glyph. Fixed by sizing
-// the canvas so canvas pixels map 1:1 (or an exact integer divisor) to
-// device pixels whenever the viewport allows it.
-//
-// This boots the real page in headless Chromium at deviceScaleFactor 2
-// and 1, at desktop (1440) and mobile (390) viewport widths, and asserts
-// the canvas's CSS box times devicePixelRatio divides its backing
-// resolution by a whole number on both desktop cases (where the box is
-// large enough for an exact mapping); it also takes a screenshot of the
-// demo area at 2x for a human to eyeball. Discriminating: reverting to
-// the old cover/contain-only resizeCanvas produces a non-integer
-// device-pixel ratio at 1440x900 @2x (the bug's own reported shape).
-//
-// image-rendering matters just as much as the ratio: caught live before
-// merge, marking EVERY exact-integer ratio "pixelated" looked right at
-// ratio 1 but broke text at ratio 2+, because those are downscales and
-// nearest-neighbour sampling on a downscale drops whole source rows and
-// columns instead of averaging them. Only ratio===1 is a true 1:1
-// mapping where "pixelated" is correct; every other ratio (an integer
-// downscale, or the smooth fallback) must be "auto" so the browser
-// area-averages instead of dropping data.
+// Boots the real landing page in headless Chromium at 1x and 2x, desktop
+// and mobile, and asserts the demo canvas fills its frame on at least one
+// axis. 1.5.8 to 1.5.13 sized it to exact device-pixel steps for
+// crispness, which on a Retina Mac left a 960 px canvas in a 1280 px box
+// (1.5.14, "big black borders"). image-rendering must be "pixelated" only
+// at an exact 1:1 map; any downscale needs "auto" or text shreds.
+// Also saves a 2x screenshot of the demo for a human to eyeball.
 import { chromium } from 'playwright';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -63,28 +44,22 @@ async function checkCase(viewport, dpr, label, shot) {
     const info = await page.evaluate(() => {
       const c = document.getElementById('screen_canvas');
       const r = c.getBoundingClientRect();
-      return { backingW: c.width, backingH: c.height, cssW: r.width, cssH: r.height, imgRendering: c.style.imageRendering };
+      const b = document.getElementById('screen_container').getBoundingClientRect();
+      return { backingW: c.width, backingH: c.height, cssW: r.width, cssH: r.height, boxW: b.width, boxH: b.height, imgRendering: c.style.imageRendering };
     });
-    const devPxW = info.cssW * dpr;
-    const devPxH = info.cssH * dpr;
-    const ratioW = info.backingW / devPxW;
-    const ratioH = info.backingH / devPxH;
-    const nearInt = v => Math.abs(v - Math.round(v)) < 0.02 && Math.round(v) >= 1;
-    console.log(`  [${label}] backing=${info.backingW}x${info.backingH} css=${info.cssW.toFixed(1)}x${info.cssH.toFixed(1)} dpr=${dpr} devicePx=${devPxW.toFixed(1)}x${devPxH.toFixed(1)} ratio=${ratioW.toFixed(3)}x${ratioH.toFixed(3)} image-rendering=${info.imgRendering}`);
-    if (nearInt(ratioW) && nearInt(ratioH)) {
-      ok(`${label}: canvas backing pixels map to device pixels by an integer factor (${Math.round(ratioW)})`);
-      // Only the true 1:1 mapping (ratio exactly 1) is a safe nearest-
-      // neighbour render. Any other integer ratio is a downscale, which
-      // needs "auto" (real area-averaging) or text shreds just as badly
-      // as the original bug -- this is the exact regression caught
-      // before this check's first merge.
-      const wantPixelated = Math.round(ratioW) === 1 && Math.round(ratioH) === 1;
-      const wantRendering = wantPixelated ? 'pixelated' : 'auto';
-      if (info.imgRendering !== wantRendering) fail(`${label}: expected image-rendering:${wantRendering} at ratio ${Math.round(ratioW)}, got "${info.imgRendering}"`);
-      else ok(`${label}: image-rendering is ${wantRendering}, correct for ratio ${Math.round(ratioW)}`);
-    } else {
-      fail(`${label}: canvas is NOT mapped to device pixels by a whole number (ratio ${ratioW.toFixed(3)}x${ratioH.toFixed(3)}) -- this is the pixely-resample bug`);
-    }
+    // 1.5.14: fill first. The old contract (integer device-pixel steps only)
+    // shrank a 1920 framebuffer to 960 CSS px in a 1280 box on Retina, the
+    // "big black borders" report. Now the canvas must reach the frame on at
+    // least one axis, and "pixelated" is only allowed at an exact 1:1 map.
+    const fill = Math.max(info.cssW / info.boxW, info.cssH / info.boxH);
+    const ratio = info.backingW / (info.cssW * dpr);
+    console.log(`  [${label}] backing=${info.backingW}x${info.backingH} css=${info.cssW.toFixed(1)}x${info.cssH.toFixed(1)} box=${info.boxW.toFixed(1)}x${info.boxH.toFixed(1)} dpr=${dpr} ratio=${ratio.toFixed(3)} image-rendering=${info.imgRendering}`);
+    if (fill >= 0.99) ok(`${label}: canvas fills its frame (${(fill * 100).toFixed(1)}%)`);
+    else fail(`${label}: canvas only fills ${(fill * 100).toFixed(1)}% of its frame -- the black-border bug`);
+    const oneToOne = Math.abs(ratio - 1) < 0.02;
+    const wantRendering = oneToOne ? 'pixelated' : 'auto';
+    if (info.imgRendering !== wantRendering) fail(`${label}: expected image-rendering:${wantRendering} at ratio ${ratio.toFixed(3)}, got "${info.imgRendering}"`);
+    else ok(`${label}: image-rendering is ${wantRendering}`);
     if (shot) {
       await page.locator('#v86-embed').screenshot({ path: shot }).catch(async () => {
         await page.screenshot({ path: shot }); // fall back to full page if the locator screenshot fails for any reason

@@ -537,52 +537,32 @@ if (typeof document !== "undefined") (function () {
   // (smooth), which correctly area-averages a downscale instead of
   // dropping data.
   var currentScale = 1;
-  var lastRsW = -1, lastRsH = -1, lastRsCW = -1, lastRsCH = -1, lastDpr = -1;
+  var lastRsW = -1, lastRsH = -1, lastRsCW = -1, lastRsCH = -1, lastDpr = -1, lastRsCss = "";
   function resizeCanvas() {
     if (!screenCanvas) return;
     var w = screenCanvas.width || 800, h = screenCanvas.height || 600;
     var cw = screenContainer.clientWidth, ch = screenContainer.clientHeight;
     var dpr = window.devicePixelRatio || 1;
-    if (cw === lastRsW && ch === lastRsH && w === lastRsCW && h === lastRsCH && dpr === lastDpr) return; // nothing changed: skip forced layout + style writes (was every 200ms)
+    if (cw === lastRsW && ch === lastRsH && w === lastRsCW && h === lastRsCH && dpr === lastDpr && screenCanvas.style.width === lastRsCss) return; // nothing changed: skip forced layout + style writes (was every 200ms)
     lastRsW = cw; lastRsH = ch; lastRsCW = w; lastRsCH = h; lastDpr = dpr;
     var box = screenContainer.getBoundingClientRect();
 
-    // Try k = 1, 2, 3, ... (largest image first): the first k whose exact
-    // device-pixel-mapped size fits inside the box wins. k=1 is the full
-    // 1:1 case (cssWidth = w/dpr); k=2 is a 2x integer downscale on top of
-    // that, etc. Twenty covers any real screen this ever runs on (a k this
-    // large would already be a postage stamp).
-    var crisp = false, crispW = 0, crispH = 0;
-    for (var k = 1; k <= 20; k++) {
-      var candW = w / (dpr * k), candH = h / (dpr * k);
-      if (candW <= box.width + 0.5 && candH <= box.height + 0.5) {
-        crisp = true; crispW = candW; crispH = candH;
-        break;
-      }
-    }
-
-    if (crisp) {
-      currentScale = crispW / w;
-      screenCanvas.style.width = Math.round(crispW) + "px";
-      screenCanvas.style.height = Math.round(crispH) + "px";
-      // Only the exact 1:1 mapping (k===1) is safe to render nearest-
-      // neighbour; k>1 is a downscale and needs real area-averaging (see
-      // the comment above this function) or text shreds just as badly as
-      // the bug this whole fix exists for.
-      screenCanvas.style.imageRendering = (k === 1) ? "pixelated" : "auto";
-    } else {
-      // Too small for any exact device-pixel mapping: smooth-scale as
-      // large as fits, matching the old cover/contain behaviour, but
-      // never "pixelated" here, a genuinely fractional scale smears worse
-      // pixelated than smoothed.
-      var coverScale = Math.max(box.width / w, box.height / h) || 1;
-      var containScale = Math.min(box.width / w, box.height / h) || 1;
-      var visibleFrac = Math.min(box.width / (w * coverScale), box.height / (h * coverScale));
-      currentScale = visibleFrac >= 0.75 ? coverScale : containScale;
-      screenCanvas.style.width = Math.round(w * currentScale) + "px";
-      screenCanvas.style.height = Math.round(h * currentScale) + "px";
-      screenCanvas.style.imageRendering = "auto";
-    }
+    // Fill first: the 1.5.11 integer-step search shrank a 1920 framebuffer
+    // to 960 CSS px inside a 1280 box on a Retina Mac, big black borders.
+    // Every k>1 step was a smoothed downscale anyway, no crisper than a
+    // fractional one. The exact 1:1 device-pixel size is still used when
+    // it lands within 10% of the fill size, so a box close to native stays
+    // pixel-sharp without leaving a visible margin.
+    var coverScale = Math.max(box.width / w, box.height / h) || 1;
+    var containScale = Math.min(box.width / w, box.height / h) || 1;
+    var visibleFrac = Math.min(box.width / (w * coverScale), box.height / (h * coverScale));
+    currentScale = visibleFrac >= 0.75 ? coverScale : containScale;
+    var crisp = 1 / dpr <= currentScale && 1 / dpr >= currentScale * 0.9;
+    if (crisp) currentScale = 1 / dpr;
+    screenCanvas.style.width = Math.round(w * currentScale) + "px";
+    screenCanvas.style.height = Math.round(h * currentScale) + "px";
+    screenCanvas.style.imageRendering = crisp ? "pixelated" : "auto";
+    lastRsCss = screenCanvas.style.width;
   }
   window.addEventListener("resize", resizeCanvas);
   window.addEventListener("orientationchange", resizeCanvas);
