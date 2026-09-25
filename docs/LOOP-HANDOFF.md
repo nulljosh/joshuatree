@@ -18,6 +18,7 @@ Main is 1.5.3+. Shipped eight releases: 1.3.0 Notes text selection and Chat show
 3. Browser demo lag profiling in v86. Measure frame time.
 4. Put WC.BIN on the disk image and port hello, note to libjt.
 5. ELF loading from disk, apps outside the kernel, tiny C compiler (2.0 spine).
+6. Make chattools-check.py's marker waits load-tolerant. Under 4 parallel QEMU shards in tools/ci-local.sh it flaked once (timeout waiting on a chattool= marker that shows up fine standalone) -- give the waits a longer deadline under shard load instead of the fixed 20s, so a slow shared runner doesn't read as a real regression.
 
 ## Restart prompt
 
