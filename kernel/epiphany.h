@@ -2,7 +2,8 @@
    The real one is a React/Supabase/Stripe stack that is HTTPS end to end, and
    this kernel has no TLS, so it cannot run here as-is (roadmap.md). What ports
    honestly is the part that needs no network: the tab shell and the four tabs'
-   local logic, over baked-in demo data.
+   local logic. Equity prices are live through Stocks' own quote fetch
+   (epi_refresh); holdings, crypto, commodities and macro stay sample data.
 
    Markets    equities from Stocks' own table, plus crypto, commodities, fear/greed
    Portfolio  holdings valued off the same prices, P/L, allocation bar; +/- edits shares
@@ -13,7 +14,8 @@
    Keys: left/right or 1-4 switch tab, up/down select, + / - shares, b/s/space in
    the simulator, esc closes. Clicking a tab switches to it; the red dot closes. */
 
-/* Fixed sample holdings stay separate from Stocks' network quotes. */
+/* Sample holdings. epi_refresh overwrites price and change with live quotes;
+   these numbers only show when the network is down. */
 static stocks_entry_t epi_demo_entries[STOCKS_MAX] = {
     {"AAPL", "Apple Inc.", 23800, 250, 3600, 312},
     {"MSFT", "Microsoft", 41900, -180, 3100, 350},
@@ -38,7 +40,7 @@ static const epi_row_t epi_alt[] = {
 
 /* Epiphany's own watchlist: a pool of tickers, a flag per ticker for whether it is watched. */
 #define EPI_POOL_N 14
-static const epi_row_t epi_pool[EPI_POOL_N] = {
+static epi_row_t epi_pool[EPI_POOL_N] = {
     {"AAPL", "Apple", 23800, 106}, {"MSFT", "Microsoft", 41900, -43}, {"GOOGL", "Alphabet", 14200, 252},
     {"AMZN", "Amazon", 19100, -164}, {"TSLA", "Tesla", 24200, 372}, {"NVDA", "NVIDIA", 12800, 330},
     {"META", "Meta", 58000, -109}, {"NFLX", "Netflix", 66000, 182}, {"AMD", "AMD", 15600, 290},
@@ -50,6 +52,24 @@ static int epi_watch[EPI_POOL_N] = {1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0};
 static int epi_nth(int want, int k) { for (int i = 0; i < EPI_POOL_N; i++) if (!!epi_watch[i] == want && k-- == 0) return i; return -1; }
 static int epi_count(int want) { int n = 0; for (int i = 0; i < EPI_POOL_N; i++) n += !!epi_watch[i] == want; return n; }
 static int epi_adding;
+static int epi_live; /* how many of the 8 equities carry a live quote */
+
+/* Pull the 1D quotes Stocks uses and copy fresh ones in. A stale or failed
+   row keeps its last price, so an outage never blanks the portfolio. */
+static void epi_refresh(void) {
+    stocks_fetch(0);
+    epi_live = 0;
+    for (int i = 0; i < STOCKS_MAX; i++) {
+        if (stx_data[0][i].stale) continue;
+        int price = stx_data[0][i].price, prev = stx_data[0][i].prev;
+        epi_demo_entries[i].price_x100 = price;
+        epi_demo_entries[i].change_x100 = price - prev;
+        /* ponytail: epi_pool's first 8 are Stocks' 8 in the same order; the other 6 stay sample */
+        epi_pool[i].price_x100 = price;
+        epi_pool[i].bp = prev >= 100 ? (price - prev) * 100 / (prev / 100) : 0; /* no 64-bit divide in a freestanding kernel */
+        epi_live++;
+    }
+}
 
 #define EPI_HOLD_N 5
 static struct { int stock; int shares; int cost_x100; } epi_hold[EPI_HOLD_N] = {
@@ -190,7 +210,7 @@ static void epi_tab_situation(int x, int y, int w) {
     font_draw_string("Daily brief", x, by, STX_MUTED, -1);
     font_draw_string("Risk appetite firm: fear and greed sits in Greed, volatility is soft.", x, by + 24, STX_INK, -1);
     font_draw_string("Rates steady, dollar flat. Mega-cap tech leads, autos and retail lag.", x, by + 46, STX_INK, -1);
-    font_draw_string("Demo data. The live map and People graph need the network stack.", x, by + 78, STX_MUTED, -1);
+    font_draw_string("Sample macro data. The live map and People graph are not ported yet.", x, by + 78, STX_MUTED, -1);
     (void)w;
 }
 
@@ -209,7 +229,8 @@ static void epi_draw(int tab, int sel) {
     else if (tab == 1) epi_tab_portfolio(x, y, w, sel);
     else if (tab == 2) epi_tab_sim(x, y, w, HH - y);
     else epi_tab_situation(x, y, w);
-    font_draw_string("Demo data, not live   left/right tabs   esc closes", 20, HH - 24, STX_MUTED, -1);
+    font_draw_string(epi_live ? "Stocks live, the rest is sample   r refresh   left/right tabs   esc closes"
+                              : "Offline, sample prices   r retry   left/right tabs   esc closes", 20, HH - 24, STX_MUTED, -1);
     window_present();
 }
 
@@ -236,7 +257,10 @@ static void gui_launch_epiphany(void) {
     epi_sim_reset();
     for (int i = 0; i < 40; i++) epi_sim_step();
     mouse_click_edge_sync();
+    epi_draw(tab, sel);
+    epi_refresh();
     for (;;) {
+        if (ticks() - stx_refresh_tick >= 6000) epi_refresh(); /* once a minute, same as Stocks */
         epi_draw(tab, sel);
         sleep_ticks(2);
         int k;
@@ -257,6 +281,7 @@ static void gui_launch_epiphany(void) {
             else if (tab == 2 && k == 's' && epi_sim_pos >= 10) { epi_sim_cash += 10 * epi_sim_px[epi_sim_n - 1]; epi_sim_pos -= 10; }
             else if (tab == 2 && k == ' ') epi_sim_paused = !epi_sim_paused;
             else if (tab == 2 && k == 'r') epi_sim_reset();
+            else if (k == 'r' || k == 'R') epi_refresh();
             else if (k == KEY_CLICK) {
                 if (!gui_app_windowed) return;
                 int mx = app_cursor_x - app_view_x, my = app_cursor_y - app_view_y;
