@@ -23,6 +23,9 @@ cd "$(dirname "$0")/../.."
 echo "pre-push: doc references..."
 ./tools/checks/check-refs.sh
 
+echo "pre-push: VERSION bumped for a code change..."
+./tools/checks/version-bump-check.sh origin/main
+
 echo "pre-push: kernel compiles..."
 make -s kernel.elf
 
