@@ -1,41 +1,36 @@
-# Joshua Tree loop handoff (2026-09-24, 11:45 UTC)
+# Joshua Tree loop handoff (2026-09-25, evening)
 
 ## What the loop is
 
-Keep building Joshua Tree headlessly from a cloud session: no Mac display, no QEMU window, never the JT app. One claude/* branch per piece, a PR per piece, merge the moment CI is green (standing authorization from Joshua, 2026-09-24). Small pieces: one feature or fix per branch, one push per branch. Every PR ships a check and a `docs/ARCHITECTURE.md` row per new file, plus a short plain-words roadmap line (see CLAUDE.md, "Writing docs"). Report usage each pass; checkpoint this file before context hits 90%.
+Continue Joshua Tree work headlessly toward 2.0 with merge-on-green CI standing. Stability, usability and performance rank above feature count. Work on branches, hotswap subagents from roadmap.md, verify headless only, and open a PR; merging happens automatically on green CI per Joshua's standing rule.
 
-Target: 1.2.0, then keep going. Sound (AC97) is pencilled as 1.3.0. Compositor, TLS and real hardware are weeks each, not loop items.
+## Where things stand
 
-## What shipped today
+Main is 1.1.5 (Chat reply timeout bounded, clipboard check hardened, filerobust subprocess timeouts). Three subagents landed commits and opened PRs yesterday:
 
-1.0.7 through 1.1.2 are on main, released with bare tags (`1.0.13` style), landing page redeployed on each merge. Highlights: windows drag live by the title bar (1.0.11); Chat talks to Samantha, the Turing project's model, over the network (1.0.12, proven against the real host from CI); Samantha acts from Chat: reminders, notes, open an app, weather, today's calendar (1.1.0); the landing tour drags a window and a Playwright check proves the demo's Chat renders a reply, gating merges (1.0.13); CI emails stopped (superseded runs end cancelled, 1.1.1; no duplicate push-to-main run, 1.1.2); the wallpaper network checks compare the theme they boot in (1.1.2). Turing v4.2.1 says Samantha has hands in Joshua Tree.
+1. **PR #169** (branch `claude/notes-0925`): Text selection in Notes (1.2.0), the first step of the typography pass. Also files docs into docs/roadmap.md.
 
-## Open PRs (merge on green, in this order, re-merging main between)
+2. **Chat tightening** (branch `claude/chat-tighten`): Removes debug `Host: localhost` header, strips `>>>` prompt from landing demo, redesigns Chat to show what Samantha can do (handle tool calls, not just answer questions). Also renames Chat to Sam per Joshua's call.
 
-- #165 `claude/docs-sync` (1.1.3): README, landing copy, roadmap catch-up, plain-words rule, CI badge reads pull-request runs.
-- #166 `claude/cursor-glide` (1.1.4): the tour's pointer glides instead of teleporting; `tools/checks/cursorglide-check.mjs` in the demo job.
-- Coming from subagents: `claude/drag-corners` (Chat reply timeout bounded, clipboard check hardened, filerobust subprocess timeouts; the rounded-corner repaint after a drag moves to `claude/reliability-2`), `claude/desktop-basics` (text selection with copy and cut in Notes plus a tour scene; right-click desktop menu and app switcher follow on `claude/desktop-basics-2` and `-3`, 1.2.0).
-- #151 `claude/e1000` is another session's draft. Leave it alone.
+3. **Small polish** (branch `claude/polish-0925`): Calendar icon padding, menu bar weather text color fix, remove uptime from About This Computer.
 
-Merge recipe: `git merge --no-commit --no-ff origin/main`; conflicts are only VERSION, `landing/version.txt`, `landing/index.html`, and added lines in `docs/roadmap.md` / `docs/ARCHITECTURE.md`. Keep the branch's version (bump if main passed it), `git checkout HEAD -- landing/index.html`, `python3 tools/gen/inject-landing-facts.py`, keep both sides' added doc lines, `git commit` the merge, then `version-bump-check.sh origin/main`, `landing-facts-check.py`, `suite-coverage-check.sh`, `check-refs.sh`, `landing-roadmap.py --check`, `check.sh`, and push. Merges are serial because branch protection requires "up to date".
+Joshua's handwritten notes (2026-09-25):
+- Stability, usability, performance first, all else follows.
+- Chat redesign: expand capabilities, drop debug header, show every tool firing in the landing demo.
+- Typography and retina polish: no pixels anywhere. Notes gets first pass.
+- Calendar, menu bar, About This Computer quick wins.
+- Audio driver (AC97) comes later. Music app depends on it.
+- Mod feature: users talk to Samantha to customize the OS, settings persist on disk.
 
 ## Next, in order
 
-1. Merge the open PRs above as they go green.
-2. Samantha acts inside apps, not just opens them: new picker tools on the Turing side (`worker.js` PICKABLE, PICK_SYSTEM, `S.sound`, plus `web/samantha.js` parity; Turing works on main, runs its check set, bumps VERSION) and kernel handlers in `kernel/chat.h`: add a calendar event, mark a reminder done, send mail, search files, set the wallpaper, read a note back. Extend `tools/checks/chattools-check.py`. MINOR bump.
-3. Docs readability pass: older roadmap entries, `docs/ARCHITECTURE.md` rows to one or two plain sentences, this file. Prose-only.
-4. Network job leftovers (non-blocking, warnings only): `wallpaper-check.py`'s tint model is 23.7 off the kernel's warm-map tint; `wallfx-check.py rain` captures a black band after re-entering the GUI; `satellite-wallpaper-check.py` compares an exact hash against PIL's JPEG decode, impossible with `drivers/jpeg.c`'s documented tolerance (use `tools/jpeg-host` or a diff bound).
-5. Sound: AC97 driver, a tone test, 1.3.0.
-6. Samantha on-device (roadmap, unscheduled, [Fable]).
-
-## Environment notes
-
-Worktrees live under the session scratchpad, one per branch. `apt-get install -y qemu-system-x86 librsvg2-bin`; use `pip install pillow` (the apt python3-pil is broken here). Playwright's Chromium is preinstalled at `/opt/pw-browsers/chromium` (a different revision than playwright-core expects, so checks pass `executablePath` when that path exists); `npm install` in a worktree, or symlink `node_modules` from another. `landing/v86/kernel.elf` is a build artifact: `make kernel.elf` before any browser check. The sandbox cannot reach turing.heyitsmejosh.com, ip-api.com or the tile hosts from the guest; live proof comes only from CI's `network` job. Turing is cloned with push access at /home/user/turing.
-
-Usage at this checkpoint: rate limit allowed, no overage, context 71%, session cost about $577.
+1. Land the three branches: merge PR #169, PR for chat-tighten, PR for polish-0925. CI is green, auto-merge applies.
+2. Run the stability items from docs/roadmap.md ranked top-down: text sharp everywhere (typography pass complete), nothing crashes (error handling audit), icons with taste (already done), accessibility floor (every app keyboard-opens).
+3. File the three Notes pages Joshua gave: window edges pixely, Files needs view buttons, improve word processor typography.
+4. AC97 sound driver and Music app when roadmap reaches it (v100 section); that is future work.
 
 ## Restart prompt
 
 ```
-/loop Resume Joshua Tree from docs/LOOP-HANDOFF.md and aim for 1.2.0 and beyond: merge my open PRs as they go green (re-merge main between them), then work "Next, in order". Small pieces: one feature or fix per branch and PR. One subagent per piece (Sonnet; Fable for kernel internals), worktrees under the session scratchpad, headless only, never touch codex/* or claude/e1000. Every PR ships a check and an ARCHITECTURE row, plain-words docs, merge on green, report usage each pass, checkpoint before 90%.
+/loop Joshua Tree loop toward 2.0: merge PRs on green CI (auto), hotswap subagents (max 4 Haiku/Sonnet, 2 if Fable) from docs/roadmap.md focusing on stability/reliability and Joshua's 2026-09-25 notes, headless only, stop at 90% session or weekly usage with /checkpoint.
 ```
