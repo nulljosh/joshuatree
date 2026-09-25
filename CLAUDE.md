@@ -151,9 +151,12 @@ This project has no finish line. Each pass:
 4. Verify against an artifact before calling it done: `check.sh`, a
    screenshot, a disk image. Run `tools/checks/check-refs.sh` after any
    rename/move/delete.
-5. Ship it: commit, push, `wrangler deploy` for landing-page-only
-   changes (or let `deploy.yml` do it), bump `VERSION` for kernel work,
-   one clear TLDR back, then pick up step 1 again.
+5. Ship it: commit, open the PR as a draft (`gh pr create --draft`), so
+   pushes while it's still being iterated on never trigger CI or a
+   failure email. Run `tools/ci-local.sh` before asking for a real CI
+   run; only once it passes, `gh pr ready <N>`. `wrangler deploy` for
+   landing-page-only changes (or let `deploy.yml` do it), bump `VERSION`
+   for kernel work, one clear TLDR back, then pick up step 1 again.
 
 Constraints in this file and in `docs/roadmap.md`'s model-routing legend get
 tightened in place as gaps turn up, not left to drift.
