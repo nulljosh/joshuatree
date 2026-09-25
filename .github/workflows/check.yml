@@ -240,9 +240,13 @@ jobs:
           echo "changes: ${{ needs.changes.result }} code=${{ needs.changes.outputs.code }}"
           echo "suite:   ${{ needs.suite.result }}"
           echo "demo:    ${{ needs.demo.result }}"
-          [ "${{ needs.changes.result }}" = "success" ] || exit 1
-          [ "${{ needs.suite.result }}" = "success" ] || { [ "${{ needs.suite.result }}" = "skipped" ] && { [ "${{ needs.changes.outputs.code }}" = "false" ] || [ "${{ needs.changes.outputs.kernel }}" = "false" ]; }; }
-          [ "${{ needs.demo.result }}" = "success" ] || { [ "${{ needs.demo.result }}" = "skipped" ] && [ "${{ needs.changes.outputs.code }}" = "false" ]; }
+          # Explicit if/exit: a bare `A || { B && C; }` line never tripped
+          # bash -e when B failed, so a red suite shard still passed this
+          # gate (1.5.14 merged over a failed shard that way).
+          skip_suite=false; { [ "${{ needs.changes.outputs.code }}" = "false" ] || [ "${{ needs.changes.outputs.kernel }}" = "false" ]; } && skip_suite=true
+          if [ "${{ needs.changes.result }}" != "success" ]; then echo "FAIL: changes"; exit 1; fi
+          if [ "${{ needs.suite.result }}" != "success" ] && ! { [ "${{ needs.suite.result }}" = "skipped" ] && $skip_suite; }; then echo "FAIL: suite"; exit 1; fi
+          if [ "${{ needs.demo.result }}" != "success" ] && ! { [ "${{ needs.demo.result }}" = "skipped" ] && [ "${{ needs.changes.outputs.code }}" = "false" ]; }; then echo "FAIL: demo"; exit 1; fi
 
   # CLAUDE.md 4d's own candidate, "a second job for check-refs.sh": pure
   # drift insurance, no clang/qemu/PIL toolchain needed at all, so it runs
