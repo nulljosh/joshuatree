@@ -170,7 +170,7 @@ The OS stays free. Monetization is custom hardware built to run it. Everything t
 
 ## Session task queue
 Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current.
-1. **Split kernel.c into per-subsystem files** [Sonnet]: ~7,800 lines, the one god file left here. Don't combine with other kernel.c work.
+1. **Break the kernel into smaller files** [Sonnet]: ~7,800 lines, the one god file left here. Don't combine with other kernel.c work.
 2. **Rich document app** [Sonnet]: Word/Pages-style paragraph and run formatting, distinct from Notes (which stays plain text).
 3. **Native code editor and package tool** [Sonnet]: syntax highlighting, plus a fetch-and-install tool over this kernel's own HTTP client.
 
