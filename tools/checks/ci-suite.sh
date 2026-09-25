@@ -123,6 +123,7 @@ once |1|Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappc
 once |1|Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
 once |3|RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
 retry|1|Stocks opens without a supported network card|python3 ./tools/checks/stocks-dock-check.py
+retry|0|Stocks chart line is antialiased (coverage blend, no stair-stepping)|python3 ./tools/checks/stocks-aa-check.py
 once |0|Stocks live quotes and kernel parsing|node ./tools/checks/stocks-live-check.mjs
 once |1|Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
 once |1|Worker /api/proxy: a silent upstream cannot hang the guest (weather/chat freeze regression)|node ./tools/checks/weatherproxy-hang-check.mjs
