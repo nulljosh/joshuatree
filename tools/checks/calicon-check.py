@@ -73,6 +73,18 @@ DAY_DIFF_MIN = 80      # dark-ink pixel count must differ by at least this many
 MONTH_DIFF_MIN = 60    # red-ink pixel count must differ by at least this many
 RED_MIN = 60           # red channel must lead green/blue by this much, averaged over the reddest pixels
 
+# v0.89.x follow-up: the day numeral used to run edge to edge on the dock's
+# 74-physical-px tile (mul_d=2, sized against the bigger Apps-folder grid
+# tile and never checked against the dock's own smaller one -- a real crop
+# showed "25" with almost no side margin and its stroke crossing into the
+# tile's own bottom curve). MARGIN_COLS keeps ink out of the same inset the
+# rest of the dock's glyphs respect (restyle_icons.py's shared top-16/
+# bottom-20-of-128 band is ~12.5%/15.6%; 8% here on a 74px tile is a real
+# margin with slack for AA fringing, not a tight pin). BOTTOM_NO_INK_ROWS
+# catches the day numeral's descender crossing the tile's own bottom edge.
+MARGIN_COLS = max(3, int(TILE_W * 0.08))
+BOTTOM_NO_INK_ROWS = range(int(TILE_W * 0.94), TILE_W)
+
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 
@@ -161,6 +173,27 @@ def red_mask(img):
     return out
 
 
+def edge_ink_count(img):
+    """Count of dark or red ink pixels in the tile's own side margins or
+    right against its bottom edge -- the exact shape of the overflow bug
+    (text running edge to edge with no inset, or a descender crossing the
+    tile's own bottom curve)."""
+    count = 0
+    for y in list(DAY_ROWS) + list(MONTH_ROWS):
+        for x in list(range(0, MARGIN_COLS)) + list(range(TILE_W - MARGIN_COLS, TILE_W)):
+            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
+            is_dark = lum(p) < 110
+            is_red = (p[0] - max(p[1], p[2])) > 60 and p[0] > 140
+            if is_dark or is_red:
+                count += 1
+    for y in BOTTOM_NO_INK_ROWS:
+        for x in COLS:
+            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
+            if lum(p) < 110:
+                count += 1
+    return count
+
+
 def red_strength(img):
     reddest = []
     for y in MONTH_ROWS:
@@ -197,6 +230,14 @@ if month_diff < MONTH_DIFF_MIN:
     fail = 1
 if red_feb < RED_MIN or red_nov < RED_MIN:
     print("FAIL: the month area is not red ink in at least one boot")
+    fail = 1
+
+edge_nov = edge_ink_count(img_nov)  # two-digit day ("28"), the wider/worst case for side overflow
+print("edge-margin ink pixels (NOV 28 boot): %d (need 0, margin %dpx each side + bottom %d%% of tile)"
+      % (edge_nov, MARGIN_COLS, int((1 - BOTTOM_NO_INK_ROWS.start / TILE_W) * 100)))
+if edge_nov > 0:
+    print("FAIL: the date text runs into the tile's own side margin or bottom edge -- "
+          "match the inset the rest of the dock's glyphs keep off the squircle")
     fail = 1
 
 if fail:

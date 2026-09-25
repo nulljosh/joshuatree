@@ -188,3 +188,7 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 ## 1.0.4: Stocks uses market data
 
 The fixed watchlist now fetches real quotes and chart closes through the existing Worker. This covers native Joshua Tree and the same kernel embedded in the portfolio. Prices refresh once a minute while Stocks is open, with R for retry, UTC quote timestamps and stale/unavailable states. The provider may delay quotes; closed markets show the last session. Synthetic charts and invented daily statistics are removed. Epiphany's sample portfolio is kept separate. Worker route checks, an ASan/UBSan harness of the actual C parser, a live upstream request and a headless boot verify the path.
+
+## Calendar dock tile padding and menu bar weather color
+
+The Calendar dock icon's day number ("25") used to run edge to edge on the tile with almost no side margin, its stroke crossing into the tile's own bottom curve: sized for the bigger Apps-folder grid tile and never checked against the dock's own smaller one. Shrunk to match the same inset every other dock glyph keeps off the squircle. Menu bar weather text now uses the clock's own ink color instead of a warm brown, so it reads on every wallpaper theme. `tools/checks/calicon-check.py` gained a margin check (fails if date ink lands in the tile's own side margin or against its bottom edge, confirmed failing on the old sizing and passing on the fix).
