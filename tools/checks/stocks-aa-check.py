@@ -107,47 +107,63 @@ def near(p, c, tol=10):
 # pixel is exactly the line color, everything else is exactly whatever
 # was already there.
 px = img.load()
-intermediate_rows = set()
-pure_line_pixels = 0
-for line_color in (STX_GREEN, STX_RED):
-    for y in range(0, H):
-        for x in range(600, 1900, 1):  # right-hand detail pane's chart region, generously wide
-            p = px[x, y]
-            if near(p, line_color, 6):
-                pure_line_pixels += 1
-                continue
-            # a pixel partway between the line color and something clearly
-            # not the line color and not pure white/cream background
-            dr = max(abs(p[i] - line_color[i]) for i in range(3))
-            if 15 < dr < 200:
-                # require it's actually a blend toward the line color, not
-                # unrelated UI (text, tab highlight etc): check it sits on
-                # at least one 4-connected neighbor that IS the pure line
-                # color, which only true edge-antialiasing produces.
-                for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
-                    if 0 <= nx < W and 0 <= ny < H and near(px[nx, ny], line_color, 6):
-                        intermediate_rows.add((line_color, y))
-                        break
 
-print(f"pure line-color pixels: {pure_line_pixels}, rows with an intermediate (antialiased) edge pixel adjacent to a pure line pixel: {len(intermediate_rows)}")
+# Restrict strictly to the big range chart's own plot box (confirmed by a
+# real pmemsave crop: apex ~x1030,y383, baseline rules at y~372/y~651,
+# plot spans roughly x804..x1716). No text or pills live inside this box
+# (the axis rules are a separate muted-gray color, not green/red), so
+# every green/red-ish pixel found here belongs to the line itself, not to
+# AA'd text or a solid pill fill -- both of which would produce false
+# "intermediate" pixels next to pure color and defeat the discrimination
+# this check exists to prove.
+CHART_BOX = (804, 374, 1716, 650)
 
-# Save the 4x crop around the chart area (upper-middle of the desktop,
-# where the detail pane's range chart sits) for visual proof.
+def scan(box, colors):
+    x0, y0, x1, y1 = box
+    pure = 0
+    distinct_levels = set()
+    for line_color in colors:
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                p = px[x, y]
+                if near(p, line_color, 4):
+                    pure += 1
+                    continue
+                dr = max(abs(p[i] - line_color[i]) for i in range(3))
+                if 8 < dr < 180:
+                    for nx, ny in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                        if 0 <= nx < W and 0 <= ny < H and near(px[nx, ny], line_color, 4):
+                            # bucket the blend fraction coarsely; real AA
+                            # produces several distinct fractional levels
+                            # along an edge, a solid 2x2 stamp produces
+                            # none inside a text/pill-free box like this.
+                            distinct_levels.add((line_color, round(dr / 12)))
+                            break
+    return pure, distinct_levels
+
+pure_line_pixels, distinct_levels = scan(CHART_BOX, (STX_GREEN, STX_RED))
+print(f"chart-box pure line pixels: {pure_line_pixels}, distinct intermediate-coverage buckets: {len(distinct_levels)}")
+
+# Save 4x crops of the big chart AND one sparkline (sidebar row 0, AAPL)
+# from the SAME real frame, for visual proof.
 try:
-    crop = img.crop((600, 100, 1000, 340))
-    crop = crop.resize((crop.width * 4, crop.height * 4), Image.NEAREST)
     os.makedirs(os.path.dirname(CROP_OUT), exist_ok=True)
-    crop.save(CROP_OUT)
-    print(f"saved 4x crop to {CROP_OUT}")
+    chart_crop = img.crop((790, 370, 1730, 660)).resize((940 * 4, 290 * 4), Image.NEAREST)
+    spark_crop = img.crop((380, 220, 540, 320)).resize((160 * 4, 100 * 4), Image.NEAREST)
+    combo = Image.new("RGB", (max(chart_crop.width, spark_crop.width), chart_crop.height + spark_crop.height + 20), (255, 255, 255))
+    combo.paste(spark_crop, (0, 0))
+    combo.paste(chart_crop, (0, spark_crop.height + 20))
+    combo.save(CROP_OUT)
+    print(f"saved 4x crop (sparkline + big chart) to {CROP_OUT}")
 except Exception as e:
     print(f"warning: could not save crop: {e}")
 
 if pure_line_pixels < 20:
-    print("FAIL: chart line not found on screen (fixture/dock click likely missed)")
+    print("FAIL: chart line not found in its own plot box (fixture/dock click likely missed)")
     sys.exit(1)
-if len(intermediate_rows) < 8:
-    print("FAIL: no genuine intermediate-coverage edge pixels found next to the line -- looks like a hard 1-pixel stair-stepped line, not antialiased")
+if len(distinct_levels) < 4:
+    print("FAIL: no genuine multi-level intermediate-coverage pixels found on the chart line inside its own plot box -- this is a hard 1-pixel stair-stepped line (solid stamps only), not antialiased")
     sys.exit(1)
 
-print(f"PASS: {len(intermediate_rows)} rows show real antialiased coverage on the Stocks chart line, no flat stair-stepping")
+print(f"PASS: {len(distinct_levels)} distinct coverage levels found on the Stocks chart line, real antialiasing confirmed (not solid stair-stepping)")
 sys.exit(0)
