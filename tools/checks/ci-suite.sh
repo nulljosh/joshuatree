@@ -121,6 +121,7 @@ once |3|RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/check
 retry|1|Stocks opens without a supported network card|python3 ./tools/checks/stocks-dock-check.py
 once |0|Stocks live quotes and kernel parsing|node ./tools/checks/stocks-live-check.mjs
 once |1|Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
+once |1|Worker /api/proxy: a silent upstream cannot hang the guest (weather/chat freeze regression)|node ./tools/checks/weatherproxy-hang-check.mjs
 retry|3|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py
 once |2|Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
 retry|3|Accounts: create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py

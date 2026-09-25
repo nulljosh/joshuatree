@@ -69,46 +69,18 @@ def count_apps():
     return len(real)
 
 
-def count_checks():
-    src = (ROOT / "tools/checks/ci-suite.sh").read_text()
-    m = re.search(r"manifest\(\) \{\ncat <<'EOF'\n(.*?)\nEOF\n\}", src, re.S)
+def count_documented():
+    # Read the same % the progress chart's caption already states (real
+    # architecture-doc coverage, computed once in tools/gen/progress.sh),
+    # rather than recomputing it a second way here. Scraping the chart's
+    # own generated text guarantees the stat row and the chart can never
+    # drift apart: run tools/gen/progress.sh first to refresh progress.svg,
+    # then this script picks up whatever it just wrote.
+    svg = (ROOT / "landing/progress.svg").read_text()
+    m = re.search(r"(\d+)% documented", svg)
     if not m:
-        raise ValueError("Could not find the manifest heredoc in tools/checks/ci-suite.sh")
-    lines = [l for l in m[1].splitlines() if re.match(r"^(once|retry)\s*\|", l)]
-    if not lines:
-        raise ValueError("Manifest heredoc parsed with no once/retry lines")
-    return len(lines)
-
-
-def count_lines():
-    # git ls-files, not a filesystem walk: a local build (`make kernel.elf`,
-    # the same one deploy.yml runs right before this script) writes real
-    # generated headers into the tree that are gitignored on purpose
-    # (drivers/version.h, drivers/user_hello.h, drivers/user_note.h --
-    # see check-refs.sh's own note on version.h). A raw walk picks those
-    # up as if they were hand-authored, inflating the count by whatever
-    # happens to be sitting on disk at compute time. Tracked files only
-    # means the same source tree every time, build or no build.
-    out = subprocess.run(
-        ["git", "-C", str(ROOT), "ls-files"], capture_output=True, text=True, check=True
-    ).stdout
-    total = 0
-    seen_any = False
-    for rel in out.splitlines():
-        if not counts_as_real(rel):
-            continue
-        path = ROOT / rel
-        if not path.is_file():
-            continue
-        seen_any = True
-        try:
-            with path.open("r", encoding="utf-8", errors="replace") as fh:
-                total += sum(1 for _ in fh)
-        except OSError:
-            continue
-    if not seen_any:
-        raise ValueError("No real source files found; filter is broken")
-    return total
+        raise ValueError("Could not find a 'N% documented' caption in landing/progress.svg; run tools/gen/progress.sh first")
+    return m[1]
 
 
 def read_version():
@@ -121,8 +93,7 @@ def read_version():
 def compute_facts():
     return {
         "apps": str(count_apps()),
-        "checks": str(count_checks()),
-        "lines": f"{count_lines():,}",
+        "documented": count_documented(),
         "version": read_version(),
     }
 

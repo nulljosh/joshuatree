@@ -77,6 +77,20 @@ def counts_as_real(path):
         return False
     return True
 
+
+def apps_at(sha):
+    # Real app count at a given commit, the same visitor-facing number the
+    # stat row shows today (GUI_LABELS minus the Apps folder and Trash,
+    # neither a real app). Plotted instead of a raw line count: "lines of
+    # code" means nothing to a visitor and inflates on generated data;
+    # apps shipped is the thing a visitor can actually try.
+    src = subprocess.run(["git", "show", f"{sha}:kernel/kernel.c"], capture_output=True, text=True).stdout
+    m = re.search(r"GUI_LABELS\[GUI_APP_COUNT\]\s*=\s*\{(.*?)\};", src, re.S)
+    if not m:
+        return 0
+    labels = re.findall(r'"([^"]*)"', m[1])
+    return len([l for l in labels if l not in ("Apps", "Trash")])
+
 log = subprocess.run(
     ["git", "log", "--reverse", "--numstat", "--pretty=format:@@%H|%ad", "--date=short"],
     capture_output=True, text=True
@@ -166,10 +180,11 @@ def doc_pct_at(sha):
     return documented * 100 // len(units)
 
 labels = [p[2] for p in sampled]
-cum = [p[3] for p in sampled]
 doc_pct = [doc_pct_at(p[1]) for p in sampled]
+cum = [apps_at(p[1]) for p in sampled]
 n = len(cum)
-max_v = cum[-1] or 1
+max_v = max(cum) or 1
+first_date_short = None
 
 # v53: real layout fix, not a tweak. The rotated y-axis title ("Lines of
 # code") and the numeric tick labels ("34912", "17456", "0") were both
@@ -187,20 +202,17 @@ max_v = cum[-1] or 1
 # today's ~35k into six digits, and pad_l is derived from those two
 # column widths plus real gaps instead of a fixed magic number.
 TICK_CHAR_W = 5.5  # approx glyph advance at font-size 9
-TITLE_COL_W = 12    # rotated title's own thickness (font-size 8) + margin
-COL_GAP = 4          # real gap between the title column and the tick column
 AXIS_GAP = 4         # real gap between the tick column and the axis line
 tick_digits = len(str(max_v))
 tick_col_w = max(10, int(tick_digits * TICK_CHAR_W) + 2)
-pad_l = TITLE_COL_W + COL_GAP + tick_col_w + AXIS_GAP
-title_x = TITLE_COL_W // 2
+pad_l = tick_col_w + AXIS_GAP
 tick_x = pad_l - AXIS_GAP  # tick text is right-aligned (anchor=end) here
 # pad_b needs room for two stacked text rows below the plot (the date
 # labels, then the bold summary caption) -- 28 only gave them an 8px
 # baseline gap, not enough for two font-size-10 rows (~14px needed
 # before descenders/ascenders start touching), and rendering it for
 # real showed exactly that: "Aug 31" clipping into "25,650 lines...".
-pad_r, pad_t, pad_b = 10, 26, 34
+pad_r, pad_t, pad_b = 10, 10, 40
 plot_w, plot_h = 420, 140
 width = pad_l + plot_w + pad_r
 height = pad_t + plot_h + pad_b
@@ -216,7 +228,7 @@ points_attr = " ".join(f"{xf(i)},{yf(cum[i])}" for i in range(n))
 DOT_TARGET = 10
 dot_step = max(1, (n - 1) // (DOT_TARGET - 1)) if n > 1 else 1
 dot_idx = sorted(set(list(range(0, n, dot_step)) + [n - 1]))
-dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2" data-version="{labels[i]}" data-lines="{cum[i]}"/>' for i in dot_idx)
+dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2" data-version="{labels[i]}" data-apps="{cum[i]}"/>' for i in dot_idx)
 half_v = max_v // 2
 
 # x-axis: real calendar dates, deduplicated (many commits share a day),
@@ -270,18 +282,10 @@ def short_date(d):
 # selector (see build_svg below) -- the interactive one needs real hit
 # targets and hover/focus state, the static one doesn't.
 bg_rect = '<rect width="100%" height="100%" fill="var(--bg)"/>'
-# Single legend row, one series. The old second dashed line (doc
-# coverage over time) got cut entirely, third real attempt at this:
-# relabeling wasn't enough, plotting the right metric wasn't enough
-# either, the metric itself is fundamentally lumpy (jumps in one pass,
-# not a smooth trend) and just reads as a noisy, ugly zigzag as a line
-# chart, direct feedback ("still looks retarded"), fair. Doc coverage
-# is a real, current, mostly-binary fact, not a time series worth
-# fighting a chart to show, so it's a plain stat in the caption instead.
-legend = (
-    f'<line x1="{pad_l}" y1="8" x2="{pad_l+14}" y2="8" stroke="var(--line)" stroke-width="2.5"/>'
-    f'<text x="{pad_l+19}" y="11" font-size="10" fill="var(--label)">Lines of real code</text>'
-)
+# No legend row and no rotated axis title: one series, self-evident from
+# the caption below the chart ("N lines..."), direct feedback that the
+# repeated "Lines of code" (once as a legend, once rotated on the y-axis)
+# was redundant furniture crowding the actual data.
 grid_lines = (
     f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l+plot_w}" y2="{pad_t}" stroke="var(--grid)"/>'
     f'<line x1="{pad_l}" y1="{pad_t+plot_h//2}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h//2}" stroke="var(--grid)"/>'
@@ -295,13 +299,12 @@ axis_lines = (
     f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l}" y2="{pad_t+plot_h}" stroke="var(--axis)"/>'
     f'<line x1="{pad_l}" y1="{pad_t+plot_h}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h}" stroke="var(--axis)"/>'
 )
-# Left axis title, rotated, its own dedicated column (title_x), well clear
-# of the tick-number column (tick_x, right-aligned into the axis line) so
-# the two never share pixels regardless of how many digits max_v has.
-title_label = f'<text x="{title_x}" y="{pad_t+plot_h//2}" font-size="8" fill="var(--line)" text-anchor="middle" transform="rotate(-90 {title_x} {pad_t+plot_h//2})">Lines of code</text>'
 polyline = f'<polyline points="{points_attr}" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
 date_labels = "".join(f'<text x="{xf(i)}" y="{pad_t+plot_h+16}" font-size="10" fill="var(--label)" text-anchor="middle">{short_date(labels[i])}</text>' for i in shown)
-caption = f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fill="var(--strong)">{max_v:,} lines &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>'
+# Body-size, muted-ink caption: readable page text, not a tiny bold chart
+# label. It carries the one real stat this chart needs, since the legend
+# and rotated axis title are gone.
+caption = f'<text x="{pad_l}" y="{height-6}" font-size="14" fill="var(--muted)">{max_v} apps &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>'
 
 # v52.4: real dark-mode support, direct feedback ("white graph on dark
 # mode... should be dynamic and native as code, not a screenshot"). A
@@ -316,16 +319,31 @@ caption = f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fi
 # already uses for the rest of the page, every fill/stroke reads via
 # var(--x) instead of a literal hex.
 def color_vars(scope):
+    if scope != ":root":
+        # Inlined into the landing page (not the standalone README embed):
+        # this <svg> is part of the live document, so it inherits the page's
+        # own :root custom properties straight through, no separate palette
+        # to keep in sync and no dark-mode media query of its own needed --
+        # it flips exactly when the page does. This is the fix for the
+        # chart reading as a boxed-in "default chart library" widget sitting
+        # on the ivory page instead of a native part of it: same paper, same
+        # ink, same clay accent, same font as everything else on the page.
+        return f'''
+  {scope} {{
+    --grid: var(--border); --axis: var(--sub); --muted: var(--sub);
+    --label: var(--sub); --strong: var(--fg); --line: var(--fg); --line2: var(--accent); --line2-pct: var(--accent);
+  }}
+  {scope} line[stroke="var(--grid)"] {{ stroke-dasharray: none; }}'''
     return f'''
   {scope} {{
-    --bg: #ffffff; --grid: #d7dfe9; --axis: #526174; --muted: #526174;
-    --label: #526174; --strong: #172334; --line: #2869c7; --line2: #159b9a; --line2-pct: #159b9a;
+    --bg: #ffffff; --grid: #e4e0d6; --axis: #6b6a63; --muted: #6b6a63;
+    --label: #6b6a63; --strong: #141413; --line: #141413; --line2: #d97757; --line2-pct: #d97757;
   }}
   @media (prefers-color-scheme: dark) {{
-    {scope} {{ --bg: #192637; --grid: #344354; --axis: #a8b8cb; --muted: #a8b8cb;
-             --label: #a8b8cb; --strong: #f1f5fa; --line: #83b5ff; --line2: #5ed0c7; --line2-pct: #5ed0c7; }}
+    {scope} {{ --bg: #1c1b1a; --grid: #38362f; --axis: #b8b6ac; --muted: #b8b6ac;
+             --label: #b8b6ac; --strong: #ece8df; --line: #ece8df; --line2: #d97757; --line2-pct: #d97757; }}
   }}
-  {'' if scope == ':root' else scope + ' '}line[stroke="var(--grid)"] {{ stroke-dasharray: none; }}'''
+  line[stroke="var(--grid)"] {{ stroke-dasharray: none; }}'''
 
 def build_svg(dots_markup, svg_id=None, extra_style="", extra_root_attrs=""):
     # svg_id=None -> the plain, standalone progress.svg (README embed via
@@ -344,7 +362,7 @@ def build_svg(dots_markup, svg_id=None, extra_style="", extra_root_attrs=""):
     style = f'<style>{color_vars(scope)}\n  {text_rule} {{ font-family: -apple-system, Helvetica, Arial, sans-serif; }}\n{extra_style}</style>'
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}"{id_attr}{extra_root_attrs}>'
-        + style + bg_rect + legend + grid_lines + tick_labels + axis_lines + title_label
+        + style + bg_rect + grid_lines + tick_labels + axis_lines
         + polyline + dots_markup + date_labels + caption + '</svg>'
     )
 
@@ -365,10 +383,10 @@ shutil.copy("progress.svg", "landing/progress.svg")
 SVG_ID = "progress-chart-live"
 dots_interactive = "".join(
     f'<g class="progress-pt" tabindex="0" role="img" '
-    f'aria-label="{short_date(labels[i])}, {cum[i]:,} lines of real code" '
-    f'data-tooltip="{short_date(labels[i])} &#183; {cum[i]:,} lines">'
+    f'aria-label="{short_date(labels[i])}, {cum[i]} apps shipped" '
+    f'data-tooltip="{short_date(labels[i])} &#183; {cum[i]} apps">'
     f'<circle class="progress-hit" cx="{xf(i)}" cy="{yf(cum[i])}" r="11" fill="transparent"/>'
-    f'<circle class="progress-dot" cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/>'
+    f'<circle class="progress-dot" cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/>'
     f'</g>'
     for i in dot_idx
 )
@@ -382,8 +400,13 @@ interactive_style = f'''
 '''
 interactive_svg = build_svg(
     dots_interactive, svg_id=SVG_ID, extra_style=interactive_style,
-    extra_root_attrs=f' role="img" aria-label="Real lines of code over time, {max_v:,} lines as of {short_date(points[-1][2])}"',
+    extra_root_attrs=f' role="img" aria-label="Apps shipped over time, {max_v} apps as of {short_date(points[-1][2])}"',
 )
+
+# Lede line above the chart, generated from the same real data (never
+# typed by hand, same "can't drift" contract as the rest of this page):
+# "From a blank screen on <first date> to <N> apps today."
+lede = f"From a blank screen on {short_date(points[0][2])} to {max_v} apps today."
 
 # Splice into landing/index.html between markers, the same inject-
 # between-comments pattern tools/gen/landing-roadmap.py already uses for
@@ -398,9 +421,15 @@ ei = html.index(end_marker)
 if si == -1 or ei == -1:
     raise SystemExit(f"{landing_path} is missing the progress-chart:start/end markers")
 html = html[:si + len(start_marker)] + "\n" + interactive_svg + "\n" + html[ei:]
+
+lede_start, lede_end = "<!-- progress-lede:start -->", "<!-- progress-lede:end -->"
+lsi = html.index(lede_start)
+lei = html.index(lede_end)
+html = html[:lsi + len(lede_start)] + lede + html[lei:]
+
 with open(landing_path, "w") as f:
     f.write(html)
 
-print(f"wrote progress.svg: {max_v:,} real lines, {doc_pct[-1]}% documented (real architecture-doc coverage), across {n} sampled points, {commit_count} total commits")
+print(f"wrote progress.svg: {max_v} apps shipped, {doc_pct[-1]}% documented (real architecture-doc coverage), across {n} sampled points, {commit_count} total commits")
 print(f"spliced interactive chart into {landing_path}")
 PYEOF
