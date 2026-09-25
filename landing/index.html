@@ -130,11 +130,13 @@
      so it wraps clean at 2-then-2 on a phone instead of stranding a card
      alone on its own row. */
   .facts { padding: 8px 20px 56px; }
-  .facts-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 16px; max-width: 720px; margin: 0 auto; text-align: center; }
+  .facts-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 16px; max-width: 560px; margin: 0 auto; text-align: center; }
+  .fact-link { display: block; color: inherit; text-decoration: none; }
+  .fact-link:hover strong, .fact-link:focus-visible strong { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
   .fact { display: flex; flex-direction: column; gap: 4px; }
   .fact strong { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; color: var(--fg); font-style: normal; }
   .fact .label { color: var(--sub); }
-  @media (max-width: 600px) { .facts-row { grid-template-columns: repeat(2, 1fr); gap: 24px 16px; } .fact strong { font-size: 26px; } }
+  @media (max-width: 600px) { .facts-row { grid-template-columns: repeat(3, 1fr); gap: 24px 12px; } .fact strong { font-size: 26px; } }
   .boot-cta { text-align: center; margin: 28px auto 0; }
   .boot-btn { display: inline-block; background: var(--accent); color: var(--bg); font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px 24px; border-radius: 999px; }
   .boot-btn:hover { opacity: 0.9; }
@@ -143,15 +145,15 @@
 
   /* Samantha + Features: one idea per section, big air, real screenshots.
      Apple-style close of the two gaps against apple.com/macos. */
-  .meet-samantha, .app-features { padding: 64px 20px; max-width: 980px; margin: 0 auto; }
-  .meet-samantha h2, .app-features h2 { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; text-align: center; margin: 0 0 12px; }
-  .meet-samantha .sub, .app-features .sub { text-align: center; color: var(--sub); font-size: 16px; max-width: 480px; margin: 0 auto 40px; line-height: 1.5; }
+  .meet-samantha, .app-features, .progress-section { padding: 64px 20px; max-width: 980px; margin: 0 auto; }
+  .meet-samantha h2, .app-features h2, .progress-section h2 { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; text-align: center; margin: 0 0 12px; }
+  .meet-samantha .sub, .app-features .sub, .progress-section .sub { text-align: center; color: var(--sub); font-size: 16px; max-width: 480px; margin: 0 auto 40px; line-height: 1.5; }
   .tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .app-features .tile-grid { grid-template-columns: repeat(3, 1fr); }
   .tile { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
   .tile img { width: 100%; height: auto; display: block; background: var(--bg); border-bottom: 1px solid var(--border); }
   .tile p { margin: 0; padding: 14px 16px; font-size: 14px; line-height: 1.4; color: var(--fg); }
-  @media (max-width: 700px) { .tile-grid, .app-features .tile-grid { grid-template-columns: 1fr; } .meet-samantha h2, .app-features h2 { font-size: 26px; } }
+  @media (max-width: 700px) { .tile-grid, .app-features .tile-grid { grid-template-columns: 1fr; } .meet-samantha h2, .app-features h2, .progress-section h2 { font-size: 26px; } }
   .boot-line a:hover { text-decoration: underline; }
 
   /* Full-bleed at every width, no framed-window card: the demo is edge
@@ -293,11 +295,8 @@
   #v86-overlay span { background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 999px; padding: 8px 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; }
   #v86-overlay.hidden { opacity: 0; }
 
-  .progress-section { padding: 64px 20px; }
-  .progress-card { padding: 20px 0; max-width: 640px; margin: 0 auto; }
-  .progress-card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.22em; color: var(--accent); margin: 0 0 14px; font-weight: 600; }
-  .progress-card > p { color: var(--sub); font-size: 13px; line-height: 1.5; margin: 0 0 16px; }
-  .progress-card { position: relative; }
+  .progress-card { padding: 20px 0 0; max-width: 640px; margin: 0 auto; position: relative; }
+  .progress-card .roadmap-next { color: var(--sub); font-size: 13px; line-height: 1.5; margin: 16px 0 0; text-align: center; }
   .progress-card svg { width: 100%; height: auto; display: block; }
   .progress-tooltip { position: absolute; background: var(--fg); color: var(--bg); padding: 6px 12px; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; z-index: 10; opacity: 0; transition: opacity 0.2s; transform: translate(-50%, -100%); }
   .progress-tooltip.visible { opacity: 1; }
@@ -394,8 +393,7 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row">
     <div class="fact"><strong><span data-fact="apps">25</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong><span data-fact="checks">80</span></strong><span class="label">Checks</span></div>
-    <div class="fact"><strong><span data-fact="lines">49,870</span></strong><span class="label">Lines of code</span></div>
+    <div class="fact"><a class="fact-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md"><strong><span data-fact="documented">100</span>%</strong><span class="label">Documented</span></a></div>
     <div class="fact"><strong>v<span data-fact="version">1.4.1</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
@@ -439,13 +437,17 @@
       <img src="shots/app-terminal.webp" alt="Terminal app running a command" loading="lazy" width="480" height="276">
       <p>Terminal. Type a command and the kernel answers back.</p>
     </div>
+    <div class="tile">
+      <img src="shots/app-stocks.webp" alt="Stocks app showing a watchlist" loading="lazy" width="480" height="276">
+      <p>Stocks. Keep an eye on a watchlist without leaving the desktop.</p>
+    </div>
   </div>
 </section>
 
 <section class="progress-section reveal">
+  <h2>Growing every week.</h2>
+  <p class="sub"><!-- progress-lede:start -->From a blank screen on Aug 31 to 25 apps today.<!-- progress-lede:end --></p>
   <div class="progress-card">
-    <h2>Where it's at</h2>
-    <!-- roadmap-summary:start --><p>Next up: cleaning up one giant file behind the scenes, a word processor, and a code editor and a way to install apps.</p><!-- roadmap-summary:end -->
     <!-- Real interactive version for this page specifically, not the same
          static image README.md embeds (README can't run JS). Generated
          and spliced in by tools/gen/progress.sh, same source data as
@@ -454,7 +456,7 @@
          fetched-and-reparsed image. Hover a point (or tap it on touch)
          to see its real date and real line count. -->
     <!-- progress-chart:start -->
-<svg xmlns="http://www.w3.org/2000/svg" width="463" height="190" viewBox="0 0 463 190" id="progress-chart-live" role="img" aria-label="Real lines of code over time, 49,870 lines as of Sep 24"><style>
+<svg xmlns="http://www.w3.org/2000/svg" width="447" height="190" viewBox="0 0 447 190" id="progress-chart-live" role="img" aria-label="Apps shipped over time, 25 apps as of Sep 24"><style>
   #progress-chart-live {
     --grid: var(--border); --axis: var(--sub); --muted: var(--sub);
     --label: var(--sub); --strong: var(--fg); --line: var(--fg); --line2: var(--accent); --line2-pct: var(--accent);
@@ -468,8 +470,9 @@
   #progress-chart-live .progress-pt:focus .progress-dot,
   #progress-chart-live .progress-pt.is-active .progress-dot { r: 5.5; stroke-width: 2.5; }
   #progress-chart-live .progress-pt:focus { outline: none; }
-</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="33" y1="10" x2="453" y2="10" stroke="var(--grid)"/><line x1="33" y1="80" x2="453" y2="80" stroke="var(--grid)"/><text x="29" y="13" font-size="9" fill="var(--muted)" text-anchor="end">49870</text><text x="29" y="83" font-size="9" fill="var(--muted)" text-anchor="end">24935</text><text x="29" y="153" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="33" y1="10" x2="33" y2="150" stroke="var(--axis)"/><line x1="33" y1="150" x2="453" y2="150" stroke="var(--axis)"/><polyline points="33,150 42,149 52,148 62,147 72,146 81,145 91,145 101,145 111,144 120,143 130,141 140,140 150,138 159,137 169,135 179,133 189,132 199,131 208,129 218,128 228,125 238,124 247,121 257,118 267,103 277,100 286,90 296,87 306,86 316,85 326,84 335,81 345,81 355,79 365,28 374,26 384,24 394,23 404,20 413,18 423,16 433,13 443,11 453,10" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 26 lines of real code" data-tooltip="Aug 31 &#183; 26 lines"><circle class="progress-hit" cx="33" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="33" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 1,482 lines of real code" data-tooltip="Sep 13 &#183; 1,482 lines"><circle class="progress-hit" cx="72" cy="146" r="11" fill="transparent"/><circle class="progress-dot" cx="72" cy="146" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 2,356 lines of real code" data-tooltip="Sep 13 &#183; 2,356 lines"><circle class="progress-hit" cx="111" cy="144" r="11" fill="transparent"/><circle class="progress-dot" cx="111" cy="144" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 4,396 lines of real code" data-tooltip="Sep 13 &#183; 4,396 lines"><circle class="progress-hit" cx="150" cy="138" r="11" fill="transparent"/><circle class="progress-dot" cx="150" cy="138" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 6,472 lines of real code" data-tooltip="Sep 13 &#183; 6,472 lines"><circle class="progress-hit" cx="189" cy="132" r="11" fill="transparent"/><circle class="progress-dot" cx="189" cy="132" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 9,127 lines of real code" data-tooltip="Sep 14 &#183; 9,127 lines"><circle class="progress-hit" cx="228" cy="125" r="11" fill="transparent"/><circle class="progress-dot" cx="228" cy="125" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 16,793 lines of real code" data-tooltip="Sep 14 &#183; 16,793 lines"><circle class="progress-hit" cx="267" cy="103" r="11" fill="transparent"/><circle class="progress-dot" cx="267" cy="103" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 23,111 lines of real code" data-tooltip="Sep 15 &#183; 23,111 lines"><circle class="progress-hit" cx="306" cy="86" r="11" fill="transparent"/><circle class="progress-dot" cx="306" cy="86" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 19, 24,851 lines of real code" data-tooltip="Sep 19 &#183; 24,851 lines"><circle class="progress-hit" cx="345" cy="81" r="11" fill="transparent"/><circle class="progress-dot" cx="345" cy="81" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 44,978 lines of real code" data-tooltip="Sep 20 &#183; 44,978 lines"><circle class="progress-hit" cx="384" cy="24" r="11" fill="transparent"/><circle class="progress-dot" cx="384" cy="24" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 23, 47,969 lines of real code" data-tooltip="Sep 23 &#183; 47,969 lines"><circle class="progress-hit" cx="423" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="423" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 24, 49,870 lines of real code" data-tooltip="Sep 24 &#183; 49,870 lines"><circle class="progress-hit" cx="453" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="453" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><text x="33" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="199" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="286" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 15</text><text x="335" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 19</text><text x="394" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 22</text><text x="443" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 24</text><text x="33" y="184" font-size="14" fill="var(--muted)">49,870 lines &#183; 100% documented &#183; 689 commits since Aug 31</text></svg>
+</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="17" y1="10" x2="437" y2="10" stroke="var(--grid)"/><line x1="17" y1="80" x2="437" y2="80" stroke="var(--grid)"/><text x="13" y="13" font-size="9" fill="var(--muted)" text-anchor="end">25</text><text x="13" y="83" font-size="9" fill="var(--muted)" text-anchor="end">12</text><text x="13" y="153" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="17" y1="10" x2="17" y2="150" stroke="var(--axis)"/><line x1="17" y1="150" x2="437" y2="150" stroke="var(--axis)"/><polyline points="17,150 26,150 36,150 46,150 56,150 65,150 75,150 85,150 95,150 104,150 114,150 124,150 134,150 143,150 153,150 163,150 173,150 183,66 192,66 202,66 212,50 222,50 231,50 241,38 251,38 261,33 270,33 280,33 290,33 300,33 310,33 319,33 329,33 339,33 349,33 358,22 368,22 378,16 388,10 397,10 407,10 417,10 427,10 437,10" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 0 apps shipped" data-tooltip="Aug 31 &#183; 0 apps"><circle class="progress-hit" cx="17" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="17" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="56" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="56" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="95" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="95" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="134" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="134" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="173" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="173" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 18 apps shipped" data-tooltip="Sep 14 &#183; 18 apps"><circle class="progress-hit" cx="212" cy="50" r="11" fill="transparent"/><circle class="progress-dot" cx="212" cy="50" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 20 apps shipped" data-tooltip="Sep 14 &#183; 20 apps"><circle class="progress-hit" cx="251" cy="38" r="11" fill="transparent"/><circle class="progress-dot" cx="251" cy="38" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 21 apps shipped" data-tooltip="Sep 15 &#183; 21 apps"><circle class="progress-hit" cx="290" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="290" cy="33" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 19, 21 apps shipped" data-tooltip="Sep 19 &#183; 21 apps"><circle class="progress-hit" cx="329" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="329" cy="33" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 23 apps shipped" data-tooltip="Sep 20 &#183; 23 apps"><circle class="progress-hit" cx="368" cy="22" r="11" fill="transparent"/><circle class="progress-dot" cx="368" cy="22" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 23, 25 apps shipped" data-tooltip="Sep 23 &#183; 25 apps"><circle class="progress-hit" cx="407" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="407" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 24, 25 apps shipped" data-tooltip="Sep 24 &#183; 25 apps"><circle class="progress-hit" cx="437" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="437" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><text x="17" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="183" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="270" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 15</text><text x="319" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 19</text><text x="378" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 22</text><text x="427" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 24</text><text x="17" y="184" font-size="14" fill="var(--muted)">25 apps &#183; 100% documented &#183; 693 commits since Aug 31</text></svg>
 <!-- progress-chart:end -->
+    <!-- roadmap-summary:start --><p>Next up: cleaning up one giant file behind the scenes, a word processor, and a code editor and a way to install apps.</p><!-- roadmap-summary:end -->
   </div>
 </section>
 
@@ -484,6 +487,14 @@
     <a href="https://github.com/nulljosh/joshuatree">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
       Source
+    </a>
+    <a href="https://github.com/nulljosh/joshuatree/tree/main/docs">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 1.5A1.5 1.5 0 0 1 3.5 0h6.086a1.5 1.5 0 0 1 1.06.44l2.915 2.914A1.5 1.5 0 0 1 14 4.414V14.5A1.5 1.5 0 0 1 12.5 16h-9A1.5 1.5 0 0 1 2 14.5v-13ZM3.5 1a.5.5 0 0 0-.5.5v13a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5V4.414L9.586 1H3.5ZM4.5 8h7v1h-7V8Zm0 3h7v1h-7v-1Zm0-6h4v1h-4V5Z"/></svg>
+      Docs
+    </a>
+    <a href="privacy.html">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0 1.5 2.5v4.6c0 4 2.7 7.5 6.5 8.4 3.8-.9 6.5-4.4 6.5-8.4V2.5L8 0Z"/></svg>
+      Privacy
     </a>
     <a href="https://heyitsmejosh.com">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm5.9 7.3h-2.2a12.4 12.4 0 0 0-1-4.3 6.5 6.5 0 0 1 3.2 4.3ZM8 1.6c.7.9 1.6 2.7 1.8 5.7H6.2C6.4 4.3 7.3 2.5 8 1.6ZM1.7 8.7h2.2c.1 1.6.4 3.1 1 4.3a6.5 6.5 0 0 1-3.2-4.3Zm2.2-1.4H1.7a6.5 6.5 0 0 1 3.2-4.3c-.6 1.2-.9 2.7-1 4.3ZM8 14.4c-.7-.9-1.6-2.7-1.8-5.7h3.6c-.2 3-1.1 4.8-1.8 5.7Zm3.1-1.4c.6-1.2.9-2.7 1-4.3h2.2a6.5 6.5 0 0 1-3.2 4.3Z"/></svg>

@@ -69,31 +69,17 @@ def count_apps():
     return len(real)
 
 
-def count_checks():
-    src = (ROOT / "tools/checks/ci-suite.sh").read_text()
-    m = re.search(r"manifest\(\) \{\ncat <<'EOF'\n(.*?)\nEOF\n\}", src, re.S)
-    if not m:
-        raise ValueError("Could not find the manifest heredoc in tools/checks/ci-suite.sh")
-    lines = [l for l in m[1].splitlines() if re.match(r"^(once|retry)\s*\|", l)]
-    if not lines:
-        raise ValueError("Manifest heredoc parsed with no once/retry lines")
-    return len(lines)
-
-
-def count_lines():
-    # Read the same number the progress chart already plots as its most
-    # recent point (landing/progress.svg's caption, e.g. "49,454 lines"),
-    # rather than recomputing it a second way. The stat row and the chart
-    # used to come from two different counts (a live filesystem walk here
-    # vs. a git-log replay in tools/gen/progress.sh) that could legitimately
-    # disagree by a handful of lines on a rename-heavy history. Scraping
-    # the chart's own generated text guarantees the two numbers on the page
-    # can never drift apart: run tools/gen/progress.sh first to refresh
-    # progress.svg, then this script picks up whatever it just wrote.
+def count_documented():
+    # Read the same % the progress chart's caption already states (real
+    # architecture-doc coverage, computed once in tools/gen/progress.sh),
+    # rather than recomputing it a second way here. Scraping the chart's
+    # own generated text guarantees the stat row and the chart can never
+    # drift apart: run tools/gen/progress.sh first to refresh progress.svg,
+    # then this script picks up whatever it just wrote.
     svg = (ROOT / "landing/progress.svg").read_text()
-    m = re.search(r"([\d,]+) lines", svg)
+    m = re.search(r"(\d+)% documented", svg)
     if not m:
-        raise ValueError("Could not find a 'N lines' caption in landing/progress.svg; run tools/gen/progress.sh first")
+        raise ValueError("Could not find a 'N% documented' caption in landing/progress.svg; run tools/gen/progress.sh first")
     return m[1]
 
 
@@ -107,8 +93,7 @@ def read_version():
 def compute_facts():
     return {
         "apps": str(count_apps()),
-        "checks": str(count_checks()),
-        "lines": count_lines(),
+        "documented": count_documented(),
         "version": read_version(),
     }
 

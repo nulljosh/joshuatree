@@ -77,6 +77,20 @@ def counts_as_real(path):
         return False
     return True
 
+
+def apps_at(sha):
+    # Real app count at a given commit, the same visitor-facing number the
+    # stat row shows today (GUI_LABELS minus the Apps folder and Trash,
+    # neither a real app). Plotted instead of a raw line count: "lines of
+    # code" means nothing to a visitor and inflates on generated data;
+    # apps shipped is the thing a visitor can actually try.
+    src = subprocess.run(["git", "show", f"{sha}:kernel/kernel.c"], capture_output=True, text=True).stdout
+    m = re.search(r"GUI_LABELS\[GUI_APP_COUNT\]\s*=\s*\{(.*?)\};", src, re.S)
+    if not m:
+        return 0
+    labels = re.findall(r'"([^"]*)"', m[1])
+    return len([l for l in labels if l not in ("Apps", "Trash")])
+
 log = subprocess.run(
     ["git", "log", "--reverse", "--numstat", "--pretty=format:@@%H|%ad", "--date=short"],
     capture_output=True, text=True
@@ -166,10 +180,11 @@ def doc_pct_at(sha):
     return documented * 100 // len(units)
 
 labels = [p[2] for p in sampled]
-cum = [p[3] for p in sampled]
 doc_pct = [doc_pct_at(p[1]) for p in sampled]
+cum = [apps_at(p[1]) for p in sampled]
 n = len(cum)
-max_v = cum[-1] or 1
+max_v = max(cum) or 1
+first_date_short = None
 
 # v53: real layout fix, not a tweak. The rotated y-axis title ("Lines of
 # code") and the numeric tick labels ("34912", "17456", "0") were both
@@ -213,7 +228,7 @@ points_attr = " ".join(f"{xf(i)},{yf(cum[i])}" for i in range(n))
 DOT_TARGET = 10
 dot_step = max(1, (n - 1) // (DOT_TARGET - 1)) if n > 1 else 1
 dot_idx = sorted(set(list(range(0, n, dot_step)) + [n - 1]))
-dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2" data-version="{labels[i]}" data-lines="{cum[i]}"/>' for i in dot_idx)
+dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2" data-version="{labels[i]}" data-apps="{cum[i]}"/>' for i in dot_idx)
 half_v = max_v // 2
 
 # x-axis: real calendar dates, deduplicated (many commits share a day),
@@ -289,7 +304,7 @@ date_labels = "".join(f'<text x="{xf(i)}" y="{pad_t+plot_h+16}" font-size="10" f
 # Body-size, muted-ink caption: readable page text, not a tiny bold chart
 # label. It carries the one real stat this chart needs, since the legend
 # and rotated axis title are gone.
-caption = f'<text x="{pad_l}" y="{height-6}" font-size="14" fill="var(--muted)">{max_v:,} lines &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>'
+caption = f'<text x="{pad_l}" y="{height-6}" font-size="14" fill="var(--muted)">{max_v} apps &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>'
 
 # v52.4: real dark-mode support, direct feedback ("white graph on dark
 # mode... should be dynamic and native as code, not a screenshot"). A
@@ -368,8 +383,8 @@ shutil.copy("progress.svg", "landing/progress.svg")
 SVG_ID = "progress-chart-live"
 dots_interactive = "".join(
     f'<g class="progress-pt" tabindex="0" role="img" '
-    f'aria-label="{short_date(labels[i])}, {cum[i]:,} lines of real code" '
-    f'data-tooltip="{short_date(labels[i])} &#183; {cum[i]:,} lines">'
+    f'aria-label="{short_date(labels[i])}, {cum[i]} apps shipped" '
+    f'data-tooltip="{short_date(labels[i])} &#183; {cum[i]} apps">'
     f'<circle class="progress-hit" cx="{xf(i)}" cy="{yf(cum[i])}" r="11" fill="transparent"/>'
     f'<circle class="progress-dot" cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/>'
     f'</g>'
@@ -385,8 +400,13 @@ interactive_style = f'''
 '''
 interactive_svg = build_svg(
     dots_interactive, svg_id=SVG_ID, extra_style=interactive_style,
-    extra_root_attrs=f' role="img" aria-label="Real lines of code over time, {max_v:,} lines as of {short_date(points[-1][2])}"',
+    extra_root_attrs=f' role="img" aria-label="Apps shipped over time, {max_v} apps as of {short_date(points[-1][2])}"',
 )
+
+# Lede line above the chart, generated from the same real data (never
+# typed by hand, same "can't drift" contract as the rest of this page):
+# "From a blank screen on <first date> to <N> apps today."
+lede = f"From a blank screen on {short_date(points[0][2])} to {max_v} apps today."
 
 # Splice into landing/index.html between markers, the same inject-
 # between-comments pattern tools/gen/landing-roadmap.py already uses for
@@ -401,9 +421,15 @@ ei = html.index(end_marker)
 if si == -1 or ei == -1:
     raise SystemExit(f"{landing_path} is missing the progress-chart:start/end markers")
 html = html[:si + len(start_marker)] + "\n" + interactive_svg + "\n" + html[ei:]
+
+lede_start, lede_end = "<!-- progress-lede:start -->", "<!-- progress-lede:end -->"
+lsi = html.index(lede_start)
+lei = html.index(lede_end)
+html = html[:lsi + len(lede_start)] + lede + html[lei:]
+
 with open(landing_path, "w") as f:
     f.write(html)
 
-print(f"wrote progress.svg: {max_v:,} real lines, {doc_pct[-1]}% documented (real architecture-doc coverage), across {n} sampled points, {commit_count} total commits")
+print(f"wrote progress.svg: {max_v} apps shipped, {doc_pct[-1]}% documented (real architecture-doc coverage), across {n} sampled points, {commit_count} total commits")
 print(f"spliced interactive chart into {landing_path}")
 PYEOF
