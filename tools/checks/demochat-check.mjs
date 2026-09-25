@@ -119,6 +119,22 @@ const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 // (embed.js's own focusIn()) and racing its 15s idle-reset reboot.
 await page.emulateMedia({ reducedMotion: 'reduce' });
 
+// 1.2.0: the tour's Chat scene now asks Samantha to run four real local
+// tools (kernel/chat.h's chat_run_tool) plus a final open_app -- each one
+// a real /api/pick round trip through this same proxy first. Answered here
+// the same hermetic way /api/chat already is: a fixed, recognisable
+// {"tool","arg"} shape per known question, everything else (including the
+// existing "what is the capital of france" case, which must keep falling
+// through to chat_send exactly as it did before this pass) gets the flat
+// 403 chat_pick already treats as "no tool".
+const PICK_REPLIES = {
+  'remind me to call mom at 5': { tool: 'new_reminder', arg: 'call mom at 5' },
+  'note: pick up dry cleaning': { tool: 'new_note', arg: 'pick up dry cleaning' },
+  "what's the weather like": { tool: 'weather', arg: '' },
+  "what's on my calendar today": { tool: 'calendar_today', arg: '' },
+  'open calculator': { tool: 'open_app', arg: 'calculator' },
+};
+
 let recordedBody = null, recordedMethod = null, proxyPostSeen = false;
 await page.route('**/api/proxy**', async (route) => {
   const req = route.request();
@@ -127,6 +143,7 @@ await page.route('**/api/proxy**', async (route) => {
   let targetUrl = null;
   try { targetUrl = new URL(target); } catch (e) { /* not a valid absolute url -> 403 below */ }
   const isSamanthaChat = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/chat';
+  const isSamanthaPick = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/pick';
   if (isSamanthaChat && req.method() === 'POST') {
     recordedBody = req.postData();
     recordedMethod = req.method();
@@ -137,6 +154,23 @@ await page.route('**/api/proxy**', async (route) => {
       headers: { 'Access-Control-Allow-Origin': '*' },
       body: JSON.stringify({ model: 'samantha', message: { role: 'assistant', content: REPLY_TEXT }, done: true }),
     });
+  } else if (isSamanthaPick && req.method() === 'POST') {
+    let q = '';
+    try { q = JSON.parse(req.postData() || '{}').q || ''; } catch (e) { /* malformed body -> no match below, 403 */ }
+    const picked = PICK_REPLIES[q];
+    if (picked) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        body: JSON.stringify({ tool: picked.tool, arg: picked.arg }),
+      });
+    } else {
+      // The capital-of-france question, and anything else unrecognized:
+      // no tool, same as a real host that decided nothing matched -- falls
+      // straight through to chat_send.
+      await route.fulfill({ status: 403, body: '' });
+    }
   } else {
     // Hermetic by design: every other proxied request (geo/weather/map
     // tiles, or a malformed url= this route couldn't even parse) gets a
@@ -251,6 +285,29 @@ try {
     else ok('recorded request\'s newest user message is the typed question');
   } catch (e) {
     fail('recorded proxy request body is not Ollama-shaped JSON: ' + e.message);
+  }
+
+  // 1.2.0: the tour's Chat scene now runs four real local tools plus a
+  // final open_app before it ends (see embed.js's TOUR_APPS Chat entry and
+  // this file's own PICK_REPLIES above). Proven here the same way the
+  // capital-of-france exchange above already is: type 'n' then the exact
+  // sentence the tour itself sends, wait for chat_run_tool's own
+  // discriminating `chattool=<tool>:...` serial marker (kernel/chat.h).
+  const TOOL_SCENES = [
+    { q: 'remind me to call mom at 5', marker: 'chattool=new_reminder:' },
+    { q: 'note: pick up dry cleaning', marker: 'chattool=new_note:' },
+    { q: "what's the weather like", marker: 'chattool=weather:' },
+    { q: "what's on my calendar today", marker: 'chattool=calendar_today:' },
+    { q: 'open calculator', marker: 'chattool=open_app:' },
+  ];
+  for (const scene of TOOL_SCENES) {
+    await page.evaluate(async () => { await window.__jt.emu.keyboard_send_text('n', 200); });
+    await page.waitForTimeout(300);
+    await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 55); }, scene.q + '\n');
+    await page.waitForFunction((m) => window.__jt.serial.includes(m), scene.marker, { timeout: 15000 })
+      .then(() => ok(`tool scene ran: "${scene.q}" -> ${scene.marker}`))
+      .catch(() => fail(`tool scene never fired: "${scene.q}" -> ${scene.marker}`));
+    await page.waitForTimeout(300);
   }
 
   const outPath = '/tmp/jt-demochat-after.png';
