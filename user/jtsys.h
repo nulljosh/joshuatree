@@ -55,6 +55,20 @@
 #define JT_SEEK_CUR 1
 #define JT_SEEK_END 2
 
+/* Flat user binaries get no .bss (see user/hello.ld): nothing zeroes it
+   and there is no crt0 to do it at startup, so libjt pins its
+   zero-initialised globals into .data instead, which the linker script
+   does write out. ELF is the only object format the real i386 target
+   uses; a host build (tools/checks/libjt-host-check.sh, on macOS/Mach-O
+   here) doesn't have a .bss restriction at all and Mach-O's section
+   attribute syntax differs, so this is a no-op there. */
+#if defined(__ELF__)
+#define JT_DATA __attribute__((section(".data")))
+#else
+#define JT_DATA
+#endif
+
+#if defined(__i386__)
 static inline int jt_syscall(int n, unsigned a, unsigned b, unsigned c) {
     int r;
     __asm__ volatile ("int $0x80"
@@ -63,6 +77,18 @@ static inline int jt_syscall(int n, unsigned a, unsigned b, unsigned c) {
                       : "memory");
     return r;
 }
+#else
+/* Host builds (tools/checks/libjt-host-check.sh) compile libjt's
+   string.c/stdlib.c natively to diff them against the host libc; `int
+   $0x80` is not valid on a non-x86 host, and nothing the host harness
+   exercises actually needs a real trap, so this stands in for it. It is
+   never linked into a ring-3 program: every real build of user/ passes
+   -target i386-unknown-none, which takes the branch above. */
+static inline int jt_syscall(int n, unsigned a, unsigned b, unsigned c) {
+    (void)n; (void)a; (void)b; (void)c;
+    return -1;
+}
+#endif
 
 static inline void jt_exit(int code) {
     jt_syscall(JT_SYS_EXIT, (unsigned)code, 0, 0);
