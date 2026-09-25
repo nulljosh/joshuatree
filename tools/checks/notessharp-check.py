@@ -138,6 +138,55 @@ def set_size(machine, index):
     raise AssertionError(('editor_size never reached', machine.integer('editor_size'), index))
 
 
+def assert_sharp(crop, label):
+    """The actual sharpness measurement, factored out so other checks (the
+    Terminal's mono grid, termsharp-check.py) can reuse it against their own
+    QEMU/pmemsave crop instead of re-deriving the antialiasing/duplicated-
+    block logic. crop is a PIL 'L' (grayscale) image of just the glyph
+    region. Returns nothing; raises AssertionError on failure, same as the
+    inline version this replaced."""
+    w, h = crop.size
+    px = list(crop.getdata())
+    bg = max(set(px), key=px.count)
+    # Notes is dark ink on a light page (fg = darkest pixel); the Terminal
+    # is light text on a dark surface (fg = brightest pixel). Pick
+    # whichever extreme sits farther from the background mode so the same
+    # measurement works for either polarity.
+    fg = min(px) if (bg - min(px)) >= (max(px) - bg) else max(px)
+    span = abs(bg - fg)
+    assert span >= 60, f'{label}: no text found (surface {bg}, extreme {fg})'
+    levels = [abs(bg - p) / span for p in px if abs(bg - p) / span > 0.08]
+    mid = sum(0.2 < a < 0.8 for a in levels)
+    assert mid >= 8, f'{label}: no intermediate coverage values, edges are not antialiased ({mid} mid-tone px)'
+    # No 2x2 duplicated blocks, checked on the EDGE pixels specifically:
+    # a solid glyph interior legitimately has same-value neighbours
+    # under any renderer, real or upscaled, so that's not a useful
+    # signal. A nearest-neighbour bitmap upscale (the bug this guards
+    # against) instead stretches its edge pixels too, so an edge block
+    # -- one containing an intermediate-coverage pixel -- comes out as
+    # four identical values far more often than real per-pixel
+    # rasterization, which recomputes coverage at every physical pixel
+    # independently.
+    edge_xy = {(i % w, i // w) for i, p in enumerate(px) if 0.08 < abs(bg - p) / span < 0.92}
+    assert edge_xy, f'{label}: no antialiased edge pixels to check for duplicated blocks'
+    uniform, total = 0, 0
+    seen = set()
+    for (ex, ey) in edge_xy:
+        bx, by = ex - ex % 2, ey - ey % 2
+        if (bx, by) in seen or bx + 1 >= w or by + 1 >= h:
+            continue
+        seen.add((bx, by))
+        block = [crop.getpixel((bx + dx, by + dy)) for dy in (0, 1) for dx in (0, 1)]
+        total += 1
+        if len(set(block)) == 1:
+            uniform += 1
+    duplicated_ratio = uniform / total if total else 0
+    assert duplicated_ratio < 0.5, (
+        f'{label}: {duplicated_ratio:.0%} of edge-pixel 2x2 blocks are duplicated pixels '
+        f'(looks like a nearest-neighbour bitmap upscale, not real rasterization)')
+    print(f'PASS: {label}: {mid} mid-tone px, {duplicated_ratio:.0%} duplicated 2x2 blocks (< 50%)')
+
+
 def check_size(index, label):
     machine = Machine()
     try:
@@ -158,45 +207,15 @@ def check_size(index, label):
         origin_x, origin_y = machine.integer('app_view_x'), machine.integer('app_view_y')
         box = ((origin_x + 40) * 2, (origin_y + 60) * 2, (origin_x + 40) * 2 + 620, (origin_y + 60) * 2 + 460)
         crop = img.crop(box)
-        w, h = crop.size
-        px = list(crop.getdata())
-        bg = max(set(px), key=px.count)
-        fg = min(px)
-        assert bg - fg >= 60, f'{label}: no text found ({box}, surface {bg}, darkest {fg})'
-        levels = [(bg - p) / (bg - fg) for p in px if (bg - p) / (bg - fg) > 0.08]
-        mid = sum(0.2 < a < 0.8 for a in levels)
-        assert mid >= 8, f'{label}: no intermediate coverage values, edges are not antialiased ({mid} mid-tone px)'
-        # No 2x2 duplicated blocks, checked on the EDGE pixels specifically:
-        # a solid glyph interior legitimately has same-value neighbours
-        # under any renderer, real or upscaled, so that's not a useful
-        # signal. A nearest-neighbour bitmap upscale (the bug this guards
-        # against) instead stretches its edge pixels too, so an edge block
-        # -- one containing an intermediate-coverage pixel -- comes out as
-        # four identical values far more often than real per-pixel
-        # rasterization, which recomputes coverage at every physical pixel
-        # independently.
-        edge_xy = {(i % w, i // w) for i, p in enumerate(px) if 0.08 < (bg - p) / (bg - fg) < 0.92}
-        assert edge_xy, f'{label}: no antialiased edge pixels to check for duplicated blocks'
-        uniform, total = 0, 0
-        seen = set()
-        for (ex, ey) in edge_xy:
-            bx, by = ex - ex % 2, ey - ey % 2
-            if (bx, by) in seen or bx + 1 >= w or by + 1 >= h:
-                continue
-            seen.add((bx, by))
-            block = [crop.getpixel((bx + dx, by + dy)) for dy in (0, 1) for dx in (0, 1)]
-            total += 1
-            if len(set(block)) == 1:
-                uniform += 1
-        duplicated_ratio = uniform / total if total else 0
-        assert duplicated_ratio < 0.5, (
-            f'{label}: {duplicated_ratio:.0%} of edge-pixel 2x2 blocks are duplicated pixels '
-            f'(looks like a nearest-neighbour bitmap upscale, not real rasterization)')
-        print(f'PASS: {label}: {mid} mid-tone px, {duplicated_ratio:.0%} duplicated 2x2 blocks (< 50%)')
+        assert_sharp(crop, label)
     finally:
         machine.close()
 
 
-check_size(0, '12pt "Ag"')
-check_size(10, '200pt "Ag"')
-print('PASS: Notes renders real antialiased TrueType at both 12pt and 200pt, no duplicated-block upscaling')
+if __name__ == '__main__':
+    # Guarded so termsharp-check.py can `from notessharp_check import
+    # assert_sharp` (see tools/checks/ci_import.py) without this module's
+    # own Notes/QEMU run firing a second time.
+    check_size(0, '12pt "Ag"')
+    check_size(10, '200pt "Ag"')
+    print('PASS: Notes renders real antialiased TrueType at both 12pt and 200pt, no duplicated-block upscaling')

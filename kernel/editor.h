@@ -104,50 +104,21 @@ static int editor_take_selection(void) {
    with coverage" shape gui_aa_char uses for the rest of the GUI's sharp
    text. This is what lets a size control go all the way to 200pt without
    ever looking blocky: there is no fixed bitmap size to run out of. */
-/* One cached ttf_font_t per real face (TTF_FACE_COUNT), loaded lazily and
-   kept for the kernel's whole editor session -- same lifetime the old
-   single editor_ttf_font had, just one per family x weight now instead of
-   faking the other five off Sans. editor_family (0=Sans,1=Serif,2=Mono)
-   times editor_weight (0=regular,1=bold) maps onto TTF_FACE_* in that
-   same order. */
-static ttf_font_t *editor_ttf_fonts[TTF_FACE_COUNT];
-
+/* Face cache, glyph cache, and the coverage/ink blend all live in
+   kernel/ttf_render.h now (ttfr_face/ttfr_glyph/ttfr_blend_glyph), shared
+   with the Terminal's mono grid below (gui_aa_char_mono) instead of each
+   keeping its own copy. editor_family (0=Sans,1=Serif,2=Mono) times
+   editor_weight (0=regular,1=bold) maps onto TTF_FACE_* in that order. */
 static ttf_face_t editor_current_face(void) {
     return (ttf_face_t)(editor_family * 2 + (editor_weight ? 1 : 0));
 }
 
 static ttf_font_t *editor_ttf(void) {
-    ttf_face_t face = editor_current_face();
-    if (!editor_ttf_fonts[face]) editor_ttf_fonts[face] = ttf_load_face(face);
-    return editor_ttf_fonts[face];
+    return ttfr_face(editor_current_face());
 }
 
-/* Small glyph cache so typing stays fast: rasterizing a fresh glyph at
-   200pt physical on every redraw would be real, felt latency. Keyed by
-   codepoint + physical pixel size (quantized to quarters of a px, which
-   is all window_scale()'s integer multiplier and the 11-entry size list
-   ever produce) + face (family x weight now pick a real distinct font,
-   not just a fake drawn off Sans, so the cache must not hand a Serif
-   glyph back to a Mono lookup); direct-mapped, oldest entry per bucket
-   evicted on a collision. Never freed except on eviction -- this is the
-   kernel's one long-lived editor session, not a churn of short-lived
-   fonts. */
-#define EDITOR_GLYPH_CACHE_N 256
-typedef struct { int used; unsigned int cp; unsigned int pxkey; unsigned int face; ttf_glyph_t g; } editor_glyph_cache_t;
-static editor_glyph_cache_t editor_glyph_cache[EDITOR_GLYPH_CACHE_N];
-
-static unsigned int editor_pxkey(float px) { return (unsigned int)(px * 4.0f + 0.5f); }
-
 static ttf_glyph_t *editor_cached_glyph(unsigned int cp, float px) {
-    unsigned int pxkey = editor_pxkey(px);
-    unsigned int face = (unsigned int)editor_current_face();
-    unsigned int slot = (cp * 2654435761u + pxkey * 40503u + face * 2246822519u) % EDITOR_GLYPH_CACHE_N;
-    editor_glyph_cache_t *e = &editor_glyph_cache[slot];
-    if (e->used && e->cp == cp && e->pxkey == pxkey && e->face == face) return &e->g;
-    if (e->used) ttf_free_glyph(&e->g);
-    if (ttf_glyph(editor_ttf(), cp, px, &e->g) != 0) { e->used = 0; return 0; }
-    e->used = 1; e->cp = cp; e->pxkey = pxkey; e->face = face;
-    return &e->g;
+    return ttfr_glyph(editor_current_face(), cp, px);
 }
 
 /* Logical point sizes Notes' F1/F2/size control cycles through; 200 is the
@@ -187,29 +158,11 @@ static void editor_draw_glyph(unsigned char character, int origin_x, int origin_
     int base_x = origin_x * (int)scale;
     int base_y = (origin_y + top_pad_logical) * (int)scale + ttf_ascent(editor_ttf(), px_phys);
     /* editor_weight now selects a real bold face via editor_ttf(), so
-       there is no double-strike here; one pass over the real glyph. */
-    for (int row = 0; row < g->height; row++) {
-        for (int col = 0; col < g->width; col++) {
-            int a = g->coverage[row * g->width + col];
-            if (!a) continue;
-            /* stb_truetype's own coverage runs a little lighter on
-               average than the PIL-baked bitmaps text_ink's curve was
-               tuned against (textsharp-check.py measured stems just
-               under its 58% full-ink floor at the curve's raw input);
-               a small pre-boost brings stem cores back to full ink
-               before the shared curve's own edges still taper off. */
-            a = a > 224 ? 255 : a * 8 / 7;
-            if (a > 255) a = 255;
-            int x = base_x + g->xoff + col, y = base_y + g->yoff + row;
-            unsigned int d = window_get_pixel_phys(x, y);
-            a = text_ink(a, EDITOR_INK, d);
-            if (!a) continue;
-            unsigned int r = ((28 * a) + (int)((d >> 16) & 0xFF) * (255 - a)) / 255;
-            unsigned int gg = ((28 * a) + (int)((d >> 8) & 0xFF) * (255 - a)) / 255;
-            unsigned int b = ((30 * a) + (int)(d & 0xFF) * (255 - a)) / 255;
-            window_pixel_phys(x, y, (r << 16) | (gg << 8) | b);
-        }
-    }
+       there is no double-strike here; one pass over the real glyph,
+       through the shared coverage/ink blend (kernel/ttf_render.h) the
+       Terminal's mono grid now uses too. Notes wraps by measured advance
+       rather than a fixed cell, so no clip bound here. */
+    ttfr_blend_glyph(g, base_x, base_y, EDITOR_INK, -0x7FFFFFFF, 0x7FFFFFFF);
     (void)background;
 }
 
