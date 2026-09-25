@@ -6,7 +6,7 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
-**Latest**: Chat looks like a product now, not a debug console, and the landing demo shows Samantha actually doing things: adding a reminder, taking a note, checking the weather, reading the calendar, and opening another app.
+**Latest**: Introducing Samantha with hands. She adds reminders, takes notes, checks the weather, reads your calendar and opens apps, right from Chat.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
