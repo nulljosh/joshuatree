@@ -2,7 +2,7 @@
 
 ## What the loop is
 
-Keep building Joshua Tree headlessly toward 2.0. Stability, usability and performance come before feature count. Merge on green CI, never ask. Sonnet subagents, max 4 at once (2 if any is Fable), 15 minutes each. Subagents push a PR and hand back; they never wait on CI or start watchers. The main session watches CI, bundles PRs into one run when several queue (branch protection reruns CI per merge), QA's every result from real frames or screenshots at 4x, and merges. Stop at 90% session or weekly usage with /checkpoint.
+Keep building Joshua Tree headlessly toward 2.0. Stability, usability and performance come before feature count. Merge on green CI, never ask. Sonnet subagents, max 4 at once (2 if any is Fable), 15 minutes each. Subagents push a PR and hand back; they never wait on CI or start watchers. Open PRs as drafts (`gh pr create --draft`): a draft PR runs no CI, so repeated pushes while a subagent is still iterating never trigger a failure email. Run `tools/ci-local.sh`; only when it passes, `gh pr ready N`. The main session watches CI, bundles PRs into one run when several queue (branch protection reruns CI per merge), QA's every result from real frames or screenshots at 4x, and merges. Stop at 90% session or weekly usage with /checkpoint.
 
 A+ is the bar: everything spotless, every line in Joshua's voice mixed with Apple and Steve Jobs. No lines of code or check counts as public metrics.
 

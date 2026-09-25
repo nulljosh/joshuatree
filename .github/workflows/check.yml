@@ -6,7 +6,13 @@ name: Boot check
 # email whenever a check flaked on the repeat. release.yml and deploy.yml
 # have their own push triggers and are unaffected.
 on:
+  # 1.5.10: explicit types, not the pull_request default (opened,
+  # synchronize, reopened) -- ready_for_review has to be listed too, or
+  # GitHub Actions doesn't fire this workflow at all the moment a draft PR
+  # flips ready, and the one run that matters (the PR's real, gating run)
+  # would silently never happen.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, master]
   workflow_dispatch:
 
@@ -27,6 +33,19 @@ jobs:
   changes:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    # 1.5.10: a draft PR runs no CI at all -- Joshua opens most PRs as
+    # drafts, pushes to them repeatedly while iterating, and every one of
+    # those pushes used to trigger the full suite and mail a failure the
+    # instant any check was red mid-work, not just once the PR was
+    # actually meant to be looked at. `github.event.pull_request.draft`
+    # is only ever set on a `pull_request` event (workflow_dispatch has no
+    # PR at all), so the left side of this `||` keeps every non-PR trigger
+    # (a manual run) unaffected. Every job below repeats this exact
+    # condition -- `needs:` alone doesn't skip a job whose dependency was
+    # itself skipped for a different reason (branch protection still
+    # needs a real pass/fail once the PR goes ready), so each job re-checks
+    # draft state itself rather than trusting it propagated.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     outputs:
       code: ${{ steps.diff.outputs.code }}
     steps:
@@ -49,7 +68,7 @@ jobs:
   # required status and passes only when every shard did.
   suite:
     needs: [changes]
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     # Pinned, not `ubuntu-latest`. `latest` silently rolls to the next LTS
     # image, which swaps the clang/qemu/PIL versions underneath every check
     # in this file at a moment GitHub picks, not one this repo picks -- the
@@ -149,7 +168,7 @@ jobs:
   # `npm install` instead, same as any other lockfile-less Node checkout.
   demo:
     needs: [changes]
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -186,7 +205,7 @@ jobs:
     # superseded push, for a run nobody cares about. With !cancelled() the
     # gates are skipped and the run ends as cancelled, which GitHub does not
     # email about. A real failed or skipped job still runs the gate.
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     needs: [changes, suite, demo]
     steps:
       - name: Every suite shard (and the demo check) passed
@@ -210,6 +229,7 @@ jobs:
   check-refs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -231,6 +251,7 @@ jobs:
     runs-on: ubuntu-24.04
     continue-on-error: true
     timeout-minutes: 15
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     steps:
       - uses: actions/checkout@v5
       - name: Install clang, lld, qemu
@@ -330,7 +351,7 @@ jobs:
   ci:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    if: ${{ !cancelled() }}  # same reasoning as `check` above: no failure email for a superseded run
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}  # same reasoning as `check` above: no failure email for a superseded run
     needs: [check, check-refs]
     steps:
       - name: Gating jobs all passed

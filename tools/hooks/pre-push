@@ -39,3 +39,5 @@ echo "pre-push: every check is wired or says why not..."
 ./tools/checks/suite-coverage-check.sh
 
 echo "pre-push: OK"
+echo "pre-push stays fast on purpose. Before flipping a draft PR ready,"
+echo "run the real suite locally: tools/ci-local.sh"
