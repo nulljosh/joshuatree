@@ -4,6 +4,11 @@
    the kernel has no libc or libm. */
 #include "ttf.h"
 #include "dejavu_font.h"
+#include "dejavu_bold_font.h"
+#include "dejavu_serif_font.h"
+#include "dejavu_serif_bold_font.h"
+#include "dejavu_mono_font.h"
+#include "dejavu_mono_bold_font.h"
 
 #ifdef TTF_HOST_BUILD
 #include "kheap.h"
@@ -122,6 +127,18 @@ ttf_font_t *ttf_load(const unsigned char *data) {
 
 ttf_font_t *ttf_load_default(void) {
     return ttf_load(dejavu_font_data);
+}
+
+ttf_font_t *ttf_load_face(ttf_face_t face) {
+    switch (face) {
+    case TTF_FACE_SANS:        return ttf_load(dejavu_font_data);
+    case TTF_FACE_SANS_BOLD:   return ttf_load(dejavu_bold_font_data);
+    case TTF_FACE_SERIF:       return ttf_load(dejavu_serif_font_data);
+    case TTF_FACE_SERIF_BOLD:  return ttf_load(dejavu_serif_bold_font_data);
+    case TTF_FACE_MONO:        return ttf_load(dejavu_mono_font_data);
+    case TTF_FACE_MONO_BOLD:   return ttf_load(dejavu_mono_bold_font_data);
+    default:                   return ttf_load(dejavu_font_data);
+    }
 }
 
 void ttf_free(ttf_font_t *font) {

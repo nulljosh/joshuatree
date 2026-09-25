@@ -7,6 +7,19 @@
 
 typedef struct ttf_font ttf_font_t;
 
+/* The six embedded faces (drivers font headers), one per family x weight the
+   Notes editor exposes. Sans/Serif/Mono each carry a real regular and a
+   real bold cut, no faked double-strike. */
+typedef enum {
+    TTF_FACE_SANS = 0,
+    TTF_FACE_SANS_BOLD,
+    TTF_FACE_SERIF,
+    TTF_FACE_SERIF_BOLD,
+    TTF_FACE_MONO,
+    TTF_FACE_MONO_BOLD,
+    TTF_FACE_COUNT
+} ttf_face_t;
+
 typedef struct {
     unsigned char *coverage; /* w*h bytes, 0-255 alpha, kmalloc'd; free with ttf_free_glyph */
     int width;
@@ -20,8 +33,12 @@ typedef struct {
    Returns NULL on parse failure. */
 ttf_font_t *ttf_load(const unsigned char *data);
 
-/* Loads the kernel's one built-in embedded font (DejaVu Sans). */
+/* Loads the kernel's default built-in embedded font (DejaVu Sans). */
 ttf_font_t *ttf_load_default(void);
+
+/* Loads one of the six embedded faces. Each call reparses the embedded
+   blob (cheap: no file I/O, the caller is expected to cache the result). */
+ttf_font_t *ttf_load_face(ttf_face_t face);
 
 void ttf_free(ttf_font_t *font);
 

@@ -104,33 +104,49 @@ static int editor_take_selection(void) {
    with coverage" shape gui_aa_char uses for the rest of the GUI's sharp
    text. This is what lets a size control go all the way to 200pt without
    ever looking blocky: there is no fixed bitmap size to run out of. */
-static ttf_font_t *editor_ttf_font;
+/* One cached ttf_font_t per real face (TTF_FACE_COUNT), loaded lazily and
+   kept for the kernel's whole editor session -- same lifetime the old
+   single editor_ttf_font had, just one per family x weight now instead of
+   faking the other five off Sans. editor_family (0=Sans,1=Serif,2=Mono)
+   times editor_weight (0=regular,1=bold) maps onto TTF_FACE_* in that
+   same order. */
+static ttf_font_t *editor_ttf_fonts[TTF_FACE_COUNT];
+
+static ttf_face_t editor_current_face(void) {
+    return (ttf_face_t)(editor_family * 2 + (editor_weight ? 1 : 0));
+}
+
 static ttf_font_t *editor_ttf(void) {
-    if (!editor_ttf_font) editor_ttf_font = ttf_load_default();
-    return editor_ttf_font;
+    ttf_face_t face = editor_current_face();
+    if (!editor_ttf_fonts[face]) editor_ttf_fonts[face] = ttf_load_face(face);
+    return editor_ttf_fonts[face];
 }
 
 /* Small glyph cache so typing stays fast: rasterizing a fresh glyph at
    200pt physical on every redraw would be real, felt latency. Keyed by
    codepoint + physical pixel size (quantized to quarters of a px, which
    is all window_scale()'s integer multiplier and the 11-entry size list
-   ever produce); direct-mapped, oldest entry per bucket evicted on a
-   collision. Never freed except on eviction -- this is the kernel's one
-   long-lived editor session, not a churn of short-lived fonts. */
+   ever produce) + face (family x weight now pick a real distinct font,
+   not just a fake drawn off Sans, so the cache must not hand a Serif
+   glyph back to a Mono lookup); direct-mapped, oldest entry per bucket
+   evicted on a collision. Never freed except on eviction -- this is the
+   kernel's one long-lived editor session, not a churn of short-lived
+   fonts. */
 #define EDITOR_GLYPH_CACHE_N 256
-typedef struct { int used; unsigned int cp; unsigned int pxkey; ttf_glyph_t g; } editor_glyph_cache_t;
+typedef struct { int used; unsigned int cp; unsigned int pxkey; unsigned int face; ttf_glyph_t g; } editor_glyph_cache_t;
 static editor_glyph_cache_t editor_glyph_cache[EDITOR_GLYPH_CACHE_N];
 
 static unsigned int editor_pxkey(float px) { return (unsigned int)(px * 4.0f + 0.5f); }
 
 static ttf_glyph_t *editor_cached_glyph(unsigned int cp, float px) {
     unsigned int pxkey = editor_pxkey(px);
-    unsigned int slot = (cp * 2654435761u + pxkey * 40503u) % EDITOR_GLYPH_CACHE_N;
+    unsigned int face = (unsigned int)editor_current_face();
+    unsigned int slot = (cp * 2654435761u + pxkey * 40503u + face * 2246822519u) % EDITOR_GLYPH_CACHE_N;
     editor_glyph_cache_t *e = &editor_glyph_cache[slot];
-    if (e->used && e->cp == cp && e->pxkey == pxkey) return &e->g;
+    if (e->used && e->cp == cp && e->pxkey == pxkey && e->face == face) return &e->g;
     if (e->used) ttf_free_glyph(&e->g);
     if (ttf_glyph(editor_ttf(), cp, px, &e->g) != 0) { e->used = 0; return 0; }
-    e->used = 1; e->cp = cp; e->pxkey = pxkey;
+    e->used = 1; e->cp = cp; e->pxkey = pxkey; e->face = face;
     return &e->g;
 }
 
@@ -143,17 +159,12 @@ static int editor_pt(void) { return EDITOR_PT_SIZES[editor_size]; }
 /* Advance in logical px for one codepoint at the current point size --
    the layout/wrap/caret math below all runs in logical units, same as
    before; only the actual glyph draw below drops to physical resolution. */
-/* editor_family/editor_weight pick a real face for step 3 (not embedded
-   yet: only DejaVu Sans is baked into the kernel today) by faking the
-   other two styles off the one ttf font, the same trick real UIs fall
-   back to when a bold/italic/mono cut of a face is missing: "Mono" forces
-   every glyph to the same fixed advance (a monospaced grid out of a
-   proportional face), "Serif" shears each row into a faux-italic lean,
-   and Bold double-strikes the glyph offset by one physical px. All three
-   are real, visibly distinct renderings, not just relabelled Sans. */
+/* editor_family/editor_weight now pick a real embedded face (DejaVu Sans,
+   Serif or Mono, each with its own real bold cut) via editor_ttf() above,
+   so the advance here is just that face's own metrics -- DejaVu Sans Mono
+   is genuinely fixed-width already, no forced advance needed. */
 static int editor_char_advance(unsigned char character) {
     int pt = editor_pt();
-    if (editor_family == 2) return ttf_advance(editor_ttf(), '0', (float)pt) * (character == '\t' ? 4 : 1);
     if (character == '\t') return ttf_advance(editor_ttf(), ' ', (float)pt) * 4;
     if (character < 32 || character > 126) character = '?';
     return ttf_advance(editor_ttf(), character, (float)pt);
@@ -175,32 +186,28 @@ static void editor_draw_glyph(unsigned char character, int origin_x, int origin_
     int top_pad_logical = pt / 6 + 4; /* a little headroom above the ascent so glyphs don't hug the line box's top edge */
     int base_x = origin_x * (int)scale;
     int base_y = (origin_y + top_pad_logical) * (int)scale + ttf_ascent(editor_ttf(), px_phys);
-    int strikes = editor_weight ? 2 : 1; /* faux bold: a second strike offset one physical px right */
-    for (int s = 0; s < strikes; s++) {
-        for (int row = 0; row < g->height; row++) {
-            /* faux italic (family 1, "Serif"): lean the top of the glyph
-               right relative to the bottom, a real per-row shear. */
-            int shear = editor_family == 1 ? (g->height - row) / 4 : 0;
-            for (int col = 0; col < g->width; col++) {
-                int a = g->coverage[row * g->width + col];
-                if (!a) continue;
-                /* stb_truetype's own coverage runs a little lighter on
-                   average than the PIL-baked bitmaps text_ink's curve was
-                   tuned against (textsharp-check.py measured stems just
-                   under its 58% full-ink floor at the curve's raw input);
-                   a small pre-boost brings stem cores back to full ink
-                   before the shared curve's own edges still taper off. */
-                a = a > 224 ? 255 : a * 8 / 7;
-                if (a > 255) a = 255;
-                int x = base_x + g->xoff + col + shear + s, y = base_y + g->yoff + row;
-                unsigned int d = window_get_pixel_phys(x, y);
-                a = text_ink(a, EDITOR_INK, d);
-                if (!a) continue;
-                unsigned int r = ((28 * a) + (int)((d >> 16) & 0xFF) * (255 - a)) / 255;
-                unsigned int gg = ((28 * a) + (int)((d >> 8) & 0xFF) * (255 - a)) / 255;
-                unsigned int b = ((30 * a) + (int)(d & 0xFF) * (255 - a)) / 255;
-                window_pixel_phys(x, y, (r << 16) | (gg << 8) | b);
-            }
+    /* editor_weight now selects a real bold face via editor_ttf(), so
+       there is no double-strike here; one pass over the real glyph. */
+    for (int row = 0; row < g->height; row++) {
+        for (int col = 0; col < g->width; col++) {
+            int a = g->coverage[row * g->width + col];
+            if (!a) continue;
+            /* stb_truetype's own coverage runs a little lighter on
+               average than the PIL-baked bitmaps text_ink's curve was
+               tuned against (textsharp-check.py measured stems just
+               under its 58% full-ink floor at the curve's raw input);
+               a small pre-boost brings stem cores back to full ink
+               before the shared curve's own edges still taper off. */
+            a = a > 224 ? 255 : a * 8 / 7;
+            if (a > 255) a = 255;
+            int x = base_x + g->xoff + col, y = base_y + g->yoff + row;
+            unsigned int d = window_get_pixel_phys(x, y);
+            a = text_ink(a, EDITOR_INK, d);
+            if (!a) continue;
+            unsigned int r = ((28 * a) + (int)((d >> 16) & 0xFF) * (255 - a)) / 255;
+            unsigned int gg = ((28 * a) + (int)((d >> 8) & 0xFF) * (255 - a)) / 255;
+            unsigned int b = ((30 * a) + (int)(d & 0xFF) * (255 - a)) / 255;
+            window_pixel_phys(x, y, (r << 16) | (gg << 8) | b);
         }
     }
     (void)background;

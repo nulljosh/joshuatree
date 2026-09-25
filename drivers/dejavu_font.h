@@ -4,9 +4,9 @@
 #ifndef DEJAVU_FONT_H
 #define DEJAVU_FONT_H
 
-#define DEJAVU_FONT_LEN 16580u
+#define DEJAVU_FONT_DATA_LEN 16580u
 
-static const unsigned char dejavu_font_data[DEJAVU_FONT_LEN] = {
+static const unsigned char dejavu_font_data[DEJAVU_FONT_DATA_LEN] = {
     0,1,0,0,0,15,0,128,0,3,0,112,71,68,69,70,
     0,233,1,136,0,0,61,60,0,0,0,28,71,80,79,83,
     68,118,76,117,0,0,61,88,0,0,0,32,71,83,85,66,
