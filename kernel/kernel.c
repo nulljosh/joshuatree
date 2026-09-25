@@ -1617,20 +1617,61 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
        Files (~820x385 logical, tools/checks/frametime-check.py): this
        call's own share of a ~400ms open frame was ~120ms. */
     if (ph > 2 * pr) window_fill_rect_phys(px0, py0 + pr, pw, ph - 2 * pr, color);
+    int outer_margin = 2; /* subsamples can land a touch past the whole-pixel test below */
     for (int py = 0; py < ph; py++){
         if (py >= pr && py < ph - pr) continue; /* the solid middle band, already filled above */
+        int cy = py < pr ? pr : ph - 1 - pr;
+        int oy = py - cy;
+        /* v83: the straight top/bottom edge used to get its OWN linear
+           band-width blend (weight purely a function of row distance from
+           the edge, identical at every column) while the corner arc used
+           a real per-pixel circle test -- two independently-computed AA
+           models meeting at a hard x boundary (px==pr) with no shared
+           math, so nothing guaranteed they agreed there. Confirmed the
+           exact discontinuity with a real pmemsave capture (QA screenshot
+           + tools/checks/windowedge-check.py): one column before the
+           corner box the edge was ~100% background (the straight model's
+           row-0 answer everywhere), one column into the corner box the
+           circle test already read ~50% coverage, a hard jump that
+           rendered as a visible step/notch right where the straight edge
+           met the arc, plus a stair-stepped corner beyond it (the old
+           circle test was fine in isolation, just never reconciled with
+           its neighbour). Fix: treat the straight edge as the SAME circle
+           test with the sample's x-offset pinned to 0 (ox=0 -- "directly
+           below/above the arc's own centre column"), computed once per
+           row since every straight column shares that offset, instead of
+           a separately-tuned linear ramp. At the seam column itself
+           (px==pr) the corner formula also evaluates to ox=0, so the two
+           sides now literally compute the identical coverage there: one
+           continuous shape, not two shapes glued together. */
+        int straight_inside = -1; /* -1 = not yet computed for this row */
         for (int px = 0; px < pw; px++){
-            /* distance from the nearest corner arc centre, or 0 if this
-               pixel isn't in a corner region at all */
-            int cx = px < pr ? pr : (px >= pw - pr ? pw - 1 - pr : -1);
-            int cy = py < pr ? pr : (py >= ph - pr ? ph - 1 - pr : -1);
+            int cx = px < pr ? pr : (px >= pw - pr ? pw - 1 - pr : px);
+            int ox = px - cx;
             unsigned int col = color;
-            if (cx >= 0 && cy >= 0){
-                int ox = px - cx, oy = py - cy;
-                int d2 = ox * ox + oy * oy;
-                int outer_margin = 2; /* subsamples can land a touch past the whole-pixel test below */
-                if (d2 > (pr - band - outer_margin) * (pr - band - outer_margin)){
-                    if (d2 > (pr + outer_margin) * (pr + outer_margin)) continue; /* comfortably outside: wallpaper untouched */
+            int d2 = ox * ox + oy * oy;
+            if (d2 > (pr - band - outer_margin) * (pr - band - outer_margin)){
+                if (d2 > (pr + outer_margin) * (pr + outer_margin)) continue; /* comfortably outside: wallpaper untouched */
+                int inside;
+                if (ox == 0){
+                    /* straight edge (or the corner's own seam column,
+                       ox==0 there too): shared per-row coverage, computed
+                       once and reused for every straight column so this
+                       fix costs nothing extra across the wide flat run. */
+                    if (straight_inside < 0){
+                        int inside_row = 0;
+                        for (int sy = 0; sy < SS; sy++){
+                            int subdy = oy * SS + sy * 2 + 1 - SS;
+                            for (int sx = 0; sx < SS; sx++){
+                                int subdx = sx * 2 + 1 - SS;
+                                long sd2 = (long)subdx * subdx + (long)subdy * subdy;
+                                if (sd2 <= (long)(pr * SS) * (pr * SS)) inside_row++;
+                            }
+                        }
+                        straight_inside = inside_row;
+                    }
+                    inside = straight_inside;
+                } else {
                     /* v79: real coverage fraction, not a single threshold.
                        Sample SSxSS sub-points spread across this physical
                        pixel's own area and count how many fall inside
@@ -1638,7 +1679,7 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
                        pixel's real AA coverage, the same quantity a 6x
                        supersample-then-box-downsample pass would produce,
                        computed directly instead of through a buffer. */
-                    int inside = 0;
+                    inside = 0;
                     for (int sy = 0; sy < SS; sy++){
                         int subdy = oy * SS + sy * 2 + 1 - SS; /* sample point offset, in 1/SS-pixel units, centred in each sub-cell */
                         for (int sx = 0; sx < SS; sx++){
@@ -1647,31 +1688,11 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
                             if (sd2 <= (long)(pr * SS) * (pr * SS)) inside++;
                         }
                     }
-                    if (inside == 0) continue;               /* fully outside: leave the wallpaper alone */
-                    unsigned int corner_bg = gui_wallpaper_sample(px0 + px, py0 + py, 0);
-                    if (inside >= SS * SS) { col = color; }
-                    else col = gui_lerp(color, corner_bg, SS * SS - inside, SS * SS);
                 }
-            } else if (py < band) {
-                /* v61: real, confirmed bug, not a guess: only the four
-                   rounded corners above ever blended toward the real
-                   wallpaper pixel; every straight edge (the whole top
-                   edge between the corners, which is most of it) was
-                   filled 100% solid color with a raw 1px cut straight
-                   into whatever was behind it, zero pixels of blend.
-                   Harmless-looking against a light backdrop, but the
-                   dock tray sits low on screen where this kernel's own
-                   wallpaper gradient is at its darkest (confirmed with a
-                   real framebuffer dump: the row immediately above the
-                   tray reads ~(2,0,1), next to next essentially black),
-                   so that hard cut from near-black straight to the
-                   tray's light cream read as a visible dark seam right
-                   along the top edge, exactly the reported defect. Same
-                   band-width blend the corners already use, straight-
-                   line distance from the true top edge instead of the
-                   corner arc's radial one. */
+                if (inside == 0) continue;               /* fully outside: leave the wallpaper alone */
                 unsigned int edge_bg = gui_wallpaper_sample(px0 + px, py0 + py, 0);
-                col = gui_lerp(color, edge_bg, band - py, band);
+                if (inside >= SS * SS) { col = color; }
+                else col = gui_lerp(color, edge_bg, SS * SS - inside, SS * SS);
             }
             window_pixel_phys(px0 + px, py0 + py, col);
         }

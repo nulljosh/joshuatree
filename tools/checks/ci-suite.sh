@@ -102,6 +102,7 @@ retry|Calendar dock tile shows today's date, not fixed art|python3 ./tools/check
 retry|Shadow under the dock darkens the photo, no flat bands|python3 ./tools/checks/dockband-check.py
 retry|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py
 retry|Dock tray corner AA (real coverage blend, not binary)|python3 ./tools/checks/traycorner-check.py
+retry|Window top edge and corner arc are one continuous AA shape|python3 ./tools/checks/windowedge-check.py
 retry|Portfolio catalog opens, lists the fleet, and the list scrolls|python3 ./tools/checks/portfolio-check.py
 retry|Boot logo AA (no false interior seams at overlapping capsule joints)|python3 ./tools/checks/bootlogo-check.py
 once |Landing eyebrow tracks roadmap Latest, H1 stays the brand line|./tools/checks/landing-headline-check.sh
