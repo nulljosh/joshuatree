@@ -512,13 +512,22 @@ if (typeof document !== "undefined") (function () {
   // on a 2x screen for a 1920px source, 1920 CSS px on a 1x screen). If the
   // viewport is narrower than that, fall back to the largest INTEGER
   // divisor of that scale that still fits (w / (dpr * k)), still an exact
-  // device-pixel mapping, just smaller. Only once no integer k fits at all
-  // (a screen too small for even a heavily-downscaled exact mapping) does
-  // this fall back to ordinary smooth (non-integer) scaling, and only then
-  // does image-rendering go back to "auto" rather than "pixelated" -- an
-  // integer device-pixel mapping needs no smoothing at all (every source
-  // pixel already lands on exactly one device pixel), while a genuinely
-  // fractional scale reads better smoothed than pixelated.
+  // device-pixel-aligned mapping (no fractional device pixel splits a
+  // source pixel), just smaller.
+  //
+  // image-rendering:pixelated is only correct at the exact k=1, ratio=1
+  // mapping (or a true integer UPscale, which never happens here -- the
+  // guest framebuffer is always at least as big as any CSS box this runs
+  // in). Every k>1 case is a DOWNscale: nearest-neighbour sampling on a
+  // downscale drops whole source rows/columns instead of averaging them,
+  // which shreds text just as badly as the original bug, worse in some
+  // cases. Caught before merge: the first version of this fix marked every
+  // exact-integer case "pixelated", which looked right at ratio 1 (the
+  // 2x-screen desktop case) but produced visibly broken glyphs at ratio 2+
+  // (1x desktop, and both mobile cases, k=3/k=6). So only k===1 gets
+  // "pixelated"; k>1 and the no-integer-fits fallback both get "auto"
+  // (smooth), which correctly area-averages a downscale instead of
+  // dropping data.
   var currentScale = 1;
   var lastRsW = -1, lastRsH = -1, lastRsCW = -1, lastRsCH = -1, lastDpr = -1;
   function resizeCanvas() {
@@ -548,7 +557,11 @@ if (typeof document !== "undefined") (function () {
       currentScale = crispW / w;
       screenCanvas.style.width = Math.round(crispW) + "px";
       screenCanvas.style.height = Math.round(crispH) + "px";
-      screenCanvas.style.imageRendering = "pixelated";
+      // Only the exact 1:1 mapping (k===1) is safe to render nearest-
+      // neighbour; k>1 is a downscale and needs real area-averaging (see
+      // the comment above this function) or text shreds just as badly as
+      // the bug this whole fix exists for.
+      screenCanvas.style.imageRendering = (k === 1) ? "pixelated" : "auto";
     } else {
       // Too small for any exact device-pixel mapping: smooth-scale as
       // large as fits, matching the old cover/contain behaviour, but

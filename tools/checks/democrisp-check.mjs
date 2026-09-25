@@ -15,6 +15,15 @@
 // demo area at 2x for a human to eyeball. Discriminating: reverting to
 // the old cover/contain-only resizeCanvas produces a non-integer
 // device-pixel ratio at 1440x900 @2x (the bug's own reported shape).
+//
+// image-rendering matters just as much as the ratio: caught live before
+// merge, marking EVERY exact-integer ratio "pixelated" looked right at
+// ratio 1 but broke text at ratio 2+, because those are downscales and
+// nearest-neighbour sampling on a downscale drops whole source rows and
+// columns instead of averaging them. Only ratio===1 is a true 1:1
+// mapping where "pixelated" is correct; every other ratio (an integer
+// downscale, or the smooth fallback) must be "auto" so the browser
+// area-averages instead of dropping data.
 import { chromium } from 'playwright';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -64,8 +73,15 @@ async function checkCase(viewport, dpr, label, shot) {
     console.log(`  [${label}] backing=${info.backingW}x${info.backingH} css=${info.cssW.toFixed(1)}x${info.cssH.toFixed(1)} dpr=${dpr} devicePx=${devPxW.toFixed(1)}x${devPxH.toFixed(1)} ratio=${ratioW.toFixed(3)}x${ratioH.toFixed(3)} image-rendering=${info.imgRendering}`);
     if (nearInt(ratioW) && nearInt(ratioH)) {
       ok(`${label}: canvas backing pixels map to device pixels by an integer factor (${Math.round(ratioW)})`);
-      if (info.imgRendering !== 'pixelated') fail(`${label}: expected image-rendering:pixelated for an integer device-pixel mapping, got "${info.imgRendering}"`);
-      else ok(`${label}: image-rendering is pixelated for the exact mapping`);
+      // Only the true 1:1 mapping (ratio exactly 1) is a safe nearest-
+      // neighbour render. Any other integer ratio is a downscale, which
+      // needs "auto" (real area-averaging) or text shreds just as badly
+      // as the original bug -- this is the exact regression caught
+      // before this check's first merge.
+      const wantPixelated = Math.round(ratioW) === 1 && Math.round(ratioH) === 1;
+      const wantRendering = wantPixelated ? 'pixelated' : 'auto';
+      if (info.imgRendering !== wantRendering) fail(`${label}: expected image-rendering:${wantRendering} at ratio ${Math.round(ratioW)}, got "${info.imgRendering}"`);
+      else ok(`${label}: image-rendering is ${wantRendering}, correct for ratio ${Math.round(ratioW)}`);
     } else {
       fail(`${label}: canvas is NOT mapped to device pixels by a whole number (ratio ${ratioW.toFixed(3)}x${ratioH.toFixed(3)}) -- this is the pixely-resample bug`);
     }
