@@ -1057,11 +1057,45 @@ if (typeof document !== "undefined") (function () {
     // one (default + ~4s) on top of an explicit ~4s post-send wait, giving
     // the reply room to actually render on screen rather than being
     // interrupted mid-fetch by the tour's own close click.
-    { name: 'Chat', slot: 7, dwell: 11000, script: [ // DWELL_MS (7000, defined below) + ~4s for chat_send's real network round trip; a literal since DWELL_MS isn't assigned yet at this point in the file
+    // 1.2.0 (direct request, "Chat demos on the landing page and doesn't
+    // show much capability"): one "what can you do?" round trip just
+    // printed a wall of text about itself; a visitor never saw a single
+    // tool actually fire. This scene now asks Samantha to run four of the
+    // real local tools chat_run_tool (kernel/chat.h) implements -- a
+    // reminder, a note, the weather, today's calendar -- each a real
+    // /api/pick round trip through worker.js's proxy followed by a real,
+    // local, on-kernel action (no LLM needed for the action itself, only
+    // for deciding which tool a plain sentence names), then finishes by
+    // asking Chat to open another app, which really does close this
+    // window and hand off to Calculator (chat_run_tool's open_app case,
+    // gui_launch_from_dock's own again: relaunch) -- the natural way this
+    // scene ends, not a scripted close. Paced slower than the old single
+    // exchange on purpose (a real request each time, not a canned demo)
+    // so a visitor can actually read each line before the next one types.
+    // tools/checks/demochat-check.mjs intercepts /api/pick the same
+    // deterministic way it already intercepts /api/chat, so this exact
+    // sequence is asserted headless, not just eyeballed live.
+    { name: 'Chat', slot: 7, dwell: 30000, script: [
       { type: 'keys', text: 'n', speed: 200 },
       { type: 'wait', ms: 400 },
-      { type: 'keys', text: 'what can you do?\n', speed: 55 }, // trailing \n submits (enter sends, chat/chat.h), a real request to Samantha
-      { type: 'wait', ms: 4200 } // real network round trip: worker.js's proxy -> Turing's own /api/chat -> the reply rendering in the console
+      { type: 'keys', text: 'remind me to call mom at 5\n', speed: 55 },
+      { type: 'wait', ms: 3000 },
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: 'note: pick up dry cleaning\n', speed: 55 },
+      { type: 'wait', ms: 3000 },
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: "what's the weather like\n", speed: 55 },
+      { type: 'wait', ms: 3000 },
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: "what's on my calendar today\n", speed: 55 },
+      { type: 'wait', ms: 3000 },
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: 'open calculator\n', speed: 55 }, // closes Chat and opens Calculator -- the scene's own real ending, not a scripted close
+      { type: 'wait', ms: 1200 }
     ] }
   ];
   // v0.76.12: the real multi-window demo. Files (slot 1) and Weather

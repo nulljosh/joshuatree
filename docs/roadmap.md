@@ -6,7 +6,7 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
-**Latest**: Introducing Chat with Samantha. Ask her anything, or tell her to add a reminder, take a note, open an app, or check the weather.
+**Latest**: Chat looks like a product now, not a debug console, and the landing demo shows Samantha actually doing things: adding a reminder, taking a note, checking the weather, reading the calendar, and opening another app.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -211,3 +211,7 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 ## 1.0.4: Stocks uses market data
 
 The fixed watchlist now fetches real quotes and chart closes through the existing Worker. This covers native Joshua Tree and the same kernel embedded in the portfolio. Prices refresh once a minute while Stocks is open, with R for retry, UTC quote timestamps and stale/unavailable states. The provider may delay quotes; closed markets show the last session. Synthetic charts and invented daily statistics are removed. Epiphany's sample portfolio is kept separate. Worker route checks, an ASan/UBSan harness of the actual C parser, a live upstream request and a headless boot verify the path.
+
+## 1.2.0: Chat reads like a product, and the demo proves it
+
+Chat's window used to open on a debug header ("samantha turing.heyitsmejosh.com:80 ready"), a bare ">>>" prompt and one wall-of-text "what can you do?" reply on the landing page. The header now just says "Samantha" and its state; the model/host/port are still the real values Settings edits, they just aren't printed on screen anymore. Every line is now labeled "You:" or "Samantha:" instead of the old REPL-style prompt, and the footer only lists the three keys. The landing tour's Chat scene now runs five real actions in sequence, paced so a visitor can read each one: add a reminder, take a note, check the weather, read today's calendar, and open another app, each showing its own confirmation line as it happens. `tools/checks/demochat-check.mjs` asserts every scene by intercepting the same `/api/pick` round trip the kernel makes for each one.
