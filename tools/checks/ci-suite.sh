@@ -83,6 +83,7 @@ retry|2|Notes typing, typography, pointer controls, persistence|python3 ./tools/
 retry|1|Notes' runtime-TTF text is real antialiased rasterization at 12pt and 200pt, not a duplicated-block bitmap upscale|python3 ./tools/checks/notessharp-check.py
 retry|2|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/termchatflash-check.sh
 retry|0|Terminal grid draws the mono face at its true advance|python3 ./tools/checks/termmono-check.py
+retry|0|Terminal's runtime-TTF text is real antialiased rasterization with a driftless monospace grid|python3 ./tools/checks/termsharp-check.py
 retry|0|Apple-menu hover stays cheap, clock redraws on a minute change|./tools/checks/menuclock-check.sh
 retry|1|Lock Screen: menu item locks, Esc cannot bypass, password unlocks|python3 ./tools/checks/lockscreen-check.py
 retry|1|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mwkeyflash-check.sh
