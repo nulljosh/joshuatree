@@ -6573,12 +6573,6 @@ static void gui_launch_about(void){
     buf[n++] = 'K'; buf[n] = 0;
     char mem_line[64]; { int p = 0; const char *s = buf; while (*s) mem_line[p++] = *s++; mem_line[p] = 0; }
 
-    unsigned int secs = ticks() / 100;
-    n = 0; buf[n++] = 'U'; buf[n++] = 'p'; buf[n++] = 't'; buf[n++] = 'i'; buf[n++] = 'm'; buf[n++] = 'e'; buf[n++] = ':'; buf[n++] = ' ';
-    { char tmp[12]; int tn = 0; unsigned int v = secs; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
-    buf[n++] = 's'; buf[n] = 0;
-    char uptime_line[64]; { int p = 0; const char *s = buf; while (*s) uptime_line[p++] = *s++; uptime_line[p] = 0; }
-
     /* v0.76.12: real bug, this line was hardcoded to "Version 0.42.1"
        for 30+ real version bumps despite JT_VERSION_STR (drivers/version.h,
        generated from the real VERSION file at build time) already
@@ -6586,11 +6580,11 @@ static void gui_launch_about(void){
     char version_line[32]; { int p = 0; const char *v = "Version " JT_VERSION_STR; while (*v && p < (int)sizeof(version_line) - 1) version_line[p++] = *v++; version_line[p] = 0; }
 
     const char *tagline = "A freestanding i386 kernel, written from scratch.";
-    const char *lines[4] = { tagline, mem_line, uptime_line, version_line };
-    unsigned int colors[4] = { 0x001C1C1E, 0x00884B16, 0x00884B16, 0x0075726E };
+    const char *lines[3] = { tagline, mem_line, version_line };
+    unsigned int colors[3] = { 0x001C1C1E, 0x00884B16, 0x0075726E };
     int line_h = 24;
-    int text_top = by + (ABOUT_H - 4 * line_h) / 2 + 6; /* real vertical centering of the whole text block within the card */
-    for (int i = 0; i < 4; i++) {
+    int text_top = by + (ABOUT_H - 3 * line_h) / 2 + 6; /* real vertical centering of the whole text block within the card */
+    for (int i = 0; i < 3; i++) {
         int x = bx + (ABOUT_W - font_string_width(lines[i])) / 2; /* real horizontal centering per line */
         font_draw_string(lines[i], x, text_top + i * line_h, colors[i], -1);
     }

@@ -6,7 +6,7 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
-**Latest**: Introducing Chat with Samantha. Ask her anything, or tell her to add a reminder, take a note, open an app, or check the weather.
+**Latest**: Introducing Samantha with hands. She adds reminders, takes notes, checks the weather, reads your calendar and opens apps, right from Chat.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -19,7 +19,7 @@ Measured against SerenityOS, the closest one-person-scale peer, and macOS/Linux.
 2. **A compositor.** Apps draw straight to the framebuffer in blocking loops: at most two windows, no resize or minimize, nothing runs in the background. See Multi-window.
 3. **Native TLS.** HTTPS goes through the worker proxy, so a browser can't happen yet.
 4. **Sound.** None at all; Music, video and a screen reader wait on AC97.
-5. **Desktop basics.** Undo, text selection, right-click menus, drag and drop, app switcher (clipboard lands in 1.0.7).
+5. **Desktop basics.** Undo, right-click menus, drag and drop, app switcher (the clipboard landed in 1.0.6, text selection in 1.2.0).
 6. **Apps from outside the kernel.** All 25 apps compile into the kernel; two ring-3 programs exist. No installer, no update path.
 
 ## Beta, 0.9.0
@@ -51,6 +51,7 @@ Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk)
 
 ## After 1.0
 What other small operating systems needed before people used them day to day.
+- [ ] [Joshua] V1 product vision: full-color UI with crisp icons and fonts, music and video at 100+ fps, clean typography, mobile-first design discipline across every surface.
 - [ ] [Fable] Bluetooth: a USB HCI transport and enough of the stack for a keyboard and mouse.
 - [ ] [Sonnet] Languages: every UI string through one table, a Settings language picker, Latin-1 accents drawn (the DejaVu faces have the glyphs; the text paths drop bytes above 0x7F today).
 - [ ] [Sonnet] Ring-3 programs a fresh shell ships with: `cat`, `wc`, `grep`, `calc`. A tiny C compiler is a stretch.
@@ -66,6 +67,11 @@ What other small operating systems needed before people used them day to day.
 - [ ] [Fable] Sound: AC97 driver under QEMU, PCM out. Step one of v100 too.
 - [ ] [Sonnet] Music app: WAV playback from disk, playlist, play, pause, skip, volume. Needs the sound driver.
 - [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
+- [ ] [Sonnet] Music app enhancements: equalizer, better playback controls.
+- [ ] [Sonnet] Video editor: basic timeline, trimming, and export.
+- [ ] [Haiku] Scientific Calculator app: standard and scientific modes, memory functions.
+- [ ] [Sonnet] Basic games: Pong, Chess, Conway's Game of Life, fully playable in the OS.
+- [ ] [Sonnet] Chat voice and video mode: speak to Samantha, get spoken replies and video responses.
 - [ ] [Fable] Better multitasking: more than two windows at once, an app switcher, apps that keep running in the background. This is the Multi-window section; snapping lands first on the windows that exist.
 - [ ] [Fable] Dual monitor support: a second framebuffer (QEMU `-device secondary-vga`), the desktop across both, windows dragged between them. Needs the compositor.
 - [ ] [Fable] A web browser, which needs secure connections first.
@@ -84,7 +90,7 @@ Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at f
 Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Fable] No sound at all. Needs an audio driver (AC97 or SB16 under QEMU).
 - [ ] [Fable] No native TLS. HTTPS only works through the worker's proxy.
-- [x] [Sonnet] Clipboard copy/paste. Shipped 1.0.6: one global 4KB buffer, Ctrl+C/X/V in Notes, Terminal, and every field built on `gui_prompt.h` (Mail, Reminders, Calculator). No selection model exists yet (see the item below), so Ctrl+C/X act on the current line/field, not an arbitrary range.
+- [x] [Sonnet] Clipboard copy/paste. Shipped 1.0.6: one global 4KB buffer, Ctrl+C/X/V in Notes, Terminal, and every field built on `gui_prompt.h` (Mail, Reminders, Calculator). Until 1.2.0 there was no selection model, so Ctrl+C/X acted on the current line or field. Notes now uses its selection when one is active and falls back to the line otherwise.
 - [ ] [Sonnet] Right-click context menus.
 - [ ] [Sonnet] App switcher and global hotkeys.
 - [ ] [Sonnet] Lock screen, sleep, and ACPI shutdown.
@@ -92,7 +98,13 @@ Things a modern desktop OS has that this kernel doesn't yet.
 - [ ] [Haiku] Clock app with timer and alarm.
 - [ ] [Sonnet] Maps app. The wallpaper already fetches map tiles.
 - [ ] [Haiku] Screenshot tool.
-- [ ] [Sonnet] Text selection and undo in editors.
+- [x] 1.2.0: Text selection in Notes. Shift+arrow extends it, Ctrl+A selects everything, a light-blue band highlights it, Ctrl+C/X/typing/Backspace/Delete act on it, Escape or a plain arrow clears it. The landing demo's Notes scene selects and copies its last word for real. Check: `tools/checks/textselect-check.py` (highlight position, clipboard hashes, cut, type-over, and a collapsed selection that must not eat the next character).
+- [ ] [Sonnet] Undo in editors.
+- [ ] [Sonnet] Files app view options: list, grid, columns, with adjustable sorting and grouping.
+- [ ] [Haiku] About This Computer: remove uptime counter, show clean system info.
+- [ ] [Sonnet] Mail account configuration: setup for multiple accounts, IMAP/POP/SMTP settings.
+- [ ] [Sonnet] Chat app redesign: expanded capabilities, better interface, rename to Sam.
+- [ ] [Sonnet] Notes typography and rendering: eliminate pixel artifacts, ensure retina-sharp text everywhere.
 - [ ] [Sonnet] Shell pipes, redirection, and environment variables.
 - [ ] [Sonnet] File associations, opening a file in the right app.
 - [ ] [Sonnet] Drag and drop.
@@ -109,6 +121,13 @@ Things a modern desktop OS has that this kernel doesn't yet.
 - [x] 1.1.2: The CI network job's wallpaper checks had been failing silently since the default theme became Satellite: they compared satellite tiles against map tiles. They now boot in the theme they test, the map compose matches the host byte for byte on a real runner, and an offline compose check runs in the suite. CI runs on pull requests only, so there is no duplicate run on main. Check: `tools/checks/wallcompose-check.py`.
 - [x] 1.1.4: The landing demo's pointer glides to where it is going instead of teleporting: each tour move is an eased walk of about half a second. Check: `tools/checks/cursorglide-check.mjs`.
 - [x] 1.1.5: Reliability. Chat now gives up on a silent Samantha host after a bounded wait (about 10s for the picker, 45s for a reply) instead of freezing the GUI for minutes. The clipboard and file checks no longer flake or hang on a slow runner. A stray `node_modules` symlink that 1.1.4 committed is removed and ignored. Check: `tools/checks/chat-timeout-check.py`.
+- [ ] [Joshua] Landing page polish: slow the demo tour for intimate feel, device-frame chrome, loading states.
+- [ ] [Haiku] Window edges and corners: eliminate pixelated rendering, ensure smooth antialiased edges.
+- [ ] [Haiku] Dock icon padding and alignment: consistent spacing, balanced visual weight.
+- [ ] [Haiku] Calendar icon: add visual date representation, proper padding around the numeral.
+- [ ] [Haiku] Menu bar weather: correct text color for visibility across themes.
+- [ ] [Haiku] Window title bar buttons: fit and finish, proper proportions and spacing.
+- [ ] [Sonnet] Word processor (Notes) text: improve letter spacing, line height, paragraph margins for better readability.
 
 ## Real hardware
 1.0 ships a USB-bootable ISO with a PS/2 fallback. USB is the 1.1 headline, built in this order.
@@ -138,6 +157,10 @@ One ink on one paper, tone by hatching. Full rule in `CLAUDE.md`'s Theme section
 
 ## Bigger, not yet scheduled
 - [ ] [Fable] Samantha on-device: run the Turing project's model inside this kernel instead of over the network. Today she is far too big for a 32-bit kernel with integer-only math, so the first step is a much smaller model and an int8 matmul path. Proof: a headless check that answers one fixed question offline.
+- [ ] [Fable] Customization system: users can talk to Samantha to modify OS behavior, colors, fonts, layouts; settings persist on disk in a user-bootstrapped config.
+- [ ] [Sonnet] Third-party LLM support: let users choose their preferred model provider (OpenAI, Anthropic, local, etc.).
+- [ ] [Joshua] Public APIs and webhooks: exposing kernel features over HTTP for external automation and integration.
+- [ ] [Joshua] Performance targets: 100+ fps sustained in all apps, instant launch times, memory efficiency on low-spec hardware.
 - [ ] [Sonnet] File search, Spotlight-style. Needs an index-or-scan design, not a stub.
 - [ ] [Sonnet] An Activity Monitor app over the shell's `ps`/`kill`/`mem`. (In PR #62, not merged.)
 - [ ] [Fable] A second privilege tier (sudo/admin) on top of the accounts that already exist.
@@ -188,3 +211,7 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 ## 1.0.4: Stocks uses market data
 
 The fixed watchlist now fetches real quotes and chart closes through the existing Worker. This covers native Joshua Tree and the same kernel embedded in the portfolio. Prices refresh once a minute while Stocks is open, with R for retry, UTC quote timestamps and stale/unavailable states. The provider may delay quotes; closed markets show the last session. Synthetic charts and invented daily statistics are removed. Epiphany's sample portfolio is kept separate. Worker route checks, an ASan/UBSan harness of the actual C parser, a live upstream request and a headless boot verify the path.
+
+## 1.2.0: Chat reads like a product, and the demo proves it
+
+Chat's window used to open on a debug header ("samantha turing.heyitsmejosh.com:80 ready"), a bare ">>>" prompt and one wall-of-text "what can you do?" reply on the landing page. The header now just says "Samantha" and its state; the model/host/port are still the real values Settings edits, they just aren't printed on screen anymore. Every line is now labeled "You:" or "Samantha:" instead of the old REPL-style prompt, and the footer only lists the three keys. The landing tour's Chat scene now runs five real actions in sequence, paced so a visitor can read each one: add a reminder, take a note, check the weather, read today's calendar, and open another app, each showing its own confirmation line as it happens. `tools/checks/demochat-check.mjs` asserts every scene by intercepting the same `/api/pick` round trip the kernel makes for each one.

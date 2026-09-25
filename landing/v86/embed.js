@@ -944,16 +944,62 @@ if (typeof document !== "undefined") (function () {
   // CLOSE_Y (94,56) for runSoloApp's own close click below -- proves the
   // drag twice (there and back) instead of once, and never requires a
   // one-off "moved close position" special case. `dwell` is raised past
-  // DWELL_MS (7000) since the typed sentence plus two real ~600ms drags
-  // and their settling pauses run past the default single-app budget,
-  // the same reasoning the Chat entry below already uses for its own
-  // real network round trip.
+  // DWELL_MS (7000) since the typed sentence, the select/copy/clear beat
+  // below (v1.2.0), and two real ~600ms drags and their settling pauses
+  // all run past the default single-app budget, the same reasoning the
+  // Chat entry below already uses for its own real network round trip.
   var NOTES_TITLE_X = 400, NOTES_TITLE_Y = 52; // inside win_y..win_y+30 (40..70) and >= win_x+80 (150)
   var NOTES_DRAG_DX = 50, NOTES_DRAG_DY = 6;   // safely inside gui_app_mouse_tick's own clamp
+  // v1.2.0: Shift+Left and Ctrl+C are real MODIFIER CHORDS (one key held
+  // down while another is pressed), which neither of libv86's higher-level
+  // helpers can express: keyboard_send_text() only knows single plain
+  // characters (simulate_char has no idea what "Shift" even is), and
+  // keyboard_send_keys() presses and releases one JS keyCode at a time
+  // (simulate_press), so a Shift held across several Left presses would
+  // come back up before the next one. keyboard_send_scancodes() is the one
+  // level below both of those this file already reaches for when a higher
+  // helper can't say what's needed (see the Escape sends elsewhere in this
+  // file) -- it puts raw XT set-1 bytes straight on the bus, in order, so a
+  // modifier's own make code can sit un-released across several taps of
+  // another key exactly like a real keyboard held down would. Bytes below
+  // are the same ones kernel/kernel.c's own SC[]/kbd_ctrl table decodes:
+  // 0x2A/0xAA Shift make/break, 0x1D/0x9D Ctrl make/break, 0x2E/0xAE 'C'
+  // make/break, 0xE0 0x4B / 0xE0 0xCB Left arrow make/break (Left is an
+  // "extended" key, always 0xE0-prefixed).
+  var SC_SHIFT_DOWN = 0x2A, SC_SHIFT_UP = 0xAA;
+  var SC_CTRL_DOWN = 0x1D, SC_CTRL_UP = 0x9D;
+  var SC_LEFT_DOWN = [0xE0, 0x4B], SC_LEFT_UP = [0xE0, 0xCB];
+  var SC_C_DOWN = 0x2E, SC_C_UP = 0xAE;
+  function heldChord(modDown, modUp, taps) {
+    var codes = [modDown];
+    for (var i = 0; i < taps.length; i++) codes = codes.concat(taps[i]);
+    codes.push(modUp);
+    return codes;
+  }
+  function shiftLeftTimes(n) {
+    var taps = [];
+    for (var i = 0; i < n; i++) taps.push(SC_LEFT_DOWN.concat(SC_LEFT_UP));
+    return heldChord(SC_SHIFT_DOWN, SC_SHIFT_UP, taps);
+  }
+  var CTRL_C_CODES = heldChord(SC_CTRL_DOWN, SC_CTRL_UP, [[SC_C_DOWN, SC_C_UP]]);
   var TOUR_APPS = [
-    { name: 'Notes', slot: 4, dwell: 13000, script: [
+    { name: 'Notes', slot: 4, dwell: 15500, script: [ // +2.5s over the pre-1.2.0 13000 for the new select/copy/clear beat below
       { type: 'keys', text: 'Kernel, GUI, browser, terminal, and a dozen real apps, none of it borrowed.', speed: 55 },
       { type: 'wait', ms: 500 },
+      // v1.2.0: select the last word ("borrowed.", 9 characters incl. the
+      // period) with real Shift+Left presses, the same highlight
+      // tools/checks/textselect-check.py proves against the kernel
+      // itself -- a beat with it visibly selected, a real Ctrl+C, then
+      // Escape clears the selection before the drag below (kernel/
+      // editor.h: a plain nav key or Escape both clear it; Escape here
+      // is a deliberate clear, not "close the app", since the selection
+      // is still active when it's sent).
+      { type: 'scancodes', codes: shiftLeftTimes(9), speed: 90 },
+      { type: 'wait', ms: 700 },
+      { type: 'scancodes', codes: CTRL_C_CODES, speed: 90 },
+      { type: 'wait', ms: 300 },
+      { type: 'raw', codes: [27], speed: 80 }, // Escape: clears the selection
+      { type: 'wait', ms: 400 },
       { type: 'drag', from: [NOTES_TITLE_X, NOTES_TITLE_Y], to: [NOTES_TITLE_X + NOTES_DRAG_DX, NOTES_TITLE_Y + NOTES_DRAG_DY], steps: 8, ms: 600 },
       { type: 'wait', ms: 900 },
       // Drag it back: the press point is wherever the pointer already is
@@ -1011,11 +1057,45 @@ if (typeof document !== "undefined") (function () {
     // one (default + ~4s) on top of an explicit ~4s post-send wait, giving
     // the reply room to actually render on screen rather than being
     // interrupted mid-fetch by the tour's own close click.
-    { name: 'Chat', slot: 7, dwell: 11000, script: [ // DWELL_MS (7000, defined below) + ~4s for chat_send's real network round trip; a literal since DWELL_MS isn't assigned yet at this point in the file
+    // 1.2.0 (direct request, "Chat demos on the landing page and doesn't
+    // show much capability"): one "what can you do?" round trip just
+    // printed a wall of text about itself; a visitor never saw a single
+    // tool actually fire. This scene now asks Samantha to run four of the
+    // real local tools chat_run_tool (kernel/chat.h) implements -- a
+    // reminder, a note, the weather, today's calendar -- each a real
+    // /api/pick round trip through worker.js's proxy followed by a real,
+    // local, on-kernel action (no LLM needed for the action itself, only
+    // for deciding which tool a plain sentence names), then finishes by
+    // asking Chat to open another app, which really does close this
+    // window and hand off to Calculator (chat_run_tool's open_app case,
+    // gui_launch_from_dock's own again: relaunch) -- the natural way this
+    // scene ends, not a scripted close. Paced slower than the old single
+    // exchange on purpose (a real request each time, not a canned demo)
+    // so a visitor can actually read each line before the next one types.
+    // tools/checks/demochat-check.mjs intercepts /api/pick the same
+    // deterministic way it already intercepts /api/chat, so this exact
+    // sequence is asserted headless, not just eyeballed live.
+    { name: 'Chat', slot: 7, dwell: 30000, script: [
       { type: 'keys', text: 'n', speed: 200 },
       { type: 'wait', ms: 400 },
-      { type: 'keys', text: 'what can you do?\n', speed: 55 }, // trailing \n submits (enter sends, chat/chat.h), a real request to Samantha
-      { type: 'wait', ms: 4200 } // real network round trip: worker.js's proxy -> Turing's own /api/chat -> the reply rendering in the console
+      { type: 'keys', text: 'remind me to call mom at 5\n', speed: 55 },
+      { type: 'wait', ms: 3000 },
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: 'note: pick up dry cleaning\n', speed: 55 },
+      { type: 'wait', ms: 3000 },
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: "what's the weather like\n", speed: 55 },
+      { type: 'wait', ms: 3000 },
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: "what's on my calendar today\n", speed: 55 },
+      { type: 'wait', ms: 3000 },
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: 'open calculator\n', speed: 55 }, // closes Chat and opens Calculator -- the scene's own real ending, not a scripted close
+      { type: 'wait', ms: 1200 }
     ] }
   ];
   // v0.76.12: the real multi-window demo. Files (slot 1) and Weather
@@ -1121,6 +1201,11 @@ if (typeof document !== "undefined") (function () {
       // Added for Chat's own fix below: cancelling out of its compose
       // prompt with a real Escape, not a typed character.
       else if (step.type === "raw" && emulator.keyboard_send_keys) await emulator.keyboard_send_keys(step.codes, step.speed || 80);
+      // v1.2.0: a real modifier chord (Shift+Left, Ctrl+C), see the
+      // heldChord/shiftLeftTimes/CTRL_C_CODES comment above the Notes
+      // entry in TOUR_APPS -- raw scancode bytes, not JS keyCodes, sent
+      // one at a time on the same bus path keyboard_send_keys uses.
+      else if (step.type === "scancodes" && emulator.keyboard_send_scancodes) await emulator.keyboard_send_scancodes(step.codes, step.speed || 30);
       // 1.0.13: press/move.../release on a window's title band, data like
       // every other step (see the Notes entry in TOUR_APPS and
       // dragWindow's own comment above).
@@ -1429,7 +1514,7 @@ if (typeof document !== "undefined") (function () {
     'Weather': 'Live data over its own network stack',
     'Mail': 'A real mailbox on a real filesystem',
     'Calendar': 'Real events, persisted across reboots',
-    'Notes': 'Written straight to disk. Drag it by its title bar.',
+    'Notes': 'Real text selection, drag it by its title bar.',
     'Reminders': 'A checklist that survives a reboot',
     'Terminal': 'A real shell, talking to a real kernel',
     'Chat': 'Talk to the machine, natively',

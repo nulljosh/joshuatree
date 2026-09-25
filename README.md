@@ -7,7 +7,7 @@
 ![platform](https://img.shields.io/badge/platform-i386-lightgrey)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-A desktop built from nothing in C: bootloader, kernel, memory manager, filesystem, network stack, window system, typeface renderer, and 25 native apps. No libc, no external dependencies beyond Clang, lld, and QEMU. Run live in the browser: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
+A desktop built from nothing in C: bootloader, kernel, memory manager, filesystem, network stack, window system, typeface renderer, and 25 native apps, with real text selection in Notes. No libc, no external dependencies beyond Clang, lld, and QEMU. Run live in the browser: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 
 What it does today: windows drag by their title bar and two apps can sit side by side. The Chat app talks to [Samantha](https://turing.heyitsmejosh.com), the small language model from the separate Turing project, over the network. She answers questions and can act inside the OS from a sentence: "remind me to buy milk", "note the meeting is at 3", "open notes", "weather". Weather, a satellite wallpaper of where you are, stocks, mail, calendar, reminders and notes all save to a real FAT16 disk. Every feature ships with a headless check that CI runs on every pull request, and a browser check boots the kernel in v86 to prove the live demo's Chat really answers. Running Samantha on the OS itself, instead of over the network, is the next goal for Chat.
 

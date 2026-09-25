@@ -449,7 +449,7 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
         reminders_done[idx] = 0;
         reminders_count++;
         reminders_save();
-        chat_fmt_reply(reply, replysz, "Reminder added: ", arg);
+        chat_fmt_reply(reply, replysz, "Added reminder: ", arg);
         serial_puts("chattool=new_reminder:"); serial_puts(reminders_text[idx]); serial_puts("\n");
         return 1;
     }
@@ -512,12 +512,16 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
    line naming the real model and host every request goes to (llm_model /
    llm_host / llm_port, the same globals chat_send uses, nothing invented),
    each prompt echoed after a plain ">>> ", and the reply as plain wrapped
-   text under it. No bubbles, no sender labels, no contact framing. Only
-   the tail that fits the window is shown (this kernel has no scroll-offset
-   input yet, same honest limit render_wrapped_text's own "out of room,
-   stop drawing" already has for every other long-text view); n opens the
-   prompt, c clears the context, esc closes. */
-#define CHAT_PROMPT ">>> "
+   text under it. No bubbles drawn as boxes, but a plain "You:"/"Samantha:"
+   label (CHAT_DIM) in front of each line tells the two apart at a glance,
+   replacing the old bare ">>> " REPL prompt (1.2.0, direct request: "doesn't
+   show much capability" -- a debug-looking prompt read like a shell, not a
+   product). Only the tail that fits the window is shown (this kernel has
+   no scroll-offset input yet, same honest limit render_wrapped_text's own
+   "out of room, stop drawing" already has for every other long-text view);
+   n opens the prompt, c clears the context, esc closes. */
+#define CHAT_YOU "You: "
+#define CHAT_SAM "Samantha: "
 #define CHAT_DIM 0x0075726E
 #define CHAT_INK 0x001C1C1E
 
@@ -541,18 +545,19 @@ static int chat_wrapped_rows(const char *p, int max_w) {
     return rows;
 }
 
-/* "<model>   <host>:<port>   <state>", the console's one status line. */
+/* "Samantha    <state>", the console's one status line. 1.2.0 (direct
+   request, "Chat demos on the landing page and doesn't show much
+   capability"): dropped the old "<model>   <host>:<port>   <state>" debug
+   header -- a visitor never asked which model or port answers them, and
+   showing host:port read like an unfinished dev tool, not a product.
+   llm_model/llm_host/llm_port are still the real values chat_send/chat_pick
+   use underneath (Settings still edits them); only this status line stopped
+   printing them. */
 static void chat_draw_status(const char *state) {
     char line[LLM_MODEL_MAX + LLM_HOST_MAX + 48];
     int p = 0;
-    const char *s = llm_model; while (*s && p < (int)sizeof(line) - 40) line[p++] = *s++;
-    s = "   "; while (*s) line[p++] = *s++;
-    s = llm_host; while (*s && p < (int)sizeof(line) - 32) line[p++] = *s++;
-    line[p++] = ':';
-    char digits[8]; int nd = 0; int v = llm_port;
-    do { digits[nd++] = (char)('0' + v % 10); v /= 10; } while (v && nd < 8);
-    while (nd) line[p++] = digits[--nd];
-    s = "   "; while (*s) line[p++] = *s++;
+    const char *s = "Samantha"; while (*s) line[p++] = *s++;
+    s = "    "; while (*s) line[p++] = *s++;
     while (*state && p < (int)sizeof(line) - 1) line[p++] = *state++;
     line[p] = 0;
     int T = gui_app_dy();
@@ -574,7 +579,8 @@ static void gui_launch_chat_app(void) {
 
         int x = 20, y = T + 76;
         int bottom = (int)window_height() - 40;
-        int prompt_w = font_string_width(CHAT_PROMPT);
+        int you_w = font_string_width(CHAT_YOU);
+        int sam_w = font_string_width(CHAT_SAM);
         int body_w = (int)window_width() - 40;
         /* Walk back from the newest turn until the visible area is full,
            then draw what fit top-down: show the tail, never a silent
@@ -582,7 +588,8 @@ static void gui_launch_chat_app(void) {
         int start = chat_count, used = 0;
         for (int i = chat_count - 1; i >= 0; i--) {
             int user = chat_msgs[i].role != CHAT_ROLE_ASSISTANT;
-            int h = chat_wrapped_rows(chat_msgs[i].content, user ? body_w - prompt_w : body_w) * 16 + (user ? 4 : 12);
+            int label_w = user ? you_w : sam_w;
+            int h = chat_wrapped_rows(chat_msgs[i].content, body_w - label_w) * 16 + (user ? 4 : 12);
             if (used + h > bottom - y && i != chat_count - 1) break;
             used += h;
             start = i;
@@ -590,14 +597,14 @@ static void gui_launch_chat_app(void) {
         int cy = y;
         for (int i = start; i < chat_count && cy + 16 <= bottom; i++) {
             int user = chat_msgs[i].role != CHAT_ROLE_ASSISTANT;
-            int tx = user ? x + prompt_w : x;
-            int tw = user ? body_w - prompt_w : body_w;
-            if (user) font_draw_string(CHAT_PROMPT, x, cy, CHAT_DIM, -1);
+            int label_w = user ? you_w : sam_w;
+            int tx = x + label_w;
+            int tw = body_w - label_w;
+            font_draw_string(user ? CHAT_YOU : CHAT_SAM, x, cy, CHAT_DIM, -1);
             render_wrapped_text(chat_msgs[i].content, tx, cy, tw, bottom - cy, CHAT_INK);
             cy += chat_wrapped_rows(chat_msgs[i].content, tw) * 16 + (user ? 4 : 12);
         }
-        if (cy + 16 <= bottom) font_draw_string(CHAT_PROMPT, x, cy, CHAT_DIM, -1); /* the idle prompt, waiting for n */
-        font_draw_string("n prompt   c clear   esc close   try: remind me to ..., note ..., open notes, weather", 20, (int)window_height() - 28, CHAT_DIM, -1);
+        font_draw_string("n prompt   c clear   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
 
         sleep_ticks(5);
         mouse_click_edge_sync();
@@ -606,13 +613,13 @@ static void gui_launch_chat_app(void) {
         if (k == 'c') { chat_clear(); state = "ready"; continue; }
         if (k == 'n') {
             char msg[CHAT_CONTENT_MAX];
-            if (!gui_prompt_line_input("Chat", CHAT_PROMPT "send a message (enter sends, esc cancels)", msg, sizeof(msg))) continue;
+            if (!gui_prompt_line_input("Chat", CHAT_YOU "send a message (enter sends, esc cancels)", msg, sizeof(msg))) continue;
             if (msg[0] == 0) continue;
 
             window_rect(0, T + 40, (int)window_width(), (int)window_height() - 40 - T, GUI_BG);
             chat_draw_status("checking for a tool ...");
-            font_draw_string(CHAT_PROMPT, x, T + 76, CHAT_DIM, -1);
-            render_wrapped_text(msg, x + prompt_w, T + 76, body_w - prompt_w, 64, CHAT_INK);
+            font_draw_string(CHAT_YOU, x, T + 76, CHAT_DIM, -1);
+            render_wrapped_text(msg, x + you_w, T + 76, body_w - you_w, 64, CHAT_INK);
 
             /* v1.1.0: chat_pick first (see chat.h's own comment above
                chat_pick/chat_run_tool) -- a tool this OS can honour
