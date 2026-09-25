@@ -212,6 +212,10 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 
 The fixed watchlist now fetches real quotes and chart closes through the existing Worker. This covers native Joshua Tree and the same kernel embedded in the portfolio. Prices refresh once a minute while Stocks is open, with R for retry, UTC quote timestamps and stale/unavailable states. The provider may delay quotes; closed markets show the last session. Synthetic charts and invented daily statistics are removed. Epiphany's sample portfolio is kept separate. Worker route checks, an ASan/UBSan harness of the actual C parser, a live upstream request and a headless boot verify the path.
 
-## 1.2.0: Chat reads like a product, and the demo proves it
+## 1.3.0: Chat reads like a product, and the demo proves it
 
 Chat's window used to open on a debug header ("samantha turing.heyitsmejosh.com:80 ready"), a bare ">>>" prompt and one wall-of-text "what can you do?" reply on the landing page. The header now just says "Samantha" and its state; the model/host/port are still the real values Settings edits, they just aren't printed on screen anymore. Every line is now labeled "You:" or "Samantha:" instead of the old REPL-style prompt, and the footer only lists the three keys. The landing tour's Chat scene now runs five real actions in sequence, paced so a visitor can read each one: add a reminder, take a note, check the weather, read today's calendar, and open another app, each showing its own confirmation line as it happens. `tools/checks/demochat-check.mjs` asserts every scene by intercepting the same `/api/pick` round trip the kernel makes for each one.
+
+## 1.3.1: Calendar dock tile padding and menu bar weather color
+
+The Calendar dock icon's day number ("25") used to run edge to edge on the tile with almost no side margin, its stroke crossing into the tile's own bottom curve: sized for the bigger Apps-folder grid tile and never checked against the dock's own smaller one. Shrunk to match the same inset every other dock glyph keeps off the squircle. Menu bar weather text now uses the clock's own ink color instead of a warm brown, so it reads on every wallpaper theme. `tools/checks/calicon-check.py` gained a margin check (fails if date ink lands in the tile's own side margin or against its bottom edge, confirmed failing on the old sizing and passing on the fix).
