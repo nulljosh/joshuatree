@@ -217,7 +217,13 @@ tick_x = pad_l - AXIS_GAP  # tick text is right-aligned (anchor=end) here
 # baseline gap, not enough for two font-size-10 rows (~14px needed
 # before descenders/ascenders start touching), and rendering it for
 # real showed exactly that: "Aug 31" clipping into "25,650 lines...".
-pad_r, pad_t, pad_b = 10, 10, 40
+# pad_r needs real room for the last x-axis date label too: it's centered
+# (text-anchor=middle) on the last plotted x, which sits flush at
+# pad_l+plot_w, so half the label's own width hangs off the right edge
+# into this margin. A 6-char label ("Sep 25") at ~5.5px/char is ~33px
+# wide, so its right half is ~16.5px -- 10 wasn't enough and real
+# rendering clipped it ("Sep 25" showing as "Sep 2"). 20 gives it room.
+pad_r, pad_t, pad_b = 20, 10, 40
 plot_w, plot_h = 420, 140
 width = pad_l + plot_w + pad_r
 height = pad_t + plot_h + pad_b
@@ -307,9 +313,12 @@ axis_lines = (
 polyline = f'<polyline points="{points_attr}" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
 date_labels = "".join(f'<text x="{xf(i)}" y="{pad_t+plot_h+16}" font-size="10" fill="var(--label)" text-anchor="middle">{short_date(labels[i])}</text>' for i in shown)
 # Body-size, muted-ink caption: readable page text, not a tiny bold chart
-# label. It carries the one real stat this chart needs, since the legend
-# and rotated axis title are gone.
-caption = f'<text x="{pad_l}" y="{height-6}" font-size="14" fill="var(--muted)">{max_v} apps &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>'
+# label. It carries the two real stats a visitor cares about, apps
+# shipped and how much of the kernel is documented -- commit count is a
+# dev metric, it says nothing about what's actually usable, so it's not
+# in this line anymore even though the git history it's computed from
+# still backs every other number here.
+caption = f'<text x="{pad_l}" y="{height-6}" font-size="14" fill="var(--muted)">{max_v} apps &#183; {doc_pct[-1]}% documented</text>'
 
 # v52.4: real dark-mode support, direct feedback ("white graph on dark
 # mode... should be dynamic and native as code, not a screenshot"). A
