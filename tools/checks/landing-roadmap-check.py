@@ -37,7 +37,7 @@ class RoadmapTests(unittest.TestCase):
 
     def test_escape_and_preserve_surrounding_markup(self):
         rendered = generator.render(QUEUE + '1. **`A` < B & C**\n', PAGE)
-        self.assertEqual(rendered, 'before' + generator.START + '<p>Next up: A &lt; B &amp; C.</p>' + generator.END + 'after')
+        self.assertEqual(rendered, 'before' + generator.START + '<p class="roadmap-next">Next up: A &lt; B &amp; C.</p>' + generator.END + 'after')
         self.assertEqual(generator.render(QUEUE + '1. **`A` < B & C**\n', rendered), rendered)
 
     def test_empty_queue_and_missing_section(self):
