@@ -174,3 +174,11 @@ int ttf_kerning(ttf_font_t *font, unsigned int cp1, unsigned int cp2, float px_s
     int k = stbtt_GetCodepointKernAdvance(&font->info, (int)cp1, (int)cp2);
     return ttf_ifloor(k * scale + 0.5f);
 }
+
+int ttf_ascent(ttf_font_t *font, float px_size) {
+    if (!font) return 0;
+    float scale = stbtt_ScaleForMappingEmToPixels(&font->info, px_size);
+    int ascent, descent, line_gap;
+    stbtt_GetFontVMetrics(&font->info, &ascent, &descent, &line_gap);
+    return ttf_ifloor(ascent * scale + 0.5f);
+}

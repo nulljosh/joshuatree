@@ -25,6 +25,7 @@
 #include "mouse.h"
 #include "vmmouse.h"
 #include "window.h"
+#include "ttf.h"
 #include "font.h"
 #include "rtl8139.h"
 #include "net.h"

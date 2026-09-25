@@ -39,4 +39,8 @@ int ttf_advance(ttf_font_t *font, unsigned int codepoint, float px_size);
    pixels (rounded); 0 if the font has no kern table for the pair. */
 int ttf_kerning(ttf_font_t *font, unsigned int cp1, unsigned int cp2, float px_size);
 
+/* Ascent (baseline to line top) at px_size, in pixels (rounded); the pen's
+   baseline y for a line whose top sits at some origin is origin + this. */
+int ttf_ascent(ttf_font_t *font, float px_size);
+
 #endif

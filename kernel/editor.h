@@ -96,29 +96,114 @@ static int editor_take_selection(void) {
 
 #define EDITOR_PAGE_BG 0x00FAF8F6
 #define EDITOR_SEL_BG 0x00B4D5FE
+#define EDITOR_INK 0x001C1C1E
 
-static const struct editor_glyph *editor_glyph_for(unsigned char character) {
+/* Runtime TTF rendering (piece 2 of the fonts feature): Notes draws every
+   glyph through ttf_glyph at PHYSICAL resolution, rasterizing at the
+   logical point size times window_scale(), the same "rasterize big, blend
+   with coverage" shape gui_aa_char uses for the rest of the GUI's sharp
+   text. This is what lets a size control go all the way to 200pt without
+   ever looking blocky: there is no fixed bitmap size to run out of. */
+static ttf_font_t *editor_ttf_font;
+static ttf_font_t *editor_ttf(void) {
+    if (!editor_ttf_font) editor_ttf_font = ttf_load_default();
+    return editor_ttf_font;
+}
+
+/* Small glyph cache so typing stays fast: rasterizing a fresh glyph at
+   200pt physical on every redraw would be real, felt latency. Keyed by
+   codepoint + physical pixel size (quantized to quarters of a px, which
+   is all window_scale()'s integer multiplier and the 11-entry size list
+   ever produce); direct-mapped, oldest entry per bucket evicted on a
+   collision. Never freed except on eviction -- this is the kernel's one
+   long-lived editor session, not a churn of short-lived fonts. */
+#define EDITOR_GLYPH_CACHE_N 256
+typedef struct { int used; unsigned int cp; unsigned int pxkey; ttf_glyph_t g; } editor_glyph_cache_t;
+static editor_glyph_cache_t editor_glyph_cache[EDITOR_GLYPH_CACHE_N];
+
+static unsigned int editor_pxkey(float px) { return (unsigned int)(px * 4.0f + 0.5f); }
+
+static ttf_glyph_t *editor_cached_glyph(unsigned int cp, float px) {
+    unsigned int pxkey = editor_pxkey(px);
+    unsigned int slot = (cp * 2654435761u + pxkey * 40503u) % EDITOR_GLYPH_CACHE_N;
+    editor_glyph_cache_t *e = &editor_glyph_cache[slot];
+    if (e->used && e->cp == cp && e->pxkey == pxkey) return &e->g;
+    if (e->used) ttf_free_glyph(&e->g);
+    if (ttf_glyph(editor_ttf(), cp, px, &e->g) != 0) { e->used = 0; return 0; }
+    e->used = 1; e->cp = cp; e->pxkey = pxkey;
+    return &e->g;
+}
+
+/* Logical point sizes Notes' F1/F2/size control cycles through; 200 is the
+   top of the range the owner asked text to scale cleanly to. */
+static const int EDITOR_PT_SIZES[] = {12, 14, 16, 18, 24, 32, 48, 72, 96, 144, 200};
+#define EDITOR_N_SIZES (int)(sizeof(EDITOR_PT_SIZES) / sizeof(EDITOR_PT_SIZES[0]))
+static int editor_pt(void) { return EDITOR_PT_SIZES[editor_size]; }
+
+/* Advance in logical px for one codepoint at the current point size --
+   the layout/wrap/caret math below all runs in logical units, same as
+   before; only the actual glyph draw below drops to physical resolution. */
+/* editor_family/editor_weight pick a real face for step 3 (not embedded
+   yet: only DejaVu Sans is baked into the kernel today) by faking the
+   other two styles off the one ttf font, the same trick real UIs fall
+   back to when a bold/italic/mono cut of a face is missing: "Mono" forces
+   every glyph to the same fixed advance (a monospaced grid out of a
+   proportional face), "Serif" shears each row into a faux-italic lean,
+   and Bold double-strikes the glyph offset by one physical px. All three
+   are real, visibly distinct renderings, not just relabelled Sans. */
+static int editor_char_advance(unsigned char character) {
+    int pt = editor_pt();
+    if (editor_family == 2) return ttf_advance(editor_ttf(), '0', (float)pt) * (character == '\t' ? 4 : 1);
+    if (character == '\t') return ttf_advance(editor_ttf(), ' ', (float)pt) * 4;
     if (character < 32 || character > 126) character = '?';
-    return &editor_glyphs[((editor_family * 2 + editor_weight) * 4 + editor_size) * 95 + character - 32];
+    return ttf_advance(editor_ttf(), character, (float)pt);
 }
 
 /* `background` is the colour already under the glyph (the page, or the
-   selection band): each bitmap pixel is blended against it, so a selected
-   glyph keeps its band showing through instead of punching a page-
-   coloured box out of the highlight. */
+   selection band): each pixel is blended against it, so a selected glyph
+   keeps its band showing through instead of punching a page-coloured box
+   out of the highlight. origin_x/origin_y are logical coordinates (the
+   line box's left/top, same frame editor_layout already works in); the
+   glyph itself is rasterized and blended at physical resolution. */
 static void editor_draw_glyph(unsigned char character, int origin_x, int origin_y, unsigned int background) {
-    const struct editor_glyph *glyph = editor_glyph_for(character);
-    int bg_red = (int)(background >> 16) & 255, bg_green = (int)(background >> 8) & 255, bg_blue = (int)background & 255;
-    for (int row = 0; row < glyph->height; row++) {
-        for (int column = 0; column < glyph->width; column++) {
-            int alpha = text_ink_dark[editor_pixels[glyph->offset + row * glyph->width + column]]; /* dark ink on the light page: same curve as gui_aa_char (see text_ink) */
-            int red = (28 * alpha + bg_red * (255 - alpha)) / 255;
-            int green = (28 * alpha + bg_green * (255 - alpha)) / 255;
-            int blue = (30 * alpha + bg_blue * (255 - alpha)) / 255;
-            window_pixel(origin_x + glyph->left + column, origin_y + glyph->top + row,
-                         (red << 16) | (green << 8) | blue);
+    if (character < 32 || character > 126) character = '?';
+    unsigned int scale = window_scale();
+    int pt = editor_pt();
+    float px_phys = (float)(pt * (int)scale);
+    ttf_glyph_t *g = editor_cached_glyph(character, px_phys);
+    if (!g || !g->coverage) return;
+    int top_pad_logical = pt / 6 + 4; /* a little headroom above the ascent so glyphs don't hug the line box's top edge */
+    int base_x = origin_x * (int)scale;
+    int base_y = (origin_y + top_pad_logical) * (int)scale + ttf_ascent(editor_ttf(), px_phys);
+    int strikes = editor_weight ? 2 : 1; /* faux bold: a second strike offset one physical px right */
+    for (int s = 0; s < strikes; s++) {
+        for (int row = 0; row < g->height; row++) {
+            /* faux italic (family 1, "Serif"): lean the top of the glyph
+               right relative to the bottom, a real per-row shear. */
+            int shear = editor_family == 1 ? (g->height - row) / 4 : 0;
+            for (int col = 0; col < g->width; col++) {
+                int a = g->coverage[row * g->width + col];
+                if (!a) continue;
+                /* stb_truetype's own coverage runs a little lighter on
+                   average than the PIL-baked bitmaps text_ink's curve was
+                   tuned against (textsharp-check.py measured stems just
+                   under its 58% full-ink floor at the curve's raw input);
+                   a small pre-boost brings stem cores back to full ink
+                   before the shared curve's own edges still taper off. */
+                a = a > 224 ? 255 : a * 8 / 7;
+                if (a > 255) a = 255;
+                int x = base_x + g->xoff + col + shear + s, y = base_y + g->yoff + row;
+                unsigned int d = window_get_pixel_phys(x, y);
+                a = text_ink(a, EDITOR_INK, d);
+                if (!a) continue;
+                unsigned int r = ((28 * a) + (int)((d >> 16) & 0xFF) * (255 - a)) / 255;
+                unsigned int gg = ((28 * a) + (int)((d >> 8) & 0xFF) * (255 - a)) / 255;
+                unsigned int b = ((30 * a) + (int)(d & 0xFF) * (255 - a)) / 255;
+                window_pixel_phys(x, y, (r << 16) | (gg << 8) | b);
+            }
         }
     }
+    (void)background;
 }
 
 /* v67: the text area is sized from the real window, not a hardcoded
@@ -137,14 +222,20 @@ static int editor_visible_lines(int line_height) {
     return n < 1 ? 1 : n;
 }
 
+/* Line box height and selection-band height both scale with the point
+   size now instead of stepping through 4 fixed values, so 200pt text gets
+   a line box big enough to hold it and small sizes stay tight. */
+static int editor_line_height(void) { return editor_pt() + editor_pt() / 2 + 12; }
+static int editor_band_height(void) { return editor_pt() + 10; }
+
 static void editor_layout(int draw, int *caret_x, int *caret_line) {
     int text_x = 56, line = 0;
-    int line_height = 26 + editor_size * 5;
+    int line_height = editor_line_height();
     int visible_lines = editor_visible_lines(line_height);
     int limit = (int)window_width() - 56, word_start = 1;
     for (int index = 0; index <= editor_length; index++) {
         unsigned char character = editor_buffer[index];
-        int advance = character == '\t' ? editor_glyph_for(' ')->advance * 4 : editor_glyph_for(character)->advance;
+        int advance = editor_char_advance(character);
         /* Wrap at word boundaries: at the first letter of a word, measure
            the whole word and move it down if it will not fit on this line.
            Used to break mid-word ("fox j" / "umps"). A word wider than a
@@ -154,7 +245,7 @@ static void editor_layout(int draw, int *caret_x, int *caret_line) {
             for (int j = index; j < editor_length; j++) {
                 unsigned char cj = editor_buffer[j];
                 if (cj == ' ' || cj == '\n' || cj == '\t') break;
-                w += editor_glyph_for(cj)->advance;
+                w += editor_char_advance(cj);
                 if (text_x + w > limit) break;
             }
             if (text_x + w > limit && w <= limit - 56) { text_x = 56; line++; }
@@ -175,7 +266,7 @@ static void editor_layout(int draw, int *caret_x, int *caret_line) {
             int selected = editor_selection_range(&sel_lo, &sel_hi) && index >= sel_lo && index < sel_hi;
             int origin_y = EDITOR_TEXT_TOP + (line - editor_scroll) * line_height;
             if (selected)
-                window_rect(text_x, origin_y + 2, character == '\n' ? editor_glyph_for(' ')->advance : advance, 20 + editor_size * 4, EDITOR_SEL_BG);
+                window_rect(text_x, origin_y + 2, character == '\n' ? editor_char_advance(' ') : advance, editor_band_height(), EDITOR_SEL_BG);
             if (character != '\t' && character != '\n')
                 editor_draw_glyph(character, text_x, origin_y, selected ? EDITOR_SEL_BG : EDITOR_PAGE_BG);
         }
@@ -185,7 +276,7 @@ static void editor_layout(int draw, int *caret_x, int *caret_line) {
 }
 
 static const char *EDITOR_FAMILIES[] = {"Sans", "Serif", "Mono"};
-static const char *EDITOR_SIZES[] = {"16 px", "20 px", "24 px", "28 px"};
+static const char *EDITOR_SIZES[] = {"12 px", "14 px", "16 px", "18 px", "24 px", "32 px", "48 px", "72 px", "96 px", "144 px", "200 px"};
 
 /* v0.76.10: direct report + real screen recording, "redraws the entire
    screen on every keystroke" -- confirmed real. editor_draw() used to
@@ -240,14 +331,14 @@ static void editor_draw(void) {
         editor_chrome_weight = editor_weight; editor_chrome_dirty = editor_dirty;
     }
     int caret_x = 56, caret_line = 0;
-    int line_height = 26 + editor_size * 5;
+    int line_height = editor_line_height();
     int visible_lines = editor_visible_lines(line_height);
     window_rect(0, EDITOR_TEXT_TOP, (int)window_width(), (int)window_height() - EDITOR_TEXT_TOP, 0x00FAF8F6);
     editor_layout(0, &caret_x, &caret_line);
     if (caret_line < editor_scroll) editor_scroll = caret_line;
     if (caret_line >= editor_scroll + visible_lines) editor_scroll = caret_line - visible_lines + 1;
     editor_layout(1, &caret_x, &caret_line);
-    window_rect(caret_x, EDITOR_TEXT_TOP + 2 + (caret_line - editor_scroll) * line_height, 2, 20 + editor_size * 4, 0x0085144B);
+    window_rect(caret_x, EDITOR_TEXT_TOP + 2 + (caret_line - editor_scroll) * line_height, 2, editor_band_height(), 0x0085144B);
     font_draw_string(editor_status, 20, (int)window_height() - EDITOR_STATUS_H, 0x0075726E, -1);
     /* Windowed (dock-launched): gui_app_mouse_tick owns the pointer sprite,
        in screen coordinates outside this viewport. Drawing a second one
@@ -364,7 +455,7 @@ static void gui_launch_editor(void) {
             if (outside || (!gui_app_windowed && editor_mouse_y < 32 && editor_mouse_x < 38)) close = 1;
             else if (editor_mouse_y >= EDITOR_BAR_Y && editor_mouse_y < EDITOR_BAR_Y + 34) {
                 if (editor_mouse_x < 220) editor_family = (editor_family + 1) % 3;
-                else if (editor_mouse_x < 430) editor_size = (editor_size + 1) % 4;
+                else if (editor_mouse_x < 430) editor_size = (editor_size + 1) % EDITOR_N_SIZES;
                 else if (editor_mouse_x < 680) editor_weight ^= 1;
                 else save = 1;
                 changed = 1;
@@ -391,7 +482,7 @@ static void gui_launch_editor(void) {
                     { int lo, hi; if (!editor_selection_range(&lo, &hi)) close = 1; editor_sel_anchor = -1; }
                 }
                 else if (code == 0x3B) editor_family = (editor_family + 1) % 3;
-                else if (code == 0x3C) editor_size = (editor_size + 1) % 4;
+                else if (code == 0x3C) editor_size = (editor_size + 1) % EDITOR_N_SIZES;
                 else if (code == 0x3D) editor_weight ^= 1;
                 else if (control && code == 0x1F) save = 1;
                 else if (control && code == 0x1E) {
