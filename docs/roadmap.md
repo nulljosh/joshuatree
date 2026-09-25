@@ -200,10 +200,11 @@ The OS stays free. Monetization is custom hardware built to run it. Everything t
 - Device-frame chrome for the browser demo: still undone, needs a redesign that doesn't fight the live 16:9 canvas.
 
 ## Session task queue
-Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current. Each item also needs a `(plain: ...)` phrase right after the title, a few plain words a 20-year-old visitor would understand with zero dev background — that phrase is what actually shows on the landing page, never the dev title.
-1. **Split kernel.c into per-subsystem files** (plain: cleaning up one giant file behind the scenes) [Sonnet]: ~7,800 lines, the one god file left here. Don't combine with other kernel.c work.
+Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current. Each item also needs a `(plain: ...)` phrase right after the title, a few plain words a 20-year-old visitor would understand with zero dev background — that phrase is what actually shows on the landing page, never the dev title. Internal refactor work that a visitor has no way to try (nothing to click, nothing that looks different) uses `(plain: skip)`, which the generator drops from the card entirely instead of translating it into vague visitor-facing words.
+1. **Split kernel.c into per-subsystem files** (plain: skip) [Sonnet]: ~7,800 lines, the one god file left here. Don't combine with other kernel.c work. Internal refactor only, nothing a visitor can see or try, so it's excluded from the landing card.
 2. **Rich document app** (plain: a word processor) [Sonnet]: Word/Pages-style paragraph and run formatting, distinct from Notes (which stays plain text).
-3. **Native code editor and package tool** (plain: a code editor and a way to install apps) [Sonnet]: syntax highlighting, plus a fetch-and-install tool over this kernel's own HTTP client.
+3. **Native code editor** (plain: a code editor) [Sonnet]: syntax highlighting for the native editor app.
+4. **Package/install tool** (plain: apps you can install) [Sonnet]: a fetch-and-install tool over this kernel's own HTTP client.
 
 ## Landing roadmap summary
 `tools/gen/landing-roadmap.py` reads this file's Session task queue and takes up to three open, numbered, bold task titles for the landing page's "Where it's going" card, skipping completed entries and escaping for HTML. `tools/checks/landing-roadmap-check.py` and `tools/gen/landing-roadmap.py --check` are the regression checks. A roadmap change triggers the landing deploy workflow, which regenerates the card before upload.
