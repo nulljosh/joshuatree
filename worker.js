@@ -41,6 +41,41 @@ function isAllowedTarget(url) {
   return ALLOWED_HOSTS.has(url.hostname);
 }
 
+// Root cause of "Chat works, then freezes on weather" (owner report on the
+// live landing demo): every fetch() in this file except handleStocks's own
+// (which already carries AbortSignal.timeout(8000)) had no bound at all.
+// v86's `cors_proxy` network mode (embed.js's net_device config) turns the
+// guest kernel's one TCP connection into exactly one browser-side fetch()
+// through this Worker, and buffers the WHOLE reply before ever handing a
+// single byte back to the guest's virtual NIC -- there is no per-segment
+// delivery for the guest's own ticks()-driven timeouts (drivers/net.c's
+// tcp_get_timeout, WX_REPLY_TIMEOUT_TICKS in kernel.c) to fire against
+// until this Worker's fetch() actually settles. An upstream host that
+// accepts the TCP connection and then never sends a body (a real,
+// ordinary failure mode, not a crafted one) leaves this fetch() pending
+// for Cloudflare's own subrequest ceiling (tens of seconds to minutes),
+// which the guest experiences as the whole desktop hanging: no reply ever
+// reaches the virtual NIC for the guest's own bounded wait to time out
+// against. Weather is the one most likely to hit this live (kernel.c's
+// gui_run calls weather_fetch() unconditionally on first pass, and again
+// every ten minutes, same shared geo_fetch/weather_fetch_inner path the
+// menu bar and the Chat "weather" tool both read from -- see chat.h's
+// weather tool handler), but the fix belongs here, in the one function
+// every proxied request funnels through, not bolted onto weather alone.
+const PROXY_FETCH_TIMEOUT_MS = 8000; // matches handleStocks's own bound
+
+async function fetchWithTimeout(url, init) {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(PROXY_FETCH_TIMEOUT_MS) });
+  } catch (e) {
+    // A timed-out or network-failed upstream still gets the guest a real,
+    // fast, well-formed HTTP response instead of leaving the browser-side
+    // fetch (and with it, v86's relay and the whole guest desktop) hanging
+    // indefinitely. 504 is what a real gateway sends for exactly this.
+    return new Response("Upstream timed out", { status: 504 });
+  }
+}
+
 async function handleProxy(request) {
   const requestUrl = new URL(request.url);
   const target = requestUrl.searchParams.get("url");
@@ -97,7 +132,7 @@ async function handleProxy(request) {
     if (bodyBuffer.byteLength > CHAT_SAMANTHA_MAX_BODY) {
       return new Response("Body too large", { status: 413 });
     }
-    const upstreamResponse = await fetch(targetUrl.toString(), {
+    const upstreamResponse = await fetchWithTimeout(targetUrl.toString(), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -153,7 +188,7 @@ async function handleProxy(request) {
   // here as a bare GET with no body, the one exception being the
   // Samantha-chat branch above, which returns before ever reaching this
   // line.
-  const upstreamResponse = await fetch(targetUrl.toString(), {
+  const upstreamResponse = await fetchWithTimeout(targetUrl.toString(), {
     method: "GET",
     headers: { "User-Agent": "JoshuaTree-kernel-demo/1 (+https://joshuatree.heyitsmejosh.com)" },
   });
