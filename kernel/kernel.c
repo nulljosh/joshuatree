@@ -29,6 +29,8 @@
 #include "font.h"
 #include "rtl8139.h"
 #include "net.h"
+#include "gui_prims.h"
+#include "dock_geom.h"
 #include "http.h"
 #include "wallpaper.h"
 #include "icon_art.h"
@@ -941,7 +943,6 @@ static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
    layout changes at all, the "auto size" half of the standing v37 dock
    request was already real before this pass, this is just the first
    change to actually exercise it past 8 icons. */
-#define GUI_ICON_COUNT 11
 static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 20, GUI_TRASH};
 
 /* gui_order is a permutation of icon indices by dock slot: dragging an icon
@@ -969,9 +970,6 @@ static int dock_hover = -1; /* slot whose label is showing */
    the edge. Solving it once, in arithmetic, beats rediscovering it in a
    screendump on every future app. DOCK_BUDGET is the widest the dock may
    ever draw, leaving a real margin on both sides of the 800px screen. */
-#define DOCK_BUDGET     740
-#define DOCK_GAP        6
-#define DOCK_PAD        10
 /* v37: the dock is sized as a real fraction of the window rather than a
    constant, so it stays proportionate at any resolution this kernel ever
    opens (vbe_set_mode already accepts any mode; only the hardcoded
@@ -985,7 +983,7 @@ static int dock_hover = -1; /* slot whose label is showing */
    content at 10%. Still the same user-adjustable Settings knob, 5-25%,
    nothing about the range or mechanism changed, just what a fresh
    install starts at. */
-static int dock_scale_pct = 7;
+int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
 /* v75: wallpaper source, extended v81 to a real theme, not just a photo/
    map binary (direct request: "multiple wallpaper themes/styles"). Four
    real, verifiably-distinct states, no JPEG/satellite decoder involved
@@ -1234,63 +1232,15 @@ static void settings_save(void){
     vfs_replace_file(SETTINGS_FILE, buf, (unsigned int)n);
 }
 
-static int gui_dock_icon(void){
-    int by_height = (int)window_height() * dock_scale_pct / 100;
-    int max_by_width = (DOCK_BUDGET - 2 * DOCK_PAD - (GUI_ICON_COUNT - 1) * DOCK_GAP) / GUI_ICON_COUNT;
-    if (by_height > max_by_width) by_height = max_by_width;
-    if (by_height < 16) by_height = 16; /* below this the vector glyphs stop being legible at all */
-    return by_height;
-}
-#define DOCK_ICON (gui_dock_icon())
-#define DOCK_MARGIN_BOT 24
-#define DOCK_TRAY_COLOR 0x00EFEBE4 /* the one surface colour every dock tile is blended against */
-static int gui_dock_w(void){ return GUI_ICON_COUNT * DOCK_ICON + (GUI_ICON_COUNT - 1) * DOCK_GAP + 2 * DOCK_PAD; }
-static int gui_dock_x0(void){ return ((int)window_width() - gui_dock_w()) / 2; }
-static int gui_dock_y0(void){ return (int)window_height() - DOCK_ICON - 2 * DOCK_PAD - DOCK_MARGIN_BOT; }
-static int gui_slot_x(int slot){ return gui_dock_x0() + DOCK_PAD + slot * (DOCK_ICON + DOCK_GAP); }
-
-/* Which dock slot a point falls in, clamped to the nearest end rather than
-   returning "none": once a drag has started, the icon should track the
-   cursor even past the dock's own edge, the same way a real dock does. */
-static int gui_slot_at(int mx){
-    /* v63: was `- DOCK_ICON / 2`, since v15. That put every slot boundary
-       at the CENTRE of a drawn tile, so the left half of each icon (and
-       the gap before it) hit-tested as the previous slot: the magnified
-       icon sat one tile to the left of the cursor half the time, caught
-       in a real framebuffer dump (cursor over Reminders, Notes lifted).
-       Half a gap either side of each tile now belongs to that tile. */
-    int rel = mx - (gui_dock_x0() + DOCK_PAD) + DOCK_GAP / 2;
-    int slot = rel / (DOCK_ICON + DOCK_GAP);
-    if (rel < 0) slot = 0;
-    if (slot < 0) slot = 0;
-    if (slot >= GUI_ICON_COUNT) slot = GUI_ICON_COUNT - 1;
-    return slot;
-}
-
-/* Only counts as being "over the dock" within its actual drawn rect,
-   unlike gui_slot_at (used once a drag is already underway, where the
-   dragged icon should keep tracking the cursor even briefly outside it). */
-static int gui_dock_hit_test(int mx, int my){
-    int y0 = gui_dock_y0(), h = DOCK_ICON + 2 * DOCK_PAD;
-    if (my < y0 - 20 || my >= y0 + h) return -1;
-    int x0 = gui_dock_x0(), w = gui_dock_w();
-    if (mx < x0 || mx >= x0 + w) return -1;
-    return gui_slot_at(mx);
-}
+/* gui_dock_icon/gui_dock_w/gui_dock_x0/gui_dock_y0/gui_slot_x/gui_slot_at/
+   gui_dock_hit_test: dock geometry and hit-testing, moved to
+   dock_geom.c/.h. DOCK_ICON/DOCK_MARGIN_BOT/DOCK_TRAY_COLOR now live in
+   dock_geom.h too. */
 
 /* Paints a rect, then overwrites each corner's pixels outside a quarter
    circle of radius r with bg, faking a rounded rect with no alpha. */
-/* Channel-wise average of two 0x00RRGGBB colors. No alpha channel in this
-   framebuffer to composite with, so a real anti-aliased edge (a soft
-   transition band instead of one hard cutoff) has to be a genuine, solid,
-   precomputed color, not a blend against whatever's already drawn. */
-static unsigned int gui_blend(unsigned int a, unsigned int b){
-    unsigned int ar = (a >> 16) & 0xFF, ag = (a >> 8) & 0xFF, ab = a & 0xFF;
-    unsigned int br = (b >> 16) & 0xFF, bg2 = (b >> 8) & 0xFF, bb = b & 0xFF;
-    return ((ar + br) / 2 << 16) | ((ag + bg2) / 2 << 8) | ((ab + bb) / 2);
-}
-
-static double gui_line_sqrt(double x){ double r; __asm__ volatile ("fsqrt" : "=t"(r) : "0"(x)); return r; }
+/* gui_blend, gui_line_sqrt: moved to gui_prims.c/.h (pure color/math
+   primitives, no state of their own). */
 
 /* Antialiased line primitive: Wu-style coverage over a segment of given
    `width` (physical px, 1.5-2.0 reads best), drawn straight at PHYSICAL
