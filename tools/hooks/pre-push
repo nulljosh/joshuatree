@@ -32,6 +32,9 @@ python3 ./tools/checks/landing-facts-check.py
 echo "pre-push: landing eyebrow tracks roadmap Latest..."
 ./tools/checks/landing-headline-check.sh
 
+echo "pre-push: badge refreshed on minor bumps..."
+./tools/checks/badge-refresh-check.sh
+
 echo "pre-push: every check is wired or says why not..."
 ./tools/checks/suite-coverage-check.sh
 
