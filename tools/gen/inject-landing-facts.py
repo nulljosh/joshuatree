@@ -81,34 +81,20 @@ def count_checks():
 
 
 def count_lines():
-    # git ls-files, not a filesystem walk: a local build (`make kernel.elf`,
-    # the same one deploy.yml runs right before this script) writes real
-    # generated headers into the tree that are gitignored on purpose
-    # (drivers/version.h, drivers/user_hello.h, drivers/user_note.h --
-    # see check-refs.sh's own note on version.h). A raw walk picks those
-    # up as if they were hand-authored, inflating the count by whatever
-    # happens to be sitting on disk at compute time. Tracked files only
-    # means the same source tree every time, build or no build.
-    out = subprocess.run(
-        ["git", "-C", str(ROOT), "ls-files"], capture_output=True, text=True, check=True
-    ).stdout
-    total = 0
-    seen_any = False
-    for rel in out.splitlines():
-        if not counts_as_real(rel):
-            continue
-        path = ROOT / rel
-        if not path.is_file():
-            continue
-        seen_any = True
-        try:
-            with path.open("r", encoding="utf-8", errors="replace") as fh:
-                total += sum(1 for _ in fh)
-        except OSError:
-            continue
-    if not seen_any:
-        raise ValueError("No real source files found; filter is broken")
-    return total
+    # Read the same number the progress chart already plots as its most
+    # recent point (landing/progress.svg's caption, e.g. "49,454 lines"),
+    # rather than recomputing it a second way. The stat row and the chart
+    # used to come from two different counts (a live filesystem walk here
+    # vs. a git-log replay in tools/gen/progress.sh) that could legitimately
+    # disagree by a handful of lines on a rename-heavy history. Scraping
+    # the chart's own generated text guarantees the two numbers on the page
+    # can never drift apart: run tools/gen/progress.sh first to refresh
+    # progress.svg, then this script picks up whatever it just wrote.
+    svg = (ROOT / "landing/progress.svg").read_text()
+    m = re.search(r"([\d,]+) lines", svg)
+    if not m:
+        raise ValueError("Could not find a 'N lines' caption in landing/progress.svg; run tools/gen/progress.sh first")
+    return m[1]
 
 
 def read_version():
@@ -122,7 +108,7 @@ def compute_facts():
     return {
         "apps": str(count_apps()),
         "checks": str(count_checks()),
-        "lines": f"{count_lines():,}",
+        "lines": count_lines(),
         "version": read_version(),
     }
 

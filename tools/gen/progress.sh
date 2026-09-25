@@ -216,7 +216,7 @@ points_attr = " ".join(f"{xf(i)},{yf(cum[i])}" for i in range(n))
 DOT_TARGET = 10
 dot_step = max(1, (n - 1) // (DOT_TARGET - 1)) if n > 1 else 1
 dot_idx = sorted(set(list(range(0, n, dot_step)) + [n - 1]))
-dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2" data-version="{labels[i]}" data-lines="{cum[i]}"/>' for i in dot_idx)
+dots = "".join(f'<circle cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2" data-version="{labels[i]}" data-lines="{cum[i]}"/>' for i in dot_idx)
 half_v = max_v // 2
 
 # x-axis: real calendar dates, deduplicated (many commits share a day),
@@ -316,16 +316,31 @@ caption = f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fi
 # already uses for the rest of the page, every fill/stroke reads via
 # var(--x) instead of a literal hex.
 def color_vars(scope):
+    if scope != ":root":
+        # Inlined into the landing page (not the standalone README embed):
+        # this <svg> is part of the live document, so it inherits the page's
+        # own :root custom properties straight through, no separate palette
+        # to keep in sync and no dark-mode media query of its own needed --
+        # it flips exactly when the page does. This is the fix for the
+        # chart reading as a boxed-in "default chart library" widget sitting
+        # on the ivory page instead of a native part of it: same paper, same
+        # ink, same clay accent, same font as everything else on the page.
+        return f'''
+  {scope} {{
+    --grid: var(--border); --axis: var(--sub); --muted: var(--sub);
+    --label: var(--sub); --strong: var(--fg); --line: var(--fg); --line2: var(--accent); --line2-pct: var(--accent);
+  }}
+  {scope} line[stroke="var(--grid)"] {{ stroke-dasharray: none; }}'''
     return f'''
   {scope} {{
-    --bg: #ffffff; --grid: #d7dfe9; --axis: #526174; --muted: #526174;
-    --label: #526174; --strong: #172334; --line: #2869c7; --line2: #159b9a; --line2-pct: #159b9a;
+    --bg: #ffffff; --grid: #e4e0d6; --axis: #6b6a63; --muted: #6b6a63;
+    --label: #6b6a63; --strong: #141413; --line: #141413; --line2: #d97757; --line2-pct: #d97757;
   }}
   @media (prefers-color-scheme: dark) {{
-    {scope} {{ --bg: #192637; --grid: #344354; --axis: #a8b8cb; --muted: #a8b8cb;
-             --label: #a8b8cb; --strong: #f1f5fa; --line: #83b5ff; --line2: #5ed0c7; --line2-pct: #5ed0c7; }}
+    {scope} {{ --bg: #1c1b1a; --grid: #38362f; --axis: #b8b6ac; --muted: #b8b6ac;
+             --label: #b8b6ac; --strong: #ece8df; --line: #ece8df; --line2: #d97757; --line2-pct: #d97757; }}
   }}
-  {'' if scope == ':root' else scope + ' '}line[stroke="var(--grid)"] {{ stroke-dasharray: none; }}'''
+  line[stroke="var(--grid)"] {{ stroke-dasharray: none; }}'''
 
 def build_svg(dots_markup, svg_id=None, extra_style="", extra_root_attrs=""):
     # svg_id=None -> the plain, standalone progress.svg (README embed via
@@ -368,7 +383,7 @@ dots_interactive = "".join(
     f'aria-label="{short_date(labels[i])}, {cum[i]:,} lines of real code" '
     f'data-tooltip="{short_date(labels[i])} &#183; {cum[i]:,} lines">'
     f'<circle class="progress-hit" cx="{xf(i)}" cy="{yf(cum[i])}" r="11" fill="transparent"/>'
-    f'<circle class="progress-dot" cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/>'
+    f'<circle class="progress-dot" cx="{xf(i)}" cy="{yf(cum[i])}" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/>'
     f'</g>'
     for i in dot_idx
 )
