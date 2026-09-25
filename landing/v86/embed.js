@@ -45,6 +45,7 @@ if (typeof document !== "undefined") (function () {
   // v42: the kernel's cursor and layout live in this LOGICAL space; the
   // physical mode is 2x this. Keep in sync with gui_run's window_open_scaled.
   var LOGICAL_W = 960, LOGICAL_H = 540;
+  var GLIDE_MAX_MS = 700; // longest tour cursor glide, see moveCursorTo
   // v52.6: real shadow cursor position, kept in sync by every real send
   // this file makes (mousemove, touchmove drags, and moveCursorTo's own
   // taps below), starting at gui_run's own literal initial (400,300).
@@ -450,7 +451,8 @@ if (typeof document !== "undefined") (function () {
       if (absoluteMouse) { sendAbsolute(trackedKx + dx, trackedKy + dy); return; }
       emulator.bus.send("mouse-delta", [dx, -dy]);
     },
-    moveTo: function (kx, ky) { if (emulator) sendAbsolute(kx, ky); }
+    moveTo: function (kx, ky) { if (emulator) sendAbsolute(kx, ky); },
+    glideTo: function (kx, ky) { return new Promise(function (res) { if (!emulator) return res(); moveCursorTo(kx, ky, res, false); }); } /* 1.1.4: the tour's own eased glide, for tools/checks/cursorglide-check.mjs */
   };
 
   // Real bug, reported directly ("the cursor is really misplaced... ten
@@ -686,8 +688,24 @@ if (typeof document !== "undefined") (function () {
     kx = Math.max(0, Math.min(LOGICAL_W - 1, kx));
     ky = Math.max(0, Math.min(LOGICAL_H - 1, ky));
     if (absoluteMouse) {
-      sendAbsolute(kx, ky);
-      if (done) setTimeout(done, 32);
+      // 1.1.4 (direct request: "it just teleports"): glide instead of
+      // jumping. The absolute backdoor makes one send the whole move, so
+      // the tour's cursor used to appear at the target instantly. Now the
+      // move is split into ~60 Hz absolute sends along an ease-in-out
+      // curve; duration grows with distance (a dock-to-dock hop is about
+      // half a second, a nudge is near-instant). trackedKx/Ky follow via
+      // sendAbsolute, so the relative fallback's shadow stays honest.
+      var fromX = trackedKx, fromY = trackedKy;
+      var dist = Math.sqrt((kx - fromX) * (kx - fromX) + (ky - fromY) * (ky - fromY));
+      var ms = Math.min(GLIDE_MAX_MS, 120 + dist * 0.9);
+      if (dist < 2 || ms < 32) { sendAbsolute(kx, ky); if (done) setTimeout(done, 32); return; }
+      var start = Date.now();
+      var tick = setInterval(function () {
+        var t = Math.min(1, (Date.now() - start) / ms);
+        var e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // ease-in-out quad
+        sendAbsolute(Math.round(fromX + (kx - fromX) * e), Math.round(fromY + (ky - fromY) * e));
+        if (t >= 1) { clearInterval(tick); sendAbsolute(kx, ky); if (done) setTimeout(done, 32); }
+      }, 16);
       return;
     }
     var packets = [];
