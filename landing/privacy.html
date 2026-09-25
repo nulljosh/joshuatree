@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · Joshua Tree</title>
+<meta name="description" content="What the Joshua Tree demo sends over the network, and what it keeps.">
+<link rel="icon" type="image/png" href="mark.png">
+<style>
+  :root { color-scheme: light dark; --bg:#faf8f4; --fg:#161513; --sub:#5c584f; --border:#ded9cd; --accent:#b5502c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141311; --fg:#f3f0e9; --sub:#b3ada0; --border:#3a362e; --accent:#e08a5f; } }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; line-height: 1.6; }
+  main { max-width: 36rem; margin: 0 auto; padding: 72px 20px 96px; }
+  h1 { font-size: 40px; letter-spacing: -0.02em; line-height: 1.1; margin: 0 0 8px; }
+  h2 { font-size: 20px; margin: 40px 0 8px; }
+  p, li { color: var(--fg); font-size: 16px; }
+  .sub { color: var(--sub); margin: 0 0 32px; }
+  ul { padding-left: 20px; }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  footer { border-top: 1px solid var(--border); margin-top: 56px; padding-top: 20px; font-size: 14px; color: var(--sub); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy</h1>
+  <p class="sub">Updated September 25, 2026</p>
+
+  <p>Joshua Tree has no accounts, no cookies and no ads. The demo on this site is the real operating system running inside your browser tab. What you type into it stays in that tab and disappears when you close or reload the page.</p>
+
+  <h2>What leaves your browser</h2>
+  <p>A few apps in the demo reach the internet. Those requests go through this site's server, which forwards them and keeps nothing:</p>
+  <ul>
+    <li><strong>Chat.</strong> Your messages go to Samantha, the assistant from the Turing project, so she can answer. Don't type anything private into the demo's Chat.</li>
+    <li><strong>Weather and the map wallpaper.</strong> Your approximate location comes from your IP address (ip-api.com), and is used to fetch local weather and a satellite map of your area.</li>
+    <li><strong>Stocks.</strong> Market prices come from Yahoo Finance. Nothing about you is sent.</li>
+  </ul>
+
+  <h2>Analytics</h2>
+  <p>The site counts visits with Cloudflare Web Analytics, which uses no cookies and doesn't track you across sites.</p>
+
+  <h2>Running it yourself</h2>
+  <p>If you boot Joshua Tree from a USB stick or in your own emulator, the same three features make the same requests from your machine. Everything else, your notes, reminders and files, lives on your own disk.</p>
+
+  <h2>Questions</h2>
+  <p>Open an issue on <a href="https://github.com/nulljosh/joshuatree/issues">GitHub</a>.</p>
+
+  <footer><a href="/">Joshua Tree</a> · Apache License 2.0</footer>
+</main>
+</body>
+</html>

@@ -9,7 +9,7 @@ set -e
 cd "$(dirname "$0")/../.."
 
 clang -O2 -Wall -Wextra -DTTF_HOST_BUILD -Itools/ttf-host -Idrivers \
-    -o /tmp/jt-ttf-host tools/ttf-host/main.c drivers/ttf.c
+    -o /tmp/jt-ttf-host tools/ttf-host/main.c drivers/ttf.c -lm
 
 status=0
 for px in 12 48 200; do

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Joshua Tree, a new custom OS</title>
-<meta name="description" content="A fresh, custom operating system built from scratch: its own GUI desktop, network stack, filesystem, and a real text editor. Open, and open to help build.">
+<title>Joshua Tree, a computer built from scratch</title>
+<meta name="description" content="A whole computer, built from nothing: its own desktop, its own network, its own files, and a real text editor. Free, and open for you to help build.">
 <link rel="icon" type="image/png" href="mark.png">
 <!-- v52 preloaded v86.wasm/kernel.elf here to start their ~5MB fetch the
      instant the HTML parsed, a real head start on first-boot time back when
@@ -31,6 +31,13 @@
     --sub:#5c584f; --border:#ded9cd; --card:#ffffff; --accent:#b5502c; --accent2:#b5502c; }
   @media (prefers-color-scheme: dark) { :root { --bg:#141311; --fg:#f3f0e9; --sub:#b3ada0; --border:#3a362e; --card:#1d1b17; --accent:#e08a5f; --accent2:#e08a5f; } }
   * { box-sizing: border-box; }
+  /* v144: typographic widows -- a lede wrapping to leave one lonely word
+     on its own last line ("it."). text-wrap: balance evens a heading's
+     line lengths, text-wrap: pretty avoids orphans in body copy; both
+     degrade to normal wrapping silently in browsers that don't support
+     them yet, so this is a pure improvement, never a regression. */
+  h1, h2, h3 { text-wrap: balance; }
+  p, .sub, .closing, .boot-line { text-wrap: pretty; }
   html, body { height: 100%; }
   /* v51: section-by-section scroll snap, direct request. `proximity`, not
      `mandatory`: mandatory snap fights the demo's own deliberate "never
@@ -104,7 +111,7 @@
   .eyebrow { height: 44px; line-height: 22px; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
   @media (max-width: 520px) { .eyebrow { height: 66px; -webkit-line-clamp: 3; line-clamp: 3; } }
   .kernel-version { font-weight: 500; letter-spacing: 0.04em; text-transform: none; }
-  .hero-mark { width: 56px; height: 61px; margin: 0 auto; --src: url(mark.png); }
+  .hero-mark { width: 56px; height: 43px; margin: 0 auto; --src: url(mark-tree.svg); }
   .hero h1 .brand { display: block; white-space: nowrap; }
   .hero h1 { font-size: 56px; margin: 14px 0 0; letter-spacing: -0.03em; line-height: 1.05; }
   @media (max-width: 520px) {
@@ -130,13 +137,30 @@
      so it wraps clean at 2-then-2 on a phone instead of stranding a card
      alone on its own row. */
   .facts { padding: 8px 20px 56px; }
-  .facts-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px 16px; max-width: 720px; margin: 0 auto; text-align: center; }
+  .facts-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 16px; max-width: 560px; margin: 0 auto; text-align: center; }
+  .fact-link { display: flex; flex-direction: column; gap: 4px; color: inherit; text-decoration: none; }
+  .fact-link:hover strong, .fact-link:focus-visible strong { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
   .fact { display: flex; flex-direction: column; gap: 4px; }
   .fact strong { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; color: var(--fg); font-style: normal; }
   .fact .label { color: var(--sub); }
-  @media (max-width: 600px) { .facts-row { grid-template-columns: repeat(2, 1fr); gap: 24px 16px; } .fact strong { font-size: 26px; } }
-  .boot-line { text-align: center; color: var(--sub); font-size: 14px; line-height: 1.5; max-width: 420px; margin: 28px auto 0; }
+  @media (max-width: 600px) { .facts-row { grid-template-columns: repeat(3, 1fr); gap: 24px 12px; } .fact strong { font-size: 26px; } }
+  .boot-cta { text-align: center; margin: 28px auto 0; }
+  .boot-btn { display: inline-block; background: var(--accent); color: var(--bg); font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px 24px; border-radius: 999px; }
+  .boot-btn:hover { opacity: 0.9; }
+  .boot-line { text-align: center; color: var(--sub); font-size: 13px; line-height: 1.5; max-width: 420px; margin: 12px auto 0; }
   .boot-line a { color: var(--accent2); text-decoration: none; font-weight: 600; }
+
+  /* Samantha + Features: one idea per section, big air, real screenshots.
+     Apple-style close of the two gaps against apple.com/macos. */
+  .meet-samantha, .app-features, .progress-section { padding: 64px 20px; max-width: 980px; margin: 0 auto; }
+  .meet-samantha h2, .app-features h2, .progress-section h2 { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; text-align: center; margin: 0 0 12px; }
+  .meet-samantha .sub, .app-features .sub, .progress-section .sub { text-align: center; color: var(--sub); font-size: 16px; max-width: 480px; margin: 0 auto 40px; line-height: 1.5; }
+  .tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .app-features .tile-grid { grid-template-columns: repeat(3, 1fr); }
+  .tile { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+  .tile img { width: 100%; height: auto; display: block; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .tile p { margin: 0; padding: 14px 16px; font-size: 14px; line-height: 1.4; color: var(--fg); }
+  @media (max-width: 700px) { .tile-grid, .app-features .tile-grid { grid-template-columns: 1fr; } .meet-samantha h2, .app-features h2, .progress-section h2 { font-size: 26px; } }
   .boot-line a:hover { text-decoration: underline; }
 
   /* Full-bleed at every width, no framed-window card: the demo is edge
@@ -220,7 +244,7 @@
      rather than a small 72px icon someone could miss at a glance on a
      mostly-black hero, not re-shipping something that was never live. */
   #boot-logo { position: absolute; inset: 0; margin: auto; width: 140px; height: 100px; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; animation: bootpulse 1.6s ease-in-out infinite; transition: opacity 0.3s ease; }
-  #boot-logo .ink-img { width: 64px; height: 70px; background: #ece8df; --src: url(mark.png); }
+  #boot-logo .ink-img { width: 64px; height: 49px; background: #ece8df; --src: url(mark-tree.svg); }
   #boot-logo span { color: #fff; font-size: 13px; letter-spacing: 0.04em; opacity: 0.8; text-shadow: 0 2px 10px rgba(0,0,0,0.85); }
   #boot-logo[hidden] { display: none; }
   @keyframes bootpulse { 0%,100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
@@ -278,23 +302,19 @@
   #v86-overlay span { background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 999px; padding: 8px 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; }
   #v86-overlay.hidden { opacity: 0; }
 
-  .progress-section { padding: 64px 20px; }
-  .progress-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; max-width: 640px; margin: 0 auto; }
-  .progress-card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.22em; color: var(--accent); margin: 0 0 14px; font-weight: 600; }
-  .progress-card > p { color: var(--sub); font-size: 13px; line-height: 1.5; margin: 0 0 16px; }
-  .progress-card { position: relative; }
+  .progress-card { padding: 20px 0 0; max-width: 640px; margin: 0 auto; position: relative; }
+  .progress-card .roadmap-next { color: var(--sub); font-size: 13px; line-height: 1.5; margin: 16px 0 0; text-align: center; }
   .progress-card svg { width: 100%; height: auto; display: block; }
-  .progress-tooltip { position: absolute; background: var(--fg); color: var(--bg); padding: 6px 12px; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; z-index: 10; opacity: 0; transition: opacity 0.2s; transform: translate(-50%, -100%); }
-  .progress-tooltip.visible { opacity: 1; }
+  .progress-tooltip { position: absolute; top: 0; left: 0; background: var(--fg); color: var(--bg); padding: 6px 12px; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none; z-index: 10; opacity: 0; visibility: hidden; transition: opacity 0.2s; transform: translate(-50%, -100%); }
+  .progress-tooltip.visible { opacity: 1; visibility: visible; }
 
   /* Closing plate: the full engraving at the one size it is meant to be
      read at, then the closing line under it. */
   .grain-zone { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px 80px; }
-  .badge { position: relative; width: min(320px, 70vw); aspect-ratio: 432 / 460; margin-bottom: 40px; }
+  .badge { position: relative; width: min(320px, 70vw); aspect-ratio: 432 / 334; margin-bottom: 40px; }
   .badge .ink-img { position: absolute; inset: 0; }
   .mark-tree { --src: url(mark-tree.svg); }
-  .mark-roots { --src: url(mark-roots.svg); background: #d97757; }
-  .closing { color: var(--fg); font-size: 18px; line-height: 1.65; max-width: 560px; text-align: center; margin: 0 auto; }
+  .closing { color: var(--fg); font-size: 18px; line-height: 1.65; max-width: 52ch; text-align: center; margin: 0 auto; }
 
   footer { text-align: center; padding: 0 0 40px; color: var(--sub); font-size: 13px; background: var(--bg); }
   footer .sheet-rule { padding: 14px 20px 28px; }
@@ -319,7 +339,7 @@
       <span>Booting...</span>
     </div>
     <div id="stage">
-      <div id="v86-embed" tabindex="0" role="application" aria-label="A real, live boot of Joshua Tree, running in your browser. Click or tap to control it.">
+      <div id="v86-embed" tabindex="0" role="application" aria-label="A real, live boot of Joshua Tree, running right in your browser. Click or tap to take control.">
         <div id="screen_container">
           <div id="screen_text"></div>
           <canvas id="screen_canvas"></canvas>
@@ -367,7 +387,7 @@
      eyebrow below (data-latest, same injector), where it belongs: H1 says
      what this is, H2 says what is new about it. -->
 <h1>Introducing <span class="brand">Joshua Tree.</span></h1>
-    <h2 class="eyebrow" data-latest="Introducing a friendlier Chat. Samantha greets you with things to try, and you just start typing"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
+    <h2 class="eyebrow" data-latest="Introducing real type in Notes. Six fonts, any size up to 200, sharp at every size"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
   </div>
 </header>
 
@@ -380,17 +400,61 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row">
     <div class="fact"><strong><span data-fact="apps">25</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong><span data-fact="checks">82</span></strong><span class="label">Regression checks</span></div>
-    <div class="fact"><strong><span data-fact="lines">61,233</span></strong><span class="label">Lines of kernel code</span></div>
-    <div class="fact"><strong>v<span data-fact="version">1.4.0</span></strong><span class="label">Latest release</span></div>
+    <div class="fact"><a class="fact-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md"><strong><span data-fact="documented">100</span>%</strong><span class="label">Documented</span></a></div>
+    <div class="fact"><strong>v<span data-fact="version">1.5.0</span></strong><span class="label">Version</span></div>
   </div>
-  <p class="boot-line">Boot it yourself: <a href="https://github.com/nulljosh/joshuatree/releases">grab the latest release from GitHub</a>, or scroll up, it's already running above.</p>
+  <div class="boot-cta">
+    <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a>
+    <p class="boot-line">or try it live above</p>
+  </div>
+</section>
+
+<section class="meet-samantha reveal" aria-label="Meet Samantha">
+  <h2>Meet Samantha.</h2>
+  <p class="sub">She's built into Chat. Ask her to do something and she just does it.</p>
+  <div class="tile-grid" style="grid-template-columns: minmax(0, 480px); justify-content: center;">
+    <div class="tile">
+      <img src="shots/samantha-chat.webp" alt="Chat with Samantha, showing suggestions like remind me to call mom, jot a note, check the weather, and look at today's calendar" loading="lazy" width="480" height="276">
+      <p>Type a message and she sets a reminder, jots a note, checks the weather, reads your calendar, or opens an app for you.</p>
+    </div>
+  </div>
+</section>
+
+<section class="app-features reveal" aria-label="Apps built in">
+  <h2>Everything you need is already there.</h2>
+  <p class="sub">A full set of apps, built from nothing but a screen and a keyboard.</p>
+  <div class="tile-grid">
+    <div class="tile">
+      <img src="shots/app-notes.webp" alt="Notes app showing a written note" loading="lazy" width="480" height="276">
+      <p>Notes. Write things down and find them later.</p>
+    </div>
+    <div class="tile">
+      <img src="shots/app-calendar.webp" alt="Calendar app showing a month view" loading="lazy" width="480" height="276">
+      <p>Calendar. See your days and your plans at a glance.</p>
+    </div>
+    <div class="tile">
+      <img src="shots/app-weather.webp" alt="Weather app showing today's forecast" loading="lazy" width="480" height="276">
+      <p>Weather. Know what to wear before you walk out.</p>
+    </div>
+    <div class="tile">
+      <img src="shots/app-files.webp" alt="Files app showing a folder of files" loading="lazy" width="480" height="276">
+      <p>Files. Every file on the machine, right where you left it.</p>
+    </div>
+    <div class="tile">
+      <img src="shots/app-terminal.webp" alt="Terminal app running a command" loading="lazy" width="480" height="276">
+      <p>Terminal. Type a command and the kernel answers back.</p>
+    </div>
+    <div class="tile">
+      <img src="shots/app-stocks.webp" alt="Stocks app showing a watchlist" loading="lazy" width="480" height="276">
+      <p>Stocks. Keep an eye on a watchlist without leaving the desktop.</p>
+    </div>
+  </div>
 </section>
 
 <section class="progress-section reveal">
+  <h2>Growing every week.</h2>
+  <p class="sub"><!-- progress-lede:start -->From a blank screen on Aug 31 to 25 apps today.<!-- progress-lede:end --></p>
   <div class="progress-card">
-    <h2>Where it's at</h2>
-    <!-- roadmap-summary:start --><p>On the roadmap: Split kernel.c into per-subsystem files; Rich document app; Native code editor and package tool.</p><!-- roadmap-summary:end -->
     <!-- Real interactive version for this page specifically, not the same
          static image README.md embeds (README can't run JS). Generated
          and spliced in by tools/gen/progress.sh, same source data as
@@ -399,14 +463,10 @@
          fetched-and-reparsed image. Hover a point (or tap it on touch)
          to see its real date and real line count. -->
     <!-- progress-chart:start -->
-<svg xmlns="http://www.w3.org/2000/svg" width="479" height="200" viewBox="0 0 479 200" id="progress-chart-live" role="img" aria-label="Real lines of code over time, 47,920 lines as of Sep 23"><style>
+<svg xmlns="http://www.w3.org/2000/svg" width="447" height="190" viewBox="0 0 447 190" id="progress-chart-live" role="img" aria-label="Apps shipped over time, 25 apps as of Sep 24"><style>
   #progress-chart-live {
-    --bg: #ffffff; --grid: #d7dfe9; --axis: #526174; --muted: #526174;
-    --label: #526174; --strong: #172334; --line: #2869c7; --line2: #159b9a; --line2-pct: #159b9a;
-  }
-  @media (prefers-color-scheme: dark) {
-    #progress-chart-live { --bg: #192637; --grid: #344354; --axis: #a8b8cb; --muted: #a8b8cb;
-             --label: #a8b8cb; --strong: #f1f5fa; --line: #83b5ff; --line2: #5ed0c7; --line2-pct: #5ed0c7; }
+    --grid: var(--border); --axis: var(--sub); --muted: var(--sub);
+    --label: var(--sub); --strong: var(--fg); --line: var(--fg); --line2: var(--accent); --line2-pct: var(--accent);
   }
   #progress-chart-live line[stroke="var(--grid)"] { stroke-dasharray: none; }
   #progress-chart-live text { font-family: -apple-system, Helvetica, Arial, sans-serif; }
@@ -417,14 +477,15 @@
   #progress-chart-live .progress-pt:focus .progress-dot,
   #progress-chart-live .progress-pt.is-active .progress-dot { r: 5.5; stroke-width: 2.5; }
   #progress-chart-live .progress-pt:focus { outline: none; }
-</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="49" y1="8" x2="63" y2="8" stroke="var(--line)" stroke-width="2.5"/><text x="68" y="11" font-size="10" fill="var(--label)">Lines of real code</text><line x1="49" y1="26" x2="469" y2="26" stroke="var(--grid)"/><line x1="49" y1="96" x2="469" y2="96" stroke="var(--grid)"/><text x="45" y="29" font-size="9" fill="var(--muted)" text-anchor="end">47920</text><text x="45" y="99" font-size="9" fill="var(--muted)" text-anchor="end">23960</text><text x="45" y="169" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="49" y1="26" x2="49" y2="166" stroke="var(--axis)"/><line x1="49" y1="166" x2="469" y2="166" stroke="var(--axis)"/><text x="6" y="96" font-size="8" fill="var(--line)" text-anchor="middle" transform="rotate(-90 6 96)">Lines of code</text><polyline points="49,166 58,165 68,164 78,163 88,162 97,162 107,161 117,161 127,161 136,159 146,158 156,156 166,154 175,153 185,152 195,150 205,149 215,148 224,146 234,145 244,143 254,141 263,139 273,136 283,134 293,118 302,116 312,112 322,103 332,100 342,99 351,98 361,97 371,95 381,94 390,92 400,90 410,38 420,36 429,33 439,33 449,30 459,28 469,26" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 26 lines of real code" data-tooltip="Aug 31 &#183; 26 lines"><circle class="progress-hit" cx="49" cy="166" r="11" fill="transparent"/><circle class="progress-dot" cx="49" cy="166" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 1,385 lines of real code" data-tooltip="Sep 13 &#183; 1,385 lines"><circle class="progress-hit" cx="88" cy="162" r="11" fill="transparent"/><circle class="progress-dot" cx="88" cy="162" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 2,034 lines of real code" data-tooltip="Sep 13 &#183; 2,034 lines"><circle class="progress-hit" cx="127" cy="161" r="11" fill="transparent"/><circle class="progress-dot" cx="127" cy="161" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 4,143 lines of real code" data-tooltip="Sep 13 &#183; 4,143 lines"><circle class="progress-hit" cx="166" cy="154" r="11" fill="transparent"/><circle class="progress-dot" cx="166" cy="154" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 6,073 lines of real code" data-tooltip="Sep 13 &#183; 6,073 lines"><circle class="progress-hit" cx="205" cy="149" r="11" fill="transparent"/><circle class="progress-dot" cx="205" cy="149" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 7,918 lines of real code" data-tooltip="Sep 14 &#183; 7,918 lines"><circle class="progress-hit" cx="244" cy="143" r="11" fill="transparent"/><circle class="progress-dot" cx="244" cy="143" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 11,140 lines of real code" data-tooltip="Sep 14 &#183; 11,140 lines"><circle class="progress-hit" cx="283" cy="134" r="11" fill="transparent"/><circle class="progress-dot" cx="283" cy="134" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 21,758 lines of real code" data-tooltip="Sep 15 &#183; 21,758 lines"><circle class="progress-hit" cx="322" cy="103" r="11" fill="transparent"/><circle class="progress-dot" cx="322" cy="103" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 16, 23,629 lines of real code" data-tooltip="Sep 16 &#183; 23,629 lines"><circle class="progress-hit" cx="361" cy="97" r="11" fill="transparent"/><circle class="progress-dot" cx="361" cy="97" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 26,259 lines of real code" data-tooltip="Sep 20 &#183; 26,259 lines"><circle class="progress-hit" cx="400" cy="90" r="11" fill="transparent"/><circle class="progress-dot" cx="400" cy="90" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 22, 45,701 lines of real code" data-tooltip="Sep 22 &#183; 45,701 lines"><circle class="progress-hit" cx="439" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="439" cy="33" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 23, 47,920 lines of real code" data-tooltip="Sep 23 &#183; 47,920 lines"><circle class="progress-hit" cx="469" cy="26" r="11" fill="transparent"/><circle class="progress-dot" cx="469" cy="26" r="3" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/></g><text x="49" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="234" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="322" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 15</text><text x="371" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 19</text><text x="459" y="182" font-size="10" fill="var(--label)" text-anchor="middle">Sep 23</text><text x="49" y="196" font-size="10" font-weight="600" fill="var(--strong)">47,920 lines &#183; 100% documented &#183; 636 commits since Aug 31</text></svg>
+</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="17" y1="10" x2="437" y2="10" stroke="var(--grid)"/><line x1="17" y1="80" x2="437" y2="80" stroke="var(--grid)"/><text x="13" y="13" font-size="9" fill="var(--muted)" text-anchor="end">25</text><text x="13" y="83" font-size="9" fill="var(--muted)" text-anchor="end">12</text><text x="13" y="153" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="17" y1="10" x2="17" y2="150" stroke="var(--axis)"/><line x1="17" y1="150" x2="437" y2="150" stroke="var(--axis)"/><polyline points="17,150 27,150 38,150 48,150 59,150 69,150 80,150 90,150 101,150 111,150 122,150 132,111 143,111 153,106 164,106 174,106 185,66 195,66 206,61 216,50 227,50 237,50 248,38 258,33 269,33 279,33 290,33 300,33 311,33 321,33 332,33 342,33 353,33 363,22 374,22 384,16 395,10 405,10 416,10 426,10 437,10" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 0 apps shipped" data-tooltip="Aug 31 &#183; 0 apps"><circle class="progress-hit" cx="17" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="17" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="59" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="59" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="101" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="101" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 7 apps shipped" data-tooltip="Sep 13 &#183; 7 apps"><circle class="progress-hit" cx="143" cy="111" r="11" fill="transparent"/><circle class="progress-dot" cx="143" cy="111" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 15 apps shipped" data-tooltip="Sep 14 &#183; 15 apps"><circle class="progress-hit" cx="185" cy="66" r="11" fill="transparent"/><circle class="progress-dot" cx="185" cy="66" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 18 apps shipped" data-tooltip="Sep 14 &#183; 18 apps"><circle class="progress-hit" cx="227" cy="50" r="11" fill="transparent"/><circle class="progress-dot" cx="227" cy="50" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 21 apps shipped" data-tooltip="Sep 15 &#183; 21 apps"><circle class="progress-hit" cx="269" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="269" cy="33" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 16, 21 apps shipped" data-tooltip="Sep 16 &#183; 21 apps"><circle class="progress-hit" cx="311" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="311" cy="33" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 21 apps shipped" data-tooltip="Sep 20 &#183; 21 apps"><circle class="progress-hit" cx="353" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="353" cy="33" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 22, 25 apps shipped" data-tooltip="Sep 22 &#183; 25 apps"><circle class="progress-hit" cx="395" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="395" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 24, 25 apps shipped" data-tooltip="Sep 24 &#183; 25 apps"><circle class="progress-hit" cx="437" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="437" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><text x="17" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="185" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="269" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 15</text><text x="321" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 19</text><text x="384" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 22</text><text x="437" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 24</text><text x="17" y="184" font-size="14" fill="var(--muted)">25 apps &#183; 100% documented &#183; 704 commits since Aug 31</text></svg>
 <!-- progress-chart:end -->
+    <!-- roadmap-summary:start --><p class="roadmap-next">Next up: cleaning up one giant file behind the scenes, a word processor, and a code editor and a way to install apps.</p><!-- roadmap-summary:end -->
   </div>
 </section>
 
 <section class="grain-zone reveal">
-  <div class="badge" role="img" aria-label="Joshua Tree: an engraved Joshua tree whose roots turn into circuit traces"><span class="ink-img mark-tree"></span><span class="ink-img mark-roots"></span></div>
-  <p class="closing">Joshua Tree is a real graphical desktop built from scratch: its own kernel, filesystem, and network stack, a working terminal, 25 apps, and a chat window talking to a local LLM. You can boot the actual kernel above right now, live in your browser, no download. It's free, open source, and headed toward a 1.0 release and real hardware next. Named for the tree that survives on nothing.</p>
+  <div class="badge" role="img" aria-label="Joshua Tree: an engraved Joshua tree"><span class="ink-img mark-tree"></span></div>
+  <p class="closing">Joshua Tree is a real desktop built from scratch: its own kernel, filesystem, and network stack, with <span data-fact="apps">25</span> apps including a Chat you can talk to. Try it live above, no download. It's free and open source, named for the tree that survives on nothing.</p>
 </section>
 
 <footer>
@@ -433,6 +494,14 @@
     <a href="https://github.com/nulljosh/joshuatree">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
       Source
+    </a>
+    <a href="https://github.com/nulljosh/joshuatree/tree/main/docs">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 1.5A1.5 1.5 0 0 1 3.5 0h6.086a1.5 1.5 0 0 1 1.06.44l2.915 2.914A1.5 1.5 0 0 1 14 4.414V14.5A1.5 1.5 0 0 1 12.5 16h-9A1.5 1.5 0 0 1 2 14.5v-13ZM3.5 1a.5.5 0 0 0-.5.5v13a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5V4.414L9.586 1H3.5ZM4.5 8h7v1h-7V8Zm0 3h7v1h-7v-1Zm0-6h4v1h-4V5Z"/></svg>
+      Docs
+    </a>
+    <a href="privacy.html">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0 1.5 2.5v4.6c0 4 2.7 7.5 6.5 8.4 3.8-.9 6.5-4.4 6.5-8.4V2.5L8 0Z"/></svg>
+      Privacy
     </a>
     <a href="https://heyitsmejosh.com">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0Zm5.9 7.3h-2.2a12.4 12.4 0 0 0-1-4.3 6.5 6.5 0 0 1 3.2 4.3ZM8 1.6c.7.9 1.6 2.7 1.8 5.7H6.2C6.4 4.3 7.3 2.5 8 1.6ZM1.7 8.7h2.2c.1 1.6.4 3.1 1 4.3a6.5 6.5 0 0 1-3.2-4.3Zm2.2-1.4H1.7a6.5 6.5 0 0 1 3.2-4.3c-.6 1.2-.9 2.7-1 4.3ZM8 14.4c-.7-.9-1.6-2.7-1.8-5.7h3.6c-.2 3-1.1 4.8-1.8 5.7Zm3.1-1.4c.6-1.2.9-2.7 1-4.3h2.2a6.5 6.5 0 0 1-3.2 4.3Z"/></svg>
@@ -511,10 +580,10 @@
   // almost immediately; that fact now lives in the generated facts
   // row below instead, where inject-landing-facts.py keeps it honest.
   var items = [
-    'A whole computer, built from scratch',
+    'A whole computer, built from nothing',
     'Ask Samantha, and she does it',
     'Your notes, reminders and calendar, saved for real',
-    'Live weather and a map of where you are',
+    'Live weather, right where you are',
     'Two apps side by side, drag them anywhere',
     'Running right here in your browser'
   ];
@@ -622,7 +691,12 @@
       // bottom of the viewport, 1 as it leaves the top: the layer moves a
       // fraction of that range, a real depth cue instead of scrolling in
       // lockstep with the text in front of it.
-      var progress = (vh - rect.top) / (vh + rect.height);
+      // Real bug: unclamped, `progress` runs way past [0,1] whenever the
+      // zone is far above or below the viewport (e.g. right after page
+      // load, before any scroll has happened) -- an unbounded offset
+      // that shoved .progress-card up into the heading above it, the
+      // clamp the hero-recede math already had right next to this.
+      var progress = Math.min(1, Math.max(0, (vh - rect.top) / (vh + rect.height)));
       var offset = (progress - 0.5) * L.range;
       L.el.style.transform = 'translateY(' + offset.toFixed(1) + 'px)';
     }

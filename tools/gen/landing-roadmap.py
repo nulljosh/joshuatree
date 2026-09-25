@@ -21,14 +21,28 @@ def summarize(roadmap):
     for line in section[1].splitlines():
         # Completed entries are struck through. Only numbered, bold task
         # titles are public copy; the diagnostic prose stays in the roadmap.
-        match = re.match(r"^\d+\. \*\*(.+?)\*\*", line)
+        match = re.match(r"^\d+\. \*\*(.+?)\*\*(\s*\(plain:\s*(.+?)\))?", line)
         if match:
-            title = re.sub(r"[`*_]", "", match[1]).strip().rstrip(".")
+            plain = match[3]
+            if plain:
+                # Plain-words phrasing is what visitors actually see; the
+                # bold dev title (e.g. "Split kernel.c into per-subsystem
+                # files") is internal bookkeeping only.
+                title = re.sub(r"[`*_]", "", plain).strip().rstrip(".")
+            else:
+                title = re.sub(r"[`*_]", "", match[1]).strip().rstrip(".")
             if title and title not in titles:
                 titles.append(title)
     if not titles:
         return "The current task queue is complete. More plans soon."
-    return "On the roadmap: " + "; ".join(titles[:3]) + "."
+    titles = titles[:3]
+    if len(titles) == 1:
+        items = titles[0]
+    elif len(titles) == 2:
+        items = f"{titles[0]} and {titles[1]}"
+    else:
+        items = ", ".join(titles[:-1]) + f", and {titles[-1]}"
+    return f"Next up: {items}."
 
 
 def render(roadmap, page):
@@ -36,7 +50,7 @@ def render(roadmap, page):
         raise ValueError("Expected exactly one roadmap summary marker pair")
     before, rest = page.split(START)
     old, after = rest.split(END)
-    return before + START + "<p>" + html.escape(summarize(roadmap)) + "</p>" + END + after
+    return before + START + '<p class="roadmap-next">' + html.escape(summarize(roadmap)) + "</p>" + END + after
 
 
 def main():

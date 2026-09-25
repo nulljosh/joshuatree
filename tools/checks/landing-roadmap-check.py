@@ -24,7 +24,7 @@ class RoadmapTests(unittest.TestCase):
 ## Another section
 1. **Outside task**
 """
-        self.assertEqual(generator.summarize(roadmap), "On the roadmap: First task; Second task; Third task.")
+        self.assertEqual(generator.summarize(roadmap), "Next up: First task, Second task, and Third task.")
 
     def test_completion_and_new_work_change_copy(self):
         roadmap = QUEUE + "1. **First task** - details.\n2. **Second task**\n"
@@ -37,7 +37,7 @@ class RoadmapTests(unittest.TestCase):
 
     def test_escape_and_preserve_surrounding_markup(self):
         rendered = generator.render(QUEUE + '1. **`A` < B & C**\n', PAGE)
-        self.assertEqual(rendered, 'before' + generator.START + '<p>On the roadmap: A &lt; B &amp; C.</p>' + generator.END + 'after')
+        self.assertEqual(rendered, 'before' + generator.START + '<p class="roadmap-next">Next up: A &lt; B &amp; C.</p>' + generator.END + 'after')
         self.assertEqual(generator.render(QUEUE + '1. **`A` < B & C**\n', rendered), rendered)
 
     def test_empty_queue_and_missing_section(self):
