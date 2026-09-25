@@ -29,6 +29,9 @@ make -s kernel.elf
 echo "pre-push: landing facts match the source..."
 python3 ./tools/checks/landing-facts-check.py
 
+echo "pre-push: landing eyebrow tracks roadmap Latest..."
+./tools/checks/landing-headline-check.sh
+
 echo "pre-push: every check is wired or says why not..."
 ./tools/checks/suite-coverage-check.sh
 
