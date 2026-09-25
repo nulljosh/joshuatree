@@ -128,6 +128,7 @@ once |0|Panic screen: a ring-0 fault paints the reason, not a frozen desktop|pyt
 once |1|Frame time: idle, dock hover and window open stay within budget|python3 ./tools/checks/frametime-check.py
 once |2|Every check in tools/checks/ is in this manifest or says why not|./tools/checks/suite-coverage-check.sh
 retry|2|Text selection in Notes: Shift-arrow/Ctrl+A highlight, edsel/edcopy/edcut markers, selection-aware copy/cut/paste/delete|python3 ./tools/checks/textselect-check.py
+retry|0|Window top edge and corner arc are one continuous AA shape|python3 ./tools/checks/windowedge-check.py
 EOF
 }
 
