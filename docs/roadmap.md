@@ -108,6 +108,7 @@ Things a modern desktop OS has that this kernel doesn't yet.
 - [x] 1.1.1: CI hygiene. A run superseded by a newer push now ends as cancelled instead of failed, so it stops emailing. Version names are bare numbers (`1.0.13`, not `jt-v1.0.13`). Two checks that a leftover merge conflict had silently skipped run again.
 - [x] 1.1.2: The CI network job's wallpaper checks had been failing silently since the default theme became Satellite: they compared satellite tiles against map tiles. They now boot in the theme they test, the map compose matches the host byte for byte on a real runner, and an offline compose check runs in the suite. CI runs on pull requests only, so there is no duplicate run on main. Check: `tools/checks/wallcompose-check.py`.
 - [x] 1.1.4: The landing demo's pointer glides to where it is going instead of teleporting: each tour move is an eased walk of about half a second. Check: `tools/checks/cursorglide-check.mjs`.
+- [x] 1.1.5: Reliability. Chat now gives up on a silent Samantha host after a bounded wait (about 10s for the picker, 45s for a reply) instead of freezing the GUI for minutes. The clipboard and file checks no longer flake or hang on a slow runner. A stray `node_modules` symlink that 1.1.4 committed is removed and ignored. Check: `tools/checks/chat-timeout-check.py`.
 
 ## Real hardware
 1.0 ships a USB-bootable ISO with a PS/2 fallback. USB is the 1.1 headline, built in this order.

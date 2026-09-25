@@ -17,7 +17,7 @@ landing/v86/kernel.elf
 dotfiles.img
 __pycache__/
 *.pyc
-node_modules/
+node_modules
 package-lock.json
 *.o.tmp
 # ISO/USB image and its fetched bootloader (build/limine, cloned from

@@ -25,4 +25,13 @@ int http_last_status(void);
 int http_post(const char *host, const char *path, unsigned short port,
               const char *body, unsigned int body_len,
               void *response_out, unsigned int response_maxlen);
+
+/* http_post with a caller-chosen reply deadline in ticks (0 = net.c's
+   default SLOW_REPLY_TIMEOUT_TICKS, sized for a slow local LLM). Added
+   for Chat (kernel/chat.h): a connected-but-silent host used to hold
+   http_post's caller for the full default (minutes) before this. */
+int http_post_timeout(const char *host, const char *path, unsigned short port,
+                       const char *body, unsigned int body_len,
+                       void *response_out, unsigned int response_maxlen,
+                       unsigned int reply_timeout_ticks);
 #endif

@@ -216,8 +216,13 @@ def to_fat_name(name):
 
 
 def mkdisk(path):
+    # CodeRabbit review of the 1.0.11 window-drag PR: no timeout meant a
+    # wedged mkdisk.sh (or a hung dd/mkfs it shells out to) could block this
+    # check, and by extension CI, indefinitely instead of failing loudly.
+    # 120s is generous for creating a small FAT image on any real runner.
     subprocess.run(["bash", str(ROOT / "tools/mkdisk.sh"), str(path)],
-                    cwd=ROOT, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    cwd=ROOT, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=120)
 
 
 def craft_big_and_loop_and_garbage(disk_path):
@@ -350,7 +355,9 @@ def main():
     workdir = tempfile.mkdtemp(prefix="jt-filerobust-")
     try:
         if KERNEL == "kernel.elf":
-            subprocess.run(["make", "-s", "kernel.elf"], cwd=ROOT, check=True)
+            # Same reasoning as mkdisk's own timeout above: a wedged build
+            # must fail this check, not hang it (and CI) indefinitely.
+            subprocess.run(["make", "-s", "kernel.elf"], cwd=ROOT, check=True, timeout=120)
 
         # ---- Cases 1-3: EMPTY, OVERSIZED, CORRUPT (shared disk image) ----
         robust_img = os.path.join(workdir, "robust.img")
