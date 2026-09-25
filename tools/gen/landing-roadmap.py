@@ -24,6 +24,13 @@ def summarize(roadmap):
         match = re.match(r"^\d+\. \*\*(.+?)\*\*(\s*\(plain:\s*(.+?)\))?", line)
         if match:
             plain = match[3]
+            if plain and plain.strip().lower() == "skip":
+                # Internal refactor work a visitor has nothing to click on
+                # or see (e.g. splitting one source file into several).
+                # Real roadmap item, just not landing-card copy, so it's
+                # dropped entirely rather than forced into a vague
+                # visitor-facing phrase.
+                continue
             if plain:
                 # Plain-words phrasing is what visitors actually see; the
                 # bold dev title (e.g. "Split kernel.c into per-subsystem
