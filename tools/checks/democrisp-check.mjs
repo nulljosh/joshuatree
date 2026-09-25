@@ -97,7 +97,7 @@ async function checkCase(viewport, dpr, label, shot) {
 }
 
 try {
-  await checkCase({ width: 1440, height: 900 }, 2, 'desktop@2x', '/private/tmp/claude-501/-Users-joshua/aa570436-1e4c-4fd4-81eb-aba396aba745/scratchpad/demo-crisp-2x.png');
+  await checkCase({ width: 1440, height: 900 }, 2, 'desktop@2x', path.join('/tmp', 'jt-demo-crisp-2x.png'));
   await checkCase({ width: 1440, height: 900 }, 1, 'desktop@1x');
   await checkCase({ width: 390, height: 844 }, 2, 'mobile@2x');
   await checkCase({ width: 390, height: 844 }, 1, 'mobile@1x');
