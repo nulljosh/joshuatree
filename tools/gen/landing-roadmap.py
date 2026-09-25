@@ -50,7 +50,7 @@ def render(roadmap, page):
         raise ValueError("Expected exactly one roadmap summary marker pair")
     before, rest = page.split(START)
     old, after = rest.split(END)
-    return before + START + "<p>" + html.escape(summarize(roadmap)) + "</p>" + END + after
+    return before + START + '<p class="roadmap-next">' + html.escape(summarize(roadmap)) + "</p>" + END + after
 
 
 def main():

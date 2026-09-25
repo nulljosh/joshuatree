@@ -7,9 +7,11 @@
 ![platform](https://img.shields.io/badge/platform-i386-lightgrey)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-A desktop built from nothing in C: bootloader, kernel, memory manager, filesystem, network stack, window system, typeface renderer, and 25 native apps, with real text selection in Notes. No libc, no external dependencies beyond Clang, lld, and QEMU. Run live in the browser: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
+A whole computer, built from nothing. Its own kernel, its own desktop, its own network, and 25 apps. Written in C, no libc.
 
-Ask Samantha, the built-in assistant, to set a reminder, take a note or open an app, and she does it. Everything you save lands on a real disk, and every feature has an automated check behind it.
+Try it live in your browser: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
+
+Ask Samantha, the built-in assistant, to set a reminder, take a note or open an app. She does it. Everything you save lands on a real disk, and every feature has a check behind it.
 
 ## Boot it
 

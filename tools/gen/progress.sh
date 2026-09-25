@@ -85,7 +85,12 @@ def apps_at(sha):
     # code" means nothing to a visitor and inflates on generated data;
     # apps shipped is the thing a visitor can actually try.
     src = subprocess.run(["git", "show", f"{sha}:kernel/kernel.c"], capture_output=True, text=True).stdout
-    m = re.search(r"GUI_LABELS\[GUI_APP_COUNT\]\s*=\s*\{(.*?)\};", src, re.S)
+    # v11-v13 (Sep 13) declared this as GUI_LABELS[GUI_ICON_COUNT], not
+    # GUI_APP_COUNT (that rename landed Sep 14, a6b006f). Matching only
+    # GUI_APP_COUNT made apps_at() silently return 0 for every Sep 13
+    # commit even though the GUI already shipped real apps that day, a
+    # false zero on the landing chart. Match either array-size name.
+    m = re.search(r"GUI_LABELS\[GUI_(?:APP|ICON)_COUNT\]\s*=\s*\{(.*?)\};", src, re.S)
     if not m:
         return 0
     labels = re.findall(r'"([^"]*)"', m[1])
