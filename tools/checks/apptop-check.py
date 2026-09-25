@@ -77,7 +77,36 @@ try:
             if "return" in r or "error" in r: return r
     f.readline()
     cmd({"execute": "qmp_capabilities"})
-    time.sleep(5.0)  # desktop up
+
+    def wait_desktop_up(deadline=20.0, quiet_for=0.35):
+        """drivers/window.c's window_present() writes a "present\\r\\n"
+        line to serial every frame it actually flips to the screen, capped
+        at 256 lines for the whole boot (window.c's own present_logged
+        guard, so one long-running check never buries every other check's
+        markers under megabytes of "present" spam). The boot splash plus
+        the first several idle-desktop frames burn through that cap in
+        about two seconds of real time, after which the count is pinned
+        for good -- a one-shot, discriminating signal that boot has gotten
+        well past the splash and into the idle desktop, not a guess at how
+        long that takes. Poll the serial log until the count stops
+        growing for `quiet_for` seconds instead of blindly sleeping past
+        the splash on a slow host. `deadline` is a generous floor so a
+        loaded CI runner that's genuinely still booting doesn't get cut
+        short; it only makes a real hang take longer to fail, never a
+        false pass."""
+        start = time.time(); last_count = -1; last_change = start
+        while time.time() - start < deadline:
+            try:
+                count = open(LOG, "rb").read().count(b"present\r\n")
+            except FileNotFoundError:
+                count = 0
+            now = time.time()
+            if count != last_count:
+                last_count = count; last_change = now
+            elif count > 0 and now - last_change >= quiet_for:
+                return
+            time.sleep(0.05)
+    wait_desktop_up()
 
     def move(x, y):
         cmd({"execute": "input-send-event", "arguments": {"events": [
