@@ -302,7 +302,15 @@ if (typeof document !== "undefined") (function () {
   // for its sections (IntersectionObserver, "don't do the expensive thing
   // until it's relevant"), applied here to the actual heavy work instead
   // of a CSS class toggle.
-  if ("IntersectionObserver" in window) {
+  // ?full is the portfolio frame: the machine is the whole page, so there is
+  // nothing to scroll to and no reason to wait. Boot now. Real report: X's
+  // in-app browser never started it, and an observer inside a cross-origin
+  // iframe is the one piece that depends on the host app's WebView.
+  // setTimeout, not a direct call: startEmulator reads vars declared further
+  // down this script, same as the observer callback always did.
+  if (/[?&]full\b/.test(location.search)) {
+    setTimeout(startEmulator, 0);
+  } else if ("IntersectionObserver" in window) {
     var startObserver = new IntersectionObserver(function (entries) {
       for (var oi = 0; oi < entries.length; oi++) {
         if (entries[oi].isIntersecting) {
