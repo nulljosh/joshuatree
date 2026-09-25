@@ -1290,6 +1290,68 @@ static unsigned int gui_blend(unsigned int a, unsigned int b){
     return ((ar + br) / 2 << 16) | ((ag + bg2) / 2 << 8) | ((ab + bb) / 2);
 }
 
+static double gui_line_sqrt(double x){ double r; __asm__ volatile ("fsqrt" : "=t"(r) : "0"(x)); return r; }
+
+/* Antialiased line primitive: Wu-style coverage over a segment of given
+   `width` (physical px, 1.5-2.0 reads best), drawn straight at PHYSICAL
+   resolution via window_pixel_phys/window_get_pixel_phys -- the same
+   physical path gui_aa_char uses -- so the coverage fringe blends against
+   whatever is actually underneath instead of landing as flat scaled
+   blocks. Coordinates are LOGICAL (same convention as stx_chart's other
+   callers); scaled to physical internally by window_scale(), matching
+   gui_fill_circle's no-offscreen-target physical path. For each physical
+   pixel near the segment, coverage is the distance from the pixel center
+   to the nearest point on the segment, falling off over a 1px band
+   centered on the line's half-width -- exact endpoints included, so the
+   line caps flat rather than growing fuzzy stubs past x0,y0/x1,y1. */
+static void gui_aa_line(int x0, int y0, int x1, int y1, unsigned int color, double width){
+    int sc = (int)window_scale(); if (sc < 1) sc = 1;
+    double fx0 = x0 * sc, fy0 = y0 * sc, fx1 = x1 * sc, fy1 = y1 * sc;
+    double dx = fx1 - fx0, dy = fy1 - fy0;
+    double len = gui_line_sqrt(dx * dx + dy * dy);
+    double halfw = width / 2.0;
+    int pad = (int)halfw + 2;
+    if (len < 0.0001) {
+        int minx = (int)fx0 - pad, maxx = (int)fx0 + pad;
+        int miny = (int)fy0 - pad, maxy = (int)fy0 + pad;
+        for (int y = miny; y <= maxy; y++) for (int x = minx; x <= maxx; x++) {
+            double ddx = (x + 0.5) - fx0, ddy = (y + 0.5) - fy0;
+            double dist = gui_line_sqrt(ddx * ddx + ddy * ddy);
+            double cov = halfw + 0.5 - dist;
+            if (cov <= 0) continue; if (cov > 1) cov = 1;
+            int a = (int)(cov * 255 + 0.5);
+            unsigned int d = window_get_pixel_phys(x, y);
+            unsigned int r = (((color >> 16) & 0xFF) * a + ((d >> 16) & 0xFF) * (255 - a)) / 255;
+            unsigned int g = (((color >> 8) & 0xFF) * a + ((d >> 8) & 0xFF) * (255 - a)) / 255;
+            unsigned int b = ((color & 0xFF) * a + (d & 0xFF) * (255 - a)) / 255;
+            window_pixel_phys(x, y, (r << 16) | (g << 8) | b);
+        }
+        return;
+    }
+    double ux = dx / len, uy = dy / len;
+    int minx = (int)(fx0 < fx1 ? fx0 : fx1) - pad, maxx = (int)(fx0 > fx1 ? fx0 : fx1) + pad;
+    int miny = (int)(fy0 < fy1 ? fy0 : fy1) - pad, maxy = (int)(fy0 > fy1 ? fy0 : fy1) + pad;
+    for (int y = miny; y <= maxy; y++) {
+        for (int x = minx; x <= maxx; x++) {
+            double px = x + 0.5, py = y + 0.5;
+            double t = (px - fx0) * ux + (py - fy0) * uy;
+            if (t < 0) t = 0; if (t > len) t = len;
+            double cx = fx0 + ux * t, cy = fy0 + uy * t;
+            double ddx = px - cx, ddy = py - cy;
+            double dist = gui_line_sqrt(ddx * ddx + ddy * ddy);
+            double cov = halfw + 0.5 - dist;
+            if (cov <= 0) continue; if (cov > 1) cov = 1;
+            int a = (int)(cov * 255 + 0.5);
+            if (a <= 0) continue;
+            unsigned int d = window_get_pixel_phys(x, y);
+            unsigned int r = (((color >> 16) & 0xFF) * a + ((d >> 16) & 0xFF) * (255 - a)) / 255;
+            unsigned int g = (((color >> 8) & 0xFF) * a + ((d >> 8) & 0xFF) * (255 - a)) / 255;
+            unsigned int b = ((color & 0xFF) * a + (d & 0xFF) * (255 - a)) / 255;
+            window_pixel_phys(x, y, (r << 16) | (g << 8) | b);
+        }
+    }
+}
+
 /* Channel-wise linear interpolation between two 0x00RRGGBB colors, `t/max`
    of the way from `a` to `b`. */
 static unsigned int gui_lerp(unsigned int a, unsigned int b, int t, int max){
