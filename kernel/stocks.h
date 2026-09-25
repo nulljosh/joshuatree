@@ -139,16 +139,7 @@ static int stx_bp(int change_x100, int price_x100) {
     return prev > 0 ? (int)((double)change_x100 * 10000 / prev) : 0;
 }
 static void stx_line(int x0, int y0, int x1, int y1, unsigned int c) {
-    int dx = x1 > x0 ? x1 - x0 : x0 - x1, sx = x0 < x1 ? 1 : -1;
-    int dy = y1 > y0 ? y0 - y1 : y1 - y0, sy = y0 < y1 ? 1 : -1;
-    int err = dx + dy;
-    for (;;) {
-        window_rect(x0, y0, 2, 2, c);
-        if (x0 == x1 && y0 == y1) break;
-        int e2 = 2 * err;
-        if (e2 >= dy) { err += dy; x0 += sx; }
-        if (e2 <= dx) { err += dx; y0 += sy; }
-    }
+    gui_aa_line(x0, y0, x1, y1, c, 1.75);
 }
 /* Line chart of v[0..n) scaled into the box; lo/hi padded so a flat series still draws. */
 static void stx_chart(int x, int y, int w, int h, const int *v, int n, unsigned int c) {
@@ -254,6 +245,24 @@ static void stocks_draw(int sel, int range, int first) {
     window_present();
 }
 
+/* Network-free fixture for headless checks (stocks-aa-check.py): seeds a
+   deterministic zigzag series with a real 45-degree diagonal segment, so
+   the AA line primitive's edges land off-pixel and a coverage check has
+   something honest to assert on. Never fetches, never touches net_init;
+   triggered only by the 't' key, same shape as 'r' triggering a real
+   fetch, so the offline path exercises the exact same stocks_draw/
+   stx_chart/stx_line/gui_aa_line pipeline the live one does. */
+static void stx_seed_fixture(int range, int sel) {
+    int n = 24;
+    stx_data[range][sel].n = n;
+    stx_data[range][sel].stale = 0;
+    for (int i = 0; i < n; i++) stx_data[range][sel].points[i] = 10000 + (i < n / 2 ? i * 40 : (n - i) * 40);
+    stx_data[range][sel].price = stx_data[range][sel].points[n - 1];
+    stx_data[range][sel].prev = stx_data[range][sel].points[0];
+    stocks_entries[sel].price_x100 = stx_data[range][sel].price;
+    stocks_entries[sel].change_x100 = stx_data[range][sel].price - stx_data[range][sel].prev;
+}
+
 static void gui_launch_stocks(void) {
     int sel = 0, range = 0, first = 0, fetched_range = -1;
 
@@ -270,6 +279,7 @@ static void gui_launch_stocks(void) {
         mouse_click_edge_sync();
         int k = get_key_or_click_until(stx_refresh_tick + 6000);
         if (k == 'r' || k == 'R') fetched_range = -1;
+        if (k == 't' || k == 'T') { stx_seed_fixture(range, sel); stocks_draw(sel, range, first); }
         if (k == KEY_ESC) return;
         if (k == KEY_UP && sel > 0) sel--;
         else if (k == KEY_DOWN && sel < STOCKS_MAX - 1) sel++;

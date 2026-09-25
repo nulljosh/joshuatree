@@ -131,6 +131,15 @@ jobs:
           ccache --zero-stats
           make kernel.elf
           ccache --show-stats
+      # democrisp-check.mjs (currently shard 3) is a Playwright check living
+      # in ci-suite.sh's manifest alongside the plain qemu+PIL checks, so
+      # this job needs the same Node/Playwright toolchain as the `demo` job
+      # below, not just for whichever shard happens to draw it -- shard
+      # numbers shift whenever the manifest's LPT packing is re-run.
+      - name: Install Node dependencies
+        run: npm install --no-audit --no-fund
+      - name: Install a real Chromium for Playwright
+        run: npx playwright install --with-deps chromium
       # One step, the whole suite. tools/checks/ci-suite.sh holds the
       # manifest and the per-check comments that used to live here as ~40
       # separate workflow steps. That shape stopped the job at the first

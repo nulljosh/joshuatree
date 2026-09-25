@@ -75,6 +75,13 @@ run_named "versionsync-check.sh" ./tools/checks/versionsync-check.sh
 run_named "version-bump-check.sh (vs origin/main)" ./tools/checks/version-bump-check.sh origin/main
 echo
 
+echo "-- demo deps (installed up front: ci-suite.sh's own shards run Playwright checks like democrisp-check.mjs, so node_modules must exist before the suite job starts, not after) --"
+if [ ! -d node_modules ]; then
+  run_named "npm install" npm install --no-audit --no-fund
+fi
+run_named "npx playwright install chromium" npx playwright install chromium
+echo
+
 echo "-- suite job: 4 shards in parallel, each its own QEMU (-display none) --"
 SUITE_PIDS=()
 SUITE_LOGS=()
@@ -110,10 +117,6 @@ fi
 echo
 
 echo "-- demo job --"
-if [ ! -d node_modules ]; then
-  run_named "npm install" npm install --no-audit --no-fund
-fi
-run_named "npx playwright install chromium" npx playwright install chromium
 run_named "demochat-check.mjs" node tools/checks/demochat-check.mjs
 run_named "cursorglide-check.mjs" node tools/checks/cursorglide-check.mjs
 echo
