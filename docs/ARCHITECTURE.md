@@ -286,3 +286,4 @@ stacks correctly, gets verified manually per change (see commit messages
 and `docs/roadmap.md`'s per-item notes) against real QEMU-attached disks and
 boot-time output, not just "it compiled."
 | `docs/BADGE.md` | Log of the landing badge refresh each minor version: what changed, and the next step. |
+| `landing/mark-tree.svg` + `landing/mark-roots.svg` | The landing mark in two layers: engraved tree and ground line (ink), circuit roots (clay). Stacked CSS masks so both follow the theme. History in `docs/BADGE.md`. |
