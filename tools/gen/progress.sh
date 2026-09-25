@@ -187,20 +187,17 @@ max_v = cum[-1] or 1
 # today's ~35k into six digits, and pad_l is derived from those two
 # column widths plus real gaps instead of a fixed magic number.
 TICK_CHAR_W = 5.5  # approx glyph advance at font-size 9
-TITLE_COL_W = 12    # rotated title's own thickness (font-size 8) + margin
-COL_GAP = 4          # real gap between the title column and the tick column
 AXIS_GAP = 4         # real gap between the tick column and the axis line
 tick_digits = len(str(max_v))
 tick_col_w = max(10, int(tick_digits * TICK_CHAR_W) + 2)
-pad_l = TITLE_COL_W + COL_GAP + tick_col_w + AXIS_GAP
-title_x = TITLE_COL_W // 2
+pad_l = tick_col_w + AXIS_GAP
 tick_x = pad_l - AXIS_GAP  # tick text is right-aligned (anchor=end) here
 # pad_b needs room for two stacked text rows below the plot (the date
 # labels, then the bold summary caption) -- 28 only gave them an 8px
 # baseline gap, not enough for two font-size-10 rows (~14px needed
 # before descenders/ascenders start touching), and rendering it for
 # real showed exactly that: "Aug 31" clipping into "25,650 lines...".
-pad_r, pad_t, pad_b = 10, 26, 34
+pad_r, pad_t, pad_b = 10, 10, 40
 plot_w, plot_h = 420, 140
 width = pad_l + plot_w + pad_r
 height = pad_t + plot_h + pad_b
@@ -270,18 +267,10 @@ def short_date(d):
 # selector (see build_svg below) -- the interactive one needs real hit
 # targets and hover/focus state, the static one doesn't.
 bg_rect = '<rect width="100%" height="100%" fill="var(--bg)"/>'
-# Single legend row, one series. The old second dashed line (doc
-# coverage over time) got cut entirely, third real attempt at this:
-# relabeling wasn't enough, plotting the right metric wasn't enough
-# either, the metric itself is fundamentally lumpy (jumps in one pass,
-# not a smooth trend) and just reads as a noisy, ugly zigzag as a line
-# chart, direct feedback ("still looks retarded"), fair. Doc coverage
-# is a real, current, mostly-binary fact, not a time series worth
-# fighting a chart to show, so it's a plain stat in the caption instead.
-legend = (
-    f'<line x1="{pad_l}" y1="8" x2="{pad_l+14}" y2="8" stroke="var(--line)" stroke-width="2.5"/>'
-    f'<text x="{pad_l+19}" y="11" font-size="10" fill="var(--label)">Lines of real code</text>'
-)
+# No legend row and no rotated axis title: one series, self-evident from
+# the caption below the chart ("N lines..."), direct feedback that the
+# repeated "Lines of code" (once as a legend, once rotated on the y-axis)
+# was redundant furniture crowding the actual data.
 grid_lines = (
     f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l+plot_w}" y2="{pad_t}" stroke="var(--grid)"/>'
     f'<line x1="{pad_l}" y1="{pad_t+plot_h//2}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h//2}" stroke="var(--grid)"/>'
@@ -295,13 +284,12 @@ axis_lines = (
     f'<line x1="{pad_l}" y1="{pad_t}" x2="{pad_l}" y2="{pad_t+plot_h}" stroke="var(--axis)"/>'
     f'<line x1="{pad_l}" y1="{pad_t+plot_h}" x2="{pad_l+plot_w}" y2="{pad_t+plot_h}" stroke="var(--axis)"/>'
 )
-# Left axis title, rotated, its own dedicated column (title_x), well clear
-# of the tick-number column (tick_x, right-aligned into the axis line) so
-# the two never share pixels regardless of how many digits max_v has.
-title_label = f'<text x="{title_x}" y="{pad_t+plot_h//2}" font-size="8" fill="var(--line)" text-anchor="middle" transform="rotate(-90 {title_x} {pad_t+plot_h//2})">Lines of code</text>'
 polyline = f'<polyline points="{points_attr}" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
 date_labels = "".join(f'<text x="{xf(i)}" y="{pad_t+plot_h+16}" font-size="10" fill="var(--label)" text-anchor="middle">{short_date(labels[i])}</text>' for i in shown)
-caption = f'<text x="{pad_l}" y="{height-4}" font-size="10" font-weight="600" fill="var(--strong)">{max_v:,} lines &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>'
+# Body-size, muted-ink caption: readable page text, not a tiny bold chart
+# label. It carries the one real stat this chart needs, since the legend
+# and rotated axis title are gone.
+caption = f'<text x="{pad_l}" y="{height-6}" font-size="14" fill="var(--muted)">{max_v:,} lines &#183; {doc_pct[-1]}% documented &#183; {commit_count} commits since {short_date(points[0][2])}</text>'
 
 # v52.4: real dark-mode support, direct feedback ("white graph on dark
 # mode... should be dynamic and native as code, not a screenshot"). A
@@ -359,7 +347,7 @@ def build_svg(dots_markup, svg_id=None, extra_style="", extra_root_attrs=""):
     style = f'<style>{color_vars(scope)}\n  {text_rule} {{ font-family: -apple-system, Helvetica, Arial, sans-serif; }}\n{extra_style}</style>'
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}"{id_attr}{extra_root_attrs}>'
-        + style + bg_rect + legend + grid_lines + tick_labels + axis_lines + title_label
+        + style + bg_rect + grid_lines + tick_labels + axis_lines
         + polyline + dots_markup + date_labels + caption + '</svg>'
     )
 
