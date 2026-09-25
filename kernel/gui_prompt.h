@@ -5,13 +5,17 @@
    and contacts.h (v0.76.23) established.
 
    gui_prompt_line_input: prompt at y=52, input at y=76 (both plus
-   gui_app_dy()). Returns 1 on enter, 0 on esc/click. */
+   gui_app_dy()). Returns 1 on enter, 0 on esc/click.
 
-/* Standard layout: titlebar + prompt at y=52 + input box at y=76.
-   Handles single-line text input for mail, reminders, and calculator apps. */
-static int gui_prompt_line_input(const char *title, const char *prompt, char *out, int max) {
+   gui_prompt_line_input_seeded (1.3.0, Chat's empty-state pass): same
+   loop, but the field starts already holding one printable character --
+   Chat's "typing any key starts a prompt directly, no n needed" contract
+   without a second, near-duplicate text-input loop to maintain. Pass -1
+   for the plain, empty-field behaviour gui_prompt_line_input still is. */
+static int gui_prompt_line_input_seeded(const char *title, const char *prompt, char *out, int max, int seed) {
     unsigned int n = 0;
     out[0] = 0;
+    if (seed >= 32 && seed < 127 && max > 1) out[n++] = (char)seed;
     mouse_click_edge_sync();
 
     /* Draw chrome only once, before the loop. */
@@ -53,4 +57,8 @@ static int gui_prompt_line_input(const char *title, const char *prompt, char *ou
     }
     out[n] = 0;
     return 1;
+}
+
+static int gui_prompt_line_input(const char *title, const char *prompt, char *out, int max) {
+    return gui_prompt_line_input_seeded(title, prompt, out, max, -1);
 }

@@ -12,16 +12,19 @@ NAT at 10.0.2.2 (the kernel's `llmhost=`/`llmport=` multiboot override);
 turing.heyitsmejosh.com is never touched.
 
 Asserts, in order: the Chat window opened (red close light at (94,56));
-zero CHAT_INK pixels below the reply line before anything is sent; after
-`chatreply=` fires on serial, the question row carries ink (the >>> echo)
-AND the band below it carries ink (the rendered answer); the recorded
-request is Ollama-shaped with model samantha and the typed question as its
-newest user message; the serial reply line carries the fake answer; and
-the red close light still closes the window afterwards.
+CHAT_INK pixels below the reply line even before anything is sent (1.3.0:
+the empty state's suggestion rows, proof it isn't a blank void any more);
+after `chatreply=` fires on serial, the question row carries ink (the >>>
+echo) AND the band below it carries ink (the rendered answer); the
+recorded request is Ollama-shaped with model samantha and the typed
+question as its newest user message; the serial reply line carries the
+fake answer; and the red close light still closes the window afterwards.
 
-Discriminating: with chat.h's render of the assistant turn stubbed out (or
-`chat_send` failing), the band below the question row stays at zero ink
-and the run fails by name.
+Discriminating: with chat.h's empty-state suggestion list removed, the
+band below the question row stays at zero ink before anything is sent and
+the run fails by name; with the assistant turn's render stubbed out (or
+`chat_send` failing) instead, the after-send band stays too dim and the
+`after_ink < 200` assertion fails by name.
 
 Usage: python3 tools/checks/chatapp-check.py   (from the repo root, after make kernel.elf)
 """
@@ -113,6 +116,13 @@ try:
     time.sleep(0.5)
     if "chatconsole" not in serial(): fails.append("no chatconsole marker")
     before = dump(); before_ink = ink_below(before, REPLY_TOP)
+    # 1.3.0: Chat's empty state now shows a greeting plus a list of example
+    # prompts (one per tool chat_run_tool handles) instead of a blank void,
+    # so this band is expected to carry the suggestion rows' ink even
+    # before anything is sent -- proof the empty state actually rendered
+    # them. The "did the reply render" proof still happens right after
+    # send below, unchanged in spirit.
+    if before_ink == 0: fails.append("empty state shows no suggestion rows (0 ink below the question row before any message)")
     keys("n"); time.sleep(0.6)
     for ch in QUESTION:
         keys("spc" if ch == " " else ch); time.sleep(0.05)
@@ -124,8 +134,7 @@ try:
     time.sleep(1.5)
     after = dump()
     after_ink = ink_below(after, REPLY_TOP); q_ink = ink_below(after, QROW_TOP) - after_ink
-    print("ink below reply line: before=%d after=%d; question-row ink=%d" % (before_ink, after_ink, q_ink))
-    if before_ink != 0: fails.append("ink present below reply line before any message (%d)" % before_ink)
+    print("ink below reply line: before=%d (empty-state suggestions) after=%d; question-row ink=%d" % (before_ink, after_ink, q_ink))
     if after_ink < 200: fails.append("reply did not render: only %d ink px below the question row" % after_ink)
     if q_ink < 50: fails.append("question echo did not render (%d ink px)" % q_ink)
     body = recorded.get("body", b"").decode("utf-8", "replace")
