@@ -102,11 +102,67 @@ static const struct editor_glyph *editor_glyph_for(unsigned char character) {
     return &editor_glyphs[((editor_family * 2 + editor_weight) * 4 + editor_size) * 95 + character - 32];
 }
 
-/* `background` is the colour already under the glyph (the page, or the
-   selection band): each bitmap pixel is blended against it, so a selected
-   glyph keeps its band showing through instead of punching a page-
-   coloured box out of the highlight. */
+/* Coverage of the logical bitmap at (row, column), 0 outside its bounds --
+   the clamp bilinear sampling below needs at the glyph's own edges. */
+static int editor_glyph_cover(const struct editor_glyph *glyph, int row, int column) {
+    if (row < 0 || column < 0 || row >= glyph->height || column >= glyph->width) return 0;
+    return editor_pixels[glyph->offset + row * glyph->width + column];
+}
+
+/* notessharp fix: Notes used to blit its DejaVu coverage bitmap through
+   window_pixel in LOGICAL coordinates, and window_pixel's own scaled path
+   (window.c) writes the SAME colour to every one of the `scale`x`scale`
+   physical pixels a logical pixel covers -- a nearest-neighbour blow-up
+   that steps every glyph edge into visible 2x2 blocks, confirmed from a
+   real headless frame (tools/checks/notessharp-check.py). The GUI's own
+   text (gui_aa_char, kernel.c) avoids this by drawing straight to
+   physical pixels from a bitmap already rasterized at that size; doing
+   the same for every logical size Notes offers (16/20/24/28 x 3 families
+   x 2 weights) would need a second, ~4x-larger glyph table this kernel's
+   4MB .text+.rodata+.data+.bss window has no room for (measured: it
+   overflows into the ring-3 program window at 0xC0500000). Instead this
+   samples the existing logical coverage bitmap with real bilinear
+   interpolation at each physical pixel's fractional logical position --
+   the standard image-upscaling fix for nearest-neighbour blockiness, same
+   antialiasing idea as v44's physical-resolution text, zero bytes of new
+   font data. All fixed-point integer math (`scale2`-denominator
+   fractions), no float: this kernel has no FPU save/restore set up.
+   Caret, selection band and line layout are untouched, still logical
+   (editor_layout, editor_glyph_for); only the glyph bitmap's blit moves
+   to physical resolution. Falls back to the old direct logical blit
+   whenever there's no real scaled framebuffer to draw into (scale 1, or
+   an offscreen render target), the same condition font_set_aa's own
+   aa_active() uses. */
 static void editor_draw_glyph(unsigned char character, int origin_x, int origin_y, unsigned int background) {
+    int scale = (int)window_scale();
+    if (scale > 1 && !window_has_target()) {
+        const struct editor_glyph *glyph = editor_glyph_for(character);
+        int scale2 = scale * scale;
+        int px = (origin_x + glyph->left) * scale, py = (origin_y + glyph->top) * scale;
+        for (int out_row = 0; out_row < glyph->height * scale; out_row++) {
+            int row = out_row / scale, frac_y = out_row % scale;
+            for (int out_col = 0; out_col < glyph->width * scale; out_col++) {
+                int column = out_col / scale, frac_x = out_col % scale;
+                int v00 = editor_glyph_cover(glyph, row, column);
+                int v10 = editor_glyph_cover(glyph, row, column + 1);
+                int v01 = editor_glyph_cover(glyph, row + 1, column);
+                int v11 = editor_glyph_cover(glyph, row + 1, column + 1);
+                int top = v00 * (scale - frac_x) + v10 * frac_x;
+                int bottom = v01 * (scale - frac_x) + v11 * frac_x;
+                int cover = (top * (scale - frac_y) + bottom * frac_y) / scale2;
+                if (!cover) continue;
+                int x = px + out_col, y = py + out_row;
+                unsigned int dst = window_get_pixel_phys(x, y);
+                int alpha = text_ink_dark[cover]; /* dark ink on the light page: same curve as gui_aa_char (see text_ink) */
+                int dst_red = (int)(dst >> 16) & 255, dst_green = (int)(dst >> 8) & 255, dst_blue = (int)dst & 255;
+                int red = (28 * alpha + dst_red * (255 - alpha)) / 255;
+                int green = (28 * alpha + dst_green * (255 - alpha)) / 255;
+                int blue = (30 * alpha + dst_blue * (255 - alpha)) / 255;
+                window_pixel_phys(x, y, (unsigned int)((red << 16) | (green << 8) | blue));
+            }
+        }
+        return;
+    }
     const struct editor_glyph *glyph = editor_glyph_for(character);
     int bg_red = (int)(background >> 16) & 255, bg_green = (int)(background >> 8) & 255, bg_blue = (int)background & 255;
     for (int row = 0; row < glyph->height; row++) {
