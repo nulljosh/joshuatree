@@ -41,7 +41,7 @@ EXEMPT=(
 # script must run under macOS's stock bash 3.2, which has no `declare -A`.)
 ratchet_ceiling() {
     case "$1" in
-        kernel/kernel.c) echo 10048 ;;
+        kernel/kernel.c) echo 9998 ;;
         *) echo "$LIMIT" ;;
     esac
 }
