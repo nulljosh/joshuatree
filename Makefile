@@ -104,16 +104,55 @@ user/note.o: user/note.c user/jtsys.h
 user/note.bin: user/note.o user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/note.o
 
-# The built binaries, embedded so `usertest`/`notetest` can seed them into
-# the VFS on a machine with no disk (every headless check boot, and the
-# browser embed).
+# libjt: a small static archive of userland library code (string/ctype/
+# stdlib/stdio over jtsys.h), built with the same freestanding flags as
+# every other ring-3 program so a program can link it in and get libc
+# shaped calls without a real libc or a kernel include path. llvm-ar
+# rather than plain `ar` because this toolchain is clang/lld throughout,
+# see USER_CFLAGS above.
+LIBJT_SRCS := user/libjt/string.c user/libjt/stdlib.c user/libjt/stdio.c
+LIBJT_OBJS := $(LIBJT_SRCS:.c=.o)
+# Plain `llvm-ar` first (on PATH on most CI images); then a versioned
+# `llvm-ar-NN` apt sometimes installs instead of the unversioned name;
+# then the Homebrew Cellar path a bare macOS dev shell needs since
+# neither of the above is on its PATH by default -- macOS's own
+# /usr/bin/ar is BSD ar, which cannot index a foreign-format (ELF i386)
+# archive (it silently produces one lld then fails to find symbols in,
+# "not a mach-o file"), so it must never be reached on a Mac. Last,
+# plain `ar` (GNU binutils, installed by default on Ubuntu runners and
+# perfectly able to index ELF i386 objects there) for CI when no
+# llvm-ar is present at all.
+AR := $(shell command -v llvm-ar 2>/dev/null; \
+             ls /usr/bin/llvm-ar-* /usr/lib/llvm-*/bin/llvm-ar 2>/dev/null | sort -V | tail -1; \
+             ls /opt/homebrew/opt/llvm/bin/llvm-ar 2>/dev/null; \
+             command -v ar 2>/dev/null)
+AR := $(firstword $(AR))
+
+user/libjt/%.o: user/libjt/%.c
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/libjt.a: $(LIBJT_OBJS)
+	$(AR) rcs $@ $(LIBJT_OBJS)
+
+user/wc.o: user/wc.c user/jtsys.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/wc.bin: user/wc.o user/libjt.a user/note.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/wc.o user/libjt.a
+
+# The built binaries, embedded so `usertest`/`notetest`/`shell` can seed
+# them into the VFS on a machine with no disk (every headless check boot,
+# and the browser embed).
 drivers/user_hello.h: user/hello.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/hello.bin drivers/user_hello.h user_hello
 
 drivers/user_note.h: user/note.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/note.bin drivers/user_note.h user_note
 
-kernel/kernel.o: drivers/user_hello.h drivers/user_note.h
+drivers/user_wc.h: user/wc.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/wc.bin drivers/user_wc.h user_wc
+
+kernel/kernel.o: drivers/user_hello.h drivers/user_note.h drivers/user_wc.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
