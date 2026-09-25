@@ -4738,6 +4738,7 @@ static int text_ink(int a, unsigned int fg, unsigned int dst){
     return a < 0 ? 0 : a > 255 ? 255 : a;
 }
 
+#include "ttf_render.h"
 #include "gui_prompt.h"
 #include "auth.h"
 #include "editor.h"
@@ -4805,33 +4806,31 @@ static void gui_aa_char(unsigned char c, int px, int py, unsigned int fg, int bg
     }
 }
 
-/* Mono glyph for the two real character grids (terminal, keyrate). Family
-   2 is DejaVu Sans Mono (see EDITOR_FAMILIES in editor.h); every glyph in
-   it shares left=0 and the same advance, unlike the proportional Sans
-   table GUI_AA_GLYPH draws everywhere else, so left-aligning it in the
-   fixed 8-logical/16-physical-px cell keeps every column lined up instead
-   of "m" crushing into "n" and "i"/"l" floating in dead space. Size 2
-   (24px face, same size GUI_AA_GLYPH uses) is the closest already-baked
-   mono size to the 16-physical-px cell. */
-#define GUI_AA_GLYPH_MONO(c) (&editor_glyphs[((2 * 2 + 0) * 4 + 2) * 95 + ((c) - 32)])
+/* Mono glyph for the two real character grids (terminal, keyrate), now
+   drawn through the same runtime-TTF path Notes uses (kernel/ttf_render.h)
+   instead of a baked PIL bitmap: DejaVu Sans Mono, rasterized at physical
+   resolution with the shared glyph cache and coverage/ink blend. The mono
+   face's own advance is genuinely fixed-width, so its rounded ttf_advance
+   is used to pick the px size that lands on this cell exactly (computed
+   once, cached), then every glyph is left-aligned and clipped to the
+   caller's fixed cell the same way the old bitmap path was, keeping
+   columns perfectly aligned -- the pitch itself is set by the caller
+   (term_render/keyrate advance by a fixed logical step), this only has to
+   not spill past its own cell. */
+static float gui_aa_mono_px(int cell){
+    static int cached_cell = -1;
+    static float cached_px = 0;
+    if (cell != cached_cell) { cached_px = ttfr_mono_px_for_cell(cell); cached_cell = cell; }
+    return cached_px;
+}
 static void gui_aa_char_mono(unsigned char c, int px, int py, unsigned int fg, int bg, int cell){
     if (c < 32 || c > 126) c = '?';
     if (bg >= 0) for (int j = 0; j < 32; j++) for (int i = 0; i < cell; i++) window_pixel_phys(px + i, py + j, (unsigned int)bg);
-    const struct editor_glyph *g = GUI_AA_GLYPH_MONO(c);
-    int ox = px + g->left, oy = py + g->top - 2;
-    for (int row = 0; row < g->height; row++){
-        for (int col = 0; col < g->width; col++){
-            int a = editor_pixels[g->offset + row * g->width + col];
-            if (!a) continue;
-            int x = ox + col, y = oy + row;
-            if (x < px || x >= px + cell) continue; /* keep inside the cell so neighbours never overdraw each other */
-            unsigned int d = window_get_pixel_phys(x, y);
-            unsigned int r = (((fg >> 16) & 0xFF) * a + ((d >> 16) & 0xFF) * (255 - a)) / 255;
-            unsigned int gg = (((fg >> 8) & 0xFF) * a + ((d >> 8) & 0xFF) * (255 - a)) / 255;
-            unsigned int b = ((fg & 0xFF) * a + (d & 0xFF) * (255 - a)) / 255;
-            window_pixel_phys(x, y, (r << 16) | (gg << 8) | b);
-        }
-    }
+    float mono_px = gui_aa_mono_px(cell);
+    ttf_glyph_t *g = ttfr_glyph(TTF_FACE_MONO, c, mono_px);
+    if (!g || !g->coverage) return;
+    int base_x = px, base_y = py + ttf_ascent(ttfr_face(TTF_FACE_MONO), mono_px);
+    ttfr_blend_glyph(g, base_x, base_y, fg, px, px + cell);
 }
 
 /* Weather window, redesigned. Everything below draws at physical
