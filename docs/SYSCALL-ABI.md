@@ -399,3 +399,33 @@ Before this, the file described an interface nothing depended on. Now two
 real reference programs are built against it and run by the regression
 suite on every change, which is what makes the promise checkable rather
 than stated: `user/hello.c` for v1 and `user/note.c` for v2.
+
+## Writing a program with libjt
+
+`user/hello.c` and `user/note.c` are written straight against `jtsys.h`'s
+`int $0x80` wrappers, on purpose: they are the interface's own self-test
+and should look exactly like the ABI they exercise. A program that just
+wants to get something done doesn't have to write at that level -- it can
+link `user/libjt/`, a small C library the Makefile builds into
+`user/libjt.a` (`llvm-ar`) with the same freestanding flags as everything
+else in `user/`.
+
+What it gets: `string.h` (`strlen`, `strcmp`, `strcpy`, `memcpy`, and the
+rest of the usual set), `ctype.h`, `stdlib.h` (`atoi`, `strtol`, `abs`,
+`exit`, and `malloc`/`calloc`/`realloc`/`free` over a fixed 16KB static
+arena, since there is still no `brk`/`mmap` -- that arena's size is the
+real ceiling on how much a libjt program can allocate, not "out of RAM"),
+and `stdio.h` (`printf`/`snprintf`/`vsnprintf` with `%d %i %u %x %X %c %s
+%p %%`, width and zero-padding; a minimal `FILE` with `fopen`/`fread`/
+`fwrite`/`fgets`/`fclose` over the same syscalls; `stdin`/`stdout`/
+`stderr`).
+
+To build one: write a `_start` the way `user/note.c` does (`void
+_start(int argc, char **argv)`, or `void _start(void)` if you don't need
+argv), `#include` whichever libjt headers you need, and link
+`user/libjt.a` in after your own object file -- see `user/wc.c` and its
+Makefile rule (`user/wc.bin`) for the pattern. Everything "What this
+contract does NOT cover" says above still applies: no `brk`, no `fork`,
+one program running at a time, the same 7-page image ceiling. libjt does
+not get around any of that, it just saves you from re-writing `strlen`
+and a decimal formatter in every program that needs one.

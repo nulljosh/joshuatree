@@ -112,7 +112,21 @@ user/note.bin: user/note.o user/note.ld
 # see USER_CFLAGS above.
 LIBJT_SRCS := user/libjt/string.c user/libjt/stdlib.c user/libjt/stdio.c
 LIBJT_OBJS := $(LIBJT_SRCS:.c=.o)
-AR := $(shell command -v llvm-ar 2>/dev/null || echo /opt/homebrew/opt/llvm/bin/llvm-ar)
+# Plain `llvm-ar` first (on PATH on most CI images); then a versioned
+# `llvm-ar-NN` apt sometimes installs instead of the unversioned name;
+# then the Homebrew Cellar path a bare macOS dev shell needs since
+# neither of the above is on its PATH by default -- macOS's own
+# /usr/bin/ar is BSD ar, which cannot index a foreign-format (ELF i386)
+# archive (it silently produces one lld then fails to find symbols in,
+# "not a mach-o file"), so it must never be reached on a Mac. Last,
+# plain `ar` (GNU binutils, installed by default on Ubuntu runners and
+# perfectly able to index ELF i386 objects there) for CI when no
+# llvm-ar is present at all.
+AR := $(shell command -v llvm-ar 2>/dev/null; \
+             ls /usr/bin/llvm-ar-* /usr/lib/llvm-*/bin/llvm-ar 2>/dev/null | sort -V | tail -1; \
+             ls /opt/homebrew/opt/llvm/bin/llvm-ar 2>/dev/null; \
+             command -v ar 2>/dev/null)
+AR := $(firstword $(AR))
 
 user/libjt/%.o: user/libjt/%.c
 	$(CC) $(USER_CFLAGS) -c $< -o $@
