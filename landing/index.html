@@ -137,6 +137,18 @@
   @media (max-width: 600px) { .facts-row { grid-template-columns: repeat(2, 1fr); gap: 24px 16px; } .fact strong { font-size: 26px; } }
   .boot-line { text-align: center; color: var(--sub); font-size: 14px; line-height: 1.5; max-width: 420px; margin: 28px auto 0; }
   .boot-line a { color: var(--accent2); text-decoration: none; font-weight: 600; }
+
+  /* Samantha + Features: one idea per section, big air, real screenshots.
+     Apple-style close of the two gaps against apple.com/macos. */
+  .meet-samantha, .app-features { padding: 64px 20px; max-width: 980px; margin: 0 auto; }
+  .meet-samantha h2, .app-features h2 { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; text-align: center; margin: 0 0 12px; }
+  .meet-samantha .sub, .app-features .sub { text-align: center; color: var(--sub); font-size: 16px; max-width: 480px; margin: 0 auto 40px; line-height: 1.5; }
+  .tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .app-features .tile-grid { grid-template-columns: repeat(3, 1fr); }
+  .tile { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+  .tile img { width: 100%; height: auto; display: block; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .tile p { margin: 0; padding: 14px 16px; font-size: 14px; line-height: 1.4; color: var(--fg); }
+  @media (max-width: 700px) { .tile-grid, .app-features .tile-grid { grid-template-columns: 1fr; } .meet-samantha h2, .app-features h2 { font-size: 26px; } }
   .boot-line a:hover { text-decoration: underline; }
 
   /* Full-bleed at every width, no framed-window card: the demo is edge
@@ -384,6 +396,44 @@
     <div class="fact"><strong>v<span data-fact="version">1.4.1</span></strong><span class="label">Latest release</span></div>
   </div>
   <p class="boot-line">Boot it yourself: <a href="https://github.com/nulljosh/joshuatree/releases">grab the latest release from GitHub</a>, or scroll up, it's already running above.</p>
+</section>
+
+<section class="meet-samantha reveal" aria-label="Meet Samantha">
+  <h2>Meet Samantha.</h2>
+  <p class="sub">She's built into Chat. Ask her to do something and she just does it.</p>
+  <div class="tile-grid" style="grid-template-columns: minmax(0, 480px); justify-content: center;">
+    <div class="tile">
+      <img src="shots/samantha-chat.webp" alt="Chat with Samantha, showing suggestions like remind me to call mom, jot a note, check the weather, and look at today's calendar" loading="lazy" width="480" height="276">
+      <p>Type a message and she sets a reminder, jots a note, checks the weather, reads your calendar, or opens an app for you.</p>
+    </div>
+  </div>
+</section>
+
+<section class="app-features reveal" aria-label="Apps built in">
+  <h2>Everything you need is already there.</h2>
+  <p class="sub">A full set of apps, built from nothing but a screen and a keyboard.</p>
+  <div class="tile-grid">
+    <div class="tile">
+      <img src="shots/app-notes.webp" alt="Notes app showing a written note" loading="lazy" width="480" height="276">
+      <p>Notes. Write things down and find them later.</p>
+    </div>
+    <div class="tile">
+      <img src="shots/app-calendar.webp" alt="Calendar app showing a month view" loading="lazy" width="480" height="276">
+      <p>Calendar. See your days and your plans at a glance.</p>
+    </div>
+    <div class="tile">
+      <img src="shots/app-weather.webp" alt="Weather app showing today's forecast" loading="lazy" width="480" height="276">
+      <p>Weather. Know what to wear before you walk out.</p>
+    </div>
+    <div class="tile">
+      <img src="shots/app-files.webp" alt="Files app showing a folder of files" loading="lazy" width="480" height="276">
+      <p>Files. Every file on the machine, right where you left it.</p>
+    </div>
+    <div class="tile">
+      <img src="shots/app-terminal.webp" alt="Terminal app running a command" loading="lazy" width="480" height="276">
+      <p>Terminal. Type a command and the kernel answers back.</p>
+    </div>
+  </div>
 </section>
 
 <section class="progress-section reveal">
