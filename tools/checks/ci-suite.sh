@@ -135,6 +135,7 @@ once |2|Every check in tools/checks/ is in this manifest or says why not|./tools
 retry|2|Text selection in Notes: Shift-arrow/Ctrl+A highlight, edsel/edcopy/edcut markers, selection-aware copy/cut/paste/delete|python3 ./tools/checks/textselect-check.py
 retry|0|Window top edge and corner arc are one continuous AA shape|python3 ./tools/checks/windowedge-check.py
 retry|0|Files view switcher: Icons grid renders and the chosen view persists across close/reopen|python3 ./tools/checks/filesview-check.py
+retry|3|Demo canvas maps 1:1 (or an exact integer divisor) to device pixels on Retina, no fractional resample|node ./tools/checks/democrisp-check.mjs
 EOF
 }
 

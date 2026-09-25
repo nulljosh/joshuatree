@@ -495,24 +495,89 @@ if (typeof document !== "undefined") (function () {
   // most landscape-ish phones), contain otherwise (a real tall portrait
   // phone), so a visitor never loses real UI to a crop just to avoid a
   // margin.
+  // 1.5.8: real report on a Retina Mac in Safari, "the live demo is still
+  // pretty pixely." Root cause: the guest framebuffer is a fixed pixel
+  // resolution (e.g. 1920x1080), but the code below used to size the
+  // canvas's CSS box purely against the container's own CSS pixel box
+  // (cover/contain), with no regard at all for the real DEVICE pixel grid
+  // a Retina screen actually draws to. Landing on an arbitrary fractional
+  // CSS size (e.g. ~1280 CSS px, 2560 device px on a 2x screen against a
+  // 1920px source) forces the browser to resample by a non-integer factor,
+  // and every glyph and line in the kernel's own bitmap UI smears or
+  // stair-steps, exactly the reported symptom, worst on the crisp VGA-style
+  // text the kernel draws.
+  //
+  // Fix: whenever the viewport allows it, size the canvas's CSS box so
+  // canvas pixels map 1:1 to DEVICE pixels: cssWidth = w / dpr (960 CSS px
+  // on a 2x screen for a 1920px source, 1920 CSS px on a 1x screen). If the
+  // viewport is narrower than that, fall back to the largest INTEGER
+  // divisor of that scale that still fits (w / (dpr * k)), still an exact
+  // device-pixel mapping, just smaller. Only once no integer k fits at all
+  // (a screen too small for even a heavily-downscaled exact mapping) does
+  // this fall back to ordinary smooth (non-integer) scaling, and only then
+  // does image-rendering go back to "auto" rather than "pixelated" -- an
+  // integer device-pixel mapping needs no smoothing at all (every source
+  // pixel already lands on exactly one device pixel), while a genuinely
+  // fractional scale reads better smoothed than pixelated.
   var currentScale = 1;
-  var lastRsW = -1, lastRsH = -1, lastRsCW = -1, lastRsCH = -1;
+  var lastRsW = -1, lastRsH = -1, lastRsCW = -1, lastRsCH = -1, lastDpr = -1;
   function resizeCanvas() {
     if (!screenCanvas) return;
     var w = screenCanvas.width || 800, h = screenCanvas.height || 600;
     var cw = screenContainer.clientWidth, ch = screenContainer.clientHeight;
-    if (cw === lastRsW && ch === lastRsH && w === lastRsCW && h === lastRsCH) return; // nothing changed: skip forced layout + style writes (was every 200ms)
-    lastRsW = cw; lastRsH = ch; lastRsCW = w; lastRsCH = h;
+    var dpr = window.devicePixelRatio || 1;
+    if (cw === lastRsW && ch === lastRsH && w === lastRsCW && h === lastRsCH && dpr === lastDpr) return; // nothing changed: skip forced layout + style writes (was every 200ms)
+    lastRsW = cw; lastRsH = ch; lastRsCW = w; lastRsCH = h; lastDpr = dpr;
     var box = screenContainer.getBoundingClientRect();
-    var coverScale = Math.max(box.width / w, box.height / h) || 1;
-    var containScale = Math.min(box.width / w, box.height / h) || 1;
-    var visibleFrac = Math.min(box.width / (w * coverScale), box.height / (h * coverScale));
-    currentScale = visibleFrac >= 0.75 ? coverScale : containScale;
-    screenCanvas.style.width = Math.round(w * currentScale) + "px";
-    screenCanvas.style.height = Math.round(h * currentScale) + "px";
+
+    // Try k = 1, 2, 3, ... (largest image first): the first k whose exact
+    // device-pixel-mapped size fits inside the box wins. k=1 is the full
+    // 1:1 case (cssWidth = w/dpr); k=2 is a 2x integer downscale on top of
+    // that, etc. Twenty covers any real screen this ever runs on (a k this
+    // large would already be a postage stamp).
+    var crisp = false, crispW = 0, crispH = 0;
+    for (var k = 1; k <= 20; k++) {
+      var candW = w / (dpr * k), candH = h / (dpr * k);
+      if (candW <= box.width + 0.5 && candH <= box.height + 0.5) {
+        crisp = true; crispW = candW; crispH = candH;
+        break;
+      }
+    }
+
+    if (crisp) {
+      currentScale = crispW / w;
+      screenCanvas.style.width = Math.round(crispW) + "px";
+      screenCanvas.style.height = Math.round(crispH) + "px";
+      screenCanvas.style.imageRendering = "pixelated";
+    } else {
+      // Too small for any exact device-pixel mapping: smooth-scale as
+      // large as fits, matching the old cover/contain behaviour, but
+      // never "pixelated" here, a genuinely fractional scale smears worse
+      // pixelated than smoothed.
+      var coverScale = Math.max(box.width / w, box.height / h) || 1;
+      var containScale = Math.min(box.width / w, box.height / h) || 1;
+      var visibleFrac = Math.min(box.width / (w * coverScale), box.height / (h * coverScale));
+      currentScale = visibleFrac >= 0.75 ? coverScale : containScale;
+      screenCanvas.style.width = Math.round(w * currentScale) + "px";
+      screenCanvas.style.height = Math.round(h * currentScale) + "px";
+      screenCanvas.style.imageRendering = "auto";
+    }
   }
   window.addEventListener("resize", resizeCanvas);
   window.addEventListener("orientationchange", resizeCanvas);
+  // devicePixelRatio has no native "change" event; the standard trick is a
+  // matchMedia query at the current ratio, which fires once the ratio no
+  // longer matches (moving the window to a different-DPI display, an OS
+  // zoom change) -- re-registered at the new ratio each time it fires so
+  // it keeps catching every future change, not just the first one.
+  if (window.matchMedia) {
+    (function watchDpr() {
+      var mq = window.matchMedia("(resolution: " + (window.devicePixelRatio || 1) + "dppx)");
+      var onChange = function () { resizeCanvas(); watchDpr(); };
+      if (mq.addEventListener) mq.addEventListener("change", onChange, { once: true });
+      else if (mq.addListener) mq.addListener(onChange); // Safari < 14 fallback
+    })();
+  }
   resizeCanvas();
 
   // A second, real bug behind the same "cursor is misplaced" report, found
