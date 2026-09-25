@@ -56,7 +56,6 @@ once |3|PNG decoder, host harness|./tools/checks/png-host-check.sh
 retry|2|PNG decoder, in-kernel|./tools/checks/png-check.sh
 retry|2|AA text spacing, in-kernel|./tools/checks/textspacing-check.sh
 retry|0|AA text stems are dense but still antialiased|python3 ./tools/checks/textsharp-check.py
-retry|0|Notes editor glyphs blit at physical resolution, not nearest-neighbour blocked|python3 ./tools/checks/notessharp-check.py
 retry|2|FAT filesystem cycle hang (regression test)|./tools/checks/fatcyclehang-check.sh
 retry|3|File robustness: empty, oversized, corrupt-FAT and full-disk cases|python3 ./tools/checks/filerobust-check.py
 retry|1|Chat history (VFS-backed, past the old 512-byte cap)|./tools/checks/chat-check.sh

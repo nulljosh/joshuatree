@@ -1,7 +1,7 @@
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-root = Path(__file__).resolve().parent.parent.parent
+root = Path(__file__).resolve().parent.parent
 pixels = bytearray()
 glyphs = []
 for family in ('DejaVuSans', 'DejaVuSerif', 'DejaVuSansMono'):
