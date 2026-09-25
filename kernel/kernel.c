@@ -4799,6 +4799,50 @@ static void gui_draw_files_content(void){
     }
 }
 
+/* Shared by both the old blocking single-window path (gui_launch_files,
+   still used from the Apple-menu "Files" item) and the real running path,
+   the multi-window compositor's per-frame key dispatch in gui_run (see
+   gui_multiwin_interactive/mw_topmost_icon above) -- Files opens through
+   gui_multiwin_open from the dock, same as Mail/Calendar/Reminders/
+   Weather, so its own key handling has to live in that same on_key shape
+   (return 1 to close the window) or it's simply never called: the dock
+   path never runs gui_launch_files's loop at all. Returns 1 when Esc
+   should close the window. */
+static int gui_files_on_key(int k){
+    if (k == KEY_ESC) return 1;
+    if (k == '1') { if (files_view != FILES_VIEW_LIST) { files_view = FILES_VIEW_LIST; settings_save(); } return 0; }
+    if (k == '2') { if (files_view != FILES_VIEW_ICONS) { files_view = FILES_VIEW_ICONS; settings_save(); } return 0; }
+    if (gui_fat_count == 0) return 0;
+    int cols = files_view == FILES_VIEW_ICONS ? gui_files_icon_cols() : 1;
+    if (k == KEY_UP) { if (files_view == FILES_VIEW_ICONS) { if (gui_files_sel - cols >= 0) gui_files_sel -= cols; } else if (gui_files_sel > 0) gui_files_sel--; }
+    else if (k == KEY_DOWN) { if (files_view == FILES_VIEW_ICONS) { if (gui_files_sel + cols < gui_fat_count) gui_files_sel += cols; } else if (gui_files_sel < gui_fat_count - 1) gui_files_sel++; }
+    else if (k == KEY_LEFT && files_view == FILES_VIEW_ICONS) { if (gui_files_sel > 0) gui_files_sel--; }
+    else if (k == KEY_RIGHT && files_view == FILES_VIEW_ICONS) { if (gui_files_sel < gui_fat_count - 1) gui_files_sel++; }
+    /* KEY_ENTER: selection exists (arrows+Enter wired); real file-open/
+       navigate is future work, same as the pre-existing flat list had no
+       open action either. */
+    return 0;
+}
+
+/* Toolbar click hit-test against the TOPMOST multi-window Files window,
+   called from gui_run's own click dispatch before it falls through to the
+   universal "any click inside the topmost window closes it" contract
+   (gui_multiwin.c's press_window handling) -- without this, clicking
+   List/Icons would just close the window like any other click, and the
+   toolbar buttons would do nothing but dismiss the app. Coordinates are
+   FULL-SCREEN logical (mx/my in gui_run), converted to the window's own
+   content-viewport-relative space the same way the Apps folder's click
+   hit-test already does. Returns 1 if the click was consumed (don't
+   close), 0 if it missed the toolbar (falls through to the normal close
+   contract). */
+static int gui_files_click(int win_x, int win_y, int mx, int my){
+    int vx = win_x + 8, vy = win_y + 32;
+    int tb = gui_files_toolbar_at(mx - vx, my - vy);
+    if (tb == 0 && files_view != FILES_VIEW_LIST) { files_view = FILES_VIEW_LIST; settings_save(); return 1; }
+    if (tb == 1 && files_view != FILES_VIEW_ICONS) { files_view = FILES_VIEW_ICONS; settings_save(); return 1; }
+    return tb >= 0; /* a click on the already-active button is still "on the toolbar", not a close */
+}
+
 static void gui_launch_files(void){
     gui_files_sel = 0;
     for (;;) {
@@ -4807,27 +4851,14 @@ static void gui_launch_files(void){
         window_present(); sleep_ticks(5);
         mouse_click_edge_sync();
         int k = get_key_or_click();
-        if (k == KEY_ESC) return;
-        if (k == '1') { if (files_view != FILES_VIEW_LIST) { files_view = FILES_VIEW_LIST; settings_save(); } continue; }
-        if (k == '2') { if (files_view != FILES_VIEW_ICONS) { files_view = FILES_VIEW_ICONS; settings_save(); } continue; }
         if (k == KEY_CLICK) {
-            /* app_cursor_x/y are FULL-SCREEN logical coords; this app draws
-               through the windowed viewport gui_launch_from_dock sets up,
-               so subtract the viewport origin first (same fix as the Apps
-               folder's own click hit-test, see its comment above). */
             int click_vx = app_cursor_x - app_view_x, click_vy = app_cursor_y - app_view_y;
             int tb = gui_files_toolbar_at(click_vx, click_vy);
-            if (tb == 0 && files_view != FILES_VIEW_LIST) { files_view = FILES_VIEW_LIST; settings_save(); continue; }
-            if (tb == 1 && files_view != FILES_VIEW_ICONS) { files_view = FILES_VIEW_ICONS; settings_save(); continue; }
+            if (tb == 0 && files_view != FILES_VIEW_LIST) files_view = FILES_VIEW_LIST, settings_save();
+            else if (tb == 1 && files_view != FILES_VIEW_ICONS) files_view = FILES_VIEW_ICONS, settings_save();
             continue;
         }
-        if (gui_fat_count == 0) continue;
-        int cols = files_view == FILES_VIEW_ICONS ? gui_files_icon_cols() : 1;
-        if (k == KEY_UP) { if (files_view == FILES_VIEW_ICONS) { if (gui_files_sel - cols >= 0) gui_files_sel -= cols; } else if (gui_files_sel > 0) gui_files_sel--; }
-        else if (k == KEY_DOWN) { if (files_view == FILES_VIEW_ICONS) { if (gui_files_sel + cols < gui_fat_count) gui_files_sel += cols; } else if (gui_files_sel < gui_fat_count - 1) gui_files_sel++; }
-        else if (k == KEY_LEFT && files_view == FILES_VIEW_ICONS) { if (gui_files_sel > 0) gui_files_sel--; }
-        else if (k == KEY_RIGHT && files_view == FILES_VIEW_ICONS) { if (gui_files_sel < gui_fat_count - 1) gui_files_sel++; }
-        else if (k == KEY_ENTER) { /* v0.85.6: selection exists (arrows+Enter wired); real file-open/navigate is future work, same as the pre-existing flat list had no open action either. */ }
+        if (gui_files_on_key(k)) return;
     }
 }
 
@@ -6423,7 +6454,7 @@ static int gui_multiwin_supported(int icon){ return icon == 0 || icon == 7 || ic
    input loop below only ever forwards a keystroke to the app whose
    window is currently topmost/focused (the same "topmost owns input"
    rule click-to-focus already established for clicks). */
-static int gui_multiwin_interactive(int icon){ return icon == 1 || icon == 2 || icon == 4 || icon == 7; } /* 7: Weather, for its R-to-retry key */
+static int gui_multiwin_interactive(int icon){ return icon == 0 || icon == 1 || icon == 2 || icon == 4 || icon == 7; } /* 0: Files, for its 1/2 view-switch keys; 7: Weather, for its R-to-retry key */
 
 /* Window 0 keeps the exact single-window rect the existing dock-app tests
    already assert against (gui_launch_from_dock's own x=70,y=40,w=820,h=385;
@@ -7239,6 +7270,7 @@ static void gui_run(void){
                 else if (mw_topmost_icon == 2) mw_should_close = gui_calendar_on_key(mwk);
                 else if (mw_topmost_icon == 1) mw_should_close = gui_mail_on_key(mwk);
                 else if (mw_topmost_icon == 7) mw_should_close = gui_weather_key(mwk, gui_weather_mw_repaint);
+                else if (mw_topmost_icon == 0) mw_should_close = gui_files_on_key(mwk);
                 if (mw_should_close) {
                     gui_multiwin_close(gui_window_count - 1);
                     mw_key_repaint = 1; /* the window left the screen: needs the real full desktop repaint to erase it, the same cost every open/close already pays */
@@ -7406,6 +7438,17 @@ static void gui_run(void){
                     dw->x = nx; dw->y = ny;
                 }
                 launched = 1;
+            } else if (press_window >= 0 && gui_windows[press_window].icon == 0
+                       && gui_files_click(gui_windows[press_window].x, gui_windows[press_window].y, mx, my)) {
+                /* Files' own toolbar (List/Icons): consumed by the toolbar
+                   hit-test above, not the generic close contract right
+                   below -- a click on List/Icons switches the view and
+                   keeps the window open, instead of dismissing it like any
+                   other click inside the window would. */
+                gui_cursor_restore();
+                gui_multiwin_draw_content_only(&gui_windows[press_window]);
+                gui_cursor_save(last_mx, last_my);
+                gui_draw_cursor(last_mx, last_my);
             } else if (press_window >= 0) {
                 /* v0.73.0: closing this window is exactly it, no reopen/
                    switch behaviour (that's v68's dock-tile close-and-open,
