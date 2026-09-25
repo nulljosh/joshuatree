@@ -55,6 +55,7 @@ retry|1|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.s
 once |3|PNG decoder, host harness|./tools/checks/png-host-check.sh
 once |3|TTF rasterizer, host harness|./tools/checks/ttf-host-check.sh
 once |0|libjt string/stdlib, host harness|./tools/checks/libjt-host-check.sh
+once |2|God-file guard (no hand-written .c/.h over its line ceiling)|./tools/checks/godfile-check.sh
 retry|2|PNG decoder, in-kernel|./tools/checks/png-check.sh
 retry|2|AA text spacing, in-kernel|./tools/checks/textspacing-check.sh
 retry|0|AA text stems are dense but still antialiased|python3 ./tools/checks/textsharp-check.py
