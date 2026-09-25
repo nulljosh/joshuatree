@@ -258,27 +258,35 @@ try:
     machine.key('caps_lock')
     expected += '\n\tQA'
     machine.expect(expected)
+    # v-ttf: the size control now cycles 11 point sizes (12..200, see
+    # EDITOR_PT_SIZES), not 4, and past ~72pt a single line of "Hello,
+    # Joshua Tree!" overflows this crop's fixed small viewport -- true, but
+    # it makes "distinct rendering at every size" a bad signal for a crop
+    # this size. Size scaling itself gets its own real test in
+    # notessharp-check.py (12pt vs 200pt, checked for antialiased edges and
+    # no duplicated blocks); this loop keeps doing what it always did --
+    # proving F1 (family) and F3 (weight) each produce a genuinely
+    # different rendering, not a relabelled one -- at whatever size is
+    # already selected, without also re-deriving the size control's own
+    # index math here.
     rendered_styles = set()
     for family in range(3):
-        for size in range(4):
-            for weight in range(2):
-                machine.wait_int('editor_family', lambda v, family=family: v == family)
-                machine.wait_int('editor_size', lambda v, size=size: v == (size + 1) % 4)
-                machine.wait_int('editor_weight', lambda v, weight=weight: v == weight)
-                # Since v0.78.0 drawing lands in a back buffer, so a kernel
-                # variable changing no longer means the screen has changed
-                # yet. Give the editor's own loop a real pass to present
-                # before sampling the framebuffer.
-                time.sleep(.4)
-                frame = machine.screenshot(f'type-{family}-{size}-{weight}')
-                origin_x, origin_y = machine.integer('app_view_x'), machine.integer('app_view_y')
-                crop = frame.crop(((origin_x + 40) * 2, (origin_y + 92) * 2,
-                                   (origin_x + 740) * 2, (origin_y + 210) * 2))
-                rendered_styles.add(crop.tobytes())
-                machine.key('f3')
-            machine.key('f2')
+        for weight in range(2):
+            machine.wait_int('editor_family', lambda v, family=family: v == family)
+            machine.wait_int('editor_weight', lambda v, weight=weight: v == weight)
+            # Since v0.78.0 drawing lands in a back buffer, so a kernel
+            # variable changing no longer means the screen has changed
+            # yet. Give the editor's own loop a real pass to present
+            # before sampling the framebuffer.
+            time.sleep(.4)
+            frame = machine.screenshot(f'type-{family}-{weight}')
+            origin_x, origin_y = machine.integer('app_view_x'), machine.integer('app_view_y')
+            crop = frame.crop(((origin_x + 40) * 2, (origin_y + 92) * 2,
+                               (origin_x + 740) * 2, (origin_y + 210) * 2))
+            rendered_styles.add(crop.tobytes())
+            machine.key('f3')
         machine.key('f1')
-    assert len(rendered_styles) == 24, 'Typography controls did not produce 24 distinct text renderings'
+    assert len(rendered_styles) == 6, 'Family/weight controls did not produce 6 distinct text renderings'
     machine.expect(expected)
     machine.key('ctrl-s')
     machine.saved()

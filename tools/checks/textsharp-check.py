@@ -40,7 +40,12 @@ CLOSE = (94, 56)  # window 0's red dot (x+24, y+16) for the x=70, y=40 dock wind
 #   Weather -> wx_text (1:1 faces): "Sample location" and the line under it
 APPS = [
     ("Mail", 2, {"Mail hint line": (196, 248, 1000, 280), "Mail message row": (270, 312, 820, 342)}),
-    ("Notes", 4, {"Notes title line": (262, 268, 520, 314), "Notes body line": (262, 392, 1000, 434)}),
+    # v-ttf: editor_draw_glyph now rasterizes through ttf_glyph at physical
+    # resolution, placing the baseline from the font's real ascent metric
+    # instead of a pre-baked bitmap's baked-in top offset, which moved the
+    # seeded note's two lines down from where the old bitmap renderer put
+    # them. Boxes re-measured against the new physical layout, same lines.
+    ("Notes", 4, {"Notes title line": (262, 330, 600, 385), "Notes body line": (262, 462, 1000, 512)}),
     ("Weather", 8, {"Weather heading": (222, 178, 490, 218), "Weather caption": (222, 224, 548, 250)}),
 ]
 CORE_MIN, MID_MIN, LEVELS_MIN = 0.58, 0.12, 12

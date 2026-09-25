@@ -4,6 +4,11 @@
    the kernel has no libc or libm. */
 #include "ttf.h"
 #include "dejavu_font.h"
+#include "dejavu_bold_font.h"
+#include "dejavu_serif_font.h"
+#include "dejavu_serif_bold_font.h"
+#include "dejavu_mono_font.h"
+#include "dejavu_mono_bold_font.h"
 
 #ifdef TTF_HOST_BUILD
 #include "kheap.h"
@@ -124,6 +129,18 @@ ttf_font_t *ttf_load_default(void) {
     return ttf_load(dejavu_font_data);
 }
 
+ttf_font_t *ttf_load_face(ttf_face_t face) {
+    switch (face) {
+    case TTF_FACE_SANS:        return ttf_load(dejavu_font_data);
+    case TTF_FACE_SANS_BOLD:   return ttf_load(dejavu_bold_font_data);
+    case TTF_FACE_SERIF:       return ttf_load(dejavu_serif_font_data);
+    case TTF_FACE_SERIF_BOLD:  return ttf_load(dejavu_serif_bold_font_data);
+    case TTF_FACE_MONO:        return ttf_load(dejavu_mono_font_data);
+    case TTF_FACE_MONO_BOLD:   return ttf_load(dejavu_mono_bold_font_data);
+    default:                   return ttf_load(dejavu_font_data);
+    }
+}
+
 void ttf_free(ttf_font_t *font) {
     if (font) kfree(font);
 }
@@ -173,4 +190,12 @@ int ttf_kerning(ttf_font_t *font, unsigned int cp1, unsigned int cp2, float px_s
     float scale = stbtt_ScaleForMappingEmToPixels(&font->info, px_size);
     int k = stbtt_GetCodepointKernAdvance(&font->info, (int)cp1, (int)cp2);
     return ttf_ifloor(k * scale + 0.5f);
+}
+
+int ttf_ascent(ttf_font_t *font, float px_size) {
+    if (!font) return 0;
+    float scale = stbtt_ScaleForMappingEmToPixels(&font->info, px_size);
+    int ascent, descent, line_gap;
+    stbtt_GetFontVMetrics(&font->info, &ascent, &descent, &line_gap);
+    return ttf_ifloor(ascent * scale + 0.5f);
 }
