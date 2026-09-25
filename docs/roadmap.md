@@ -17,10 +17,10 @@ Measured against SerenityOS, the closest one-person-scale peer, and macOS/Linux.
 
 1. **Real hardware.** Boots only in QEMU: no xHCI USB, no AHCI, no e1000; keyboard needs legacy BIOS mode, saving needs an old IDE disk. The hardware business depends on this. See Real hardware, e1000 under 1.0.0.
 2. **A compositor.** Apps draw straight to the framebuffer in blocking loops: at most two windows, no resize or minimize, nothing runs in the background. See Multi-window.
-3. **Native TLS.** HTTPS goes through the worker proxy, so a browser can't happen yet.
-4. **Sound.** None at all; Music, video and a screen reader wait on AC97.
-5. **Desktop basics.** Undo, right-click menus, drag and drop, app switcher (the clipboard landed in 1.0.6, text selection in 1.2.0).
-6. **Apps from outside the kernel.** All 25 apps compile into the kernel; two ring-3 programs exist. No installer, no update path.
+2. **Native TLS.** HTTPS goes through the worker proxy, so a browser can't happen yet.
+3. **Sound.** None at all; Music, video and a screen reader wait on AC97.
+4. **Desktop basics.** Undo, right-click menus, drag and drop, app switcher (the clipboard landed in 1.0.6, text selection in 1.2.0).
+5. **Apps from outside the kernel.** All 25 apps compile into the kernel; two ring-3 programs exist. No installer, no update path.
 
 ## Beta, 0.9.0
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck.
@@ -202,12 +202,11 @@ The OS stays free. Monetization is custom hardware built to run it. Everything t
 ## Session task queue
 Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current. Each item also needs a `(plain: ...)` phrase right after the title, a few plain words a 20-year-old visitor would understand with zero dev background — that phrase is what actually shows on the landing page, never the dev title. Internal refactor work that a visitor has no way to try (nothing to click, nothing that looks different) uses `(plain: skip)`, which the generator drops from the card entirely instead of translating it into vague visitor-facing words.
 1. **Portfolio apps get real demos** (plain: watch each app work) [Sonnet]: picking an app in portfolio mode only shows its URL today. Play a short scripted walkthrough instead: the ported snapshot where one exists, an auto-played tour otherwise. Start with the five homepage picks. Joshua's note, 2026-09-25: "apps aren't really demo'd, just opened". Target: weekend of 2026-09-26.
-2. **Epiphany shows live prices** (plain: live stock prices in the finance app) [Sonnet]: value Epiphany's sample holdings at real quotes through the same `/api/stocks` Worker route Stocks already uses, and drop the "Demo data, not live" banner. The holdings stay sample: showing Joshua's real portfolio on a public page is [Joshua]'s call, not a default. Joshua's note, 2026-09-25: "epiphany still shows demo data". Target: weekend of 2026-09-26.
 3. **Check the portfolio in X's in-app browser** (plain: skip) [Haiku]: `?full` now boots right away instead of waiting on an IntersectionObserver. Confirm on a phone by opening heyitsmejosh.com from a post in the X app. If it still hangs, capture what shows.
 4. **Split kernel.c into per-subsystem files** (plain: skip) [Sonnet]: ~7,800 lines, the one god file left here. Don't combine with other kernel.c work. Internal refactor only, nothing a visitor can see or try, so it's excluded from the landing card.
 5. **Rich document app** (plain: a word processor) [Sonnet]: Word/Pages-style paragraph and run formatting, distinct from Notes (which stays plain text).
 6. **Native code editor** (plain: a code editor) [Sonnet]: syntax highlighting for the native editor app.
-7. **Package/install tool** (plain: apps you can install) [Sonnet]: a fetch-and-install tool over this kernel's own HTTP client.
+6. **Package/install tool** (plain: apps you can install) [Sonnet]: a fetch-and-install tool over this kernel's own HTTP client.
 
 ## Landing roadmap summary
 `tools/gen/landing-roadmap.py` reads this file's Session task queue and takes up to three open, numbered, bold task titles for the landing page's "Where it's going" card, skipping completed entries and escaping for HTML. `tools/checks/landing-roadmap-check.py` and `tools/gen/landing-roadmap.py --check` are the regression checks. A roadmap change triggers the landing deploy workflow, which regenerates the card before upload.
