@@ -80,6 +80,7 @@ retry|1|Notes editor chrome doesn't redraw on plain keystrokes|./tools/checks/ed
 retry|1|System-wide clipboard: Ctrl+C/X/V round-trips real text within Notes, across Notes->Terminal, truncates a too-long paste cleanly|python3 ./tools/checks/clipboard-check.py
 retry|1|Mail, Reminders and Calculator prompts redraw content, not chrome, per keystroke|./tools/checks/gui-prompt-keystroke-check.sh
 retry|2|Notes typing, typography, pointer controls, persistence|python3 ./tools/checks/editor_qa.py
+retry|1|Notes' runtime-TTF text is real antialiased rasterization at 12pt and 200pt, not a duplicated-block bitmap upscale|python3 ./tools/checks/notessharp-check.py
 retry|2|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/termchatflash-check.sh
 retry|0|Terminal grid draws the mono face at its true advance|python3 ./tools/checks/termmono-check.py
 retry|0|Apple-menu hover stays cheap, clock redraws on a minute change|./tools/checks/menuclock-check.sh
