@@ -48,13 +48,14 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     outputs:
       code: ${{ steps.diff.outputs.code }}
+      kernel: ${{ steps.diff.outputs.kernel }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - id: diff
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then echo code=true >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo code=true >> "$GITHUB_OUTPUT"; echo kernel=true >> "$GITHUB_OUTPUT"; exit 0; fi
           files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
           echo "$files"
           if echo "$files" | grep -qvE '\.md$' || echo "$files" | grep -qx 'docs/roadmap.md'; then
@@ -62,13 +63,20 @@ jobs:
           else
             echo code=false >> "$GITHUB_OUTPUT"
           fi
+          # 1.5.14: a landing-only PR (landing/, VERSION, prose) skips the
+          # ~9 minute QEMU suite; the demo job runs the landing checks instead.
+          if echo "$files" | grep -qvE '^landing/|^VERSION$|\.md$'; then
+            echo kernel=true >> "$GITHUB_OUTPUT"
+          else
+            echo kernel=false >> "$GITHUB_OUTPUT"
+          fi
 
   # The suite runs as four parallel shards (ci-suite.sh SHARD/SHARDS),
   # about a quarter of the wall time each. `check` below stays the one
   # required status and passes only when every shard did.
   suite:
     needs: [changes]
-    if: needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.kernel == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
     # Pinned, not `ubuntu-latest`. `latest` silently rolls to the next LTS
     # image, which swaps the clang/qemu/PIL versions underneath every check
     # in this file at a moment GitHub picks, not one this repo picks -- the
@@ -196,6 +204,16 @@ jobs:
         run: node tools/checks/demochat-check.mjs || (sleep 10 && node tools/checks/demochat-check.mjs)
       - name: Landing demo cursor glides, never teleports (retries once)
         run: node tools/checks/cursorglide-check.mjs || (sleep 10 && node tools/checks/cursorglide-check.mjs)
+      # Landing-only PR: the suite is skipped, so its landing checks run here.
+      - name: Landing checks (landing-only PR, suite skipped)
+        if: needs.changes.outputs.kernel == 'false'
+        run: |
+          fail=0
+          for c in democrisp-check.mjs tourappcount-check.mjs idletour-arm-reset-check.mjs rtc-timezone-check.mjs stocks-live-check.mjs; do
+            node tools/checks/$c || fail=1
+          done
+          ./tools/checks/landing-headline-check.sh || fail=1
+          exit $fail
       - name: Keep the after-reply screenshot from a failed run
         if: failure()
         uses: actions/upload-artifact@v4
@@ -223,7 +241,7 @@ jobs:
           echo "suite:   ${{ needs.suite.result }}"
           echo "demo:    ${{ needs.demo.result }}"
           [ "${{ needs.changes.result }}" = "success" ] || exit 1
-          [ "${{ needs.suite.result }}" = "success" ] || { [ "${{ needs.suite.result }}" = "skipped" ] && [ "${{ needs.changes.outputs.code }}" = "false" ]; }
+          [ "${{ needs.suite.result }}" = "success" ] || { [ "${{ needs.suite.result }}" = "skipped" ] && { [ "${{ needs.changes.outputs.code }}" = "false" ] || [ "${{ needs.changes.outputs.kernel }}" = "false" ]; }; }
           [ "${{ needs.demo.result }}" = "success" ] || { [ "${{ needs.demo.result }}" = "skipped" ] && [ "${{ needs.changes.outputs.code }}" = "false" ]; }
 
   # CLAUDE.md 4d's own candidate, "a second job for check-refs.sh": pure
