@@ -100,6 +100,7 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #define WALL_ROWS 3
 #include "serial.h"
 #include "sb16.h"
+#include "speak.h"
 #include "app_weather.h"
 #include "app_curbfind.h"
 #include "app_keyrate.h"
@@ -7679,7 +7680,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest beep\n");
+    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest beep say\n");
                                         puts("a name that isn't one of the above runs a program by that name too, e.g. \"hello\" or \"note buy milk\" (same as exec, case-insensitive)\n"); }
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
@@ -7687,6 +7688,8 @@ static void run(char *line){
     else if (!strcmp(line, "pagefault")) { volatile int *p = (int *)0xDEAD0000; *p = 1; } /* manual check: exercises paging */
     else if (!strcmp(line, "bench"))     { bench_run(fs_ok_global); }
     else if (!strcmp(line, "beep"))      puts(sb16_beep(440, 500) ? "beep: played 440Hz\n" : "beep: no sound card\n");
+    else if (!strcmp(line, "say"))       puts(!*arg ? "usage: say <text>\n" : !net_init(0x0A00020F) ? "say: no NIC\n"
+                                              : speak_text(llm_host, (unsigned short)llm_port, arg, CHAT_SPEAK_TIMEOUT_TICKS) ? "say: played\n" : "say: nothing played\n");
     else if (!strcmp(line, "heaptest")) {
         char *a = kmalloc(16);
         char *b = kmalloc(32);

@@ -95,6 +95,7 @@ Ollama server in the Chat app.
 | File | What it does |
 |---|---|
 | `drivers/sb16.c` | Driver for the Sound Blaster 16, the card both QEMU and the browser emulator provide. It plays 8-bit mono sound through the old ISA DMA controller, and the shell's `beep` command uses it to play a short 440Hz tone. |
+| `drivers/speak.c` | Text to speech. It sends a line of text to Samantha's `/api/speak`, gets raw sound back, and plays it on the Sound Blaster. Chat uses it to read each reply aloud, and the shell's `say` command uses it too. With no sound card, it does nothing. |
 
 On a machine without the card the driver says so on the serial port and
 does nothing else. It never waits forever on a port.
@@ -150,7 +151,7 @@ change. No Save button.
 | Calendar | `kernel/calendar.h` | `EVENTS.TXT`. The grid itself is computed from the clock. |
 | Mail | `kernel/mail.h` | `MAIL.TXT`. Two starter messages ship compiled in. |
 | Contacts | `kernel/contacts.h` | `CONTACTS.TXT`. |
-| Chat | `kernel/chat.h` | `CHAT.TXT`. Talks to a local Ollama server over the kernel's own HTTP. |
+| Chat | `kernel/chat.h` | `CHAT.TXT`. Talks to a local Ollama server over the kernel's own HTTP. Reads each reply aloud when there is a sound card. |
 
 **Apps with nothing to save.**
 

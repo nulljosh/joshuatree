@@ -108,6 +108,7 @@ static const char *chat_error(void) { return chat_last_error; }
    real local box needs longer. */
 #define CHAT_SEND_TIMEOUT_TICKS 4500  /* ~45s at 100Hz: /api/chat */
 #define CHAT_PICK_TIMEOUT_TICKS 1000  /* ~10s at 100Hz: /api/pick, a small classifier call */
+#define CHAT_SPEAK_TIMEOUT_TICKS 1500 /* ~15s at 100Hz: /api/speak audio download, well under /api/chat's own bound */
 
 /* Same field-boundary contract contacts.h/mail.h already use: stored
    content can't contain '|' or '\n', so a plain scan for either is a
@@ -611,7 +612,15 @@ static const char *chat_process_message(char *msg, int T, int x, int you_w, int 
     if (!handled) {
         chat_draw_status("generating ...");
         static char answer[4096];
-        if (chat_send(msg, answer, sizeof(answer))) return "ready";
+        if (chat_send(msg, answer, sizeof(answer))) {
+            /* Speak the reply when a sound card is there; speak_text is a
+               silent no-op without one or when /api/speak fails. */
+            if (sb16_present()) {
+                chat_draw_status("speaking ...");
+                speak_text(llm_host, (unsigned short)llm_port, answer, CHAT_SPEAK_TIMEOUT_TICKS);
+            }
+            return "ready";
+        }
         const char *e = chat_error();
         return e[0] ? e : "error: couldn't reach the host, or no reply";
     }
