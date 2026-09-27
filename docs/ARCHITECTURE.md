@@ -1,43 +1,40 @@
 # Architecture
 
-This is the map of the kernel as it exists today. If you want to know what
-a file is for, or where to start reading, start here. `docs/roadmap.md` is
-the plan and the history; this page stays in the present tense.
+Joshua Tree is a whole computer written from nothing. You turn it on, it
+draws a desktop, and you use its apps: notes, mail, a calendar, weather,
+a chat that can set reminders for you. Everything it does, it does
+itself. There is no Linux underneath and no borrowed library.
 
-The whole thing is one static binary, `kernel.elf`, built from the
-`boot/`, `kernel/`, `drivers/` and `lib/` folders with Clang and lld.
-There is no libc. Everything the kernel needs, it carries.
+It runs in your browser on the landing page, in QEMU on a Mac, or from a
+USB stick on a real PC. It is all one file, `kernel.elf`, built from the
+`boot/`, `kernel/`, `drivers/` and `lib/` folders. `docs/roadmap.md` is
+the plan; this page is the map of what exists today.
 
-## From power-on to the desktop
+## How it starts
 
-1. **The bootloader hands over.** QEMU's `-kernel` loader, or Limine on a
-   real disk, loads the ELF at physical address 1MB and jumps to
-   `_start` in `boot/boot.S`.
-2. **Paging comes on.** The kernel is linked to run at 0xC0000000 (a
-   "higher-half" kernel) but it is sitting at 1MB. `boot.S` builds a
-   temporary page directory that maps the first 4MB at both addresses,
-   switches paging on, and jumps to the high address. From here on every
-   line of C runs in the upper half.
-3. **`kmain` brings the hardware up in dependency order.** Segments, then
-   interrupt tables, then the interrupt controller, then physical memory,
-   then the permanent page tables, then the scheduler, then the disk. Each
-   step needs the one before it, so the order is not negotiable.
+1. **Something loads it.** QEMU, the browser demo or a real bootloader
+   drops the kernel into memory and jumps to `boot/boot.S`.
+2. **It sets up its own memory.** A few lines of assembly move the kernel
+   to where it expects to live, then hand off to C.
+3. **It wakes the hardware, one piece at a time.** `kmain` starts the
+   processor tables, the clock, memory, the scheduler and the disk, each
+   one needing the last.
 4. **You land in a shell.** Type `gui` and the desktop starts. The shell
-   and the desktop are the same program; the terminal window is just the
-   shell in a window.
+   and the desktop are the same program; the Terminal is the shell in a
+   window.
 
 ## The layers
 
-Read the kernel bottom-up and each file makes sense from the ones below it.
+Each layer only leans on the ones above it on this page, so it reads top to bottom.
 
 ### CPU setup and interrupts
 
 | File | What it does |
 |---|---|
-| `boot/boot.S` | Multiboot header, temporary page tables, the jump into the higher half, the first stack. |
-| `kernel/gdt.c` | The segment table. Ring-0 and ring-3 code and data segments, plus the TSS that lets a user program trap back into the kernel on its own kernel stack. |
+| `boot/boot.S` | The first code that runs. Sets up just enough memory to reach C. |
+| `kernel/gdt.c` | Tells the processor what is kernel and what is a program, so programs can safely call into the kernel. |
 | `kernel/idt.c` + `kernel/isr.S` | The interrupt table and the 32 CPU exception handlers. A kernel-mode fault paints a panic screen and halts. A user-mode fault kills that one program and the kernel keeps going. |
-| `kernel/pic.c` | Reprograms the 8259 so hardware interrupts land on vectors 32 to 47 instead of colliding with CPU exceptions. |
+| `kernel/pic.c` | Routes hardware signals, like a key press, so they never get confused with processor errors. |
 | `kernel/irq.c` + `kernel/irq_stubs.S` | The hardware interrupt handlers. The timer tick drives the scheduler, the keyboard fills a ring buffer. |
 | `kernel/syscall.c` | The `int 0x80` dispatch table. Numbers and calling convention are Linux's, so the ABI needs no translation. The contract is written down in `docs/SYSCALL-ABI.md`. |
 
@@ -46,7 +43,7 @@ Read the kernel bottom-up and each file makes sense from the ones below it.
 | File | What it does |
 |---|---|
 | `kernel/pmm.c` | Physical memory as a bitmap of 4KB frames, sized from what the bootloader reports. |
-| `kernel/paging.c` | The permanent page tables. Identity-maps the first 4MB and maps it again at 0xC0000000 for the kernel. Also flips individual pages user-accessible for ring-3 programs. |
+| `kernel/paging.c` | Decides which memory each program can see, and keeps programs out of the kernel's. |
 | `kernel/kheap.c` | `kmalloc` and `kfree`. A first-fit free list that grows one frame at a time. |
 | `lib/libc.c` | `memcpy`, `memset`, `strlen` and the other handful of primitives a freestanding kernel cannot live without. |
 
@@ -66,7 +63,7 @@ Read the kernel bottom-up and each file makes sense from the ones below it.
 
 | File | What it does |
 |---|---|
-| `drivers/ata.c` | ATA PIO disk reads and writes, primary master, 28-bit addressing. |
+| `drivers/ata.c` | Reads and writes the hard disk. |
 | `drivers/blockdev.c` | One `read_sector` / `write_sector` table so the filesystem does not care whether the bytes come from a disk or from RAM. |
 | `drivers/ramdisk.c` | The RAM-backed block device. |
 | `drivers/fat.c` | FAT16 with real subdirectories, writes and 8.3 names. |
@@ -94,7 +91,7 @@ Ollama server in the Chat app.
 
 | File | What it does |
 |---|---|
-| `drivers/vbe.c` | Switches the Bochs VGA adapter into 1920x1080 linear framebuffer mode and back. |
+| `drivers/vbe.c` | Switches the screen into 1920x1080 graphics. |
 | `drivers/window.c` | The one drawing target everything renders through: pixels, rectangles, a viewport, and a partial-repaint band. |
 | `drivers/font.c` | Reads the real 8x16 IBM font out of VGA hardware at boot. Falls back to an embedded copy when the read comes back empty, as it does in the browser. |
 | `drivers/png.c` + `drivers/jpeg.c` | Small image decoders, 8-bit RGB and RGBA PNG and baseline JPEG. The wallpaper map tiles go through PNG. |
