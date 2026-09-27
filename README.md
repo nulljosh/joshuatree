@@ -33,12 +33,14 @@ brew install lld qemu
 make run              # boot to shell; type gui for desktop
 make iso              # build bootable ISO
 ./check.sh            # run regression tests
+./tools/bench.sh      # boot time, heap, memcpy, context switch, disk
 ```
 
 ## Read more
 
 - [docs/WHITEPAPER.md](docs/WHITEPAPER.md) - why and how
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - every file
+- [docs/BENCHMARKS.md](docs/BENCHMARKS.md) - how fast it is
 - [SECURITY.md](SECURITY.md) - security model
 - [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) - threat model
 - [docs/roadmap.md](docs/roadmap.md) - what's next
