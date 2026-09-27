@@ -88,9 +88,12 @@ async function handleProxy(request) {
     return new Response("Invalid url parameter", { status: 400 });
   }
 
-  if (targetUrl.hostname === "joshuatree.heyitsmejosh.com" && targetUrl.pathname === "/api/stocks"
-      && ["http:", "https:"].includes(targetUrl.protocol) && !targetUrl.port && !targetUrl.username && !targetUrl.password)
-    return handleStocks(targetUrl);
+  if (targetUrl.hostname === "joshuatree.heyitsmejosh.com"
+      && ["http:", "https:"].includes(targetUrl.protocol) && !targetUrl.port && !targetUrl.username && !targetUrl.password) {
+    if (targetUrl.pathname === "/api/stocks") return handleStocks(targetUrl);
+    if (targetUrl.pathname === "/api/quotes") return handleQuotes();
+    if (targetUrl.pathname === "/api/deals") return handleDeals(request); // the guest's request rides the visitor's own browser fetch, so request.cf is the visitor
+  }
 
   // 1.0.12: a tight, deliberately narrow exception for Chat talking to the
   // Turing project's own Ollama-compatible /api/chat (kernel/chat.h's
@@ -240,10 +243,54 @@ async function handleStocks(url) {
   }});
 }
 
+const WIRE = {"Content-Type": "text/plain; charset=utf-8", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"};
+
+// Epiphany's watchlist: price and previous close only, one line per symbol,
+// so the kernel side stays a 40-line text parse. Kept under Cloudflare's
+// 50-subrequest cap for one incoming request.
+const QUOTE_SYMBOLS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "NFLX", "AMD", "DIS", "JPM", "COIN", "SHOP", "UBER",
+  "INTC", "CRM", "ORCL", "ADBE", "PYPL", "SQ", "ABNB", "SNOW", "PLTR", "BA", "GS", "BAC", "V", "MA", "WMT", "COST",
+  "KO", "PEP", "NKE", "SBUX", "MCD", "XOM", "CVX", "PFE", "JNJ", "UNH"];
+async function handleQuotes() {
+  const lines = await Promise.all(QUOTE_SYMBOLS.map(async symbol => {
+    try {
+      const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=1d&interval=1d`, {
+        headers: {"User-Agent": "Mozilla/5.0"}, signal: AbortSignal.timeout(8000), cf: {cacheTtl: 300, cacheEverything: true},
+      });
+      const m = (await response.json())?.chart?.result?.[0]?.meta;
+      const cents = v => typeof v === "number" && v > 0 && v <= 100000 ? Math.round(v * 100) : 0;
+      const price = cents(m?.regularMarketPrice), prev = cents(m?.previousClose ?? m?.chartPreviousClose);
+      if (!price || !prev) throw Error("Missing quote");
+      return `${symbol} ${price} ${prev}`;
+    } catch { return `${symbol} 0 0`; }
+  }));
+  return new Response(lines.join("\n") + "\n", {headers: WIRE});
+}
+
+// Curbfind, local to the visitor: Cloudflare's own geo-IP city, slugged the
+// way Craigslist names its areas, against Curbfind's real deal-ranked search
+// (curbfind/worker). Unknown area falls back to Vancouver. Wire format:
+// first line is the city, then `score|price|neighbourhood|title` rows.
+const CURBFIND_API = "https://curbside-api.trommatic.workers.dev/api/search?sort=deal&city=";
+async function handleDeals(request) {
+  const clean = v => String(v ?? "").replace(/[^\x20-\x7e]/g, "").replace(/\|/g, " ").trim();
+  let city = clean(request.cf?.city) || "Vancouver";
+  const fetchCity = c => fetch(CURBFIND_API + encodeURIComponent(c.toLowerCase().replace(/[^a-z]/g, "")), {signal: AbortSignal.timeout(8000)});
+  let res = await fetchCity(city);
+  if (!res.ok) { city = "Vancouver"; res = await fetchCity(city); }
+  if (!res.ok) return new Response("", {status: 502});
+  const items = (await res.json()).items || [];
+  const rows = items.filter(i => typeof i.price === "number" && i.price >= 25 && i.title).slice(0, 14).map(i =>
+    `${Math.max(0, Math.min(10, Math.round(i.dealScore * 10)))}|$${i.price}|${clean(i.location) || city}|${clean(i.title).slice(0, 60)}`);
+  return new Response([city, ...rows].join("\n") + "\n", {headers: WIRE});
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/stocks") return handleStocks(url);
+    if (url.pathname === "/api/quotes") return handleQuotes();
+    if (url.pathname === "/api/deals") return handleDeals(request);
     if (url.pathname === "/api/proxy") {
       return handleProxy(request);
     }

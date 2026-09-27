@@ -38,21 +38,59 @@ static const epi_row_t epi_alt[] = {
 };
 #define EPI_ALT_N 5
 
-/* Epiphany's own watchlist: a pool of tickers, a flag per ticker for whether it is watched. */
-#define EPI_POOL_N 14
+/* Epiphany's own watchlist: a pool of tickers, a flag per ticker for whether it is watched.
+   All 40 carry live quotes through /api/quotes (worker.js); the numbers here are the offline fallback. */
+#define EPI_POOL_N 40
 static epi_row_t epi_pool[EPI_POOL_N] = {
     {"AAPL", "Apple", 23800, 106}, {"MSFT", "Microsoft", 41900, -43}, {"GOOGL", "Alphabet", 14200, 252},
     {"AMZN", "Amazon", 19100, -164}, {"TSLA", "Tesla", 24200, 372}, {"NVDA", "NVIDIA", 12800, 330},
     {"META", "Meta", 58000, -109}, {"NFLX", "Netflix", 66000, 182}, {"AMD", "AMD", 15600, 290},
     {"DIS", "Disney", 9800, -60}, {"JPM", "JPMorgan", 21500, 45}, {"COIN", "Coinbase", 24800, 540},
-    {"SHOP", "Shopify", 8900, 210}, {"UBER", "Uber", 7400, -85},
+    {"SHOP", "Shopify", 8900, 210}, {"UBER", "Uber", 7400, -85}, {"INTC", "Intel", 2300, -120},
+    {"CRM", "Salesforce", 27000, 80}, {"ORCL", "Oracle", 16500, 140}, {"ADBE", "Adobe", 46000, -70},
+    {"PYPL", "PayPal", 7200, 30}, {"SQ", "Block", 6800, 190}, {"ABNB", "Airbnb", 13500, -40},
+    {"SNOW", "Snowflake", 12000, 260}, {"PLTR", "Palantir", 4200, 410}, {"BA", "Boeing", 17500, -150},
+    {"GS", "Goldman Sachs", 52000, 60}, {"BAC", "Bank of America", 4100, 25}, {"V", "Visa", 29000, 50},
+    {"MA", "Mastercard", 47000, 40}, {"WMT", "Walmart", 8200, 70}, {"COST", "Costco", 89000, 30},
+    {"KO", "Coca-Cola", 6300, -10}, {"PEP", "PepsiCo", 16800, -20}, {"NKE", "Nike", 7800, -130},
+    {"SBUX", "Starbucks", 9600, 90}, {"MCD", "McDonald's", 29500, 15}, {"XOM", "Exxon", 11800, 110},
+    {"CVX", "Chevron", 15500, 95}, {"PFE", "Pfizer", 2800, -45}, {"JNJ", "Johnson & Johnson", 16000, 20},
+    {"UNH", "UnitedHealth", 52500, -210},
 };
-static int epi_watch[EPI_POOL_N] = {1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0};
+static int epi_watch[EPI_POOL_N] = {[0 ... EPI_POOL_N - 1] = 1};
+static int epi_scroll; /* first visible watchlist row */
 /* k-th watched (or, with want=0, unwatched) pool index; -1 past the end */
 static int epi_nth(int want, int k) { for (int i = 0; i < EPI_POOL_N; i++) if (!!epi_watch[i] == want && k-- == 0) return i; return -1; }
 static int epi_count(int want) { int n = 0; for (int i = 0; i < EPI_POOL_N; i++) n += !!epi_watch[i] == want; return n; }
 static int epi_adding;
-static int epi_live; /* how many of the 8 equities carry a live quote */
+static int epi_live; /* how many pool tickers carry a live quote */
+
+/* "SYM price prev" per line from /api/quotes; a 0 price keeps the last number. */
+static void epi_fetch_quotes(void) {
+    static char body[2048];
+    int n = net_init(0x0A00020F) ? http_get_timeout("joshuatree.heyitsmejosh.com", "/api/quotes", 80, body, sizeof(body) - 1, 1500) : -1;
+    if (n <= 0 || n >= (int)sizeof(body) - 1 || http_last_status() != 200) return;
+    body[n] = 0;
+    for (const char *p = body; *p;) {
+        char sym[8]; int si = 0, price = 0, prev = 0;
+        while (*p && *p != ' ' && *p != '\n' && si < 7) sym[si++] = *p++;
+        sym[si] = 0;
+        if (*p == ' ') { p++; while (*p >= '0' && *p <= '9') price = price * 10 + (*p++ - '0'); }
+        if (*p == ' ') { p++; while (*p >= '0' && *p <= '9') prev = prev * 10 + (*p++ - '0'); }
+        while (*p && *p != '\n') p++;
+        if (*p) p++;
+        if (price <= 0 || prev < 100) continue;
+        for (int i = 0; i < EPI_POOL_N; i++) {
+            const char *a = sym, *b = epi_pool[i].sym;
+            while (*a && *a == *b) { a++; b++; }
+            if (*a || *b) continue;
+            epi_pool[i].price_x100 = price;
+            epi_pool[i].bp = (price - prev) * 100 / (prev / 100); /* no 64-bit divide in a freestanding kernel */
+            epi_live++;
+            break;
+        }
+    }
+}
 
 /* Pull the 1D quotes Stocks uses and copy fresh ones in. A stale or failed
    row keeps its last price, so an outage never blanks the portfolio. */
@@ -62,13 +100,10 @@ static void epi_refresh(void) {
     for (int i = 0; i < STOCKS_MAX; i++) {
         if (stx_data[0][i].stale) continue;
         int price = stx_data[0][i].price, prev = stx_data[0][i].prev;
-        epi_demo_entries[i].price_x100 = price;
+        epi_demo_entries[i].price_x100 = price; /* holdings are Stocks' 8, chart points included */
         epi_demo_entries[i].change_x100 = price - prev;
-        /* ponytail: epi_pool's first 8 are Stocks' 8 in the same order; the other 6 stay sample */
-        epi_pool[i].price_x100 = price;
-        epi_pool[i].bp = prev >= 100 ? (price - prev) * 100 / (prev / 100) : 0; /* no 64-bit divide in a freestanding kernel */
-        epi_live++;
     }
+    epi_fetch_quotes();
 }
 
 #define EPI_HOLD_N 5
@@ -111,9 +146,15 @@ static void epi_tab_markets(int x, int y, int w, int sel) {
     int cw = (w - 32) / 2, x2 = x + cw + 32;
     font_draw_string(epi_adding ? "Add to watchlist (enter or space adds, esc cancels)" : "Watchlist", x, y, epi_adding ? EPI_ACCENT : STX_MUTED, -1);
     int want = epi_adding ? 0 : 1, n = epi_count(want);
+    int vis = ((int)window_height() - y - 60) / 22; if (vis < 3) vis = 3;
+    if (sel < epi_scroll) epi_scroll = sel;
+    if (sel >= epi_scroll + vis) epi_scroll = sel - vis + 1;
+    if (epi_scroll > n - vis) epi_scroll = n - vis;
+    if (epi_scroll < 0) epi_scroll = 0;
     if (n == 0) font_draw_string(epi_adding ? "Everything is already watched" : "Empty, press a to add", x, y + 24, STX_MUTED, -1);
-    for (int r = 0; r < n && r < 9; r++) {
-        const epi_row_t *s = &epi_pool[epi_nth(want, r)]; int ry = y + 24 + r * 22;
+    if (!epi_adding && n) { epi_num(n, b); stx_cat(b, font_strlen_local(b), " watched"); epi_right(b, x + cw, y, STX_MUTED); }
+    for (int r = epi_scroll; r < n && r < epi_scroll + vis; r++) {
+        const epi_row_t *s = &epi_pool[epi_nth(want, r)]; int ry = y + 24 + (r - epi_scroll) * 22;
         if (r == sel) window_rect(x - 8, ry - 4, cw + 16, 22, 0x00E2D9CC);
         font_draw_string(s->sym, x, ry, STX_INK, -1);
         stocks_format_price(s->price_x100, b, sizeof b); epi_right(b, x + cw - 90, ry, STX_INK);
@@ -229,7 +270,7 @@ static void epi_draw(int tab, int sel) {
     else if (tab == 1) epi_tab_portfolio(x, y, w, sel);
     else if (tab == 2) epi_tab_sim(x, y, w, HH - y);
     else epi_tab_situation(x, y, w);
-    font_draw_string(epi_live ? "Stocks live, the rest is sample   r refresh   left/right tabs   esc closes"
+    font_draw_string(epi_live ? "Live quotes, crypto and macro are sample   r refresh   left/right tabs   esc closes"
                               : "Offline, sample prices   r retry   left/right tabs   esc closes", 20, HH - 24, STX_MUTED, -1);
     window_present();
 }
@@ -253,7 +294,7 @@ static int epi_poll(void) {
 
 static void gui_launch_epiphany(void) {
     int tab = 0, sel = 0, frame = 0;
-    epi_adding = 0;
+    epi_adding = 0; epi_scroll = 0;
     epi_sim_reset();
     for (int i = 0; i < 40; i++) epi_sim_step();
     mouse_click_edge_sync();
@@ -265,7 +306,7 @@ static void gui_launch_epiphany(void) {
         sleep_ticks(2);
         int k;
         while ((k = epi_poll()) != -1) {
-            int lim = tab == 0 ? epi_count(epi_adding ? 0 : 1) : EPI_HOLD_N; if (lim > 9 && tab == 0) lim = 9;
+            int lim = tab == 0 ? epi_count(epi_adding ? 0 : 1) : EPI_HOLD_N;
             if (k == KEY_ESC) { if (epi_adding) { epi_adding = 0; sel = 0; continue; } return; }
             if (tab == 0 && k == 'a' && !epi_adding && epi_count(0) > 0) { epi_adding = 1; sel = 0; continue; }
             if (tab == 0 && epi_adding && (k == KEY_ENTER || k == ' ')) { int p = epi_nth(0, sel); if (p >= 0) epi_watch[p] = 1; epi_adding = 0; sel = 0; continue; }
