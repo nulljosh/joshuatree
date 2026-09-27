@@ -72,6 +72,25 @@ def goertzel(samples, rate, freq):
     return s1 * s1 + s2 * s2 - c * s1 * s2
 
 
+def zero_crossing_pitch(tone, secs):
+    """Schmitt-trigger crossing count: a bare mean-crossing count double-fires
+    on a stray ripple near zero (seen under some CI QEMU builds' audio
+    resampling), so require a real swing through a +-30% amplitude band
+    before it arms the next crossing."""
+    mean = sum(tone) / len(tone)
+    amp = (max(tone) - min(tone)) / 2
+    lo, hi = mean - 0.3 * amp, mean + 0.3 * amp
+    armed = tone[0] < lo
+    crossings = 0
+    for v in tone:
+        if armed and v > hi:
+            crossings += 1
+            armed = False
+        elif not armed and v < lo:
+            armed = True
+    return crossings / secs
+
+
 def wait_for(path, needle, count, secs):
     end = time.time() + secs
     while time.time() < end:
@@ -117,6 +136,10 @@ with tempfile.TemporaryDirectory(prefix="jt-speak-") as work:
             q.kill()
         srv.shutdown()
 
+    if os.path.exists(wav_path):
+        import shutil
+        shutil.copy(wav_path, "/tmp/jt-speak-debug.wav")
+
     log = open(serial, errors="replace").read() if os.path.exists(serial) else ""
     lines = [l for l in log.splitlines() if l.startswith("speak: ")]
     print("chat-speaks-check: " + " | ".join(lines))
@@ -153,8 +176,7 @@ with tempfile.TemporaryDirectory(prefix="jt-speak-") as work:
         if rms < 1000 or secs < SECS - 0.3:
             fails.append(f"audio silent or short (rms {rms:.0f}, {secs:.2f}s, want ~{SECS}s)")
         else:
-            mean = sum(tone) / len(tone)
-            pitch = sum(1 for a, b in zip(tone, tone[1:]) if (a - mean) < 0 <= (b - mean)) / secs
+            pitch = zero_crossing_pitch(tone, secs)
             seg = tone[:rate // 4]
             e, lo, hi = (goertzel(seg, rate, f) for f in (TONE_HZ, 700, 1400))
             print(f"chat-speaks-check: wav {rate}Hz, {secs:.2f}s loud, rms {rms:.0f}, pitch {pitch:.1f}Hz, "
