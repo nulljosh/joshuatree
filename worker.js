@@ -93,6 +93,28 @@ async function handleProxy(request) {
     if (targetUrl.pathname === "/api/stocks") return handleStocks(targetUrl);
     if (targetUrl.pathname === "/api/quotes") return handleQuotes();
     if (targetUrl.pathname === "/api/deals") return handleDeals(request); // the guest's request rides the visitor's own browser fetch, so request.cf is the visitor
+    // v1.6.12: kernel/chat_face.h's chat_face_load fetches Samantha's Chat
+    // face frames (idle-0..3.png, talk-0..7.png) over the same plain-HTTP
+    // stack every other guest request uses, from facehost=joshuatree.
+    // heyitsmejosh.com (embed.js's cmdline). Those files are static assets
+    // in this exact deploy (landing/face/*.png, wrangler.toml's [assets]
+    // binding), so a plain GET, self-fetched over HTTPS, is a real,
+    // narrowly-shaped exception -- same idea as /api/stocks etc above, just
+    // serving a fixed asset instead of running a handler. Path is
+    // constrained to exactly the file names chat_face.h ever builds
+    // (face_fetch's "/face/" + kind + "-" + i + ".png"), nothing else on
+    // this host is reachable through this branch.
+    if (/^\/face\/(idle|talk)-[0-9]\.png$/.test(targetUrl.pathname) && request.method === "GET") {
+      const resp = await fetchWithTimeout("https://joshuatree.heyitsmejosh.com" + targetUrl.pathname, {
+        method: "GET",
+        headers: { "User-Agent": "JoshuaTree-kernel-demo/1 (+https://joshuatree.heyitsmejosh.com)" },
+      });
+      const headers = new Headers(resp.headers);
+      headers.set("Access-Control-Allow-Origin", "*");
+      headers.delete("content-security-policy");
+      headers.delete("set-cookie");
+      return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers });
+    }
   }
 
   // 1.0.12: a tight, deliberately narrow exception for Chat talking to the
@@ -118,7 +140,18 @@ async function handleProxy(request) {
   // isAllowedTarget: every other path on this host, or either of these
   // two paths with a different method/content-type/size, still falls
   // through to the ordinary 403 below exactly as before this pass.
-  const SAMANTHA_PATHS = new Set(["/api/chat", "/api/pick"]);
+  //
+  // 1.6.12: /api/speak joins the set -- drivers/speak.c's speak_text posts
+  // the exact same shape (POST, application/json, {"text","format"}, well
+  // under the cap) to the same llm_host chat_send/chat_pick already use.
+  // Without this, Chat's speak_text always got the generic 403 below (no
+  // ALLOWED_HOSTS entry for turing.heyitsmejosh.com), so speak: status=200
+  // never happened on the real deployed page -- audio was silently dead in
+  // production even with sb16 wired up correctly on the kernel side. The
+  // response here is raw PCM, not JSON, but this block only inspects the
+  // REQUEST's content-type/size and passes the response body straight
+  // through untouched either way.
+  const SAMANTHA_PATHS = new Set(["/api/chat", "/api/pick", "/api/speak"]);
   const isSamanthaChat = targetUrl.hostname === "turing.heyitsmejosh.com" && SAMANTHA_PATHS.has(targetUrl.pathname)
       && ["http:", "https:"].includes(targetUrl.protocol) && !targetUrl.port && !targetUrl.username && !targetUrl.password;
   const CHAT_SAMANTHA_MAX_BODY = 8192; // 8 KB, the task's own stated cap

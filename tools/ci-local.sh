@@ -13,7 +13,8 @@
 #     rather than CI's 4 separate runners.
 #   - `check-refs` job's three scripts: check-refs.sh, versionsync-check.sh,
 #     version-bump-check.sh.
-#   - `demo` job: demochat-check.mjs and cursorglide-check.mjs.
+#   - `demo` job: demochat-check.mjs, cursorglide-check.mjs, and
+#     facespeak-demo-check.mjs (Samantha's Chat face + speak audio).
 #
 # Deliberately NOT run: the `network` job (continue-on-error in CI, talks
 # to real internet hosts, never gates a merge -- see check.yml's own
@@ -119,6 +120,7 @@ echo
 echo "-- demo job --"
 run_named "demochat-check.mjs" node tools/checks/demochat-check.mjs
 run_named "cursorglide-check.mjs" node tools/checks/cursorglide-check.mjs
+run_named "facespeak-demo-check.mjs" node tools/checks/facespeak-demo-check.mjs
 echo
 
 TOTAL=$(( $(date +%s) - START ))
