@@ -1756,10 +1756,40 @@ if (typeof document !== "undefined") (function () {
   // and boots with Joshua's own apps on the dock. The generic kiosk tour is
   // the wrong demo there, so tourLoop runs PORTFOLIO_TOUR instead, four idle seconds in.
   var PORTFOLIO_MODE = /[?&]portfolio\b/.test(location.search);
+  // Real keypresses per app (the same scripted path the main tour uses),
+  // so each one is used on camera, not just opened. Direct report
+  // (2026-09-26): "demo apps have no interaction".
+  var SC_DOWN_TAP = [0xE0, 0x50, 0xE0, 0xD0];
+  function downTimes(n) { var c = []; for (var i = 0; i < n; i++) c = c.concat(SC_DOWN_TAP); return c; }
+  function browseList(n) { return [{ type: 'wait', ms: 700 }, { type: 'scancodes', codes: downTimes(n), speed: 350 }]; }
+  var PORTFOLIO_SCRIPTS = {
+    Epiphany: [
+      { type: 'wait', ms: 900 },
+      { type: 'scancodes', codes: downTimes(6), speed: 220 }, // walk the live watchlist
+      { type: 'wait', ms: 600 },
+      { type: 'keys', text: '2', speed: 200 }, // Portfolio tab
+      { type: 'wait', ms: 700 },
+      { type: 'keys', text: '+++', speed: 320 }, // buy three more shares, P/L moves
+      { type: 'wait', ms: 700 },
+      { type: 'keys', text: '3', speed: 200 }, // Simulator
+      { type: 'wait', ms: 2200 },
+      { type: 'keys', text: 'b', speed: 200 },
+      { type: 'wait', ms: 1600 },
+      { type: 'keys', text: 'b', speed: 200 },
+      { type: 'wait', ms: 1600 },
+      { type: 'keys', text: 's', speed: 200 },
+      { type: 'wait', ms: 900 },
+      { type: 'keys', text: '4', speed: 200 } // Situation
+    ],
+    Curbfind: browseList(4),
+    Bookrank: browseList(4),
+    Sparkjar: browseList(2).concat([{ type: 'keys', text: 'u', speed: 200 }, { type: 'wait', ms: 500 }, { type: 'scancodes', codes: downTimes(2), speed: 350 }, { type: 'keys', text: 'u', speed: 200 }]), // upvote two ideas
+    Keyrate: [{ type: 'wait', ms: 700 }, { type: 'keys', text: 'A real OS, from scratch, and every app on it. ', speed: 70 }]
+  };
+  var PORTFOLIO_DWELL = { Epiphany: 16000, Curbfind: 7000, Bookrank: 6000, Sparkjar: 7000, Keyrate: 8000 };
   var PORTFOLIO_TOUR = ['Epiphany', 'Curbfind', 'Bookrank', 'Lexly', 'Sparkjar', 'Quotes', 'Keyrate', 'Toroid']
-    // Portfolio, Epiphany and Keyrate are full apps and get the full dwell. The rest are still
-    // one-line cards in the kernel, so they get a short beat instead of seven seconds of blank window.
-    .map(function (name, i) { return { name: name, slot: i + 2, script: [], dwell: /^(Epiphany|Keyrate|Quotes|Toroid)$/.test(name) ? 0 : 3000 }; }); // slot 1 is the Portfolio list, the show opens the apps themselves, never the list
+    // Lexly, Quotes and Toroid are click-only cards in the kernel, so they get a short beat instead of seconds of blank window.
+    .map(function (name, i) { return { name: name, slot: i + 2, script: PORTFOLIO_SCRIPTS[name] || [], dwell: PORTFOLIO_DWELL[name] || 3000 }; }); // slot 1 is the Portfolio list, the show opens the apps themselves, never the list
   // Boot takes a few seconds; the tour waits for graphical mode plus a
   // beat, and never starts at all once the visitor has focused. Also respects
   // prefers-reduced-motion: autoplay motion should not start if the visitor

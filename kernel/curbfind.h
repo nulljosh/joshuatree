@@ -1,7 +1,10 @@
-/* Curbfind: Craigslist deal rankings for Vancouver. Left: ranked list
+/* Curbfind: Craigslist deal rankings near the visitor. Left: ranked list
    sorted by deal score, selected row highlighted; up/down or click selects.
    Right: listing title, price, neighbourhood, deal score as a 10-segment bar,
-   and a brief reason why it is a good deal. Sample listings compiled in.
+   and a brief reason why it is a good deal. Live rows come from
+   joshuatree.heyitsmejosh.com/api/deals (worker.js: the visitor's geo-IP
+   city against Curbfind's real deal-ranked search); the compiled-in
+   Vancouver samples only show when that fetch fails.
    Included by kernel.c after render_wrapped_text. */
 
 typedef struct {
@@ -25,14 +28,50 @@ static const CfListing CF_LISTINGS[] = {
     {"Shelving unit metal", "$30", "Surrey", 5, "Industrial style, sturdy metal frame, some surface rust but structurally sound."},
 };
 
-#define CF_COUNT ((int)(sizeof(CF_LISTINGS) / sizeof(CF_LISTINGS[0])))
+#define CF_SAMPLE_N ((int)(sizeof(CF_LISTINGS) / sizeof(CF_LISTINGS[0])))
+#define CF_LIVE_MAX 14
+static char cf_arena[CF_LIVE_MAX][112]; /* one "score|price|hood|title" row each, split in place */
+static CfListing cf_live[CF_LIVE_MAX];
+static char cf_city[32];
+static const CfListing *cf_rows = CF_LISTINGS;
+static int cf_n = CF_SAMPLE_N;
+#define CF_COUNT cf_n
+
+static void cf_fetch(void) {
+    static char body[2048];
+    cf_rows = CF_LISTINGS; cf_n = CF_SAMPLE_N; cf_city[0] = 0;
+    int n = net_init(0x0A00020F) ? http_get_timeout("joshuatree.heyitsmejosh.com", "/api/deals", 80, body, sizeof(body) - 1, 1500) : -1;
+    if (n <= 0 || n >= (int)sizeof(body) - 1 || http_last_status() != 200) return;
+    body[n] = 0;
+    char *p = body; int i = 0, live = 0;
+    while (*p && *p != '\n' && i < 31) cf_city[i++] = *p++;
+    cf_city[i] = 0;
+    if (*p) p++;
+    while (*p && live < CF_LIVE_MAX) {
+        char *row = cf_arena[live]; int j = 0;
+        while (*p && *p != '\n' && j < 110) row[j++] = *p++;
+        row[j] = 0;
+        while (*p && *p != '\n') p++;
+        if (*p) p++;
+        char *f[4]; int k = 1; f[0] = row;
+        for (char *q = row; *q && k < 4; q++) if (*q == '|') { *q = 0; f[k++] = q + 1; }
+        if (k < 4 || !f[3][0]) continue;
+        int sc = 0; for (char *q = f[0]; *q >= '0' && *q <= '9'; q++) sc = sc * 10 + (*q - '0');
+        cf_live[live].title = f[3]; cf_live[live].price = f[1]; cf_live[live].neighbourhood = f[2];
+        cf_live[live].score = sc > 10 ? 10 : sc;
+        cf_live[live].reason = "Priced well under the median for its search. Live from Craigslist, ranked by Curbfind's own deal score.";
+        live++;
+    }
+    if (live) { cf_rows = cf_live; cf_n = live; }
+    else cf_city[0] = 0;
+}
 #define CF_LIST_X  20
 #define CF_LIST_W  220
 #define CF_INFO_X  260
 #define CF_INFO_W  ((int)window_width() - CF_INFO_X - 24)
 
 /* Sorted indices: cf_order[0] is the index of the highest-scored listing */
-static int cf_order[CF_COUNT];
+static int cf_order[CF_LIVE_MAX];
 static int cf_sel = 0; /* currently selected position in cf_order */
 
 static void cf_init_order(void) {
@@ -42,7 +81,7 @@ static void cf_init_order(void) {
     /* Sort by score descending */
     for (int i = 0; i < CF_COUNT - 1; i++) {
         for (int j = i + 1; j < CF_COUNT; j++) {
-            if (CF_LISTINGS[cf_order[i]].score < CF_LISTINGS[cf_order[j]].score) {
+            if (cf_rows[cf_order[i]].score < cf_rows[cf_order[j]].score) {
                 int tmp = cf_order[i];
                 cf_order[i] = cf_order[j];
                 cf_order[j] = tmp;
@@ -62,7 +101,7 @@ static void cf_draw(void) {
     for (int i = 0; i < items_shown; i++) {
         int y = list_top + i * item_h;
         int listing_idx = cf_order[i];
-        const CfListing *listing = &CF_LISTINGS[listing_idx];
+        const CfListing *listing = &cf_rows[listing_idx];
         unsigned int bg = (i == cf_sel) ? 0x00E2D8CC : 0x00F1EDE7;
         unsigned int fg = (i == cf_sel) ? 0x001C1C1E : 0x0075726E;
         window_rect(CF_LIST_X, y, CF_LIST_W, item_h - 2, bg);
@@ -97,7 +136,7 @@ static void cf_draw(void) {
     if (cf_sel < CF_COUNT) {
         int info_top = 56;
         int listing_idx = cf_order[cf_sel];
-        const CfListing *listing = &CF_LISTINGS[listing_idx];
+        const CfListing *listing = &cf_rows[listing_idx];
 
         font_draw_string(listing->title, CF_INFO_X, info_top, 0x001C1C1E, -1);
 
@@ -149,12 +188,23 @@ static void cf_draw(void) {
                            (int)window_height() - wrap_y - 50, 0x001C1C1E);
     }
 
-    font_draw_string("Sample listings, not live   up/down or click to select   esc closes", 20, (int)window_height() - 30, 0x0075726E, -1);
+    if (cf_city[0]) {
+        char hdr[64]; int h = 0; const char *t = "Deals near "; while (*t) hdr[h++] = *t++;
+        for (const char *c = cf_city; *c && h < 62; c++) hdr[h++] = *c;
+        hdr[h] = 0;
+        font_draw_string(hdr, CF_LIST_X, 34, 0x0075726E, -1);
+    }
+    font_draw_string(cf_city[0] ? "Live Craigslist deals for your area   up/down or click to select   esc closes"
+                                : "Offline, sample Vancouver listings   up/down or click to select   esc closes", 20, (int)window_height() - 30, 0x0075726E, -1);
 }
 
 static void gui_launch_curbfind(void) {
+    cf_rows = CF_LISTINGS; cf_n = CF_SAMPLE_N; cf_city[0] = 0;
     cf_init_order();
     cf_sel = 0;
+    cf_draw(); /* first frame before the network round trip, so the window never opens blank */
+    cf_fetch();
+    cf_init_order();
     mouse_click_edge_sync();
     for (;;) {
         cf_draw();
