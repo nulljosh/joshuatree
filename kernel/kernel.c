@@ -2003,45 +2003,6 @@ static void gui_draw_script_loop(int cx, int cy, int r, int thick, unsigned int 
    in scale units from the letter's own anchor, n is how many scale units
    above the baseline it sits, real distance for the shear (SL) to work
    from, not an arbitrary label. */
-static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int color, unsigned int bg){
-    int thick = scale >= 6 ? 2 : 1;
-    int total_w = 22 * scale;
-    int x = cx - total_w / 2;
-#define SL(n) (((n) * scale * HELLO_SLANT_NUM) / HELLO_SLANT_DEN)
-#define PX(dx, n) (x + (dx) * scale + SL(n))
-#define PY(n) (baseline - (n) * scale)
-
-    /* h */
-    gui_draw_capsule(PX(0, 10), PY(10), PX(0, 0), PY(0), thick, color, bg);
-    gui_draw_capsule(PX(0, 5), PY(5), PX(1, 7), PY(7), thick, color, bg);
-    gui_draw_capsule(PX(1, 7), PY(7), PX(3, 7), PY(7), thick, color, bg);
-    gui_draw_capsule(PX(3, 7), PY(7), PX(4, 5), PY(5), thick, color, bg);
-    gui_draw_capsule(PX(4, 5), PY(5), PX(4, 0), PY(0), thick, color, bg);
-    gui_draw_capsule(PX(4, 0), PY(0), PX(6, 0), PY(0), thick, color, bg); /* connector into e */
-    x += 6 * scale;
-
-    /* e: loop centered (2,3), open on the right, crossbar completes it */
-    gui_draw_script_loop(x + 2 * scale, PY(3), 3 * scale, thick, color, bg, (1 << 11) | (1 << 0) | (1 << 1), SL(3));
-    gui_draw_capsule(PX(-1, 3), PY(3), PX(5, 3), PY(3), thick, color, bg);
-    gui_draw_capsule(PX(5, 0), PY(0), PX(7, 0), PY(0), thick, color, bg); /* connector into l */
-    x += 6 * scale;
-
-    /* l */
-    gui_draw_capsule(PX(0, 10), PY(10), PX(0, 0), PY(0), thick, color, bg);
-    gui_draw_capsule(PX(0, 0), PY(0), PX(2, 0), PY(0), thick, color, bg); /* connector into l */
-    x += 3 * scale;
-
-    /* l */
-    gui_draw_capsule(PX(0, 10), PY(10), PX(0, 0), PY(0), thick, color, bg);
-    gui_draw_capsule(PX(0, 0), PY(0), PX(2, 0), PY(0), thick, color, bg); /* connector into o */
-    x += 3 * scale;
-
-    /* o: closed loop centered (2,3) */
-    gui_draw_script_loop(x + 2 * scale, PY(3), 3 * scale, thick, color, bg, 0, SL(3));
-#undef PX
-#undef PY
-#undef SL
-}
 
 
 /* v40: a row band, so a partial repaint (the dock band on a hover change)
