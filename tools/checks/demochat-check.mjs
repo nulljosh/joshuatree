@@ -246,7 +246,30 @@ try {
     return near(px(cx, cy), 0xFF, 0x5F, 0x57, 12) && near(px(bx, by), 0xFA, 0xF8, 0xF6, 4);
   }, [94, 56, VX + 10, REPLY_TOP + 4], { timeout: 20000 });
   ok('Chat window chrome and body are on the canvas');
-  await page.waitForTimeout(200);
+  // 1.6.12: chat_face_load() now always runs a real (if quickly-403'd)
+  // network round trip before the empty state's suggestion rows ever
+  // paint -- facehost= is unconditional on the cmdline now (embed.js),
+  // where it used to be off by default and this fetch a same-tick no-op
+  // (see chat_face.h's own "off unless facehost=" comment). A flat 200ms
+  // sleep here raced that real round trip and intermittently sampled
+  // before the suggestions drew. Poll instead, same shape as the window
+  // chrome wait just above, capped well under this test's own budget.
+  await page.waitForFunction(([vx, vy, vw, vh, replyTop, inkColor, tol]) => {
+    const c = document.querySelector('#screen_canvas');
+    if (!c || !c.width) return false;
+    const scale = c.width / 960, ctx = c.getContext('2d');
+    const data = ctx.getImageData(0, 0, c.width, c.height).data;
+    function isInk(x, y) {
+      const px = Math.min(c.width - 1, Math.round(x * scale));
+      const py = Math.min(c.height - 1, Math.round(y * scale));
+      const i = (py * c.width + px) * 4;
+      return Math.abs(data[i] - inkColor[0]) <= tol && Math.abs(data[i + 1] - inkColor[1]) <= tol && Math.abs(data[i + 2] - inkColor[2]) <= tol;
+    }
+    for (let y = replyTop; y < vy + vh - 20; y++) {
+      for (let x = vx + 4; x < vx + vw - 4; x++) if (isInk(x, y)) return true;
+    }
+    return false;
+  }, [VX, VY, VW, VH, REPLY_TOP, INK, INK_TOL], { timeout: 8000 }).catch(() => {});
   const before = await ink();
   console.log(`ink below reply line before sending: ${before ? before.replyBelow : '(no canvas)'} (canvas ${before ? before.canvasW + 'x' + before.canvasH + ' scale=' + before.scale : '?'})`);
   if (!before) fail('could not read the v86 canvas at all');

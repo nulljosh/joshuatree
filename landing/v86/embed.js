@@ -190,7 +190,16 @@ if (typeof document !== "undefined") (function () {
     vga_memory_size: 16 * 1024 * 1024, // v41: 1600x1200x32bpp is 7.68MB, 8 was one bad rounding away from failing
     screen_container: screenContainer,
     multiboot: buf ? { buffer: buf.slice(0) } : { url: "v86/kernel.elf" },
-    cmdline: /[?&]portfolio\b/.test(location.search) ? "portfolio" : undefined, // kmain reads this and puts Joshua's own apps on the dock
+    // facehost= is always on, portfolio mode is still opt-in via ?portfolio:
+    // kernel/chat_face.h only turns Samantha's Chat face on when this exact
+    // token is present, and the frames it fetches (idle-0..3, talk-0..7 under
+    // /face/) are served by this same Cloudflare deploy at
+    // joshuatree.heyitsmejosh.com (landing/face/*.png, wrangler.toml's
+    // [assets] binding), reached through the guest's plain-HTTP stack over
+    // the same cors_proxy relay below -- worker.js's handleProxy has a
+    // matching /face/ path exception for that host, same shape as its
+    // existing /api/stocks|/api/quotes|/api/deals allowance.
+    cmdline: (/[?&]portfolio\b/.test(location.search) ? "portfolio " : "") + "facehost=joshuatree.heyitsmejosh.com", // kmain reads this and puts Joshua's own apps on the dock
     autostart: true,
     // Real network backend for the emulated NIC: without this, v86's NIC
     // (ne2k by default, see drivers/ne2k.c) is wired to nothing, every
@@ -379,6 +388,20 @@ if (typeof document !== "undefined") (function () {
     focused = true;
     emulator.keyboard_adapter.emu_enabled = true;
     emulator.mouse_adapter.emu_enabled = true;
+    // Browsers block audio until a real user gesture. v86 builds
+    // speaker_adapter (and its AudioContext) unconditionally in its
+    // constructor (libv86.js: `b.disable_speaker||(this.speaker_adapter=new
+    // jb(this.bus))`, never passed here, so it's always on) and already
+    // calls audio_context.resume() on its own "emulator-started" event, but
+    // that fires from autostart, not from a click, so a real browser leaves
+    // the context "suspended" and Chat's speak.c audio never comes out.
+    // This is the actual user gesture (focusIn only ever runs from a real
+    // mousedown/touchstart/keydown), so resume it here too; a second
+    // resume() on an already-running context is a harmless no-op.
+    if (emulator.speaker_adapter && emulator.speaker_adapter.audio_context
+        && emulator.speaker_adapter.audio_context.state !== "running") {
+      emulator.speaker_adapter.audio_context.resume().catch(function () {});
+    }
     if (overlay) overlay.classList.add("hidden");
     stopAutoplay();
     resetHeadline(); // v0.76.29: reset headline when visitor takes control

@@ -204,6 +204,8 @@ jobs:
         run: node tools/checks/demochat-check.mjs || (sleep 10 && node tools/checks/demochat-check.mjs)
       - name: Landing demo cursor glides, never teleports (retries once)
         run: node tools/checks/cursorglide-check.mjs || (sleep 10 && node tools/checks/cursorglide-check.mjs)
+      - name: Landing demo shows Samantha's face and plays her voice (retries once)
+        run: node tools/checks/facespeak-demo-check.mjs || (sleep 10 && node tools/checks/facespeak-demo-check.mjs)
       # Landing-only PR: the suite is skipped, so its landing checks run here.
       - name: Landing checks (landing-only PR, suite skipped)
         if: needs.changes.outputs.kernel == 'false'
