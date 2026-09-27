@@ -1,15 +1,18 @@
 # Blueprint: where the OS goes after 1.0
 
-1.0 shipped a real desktop: 22 apps, a compositor-free GUI, ring 3 with a
-frozen syscall ABI that nothing uses yet. This is the plan for the next
-structural shift: apps as real user processes, a window server, fault
-isolation that actually protects the kernel from a buggy app. It is
-research-grounded (SerenityOS, ToaruOS, Haiku, Redox, Essence, xv6,
-KolibriOS) and phased as small PRs, each keeping headless CI green.
+Today every app runs inside the kernel. One buggy app can take the whole
+machine down. The next big step is to give each app its own protected
+space, so a crash closes that app and nothing else, the way it works on a
+Mac. This page is the plan for getting there in small, safe steps, based
+on how SerenityOS, ToaruOS, Haiku, Redox and others did it.
+
+**Focus right now: Phase 1.** Keep moving apps out of `kernel/kernel.c`
+into their own files, one per PR. It is mechanical, it makes every later
+phase smaller, and it keeps the god-file guard green.
 
 ## Where we are, measured
 
-- `kernel/kernel.c` is 9,079 lines. Most GUI apps (Notes, Reminders,
+- `kernel/kernel.c` is 9,780 lines (September 27, 2026). Most GUI apps (Notes, Reminders,
   Calendar, Mail, Contacts, Chat, Calculator, Stocks, Epiphany, Search,
   Settings) still live in it; 11 apps have already moved out to
   `drivers/app_*.h`-style headers (Quotes, Toroid, and others per
