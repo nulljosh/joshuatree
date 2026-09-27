@@ -71,7 +71,7 @@ jobs:
             echo kernel=false >> "$GITHUB_OUTPUT"
           fi
 
-  # The suite runs as four parallel shards (ci-suite.sh SHARD/SHARDS),
+  # The suite runs as eight parallel shards (ci-suite.sh SHARD/SHARDS),
   # about a quarter of the wall time each. `check` below stays the one
   # required status and passes only when every shard did.
   suite:
@@ -97,7 +97,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
     steps:
       # fetch-depth: 0 for the kernel.elf sync step at the end of this job,
       # which compares real commit ancestry. It used to paper over the
@@ -156,7 +156,7 @@ jobs:
       # minute run at a time. The suite now runs everything, prints a full
       # pass/fail summary, and fails the job if any check failed.
       - name: Regression suite (all checks, full summary)
-        run: SHARD=${{ matrix.shard }} SHARDS=4 ./tools/checks/ci-suite.sh
+        run: SHARD=${{ matrix.shard }} SHARDS=8 ./tools/checks/ci-suite.sh
       # A check that fails only on the runner is unreadable from the log
       # alone. Keep what every check leaves in /tmp (serial logs, raw
       # framebuffer dumps, PNGs) so the failure can be looked at, not guessed.

@@ -85,15 +85,15 @@ echo
 echo "-- suite job: 4 shards in parallel, each its own QEMU (-display none) --"
 SUITE_PIDS=()
 SUITE_LOGS=()
-for shard in 0 1 2 3; do
+for shard in 0 1 2 3 4 5 6 7; do
   log="/tmp/jt-ci-local-$$-shard${shard}.log"
   SUITE_LOGS+=("$log")
-  ( SHARD=$shard SHARDS=4 ./tools/checks/ci-suite.sh > "$log" 2>&1 ) &
+  ( SHARD=$shard SHARDS=8 ./tools/checks/ci-suite.sh > "$log" 2>&1 ) &
   SUITE_PIDS+=($!)
 done
 suite_start=$(date +%s)
 suite_ok=1
-for i in 0 1 2 3; do
+for i in 0 1 2 3 4 5 6 7; do
   pid=${SUITE_PIDS[$i]}
   if wait "$pid"; then
     :
@@ -102,7 +102,7 @@ for i in 0 1 2 3; do
   fi
 done
 suite_dur=$(( $(date +%s) - suite_start ))
-for i in 0 1 2 3; do
+for i in 0 1 2 3 4 5 6 7; do
   echo "  shard $i log: ${SUITE_LOGS[$i]}"
   tail -n 3 "${SUITE_LOGS[$i]}" | sed 's/^/    /'
 done
