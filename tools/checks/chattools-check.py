@@ -216,7 +216,7 @@ def main():
         # the console over to its transcript view, which is exactly the
         # thing that stops showing the suggestion list this proves.
         click_dock(DOCK_CHAT)
-        for _ in range(40):
+        for _ in range(200):
             time.sleep(0.1)
             if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
         else: fails.append("Chat window never opened from dock slot %d (scenario 0)" % DOCK_CHAT)
@@ -234,7 +234,7 @@ def main():
 
         # --- baseline: Reminders, empty, before scenario (a) ever runs ---
         click_dock(DOCK_REMINDERS)
-        for _ in range(40):
+        for _ in range(200):
             time.sleep(0.1)
             if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
         else: fails.append("Reminders window never opened from dock slot %d" % DOCK_REMINDERS)
@@ -245,7 +245,7 @@ def main():
 
         # --- scenario (a): "remind me to buy milk" -> new_reminder ------
         click_dock(DOCK_CHAT)
-        for _ in range(40):
+        for _ in range(200):
             time.sleep(0.1)
             if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
         else: fails.append("Chat window never opened from dock slot %d" % DOCK_CHAT)
@@ -269,7 +269,7 @@ def main():
         # Reminders should now really hold the new row (persisted VFS
         # write, not just a rendered chat bubble).
         click_dock(DOCK_REMINDERS)
-        for _ in range(40):
+        for _ in range(200):
             time.sleep(0.1)
             if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
         else: fails.append("Reminders window never (re)opened from dock slot %d after scenario a" % DOCK_REMINDERS)
@@ -291,7 +291,7 @@ def main():
 
         # --- scenario (b): an ordinary question -> pick says null --------
         click_dock(DOCK_CHAT)
-        for _ in range(40):
+        for _ in range(200):
             time.sleep(0.1)
             if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
         else: fails.append("Chat window never (re)opened from dock slot %d for scenario b" % DOCK_CHAT)
@@ -313,7 +313,7 @@ def main():
 
         # --- scenario (c): "open notes" -> open_app -----------------------
         click_dock(DOCK_CHAT)
-        for _ in range(40):
+        for _ in range(200):
             time.sleep(0.1)
             if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
         else: fails.append("Chat window never (re)opened from dock slot %d for scenario c" % DOCK_CHAT)

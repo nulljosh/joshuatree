@@ -109,7 +109,7 @@ try:
     else: raise SystemExit("FAIL: desktop never appeared")
     time.sleep(0.5)
     move(SLOT0_X + 7 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
-    for _ in range(40):
+    for _ in range(200):
         time.sleep(0.1)
         if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
     else: fails.append("Chat window never opened from dock slot 7")

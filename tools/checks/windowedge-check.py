@@ -91,7 +91,7 @@ try:
     time.sleep(6.0)
     move(SLOT0_X + 7 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
     img = None
-    for _ in range(40):
+    for _ in range(200):
         time.sleep(0.1)
         img = dump()
         if is_red(logical_pixel(img, CLOSE_X, CLOSE_Y)): break

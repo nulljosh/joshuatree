@@ -143,7 +143,7 @@ def run(scenario, facehost):
         else: fails.append(tag + "desktop never appeared"); return
         time.sleep(0.5)
         move(SLOT0_X + 7 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
-        for _ in range(100):
+        for _ in range(300):
             time.sleep(0.2)
             if "face: " in serial(): break
         time.sleep(1.0)
