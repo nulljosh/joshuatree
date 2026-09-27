@@ -136,6 +136,10 @@ with tempfile.TemporaryDirectory(prefix="jt-speak-") as work:
             q.kill()
         srv.shutdown()
 
+    if os.path.exists(wav_path):
+        import shutil
+        shutil.copy(wav_path, "/tmp/jt-speak-debug.wav")
+
     log = open(serial, errors="replace").read() if os.path.exists(serial) else ""
     lines = [l for l in log.splitlines() if l.startswith("speak: ")]
     print("chat-speaks-check: " + " | ".join(lines))
