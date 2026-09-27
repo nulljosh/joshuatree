@@ -2363,11 +2363,14 @@ static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned i
    "8-bit" staircase problem the weather icon's rays had, now on the one
    piece of branding that appears everywhere including full-size at boot. */
 static void gui_draw_logo(int x, int cy, int scale, unsigned int bg, unsigned int c){
-    if (!window_has_target() && window_scale() > 1){
+    if (!window_has_target()){
         /* Drawn in physical pixels: u is one logo unit, every limb a round-ended
-           stroke. The logical path below rounds the menu bar's stroke radius to 0
-           and pixel-doubles its diagonals, which is what read as 8-bit. */
+           stroke. At scale=1 the boot_mark replaces the logo at boot, but this
+           always runs for the menu bar. Rendering in physical pixels avoids
+           logical-path scaling artifacts. */
         int sc = (int)window_scale(), u = scale * sc;
+        /* Radius formula: u*2/5 produces 0 at scale=1, which is too thin to
+           render smooth AA. Clamp to 1 to maintain legibility at all scales. */
         int pr = u * 2 / 5; if (pr < 1) pr = 1;
         int ox = x * sc + u / 2, oy = cy * sc;
         #define LG(ax, ay, bx, by) gui_capsule_phys(ox + (ax) * u, oy + (ay) * u, ox + (bx) * u, oy + (by) * u, pr, c)
