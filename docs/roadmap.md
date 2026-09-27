@@ -176,11 +176,13 @@ One ink on one paper, tone by hatching. Full rule in `CLAUDE.md`'s Theme section
 - [ ] [Joshua] Boot-to-disk install flow with install-speed numbers. Needs hardware boot support first.
 
 ## v100: talk to it with your voice
-Not started. The standing long-horizon target: a microphone in, ElevenLabs TTS out. Order, most-blocking first:
-1. HDA/AC97 audio driver.
-2. USB host controller + USB audio class, for microphone input.
-3. Capture loop, then speech-to-text and the ElevenLabs call (plain HTTP, the same shape `chat`'s Ollama call already proves).
-4. Camera/video response is a separate, later branch off the same USB prerequisite.
+The goal: you talk to the computer, and Samantha answers out loud with her face on screen.
+
+Where it stands:
+1. **It can make sound.** The Sound Blaster driver plays audio in QEMU and the browser demo (PR 222).
+2. **She can speak through it.** Samantha's server turns her reply into audio the kernel plays as-is. Chat reading her answers aloud is in progress.
+3. **It can't hear you yet.** A microphone needs USB support first, then a way to send your voice to Whisper.
+4. **Her face comes later.** Her video loops already play on the Mac. On Joshua Tree they would play as a stack of still frames the kernel can already draw.
 
 ## Free OS, hardware pays for it
 The OS stays free. Monetization is custom hardware built to run it. Everything this kernel drives today runs on QEMU's emulated devices; porting to physical hardware comes first, not a coding task yet.
