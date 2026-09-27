@@ -6,21 +6,22 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
-**Latest**: Introducing real type in Notes. Six fonts, any size up to 200, sharp at every size.
+**Latest**: Introducing Samantha's voice. Ask her something in Chat and she answers out loud.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
-## Biggest gaps vs a shipping OS (set 2026-09-23)
-Measured against SerenityOS, the closest one-person-scale peer, and macOS/Linux. Ranked; the loop works top down. Each line points at the items below that close it.
+## Biggest gaps vs a shipping OS (refreshed 2026-09-27)
+Measured against the closest from-scratch peers: SerenityOS (the one-person-scale benchmark), ToaruOS (own compositor, own libc), KolibriOS (tiny, runs on real PCs), Haiku, and against macOS/Linux. Ranked; the loop works top down. Each line points at the items below that close it.
 
 1. **Real hardware.** Boots only in QEMU: no xHCI USB, no AHCI, no e1000; keyboard needs legacy BIOS mode, saving needs an old IDE disk. The hardware business depends on this. See Real hardware, e1000 under 1.0.0.
 2. **A compositor.** Apps draw straight to the framebuffer in blocking loops: at most two windows, no resize or minimize, nothing runs in the background. See Multi-window.
 3. **Native TLS.** HTTPS goes through the worker proxy, so a browser can't happen yet.
-4. **Sound.** None at all; Music, video and a screen reader wait on AC97.
-5. **Desktop basics.** Undo, right-click menus, drag and drop, app switcher (the clipboard landed in 1.0.6, text selection in 1.2.0).
+4. **Sound beyond the demo.** The Sound Blaster driver plays audio in QEMU (1.6.9), but every peer ships a music player, and real PCs need AC97 or HD Audio. See Music app, Sound under After 1.0.
+5. **Desktop basics.** Undo, right-click menus, drag and drop, an app switcher, a screenshot key. SerenityOS, ToaruOS and KolibriOS all have these (the clipboard landed in 1.0.6, text selection in 1.2.0).
 6. **Apps from outside the kernel.** All 25 apps compile into the kernel; two ring-3 programs exist. No installer, no update path.
+7. **Everyday apps peers ship.** An image viewer, a music player, a few games. KolibriOS ships dozens in under 2MB. See Photos, Music, Basic games under After 1.0.
 
 ## Beta, 0.9.0
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck.
@@ -45,7 +46,7 @@ Joshua's call, 2026-09-21: 1.0.0 is a super thorough QA release. Every feature w
   - 1.0.9: a retina-bar typography pass judged from real headless crops (`/tmp/jt-loop/typography-crops`, this pass's own review output, not committed to the repo) across the menu bar, a title bar, Notes' paragraph, Terminal's prompt/output, a Settings row, the dock hover label and the Apps folder grid. Most of those already read clean (proportional AA, dense stems, level baselines, even letter gaps) thanks to the earlier v44/v50/v77/v78/v79/v82/0.89.0 passes; the one real defect was the Apps folder's glass panel, sized 19 logical px short of the grid it actually draws (`APPS_VIS_ROWS * cell_h` measured from the panel's own top edge, when the grid really starts 70px lower to clear its own hint line), so the bottom visible row's labels sat only ~9 logical px above the panel's real edge, title-bar-tight everywhere else in this UI. Fixed (`APPS_PANEL_H` 375 -> 410, plus a second copy of the same stale-pixel-height bug in the click hit test); `tools/checks/baseline-check.py` measures container padding, baseline flatness and letter-gap variance on real pixels so this class of bug (a fine but not fully sufficient panel/cell-height budget) cannot come back silently.
 - [ ] [Haiku] Accessibility floor: every app opens and closes by keyboard alone. In progress in #127 (Enter on the desktop opens the Apps folder; the check still has to prove all 25). Ships as 1.0.x, not a blocker for the tag.
 - [ ] [Fable] Wired internet on real PCs: an Intel e1000 driver next to rtl8139 and ne2k, proven with QEMU `-device e1000`. Most PCs from the last 15 years have an Intel or Realtek chip, so this is what makes the network real off the emulator. Stretch for 1.0; if it slips, the release notes say wired internet is QEMU-only.
-- [ ] [Joshua] Decided for 1.0, stated in the release notes: no Wi-Fi, no Bluetooth (both need firmware blobs and a full 802.11 or BT stack, months of work each), English only (every UI string is compiled in; a language table is a 1.1 project), no screen reader (no sound yet). Keyboard-only use and large text in Notes are the accessibility floor.
+- [ ] [Joshua] Decided for 1.0, stated in the release notes: no Wi-Fi, no Bluetooth (both need firmware blobs and a full 802.11 or BT stack, months of work each), English only (every UI string is compiled in; a language table is a 1.1 project), no screen reader. Keyboard-only use and large text in Notes are the accessibility floor.
 
 Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk), and moving the landing page to a `gh-pages` branch.
 
@@ -64,14 +65,14 @@ What other small operating systems needed before people used them day to day.
 - [ ] [Fable] Keyboards on real PCs: a USB keyboard driver, or release notes that say plainly it needs the BIOS legacy keyboard mode.
 - [ ] [Sonnet] Saving on real PCs stated plainly: today only old IDE disks work.
 - [ ] [Fable] User profiles and sign-in done properly: login screen at boot, a home folder and settings per person, passwords stored hashed and never in the clear, lock screen, an admin level for risky actions (issue #28). Accounts exist today; this is the pass that makes them trustworthy.
-- [ ] [Fable] Sound: AC97 driver under QEMU, PCM out. Step one of v100 too.
-- [ ] [Sonnet] Music app: WAV playback from disk, playlist, play, pause, skip, volume. Needs the sound driver.
+- [ ] [Fable] Sound on real PCs: an AC97 or Intel HD Audio driver next to the Sound Blaster one (1.6.9), which only exists in emulators.
+- [ ] [Sonnet] Music app: WAV playback from disk, playlist, play, pause, skip, volume. Unblocked: the Sound Blaster driver shipped in 1.6.9.
 - [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
 - [ ] [Sonnet] Music app enhancements: equalizer, better playback controls.
 - [ ] [Sonnet] Video editor: basic timeline, trimming, and export.
 - [ ] [Haiku] Scientific Calculator app: standard and scientific modes, memory functions.
 - [ ] [Sonnet] Basic games: Pong, Chess, Conway's Game of Life, fully playable in the OS.
-- [ ] [Sonnet] Chat voice and video mode: speak to Samantha, get spoken replies and video responses.
+- [ ] [Sonnet] Chat listens: speak to Samantha instead of typing. She already answers out loud with her face moving (1.6.9); hearing you needs a microphone path first.
 - [ ] [Fable] Better multitasking: more than two windows at once, an app switcher, apps that keep running in the background. This is the Multi-window section; snapping lands first on the windows that exist.
 - [ ] [Fable] Dual monitor support: a second framebuffer (QEMU `-device secondary-vga`), the desktop across both, windows dragged between them. Needs the compositor.
 - [ ] [Fable] A web browser, which needs secure connections first.
@@ -88,7 +89,6 @@ Found by eye in the 2026-09-21 QA tour (`tools/qa-demo.sh`, frames reviewed at f
 
 ## Gaps vs macOS / Linux / Windows
 Things a modern desktop OS has that this kernel doesn't yet.
-- [ ] [Fable] No sound at all. Needs an audio driver (AC97 or SB16 under QEMU).
 - [ ] [Fable] No native TLS. HTTPS only works through the worker's proxy.
 - [x] [Sonnet] Clipboard copy/paste. Shipped 1.0.6: one global 4KB buffer, Ctrl+C/X/V in Notes, Terminal, and every field built on `gui_prompt.h` (Mail, Reminders, Calculator). Until 1.2.0 there was no selection model, so Ctrl+C/X acted on the current line or field. Notes now uses its selection when one is active and falls back to the line otherwise.
 - [ ] [Sonnet] Right-click context menus.
@@ -179,10 +179,10 @@ One ink on one paper, tone by hatching. Full rule in `CLAUDE.md`'s Theme section
 The goal: you talk to the computer, and Samantha answers out loud with her face on screen.
 
 Where it stands:
-1. **It can make sound.** The Sound Blaster driver plays audio in QEMU and the browser demo (PR 222).
-2. **She can speak through it.** Samantha's server turns her reply into audio the kernel plays as-is. Chat reading her answers aloud is in progress.
+1. **It can make sound.** The Sound Blaster driver plays audio in QEMU (1.6.9).
+2. **She speaks.** Chat reads her answers aloud: her server turns the reply into audio the kernel plays as-is (1.6.9).
 3. **It can't hear you yet.** A microphone needs USB support first, then a way to send your voice to Whisper.
-4. **Her face comes later.** Her video loops already play on the Mac. On Joshua Tree they would play as a stack of still frames the kernel can already draw.
+4. **Her face is on screen.** Chat shows her face and moves her mouth while she talks, from still frames cut out of her video loops (1.6.9). The landing demo is next.
 
 ## Free OS, hardware pays for it
 The OS stays free. Monetization is custom hardware built to run it. Everything this kernel drives today runs on QEMU's emulated devices; porting to physical hardware comes first, not a coding task yet.
