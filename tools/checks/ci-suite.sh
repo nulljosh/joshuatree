@@ -50,6 +50,8 @@ cd "$(dirname "$0")/../.."
 manifest() {
 cat <<'EOF'
 once |1|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
+once |0|The landing logo rebuilds byte for byte from tools/gen/logo.py|./tools/checks/logo-check.sh
+once |0|The landing demo downloads the kernel once, gzipped|./tools/checks/kernel-gz-check.sh
 retry|1|Boot check|./check.sh
 retry|1|Benchmarks run and report every number|./tools/checks/bench-check.sh
 retry|1|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
