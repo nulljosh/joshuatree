@@ -607,6 +607,11 @@ static const char *chat_process_message(char *msg, int T, int x, int you_w, int 
         if (chat_launch_after >= 0) return 0; /* open_app: caller returns, again: reopens the picked app */
         chat_push(CHAT_ROLE_USER, msg);
         chat_push(CHAT_ROLE_ASSISTANT, tool_reply);
+        /* A tool's reply ("Reminder set: call mom") is spoken like any answer. */
+        if (sb16_present() && tool_reply[0]) {
+            chat_draw_status("speaking ...");
+            speak_text(llm_host, (unsigned short)llm_port, tool_reply, CHAT_SPEAK_TIMEOUT_TICKS);
+        }
     }
 
     if (!handled) {
