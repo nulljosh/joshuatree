@@ -105,7 +105,7 @@ try:
     centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
     move(centre(TERM_SLOT), ICON_ROW_Y); time.sleep(0.3); click()
     opened = False
-    for _ in range(40):
+    for _ in range(200):
         time.sleep(0.1)
         img = dump()
         if is_red(img, CLOSE_X, CLOSE_Y): opened = True; break

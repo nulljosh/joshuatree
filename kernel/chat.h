@@ -57,6 +57,8 @@
    "no reply" (which read exactly like a dead host or a typo, not "you
    need a different port/host"), via chat_error() below. */
 
+#include "chat_face.h"
+
 #define CHAT_MAX 8            /* messages kept (4 user/assistant exchanges); oldest drop first once full */
 #define CHAT_CONTENT_MAX 640  /* raw stored content per message; real growth from the old 512-byte input cap */
 #define CHAT_ROLE_USER 0
@@ -108,6 +110,7 @@ static const char *chat_error(void) { return chat_last_error; }
    real local box needs longer. */
 #define CHAT_SEND_TIMEOUT_TICKS 4500  /* ~45s at 100Hz: /api/chat */
 #define CHAT_PICK_TIMEOUT_TICKS 1000  /* ~10s at 100Hz: /api/pick, a small classifier call */
+#define CHAT_SPEAK_TIMEOUT_TICKS 1500 /* ~15s at 100Hz: /api/speak audio download, well under /api/chat's own bound */
 
 /* Same field-boundary contract contacts.h/mail.h already use: stored
    content can't contain '|' or '\n', so a plain scan for either is a
@@ -584,6 +587,7 @@ static void chat_draw_status(const char *state) {
     int T = gui_app_dy();
     window_rect(0, T + 40, (int)window_width(), 32, GUI_BG);
     font_draw_string(line, 20, T + 52, CHAT_DIM, -1);
+    chat_face_draw(T);
 }
 
 /* Shared by every way a message can be sent now (n's prompt, a suggestion
@@ -606,12 +610,25 @@ static const char *chat_process_message(char *msg, int T, int x, int you_w, int 
         if (chat_launch_after >= 0) return 0; /* open_app: caller returns, again: reopens the picked app */
         chat_push(CHAT_ROLE_USER, msg);
         chat_push(CHAT_ROLE_ASSISTANT, tool_reply);
+        /* A tool's reply ("Reminder set: call mom") is spoken like any answer. */
+        if (sb16_present() && tool_reply[0]) {
+            chat_draw_status("speaking ...");
+            chat_face_speak(llm_host, (unsigned short)llm_port, tool_reply, CHAT_SPEAK_TIMEOUT_TICKS);
+        }
     }
 
     if (!handled) {
         chat_draw_status("generating ...");
         static char answer[4096];
-        if (chat_send(msg, answer, sizeof(answer))) return "ready";
+        if (chat_send(msg, answer, sizeof(answer))) {
+            /* Speak the reply when a sound card is there; speak_text is a
+               silent no-op without one or when /api/speak fails. */
+            if (sb16_present()) {
+                chat_draw_status("speaking ...");
+                chat_face_speak(llm_host, (unsigned short)llm_port, answer, CHAT_SPEAK_TIMEOUT_TICKS);
+            }
+            return "ready";
+        }
         const char *e = chat_error();
         return e[0] ? e : "error: couldn't reach the host, or no reply";
     }
@@ -625,6 +642,7 @@ static void gui_launch_chat_app(void) {
     gui_draw_app_titlebar("Chat"); /* v0.76.11: drawn once, not every keystroke -- see chat_prompt_line's own comment */
     const char *state = "ready";
     int T = gui_app_dy();
+    chat_face_load();
     for (;;) {
         window_rect(0, T + 40, (int)window_width(), (int)window_height() - 40 - T, GUI_BG);
         chat_draw_status(state);
@@ -634,7 +652,7 @@ static void gui_launch_chat_app(void) {
         int bottom = (int)window_height() - 40;
         int you_w = font_string_width(CHAT_YOU);
         int sam_w = font_string_width(CHAT_SAM);
-        int body_w = (int)window_width() - 40;
+        int body_w = (int)window_width() - 40 - chat_face_reserve();
 
         if (chat_count == 0) {
             /* 1.3.0: empty state -- a short line from Samantha plus every
