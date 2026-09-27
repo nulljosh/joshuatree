@@ -1,13 +1,13 @@
 # Joshua Tree Technical Whitepaper
 
-**0.85.3** | September 2026
+**1.5.18** | September 2026
 
 An operating system, written from nothing. Not a Linux distribution. Not a
 layer on top of something else. Every part of it, from the first
 instruction the CPU runs to the pixels of the desktop, is in this
 repository. It boots in about two seconds, runs at 1920x1080, has a dock, a
 terminal, a text editor, a file browser, Mail, Calendar, Contacts,
-Calculator, Stocks, Reminders, twenty-three apps in all, live weather in
+Calculator, Stocks, Reminders, twenty-five apps in all, live weather in
 the menu bar, and a tree that sways in the wind over a real map of your
 location. It also runs in a browser tab.
 
@@ -31,7 +31,7 @@ backends (a real FAT16 disk and a RAM disk). It found the network card by
 reading the PCI bus itself and built Ethernet, ARP, IPv4, UDP, DNS, TCP and
 HTTP from raw bytes on the wire.
 
-On top of that sits a desktop. Twenty-three apps live in an Apps folder;
+On top of that sits a desktop. Twenty-five apps live in an Apps folder;
 the dock pins nine you reach for most, Apps and Trash bookending them.
 Deleted files go to a Trash you can restore from. Clicking the clock shows the
 system's own log and any live warnings. The terminal is the same shell the
