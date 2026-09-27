@@ -642,7 +642,6 @@ static void gui_launch_chat_app(void) {
     gui_draw_app_titlebar("Chat"); /* v0.76.11: drawn once, not every keystroke -- see chat_prompt_line's own comment */
     const char *state = "ready";
     int T = gui_app_dy();
-    window_present(); /* show the empty window while the face frames load, once per boot */
     chat_face_load();
     for (;;) {
         window_rect(0, T + 40, (int)window_width(), (int)window_height() - 40 - T, GUI_BG);

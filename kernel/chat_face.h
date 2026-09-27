@@ -82,6 +82,7 @@ static void chat_face_load(void) {
        A default fetch blocked Chat's first paint for seconds on every boot
        with a NIC, which broke every check that times how fast Chat opens. */
     if (!face_host_set) return;
+    window_present(); /* show the empty window while the frames load */
     /* Every other HTTP caller in this kernel (chat_send/chat_pick above,
        stocks.h, curbfind.h, epiphany.h) gates on net_init() before ever
        calling http_get_timeout, because net.c's send/receive helpers
@@ -98,13 +99,15 @@ static void chat_face_load(void) {
        opening Chat crashed with "exception: ring-0 invalid-opcode, halted"
        right after "chatchrome", with this gate removed. No NIC now just
        means no face, exactly like every sibling feature. */
-    if (!net_init(0x0A00020F)) return;
-    unsigned char *file = kmalloc(FACE_FILE_MAX);
-    if (!file) return;
-    while (face_idle_n < FACE_IDLE_MAX && (face_idle[face_idle_n] = face_fetch(file, "idle", face_idle_n))) face_idle_n++;
-    if (face_idle_n)
-        while (face_talk_n < FACE_TALK_MAX && (face_talk[face_talk_n] = face_fetch(file, "talk", face_talk_n))) face_talk_n++;
-    kfree(file);
+    unsigned char *file = net_init(0x0A00020F) ? kmalloc(FACE_FILE_MAX) : 0;
+    if (file) {
+        while (face_idle_n < FACE_IDLE_MAX && (face_idle[face_idle_n] = face_fetch(file, "idle", face_idle_n))) face_idle_n++;
+        if (face_idle_n)
+            while (face_talk_n < FACE_TALK_MAX && (face_talk[face_talk_n] = face_fetch(file, "talk", face_talk_n))) face_talk_n++;
+        kfree(file);
+    }
+    /* Always say how it went once facehost= asked for a face, even when the
+       card or memory wasn't there: silence reads as a hang to anyone watching. */
     serial_puts("face: idle="); { char d[2] = { (char)('0' + face_idle_n), 0 }; serial_puts(d); }
     serial_puts(" talk="); { char d[2] = { (char)('0' + face_talk_n), 0 }; serial_puts(d); }
     serial_puts("\n");

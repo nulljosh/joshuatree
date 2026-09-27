@@ -26,8 +26,13 @@ os.chdir(ROOT)
 subprocess.run(["make", "-s", "kernel.elf"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 RATE, TONE_HZ, SECS = 16000, 1000, float(os.environ.get("SPEAK_SECS", "2.5"))
-TONE = bytes(max(0, min(255, int(round(128 + 128 * math.sin(2 * math.pi * TONE_HZ * i / RATE)))))
+# 100, not 128: a full-scale tone wraps around inside the QEMU audio mixer
+# on GitHub's Linux runners (each peak flips to max negative, which reads
+# as double the pitch; seen in the recorded wav). sb16-check's beep uses
+# the same headroom.
+TONE = bytes(max(0, min(255, int(round(128 + 100 * math.sin(2 * math.pi * TONE_HZ * i / RATE)))))
              for i in range(int(RATE * SECS)))
+TONE = b"\x00" + TONE[1:]  # one NUL (the negative extreme, which never wraps) so the body really carries NUL bytes
 assert 0 in TONE  # the body really carries NUL bytes
 
 recorded = []
