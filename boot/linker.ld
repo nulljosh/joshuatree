@@ -35,6 +35,16 @@ SECTIONS {
         . += 8 * 4096; /* 7 pages of image + 1 page of user stack */
     }
 
+    /* Sound Blaster 16 DMA buffer (drivers/sb16.c). ISA DMA can only
+       address the low 16MB and a transfer must not cross a 64KB boundary,
+       so this is 64KB at a 64KB-aligned physical address. NOLOAD, like
+       .userimg above: it costs nothing in kernel.elf, and sitting before
+       _kernel_end keeps pmm.c from handing these frames out. */
+    .dmabuf 0xC0510000 (NOLOAD) : AT(0x00510000) {
+        sb16_dma_buf = .;
+        . += 0x10000;
+    }
+
     . = ALIGN(4096);
     _kernel_end = . - 0xC0000000; /* physical, matching pmm.c's other physical addresses */
 }

@@ -99,6 +99,7 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #define WALL_COLS 4     /* 4x3 grid = 1024x768, the smallest that covers a centered 960x540 crop */
 #define WALL_ROWS 3
 #include "serial.h"
+#include "sb16.h"
 #include "app_weather.h"
 #include "app_curbfind.h"
 #include "app_keyrate.h"
@@ -7678,13 +7679,14 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest\n");
+    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest beep\n");
                                         puts("a name that isn't one of the above runs a program by that name too, e.g. \"hello\" or \"note buy milk\" (same as exec, case-insensitive)\n"); }
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
     else if (!strcmp(line, "pagefault")) { volatile int *p = (int *)0xDEAD0000; *p = 1; } /* manual check: exercises paging */
     else if (!strcmp(line, "bench"))     { bench_run(fs_ok_global); }
+    else if (!strcmp(line, "beep"))      puts(sb16_beep(440, 500) ? "beep: played 440Hz\n" : "beep: no sound card\n");
     else if (!strcmp(line, "heaptest")) {
         char *a = kmalloc(16);
         char *b = kmalloc(32);
@@ -9686,6 +9688,7 @@ void kmain(unsigned int multiboot_info_addr){
     klog("paging_install: higher-half paging active");
     tasks_init();
     klog("tasks_init: scheduler ready");
+    klog(sb16_init() ? "sb16_init: Sound Blaster 16 found" : "sb16_init: no sound card");
     ata_blockdev_register(); /* v33 (0.33.0): register real backends before anything tries to mount a filesystem over one */
     ramdisk_init();
     trash_init();

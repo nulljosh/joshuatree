@@ -90,6 +90,15 @@ The network stack is what fetches the weather in the menu bar, the map
 tiles for the wallpaper, stock quotes, and the replies from a local
 Ollama server in the Chat app.
 
+### Sound
+
+| File | What it does |
+|---|---|
+| `drivers/sb16.c` | Driver for the Sound Blaster 16, the card both QEMU and the browser emulator provide. It plays 8-bit mono sound through the old ISA DMA controller, and the shell's `beep` command uses it to play a short 440Hz tone. |
+
+On a machine without the card the driver says so on the serial port and
+does nothing else. It never waits forever on a port.
+
 ### Graphics and input
 
 | File | What it does |
