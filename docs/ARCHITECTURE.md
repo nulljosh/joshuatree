@@ -59,6 +59,8 @@ Read the kernel bottom-up and each file makes sense from the ones below it.
 | `kernel/exec.c` | Loads a flat binary off the filesystem into a fixed window the linker script reserves, marks its pages user-accessible, and starts it as a ring-3 task with argv. |
 | `user/hello.c` + `user/jtsys.h` | The reference user program and the one header a user program gets: inline `int 0x80` wrappers, nothing else. |
 | `user/note.c` | The second user program, and the first one worth running: prints a file, appends a line, seeks. Exercises the v2 syscalls. |
+| `user/libjt/` | A small C library for user programs: `string.c`, `stdlib.c` (a fixed-arena `malloc`), `stdio.c` (`printf` and friends over the write syscall), plus `ctype.h` and `unistd.h`. Built into `libjt.a`. |
+| `user/wc.c` | Unix `wc`, counts lines, words and bytes. The first program linked against libjt instead of raw syscalls. |
 
 ### Storage
 
@@ -96,6 +98,8 @@ Ollama server in the Chat app.
 | `drivers/window.c` | The one drawing target everything renders through: pixels, rectangles, a viewport, and a partial-repaint band. |
 | `drivers/font.c` | Reads the real 8x16 IBM font out of VGA hardware at boot. Falls back to an embedded copy when the read comes back empty, as it does in the browser. |
 | `drivers/png.c` + `drivers/jpeg.c` | Small image decoders, 8-bit RGB and RGBA PNG and baseline JPEG. The wallpaper map tiles go through PNG. |
+| `drivers/ttf.c` | A runtime TrueType rasterizer, so text scales to any size. Wraps `drivers/stb_truetype.h`, vendored unmodified from Sean Barrett's stb, with the heap and string shims it needs. |
+| `drivers/dejavu_font.h` and siblings | The six DejaVu faces, Sans, Serif and Mono in regular and bold, as ASCII plus Latin-1 subsets: `dejavu_bold_font.h`, `dejavu_serif_font.h`, `dejavu_serif_bold_font.h`, `dejavu_mono_font.h`, `dejavu_mono_bold_font.h`. Generated from the TTFs in `tools/fonts/`. |
 | `drivers/mouse.c` | The PS/2 mouse, including the wheel. |
 | `drivers/vmmouse.c` | The VMware absolute-pointer interface. When the host answers, a tap lands exactly where the finger is. Real hardware falls back to `mouse.c`. |
 | `drivers/serial.c` | COM1 output for debugging. A boot trace you can read with `-serial stdio` even after the screen is dead. |
@@ -113,6 +117,9 @@ changed.
 |---|---|
 | `kernel/kernel.c` | The big one. The text console, the keyboard scancode table, the clock, the shell, and the whole desktop: menu bar, dock, windows, Apps folder, Files, Settings, Weather, Lock Screen, the wind-swayed tree. Most apps are still drawn from here. |
 | `kernel/files.h` | The Files app: browse the disk, open, rename, delete, restore from Trash. Split out of `kernel.c` and included straight back in. |
+| `kernel/ttf_render.h` | The shared glyph path for anything drawing real DejaVu text at physical resolution: a per-face cache, a glyph cache, the antialiased ink blend. Notes and the Terminal both draw through it. |
+| `kernel/gui_prims.c` | Tiny pure helpers split out of `kernel.c`: blend two colours, square root for antialiased lines. |
+| `kernel/dock_geom.c` | Dock geometry and hit-testing: where each icon sits at the current scale, and which slot a click landed on. |
 | `kernel/gui_prompt.h` | The shared one-line prompt and chrome-versus-content split that the newer apps use, so a keystroke redraws only what changed. |
 | `kernel/auth.h` | User accounts. A from-scratch SHA-256, a salted `USERS.TXT` on disk, the login and first-run screens. Built against `docs/THREAT-MODEL.md`. |
 | `kernel/wall_sat.h` | A real satellite photo, baked in, used as the wallpaper when there is no network to fetch map tiles. |
@@ -128,7 +135,7 @@ change. No Save button.
 
 | App | File | On disk |
 |---|---|---|
-| Notes | `kernel/editor.h` | `NOTES.TXT`. The one app with real typography: an embedded DejaVu family with pickers for face, size and weight. |
+| Notes | `kernel/editor.h` | `NOTES.TXT`. The one app with real typography: an embedded DejaVu family with six faces and any size from 12 to 200 points. |
 | Reminders | `kernel/reminders.h` | `REMINDERS.TXT`, one line per item. |
 | Calendar | `kernel/calendar.h` | `EVENTS.TXT`. The grid itself is computed from the clock. |
 | Mail | `kernel/mail.h` | `MAIL.TXT`. Two starter messages ship compiled in. |
@@ -174,8 +181,9 @@ None of this is kernel code. It builds and runs on the Mac.
 
 **Native harnesses** compile one kernel file against a tiny fake of
 `kmalloc` and `memcpy` so it can be tested without booting QEMU.
-`tools/png-host/main.c`, `tools/jpeg-host/main.c` and
-`tools/auth-host/main.c` each do this for their decoder or for `auth.h`;
+`tools/png-host/main.c`, `tools/jpeg-host/main.c`, `tools/ttf-host/` and
+`tools/auth-host/main.c` each do this for a decoder, the font rasterizer or `auth.h`;
+`tools/libjt-host/main.c` does the same for the user-space C library;
 the `kheap.h` and `libc.h` shims next to each one are the fakes.
 `tools/png-host/wallsat_check.c` decodes the baked satellite photo and
 checks it comes out 960x540. `drivers/png_testdata.h` and
@@ -192,8 +200,8 @@ satellite wallpaper, the user program arrays, the ported app arrays, and
 the fact row and progress chart on the landing page.
 
 **Checks** in `tools/checks/` are the regression suite. `check.sh` proves
-the kernel boots. `apptest.sh` and `qa-gallery.py` open every app in a
-headless QEMU and look at the pixels. `feature-drive.py` performs each
+the kernel boots. `qa-gallery.py` opens every app in a
+headless QEMU and looks at the pixels. `feature-drive.py` performs each
 app's main action. `soak-check.py` opens and closes everything many times
 and checks nothing leaked. `frametime-check.py` fails if a repaint gets
 slow. `usertest-check.sh` runs the ring-3 programs and asserts their
