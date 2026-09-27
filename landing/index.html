@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Joshua Tree, a computer built from scratch</title>
 <meta name="description" content="A whole computer, built from nothing: its own desktop, its own network, its own files, and a real text editor. Free, and open for you to help build.">
-<link rel="icon" type="image/png" href="mark.png">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="alternate icon" type="image/png" href="mark.png">
 <!-- v52 preloaded v86.wasm/kernel.elf here to start their ~5MB fetch the
      instant the HTML parsed, a real head start on first-boot time back when
      the demo was expected to start immediately regardless of scroll
@@ -83,7 +84,6 @@
   /* The mark is a single-ink alpha PNG used as a mask, so it takes the exact
      --ink token in both schemes instead of an inverted-filter approximation. */
   .ink-img { display: block; background: var(--fg); -webkit-mask: var(--src) center / contain no-repeat; mask: var(--src) center / contain no-repeat; }
-  .plate-cap { margin: 14px 0 0; text-align: center; }
 
   /* v71.1: demo moved to normal flow above header. The hero header is now
      a clean, text-only moment without the demo overlay. */
@@ -326,6 +326,16 @@
   .foot-meta { color: var(--sub); font-size: 12.5px; line-height: 1.9; }
   .foot-meta a { color: var(--sub); }
   footer a { color: var(--accent2); }
+  /* The mark: a Joshua tree, branches raised like Joshua's arms. */
+  .hero-logo { display: block; width: 96px; height: 96px; margin: 0 auto; }
+  .closing-name { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 12px; text-align: center; text-wrap: balance; }
+  .more { padding: 24px 20px 72px; text-align: center; }
+  .more h2 { font-size: 40px; letter-spacing: -0.03em; margin: 0 0 28px; }
+  .more-list { list-style: none; padding: 0; margin: 0 auto; max-width: 880px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid var(--border); }
+  .more-list li { padding: 16px 8px; border-bottom: 1px solid var(--border); font-size: 17px; font-weight: 500; }
+  .seal { display: block; width: 120px; height: 120px; margin: 0 auto 8px; }
+  @media (max-width: 700px) { .more h2 { font-size: 28px; } .more-list { grid-template-columns: repeat(2, 1fr); } }
+  @media (prefers-color-scheme: dark) { .hero-logo, .seal { filter: invert(0.93); } }
 </style>
 </head>
 <body>
@@ -356,7 +366,7 @@
 
 <header class="hero" id="main">
   <div class="hero-copy">
-    <div class="ink-img hero-mark" aria-hidden="true"></div>
+    <img class="hero-logo" src="logo.svg" alt="" width="96" height="96">
     <!-- Sep 2026, direct urgent correction -- this line briefly named
          Satellite Wallpaper (v0.76.7), but a real headless test of this
          exact deployed page found the browser demo can never actually show
@@ -464,6 +474,10 @@
   </div>
 </section>
 
+<section class="more reveal" aria-label="And so much more">
+  <h2>And so much more.</h2>
+  <ul class="more-list"><li>Files</li><li>Mail</li><li>Calendar</li><li>Notes</li><li>Reminders</li><li>Terminal</li><li>Chat</li><li>Weather</li><li>Contacts</li><li>Calculator</li><li>Stocks</li><li>Search</li><li>Epiphany</li><li>Activity</li><li>Curbfind</li><li>Bookrank</li><li>Quotes</li><li>Lexly</li><li>Toroid</li><li>Sparkjar</li></ul>
+</section>
 <section class="progress-section reveal">
   <h2>Growing every week.</h2>
   <p class="sub"><!-- progress-lede:start -->From a blank screen on Aug 31 to 25 apps today.<!-- progress-lede:end --></p>
@@ -497,7 +511,8 @@
 </section>
 
 <section class="grain-zone reveal">
-  <div class="badge" role="img" aria-label="Joshua Tree: an engraved Joshua tree"><span class="ink-img mark-tree"></span></div>
+  <img class="seal" src="logo.svg" alt="The Joshua Tree mark: a Joshua tree with its branches raised like arms" width="160" height="160" loading="lazy">
+  <p class="closing-name">Settlers named the Joshua tree for Joshua, arms raised to the sky.</p>
   <p class="closing">Joshua Tree is a real desktop built from nothing, not a skin on top of something else. It remembers your files, runs <span data-fact="apps">25</span> apps, and its Chat actually talks back over the internet to a real assistant. Try it live above, no download. It's free and open source, named for the tree that survives on nothing.</p>
 </section>
 
