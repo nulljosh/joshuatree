@@ -63,6 +63,25 @@ def goertzel(samples, rate, freq):
     return s1 * s1 + s2 * s2 - c * s1 * s2
 
 
+def zero_crossing_pitch(tone, secs):
+    """Schmitt-trigger crossing count: a bare mean-crossing count double-fires
+    on a stray ripple near zero (seen under some CI QEMU builds' audio
+    resampling), so require a real swing through a +-30% amplitude band
+    before it arms the next crossing."""
+    mean = sum(tone) / len(tone)
+    amp = (max(tone) - min(tone)) / 2
+    lo, hi = mean - 0.3 * amp, mean + 0.3 * amp
+    armed = tone[0] < lo
+    crossings = 0
+    for v in tone:
+        if armed and v > hi:
+            crossings += 1
+            armed = False
+        elif not armed and v < lo:
+            armed = True
+    return crossings / secs
+
+
 fails = []
 with tempfile.TemporaryDirectory(prefix="jt-sb16-") as work:
     work = os.environ.get("SB16_KEEP", work)
@@ -104,9 +123,7 @@ with tempfile.TemporaryDirectory(prefix="jt-sb16-") as work:
         if rms < 1000 or secs < 0.3:
             fails.append(f"audio is silent or too short (rms {rms:.0f}, {secs:.2f}s)")
         else:
-            mean = sum(tone) / len(tone)
-            crossings = sum(1 for a, b in zip(tone, tone[1:]) if (a - mean) < 0 <= (b - mean))
-            pitch = crossings / secs
+            pitch = zero_crossing_pitch(tone, secs)
             seg = tone[:rate // 4]
             e440, e300, e600 = (goertzel(seg, rate, f) for f in (440, 300, 600))
             print(f"sb16-check: pitch by zero crossings {pitch:.1f}Hz, "
