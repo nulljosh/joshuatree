@@ -33,12 +33,28 @@ brew install lld qemu
 make run              # boot to shell; type gui for desktop
 make iso              # build bootable ISO
 ./check.sh            # run regression tests
+./tools/bench.sh      # boot time, heap, memcpy, context switch, disk
 ```
+
+## How fast
+
+Measured headless in QEMU on a Mac Mini M4 by `tools/bench.sh`. Run it yourself; the numbers move with the host.
+
+<!-- bench:start -->
+| Benchmark | Result |
+|---|---|
+| Boot to shell | 260 ms |
+| Alloc + free | 134 ns/op |
+| memcpy | 475 MB/s |
+| Context switch | 4348 ns/switch |
+| Disk read | 6375 KB/s |
+<!-- bench:end -->
 
 ## Read more
 
 - [docs/WHITEPAPER.md](docs/WHITEPAPER.md) - why and how
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - every file
+- [docs/BENCHMARKS.md](docs/BENCHMARKS.md) - how fast it is
 - [SECURITY.md](SECURITY.md) - security model
 - [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md) - threat model
 - [docs/roadmap.md](docs/roadmap.md) - what's next

@@ -2003,45 +2003,6 @@ static void gui_draw_script_loop(int cx, int cy, int r, int thick, unsigned int 
    in scale units from the letter's own anchor, n is how many scale units
    above the baseline it sits, real distance for the shear (SL) to work
    from, not an arbitrary label. */
-static void gui_draw_hello_script(int cx, int baseline, int scale, unsigned int color, unsigned int bg){
-    int thick = scale >= 6 ? 2 : 1;
-    int total_w = 22 * scale;
-    int x = cx - total_w / 2;
-#define SL(n) (((n) * scale * HELLO_SLANT_NUM) / HELLO_SLANT_DEN)
-#define PX(dx, n) (x + (dx) * scale + SL(n))
-#define PY(n) (baseline - (n) * scale)
-
-    /* h */
-    gui_draw_capsule(PX(0, 10), PY(10), PX(0, 0), PY(0), thick, color, bg);
-    gui_draw_capsule(PX(0, 5), PY(5), PX(1, 7), PY(7), thick, color, bg);
-    gui_draw_capsule(PX(1, 7), PY(7), PX(3, 7), PY(7), thick, color, bg);
-    gui_draw_capsule(PX(3, 7), PY(7), PX(4, 5), PY(5), thick, color, bg);
-    gui_draw_capsule(PX(4, 5), PY(5), PX(4, 0), PY(0), thick, color, bg);
-    gui_draw_capsule(PX(4, 0), PY(0), PX(6, 0), PY(0), thick, color, bg); /* connector into e */
-    x += 6 * scale;
-
-    /* e: loop centered (2,3), open on the right, crossbar completes it */
-    gui_draw_script_loop(x + 2 * scale, PY(3), 3 * scale, thick, color, bg, (1 << 11) | (1 << 0) | (1 << 1), SL(3));
-    gui_draw_capsule(PX(-1, 3), PY(3), PX(5, 3), PY(3), thick, color, bg);
-    gui_draw_capsule(PX(5, 0), PY(0), PX(7, 0), PY(0), thick, color, bg); /* connector into l */
-    x += 6 * scale;
-
-    /* l */
-    gui_draw_capsule(PX(0, 10), PY(10), PX(0, 0), PY(0), thick, color, bg);
-    gui_draw_capsule(PX(0, 0), PY(0), PX(2, 0), PY(0), thick, color, bg); /* connector into l */
-    x += 3 * scale;
-
-    /* l */
-    gui_draw_capsule(PX(0, 10), PY(10), PX(0, 0), PY(0), thick, color, bg);
-    gui_draw_capsule(PX(0, 0), PY(0), PX(2, 0), PY(0), thick, color, bg); /* connector into o */
-    x += 3 * scale;
-
-    /* o: closed loop centered (2,3) */
-    gui_draw_script_loop(x + 2 * scale, PY(3), 3 * scale, thick, color, bg, 0, SL(3));
-#undef PX
-#undef PY
-#undef SL
-}
 
 
 /* v40: a row band, so a partial repaint (the dock band on a hover change)
@@ -6131,6 +6092,8 @@ static void gui_launch_settings(void){
 #include "sparkjar.h"
 #include "epiphany.h"
 #include "activity.h"
+static int fs_ok_global = 0;
+#include "bench.h"
 
 static void gui_launch(int icon){
     if (icon == GUI_APPS_FOLDER) { gui_launch_apps(); return; }
@@ -7715,12 +7678,13 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest\n");
+    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest\n");
                                         puts("a name that isn't one of the above runs a program by that name too, e.g. \"hello\" or \"note buy milk\" (same as exec, case-insensitive)\n"); }
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
     else if (!strcmp(line, "crash")) __asm__ volatile ("int $3");  /* manual check: exercises idt/isr */
     else if (!strcmp(line, "pagefault")) { volatile int *p = (int *)0xDEAD0000; *p = 1; } /* manual check: exercises paging */
+    else if (!strcmp(line, "bench"))     { bench_run(fs_ok_global); }
     else if (!strcmp(line, "heaptest")) {
         char *a = kmalloc(16);
         char *b = kmalloc(32);
@@ -9606,6 +9570,7 @@ static void run(char *line){
     }
 }
 
+static int bench_at_boot = 0;
 void kmain(unsigned int multiboot_info_addr){
     serial_init();
     serial_puts("=== kmain boot start === v" JT_VERSION_STR "\n");
@@ -9639,6 +9604,8 @@ void kmain(unsigned int multiboot_info_addr){
             if (pc[0]=='p' && pc[1]=='o' && pc[2]=='r' && pc[3]=='t' && pc[4]=='f' && pc[5]=='o' && pc[6]=='l' && pc[7]=='i' && pc[8]=='o') { portfolio_dock = 1; serial_puts("portfolio dock\n"); break; }
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='c' && pc[1]=='l' && pc[2]=='i' && pc[3]=='p' && pc[4]=='t' && pc[5]=='r' && pc[6]=='a' && pc[7]=='c' && pc[8]=='e') { clip_trace = 1; serial_puts("cliptrace\n"); break; }
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='b' && pc[1]=='e' && pc[2]=='n' && pc[3]=='c' && pc[4]=='h' && (pc[5]==' ' || pc[5]==0)) { bench_at_boot = 1; break; }
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;
@@ -9723,6 +9690,7 @@ void kmain(unsigned int multiboot_info_addr){
     ramdisk_init();
     trash_init();
     int fs_ok = fat_mount();
+    fs_ok_global = fs_ok;
     klog(fs_ok ? "fat_mount: FAT16 filesystem mounted" : "fat_mount: no filesystem found");
     fat_vfs_register(); /* registered regardless of fs_ok: an unmounted fat backend just returns real failures, same as before v29 */
     ramfs_init();
@@ -9774,6 +9742,7 @@ void kmain(unsigned int multiboot_info_addr){
     if (wall_theme_override >= 0) { wall_theme = wall_theme_override; serial_puts("wallthemeoverride="); { char d[2] = { (char)(48 + wall_theme), 0 }; serial_puts(d); } serial_puts("\n"); }
     clear();
     boot_chime();
+    if (bench_at_boot) bench_run(fs_ok);
     puts("joshuatree v0 -- type help\n");
     if (!fs_ok) puts("(no FAT filesystem found -- ls/cat unavailable)\n");
     /* check.sh's only way to know the kernel reached this point: booting

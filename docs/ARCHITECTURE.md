@@ -120,6 +120,7 @@ changed.
 | `kernel/ttf_render.h` | The shared glyph path for anything drawing real DejaVu text at physical resolution: a per-face cache, a glyph cache, the antialiased ink blend. Notes and the Terminal both draw through it. |
 | `kernel/gui_prims.c` | Tiny pure helpers split out of `kernel.c`: blend two colours, square root for antialiased lines. |
 | `kernel/dock_geom.c` | Dock geometry and hit-testing: where each icon sits at the current scale, and which slot a click landed on. |
+| `kernel/bench.h` | Built-in benchmarks: boot time, heap, memcpy, context switch, disk read. `bench` in the shell or on the command line. Results in `docs/BENCHMARKS.md`. |
 | `kernel/gui_prompt.h` | The shared one-line prompt and chrome-versus-content split that the newer apps use, so a keystroke redraws only what changed. |
 | `kernel/auth.h` | User accounts. A from-scratch SHA-256, a salted `USERS.TXT` on disk, the login and first-run screens. Built against `docs/THREAT-MODEL.md`. |
 | `kernel/wall_sat.h` | A real satellite photo, baked in, used as the wallpaper when there is no network to fetch map tiles. |
@@ -216,6 +217,7 @@ speak a shell command into a running instance through Whisper and Ollama.
 
 ## Where to go next
 
+- `docs/BENCHMARKS.md` for how fast it is, and `tools/bench.sh` to measure it yourself.
 - `docs/WHITEPAPER.md` for why this exists and what it is not yet.
 - `docs/SYSCALL-ABI.md` if you want to write a program for it.
 - `docs/BLUEPRINT.md` for the plan after 1.0: apps as real processes and a window server.
