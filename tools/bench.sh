@@ -16,7 +16,7 @@ Q=$!
 for _ in $(seq 1 120); do grep -q "^bench done" "$LOG" 2>/dev/null && break; sleep 0.5; done
 kill $Q 2>/dev/null || true
 grep -q "^bench done" "$LOG" || { echo "bench: kernel never finished (see $LOG)"; exit 1; }
-ROWS=$(grep "^bench " "$LOG" | grep -v done | awk '{printf "| %s | %s %s |\n", $2, $3, $4}')
+ROWS=$(grep "^bench " "$LOG" | grep -v done | tr -d "\r" | awk '{printf "| %s | %s %s |\n", $2, $3, $4}')
 printf "| Benchmark | Result |\n|---|---|\n%s\n" "$ROWS"
 if [ "${1:-}" = "--write" ]; then
   {
@@ -34,6 +34,19 @@ if [ "${1:-}" = "--write" ]; then
     echo "of a round trip to a task that only yields. disk_read is 128 KB of PIO"
     echo "sectors from a fresh FAT16 image."
   } > docs/BENCHMARKS.md
-  echo "wrote docs/BENCHMARKS.md"
+  python3 - "$ROWS" <<'PY'
+import re, sys
+rows = [[c.strip() for c in l.strip().strip("|").split("|")] for l in sys.argv[1].splitlines() if l.count("|") >= 3]
+labels = {"boot_to_shell":"Boot to shell","heap_alloc_free":"Alloc + free","memcpy":"memcpy","context_switch":"Context switch","disk_read":"Disk read"}
+def splice(path, body):
+    s = open(path).read()
+    s = re.sub(r"(<!-- bench:start -->\n).*?(\s*<!-- bench:end -->)", lambda m: m.group(1) + body + m.group(2), s, flags=re.S)
+    open(path, "w").write(s)
+md = "| Benchmark | Result |\n|---|---|\n" + "\n".join(f"| {labels[n]} | {v} |" for n, v in rows)
+splice("README.md", md)
+html = "\n".join(f'    <div class="fact"><strong>{v.split()[0]}<span class="label" style="display:inline;margin-left:4px">{v.split()[1]}</span></strong><span class="label">{labels[n]}</span></div>' for n, v in rows)
+splice("landing/index.html", html)
+PY
+  echo "wrote docs/BENCHMARKS.md, README.md, landing/index.html"
 fi
 rm -f "$LOG"; [ -n "$IMG" ] && rm -rf "$(dirname "$IMG")"
