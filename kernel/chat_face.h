@@ -14,8 +14,9 @@
    fixed caps, and a failed first frame stops the rest so a dead network
    costs one timeout, not twelve.
 
-   facehost=HOST[:PORT] on the kernel command line points the fetch
-   somewhere else (tools/checks/chat-face-check.py serves solid colors). */
+   Off unless facehost=HOST[:PORT] is on the kernel command line
+   (facehost=joshuatree.heyitsmejosh.com for her real frames;
+   tools/checks/chat-face-check.py serves solid colors). */
 #include "sb16.h"
 
 #define FACE_IDLE_MAX  4
@@ -31,6 +32,7 @@ static char face_host[FACE_HOST_MAX] = "joshuatree.heyitsmejosh.com";
 static unsigned short face_port = 80;
 static unsigned char *face_idle[FACE_IDLE_MAX], *face_talk[FACE_TALK_MAX]; /* RGB, FACE_SRC^2 * 3 */
 static int face_idle_n = 0, face_talk_n = 0, face_tried = 0;
+static int face_host_set = 0;        /* 1 once facehost= was on the command line */
 static int face_x = -1, face_y = -1;  /* viewport-local logical top-left, -1 = not placed */
 static int face_shown = -1;           /* talk frame on screen during playback */
 
@@ -41,6 +43,7 @@ static void chat_face_cmdline(const char *cl) {
             p += 9; int n = 0;
             while (*p && *p != ' ' && *p != ':' && n < FACE_HOST_MAX - 1) face_host[n++] = *p++;
             face_host[n] = 0;
+            face_host_set = n > 0;
             if (*p == ':') {
                 unsigned int pt = 0; p++;
                 while (*p >= '0' && *p <= '9') pt = pt * 10 + (unsigned int)(*p++ - '0');
@@ -75,6 +78,10 @@ static unsigned char *face_fetch(unsigned char *file, const char *kind, int i) {
 static void chat_face_load(void) {
     if (face_tried) return;
     face_tried = 1;
+    /* Opt-in: without facehost= Chat never touches the network for her face.
+       A default fetch blocked Chat's first paint for seconds on every boot
+       with a NIC, which broke every check that times how fast Chat opens. */
+    if (!face_host_set) return;
     /* Every other HTTP caller in this kernel (chat_send/chat_pick above,
        stocks.h, curbfind.h, epiphany.h) gates on net_init() before ever
        calling http_get_timeout, because net.c's send/receive helpers
