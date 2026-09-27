@@ -28,3 +28,4 @@ package-lock.json
 # staging tree make iso assembles it from.
 *.iso
 build/
+landing/v86/kernel.elf.gz

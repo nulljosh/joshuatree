@@ -169,20 +169,27 @@ if (typeof document !== "undefined") (function () {
   var emulator = null;
   var adaptersReady = false;
   var bootStart = 0; // set inside startEmulator, not here: the boot-detection setInterval's own "stuck in text mode" fallback measures elapsed time since boot actually STARTED, and boot no longer starts at page load
+  var emulatorStarting = false;
   function startEmulator() {
-    if (emulator) return; // idempotent: the observer below only fires this once anyway, but this stays safe if that ever changes
+    if (emulatorStarting) return; // idempotent: construction now waits on the kernel fetch, so `emulator` stays null for a moment
+    emulatorStarting = true;
     bootStart = Date.now();
-    kernelElfFetch = fetch("v86/kernel.elf").then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
+    // The kernel is fetched exactly once, gzipped, and handed to v86 as a
+    // buffer. It used to be fetched twice (here, and again by v86 from
+    // multiboot.url), 7MB on any browser that doesn't share the in-flight
+    // request, and served uncompressed either way.
+    kernelElfFetch = loadKernel().then(function (buf) {
       kernelElfBuffer = buf;
       return buf;
     }).catch(function () { return null; });
+    kernelElfFetch.then(function (buf) {
 
     emulator = new V86({
     wasm_path: "v86/v86.wasm",
     memory_size: 32 * 1024 * 1024,
     vga_memory_size: 16 * 1024 * 1024, // v41: 1600x1200x32bpp is 7.68MB, 8 was one bad rounding away from failing
     screen_container: screenContainer,
-    multiboot: { url: "v86/kernel.elf" },
+    multiboot: buf ? { buffer: buf.slice(0) } : { url: "v86/kernel.elf" },
     cmdline: /[?&]portfolio\b/.test(location.search) ? "portfolio" : undefined, // kmain reads this and puts Joshua's own apps on the dock
     autostart: true,
     // Real network backend for the emulated NIC: without this, v86's NIC
@@ -285,6 +292,23 @@ if (typeof document !== "undefined") (function () {
     emulator.add_listener("serial0-output-byte", function (b) {
       if (serialLog.length < 65536) serialLog += String.fromCharCode(b);
     });
+    });
+  }
+
+  // Gzipped kernel through DecompressionStream, raw ELF when the browser
+  // lacks it or the .gz is missing. The magic-byte check covers a host
+  // that already decoded it via Content-Encoding.
+  function loadKernel() {
+    function raw() { return fetch("v86/kernel.elf").then(function (r) { return r.arrayBuffer(); }); }
+    if (typeof DecompressionStream !== "function") return raw();
+    return fetch("v86/kernel.elf.gz").then(function (r) {
+      if (!r.ok) throw new Error("no gz");
+      return r.arrayBuffer();
+    }).then(function (buf) {
+      var b = new Uint8Array(buf, 0, 2);
+      if (b[0] !== 0x1f || b[1] !== 0x8b) return buf;
+      return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+    }).catch(raw);
   }
 
   // Start a little before the visitor actually scrolls to it (600px
@@ -447,7 +471,7 @@ if (typeof document !== "undefined") (function () {
     get mouseOn() { return !!(emulator && emulator.mouse_adapter && emulator.mouse_adapter.emu_enabled); },
     get absolute() { return absoluteMouse; }, /* v62: did the kernel enable v86's vmmouse backdoor */
     get serial() { return serialLog; },
-    get started() { return !!emulator; }, /* v0.82.x: true once startEmulator() has actually run (construction kicked off, not necessarily finished) -- lets a check script tell "gated, not yet started" apart from "started", the real signal lazy-boot-check.mjs asserts on */
+    get started() { return !!emulator || emulatorStarting; }, /* v0.82.x: true once startEmulator() has actually run (construction kicked off, not necessarily finished) -- lets a check script tell "gated, not yet started" apart from "started", the real signal lazy-boot-check.mjs asserts on */
     click: function () {
       if (!emulator) return;
       trackClick();

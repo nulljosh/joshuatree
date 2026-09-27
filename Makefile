@@ -18,6 +18,7 @@ OBJS := boot/boot.o $(KERNEL_ASM:.S=.o) $(KERNEL_SRCS:.c=.o) $(DRIVER_SRCS:.c=.o
 kernel.elf: $(OBJS) boot/linker.ld
 	$(LD) -m elf_i386 -T boot/linker.ld -o $@ $(OBJS)
 	@cp kernel.elf landing/v86/kernel.elf
+	@gzip -9nc kernel.elf > landing/v86/kernel.elf.gz
 # Real recurring gap, hit three times in one night: a subagent bumps
 # VERSION, builds, verifies, commits, and forgets `cp kernel.elf
 # landing/v86/kernel.elf`, since it's a separate manual step CLAUDE.md
