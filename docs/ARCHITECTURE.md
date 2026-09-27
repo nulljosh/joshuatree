@@ -150,6 +150,7 @@ change. No Save button.
 | Search | `kernel/search.h` | Filters the current directory as you type. Enter opens a folder or shows a file. Scoped to what the VFS can list, no whole-disk index. |
 | Portfolio | `kernel/portfolio.h` | A catalog of every app in the fleet with its URL. |
 | Activity | `kernel/activity.h` | Activity Monitor over the real scheduler and memory counters. Refreshes on a timer, can kill a task. |
+| Clock | `kernel/clock.h` | Current time from the RTC, a countdown timer you can start and pause, and an alarm. |
 
 **Apps ported from the fleet.** Each is a native rewrite of one of the
 sibling web apps, kept small on purpose.

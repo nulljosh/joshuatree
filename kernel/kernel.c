@@ -914,13 +914,13 @@ static void reboot(void){
    it keeps the primitive glyph path like every other unart'd icon. */
 /* v0.89.x: Activity landed after Portfolio took slot 23, so it sits at
    24 and GUI_APPS_FOLDER/GUI_TRASH moved to 25/26, same shift again. */
-#define GUI_APP_COUNT   27 /* 25 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 25 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       26
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Apps", "Trash"};
+#define GUI_APP_COUNT   28 /* 26 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 26 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       27
+static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Clock", "Apps", "Trash"};
 static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
     0x00707070, 0x00A13F3F, 0x00A0553F, 0x006B4423, 0x00375A4A, 0x002B2B2B, 0x00365E8C, 0x0085144B,
-    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078, 0x001F5FA8, 0x004A5A3E, 0x003E4C58
+    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078, 0x001F5FA8, 0x004A5A3E, 0x003E4C58, 0x00565A7A
 };
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
@@ -6096,6 +6096,7 @@ static void gui_launch_settings(void){
 #include "activity.h"
 static int fs_ok_global = 0;
 #include "bench.h"
+#include "clock.h"
 
 static void gui_launch(int icon){
     if (icon == GUI_APPS_FOLDER) { gui_launch_apps(); return; }
@@ -6126,6 +6127,7 @@ static void gui_launch(int icon){
     else if (icon == 22) gui_launch_epiphany();
     else if (icon == 23) gui_launch_portfolio();
     else if (icon == 24) gui_launch_activity();
+    else if (icon == 25) gui_launch_clock();
 }
 
 static void gui_launch_from_dock(int icon){
