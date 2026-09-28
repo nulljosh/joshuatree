@@ -137,6 +137,7 @@ retry|3|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyb
 once |2|Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
 retry|5|Accounts: create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py
 once |6|Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py
+once |6|Crash report names the faulting function, not just the exception kind|python3 ./tools/checks/panic-symbols-check.py
 once |7|Frame time: idle, dock hover and window open stay within budget|python3 ./tools/checks/frametime-check.py
 once |2|Every check in tools/checks/ is in this manifest or says why not|./tools/checks/suite-coverage-check.sh
 retry|5|Text selection in Notes: Shift-arrow/Ctrl+A highlight, edsel/edcopy/edcut markers, selection-aware copy/cut/paste/delete|python3 ./tools/checks/textselect-check.py

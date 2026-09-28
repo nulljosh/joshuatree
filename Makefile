@@ -1,19 +1,41 @@
 CC := clang
 CFLAGS := -target i386-unknown-none -ffreestanding -fno-stack-protector \
-          -fno-pic -mno-sse -mno-mmx -Wall -Wextra -O2 \
+          -fno-pic -mno-sse -mno-mmx -fno-omit-frame-pointer -Wall -Wextra -O2 \
           -Iboot -Ikernel -Idrivers -Ilib -MMD -MP
 LD := ld.lld
+# -fno-omit-frame-pointer: kernel/backtrace.c walks the EBP chain to print
+# crash-report frames (kernel/symtab.h). Without it clang's -O2 elides EBP
+# as a general-purpose register and the chain walk has nothing to follow.
 
 KERNEL_SRCS := kernel/gdt.c kernel/idt.c kernel/pic.c kernel/irq.c kernel/pmm.c \
                kernel/paging.c kernel/kheap.c kernel/task.c kernel/exec.c kernel/ring3.c kernel/syscall.c \
-               kernel/gui_prims.c kernel/dock_geom.c kernel/kernel.c
+               kernel/gui_prims.c kernel/dock_geom.c kernel/backtrace.c kernel/kernel.c
 KERNEL_ASM  := kernel/isr.S kernel/irq_stubs.S kernel/ring3_asm.S
 DRIVER_SRCS := drivers/ata.c drivers/blockdev.c drivers/ramdisk.c drivers/trash.c drivers/fat.c drivers/vfs.c drivers/ramfs.c drivers/pci.c drivers/vbe.c drivers/mouse.c drivers/vmmouse.c \
                drivers/window.c drivers/rtl8139.c drivers/ne2k.c drivers/net.c drivers/http.c drivers/html.c \
                drivers/json.c drivers/font.c drivers/serial.c drivers/sb16.c drivers/speak.c drivers/png.c drivers/jpeg.c drivers/ttf.c
 LIB_SRCS    := lib/libc.c
 
-OBJS := boot/boot.o $(KERNEL_ASM:.S=.o) $(KERNEL_SRCS:.c=.o) $(DRIVER_SRCS:.c=.o) $(LIB_SRCS:.c=.o)
+OBJS := boot/boot.o $(KERNEL_ASM:.S=.o) $(KERNEL_SRCS:.c=.o) $(DRIVER_SRCS:.c=.o) $(LIB_SRCS:.c=.o) kernel/symtab.o
+PASS1_OBJS := $(filter-out kernel/symtab.o,$(OBJS))
+
+# Crash-report symbol table: a two-pass build. Pass 1 links every object
+# except kernel/symtab.o into kernel.elf.pass1 -- its .text addresses are
+# final the moment PASS1_OBJS is complete, since boot/linker.ld places
+# .text before .rodata/.data/.bss and symtab.o contributes only a data
+# table, never code, so it can't move anything pass 1 already placed.
+# gen_symtab.py then reads that binary's own `nm -n` into kernel/symtab.c,
+# which compiles into the real kernel/symtab.o for the final link below.
+# Neither kernel.elf.pass1 nor the generated kernel/symtab.c is committed
+# (see .gitignore); both regenerate from scratch on every build, same as
+# drivers/version.h.
+kernel.elf.pass1: $(PASS1_OBJS) kernel/symtab_stub.o boot/linker.ld
+	$(LD) -m elf_i386 -T boot/linker.ld -o $@ $(PASS1_OBJS) kernel/symtab_stub.o
+
+kernel/symtab.c: kernel.elf.pass1 tools/gen/gen_symtab.py
+	python3 tools/gen/gen_symtab.py kernel.elf.pass1 kernel/symtab.c
+
+kernel/symtab.o: kernel/symtab.c kernel/symtab.h
 
 kernel.elf: $(OBJS) boot/linker.ld
 	$(LD) -m elf_i386 -T boot/linker.ld -o $@ $(OBJS)
@@ -169,7 +191,7 @@ run: kernel.elf dotfiles.img
 	qemu-system-i386 -kernel kernel.elf -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file=dotfiles.img,format=raw,if=ide,index=0
 
 clean:
-	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf user/hello.o user/hello.bin drivers/user_hello.h \
+	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf kernel.elf.pass1 kernel/symtab.c kernel/symtab_stub.o kernel/symtab_stub.d user/hello.o user/hello.bin drivers/user_hello.h \
 	      user/note.o user/note.bin drivers/user_note.h
 	rm -f joshuatree.iso
 	rm -rf build/iso_root

@@ -1,6 +1,7 @@
 /* Freestanding i386 kernel: VGA text, PS/2 keyboard, RTC clock, tiny shell. */
 #include "gdt.h"
 #include "idt.h"
+#include "symtab.h"
 #include "irq.h"
 #include "pic.h"
 #include "pmm.h"
@@ -9600,6 +9601,7 @@ static void run(char *line){
 }
 
 static int bench_at_boot = 0;
+static int panic_test_at_boot = 0;
 void kmain(unsigned int multiboot_info_addr){
     serial_init();
     serial_puts("=== kmain boot start === v" JT_VERSION_STR "\n");
@@ -9635,6 +9637,14 @@ void kmain(unsigned int multiboot_info_addr){
             if (pc[0]=='c' && pc[1]=='l' && pc[2]=='i' && pc[3]=='p' && pc[4]=='t' && pc[5]=='r' && pc[6]=='a' && pc[7]=='c' && pc[8]=='e') { clip_trace = 1; serial_puts("cliptrace\n"); break; }
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='b' && pc[1]=='e' && pc[2]=='n' && pc[3]=='c' && pc[4]=='h' && (pc[5]==' ' || pc[5]==0)) { bench_at_boot = 1; break; }
+        /* "panictest" on the multiboot command line (tools/checks/
+           panic-symbols-check.py passes it) -- deliberately faults from a
+           known, named function right after idt_install() so a headless
+           check can prove the crash report's symbol table names it. Never
+           set on a normal boot, so this path can never fire outside the
+           check that asks for it. */
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='p' && pc[1]=='a' && pc[2]=='n' && pc[3]=='i' && pc[4]=='c' && pc[5]=='t' && pc[6]=='e' && pc[7]=='s' && pc[8]=='t') { panic_test_at_boot = 1; break; }
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;
@@ -9697,6 +9707,7 @@ void kmain(unsigned int multiboot_info_addr){
     klog("gdt_install: GDT loaded");
     idt_install();
     klog("idt_install: IDT loaded");
+    if (panic_test_at_boot) jt_panic_test_target(); /* never returns: ring-0 fault, isr_handler halts after printing the crash report */
     syscall_install(); /* v64: int 0x80 gate, DPL 3 */
     klog("syscall_install: int 0x80 gate live");
     irq_install();
