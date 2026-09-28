@@ -108,7 +108,6 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app_keyrate.h"
 #include "app.h"
 #include "quotestreak.h"
-#include "calculator.h"
 #include "app_bookrank.h"
 #include "app_quotestreak.h"
 #include "app_plan.h"
@@ -2063,7 +2062,7 @@ static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_ro
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
@@ -6245,7 +6244,7 @@ static const struct app APPS[GUI_APP_COUNT] = {
     /* 16 */ {"Homeqi",     0x00566A3A, gui_icon_homeqi,     gui_open_homeqi,       0, 0},
     /* 17 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  gui_launch_fieldbook,  0, 0},
     /* 18 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   gui_launch_contacts,   0, 0},
-    /* 19 */ {"Calculator", 0x00556B85, gui_icon_calculator, calculator_open,      0, 0},
+    /* 19 */ {"Calculator", 0x00556B85, gui_icon_calculator, calculator_ring3_open, 0, 0}, /* 1.7.12: ring 3 too (user/calculator.c) */
     /* 20 */ {"Stocks",     0x00356B4F, gui_icon_stocks,     gui_launch_stocks,     0, 0},
     /* 21 */ {"Search",     0x00506078, gui_icon_search,     gui_launch_search,     0, 0},
     /* 22 */ {"Epiphany",   0x001F5FA8, gui_icon_stocks,     gui_launch_epiphany,   0, 0}, /* art covers it; primitive fallback only */
@@ -9404,10 +9403,9 @@ static void run(char *line){
         serial_puts(pass ? "chattest PASS\n" : "chattest FAIL\n");
         if (!pass) puts("FAILED\n");
     }
-    else if (!strcmp(line, "calctest")) {
-        /* Parser and test both live in app_calculator.c now (calculator_test). */
-        puts(calculator_test() ? "calculator parser: ok\n" : "FAILED\n");
-    }
+    /* calctest retired: the parser it exercised moved to user/calculator.c,
+       a real ring-3 program (1.7.12), whose own math is what
+       tools/checks/ring3calc-check.py exercises now. */
     else if (!strcmp(line, "stockstest")) {
         int pass = 1;
         char price_str[16];

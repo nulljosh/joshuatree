@@ -1,9 +1,10 @@
 /* 1.7.7: Keyrate as a real ring-3 process, and the supervisor around it.
    1.7.11: Toroid joins it, and the launcher became one table (RING3_APPS).
+   1.7.12: Calculator joins it, the third app out.
 
    Roadmap 2.0 says apps leave the kernel, so a crash in one cannot take
    the machine down. Keyrate, the smallest real app, went first; Toroid
-   followed the same path. Each app's dock entry lands here,
+   and Calculator followed the same path. Each app's dock entry lands here,
    and everything else stays as it was: gui_launch_from_dock has already
    drawn the window chrome and set the viewport by the time this runs,
    just as for an in-kernel app.
@@ -30,6 +31,7 @@
 #include "serial.h"
 #include "user_keyrate.h"
 #include "user_toroid.h"
+#include "user_calculator.h"
 #include "user_fbpoke.h"
 #include "app.h"
 #include "irq.h"
@@ -61,8 +63,9 @@ int gui_app_view_size(unsigned int *w, unsigned int *h);
    app's `open` at the small wrapper below its row. */
 struct ring3_app { const char *name; const unsigned char *bin; unsigned int len; const char *file; };
 static const struct ring3_app RING3_APPS[] = {
-    {"Keyrate", user_keyrate, USER_KEYRATE_LEN, "KEYRATE.BIN"},
-    {"Toroid",  user_toroid,  USER_TOROID_LEN,  "TOROID.BIN"},
+    {"Keyrate",    user_keyrate,    USER_KEYRATE_LEN,    "KEYRATE.BIN"},
+    {"Toroid",     user_toroid,     USER_TOROID_LEN,     "TOROID.BIN"},
+    {"Calculator", user_calculator, USER_CALCULATOR_LEN, "CALC.BIN"},
 };
 
 static void ring3app_launch(const struct ring3_app *a) {
@@ -113,8 +116,9 @@ static void ring3app_launch(const struct ring3_app *a) {
     }
     if (syscall_window_owner() >= 0) serial_puts("ring3app: BUG window still owned after the task ended\n");
 }
-void keyrate_ring3_open(void) { ring3app_launch(&RING3_APPS[0]); }
-void toroid_ring3_open(void)  { ring3app_launch(&RING3_APPS[1]); }
+void keyrate_ring3_open(void)    { ring3app_launch(&RING3_APPS[0]); }
+void toroid_ring3_open(void)     { ring3app_launch(&RING3_APPS[1]); }
+void calculator_ring3_open(void) { ring3app_launch(&RING3_APPS[2]); }
 
 /* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
    run user/fbpoke.c with no window: it must be refused a pointer into
@@ -147,6 +151,7 @@ void ring3app_autoopen_arm(const char *cl){
     for (const char *pc = cl; pc && *pc; pc++) {
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='k' && pc[6]=='e' && pc[7]=='y' && pc[8]=='r') { ring3app_autoopen_slot = 9; serial_puts("autoopen=keyrate\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='t' && pc[6]=='o' && pc[7]=='r' && pc[8]=='o') { ring3app_autoopen_slot = 14; serial_puts("autoopen=toroid\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='a' && pc[7]=='l' && pc[8]=='c') { ring3app_autoopen_slot = 19; serial_puts("autoopen=calculator\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
     }
 }
@@ -154,7 +159,7 @@ void ring3app_autoopen_run(int mx, int my){
     if (ring3app_autoopen_slot < 0) return;
     int slot = ring3app_autoopen_slot; ring3app_autoopen_slot = -1;
     editor_mouse_x = mx; editor_mouse_y = my;
-    gui_launch_from_dock(slot); /* Keyrate's or Toroid's APPS slot */
+    gui_launch_from_dock(slot); /* Keyrate's, Toroid's or Calculator's APPS slot */
     if (fbpoke_armed) { fbpoke_armed = 0; fbpoke_run(); }
     gui_draw_desktop(-1, -1, 0, 0);
     cursor_saved_x = cursor_saved_y = -1;
