@@ -13,8 +13,9 @@
 #     rather than CI's 4 separate runners.
 #   - `check-refs` job's three scripts: check-refs.sh, versionsync-check.sh,
 #     version-bump-check.sh.
-#   - `demo` job: demochat-check.mjs, cursorglide-check.mjs, and
-#     facespeak-demo-check.mjs (Samantha's Chat face + speak audio).
+#   - `demo` job: demochat-check.mjs, cursorglide-check.mjs,
+#     facespeak-demo-check.mjs (Samantha's Chat face + speak audio), and
+#     mobile-audio-check.mjs (phone audio unlocks on a real tap).
 #
 # Deliberately NOT run: the `network` job (continue-on-error in CI, talks
 # to real internet hosts, never gates a merge -- see check.yml's own
@@ -81,6 +82,7 @@ if [ ! -d node_modules ]; then
   run_named "npm install" npm install --no-audit --no-fund
 fi
 run_named "npx playwright install chromium" npx playwright install chromium
+run_named "npx playwright install webkit" npx playwright install webkit
 echo
 
 echo "-- suite job: 4 shards in parallel, each its own QEMU (-display none) --"
@@ -121,6 +123,7 @@ echo "-- demo job --"
 run_named "demochat-check.mjs" node tools/checks/demochat-check.mjs
 run_named "cursorglide-check.mjs" node tools/checks/cursorglide-check.mjs
 run_named "facespeak-demo-check.mjs" node tools/checks/facespeak-demo-check.mjs
+run_named "mobile-audio-check.mjs" node tools/checks/mobile-audio-check.mjs
 echo
 
 TOTAL=$(( $(date +%s) - START ))
