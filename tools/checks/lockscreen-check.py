@@ -455,8 +455,15 @@ try:
     # 0 -> 1 for the first and only time in this boot), not just a pixel
     # that happens to look right.
     m3.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
+    # v2.0 (notes/folders): dock click lands on the folder/note browser;
+    # Enter opens what's selected, 'n' creates one on a note-free disk.
+    m3.key('ret')
+    if not m3.integer('editor_loaded'):
+        m3.key('n')
     m3.wait_int('editor_loaded', lambda v: v == 1, 'Desktop did not become interactive after unlocking', timeout=5)
     check('unlock: the desktop is interactive again (Notes opens, same signal auth-flow-check.py uses)', True)
+    m3.key('esc')
+    time.sleep(0.2)
     m3.key('esc')
     time.sleep(0.3)
     m3.screenshot('03-unlocked')

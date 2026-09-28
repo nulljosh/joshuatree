@@ -104,8 +104,20 @@ class Machine:
         return Image.frombytes('RGB', (1920, 1080), raw.read_bytes(), 'raw', 'BGRX').convert('L')
 
     def open_notes(self):
+        # v2.0 (notes/folders): dock click lands on the folder/note
+        # browser; Enter opens the selected note (the disk-less boot's
+        # demo NOTES.TXT, migrated in place as this folder's one note),
+        # 'n' falls back to creating one if that's ever not there.
         self.move(458, 487)
         self.click()
+        time.sleep(.5)
+        self.key('ret')
+        for attempt in range(20):
+            if self.integer('editor_loaded'):
+                time.sleep(.5)
+                return
+            time.sleep(.1)
+        self.key('n')
         for attempt in range(50):
             if self.integer('editor_loaded') and self.integer('gui_app_windowed'):
                 time.sleep(.5)

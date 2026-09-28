@@ -4,7 +4,7 @@ static char editor_buffer[4096];
 static int editor_length, editor_position, editor_loaded, editor_dirty;
 static int editor_family, editor_size = 1, editor_weight, editor_scroll;
 int editor_mouse_x = 400, editor_mouse_y = 300;
-static const char *editor_status = "NOTES.TXT   |   Ctrl+S saves   Esc closes";
+static const char *editor_status = "Ctrl+S saves   Esc: back to Notes";
 
 /* v1.2.0: real text selection. -1 means no selection; otherwise this is
    the position Shift+arrow/Ctrl+A started extending from, and the active
@@ -306,14 +306,22 @@ static void editor_draw(void) {
     if (!gui_app_windowed) gui_draw_cursor(editor_mouse_x, editor_mouse_y);
 }
 
+/* v2.0 (notes/folders): the buffer no longer always belongs to the one
+   compiled-in NOTES.TXT -- notes_current_file (below, set by
+   gui_launch_notes before it calls notes_edit_loop) names whichever note
+   file is open, and the caller has already vfs_chdir'd into that note's
+   folder (notes_enter_current_folder) before this runs, so a plain
+   filename here still reaches the right file. */
+static char notes_current_file[13] = "";
+
 static int editor_save(void) {
     editor_buffer[editor_length] = 0;
-    if (!vfs_replace_file("NOTES.TXT", editor_buffer, editor_length)) {
-        editor_status = "Save failed. Text kept in RAM. Esc closes; Ctrl+S retries.";
+    if (!vfs_replace_file(notes_current_file, editor_buffer, editor_length)) {
+        editor_status = "Save failed. Text kept in RAM. Esc retries.";
         return 0;
     }
     editor_dirty = 0;
-    editor_status = "Saved to NOTES.TXT   |   Ctrl+S saves   Esc closes";
+    editor_status = "Saved   |   Ctrl+S saves   Esc: back to Notes";
     return 1;
 }
 
@@ -350,9 +358,14 @@ static void editor_vertical(int direction) {
     }
 }
 
-static void gui_launch_editor(void) {
+/* Runs the plain text-editing screen full-window on notes_current_file,
+   until Esc/an outside click hands control back to gui_launch_notes's
+   folder+note browser (never a full app close by itself -- the browser
+   is what owns the window's lifetime now). Body otherwise unchanged from
+   the pre-folders single-note editor. */
+static void notes_edit_loop(void) {
     if (!editor_loaded) {
-        editor_length = vfs_read_file("NOTES.TXT", editor_buffer, sizeof(editor_buffer));
+        editor_length = vfs_read_file(notes_current_file, editor_buffer, sizeof(editor_buffer));
         if (editor_length >= (int)sizeof(editor_buffer)) {
             app_begin("Notes", 0x00FAF8F6);
             font_draw_string("File exceeds 4095 bytes. Editing disabled to protect it.", 20, 60 + gui_app_dy(), 0x001C1C1E, -1);
@@ -590,5 +603,370 @@ static void gui_launch_editor(void) {
            sampled a frame the kernel had drawn and not yet shown. */
         window_present();
         __asm__ volatile ("hlt");
+    }
+}
+
+/* ---------------------------------------------------------------------
+   Notes / folders (v2.0): real multiple notes in real folders under a
+   NOTES/ directory on the VFS, instead of the one always-open NOTES.TXT
+   above. Model: NOTES/<folder>/<file>, folders are real subdirectories
+   (vfs_mkdir/vfs_chdir), notes are files named "N0000001.TXT" etc (FAT's
+   8.3 names can't hold an arbitrary title, so the title shown in the UI
+   is always just the note's own first line, read live off disk, same
+   "first line = title" contract macOS Notes uses).
+
+   vfs_chdir is one global cursor, not a real per-call path, so every
+   helper below that touches a folder returns to the VFS root when it's
+   done (notes_goto_root: ".." twice is always enough, since this app
+   never nests deeper than NOTES/<folder>/). Leaving cwd anywhere but
+   root would be a live landmine for chat.h's read_notes/new_note tools,
+   which still open "NOTES.TXT" by a plain relative name.
+
+   ramfs (the browser landing demo's disk-free boot) has no directories
+   at all (vfs_mkdir/vfs_chdir always return 0 there, by design -- see
+   drivers/ramfs.c). notes_check_support() probes this once: unsupported
+   falls back to a single flat "Notes" folder living directly at VFS
+   root, same as the old single-note editor, so the demo still works,
+   just without real folders. */
+#define NOTES_DIR "NOTES"
+#define NOTES_DEFAULT_FOLDER "NOTES"
+#define NOTES_MAX_FOLDERS 16
+#define NOTES_MAX_NOTES 64
+#define NOTES_TITLE_MAX 40
+
+typedef struct { char name[9]; } notes_folder_t;
+static notes_folder_t notes_folders[NOTES_MAX_FOLDERS];
+static int notes_folder_count = 0;
+static int notes_folder_sel = 0;
+
+typedef struct { char file[13]; char title[NOTES_TITLE_MAX]; } notes_note_t;
+static notes_note_t notes_notes[NOTES_MAX_NOTES];
+static int notes_note_count = 0;
+static int notes_note_sel = 0;
+
+static int notes_folders_supported = -1; /* -1 unknown, 0 ramfs (flat), 1 real disk */
+static int notes_migrated = 0;
+static int notes_inited = 0;
+
+enum { NOTES_FOCUS_FOLDERS = 0, NOTES_FOCUS_NOTES = 1 };
+static int notes_focus = NOTES_FOCUS_NOTES;
+static int notes_phone_level = 0; /* narrow/phone mode: 0=folders, 1=notes */
+
+static void notes_strcopy(char *dst, const char *src, int max) {
+    int i = 0;
+    while (src[i] && i < max - 1) { dst[i] = src[i]; i++; }
+    dst[i] = 0;
+}
+
+/* Always returns to VFS root. Safe from any depth this app ever reaches
+   (root, NOTES/, or NOTES/<folder>/): fat_chdir("..") at root is a no-op
+   that still returns success, so two calls always land at root. */
+static void notes_goto_root(void) { vfs_chdir(".."); vfs_chdir(".."); }
+
+/* Enters (creating if needed) the NOTES/ container directory. Returns 0
+   on ramfs or on real disk failure (full root directory, etc). */
+static int notes_enter_container(void) {
+    notes_goto_root();
+    if (vfs_chdir(NOTES_DIR)) return 1;
+    if (vfs_mkdir(NOTES_DIR) && vfs_chdir(NOTES_DIR)) return 1;
+    return 0;
+}
+
+static int notes_enter_folder(const char *name) {
+    if (!notes_enter_container()) return 0;
+    if (vfs_chdir(name)) return 1;
+    if (vfs_mkdir(name) && vfs_chdir(name)) return 1;
+    return 0;
+}
+
+static int notes_check_support(void) {
+    if (notes_folders_supported >= 0) return notes_folders_supported;
+    notes_folders_supported = notes_enter_folder(NOTES_DEFAULT_FOLDER) ? 1 : 0;
+    notes_goto_root();
+    return notes_folders_supported;
+}
+
+/* chdir into whichever folder the current selection means, so the plain
+   filenames notes_edit_loop/editor_save use land in the right place.
+   No-op (stays at root) in flat/ramfs mode, where notes just live there. */
+static void notes_enter_current_folder(void) {
+    if (notes_check_support()) notes_enter_folder(notes_folders[notes_folder_sel].name);
+}
+static void notes_leave_current_folder(void) {
+    if (notes_check_support()) notes_goto_root();
+}
+
+static int notes_list_tmp_count = 0;
+static void notes_count_cb(const char *name, unsigned int size, int is_dir) {
+    (void)size;
+    if (is_dir || name[0] == '.') return;
+    notes_list_tmp_count++;
+}
+
+/* One-time: NOTES.TXT's content must never be lost. On a real disk it
+   moves into the default folder's first note file; NOTES.TXT itself is
+   only deleted once that write is confirmed. On ramfs (no folders) it's
+   left exactly where it is -- it already IS the one note the flat
+   fallback below shows. Skips entirely (and safely: nothing to do) once
+   the default folder already has a note in it, so this never re-fires
+   or clobbers real notes a user has since made. */
+static void notes_migrate_legacy(void) {
+    if (notes_migrated) return;
+    notes_migrated = 1;
+    notes_goto_root();
+    static char legacy[4096];
+    int n = vfs_read_file("NOTES.TXT", legacy, sizeof(legacy) - 1);
+    if (n <= 0) { notes_goto_root(); return; }
+    if (!notes_check_support()) { notes_goto_root(); return; }
+    if (!notes_enter_folder(NOTES_DEFAULT_FOLDER)) { notes_goto_root(); return; }
+    notes_list_tmp_count = 0;
+    vfs_list(notes_count_cb);
+    if (notes_list_tmp_count == 0) {
+        if (vfs_write_file("N0000001.TXT", legacy, (unsigned int)n)) {
+            notes_goto_root();
+            vfs_delete("NOTES.TXT");
+            notes_goto_root();
+            return;
+        }
+    }
+    notes_goto_root();
+}
+
+static void notes_folder_cb(const char *name, unsigned int size, int is_dir) {
+    (void)size;
+    if (!is_dir || name[0] == '.') return;
+    if (notes_folder_count >= NOTES_MAX_FOLDERS) return;
+    notes_strcopy(notes_folders[notes_folder_count].name, name, 9);
+    notes_folder_count++;
+}
+
+static void notes_load_folders(void) {
+    notes_folder_count = 0;
+    if (!notes_check_support()) {
+        notes_strcopy(notes_folders[0].name, "Notes", 9);
+        notes_folder_count = 1;
+        notes_folder_sel = 0;
+        return;
+    }
+    notes_enter_container();
+    vfs_list(notes_folder_cb);
+    notes_goto_root();
+    if (notes_folder_count == 0) {
+        notes_strcopy(notes_folders[0].name, NOTES_DEFAULT_FOLDER, 9);
+        notes_folder_count = 1;
+    }
+    if (notes_folder_sel >= notes_folder_count) notes_folder_sel = notes_folder_count - 1;
+    if (notes_folder_sel < 0) notes_folder_sel = 0;
+}
+
+static void notes_note_cb(const char *name, unsigned int size, int is_dir) {
+    (void)size;
+    if (is_dir) return;
+    if (!notes_check_support()) {
+        /* flat/ramfs root: only pick up this app's own note files, not
+           every unrelated root file (CONTACTS.TXT, MAIL.TXT, ...). */
+        int ours = (name[0] == 'N' && name[1] >= '0' && name[1] <= '9') || !strcmp(name, "NOTES.TXT");
+        if (!ours) return;
+    } else if (name[0] == '.') return;
+    if (notes_note_count >= NOTES_MAX_NOTES) return;
+    notes_strcopy(notes_notes[notes_note_count].file, name, 13);
+    notes_note_count++;
+}
+
+static void notes_load_notes(void) {
+    notes_note_count = 0;
+    notes_enter_current_folder();
+    vfs_list(notes_note_cb);
+    for (int i = 0; i < notes_note_count; i++) {
+        static char buf[512];
+        int n = vfs_read_file(notes_notes[i].file, buf, sizeof(buf) - 1);
+        if (n < 0) n = 0;
+        int t = 0;
+        while (t < n && buf[t] != '\n' && t < NOTES_TITLE_MAX - 1) { notes_notes[i].title[t] = buf[t]; t++; }
+        notes_notes[i].title[t] = 0;
+        if (t == 0) notes_strcopy(notes_notes[i].title, "(empty note)", NOTES_TITLE_MAX);
+    }
+    notes_leave_current_folder();
+    if (notes_note_sel >= notes_note_count) notes_note_sel = notes_note_count - 1;
+    if (notes_note_sel < 0) notes_note_sel = 0;
+}
+
+/* Builds "N" + a 7-digit zero-padded index + ".TXT" (8.3-legal), skipping
+   any index already taken in the current folder's already-loaded list. */
+static void notes_next_filename(char *out) {
+    int idx = notes_note_count + 1;
+    for (;;) {
+        out[0] = 'N';
+        int v = idx;
+        for (int p = 7; p >= 1; p--) { out[p] = (char)('0' + v % 10); v /= 10; }
+        out[8] = '.'; out[9] = 'T'; out[10] = 'X'; out[11] = 'T'; out[12] = 0;
+        int collide = 0;
+        for (int i = 0; i < notes_note_count; i++) if (!strcmp(notes_notes[i].file, out)) { collide = 1; break; }
+        if (!collide) return;
+        idx++;
+    }
+}
+
+/* Creates a new, empty note in the CURRENT folder and opens it for
+   editing immediately, cursor ready -- the actual ask this whole pass
+   is for. */
+static void notes_new_note(void) {
+    if (notes_folder_count == 0) return;
+    char fname[13];
+    notes_next_filename(fname);
+    notes_enter_current_folder();
+    int ok = vfs_write_file(fname, "", 0);
+    notes_leave_current_folder();
+    if (!ok) return;
+    notes_strcopy(notes_current_file, fname, 13);
+    notes_load_notes();
+    for (int i = 0; i < notes_note_count; i++) if (!strcmp(notes_notes[i].file, fname)) { notes_note_sel = i; break; }
+    editor_loaded = 0;
+    editor_status = "Ctrl+S saves   Esc: back to Notes";
+    notes_enter_current_folder();
+    notes_edit_loop();
+    notes_leave_current_folder();
+    notes_load_notes();
+}
+
+static void notes_open_selected(void) {
+    if (notes_note_count == 0) return;
+    notes_strcopy(notes_current_file, notes_notes[notes_note_sel].file, 13);
+    editor_loaded = 0;
+    editor_status = "Ctrl+S saves   Esc: back to Notes";
+    notes_enter_current_folder();
+    notes_edit_loop();
+    notes_leave_current_folder();
+    notes_load_notes();
+}
+
+static void notes_new_folder(void) {
+    if (!notes_check_support()) return; /* ramfs: no real directories, graceful no-op */
+    char name[9];
+    if (!gui_prompt_line_input("Notes", "new folder name (enter to confirm, esc to cancel):", name, sizeof(name))) return;
+    if (!name[0]) return;
+    notes_enter_container();
+    vfs_mkdir(name);
+    notes_goto_root();
+    notes_load_folders();
+    for (int i = 0; i < notes_folder_count; i++) if (!strcmp(notes_folders[i].name, name)) { notes_folder_sel = i; break; }
+    notes_load_notes();
+}
+
+/* Deletes the selected note, but only after a typed confirm -- the same
+   "type yes, esc cancels" prompt pattern every other confirm-needing
+   action in this kernel already uses (gui_prompt_line_input), rather
+   than a bare keypress silently destroying a note. */
+static void notes_delete_selected(void) {
+    if (notes_note_count == 0) return;
+    char resp[8];
+    if (!gui_prompt_line_input("Notes", "Delete this note? Type yes, esc cancels:", resp, sizeof(resp))) return;
+    if (strcmp(resp, "yes") && strcmp(resp, "y")) return;
+    notes_enter_current_folder();
+    vfs_delete(notes_notes[notes_note_sel].file);
+    notes_leave_current_folder();
+    notes_load_notes();
+}
+
+#define NOTES_WIDE_MIN 640
+#define NOTES_FOLDER_W 150
+#define NOTES_LIST_W 220
+
+static void notes_draw_list(int x, int w, int top, const char *title, int is_focused,
+                             int count, int sel, int wide) {
+    font_draw_string(title, x + 12, top, 0x0075726E, w - 20);
+    if (is_focused && wide) window_rect(x, top - 6, w, 18, 0x00EAE4DC);
+    if (count == 0) {
+        font_draw_string("(empty)", x + 12, top + 26, 0x00A29A90, w - 20);
+        return;
+    }
+    for (int i = 0; i < count; i++) {
+        int y = top + 26 + i * 22;
+        if (i == sel) window_rect(x, y - 4, w, 20, is_focused ? 0x00EDE6DC : 0x00F4F0EA);
+    }
+}
+
+/* Notes' front door: browses folders (left column) and notes (middle
+   column) macOS-Notes-style, then hands the full window to
+   notes_edit_loop for the actual writing (right column's job). Narrow
+   windows (a phone-sized boot) show one column at a time instead, with
+   a "< Back" chevron, since three real columns don't fit a 430px frame. */
+static void gui_launch_editor(void) {
+    int T = gui_app_dy();
+    if (!notes_inited) {
+        notes_inited = 1;
+        notes_migrate_legacy();
+        notes_load_folders();
+        notes_load_notes();
+    } else {
+        notes_load_folders();
+        notes_load_notes();
+    }
+    notes_focus = NOTES_FOCUS_NOTES;
+    notes_phone_level = 0;
+    mouse_click_edge_sync();
+
+    for (;;) {
+        int wide = (int)window_width() >= NOTES_WIDE_MIN;
+        window_clear(0x00FAF8F6);
+        gui_draw_app_titlebar("Notes");
+
+        if (wide) {
+            font_draw_string("n new   f folder   d delete   tab switch   enter opens   esc closes",
+                              20, T + 14, 0x0075726E, (int)window_width() - 40);
+            notes_draw_list(20, NOTES_FOLDER_W, T + 44, "FOLDERS", notes_focus == NOTES_FOCUS_FOLDERS, notes_folder_count, notes_folder_sel, 1);
+            for (int i = 0; i < notes_folder_count; i++)
+                font_draw_string(notes_folders[i].name, 32, T + 70 + i * 22, 0x001C1C1E, NOTES_FOLDER_W - 20);
+            int nx = 20 + NOTES_FOLDER_W + 16;
+            notes_draw_list(nx, NOTES_LIST_W, T + 44, "NOTES", notes_focus == NOTES_FOCUS_NOTES, notes_note_count, notes_note_sel, 1);
+            for (int i = 0; i < notes_note_count; i++)
+                font_draw_string(notes_notes[i].title, nx + 12, T + 70 + i * 22, 0x001C1C1E, NOTES_LIST_W - 24);
+            window_rect(nx + NOTES_LIST_W, T + 44, 1, (int)window_height() - T - 60, 0x00E4DDD3);
+            font_draw_string("select a note and press enter to write", nx + NOTES_LIST_W + 24, T + 60, 0x00A29A90, -1);
+        } else {
+            if (notes_phone_level == 1) font_draw_string("< Back (esc)", 20, T + 14, 0x0085144B, -1);
+            if (notes_phone_level == 0) {
+                font_draw_string("up/down pick   enter opens   f new folder   esc closes", 20, T + 14, 0x0075726E, (int)window_width() - 40);
+                notes_draw_list(20, (int)window_width() - 40, T + 44, "FOLDERS", 1, notes_folder_count, notes_folder_sel, 0);
+                for (int i = 0; i < notes_folder_count; i++)
+                    font_draw_string(notes_folders[i].name, 32, T + 70 + i * 22, 0x001C1C1E, (int)window_width() - 64);
+            } else {
+                font_draw_string("up/down pick   enter opens   n new   d delete", 20, T + 14, 0x0075726E, (int)window_width() - 40);
+                notes_draw_list(20, (int)window_width() - 40, T + 44, notes_folders[notes_folder_sel].name, 1, notes_note_count, notes_note_sel, 0);
+                for (int i = 0; i < notes_note_count; i++)
+                    font_draw_string(notes_notes[i].title, 32, T + 70 + i * 22, 0x001C1C1E, (int)window_width() - 64);
+            }
+        }
+
+        window_present();
+        int k = get_key_or_click();
+        int list_focus = wide ? notes_focus : notes_phone_level;
+
+        if (k == KEY_ESC) {
+            if (!wide && notes_phone_level == 1) { notes_phone_level = 0; continue; }
+            return;
+        }
+        if (k == KEY_CLICK) {
+            if (!wide && notes_phone_level == 1) { notes_phone_level = 0; continue; }
+            return;
+        }
+        if (k == '\t') { notes_focus = (notes_focus == NOTES_FOCUS_FOLDERS) ? NOTES_FOCUS_NOTES : NOTES_FOCUS_FOLDERS; continue; }
+        if (k == 'f') { notes_new_folder(); continue; }
+        if (k == 'n') {
+            if (list_focus == NOTES_FOCUS_FOLDERS && !wide) { notes_phone_level = 1; continue; }
+            notes_new_note();
+            continue;
+        }
+        if (list_focus == NOTES_FOCUS_FOLDERS) {
+            if (k == KEY_UP && notes_folder_sel > 0) { notes_folder_sel--; notes_note_sel = 0; notes_load_notes(); }
+            else if (k == KEY_DOWN && notes_folder_sel < notes_folder_count - 1) { notes_folder_sel++; notes_note_sel = 0; notes_load_notes(); }
+            else if (k == KEY_ENTER || k == KEY_RIGHT) { if (!wide) notes_phone_level = 1; else notes_focus = NOTES_FOCUS_NOTES; }
+        } else {
+            if (k == KEY_UP && notes_note_sel > 0) notes_note_sel--;
+            else if (k == KEY_DOWN && notes_note_sel < notes_note_count - 1) notes_note_sel++;
+            else if (k == KEY_LEFT && !wide) notes_phone_level = 0;
+            else if (k == KEY_ENTER) notes_open_selected();
+            else if (k == 'd') notes_delete_selected();
+        }
     }
 }

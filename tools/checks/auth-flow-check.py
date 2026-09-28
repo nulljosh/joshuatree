@@ -405,8 +405,17 @@ try:
     check('fresh boot: auth_logged_in is 0 (nothing to log into)', m1.integer('auth_logged_in') == 0)
     m1.screenshot('01-fresh-desktop')
     m1.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
+    # v2.0 (notes/folders): dock click lands on the folder/note browser now.
+    # Enter opens whatever's already selected; a totally fresh disk has no
+    # note yet, so fall back to 'n' (new note in the current folder), same
+    # editor_loaded==1 signal the old direct-open gave.
+    m1.key('ret')
+    if not m1.integer('editor_loaded'):
+        m1.key('n')
     m1.wait_int('editor_loaded', lambda v: v == 1, 'Notes did not open on a gate-free fresh image', timeout=5)
     check('fresh boot: desktop is live with no accounts configured (today\'s documented behaviour)', True)
+    m1.key('esc')
+    time.sleep(0.2)
     m1.key('esc')
     time.sleep(0.3)
 
@@ -518,8 +527,13 @@ try:
     check('correct password: auth_current_user == "joshua"', m2.string('auth_current_user', 25) == USERNAME)
 
     m2.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
+    m2.key('ret')
+    if not m2.integer('editor_loaded'):
+        m2.key('n')
     m2.wait_int('editor_loaded', lambda v: v == 1, 'Desktop did not become interactive after a real login', timeout=5)
     check('post-login: the desktop is interactive (Notes opens)', True)
+    m2.key('esc')
+    time.sleep(0.2)
     m2.key('esc')
     time.sleep(0.3)
     m2.screenshot('03-post-login-desktop')
