@@ -173,6 +173,30 @@ def red_mask(img):
     return out
 
 
+TILE_R = int(TILE_W * 0.22)  # gui_draw_one_icon_on's own squircle radius: size * 22/100
+
+
+def red_outside_rounded_rect(img):
+    """Count of red month-label ink that falls outside the tile's own
+    rounded-rect corners -- the size>40 phone/Apps-folder branch of
+    gui_calendar_draw_date once spilled "SEP" past both straight edges
+    of a bigger tile; this catches the same overflow shape even when it
+    only clips a corner rather than a full side."""
+    count = 0
+    for y in MONTH_ROWS:
+        for x in COLS:
+            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
+            if not ((p[0] - max(p[1], p[2])) > 60 and p[0] > 140):
+                continue
+            cx = x if x < TILE_R else (TILE_W - 1 - x if x >= TILE_W - TILE_R else None)
+            cy = y if y < TILE_R else (TILE_W - 1 - y if y >= TILE_W - TILE_R else None)
+            if cx is not None and cy is not None:
+                dx, dy = TILE_R - cx, TILE_R - cy
+                if dx * dx + dy * dy > TILE_R * TILE_R:
+                    count += 1
+    return count
+
+
 def edge_ink_count(img):
     """Count of dark or red ink pixels in the tile's own side margins or
     right against its bottom edge -- the exact shape of the overflow bug
@@ -263,6 +287,12 @@ if month_diff < MONTH_DIFF_MIN:
     fail = 1
 if red_feb < RED_MIN or red_nov < RED_MIN:
     print("FAIL: the month area is not red ink in at least one boot")
+    fail = 1
+
+red_out_nov = red_outside_rounded_rect(img_nov)
+print("red month ink outside rounded corners (NOV 28 boot): %d (need 0, corner radius %dpx)" % (red_out_nov, TILE_R))
+if red_out_nov > 0:
+    print("FAIL: the month label's red ink clips the tile's own rounded corner")
     fail = 1
 
 edge_nov = edge_ink_count(img_nov)  # two-digit day ("28"), the wider/worst case for side overflow

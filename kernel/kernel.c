@@ -4915,15 +4915,20 @@ static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
        tile; on the bigger Apps-folder/phone tile (tile=60 logical) it
        left the day numeral small with the tile's bottom third empty.
        size is the same logical unit both callers pass, so branch on it. */
+    /* v1.8: phone tile's "SEP"/"28" spilled past the rounded corners.
+       No fractional mul (integer divisor), so ~70% comes from dropping
+       one face size each line: month 24px->16px@mul2=32px (~67% of 48),
+       day 28px->20px@mul2=40px (~71% of 56). */
     int mul_m = 1, mul_d = 1;
-    if (size > 40) { mul_m = 2; mul_d = 2; }
+    int face_m = 2, face_d = 3;
+    if (size > 40) { mul_m = 2; mul_d = 2; face_m = 0; face_d = 1; }
     const char *mon3 = GUI_CAL_MON3[monv - 1];
     int ly_m = y + size * 16 / 100;
     int ly_d = y + (size > 40 ? size * 48 / 100 : size * 42 / 100);
-    int lwm = wx_text_lw(mon3, 2, 1, mul_m);
-    wx_text(mon3, cx_center - lwm / 2, ly_m, 2, 1, mul_m, 0x00FF3B30);
-    int lwd = wx_text_lw(daybuf, 3, 1, mul_d);
-    wx_text(daybuf, cx_center - lwd / 2, ly_d, 3, 1, mul_d, 0x001F1F22);
+    int lwm = wx_text_lw(mon3, face_m, 1, mul_m);
+    wx_text(mon3, cx_center - lwm / 2, ly_m, face_m, 1, mul_m, 0x00FF3B30);
+    int lwd = wx_text_lw(daybuf, face_d, 1, mul_d);
+    wx_text(daybuf, cx_center - lwd / 2, ly_d, face_d, 1, mul_d, 0x001F1F22);
 }
 
 /* Flat rounded card: four anti-aliased corner discs plus two rects. */
