@@ -162,7 +162,7 @@ static void gui_launch_contacts(void) {
             font_draw_string("No contacts yet.", 20, T + 52, 0x001C1C1E, -1);
             font_draw_string("Press a to add one.", 20, T + 76, 0x00807468, -1);
         } else {
-            font_draw_string("up/down to pick   enter views   a adds   d deletes   esc closes", 20, T + 52, 0x00807468, -1);
+            gui_draw_hint(20, T + 52, "up/down to pick   enter views   a adds   d deletes   esc closes", 0x00807468);
             for (int i = 0; i < contacts_count; i++) {
                 int y = T + 84 + i * 22;
                 if (i == sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);

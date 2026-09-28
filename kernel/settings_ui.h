@@ -270,7 +270,7 @@ static void gui_launch_settings(void){
            second line clipped at the window's own bottom edge; one line
            with real breathing room below it instead of two stacked to
            the last pixel. */
-        font_draw_string("left/right or tap changes a row, tab switches section, esc closes. Saved automatically.", SETTINGS_DETAIL_X, wh - 22, 0x00807468, -1);
+        gui_draw_hint(SETTINGS_DETAIL_X, wh - 22, "left/right or tap changes a row, tab switches section, esc closes. Saved automatically.", 0x00807468);
 
         for (int p = 0; p < n_rows; p++) {
             int i = SETTINGS_SECTION_ROWS[cur_section][p];

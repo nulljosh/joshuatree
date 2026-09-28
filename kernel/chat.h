@@ -1095,7 +1095,15 @@ static void chat_boot_samantha_open(void) {
         font_draw_string(msg, 24, bottom - 28, 0x001C1C1E, -1);
         serial_puts("samfocus\n"); /* discriminating marker: the input box is drawn and reading keys every frame, i.e. focused */
         int k = get_key_or_click();
-        if (k == KEY_ESC || k == KEY_CLICK) { gui_launch_chat_app(); return; }
+        /* Only the back chevron (phone_home.h's phone_back_zone_tick)
+           exits: it injects the real ESC make code when tapped, so KEY_ESC
+           alone is the exit signal here. A raw KEY_CLICK is a tap anywhere
+           else on this screen -- most commonly her own face -- and used to
+           exit too (bug: any click abandoned the visitor into the console
+           mid-tap). Now it just falls through and loops again with the
+           input box still drawn and still reading keys, i.e. still
+           focused, so a face-tap keeps her open and ready to type into. */
+        if (k == KEY_ESC) { gui_launch_chat_app(); return; }
         if (k == KEY_ENTER) break;
         if (k == '\b') { if (n > 0) n--; continue; }
         if (k >= 32 && k < 127 && n < sizeof(msg) - 1) msg[n++] = (char)k;
