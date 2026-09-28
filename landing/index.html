@@ -158,17 +158,21 @@
   .fact-link { display: flex; flex-direction: column; gap: 4px; color: inherit; text-decoration: none; min-width: 0; }
   .fact-link:hover strong, .fact-link:focus-visible strong { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
   .fact { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .fact strong { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; color: var(--fg); font-style: normal; }
+  .fact strong { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; color: var(--fg); font-style: normal; white-space: nowrap; }
   .fact .label { color: var(--sub); }
   @media (max-width: 600px) { .facts-row { grid-template-columns: repeat(3, 1fr); gap: 24px 12px; } .fact strong { font-size: 26px; } }
-  /* Phones: 3 columns squeeze a 4-5 char value plus a unit onto one line
-     and the bottom row collides with the section below. Two columns,
-     value and unit stacked, fixes both without changing the desktop
-     design. */
+  /* Phones: the "Fast on nothing" bench row (5 facts, longer units like
+     ns/switch) squeezes a value plus its unit onto one line and the
+     bottom row collides with the section below. Two columns, value and
+     unit stacked, fixes both there. Scoped to that section only
+     ([aria-label="How fast"]): the "Joshua Tree by the numbers" facts
+     row above it (Apps/Documented/Version, 3 short facts) shares the
+     same .facts-row/.fact classes and stays 3-across on one line each,
+     unchanged. */
   @media (max-width: 480px) {
-    .facts-row { grid-template-columns: repeat(2, 1fr); gap: 22px 16px; max-width: 320px; }
-    .fact strong { font-size: 24px; display: flex; flex-direction: column; align-items: center; }
-    .fact strong .label { display: block; margin-left: 0 !important; margin-top: 2px; font-size: 11px; }
+    [aria-label="How fast"] .facts-row { grid-template-columns: repeat(2, 1fr); gap: 22px 16px; max-width: 320px; }
+    [aria-label="How fast"] .fact strong { font-size: 24px; display: flex; flex-direction: column; align-items: center; white-space: normal; }
+    [aria-label="How fast"] .fact strong .label { display: block; margin-left: 0 !important; margin-top: 2px; font-size: 11px; white-space: nowrap; }
   }
   @media (max-width: 380px) { .fact strong { font-size: 21px; } .facts-row { gap: 18px 12px; } }
   .boot-cta { text-align: center; margin: 28px auto 0; }
