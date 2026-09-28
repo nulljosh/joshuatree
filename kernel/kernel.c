@@ -6237,7 +6237,7 @@ static const struct app APPS[GUI_APP_COUNT] = {
     /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        gui_launch_curbfind,   0, 0},
     /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c */
     /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       gui_launch_bookrank,   0, 0},
-    /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_ring3_open, 0, 0}, /* 1.7.13: ring 3 too (user/quotes.c) */
+    /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_ring3_open, 0, 0}, /* 1.7.14: ring 3 too (user/quotes.c) */
     /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       gui_launch_plan,       0, 0},
     /* 13 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      gui_launch_lexly,      0, 0},
     /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */

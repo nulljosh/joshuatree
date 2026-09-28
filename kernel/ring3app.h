@@ -6,7 +6,7 @@
    process, and whether the program exited on its own or was reaped by
    idt.c's ring-3 fault path, it tears the window down and hands the
    desktop back. Keyrate went first (1.7.7), Toroid second (1.7.11),
-   Calculator third (1.7.12), Quotes fourth (1.7.13). */
+   Calculator third (1.7.12), Quotes fourth (1.7.14). */
 void keyrate_ring3_open(void);
 void toroid_ring3_open(void);
 void calculator_ring3_open(void);

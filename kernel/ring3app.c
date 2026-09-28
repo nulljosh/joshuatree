@@ -1,7 +1,7 @@
 /* 1.7.7: Keyrate as a real ring-3 process, and the supervisor around it.
    1.7.11: Toroid joins it, and the launcher became one table (RING3_APPS).
    1.7.12: Calculator joins it, the third app out.
-   1.7.13: Quotes joins it, the fourth app out.
+   1.7.14: Quotes joins it, the fourth app out.
 
    Roadmap 2.0 says apps leave the kernel, so a crash in one cannot take
    the machine down. Keyrate, the smallest real app, went first; Toroid,
