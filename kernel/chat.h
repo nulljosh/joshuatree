@@ -749,7 +749,17 @@ static void chat_draw_conversation(int T, int x, int you_w, int sam_w, int body_
         int cap_rows = last >= 0 ? chat_wrapped_rows(chat_msgs[last].content, cw) : 0;
         if (cap_rows > 2) cap_rows = 2;
         int face_bottom = bottom - cap_rows * 16 - 10;
-        int cy = chat_face_draw_big(T + 44, face_bottom) + 10; /* up into the status band's empty middle: the status text sits at the left */
+        /* Desktop: T + 44 pokes the face up into the status band's empty
+           middle on purpose -- "Samantha  <state>" sits at the left (x=20)
+           and the face is centered on a wide screen, so they never touch.
+           Phone: the face is nearly as wide as the whole 430-wide screen,
+           so centered means it also covers x=20 -- T + 44 there draws it
+           right over the status label ("Samant" then face, real bug seen
+           on the deployed demo). Start it below the status band instead
+           (T + 72, same band chat_draw_status clears/redraws) plus a small
+           gap, so the label stays fully readable. */
+        int face_top = boot_to_phone ? T + 84 : T + 44;
+        int cy = chat_face_draw_big(face_top, face_bottom) + 10; /* up into the status band's empty middle: the status text sits at the left */
         if (last >= 0) render_wrapped_text(chat_msgs[last].content, x, cy, cw, bottom - cy, CHAT_INK);
         return;
     }
