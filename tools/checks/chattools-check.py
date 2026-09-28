@@ -367,7 +367,7 @@ def run_live():
     proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         time.sleep(5)
-        proc.stdin.write(b"sendkey esc\n"); proc.stdin.flush()
+        proc.stdin.write(b"sendkey ctrl-alt-backspace\n"); proc.stdin.flush()  # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
         time.sleep(2)
         proc.stdin.write(send("chat remind me to test the live picker").encode()); proc.stdin.flush()
         serial_text = ""

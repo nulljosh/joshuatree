@@ -13,7 +13,7 @@ KERNEL_SRCS := kernel/gdt.c kernel/idt.c kernel/pic.c kernel/irq.c kernel/pmm.c 
 KERNEL_ASM  := kernel/isr.S kernel/irq_stubs.S kernel/ring3_asm.S
 DRIVER_SRCS := drivers/ata.c drivers/blockdev.c drivers/ramdisk.c drivers/trash.c drivers/fat.c drivers/vfs.c drivers/ramfs.c drivers/pci.c drivers/vbe.c drivers/mouse.c drivers/vmmouse.c \
                drivers/window.c drivers/rtl8139.c drivers/ne2k.c drivers/net.c drivers/http.c drivers/html.c \
-               drivers/json.c drivers/font.c drivers/app_quotestreak.c \
+               drivers/json.c drivers/font.c \
                drivers/serial.c drivers/sb16.c drivers/speak.c drivers/png.c drivers/jpeg.c drivers/ttf.c
 LIB_SRCS    := lib/libc.c third_party/bearssl/src/sha2small.c third_party/bearssl/src/hmac.c \
                third_party/bearssl/src/hmac_drbg.c third_party/bearssl/src/dec32be.c third_party/bearssl/src/enc32be.c
@@ -189,6 +189,13 @@ user/calculator.o: user/calculator.c user/jtsys.h drivers/vgafont.h
 user/calculator.bin: user/calculator.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/calculator.o user/libjt.a
 
+# 1.7.14: Quotes, the fourth app out of the kernel, built the same way.
+user/quotes.o: user/quotes.c user/jtsys.h drivers/vgafont.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/quotes.bin: user/quotes.o user/libjt.a user/note.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/quotes.o user/libjt.a
+
 # 1.7.8: fbpoke, the program that pokes the released window framebuffer
 # and must fault. Run by kernel/ring3app.c under the `fbpoke` boot flag.
 user/fbpoke.o: user/fbpoke.c user/jtsys.h
@@ -218,11 +225,14 @@ drivers/user_toroid.h: user/toroid.bin tools/gen/gen_user_bin.py
 drivers/user_calculator.h: user/calculator.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/calculator.bin drivers/user_calculator.h user_calculator
 
+drivers/user_quotes.h: user/quotes.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/quotes.bin drivers/user_quotes.h user_quotes
+
 kernel/kernel.o: drivers/user_hello.h drivers/user_note.h drivers/user_wc.h
 drivers/user_fbpoke.h: user/fbpoke.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/fbpoke.bin drivers/user_fbpoke.h user_fbpoke
 
-kernel/ring3app.o: drivers/user_keyrate.h drivers/user_toroid.h drivers/user_calculator.h drivers/user_fbpoke.h
+kernel/ring3app.o: drivers/user_keyrate.h drivers/user_toroid.h drivers/user_calculator.h drivers/user_quotes.h drivers/user_fbpoke.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -260,7 +270,7 @@ talk: kernel.elf dotfiles.img
 clean:
 	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf kernel.elf.pass1 kernel/symtab.c kernel/symtab_stub.o kernel/symtab_stub.d user/hello.o user/hello.bin drivers/user_hello.h \
 	      user/note.o user/note.bin drivers/user_note.h user/keyrate.o user/keyrate.bin drivers/user_keyrate.h user/toroid.o user/toroid.bin drivers/user_toroid.h \
-	      user/calculator.o user/calculator.bin drivers/user_calculator.h
+	      user/calculator.o user/calculator.bin drivers/user_calculator.h user/quotes.o user/quotes.bin drivers/user_quotes.h
 	rm -f joshuatree.iso
 	rm -rf build/iso_root
 

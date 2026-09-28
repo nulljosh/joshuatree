@@ -86,6 +86,7 @@ retry|3|Ring-3 program writing a real file against the v2 syscall ABI|./tools/ch
 retry|1|Keyrate runs as a ring-3 process with its own window; crashing it leaves the desktop alive (v3 syscall ABI)|python3 ./tools/checks/ring3app-check.py
 retry|2|Toroid runs as a ring-3 process through the table-driven launcher: draws generations, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3toroid-check.py
 retry|2|Calculator runs as a ring-3 process through the table-driven launcher: evaluates 12*3=36 and 5/0=0 through the real parser, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3calc-check.py
+retry|2|Quotes runs as a ring-3 process through the table-driven launcher: draws the option grid, answers right and wrong through the real logic, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3quotes-check.py
 retry|5|A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT|python3 ./tools/checks/userfb-release-check.py
 retry|7|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
 retry|0|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
@@ -116,6 +117,7 @@ once |1|HTTP/JSON/FAT16 parser fuzz (ASan/UBSan, truncation+mutation+nasties)|./
 once |5|Text-input bounds: json.c maxlen 0/1/truncation + auth const-time compare (ASan/UBSan)|./tools/checks/input-bounds-check.sh
 once |2|Password hashing, host harness: PBKDF2-HMAC-SHA256 vectors (RFC 7914, RFC 6070 for SHA-256), legacy record upgrade, USERS.TXT parse|./tools/checks/auth-check.sh
 retry|6|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclose-check.py
+retry|7|Esc on a bare desktop does not quit the GUI; Mail still opens from the dock|python3 ./tools/checks/esc-desktop-check.py
 retry|0|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
 retry|1|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
 retry|1|Apps folder layout (no black band, no row spill, no ghost icons)|python3 ./tools/checks/appsfolder-layout-check.py

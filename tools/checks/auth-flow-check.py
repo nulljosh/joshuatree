@@ -84,11 +84,36 @@ PASSWORD2 = 'new pass 2'
 # proved open Settings for real.
 LOGO_X, LOGO_Y = 16, 13
 SETTINGS_MENU_X, SETTINGS_MENU_Y = 94, 111
-# kernel.c's own SETTINGS_ROWS_Y, row 5 = Account (change password), row 6
-# = Add user (new account).
-SETTINGS_ROWS_Y = [84, 116, 148, 180, 212, 252, 284]
 ROW_ACCOUNT = 5
 ROW_ADDUSER = 6
+# 1.8's redesign (kernel/settings_ui.h) replaced the old flat 8-row list
+# with a left sidebar of sections (General/Assistant/Account) and a right
+# detail pane showing only the current section's rows -- SETTINGS_ROWS_Y
+# no longer exists and a bare click at the old absolute row y no longer
+# lands anywhere (it's now inside the sidebar's own x range, and row 6
+# isn't even drawn until the Account section is selected). Mirrors
+# kernel/settings_ui.h's own SETTINGS_SECTION_ROWS / SETTINGS_SIDEBAR_* /
+# SETTINGS_DETAIL_* constants so a click_settings_row() call reaches a row
+# the same way a person clicking the real UI would: pick the section in
+# the sidebar first, then the row inside it.
+SETTINGS_SECTIONS = [
+    [0, 1, 2, 7],  # General: Wind, Dock size, Wallpaper, Location
+    [3, 4],        # Assistant: LLM model, LLM host:port
+    [5, 6],        # Account: Account (change password), Add user
+]
+SETTINGS_SIDEBAR_X = 90
+SETTINGS_SIDEBAR_Y0 = 60
+SETTINGS_SIDEBAR_ROW_H = 34
+SETTINGS_DETAIL_X = 300
+SETTINGS_DETAIL_Y0 = 92
+SETTINGS_ROW_H = 36
+
+
+def settings_section_for_row(row):
+    for section, rows in enumerate(SETTINGS_SECTIONS):
+        if row in rows:
+            return section, rows.index(row)
+    raise ValueError(f'row {row} is not in any settings section')
 # The Notes dock icon, the exact coordinates editor_qa.py's open_notes()
 # already proved land on it.
 DOCK_NOTES_X, DOCK_NOTES_Y = 458, 487
@@ -274,7 +299,13 @@ def open_settings(machine):
 
 
 def click_settings_row(machine, row):
-    machine.click_at(200, SETTINGS_ROWS_Y[row] + 5)
+    # Click the row's own section in the sidebar first -- exactly what a
+    # person at the keyboard does, and required now: the detail pane only
+    # draws (and only hit-tests) the current section's rows, so a row in a
+    # not-yet-selected section can't be clicked directly.
+    section, pos = settings_section_for_row(row)
+    machine.click_at(SETTINGS_SIDEBAR_X, SETTINGS_SIDEBAR_Y0 + section * SETTINGS_SIDEBAR_ROW_H + 9)
+    machine.click_at(SETTINGS_DETAIL_X, SETTINGS_DETAIL_Y0 + pos * SETTINGS_ROW_H + 5)
 
 
 def check(label, condition):
