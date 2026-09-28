@@ -11,7 +11,7 @@ A whole computer, built from nothing. Its own kernel, its own desktop, its own n
 
 Try it live in your browser: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 
-Ask Samantha, the built-in assistant, to set a reminder, take a note or open an app. She does it. Everything you save lands on a real disk, and every feature has a check behind it.
+Ask Samantha, the built-in assistant, to set a reminder, take a note or open an app. She does it, and she answers out loud: her own voice through the OS's own sound driver, and a face that talks while she speaks. Everything you save lands on a real disk, and every feature has a check behind it.
 
 ## Boot it
 
