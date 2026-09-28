@@ -35,7 +35,7 @@ and gui_icon_art_scale's exact area weights handle the other sizes.
 
 Kernel-image budget. Storing decoded RGBA was the first design: 24 artworks
 at 128*128*4 is 1.5MB, and that collided with the ring-3 program window
-boot/linker.ld pins at 0xC0500000, which docs/SYSCALL-ABI.md names as part
+boot/linker.ld pins at 0xC0501000, which docs/SYSCALL-ABI.md names as part
 of the published v1 contract. As PNG the same 24 artworks are 141KB. Run
 this with --budget for the real figure.
 

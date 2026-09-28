@@ -21,7 +21,7 @@
 // MW_* multi-window ones) and checks the union covers all 8.
 import { readFileSync } from 'fs';
 
-const EXPECTED = ['Files', 'Mail', 'Calendar', 'Notes', 'Reminders', 'Terminal', 'Chat', 'Weather'];
+const EXPECTED = ['Files', 'Mail', 'Calendar', 'Notes', 'Reminders', 'Terminal', 'Samantha', 'Weather'];
 
 const src = readFileSync(new URL('../../landing/v86/embed.js', import.meta.url), 'utf8');
 const names = [...src.matchAll(/name:\s*'([^']+)'/g)].map(x => x[1]);

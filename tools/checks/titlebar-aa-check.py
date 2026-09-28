@@ -43,7 +43,7 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-DOCK_SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Trash"]
+DOCK_SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Trash"]
 
 # Physical pixel on the red close dot's own AA fringe, root-caused above:
 # pure fill color pre-fix, a real blended intermediate value post-fix.

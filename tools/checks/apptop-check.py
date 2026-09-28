@@ -43,7 +43,7 @@ PARK = (930, 300)          # right of the window: the pointer sprite must not re
 CLOSE = (94, 56)             # window 0's red traffic light (gui_multiwin_geom slot 0 / gui_launch_from_dock)
 VX0, VY0, VX1, VY1 = 78, 72, 890, 417  # content viewport: (x+8, y+32, w-16, h-40) for x=70,y=40,w=820,h=385
 MAX_GAP = 30
-SLOTS = {"Mail": 2, "Calendar": 3, "Notes": 4, "Reminders": 5, "Chat": 7, "Trash": 10}
+SLOTS = {"Mail": 2, "Calendar": 3, "Notes": 4, "Reminders": 5, "Samantha": 7, "Trash": 10}
 # Apps-folder apps open inside the folder window (x=56,y=30,w=848,h=490, see
 # gui_launch_from_dock), viewport (x+8, y+32, w-16, h-40). Grid index i sits
 # at row i/5, col i%5 (APPS_COLS); d moves right, s moves down.
@@ -141,7 +141,7 @@ try:
 
     move(*PARK); time.sleep(0.5)
     for name, slot in SLOTS.items():
-        click_at(centre(slot), ICON_ROW_Y, 2.0 if name == "Chat" else 1.2)
+        click_at(centre(slot), ICON_ROW_Y, 2.0 if name == "Samantha" else 1.2)
         move(*PARK); time.sleep(0.6)
         img = dump()
         img.save(f"/tmp/jt-apptop-{name.lower()}.png")

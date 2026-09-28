@@ -46,7 +46,7 @@ CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 
 # App names from kernel/kernel.c GUI_LABELS (indices 0-26)
-APPS = ["Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather",
+APPS = ["Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
         "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar",
         "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity", "Apps", "Trash"]
@@ -58,7 +58,7 @@ ACTIONS = [
     (4, "Reminders", ["a", ("type", "milk"), "ret"]),
     (2, "Calendar", ["right"]),
     (5, "Terminal", [("type", "help"), "ret"]),
-    (6, "Chat", [("type", "hi"), "ret"]),
+    (6, "Samantha", [("type", "hi"), "ret"]),
     (21, "Search", [("type", "read")]),
     (19, "Calculator", [("type", "2+2"), "ret"]),
     (20, "Stocks", ["right"]),

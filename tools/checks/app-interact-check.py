@@ -41,7 +41,7 @@ FOLDER_CLOSE_X, FOLDER_CLOSE_Y = 80, 46  # apps launched from inside the Apps fo
 APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
-DOCK_SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Trash"]
+DOCK_SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Trash"]
 
 subprocess.run(["./tools/mkdisk.sh", DISK], check=True)
 

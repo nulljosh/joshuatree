@@ -53,7 +53,7 @@ PORT = 4487
 # config (960x540 @2x, dock_scale_pct 7, GUI_ICON_COUNT 11).
 DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 247, 469, 2
 PITCH = DOCK_ICON + DOCK_GAP
-SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Stocks", "Trash"]
+SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
 COLS = range(20, 54)
 TOP_ROWS, BOT_ROWS, HL_ROW, EDGE_ROW = range(3, 8), range(64, 70), 0, 73
 DEPTH_MIN, DEPTH_MAX = 6, 45   # glossy 90-99, Big Sur 16-28

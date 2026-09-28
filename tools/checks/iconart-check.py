@@ -41,7 +41,7 @@ PORT = 4453
 DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE = 37, 6, 247, 469, 2
 PITCH = DOCK_ICON + DOCK_GAP
 # GUI_DOCK_DEFAULT order.
-SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Chat", "Weather", "Stocks", "Trash"]
+SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
 SVGS = ["apps", "files", "mail", "calendar", "notes", "reminders", "terminal", "chat", "weather", "stocks", "trash"]
 COLS = range(20, 54)
 BANDS = (range(3, 8), range(64, 70))

@@ -416,6 +416,7 @@ static int chat_match_app(const char *arg) {
         (b[bl - 3] == 'a' || b[bl - 3] == 'A') && (b[bl - 2] == 'p' || b[bl - 2] == 'P') && (b[bl - 1] == 'p' || b[bl - 1] == 'P'))
         bl -= 4;
     b[bl] = 0;
+    if ((b[0] | 32) == 'c' && (b[1] | 32) == 'h' && (b[2] | 32) == 'a' && (b[3] | 32) == 't' && !b[4]) b = "samantha"; /* Chat was renamed Samantha; "open chat" still works */
     for (int i = 0; i < GUI_APPS_FOLDER; i++) {
         for (const char *w = b; ; w++) {
             if ((w == b || *(w - 1) == ' ') && chat_word_prefix_ci(GUI_LABELS[i], w)) return i;
@@ -527,6 +528,7 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
 #define CHAT_SAM "Samantha: "
 #define CHAT_DIM 0x0075726E
 #define CHAT_INK 0x001C1C1E
+#define CHAT_ACCENT 0x00B7862A   /* mustard, like her cardigan */
 
 /* 1.3.0 ("Chat's empty state"): a blank console plus "n prompt" told a
    first-time visitor nothing about what Samantha can actually do here, and
@@ -587,6 +589,7 @@ static void chat_draw_status(const char *state) {
     int T = gui_app_dy();
     window_rect(0, T + 40, (int)window_width(), 32, GUI_BG);
     font_draw_string(line, 20, T + 52, CHAT_DIM, -1);
+    font_draw_string("Samantha", 20, T + 52, CHAT_ACCENT, -1); /* her name in her colour, over the dim copy */
     if (chat_count == 0) chat_face_draw(T);
 }
 
@@ -607,9 +610,9 @@ static void chat_draw_conversation(int T, int x, int you_w, int sam_w, int body_
         for (int i = chat_count - 1; i >= 0; i--) if (chat_msgs[i].role == CHAT_ROLE_ASSISTANT) { last = i; break; }
         int cw = (int)window_width() - 40;      /* the small face's reserve doesn't apply up here */
         int cap_rows = last >= 0 ? chat_wrapped_rows(chat_msgs[last].content, cw) : 0;
-        if (cap_rows > 3) cap_rows = 3;
+        if (cap_rows > 2) cap_rows = 2;
         int face_bottom = bottom - cap_rows * 16 - 10;
-        int cy = chat_face_draw_big(y, face_bottom) + 10;
+        int cy = chat_face_draw_big(T + 44, face_bottom) + 10; /* up into the status band's empty middle: the status text sits at the left */
         if (last >= 0) render_wrapped_text(chat_msgs[last].content, x, cy, cw, bottom - cy, CHAT_INK);
         return;
     }
@@ -684,7 +687,7 @@ static void gui_launch_chat_app(void) {
     chat_load();
     serial_puts("chatchrome\n"); /* discriminating marker for tools/checks/termchatflash-check.sh, same convention editor.h's "editorchrome" already established */
     window_clear(GUI_BG);
-    gui_draw_app_titlebar("Chat"); /* v0.76.11: drawn once, not every keystroke -- see chat_prompt_line's own comment */
+    gui_draw_app_titlebar("Samantha"); /* v0.76.11: drawn once, not every keystroke -- see chat_prompt_line's own comment */
     const char *state = "ready";
     int T = gui_app_dy();
     chat_face_load();
@@ -719,7 +722,9 @@ static void gui_launch_chat_app(void) {
 
         sleep_ticks(5);
         mouse_click_edge_sync();
-        int k = get_key_or_click();
+        /* While waiting, her idle loop plays (12fps); no face, plain wait. */
+        int k;
+        while (!(k = get_key_or_click_until(face_idle_n ? ticks() + 8 : 0))) chat_face_idle_tick();
         if (k == KEY_ESC) return;
         if (k == KEY_CLICK) {
             if (chat_count == 0) {
@@ -758,7 +763,7 @@ static void gui_launch_chat_app(void) {
         if (k == 'c') { chat_clear(); chat_suggest_sel = 0; state = "ready"; continue; }
         if (k == 'n') {
             char msg[CHAT_CONTENT_MAX];
-            if (!gui_prompt_line_input("Chat", CHAT_YOU "send a message (enter sends, esc cancels)", msg, sizeof(msg))) continue;
+            if (!gui_prompt_line_input("Samantha", CHAT_YOU "send a message (enter sends, esc cancels)", msg, sizeof(msg))) continue;
             if (msg[0] == 0) continue;
             const char *ns = chat_process_message(msg, T, x, you_w, body_w);
             if (!ns) return;
@@ -772,7 +777,7 @@ static void gui_launch_chat_app(void) {
            above this branch so they keep their own meaning). */
         if (k >= 32 && k < 127) {
             char msg[CHAT_CONTENT_MAX];
-            if (!gui_prompt_line_input_seeded("Chat", CHAT_YOU "send a message (enter sends, esc cancels)", msg, sizeof(msg), k)) continue;
+            if (!gui_prompt_line_input_seeded("Samantha", CHAT_YOU "send a message (enter sends, esc cancels)", msg, sizeof(msg), k)) continue;
             if (msg[0] == 0) continue;
             const char *ns = chat_process_message(msg, T, x, you_w, body_w);
             if (!ns) return;
