@@ -212,6 +212,40 @@ try:
     if open_keyrate_from_grid("dot-close"):
         move(APPS_CLOSE_X, APPS_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.5)
         assert_closed("dot-close", exits)
+
+    # 6. the keyboard path into the Apps folder, not the dock click: Enter on
+    #    a bare desktop used to call gui_launch_apps() directly, skipping the
+    #    gui_launch_from_dock windowed setup, so gui_app_view_size() returned
+    #    0 and Keyrate's SYS_WINDOW_OPEN failed ENODEV before it drew a thing
+    #    (1.7.7 desktop-hang root cause). Open the folder with Enter, launch
+    #    Keyrate, confirm it got a real window, back out with two Esc, then
+    #    confirm the desktop still answers a dock click.
+    seen = serial().count("keyrate: ring-3 window")
+    move(*PARK); time.sleep(0.3)
+    keys("ret"); time.sleep(1.0)  # bare desktop -> Apps folder, by keyboard
+    for _ in range(4): keys("d"); time.sleep(0.35)
+    keys("s"); time.sleep(0.35)
+    keys("ret")  # launch Keyrate from the grid selection
+    for _ in range(60):
+        time.sleep(0.1)
+        if serial().count("keyrate: ring-3 window") > seen: break
+    else:
+        fails.append("keyboard-open: Keyrate did not open a ring-3 window after Enter opened the Apps folder by keyboard")
+    if "ring3app: BUG" in serial():
+        fails.append("keyboard-open: ring3app logged a BUG line launching Keyrate from a keyboard-opened Apps folder")
+    keys("esc"); time.sleep(0.5)  # closes Keyrate
+    keys("esc"); time.sleep(0.5)  # closes the Apps folder
+    move(*PARK); time.sleep(0.3)
+    if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED) or near(pixel(APPS_CLOSE_X, APPS_CLOSE_Y), CLOSE_RED):
+        fails.append("keyboard-open: a window is still open after the two Esc presses")
+    move(SLOT0_X + 2 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
+    opened = False
+    for _ in range(40):
+        time.sleep(0.1)
+        if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): opened = True; break
+    print(f"keyboard-open: Mail opens from the dock afterwards: {'yes' if opened else 'NO'}")
+    if not opened: fails.append("keyboard-open: Mail did not open from a dock click after the keyboard-opened Apps folder closed: desktop stuck")
+    keys("esc"); time.sleep(1.0)
 finally:
     q.terminate()
     try: q.wait(5)

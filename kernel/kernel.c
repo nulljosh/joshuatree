@@ -7194,8 +7194,9 @@ static void gui_run(void){
                     gui_multiwin_close(gui_window_count - 1);
                     mw_key_repaint = 1;
                 } else if (c == '\n' && gui_window_count == 0) {
-                    /* Enter on the bare desktop opens the Apps folder */
-                    gui_launch_apps();
+                    /* Enter opens the Apps folder via the dock's own path,
+                       so gui_app_windowed/app_view_* are set like a click. */
+                    gui_launch_from_dock(GUI_APPS_FOLDER);
                 }
             }
         }

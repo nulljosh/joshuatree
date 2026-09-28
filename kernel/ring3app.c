@@ -62,7 +62,18 @@ void keyrate_ring3_open(void) {
        loudly, so a viewport that outgrows .userfb (boot/linker.ld) shows
        up as one serial line rather than an app that "never opens". */
     unsigned int vw = 0, vh = 0;
-    if (gui_app_view_size(&vw, &vh) && vw * vh * 4 > JT_USER_FB_BYTES) {
+    if (!gui_app_view_size(&vw, &vh)) {
+        /* gui_app_windowed is 0 or app_view_w/h are 0: the caller opened
+           this app without going through gui_launch_from_dock's windowed
+           setup (e.g. a keyboard path that called gui_launch_apps directly
+           instead of gui_launch_from_dock(GUI_APPS_FOLDER)). Launching
+           anyway means SYS_WINDOW_OPEN fails ENODEV and the app exits
+           before it draws, which reads as "never opens". Refuse loudly and
+           hand control back to the desktop instead. */
+        serial_puts("ring3app: BUG no app viewport, not launching\n");
+        return;
+    }
+    if (vw * vh * 4 > JT_USER_FB_BYTES) {
         serial_puts("ring3app: BUG app viewport does not fit JT_USER_FB, grow .userfb in boot/linker.ld\n");
         return;
     }
