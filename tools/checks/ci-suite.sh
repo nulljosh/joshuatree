@@ -101,6 +101,7 @@ retry|5|System-wide clipboard: Ctrl+C/X/V round-trips real text within Notes, ac
 retry|2|Mail, Reminders and Calculator prompts redraw content, not chrome, per keystroke|./tools/checks/gui-prompt-keystroke-check.sh
 retry|7|Notes typing, typography, pointer controls, persistence|python3 ./tools/checks/editor_qa.py
 retry|6|Notes' runtime-TTF text is real antialiased rasterization at 12pt and 200pt, not a duplicated-block bitmap upscale|python3 ./tools/checks/notessharp-check.py
+retry|5|Notes folders: legacy NOTES.TXT migrates intact, a new note lands in the current folder, both survive reboot, delete asks first|python3 ./tools/checks/notesfolders-check.py
 retry|2|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/termchatflash-check.sh
 retry|6|Terminal grid draws the mono face at its true advance|python3 ./tools/checks/termmono-check.py
 retry|4|Terminal's runtime-TTF text is real antialiased rasterization with a driftless monospace grid|python3 ./tools/checks/termsharp-check.py
