@@ -14,6 +14,10 @@ clip or a full-screen OS recording), then scores six things at 12fps:
   rest    mouth still when she's quiet vs talking      (low = chattering)
   eyes    eyes open while she talks                    (low = blinking all the time)
   alive   some head and shoulder motion                (0 = a frozen photo)
+  head    head drift vs a real talker (NASA interview close-up: ~4.2% of frame
+          height std). Ours was 0: a still photo with a moving mouth.
+  whole   the whole face moves together, not just the mouth (real: lower/upper
+          face motion 1.3; a pasted mouth reads 3)
   words   with --align (ElevenLabs with-timestamps JSON for the audio in
           the video): lips shut on m/b/p and silence, open on vowels.
           Loudness can't tell "mm" from "ah"; this can.
@@ -96,6 +100,17 @@ def score(path):
     # alive: motion outside the mouth, in a band that reads as breathing (not shaking)
     hm = head_step.mean()
     r["alive"] = 100 * min(1, hm / 0.8) if hm < 4 else 100 * max(0, 1 - (hm - 4) / 4)
+    # head: global drift of the face, by phase correlation against frame 0
+    def shift(a, b):
+        A = np.fft.fft2(a - a.mean()); B = np.fft.fft2(b - b.mean()); R = A * np.conj(B); R /= np.abs(R) + 1e-9
+        y, x = np.unravel_index(np.fft.ifft2(R).real.argmax(), R.shape)
+        return (y if y < SIDE // 2 else y - SIDE, x if x < SIDE // 2 else x - SIDE)
+    sh = np.array([shift(fr, f[0]) for fr in f], float)
+    drift_pct = 100 * sh.std(0).mean() / SIDE
+    r["head"] = 100 * min(1, drift_pct / 4.2 / 0.6)        # 60% of a lively interviewee is plenty
+    d = np.abs(np.diff(f, axis=0))
+    ratio = d[:, int(SIDE * .62):int(SIDE * .94)].mean() / (d[:, int(SIDE * .16):int(SIDE * .47)].mean() + 1e-9)
+    r["whole"] = 100 * max(0, 1 - abs(ratio - 1.3) / 1.7)
     key = "sync"
     if ALIGN:
         a = json.load(open(ALIGN))["alignment"]
@@ -113,7 +128,13 @@ def score(path):
             if wv.std() > 0 and ov.std() > 0:
                 r["words"] = 100 * min(1, max(0, np.corrcoef(wv, ov)[0, 1]) / 0.5)
                 key = "words"
-    total = (sum(r.values()) + r[key]) / (len(r) + 1)
+    # Grade = how human it looks. Calibrated on a real person (NASA interview
+    # close-up): a real talker blinks, moves the head, keeps the mouth busy in
+    # short pauses and has hard shot-to-shot jumps, so "eyes", "rest",
+    # "steady" and "pops" are diagnostics, not the grade. The graded signals
+    # are the ones where real video and our failures actually differ.
+    graded = ["fluid", "smooth", "alive", "head", "whole", key]
+    total = (sum(r[g] for g in graded) + r[key]) / (len(graded) + 1)
     return r, total
 
 
@@ -130,7 +151,7 @@ if __name__ == "__main__":
     args = sys.argv[1:]
     if args[:1] == ["--align"]:
         ALIGN, args = args[1], args[2:]
-    cols = ("fluid", "smooth", "pops", "steady", "sync", "rest", "eyes", "alive") + (("words",) if ALIGN else ())
+    cols = ("fluid", "smooth", "pops", "steady", "sync", "rest", "eyes", "alive", "head", "whole") + (("words",) if ALIGN else ())
     print(f"{'video':28} " + " ".join(f"{c:>6}" for c in cols) + "  total")
     for p in args:
         r, t = score(p)

@@ -131,9 +131,34 @@ def main(clip, words, wav, out):
                 wa = cv2.remap(A.astype(np.float32), gx - t * f[..., 0], gy - t * f[..., 1], cv2.INTER_LINEAR)
                 wb = cv2.remap(B.astype(np.float32), gx + (1 - t) * f[..., 0], gy + (1 - t) * f[..., 1], cv2.INTER_LINEAR)
                 morphed[k][Y0:Y1, X0:X1] = (1 - t) * wa + t * wb
+        # A real talker's head never stops: measured on a NASA interview
+        # close-up, about 4% of frame height of drift in each direction, and
+        # the whole face moves together. Ours had 0 (a frozen photo with a
+        # moving mouth). Add a slow sway plus a small nod on each stressed
+        # syllable (loudness peak), and a slight tilt, on a zoomed frame so
+        # the edges never show.
+        rng = np.random.default_rng(7)
+        def drift(sd, smooth):
+            x = np.cumsum(rng.normal(0, 1, T + 50))
+            x = np.convolve(x, np.ones(smooth) / smooth, "same")[25:25 + T]
+            x = x - np.linspace(x[0], x[-1], T)
+            return sd * x / (x.std() + 1e-9)
+        sx, sy, rot = drift(5, 21), drift(3, 25), drift(0.8, 31)
+        lf = np.array([loud[k] if k < len(loud) else 0 for k in range(T)])
+        peaks = [k for k in range(2, T - 2) if lf[k] > 0.7 and lf[k] == lf[k - 2:k + 3].max()]
+        nod = np.zeros(T)
+        for k in peaks:
+            for d in range(-3, 8):
+                if 0 <= k + d < T:
+                    nod[k + d] += 4 * np.exp(-((d - 1) / 2.5) ** 2)   # dip about 4px, back up in ~0.3s
         for k in range(len(path)):
             base = arr[k % N]
-            Image.fromarray((base * (1 - mask) + morphed[k] * mask).astype(np.uint8)).save(f"{w}/o-{k:04d}.png")
+            im = Image.fromarray((base * (1 - mask) + morphed[k] * mask).astype(np.uint8))
+            im = im.rotate(rot[k], resample=Image.BICUBIC, center=(160, 200),
+                           translate=(sx[k], sy[k] + nod[k]))
+            z = 1.16  # zoom so moving never shows an edge
+            im = im.resize((int(320 * z), int(320 * z)), Image.BICUBIC).crop((26, 26, 346, 346))
+            im.save(f"{w}/o-{k:04d}.png")
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", str(FPS), "-i", f"{w}/o-%04d.png", "-i", wav,
                         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", out], check=True)
     print("face_visemes:", out)
