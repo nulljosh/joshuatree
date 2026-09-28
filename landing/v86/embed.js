@@ -50,6 +50,10 @@ if (typeof document !== "undefined") (function () {
   // space has to switch to match, 1:1, instead of downscaling a desktop.
   var IS_PHONE = typeof matchMedia === "function" && matchMedia("(max-width: 520px)").matches;
   var LOGICAL_W = IS_PHONE ? 430 : 960, LOGICAL_H = IS_PHONE ? 760 : 540;
+  // 1.7.16: one cmdline for the first boot AND every tour-lap reboot. reinjectKernel
+  // used to reload the kernel with no cmdline, so after lap 1 a phone visitor got a
+  // letterboxed desktop (no "phone"), and everyone lost facehost.
+  var BOOT_CMDLINE = (IS_PHONE ? "phone samantha " : "") + (/[?&]portfolio\b/.test(location.search) ? "portfolio " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com";
   var GLIDE_MAX_MS = 700; // longest tour cursor glide, see moveCursorTo
   // v52.6: real shadow cursor position, kept in sync by every real send
   // this file makes (mousemove, touchmove drags, and moveCursorTo's own
@@ -244,7 +248,7 @@ if (typeof document !== "undefined") (function () {
     // which itself forces boot_to_samantha in the kernel -- a phone
     // visitor gets her portrait view unconditionally, desktop visitors
     // are untouched and still need ?samantha to opt in.
-    cmdline: (IS_PHONE ? "phone samantha " : "") + (/[?&]portfolio\b/.test(location.search) ? "portfolio " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com", // kmain reads this and puts Joshua's own apps on the dock
+    cmdline: BOOT_CMDLINE, // kmain reads this and puts Joshua's own apps on the dock
     autostart: true,
     // Real network backend for the emulated NIC: without this, v86's NIC
     // (ne2k by default, see drivers/ne2k.c) is wired to nothing, every
@@ -1378,7 +1382,7 @@ if (typeof document !== "undefined") (function () {
   function reinjectKernel() {
     var cpu = emulator.v86 && emulator.v86.cpu;
     if (!kernelElfBuffer || !cpu || !cpu.load_multiboot) return;
-    if (PORTFOLIO_MODE && cpu.load_multiboot_option_rom) { if (cpu.load_multiboot_option_rom(kernelElfBuffer, undefined, "portfolio")) cpu.reg32[0] = cpu.io.port_read32(244); }
+    if (cpu.load_multiboot_option_rom) { if (cpu.load_multiboot_option_rom(kernelElfBuffer, undefined, BOOT_CMDLINE)) cpu.reg32[0] = cpu.io.port_read32(244); }
     else cpu.load_multiboot(kernelElfBuffer);
   }
   function stopAutoplay() { if (tourTimer) { clearTimeout(tourTimer); tourTimer = 0; } tourRunning = false; tourGen++; /* invalidates any in-flight tourLoop */ }
