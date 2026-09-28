@@ -42,6 +42,39 @@ What that series covers that Joshua Tree still doesn't, ranked for a dev kit tha
 - [ ] [Fable] Load ELF programs from disk at runtime, so apps can ship outside the kernel. First step to installable apps (gap 6 above).
 - [ ] [Sonnet] Crash reports with function names: build a symbol table into the kernel and print `panic in <function>+offset` over serial and on screen.
 
+## Our own computer (set 2026-09-27)
+Joshua Tree boots in QEMU and a browser. A computer means it boots a real box on a desk. Ranked by what blocks that first.
+
+- [ ] [Joshua] Pick one reference machine (a common mini PC) and target its real chips. Every driver below aims at that box first.
+- [ ] [Fable] UEFI boot and a native-resolution framebuffer (GOP). Modern PCs don't boot legacy BIOS images.
+- [ ] [Fable] USB (xHCI): keyboard, mouse and a USB stick. Real machines have no PS/2 port.
+- [ ] [Fable] A real disk: AHCI first, NVMe next.
+- [ ] [Sonnet] A real network card: e1000 (draft PR 151) then Realtek RTL8111, the chip in most mini PCs.
+- [ ] [Fable] HD Audio, so sound works outside the emulator's Sound Blaster.
+- [ ] [Fable] ACPI: shut down, restart, sleep. Today the power button is QEMU's.
+- [ ] [Fable] 64-bit and more than one CPU core. Every desktop chip since 2006 is 64-bit and multi-core.
+
+## A Bloomberg terminal on it (set 2026-09-27)
+Epiphany is the terminal; Stocks stays the basic native app. The live quotes and charts through the Worker (1.0.4) are shared. A terminal is keyboard-first, dense and live, so everything below lands in Epiphany.
+
+- [ ] [Sonnet] Command bar with function codes: `AAPL GP` price graph, `AAPL DES` description, `TOP` headlines, `WEI` world indices, `FX`, `CRYPTO`. Type, Enter, it's there.
+- [ ] [Sonnet] Streaming quotes: the Worker relays ticks every second, prices flash green or red as they move.
+- [ ] [Sonnet] Real charts: candlesticks, volume, 1m/5m/1D ranges, moving averages and RSI, a crosshair that reads the value.
+- [ ] [Sonnet] Four panels at once, keyboard-switched, and an amber-on-black terminal theme.
+- [ ] [Sonnet] News wire: ticker-tagged headlines from the sidewise RSS API, newest first.
+- [ ] [Sonnet] Alerts: "tell me when NVDA crosses 150", then a notification and Samantha says it out loud.
+- [ ] [Sonnet] Portfolio P&L from Epiphany: positions, cost basis, day and total gain.
+- [ ] [Sonnet] Ask Samantha "how's Apple doing": quote, day move and top headline, spoken.
+- [ ] [Fable] Frame budget: a full terminal redraw under 16ms, measured and printed in the release notes.
+
+## The loop itself (set 2026-09-27)
+What slowed tonight down, fixed so it can't again.
+
+- [ ] [Sonnet] Bump the version at merge time, not per PR. Four parallel PRs all claimed 1.6.21 tonight and every merge after the first needs a rebump.
+- [ ] [Sonnet] A merge queue script: take the next draft PR, rebase it, run `tools/ci-local.sh`, flip it ready, merge, repeat. One at a time.
+- [ ] [Haiku] The Dock icon-edge check retries its VM connection on a reset instead of failing (flaked once on 2026-09-27).
+- [ ] [Sonnet] A size budget check on the kernel's reserved memory, so a feature can't silently grow into the app area again (PR 239 did, by 4KB, only on Linux).
+
 ## Beta, 0.9.0
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck.
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
