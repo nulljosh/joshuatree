@@ -381,7 +381,7 @@ static void chat_fmt_reply(char *reply, int replysz, const char *prefix, const c
 static int chat_launch_after = -1;
 
 /* Case-insensitive "does word start here" match: lbl is always one of
-   this kernel's own known-good GUI_LABELS entries (short, ASCII, no
+   this kernel's own known-good APPS[] names (short, ASCII, no
    punctuation), s is the untrusted, longer phrase the picker copied out
    of the user's message. Matches at s only when lbl's letters line up
    exactly and s either ends there or continues with a space, so "not"
@@ -397,12 +397,12 @@ static int chat_word_prefix_ci(const char *lbl, const char *s) {
     return *s == 0 || *s == ' ';
 }
 
-/* Matches arg against GUI_LABELS by whole word, case-insensitively, so
+/* Matches arg against APPS[].name by whole word, case-insensitively, so
    "notes" or "the weather app" both find "Notes"/"Weather". A leading
    "the " and a trailing " app" are stripped first (both optional, neither
    required), then every word-start position in what's left is tried
    against every real app's label. Returns the matching icon index (into
-   GUI_LABELS/gui_launch), or -1 for no match -- open_app then leaves the
+   APPS/gui_launch), or -1 for no match -- open_app then leaves the
    message unhandled rather than guessing, so chat_send/Samantha gets a
    chance to answer instead. */
 static int chat_match_app(const char *arg) {
@@ -419,7 +419,7 @@ static int chat_match_app(const char *arg) {
     if ((b[0] | 32) == 'c' && (b[1] | 32) == 'h' && (b[2] | 32) == 'a' && (b[3] | 32) == 't' && !b[4]) b = "samantha"; /* Chat was renamed Samantha; "open chat" still works */
     for (int i = 0; i < GUI_APPS_FOLDER; i++) {
         for (const char *w = b; ; w++) {
-            if ((w == b || *(w - 1) == ' ') && chat_word_prefix_ci(GUI_LABELS[i], w)) return i;
+            if ((w == b || *(w - 1) == ' ') && chat_word_prefix_ci(APPS[i].name, w)) return i;
             if (!*w) break;
         }
     }
@@ -500,8 +500,8 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
         int icon = chat_match_app(arg);
         if (icon < 0) return 0; /* unrecognized app name: let Samantha take a shot instead of guessing */
         chat_launch_after = icon;
-        chat_fmt_reply(reply, replysz, "Opening ", GUI_LABELS[icon]);
-        serial_puts("chattool=open_app:"); serial_puts(GUI_LABELS[icon]); serial_puts("\n");
+        chat_fmt_reply(reply, replysz, "Opening ", APPS[icon].name);
+        serial_puts("chattool=open_app:"); serial_puts(APPS[icon].name); serial_puts("\n");
         return 1;
     }
 

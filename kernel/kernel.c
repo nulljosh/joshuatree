@@ -105,6 +105,8 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app_weather.h"
 #include "app_curbfind.h"
 #include "app_keyrate.h"
+#include "app.h"
+#include "keyrate.h"
 #include "app_bookrank.h"
 #include "app_quotestreak.h"
 #include "app_plan.h"
@@ -260,7 +262,7 @@ static char getch(void){
    event, cleared whenever a key is handed out instead, so it always
    describes the event that actually caused the close. */
 static int gui_close_was_click = 0;
-static int gui_getch_or_click(void){
+int gui_getch_or_click(void){
     mouse_click_edge_sync(); /* a button already held (e.g. the click that opened this app) is the baseline, not a fresh click */
     for (;;) {
         gui_app_mouse_tick();
@@ -918,11 +920,11 @@ static void reboot(void){
 #define GUI_APP_COUNT   27 /* 25 real apps + the Apps folder + Trash */
 #define GUI_APPS_FOLDER 25 /* not an app: the dock tile that opens the folder */
 #define GUI_TRASH       26
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Apps", "Trash"};
-static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
-    0x00707070, 0x00A13F3F, 0x00A0553F, 0x006B4423, 0x00375A4A, 0x002B2B2B, 0x00365E8C, 0x0085144B,
-    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078, 0x001F5FA8, 0x004A5A3E, 0x003E4C58
-};
+/* Every app's name, color, glyph and hooks live in one table, APPS[],
+   defined further down once every hook it points at exists (see "The app
+   registry" below). This tentative definition lets the dock and Launchpad
+   code above that point read it. */
+static const struct app APPS[GUI_APP_COUNT];
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
    boot rather than what happened to be built most recently: a terminal, a
@@ -3769,35 +3771,7 @@ static void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
 }
 
 static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsigned int bg){
-    switch (icon) {
-        case 0: gui_icon_folder(cx_center, cy, size, bg); break;
-        case 1: gui_icon_mail(cx_center, cy, size, bg); break;
-        case 2: gui_icon_calendar(cx_center, cy, size, bg); break;
-        case 3: gui_icon_notes(cx_center, cy, size, bg); break;
-        case 4: gui_icon_reminders(cx_center, cy, size, bg); break;
-        case 5: gui_icon_terminal(cx_center, cy, size, bg); break;
-        case 6: gui_icon_chat(cx_center, cy, size, bg); break;
-        case 7: gui_icon_weather(cx_center, cy, size, bg); break;
-        case 8: gui_icon_pin(cx_center, cy, size, bg); break;
-        case 9: gui_icon_keyrate(cx_center, cy, size, bg); break;
-        case 10: gui_icon_book(cx_center, cy, size, bg); break;
-        case 11: gui_icon_quotes(cx_center, cy, size, bg); break;
-        case 12: gui_icon_plan(cx_center, cy, size, bg); break;
-        case 13: gui_icon_lexly(cx_center, cy, size, bg); break;
-        case 14: gui_icon_toroid(cx_center, cy, size, bg); break;
-        case 15: gui_icon_sparkjar(cx_center, cy, size, bg); break;
-        case 16: gui_icon_homeqi(cx_center, cy, size, bg); break;
-        case 17: gui_icon_fieldbook(cx_center, cy, size, bg); break;
-        case 18: gui_icon_contacts(cx_center, cy, size, bg); break;
-        case 19: gui_icon_calculator(cx_center, cy, size, bg); break;
-        case 20: gui_icon_stocks(cx_center, cy, size, bg); break;
-        case 21: gui_icon_search(cx_center, cy, size, bg); break;
-        case 22: gui_icon_stocks(cx_center, cy, size, bg); break; /* art covers it; primitive fallback only */
-        case 23: gui_icon_apps(cx_center, cy, size, bg); break; /* Portfolio: no authored art yet, reuses the grid-of-tiles glyph */
-        case 24: gui_icon_activity(cx_center, cy, size, bg); break;
-        case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
-        case GUI_TRASH: gui_icon_trash(cx_center, cy, size, bg); break;
-    }
+    if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].icon) APPS[icon].icon(cx_center, cy, size, bg);
 }
 
 /* Real, repeated feedback across many rounds: the icons still read as
@@ -4001,7 +3975,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     }
     icon_cache_under[icon][slot] = under;
     icon_cache_variant[icon][slot] = variant;
-    unsigned int bg = GUI_COLORS[icon];
+    unsigned int bg = APPS[icon].color;
     unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
     window_push_target(ssbuf, ssz, ssz);
     int saved_band = aa_band; aa_band = ICON_SS_SCALE * 3; /* 3 physical px of real AA on every primitive edge, before the box filter */
@@ -4098,7 +4072,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
         return;
     }
     /* out of memory for the cache: draw directly, un-supersampled, rather than draw nothing */
-    unsigned int bg = GUI_COLORS[icon];
+    unsigned int bg = APPS[icon].color;
     unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
     gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, under, size * 22 / 100);
     gui_draw_gloss(x, y, size, size, bg, size * 22 / 100 + 1);
@@ -4297,7 +4271,7 @@ static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
         gui_draw_icon_shadow(cx_center, cy_bottom, size);
         gui_draw_one_icon(icon, cx_center, cy_bottom, size);
         if (slot == dock_hover) {
-            int label_w = font_string_width(GUI_LABELS[icon]);
+            int label_w = font_string_width(APPS[icon].name);
             int ly = y0 - 21; /* capsule spans ly-3 .. ly+19: clear of the tray's top edge, inside the band (y0 - 24) */
             /* Dark text on a light capsule with a hairline edge, the macOS
                dock tooltip, in the tray's own cream. Bare light text read
@@ -4309,7 +4283,7 @@ static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
             int lx0 = cx_center - label_w / 2 - 2, lx1 = cx_center + label_w / 2 + 2;
             gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 11, DOCK_LABEL_EDGE, DOCK_LABEL_EDGE);
             gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 10, DOCK_LABEL_BG, DOCK_LABEL_BG);
-            font_draw_string(GUI_LABELS[icon], cx_center - label_w / 2, ly, 0x001C1C1E, -1);
+            font_draw_string(APPS[icon].name, cx_center - label_w / 2, ly, 0x001C1C1E, -1);
         }
     }
     if (drag_slot >= 0) {
@@ -4581,7 +4555,7 @@ static void gui_wait_close(void){
    be a fake control that looks like it does something it doesn't. Real
    minimize/maximize wait on the actual windowing system already queued in
    roadmap.md's later product ideas, not a shortcut bolted on here. */
-static void gui_draw_app_titlebar(const char *title){
+void gui_draw_app_titlebar(const char *title){
     if (!gui_app_windowed) {
         gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
         gui_fill_circle(46, 20, 6, 0x00FFD64A, 0x00FAF8F6);
@@ -4631,8 +4605,7 @@ static void gui_launch_weather(void){
 }
 
 static void gui_launch_html(const char *label, const unsigned char *data, unsigned int data_len){
-    window_clear(0x00FAF8F6);
-    gui_draw_app_titlebar(label);
+    app_begin(label, 0x00FAF8F6);
 
     /* app_weather_html/app_curbfind_html are raw byte arrays generated by
        gen_app.sh, not null-terminated C strings; html_to_text expects one,
@@ -5155,115 +5128,6 @@ static void gui_draw_weather_content(void){
           serial_puts(have_extra ? " facts=yes\n" : " facts=no\n"); } }
 }
 
-/* Real, reported bug, not a style complaint: gui_wait_close's "any key
-   closes" is right for a page you only ever read (Weather, Curbfind,
-   Bookrank, Quotestreak), but Keyrate was wired to that same read-only
-   viewer despite being a TYPING TEST, its whole point is pressing keys.
-   The very first keystroke anyone made to try typing closed the app
-   instead. Root cause was the app itself: Keyrate was never actually a
-   typing test in this kernel, gui_launch_html just rendered the ported
-   site's own marketing copy as read-only text, same as every other
-   ported page. A real typing test needs its own real input loop, not a
-   different exit key bolted onto the read-only one. */
-/* One fixed sentence ("the quick brown fox...") only ever tested the same
-   45 characters, nothing like a real typing test (10fastfingers,
-   monkeytype), which never run out of words. This freestanding build has
-   no rand()/no libc, so a tiny LCG seeded from the real PIT tick count
-   (irq.c's ticks()) stands in, good enough for word order, not for
-   anything security-sensitive. */
-static const char *KEYRATE_WORDS[] = {
-    "the","quick","brown","fox","jumps","over","lazy","dog","time","people",
-    "water","first","would","these","other","after","words","world","school",
-    "still","every","great","might","under","never","found","those","while",
-    "place","right","small","sound","between","name","home","read","hand",
-    "large","spell","add","even","land","here","must","big","high","such",
-    "follow","act","why","ask","men","change","went","light","kind","off",
-    "need","house","try","again","animal","point","mother","near","self",
-    "work","part","take","get","made","live","where","much","back","only",
-};
-#define KEYRATE_WORD_COUNT (int)(sizeof(KEYRATE_WORDS) / sizeof(KEYRATE_WORDS[0]))
-
-static unsigned int keyrate_rand(unsigned int *state) {
-    *state = *state * 1103515245u + 12345u;
-    return (*state >> 16) & 0x7fff;
-}
-
-/* Fills buf from scratch with space-separated random words up to cap, returns the length. */
-static int keyrate_gen_words(char *buf, int cap, unsigned int *rng) {
-    int len = 0;
-    while (len < cap - 12) { /* 12 = room for a trailing space + the longest word ("between") */
-        if (len > 0) buf[len++] = ' ';
-        const char *w = KEYRATE_WORDS[keyrate_rand(rng) % KEYRATE_WORD_COUNT];
-        while (*w) buf[len++] = *w++;
-    }
-    buf[len] = 0;
-    return len;
-}
-
-static void gui_launch_keyrate(void){
-    window_clear(0x00FAF8F6);
-    gui_draw_app_titlebar("Keyrate");
-
-    static char target[256];
-    unsigned int rng = ticks() | 1; /* |1 so a tick count of 0 at boot never freezes the LCG at 0 */
-    int tlen = keyrate_gen_words(target, sizeof(target), &rng);
-    int pos = 0, started = 0, total_typed = 0;
-    unsigned int start_tick = 0;
-    int area_bottom = (int)window_height() - 40;
-
-    for (;;) {
-        /* Real bug shipped and reported live, not caught in time: an
-           earlier fix for this exact overlap (clear both the target-text
-           row and the hint row every frame, not just inside one branch)
-           was verified working in testing, then accidentally reverted by
-           restoring kernel.c from a stale backup taken before that fix
-           while cleaning up an unrelated temporary test command, the same
-           wrong-backup mistake this session already made once with the
-           gradient icon work. Re-applied here, and this time verified
-           again with a real two-round script test (finish, retry, finish
-           again) after re-applying, not just trusted from memory. One
-           clear covering everything that can change, every frame,
-           regardless of which branch below runs. */
-        window_rect(20, 60, (int)window_width() - 40, area_bottom - 60, 0x00FAF8F6);
-        window_rect(20, (int)window_height() - 30, (int)window_width() - 40, 16, 0x00FAF8F6);
-
-        /* ponytail: wraps mid-word, no word-boundary lookahead like monkeytype's real
-           renderer. Fine at 8px monospace; revisit if it reads badly in practice. */
-        int x = 20, y = 60, max_x = (int)window_width() - 20;
-        for (int i = 0; i < tlen; i++) {
-            if (x + 8 > max_x) { x = 20; y += 16; }
-            font_draw_char_mono((unsigned char)target[i], x, y, i < pos ? 0x00884B16 : 0x001C1C1E, -1);
-            x += 8;
-        }
-
-        if (started) {
-            unsigned int elapsed = ticks() - start_tick; /* real PIT ticks, ~100Hz, running since the very first keystroke */
-            int chars = total_typed + pos;
-            int wpm = elapsed > 0 ? (chars * 6000) / (5 * (int)elapsed) : 0; /* (chars/5 words) / (elapsed/100/60 min) */
-            char buf[32]; int n = 0;
-            if (wpm == 0) buf[n++] = '0';
-            else { char tmp[12]; int tn = 0; int v = wpm; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
-            buf[n++] = ' '; buf[n++] = 'w'; buf[n++] = 'p'; buf[n++] = 'm'; buf[n] = 0;
-            font_draw_string(buf, 20, (int)window_height() - 30, 0x00884B16, -1);
-        } else {
-            font_draw_string("type to begin, esc or click to close", 20, (int)window_height() - 30, 0x0075726E, -1);
-        }
-
-        int ci = gui_getch_or_click();
-        if (ci == -1 || ci == 27) break;
-        char c = (char)ci;
-        if (!started) { started = 1; start_tick = ticks(); }
-        if (c == target[pos]) {
-            pos++;
-            if (pos >= tlen) { /* endless: bank this batch's chars, roll a fresh one, keep the same running timer going */
-                total_typed += tlen;
-                tlen = keyrate_gen_words(target, sizeof(target), &rng);
-                pos = 0;
-            }
-        }
-    }
-}
-
 /* v36 (0.36.0): a real terminal inside the desktop, not a second shell.
    It runs the exact same run() every text-mode command goes through, so
    there is precisely one shell in this kernel and anything it learns
@@ -5312,8 +5176,7 @@ static void term_puts(const char *s){ while (*s) term_putc(*s++); }
    gui_launch_terminal, never again per keystroke. */
 static void term_draw_chrome(void){
     serial_puts("termchrome\n"); /* discriminating marker for tools/checks/termchatflash-check.sh, same convention editor.h's "editorchrome" already established */
-    window_clear(0x001A1512); /* warm near-black, the Mojave palette's dark end, not a cold pure black */
-    gui_draw_app_titlebar("Terminal");
+    app_begin("Terminal", 0x001A1512); /* warm near-black, the Mojave palette's dark end, not a cold pure black */
 }
 
 static void term_render(const char *input, unsigned int input_len){
@@ -5495,8 +5358,8 @@ static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int c
         if (i == sel) gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 14,
                                                  0x00FFF8F1, 0x00E5D8D0, 0x00E9DEE0, 12);
         gui_draw_one_icon_on(i, cx, cy + tile, tile, 0x00E9DEE0);
-        int lw = font_string_width(GUI_LABELS[i]);
-        font_draw_string(GUI_LABELS[i], cx - lw / 2, cy + tile + 10, 0x001C1C1E, -1);
+        int lw = font_string_width(APPS[i].name);
+        font_draw_string(APPS[i].name, cx - lw / 2, cy + tile + 10, 0x001C1C1E, -1);
     }
 }
 static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, int cell_w, int cell_h, int tile, int grid_w){
@@ -5504,7 +5367,7 @@ static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, in
     gui_draw_wallpaper_rect(panel_x, panel_y, panel_w, panel_h);
     gui_apps_glass(panel_x, panel_y, panel_w, panel_h);
     /* The window's own title bar already reads "Apps" (gui_launch_from_
-       dock draws GUI_LABELS[icon] there); a second "Apps" heading here
+       dock draws APPS[icon].name there); a second "Apps" heading here
        just repeated it. Keep the key-hint line, moved up into the space
        the heading used to take. */
     font_draw_string("arrow keys to move   enter opens   esc closes", x0, 40, 0x006A6064, -1);
@@ -5525,9 +5388,9 @@ static void gui_app_frame_title(const char *label){
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
 static void gui_apps_launch(int icon){
-    gui_app_frame_title(GUI_LABELS[icon]);
+    gui_app_frame_title(APPS[icon].name);
     gui_launch(icon);
-    gui_app_frame_title(GUI_LABELS[GUI_APPS_FOLDER]);
+    gui_app_frame_title(APPS[GUI_APPS_FOLDER].name);
 }
 
 static void gui_launch_apps(void){
@@ -6100,34 +5963,7 @@ static int fs_ok_global = 0;
 #include "bench.h"
 
 static void gui_launch(int icon){
-    if (icon == GUI_APPS_FOLDER) { gui_launch_apps(); return; }
-    if (icon == GUI_TRASH) { gui_launch_trash(); return; }
-    if (icon == 0)      gui_launch_files();
-    else if (icon == 1) gui_launch_mail();
-    else if (icon == 2) gui_launch_calendar();
-    else if (icon == 3) gui_launch_editor();
-    else if (icon == 4) gui_launch_reminders();
-    else if (icon == 5) gui_launch_terminal();
-    else if (icon == 6) gui_launch_chat_app();
-    else if (icon == 7) gui_launch_weather();
-    else if (icon == 8) gui_launch_curbfind();
-    else if (icon == 9) gui_launch_keyrate();
-    else if (icon == 10) gui_launch_bookrank();
-    else if (icon == 11) gui_launch_quotes();
-    else if (icon == 12) gui_launch_plan();
-    else if (icon == 13) gui_launch_lexly();
-    else if (icon == 14) gui_launch_toroid();
-    else if (icon == 15) gui_launch_sparkjar();
-    else if (icon == 16) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
-    else if (icon == 16) gui_launch_homeqi();
-    else if (icon == 17) gui_launch_fieldbook();
-    else if (icon == 18) gui_launch_contacts();
-    else if (icon == 19) gui_launch_calculator();
-    else if (icon == 20) gui_launch_stocks();
-    else if (icon == 21) gui_launch_search();
-    else if (icon == 22) gui_launch_epiphany();
-    else if (icon == 23) gui_launch_portfolio();
-    else if (icon == 24) gui_launch_activity();
+    if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
 }
 
 static void gui_launch_from_dock(int icon){
@@ -6145,7 +5981,7 @@ again:
     gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
     font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
     font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
-    font_draw_string(GUI_LABELS[icon], x + 96, y + 8, 0x00403439, -1);
+    font_draw_string(APPS[icon].name, x + 96, y + 8, 0x00403439, -1);
     window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
     app_view_x = x + 8; app_view_y = y + 32;
     app_view_w = w - 16; app_view_h = h - 40;
@@ -6236,7 +6072,7 @@ typedef struct {
 static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
 static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
 
-static int gui_multiwin_supported(int icon){ return icon == 0 || icon == 7 || icon == 1 || icon == 2 || icon == 4; } /* Files, Weather, Mail, Calendar, Reminders */
+static int gui_multiwin_supported(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].draw; } /* apps with a draw hook: Files, Mail, Calendar, Reminders, Weather */
 
 /* v0.75.0 (batch 2): Mail/Calendar/Reminders have real per-keystroke
    interaction (adding a reminder, navigating calendar days/months,
@@ -6245,7 +6081,7 @@ static int gui_multiwin_supported(int icon){ return icon == 0 || icon == 7 || ic
    input loop below only ever forwards a keystroke to the app whose
    window is currently topmost/focused (the same "topmost owns input"
    rule click-to-focus already established for clicks). */
-static int gui_multiwin_interactive(int icon){ return icon == 0 || icon == 1 || icon == 2 || icon == 4 || icon == 7; } /* 0: Files, for its 1/2 view-switch keys; 7: Weather, for its R-to-retry key */
+static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].key; } /* apps with a key hook; Files for its 1/2 view-switch keys, Weather for R-to-retry */
 
 /* Window 0 keeps the exact single-window rect the existing dock-app tests
    already assert against (gui_launch_from_dock's own x=70,y=40,w=820,h=385;
@@ -6340,7 +6176,7 @@ static void gui_multiwin_draw_chrome(const gui_window_t *win){
     gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
     font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
     font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
-    font_draw_string(GUI_LABELS[win->icon], x + 96, y + 8, 0x00403439, -1);
+    font_draw_string(APPS[win->icon].name, x + 96, y + 8, 0x00403439, -1);
 }
 static void gui_multiwin_draw_content_only(const gui_window_t *win){
     int x = win->x, y = win->y, w = win->w, h = win->h;
@@ -6366,11 +6202,7 @@ static void gui_multiwin_draw_content_only(const gui_window_t *win){
        counterpart reads (vfs_list for Files, weather_text for Weather),
        so a second window opening never leaves the first one's content
        stale or frozen. */
-    if (win->icon == 0) gui_draw_files_content();
-    else if (win->icon == 7) gui_draw_weather_content();
-    else if (win->icon == 1) gui_draw_mail_content();
-    else if (win->icon == 2) gui_draw_calendar_content();
-    else if (win->icon == 4) gui_draw_reminders_content();
+    if (gui_multiwin_supported(win->icon)) APPS[win->icon].draw();
     gui_app_windowed = 0;
     window_clear_viewport();
 }
@@ -6384,6 +6216,42 @@ static void gui_multiwin_draw_one(const gui_window_t *win){
 static void gui_weather_mw_repaint(void){
     if (gui_window_count > 0 && gui_windows[gui_window_count - 1].icon == 7) gui_multiwin_draw_content_only(&gui_windows[gui_window_count - 1]);
 }
+
+/* The app registry: the one place an app is wired into the desktop. Its
+   index is its identity (dock order, gui_order, icon art slots and the
+   window list all key off it), so a new app is one row here plus one
+   bump of GUI_APP_COUNT/GUI_APPS_FOLDER/GUI_TRASH above. */
+static int gui_weather_mw_key(int k){ return gui_weather_key(k, gui_weather_mw_repaint); }
+static void gui_open_homeqi(void){ gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len); }
+static const struct app APPS[GUI_APP_COUNT] = {
+    /*  0 */ {"Files",      0x00707070, gui_icon_folder,     gui_launch_files,      gui_draw_files_content,     gui_files_on_key},
+    /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       gui_launch_mail,       gui_draw_mail_content,      gui_mail_on_key},
+    /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   gui_launch_calendar,   gui_draw_calendar_content,  gui_calendar_on_key},
+    /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      gui_launch_editor,     0, 0},
+    /*  4 */ {"Reminders",  0x00375A4A, gui_icon_reminders,  gui_launch_reminders,  gui_draw_reminders_content, gui_reminders_on_key},
+    /*  5 */ {"Terminal",   0x002B2B2B, gui_icon_terminal,   gui_launch_terminal,   0, 0},
+    /*  6 */ {"Chat",       0x00365E8C, gui_icon_chat,       gui_launch_chat_app,   0, 0},
+    /*  7 */ {"Weather",    0x0085144B, gui_icon_weather,    gui_launch_weather,    gui_draw_weather_content,   gui_weather_mw_key},
+    /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        gui_launch_curbfind,   0, 0},
+    /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_open,          0, 0},
+    /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       gui_launch_bookrank,   0, 0},
+    /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     gui_launch_quotes,     0, 0},
+    /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       gui_launch_plan,       0, 0},
+    /* 13 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      gui_launch_lexly,      0, 0},
+    /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     gui_launch_toroid,     0, 0},
+    /* 15 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   gui_launch_sparkjar,   0, 0},
+    /* 16 */ {"Homeqi",     0x00566A3A, gui_icon_homeqi,     gui_open_homeqi,       0, 0},
+    /* 17 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  gui_launch_fieldbook,  0, 0},
+    /* 18 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   gui_launch_contacts,   0, 0},
+    /* 19 */ {"Calculator", 0x00556B85, gui_icon_calculator, gui_launch_calculator, 0, 0},
+    /* 20 */ {"Stocks",     0x00356B4F, gui_icon_stocks,     gui_launch_stocks,     0, 0},
+    /* 21 */ {"Search",     0x00506078, gui_icon_search,     gui_launch_search,     0, 0},
+    /* 22 */ {"Epiphany",   0x001F5FA8, gui_icon_stocks,     gui_launch_epiphany,   0, 0}, /* art covers it; primitive fallback only */
+    /* 23 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       gui_launch_portfolio,  0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph */
+    /* 24 */ {"Activity",   0x003E4C58, gui_icon_activity,   gui_launch_activity,   0, 0},
+    [GUI_APPS_FOLDER] = {"Apps",  0, gui_icon_apps,  gui_launch_apps,  0, 0},
+    [GUI_TRASH]       = {"Trash", 0, gui_icon_trash, gui_launch_trash, 0, 0},
+};
 
 /* Called from gui_run's own full-repaint branch, right alongside the
    menu/notif/weather overlay draws it already does there, so every open
@@ -6587,9 +6455,9 @@ static void gui_launch_about(void){
     char buf[64]; int n;
     unsigned int total_kb = pmm_total_frames() * 4, free_kb = pmm_free_frames() * 4;
     n = 0; buf[n++] = 'M'; buf[n++] = 'e'; buf[n++] = 'm'; buf[n++] = 'o'; buf[n++] = 'r'; buf[n++] = 'y'; buf[n++] = ':'; buf[n++] = ' ';
-    { char tmp[12]; int tn = 0; unsigned int v = free_kb; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
+    n += app_utoa(free_kb, buf + n);
     buf[n++] = 'K'; buf[n++] = ' '; buf[n++] = 'f'; buf[n++] = 'r'; buf[n++] = 'e'; buf[n++] = 'e'; buf[n++] = ' '; buf[n++] = 'o'; buf[n++] = 'f'; buf[n++] = ' ';
-    { char tmp[12]; int tn = 0; unsigned int v = total_kb; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
+    n += app_utoa(total_kb, buf + n);
     buf[n++] = 'K'; buf[n] = 0;
     char mem_line[64]; { int p = 0; const char *s = buf; while (*s) mem_line[p++] = *s++; mem_line[p] = 0; }
 
@@ -7079,11 +6947,7 @@ static void gui_run(void){
             int mwk = gui_multiwin_key_nonblock();
             if (mwk >= 0) {
                 int mw_should_close = 0;
-                if (mw_topmost_icon == 4) mw_should_close = gui_reminders_on_key(mwk);
-                else if (mw_topmost_icon == 2) mw_should_close = gui_calendar_on_key(mwk);
-                else if (mw_topmost_icon == 1) mw_should_close = gui_mail_on_key(mwk);
-                else if (mw_topmost_icon == 7) mw_should_close = gui_weather_key(mwk, gui_weather_mw_repaint);
-                else if (mw_topmost_icon == 0) mw_should_close = gui_files_on_key(mwk);
+                mw_should_close = APPS[mw_topmost_icon].key(mwk);
                 if (mw_should_close) {
                     gui_multiwin_close(gui_window_count - 1);
                     mw_key_repaint = 1; /* the window left the screen: needs the real full desktop repaint to erase it, the same cost every open/close already pays */

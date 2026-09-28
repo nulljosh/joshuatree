@@ -19,7 +19,7 @@ of top-to-bottom depth), and the Big Sur pass deliberately replaced that
 technique: subtle 16-28 depth, a soft highlight, no dark rim. The lighting
 property now lives in iconlight-check.py; this check keeps its original
 job, "the authored art is what the dock is drawing", with a sharper oracle.
-The runtime primitive fallback paints GUI_COLORS' own hues (dusty rose for
+The runtime primitive fallback paints APPS[].color's own hues (dusty rose for
 Mail where the art is blue, and so on), and any stale header or stale SVG
 paints some other colour, so both miss by far more than TOL. Confirmed
 discriminating: on the pre-Big-Sur build every slot misses by 118-186 on

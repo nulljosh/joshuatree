@@ -90,6 +90,10 @@ def apps_at(sha):
     # GUI_APP_COUNT made apps_at() silently return 0 for every Sep 13
     # commit even though the GUI already shipped real apps that day, a
     # false zero on the landing chart. Match either array-size name.
+    # Sep 27: the labels moved into the APPS[] registry rows.
+    m = re.search(r"struct app APPS\[GUI_APP_COUNT\]\s*=\s*\{(.*?)\n\};", src, re.S)
+    if m:
+        return len([l for l in re.findall(r'\{"([^"]*)",', m[1]) if l not in ("Apps", "Trash")])
     m = re.search(r"GUI_LABELS\[GUI_(?:APP|ICON)_COUNT\]\s*=\s*\{(.*?)\};", src, re.S)
     if not m:
         return 0

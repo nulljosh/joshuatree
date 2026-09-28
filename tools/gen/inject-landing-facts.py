@@ -8,7 +8,7 @@ comes from docs/roadmap.md's **Latest** line (inject-landing-headline.sh)
 and the version comes from VERSION (landing/version.txt). This does the
 same job for four more facts:
 
-  apps    - real apps in kernel/kernel.c's GUI_LABELS, minus the Apps
+  apps    - real apps in kernel/kernel.c's APPS table, minus the Apps
             folder tile and Trash (neither is a real app).
   checks  - regression checks in tools/checks/ci-suite.sh's manifest,
             counted the same way the suite itself counts them: one line
@@ -59,12 +59,12 @@ def counts_as_real(rel_path):
 
 def count_apps():
     src = (ROOT / "kernel/kernel.c").read_text()
-    m = re.search(r"GUI_LABELS\[GUI_APP_COUNT\]\s*=\s*\{(.*?)\};", src, re.S)
+    m = re.search(r"struct app APPS\[GUI_APP_COUNT\]\s*=\s*\{(.*?)\n\};", src, re.S)
     if not m:
-        raise ValueError("Could not find GUI_LABELS in kernel/kernel.c")
-    labels = re.findall(r'"([^"]*)"', m[1])
+        raise ValueError("Could not find the APPS table in kernel/kernel.c")
+    labels = re.findall(r'\{"([^"]*)",', m[1])
     if not labels:
-        raise ValueError("GUI_LABELS parsed with no labels")
+        raise ValueError("APPS table parsed with no names")
     real = [l for l in labels if l not in ("Apps", "Trash")]
     return len(real)
 

@@ -50,7 +50,7 @@ import sys
 
 SIZE = 148  # 2 x the dock's 74 physical px, see the docstring
 
-# Icon index in kernel.c's GUI_LABELS / GUI_COLORS order -> SVG basename.
+# Icon index in kernel.c's APPS[] order -> SVG basename.
 # Only the icons that have real authored art are listed; every other index
 # keeps the existing primitive path, so this can be filled in incrementally.
 ART = {

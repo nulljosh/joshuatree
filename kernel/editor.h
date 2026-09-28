@@ -354,8 +354,7 @@ static void gui_launch_editor(void) {
     if (!editor_loaded) {
         editor_length = vfs_read_file("NOTES.TXT", editor_buffer, sizeof(editor_buffer));
         if (editor_length >= (int)sizeof(editor_buffer)) {
-            window_clear(0x00FAF8F6);
-            gui_draw_app_titlebar("Notes");
+            app_begin("Notes", 0x00FAF8F6);
             font_draw_string("File exceeds 4095 bytes. Editing disabled to protect it.", 20, 60 + gui_app_dy(), 0x001C1C1E, -1);
             gui_wait_close();
             return;
