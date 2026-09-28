@@ -1,24 +1,27 @@
-# Joshua Tree loop handoff (2026-09-27, evening)
+# Joshua Tree loop handoff (2026-09-27, late night)
 
 ## What the loop is
 
-Build toward 2.0, one PR at a time, watching usage. Merge on green CI, never ask. Haiku subagents 15 min max for code, max two at once; CI waits go to subagents not background. Fix CI, never mute. Main session merges, picks next. A+ bar always. No LOC metrics public.
+Build Joshua Tree toward its own computer and a Bloomberg terminal, one PR at a time, watching usage and RAM. Up to 3 Sonnet agents or 2 if one is Opus, 20 minutes each, headless QEMU only, one VM at a time. PRs stay draft until `tools/ci-local.sh` is green. Merge on green, never ask, but while a big PR waits, hold every other merge (main requires up-to-date branches). Keep README, landing, docs/TESTING.md and benchmarks current in the same PR as the change.
 
 ## Where things stand
 
-Main is 1.6.6: kernel downloads once gzipped (landing loads twice as fast). Four-arm Joshua tree logo. Sound Blaster 16 driver. Chat window titled Samantha, speaking her replies aloud. PR #226 had Samantha's face filling Chat and animating while she talks, but crashed Linux CI only (Files, Mail, Weather all failed to open; PNG decode or heap sizing bug in kernel/chat_face.h not reproducible on macOS). Face feature reverted, but sound driver and Chat audio shipping. Auto-merge is armed. 44 stale branches cleaned; pre-push hook checks the pushed tree.
+Main is 1.6.20 and live. Merge queue, in order: 239 (Samantha's video face, Chat renamed Samantha; green), then drafts 241 (face loops, face_bench, face_visemes), 243 (Samantha reads mail, notes, reminders), 245 (dev kit waitlist), 246 (boot straight into Samantha, phone mode), 248 (crash reports name the function), 250 (this docs pass), 251 (landing fits phones), 252 (Epiphany command bar: AAPL GP, AAPL DES). Each claims 1.6.21, so every merge after the first rebumps.
+
+Architecture graded C+: kernel.c is ~9,800 lines, all 25 apps run in the kernel. An Opus agent is building the app interface (`feat/app-interface`); apps move to ring 3 next.
+
+Samantha's face: v27 B is best so far by Joshua's eye, built on `tools/gen/face_visemes.py`. Recipe and failures live in the character-creator skill.
 
 ## Next, in order
 
-1. Debug the Linux-only crash in kernel/chat_face.h (PNG frame fetch/decode path), then reattempt Samantha's face in Chat.
-2. Sharper face frames (240px source, 16 talk frames).
-3. Inline chat bar instead of prompt popup.
-4. Terminal moved to far right of dock.
-5. Samantha's idle loop on landing page.
-6. Bluetooth (parked, needs real hardware).
+1. Merge 239, then the drafts one at a time, biggest first, rebumping versions.
+2. Finish phone mode (430x932, boots to Samantha). Mobile first by 2026-10-04.
+3. App interface lands, then apps move out a few per PR.
+4. App smoke check for the 14 untested apps (parked in `git stash` on feat/guard-checks; grid launch fails past the first rows). Use the app interface to launch by name instead.
+5. Face: phoneme-timed mouth in the kernel, fed by ElevenLabs alignment from Turing.
 
 ## Restart prompt
 
 ```
-/loop debug the Linux-only crash in kernel/chat_face.h (PR 226's face feature was reverted after crashing Files/Mail/Weather in CI), then reattempt Samantha's face in Chat, one PR at a time, watching Claude usage; hard stop at 90% session usage.
+/loop keep building the Joshua Tree roadmap: merge the PR queue one at a time (239 first, hold other merges), finish phone mode, the app interface and apps out of the kernel, keep tests, docs, README, landing and benchmarks current, watch RAM and usage. Goal: A+ architecture, mobile first by 2026-10-04.
 ```
