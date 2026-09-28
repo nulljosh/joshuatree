@@ -196,10 +196,10 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 1. **Apps leave the kernel, each in its own protected space** (plain: apps that can't crash each other) [Fable]: the 2.0 gate in docs/LOOP-HANDOFF.md. Keyrate is first (#269); then one app per PR, each added to the crash check.
 2. **Close the window-memory gap, validate every pointer a syscall takes** (plain: apps kept out of each other's memory) [Fable]: framebuffer pages stay user-writable after a window closes; audit copy-in/copy-out on every syscall.
 3. **Kernel randomness pool** (plain: safer stored passwords) [Fable]: password salts come from a predictable generator today. BearSSL's HMAC_DRBG, seeded from RDRAND and timing jitter.
-4. **Phone home screen** (plain: a real phone home screen) [Sonnet]: VERSIONS.md 1.8.
-5. **Check the portfolio in X's in-app browser** (plain: skip) [Haiku]: `?full` boots right away now; confirm on a phone from a post in the X app.
-6. **Split kernel.c into per-subsystem files** (plain: skip) [Sonnet]: shrinks as apps move out; the 2.0 progress bar.
-7. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after 2.0.
+4. **Check the portfolio in X's in-app browser** (plain: skip) [Haiku]: `?full` boots right away now; confirm on a phone from a post in the X app.
+5. **Split kernel.c into per-subsystem files** (plain: skip) [Sonnet]: shrinks as apps move out; the 2.0 progress bar.
+6. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after 2.0.
+7. **Real Activity and Clock icons** (plain: skip) [Haiku]: both still show placeholder keypad art on the phone home grid and the Apps folder; need their own glyphs.
 
 ## Landing roadmap summary
 `tools/gen/landing-roadmap.py` reads this file's Session task queue and takes up to three open, numbered, bold task titles for the landing page's "Where it's going" card, skipping completed entries and escaping for HTML. `tools/checks/landing-roadmap-check.py` and `tools/gen/landing-roadmap.py --check` are the regression checks. A roadmap change triggers the landing deploy workflow, which regenerates the card before upload.
