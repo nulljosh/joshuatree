@@ -20,14 +20,12 @@ Main is 1.7.11 and live. 1.7.12 puts a third app in ring 3: Calculator runs as i
 
 ## Next, in order
 
-1. Move passwords from salted hashes to PBKDF2.
-2. Call paging_clear_user on window release so a closed app's memory doesn't linger.
-3. Audit every syscall for unchecked user pointers.
-4. Move apps out a few per PR, smallest first, each one added to the crash check.
-5. 1.8 phone home screen, in parallel with the moves (it only touches the desktop, not the apps).
-6. 1.9 touch and the on-screen keyboard.
-
-This is a personal repo with no merge queue, so PRs get batched into one release branch instead of landing one at a time.
+1. Land what is in flight, one at a time (main requires up to date branches): Quotes to ring 3, 1.8 phone home screen, 1.8.1 Esc no longer quits the desktop, Mail compose in its own window, Settings redesign.
+2. Audio: 1.7.16 stopped the tour reboot from dropping facehost. Drive a real message into Samantha (headless Chromium, ?audiodebug), confirm "speak: status=200" in serial and non-zero output RMS; then Joshua checks ?audiodebug on his iPhone.
+3. Test infra: every check picks a free QMP port instead of a fixed one, so parallel agents stop colliding.
+4. 1.9: touch and an on-screen keyboard, so a phone visitor can type to Samantha, and every app readable at phone size.
+5. 2.0: move the remaining apps to ring 3, smallest first, each with its crash check; real icons for Activity and Clock.
+6. 2.1 Music, 2.2 Video.
 
 ## Restart prompt
 

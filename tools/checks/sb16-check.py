@@ -39,7 +39,7 @@ def boot(extra, work, commands):
         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
     try:
         time.sleep(4)
-        q.stdin.write("sendkey esc\n"); q.stdin.flush()   # leave the GUI for the text shell
+        q.stdin.write("sendkey ctrl-alt-backspace\n"); q.stdin.flush()   # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
         time.sleep(1)
         for line in commands:
             q.stdin.write(line + "\n"); q.stdin.flush()
