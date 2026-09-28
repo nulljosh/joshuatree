@@ -1732,6 +1732,67 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
    this framebuffer doesn't have, same technique the wallpaper and every
    other AA edge in this file already uses. */
 static void gui_rounded_rect_gradient(int x, int y, int w, int h, unsigned int color_top, unsigned int color_bottom, unsigned int bg, int r){
+    /* Settings retina pass: this is the same logical-space-then-block-
+       replicate staircase gui_fill_circle's v82 fix and gui_draw_capsule's
+       matching fix already found and fixed for circles/capsules -- the AA
+       ramp below is computed once per LOGICAL pixel, and at window_scale()
+       2 (every real dock-launched windowed app, including Settings)
+       window_rect/window_pixel replicate each logical pixel into a flat
+       2x2 physical block with no interpolation, so the ramp rasterizes as
+       distinct flat terraces: the Wind switch's track edge, the grouped
+       card's corners and the sidebar highlight's corners, all real macro
+       staircasing (confirmed visually, /tmp/jt-settings-4x-*.png). This
+       function is the one AA rounded-rect primitive every one of those
+       three draws through, so one fix here covers all three. Same
+       technique gui_rounded_rect_on_wallpaper's v79 fix uses: work in
+       PHYSICAL pixels, SSxSS true subsample coverage per corner pixel
+       instead of a single distance threshold, blend straight to `bg`
+       (already a flat color for every caller here, no wallpaper sampling
+       needed the way the tray's on-wallpaper variant does). The original
+       logical-space path stays for callers with an offscreen target
+       pushed (window_has_target() true, e.g. gui_render_icon_cached's own
+       6x-supersampled icon buffer): that path already gets its real AA
+       from the later box-downsample, exactly like every icon glyph. */
+    if (!window_has_target() && window_scale() > 1) {
+        int sc = (int)window_scale();
+        int px0 = x * sc, py0 = y * sc, pw = w * sc, ph = h * sc, pr = r * sc;
+        const int SS = 4, band = 3, margin = 2;
+        if (ph > 2 * pr) {
+            for (int py = pr; py < ph - pr; py++) {
+                int ly = py / sc;
+                window_fill_rect_phys(px0, py0 + py, pw, 1, gui_lerp(color_top, color_bottom, ly, h));
+            }
+        }
+        for (int py = 0; py < ph; py++) {
+            if (py >= pr && py < ph - pr) continue;
+            int cy = py < pr ? pr : ph - 1 - pr;
+            int oy = py - cy;
+            int ly = py / sc;
+            unsigned int row_col = gui_lerp(color_top, color_bottom, ly, h);
+            for (int px = 0; px < pw; px++) {
+                int cx = px < pr ? pr : (px >= pw - pr ? pw - 1 - pr : px);
+                int ox = px - cx;
+                int d2 = ox * ox + oy * oy;
+                unsigned int col = row_col;
+                if (d2 > (pr - band) * (pr - band)) {
+                    if (d2 > (pr + margin) * (pr + margin)) continue;
+                    int inside = 0;
+                    for (int sy = 0; sy < SS; sy++) {
+                        int subdy = oy * SS + sy * 2 + 1 - SS;
+                        for (int sx = 0; sx < SS; sx++) {
+                            int subdx = ox * SS + sx * 2 + 1 - SS;
+                            long sd2 = (long)subdx * subdx + (long)subdy * subdy;
+                            if (sd2 <= (long)(pr * SS) * (pr * SS)) inside++;
+                        }
+                    }
+                    if (inside == 0) continue;
+                    col = (inside >= SS * SS) ? row_col : gui_lerp(row_col, bg, SS * SS - inside, SS * SS);
+                }
+                window_pixel_phys(px0 + px, py0 + py, col);
+            }
+        }
+        return;
+    }
     for (int row = 0; row < h; row++)
         window_rect(x, row + y, w, 1, gui_lerp(color_top, color_bottom, row, h));
     /* v37, real long-standing bug fixed here, not a tweak: this loop used
@@ -5571,382 +5632,7 @@ static void gui_launch_trash(void){
     }
 }
 
-/* v47 (0.47.0): a real Settings screen, not a hidden shell command. Two
-   rows, each a live toggle/stepper that writes through settings_save()
-   immediately, the same "no separate Apply step" behaviour every setting
-   in this kernel already has (fsuse, diskuse, wind). up/down picks a row,
-   left/right (a/d, since there's no numpad here) changes it, a tap on a
-   row also toggles/steps it, matching the touch-first contract every
-   other screen in this GUI already keeps. */
-/* v85: settings_prompt_line, the same shape contacts_prompt_line and
-   mail_prompt_line already established (live-render, backspace, enter
-   confirms, esc or a click cancels), pulled in here rather than shared
-   across files since every app in this kernel keeps its own copy of this
-   small loop already. Used to edit the two string LLM settings, since a
-   toggle/stepper doesn't fit free text the way it fits wind/dock/wall.
-
-   security pass: added a `masked` parameter. The password-change and
-   add-user rows below used to call this with the typed password rendered
-   in the clear on screen, the exact thing auth_field_input's dot-echo in
-   auth.h was built to avoid for the login/first-run screens -- a real gap
-   (shoulder-surfing, screen recording, the v86 landing demo) since this is
-   the same secret, just entered through a different door. Masked draws a
-   fixed-width dot per character, same convention, same length-not-content
-   leak trade-off already accepted for login. */
-static int settings_prompt_line(const char *prompt, char *out, int max, int masked) {
-    unsigned int n = 0;
-    while (out[n] && (int)n < max - 1) n++; /* start from the current value, not empty, so editing is a tweak not a retype */
-    mouse_click_edge_sync();
-    for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Settings");
-        font_draw_string(prompt, 20, 52, 0x0075726E, -1);
-        window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
-        out[n] = 0;
-        if (masked) {
-            char dots[AUTH_PASSWORD_MAX + 1];
-            unsigned int dn = n; if (dn > AUTH_PASSWORD_MAX) dn = AUTH_PASSWORD_MAX;
-            for (unsigned int i = 0; i < dn; i++) dots[i] = '*';
-            dots[dn] = 0;
-            font_draw_string(dots, 24, 78, 0x001C1C1E, -1);
-        } else {
-            font_draw_string(out, 24, 78, 0x001C1C1E, -1);
-        }
-        int k = get_key_or_click();
-        if (k == KEY_ESC || k == KEY_CLICK) return 0;
-        if (k == KEY_ENTER) break;
-        if (k == '\b') { if (n > 0) n--; }
-        else if ((int)n < max - 1 && k >= 32 && k < 127) out[n++] = (char)k;
-    }
-    out[n] = 0;
-    return 1;
-}
-
-#define SETTINGS_ROW_COUNT 8 /* v75: + wallpaper source; v85: + LLM model, + LLM host:port; v0.77: + Account (change password), + Add user; v0.85.5: + Location */
-static const int SETTINGS_ROWS_Y[SETTINGS_ROW_COUNT] = {84, 116, 148, 180, 212, 252, 284, 316};
-
-/* Pure, hardware/GUI-free: given a real click's full-screen logical
-   coordinates and the window's current width, returns which Settings row
-   (0..SETTINGS_ROW_COUNT-1) it lands in, or -1 if it misses every row's
-   own highlight rect (window_rect(16, y-6, ww-32, 28, ...), the exact
-   rect drawn below). Extracted into its own function so this real
-   hit-test math is unit-testable without a mouse or a boot, the same
-   shape rtl8139_clamp_len's own extraction used for exactly this reason
-   (v0.72.1: "so it's unit-testable without a NIC"). */
-static int settings_row_at(int cx, int cy, int ww){
-    if (cx < 16 || cx >= ww - 16) return -1;
-    for (int i = 0; i < SETTINGS_ROW_COUNT; i++) {
-        int ry = SETTINGS_ROWS_Y[i];
-        if (cy >= ry - 6 && cy < ry - 6 + 28) return i;
-    }
-    return -1;
-}
-
-static void gui_launch_settings(void){
-    int sel = 0;
-    for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Settings");
-        font_draw_string("up/down to pick   left/right or tap to change   esc closes", 20, 52, 0x00807468, -1);
-
-        const int *rows_y = SETTINGS_ROWS_Y;
-        for (int i = 0; i < SETTINGS_ROW_COUNT; i++) {
-            int y = rows_y[i];
-            if (i == sel) window_rect(16, y - 6, (int)window_width() - 32, 28, 0x00EDE6DC);
-            if (i == 0) {
-                font_draw_string("Wind (swaying wallpaper)", 28, y, 0x001C1C1E, -1);
-                font_draw_string(wind_enabled ? "On" : "Off", 400, y, wind_enabled ? 0x002F7B4F : 0x00807468, -1);
-            } else if (i == 1) {
-                font_draw_string("Dock size", 28, y, 0x001C1C1E, -1);
-                char sz[8]; int p = 0; int v = dock_scale_pct;
-                if (v >= 10) sz[p++] = '0' + v / 10;
-                sz[p++] = '0' + v % 10; sz[p++] = '%'; sz[p] = 0;
-                font_draw_string(sz, 400, y, 0x001C1C1E, -1);
-            } else if (i == 2) {
-                /* v75/v81: honest label. A map theme's name only shows once
-                   a real tile mosaic is on screen; while it's still
-                   fetching, or when the fetch failed and the photo is
-                   what's actually up, say so instead of claiming a theme
-                   that isn't really rendering. */
-                font_draw_string("Wallpaper", 28, y, 0x001C1C1E, -1);
-                const char *theme_name = wall_theme == WALL_COOL ? "Map (Cool)" : wall_theme == WALL_RAW ? "Map (Raw)" : wall_theme == WALL_SAT ? "Satellite" : (geo_city[0] ? geo_city : "Map (Warm)");
-                /* v0.83.x: the v86 demo's own honest label. "photo until
-                   then" stopped being true the moment the no-network
-                   fallback became the baked satellite capture instead of
-                   the tree -- font_is_fallback() is the same real v86
-                   signal wall_apply() itself branches on. */
-                const char *lbl = wall_theme == WALL_PHOTO ? "Photo" : (wall_map ? theme_name : (font_is_fallback() ? "Satellite (offline demo)" : "Map (fetching, photo until then)"));
-                font_draw_string(lbl, 400, y, wall_theme != WALL_PHOTO && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
-            } else if (i == 3) {
-                font_draw_string("LLM model", 28, y, 0x001C1C1E, -1);
-                font_draw_string(llm_model, 400, y, 0x001C1C1E, -1);
-            } else if (i == 4) {
-                font_draw_string("LLM host:port", 28, y, 0x001C1C1E, -1);
-                char hp[LLM_HOST_MAX + 8]; int p = 0;
-                const char *s = llm_host; while (*s && p < (int)sizeof(hp) - 8) hp[p++] = *s++;
-                hp[p++] = ':';
-                char digits[8]; int nd = 0; int v = llm_port;
-                if (v == 0) digits[nd++] = '0';
-                while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
-                while (nd) hp[p++] = digits[--nd];
-                hp[p] = 0;
-                font_draw_string(hp, 400, y, 0x001C1C1E, -1);
-            } else if (i == 5) {
-                /* v0.77: real accounts. Tap/enter here walks old-password
-                   ->new-password->confirm through settings_prompt_line
-                   (masking not needed for that shared shell-style prompt,
-                   the dedicated masked auth_field_input is only used by
-                   the login/first-run screens themselves, kept separate on
-                   purpose so Settings doesn't need its own copy of the
-                   dot-echo loop for one row). */
-                font_draw_string("Account", 28, y, 0x001C1C1E, -1);
-                font_draw_string(auth_current_user[0] ? auth_current_user : "(none)", 400, y, 0x001C1C1E, -1);
-            } else if (i == 6) {
-                font_draw_string("Add user (new account)", 28, y, 0x001C1C1E, -1);
-                font_draw_string("tap or enter", 400, y, 0x00807468, -1);
-            } else {
-                /* v0.85.5: the Location field roadmap.md asked for. Empty
-                   means "no override", the same honest-label convention
-                   Wallpaper's own row just above already uses: say what's
-                   actually in effect, not what was typed. */
-                font_draw_string("Location", 28, y, 0x001C1C1E, -1);
-                font_draw_string(loc_have ? loc_name : "(auto, from IP address)", 400, y, loc_have ? 0x002F7B4F : 0x00807468, -1);
-            }
-        }
-        font_draw_string("Settings are saved to disk and survive a reboot.", 20, (int)window_height() - 28, 0x00807468, -1);
-
-        window_present(); sleep_ticks(5);
-        mouse_click_edge_sync();
-        int k = get_key_or_click();
-        if (k == KEY_ESC) return;
-        if (k == KEY_UP && sel > 0) sel--;
-        else if (k == KEY_DOWN && sel < SETTINGS_ROW_COUNT - 1) sel++;
-        else if (k == KEY_CLICK || k == 'a' || k == 'd') {
-            /* A real click acts on whichever row it actually landed on, not
-               whichever row a PRIOR arrow-key press happened to leave
-               selected -- before this, a mouse/touch-only visitor with no
-               keyboard (this kernel's own browser-demo idle tour included)
-               could only ever toggle row 0 (Wind), since `sel` starts at 0
-               and a bare click never moved it. Scoped to k==KEY_CLICK only:
-               a real 'a'/'d' keypress must keep acting on whatever `sel`
-               already is, not get silently overridden by a stale cursor
-               position that has nothing to do with the keypress. */
-            if (k == KEY_CLICK) {
-                /* Real bug, found by tools/checks/auth-flow-check.py driving a real
-                   synthetic pointer click (the exact gap walldemo-regression-check.py's
-                   own comment already flagged as unconfirmed): app_cursor_x/y is only
-                   kept live by gui_app_mouse_tick(), which is gated on gui_app_windowed
-                   and therefore only ticks for apps opened through gui_launch_from_dock.
-                   gui_launch_settings() is entered straight from the Apple menu
-                   (gui_menu_run_item), never through that wrapper, so gui_app_windowed
-                   stays 0 the whole time Settings is open and app_cursor_x/y is never
-                   seeded or updated -- every click here hit-tested wherever the cursor
-                   happened to be frozen at (0,0 if no windowed app had run yet this
-                   boot), so settings_row_at() always missed and every click silently
-                   fell through to acting on whatever `sel` already was, exactly the
-                   pre-fix settingsclick bug this same block's own comment describes,
-                   just reachable a different way than that fix covered. Query the real
-                   position directly at the moment of the click instead of trusting the
-                   stale global. */
-                mouse_get_absolute(&app_cursor_x, &app_cursor_y, (int)window_width(), (int)window_height());
-                int hit = settings_row_at(app_cursor_x, app_cursor_y, (int)window_width());
-                if (hit >= 0) sel = hit;
-            }
-            if (sel == 0) { wind_enabled = !wind_enabled; settings_save(); }
-            else if (sel == 2) {
-                /* v81: cycles all four real themes (Photo -> Warm -> Cool
-                   -> Raw -> Photo), not a binary toggle, matching the
-                   left/right-steps contract dock size already uses below.
-                   A tap (KEY_CLICK) always steps forward, same convention
-                   dock size's tap already keeps. */
-                int dir = (k == 'a') ? -1 : 1;
-                wall_switch_theme((wall_theme + dir + 5) % 5);
-                wall_apply(wall_theme != WALL_PHOTO);
-            }
-            else if (sel == 3) {
-                /* v85 (direct feedback, after this landed): a free-text
-                   model field can be typo'd to point at a model that
-                   isn't actually installed on the host, silently failing
-                   every chat. Real fix, checked against `ollama list` on
-                   this machine rather than guessed: a bounded cycle over
-                   real, known-working models, not free text.
-                   nomic-embed-text is on the host too but is an
-                   embedding-only model, not a chat model, deliberately
-                   left off this list, the same "don't offer what wouldn't
-                   work" call the wallpaper theme cycle already makes for
-                   its own four real options. A live /api/tags probe
-                   (Ollama's own model-list endpoint, same plain-HTTP shape
-                   chat_send already uses) would be the more general fix
-                   and is a real, scoped-out next step, not done here to
-                   keep this pass's actual shipped surface honest about
-                   what it covers.
-                   1.0.12: "samantha" (Turing's model, the new default) is
-                   now index 0 of LLM_MODELS; qwen3:8b/llama3.1:8b (the
-                   local-Ollama-on-the-host alternatives) fill the other
-                   two slots. `cur` is found by real lookup, not a
-                   two-way strcmp against index 0 -- the old shape assumed
-                   exactly two entries and silently treated anything past
-                   index 0 as "the other one," which broke the moment a
-                   third real model joined the list. */
-                int cur = 0;
-                for (int mi = 0; mi < LLM_MODEL_COUNT; mi++) if (!strcmp(llm_model, LLM_MODELS[mi])) { cur = mi; break; }
-                int dir = (k == 'a') ? -1 : 1;
-                int next = (cur + dir + LLM_MODEL_COUNT) % LLM_MODEL_COUNT;
-                int p = 0; const char *m = LLM_MODELS[next];
-                while (m[p] && p < LLM_MODEL_MAX - 1) { llm_model[p] = m[p]; p++; }
-                llm_model[p] = 0;
-                settings_save();
-            }
-            else if (sel == 4) {
-                char hostbuf[LLM_HOST_MAX];
-                int hn = 0; while (llm_host[hn] && hn < LLM_HOST_MAX - 1) { hostbuf[hn] = llm_host[hn]; hn++; }
-                hostbuf[hn] = 0;
-                if (settings_prompt_line("LLM host (hostname or IP, enter to confirm, esc to cancel):", hostbuf, LLM_HOST_MAX, 0)) {
-                    int j = 0; while (hostbuf[j] && j < LLM_HOST_MAX - 1) { llm_host[j] = hostbuf[j]; j++; } llm_host[j] = 0;
-                    char portbuf[8]; int pn = 0; int v = llm_port;
-                    char digits[8]; int nd = 0;
-                    if (v == 0) digits[nd++] = '0';
-                    while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
-                    while (nd) portbuf[pn++] = digits[--nd];
-                    portbuf[pn] = 0;
-                    if (settings_prompt_line("LLM port (enter to confirm, esc to cancel):", portbuf, sizeof(portbuf), 0)) {
-                        int nv = 0; for (int c = 0; portbuf[c]; c++) if (portbuf[c] >= '0' && portbuf[c] <= '9') nv = nv * 10 + (portbuf[c] - '0');
-                        if (nv > 0 && nv <= 65535) llm_port = nv;
-                    }
-                    settings_save();
-                }
-            }
-            else if (sel == 5 && k != 'a' && k != 'd') {
-                /* Change password for the account that's actually logged
-                   in this session, not a free-text username field: there
-                   is exactly one real "current user" concept in this
-                   kernel today (auth_current_user, set by auth_gate at
-                   boot), matching the single-machine/single-visitor
-                   threat model docs/THREAT-MODEL.md lays out. 'a'/'d'
-                   (left/right, the stepper convention every other row
-                   uses) don't apply to this row, only a real tap/enter. */
-                if (auth_current_user[0]) {
-                    char oldbuf[AUTH_PASSWORD_MAX + 1]; oldbuf[0] = 0;
-                    if (settings_prompt_line("Current password (enter to confirm, esc to cancel):", oldbuf, sizeof(oldbuf), 1)) {
-                        char newbuf[AUTH_PASSWORD_MAX + 1]; newbuf[0] = 0;
-                        if (settings_prompt_line("New password (enter to confirm, esc to cancel):", newbuf, sizeof(newbuf), 1)) {
-                            char confirmbuf[AUTH_PASSWORD_MAX + 1]; confirmbuf[0] = 0;
-                            if (settings_prompt_line("Confirm new password (enter to confirm, esc to cancel):", confirmbuf, sizeof(confirmbuf), 1)) {
-                                int ok = !strcmp(newbuf, confirmbuf) && auth_change_password(auth_current_user, oldbuf, newbuf);
-                                font_draw_string(ok ? "Password changed." : "That didn't work -- wrong current password or mismatch.",
-                                                  20, (int)window_height() - 48, ok ? 0x002F7B4F : 0x00A33B3B, -1);
-                                /* Same real bug tools/checks/auth-flow-check.py found in
-                                   kernel/auth.h's login rejection: drawing lands in a back
-                                   buffer and only window_present() ever flips it visible, and
-                                   this status line had no frame boundary of its own before
-                                   sleep_ticks -- the next redraw erased it unseen. */
-                                window_present();
-                                sleep_ticks(60);
-                            }
-                            memset(newbuf, 0, sizeof(newbuf));
-                            memset(confirmbuf, 0, sizeof(confirmbuf));
-                        }
-                        memset(oldbuf, 0, sizeof(oldbuf));
-                    }
-                }
-            }
-            else if (sel == 6 && k != 'a' && k != 'd') {
-                /* Adding a second local account. No admin/role concept
-                   exists in this kernel (real, honest gap, not modeled
-                   here since the direct request scoped this to "create a
-                   user, change your own password", not a permissions
-                   system) -- any logged-in session can add another
-                   account. auth_create_user already refuses a duplicate
-                   name, an empty name/password, or a full table (8 max). */
-                char ubuf[AUTH_USERNAME_MAX + 1]; ubuf[0] = 0;
-                if (settings_prompt_line("New username (enter to confirm, esc to cancel):", ubuf, sizeof(ubuf), 0)) {
-                    char pbuf[AUTH_PASSWORD_MAX + 1]; pbuf[0] = 0;
-                    if (settings_prompt_line("Password for that user (enter to confirm, esc to cancel):", pbuf, sizeof(pbuf), 1)) {
-                        int ok = auth_create_user(ubuf, pbuf);
-                        /* v0.77.1: the gate is opt-in (auth_gate is a no-op
-                           on an unconfigured system, see kernel/auth.h),
-                           so a session that reaches this row with nobody
-                           logged in yet is exactly the "creating the very
-                           first account" case that used to be the
-                           first-run screen's job. Treat this account as
-                           the current session's own from here on, the
-                           same real effect the old first-run flow had,
-                           just moved to Settings instead of gating boot. */
-                        if (ok && !auth_current_user[0]) {
-                            unsigned int p = 0; while (ubuf[p] && p < AUTH_USERNAME_MAX) { auth_current_user[p] = ubuf[p]; p++; } auth_current_user[p] = 0;
-                            auth_logged_in = 1;
-                        }
-                        font_draw_string(ok ? "Account created." : "Couldn't create that account (name taken, empty, or table full).",
-                                          20, (int)window_height() - 48, ok ? 0x002F7B4F : 0x00A33B3B, -1);
-                        /* Same missing-present bug as the Change password status line
-                           above and kernel/auth.h's login rejection: without this call
-                           the message never reaches the visible framebuffer. */
-                        window_present();
-                        sleep_ticks(60);
-                    }
-                    memset(pbuf, 0, sizeof(pbuf));
-                }
-            }
-            else if (sel == 7 && k != 'a' && k != 'd') {
-                /* v0.85.5: Location, city or postal code, resolved through
-                   Open-Meteo's own geocoding endpoint (loc_geocode above),
-                   the same house the forecast itself already comes from.
-                   Bounded the same way every other free-text Settings row
-                   is: settings_prompt_line's max param (LOC_NAME_MAX,
-                   matching geo_city's own bound). Empty input clears the
-                   override and goes back to the IP lookup; a bad or
-                   unknown location shows loc_geocode's own short error and
-                   never panics or writes a fabricated coordinate. */
-                char lbuf[LOC_NAME_MAX]; int li = 0; while (loc_name[li] && li < LOC_NAME_MAX - 1) { lbuf[li] = loc_name[li]; li++; } lbuf[li] = 0;
-                if (settings_prompt_line("Location (city or postal code, enter to confirm, esc to cancel):", lbuf, sizeof(lbuf), 0)) {
-                    if (!lbuf[0]) {
-                        loc_have = 0; loc_name[0] = 0; loc_lat[0] = 0; loc_lon[0] = 0;
-                        geo_have = 0; geo_lat[0] = 0; geo_lon[0] = 0; geo_city[0] = 0;
-                        settings_save();
-                        /* Same cache drop as the set path below: the old
-                           override's weather and map must not outlive it. */
-                        weather_tried_once = 0; weather_have = 0;
-                        if (wall_map) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
-                        wall_apply(wall_theme != WALL_PHOTO);
-                        font_draw_string("Location cleared (using your IP address instead).", 20, (int)window_height() - 48, 0x00807468, -1);
-                    } else if (loc_geocode(lbuf)) {
-                        settings_save();
-                        /* Drop whatever weather/map already have cached so
-                           the desktop loop's own ten-minute cycle (the
-                           same one that would normally re-check the IP
-                           lookup) picks up the new coordinates on its very
-                           next tick instead of waiting out the old cache,
-                           through the exact same weather_fetch/wall_fetch
-                           paths it already runs, nothing called directly
-                           from here. */
-                        weather_tried_once = 0; weather_have = 0;
-                        if (wall_map) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
-                        /* wall_src still pointed at the buffer just freed;
-                           wall_apply repoints it (baked satellite or the
-                           photo) until the refetch lands, the same way
-                           wall_switch_theme is always followed by one. */
-                        wall_apply(wall_theme != WALL_PHOTO);
-                        char msg[48] = "Location set: "; int mp = 14; /* strlen("Location set: ") */
-                        for (const char *c = loc_name; *c && mp < 47; c++) msg[mp++] = *c;
-                        msg[mp] = 0;
-                        font_draw_string(msg, 20, (int)window_height() - 48, 0x002F7B4F, -1);
-                    } else {
-                        font_draw_string(loc_err[0] ? loc_err : "Couldn't find that location.", 20, (int)window_height() - 48, 0x00A33B3B, -1);
-                    }
-                    window_present();
-                    sleep_ticks(60);
-                }
-            }
-            else if (sel != 5 && sel != 6 && sel != 7) {
-                int dir = (k == 'a') ? -1 : 1; /* a tap always steps up; a real direction only from the keyboard */
-                if (k == KEY_CLICK) dir = 1;
-                int v = dock_scale_pct + dir;
-                if (v > 25) v = 5; if (v < 5) v = 25; /* wraps, so a tap always does something visible */
-                dock_scale_pct = v; settings_save();
-            }
-        }
-    }
-}
+#include "settings_ui.h"
 
 #include "stocks.h"
 #include "bookrank.h"
@@ -8944,15 +8630,57 @@ static void run(char *line){
            moved `sel`. settings_row_at is the exact pure hit-test
            gui_launch_settings' click branch now calls before touching
            `sel`; no mouse, GUI, or boot state needed to exercise it. */
+        /* 1.8: extended for the sidebar+detail-pane redesign. settings_row_at
+           now takes which section is showing (a row belonging to a
+           different, not-currently-visible section can never be hit) and
+           settings_sidebar_at is the same shape for the new sidebar's own
+           3 section rows. Also covers the real "does a setting survive a
+           reboot" contract settings_save/settings_load promise -- Settings'
+           own footer text says so, this proves it round-trips through the
+           same save/load path a real reboot uses, not just that the in-
+           memory toggle flips. */
         int ok = 1;
-        if (settings_row_at(300, 84,  960) != 0) { puts("settingsclick: row 0 (Wind) center missed\n"); ok = 0; }
-        if (settings_row_at(300, 148, 960) != 2) { puts("settingsclick: row 2 (Wallpaper) center missed\n"); ok = 0; }
-        if (settings_row_at(300, 212, 960) != 4) { puts("settingsclick: row 4 (LLM host) center missed\n"); ok = 0; }
-        if (settings_row_at(300, 70,  960) != -1) { puts("settingsclick: above row 0 should miss\n"); ok = 0; }
-        if (settings_row_at(300, 108, 960) != -1) { puts("settingsclick: real gap between row 0 and row 1 should miss\n"); ok = 0; }
-        if (settings_row_at(10,  148, 960) != -1) { puts("settingsclick: left of the row rect (x<16) should miss\n"); ok = 0; }
-        if (settings_row_at(950, 148, 960) != -1) { puts("settingsclick: right of the row rect should miss\n"); ok = 0; }
-        puts(ok ? "settingsclick: click hit-tests the row it actually landed on: ok\n" : "settingsclick: FAILED\n");
+        if (settings_row_at(300, 92,  960, 0) != 0) { puts("settingsclick: General row 0 (Wind) center missed\n"); ok = 0; }
+        /* 1.8.2 polish pass: Wind's value is now a real switch control,
+           right-aligned near the row's own right edge instead of an
+           "On"/"Off" text label near the middle -- prove that region of
+           the row (where the switch itself actually is, detail_right(940)
+           - SETTINGS_SWITCH_W(40) = 900, plus a few px margin) still
+           resolves to row 0 like the rest of the row always has, same
+           "click anywhere on the row toggles it" contract every row here
+           keeps, not just the switch's own bounding box. */
+        if (settings_row_at(910, 92,  960, 0) != 0) { puts("settingsclick: General row 0's switch region missed\n"); ok = 0; }
+        if (settings_row_at(300, 164, 960, 0) != 2) { puts("settingsclick: General row (Wallpaper) center missed\n"); ok = 0; }
+        if (settings_row_at(300, 200, 960, 0) != 7) { puts("settingsclick: General row (Location) center missed\n"); ok = 0; }
+        if (settings_row_at(300, 70,  960, 0) != -1) { puts("settingsclick: above the first General row should miss\n"); ok = 0; }
+        if (settings_row_at(300, 119, 960, 0) != -1) { puts("settingsclick: real gap between rows should miss\n"); ok = 0; }
+        if (settings_row_at(180, 92,  960, 0) != -1) { puts("settingsclick: left of the detail pane (in the sidebar's x range) should miss\n"); ok = 0; }
+        if (settings_row_at(950, 92,  960, 0) != -1) { puts("settingsclick: right of the detail pane should miss\n"); ok = 0; }
+        if (settings_row_at(300, 92,  960, 1) != 3) { puts("settingsclick: Assistant row (LLM model) center missed\n"); ok = 0; }
+        if (settings_row_at(300, 128, 960, 1) != 4) { puts("settingsclick: Assistant row (LLM host:port) center missed\n"); ok = 0; }
+        if (settings_row_at(300, 92,  960, 2) != 5) { puts("settingsclick: Account row (Account) center missed\n"); ok = 0; }
+        /* Same physical y (92, each section's own first row) resolves to a
+           different absolute row index depending which section is showing
+           -- proves the hit-test is scoped to what's actually on screen,
+           not just "any known row y" independent of section. */
+        if (settings_row_at(300, 92, 960, 1) == 0) { puts("settingsclick: Assistant section must not hit General's Wind row\n"); ok = 0; }
+        if (settings_sidebar_at(90, 60)  != 0) { puts("settingsclick: sidebar row 0 (General) missed\n"); ok = 0; }
+        if (settings_sidebar_at(90, 94)  != 1) { puts("settingsclick: sidebar row 1 (Assistant) missed\n"); ok = 0; }
+        if (settings_sidebar_at(90, 128) != 2) { puts("settingsclick: sidebar row 2 (Account) missed\n"); ok = 0; }
+        if (settings_sidebar_at(90, 40)  != -1) { puts("settingsclick: above the sidebar's first row should miss\n"); ok = 0; }
+        if (settings_sidebar_at(2,  60)  != -1) { puts("settingsclick: left of the sidebar (x<8) should miss\n"); ok = 0; }
+        if (settings_sidebar_at(170,60)  != -1) { puts("settingsclick: right of the sidebar should miss\n"); ok = 0; }
+
+        int wind_before = wind_enabled;
+        wind_enabled = !wind_enabled;
+        settings_save();
+        int wind_saved = wind_enabled;
+        wind_enabled = !wind_enabled; /* corrupt the in-memory value so a real disk round-trip is what proves it, not just the assignment above */
+        settings_load();
+        if (wind_enabled != wind_saved) { puts("settingsclick: Wind toggle did not survive settings_save/settings_load\n"); ok = 0; }
+        wind_enabled = wind_before; settings_save(); /* restore, no lasting side effect on the rest of this boot */
+
+        puts(ok ? "settingsclick: click hit-tests the row it actually landed on, sidebar sections hit-test correctly, and a toggle survives save/load: ok\n" : "settingsclick: FAILED\n");
         serial_puts(ok ? "settingsclick PASS\n" : "settingsclick FAIL\n"); /* mirrors texttest/chattest/jpegtest's own convention so a tools/checks shell script can read the verdict headless */
     }
     else if (!strcmp(line, "nettest")) {
