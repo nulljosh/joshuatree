@@ -162,6 +162,56 @@ try:
     keys("esc"); time.sleep(1.0)
     if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED):
         fails.append("Mail did not close on Esc after the crash")
+
+    # 5. a normal close, both ways, from the path qa-gallery.py takes: the
+    #    Apps folder grid (Keyrate is row 1, col 4), whose viewport is the
+    #    folder's 832x450, not the dock's 804x345. Esc, then the red close
+    #    dot; after each the program must have exited 0, the window must be
+    #    released, and Mail must open from the dock. This is the case that
+    #    left 17 apps "never opened" in 1.7.7: the folder viewport did not
+    #    fit JT_USER_FB, SYS_WINDOW_OPEN failed, and the desktop hung.
+    APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
+    def open_keyrate_from_grid(tag):
+        seen = serial().count("keyrate: ring-3 window")
+        move(*PARK); time.sleep(0.2)
+        move(SLOT0_X + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.0)
+        for _ in range(4): keys("d"); time.sleep(0.35)  # the grid moves on wasd, as qa-gallery.py does
+        keys("s"); time.sleep(0.35)
+        keys("ret")
+        for _ in range(60):
+            time.sleep(0.1)
+            if serial().count("keyrate: ring-3 window") > seen: break
+        else:
+            fails.append(f"{tag}: Keyrate did not open a ring-3 window from the Apps folder grid"); return False
+        if "keyrate: ring-3 window 832x450" not in serial():
+            fails.append(f"{tag}: the folder-launched window is not the folder viewport's 832x450")
+        if "ring3app: BUG" in serial():
+            fails.append(f"{tag}: ring3app logged a BUG line")
+        time.sleep(0.5)
+        return True
+    def assert_closed(tag, exits_before):
+        if not wait_serial("syscall: window released, task gone", 5) or serial().count("KEYRATE.BIN exited 0") <= exits_before:
+            fails.append(f"{tag}: Keyrate did not exit 0 and release its window on a normal close")
+        keys("esc"); time.sleep(0.8)  # the Apps folder itself
+        move(*PARK); time.sleep(0.3)
+        if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED) or near(pixel(APPS_CLOSE_X, APPS_CLOSE_Y), CLOSE_RED):
+            fails.append(f"{tag}: a window is still open after the close")
+        move(SLOT0_X + 2 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
+        ok = False
+        for _ in range(40):
+            time.sleep(0.1)
+            if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): ok = True; break
+        print(f"{tag}: Mail opens from the dock afterwards: {'yes' if ok else 'NO'}")
+        if not ok: fails.append(f"{tag}: Mail did not open from a dock click after the close: desktop stuck")
+        keys("esc"); time.sleep(1.0)
+    exits = serial().count("KEYRATE.BIN exited 0")
+    if open_keyrate_from_grid("esc-close"):
+        keys("esc"); time.sleep(0.5)
+        assert_closed("esc-close", exits)
+    exits = serial().count("KEYRATE.BIN exited 0")
+    if open_keyrate_from_grid("dot-close"):
+        move(APPS_CLOSE_X, APPS_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.5)
+        assert_closed("dot-close", exits)
 finally:
     q.terminate()
     try: q.wait(5)
@@ -173,4 +223,4 @@ if fails:
     print("--- serial tail ---")
     print(serial()[-1500:])
     sys.exit(1)
-print("PASS: Keyrate ran at ring 3 with its own window, took keys, crashed on demand, and the desktop stayed alive")
+print("PASS: Keyrate ran at ring 3 with its own window, took keys, crashed on demand, closed normally both ways from the Apps folder, and the desktop stayed alive")

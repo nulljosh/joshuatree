@@ -59,7 +59,7 @@
    image window above. 0x110000 = 272 pages = 1,114,112 bytes, enough for
    the 804x345 app viewport at 32bpp (1,109,520). */
 #define JT_USER_FB        0xC0520000u /* must match boot/linker.ld's .userfb */
-#define JT_USER_FB_BYTES  0x110000u
+#define JT_USER_FB_BYTES  0x170000u
 
 #define JT_ARGC_MAX   8    /* including argv[0] */
 #define JT_ARGV_BYTES 256  /* total bytes of argument text, NULs included */

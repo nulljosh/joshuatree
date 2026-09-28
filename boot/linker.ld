@@ -53,10 +53,11 @@ SECTIONS {
        A program that asked for a window through SYS_WINDOW_OPEN draws
        into these pages directly; the kernel copies them into the app
        viewport on SYS_WINDOW_POLL. Big enough for the dock's app window
-       (804x345 pixels, 32bpp) with a little room. NOLOAD like the two
+       (804x345 pixels, 32bpp) and for the Apps folder viewport an app
+       launched from the grid runs in (832x450, 0x16DA00 bytes). NOLOAD like the two
        above, and still inside the 8MB base map paging_set_user covers. */
     .userfb 0xC0520000 (NOLOAD) : AT(0x00520000) {
-        . += 0x110000;
+        . += 0x170000;
     }
 
     . = ALIGN(4096);

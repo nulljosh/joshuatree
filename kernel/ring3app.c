@@ -49,11 +49,21 @@ static const char *EXC_SHORT[32] = {
     "reserved", "reserved", "reserved", "reserved", "reserved", "reserved", "reserved", "reserved",
 };
 
+int gui_app_view_size(unsigned int *w, unsigned int *h);
 void keyrate_ring3_open(void) {
     unsigned char probe[1];
     if (vfs_read_file("KEYRATE.BIN", probe, 1) < 0 &&
         !vfs_write_file("KEYRATE.BIN", user_keyrate, USER_KEYRATE_LEN)) {
         serial_puts("ring3app: could not seed KEYRATE.BIN, not started\n");
+        return;
+    }
+    /* The viewport must fit the ring-3 framebuffer, or SYS_WINDOW_OPEN
+       fails and the program exits before it draws a thing. Checked here,
+       loudly, so a viewport that outgrows .userfb (boot/linker.ld) shows
+       up as one serial line rather than an app that "never opens". */
+    unsigned int vw = 0, vh = 0;
+    if (gui_app_view_size(&vw, &vh) && vw * vh * 4 > JT_USER_FB_BYTES) {
+        serial_puts("ring3app: BUG app viewport does not fit JT_USER_FB, grow .userfb in boot/linker.ld\n");
         return;
     }
     serial_puts("ring3app: launching KEYRATE.BIN at ring 3\n");
