@@ -91,11 +91,13 @@ static int settings_section_row_count(int sec){
 
 #define SETTINGS_SIDEBAR_W 176
 #define SETTINGS_DETAIL_X (SETTINGS_SIDEBAR_W + 28)
-#define SETTINGS_VALUE_X (SETTINGS_SIDEBAR_W + 260)
 #define SETTINGS_DETAIL_Y0 92
 #define SETTINGS_ROW_H 36
 #define SETTINGS_SIDEBAR_Y0 60
 #define SETTINGS_SIDEBAR_ROW_H 34
+#define SETTINGS_TILE_S 22   /* sidebar icon tile side, logical px */
+#define SETTINGS_SWITCH_W 40 /* boolean-row switch track width */
+#define SETTINGS_SWITCH_H 22
 /* Titlebar (traffic-light dots at y=20 r=6, title text baseline y=12,
    drawn by gui_draw_app_titlebar) occupies roughly the top 34px -- the
    sidebar must start below it, not at y=0, or it paints over the dots
@@ -106,16 +108,19 @@ static int settings_section_row_count(int sec){
    coordinates, the window's current width, and which section is showing
    in the detail pane, returns the absolute row index (0..SETTINGS_ROW_COUNT-1)
    it lands in, or -1 if it misses every visible row's own highlight rect
-   (window_rect(SETTINGS_DETAIL_X-12, y-7, ..., SETTINGS_ROW_H-4, ...), the
-   exact rect drawn below). Only the rows the current section actually
-   draws can be hit -- a row belonging to a different, not-currently-shown
-   section can never be clicked, same as a real grouped list. Extracted
-   into its own function so this real hit-test math is unit-testable
-   without a mouse or a boot, the same shape rtl8139_clamp_len's own
-   extraction used for exactly this reason (v0.72.1: "so it's
-   unit-testable without a NIC"). */
+   (the gui_rounded_rect_gradient(SETTINGS_DETAIL_X, y-7, ..., SETTINGS_ROW_H-4,
+   ...) call drawn below -- the polish pass that added the grouped card
+   also moved this rect's left edge onto SETTINGS_DETAIL_X itself, the
+   same x every divider and every row's own text already use, so this
+   hit-test's own left bound moved with it). Only the rows the current
+   section actually draws can be hit -- a row belonging to a different,
+   not-currently-shown section can never be clicked, same as a real
+   grouped list. Extracted into its own function so this real hit-test
+   math is unit-testable without a mouse or a boot, the same shape
+   rtl8139_clamp_len's own extraction used for exactly this reason
+   (v0.72.1: "so it's unit-testable without a NIC"). */
 static int settings_row_at(int cx, int cy, int ww, int cur_section){
-    if (cx < SETTINGS_DETAIL_X - 12 || cx >= ww - 16) return -1;
+    if (cx < SETTINGS_DETAIL_X || cx >= ww - 20) return -1;
     int n = settings_section_row_count(cur_section);
     for (int p = 0; p < n; p++) {
         int ry = SETTINGS_DETAIL_Y0 + p * SETTINGS_ROW_H;
@@ -136,14 +141,76 @@ static int settings_sidebar_at(int cx, int cy){
     return -1;
 }
 
-/* Sidebar glyph: a plain filled circle with a one-letter mark, the same
-   "no icon font, draw real primitives" convention gui_icon_folder and the
-   other dock icons already use elsewhere in this kernel -- not a photo,
-   not a font glyph, just enough ink to tell three rows apart at a glance. */
-static void settings_sidebar_glyph(int cx, int cy, char letter, unsigned int bg){
-    gui_fill_circle(cx, cy, 9, bg, GUI_BG);
-    char s[2] = {letter, 0};
-    font_draw_string(s, cx - 4, cy - 7, 0x00FFFFFF, -1);
+/* Sidebar glyphs: real drawn primitives in a rounded-square tile, the
+   same macOS System Settings convention (a colored rounded-square icon
+   tile with a white glyph inside) instead of the old letter-in-circle
+   ("G"/"A"/"U") this pass replaced -- house rule is no text in icons.
+   Built from the exact same primitives every other icon in this file
+   already uses (gui_rounded_rect_gradient for the flat tile,
+   gui_fill_circle/gui_draw_capsule for the glyph itself), so these sit
+   at one consistent style with the rest of the kernel's iconography, no
+   new drawing primitive needed. Flat colors only, no gradients on the
+   glyph itself (the tile fill call takes top==bottom on purpose) and no
+   purple/teal in the palette. */
+static void settings_tile_bg(int cx, int cy, int s, unsigned int color, unsigned int bg){
+    gui_rounded_rect_gradient(cx - s / 2, cy - s / 2, s, s, color, color, bg, s / 4);
+}
+/* General: a gear. A ring hub (fill then punch a same-bg hole, the same
+   donut technique gui_icon_search's own magnifying glass ring already
+   uses) plus 8 capsule teeth around it, 4 axis-aligned and 4 diagonal --
+   the same ray layout gui_icon_weather's sun already establishes for
+   "spokes radiating from a circle", just short and blunt instead of long
+   and thin so it reads as teeth, not sunbeams. */
+static void settings_icon_gear(int cx, int cy, int s, unsigned int bg){
+    settings_tile_bg(cx, cy, s, 0x005B8A72, bg);
+    int hub_r = s / 5, tooth_r = s / 16, gap = hub_r + 1, tooth = s / 7;
+    int diag = (tooth * 7) / 10; /* ~cos(45deg), same constant gui_icon_weather uses */
+    gui_fill_circle(cx, cy, hub_r, 0x00FFFFFF, 0x005B8A72);
+    gui_draw_capsule(cx, cy - gap,       cx, cy - gap - tooth,       tooth_r, 0x00FFFFFF, 0x005B8A72);
+    gui_draw_capsule(cx, cy + gap,       cx, cy + gap + tooth,       tooth_r, 0x00FFFFFF, 0x005B8A72);
+    gui_draw_capsule(cx - gap, cy,       cx - gap - tooth, cy,       tooth_r, 0x00FFFFFF, 0x005B8A72);
+    gui_draw_capsule(cx + gap, cy,       cx + gap + tooth, cy,       tooth_r, 0x00FFFFFF, 0x005B8A72);
+    gui_draw_capsule(cx - gap, cy - gap, cx - gap - diag, cy - gap - diag, tooth_r, 0x00FFFFFF, 0x005B8A72);
+    gui_draw_capsule(cx + gap, cy - gap, cx + gap + diag, cy - gap - diag, tooth_r, 0x00FFFFFF, 0x005B8A72);
+    gui_draw_capsule(cx - gap, cy + gap, cx - gap - diag, cy + gap + diag, tooth_r, 0x00FFFFFF, 0x005B8A72);
+    gui_draw_capsule(cx + gap, cy + gap, cx + gap + diag, cy + gap + diag, tooth_r, 0x00FFFFFF, 0x005B8A72);
+}
+/* Assistant: a speech bubble with a sparkle dot, not the full green Messages
+   bubble gui_icon_chat already owns elsewhere (that one's a dock/app icon
+   with its own identity) -- a flat white bubble on the tile's own accent
+   color keeps this glyph at the same one-color-ink style as the gear and
+   person tiles either side of it. */
+static void settings_icon_bubble(int cx, int cy, int s, unsigned int bg){
+    settings_tile_bg(cx, cy, s, 0x00376E9E, bg);
+    int w = (s * 6) / 10, h = (s * 5) / 10;
+    int x = cx - w / 2, y = cy - h / 2 - s / 14;
+    gui_rounded_rect_gradient(x, y, w, h, 0x00FFFFFF, 0x00FFFFFF, 0x00376E9E, s / 8);
+    gui_fill_triangle_down(x + w / 4, y + h - 1, s / 10, s / 8, 0x00FFFFFF);
+}
+/* Account: a person silhouette, the same head-circle + shoulders-capsule
+   shape gui_icon_contacts already establishes elsewhere in this file. */
+static void settings_icon_person(int cx, int cy, int s, unsigned int bg){
+    settings_tile_bg(cx, cy, s, 0x00A3703B, bg);
+    int r = s / 6;
+    gui_fill_circle(cx, cy - r, r, 0x00FFFFFF, 0x00A3703B);
+    gui_draw_capsule(cx - r - r / 2, cy + r * 2, cx + r + r / 2, cy + r * 2, s / 9, 0x00FFFFFF, 0x00A3703B);
+}
+
+/* A real switch control -- rounded pill track plus a round knob -- for
+   the one boolean row (Wind) instead of an "On"/"Off" text label. `x,y`
+   is the track's own top-left; drawn right-aligned by the caller the
+   same way every other value in this pane now is. Same on/off green
+   already used for the wind row's old text ("On" in 0x002F7B4F), same
+   neutral track gray gui_icon_keyrate's own keycaps already use for
+   "not lit". Toggled by the row's existing click/tap and left/right (a/d)
+   handling below -- this only changes what gets drawn, not how it's hit. */
+static void settings_draw_switch(int x, int y, int on){
+    unsigned int track = on ? 0x002F7B4F : 0x00C7C0B4;
+    int r = SETTINGS_SWITCH_H / 2;
+    gui_rounded_rect_gradient(x, y, SETTINGS_SWITCH_W, SETTINGS_SWITCH_H, track, track, 0x00F1EBE0, r);
+    int knob_r = r - 3;
+    int knob_cx = on ? x + SETTINGS_SWITCH_W - r : x + r;
+    gui_fill_circle(knob_cx, y + r, knob_r, 0x00FFFFFF, track);
 }
 
 static void gui_launch_settings(void){
@@ -154,43 +221,66 @@ static void gui_launch_settings(void){
         gui_draw_app_titlebar("Settings");
         int ww = (int)window_width(), wh = (int)window_height();
 
-        /* Sidebar: three section rows, icon + label, the selected section
-           highlighted the same rounded-rect convention every other
-           selectable row in this kernel's GUI already uses. A thin
-           vertical divider separates it from the detail pane, matching
-           System Settings' own sidebar/detail split. */
+        /* Sidebar: three section rows, real icon tile + label, the
+           selected section highlighted with a rounded rect (even 8px
+           inset both sides) instead of the old square-cornered block.
+           Icon tile and label are both centered on the row's own
+           vertical middle -- the pre-polish bug had both sitting in the
+           row's top half because the icon center (y+3) and the
+           highlight's own center (y+9) never agreed; both now key off
+           the same `mid` value. A thin vertical divider separates the
+           sidebar from the detail pane, matching System Settings' own
+           sidebar/detail split. */
         window_rect(0, SETTINGS_TITLEBAR_H, SETTINGS_SIDEBAR_W, wh - SETTINGS_TITLEBAR_H, 0x00F0EAE1);
         window_rect(SETTINGS_SIDEBAR_W - 1, SETTINGS_TITLEBAR_H, 1, wh - SETTINGS_TITLEBAR_H, 0x00DDD5C8);
-        static const unsigned int SEC_DOT[SETTINGS_SECTION_COUNT] = {0x005B8A72, 0x00376E9E, 0x00A3703B};
-        static const char SEC_LETTER[SETTINGS_SECTION_COUNT] = {'G', 'A', 'U'};
         for (int s = 0; s < SETTINGS_SECTION_COUNT; s++) {
             int y = SETTINGS_SIDEBAR_Y0 + s * SETTINGS_SIDEBAR_ROW_H;
-            if (s == cur_section) window_rect(8, y - 6, SETTINGS_SIDEBAR_W - 16, SETTINGS_SIDEBAR_ROW_H - 4, 0x00E2D9C9);
-            settings_sidebar_glyph(28, y + 3, SEC_LETTER[s], SEC_DOT[s]);
-            font_draw_string(SETTINGS_SECTION_NAMES[s], 46, y - 4, 0x001C1C1E, -1);
+            int mid = y + 9; /* the highlight rect below is (y-6, h=30): its own true vertical center */
+            if (s == cur_section) gui_rounded_rect_gradient(8, y - 6, SETTINGS_SIDEBAR_W - 16, SETTINGS_SIDEBAR_ROW_H - 4, 0x00E2D9C9, 0x00E2D9C9, 0x00F0EAE1, 8);
+            unsigned int row_bg = s == cur_section ? 0x00E2D9C9 : 0x00F0EAE1;
+            if (s == 0) settings_icon_gear(28, mid, SETTINGS_TILE_S, row_bg);
+            else if (s == 1) settings_icon_bubble(28, mid, SETTINGS_TILE_S, row_bg);
+            else settings_icon_person(28, mid, SETTINGS_TILE_S, row_bg);
+            font_draw_string(SETTINGS_SECTION_NAMES[s], 46, mid - 5, 0x001C1C1E, -1);
         }
 
-        /* Detail pane: only the current section's rows, grouped under its
-           own header, consistent row height, a divider under the header. */
+        /* Detail pane: only the current section's rows, grouped inside a
+           rounded inset card (macOS System Settings' own grouped-list
+           look) with a hairline divider between rows, section title
+           above the card. Left edge of the card, the row highlight, the
+           dividers and the row/value text all key off the one same
+           SETTINGS_DETAIL_X constant now -- the pre-polish bug had the
+           highlight starting 12px left of where the dividers and text
+           themselves started. */
         font_draw_string(SETTINGS_SECTION_NAMES[cur_section], SETTINGS_DETAIL_X, 48, 0x001C1C1E, -1);
-        window_rect(SETTINGS_DETAIL_X, 72, ww - SETTINGS_DETAIL_X - 20, 1, 0x00DDD5C8);
-        font_draw_string("left/right or tap changes a row   esc closes", SETTINGS_DETAIL_X, wh - 28, 0x00807468, -1);
-
         int n_rows = settings_section_row_count(cur_section);
+        int detail_right = ww - 20;
+        int card_x = SETTINGS_DETAIL_X - 12, card_w = detail_right + 12 - card_x;
+        int card_y = SETTINGS_DETAIL_Y0 - 16, card_h = n_rows * SETTINGS_ROW_H + 8;
+        gui_rounded_rect_gradient(card_x, card_y, card_w, card_h, 0x00F1EBE0, 0x00F1EBE0, GUI_BG, 10);
+        /* Single bottom-margin help line -- the old two-line footer's
+           second line clipped at the window's own bottom edge; one line
+           with real breathing room below it instead of two stacked to
+           the last pixel. */
+        font_draw_string("left/right or tap changes a row, esc closes. Saved automatically.", SETTINGS_DETAIL_X, wh - 22, 0x00807468, -1);
+
         for (int p = 0; p < n_rows; p++) {
             int i = SETTINGS_SECTION_ROWS[cur_section][p];
             int y = SETTINGS_DETAIL_Y0 + p * SETTINGS_ROW_H;
-            if (i == sel) window_rect(SETTINGS_DETAIL_X - 12, y - 7, ww - SETTINGS_DETAIL_X - 8, SETTINGS_ROW_H - 4, 0x00EDE6DC);
-            if (p > 0) window_rect(SETTINGS_DETAIL_X, y - 9, ww - SETTINGS_DETAIL_X - 20, 1, 0x00EAE3D8); /* divider above every row but the first in a group */
+            if (i == sel) gui_rounded_rect_gradient(SETTINGS_DETAIL_X, y - 7, detail_right - SETTINGS_DETAIL_X, SETTINGS_ROW_H - 4, 0x00EDE6DC, 0x00EDE6DC, 0x00F1EBE0, 6);
+            if (p > 0) window_rect(SETTINGS_DETAIL_X, y - 9, detail_right - SETTINGS_DETAIL_X, 1, 0x00E2DACB); /* hairline divider above every row but the first in the card */
             if (i == 0) {
                 font_draw_string("Wind (swaying wallpaper)", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
-                font_draw_string(wind_enabled ? "On" : "Off", SETTINGS_VALUE_X, y, wind_enabled ? 0x002F7B4F : 0x00807468, -1);
+                /* A real switch control (rounded track + knob), not an
+                   On/Off text label -- toggled the same way every other
+                   row already is, by a click/tap or left/right (a/d). */
+                settings_draw_switch(detail_right - SETTINGS_SWITCH_W, y - 2, wind_enabled);
             } else if (i == 1) {
                 font_draw_string("Dock size", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
                 char sz[8]; int p = 0; int v = dock_scale_pct;
                 if (v >= 10) sz[p++] = '0' + v / 10;
                 sz[p++] = '0' + v % 10; sz[p++] = '%'; sz[p] = 0;
-                font_draw_string(sz, SETTINGS_VALUE_X, y, 0x001C1C1E, -1);
+                font_draw_string(sz, detail_right - font_string_width(sz), y, 0x001C1C1E, -1);
             } else if (i == 2) {
                 /* v75/v81: honest label. A map theme's name only shows once
                    a real tile mosaic is on screen; while it's still
@@ -205,10 +295,10 @@ static void gui_launch_settings(void){
                    the tree -- font_is_fallback() is the same real v86
                    signal wall_apply() itself branches on. */
                 const char *lbl = wall_theme == WALL_PHOTO ? "Photo" : (wall_map ? theme_name : (font_is_fallback() ? "Satellite (offline demo)" : "Map (fetching, photo until then)"));
-                font_draw_string(lbl, SETTINGS_VALUE_X, y, wall_theme != WALL_PHOTO && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
+                font_draw_string(lbl, detail_right - font_string_width(lbl), y, wall_theme != WALL_PHOTO && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
             } else if (i == 3) {
                 font_draw_string("LLM model", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
-                font_draw_string(llm_model, SETTINGS_VALUE_X, y, 0x001C1C1E, -1);
+                font_draw_string(llm_model, detail_right - font_string_width(llm_model), y, 0x001C1C1E, -1);
             } else if (i == 4) {
                 font_draw_string("LLM host:port", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
                 char hp[LLM_HOST_MAX + 8]; int p = 0;
@@ -219,7 +309,7 @@ static void gui_launch_settings(void){
                 while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
                 while (nd) hp[p++] = digits[--nd];
                 hp[p] = 0;
-                font_draw_string(hp, SETTINGS_VALUE_X, y, 0x001C1C1E, -1);
+                font_draw_string(hp, detail_right - font_string_width(hp), y, 0x001C1C1E, -1);
             } else if (i == 5) {
                 /* v0.77: real accounts. Tap/enter here walks old-password
                    ->new-password->confirm through settings_prompt_line
@@ -229,24 +319,30 @@ static void gui_launch_settings(void){
                    purpose so Settings doesn't need its own copy of the
                    dot-echo loop for one row). */
                 font_draw_string("Account", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
-                font_draw_string(auth_current_user[0] ? auth_current_user : "(none)", SETTINGS_VALUE_X, y, 0x001C1C1E, -1);
+                font_draw_string(auth_current_user[0] ? auth_current_user : "(none)", detail_right - font_string_width(auth_current_user[0] ? auth_current_user : "(none)"), y, 0x001C1C1E, -1);
             } else if (i == 6) {
                 font_draw_string("Add user (new account)", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
-                font_draw_string("tap or enter", SETTINGS_VALUE_X, y, 0x00807468, -1);
+                font_draw_string("tap or enter", detail_right - font_string_width("tap or enter"), y, 0x00807468, -1);
             } else {
                 /* v0.85.5: the Location field roadmap.md asked for. Empty
                    means "no override", the same honest-label convention
                    Wallpaper's own row just above already uses: say what's
                    actually in effect, not what was typed. */
                 font_draw_string("Location", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
-                font_draw_string(loc_have ? loc_name : "(auto, from IP address)", SETTINGS_VALUE_X, y, loc_have ? 0x002F7B4F : 0x00807468, -1);
+                font_draw_string(loc_have ? loc_name : "(auto, from IP address)", detail_right - font_string_width(loc_have ? loc_name : "(auto, from IP address)"), y, loc_have ? 0x002F7B4F : 0x00807468, -1);
             }
         }
-        font_draw_string("Settings are saved to disk and survive a reboot.", SETTINGS_DETAIL_X, wh - 12, 0x00807468, -1);
 
         window_present(); sleep_ticks(5);
         mouse_click_edge_sync();
         int k = get_key_or_click();
+        /* Real left/right arrow keys step a row exactly like 'a'/'d' do --
+           normalized right here so every branch below that already keys
+           off 'a'/'d' (the wallpaper cycle, the LLM model cycle, dock
+           size, and now the switch) gets real arrow-key support for
+           free, not a second copy of the same dispatch logic. */
+        if (k == KEY_LEFT) k = 'a';
+        else if (k == KEY_RIGHT) k = 'd';
         if (k == KEY_ESC) return;
         /* Up/down moves within the current section's own rows only, same
            "arrow keys stay inside the visible group" behavior System

@@ -8579,6 +8579,15 @@ static void run(char *line){
            memory toggle flips. */
         int ok = 1;
         if (settings_row_at(300, 92,  960, 0) != 0) { puts("settingsclick: General row 0 (Wind) center missed\n"); ok = 0; }
+        /* 1.8.2 polish pass: Wind's value is now a real switch control,
+           right-aligned near the row's own right edge instead of an
+           "On"/"Off" text label near the middle -- prove that region of
+           the row (where the switch itself actually is, detail_right(940)
+           - SETTINGS_SWITCH_W(40) = 900, plus a few px margin) still
+           resolves to row 0 like the rest of the row always has, same
+           "click anywhere on the row toggles it" contract every row here
+           keeps, not just the switch's own bounding box. */
+        if (settings_row_at(910, 92,  960, 0) != 0) { puts("settingsclick: General row 0's switch region missed\n"); ok = 0; }
         if (settings_row_at(300, 164, 960, 0) != 2) { puts("settingsclick: General row (Wallpaper) center missed\n"); ok = 0; }
         if (settings_row_at(300, 200, 960, 0) != 7) { puts("settingsclick: General row (Location) center missed\n"); ok = 0; }
         if (settings_row_at(300, 70,  960, 0) != -1) { puts("settingsclick: above the first General row should miss\n"); ok = 0; }
