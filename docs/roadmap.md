@@ -6,7 +6,7 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
-**Latest**: Introducing Samantha's voice. Ask her something in Chat and she answers out loud.
+**Latest**: Introducing Samantha on your phone. Open the demo on a phone and she boots straight up, face and all.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 

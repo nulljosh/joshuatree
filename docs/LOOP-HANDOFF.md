@@ -14,7 +14,7 @@ Samantha's face: v27 B is best so far by Joshua's eye, built on `tools/gen/face_
 
 ## Next, in order
 
-1. Merge 239, then the drafts one at a time, biggest first, rebumping versions.
+1. docs/VERSIONS.md is the map: work toward the next unchecked version (1.8: phone home screen).
 2. Finish phone mode (430x932, boots to Samantha). Mobile first by 2026-10-04.
 3. App interface lands, then apps move out a few per PR.
 4. App smoke check for the 14 untested apps (parked in `git stash` on feat/guard-checks; grid launch fails past the first rows). Use the app interface to launch by name instead.
@@ -23,5 +23,5 @@ Samantha's face: v27 B is best so far by Joshua's eye, built on `tools/gen/face_
 ## Restart prompt
 
 ```
-/loop keep building the Joshua Tree roadmap: merge the PR queue one at a time (239 first, hold other merges), finish phone mode, the app interface and apps out of the kernel, keep tests, docs, README, landing and benchmarks current, watch RAM and usage. Goal: A+ architecture, mobile first by 2026-10-04.
+/loop keep building the Joshua Tree roadmap: docs/VERSIONS.md is the map, work toward the next unchecked version (1.8: phone home screen), finish phone mode, the app interface and apps out of the kernel, keep tests, docs, README, landing and benchmarks current, watch RAM and usage. Goal: A+ architecture, mobile first by 2026-10-04.
 ```

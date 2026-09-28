@@ -2,17 +2,18 @@
 """Write docs/TESTING.md from the suite itself, so the doc can't drift.
 
 Every line of tools/checks/ci-suite.sh becomes a row (what it proves, the
-file that proves it). Then each app in kernel.c's GUI_LABELS gets the checks
-that name it, so the apps with no test stand out. --check exits 1 when the
-committed doc is stale (tools/checks/testing-doc-check.sh runs it).
+file that proves it). Then each app in kernel.c's APPS[] registry gets the
+checks that name it, so the apps with no test stand out. --check exits 1
+when the committed doc is stale (tools/checks/testing-doc-check.sh runs it).
 """
 import os, re, sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 suite = open(os.path.join(ROOT, "tools/checks/ci-suite.sh")).read()
 rows = re.findall(r"^(once|retry)\s*\|(\d+)\|([^|]+)\|(.+)$", suite, re.M)
-labels = re.search(r"GUI_LABELS\[GUI_APP_COUNT\] = \{([^}]*)\}", open(os.path.join(ROOT, "kernel/kernel.c")).read())
-apps = re.findall(r'"([^"]+)"', labels.group(1))
+kernel_src = open(os.path.join(ROOT, "kernel/kernel.c")).read()
+table = re.search(r"static const struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", kernel_src, re.S)
+apps = re.findall(r'\{\s*"([^"]+)"', table.group(1))
 
 
 def file_of(cmd):
