@@ -23,6 +23,16 @@ the plan; this page is the map of what exists today.
    and the desktop are the same program; the Terminal is the shell in a
    window.
 
+## Boot modes
+
+Pass keywords on the multiboot command line (QEMU's `-append` flag or the
+browser emulator's cmdline config) to change how the kernel starts:
+
+| Flag | What it does |
+|---|---|
+| `phone` | Boots into portrait phone mode (430x932) instead of the desktop (960x540 retina). Handled in `kernel/kernel.c`'s `kmain` as `boot_to_phone`, used by `gui_run`. |
+| `samantha` | Skips the desktop and opens Chat's full-screen Samantha avatar view directly. Handled in `kernel/kernel.c`'s `kmain` as `boot_to_samantha`, passed to `chat_boot_samantha_open`. |
+
 ## The layers
 
 Each layer only leans on the ones above it on this page, so it reads top to bottom.
@@ -87,6 +97,18 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 The network stack is what fetches the weather in the menu bar, the map
 tiles for the wallpaper, stock quotes, and the replies from a local
 Ollama server in the Chat app.
+
+### Worker endpoints
+
+The browser landing page routes kernel HTTP requests to a Cloudflare Worker
+(`worker.js`) for external APIs:
+
+| Endpoint | What it does |
+|---|---|
+| `/api/stocks` | Live stock quotes for the Stocks app. |
+| `/api/chat` | LLM routing and chat responses for the Chat app. |
+| `/api/pick` | LLM tool selection for Chat's command execution. |
+| `/api/waitlist` | Dev-kit waitlist signup (POST) and count (GET). Stores one email per address with a timestamp. |
 
 ### Graphics and input
 

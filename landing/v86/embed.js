@@ -1854,10 +1854,11 @@ if (typeof document !== "undefined") (function () {
     Curbfind: browseList(4),
     Bookrank: browseList(4),
     Sparkjar: browseList(2).concat([{ type: 'keys', text: 'u', speed: 200 }, { type: 'wait', ms: 500 }, { type: 'scancodes', codes: downTimes(2), speed: 350 }, { type: 'keys', text: 'u', speed: 200 }]), // upvote two ideas
-    Keyrate: [{ type: 'wait', ms: 700 }, { type: 'keys', text: 'A real OS, from scratch, and every app on it. ', speed: 70 }]
+    Keyrate: [{ type: 'wait', ms: 700 }, { type: 'keys', text: 'A real OS, from scratch, and every app on it. ', speed: 70 }],
+    Calculator: [{ type: 'wait', ms: 700 }, { type: 'keys', text: '12*7', speed: 80 }, { type: 'wait', ms: 500 }, { type: 'keys', text: '\n', speed: 200 }, { type: 'wait', ms: 800 }]
   };
-  var PORTFOLIO_DWELL = { Epiphany: 16000, Curbfind: 7000, Bookrank: 6000, Sparkjar: 7000, Keyrate: 8000 };
-  var PORTFOLIO_TOUR = ['Epiphany', 'Curbfind', 'Bookrank', 'Lexly', 'Sparkjar', 'Quotes', 'Keyrate', 'Toroid']
+  var PORTFOLIO_DWELL = { Epiphany: 16000, Curbfind: 7000, Bookrank: 6000, Sparkjar: 7000, Keyrate: 8000, Calculator: 4000 };
+  var PORTFOLIO_TOUR = ['Epiphany', 'Curbfind', 'Bookrank', 'Lexly', 'Sparkjar', 'Quotes', 'Keyrate', 'Toroid', 'Calculator']
     // Lexly, Quotes and Toroid are click-only cards in the kernel, so they get a short beat instead of seconds of blank window.
     .map(function (name, i) { return { name: name, slot: i + 2, script: PORTFOLIO_SCRIPTS[name] || [], dwell: PORTFOLIO_DWELL[name] || 3000 }; }); // slot 1 is the Portfolio list, the show opens the apps themselves, never the list
   // Boot takes a few seconds; the tour waits for graphical mode plus a
