@@ -13,8 +13,11 @@ protects against a casual second person sitting down at that keyboard
 while the first person is away, and it protects against someone opening
 the desktop by accident (a stray click, a demo left running) and seeing or
 changing another account's files. It also gives this kernel a real,
-non-trivial password hash for the first time (salted, iterated SHA-256
-instead of nothing), which is worth having on its own, so that adding a
+non-trivial password hash for the first time (PBKDF2-HMAC-SHA256 over
+BearSSL, 100,000 iterations, a 16-byte salt and the iteration count stored
+per record; the 1.7.9 replacement for the earlier home-grown chained
+SHA-256, which is still verified so old accounts log in, then rewritten as
+PBKDF2 on that login), which is worth having on its own, so that adding a
 second real account later (multi-user on one machine, still not networked)
 doesn't start from a worse place than "no hash at all." That is the whole
 scope: a lock on the desktop for the person physically in front of it,
