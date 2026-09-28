@@ -25,7 +25,7 @@ static inline void outb(u16 p, u8 v){ __asm__ volatile("outb %0,%1"::"a"(v),"Nd"
 #define SB_IRQ       5
 #define POLL_LIMIT   100000u
 
-#define DMA_CHUNK    0x10000u
+#define DMA_CHUNK    0x8000u   /* 32KB: v86 (the landing demo) plays one full 64KB transfer as a beep; QEMU was fine either way */
 extern u8 sb16_dma_buf[];              /* boot/linker.ld, 64KB, 64KB-aligned */
 #define KERNEL_VIRTUAL_BASE 0xC0000000u
 

@@ -76,10 +76,14 @@ const FACE_Y = VY + (-32 + 44);
 function synthPcm8(ms) {
   const rate = 16000, n = Math.round(rate * ms / 1000);
   const buf = Buffer.alloc(n);
-  for (let i = 0; i < n; i++) buf[i] = 128 + Math.round(96 * Math.sin(2 * Math.PI * 440 * i / rate));
+  // 440Hz and 880Hz swap every 500ms: a stuck or looped buffer can't fake both
+  for (let i = 0; i < n; i++) { const f = Math.floor(i / 8000) % 2 ? 880 : 440; buf[i] = 128 + Math.round(96 * Math.sin(2 * Math.PI * f * i / rate)); }
   return buf;
 }
-const PCM = synthPcm8(500);
+// 5s = 80000 bytes, past sb16's 32KB DMA chunk so playback spans several
+// transfers: v86 turned a single full 64KB transfer into one beep, and only
+// a long reply ever hit it.
+const PCM = synthPcm8(5000);
 
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.txt': 'text/plain', '.elf': 'application/octet-stream' };
 const server = http.createServer((q, r) => {
@@ -97,6 +101,27 @@ function ok(msg) { console.log('  ok:   ' + msg); }
 
 const browser = await chromium.launch(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {});
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+// Tap what really reaches the speakers: 100ms windows, counts the loud ones.
+await page.addInitScript(() => {
+  window.__loudMs = 0;
+  const orig = AudioNode.prototype.connect;
+  AudioNode.prototype.connect = function (dest, ...rest) {
+    if (dest instanceof AudioDestinationNode && !dest.context.__an) {
+      const an = dest.context.createAnalyser(); an.fftSize = 2048; dest.context.__an = an; orig.call(this, an);
+      const buf = new Float32Array(an.fftSize), fq = new Float32Array(an.frequencyBinCount);
+      window.__pitchMs = { 440: 0, 880: 0 };
+      setInterval(() => {
+        an.getFloatTimeDomainData(buf); let s = 0; for (const v of buf) s += v * v;
+        if (Math.sqrt(s / buf.length) <= 0.02) return;
+        window.__loudMs += 100;
+        an.getFloatFrequencyData(fq); let best = 0; for (let i = 1; i < fq.length; i++) if (fq[i] > fq[best]) best = i;
+        const hz = best * dest.context.sampleRate / an.fftSize;
+        if (Math.abs(hz - 440) < 40) window.__pitchMs[440] += 100; else if (Math.abs(hz - 880) < 60) window.__pitchMs[880] += 100;
+      }, 100);
+    } else if (dest instanceof AudioDestinationNode) orig.call(this, dest.context.__an);
+    return orig.call(this, dest, ...rest);
+  };
+});
 await page.emulateMedia({ reducedMotion: 'reduce' }); // never arm the idle tour, same reasoning as demochat-check.mjs
 
 let facePngsServed = 0, speakServed = false, chatServed = false;
@@ -238,6 +263,14 @@ try {
   await page.waitForFunction(() => /speak: status=200/.test(window.__jt.serial), null, { timeout: 15000 })
     .then(() => ok('guest serial reports "speak: status=200"'))
     .catch(() => fail('no "speak: status=200" on the guest serial -- sb16_play never got a real 200'));
+
+  await page.waitForTimeout(6500);
+  const loudMs = await page.evaluate(() => window.__loudMs);
+  console.log(`speakers were loud for ${loudMs}ms of a 5000ms reply`);
+  const pitch = await page.evaluate(() => window.__pitchMs);
+  console.log(`440Hz heard ${pitch[440]}ms, 880Hz heard ${pitch[880]}ms`);
+  if (loudMs < 4000 || pitch[440] < 1500 || pitch[880] < 1500) fail(`the reply didn't reach the speakers intact (loud ${loudMs}ms, 440Hz ${pitch[440]}ms, 880Hz ${pitch[880]}ms of 2500 each): a long reply played as a beep, a loop or silence`);
+  else ok(`the whole reply reached the speakers intact (${loudMs}ms loud, both pitches heard)`);
 
   const sb16Found = await page.evaluate(() => /sb16|SB16/i.test(window.__jt.serial));
   console.log('sb16 mentioned on serial: ' + sb16Found);
