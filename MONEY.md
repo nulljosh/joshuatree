@@ -58,10 +58,11 @@ The computer after the phone. Joshua Tree becomes what people talk to instead of
 
 ## Where we are
 
+- 2026-09-28: 1.7.4 merged. The OS now gets its own internet address on its own, has the start of voice input, and on phones Samantha's face no longer covers her title bar. A broken deploy setting kept the live site on 1.7.3; the fix is in review. Work started on moving apps out of the core so one crashing app can't take the machine down.
 - 2026-09-27: the Samantha app (Turing's assistant, reached through Joshua Tree) talks with a face and a real voice through the OS's own sound driver. The landing page runs the whole OS live in the browser.
 
 ## Next
 
 Real drivers for one real board. That's the first dollar.
 
-*Set 2026-09-27.*
+*Set 2026-09-28.*
