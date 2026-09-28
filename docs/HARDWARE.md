@@ -188,22 +188,71 @@ revisiting once real numbers exist. Flagged plainly, not papered over.
   minute check against ASRock's official J4125B-ITX manual before
   ordering, since it's the whole reason for this pick.
 
-## Enclosure
+## Enclosure: Mesa
 
-Placeholder - the Blender render happens after the board pick is bought
-and confirmed, not before. This section holds what's known now:
+![Mesa, front](hardware/mesa-hero.jpg)
 
-- **Board dimensions:** mini-ITX standard, 170mm x 170mm (ASRock spec
-  page). A stock mini-ITX case fits it; no custom enclosure needed for
-  v0.
-- **Rear I/O to cut clearance for:** PS/2 mouse, PS/2 keyboard, HDMI,
-  D-Sub (VGA), 2x USB 3.2 Gen1, Gigabit LAN, 3x audio jacks + optical
-  SPDIF (ASRock spec page).
-- **Cooling:** passive heatsink on the SoC per ASRock's spec page (no
-  fan header requirement); a case with any airflow is enough for a
-  15W-class part.
-- **Look:** house style once a custom enclosure is designed - black ink
-  on cream, hatched engraving, the tree mark, no purple, no teal, no
-  gradients. Not started; v0 ships in an off-the-shelf mini-ITX case,
-  not a custom shell.
-- **Render:** none yet. Add here once made.
+Mesa is a stack of six rings, terracotta at the base fading to cream at
+the top, like the layered rock around Joshua Tree. The 2 mm gaps between
+rings are the vents. The tree mark is laser engraved half a millimetre
+into the cap, tone on tone, so you see it up close and not across the
+room. It's the concept for the custom shell; v0 still ships in a stock
+mini-ITX case.
+
+![Mesa, rear I/O](hardware/mesa-rear.jpg)
+
+### The drawing
+
+![Mesa blueprint sheet](hardware/mesa-blueprint.svg)
+
+224 x 224 x 64.5 mm outside. Inside is a 178 mm core tray with 2 mm
+walls, which leaves a 174 mm cavity for the 170 mm board. The rear notch
+cuts through every ring down to the tray so the stock 158.75 x 44.45 mm
+I/O shield fits.
+
+### Parts
+
+| Part | Size | How to make it |
+|------|------|----------------|
+| Rings S0 to S5 | 224 down to 209 mm, 3 mm smaller each, 9 / 7 / 10 / 6.5 / 8.5 / 7 mm thick | SLS nylon or FDM PETG at 0.2 mm, dyed or painted one tone each |
+| Cap | 206 mm square, 4.5 mm | Same print, tree laser engraved 0.5 mm deep |
+| Core tray | 178 mm square, 62 mm tall, 2 mm walls, vent slots on every gap line | Bent 1.5 mm aluminium, or printed |
+| Hardware | 4 M3 threaded rods, 20 spacers 2 mm, 4 nuts, 4 M3 standoffs 6 mm | Off the shelf |
+
+### Build it
+
+1. Print the six rings and the cap. Colour runs B9542C at the base to
+   F0E7D8 at the top.
+2. Make the tray. The vent slots sit at each gap height so air goes
+   straight through a ring gap into the board.
+3. Engrave the tree on the cap from `hardware/mark.svg`.
+4. Stack it: tray, four rods, then ring, spacer, ring, spacer, up to S5.
+5. Board onto the standoffs, stock I/O shield into the notch, cap on,
+   nuts on top.
+
+### Check before cutting
+
+- Board mounting holes against the mini-ITX spacing (154.94 x 157.48 mm)
+  on the real J4125B-ITX. The CAD file uses the spec numbers.
+- Tallest part on the board, heatsink included, against the 62 mm tray.
+- Power input type, from the board manual, and where its jack lands on
+  the rear I/O.
+- Passive cooling is fine on paper for this SoC; measure it in the stack
+  under load before calling it done.
+- No print or machining quotes yet. Price goes in the BOM only once
+  there's a real quote.
+
+### Regenerate
+
+Every file here comes from one set of numbers in `hardware/mesa_cad.py`.
+
+```sh
+uv run --with build123d python docs/hardware/mesa_cad.py out   # STEP + one STL per part
+python3 docs/hardware/blueprint_sheet.py docs/hardware/mesa-blueprint.svg
+blender -b -P docs/hardware/concepts.py -- docs/hardware mesa  # renders
+```
+
+`mesa_cad.py` asserts that the cap covers the core and the rods sit
+inside the smallest ring. Those two checks caught real mistakes in the
+first draft: the rods didn't fit the top rings, and the I/O window was
+too short for a standard shield.
