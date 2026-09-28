@@ -4,14 +4,17 @@
 Headless only (-display none, never a window). A loopback stub stands in
 for both hosts through QEMU's user NAT at 10.0.2.2: facehost= serves the
 face frames, llmhost= answers /api/chat and /api/speak. The frames are
-solid colors so the screen can be read without guessing: idle is red, talk
-frames alternate green and blue, and talk-7 is garbage bytes (a bad frame
-must be skipped, not crash anything).
+480x480 solid-color JPEGs so the screen can be read without guessing: idle
+is red, the closed-mouth talk frames (0..5) green, the open ones (6..10)
+blue, and talk-11 is garbage bytes (a bad frame must be skipped, not crash
+anything).
 
 Scenario "face": open Chat from the dock, assert serial says
-"face: idle=4 talk=7" and the face square is red. Send a message; the stub
-replies and hands back 3s of tone. While it plays, the square must show
-green and blue; once it ends, red again.
+"face: idle=6 talk=11" and the small face is red. Send a message; the stub
+replies with 6s of audio that alternates loud tone and silence every
+500ms, over 64KB so it plays in several DMA transfers. While it plays the
+big face must show blue (loud) and green (quiet): the mouth follows the
+audio. After it ends, red again, and the machine must not have rebooted.
 
 Scenario "noface": facehost= points at a closed port. Chat must still
 answer, serial says "face: idle=0 talk=0", and the square stays plain
@@ -33,21 +36,23 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247; PITCH = DOCK_ICON + DOCK_GAP; ICON_ROW_Y = 487
 CLOSE_X, CLOSE_Y = 94, 56; CLOSE_RED = (0xFF, 0x5F, 0x57)
 VX, VY, VW = 78, 72, 804
-FACE_CX, FACE_CY = VX + VW - 20 - 30, VY + (-32 + 44) + 30   # centre of the 60x60 face square
+FACE_CX, FACE_CY = VX + VW - 20 - 30, VY + (-32 + 44) + 30   # centre of the small 60x60 face, empty Chat
+BIG_CX, BIG_CY = VX + VW // 2, VY + (-32 + 76) + 60         # inside the big centered face, conversation
 IDLE, GREEN, BLUE = (220, 30, 30), (30, 200, 30), (30, 30, 220)
 QUESTION = "hello there"
 REPLY = "Hi, it is lovely to see you."
-SECS = 3.0
-TONE = bytes(int(128 + 100 * math.sin(2 * math.pi * 440 * i / 16000)) for i in range(int(16000 * SECS)))
+SECS = 6.0
+# loud 440Hz for 500ms, silence for 500ms, repeated
+TONE = bytes((int(128 + 100 * math.sin(2 * math.pi * 440 * i / 16000)) if (i // 8000) % 2 == 0 else 128) for i in range(int(16000 * SECS)))
 
 
-def png(color):
-    b = io.BytesIO(); Image.new("RGB", (120, 120), color).save(b, "PNG"); return b.getvalue()
+def jpg(color):
+    b = io.BytesIO(); Image.new("RGB", (480, 480), color).save(b, "JPEG", quality=90); return b.getvalue()
 
 
-FRAMES = {f"/face/idle-{i}.png": png(IDLE) for i in range(4)}
-FRAMES.update({f"/face/talk-{i}.png": png(GREEN if i % 2 == 0 else BLUE) for i in range(7)})
-FRAMES["/face/talk-7.png"] = b"\x89PNG\r\n\x1a\nnot really a png"
+FRAMES = {f"/face/idle-{i}.jpg": jpg(IDLE) for i in range(6)}
+FRAMES.update({f"/face/talk-{i}.jpg": jpg(GREEN if i < 6 else BLUE) for i in range(11)})
+FRAMES["/face/talk-11.jpg"] = b"\xff\xd8\xff not really a jpeg"
 
 
 class Stub(http.server.BaseHTTPRequestHandler):
@@ -60,7 +65,7 @@ class Stub(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         body = FRAMES.get(self.path)
         if body is None: self.reply(404, b"not found", "text/plain")
-        else: self.reply(200, body, "image/png")
+        else: self.reply(200, body, "image/jpeg")
 
     def do_POST(self):
         self.rfile.read(int(self.headers.get("Content-Length", "0")))
@@ -90,7 +95,7 @@ def name(p):
 def run(scenario, facehost):
     work = tempfile.mkdtemp(prefix="jt-face-" + scenario + "-")
     log, dump_path = os.path.join(work, "serial.txt"), os.path.join(work, "fb.raw")
-    q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
+    q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std", "-no-reboot",
                           "-qmp", f"tcp:127.0.0.1:{QMP_PORT},server,nowait", "-serial", "file:" + log,
                           "-net", "nic,model=rtl8139", "-net", "user",
                           "-audiodev", f"wav,id=snd,path={os.path.join(work, 'out.wav')}", "-device", "sb16,audiodev=snd",
@@ -131,6 +136,8 @@ def run(scenario, facehost):
 
         def face(): return pixel(dump(), FACE_CX, FACE_CY)
 
+        def big(): return pixel(dump(), BIG_CX, BIG_CY)
+
         def keys(k): cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k}]}})
 
         def serial():
@@ -145,11 +152,11 @@ def run(scenario, facehost):
         move(SLOT0_X + 7 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
         for _ in range(300):
             time.sleep(0.2)
-            if "face: " in serial(): break
+            if any(l.startswith("face: ") for l in serial().splitlines()): break  # line start: "typeface: " elsewhere must not end the wait
         time.sleep(1.0)
         lines = [l for l in serial().splitlines() if l.startswith("face: ")]
         print(tag + (lines[-1] if lines else "(no face: line)"))
-        want = "face: idle=4 talk=7" if scenario == "face" else "face: idle=0 talk=0"
+        want = "face: idle=6 talk=11" if scenario == "face" else "face: idle=0 talk=0"
         if want not in lines: fails.append(tag + f"serial did not say '{want}' (got {lines})")
         before = face()
         print(tag + f"face square before sending: {before} ({name(before)})")
@@ -163,11 +170,11 @@ def run(scenario, facehost):
         # before it plays; sample until then, then through the clip and past it.
         seen, t_end = [], time.time() + 45
         while time.time() < t_end and "speak: status=" not in serial():
-            seen.append(name(face())); time.sleep(0.1)
+            seen.append(name(big())); time.sleep(0.1)
         t_end = time.time() + SECS + 3
         while time.time() < t_end:
-            seen.append(name(face())); time.sleep(0.1)
-        after = face()
+            seen.append(name(big())); time.sleep(0.1)
+        after = big()
         runs = [seen[0]] + [b for a, b in zip(seen, seen[1:]) if a != b]
         print(tag + "face colors over the reply: " + " > ".join(runs))
         print(tag + f"face square after the reply: {after} ({name(after)})")
@@ -179,6 +186,8 @@ def run(scenario, facehost):
         else:
             if any(n in ("idle", "green", "blue") for n in seen): fails.append(tag + "a face appeared with no frames")
         if "timed out" in serial(): fails.append(tag + "a DMA transfer timed out")
+        if serial().count("kmain boot start") > 1 or q.poll() is not None or "exception" in serial():
+            fails.append(tag + "the machine crashed or rebooted around her reply")
     finally:
         q.kill(); q.wait()
 

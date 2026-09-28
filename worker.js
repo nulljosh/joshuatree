@@ -94,17 +94,17 @@ async function handleProxy(request, env) {
     if (targetUrl.pathname === "/api/quotes") return handleQuotes();
     if (targetUrl.pathname === "/api/deals") return handleDeals(request); // the guest's request rides the visitor's own browser fetch, so request.cf is the visitor
     // v1.6.12: kernel/chat_face.h's chat_face_load fetches Samantha's Chat
-    // face frames (idle-0..3.png, talk-0..7.png) over the same plain-HTTP
+    // face frames (idle-0..5.jpg, talk-0..11.jpg) over the same plain-HTTP
     // stack every other guest request uses, from facehost=joshuatree.
     // heyitsmejosh.com (embed.js's cmdline). Those files are static assets
-    // in this exact deploy (landing/face/*.png, wrangler.toml's [assets]
+    // in this exact deploy (landing/face/*.jpg, wrangler.toml's [assets]
     // binding), so a plain GET, self-fetched over HTTPS, is a real,
     // narrowly-shaped exception -- same idea as /api/stocks etc above, just
     // serving a fixed asset instead of running a handler. Path is
     // constrained to exactly the file names chat_face.h ever builds
     // (face_fetch's "/face/" + kind + "-" + i + ".png"), nothing else on
     // this host is reachable through this branch.
-    if (/^\/face\/(idle|talk)-[0-9]\.png$/.test(targetUrl.pathname) && request.method === "GET") {
+    if (/^\/face\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname) && request.method === "GET") {
       // Read the frame from this deploy's own assets: a Worker fetching its
       // own hostname over the network gets Cloudflare's 522, so the guest's
       // face never loaded on the live site.

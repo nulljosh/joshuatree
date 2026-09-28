@@ -18,4 +18,8 @@
 
 unsigned int speak_text(const char *host, unsigned short port, const char *text,
                         unsigned int timeout_ticks);
+/* Loudness (mean distance from silence, 0..128) of the clip speak_text is
+   playing, over 40ms at elapsed_ticks into it; 0 when nothing plays. For
+   sb16's progress hook, so a face can follow her voice. */
+unsigned int speak_level(unsigned int elapsed_ticks);
 #endif
