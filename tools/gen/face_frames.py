@@ -38,7 +38,23 @@ for kind in COUNT:
         sys.exit(f"face_frames: missing {src}/{kind}.mp4")
 
 
-def seamless(paths, n):
+def eyes_open(paths):
+    """True per frame when her eyes are open. Open eyes put dark irises in
+    the eye band; closed lids are skin. Relative to the clip's own open-eye
+    level, so any character works. A long blink stretch in the source clip
+    otherwise wins "steadiest" and the loop blinks the whole time."""
+    dark = []
+    for p in paths:
+        g = Image.open(p).convert("L")
+        w, h = g.size
+        band = g.crop((int(w * .28), int(h * .33), int(w * .72), int(h * .42)))
+        px = band.get_flattened_data()
+        dark.append(sum(1 for v in px if v < 70) / len(px))
+    top = sorted(dark)[int(len(dark) * .9)]
+    return [d >= .85 * top for d in dark]
+
+
+def seamless(paths, n, open_eyes=False):
     """n consecutive frames that loop cleanly (last frame like the first)
     and hold the head steadiest (least frame-to-frame change), so the
     loop point doesn't show and the head doesn't sway."""
@@ -47,7 +63,17 @@ def seamless(paths, n):
     step = [diff(i, i + 1) for i in range(len(paths) - 1)]
     def cost(s):
         return 3 * diff(s, s + n - 1) + sum(step[s:s + n - 1])
-    start = min(range(len(paths) - n + 1), key=cost)
+    ok = eyes_open(paths) if open_eyes else [True] * len(paths)
+    starts = [s for s in range(len(paths) - n + 1) if all(ok[s:s + n])]
+    if not starts:  # no open-eyed stretch that long: take the longest one
+        run, best = 0, (0, 0)
+        for i, o in enumerate(ok + [False]):
+            run = run + 1 if o else 0
+            if run > best[0]:
+                best = (run, i - run + 1)
+        n, starts = best[0], [best[1]]
+        print(f"face_frames: only {n} open-eyed frames in a row, loop is {n} frames")
+    start = min(starts, key=cost)
     return paths[start:start + n]
 
 
@@ -67,7 +93,8 @@ with tempfile.TemporaryDirectory() as work:
     for kind, n in COUNT.items():
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", f"{src}/{kind}.mp4",
                         "-vf", f"crop={crop},scale={SIDE}:{SIDE}:flags=lanczos,fps={FPS}", f"{work}/{kind}-%03d.png"], check=True)
-        picked[kind] = crossfade(seamless(sorted(glob.glob(f"{work}/{kind}-*.png")), n + 6), n)
+        sel = seamless(sorted(glob.glob(f"{work}/{kind}-*.png")), n + 6, open_eyes=(kind == "talk"))
+        picked[kind] = crossfade(sel, len(sel) - 6)
     for f in glob.glob(f"{out}/idle-*") + glob.glob(f"{out}/talk-*"):
         os.remove(f)
     os.makedirs(out, exist_ok=True)
