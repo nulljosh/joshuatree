@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Regression checks for build-time roadmap copy; no repository files mutated."""
+import html
 import importlib.util
 from pathlib import Path
 import unittest
@@ -54,7 +55,7 @@ class RoadmapTests(unittest.TestCase):
         roadmap = (ROOT / 'docs/roadmap.md').read_text()
         page = (ROOT / 'landing/index.html').read_text()
         updated = generator.render(roadmap, page)
-        self.assertIn(generator.summarize(roadmap), updated)
+        self.assertIn(html.escape(generator.summarize(roadmap)), updated)  # the page stores it escaped, so "can't" is &#x27;
         self.assertEqual(generator.render(roadmap, updated), updated)
 
 

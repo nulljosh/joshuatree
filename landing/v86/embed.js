@@ -442,6 +442,19 @@ if (typeof document !== "undefined") (function () {
       resetIdleRestart();
     }
   }
+  // 1.7.6: iPhone audio. focusIn's resume() runs once, from touchstart,
+  // which iOS does not count as a gesture that may start audio (touchend
+  // and click do), so the context stayed suspended and focusIn never tried
+  // again. Retry on every real tap until it runs. audioSession "playback"
+  // (Safari 16.4+) keeps her voice audible with the silent switch on, the
+  // way a video would be.
+  function unlockAudio() {
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+    var ac = emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
+    if (ac && ac.state !== "running") ac.resume().catch(function () {});
+  }
+  container.addEventListener("touchend", unlockAudio, { passive: true });
+  container.addEventListener("click", unlockAudio);
   container.addEventListener("mousedown", focusIn);
   container.addEventListener("touchstart", focusIn, { passive: true });
   container.addEventListener("keydown", focusIn);
