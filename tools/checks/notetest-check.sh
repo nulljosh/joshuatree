@@ -37,10 +37,10 @@ make -s kernel.elf >/dev/null
 # address lives in four places now (a linker script cannot include a C
 # header). user/hello.ld is checked by usertest-check.sh; user/note.ld is
 # this one's job.
-base_c=$(grep -o '0xC0500000' kernel/exec.h | head -1)
-base_u=$(grep -o '0xC0500000' user/note.ld | head -1)
-base_l=$(grep -o '0xC0500000' boot/linker.ld | head -1)
-if [ "$base_c" != "0xC0500000" ] || [ "$base_u" != "0xC0500000" ] || [ "$base_l" != "0xC0500000" ]; then
+base_c=$(grep -o '0xC0501000' kernel/exec.h | head -1)
+base_u=$(grep -o '0xC0501000' user/note.ld | head -1)
+base_l=$(grep -o '0xC0501000' boot/linker.ld | head -1)
+if [ "$base_c" != "0xC0501000" ] || [ "$base_u" != "0xC0501000" ] || [ "$base_l" != "0xC0501000" ]; then
     echo "FAIL: JT_USER_BASE disagrees across kernel/exec.h, user/note.ld and boot/linker.ld"
     exit 1
 fi
