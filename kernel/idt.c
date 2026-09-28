@@ -9,6 +9,7 @@
 #include "console.h"
 #include "serial.h"
 #include "task.h"
+#include "symtab.h"
 
 typedef unsigned int  u32;
 typedef unsigned short u16;
@@ -57,7 +58,7 @@ static const char *EXC_NAME[32] = {
     "security", "reserved"
 };
 
-void isr_handler(u32 vector, u32 err, u32 eip, u32 cs, u32 eflags) {
+void isr_handler(u32 ebp, u32 vector, u32 err, u32 eip, u32 cs, u32 eflags) {
     (void)err; (void)eflags;
     const char *name = EXC_NAME[vector < 32 ? vector : 31];
     u32 fault_addr = 0;
@@ -84,6 +85,15 @@ void isr_handler(u32 vector, u32 err, u32 eip, u32 cs, u32 eflags) {
     if (vector == 14) { puts(" at "); puthex(fault_addr); }
     puts(" -- halted\n");
     serial_puts("exception: ring-0 "); serial_puts(name); serial_puts(", halted\n");
+
+    /* Crash report: EIP plus a few EBP-chain frames, named from the
+       symbol table gen_symtab.py built into this kernel (kernel/symtab.c),
+       over both serial and the text console -- tools/checks/
+       panic-symbols-check.py's target. */
+    serial_puts("panic in ");
+    { unsigned int off = 0; const char *fn = symtab_lookup(eip, &off); serial_puts(fn ? fn : "?"); }
+    serial_puts("\n");
+    backtrace_print(eip, ebp);
 
     /* Display panic screen on GUI if active */
     extern void gui_panic_screen(const char *name, unsigned int fault_addr, unsigned int eip);

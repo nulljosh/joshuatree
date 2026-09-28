@@ -6,6 +6,10 @@ main = "worker.js"
 directory = "landing"
 binding = "ASSETS"
 
+[[kv_namespaces]]
+binding = "WAITLIST"
+id = "97c2fc5f19fc4210bec0337bb7ae045f"
+
 [[routes]]
 pattern = "joshuatree.heyitsmejosh.com"
 custom_domain = true

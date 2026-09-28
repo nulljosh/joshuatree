@@ -74,6 +74,8 @@
   /* Spec-sheet furniture: tracked caps labels and hairline rules, the same
      chrome the logo's own construction sheet uses top and bottom. */
   .label, .sheet-rule, .plate-cap { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 500; }
+  .plate-cap-mobile { display: none; }
+  @media (max-width: 520px) { .plate-cap-desktop { display: none; } .plate-cap-mobile { display: inline; } }
   .sheet-rule { display: flex; align-items: center; gap: 16px; padding: 12px 20px 0; color: var(--sub); white-space: nowrap; }
   .sheet-rule::before { content: ""; order: 1; flex: 1; height: 1px; background: var(--border); }
   .sheet-rule > :first-child { order: 0; }
@@ -138,12 +140,13 @@
      alone on its own row. */
   .facts { padding: 8px 20px 56px; }
   .facts-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 16px; max-width: 560px; margin: 0 auto; text-align: center; }
-  .fact-link { display: flex; flex-direction: column; gap: 4px; color: inherit; text-decoration: none; }
+  .fact-link { display: flex; flex-direction: column; gap: 4px; color: inherit; text-decoration: none; min-width: 0; }
   .fact-link:hover strong, .fact-link:focus-visible strong { text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
-  .fact { display: flex; flex-direction: column; gap: 4px; }
+  .fact { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .fact strong { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; color: var(--fg); font-style: normal; }
   .fact .label { color: var(--sub); }
   @media (max-width: 600px) { .facts-row { grid-template-columns: repeat(3, 1fr); gap: 24px 12px; } .fact strong { font-size: 26px; } }
+  @media (max-width: 380px) { .fact strong { font-size: 21px; } .facts-row { gap: 20px 8px; } }
   .boot-cta { text-align: center; margin: 28px auto 0; }
   .boot-btn { display: inline-block; background: var(--accent); color: var(--bg); font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px 24px; border-radius: 999px; }
   .boot-btn:hover { opacity: 0.9; }
@@ -225,6 +228,17 @@
   #stage-wrap { background: #000; position: relative; --stage-h: min(80svh, calc(100svh - 270px)); width: min(100%, calc(var(--stage-h) * 16 / 9)); height: auto; max-height: var(--stage-h); aspect-ratio: 16 / 9; z-index: 0; overflow: hidden; border-radius: 6px; }
   #demo-frame.demo-full #stage-wrap { width: min(100vw, calc(100dvh * 16 / 9)); max-height: 100dvh; border-radius: 0; }
   @media (max-width: 600px) { #stage-wrap { width: 100%; max-height: none; } }
+  /* Phone boot (embed.js's IS_PHONE, <=520px): the kernel opens a real
+     430x932 portrait mode instead of the desktop's 16:9, so the box has
+     to actually be that shape, not 16:9 squeezed into a narrow column --
+     the same "aspect-ratio has to match what's really being drawn" rule
+     the 0.76.40 revert note above already learned the hard way. 430/932
+     lands almost exactly on a real phone's 9/19.5, so this is a real
+     phone shape, not an arbitrary number. */
+  @media (max-width: 520px) {
+    #stage-wrap { aspect-ratio: 430 / 932; width: min(100%, calc(var(--stage-h) * 430 / 932)); }
+    #demo-frame.demo-full #stage-wrap { width: min(100vw, calc(100dvh * 430 / 932)); aspect-ratio: 430 / 932; }
+  }
   /* The demo's full screen toggle (#demo-frame.demo-full, wired in the
      script below): always shown, a tap target plus Esc to leave. Nothing
      hides the hero copy on click any more. */
@@ -336,6 +350,19 @@
   .seal { display: block; width: 120px; height: 120px; margin: 0 auto 8px; }
   @media (max-width: 700px) { .more h2 { font-size: 28px; } .more-list { grid-template-columns: repeat(2, 1fr); } }
   @media (prefers-color-scheme: dark) { .hero-logo, .seal { filter: invert(0.93); } }
+  .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  .waitlist-section { padding: 24px 20px 72px; text-align: center; }
+  .waitlist-section h2 { font-size: 40px; letter-spacing: -0.03em; margin: 0 0 12px; }
+  .waitlist-card { max-width: 480px; margin: 0 auto; }
+  .waitlist-form { display: flex; gap: 10px; margin: 24px auto 0; max-width: 420px; }
+  .waitlist-form input[type="email"] { flex: 1; min-width: 0; background: var(--card); color: var(--fg); border: 1px solid var(--border); border-radius: 999px; padding: 12px 18px; font-size: 15px; font-family: inherit; }
+  .waitlist-form input[type="email"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .waitlist-form button { background: var(--accent); color: var(--bg); border: none; font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px 22px; border-radius: 999px; cursor: pointer; font-family: inherit; white-space: nowrap; }
+  .waitlist-form button:disabled { opacity: 0.6; cursor: default; }
+  .waitlist-status { min-height: 20px; margin: 12px 0 0; font-size: 14px; color: var(--sub); }
+  .waitlist-status[data-state="ok"] { color: var(--accent); }
+  .waitlist-status[data-state="error"] { color: var(--accent2); }
+  @media (max-width: 520px) { .waitlist-section h2 { font-size: 28px; } .waitlist-form { flex-direction: column; } }
 </style>
 </head>
 <body>
@@ -359,7 +386,20 @@
     </div>
     <button id="demo-exit" type="button" aria-pressed="false">Full screen</button>
   </div>
-  <p class="plate-cap">Fig. 1 &middot; Joshua Tree, booting live in your browser</p>
+  <p class="plate-cap">
+    <span class="plate-cap-desktop">Fig. 1 &middot; Joshua Tree, booting live in your browser</span>
+    <!-- v86's keyboard input listens on the document, not a focused text
+         field, so there is no on-screen keyboard on a touch device: typing
+         inside the guest is not usable on a phone even though tapping
+         icons and dragging windows works fine. Saying so plainly beats a
+         caption that implies full control. -->
+    <span class="plate-cap-mobile">Best on a computer. Tap to look around.</span>
+  </p>
+  <!-- ?samantha reload, same opt-in shape as os.html's ?portfolio embed:
+       embed.js's cmdline builder appends "samantha " to the kernel command
+       line when this query param is present, and kernel.c's boot_to_samantha
+       skips the desktop for Chat's full-screen avatar view. -->
+  <p class="plate-cap"><a href="?samantha" id="samantha-boot-link">Boot straight into Samantha</a></p>
 </div>
 
 <div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Co.</span><span>Est. 2026</span></div>
@@ -397,7 +437,7 @@
      eyebrow below (data-latest, same injector), where it belongs: H1 says
      what this is, H2 says what is new about it. -->
 <h1>Introducing <span class="brand">Joshua Tree.</span></h1>
-    <h2 class="eyebrow" data-latest="Introducing Samantha's voice. Ask her something in Chat and she answers out loud"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
+    <h2 class="eyebrow" data-latest="Introducing Samantha on your phone. Open the demo on a phone and she boots straight up, face and all"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
   </div>
 </header>
 
@@ -409,9 +449,9 @@
      source it names. -->
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row">
-    <div class="fact"><strong><span data-fact="apps">25</span></strong><span class="label">Apps</span></div>
+    <div class="fact"><strong><span data-fact="apps">26</span></strong><span class="label">Apps</span></div>
     <div class="fact"><a class="fact-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md"><strong><span data-fact="documented">100</span>%</strong><span class="label">Documented</span></a></div>
-    <div class="fact"><strong>v<span data-fact="version">1.6.22</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">1.7.0</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a>
@@ -424,23 +464,24 @@
   <p class="sub" style="text-align:center;color:var(--sub);font-size:16px;max-width:480px;margin:0 auto 24px;line-height:1.5">Measured headless in QEMU on a Mac Mini M4 by <code>tools/bench.sh</code>. Refreshed with every release.</p>
   <div class="facts-row">
     <!-- bench:start -->
-    <div class="fact"><strong>260<span class="label" style="display:inline;margin-left:4px">ms</span></strong><span class="label">Boot to shell</span></div>
-    <div class="fact"><strong>134<span class="label" style="display:inline;margin-left:4px">ns/op</span></strong><span class="label">Alloc + free</span></div>
-    <div class="fact"><strong>475<span class="label" style="display:inline;margin-left:4px">MB/s</span></strong><span class="label">memcpy</span></div>
-    <div class="fact"><strong>4348<span class="label" style="display:inline;margin-left:4px">ns/switch</span></strong><span class="label">Context switch</span></div>
-    <div class="fact"><strong>6375<span class="label" style="display:inline;margin-left:4px">KB/s</span></strong><span class="label">Disk read</span></div>    <!-- bench:end -->
+    <div class="fact"><strong>250<span class="label" style="display:inline;margin-left:4px">ms</span></strong><span class="label">Boot to shell</span></div>
+    <div class="fact"><strong>65<span class="label" style="display:inline;margin-left:4px">ns/op</span></strong><span class="label">Alloc + free</span></div>
+    <div class="fact"><strong>777<span class="label" style="display:inline;margin-left:4px">MB/s</span></strong><span class="label">memcpy</span></div>
+    <div class="fact"><strong>2797<span class="label" style="display:inline;margin-left:4px">ns/switch</span></strong><span class="label">Context switch</span></div>
+    <div class="fact"><strong>11443<span class="label" style="display:inline;margin-left:4px">KB/s</span></strong><span class="label">Disk read</span></div>    <!-- bench:end -->
   </div>
 </section>
 
 <section class="meet-samantha reveal" aria-label="Meet Samantha">
   <h2>Meet Samantha.</h2>
-  <p class="sub">She's built into Chat. Ask her to do something and she just does it.</p>
+  <p class="sub">Boot straight into her. Tell her what to do, and she runs the machine.</p>
   <div class="tile-grid" style="grid-template-columns: minmax(0, 480px); justify-content: center;">
     <div class="tile">
       <img src="shots/samantha-chat.webp" alt="Chat with Samantha, showing suggestions like remind me to call mom, jot a note, check the weather, and look at today's calendar" loading="lazy" width="984" height="462">
-      <p>Type a message and she sets a reminder, jots a note, checks the weather, reads your calendar, or opens an app for you.</p>
+      <p>Tell her what to do and she opens an app, sets a reminder, jots a note, or checks the weather.</p>
     </div>
   </div>
+  <p class="sub" style="margin-top:16px">Samantha comes from Turing, a separate project. Joshua Tree is the machine she runs.</p>
 </section>
 
 <section class="app-features reveal" aria-label="Apps built in">
@@ -506,14 +547,27 @@
   #progress-chart-live .progress-pt:focus { outline: none; }
 </style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="17" y1="10" x2="437" y2="10" stroke="var(--grid)"/><line x1="17" y1="80" x2="437" y2="80" stroke="var(--grid)"/><text x="13" y="13" font-size="9" fill="var(--muted)" text-anchor="end">25</text><text x="13" y="83" font-size="9" fill="var(--muted)" text-anchor="end">12</text><text x="13" y="153" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="17" y1="10" x2="17" y2="150" stroke="var(--axis)"/><line x1="17" y1="150" x2="437" y2="150" stroke="var(--axis)"/><polyline points="17,150 27,150 37,150 47,150 57,150 68,150 78,150 88,150 98,150 109,150 119,150 129,111 139,111 150,106 160,106 170,106 180,66 191,66 201,61 211,50 221,50 232,50 242,38 252,33 262,33 273,33 283,33 293,33 303,33 314,33 324,33 334,33 344,33 355,22 365,22 375,16 385,10 396,10 406,10 416,10 426,10 437,10" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 0 apps shipped" data-tooltip="Aug 31 &#183; 0 apps"><circle class="progress-hit" cx="17" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="17" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="57" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="57" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="98" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="98" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 7 apps shipped" data-tooltip="Sep 13 &#183; 7 apps"><circle class="progress-hit" cx="139" cy="111" r="11" fill="transparent"/><circle class="progress-dot" cx="139" cy="111" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 15 apps shipped" data-tooltip="Sep 14 &#183; 15 apps"><circle class="progress-hit" cx="180" cy="66" r="11" fill="transparent"/><circle class="progress-dot" cx="180" cy="66" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 18 apps shipped" data-tooltip="Sep 14 &#183; 18 apps"><circle class="progress-hit" cx="221" cy="50" r="11" fill="transparent"/><circle class="progress-dot" cx="221" cy="50" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 21 apps shipped" data-tooltip="Sep 15 &#183; 21 apps"><circle class="progress-hit" cx="262" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="262" cy="33" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 16, 21 apps shipped" data-tooltip="Sep 16 &#183; 21 apps"><circle class="progress-hit" cx="303" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="303" cy="33" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 21 apps shipped" data-tooltip="Sep 20 &#183; 21 apps"><circle class="progress-hit" cx="344" cy="33" r="11" fill="transparent"/><circle class="progress-dot" cx="344" cy="33" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 22, 25 apps shipped" data-tooltip="Sep 22 &#183; 25 apps"><circle class="progress-hit" cx="385" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="385" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 25, 25 apps shipped" data-tooltip="Sep 25 &#183; 25 apps"><circle class="progress-hit" cx="426" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="426" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 25, 25 apps shipped" data-tooltip="Sep 25 &#183; 25 apps"><circle class="progress-hit" cx="437" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="437" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><text x="17" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="180" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="262" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 15</text><text x="314" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 19</text><text x="375" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 22</text><text x="426" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 25</text><text x="17" y="184" font-size="14" fill="var(--muted)">25 apps &#183; 100% documented</text></svg>
 <!-- progress-chart:end -->
-    <!-- roadmap-summary:start --><p class="roadmap-next">Next up: watch each app work, a word processor, and nicer weather art.</p><!-- roadmap-summary:end -->
+    <!-- roadmap-summary:start --><p class="roadmap-next">Next up: a word processor, nicer weather art, and a code editor.</p><!-- roadmap-summary:end -->
+  </div>
+</section>
+
+<section class="waitlist-section reveal" aria-label="Dev kit waitlist">
+  <h2>Want one?</h2>
+  <div class="waitlist-card">
+    <p class="sub">A small board with Joshua Tree on it. Leave your email, we'll tell you when it's real.</p>
+    <form class="waitlist-form" id="waitlist-form" novalidate>
+      <label class="visually-hidden" for="waitlist-email">Email address</label>
+      <input type="email" id="waitlist-email" name="email" placeholder="you@example.com" autocomplete="email" required maxlength="254">
+      <button type="submit" id="waitlist-submit">Notify me</button>
+    </form>
+    <p class="waitlist-status" id="waitlist-status" role="status" aria-live="polite"></p>
   </div>
 </section>
 
 <section class="grain-zone reveal">
   <img class="seal" src="logo.svg" alt="The Joshua Tree mark: a Joshua tree with its branches raised like arms" width="160" height="160" loading="lazy">
   <p class="closing-name">Settlers named the Joshua tree for Joshua, arms raised to the sky.</p>
-  <p class="closing">Joshua Tree is a real desktop built from nothing, not a skin on top of something else. It remembers your files, runs <span data-fact="apps">25</span> apps, and its Chat actually talks back over the internet to a real assistant. Try it live above, no download. It's free and open source, named for the tree that survives on nothing.</p>
+  <p class="closing">Joshua Tree is a real desktop built from nothing, not a skin on top of something else. It remembers your files, runs <span data-fact="apps">26</span> apps, and its Chat actually talks back over the internet to a real assistant. Try it live above, no download. It's free and open source, named for the tree that survives on nothing.</p>
 </section>
 
 <footer>
@@ -818,6 +872,45 @@
   // Tap/click outside any point dismisses whatever is showing.
   document.addEventListener('click', function (e) {
     if (!chart.contains(e.target)) hide();
+  });
+})();
+// Dev-kit waitlist: posts to this same Worker's /api/waitlist. Inline
+// status text only, no alert()/confirm() -- those are jarring and this
+// is a low-stakes form.
+(function () {
+  var form = document.getElementById('waitlist-form');
+  if (!form) return;
+  var input = document.getElementById('waitlist-email');
+  var button = document.getElementById('waitlist-submit');
+  var status = document.getElementById('waitlist-status');
+
+  function setStatus(text, state) {
+    status.textContent = text;
+    if (state) status.setAttribute('data-state', state); else status.removeAttribute('data-state');
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var email = input.value.trim();
+    if (!email) { setStatus('Enter an email first.', 'error'); return; }
+    button.disabled = true;
+    setStatus('Adding you...');
+    fetch('/api/waitlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email }),
+    }).then(function (res) {
+      if (res.ok) {
+        setStatus("You're on the list. We'll email you when it's real.", 'ok');
+        form.reset();
+      } else {
+        setStatus('That email doesn\'t look right. Try again.', 'error');
+      }
+    }).catch(function () {
+      setStatus('Could not reach the server. Try again in a bit.', 'error');
+    }).finally(function () {
+      button.disabled = false;
+    });
   });
 })();
 </script>

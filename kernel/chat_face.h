@@ -185,22 +185,30 @@ static int chat_face_reserve(void) { return face_idle_n ? FACE_SIDE + 16 : 0; }
 
 /* Draws one frame at face_x/face_y, face_side logical pixels, at full
    physical resolution with rounded corners. */
-static void face_blit(const unsigned char *px) {
+/* Draws a frame, or a 50/50 blend of two (mix = 0 for none), at
+   face_x/face_y, face_side logical pixels, full physical resolution,
+   rounded corners. The blend is the in-between frame that doubles her
+   motion to about 24 a second and turns clip switches into crossfades. */
+static void face_blit_mix(const unsigned char *px, const unsigned char *mix) {
     if (!px || face_x < 0) return;
     int sc = (int)window_scale(); if (sc < 1) sc = 1;
     int side = face_side * sc, r = (face_side > FACE_SIDE ? 14 : 6) * sc;
     int ox = face_x * sc, oy = face_y * sc;
     for (int y = 0; y < side; y++) {
-        const unsigned char *row = px + (unsigned int)(y * FACE_SRC / side) * FACE_SRC * 3;
+        unsigned int ro = (unsigned int)(y * FACE_SRC / side) * FACE_SRC * 3;
         int cy = y < r ? r - y : (y >= side - r ? y - (side - r - 1) : 0);
         for (int x = 0; x < side; x++) {
             int cx = x < r ? r - x : (x >= side - r ? x - (side - r - 1) : 0);
             if (cx && cy && cx * cx + cy * cy > r * r) continue;
-            const unsigned char *p = row + (x * FACE_SRC / side) * 3;
-            window_pixel_phys(ox + x, oy + y, ((unsigned int)p[0] << 16) | ((unsigned int)p[1] << 8) | p[2]);
+            unsigned int o = ro + (unsigned int)(x * FACE_SRC / side) * 3;
+            unsigned int R = px[o], G = px[o + 1], B = px[o + 2];
+            if (mix) { R = (R + mix[o]) >> 1; G = (G + mix[o + 1]) >> 1; B = (B + mix[o + 2]) >> 1; }
+            window_pixel_phys(ox + x, oy + y, (R << 16) | (G << 8) | B);
         }
     }
 }
+
+static void face_blit(const unsigned char *px) { face_blit_mix(px, 0); }
 
 /* Small face at the top right of the empty Chat. */
 static void chat_face_draw(int T) {
@@ -225,13 +233,10 @@ static int chat_face_draw_big(int top, int bottom) {
     return top + side;
 }
 
-/* Idle loop position steps forward and back (ping-pong), so the end of
-   the clip never cuts back to its start. */
+/* Idle loop position: forward, wrapping at a cut where the last frame
+   matches the first (tools/gen/face_frames.py). */
 static void chat_face_idle_step(void) {
-    static int idir = 1;
-    if (face_idle_n < 2) return;
-    if (face_idle_at + idir < 0 || face_idle_at + idir >= face_idle_n) idir = -idir;
-    face_idle_at += idir;
+    if (face_idle_n) face_idle_at = (face_idle_at + 1) % face_idle_n;   /* forward; the seamless cut and the blend hide the wrap */
 }
 
 /* sb16_play's progress hook, 12 frames a second (her clip's own rate).
@@ -242,9 +247,13 @@ static void chat_face_idle_step(void) {
    loud she is right now, so the clip leans into her voice. A real pause (0.6s quiet)
    relaxes into the idle loop at the idle frame nearest her pose. */
 static void chat_face_tick(unsigned int elapsed) {
-    static unsigned int next_at = 0, sound_at = 0;
-    static const unsigned char *cur = 0;
+    static unsigned int next_at = 0, sound_at = 0, full_at = 0;
+    static const unsigned char *cur = 0, *shown_px = 0, *pending_px = 0;
     static int dir = 1;
+    if (pending_px && elapsed >= full_at) {          /* second half of a step: the real frame */
+        face_blit(pending_px); shown_px = pending_px; pending_px = 0;
+        window_present();
+    }
     if (face_shown != -1 && elapsed < next_at) return;
     if (face_shown == -1) { sound_at = elapsed; cur = face_sig_idle[face_idle_at]; }
     next_at = elapsed + 8;
@@ -255,7 +264,7 @@ static void chat_face_tick(unsigned int elapsed) {
         else chat_face_idle_step();
         face_shown = -2;
         cur = face_sig_idle[face_idle_at];
-        face_blit(face_idle[face_idle_at]);
+        pending_px = face_idle[face_idle_at];
     } else {
         int n = face_talk_n, pick;
         if (face_shown < 0) pick = face_nearest(face_sig_talk, n, cur);   /* coming from idle: nearest pose */
@@ -268,10 +277,13 @@ static void chat_face_tick(unsigned int elapsed) {
                mouth fits the sound better. Turning around only at the clip's
                ends keeps it seamless; letting the voice pick the direction
                made her rock between two frames and look frozen. */
-            if (face_shown + dir < 0 || face_shown + dir >= n) dir = -dir;
-            int a = face_shown + dir, b = face_shown + 2 * dir;
+            /* Forward only: the clip wraps (face_frames.py cuts it where the
+               last frame matches the first, and the in-between blend hides
+               the rest). Playing it backwards read as a head shake. */
+            (void)dir;
+            int a = (face_shown + 1) % n, b = (face_shown + 2) % n;
             pick = a;
-            if (b >= 0 && b < n) {
+            {
                 unsigned int da = face_open[a] > target ? face_open[a] - target : target - face_open[a];
                 unsigned int db = face_open[b] > target ? face_open[b] - target : target - face_open[b];
                 if (db < da) pick = b;
@@ -279,8 +291,12 @@ static void chat_face_tick(unsigned int elapsed) {
         }
         face_shown = face_talk_at = pick;
         cur = face_sig_talk[pick];
-        face_blit(face_talk[pick]);
+        pending_px = face_talk[pick];
     }
+    /* first half of the step: the in-between blend of what's on screen and what's next */
+    if (shown_px && shown_px != pending_px) face_blit_mix(pending_px, shown_px);
+    else { face_blit(pending_px); shown_px = pending_px; pending_px = 0; }
+    full_at = elapsed + 4;
     window_present();
 }
 

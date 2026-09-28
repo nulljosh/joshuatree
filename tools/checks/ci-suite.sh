@@ -51,12 +51,16 @@ cd "$(dirname "$0")/../.."
 manifest() {
 cat <<'EOF'
 once |7|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
+once |7|Kernel memory keeps 16KB clear of the program window (toolchain drift guard)|python3 ./tools/checks/bss-margin-check.py
+once |7|Samantha's face loops wrap without a seam|python3 ./tools/checks/face-frames-check.py
+once |7|docs/TESTING.md lists every check in this suite|./tools/checks/testing-doc-check.sh
 once |5|The landing logo rebuilds byte for byte from tools/gen/logo.py|./tools/checks/logo-check.sh
 once |6|The landing demo downloads the kernel once, gzipped|./tools/checks/kernel-gz-check.sh
 retry|0|Boot check|./check.sh
 retry|0|Benchmarks run and report every number|./tools/checks/bench-check.sh
 retry|4|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
 once |7|PNG decoder, host harness|./tools/checks/png-host-check.sh
+retry|2|Clock opens and its countdown timer updates live|python3 ./tools/checks/clock-check.py
 once |3|TTF rasterizer, host harness|./tools/checks/ttf-host-check.sh
 once |1|libjt string/stdlib, host harness|./tools/checks/libjt-host-check.sh
 once |7|God-file guard (no hand-written .c/.h over its line ceiling)|./tools/checks/godfile-check.sh
@@ -69,6 +73,10 @@ retry|2|Chat history (VFS-backed, past the old 512-byte cap)|./tools/checks/chat
 retry|1|Chat defaults to Samantha (Turing) and surfaces an HTTPS-redirect host clearly|python3 ./tools/checks/chat-samantha-check.py
 retry|3|GUI Chat app asks Samantha and renders the reply on screen|python3 ./tools/checks/chatapp-check.py
 retry|1|Chat's tools (reminder, note, open app) work locally via /api/pick, ordinary questions still reach Samantha|python3 ./tools/checks/chattools-check.py
+retry|1|Chat mail tools: "read my email" lists a real message, "email <someone> <text>" lands one in Mail|python3 ./tools/checks/mailtools-check.py
+retry|1|Chat notes/reminders tools: list_reminders and read_notes work via the local keyword fallback when the picker doesn't know them|python3 ./tools/checks/notestools-check.py
+retry|2|"samantha" boot flag opens Chat's full-screen avatar view, input focused, before the desktop|python3 ./tools/checks/samantha-boot-check.py
+retry|2|"phone" boot flag opens a real 430x932 portrait frame straight into Samantha's view|python3 ./tools/checks/phone-boot-check.py
 retry|2|Chat bounds a connected-but-silent LLM host instead of hanging on net.c's old multi-minute default|python3 ./tools/checks/chat-timeout-check.py
 retry|4|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ramfs-demo-check.sh
 retry|6|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh
@@ -131,12 +139,15 @@ once |7|RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/check
 retry|4|Stocks opens without a supported network card|python3 ./tools/checks/stocks-dock-check.py
 retry|3|Stocks chart line is antialiased (coverage blend, no stair-stepping)|python3 ./tools/checks/stocks-aa-check.py
 once |7|Stocks live quotes and kernel parsing|node ./tools/checks/stocks-live-check.mjs
+retry|5|Epiphany command bar: AAPL GP draws the chart, an unknown code errors cleanly|python3 ./tools/checks/epiphany-cmdbar-check.py
 once |3|Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
+once |3|Worker /api/waitlist store, validate, count|node ./tools/checks/waitlist-check.mjs
 once |7|Worker /api/proxy: a silent upstream cannot hang the guest (weather/chat freeze regression)|node ./tools/checks/weatherproxy-hang-check.mjs
 retry|3|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py
 once |2|Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
 retry|5|Accounts: create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py
 once |6|Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py
+once |6|Crash report names the faulting function, not just the exception kind|python3 ./tools/checks/panic-symbols-check.py
 once |7|Frame time: idle, dock hover and window open stay within budget|python3 ./tools/checks/frametime-check.py
 once |2|Every check in tools/checks/ is in this manifest or says why not|./tools/checks/suite-coverage-check.sh
 retry|5|Text selection in Notes: Shift-arrow/Ctrl+A highlight, edsel/edcopy/edcut markers, selection-aware copy/cut/paste/delete|python3 ./tools/checks/textselect-check.py
@@ -146,6 +157,9 @@ retry|4|Chat speaks: say fetches /api/speak PCM from a stub and plays a real 100
 retry|4|Chat face: idle frame before, talk frames while she speaks, idle after; no frames means no face|python3 ./tools/checks/chat-face-check.py
 retry|3|Files view switcher: Icons grid renders and the chosen view persists across close/reopen|python3 ./tools/checks/filesview-check.py
 retry|7|Demo canvas fills its frame, pixelated only at an exact 1:1 map|node ./tools/checks/democrisp-check.mjs
+once |7|Landing page never overflows horizontally at phone widths|node ./tools/checks/mobile-overflow-check.mjs
+retry|1|App switcher: Ctrl+Tab cycles open windows and focuses the highlighted one|python3 ./tools/checks/appswitcher-check.py
+retry|2|Screenshot key: Ctrl+Shift+3 saves a real framebuffer BMP, numbered and visible in Files|python3 ./tools/checks/screenshot-check.py
 EOF
 }
 

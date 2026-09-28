@@ -33,7 +33,8 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 |---|---|
 | `boot/boot.S` | The first code that runs. Sets up just enough memory to reach C. |
 | `kernel/gdt.c` | Tells the processor what is kernel and what is a program, so programs can safely call into the kernel. |
-| `kernel/idt.c` + `kernel/isr.S` | The interrupt table and the 32 CPU exception handlers. A kernel-mode fault paints a panic screen and halts. A user-mode fault kills that one program and the kernel keeps going. |
+| `kernel/idt.c` + `kernel/isr.S` | The interrupt table and the 32 CPU exception handlers. A kernel-mode fault paints a panic screen and halts. A user-mode fault kills that one program and the kernel keeps going. Its crash report now names the function that faulted, via `kernel/symtab.h`. |
+| `kernel/symtab.h` + `kernel/backtrace.c` | Crash reports with real function names. `kernel/symtab.c` (generated, never committed) is a sorted address-to-name table read from `nm -n` on a first-pass link of the kernel, done twice by the Makefile so the table can live inside the very kernel it describes. `backtrace.c` binary-searches that table for a fault's EIP and walks a few EBP stack frames above it, printing `at <func>+0x<off>` lines over serial and on the panic screen. `kernel/symtab_stub.c` is the empty placeholder table pass one links against, since the real table doesn't exist yet at that point. |
 | `kernel/pic.c` | Routes hardware signals, like a key press, so they never get confused with processor errors. |
 | `kernel/irq.c` + `kernel/irq_stubs.S` | The hardware interrupt handlers. The timer tick drives the scheduler, the keyboard fills a ring buffer. |
 | `kernel/syscall.c` | The `int 0x80` dispatch table. Numbers and calling convention are Linux's, so the ABI needs no translation. The contract is written down in `docs/SYSCALL-ABI.md`. |
@@ -117,6 +118,8 @@ changed.
 | `kernel/ttf_render.h` | The shared glyph path for anything drawing real DejaVu text at physical resolution: a per-face cache, a glyph cache, the antialiased ink blend. Notes and the Terminal both draw through it. |
 | `kernel/gui_prims.c` | Tiny pure helpers split out of `kernel.c`: blend two colours, square root for antialiased lines. |
 | `kernel/dock_geom.c` | Dock geometry and hit-testing: where each icon sits at the current scale, and which slot a click landed on. |
+| `kernel/app.h` | The app interface. One `struct app` per app (name, tile color, glyph, `open`, and `draw`/`key` for apps that run in a desktop window), plus the few desktop services and helpers an app in its own file needs. |
+| `kernel/app.c` | The helpers behind `app.h`, only ones two or more apps were writing by hand: start an app's window with its titlebar, print a number. |
 | `kernel/bench.h` | Built-in benchmarks: boot time, heap, memcpy, context switch, disk read. `bench` in the shell or on the command line. Results in `docs/BENCHMARKS.md`. |
 | `kernel/gui_prompt.h` | The shared one-line prompt and chrome-versus-content split that the newer apps use, so a keystroke redraws only what changed. |
 | `kernel/auth.h` | User accounts. A from-scratch SHA-256, a salted `USERS.TXT` on disk, the login and first-run screens. Built against `docs/THREAT-MODEL.md`. |
@@ -145,20 +148,21 @@ change. No Save button.
 
 | App | File | What it is |
 |---|---|---|
-| Calculator | `kernel/calculator.h` | A recursive-descent parser over `+ - * / ()`. |
+| Calculator | `drivers/app_calculator.c`, `drivers/calculator.h` | A recursive-descent parser over `+ - * / ()`. Moved out of `kernel.c` after Keyrate. |
 | Stocks | `kernel/stocks.h` | Eight fixed symbols with live quotes and charts from the Worker at `/api/stocks`. |
-| Epiphany | `kernel/epiphany.h` | The offline slice of the Epiphany portfolio app: watchlist, portfolio, crypto. |
+| Epiphany | `kernel/epiphany.h` | The offline slice of the Epiphany portfolio app: watchlist, portfolio, crypto, plus a Bloomberg-style command bar (`/`, then `AAPL GP` or `AAPL DES`). |
 | Search | `kernel/search.h` | Filters the current directory as you type. Enter opens a folder or shows a file. Scoped to what the VFS can list, no whole-disk index. |
 | Portfolio | `kernel/portfolio.h` | A catalog of every app in the fleet with its URL. |
 | Activity | `kernel/activity.h` | Activity Monitor over the real scheduler and memory counters. Refreshes on a timer, can kill a task. |
+| Clock | `kernel/clock.h` | Current time from the RTC, a countdown timer you can start and pause, and an alarm. |
 
 **Apps ported from the fleet.** Each is a native rewrite of one of the
 sibling web apps, kept small on purpose.
 
 | App | File | What it is |
 |---|---|---|
-| Quotes | `kernel/quotes.h` | Name the film from the line. Streak and best for the session. |
-| Toroid | `kernel/toroid.h` | Conway's Life on a torus. |
+| Quotes | `drivers/app_quotestreak.c`, `drivers/quotestreak.h` | Name the film from the line. Streak and best for the session. Moved out of `kernel.c` after Keyrate. |
+| Toroid | `drivers/app_toroid.c`, `drivers/toroid.h` | Conway's Life on a torus. Moved out of `kernel.c` after Keyrate. |
 | Bookrank | `kernel/bookrank.h` | Ranked non-fiction with a summary panel. |
 | Curbfind | `kernel/curbfind.h` | Craigslist deals for Vancouver, ranked by score. |
 | Lexly | `kernel/lexly.h` | Spanish vocabulary drill, four choices. |
@@ -166,6 +170,15 @@ sibling web apps, kept small on purpose.
 | Plan | `kernel/plan.h` | A ten-year timeline with a detail panel. |
 | Sparkjar | `kernel/sparkjar.h` | Post an idea, vote on ideas. |
 | Homeqi | `kernel/homeqi.h` | Eight feng shui questions about your home and a score. |
+| Keyrate | `drivers/app_keyrate.c`, `drivers/keyrate.h` | Typing test with endless random words and a live words-per-minute count. The first app compiled on its own instead of included into `kernel.c`. |
+
+**Adding an app.** Every app is one row in `APPS[]` in `kernel/kernel.c`,
+and nothing else dispatches on an app's index: the dock, the Apps folder,
+Chat's `open_app`, and the multiwindow desktop all read that table. Write
+the app in its own `.c` the way Keyrate does, declare its `open` in a tiny
+header, add the row, add the `.c` to the Makefile, and bump
+`GUI_APP_COUNT`. Give it `draw` and `key` only if it should also run as a
+desktop window. Reach for `app.h`'s helpers before writing your own.
 
 The `drivers/app_*.h` files are the original single-file web builds of
 those apps as C byte arrays, generated by `tools/gen/gen_app.sh`. The

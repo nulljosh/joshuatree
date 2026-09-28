@@ -1,8 +1,18 @@
-/* v70 (0.64.0): Calculator. Simplified recursive-descent parser for +, -, *,
-   /, (), and numbers. Pure arithmetic, no functions or constants, to keep the
-   parser portable and avoid linking external dependencies. Expression text is
-   captured from the user via one-line input, evaluated on enter, and the
-   result is shown. */
+/* Calculator, in its own translation unit: the fourth app moved out of
+   kernel.c, same pattern as Keyrate, Toroid and Quotestreak. Simplified
+   recursive-descent parser for +, -, *, /, (), and numbers. Pure
+   arithmetic, no functions or constants, to keep the parser portable and
+   avoid linking external dependencies. Expression text is captured from
+   the user via one-line input, evaluated on enter, and the result shown. */
+#include "app.h"
+#include "calculator.h"
+#include "window.h"
+#include "font.h"
+#include "mouse.h"
+#include "task.h"
+#include "kheap.h"
+#include "serial.h"
+#include "console.h"
 
 #define CALC_INPUT_MAX 80
 #define CALC_OUTPUT_MAX 32
@@ -241,25 +251,14 @@ static void calc_free(expr_node *e) {
     kfree(e);
 }
 
+/* Whole part via app_utoa (the same digit-reverse loop app.h already gives
+   every app, Keyrate included) instead of a second hand-rolled copy; only
+   the fractional digits and the sign are Calculator's own. */
 static void calc_format_result(double result, char *buf, int max) {
     int i = 0;
     if (result < 0) { buf[i++] = '-'; result = -result; }
-
-    int integer = (int)result;
-    double frac = result - integer;
-
-    if (integer == 0) {
-        buf[i++] = '0';
-    } else {
-        int digits[12], digit_count = 0, val = integer;
-        while (val > 0 && digit_count < 12) {
-            digits[digit_count++] = val % 10;
-            val /= 10;
-        }
-        for (int j = digit_count - 1; j >= 0 && i < max - 1; j--) {
-            buf[i++] = '0' + digits[j];
-        }
-    }
+    i += app_utoa((unsigned int)result, buf + i);
+    double frac = result - (int)result;
 
     if (frac > 0.0001 && i < max - 5) {
         buf[i++] = '.';
@@ -274,7 +273,34 @@ static void calc_format_result(double result, char *buf, int max) {
     buf[i] = 0;
 }
 
-static void gui_launch_calculator(void) {
+/* kernel.c's "calctest" console command, moved here with the parser it
+   exercises. Real checks: (1) simple addition "2+3" evaluates to 5.0, (2)
+   multiplication binds tighter than addition: "2+3*4" evaluates to 14.0
+   not 20.0, (3) parentheses work and override precedence: "(2+3)*4"
+   evaluates to 20.0 not 14.0, (4) unary minus: "-2+3" evaluates to 1.0,
+   (5) division: "10/2" is 5.0. */
+static void calc_test_check(const char *expr, double got, double want, int *pass) {
+    if (got == want) return;
+    *pass = 0;
+    puts(expr); puts(" failed: got ");
+    char buf[12]; buf[app_utoa((unsigned int)got, buf)] = 0;
+    puts(buf); puts("\n");
+}
+
+int calculator_test(void) {
+    int pass = 1;
+    expr_node *e;
+
+    e = calc_parse("2+3");     calc_test_check("2+3",     calc_eval(e), 5.0,  &pass); calc_free(e);
+    e = calc_parse("2+3*4");   calc_test_check("2+3*4",   calc_eval(e), 14.0, &pass); calc_free(e);
+    e = calc_parse("(2+3)*4"); calc_test_check("(2+3)*4", calc_eval(e), 20.0, &pass); calc_free(e);
+    e = calc_parse("-2+3");    calc_test_check("-2+3",    calc_eval(e), 1.0,  &pass); calc_free(e);
+    e = calc_parse("10/2");    calc_test_check("10/2",    calc_eval(e), 5.0,  &pass); calc_free(e);
+
+    return pass;
+}
+
+void calculator_open(void) {
     int T = gui_app_dy();
     static char input[CALC_INPUT_MAX];
     static char output[CALC_OUTPUT_MAX];
@@ -285,8 +311,7 @@ static void gui_launch_calculator(void) {
     /* v0.76.24: Draw chrome (titlebar + help text) once before the loop,
        then redraw only content (input/output display) per keystroke,
        fixing the per-keystroke window_clear bug. */
-    window_clear(GUI_BG);
-    gui_draw_app_titlebar("Calculator");
+    app_begin("Calculator", GUI_BG);
     font_draw_string("expr: + - * / ( ) enter evaluate  esc closes", 20, T + 52, 0x00807468, -1);
 
     for (;;) {

@@ -43,7 +43,7 @@
  * accessible. argv[argc] is NULL.
  */
 
-#define JT_USER_BASE       0xC0501000u /* must match user/hello.ld and boot/linker.ld's .userimg */
+#define JT_USER_BASE       0xC0503000u /* must match user/hello.ld and boot/linker.ld's .userimg */
 #define JT_USER_IMAGE_MAX  (7 * 4096)  /* 28KB of code+data; page 8 of the window is the stack */
 #define JT_USER_STACK_TOP  (JT_USER_BASE + 8 * 4096)
 

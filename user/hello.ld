@@ -16,7 +16,7 @@
 ENTRY(_start)
 
 SECTIONS {
-    . = 0xC0501000;
+    . = 0xC0503000;
 
     .text : {
         *(.text.start)
@@ -37,7 +37,7 @@ SECTIONS {
     /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) }
 }
 
-ASSERT(_user_end - 0xC0501000 <= 0x7000,
+ASSERT(_user_end - 0xC0503000 <= 0x7000,
        "user flat binary is larger than the 7-page image window exec_user() loads into")
 ASSERT(_user_bss_size == 0,
        "a flat user binary cannot have .bss: nothing zeroes it, see the comment above")

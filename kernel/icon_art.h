@@ -9503,7 +9503,7 @@ static const unsigned char icon_art_trash_full[6128] = {
 
 /* Icon index -> artwork, 0 where no authored art exists yet (that icon
    keeps the runtime primitive path). Sized by the caller's GUI_APP_COUNT. */
-static const unsigned char *const ICON_ART[27] = {
+static const unsigned char *const ICON_ART[28] = {
     icon_art_files,
     icon_art_mail,
     icon_art_calendar,
@@ -9529,10 +9529,11 @@ static const unsigned char *const ICON_ART[27] = {
     icon_art_epiphany,
     0,
     0,
+    0,
     icon_art_apps,
     icon_art_trash,
 };
-static const unsigned int ICON_ART_LEN[27] = {
+static const unsigned int ICON_ART_LEN[28] = {
     ICON_ART_FILES_LEN,
     ICON_ART_MAIL_LEN,
     ICON_ART_CALENDAR_LEN,
@@ -9558,6 +9559,7 @@ static const unsigned int ICON_ART_LEN[27] = {
     ICON_ART_EPIPHANY_LEN,
     0,
     0,
+    0,
     ICON_ART_APPS_LEN,
     ICON_ART_TRASH_LEN,
 };
@@ -9565,7 +9567,7 @@ static const unsigned int ICON_ART_LEN[27] = {
 /* The variant-1 artwork for the icons that have runtime state, 0 for
    the rest. Indexed the same way, selected by gui_render_icon_cached's
    own `variant` so the empty/full Trash distinction survives. */
-static const unsigned char *const ICON_ART_VARIANT[27] = {
+static const unsigned char *const ICON_ART_VARIANT[28] = {
     0,
     0,
     0,
@@ -9593,8 +9595,9 @@ static const unsigned char *const ICON_ART_VARIANT[27] = {
     0,
     0,
     icon_art_trash_full,
+    0,
 };
-static const unsigned int ICON_ART_VARIANT_LEN[27] = {
+static const unsigned int ICON_ART_VARIANT_LEN[28] = {
     0,
     0,
     0,
@@ -9622,7 +9625,8 @@ static const unsigned int ICON_ART_VARIANT_LEN[27] = {
     0,
     0,
     ICON_ART_TRASH_FULL_LEN,
+    0,
 };
-#define ICON_ART_COUNT 27
+#define ICON_ART_COUNT 28
 
 #endif

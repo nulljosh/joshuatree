@@ -30,8 +30,12 @@ SECTIONS {
        loud failure rather than a kernel that quietly loads user code over
        its own data. Declaring it here also pushes _kernel_end past it, so
        pmm.c reserves these frames at boot the same way it reserves the
-       rest of the kernel image. */
-    .userimg 0xC0501000 (NOLOAD) : AT(0x00501000) {
+       rest of the kernel image.
+       2026-09-27: moved up 8KB from 0xC0501000 for 1.7.0's integration
+       release, which pushed .bss to a 12KB gap here (under the 16KB
+       bss-margin-check floor). .dmabuf below still has 20KB of slack
+       after this move, so there's real room before the next collision. */
+    .userimg 0xC0503000 (NOLOAD) : AT(0x00503000) {
         . += 8 * 4096; /* 7 pages of image + 1 page of user stack */
     }
 
@@ -49,5 +53,5 @@ SECTIONS {
     _kernel_end = . - 0xC0000000; /* physical, matching pmm.c's other physical addresses */
 }
 
-ASSERT(ADDR(.bss) + SIZEOF(.bss) <= 0xC0501000,
-       "kernel .bss has grown into the ring-3 program window at 0xC0501000; move JT_USER_BASE (kernel/exec.h), user/hello.ld and this section together")
+ASSERT(ADDR(.bss) + SIZEOF(.bss) <= 0xC0503000,
+       "kernel .bss has grown into the ring-3 program window at 0xC0503000; move JT_USER_BASE (kernel/exec.h), user/hello.ld and this section together")

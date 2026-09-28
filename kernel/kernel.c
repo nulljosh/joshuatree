@@ -1,6 +1,7 @@
 /* Freestanding i386 kernel: VGA text, PS/2 keyboard, RTC clock, tiny shell. */
 #include "gdt.h"
 #include "idt.h"
+#include "symtab.h"
 #include "irq.h"
 #include "pic.h"
 #include "pmm.h"
@@ -105,6 +106,11 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app_weather.h"
 #include "app_curbfind.h"
 #include "app_keyrate.h"
+#include "app.h"
+#include "keyrate.h"
+#include "toroid.h"
+#include "quotestreak.h"
+#include "calculator.h"
 #include "app_bookrank.h"
 #include "app_quotestreak.h"
 #include "app_plan.h"
@@ -260,7 +266,7 @@ static char getch(void){
    event, cleared whenever a key is handed out instead, so it always
    describes the event that actually caused the close. */
 static int gui_close_was_click = 0;
-static int gui_getch_or_click(void){
+int gui_getch_or_click(void){
     mouse_click_edge_sync(); /* a button already held (e.g. the click that opened this app) is the baseline, not a fresh click */
     for (;;) {
         gui_app_mouse_tick();
@@ -276,29 +282,9 @@ static int gui_getch_or_click(void){
     }
 }
 
-/* ---- extended keys (arrows) for the file browser. 0xE0 is the make-code
-   prefix for the "extended" keyboard block; 0x48/0x50 are up/down within it. ---- */
-#define KEY_UP    256
-#define KEY_DOWN  257
-#define KEY_ENTER 258
-#define KEY_ESC   259
-/* v54: left/right (0x4B/0x4D in the same extended block) for Calendar's
-   month stepping. Every existing consumer gates text input on
-   32 <= k < 127, so these new values fall through as ignored keys there,
-   same as up/down always have. */
-#define KEY_LEFT  261
-#define KEY_RIGHT 262
-
-/* v38: same shape as get_key below, but a click (or a tap, which reaches
-   the kernel as a real PS/2 click from the browser embed) also counts as
-   input. Every interactive app screen has to offer this, not just the
-   read-only viewers gui_wait_close covers: a phone visitor has no
-   keyboard at all, so a screen that only reads keys is a screen they can
-   open and then never leave. Terminal and the Apps folder both shipped
-   with exactly that bug in v36/v37, reported from a real phone. */
-#define KEY_CLICK 260
-#define KEY_WHEEL_UP 300
-#define KEY_WHEEL_DOWN 301
+/* KEY_UP..KEY_WHEEL_DOWN (arrows, enter, esc, click, wheel) now live in
+   app.h: a moved-out app's own unit needs the exact values get_key_or_click
+   hands back, same as this file. */
 /* v1.0.6: one system-wide clipboard. Every text field that reads through
    get_key/get_key_or_click gets Ctrl+C/X/V for free instead of each app
    decoding scancodes itself: kbd_ctrl (irq.c) plus the plain character scan
@@ -351,7 +337,7 @@ static void clipboard_set(const char *s, unsigned int n) {
     clipboard_len = n;
     clip_serial_dump("CLIPCOPY:", clipboard_buf, clipboard_len);
 }
-static int get_key_or_click(void);
+int get_key_or_click(void);
 
 static int get_key(void){
     for (;;) {
@@ -380,7 +366,7 @@ static int get_key(void){
     }
 }
 
-static int get_key_or_click_until(unsigned int deadline){
+int get_key_or_click_until(unsigned int deadline){
     for (;;) {
         if (deadline && (int)(ticks() - deadline) >= 0) return 0;
         gui_app_mouse_tick();
@@ -417,7 +403,7 @@ static int get_key_or_click_until(unsigned int deadline){
     }
 }
 
-static int get_key_or_click(void) { return get_key_or_click_until(0); }
+int get_key_or_click(void) { return get_key_or_click_until(0); }
 
 /* ---- RTC via CMOS. ponytail: no PIT tick counter; the shell only ever
    needs wall-clock, and this needs no interrupt handler. ---- */
@@ -915,14 +901,16 @@ static void reboot(void){
    it keeps the primitive glyph path like every other unart'd icon. */
 /* v0.89.x: Activity landed after Portfolio took slot 23, so it sits at
    24 and GUI_APPS_FOLDER/GUI_TRASH moved to 25/26, same shift again. */
-#define GUI_APP_COUNT   27 /* 25 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 25 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       26
-static const char *GUI_LABELS[GUI_APP_COUNT] = {"Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Apps", "Trash"};
-static const unsigned int GUI_COLORS[GUI_APP_COUNT] = {
-    0x00707070, 0x00A13F3F, 0x00A0553F, 0x006B4423, 0x00375A4A, 0x002B2B2B, 0x00365E8C, 0x0085144B,
-    0x007A2048, 0x00B08900, 0x002F7B4F, 0x008B4A9C, 0x00475C6B, 0x00376E5E, 0x00234A78, 0x00A6741E, 0x00566A3A, 0x005A3E6B, 0x00A87C5B, 0x00556B85, 0x00356B4F, 0x00506078, 0x001F5FA8, 0x004A5A3E, 0x003E4C58
-};
+/* Clock landed after Activity, so it sits at 25 and GUI_APPS_FOLDER/
+   GUI_TRASH moved to 26/27, same shift again. */
+#define GUI_APP_COUNT   28 /* 26 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 26 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       27
+/* Every app's name, color, glyph and hooks live in one table, APPS[],
+   defined further down once every hook it points at exists (see "The app
+   registry" below). This tentative definition lets the dock and Launchpad
+   code above that point read it. */
+static const struct app APPS[GUI_APP_COUNT];
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
    boot rather than what happened to be built most recently: a terminal, a
@@ -959,11 +947,22 @@ static int gui_order[GUI_ICON_COUNT];
    Joshua's own apps instead of the system set. Same slot count, Apps folder
    and Trash stay at the ends; everything left out is still in the Apps folder. */
 static int portfolio_dock;
+/* "samantha" on the multiboot command line: skip the desktop and open
+   Chat's full-screen avatar view (chat_boot_samantha_open, kernel/chat.h)
+   the instant gui_run's first frame would otherwise draw the dock. One
+   splash frame still shows (gui_draw_boot_screen runs first, unconditionally);
+   this only replaces the icon desktop that would follow it. */
+static int boot_to_samantha;
+/* "phone" on the command line, see kmain's parse: gui_run opens a real
+   portrait phone mode (430x932) instead of the desktop's 960x540@2x so
+   the demo boots 1:1 into what a phone screen actually is, rather than
+   shrinking the desktop's layout down to unreadable text. */
+static int boot_to_phone;
 static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 static int dock_hover = -1; /* slot whose label is showing */
 
-#define GUI_BG          0x00FAF8F6
+/* GUI_BG lives in app.h now: a moved-out app's own unit clears to it too. */
 #define GUI_MENUBAR_H   26
 /* v36 (0.36.0): the icon size is now *derived* from how many icons there
    are, instead of a constant that silently overflows the screen every
@@ -3769,35 +3768,7 @@ static void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
 }
 
 static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsigned int bg){
-    switch (icon) {
-        case 0: gui_icon_folder(cx_center, cy, size, bg); break;
-        case 1: gui_icon_mail(cx_center, cy, size, bg); break;
-        case 2: gui_icon_calendar(cx_center, cy, size, bg); break;
-        case 3: gui_icon_notes(cx_center, cy, size, bg); break;
-        case 4: gui_icon_reminders(cx_center, cy, size, bg); break;
-        case 5: gui_icon_terminal(cx_center, cy, size, bg); break;
-        case 6: gui_icon_chat(cx_center, cy, size, bg); break;
-        case 7: gui_icon_weather(cx_center, cy, size, bg); break;
-        case 8: gui_icon_pin(cx_center, cy, size, bg); break;
-        case 9: gui_icon_keyrate(cx_center, cy, size, bg); break;
-        case 10: gui_icon_book(cx_center, cy, size, bg); break;
-        case 11: gui_icon_quotes(cx_center, cy, size, bg); break;
-        case 12: gui_icon_plan(cx_center, cy, size, bg); break;
-        case 13: gui_icon_lexly(cx_center, cy, size, bg); break;
-        case 14: gui_icon_toroid(cx_center, cy, size, bg); break;
-        case 15: gui_icon_sparkjar(cx_center, cy, size, bg); break;
-        case 16: gui_icon_homeqi(cx_center, cy, size, bg); break;
-        case 17: gui_icon_fieldbook(cx_center, cy, size, bg); break;
-        case 18: gui_icon_contacts(cx_center, cy, size, bg); break;
-        case 19: gui_icon_calculator(cx_center, cy, size, bg); break;
-        case 20: gui_icon_stocks(cx_center, cy, size, bg); break;
-        case 21: gui_icon_search(cx_center, cy, size, bg); break;
-        case 22: gui_icon_stocks(cx_center, cy, size, bg); break; /* art covers it; primitive fallback only */
-        case 23: gui_icon_apps(cx_center, cy, size, bg); break; /* Portfolio: no authored art yet, reuses the grid-of-tiles glyph */
-        case 24: gui_icon_activity(cx_center, cy, size, bg); break;
-        case GUI_APPS_FOLDER: gui_icon_apps(cx_center, cy, size, bg); break;
-        case GUI_TRASH: gui_icon_trash(cx_center, cy, size, bg); break;
-    }
+    if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].icon) APPS[icon].icon(cx_center, cy, size, bg);
 }
 
 /* Real, repeated feedback across many rounds: the icons still read as
@@ -3964,7 +3935,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     }
     /* The artwork is stored as PNG, not as decoded RGBA: 24 artworks of
        128x128 RGBA is 1.5MB, which runs into the ring-3 program window
-       boot/linker.ld pins at 0xC0501000, and docs/SYSCALL-ABI.md names that
+       boot/linker.ld pins at 0xC0503000, and docs/SYSCALL-ABI.md names that
        address as part of the published v1 contract. As PNG the same 24 are
        141KB. Decoding here rather than once at boot costs nothing in
        practice: this function is the icon cache's own miss path, so it runs
@@ -4001,7 +3972,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     }
     icon_cache_under[icon][slot] = under;
     icon_cache_variant[icon][slot] = variant;
-    unsigned int bg = GUI_COLORS[icon];
+    unsigned int bg = APPS[icon].color;
     unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
     window_push_target(ssbuf, ssz, ssz);
     int saved_band = aa_band; aa_band = ICON_SS_SCALE * 3; /* 3 physical px of real AA on every primitive edge, before the box filter */
@@ -4098,7 +4069,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
         return;
     }
     /* out of memory for the cache: draw directly, un-supersampled, rather than draw nothing */
-    unsigned int bg = GUI_COLORS[icon];
+    unsigned int bg = APPS[icon].color;
     unsigned int bg_light = gui_blend(bg, 0x00FFFFFF), bg_dark = gui_blend(bg, 0x00000000);
     gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, under, size * 22 / 100);
     gui_draw_gloss(x, y, size, size, bg, size * 22 / 100 + 1);
@@ -4297,7 +4268,7 @@ static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
         gui_draw_icon_shadow(cx_center, cy_bottom, size);
         gui_draw_one_icon(icon, cx_center, cy_bottom, size);
         if (slot == dock_hover) {
-            int label_w = font_string_width(GUI_LABELS[icon]);
+            int label_w = font_string_width(APPS[icon].name);
             int ly = y0 - 21; /* capsule spans ly-3 .. ly+19: clear of the tray's top edge, inside the band (y0 - 24) */
             /* Dark text on a light capsule with a hairline edge, the macOS
                dock tooltip, in the tray's own cream. Bare light text read
@@ -4309,7 +4280,7 @@ static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
             int lx0 = cx_center - label_w / 2 - 2, lx1 = cx_center + label_w / 2 + 2;
             gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 11, DOCK_LABEL_EDGE, DOCK_LABEL_EDGE);
             gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 10, DOCK_LABEL_BG, DOCK_LABEL_BG);
-            font_draw_string(GUI_LABELS[icon], cx_center - label_w / 2, ly, 0x001C1C1E, -1);
+            font_draw_string(APPS[icon].name, cx_center - label_w / 2, ly, 0x001C1C1E, -1);
         }
     }
     if (drag_slot >= 0) {
@@ -4447,7 +4418,7 @@ static int gui_app_windowed = 0;
    dock window the frame already draws the title bar above the viewport,
    so the same layout moves up by that strip, the same 32px Stocks has
    always saved through stx_top(). Add it to every content y. */
-static int gui_app_dy(void){ return gui_app_windowed ? -32 : 0; }
+int gui_app_dy(void){ return gui_app_windowed ? -32 : 0; }
 /* Live title-bar drag for the blocking single-window apps (everything
    that opens through gui_launch_from_dock: Notes, Terminal, Chat, the
    fleet apps, Settings...). Direct request: "app windows should be
@@ -4469,8 +4440,8 @@ static int app_win_x = 0, app_win_y = 0, app_win_w = 0, app_win_h = 0;
 static int app_drag_held = 0, app_drag_on = 0, app_drag_gx = 0, app_drag_gy = 0;
 static int gui_dock_band_top(void);
 static void gui_daynight_wallpaper_rect(int x, int y, int w, int h);
-static int app_view_x, app_view_y, app_view_w, app_view_h;
-static int app_cursor_x, app_cursor_y;
+int app_view_x, app_view_y; static int app_view_w, app_view_h;
+int app_cursor_x, app_cursor_y;
 static void gui_app_mouse_tick(void){
     if (!gui_app_windowed) return;
     int dx = 0, dy = 0, buttons = 0;
@@ -4581,7 +4552,7 @@ static void gui_wait_close(void){
    be a fake control that looks like it does something it doesn't. Real
    minimize/maximize wait on the actual windowing system already queued in
    roadmap.md's later product ideas, not a shortcut bolted on here. */
-static void gui_draw_app_titlebar(const char *title){
+void gui_draw_app_titlebar(const char *title){
     if (!gui_app_windowed) {
         gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
         gui_fill_circle(46, 20, 6, 0x00FFD64A, 0x00FAF8F6);
@@ -4631,8 +4602,7 @@ static void gui_launch_weather(void){
 }
 
 static void gui_launch_html(const char *label, const unsigned char *data, unsigned int data_len){
-    window_clear(0x00FAF8F6);
-    gui_draw_app_titlebar(label);
+    app_begin(label, 0x00FAF8F6);
 
     /* app_weather_html/app_curbfind_html are raw byte arrays generated by
        gen_app.sh, not null-terminated C strings; html_to_text expects one,
@@ -4709,7 +4679,6 @@ static int text_ink(int a, unsigned int fg, unsigned int dst){
 #include "calendar.h"
 #include "mail.h"
 #include "contacts.h"
-#include "calculator.h"
 #include "chat.h"
 #include "search.h"
 #include "portfolio.h"
@@ -4967,7 +4936,7 @@ static void wx_card(int x, int y, int w, int h, int r, unsigned int color, unsig
 }
 
 /* "18°" style degrees into out. */
-static char *wx_put_int(char *o, int v){
+char *wx_put_int(char *o, int v){
     if (v < 0) { *o++ = '-'; v = -v; }
     char d[8]; int n = 0; if (!v) d[n++] = '0'; while (v && n < 7) { d[n++] = (char)('0' + v % 10); v /= 10; }
     while (n) *o++ = d[--n];
@@ -5155,115 +5124,6 @@ static void gui_draw_weather_content(void){
           serial_puts(have_extra ? " facts=yes\n" : " facts=no\n"); } }
 }
 
-/* Real, reported bug, not a style complaint: gui_wait_close's "any key
-   closes" is right for a page you only ever read (Weather, Curbfind,
-   Bookrank, Quotestreak), but Keyrate was wired to that same read-only
-   viewer despite being a TYPING TEST, its whole point is pressing keys.
-   The very first keystroke anyone made to try typing closed the app
-   instead. Root cause was the app itself: Keyrate was never actually a
-   typing test in this kernel, gui_launch_html just rendered the ported
-   site's own marketing copy as read-only text, same as every other
-   ported page. A real typing test needs its own real input loop, not a
-   different exit key bolted onto the read-only one. */
-/* One fixed sentence ("the quick brown fox...") only ever tested the same
-   45 characters, nothing like a real typing test (10fastfingers,
-   monkeytype), which never run out of words. This freestanding build has
-   no rand()/no libc, so a tiny LCG seeded from the real PIT tick count
-   (irq.c's ticks()) stands in, good enough for word order, not for
-   anything security-sensitive. */
-static const char *KEYRATE_WORDS[] = {
-    "the","quick","brown","fox","jumps","over","lazy","dog","time","people",
-    "water","first","would","these","other","after","words","world","school",
-    "still","every","great","might","under","never","found","those","while",
-    "place","right","small","sound","between","name","home","read","hand",
-    "large","spell","add","even","land","here","must","big","high","such",
-    "follow","act","why","ask","men","change","went","light","kind","off",
-    "need","house","try","again","animal","point","mother","near","self",
-    "work","part","take","get","made","live","where","much","back","only",
-};
-#define KEYRATE_WORD_COUNT (int)(sizeof(KEYRATE_WORDS) / sizeof(KEYRATE_WORDS[0]))
-
-static unsigned int keyrate_rand(unsigned int *state) {
-    *state = *state * 1103515245u + 12345u;
-    return (*state >> 16) & 0x7fff;
-}
-
-/* Fills buf from scratch with space-separated random words up to cap, returns the length. */
-static int keyrate_gen_words(char *buf, int cap, unsigned int *rng) {
-    int len = 0;
-    while (len < cap - 12) { /* 12 = room for a trailing space + the longest word ("between") */
-        if (len > 0) buf[len++] = ' ';
-        const char *w = KEYRATE_WORDS[keyrate_rand(rng) % KEYRATE_WORD_COUNT];
-        while (*w) buf[len++] = *w++;
-    }
-    buf[len] = 0;
-    return len;
-}
-
-static void gui_launch_keyrate(void){
-    window_clear(0x00FAF8F6);
-    gui_draw_app_titlebar("Keyrate");
-
-    static char target[256];
-    unsigned int rng = ticks() | 1; /* |1 so a tick count of 0 at boot never freezes the LCG at 0 */
-    int tlen = keyrate_gen_words(target, sizeof(target), &rng);
-    int pos = 0, started = 0, total_typed = 0;
-    unsigned int start_tick = 0;
-    int area_bottom = (int)window_height() - 40;
-
-    for (;;) {
-        /* Real bug shipped and reported live, not caught in time: an
-           earlier fix for this exact overlap (clear both the target-text
-           row and the hint row every frame, not just inside one branch)
-           was verified working in testing, then accidentally reverted by
-           restoring kernel.c from a stale backup taken before that fix
-           while cleaning up an unrelated temporary test command, the same
-           wrong-backup mistake this session already made once with the
-           gradient icon work. Re-applied here, and this time verified
-           again with a real two-round script test (finish, retry, finish
-           again) after re-applying, not just trusted from memory. One
-           clear covering everything that can change, every frame,
-           regardless of which branch below runs. */
-        window_rect(20, 60, (int)window_width() - 40, area_bottom - 60, 0x00FAF8F6);
-        window_rect(20, (int)window_height() - 30, (int)window_width() - 40, 16, 0x00FAF8F6);
-
-        /* ponytail: wraps mid-word, no word-boundary lookahead like monkeytype's real
-           renderer. Fine at 8px monospace; revisit if it reads badly in practice. */
-        int x = 20, y = 60, max_x = (int)window_width() - 20;
-        for (int i = 0; i < tlen; i++) {
-            if (x + 8 > max_x) { x = 20; y += 16; }
-            font_draw_char_mono((unsigned char)target[i], x, y, i < pos ? 0x00884B16 : 0x001C1C1E, -1);
-            x += 8;
-        }
-
-        if (started) {
-            unsigned int elapsed = ticks() - start_tick; /* real PIT ticks, ~100Hz, running since the very first keystroke */
-            int chars = total_typed + pos;
-            int wpm = elapsed > 0 ? (chars * 6000) / (5 * (int)elapsed) : 0; /* (chars/5 words) / (elapsed/100/60 min) */
-            char buf[32]; int n = 0;
-            if (wpm == 0) buf[n++] = '0';
-            else { char tmp[12]; int tn = 0; int v = wpm; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
-            buf[n++] = ' '; buf[n++] = 'w'; buf[n++] = 'p'; buf[n++] = 'm'; buf[n] = 0;
-            font_draw_string(buf, 20, (int)window_height() - 30, 0x00884B16, -1);
-        } else {
-            font_draw_string("type to begin, esc or click to close", 20, (int)window_height() - 30, 0x0075726E, -1);
-        }
-
-        int ci = gui_getch_or_click();
-        if (ci == -1 || ci == 27) break;
-        char c = (char)ci;
-        if (!started) { started = 1; start_tick = ticks(); }
-        if (c == target[pos]) {
-            pos++;
-            if (pos >= tlen) { /* endless: bank this batch's chars, roll a fresh one, keep the same running timer going */
-                total_typed += tlen;
-                tlen = keyrate_gen_words(target, sizeof(target), &rng);
-                pos = 0;
-            }
-        }
-    }
-}
-
 /* v36 (0.36.0): a real terminal inside the desktop, not a second shell.
    It runs the exact same run() every text-mode command goes through, so
    there is precisely one shell in this kernel and anything it learns
@@ -5312,8 +5172,7 @@ static void term_puts(const char *s){ while (*s) term_putc(*s++); }
    gui_launch_terminal, never again per keystroke. */
 static void term_draw_chrome(void){
     serial_puts("termchrome\n"); /* discriminating marker for tools/checks/termchatflash-check.sh, same convention editor.h's "editorchrome" already established */
-    window_clear(0x001A1512); /* warm near-black, the Mojave palette's dark end, not a cold pure black */
-    gui_draw_app_titlebar("Terminal");
+    app_begin("Terminal", 0x001A1512); /* warm near-black, the Mojave palette's dark end, not a cold pure black */
 }
 
 static void term_render(const char *input, unsigned int input_len){
@@ -5495,8 +5354,8 @@ static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int c
         if (i == sel) gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 14,
                                                  0x00FFF8F1, 0x00E5D8D0, 0x00E9DEE0, 12);
         gui_draw_one_icon_on(i, cx, cy + tile, tile, 0x00E9DEE0);
-        int lw = font_string_width(GUI_LABELS[i]);
-        font_draw_string(GUI_LABELS[i], cx - lw / 2, cy + tile + 10, 0x001C1C1E, -1);
+        int lw = font_string_width(APPS[i].name);
+        font_draw_string(APPS[i].name, cx - lw / 2, cy + tile + 10, 0x001C1C1E, -1);
     }
 }
 static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, int cell_w, int cell_h, int tile, int grid_w){
@@ -5504,7 +5363,7 @@ static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, in
     gui_draw_wallpaper_rect(panel_x, panel_y, panel_w, panel_h);
     gui_apps_glass(panel_x, panel_y, panel_w, panel_h);
     /* The window's own title bar already reads "Apps" (gui_launch_from_
-       dock draws GUI_LABELS[icon] there); a second "Apps" heading here
+       dock draws APPS[icon].name there); a second "Apps" heading here
        just repeated it. Keep the key-hint line, moved up into the space
        the heading used to take. */
     font_draw_string("arrow keys to move   enter opens   esc closes", x0, 40, 0x006A6064, -1);
@@ -5525,9 +5384,9 @@ static void gui_app_frame_title(const char *label){
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
 static void gui_apps_launch(int icon){
-    gui_app_frame_title(GUI_LABELS[icon]);
+    gui_app_frame_title(APPS[icon].name);
     gui_launch(icon);
-    gui_app_frame_title(GUI_LABELS[GUI_APPS_FOLDER]);
+    gui_app_frame_title(APPS[GUI_APPS_FOLDER].name);
 }
 
 static void gui_launch_apps(void){
@@ -6085,8 +5944,6 @@ static void gui_launch_settings(void){
 }
 
 #include "stocks.h"
-#include "toroid.h"
-#include "quotes.h"
 #include "bookrank.h"
 #include "lexly.h"
 #include "fieldbook.h"
@@ -6098,36 +5955,10 @@ static void gui_launch_settings(void){
 #include "activity.h"
 static int fs_ok_global = 0;
 #include "bench.h"
+#include "clock.h"
 
 static void gui_launch(int icon){
-    if (icon == GUI_APPS_FOLDER) { gui_launch_apps(); return; }
-    if (icon == GUI_TRASH) { gui_launch_trash(); return; }
-    if (icon == 0)      gui_launch_files();
-    else if (icon == 1) gui_launch_mail();
-    else if (icon == 2) gui_launch_calendar();
-    else if (icon == 3) gui_launch_editor();
-    else if (icon == 4) gui_launch_reminders();
-    else if (icon == 5) gui_launch_terminal();
-    else if (icon == 6) gui_launch_chat_app();
-    else if (icon == 7) gui_launch_weather();
-    else if (icon == 8) gui_launch_curbfind();
-    else if (icon == 9) gui_launch_keyrate();
-    else if (icon == 10) gui_launch_bookrank();
-    else if (icon == 11) gui_launch_quotes();
-    else if (icon == 12) gui_launch_plan();
-    else if (icon == 13) gui_launch_lexly();
-    else if (icon == 14) gui_launch_toroid();
-    else if (icon == 15) gui_launch_sparkjar();
-    else if (icon == 16) gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len);
-    else if (icon == 16) gui_launch_homeqi();
-    else if (icon == 17) gui_launch_fieldbook();
-    else if (icon == 18) gui_launch_contacts();
-    else if (icon == 19) gui_launch_calculator();
-    else if (icon == 20) gui_launch_stocks();
-    else if (icon == 21) gui_launch_search();
-    else if (icon == 22) gui_launch_epiphany();
-    else if (icon == 23) gui_launch_portfolio();
-    else if (icon == 24) gui_launch_activity();
+    if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
 }
 
 static void gui_launch_from_dock(int icon){
@@ -6145,7 +5976,7 @@ again:
     gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
     font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
     font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
-    font_draw_string(GUI_LABELS[icon], x + 96, y + 8, 0x00403439, -1);
+    font_draw_string(APPS[icon].name, x + 96, y + 8, 0x00403439, -1);
     window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
     app_view_x = x + 8; app_view_y = y + 32;
     app_view_w = w - 16; app_view_h = h - 40;
@@ -6236,7 +6067,7 @@ typedef struct {
 static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
 static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
 
-static int gui_multiwin_supported(int icon){ return icon == 0 || icon == 7 || icon == 1 || icon == 2 || icon == 4; } /* Files, Weather, Mail, Calendar, Reminders */
+static int gui_multiwin_supported(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].draw; } /* apps with a draw hook: Files, Mail, Calendar, Reminders, Weather */
 
 /* v0.75.0 (batch 2): Mail/Calendar/Reminders have real per-keystroke
    interaction (adding a reminder, navigating calendar days/months,
@@ -6245,7 +6076,7 @@ static int gui_multiwin_supported(int icon){ return icon == 0 || icon == 7 || ic
    input loop below only ever forwards a keystroke to the app whose
    window is currently topmost/focused (the same "topmost owns input"
    rule click-to-focus already established for clicks). */
-static int gui_multiwin_interactive(int icon){ return icon == 0 || icon == 1 || icon == 2 || icon == 4 || icon == 7; } /* 0: Files, for its 1/2 view-switch keys; 7: Weather, for its R-to-retry key */
+static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].key; } /* apps with a key hook; Files for its 1/2 view-switch keys, Weather for R-to-retry */
 
 /* Window 0 keeps the exact single-window rect the existing dock-app tests
    already assert against (gui_launch_from_dock's own x=70,y=40,w=820,h=385;
@@ -6340,7 +6171,7 @@ static void gui_multiwin_draw_chrome(const gui_window_t *win){
     gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
     font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
     font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
-    font_draw_string(GUI_LABELS[win->icon], x + 96, y + 8, 0x00403439, -1);
+    font_draw_string(APPS[win->icon].name, x + 96, y + 8, 0x00403439, -1);
 }
 static void gui_multiwin_draw_content_only(const gui_window_t *win){
     int x = win->x, y = win->y, w = win->w, h = win->h;
@@ -6366,11 +6197,7 @@ static void gui_multiwin_draw_content_only(const gui_window_t *win){
        counterpart reads (vfs_list for Files, weather_text for Weather),
        so a second window opening never leaves the first one's content
        stale or frozen. */
-    if (win->icon == 0) gui_draw_files_content();
-    else if (win->icon == 7) gui_draw_weather_content();
-    else if (win->icon == 1) gui_draw_mail_content();
-    else if (win->icon == 2) gui_draw_calendar_content();
-    else if (win->icon == 4) gui_draw_reminders_content();
+    if (gui_multiwin_supported(win->icon)) APPS[win->icon].draw();
     gui_app_windowed = 0;
     window_clear_viewport();
 }
@@ -6384,6 +6211,52 @@ static void gui_multiwin_draw_one(const gui_window_t *win){
 static void gui_weather_mw_repaint(void){
     if (gui_window_count > 0 && gui_windows[gui_window_count - 1].icon == 7) gui_multiwin_draw_content_only(&gui_windows[gui_window_count - 1]);
 }
+
+/* The app registry: the one place an app is wired into the desktop. Its
+   index is its identity (dock order, gui_order, icon art slots and the
+   window list all key off it), so a new app is one row here plus one
+   bump of GUI_APP_COUNT/GUI_APPS_FOLDER/GUI_TRASH above. */
+static int gui_weather_mw_key(int k){ return gui_weather_key(k, gui_weather_mw_repaint); }
+static void gui_open_homeqi(void){ gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len); }
+static const struct app APPS[GUI_APP_COUNT] = {
+    /*  0 */ {"Files",      0x00707070, gui_icon_folder,     gui_launch_files,      gui_draw_files_content,     gui_files_on_key},
+    /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       gui_launch_mail,       gui_draw_mail_content,      gui_mail_on_key},
+    /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   gui_launch_calendar,   gui_draw_calendar_content,  gui_calendar_on_key},
+    /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      gui_launch_editor,     0, 0},
+    /*  4 */ {"Reminders",  0x00375A4A, gui_icon_reminders,  gui_launch_reminders,  gui_draw_reminders_content, gui_reminders_on_key},
+    /*  5 */ {"Terminal",   0x002B2B2B, gui_icon_terminal,   gui_launch_terminal,   0, 0},
+    /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       gui_launch_chat_app,   0, 0},
+    /*  7 */ {"Weather",    0x0085144B, gui_icon_weather,    gui_launch_weather,    gui_draw_weather_content,   gui_weather_mw_key},
+    /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        gui_launch_curbfind,   0, 0},
+    /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_open,          0, 0},
+    /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       gui_launch_bookrank,   0, 0},
+    /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_open,      0, 0},
+    /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       gui_launch_plan,       0, 0},
+    /* 13 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      gui_launch_lexly,      0, 0},
+    /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_open,           0, 0},
+    /* 15 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   gui_launch_sparkjar,   0, 0},
+    /* 16 */ {"Homeqi",     0x00566A3A, gui_icon_homeqi,     gui_open_homeqi,       0, 0},
+    /* 17 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  gui_launch_fieldbook,  0, 0},
+    /* 18 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   gui_launch_contacts,   0, 0},
+    /* 19 */ {"Calculator", 0x00556B85, gui_icon_calculator, calculator_open,      0, 0},
+    /* 20 */ {"Stocks",     0x00356B4F, gui_icon_stocks,     gui_launch_stocks,     0, 0},
+    /* 21 */ {"Search",     0x00506078, gui_icon_search,     gui_launch_search,     0, 0},
+    /* 22 */ {"Epiphany",   0x001F5FA8, gui_icon_stocks,     gui_launch_epiphany,   0, 0}, /* art covers it; primitive fallback only */
+    /* 23 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       gui_launch_portfolio,  0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph */
+    /* 24 */ {"Activity",   0x003E4C58, gui_icon_activity,   gui_launch_activity,   0, 0},
+    /* 25 */ {"Clock",      0x00565A7A, gui_icon_apps,       gui_launch_clock,      0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph */
+    /* Apps and Trash aren't real apps with their own brand color, so their
+       tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
+       tinted background like every real app above. 2026-09-27: this used
+       to read GUI_COLORS[icon] out of bounds (that array only had 25 real
+       entries, never Apps/Trash's own), which happened to land on nearby
+       static data close enough to pass by luck; a plain 0 here instead
+       renders black and the trash can's punched-through ribs show as
+       black cuts against the body (iconedge-check.py's "shadow-rib
+       stubs" failure). DOCK_TRAY_COLOR is the real, intended value. */
+    [GUI_APPS_FOLDER] = {"Apps",  DOCK_TRAY_COLOR, gui_icon_apps,  gui_launch_apps,  0, 0},
+    [GUI_TRASH]       = {"Trash", DOCK_TRAY_COLOR, gui_icon_trash, gui_launch_trash, 0, 0},
+};
 
 /* Called from gui_run's own full-repaint branch, right alongside the
    menu/notif/weather overlay draws it already does there, so every open
@@ -6406,6 +6279,129 @@ static void gui_multiwin_focus(int idx){
     gui_window_t tmp = gui_windows[idx];
     for (int j = idx; j < gui_window_count - 1; j++) gui_windows[j] = gui_windows[j + 1];
     gui_windows[gui_window_count - 1] = tmp;
+}
+
+/* App switcher: Alt+Tab (Ctrl+Tab too, since QEMU/v86's Alt delivery to a
+   guest kernel is the flaky one to bet on) cycles the open windows, the
+   same macOS Cmd+Tab shape -- hold the modifier and tap Tab, a small
+   centered panel lists every open window with the next one highlighted;
+   releasing the modifier focuses it. Walks whatever's really open
+   (gui_window_count, capped at GUI_MULTIWIN_MAX like the window list
+   itself already is), never a hard-coded count. */
+static int gui_switcher_open = 0;
+static int gui_switcher_idx = 0;
+
+static void gui_switcher_draw(int hi){
+    int rows = gui_window_count;
+    if (rows <= 0) return;
+    int row_h = 28, pad_v = 10, w = 220;
+    int h = pad_v * 2 + rows * row_h;
+    int x = ((int)window_width() - w) / 2, y = ((int)window_height() - h) / 2;
+    unsigned int bg = 0x002C2C2E, text = 0x00F5F5F7; /* same flyout colors the Apple menu/notif/weather panels already share */
+    gui_rounded_rect_on_wallpaper(x, y, w, h, bg, 14);
+    int ry = y + pad_v;
+    for (int i = 0; i < rows; i++) {
+        if (i == hi) window_rect(x + 6, ry, w - 12, row_h - 4, 0x00555555);
+        int icon = gui_windows[i].icon;
+        const char *label = (icon >= 0 && icon < GUI_APP_COUNT) ? APPS[icon].name : "?";
+        font_draw_string(label, x + 18, ry + 6, text, -1);
+        ry += row_h;
+    }
+    window_present();
+}
+
+/* Screenshot: Ctrl+Shift+3, the reliable one -- real PrintScreen sends an
+   E0-prefixed 4-byte make sequence (E0 2A E0 37) that shares its 0xE0
+   lead byte with every arrow key's own extended sequence, which the
+   multiwin key readers just above are already mid-decoding whenever a
+   window with arrow-key input (Files, Calendar) is open; peeking for it
+   here risked eating a real arrow keystroke, so this ships the one
+   hotkey that can't collide. Saves the live framebuffer as an
+   uncompressed 24-bit BMP (no PNG encoder exists in this tree, drivers/
+   png.c only decodes) named SHOT0001.BMP, SHOT0002.BMP, ... in the files
+   root, so it shows up in Files like any other saved file. */
+static void gui_write_u32le(unsigned char *p, unsigned int v){ p[0]=v&0xFF; p[1]=(v>>8)&0xFF; p[2]=(v>>16)&0xFF; p[3]=(v>>24)&0xFF; }
+static void gui_write_u16le(unsigned char *p, unsigned int v){ p[0]=v&0xFF; p[1]=(v>>8)&0xFF; }
+
+static int gui_screenshot_next_name(char *out /* 13 bytes, "SHOTNNNN.BMP\0" */){
+    for (int n = 1; n <= 9999; n++) {
+        char name[13];
+        int i = 0; name[i++]='S'; name[i++]='H'; name[i++]='O'; name[i++]='T';
+        name[i++]='0'+(n/1000)%10; name[i++]='0'+(n/100)%10; name[i++]='0'+(n/10)%10; name[i++]='0'+n%10;
+        name[i++]='.'; name[i++]='B'; name[i++]='M'; name[i++]='P'; name[i]=0;
+        unsigned char probe[1];
+        if (vfs_read_file(name, probe, 1) < 0) { for (int j = 0; j <= i; j++) out[j] = name[j]; return 1; }
+    }
+    return 0;
+}
+
+/* Returns the real byte count written (54-byte header + padded pixel
+   rows) on success, 0 on failure -- a headless check can grep the exact
+   figure straight out of the serial marker below instead of having to
+   parse the FAT image itself to prove the file's real size. */
+static unsigned int gui_screenshot_save(char *name_out /* 13 bytes */){
+    int sc = (int)window_scale(); if (sc < 1) sc = 1;
+    int w = (int)window_width() * sc, h = (int)window_height() * sc;
+    if (w <= 0 || h <= 0) return 0;
+    unsigned int row_bytes = (unsigned int)w * 3;
+    unsigned int pad = (4 - (row_bytes % 4)) % 4;
+    unsigned int data_size = (row_bytes + pad) * (unsigned int)h;
+    unsigned int file_size = 54 + data_size;
+    unsigned char *buf = (unsigned char *)kmalloc(file_size);
+    if (!buf) return 0;
+    buf[0]='B'; buf[1]='M';
+    gui_write_u32le(buf + 2, file_size);
+    gui_write_u32le(buf + 6, 0);
+    gui_write_u32le(buf + 10, 54);
+    gui_write_u32le(buf + 14, 40);
+    gui_write_u32le(buf + 18, (unsigned int)w);
+    gui_write_u32le(buf + 22, (unsigned int)h); /* positive height: bottom-up rows, standard BMP */
+    gui_write_u16le(buf + 26, 1);
+    gui_write_u16le(buf + 28, 24);
+    gui_write_u32le(buf + 30, 0);
+    gui_write_u32le(buf + 34, data_size);
+    gui_write_u32le(buf + 38, 2835);
+    gui_write_u32le(buf + 42, 2835);
+    gui_write_u32le(buf + 46, 0);
+    gui_write_u32le(buf + 50, 0);
+    unsigned char *px = buf + 54;
+    for (int y = 0; y < h; y++) {
+        int src_y = h - 1 - y; /* bottom-up */
+        unsigned char *row = px + (unsigned int)y * (row_bytes + pad);
+        for (int x = 0; x < w; x++) {
+            unsigned int c = window_get_pixel_phys(x, src_y);
+            row[x*3+0] = (unsigned char)(c & 0xFF);
+            row[x*3+1] = (unsigned char)((c >> 8) & 0xFF);
+            row[x*3+2] = (unsigned char)((c >> 16) & 0xFF);
+        }
+        for (unsigned int p = 0; p < pad; p++) row[row_bytes + p] = 0;
+    }
+    char name[13];
+    int ok = gui_screenshot_next_name(name);
+    int saved = ok && vfs_write_file(name, buf, file_size) == 1; /* vfs_write_file (drivers/vfs.h), not fat_write_file directly, so this lands in whichever backend is actually active -- the FAT disk when one's attached, the RAM fallback (ramfs.c) in every headless/no-disk boot -- the same choice Files/Notes already make instead of hard-wiring FAT. Returns exactly 1 on success, 0 on failure, never a byte count. */
+    kfree(buf);
+    if (saved) { for (int j = 0; j < 13; j++) name_out[j] = name[j]; }
+    return saved ? file_size : 0;
+}
+
+/* A brief centered confirmation banner, same flyout colors as the
+   switcher panel above, up for ~0.6s (60 PIT ticks) then erased by the
+   next real desktop repaint -- the same "flash" every other save
+   confirmation in this kernel (editor.h's status line) already does,
+   just as its own overlay instead of a status line, since the desktop
+   itself has none. */
+static void gui_screenshot_flash(const char *name){
+    char msg[24]; int i = 0; const char *s = "Saved "; while (*s) msg[i++] = *s++;
+    s = name; while (*s && i < 23) msg[i++] = *s++;
+    msg[i] = 0;
+    int tw = font_string_width(msg);
+    int w = tw + 40, h = 40;
+    int x = ((int)window_width() - w) / 2, y = 70;
+    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x002C2C2E, 14);
+    font_draw_string(msg, x + 20, y + 12, 0x00F5F5F7, -1);
+    window_present();
+    unsigned int until = ticks() + 60;
+    while ((int)(ticks() - until) < 0) __asm__ volatile ("hlt");
 }
 
 static int gui_multiwin_open(int icon){
@@ -6587,9 +6583,9 @@ static void gui_launch_about(void){
     char buf[64]; int n;
     unsigned int total_kb = pmm_total_frames() * 4, free_kb = pmm_free_frames() * 4;
     n = 0; buf[n++] = 'M'; buf[n++] = 'e'; buf[n++] = 'm'; buf[n++] = 'o'; buf[n++] = 'r'; buf[n++] = 'y'; buf[n++] = ':'; buf[n++] = ' ';
-    { char tmp[12]; int tn = 0; unsigned int v = free_kb; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
+    n += app_utoa(free_kb, buf + n);
     buf[n++] = 'K'; buf[n++] = ' '; buf[n++] = 'f'; buf[n++] = 'r'; buf[n++] = 'e'; buf[n++] = 'e'; buf[n++] = ' '; buf[n++] = 'o'; buf[n++] = 'f'; buf[n++] = ' ';
-    { char tmp[12]; int tn = 0; unsigned int v = total_kb; if (v == 0) tmp[tn++] = '0'; while (v > 0) { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (tn > 0) buf[n++] = tmp[--tn]; }
+    n += app_utoa(total_kb, buf + n);
     buf[n++] = 'K'; buf[n] = 0;
     char mem_line[64]; { int p = 0; const char *s = buf; while (*s) mem_line[p++] = *s++; mem_line[p] = 0; }
 
@@ -6931,7 +6927,11 @@ static void gui_run(void){
        zoom-to-fit stretches without preserving aspect, so a 4:3 mode on a
        16:9 panel came out visibly skewed; matching the panel's own shape
        means fullscreen is pixel-exact with no scaling at all. */
-    if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
+    /* "phone" boots a real portrait phone mode at scale 1 instead: Bochs
+       VBE takes any size, and 430x932 is a real phone's own logical
+       pixels, not the desktop's 960x540 shrunk to fit. */
+    if (boot_to_phone) { if (!window_open(430, 932, 32)) { puts("no VGA device found or out of page tables\n"); return; } }
+    else if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
     font_set_aa(gui_aa_char, gui_aa_advance); /* v44: real typeface for every string from here on */
     font_set_aa_mono(gui_aa_char_mono); /* term-mono: mono face for the terminal grid and Keyrate's typed line */
     /* v46: no wind in the browser, decided up front rather than measured
@@ -6950,6 +6950,8 @@ static void gui_run(void){
     auth_gate(); /* v0.77: real login screen, once per session, before the desktop ever paints */
     gui_draw_boot_screen();
     gui_order_init();
+    if (boot_to_samantha) { boot_to_samantha = 0; chat_boot_samantha_open(); }
+    else serial_puts("guidesktop\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: the icon desktop drew first, samantha mode never reaches here before her avatar */
     dock_hover = dock_presented_hover = -1;
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;
     /* press_slot: the slot the mouse went down on, latched until release.
@@ -7075,15 +7077,57 @@ static void gui_run(void){
            branches can't double-consume the same scancode. */
         int mw_topmost_icon = gui_window_count > 0 ? gui_windows[gui_window_count - 1].icon : -1;
         int mw_key_repaint = 0;
+        /* App switcher hotkey, checked before the per-app dispatch just
+           below gets its own single kbd_pop() this frame. kbd_peek()
+           (irq.c) only tells us what's next without eating it, so a plain
+           Alt+Tab with one or zero windows open -- or any other scancode
+           entirely -- falls straight through untouched. Only a real
+           Tab-make while Alt/Ctrl is down, or the matching modifier
+           release while the panel is open, is ever actually popped here. */
+        if (gui_window_count > 1) {
+            int sw_pk = kbd_peek();
+            if (sw_pk == 0x0F && (kbd_alt || kbd_ctrl)) {
+                kbd_pop();
+                if (!gui_switcher_open) { gui_switcher_open = 1; gui_switcher_idx = gui_window_count - 1; }
+                gui_switcher_idx = (gui_switcher_idx + 1) % gui_window_count;
+                gui_switcher_draw(gui_switcher_idx);
+                serial_puts("SWITCHER:tab\n");
+            } else if (gui_switcher_open && (sw_pk == 0xB8 || sw_pk == 0x9D)) {
+                kbd_pop();
+                gui_switcher_open = 0;
+                gui_multiwin_focus(gui_switcher_idx);
+                mw_key_repaint = 1; /* the panel is gone and the z-order changed: needs the real full repaint, same as any other focus/close change */
+                serial_puts("SWITCHER:focus\n");
+            }
+        }
+        /* Screenshot: Ctrl+Shift+3. Same peek-first discipline as the
+           switcher above -- '3' is only ever consumed here when both
+           modifiers are already down, which real typing never does, so a
+           lone '3' keystroke elsewhere on the desktop is untouched. */
+        if (kbd_ctrl && kbd_shift) {
+            int ss_pk = kbd_peek();
+            if (ss_pk == 0x04) {
+                kbd_pop();
+                char shot_name[13];
+                unsigned int shot_bytes = gui_screenshot_save(shot_name);
+                if (shot_bytes) {
+                    char nbuf[12]; int ni = 0; unsigned int v = shot_bytes;
+                    do { nbuf[ni++] = (char)('0' + v % 10); v /= 10; } while (v);
+                    serial_puts("SHOT:");
+                    serial_puts(shot_name);
+                    serial_puts(":");
+                    while (ni) { char d[2] = { nbuf[--ni], 0 }; serial_puts(d); }
+                    serial_puts("\n");
+                    gui_screenshot_flash(shot_name);
+                    mw_key_repaint = 1; /* the flash banner drew over the desktop; needs a real repaint to erase it */
+                }
+            }
+        }
         if (gui_multiwin_interactive(mw_topmost_icon)) {
             int mwk = gui_multiwin_key_nonblock();
             if (mwk >= 0) {
                 int mw_should_close = 0;
-                if (mw_topmost_icon == 4) mw_should_close = gui_reminders_on_key(mwk);
-                else if (mw_topmost_icon == 2) mw_should_close = gui_calendar_on_key(mwk);
-                else if (mw_topmost_icon == 1) mw_should_close = gui_mail_on_key(mwk);
-                else if (mw_topmost_icon == 7) mw_should_close = gui_weather_key(mwk, gui_weather_mw_repaint);
-                else if (mw_topmost_icon == 0) mw_should_close = gui_files_on_key(mwk);
+                mw_should_close = APPS[mw_topmost_icon].key(mwk);
                 if (mw_should_close) {
                     gui_multiwin_close(gui_window_count - 1);
                     mw_key_repaint = 1; /* the window left the screen: needs the real full desktop repaint to erase it, the same cost every open/close already pays */
@@ -9337,43 +9381,8 @@ static void run(char *line){
         if (!pass) puts("FAILED\n");
     }
     else if (!strcmp(line, "calctest")) {
-        /* v70 (0.64.0): discriminating regression test for Calculator. Core
-           contract: parse and evaluate basic arithmetic expressions correctly,
-           with proper operator precedence. Real checks: (1) simple addition
-           "2+3" evaluates to 5.0, (2) multiplication binds tighter than
-           addition: "2+3*4" evaluates to 14.0 not 20.0, (3) parentheses work
-           and override precedence: "(2+3)*4" evaluates to 20.0 not 14.0, (4)
-           unary minus: "-2+3" evaluates to 1.0, (5) division: "10/2" is 5.0.
-           If any expression fails to parse or evaluates to the wrong value,
-           the test catches it. */
-        int pass = 1;
-
-        expr_node *e1 = calc_parse("2+3");
-        double r1 = calc_eval(e1);
-        calc_free(e1);
-        if (r1 != 5.0) { puts("2+3 failed: got "); putn((unsigned int)r1); puts("\n"); pass = 0; }
-
-        expr_node *e2 = calc_parse("2+3*4");
-        double r2 = calc_eval(e2);
-        calc_free(e2);
-        if (r2 != 14.0) { puts("2+3*4 failed: got "); putn((unsigned int)r2); puts("\n"); pass = 0; }
-
-        expr_node *e3 = calc_parse("(2+3)*4");
-        double r3 = calc_eval(e3);
-        calc_free(e3);
-        if (r3 != 20.0) { puts("(2+3)*4 failed: got "); putn((unsigned int)r3); puts("\n"); pass = 0; }
-
-        expr_node *e4 = calc_parse("-2+3");
-        double r4 = calc_eval(e4);
-        calc_free(e4);
-        if (r4 != 1.0) { puts("-2+3 failed: got "); putn((unsigned int)r4); puts("\n"); pass = 0; }
-
-        expr_node *e5 = calc_parse("10/2");
-        double r5 = calc_eval(e5);
-        calc_free(e5);
-        if (r5 != 5.0) { puts("10/2 failed: got "); putn((unsigned int)r5); puts("\n"); pass = 0; }
-
-        puts(pass ? "calculator parser: ok\n" : "FAILED\n");
+        /* Parser and test both live in app_calculator.c now (calculator_test). */
+        puts(calculator_test() ? "calculator parser: ok\n" : "FAILED\n");
     }
     else if (!strcmp(line, "stockstest")) {
         int pass = 1;
@@ -9600,6 +9609,7 @@ static void run(char *line){
 }
 
 static int bench_at_boot = 0;
+static int panic_test_at_boot = 0;
 void kmain(unsigned int multiboot_info_addr){
     serial_init();
     serial_puts("=== kmain boot start === v" JT_VERSION_STR "\n");
@@ -9635,6 +9645,25 @@ void kmain(unsigned int multiboot_info_addr){
             if (pc[0]=='c' && pc[1]=='l' && pc[2]=='i' && pc[3]=='p' && pc[4]=='t' && pc[5]=='r' && pc[6]=='a' && pc[7]=='c' && pc[8]=='e') { clip_trace = 1; serial_puts("cliptrace\n"); break; }
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='b' && pc[1]=='e' && pc[2]=='n' && pc[3]=='c' && pc[4]=='h' && (pc[5]==' ' || pc[5]==0)) { bench_at_boot = 1; break; }
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='s' && pc[1]=='a' && pc[2]=='m' && pc[3]=='a' && pc[4]=='n' && pc[5]=='t' && pc[6]=='h' && pc[7]=='a') { boot_to_samantha = 1; serial_puts("bootsamantha\n"); break; }
+        /* "phone" on the command line: Bochs VBE takes any mode, so this
+           just swaps gui_run's video mode for a real portrait phone size
+           (430x932) instead of the desktop's 960x540@2x. Landing's embed.js
+           always pairs this with samantha (a phone visitor gets her full-
+           screen view, not the icon desktop laid out for a mouse), but
+           phone alone still forces it here so booting with just "phone"
+           never lands on a desktop that was never designed for 430px. */
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='p' && pc[1]=='h' && pc[2]=='o' && pc[3]=='n' && pc[4]=='e' && (pc[5]==' ' || pc[5]==0)) { boot_to_phone = 1; boot_to_samantha = 1; serial_puts("bootphone\n"); break; }
+        /* "panictest" on the multiboot command line (tools/checks/
+           panic-symbols-check.py passes it) -- deliberately faults from a
+           known, named function right after idt_install() so a headless
+           check can prove the crash report's symbol table names it. Never
+           set on a normal boot, so this path can never fire outside the
+           check that asks for it. */
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='p' && pc[1]=='a' && pc[2]=='n' && pc[3]=='i' && pc[4]=='c' && pc[5]=='t' && pc[6]=='e' && pc[7]=='s' && pc[8]=='t') { panic_test_at_boot = 1; break; }
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;
@@ -9697,6 +9726,7 @@ void kmain(unsigned int multiboot_info_addr){
     klog("gdt_install: GDT loaded");
     idt_install();
     klog("idt_install: IDT loaded");
+    if (panic_test_at_boot) jt_panic_test_target(); /* never returns: ring-0 fault, isr_handler halts after printing the crash report */
     syscall_install(); /* v64: int 0x80 gate, DPL 3 */
     klog("syscall_install: int 0x80 gate live");
     irq_install();

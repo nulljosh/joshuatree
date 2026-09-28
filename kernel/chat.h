@@ -346,7 +346,7 @@ static int chat_pick(const char *msg, char *tool, int toolsz, char *arg, int arg
     const char *head = "{\"q\":\"";
     while (*head && n < sizeof(req_body)) req_body[n++] = *head++;
     { const char *s = escaped; while (*s && n < sizeof(req_body)) req_body[n++] = *s++; }
-    const char *tail = "\",\"sections\":[]}";
+    const char *tail = "\",\"sections\":[],\"os\":\"jt\"}"; /* os: "jt" unlocks Joshua Tree's own tools (mail) in the picker */
     while (*tail && n < sizeof(req_body)) req_body[n++] = *tail++;
 
     static char resp[512];
@@ -381,7 +381,7 @@ static void chat_fmt_reply(char *reply, int replysz, const char *prefix, const c
 static int chat_launch_after = -1;
 
 /* Case-insensitive "does word start here" match: lbl is always one of
-   this kernel's own known-good GUI_LABELS entries (short, ASCII, no
+   this kernel's own known-good APPS[] names (short, ASCII, no
    punctuation), s is the untrusted, longer phrase the picker copied out
    of the user's message. Matches at s only when lbl's letters line up
    exactly and s either ends there or continues with a space, so "not"
@@ -397,12 +397,12 @@ static int chat_word_prefix_ci(const char *lbl, const char *s) {
     return *s == 0 || *s == ' ';
 }
 
-/* Matches arg against GUI_LABELS by whole word, case-insensitively, so
+/* Matches arg against APPS[].name by whole word, case-insensitively, so
    "notes" or "the weather app" both find "Notes"/"Weather". A leading
    "the " and a trailing " app" are stripped first (both optional, neither
    required), then every word-start position in what's left is tried
    against every real app's label. Returns the matching icon index (into
-   GUI_LABELS/gui_launch), or -1 for no match -- open_app then leaves the
+   APPS/gui_launch), or -1 for no match -- open_app then leaves the
    message unhandled rather than guessing, so chat_send/Samantha gets a
    chance to answer instead. */
 static int chat_match_app(const char *arg) {
@@ -419,7 +419,7 @@ static int chat_match_app(const char *arg) {
     if ((b[0] | 32) == 'c' && (b[1] | 32) == 'h' && (b[2] | 32) == 'a' && (b[3] | 32) == 't' && !b[4]) b = "samantha"; /* Chat was renamed Samantha; "open chat" still works */
     for (int i = 0; i < GUI_APPS_FOLDER; i++) {
         for (const char *w = b; ; w++) {
-            if ((w == b || *(w - 1) == ' ') && chat_word_prefix_ci(GUI_LABELS[i], w)) return i;
+            if ((w == b || *(w - 1) == ' ') && chat_word_prefix_ci(APPS[i].name, w)) return i;
             if (!*w) break;
         }
     }
@@ -437,6 +437,9 @@ static int chat_match_app(const char *arg) {
    returned nothing. Every branch that does handle its tool emits a
    `chattool=<tool>:<short result>` serial marker, a discriminating proof
    this actually ran (not just that chat_pick named a tool). */
+static const char *chat_last_user_msg = "";
+static int chat_starts(const char *s, const char *p) { while (*p) if (*s++ != *p++) return 0; return 1; } /* what was actually said, for tools whose arg is only part of it (send_mail) */
+
 static int chat_run_tool(const char *tool, const char *arg, char *reply, int replysz) {
     if (replysz > 0) reply[0] = 0;
 
@@ -455,6 +458,40 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
         reminders_save();
         chat_fmt_reply(reply, replysz, "Added reminder: ", arg);
         serial_puts("chattool=new_reminder:"); serial_puts(reminders_text[idx]); serial_puts("\n");
+        return 1;
+    }
+
+    if (!strcmp(tool, "list_reminders")) {
+        reminders_load();
+        if (!reminders_count) {
+            chat_fmt_reply(reply, replysz, "", "No reminders.");
+            serial_puts("chattool=list_reminders:none\n");
+            return 1;
+        }
+        int p = 0; int shown = 0;
+        for (int i = 0; i < reminders_count && p < replysz - 1; i++) {
+            if (reminders_done[i]) continue;
+            if (shown) { reply[p++] = ','; reply[p++] = ' '; }
+            for (const char *c = reminders_text[i]; *c && p < replysz - 1; c++) reply[p++] = *c;
+            shown++;
+        }
+        reply[p] = 0;
+        if (!shown) chat_fmt_reply(reply, replysz, "", "No reminders.");
+        serial_puts("chattool=list_reminders:"); serial_puts(shown ? reply : "none"); serial_puts("\n");
+        return 1;
+    }
+
+    if (!strcmp(tool, "read_notes")) {
+        static char buf[4096]; /* same NOTES.TXT bound new_note/editor.h already keep */
+        int n = vfs_read_file("NOTES.TXT", buf, sizeof(buf) - 1);
+        if (n <= 0) {
+            chat_fmt_reply(reply, replysz, "", "No notes yet.");
+            serial_puts("chattool=read_notes:none\n");
+            return 1;
+        }
+        buf[n] = 0;
+        chat_fmt_reply(reply, replysz, "", buf);
+        serial_puts("chattool=read_notes:"); serial_puts(buf); serial_puts("\n");
         return 1;
     }
 
@@ -500,12 +537,108 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
         int icon = chat_match_app(arg);
         if (icon < 0) return 0; /* unrecognized app name: let Samantha take a shot instead of guessing */
         chat_launch_after = icon;
-        chat_fmt_reply(reply, replysz, "Opening ", GUI_LABELS[icon]);
-        serial_puts("chattool=open_app:"); serial_puts(GUI_LABELS[icon]); serial_puts("\n");
+        chat_fmt_reply(reply, replysz, "Opening ", APPS[icon].name);
+        serial_puts("chattool=open_app:"); serial_puts(APPS[icon].name); serial_puts("\n");
+        return 1;
+    }
+
+    if (!strcmp(tool, "read_mail")) {
+        /* The newest message, or the newest from whoever she was asked about. */
+        mail_load();
+        int idx = -1;
+        for (int i = mail_count - 1; i >= 0 && idx < 0; i--) {
+            if (!arg[0]) { idx = i; break; }
+            for (int k = 0; mail_msgs[i].from[k] && idx < 0; k++) {
+                int m = 0;
+                while (arg[m] && mail_msgs[i].from[k + m] && ((arg[m] | 32) == (mail_msgs[i].from[k + m] | 32))) m++;
+                if (!arg[m]) idx = i;
+            }
+        }
+        if (idx < 0) {
+            chat_fmt_reply(reply, replysz, arg[0] ? "No mail from " : "", arg[0] ? arg : "Your inbox is empty.");
+            serial_puts("chattool=read_mail:none\n");
+            return 1;
+        }
+        mail_msg_t *m = &mail_msgs[idx];
+        int p = 0;
+        const char *parts[] = { "From ", m->from, ": ", m->subject, ". ", m->body };
+        for (int k = 0; k < 6; k++) for (const char *c = parts[k]; *c && p < replysz - 1; c++) reply[p++] = *c;
+        reply[p] = 0;
+        if (!m->read) { m->read = 1; mail_save(); }
+        serial_puts("chattool=read_mail:"); serial_puts(m->subject); serial_puts("\n");
+        return 1;
+    }
+
+    if (!strcmp(tool, "send_mail")) {
+        /* Local until Mail has accounts: the message lands in Mail, addressed. The words
+           come from what was said after "that", "saying" or a colon, else all of it. */
+        const char *body = chat_last_user_msg;
+        for (const char *c = chat_last_user_msg; *c; c++) {
+            if (*c == ':') { body = c + 1; break; }
+            if (chat_starts(c, " that ")) { body = c + 6; break; }
+            if (chat_starts(c, " saying ")) { body = c + 8; break; }
+        }
+        while (*body == ' ') body++;
+        mail_load();
+        if (mail_count >= MAIL_MAX) {
+            chat_fmt_reply(reply, replysz, "", "Mail is full, nothing sent.");
+            serial_puts("chattool=send_mail:full\n");
+            return 1;
+        }
+        mail_msg_t *m = &mail_msgs[mail_count];
+        char to[MAIL_FROM_MAX]; int t = 0;
+        for (const char *c = "To "; *c; c++) to[t++] = *c;
+        for (const char *c = arg; *c && *c != '|' && t < MAIL_FROM_MAX - 1; c++) to[t++] = *c;
+        to[t] = 0;
+        mail_str_copy(m->from, to, MAIL_FROM_MAX);
+        mail_str_copy(m->subject, "From Samantha", MAIL_SUBJECT_MAX);
+        int b = 0;
+        for (const char *c = body; *c && b < MAIL_BODY_MAX - 1; c++) if (*c != '|') m->body[b++] = *c;
+        m->body[b] = 0;
+        m->read = 1;
+        mail_count++;
+        mail_save();
+        chat_fmt_reply(reply, replysz, "Wrote it to ", arg);
+        serial_puts("chattool=send_mail:"); serial_puts(arg); serial_puts("\n");
         return 1;
     }
 
     return 0; /* open_url, web_search, current_tab, screenshot, clipboard, set_volume, battery, list_dir, read_file, make_logo, music, timer, set_heading, scroll_to, theme, reset_page: not handled */
+}
+
+/* Local keyword fallback for the notes/reminders tools this pass adds
+   (read_notes, list_reminders): mirrors mail's own "os":"jt" gate rather
+   than widening it, since Turing's picker may not know these two tool
+   names yet. Checked only after chat_pick has already failed to name a
+   tool (see chat_process_message below), so a picker that does know them
+   is always trusted first; this is strictly a fallback, not a bypass.
+   Deliberately narrow substring matches, same shape chat_match_app's
+   "the "/" app" trimming already uses elsewhere in this file: a false
+   positive here just answers a tool question with a tool's own honest
+   answer, never a wrong write. */
+static int chat_has_word(const char *hay, int n, const char *needle) {
+    int nl = 0; while (needle[nl]) nl++;
+    for (int i = 0; i + nl <= n; i++) {
+        int k = 0; while (k < nl && hay[i + k] == needle[k]) k++;
+        if (k == nl) return 1;
+    }
+    return 0;
+}
+
+static int chat_keyword_fallback(const char *msg, char *tool, int toolsz) {
+    char lower[256]; int n = 0;
+    for (const char *s = msg; *s && n < (int)sizeof(lower) - 1; s++) {
+        char c = *s; if (c >= 'A' && c <= 'Z') c += 32; lower[n++] = c;
+    }
+    lower[n] = 0;
+    int asking = chat_has_word(lower, n, "what") || chat_has_word(lower, n, "read") || chat_has_word(lower, n, "list");
+    if (asking && chat_has_word(lower, n, "note")) {
+        int p = 0; const char *t = "read_notes"; while (*t && p < toolsz - 1) tool[p++] = *t++; tool[p] = 0; return 1;
+    }
+    if (asking && chat_has_word(lower, n, "reminders")) {
+        int p = 0; const char *t = "list_reminders"; while (*t && p < toolsz - 1) tool[p++] = *t++; tool[p] = 0; return 1;
+    }
+    return 0;
 }
 
 /* Uses the shared gui_prompt.h helper to avoid the per-keystroke full-redraw
@@ -534,7 +667,8 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
    first-time visitor nothing about what Samantha can actually do here, and
    made them press n before they could even try. This table is every tool
    chat_run_tool above handles that a plain typed sentence can trigger
-   (new_reminder, new_note, weather, calendar_today, open_app -- "say" is
+   (new_reminder, new_note, list_reminders, read_notes, weather,
+   calendar_today, open_app -- "say" is
    the picker's own internal echo tool, not something a visitor asks for
    by name, so it has no row here), each phrased as the exact sentence
    that names it. Shown as a selectable list when chat_count is 0; picking
@@ -546,6 +680,8 @@ static const chat_suggestion_t CHAT_SUGGESTIONS[] = {
     { "Note: pick up dry cleaning" },
     { "What's the weather like" },
     { "What's on my calendar today" },
+    { "What are my reminders" },
+    { "What's in my notes" },
     { "Open calculator" },
 };
 #define CHAT_SUGGEST_COUNT ((int)(sizeof(CHAT_SUGGESTIONS) / sizeof(CHAT_SUGGESTIONS[0])))
@@ -646,9 +782,12 @@ static const char *chat_process_message(char *msg, int T, int x, int you_w, int 
     font_draw_string(CHAT_YOU, x, T + 76, CHAT_DIM, -1);
     render_wrapped_text(msg, x + you_w, T + 76, body_w - you_w, 64, CHAT_INK);
 
+    chat_last_user_msg = msg;
     int handled = 0;
     static char pick_tool[CHAT_TOOL_MAX], pick_arg[CHAT_ARG_MAX], tool_reply[256];
-    if (chat_pick(msg, pick_tool, sizeof(pick_tool), pick_arg, sizeof(pick_arg))
+    int picked = chat_pick(msg, pick_tool, sizeof(pick_tool), pick_arg, sizeof(pick_arg));
+    if (!picked) picked = chat_keyword_fallback(msg, pick_tool, sizeof(pick_tool));
+    if (picked
         && chat_run_tool(pick_tool, pick_arg, tool_reply, sizeof(tool_reply))) {
         handled = 1;
         if (chat_launch_after >= 0) return 0; /* open_app: caller returns, again: reopens the picked app */
@@ -785,4 +924,59 @@ static void gui_launch_chat_app(void) {
             continue;
         }
     }
+}
+
+/* "samantha" on the boot command line (kmain -> gui_run, kernel.c's
+   boot_to_samantha): the very first frame after the splash is her, full
+   screen -- big face, a caption, and an already-drawn, already-live input
+   box, not the icon desktop. No conversation exists yet, so this is its
+   own draw (chat_draw_conversation only runs once chat_count > 0), but it
+   ends by handing off into the exact same gui_launch_chat_app console
+   this same face and input live in the rest of the time: esc here goes
+   straight to Chat's normal empty state, and a real first message is
+   processed then dropped into that same console too, so opening an app
+   afterward (chat_run_tool's "open_app") works exactly as it does from
+   the dock icon. */
+static void chat_boot_samantha_open(void) {
+    chat_load();
+    chat_face_load();
+    window_clear(GUI_BG);
+    gui_draw_app_titlebar("Samantha");
+    int T = gui_app_dy();
+    int bottom = (int)window_height() - 40;
+    /* phone: portrait layout -- face centered in the top half sized to the
+       screen width, caption right under it, input box stays pinned to the
+       bottom same as the desktop layout below. Desktop/samantha-only keeps
+       its original bottom-anchored face (unchanged from PR #246). */
+    if (boot_to_phone) {
+        int half = T + 20 + ((int)window_height() - (T + 20)) / 2;
+        int cy = chat_face_draw_big(T + 20, half);
+        render_wrapped_text("Tell me what to do.", 20, cy + 16, (int)window_width() - 40, 20, CHAT_DIM);
+    } else {
+        chat_face_draw_big(T + 20, bottom - 76);
+        render_wrapped_text("Tell me what to do.", 20, bottom - 60, (int)window_width() - 40, 20, CHAT_DIM);
+    }
+    serial_puts("samopen\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: full-screen avatar is up */
+
+    unsigned int n = 0;
+    char msg[CHAT_CONTENT_MAX];
+    msg[0] = 0;
+    mouse_click_edge_sync();
+    for (;;) {
+        window_rect(20, bottom - 30, (int)window_width() - 40, 20, 0x00FFFFFF);
+        msg[n] = 0;
+        font_draw_string(msg, 24, bottom - 28, 0x001C1C1E, -1);
+        serial_puts("samfocus\n"); /* discriminating marker: the input box is drawn and reading keys every frame, i.e. focused */
+        int k = get_key_or_click();
+        if (k == KEY_ESC || k == KEY_CLICK) { gui_launch_chat_app(); return; }
+        if (k == KEY_ENTER) break;
+        if (k == '\b') { if (n > 0) n--; continue; }
+        if (k >= 32 && k < 127 && n < sizeof(msg) - 1) msg[n++] = (char)k;
+    }
+    if (msg[0] != 0) {
+        int x = 20, you_w = font_string_width(CHAT_YOU);
+        int body_w = (int)window_width() - 40 - chat_face_reserve();
+        chat_process_message(msg, T, x, you_w, body_w);
+    }
+    gui_launch_chat_app();
 }

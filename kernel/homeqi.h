@@ -94,7 +94,9 @@ static void hq_draw(void){
     }
 }
 
-static void gui_launch_homeqi(void){
+/* Unreached: APPS[] opens Homeqi through gui_launch_html, as the old
+   switch did (its gui_launch_homeqi branch sat behind a duplicate case). */
+__attribute__((unused)) static void gui_launch_homeqi(void){
     hq_q = 0;
     hq_score = 0;
     hq_show_reasoning = 0;
