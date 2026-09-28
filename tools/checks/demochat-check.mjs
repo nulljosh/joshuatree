@@ -342,6 +342,84 @@ try {
   const outPath = '/tmp/jt-demochat-after.png';
   await page.locator('#screen_canvas').screenshot({ path: outPath });
   console.log('saved ' + outPath);
+
+  // Real bug fixed by fix/phone-samantha-picker: on a phone-sized viewport
+  // embed.js's cmdline adds "phone samantha " (kernel.c's boot_to_phone +
+  // boot_to_samantha), which lands straight in Chat's full-screen avatar
+  // (kernel/chat.h's chat_boot_samantha_open) -- an already-open input box,
+  // not the windowed console's 'n'-to-compose flow every scene above just
+  // drove. phoneSamanthaIntro (embed.js) types directly into it, no
+  // leading 'n'. Proven here the same discriminating way the desktop tool
+  // scenes above are: the real /api/pick body must be the clean sentence
+  // (not "nremind me to call mom at 5", the exact corruption this bug
+  // produced), and kernel/chat.h's own chattool=new_reminder: marker --
+  // not a decline line -- must be the result.
+  console.log('--- phone path ---');
+  const phonePage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await phonePage.emulateMedia({ reducedMotion: 'reduce' });
+  let phonePickBody = null, phonePickSeen = false;
+  await phonePage.route('**/api/proxy**', async (route) => {
+    const req = route.request();
+    let target = '';
+    try { target = new URL(req.url()).searchParams.get('url') || ''; } catch (e) { /* fall through to 403 below */ }
+    let targetUrl = null;
+    try { targetUrl = new URL(target); } catch (e) { /* not a valid absolute url -> 403 below */ }
+    const isPick = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/pick';
+    if (isPick && req.method() === 'POST') {
+      phonePickBody = req.postData();
+      phonePickSeen = true;
+      let q = '';
+      try { q = JSON.parse(phonePickBody || '{}').q || ''; } catch (e) { /* malformed -> 403 below */ }
+      if (q === 'remind me to call mom at 5') {
+        await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ tool: 'new_reminder', arg: 'call mom at 5' }) });
+      } else {
+        await route.fulfill({ status: 403, body: '' }); // any other/garbled q (e.g. the pre-fix "nremind me...") falls through to /api/chat below, same as a real unmatched pick
+      }
+    } else {
+      // /api/chat and everything else: the decline line is what a real LLM
+      // says to a garbled sentence, so a 403 here (falls through to
+      // chat_send's own error text) is enough to prove the FIX path never
+      // needs it -- this route should never see a POST at all once the
+      // pick body is clean.
+      await route.fulfill({ status: 403, body: '' });
+    }
+  });
+  await phonePage.goto(url, { waitUntil: 'load' });
+  try {
+    await phonePage.waitForFunction(() => window.__jt && window.__jt.ready, null, { timeout: 60000 });
+    await phonePage.evaluate(() => {
+      const e = window.__jt.emu;
+      e.mouse_adapter.emu_enabled = true;
+      e.keyboard_adapter.emu_enabled = true;
+    });
+    await phonePage.waitForFunction(() => window.__jt.serial.includes('samopen'), null, { timeout: 20000 });
+    ok('phone: booted straight into the full-screen avatar (samopen)');
+    await phonePage.waitForFunction(() => window.__jt.serial.includes('samfocus'), null, { timeout: 20000 });
+    ok('phone: avatar input box is focused (samfocus)');
+
+    // Same exact input phoneSamanthaIntro (embed.js) drives: typed
+    // straight into the already-open avatar box, no leading 'n' -- this is
+    // what the fix changed (before, runSoloApp's shared script prepended
+    // 'n', corrupting the message into "nremind me to call mom at 5").
+    await phonePage.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 55); }, 'remind me to call mom at 5\n');
+    ok('phone: typed the reminder sentence directly into the avatar, no leading n');
+
+    const t0 = Date.now();
+    while (Date.now() - t0 < 15000 && !phonePickSeen) await phonePage.waitForTimeout(200);
+    if (!phonePickSeen) fail('phone: the demo never made the intercepted POST to /api/pick through /api/proxy');
+    else {
+      let q = '';
+      try { q = JSON.parse(phonePickBody || '{}').q || ''; } catch (e) { /* logged raw below */ }
+      if (q === 'remind me to call mom at 5') ok(`phone: /api/pick got the clean sentence (q="${q}")`);
+      else fail(`phone: /api/pick got a corrupted q: ${JSON.stringify(phonePickBody)}`);
+    }
+
+    await phonePage.waitForFunction(() => window.__jt.serial.includes('chattool=new_reminder:'), null, { timeout: 15000 })
+      .then(() => ok('phone: chattool=new_reminder: fired -- the reminder was really created, not the decline line'))
+      .catch(() => fail('phone: chattool=new_reminder: never fired within 15s'));
+  } catch (e) {
+    fail('phone path setup failed: ' + e.message);
+  }
 } finally {
   await browser.close();
   server.close();
