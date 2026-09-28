@@ -21,6 +21,7 @@ EXEMPT=(
     "drivers/wallpaper.h"
     "drivers/wall_sat.h"
     "kernel/wall_sat.h"
+    "kernel/boot_mark.h"
     "drivers/editor_fonts.h"
     "kernel/icon_art.h"
     "drivers/icon_art.h"
