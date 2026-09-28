@@ -22,14 +22,25 @@ def run(args): subprocess.run(["ffmpeg", "-v", "error", "-y", *args], check=True
 def shot(name, dur, out, caption=True):
     n = len(glob.glob(f"shots/{name}/*.png"))
     speed = n / FPS / dur  # stretch or squeeze the render to the slot
-    fc = f"[0:v]setpts=PTS/{speed:.4f},{V},trim=duration={dur}[b];[b][1:v]overlay=56:H-80,format=yuv420p"
-    run(["-framerate", str(FPS), "-i", f"shots/{name}/%04d.png", "-i", CAP, "-filter_complex", fc, "-an", "-c:v", "libx264", "-crf", "16", out])
+    fc = f"[0:v]setpts=PTS/{speed:.4f},{V},trim=duration={dur}"
+    run(["-framerate", str(FPS), "-i", f"shots/{name}/%04d.png", "-filter_complex", fc, "-an", "-c:v", "libx264", "-crf", "16", out])
 
 def footage(t, dur, out):
     # cover the landing page's Full screen button with the wallpaper just left of it
     fc = ("[0:v]crop=1298:730:151:14,split[a][b];[b]crop=130:56:1036:674[p];"
           f"[a][p]overlay=1166:674,{V}")
     run(["-ss", str(t), "-t", str(dur), "-i", WEBM, "-filter_complex", fc, "-an", "-c:v", "libx264", "-crf", "16", out])
+
+CLAY = "0xB9542C"
+subprocess.run(["magick", "-size", "1600x900", "xc:black", "-fill", "white", "-draw", "roundrectangle 0,0 1599,899 30,30", "cut/mask.png"], check=True)
+def frame(raw, dur, bg, cap, out):
+    # Anthropic-release look: product inset in a rounded frame on a flat colour field, small lower-third caption
+    capp = text_png(cap, 26, "0xF4EEE3" if bg == CLAY else SOFT, f"cut/cap-{abs(hash(cap))}.png")
+    fc = ("[0:v]scale=1600:900,format=rgba[v];[1:v]format=gray[m];[v][m]alphamerge[r];"
+          "[2:v][r]overlay=160:52[a];[a][3:v]overlay=160:H-96,"
+          f"fade=t=in:st=0:d=0.2,fade=t=out:st={dur - 0.2}:d=0.2,format=yuv420p")
+    run(["-i", raw, "-loop", "1", "-framerate", str(FPS), "-i", "cut/mask.png", "-f", "lavfi", "-i", f"color=c={bg}:s=1920x1080:r={FPS}",
+         "-loop", "1", "-framerate", str(FPS), "-i", capp, "-filter_complex", fc, "-t", str(dur), "-an", "-c:v", "libx264", "-crf", "16", out])
 
 def card(text, dur, out, size=120):
     t = text_png(text, size, INK, f"cut/card-{text.strip('.')}.png")
@@ -65,10 +76,13 @@ EDL = [
     (5.6,  "end",     ()),
 ]
 parts = []
+CAPS = {"hero": "Introducing Joshua Tree", "turn": "Mesa enclosure. Concept render.", "explode": "Six layers. Two millimetre gaps.", "mark": "The tree, engraved into the lid."}
 for i, (dur, kind, a) in enumerate(EDL):
-    out = f"cut/{i:02d}.mp4"
-    {"shot": lambda: shot(a[0], dur, out), "footage": lambda: footage(a[0], dur, out),
-     "card": lambda: card(a[0], dur, out), "end": lambda: end(dur, out)}[kind]()
+    out = f"cut/{i:02d}.mp4"; raw = f"cut/{i:02d}-raw.mp4"
+    if kind == "shot": shot(a[0], dur, raw); frame(raw, dur, CLAY, CAPS[a[0]], out)
+    elif kind == "footage": footage(a[0], dur, raw); frame(raw, dur, BG, "Joshua Tree OS. Live, in a browser.", out)
+    elif kind == "card": card(a[0], dur, out)
+    else: end(dur, out)
     parts.append(out)
 open("cut/list.txt", "w").write("".join(f"file '{os.path.basename(p)}'\n" for p in parts))
 run(["-f", "concat", "-safe", "0", "-i", "cut/list.txt", "-c", "copy", "cut/picture.mp4"])
