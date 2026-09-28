@@ -21,6 +21,7 @@ function makeFakeKV() {
   const store = new Map();
   return {
     store,
+    async get(key) { return store.has(key) ? store.get(key) : null; },
     async put(key, value) { store.set(key, value); },
     async list({ cursor } = {}) {
       // Single page every time: real KV pages at 1000 keys, no test here
