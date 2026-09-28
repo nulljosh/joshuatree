@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Headless proof of the "phone" boot flag (kernel.c's boot_to_phone):
-"phone samantha" on the multiboot command line opens a real 430x932
+"phone samantha" on the multiboot command line opens a real 430x760
 portrait framebuffer (Bochs VBE, drivers/vbe.c's vbe_set_mode, called via
 window_open in gui_run) instead of the desktop's 960x540@2x, and lands on
 Chat's full-screen avatar view laid out for it (kernel/chat.h's
@@ -10,8 +10,8 @@ for boot_to_phone).
 Same boot + QMP + serial shape as samantha-boot-check.py: boots
 kernel.elf under `-display none`, waits past the splash, reads serial for
 her avatar markers, and screendumps the framebuffer at exactly
-430*932*4 bytes -- the read only lines up with real content if the mode
-really is 430x932, not the desktop's 960x540 (misaligned rows would read
+860*1520*4 bytes -- the read only lines up with real content if the mode
+really is 430x760, not the desktop's 960x540 (misaligned rows would read
 as noise, not the specific colors this checks for at specific offsets).
 
 Usage: tools/checks/phone-boot-check.py   (from the repo root, after make kernel.elf)
@@ -20,7 +20,7 @@ import json, os, socket, subprocess, sys, time
 
 PORT = 4480
 FB = 0xfd000000
-W, H = 430, 932
+W, H = 860, 1520  # 430x760 logical at 2x
 GUI_BG = (0xFA, 0xF8, 0xF6)
 DUMP = "/tmp/jt-phoneboot.raw"
 PNG = "/tmp/jt-phoneboot.png"
@@ -87,7 +87,7 @@ try:
     # her real face photo, which needs facehost= reachable -- this headless
     # boot has no NIC, same caveat samantha-boot-check.py notes). A real,
     # saturated red dot there is real, positioned ink, not a flat background.
-    dot = get(26, 20)
+    dot = get(52, 40)
     if close(dot, GUI_BG, 30):
         fail = 1; print(f"FAIL: titlebar dot at (26,20) looks like plain background {dot} -- top region not drawn")
     else:
@@ -95,20 +95,20 @@ try:
 
     # Input box: chat_boot_samantha_open draws a solid white rect at
     # (20, bottom-30) .. (width-20, bottom-10), bottom = height-40 = 892,
-    # i.e. rows 862..882 -- only at the true bottom of a 932-tall frame.
-    box = get(30, 872)
+    # i.e. rows 690..710 -- only at the true bottom of a 760-tall frame.
+    box = get(60, 1400)
     if not close(box, (255, 255, 255), 15):
-        fail = 1; print(f"FAIL: input box at (30,872) is not white {box} -- not drawn where a 932-tall frame puts it")
+        fail = 1; print(f"FAIL: input box at (30,700) is not white {box} -- not drawn where a 760-tall frame puts it")
     else:
         print(f"PASS: input box drawn at the expected bottom position: rgb={box}")
-    above_box = get(30, 840)
+    above_box = get(60, 1336)
     if close(box, above_box, 5) and not close(above_box, (255, 255, 255), 15):
         pass  # background sampled above the box differs from the box itself -- fine either way, informational only
 except Exception as e:
     fail = 1; print(f"FAIL: pixel checks errored ({e})")
 
 if not fail:
-    print("PASS: \"phone samantha\" opens a real 430x932 portrait boot straight into Samantha's view, titlebar and input box both where a phone-sized frame puts them")
+    print("PASS: \"phone samantha\" opens a real 430x760 portrait boot straight into Samantha's view, titlebar and input box both where a phone-sized frame puts them")
 
 try:
     from PIL import Image as _Image
