@@ -366,8 +366,29 @@ async function handleWaitlistPost(request, env) {
     return new Response(JSON.stringify({ error: "Invalid email" }), { status: 400, headers: WAITLIST_JSON });
   }
 
+  // Only a first-time signup sends mail, so a repeat post can't be used to spam an address.
+  const isNew = (await env.WAITLIST.get(email)) === null;
   await env.WAITLIST.put(email, new Date().toISOString());
+  if (isNew) await sendWaitlistEmail(env, email);
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: WAITLIST_JSON });
+}
+
+// Resend confirmation. Never fails the signup: the address is already saved, a mail hiccup just logs.
+async function sendWaitlistEmail(env, email) {
+  if (!env.RESEND_API_KEY) { console.warn("waitlist mail skipped: RESEND_API_KEY not set"); return; }
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: env.MAIL_FROM || "Joshua Tree <noreply@epiphany.heyitsmejosh.com>",
+        to: [email],
+        subject: "You're on the Joshua Tree waitlist",
+        text: "You're on the list.\n\nJoshua Tree is an operating system written from scratch, and the Strata case is the hardware it will ship in. When the dev kit is ready, you'll get one email from me. Nothing else.\n\nTry it in your browser now: https://joshuatree.heyitsmejosh.com\n\nJoshua",
+      }),
+    });
+    if (!res.ok) console.warn("waitlist mail failed", res.status, await res.text());
+  } catch (e) { console.warn("waitlist mail error", String(e)); }
 }
 
 // list() pages at 1000 keys per call and this only ever needs a count, so
