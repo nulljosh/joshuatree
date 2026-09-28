@@ -123,6 +123,7 @@ retry|5|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./to
 retry|4|Dock tray corner AA (real coverage blend, not binary)|python3 ./tools/checks/traycorner-check.py
 retry|5|Portfolio catalog opens, lists the fleet, and the list scrolls|python3 ./tools/checks/portfolio-check.py
 retry|5|Boot logo AA (no false interior seams at overlapping capsule joints)|python3 ./tools/checks/bootlogo-check.py
+retry|1|Boot splash draws the real landing/logo.svg mark, not the old stick tree|python3 ./tools/checks/bootmark-check.py
 once |7|Landing eyebrow tracks roadmap Latest, H1 stays the brand line|./tools/checks/landing-headline-check.sh
 once |1|Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcount-check.mjs
 once |7|Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs

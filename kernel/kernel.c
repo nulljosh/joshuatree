@@ -34,6 +34,7 @@
 #include "http.h"
 #include "wallpaper.h"
 #include "icon_art.h"
+#include "boot_mark.h"
 #include "wall_sat.h"
 /* v75 (0.67.0): the wallpaper is read through this pointer, not the baked
    array directly, so a real fetched image (wall_fetch below: a 2x2 mosaic
@@ -2337,10 +2338,11 @@ static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned i
    "8-bit" staircase problem the weather icon's rays had, now on the one
    piece of branding that appears everywhere including full-size at boot. */
 static void gui_draw_logo(int x, int cy, int scale, unsigned int bg, unsigned int c){
-    if (!window_has_target() && window_scale() > 1){
+    if (!window_has_target()){
         /* Drawn in physical pixels: u is one logo unit, every limb a round-ended
-           stroke. The logical path below rounds the menu bar's stroke radius to 0
-           and pixel-doubles its diagonals, which is what read as 8-bit. */
+           stroke. gui_draw_boot_mark replaces this at boot now, so the only
+           caller left is the menu bar; always taking physical pixels here
+           avoids the logical path's scaling artifacts at any window_scale. */
         int sc = (int)window_scale(), u = scale * sc;
         int pr = u * 2 / 5; if (pr < 1) pr = 1;
         int ox = x * sc + u / 2, oy = cy * sc;
@@ -6499,11 +6501,33 @@ static int gui_multiwin_key_nonblock(void){
    confirmed via the shell's own "sleep 1s" = sleep_ticks(100)), not a
    frame-counted loop, so it holds the same real duration regardless of
    how fast this machine happens to render each frame. */
+/* The real landing brand mark (landing/logo.svg), not the old stick-figure
+   gui_draw_logo primitive. boot_mark.h (tools/gen/gen_boot_mark.py) carries
+   its rasterized 8-bit coverage; blended at PHYSICAL resolution via
+   window_pixel_phys, the same pattern gui_aa_char uses for text. cx,cy are
+   LOGICAL center coords, converted to physical here. */
+static void gui_draw_boot_mark(int cx, int cy, unsigned int ink){
+    int sc = window_has_target() ? 1 : (int)window_scale(); if (sc < 1) sc = 1;
+    int ox = cx * sc - BOOT_MARK_W / 2, oy = cy * sc - BOOT_MARK_H / 2;
+    for (int row = 0; row < BOOT_MARK_H; row++){
+        for (int col = 0; col < BOOT_MARK_W; col++){
+            int a = boot_mark_cov[row * BOOT_MARK_W + col];
+            if (!a) continue;
+            int x = ox + col, y = oy + row;
+            unsigned int d = window_get_pixel_phys(x, y);
+            unsigned int r = (((ink >> 16) & 0xFF) * a + ((d >> 16) & 0xFF) * (255 - a)) / 255;
+            unsigned int g = (((ink >> 8) & 0xFF) * a + ((d >> 8) & 0xFF) * (255 - a)) / 255;
+            unsigned int b = ((ink & 0xFF) * a + (d & 0xFF) * (255 - a)) / 255;
+            window_pixel_phys(x, y, (r << 16) | (g << 8) | b);
+        }
+    }
+}
+
 static void gui_draw_boot_screen(void){
     unsigned int bg = 0x00000000; /* pure black boot background, direct request */
     window_clear(bg);
     int cx = (int)window_width() / 2, cy = (int)window_height() / 2; /* v45.2: centred on the real window; 400 was the 800-wide centre and sat left of centre at 960 */
-    gui_draw_logo(cx, cy - 10, 5, bg, 0x00FFFFFF); /* v0.76.47: was a hardcoded maroon (0x0085144B) the function used to bake in regardless of caller, direct report ("boot logo still pink/purple") -- gui_draw_logo now takes color explicitly, white here to match the plain-black boot screen. v48: dropped the "hello" wordmark, direct request, logo alone reads cleaner */
+    gui_draw_boot_mark(cx, cy - 10, 0x00FFFFFF); /* v1.6.20: the real landing/logo.svg brand mark, replacing the old stick-tree gui_draw_logo primitive here -- white ink to match the plain-black boot screen, same as the primitive it replaces */
 
     unsigned int start = ticks();
     unsigned int logo_only = 60; /* 0.6s: just the logo and wordmark, no bar yet */
