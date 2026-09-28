@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+// MANUAL: WIP, not yet wired into CI. Booting the kernel under Playwright's
+// bundled WebKit hits a real environment bug (new Worker(blob:...) fails
+// with "WebKitBlobResource error 1", which v86's tick scheduler needs), so
+// the chat/speak/chunk-counter assertions below don't run yet -- see
+// HANDOFF.md for the fix (split webkit-for-unlock vs chromium-for-boot)
+// before wiring this into .github/workflows/check.yml's demo job.
 // 1.7.14: Samantha's voice still didn't play on Joshua's real iPhone even
 // after 1.7.6's touchend/click unlock. We can't test a real phone from
 // here, so this proves the mobile unlock path end to end under real
