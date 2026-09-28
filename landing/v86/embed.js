@@ -1224,6 +1224,12 @@ if (typeof document !== "undefined") (function () {
     return heldChord(SC_SHIFT_DOWN, SC_SHIFT_UP, taps);
   }
   var CTRL_C_CODES = heldChord(SC_CTRL_DOWN, SC_CTRL_UP, [[SC_C_DOWN, SC_C_UP]]);
+  // Shared with phoneSamanthaIntro below (the exact same first line the
+  // Samantha scene's own script types), so a phone visitor's first
+  // reminder request and a desktop visitor's are word-for-word the same
+  // sentence -- only the delivery differs (see phoneSamanthaIntro's own
+  // comment for why phone skips the leading 'n').
+  var SAMANTHA_REMINDER_LINE = 'remind me to call mom at 5';
   var TOUR_APPS = [
     { name: 'Notes', slot: 4, dwell: 15500, script: [ // +2.5s over the pre-1.2.0 13000 for the new select/copy/clear beat below
       { type: 'keys', text: 'Kernel, GUI, browser, terminal, and a dozen real apps, none of it borrowed.', speed: 55 },
@@ -1320,7 +1326,7 @@ if (typeof document !== "undefined") (function () {
     { name: 'Samantha', slot: 7, dwell: 30000, script: [
       { type: 'keys', text: 'n', speed: 200 },
       { type: 'wait', ms: 400 },
-      { type: 'keys', text: 'remind me to call mom at 5\n', speed: 55 },
+      { type: 'keys', text: SAMANTHA_REMINDER_LINE + '\n', speed: 55 },
       { type: 'wait', ms: 3000 },
       { type: 'keys', text: 'n', speed: 200 },
       { type: 'wait', ms: 400 },
@@ -1837,6 +1843,56 @@ if (typeof document !== "undefined") (function () {
     resetHeadline(); // the app is gone, so stop announcing it over an empty desktop
     await sleep(1200); // a beat before the next app opens, reads as a real transition not a jump-cut
   }
+  // Real bug, reproduced headless at iPhone size and confirmed by
+  // intercepting the actual POST body: on a phone, kernel.c's boot_to_phone
+  // + boot_to_samantha (embed.js's own cmdline above, "phone samantha ...")
+  // lands the kernel straight in Chat's full-screen avatar view
+  // (kernel/chat.h's chat_boot_samantha_open) BEFORE any dock/desktop ever
+  // shows -- her input box there is already open and reading keys directly
+  // into the message buffer (see chat_boot_samantha_open's own `for (;;)`
+  // loop, `if (k >= 32 && k < 127) msg[n++] = k`), unlike the windowed
+  // console every OTHER tour scene drives, where 'n' is a hotkey that opens
+  // a compose prompt first. runSoloApp's shared script shape sends that
+  // leading 'n' unconditionally; on the phone boot avatar there is no
+  // hotkey to catch it, so it becomes the literal first character of the
+  // message. Confirmed live: intercepting the demo's own /api/proxy POST
+  // showed q:"nremind me to call mom at 5" -- Turing's picker can't
+  // classify that, /api/chat falls back to the real LLM, and its honest
+  // answer to a nonsense sentence is the canned "I couldn't find anything
+  // on that" decline line. That decline line was the very first thing a
+  // phone visitor (and Joshua, on his own iPhone) ever saw her say.
+  //
+  // Also: the very first tour action every lap (runSoloApp(MAIL_APP)) is a
+  // dock-tile click, but on phone there is no dock yet -- the avatar screen
+  // is still up, and ANY click there (chat_boot_samantha_open's own
+  // `k == KEY_CLICK` case) abandons it straight into the windowed console,
+  // so the rest of that first scene's script would already be typing into
+  // the wrong view. Real fix: give phone its own first scene that types
+  // directly into the still-open avatar (no dock click, no leading 'n'),
+  // waits for her real reply, then closes the console with Escape -- the
+  // same unconditional `KEY_ESC -> return` gui_launch_chat_app already
+  // honors -- landing cleanly on the normal desktop the rest of this lap's
+  // dock-based tour already assumes.
+  async function phoneSamanthaIntro(gen) {
+    if (!IS_PHONE) return;
+    if (focused || tourGen !== gen || !adaptersReady) return;
+    emulator.mouse_adapter.emu_enabled = true;
+    emulator.keyboard_adapter.emu_enabled = true;
+    var start = Date.now();
+    while (serialLog.indexOf('samfocus') === -1) {
+      if (focused || tourGen !== gen) return; // a real visitor took over
+      if (Date.now() - start > 8000) return; // didn't see the avatar boot at all (unexpected cmdline) -- bail, the normal dock tour below still runs as-is
+      await sleep(150);
+    }
+    if (focused || tourGen !== gen) return;
+    updateHeadline('Samantha');
+    await emulator.keyboard_send_text(SAMANTHA_REMINDER_LINE + '\n', 55); // straight into her already-open input box, exactly like a real visitor's first tap-and-type would
+    await sleep(3000); // real /api/pick + local reminder-tool round trip, same dwell the windowed scene's own script already gives each turn
+    if (focused || tourGen !== gen) return;
+    if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80); // Escape: closes the now-windowed console back to the desktop
+    await sleep(800);
+    resetHeadline();
+  }
   async function tourLoop(gen) {
     tourRunning = true;
     // Portfolio mode: the dock is Joshua's own apps (GUI_DOCK_PORTFOLIO in kernel.c,
@@ -1863,6 +1919,13 @@ if (typeof document !== "undefined") (function () {
       // round, then another solo app, then the second (quieter) round,
       // then the rest. Real content is never more than one scene away.
       if (focused || tourGen !== gen || !adaptersReady) return;
+      // Phone boots straight into Chat's full-screen avatar (see
+      // phoneSamanthaIntro's own header comment) -- handle that screen
+      // for real before the dock-based tour below, which assumes the
+      // normal desktop is already showing, ever clicks anything. A no-op
+      // on desktop (IS_PHONE false).
+      await phoneSamanthaIntro(gen);
+      if (focused || tourGen !== gen) return;
       await runSoloApp(gen, MAIL_APP);
       if (focused || tourGen !== gen) return;
       await multiWindowRound(gen, MW_FILES, MW_REMINDERS); // has real typed interaction (Reminders)
