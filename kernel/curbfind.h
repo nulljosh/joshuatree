@@ -194,8 +194,8 @@ static void cf_draw(void) {
         hdr[h] = 0;
         font_draw_string(hdr, CF_LIST_X, 34, 0x0075726E, -1);
     }
-    font_draw_string(cf_city[0] ? "Live Craigslist deals for your area   up/down or click to select   esc closes"
-                                : "Offline, sample Vancouver listings   up/down or click to select   esc closes", 20, (int)window_height() - 30, 0x0075726E, -1);
+    gui_draw_hint(20, (int)window_height() - 30, cf_city[0] ? "Live Craigslist deals for your area   up/down or click to select   esc closes"
+                                : "Offline, sample Vancouver listings   up/down or click to select   esc closes", 0x0075726E);
 }
 
 static void gui_launch_curbfind(void) {

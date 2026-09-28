@@ -69,7 +69,7 @@ static void clock_draw_timer(void) {
 static void gui_launch_clock(void) {
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Clock");
-    font_draw_string("space starts timer  r resets  a alarm  esc closes", 20, 42, 0x0075726E, -1);
+    gui_draw_hint(20, 42, "space starts timer  r resets  a alarm  esc closes", 0x0075726E);
 
     clock_timer_sec = 0;
     clock_timer_paused = 0;

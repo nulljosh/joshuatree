@@ -142,7 +142,7 @@ static void gui_launch_search(void) {
     /* Chrome drawn once: titlebar + instructions never change while typing. */
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Search");
-    font_draw_string("type to filter   up/down to pick   enter opens   esc closes", 20, T + 52, 0x0075726E, -1);
+    gui_draw_hint(20, T + 52, "type to filter   up/down to pick   enter opens   esc closes", 0x0075726E);
 
     for (;;) {
         search_draw_content();
@@ -191,7 +191,7 @@ static void gui_launch_search(void) {
             search_open_file(f->name);
             window_clear(GUI_BG);
             gui_draw_app_titlebar("Search");
-            font_draw_string("type to filter   up/down to pick   enter opens   esc closes", 20, T + 52, 0x0075726E, -1);
+            gui_draw_hint(20, T + 52, "type to filter   up/down to pick   enter opens   esc closes", 0x0075726E);
         }
     }
 }

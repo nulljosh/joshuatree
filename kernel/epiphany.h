@@ -389,8 +389,8 @@ static void epi_draw(int tab, int sel) {
         font_draw_string(shown, 20, bar_y + 10, EPI_ACCENT, -1);
     } else font_draw_string("/ command   AAPL GP   AAPL DES", 20, bar_y + 10, STX_MUTED, -1);
 
-    font_draw_string(epi_live ? "Live quotes, crypto and macro are sample   r refresh   left/right tabs   esc closes"
-                              : "Offline, sample prices   r retry   left/right tabs   esc closes", 20, HH - 24, STX_MUTED, -1);
+    gui_draw_hint(20, HH - 24, epi_live ? "Live quotes, crypto and macro are sample   r refresh   left/right tabs   esc closes"
+                              : "Offline, sample prices   r retry   left/right tabs   esc closes", STX_MUTED);
     window_present();
 }
 

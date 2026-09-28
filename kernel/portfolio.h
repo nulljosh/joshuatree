@@ -155,7 +155,7 @@ static void gui_launch_portfolio(void) {
 
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Portfolio");
-    font_draw_string("up/down or scroll to browse   esc closes", 20, 48, 0x0075726E, -1);
+    gui_draw_hint(20, 48, "up/down or scroll to browse   esc closes", 0x0075726E);
 
     for (;;) {
         pf_draw_content();
