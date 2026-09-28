@@ -209,6 +209,26 @@ void paging_set_user(void *virt_addr) {
     __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
 }
 
+/* 1.7.8: see paging.h. Per page, and per alias for the TLB: the same
+   frame is visible at addr and at addr +/- KERNEL_VIRTUAL_BASE, and a
+   stale user-permitted TLB entry for either would let the write through
+   after the PTE says no. */
+void paging_clear_user(void *addr, unsigned int len) {
+    u32 start = (u32)addr & ~0xFFFu;
+    u32 end = (u32)addr + len;
+    if (end < (u32)addr) end = 0xFFFFF000u;
+    for (u32 p = start; p < end; p += 0x1000) {
+        int t = base_table_index(p);
+        if (t < 0) return;
+        u32 pte = (p >> 12) & 0x3FF;
+        base_page_tables[t][pte] &= ~0x4u;
+        u32 alias = p >= KERNEL_VIRTUAL_BASE ? p - KERNEL_VIRTUAL_BASE : p + KERNEL_VIRTUAL_BASE;
+        __asm__ volatile ("invlpg (%0)" :: "r"(p) : "memory");
+        __asm__ volatile ("invlpg (%0)" :: "r"(alias) : "memory");
+        if (p > 0xFFFFF000u - 0x1000) break;
+    }
+}
+
 /* v64 (0.61.0): access_ok for syscalls. Only the base map (either alias)
    can hold user pages today (paging_set_user's own limit), so anything
    outside it is a kernel-only address by construction. Within it, every

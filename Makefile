@@ -175,6 +175,14 @@ user/keyrate.o: user/keyrate.c user/jtsys.h drivers/vgafont.h
 user/keyrate.bin: user/keyrate.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/keyrate.o user/libjt.a
 
+# 1.7.8: fbpoke, the program that pokes the released window framebuffer
+# and must fault. Run by kernel/ring3app.c under the `fbpoke` boot flag.
+user/fbpoke.o: user/fbpoke.c user/jtsys.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/fbpoke.bin: user/fbpoke.o user/note.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/fbpoke.o
+
 # The built binaries, embedded so `usertest`/`notetest`/`shell` can seed
 # them into the VFS on a machine with no disk (every headless check boot,
 # and the browser embed).
@@ -191,7 +199,10 @@ drivers/user_keyrate.h: user/keyrate.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/keyrate.bin drivers/user_keyrate.h user_keyrate
 
 kernel/kernel.o: drivers/user_hello.h drivers/user_note.h drivers/user_wc.h
-kernel/ring3app.o: drivers/user_keyrate.h
+drivers/user_fbpoke.h: user/fbpoke.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/fbpoke.bin drivers/user_fbpoke.h user_fbpoke
+
+kernel/ring3app.o: drivers/user_keyrate.h drivers/user_fbpoke.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@

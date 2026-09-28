@@ -504,11 +504,16 @@ same one-program-at-a-time rule as `exec_user`. The framebuffer is
 room. The kernel copies the whole buffer on every present, so a program
 should present only after it drew something. No font: a program draws its
 own glyphs (`user/keyrate.c` carries the kernel's 8x16 VGA fallback font
-as data). No finer clock than `time`'s seconds. On release the buffer is
-zeroed, and it is zeroed and re-mapped on the next `window_open`, but its
-pages are not flipped back to supervisor-only between programs; nothing
-at ring 3 can reach them without a live `window_open`, since there is no
-other ring-3 task then, and a future paging call will close that gap.
+as data). No finer clock than `time`'s seconds.
+
+Release is complete, as of 1.7.8. When the owning task ends, by `exit` or
+by a fault, the buffer is zeroed and its pages are flipped back to
+supervisor-only (`paging_clear_user`), on every teardown path. The next
+program, with no `window_open` of its own, page-faults if it stores into
+`0xC0520000`, and a syscall handed a pointer into that range gets
+`-EFAULT`, the same answer as for a pointer into the kernel. 1.7.7 only
+zeroed; `tools/checks/userfb-release-check.py` runs `user/fbpoke.c` right
+after a window closes and asserts both refusals and the fault.
 
 ## The v3 reference program
 

@@ -33,3 +33,5 @@ package-lock.json
 *.iso
 build/
 landing/v86/kernel.elf.gz
+user/fbpoke.bin
+drivers/user_fbpoke.h
