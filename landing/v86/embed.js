@@ -186,7 +186,7 @@ if (typeof document !== "undefined") (function () {
 
     emulator = new V86({
     wasm_path: "v86/v86.wasm",
-    memory_size: 32 * 1024 * 1024,
+    memory_size: 64 * 1024 * 1024, // 1.6.14: 32MB left no room for a full spoken reply once her face frames were loaded
     vga_memory_size: 16 * 1024 * 1024, // v41: 1600x1200x32bpp is 7.68MB, 8 was one bad rounding away from failing
     screen_container: screenContainer,
     multiboot: buf ? { buffer: buf.slice(0) } : { url: "v86/kernel.elf" },

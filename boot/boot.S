@@ -20,7 +20,9 @@
    VBE path still sets the mode; Limine on a real PC honours it through the
    card's own VBE/GOP, which is the only way this kernel gets pixels on
    hardware that is not the Bochs adapter. */
-.set FLAGS,    0x4
+/* Bit 1: ask for memory info. v86 answers with a memory map only (no
+   mem_upper), which pmm.c reads; without the request v86 sends neither. */
+.set FLAGS,    0x6
 .set CHECKSUM, -(MAGIC + FLAGS)
 
 .section .multiboot, "a"
