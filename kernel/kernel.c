@@ -9664,6 +9664,13 @@ void kmain(unsigned int multiboot_info_addr){
            check that asks for it. */
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='p' && pc[1]=='a' && pc[2]=='n' && pc[3]=='i' && pc[4]=='c' && pc[5]=='t' && pc[6]=='e' && pc[7]=='s' && pc[8]=='t') { panic_test_at_boot = 1; break; }
+        /* nodhcp: skip the DHCP DISCOVER/OFFER/REQUEST/ACK exchange
+           net_init now runs by default (drivers/net.c) and boot straight
+           onto the hardcoded 10.0.2.15/SLIRP-gateway config every net_init
+           caller already passes. Parsed before anything else in kmain
+           could call net_init. */
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='n' && pc[1]=='o' && pc[2]=='d' && pc[3]=='h' && pc[4]=='c' && pc[5]=='p' && (pc[6]==' ' || pc[6]==0)) { net_nodhcp = 1; break; }
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;

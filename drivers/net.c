@@ -8,6 +8,7 @@
 #include "rtl8139.h"
 #include "ne2k.h"
 #include "irq.h"
+#include "serial.h"
 
 typedef unsigned int   u32;
 typedef unsigned short u16;
@@ -122,6 +123,238 @@ const char *net_error_name(int err) {
     }
 }
 
+/* ---- DHCP (RFC 2131 minimum): DISCOVER/OFFER/REQUEST/ACK over UDP 68->67,
+   broadcast both ways since the client has no IP (and often no ARP entry
+   for it either) until the exchange finishes. Real routers only hand out
+   a lease to a client that does this whole 4-step dance; a bare "ask the
+   gateway for an address" ARP-style shortcut isn't DHCP and most routers
+   (and QEMU SLIRP's own dhcp server) just won't answer it. Runs once at
+   net_init, before our_ip is considered final; falls back to net_init's
+   caller-supplied fixed IP (unchanged behavior) if no server ever answers,
+   so a real network with no DHCP server, or `nodhcp` on the command line,
+   boots exactly as this kernel always has. */
+#define DHCP_SERVER_PORT 67
+#define DHCP_CLIENT_PORT 68
+#define DHCP_MAGIC_COOKIE 0x63825363u
+#define DHCP_MSG_DISCOVER 1
+#define DHCP_MSG_OFFER    2
+#define DHCP_MSG_REQUEST  3
+#define DHCP_MSG_ACK      5
+#define DHCP_MSG_NAK      6
+#define DHCP_TIMEOUT_TICKS 300 /* ~2.5-7s per attempt depending on host load; SLIRP's dhcpd answers near-instantly */
+#define DHCP_RETRIES 3
+
+struct dhcp_packet {
+    u8  op, htype, hlen, hops;
+    u32 xid;
+    u16 secs, flags;
+    u32 ciaddr, yiaddr, siaddr, giaddr;
+    u8  chaddr[16];
+    u8  sname[64];
+    u8  file[128];
+    u32 magic_cookie;
+    u8  options[64];
+} __attribute__((packed));
+
+/* Sends one DHCP message as a broadcast frame: dest MAC ff:ff:ff:ff:ff:ff,
+   src IP 0.0.0.0 (we don't have one yet, or are just confirming an offer),
+   dest IP 255.255.255.255. Bypasses udp_send/resolve_next_hop entirely --
+   both assume a real our_ip and a real ARP-resolvable next hop, neither of
+   which exist yet during DISCOVER. */
+static int dhcp_send(const struct dhcp_packet *pkt, u32 opt_len) {
+    u8 frame[sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct udp_header) + sizeof(struct dhcp_packet)];
+    struct eth_header *eth = (struct eth_header *)frame;
+    struct ip_header  *ip  = (struct ip_header *)(frame + sizeof(*eth));
+    struct udp_header *udp = (struct udp_header *)(frame + sizeof(*eth) + sizeof(*ip));
+    u8 *payload = frame + sizeof(*eth) + sizeof(*ip) + sizeof(*udp);
+
+    u32 dhcp_len = (u32)(sizeof(struct dhcp_packet) - sizeof(((struct dhcp_packet *)0)->options)) + opt_len;
+
+    for (int i = 0; i < 6; i++) { eth->dest[i] = 0xFF; eth->src[i] = our_mac[i]; }
+    eth->ethertype = htons(ETHERTYPE_IP);
+
+    u16 udp_len = (u16)(sizeof(*udp) + dhcp_len);
+    u16 ip_len  = (u16)(sizeof(*ip) + udp_len);
+
+    ip->version_ihl = 0x45;
+    ip->tos = 0;
+    ip->total_length = htons(ip_len);
+    ip->id = 0;
+    ip->flags_fragment = 0;
+    ip->ttl = 64;
+    ip->protocol = 17;
+    ip->checksum = 0;
+    ip->src_ip = 0; /* 0.0.0.0 */
+    ip->dst_ip = 0xFFFFFFFFu; /* 255.255.255.255 */
+    ip->checksum = checksum16(ip, sizeof(*ip));
+
+    udp->src_port = htons(DHCP_CLIENT_PORT);
+    udp->dst_port = htons(DHCP_SERVER_PORT);
+    udp->length = htons(udp_len);
+    udp->checksum = 0;
+
+    const u8 *src = (const u8 *)pkt;
+    for (u32 i = 0; i < dhcp_len; i++) payload[i] = src[i];
+
+    u32 frame_len = sizeof(*eth) + ip_len;
+    if (frame_len < 60) frame_len = 60;
+    return active_send(frame, frame_len);
+}
+
+/* Scans a received DHCP packet's options for tag, returns a pointer to its
+   value (val_len filled in) or 0 if not present / truncated. */
+static const u8 *dhcp_find_option(const u8 *opts, u32 opts_len, u8 tag, u8 *val_len) {
+    u32 i = 0;
+    while (i < opts_len) {
+        u8 t = opts[i];
+        if (t == 0xFF) break;      /* end */
+        if (t == 0) { i++; continue; } /* pad */
+        if (i + 1 >= opts_len) break;
+        u8 len = opts[i + 1];
+        if (i + 2 + len > opts_len) break;
+        if (t == tag) { *val_len = len; return opts + i + 2; }
+        i += 2 + len;
+    }
+    return 0;
+}
+
+static void serial_put_ip(u32 ip) {
+    for (int shift = 24; shift >= 0; shift -= 8) {
+        u8 byte = (u8)(ip >> shift);
+        char digits[4]; int n = 0;
+        if (byte == 0) digits[n++] = '0';
+        while (byte) { digits[n++] = (char)('0' + (byte % 10)); byte /= 10; }
+        char out[4]; for (int k = 0; k < n; k++) out[k] = digits[n - 1 - k]; out[n] = 0;
+        serial_puts(out);
+        if (shift) serial_puts(".");
+    }
+}
+
+/* Runs the full DISCOVER -> OFFER -> REQUEST -> ACK exchange. On success,
+   fills ip_out/mask_out/gw_out/dns_out (host byte order, dns/gw default to
+   0 if the server's ACK didn't include them) and returns 1. Retries
+   DHCP_RETRIES times with a fresh transaction ID each attempt (a real
+   router can drop a broadcast, and this is exactly the "retry with a
+   timeout" the DHCP spec expects of every client). Returns 0 if nothing
+   ever answers. */
+static int dhcp_negotiate(u32 *ip_out, u32 *mask_out, u32 *gw_out, u32 *dns_out) {
+    u8 rx[1514];
+
+    for (int attempt = 0; attempt < DHCP_RETRIES; attempt++) {
+        u32 xid = ticks() + (u32)attempt * 7919u + 1u;
+
+        struct dhcp_packet disc = {0};
+        disc.op = 1; disc.htype = 1; disc.hlen = 6; disc.hops = 0;
+        disc.xid = htonl(xid);
+        disc.flags = htons(0x8000); /* broadcast flag: we can't receive a unicast reply, we have no IP yet */
+        for (int i = 0; i < 6; i++) disc.chaddr[i] = our_mac[i];
+        disc.magic_cookie = htonl(DHCP_MAGIC_COOKIE);
+        u32 op = 0;
+        disc.options[op++] = 53; disc.options[op++] = 1; disc.options[op++] = DHCP_MSG_DISCOVER;
+        disc.options[op++] = 55; disc.options[op++] = 3; disc.options[op++] = 1; disc.options[op++] = 3; disc.options[op++] = 6; /* param request: subnet, router, DNS */
+        disc.options[op++] = 0xFF;
+        if (!dhcp_send(&disc, op)) continue;
+
+        u32 offered_ip = 0, server_id = 0;
+        u32 deadline = ticks() + DHCP_TIMEOUT_TICKS;
+        while (ticks() < deadline) {
+            u32 n = active_receive(rx, sizeof(rx));
+            if (n < sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct udp_header) + 240) continue;
+            struct eth_header *eth = (struct eth_header *)rx;
+            if (eth->ethertype != htons(ETHERTYPE_IP)) continue;
+            struct ip_header *ip = (struct ip_header *)(rx + sizeof(*eth));
+            if (ip->protocol != 17) continue;
+            u32 ip_hlen = (u32)(ip->version_ihl & 0x0F) * 4;
+            struct udp_header *udp = (struct udp_header *)(rx + sizeof(*eth) + ip_hlen);
+            if (udp->dst_port != htons(DHCP_CLIENT_PORT)) continue;
+            const u8 *body = rx + sizeof(*eth) + ip_hlen + sizeof(*udp);
+            u32 body_len = n - (u32)(sizeof(*eth) + ip_hlen + sizeof(*udp));
+            if (body_len < 240) continue;
+            const struct dhcp_packet *reply = (const struct dhcp_packet *)body;
+            if (reply->xid != htonl(xid)) continue;
+            if (reply->magic_cookie != htonl(DHCP_MAGIC_COOKIE)) continue;
+
+            u8 vlen; const u8 *v = dhcp_find_option(reply->options, body_len - 240, 53, &vlen);
+            if (!v || vlen != 1 || v[0] != DHCP_MSG_OFFER) continue;
+
+            offered_ip = htonl(reply->yiaddr);
+            v = dhcp_find_option(reply->options, body_len - 240, 54, &vlen);
+            server_id = (v && vlen == 4) ? ((u32)v[0] << 24 | (u32)v[1] << 16 | (u32)v[2] << 8 | v[3]) : 0;
+            break;
+        }
+        if (!offered_ip) continue; /* no OFFER this attempt, retry */
+
+        struct dhcp_packet req = {0};
+        req.op = 1; req.htype = 1; req.hlen = 6; req.hops = 0;
+        req.xid = htonl(xid);
+        req.flags = htons(0x8000);
+        for (int i = 0; i < 6; i++) req.chaddr[i] = our_mac[i];
+        req.magic_cookie = htonl(DHCP_MAGIC_COOKIE);
+        op = 0;
+        req.options[op++] = 53; req.options[op++] = 1; req.options[op++] = DHCP_MSG_REQUEST;
+        req.options[op++] = 50; req.options[op++] = 4; /* requested IP */
+        req.options[op++] = (u8)(offered_ip >> 24); req.options[op++] = (u8)(offered_ip >> 16);
+        req.options[op++] = (u8)(offered_ip >> 8);  req.options[op++] = (u8)offered_ip;
+        if (server_id) {
+            req.options[op++] = 54; req.options[op++] = 4;
+            req.options[op++] = (u8)(server_id >> 24); req.options[op++] = (u8)(server_id >> 16);
+            req.options[op++] = (u8)(server_id >> 8);  req.options[op++] = (u8)server_id;
+        }
+        req.options[op++] = 0xFF;
+        if (!dhcp_send(&req, op)) continue;
+
+        deadline = ticks() + DHCP_TIMEOUT_TICKS;
+        while (ticks() < deadline) {
+            u32 n = active_receive(rx, sizeof(rx));
+            if (n < sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct udp_header) + 240) continue;
+            struct eth_header *eth = (struct eth_header *)rx;
+            if (eth->ethertype != htons(ETHERTYPE_IP)) continue;
+            struct ip_header *ip = (struct ip_header *)(rx + sizeof(*eth));
+            if (ip->protocol != 17) continue;
+            u32 ip_hlen = (u32)(ip->version_ihl & 0x0F) * 4;
+            struct udp_header *udp = (struct udp_header *)(rx + sizeof(*eth) + ip_hlen);
+            if (udp->dst_port != htons(DHCP_CLIENT_PORT)) continue;
+            const u8 *body = rx + sizeof(*eth) + ip_hlen + sizeof(*udp);
+            u32 body_len = n - (u32)(sizeof(*eth) + ip_hlen + sizeof(*udp));
+            if (body_len < 240) continue;
+            const struct dhcp_packet *reply = (const struct dhcp_packet *)body;
+            if (reply->xid != htonl(xid)) continue;
+            if (reply->magic_cookie != htonl(DHCP_MAGIC_COOKIE)) continue;
+
+            u8 vlen; const u8 *v = dhcp_find_option(reply->options, body_len - 240, 53, &vlen);
+            if (!v || vlen != 1) continue;
+            if (v[0] == DHCP_MSG_NAK) break; /* server changed its mind, retry from DISCOVER */
+            if (v[0] != DHCP_MSG_ACK) continue;
+
+            *ip_out = htonl(reply->yiaddr);
+            *mask_out = 0; *gw_out = 0; *dns_out = 0;
+            v = dhcp_find_option(reply->options, body_len - 240, 1, &vlen);
+            if (v && vlen == 4) *mask_out = (u32)v[0] << 24 | (u32)v[1] << 16 | (u32)v[2] << 8 | v[3];
+            v = dhcp_find_option(reply->options, body_len - 240, 3, &vlen);
+            if (v && vlen >= 4) *gw_out = (u32)v[0] << 24 | (u32)v[1] << 16 | (u32)v[2] << 8 | v[3];
+            v = dhcp_find_option(reply->options, body_len - 240, 6, &vlen);
+            if (v && vlen >= 4) *dns_out = (u32)v[0] << 24 | (u32)v[1] << 16 | (u32)v[2] << 8 | v[3];
+            return 1;
+        }
+        /* ACK never came (or a NAK did): loop around, fresh DISCOVER with a new xid */
+    }
+    return 0;
+}
+
+#define LOCAL_SUBNET_MASK  0xFFFFFF00u /* /24, matches SLIRP's fixed subnet shape */
+#define DEFAULT_GATEWAY_IP 0x0A000202u /* 10.0.2.2, SLIRP's fixed gateway, used when DHCP never ran or never offered one */
+
+/* Filled in by dhcp_init() below on a successful lease; 0 means "use the
+   hardcoded fallback", which is exactly DEFAULT_GATEWAY_IP's job, so a
+   kernel booted with nodhcp or against a network with no DHCP server
+   behaves exactly as it always did. */
+static u32 dhcp_gateway_ip = 0;
+static u32 dhcp_dns_ip = 0;
+static u32 dhcp_netmask = 0;
+static u32 dhcp_lease_ip = 0;
+
+int net_nodhcp = 0; /* set from kernel.c's cmdline parse ("nodhcp"), see net.h */
+
 int net_init(u32 ip) {
     if (rtl8139_init()) {
         rtl8139_get_mac(our_mac);
@@ -134,7 +367,41 @@ int net_init(u32 ip) {
     } else {
         return 0;
     }
-    our_ip = ip;
+
+    /* net_init is called fresh from every command site (nettest, ifconfig,
+       weather, web, ...), same as it always has been; DHCP itself must
+       only ever run once per boot (a 3-retry broadcast negotiation on
+       every single call would make each of those commands pause for
+       seconds). dhcp_state remembers the outcome of the first call and
+       every later call just reapplies it. */
+    static int dhcp_state = 0; /* 0 = not yet attempted, 1 = leased, 2 = fell back */
+
+    if (net_nodhcp) {
+        if (dhcp_state == 0) { serial_puts("dhcp: skipped (nodhcp), using fixed config\n"); dhcp_state = 2; }
+        our_ip = ip;
+        return 1;
+    }
+
+    if (dhcp_state == 1) { our_ip = dhcp_lease_ip; return 1; }
+    if (dhcp_state == 2) { our_ip = ip; return 1; }
+
+    u32 lease_ip, mask, gw, dns;
+    if (dhcp_negotiate(&lease_ip, &mask, &gw, &dns)) {
+        our_ip = lease_ip;
+        dhcp_lease_ip = lease_ip;
+        dhcp_netmask = mask;
+        dhcp_gateway_ip = gw;
+        dhcp_dns_ip = dns;
+        dhcp_state = 1;
+        serial_puts("dhcp: lease "); serial_put_ip(lease_ip);
+        serial_puts(" gw "); serial_put_ip(gw);
+        serial_puts(" dns "); serial_put_ip(dns);
+        serial_puts("\n");
+    } else {
+        serial_puts("dhcp: no offer, falling back to fixed config "); serial_put_ip(ip); serial_puts("\n");
+        our_ip = ip;
+        dhcp_state = 2;
+    }
     return 1;
 }
 
@@ -233,11 +500,17 @@ static void arp_maybe_reply(const u8 *rx, u32 n) {
    the frame, the IP header still carries the real destination, the
    gateway does the actual routing. Not a routing table, one hardcoded
    default route, which is genuinely all this scope needs. */
-#define LOCAL_SUBNET_MASK  0xFFFFFF00u /* /24, matches SLIRP's fixed subnet shape */
-#define DEFAULT_GATEWAY_IP 0x0A000202u /* 10.0.2.2, SLIRP's fixed gateway */
+/* Real router/DNS accessors, for callers (e.g. a future ifconfig/nettest
+   line) that want what DHCP actually handed us instead of the hardcoded
+   SLIRP constants sprinkled through kernel.c; both return 0 if DHCP never
+   ran or never completed. */
+u32 net_get_gateway(void) { return dhcp_gateway_ip; }
+u32 net_get_dns(void) { return dhcp_dns_ip; }
+u32 net_get_netmask(void) { return dhcp_netmask; }
 
 static int resolve_next_hop(u32 dest_ip, u8 mac_out[6]) {
-    u32 next_hop = ((dest_ip ^ our_ip) & LOCAL_SUBNET_MASK) ? DEFAULT_GATEWAY_IP : dest_ip;
+    u32 gw = dhcp_gateway_ip ? dhcp_gateway_ip : DEFAULT_GATEWAY_IP;
+    u32 next_hop = ((dest_ip ^ our_ip) & LOCAL_SUBNET_MASK) ? gw : dest_ip;
     return arp_resolve(next_hop, mac_out);
 }
 
