@@ -38,6 +38,16 @@ void sb16_set_progress(void (*fn)(unsigned int elapsed_ticks)) { progress_fn = f
 
 static void io_delay(void) { for (int i = 0; i < 16; i++) (void)inb(0x80); }
 
+static void put_uint_serial(unsigned int v) {
+    char d[12]; int n = 0;
+    if (v == 0) d[n++] = '0';
+    while (v) { d[n++] = (char)('0' + v % 10); v /= 10; }
+    char out[12]; int o = 0;
+    while (n) out[o++] = d[--n];
+    out[o] = 0;
+    serial_puts(out);
+}
+
 static int dsp_write(u8 v) {
     for (u32 t = 0; t < POLL_LIMIT; t++)
         if (!(inb(DSP_WRITE) & 0x80)) { outb(DSP_WRITE, v); return 1; }
@@ -120,6 +130,58 @@ int sb16_play(const unsigned char *pcm, unsigned int len, unsigned int rate) {
         pcm += n; len -= n;
     }
     return 1;
+}
+
+/* One single-cycle ADC (record) transfer of n bytes into sb16_dma_buf,
+   the mirror of play_chunk but with the DMA controller programmed for
+   "write to memory" (mode 0x45: same single/increment/no-autoinit/
+   channel-1 bits as play_chunk's 0x49, transfer-type bits flipped from
+   10 (read, memory->device) to 01 (write, device->memory)), and the
+   DSP's old-style ADC pair (0x40 time constant, then 0x24 length-1 lo/hi)
+   instead of play_chunk's new-style 0x41 rate / 0xC0 mode / length pair.
+   The old pair is DSP-2.xx compatible, so it is the one command every
+   real SB16 and QEMU's `-device sb16` both honor identically. */
+static int record_chunk(u32 n, u32 rate) {
+    u32 phys = (u32)sb16_dma_buf - KERNEL_VIRTUAL_BASE;
+    u32 cnt = n - 1;
+    irq_done = 0;
+
+    outb(0x0A, 0x05);                  /* mask channel 1 */
+    outb(0x0C, 0x00);                  /* reset the byte flip-flop */
+    outb(0x0B, 0x45);                  /* single mode, increment, write to memory, channel 1 */
+    outb(0x02, (u8)phys);
+    outb(0x02, (u8)(phys >> 8));
+    outb(0x83, (u8)(phys >> 16));      /* channel 1 page register */
+    outb(0x0C, 0x00);
+    outb(0x03, (u8)cnt);
+    outb(0x03, (u8)(cnt >> 8));
+    outb(0x0A, 0x01);                  /* unmask channel 1 */
+
+    /* time constant = 256 - 1000000/rate (8-bit DSP-2.xx formula). */
+    u8 tc = (u8)(256u - 1000000u / rate);
+    if (!dsp_write(0x40) || !dsp_write(tc)) return 0;
+    if (!dsp_write(0x24) || !dsp_write((u8)cnt) || !dsp_write((u8)(cnt >> 8))) return 0;
+
+    u32 limit = (n * 100u) / rate + 100u, start = ticks();
+    while (!irq_done && ticks() - start < limit) __asm__ volatile("pause");
+    if (!irq_done) { serial_puts("sb16: record timed out\n"); return 0; }
+    return 1;
+}
+
+int sb16_record(unsigned char *out, unsigned int max_len, unsigned int rate) {
+    if (!present || !out || !max_len) return 0;
+    if (rate < 4000) rate = 4000;
+    if (rate > 44100) rate = 44100;
+    unsigned int captured = 0;
+    serial_puts("sb16: record start\n");
+    while (captured < max_len) {
+        u32 n = (max_len - captured) > DMA_CHUNK ? DMA_CHUNK : (max_len - captured);
+        if (!record_chunk(n, rate)) break;
+        for (u32 i = 0; i < n; i++) out[captured + i] = sb16_dma_buf[i];
+        captured += n;
+    }
+    serial_puts("sb16: record done n="); put_uint_serial(captured); serial_puts("\n");
+    return (int)captured;
 }
 
 int sb16_beep(unsigned int freq, unsigned int ms) {

@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""Easter egg test: drunk mode applies horizontal sway to framebuffer rows.
+
+Boot with cmdline `drunk` flag, then take two screenshots and assert that
+the row offsets differ between frames due to the sway animation.
+
+Usage: tools/checks/drunk-mode-check.py   (from the repo root, after make kernel.elf)
+"""
+import json, os, socket, subprocess, sys, time
+
+LOG = "/tmp/jt-drunk-serial.log"
+PORT = 4711
+FB = 0xfd000000; W, H = 1920, 1080
+
+def qmp_command(f, obj):
+    """Sends one QMP command and returns its reply, skipping any async
+    event lines QEMU interleaves in -- the same shape iconedge-check.py's
+    own cmd() already uses, real JSON objects with "execute"/"arguments",
+    not HMP command-string text, and a real capabilities handshake first."""
+    f.write(json.dumps(obj) + "\n"); f.flush()
+    while True:
+        r = json.loads(f.readline())
+        if "return" in r or "error" in r: return r
+
+def screenshot(f, dump_path):
+    qmp_command(f, {"execute": "stop"})
+    time.sleep(0.1)
+    qmp_command(f, {"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": dump_path}})
+    time.sleep(0.2)
+    qmp_command(f, {"execute": "cont"})
+    time.sleep(0.1)
+
+def check_horizontal_variance(img_bytes):
+    """Returns True if row offsets vary, indicating sway is working."""
+    pixels = [int.from_bytes(img_bytes[i:i+4], 'little') for i in range(0, len(img_bytes), 4)]
+    rows = [pixels[y*W:(y+1)*W] for y in range(H)]
+
+    variances = []
+    for y in range(1, min(100, H)):
+        prev_row = rows[y-1]
+        curr_row = rows[y]
+        if prev_row and curr_row:
+            variance = sum(1 for i in range(W-10) if prev_row[i] != curr_row[i])
+            variances.append(variance)
+
+    return any(v > W*0.1 for v in variances)
+
+try:
+    if os.path.exists(LOG): os.remove(LOG)
+
+    kernel = "kernel.elf"
+    if not os.path.exists(kernel):
+        print(f"FAIL: {kernel} not found (run 'make kernel.elf' first)")
+        sys.exit(1)
+
+    with open("/tmp/jt-drunk-qmp", "w") as f:
+        qemu = subprocess.Popen([
+            "qemu-system-i386",
+            "-machine", "pc", "-m", "128",
+            "-kernel", kernel,
+            "-append", "drunk",
+            "-qmp", f"unix:/tmp/jt-drunk-qmp,server,nowait",
+            "-serial", f"file:{LOG}",
+            "-display", "none", "-vga", "std", "-monitor", "none",
+            "-device", "sb16,audiodev=a0", "-audiodev", "none,id=a0"
+        ])
+
+    time.sleep(2)
+    sock = socket.socket(socket.AF_UNIX)
+    sock.connect("/tmp/jt-drunk-qmp")
+    qf = sock.makefile("rw")
+    qf.readline()  # greeting
+    qmp_command(qf, {"execute": "qmp_capabilities"})
+    time.sleep(3)
+
+    dump1 = "/tmp/jt-drunk-frame1.raw"
+    dump2 = "/tmp/jt-drunk-frame2.raw"
+
+    screenshot(qf, dump1)
+    time.sleep(0.2)
+    screenshot(qf, dump2)
+
+    with open(dump1, 'rb') as f:
+        img1 = f.read()
+    with open(dump2, 'rb') as f:
+        img2 = f.read()
+
+    try: qmp_command(qf, {"execute": "quit"})
+    except (ConnectionResetError, BrokenPipeError, OSError): pass
+    qemu.wait(timeout=5)
+
+    if len(img1) != W*H*4 or len(img2) != W*H*4:
+        print(f"FAIL: dump size mismatch (got {len(img1)}, {len(img2)}, expected {W*H*4})")
+        sys.exit(1)
+
+    if img1 == img2:
+        print("FAIL: frames identical, sway not applied")
+        sys.exit(1)
+
+    diff_pixels = sum(1 for i in range(len(img1)) if img1[i] != img2[i])
+    if diff_pixels < W*H*0.01:
+        print(f"FAIL: only {diff_pixels} pixels differ, expected more variance from sway")
+        sys.exit(1)
+
+    print(f"PASS: drunk mode sway detected ({diff_pixels} differing pixels)")
+
+except Exception as e:
+    print(f"FAIL: {e}")
+    sys.exit(1)

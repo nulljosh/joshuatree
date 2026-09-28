@@ -47,7 +47,12 @@ ratchet_ceiling() {
         # on top of the 9620 ceiling guard-checks (#250) set earlier the
         # same night, real feature lines, not silent bloat. Ratcheted up
         # once to the merged total; still only shrinks from here.
-        kernel/kernel.c) echo 9841 ;;
+        # 2026-09-28: 1.7.4's integration release deliberately merged
+        # three more draft PRs (#258 DHCP, #259 drunk mode, #260 voice-in)
+        # on top of that 9841 ceiling, each adding real kmain command-line
+        # handling and feature code, not silent bloat. Ratcheted up once
+        # more to the merged total; still only shrinks from here.
+        kernel/kernel.c) echo 9877 ;;
         *) echo "$LIMIT" ;;
     esac
 }
