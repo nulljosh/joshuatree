@@ -75,6 +75,16 @@ What slowed tonight down, fixed so it can't again.
 - [ ] [Haiku] The Dock icon-edge check retries its VM connection on a reset instead of failing (flaked once on 2026-09-27).
 - [ ] [Sonnet] A size budget check on the kernel's reserved memory, so a feature can't silently grow into the app area again (PR 239 did, by 4KB, only on Linux).
 
+## Architecture to A+ (set 2026-09-27, graded C+)
+Measured: kernel.c is about 9,800 lines and 84 more files are pasted into it at build time, so the whole OS compiles as one unit. All 25 apps run inside the kernel and are wired in through hand-edited switch statements on GUI_LABELS. Generated artwork lives in C headers (the wallpaper alone is 17,000 lines). Each step below leaves the OS working and shippable.
+
+- [ ] [Fable] App interface: every app provides open, draw, key and close in one `struct app` registered in a single table; the GUI_LABELS switches go away. Move one app (Keyrate) to its own `.c` as the pattern.
+- [ ] [Sonnet] Move the remaining apps behind the interface, a few per PR, each in its own `.c`.
+- [ ] [Fable] Split kernel.c into separately compiled parts (window manager, desktop, network glue), each behind a small header. The god-file check's limit ratchets down with every split.
+- [ ] [Sonnet] Artwork as data: wallpaper, icons and marks packed into binary blobs at build time (objcopy), not C source.
+- [ ] [Sonnet] Layer rules, checked: drivers never call the desktop, apps only use the app interface and syscalls. A check reads the include graph and fails on a reach-through.
+- [ ] [Fable] Apps out of the kernel: one app at a time becomes a ring-3 program on libjt, so a crashing app can't take the machine down.
+
 ## Beta, 0.9.0
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck.
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
