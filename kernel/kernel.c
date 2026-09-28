@@ -108,7 +108,6 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app_keyrate.h"
 #include "app.h"
 #include "keyrate.h"
-#include "ring3app.h"
 #include "toroid.h"
 #include "quotestreak.h"
 #include "calculator.h"
@@ -221,7 +220,7 @@ static const char SCS[128] = {
 };
 /* Scancode to ASCII with the modifier state kbd_pop tracks. Caps Lock
    flips letters only, the way a real keyboard does. */
-static char kbd_map(int sc){
+char kbd_map(int sc){
     int i = sc & 0x7F;
     char c = kbd_shift ? SCS[i] : SC[i];
     if (kbd_caps && ((SC[i] >= 'a' && SC[i] <= 'z'))) c = kbd_shift ? SC[i] : SCS[i];
@@ -242,7 +241,7 @@ int console_read_key(void){
     }
 }
 
-static void gui_app_mouse_tick(void);
+void gui_app_mouse_tick(void);
 static char getch(void){
     for (;;) {
         gui_app_mouse_tick();
@@ -266,7 +265,7 @@ static char getch(void){
    one". Set at every site that turns a mouse edge into an app-visible
    event, cleared whenever a key is handed out instead, so it always
    describes the event that actually caused the close. */
-static int gui_close_was_click = 0;
+int gui_close_was_click = 0;
 int gui_getch_or_click(void){
     mouse_click_edge_sync(); /* a button already held (e.g. the click that opened this app) is the baseline, not a fresh click */
     for (;;) {
@@ -295,9 +294,6 @@ int gui_getch_or_click(void){
    length is the whole clipboard; every consumer copies at most
    CLIPBOARD_CAP bytes in and truncates a paste at its own field's max
    length, so nothing here can overflow a caller's buffer. */
-#define KEY_COPY  302
-#define KEY_CUT   303
-#define KEY_PASTE 304
 /* v1.6.23: push-to-talk for Chat. F2's make code (0x3C) is a real,
    unassigned scancode kbd_map never turns into a character (F-keys have
    no entry in SC[]/SCS[]), so it reaches here through get_key_or_click_
@@ -414,50 +410,6 @@ int get_key_or_click_until(unsigned int deadline){
 }
 
 int get_key_or_click(void) { return get_key_or_click_until(0); }
-
-/* 1.7.7: the non-blocking twin of get_key_or_click_until, for
-   kernel/syscall.c's SYS_WINDOW_POLL. It runs inside the int 0x80 gate
-   with interrupts off, so it must never wait: one look at the keyboard
-   queue and the mouse, then back. Returns JT_EV_KEY (1) with the key in
-   *a (the same ASCII/KEY_* values the blocking loop hands in-kernel apps),
-   JT_EV_CLICK (2) with the pointer in app-window coordinates, JT_EV_WHEEL
-   (3) with +1/-1 in *a, or 0 when nothing happened. A 0xE0 prefix whose
-   second byte has not arrived yet (it cannot, with IF clear) is remembered
-   for the next call rather than dropped, so arrows still work. */
-static int gui_poll_pending_e0 = 0;
-int gui_poll_event(int *a, int *b){
-    *a = 0; *b = 0;
-    gui_app_mouse_tick();
-    int sc = kbd_pop();
-    if (sc >= 0) {
-        if (sc == 0xE0 && !gui_poll_pending_e0) { gui_poll_pending_e0 = 1; sc = kbd_pop(); if (sc < 0) return 0; }
-        if (gui_poll_pending_e0) {
-            gui_poll_pending_e0 = 0;
-            if (sc == 0x48) { *a = KEY_UP; return 1; }
-            if (sc == 0x50) { *a = KEY_DOWN; return 1; }
-            if (sc == 0x4B) { *a = KEY_LEFT; return 1; }
-            if (sc == 0x4D) { *a = KEY_RIGHT; return 1; }
-            return 0;
-        }
-        if (sc & 0x80) return 0;
-        gui_close_was_click = 0;
-        if (kbd_ctrl) {
-            int code = sc & 0x7F;
-            if (code == 0x2E) { *a = KEY_COPY; return 1; }
-            if (code == 0x2D) { *a = KEY_CUT; return 1; }
-            if (code == 0x2F) { *a = KEY_PASTE; return 1; }
-        }
-        char c = kbd_map(sc);
-        if (c == '\n') { *a = KEY_ENTER; return 1; }
-        if (c == 27)   { *a = KEY_ESC; return 1; }
-        if (c) { *a = (int)(unsigned char)c; return 1; }
-        return 0;
-    }
-    if (mouse_click_edge()) { gui_close_was_click = 1; *a = app_cursor_x - app_view_x; *b = app_cursor_y - app_view_y; return 2; }
-    int wheel = mouse_get_wheel();
-    if (wheel) { *a = wheel > 0 ? 1 : -1; return 3; }
-    return 0;
-}
 
 /* ---- RTC via CMOS. ponytail: no PIT tick counter; the shell only ever
    needs wall-clock, and this needs no interrupt handler. ---- */
@@ -2113,10 +2065,9 @@ static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_ro
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0;
+static int wind_base_width = 0; void keyrate_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
-static int gui_autoopen_icon = -1; /* 1.7.7: `open=keyrate` boot flag (kmain), launched once by gui_run after the first desktop paint */
-static int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
+int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
     struct wp_row c;
     int lw = (int)window_width(), lh = (int)window_height();
@@ -4158,7 +4109,7 @@ static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_m
 static void gui_draw_dock_tray(void);
 static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my);
 
-static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
+void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     gui_draw_wallpaper();
     if (wind_enabled && !wind_base) {
         int sc = (int)window_scale();
@@ -4368,7 +4319,7 @@ static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_m
    the damage and read as "still the old bitmap font" (roadmap, Sep 2026).
    Reproduced headlessly with a scripted sweep + pmemsave, fixed here. */
 static unsigned int cursor_backup[CURSOR_W * CURSOR_MAX_SCALE * CURSOR_H * CURSOR_MAX_SCALE];
-static int cursor_saved_x = -1, cursor_saved_y = -1;
+int cursor_saved_x = -1, cursor_saved_y = -1;
 static int gui_cursor_scale(void){ int sc = (int)window_scale(); return sc > CURSOR_MAX_SCALE ? CURSOR_MAX_SCALE : sc; }
 static void gui_cursor_restore(void){
     if (cursor_saved_x < 0) return;
@@ -4379,7 +4330,7 @@ static void gui_cursor_restore(void){
             window_pixel_phys(px0 + i, py0 + j, cursor_backup[j * pw + i]);
     cursor_saved_x = cursor_saved_y = -1;
 }
-static void gui_cursor_save(int x, int y){
+void gui_cursor_save(int x, int y){
     int sc = gui_cursor_scale(), pw = CURSOR_W * sc, ph = CURSOR_H * sc;
     int px0 = x * sc, py0 = y * sc;
     for (int j = 0; j < ph; j++)
@@ -4424,7 +4375,7 @@ static void gui_cursor_build_mask(int sc){
     }
     cur_mask_scale = sc;
 }
-static void gui_draw_cursor(int x, int y){
+void gui_draw_cursor(int x, int y){
     int sc = gui_cursor_scale(), pw = CURSOR_W * sc, ph = CURSOR_H * sc;
     if (cur_mask_scale != sc) gui_cursor_build_mask(sc);
     for (int j = 0; j < ph; j++) for (int i = 0; i < pw; i++){
@@ -4467,7 +4418,7 @@ static void gui_calendar_check_rollover(int hover_slot, int drag_slot, int mx, i
 
 /* App viewers have their own input loops. Keep the pointer alive while one
    is open, drawing it in screen coordinates outside the app viewport. */
-static int gui_app_windowed = 0;
+int gui_app_windowed = 0;
 /* Vertical shift for an app's own content. Full screen, an app draws its
    own title strip across the top 40px and starts content at y=52. In a
    dock window the frame already draws the title bar above the viewport,
@@ -4495,16 +4446,9 @@ static int app_win_x = 0, app_win_y = 0, app_win_w = 0, app_win_h = 0;
 static int app_drag_held = 0, app_drag_on = 0, app_drag_gx = 0, app_drag_gy = 0;
 static int gui_dock_band_top(void);
 static void gui_daynight_wallpaper_rect(int x, int y, int w, int h);
-int app_view_x, app_view_y; static int app_view_w, app_view_h;
+int app_view_x, app_view_y; int app_view_w, app_view_h;
 int app_cursor_x, app_cursor_y;
-/* 1.7.7: the size of the app viewport a dock launch opened, for
-   kernel/syscall.c's SYS_WINDOW_OPEN. 0 when no app window is open. */
-int gui_app_view_size(unsigned int *w, unsigned int *h){
-    if (!gui_app_windowed || app_view_w <= 0 || app_view_h <= 0) return 0;
-    *w = (unsigned int)app_view_w; *h = (unsigned int)app_view_h;
-    return 1;
-}
-static void gui_app_mouse_tick(void){
+void gui_app_mouse_tick(void){
     if (!gui_app_windowed) return;
     int dx = 0, dy = 0, buttons = 0;
     int moved = mouse_get_delta(&dx, &dy, &buttons);
@@ -4735,7 +4679,6 @@ static int text_ink(int a, unsigned int fg, unsigned int dst){
 
 #include "ttf_render.h"
 #include "gui_prompt.h"
-#include "entropy.h"
 #include "auth.h"
 #include "editor.h"
 #include "reminders.h"
@@ -6024,7 +5967,7 @@ static void gui_launch(int icon){
     if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
 }
 
-static void gui_launch_from_dock(int icon){
+void gui_launch_from_dock(int icon){
 again:
     /* Keep the desktop visible around the app. The framebuffer viewport
        clips every app draw, including window_clear and physical AA text. */
@@ -7059,17 +7002,7 @@ static void gui_run(void){
     cursor_saved_x = cursor_saved_y = -1;
     gui_cursor_save(mx, my);
     gui_draw_cursor(mx, my);
-    gui_dock_prewarm();
-    if (gui_autoopen_icon >= 0) {
-        int ic = gui_autoopen_icon; gui_autoopen_icon = -1;
-        editor_mouse_x = mx; editor_mouse_y = my;
-        gui_launch_from_dock(ic);
-        gui_draw_desktop(-1, -1, 0, 0);
-        cursor_saved_x = cursor_saved_y = -1;
-        gui_cursor_save(mx, my);
-        gui_draw_cursor(mx, my);
-        serial_puts("autoopen: back on the desktop\n");
-    }
+    gui_dock_prewarm(); ring3app_autoopen_run(mx, my); /* `open=keyrate` boot flag, if set */
     for (;;) {
         window_present(); __asm__ volatile ("hlt");
         /* v0.76.17: direct request ("time in top right needs live reload
@@ -9703,8 +9636,7 @@ static int bench_at_boot = 0;
 static int panic_test_at_boot = 0;
 void kmain(unsigned int multiboot_info_addr){
     serial_init();
-    serial_puts("=== kmain boot start === v" JT_VERSION_STR "\n");
-    entropy_init(); /* 1.7.10: seed the HMAC_DRBG before anything asks for a salt; logs its sources */
+    serial_puts("=== kmain boot start === v" JT_VERSION_STR "\n"); entropy_init(); /* 1.7.10: seed the DRBG before anything asks for a salt */
     /* 1.0.12: llmhost=/llmport= command-line overrides for llm_host/llm_port
        (declared way below), parsed alongside wxhost= but applied AFTER
        settings_load() runs (see its call site) so a stale/persisted
@@ -9765,13 +9697,7 @@ void kmain(unsigned int multiboot_info_addr){
             if (pc[0]=='n' && pc[1]=='o' && pc[2]=='d' && pc[3]=='h' && pc[4]=='c' && pc[5]=='p' && (pc[6]==' ' || pc[6]==0)) { net_nodhcp = 1; break; }
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='d' && pc[1]=='r' && pc[2]=='u' && pc[3]=='n' && pc[4]=='k' && (pc[5]==' ' || pc[5]==0)) { extern void window_set_drunk(int); window_set_drunk(1); serial_puts("drunk\n"); break; }
-        /* 1.7.7: `open=keyrate` launches Keyrate from the dock path the
-           moment the desktop is up, so tools/checks/ring3app-check.py can
-           drive the ring-3 app without locating its tile in the Apps
-           folder first. Only Keyrate for now: the one app that runs as a
-           real process. */
-        for (const char *pc = cl; pc && *pc; pc++)
-            if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='k' && pc[6]=='e' && pc[7]=='y' && pc[8]=='r') { gui_autoopen_icon = 9; serial_puts("autoopen=keyrate\n"); break; }
+        ring3app_autoopen_arm(cl); /* `open=keyrate` boot flag */
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;
