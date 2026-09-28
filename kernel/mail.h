@@ -266,6 +266,16 @@ static void gui_draw_mail_content(void){
     }
 }
 
+/* Forward declarations: gui_mail_on_key's 'c' case opens Compose as a
+   second window (defined further down, after the list's own on_key),
+   the same forward-reference every other multiwindow app's table entry
+   already needs since APPS[] itself is defined once, after every app's
+   hooks exist. */
+static void gui_mail_compose_begin(void);
+static void gui_draw_mail_compose_content(void);
+static int gui_mail_compose_on_key(int k);
+static int gui_multiwin_open(int icon); /* kernel.c, defined further down; opens Compose as a real second window */
+
 /* Returns 1 when this window should close (esc from the list view); esc
    from read/compose just cancels back to the list, matching
    mail_read_message/mail_prompt_line's own esc contracts, not a
@@ -306,7 +316,13 @@ static int gui_mail_on_key(int k){
     }
     /* list mode */
     if (k == KEY_ESC) return 1;
-    if (k == 'c') { mail_mw_mode = MAIL_MW_COMPOSE_FROM; mail_mw_len = 0; mail_mw_from[0] = 0; return 0; }
+    /* v1.9.0: 'c' no longer flips this same window into compose mode; it
+       opens Compose as a real second window (like macOS Mail: New Message
+       is its own window, the mailbox stays open behind it), through the
+       exact multiwindow machinery every other app already uses. The list
+       window itself is untouched and keeps drawing/handling keys as
+       normal underneath. */
+    if (k == 'c') { gui_mail_compose_begin(); gui_multiwin_open(GUI_MAIL_COMPOSE); return 0; }
     if (!mail_count) return 0;
     if (k == KEY_UP && mail_mw_sel > 0) mail_mw_sel--;
     else if (k == KEY_DOWN && mail_mw_sel < mail_count - 1) mail_mw_sel++;
@@ -317,5 +333,82 @@ static int gui_mail_on_key(int k){
         mail_delete_at(mail_mw_sel);
         if (mail_mw_sel >= mail_count && mail_mw_sel > 0) mail_mw_sel--;
     }
+    return 0;
+}
+
+/* v1.9.0: Compose, a second, separate window. Same three-stage from/
+   subject/body flow the list window's own compose mode used to run
+   in-place, just driven by its own state (mail_compose_mode/from/
+   subject/body/len) so it doesn't collide with whatever the list window
+   (mail_mw_*) is doing underneath -- it keeps showing the inbox, and
+   after a send it just re-reads mail_count/mail_msgs (shared globals
+   mail_save/mail_load already write through) on its very next repaint,
+   no explicit refresh call needed. */
+#define MAIL_COMPOSE_FROM    0
+#define MAIL_COMPOSE_SUBJECT 1
+#define MAIL_COMPOSE_BODY    2
+static int mail_compose_mode = MAIL_COMPOSE_FROM;
+static char mail_compose_from[MAIL_FROM_MAX];
+static char mail_compose_subject[MAIL_SUBJECT_MAX];
+static char mail_compose_body[MAIL_BODY_MAX];
+static unsigned int mail_compose_len = 0;
+
+static void gui_mail_compose_begin(void){
+    mail_compose_mode = MAIL_COMPOSE_FROM;
+    mail_compose_len = 0;
+    mail_compose_from[0] = 0;
+    mail_compose_subject[0] = 0;
+    mail_compose_body[0] = 0;
+}
+
+static void gui_draw_mail_compose_content(void){
+    int T = gui_app_dy();
+    window_clear(GUI_BG);
+    gui_draw_app_titlebar("New Message");
+    const char *prompt = mail_compose_mode == MAIL_COMPOSE_FROM ? "from (enter confirms, esc cancels):" :
+                          mail_compose_mode == MAIL_COMPOSE_SUBJECT ? "subject:" : "body (enter sends):";
+    char *buf = mail_compose_mode == MAIL_COMPOSE_FROM ? mail_compose_from : mail_compose_mode == MAIL_COMPOSE_SUBJECT ? mail_compose_subject : mail_compose_body;
+    font_draw_string(prompt, 20, T + 52, 0x0075726E, -1);
+    window_rect(20, T + 76, (int)window_width() - 40, 20, 0x00FFFFFF);
+    buf[mail_compose_len] = 0;
+    font_draw_string(buf, 24, T + 78, 0x001C1C1E, -1);
+}
+
+/* Returns 1 to close this window: esc at any stage cancels the whole
+   compose (matching mail_prompt_line's own esc-cancels contract), and a
+   successful send closes it too -- a real Mail compose window doesn't
+   stick around after you hit send. */
+static int gui_mail_compose_on_key(int k){
+    char *buf = mail_compose_mode == MAIL_COMPOSE_FROM ? mail_compose_from : mail_compose_mode == MAIL_COMPOSE_SUBJECT ? mail_compose_subject : mail_compose_body;
+    int max = mail_compose_mode == MAIL_COMPOSE_FROM ? MAIL_FROM_MAX : mail_compose_mode == MAIL_COMPOSE_SUBJECT ? MAIL_SUBJECT_MAX : MAIL_BODY_MAX;
+    if (k == KEY_ESC) return 1;
+    if (k == KEY_ENTER) {
+        buf[mail_compose_len] = 0;
+        if (mail_compose_mode == MAIL_COMPOSE_FROM) {
+            if (mail_compose_from[0] == 0) return 1;
+            mail_compose_mode = MAIL_COMPOSE_SUBJECT; mail_compose_len = 0; mail_compose_subject[0] = 0;
+            return 0;
+        }
+        if (mail_compose_mode == MAIL_COMPOSE_SUBJECT) {
+            mail_compose_mode = MAIL_COMPOSE_BODY; mail_compose_len = 0; mail_compose_body[0] = 0;
+            return 0;
+        }
+        /* body stage: send, i.e. save through to MAIL.TXT, same as
+           mail_compose/mail_mw's own final step, then close this window
+           so the list window behind it is the only thing left, already
+           showing the new message on its next repaint. */
+        if (mail_count < MAIL_MAX) {
+            mail_msg_t *m = &mail_msgs[mail_count];
+            mail_str_copy(m->from, mail_compose_from, MAIL_FROM_MAX);
+            mail_str_copy(m->subject, mail_compose_subject, MAIL_SUBJECT_MAX);
+            mail_str_copy(m->body, mail_compose_body, MAIL_BODY_MAX);
+            m->read = 0;
+            mail_count++;
+            mail_save();
+        }
+        return 1;
+    }
+    if (k == '\b') { if (mail_compose_len > 0) mail_compose_len--; return 0; }
+    if (k >= 32 && k < 127 && (int)mail_compose_len < max - 1) buf[mail_compose_len++] = (char)k;
     return 0;
 }
