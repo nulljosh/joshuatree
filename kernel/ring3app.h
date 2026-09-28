@@ -6,18 +6,20 @@
    process, and whether the program exited on its own or was reaped by
    idt.c's ring-3 fault path, it tears the window down and hands the
    desktop back. Keyrate went first (1.7.7), Toroid second (1.7.11),
-   Calculator third (1.7.12). */
+   Calculator third (1.7.12), Homeqi fourth (1.7.13). */
 void keyrate_ring3_open(void);
 void toroid_ring3_open(void);
 void calculator_ring3_open(void);
+void homeqi_ring3_open(void);
 
-/* `open=keyrate` / `open=toroid` / `open=calc` launches that app from the
-   dock path the moment the desktop is up, so tools/checks/ring3app-check.py,
-   ring3toroid-check.py and ring3calc-check.py can drive a ring-3 app
-   without locating its tile in the Apps folder first.
+/* `open=keyrate` / `open=toroid` / `open=calc` / `open=homeqi` launches
+   that app from the dock path the moment the desktop is up, so
+   tools/checks/ring3app-check.py, ring3toroid-check.py, ring3calc-check.py
+   and ring3homeqi-check.py can drive a ring-3 app without locating its
+   tile in the Apps folder first.
    ring3app_autoopen_arm: kmain calls this with the boot command line;
-   remembers the APPS slot if it says `open=keyrate`, `open=toroid` or
-   `open=calc`.
+   remembers the APPS slot if it says `open=keyrate`, `open=toroid`,
+   `open=calc` or `open=homeqi`.
    ring3app_autoopen_run: gui_run calls this once, right after the first
    desktop paint; if armed, launches that app from the dock path (mx, my
    are the cursor position to restore after) and disarms. No-op otherwise. */

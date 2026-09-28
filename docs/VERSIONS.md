@@ -14,6 +14,7 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
   - 1.7.7 took the first step: Keyrate runs as a real ring-3 process with its own window, and crashing it on purpose leaves the desktop standing.
   - 1.7.11: two apps in ring 3 now. Toroid followed Keyrate out, the in-kernel copies of both are gone, and one table-driven launcher runs them. Still to do before this line is checked: the other apps, ported the same way, one PR at a time.
   - 1.7.12: three apps in ring 3 now. Calculator followed Keyrate and Toroid out, the in-kernel copy is gone, and the same table-driven launcher runs it. Still to do before this line is checked: the other apps, ported the same way, one PR at a time.
+  - 1.7.14: four apps in ring 3 now. Homeqi followed Keyrate, Toroid and Calculator out, the in-kernel copy is gone, and the same table-driven launcher runs it. Still to do before this line is checked: the other apps, ported the same way, one PR at a time.
 - 3.0: It boots a real computer. One reference mini PC: UEFI, USB keyboard, mouse and stick, a real disk, a real network card, real sound.
 - 4.0: True multitasking. A compositor, many windows, resize and minimize, apps that never freeze each other.
 - 5.0: The real internet. TLS built in, no proxy, and a web browser on top.
