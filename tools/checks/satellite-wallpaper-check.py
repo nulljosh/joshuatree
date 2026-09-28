@@ -79,11 +79,14 @@ try:
     f.readline()
     cmd({"execute": "qmp_capabilities"})
     def key(k): cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k}]}}); time.sleep(0.06)
+    def key_combo(*ks): cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in ks]}}); time.sleep(0.06)
     def type_line(t):
         for c in t: key("spc" if c == " " else c)
         key("ret"); time.sleep(2.0)  # the shell needs real settle time after a command that touches the desktop (wall_apply's redraw), not just the keystrokes -- too short a gap here silently drops the NEXT typed command
     time.sleep(6.0)               # desktop up, first weather cycle (topo, default theme) already ran and its own serial burst (geo=/wxurl=/wx=/wall=) has fully landed
-    key("esc"); time.sleep(1.0)   # into the shell
+    # Ctrl+Alt+Backspace: the deliberate shell chord (plain Esc on a bare
+    # desktop is now a no-op, kernel.c gui_run).
+    key_combo("ctrl", "alt", "backspace"); time.sleep(1.0)   # into the shell
     # marker: the default-theme autofetch above already wrote its own wall=
     # line to serial, delayed-flush of "-serial file:" can make a length
     # snapshot land mid-line if taken too early, so require the length to
