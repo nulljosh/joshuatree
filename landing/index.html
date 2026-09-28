@@ -172,7 +172,7 @@
   @media (max-width: 480px) {
     [aria-label="How fast"] .facts-row { grid-template-columns: repeat(2, 1fr); gap: 22px 16px; max-width: 320px; }
     [aria-label="How fast"] .fact strong { font-size: 24px; display: flex; flex-direction: column; align-items: center; white-space: normal; }
-    [aria-label="How fast"] .fact strong .label { display: block; margin-left: 0 !important; margin-top: 2px; font-size: 11px; white-space: nowrap; }
+    [aria-label="How fast"] .fact strong .label { display: block !important; margin-left: 0 !important; margin-top: 2px; font-size: 11px; white-space: nowrap; }
   }
   @media (max-width: 380px) { .fact strong { font-size: 21px; } .facts-row { gap: 18px 12px; } }
   .boot-cta { text-align: center; margin: 28px auto 0; }
@@ -385,6 +385,11 @@
   @media (max-width: 700px) { .more h2 { font-size: 28px; } .more-list { grid-template-columns: repeat(2, 1fr); } }
   @media (prefers-color-scheme: dark) { .hero-logo, .seal { filter: invert(0.93); } }
   .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  .plate-cap a#samantha-boot-link { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent); padding-bottom: 2px; }
+  .plate-cap a#samantha-boot-link:hover { opacity: 0.8; }
+  .ad-video, .strata-img { display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--border); margin: 28px auto 0; background: var(--card); }
+  .strata-cap { margin: 10px 0 0; font-size: 14px; color: var(--sub); }
+  .audience { max-width: 480px; margin: 0 auto 12px; }
   .waitlist-section { padding: 24px 20px 72px; text-align: center; }
   .waitlist-section h2 { font-size: 40px; letter-spacing: -0.03em; margin: 0 0 12px; }
   .waitlist-card { max-width: 480px; margin: 0 auto; }
@@ -485,7 +490,7 @@
   <div class="facts-row">
     <div class="fact"><strong><span data-fact="apps">26</span></strong><span class="label">Apps</span></div>
     <div class="fact"><a class="fact-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md"><strong><span data-fact="documented">86</span>%</strong><span class="label">Documented</span></a></div>
-    <div class="fact"><strong>v<span data-fact="version">1.8.11</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">1.8.13</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a>
@@ -588,6 +593,7 @@
 <section class="waitlist-section reveal" aria-label="Dev kit waitlist">
   <h2>Want one?</h2>
   <div class="waitlist-card">
+    <p class="sub audience">For anyone curious how a computer really works, and for developers who want to help build one.</p>
     <p class="sub">A small board with Joshua Tree on it. Leave your email, we'll tell you when it's real.</p>
     <form class="waitlist-form" id="waitlist-form" novalidate>
       <label class="visually-hidden" for="waitlist-email">Email address</label>
@@ -595,6 +601,11 @@
       <button type="submit" id="waitlist-submit">Notify me</button>
     </form>
     <p class="waitlist-status" id="waitlist-status" role="status" aria-live="polite"></p>
+    <video class="ad-video" controls preload="none" playsinline poster="ad-poster.jpg" aria-label="A 36 second ad for Joshua Tree"><source src="https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4" type="video/mp4"></video>
+    <p class="strata-cap">The 36 second version.</p>
+    <img class="strata-img" src="strata-hero.jpg" alt="A render of Strata, the case for the Joshua Tree board" width="1200" height="750" loading="lazy">
+    <p class="strata-cap">Strata, the case. A concept for now, not for sale yet.</p>
+    <p class="strata-cap">Apps already running in their own protected space can crash without taking the desktop down.</p>
   </div>
 </section>
 
