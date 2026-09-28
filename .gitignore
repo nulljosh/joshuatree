@@ -1,6 +1,8 @@
 *.o
 *.d
 kernel.elf
+kernel.elf.pass1
+kernel/symtab.c
 drivers/version.h
 # Built from user/hello.c by the Makefile on every build, same
 # relationship drivers/version.h has to VERSION. The source is in the

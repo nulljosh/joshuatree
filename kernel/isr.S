@@ -48,7 +48,12 @@ isr_common:
     mov %ax, %es
     mov %ax, %fs
     mov %ax, %gs
-    call isr_handler    /* args: [vector][err][eip][cs][eflags] already on the stack */
+    push %ebp            /* the faulting frame's own EBP, for the crash-report
+                             backtrace (kernel/backtrace.c) to walk -- the CPU's
+                             own exception frame never includes it, since it's a
+                             general-purpose register, not part of the
+                             privilege-transition state SS/ESP/EFLAGS/CS/EIP are */
+    call isr_handler    /* args: [ebp][vector][err][eip][cs][eflags] already on the stack */
 1:  cli
     hlt
     jmp 1b
