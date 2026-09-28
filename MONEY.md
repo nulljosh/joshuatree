@@ -34,11 +34,72 @@ In order. Each one feeds the next.
 
 ## The million dollar plan
 
-A dev kit. A small board with Joshua Tree flashed on it, sold to the people who build their own computers for fun.
+A dev kit. A small board with Joshua Tree flashed on it, sold to the people who build their own computers for fun. The board pick and driver work are in `docs/HARDWARE.md`.
 
 - 5,000 boards at $199 is $1M.
 - Needs: real drivers for one real board (network, sound, USB keyboard and mouse), a landing page that sells it, one launch on Hacker News and the osdev crowd.
 - Proof it's working: the first 100 preorders.
+
+### Unit economics (v0, from the HARDWARE.md BOM)
+
+Everything below is either sourced (a real listing) or marked estimate. As of this writing only the board price has a real listing behind it - the rest of the BOM is estimate. Don't read this as a quote.
+
+| Line | Amount | Note |
+|---|---|---|
+| Parts (board, RAM, storage, case, PSU, USB stick, cables) | ~$250 | docs/HARDWARE.md BOM; mostly estimate, board price sourced |
+| Payment fees (~3%, card processing) | ~$6 at $199 | standard processor rate, estimate |
+| Shipping (domestic, boxed mini-ITX build) | ~$15-25 | estimate, no carrier quote yet |
+| Warranty reserve | ~$10/unit | estimate, no return-rate data exists yet |
+| **Cost per unit (parts + fees + shipping + warranty)** | **~$281-291** | **exceeds $199** |
+| Price | $199 | current price, unchanged here |
+| **Margin at $199** | **negative, roughly -$85 to -$95/unit** | the BOM does not support $199 today |
+
+This is the biggest open problem in the money plan: HARDWARE.md's BOM
+runs over $250 in parts alone, before fees, shipping or warranty. $199
+doesn't work at this BOM. Three ways out, none decided:
+1. A cheaper board (the ASRock pick was chosen for driver-surface fit,
+   not price - a bare SoC or SBC could cut real dollars off parts).
+2. Volume pricing at 5,000-unit order quantities. No supplier quote
+   exists yet to say how much this moves the number.
+3. Raise the price. Named, not proposed.
+Nothing here is a promise - it's the honest math today, flagged so it
+gets solved before any preorder is charged.
+
+### The first dollar
+
+What has to be true before anyone is charged:
+- A board that passes Phase 0-2 in `docs/HARDWARE.md` (boots, shows a
+  screen, takes keyboard input) on real hardware, not QEMU.
+- The unit economics above resolved to a positive margin, not negative.
+- A real fulfillment path: who assembles the kit and who ships it.
+
+Path, in order:
+1. **Waitlist first, no charge.** The landing page's existing waitlist
+   ("Getting it seen," step 5 above) is the demand signal. No fixed
+   threshold is set here - that's Joshua's call once Phase 2 is real and
+   the board price isn't mostly estimate.
+2. **Channel:** the Joshua Tree landing page (joshuatree.heyitsmejosh.com),
+   same place the OS demo runs. No third-party storefront planned for v0.
+3. **Fulfillment:** unresolved. Self-assembly-and-ship by Joshua at low
+   volume, or a contract assembler at higher volume - no decision made,
+   no quote gathered.
+4. **First charge only after:** a board that passes Phase 0-3 (boots,
+   desktop, input, a file survives a reboot) on camera, and a BOM that
+   doesn't lose money at $199 or a revised price that doesn't.
+
+### Milestones (targets, not promises)
+
+Tied to the bring-up phases in `docs/HARDWARE.md`. No revenue, user
+count, or date below is a fact.
+
+| Milestone | Tied to | What it proves |
+|---|---|---|
+| Board boots, shows a picture | Phase 0-1 | GRUB/multiboot works on real silicon, not just QEMU |
+| Keyboard and mouse work | Phase 2 | the PS/2 pick was right, or the fallback plan kicks in |
+| Files survive a reboot | Phase 3 | "a real disk" in the 3.0 definition is true |
+| The board gets online | Phase 4 | Samantha's tools work off QEMU |
+| The board makes sound | Phase 5 | all five 3.0 pieces are real |
+| First 100 preorders | after unit economics resolve | demand exists at a price that doesn't lose money |
 
 ## The billion dollar plan
 

@@ -65,9 +65,11 @@ Measured headless in QEMU on a Mac Mini M4 by `tools/bench.sh`. Run it yourself;
 
 - [docs/WHITEPAPER.md](docs/WHITEPAPER.md) - why and how
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - every file
+- [docs/HARDWARE.md](docs/HARDWARE.md) - the real board pick and the 3.0 bring-up plan
 - [docs/VERSIONS.md](docs/VERSIONS.md) - release history
 - [docs/PLAYLIST.md](docs/PLAYLIST.md) - the Building an OS video series, mapped to what we have
 - [docs/TESTING.md](docs/TESTING.md) - every test
 - [docs/roadmap.md](docs/roadmap.md) - what's next
+- [MONEY.md](MONEY.md) - how it makes money
 
 Apache License 2.0, © 2026 Joshua Trommel
