@@ -107,6 +107,9 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app_keyrate.h"
 #include "app.h"
 #include "keyrate.h"
+#include "toroid.h"
+#include "quotestreak.h"
+#include "calculator.h"
 #include "app_bookrank.h"
 #include "app_quotestreak.h"
 #include "app_plan.h"
@@ -278,29 +281,9 @@ int gui_getch_or_click(void){
     }
 }
 
-/* ---- extended keys (arrows) for the file browser. 0xE0 is the make-code
-   prefix for the "extended" keyboard block; 0x48/0x50 are up/down within it. ---- */
-#define KEY_UP    256
-#define KEY_DOWN  257
-#define KEY_ENTER 258
-#define KEY_ESC   259
-/* v54: left/right (0x4B/0x4D in the same extended block) for Calendar's
-   month stepping. Every existing consumer gates text input on
-   32 <= k < 127, so these new values fall through as ignored keys there,
-   same as up/down always have. */
-#define KEY_LEFT  261
-#define KEY_RIGHT 262
-
-/* v38: same shape as get_key below, but a click (or a tap, which reaches
-   the kernel as a real PS/2 click from the browser embed) also counts as
-   input. Every interactive app screen has to offer this, not just the
-   read-only viewers gui_wait_close covers: a phone visitor has no
-   keyboard at all, so a screen that only reads keys is a screen they can
-   open and then never leave. Terminal and the Apps folder both shipped
-   with exactly that bug in v36/v37, reported from a real phone. */
-#define KEY_CLICK 260
-#define KEY_WHEEL_UP 300
-#define KEY_WHEEL_DOWN 301
+/* KEY_UP..KEY_WHEEL_DOWN (arrows, enter, esc, click, wheel) now live in
+   app.h: a moved-out app's own unit needs the exact values get_key_or_click
+   hands back, same as this file. */
 /* v1.0.6: one system-wide clipboard. Every text field that reads through
    get_key/get_key_or_click gets Ctrl+C/X/V for free instead of each app
    decoding scancodes itself: kbd_ctrl (irq.c) plus the plain character scan
@@ -353,7 +336,7 @@ static void clipboard_set(const char *s, unsigned int n) {
     clipboard_len = n;
     clip_serial_dump("CLIPCOPY:", clipboard_buf, clipboard_len);
 }
-static int get_key_or_click(void);
+int get_key_or_click(void);
 
 static int get_key(void){
     for (;;) {
@@ -382,7 +365,7 @@ static int get_key(void){
     }
 }
 
-static int get_key_or_click_until(unsigned int deadline){
+int get_key_or_click_until(unsigned int deadline){
     for (;;) {
         if (deadline && (int)(ticks() - deadline) >= 0) return 0;
         gui_app_mouse_tick();
@@ -419,7 +402,7 @@ static int get_key_or_click_until(unsigned int deadline){
     }
 }
 
-static int get_key_or_click(void) { return get_key_or_click_until(0); }
+int get_key_or_click(void) { return get_key_or_click_until(0); }
 
 /* ---- RTC via CMOS. ponytail: no PIT tick counter; the shell only ever
    needs wall-clock, and this needs no interrupt handler. ---- */
@@ -965,7 +948,7 @@ static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 static int dock_hover = -1; /* slot whose label is showing */
 
-#define GUI_BG          0x00FAF8F6
+/* GUI_BG lives in app.h now: a moved-out app's own unit clears to it too. */
 #define GUI_MENUBAR_H   26
 /* v36 (0.36.0): the icon size is now *derived* from how many icons there
    are, instead of a constant that silently overflows the screen every
@@ -4421,7 +4404,7 @@ static int gui_app_windowed = 0;
    dock window the frame already draws the title bar above the viewport,
    so the same layout moves up by that strip, the same 32px Stocks has
    always saved through stx_top(). Add it to every content y. */
-static int gui_app_dy(void){ return gui_app_windowed ? -32 : 0; }
+int gui_app_dy(void){ return gui_app_windowed ? -32 : 0; }
 /* Live title-bar drag for the blocking single-window apps (everything
    that opens through gui_launch_from_dock: Notes, Terminal, Chat, the
    fleet apps, Settings...). Direct request: "app windows should be
@@ -4443,8 +4426,8 @@ static int app_win_x = 0, app_win_y = 0, app_win_w = 0, app_win_h = 0;
 static int app_drag_held = 0, app_drag_on = 0, app_drag_gx = 0, app_drag_gy = 0;
 static int gui_dock_band_top(void);
 static void gui_daynight_wallpaper_rect(int x, int y, int w, int h);
-static int app_view_x, app_view_y, app_view_w, app_view_h;
-static int app_cursor_x, app_cursor_y;
+int app_view_x, app_view_y; static int app_view_w, app_view_h;
+int app_cursor_x, app_cursor_y;
 static void gui_app_mouse_tick(void){
     if (!gui_app_windowed) return;
     int dx = 0, dy = 0, buttons = 0;
@@ -4682,7 +4665,6 @@ static int text_ink(int a, unsigned int fg, unsigned int dst){
 #include "calendar.h"
 #include "mail.h"
 #include "contacts.h"
-#include "calculator.h"
 #include "chat.h"
 #include "search.h"
 #include "portfolio.h"
@@ -4940,7 +4922,7 @@ static void wx_card(int x, int y, int w, int h, int r, unsigned int color, unsig
 }
 
 /* "18°" style degrees into out. */
-static char *wx_put_int(char *o, int v){
+char *wx_put_int(char *o, int v){
     if (v < 0) { *o++ = '-'; v = -v; }
     char d[8]; int n = 0; if (!v) d[n++] = '0'; while (v && n < 7) { d[n++] = (char)('0' + v % 10); v /= 10; }
     while (n) *o++ = d[--n];
@@ -5948,8 +5930,6 @@ static void gui_launch_settings(void){
 }
 
 #include "stocks.h"
-#include "toroid.h"
-#include "quotes.h"
 #include "bookrank.h"
 #include "lexly.h"
 #include "fieldbook.h"
@@ -6235,15 +6215,15 @@ static const struct app APPS[GUI_APP_COUNT] = {
     /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        gui_launch_curbfind,   0, 0},
     /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_open,          0, 0},
     /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       gui_launch_bookrank,   0, 0},
-    /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     gui_launch_quotes,     0, 0},
+    /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_open,      0, 0},
     /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       gui_launch_plan,       0, 0},
     /* 13 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      gui_launch_lexly,      0, 0},
-    /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     gui_launch_toroid,     0, 0},
+    /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_open,           0, 0},
     /* 15 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   gui_launch_sparkjar,   0, 0},
     /* 16 */ {"Homeqi",     0x00566A3A, gui_icon_homeqi,     gui_open_homeqi,       0, 0},
     /* 17 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  gui_launch_fieldbook,  0, 0},
     /* 18 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   gui_launch_contacts,   0, 0},
-    /* 19 */ {"Calculator", 0x00556B85, gui_icon_calculator, gui_launch_calculator, 0, 0},
+    /* 19 */ {"Calculator", 0x00556B85, gui_icon_calculator, calculator_open,      0, 0},
     /* 20 */ {"Stocks",     0x00356B4F, gui_icon_stocks,     gui_launch_stocks,     0, 0},
     /* 21 */ {"Search",     0x00506078, gui_icon_search,     gui_launch_search,     0, 0},
     /* 22 */ {"Epiphany",   0x001F5FA8, gui_icon_stocks,     gui_launch_epiphany,   0, 0}, /* art covers it; primitive fallback only */
@@ -9201,43 +9181,8 @@ static void run(char *line){
         if (!pass) puts("FAILED\n");
     }
     else if (!strcmp(line, "calctest")) {
-        /* v70 (0.64.0): discriminating regression test for Calculator. Core
-           contract: parse and evaluate basic arithmetic expressions correctly,
-           with proper operator precedence. Real checks: (1) simple addition
-           "2+3" evaluates to 5.0, (2) multiplication binds tighter than
-           addition: "2+3*4" evaluates to 14.0 not 20.0, (3) parentheses work
-           and override precedence: "(2+3)*4" evaluates to 20.0 not 14.0, (4)
-           unary minus: "-2+3" evaluates to 1.0, (5) division: "10/2" is 5.0.
-           If any expression fails to parse or evaluates to the wrong value,
-           the test catches it. */
-        int pass = 1;
-
-        expr_node *e1 = calc_parse("2+3");
-        double r1 = calc_eval(e1);
-        calc_free(e1);
-        if (r1 != 5.0) { puts("2+3 failed: got "); putn((unsigned int)r1); puts("\n"); pass = 0; }
-
-        expr_node *e2 = calc_parse("2+3*4");
-        double r2 = calc_eval(e2);
-        calc_free(e2);
-        if (r2 != 14.0) { puts("2+3*4 failed: got "); putn((unsigned int)r2); puts("\n"); pass = 0; }
-
-        expr_node *e3 = calc_parse("(2+3)*4");
-        double r3 = calc_eval(e3);
-        calc_free(e3);
-        if (r3 != 20.0) { puts("(2+3)*4 failed: got "); putn((unsigned int)r3); puts("\n"); pass = 0; }
-
-        expr_node *e4 = calc_parse("-2+3");
-        double r4 = calc_eval(e4);
-        calc_free(e4);
-        if (r4 != 1.0) { puts("-2+3 failed: got "); putn((unsigned int)r4); puts("\n"); pass = 0; }
-
-        expr_node *e5 = calc_parse("10/2");
-        double r5 = calc_eval(e5);
-        calc_free(e5);
-        if (r5 != 5.0) { puts("10/2 failed: got "); putn((unsigned int)r5); puts("\n"); pass = 0; }
-
-        puts(pass ? "calculator parser: ok\n" : "FAILED\n");
+        /* Parser and test both live in app_calculator.c now (calculator_test). */
+        puts(calculator_test() ? "calculator parser: ok\n" : "FAILED\n");
     }
     else if (!strcmp(line, "stockstest")) {
         int pass = 1;

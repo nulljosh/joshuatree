@@ -147,7 +147,7 @@ change. No Save button.
 
 | App | File | What it is |
 |---|---|---|
-| Calculator | `kernel/calculator.h` | A recursive-descent parser over `+ - * / ()`. |
+| Calculator | `drivers/app_calculator.c`, `drivers/calculator.h` | A recursive-descent parser over `+ - * / ()`. Moved out of `kernel.c` after Keyrate. |
 | Stocks | `kernel/stocks.h` | Eight fixed symbols with live quotes and charts from the Worker at `/api/stocks`. |
 | Epiphany | `kernel/epiphany.h` | The offline slice of the Epiphany portfolio app: watchlist, portfolio, crypto. |
 | Search | `kernel/search.h` | Filters the current directory as you type. Enter opens a folder or shows a file. Scoped to what the VFS can list, no whole-disk index. |
@@ -159,8 +159,8 @@ sibling web apps, kept small on purpose.
 
 | App | File | What it is |
 |---|---|---|
-| Quotes | `kernel/quotes.h` | Name the film from the line. Streak and best for the session. |
-| Toroid | `kernel/toroid.h` | Conway's Life on a torus. |
+| Quotes | `drivers/app_quotestreak.c`, `drivers/quotestreak.h` | Name the film from the line. Streak and best for the session. Moved out of `kernel.c` after Keyrate. |
+| Toroid | `drivers/app_toroid.c`, `drivers/toroid.h` | Conway's Life on a torus. Moved out of `kernel.c` after Keyrate. |
 | Bookrank | `kernel/bookrank.h` | Ranked non-fiction with a summary panel. |
 | Curbfind | `kernel/curbfind.h` | Craigslist deals for Vancouver, ranked by score. |
 | Lexly | `kernel/lexly.h` | Spanish vocabulary drill, four choices. |

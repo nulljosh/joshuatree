@@ -1,9 +1,16 @@
-/* Quotes: Quotestreak running natively. A line from a film, four titles,
-   pick the right one and the streak grows; miss and it resets. Same game as
-   quotestreak.heyitsmejosh.com, replacing the one-line HTML card the dock
-   tile used to open. Included by kernel.c after wx_put_int (streak counter).
+/* Quotestreak, the film-quote guessing game, in its own translation unit:
+   the third app moved out of kernel.c, same pattern as app_keyrate.c and
+   app_toroid.c. A line from a film, four titles, pick the right one and
+   the streak grows; miss and it resets.
    ponytail: a fixed table of well-known lines, answer order rotated per
    round instead of shuffled. Add rows here to grow the deck. */
+#include "app.h"
+#include "quotestreak.h"
+#include "window.h"
+#include "font.h"
+#include "mouse.h"
+#include "task.h"
+
 typedef struct { const char *line; const char *film; } QsQuote;
 static const QsQuote QS_DECK[] = {
     {"I'm going to make him an offer he can't refuse.", "The Godfather"},
@@ -38,8 +45,7 @@ static int qs_option(int slot){
     return (cur + 3 + n * 5) % QS_COUNT == cur ? (cur + 1) % QS_COUNT : (cur + 3 + n * 5) % QS_COUNT;
 }
 static void qs_draw(void){
-    window_clear(GUI_BG);
-    gui_draw_app_titlebar("Quotes");
+    app_begin("Quotes", GUI_BG);
     font_draw_string("Which film is this from?", 20, 56, 0x0075726E, -1);
     font_draw_string(QS_DECK[qs_cur()].line, 20, 96, 0x001C1C1E, -1);
     int right = qs_round % 4;
@@ -61,14 +67,17 @@ static void qs_draw(void){
     for (t = qs_pick < 0 ? "   1-4 or click to answer   esc closes" : (qs_pick == right ? "   right. any key for the next one" : "   missed. any key for the next one"); *t; t++) *o++ = *t;
     *o = 0;
     font_draw_string(line, 20, (int)window_height() - 30, 0x0075726E, -1);
+    window_present();
 }
-static void gui_launch_quotes(void){
+
+void quotestreak_open(void){
+    qs_round = qs_streak = 0;
     qs_pick = -1;
     mouse_click_edge_sync();
     for (;;) {
         qs_draw();
         sleep_ticks(5);
-        mouse_click_edge_sync();
+        mouse_click_edge_sync(); /* flush the click that just answered, so it can't also read as the "next" click */
         int k = get_key_or_click();
         if (k == KEY_ESC) return;
         int slot = -1;
