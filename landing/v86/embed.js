@@ -96,6 +96,7 @@ if (typeof document !== "undefined") (function () {
   // e.g. whether the backdoor probe found v86's vmmouse and whether an
   // absolute packet really arrived, not just whether the page sent one.
   var serialLog = "";
+  var speakCount = 0, lastSpeakBytes = 0; // every "speak: status=200 bytes=N" line, counted as it arrives (serialLog stops growing at 64KB)
   // v0.73.5: fetched once and reused by the idle tour's reboot sequence
   // below (see the comment above the reboot block in tourLoop) to
   // re-inject the kernel image after each lap's reset_memory(); this
@@ -503,6 +504,7 @@ if (typeof document !== "undefined") (function () {
       // middle of her spoken reply, since listening involves no clicks.
       if (b === 10) {
         var m = /^speak: status=200 bytes=(\d+)/.exec(serialLine);
+        if (m) { speakCount++; lastSpeakBytes = Number(m[1]); }
         if (m) lastInteractionTime = Date.now() + Math.ceil(Number(m[1]) / 16); // 16000 samples/s = 16 per ms
         else if (/^chatreply=|^chattool=/.test(serialLine)) lastInteractionTime = Date.now();
         serialLine = "";
@@ -677,6 +679,40 @@ if (typeof document !== "undefined") (function () {
     var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
     if (ac && ac.state !== "running") ac.resume().catch(function () {});
   });
+  // 1.8.x: tap to talk. iPhone plays no sound before a tap, and the phone
+  // intro used to have Samantha answer before anyone touched the page, so her
+  // first line was thrown away (measured in the iOS Simulator: context
+  // "interrupted", speak 200, zero DAC chunks). On phones the intro now waits
+  // for this button; the tap unlocks audio (the document listeners above run
+  // first) and she speaks right after. The button eats its own touch so the
+  // tap doesn't count as a visitor takeover (focusIn would stop the tour).
+  function audioRunning() {
+    var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
+    return !!ac && ac.state === "running";
+  }
+  var tapTalkBtn = null, tapTalkResolve = null;
+  var tapTalkPromise = new Promise(function (r) { tapTalkResolve = r; });
+  if (IS_PHONE) {
+    tapTalkBtn = document.createElement("button");
+    tapTalkBtn.type = "button";
+    tapTalkBtn.id = "tap-to-talk";
+    tapTalkBtn.textContent = "Tap to hear Samantha";
+    tapTalkBtn.hidden = true;
+    tapTalkBtn.style.cssText = "position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:7;" +
+      "background:var(--fg);color:var(--bg);border:none;border-radius:999px;padding:14px 22px;min-height:44px;" +
+      "font:600 15px/1 -apple-system,Helvetica,Arial,sans-serif;letter-spacing:0.01em;cursor:pointer;" +
+      "box-shadow:0 4px 18px rgba(0,0,0,0.18);white-space:nowrap;";
+    ["touchstart", "mousedown", "pointerdown"].forEach(function (t) {
+      tapTalkBtn.addEventListener(t, function (ev) { ev.stopPropagation(); }, { passive: true });
+    });
+    tapTalkBtn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      unlockAudio(ev);
+      tapTalkBtn.hidden = true;
+      tapTalkResolve();
+    });
+    container.appendChild(tapTalkBtn);
+  }
   container.addEventListener("mousedown", focusIn);
   container.addEventListener("touchstart", focusIn, { passive: true });
   container.addEventListener("keydown", focusIn);
@@ -2016,9 +2052,29 @@ if (typeof document !== "undefined") (function () {
       await sleep(150);
     }
     if (focused || tourGen !== gen) return;
+    if (tapTalkBtn && !audioRunning()) {
+      // Wait for the tap so her reply is audible; give up after 20s and run
+      // silently so the demo still moves (the button stays up for later).
+      tapTalkBtn.hidden = false;
+      await Promise.race([tapTalkPromise, new Promise(function (r) { setTimeout(r, 20000); })]);
+      if (focused || tourGen !== gen) return;
+      await new Promise(function (r) { setTimeout(r, 400); }); // let resume() settle
+    }
     updateHeadline('Samantha');
+    var speakSeen = speakCount;
     await emulator.keyboard_send_text(SAMANTHA_REMINDER_LINE + '\n', 55); // straight into her already-open input box, exactly like a real visitor's first tap-and-type would
-    await sleep(3000); // real /api/pick + local reminder-tool round trip, same dwell the windowed scene's own script already gives each turn
+    // Wait for her real reply to finish speaking before closing her. A fixed
+    // 3s dwell closed the avatar before /api/speak even returned on a slow
+    // phone, so iOS visitors never heard her. The kernel logs
+    // "speak: status=N bytes=M" and plays pcm8 at 16 kHz (drivers/speak.h),
+    // so the clip lasts M/16000 s.
+    var waitStart = Date.now(), speakMs = 0;
+    while (Date.now() - waitStart < 15000) {
+      if (focused || tourGen !== gen) return;
+      if (speakCount > speakSeen) { speakMs = Math.min(12000, Math.round(lastSpeakBytes / 16)) + 800; break; }
+      await sleep(200);
+    }
+    await sleep(speakMs || 3000);
     if (focused || tourGen !== gen) return;
     if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80); // Escape: closes the now-windowed console back to the desktop
     await sleep(800);
