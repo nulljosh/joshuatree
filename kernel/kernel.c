@@ -2122,7 +2122,7 @@ static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_ro
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
@@ -5635,7 +5635,6 @@ static void gui_launch_trash(void){
 #include "settings_ui.h"
 
 #include "stocks.h"
-#include "bookrank.h"
 #include "lexly.h"
 #include "fieldbook.h"
 #include "plan.h"
@@ -5922,7 +5921,7 @@ static const struct app APPS[GUI_APP_COUNT] = {
     /*  7 */ {"Weather",    0x0085144B, gui_icon_weather,    gui_launch_weather,    gui_draw_weather_content,   gui_weather_mw_key},
     /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        gui_launch_curbfind,   0, 0},
     /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c */
-    /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       gui_launch_bookrank,   0, 0},
+    /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       bookrank_ring3_open,   0, 0}, /* 2.0: ring 3 too (user/bookrank.c) */
     /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_ring3_open, 0, 0}, /* 1.7.14: ring 3 too (user/quotes.c) */
     /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       gui_launch_plan,       0, 0},
     /* 13 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      gui_launch_lexly,      0, 0},
