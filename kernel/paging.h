@@ -32,6 +32,15 @@ void paging_set_user(void *virt_addr);
    map is kernel-only by construction and returns 0. */
 int paging_user_range_ok(unsigned int addr, unsigned int len);
 
+/* 1.7.8: the reverse of paging_set_user, for a whole range. Clears the
+   U/S bit on every page of [addr, addr+len) in the shared base table and
+   flushes each page from the TLB (both aliases), so a region the kernel
+   lent to ring 3 (the window framebuffer) is supervisor-only again the
+   moment the lender is gone. The page stays present and mapped: only who
+   may touch it changes. The directory-level U/S bit is left set, because
+   other user pages share that 4MB slot. Outside the base map: no-op. */
+void paging_clear_user(void *addr, unsigned int len);
+
 /* v31 (0.31.0): real per-task memory isolation. Every task gets its own
    page directory, cloned from the kernel's (so kernel code/data/stack
    stay shared and trusted, exactly as today) plus one private page table

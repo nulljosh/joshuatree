@@ -28,6 +28,7 @@
 #include "vfs.h"
 #include "serial.h"
 #include "user_keyrate.h"
+#include "user_fbpoke.h"
 #include "app.h"
 #include "irq.h"
 #include "mouse.h"
@@ -98,16 +99,45 @@ void keyrate_ring3_open(void) {
     if (syscall_window_owner() >= 0) serial_puts("ring3app: BUG window still owned after the task ended\n");
 }
 
+/* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
+   run user/fbpoke.c with no window: it must be refused a pointer into
+   the released framebuffer and must page-fault storing into it. The
+   check reads this function's lines; a program that "exited" here
+   instead of crashing is the 1.7.7 hole reopened. */
+static int fbpoke_armed = 0;
+static void fbpoke_run(void) {
+    unsigned char probe[1];
+    if (vfs_read_file("FBPOKE.BIN", probe, 1) < 0 &&
+        !vfs_write_file("FBPOKE.BIN", user_fbpoke, USER_FBPOKE_LEN)) {
+        serial_puts("ring3app: could not seed FBPOKE.BIN, not started\n");
+        return;
+    }
+    serial_puts("ring3app: launching FBPOKE.BIN at ring 3, no window\n");
+    int status = -1;
+    const char *argv[] = { "FBPOKE.BIN" };
+    if (!exec_user("FBPOKE.BIN", argv, 1, &status)) { serial_puts("ring3app: exec_user failed for FBPOKE.BIN\n"); return; }
+    char num[12]; put_dec(num, status);
+    if (status < 0 && -status < 32) {
+        serial_puts("ring3app: FBPOKE.BIN crashed ("); serial_puts(EXC_SHORT[-status]);
+        serial_puts("), released framebuffer stayed supervisor-only\n");
+    } else {
+        serial_puts("ring3app: BUG FBPOKE.BIN exited "); serial_puts(num); serial_puts(", the released framebuffer was still writable\n");
+    }
+}
+
 static int ring3app_autoopen_armed = 0;
 void ring3app_autoopen_arm(const char *cl){
-    for (const char *pc = cl; pc && *pc; pc++)
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='k' && pc[6]=='e' && pc[7]=='y' && pc[8]=='r') { ring3app_autoopen_armed = 1; serial_puts("autoopen=keyrate\n"); return; }
+    for (const char *pc = cl; pc && *pc; pc++) {
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='k' && pc[6]=='e' && pc[7]=='y' && pc[8]=='r') { ring3app_autoopen_armed = 1; serial_puts("autoopen=keyrate\n"); }
+        if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
+    }
 }
 void ring3app_autoopen_run(int mx, int my){
     if (!ring3app_autoopen_armed) return;
     ring3app_autoopen_armed = 0;
     editor_mouse_x = mx; editor_mouse_y = my;
     gui_launch_from_dock(9); /* Keyrate's APPS slot */
+    if (fbpoke_armed) { fbpoke_armed = 0; fbpoke_run(); }
     gui_draw_desktop(-1, -1, 0, 0);
     cursor_saved_x = cursor_saved_y = -1;
     gui_cursor_save(mx, my);
