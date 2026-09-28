@@ -23,6 +23,25 @@ Measured against the closest from-scratch peers: SerenityOS (the one-person-scal
 6. **Apps from outside the kernel.** All 25 apps compile into the kernel; two ring-3 programs exist. No installer, no update path.
 7. **Everyday apps peers ship.** An image viewer, a music player, a few games. KolibriOS ships dozens in under 2MB. See Photos, Music, Basic games under After 1.0.
 
+## This week (set 2026-09-27)
+Samantha runs the machine. Joshua's list, in order.
+
+- [ ] [Sonnet] Samantha's mail tools ship: "read my email" and "email Mom that I'm late" work in Chat, with a scenario check.
+- [ ] [Sonnet] Samantha tools for every app: open, read and write Notes, Files, Calendar, Reminders, Weather, Stocks. A few apps a night, one check each.
+- [ ] [Sonnet] Boot straight into Samantha: a kernel command-line flag (`samantha`) opens her full screen after boot.
+- [ ] [Fable] HTTPS without the proxy: native TLS 1.3 in the kernel, then the web browser on top of it.
+- [ ] [Joshua] Google project for mail sign-in (OAuth client id), then [Sonnet] sign in with Google in Mail.
+- [ ] [Sonnet] Lip-synced face: one Higgsfield lip-sync render of a sentence about Joshua Tree, cut into a viseme library, the server sends a mouth timeline with each reply. the face benchmark (PR #241) must grade it A+ (sync is the gap: best so far 55/100).
+- [ ] [Sonnet] Mobile Joshua Tree: the landing demo and the OS usable on a phone screen.
+- [ ] [Fable] Samantha fixes her own bugs: a failing check becomes a draft PR she opens herself (Claude for the hard part at first), gated on `tools/ci-local.sh`. First target: the three compiler warnings in the build.
+
+## From the nanobyte "Building an OS" series (set 2026-09-27)
+What that series covers that Joshua Tree still doesn't, ranked for a dev kit that boots real PCs.
+
+- [ ] [Fable] FAT32, read and write: open a normal USB stick or SD card. Today the disk format is Joshua Tree's own, so nothing from another computer opens.
+- [ ] [Fable] Load ELF programs from disk at runtime, so apps can ship outside the kernel. First step to installable apps (gap 6 above).
+- [ ] [Sonnet] Crash reports with function names: build a symbol table into the kernel and print `panic in <function>+offset` over serial and on screen.
+
 ## Beta, 0.9.0
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck.
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
