@@ -50,6 +50,10 @@ if (typeof document !== "undefined") (function () {
   // space has to switch to match, 1:1, instead of downscaling a desktop.
   var IS_PHONE = typeof matchMedia === "function" && matchMedia("(max-width: 520px)").matches;
   var LOGICAL_W = IS_PHONE ? 430 : 960, LOGICAL_H = IS_PHONE ? 760 : 540;
+  // 1.7.16: one cmdline for the first boot AND every tour-lap reboot. reinjectKernel
+  // used to reload the kernel with no cmdline, so after lap 1 a phone visitor got a
+  // letterboxed desktop (no "phone"), and everyone lost facehost.
+  var BOOT_CMDLINE = (IS_PHONE ? "phone samantha " : "") + (/[?&]portfolio\b/.test(location.search) ? "portfolio " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com";
   var GLIDE_MAX_MS = 700; // longest tour cursor glide, see moveCursorTo
   // v52.6: real shadow cursor position, kept in sync by every real send
   // this file makes (mousemove, touchmove drags, and moveCursorTo's own
@@ -141,6 +145,39 @@ if (typeof document !== "undefined") (function () {
   var screenCanvas = document.getElementById("screen_canvas");
   var overlay = document.getElementById("v86-overlay");
 
+  // 1.7.14: mobile audio debugging. Samantha's voice still doesn't play on
+  // a real iPhone even after 1.7.6's touchend/click unlock, and we can't
+  // test a real phone from here. ?audiodebug shows a small fixed overlay
+  // with everything needed to tell "AudioContext is locked" apart from
+  // "the context runs but v86 never got any samples" (kernel/SB16 side)
+  // from a screenshot the visitor sends back. Plain text, no emoji, no
+  // libraries: this has to survive on whatever ships in the PR, untouched
+  // by anything else on the page.
+  var AUDIO_DEBUG = /[?&]audiodebug\b/.test(location.search);
+  var audioDebugState = { unlockAttempts: 0, lastUnlockEvent: "-", chunkCount: 0, lastLevel: 0 };
+  var audioDebugEl = null;
+  if (AUDIO_DEBUG) {
+    audioDebugEl = document.createElement("div");
+    audioDebugEl.id = "audio-debug-overlay";
+    audioDebugEl.style.cssText = "position:fixed;top:8px;left:8px;z-index:99999;background:#fff;color:#111;border:1px solid #111;padding:8px 10px;font:12px/1.5 -apple-system,Helvetica,Arial,sans-serif;white-space:pre;pointer-events:none;max-width:80vw;";
+    document.body.appendChild(audioDebugEl);
+    var renderAudioDebug = function () {
+      var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
+      var lines = [
+        "audio debug",
+        "context state: " + (ac ? ac.state : "no speaker_adapter"),
+        "sample rate: " + (ac ? ac.sampleRate : "-"),
+        "audioSession.type: " + (navigator.audioSession ? navigator.audioSession.type : "n/a"),
+        "unlock attempts: " + audioDebugState.unlockAttempts + " (last: " + audioDebugState.lastUnlockEvent + ")",
+        "dac chunks received: " + audioDebugState.chunkCount,
+        "last non-zero sample: " + audioDebugState.lastLevel
+      ];
+      audioDebugEl.textContent = lines.join("\n");
+    };
+    setInterval(renderAudioDebug, 200);
+    renderAudioDebug();
+  }
+
   // v0.76.26 fix: prevent Escape key from reaching the kernel when a visitor
   // presses it (which triggers kernel.c's gui_run shell-exit feature, leaving
   // the demo stuck at a bare shell prompt). This listener must be registered on
@@ -211,7 +248,7 @@ if (typeof document !== "undefined") (function () {
     // which itself forces boot_to_samantha in the kernel -- a phone
     // visitor gets her portrait view unconditionally, desktop visitors
     // are untouched and still need ?samantha to opt in.
-    cmdline: (IS_PHONE ? "phone samantha " : "") + (/[?&]portfolio\b/.test(location.search) ? "portfolio " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com", // kmain reads this and puts Joshua's own apps on the dock
+    cmdline: BOOT_CMDLINE, // kmain reads this and puts Joshua's own apps on the dock
     autostart: true,
     // Real network backend for the emulated NIC: without this, v86's NIC
     // (ne2k by default, see drivers/ne2k.c) is wired to nothing, every
@@ -266,6 +303,23 @@ if (typeof document !== "undefined") (function () {
     net_device: { type: "ne2k", relay_url: "fetch", vm_ip: "10.0.2.15", router_ip: "10.0.2.2", cors_proxy: "/api/proxy?url=" },
     });
     window.__joshuaTreeEmulator = emulator; // for debugging from the console, harmless to leave; moved here (was a bottom-of-file assignment) since construction itself now happens in here, not synchronously as this script parses
+    if (AUDIO_DEBUG && emulator.bus) {
+      // libv86.js's SB16 device (`D.prototype.dac_send`) fires this bus
+      // event with two shifted sample blocks every time it hands real
+      // audio to the mixer/AudioContext side; counting it (and the last
+      // non-zero sample it carried) is the only way to tell, on a phone we
+      // can't attach devtools to, whether the kernel/SB16 side ever sent
+      // anything at all versus the AudioContext just being locked.
+      emulator.bus.register("dac-send-data", function (data) {
+        audioDebugState.chunkCount++;
+        var block = data && data[0];
+        if (block) {
+          for (var i = block.length - 1; i >= 0; i--) {
+            if (block[i]) { audioDebugState.lastLevel = block[i]; break; }
+          }
+        }
+      });
+    }
 
     // keyboard_adapter/mouse_adapter aren't attached synchronously: V86's
     // constructor kicks off the wasm load and only wires them up once the
@@ -448,13 +502,50 @@ if (typeof document !== "undefined") (function () {
   // again. Retry on every real tap until it runs. audioSession "playback"
   // (Safari 16.4+) keeps her voice audible with the silent switch on, the
   // way a video would be.
-  function unlockAudio() {
-    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
-    var ac = emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
-    if (ac && ac.state !== "running") ac.resume().catch(function () {});
+  // 1.7.14: still silent on a real iPhone after 1.7.6. Two more gaps:
+  // (1) the listeners were on `container`, but a visitor's first real tap
+  // often lands on `overlay` (the "click to start" layer) or the
+  // "Full screen" button, both of which sit on top of/beside container and
+  // never bubble a click to it -- listen on `document` instead, in the
+  // capture phase, so every tap anywhere on the page counts, whatever it
+  // hits. (2) resume() alone doesn't always stick on iOS Safari: the
+  // standard unlock idiom plays one frame of silence through the same
+  // context, which is what actually flips WebKit's internal "this context
+  // was unlocked by a gesture" bit. (3) iOS can drop a running context back
+  // to "interrupted" (a phone call, Siri, switching apps) with no gesture
+  // to resume it on -- catch that on visibilitychange/pageshow too.
+  function silentPrime(ac) {
+    try {
+      var buf = ac.createBuffer(1, 1, ac.sampleRate);
+      var src = ac.createBufferSource();
+      src.buffer = buf;
+      src.connect(ac.destination);
+      src.start(0);
+    } catch (e) {}
   }
-  container.addEventListener("touchend", unlockAudio, { passive: true });
-  container.addEventListener("click", unlockAudio);
+  function unlockAudio(ev) {
+    audioDebugState.unlockAttempts++;
+    audioDebugState.lastUnlockEvent = ev ? ev.type : "?";
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+    var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
+    if (!ac) return;
+    if (ac.state !== "running") {
+      ac.resume().catch(function () {});
+      silentPrime(ac);
+    }
+  }
+  document.addEventListener("pointerup", unlockAudio, { capture: true, passive: true });
+  document.addEventListener("touchend", unlockAudio, { capture: true, passive: true });
+  document.addEventListener("click", unlockAudio, { capture: true, passive: true });
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible") return;
+    var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
+    if (ac && ac.state === "interrupted") ac.resume().catch(function () {});
+  });
+  window.addEventListener("pageshow", function () {
+    var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
+    if (ac && ac.state !== "running") ac.resume().catch(function () {});
+  });
   container.addEventListener("mousedown", focusIn);
   container.addEventListener("touchstart", focusIn, { passive: true });
   container.addEventListener("keydown", focusIn);
@@ -531,6 +622,8 @@ if (typeof document !== "undefined") (function () {
     get absolute() { return absoluteMouse; }, /* v62: did the kernel enable v86's vmmouse backdoor */
     get serial() { return serialLog; },
     get started() { return !!emulator || emulatorStarting; }, /* v0.82.x: true once startEmulator() has actually run (construction kicked off, not necessarily finished) -- lets a check script tell "gated, not yet started" apart from "started", the real signal lazy-boot-check.mjs asserts on */
+    get audioState() { return emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context ? emulator.speaker_adapter.audio_context.state : "no-speaker-adapter"; }, /* mobile-audio-check.mjs: real iPhone AudioContext unlock state, no ?audiodebug flag needed */
+    get audioDebug() { return audioDebugState; }, /* mobile-audio-check.mjs: chunkCount/lastLevel from the dac-send-data hook, only populated under ?audiodebug */
     click: function () {
       if (!emulator) return;
       trackClick();
@@ -1289,7 +1382,7 @@ if (typeof document !== "undefined") (function () {
   function reinjectKernel() {
     var cpu = emulator.v86 && emulator.v86.cpu;
     if (!kernelElfBuffer || !cpu || !cpu.load_multiboot) return;
-    if (PORTFOLIO_MODE && cpu.load_multiboot_option_rom) { if (cpu.load_multiboot_option_rom(kernelElfBuffer, undefined, "portfolio")) cpu.reg32[0] = cpu.io.port_read32(244); }
+    if (cpu.load_multiboot_option_rom) { if (cpu.load_multiboot_option_rom(kernelElfBuffer, undefined, BOOT_CMDLINE)) cpu.reg32[0] = cpu.io.port_read32(244); }
     else cpu.load_multiboot(kernelElfBuffer);
   }
   function stopAutoplay() { if (tourTimer) { clearTimeout(tourTimer); tourTimer = 0; } tourRunning = false; tourGen++; /* invalidates any in-flight tourLoop */ }

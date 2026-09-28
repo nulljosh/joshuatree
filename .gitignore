@@ -41,3 +41,6 @@ build/
 landing/v86/kernel.elf.gz
 user/fbpoke.bin
 drivers/user_fbpoke.h
+
+# Agent scratch notes (per-worktree handoffs), never commit
+HANDOFF.md
