@@ -83,6 +83,7 @@ retry|4|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/r
 retry|6|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh
 retry|5|Ring-3 reference program against the v1 syscall ABI|./tools/checks/usertest-check.sh
 retry|3|Ring-3 program writing a real file against the v2 syscall ABI|./tools/checks/notetest-check.sh
+retry|1|Keyrate runs as a ring-3 process with its own window; crashing it leaves the desktop alive (v3 syscall ABI)|python3 ./tools/checks/ring3app-check.py
 retry|7|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
 retry|0|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
 once |7|Calendar date math, host harness|./tools/checks/check-calendar.sh

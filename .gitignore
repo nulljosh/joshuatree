@@ -13,6 +13,8 @@ user/note.bin
 drivers/user_note.h
 user/wc.bin
 drivers/user_wc.h
+user/keyrate.bin
+drivers/user_keyrate.h
 user/libjt.a
 landing/kernel.elf
 landing/v86/kernel.elf

@@ -27,11 +27,11 @@ the kernel would really fetch.
 
 Kernel-image budget (checked the same way gen_icon_art.py's own comment
 documents for the icon-art PNG-storage pass, since it's the same
-0xC0503000 ring-3 program window ceiling, see boot/linker.ld and
+0xC0507000 ring-3 program window ceiling, see boot/linker.ld and
 docs/SYSCALL-ABI.md): a raw 960x540x3 RGB blob is 1,555,200 bytes, more
 than double the ~638KB of headroom this kernel image had before this
 capture (measured via `size`/section-header dump against
-boot/linker.ld's `. + .bss <= 0xC0503000` ASSERT) -- a raw bake would not
+boot/linker.ld's `. + .bss <= 0xC0507000` ASSERT) -- a raw bake would not
 link. Quantized to a 32-color indexed PNG (drivers/png.c has decoded
 8-bit indexed/PLTE images since v75, exactly this shape) the same real
 capture is ~270KB, a >5.6x saving, decodes byte-for-byte through the same
@@ -166,7 +166,7 @@ def build(png, coords):
    decoded that shape since v75, and quantizing to %d colors takes a
    1,555,200-byte raw 960x540x3 RGB capture down to %d bytes, small enough
    to fit the ~638KB of headroom the kernel image had left under
-   boot/linker.ld's 0xC0503000 ring-3 program window ceiling (see this
+   boot/linker.ld's 0xC0507000 ring-3 program window ceiling (see this
    script's own module docstring for the real measured numbers).
    The kernel png_decode()s this once, lazily, on first need (v86 desktop
    paint with no map ever going to arrive) and keeps the decoded 960x540x3

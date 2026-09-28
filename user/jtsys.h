@@ -38,6 +38,28 @@
 #define JT_SYS_GETPID      20
 #define JT_SYS_SCHED_YIELD 158
 
+/* v3 (1.7.7): windows. Joshua Tree's own numbers, 384 up, past anything
+   Linux i386 assigns. A program launched from the dock asks for the app
+   window the desktop already opened for it and gets a framebuffer of that
+   size to draw into; poll hands back keys, clicks and wheel ticks, and
+   with JT_POLL_PRESENT copies the framebuffer to the screen first. There
+   is no close call: exiting (or crashing) releases the window. */
+#define JT_SYS_WINDOW_OPEN 384
+#define JT_SYS_WINDOW_POLL 385
+#define JT_POLL_PRESENT 1
+#define JT_EV_KEY   1
+#define JT_EV_CLICK 2
+#define JT_EV_WHEEL 3
+/* Key codes above ASCII, the same values the desktop's own apps see. */
+#define JT_KEY_UP    256
+#define JT_KEY_DOWN  257
+#define JT_KEY_ENTER 258
+#define JT_KEY_ESC   259
+#define JT_KEY_LEFT  261
+#define JT_KEY_RIGHT 262
+struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
+struct jt_event { unsigned int kind; int a, b; };
+
 /* v2 open() flags and lseek() whence values, Linux i386's own numbers.
    O_RDONLY is 0, which is exactly what v1 required, so a v1 program's
    open(path, 0) means the same thing it always did. O_CREAT, O_TRUNC and
@@ -102,5 +124,7 @@ static inline int jt_time(unsigned *out)                          { return jt_sy
 static inline int jt_getpid(void)                                 { return jt_syscall(JT_SYS_GETPID, 0, 0, 0); }
 static inline int jt_sched_yield(void)                            { return jt_syscall(JT_SYS_SCHED_YIELD, 0, 0, 0); }
 static inline int jt_lseek(int fd, int off, int whence)           { return jt_syscall(JT_SYS_LSEEK, (unsigned)fd, (unsigned)off, (unsigned)whence); }
+static inline int jt_window_open(struct jt_window_info *info)     { return jt_syscall(JT_SYS_WINDOW_OPEN, (unsigned)info, 0, 0); }
+static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
 
 #endif

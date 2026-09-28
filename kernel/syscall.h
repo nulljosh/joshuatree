@@ -27,6 +27,26 @@
 #define SYS_GETPID      20   /* returns the calling task's slot id */
 #define SYS_SCHED_YIELD 158  /* gives up the rest of this quantum; returns 0 */
 
+/* v3 (1.7.7): windows. Joshua Tree's own numbers start at 384, past
+   anything Linux i386 assigns that this kernel could ever want to borrow,
+   so the two sets can never collide. Same register shape as everything
+   above: ebx/ecx/edx, result in eax, negative errno on failure. */
+#define SYS_WINDOW_OPEN 384  /* ebx = struct jt_window_info* (user); fills it, maps the framebuffer user-accessible; 0 or -errno */
+#define SYS_WINDOW_POLL 385  /* ebx = struct jt_event* (user), ecx = flags (JT_POLL_PRESENT); 1 event written, -EAGAIN none */
+
+#define JT_POLL_PRESENT 1    /* copy the framebuffer to the screen before looking for an event */
+
+/* Event kinds SYS_WINDOW_POLL writes. a/b depend on the kind: KEY carries
+   the key in a (ASCII, or app.h's KEY_* codes at 256 and up), CLICK the
+   pointer in window coordinates (a = x, b = y), WHEEL the direction in a
+   (+1 up, -1 down). */
+#define JT_EV_KEY   1
+#define JT_EV_CLICK 2
+#define JT_EV_WHEEL 3
+
+struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
+struct jt_event { unsigned int kind; int a, b; };
+
 /* v2 open() flags. Linux i386's own values, the same borrow the call
    numbers are: O_RDONLY/O_WRONLY/O_RDWR are the low two bits, the rest
    are independent bits. v1 froze "flags must be 0", which is exactly
@@ -56,7 +76,7 @@
    assigned below is a null the dispatcher turns into -ENOSYS rather than
    a jump into nothing, and any number >= NSYSCALLS gets the same answer,
    so the gaps in Linux's numbering cost nothing and hide nothing. */
-#define NSYSCALLS 160
+#define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3 */
 
 /* Exactly the stack shape syscall_entry (isr.S) builds, lowest address
    first: the four data segments pushed last, pusha's eight, then the CPU's
@@ -78,4 +98,9 @@ void syscall_dispatch(struct syscall_frame *f); /* called from syscall_entry; wr
    task_create, and a stale fd table would hand the new task the previous
    one's open files. */
 void syscall_release_task(int id);
+
+/* 1.7.7: slot id of the task that owns the ring-3 window, or -1. The
+   launcher (kernel/ring3app.c) reads it after exec_user returns to say
+   whether the window was released cleanly. */
+int syscall_window_owner(void);
 #endif

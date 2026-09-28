@@ -15,6 +15,11 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 ## Now (set 2026-09-27)
 Samantha runs the machine. Mobile first by 2026-10-04: phone mode, the landing demo and the OS both usable on a phone screen. The PR merge queue moves one at a time, biggest first (see `docs/LOOP-HANDOFF.md` for exactly what's queued today). Full items live in the themed sections below, not here.
 
+## Toward 2.0: apps leave the kernel
+- [x] [Fable] Step one, 1.7.7: Keyrate is the first app running as a real ring-3 process (`user/keyrate.c`, launched by `kernel/ring3app.c`) with its own window through two new syscalls (`SYS_WINDOW_OPEN`, `SYS_WINDOW_POLL`) and real crash isolation: a null write inside it is reaped by the kernel, the window is torn down, the desktop comes back. Proven by `tools/checks/ring3app-check.py`. Not 2.0 yet.
+- [ ] [Sonnet] Port the remaining apps the same way, one PR each, smallest first (Toroid, Quotes, Calculator next). Each PR: `user/<app>.c`, a `ring3app.c` launcher entry, the in-kernel copy deleted once the check passes.
+- [ ] [Fable] What the ports will need from the ABI: a font syscall (Keyrate carries its own 8x16 bitmap), a tick clock finer than `SYS_TIME`'s seconds, more than one program window at a time, and the framebuffer pages flipped back to supervisor-only on release (today they are zeroed and re-mapped on the next open).
+
 ## Architecture to A+ (refreshed 2026-09-27)
 Measured against the closest from-scratch peers: SerenityOS (the one-person-scale benchmark), ToaruOS (own compositor, own libc), KolibriOS (tiny, runs on real PCs), Haiku, and against macOS/Linux. Ranked; the loop works top down. Each line points at the section that closes it.
 
