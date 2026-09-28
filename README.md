@@ -15,7 +15,7 @@ Ask Samantha to set a reminder, take a note or open an app. She does it, and she
 
 ## Boot it
 
-**Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
+**Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com) -- on a phone, the demo boots straight into Samantha, full screen.
 
 **USB stick:** Download from [Releases](https://github.com/nulljosh/joshuatree/releases), then:
 ```sh
@@ -31,6 +31,7 @@ Boot from USB (F12/F10/Esc/Del at power-on).
 ```sh
 brew install lld qemu
 make run              # boot to shell; type gui for desktop
+make samantha         # boot straight into Samantha, full screen, input focused
 make iso              # build bootable ISO
 ./check.sh            # run regression tests
 ./tools/bench.sh      # boot time, heap, memcpy, context switch, disk

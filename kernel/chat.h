@@ -925,3 +925,58 @@ static void gui_launch_chat_app(void) {
         }
     }
 }
+
+/* "samantha" on the boot command line (kmain -> gui_run, kernel.c's
+   boot_to_samantha): the very first frame after the splash is her, full
+   screen -- big face, a caption, and an already-drawn, already-live input
+   box, not the icon desktop. No conversation exists yet, so this is its
+   own draw (chat_draw_conversation only runs once chat_count > 0), but it
+   ends by handing off into the exact same gui_launch_chat_app console
+   this same face and input live in the rest of the time: esc here goes
+   straight to Chat's normal empty state, and a real first message is
+   processed then dropped into that same console too, so opening an app
+   afterward (chat_run_tool's "open_app") works exactly as it does from
+   the dock icon. */
+static void chat_boot_samantha_open(void) {
+    chat_load();
+    chat_face_load();
+    window_clear(GUI_BG);
+    gui_draw_app_titlebar("Samantha");
+    int T = gui_app_dy();
+    int bottom = (int)window_height() - 40;
+    /* phone: portrait layout -- face centered in the top half sized to the
+       screen width, caption right under it, input box stays pinned to the
+       bottom same as the desktop layout below. Desktop/samantha-only keeps
+       its original bottom-anchored face (unchanged from PR #246). */
+    if (boot_to_phone) {
+        int half = T + 20 + ((int)window_height() - (T + 20)) / 2;
+        int cy = chat_face_draw_big(T + 20, half);
+        render_wrapped_text("Tell me what to do.", 20, cy + 16, (int)window_width() - 40, 20, CHAT_DIM);
+    } else {
+        chat_face_draw_big(T + 20, bottom - 76);
+        render_wrapped_text("Tell me what to do.", 20, bottom - 60, (int)window_width() - 40, 20, CHAT_DIM);
+    }
+    serial_puts("samopen\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: full-screen avatar is up */
+
+    unsigned int n = 0;
+    char msg[CHAT_CONTENT_MAX];
+    msg[0] = 0;
+    mouse_click_edge_sync();
+    for (;;) {
+        window_rect(20, bottom - 30, (int)window_width() - 40, 20, 0x00FFFFFF);
+        msg[n] = 0;
+        font_draw_string(msg, 24, bottom - 28, 0x001C1C1E, -1);
+        serial_puts("samfocus\n"); /* discriminating marker: the input box is drawn and reading keys every frame, i.e. focused */
+        int k = get_key_or_click();
+        if (k == KEY_ESC || k == KEY_CLICK) { gui_launch_chat_app(); return; }
+        if (k == KEY_ENTER) break;
+        if (k == '\b') { if (n > 0) n--; continue; }
+        if (k >= 32 && k < 127 && n < sizeof(msg) - 1) msg[n++] = (char)k;
+    }
+    if (msg[0] != 0) {
+        int x = 20, you_w = font_string_width(CHAT_YOU);
+        int body_w = (int)window_width() - 40 - chat_face_reserve();
+        chat_process_message(msg, T, x, you_w, body_w);
+    }
+    gui_launch_chat_app();
+}

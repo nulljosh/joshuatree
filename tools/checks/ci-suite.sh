@@ -71,6 +71,8 @@ retry|3|GUI Chat app asks Samantha and renders the reply on screen|python3 ./too
 retry|1|Chat's tools (reminder, note, open app) work locally via /api/pick, ordinary questions still reach Samantha|python3 ./tools/checks/chattools-check.py
 retry|1|Chat mail tools: "read my email" lists a real message, "email <someone> <text>" lands one in Mail|python3 ./tools/checks/mailtools-check.py
 retry|1|Chat notes/reminders tools: list_reminders and read_notes work via the local keyword fallback when the picker doesn't know them|python3 ./tools/checks/notestools-check.py
+retry|2|"samantha" boot flag opens Chat's full-screen avatar view, input focused, before the desktop|python3 ./tools/checks/samantha-boot-check.py
+retry|2|"phone" boot flag opens a real 430x932 portrait frame straight into Samantha's view|python3 ./tools/checks/phone-boot-check.py
 retry|2|Chat bounds a connected-but-silent LLM host instead of hanging on net.c's old multi-minute default|python3 ./tools/checks/chat-timeout-check.py
 retry|4|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ramfs-demo-check.sh
 retry|6|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh

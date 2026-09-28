@@ -944,6 +944,17 @@ static int gui_order[GUI_ICON_COUNT];
    Joshua's own apps instead of the system set. Same slot count, Apps folder
    and Trash stay at the ends; everything left out is still in the Apps folder. */
 static int portfolio_dock;
+/* "samantha" on the multiboot command line: skip the desktop and open
+   Chat's full-screen avatar view (chat_boot_samantha_open, kernel/chat.h)
+   the instant gui_run's first frame would otherwise draw the dock. One
+   splash frame still shows (gui_draw_boot_screen runs first, unconditionally);
+   this only replaces the icon desktop that would follow it. */
+static int boot_to_samantha;
+/* "phone" on the command line, see kmain's parse: gui_run opens a real
+   portrait phone mode (430x932) instead of the desktop's 960x540@2x so
+   the demo boots 1:1 into what a phone screen actually is, rather than
+   shrinking the desktop's layout down to unreadable text. */
+static int boot_to_phone;
 static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 static int dock_hover = -1; /* slot whose label is showing */
@@ -6779,7 +6790,11 @@ static void gui_run(void){
        zoom-to-fit stretches without preserving aspect, so a 4:3 mode on a
        16:9 panel came out visibly skewed; matching the panel's own shape
        means fullscreen is pixel-exact with no scaling at all. */
-    if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
+    /* "phone" boots a real portrait phone mode at scale 1 instead: Bochs
+       VBE takes any size, and 430x932 is a real phone's own logical
+       pixels, not the desktop's 960x540 shrunk to fit. */
+    if (boot_to_phone) { if (!window_open(430, 932, 32)) { puts("no VGA device found or out of page tables\n"); return; } }
+    else if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
     font_set_aa(gui_aa_char, gui_aa_advance); /* v44: real typeface for every string from here on */
     font_set_aa_mono(gui_aa_char_mono); /* term-mono: mono face for the terminal grid and Keyrate's typed line */
     /* v46: no wind in the browser, decided up front rather than measured
@@ -6798,6 +6813,8 @@ static void gui_run(void){
     auth_gate(); /* v0.77: real login screen, once per session, before the desktop ever paints */
     gui_draw_boot_screen();
     gui_order_init();
+    if (boot_to_samantha) { boot_to_samantha = 0; chat_boot_samantha_open(); }
+    else serial_puts("guidesktop\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: the icon desktop drew first, samantha mode never reaches here before her avatar */
     dock_hover = dock_presented_hover = -1;
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;
     /* press_slot: the slot the mouse went down on, latched until release.
@@ -9444,6 +9461,17 @@ void kmain(unsigned int multiboot_info_addr){
             if (pc[0]=='c' && pc[1]=='l' && pc[2]=='i' && pc[3]=='p' && pc[4]=='t' && pc[5]=='r' && pc[6]=='a' && pc[7]=='c' && pc[8]=='e') { clip_trace = 1; serial_puts("cliptrace\n"); break; }
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='b' && pc[1]=='e' && pc[2]=='n' && pc[3]=='c' && pc[4]=='h' && (pc[5]==' ' || pc[5]==0)) { bench_at_boot = 1; break; }
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='s' && pc[1]=='a' && pc[2]=='m' && pc[3]=='a' && pc[4]=='n' && pc[5]=='t' && pc[6]=='h' && pc[7]=='a') { boot_to_samantha = 1; serial_puts("bootsamantha\n"); break; }
+        /* "phone" on the command line: Bochs VBE takes any mode, so this
+           just swaps gui_run's video mode for a real portrait phone size
+           (430x932) instead of the desktop's 960x540@2x. Landing's embed.js
+           always pairs this with samantha (a phone visitor gets her full-
+           screen view, not the icon desktop laid out for a mouse), but
+           phone alone still forces it here so booting with just "phone"
+           never lands on a desktop that was never designed for 430px. */
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='p' && pc[1]=='h' && pc[2]=='o' && pc[3]=='n' && pc[4]=='e' && (pc[5]==' ' || pc[5]==0)) { boot_to_phone = 1; boot_to_samantha = 1; serial_puts("bootphone\n"); break; }
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;

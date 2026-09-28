@@ -169,6 +169,12 @@ dotfiles.img:
 run: kernel.elf dotfiles.img
 	qemu-system-i386 -kernel kernel.elf -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file=dotfiles.img,format=raw,if=ide,index=0
 
+# Same boot as `run`, plus "samantha" on the command line: kmain's
+# boot_to_samantha skips the desktop for Chat's full-screen avatar view
+# (kernel/chat.h's chat_boot_samantha_open) the instant the splash clears.
+samantha: kernel.elf dotfiles.img
+	qemu-system-i386 -kernel kernel.elf -append samantha -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file=dotfiles.img,format=raw,if=ide,index=0
+
 clean:
 	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf user/hello.o user/hello.bin drivers/user_hello.h \
 	      user/note.o user/note.bin drivers/user_note.h
@@ -227,4 +233,4 @@ iso: joshuatree.iso
 
 -include $(OBJS:.o=.d)
 
-.PHONY: run clean hooks iso
+.PHONY: run samantha clean hooks iso
