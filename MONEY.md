@@ -4,7 +4,7 @@ How Joshua Tree makes money. The fleet-wide ledger is `GTM.md` in the Code root.
 
 ## Price
 
-Free. The OS, the apps and Samantha stay free, forever.
+Free. The OS and its apps stay free, forever.
 
 ## Rail
 
@@ -42,7 +42,7 @@ The computer after the phone. Joshua Tree becomes what people talk to instead of
 
 ## Where we are
 
-- 2026-09-27: the Samantha app (Turing's assistant, reached through Joshua Tree) talks with a face and a real voice through the OS's own sound driver. She can read and send mail. The landing page runs the whole OS live in the browser.
+- 2026-09-27: the Samantha app (Turing's assistant, reached through Joshua Tree) talks with a face and a real voice through the OS's own sound driver. The landing page runs the whole OS live in the browser.
 
 ## Next
 
