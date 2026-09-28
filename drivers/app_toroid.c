@@ -11,6 +11,7 @@
 #include "font.h"
 #include "mouse.h"
 #include "irq.h"
+#include "kheap.h"
 
 #define TR_MAXW 160
 #define TR_MAXH 80
@@ -18,7 +19,13 @@
 #define TR_TOP  48
 #define TR_PAD  20
 
-static unsigned char tr_a[TR_MAXH][TR_MAXW], tr_b[TR_MAXH][TR_MAXW];
+/* Heap-allocated (not .bss): two TR_MAXH*TR_MAXW grids are 25600 bytes
+   that only exist while Toroid is open, and carrying them in .bss
+   year-round crowds the ring-3 .userimg window (same reasoning as
+   chat_face.h's frame fingerprints). Allocated in toroid_open, freed on
+   every return path. */
+typedef unsigned char tr_row[TR_MAXW];
+static tr_row *tr_a, *tr_b;
 static int tr_w, tr_h, tr_gen, tr_paused;
 static unsigned int tr_seed = 2463534242u;
 static unsigned int tr_rand(void){ tr_seed ^= tr_seed << 13; tr_seed ^= tr_seed >> 17; tr_seed ^= tr_seed << 5; return tr_seed; }
@@ -61,6 +68,9 @@ static void tr_draw(void){
 
 void toroid_open(void){
     app_begin("Toroid", GUI_BG);
+    tr_a = (tr_row *)kmalloc(sizeof(tr_row) * TR_MAXH);
+    tr_b = (tr_row *)kmalloc(sizeof(tr_row) * TR_MAXH);
+    if (!tr_a || !tr_b) { if (tr_a) kfree(tr_a); if (tr_b) kfree(tr_b); tr_a = tr_b = 0; return; }
     tr_w = ((int)window_width() - 2 * TR_PAD) / TR_CELL;
     tr_h = ((int)window_height() - TR_TOP - 44) / TR_CELL;
     if (tr_w > TR_MAXW) tr_w = TR_MAXW;
@@ -77,10 +87,10 @@ void toroid_open(void){
            counted loop kept, but a real keypress or click still answers
            immediately instead of waiting out the window. */
         int k = get_key_or_click_until(tr_paused ? 0 : ticks() + 8);
-        if (k == KEY_ESC) return;
+        if (k == KEY_ESC) { kfree(tr_a); kfree(tr_b); tr_a = tr_b = 0; return; }
         if (k == KEY_CLICK) {
             int cx = (app_cursor_x - app_view_x - TR_PAD) / TR_CELL, cy = (app_cursor_y - app_view_y - TR_TOP) / TR_CELL;
-            if (cx < 0 || cy < 0 || cx >= tr_w || cy >= tr_h) return; /* titlebar X, or off the grid, same as every other app */
+            if (cx < 0 || cy < 0 || cx >= tr_w || cy >= tr_h) { kfree(tr_a); kfree(tr_b); tr_a = tr_b = 0; return; } /* titlebar X, or off the grid, same as every other app */
             tr_a[cy][cx] = !tr_a[cy][cx];
         } else if (k == ' ') tr_paused = !tr_paused;
         else if (k == 'r') tr_reseed();
