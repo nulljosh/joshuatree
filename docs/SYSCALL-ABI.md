@@ -518,7 +518,7 @@ after a window closes and asserts both refusals and the fault.
 ## The v3 reference program
 
 `user/keyrate.c`, the typing test, launched from the dock by
-`kernel/ring3app.c` in place of the in-kernel `drivers/app_keyrate.c`
+`kernel/ring3app.c` (which since 1.7.11 also launches `user/toroid.c` from one table)
 (which is kept for now). The backquote key makes it write through a null
 pointer on purpose; the check presses it and asserts the desktop is still
 alive afterwards, with the serial log naming the fault.

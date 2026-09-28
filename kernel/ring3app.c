@@ -1,8 +1,9 @@
 /* 1.7.7: Keyrate as a real ring-3 process, and the supervisor around it.
+   1.7.11: Toroid joins it, and the launcher became one table (RING3_APPS).
 
    Roadmap 2.0 says apps leave the kernel, so a crash in one cannot take
-   the machine down. This is step one of that: exactly one app, Keyrate,
-   the smallest real one, moved out of ring 0. The dock entry lands here,
+   the machine down. Keyrate, the smallest real app, went first; Toroid
+   followed the same path. Each app's dock entry lands here,
    and everything else stays as it was: gui_launch_from_dock has already
    drawn the window chrome and set the viewport by the time this runs,
    just as for an in-kernel app.
@@ -17,8 +18,8 @@
    whichever way it ended. This function then logs what happened and
    returns to the desktop, which repaints. No panic, no reboot.
 
-   The binary rides along in kernel.elf (drivers/user_keyrate.h, generated
-   by the Makefile from the real built user/keyrate.bin) and is seeded onto
+   Each binary rides along in kernel.elf (drivers/user_<app>.h, generated
+   by the Makefile from the real built user/<app>.bin) and is seeded onto
    the VFS on first launch, the same way `usertest` seeds HELLO.BIN: the
    headless checks and the browser demo have no disk. */
 #include "ring3app.h"
@@ -28,6 +29,7 @@
 #include "vfs.h"
 #include "serial.h"
 #include "user_keyrate.h"
+#include "user_toroid.h"
 #include "user_fbpoke.h"
 #include "app.h"
 #include "irq.h"
@@ -51,11 +53,23 @@ static const char *EXC_SHORT[32] = {
 };
 
 int gui_app_view_size(unsigned int *w, unsigned int *h);
-void keyrate_ring3_open(void) {
+
+/* 1.7.11: one launcher for every app that runs at ring 3. A row is the
+   app's name, the binary embedded in kernel.elf (drivers/user_<app>.h,
+   generated from the real built user/<app>.bin) and the VFS filename it
+   is seeded under on first launch. APPS[] in kernel.c points each ring-3
+   app's `open` at the small wrapper below its row. */
+struct ring3_app { const char *name; const unsigned char *bin; unsigned int len; const char *file; };
+static const struct ring3_app RING3_APPS[] = {
+    {"Keyrate", user_keyrate, USER_KEYRATE_LEN, "KEYRATE.BIN"},
+    {"Toroid",  user_toroid,  USER_TOROID_LEN,  "TOROID.BIN"},
+};
+
+static void ring3app_launch(const struct ring3_app *a) {
     unsigned char probe[1];
-    if (vfs_read_file("KEYRATE.BIN", probe, 1) < 0 &&
-        !vfs_write_file("KEYRATE.BIN", user_keyrate, USER_KEYRATE_LEN)) {
-        serial_puts("ring3app: could not seed KEYRATE.BIN, not started\n");
+    if (vfs_read_file(a->file, probe, 1) < 0 &&
+        !vfs_write_file(a->file, a->bin, a->len)) {
+        serial_puts("ring3app: could not seed "); serial_puts(a->file); serial_puts(", not started\n");
         return;
     }
     /* The viewport must fit the ring-3 framebuffer, or SYS_WINDOW_OPEN
@@ -78,10 +92,10 @@ void keyrate_ring3_open(void) {
         serial_puts("ring3app: BUG app viewport does not fit JT_USER_FB, grow .userfb in boot/linker.ld\n");
         return;
     }
-    serial_puts("ring3app: launching KEYRATE.BIN at ring 3\n");
+    serial_puts("ring3app: launching "); serial_puts(a->file); serial_puts(" at ring 3\n");
     int status = -1;
-    const char *argv[] = { "KEYRATE.BIN" };
-    if (!exec_user("KEYRATE.BIN", argv, 1, &status)) {
+    const char *argv[] = { a->file };
+    if (!exec_user(a->file, argv, 1, &status)) {
         serial_puts("ring3app: exec_user failed (not found, too big, or no free task slot)\n");
         return;
     }
@@ -90,14 +104,17 @@ void keyrate_ring3_open(void) {
        program crashed and was reaped. Zero or positive is its own exit
        code. Either way the desktop is what comes next. */
     char num[12]; put_dec(num, status);
+    serial_puts("ring3app: "); serial_puts(a->file);
     if (status < 0 && -status < 32) {
-        serial_puts("ring3app: KEYRATE.BIN crashed ("); serial_puts(EXC_SHORT[-status]);
+        serial_puts(" crashed ("); serial_puts(EXC_SHORT[-status]);
         serial_puts("), window torn down, desktop alive\n");
     } else {
-        serial_puts("ring3app: KEYRATE.BIN exited "); serial_puts(num); serial_puts(", window torn down, desktop alive\n");
+        serial_puts(" exited "); serial_puts(num); serial_puts(", window torn down, desktop alive\n");
     }
     if (syscall_window_owner() >= 0) serial_puts("ring3app: BUG window still owned after the task ended\n");
 }
+void keyrate_ring3_open(void) { ring3app_launch(&RING3_APPS[0]); }
+void toroid_ring3_open(void)  { ring3app_launch(&RING3_APPS[1]); }
 
 /* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
    run user/fbpoke.c with no window: it must be refused a pointer into
@@ -125,18 +142,19 @@ static void fbpoke_run(void) {
     }
 }
 
-static int ring3app_autoopen_armed = 0;
+static int ring3app_autoopen_slot = -1; /* APPS[] index to open, -1 when unarmed */
 void ring3app_autoopen_arm(const char *cl){
     for (const char *pc = cl; pc && *pc; pc++) {
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='k' && pc[6]=='e' && pc[7]=='y' && pc[8]=='r') { ring3app_autoopen_armed = 1; serial_puts("autoopen=keyrate\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='k' && pc[6]=='e' && pc[7]=='y' && pc[8]=='r') { ring3app_autoopen_slot = 9; serial_puts("autoopen=keyrate\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='t' && pc[6]=='o' && pc[7]=='r' && pc[8]=='o') { ring3app_autoopen_slot = 14; serial_puts("autoopen=toroid\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
     }
 }
 void ring3app_autoopen_run(int mx, int my){
-    if (!ring3app_autoopen_armed) return;
-    ring3app_autoopen_armed = 0;
+    if (ring3app_autoopen_slot < 0) return;
+    int slot = ring3app_autoopen_slot; ring3app_autoopen_slot = -1;
     editor_mouse_x = mx; editor_mouse_y = my;
-    gui_launch_from_dock(9); /* Keyrate's APPS slot */
+    gui_launch_from_dock(slot); /* Keyrate's or Toroid's APPS slot */
     if (fbpoke_armed) { fbpoke_armed = 0; fbpoke_run(); }
     gui_draw_desktop(-1, -1, 0, 0);
     cursor_saved_x = cursor_saved_y = -1;

@@ -73,7 +73,8 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `user/wc.c` | Unix `wc`, counts lines, words and bytes. The first program linked against libjt instead of raw syscalls. |
 | `user/fbpoke.c` | The program that must not work (1.7.8): runs after a window closed, hands `write` a kernel pointer and a pointer into the released framebuffer (both must be `-EFAULT`), then stores into it and must page-fault. Run by `kernel/ring3app.c` under the `fbpoke` boot flag. |
 | `user/keyrate.c` | Keyrate, the typing test, as a ring-3 program: the first app to leave the kernel (1.7.7). Gets its window from `SYS_WINDOW_OPEN`, its keys from `SYS_WINDOW_POLL`, draws its own 8x16 glyphs. The backquote key crashes it on purpose. |
-| `kernel/ring3app.c` + `kernel/ring3app.h` | The launcher and supervisor for apps that run as ring-3 processes. Seeds the binary onto the VFS, runs it with `exec_user`, and when it exits or is reaped after a fault, logs what happened and hands the desktop back. |
+| `user/toroid.c` | Toroid, Conway's Life on a torus, as a ring-3 program: the second app out of the kernel (1.7.11). Two 160x80 bit-packed boards in its own .data, generations paced off `SYS_TIME`, the backquote key crashes it on purpose. |
+| `kernel/ring3app.c` + `kernel/ring3app.h` | The table-driven launcher and supervisor for apps that run as ring-3 processes (`RING3_APPS`: name, embedded binary, VFS filename). Seeds the binary onto the VFS, runs it with `exec_user`, and when it exits or is reaped after a fault, logs what happened and hands the desktop back. |
 
 ### Storage
 
@@ -198,7 +199,6 @@ sibling web apps, kept small on purpose.
 | App | File | What it is |
 |---|---|---|
 | Quotes | `drivers/app_quotestreak.c`, `drivers/quotestreak.h` | Name the film from the line. Streak and best for the session. Moved out of `kernel.c` after Keyrate. |
-| Toroid | `drivers/app_toroid.c`, `drivers/toroid.h` | Conway's Life on a torus. Moved out of `kernel.c` after Keyrate. |
 | Bookrank | `kernel/bookrank.h` | Ranked non-fiction with a summary panel. |
 | Curbfind | `kernel/curbfind.h` | Craigslist deals for Vancouver, ranked by score. |
 | Lexly | `kernel/lexly.h` | Spanish vocabulary drill, four choices. |
@@ -206,14 +206,16 @@ sibling web apps, kept small on purpose.
 | Plan | `kernel/plan.h` | A ten-year timeline with a detail panel. |
 | Sparkjar | `kernel/sparkjar.h` | Post an idea, vote on ideas. |
 | Homeqi | `kernel/homeqi.h` | Eight feng shui questions about your home and a score. |
-| Keyrate | `user/keyrate.c`, `kernel/ring3app.c` (in-kernel copy still in `drivers/app_keyrate.c`, `drivers/keyrate.h`) | Typing test with endless random words and a live words-per-minute count. The first app compiled on its own, and as of 1.7.7 the first one running outside the kernel as a ring-3 process. |
+| Keyrate | `user/keyrate.c`, `kernel/ring3app.c` | Typing test with endless random words and a live words-per-minute count. The first app running outside the kernel as a ring-3 process (1.7.7); its in-kernel copy is gone. |
+| Toroid | `user/toroid.c`, `kernel/ring3app.c` | Conway's Life on a torus. The second ring-3 app (1.7.11); its in-kernel copy is gone. |
 
 **Adding an app.** Every app is one row in `APPS[]` in `kernel/kernel.c`,
 and nothing else dispatches on an app's index: the dock, the Apps folder,
 Chat's `open_app`, and the multiwindow desktop all read that table. Write
-the app in its own `.c` the way Keyrate does, declare its `open` in a tiny
-header, add the row, add the `.c` to the Makefile, and bump
-`GUI_APP_COUNT`. Give it `draw` and `key` only if it should also run as a
+the app as a ring-3 program in `user/<app>.c` the way Keyrate and Toroid
+do and add a row to `RING3_APPS` in `kernel/ring3app.c`, or (for now) in
+its own kernel `.c` with its `open` declared in a tiny header. Then add
+the row, add the `.c` to the Makefile, and bump `GUI_APP_COUNT`. Give it `draw` and `key` only if it should also run as a
 desktop window. Reach for `app.h`'s helpers before writing your own.
 
 The `drivers/app_*.h` files are the original single-file web builds of

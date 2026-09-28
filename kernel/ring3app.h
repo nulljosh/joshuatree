@@ -1,21 +1,22 @@
 #ifndef RING3APP_H
 #define RING3APP_H
-/* 1.7.7: the first app that leaves the kernel. Keyrate's dock entry runs
-   user/keyrate.c as a real ring-3 process instead of calling
-   drivers/app_keyrate.c's in-kernel function. The launcher is also the
-   supervisor: it waits for the process, and whether the program exited
-   on its own or was reaped by idt.c's ring-3 fault path, it tears the
-   window down and hands the desktop back. See ring3app.c. */
+/* The apps that have left the kernel. Each dock entry runs user/<app>.c
+   as a real ring-3 process through one table-driven launcher (RING3_APPS
+   in ring3app.c). The launcher is also the supervisor: it waits for the
+   process, and whether the program exited on its own or was reaped by
+   idt.c's ring-3 fault path, it tears the window down and hands the
+   desktop back. Keyrate went first (1.7.7), Toroid second (1.7.11). */
 void keyrate_ring3_open(void);
+void toroid_ring3_open(void);
 
-/* `open=keyrate` launches Keyrate from the dock path the moment the
-   desktop is up, so tools/checks/ring3app-check.py can drive the ring-3
-   app without locating its tile in the Apps folder first. Only Keyrate
-   for now: the one app that runs as a real process.
+/* `open=keyrate` / `open=toroid` launches that app from the dock path the
+   moment the desktop is up, so tools/checks/ring3app-check.py and
+   ring3toroid-check.py can drive a ring-3 app without locating its tile
+   in the Apps folder first.
    ring3app_autoopen_arm: kmain calls this with the boot command line;
-   arms an internal flag if it says `open=keyrate`.
+   remembers the APPS slot if it says `open=keyrate` or `open=toroid`.
    ring3app_autoopen_run: gui_run calls this once, right after the first
-   desktop paint; if armed, launches Keyrate from the dock path (mx, my
+   desktop paint; if armed, launches that app from the dock path (mx, my
    are the cursor position to restore after) and disarms. No-op otherwise. */
 void ring3app_autoopen_arm(const char *cmdline);
 void ring3app_autoopen_run(int mx, int my);
