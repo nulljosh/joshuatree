@@ -146,7 +146,7 @@ The computer after the phone. Joshua Tree becomes what people talk to instead of
 
 ## Where we are
 
-- 2026-09-28, afternoon: a 36 second ad exists. Strata renders, the real OS booting, Samantha narrating in her own voice, original music. It's in docs/DEMO.md. The landing page doesn't show the hardware yet; that's the next conversion fix before any waitlist push.
+- 2026-09-28, afternoon: a 36 second ad exists. Strata renders, the real OS booting, Samantha narrating in her own voice, original music. It's in the README. The landing page doesn't show the hardware yet; that's the next conversion fix before any waitlist push.
 - 2026-09-28: the $199 problem is fixed on paper. Two boxes: a $199 Strata Kit (case plus OS stick, bring your own board) that makes money if the case prints under about $160, and a $349 Strata Complete. The Strata case now has a real CAD file, a drawing and a build guide.
 - 2026-09-28: 1.7.4 merged. The OS now gets its own internet address on its own, has the start of voice input, and on phones Samantha's face no longer covers her title bar. A broken deploy setting kept the live site on 1.7.3; the fix is in review. Work started on moving apps out of the core so one crashing app can't take the machine down.
 - 2026-09-27: the Samantha app (Turing's assistant, reached through Joshua Tree) talks with a face and a real voice through the OS's own sound driver. The landing page runs the whole OS live in the browser.
