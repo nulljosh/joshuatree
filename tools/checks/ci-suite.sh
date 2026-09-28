@@ -146,6 +146,8 @@ retry|4|Chat speaks: say fetches /api/speak PCM from a stub and plays a real 100
 retry|4|Chat face: idle frame before, talk frames while she speaks, idle after; no frames means no face|python3 ./tools/checks/chat-face-check.py
 retry|3|Files view switcher: Icons grid renders and the chosen view persists across close/reopen|python3 ./tools/checks/filesview-check.py
 retry|7|Demo canvas fills its frame, pixelated only at an exact 1:1 map|node ./tools/checks/democrisp-check.mjs
+retry|1|App switcher: Ctrl+Tab cycles open windows and focuses the highlighted one|python3 ./tools/checks/appswitcher-check.py
+retry|2|Screenshot key: Ctrl+Shift+3 saves a real framebuffer BMP, numbered and visible in Files|python3 ./tools/checks/screenshot-check.py
 EOF
 }
 

@@ -52,7 +52,7 @@ void irq_handler(u32 irq_no) {
    through, so Shift and Caps Lock work in every app, not only in Notes
    (which decoded them itself). Left/right Shift make 0x2A/0x36, break
    0xAA/0xB6; Caps Lock make 0x3A toggles. kbd_map() applies them. */
-int kbd_shift = 0, kbd_caps = 0, kbd_ctrl = 0;
+int kbd_shift = 0, kbd_caps = 0, kbd_ctrl = 0, kbd_alt = 0;
 
 /* v1.0.6: Ctrl, tracked the same way as Shift so copy/paste works in every
    app that already reads kbd_pop(), not just the ones that decode 0x1D
@@ -69,7 +69,23 @@ int kbd_pop(void) {
     else if (sc == 0x3A) kbd_caps = !kbd_caps;
     else if (sc == 0x1D) kbd_ctrl = 1;
     else if (sc == 0x9D) kbd_ctrl = 0;
+    /* Left Alt make/break 0x38/0xB8, tracked the same way as Ctrl, for the
+       app switcher (Alt+Tab). The E0-prefixed right-Alt sends the same
+       0x38/0xB8 as its second byte, so both Alt keys work here too. */
+    else if (sc == 0x38) kbd_alt = 1;
+    else if (sc == 0xB8) kbd_alt = 0;
     return sc;
+}
+
+/* Same decode as kbd_pop but never advances kbd_tail: lets a caller check
+   "is the next scancode the one my hotkey cares about" without eating a
+   keystroke some other handler needed this same frame if the answer is
+   no. Added for the app switcher (kernel.c), which only wants to consume
+   a scancode when it's genuinely Tab-while-Alt/Ctrl-held or the matching
+   modifier release, and must leave everything else queued untouched. */
+int kbd_peek(void) {
+    if (kbd_head == kbd_tail) return -1;
+    return kbd_buf[kbd_tail];
 }
 
 void kbd_drain(void) {
