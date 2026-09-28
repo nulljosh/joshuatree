@@ -270,7 +270,7 @@ static void gui_launch_settings(void){
            second line clipped at the window's own bottom edge; one line
            with real breathing room below it instead of two stacked to
            the last pixel. */
-        font_draw_string("left/right or tap changes a row, esc closes. Saved automatically.", SETTINGS_DETAIL_X, wh - 22, 0x00807468, -1);
+        font_draw_string("left/right or tap changes a row, tab switches section, esc closes. Saved automatically.", SETTINGS_DETAIL_X, wh - 22, 0x00807468, -1);
 
         for (int p = 0; p < n_rows; p++) {
             int i = SETTINGS_SECTION_ROWS[cur_section][p];
@@ -352,10 +352,24 @@ static void gui_launch_settings(void){
         if (k == KEY_LEFT) k = 'a';
         else if (k == KEY_RIGHT) k = 'd';
         if (k == KEY_ESC) return;
+        /* Tab cycles the sidebar section (General -> Assistant -> Account
+           -> General...), landing on that section's first row same as a
+           real sidebar click does. Before this there was NO keyboard path
+           to switch sections at all -- up/down below is scoped to the
+           current section's own rows and left/right steps a row's value,
+           so a keyboard-only visitor could reach "Add user" (now inside
+           Account, not the old flat list) only with a mouse on the
+           sidebar. Real accessibility regression from 1.8's redesign,
+           found reading this file, not guessed. */
+        if (k == '\t') {
+            cur_section = (cur_section + 1) % SETTINGS_SECTION_COUNT;
+            sel = SETTINGS_SECTION_ROWS[cur_section][0];
+            continue;
+        }
         /* Up/down moves within the current section's own rows only, same
            "arrow keys stay inside the visible group" behavior System
            Settings' own detail pane has -- switching sections is the
-           sidebar's job (click a row there, or KEY_LEFT/KEY_RIGHT below),
+           sidebar's job (click a row there, or Tab above),
            not something up/down should do by falling off the end of a
            group into an unrelated one. */
         if (k == KEY_UP || k == KEY_DOWN) {
