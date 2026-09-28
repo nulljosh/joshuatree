@@ -1,5 +1,9 @@
 # Mobile audio unlock — handoff
 
+STATUS: pushed to origin/fix/mobile-audio-unlock (3 commits, VERSION 1.7.14). No PR opened yet.
+mobile-audio-check.mjs is marked MANUAL (not wired into CI) until item 5 below lands.
+
+
 1. WebKit + iPhone 15 run so far: AudioContext state before tap = "suspended", after a real `page.touchscreen.tap()` on `#v86-embed` = "running" (confirmed repeatedly). `window.__jt.audioDebug.unlockAttempts` incremented (2, last event "touchend") — the new document-capture-phase unlock listener works under real WebKit touch input. Chunk-counter proof ("dac chunks rise while she speaks") is NOT yet verified: booting the actual kernel under Playwright's bundled WebKit hits a real environment bug — `new Worker(blob:...)` fails with "WebKitBlobResource error 1" (confirmed via `requestfailed`/`pageerror` listeners), which v86 needs for its tick scheduler (`register_yield`) and the AudioWorklet dac processor, so kernel serial output stays empty ("samfocus" marker never appears) and Chat/speak never happen in that browser context. This is a known Playwright-WebKit limitation with blob-sourced Workers, not a bug in our code.
 
 2. Code changes made (all in `landing/v86/embed.js`, syntax-checked with `node --check`):
