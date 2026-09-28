@@ -1,8 +1,8 @@
 # Demo
 
-[![Joshua Tree ad, 36 seconds. Click to play.](hardware/ad-poster.jpg)](https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v5.mp4)
+[![Joshua Tree ad, 36 seconds. Click to play.](hardware/ad-poster.jpg)](https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4)
 
-A 36 second ad for Joshua Tree, now in the Claude release look: cream and clay fields, the product in a rounded frame, quiet captions. Click the picture to play it. The video still says the old name Mesa out loud and in two captions; the next cut says Strata.
+A 36 second ad for Joshua Tree, now in the Claude release look: cream and clay fields, the product in a rounded frame, quiet captions. Click the picture to play it.
 
 Samantha narrates it herself. The OS shots are the real system, recorded
 from the live site booting in a browser. The case is Strata, rendered from
