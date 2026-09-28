@@ -31,4 +31,10 @@ int gui_slot_x(int slot);
 int gui_slot_at(int mx);
 int gui_dock_hit_test(int mx, int my);
 
+/* Clamps a windowed-app rect (gui_launch_from_dock's x/y/w/h, gui_multiwin_
+   geom's) into whatever screen actually opened: those callers' numbers are
+   tuned for the desktop's 960x540, far wider than phone mode's 430x760.
+   Desktop is unaffected, everything already fits there. */
+void gui_clamp_win_rect(int *x, int *y, int *w, int *h);
+
 #endif
