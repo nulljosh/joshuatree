@@ -69,6 +69,7 @@ retry|2|Chat history (VFS-backed, past the old 512-byte cap)|./tools/checks/chat
 retry|1|Chat defaults to Samantha (Turing) and surfaces an HTTPS-redirect host clearly|python3 ./tools/checks/chat-samantha-check.py
 retry|3|GUI Chat app asks Samantha and renders the reply on screen|python3 ./tools/checks/chatapp-check.py
 retry|1|Chat's tools (reminder, note, open app) work locally via /api/pick, ordinary questions still reach Samantha|python3 ./tools/checks/chattools-check.py
+retry|2|"samantha" boot flag opens Chat's full-screen avatar view, input focused, before the desktop|python3 ./tools/checks/samantha-boot-check.py
 retry|2|Chat bounds a connected-but-silent LLM host instead of hanging on net.c's old multi-minute default|python3 ./tools/checks/chat-timeout-check.py
 retry|4|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ramfs-demo-check.sh
 retry|6|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh

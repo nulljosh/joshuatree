@@ -31,6 +31,7 @@ Boot from USB (F12/F10/Esc/Del at power-on).
 ```sh
 brew install lld qemu
 make run              # boot to shell; type gui for desktop
+make samantha         # boot straight into Samantha, full screen, input focused
 make iso              # build bootable ISO
 ./check.sh            # run regression tests
 ./tools/bench.sh      # boot time, heap, memcpy, context switch, disk

@@ -199,7 +199,10 @@ if (typeof document !== "undefined") (function () {
     // the same cors_proxy relay below -- worker.js's handleProxy has a
     // matching /face/ path exception for that host, same shape as its
     // existing /api/stocks|/api/quotes|/api/deals allowance.
-    cmdline: (/[?&]portfolio\b/.test(location.search) ? "portfolio " : "") + "facehost=joshuatree.heyitsmejosh.com", // kmain reads this and puts Joshua's own apps on the dock
+    // ?samantha, same opt-in shape as ?portfolio right above: kernel.c's
+    // boot_to_samantha reads this exact token and skips the desktop for
+    // Chat's full-screen avatar view (kernel/chat.h's chat_boot_samantha_open).
+    cmdline: (/[?&]portfolio\b/.test(location.search) ? "portfolio " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com", // kmain reads this and puts Joshua's own apps on the dock
     autostart: true,
     // Real network backend for the emulated NIC: without this, v86's NIC
     // (ne2k by default, see drivers/ne2k.c) is wired to nothing, every

@@ -360,6 +360,11 @@
     <button id="demo-exit" type="button" aria-pressed="false">Full screen</button>
   </div>
   <p class="plate-cap">Fig. 1 &middot; Joshua Tree, booting live in your browser</p>
+  <!-- ?samantha reload, same opt-in shape as os.html's ?portfolio embed:
+       embed.js's cmdline builder appends "samantha " to the kernel command
+       line when this query param is present, and kernel.c's boot_to_samantha
+       skips the desktop for Chat's full-screen avatar view. -->
+  <p class="plate-cap"><a href="?samantha" id="samantha-boot-link">Boot straight into Samantha</a></p>
 </div>
 
 <div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Co.</span><span>Est. 2026</span></div>
@@ -397,7 +402,7 @@
      eyebrow below (data-latest, same injector), where it belongs: H1 says
      what this is, H2 says what is new about it. -->
 <h1>Introducing <span class="brand">Joshua Tree.</span></h1>
-    <h2 class="eyebrow" data-latest="Introducing Samantha's voice. Ask her something in Chat and she answers out loud"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
+    <h2 class="eyebrow" data-latest="Introducing Samantha at boot. Joshua Tree starts on her face, and you just tell her what to do"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></h2>
   </div>
 </header>
 
@@ -411,7 +416,7 @@
   <div class="facts-row">
     <div class="fact"><strong><span data-fact="apps">25</span></strong><span class="label">Apps</span></div>
     <div class="fact"><a class="fact-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md"><strong><span data-fact="documented">100</span>%</strong><span class="label">Documented</span></a></div>
-    <div class="fact"><strong>v<span data-fact="version">1.6.20</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">1.6.21</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a>
@@ -434,13 +439,14 @@
 
 <section class="meet-samantha reveal" aria-label="Meet Samantha">
   <h2>Meet Samantha.</h2>
-  <p class="sub">She's built into Chat. Ask her to do something and she just does it.</p>
+  <p class="sub">Boot straight into her. Tell her what to do, and she runs the machine.</p>
   <div class="tile-grid" style="grid-template-columns: minmax(0, 480px); justify-content: center;">
     <div class="tile">
       <img src="shots/samantha-chat.webp" alt="Chat with Samantha, showing suggestions like remind me to call mom, jot a note, check the weather, and look at today's calendar" loading="lazy" width="984" height="462">
-      <p>Type a message and she sets a reminder, jots a note, checks the weather, reads your calendar, or opens an app for you.</p>
+      <p>Tell her what to do and she opens an app, sets a reminder, jots a note, or checks the weather.</p>
     </div>
   </div>
+  <p class="sub" style="margin-top:16px">Samantha comes from Turing, a separate project. Joshua Tree is the machine she runs.</p>
 </section>
 
 <section class="app-features reveal" aria-label="Apps built in">
