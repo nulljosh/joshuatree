@@ -141,9 +141,22 @@ try:
 
     move(*PARK); time.sleep(0.5)
     for name, slot in SLOTS.items():
-        click_at(centre(slot), ICON_ROW_Y, 2.0 if name == "Samantha" else 1.2)
-        move(*PARK); time.sleep(0.6)
-        img = dump()
+        click_at(centre(slot), ICON_ROW_Y, 0.3)
+        move(*PARK)
+        # A fixed settle sleep before one single dump is a coin flip on a
+        # loaded host: poll until the window's ink has actually stopped
+        # changing across two dumps 0.3s apart (same pattern as the
+        # Apps-folder title-stability poll below), up to a generous
+        # deadline for a slow run.
+        deadline = time.time() + 8
+        prev_rows, img = None, dump()
+        while True:
+            rows = ink_rows(img)
+            if rows and rows == prev_rows: break
+            if time.time() > deadline: break
+            prev_rows = rows
+            time.sleep(0.3)
+            img = dump()
         img.save(f"/tmp/jt-apptop-{name.lower()}.png")
         rows = ink_rows(img)
         if not rows:

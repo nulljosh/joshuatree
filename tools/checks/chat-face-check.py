@@ -153,12 +153,19 @@ def run(scenario, facehost):
         for _ in range(300):
             time.sleep(0.2)
             if any(l.startswith("face: ") for l in serial().splitlines()): break  # line start: "typeface: " elsewhere must not end the wait
-        time.sleep(1.0)
+        # The small face redraws asynchronously after the "face: " serial
+        # line lands, so a fixed sleep here is a coin flip on a loaded host:
+        # poll the actual pixel until it settles on the expected frame (or
+        # a generous deadline elapses, still failing the assertions below).
+        want_name = "idle" if scenario == "face" else "other"
+        deadline = time.time() + 6
+        before = face()
+        while name(before) != want_name and time.time() < deadline:
+            time.sleep(0.1); before = face()
         lines = [l for l in serial().splitlines() if l.startswith("face: ")]
         print(tag + (lines[-1] if lines else "(no face: line)"))
         want = "face: idle=6 talk=11" if scenario == "face" else "face: idle=0 talk=0"
         if want not in lines: fails.append(tag + f"serial did not say '{want}' (got {lines})")
-        before = face()
         print(tag + f"face square before sending: {before} ({name(before)})")
         if scenario == "face" and name(before) != "idle": fails.append(tag + f"face square is not the idle frame before sending: {before}")
         if scenario == "noface" and name(before) != "other": fails.append(tag + f"face square drew something with no frames: {before}")
@@ -171,10 +178,19 @@ def run(scenario, facehost):
         seen, t_end = [], time.time() + 45
         while time.time() < t_end and "speak: status=" not in serial():
             seen.append(name(big())); time.sleep(0.1)
-        t_end = time.time() + SECS + 3
+        # A fixed SECS+3 wall-clock window assumes the guest's audio DMA
+        # keeps pace with real time; under a loaded host it can fall behind,
+        # so poll for the real end-of-playback condition (idle, held for a
+        # few samples, after having actually cycled through talk colors)
+        # instead, with a generous deadline for a slow run.
+        t_end = time.time() + SECS + 20
+        after = big(); idle_streak = 0
         while time.time() < t_end:
-            seen.append(name(big())); time.sleep(0.1)
-        after = big()
+            after = big(); n = name(after)
+            seen.append(n)
+            idle_streak = idle_streak + 1 if n == "idle" else 0
+            if idle_streak >= 3 and ("green" in seen or "blue" in seen): break
+            time.sleep(0.1)
         runs = [seen[0]] + [b for a, b in zip(seen, seen[1:]) if a != b]
         print(tag + "face colors over the reply: " + " > ".join(runs))
         print(tag + f"face square after the reply: {after} ({name(after)})")
