@@ -76,7 +76,7 @@ async function fetchWithTimeout(url, init) {
   }
 }
 
-async function handleProxy(request) {
+async function handleProxy(request, env) {
   const requestUrl = new URL(request.url);
   const target = requestUrl.searchParams.get("url");
   if (!target) return new Response("Missing url parameter", { status: 400 });
@@ -105,14 +105,12 @@ async function handleProxy(request) {
     // (face_fetch's "/face/" + kind + "-" + i + ".png"), nothing else on
     // this host is reachable through this branch.
     if (/^\/face\/(idle|talk)-[0-9]\.png$/.test(targetUrl.pathname) && request.method === "GET") {
-      const resp = await fetchWithTimeout("https://joshuatree.heyitsmejosh.com" + targetUrl.pathname, {
-        method: "GET",
-        headers: { "User-Agent": "JoshuaTree-kernel-demo/1 (+https://joshuatree.heyitsmejosh.com)" },
-      });
+      // Read the frame from this deploy's own assets: a Worker fetching its
+      // own hostname over the network gets Cloudflare's 522, so the guest's
+      // face never loaded on the live site.
+      const resp = await env.ASSETS.fetch(new Request("https://joshuatree.heyitsmejosh.com" + targetUrl.pathname));
       const headers = new Headers(resp.headers);
       headers.set("Access-Control-Allow-Origin", "*");
-      headers.delete("content-security-policy");
-      headers.delete("set-cookie");
       return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers });
     }
   }
@@ -325,7 +323,7 @@ export default {
     if (url.pathname === "/api/quotes") return handleQuotes();
     if (url.pathname === "/api/deals") return handleDeals(request);
     if (url.pathname === "/api/proxy") {
-      return handleProxy(request);
+      return handleProxy(request, env);
     }
     return env.ASSETS.fetch(request);
   },
