@@ -54,30 +54,57 @@ Everything below is either sourced (a real listing) or marked estimate. As of th
 | Price | $199 | current price, unchanged here |
 | **Margin at $199** | **negative, roughly -$85 to -$95/unit** | the BOM does not support $199 today |
 
-This is the biggest open problem in the money plan: HARDWARE.md's BOM
-runs over $250 in parts alone, before fees, shipping or warranty. $199
-doesn't work at this BOM. Three ways out, none decided:
-1. A cheaper board (the ASRock pick was chosen for driver-surface fit,
-   not price - a bare SoC or SBC could cut real dollars off parts).
-2. Volume pricing at 5,000-unit order quantities. No supplier quote
-   exists yet to say how much this moves the number.
-3. Raise the price. Named, not proposed.
-Nothing here is a promise - it's the honest math today, flagged so it
-gets solved before any preorder is charged.
+$199 doesn't work for a whole computer. So we don't sell a whole
+computer at $199.
+
+### The fix: two boxes (decided 2026-09-28)
+
+**Mesa Kit, $199.** The case, a USB stick with the OS on it, the screws,
+and a printed parts list. The buyer brings the board, RAM, SSD and power
+supply. Developers already own half of that, and the board is a $120
+listing they can buy anywhere.
+
+| Line | Amount | Note |
+|---|---|---|
+| Mesa case (6 rings, cap, tray, rods) | unknown | no print quote yet; $40 is the stock-case estimate above |
+| USB stick, pre-flashed | ~$8 | estimate |
+| Screws, spacers, rods | ~$7 | estimate |
+| Payment fees | ~$6 | 3% of $199 |
+| Shipping, small box | ~$15 | estimate, no carrier quote |
+| **Cost without the case** | **~$36** | |
+| **Breakeven case cost** | **~$163** | $199 minus $36 |
+
+The kit makes money as long as the Mesa case costs under about $160 to
+make. The first real print quote says by how much.
+
+**Mesa Complete, $349.** Everything built and tested, plug it in. Parts
+are ~$250 with a stock case, ~$281-291 with fees, shipping and warranty,
+so $349 leaves roughly $58-68 before the Mesa case costs more than a
+stock one. $299 would leave $8-18, too thin to survive one return.
+
+**Later: a cheaper board.** The ODROID-H4 lists at $99
+(<https://liliputing.com/odroid-h4-is-a-mini-pc-board-with-intel-alder-lake-n-that-sells-for-99-and-up/>)
+against ~$120 for the current pick, but it has no PS/2 ports, so it only
+works once the kernel has a USB driver for keyboards. That's the xHCI
+item on the roadmap. Not before.
+
+**Next real step:** get an instant quote for the Mesa parts from a print
+service using `docs/hardware/mesa_cad.py`'s STLs. That one number decides
+the kit margin.
 
 ### The first dollar
 
 What has to be true before anyone is charged:
 - A board that passes Phase 0-2 in `docs/HARDWARE.md` (boots, shows a
   screen, takes keyboard input) on real hardware, not QEMU.
-- The unit economics above resolved to a positive margin, not negative.
+- A real print quote for the Mesa case under the ~$163 kit breakeven.
 - A real fulfillment path: who assembles the kit and who ships it.
 
 Path, in order:
 1. **Waitlist first, no charge.** The landing page's existing waitlist
    ("Getting it seen," step 5 above) is the demand signal. No fixed
    threshold is set here - that's Joshua's call once Phase 2 is real and
-   the board price isn't mostly estimate.
+   the board price isn't mostly estimate. The Kit ships first.
 2. **Channel:** the Joshua Tree landing page (joshuatree.heyitsmejosh.com),
    same place the OS demo runs. No third-party storefront planned for v0.
 3. **Fulfillment:** unresolved. Self-assembly-and-ship by Joshua at low
@@ -85,7 +112,7 @@ Path, in order:
    no quote gathered.
 4. **First charge only after:** a board that passes Phase 0-3 (boots,
    desktop, input, a file survives a reboot) on camera, and a BOM that
-   doesn't lose money at $199 or a revised price that doesn't.
+   doesn't lose money: Kit at $199, Complete at $349.
 
 ### Milestones (targets, not promises)
 
@@ -119,6 +146,7 @@ The computer after the phone. Joshua Tree becomes what people talk to instead of
 
 ## Where we are
 
+- 2026-09-28: the $199 problem is fixed on paper. Two boxes: a $199 Mesa Kit (case plus OS stick, bring your own board) that makes money if the case prints under about $160, and a $349 Mesa Complete. The Mesa case now has a real CAD file, a drawing and a build guide.
 - 2026-09-28: 1.7.4 merged. The OS now gets its own internet address on its own, has the start of voice input, and on phones Samantha's face no longer covers her title bar. A broken deploy setting kept the live site on 1.7.3; the fix is in review. Work started on moving apps out of the core so one crashing app can't take the machine down.
 - 2026-09-27: the Samantha app (Turing's assistant, reached through Joshua Tree) talks with a face and a real voice through the OS's own sound driver. The landing page runs the whole OS live in the browser.
 

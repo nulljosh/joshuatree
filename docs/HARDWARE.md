@@ -159,10 +159,8 @@ this as a snapshot, not a quote.
 
 This is a build-it-yourself BOM, not the $199 dev kit price - it is
 already above $199 before labor, assembly, packaging and shipping are
-added. That gap is the central open question for the money plan below:
-either the board pick changes to something cheaper, volume pricing on
-the board and RAM brings the number down, or the $199 price needs
-revisiting once real numbers exist. Flagged plainly, not papered over.
+added. MONEY.md resolves it with two boxes: a $199 Mesa Kit (case and OS
+stick, you bring the board) and a $349 Mesa Complete.
 
 ## Risks and unknowns
 
