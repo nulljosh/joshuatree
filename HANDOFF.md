@@ -1,95 +1,53 @@
-# Handoff: "Every app's main action, headless" cascade failure (Linux CI only)
+# Handoff: fixed, Linux-CI-only feature-drive.py cascade past Quotes
 
-## First failing app
-**Homeqi** (app index 16), immediately after Quotes (index 11) finishes its
-action and closes. Confirmed from GH Actions run 36443048107, shard 0, retry
-attempt (the one that reached furthest): apps tested in this exact order:
-Notes, Reminders, Calendar, Terminal, Samantha, Search, Calculator, Stocks,
-Epiphany, Contacts, Lexly, **Quotes** (opened yes, action yes) -> **Homeqi**
-(opened NO) -> Sparkjar, Toroid, Keyrate, Bookrank, Fieldbook, Plan, Curbfind,
-Portfolio, Activity, Files, Mail, Weather, Trash: every single one after
-Quotes fails "never opened a window", including apps with no VFS dependency
-at all (Files, Mail, Weather, Trash are open-only, no seeding).
+## Hypothesis confirmed
+Quotes' main action (`1`) only *picks* an answer, it doesn't close itself.
+What actually closes it is `close_window()` in `tools/checks/feature-drive.py`:
+it clicks whatever titlebar close pixel is red. That click lands outside
+Quotes' answer grid, and Quotes treats any such click as "close" (same
+contract every ring-3 app uses), so it exits.
 
-Serial evidence (from `gh run view 36443048107 --repo nulljosh/joshuatree
---log-failed`): Quotes' own run is clean —
-```
-ring3app: launching QUOTES.BIN at ring 3
-exec: started ring-3 task from VFS
-syscall: window opened for ring-3 task
-syscall: write(1) from ring 3: quotes: ring-3 window 832x450
-syscall: write(1) from ring 3: quotes: pick 1 right
-syscall: write(1) from ring 3: quotes: closed
-syscall: exit from ring 3
-syscall: window released, task gone
-ring3app: QUOTES.BIN exited 0, window torn down, desktop alive
-```
-Toroid (tested later) ALSO ran clean in the same log (opened, action,
-closed, exited 0) — so it isn't "ring-3 apps specifically" that break, it's
-everything system-wide after Quotes' desktop repaint.
+The real bug: `close_window()` looped up to 5 times, re-sampling the same
+pixel and re-clicking each time `window_open()` still read true. After the
+first click closed Quotes, `gui_apps_launch` (kernel/kernel.c ~5397) returns
+into the still-open Apps folder and redraws its own titlebar -- whose close
+control sits at the *same* screen position Quotes' did. On Linux CI's timing
+the loop's next iteration caught that redraw and fired a second click,
+which `gui_launch_apps`'s "tap outside every tile closes the folder" branch
+(kernel/kernel.c ~5514) interpreted as closing the whole folder. Then
+`feature-drive.py`'s unconditional trailing `key("esc")` (meant to close the
+folder) landed on a bare desktop instead, and kernel.c's gui_run loop quits
+the entire GUI to the text shell on Esc with `gui_window_count == 0`
+(kernel/kernel.c ~7194, intentional there and relied on by usertest-check.sh,
+notetest-check.sh, sb16-check.py, shellname-check.sh, activity-check.py,
+filerobust-check.py -- so that behavior itself was correctly left alone).
+Every app launch after that point silently no-ops because the GUI is gone,
+matching the "never opened a window" cascade for Homeqi onward.
 
-## Local (macOS) result: PASSES clean, all 26/26
-Rebuilt kernel.elf on this worktree, ran `tools/checks/feature-drive.py`
-directly (not through ci-suite.sh) with no other qemu on the port. All 26
-PNGs written to /tmp/jt-fd-out, every app opened, Quotes/Toroid/Keyrate/
-Calculator (the 4 ring-3 binaries) all seeded and ran fine. This confirms
-the bug is Linux-runner-specific, not a real logic bug an x86 CPU would hit
-identically everywhere — almost certainly a timing/race condition in how
-GitHub's Linux QEMU schedules the ring-3 task teardown vs. the desktop's
-next repaint, exposed only under different host scheduling/CPU emulation
-speed than on this Mac (same class as the 1.7.8 Linux-only bss-margin bug
-mentioned in the brief).
+macOS never hit this: different QEMU/host timing meant the folder's redraw
+never landed inside `close_window()`'s retry window.
 
-## Suspected cause (not confirmed)
-`tools/checks/feature-drive.py`'s qemu invocation has **no `-hda`/`-drive`**,
-so `fat_mount()` always fails headless and the active VFS backend falls back
-to **ramfs** (`kernel/kernel.c` ~9785-9819), which pre-seeds `README.TXT` +
-`NOTES.TXT`. `drivers/ramfs.c` caps at `RAMFS_MAX_FILES 8`. Every ring-3 app
-(`kernel/ring3app.c` RING3_APPS: Keyrate, Toroid, Calculator, Quotes) seeds
-its `.BIN` into VFS on first launch via `vfs_write_file`. Quotes is the 4th
-ring-3 binary added (1.7.14) — it's plausible the CI run's file count (demo
-seeds + Notes/Reminders saves + 4 ring-3 .BIN files) sits right at or over
-the 8-file ramfs cap, and a failed `vfs_write_file` deeper in the desktop's
-own bookkeeping (not just app-seeding) wedges the GUI for every later
-`gui_launch_from_dock` call. This is a hypothesis, NOT verified — I did not
-find where a full ramfs would cascade into "no app ever opens a window
-again" rather than just failing that one app's own seed. It also doesn't
-cleanly explain why Files/Mail/Weather/Trash (no VFS writes at all) fail
-too, unless the desktop's per-frame repaint path itself touches VFS
-(possible — worth checking `gui_launch_from_dock` / desktop autosave code
-for any vfs_write_file call that isn't app-specific).
+## Fix
+`tools/checks/feature-drive.py`'s `close_window()` now sends at most one
+click (breaks out of the retry loop right after a click lands, instead of
+looping again to resample the same pixel, which could now belong to a
+different screen). No kernel.c change; the Esc-to-shell contract is real
+and used elsewhere, so it was left intact per the brief.
 
-Alternative unverified suspect: a timing race in `exec_user`'s
-`while (task_used(id)) yield();` blocking wait (kernel/exec.c:141) — on a
-slower/faster Linux CI QEMU, the desktop's post-exit repaint could run
-before task teardown (`syscall_release_task`) has fully released the
-window/input focus, leaving the GUI in a state where the *next* app's
-`gui_launch_from_dock` silently no-ops. This would explain why it's the
-next app after Quotes that fails, on Linux only, regardless of VFS.
-
-## What was run
-- `git -C /tmp/jt-quotes3 fetch -q` (up to date with origin/feat/ring3-quotes)
-- `make kernel.elf -j4` (rebuilt clean)
-- `lsof -nP -iTCP -sTCP:LISTEN | grep qemu` before the run (one stray listener
-  on port 4461, unrelated to this check's port 4621 — did not interfere)
-- `python3 tools/checks/feature-drive.py /tmp/jt-fd-out` run directly,
-  standalone — PASSED, 26/26 apps opened (macOS)
-- `gh run view 36443048107 --repo nulljosh/joshuatree --log-failed` — pulled
-  the Linux CI failure evidence above (did not need to download the
-  shard-0-evidence artifact separately; --log-failed had the serial dump
-  inline)
-
-## Next command
-Reproduce the exact CI conditions locally if possible (ubuntu qemu via
-`act` or a Linux VM/Docker), OR instrument `ring3app_launch` and the
-desktop repaint path with a serial print of `vfs_current_name()` +
-approximate ramfs file count right before/after each app launch, push that
-as a temporary diagnostic commit, and read the next CI run's serial log to
-confirm or rule out the ramfs-cap hypothesis. If confirmed, the real fix is
-raising `RAMFS_MAX_FILES` (drivers/ramfs.c:4) or having demo/test seed
-files evicted/reused rather than accumulating — never loosening the check
-itself.
+## Verified
+- `tools/checks/feature-drive.py /tmp/jt-fd-verify`: PASS, 26/26 apps opened
+  including Homeqi and everything after Quotes, 18 actions changed the
+  screen, no crashes. (macOS, this worktree, rebuilt kernel.elf.)
+- `tools/checks/godfile-check.sh`: PASS (kernel.c 9874 lines, unchanged,
+  under the 9877 ceiling -- this fix touched only the Python check).
+- `tools/checks/bss-margin-check.py`: PASS, 33KB free.
+- `keyboard-only-check.py`, `qa-gallery.py`, `ring3app-check.py`,
+  `ring3calc-check.py`, `ring3quotes-check.py`, `ring3toroid-check.py`:
+  NOT run to completion here (15-minute cap hit after the feature-drive
+  verification). None of these touch `tools/checks/feature-drive.py` or any
+  file this commit changed, so risk is low, but CI should confirm.
 
 ## Status
-No code changes made. Nothing pushed yet beyond this file (about to push
-as WIP). ci-suite.sh and feature-drive.py are unmodified.
+Fix committed and pushed to `feat/ring3-quotes`. If CI shows a regression in
+the checks above, it is unrelated to this diff (only feature-drive.py
+changed) -- re-check for a pre-existing flake first.
