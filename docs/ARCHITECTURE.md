@@ -69,6 +69,8 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `user/note.c` | The second user program, and the first one worth running: prints a file, appends a line, seeks. Exercises the v2 syscalls. |
 | `user/libjt/` | A small C library for user programs: `string.c`, `stdlib.c` (a fixed-arena `malloc`), `stdio.c` (`printf` and friends over the write syscall), plus `ctype.h` and `unistd.h`. Built into `libjt.a`. |
 | `user/wc.c` | Unix `wc`, counts lines, words and bytes. The first program linked against libjt instead of raw syscalls. |
+| `user/keyrate.c` | Keyrate, the typing test, as a ring-3 program: the first app to leave the kernel (1.7.7). Gets its window from `SYS_WINDOW_OPEN`, its keys from `SYS_WINDOW_POLL`, draws its own 8x16 glyphs. The backquote key crashes it on purpose. |
+| `kernel/ring3app.c` + `kernel/ring3app.h` | The launcher and supervisor for apps that run as ring-3 processes. Seeds the binary onto the VFS, runs it with `exec_user`, and when it exits or is reaped after a fault, logs what happened and hands the desktop back. |
 
 ### Storage
 
@@ -200,7 +202,7 @@ sibling web apps, kept small on purpose.
 | Plan | `kernel/plan.h` | A ten-year timeline with a detail panel. |
 | Sparkjar | `kernel/sparkjar.h` | Post an idea, vote on ideas. |
 | Homeqi | `kernel/homeqi.h` | Eight feng shui questions about your home and a score. |
-| Keyrate | `drivers/app_keyrate.c`, `drivers/keyrate.h` | Typing test with endless random words and a live words-per-minute count. The first app compiled on its own instead of included into `kernel.c`. |
+| Keyrate | `user/keyrate.c`, `kernel/ring3app.c` (in-kernel copy still in `drivers/app_keyrate.c`, `drivers/keyrate.h`) | Typing test with endless random words and a live words-per-minute count. The first app compiled on its own, and as of 1.7.7 the first one running outside the kernel as a ring-3 process. |
 
 **Adding an app.** Every app is one row in `APPS[]` in `kernel/kernel.c`,
 and nothing else dispatches on an app's index: the dock, the Apps folder,

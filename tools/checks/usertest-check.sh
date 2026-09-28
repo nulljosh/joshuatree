@@ -31,10 +31,10 @@ make -s kernel.elf >/dev/null
 # different address than it is loaded at, and that address lives in three
 # places by necessity (a linker script cannot include a C header). Check
 # they still agree before spending a boot on it.
-base_c=$(grep -o '0xC0503000' kernel/exec.h | head -1)
-base_u=$(grep -o '0xC0503000' user/hello.ld | head -1)
-base_l=$(grep -o '0xC0503000' boot/linker.ld | head -1)
-if [ "$base_c" != "0xC0503000" ] || [ "$base_u" != "0xC0503000" ] || [ "$base_l" != "0xC0503000" ]; then
+base_c=$(grep -o '0xC0507000' kernel/exec.h | head -1)
+base_u=$(grep -o '0xC0507000' user/hello.ld | head -1)
+base_l=$(grep -o '0xC0507000' boot/linker.ld | head -1)
+if [ "$base_c" != "0xC0507000" ] || [ "$base_u" != "0xC0507000" ] || [ "$base_l" != "0xC0507000" ]; then
     echo "FAIL: JT_USER_BASE disagrees across kernel/exec.h, user/hello.ld and boot/linker.ld"
     exit 1
 fi

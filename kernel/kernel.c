@@ -108,6 +108,7 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app_keyrate.h"
 #include "app.h"
 #include "keyrate.h"
+#include "ring3app.h"
 #include "toroid.h"
 #include "quotestreak.h"
 #include "calculator.h"
@@ -413,6 +414,50 @@ int get_key_or_click_until(unsigned int deadline){
 }
 
 int get_key_or_click(void) { return get_key_or_click_until(0); }
+
+/* 1.7.7: the non-blocking twin of get_key_or_click_until, for
+   kernel/syscall.c's SYS_WINDOW_POLL. It runs inside the int 0x80 gate
+   with interrupts off, so it must never wait: one look at the keyboard
+   queue and the mouse, then back. Returns JT_EV_KEY (1) with the key in
+   *a (the same ASCII/KEY_* values the blocking loop hands in-kernel apps),
+   JT_EV_CLICK (2) with the pointer in app-window coordinates, JT_EV_WHEEL
+   (3) with +1/-1 in *a, or 0 when nothing happened. A 0xE0 prefix whose
+   second byte has not arrived yet (it cannot, with IF clear) is remembered
+   for the next call rather than dropped, so arrows still work. */
+static int gui_poll_pending_e0 = 0;
+int gui_poll_event(int *a, int *b){
+    *a = 0; *b = 0;
+    gui_app_mouse_tick();
+    int sc = kbd_pop();
+    if (sc >= 0) {
+        if (sc == 0xE0 && !gui_poll_pending_e0) { gui_poll_pending_e0 = 1; sc = kbd_pop(); if (sc < 0) return 0; }
+        if (gui_poll_pending_e0) {
+            gui_poll_pending_e0 = 0;
+            if (sc == 0x48) { *a = KEY_UP; return 1; }
+            if (sc == 0x50) { *a = KEY_DOWN; return 1; }
+            if (sc == 0x4B) { *a = KEY_LEFT; return 1; }
+            if (sc == 0x4D) { *a = KEY_RIGHT; return 1; }
+            return 0;
+        }
+        if (sc & 0x80) return 0;
+        gui_close_was_click = 0;
+        if (kbd_ctrl) {
+            int code = sc & 0x7F;
+            if (code == 0x2E) { *a = KEY_COPY; return 1; }
+            if (code == 0x2D) { *a = KEY_CUT; return 1; }
+            if (code == 0x2F) { *a = KEY_PASTE; return 1; }
+        }
+        char c = kbd_map(sc);
+        if (c == '\n') { *a = KEY_ENTER; return 1; }
+        if (c == 27)   { *a = KEY_ESC; return 1; }
+        if (c) { *a = (int)(unsigned char)c; return 1; }
+        return 0;
+    }
+    if (mouse_click_edge()) { gui_close_was_click = 1; *a = app_cursor_x - app_view_x; *b = app_cursor_y - app_view_y; return 2; }
+    int wheel = mouse_get_wheel();
+    if (wheel) { *a = wheel > 0 ? 1 : -1; return 3; }
+    return 0;
+}
 
 /* ---- RTC via CMOS. ponytail: no PIT tick counter; the shell only ever
    needs wall-clock, and this needs no interrupt handler. ---- */
@@ -2070,6 +2115,7 @@ struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
 static int wind_base_width = 0;
 
+static int gui_autoopen_icon = -1; /* 1.7.7: `open=keyrate` boot flag (kmain), launched once by gui_run after the first desktop paint */
 static int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
     struct wp_row c;
@@ -3944,7 +3990,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     }
     /* The artwork is stored as PNG, not as decoded RGBA: 24 artworks of
        128x128 RGBA is 1.5MB, which runs into the ring-3 program window
-       boot/linker.ld pins at 0xC0503000, and docs/SYSCALL-ABI.md names that
+       boot/linker.ld pins at 0xC0507000, and docs/SYSCALL-ABI.md names that
        address as part of the published v1 contract. As PNG the same 24 are
        141KB. Decoding here rather than once at boot costs nothing in
        practice: this function is the icon cache's own miss path, so it runs
@@ -4451,6 +4497,13 @@ static int gui_dock_band_top(void);
 static void gui_daynight_wallpaper_rect(int x, int y, int w, int h);
 int app_view_x, app_view_y; static int app_view_w, app_view_h;
 int app_cursor_x, app_cursor_y;
+/* 1.7.7: the size of the app viewport a dock launch opened, for
+   kernel/syscall.c's SYS_WINDOW_OPEN. 0 when no app window is open. */
+int gui_app_view_size(unsigned int *w, unsigned int *h){
+    if (!gui_app_windowed || app_view_w <= 0 || app_view_h <= 0) return 0;
+    *w = (unsigned int)app_view_w; *h = (unsigned int)app_view_h;
+    return 1;
+}
 static void gui_app_mouse_tick(void){
     if (!gui_app_windowed) return;
     int dx = 0, dy = 0, buttons = 0;
@@ -6237,7 +6290,7 @@ static const struct app APPS[GUI_APP_COUNT] = {
     /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       gui_launch_chat_app,   0, 0},
     /*  7 */ {"Weather",    0x0085144B, gui_icon_weather,    gui_launch_weather,    gui_draw_weather_content,   gui_weather_mw_key},
     /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        gui_launch_curbfind,   0, 0},
-    /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_open,          0, 0},
+    /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c; drivers/app_keyrate.c's in-kernel version stays for now */
     /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       gui_launch_bookrank,   0, 0},
     /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_open,      0, 0},
     /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       gui_launch_plan,       0, 0},
@@ -7006,6 +7059,16 @@ static void gui_run(void){
     gui_cursor_save(mx, my);
     gui_draw_cursor(mx, my);
     gui_dock_prewarm();
+    if (gui_autoopen_icon >= 0) {
+        int ic = gui_autoopen_icon; gui_autoopen_icon = -1;
+        editor_mouse_x = mx; editor_mouse_y = my;
+        gui_launch_from_dock(ic);
+        gui_draw_desktop(-1, -1, 0, 0);
+        cursor_saved_x = cursor_saved_y = -1;
+        gui_cursor_save(mx, my);
+        gui_draw_cursor(mx, my);
+        serial_puts("autoopen: back on the desktop\n");
+    }
     for (;;) {
         window_present(); __asm__ volatile ("hlt");
         /* v0.76.17: direct request ("time in top right needs live reload
@@ -9700,6 +9763,13 @@ void kmain(unsigned int multiboot_info_addr){
             if (pc[0]=='n' && pc[1]=='o' && pc[2]=='d' && pc[3]=='h' && pc[4]=='c' && pc[5]=='p' && (pc[6]==' ' || pc[6]==0)) { net_nodhcp = 1; break; }
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='d' && pc[1]=='r' && pc[2]=='u' && pc[3]=='n' && pc[4]=='k' && (pc[5]==' ' || pc[5]==0)) { extern void window_set_drunk(int); window_set_drunk(1); serial_puts("drunk\n"); break; }
+        /* 1.7.7: `open=keyrate` launches Keyrate from the dock path the
+           moment the desktop is up, so tools/checks/ring3app-check.py can
+           drive the ring-3 app without locating its tile in the Apps
+           folder first. Only Keyrate for now: the one app that runs as a
+           real process. */
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='k' && pc[6]=='e' && pc[7]=='y' && pc[8]=='r') { gui_autoopen_icon = 9; serial_puts("autoopen=keyrate\n"); break; }
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;
