@@ -32,7 +32,7 @@ Boot from USB (F12/F10/Esc/Del at power-on).
 brew install lld qemu
 make run              # boot to shell; type gui for desktop
 make iso              # build bootable ISO
-./check.sh            # run regression tests
+./check.sh            # run regression tests (every check: docs/TESTING.md)
 ./tools/bench.sh      # boot time, heap, memcpy, context switch, disk
 ```
 
