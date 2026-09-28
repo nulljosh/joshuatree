@@ -901,9 +901,11 @@ static void reboot(void){
    it keeps the primitive glyph path like every other unart'd icon. */
 /* v0.89.x: Activity landed after Portfolio took slot 23, so it sits at
    24 and GUI_APPS_FOLDER/GUI_TRASH moved to 25/26, same shift again. */
-#define GUI_APP_COUNT   27 /* 25 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 25 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       26
+/* Clock landed after Activity, so it sits at 25 and GUI_APPS_FOLDER/
+   GUI_TRASH moved to 26/27, same shift again. */
+#define GUI_APP_COUNT   28 /* 26 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 26 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       27
 /* Every app's name, color, glyph and hooks live in one table, APPS[],
    defined further down once every hook it points at exists (see "The app
    registry" below). This tentative definition lets the dock and Launchpad
@@ -5953,6 +5955,7 @@ static void gui_launch_settings(void){
 #include "activity.h"
 static int fs_ok_global = 0;
 #include "bench.h"
+#include "clock.h"
 
 static void gui_launch(int icon){
     if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
@@ -6241,6 +6244,7 @@ static const struct app APPS[GUI_APP_COUNT] = {
     /* 22 */ {"Epiphany",   0x001F5FA8, gui_icon_stocks,     gui_launch_epiphany,   0, 0}, /* art covers it; primitive fallback only */
     /* 23 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       gui_launch_portfolio,  0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph */
     /* 24 */ {"Activity",   0x003E4C58, gui_icon_activity,   gui_launch_activity,   0, 0},
+    /* 25 */ {"Clock",      0x00565A7A, gui_icon_apps,       gui_launch_clock,      0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph */
     [GUI_APPS_FOLDER] = {"Apps",  0, gui_icon_apps,  gui_launch_apps,  0, 0},
     [GUI_TRASH]       = {"Trash", 0, gui_icon_trash, gui_launch_trash, 0, 0},
 };
