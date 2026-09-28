@@ -3,7 +3,14 @@
 
 int gui_dock_icon(void){
     int by_height = (int)window_height() * dock_scale_pct / 100;
-    int max_by_width = (DOCK_BUDGET - 2 * DOCK_PAD - (GUI_ICON_COUNT - 1) * DOCK_GAP) / GUI_ICON_COUNT;
+    /* DOCK_BUDGET (740) is tuned for the desktop's 960px screen; phone mode
+       is only 430px wide, so cap the budget at the real screen width too,
+       or the dock draws wider than the window and both ends get cropped.
+       Desktop is unaffected: 960 - 40 > 740 so DOCK_BUDGET still wins there. */
+    int budget = DOCK_BUDGET;
+    int screen_budget = (int)window_width() - 40;
+    if (screen_budget < budget) budget = screen_budget;
+    int max_by_width = (budget - 2 * DOCK_PAD - (GUI_ICON_COUNT - 1) * DOCK_GAP) / GUI_ICON_COUNT;
     if (by_height > max_by_width) by_height = max_by_width;
     if (by_height < 16) by_height = 16; /* below this the vector glyphs stop being legible at all */
     return by_height;
@@ -35,6 +42,16 @@ int gui_slot_at(int mx){
 /* Only counts as being "over the dock" within its actual drawn rect,
    unlike gui_slot_at (used once a drag is already underway, where the
    dragged icon should keep tracking the cursor even briefly outside it). */
+void gui_clamp_win_rect(int *x, int *y, int *w, int *h){
+    int sw = (int)window_width(), sh = (int)window_height(), m = 10;
+    if (*w > sw - 2 * m) *w = sw - 2 * m;
+    if (*h > sh - 2 * m) *h = sh - 2 * m;
+    if (*x + *w > sw - m) *x = sw - m - *w;
+    if (*x < m) *x = m;
+    if (*y + *h > sh - m) *y = sh - m - *h;
+    if (*y < m) *y = m;
+}
+
 int gui_dock_hit_test(int mx, int my){
     int y0 = gui_dock_y0(), h = DOCK_ICON + 2 * DOCK_PAD;
     if (my < y0 - 20 || my >= y0 + h) return -1;

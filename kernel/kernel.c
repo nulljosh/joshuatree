@@ -5975,6 +5975,7 @@ again:
     int apps = icon == GUI_APPS_FOLDER;
     int x = apps ? 56 : 70, y = apps ? 30 : 40;
     int w = apps ? 848 : 820, h = apps ? 490 : 385;
+    gui_clamp_win_rect(&x, &y, &w, &h); /* phone screens are far narrower than these desktop-tuned numbers */
     gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
     window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
     gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
@@ -6094,6 +6095,7 @@ static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_AP
 static void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
     if (slot_index == 0) { *x = 70; *y = 40; *w = 820; *h = 385; }
     else { *x = 70 + 60; *y = 40 + 60; *w = 820; *h = 385; }
+    gui_clamp_win_rect(x, y, w, h); /* Mail/Calendar/Reminders/Files/Weather open here, not gui_launch_from_dock -- phone screens need the same clamp */
 }
 
 /* Magnet-style window snapping (title-bar drag to an edge/corner). All five

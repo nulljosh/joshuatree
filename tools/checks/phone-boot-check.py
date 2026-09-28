@@ -215,4 +215,142 @@ try:
 except Exception as e:
     fail = 1; print(f"FAIL: face+label regression check errored ({e})")
 
+# Third scenario (this fix): the desktop dock and windowed apps in phone
+# mode. gui_launch_from_dock used to open every app at the desktop's own
+# fixed x/y/w/h (Calendar at x=70,w=820 -- fine on a 960-wide screen, way
+# off the right edge of a 430-wide phone), and gui_dock_icon's DOCK_BUDGET
+# (740) assumed a screen wide enough to hold it, so the dock itself drew
+# wider than a 430px phone screen and got cropped on both ends. Reach the
+# dock from a "phone" boot by escaping Samantha's full-screen avatar (one
+# ESC into her normal Chat console, a second ESC out of that back to
+# gui_run's desktop loop), then click Calendar's dock slot (GUI_DOCK_DEFAULT
+# slot 3: Apps folder, then icons 0/1/2 -- Calendar is icon 2) and assert
+# its window's right edge and the dock's first/last icon all land inside
+# the real 430px-wide screen.
+try:
+    from PIL import Image as _Image3
+
+    PW, PH = 860, 1520          # 430x760 logical at 2x, same convention as the rest of this file
+    LOGICAL_W, LOGICAL_H, SC = 430, 760, 2
+    FIT_PORT = PORT + 2
+    FIT_LOG = "/tmp/jt-phonefit-serial.log"
+    FIT_DUMP_BEFORE = "/tmp/jt-phonefit-before.raw"
+    FIT_DUMP_AFTER = "/tmp/jt-phonefit-after.raw"
+    FIT_PNG_BEFORE = "/tmp/jt-phonefit-before.png"
+    FIT_PNG_AFTER = "/tmp/jt-phonefit-after.png"
+    for f in (FIT_LOG, FIT_DUMP_BEFORE, FIT_DUMP_AFTER):
+        try: os.remove(f)
+        except FileNotFoundError: pass
+
+    args3 = ["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std", "-no-reboot",
+             "-qmp", f"tcp:127.0.0.1:{FIT_PORT},server,nowait", "-serial", "file:" + FIT_LOG,
+             "-append", "phone"]
+    q3 = subprocess.Popen(args3, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        time.sleep(1.0)
+        s3 = socket.create_connection(("127.0.0.1", FIT_PORT)); f3 = s3.makefile("rw")
+
+        def cmd3(o):
+            f3.write(json.dumps(o) + "\n"); f3.flush()
+            while True:
+                r = json.loads(f3.readline())
+                if "return" in r or "error" in r: return r
+
+        def key3(k):
+            cmd3({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k}]}})
+
+        def move3(x, y):
+            cmd3({"execute": "input-send-event", "arguments": {"events": [
+                {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
+                {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
+
+        def click3():
+            cmd3({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
+            time.sleep(0.1)
+            cmd3({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
+
+        def dump3(path):
+            cmd3({"execute": "pmemsave", "arguments": {"val": FB, "size": PW * PH * 4, "filename": path}})
+
+        f3.readline(); cmd3({"execute": "qmp_capabilities"})
+        time.sleep(2.5)  # past splash, samopen up
+        key3("esc"); time.sleep(0.6)  # samantha avatar -> her normal Chat console
+        key3("esc"); time.sleep(0.6)  # Chat console -> desktop dock
+
+        dump3(FIT_DUMP_BEFORE)
+        raw_before = open(FIT_DUMP_BEFORE, "rb").read()
+        img_before = _Image3.frombytes("RGBA", (PW, PH), raw_before, "raw", "BGRA").convert("RGB")
+        img_before.save(FIT_PNG_BEFORE)
+        pxb = img_before.load()
+        BG = (0xEF, 0xEB, 0xE4)  # DOCK_TRAY_COLOR
+
+        def not_bg(x, y, tol=18):
+            # Sample a small neighbourhood, not one pixel: an icon glyph
+            # can have a near-tray-gray pixel dead center (Trash's lid),
+            # which would false-negative a single-point sample.
+            for dx in range(-4, 5, 2):
+                for dy in range(-4, 5, 2):
+                    p = pxb[(x + dx) * SC + 1, (y + dy) * SC + 1]
+                    if any(abs(p[i] - BG[i]) > tol for i in range(3)):
+                        return True
+            return False
+
+        # Computed dock geometry for this exact build: DOCK_BUDGET clamped
+        # to (430 - 40) = 390 gives DOCK_ICON=28, DOCK_GAP=6, DOCK_PAD=10,
+        # dock_x0=21, so slot N's icon centre sits at 31 + N*34 + 14.
+        DOCK_ICON, DOCK_GAP, DOCK_PAD = 28, 6, 10
+        SLOT0_X = 31
+        PITCH = DOCK_ICON + DOCK_GAP
+        DOCK_Y0 = LOGICAL_H - DOCK_ICON - 2 * DOCK_PAD - 24
+        ICON_CY = DOCK_Y0 + DOCK_PAD + DOCK_ICON // 2
+        first_cx = SLOT0_X + DOCK_ICON // 2
+        last_cx = SLOT0_X + 10 * PITCH + DOCK_ICON // 2
+
+        if first_cx >= LOGICAL_W or last_cx >= LOGICAL_W:
+            fail = 1
+            print(f"FAIL: dock's first ({first_cx}) or last ({last_cx}) icon centre falls outside the {LOGICAL_W}px-wide phone screen")
+        elif not not_bg(first_cx, ICON_CY):
+            fail = 1
+            print(f"FAIL: dock's first icon (Apps folder) not drawn at ({first_cx},{ICON_CY}) -- cropped off screen")
+        elif not not_bg(last_cx, ICON_CY):
+            fail = 1
+            print(f"FAIL: dock's last icon (Trash) not drawn at ({last_cx},{ICON_CY}) -- cropped off screen")
+        else:
+            print(f"PASS: dock's first ({first_cx}) and last ({last_cx}) icon both fully on screen (width {LOGICAL_W})")
+
+        # Click Calendar (dock slot 3: Apps folder, icon0, icon1, icon2=Calendar)
+        cal_cx = SLOT0_X + 3 * PITCH + DOCK_ICON // 2
+        move3(cal_cx, ICON_CY); time.sleep(0.3); click3(); time.sleep(1.0)
+
+        dump3(FIT_DUMP_AFTER)
+        raw_after = open(FIT_DUMP_AFTER, "rb").read()
+        img_after = _Image3.frombytes("RGBA", (PW, PH), raw_after, "raw", "BGRA").convert("RGB")
+        img_after.save(FIT_PNG_AFTER)
+        pxa = img_after.load()
+        CLOSE_RED = (0xFF, 0x5F, 0x57)
+
+        def is_red(p): return max(abs(p[i] - CLOSE_RED[i]) for i in range(3)) <= 20
+
+        # Calendar opens at the clamped x=10,y=40,w=410,h=385 (see kernel.c's
+        # gui_launch_from_dock): close dot at (x+24, y+16) = (34,56), right
+        # edge of the window frame at x+w = 420, inside the 430px screen.
+        close_p = pxa[34 * SC + 1, 56 * SC + 1]
+        win_right = 10 + 410
+        if win_right >= LOGICAL_W:
+            fail = 1
+            print(f"FAIL: Calendar window right edge ({win_right}) is not within the {LOGICAL_W}px screen")
+        elif not is_red(close_p):
+            fail = 1
+            print(f"FAIL: Calendar window close dot not found at (34,56): {close_p} -- window may not have opened")
+        else:
+            print(f"PASS: Calendar window right edge ({win_right}px) fits inside the {LOGICAL_W}px phone screen, close dot confirms it opened")
+        print(f"saved {FIT_PNG_BEFORE} and {FIT_PNG_AFTER}")
+    finally:
+        try: cmd3({"execute": "quit"})
+        except (ConnectionResetError, BrokenPipeError, OSError, NameError): pass
+        try: q3.wait(timeout=5)
+        except subprocess.TimeoutExpired: q3.kill()
+except Exception as e:
+    fail = 1; print(f"FAIL: phone dock/window-fit check errored ({e})")
+
 sys.exit(fail)
