@@ -333,6 +333,59 @@ async function handleDeals(request) {
   return new Response([city, ...rows].join("\n") + "\n", {headers: WIRE});
 }
 
+// Dev-kit waitlist: one email, one timestamp, key = email so a repeat
+// signup just overwrites its own row instead of growing the namespace.
+// WAITLIST_MAX_BODY guards against someone posting a huge JSON blob;
+// WAITLIST_MAX_EMAIL is RFC 5321's own address-length ceiling, generous
+// for any real address.
+const WAITLIST_MAX_BODY = 1024; // 1 KB
+const WAITLIST_MAX_EMAIL = 254;
+// A deliberately simple shape check, not full RFC 5322: one @, something
+// on both sides, no whitespace, a dot in the domain part. Real validation
+// (does the mailbox exist) only happens when the dev kit actually ships
+// and someone emails the list -- this just keeps obvious garbage out.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const WAITLIST_JSON = { "Content-Type": "application/json", "Cache-Control": "no-store" };
+
+async function handleWaitlistPost(request, env) {
+  if (!env.WAITLIST) return new Response("Waitlist not configured", { status: 500 });
+  const declaredLength = Number(request.headers.get("content-length") || "0");
+  if (declaredLength > WAITLIST_MAX_BODY) return new Response("Body too large", { status: 413 });
+  const bodyBuffer = await request.arrayBuffer();
+  if (bodyBuffer.byteLength > WAITLIST_MAX_BODY) return new Response("Body too large", { status: 413 });
+
+  let data;
+  try {
+    data = JSON.parse(new TextDecoder().decode(bodyBuffer));
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers: WAITLIST_JSON });
+  }
+
+  const email = typeof data?.email === "string" ? data.email.trim().toLowerCase() : "";
+  if (!email || email.length > WAITLIST_MAX_EMAIL || !EMAIL_RE.test(email)) {
+    return new Response(JSON.stringify({ error: "Invalid email" }), { status: 400, headers: WAITLIST_JSON });
+  }
+
+  await env.WAITLIST.put(email, new Date().toISOString());
+  return new Response(JSON.stringify({ ok: true }), { status: 200, headers: WAITLIST_JSON });
+}
+
+// list() pages at 1000 keys per call and this only ever needs a count, so
+// this is fine up to a few thousand signups (a handful of calls, worst
+// case). Ponytail: past ~50k rows, switch to a maintained counter (a
+// single KV key incremented on put) instead of listing every key here.
+async function handleWaitlistCount(env) {
+  if (!env.WAITLIST) return new Response("Waitlist not configured", { status: 500 });
+  let count = 0;
+  let cursor;
+  do {
+    const page = await env.WAITLIST.list({ cursor });
+    count += page.keys.length;
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return new Response(JSON.stringify({ count }), { status: 200, headers: WAITLIST_JSON });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -341,6 +394,12 @@ export default {
     if (url.pathname === "/api/deals") return handleDeals(request);
     if (url.pathname === "/api/proxy") {
       return handleProxy(request, env);
+    }
+    if (url.pathname === "/api/waitlist" && request.method === "POST") {
+      return handleWaitlistPost(request, env);
+    }
+    if (url.pathname === "/api/waitlist/count" && request.method === "GET") {
+      return handleWaitlistCount(env);
     }
     return env.ASSETS.fetch(request);
   },
@@ -352,3 +411,4 @@ export default {
 export { isAllowedTarget, handleProxy, ALLOWED_HOSTS };
 
 export { stockWire, handleStocks };
+export { handleWaitlistPost, handleWaitlistCount };

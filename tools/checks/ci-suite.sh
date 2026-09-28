@@ -137,6 +137,7 @@ retry|3|Stocks chart line is antialiased (coverage blend, no stair-stepping)|pyt
 once |7|Stocks live quotes and kernel parsing|node ./tools/checks/stocks-live-check.mjs
 retry|5|Epiphany command bar: AAPL GP draws the chart, an unknown code errors cleanly|python3 ./tools/checks/epiphany-cmdbar-check.py
 once |3|Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
+once |3|Worker /api/waitlist store, validate, count|node ./tools/checks/waitlist-check.mjs
 once |7|Worker /api/proxy: a silent upstream cannot hang the guest (weather/chat freeze regression)|node ./tools/checks/weatherproxy-hang-check.mjs
 retry|3|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py
 once |2|Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
