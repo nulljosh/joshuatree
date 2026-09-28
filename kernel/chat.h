@@ -111,6 +111,7 @@ static const char *chat_error(void) { return chat_last_error; }
 #define CHAT_SEND_TIMEOUT_TICKS 4500  /* ~45s at 100Hz: /api/chat */
 #define CHAT_PICK_TIMEOUT_TICKS 1000  /* ~10s at 100Hz: /api/pick, a small classifier call */
 #define CHAT_SPEAK_TIMEOUT_TICKS 1500 /* ~15s at 100Hz: /api/speak audio download, well under /api/chat's own bound */
+#define CHAT_LISTEN_TIMEOUT_TICKS 3000 /* ~30s at 100Hz: worker.js's /api/listen runs Workers AI Whisper cold, plus uploading up to PTT_MAX_SAMPLES over this kernel's own TCP stack */
 
 /* Same field-boundary contract contacts.h/mail.h already use: stored
    content can't contain '|' or '\n', so a plain scan for either is a
@@ -683,6 +684,88 @@ static const char *chat_process_message(char *msg, int T, int x, int you_w, int 
     return "ready";
 }
 
+/* Push-to-talk (v1.6.23, direct owner request: "voice-and-video first").
+   Held F2 records, released F2 sends -- see kernel.c's KEY_PTT for why F2:
+   it is a real scancode (0x3C make, 0xBC break) that kbd_map never turns
+   into a character, so it was reaching here as a silently-dropped key
+   already, the same unclaimed slot the synthetic clipboard keys used.
+
+   sb16_record's DMA transfer blocks for a whole chunk at a time (about 2s
+   at 16kHz -- see sb16.c's DMA_CHUNK), so a held key's release can only be
+   noticed between chunks, not mid-word; PTT_MAX_SECONDS bounds the total
+   at 8s of 8-bit 16kHz mono, matching the task's own cap. The level meter
+   updates once per chunk (peak deviation from the 128 midpoint), not live
+   -- the same 2s granularity.
+
+   IMPORTANT, found reading QEMU's own hw/audio/sb16.c before writing this:
+   QEMU's `-device sb16` logs "ADC not yet supported" for every recording
+   DSP command (0x24/0x2C/0xB0-0xCF with the ADC bit set) and never drives
+   an audio-input backend at all -- 0x42 (set input rate) is dead code that
+   silently sets the *output* rate instead. So `make talk` under QEMU's
+   sb16 model will never see IRQ 5 fire for a real recording: sb16_record
+   times out and returns 0, cleanly, exactly like the no-card case. This
+   driver is written to the real, DSP-2.xx-compatible hardware command set
+   (what a real SB16 and, per the task, a from-scratch reimplementation
+   would both honor) -- it is QEMU's own sb16 emulation, not this code,
+   that has no record path today. */
+#define PTT_CHUNK_SAMPLES (16000u * 2u)   /* one sb16 DMA chunk at 16kHz, ~2s */
+#define PTT_MAX_SECONDS   8u
+#define PTT_MAX_SAMPLES   (16000u * PTT_MAX_SECONDS)
+
+static void chat_draw_listening(int T, int x, int body_w, unsigned int level_pct) {
+    window_rect(0, T + 40, (int)window_width(), (int)window_height() - 40 - T, GUI_BG);
+    font_draw_string("Listening... (release F2 to send)", x, T + 76, CHAT_ACCENT, -1);
+    if (level_pct > 100) level_pct = 100;
+    int meter_w = body_w > 220 ? 220 : body_w;
+    window_rect(x, T + 104, meter_w, 14, 0x00EDE6DC);
+    window_rect(x, T + 104, (int)((unsigned int)meter_w * level_pct / 100u), 14, CHAT_ACCENT);
+    window_present();
+}
+
+/* Records, ships the clip to worker.js's /api/listen (Workers AI Whisper,
+   same joshuatree.heyitsmejosh.com host kernel/stocks.h and kernel/
+   curbfind.h already reach directly, not through llm_host/the Turing
+   proxy), and runs whatever text comes back through the exact same
+   chat_process_message path a typed message takes. Returns the new status
+   line, or NULL when chat_process_message returned NULL (open_app: the
+   caller must return immediately, same contract every other call site
+   here already follows). */
+static const char *chat_ptt_record(int T, int x, int you_w, int body_w) {
+    if (!sb16_present()) return "no sound card";
+    if (!net_init(0x0A00020F)) return "no network";
+    unsigned char *pcm = kmalloc(PTT_MAX_SAMPLES);
+    if (!pcm) return "out of memory";
+    unsigned int captured = 0;
+    for (;;) {
+        unsigned int want = PTT_MAX_SAMPLES - captured;
+        if (want > PTT_CHUNK_SAMPLES) want = PTT_CHUNK_SAMPLES;
+        if (!want) break;
+        int got = sb16_record(pcm + captured, want, 16000u);
+        if (got <= 0) break;
+        unsigned int peak = 0;
+        for (int i = 0; i < got; i++) {
+            int d = (int)pcm[captured + i] - 128; if (d < 0) d = -d;
+            if ((unsigned int)d > peak) peak = (unsigned int)d;
+        }
+        captured += (unsigned int)got;
+        chat_draw_listening(T, x, body_w, peak * 100u / 128u);
+        int released = 0, sc;
+        while ((sc = kbd_pop()) >= 0) if (sc == 0xBC) released = 1; /* F2 break code */
+        if (released || (unsigned int)got < want) break;
+    }
+    if (!captured) { kfree(pcm); return "nothing recorded"; }
+    chat_draw_status("listening to you ...");
+    static char resp[1024];
+    int respn = http_post_timeout("joshuatree.heyitsmejosh.com", "/api/listen", 80,
+                                   (const char *)pcm, captured, resp, sizeof(resp) - 1, CHAT_LISTEN_TIMEOUT_TICKS);
+    kfree(pcm);
+    if (respn <= 0 || http_last_status() != 200) return "couldn't hear that";
+    resp[respn] = 0;
+    static char text[CHAT_CONTENT_MAX];
+    if (!json_extract_string(resp, "text", text, sizeof(text)) || !text[0]) return "didn't catch that";
+    return chat_process_message(text, T, x, you_w, body_w);
+}
+
 static void gui_launch_chat_app(void) {
     chat_load();
     serial_puts("chatchrome\n"); /* discriminating marker for tools/checks/termchatflash-check.sh, same convention editor.h's "editorchrome" already established */
@@ -714,10 +797,10 @@ static void gui_launch_chat_app(void) {
                 if (i == chat_suggest_sel) window_rect(x - 4, ry - 4, body_w, 20, 0x00EDE6DC);
                 font_draw_string(CHAT_SUGGESTIONS[i].text, x, ry, CHAT_INK, -1);
             }
-            font_draw_string("up/down select   enter sends   or just type   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
+            font_draw_string("up/down select   enter sends   hold F2 to talk   or just type   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
         } else {
             chat_draw_conversation(T, x, you_w, sam_w, body_w);
-            font_draw_string("type to send   n prompt   c clear   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
+            font_draw_string("type to send   hold F2 to talk   n prompt   c clear   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
         }
 
         sleep_ticks(5);
@@ -726,6 +809,12 @@ static void gui_launch_chat_app(void) {
         int k;
         while (!(k = get_key_or_click_until(face_idle_n ? ticks() + 8 : 0))) chat_face_idle_tick();
         if (k == KEY_ESC) return;
+        if (k == KEY_PTT) {
+            const char *ns = chat_ptt_record(T, x, you_w, body_w);
+            if (!ns) return;
+            state = ns;
+            continue;
+        }
         if (k == KEY_CLICK) {
             if (chat_count == 0) {
                 int click_vx = app_cursor_x - app_view_x, click_vy = app_cursor_y - app_view_y;

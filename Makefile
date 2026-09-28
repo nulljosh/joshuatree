@@ -168,6 +168,21 @@ dotfiles.img:
 run: kernel.elf dotfiles.img
 	qemu-system-i386 -kernel kernel.elf -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file=dotfiles.img,format=raw,if=ide,index=0
 
+# v1.6.23: `run` plus a real Sound Blaster wired to this Mac's default
+# input/output through QEMU's coreaudio backend -- the Yeti (or whatever
+# the Mac's default mic is) reaches the guest's SB16 speaker output too,
+# not just recording, so Chat's speak_text plays over real speakers here
+# instead of the silent no-op `run` gets without a card at all. See
+# kernel/chat.h's chat_ptt_record for why holding F2 records nothing under
+# plain QEMU emulation today (QEMU's own -device sb16 has no ADC/record
+# path, confirmed against its source) -- coreaudio's "in" side plumbs a
+# real host mic into the DSP's input port, so `talk` is still the right
+# target for the day QEMU (or a swap to a card QEMU emulates more fully)
+# closes that gap, and for real hardware, which this driver is written to.
+talk: kernel.elf dotfiles.img
+	qemu-system-i386 -kernel kernel.elf -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file=dotfiles.img,format=raw,if=ide,index=0 \
+		-audiodev coreaudio,id=snd0 -device sb16,audiodev=snd0
+
 clean:
 	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf user/hello.o user/hello.bin drivers/user_hello.h \
 	      user/note.o user/note.bin drivers/user_note.h

@@ -333,12 +333,80 @@ async function handleDeals(request) {
   return new Response([city, ...rows].join("\n") + "\n", {headers: WIRE});
 }
 
+// v1.6.23: speech-to-text for Chat's push-to-talk (kernel/chat.h's
+// chat_ptt_record posts here directly, over the same plain-HTTP path
+// stocks.h/curbfind.h's http_get_timeout already reaches this exact host
+// with -- no /api/proxy involved, this endpoint lives on this Worker
+// itself). Runs Cloudflare Workers AI's Whisper (`@cf/openai/whisper`,
+// free tier) over the posted clip and returns {"text":"..."}. 503 with no
+// [ai] binding (a real, honest failure, not a hang) rather than crashing
+// on env.AI.run of an undefined binding.
+const LISTEN_MAX_BYTES = 1024 * 1024; // 1MB, the task's own stated cap
+
+// Whisper's input contract wants a real audio container (wav/mp3/flac),
+// not a bare PCM stream -- the kernel's sb16_record output has no header
+// at all, so a plain byte array of raw samples fed straight to Whisper
+// would be misread as garbage. This wraps it in the smallest real WAV
+// header (44 bytes, PCM, mono, 8-bit, matching drivers/sb16.c's record
+// format) when the caller didn't already send one (sniffed by "RIFF").
+function wrapPcmAsWav(bytes, sampleRate, bitsPerSample, channels) {
+  const blockAlign = (channels * bitsPerSample) / 8;
+  const byteRate = sampleRate * blockAlign;
+  const buf = new ArrayBuffer(44 + bytes.length);
+  const view = new DataView(buf);
+  const str = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  str(0, "RIFF"); view.setUint32(4, 36 + bytes.length, true); str(8, "WAVE");
+  str(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, channels, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true); view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  str(36, "data"); view.setUint32(40, bytes.length, true);
+  new Uint8Array(buf, 44).set(bytes);
+  return new Uint8Array(buf);
+}
+
+const JSON_CORS = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" };
+
+async function handleListen(request, env) {
+  if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+  if (!env.AI) return new Response(JSON.stringify({ error: "speech recognition is not configured" }), { status: 503, headers: JSON_CORS });
+
+  // Per-IP rate limit: the Workers "ratelimit" binding (wrangler.toml's
+  // LISTEN_RATE_LIMITER) when it exists; this repo had none before this
+  // pass, and dev/CI environments never define it, so this degrades to
+  // "no limit locally" rather than crashing on a missing binding.
+  if (env.LISTEN_RATE_LIMITER) {
+    const ip = request.headers.get("cf-connecting-ip") || "unknown";
+    const { success } = await env.LISTEN_RATE_LIMITER.limit({ key: ip });
+    if (!success) return new Response(JSON.stringify({ error: "too many requests" }), { status: 429, headers: JSON_CORS });
+  }
+
+  const declaredLength = Number(request.headers.get("content-length") || "0");
+  if (declaredLength > LISTEN_MAX_BYTES) return new Response(JSON.stringify({ error: "audio too large" }), { status: 413, headers: JSON_CORS });
+  const bodyBuffer = await request.arrayBuffer();
+  if (bodyBuffer.byteLength === 0) return new Response(JSON.stringify({ error: "empty audio" }), { status: 400, headers: JSON_CORS });
+  if (bodyBuffer.byteLength > LISTEN_MAX_BYTES) return new Response(JSON.stringify({ error: "audio too large" }), { status: 413, headers: JSON_CORS });
+
+  let bytes = new Uint8Array(bodyBuffer);
+  const isWav = bytes.length > 4 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46; // "RIFF"
+  if (!isWav) bytes = wrapPcmAsWav(bytes, 16000, 8, 1); // drivers/sb16.c's sb16_record format: 8-bit unsigned mono, 16kHz
+
+  try {
+    const result = await env.AI.run("@cf/openai/whisper", { audio: Array.from(bytes) });
+    const text = result && typeof result.text === "string" ? result.text.slice(0, 2000) : "";
+    return new Response(JSON.stringify({ text }), { status: 200, headers: JSON_CORS });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: "speech recognition failed" }), { status: 502, headers: JSON_CORS });
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/api/stocks") return handleStocks(url);
     if (url.pathname === "/api/quotes") return handleQuotes();
     if (url.pathname === "/api/deals") return handleDeals(request);
+    if (url.pathname === "/api/listen") return handleListen(request, env);
     if (url.pathname === "/api/proxy") {
       return handleProxy(request, env);
     }
@@ -352,3 +420,4 @@ export default {
 export { isAllowedTarget, handleProxy, ALLOWED_HOSTS };
 
 export { stockWire, handleStocks };
+export { handleListen, wrapPcmAsWav, LISTEN_MAX_BYTES };

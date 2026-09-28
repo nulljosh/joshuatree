@@ -311,6 +311,14 @@ static int gui_getch_or_click(void){
 #define KEY_COPY  302
 #define KEY_CUT   303
 #define KEY_PASTE 304
+/* v1.6.23: push-to-talk for Chat. F2's make code (0x3C) is a real,
+   unassigned scancode kbd_map never turns into a character (F-keys have
+   no entry in SC[]/SCS[]), so it reaches here through get_key_or_click_
+   until's ordinary "not a printable key" path and is otherwise silently
+   dropped -- same slot every other synthetic key above claims. Chat holds
+   F2 to record (kernel/chat.h's chat_ptt_record) and watches for the
+   matching break code (0xBC) between DMA chunks to notice release. */
+#define KEY_PTT 305
 #define CLIPBOARD_CAP 4096
 static char clipboard_buf[CLIPBOARD_CAP];
 static unsigned int clipboard_len = 0;
@@ -397,6 +405,7 @@ static int get_key_or_click_until(unsigned int deadline){
             }
             if (!(sc & 0x80)) {
                 gui_close_was_click = 0;
+                if (sc == 0x3C) return KEY_PTT; /* F2 make code: push-to-talk */
                 if (kbd_ctrl) {
                     int code = sc & 0x7F;
                     if (code == 0x2E) return KEY_COPY;
@@ -7704,7 +7713,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest beep say\n");
+    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest beep say listen\n");
                                         puts("a name that isn't one of the above runs a program by that name too, e.g. \"hello\" or \"note buy milk\" (same as exec, case-insensitive)\n"); }
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
@@ -7712,6 +7721,24 @@ static void run(char *line){
     else if (!strcmp(line, "pagefault")) { volatile int *p = (int *)0xDEAD0000; *p = 1; } /* manual check: exercises paging */
     else if (!strcmp(line, "bench"))     { bench_run(fs_ok_global); }
     else if (!strcmp(line, "beep"))      puts(sb16_beep(440, 500) ? "beep: played 440Hz\n" : "beep: no sound card\n");
+    else if (!strcmp(line, "listen")) {  /* headless test hook for tools/checks/sb16-record-check.py: records 2s at 16kHz, reports bytes captured */
+        unsigned int cap = 16000u * 2u;
+        unsigned char *buf = kmalloc(cap);
+        if (!buf) puts("listen: out of memory\n");
+        else {
+            int n = sb16_record(buf, cap, 16000u);
+            char msg[48]; int p = 0;
+            const char *h = "listen: n="; while (*h) msg[p++] = *h++;
+            unsigned int v = n < 0 ? 0 : (unsigned int)n;
+            unsigned int digs[12]; int dn = 0;
+            if (v == 0) msg[p++] = '0';
+            while (v) { digs[dn++] = v % 10; v /= 10; }
+            while (dn) msg[p++] = (char)('0' + digs[--dn]);
+            msg[p++] = '\n'; msg[p] = 0;
+            puts(msg);
+            kfree(buf);
+        }
+    }
     else if (!strcmp(line, "say"))       puts(!*arg ? "usage: say <text>\n" : !net_init(0x0A00020F) ? "say: no NIC\n"
                                               : speak_text(llm_host, (unsigned short)llm_port, arg, CHAT_SPEAK_TIMEOUT_TICKS) ? "say: played\n" : "say: nothing played\n");
     else if (!strcmp(line, "heaptest")) {

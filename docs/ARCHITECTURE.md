@@ -87,6 +87,13 @@ The network stack is what fetches the weather in the menu bar, the map
 tiles for the wallpaper, stock quotes, and the replies from a local
 Ollama server in the Chat app.
 
+### Sound
+
+| File | What it does |
+|---|---|
+| `drivers/sb16.c` | The Sound Blaster 16 driver: DSP reset/detect, IRQ 5, and ISA DMA channel 1 for both directions. `sb16_play`/`sb16_beep` push 8-bit unsigned mono PCM out through the SB16-only high-speed command pair (`0x41` set rate, `0xC0` transfer). `sb16_record` captures the same format in, through the older DSP-2.xx-compatible ADC pair (`0x40` set time constant, `0x24` transfer) every real SB16 answers -- QEMU's own `-device sb16` has no ADC path today (confirmed against its source), so recording only produces real audio on hardware, or under `make talk`'s coreaudio backend. |
+| `drivers/speak.c` | Text to speech: posts to Turing's `/api/speak`, plays the PCM reply on `sb16.c`, and tracks its own playback position so Chat's face can move with it (`speak_level`). |
+
 ### Graphics and input
 
 | File | What it does |
@@ -139,7 +146,7 @@ change. No Save button.
 | Calendar | `kernel/calendar.h` | `EVENTS.TXT`. The grid itself is computed from the clock. |
 | Mail | `kernel/mail.h` | `MAIL.TXT`. Two starter messages ship compiled in. |
 | Contacts | `kernel/contacts.h` | `CONTACTS.TXT`. |
-| Chat | `kernel/chat.h` | `CHAT.TXT`. Talks to a local Ollama server over the kernel's own HTTP. |
+| Chat | `kernel/chat.h` | `CHAT.TXT`. Talks to a local Ollama server over the kernel's own HTTP. Push-to-talk: holding F2 records on `drivers/sb16.c` and posts the clip to the Worker's `/api/listen` (Cloudflare Workers AI Whisper); the recognized text runs through the same path a typed message takes. |
 
 **Apps with nothing to save.**
 

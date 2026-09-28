@@ -26,11 +26,14 @@ sudo dd if=joshuatree-X.Y.Z.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 Boot from USB (F12/F10/Esc/Del at power-on).
 
+Talk to her: `make talk`, hold **F2**, speak. (Real hardware and a real mic only -- QEMU's own Sound Blaster emulation has no recording path today, so a real "hearing" Samantha only exists on real hardware or a card QEMU emulates more fully; see `kernel/chat.h`.)
+
 ## Build it
 
 ```sh
 brew install lld qemu
 make run              # boot to shell; type gui for desktop
+make talk             # boot with a real Sound Blaster on this Mac's mic/speakers
 make iso              # build bootable ISO
 ./check.sh            # run regression tests
 ./tools/bench.sh      # boot time, heap, memcpy, context switch, disk
