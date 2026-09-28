@@ -902,7 +902,6 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-/* v0.89.x: Activity landed after Portfolio (slot 23, GUI_APPS_FOLDER/TRASH to 25/26); Clock landed after Activity (slot 25, GUI_APPS_FOLDER/TRASH to 26/27), same shift each time. */
 #define GUI_APP_COUNT   29 /* 26 real apps + the Apps folder + Trash + Mail Compose */
 #define GUI_APPS_FOLDER 26 /* not an app: the dock tile that opens the folder */
 #define GUI_TRASH       27
