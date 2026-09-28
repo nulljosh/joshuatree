@@ -210,7 +210,7 @@ DOCK = {
         </g>
         <g fill="#15110D" stroke="none"><circle cx="54" cy="61" r="3.2"/><circle cx="74" cy="61" r="3.2"/></g>
         <path d="M56 79 Q64 85 72 79" fill="none" stroke-width="3"/>
-        <path d="M84 90 C84 82 92 78 100 78 C110 78 117 83 117 91 C117 99 110 104 101 104 L96 104 L90 111 L91 103 C86 100 84 96 84 90 Z" fill="#FBF3E2" stroke-width="3"/>
+        <path d="M84 90 C84 82 92 78 100 78 C110 78 117 83 117 91 C117 99 110 104 101 104 L96 104 L91 107 L91.5 103 C86 100 84 96 84 90 Z" fill="#FBF3E2" stroke-width="3"/>
         <g fill="#15110D" stroke="none"><circle cx="94" cy="91" r="2.2"/><circle cx="101" cy="91" r="2.2"/><circle cx="108" cy="91" r="2.2"/></g>
       </g>"""),
 
