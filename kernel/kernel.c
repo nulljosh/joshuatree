@@ -4909,22 +4909,18 @@ static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
        same trade the authored artwork itself already makes everywhere
        else (one 148px source raster area-averaged down, never redrawn
        per size) rather than a second layout to get right and keep right. */
-    /* v0.89.x follow-up: mul_d=2 (48 physical px) was sized against the
-       Apps-folder grid's own bigger tile (see the comment above) and
-       never actually checked against the dock's own 74-physical-px
-       tile -- a real headless crop there showed "25" running edge to
-       edge with almost no side margin and its descender crossing the
-       tile's own bottom curve, tighter than every other dock glyph's
-       shared inset (gui_icon_calendar's vector siblings all keep a real
-       margin off the squircle, see restyle_icons.py's top-16/bottom-20
-       band). mul_d=1 (24px, same face as the month label) leaves real
-       breathing room on both axes at dock size; the day face is a size
-       class up (3 vs 2) so it still reads as the bigger of the two
-       lines without the old overflow. */
+    /* v0.89.x follow-up: mul_d=2 overflowed the dock's own 74px tile (a
+       real crop showed "25" edge to edge, its descender crossing the
+       tile's bottom curve); mul_d=1 keeps real breathing room there. */
+    /* v0.90.x: mul_d=1 was only ever measured against the dock's 74px
+       tile; on the bigger Apps-folder/phone tile (tile=60 logical) it
+       left the day numeral small with the tile's bottom third empty.
+       size is the same logical unit both callers pass, so branch on it. */
     int mul_m = 1, mul_d = 1;
+    if (size > 40) { mul_m = 2; mul_d = 2; }
     const char *mon3 = GUI_CAL_MON3[monv - 1];
     int ly_m = y + size * 16 / 100;
-    int ly_d = y + size * 42 / 100;
+    int ly_d = y + (size > 40 ? size * 48 / 100 : size * 42 / 100);
     int lwm = wx_text_lw(mon3, 2, 1, mul_m);
     wx_text(mon3, cx_center - lwm / 2, ly_m, 2, 1, mul_m, 0x00FF3B30);
     int lwd = wx_text_lw(daybuf, 3, 1, mul_d);

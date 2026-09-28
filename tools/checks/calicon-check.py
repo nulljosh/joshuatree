@@ -194,6 +194,39 @@ def edge_ink_count(img):
     return count
 
 
+BG_SAMPLE_ROWS = range(12, 56)  # clear of the top/bottom squircle curve's own AA blend
+BG_SAMPLE_COLS = list(range(0, 3)) + list(range(TILE_W - 3, TILE_W))  # hard against the sides, where the month/day text (centered) never reaches
+WHITE_MIN = 210   # near-white background: every channel must clear this, well above the #E0E1E6 gradient floor
+CENTER_TOL_PCT = 0.12  # day numeral's ink centroid must sit within this fraction of tile width from center
+
+
+def bg_near_white(img):
+    """Sample straight down the tile's own left/right edges (outside the
+    centered text's reach) and confirm the material tile itself is
+    near-white, not the old flat grey a plain fill would read as -- this
+    is the same #F5F5F8/#E0E1E6 squircle every other white-tile icon
+    (Files/Notes/Reminders) already uses."""
+    samples = [img.getpixel((TILE_X0 + x, TILE_Y0 + y)) for y in BG_SAMPLE_ROWS for x in BG_SAMPLE_COLS]
+    lo = min(min(p) for p in samples)
+    return lo
+
+
+def day_centroid_offset(img):
+    """Horizontal centroid of the day numeral's dark ink, as a fraction of
+    tile width away from the tile's own center column -- proof the digits
+    are actually centered, not left/right of the squircle."""
+    xs = []
+    for y in DAY_ROWS:
+        for x in COLS:
+            p = img.getpixel((TILE_X0 + x, TILE_Y0 + y))
+            if lum(p) < 110:
+                xs.append(x)
+    if not xs:
+        return None
+    centroid = sum(xs) / len(xs)
+    return abs(centroid - TILE_W / 2.0) / TILE_W
+
+
 def red_strength(img):
     reddest = []
     for y in MONTH_ROWS:
@@ -238,6 +271,19 @@ print("edge-margin ink pixels (NOV 28 boot): %d (need 0, margin %dpx each side +
 if edge_nov > 0:
     print("FAIL: the date text runs into the tile's own side margin or bottom edge -- "
           "match the inset the rest of the dock's glyphs keep off the squircle")
+    fail = 1
+
+white_nov = bg_near_white(img_nov)
+print("tile background darkest channel (NOV 28 boot): %d (need >= %d, i.e. near-white, not flat grey)" % (white_nov, WHITE_MIN))
+if white_nov < WHITE_MIN:
+    print("FAIL: the tile background reads as flat grey, not the near-white squircle every other white-tile icon uses")
+    fail = 1
+
+center_nov = day_centroid_offset(img_nov)
+print("day-numeral centroid offset (NOV 28 boot): %s (need <= %.2f of tile width)"
+      % ("%.3f" % center_nov if center_nov is not None else "n/a", CENTER_TOL_PCT))
+if center_nov is None or center_nov > CENTER_TOL_PCT:
+    print("FAIL: the day digits are not horizontally centered in the tile")
     fail = 1
 
 if fail:
