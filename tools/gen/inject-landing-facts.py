@@ -120,6 +120,12 @@ def main():
     updated = render(page, facts)
     if updated != page:
         page_path.write_text(updated)
+    # 1.7.14: every version bump runs this script, and landing/version.txt kept
+    # getting left behind (versionsync-check failed CI three times in one night).
+    # Keep it in lockstep here so a bump is one step, not two.
+    vt = ROOT / "landing/version.txt"
+    if vt.read_text() != (ROOT / "VERSION").read_text():
+        vt.write_text((ROOT / "VERSION").read_text())
     print("Landing facts: " + ", ".join(f"{k}={v}" for k, v in facts.items()))
 
 
