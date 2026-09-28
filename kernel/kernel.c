@@ -6268,6 +6268,129 @@ static void gui_multiwin_focus(int idx){
     gui_windows[gui_window_count - 1] = tmp;
 }
 
+/* App switcher: Alt+Tab (Ctrl+Tab too, since QEMU/v86's Alt delivery to a
+   guest kernel is the flaky one to bet on) cycles the open windows, the
+   same macOS Cmd+Tab shape -- hold the modifier and tap Tab, a small
+   centered panel lists every open window with the next one highlighted;
+   releasing the modifier focuses it. Walks whatever's really open
+   (gui_window_count, capped at GUI_MULTIWIN_MAX like the window list
+   itself already is), never a hard-coded count. */
+static int gui_switcher_open = 0;
+static int gui_switcher_idx = 0;
+
+static void gui_switcher_draw(int hi){
+    int rows = gui_window_count;
+    if (rows <= 0) return;
+    int row_h = 28, pad_v = 10, w = 220;
+    int h = pad_v * 2 + rows * row_h;
+    int x = ((int)window_width() - w) / 2, y = ((int)window_height() - h) / 2;
+    unsigned int bg = 0x002C2C2E, text = 0x00F5F5F7; /* same flyout colors the Apple menu/notif/weather panels already share */
+    gui_rounded_rect_on_wallpaper(x, y, w, h, bg, 14);
+    int ry = y + pad_v;
+    for (int i = 0; i < rows; i++) {
+        if (i == hi) window_rect(x + 6, ry, w - 12, row_h - 4, 0x00555555);
+        int icon = gui_windows[i].icon;
+        const char *label = (icon >= 0 && icon < GUI_APP_COUNT) ? GUI_LABELS[icon] : "?";
+        font_draw_string(label, x + 18, ry + 6, text, -1);
+        ry += row_h;
+    }
+    window_present();
+}
+
+/* Screenshot: Ctrl+Shift+3, the reliable one -- real PrintScreen sends an
+   E0-prefixed 4-byte make sequence (E0 2A E0 37) that shares its 0xE0
+   lead byte with every arrow key's own extended sequence, which the
+   multiwin key readers just above are already mid-decoding whenever a
+   window with arrow-key input (Files, Calendar) is open; peeking for it
+   here risked eating a real arrow keystroke, so this ships the one
+   hotkey that can't collide. Saves the live framebuffer as an
+   uncompressed 24-bit BMP (no PNG encoder exists in this tree, drivers/
+   png.c only decodes) named SHOT0001.BMP, SHOT0002.BMP, ... in the files
+   root, so it shows up in Files like any other saved file. */
+static void gui_write_u32le(unsigned char *p, unsigned int v){ p[0]=v&0xFF; p[1]=(v>>8)&0xFF; p[2]=(v>>16)&0xFF; p[3]=(v>>24)&0xFF; }
+static void gui_write_u16le(unsigned char *p, unsigned int v){ p[0]=v&0xFF; p[1]=(v>>8)&0xFF; }
+
+static int gui_screenshot_next_name(char *out /* 13 bytes, "SHOTNNNN.BMP\0" */){
+    for (int n = 1; n <= 9999; n++) {
+        char name[13];
+        int i = 0; name[i++]='S'; name[i++]='H'; name[i++]='O'; name[i++]='T';
+        name[i++]='0'+(n/1000)%10; name[i++]='0'+(n/100)%10; name[i++]='0'+(n/10)%10; name[i++]='0'+n%10;
+        name[i++]='.'; name[i++]='B'; name[i++]='M'; name[i++]='P'; name[i]=0;
+        unsigned char probe[1];
+        if (vfs_read_file(name, probe, 1) < 0) { for (int j = 0; j <= i; j++) out[j] = name[j]; return 1; }
+    }
+    return 0;
+}
+
+/* Returns the real byte count written (54-byte header + padded pixel
+   rows) on success, 0 on failure -- a headless check can grep the exact
+   figure straight out of the serial marker below instead of having to
+   parse the FAT image itself to prove the file's real size. */
+static unsigned int gui_screenshot_save(char *name_out /* 13 bytes */){
+    int sc = (int)window_scale(); if (sc < 1) sc = 1;
+    int w = (int)window_width() * sc, h = (int)window_height() * sc;
+    if (w <= 0 || h <= 0) return 0;
+    unsigned int row_bytes = (unsigned int)w * 3;
+    unsigned int pad = (4 - (row_bytes % 4)) % 4;
+    unsigned int data_size = (row_bytes + pad) * (unsigned int)h;
+    unsigned int file_size = 54 + data_size;
+    unsigned char *buf = (unsigned char *)kmalloc(file_size);
+    if (!buf) return 0;
+    buf[0]='B'; buf[1]='M';
+    gui_write_u32le(buf + 2, file_size);
+    gui_write_u32le(buf + 6, 0);
+    gui_write_u32le(buf + 10, 54);
+    gui_write_u32le(buf + 14, 40);
+    gui_write_u32le(buf + 18, (unsigned int)w);
+    gui_write_u32le(buf + 22, (unsigned int)h); /* positive height: bottom-up rows, standard BMP */
+    gui_write_u16le(buf + 26, 1);
+    gui_write_u16le(buf + 28, 24);
+    gui_write_u32le(buf + 30, 0);
+    gui_write_u32le(buf + 34, data_size);
+    gui_write_u32le(buf + 38, 2835);
+    gui_write_u32le(buf + 42, 2835);
+    gui_write_u32le(buf + 46, 0);
+    gui_write_u32le(buf + 50, 0);
+    unsigned char *px = buf + 54;
+    for (int y = 0; y < h; y++) {
+        int src_y = h - 1 - y; /* bottom-up */
+        unsigned char *row = px + (unsigned int)y * (row_bytes + pad);
+        for (int x = 0; x < w; x++) {
+            unsigned int c = window_get_pixel_phys(x, src_y);
+            row[x*3+0] = (unsigned char)(c & 0xFF);
+            row[x*3+1] = (unsigned char)((c >> 8) & 0xFF);
+            row[x*3+2] = (unsigned char)((c >> 16) & 0xFF);
+        }
+        for (unsigned int p = 0; p < pad; p++) row[row_bytes + p] = 0;
+    }
+    char name[13];
+    int ok = gui_screenshot_next_name(name);
+    int saved = ok && vfs_write_file(name, buf, file_size) == 1; /* vfs_write_file (drivers/vfs.h), not fat_write_file directly, so this lands in whichever backend is actually active -- the FAT disk when one's attached, the RAM fallback (ramfs.c) in every headless/no-disk boot -- the same choice Files/Notes already make instead of hard-wiring FAT. Returns exactly 1 on success, 0 on failure, never a byte count. */
+    kfree(buf);
+    if (saved) { for (int j = 0; j < 13; j++) name_out[j] = name[j]; }
+    return saved ? file_size : 0;
+}
+
+/* A brief centered confirmation banner, same flyout colors as the
+   switcher panel above, up for ~0.6s (60 PIT ticks) then erased by the
+   next real desktop repaint -- the same "flash" every other save
+   confirmation in this kernel (editor.h's status line) already does,
+   just as its own overlay instead of a status line, since the desktop
+   itself has none. */
+static void gui_screenshot_flash(const char *name){
+    char msg[24]; int i = 0; const char *s = "Saved "; while (*s) msg[i++] = *s++;
+    s = name; while (*s && i < 23) msg[i++] = *s++;
+    msg[i] = 0;
+    int tw = font_string_width(msg);
+    int w = tw + 40, h = 40;
+    int x = ((int)window_width() - w) / 2, y = 70;
+    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x002C2C2E, 14);
+    font_draw_string(msg, x + 20, y + 12, 0x00F5F5F7, -1);
+    window_present();
+    unsigned int until = ticks() + 60;
+    while ((int)(ticks() - until) < 0) __asm__ volatile ("hlt");
+}
+
 static int gui_multiwin_open(int icon){
     for (int i = 0; i < gui_window_count; i++) {
         if (gui_windows[i].icon == icon) {
@@ -6941,6 +7064,52 @@ static void gui_run(void){
            branches can't double-consume the same scancode. */
         int mw_topmost_icon = gui_window_count > 0 ? gui_windows[gui_window_count - 1].icon : -1;
         int mw_key_repaint = 0;
+        /* App switcher hotkey, checked before the per-app dispatch just
+           below gets its own single kbd_pop() this frame. kbd_peek()
+           (irq.c) only tells us what's next without eating it, so a plain
+           Alt+Tab with one or zero windows open -- or any other scancode
+           entirely -- falls straight through untouched. Only a real
+           Tab-make while Alt/Ctrl is down, or the matching modifier
+           release while the panel is open, is ever actually popped here. */
+        if (gui_window_count > 1) {
+            int sw_pk = kbd_peek();
+            if (sw_pk == 0x0F && (kbd_alt || kbd_ctrl)) {
+                kbd_pop();
+                if (!gui_switcher_open) { gui_switcher_open = 1; gui_switcher_idx = gui_window_count - 1; }
+                gui_switcher_idx = (gui_switcher_idx + 1) % gui_window_count;
+                gui_switcher_draw(gui_switcher_idx);
+                serial_puts("SWITCHER:tab\n");
+            } else if (gui_switcher_open && (sw_pk == 0xB8 || sw_pk == 0x9D)) {
+                kbd_pop();
+                gui_switcher_open = 0;
+                gui_multiwin_focus(gui_switcher_idx);
+                mw_key_repaint = 1; /* the panel is gone and the z-order changed: needs the real full repaint, same as any other focus/close change */
+                serial_puts("SWITCHER:focus\n");
+            }
+        }
+        /* Screenshot: Ctrl+Shift+3. Same peek-first discipline as the
+           switcher above -- '3' is only ever consumed here when both
+           modifiers are already down, which real typing never does, so a
+           lone '3' keystroke elsewhere on the desktop is untouched. */
+        if (kbd_ctrl && kbd_shift) {
+            int ss_pk = kbd_peek();
+            if (ss_pk == 0x04) {
+                kbd_pop();
+                char shot_name[13];
+                unsigned int shot_bytes = gui_screenshot_save(shot_name);
+                if (shot_bytes) {
+                    char nbuf[12]; int ni = 0; unsigned int v = shot_bytes;
+                    do { nbuf[ni++] = (char)('0' + v % 10); v /= 10; } while (v);
+                    serial_puts("SHOT:");
+                    serial_puts(shot_name);
+                    serial_puts(":");
+                    while (ni) { char d[2] = { nbuf[--ni], 0 }; serial_puts(d); }
+                    serial_puts("\n");
+                    gui_screenshot_flash(shot_name);
+                    mw_key_repaint = 1; /* the flash banner drew over the desktop; needs a real repaint to erase it */
+                }
+            }
+        }
         if (gui_multiwin_interactive(mw_topmost_icon)) {
             int mwk = gui_multiwin_key_nonblock();
             if (mwk >= 0) {
