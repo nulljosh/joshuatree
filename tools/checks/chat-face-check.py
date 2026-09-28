@@ -4,7 +4,7 @@
 Headless only (-display none, never a window). A loopback stub stands in
 for both hosts through QEMU's user NAT at 10.0.2.2: facehost= serves the
 face frames, llmhost= answers /api/chat and /api/speak. The frames are
-480x480 solid-color JPEGs so the screen can be read without guessing: idle
+320x320 solid-color JPEGs so the screen can be read without guessing: idle
 is red, the closed-mouth talk frames (0..5) green, the open ones (6..10)
 blue, and talk-11 is garbage bytes (a bad frame must be skipped, not crash
 anything).
@@ -47,7 +47,7 @@ TONE = bytes((int(128 + 100 * math.sin(2 * math.pi * 440 * i / 16000)) if (i // 
 
 
 def jpg(color):
-    b = io.BytesIO(); Image.new("RGB", (480, 480), color).save(b, "JPEG", quality=90); return b.getvalue()
+    b = io.BytesIO(); Image.new("RGB", (320, 320), color).save(b, "JPEG", quality=90); return b.getvalue()
 
 
 FRAMES = {f"/face/idle-{i}.jpg": jpg(IDLE) for i in range(6)}

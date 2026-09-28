@@ -1199,7 +1199,7 @@ if (typeof document !== "undefined") (function () {
     // tools/checks/demochat-check.mjs intercepts /api/pick the same
     // deterministic way it already intercepts /api/chat, so this exact
     // sequence is asserted headless, not just eyeballed live.
-    { name: 'Chat', slot: 7, dwell: 30000, script: [
+    { name: 'Samantha', slot: 7, dwell: 30000, script: [
       { type: 'keys', text: 'n', speed: 200 },
       { type: 'wait', ms: 400 },
       { type: 'keys', text: 'remind me to call mom at 5\n', speed: 55 },
@@ -1641,7 +1641,7 @@ if (typeof document !== "undefined") (function () {
     'Notes': 'Real text selection, drag it by its title bar.',
     'Reminders': 'A checklist that survives a reboot',
     'Terminal': 'A real shell, talking to a real kernel',
-    'Chat': 'Talk to the machine, natively',
+    'Samantha': 'Talk to the machine, natively',
     'Trash': 'Deleted files, really recoverable',
     'Contacts': 'Its own records, its own format',
     'Calculator': 'Small, and it actually adds up'
