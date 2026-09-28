@@ -103,12 +103,68 @@ int main(void) {
     check("sha256(56-byte multi-block message) matches FIPS 180-4 vector",
           !strcmp(hex, "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"));
 
+    /* --- PBKDF2-HMAC-SHA256 (kernel/auth_kdf.c) against published vectors:
+       RFC 7914 section 11's two SHA-256 PBKDF2 vectors, then the RFC 6070
+       set recomputed for SHA-256 (the values every mainstream library
+       ships as its own test set). Covers c=1, c=2, c=4096, c=80000, a
+       two-block dkLen=64 output and a 40-byte partial second block. --- */
+    struct { const char *pw, *salt; unsigned int c, dklen; const char *hex; } pv[] = {
+        {"passwd", "salt", 1, 64, "55ac046e56e3089fec1691c22544b605f94185216dde0465e68b9d57c20dacbc49ca9cccf179b645991664b39d77ef317c71b845b1e30bd509112041d3a19783"},
+        {"Password", "NaCl", 80000, 64, "4ddcd8f60b98be21830cee5ef22701f9641a4418d04c0414aeff08876b34ab56a1d425a1225833549adb841b51c9b3176a272bdebba1d078478f62b397f33c8d"},
+        {"password", "salt", 1, 32, "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b"},
+        {"password", "salt", 2, 32, "ae4d0c95af6b46d32d0adff928f06dd02a303f8ef3c251dfd6e2d85a95474c43"},
+        {"password", "salt", 4096, 32, "c5e478d59288c841aa530db6845c4c8d962893a001ce4e11a4963873aa98134a"},
+        {"passwordPASSWORDpassword", "saltSALTsaltSALTsaltSALTsaltSALTsalt", 4096, 40, "348c89dbcbd32b2f32d814b8116e84cf2b17347ebc1800181c4e2a1fb8dd53e1c635518c7dac47e9"},
+    };
+    for (unsigned int i = 0; i < sizeof(pv)/sizeof(pv[0]); i++) {
+        unsigned char dk[64]; char dkhex[129]; char name[96];
+        auth_pbkdf2_sha256(pv[i].pw, (unsigned int)strlen(pv[i].pw), pv[i].salt, (unsigned int)strlen(pv[i].salt), pv[i].c, dk, pv[i].dklen);
+        auth_to_hex(dk, pv[i].dklen, dkhex);
+        snprintf(name, sizeof name, "pbkdf2-sha256(\"%s\", \"%s\", c=%u, dkLen=%u) matches published vector", pv[i].pw, pv[i].salt, pv[i].c, pv[i].dklen);
+        check(name, !strcmp(dkhex, pv[i].hex));
+    }
+
+    /* --- legacy record migration: a pre-1.7.9 USERS.TXT line (no scheme
+       tag, chained SHA-256) must still log in, and that login must rewrite
+       it as a tagged PBKDF2 record that then verifies on a fresh load. --- */
+    {
+        unsigned char lsalt[AUTH_SALT_LEN], lhash[AUTH_HASH_LEN];
+        for (int i = 0; i < AUTH_SALT_LEN; i++) lsalt[i] = (unsigned char)(0xA0 + i);
+        auth_hash_legacy(lsalt, "old style pw", lhash);
+        char shex[AUTH_SALT_LEN*2+1], hhex[AUTH_HASH_LEN*2+1], line[256];
+        auth_to_hex(lsalt, AUTH_SALT_LEN, shex); auth_to_hex(lhash, AUTH_HASH_LEN, hhex);
+        snprintf(line, sizeof line, "legacy:%s:%s\n", shex, hhex);
+        fake_vfs_len = (int)strlen(line); memcpy(fake_vfs_buf, line, (size_t)fake_vfs_len);
+        auth_users_loaded = 0; auth_user_count = 0; auth_upgraded_count = 0;
+        auth_users_load();
+        check("legacy (untagged) USERS.TXT record loads with iters == 0", auth_user_count == 1 && auth_users[0].iters == 0);
+        check("legacy record: wrong password rejected", !auth_verify("legacy", "old style pX"));
+        check("legacy record: not upgraded by a failed login", auth_upgraded_count == 0 && strstr(fake_vfs_buf, ":p2:") == NULL);
+        check("legacy record: right password accepted", auth_verify("legacy", "old style pw"));
+        check("legacy record: upgraded on that login (counter, tagged line on disk, old line gone)",
+              auth_upgraded_count == 1 && strncmp(fake_vfs_buf, "legacy:p2:100000:", 17) == 0 && strstr(fake_vfs_buf, hhex) == NULL);
+        auth_users_loaded = 0; auth_user_count = 0;
+        check("upgraded record reloads from disk as PBKDF2 and still accepts the password",
+              auth_verify("legacy", "old style pw") && auth_users[0].iters == AUTH_PBKDF2_ITERS);
+        check("upgraded record still rejects a wrong password", !auth_verify("legacy", "old style pw "));
+        check("upgrade happens exactly once", auth_upgraded_count == 1);
+        const char *badtag = "x:p3:100000:00112233445566778899aabbccddeeff00:"
+                             "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899\n"
+                             "y:p2:12:00112233445566778899aabbccddeeff00:"
+                             "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899\n";
+        fake_vfs_len = (int)strlen(badtag); memcpy(fake_vfs_buf, badtag, (size_t)fake_vfs_len);
+        auth_users_loaded = 0; auth_user_count = 0; auth_users_load();
+        check("unknown scheme tag and out-of-range iteration count are both skipped", auth_user_count == 0);
+    }
+
     /* --- account creation, wrong password rejected, right accepted --- */
     fake_vfs_len = -1; /* fresh "disk" */
     auth_users_loaded = 0; auth_user_count = 0; auth_logged_in = 0;
 
     check("auth_create_user succeeds for a fresh username/password",
           auth_create_user("joshua", "correcthorsebatterystaple"));
+    check("new records are written tagged as PBKDF2 with the iteration count",
+          strncmp(fake_vfs_buf, "joshua:p2:100000:", 17) == 0);
     check("auth_create_user refuses a duplicate username",
           !auth_create_user("joshua", "somethingelse"));
     check("auth_verify accepts the right password",

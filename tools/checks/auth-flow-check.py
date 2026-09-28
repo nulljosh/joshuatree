@@ -18,13 +18,20 @@ builds the real FAT disk image, same as every other disk-backed check.
 
 The flow, each step polled on a real kernel symbol or window_present_count
 (never a bare sleep):
+  0. (1.7.9) A pre-PBKDF2 USERS.TXT written straight into the image with
+     mtools: the untagged chained-SHA-256 record. It still logs in, that
+     login rewrites it as a tagged PBKDF2 record (checked through the FAT
+     directory, not a raw grep), a reboot logs in again on the new record
+     with the login time printed and bounded, wrong passwords rejected
+     both times.
   1. Fresh image, first boot, no USERS.TXT: no gate, desktop reachable
      (kernel/auth.h's own documented design: nothing configured, nothing
      to protect).
   2. Settings -> Add user "joshua" / "hidden valley 1". auth_user_count
      flips to 1 in kernel memory; USERS.TXT on the raw disk image (read
      back directly, not trusted from RAM) holds exactly one well-formed
-     "joshua:<salt>:<hash>" line and never the plaintext password.
+     "joshua:p2:<iters>:<salt>:<hash>" line and never the plaintext
+     password.
   3. Reboot the same image. The dock is inert until login succeeds (no
      gui_draw_boot_screen() call has happened yet -- auth_gate() blocks
      first). Esc on either field does not bypass the gate. A wrong
@@ -277,6 +284,87 @@ def check(label, condition):
         raise AssertionError(label)
 
 
+def legacy_hash(salt, password):
+    # The pre-1.7.9 scheme kernel/auth.h still verifies (never writes):
+    # sha256(salt || password), then 199,999 more rounds of sha256 over
+    # the previous digest. Computed here on the host so the fixture is an
+    # honest old-format record, not one the new kernel wrote for itself.
+    import hashlib
+    h = hashlib.sha256(salt + password.encode()).digest()
+    for _ in range(200000 - 1):
+        h = hashlib.sha256(h).digest()
+    return h
+
+
+def users_txt(disk):
+    # The real file as the FAT directory sees it (mtools), not a raw grep
+    # that also sees freed clusters.
+    return subprocess.run(['mtype', '-i', str(disk), '::USERS.TXT'], capture_output=True, text=True).stdout
+
+
+def timed_login(machine, password, label, limit=1.5):
+    machine.type(USERNAME)
+    machine.key('ret')
+    time.sleep(0.3)
+    machine.type(password)
+    t0 = time.time()
+    machine.key('ret')
+    machine.wait_int('auth_logged_in', lambda v: v == 1, f'{label}: password did not log in', timeout=8)
+    elapsed = time.time() - t0
+    check(f'{label}: logged in, {elapsed:.2f}s from Enter to auth_logged_in (limit {limit}s)', elapsed <= limit)
+    return elapsed
+
+
+print('=== Phase 0: pre-1.7.9 USERS.TXT fixture -> login upgrades it to PBKDF2 in place ===')
+subprocess.run(['bash', str(ROOT / 'tools' / 'mkdisk.sh'), str(DISK)], check=True, cwd=ROOT)
+legacy_salt = bytes(range(0x30, 0x40))
+legacy_line = f'{USERNAME}:{legacy_salt.hex()}:{legacy_hash(legacy_salt, PASSWORD1).hex()}\n'
+fixture = WORKDIR / 'USERS.TXT'
+fixture.write_text(legacy_line)
+subprocess.run(['mcopy', '-i', str(DISK), str(fixture), '::USERS.TXT'], check=True)
+check('legacy fixture: USERS.TXT on disk is the untagged 3-field record', users_txt(DISK) == legacy_line)
+
+m0 = Machine(DISK)
+try:
+    check('legacy boot: the old record still loads (auth_user_count == 1)', m0.integer('auth_user_count') == 1)
+    check('legacy boot: gate engaged (auth_logged_in == 0)', m0.integer('auth_logged_in') == 0)
+    m0.type(USERNAME)
+    m0.key('ret')
+    time.sleep(0.3)
+    m0.type('notrealpassword')
+    m0.key('ret')
+    time.sleep(1.5)
+    check('legacy record: wrong password rejected', m0.integer('auth_logged_in') == 0)
+    check('legacy record: a failed login does not rewrite it', m0.integer('auth_upgraded_count') == 0)
+    timed_login(m0, PASSWORD1, 'legacy record, right password', limit=3.0)
+    check('legacy record: upgraded on that login (auth_upgraded_count == 1)', m0.integer('auth_upgraded_count') == 1)
+    time.sleep(1.0)
+finally:
+    m0.close()
+
+after = users_txt(DISK)
+upgraded = re.findall(rf'^{USERNAME}:p2:(\d+):([0-9a-f]{{32}}):([0-9a-f]{{64}})$', after, re.M)
+check('USERS.TXT after the login: exactly one tagged PBKDF2 "joshua" line', len(upgraded) == 1 and after.count('\n') == 1)
+check('USERS.TXT after the login: iteration count stored in the record (100000)', upgraded and upgraded[0][0] == '100000')
+check('USERS.TXT after the login: salt rotated, hash changed', upgraded and upgraded[0][1] != legacy_salt.hex() and upgraded[0][2] != legacy_line.split(':')[2].strip())
+check('USERS.TXT after the login: plaintext never on disk', PASSWORD1.encode() not in DISK.read_bytes())
+
+m0b = Machine(DISK)
+try:
+    check('reboot on the upgraded record: account persisted', m0b.integer('auth_user_count') == 1)
+    m0b.type(USERNAME)
+    m0b.key('ret')
+    time.sleep(0.3)
+    m0b.type('notrealpassword')
+    m0b.key('ret')
+    time.sleep(1.5)
+    check('upgraded record: wrong password rejected', m0b.integer('auth_logged_in') == 0)
+    pbkdf2_login_s = timed_login(m0b, PASSWORD1, 'upgraded PBKDF2 record, right password')
+    check('upgraded record: nothing left to upgrade (auth_upgraded_count stays 0)', m0b.integer('auth_upgraded_count') == 0)
+finally:
+    m0b.close()
+print(f'  PBKDF2 login time in QEMU: {pbkdf2_login_s:.2f}s')
+
 print('=== Phase 1: fresh image, no account -> no gate, desktop reachable ===')
 subprocess.run(['bash', str(ROOT / 'tools' / 'mkdisk.sh'), str(DISK)], check=True, cwd=ROOT)
 
@@ -316,7 +404,7 @@ finally:
     m1.close()
 
 raw = DISK.read_bytes()
-matches = re.findall(rb'joshua:([0-9a-f]{32}):([0-9a-f]{64})', raw)
+matches = re.findall(rb'joshua:p2:\d+:([0-9a-f]{32}):([0-9a-f]{64})', raw)
 check('USERS.TXT on the raw disk image: exactly one well-formed "joshua" line', len(matches) == 1)
 original_hash = matches[0][1] if matches else None
 check('USERS.TXT on the raw disk image: plaintext "hidden valley 1" never appears anywhere', b'hidden valley 1' not in raw)
@@ -426,7 +514,7 @@ try:
     # writes in the host page cache), so poll it for a new "joshua" line.
     deadline = time.time() + 20
     while time.time() < deadline:
-        found = re.findall(rb'joshua:([0-9a-f]{32}):([0-9a-f]{64})', DISK.read_bytes())
+        found = re.findall(rb'joshua:p2:\d+:([0-9a-f]{32}):([0-9a-f]{64})', DISK.read_bytes())
         if any(h != original_hash for _, h in found):
             break
         time.sleep(0.2)
@@ -435,7 +523,7 @@ finally:
     m2.close()
 
 raw = DISK.read_bytes()
-matches = re.findall(rb'joshua:([0-9a-f]{32}):([0-9a-f]{64})', raw)
+matches = re.findall(rb'joshua:p2:\d+:([0-9a-f]{32}):([0-9a-f]{64})', raw)
 # Unlike the very first write (Phase 2, where a single "joshua" line is the
 # only one that can possibly exist), a raw grep here can legitimately also
 # still see the OLD hash: replacing a file on this FAT filesystem unlinks

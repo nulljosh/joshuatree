@@ -112,6 +112,7 @@ retry|2|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
 once |6|PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/decoder-fuzz-check.sh
 once |1|HTTP/JSON/FAT16 parser fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/parser-fuzz-check.sh
 once |5|Text-input bounds: json.c maxlen 0/1/truncation + auth const-time compare (ASan/UBSan)|./tools/checks/input-bounds-check.sh
+once |2|Password hashing, host harness: PBKDF2-HMAC-SHA256 vectors (RFC 7914, RFC 6070 for SHA-256), legacy record upgrade, USERS.TXT parse|./tools/checks/auth-check.sh
 retry|6|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclose-check.py
 retry|0|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
 retry|1|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
@@ -149,7 +150,7 @@ once |7|Worker /api/proxy: a silent upstream cannot hang the guest (weather/chat
 once |3|Worker /api/listen: Whisper transcription, 503 without the AI binding, rejects oversize/empty, per-IP rate limit|node ./tools/checks/listen-worker-check.mjs
 retry|3|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py
 once |2|Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
-retry|5|Accounts: create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py
+retry|5|Accounts: legacy record upgrades to PBKDF2 on login, create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py
 retry|3|Entropy pool: serial names its sources, two boots draw different salts|python3 ./tools/checks/entropy-check.py
 once |6|Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py
 once |6|Crash report names the faulting function, not just the exception kind|python3 ./tools/checks/panic-symbols-check.py
