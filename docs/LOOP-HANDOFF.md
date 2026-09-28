@@ -1,27 +1,37 @@
-# Joshua Tree loop handoff (2026-09-27, late night)
+# Joshua Tree loop handoff (2026-09-28, after midnight)
 
 ## What the loop is
 
-Build Joshua Tree toward its own computer and a Bloomberg terminal, one PR at a time, watching usage and RAM. Up to 3 Sonnet agents or 2 if one is Opus, 20 minutes each, headless QEMU only, one VM at a time. PRs stay draft until `tools/ci-local.sh` is green. Merge on green, never ask, but while a big PR waits, hold every other merge (main requires up-to-date branches). Keep README, landing, docs/TESTING.md and benchmarks current in the same PR as the change.
+Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map: 1.8, then 1.9, then 2.0. Each agent gets one shippable slice, about 10 minutes, headless QEMU only, one VM at a time. Two agents at once if either is Fable or Opus, otherwise three. PRs stay draft until `tools/ci-local.sh` is green, then merge on green without asking. While a big PR waits, hold every other merge (main requires up to date branches), and fold small docs changes into a PR that is already open. Keep README, landing, docs/TESTING.md and ARCHITECTURE.md current in the same PR as the change. Zero open issues, always. At 90% session usage, checkpoint and stop starting new work.
+
+## The 2.0.0 gate
+
+2.0.0 ships only when all of these are true and each has a headless check in ci-suite.sh:
+
+1. 1.8 done: a phone home screen, an app grid, one app full screen at a time, a back button.
+2. 1.9 done: touch works, an on-screen keyboard, every app readable at phone size.
+3. Every app in the APPS[] table runs as its own ring 3 program. No app code left in kernel.c.
+4. A check crashes each app on purpose and proves the desktop is still alive after every one.
+5. Input goes to the focused window only, not a global key pull.
 
 ## Where things stand
 
-Main is 1.6.20 and live. Merge queue, in order: 239 (Samantha's video face, Chat renamed Samantha; green), then drafts 241 (face loops, face_bench, face_visemes), 243 (Samantha reads mail, notes, reminders), 245 (dev kit waitlist), 246 (boot straight into Samantha, phone mode), 248 (crash reports name the function), 250 (this docs pass), 251 (landing fits phones), 252 (Epiphany command bar: AAPL GP, AAPL DES). Each claims 1.6.21, so every merge after the first rebumps.
+Main is 1.7.5 and live. 1.7.4 brought the OS its own network address (DHCP), drunk mode, the start of voice input, and landing polish. 1.7.5 fixed the deploy: a rate limit setting in the old format had kept the live site on 1.7.3.
 
-Architecture graded C+: kernel.c is ~9,800 lines, all 25 apps run in the kernel. An Opus agent is building the app interface (`feat/app-interface`); apps move to ring 3 next.
+Open: #268 (1.7.6, the kernel goes 1-bit with ordered dither; local suite running before it goes ready) and #267 (this file and MONEY.md). A Fable agent is on 2.0 step one: window and input syscalls for ring 3, Keyrate as the first app moved out, and a crash that returns to the desktop.
 
-Samantha's face: v27 B is best so far by Joshua's eye, built on `tools/gen/face_visemes.py`. Recipe and failures live in the character-creator skill.
+kernel.c is 9,877 lines with every app still inside it. That number going down is the real progress bar for 2.0.
 
 ## Next, in order
 
-1. docs/VERSIONS.md is the map: work toward the next unchecked version (1.8: phone home screen).
-2. Finish phone mode (430x932, boots to Samantha). Mobile first by 2026-10-04.
-3. App interface lands, then apps move out a few per PR.
-4. App smoke check for the 14 untested apps (parked in `git stash` on feat/guard-checks; grid launch fails past the first rows). Use the app interface to launch by name instead.
-5. Face: phoneme-timed mouth in the kernel, fed by ElevenLabs alignment from Turing.
+1. Land #268, then the ring 3 Keyrate PR.
+2. Move apps out a few per PR, smallest first, each one added to the crash check.
+3. 1.8 phone home screen, in parallel with the moves (it only touches the desktop, not the apps).
+4. 1.9 touch and the on-screen keyboard.
+5. Before any encryption work: a real randomness pool in the kernel. Today's random numbers are predictable and they salt the passwords. After that, BearSSL on TLS 1.2 (decided 2026-09-28), ported, never hand written.
 
 ## Restart prompt
 
 ```
-/loop keep building the Joshua Tree roadmap: docs/VERSIONS.md is the map, work toward the next unchecked version (1.8: phone home screen), finish phone mode, the app interface and apps out of the kernel, keep tests, docs, README, landing and benchmarks current, watch RAM and usage. Goal: A+ architecture, mobile first by 2026-10-04.
+/loop build Joshua Tree to 2.0.0: docs/LOOP-HANDOFF.md has the gate and the order. One ~10 minute slice per agent, two at once if Fable, headless only, draft until ci-local is green, merge on green, hold merges while a big PR waits, zero issues, docs and landing in the same PR, MONEY.md dated line each pitch. Stop starting work at 90% usage.
 ```
