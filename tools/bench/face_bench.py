@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Grade a recording of Samantha talking. Numbers, not vibes.
 
-Usage: uv run --with numpy --with pillow tools/bench/face_bench.py a.mp4 [b.mp4 ...]
+Usage: uv run --with numpy --with pillow tools/bench/face_bench.py [--align words.json] a.mp4 [b.mp4 ...]
 
 Finds her face as the part of the frame that moves (works on a bare face
 clip or a full-screen OS recording), then scores six things at 12fps:
@@ -12,10 +12,16 @@ clip or a full-screen OS recording), then scores six things at 12fps:
   steady  mouth motion vs head/eye motion when talking (low = head shakes)
   sync    how well mouth opening tracks her voice      (the big one)
   rest    mouth still when she's quiet vs talking      (low = chattering)
+  eyes    eyes open while she talks                    (low = blinking all the time)
+  alive   some head and shoulder motion                (0 = a frozen photo)
+  words   with --align (ElevenLabs with-timestamps JSON for the audio in
+          the video): lips shut on m/b/p and silence, open on vowels.
+          Loudness can't tell "mm" from "ah"; this can.
 
-Each is 0-100; the grade is their average, with sync counted twice.
+Each is 0-100; the grade is their average, with sync (or words, when
+given) counted twice.
 """
-import subprocess, sys
+import json, subprocess, sys
 import numpy as np
 from PIL import Image
 
@@ -79,7 +85,32 @@ def score(path):
     r["sync"] = 100 * min(1, max(0, best) / 0.6)
     quiet, loud = mouth_step[~t], mouth_step[t]
     r["rest"] = 100 * min(1, max(0, 1 - (quiet.mean() / (loud.mean() + 1e-6)))) if quiet.size and loud.size else 50
-    total = (sum(r.values()) + r["sync"]) / (len(r) + 1)
+    # eyes: dark iris pixels in the eye band, relative to this clip's open level
+    band = f[:, int(SIDE * .33):int(SIDE * .42), int(SIDE * .28):int(SIDE * .72)]
+    dark = (band < 70).mean((1, 2))
+    shut = dark < .85 * np.percentile(dark, 90)
+    r["eyes"] = 100 * (1 - shut[talking].mean()) if talking.any() else 100
+    # alive: motion outside the mouth, in a band that reads as breathing (not shaking)
+    hm = head_step.mean()
+    r["alive"] = 100 * min(1, hm / 0.8) if hm < 4 else 100 * max(0, 1 - (hm - 4) / 4)
+    key = "sync"
+    if ALIGN:
+        a = json.load(open(ALIGN))["alignment"]
+        span = list(zip(a["character_start_times_seconds"], a["character_end_times_seconds"], a["characters"]))
+        def want(t):
+            for s0, e0, c in span:
+                if s0 <= t < e0:
+                    c = c.lower()
+                    return 0 if c in "mbp .,!?" else 1 if c in "aeiouhy" else None
+            return 0
+        w = np.array([want(i / FPS) for i in range(n)], dtype=object)
+        idx = [i for i in range(n) if w[i] is not None]
+        if len(idx) > 4:
+            wv = np.array([w[i] for i in idx], float); ov = openness[idx]
+            if wv.std() > 0 and ov.std() > 0:
+                r["words"] = 100 * min(1, max(0, np.corrcoef(wv, ov)[0, 1]) / 0.5)
+                key = "words"
+    total = (sum(r.values()) + r[key]) / (len(r) + 1)
     return r, total
 
 
@@ -90,8 +121,14 @@ def letter(x):
     return "F"
 
 
+ALIGN = None
+
 if __name__ == "__main__":
-    print(f"{'video':32} fluid smooth pops steady sync rest  total")
-    for p in sys.argv[1:]:
+    args = sys.argv[1:]
+    if args[:1] == ["--align"]:
+        ALIGN, args = args[1], args[2:]
+    cols = ("fluid", "smooth", "pops", "steady", "sync", "rest", "eyes", "alive") + (("words",) if ALIGN else ())
+    print(f"{'video':28} " + " ".join(f"{c:>6}" for c in cols) + "  total")
+    for p in args:
         r, t = score(p)
-        print(f"{p.rsplit('/', 1)[-1][:32]:32} " + " ".join(f"{r[k]:5.0f}" for k in ("fluid", "smooth", "pops", "steady", "sync", "rest")) + f"  {t:4.0f} {letter(t)}")
+        print(f"{p.rsplit('/', 1)[-1][:28]:28} " + " ".join(f"{r.get(k, 0):6.0f}" for k in cols) + f"  {t:4.0f} {letter(t)}")
