@@ -18,7 +18,7 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 Main is 1.8.10. Four apps run in ring 3 (Keyrate, Toroid, Calculator, Quotes); the rest are still in kernel.c, which is 9433 lines under a ceiling that only ratchets down. Phones get a home screen, tap to hear Samantha, and she finishes talking before the tour moves on. Every check picks its own free QMP port once #289 lands.
 
-The merge train, one at a time: #290 landing QA (1.8.11, in CI), #291 docs to 100%, #289 free QMP ports. #296 is the 3.0 hardware blueprint (draft): the Strata enclosure with CAD, drawing and build steps, the two-box money fix (Strata Kit $199, Strata Complete $349), the ad in docs/DEMO.md.
+Merge train landed: #290 done. Waiting to land: #291 docs to 100%, #289 free QMP ports. #296 is the 3.0 hardware blueprint (draft): the Strata enclosure with CAD, drawing and build steps, the two-box money fix (Strata Kit $199, Strata Complete $349), the ad in docs/DEMO.md uploaded and A-graded. Re-record on ElevenLabs blocked (key invalid 401). Landing fix PR queued.
 
 ## Next, in order
 
