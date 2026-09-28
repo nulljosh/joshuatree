@@ -58,7 +58,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `kernel/paging.c` | Decides which memory each program can see, and keeps programs out of the kernel's. |
 | `kernel/kheap.c` | `kmalloc` and `kfree`. A first-fit free list that grows one frame at a time. |
 | `lib/libc.c` | `memcpy`, `memset`, `strlen` and the other handful of primitives a freestanding kernel cannot live without. |
-| `third_party/bearssl/` | Vendored BearSSL 0.6 subset (MIT): `sha2small.c`, `hmac.c`, `hmac_drbg.c`, the two big-endian codec files, the public headers and a one-line `string.h` shim onto `lib/libc.h`. Nothing modified; see its README.md. |
+| `third_party/bearssl/` | Vendored BearSSL 0.6 subset (MIT): implementation files (`src/sha2small.c`, `src/hmac.c`, `src/hmac_drbg.c`, `src/dec32be.c`, `src/enc32be.c`), public API headers (`inc/bearssl.h`, `bearssl_aead.h`, `bearssl_block.h`, `bearssl_ec.h`, `bearssl_hash.h`, `bearssl_hmac.h`, `bearssl_kdf.h`, `bearssl_pem.h`, `bearssl_prf.h`, `bearssl_rand.h`, `bearssl_rsa.h`, `bearssl_ssl.h`, `bearssl_x509.h`), an internal header (`src/inner.h`), a config header (`src/config.h`), and a one-line `string.h` shim onto `lib/libc.h`. Nothing modified; see its README.md. |
 
 ### Tasks and user programs
 
@@ -167,6 +167,7 @@ changed.
 | `kernel/wall_sat.h` | A real satellite photo, baked in, used as the wallpaper when there is no network to fetch map tiles. |
 | `kernel/boot_mark.h` | The real landing brand mark (`landing/logo.svg`, the four-arm Joshua tree), rasterized by `tools/gen/gen_boot_mark.py` into 8-bit alpha coverage at the splash's real physical size and blended straight onto the boot screen by `gui_draw_boot_mark` (`kernel/kernel.c`), replacing the old `gui_draw_logo` stick-figure primitive there. The menu bar keeps drawing `gui_draw_logo` unchanged, since the engraved-style mark reads as a solid blob at 16px. |
 | `kernel/phone_home.h` | The phone home screen for `boot_to_phone`: a 5-column, no-scroll grid of all 26 apps, a status bar with the real clock and weather, and a tappable back chevron in place of the desktop's traffic lights (drawn as two bold stepped diagonal strokes, injects a real Esc scancode through `kbd_inject()` so every app closes through the one `kbd_pop()==27` path a keyboard already drives). Desktop mode never calls into it, so it stays pixel-identical. |
+| `kernel/settings_ui.h` | Settings app UI with a sidebar plus grouped detail pane (modeled on macOS System Settings). Pulled into its own file in the 1.7.x redesign pass to keep `kernel.c` under the godfile-check.sh ceiling; `#include`d directly into `kernel.c` at the exact spot the inline version used to sit. |
 
 ## The apps
 
@@ -184,7 +185,7 @@ change. No Save button.
 | Calendar | `kernel/calendar.h` | `EVENTS.TXT`. The grid itself is computed from the clock. |
 | Mail | `kernel/mail.h` | `MAIL.TXT`. Two starter messages ship compiled in. |
 | Contacts | `kernel/contacts.h` | `CONTACTS.TXT`. |
-| Chat | `kernel/chat.h` | `CHAT.TXT`. Talks to a local Ollama server over the kernel's own HTTP. Push-to-talk: holding F2 records on `drivers/sb16.c` and posts the clip to the Worker's `/api/listen` (Cloudflare Workers AI Whisper); the recognized text runs through the same path a typed message takes. |
+| Chat | `kernel/chat.h`, `kernel/chat_face.h` | `CHAT.TXT`. Talks to a local Ollama server over the kernel's own HTTP. Push-to-talk: holding F2 records on `drivers/sb16.c` and posts the clip to the Worker's `/api/listen` (Cloudflare Workers AI Whisper); the recognized text runs through the same path a typed message takes. `chat_face.h` renders Samantha's animated face above the conversation, fetching idle and talk frame sequences on first boot. |
 
 **Apps with nothing to save.**
 
