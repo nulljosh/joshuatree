@@ -24,8 +24,10 @@ binding = "AI"
 # 10 requests/minute per caller. This repo had no rate-limit binding before
 # 1.6.23; handleListen degrades to "no limit" if this binding is ever
 # absent (local dev, CI) instead of crashing.
-[[unsafe.bindings]]
+[[ratelimits]]
 name = "LISTEN_RATE_LIMITER"
-type = "ratelimit"
-namespace_id = 1601
-simple = { limit = 10, period = 60 }
+namespace_id = "1601"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
