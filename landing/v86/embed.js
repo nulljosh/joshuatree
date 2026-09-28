@@ -156,23 +156,154 @@ if (typeof document !== "undefined") (function () {
   var AUDIO_DEBUG = /[?&]audiodebug\b/.test(location.search);
   var audioDebugState = { unlockAttempts: 0, lastUnlockEvent: "-", chunkCount: 0, lastLevel: 0 };
   var audioDebugEl = null;
+  // 1.8.4: splitting "her voice never played on a real iPhone" in two
+  // without ever hearing a real iPhone ourselves. A tone button proves (or
+  // disproves) plain AudioContext output on the visitor's own phone,
+  // separate from whether v86's SB16 emulation ever gets that far; a live
+  // meter tapped after the real speaker output means one screenshot shows
+  // both halves at once instead of a back-and-forth over text.
+  var audioMeterState = { analyser: null, data: null, rms: 0, peak: 0 };
+  var audioWorkletState = { moduleRequested: false, moduleAdded: false, nodeCreated: false };
+  var audioDebugToneCtx = null; // only created if v86's own context doesn't exist yet
   if (AUDIO_DEBUG) {
+    // Tap whatever actually reaches an AudioContext's real output. v86's
+    // speaker adapter (and the tone button below) both eventually call
+    // .connect(ctx.destination); wrapping AudioNode.prototype.connect is
+    // the only way to insert an AnalyserNode on that path without touching
+    // v86's own vendored code. One analyser per context, reused across
+    // every node that connects to that context's destination.
+    var origConnect = AudioNode.prototype.connect;
+    AudioNode.prototype.connect = function () {
+      var dest = arguments[0];
+      var ctx = this.context;
+      try {
+        if (ctx && dest === ctx.destination) {
+          if (!ctx.__jtDebugAnalyser) {
+            var analyser = ctx.createAnalyser();
+            analyser.fftSize = 2048;
+            ctx.__jtDebugAnalyser = analyser; // set before connecting: connect() below re-enters this same wrapper
+            origConnect.call(this, analyser);
+            origConnect.call(analyser, ctx.destination);
+            audioMeterState.analyser = analyser;
+            audioMeterState.data = new Float32Array(analyser.fftSize);
+          } else {
+            origConnect.call(this, ctx.__jtDebugAnalyser);
+          }
+        }
+      } catch (e) {}
+      return origConnect.apply(this, arguments);
+    };
+    // AudioWorklet status: did dac-processor's module ever get requested/
+    // resolved, and was a node for it ever constructed. Both answer "is
+    // the worklet path even running" without needing devtools on a phone.
+    if (window.AudioWorklet && AudioWorklet.prototype.addModule) {
+      var origAddModule = AudioWorklet.prototype.addModule;
+      AudioWorklet.prototype.addModule = function () {
+        audioWorkletState.moduleRequested = true;
+        var p = origAddModule.apply(this, arguments);
+        p.then(function () { audioWorkletState.moduleAdded = true; }).catch(function () {});
+        return p;
+      };
+    }
+    if (window.AudioWorkletNode) {
+      var OrigAudioWorkletNode = window.AudioWorkletNode;
+      window.AudioWorkletNode = function () {
+        audioWorkletState.nodeCreated = true;
+        return Reflect.construct(OrigAudioWorkletNode, arguments, new.target || window.AudioWorkletNode);
+      };
+      window.AudioWorkletNode.prototype = OrigAudioWorkletNode.prototype;
+    }
+    // Meter polls fast (rAF) so a 0.5s test tone isn't missed between
+    // ticks; the text render below stays on its own slower interval.
+    var meterTick = function () {
+      var m = audioMeterState;
+      if (m.analyser && m.data) {
+        m.analyser.getFloatTimeDomainData(m.data);
+        var sum = 0;
+        for (var i = 0; i < m.data.length; i++) sum += m.data[i] * m.data[i];
+        var rms = Math.sqrt(sum / m.data.length);
+        m.rms = rms;
+        if (rms > m.peak) m.peak = rms;
+      }
+      requestAnimationFrame(meterTick);
+    };
+    requestAnimationFrame(meterTick);
+
     audioDebugEl = document.createElement("div");
     audioDebugEl.id = "audio-debug-overlay";
-    audioDebugEl.style.cssText = "position:fixed;top:8px;left:8px;z-index:99999;background:#fff;color:#111;border:1px solid #111;padding:8px 10px;font:12px/1.5 -apple-system,Helvetica,Arial,sans-serif;white-space:pre;pointer-events:none;max-width:80vw;";
+    audioDebugEl.style.cssText = "position:fixed;top:8px;left:8px;z-index:99999;background:#fff;color:#111;border:1px solid #111;padding:8px 10px;font:12px/1.5 -apple-system,Helvetica,Arial,sans-serif;pointer-events:none;max-width:80vw;";
+    var audioDebugText = document.createElement("div");
+    audioDebugText.style.cssText = "white-space:pre;";
+    var toneButton = document.createElement("button");
+    toneButton.id = "audio-debug-tone-btn";
+    toneButton.textContent = "Play test tone";
+    toneButton.style.cssText = "pointer-events:auto;display:block;width:100%;margin-top:8px;padding:12px 10px;font:13px/1 -apple-system,Helvetica,Arial,sans-serif;background:#111;color:#fff;border:1px solid #111;cursor:pointer;";
+    var toneStatus = document.createElement("div");
+    toneStatus.style.cssText = "white-space:pre-wrap;margin-top:4px;";
+    audioDebugEl.appendChild(audioDebugText);
+    audioDebugEl.appendChild(toneButton);
+    audioDebugEl.appendChild(toneStatus);
     document.body.appendChild(audioDebugEl);
+
+    // Plays through whatever context v86 will actually use (creating one
+    // early, with a note, if the emulator hasn't started yet). If the
+    // visitor hears this but not Samantha, the problem is v86/dac-processor,
+    // not iOS's audio policy; if this is silent too, it never was v86 at
+    // all.
+    var playTestTone = function () {
+      var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
+      var createdNew = false;
+      if (!ac) {
+        try {
+          audioDebugToneCtx = audioDebugToneCtx || new (window.AudioContext || window.webkitAudioContext)();
+          ac = audioDebugToneCtx;
+          createdNew = true;
+        } catch (e) {
+          toneStatus.textContent = "tone: could not create an AudioContext - " + e.message;
+          return;
+        }
+      }
+      try {
+        if (ac.state !== "running") ac.resume().catch(function () {});
+        var osc = ac.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = 440;
+        var gain = ac.createGain();
+        gain.gain.value = 0.2;
+        osc.connect(gain);
+        gain.connect(ac.destination);
+        var now = ac.currentTime;
+        osc.start(now);
+        osc.stop(now + 0.5);
+        toneStatus.textContent = "tone: playing 440hz for 0.5s" +
+          (createdNew ? " (v86's own context did not exist yet, created a new one)" : " (same context v86's speaker uses)");
+      } catch (e) {
+        toneStatus.textContent = "tone: error - " + e.message;
+      }
+    };
+    toneButton.addEventListener("click", playTestTone);
+    toneButton.addEventListener("touchend", function (ev) { ev.preventDefault(); playTestTone(); }, { passive: false });
+
     var renderAudioDebug = function () {
       var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
+      var lastSpeak = /speak: status=\d+[^\n]*/g;
+      var speakMatches = serialLog.match(lastSpeak);
       var lines = [
         "audio debug",
         "context state: " + (ac ? ac.state : "no speaker_adapter"),
         "sample rate: " + (ac ? ac.sampleRate : "-"),
+        "base latency: " + (ac && ac.baseLatency !== undefined ? ac.baseLatency : "-"),
+        "output latency: " + (ac && ac.outputLatency !== undefined ? ac.outputLatency : "-"),
         "audioSession.type: " + (navigator.audioSession ? navigator.audioSession.type : "n/a"),
         "unlock attempts: " + audioDebugState.unlockAttempts + " (last: " + audioDebugState.lastUnlockEvent + ")",
         "dac chunks received: " + audioDebugState.chunkCount,
-        "last non-zero sample: " + audioDebugState.lastLevel
+        "last non-zero sample: " + audioDebugState.lastLevel,
+        "worklet module: requested=" + audioWorkletState.moduleRequested + " added=" + audioWorkletState.moduleAdded,
+        "worklet node created: " + audioWorkletState.nodeCreated,
+        "output meter: rms=" + audioMeterState.rms.toFixed(4) + " peak=" + audioMeterState.peak.toFixed(4),
+        "last serial speak line: " + (speakMatches ? speakMatches[speakMatches.length - 1] : "none yet")
       ];
-      audioDebugEl.textContent = lines.join("\n");
+      audioDebugText.textContent = lines.join("\n");
     };
     setInterval(renderAudioDebug, 200);
     renderAudioDebug();
