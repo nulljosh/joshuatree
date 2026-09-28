@@ -6,6 +6,7 @@
    MAX_FRAMES array (128MB worth); more RAM than that is just left untracked
    for now, upgrade to a dynamically-sized bitmap if that ever matters. */
 #include "pmm.h"
+#include "serial.h"
 
 typedef unsigned int u32;
 
@@ -26,18 +27,44 @@ struct multiboot_info {
     u32 flags;
     u32 mem_lower;
     u32 mem_upper;
+    u32 boot_device, cmdline, mods_count, mods_addr, syms[4];
+    u32 mmap_length;
+    u32 mmap_addr;
 } __attribute__((packed));
+
+/* v86 (the landing page's in-browser PC) never fills mem_upper, only the
+   memory map, so without this the demo guessed 15MB and ran out of heap:
+   no wallpaper, and Samantha's voice never had room to play. Returns KB of
+   RAM in the map entry that starts at or covers 1MB, like mem_upper. */
+static u32 mmap_upper_kb(const struct multiboot_info *mb) {
+    u32 p = mb->mmap_addr, end = mb->mmap_addr + mb->mmap_length;
+    while (p < end) {
+        const u32 *e = (const u32 *)p;           /* size, base_lo, base_hi, len_lo, len_hi, type */
+        if (e[5] == 1 && e[2] == 0 && e[4] == 0 && e[1] <= 0x100000 && e[1] + e[3] > 0x100000)
+            return (e[1] + e[3] - 0x100000) / 1024;
+        p += e[0] + 4;
+    }
+    return 0;
+}
 
 void pmm_init(u32 multiboot_info_addr) {
     struct multiboot_info *mb = (struct multiboot_info *)multiboot_info_addr;
 
     u32 mem_upper_kb = 0;
     if (mb && (mb->flags & 0x1)) mem_upper_kb = mb->mem_upper;
+    else if (mb && (mb->flags & 0x40)) mem_upper_kb = mmap_upper_kb(mb);
     /* mem_upper is KB of RAM starting at 1MB. Fall back to a conservative
        16MB guess if the bootloader didn't report it (shouldn't happen under
        QEMU/GRUB, but better than dividing by zero). */
     u32 usable_bytes = mem_upper_kb ? mem_upper_kb * 1024 : (16 * 1024 * 1024 - 0x100000);
 
+    { /* one boot line so a wrong RAM size is visible, not a silent 16MB guess */
+        char d[12]; int n = 0; u32 v = usable_bytes / (1024 * 1024);
+        do { d[n++] = (char)('0' + v % 10); v /= 10; } while (v);
+        serial_puts(mem_upper_kb ? "pmm: ram_mb=" : "pmm: ram_mb=guess ");
+        while (n) { char c[2] = { d[--n], 0 }; serial_puts(c); }
+        serial_puts("\n");
+    }
     total_frames = usable_bytes / FRAME_SIZE;
     if (total_frames > MAX_FRAMES) total_frames = MAX_FRAMES;
 
