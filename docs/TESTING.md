@@ -166,5 +166,6 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Clock | `tools/checks/clock-check.py`, `tools/checks/menuclock-check.sh` |
 | Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/tourappcount-check.mjs` |
 | Trash | none yet |
+| Compose | `tools/checks/wallcompose-check.py` |
 
 Apps with no check yet: Curbfind, Bookrank, Plan, Lexly, Sparkjar, Homeqi, Fieldbook, Contacts, Search, Activity, Trash.
