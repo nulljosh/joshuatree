@@ -960,6 +960,7 @@ static int boot_to_samantha;
    the demo boots 1:1 into what a phone screen actually is, rather than
    shrinking the desktop's layout down to unreadable text. */
 static int boot_to_phone;
+static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
 static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 static int dock_hover = -1; /* slot whose label is showing */
@@ -4518,8 +4519,8 @@ void gui_app_mouse_tick(void){
     if (app_cursor_y < 0) app_cursor_y = 0;
     if (app_cursor_x > (int)window_width() - CURSOR_W) app_cursor_x = (int)window_width() - CURSOR_W;
     if (app_cursor_y > (int)window_height() - CURSOR_H) app_cursor_y = (int)window_height() - CURSOR_H;
-    /* Live window drag (see app_win_x's comment). Press edge: arm only in
-       the title band, right of the three lights (x + 80 on), so the red
+    if (boot_to_phone) phone_back_zone_tick(buttons, app_drag_held, app_cursor_x, app_cursor_y); /* phone_home.h: back-chevron tap, no Esc key on a phone */ /* Live window drag (app_win_x's comment). Press edge: arm only in the
+       title band, right of the three lights (x + 80 on), so the red
        close light and the app's own content keep their click semantics. */
     int held = buttons & 1;
     if (held && !app_drag_held) {
@@ -4551,8 +4552,7 @@ void gui_app_mouse_tick(void){
             serial_puts("windrag\n"); /* marker for tools/checks/windowdrag-check.py */
         }
     }
-    gui_cursor_save(app_cursor_x, app_cursor_y);
-    gui_draw_cursor(app_cursor_x, app_cursor_y);
+    if (!boot_to_phone) { gui_cursor_save(app_cursor_x, app_cursor_y); gui_draw_cursor(app_cursor_x, app_cursor_y); } /* phone_home.h: touch has no cursor, never draw the desktop arrow over an open app */
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
 /* v67 (0.62.2): for an app that repaints its whole viewport itself on
@@ -4616,14 +4616,14 @@ static void gui_wait_close(void){
    minimize/maximize wait on the actual windowing system already queued in
    roadmap.md's later product ideas, not a shortcut bolted on here. */
 void gui_draw_app_titlebar(const char *title){
-    if (!gui_app_windowed) {
-        gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
-        gui_fill_circle(46, 20, 6, 0x00FFD64A, 0x00FAF8F6);
-        gui_fill_circle(66, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
-        font_draw_string("x", 23, 12, 0x00602B28, -1);
-        font_draw_string("-", 43, 12, 0x00624A20, -1);
-        font_draw_string(title, 84, 12, 0x00555555, -1);
-    }
+    if (gui_app_windowed) return;
+    if (boot_to_phone) { phone_app_titlebar_draw(title); return; } /* kernel/phone_home.h: back chevron, no Esc key on a phone */
+    gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
+    gui_fill_circle(46, 20, 6, 0x00FFD64A, 0x00FAF8F6);
+    gui_fill_circle(66, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
+    font_draw_string("x", 23, 12, 0x00602B28, -1);
+    font_draw_string("-", 43, 12, 0x00624A20, -1);
+    font_draw_string(title, 84, 12, 0x00555555, -1);
 }
 
 /* Split into a content-only draw plus the old blocking entry point: the
@@ -4968,26 +4968,27 @@ static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
        same trade the authored artwork itself already makes everywhere
        else (one 148px source raster area-averaged down, never redrawn
        per size) rather than a second layout to get right and keep right. */
-    /* v0.89.x follow-up: mul_d=2 (48 physical px) was sized against the
-       Apps-folder grid's own bigger tile (see the comment above) and
-       never actually checked against the dock's own 74-physical-px
-       tile -- a real headless crop there showed "25" running edge to
-       edge with almost no side margin and its descender crossing the
-       tile's own bottom curve, tighter than every other dock glyph's
-       shared inset (gui_icon_calendar's vector siblings all keep a real
-       margin off the squircle, see restyle_icons.py's top-16/bottom-20
-       band). mul_d=1 (24px, same face as the month label) leaves real
-       breathing room on both axes at dock size; the day face is a size
-       class up (3 vs 2) so it still reads as the bigger of the two
-       lines without the old overflow. */
+    /* v0.89.x follow-up: mul_d=2 overflowed the dock's own 74px tile (a
+       real crop showed "25" edge to edge, its descender crossing the
+       tile's bottom curve); mul_d=1 keeps real breathing room there. */
+    /* v0.90.x: mul_d=1 was only ever measured against the dock's 74px
+       tile; on the bigger Apps-folder/phone tile (tile=60 logical) it
+       left the day numeral small with the tile's bottom third empty.
+       size is the same logical unit both callers pass, so branch on it. */
+    /* v1.8: phone tile's "SEP"/"28" spilled past the rounded corners.
+       No fractional mul (integer divisor), so ~70% comes from dropping
+       one face size each line: month 24px->16px@mul2=32px (~67% of 48),
+       day 28px->20px@mul2=40px (~71% of 56). */
     int mul_m = 1, mul_d = 1;
+    int face_m = 2, face_d = 3;
+    if (size > 40) { mul_m = 2; mul_d = 2; face_m = 0; face_d = 1; }
     const char *mon3 = GUI_CAL_MON3[monv - 1];
     int ly_m = y + size * 16 / 100;
-    int ly_d = y + size * 42 / 100;
-    int lwm = wx_text_lw(mon3, 2, 1, mul_m);
-    wx_text(mon3, cx_center - lwm / 2, ly_m, 2, 1, mul_m, 0x00FF3B30);
-    int lwd = wx_text_lw(daybuf, 3, 1, mul_d);
-    wx_text(daybuf, cx_center - lwd / 2, ly_d, 3, 1, mul_d, 0x001F1F22);
+    int ly_d = y + (size > 40 ? size * 48 / 100 : size * 42 / 100);
+    int lwm = wx_text_lw(mon3, face_m, 1, mul_m);
+    wx_text(mon3, cx_center - lwm / 2, ly_m, face_m, 1, mul_m, 0x00FF3B30);
+    int lwd = wx_text_lw(daybuf, face_d, 1, mul_d);
+    wx_text(daybuf, cx_center - lwd / 2, ly_d, face_d, 1, mul_d, 0x001F1F22);
 }
 
 /* Flat rounded card: four anti-aliased corner discs plus two rects. */
@@ -6612,7 +6613,7 @@ static void gui_menu_run_item(int item){
         for (;;) __asm__ volatile ("hlt");
     }
 }
-
+#include "phone_home.h" /* v1.8.0: phone mode's real home screen, see its own header comment */
 static void gui_run(void){
     /* v42: 16:9, 960x540 logical at 2x = 1920x1080 physical, the native
        size of the monitor this actually runs fullscreen on. QEMU's cocoa
@@ -6643,7 +6644,8 @@ static void gui_run(void){
     gui_draw_boot_screen();
     gui_order_init();
     if (boot_to_samantha) { boot_to_samantha = 0; chat_boot_samantha_open(); }
-    else serial_puts("guidesktop\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: the icon desktop drew first, samantha mode never reaches here before her avatar */
+    else if (!boot_to_phone) serial_puts("guidesktop\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: the icon desktop drew first, samantha mode never reaches here before her avatar; phone mode never draws this desktop at all (see below), so it must not claim it did */
+    if (boot_to_phone) { phone_home_run(); return; } /* v1.8.0: leaving Samantha lands on a real home screen, not the desktop's dock squeezed into 430px; never returns */
     dock_hover = dock_presented_hover = -1;
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;
     /* press_slot: the slot the mouse went down on, latched until release.
