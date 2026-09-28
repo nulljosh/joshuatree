@@ -4682,6 +4682,7 @@ static int text_ink(int a, unsigned int fg, unsigned int dst){
 
 #include "ttf_render.h"
 #include "gui_prompt.h"
+#include "entropy.h"
 #include "auth.h"
 #include "editor.h"
 #include "reminders.h"
@@ -9640,6 +9641,7 @@ static int panic_test_at_boot = 0;
 void kmain(unsigned int multiboot_info_addr){
     serial_init();
     serial_puts("=== kmain boot start === v" JT_VERSION_STR "\n");
+    entropy_init(); /* 1.7.8: seed the HMAC_DRBG before anything asks for a salt; logs its sources */
     /* 1.0.12: llmhost=/llmport= command-line overrides for llm_host/llm_port
        (declared way below), parsed alongside wxhost= but applied AFTER
        settings_load() runs (see its call site) so a stale/persisted

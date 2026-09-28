@@ -20,6 +20,9 @@
 /* ---- minimal stand-ins for the kernel functions auth.h references ---- */
 static unsigned int fake_ticks = 1;
 unsigned int ticks(void) { return fake_ticks++; }
+/* kernel/entropy.c stand-in: the host harness tests hashing and parsing,
+   not the DRBG, so a counter is enough to keep salts distinct. */
+static void entropy_bytes(void *buf, unsigned int n) { unsigned char *b = buf; for (unsigned int i = 0; i < n; i++) b[i] = (unsigned char)(fake_ticks++ * 97u + i); }
 
 #define FAKE_VFS_MAX 4096
 static char fake_vfs_buf[FAKE_VFS_MAX];

@@ -1,7 +1,7 @@
 CC := clang
 CFLAGS := -target i386-unknown-none -ffreestanding -fno-stack-protector \
           -fno-pic -mno-sse -mno-mmx -fno-omit-frame-pointer -Wall -Wextra -O2 \
-          -Iboot -Ikernel -Idrivers -Ilib -MMD -MP
+          -Iboot -Ikernel -Idrivers -Ilib -Ithird_party/bearssl/inc -Ithird_party/bearssl/src -Ithird_party/bearssl/shim -MMD -MP
 LD := ld.lld
 # -fno-omit-frame-pointer: kernel/backtrace.c walks the EBP chain to print
 # crash-report frames (kernel/symtab.h). Without it clang's -O2 elides EBP
@@ -9,13 +9,14 @@ LD := ld.lld
 
 KERNEL_SRCS := kernel/gdt.c kernel/idt.c kernel/pic.c kernel/irq.c kernel/pmm.c \
                kernel/paging.c kernel/kheap.c kernel/task.c kernel/exec.c kernel/ring3.c kernel/syscall.c \
-               kernel/gui_prims.c kernel/dock_geom.c kernel/app.c kernel/backtrace.c kernel/kernel.c
+               kernel/gui_prims.c kernel/dock_geom.c kernel/app.c kernel/backtrace.c kernel/entropy.c kernel/kernel.c
 KERNEL_ASM  := kernel/isr.S kernel/irq_stubs.S kernel/ring3_asm.S
 DRIVER_SRCS := drivers/ata.c drivers/blockdev.c drivers/ramdisk.c drivers/trash.c drivers/fat.c drivers/vfs.c drivers/ramfs.c drivers/pci.c drivers/vbe.c drivers/mouse.c drivers/vmmouse.c \
                drivers/window.c drivers/rtl8139.c drivers/ne2k.c drivers/net.c drivers/http.c drivers/html.c \
                drivers/json.c drivers/font.c drivers/app_keyrate.c drivers/app_toroid.c drivers/app_quotestreak.c drivers/app_calculator.c \
                drivers/serial.c drivers/sb16.c drivers/speak.c drivers/png.c drivers/jpeg.c drivers/ttf.c
-LIB_SRCS    := lib/libc.c
+LIB_SRCS    := lib/libc.c third_party/bearssl/src/sha2small.c third_party/bearssl/src/hmac.c \
+               third_party/bearssl/src/hmac_drbg.c third_party/bearssl/src/dec32be.c third_party/bearssl/src/enc32be.c
 
 OBJS := boot/boot.o $(KERNEL_ASM:.S=.o) $(KERNEL_SRCS:.c=.o) $(DRIVER_SRCS:.c=.o) $(LIB_SRCS:.c=.o) kernel/symtab.o
 PASS1_OBJS := $(filter-out kernel/symtab.o,$(OBJS))
