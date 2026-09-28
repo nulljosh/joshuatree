@@ -152,6 +152,7 @@ retry|4|Chat speaks: say fetches /api/speak PCM from a stub and plays a real 100
 retry|4|Chat face: idle frame before, talk frames while she speaks, idle after; no frames means no face|python3 ./tools/checks/chat-face-check.py
 retry|3|Files view switcher: Icons grid renders and the chosen view persists across close/reopen|python3 ./tools/checks/filesview-check.py
 retry|7|Demo canvas fills its frame, pixelated only at an exact 1:1 map|node ./tools/checks/democrisp-check.mjs
+once |7|Landing page never overflows horizontally at phone widths|node ./tools/checks/mobile-overflow-check.mjs
 EOF
 }
 
