@@ -23,7 +23,7 @@ def frames(kind):
 
 def steps(fs):
     small = [f.resize((40, 40)) for f in fs]
-    d = lambda a, b: sum(ImageChops.difference(a, b).get_flattened_data()) / 1600
+    d = lambda a, b: sum(ImageChops.difference(a, b).getdata())  # getdata: CI's Pillow predates get_flattened_data / 1600
     inner = [d(small[i], small[i + 1]) for i in range(len(small) - 1)]
     return inner, d(small[-1], small[0])
 
