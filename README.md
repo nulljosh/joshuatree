@@ -13,6 +13,10 @@ Try it live in your browser: [joshuatree.heyitsmejosh.com](https://joshuatree.he
 
 Ask Samantha to set a reminder, take a note or open an app. She does it, and she answers out loud: her voice plays through Joshua Tree's own sound driver, with a face that talks while she speaks. Samantha is the assistant from [Turing](https://github.com/nulljosh/turing), a separate project; Joshua Tree's Samantha app is how the OS talks to her. Everything you save lands on a real disk, and every feature has a check behind it.
 
+## Architecture
+
+<img src="architecture.svg" width="600">
+
 ## Boot it
 
 **Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
