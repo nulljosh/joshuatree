@@ -1059,8 +1059,15 @@ static void chat_boot_samantha_open(void) {
        bottom same as the desktop layout below. Desktop/samantha-only keeps
        its original bottom-anchored face (unchanged from PR #246). */
     if (boot_to_phone) {
-        int half = T + 20 + ((int)window_height() - (T + 20)) / 2;
-        int cy = chat_face_draw_big(T + 20, half);
+        /* T + 44 clears the titlebar's traffic lights (centered at y=20,
+           radius 6) and title text (baseline y=12) the same way the
+           console's own small-face draw already does (see chat_face_draw's
+           T + 44) -- T + 20 put the face's top edge right on top of the
+           titlebar, covering "Samantha" behind her own face on a phone
+           boot (real bug seen live on the deployed demo). */
+        int face_top = T + 44;
+        int half = face_top + ((int)window_height() - face_top) / 2;
+        int cy = chat_face_draw_big(face_top, half);
         render_wrapped_text("Tell me what to do.", 20, cy + 16, (int)window_width() - 40, 20, CHAT_DIM);
     } else {
         chat_face_draw_big(T + 20, bottom - 76);

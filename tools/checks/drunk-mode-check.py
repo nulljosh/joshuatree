@@ -56,7 +56,7 @@ try:
             "-qmp", f"unix:/tmp/jt-drunk-qmp,server,nowait",
             "-serial", f"file:{LOG}",
             "-nographic", "-monitor", "none",
-            "-device", "sb16", "-audiodev", "none,id=a0"
+            "-device", "sb16,audiodev=a0", "-audiodev", "none,id=a0"
         ])
 
     time.sleep(2)
