@@ -104,6 +104,26 @@ try {
     globalThis.fetch = realFetch;
   }
 }
+// The demo's "where am I?" gets the visitor's own location from request.cf,
+// never ip-api.com: fetched from the Worker, ip-api sees Cloudflare's data
+// center (Vancouver for a Langley visitor). Numeric lat/lon, ip-api field
+// names, and the real upstream is never called.
+{
+  const realFetch = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = async () => { called = true; return new Response("{}", { status: 200 }); };
+  try {
+    const req = new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("http://ip-api.com/json/"));
+    Object.defineProperty(req, "cf", { value: { latitude: "49.10107", longitude: "-122.65883", city: "Langley", region: "British Columbia", country: "CA" } });
+    const res = await handleProxy(req);
+    const body = await res.json();
+    check("ip-api lookups answer with the visitor's city from request.cf", res.status === 200 && body.city === "Langley");
+    check("...with numeric lat/lon, the shape kernel.c's geo_fetch reads", body.lat === 49.10107 && body.lon === -122.65883);
+    check("...without calling ip-api.com (it would see Cloudflare, not the visitor)", !called);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
 // The other two allowed hosts are untouched -- real map/tile services,
 // no known scheme restriction, so forcing a scheme there would be an
 // unjustified special case, not a fix for a real, confirmed problem.
