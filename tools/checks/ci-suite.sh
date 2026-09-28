@@ -51,6 +51,8 @@ cd "$(dirname "$0")/../.."
 manifest() {
 cat <<'EOF'
 once |7|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
+once |7|Kernel memory keeps 16KB clear of the program window (toolchain drift guard)|python3 ./tools/checks/bss-margin-check.py
+once |7|Samantha's face loops wrap without a seam|python3 ./tools/checks/face-frames-check.py
 once |5|The landing logo rebuilds byte for byte from tools/gen/logo.py|./tools/checks/logo-check.sh
 once |6|The landing demo downloads the kernel once, gzipped|./tools/checks/kernel-gz-check.sh
 retry|0|Boot check|./check.sh
