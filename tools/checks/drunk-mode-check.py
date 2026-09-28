@@ -42,7 +42,7 @@ def check_horizontal_variance(img_bytes):
 try:
     if os.path.exists(LOG): os.remove(LOG)
 
-    kernel = "kernel/kernel.elf"
+    kernel = "kernel.elf"
     if not os.path.exists(kernel):
         print(f"FAIL: {kernel} not found (run 'make kernel.elf' first)")
         sys.exit(1)

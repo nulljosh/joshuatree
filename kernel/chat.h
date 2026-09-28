@@ -914,13 +914,14 @@ static const char *chat_ptt_record(int T, int x, int you_w, int body_w) {
     }
     if (!captured) { kfree(pcm); return "nothing recorded"; }
     chat_draw_status("listening to you ...");
-    static char resp[1024];
+    char resp[1024]; /* stack, not .bss -- tools/checks/bss-margin-check.py keeps the ring-3
+                         window's margin real, and this is only ever live for this one call */
     int respn = http_post_timeout("joshuatree.heyitsmejosh.com", "/api/listen", 80,
                                    (const char *)pcm, captured, resp, sizeof(resp) - 1, CHAT_LISTEN_TIMEOUT_TICKS);
     kfree(pcm);
     if (respn <= 0 || http_last_status() != 200) return "couldn't hear that";
     resp[respn] = 0;
-    static char text[CHAT_CONTENT_MAX];
+    char text[CHAT_CONTENT_MAX]; /* stack, like every other chat_process_message caller's msg[] */
     if (!json_extract_string(resp, "text", text, sizeof(text)) || !text[0]) return "didn't catch that";
     return chat_process_message(text, T, x, you_w, body_w);
 }
