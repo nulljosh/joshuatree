@@ -82,16 +82,20 @@ try:
     def get(x, y): return px[x, y][:3]
     def close(a, b, tol=10): return all(abs(a[i] - b[i]) <= tol for i in range(3))
 
-    # Titlebar/top region: gui_draw_app_titlebar's traffic-light dots sit at
-    # (26,20)/(46,20)/(66,20), always drawn regardless of network (unlike
-    # her real face photo, which needs facehost= reachable -- this headless
-    # boot has no NIC, same caveat samantha-boot-check.py notes). A real,
-    # saturated red dot there is real, positioned ink, not a flat background.
-    dot = get(52, 40)
-    if close(dot, GUI_BG, 30):
-        fail = 1; print(f"FAIL: titlebar dot at (26,20) looks like plain background {dot} -- top region not drawn")
+    # Titlebar/top region: gui_draw_app_titlebar always draws something
+    # here regardless of network (unlike her real face photo, which needs
+    # facehost= reachable -- this headless boot has no NIC, same caveat
+    # samantha-boot-check.py notes). Desktop mode draws three traffic-
+    # light dots at (26,20)/(46,20)/(66,20); v1.8.0 replaced that with a
+    # single tappable back chevron ("<") at (18,10) for boot_to_phone (no
+    # Esc key on a real phone) -- scan the whole titlebar strip for real
+    # ink rather than one dot's exact old pixel, so this still passes
+    # either way.
+    top_has_ink = any(not close(get(x, y), GUI_BG, 30) for x in range(20, 140, 4) for y in range(10, 40, 4))
+    if not top_has_ink:
+        fail = 1; print("FAIL: titlebar/back-chevron region looks like plain background -- top region not drawn")
     else:
-        print(f"PASS: titlebar region has real content at (26,20): rgb={dot}")
+        print("PASS: titlebar region has real content (back chevron)")
 
     # Input box: chat_boot_samantha_open draws a solid white rect at
     # (20, bottom-30) .. (width-20, bottom-10), bottom = height-40 = 892,
@@ -299,59 +303,96 @@ try:
                         return True
             return False
 
-        # Grid geometry from kernel/phone_home.h's phone_home_home_grid_geom:
-        # PHONE_HOME_COLS=4, cell_w=430/4=107, cell_h=96, tile=52,
-        # x0=0, y0=PHONE_STATUS_H(44)+20=64. cell (row,col) centre:
+        # Grid geometry from kernel/phone_home.h's phone_home_grid_geom:
+        # PHONE_HOME_COLS=5 (v1.8.0: 4 cols put 26 apps at 7 rows and the
+        # last row -- Activity, Clock -- never fit inside the 760px
+        # screen, unreachable by any tap; 5 cols is 6 rows, clears it with
+        # real margin), cell_w=430/5=86, cell_h=96, tile=48, x0=0,
+        # y0=PHONE_STATUS_H(44)+12=56. cell (row,col) centre:
         # cx = col*cell_w + cell_w//2, cy = y0 + row*cell_h + tile.
-        CELL_W, CELL_H, TILE, Y0 = 107, 96, 52, 64
+        COLS = 5
+        CELL_W, CELL_H, TILE, Y0 = 86, 96, 48, 56
 
         def cell_center(icon):
-            row, col = icon // 4, icon % 4
+            row, col = icon // COLS, icon % COLS
             return col * CELL_W + CELL_W // 2, Y0 + row * CELL_H + TILE
+
+        # All 26 real apps' cells must land inside the 760px logical
+        # screen (no scrolling) -- the exact bug Joshua's screenshot
+        # review caught at 4 columns (Activity idx24, Clock idx25 sitting
+        # off the bottom, unreachable by any tap).
+        GUI_APPS_FOLDER = 26
+        offscreen = [i for i in range(GUI_APPS_FOLDER) if cell_center(i)[1] + 24 > LOGICAL_H]
+        if offscreen:
+            fail = 1; print(f"FAIL: {len(offscreen)} app cell(s) fall below the {LOGICAL_H}px screen: {offscreen}")
+        else:
+            print(f"PASS: all {GUI_APPS_FOLDER} app cells fit inside the {LOGICAL_H}px screen, no scrolling needed")
 
         cal_cx, cal_cy = cell_center(2)   # Calendar, APPS[2]
         key_cx, key_cy = cell_center(9)   # Keyrate, APPS[9], ring-3
+        act_cx, act_cy = cell_center(24)  # Activity, APPS[24] -- the row the 4-col grid used to drop
+        clk_cx, clk_cy = cell_center(25)  # Clock, APPS[25]
 
         if not not_bg(px_home, cal_cx, cal_cy):
             fail = 1; print(f"FAIL: no icon drawn at Calendar's grid cell ({cal_cx},{cal_cy})")
         elif not not_bg(px_home, key_cx, key_cy):
             fail = 1; print(f"FAIL: no icon drawn at Keyrate's grid cell ({key_cx},{key_cy})")
+        elif not not_bg(px_home, act_cx, act_cy):
+            fail = 1; print(f"FAIL: no icon drawn at Activity's grid cell ({act_cx},{act_cy}) -- last row still not fitting")
+        elif not not_bg(px_home, clk_cx, clk_cy):
+            fail = 1; print(f"FAIL: no icon drawn at Clock's grid cell ({clk_cx},{clk_cy}) -- last row still not fitting")
         else:
-            print(f"PASS: home grid drew real icons at Calendar ({cal_cx},{cal_cy}) and Keyrate ({key_cx},{key_cy})")
+            print(f"PASS: home grid drew real icons at Calendar ({cal_cx},{cal_cy}), Keyrate ({key_cx},{key_cy}), and the last row's Activity/Clock")
 
-        CLOSE_RED = (0xFF, 0x5F, 0x57)
+        # v1.8.0: phone has no Esc key, so gui_draw_app_titlebar's desktop
+        # traffic lights are replaced with a single tappable back chevron
+        # (a plain "<" glyph, ink on cream) for boot_to_phone -- no more
+        # saturated red dot to sample. Check for real ink in the chevron's
+        # top-left corner instead, then prove the tap itself works by
+        # clicking there and confirming it lands back on the grid, the
+        # same as Esc does below.
+        def has_ink(px, x, y, bg=GUI_BG, tol=20):
+            for dx in range(0, 20, 2):
+                for dy in range(0, 16, 2):
+                    p = px[(x + dx) * SC + 1, (y + dy) * SC + 1]
+                    if any(abs(p[i] - bg[i]) > tol for i in range(3)):
+                        return True
+            return False
 
-        def is_red(px, x, y): return max(abs(px[x * SC + 1, y * SC + 1][i] - CLOSE_RED[i]) for i in range(3)) <= 20
-
-        # Calendar: tap it, confirm the full-screen titlebar's close dot
-        # (gui_draw_app_titlebar, drawn at logical (26,20) whenever
-        # gui_app_windowed was 0 on entry -- the exact branch
-        # gui_apps_launch takes from phone_home_run), then Esc back.
+        # Calendar: tap it, confirm the full-screen titlebar's back
+        # chevron (gui_draw_app_titlebar, drawn at logical (18,10)
+        # whenever gui_app_windowed was 0 on entry -- the exact branch
+        # gui_apps_launch takes from phone_home_run), then tap the
+        # chevron itself (gui_app_mouse_tick's phone back-zone) instead
+        # of Esc -- there is no Esc key on a real phone.
         move3(cal_cx, cal_cy); time.sleep(0.3); click3(); time.sleep(1.0)
         dump3(CAL_DUMP)
         img_cal, px_cal = load3(CAL_DUMP)
         img_cal.save(APP_PNG)
-        if not is_red(px_cal, 26, 20):
-            fail = 1; print(f"FAIL: Calendar didn't open full screen -- no titlebar close dot at (26,20): {px_cal[53,41]}")
+        if not has_ink(px_cal, 12, 4):
+            fail = 1; print("FAIL: Calendar didn't open full screen -- no back chevron drawn near (18,10)")
         else:
-            print("PASS: Calendar opened full screen below the status bar (titlebar close dot found)")
+            print("PASS: Calendar opened full screen below the status bar (back chevron found)")
 
-        key3("esc"); time.sleep(0.6)
+        move3(20, 15); time.sleep(0.3); click3(); time.sleep(0.6)  # tap the back chevron, not Esc
         dump3(BACK1_DUMP)
         _, px_back1 = load3(BACK1_DUMP)
         if not not_bg(px_back1, cal_cx, cal_cy):
-            fail = 1; print("FAIL: Esc from Calendar didn't return to the home grid (Calendar's icon cell is blank)")
+            fail = 1; print("FAIL: tapping the back chevron from Calendar didn't return to the home grid (Calendar's icon cell is blank)")
         else:
-            print("PASS: Esc from Calendar returns to the home grid")
+            print("PASS: tapping the back chevron from Calendar returns to the home grid, same close path as Esc")
 
         # Keyrate: same round trip, a real ring-3 program this time
-        # (kernel/ring3app.c), proving the full-screen host isn't
-        # in-kernel-apps-only.
+        # (kernel/ring3app.c), proving the full-screen host and the
+        # chevron tap-to-back both work for ring-3 apps too, not just
+        # in-kernel ones. This one exits via a real Esc keypress instead,
+        # to prove the chevron tap and Esc still land on the exact same
+        # grid, not two different close paths.
         move3(key_cx, key_cy); time.sleep(0.3); click3(); time.sleep(1.0)
         dump3(KEY_DUMP)
         _, px_key = load3(KEY_DUMP)
-        if not is_red(px_key, 26, 20):
-            fail = 1; print(f"FAIL: Keyrate (ring-3) didn't open full screen -- no titlebar close dot at (26,20): {px_key[53,41]}")
+        if not has_ink(px_key, 12, 4):
+            fail = 1; print("FAIL: Keyrate (ring-3) didn't open full screen -- no back chevron drawn near (18,10)")
         else:
             print("PASS: Keyrate (ring-3) opened full screen below the status bar")
 

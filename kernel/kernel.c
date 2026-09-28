@@ -961,6 +961,7 @@ static int boot_to_samantha;
    the demo boots 1:1 into what a phone screen actually is, rather than
    shrinking the desktop's layout down to unreadable text. */
 static int boot_to_phone;
+static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
 static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 static int dock_hover = -1; /* slot whose label is showing */
@@ -4458,8 +4459,8 @@ void gui_app_mouse_tick(void){
     if (app_cursor_y < 0) app_cursor_y = 0;
     if (app_cursor_x > (int)window_width() - CURSOR_W) app_cursor_x = (int)window_width() - CURSOR_W;
     if (app_cursor_y > (int)window_height() - CURSOR_H) app_cursor_y = (int)window_height() - CURSOR_H;
-    /* Live window drag (see app_win_x's comment). Press edge: arm only in
-       the title band, right of the three lights (x + 80 on), so the red
+    if (boot_to_phone) phone_back_zone_tick(buttons, app_drag_held, app_cursor_x, app_cursor_y); /* phone_home.h: back-chevron tap, no Esc key on a phone */ /* Live window drag (app_win_x's comment). Press edge: arm only in the
+       title band, right of the three lights (x + 80 on), so the red
        close light and the app's own content keep their click semantics. */
     int held = buttons & 1;
     if (held && !app_drag_held) {
@@ -4556,14 +4557,14 @@ static void gui_wait_close(void){
    minimize/maximize wait on the actual windowing system already queued in
    roadmap.md's later product ideas, not a shortcut bolted on here. */
 void gui_draw_app_titlebar(const char *title){
-    if (!gui_app_windowed) {
-        gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
-        gui_fill_circle(46, 20, 6, 0x00FFD64A, 0x00FAF8F6);
-        gui_fill_circle(66, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
-        font_draw_string("x", 23, 12, 0x00602B28, -1);
-        font_draw_string("-", 43, 12, 0x00624A20, -1);
-        font_draw_string(title, 84, 12, 0x00555555, -1);
-    }
+    if (gui_app_windowed) return;
+    if (boot_to_phone) { phone_app_titlebar_draw(title); return; } /* kernel/phone_home.h: back chevron, no Esc key on a phone */
+    gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
+    gui_fill_circle(46, 20, 6, 0x00FFD64A, 0x00FAF8F6);
+    gui_fill_circle(66, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
+    font_draw_string("x", 23, 12, 0x00602B28, -1);
+    font_draw_string("-", 43, 12, 0x00624A20, -1);
+    font_draw_string(title, 84, 12, 0x00555555, -1);
 }
 
 /* Split into a content-only draw plus the old blocking entry point: the

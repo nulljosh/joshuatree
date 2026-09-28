@@ -19,8 +19,41 @@
    (ring3app.c's viewport is that same app_view_w/app_view_h), so the
    grid below calls it directly instead of re-deriving the same host. */
 
-#define PHONE_HOME_COLS 4
+#define PHONE_HOME_COLS 5
 #define PHONE_STATUS_H  44
+
+/* v1.8.0 roadmap items 2/2: a phone has no Esc key, so the desktop's
+   three traffic lights on an open app (gui_draw_app_titlebar's own
+   branch) are replaced with a single tappable back chevron for
+   boot_to_phone, forward-declared near boot_to_phone's own definition so
+   gui_draw_app_titlebar and gui_app_mouse_tick (both defined well above
+   this #include) can call them. */
+static void phone_app_titlebar_draw(const char *title){
+    /* The home grid's status bar (its clock, centered at this same y)
+       and this titlebar share the same top strip, and nothing else
+       clears it before drawing -- without this the app's title rendered
+       on top of the stale clock digits underneath (caught in the first
+       screenshot of a real app open). */
+    window_rect(0, 0, (int)window_width(), 40, GUI_BG);
+    font_draw_string("<", 18, 10, 0x001C1C1E, -1);
+    int tw = font_string_width(title);
+    font_draw_string(title, ((int)window_width() - tw) / 2, 12, 0x00555555, -1);
+}
+/* Called every gui_app_mouse_tick while an app is open on phone. The
+   chevron lives in the top 40px strip, outside every app's own content
+   viewport (which starts at y=40), so no app ever sees a tap up here as
+   its own click -- a tap consumes the click edge itself (same as the
+   desktop's traffic-light drag-arm does for its own zone, right below
+   this call in gui_app_mouse_tick) and injects the real ESC make code,
+   so the app closes through the exact kbd_pop()==27 path a keyboard's
+   Esc key already drives: one close path, not a second one bolted on
+   for touch. */
+static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y){
+    if ((buttons & 1) && !app_drag_held && cursor_y < 40 && cursor_x < 60) {
+        mouse_click_edge(); /* consumed here: the app underneath never sees this tap */
+        kbd_inject(0x01);
+    }
+}
 
 /* Status bar: same data gui_draw_menubar reads (cmos_read_time_stable,
    weather_text), phone-styled -- centered weight, no Apple-menu logo (a
@@ -56,14 +89,21 @@ static void phone_status_bar_draw(void){
    entries with no meaning on a screen that already shows every app. */
 static void phone_home_grid_geom(int *x0, int *y0, int *cell_w, int *cell_h, int *tile){
     *cell_w = (int)window_width() / PHONE_HOME_COLS;
-    /* GUI_APPS_FOLDER real apps at 4 cols is 7 rows (26/4 rounded up); 96px
-       a row is the largest cell_h that still fits all 7 inside a real
-       phone's 760px tall screen below the status bar, so every app in
-       APPS[] stays reachable with no scrolling, not just the first 24. */
+    /* v1.8.0: 4 columns put GUI_APPS_FOLDER's 26 real apps at 7 rows, and
+       row 6 (Activity, Clock) silently never drew -- Joshua's screenshot
+       review caught the two icons missing off the bottom, unreachable by
+       any tap. 5 columns instead makes it 6 rows (26/5 rounded up), which
+       clears the 760px phone screen with real margin to spare (last row's
+       label bottom lands well above 760 -- see the comment on the row-fit
+       constant below), not just barely inside it, so this isn't another
+       boundary case waiting to reproduce the same bug from a slightly
+       taller status bar or a future 27th app. 48px tiles at 86px-wide
+       cells still read as real retina-crisp icons (close to the desktop
+       dock's own tile size), not shrunk-to-fit thumbnails. */
     *cell_h = 96;
-    *tile = 52;
+    *tile = 48;
     *x0 = 0;
-    *y0 = PHONE_STATUS_H + 20;
+    *y0 = PHONE_STATUS_H + 12;
 }
 static void phone_home_draw_grid(void){
     int x0, y0, cell_w, cell_h, tile;
@@ -105,6 +145,18 @@ static void phone_home_run(void){
     gui_app_windowed = 0;
     int mx = (int)window_width() / 2, my = (int)window_height() / 2;
     for (;;) {
+        /* v1.8.0: the desktop menu bar's own weather fetch (same
+           weather_fetch(), same weather_text the status bar reads) lives
+           inside gui_run's dock loop below, which phone mode never
+           reaches -- phone_status_bar_draw was reading weather_text but
+           nothing here ever populated it, so it stayed permanently blank
+           on a real network boot, not just headless. Same "once, then
+           every ten minutes" gate as the desktop, so a tap-heavy home
+           screen doesn't refetch on every repaint. */
+        if (!weather_tried_once || ticks() - weather_last_tick > 100 * 600) {
+            weather_tried_once = 1;
+            weather_fetch();
+        }
         phone_home_full_repaint();
         window_present(); sleep_ticks(5);
         mouse_click_edge_sync();

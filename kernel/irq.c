@@ -95,6 +95,16 @@ void kbd_drain(void) {
     while (kbd_pop() >= 0) {}
 }
 
+/* v1.8.0: same ring buffer IRQ1 writes into, written from software instead
+   of a real scancode arriving off port 0x60. Used only by the phone home
+   screen's back-chevron tap so it can hand every app's existing
+   kbd_pop()==27 close check a real ESC make code, rather than teaching
+   every app a second close condition. */
+void kbd_inject(u8 sc) {
+    int next = (kbd_head + 1) % KBD_BUF_SIZE;
+    if (next != kbd_tail) { kbd_buf[kbd_head] = sc; kbd_head = next; }
+}
+
 unsigned int ticks(void) { return tick_count; }
 
 /* PIT channel 0, mode 3 (square wave), reload for ~100Hz from the 1.193182MHz base. */
