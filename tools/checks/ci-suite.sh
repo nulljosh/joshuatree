@@ -54,6 +54,7 @@ once |7|Dock slot constants agree with kernel.c (static drift guard)|python3 ./t
 once |5|The landing logo rebuilds byte for byte from tools/gen/logo.py|./tools/checks/logo-check.sh
 once |6|The landing demo downloads the kernel once, gzipped|./tools/checks/kernel-gz-check.sh
 retry|0|Boot check|./check.sh
+retry|0|DHCP client leases real SLIRP config, DNS+HTTP still work, nodhcp keeps the old fixed path|./tools/checks/dhcp-check.sh
 retry|0|Benchmarks run and report every number|./tools/checks/bench-check.sh
 retry|4|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
 once |7|PNG decoder, host harness|./tools/checks/png-host-check.sh

@@ -78,7 +78,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `drivers/pci.c` | Walks the PCI bus so the kernel can find its own network card. |
 | `drivers/rtl8139.c` | Driver for the RTL8139 card, QEMU's default. |
 | `drivers/ne2k.c` | Driver for the NE2000 card, which is what the browser emulator provides. The kernel probes for RTL8139 first and falls back to this. |
-| `drivers/net.c` | Ethernet, ARP, IPv4, UDP, DNS and TCP, built up from raw frames on top of whichever card was found. |
+| `drivers/net.c` | Ethernet, ARP, IPv4, UDP, DNS and TCP, built up from raw frames on top of whichever card was found. `net_init` leases a real address by DHCP (DISCOVER/OFFER/REQUEST/ACK) first, falling back to the old fixed config if nothing answers; `nodhcp` on the command line skips it. |
 | `drivers/http.c` | `http_get` and `http_post` over that TCP. Plain HTTP only. There is no TLS. |
 | `drivers/html.c` | A deliberately tiny HTML-to-text converter, enough to read a page or a ported app. |
 | `drivers/json.c` | A small JSON reader for the weather, geolocation and chat responses. |

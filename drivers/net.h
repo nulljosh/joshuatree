@@ -15,6 +15,19 @@
    pattern every call site used to need. */
 int net_init(unsigned int our_ip);
 
+/* DHCP (RFC 2131 minimum: DISCOVER/OFFER/REQUEST/ACK), run once from inside
+   net_init before our_ip is considered final. Set to 1 (e.g. from a
+   "nodhcp" multiboot command-line flag, see kmain) to skip it entirely and
+   go straight to net_init's caller-supplied fixed IP, the old behavior.
+   Must be set before the first net_init call to have any effect. */
+extern int net_nodhcp;
+
+/* What DHCP actually leased us (host byte order), 0 if net_nodhcp was set
+   or no server ever answered and net_init fell back to its fixed IP. */
+unsigned int net_get_gateway(void);
+unsigned int net_get_dns(void);
+unsigned int net_get_netmask(void);
+
 /* Hardware-agnostic single raw-frame send and MAC accessor, for low-level
    diagnostics (kernel.c's "nettest"/"ifconfig") that used to call
    rtl8139_send/rtl8139_get_mac directly and so silently assumed RTL8139. */
