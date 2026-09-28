@@ -957,6 +957,20 @@ static int boot_to_samantha;
    the demo boots 1:1 into what a phone screen actually is, rather than
    shrinking the desktop's layout down to unreadable text. */
 static int boot_to_phone;
+/* v1.8.5 demo A+ pass, rubric item 3: every app drew its own keyboard-only
+   hint line ("up/down to pick ... esc closes") by calling font_draw_string
+   directly, one call site per app (~20 of them across mail.h, fieldbook.h,
+   reminders.h, etc, plus kernel.c's own Trash/Recents/Terminal). On a phone
+   there is no keyboard and no Esc key (phone_home.h's back chevron is the
+   only way back), so that whole line was dead advice shown to a visitor
+   who can only tap. Rather than touch all ~20 sites individually, they now
+   route through this one helper: draws nothing when boot_to_phone, draws
+   exactly the same font_draw_string call otherwise, so desktop is pixel-
+   identical and phone silently drops the line. */
+static void gui_draw_hint(int x, int y, const char *text, unsigned int color){
+    if (boot_to_phone) return;
+    font_draw_string(text, x, y, color, -1);
+}
 static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
 static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
@@ -5281,7 +5295,7 @@ static void term_render(const char *input, unsigned int input_len){
     for (unsigned int i = 0; i < input_len && x < 780; i++, x += 8)
         font_draw_char_mono((unsigned char)input[i], x, py, 0x00F2E9D8, -1);
     window_rect(x, py, 8, 15, 0x00C98A3E); /* block cursor */
-    font_draw_string("esc closes   |   same shell as text mode", 16, (int)window_height() - 28, 0x00807468, -1);
+    gui_draw_hint(16, (int)window_height() - 28, "esc closes   |   same shell as text mode", 0x00807468);
 }
 
 static void gui_launch_terminal(void){
@@ -5427,7 +5441,7 @@ static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, in
        dock draws APPS[icon].name there); a second "Apps" heading here
        just repeated it. Keep the key-hint line, moved up into the space
        the heading used to take. */
-    font_draw_string("arrow keys to move   enter opens   esc closes", x0, 40, 0x006A6064, -1);
+    gui_draw_hint(x0, 40, "arrow keys to move   enter opens   esc closes", 0x006A6064);
     gui_apps_draw_grid(scroll_offset, sel, x0, y0, cell_w, cell_h, tile);
     serial_puts("appsgridrepaint\n");
 }
@@ -5606,7 +5620,7 @@ static void gui_launch_trash(void){
             font_draw_string("Trash is empty.", 20, T + 52, 0x001C1C1E, -1);
             font_draw_string("Deleting a file with rm puts it here first.", 20, T + 76, 0x00807468, -1);
         } else {
-            font_draw_string("up/down to pick   r restores   e empties   esc closes", 20, T + 52, 0x00807468, -1);
+            gui_draw_hint(20, T + 52, "up/down to pick   r restores   e empties   esc closes", 0x00807468);
             for (int i = 0; i < n; i++) {
                 int y = T + 84 + i * 22;
                 if (i == sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);
