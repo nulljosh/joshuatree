@@ -3,7 +3,7 @@
 static char editor_buffer[4096];
 static int editor_length, editor_position, editor_loaded, editor_dirty;
 static int editor_family, editor_size = 1, editor_weight, editor_scroll;
-static int editor_mouse_x = 400, editor_mouse_y = 300;
+int editor_mouse_x = 400, editor_mouse_y = 300;
 static const char *editor_status = "NOTES.TXT   |   Ctrl+S saves   Esc closes";
 
 /* v1.2.0: real text selection. -1 means no selection; otherwise this is

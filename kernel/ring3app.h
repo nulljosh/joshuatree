@@ -1,0 +1,45 @@
+#ifndef RING3APP_H
+#define RING3APP_H
+/* 1.7.7: the first app that leaves the kernel. Keyrate's dock entry runs
+   user/keyrate.c as a real ring-3 process instead of calling
+   drivers/app_keyrate.c's in-kernel function. The launcher is also the
+   supervisor: it waits for the process, and whether the program exited
+   on its own or was reaped by idt.c's ring-3 fault path, it tears the
+   window down and hands the desktop back. See ring3app.c. */
+void keyrate_ring3_open(void);
+
+/* `open=keyrate` launches Keyrate from the dock path the moment the
+   desktop is up, so tools/checks/ring3app-check.py can drive the ring-3
+   app without locating its tile in the Apps folder first. Only Keyrate
+   for now: the one app that runs as a real process.
+   ring3app_autoopen_arm: kmain calls this with the boot command line;
+   arms an internal flag if it says `open=keyrate`.
+   ring3app_autoopen_run: gui_run calls this once, right after the first
+   desktop paint; if armed, launches Keyrate from the dock path (mx, my
+   are the cursor position to restore after) and disarms. No-op otherwise. */
+void ring3app_autoopen_arm(const char *cmdline);
+void ring3app_autoopen_run(int mx, int my);
+
+/* SYS_WINDOW_POLL / SYS_WINDOW_OPEN support, called from kernel/syscall.c;
+   defined in ring3app.c alongside the rest of the ring-3 window plumbing.
+   The internals they read (kbd_map, gui_app_mouse_tick, gui_close_was_click,
+   gui_app_windowed, app_view_w/h, cursor_saved_x/y, editor_mouse_x/y,
+   gui_draw_desktop, gui_cursor_save, gui_draw_cursor, gui_launch_from_dock)
+   are kernel.c statics turned into plain globals/functions for this one
+   external user. */
+int gui_poll_event(int *a, int *b);
+int gui_app_view_size(unsigned int *w, unsigned int *h);
+
+char kbd_map(int sc);
+void gui_app_mouse_tick(void);
+extern int gui_close_was_click;
+extern int gui_app_windowed;
+extern int app_view_w, app_view_h;
+
+extern int cursor_saved_x, cursor_saved_y;
+extern int editor_mouse_x, editor_mouse_y;
+void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my);
+void gui_cursor_save(int x, int y);
+void gui_draw_cursor(int x, int y);
+void gui_launch_from_dock(int icon);
+#endif

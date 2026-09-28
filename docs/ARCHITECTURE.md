@@ -47,6 +47,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `kernel/symtab.h` + `kernel/backtrace.c` | Crash reports with real function names. `kernel/symtab.c` (generated, never committed) is a sorted address-to-name table read from `nm -n` on a first-pass link of the kernel, done twice by the Makefile so the table can live inside the very kernel it describes. `backtrace.c` binary-searches that table for a fault's EIP and walks a few EBP stack frames above it, printing `at <func>+0x<off>` lines over serial and on the panic screen. `kernel/symtab_stub.c` is the empty placeholder table pass one links against, since the real table doesn't exist yet at that point. |
 | `kernel/pic.c` | Routes hardware signals, like a key press, so they never get confused with processor errors. |
 | `kernel/irq.c` + `kernel/irq_stubs.S` | The hardware interrupt handlers. The timer tick drives the scheduler, the keyboard fills a ring buffer. |
+| `kernel/entropy.c` + `kernel/entropy.h` | The kernel's only source of unpredictable bytes: an HMAC_DRBG (BearSSL SHA-256) seeded from RDRAND when the CPU has it, RDTSC jitter and interrupt timing. Password salts draw from it. Boot logs `entropy: sources=` over serial. |
 | `kernel/syscall.c` | The `int 0x80` dispatch table. Numbers and calling convention are Linux's, so the ABI needs no translation. The contract is written down in `docs/SYSCALL-ABI.md`. |
 
 ### Memory
@@ -57,6 +58,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `kernel/paging.c` | Decides which memory each program can see, and keeps programs out of the kernel's. |
 | `kernel/kheap.c` | `kmalloc` and `kfree`. A first-fit free list that grows one frame at a time. |
 | `lib/libc.c` | `memcpy`, `memset`, `strlen` and the other handful of primitives a freestanding kernel cannot live without. |
+| `third_party/bearssl/` | Vendored BearSSL 0.6 subset (MIT): `sha2small.c`, `hmac.c`, `hmac_drbg.c`, the two big-endian codec files, the public headers and a one-line `string.h` shim onto `lib/libc.h`. Nothing modified; see its README.md. |
 
 ### Tasks and user programs
 
@@ -69,6 +71,8 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `user/note.c` | The second user program, and the first one worth running: prints a file, appends a line, seeks. Exercises the v2 syscalls. |
 | `user/libjt/` | A small C library for user programs: `string.c`, `stdlib.c` (a fixed-arena `malloc`), `stdio.c` (`printf` and friends over the write syscall), plus `ctype.h` and `unistd.h`. Built into `libjt.a`. |
 | `user/wc.c` | Unix `wc`, counts lines, words and bytes. The first program linked against libjt instead of raw syscalls. |
+| `user/keyrate.c` | Keyrate, the typing test, as a ring-3 program: the first app to leave the kernel (1.7.7). Gets its window from `SYS_WINDOW_OPEN`, its keys from `SYS_WINDOW_POLL`, draws its own 8x16 glyphs. The backquote key crashes it on purpose. |
+| `kernel/ring3app.c` + `kernel/ring3app.h` | The launcher and supervisor for apps that run as ring-3 processes. Seeds the binary onto the VFS, runs it with `exec_user`, and when it exits or is reaped after a fault, logs what happened and hands the desktop back. |
 
 ### Storage
 
@@ -200,7 +204,7 @@ sibling web apps, kept small on purpose.
 | Plan | `kernel/plan.h` | A ten-year timeline with a detail panel. |
 | Sparkjar | `kernel/sparkjar.h` | Post an idea, vote on ideas. |
 | Homeqi | `kernel/homeqi.h` | Eight feng shui questions about your home and a score. |
-| Keyrate | `drivers/app_keyrate.c`, `drivers/keyrate.h` | Typing test with endless random words and a live words-per-minute count. The first app compiled on its own instead of included into `kernel.c`. |
+| Keyrate | `user/keyrate.c`, `kernel/ring3app.c` (in-kernel copy still in `drivers/app_keyrate.c`, `drivers/keyrate.h`) | Typing test with endless random words and a live words-per-minute count. The first app compiled on its own, and as of 1.7.7 the first one running outside the kernel as a ring-3 process. |
 
 **Adding an app.** Every app is one row in `APPS[]` in `kernel/kernel.c`,
 and nothing else dispatches on an app's index: the dock, the Apps folder,

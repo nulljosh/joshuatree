@@ -1,21 +1,22 @@
 CC := clang
 CFLAGS := -target i386-unknown-none -ffreestanding -fno-stack-protector \
           -fno-pic -mno-sse -mno-mmx -fno-omit-frame-pointer -Wall -Wextra -O2 \
-          -Iboot -Ikernel -Idrivers -Ilib -MMD -MP
+          -Iboot -Ikernel -Idrivers -Ilib -Ithird_party/bearssl/inc -Ithird_party/bearssl/src -Ithird_party/bearssl/shim -MMD -MP
 LD := ld.lld
 # -fno-omit-frame-pointer: kernel/backtrace.c walks the EBP chain to print
 # crash-report frames (kernel/symtab.h). Without it clang's -O2 elides EBP
 # as a general-purpose register and the chain walk has nothing to follow.
 
 KERNEL_SRCS := kernel/gdt.c kernel/idt.c kernel/pic.c kernel/irq.c kernel/pmm.c \
-               kernel/paging.c kernel/kheap.c kernel/task.c kernel/exec.c kernel/ring3.c kernel/syscall.c \
-               kernel/gui_prims.c kernel/dock_geom.c kernel/app.c kernel/backtrace.c kernel/kernel.c
+               kernel/paging.c kernel/kheap.c kernel/task.c kernel/exec.c kernel/ring3.c kernel/ring3app.c kernel/syscall.c \
+               kernel/gui_prims.c kernel/dock_geom.c kernel/app.c kernel/backtrace.c kernel/entropy.c kernel/kernel.c
 KERNEL_ASM  := kernel/isr.S kernel/irq_stubs.S kernel/ring3_asm.S
 DRIVER_SRCS := drivers/ata.c drivers/blockdev.c drivers/ramdisk.c drivers/trash.c drivers/fat.c drivers/vfs.c drivers/ramfs.c drivers/pci.c drivers/vbe.c drivers/mouse.c drivers/vmmouse.c \
                drivers/window.c drivers/rtl8139.c drivers/ne2k.c drivers/net.c drivers/http.c drivers/html.c \
                drivers/json.c drivers/font.c drivers/app_keyrate.c drivers/app_toroid.c drivers/app_quotestreak.c drivers/app_calculator.c \
                drivers/serial.c drivers/sb16.c drivers/speak.c drivers/png.c drivers/jpeg.c drivers/ttf.c
-LIB_SRCS    := lib/libc.c
+LIB_SRCS    := lib/libc.c third_party/bearssl/src/sha2small.c third_party/bearssl/src/hmac.c \
+               third_party/bearssl/src/hmac_drbg.c third_party/bearssl/src/dec32be.c third_party/bearssl/src/enc32be.c
 
 OBJS := boot/boot.o $(KERNEL_ASM:.S=.o) $(KERNEL_SRCS:.c=.o) $(DRIVER_SRCS:.c=.o) $(LIB_SRCS:.c=.o) kernel/symtab.o
 PASS1_OBJS := $(filter-out kernel/symtab.o,$(OBJS))
@@ -165,6 +166,15 @@ user/wc.o: user/wc.c user/jtsys.h
 user/wc.bin: user/wc.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/wc.o user/libjt.a
 
+# 1.7.7: Keyrate as a ring-3 program (kernel/ring3app.c launches it from
+# the dock). Same flags, same link script, same flat image as the others;
+# it also pulls in drivers/vgafont.h as plain data for its glyphs.
+user/keyrate.o: user/keyrate.c user/jtsys.h drivers/vgafont.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/keyrate.bin: user/keyrate.o user/libjt.a user/note.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/keyrate.o user/libjt.a
+
 # The built binaries, embedded so `usertest`/`notetest`/`shell` can seed
 # them into the VFS on a machine with no disk (every headless check boot,
 # and the browser embed).
@@ -177,7 +187,11 @@ drivers/user_note.h: user/note.bin tools/gen/gen_user_bin.py
 drivers/user_wc.h: user/wc.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/wc.bin drivers/user_wc.h user_wc
 
+drivers/user_keyrate.h: user/keyrate.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/keyrate.bin drivers/user_keyrate.h user_keyrate
+
 kernel/kernel.o: drivers/user_hello.h drivers/user_note.h drivers/user_wc.h
+kernel/ring3app.o: drivers/user_keyrate.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -214,7 +228,7 @@ talk: kernel.elf dotfiles.img
 
 clean:
 	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf kernel.elf.pass1 kernel/symtab.c kernel/symtab_stub.o kernel/symtab_stub.d user/hello.o user/hello.bin drivers/user_hello.h \
-	      user/note.o user/note.bin drivers/user_note.h
+	      user/note.o user/note.bin drivers/user_note.h user/keyrate.o user/keyrate.bin drivers/user_keyrate.h
 	rm -f joshuatree.iso
 	rm -rf build/iso_root
 

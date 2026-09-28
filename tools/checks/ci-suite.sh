@@ -83,6 +83,7 @@ retry|4|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/r
 retry|6|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh
 retry|5|Ring-3 reference program against the v1 syscall ABI|./tools/checks/usertest-check.sh
 retry|3|Ring-3 program writing a real file against the v2 syscall ABI|./tools/checks/notetest-check.sh
+retry|1|Keyrate runs as a ring-3 process with its own window; crashing it leaves the desktop alive (v3 syscall ABI)|python3 ./tools/checks/ring3app-check.py
 retry|7|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
 retry|0|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
 once |7|Calendar date math, host harness|./tools/checks/check-calendar.sh
@@ -148,6 +149,7 @@ once |3|Worker /api/listen: Whisper transcription, 503 without the AI binding, r
 retry|3|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py
 once |2|Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
 retry|5|Accounts: create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py
+retry|3|Entropy pool: serial names its sources, two boots draw different salts|python3 ./tools/checks/entropy-check.py
 once |6|Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py
 once |6|Crash report names the faulting function, not just the exception kind|python3 ./tools/checks/panic-symbols-check.py
 once |7|Frame time: idle, dock hover and window open stay within budget|python3 ./tools/checks/frametime-check.py

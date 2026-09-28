@@ -11,6 +11,7 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
 ## The plan to 10
 
 - 2.0: Apps leave the kernel. Each app is its own protected program, so one crash can't take the machine down.
+  - 1.7.7 took the first step: Keyrate runs as a real ring-3 process with its own window, and crashing it on purpose leaves the desktop standing. Still to do before this line is checked: the other apps, ported the same way, one PR at a time.
 - 3.0: It boots a real computer. One reference mini PC: UEFI, USB keyboard, mouse and stick, a real disk, a real network card, real sound.
 - 4.0: True multitasking. A compositor, many windows, resize and minimize, apps that never freeze each other.
 - 5.0: The real internet. TLS built in, no proxy, and a web browser on top.

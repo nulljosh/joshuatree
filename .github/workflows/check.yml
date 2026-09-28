@@ -274,6 +274,18 @@ jobs:
       - name: A code PR bumps VERSION, so its merge cuts a release
         if: github.event_name == 'pull_request'
         run: ./tools/checks/version-bump-check.sh "origin/${{ github.base_ref }}"
+      # 1.7.9: 1.7.4 merged green, then every deploy failed on a wrangler.toml
+      # binding Cloudflare's API rejected (error 10021), and the live site sat
+      # on the old version. Only the real API catches that, so upload a
+      # version here without deploying it: nothing routes to it, but the
+      # config goes through the same validation the deploy will.
+      - name: Deploy config passes Cloudflare's own validation (upload, no deploy)
+        if: github.event_name == 'pull_request'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "no token on this PR (fork), skipping"; exit 0; fi
+          npx --yes wrangler versions upload --message "PR ${{ github.event.pull_request.number }} config check"
 
   # v75: real-network checks. geo-check.sh (v71) and wallpaper-check.py /
   # wallfx-check.py (v75) talk to ip-api.com, Open-Meteo and OpenTopoMap

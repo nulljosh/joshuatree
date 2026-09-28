@@ -23,6 +23,9 @@
 #include "kheap.h"
 #include "irq.h"
 #include "vfs.h"
+#include "exec.h"
+#include "window.h"
+#include "app.h"
 
 typedef unsigned int u32;
 typedef unsigned char u8;
@@ -40,8 +43,11 @@ typedef int (*syscall_fn)(u32 a, u32 b, u32 c);
 #define ESPIPE  29
 #define ENOSYS  38
 #define ENOENT   2
+#define EBUSY   16
+#define ENODEV  19
 
 extern void syscall_entry(void);
+static void window_release(int id); /* v3 windows, below */
 
 static int sys_exit(u32 code, u32 b, u32 c) {
     (void)b; (void)c;
@@ -345,6 +351,7 @@ static int sys_close(u32 fd, u32 b, u32 c) {
 
 void syscall_release_task(int id) {
     if (id < 0 || id >= TASK_SLOTS) return;
+    window_release(id);
     for (int i = FIRST_FD; i < MAX_FDS; i++) {
         /* v2: this also flushes. A program that writes and then exits
            without closing still gets its bytes out, which is what a caller
@@ -447,6 +454,85 @@ static int sys_sched_yield(u32 a, u32 b, u32 c) {
     return 0;
 }
 
+/* ---- windows (v3, 1.7.7) -------------------------------------------------
+   The first step of "apps leave the kernel": a ring-3 program gets the
+   app window the desktop already opened for it. No new windowing code:
+   the desktop draws the chrome and sets the viewport exactly as it does
+   for an in-kernel app (gui_launch_from_dock), then the program the
+   launcher exec'd asks for that viewport here. It gets a framebuffer of
+   the viewport's size at JT_USER_FB, mapped user-accessible, and draws
+   into it directly. SYS_WINDOW_POLL with JT_POLL_PRESENT copies the
+   buffer into the viewport through window_pixel, the same primitive every
+   in-kernel app draws with, so clipping and the back buffer come for free.
+
+   One window, one owner. The owner is recorded by task slot so
+   syscall_release_task can tear it down whether the program exited or was
+   reaped by idt.c's fault path: either way the pages go back to
+   supervisor-only and the desktop repaints, nothing waits on a program
+   that is no longer there. */
+static int win_owner = -1;
+static u32 win_w = 0, win_h = 0;
+
+int syscall_window_owner(void) { return win_owner; }
+
+/* Desktop side, kernel.c. */
+int  gui_app_view_size(unsigned int *w, unsigned int *h); /* 1 if an app viewport is open */
+int  gui_poll_event(int *a, int *b);                        /* non-blocking: JT_EV_* or 0 */
+
+static int sys_window_open(u32 info, u32 b, u32 c) {
+    (void)b; (void)c;
+    if (!paging_user_range_ok(info, sizeof(struct jt_window_info))) return -EFAULT;
+    int id = task_current();
+    if (id <= 0 || id >= TASK_SLOTS) return -EBADF;
+    if (win_owner >= 0 && win_owner != id) return -EBUSY;
+    u32 w, h;
+    if (!gui_app_view_size(&w, &h) || !w || !h) return -ENODEV;
+    if (w * h * 4 > JT_USER_FB_BYTES) return -ENOMEM;
+    u32 *fb = (u32 *)JT_USER_FB;
+    for (u32 i = 0; i < w * h; i++) fb[i] = 0; /* the previous program's frame is not this one's to read */
+    for (u32 off = 0; off < JT_USER_FB_BYTES; off += 4096) paging_set_user((void *)(JT_USER_FB + off));
+    win_owner = id; win_w = w; win_h = h;
+    struct jt_window_info *out = (struct jt_window_info *)info;
+    out->width = w; out->height = h; out->pitch = w * 4; out->pixels = fb;
+    serial_puts("syscall: window opened for ring-3 task\n");
+    return 0;
+}
+
+static void window_present_user(void) {
+    const u32 *fb = (const u32 *)JT_USER_FB;
+    for (u32 y = 0; y < win_h; y++)
+        for (u32 x = 0; x < win_w; x++)
+            window_pixel((int)x, (int)y, fb[y * win_w + x]);
+    window_present();
+}
+
+static int sys_window_poll(u32 ev, u32 flags, u32 c) {
+    (void)c;
+    if (!paging_user_range_ok(ev, sizeof(struct jt_event))) return -EFAULT;
+    if (win_owner != task_current()) return -EBADF;
+    if (flags & ~(u32)JT_POLL_PRESENT) return -EINVAL;
+    if (flags & JT_POLL_PRESENT) window_present_user();
+    int a = 0, b = 0;
+    int kind = gui_poll_event(&a, &b);
+    if (!kind) return -EAGAIN;
+    struct jt_event *out = (struct jt_event *)ev;
+    out->kind = (u32)kind; out->a = a; out->b = b;
+    return 1;
+}
+
+/* Called from syscall_release_task on exit or fault. Pages back to
+   supervisor-only is not something paging.h offers yet, so the buffer is
+   zeroed instead: the next program cannot read this one's frame, and
+   nothing at ring 3 can reach it without a live SYS_WINDOW_OPEN because
+   the loader zeroes and re-maps on the next exec. */
+static void window_release(int id) {
+    if (win_owner != id) return;
+    u32 *fb = (u32 *)JT_USER_FB;
+    for (u32 i = 0; i < win_w * win_h; i++) fb[i] = 0;
+    win_owner = -1; win_w = win_h = 0;
+    serial_puts("syscall: window released, task gone\n");
+}
+
 static const syscall_fn table[NSYSCALLS] = {
     [SYS_EXIT]        = sys_exit,
     [SYS_READ]        = sys_read,
@@ -457,6 +543,8 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_TIME]        = sys_time,
     [SYS_GETPID]      = sys_getpid,
     [SYS_SCHED_YIELD] = sys_sched_yield,
+    [SYS_WINDOW_OPEN] = sys_window_open,
+    [SYS_WINDOW_POLL] = sys_window_poll,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {

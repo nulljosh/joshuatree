@@ -16,19 +16,20 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-Main is 1.7.5 and live. 1.7.4 brought the OS its own network address (DHCP), drunk mode, the start of voice input, and landing polish. 1.7.5 fixed the deploy: a rate limit setting in the old format had kept the live site on 1.7.3.
+Main is 1.7.6 and live: the phone demo runs full width, iPhone audio unlocks properly, and the next-up line reads in plain words. This 1.7.7 batch brings Keyrate out into ring 3 with real crash isolation, a real randomness pool backing password salts, a fix for the phone face label, and a deploy-config check in CI. #268 (1-bit ordered dither) is being tested separately and merges on its own.
 
-Open: #268 (1.7.6, the kernel goes 1-bit with ordered dither; local suite running before it goes ready) and #267 (this file and MONEY.md). A Fable agent is on 2.0 step one: window and input syscalls for ring 3, Keyrate as the first app moved out, and a crash that returns to the desktop.
-
-kernel.c is 9,877 lines with every app still inside it. That number going down is the real progress bar for 2.0.
+kernel.c is still carrying every other app. That number going down is the real progress bar for 2.0.
 
 ## Next, in order
 
-1. Land #268, then the ring 3 Keyrate PR.
-2. Move apps out a few per PR, smallest first, each one added to the crash check.
-3. 1.8 phone home screen, in parallel with the moves (it only touches the desktop, not the apps).
-4. 1.9 touch and the on-screen keyboard.
-5. Before any encryption work: a real randomness pool in the kernel. Today's random numbers are predictable and they salt the passwords. After that, BearSSL on TLS 1.2 (decided 2026-09-28), ported, never hand written.
+1. Move passwords from salted hashes to PBKDF2.
+2. Call paging_clear_user on window release so a closed app's memory doesn't linger.
+3. Audit every syscall for unchecked user pointers.
+4. Move apps out a few per PR, smallest first, each one added to the crash check.
+5. 1.8 phone home screen, in parallel with the moves (it only touches the desktop, not the apps).
+6. 1.9 touch and the on-screen keyboard.
+
+This is a personal repo with no merge queue, so PRs get batched into one release branch instead of landing one at a time.
 
 ## Restart prompt
 

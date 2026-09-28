@@ -18,6 +18,9 @@
 #define KEY_CLICK      260
 #define KEY_WHEEL_UP   300
 #define KEY_WHEEL_DOWN 301
+#define KEY_COPY       302
+#define KEY_CUT        303
+#define KEY_PASTE      304
 
 /* One app, one entry. Every place the desktop used to switch on an app's
    index (launch, dock glyph, tile color, label, multiwindow content and

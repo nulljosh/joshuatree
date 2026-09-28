@@ -35,7 +35,7 @@ SECTIONS {
        release, which pushed .bss to a 12KB gap here (under the 16KB
        bss-margin-check floor). .dmabuf below still has 20KB of slack
        after this move, so there's real room before the next collision. */
-    .userimg 0xC0503000 (NOLOAD) : AT(0x00503000) {
+    .userimg 0xC0507000 (NOLOAD) : AT(0x00507000) {
         . += 8 * 4096; /* 7 pages of image + 1 page of user stack */
     }
 
@@ -49,9 +49,20 @@ SECTIONS {
         . += 0x10000;
     }
 
+    /* 1.7.7: the ring-3 window framebuffer (kernel/exec.h JT_USER_FB).
+       A program that asked for a window through SYS_WINDOW_OPEN draws
+       into these pages directly; the kernel copies them into the app
+       viewport on SYS_WINDOW_POLL. Big enough for the dock's app window
+       (804x345 pixels, 32bpp) and for the Apps folder viewport an app
+       launched from the grid runs in (832x450, 0x16DA00 bytes). NOLOAD like the two
+       above, and still inside the 8MB base map paging_set_user covers. */
+    .userfb 0xC0520000 (NOLOAD) : AT(0x00520000) {
+        . += 0x170000;
+    }
+
     . = ALIGN(4096);
     _kernel_end = . - 0xC0000000; /* physical, matching pmm.c's other physical addresses */
 }
 
-ASSERT(ADDR(.bss) + SIZEOF(.bss) <= 0xC0503000,
-       "kernel .bss has grown into the ring-3 program window at 0xC0503000; move JT_USER_BASE (kernel/exec.h), user/hello.ld and this section together")
+ASSERT(ADDR(.bss) + SIZEOF(.bss) <= 0xC0507000,
+       "kernel .bss has grown into the ring-3 program window at 0xC0507000; move JT_USER_BASE (kernel/exec.h), user/hello.ld and this section together")

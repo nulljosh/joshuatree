@@ -5,12 +5,14 @@ on. It exists because of what 1.0.0 has to mean here: semver's 1.0.0 claims
 a stable public interface, and until there was a real external caller there
 was nothing for a MAJOR version to protect. This file is that interface.
 
-Two versions are shipped. **v1 is frozen**: every number, argument meaning
+Three versions are shipped. **v1 is frozen**: every number, argument meaning
 and error below in the v1 section works exactly as written and will not
 change without a MAJOR bump. **v2 adds** file writing, a real seek, and
 command-line arguments. v2 adds numbers, flag bits and one loader
 convention; it redefines nothing v1 said. `user/hello.c` is unchanged and
-`tools/checks/usertest-check.sh` still runs it unmodified.
+`tools/checks/usertest-check.sh` still runs it unmodified. **v3 adds** two
+window calls so a program can be a desktop app, the first step of 2.0's
+"apps leave the kernel"; see the v3 section at the end.
 
 # v1, frozen
 
@@ -117,7 +119,7 @@ relocations, so its load address is not negotiable:
 
 - A user program is a flat binary. Entry is offset 0, not an ELF entry
   point; `exec_user()` jumps straight at the load address.
-- It is linked at **0xC0503000** and gets **8 pages**: seven for the
+- It is linked at **0xC0507000** and gets **8 pages**: seven for the
   image (28KB, and a larger one fails to link), one for its stack, whose
   top, 0xC0508000, is the initial `esp`. (v2 pushes the argument block
   onto that page, so the initial `esp` is now a little below the top; see
@@ -429,3 +431,89 @@ contract does NOT cover" says above still applies: no `brk`, no `fork`,
 one program running at a time, the same 7-page image ceiling. libjt does
 not get around any of that, it just saves you from re-writing `strlen`
 and a decimal formatter in every program that needs one.
+
+# v3, shipped (1.7.7)
+
+Two calls, so a ring-3 program can be an app on the desktop rather than a
+line of text in the shell. They are Joshua Tree's own numbers, **384 and
+385**, starting past anything Linux i386 assigns so the two sets can never
+collide. Register shape is unchanged: `eax` number, `ebx`/`ecx`/`edx`
+arguments, result in `eax`, negative errno on failure. Every user pointer
+is checked the way every v1 and v2 pointer is. Nothing v1 or v2 said
+changes.
+
+## The v3 call set
+
+| # | Name | ebx | ecx | Returns |
+|---|---|---|---|---|
+| 384 | `window_open` | `struct jt_window_info *` | 0 | 0, or -errno |
+| 385 | `window_poll` | `struct jt_event *` | flags | 1 with an event written, -EAGAIN with none, or -errno |
+
+```c
+struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
+struct jt_event { unsigned int kind; int a, b; };
+```
+
+**window_open** hands the program the app window the desktop already
+opened for it. There is no "create a window at x,y" here on purpose: the
+desktop draws the chrome and sets the viewport exactly as it does for an
+in-kernel app (see `gui_launch_from_dock` in `kernel/kernel.c`), then the
+launcher (`kernel/ring3app.c`) runs the program, and the program asks for
+that viewport. It gets its size in `width`/`height`, `pitch` in bytes
+(always `width * 4`), and `pixels`, a framebuffer of exactly that size,
+32 bits per pixel, `0x00RRGGBB`, mapped user-accessible at a fixed address
+(`JT_USER_FB`, 0xC0520000, reserved by `boot/linker.ld`). The program
+draws into it directly. Errors: -EFAULT (bad pointer), -EBUSY (another
+program owns the window), -ENODEV (no app viewport is open, e.g. the
+program was run from the text shell), -ENOMEM (viewport bigger than the
+buffer, which the dock's window never is).
+
+**window_poll** is how pixels reach the screen and how input reaches the
+program, and it never blocks: `int 0x80` runs with interrupts off, so the
+kernel cannot sleep a program inside it. With `JT_POLL_PRESENT` (1) in
+`ecx` the kernel first copies the framebuffer into the viewport through
+the same `window_pixel` path every in-kernel app draws with (so clipping,
+the back buffer and window drag come for free), then looks once at the
+keyboard and mouse. One event, or -EAGAIN; the program yields and asks
+again. Any other bit in `ecx` is -EINVAL. Event kinds:
+
+| kind | meaning | a | b |
+|---|---|---|---|
+| 1 `JT_EV_KEY` | a key | ASCII, or 256 and up for up/down/enter/esc/left/right, the same values `kernel/app.h` gives in-kernel apps | 0 |
+| 2 `JT_EV_CLICK` | a left click | x in window coordinates | y |
+| 3 `JT_EV_WHEEL` | a wheel tick | +1 up, -1 down | 0 |
+
+There is no `window_close`. Exiting releases the window; so does
+crashing. `task_exit_with` runs `syscall_release_task` for a task that
+faulted exactly as for one that called `exit`, and the window is torn
+down there, so the launcher never waits on a program that is gone.
+
+## What v3 guarantees, and what it does not
+
+The point of v3 is isolation, and this is the part `tools/checks/
+ring3app-check.py` proves rather than states: a program with a window is
+still an ordinary ring-3 task. It runs at CPL 3, IOPL 0, with its own page
+directory, and touches the machine only through these numbers and its own
+framebuffer pages. Writing through a null pointer inside Keyrate is a page
+fault the kernel reaps; the window goes away; the desktop repaints and
+takes the next click. Nothing in ring 0 stops.
+
+Limits, exactly: one program window at a time (`-EBUSY` otherwise), the
+same one-program-at-a-time rule as `exec_user`. The framebuffer is
+`0x110000` bytes, enough for the dock's 804x345 viewport with a little
+room. The kernel copies the whole buffer on every present, so a program
+should present only after it drew something. No font: a program draws its
+own glyphs (`user/keyrate.c` carries the kernel's 8x16 VGA fallback font
+as data). No finer clock than `time`'s seconds. On release the buffer is
+zeroed, and it is zeroed and re-mapped on the next `window_open`, but its
+pages are not flipped back to supervisor-only between programs; nothing
+at ring 3 can reach them without a live `window_open`, since there is no
+other ring-3 task then, and a future paging call will close that gap.
+
+## The v3 reference program
+
+`user/keyrate.c`, the typing test, launched from the dock by
+`kernel/ring3app.c` in place of the in-kernel `drivers/app_keyrate.c`
+(which is kept for now). The backquote key makes it write through a null
+pointer on purpose; the check presses it and asserts the desktop is still
+alive afterwards, with the serial log naming the fault.

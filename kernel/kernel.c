@@ -220,7 +220,7 @@ static const char SCS[128] = {
 };
 /* Scancode to ASCII with the modifier state kbd_pop tracks. Caps Lock
    flips letters only, the way a real keyboard does. */
-static char kbd_map(int sc){
+char kbd_map(int sc){
     int i = sc & 0x7F;
     char c = kbd_shift ? SCS[i] : SC[i];
     if (kbd_caps && ((SC[i] >= 'a' && SC[i] <= 'z'))) c = kbd_shift ? SC[i] : SCS[i];
@@ -241,7 +241,7 @@ int console_read_key(void){
     }
 }
 
-static void gui_app_mouse_tick(void);
+void gui_app_mouse_tick(void);
 static char getch(void){
     for (;;) {
         gui_app_mouse_tick();
@@ -265,7 +265,7 @@ static char getch(void){
    one". Set at every site that turns a mouse edge into an app-visible
    event, cleared whenever a key is handed out instead, so it always
    describes the event that actually caused the close. */
-static int gui_close_was_click = 0;
+int gui_close_was_click = 0;
 int gui_getch_or_click(void){
     mouse_click_edge_sync(); /* a button already held (e.g. the click that opened this app) is the baseline, not a fresh click */
     for (;;) {
@@ -294,9 +294,6 @@ int gui_getch_or_click(void){
    length is the whole clipboard; every consumer copies at most
    CLIPBOARD_CAP bytes in and truncates a paste at its own field's max
    length, so nothing here can overflow a caller's buffer. */
-#define KEY_COPY  302
-#define KEY_CUT   303
-#define KEY_PASTE 304
 /* v1.6.23: push-to-talk for Chat. F2's make code (0x3C) is a real,
    unassigned scancode kbd_map never turns into a character (F-keys have
    no entry in SC[]/SCS[]), so it reaches here through get_key_or_click_
@@ -2068,9 +2065,9 @@ static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_ro
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0;
+static int wind_base_width = 0; void keyrate_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
-static int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
+int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
     struct wp_row c;
     int lw = (int)window_width(), lh = (int)window_height();
@@ -3944,7 +3941,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     }
     /* The artwork is stored as PNG, not as decoded RGBA: 24 artworks of
        128x128 RGBA is 1.5MB, which runs into the ring-3 program window
-       boot/linker.ld pins at 0xC0503000, and docs/SYSCALL-ABI.md names that
+       boot/linker.ld pins at 0xC0507000, and docs/SYSCALL-ABI.md names that
        address as part of the published v1 contract. As PNG the same 24 are
        141KB. Decoding here rather than once at boot costs nothing in
        practice: this function is the icon cache's own miss path, so it runs
@@ -4112,7 +4109,7 @@ static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_m
 static void gui_draw_dock_tray(void);
 static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my);
 
-static void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
+void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     gui_draw_wallpaper();
     if (wind_enabled && !wind_base) {
         int sc = (int)window_scale();
@@ -4322,7 +4319,7 @@ static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_m
    the damage and read as "still the old bitmap font" (roadmap, Sep 2026).
    Reproduced headlessly with a scripted sweep + pmemsave, fixed here. */
 static unsigned int cursor_backup[CURSOR_W * CURSOR_MAX_SCALE * CURSOR_H * CURSOR_MAX_SCALE];
-static int cursor_saved_x = -1, cursor_saved_y = -1;
+int cursor_saved_x = -1, cursor_saved_y = -1;
 static int gui_cursor_scale(void){ int sc = (int)window_scale(); return sc > CURSOR_MAX_SCALE ? CURSOR_MAX_SCALE : sc; }
 static void gui_cursor_restore(void){
     if (cursor_saved_x < 0) return;
@@ -4333,7 +4330,7 @@ static void gui_cursor_restore(void){
             window_pixel_phys(px0 + i, py0 + j, cursor_backup[j * pw + i]);
     cursor_saved_x = cursor_saved_y = -1;
 }
-static void gui_cursor_save(int x, int y){
+void gui_cursor_save(int x, int y){
     int sc = gui_cursor_scale(), pw = CURSOR_W * sc, ph = CURSOR_H * sc;
     int px0 = x * sc, py0 = y * sc;
     for (int j = 0; j < ph; j++)
@@ -4378,7 +4375,7 @@ static void gui_cursor_build_mask(int sc){
     }
     cur_mask_scale = sc;
 }
-static void gui_draw_cursor(int x, int y){
+void gui_draw_cursor(int x, int y){
     int sc = gui_cursor_scale(), pw = CURSOR_W * sc, ph = CURSOR_H * sc;
     if (cur_mask_scale != sc) gui_cursor_build_mask(sc);
     for (int j = 0; j < ph; j++) for (int i = 0; i < pw; i++){
@@ -4421,7 +4418,7 @@ static void gui_calendar_check_rollover(int hover_slot, int drag_slot, int mx, i
 
 /* App viewers have their own input loops. Keep the pointer alive while one
    is open, drawing it in screen coordinates outside the app viewport. */
-static int gui_app_windowed = 0;
+int gui_app_windowed = 0;
 /* Vertical shift for an app's own content. Full screen, an app draws its
    own title strip across the top 40px and starts content at y=52. In a
    dock window the frame already draws the title bar above the viewport,
@@ -4449,9 +4446,9 @@ static int app_win_x = 0, app_win_y = 0, app_win_w = 0, app_win_h = 0;
 static int app_drag_held = 0, app_drag_on = 0, app_drag_gx = 0, app_drag_gy = 0;
 static int gui_dock_band_top(void);
 static void gui_daynight_wallpaper_rect(int x, int y, int w, int h);
-int app_view_x, app_view_y; static int app_view_w, app_view_h;
+int app_view_x, app_view_y; int app_view_w, app_view_h;
 int app_cursor_x, app_cursor_y;
-static void gui_app_mouse_tick(void){
+void gui_app_mouse_tick(void){
     if (!gui_app_windowed) return;
     int dx = 0, dy = 0, buttons = 0;
     int moved = mouse_get_delta(&dx, &dy, &buttons);
@@ -5393,10 +5390,13 @@ static void gui_app_frame_title(const char *label){
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
 static void gui_apps_launch(int icon){
-    gui_app_frame_title(APPS[icon].name);
+    int was_windowed = gui_app_windowed; /* v1.7.7: ring-3 apps need a real viewport via keyboard Enter too */
+    unsigned int vw = window_width(), vh = window_height() - 40; /* clamped below to fit ring-3 .userfb */
+    if (!was_windowed) { gui_draw_app_titlebar(APPS[icon].name); if (vw * vh * 4 > 0x170000) { vw = 832; vh = 450; }
+        window_set_viewport(0, 40, vw, vh); app_view_x = 0; app_view_y = 40; app_view_w = (int)vw; app_view_h = (int)vh; gui_app_windowed = 1;
+    } else gui_app_frame_title(APPS[icon].name);
     gui_launch(icon);
-    gui_app_frame_title(APPS[GUI_APPS_FOLDER].name);
-}
+    if (!was_windowed) { gui_app_windowed = 0; window_clear_viewport(); } else gui_app_frame_title(APPS[GUI_APPS_FOLDER].name); }
 
 static void gui_launch_apps(void){
     int sel = 0;
@@ -5970,7 +5970,7 @@ static void gui_launch(int icon){
     if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
 }
 
-static void gui_launch_from_dock(int icon){
+void gui_launch_from_dock(int icon){
 again:
     /* Keep the desktop visible around the app. The framebuffer viewport
        clips every app draw, including window_clear and physical AA text. */
@@ -6237,7 +6237,7 @@ static const struct app APPS[GUI_APP_COUNT] = {
     /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       gui_launch_chat_app,   0, 0},
     /*  7 */ {"Weather",    0x0085144B, gui_icon_weather,    gui_launch_weather,    gui_draw_weather_content,   gui_weather_mw_key},
     /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        gui_launch_curbfind,   0, 0},
-    /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_open,          0, 0},
+    /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c; drivers/app_keyrate.c's in-kernel version stays for now */
     /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       gui_launch_bookrank,   0, 0},
     /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_open,      0, 0},
     /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       gui_launch_plan,       0, 0},
@@ -7005,7 +7005,7 @@ static void gui_run(void){
     cursor_saved_x = cursor_saved_y = -1;
     gui_cursor_save(mx, my);
     gui_draw_cursor(mx, my);
-    gui_dock_prewarm();
+    gui_dock_prewarm(); ring3app_autoopen_run(mx, my); /* `open=keyrate` boot flag, if set */
     for (;;) {
         window_present(); __asm__ volatile ("hlt");
         /* v0.76.17: direct request ("time in top right needs live reload
@@ -7197,8 +7197,7 @@ static void gui_run(void){
                     gui_multiwin_close(gui_window_count - 1);
                     mw_key_repaint = 1;
                 } else if (c == '\n' && gui_window_count == 0) {
-                    /* Enter on the bare desktop opens the Apps folder */
-                    gui_launch_apps();
+                    gui_launch_apps(); /* direct, not gui_launch_from_dock's boxed frame (moves the a11y close pixel) */
                 }
             }
         }
@@ -9639,7 +9638,7 @@ static int bench_at_boot = 0;
 static int panic_test_at_boot = 0;
 void kmain(unsigned int multiboot_info_addr){
     serial_init();
-    serial_puts("=== kmain boot start === v" JT_VERSION_STR "\n");
+    serial_puts("=== kmain boot start === v" JT_VERSION_STR "\n"); entropy_init(); /* 1.7.10: seed the DRBG before anything asks for a salt */
     /* 1.0.12: llmhost=/llmport= command-line overrides for llm_host/llm_port
        (declared way below), parsed alongside wxhost= but applied AFTER
        settings_load() runs (see its call site) so a stale/persisted
@@ -9700,6 +9699,7 @@ void kmain(unsigned int multiboot_info_addr){
             if (pc[0]=='n' && pc[1]=='o' && pc[2]=='d' && pc[3]=='h' && pc[4]=='c' && pc[5]=='p' && (pc[6]==' ' || pc[6]==0)) { net_nodhcp = 1; break; }
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='d' && pc[1]=='r' && pc[2]=='u' && pc[3]=='n' && pc[4]=='k' && (pc[5]==' ' || pc[5]==0)) { extern void window_set_drunk(int); window_set_drunk(1); serial_puts("drunk\n"); break; }
+        ring3app_autoopen_arm(cl); /* `open=keyrate` boot flag */
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;
