@@ -587,7 +587,7 @@ static void chat_draw_status(const char *state) {
     int T = gui_app_dy();
     window_rect(0, T + 40, (int)window_width(), 32, GUI_BG);
     font_draw_string(line, 20, T + 52, CHAT_DIM, -1);
-    chat_face_draw(T);
+    if (chat_count == 0) chat_face_draw(T);
 }
 
 /* Shared by every way a message can be sent now (n's prompt, a suggestion
@@ -596,6 +596,47 @@ static void chat_draw_status(const char *state) {
    chat_run_tool picked open_app -- the caller must return immediately, the
    same chat_launch_after contract gui_launch_chat_app's caller relied on
    before this was pulled out into its own function. */
+/* The conversation: with her face loaded, a big face above her latest
+   reply; without it, the transcript tail. Drawn before she speaks too, so
+   visitors see who is talking. */
+static void chat_draw_conversation(int T, int x, int you_w, int sam_w, int body_w) {
+    int y = T + 76, bottom = (int)window_height() - 40;
+    window_rect(0, T + 72, (int)window_width(), bottom - (T + 72), GUI_BG);
+    if (face_idle_n) {
+        int last = -1;
+        for (int i = chat_count - 1; i >= 0; i--) if (chat_msgs[i].role == CHAT_ROLE_ASSISTANT) { last = i; break; }
+        int cw = (int)window_width() - 40;      /* the small face's reserve doesn't apply up here */
+        int cap_rows = last >= 0 ? chat_wrapped_rows(chat_msgs[last].content, cw) : 0;
+        if (cap_rows > 3) cap_rows = 3;
+        int face_bottom = bottom - cap_rows * 16 - 10;
+        int cy = chat_face_draw_big(y, face_bottom) + 10;
+        if (last >= 0) render_wrapped_text(chat_msgs[last].content, x, cy, cw, bottom - cy, CHAT_INK);
+        return;
+    }
+    /* Walk back from the newest turn until the visible area is full,
+       then draw what fit top-down: show the tail, never a silent
+       overflow. */
+    int start = chat_count, used = 0;
+    for (int i = chat_count - 1; i >= 0; i--) {
+        int user = chat_msgs[i].role != CHAT_ROLE_ASSISTANT;
+        int label_w = user ? you_w : sam_w;
+        int h = chat_wrapped_rows(chat_msgs[i].content, body_w - label_w) * 16 + (user ? 4 : 12);
+        if (used + h > bottom - y && i != chat_count - 1) break;
+        used += h;
+        start = i;
+    }
+    int cy = y;
+    for (int i = start; i < chat_count && cy + 16 <= bottom; i++) {
+        int user = chat_msgs[i].role != CHAT_ROLE_ASSISTANT;
+        int label_w = user ? you_w : sam_w;
+        int tx = x + label_w;
+        int tw = body_w - label_w;
+        font_draw_string(user ? CHAT_YOU : CHAT_SAM, x, cy, CHAT_DIM, -1);
+        render_wrapped_text(chat_msgs[i].content, tx, cy, tw, bottom - cy, CHAT_INK);
+        cy += chat_wrapped_rows(chat_msgs[i].content, tw) * 16 + (user ? 4 : 12);
+    }
+}
+
 static const char *chat_process_message(char *msg, int T, int x, int you_w, int body_w) {
     window_rect(0, T + 40, (int)window_width(), (int)window_height() - 40 - T, GUI_BG);
     chat_draw_status("checking for a tool ...");
@@ -613,6 +654,8 @@ static const char *chat_process_message(char *msg, int T, int x, int you_w, int 
         /* A tool's reply ("Reminder set: call mom") is spoken like any answer. */
         if (sb16_present() && tool_reply[0]) {
             chat_draw_status("speaking ...");
+            chat_draw_conversation(T, x, you_w, font_string_width(CHAT_SAM), body_w);
+            window_present();
             chat_face_speak(llm_host, (unsigned short)llm_port, tool_reply, CHAT_SPEAK_TIMEOUT_TICKS);
         }
     }
@@ -625,6 +668,8 @@ static const char *chat_process_message(char *msg, int T, int x, int you_w, int 
                silent no-op without one or when /api/speak fails. */
             if (sb16_present()) {
                 chat_draw_status("speaking ...");
+                chat_draw_conversation(T, x, you_w, font_string_width(CHAT_SAM), body_w);
+                window_present();
                 chat_face_speak(llm_host, (unsigned short)llm_port, answer, CHAT_SPEAK_TIMEOUT_TICKS);
             }
             return "ready";
@@ -668,28 +713,7 @@ static void gui_launch_chat_app(void) {
             }
             font_draw_string("up/down select   enter sends   or just type   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
         } else {
-            /* Walk back from the newest turn until the visible area is full,
-               then draw what fit top-down: show the tail, never a silent
-               overflow. */
-            int start = chat_count, used = 0;
-            for (int i = chat_count - 1; i >= 0; i--) {
-                int user = chat_msgs[i].role != CHAT_ROLE_ASSISTANT;
-                int label_w = user ? you_w : sam_w;
-                int h = chat_wrapped_rows(chat_msgs[i].content, body_w - label_w) * 16 + (user ? 4 : 12);
-                if (used + h > bottom - y && i != chat_count - 1) break;
-                used += h;
-                start = i;
-            }
-            int cy = y;
-            for (int i = start; i < chat_count && cy + 16 <= bottom; i++) {
-                int user = chat_msgs[i].role != CHAT_ROLE_ASSISTANT;
-                int label_w = user ? you_w : sam_w;
-                int tx = x + label_w;
-                int tw = body_w - label_w;
-                font_draw_string(user ? CHAT_YOU : CHAT_SAM, x, cy, CHAT_DIM, -1);
-                render_wrapped_text(chat_msgs[i].content, tx, cy, tw, bottom - cy, CHAT_INK);
-                cy += chat_wrapped_rows(chat_msgs[i].content, tw) * 16 + (user ? 4 : 12);
-            }
+            chat_draw_conversation(T, x, you_w, sam_w, body_w);
             font_draw_string("type to send   n prompt   c clear   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
         }
 

@@ -12,8 +12,8 @@
 // every /api/proxy request. turing.heyitsmejosh.com/api/chat gets a fixed
 // reply; turing.heyitsmejosh.com/api/speak gets a real raw PCM8 buffer
 // (a synthetic tone, not silence, so sb16_play has real samples to push);
-// joshuatree.heyitsmejosh.com/face/*.png gets the REAL committed frame
-// files (landing/face/*.png) read straight off disk -- proving embed.js's
+// joshuatree.heyitsmejosh.com/face/*.jpg gets the REAL committed frame
+// files (landing/face/*.jpg) read straight off disk -- proving embed.js's
 // facehost= cmdline value actually reaches chat_face.h's fetches, and that
 // worker.js's own /face/ proxy exception (see worker.js's handleProxy) is
 // asked for exactly the paths chat_face_load builds. worker.js itself is
@@ -131,7 +131,7 @@ await page.route('**/api/proxy**', async (route) => {
   try { target = new URL(req.url()).searchParams.get('url') || ''; } catch (e) { /* 403 below */ }
   let targetUrl = null;
   try { targetUrl = new URL(target); } catch (e) { /* 403 below */ }
-  const isFace = targetUrl && targetUrl.hostname === 'joshuatree.heyitsmejosh.com' && /^\/face\/(idle|talk)-[0-9]\.png$/.test(targetUrl.pathname);
+  const isFace = targetUrl && targetUrl.hostname === 'joshuatree.heyitsmejosh.com' && /^\/face\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname);
   const isChat = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/chat';
   const isPick = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/pick';
   const isSpeak = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/speak';
@@ -139,7 +139,7 @@ await page.route('**/api/proxy**', async (route) => {
     const file = path.join(root, 'face', path.basename(targetUrl.pathname));
     if (fs.existsSync(file)) {
       facePngsServed++;
-      await route.fulfill({ status: 200, contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: fs.readFileSync(file) });
+      await route.fulfill({ status: 200, contentType: 'image/jpeg', headers: { 'Access-Control-Allow-Origin': '*' }, body: fs.readFileSync(file) });
     } else {
       await route.fulfill({ status: 404, body: '' });
     }
@@ -197,8 +197,8 @@ try {
   await page.waitForFunction(() => window.__jt.serial.includes('face: idle='), null, { timeout: 20000 })
     .then(() => ok('chat_face_load ran and reported a result over serial'))
     .catch(() => fail('no "face: idle=" serial marker within 20s of Chat opening -- chat_face_load never ran or never finished'));
-  const faceLine = await page.evaluate(() => { const m = window.__jt.serial.match(/face: idle=(\d) talk=(\d)/); return m ? m[0] : null; });
-  console.log('face serial line: ' + faceLine + ' (face pngs served over the intercepted proxy: ' + facePngsServed + ')');
+  const faceLine = await page.evaluate(() => { const m = window.__jt.serial.match(/face: idle=(\d+) talk=(\d+)/); return m ? m[0] : null; });
+  console.log('face serial line: ' + faceLine + ' (face frames served over the intercepted proxy: ' + facePngsServed + ')');
   if (!faceLine || faceLine.startsWith('face: idle=0')) fail(`face frames did not load (${faceLine}); facehost= cmdline or the /face/ proxy path is not reaching the guest`);
   else ok(`face frames loaded: ${faceLine}`);
 

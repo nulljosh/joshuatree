@@ -16,6 +16,23 @@ static void put_uint(unsigned int v) {
     serial_puts(out);
 }
 
+/* The clip playing right now, so Chat can move her mouth with it. */
+static const unsigned char *speak_pcm = 0;
+static unsigned int speak_len = 0;
+
+unsigned int speak_level(unsigned int elapsed_ticks) {
+    if (!speak_pcm) return 0;
+    unsigned int at = elapsed_ticks * (SPEAK_RATE / 100u), win = SPEAK_RATE / 25u; /* 40ms */
+    if (at >= speak_len) return 0;
+    if (at + win > speak_len) win = speak_len - at;
+    unsigned int sum = 0;
+    for (unsigned int i = 0; i < win; i++) {
+        int d = (int)speak_pcm[at + i] - 128;
+        sum += (unsigned int)(d < 0 ? -d : d);
+    }
+    return win ? sum / win : 0;
+}
+
 unsigned int speak_text(const char *host, unsigned short port, const char *text,
                         unsigned int timeout_ticks) {
     if (!sb16_present() || !text || !text[0]) return 0;
@@ -45,7 +62,9 @@ unsigned int speak_text(const char *host, unsigned short port, const char *text,
     /* A 404 page or a proxy's error body is text, not audio: play only a
        real 200, and only a body long enough to be sound (a few ms). */
     if (status == 200 && got >= 64) {
+        speak_pcm = pcm; speak_len = (unsigned int)got;
         if (sb16_play(pcm, (unsigned int)got, SPEAK_RATE)) played = (unsigned int)got;
+        speak_pcm = 0; speak_len = 0;
     }
     kfree(pcm);
     return played;

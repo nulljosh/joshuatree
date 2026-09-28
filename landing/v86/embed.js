@@ -298,8 +298,18 @@ if (typeof document !== "undefined") (function () {
     // and necessary: the serial log starts at the first boot byte, and the
     // kernel enables the backdoor a few ms into boot, long before ready.
     emulator.add_listener("vmware-absolute-mouse", function (on) { absoluteMouse = !!on; });
+    var serialLine = "";
     emulator.add_listener("serial0-output-byte", function (b) {
       if (serialLog.length < 65536) serialLog += String.fromCharCode(b);
+      // Samantha answering or speaking counts as the visitor still being
+      // here: without this the 15s kiosk reset rebooted the demo in the
+      // middle of her spoken reply, since listening involves no clicks.
+      if (b === 10) {
+        var m = /^speak: status=200 bytes=(\d+)/.exec(serialLine);
+        if (m) lastInteractionTime = Date.now() + Math.ceil(Number(m[1]) / 16); // 16000 samples/s = 16 per ms
+        else if (/^chatreply=|^chattool=/.test(serialLine)) lastInteractionTime = Date.now();
+        serialLine = "";
+      } else if (b !== 13 && serialLine.length < 80) serialLine += String.fromCharCode(b);
     });
     });
   }
@@ -368,6 +378,7 @@ if (typeof document !== "undefined") (function () {
       // Retail-kiosk style: after 15 seconds of inactivity, close windows and restart the tour.
       // Only trigger if 15+ seconds have passed since the last user interaction (click, movement, key).
       var timeSinceActivity = Date.now() - lastInteractionTime;
+      if (focused && !tourRunning && timeSinceActivity < 15000) { idleRestartTimeout = 0; resetIdleRestart(); return; } // still busy (e.g. she's talking): check again later
       if (focused && !tourRunning && timeSinceActivity >= 15000) { // only if still focused, tour not running, and truly idle
         // Trigger a soft reset: close any open windows by rebooting the emulator
         // then restart the tour
