@@ -161,6 +161,7 @@ retry|7|Demo canvas fills its frame, pixelated only at an exact 1:1 map|node ./t
 once |7|Landing page never overflows horizontally at phone widths|node ./tools/checks/mobile-overflow-check.mjs
 retry|1|App switcher: Ctrl+Tab cycles open windows and focuses the highlighted one|python3 ./tools/checks/appswitcher-check.py
 retry|2|Screenshot key: Ctrl+Shift+3 saves a real framebuffer BMP, numbered and visible in Files|python3 ./tools/checks/screenshot-check.py
+retry|5|Drunk mode easter egg: horizontal sway applied to framebuffer rows|python3 ./tools/checks/drunk-mode-check.py
 EOF
 }
 
