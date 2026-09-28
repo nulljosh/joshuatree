@@ -110,13 +110,21 @@ try:
     if not window_open():
         raise SystemExit("FAIL: Epiphany never opened a window")
 
-    # Focus the bar, type "aapl gp", Enter
-    keyname("slash"); time.sleep(0.1)
+    # Focus the bar, type "aapl gp", Enter. Wait for Epiphany to finish its
+    # first draw and fetch before typing (CI runners are slower than the Mac;
+    # fixed short sleeps dropped the keys there), then poll the log with a
+    # deadline instead of a fixed sleep.
+    time.sleep(2.5)
+    keyname("slash"); time.sleep(0.5)
     type_str("aapl gp")
     keyname("ret")
+    log = ""
+    for _ in range(40):
+        time.sleep(0.25)
+        log = open(LOG, errors="replace").read() if os.path.exists(LOG) else ""
+        if "epicmd=run:AAPL GP" in log:
+            break
     time.sleep(0.6)
-
-    log = open(LOG, errors="replace").read() if os.path.exists(LOG) else ""
     if "epicmd=run:AAPL GP" not in log:
         fails.append(f"serial log missing 'epicmd=run:AAPL GP' marker; got tail: {log[-400:]!r}")
 
@@ -128,7 +136,7 @@ try:
 
     # Esc clears, then a bogus code shows a one-line error and its own marker
     keyname("esc"); time.sleep(0.2)
-    keyname("slash"); time.sleep(0.1)
+    keyname("slash"); time.sleep(0.5)
     type_str("aapl zz")
     keyname("ret")
     time.sleep(0.4)
