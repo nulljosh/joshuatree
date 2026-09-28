@@ -1733,6 +1733,67 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
    this framebuffer doesn't have, same technique the wallpaper and every
    other AA edge in this file already uses. */
 static void gui_rounded_rect_gradient(int x, int y, int w, int h, unsigned int color_top, unsigned int color_bottom, unsigned int bg, int r){
+    /* Settings retina pass: this is the same logical-space-then-block-
+       replicate staircase gui_fill_circle's v82 fix and gui_draw_capsule's
+       matching fix already found and fixed for circles/capsules -- the AA
+       ramp below is computed once per LOGICAL pixel, and at window_scale()
+       2 (every real dock-launched windowed app, including Settings)
+       window_rect/window_pixel replicate each logical pixel into a flat
+       2x2 physical block with no interpolation, so the ramp rasterizes as
+       distinct flat terraces: the Wind switch's track edge, the grouped
+       card's corners and the sidebar highlight's corners, all real macro
+       staircasing (confirmed visually, /tmp/jt-settings-4x-*.png). This
+       function is the one AA rounded-rect primitive every one of those
+       three draws through, so one fix here covers all three. Same
+       technique gui_rounded_rect_on_wallpaper's v79 fix uses: work in
+       PHYSICAL pixels, SSxSS true subsample coverage per corner pixel
+       instead of a single distance threshold, blend straight to `bg`
+       (already a flat color for every caller here, no wallpaper sampling
+       needed the way the tray's on-wallpaper variant does). The original
+       logical-space path stays for callers with an offscreen target
+       pushed (window_has_target() true, e.g. gui_render_icon_cached's own
+       6x-supersampled icon buffer): that path already gets its real AA
+       from the later box-downsample, exactly like every icon glyph. */
+    if (!window_has_target() && window_scale() > 1) {
+        int sc = (int)window_scale();
+        int px0 = x * sc, py0 = y * sc, pw = w * sc, ph = h * sc, pr = r * sc;
+        const int SS = 4, band = 3, margin = 2;
+        if (ph > 2 * pr) {
+            for (int py = pr; py < ph - pr; py++) {
+                int ly = py / sc;
+                window_fill_rect_phys(px0, py0 + py, pw, 1, gui_lerp(color_top, color_bottom, ly, h));
+            }
+        }
+        for (int py = 0; py < ph; py++) {
+            if (py >= pr && py < ph - pr) continue;
+            int cy = py < pr ? pr : ph - 1 - pr;
+            int oy = py - cy;
+            int ly = py / sc;
+            unsigned int row_col = gui_lerp(color_top, color_bottom, ly, h);
+            for (int px = 0; px < pw; px++) {
+                int cx = px < pr ? pr : (px >= pw - pr ? pw - 1 - pr : px);
+                int ox = px - cx;
+                int d2 = ox * ox + oy * oy;
+                unsigned int col = row_col;
+                if (d2 > (pr - band) * (pr - band)) {
+                    if (d2 > (pr + margin) * (pr + margin)) continue;
+                    int inside = 0;
+                    for (int sy = 0; sy < SS; sy++) {
+                        int subdy = oy * SS + sy * 2 + 1 - SS;
+                        for (int sx = 0; sx < SS; sx++) {
+                            int subdx = ox * SS + sx * 2 + 1 - SS;
+                            long sd2 = (long)subdx * subdx + (long)subdy * subdy;
+                            if (sd2 <= (long)(pr * SS) * (pr * SS)) inside++;
+                        }
+                    }
+                    if (inside == 0) continue;
+                    col = (inside >= SS * SS) ? row_col : gui_lerp(row_col, bg, SS * SS - inside, SS * SS);
+                }
+                window_pixel_phys(px0 + px, py0 + py, col);
+            }
+        }
+        return;
+    }
     for (int row = 0; row < h; row++)
         window_rect(x, row + y, w, 1, gui_lerp(color_top, color_bottom, row, h));
     /* v37, real long-standing bug fixed here, not a tweak: this loop used

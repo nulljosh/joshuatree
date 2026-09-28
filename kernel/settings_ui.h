@@ -254,8 +254,16 @@ static void gui_launch_settings(void){
            themselves started. */
         font_draw_string(SETTINGS_SECTION_NAMES[cur_section], SETTINGS_DETAIL_X, 48, 0x001C1C1E, -1);
         int n_rows = settings_section_row_count(cur_section);
+        /* One right inset for everything in the detail pane: card, hairline
+           dividers, right-aligned values and the switch all end flush at
+           detail_right. The card used to run 12px past it on the right
+           (card_x + card_w = detail_right + 12, its left inset applied
+           again to the right edge instead of matching detail_right the
+           way every other element already did) while keeping the same
+           12px left of SETTINGS_DETAIL_X, so the card visibly overshot
+           the dividers beneath it -- one shared edge now, both sides. */
         int detail_right = ww - 20;
-        int card_x = SETTINGS_DETAIL_X - 12, card_w = detail_right + 12 - card_x;
+        int card_x = SETTINGS_DETAIL_X - 12, card_w = detail_right - card_x;
         int card_y = SETTINGS_DETAIL_Y0 - 16, card_h = n_rows * SETTINGS_ROW_H + 8;
         gui_rounded_rect_gradient(card_x, card_y, card_w, card_h, 0x00F1EBE0, 0x00F1EBE0, GUI_BG, 10);
         /* Single bottom-margin help line -- the old two-line footer's
