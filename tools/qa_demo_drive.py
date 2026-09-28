@@ -56,12 +56,12 @@ def hold(seconds, tag=""):
 
 LOGICAL_W, LOGICAL_H = 960, 540
 # Dock order and geometry come from kernel/kernel.c itself (GUI_DOCK_DEFAULT,
-# GUI_LABELS, gui_dock_w/gui_dock_x0), the way tools/checks/dockslots-check.py
+# APPS[].name, gui_dock_w/gui_dock_x0), the way tools/checks/dockslots-check.py
 # reads them. A hardcoded copy went stale when Stocks joined the dock: every
 # click landed a tile off and the "Weather" and "Trash" steps both opened
 # Stocks. Icon size is the 960x540, dock_scale_pct 7 default (37 px).
 _k = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "kernel", "kernel.c")).read()
-_labels = re.findall(r'"([^"]+)"', re.search(r"GUI_LABELS\[GUI_APP_COUNT\] = \{(.*?)\};", _k, re.S).group(1))
+_labels = re.findall(r'\{"([^"]+)",', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", _k, re.S).group(1))
 _sym = {"GUI_APPS_FOLDER": _labels.index("Apps"), "GUI_TRASH": _labels.index("Trash")}
 DOCK = [_labels[_sym[t] if t in _sym else int(t)]
         for t in re.search(r"GUI_DOCK_DEFAULT\[GUI_ICON_COUNT\] = \{(.*?)\};", _k).group(1).replace(" ", "").split(",")]
@@ -122,7 +122,7 @@ for slot, name in enumerate(DOCK):
         key("a"); type_text("ship 1.0.0")
     if name == "Terminal":
         type_text("help"); key("ret", settle=1.0)
-    if name == "Chat":
+    if name == "Samantha":
         type_text("hello")
     hold(0.75)
     close_window(name)

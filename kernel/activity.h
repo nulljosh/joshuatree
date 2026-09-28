@@ -27,18 +27,6 @@ static int activity_sel;          /* selected row, 0..ACTIVITY_ROWS-1 */
 static char activity_msg[64];     /* transient feedback line: kill result or refusal */
 static unsigned int activity_msg_until; /* ticks() deadline; 0 means no message showing */
 
-static void activity_itoa(unsigned int v, char *buf) {
-    /* Same hand-rolled reverse-and-flip digit extraction the shell's own
-       `ps` case already uses inline (kernel.c), pulled out here since
-       this file needs it in three places (pid, uptime, mem). */
-    char tmp[12]; int ti = 0;
-    if (v == 0) tmp[ti++] = '0';
-    while (v) { tmp[ti++] = '0' + v % 10; v /= 10; }
-    int n = 0;
-    while (ti) buf[n++] = tmp[--ti];
-    buf[n] = 0;
-}
-
 /* Redraws only the stats line, the column header, the six task rows and
    the Kill button -- the gui_prompt.h chrome/content split search.h/
    reminders.h already established, never the titlebar/instructions
@@ -50,16 +38,16 @@ static void activity_draw_content(void) {
 
     char num[12];
     font_draw_string("Uptime:", 20, 62, 0x0075726E, -1);
-    activity_itoa(ticks() / 100, num);
+    app_utoa(ticks() / 100, num);
     font_draw_string(num, 84, 62, 0x001C1C1E, -1);
     font_draw_string("s", 84 + font_string_width(num), 62, 0x001C1C1E, -1);
 
     font_draw_string("Memory:", 180, 62, 0x0075726E, -1);
-    activity_itoa(pmm_free_frames() * 4, num);
+    app_utoa(pmm_free_frames() * 4, num);
     int mx = 244;
     font_draw_string(num, mx, 62, 0x001C1C1E, -1); mx += font_string_width(num);
     font_draw_string("K free /", mx, 62, 0x001C1C1E, -1); mx += font_string_width("K free /") + 6;
-    activity_itoa(pmm_total_frames() * 4, num);
+    app_utoa(pmm_total_frames() * 4, num);
     font_draw_string(num, mx, 62, 0x001C1C1E, -1); mx += font_string_width(num);
     font_draw_string("K total", mx, 62, 0x001C1C1E, -1);
 
@@ -70,11 +58,11 @@ static void activity_draw_content(void) {
     for (int i = 0; i < ACTIVITY_ROWS; i++) {
         int y = 108 + i * 22;
         if (i == activity_sel) window_rect(16, y - 4, w - 32, 20, 0x00EDE6DC);
-        activity_itoa((unsigned int)i, num);
+        app_utoa((unsigned int)i, num);
         font_draw_string(num, 20, y, 0x001C1C1E, -1);
         int current = (i == task_current());
         if (i == 0) font_draw_string("Shell/GUI", 80, y, 0x001C1C1E, -1);
-        else if (task_used(i)) { char nm[16] = "Task "; activity_itoa((unsigned int)i, nm + 5); font_draw_string(nm, 80, y, 0x001C1C1E, -1); }
+        else if (task_used(i)) { char nm[16] = "Task "; app_utoa((unsigned int)i, nm + 5); font_draw_string(nm, 80, y, 0x001C1C1E, -1); }
         else font_draw_string("--", 80, y, 0x00807468, -1);
         if (current) font_draw_string("running (this)", 200, y, 0x001C1C1E, -1);
         else if (task_used(i)) font_draw_string("running", 200, y, 0x00375A4A, -1);

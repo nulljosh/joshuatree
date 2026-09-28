@@ -89,8 +89,7 @@ static void gui_draw_file_glyph(int x, int y, int size, int is_dir){
 /* Same split as gui_draw_weather_content above. */
 static int gui_files_sel = 0;
 static void gui_draw_files_content(void){
-    window_clear(0x00FAF8F6);
-    gui_draw_app_titlebar("Files");
+    app_begin("Files", 0x00FAF8F6);
 
     /* Toolbar: List / Icons. Cmd/Ctrl+1/2 or plain 1/2, or a tap, switch
        views; the highlighted button always reflects files_view, never a

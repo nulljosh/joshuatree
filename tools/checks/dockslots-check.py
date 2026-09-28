@@ -4,12 +4,12 @@
 Every check that clicks a dock tile hardcodes that tile's slot number. When the
 dock changes (Stocks pinned at 9 pushed Trash to 10) those numbers go stale and
 unrelated checks fail far downstream. This reads the one real source, kernel.c's
-GUI_DOCK_DEFAULT + GUI_LABELS, and fails naming every file that disagrees.
+GUI_DOCK_DEFAULT + APPS[].name, and fails naming every file that disagrees.
 """
 import glob, os, re, sys
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 k = open("kernel/kernel.c").read()
-labels = re.findall(r'"([^"]+)"', re.search(r"GUI_LABELS\[GUI_APP_COUNT\] = \{(.*?)\};", k, re.S).group(1))
+labels = re.findall(r'\{"([^"]+)",', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", k, re.S).group(1))
 sym = {"GUI_APPS_FOLDER": labels.index("Apps"), "GUI_TRASH": labels.index("Trash")}
 order = [labels[sym[t] if t in sym else int(t)]
          for t in re.search(r"GUI_DOCK_DEFAULT\[GUI_ICON_COUNT\] = \{(.*?)\};", k).group(1).replace(" ", "").split(",")]
