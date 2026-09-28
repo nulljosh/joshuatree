@@ -5,7 +5,9 @@
    loops cut from her character videos at 12fps by
    tools/gen/face_frames.py) and keeps them decoded in RAM. Like the Mac
    face window, she is a video, not a still: the idle loop plays whenever
-   Chat is waiting (breathing, blinking), and while her voice plays the
+   Chat is waiting (breathing, blinking; idle-0 must be an open-eyed frame
+   so Chat never opens on shut eyes, tools/gen/face_frames.py starts the loop
+   on her open stretch), and while her voice plays the
    talk loop advances only while there is sound (speak_level), holding
    on pauses. The empty Chat shows a small face at the top right; once a
    conversation starts she fills the window above her latest reply.
