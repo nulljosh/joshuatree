@@ -6290,7 +6290,7 @@ static void gui_switcher_draw(int hi){
     for (int i = 0; i < rows; i++) {
         if (i == hi) window_rect(x + 6, ry, w - 12, row_h - 4, 0x00555555);
         int icon = gui_windows[i].icon;
-        const char *label = (icon >= 0 && icon < GUI_APP_COUNT) ? GUI_LABELS[icon] : "?";
+        const char *label = (icon >= 0 && icon < GUI_APP_COUNT) ? APPS[icon].name : "?";
         font_draw_string(label, x + 18, ry + 6, text, -1);
         ry += row_h;
     }
