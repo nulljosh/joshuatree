@@ -23,6 +23,16 @@ the plan; this page is the map of what exists today.
    and the desktop are the same program; the Terminal is the shell in a
    window.
 
+## Boot modes
+
+Pass keywords on the multiboot command line (QEMU's `-append` flag or the
+browser emulator's cmdline config) to change how the kernel starts:
+
+| Flag | What it does |
+|---|---|
+| `phone` | Boots into portrait phone mode (430x932) instead of the desktop (960x540 retina). Handled in `kernel/kernel.c`'s `kmain` as `boot_to_phone`, used by `gui_run`. |
+| `samantha` | Skips the desktop and opens Chat's full-screen Samantha avatar view directly. Handled in `kernel/kernel.c`'s `kmain` as `boot_to_samantha`, passed to `chat_boot_samantha_open`. |
+
 ## The layers
 
 Each layer only leans on the ones above it on this page, so it reads top to bottom.
@@ -94,6 +104,19 @@ Ollama server in the Chat app.
 |---|---|
 | `drivers/sb16.c` | The Sound Blaster 16 driver: DSP reset/detect, IRQ 5, and ISA DMA channel 1 for both directions. `sb16_play`/`sb16_beep` push 8-bit unsigned mono PCM out through the SB16-only high-speed command pair (`0x41` set rate, `0xC0` transfer). `sb16_record` captures the same format in, through the older DSP-2.xx-compatible ADC pair (`0x40` set time constant, `0x24` transfer) every real SB16 answers -- QEMU's own `-device sb16` has no ADC path today (confirmed against its source), so recording only produces real audio on hardware, or under `make talk`'s coreaudio backend. |
 | `drivers/speak.c` | Text to speech: posts to Turing's `/api/speak`, plays the PCM reply on `sb16.c`, and tracks its own playback position so Chat's face can move with it (`speak_level`). |
+
+### Worker endpoints
+
+The browser landing page routes kernel HTTP requests to a Cloudflare Worker
+(`worker.js`) for external APIs:
+
+| Endpoint | What it does |
+|---|---|
+| `/api/stocks` | Live stock quotes for the Stocks app. |
+| `/api/chat` | LLM routing and chat responses for the Chat app. |
+| `/api/pick` | LLM tool selection for Chat's command execution. |
+| `/api/waitlist` | Dev-kit waitlist signup (POST) and count (GET). Stores one email per address with a timestamp. |
+| `/api/listen` | Speech-to-text for Chat's push-to-talk: runs Workers AI Whisper over a posted audio clip. |
 
 ### Graphics and input
 
