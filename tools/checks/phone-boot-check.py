@@ -16,6 +16,7 @@ as noise, not the specific colors this checks for at specific offsets).
 
 Usage: tools/checks/phone-boot-check.py   (from the repo root, after make kernel.elf)
 """
+from freeport import free_port
 import json, os, socket, subprocess, sys, time
 
 PORT = free_port()
@@ -71,7 +72,6 @@ if "guidesktop" in log:
 
 try:
     from PIL import Image
-from freeport import free_port
     raw = open(DUMP, "rb").read()
     if len(raw) != W * H * 4:
         fail = 1; print(f"FAIL: screendump is {len(raw)} bytes, expected exactly {W*H*4} for a {W}x{H} frame")
@@ -117,7 +117,6 @@ if not fail:
 
 try:
     from PIL import Image as _Image
-from freeport import free_port
     _img = _Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA")
     _img.convert("RGB").save(PNG)
     print(f"saved {PNG}")
@@ -140,7 +139,6 @@ import http.server, io, threading
 
 try:
     from PIL import Image as _Image2
-from freeport import free_port
 
     def jpg(color):
         b = io.BytesIO(); _Image2.new("RGB", (320, 320), color).save(b, "JPEG", quality=90); return b.getvalue()
@@ -238,7 +236,6 @@ except Exception as e:
 # the full-screen host works for both in-kernel and ring-3 apps.
 try:
     from PIL import Image as _Image3
-from freeport import free_port
 
     PW, PH = 860, 1520          # 430x760 logical at 2x, same convention as the rest of this file
     LOGICAL_W, LOGICAL_H, SC = 430, 760, 2

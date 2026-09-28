@@ -33,12 +33,12 @@ script fails by name on each of those.
 
 Usage: python3 tools/checks/mailtools-check.py
 """
+from freeport import free_port
 import http.server, json, os, socket, subprocess, sys, threading, time
 from PIL import Image
-from freeport import free_port
 
 LOG = "/tmp/jt-mailtools-serial.log"; DUMP = "/tmp/jt-mailtools.raw"
-FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()0
+FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247; PITCH = DOCK_ICON + DOCK_GAP; ICON_ROW_Y = 487
 CLOSE_X, CLOSE_Y = 94, 56; CLOSE_RED = (0xFF, 0x5F, 0x57)
