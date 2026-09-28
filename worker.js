@@ -366,8 +366,44 @@ async function handleWaitlistPost(request, env) {
     return new Response(JSON.stringify({ error: "Invalid email" }), { status: 400, headers: WAITLIST_JSON });
   }
 
+  // Only a first-time signup sends mail, so a repeat post can't be used to spam an address.
+  const isNew = (await env.WAITLIST.get(email)) === null;
   await env.WAITLIST.put(email, new Date().toISOString());
+  if (isNew) await sendWaitlistEmail(env, email);
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: WAITLIST_JSON });
+}
+
+const WAITLIST_MAIL_TEXT = [
+  "You're on the list.",
+  "",
+  "Joshua Tree is an operating system written from scratch. It boots in your browser right now, with 26 apps and Samantha, the assistant who lives inside it.",
+  "",
+  "Try the live demo: https://joshuatree.heyitsmejosh.com",
+  "Watch the 36 second ad: https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4",
+  "",
+  "The hardware is called Strata, a concept case for the OS. It is not for sale yet. When the dev kit is ready you'll get one email from me, and nothing else in between.",
+  "",
+  "Joshua",
+].join("\n");
+const WAITLIST_MAIL_HTML = `<div style="background:#F4EEE3;padding:32px 16px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Helvetica,Arial,sans-serif;color:#1A1814"><div style="max-width:520px;margin:0 auto"><p style="font-size:28px;font-weight:600;letter-spacing:-0.02em;margin:0 0 16px">You're on the list.</p><p style="font-size:16px;line-height:1.55;margin:0 0 16px">Joshua Tree is an operating system written from scratch. It boots in your browser right now, with 26 apps and Samantha, the assistant who lives inside it.</p><p style="margin:0 0 16px"><a href="https://joshuatree.heyitsmejosh.com" style="background:#B9542C;color:#F4EEE3;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:999px;display:inline-block">Try the live demo</a></p><p style="margin:0 0 24px"><a href="https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4" style="color:#B9542C;font-weight:600">Watch the 36 second ad</a></p><p style="font-size:15px;line-height:1.55;color:#6F675C;margin:0 0 16px">The hardware is called Strata, a concept case for the OS. It is not for sale yet. When the dev kit is ready you'll get one email from me, and nothing else in between.</p><p style="font-size:15px;margin:0">Joshua</p></div></div>`;
+
+// Resend confirmation. Never fails the signup: the address is already saved, a mail hiccup just logs.
+async function sendWaitlistEmail(env, email) {
+  if (!env.RESEND_API_KEY) { console.warn("waitlist mail skipped: RESEND_API_KEY not set"); return; }
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: env.MAIL_FROM || "Joshua Tree <noreply@epiphany.heyitsmejosh.com>",
+        to: [email],
+        subject: "You're on the Joshua Tree list",
+        text: WAITLIST_MAIL_TEXT,
+        html: WAITLIST_MAIL_HTML,
+      }),
+    });
+    if (!res.ok) console.warn("waitlist mail failed", res.status, await res.text());
+  } catch (e) { console.warn("waitlist mail error", String(e)); }
 }
 
 // list() pages at 1000 keys per call and this only ever needs a count, so

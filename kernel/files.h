@@ -179,7 +179,7 @@ static void gui_launch_files(void){
     gui_files_sel = 0;
     for (;;) {
         gui_draw_files_content();
-        font_draw_string("1/2 view   arrows move   enter opens   esc closes", 20, (int)window_height() - 28, 0x00807468, -1);
+        gui_draw_hint(20, (int)window_height() - 28, "1/2 view   arrows move   enter opens   esc closes", 0x00807468);
         window_present(); sleep_ticks(5);
         mouse_click_edge_sync();
         int k = get_key_or_click();
