@@ -46,7 +46,7 @@ send() {
 
 (
     sleep 3
-    echo 'sendkey esc'; sleep 1
+    echo 'sendkey ctrl-alt-backspace'; sleep 1    # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
     send "settingsclicktest"; sleep 2
     echo quit
 ) | qemu-system-i386 -kernel kernel.elf -display none -monitor stdio -serial "file:$LOG" >/dev/null 2>&1

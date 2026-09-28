@@ -76,7 +76,7 @@ def main():
                              stderr=subprocess.DEVNULL)
     try:
         time.sleep(5)
-        proc.stdin.write(b"sendkey esc\n")
+        proc.stdin.write(b"sendkey ctrl-alt-backspace\n")  # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
         proc.stdin.flush()
         time.sleep(2)
         proc.stdin.write(send("loctest").encode())

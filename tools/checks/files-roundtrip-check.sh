@@ -41,7 +41,7 @@ echo "Phase 1: Write file via filetest and verify..."
 SERIAL1="$WORKDIR/serial1"
 (
     sleep 3
-    echo 'sendkey esc'; sleep 1
+    echo 'sendkey ctrl-alt-backspace'; sleep 1    # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
     send "filetest"; sleep 8
     echo quit
 ) | qemu-system-i386 -kernel "$KERNEL" -display none -monitor stdio -serial "file:$SERIAL1" \
@@ -60,7 +60,7 @@ echo "Phase 2: Reboot and verify file persists..."
 SERIAL2="$WORKDIR/serial2"
 (
     sleep 3
-    echo 'sendkey esc'; sleep 1
+    echo 'sendkey ctrl-alt-backspace'; sleep 1    # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
     send "filetest read"; sleep 8
     echo quit
 ) | qemu-system-i386 -kernel "$KERNEL" -display none -monitor stdio -serial "file:$SERIAL2" \

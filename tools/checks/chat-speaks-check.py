@@ -126,7 +126,7 @@ with tempfile.TemporaryDirectory(prefix="jt-speak-") as work:
         stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, text=True)
     try:
         time.sleep(5)
-        q.stdin.write("sendkey esc\n"); q.stdin.flush()
+        q.stdin.write("sendkey ctrl-alt-backspace\n"); q.stdin.flush()  # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
         time.sleep(2)
         for i, word in enumerate(["hello", "missing", "empty"], 1):
             q.stdin.write(keys("say " + word)); q.stdin.flush()
