@@ -646,6 +646,25 @@ static const char *chat_process_message(char *msg, int T, int x, int you_w, int 
     font_draw_string(CHAT_YOU, x, T + 76, CHAT_DIM, -1);
     render_wrapped_text(msg, x + you_w, T + 76, body_w - you_w, 64, CHAT_INK);
 
+    /* Local command handling for easter eggs */
+    extern void window_set_drunk(int mode);
+    extern int window_get_drunk(void);
+    if (msg[0] && ((msg[0] | 32) == 'd' && (msg[1] | 32) == 'r' && (msg[2] | 32) == 'u' &&
+                   (msg[3] | 32) == 'n' && (msg[4] | 32) == 'k' && !msg[5])) {
+        window_set_drunk(1);
+        chat_push(CHAT_ROLE_USER, msg);
+        chat_push(CHAT_ROLE_ASSISTANT, "Whoa. Everything's a little wavy now.");
+        return "ready";
+    }
+    if (msg[0] && ((msg[0] | 32) == 's' && (msg[1] | 32) == 'o' && (msg[2] | 32) == 'b' &&
+                   (msg[3] | 32) == 'e' && (msg[4] | 32) == 'r' && (msg[5] | 32) == ' ' &&
+                   (msg[6] | 32) == 'u' && (msg[7] | 32) == 'p' && !msg[8])) {
+        window_set_drunk(0);
+        chat_push(CHAT_ROLE_USER, msg);
+        chat_push(CHAT_ROLE_ASSISTANT, "Okay, back to normal.");
+        return "ready";
+    }
+
     int handled = 0;
     static char pick_tool[CHAT_TOOL_MAX], pick_arg[CHAT_ARG_MAX], tool_reply[256];
     if (chat_pick(msg, pick_tool, sizeof(pick_tool), pick_arg, sizeof(pick_arg))

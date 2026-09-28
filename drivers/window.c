@@ -38,6 +38,9 @@ static u32 screen_band_h = 0;
    behaviour that shipped before this change, no new failure mode. */
 static u32 *back = 0;
 
+static int drunk_mode = 0;
+static unsigned int drunk_frame_counter = 0;
+
 static int present_logged = 0;
 /* Not debug state: a real frame counter the host-side checks read by symbol.
    With drawing offscreen, a kernel variable changing no longer means the
@@ -308,6 +311,18 @@ void window_fill_rect_phys(int px, int py, int w, int h, u32 color) {
     if (back) window_damage(px, py, w, h);
 }
 
+void window_set_drunk(int mode) { drunk_mode = mode; }
+int window_get_drunk(void) { return drunk_mode; }
+
+/* Applies horizontal sway to a row based on sin(row/40 + frame_counter) * 3.
+   Returns the X offset to apply. */
+static int drunk_sway_offset(int y) {
+    if (!drunk_mode) return 0;
+    int offset_raw = 3 * (int)((drunk_frame_counter + y / 40) % 360) / 60;
+    if (((drunk_frame_counter + y / 40) % 360) > 180) offset_raw = -offset_raw;
+    return offset_raw;
+}
+
 /* Copies the damaged rectangle of the back buffer onto the real
    framebuffer in one pass, then clears the damage. This is the only
    moment anything a caller drew becomes visible, so it belongs at a real
@@ -328,13 +343,23 @@ void window_present(void) {
         if (x1 <= x0) continue;                      /* nothing drew into this row */
         if (x0 < 0) x0 = 0;
         if (x1 > (int)phys_w) x1 = (int)phys_w;
+        /* Apply drunk mode horizontal sway to framebuffer position */
+        int sway = drunk_sway_offset(y);
+        int dst_x0 = x0 + sway;
+        if (dst_x0 < 0) dst_x0 = 0;
+        if (dst_x0 > (int)phys_w) dst_x0 = (int)phys_w;
+        int dst_x1 = x1 + sway;
+        if (dst_x1 < 0) dst_x1 = 0;
+        if (dst_x1 > (int)phys_w) dst_x1 = (int)phys_w;
+        if (dst_x1 <= dst_x0) continue;
         /* a tight run copy over the row's own dirty span, the shape a real
            memcpy compiles to, rather than an indexed per-pixel loop */
         const u32 *src = back + (u32)y * phys_w + (u32)x0;
-        u32 *dst = fb + (u32)y * phys_w + (u32)x0;
-        for (int n = x1 - x0; n > 0; n--) *dst++ = *src++;
+        u32 *dst = fb + (u32)y * phys_w + (u32)dst_x0;
+        for (int n = dst_x1 - dst_x0; n > 0; n--) *dst++ = *src++;
     }
     dmg_y0 = DMG_EMPTY; dmg_y1 = 0;
+    drunk_frame_counter++;
     window_present_count++;
     /* Soak-check leak detection: snapshot free frames and used task count. */
     pmm_free_frames_last = pmm_free_frames();
