@@ -215,30 +215,35 @@ try:
 except Exception as e:
     fail = 1; print(f"FAIL: face+label regression check errored ({e})")
 
-# Third scenario (this fix): the desktop dock and windowed apps in phone
-# mode. gui_launch_from_dock used to open every app at the desktop's own
-# fixed x/y/w/h (Calendar at x=70,w=820 -- fine on a 960-wide screen, way
-# off the right edge of a 430-wide phone), and gui_dock_icon's DOCK_BUDGET
-# (740) assumed a screen wide enough to hold it, so the dock itself drew
-# wider than a 430px phone screen and got cropped on both ends. Reach the
-# dock from a "phone" boot by escaping Samantha's full-screen avatar (one
-# ESC into her normal Chat console, a second ESC out of that back to
-# gui_run's desktop loop), then click Calendar's dock slot (GUI_DOCK_DEFAULT
-# slot 3: Apps folder, then icons 0/1/2 -- Calendar is icon 2) and assert
-# its window's right edge and the dock's first/last icon all land inside
-# the real 430px-wide screen.
+# Third scenario (1.8.0, roadmap "A phone home screen"): a real iOS-shaped
+# app grid instead of the desktop's dock+menu bar squeezed into 430px.
+# Reach it from a "phone" boot the same way scenario 2 above already does
+# (Samantha boots first, one ESC into her normal Chat console, a second
+# ESC out of that -- gui_run now calls phone_home_run() in place of the
+# old desktop dock loop for boot_to_phone, so this second ESC lands on
+# the home grid, not the old dock). Verifies: the grid actually drew
+# (icons at Calendar's and Keyrate's real cells, not blank background),
+# tapping Calendar opens it full width below the status bar (same
+# gui_draw_app_titlebar dot every full-screen app draws, kernel/
+# phone_home.h reuses gui_apps_launch's existing full-screen-open branch
+# rather than a new one), Esc returns to the grid, then the same round
+# trip for Keyrate -- a real ring-3 program (kernel/ring3app.c), proving
+# the full-screen host works for both in-kernel and ring-3 apps.
 try:
     from PIL import Image as _Image3
 
     PW, PH = 860, 1520          # 430x760 logical at 2x, same convention as the rest of this file
     LOGICAL_W, LOGICAL_H, SC = 430, 760, 2
     FIT_PORT = PORT + 2
-    FIT_LOG = "/tmp/jt-phonefit-serial.log"
-    FIT_DUMP_BEFORE = "/tmp/jt-phonefit-before.raw"
-    FIT_DUMP_AFTER = "/tmp/jt-phonefit-after.raw"
-    FIT_PNG_BEFORE = "/tmp/jt-phonefit-before.png"
-    FIT_PNG_AFTER = "/tmp/jt-phonefit-after.png"
-    for f in (FIT_LOG, FIT_DUMP_BEFORE, FIT_DUMP_AFTER):
+    FIT_LOG = "/tmp/jt-phonehome-serial.log"
+    HOME_DUMP = "/tmp/jt-phonehome-grid.raw"
+    CAL_DUMP = "/tmp/jt-phonehome-calendar.raw"
+    BACK1_DUMP = "/tmp/jt-phonehome-back1.raw"
+    KEY_DUMP = "/tmp/jt-phonehome-keyrate.raw"
+    BACK2_DUMP = "/tmp/jt-phonehome-back2.raw"
+    HOME_PNG = "/tmp/jt-home18-home.png"
+    APP_PNG = "/tmp/jt-home18-app.png"
+    for f in (FIT_LOG, HOME_DUMP, CAL_DUMP, BACK1_DUMP, KEY_DUMP, BACK2_DUMP):
         try: os.remove(f)
         except FileNotFoundError: pass
 
@@ -272,85 +277,99 @@ try:
         def dump3(path):
             cmd3({"execute": "pmemsave", "arguments": {"val": FB, "size": PW * PH * 4, "filename": path}})
 
+        def load3(path):
+            img = _Image3.frombytes("RGBA", (PW, PH), open(path, "rb").read(), "raw", "BGRA").convert("RGB")
+            return img, img.load()
+
         f3.readline(); cmd3({"execute": "qmp_capabilities"})
         time.sleep(2.5)  # past splash, samopen up
         key3("esc"); time.sleep(0.6)  # samantha avatar -> her normal Chat console
-        key3("esc"); time.sleep(0.6)  # Chat console -> desktop dock
+        key3("esc"); time.sleep(0.6)  # Chat console -> phone_home_run's grid
 
-        dump3(FIT_DUMP_BEFORE)
-        raw_before = open(FIT_DUMP_BEFORE, "rb").read()
-        img_before = _Image3.frombytes("RGBA", (PW, PH), raw_before, "raw", "BGRA").convert("RGB")
-        img_before.save(FIT_PNG_BEFORE)
-        pxb = img_before.load()
-        BG = (0xEF, 0xEB, 0xE4)  # DOCK_TRAY_COLOR
+        dump3(HOME_DUMP)
+        img_home, px_home = load3(HOME_DUMP)
+        img_home.save(HOME_PNG)
+        GUI_BG = (0xFA, 0xF8, 0xF6)
 
-        def not_bg(x, y, tol=18):
-            # Sample a small neighbourhood, not one pixel: an icon glyph
-            # can have a near-tray-gray pixel dead center (Trash's lid),
-            # which would false-negative a single-point sample.
-            for dx in range(-4, 5, 2):
-                for dy in range(-4, 5, 2):
-                    p = pxb[(x + dx) * SC + 1, (y + dy) * SC + 1]
-                    if any(abs(p[i] - BG[i]) > tol for i in range(3)):
+        def not_bg(px, x, y, bg=GUI_BG, tol=16):
+            for dx in range(-6, 7, 3):
+                for dy in range(-6, 7, 3):
+                    p = px[(x + dx) * SC + 1, (y + dy) * SC + 1]
+                    if any(abs(p[i] - bg[i]) > tol for i in range(3)):
                         return True
             return False
 
-        # Computed dock geometry for this exact build: DOCK_BUDGET clamped
-        # to (430 - 40) = 390 gives DOCK_ICON=28, DOCK_GAP=6, DOCK_PAD=10,
-        # dock_x0=21, so slot N's icon centre sits at 31 + N*34 + 14.
-        DOCK_ICON, DOCK_GAP, DOCK_PAD = 28, 6, 10
-        SLOT0_X = 31
-        PITCH = DOCK_ICON + DOCK_GAP
-        DOCK_Y0 = LOGICAL_H - DOCK_ICON - 2 * DOCK_PAD - 24
-        ICON_CY = DOCK_Y0 + DOCK_PAD + DOCK_ICON // 2
-        first_cx = SLOT0_X + DOCK_ICON // 2
-        last_cx = SLOT0_X + 10 * PITCH + DOCK_ICON // 2
+        # Grid geometry from kernel/phone_home.h's phone_home_home_grid_geom:
+        # PHONE_HOME_COLS=4, cell_w=430/4=107, cell_h=96, tile=52,
+        # x0=0, y0=PHONE_STATUS_H(44)+20=64. cell (row,col) centre:
+        # cx = col*cell_w + cell_w//2, cy = y0 + row*cell_h + tile.
+        CELL_W, CELL_H, TILE, Y0 = 107, 96, 52, 64
 
-        if first_cx >= LOGICAL_W or last_cx >= LOGICAL_W:
-            fail = 1
-            print(f"FAIL: dock's first ({first_cx}) or last ({last_cx}) icon centre falls outside the {LOGICAL_W}px-wide phone screen")
-        elif not not_bg(first_cx, ICON_CY):
-            fail = 1
-            print(f"FAIL: dock's first icon (Apps folder) not drawn at ({first_cx},{ICON_CY}) -- cropped off screen")
-        elif not not_bg(last_cx, ICON_CY):
-            fail = 1
-            print(f"FAIL: dock's last icon (Trash) not drawn at ({last_cx},{ICON_CY}) -- cropped off screen")
+        def cell_center(icon):
+            row, col = icon // 4, icon % 4
+            return col * CELL_W + CELL_W // 2, Y0 + row * CELL_H + TILE
+
+        cal_cx, cal_cy = cell_center(2)   # Calendar, APPS[2]
+        key_cx, key_cy = cell_center(9)   # Keyrate, APPS[9], ring-3
+
+        if not not_bg(px_home, cal_cx, cal_cy):
+            fail = 1; print(f"FAIL: no icon drawn at Calendar's grid cell ({cal_cx},{cal_cy})")
+        elif not not_bg(px_home, key_cx, key_cy):
+            fail = 1; print(f"FAIL: no icon drawn at Keyrate's grid cell ({key_cx},{key_cy})")
         else:
-            print(f"PASS: dock's first ({first_cx}) and last ({last_cx}) icon both fully on screen (width {LOGICAL_W})")
+            print(f"PASS: home grid drew real icons at Calendar ({cal_cx},{cal_cy}) and Keyrate ({key_cx},{key_cy})")
 
-        # Click Calendar (dock slot 3: Apps folder, icon0, icon1, icon2=Calendar)
-        cal_cx = SLOT0_X + 3 * PITCH + DOCK_ICON // 2
-        move3(cal_cx, ICON_CY); time.sleep(0.3); click3(); time.sleep(1.0)
-
-        dump3(FIT_DUMP_AFTER)
-        raw_after = open(FIT_DUMP_AFTER, "rb").read()
-        img_after = _Image3.frombytes("RGBA", (PW, PH), raw_after, "raw", "BGRA").convert("RGB")
-        img_after.save(FIT_PNG_AFTER)
-        pxa = img_after.load()
         CLOSE_RED = (0xFF, 0x5F, 0x57)
 
-        def is_red(p): return max(abs(p[i] - CLOSE_RED[i]) for i in range(3)) <= 20
+        def is_red(px, x, y): return max(abs(px[x * SC + 1, y * SC + 1][i] - CLOSE_RED[i]) for i in range(3)) <= 20
 
-        # Calendar opens at the clamped x=10,y=40,w=410,h=385 (see kernel.c's
-        # gui_launch_from_dock): close dot at (x+24, y+16) = (34,56), right
-        # edge of the window frame at x+w = 420, inside the 430px screen.
-        close_p = pxa[34 * SC + 1, 56 * SC + 1]
-        win_right = 10 + 410
-        if win_right >= LOGICAL_W:
-            fail = 1
-            print(f"FAIL: Calendar window right edge ({win_right}) is not within the {LOGICAL_W}px screen")
-        elif not is_red(close_p):
-            fail = 1
-            print(f"FAIL: Calendar window close dot not found at (34,56): {close_p} -- window may not have opened")
+        # Calendar: tap it, confirm the full-screen titlebar's close dot
+        # (gui_draw_app_titlebar, drawn at logical (26,20) whenever
+        # gui_app_windowed was 0 on entry -- the exact branch
+        # gui_apps_launch takes from phone_home_run), then Esc back.
+        move3(cal_cx, cal_cy); time.sleep(0.3); click3(); time.sleep(1.0)
+        dump3(CAL_DUMP)
+        img_cal, px_cal = load3(CAL_DUMP)
+        img_cal.save(APP_PNG)
+        if not is_red(px_cal, 26, 20):
+            fail = 1; print(f"FAIL: Calendar didn't open full screen -- no titlebar close dot at (26,20): {px_cal[53,41]}")
         else:
-            print(f"PASS: Calendar window right edge ({win_right}px) fits inside the {LOGICAL_W}px phone screen, close dot confirms it opened")
-        print(f"saved {FIT_PNG_BEFORE} and {FIT_PNG_AFTER}")
+            print("PASS: Calendar opened full screen below the status bar (titlebar close dot found)")
+
+        key3("esc"); time.sleep(0.6)
+        dump3(BACK1_DUMP)
+        _, px_back1 = load3(BACK1_DUMP)
+        if not not_bg(px_back1, cal_cx, cal_cy):
+            fail = 1; print("FAIL: Esc from Calendar didn't return to the home grid (Calendar's icon cell is blank)")
+        else:
+            print("PASS: Esc from Calendar returns to the home grid")
+
+        # Keyrate: same round trip, a real ring-3 program this time
+        # (kernel/ring3app.c), proving the full-screen host isn't
+        # in-kernel-apps-only.
+        move3(key_cx, key_cy); time.sleep(0.3); click3(); time.sleep(1.0)
+        dump3(KEY_DUMP)
+        _, px_key = load3(KEY_DUMP)
+        if not is_red(px_key, 26, 20):
+            fail = 1; print(f"FAIL: Keyrate (ring-3) didn't open full screen -- no titlebar close dot at (26,20): {px_key[53,41]}")
+        else:
+            print("PASS: Keyrate (ring-3) opened full screen below the status bar")
+
+        key3("esc"); time.sleep(0.6)
+        dump3(BACK2_DUMP)
+        _, px_back2 = load3(BACK2_DUMP)
+        if not not_bg(px_back2, key_cx, key_cy):
+            fail = 1; print("FAIL: Esc from Keyrate didn't return to the home grid (Keyrate's icon cell is blank)")
+        else:
+            print("PASS: Esc from Keyrate (ring-3) returns to the home grid")
+        print(f"saved {HOME_PNG} and {APP_PNG}")
     finally:
         try: cmd3({"execute": "quit"})
         except (ConnectionResetError, BrokenPipeError, OSError, NameError): pass
         try: q3.wait(timeout=5)
         except subprocess.TimeoutExpired: q3.kill()
 except Exception as e:
-    fail = 1; print(f"FAIL: phone dock/window-fit check errored ({e})")
+    fail = 1; print(f"FAIL: phone home screen check errored ({e})")
+
 
 sys.exit(fail)

@@ -6928,7 +6928,7 @@ static void gui_menu_run_item(int item){
         for (;;) __asm__ volatile ("hlt");
     }
 }
-
+#include "phone_home.h" /* v1.8.0: phone mode's real home screen, see its own header comment */
 static void gui_run(void){
     /* v42: 16:9, 960x540 logical at 2x = 1920x1080 physical, the native
        size of the monitor this actually runs fullscreen on. QEMU's cocoa
@@ -6959,7 +6959,8 @@ static void gui_run(void){
     gui_draw_boot_screen();
     gui_order_init();
     if (boot_to_samantha) { boot_to_samantha = 0; chat_boot_samantha_open(); }
-    else serial_puts("guidesktop\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: the icon desktop drew first, samantha mode never reaches here before her avatar */
+    else if (!boot_to_phone) serial_puts("guidesktop\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: the icon desktop drew first, samantha mode never reaches here before her avatar; phone mode never draws this desktop at all (see below), so it must not claim it did */
+    if (boot_to_phone) { phone_home_run(); return; } /* v1.8.0: leaving Samantha lands on a real home screen, not the desktop's dock squeezed into 430px; never returns */
     dock_hover = dock_presented_hover = -1;
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;
     /* press_slot: the slot the mouse went down on, latched until release.
