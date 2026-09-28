@@ -49,7 +49,7 @@ send() {
 
 (
     sleep 3
-    echo 'sendkey esc'; sleep 1
+    echo 'sendkey ctrl-alt-backspace'; sleep 1    # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
     send "heaptest"; sleep 2
     send "tasktest"; sleep 3
     send "preempttest"; sleep 3

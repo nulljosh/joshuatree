@@ -96,8 +96,8 @@ try:
         cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
         time.sleep(0.1)
         cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
-    def key(qcode):
-        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qcode}]}})
+    def key(*qcodes):
+        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": q} for q in qcodes]}})
         time.sleep(0.35)  # real, measured cadence search-check.py/contacts-keystroke-check.sh already rely on
     def dump():
         cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
@@ -112,8 +112,9 @@ try:
                     dark += 1
         return dark
 
-    # Step 1: esc drops the booted desktop back to the real text shell.
-    key("esc"); time.sleep(0.5)
+    # Step 1: Ctrl+Alt+Backspace drops the booted desktop back to the real
+    # text shell (plain Esc on a bare desktop is now a no-op, kernel.c gui_run).
+    key("ctrl", "alt", "backspace"); time.sleep(0.5)
 
     # Step 2: spawn a real, persistent task and learn its real slot id.
     # Keys dropped on slow runners if sent in burst; poll for result after typing

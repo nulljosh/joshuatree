@@ -7130,6 +7130,12 @@ static void gui_run(void){
                 }
             }
         }
+        /* Text shell: Ctrl+Alt+Backspace, the deliberate way off the
+           desktop now that a bare Esc there is a no-op. */
+        if (kbd_ctrl && kbd_alt) {
+            int shell_pk = kbd_peek();
+            if (shell_pk == 0x0E) { kbd_pop(); break; }
+        }
         if (gui_multiwin_interactive(mw_topmost_icon)) {
             int mwk = gui_multiwin_key_nonblock();
             if (mwk >= 0) {
@@ -7187,13 +7193,9 @@ static void gui_run(void){
             if (sc >= 0 && !(sc & 0x80)) {
                 char c = SC[sc & 0x7F];
                 if (c == 27) {
-                    /* Esc closes the focused window first. Only a bare desktop
-                       quits to the shell. Files has no key handler of its own,
-                       so before this Esc with Files open dropped the whole
-                       desktop to text mode. */
-                    if (gui_window_count == 0) break;
-                    gui_multiwin_close(gui_window_count - 1);
-                    mw_key_repaint = 1;
+                    /* Esc closes the window; a no-op on a bare desktop (Ctrl+Alt+Backspace reaches the shell). */
+                    if (gui_window_count == 0) { /* no-op */ }
+                    else { gui_multiwin_close(gui_window_count - 1); mw_key_repaint = 1; }
                 } else if (c == '\n' && gui_window_count == 0) {
                     gui_launch_apps(); /* direct, not gui_launch_from_dock's boxed frame (moves the a11y close pixel) */
                 }
