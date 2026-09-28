@@ -187,7 +187,7 @@ static void auth_hash_password(const unsigned char salt[AUTH_SALT_LEN], const ch
 
 /* Salts come from kernel/entropy.c: an HMAC_DRBG (SHA-256, vendored
    BearSSL) seeded from RDRAND when present, RDTSC jitter, and interrupt
-   timing. 1.7.8 replaced the tick-seeded LCG that lived here; it made
+   timing. 1.7.10 replaced the tick-seeded LCG that lived here; it made
    salts guessable from boot timing. Stored accounts keep their old salts
    next to their hashes, so nothing already on disk changes. */
 static void auth_gen_salt(unsigned char salt[AUTH_SALT_LEN]) {
