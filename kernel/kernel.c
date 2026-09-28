@@ -107,8 +107,6 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app_curbfind.h"
 #include "app_keyrate.h"
 #include "app.h"
-#include "keyrate.h"
-#include "toroid.h"
 #include "quotestreak.h"
 #include "calculator.h"
 #include "app_bookrank.h"
@@ -2065,7 +2063,7 @@ static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_ro
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
@@ -6237,12 +6235,12 @@ static const struct app APPS[GUI_APP_COUNT] = {
     /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       gui_launch_chat_app,   0, 0},
     /*  7 */ {"Weather",    0x0085144B, gui_icon_weather,    gui_launch_weather,    gui_draw_weather_content,   gui_weather_mw_key},
     /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        gui_launch_curbfind,   0, 0},
-    /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c; drivers/app_keyrate.c's in-kernel version stays for now */
+    /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c */
     /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       gui_launch_bookrank,   0, 0},
     /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_open,      0, 0},
     /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       gui_launch_plan,       0, 0},
     /* 13 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      gui_launch_lexly,      0, 0},
-    /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_open,           0, 0},
+    /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */
     /* 15 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   gui_launch_sparkjar,   0, 0},
     /* 16 */ {"Homeqi",     0x00566A3A, gui_icon_homeqi,     gui_open_homeqi,       0, 0},
     /* 17 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  gui_launch_fieldbook,  0, 0},
@@ -7005,7 +7003,7 @@ static void gui_run(void){
     cursor_saved_x = cursor_saved_y = -1;
     gui_cursor_save(mx, my);
     gui_draw_cursor(mx, my);
-    gui_dock_prewarm(); ring3app_autoopen_run(mx, my); /* `open=keyrate` boot flag, if set */
+    gui_dock_prewarm(); ring3app_autoopen_run(mx, my); /* `open=keyrate` / `open=toroid` boot flag, if set */
     for (;;) {
         window_present(); __asm__ volatile ("hlt");
         /* v0.76.17: direct request ("time in top right needs live reload
@@ -9699,7 +9697,7 @@ void kmain(unsigned int multiboot_info_addr){
             if (pc[0]=='n' && pc[1]=='o' && pc[2]=='d' && pc[3]=='h' && pc[4]=='c' && pc[5]=='p' && (pc[6]==' ' || pc[6]==0)) { net_nodhcp = 1; break; }
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='d' && pc[1]=='r' && pc[2]=='u' && pc[3]=='n' && pc[4]=='k' && (pc[5]==' ' || pc[5]==0)) { extern void window_set_drunk(int); window_set_drunk(1); serial_puts("drunk\n"); break; }
-        ring3app_autoopen_arm(cl); /* `open=keyrate` boot flag */
+        ring3app_autoopen_arm(cl); /* `open=keyrate` / `open=toroid` boot flag */
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;

@@ -17,7 +17,8 @@ Samantha runs the machine. Mobile first by 2026-10-04: phone mode, the landing d
 
 ## Toward 2.0: apps leave the kernel
 - [x] [Fable] Step one, 1.7.7: Keyrate is the first app running as a real ring-3 process (`user/keyrate.c`, launched by `kernel/ring3app.c`) with its own window through two new syscalls (`SYS_WINDOW_OPEN`, `SYS_WINDOW_POLL`) and real crash isolation: a null write inside it is reaped by the kernel, the window is torn down, the desktop comes back. Proven by `tools/checks/ring3app-check.py`. Not 2.0 yet.
-- [ ] [Sonnet] Port the remaining apps the same way, one PR each, smallest first (Toroid, Quotes, Calculator next). Each PR: `user/<app>.c`, a `ring3app.c` launcher entry, the in-kernel copy deleted once the check passes.
+- [x] [Fable] Step two, 1.7.11: Toroid runs at ring 3 (`user/toroid.c`, bit-packed grids in its own .data), `kernel/ring3app.c` is one table-driven launcher (`RING3_APPS`), and the in-kernel copies of both Keyrate and Toroid are deleted. `tools/checks/ring3toroid-check.py` proves it draws, closes both ways, crashes safely.
+- [ ] [Sonnet] Port the remaining apps the same way, one PR each, smallest first (Quotes, Calculator next). Each PR: `user/<app>.c`, a row in `RING3_APPS`, the in-kernel copy deleted once the check passes.
 - [ ] [Fable] What the ports will need from the ABI: a font syscall (Keyrate carries its own 8x16 bitmap), a tick clock finer than `SYS_TIME`'s seconds, more than one program window at a time, and the framebuffer pages flipped back to supervisor-only on release (today they are zeroed and re-mapped on the next open).
 
 ## Architecture to A+ (refreshed 2026-09-27)

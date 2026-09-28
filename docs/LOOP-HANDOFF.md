@@ -16,9 +16,7 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-Main is 1.7.6 and live: the phone demo runs full width, iPhone audio unlocks properly, and the next-up line reads in plain words. This 1.7.7 batch brings Keyrate out into ring 3 with real crash isolation, a real randomness pool backing password salts, a fix for the phone face label, and a deploy-config check in CI. #268 (1-bit ordered dither) is being tested separately and merges on its own.
-
-kernel.c is still carrying every other app. That number going down is the real progress bar for 2.0.
+Main is 1.7.10 and live. 1.7.11 puts a second app in ring 3: Toroid runs as its own program next to Keyrate, `kernel/ring3app.c` is one table-driven launcher (a row per app: name, embedded binary, VFS filename), and the in-kernel copies of both are deleted. Two apps out, the rest still in kernel.c. That number going down is the real progress bar for 2.0. Quotes and Calculator are next, one PR each.
 
 ## Next, in order
 
