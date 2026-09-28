@@ -99,7 +99,7 @@ def main(clip, words, wav, out):
         # and feathered in. Whole-frame cuts read as "photos stapled
         # together" (v26, Joshua: C) because hair and eyes jumped with them.
         yy, xx = np.mgrid[0:320, 0:320]
-        ell = ((xx - 160) / 58.0) ** 2 + ((yy - 214) / 40.0) ** 2
+        ell = ((xx - 160) / 62.0) ** 2 + ((yy - 226) / 52.0) ** 2   # lips and chin: the jaw drops with the vowel
         mask = np.clip((1.35 - ell) / 0.5, 0, 1)[..., None]          # soft ellipse over mouth and lips
         ring = (ell > 0.9) & (ell < 1.6)                               # skin around it, for alignment
         arr = [np.asarray(im, float) for im in imgs]
@@ -137,22 +137,62 @@ def main(clip, words, wav, out):
         # moving mouth). Add a slow sway plus a small nod on each stressed
         # syllable (loudness peak), and a slight tilt, on a zoomed frame so
         # the edges never show.
+        # Slow overlapping waves, not noise: smoothed random walks still
+        # wobbled frame to frame (v29, Joshua: "janky").
         rng = np.random.default_rng(7)
-        def drift(sd, smooth):
-            x = np.cumsum(rng.normal(0, 1, T + 50))
-            x = np.convolve(x, np.ones(smooth) / smooth, "same")[25:25 + T]
-            x = x - np.linspace(x[0], x[-1], T)
-            return sd * x / (x.std() + 1e-9)
-        sx, sy, rot = drift(5, 21), drift(3, 25), drift(0.8, 31)
+        tt = np.arange(T) / FPS
+        def sway(amp, *hz):
+            ph = rng.uniform(0, 2 * np.pi, len(hz))
+            return amp * sum(w * np.sin(2 * np.pi * f * tt + p0) for (f, w), p0 in zip(hz, ph))
+        sx = sway(9.0, (0.17, .6), (0.31, .4))
+        sy = sway(6.0, (0.13, .6), (0.27, .4))
+        rot = sway(1.3, (0.11, .7), (0.23, .3))
         lf = np.array([loud[k] if k < len(loud) else 0 for k in range(T)])
-        peaks = [k for k in range(2, T - 2) if lf[k] > 0.7 and lf[k] == lf[k - 2:k + 3].max()]
+        # Move with the voice: livelier while she speaks, settling in pauses
+        # (a real talker's head motion rides the speech energy).
+        env = np.convolve(lf, np.ones(int(0.6 * FPS)) / int(0.6 * FPS), "same")
+        env = 0.45 + 0.9 * env / (env.max() + 1e-9)
+        sx, sy, rot = sx * env, sy * env, rot * env
+        peaks, last = [], -99
+        for k in range(3, T - 3):
+            if lf[k] > 0.75 and lf[k] == lf[k - 3:k + 4].max() and k - last >= int(0.6 * FPS):
+                peaks.append(k); last = k
         nod = np.zeros(T)
+        L = int(0.5 * FPS)   # a nod: down and back up over half a second, raised-cosine
         for k in peaks:
-            for d in range(-3, 8):
-                if 0 <= k + d < T:
-                    nod[k + d] += 4 * np.exp(-((d - 1) / 2.5) ** 2)   # dip about 4px, back up in ~0.3s
+            for d in range(L):
+                if k + d < T:
+                    nod[k + d] += 3 * 0.5 * (1 - np.cos(2 * np.pi * d / L))
+        # Blinks. Keeping her eyes open (v18) left her never blinking, which
+        # reads as a stare. Real people blink every 3 to 5 s, about 0.25 s
+        # long. BLINK_CLIP is the same render before its eyes were fixed, so
+        # its frames line up; take its first close and reopen.
+        blink_frames = []
+        bc = os.environ.get("BLINK_CLIP")
+        if bc:
+            subprocess.run(["ffmpeg", "-v", "error", "-i", bc, "-vf", f"crop=ih:ih:(iw-ih)/2:0,scale=320:320,fps={FPS}",
+                            f"{w}/b-%04d.png"], check=True)
+            bf = [np.asarray(Image.open(f).convert("RGB"), float) for f in sorted(glob.glob(f"{w}/b-*.png"))]
+            dark = np.array([(b.mean(2)[105:135, 90:230] < 70).mean() for b in bf])
+            shut = dark < .85 * np.percentile(dark, 90)
+            c = int(np.argmax(shut)) if shut.any() else -1
+            if c > 3:
+                o = c + int(np.argmin(shut[c:])) if not shut[c:].all() else -1
+                if o > c:
+                    blink_frames = bf[c - 3:c + 1] + bf[o:o + 3]      # closing, then opening
+        ey = np.clip(np.minimum((yy - 88) / 10.0, (150 - yy) / 10.0), 0, 1) * np.clip(np.minimum((xx - 70) / 12.0, (250 - xx) / 12.0), 0, 1)
+        emask = ey[..., None]
+        blink_at = {}
+        if blink_frames:
+            t = int(FPS * rng.uniform(1.0, 2.5))
+            while t < T - len(blink_frames):
+                for d, fr in enumerate(blink_frames):
+                    blink_at[t + d] = fr
+                t += int(FPS * rng.uniform(3.0, 5.0))
         for k in range(len(path)):
             base = arr[k % N]
+            if k in blink_at:
+                base = base * (1 - emask) + blink_at[k] * emask
             im = Image.fromarray((base * (1 - mask) + morphed[k] * mask).astype(np.uint8))
             im = im.rotate(rot[k], resample=Image.BICUBIC, center=(160, 200),
                            translate=(sx[k], sy[k] + nod[k]))
