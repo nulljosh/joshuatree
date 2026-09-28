@@ -116,6 +116,7 @@ once |1|HTTP/JSON/FAT16 parser fuzz (ASan/UBSan, truncation+mutation+nasties)|./
 once |5|Text-input bounds: json.c maxlen 0/1/truncation + auth const-time compare (ASan/UBSan)|./tools/checks/input-bounds-check.sh
 once |2|Password hashing, host harness: PBKDF2-HMAC-SHA256 vectors (RFC 7914, RFC 6070 for SHA-256), legacy record upgrade, USERS.TXT parse|./tools/checks/auth-check.sh
 retry|6|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclose-check.py
+retry|7|Esc on a bare desktop does not quit the GUI; Mail still opens from the dock|python3 ./tools/checks/esc-desktop-check.py
 retry|0|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
 retry|1|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
 retry|1|Apps folder layout (no black band, no row spill, no ghost icons)|python3 ./tools/checks/appsfolder-layout-check.py
