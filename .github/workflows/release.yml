@@ -32,6 +32,7 @@ jobs:
           shasum -a 256 "joshuatree-$v.iso" > SHA256SUMS
           echo "ISO_FILE=joshuatree-$v.iso" >> "$GITHUB_ENV"
       - name: Tag and release if this version has none yet
+        id: rel
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -44,3 +45,12 @@ jobs:
           [ -s notes.md ] || git log -1 --format=%B > notes.md
           printf '%s\n' '' '## Boot it' '' 'The release above includes `joshuatree-'"$v"'.iso`, a bootable disk image. Write it to a USB stick to boot on real hardware:' '' 'macOS:' '```sh' 'diskutil list                    # find the disk (e.g. disk2)' 'sudo dd if=joshuatree-'"$v"'.iso of=/dev/rdiskN bs=4m' '```' '' 'Linux:' '```sh' 'lsblk                            # find the device (e.g. sdb)' 'sudo dd if=joshuatree-'"$v"'.iso of=/dev/sdX bs=4M status=progress conv=fsync' '```' '' 'This will erase the stick. Double-check the device path first. Boot the machine from the USB stick (F12/F10/Esc/Del at power-on for most PCs) to start the kernel.' '' 'The ISO is proven to boot in QEMU (CD-ROM and USB-style raw disk) via the CI regression suite. Real hardware testing is ongoing.' >> notes.md
           gh release create "$tag" --target "$GITHUB_SHA" -t "$v: ${title:-$(git log -1 --format=%s)}" -F notes.md "${{ env.ISO_FILE }}" SHA256SUMS
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"; echo "title=${title:-$(git log -1 --format=%s)}" >> "$GITHUB_OUTPUT"
+      - name: Announce the release on X (dry run until the X keys are set)
+        if: steps.rel.outputs.tag != ''
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+        run: python3 tools/release-tweet.py "${{ steps.rel.outputs.tag }}" "${{ steps.rel.outputs.title }}" "https://github.com/${{ github.repository }}/releases/tag/${{ steps.rel.outputs.tag }}"
