@@ -15,7 +15,7 @@ Ask Samantha, the built-in assistant, to set a reminder, take a note or open an 
 
 ## Boot it
 
-**Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
+**Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com) -- on a phone, the demo boots straight into Samantha, full screen.
 
 **USB stick:** Download from [Releases](https://github.com/nulljosh/joshuatree/releases), then:
 ```sh

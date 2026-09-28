@@ -225,6 +225,17 @@
   #stage-wrap { background: #000; position: relative; --stage-h: min(80svh, calc(100svh - 270px)); width: min(100%, calc(var(--stage-h) * 16 / 9)); height: auto; max-height: var(--stage-h); aspect-ratio: 16 / 9; z-index: 0; overflow: hidden; border-radius: 6px; }
   #demo-frame.demo-full #stage-wrap { width: min(100vw, calc(100dvh * 16 / 9)); max-height: 100dvh; border-radius: 0; }
   @media (max-width: 600px) { #stage-wrap { width: 100%; max-height: none; } }
+  /* Phone boot (embed.js's IS_PHONE, <=520px): the kernel opens a real
+     430x932 portrait mode instead of the desktop's 16:9, so the box has
+     to actually be that shape, not 16:9 squeezed into a narrow column --
+     the same "aspect-ratio has to match what's really being drawn" rule
+     the 0.76.40 revert note above already learned the hard way. 430/932
+     lands almost exactly on a real phone's 9/19.5, so this is a real
+     phone shape, not an arbitrary number. */
+  @media (max-width: 520px) {
+    #stage-wrap { aspect-ratio: 430 / 932; width: min(100%, calc(var(--stage-h) * 430 / 932)); }
+    #demo-frame.demo-full #stage-wrap { width: min(100vw, calc(100dvh * 430 / 932)); aspect-ratio: 430 / 932; }
+  }
   /* The demo's full screen toggle (#demo-frame.demo-full, wired in the
      script below): always shown, a tap target plus Esc to leave. Nothing
      hides the hero copy on click any more. */

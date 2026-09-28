@@ -800,8 +800,18 @@ static void chat_boot_samantha_open(void) {
     gui_draw_app_titlebar("Samantha");
     int T = gui_app_dy();
     int bottom = (int)window_height() - 40;
-    chat_face_draw_big(T + 20, bottom - 76);
-    render_wrapped_text("Tell me what to do.", 20, bottom - 60, (int)window_width() - 40, 20, CHAT_DIM);
+    /* phone: portrait layout -- face centered in the top half sized to the
+       screen width, caption right under it, input box stays pinned to the
+       bottom same as the desktop layout below. Desktop/samantha-only keeps
+       its original bottom-anchored face (unchanged from PR #246). */
+    if (boot_to_phone) {
+        int half = T + 20 + ((int)window_height() - (T + 20)) / 2;
+        int cy = chat_face_draw_big(T + 20, half);
+        render_wrapped_text("Tell me what to do.", 20, cy + 16, (int)window_width() - 40, 20, CHAT_DIM);
+    } else {
+        chat_face_draw_big(T + 20, bottom - 76);
+        render_wrapped_text("Tell me what to do.", 20, bottom - 60, (int)window_width() - 40, 20, CHAT_DIM);
+    }
     serial_puts("samopen\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: full-screen avatar is up */
 
     unsigned int n = 0;

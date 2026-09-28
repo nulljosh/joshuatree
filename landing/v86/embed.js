@@ -44,7 +44,12 @@ if (typeof document !== "undefined") (function () {
   // scoped to exactly our #screen_text div and #screen_canvas canvas.
   // v42: the kernel's cursor and layout live in this LOGICAL space; the
   // physical mode is 2x this. Keep in sync with gui_run's window_open_scaled.
-  var LOGICAL_W = 960, LOGICAL_H = 540;
+  // Phone: a narrow visitor boots "phone samantha" instead, which opens a
+  // real 430x932 portrait mode at scale 1 (kernel.c's boot_to_phone), not
+  // the desktop's 960x540 shrunk to fit -- so this file's own logical
+  // space has to switch to match, 1:1, instead of downscaling a desktop.
+  var IS_PHONE = typeof matchMedia === "function" && matchMedia("(max-width: 520px)").matches;
+  var LOGICAL_W = IS_PHONE ? 430 : 960, LOGICAL_H = IS_PHONE ? 932 : 540;
   var GLIDE_MAX_MS = 700; // longest tour cursor glide, see moveCursorTo
   // v52.6: real shadow cursor position, kept in sync by every real send
   // this file makes (mousemove, touchmove drags, and moveCursorTo's own
@@ -202,7 +207,11 @@ if (typeof document !== "undefined") (function () {
     // ?samantha, same opt-in shape as ?portfolio right above: kernel.c's
     // boot_to_samantha reads this exact token and skips the desktop for
     // Chat's full-screen avatar view (kernel/chat.h's chat_boot_samantha_open).
-    cmdline: (/[?&]portfolio\b/.test(location.search) ? "portfolio " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com", // kmain reads this and puts Joshua's own apps on the dock
+    // IS_PHONE (narrow viewport, no ?param needed) always adds "phone ",
+    // which itself forces boot_to_samantha in the kernel -- a phone
+    // visitor gets her portrait view unconditionally, desktop visitors
+    // are untouched and still need ?samantha to opt in.
+    cmdline: (IS_PHONE ? "phone samantha " : "") + (/[?&]portfolio\b/.test(location.search) ? "portfolio " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com", // kmain reads this and puts Joshua's own apps on the dock
     autostart: true,
     // Real network backend for the emulated NIC: without this, v86's NIC
     // (ne2k by default, see drivers/ne2k.c) is wired to nothing, every
