@@ -45,8 +45,13 @@ static int face_idle_at = 0;          /* idle loop position */
 static int face_talk_at = 0;          /* talk loop position */
 /* A 16x16 grey fingerprint of every frame, so a switch between the idle and
    talk clips can land on the frame that looks most like the current one
-   instead of cutting to a different head position. */
-static unsigned char face_sig_idle[FACE_IDLE_MAX][256], face_sig_talk[FACE_TALK_MAX][256];
+   instead of cutting to a different head position. Heap-allocated (not
+   .bss) because FACE_IDLE_MAX + FACE_TALK_MAX frames at 256 bytes each is
+   21KB that only exists once facehost= is on the command line and a face
+   is actually loading; carrying it in .bss year-round crowds the ring-3
+   .userimg window right next to it (see boot/linker.ld). Null until
+   chat_face_load allocates it. */
+static unsigned char (*face_sig_idle)[256] = 0, (*face_sig_talk)[256] = 0;
 static unsigned int face_open[FACE_TALK_MAX];   /* how open the mouth is in each talk frame */
 static unsigned int face_open_lo = 0, face_open_hi = 1;
 
@@ -146,13 +151,25 @@ static void chat_face_load(void) {
        means no face, exactly like every sibling feature. */
     unsigned char *file = net_init(0x0A00020F) ? kmalloc(FACE_FILE_MAX) : 0;
     if (file) {
-        while (face_idle_n < FACE_IDLE_MAX && (face_idle[face_idle_n] = face_fetch(file, "idle", face_idle_n))) { face_sig(face_idle[face_idle_n], face_sig_idle[face_idle_n]); face_idle_n++; }
-        if (face_idle_n)
-            while (face_talk_n < FACE_TALK_MAX && (face_talk[face_talk_n] = face_fetch(file, "talk", face_talk_n))) { face_sig(face_talk[face_talk_n], face_sig_talk[face_talk_n]); face_open[face_talk_n] = face_openness(face_talk[face_talk_n]); face_talk_n++; }
-        if (face_talk_n) {
-            face_open_lo = face_open_hi = face_open[0];
-            for (int i = 1; i < face_talk_n; i++) { if (face_open[i] < face_open_lo) face_open_lo = face_open[i]; if (face_open[i] > face_open_hi) face_open_hi = face_open[i]; }
-            if (face_open_hi == face_open_lo) face_open_hi++;
+        /* Both sig tables or neither: face_nearest/chat_face_tick assume
+           face_idle_n/face_talk_n > 0 implies a live sig table, so a
+           partial allocation must not leave either counter set. */
+        face_sig_idle = (unsigned char (*)[256])kmalloc(FACE_IDLE_MAX * 256u);
+        face_sig_talk = (unsigned char (*)[256])kmalloc(FACE_TALK_MAX * 256u);
+        if (face_sig_idle && face_sig_talk) {
+            while (face_idle_n < FACE_IDLE_MAX && (face_idle[face_idle_n] = face_fetch(file, "idle", face_idle_n))) { face_sig(face_idle[face_idle_n], face_sig_idle[face_idle_n]); face_idle_n++; }
+            if (face_idle_n)
+                while (face_talk_n < FACE_TALK_MAX && (face_talk[face_talk_n] = face_fetch(file, "talk", face_talk_n))) { face_sig(face_talk[face_talk_n], face_sig_talk[face_talk_n]); face_open[face_talk_n] = face_openness(face_talk[face_talk_n]); face_talk_n++; }
+            if (face_talk_n) {
+                face_open_lo = face_open_hi = face_open[0];
+                for (int i = 1; i < face_talk_n; i++) { if (face_open[i] < face_open_lo) face_open_lo = face_open[i]; if (face_open[i] > face_open_hi) face_open_hi = face_open[i]; }
+                if (face_open_hi == face_open_lo) face_open_hi++;
+            }
+        } else {
+            /* No memory for the sig tables: same as a dead network or a
+               404 on frame 0, no face this boot. */
+            if (face_sig_idle) { kfree(face_sig_idle); face_sig_idle = 0; }
+            if (face_sig_talk) { kfree(face_sig_talk); face_sig_talk = 0; }
         }
         kfree(file);
     }
