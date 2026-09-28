@@ -958,20 +958,7 @@ static int boot_to_samantha;
    the demo boots 1:1 into what a phone screen actually is, rather than
    shrinking the desktop's layout down to unreadable text. */
 static int boot_to_phone;
-/* v1.8.5 demo A+ pass, rubric item 3: every app drew its own keyboard-only
-   hint line ("up/down to pick ... esc closes") by calling font_draw_string
-   directly, one call site per app (~20 of them across mail.h, fieldbook.h,
-   reminders.h, etc, plus kernel.c's own Trash/Recents/Terminal). On a phone
-   there is no keyboard and no Esc key (phone_home.h's back chevron is the
-   only way back), so that whole line was dead advice shown to a visitor
-   who can only tap. Rather than touch all ~20 sites individually, they now
-   route through this one helper: draws nothing when boot_to_phone, draws
-   exactly the same font_draw_string call otherwise, so desktop is pixel-
-   identical and phone silently drops the line. */
-static void gui_draw_hint(int x, int y, const char *text, unsigned int color){
-    if (boot_to_phone) return;
-    font_draw_string(text, x, y, color, -1);
-}
+#include "hint.h"
 static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
 static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
@@ -5490,6 +5477,17 @@ static int fs_ok_global = 0;
 #include "bench.h"
 #include "clock.h"
 
+/* One app window's frame: rounded body, content well, traffic lights, title. */
+static void gui_draw_window_frame(int x, int y, int w, int h, const char *name){
+    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
+    window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
+    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
+    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
+    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
+    font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
+    font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
+    font_draw_string(name, x + 96, y + 8, 0x00403439, -1);
+}
 static void gui_launch(int icon){
     if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
 }
@@ -5503,14 +5501,7 @@ again:
     int x = apps ? 56 : 70, y = apps ? 30 : 40;
     int w = apps ? 848 : 820, h = apps ? 490 : 385;
     gui_clamp_win_rect(&x, &y, &w, &h); /* phone screens are far narrower than these desktop-tuned numbers */
-    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
-    window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
-    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
-    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
-    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
-    font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
-    font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
-    font_draw_string(APPS[icon].name, x + 96, y + 8, 0x00403439, -1);
+    gui_draw_window_frame(x, y, w, h, APPS[icon].name);
     window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
     app_view_x = x + 8; app_view_y = y + 32;
     app_view_w = w - 16; app_view_h = h - 40;
@@ -5699,14 +5690,7 @@ static void gui_snap_outline(int zone){
 static void gui_multiwin_draw_chrome(const gui_window_t *win){
     serial_puts("mwchrome\n"); /* discriminating marker for tools/checks/mwkeyflash-check.sh */
     int x = win->x, y = win->y, w = win->w, h = win->h;
-    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
-    window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
-    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
-    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
-    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
-    font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
-    font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
-    font_draw_string(APPS[win->icon].name, x + 96, y + 8, 0x00403439, -1);
+    gui_draw_window_frame(x, y, w, h, APPS[win->icon].name);
 }
 static void gui_multiwin_draw_content_only(const gui_window_t *win){
     int x = win->x, y = win->y, w = win->w, h = win->h;
