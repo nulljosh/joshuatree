@@ -57,11 +57,11 @@ Measured headless in QEMU on a Mac Mini M4 by `tools/bench.sh`. Run it yourself;
 <!-- bench:start -->
 | Benchmark | Result |
 |---|---|
-| Boot to shell | 260 ms |
-| Alloc + free | 134 ns/op |
-| memcpy | 475 MB/s |
-| Context switch | 4348 ns/switch |
-| Disk read | 6375 KB/s |
+| Boot to shell | 250 ms |
+| Alloc + free | 65 ns/op |
+| memcpy | 777 MB/s |
+| Context switch | 2797 ns/switch |
+| Disk read | 11443 KB/s |
 <!-- bench:end -->
 
 ## Read more
