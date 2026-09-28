@@ -3935,7 +3935,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     }
     /* The artwork is stored as PNG, not as decoded RGBA: 24 artworks of
        128x128 RGBA is 1.5MB, which runs into the ring-3 program window
-       boot/linker.ld pins at 0xC0501000, and docs/SYSCALL-ABI.md names that
+       boot/linker.ld pins at 0xC0503000, and docs/SYSCALL-ABI.md names that
        address as part of the published v1 contract. As PNG the same 24 are
        141KB. Decoding here rather than once at boot costs nothing in
        practice: this function is the icon cache's own miss path, so it runs
@@ -6245,8 +6245,17 @@ static const struct app APPS[GUI_APP_COUNT] = {
     /* 23 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       gui_launch_portfolio,  0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph */
     /* 24 */ {"Activity",   0x003E4C58, gui_icon_activity,   gui_launch_activity,   0, 0},
     /* 25 */ {"Clock",      0x00565A7A, gui_icon_apps,       gui_launch_clock,      0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph */
-    [GUI_APPS_FOLDER] = {"Apps",  0, gui_icon_apps,  gui_launch_apps,  0, 0},
-    [GUI_TRASH]       = {"Trash", 0, gui_icon_trash, gui_launch_trash, 0, 0},
+    /* Apps and Trash aren't real apps with their own brand color, so their
+       tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
+       tinted background like every real app above. 2026-09-27: this used
+       to read GUI_COLORS[icon] out of bounds (that array only had 25 real
+       entries, never Apps/Trash's own), which happened to land on nearby
+       static data close enough to pass by luck; a plain 0 here instead
+       renders black and the trash can's punched-through ribs show as
+       black cuts against the body (iconedge-check.py's "shadow-rib
+       stubs" failure). DOCK_TRAY_COLOR is the real, intended value. */
+    [GUI_APPS_FOLDER] = {"Apps",  DOCK_TRAY_COLOR, gui_icon_apps,  gui_launch_apps,  0, 0},
+    [GUI_TRASH]       = {"Trash", DOCK_TRAY_COLOR, gui_icon_trash, gui_launch_trash, 0, 0},
 };
 
 /* Called from gui_run's own full-repaint branch, right alongside the

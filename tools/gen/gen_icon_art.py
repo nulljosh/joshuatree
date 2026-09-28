@@ -77,10 +77,12 @@ ART = {
     20: "stocks",
     21: "search",
     22: "epiphany",
-    # 23 Portfolio and 24 Activity have no authored artwork yet, they keep
-    # the primitive glyph paths (see the icon index table in kernel/kernel.c).
-    25: "apps",
-    26: "trash",
+    # 23 Portfolio, 24 Activity and 25 Clock have no authored artwork yet,
+    # they keep the primitive glyph paths (see the icon index table in
+    # kernel/kernel.c). Apps and Trash shifted from 25/26 to 26/27 when
+    # Clock landed at 25 (2026-09-27).
+    26: "apps",
+    27: "trash",
 }
 
 # Icons whose glyph depends on runtime state get a second artwork keyed by

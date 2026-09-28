@@ -117,7 +117,7 @@ relocations, so its load address is not negotiable:
 
 - A user program is a flat binary. Entry is offset 0, not an ELF entry
   point; `exec_user()` jumps straight at the load address.
-- It is linked at **0xC0501000** and gets **8 pages**: seven for the
+- It is linked at **0xC0503000** and gets **8 pages**: seven for the
   image (28KB, and a larger one fails to link), one for its stack, whose
   top, 0xC0508000, is the initial `esp`. (v2 pushes the argument block
   onto that page, so the initial `esp` is now a little below the top; see
