@@ -906,9 +906,10 @@ static void reboot(void){
    24 and GUI_APPS_FOLDER/GUI_TRASH moved to 25/26, same shift again. */
 /* Clock landed after Activity, so it sits at 25 and GUI_APPS_FOLDER/
    GUI_TRASH moved to 26/27, same shift again. */
-#define GUI_APP_COUNT   28 /* 26 real apps + the Apps folder + Trash */
+#define GUI_APP_COUNT   29 /* 26 real apps + the Apps folder + Trash + Mail Compose */
 #define GUI_APPS_FOLDER 26 /* not an app: the dock tile that opens the folder */
 #define GUI_TRASH       27
+#define GUI_MAIL_COMPOSE 28 /* v1.9.0: Mail's own 2nd window, see mail.h; not in the dock or Apps folder */
 /* Every app's name, color, glyph and hooks live in one table, APPS[],
    defined further down once every hook it points at exists (see "The app
    registry" below). This tentative definition lets the dock and Launchpad
@@ -6264,6 +6265,7 @@ static const struct app APPS[GUI_APP_COUNT] = {
        stubs" failure). DOCK_TRAY_COLOR is the real, intended value. */
     [GUI_APPS_FOLDER] = {"Apps",  DOCK_TRAY_COLOR, gui_icon_apps,  gui_launch_apps,  0, 0},
     [GUI_TRASH]       = {"Trash", DOCK_TRAY_COLOR, gui_icon_trash, gui_launch_trash, 0, 0},
+    [GUI_MAIL_COMPOSE] = {"Compose", 0x00A13F3F, gui_icon_mail, 0, gui_draw_mail_compose_content, gui_mail_compose_on_key}, /* no .open: only Mail's 'c' opens it */
 };
 
 /* Called from gui_run's own full-repaint branch, right alongside the
