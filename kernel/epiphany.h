@@ -141,6 +141,114 @@ static void epi_num(int v, char *b) {
 static void epi_right(const char *s, int xr, int y, unsigned int c) { font_draw_string(s, xr - font_string_width(s), y, c, -1); }
 static unsigned int epi_col(int v) { return v >= 0 ? STX_GREEN : STX_RED; }
 
+/* ---- command bar: "<TICKER> CODE", Enter, it's there. GP and GP alone
+   ships tonight (full chart) plus DES (a description panel); the table is
+   the only thing TOP/WEI/FX/CRYPTO need touched to drop in later. */
+#define EPI_CMD_MAX 24
+static char epi_cmd_buf[EPI_CMD_MAX + 1];
+static int epi_cmd_len;
+static int epi_cmd_focus;   /* command bar has keyboard focus, swallowing other keys */
+static char epi_cmd_err[40];
+#define EPI_CMD_NONE 0
+#define EPI_CMD_GP   1
+#define EPI_CMD_DES  2
+static int epi_cmd_view;    /* active result view, EPI_CMD_NONE when nothing is up */
+static int epi_cmd_idx;     /* epi_pool index the view is showing */
+
+typedef struct { const char *code; int id; } epi_cmd_def_t;
+static const epi_cmd_def_t epi_cmd_table[] = { {"GP", EPI_CMD_GP}, {"DES", EPI_CMD_DES} };
+#define EPI_CMD_TABLE_N ((int)(sizeof(epi_cmd_table) / sizeof(epi_cmd_table[0])))
+
+static char epi_upper(char c) { return (c >= 'a' && c <= 'z') ? (char)(c - 32) : c; }
+static int epi_streq_ci(const char *a, const char *b) {
+    while (*a && *b) { if (epi_upper(*a) != epi_upper(*b)) return 0; a++; b++; }
+    return *a == *b;
+}
+static int epi_find_pool(const char *sym) {
+    for (int i = 0; i < EPI_POOL_N; i++) if (epi_streq_ci(sym, epi_pool[i].sym)) return i;
+    return -1;
+}
+
+/* Splits "AAPL GP" on the last space into an uppercased ticker and code.
+   0 on anything malformed (no space, or an empty half). */
+static int epi_cmd_split(const char *in, char *ticker, char *code) {
+    int len = font_strlen_local(in), sp = -1;
+    for (int i = len - 1; i >= 0; i--) if (in[i] == ' ') { sp = i; break; }
+    if (sp <= 0 || sp >= len - 1) return 0;
+    int ti = 0; for (int i = 0; i < sp && ti < 7; i++) ticker[ti++] = epi_upper(in[i]); ticker[ti] = 0;
+    int ci = 0; for (int i = sp + 1; i < len && ci < 7; i++) code[ci++] = epi_upper(in[i]); code[ci] = 0;
+    return ti > 0 && ci > 0;
+}
+
+/* Runs the typed line: unknown code or ticker leaves a one-line error in
+   the bar and never touches epi_cmd_view, so a bad command can't blank
+   out a result already on screen. */
+static void epi_cmd_run(void) {
+    epi_cmd_buf[epi_cmd_len] = 0;
+    char ticker[8], code[8];
+    if (!epi_cmd_split(epi_cmd_buf, ticker, code)) { stx_cat(epi_cmd_err, 0, "Type TICKER CODE, e.g. AAPL GP"); return; }
+    int id = EPI_CMD_NONE;
+    for (int i = 0; i < EPI_CMD_TABLE_N; i++) if (epi_streq_ci(code, epi_cmd_table[i].code)) { id = epi_cmd_table[i].id; break; }
+    if (id == EPI_CMD_NONE) {
+        int p = stx_cat(epi_cmd_err, 0, "Unknown code: "); stx_cat(epi_cmd_err, p, code);
+        serial_puts("epicmd=unknown_code:"); serial_puts(code); serial_puts("\n"); /* discriminating marker for tools/checks/epiphany-cmdbar-check.py */
+        return;
+    }
+    int idx = epi_find_pool(ticker);
+    if (idx < 0) {
+        int p = stx_cat(epi_cmd_err, 0, "Unknown ticker: "); stx_cat(epi_cmd_err, p, ticker);
+        serial_puts("epicmd=unknown_ticker:"); serial_puts(ticker); serial_puts("\n");
+        return;
+    }
+    epi_cmd_err[0] = 0;
+    epi_watch[idx] = 1; /* GP/DES both add the ticker to the watchlist if it wasn't already on it */
+    epi_cmd_view = id; epi_cmd_idx = idx;
+    serial_puts("epicmd=run:"); serial_puts(ticker); serial_puts(" "); serial_puts(code); serial_puts("\n"); /* discriminating marker for tools/checks/epiphany-cmdbar-check.py */
+}
+
+/* Full chart panel for GP. Only the Stocks app's own STOCKS_MAX symbols
+   carry real chart history (stx_data); any other pool ticker is a real,
+   live price with no chart series yet, so it gets the same "unavailable"
+   treatment Stocks itself shows for a stale/missing quote. */
+static void epi_cmd_draw_gp(int x, int y, int w, int h) {
+    epi_row_t *s = &epi_pool[epi_cmd_idx];
+    char b[64];
+    font_draw_string(s->sym, x, y, STX_MUTED, -1);
+    font_draw_string(s->name, x, y + 22, STX_INK, -1);
+    stocks_format_price(s->price_x100, b, sizeof b); font_draw_string(b, x, y + 50, STX_INK, -1);
+    stx_pct(s->bp, b); font_draw_string(b, x + 140, y + 50, epi_col(s->bp), -1);
+    int ch = h - 90; if (ch < 60) ch = 60;
+    window_rect(x, y + 74, w, 1, 0x00E0D8CE);
+    if (epi_cmd_idx < STOCKS_MAX && stx_data[0][epi_cmd_idx].n > 1 && !stx_data[0][epi_cmd_idx].stale) {
+        stx_chart(x, y + 82, w, ch, stx_data[0][epi_cmd_idx].points, stx_data[0][epi_cmd_idx].n, epi_col(s->bp));
+        font_draw_string("Yahoo Finance / USD / may be delayed", x, y + 82 + ch + 14, STX_MUTED, -1);
+    } else {
+        font_draw_string(epi_cmd_idx < STOCKS_MAX ? "Stale quote. R to retry." : "No chart history for this ticker yet, live price only.",
+                          x, y + 82, STX_MUTED, -1);
+    }
+}
+
+/* Name, price, day change, and cap/P/E when the data actually has them
+   (only the Stocks-tracked symbols carry those two fields today). */
+static void epi_cmd_draw_des(int x, int y, int w) {
+    epi_row_t *s = &epi_pool[epi_cmd_idx];
+    char b[64]; (void)w;
+    font_draw_string(s->sym, x, y, STX_MUTED, -1);
+    font_draw_string(s->name, x, y + 22, STX_INK, -1);
+    stocks_format_price(s->price_x100, b, sizeof b); font_draw_string(b, x, y + 50, STX_INK, -1);
+    stx_pct(s->bp, b); font_draw_string(b, x + 140, y + 50, epi_col(s->bp), -1);
+    if (epi_cmd_idx < STOCKS_MAX) {
+        stocks_entry_t *e = &stocks_entries[epi_cmd_idx];
+        font_draw_string("Market cap", x, y + 88, STX_MUTED, -1);
+        epi_num(e->cap_b, b); stx_cat(b, font_strlen_local(b), "B"); font_draw_string(b, x, y + 108, STX_INK, -1);
+        font_draw_string("P/E", x + 200, y + 88, STX_MUTED, -1);
+        epi_num(e->pe_x10 / 10, b); int p = font_strlen_local(b); b[p++] = '.'; b[p++] = '0' + e->pe_x10 % 10; b[p] = 0;
+        font_draw_string(b, x + 200, y + 108, STX_INK, -1);
+    } else {
+        font_draw_string("Market cap and P/E unavailable for this ticker.", x, y + 88, STX_MUTED, -1);
+    }
+}
+
 static void epi_tab_markets(int x, int y, int w, int sel) {
     char b[64];
     int cw = (w - 32) / 2, x2 = x + cw + 32;
@@ -266,10 +374,21 @@ static void epi_draw(int tab, int sel) {
     }
     window_rect(0, T + 32, WW, 1, 0x00E0D8CE);
     int x = 32, y = T + 48, w = WW - 64; if (w > 760) w = 760;
-    if (tab == 0) epi_tab_markets(x, y, w, sel);
+    int bar_y = HH - 56;
+    if (epi_cmd_view == EPI_CMD_GP) epi_cmd_draw_gp(x, y, w, bar_y - y - 12);
+    else if (epi_cmd_view == EPI_CMD_DES) epi_cmd_draw_des(x, y, w);
+    else if (tab == 0) epi_tab_markets(x, y, w, sel);
     else if (tab == 1) epi_tab_portfolio(x, y, w, sel);
-    else if (tab == 2) epi_tab_sim(x, y, w, HH - y);
+    else if (tab == 2) epi_tab_sim(x, y, w, bar_y - y);
     else epi_tab_situation(x, y, w);
+
+    window_rect(20, bar_y, WW - 40, 1, 0x00E0D8CE);
+    if (epi_cmd_err[0]) font_draw_string(epi_cmd_err, 20, bar_y + 10, STX_RED, -1);
+    else if (epi_cmd_focus) {
+        char shown[EPI_CMD_MAX + 2]; int p = stx_cat(shown, 0, "/ "); p = stx_cat(shown, p, epi_cmd_buf); stx_cat(shown, p, "_");
+        font_draw_string(shown, 20, bar_y + 10, EPI_ACCENT, -1);
+    } else font_draw_string("/ command   AAPL GP   AAPL DES", 20, bar_y + 10, STX_MUTED, -1);
+
     font_draw_string(epi_live ? "Live quotes, crypto and macro are sample   r refresh   left/right tabs   esc closes"
                               : "Offline, sample prices   r retry   left/right tabs   esc closes", 20, HH - 24, STX_MUTED, -1);
     window_present();
@@ -295,6 +414,7 @@ static int epi_poll(void) {
 static void gui_launch_epiphany(void) {
     int tab = 0, sel = 0, frame = 0;
     epi_adding = 0; epi_scroll = 0;
+    epi_cmd_focus = 0; epi_cmd_len = 0; epi_cmd_buf[0] = 0; epi_cmd_err[0] = 0; epi_cmd_view = EPI_CMD_NONE;
     epi_sim_reset();
     for (int i = 0; i < 40; i++) epi_sim_step();
     mouse_click_edge_sync();
@@ -306,14 +426,22 @@ static void gui_launch_epiphany(void) {
         sleep_ticks(2);
         int k;
         while ((k = epi_poll()) != -1) {
+            if (epi_cmd_focus) {
+                if (k == KEY_ESC) { epi_cmd_focus = 0; epi_cmd_len = 0; epi_cmd_err[0] = 0; continue; }
+                if (k == '\n' || k == KEY_ENTER) { epi_cmd_focus = 0; epi_cmd_run(); continue; }
+                if (k == '\b') { if (epi_cmd_len > 0) epi_cmd_len--; continue; }
+                if (k >= 32 && k < 127 && epi_cmd_len < EPI_CMD_MAX) epi_cmd_buf[epi_cmd_len++] = (char)k;
+                continue; /* focused bar swallows every other key */
+            }
+            if (k == '/') { epi_cmd_focus = 1; epi_cmd_len = 0; epi_cmd_buf[0] = 0; epi_cmd_err[0] = 0; continue; }
             int lim = tab == 0 ? epi_count(epi_adding ? 0 : 1) : EPI_HOLD_N;
-            if (k == KEY_ESC) { if (epi_adding) { epi_adding = 0; sel = 0; continue; } return; }
+            if (k == KEY_ESC) { if (epi_cmd_view) { epi_cmd_view = 0; epi_cmd_err[0] = 0; continue; } if (epi_adding) { epi_adding = 0; sel = 0; continue; } return; }
             if (tab == 0 && k == 'a' && !epi_adding && epi_count(0) > 0) { epi_adding = 1; sel = 0; continue; }
             if (tab == 0 && epi_adding && (k == KEY_ENTER || k == ' ')) { int p = epi_nth(0, sel); if (p >= 0) epi_watch[p] = 1; epi_adding = 0; sel = 0; continue; }
             if (tab == 0 && !epi_adding && k == 'd') { int p = epi_nth(1, sel); if (p >= 0) epi_watch[p] = 0; if (sel > 0 && sel >= epi_count(1)) sel--; continue; }
-            if (k == KEY_LEFT && tab > 0) { tab--; sel = 0; }
-            else if (k == KEY_RIGHT && tab < EPI_TABS - 1) { tab++; sel = 0; }
-            else if (!epi_adding && k >= '1' && k <= '4') { tab = k - '1'; sel = 0; }
+            if (k == KEY_LEFT && tab > 0) { tab--; sel = 0; epi_cmd_view = 0; }
+            else if (k == KEY_RIGHT && tab < EPI_TABS - 1) { tab++; sel = 0; epi_cmd_view = 0; }
+            else if (!epi_adding && k >= '1' && k <= '4') { tab = k - '1'; sel = 0; epi_cmd_view = 0; }
             else if (k == KEY_UP && sel > 0) sel--;
             else if (k == KEY_DOWN && sel < lim - 1) sel++;
             else if (tab == 1 && (k == '+' || k == '=') && epi_hold[sel].shares < 9999) epi_hold[sel].shares++;
