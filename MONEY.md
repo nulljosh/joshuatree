@@ -59,14 +59,14 @@ computer at $199.
 
 ### The fix: two boxes (decided 2026-09-28)
 
-**Mesa Kit, $199.** The case, a USB stick with the OS on it, the screws,
+**Strata Kit, $199.** The case, a USB stick with the OS on it, the screws,
 and a printed parts list. The buyer brings the board, RAM, SSD and power
 supply. Developers already own half of that, and the board is a $120
 listing they can buy anywhere.
 
 | Line | Amount | Note |
 |---|---|---|
-| Mesa case (6 rings, cap, tray, rods) | unknown | no print quote yet; $40 is the stock-case estimate above |
+| Strata case (6 rings, cap, tray, rods) | unknown | no print quote yet; $40 is the stock-case estimate above |
 | USB stick, pre-flashed | ~$8 | estimate |
 | Screws, spacers, rods | ~$7 | estimate |
 | Payment fees | ~$6 | 3% of $199 |
@@ -74,12 +74,12 @@ listing they can buy anywhere.
 | **Cost without the case** | **~$36** | |
 | **Breakeven case cost** | **~$163** | $199 minus $36 |
 
-The kit makes money as long as the Mesa case costs under about $160 to
+The kit makes money as long as the Strata case costs under about $160 to
 make. The first real print quote says by how much.
 
-**Mesa Complete, $349.** Everything built and tested, plug it in. Parts
+**Strata Complete, $349.** Everything built and tested, plug it in. Parts
 are ~$250 with a stock case, ~$281-291 with fees, shipping and warranty,
-so $349 leaves roughly $58-68 before the Mesa case costs more than a
+so $349 leaves roughly $58-68 before the Strata case costs more than a
 stock one. $299 would leave $8-18, too thin to survive one return.
 
 **Later: a cheaper board.** The ODROID-H4 lists at $99
@@ -88,8 +88,8 @@ against ~$120 for the current pick, but it has no PS/2 ports, so it only
 works once the kernel has a USB driver for keyboards. That's the xHCI
 item on the roadmap. Not before.
 
-**Next real step:** get an instant quote for the Mesa parts from a print
-service using `docs/hardware/mesa_cad.py`'s STLs. That one number decides
+**Next real step:** get an instant quote for the Strata parts from a print
+service using `docs/hardware/strata_cad.py`'s STLs. That one number decides
 the kit margin.
 
 ### The first dollar
@@ -97,7 +97,7 @@ the kit margin.
 What has to be true before anyone is charged:
 - A board that passes Phase 0-2 in `docs/HARDWARE.md` (boots, shows a
   screen, takes keyboard input) on real hardware, not QEMU.
-- A real print quote for the Mesa case under the ~$163 kit breakeven.
+- A real print quote for the Strata case under the ~$163 kit breakeven.
 - A real fulfillment path: who assembles the kit and who ships it.
 
 Path, in order:
@@ -146,8 +146,8 @@ The computer after the phone. Joshua Tree becomes what people talk to instead of
 
 ## Where we are
 
-- 2026-09-28, afternoon: a 36 second ad exists. Mesa renders, the real OS booting, Samantha narrating in her own voice, original music. It's in docs/DEMO.md. The landing page doesn't show the hardware yet; that's the next conversion fix before any waitlist push.
-- 2026-09-28: the $199 problem is fixed on paper. Two boxes: a $199 Mesa Kit (case plus OS stick, bring your own board) that makes money if the case prints under about $160, and a $349 Mesa Complete. The Mesa case now has a real CAD file, a drawing and a build guide.
+- 2026-09-28, afternoon: a 36 second ad exists. Strata renders, the real OS booting, Samantha narrating in her own voice, original music. It's in docs/DEMO.md. The landing page doesn't show the hardware yet; that's the next conversion fix before any waitlist push.
+- 2026-09-28: the $199 problem is fixed on paper. Two boxes: a $199 Strata Kit (case plus OS stick, bring your own board) that makes money if the case prints under about $160, and a $349 Strata Complete. The Strata case now has a real CAD file, a drawing and a build guide.
 - 2026-09-28: 1.7.4 merged. The OS now gets its own internet address on its own, has the start of voice input, and on phones Samantha's face no longer covers her title bar. A broken deploy setting kept the live site on 1.7.3; the fix is in review. Work started on moving apps out of the core so one crashing app can't take the machine down.
 - 2026-09-27: the Samantha app (Turing's assistant, reached through Joshua Tree) talks with a face and a real voice through the OS's own sound driver. The landing page runs the whole OS live in the browser.
 

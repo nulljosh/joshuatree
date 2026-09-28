@@ -1,8 +1,8 @@
-# Dimensioned blueprint sheet for Mesa: section (front) + plan, drawn from mesa_cad.py's own numbers.
+# Dimensioned blueprint sheet for Strata: section (front) + plan, drawn from strata_cad.py's own numbers.
 import sys, os
-src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "mesa_cad.py")).read()
+src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "strata_cad.py")).read()
 exec(src[src.index("BOARD ="):src.index("def rounded_plate")])  # ponytail: one source of truth for dimensions
-OUT = sys.argv[1] if len(sys.argv) > 1 else "mesa-blueprint.svg"
+OUT = sys.argv[1] if len(sys.argv) > 1 else "strata-blueprint.svg"
 
 K = 2.4                  # px per mm
 INK, SOFT, ACC = "#1a1814", "#8a8378", "#b9542c"
@@ -74,7 +74,7 @@ text(px + BASE_W / 2 * K + 12, py + ROD_AT * K + 4, f"M3 rod x4, {ROD_AT:g} from
 # notes column
 nx = 900
 notes = [
-    ("MESA  Joshua Tree dev kit enclosure", 16, 600),
+    ("STRATA  Joshua Tree dev kit enclosure", 16, 600),
     ("all dimensions mm, first article", 11, 400), ("", 8, 400),
     ("PARTS", 13, 600),
     (f"S0 to S5  six rings, {BASE_W:g} down to {BASE_W - 5 * STEP_IN:g}, each {STEP_IN:g} smaller", 11, 400),
@@ -98,7 +98,7 @@ notes = [
     ("power input type from the board manual", 11, 400),
     ("I/O window fits the stock 158.75 x 44.45 shield", 11, 400), ("", 8, 400),
     ("SOURCE", 13, 600),
-    ("docs/hardware/mesa_cad.py makes the STEP and STLs", 11, 400),
+    ("docs/hardware/strata_cad.py makes the STEP and STLs", 11, 400),
     ("this sheet reads the same numbers", 11, 400),
 ]
 y = 90

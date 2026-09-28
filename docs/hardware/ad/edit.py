@@ -15,7 +15,7 @@ def text_png(text, size, color, out):
                     f"label:{text}", out], check=True)
     return out
 os.makedirs("cut", exist_ok=True)
-CAP = text_png("Mesa enclosure. Concept render.", 22, SOFT, "cut/cap.png")
+CAP = text_png("Strata enclosure. Concept render.", 22, SOFT, "cut/cap.png")
 
 def run(args): subprocess.run(["ffmpeg", "-v", "error", "-y", *args], check=True)
 
@@ -64,7 +64,7 @@ EDL = [
     (1.0,  "footage", (77.5,)),    # terminal: "The kernel."
     (1.0,  "footage", (12.5,)),    # Mail compose over Files: "The windows."
     (1.8,  "footage", (58.0,)),    # Notes: "The apps."
-    (1.4,  "card",    ("Mesa.",)),
+    (1.4,  "card",    ("Strata.",)),
     (3.3,  "shot",    ("turn",)),
     (2.3,  "shot",    ("explode",)),
     (4.7,  "shot",    ("mark",)),
@@ -76,7 +76,7 @@ EDL = [
     (5.6,  "end",     ()),
 ]
 parts = []
-CAPS = {"hero": "Introducing Joshua Tree", "turn": "Mesa enclosure. Concept render.", "explode": "Six layers. Two millimetre gaps.", "mark": "The tree, engraved into the lid."}
+CAPS = {"hero": "Introducing Joshua Tree", "turn": "Strata enclosure. Concept render.", "explode": "Six layers. Two millimetre gaps.", "mark": "The tree, engraved into the lid."}
 for i, (dur, kind, a) in enumerate(EDL):
     out = f"cut/{i:02d}.mp4"; raw = f"cut/{i:02d}-raw.mp4"
     if kind == "shot": shot(a[0], dur, raw); frame(raw, dur, CLAY, CAPS[a[0]], out)

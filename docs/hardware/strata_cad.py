@@ -1,5 +1,5 @@
-# Mesa enclosure, manufacturable parts. build123d -> STEP (whole thing) + STL per part.
-# mm throughout. Numbers match docs/HARDWARE.md "Mesa build blueprint".
+# Strata enclosure, manufacturable parts. build123d -> STEP (whole thing) + STL per part.
+# mm throughout. Numbers match docs/HARDWARE.md "Strata build blueprint".
 import sys, os
 from build123d import *
 
@@ -63,7 +63,7 @@ parts["core_tray"] = tray
 os.makedirs(OUT, exist_ok=True)
 for name, p in parts.items():
     export_stl(p, os.path.join(OUT, f"{name}.stl"))
-export_step(Compound(list(parts.values())), os.path.join(OUT, "mesa.step"))
+export_step(Compound(list(parts.values())), os.path.join(OUT, "strata.step"))
 
 # plan + front elevation as one SVG drawing
 asm = Compound(list(parts.values()))
@@ -71,10 +71,10 @@ drw = ExportSVG(unit=Unit.MM, line_weight=0.25)
 drw.add_layer("v", line_weight=0.3)
 vis_front, _ = asm.project_to_viewport((0, -1000, 0), (0, 0, 1))
 drw.add_shape(vis_front, layer="v")
-drw.write(os.path.join(OUT, "mesa-front.svg"))
+drw.write(os.path.join(OUT, "strata-front.svg"))
 drw2 = ExportSVG(unit=Unit.MM, line_weight=0.25); drw2.add_layer("v", line_weight=0.3)
 vis_top, _ = asm.project_to_viewport((0, 0, 1000), (0, 1, 0))
-drw2.add_shape(vis_top, layer="v"); drw2.write(os.path.join(OUT, "mesa-plan.svg"))
+drw2.add_shape(vis_top, layer="v"); drw2.write(os.path.join(OUT, "strata-plan.svg"))
 
 bb = asm.bounding_box()
 print("PARTS", len(parts), "SIZE %.1f x %.1f x %.1f mm" % (bb.size.X, bb.size.Y, bb.size.Z))

@@ -159,8 +159,8 @@ this as a snapshot, not a quote.
 
 This is a build-it-yourself BOM, not the $199 dev kit price - it is
 already above $199 before labor, assembly, packaging and shipping are
-added. MONEY.md resolves it with two boxes: a $199 Mesa Kit (case and OS
-stick, you bring the board) and a $349 Mesa Complete.
+added. MONEY.md resolves it with two boxes: a $199 Strata Kit (case and OS
+stick, you bring the board) and a $349 Strata Complete.
 
 ## Risks and unknowns
 
@@ -186,22 +186,22 @@ stick, you bring the board) and a $349 Mesa Complete.
   minute check against ASRock's official J4125B-ITX manual before
   ordering, since it's the whole reason for this pick.
 
-## Enclosure: Mesa
+## Enclosure: Strata
 
-![Mesa, front](hardware/mesa-hero.jpg)
+![Strata, front](hardware/strata-hero.jpg)
 
-Mesa is a stack of six rings, terracotta at the base fading to cream at
+Strata is a stack of six rings, terracotta at the base fading to cream at
 the top, like the layered rock around Joshua Tree. The 2 mm gaps between
 rings are the vents. The tree mark is laser engraved half a millimetre
 into the cap, tone on tone, so you see it up close and not across the
 room. It's the concept for the custom shell; v0 still ships in a stock
 mini-ITX case.
 
-![Mesa, rear I/O](hardware/mesa-rear.jpg)
+![Strata, rear I/O](hardware/strata-rear.jpg)
 
 ### The drawing
 
-![Mesa blueprint sheet](hardware/mesa-blueprint.svg)
+![Strata blueprint sheet](hardware/strata-blueprint.svg)
 
 224 x 224 x 64.5 mm outside. Inside is a 178 mm core tray with 2 mm
 walls, which leaves a 174 mm cavity for the 170 mm board. The rear notch
@@ -242,15 +242,15 @@ I/O shield fits.
 
 ### Regenerate
 
-Every file here comes from one set of numbers in `hardware/mesa_cad.py`.
+Every file here comes from one set of numbers in `hardware/strata_cad.py`.
 
 ```sh
-uv run --with build123d python docs/hardware/mesa_cad.py out   # STEP + one STL per part
-python3 docs/hardware/blueprint_sheet.py docs/hardware/mesa-blueprint.svg
-blender -b -P docs/hardware/concepts.py -- docs/hardware mesa  # renders
+uv run --with build123d python docs/hardware/strata_cad.py out   # STEP + one STL per part
+python3 docs/hardware/blueprint_sheet.py docs/hardware/strata-blueprint.svg
+blender -b -P docs/hardware/concepts.py -- docs/hardware strata  # renders
 ```
 
-`mesa_cad.py` asserts that the cap covers the core and the rods sit
+`strata_cad.py` asserts that the cap covers the core and the rods sit
 inside the smallest ring. Those two checks caught real mistakes in the
 first draft: the rods didn't fit the top rings, and the I/O window was
 too short for a standard shield.

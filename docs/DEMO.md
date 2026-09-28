@@ -2,11 +2,11 @@
 
 [![Joshua Tree ad, 36 seconds. Click to play.](hardware/ad-poster.jpg)](https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v5.mp4)
 
-A 36 second ad for Joshua Tree, now in the Claude release look: cream and clay fields, the product in a rounded frame, quiet captions. Click the picture to play it.
+A 36 second ad for Joshua Tree, now in the Claude release look: cream and clay fields, the product in a rounded frame, quiet captions. Click the picture to play it. The video still says the old name Mesa out loud and in two captions; the next cut says Strata.
 
 Samantha narrates it herself. The OS shots are the real system, recorded
-from the live site booting in a browser. The case is Mesa, rendered from
-the CAD file in [HARDWARE.md](HARDWARE.md#enclosure-mesa). It's a concept:
+from the live site booting in a browser. The case is Strata, rendered from
+the CAD file in [HARDWARE.md](HARDWARE.md#enclosure-strata). It's a concept:
 nothing has been built or priced by a shop yet, and the ad says so on
 screen.
 
@@ -15,7 +15,7 @@ screen.
 > This is Joshua Tree.
 > Every line of its operating system, written from scratch.
 > The kernel. The windows. The apps.
-> It lives in Mesa.
+> It lives in Strata.
 > Six layers, like the desert it's named after.
 > The gaps are how it breathes.
 > And the tree is cut into the top. Just enough to find it.

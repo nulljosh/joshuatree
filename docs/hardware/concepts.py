@@ -1,4 +1,4 @@
-# Joshua Tree dev kit, original form concepts: "mesa" (stacked sandstone strata,
+# Joshua Tree dev kit, original form concepts: "strata" (stacked sandstone strata,
 # gaps are the vents) and "monolith" (standing desert stone). Headless EEVEE.
 import bpy, math, sys, os
 args = sys.argv[sys.argv.index("--") + 1:]
@@ -64,7 +64,7 @@ def ports_row(y, z, x0, facing=1):
     box("eth", 16 * S, 2.5 * S, 13.5 * S, (x0 + 14 * S, y + dy, z), CORE); box("etht", 8 * S, 2.8 * S, 3 * S, (x0 + 14 * S, y + dy, z + 5.2 * S), TONGUE)
     cyl(3.2 * S, 2.5 * S, (x0 + 66 * S, y + dy, z), (math.radians(90), 0, 0), CORE)
 
-if CONCEPT == "mesa":
+if CONCEPT == "strata":
     # desert strata: warm at the base, cream at the cap, each layer a touch off-axis
     # like real sandstone. The dark core shows through the gaps, which are the vents.
     box("core", 178 * S, 178 * S, 62 * S, (0, 0, 32 * S), CORE, bevel=6 * S)
@@ -139,5 +139,5 @@ def shot(name, loc, lk, lens=62):
     cam.rotation_euler = (math.atan2(math.hypot(d[0], d[1]), -d[2]), 0, math.atan2(d[1], d[0]) - math.pi / 2)
     scn.camera = cam; scn.render.filepath = os.path.join(OUT, name); bpy.ops.render.render(write_still=True)
 shot(f"{CONCEPT}-hero.png", hero, look)
-shot(f"{CONCEPT}-rear.png", (2.6, 4.6, 1.6 if CONCEPT == "mesa" else 1.9), look)
+shot(f"{CONCEPT}-rear.png", (2.6, 4.6, 1.6 if CONCEPT == "strata" else 1.9), look)
 print("RENDERED", CONCEPT)

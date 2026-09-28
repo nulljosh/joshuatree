@@ -18,16 +18,16 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 Main is 1.8.10. Four apps run in ring 3 (Keyrate, Toroid, Calculator, Quotes); the rest are still in kernel.c, which is 9433 lines under a ceiling that only ratchets down. Phones get a home screen, tap to hear Samantha, and she finishes talking before the tour moves on. Every check picks its own free QMP port once #289 lands.
 
-The merge train, one at a time: #290 landing QA (1.8.11, in CI), #291 docs to 100%, #289 free QMP ports. #296 is the 3.0 hardware blueprint (draft): the Mesa enclosure with CAD, drawing and build steps, the two-box money fix (Mesa Kit $199, Mesa Complete $349), the ad in docs/DEMO.md.
+The merge train, one at a time: #290 landing QA (1.8.11, in CI), #291 docs to 100%, #289 free QMP ports. #296 is the 3.0 hardware blueprint (draft): the Strata enclosure with CAD, drawing and build steps, the two-box money fix (Strata Kit $199, Strata Complete $349), the ad in docs/DEMO.md.
 
 ## Next, in order
 
 1. Land the train: #290, #291, #289. Rebump each with the version-stamp helper; resolve real conflicts by hunk, never by taking a whole side.
-2. Landing fixes from the grade: put the ad and a Mesa render in "Want one?", one app count everywhere, the phone benchmark labels that collide, the unstyled Samantha link, sections visible without scrolling.
+2. Landing fixes from the grade: put the ad and a Strata render in "Want one?", one app count everywhere, the phone benchmark labels that collide, the unstyled Samantha link, sections visible without scrolling.
 3. Ship Bookrank and Homeqi in ring 3 (both have WIP branches), then resume Notes folders.
 4. 1.9: touch and an on-screen keyboard, every app readable at phone size.
 5. 2.0: the remaining apps to ring 3, smallest first, each with its crash check; input by focus.
-6. 2.1 Music, 2.2 Video. Then 3.0 on the ASRock J4125B-ITX, and the Mesa Kit at 3.1.
+6. 2.1 Music, 2.2 Video. Then 3.0 on the ASRock J4125B-ITX, and the Strata Kit at 3.1.
 
 ## Restart prompt
 
