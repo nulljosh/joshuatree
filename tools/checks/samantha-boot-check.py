@@ -25,7 +25,7 @@ Usage: tools/checks/samantha-boot-check.py   (from the repo root, after make ker
 """
 import json, os, socket, subprocess, sys, time
 
-PORT = 4479
+PORT = free_port()
 FB = 0xfd000000
 W, H = 1920, 1080
 
@@ -79,6 +79,7 @@ if "samopen" in log_on and "guidesktop" in log_on and log_on.index("guidesktop")
 # Visual sanity: something other than a flat background actually painted.
 try:
     from PIL import Image
+from freeport import free_port
     img = Image.frombytes("RGBA", (W, H), open("/tmp/jt-samboot-on.raw", "rb").read(), "raw", "BGRA").convert("L")
     px = img.load()
     non_bg = sum(1 for y in range(0, H, 3) for x in range(0, W, 3) if px[x, y] < 240)

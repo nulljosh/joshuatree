@@ -8,6 +8,7 @@
 # every dock click computed the correct slot and the correct icon, both
 # at press and at release.
 #
+source "$(dirname "$0")/freeport.sh"
 # The real bug: GUI_MULTIWIN_MAX caps concurrent multi-window apps
 # (Files/Weather/Mail/Calendar/Reminders) at 2. Once that cap is hit,
 # gui_multiwin_open() correctly returns -1, but the click handler in
@@ -40,7 +41,7 @@ make -s kernel.elf
 cleanup() { pkill -9 -f "qemu-system-i386.*jt-dockcap" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-PORT=4486
+PORT=$(free_port)
 LOG=/tmp/jt-dockcap-check.log
 rm -f "$LOG"
 qemu-system-i386 -kernel kernel.elf -display none -vga std \

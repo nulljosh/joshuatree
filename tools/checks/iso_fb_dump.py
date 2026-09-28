@@ -10,11 +10,12 @@ Usage: tools/checks/iso_fb_dump.py [out.png]
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 LOG = "/tmp/jt-isodump-serial.log"
 DUMP = "/tmp/jt-isodump.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4460
+PORT = free_port()
 OUT = sys.argv[1] if len(sys.argv) > 1 else "/tmp/jt-iso-boot.png"
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))

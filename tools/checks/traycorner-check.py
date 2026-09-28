@@ -32,11 +32,12 @@ Usage: tools/checks/traycorner-check.py   (from the repo root, after make kernel
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 LOG = "/tmp/jt-traycorner-serial.log"
 DUMP = "/tmp/jt-traycorner.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4454
+PORT = free_port()
 
 # Physical pixel on the tray's top-left corner arc, root-caused as
 # described above: pure tray-shadow-corner color pre-fix, a real blended

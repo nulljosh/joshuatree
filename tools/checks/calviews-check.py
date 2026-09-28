@@ -29,11 +29,12 @@ Usage: tools/checks/calviews-check.py   (from the repo root, after make kernel.e
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 LOG = "/tmp/jt-calviews-serial.log"
 DUMP = "/tmp/jt-calviews.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4472
+PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP

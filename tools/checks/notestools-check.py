@@ -30,7 +30,7 @@ Usage: python3 tools/checks/notestools-check.py
 import http.server, json, os, socket, subprocess, sys, threading, time
 
 LOG = "/tmp/jt-notestools-serial.log"
-PORT = 44730
+PORT = free_port()0
 
 DOCK_CHAT = 7  # GUI_DOCK_DEFAULT slots: Apps,Files,Mail,Calendar,Notes,Reminders,Terminal,Chat,...
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
@@ -123,6 +123,7 @@ def main():
 
         def pixel(x, y):
             from PIL import Image
+from freeport import free_port
             dump()
             img = Image.frombytes("RGBA", (1920, 1080), open("/tmp/jt-notestools.raw", "rb").read(), "raw", "BGRA").convert("RGB")
             return img.getpixel((x * 2 + 1, y * 2 + 1))

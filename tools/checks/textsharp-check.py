@@ -26,8 +26,9 @@ Usage: python3 tools/checks/textsharp-check.py   (repo root, after make kernel.e
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
-PORT = 4494
+PORT = free_port()
 DUMP = "/tmp/jt-textsharp.raw"
 FB = 0xfd000000; W, H = 1920, 1080
 LOGICAL_W, LOGICAL_H = 960, 540

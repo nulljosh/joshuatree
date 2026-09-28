@@ -17,11 +17,12 @@ Usage: tools/checks/qa-gallery.py [outdir]   (from the repo root, after make ker
 """
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image, ImageChops
+from freeport import free_port
 
 LOG = "/tmp/jt-qa-gallery-serial.log"
 DUMP = "/tmp/jt-qa-gallery.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4461  # unique port, checked existing checks
+PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
