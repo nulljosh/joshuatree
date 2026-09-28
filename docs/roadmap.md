@@ -193,12 +193,12 @@ Needs a call from Joshua before scoping:
 
 ## Session task queue
 Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current. Each item also needs a `(plain: ...)` phrase right after the title, a few plain words a 20-year-old visitor would understand with zero dev background, that phrase is what actually shows on the landing page, never the dev title. Internal refactor work that a visitor has no way to try (nothing to click, nothing that looks different) uses `(plain: skip)`, which the generator drops from the card entirely instead of translating it into vague visitor-facing words.
-1. **Apps leave the kernel, each in its own protected space** (plain: apps that can't crash each other) [Fable]: the 2.0 gate in docs/LOOP-HANDOFF.md. Keyrate is first (#269); then one app per PR, each added to the crash check.
-2. **Close the window-memory gap, validate every pointer a syscall takes** (plain: apps kept out of each other's memory) [Fable]: framebuffer pages stay user-writable after a window closes; audit copy-in/copy-out on every syscall.
-3. **Kernel randomness pool** (plain: safer stored passwords) [Fable]: password salts come from a predictable generator today. BearSSL's HMAC_DRBG, seeded from RDRAND and timing jitter.
-4. **Phone home screen** (plain: a real phone home screen) [Sonnet]: VERSIONS.md 1.8.
-5. **Check the portfolio in X's in-app browser** (plain: skip) [Haiku]: `?full` boots right away now; confirm on a phone from a post in the X app.
-6. **Split kernel.c into per-subsystem files** (plain: skip) [Sonnet]: shrinks as apps move out; the 2.0 progress bar.
+1. **Samantha speaks on the landing demo** (plain: hear her voice on the demo) [Sonnet]: measure a real reply end to end (serial speak status, output RMS) now that the tour reboot keeps facehost.
+2. **Touch and an on-screen keyboard** (plain: type to her on your phone) [Sonnet]: VERSIONS 1.9.
+3. **Apps leave the kernel, each in its own protected space** (plain: apps that can't crash each other) [Sonnet]: the 2.0 gate; one app per PR with its crash check.
+4. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
+5. **Real Activity and Clock icons** (plain: skip) [Sonnet]: they show placeholder art on the phone grid.
+6. **Music and Video players** (plain: music and video apps) [Sonnet]: VERSIONS 2.1 and 2.2.
 7. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after 2.0.
 
 ## Landing roadmap summary
