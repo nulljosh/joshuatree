@@ -346,7 +346,7 @@ static int chat_pick(const char *msg, char *tool, int toolsz, char *arg, int arg
     const char *head = "{\"q\":\"";
     while (*head && n < sizeof(req_body)) req_body[n++] = *head++;
     { const char *s = escaped; while (*s && n < sizeof(req_body)) req_body[n++] = *s++; }
-    const char *tail = "\",\"sections\":[]}";
+    const char *tail = "\",\"sections\":[],\"os\":\"jt\"}"; /* os: "jt" unlocks Joshua Tree's own tools (mail) in the picker */
     while (*tail && n < sizeof(req_body)) req_body[n++] = *tail++;
 
     static char resp[512];
@@ -436,6 +436,9 @@ static int chat_match_app(const char *arg) {
    returned nothing. Every branch that does handle its tool emits a
    `chattool=<tool>:<short result>` serial marker, a discriminating proof
    this actually ran (not just that chat_pick named a tool). */
+static const char *chat_last_user_msg = "";
+static int chat_starts(const char *s, const char *p) { while (*p) if (*s++ != *p++) return 0; return 1; } /* what was actually said, for tools whose arg is only part of it (send_mail) */
+
 static int chat_run_tool(const char *tool, const char *arg, char *reply, int replysz) {
     if (replysz > 0) reply[0] = 0;
 
@@ -501,6 +504,67 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
         chat_launch_after = icon;
         chat_fmt_reply(reply, replysz, "Opening ", GUI_LABELS[icon]);
         serial_puts("chattool=open_app:"); serial_puts(GUI_LABELS[icon]); serial_puts("\n");
+        return 1;
+    }
+
+    if (!strcmp(tool, "read_mail")) {
+        /* The newest message, or the newest from whoever she was asked about. */
+        mail_load();
+        int idx = -1;
+        for (int i = mail_count - 1; i >= 0 && idx < 0; i--) {
+            if (!arg[0]) { idx = i; break; }
+            for (int k = 0; mail_msgs[i].from[k] && idx < 0; k++) {
+                int m = 0;
+                while (arg[m] && mail_msgs[i].from[k + m] && ((arg[m] | 32) == (mail_msgs[i].from[k + m] | 32))) m++;
+                if (!arg[m]) idx = i;
+            }
+        }
+        if (idx < 0) {
+            chat_fmt_reply(reply, replysz, arg[0] ? "No mail from " : "", arg[0] ? arg : "Your inbox is empty.");
+            serial_puts("chattool=read_mail:none\n");
+            return 1;
+        }
+        mail_msg_t *m = &mail_msgs[idx];
+        int p = 0;
+        const char *parts[] = { "From ", m->from, ": ", m->subject, ". ", m->body };
+        for (int k = 0; k < 6; k++) for (const char *c = parts[k]; *c && p < replysz - 1; c++) reply[p++] = *c;
+        reply[p] = 0;
+        if (!m->read) { m->read = 1; mail_save(); }
+        serial_puts("chattool=read_mail:"); serial_puts(m->subject); serial_puts("\n");
+        return 1;
+    }
+
+    if (!strcmp(tool, "send_mail")) {
+        /* Local until Mail has accounts: the message lands in Mail, addressed. The words
+           come from what was said after "that", "saying" or a colon, else all of it. */
+        const char *body = chat_last_user_msg;
+        for (const char *c = chat_last_user_msg; *c; c++) {
+            if (*c == ':') { body = c + 1; break; }
+            if (chat_starts(c, " that ")) { body = c + 6; break; }
+            if (chat_starts(c, " saying ")) { body = c + 8; break; }
+        }
+        while (*body == ' ') body++;
+        mail_load();
+        if (mail_count >= MAIL_MAX) {
+            chat_fmt_reply(reply, replysz, "", "Mail is full, nothing sent.");
+            serial_puts("chattool=send_mail:full\n");
+            return 1;
+        }
+        mail_msg_t *m = &mail_msgs[mail_count];
+        char to[MAIL_FROM_MAX]; int t = 0;
+        for (const char *c = "To "; *c; c++) to[t++] = *c;
+        for (const char *c = arg; *c && *c != '|' && t < MAIL_FROM_MAX - 1; c++) to[t++] = *c;
+        to[t] = 0;
+        mail_str_copy(m->from, to, MAIL_FROM_MAX);
+        mail_str_copy(m->subject, "From Samantha", MAIL_SUBJECT_MAX);
+        int b = 0;
+        for (const char *c = body; *c && b < MAIL_BODY_MAX - 1; c++) if (*c != '|') m->body[b++] = *c;
+        m->body[b] = 0;
+        m->read = 1;
+        mail_count++;
+        mail_save();
+        chat_fmt_reply(reply, replysz, "Wrote it to ", arg);
+        serial_puts("chattool=send_mail:"); serial_puts(arg); serial_puts("\n");
         return 1;
     }
 
@@ -643,6 +707,7 @@ static const char *chat_process_message(char *msg, int T, int x, int you_w, int 
     font_draw_string(CHAT_YOU, x, T + 76, CHAT_DIM, -1);
     render_wrapped_text(msg, x + you_w, T + 76, body_w - you_w, 64, CHAT_INK);
 
+    chat_last_user_msg = msg;
     int handled = 0;
     static char pick_tool[CHAT_TOOL_MAX], pick_arg[CHAT_ARG_MAX], tool_reply[256];
     if (chat_pick(msg, pick_tool, sizeof(pick_tool), pick_arg, sizeof(pick_arg))
