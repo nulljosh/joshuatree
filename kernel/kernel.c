@@ -5390,10 +5390,13 @@ static void gui_app_frame_title(const char *label){
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
 static void gui_apps_launch(int icon){
-    gui_app_frame_title(APPS[icon].name);
+    int was_windowed = gui_app_windowed; /* v1.7.7: ring-3 apps need a real viewport via keyboard Enter too */
+    unsigned int vw = window_width(), vh = window_height() - 40; /* clamped below to fit ring-3 .userfb */
+    if (!was_windowed) { gui_draw_app_titlebar(APPS[icon].name); if (vw * vh * 4 > 0x170000) { vw = 832; vh = 450; }
+        window_set_viewport(0, 40, vw, vh); app_view_x = 0; app_view_y = 40; app_view_w = (int)vw; app_view_h = (int)vh; gui_app_windowed = 1;
+    } else gui_app_frame_title(APPS[icon].name);
     gui_launch(icon);
-    gui_app_frame_title(APPS[GUI_APPS_FOLDER].name);
-}
+    if (!was_windowed) { gui_app_windowed = 0; window_clear_viewport(); } else gui_app_frame_title(APPS[GUI_APPS_FOLDER].name); }
 
 static void gui_launch_apps(void){
     int sel = 0;
@@ -7194,9 +7197,7 @@ static void gui_run(void){
                     gui_multiwin_close(gui_window_count - 1);
                     mw_key_repaint = 1;
                 } else if (c == '\n' && gui_window_count == 0) {
-                    /* Enter opens the Apps folder via the dock's own path,
-                       so gui_app_windowed/app_view_* are set like a click. */
-                    gui_launch_from_dock(GUI_APPS_FOLDER);
+                    gui_launch_apps(); /* direct, not gui_launch_from_dock's boxed frame (moves the a11y close pixel) */
                 }
             }
         }
