@@ -12,16 +12,22 @@ LOG = "/tmp/jt-drunk-serial.log"
 PORT = 4711
 FB = 0xfd000000; W, H = 1920, 1080
 
-def qmp_command(sock, cmd):
-    sock.sendall(json.dumps({"execute": cmd}).encode())
-    sock.recv(4096)
+def qmp_command(f, obj):
+    """Sends one QMP command and returns its reply, skipping any async
+    event lines QEMU interleaves in -- the same shape iconedge-check.py's
+    own cmd() already uses, real JSON objects with "execute"/"arguments",
+    not HMP command-string text, and a real capabilities handshake first."""
+    f.write(json.dumps(obj) + "\n"); f.flush()
+    while True:
+        r = json.loads(f.readline())
+        if "return" in r or "error" in r: return r
 
-def screenshot(sock, dump_path):
-    qmp_command(sock, "stop")
+def screenshot(f, dump_path):
+    qmp_command(f, {"execute": "stop"})
     time.sleep(0.1)
-    qmp_command(sock, f"pmemsave {FB} {W*H*4} {dump_path}")
+    qmp_command(f, {"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": dump_path}})
     time.sleep(0.2)
-    qmp_command(sock, "cont")
+    qmp_command(f, {"execute": "cont"})
     time.sleep(0.1)
 
 def check_horizontal_variance(img_bytes):
@@ -55,31 +61,32 @@ try:
             "-append", "drunk",
             "-qmp", f"unix:/tmp/jt-drunk-qmp,server,nowait",
             "-serial", f"file:{LOG}",
-            "-nographic", "-monitor", "none",
+            "-display", "none", "-vga", "std", "-monitor", "none",
             "-device", "sb16,audiodev=a0", "-audiodev", "none,id=a0"
         ])
 
     time.sleep(2)
     sock = socket.socket(socket.AF_UNIX)
     sock.connect("/tmp/jt-drunk-qmp")
-    sock.recv(4096)
-
-    qmp_command(sock, "cont")
+    qf = sock.makefile("rw")
+    qf.readline()  # greeting
+    qmp_command(qf, {"execute": "qmp_capabilities"})
     time.sleep(3)
 
     dump1 = "/tmp/jt-drunk-frame1.raw"
     dump2 = "/tmp/jt-drunk-frame2.raw"
 
-    screenshot(sock, dump1)
+    screenshot(qf, dump1)
     time.sleep(0.2)
-    screenshot(sock, dump2)
+    screenshot(qf, dump2)
 
     with open(dump1, 'rb') as f:
         img1 = f.read()
     with open(dump2, 'rb') as f:
         img2 = f.read()
 
-    qmp_command(sock, "quit")
+    try: qmp_command(qf, {"execute": "quit"})
+    except (ConnectionResetError, BrokenPipeError, OSError): pass
     qemu.wait(timeout=5)
 
     if len(img1) != W*H*4 or len(img2) != W*H*4:
