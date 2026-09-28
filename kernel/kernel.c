@@ -4492,8 +4492,7 @@ void gui_app_mouse_tick(void){
             serial_puts("windrag\n"); /* marker for tools/checks/windowdrag-check.py */
         }
     }
-    gui_cursor_save(app_cursor_x, app_cursor_y);
-    gui_draw_cursor(app_cursor_x, app_cursor_y);
+    if (!boot_to_phone) { gui_cursor_save(app_cursor_x, app_cursor_y); gui_draw_cursor(app_cursor_x, app_cursor_y); } /* phone_home.h: touch has no cursor, never draw the desktop arrow over an open app */
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
 /* v67 (0.62.2): for an app that repaints its whole viewport itself on

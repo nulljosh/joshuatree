@@ -28,6 +28,19 @@
    boot_to_phone, forward-declared near boot_to_phone's own definition so
    gui_draw_app_titlebar and gui_app_mouse_tick (both defined well above
    this #include) can call them. */
+/* Bold "<" chevron, drawn as two stepped diagonal strokes rather than a
+   single font glyph -- the font's own "<" (Joshua's review: "thin") is a
+   single-pixel-weight character never meant to read as a tap target on
+   a real screen. Each stroke is a stack of thick x thick squares walked
+   one logical pixel at a time from the tip, so both diagonals stay
+   solid and retina-crisp at any window_scale (window_rect itself does
+   the physical-pixel multiply, same as every other primitive here). */
+static void phone_chevron_draw(int tip_x, int tip_y, int reach, int thick, unsigned int color){
+    for (int i = 0; i <= reach; i++) {
+        window_rect(tip_x + i - thick / 2, tip_y - i - thick / 2, thick, thick, color);
+        window_rect(tip_x + i - thick / 2, tip_y + i - thick / 2, thick, thick, color);
+    }
+}
 static void phone_app_titlebar_draw(const char *title){
     /* The home grid's status bar (its clock, centered at this same y)
        and this titlebar share the same top strip, and nothing else
@@ -35,7 +48,7 @@ static void phone_app_titlebar_draw(const char *title){
        on top of the stale clock digits underneath (caught in the first
        screenshot of a real app open). */
     window_rect(0, 0, (int)window_width(), 40, GUI_BG);
-    font_draw_string("<", 18, 10, 0x001C1C1E, -1);
+    phone_chevron_draw(20, 20, 9, 3, 0x001C1C1E); /* tip at (20,20): centered in the 44x40 tap zone phone_back_zone_tick below hit-tests */
     int tw = font_string_width(title);
     font_draw_string(title, ((int)window_width() - tw) / 2, 12, 0x00555555, -1);
 }
@@ -47,9 +60,13 @@ static void phone_app_titlebar_draw(const char *title){
    this call in gui_app_mouse_tick) and injects the real ESC make code,
    so the app closes through the exact kbd_pop()==27 path a keyboard's
    Esc key already drives: one close path, not a second one bolted on
-   for touch. */
+   for touch. Zone widened to 44 logical px wide (was 60, already
+   comfortable by area, but this makes the width match Apple's own
+   44x44 minimum tap target exactly) x the full 40px strip -- the strip
+   itself is the ceiling here, shared with the titlebar's own layout, so
+   40 is as tall as this zone can go without moving that shared line. */
 static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y){
-    if ((buttons & 1) && !app_drag_held && cursor_y < 40 && cursor_x < 60) {
+    if ((buttons & 1) && !app_drag_held && cursor_y < 40 && cursor_x < 44) {
         mouse_click_edge(); /* consumed here: the app underneath never sees this tap */
         kbd_inject(0x01);
     }
