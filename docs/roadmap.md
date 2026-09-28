@@ -55,7 +55,7 @@ Joshua Tree boots in QEMU and a browser. A computer means it boots a real box on
 - [ ] [Fable] 64-bit and more than one CPU core. Every desktop chip since 2006 is 64-bit and multi-core.
 
 ## A Bloomberg terminal on it (set 2026-09-27)
-Stocks already has a live watchlist, real quotes and charts through the Worker (1.0.4). A terminal is keyboard-first, dense and live.
+Epiphany is the terminal; Stocks stays the basic native app. The live quotes and charts through the Worker (1.0.4) are shared. A terminal is keyboard-first, dense and live, so everything below lands in Epiphany.
 
 - [ ] [Sonnet] Command bar with function codes: `AAPL GP` price graph, `AAPL DES` description, `TOP` headlines, `WEI` world indices, `FX`, `CRYPTO`. Type, Enter, it's there.
 - [ ] [Sonnet] Streaming quotes: the Worker relays ticks every second, prices flash green or red as they move.
