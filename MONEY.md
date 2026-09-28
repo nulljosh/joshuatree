@@ -16,6 +16,22 @@ An operating system you talk to. Ask it to open an app or take a note and it doe
 
 The software is the demo. The money is in the thing it runs on.
 
+## What it's worth today
+
+Revenue: $0. On purpose, the OS is free.
+
+Real value right now is proof. One person built a whole computer from nothing, and anyone can click and run it. That gets a founder funded or an engineer hired senior. Treat it as the reputation that sells the dev kit later.
+
+## Getting it seen
+
+In order. Each one feeds the next.
+
+1. Show HN: "I built an operating system from scratch, and it runs in your browser." The live demo is the pitch. One click, no install.
+2. A 30 second video: boot, open apps, ask for something, hear the answer. X, Reddit (r/osdev, r/programming), YouTube Shorts.
+3. The story: one person in Langley, Claude as the hands. Pitched to AI and developer newsletters.
+4. The osdev forums: source, a write-up of the hard parts. These are the first dev kit buyers.
+5. A waitlist on the landing page for the dev kit. The count is the demand test before any hardware gets ordered.
+
 ## The million dollar plan
 
 A dev kit. A small board with Joshua Tree flashed on it, sold to the people who build their own computers for fun.
