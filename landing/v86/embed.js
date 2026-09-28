@@ -45,11 +45,11 @@ if (typeof document !== "undefined") (function () {
   // v42: the kernel's cursor and layout live in this LOGICAL space; the
   // physical mode is 2x this. Keep in sync with gui_run's window_open_scaled.
   // Phone: a narrow visitor boots "phone samantha" instead, which opens a
-  // real 430x932 portrait mode at scale 1 (kernel.c's boot_to_phone), not
+  // real 430x760 portrait mode at scale 1 (kernel.c's boot_to_phone), not
   // the desktop's 960x540 shrunk to fit -- so this file's own logical
   // space has to switch to match, 1:1, instead of downscaling a desktop.
   var IS_PHONE = typeof matchMedia === "function" && matchMedia("(max-width: 520px)").matches;
-  var LOGICAL_W = IS_PHONE ? 430 : 960, LOGICAL_H = IS_PHONE ? 932 : 540;
+  var LOGICAL_W = IS_PHONE ? 430 : 960, LOGICAL_H = IS_PHONE ? 760 : 540;
   var GLIDE_MAX_MS = 700; // longest tour cursor glide, see moveCursorTo
   // v52.6: real shadow cursor position, kept in sync by every real send
   // this file makes (mousemove, touchmove drags, and moveCursorTo's own

@@ -954,7 +954,7 @@ static int portfolio_dock;
    this only replaces the icon desktop that would follow it. */
 static int boot_to_samantha;
 /* "phone" on the command line, see kmain's parse: gui_run opens a real
-   portrait phone mode (430x932) instead of the desktop's 960x540@2x so
+   portrait phone mode (430x760) instead of the desktop's 960x540@2x so
    the demo boots 1:1 into what a phone screen actually is, rather than
    shrinking the desktop's layout down to unreadable text. */
 static int boot_to_phone;
@@ -6928,9 +6928,9 @@ static void gui_run(void){
        16:9 panel came out visibly skewed; matching the panel's own shape
        means fullscreen is pixel-exact with no scaling at all. */
     /* "phone" boots a real portrait phone mode at scale 1 instead: Bochs
-       VBE takes any size, and 430x932 is a real phone's own logical
+       VBE takes any size, and 430x760 is a real phone's own logical
        pixels, not the desktop's 960x540 shrunk to fit. */
-    if (boot_to_phone) { if (!window_open(430, 932, 32)) { puts("no VGA device found or out of page tables\n"); return; } }
+    if (boot_to_phone) { if (!window_open_scaled(430, 760, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; } }
     else if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
     font_set_aa(gui_aa_char, gui_aa_advance); /* v44: real typeface for every string from here on */
     font_set_aa_mono(gui_aa_char_mono); /* term-mono: mono face for the terminal grid and Keyrate's typed line */
@@ -9649,7 +9649,7 @@ void kmain(unsigned int multiboot_info_addr){
             if (pc[0]=='s' && pc[1]=='a' && pc[2]=='m' && pc[3]=='a' && pc[4]=='n' && pc[5]=='t' && pc[6]=='h' && pc[7]=='a') { boot_to_samantha = 1; serial_puts("bootsamantha\n"); break; }
         /* "phone" on the command line: Bochs VBE takes any mode, so this
            just swaps gui_run's video mode for a real portrait phone size
-           (430x932) instead of the desktop's 960x540@2x. Landing's embed.js
+           (430x760) instead of the desktop's 960x540@2x. Landing's embed.js
            always pairs this with samantha (a phone visitor gets her full-
            screen view, not the icon desktop laid out for a mouse), but
            phone alone still forces it here so booting with just "phone"
