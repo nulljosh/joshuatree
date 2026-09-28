@@ -35,6 +35,13 @@ Samantha runs the machine. Joshua's list, in order.
 - [ ] [Sonnet] Mobile Joshua Tree: the landing demo and the OS usable on a phone screen.
 - [ ] [Fable] Samantha fixes her own bugs: a failing check becomes a draft PR she opens herself (Claude for the hard part at first), gated on `tools/ci-local.sh`. First target: the three compiler warnings in the build.
 
+## From the nanobyte "Building an OS" series (set 2026-09-27)
+What that series covers that Joshua Tree still doesn't, ranked for a dev kit that boots real PCs.
+
+- [ ] [Fable] FAT32, read and write: open a normal USB stick or SD card. Today the disk format is Joshua Tree's own, so nothing from another computer opens.
+- [ ] [Fable] Load ELF programs from disk at runtime, so apps can ship outside the kernel. First step to installable apps (gap 6 above).
+- [ ] [Sonnet] Crash reports with function names: build a symbol table into the kernel and print `panic in <function>+offset` over serial and on screen.
+
 ## Beta, 0.9.0
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck.
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
