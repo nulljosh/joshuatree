@@ -103,6 +103,7 @@ retry|0|Apple-menu hover stays cheap, clock redraws on a minute change|./tools/c
 retry|6|Lock Screen: menu item locks, Esc cannot bypass, password unlocks|python3 ./tools/checks/lockscreen-check.py
 retry|2|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mwkeyflash-check.sh
 retry|7|Drawing lands offscreen, window_present puts it on screen|./tools/checks/backbuffer-check.sh
+retry|5|1-bit chrome: every UI blend is a 4x4 Bayer dither, never a mid tone|python3 ./tools/checks/dither-check.py
 retry|5|Multi-window apps draw exactly one toolbar, not two|./tools/checks/mwdupetoolbar-check.sh
 once |6|JPEG decoder, host harness|./tools/checks/jpeg-host-check.sh
 once |7|HTML entities decode to ASCII, host harness|./tools/checks/html-host-check.sh

@@ -1316,19 +1316,11 @@ static void gui_aa_line(int x0, int y0, int x1, int y1, unsigned int color, doub
 /* Channel-wise linear interpolation between two 0x00RRGGBB colors, `t/max`
    of the way from `a` to `b`. */
 static unsigned int gui_lerp(unsigned int a, unsigned int b, int t, int max){
-    /* Every channel here as a signed int throughout: `a`/`b` are unsigned,
-       so `br - ar` promotes back to unsigned if either operand stays
-       unsigned, wrapping to a huge positive value whenever the channel is
-       decreasing (exactly the case going from sand to burgundy), which is
-       the real bug a first version of this shipped with, a genuinely
-       wrong saturated-magenta gradient, not the intended one, caught by
-       actually looking at a real screenshot instead of trusting the math. */
-    int ar = (int)((a >> 16) & 0xFF), ag = (int)((a >> 8) & 0xFF), ab = (int)(a & 0xFF);
-    int br = (int)((b >> 16) & 0xFF), bg2 = (int)((b >> 8) & 0xFF), bb = (int)(b & 0xFF);
-    int r = ar + (br - ar) * t / max;
-    int g = ag + (bg2 - ag) * t / max;
-    int bl = ab + (bb - ab) * t / max;
-    return ((unsigned int)r << 16) | ((unsigned int)g << 8) | (unsigned int)bl;
+    /* 1-bit: a dither handle, never a mid colour (kernel/gui_prims.c). The
+       pixel writers lay down a or b per pixel off a 4x4 Bayer cell. The
+       photo paths (wallpaper scaler, day/night grade) use gui_dither_flat
+       on purpose: those are image pixels, not chrome. */
+    return gui_dither(a, b, t, max);
 }
 
 /* No libm in this freestanding build, and these icons are small enough
@@ -1407,8 +1399,8 @@ static void daynight_update(void){
    every other precomputed solid-color transition here), reused rather
    than a new blend primitive. */
 static unsigned int gui_daynight_tint_pct(unsigned int rgb, int night, int day){
-    if (night > 0) return gui_lerp(rgb, 0x00201009, night, 100); /* toward the wallpaper's own espresso-brown floor, never blue */
-    if (day > 0)   return gui_lerp(rgb, 0x00DDDDDD, day, 100);   /* toward this file's own documented Silver, a small real brighten */
+    if (night > 0) return gui_dither_flat(rgb, 0x00201009, night, 100); /* toward the wallpaper's own espresso-brown floor, never blue */
+    if (day > 0)   return gui_dither_flat(rgb, 0x00DDDDDD, day, 100);   /* toward this file's own documented Silver, a small real brighten */
     return rgb;
 }
 static unsigned int gui_daynight_tint(unsigned int rgb){ return gui_daynight_tint_pct(rgb, daynight_night_pct, daynight_day_pct); }
@@ -2172,7 +2164,7 @@ static unsigned int gui_wind_cached_pixel(int px, int py){
     if (sx >= wind_base_width) sx = wind_base_width - 1;
     int sx1 = sx + 1 < wind_base_width ? sx + 1 : sx;
     const unsigned int *row = wind_base + (py - top) * wind_base_width;
-    return frac ? gui_lerp(row[sx], row[sx1], frac, 256) : row[sx];
+    return frac ? gui_dither_flat(row[sx], row[sx1], frac, 256) : row[sx];
 }
 static unsigned int gui_wallpaper_sample(int px, int py, int sway){
     /* v65: wind_base (below) caches RAW, untinted samples on purpose, so
@@ -2221,7 +2213,7 @@ static void gui_draw_wallpaper_rows_sway_ex(int y_from, int y_to, int sway, int 
                 /* wind_base holds RAW samples (v65: see its own build-loop
                    comment), tinted fresh here against the current real
                    hour rather than baked in once at cache-build time. */
-                unsigned int color = frac ? gui_lerp(row[sx], row[sx1], frac, 256) : row[sx];
+                unsigned int color = frac ? gui_dither_flat(row[sx], row[sx1], frac, 256) : row[sx];
                 color = gui_daynight_tint(color);
                 if (dst) dst[px] = color;
                 else window_pixel_phys(px, py, color);
@@ -4254,7 +4246,7 @@ static void gui_draw_dock_tray(void){
     for (int row = 0; row < rows; row++){
         for (int px = sx0; px < sx1; px++){
             unsigned int wall = gui_wallpaper_sample(px, sy0 + row, 0);
-            window_pixel_phys(px, sy0 + row, gui_lerp(gui_blend(wall, 0x00000000), wall, row, rows));
+            window_pixel_phys(px, sy0 + row, gui_dither_pick(px, sy0 + row, wall, 0x00000000, rows - row, 2 * rows)); /* 1-bit: wallpaper or ink per pixel, 50% ink at the tray edge fading out */
         }
     }
 

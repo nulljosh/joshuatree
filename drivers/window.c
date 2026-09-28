@@ -4,6 +4,7 @@
 #include "kheap.h"
 #include "serial.h"
 #include "irq.h"
+#include "../kernel/gui_prims.h" /* 1-bit: dither handles resolve here, at the pixel */
 
 typedef unsigned int u32;
 
@@ -263,7 +264,7 @@ u32 *window_phys_row(int py) {
 
 void window_pixel_phys(int px, int py, u32 color) {
     u32 *p = screen_pixel_ex(px, py, 1);
-    if (p) *p = color;
+    if (p) *p = gui_dither_pixel(px, py, color);
 }
 
 /* Issue #14 ("everything super laggy"): a solid-color rectangle fast
@@ -281,6 +282,13 @@ void window_pixel_phys(int px, int py, u32 color) {
    loop of window_pixel_phys(px,py,color) calls would have written. */
 void window_fill_rect_phys(int px, int py, int w, int h, u32 color) {
     if (w <= 0 || h <= 0) return;
+    if (GUI_DITHER_IS(color)) {
+        /* a dithered fill is two colours in a 4x4 pattern, so it goes pixel
+           by pixel; solid fills keep the fast path below */
+        for (int y = py; y < py + h; y++)
+            for (int x = px; x < px + w; x++) window_pixel_phys(x, y, color);
+        return;
+    }
     if (view_w) {
         if (px < 0) { w += px; px = 0; }
         if (py < 0) { h += py; py = 0; }
@@ -437,7 +445,8 @@ void window_clear(u32 color) {
         window_fill_rect_phys(0, 0, (int)(view_w * scale), (int)(view_h * scale), color);
     } else {
         u32 *dst = back ? back : fb;
-        for (u32 i = 0; i < phys_w * win_h * scale; i++) dst[i] = color;
+        if (GUI_DITHER_IS(color)) { for (u32 i = 0; i < phys_w * win_h * scale; i++) dst[i] = gui_dither_pixel((int)(i % phys_w), (int)(i / phys_w), color); }
+        else for (u32 i = 0; i < phys_w * win_h * scale; i++) dst[i] = color;
         if (back) damage_all();
     }
 }
@@ -445,7 +454,7 @@ void window_clear(u32 color) {
 void window_pixel(int x, int y, u32 color) {
     if (target_fb) {
         if (x < 0 || y < 0 || (u32)x >= target_w || (u32)y >= target_h) return;
-        target_fb[(u32)y * target_w + (u32)x] = color;
+        target_fb[(u32)y * target_w + (u32)x] = gui_dither_pixel(x, y, color);
         return;
     }
     if (x < 0 || y < 0 || (u32)x >= (view_w ? view_w : win_w) || (u32)y >= (view_h ? view_h : win_h)) return;
