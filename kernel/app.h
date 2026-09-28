@@ -35,6 +35,10 @@ struct app {
     int (*key)(int k);                                   /* multiwindow keystroke, returns 1 to close the window */
 };
 
+/* The single APPS[] table, defined in kernel.c; non-static so dock_draw.c
+   can read a slot's name/color for the dock label and glyph fallback. */
+extern const struct app APPS[];
+
 /* Desktop services an app compiled in its own unit needs from kernel.c. */
 void gui_draw_app_titlebar(const char *title);
 int gui_getch_or_click(void);

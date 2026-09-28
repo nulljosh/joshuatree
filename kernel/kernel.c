@@ -32,6 +32,7 @@
 #include "net.h"
 #include "gui_prims.h"
 #include "dock_geom.h"
+#include "dock_draw.h"
 #include "http.h"
 #include "wallpaper.h"
 #include "icon_art.h"
@@ -909,7 +910,7 @@ static void reboot(void){
    defined further down once every hook it points at exists (see "The app
    registry" below). This tentative definition lets the dock and Launchpad
    code above that point read it. */
-static const struct app APPS[GUI_APP_COUNT];
+const struct app APPS[GUI_APP_COUNT];
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
    boot rather than what happened to be built most recently: a terminal, a
@@ -940,7 +941,7 @@ static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3
    real and sticks for the rest of this GUI session (reset to launch order
    next time `gui` runs; nothing about layout is saved to disk, matching
    this whole desktop's one-screen, nothing-persisted scope). */
-static int gui_order[GUI_ICON_COUNT];
+int gui_order[GUI_ICON_COUNT];
 /* Portfolio mode ("portfolio" on the multiboot command line, sent by the
    landing's embed.js when heyitsmejosh.com/os.html frames it): the dock is
    Joshua's own apps instead of the system set. Same slot count, Apps folder
@@ -957,24 +958,11 @@ static int boot_to_samantha;
    the demo boots 1:1 into what a phone screen actually is, rather than
    shrinking the desktop's layout down to unreadable text. */
 static int boot_to_phone;
-/* v1.8.5 demo A+ pass, rubric item 3: every app drew its own keyboard-only
-   hint line ("up/down to pick ... esc closes") by calling font_draw_string
-   directly, one call site per app (~20 of them across mail.h, fieldbook.h,
-   reminders.h, etc, plus kernel.c's own Trash/Recents/Terminal). On a phone
-   there is no keyboard and no Esc key (phone_home.h's back chevron is the
-   only way back), so that whole line was dead advice shown to a visitor
-   who can only tap. Rather than touch all ~20 sites individually, they now
-   route through this one helper: draws nothing when boot_to_phone, draws
-   exactly the same font_draw_string call otherwise, so desktop is pixel-
-   identical and phone silently drops the line. */
-static void gui_draw_hint(int x, int y, const char *text, unsigned int color){
-    if (boot_to_phone) return;
-    font_draw_string(text, x, y, color, -1);
-}
+#include "hint.h"
 static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
 static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
-static int dock_hover = -1; /* slot whose label is showing */
+int dock_hover = -1; /* slot whose label is showing */
 
 /* GUI_BG lives in app.h now: a moved-out app's own unit clears to it too. */
 #define GUI_MENUBAR_H   26
@@ -1320,7 +1308,7 @@ static void gui_aa_line(int x0, int y0, int x1, int y1, unsigned int color, doub
 
 /* Channel-wise linear interpolation between two 0x00RRGGBB colors, `t/max`
    of the way from `a` to `b`. */
-static unsigned int gui_lerp(unsigned int a, unsigned int b, int t, int max){
+unsigned int gui_lerp(unsigned int a, unsigned int b, int t, int max){
     /* Every channel here as a signed int throughout: `a`/`b` are unsigned,
        so `br - ar` promotes back to unsigned if either operand stays
        unsigned, wrapping to a huge positive value whenever the channel is
@@ -1604,9 +1592,9 @@ static int aa_band = 5;
    so each corner's AA band can blend against the ACTUAL pixel behind
    that corner instead of gui_wallpaper_color(row)'s centre-column sample,
    which is wrong at the tray's own far left/right edges. */
-static unsigned int gui_wallpaper_sample(int px, int py, int sway);
+unsigned int gui_wallpaper_sample(int px, int py, int sway);
 
-static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned int color, int r){
+void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned int color, int r){
     /* v43: drawn at PHYSICAL resolution. Through the logical layer every
        corner step was a 2x2 block and the AA band two logical pixels wide,
        which on a 1920px panel reads as a plainly staircased edge (real
@@ -2014,7 +2002,7 @@ static void gui_capsule_phys(int pcx0, int pcy0, int pcx1, int pcy1, int pr, uns
     }
 }
 
-static void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color, unsigned int into){
+void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color, unsigned int into){
     if (!window_has_target() && window_scale() > 1){
         int sc = (int)window_scale();
         gui_capsule_phys(x0 * sc, y0 * sc, x1 * sc, y1 * sc, r * sc, color);
@@ -2120,7 +2108,7 @@ static int gui_wind_shift(int row){ /* source-pixel shift for this screen row, i
 }
 
 static void gui_draw_wallpaper_rows_sway(int y_from, int y_to, int sway);
-static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway(y_from, y_to, 0); }
+void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway(y_from, y_to, 0); }
 
 /* One wallpaper pixel at PHYSICAL (px, py): bilinear over the 960x540
    source, plus the wind shift when `sway` is set. Everything that paints
@@ -2240,7 +2228,7 @@ static unsigned int gui_wind_cached_pixel(int px, int py){
     const unsigned int *row = wind_base + (py - top) * wind_base_width;
     return frac ? gui_lerp(row[sx], row[sx1], frac, 256) : row[sx];
 }
-static unsigned int gui_wallpaper_sample(int px, int py, int sway){
+unsigned int gui_wallpaper_sample(int px, int py, int sway){
     /* v65: wind_base (below) caches RAW, untinted samples on purpose, so
        the tint here is always computed fresh against the current real
        hour, not frozen at whatever hour the cache happened to be built. */
@@ -3798,7 +3786,7 @@ static void gui_draw_gloss(int x, int y, int w, int h, unsigned int bg, int corn
    other effect here, no alpha channel and no bitmap: darkest directly
    under the icon, blending out to the dock's own color at the edge,
    which is exactly what a soft shadow is. */
-static void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
+void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
     /* v44.2: drawn at PHYSICAL resolution, same fix shape as v43's dock
        tray corners. Through the LOGICAL layer this was the one dock
        element not matching every icon tile beside it, which renders at
@@ -4151,7 +4139,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
     gui_draw_icon_glyph(icon, cx_center, y + size / 2, size, bg);
     if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
 }
-static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){ gui_draw_one_icon_on(icon, cx_center, cy_bottom, size, DOCK_TRAY_COLOR); }
+void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){ gui_draw_one_icon_on(icon, cx_center, cy_bottom, size, DOCK_TRAY_COLOR); }
 
 /* hover_slot: which slot shows the magnify+label (-1 none). drag_slot: the
    slot currently being dragged, drawn separately so it can float free of
@@ -4159,25 +4147,6 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
 /* v40: the dock band's top edge, high enough to cover a magnified,
    lifted icon and its label, so repainting this band alone is enough to
    erase any previous hover state. */
-static int gui_dock_band_top(void){ return gui_dock_y0() - 24; }
-#define DOCK_LABEL_BG   0x00F4F1EC /* hover label capsule fill */
-#define DOCK_LABEL_EDGE 0x00BDB4A8 /* its hairline edge */
-#define DOCK_LABEL_SPAN 48         /* px either side of a slot a hover change repaints: the widest label plus its capsule */
-
-static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my);
-/* v0.79.x: the dock splits into the half that never changes while the
-   pointer moves (the tray's shadow and its rounded body) and the half that
-   does (the icons, their contact shadows and the hover label). Measured,
-   one hover frame: the tray half is 4442 us of a 9842 us band compose, all
-   of it redrawing pixels identical to the ones already there. Baking it
-   into the band cache alongside the wallpaper rows it sits on costs
-   nothing extra (the cache is built once per resolution) and takes it off
-   every single animation frame. Both halves read the wallpaper through
-   gui_wallpaper_sample, never through the framebuffer, so a cached tray is
-   the same pixels as a freshly drawn one, not an approximation of them. */
-static void gui_draw_dock_tray(void);
-static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my);
-
 void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     gui_draw_wallpaper();
     if (wind_enabled && !wind_base) {
@@ -4211,163 +4180,12 @@ void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
 }
 
-/* v40: repaint only the dock band: the wallpaper rows behind it, then the
-   dock itself. This is what a hover change costs now, instead of a full
-   456,000-pixel photo blit plus eight supersampled icons. */
-static unsigned int *dock_band_cache = 0;
-static unsigned int *dock_band_frame = 0;
-static int dock_band_cache_top = -1;
-static int dock_presented_hover = -1;
-static void gui_dock_band_cache_build(void){
-    int sc = (int)window_scale();
-    int top = gui_dock_band_top(), h = (int)window_height() - top;
-    int pw = (int)window_width() * sc, ph = h * sc;
-    if (dock_band_cache && dock_band_cache_top == top) return;
-    if (dock_band_cache) kfree(dock_band_cache);
-    if (dock_band_frame) kfree(dock_band_frame);
-    dock_band_cache = (unsigned int *)kmalloc((unsigned int)(pw * ph) * sizeof(unsigned int));
-    dock_band_frame = (unsigned int *)kmalloc((unsigned int)(pw * ph) * sizeof(unsigned int));
-    dock_band_cache_top = top;
-    if (dock_band_cache && dock_band_frame) {
-        window_push_screen_band(dock_band_cache, top * sc, (unsigned int)ph);
-        gui_draw_wallpaper_rows(top, (int)window_height());
-        gui_draw_dock_tray();
-        window_pop_screen_band();
-    }
-}
-
-/* Everything the first hover of a session would otherwise pay for mid
-   animation: the band cache above (a full-width wallpaper render plus the
-   tray), and the magnified tile for every icon, whose cache miss path
-   decodes a PNG. Measured, that first hover showed one single size where
-   a warm one shows six, and the second showed three, because the work
-   landed inside the sixty milliseconds the animation had to run in. Doing
-   it here, while the desktop's first frame is already up and nothing is
-   animating, costs a boot moment nobody is watching and allocates nothing
-   a hover sweep would not have allocated seconds later anyway. */
-static void gui_dock_prewarm(void){
-    gui_dock_band_cache_build();
-}
-
-static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int drag_my){
-    /* v43: the wallpaper rows behind the dock never change, so bilinear
-       them once and copy thereafter. ~400k physical samples per hover
-       change was the other half of the flash. */
-    int sc = (int)window_scale();
-    int top = gui_dock_band_top(), h = (int)window_height() - top;
-    int pw = (int)window_width() * sc, ph = h * sc;
-    gui_dock_band_cache_build();
-    if (dock_band_cache && dock_band_frame) {
-        for (int i = 0; i < pw * ph; i++) dock_band_frame[i] = dock_band_cache[i];
-        window_push_screen_band(dock_band_frame, top * sc, (unsigned int)ph);
-        gui_draw_dock_icons(drag_slot, drag_mx, drag_my);
-        window_pop_screen_band();
-        /* Only present slots whose icon size changed. Copying the whole
-           2 MB band on every hover step visibly exposed the half-drawn
-           frame even though composition itself was offscreen. */
-        for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
-            if ((slot == dock_presented_hover) == (slot == dock_hover)) continue;
-            int left = (gui_slot_x(slot) - DOCK_LABEL_SPAN) * sc;
-            int right = (gui_slot_x(slot) + DOCK_ICON + DOCK_LABEL_SPAN) * sc;
-            if (left < 0) left = 0;
-            if (right > pw) right = pw;
-            for (int py = 0; py < ph; py++) {
-                unsigned int *dst = window_phys_row(top * sc + py);
-                for (int px = left; px < right; px++) {
-                    unsigned int next = dock_band_frame[py * pw + px];
-                    if (dst[px] != next) dst[px] = next;
-                }
-            }
-            /* v0.78.x: this is the one caller that writes through a raw row
-               pointer, so it has to declare what it touched. Measured: the
-               old "assume the whole row" guess damaged 1920 columns per row
-               to change the ~174 this actually writes, which is what made a
-               dock hover present 1.96M pixels instead of ~86k. */
-            window_damage(left, top * sc, right - left, ph);
-            }
-        dock_presented_hover = dock_hover;
-    } else {
-        gui_draw_wallpaper_rows(top, (int)window_height());
-        gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
-    }
-}
-
 /* v75: see wall_apply. wind_base is rebuilt lazily by gui_draw_desktop,
    the dock band by gui_redraw_dock_band's own top-mismatch check. */
 static void wall_caches_drop(void){
     if (wind_base) { kfree(wind_base); wind_base = 0; }
     dock_band_cache_top = -1;
     gui_wall_full_cache_drop();
-}
-
-static void gui_draw_dock_tray(void){
-    int y0 = gui_dock_y0(), dock_h = DOCK_ICON + 2 * DOCK_PAD, dock_w = gui_dock_w(), dock_x = gui_dock_x0();
-
-    /* A soft shadow beneath the tray, the same floating-panel look a real
-       macOS dock has, drawn before the tray itself so the tray's own edge
-       sits cleanly on top of it. Real per-pixel colors blended toward
-       black (gui_blend), fading back to the plain wallpaper color over a
-       few rows, no alpha compositing needed since these are precomputed
-       solid colors, same technique every AA edge in this file already
-       uses. Inset a little past the tray's own rounded corners so it
-       reads as a shadow, not a second, darker rectangle. */
-    /* Per physical pixel against the real photo. gui_wallpaper_color is one
-       colour per row (the centre column), fine for the old gradient but on
-       the photo it drew a flat striped bar under the tray. */
-    int sc = (int)window_scale();
-    int sy0 = (y0 + dock_h) * sc, rows = 10 * sc;
-    int sx0 = (dock_x + 6) * sc, sx1 = (dock_x + dock_w - 6) * sc;
-    for (int row = 0; row < rows; row++){
-        for (int px = sx0; px < sx1; px++){
-            unsigned int wall = gui_wallpaper_sample(px, sy0 + row, 0);
-            window_pixel_phys(px, sy0 + row, gui_lerp(gui_blend(wall, 0x00000000), wall, row, rows));
-        }
-    }
-
-    /* gui_rounded_rect_on_wallpaper, not gui_rounded_rect: the tray's top
-       and bottom corners sit against very different points on the
-       gradient, one fixed blend sample for both was the real dark-bubble
-       bug just found and fixed above. */
-    gui_rounded_rect_on_wallpaper(dock_x, y0, dock_w, dock_h, DOCK_TRAY_COLOR, 20);
-}
-
-static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
-    int y0 = gui_dock_y0();
-
-    for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
-        if (slot == drag_slot) continue; /* drawn last, floating at the cursor */
-        int icon = gui_order[slot];
-        int size = DOCK_ICON;
-        int cx_center = gui_slot_x(slot) + DOCK_ICON / 2;
-        int cy_bottom = y0 + DOCK_PAD + DOCK_ICON;
-        gui_draw_icon_shadow(cx_center, cy_bottom, size);
-        gui_draw_one_icon(icon, cx_center, cy_bottom, size);
-        if (slot == dock_hover) {
-            int label_w = font_string_width(APPS[icon].name);
-            int ly = y0 - 21; /* capsule spans ly-3 .. ly+19: clear of the tray's top edge, inside the band (y0 - 24) */
-            /* Dark text on a light capsule with a hairline edge, the macOS
-               dock tooltip, in the tray's own cream. Bare light text read
-               on dark wallpaper but vanished on bright map tiles and
-               collided with an open window's bottom edge (QA tour,
-               2026-09-21); the hairline keeps the capsule distinct over a
-               light window. It stays inside the band gui_dock_band_top()
-               composes and the per-slot present span DOCK_LABEL_SPAN. */
-            int lx0 = cx_center - label_w / 2 - 2, lx1 = cx_center + label_w / 2 + 2;
-            gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 11, DOCK_LABEL_EDGE, DOCK_LABEL_EDGE);
-            gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 10, DOCK_LABEL_BG, DOCK_LABEL_BG);
-            font_draw_string(APPS[icon].name, cx_center - label_w / 2, ly, 0x001C1C1E, -1);
-        }
-    }
-    if (drag_slot >= 0) {
-        int icon = gui_order[drag_slot];
-        gui_draw_one_icon(icon, drag_mx, drag_my + DOCK_ICON / 2, DOCK_ICON);
-    }
-}
-
-static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my){
-    (void)hover_slot;
-    gui_draw_dock_tray();
-    gui_draw_dock_icons(drag_slot, drag_mx, drag_my);
 }
 
 /* v40: a real software cursor. Save the 13x13 patch it's about to cover,
@@ -4513,7 +4331,6 @@ int gui_app_dy(void){ return gui_app_windowed ? -32 : 0; }
    always plain wallpaper, nothing else needs redrawing. */
 static int app_win_x = 0, app_win_y = 0, app_win_w = 0, app_win_h = 0;
 static int app_drag_held = 0, app_drag_on = 0, app_drag_gx = 0, app_drag_gy = 0;
-static int gui_dock_band_top(void);
 static void gui_daynight_wallpaper_rect(int x, int y, int w, int h);
 int app_view_x, app_view_y; int app_view_w, app_view_h;
 int app_cursor_x, app_cursor_y;
@@ -5660,6 +5477,17 @@ static int fs_ok_global = 0;
 #include "bench.h"
 #include "clock.h"
 
+/* One app window's frame: rounded body, content well, traffic lights, title. */
+static void gui_draw_window_frame(int x, int y, int w, int h, const char *name){
+    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
+    window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
+    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
+    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
+    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
+    font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
+    font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
+    font_draw_string(name, x + 96, y + 8, 0x00403439, -1);
+}
 static void gui_launch(int icon){
     if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
 }
@@ -5673,14 +5501,7 @@ again:
     int x = apps ? 56 : 70, y = apps ? 30 : 40;
     int w = apps ? 848 : 820, h = apps ? 490 : 385;
     gui_clamp_win_rect(&x, &y, &w, &h); /* phone screens are far narrower than these desktop-tuned numbers */
-    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
-    window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
-    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
-    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
-    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
-    font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
-    font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
-    font_draw_string(APPS[icon].name, x + 96, y + 8, 0x00403439, -1);
+    gui_draw_window_frame(x, y, w, h, APPS[icon].name);
     window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
     app_view_x = x + 8; app_view_y = y + 32;
     app_view_w = w - 16; app_view_h = h - 40;
@@ -5869,14 +5690,7 @@ static void gui_snap_outline(int zone){
 static void gui_multiwin_draw_chrome(const gui_window_t *win){
     serial_puts("mwchrome\n"); /* discriminating marker for tools/checks/mwkeyflash-check.sh */
     int x = win->x, y = win->y, w = win->w, h = win->h;
-    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
-    window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
-    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
-    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
-    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
-    font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
-    font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
-    font_draw_string(APPS[win->icon].name, x + 96, y + 8, 0x00403439, -1);
+    gui_draw_window_frame(x, y, w, h, APPS[win->icon].name);
 }
 static void gui_multiwin_draw_content_only(const gui_window_t *win){
     int x = win->x, y = win->y, w = win->w, h = win->h;
@@ -5923,7 +5737,7 @@ static void gui_weather_mw_repaint(void){
    bump of GUI_APP_COUNT/GUI_APPS_FOLDER/GUI_TRASH above. */
 static int gui_weather_mw_key(int k){ return gui_weather_key(k, gui_weather_mw_repaint); }
 static void gui_open_homeqi(void){ gui_launch_html("Homeqi", app_homeqi_html, app_homeqi_len); }
-static const struct app APPS[GUI_APP_COUNT] = {
+const struct app APPS[GUI_APP_COUNT] = {
     /*  0 */ {"Files",      0x00707070, gui_icon_folder,     gui_launch_files,      gui_draw_files_content,     gui_files_on_key},
     /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       gui_launch_mail,       gui_draw_mail_content,      gui_mail_on_key},
     /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   gui_launch_calendar,   gui_draw_calendar_content,  gui_calendar_on_key},
@@ -7216,8 +7030,7 @@ static void gui_run(void){
        allocations consume virtual address space and prevent paging_map_region
        from mapping new heap frames beyond the base map. */
     wall_caches_drop();
-    if (dock_band_cache) { kfree(dock_band_cache); dock_band_cache = 0; }
-    if (dock_band_frame) { kfree(dock_band_frame); dock_band_frame = 0; }
+    gui_dock_band_cache_free();
     clear();
     puts("back in text mode\n");
 }
