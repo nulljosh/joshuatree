@@ -71,9 +71,25 @@ jobs:
             echo kernel=false >> "$GITHUB_OUTPUT"
           fi
 
-  # The suite runs as eight parallel shards (ci-suite.sh SHARD/SHARDS),
-  # about a quarter of the wall time each. `check` below stays the one
-  # required status and passes only when every shard did.
+  # The suite runs as sixteen parallel shards (ci-suite.sh SHARD/SHARDS),
+  # for a smaller slice of the wall time each than the old eight. `check`
+  # below stays the one required status and passes only when every shard
+  # did.
+  #
+  # ci/faster-kvm-shards tried adding real KVM here too (a PATH shim on
+  # qemu-system-i386 appending -accel kvm -accel tcg). Dropped before it
+  # ever ran in CI: 53 of the 102 checks in tools/checks/ drive the mouse
+  # through QEMU's VMware backdoor (QMP input-send-event against
+  # hw/input/vmmouse.c), which under real KVM needs the HOST kernel's kvm
+  # module loaded with enable_vmware_backdoor=1 -- not set on GitHub's
+  # runner image, and not something a workflow step can turn on for an
+  # already-running kernel module. Only vmmouse-check.sh, this repo's own
+  # backdoor test, was suspected going in; the other 52 (dock, windows,
+  # Notes, Terminal, Files, auth flow, feature-drive, qa-gallery, soak,
+  # ...) all reuse the same QMP click/drag mechanism, so KVM would likely
+  # break roughly half the suite, not one check. Patching every one of
+  # them to opt out (QEMU_NO_KVM=1, or a boot-only accel path) was not a
+  # same-PR fix. Shards only, this time.
   suite:
     needs: [changes]
     if: needs.changes.outputs.code == 'true' && needs.changes.outputs.kernel == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
@@ -97,7 +113,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     steps:
       # fetch-depth: 0 for the kernel.elf sync step at the end of this job,
       # which compares real commit ancestry. It used to paper over the

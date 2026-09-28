@@ -42,110 +42,115 @@ set -uo pipefail
 # (see PR that introduced this comment), so all shards land within ~1s
 # of each other instead of one shard alone gating the job. 8 shards since
 # 1.6.10, about 300s each (was 4 at about 600s): GitHub gives a public repo
-# the extra runners for free, so the wall time roughly halves. Re-run the packing (any LPT/bin
-# packing script works) if the suite's shape changes enough to matter --
-# a new slow check, or several checks added/removed.
+# the extra runners for free, so the wall time roughly halves. 16 shards
+# as of the ci/faster-kvm-shards experiment: each old 8-shard bin was split
+# in two by alternating its checks between the pair, not a fresh LPT run
+# against new timings, so it is an approximation -- re-run the real packing
+# against a measured run once this settles instead of trusting the split
+# forever. Re-run the packing (any LPT/bin packing script works) if the
+# suite's shape changes enough to matter -- a new slow check, or several
+# checks added/removed.
 cd "$(dirname "$0")/../.."
 
 # retry?  shard  name                                                   command
 manifest() {
 cat <<'EOF'
-once |7|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
-once |5|The landing logo rebuilds byte for byte from tools/gen/logo.py|./tools/checks/logo-check.sh
-once |6|The landing demo downloads the kernel once, gzipped|./tools/checks/kernel-gz-check.sh
+once |14|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
+once |10|The landing logo rebuilds byte for byte from tools/gen/logo.py|./tools/checks/logo-check.sh
+once |12|The landing demo downloads the kernel once, gzipped|./tools/checks/kernel-gz-check.sh
 retry|0|Boot check|./check.sh
-retry|0|Benchmarks run and report every number|./tools/checks/bench-check.sh
-retry|4|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
-once |7|PNG decoder, host harness|./tools/checks/png-host-check.sh
-once |3|TTF rasterizer, host harness|./tools/checks/ttf-host-check.sh
-once |1|libjt string/stdlib, host harness|./tools/checks/libjt-host-check.sh
-once |7|God-file guard (no hand-written .c/.h over its line ceiling)|./tools/checks/godfile-check.sh
-retry|3|PNG decoder, in-kernel|./tools/checks/png-check.sh
-retry|6|AA text spacing, in-kernel|./tools/checks/textspacing-check.sh
-retry|4|AA text stems are dense but still antialiased|python3 ./tools/checks/textsharp-check.py
-retry|2|FAT filesystem cycle hang (regression test)|./tools/checks/fatcyclehang-check.sh
-retry|5|File robustness: empty, oversized, corrupt-FAT and full-disk cases|python3 ./tools/checks/filerobust-check.py
-retry|2|Chat history (VFS-backed, past the old 512-byte cap)|./tools/checks/chat-check.sh
-retry|1|Chat defaults to Samantha (Turing) and surfaces an HTTPS-redirect host clearly|python3 ./tools/checks/chat-samantha-check.py
-retry|3|GUI Chat app asks Samantha and renders the reply on screen|python3 ./tools/checks/chatapp-check.py
-retry|1|Chat's tools (reminder, note, open app) work locally via /api/pick, ordinary questions still reach Samantha|python3 ./tools/checks/chattools-check.py
-retry|2|Chat bounds a connected-but-silent LLM host instead of hanging on net.c's old multi-minute default|python3 ./tools/checks/chat-timeout-check.py
-retry|4|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ramfs-demo-check.sh
-retry|6|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh
-retry|5|Ring-3 reference program against the v1 syscall ABI|./tools/checks/usertest-check.sh
-retry|3|Ring-3 program writing a real file against the v2 syscall ABI|./tools/checks/notetest-check.sh
-retry|7|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
+retry|1|Benchmarks run and report every number|./tools/checks/bench-check.sh
+retry|8|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
+once |15|PNG decoder, host harness|./tools/checks/png-host-check.sh
+once |6|TTF rasterizer, host harness|./tools/checks/ttf-host-check.sh
+once |2|libjt string/stdlib, host harness|./tools/checks/libjt-host-check.sh
+once |14|God-file guard (no hand-written .c/.h over its line ceiling)|./tools/checks/godfile-check.sh
+retry|7|PNG decoder, in-kernel|./tools/checks/png-check.sh
+retry|13|AA text spacing, in-kernel|./tools/checks/textspacing-check.sh
+retry|9|AA text stems are dense but still antialiased|python3 ./tools/checks/textsharp-check.py
+retry|4|FAT filesystem cycle hang (regression test)|./tools/checks/fatcyclehang-check.sh
+retry|11|File robustness: empty, oversized, corrupt-FAT and full-disk cases|python3 ./tools/checks/filerobust-check.py
+retry|5|Chat history (VFS-backed, past the old 512-byte cap)|./tools/checks/chat-check.sh
+retry|3|Chat defaults to Samantha (Turing) and surfaces an HTTPS-redirect host clearly|python3 ./tools/checks/chat-samantha-check.py
+retry|6|GUI Chat app asks Samantha and renders the reply on screen|python3 ./tools/checks/chatapp-check.py
+retry|2|Chat's tools (reminder, note, open app) work locally via /api/pick, ordinary questions still reach Samantha|python3 ./tools/checks/chattools-check.py
+retry|4|Chat bounds a connected-but-silent LLM host instead of hanging on net.c's old multi-minute default|python3 ./tools/checks/chat-timeout-check.py
+retry|8|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ramfs-demo-check.sh
+retry|12|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh
+retry|10|Ring-3 reference program against the v1 syscall ABI|./tools/checks/usertest-check.sh
+retry|7|Ring-3 program writing a real file against the v2 syscall ABI|./tools/checks/notetest-check.sh
+retry|15|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
 retry|0|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
-once |7|Calendar date math, host harness|./tools/checks/check-calendar.sh
-retry|3|Settings click acts on the row actually clicked|./tools/checks/settingsclick-check.sh
-retry|0|Settings Location geocodes, persists, and fails clean|python3 ./tools/checks/location-check.py
-retry|1|Wallpaper defaults to Satellite on a fresh boot|./tools/checks/walldefault-check.sh
-retry|5|Idle tour's Settings visit doesn't change the wallpaper theme|python3 ./tools/checks/walldemo-regression-check.py
-retry|5|Wallpaper compose: Map and Satellite fetch distinct, byte-correct buffers (hermetic, fake tile server)|python3 ./tools/checks/wallcompose-check.py
-retry|4|Notes editor chrome doesn't redraw on plain keystrokes|./tools/checks/editorflash-check.sh
-retry|5|System-wide clipboard: Ctrl+C/X/V round-trips real text within Notes, across Notes->Terminal, truncates a too-long paste cleanly|python3 ./tools/checks/clipboard-check.py
-retry|2|Mail, Reminders and Calculator prompts redraw content, not chrome, per keystroke|./tools/checks/gui-prompt-keystroke-check.sh
-retry|7|Notes typing, typography, pointer controls, persistence|python3 ./tools/checks/editor_qa.py
-retry|6|Notes' runtime-TTF text is real antialiased rasterization at 12pt and 200pt, not a duplicated-block bitmap upscale|python3 ./tools/checks/notessharp-check.py
-retry|2|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/termchatflash-check.sh
-retry|6|Terminal grid draws the mono face at its true advance|python3 ./tools/checks/termmono-check.py
-retry|4|Terminal's runtime-TTF text is real antialiased rasterization with a driftless monospace grid|python3 ./tools/checks/termsharp-check.py
+once |14|Calendar date math, host harness|./tools/checks/check-calendar.sh
+retry|6|Settings click acts on the row actually clicked|./tools/checks/settingsclick-check.sh
+retry|1|Settings Location geocodes, persists, and fails clean|python3 ./tools/checks/location-check.py
+retry|3|Wallpaper defaults to Satellite on a fresh boot|./tools/checks/walldefault-check.sh
+retry|11|Idle tour's Settings visit doesn't change the wallpaper theme|python3 ./tools/checks/walldemo-regression-check.py
+retry|10|Wallpaper compose: Map and Satellite fetch distinct, byte-correct buffers (hermetic, fake tile server)|python3 ./tools/checks/wallcompose-check.py
+retry|9|Notes editor chrome doesn't redraw on plain keystrokes|./tools/checks/editorflash-check.sh
+retry|11|System-wide clipboard: Ctrl+C/X/V round-trips real text within Notes, across Notes->Terminal, truncates a too-long paste cleanly|python3 ./tools/checks/clipboard-check.py
+retry|5|Mail, Reminders and Calculator prompts redraw content, not chrome, per keystroke|./tools/checks/gui-prompt-keystroke-check.sh
+retry|15|Notes typing, typography, pointer controls, persistence|python3 ./tools/checks/editor_qa.py
+retry|13|Notes' runtime-TTF text is real antialiased rasterization at 12pt and 200pt, not a duplicated-block bitmap upscale|python3 ./tools/checks/notessharp-check.py
+retry|4|Terminal and Chat chrome don't redraw on plain keystrokes|./tools/checks/termchatflash-check.sh
+retry|12|Terminal grid draws the mono face at its true advance|python3 ./tools/checks/termmono-check.py
+retry|8|Terminal's runtime-TTF text is real antialiased rasterization with a driftless monospace grid|python3 ./tools/checks/termsharp-check.py
 retry|0|Apple-menu hover stays cheap, clock redraws on a minute change|./tools/checks/menuclock-check.sh
-retry|6|Lock Screen: menu item locks, Esc cannot bypass, password unlocks|python3 ./tools/checks/lockscreen-check.py
-retry|2|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mwkeyflash-check.sh
-retry|7|Drawing lands offscreen, window_present puts it on screen|./tools/checks/backbuffer-check.sh
-retry|5|Multi-window apps draw exactly one toolbar, not two|./tools/checks/mwdupetoolbar-check.sh
-once |6|JPEG decoder, host harness|./tools/checks/jpeg-host-check.sh
-once |7|HTML entities decode to ASCII, host harness|./tools/checks/html-host-check.sh
-retry|2|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
-once |6|PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/decoder-fuzz-check.sh
-once |1|HTTP/JSON/FAT16 parser fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/parser-fuzz-check.sh
-once |5|Text-input bounds: json.c maxlen 0/1/truncation + auth const-time compare (ASan/UBSan)|./tools/checks/input-bounds-check.sh
-retry|6|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclose-check.py
-retry|0|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
-retry|1|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
-retry|1|Apps folder layout (no black band, no row spill, no ghost icons)|python3 ./tools/checks/appsfolder-layout-check.py
-retry|1|Typography: baseline flatness, letter-gap variance, container padding|python3 ./tools/checks/baseline-check.py
-retry|6|Multi-window (click-to-focus, real z-order compositing)|python3 ./tools/checks/multiwindow-check.py
-retry|4|Window snapping (title-bar drag to edge/corner, real pixel proof)|python3 ./tools/checks/windowsnap-check.py
-retry|3|Windows drag live by their title bar (single-window Notes and multi-window Files)|python3 ./tools/checks/windowdrag-check.py
-retry|7|Windowed apps start under the title bar, Calendar fits six weeks|python3 ./tools/checks/apptop-check.py
-retry|4|Calendar Day, Week, Month and Year views|python3 ./tools/checks/calviews-check.py
-retry|1|QA gallery: every app opens, screenshots, closes, no crash|python3 ./tools/checks/qa-gallery.py /tmp/jt-gallery
+retry|13|Lock Screen: menu item locks, Esc cannot bypass, password unlocks|python3 ./tools/checks/lockscreen-check.py
+retry|5|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mwkeyflash-check.sh
+retry|14|Drawing lands offscreen, window_present puts it on screen|./tools/checks/backbuffer-check.sh
+retry|10|Multi-window apps draw exactly one toolbar, not two|./tools/checks/mwdupetoolbar-check.sh
+once |12|JPEG decoder, host harness|./tools/checks/jpeg-host-check.sh
+once |15|HTML entities decode to ASCII, host harness|./tools/checks/html-host-check.sh
+retry|4|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
+once |13|PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/decoder-fuzz-check.sh
+once |2|HTTP/JSON/FAT16 parser fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/parser-fuzz-check.sh
+once |11|Text-input bounds: json.c maxlen 0/1/truncation + auth const-time compare (ASan/UBSan)|./tools/checks/input-bounds-check.sh
+retry|12|Dock apps open/close from the pointer alone|python3 ./tools/checks/appclose-check.py
+retry|1|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check.py
+retry|3|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
+retry|2|Apps folder layout (no black band, no row spill, no ghost icons)|python3 ./tools/checks/appsfolder-layout-check.py
+retry|3|Typography: baseline flatness, letter-gap variance, container padding|python3 ./tools/checks/baseline-check.py
+retry|13|Multi-window (click-to-focus, real z-order compositing)|python3 ./tools/checks/multiwindow-check.py
+retry|9|Window snapping (title-bar drag to edge/corner, real pixel proof)|python3 ./tools/checks/windowsnap-check.py
+retry|7|Windows drag live by their title bar (single-window Notes and multi-window Files)|python3 ./tools/checks/windowdrag-check.py
+retry|14|Windowed apps start under the title bar, Calendar fits six weeks|python3 ./tools/checks/apptop-check.py
+retry|8|Calendar Day, Week, Month and Year views|python3 ./tools/checks/calviews-check.py
+retry|2|QA gallery: every app opens, screenshots, closes, no crash|python3 ./tools/checks/qa-gallery.py /tmp/jt-gallery
 retry|0|Every app's main action, headless|python3 ./tools/checks/feature-drive.py
-retry|0|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
-retry|7|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
-retry|6|Dock icon lighting (one soft top light, top highlight, no dark outline)|python3 ./tools/checks/iconlight-check.py
-once |3|Every authored icon shares one tile silhouette, AA edges, glyph margin|python3 ./tools/checks/iconinset-check.py
-retry|7|Calendar dock tile shows today's date, not fixed art|python3 ./tools/checks/calicon-check.py
-retry|2|Shadow under the dock darkens the photo, no flat bands|python3 ./tools/checks/dockband-check.py
-retry|5|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py
-retry|4|Dock tray corner AA (real coverage blend, not binary)|python3 ./tools/checks/traycorner-check.py
-retry|5|Portfolio catalog opens, lists the fleet, and the list scrolls|python3 ./tools/checks/portfolio-check.py
-retry|5|Boot logo AA (no false interior seams at overlapping capsule joints)|python3 ./tools/checks/bootlogo-check.py
-retry|1|Boot splash draws the real landing/logo.svg mark, not the old stick tree|python3 ./tools/checks/bootmark-check.py
-once |7|Landing eyebrow tracks roadmap Latest, H1 stays the brand line|./tools/checks/landing-headline-check.sh
-once |1|Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcount-check.mjs
-once |7|Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
-once |7|RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
-retry|4|Stocks opens without a supported network card|python3 ./tools/checks/stocks-dock-check.py
-retry|3|Stocks chart line is antialiased (coverage blend, no stair-stepping)|python3 ./tools/checks/stocks-aa-check.py
-once |7|Stocks live quotes and kernel parsing|node ./tools/checks/stocks-live-check.mjs
-once |3|Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
-once |7|Worker /api/proxy: a silent upstream cannot hang the guest (weather/chat freeze regression)|node ./tools/checks/weatherproxy-hang-check.mjs
-retry|3|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py
-once |2|Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
-retry|5|Accounts: create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py
-once |6|Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py
-once |7|Frame time: idle, dock hover and window open stay within budget|python3 ./tools/checks/frametime-check.py
-once |2|Every check in tools/checks/ is in this manifest or says why not|./tools/checks/suite-coverage-check.sh
-retry|5|Text selection in Notes: Shift-arrow/Ctrl+A highlight, edsel/edcopy/edcut markers, selection-aware copy/cut/paste/delete|python3 ./tools/checks/textselect-check.py
-retry|6|Window top edge and corner arc are one continuous AA shape|python3 ./tools/checks/windowedge-check.py
-retry|7|Sound Blaster 16 detects, beep plays a real 440Hz tone, card-less boot is a no-op|python3 ./tools/checks/sb16-check.py
-retry|4|Chat speaks: say fetches /api/speak PCM from a stub and plays a real 1000Hz tone|python3 ./tools/checks/chat-speaks-check.py
-retry|4|Chat face: idle frame before, talk frames while she speaks, idle after; no frames means no face|python3 ./tools/checks/chat-face-check.py
-retry|3|Files view switcher: Icons grid renders and the chosen view persists across close/reopen|python3 ./tools/checks/filesview-check.py
-retry|7|Demo canvas fills its frame, pixelated only at an exact 1:1 map|node ./tools/checks/democrisp-check.mjs
+retry|1|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
+retry|15|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
+retry|12|Dock icon lighting (one soft top light, top highlight, no dark outline)|python3 ./tools/checks/iconlight-check.py
+once |6|Every authored icon shares one tile silhouette, AA edges, glyph margin|python3 ./tools/checks/iconinset-check.py
+retry|14|Calendar dock tile shows today's date, not fixed art|python3 ./tools/checks/calicon-check.py
+retry|5|Shadow under the dock darkens the photo, no flat bands|python3 ./tools/checks/dockband-check.py
+retry|10|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py
+retry|9|Dock tray corner AA (real coverage blend, not binary)|python3 ./tools/checks/traycorner-check.py
+retry|11|Portfolio catalog opens, lists the fleet, and the list scrolls|python3 ./tools/checks/portfolio-check.py
+retry|10|Boot logo AA (no false interior seams at overlapping capsule joints)|python3 ./tools/checks/bootlogo-check.py
+retry|3|Boot splash draws the real landing/logo.svg mark, not the old stick tree|python3 ./tools/checks/bootmark-check.py
+once |15|Landing eyebrow tracks roadmap Latest, H1 stays the brand line|./tools/checks/landing-headline-check.sh
+once |2|Idle tour still cycles all 8 real dock apps|node ./tools/checks/tourappcount-check.mjs
+once |14|Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks/idletour-arm-reset-check.mjs
+once |15|RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
+retry|8|Stocks opens without a supported network card|python3 ./tools/checks/stocks-dock-check.py
+retry|7|Stocks chart line is antialiased (coverage blend, no stair-stepping)|python3 ./tools/checks/stocks-aa-check.py
+once |14|Stocks live quotes and kernel parsing|node ./tools/checks/stocks-live-check.mjs
+once |6|Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
+once |15|Worker /api/proxy: a silent upstream cannot hang the guest (weather/chat freeze regression)|node ./tools/checks/weatherproxy-hang-check.mjs
+retry|7|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py
+once |4|Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
+retry|11|Accounts: create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py
+once |13|Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py
+once |14|Frame time: idle, dock hover and window open stay within budget|python3 ./tools/checks/frametime-check.py
+once |5|Every check in tools/checks/ is in this manifest or says why not|./tools/checks/suite-coverage-check.sh
+retry|10|Text selection in Notes: Shift-arrow/Ctrl+A highlight, edsel/edcopy/edcut markers, selection-aware copy/cut/paste/delete|python3 ./tools/checks/textselect-check.py
+retry|12|Window top edge and corner arc are one continuous AA shape|python3 ./tools/checks/windowedge-check.py
+retry|15|Sound Blaster 16 detects, beep plays a real 440Hz tone, card-less boot is a no-op|python3 ./tools/checks/sb16-check.py
+retry|9|Chat speaks: say fetches /api/speak PCM from a stub and plays a real 1000Hz tone|python3 ./tools/checks/chat-speaks-check.py
+retry|8|Chat face: idle frame before, talk frames while she speaks, idle after; no frames means no face|python3 ./tools/checks/chat-face-check.py
+retry|6|Files view switcher: Icons grid renders and the chosen view persists across close/reopen|python3 ./tools/checks/filesview-check.py
+retry|14|Demo canvas fills its frame, pixelated only at an exact 1:1 map|node ./tools/checks/democrisp-check.mjs
 EOF
 }
 
