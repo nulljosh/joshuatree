@@ -2,24 +2,23 @@
 
 ## What the loop is
 
-Build Joshua Tree toward its own computer and a Bloomberg terminal, one PR at a time, watching usage and RAM. Up to 3 Sonnet agents or 2 if one is Opus, 20 minutes each, headless QEMU only, one VM at a time (the Mac is memory-tight). PRs stay draft until `tools/ci-local.sh` is green. Merge on green, never ask, but while a big PR waits, hold every other merge: main requires up-to-date branches, and docs merges kept knocking PR 239 behind. Keep README, landing, docs/TESTING.md and benchmarks current in the same PR as the change.
+Build Joshua Tree toward its own computer and a Bloomberg terminal, one PR at a time, watching usage and RAM. Up to 3 Sonnet agents or 2 if one is Opus, 20 minutes each, headless QEMU only, one VM at a time. PRs stay draft until `tools/ci-local.sh` is green. Merge on green, never ask, but while a big PR waits, hold every other merge (main requires up-to-date branches). Keep README, landing, docs/TESTING.md and benchmarks current in the same PR as the change.
 
 ## Where things stand
 
-Main is 1.6.20 and live. Waiting to merge, in order: 239 (Samantha's video face and the Chat app renamed Samantha; green), then drafts 241 (face loops, face_bench, face_visemes), 243 (Samantha reads mail, notes, reminders), 245 (dev kit waitlist), 246 (boot straight into Samantha; phone mode being added), 248 (crash reports name the function), 250 (memory margin and face seam checks, docs/TESTING.md, redrawn architecture.svg, plain-language README, talk-flow and memory maps, fresh benchmarks), 251 (landing fits phones), 252 (Epiphany command bar: AAPL GP, AAPL DES). Each claims 1.6.21, so every merge after the first rebumps.
+Main is 1.6.20 and live. Merge queue, in order: 239 (Samantha's video face, Chat renamed Samantha; green), then drafts 241 (face loops, face_bench, face_visemes), 243 (Samantha reads mail, notes, reminders), 245 (dev kit waitlist), 246 (boot straight into Samantha, phone mode), 248 (crash reports name the function), 250 (this docs pass), 251 (landing fits phones), 252 (Epiphany command bar: AAPL GP, AAPL DES). Each claims 1.6.21, so every merge after the first rebumps.
 
-Architecture graded C+: kernel.c is ~9,800 lines with 84 files pasted in, all 25 apps run in the kernel. An Opus agent is building the app interface (feat/app-interface). Joshua: "apps on the kernel are a bad idea", so apps move to ring 3 next.
+Architecture graded C+: kernel.c is ~9,800 lines, all 25 apps run in the kernel. An Opus agent is building the app interface (`feat/app-interface`); apps move to ring 3 next.
 
-Samantha's face: v18 (a LatentSync render, free on Hugging Face) is the A- reference. Live replies use tools/gen/face_visemes.py (whole-sentence plan, continuous base, feathered mouth patch, optical-flow in-betweens, head sway and nods): best so far v27 B by Joshua's eye. Benchmark calibrated on a real NASA interview. Recipe and failures: character-creator skill.
+Samantha's face: v27 B is best so far by Joshua's eye, built on `tools/gen/face_visemes.py`. Recipe and failures live in the character-creator skill.
 
 ## Next, in order
 
 1. Merge 239, then the drafts one at a time, biggest first, rebumping versions.
-2. Finish phone mode (430x932, boots to Samantha) so the landing is readable on phones. Mobile first by 2026-10-04.
-3. App interface lands, then apps move out a few per PR, each getting shorter (Paul Graham, bottom-up).
-4. App smoke check for the 14 untested apps: parked in `git stash` on feat/guard-checks; the grid launch fails past the first rows. Use the app interface to launch by name instead.
-5. Merge the roadmap's overlapping sections (Biggest gaps, Gaps vs macOS, Real hardware, Our own computer) into one list.
-6. Face: phoneme-timed mouth in the kernel, fed by ElevenLabs alignment from Turing.
+2. Finish phone mode (430x932, boots to Samantha). Mobile first by 2026-10-04.
+3. App interface lands, then apps move out a few per PR.
+4. App smoke check for the 14 untested apps (parked in `git stash` on feat/guard-checks; grid launch fails past the first rows). Use the app interface to launch by name instead.
+5. Face: phoneme-timed mouth in the kernel, fed by ElevenLabs alignment from Turing.
 
 ## Restart prompt
 
