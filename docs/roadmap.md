@@ -31,7 +31,7 @@ Samantha runs the machine. Joshua's list, in order.
 - [ ] [Sonnet] Boot straight into Samantha: a kernel command-line flag (`samantha`) opens her full screen after boot.
 - [ ] [Fable] HTTPS without the proxy: native TLS 1.3 in the kernel, then the web browser on top of it.
 - [ ] [Joshua] Google project for mail sign-in (OAuth client id), then [Sonnet] sign in with Google in Mail.
-- [ ] [Sonnet] Lip-synced face: one Higgsfield lip-sync render of a sentence about Joshua Tree, cut into a viseme library, the server sends a mouth timeline with each reply. `tools/bench/face_bench.py` must grade it A+ (sync is the gap: best so far 55/100).
+- [ ] [Sonnet] Lip-synced face: one Higgsfield lip-sync render of a sentence about Joshua Tree, cut into a viseme library, the server sends a mouth timeline with each reply. the face benchmark (PR #241) must grade it A+ (sync is the gap: best so far 55/100).
 - [ ] [Sonnet] Mobile Joshua Tree: the landing demo and the OS usable on a phone screen.
 - [ ] [Fable] Samantha fixes her own bugs: a failing check becomes a draft PR she opens herself (Claude for the hard part at first), gated on `tools/ci-local.sh`. First target: the three compiler warnings in the build.
 
