@@ -11,7 +11,7 @@ A whole computer, built from nothing. Its own kernel, its own desktop, its own n
 
 Try it live in your browser: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 
-Ask Samantha, the built-in assistant, to set a reminder, take a note or open an app. She does it, and she answers out loud: her own voice through the OS's own sound driver, and a face that talks while she speaks. Everything you save lands on a real disk, and every feature has a check behind it.
+Ask Samantha to set a reminder, take a note or open an app. She does it, and she answers out loud: her voice plays through Joshua Tree's own sound driver, with a face that talks while she speaks. Samantha is the assistant from [Turing](https://github.com/nulljosh/turing), a separate project; Joshua Tree's Samantha app is how the OS talks to her. Everything you save lands on a real disk, and every feature has a check behind it.
 
 ## Boot it
 
