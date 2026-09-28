@@ -6,7 +6,7 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
-**Latest**: Introducing Samantha on your phone. Open the demo on a phone and she boots straight up, face and all.
+**Latest**: A real phone home screen, and Settings rebuilt.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -194,13 +194,12 @@ Needs a call from Joshua before scoping:
 
 ## Session task queue
 Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current. Each item also needs a `(plain: ...)` phrase right after the title, a few plain words a 20-year-old visitor would understand with zero dev background, that phrase is what actually shows on the landing page, never the dev title. Internal refactor work that a visitor has no way to try (nothing to click, nothing that looks different) uses `(plain: skip)`, which the generator drops from the card entirely instead of translating it into vague visitor-facing words.
-1. **Samantha speaks on the landing demo** (plain: hear her voice on the demo) [Sonnet]: measure a real reply end to end (serial speak status, output RMS) now that the tour reboot keeps facehost.
-2. **Touch and an on-screen keyboard** (plain: type to her on your phone) [Sonnet]: VERSIONS 1.9.
-3. **Apps leave the kernel, each in its own protected space** (plain: apps that can't crash each other) [Sonnet]: the 2.0 gate; one app per PR with its crash check.
-4. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
-5. **Real Activity and Clock icons** (plain: skip) [Sonnet]: they show placeholder art on the phone grid.
-6. **Music and Video players** (plain: music and video apps) [Sonnet]: VERSIONS 2.1 and 2.2.
-7. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after 2.0.
+1. **Touch and an on-screen keyboard** (plain: type to her on your phone) [Sonnet]: VERSIONS 1.9.
+2. **Apps leave the kernel, each in its own protected space** (plain: apps that can't crash each other) [Sonnet]: the 2.0 gate; one app per PR with its crash check.
+3. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
+4. **Real Activity and Clock icons** (plain: skip) [Sonnet]: they show placeholder art on the phone grid.
+5. **Music and Video players** (plain: music and video apps) [Sonnet]: VERSIONS 2.1 and 2.2.
+6. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after 2.0.
 
 ## Landing roadmap summary
 `tools/gen/landing-roadmap.py` reads this file's Session task queue and takes up to three open, numbered, bold task titles for the landing page's "Where it's going" card, skipping completed entries and escaping for HTML. `tools/checks/landing-roadmap-check.py` and `tools/gen/landing-roadmap.py --check` are the regression checks. A roadmap change triggers the landing deploy workflow, which regenerates the card before upload.
