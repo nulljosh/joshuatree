@@ -52,6 +52,9 @@ def face_crop(v):
     ys, xs = np.nonzero(motion > max(2.0, np.percentile(motion, 99) * 0.2))
     y0, y1, x0, x1 = np.percentile(ys, 1), np.percentile(ys, 99), np.percentile(xs, 1), np.percentile(xs, 99)
     s = max(y1 - y0, x1 - x0); cy, cx = (y0 + y1) / 2, (x0 + x1) / 2
+    H, W = v.shape[1:]
+    if s < 0.5 * min(H, W):   # only the mouth moves (a steady face clip): the face is the centered square
+        s, cy, cx = min(H, W), H / 2, W / 2
     box = tuple(int(round(t)) for t in (cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2))
     return np.stack([np.asarray(Image.fromarray(f).crop(box).resize((SIDE, SIDE))) for f in v.astype(np.uint8)]).astype(np.float32)
 
