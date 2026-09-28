@@ -214,6 +214,23 @@ async function handleProxy(request, env) {
   // here rather than trying to patch vendored, unowned v86 source.
   if (targetUrl.hostname === "ip-api.com") targetUrl.protocol = "http:";
 
+  // The demo asking "where am I?" gets the visitor's location, not ours:
+  // fetched from here, ip-api.com sees Cloudflare's data center (a
+  // Vancouver PoP for a Langley visitor), so the weather and map flipped
+  // to Vancouver. request.cf is Cloudflare's own lookup of the visitor's
+  // connection, the same source /api/deals uses. Same ip-api field names
+  // and numeric lat/lon, which is all kernel.c's geo_fetch reads. No cf
+  // data (e.g. local dev) falls through to the real lookup below.
+  const cf = request.cf;
+  if (targetUrl.hostname === "ip-api.com" && targetUrl.pathname.startsWith("/json") && cf && cf.latitude && cf.longitude) {
+    const lat = Number(cf.latitude), lon = Number(cf.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lon)) {
+      return new Response(JSON.stringify({ status: "success", city: cf.city || "", regionName: cf.region || "", country: cf.country || "", lat, lon, timezone: cf.timezone || "" }), {
+        status: 200, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" },
+      });
+    }
+  }
+
   // Only forward a plain GET with no guest-controlled headers/body: every
   // real caller here (geo_fetch/weather_fetch/wall_fetch) only ever issues
   // a bare GET, so there's nothing legitimate to lose by not forwarding
