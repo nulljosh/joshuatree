@@ -315,7 +315,7 @@ def boot_and_run(disk_path, commands, workdir, boot_name, per_cmd_sleep=2, hang_
     )
     try:
         time.sleep(3)
-        proc.stdin.write("sendkey esc\n")
+        proc.stdin.write("sendkey ctrl-alt-backspace\n")  # plain esc on a bare desktop is now a no-op, kernel.c gui_run
         proc.stdin.flush()
         time.sleep(1)
         for cmd in commands:

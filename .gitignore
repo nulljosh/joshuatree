@@ -19,6 +19,8 @@ user/toroid.bin
 drivers/user_toroid.h
 user/calculator.bin
 drivers/user_calculator.h
+user/quotes.bin
+drivers/user_quotes.h
 user/libjt.a
 landing/kernel.elf
 landing/v86/kernel.elf

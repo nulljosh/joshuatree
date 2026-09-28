@@ -19,7 +19,8 @@ Samantha runs the machine. Mobile first by 2026-10-04: phone mode, the landing d
 - [x] [Fable] Step one, 1.7.7: Keyrate is the first app running as a real ring-3 process (`user/keyrate.c`, launched by `kernel/ring3app.c`) with its own window through two new syscalls (`SYS_WINDOW_OPEN`, `SYS_WINDOW_POLL`) and real crash isolation: a null write inside it is reaped by the kernel, the window is torn down, the desktop comes back. Proven by `tools/checks/ring3app-check.py`. Not 2.0 yet.
 - [x] [Fable] Step two, 1.7.11: Toroid runs at ring 3 (`user/toroid.c`, bit-packed grids in its own .data), `kernel/ring3app.c` is one table-driven launcher (`RING3_APPS`), and the in-kernel copies of both Keyrate and Toroid are deleted. `tools/checks/ring3toroid-check.py` proves it draws, closes both ways, crashes safely.
 - [x] [Opus] Step three, 1.7.12: Calculator runs at ring 3 (`user/calculator.c`, the same recursive-descent grammar evaluated straight into a double instead of an expr_node tree, since a flat binary has no .bss and no kmalloc), still one row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3calc-check.py` proves it evaluates through the real parser (`12*3 = 36`, `5/0 = 0`), draws, closes both ways, crashes safely.
-- [ ] [Sonnet] Port the remaining apps the same way, one PR each, smallest first (Quotes next). Each PR: `user/<app>.c`, a row in `RING3_APPS`, the in-kernel copy deleted once the check passes.
+- [x] [Opus] Step four, 1.7.14: Quotes runs at ring 3 (`user/quotes.c`, the same fixed deck and answer-rotation, streak and best kept in its own `.data`), still one row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3quotes-check.py` proves it draws the option grid, answers right and wrong through the real logic, closes both ways, crashes safely.
+- [ ] [Sonnet] Port the remaining apps the same way, one PR each. Each PR: `user/<app>.c`, a row in `RING3_APPS`, the in-kernel copy deleted once the check passes.
 - [ ] [Fable] What the ports will need from the ABI: a font syscall (Keyrate carries its own 8x16 bitmap), a tick clock finer than `SYS_TIME`'s seconds, more than one program window at a time, and the framebuffer pages flipped back to supervisor-only on release (today they are zeroed and re-mapped on the next open).
 
 ## Architecture to A+ (refreshed 2026-09-27)
@@ -30,7 +31,7 @@ Measured against the closest from-scratch peers: SerenityOS (the one-person-scal
 3. **Native TLS.** HTTPS goes through the worker proxy, so a browser can't happen yet.
 4. **Sound beyond the demo.** The Sound Blaster driver plays audio in QEMU (1.6.9), but every peer ships a music player, and real PCs need AC97 or HD Audio. See Desktop and apps, Our own computer.
 5. **Desktop basics.** Undo, right-click menus, drag and drop, an app switcher, a screenshot key. SerenityOS, ToaruOS and KolibriOS all have these (the clipboard landed in 1.0.6, text selection in 1.2.0).
-6. **Apps from outside the kernel.** Most apps compile into the kernel; three ring-3 programs exist (Keyrate, Toroid, Calculator). No installer, no update path.
+6. **Apps from outside the kernel.** Most apps compile into the kernel; four ring-3 programs exist (Keyrate, Toroid, Calculator, Quotes). No installer, no update path.
 7. **Everyday apps peers ship.** An image viewer, a music player, a few games. KolibriOS ships dozens in under 2MB. See Desktop and apps.
 
 Kernel.c is ~9,800 lines with 84 files pasted in; an Opus agent is building the app interface (`feat/app-interface`) so apps move to ring 3. Grading is currently C+.
@@ -193,12 +194,12 @@ Needs a call from Joshua before scoping:
 
 ## Session task queue
 Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current. Each item also needs a `(plain: ...)` phrase right after the title, a few plain words a 20-year-old visitor would understand with zero dev background, that phrase is what actually shows on the landing page, never the dev title. Internal refactor work that a visitor has no way to try (nothing to click, nothing that looks different) uses `(plain: skip)`, which the generator drops from the card entirely instead of translating it into vague visitor-facing words.
-1. **Apps leave the kernel, each in its own protected space** (plain: apps that can't crash each other) [Fable]: the 2.0 gate in docs/LOOP-HANDOFF.md. Keyrate is first (#269); then one app per PR, each added to the crash check.
-2. **Close the window-memory gap, validate every pointer a syscall takes** (plain: apps kept out of each other's memory) [Fable]: framebuffer pages stay user-writable after a window closes; audit copy-in/copy-out on every syscall.
-3. **Kernel randomness pool** (plain: safer stored passwords) [Fable]: password salts come from a predictable generator today. BearSSL's HMAC_DRBG, seeded from RDRAND and timing jitter.
-4. **Phone home screen** (plain: a real phone home screen) [Sonnet]: VERSIONS.md 1.8.
-5. **Check the portfolio in X's in-app browser** (plain: skip) [Haiku]: `?full` boots right away now; confirm on a phone from a post in the X app.
-6. **Split kernel.c into per-subsystem files** (plain: skip) [Sonnet]: shrinks as apps move out; the 2.0 progress bar.
+1. **Samantha speaks on the landing demo** (plain: hear her voice on the demo) [Sonnet]: measure a real reply end to end (serial speak status, output RMS) now that the tour reboot keeps facehost.
+2. **Touch and an on-screen keyboard** (plain: type to her on your phone) [Sonnet]: VERSIONS 1.9.
+3. **Apps leave the kernel, each in its own protected space** (plain: apps that can't crash each other) [Sonnet]: the 2.0 gate; one app per PR with its crash check.
+4. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
+5. **Real Activity and Clock icons** (plain: skip) [Sonnet]: they show placeholder art on the phone grid.
+6. **Music and Video players** (plain: music and video apps) [Sonnet]: VERSIONS 2.1 and 2.2.
 7. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after 2.0.
 
 ## Landing roadmap summary
