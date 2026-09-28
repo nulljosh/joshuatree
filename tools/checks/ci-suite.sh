@@ -149,6 +149,7 @@ once |3|Worker /api/listen: Whisper transcription, 503 without the AI binding, r
 retry|3|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py
 once |2|Soak: every app opened and closed once each in one boot, no leak, no crash|python3 ./tools/checks/soak-check.py 1
 retry|5|Accounts: create, reboot, login, wrong and empty passwords rejected, change password|python3 ./tools/checks/auth-flow-check.py
+retry|3|Entropy pool: serial names its sources, two boots draw different salts|python3 ./tools/checks/entropy-check.py
 once |6|Panic screen: a ring-0 fault paints the reason, not a frozen desktop|python3 ./tools/checks/panic-check.py
 once |6|Crash report names the faulting function, not just the exception kind|python3 ./tools/checks/panic-symbols-check.py
 once |7|Frame time: idle, dock hover and window open stay within budget|python3 ./tools/checks/frametime-check.py

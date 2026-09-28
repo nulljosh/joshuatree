@@ -185,23 +185,13 @@ static void auth_hash_password(const unsigned char salt[AUTH_SALT_LEN], const ch
     }
 }
 
-/* Not a cryptographically strong RNG (this kernel has none; the honest
-   gap is logged in docs/THREAT-MODEL.md -- nothing here claims otherwise).
-   Same tiny LCG house pattern weather_rand/keyrate_rand already use,
-   seeded from the real PIT tick count so at least two salts generated in
-   the same boot at different moments differ. Good enough for its actual
-   job: making two identical passwords hash differently and defeating a
-   precomputed rainbow table, not resisting a targeted attacker who can
-   also influence or observe boot timing. */
-static unsigned int auth_rng_state = 0;
-static unsigned int auth_rand(void) {
-    if (auth_rng_state == 0) auth_rng_state = ticks() ? ticks() : 1;
-    auth_rng_state = auth_rng_state * 1103515245u + 12345u;
-    return (auth_rng_state >> 16) & 0x7fff;
-}
-
+/* Salts come from kernel/entropy.c: an HMAC_DRBG (SHA-256, vendored
+   BearSSL) seeded from RDRAND when present, RDTSC jitter, and interrupt
+   timing. 1.7.10 replaced the tick-seeded LCG that lived here; it made
+   salts guessable from boot timing. Stored accounts keep their old salts
+   next to their hashes, so nothing already on disk changes. */
 static void auth_gen_salt(unsigned char salt[AUTH_SALT_LEN]) {
-    for (int i = 0; i < AUTH_SALT_LEN; i++) salt[i] = (unsigned char)(auth_rand() & 0xff);
+    entropy_bytes(salt, AUTH_SALT_LEN);
 }
 
 static const char AUTH_HEX[] = "0123456789abcdef";

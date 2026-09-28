@@ -6,6 +6,7 @@
 #include "idt.h"
 #include "mouse.h"
 #include "sb16.h"
+#include "entropy.h"
 
 typedef unsigned int  u32;
 typedef unsigned short u16;
@@ -36,7 +37,9 @@ static volatile int kbd_head = 0, kbd_tail = 0;
 void irq_handler(u32 irq_no) {
     if (irq_no == 0) {
         tick_count++;
+        entropy_irq_sample(0);
     } else if (irq_no == 1) {
+        entropy_irq_sample(1);
         u8 sc = inb(0x60);
         int next = (kbd_head + 1) % KBD_BUF_SIZE;
         if (next != kbd_tail) { kbd_buf[kbd_head] = sc; kbd_head = next; }
