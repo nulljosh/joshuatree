@@ -48,6 +48,12 @@ Needs the same real FAT16 test image app-interact-check.py uses
 (tools/mkdisk.sh if /tmp/jt-qa-test.img doesn't exist yet), so this script
 now boots QEMU with that disk attached too.
 
+v1.9.0 extends this again with step 7: Mail's Compose, opened via 'c' in
+the Mail list window, must be a real second window (not the list window
+flipping mode in place) -- the list window (window 0) stays open behind
+it, and once a message is typed and sent, Compose closes itself and the
+new message's ink shows up in the still-open list window.
+
 Usage: tools/checks/multiwindow-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time, tempfile, shutil
@@ -69,6 +75,12 @@ W0_CLOSE = (94, 56)
 W1_CLOSE = (154, 116)
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
+# Window 0's real content viewport (window_set_viewport(x+8,y+32,w-16,h-40)
+# on the 70,40,820,385 rect gui_multiwin_geom gives slot 0) -- the same
+# region tools/checks/mailtools-check.py already samples for Mail's ink,
+# reused here for step 7's Compose-sends-into-the-list-window proof.
+VX, VY, VW, VH = 78, 72, 804, 345
+INK = (0x1C, 0x1C, 0x1E)
 SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -115,6 +127,12 @@ try:
         return img.getpixel((x * SCALE + 1, y * SCALE + 1))
     def close(p1, p2): return max(abs(p1[i] - p2[i]) for i in range(3))
     def is_red(p): return close(p, CLOSE_RED) <= 12
+    def ink_count(img, vx, vy, vw, vh, color=INK):
+        n = 0
+        for y in range(vy, vy + vh - 4):
+            for x in range(vx + 4, vx + vw - 4):
+                if pixel(img, x, y) == color: n += 1
+        return n
 
     centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
     def open_slot(slot, ready=None):
@@ -336,11 +354,58 @@ try:
     if is_red(pixel(img6d, *W0_CLOSE)):
         fails.append("batch2 cleanup: Files did not close after the Reminders-alongside-Files sequence")
 
-    open_slot(2)  # Mail
-    mail_ok = is_red(pixel(dump(), *W0_CLOSE))
-    if mail_ok: click_at(*W0_CLOSE); mail_ok = not is_red(pixel(dump(), *W0_CLOSE))
-    print(f"input alive after multi-window sweep, Mail open+close: {'yes' if mail_ok else 'NO'}")
-    if not mail_ok: fails.append("input dead after the multi-window sweep: Mail could not be opened and closed again")
+    # 7. v1.9.0: Mail's Compose is its own real second window (like macOS
+    #    Mail: New Message doesn't take over the mailbox). Open Mail (dock
+    #    slot 2, window 0), press 'c' -- this must NOT flip window 0's own
+    #    mode in place, it must open Compose as window 1 via the same
+    #    gui_multiwin_open path step 6 just proved for Reminders, with the
+    #    list window untouched and still open behind it.
+    open_slot(2)  # Mail (window 0)
+    mail_list_open = is_red(pixel(dump(), *W0_CLOSE))
+    print(f"batch3: Mail list window open: {'yes' if mail_list_open else 'NO'}")
+    if not mail_list_open: fails.append("batch3: Mail did not open from the dock")
+    ink_before_compose = ink_count(dump(), VX, VY, VW, VH)
+
+    key("c")
+    compose_opened = False
+    for _ in range(30):
+        time.sleep(0.1)
+        if is_red(pixel(dump(), *W1_CLOSE)): compose_opened = True; break
+    time.sleep(0.3)
+    img7a = dump()
+    compose_opened = compose_opened or is_red(pixel(img7a, *W1_CLOSE))
+    list_stayed_open = is_red(pixel(img7a, *W0_CLOSE))
+    print(f"batch3: pressing 'c' opened a real second (Compose) window: {'yes' if compose_opened else 'NO'}   list window stayed open behind it: {'yes' if list_stayed_open else 'NO'}")
+    if not compose_opened: fails.append("batch3: Mail's 'c' did not open a real second Compose window")
+    if not list_stayed_open: fails.append("batch3: Mail's list window closed/hid when Compose opened instead of staying open behind it")
+
+    # Type the from/subject/body stages into Compose (window 1, focused --
+    # it opened on top, so keystrokes go there, not to the list window).
+    type_str("qa-mw-compose-from"); keys("ret"); time.sleep(0.3)
+    type_str("qa-mw-compose-subject"); keys("ret"); time.sleep(0.3)
+    type_str("qa-mw-compose-body-marker"); keys("ret"); time.sleep(0.5)
+
+    img7b = dump()
+    compose_closed_after_send = not is_red(pixel(img7b, *W1_CLOSE))
+    list_still_open_after_send = is_red(pixel(img7b, *W0_CLOSE))
+    print(f"batch3: Compose closed itself after send: {'yes' if compose_closed_after_send else 'NO'}   list window still open: {'yes' if list_still_open_after_send else 'NO'}")
+    if not compose_closed_after_send: fails.append("batch3: Compose did not close itself after a successful send")
+    if not list_still_open_after_send: fails.append("batch3: the list window closed when Compose sent/closed instead of staying open")
+
+    # The sent message must actually show in the still-open list window,
+    # not just have been written somewhere off-screen: the list's real
+    # ink (from/subject text) in its content area must have grown, the
+    # same "real content changed" bar mailtools-check.py already holds
+    # send_mail to, now proven for the windowed Compose path too.
+    ink_after_send = ink_count(img7b, VX, VY, VW, VH)
+    print(f"batch3: Mail list ink before Compose={ink_before_compose}  after send={ink_after_send}")
+    if ink_after_send <= ink_before_compose:
+        fails.append("batch3: Mail list window's ink did not grow after sending -- the new message does not appear to show in the list")
+
+    click_at(*W0_CLOSE)
+    img7c = dump()
+    if is_red(pixel(img7c, *W0_CLOSE)):
+        fails.append("batch3 cleanup: Mail's list window did not close via its own X")
 
     # QEMU can tear down the QMP socket the instant it processes quit,
     # before this side ever reads a reply -- a real race, not a bug in
@@ -380,4 +445,4 @@ else:
 if fails:
     for x in fails: print("FAIL:", x)
     sys.exit(1)
-print("PASS: two real windows (Files + Weather) open, draw real distinct content, and close independently; batch-2 (Files + Reminders) proven the same way with a real disk write")
+print("PASS: two real windows (Files + Weather) open, draw real distinct content, and close independently; batch-2 (Files + Reminders) proven the same way with a real disk write; batch-3 (Mail's Compose) proven as its own second window, list window stays open behind it, and the sent message shows in the list after Compose closes")

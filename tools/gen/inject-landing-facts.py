@@ -9,7 +9,8 @@ and the version comes from VERSION (landing/version.txt). This does the
 same job for four more facts:
 
   apps    - real apps in kernel/kernel.c's APPS table, minus the Apps
-            folder tile and Trash (neither is a real app).
+            folder tile, Trash, and Mail Compose (a window, not an app;
+            no .open hook, unreachable from Dock/Apps folder).
   checks  - regression checks in tools/checks/ci-suite.sh's manifest,
             counted the same way the suite itself counts them: one line
             per `once` or `retry` entry.
@@ -65,7 +66,7 @@ def count_apps():
     labels = re.findall(r'\{"([^"]*)",', m[1])
     if not labels:
         raise ValueError("APPS table parsed with no names")
-    real = [l for l in labels if l not in ("Apps", "Trash")]
+    real = [l for l in labels if l not in ("Apps", "Trash", "Compose")]
     return len(real)
 
 

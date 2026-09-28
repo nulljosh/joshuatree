@@ -902,10 +902,7 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-/* v0.89.x: Activity landed after Portfolio took slot 23, so it sits at
-   24 and GUI_APPS_FOLDER/GUI_TRASH moved to 25/26, same shift again. */
-/* Clock landed after Activity, so it sits at 25 and GUI_APPS_FOLDER/
-   GUI_TRASH moved to 26/27, same shift again. */
+/* v0.89.x: Activity landed after Portfolio (slot 23, GUI_APPS_FOLDER/TRASH to 25/26); Clock landed after Activity (slot 25, GUI_APPS_FOLDER/TRASH to 26/27), same shift each time. */
 #define GUI_APP_COUNT   29 /* 26 real apps + the Apps folder + Trash + Mail Compose */
 #define GUI_APPS_FOLDER 26 /* not an app: the dock tile that opens the folder */
 #define GUI_TRASH       27
@@ -7136,11 +7133,13 @@ static void gui_run(void){
         if (gui_multiwin_interactive(mw_topmost_icon)) {
             int mwk = gui_multiwin_key_nonblock();
             if (mwk >= 0) {
-                int mw_should_close = 0;
+                int mw_should_close = 0, mw_count_before_key = gui_window_count;
                 mw_should_close = APPS[mw_topmost_icon].key(mwk);
                 if (mw_should_close) {
                     gui_multiwin_close(gui_window_count - 1);
                     mw_key_repaint = 1; /* the window left the screen: needs the real full desktop repaint to erase it, the same cost every open/close already pays */
+                } else if (gui_window_count != mw_count_before_key) {
+                    mw_key_repaint = 1; /* v1.9.0: opened another window as a side effect (Mail's 'c'); its chrome was never drawn, needs a full repaint like any window-count change */
                 } else {
                     /* v0.75.0: a cheap, scoped repaint tier, the same
                        "cheapest repaint that's correct" discipline
