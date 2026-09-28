@@ -346,7 +346,7 @@ static int chat_pick(const char *msg, char *tool, int toolsz, char *arg, int arg
     const char *head = "{\"q\":\"";
     while (*head && n < sizeof(req_body)) req_body[n++] = *head++;
     { const char *s = escaped; while (*s && n < sizeof(req_body)) req_body[n++] = *s++; }
-    const char *tail = "\",\"sections\":[]}";
+    const char *tail = "\",\"sections\":[],\"os\":\"jt\"}"; /* os: "jt" unlocks Joshua Tree's own tools (mail) in the picker */
     while (*tail && n < sizeof(req_body)) req_body[n++] = *tail++;
 
     static char resp[512];
@@ -437,6 +437,9 @@ static int chat_match_app(const char *arg) {
    returned nothing. Every branch that does handle its tool emits a
    `chattool=<tool>:<short result>` serial marker, a discriminating proof
    this actually ran (not just that chat_pick named a tool). */
+static const char *chat_last_user_msg = "";
+static int chat_starts(const char *s, const char *p) { while (*p) if (*s++ != *p++) return 0; return 1; } /* what was actually said, for tools whose arg is only part of it (send_mail) */
+
 static int chat_run_tool(const char *tool, const char *arg, char *reply, int replysz) {
     if (replysz > 0) reply[0] = 0;
 
@@ -455,6 +458,40 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
         reminders_save();
         chat_fmt_reply(reply, replysz, "Added reminder: ", arg);
         serial_puts("chattool=new_reminder:"); serial_puts(reminders_text[idx]); serial_puts("\n");
+        return 1;
+    }
+
+    if (!strcmp(tool, "list_reminders")) {
+        reminders_load();
+        if (!reminders_count) {
+            chat_fmt_reply(reply, replysz, "", "No reminders.");
+            serial_puts("chattool=list_reminders:none\n");
+            return 1;
+        }
+        int p = 0; int shown = 0;
+        for (int i = 0; i < reminders_count && p < replysz - 1; i++) {
+            if (reminders_done[i]) continue;
+            if (shown) { reply[p++] = ','; reply[p++] = ' '; }
+            for (const char *c = reminders_text[i]; *c && p < replysz - 1; c++) reply[p++] = *c;
+            shown++;
+        }
+        reply[p] = 0;
+        if (!shown) chat_fmt_reply(reply, replysz, "", "No reminders.");
+        serial_puts("chattool=list_reminders:"); serial_puts(shown ? reply : "none"); serial_puts("\n");
+        return 1;
+    }
+
+    if (!strcmp(tool, "read_notes")) {
+        static char buf[4096]; /* same NOTES.TXT bound new_note/editor.h already keep */
+        int n = vfs_read_file("NOTES.TXT", buf, sizeof(buf) - 1);
+        if (n <= 0) {
+            chat_fmt_reply(reply, replysz, "", "No notes yet.");
+            serial_puts("chattool=read_notes:none\n");
+            return 1;
+        }
+        buf[n] = 0;
+        chat_fmt_reply(reply, replysz, "", buf);
+        serial_puts("chattool=read_notes:"); serial_puts(buf); serial_puts("\n");
         return 1;
     }
 
@@ -505,7 +542,103 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
         return 1;
     }
 
+    if (!strcmp(tool, "read_mail")) {
+        /* The newest message, or the newest from whoever she was asked about. */
+        mail_load();
+        int idx = -1;
+        for (int i = mail_count - 1; i >= 0 && idx < 0; i--) {
+            if (!arg[0]) { idx = i; break; }
+            for (int k = 0; mail_msgs[i].from[k] && idx < 0; k++) {
+                int m = 0;
+                while (arg[m] && mail_msgs[i].from[k + m] && ((arg[m] | 32) == (mail_msgs[i].from[k + m] | 32))) m++;
+                if (!arg[m]) idx = i;
+            }
+        }
+        if (idx < 0) {
+            chat_fmt_reply(reply, replysz, arg[0] ? "No mail from " : "", arg[0] ? arg : "Your inbox is empty.");
+            serial_puts("chattool=read_mail:none\n");
+            return 1;
+        }
+        mail_msg_t *m = &mail_msgs[idx];
+        int p = 0;
+        const char *parts[] = { "From ", m->from, ": ", m->subject, ". ", m->body };
+        for (int k = 0; k < 6; k++) for (const char *c = parts[k]; *c && p < replysz - 1; c++) reply[p++] = *c;
+        reply[p] = 0;
+        if (!m->read) { m->read = 1; mail_save(); }
+        serial_puts("chattool=read_mail:"); serial_puts(m->subject); serial_puts("\n");
+        return 1;
+    }
+
+    if (!strcmp(tool, "send_mail")) {
+        /* Local until Mail has accounts: the message lands in Mail, addressed. The words
+           come from what was said after "that", "saying" or a colon, else all of it. */
+        const char *body = chat_last_user_msg;
+        for (const char *c = chat_last_user_msg; *c; c++) {
+            if (*c == ':') { body = c + 1; break; }
+            if (chat_starts(c, " that ")) { body = c + 6; break; }
+            if (chat_starts(c, " saying ")) { body = c + 8; break; }
+        }
+        while (*body == ' ') body++;
+        mail_load();
+        if (mail_count >= MAIL_MAX) {
+            chat_fmt_reply(reply, replysz, "", "Mail is full, nothing sent.");
+            serial_puts("chattool=send_mail:full\n");
+            return 1;
+        }
+        mail_msg_t *m = &mail_msgs[mail_count];
+        char to[MAIL_FROM_MAX]; int t = 0;
+        for (const char *c = "To "; *c; c++) to[t++] = *c;
+        for (const char *c = arg; *c && *c != '|' && t < MAIL_FROM_MAX - 1; c++) to[t++] = *c;
+        to[t] = 0;
+        mail_str_copy(m->from, to, MAIL_FROM_MAX);
+        mail_str_copy(m->subject, "From Samantha", MAIL_SUBJECT_MAX);
+        int b = 0;
+        for (const char *c = body; *c && b < MAIL_BODY_MAX - 1; c++) if (*c != '|') m->body[b++] = *c;
+        m->body[b] = 0;
+        m->read = 1;
+        mail_count++;
+        mail_save();
+        chat_fmt_reply(reply, replysz, "Wrote it to ", arg);
+        serial_puts("chattool=send_mail:"); serial_puts(arg); serial_puts("\n");
+        return 1;
+    }
+
     return 0; /* open_url, web_search, current_tab, screenshot, clipboard, set_volume, battery, list_dir, read_file, make_logo, music, timer, set_heading, scroll_to, theme, reset_page: not handled */
+}
+
+/* Local keyword fallback for the notes/reminders tools this pass adds
+   (read_notes, list_reminders): mirrors mail's own "os":"jt" gate rather
+   than widening it, since Turing's picker may not know these two tool
+   names yet. Checked only after chat_pick has already failed to name a
+   tool (see chat_process_message below), so a picker that does know them
+   is always trusted first; this is strictly a fallback, not a bypass.
+   Deliberately narrow substring matches, same shape chat_match_app's
+   "the "/" app" trimming already uses elsewhere in this file: a false
+   positive here just answers a tool question with a tool's own honest
+   answer, never a wrong write. */
+static int chat_has_word(const char *hay, int n, const char *needle) {
+    int nl = 0; while (needle[nl]) nl++;
+    for (int i = 0; i + nl <= n; i++) {
+        int k = 0; while (k < nl && hay[i + k] == needle[k]) k++;
+        if (k == nl) return 1;
+    }
+    return 0;
+}
+
+static int chat_keyword_fallback(const char *msg, char *tool, int toolsz) {
+    char lower[256]; int n = 0;
+    for (const char *s = msg; *s && n < (int)sizeof(lower) - 1; s++) {
+        char c = *s; if (c >= 'A' && c <= 'Z') c += 32; lower[n++] = c;
+    }
+    lower[n] = 0;
+    int asking = chat_has_word(lower, n, "what") || chat_has_word(lower, n, "read") || chat_has_word(lower, n, "list");
+    if (asking && chat_has_word(lower, n, "note")) {
+        int p = 0; const char *t = "read_notes"; while (*t && p < toolsz - 1) tool[p++] = *t++; tool[p] = 0; return 1;
+    }
+    if (asking && chat_has_word(lower, n, "reminders")) {
+        int p = 0; const char *t = "list_reminders"; while (*t && p < toolsz - 1) tool[p++] = *t++; tool[p] = 0; return 1;
+    }
+    return 0;
 }
 
 /* Uses the shared gui_prompt.h helper to avoid the per-keystroke full-redraw
@@ -534,7 +667,8 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
    first-time visitor nothing about what Samantha can actually do here, and
    made them press n before they could even try. This table is every tool
    chat_run_tool above handles that a plain typed sentence can trigger
-   (new_reminder, new_note, weather, calendar_today, open_app -- "say" is
+   (new_reminder, new_note, list_reminders, read_notes, weather,
+   calendar_today, open_app -- "say" is
    the picker's own internal echo tool, not something a visitor asks for
    by name, so it has no row here), each phrased as the exact sentence
    that names it. Shown as a selectable list when chat_count is 0; picking
@@ -546,6 +680,8 @@ static const chat_suggestion_t CHAT_SUGGESTIONS[] = {
     { "Note: pick up dry cleaning" },
     { "What's the weather like" },
     { "What's on my calendar today" },
+    { "What are my reminders" },
+    { "What's in my notes" },
     { "Open calculator" },
 };
 #define CHAT_SUGGEST_COUNT ((int)(sizeof(CHAT_SUGGESTIONS) / sizeof(CHAT_SUGGESTIONS[0])))
@@ -646,9 +782,12 @@ static const char *chat_process_message(char *msg, int T, int x, int you_w, int 
     font_draw_string(CHAT_YOU, x, T + 76, CHAT_DIM, -1);
     render_wrapped_text(msg, x + you_w, T + 76, body_w - you_w, 64, CHAT_INK);
 
+    chat_last_user_msg = msg;
     int handled = 0;
     static char pick_tool[CHAT_TOOL_MAX], pick_arg[CHAT_ARG_MAX], tool_reply[256];
-    if (chat_pick(msg, pick_tool, sizeof(pick_tool), pick_arg, sizeof(pick_arg))
+    int picked = chat_pick(msg, pick_tool, sizeof(pick_tool), pick_arg, sizeof(pick_arg));
+    if (!picked) picked = chat_keyword_fallback(msg, pick_tool, sizeof(pick_tool));
+    if (picked
         && chat_run_tool(pick_tool, pick_arg, tool_reply, sizeof(tool_reply))) {
         handled = 1;
         if (chat_launch_after >= 0) return 0; /* open_app: caller returns, again: reopens the picked app */
