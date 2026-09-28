@@ -16,7 +16,7 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-Main is 1.7.10 and live. 1.7.11 puts a second app in ring 3: Toroid runs as its own program next to Keyrate, `kernel/ring3app.c` is one table-driven launcher (a row per app: name, embedded binary, VFS filename), and the in-kernel copies of both are deleted. Two apps out, the rest still in kernel.c. That number going down is the real progress bar for 2.0. Quotes and Calculator are next, one PR each.
+Main is 1.7.11 and live. 1.7.12 puts a third app in ring 3: Calculator runs as its own program next to Keyrate and Toroid, still one row in `kernel/ring3app.c`'s table-driven launcher (name, embedded binary, VFS filename), and the in-kernel copy is deleted. Three apps out, the rest still in kernel.c. That number going down is the real progress bar for 2.0. Quotes is next.
 
 ## Next, in order
 

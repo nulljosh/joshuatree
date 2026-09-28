@@ -17,6 +17,8 @@ user/keyrate.bin
 drivers/user_keyrate.h
 user/toroid.bin
 drivers/user_toroid.h
+user/calculator.bin
+drivers/user_calculator.h
 user/libjt.a
 landing/kernel.elf
 landing/v86/kernel.elf

@@ -9,9 +9,19 @@
 #
 # This test counts "guiprompt" serial markers emitted by the content redraw
 # loop to verify that chrome (titlebar) doesn't cause full window redraws on
-# every keystroke. Opens each app type (Reminders, Mail, Calculator),
-# triggers a prompt, types several characters, and verifies guiprompt count
-# increases per keystroke without seeing the full-screen "chrome" redraws.
+# every keystroke. Opens each in-kernel app type still on this path
+# (Reminders, Mail), triggers a prompt, types several characters, and
+# verifies guiprompt count increases per keystroke without seeing the
+# full-screen "chrome" redraws.
+#
+# 1.7.12: Calculator left this path entirely -- it's a real ring-3 program
+# now (user/calculator.c via kernel/ring3app.c, same move Keyrate and
+# Toroid already made), drawing through SYS_WINDOW_OPEN/POLL, not
+# kernel.c's gui_prompt_line_input. It never emitted "guiprompt" as
+# anything but chrome-once noise for this test to catch, so its case is
+# dropped here rather than kept as dead coverage; ring-3 Calculator's own
+# per-keystroke redraw and divide-by-zero/crash behavior are
+# tools/checks/ring3calc-check.py's job.
 #
 # v0.76.58: this test was itself broken, four real ways, found by reading
 # the actual kernel code (kernel.c's gui_launch_apps/gui_multiwin_open,
@@ -48,7 +58,7 @@
 #      So every app here now opens through the Apps folder grid, not the
 #      dock, matching what this test can actually observe.
 #
-# Real flows now driven, all three launched from inside the Apps folder
+# Real flows now driven, both launched from inside the Apps folder
 # grid (never the dock) so the single-window "guiprompt" code path is the
 # one that actually runs:
 #   Reminders: digit '5' (grid index 4, within the '1'-'9' shortcut
@@ -57,20 +67,8 @@
 #   Mail: digit '2' (grid index 1), then 'c' to compose (mail.h: "if
 #     (k == 'c') mail_compose();"), type real characters into the "from"
 #     field.
-#   Calculator: grid index 19 is past the digit range, needs real a/d/w/s
-#     navigation (right x3, down x3 from wherever Mail's digit launch
-#     left the selection) then Enter, then type a real expression.
-#     Calculator used its own local "guiprompt" call, but only once,
-#     before its main loop -- so no amount of correct navigation could
-#     ever have grown it with real typing; that placement bug is fixed in
-#     kernel/calculator.h alongside this test (marker moved inside the
-#     per-keystroke redraw, the same place gui_prompt_line_input already
-#     emits it).
 #
-# Proven discriminating (all three): reverted kernel/calculator.h's
-# marker back outside the loop and reran -- Calculator FAILed with 0
-# redraws while Reminders/Mail still passed; restored, all three PASS.
-# Separately, reverted reminders.h's 'a' gate to start the prompt store
+# Proven discriminating (both): reverted reminders.h's 'a' gate to start the prompt store
 # immediately from list view (no `if (k=='a')`) and confirmed the test's
 # real flow still requires the real key sequence to open the prompt at
 # all (a broken flow just sits on the list screen forever, prompt count
@@ -210,44 +208,7 @@ else:
 key("esc"); time.sleep(0.3)  # cancel compose
 key("esc"); time.sleep(0.5)  # close Mail, back to the Apps folder grid
 
-# Test 3: Calculator is grid index 19, past the digit-shortcut range --
-# needs real a/d/w/s navigation. The digit '2' launch above left the grid
-# selection on index 1 (row 0, col 1); right x3, down x3 reaches row 3
-# col 4 = index 19, the same cell math gui_launch_apps itself uses.
-# 0.35 s per grid step, not key()'s 0.1 s: faster sends drop scancodes in
-# the grid (search-check.py measured it), which is what left this test
-# typing into the Apps folder instead of Calculator.
-for c in ("d", "d", "d", "s", "s", "s"):
-    key(c); time.sleep(0.25)
-# Wait for Calculator's own first draw (one "guiprompt" line) instead of a
-# fixed 0.5 s: on a loaded CI runner the grid's scroll repaint can swallow
-# the ret or outlast the sleep. One more ret only if it never opened.
-opened_at = prompt_count()
-key("ret")
-for attempt in range(2):
-    deadline = time.time() + 8
-    while prompt_count() == opened_at and time.time() < deadline: time.sleep(0.3)
-    if prompt_count() > opened_at or attempt: break
-    key("ret")  # exactly one retry
-time.sleep(0.5)
-
-before = prompt_count()
-for c in "2+3+4":
-    key_char(c)
-# Keys dropped on slow runners if sent in burst; poll for redraw markers
-after = 0
-for _ in range(50):
-    after = prompt_count()
-    if after > before + 2:
-        break
-    time.sleep(0.1)
-
-if after > before + 3:
-    test_results.append(f"Calculator: OK ({after - before} redraws for ~5 keystrokes)")
-else:
-    test_results.append(f"Calculator: FAIL (expected 4+ redraws, got {after - before})")
-
-key("esc"); time.sleep(0.3)  # close Calculator
+key("esc"); time.sleep(0.3)  # close the Apps folder grid
 
 cmd({"execute": "quit"})
 
