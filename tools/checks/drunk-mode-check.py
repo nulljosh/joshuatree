@@ -7,9 +7,10 @@ the row offsets differ between frames due to the sway animation.
 Usage: tools/checks/drunk-mode-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time
+from freeport import free_port
 
 LOG = "/tmp/jt-drunk-serial.log"
-PORT = 4711
+PORT = free_port()
 FB = 0xfd000000; W, H = 1920, 1080
 
 def qmp_command(f, obj):

@@ -19,6 +19,10 @@ user/toroid.bin
 drivers/user_toroid.h
 user/calculator.bin
 drivers/user_calculator.h
+user/quotes.bin
+drivers/user_quotes.h
+user/bookrank.bin
+drivers/user_bookrank.h
 user/libjt.a
 landing/kernel.elf
 landing/v86/kernel.elf
@@ -39,3 +43,6 @@ build/
 landing/v86/kernel.elf.gz
 user/fbpoke.bin
 drivers/user_fbpoke.h
+
+# Agent scratch notes (per-worktree handoffs), never commit
+HANDOFF.md

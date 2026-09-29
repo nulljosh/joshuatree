@@ -191,13 +191,27 @@ DOCK = {
         <path d="M61 76 H84"/>
       </g>"""),
 
-    # Chat: a white speech bubble on a green tile.
-    "chat": ("#62DE72", "#33C54D",
-             lg("bub", (0, "#FFFFFF"), (1, "#E8F1E9")),
+    # Chat (Samantha): her engraved portrait on a cream tile, black ink on
+    # cream like the rest of the OS. Clay hair with ink hatching, round
+    # glasses, open eyes, a small smile and a speech cue at the corner.
+    "chat": ("#F6EBD5", "#E6D5B5",
+             "",
              """
-      <g fill="url(#bub)">
-        <ellipse cx="64" cy="59" rx="42" ry="34"/>
-        <path d="M34 78 C34 88 29 94 22 98 C34 99 44 95 50 88 Z"/>
+      <g stroke="#15110D" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M27 62 C27 32 44 17 64 17 C84 17 101 32 101 62 L101 98 C101 105 91 106 88 100 L88 72 L40 72 L40 100 C37 106 27 105 27 98 Z" fill="#C98A48" stroke-width="3"/>
+        <g fill="none" stroke-width="1.8" opacity="0.85">
+          <path d="M32 44 L36 66"/><path d="M36 38 L41 62"/><path d="M32 74 L34 96"/><path d="M37 76 L38 94"/>
+          <path d="M96 44 L92 66"/><path d="M92 38 L87 62"/><path d="M96 74 L94 96"/><path d="M91 76 L90 92"/>
+        </g>
+        <ellipse cx="64" cy="63" rx="23" ry="28" fill="#FBF3E2" stroke-width="3"/>
+        <path d="M42 52 C46 34 82 34 86 52 C76 44 52 44 42 52 Z" fill="#C98A48" stroke-width="2.4"/>
+        <g fill="none" stroke-width="3">
+          <circle cx="54" cy="61" r="8.5"/><circle cx="74" cy="61" r="8.5"/><path d="M62.5 60 H65.5"/>
+        </g>
+        <g fill="#15110D" stroke="none"><circle cx="54" cy="61" r="3.2"/><circle cx="74" cy="61" r="3.2"/></g>
+        <path d="M56 79 Q64 85 72 79" fill="none" stroke-width="3"/>
+        <path d="M84 90 C84 82 92 78 100 78 C110 78 117 83 117 91 C117 99 110 104 101 104 L96 104 L91 107 L91.5 103 C86 100 84 96 84 90 Z" fill="#FBF3E2" stroke-width="3"/>
+        <g fill="#15110D" stroke="none"><circle cx="94" cy="91" r="2.2"/><circle cx="101" cy="91" r="2.2"/><circle cx="108" cy="91" r="2.2"/></g>
       </g>"""),
 
     # Weather: a sun half behind a cloud, on a sky-blue tile.

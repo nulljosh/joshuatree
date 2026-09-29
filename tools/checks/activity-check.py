@@ -47,11 +47,12 @@ Usage: tools/checks/activity-check.py   (from the repo root, after make kernel.e
 """
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 LOG = "/tmp/jt-activity-serial.log"
 DUMP = "/tmp/jt-activity.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4711  # > 4700, avoids colliding with other checks' ports on a shared machine
+PORT = free_port()  # > 4700, avoids colliding with other checks' ports on a shared machine
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
@@ -96,8 +97,8 @@ try:
         cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
         time.sleep(0.1)
         cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
-    def key(qcode):
-        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qcode}]}})
+    def key(*qcodes):
+        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": q} for q in qcodes]}})
         time.sleep(0.35)  # real, measured cadence search-check.py/contacts-keystroke-check.sh already rely on
     def dump():
         cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
@@ -112,8 +113,9 @@ try:
                     dark += 1
         return dark
 
-    # Step 1: esc drops the booted desktop back to the real text shell.
-    key("esc"); time.sleep(0.5)
+    # Step 1: Ctrl+Alt+Backspace drops the booted desktop back to the real
+    # text shell (plain Esc on a bare desktop is now a no-op, kernel.c gui_run).
+    key("ctrl", "alt", "backspace"); time.sleep(0.5)
 
     # Step 2: spawn a real, persistent task and learn its real slot id.
     # Keys dropped on slow runners if sent in burst; poll for result after typing

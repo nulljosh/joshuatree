@@ -28,11 +28,12 @@ Usage: tools/checks/dockhover-check.py   (from the repo root, after make kernel.
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 LOG = "/tmp/jt-dockhover-serial.log"
 REST, MID, END = "/tmp/jt-dockhover-rest.raw", "/tmp/jt-dockhover-mid.raw", "/tmp/jt-dockhover-end.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4449
+PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X, ICONS = 37, 6, 247, 11
 PITCH = DOCK_ICON + DOCK_GAP

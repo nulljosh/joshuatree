@@ -40,10 +40,11 @@ Usage: python3 tools/checks/chat-timeout-check.py   (from the repo root, after m
 """
 import http.server, os, socket, subprocess, sys, threading, time
 from PIL import Image
+from freeport import free_port
 
 QUESTION = "what is the capital of france"
 LOG = "/tmp/jt-chattimeout-serial.log"; DUMP = "/tmp/jt-chattimeout.raw"
-FB = 0xfd000000; W, H = 1920, 1080; PORT = 4471
+FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247; PITCH = DOCK_ICON + DOCK_GAP; ICON_ROW_Y = 487
 CLOSE_X, CLOSE_Y = 94, 56; CLOSE_RED = (0xFF, 0x5F, 0x57)

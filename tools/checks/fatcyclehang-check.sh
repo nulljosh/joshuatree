@@ -59,7 +59,7 @@ PYEOF
 LOG1="$WORKDIR/log1"
 (
     sleep 3
-    echo 'sendkey esc'; sleep 1
+    echo 'sendkey ctrl-alt-backspace'; sleep 1    # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
     send "mkdir cyc"; sleep 2
     echo 'xp /4000xb 0x000b8000'
     sleep 1
@@ -160,7 +160,7 @@ PYEOF
 LOG2="$WORKDIR/log2"
 (
     sleep 3
-    echo 'sendkey esc'; sleep 1
+    echo 'sendkey ctrl-alt-backspace'; sleep 1    # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
     send "cd cyc"; sleep 2
     send "ls"; sleep 12
     send "echo zzzmarkerzzz"; sleep 2

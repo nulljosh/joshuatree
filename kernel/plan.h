@@ -64,7 +64,7 @@ static void plan_draw(void){
                            (int)window_height() - wrap_y - 50, 0x001C1C1E);
     }
 
-    font_draw_string("up/down or click to select   esc closes", 20, (int)window_height() - 30, 0x0075726E, -1);
+    gui_draw_hint(20, (int)window_height() - 30, "up/down or click to select   esc closes", 0x0075726E);
 }
 
 static void gui_launch_plan(void){

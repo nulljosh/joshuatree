@@ -58,9 +58,10 @@ Usage: python3 tools/checks/chattools-check.py         (from the repo root, afte
 """
 import http.server, json, os, socket, subprocess, sys, tempfile, threading, time
 from PIL import Image
+from freeport import free_port
 
 LOG = "/tmp/jt-chattools-serial.log"; DUMP = "/tmp/jt-chattools.raw"
-FB = 0xfd000000; W, H = 1920, 1080; PORT = 4471
+FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247; PITCH = DOCK_ICON + DOCK_GAP; ICON_ROW_Y = 487
 CLOSE_X, CLOSE_Y = 94, 56; CLOSE_RED = (0xFF, 0x5F, 0x57)
@@ -367,7 +368,7 @@ def run_live():
     proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         time.sleep(5)
-        proc.stdin.write(b"sendkey esc\n"); proc.stdin.flush()
+        proc.stdin.write(b"sendkey ctrl-alt-backspace\n"); proc.stdin.flush()  # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
         time.sleep(2)
         proc.stdin.write(send("chat remind me to test the live picker").encode()); proc.stdin.flush()
         serial_text = ""

@@ -200,12 +200,16 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Install a real Chromium for Playwright
         run: npx playwright install --with-deps chromium
+      - name: Install a real WebKit for Playwright
+        run: npx playwright install --with-deps webkit
       - name: Landing demo Chat check (retries once on a timing flake)
         run: node tools/checks/demochat-check.mjs || (sleep 10 && node tools/checks/demochat-check.mjs)
       - name: Landing demo cursor glides, never teleports (retries once)
         run: node tools/checks/cursorglide-check.mjs || (sleep 10 && node tools/checks/cursorglide-check.mjs)
       - name: Landing demo shows Samantha's face and plays her voice (retries once)
         run: node tools/checks/facespeak-demo-check.mjs || (sleep 10 && node tools/checks/facespeak-demo-check.mjs)
+      - name: Phone audio unlocks on a real tap (retries once)
+        run: node tools/checks/mobile-audio-check.mjs || (sleep 10 && node tools/checks/mobile-audio-check.mjs)
       # Landing-only PR: the suite is skipped, so its landing checks run here.
       - name: Landing checks (landing-only PR, suite skipped)
         if: needs.changes.outputs.kernel == 'false'

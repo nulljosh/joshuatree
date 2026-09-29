@@ -210,6 +210,10 @@ def main():
             cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k}]}})
             time.sleep(0.06)
 
+        def key_combo(*ks):
+            cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in ks]}})
+            time.sleep(0.06)
+
         def type_line(t):
             for c in t: key("spc" if c == " " else c)
             key("ret"); time.sleep(2.0)
@@ -219,7 +223,9 @@ def main():
             except FileNotFoundError: return ""
 
         time.sleep(6.0)  # desktop up, first (default-theme) weather cycle already ran
-        key("esc"); time.sleep(1.0)  # into the shell
+        # Ctrl+Alt+Backspace: the deliberate shell chord (plain Esc on a bare
+        # desktop is now a no-op, kernel.c gui_run).
+        key_combo("ctrl", "alt", "backspace"); time.sleep(1.0)  # into the shell
 
         def marker():
             prev = -1

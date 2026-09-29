@@ -29,11 +29,12 @@ Usage: tools/checks/iconart-check.py   (from the repo root, after make kernel.el
 """
 import json, os, re, shutil, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 LOG = "/tmp/jt-iconart-serial.log"
 DUMP = "/tmp/jt-iconart.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4453
+PORT = free_port()
 
 # Same geometry dockhover-check.py / iconhalo-check.py already derived and
 # verified for this exact 960x540@2x boot config (dock_scale_pct 7,

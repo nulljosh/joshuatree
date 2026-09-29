@@ -14,15 +14,20 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
   - 1.7.7 took the first step: Keyrate runs as a real ring-3 process with its own window, and crashing it on purpose leaves the desktop standing.
   - 1.7.11: two apps in ring 3 now. Toroid followed Keyrate out, the in-kernel copies of both are gone, and one table-driven launcher runs them. Still to do before this line is checked: the other apps, ported the same way, one PR at a time.
   - 1.7.12: three apps in ring 3 now. Calculator followed Keyrate and Toroid out, the in-kernel copy is gone, and the same table-driven launcher runs it. Still to do before this line is checked: the other apps, ported the same way, one PR at a time.
-  - 1.7.14: four apps in ring 3 now. Homeqi followed Keyrate, Toroid and Calculator out, the in-kernel copy is gone, and the same table-driven launcher runs it. Still to do before this line is checked: the other apps, ported the same way, one PR at a time.
+  - 1.7.14: four apps in ring 3 now. Quotes followed Keyrate, Toroid and Calculator out, the in-kernel copy is gone, and the same table-driven launcher runs it. Still to do before this line is checked: the other apps, ported the same way, one PR at a time.
+  - 1.7.15: fixed a Linux-CI-only feature-drive.py bug that Quotes exposed, not caused: the check's own window-close retry could double-click into the Apps folder behind a self-closing app and quit the whole GUI to the text shell, failing every app tested after it.
+  - 1.8.22: six apps in ring 3 now. Homeqi followed Keyrate, Toroid, Calculator, Quotes and Bookrank out, the in-kernel copy is gone, and the same table-driven launcher runs it.
+- 2.1: Music. A player app in its own protected space: WAV first, then MP3 through a small public-domain decoder, a library from Files, play and pause through the sound driver it already has.
+- 2.2: Video. A player app: motion-JPEG first (reusing the JPEG decoder the kernel already has) with sound in sync, then a real codec when the hardware allows.
 - 3.0: It boots a real computer. One reference mini PC: UEFI, USB keyboard, mouse and stick, a real disk, a real network card, real sound.
+- 3.1: The Strata Kit ships. The $199 case and OS stick for the 3.0 board, bring your own parts (MONEY.md has the math).
 - 4.0: True multitasking. A compositor, many windows, resize and minimize, apps that never freeze each other.
 - 5.0: The real internet. TLS built in, no proxy, and a web browser on top.
 - 6.0: The terminal. Epiphany streams prices, draws candlesticks, runs four panels, a news wire, alerts and P&L.
 - 7.0: Modern chips. 64-bit, every core.
 - 8.0: Samantha lives inside. Her model runs on the machine, no cloud needed.
 - 9.0: It builds itself. A compiler on Joshua Tree, and Samantha fixes her own bugs.
-- 10.0: The dev kit ships. A board with Joshua Tree on it, install to disk, updates.
+- 10.0: Strata Complete ships. A finished machine with Joshua Tree on it, install to disk, updates.
 
 ## 11 to 20: a family of machines
 

@@ -31,11 +31,12 @@ Usage: tools/checks/feature-drive.py [outdir]   (from the repo root, after make 
 """
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image, ImageChops
+from freeport import free_port
 
 LOG = "/tmp/jt-feature-drive-serial.log"
 DUMP = "/tmp/jt-feature-drive.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4621  # unique port for this script
+PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
@@ -174,7 +175,21 @@ try:
     time.sleep(0.3)
 
     def close_window():
-        """Close current window via pointer or esc."""
+        """Close current window via pointer, at most once.
+
+        A second click here after the first one already closed the app
+        would land on whatever redrew at the same pixel next -- the Apps
+        folder underneath, whose own close control sits at the same
+        titlebar position -- and close that too. That leaves the
+        deliberate trailing Esc below (meant to close the folder) to land
+        on a bare desktop instead, and kernel.c's gui_run quits the whole
+        GUI to the text shell on an Esc with zero windows open. Linux CI's
+        QEMU redraws the folder behind a self-closing app (Quotes: any
+        click outside its answer grid closes it) fast enough for this
+        loop to catch and re-click it before returning; macOS didn't hit
+        the same window. One click, then stop -- retrying only while
+        nothing has registered yet, never after a click already landed.
+        """
         for _ in range(5):
             if not window_open(): break
             p1 = pixel(CLOSE_X, CLOSE_Y)
@@ -183,8 +198,10 @@ try:
             is_red_2 = max(abs(p2[i] - CLOSE_RED[i]) for i in range(3)) <= 12
             if is_red_1:
                 move(CLOSE_X, CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)
+                break
             elif is_red_2:
                 move(APPS_CLOSE_X, APPS_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)
+                break
             else:
                 break
         move(*PARK); time.sleep(0.3)

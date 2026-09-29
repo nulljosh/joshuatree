@@ -28,11 +28,12 @@ Usage: tools/checks/bootlogo-check.py   (from the repo root, after make kernel.e
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 LOG = "/tmp/jt-bootlogo-check-serial.log"
 DUMP = "/tmp/jt-bootlogo-check.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4463
+PORT = free_port()
 
 # Menu bar height and logo position. gui_draw_logo is called at (16, GUI_MENUBAR_H / 2 + 2)
 GUI_MENUBAR_H = 26

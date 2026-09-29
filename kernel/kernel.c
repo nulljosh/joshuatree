@@ -32,6 +32,7 @@
 #include "net.h"
 #include "gui_prims.h"
 #include "dock_geom.h"
+#include "dock_draw.h"
 #include "http.h"
 #include "wallpaper.h"
 #include "icon_art.h"
@@ -107,7 +108,6 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app_curbfind.h"
 #include "app_keyrate.h"
 #include "app.h"
-#include "quotestreak.h"
 #include "app_bookrank.h"
 #include "app_quotestreak.h"
 #include "app_plan.h"
@@ -902,18 +902,15 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-/* v0.89.x: Activity landed after Portfolio took slot 23, so it sits at
-   24 and GUI_APPS_FOLDER/GUI_TRASH moved to 25/26, same shift again. */
-/* Clock landed after Activity, so it sits at 25 and GUI_APPS_FOLDER/
-   GUI_TRASH moved to 26/27, same shift again. */
-#define GUI_APP_COUNT   28 /* 26 real apps + the Apps folder + Trash */
+#define GUI_APP_COUNT   29 /* 26 real apps + the Apps folder + Trash + Mail Compose */
 #define GUI_APPS_FOLDER 26 /* not an app: the dock tile that opens the folder */
 #define GUI_TRASH       27
+#define GUI_MAIL_COMPOSE 28 /* v1.9.0: Mail's own 2nd window, see mail.h; not in the dock or Apps folder */
 /* Every app's name, color, glyph and hooks live in one table, APPS[],
    defined further down once every hook it points at exists (see "The app
    registry" below). This tentative definition lets the dock and Launchpad
    code above that point read it. */
-static const struct app APPS[GUI_APP_COUNT];
+const struct app APPS[GUI_APP_COUNT];
 
 /* The pinned set, chosen on what someone actually reaches for on a fresh
    boot rather than what happened to be built most recently: a terminal, a
@@ -944,7 +941,7 @@ static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3
    real and sticks for the rest of this GUI session (reset to launch order
    next time `gui` runs; nothing about layout is saved to disk, matching
    this whole desktop's one-screen, nothing-persisted scope). */
-static int gui_order[GUI_ICON_COUNT];
+int gui_order[GUI_ICON_COUNT];
 /* Portfolio mode ("portfolio" on the multiboot command line, sent by the
    landing's embed.js when heyitsmejosh.com/os.html frames it): the dock is
    Joshua's own apps instead of the system set. Same slot count, Apps folder
@@ -961,9 +958,11 @@ static int boot_to_samantha;
    the demo boots 1:1 into what a phone screen actually is, rather than
    shrinking the desktop's layout down to unreadable text. */
 static int boot_to_phone;
+#include "hint.h"
+static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
 static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
-static int dock_hover = -1; /* slot whose label is showing */
+int dock_hover = -1; /* slot whose label is showing */
 
 /* GUI_BG lives in app.h now: a moved-out app's own unit clears to it too. */
 #define GUI_MENUBAR_H   26
@@ -1309,7 +1308,7 @@ static void gui_aa_line(int x0, int y0, int x1, int y1, unsigned int color, doub
 
 /* Channel-wise linear interpolation between two 0x00RRGGBB colors, `t/max`
    of the way from `a` to `b`. */
-static unsigned int gui_lerp(unsigned int a, unsigned int b, int t, int max){
+unsigned int gui_lerp(unsigned int a, unsigned int b, int t, int max){
     /* Every channel here as a signed int throughout: `a`/`b` are unsigned,
        so `br - ar` promotes back to unsigned if either operand stays
        unsigned, wrapping to a huge positive value whenever the channel is
@@ -1593,9 +1592,9 @@ static int aa_band = 5;
    so each corner's AA band can blend against the ACTUAL pixel behind
    that corner instead of gui_wallpaper_color(row)'s centre-column sample,
    which is wrong at the tray's own far left/right edges. */
-static unsigned int gui_wallpaper_sample(int px, int py, int sway);
+unsigned int gui_wallpaper_sample(int px, int py, int sway);
 
-static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned int color, int r){
+void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned int color, int r){
     /* v43: drawn at PHYSICAL resolution. Through the logical layer every
        corner step was a 2x2 block and the AA band two logical pixels wide,
        which on a 1920px panel reads as a plainly staircased edge (real
@@ -1733,6 +1732,67 @@ static void gui_rounded_rect_on_wallpaper(int x, int y, int w, int h, unsigned i
    this framebuffer doesn't have, same technique the wallpaper and every
    other AA edge in this file already uses. */
 static void gui_rounded_rect_gradient(int x, int y, int w, int h, unsigned int color_top, unsigned int color_bottom, unsigned int bg, int r){
+    /* Settings retina pass: this is the same logical-space-then-block-
+       replicate staircase gui_fill_circle's v82 fix and gui_draw_capsule's
+       matching fix already found and fixed for circles/capsules -- the AA
+       ramp below is computed once per LOGICAL pixel, and at window_scale()
+       2 (every real dock-launched windowed app, including Settings)
+       window_rect/window_pixel replicate each logical pixel into a flat
+       2x2 physical block with no interpolation, so the ramp rasterizes as
+       distinct flat terraces: the Wind switch's track edge, the grouped
+       card's corners and the sidebar highlight's corners, all real macro
+       staircasing (confirmed visually, /tmp/jt-settings-4x-*.png). This
+       function is the one AA rounded-rect primitive every one of those
+       three draws through, so one fix here covers all three. Same
+       technique gui_rounded_rect_on_wallpaper's v79 fix uses: work in
+       PHYSICAL pixels, SSxSS true subsample coverage per corner pixel
+       instead of a single distance threshold, blend straight to `bg`
+       (already a flat color for every caller here, no wallpaper sampling
+       needed the way the tray's on-wallpaper variant does). The original
+       logical-space path stays for callers with an offscreen target
+       pushed (window_has_target() true, e.g. gui_render_icon_cached's own
+       6x-supersampled icon buffer): that path already gets its real AA
+       from the later box-downsample, exactly like every icon glyph. */
+    if (!window_has_target() && window_scale() > 1) {
+        int sc = (int)window_scale();
+        int px0 = x * sc, py0 = y * sc, pw = w * sc, ph = h * sc, pr = r * sc;
+        const int SS = 4, band = 3, margin = 2;
+        if (ph > 2 * pr) {
+            for (int py = pr; py < ph - pr; py++) {
+                int ly = py / sc;
+                window_fill_rect_phys(px0, py0 + py, pw, 1, gui_lerp(color_top, color_bottom, ly, h));
+            }
+        }
+        for (int py = 0; py < ph; py++) {
+            if (py >= pr && py < ph - pr) continue;
+            int cy = py < pr ? pr : ph - 1 - pr;
+            int oy = py - cy;
+            int ly = py / sc;
+            unsigned int row_col = gui_lerp(color_top, color_bottom, ly, h);
+            for (int px = 0; px < pw; px++) {
+                int cx = px < pr ? pr : (px >= pw - pr ? pw - 1 - pr : px);
+                int ox = px - cx;
+                int d2 = ox * ox + oy * oy;
+                unsigned int col = row_col;
+                if (d2 > (pr - band) * (pr - band)) {
+                    if (d2 > (pr + margin) * (pr + margin)) continue;
+                    int inside = 0;
+                    for (int sy = 0; sy < SS; sy++) {
+                        int subdy = oy * SS + sy * 2 + 1 - SS;
+                        for (int sx = 0; sx < SS; sx++) {
+                            int subdx = ox * SS + sx * 2 + 1 - SS;
+                            long sd2 = (long)subdx * subdx + (long)subdy * subdy;
+                            if (sd2 <= (long)(pr * SS) * (pr * SS)) inside++;
+                        }
+                    }
+                    if (inside == 0) continue;
+                    col = (inside >= SS * SS) ? row_col : gui_lerp(row_col, bg, SS * SS - inside, SS * SS);
+                }
+                window_pixel_phys(px0 + px, py0 + py, col);
+            }
+        }
+        return;
+    }
     for (int row = 0; row < h; row++)
         window_rect(x, row + y, w, 1, gui_lerp(color_top, color_bottom, row, h));
     /* v37, real long-standing bug fixed here, not a tweak: this loop used
@@ -1942,7 +2002,7 @@ static void gui_capsule_phys(int pcx0, int pcy0, int pcx1, int pcy1, int pr, uns
     }
 }
 
-static void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color, unsigned int into){
+void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color, unsigned int into){
     if (!window_has_target() && window_scale() > 1){
         int sc = (int)window_scale();
         gui_capsule_phys(x0 * sc, y0 * sc, x1 * sc, y1 * sc, r * sc, color);
@@ -2048,7 +2108,7 @@ static int gui_wind_shift(int row){ /* source-pixel shift for this screen row, i
 }
 
 static void gui_draw_wallpaper_rows_sway(int y_from, int y_to, int sway);
-static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway(y_from, y_to, 0); }
+void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway(y_from, y_to, 0); }
 
 /* One wallpaper pixel at PHYSICAL (px, py): bilinear over the 960x540
    source, plus the wind shift when `sway` is set. Everything that paints
@@ -2062,7 +2122,7 @@ static void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_ro
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void homeqi_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
@@ -2168,7 +2228,7 @@ static unsigned int gui_wind_cached_pixel(int px, int py){
     const unsigned int *row = wind_base + (py - top) * wind_base_width;
     return frac ? gui_lerp(row[sx], row[sx1], frac, 256) : row[sx];
 }
-static unsigned int gui_wallpaper_sample(int px, int py, int sway){
+unsigned int gui_wallpaper_sample(int px, int py, int sway){
     /* v65: wind_base (below) caches RAW, untinted samples on purpose, so
        the tint here is always computed fresh against the current real
        hour, not frozen at whatever hour the cache happened to be built. */
@@ -3726,7 +3786,7 @@ static void gui_draw_gloss(int x, int y, int w, int h, unsigned int bg, int corn
    other effect here, no alpha channel and no bitmap: darkest directly
    under the icon, blending out to the dock's own color at the edge,
    which is exactly what a soft shadow is. */
-static void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
+void gui_draw_icon_shadow(int cx_center, int cy_bottom, int size){
     /* v44.2: drawn at PHYSICAL resolution, same fix shape as v43's dock
        tray corners. Through the LOGICAL layer this was the one dock
        element not matching every icon tile beside it, which renders at
@@ -4079,7 +4139,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
     gui_draw_icon_glyph(icon, cx_center, y + size / 2, size, bg);
     if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
 }
-static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){ gui_draw_one_icon_on(icon, cx_center, cy_bottom, size, DOCK_TRAY_COLOR); }
+void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){ gui_draw_one_icon_on(icon, cx_center, cy_bottom, size, DOCK_TRAY_COLOR); }
 
 /* hover_slot: which slot shows the magnify+label (-1 none). drag_slot: the
    slot currently being dragged, drawn separately so it can float free of
@@ -4087,25 +4147,6 @@ static void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){
 /* v40: the dock band's top edge, high enough to cover a magnified,
    lifted icon and its label, so repainting this band alone is enough to
    erase any previous hover state. */
-static int gui_dock_band_top(void){ return gui_dock_y0() - 24; }
-#define DOCK_LABEL_BG   0x00F4F1EC /* hover label capsule fill */
-#define DOCK_LABEL_EDGE 0x00BDB4A8 /* its hairline edge */
-#define DOCK_LABEL_SPAN 48         /* px either side of a slot a hover change repaints: the widest label plus its capsule */
-
-static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my);
-/* v0.79.x: the dock splits into the half that never changes while the
-   pointer moves (the tray's shadow and its rounded body) and the half that
-   does (the icons, their contact shadows and the hover label). Measured,
-   one hover frame: the tray half is 4442 us of a 9842 us band compose, all
-   of it redrawing pixels identical to the ones already there. Baking it
-   into the band cache alongside the wallpaper rows it sits on costs
-   nothing extra (the cache is built once per resolution) and takes it off
-   every single animation frame. Both halves read the wallpaper through
-   gui_wallpaper_sample, never through the framebuffer, so a cached tray is
-   the same pixels as a freshly drawn one, not an approximation of them. */
-static void gui_draw_dock_tray(void);
-static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my);
-
 void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     gui_draw_wallpaper();
     if (wind_enabled && !wind_base) {
@@ -4139,163 +4180,12 @@ void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
     gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
 }
 
-/* v40: repaint only the dock band: the wallpaper rows behind it, then the
-   dock itself. This is what a hover change costs now, instead of a full
-   456,000-pixel photo blit plus eight supersampled icons. */
-static unsigned int *dock_band_cache = 0;
-static unsigned int *dock_band_frame = 0;
-static int dock_band_cache_top = -1;
-static int dock_presented_hover = -1;
-static void gui_dock_band_cache_build(void){
-    int sc = (int)window_scale();
-    int top = gui_dock_band_top(), h = (int)window_height() - top;
-    int pw = (int)window_width() * sc, ph = h * sc;
-    if (dock_band_cache && dock_band_cache_top == top) return;
-    if (dock_band_cache) kfree(dock_band_cache);
-    if (dock_band_frame) kfree(dock_band_frame);
-    dock_band_cache = (unsigned int *)kmalloc((unsigned int)(pw * ph) * sizeof(unsigned int));
-    dock_band_frame = (unsigned int *)kmalloc((unsigned int)(pw * ph) * sizeof(unsigned int));
-    dock_band_cache_top = top;
-    if (dock_band_cache && dock_band_frame) {
-        window_push_screen_band(dock_band_cache, top * sc, (unsigned int)ph);
-        gui_draw_wallpaper_rows(top, (int)window_height());
-        gui_draw_dock_tray();
-        window_pop_screen_band();
-    }
-}
-
-/* Everything the first hover of a session would otherwise pay for mid
-   animation: the band cache above (a full-width wallpaper render plus the
-   tray), and the magnified tile for every icon, whose cache miss path
-   decodes a PNG. Measured, that first hover showed one single size where
-   a warm one shows six, and the second showed three, because the work
-   landed inside the sixty milliseconds the animation had to run in. Doing
-   it here, while the desktop's first frame is already up and nothing is
-   animating, costs a boot moment nobody is watching and allocates nothing
-   a hover sweep would not have allocated seconds later anyway. */
-static void gui_dock_prewarm(void){
-    gui_dock_band_cache_build();
-}
-
-static void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int drag_my){
-    /* v43: the wallpaper rows behind the dock never change, so bilinear
-       them once and copy thereafter. ~400k physical samples per hover
-       change was the other half of the flash. */
-    int sc = (int)window_scale();
-    int top = gui_dock_band_top(), h = (int)window_height() - top;
-    int pw = (int)window_width() * sc, ph = h * sc;
-    gui_dock_band_cache_build();
-    if (dock_band_cache && dock_band_frame) {
-        for (int i = 0; i < pw * ph; i++) dock_band_frame[i] = dock_band_cache[i];
-        window_push_screen_band(dock_band_frame, top * sc, (unsigned int)ph);
-        gui_draw_dock_icons(drag_slot, drag_mx, drag_my);
-        window_pop_screen_band();
-        /* Only present slots whose icon size changed. Copying the whole
-           2 MB band on every hover step visibly exposed the half-drawn
-           frame even though composition itself was offscreen. */
-        for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
-            if ((slot == dock_presented_hover) == (slot == dock_hover)) continue;
-            int left = (gui_slot_x(slot) - DOCK_LABEL_SPAN) * sc;
-            int right = (gui_slot_x(slot) + DOCK_ICON + DOCK_LABEL_SPAN) * sc;
-            if (left < 0) left = 0;
-            if (right > pw) right = pw;
-            for (int py = 0; py < ph; py++) {
-                unsigned int *dst = window_phys_row(top * sc + py);
-                for (int px = left; px < right; px++) {
-                    unsigned int next = dock_band_frame[py * pw + px];
-                    if (dst[px] != next) dst[px] = next;
-                }
-            }
-            /* v0.78.x: this is the one caller that writes through a raw row
-               pointer, so it has to declare what it touched. Measured: the
-               old "assume the whole row" guess damaged 1920 columns per row
-               to change the ~174 this actually writes, which is what made a
-               dock hover present 1.96M pixels instead of ~86k. */
-            window_damage(left, top * sc, right - left, ph);
-            }
-        dock_presented_hover = dock_hover;
-    } else {
-        gui_draw_wallpaper_rows(top, (int)window_height());
-        gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
-    }
-}
-
 /* v75: see wall_apply. wind_base is rebuilt lazily by gui_draw_desktop,
    the dock band by gui_redraw_dock_band's own top-mismatch check. */
 static void wall_caches_drop(void){
     if (wind_base) { kfree(wind_base); wind_base = 0; }
     dock_band_cache_top = -1;
     gui_wall_full_cache_drop();
-}
-
-static void gui_draw_dock_tray(void){
-    int y0 = gui_dock_y0(), dock_h = DOCK_ICON + 2 * DOCK_PAD, dock_w = gui_dock_w(), dock_x = gui_dock_x0();
-
-    /* A soft shadow beneath the tray, the same floating-panel look a real
-       macOS dock has, drawn before the tray itself so the tray's own edge
-       sits cleanly on top of it. Real per-pixel colors blended toward
-       black (gui_blend), fading back to the plain wallpaper color over a
-       few rows, no alpha compositing needed since these are precomputed
-       solid colors, same technique every AA edge in this file already
-       uses. Inset a little past the tray's own rounded corners so it
-       reads as a shadow, not a second, darker rectangle. */
-    /* Per physical pixel against the real photo. gui_wallpaper_color is one
-       colour per row (the centre column), fine for the old gradient but on
-       the photo it drew a flat striped bar under the tray. */
-    int sc = (int)window_scale();
-    int sy0 = (y0 + dock_h) * sc, rows = 10 * sc;
-    int sx0 = (dock_x + 6) * sc, sx1 = (dock_x + dock_w - 6) * sc;
-    for (int row = 0; row < rows; row++){
-        for (int px = sx0; px < sx1; px++){
-            unsigned int wall = gui_wallpaper_sample(px, sy0 + row, 0);
-            window_pixel_phys(px, sy0 + row, gui_lerp(gui_blend(wall, 0x00000000), wall, row, rows));
-        }
-    }
-
-    /* gui_rounded_rect_on_wallpaper, not gui_rounded_rect: the tray's top
-       and bottom corners sit against very different points on the
-       gradient, one fixed blend sample for both was the real dark-bubble
-       bug just found and fixed above. */
-    gui_rounded_rect_on_wallpaper(dock_x, y0, dock_w, dock_h, DOCK_TRAY_COLOR, 20);
-}
-
-static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
-    int y0 = gui_dock_y0();
-
-    for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
-        if (slot == drag_slot) continue; /* drawn last, floating at the cursor */
-        int icon = gui_order[slot];
-        int size = DOCK_ICON;
-        int cx_center = gui_slot_x(slot) + DOCK_ICON / 2;
-        int cy_bottom = y0 + DOCK_PAD + DOCK_ICON;
-        gui_draw_icon_shadow(cx_center, cy_bottom, size);
-        gui_draw_one_icon(icon, cx_center, cy_bottom, size);
-        if (slot == dock_hover) {
-            int label_w = font_string_width(APPS[icon].name);
-            int ly = y0 - 21; /* capsule spans ly-3 .. ly+19: clear of the tray's top edge, inside the band (y0 - 24) */
-            /* Dark text on a light capsule with a hairline edge, the macOS
-               dock tooltip, in the tray's own cream. Bare light text read
-               on dark wallpaper but vanished on bright map tiles and
-               collided with an open window's bottom edge (QA tour,
-               2026-09-21); the hairline keeps the capsule distinct over a
-               light window. It stays inside the band gui_dock_band_top()
-               composes and the per-slot present span DOCK_LABEL_SPAN. */
-            int lx0 = cx_center - label_w / 2 - 2, lx1 = cx_center + label_w / 2 + 2;
-            gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 11, DOCK_LABEL_EDGE, DOCK_LABEL_EDGE);
-            gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 10, DOCK_LABEL_BG, DOCK_LABEL_BG);
-            font_draw_string(APPS[icon].name, cx_center - label_w / 2, ly, 0x001C1C1E, -1);
-        }
-    }
-    if (drag_slot >= 0) {
-        int icon = gui_order[drag_slot];
-        gui_draw_one_icon(icon, drag_mx, drag_my + DOCK_ICON / 2, DOCK_ICON);
-    }
-}
-
-static void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my){
-    (void)hover_slot;
-    gui_draw_dock_tray();
-    gui_draw_dock_icons(drag_slot, drag_mx, drag_my);
 }
 
 /* v40: a real software cursor. Save the 13x13 patch it's about to cover,
@@ -4441,7 +4331,6 @@ int gui_app_dy(void){ return gui_app_windowed ? -32 : 0; }
    always plain wallpaper, nothing else needs redrawing. */
 static int app_win_x = 0, app_win_y = 0, app_win_w = 0, app_win_h = 0;
 static int app_drag_held = 0, app_drag_on = 0, app_drag_gx = 0, app_drag_gy = 0;
-static int gui_dock_band_top(void);
 static void gui_daynight_wallpaper_rect(int x, int y, int w, int h);
 int app_view_x, app_view_y; int app_view_w, app_view_h;
 int app_cursor_x, app_cursor_y;
@@ -4458,8 +4347,8 @@ void gui_app_mouse_tick(void){
     if (app_cursor_y < 0) app_cursor_y = 0;
     if (app_cursor_x > (int)window_width() - CURSOR_W) app_cursor_x = (int)window_width() - CURSOR_W;
     if (app_cursor_y > (int)window_height() - CURSOR_H) app_cursor_y = (int)window_height() - CURSOR_H;
-    /* Live window drag (see app_win_x's comment). Press edge: arm only in
-       the title band, right of the three lights (x + 80 on), so the red
+    if (boot_to_phone) phone_back_zone_tick(buttons, app_drag_held, app_cursor_x, app_cursor_y); /* phone_home.h: back-chevron tap, no Esc key on a phone */ /* Live window drag (app_win_x's comment). Press edge: arm only in the
+       title band, right of the three lights (x + 80 on), so the red
        close light and the app's own content keep their click semantics. */
     int held = buttons & 1;
     if (held && !app_drag_held) {
@@ -4491,8 +4380,7 @@ void gui_app_mouse_tick(void){
             serial_puts("windrag\n"); /* marker for tools/checks/windowdrag-check.py */
         }
     }
-    gui_cursor_save(app_cursor_x, app_cursor_y);
-    gui_draw_cursor(app_cursor_x, app_cursor_y);
+    if (!boot_to_phone) { gui_cursor_save(app_cursor_x, app_cursor_y); gui_draw_cursor(app_cursor_x, app_cursor_y); } /* phone_home.h: touch has no cursor, never draw the desktop arrow over an open app */
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
 /* v67 (0.62.2): for an app that repaints its whole viewport itself on
@@ -4556,14 +4444,14 @@ static void gui_wait_close(void){
    minimize/maximize wait on the actual windowing system already queued in
    roadmap.md's later product ideas, not a shortcut bolted on here. */
 void gui_draw_app_titlebar(const char *title){
-    if (!gui_app_windowed) {
-        gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
-        gui_fill_circle(46, 20, 6, 0x00FFD64A, 0x00FAF8F6);
-        gui_fill_circle(66, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
-        font_draw_string("x", 23, 12, 0x00602B28, -1);
-        font_draw_string("-", 43, 12, 0x00624A20, -1);
-        font_draw_string(title, 84, 12, 0x00555555, -1);
-    }
+    if (gui_app_windowed) return;
+    if (boot_to_phone) { phone_app_titlebar_draw(title); return; } /* kernel/phone_home.h: back chevron, no Esc key on a phone */
+    gui_fill_circle(26, 20, 6, 0x00FF5F57, 0x00FAF8F6);
+    gui_fill_circle(46, 20, 6, 0x00FFD64A, 0x00FAF8F6);
+    gui_fill_circle(66, 20, 6, 0x00D8D4CE, 0x00FAF8F6);
+    font_draw_string("x", 23, 12, 0x00602B28, -1);
+    font_draw_string("-", 43, 12, 0x00624A20, -1);
+    font_draw_string(title, 84, 12, 0x00555555, -1);
 }
 
 /* Split into a content-only draw plus the old blocking entry point: the
@@ -4889,26 +4777,27 @@ static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
        same trade the authored artwork itself already makes everywhere
        else (one 148px source raster area-averaged down, never redrawn
        per size) rather than a second layout to get right and keep right. */
-    /* v0.89.x follow-up: mul_d=2 (48 physical px) was sized against the
-       Apps-folder grid's own bigger tile (see the comment above) and
-       never actually checked against the dock's own 74-physical-px
-       tile -- a real headless crop there showed "25" running edge to
-       edge with almost no side margin and its descender crossing the
-       tile's own bottom curve, tighter than every other dock glyph's
-       shared inset (gui_icon_calendar's vector siblings all keep a real
-       margin off the squircle, see restyle_icons.py's top-16/bottom-20
-       band). mul_d=1 (24px, same face as the month label) leaves real
-       breathing room on both axes at dock size; the day face is a size
-       class up (3 vs 2) so it still reads as the bigger of the two
-       lines without the old overflow. */
+    /* v0.89.x follow-up: mul_d=2 overflowed the dock's own 74px tile (a
+       real crop showed "25" edge to edge, its descender crossing the
+       tile's bottom curve); mul_d=1 keeps real breathing room there. */
+    /* v0.90.x: mul_d=1 was only ever measured against the dock's 74px
+       tile; on the bigger Apps-folder/phone tile (tile=60 logical) it
+       left the day numeral small with the tile's bottom third empty.
+       size is the same logical unit both callers pass, so branch on it. */
+    /* v1.8: phone tile's "SEP"/"28" spilled past the rounded corners.
+       No fractional mul (integer divisor), so ~70% comes from dropping
+       one face size each line: month 24px->16px@mul2=32px (~67% of 48),
+       day 28px->20px@mul2=40px (~71% of 56). */
     int mul_m = 1, mul_d = 1;
+    int face_m = 2, face_d = 3;
+    if (size > 40) { mul_m = 2; mul_d = 2; face_m = 0; face_d = 1; }
     const char *mon3 = GUI_CAL_MON3[monv - 1];
     int ly_m = y + size * 16 / 100;
-    int ly_d = y + size * 42 / 100;
-    int lwm = wx_text_lw(mon3, 2, 1, mul_m);
-    wx_text(mon3, cx_center - lwm / 2, ly_m, 2, 1, mul_m, 0x00FF3B30);
-    int lwd = wx_text_lw(daybuf, 3, 1, mul_d);
-    wx_text(daybuf, cx_center - lwd / 2, ly_d, 3, 1, mul_d, 0x001F1F22);
+    int ly_d = y + (size > 40 ? size * 48 / 100 : size * 42 / 100);
+    int lwm = wx_text_lw(mon3, face_m, 1, mul_m);
+    wx_text(mon3, cx_center - lwm / 2, ly_m, face_m, 1, mul_m, 0x00FF3B30);
+    int lwd = wx_text_lw(daybuf, face_d, 1, mul_d);
+    wx_text(daybuf, cx_center - lwd / 2, ly_d, face_d, 1, mul_d, 0x001F1F22);
 }
 
 /* Flat rounded card: four anti-aliased corner discs plus two rects. */
@@ -5204,7 +5093,7 @@ static void term_render(const char *input, unsigned int input_len){
     for (unsigned int i = 0; i < input_len && x < 780; i++, x += 8)
         font_draw_char_mono((unsigned char)input[i], x, py, 0x00F2E9D8, -1);
     window_rect(x, py, 8, 15, 0x00C98A3E); /* block cursor */
-    font_draw_string("esc closes   |   same shell as text mode", 16, (int)window_height() - 28, 0x00807468, -1);
+    gui_draw_hint(16, (int)window_height() - 28, "esc closes   |   same shell as text mode", 0x00807468);
 }
 
 static void gui_launch_terminal(void){
@@ -5350,7 +5239,7 @@ static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, in
        dock draws APPS[icon].name there); a second "Apps" heading here
        just repeated it. Keep the key-hint line, moved up into the space
        the heading used to take. */
-    font_draw_string("arrow keys to move   enter opens   esc closes", x0, 40, 0x006A6064, -1);
+    gui_draw_hint(x0, 40, "arrow keys to move   enter opens   esc closes", 0x006A6064);
     gui_apps_draw_grid(scroll_offset, sel, x0, y0, cell_w, cell_h, tile);
     serial_puts("appsgridrepaint\n");
 }
@@ -5529,7 +5418,7 @@ static void gui_launch_trash(void){
             font_draw_string("Trash is empty.", 20, T + 52, 0x001C1C1E, -1);
             font_draw_string("Deleting a file with rm puts it here first.", 20, T + 76, 0x00807468, -1);
         } else {
-            font_draw_string("up/down to pick   r restores   e empties   esc closes", 20, T + 52, 0x00807468, -1);
+            gui_draw_hint(20, T + 52, "up/down to pick   r restores   e empties   esc closes", 0x00807468);
             for (int i = 0; i < n; i++) {
                 int y = T + 84 + i * 22;
                 if (i == sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);
@@ -5553,385 +5442,9 @@ static void gui_launch_trash(void){
     }
 }
 
-/* v47 (0.47.0): a real Settings screen, not a hidden shell command. Two
-   rows, each a live toggle/stepper that writes through settings_save()
-   immediately, the same "no separate Apply step" behaviour every setting
-   in this kernel already has (fsuse, diskuse, wind). up/down picks a row,
-   left/right (a/d, since there's no numpad here) changes it, a tap on a
-   row also toggles/steps it, matching the touch-first contract every
-   other screen in this GUI already keeps. */
-/* v85: settings_prompt_line, the same shape contacts_prompt_line and
-   mail_prompt_line already established (live-render, backspace, enter
-   confirms, esc or a click cancels), pulled in here rather than shared
-   across files since every app in this kernel keeps its own copy of this
-   small loop already. Used to edit the two string LLM settings, since a
-   toggle/stepper doesn't fit free text the way it fits wind/dock/wall.
-
-   security pass: added a `masked` parameter. The password-change and
-   add-user rows below used to call this with the typed password rendered
-   in the clear on screen, the exact thing auth_field_input's dot-echo in
-   auth.h was built to avoid for the login/first-run screens -- a real gap
-   (shoulder-surfing, screen recording, the v86 landing demo) since this is
-   the same secret, just entered through a different door. Masked draws a
-   fixed-width dot per character, same convention, same length-not-content
-   leak trade-off already accepted for login. */
-static int settings_prompt_line(const char *prompt, char *out, int max, int masked) {
-    unsigned int n = 0;
-    while (out[n] && (int)n < max - 1) n++; /* start from the current value, not empty, so editing is a tweak not a retype */
-    mouse_click_edge_sync();
-    for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Settings");
-        font_draw_string(prompt, 20, 52, 0x0075726E, -1);
-        window_rect(20, 76, (int)window_width() - 40, 20, 0x00FFFFFF);
-        out[n] = 0;
-        if (masked) {
-            char dots[AUTH_PASSWORD_MAX + 1];
-            unsigned int dn = n; if (dn > AUTH_PASSWORD_MAX) dn = AUTH_PASSWORD_MAX;
-            for (unsigned int i = 0; i < dn; i++) dots[i] = '*';
-            dots[dn] = 0;
-            font_draw_string(dots, 24, 78, 0x001C1C1E, -1);
-        } else {
-            font_draw_string(out, 24, 78, 0x001C1C1E, -1);
-        }
-        int k = get_key_or_click();
-        if (k == KEY_ESC || k == KEY_CLICK) return 0;
-        if (k == KEY_ENTER) break;
-        if (k == '\b') { if (n > 0) n--; }
-        else if ((int)n < max - 1 && k >= 32 && k < 127) out[n++] = (char)k;
-    }
-    out[n] = 0;
-    return 1;
-}
-
-#define SETTINGS_ROW_COUNT 8 /* v75: + wallpaper source; v85: + LLM model, + LLM host:port; v0.77: + Account (change password), + Add user; v0.85.5: + Location */
-static const int SETTINGS_ROWS_Y[SETTINGS_ROW_COUNT] = {84, 116, 148, 180, 212, 252, 284, 316};
-
-/* Pure, hardware/GUI-free: given a real click's full-screen logical
-   coordinates and the window's current width, returns which Settings row
-   (0..SETTINGS_ROW_COUNT-1) it lands in, or -1 if it misses every row's
-   own highlight rect (window_rect(16, y-6, ww-32, 28, ...), the exact
-   rect drawn below). Extracted into its own function so this real
-   hit-test math is unit-testable without a mouse or a boot, the same
-   shape rtl8139_clamp_len's own extraction used for exactly this reason
-   (v0.72.1: "so it's unit-testable without a NIC"). */
-static int settings_row_at(int cx, int cy, int ww){
-    if (cx < 16 || cx >= ww - 16) return -1;
-    for (int i = 0; i < SETTINGS_ROW_COUNT; i++) {
-        int ry = SETTINGS_ROWS_Y[i];
-        if (cy >= ry - 6 && cy < ry - 6 + 28) return i;
-    }
-    return -1;
-}
-
-static void gui_launch_settings(void){
-    int sel = 0;
-    for (;;) {
-        window_clear(GUI_BG);
-        gui_draw_app_titlebar("Settings");
-        font_draw_string("up/down to pick   left/right or tap to change   esc closes", 20, 52, 0x00807468, -1);
-
-        const int *rows_y = SETTINGS_ROWS_Y;
-        for (int i = 0; i < SETTINGS_ROW_COUNT; i++) {
-            int y = rows_y[i];
-            if (i == sel) window_rect(16, y - 6, (int)window_width() - 32, 28, 0x00EDE6DC);
-            if (i == 0) {
-                font_draw_string("Wind (swaying wallpaper)", 28, y, 0x001C1C1E, -1);
-                font_draw_string(wind_enabled ? "On" : "Off", 400, y, wind_enabled ? 0x002F7B4F : 0x00807468, -1);
-            } else if (i == 1) {
-                font_draw_string("Dock size", 28, y, 0x001C1C1E, -1);
-                char sz[8]; int p = 0; int v = dock_scale_pct;
-                if (v >= 10) sz[p++] = '0' + v / 10;
-                sz[p++] = '0' + v % 10; sz[p++] = '%'; sz[p] = 0;
-                font_draw_string(sz, 400, y, 0x001C1C1E, -1);
-            } else if (i == 2) {
-                /* v75/v81: honest label. A map theme's name only shows once
-                   a real tile mosaic is on screen; while it's still
-                   fetching, or when the fetch failed and the photo is
-                   what's actually up, say so instead of claiming a theme
-                   that isn't really rendering. */
-                font_draw_string("Wallpaper", 28, y, 0x001C1C1E, -1);
-                const char *theme_name = wall_theme == WALL_COOL ? "Map (Cool)" : wall_theme == WALL_RAW ? "Map (Raw)" : wall_theme == WALL_SAT ? "Satellite" : (geo_city[0] ? geo_city : "Map (Warm)");
-                /* v0.83.x: the v86 demo's own honest label. "photo until
-                   then" stopped being true the moment the no-network
-                   fallback became the baked satellite capture instead of
-                   the tree -- font_is_fallback() is the same real v86
-                   signal wall_apply() itself branches on. */
-                const char *lbl = wall_theme == WALL_PHOTO ? "Photo" : (wall_map ? theme_name : (font_is_fallback() ? "Satellite (offline demo)" : "Map (fetching, photo until then)"));
-                font_draw_string(lbl, 400, y, wall_theme != WALL_PHOTO && wall_map ? 0x002F7B4F : 0x001C1C1E, -1);
-            } else if (i == 3) {
-                font_draw_string("LLM model", 28, y, 0x001C1C1E, -1);
-                font_draw_string(llm_model, 400, y, 0x001C1C1E, -1);
-            } else if (i == 4) {
-                font_draw_string("LLM host:port", 28, y, 0x001C1C1E, -1);
-                char hp[LLM_HOST_MAX + 8]; int p = 0;
-                const char *s = llm_host; while (*s && p < (int)sizeof(hp) - 8) hp[p++] = *s++;
-                hp[p++] = ':';
-                char digits[8]; int nd = 0; int v = llm_port;
-                if (v == 0) digits[nd++] = '0';
-                while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
-                while (nd) hp[p++] = digits[--nd];
-                hp[p] = 0;
-                font_draw_string(hp, 400, y, 0x001C1C1E, -1);
-            } else if (i == 5) {
-                /* v0.77: real accounts. Tap/enter here walks old-password
-                   ->new-password->confirm through settings_prompt_line
-                   (masking not needed for that shared shell-style prompt,
-                   the dedicated masked auth_field_input is only used by
-                   the login/first-run screens themselves, kept separate on
-                   purpose so Settings doesn't need its own copy of the
-                   dot-echo loop for one row). */
-                font_draw_string("Account", 28, y, 0x001C1C1E, -1);
-                font_draw_string(auth_current_user[0] ? auth_current_user : "(none)", 400, y, 0x001C1C1E, -1);
-            } else if (i == 6) {
-                font_draw_string("Add user (new account)", 28, y, 0x001C1C1E, -1);
-                font_draw_string("tap or enter", 400, y, 0x00807468, -1);
-            } else {
-                /* v0.85.5: the Location field roadmap.md asked for. Empty
-                   means "no override", the same honest-label convention
-                   Wallpaper's own row just above already uses: say what's
-                   actually in effect, not what was typed. */
-                font_draw_string("Location", 28, y, 0x001C1C1E, -1);
-                font_draw_string(loc_have ? loc_name : "(auto, from IP address)", 400, y, loc_have ? 0x002F7B4F : 0x00807468, -1);
-            }
-        }
-        font_draw_string("Settings are saved to disk and survive a reboot.", 20, (int)window_height() - 28, 0x00807468, -1);
-
-        window_present(); sleep_ticks(5);
-        mouse_click_edge_sync();
-        int k = get_key_or_click();
-        if (k == KEY_ESC) return;
-        if (k == KEY_UP && sel > 0) sel--;
-        else if (k == KEY_DOWN && sel < SETTINGS_ROW_COUNT - 1) sel++;
-        else if (k == KEY_CLICK || k == 'a' || k == 'd') {
-            /* A real click acts on whichever row it actually landed on, not
-               whichever row a PRIOR arrow-key press happened to leave
-               selected -- before this, a mouse/touch-only visitor with no
-               keyboard (this kernel's own browser-demo idle tour included)
-               could only ever toggle row 0 (Wind), since `sel` starts at 0
-               and a bare click never moved it. Scoped to k==KEY_CLICK only:
-               a real 'a'/'d' keypress must keep acting on whatever `sel`
-               already is, not get silently overridden by a stale cursor
-               position that has nothing to do with the keypress. */
-            if (k == KEY_CLICK) {
-                /* Real bug, found by tools/checks/auth-flow-check.py driving a real
-                   synthetic pointer click (the exact gap walldemo-regression-check.py's
-                   own comment already flagged as unconfirmed): app_cursor_x/y is only
-                   kept live by gui_app_mouse_tick(), which is gated on gui_app_windowed
-                   and therefore only ticks for apps opened through gui_launch_from_dock.
-                   gui_launch_settings() is entered straight from the Apple menu
-                   (gui_menu_run_item), never through that wrapper, so gui_app_windowed
-                   stays 0 the whole time Settings is open and app_cursor_x/y is never
-                   seeded or updated -- every click here hit-tested wherever the cursor
-                   happened to be frozen at (0,0 if no windowed app had run yet this
-                   boot), so settings_row_at() always missed and every click silently
-                   fell through to acting on whatever `sel` already was, exactly the
-                   pre-fix settingsclick bug this same block's own comment describes,
-                   just reachable a different way than that fix covered. Query the real
-                   position directly at the moment of the click instead of trusting the
-                   stale global. */
-                mouse_get_absolute(&app_cursor_x, &app_cursor_y, (int)window_width(), (int)window_height());
-                int hit = settings_row_at(app_cursor_x, app_cursor_y, (int)window_width());
-                if (hit >= 0) sel = hit;
-            }
-            if (sel == 0) { wind_enabled = !wind_enabled; settings_save(); }
-            else if (sel == 2) {
-                /* v81: cycles all four real themes (Photo -> Warm -> Cool
-                   -> Raw -> Photo), not a binary toggle, matching the
-                   left/right-steps contract dock size already uses below.
-                   A tap (KEY_CLICK) always steps forward, same convention
-                   dock size's tap already keeps. */
-                int dir = (k == 'a') ? -1 : 1;
-                wall_switch_theme((wall_theme + dir + 5) % 5);
-                wall_apply(wall_theme != WALL_PHOTO);
-            }
-            else if (sel == 3) {
-                /* v85 (direct feedback, after this landed): a free-text
-                   model field can be typo'd to point at a model that
-                   isn't actually installed on the host, silently failing
-                   every chat. Real fix, checked against `ollama list` on
-                   this machine rather than guessed: a bounded cycle over
-                   real, known-working models, not free text.
-                   nomic-embed-text is on the host too but is an
-                   embedding-only model, not a chat model, deliberately
-                   left off this list, the same "don't offer what wouldn't
-                   work" call the wallpaper theme cycle already makes for
-                   its own four real options. A live /api/tags probe
-                   (Ollama's own model-list endpoint, same plain-HTTP shape
-                   chat_send already uses) would be the more general fix
-                   and is a real, scoped-out next step, not done here to
-                   keep this pass's actual shipped surface honest about
-                   what it covers.
-                   1.0.12: "samantha" (Turing's model, the new default) is
-                   now index 0 of LLM_MODELS; qwen3:8b/llama3.1:8b (the
-                   local-Ollama-on-the-host alternatives) fill the other
-                   two slots. `cur` is found by real lookup, not a
-                   two-way strcmp against index 0 -- the old shape assumed
-                   exactly two entries and silently treated anything past
-                   index 0 as "the other one," which broke the moment a
-                   third real model joined the list. */
-                int cur = 0;
-                for (int mi = 0; mi < LLM_MODEL_COUNT; mi++) if (!strcmp(llm_model, LLM_MODELS[mi])) { cur = mi; break; }
-                int dir = (k == 'a') ? -1 : 1;
-                int next = (cur + dir + LLM_MODEL_COUNT) % LLM_MODEL_COUNT;
-                int p = 0; const char *m = LLM_MODELS[next];
-                while (m[p] && p < LLM_MODEL_MAX - 1) { llm_model[p] = m[p]; p++; }
-                llm_model[p] = 0;
-                settings_save();
-            }
-            else if (sel == 4) {
-                char hostbuf[LLM_HOST_MAX];
-                int hn = 0; while (llm_host[hn] && hn < LLM_HOST_MAX - 1) { hostbuf[hn] = llm_host[hn]; hn++; }
-                hostbuf[hn] = 0;
-                if (settings_prompt_line("LLM host (hostname or IP, enter to confirm, esc to cancel):", hostbuf, LLM_HOST_MAX, 0)) {
-                    int j = 0; while (hostbuf[j] && j < LLM_HOST_MAX - 1) { llm_host[j] = hostbuf[j]; j++; } llm_host[j] = 0;
-                    char portbuf[8]; int pn = 0; int v = llm_port;
-                    char digits[8]; int nd = 0;
-                    if (v == 0) digits[nd++] = '0';
-                    while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
-                    while (nd) portbuf[pn++] = digits[--nd];
-                    portbuf[pn] = 0;
-                    if (settings_prompt_line("LLM port (enter to confirm, esc to cancel):", portbuf, sizeof(portbuf), 0)) {
-                        int nv = 0; for (int c = 0; portbuf[c]; c++) if (portbuf[c] >= '0' && portbuf[c] <= '9') nv = nv * 10 + (portbuf[c] - '0');
-                        if (nv > 0 && nv <= 65535) llm_port = nv;
-                    }
-                    settings_save();
-                }
-            }
-            else if (sel == 5 && k != 'a' && k != 'd') {
-                /* Change password for the account that's actually logged
-                   in this session, not a free-text username field: there
-                   is exactly one real "current user" concept in this
-                   kernel today (auth_current_user, set by auth_gate at
-                   boot), matching the single-machine/single-visitor
-                   threat model docs/THREAT-MODEL.md lays out. 'a'/'d'
-                   (left/right, the stepper convention every other row
-                   uses) don't apply to this row, only a real tap/enter. */
-                if (auth_current_user[0]) {
-                    char oldbuf[AUTH_PASSWORD_MAX + 1]; oldbuf[0] = 0;
-                    if (settings_prompt_line("Current password (enter to confirm, esc to cancel):", oldbuf, sizeof(oldbuf), 1)) {
-                        char newbuf[AUTH_PASSWORD_MAX + 1]; newbuf[0] = 0;
-                        if (settings_prompt_line("New password (enter to confirm, esc to cancel):", newbuf, sizeof(newbuf), 1)) {
-                            char confirmbuf[AUTH_PASSWORD_MAX + 1]; confirmbuf[0] = 0;
-                            if (settings_prompt_line("Confirm new password (enter to confirm, esc to cancel):", confirmbuf, sizeof(confirmbuf), 1)) {
-                                int ok = !strcmp(newbuf, confirmbuf) && auth_change_password(auth_current_user, oldbuf, newbuf);
-                                font_draw_string(ok ? "Password changed." : "That didn't work -- wrong current password or mismatch.",
-                                                  20, (int)window_height() - 48, ok ? 0x002F7B4F : 0x00A33B3B, -1);
-                                /* Same real bug tools/checks/auth-flow-check.py found in
-                                   kernel/auth.h's login rejection: drawing lands in a back
-                                   buffer and only window_present() ever flips it visible, and
-                                   this status line had no frame boundary of its own before
-                                   sleep_ticks -- the next redraw erased it unseen. */
-                                window_present();
-                                sleep_ticks(60);
-                            }
-                            memset(newbuf, 0, sizeof(newbuf));
-                            memset(confirmbuf, 0, sizeof(confirmbuf));
-                        }
-                        memset(oldbuf, 0, sizeof(oldbuf));
-                    }
-                }
-            }
-            else if (sel == 6 && k != 'a' && k != 'd') {
-                /* Adding a second local account. No admin/role concept
-                   exists in this kernel (real, honest gap, not modeled
-                   here since the direct request scoped this to "create a
-                   user, change your own password", not a permissions
-                   system) -- any logged-in session can add another
-                   account. auth_create_user already refuses a duplicate
-                   name, an empty name/password, or a full table (8 max). */
-                char ubuf[AUTH_USERNAME_MAX + 1]; ubuf[0] = 0;
-                if (settings_prompt_line("New username (enter to confirm, esc to cancel):", ubuf, sizeof(ubuf), 0)) {
-                    char pbuf[AUTH_PASSWORD_MAX + 1]; pbuf[0] = 0;
-                    if (settings_prompt_line("Password for that user (enter to confirm, esc to cancel):", pbuf, sizeof(pbuf), 1)) {
-                        int ok = auth_create_user(ubuf, pbuf);
-                        /* v0.77.1: the gate is opt-in (auth_gate is a no-op
-                           on an unconfigured system, see kernel/auth.h),
-                           so a session that reaches this row with nobody
-                           logged in yet is exactly the "creating the very
-                           first account" case that used to be the
-                           first-run screen's job. Treat this account as
-                           the current session's own from here on, the
-                           same real effect the old first-run flow had,
-                           just moved to Settings instead of gating boot. */
-                        if (ok && !auth_current_user[0]) {
-                            unsigned int p = 0; while (ubuf[p] && p < AUTH_USERNAME_MAX) { auth_current_user[p] = ubuf[p]; p++; } auth_current_user[p] = 0;
-                            auth_logged_in = 1;
-                        }
-                        font_draw_string(ok ? "Account created." : "Couldn't create that account (name taken, empty, or table full).",
-                                          20, (int)window_height() - 48, ok ? 0x002F7B4F : 0x00A33B3B, -1);
-                        /* Same missing-present bug as the Change password status line
-                           above and kernel/auth.h's login rejection: without this call
-                           the message never reaches the visible framebuffer. */
-                        window_present();
-                        sleep_ticks(60);
-                    }
-                    memset(pbuf, 0, sizeof(pbuf));
-                }
-            }
-            else if (sel == 7 && k != 'a' && k != 'd') {
-                /* v0.85.5: Location, city or postal code, resolved through
-                   Open-Meteo's own geocoding endpoint (loc_geocode above),
-                   the same house the forecast itself already comes from.
-                   Bounded the same way every other free-text Settings row
-                   is: settings_prompt_line's max param (LOC_NAME_MAX,
-                   matching geo_city's own bound). Empty input clears the
-                   override and goes back to the IP lookup; a bad or
-                   unknown location shows loc_geocode's own short error and
-                   never panics or writes a fabricated coordinate. */
-                char lbuf[LOC_NAME_MAX]; int li = 0; while (loc_name[li] && li < LOC_NAME_MAX - 1) { lbuf[li] = loc_name[li]; li++; } lbuf[li] = 0;
-                if (settings_prompt_line("Location (city or postal code, enter to confirm, esc to cancel):", lbuf, sizeof(lbuf), 0)) {
-                    if (!lbuf[0]) {
-                        loc_have = 0; loc_name[0] = 0; loc_lat[0] = 0; loc_lon[0] = 0;
-                        geo_have = 0; geo_lat[0] = 0; geo_lon[0] = 0; geo_city[0] = 0;
-                        settings_save();
-                        /* Same cache drop as the set path below: the old
-                           override's weather and map must not outlive it. */
-                        weather_tried_once = 0; weather_have = 0;
-                        if (wall_map) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
-                        wall_apply(wall_theme != WALL_PHOTO);
-                        font_draw_string("Location cleared (using your IP address instead).", 20, (int)window_height() - 48, 0x00807468, -1);
-                    } else if (loc_geocode(lbuf)) {
-                        settings_save();
-                        /* Drop whatever weather/map already have cached so
-                           the desktop loop's own ten-minute cycle (the
-                           same one that would normally re-check the IP
-                           lookup) picks up the new coordinates on its very
-                           next tick instead of waiting out the old cache,
-                           through the exact same weather_fetch/wall_fetch
-                           paths it already runs, nothing called directly
-                           from here. */
-                        weather_tried_once = 0; weather_have = 0;
-                        if (wall_map) { kfree(wall_map); wall_map = 0; wall_caches_drop(); }
-                        /* wall_src still pointed at the buffer just freed;
-                           wall_apply repoints it (baked satellite or the
-                           photo) until the refetch lands, the same way
-                           wall_switch_theme is always followed by one. */
-                        wall_apply(wall_theme != WALL_PHOTO);
-                        char msg[48] = "Location set: "; int mp = 14; /* strlen("Location set: ") */
-                        for (const char *c = loc_name; *c && mp < 47; c++) msg[mp++] = *c;
-                        msg[mp] = 0;
-                        font_draw_string(msg, 20, (int)window_height() - 48, 0x002F7B4F, -1);
-                    } else {
-                        font_draw_string(loc_err[0] ? loc_err : "Couldn't find that location.", 20, (int)window_height() - 48, 0x00A33B3B, -1);
-                    }
-                    window_present();
-                    sleep_ticks(60);
-                }
-            }
-            else if (sel != 5 && sel != 6 && sel != 7) {
-                int dir = (k == 'a') ? -1 : 1; /* a tap always steps up; a real direction only from the keyboard */
-                if (k == KEY_CLICK) dir = 1;
-                int v = dock_scale_pct + dir;
-                if (v > 25) v = 5; if (v < 5) v = 25; /* wraps, so a tap always does something visible */
-                dock_scale_pct = v; settings_save();
-            }
-        }
-    }
-}
+#include "settings_ui.h"
 
 #include "stocks.h"
-#include "bookrank.h"
 #include "lexly.h"
 #include "fieldbook.h"
 #include "plan.h"
@@ -5943,6 +5456,17 @@ static int fs_ok_global = 0;
 #include "bench.h"
 #include "clock.h"
 
+/* One app window's frame: rounded body, content well, traffic lights, title. */
+static void gui_draw_window_frame(int x, int y, int w, int h, const char *name){
+    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
+    window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
+    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
+    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
+    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
+    font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
+    font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
+    font_draw_string(name, x + 96, y + 8, 0x00403439, -1);
+}
 static void gui_launch(int icon){
     if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
 }
@@ -5956,14 +5480,7 @@ again:
     int x = apps ? 56 : 70, y = apps ? 30 : 40;
     int w = apps ? 848 : 820, h = apps ? 490 : 385;
     gui_clamp_win_rect(&x, &y, &w, &h); /* phone screens are far narrower than these desktop-tuned numbers */
-    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
-    window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
-    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
-    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
-    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
-    font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
-    font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
-    font_draw_string(APPS[icon].name, x + 96, y + 8, 0x00403439, -1);
+    gui_draw_window_frame(x, y, w, h, APPS[icon].name);
     window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
     app_view_x = x + 8; app_view_y = y + 32;
     app_view_w = w - 16; app_view_h = h - 40;
@@ -6152,14 +5669,7 @@ static void gui_snap_outline(int zone){
 static void gui_multiwin_draw_chrome(const gui_window_t *win){
     serial_puts("mwchrome\n"); /* discriminating marker for tools/checks/mwkeyflash-check.sh */
     int x = win->x, y = win->y, w = win->w, h = win->h;
-    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
-    window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
-    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
-    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
-    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
-    font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
-    font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
-    font_draw_string(APPS[win->icon].name, x + 96, y + 8, 0x00403439, -1);
+    gui_draw_window_frame(x, y, w, h, APPS[win->icon].name);
 }
 static void gui_multiwin_draw_content_only(const gui_window_t *win){
     int x = win->x, y = win->y, w = win->w, h = win->h;
@@ -6205,7 +5715,7 @@ static void gui_weather_mw_repaint(void){
    window list all key off it), so a new app is one row here plus one
    bump of GUI_APP_COUNT/GUI_APPS_FOLDER/GUI_TRASH above. */
 static int gui_weather_mw_key(int k){ return gui_weather_key(k, gui_weather_mw_repaint); }
-static const struct app APPS[GUI_APP_COUNT] = {
+const struct app APPS[GUI_APP_COUNT] = {
     /*  0 */ {"Files",      0x00707070, gui_icon_folder,     gui_launch_files,      gui_draw_files_content,     gui_files_on_key},
     /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       gui_launch_mail,       gui_draw_mail_content,      gui_mail_on_key},
     /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   gui_launch_calendar,   gui_draw_calendar_content,  gui_calendar_on_key},
@@ -6216,8 +5726,8 @@ static const struct app APPS[GUI_APP_COUNT] = {
     /*  7 */ {"Weather",    0x0085144B, gui_icon_weather,    gui_launch_weather,    gui_draw_weather_content,   gui_weather_mw_key},
     /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        gui_launch_curbfind,   0, 0},
     /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c */
-    /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       gui_launch_bookrank,   0, 0},
-    /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_open,      0, 0},
+    /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       bookrank_ring3_open,   0, 0}, /* 2.0: ring 3 too (user/bookrank.c) */
+    /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_ring3_open, 0, 0}, /* 1.7.14: ring 3 too (user/quotes.c) */
     /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       gui_launch_plan,       0, 0},
     /* 13 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      gui_launch_lexly,      0, 0},
     /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */
@@ -6243,6 +5753,7 @@ static const struct app APPS[GUI_APP_COUNT] = {
        stubs" failure). DOCK_TRAY_COLOR is the real, intended value. */
     [GUI_APPS_FOLDER] = {"Apps",  DOCK_TRAY_COLOR, gui_icon_apps,  gui_launch_apps,  0, 0},
     [GUI_TRASH]       = {"Trash", DOCK_TRAY_COLOR, gui_icon_trash, gui_launch_trash, 0, 0},
+    [GUI_MAIL_COMPOSE] = {"Compose", 0x00A13F3F, gui_icon_mail, 0, gui_draw_mail_compose_content, gui_mail_compose_on_key}, /* no .open: only Mail's 'c' opens it */
 };
 
 /* Called from gui_run's own full-repaint branch, right alongside the
@@ -6907,7 +6418,7 @@ static void gui_menu_run_item(int item){
         for (;;) __asm__ volatile ("hlt");
     }
 }
-
+#include "phone_home.h" /* v1.8.0: phone mode's real home screen, see its own header comment */
 static void gui_run(void){
     /* v42: 16:9, 960x540 logical at 2x = 1920x1080 physical, the native
        size of the monitor this actually runs fullscreen on. QEMU's cocoa
@@ -6938,7 +6449,8 @@ static void gui_run(void){
     gui_draw_boot_screen();
     gui_order_init();
     if (boot_to_samantha) { boot_to_samantha = 0; chat_boot_samantha_open(); }
-    else serial_puts("guidesktop\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: the icon desktop drew first, samantha mode never reaches here before her avatar */
+    else if (!boot_to_phone) serial_puts("guidesktop\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: the icon desktop drew first, samantha mode never reaches here before her avatar; phone mode never draws this desktop at all (see below), so it must not claim it did */
+    if (boot_to_phone) { phone_home_run(); return; } /* v1.8.0: leaving Samantha lands on a real home screen, not the desktop's dock squeezed into 430px; never returns */
     dock_hover = dock_presented_hover = -1;
     int mx = 400, my = 300, buttons = 0, prev_buttons = 0;
     /* press_slot: the slot the mouse went down on, latched until release.
@@ -7110,14 +6622,22 @@ static void gui_run(void){
                 }
             }
         }
+        /* Text shell: Ctrl+Alt+Backspace, the deliberate way off the
+           desktop now that a bare Esc there is a no-op. */
+        if (kbd_ctrl && kbd_alt) {
+            int shell_pk = kbd_peek();
+            if (shell_pk == 0x0E) { kbd_pop(); break; }
+        }
         if (gui_multiwin_interactive(mw_topmost_icon)) {
             int mwk = gui_multiwin_key_nonblock();
             if (mwk >= 0) {
-                int mw_should_close = 0;
+                int mw_should_close = 0, mw_count_before_key = gui_window_count;
                 mw_should_close = APPS[mw_topmost_icon].key(mwk);
                 if (mw_should_close) {
                     gui_multiwin_close(gui_window_count - 1);
                     mw_key_repaint = 1; /* the window left the screen: needs the real full desktop repaint to erase it, the same cost every open/close already pays */
+                } else if (gui_window_count != mw_count_before_key) {
+                    mw_key_repaint = 1; /* v1.9.0: opened another window as a side effect (Mail's 'c'); its chrome was never drawn, needs a full repaint like any window-count change */
                 } else {
                     /* v0.75.0: a cheap, scoped repaint tier, the same
                        "cheapest repaint that's correct" discipline
@@ -7167,13 +6687,9 @@ static void gui_run(void){
             if (sc >= 0 && !(sc & 0x80)) {
                 char c = SC[sc & 0x7F];
                 if (c == 27) {
-                    /* Esc closes the focused window first. Only a bare desktop
-                       quits to the shell. Files has no key handler of its own,
-                       so before this Esc with Files open dropped the whole
-                       desktop to text mode. */
-                    if (gui_window_count == 0) break;
-                    gui_multiwin_close(gui_window_count - 1);
-                    mw_key_repaint = 1;
+                    /* Esc closes the window; a no-op on a bare desktop (Ctrl+Alt+Backspace reaches the shell). */
+                    if (gui_window_count == 0) { /* no-op */ }
+                    else { gui_multiwin_close(gui_window_count - 1); mw_key_repaint = 1; }
                 } else if (c == '\n' && gui_window_count == 0) {
                     gui_launch_apps(); /* direct, not gui_launch_from_dock's boxed frame (moves the a11y close pixel) */
                 }
@@ -7492,8 +7008,7 @@ static void gui_run(void){
        allocations consume virtual address space and prevent paging_map_region
        from mapping new heap frames beyond the base map. */
     wall_caches_drop();
-    if (dock_band_cache) { kfree(dock_band_cache); dock_band_cache = 0; }
-    if (dock_band_frame) { kfree(dock_band_frame); dock_band_frame = 0; }
+    gui_dock_band_cache_free();
     clear();
     puts("back in text mode\n");
 }
@@ -8922,15 +8437,57 @@ static void run(char *line){
            moved `sel`. settings_row_at is the exact pure hit-test
            gui_launch_settings' click branch now calls before touching
            `sel`; no mouse, GUI, or boot state needed to exercise it. */
+        /* 1.8: extended for the sidebar+detail-pane redesign. settings_row_at
+           now takes which section is showing (a row belonging to a
+           different, not-currently-visible section can never be hit) and
+           settings_sidebar_at is the same shape for the new sidebar's own
+           3 section rows. Also covers the real "does a setting survive a
+           reboot" contract settings_save/settings_load promise -- Settings'
+           own footer text says so, this proves it round-trips through the
+           same save/load path a real reboot uses, not just that the in-
+           memory toggle flips. */
         int ok = 1;
-        if (settings_row_at(300, 84,  960) != 0) { puts("settingsclick: row 0 (Wind) center missed\n"); ok = 0; }
-        if (settings_row_at(300, 148, 960) != 2) { puts("settingsclick: row 2 (Wallpaper) center missed\n"); ok = 0; }
-        if (settings_row_at(300, 212, 960) != 4) { puts("settingsclick: row 4 (LLM host) center missed\n"); ok = 0; }
-        if (settings_row_at(300, 70,  960) != -1) { puts("settingsclick: above row 0 should miss\n"); ok = 0; }
-        if (settings_row_at(300, 108, 960) != -1) { puts("settingsclick: real gap between row 0 and row 1 should miss\n"); ok = 0; }
-        if (settings_row_at(10,  148, 960) != -1) { puts("settingsclick: left of the row rect (x<16) should miss\n"); ok = 0; }
-        if (settings_row_at(950, 148, 960) != -1) { puts("settingsclick: right of the row rect should miss\n"); ok = 0; }
-        puts(ok ? "settingsclick: click hit-tests the row it actually landed on: ok\n" : "settingsclick: FAILED\n");
+        if (settings_row_at(300, 92,  960, 0) != 0) { puts("settingsclick: General row 0 (Wind) center missed\n"); ok = 0; }
+        /* 1.8.2 polish pass: Wind's value is now a real switch control,
+           right-aligned near the row's own right edge instead of an
+           "On"/"Off" text label near the middle -- prove that region of
+           the row (where the switch itself actually is, detail_right(940)
+           - SETTINGS_SWITCH_W(40) = 900, plus a few px margin) still
+           resolves to row 0 like the rest of the row always has, same
+           "click anywhere on the row toggles it" contract every row here
+           keeps, not just the switch's own bounding box. */
+        if (settings_row_at(910, 92,  960, 0) != 0) { puts("settingsclick: General row 0's switch region missed\n"); ok = 0; }
+        if (settings_row_at(300, 164, 960, 0) != 2) { puts("settingsclick: General row (Wallpaper) center missed\n"); ok = 0; }
+        if (settings_row_at(300, 200, 960, 0) != 7) { puts("settingsclick: General row (Location) center missed\n"); ok = 0; }
+        if (settings_row_at(300, 70,  960, 0) != -1) { puts("settingsclick: above the first General row should miss\n"); ok = 0; }
+        if (settings_row_at(300, 119, 960, 0) != -1) { puts("settingsclick: real gap between rows should miss\n"); ok = 0; }
+        if (settings_row_at(180, 92,  960, 0) != -1) { puts("settingsclick: left of the detail pane (in the sidebar's x range) should miss\n"); ok = 0; }
+        if (settings_row_at(950, 92,  960, 0) != -1) { puts("settingsclick: right of the detail pane should miss\n"); ok = 0; }
+        if (settings_row_at(300, 92,  960, 1) != 3) { puts("settingsclick: Assistant row (LLM model) center missed\n"); ok = 0; }
+        if (settings_row_at(300, 128, 960, 1) != 4) { puts("settingsclick: Assistant row (LLM host:port) center missed\n"); ok = 0; }
+        if (settings_row_at(300, 92,  960, 2) != 5) { puts("settingsclick: Account row (Account) center missed\n"); ok = 0; }
+        /* Same physical y (92, each section's own first row) resolves to a
+           different absolute row index depending which section is showing
+           -- proves the hit-test is scoped to what's actually on screen,
+           not just "any known row y" independent of section. */
+        if (settings_row_at(300, 92, 960, 1) == 0) { puts("settingsclick: Assistant section must not hit General's Wind row\n"); ok = 0; }
+        if (settings_sidebar_at(90, 60)  != 0) { puts("settingsclick: sidebar row 0 (General) missed\n"); ok = 0; }
+        if (settings_sidebar_at(90, 94)  != 1) { puts("settingsclick: sidebar row 1 (Assistant) missed\n"); ok = 0; }
+        if (settings_sidebar_at(90, 128) != 2) { puts("settingsclick: sidebar row 2 (Account) missed\n"); ok = 0; }
+        if (settings_sidebar_at(90, 40)  != -1) { puts("settingsclick: above the sidebar's first row should miss\n"); ok = 0; }
+        if (settings_sidebar_at(2,  60)  != -1) { puts("settingsclick: left of the sidebar (x<8) should miss\n"); ok = 0; }
+        if (settings_sidebar_at(170,60)  != -1) { puts("settingsclick: right of the sidebar should miss\n"); ok = 0; }
+
+        int wind_before = wind_enabled;
+        wind_enabled = !wind_enabled;
+        settings_save();
+        int wind_saved = wind_enabled;
+        wind_enabled = !wind_enabled; /* corrupt the in-memory value so a real disk round-trip is what proves it, not just the assignment above */
+        settings_load();
+        if (wind_enabled != wind_saved) { puts("settingsclick: Wind toggle did not survive settings_save/settings_load\n"); ok = 0; }
+        wind_enabled = wind_before; settings_save(); /* restore, no lasting side effect on the rest of this boot */
+
+        puts(ok ? "settingsclick: click hit-tests the row it actually landed on, sidebar sections hit-test correctly, and a toggle survives save/load: ok\n" : "settingsclick: FAILED\n");
         serial_puts(ok ? "settingsclick PASS\n" : "settingsclick FAIL\n"); /* mirrors texttest/chattest/jpegtest's own convention so a tools/checks shell script can read the verdict headless */
     }
     else if (!strcmp(line, "nettest")) {

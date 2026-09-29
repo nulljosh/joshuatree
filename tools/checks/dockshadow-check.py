@@ -34,11 +34,12 @@ Usage: tools/checks/dockshadow-check.py   (from the repo root, after make kernel
 """
 import json, os, re, shutil, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 LOG = "/tmp/jt-dockshadow-serial.log"
 DUMP = "/tmp/jt-dockshadow.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4455
+PORT = free_port()
 
 # Same geometry every other dock check here already derived and verified for
 # this 960x540@2x boot config (dock_scale_pct 7, GUI_ICON_COUNT 11).
