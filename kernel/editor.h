@@ -178,7 +178,7 @@ static void editor_draw_glyph(unsigned char character, int origin_x, int origin_
 #define EDITOR_TEXT_TOP (92 + gui_app_dy())
 #define EDITOR_STATUS_H 30
 static int editor_visible_lines(int line_height) {
-    int n = ((int)window_height() - EDITOR_TEXT_TOP - EDITOR_STATUS_H) / line_height;
+    int n = ((int)window_height() - EDITOR_TEXT_TOP - EDITOR_STATUS_H - osk_h()) / line_height;
     return n < 1 ? 1 : n;
 }
 
@@ -299,6 +299,7 @@ static void editor_draw(void) {
     if (caret_line >= editor_scroll + visible_lines) editor_scroll = caret_line - visible_lines + 1;
     editor_layout(1, &caret_x, &caret_line);
     window_rect(caret_x, EDITOR_TEXT_TOP + 2 + (caret_line - editor_scroll) * line_height, 2, editor_band_height(), 0x0085144B);
+    osk_draw(); /* phone only: no-op on the desktop */
     font_draw_string(editor_status, 20, (int)window_height() - EDITOR_STATUS_H, 0x0075726E, -1);
     /* Windowed (dock-launched): gui_app_mouse_tick owns the pointer sprite,
        in screen coordinates outside this viewport. Drawing a second one
@@ -426,7 +427,9 @@ static void notes_edit_loop(void) {
             if (editor_mouse_y > (int)window_height() - 1) editor_mouse_y = (int)window_height() - 1;
             changed = 1;
         }
-        if (mouse_click_edge()) {
+        int tapped = mouse_click_edge();
+        if (tapped && boot_to_phone && osk_tap(editor_mouse_x, editor_mouse_y)) { /* tap on a key: injected as a scancode, never a close */ }
+        else if (tapped) {
             gui_close_was_click = 1;
             notes_exit_all = 1;
             int outside = editor_mouse_x < 0 || editor_mouse_y < 0
