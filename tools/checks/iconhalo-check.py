@@ -29,11 +29,12 @@ Usage: tools/checks/iconhalo-check.py   (from the repo root, after make kernel.e
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 LOG = "/tmp/jt-iconhalo-serial.log"
 DUMP = "/tmp/jt-iconhalo.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4451
+PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 
 # Same geometry dockhover-check.py already derived and verified for this

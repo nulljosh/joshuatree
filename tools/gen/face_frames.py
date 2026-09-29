@@ -77,6 +77,27 @@ def seamless(paths, n, open_eyes=False):
     return paths[start:start + n]
 
 
+def open_start(paths):
+    """Frames rotated so the loop starts where her longest open-eyed stretch
+    (circular, the clip loops) begins. Her idle clip holds a long closed-eyes
+    stretch, so the steadiest window is a closed-eye one and Chat opened on
+    a face with its eyes shut. Starting on the open stretch keeps the blink
+    mid-loop and puts open eyes on idle-0."""
+    ok = eyes_open(paths)
+    n = len(paths)
+    if all(ok) or not any(ok):
+        return paths
+    best, at = 0, 0
+    for i in range(n):
+        if ok[i] and not ok[i - 1]:
+            run = 0
+            while ok[(i + run) % n]:
+                run += 1
+            if run > best:
+                best, at = run, i
+    return paths[at:] + paths[:at]
+
+
 def crossfade(paths, n, k=6):
     """n frames from n+k consecutive ones. The last k fade into the frames
     just before the loop's first, so the wrap is a real motion step and the
@@ -93,7 +114,11 @@ with tempfile.TemporaryDirectory() as work:
     for kind, n in COUNT.items():
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", f"{src}/{kind}.mp4",
                         "-vf", f"crop={crop},scale={SIDE}:{SIDE}:flags=lanczos,fps={FPS}", f"{work}/{kind}-%03d.png"], check=True)
-        sel = seamless(sorted(glob.glob(f"{work}/{kind}-*.png")), n + 6, open_eyes=(kind == "talk"))
+        frames = sorted(glob.glob(f"{work}/{kind}-*.png"))
+        if kind == "idle":
+            sel = open_start(frames)[:n + 6]
+        else:
+            sel = seamless(frames, n + 6, open_eyes=True)
         picked[kind] = crossfade(sel, len(sel) - 6)
     for f in glob.glob(f"{out}/idle-*") + glob.glob(f"{out}/talk-*"):
         os.remove(f)

@@ -46,6 +46,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Toroid runs as a ring-3 process through the table-driven launcher: draws generations, closes both ways, crashes safely, desktop alive | `tools/checks/ring3toroid-check.py` | retry |
 | Calculator runs as a ring-3 process through the table-driven launcher: evaluates 12*3=36 and 5/0=0 through the real parser, closes both ways, crashes safely, desktop alive | `tools/checks/ring3calc-check.py` | retry |
 | Quotes runs as a ring-3 process through the table-driven launcher: draws the option grid, answers right and wrong through the real logic, closes both ways, crashes safely, desktop alive | `tools/checks/ring3quotes-check.py` | retry |
+| Bookrank runs as a ring-3 process through the table-driven launcher: draws the ranked list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive | `tools/checks/ring3bookrank-check.py` | retry |
 | A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT | `tools/checks/userfb-release-check.py` | retry |
 | Shell launches a ring-3 program by bare name, case-insensitively | `tools/checks/shellname-check.sh` | retry |
 | QEMU vmmouse absolute-pointer round trip | `tools/checks/vmmouse-check.sh` | retry |
@@ -148,7 +149,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Weather | `tools/checks/weatherproxy-hang-check.mjs` |
 | Curbfind | none yet |
 | Keyrate | `tools/checks/ring3app-check.py` |
-| Bookrank | none yet |
+| Bookrank | `tools/checks/ring3bookrank-check.py` |
 | Quotes | `tools/checks/ring3quotes-check.py`, `tools/checks/stocks-live-check.mjs` |
 | Plan | none yet |
 | Lexly | none yet |
@@ -166,5 +167,6 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Clock | `tools/checks/clock-check.py`, `tools/checks/menuclock-check.sh` |
 | Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/tourappcount-check.mjs` |
 | Trash | none yet |
+| Compose | `tools/checks/wallcompose-check.py` |
 
-Apps with no check yet: Curbfind, Bookrank, Plan, Lexly, Sparkjar, Homeqi, Fieldbook, Contacts, Search, Activity, Trash.
+Apps with no check yet: Curbfind, Plan, Lexly, Sparkjar, Homeqi, Fieldbook, Contacts, Search, Activity, Trash.

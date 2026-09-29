@@ -12,7 +12,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 suite = open(os.path.join(ROOT, "tools/checks/ci-suite.sh")).read()
 rows = re.findall(r"^(once|retry)\s*\|(\d+)\|([^|]+)\|(.+)$", suite, re.M)
 kernel_src = open(os.path.join(ROOT, "kernel/kernel.c")).read()
-table = re.search(r"static const struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", kernel_src, re.S)
+table = re.search(r"const struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", kernel_src, re.S)
 apps = re.findall(r'\{\s*"([^"]+)"', table.group(1))
 
 

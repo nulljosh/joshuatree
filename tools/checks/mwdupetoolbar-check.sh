@@ -8,6 +8,7 @@
 # files_content, gui_draw_weather_content, gui_draw_mail_content,
 # gui_draw_calendar_content, gui_draw_reminders_content) calls the shared
 # gui_draw_app_titlebar(), which only skips drawing its OWN traffic-light
+source "$(dirname "$0")/freeport.sh"
 # circles + "x"/"-" when the global gui_app_windowed flag is set. That flag
 # was only ever set by the OLD single-window gui_launch_from_dock path
 # (bracketing its blocking gui_launch() call) -- gui_multiwin_draw_
@@ -38,7 +39,7 @@ make -s kernel.elf
 cleanup() { pkill -9 -f "qemu-system-i386.*jt-dupetoolbar" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-PORT=4492
+PORT=$(free_port)
 LOG=/tmp/jt-dupetoolbar-check.log
 RAW=/tmp/jt-dupetoolbar-check.raw
 rm -f "$LOG" "$RAW"

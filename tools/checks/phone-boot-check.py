@@ -16,9 +16,10 @@ as noise, not the specific colors this checks for at specific offsets).
 
 Usage: tools/checks/phone-boot-check.py   (from the repo root, after make kernel.elf)
 """
+from freeport import free_port
 import json, os, socket, subprocess, sys, time
 
-PORT = 4480
+PORT = free_port()
 FB = 0xfd000000
 W, H = 860, 1520  # 430x760 logical at 2x
 GUI_BG = (0xFA, 0xF8, 0xF6)
@@ -161,17 +162,18 @@ try:
     LABEL_LOG = "/tmp/jt-phoneboot-label.log"
     LABEL_DUMP = "/tmp/jt-phoneboot-label.raw"
     LABEL_PNG = "/tmp/jt-facelabel-after.png"
+    LABEL_PORT = free_port()  # not LABEL_PORT: the stub servers' free_port() calls hand out neighbours, QEMU then fails to bind and readline() hangs
     for f in (LABEL_LOG, LABEL_DUMP):
         try: os.remove(f)
         except FileNotFoundError: pass
     args = ["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std", "-no-reboot",
-            "-qmp", f"tcp:127.0.0.1:{PORT + 1},server,nowait", "-serial", "file:" + LABEL_LOG,
+            "-qmp", f"tcp:127.0.0.1:{LABEL_PORT},server,nowait", "-serial", "file:" + LABEL_LOG,
             "-net", "nic,model=rtl8139", "-net", "user",
             "-append", f"phone samantha facehost=10.0.2.2:{_port}"]
     q2 = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         time.sleep(1.0)
-        s2 = socket.create_connection(("127.0.0.1", PORT + 1)); f2 = s2.makefile("rw")
+        s2 = socket.create_connection(("127.0.0.1", LABEL_PORT)); f2 = s2.makefile("rw")
 
         def cmd2(o):
             f2.write(json.dumps(o) + "\n"); f2.flush()
@@ -238,7 +240,7 @@ try:
 
     PW, PH = 860, 1520          # 430x760 logical at 2x, same convention as the rest of this file
     LOGICAL_W, LOGICAL_H, SC = 430, 760, 2
-    FIT_PORT = PORT + 2
+    FIT_PORT = free_port()
     FIT_LOG = "/tmp/jt-phonehome-serial.log"
     HOME_DUMP = "/tmp/jt-phonehome-grid.raw"
     CAL_DUMP = "/tmp/jt-phonehome-calendar.raw"
@@ -412,5 +414,239 @@ try:
 except Exception as e:
     fail = 1; print(f"FAIL: phone home screen check errored ({e})")
 
+# Fourth scenario (demo A+ pass): tapping Samantha's own face on the phone
+# boot avatar screen must NOT abandon the visitor into the console --
+# kernel/chat.h's chat_boot_samantha_open loop now only exits on KEY_ESC
+# (the back chevron injects it via kbd_inject, phone_home.h's
+# phone_back_zone_tick), a raw click anywhere else -- most commonly her
+# own face -- falls through and keeps the input box focused. Proves that
+# live: boot straight into her avatar with a real (stubbed) face loaded,
+# click dead center of the face, confirm the same face-colored pixels are
+# still there (not the GUI_BG the home grid's empty margins would show),
+# type a short message and hit enter, confirm serial shows the chat
+# request actually fired (the /api/pick or /api/chat line the kernel
+# logs -- chat_pick always runs first), then tap the back chevron and
+# confirm it lands on the phone home grid. Finally opens Mail from that
+# grid, composes one message so gui_draw_mail_content's gui_draw_hint call
+# site is actually reached (an empty inbox shows "No mail yet." instead
+# and never calls it), and asserts the hint row -- gui_draw_hint no-ops
+# when boot_to_phone -- is blank.
+try:
+    from PIL import Image as _Image4
+    import http.server as _hs4, io as _io4, threading as _th4
+
+    def _jpg4(color):
+        b = _io4.BytesIO(); _Image4.new("RGB", (320, 320), color).save(b, "JPEG", quality=90); return b.getvalue()
+
+    FACE4 = (200, 30, 30)
+    FRAMES4 = {f"/face/idle-{i}.jpg": _jpg4(FACE4) for i in range(3)}
+
+    class _Stub4(_hs4.BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+        def do_GET(self):
+            body = FRAMES4.get(self.path)
+            if body is None: self.send_response(404); self.end_headers()
+            else:
+                self.send_response(200); self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+
+    _srv4 = _hs4.ThreadingHTTPServer(("127.0.0.1", 0), _Stub4); _srv4.daemon_threads = True
+    _th4.Thread(target=_srv4.serve_forever, daemon=True).start()
+    _port4 = _srv4.server_address[1]
+
+    TAP_PORT = free_port()
+    TAP_LOG = "/tmp/jt-phonetap-serial.log"
+    TAP_BEFORE = "/tmp/jt-phonetap-before.raw"
+    TAP_AFTER_CLICK = "/tmp/jt-phonetap-afterclick.raw"
+    TAP_AFTER_SEND = "/tmp/jt-phonetap-aftersend.raw"
+    TAP_HOME = "/tmp/jt-phonetap-home.raw"
+    TAP_MAIL = "/tmp/jt-phonetap-mail.raw"
+    TAP_FACE_PNG = "/tmp/jt-phonetap-face.png"
+    TAP_MAIL_PNG = "/tmp/jt-phonetap-mail.png"
+    for f in (TAP_LOG, TAP_BEFORE, TAP_AFTER_CLICK, TAP_AFTER_SEND, TAP_HOME, TAP_MAIL):
+        try: os.remove(f)
+        except FileNotFoundError: pass
+
+    PW4, PH4, SC4 = 860, 1520, 2
+    LOGICAL_W4, LOGICAL_H4 = 430, 760
+
+    args4 = ["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std", "-no-reboot",
+             "-qmp", f"tcp:127.0.0.1:{TAP_PORT},server,nowait", "-serial", "file:" + TAP_LOG,
+             "-net", "nic,model=rtl8139", "-net", "user",
+             "-append", f"phone samantha facehost=10.0.2.2:{_port4}"]
+    q4 = subprocess.Popen(args4, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        time.sleep(1.0)
+        s4 = socket.create_connection(("127.0.0.1", TAP_PORT)); f4 = s4.makefile("rw")
+
+        def cmd4(o):
+            f4.write(json.dumps(o) + "\n"); f4.flush()
+            while True:
+                r = json.loads(f4.readline())
+                if "return" in r or "error" in r: return r
+
+        def key4(k):
+            cmd4({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k}]}})
+
+        def type4(s):
+            for ch in s:
+                key4("spc" if ch == " " else ch)
+                time.sleep(0.03)
+
+        def move4(x, y):
+            cmd4({"execute": "input-send-event", "arguments": {"events": [
+                {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W4)}},
+                {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H4)}}]}})
+
+        def click4():
+            cmd4({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
+            time.sleep(0.1)
+            cmd4({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
+
+        def dump4(path):
+            cmd4({"execute": "pmemsave", "arguments": {"val": FB, "size": PW4 * PH4 * 4, "filename": path}})
+
+        def load4(path):
+            img = _Image4.frombytes("RGBA", (PW4, PH4), open(path, "rb").read(), "raw", "BGRA").convert("RGB")
+            return img, img.load()
+
+        def px_at(px, x, y):
+            return px[x * SC4 + 1, y * SC4 + 1]
+
+        def close4(a, b, tol=50):
+            return all(abs(a[i] - b[i]) <= tol for i in range(3))
+
+        f4.readline(); cmd4({"execute": "qmp_capabilities"})
+        time.sleep(3.0)  # past splash, face fetched from the stub, samopen/samfocus up
+
+        log4 = open(TAP_LOG, errors="replace").read()
+        if "samopen" not in log4 or "samfocus" not in log4:
+            fail = 1; print("FAIL: phone samantha boot never reached the focused avatar screen (samopen/samfocus missing)")
+        else:
+            print("PASS: phone boot landed on the focused avatar screen")
+
+        # Face geometry from chat.h's chat_boot_samantha_open (boot_to_phone
+        # branch): face_top = T(0) + 44, half = face_top + (760-face_top)/2,
+        # side = min(half-face_top, FACE_BIG_MAX=300), centered horizontally.
+        face_top = 44
+        half = face_top + (LOGICAL_H4 - face_top) // 2
+        side = min(half - face_top, 300)
+        face_cx = LOGICAL_W4 // 2
+        face_cy = face_top + side // 2
+
+        GUI_BG4 = (0xFA, 0xF8, 0xF6)
+        dump4(TAP_BEFORE)
+        img_before, px_before = load4(TAP_BEFORE)
+        img_before.save(TAP_FACE_PNG)
+        before_color = px_at(px_before, face_cx, face_cy)
+        if close4(before_color, GUI_BG4, 20):
+            fail = 1; print(f"FAIL: face center ({face_cx},{face_cy}) reads as background {before_color} before any tap -- stub face never rendered")
+        else:
+            print(f"PASS: her face is really drawn at ({face_cx},{face_cy}) before the tap: rgb={before_color}")
+
+        # The tap itself: dead center of her own face.
+        move4(face_cx, face_cy); time.sleep(0.3); click4(); time.sleep(0.4)
+        dump4(TAP_AFTER_CLICK)
+        _, px_after_click = load4(TAP_AFTER_CLICK)
+        after_click_color = px_at(px_after_click, face_cx, face_cy)
+        if close4(after_click_color, GUI_BG4, 20):
+            fail = 1; print(f"FAIL: tapping her face cleared the avatar screen -- face center is now background {after_click_color}, the old any-click-exits bug")
+        else:
+            print(f"PASS: tapping her face keeps the avatar open -- face center still not background: rgb={after_click_color}")
+
+        # Type a short message and send it. chat_process_message always
+        # runs chat_pick (POST /api/pick) before chat_send (POST /api/chat),
+        # win or lose on the network -- either one logs a discriminating
+        # marker (chatpick=/chatpickfail=/chatfail=/chatreply=/chathttps=)
+        # the instant it resolves, so this proves the tap left the input box
+        # reading keys and enter actually fired a real request, without
+        # needing the request to succeed or a full round trip to finish.
+        type4("hey there")
+        time.sleep(0.2)
+        key4("ret")
+        time.sleep(4.0)
+
+        log4 = open(TAP_LOG, errors="replace").read()
+        chat_fired = any(m in log4 for m in ("chatpick", "chatfail", "chatreply=", "chathttps="))
+        if not chat_fired:
+            fail = 1; print("FAIL: typing a message and hitting enter never produced a chat_pick/chat_send serial marker -- no request fired")
+        else:
+            print("PASS: serial shows the chat request fired after typing + enter")
+
+        dump4(TAP_AFTER_SEND)
+        _, px_after_send = load4(TAP_AFTER_SEND)
+        after_send_color = px_at(px_after_send, face_cx, face_cy)
+        if close4(after_send_color, GUI_BG4, 20):
+            fail = 1; print(f"FAIL: after sending, the avatar screen is gone -- face region reads as background {after_send_color}")
+        else:
+            print(f"PASS: avatar/face still on screen after sending: rgb={after_send_color}")
+
+        # Back chevron: same top-left 44x40 tap zone every phone screen
+        # hit-tests (phone_home.h's phone_back_zone_tick), injects a real
+        # ESC regardless of which loop is reading keys right now (the
+        # windowed chat console gui_launch_chat_app landed on after enter).
+        # ESC from there returns to gui_run's caller, which for
+        # boot_to_phone always lands on phone_home_run's grid.
+        move4(20, 15); time.sleep(0.3); click4(); time.sleep(0.8)
+        dump4(TAP_HOME)
+        img_home, px_home = load4(TAP_HOME)
+        # Mail is APPS[1]: grid geometry from phone_home.h's
+        # phone_home_grid_geom, same COLS/CELL_W/CELL_H/TILE/Y0 constants
+        # scenario 3 above already established.
+        COLS4, CELL_W4, CELL_H4, TILE4, Y04 = 5, 86, 96, 48, 56
+        def cell_center4(icon):
+            row, col = icon // COLS4, icon % COLS4
+            return col * CELL_W4 + CELL_W4 // 2, Y04 + row * CELL_H4 + TILE4
+        mail_cx, mail_cy = cell_center4(1)
+
+        def not_bg4(px, x, y, bg=GUI_BG4, tol=16):
+            for dx in range(-6, 7, 3):
+                for dy in range(-6, 7, 3):
+                    p = px[(x + dx) * SC4 + 1, (y + dy) * SC4 + 1]
+                    if any(abs(p[i] - bg[i]) > tol for i in range(3)):
+                        return True
+            return False
+
+        if not not_bg4(px_home, mail_cx, mail_cy):
+            fail = 1; print(f"FAIL: back chevron tap didn't land on the home grid -- Mail's cell ({mail_cx},{mail_cy}) is blank")
+        else:
+            print("PASS: back chevron tap from the chat console returns to the phone home grid")
+
+        # Open Mail, compose one message so gui_launch's on_key path
+        # actually reaches gui_draw_mail_content's gui_draw_hint call
+        # (an empty inbox shows "No mail yet." at the same coordinates
+        # instead and never calls it -- that would pass this check for
+        # the wrong reason), then assert the hint row is blank on phone.
+        move4(mail_cx, mail_cy); time.sleep(0.3); click4(); time.sleep(0.8)
+        key4("c"); time.sleep(0.3)
+        type4("me@jt.local"); key4("ret"); time.sleep(0.2)
+        type4("hello"); key4("ret"); time.sleep(0.2)
+        type4("just a test"); key4("ret"); time.sleep(0.4)
+
+        dump4(TAP_MAIL)
+        img_mail, px_mail = load4(TAP_MAIL)
+        img_mail.save(TAP_MAIL_PNG)
+
+        # gui_draw_hint(20, T+52, ...) -- T=0 full screen. Sample the whole
+        # hint row's x-span (past where even a short "No mail yet." string
+        # would sit) for any ink at all.
+        hint_row_has_ink = any(
+            not close4(px_at(px_mail, x, 52), GUI_BG4, 25)
+            for x in range(18, 340, 4)
+        )
+        if hint_row_has_ink:
+            fail = 1; print("FAIL: Mail's hint row has ink on a phone boot -- gui_draw_hint should no-op for boot_to_phone")
+        else:
+            print("PASS: Mail's hint row is blank on phone (gui_draw_hint correctly no-ops)")
+        print(f"saved {TAP_FACE_PNG} and {TAP_MAIL_PNG}")
+    finally:
+        try: cmd4({"execute": "quit"})
+        except (ConnectionResetError, BrokenPipeError, OSError, NameError): pass
+        try: q4.wait(timeout=5)
+        except subprocess.TimeoutExpired: q4.kill()
+        try: _srv4.shutdown()
+        except Exception: pass
+except Exception as e:
+    fail = 1; print(f"FAIL: tap-face/back-chevron/mail-hint check errored ({e})")
 
 sys.exit(fail)

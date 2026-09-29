@@ -8,6 +8,7 @@
 # touched. Both apps' titlebar text never changes at all (no toggling
 # title like Notes' "Notes *"), so the fix here is simpler: chrome draws
 # exactly once per open (serial_puts("termchrome\n") / "chatchrome\n"),
+source "$(dirname "$0")/freeport.sh"
 # never again per keystroke; only the content region redraws on typing.
 #
 # This proves the fix holds for real: opens Terminal, types 4 plain
@@ -24,7 +25,7 @@ set -e
 cd "$(dirname "$0")/../.."
 make -s kernel.elf
 
-PORT=4472
+PORT=$(free_port)
 LOG=$(mktemp /tmp/jt-termchatflash-XXXX.log)
 
 qemu-system-i386 -kernel kernel.elf -display none -vga std \

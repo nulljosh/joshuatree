@@ -8,6 +8,7 @@
 #    extended to the Apple menu's own hover highlight -- cursor_only
 #    explicitly excludes any menu_hover change, dock_only requires the
 #    menu closed, so switching which row is highlighted fell through to
+source "$(dirname "$0")/freeport.sh"
 #    the full-repaint branch (whole photo blit + dock + every open window)
 #    on every row hovered. Fix: a 4th tier, menu_only, a direct copy of
 #    dock_only's shape using gui_draw_apple_menu (already self-contained,
@@ -57,7 +58,7 @@ make -s kernel.elf
 cleanup() { pkill -9 -f "qemu-system-i386.*jt-menuclock" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-PORT=4483
+PORT=$(free_port)
 LOG=/tmp/jt-menuclock-check.log
 rm -f "$LOG"
 qemu-system-i386 -kernel kernel.elf -display none -vga std \

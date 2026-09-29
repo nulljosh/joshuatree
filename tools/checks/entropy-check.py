@@ -15,10 +15,11 @@ stored salt+hash) is tools/checks/auth-flow-check.py, which ci-suite.sh
 already runs; it is the existing-login regression for this change.
 """
 import pathlib, socket, subprocess, sys, time, json
+from freeport import free_port
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ELF = ROOT / 'kernel.elf'
-PORT = 4571
+PORT = free_port()
 
 def symbol(name):
     out = subprocess.run(['nm', str(ELF)], capture_output=True, text=True, check=True).stdout

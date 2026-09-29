@@ -8,6 +8,7 @@
 #
 # This asserts exactly that: open the Apps folder from the dock, then move
 # the selection with real keystrokes and demand the full-repaint count stay
+source "$(dirname "$0")/freeport.sh"
 # flat at 1 while the panel-repaint count actually grows (a flat panel count
 # would mean the selection is not being drawn at all, so both halves matter).
 #
@@ -20,7 +21,7 @@ make -s kernel.elf
 cleanup() { pkill -9 -f "qemu-system-i386.*jt-appsredraw" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-PORT=4489
+PORT=$(free_port)
 LOG=/tmp/jt-appsredraw-check.log
 rm -f "$LOG"
 qemu-system-i386 -kernel kernel.elf -display none -vga std \

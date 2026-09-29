@@ -27,12 +27,13 @@ Usage: tools/checks/windowdrag-check.py   (from the repo root, after make kernel
 """
 import json, os, socket, subprocess, sys, time, tempfile
 from PIL import Image, ImageChops
+from freeport import free_port
 
 ART = tempfile.mkdtemp(prefix="jt-windowdrag-")
 LOG = os.path.join(ART, "serial.log")
 DUMP = os.path.join(ART, "fb.raw")
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4463
+PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
