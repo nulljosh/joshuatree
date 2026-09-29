@@ -194,7 +194,10 @@ try:
         prev, deadline = None, time.time() + 8
         while True:
             title_apps = title(dump())
-            if title_apps == prev or time.time() > deadline: break
+            # A stale wallpaper frame is also "still" across two dumps: the
+            # reference must hold the folder's own title strip (light frame).
+            drawn = sum(1 for i in range(0, len(title_apps), 3) if title_apps[i] >= 0xF0 and title_apps[i+1] >= 0xEE) > len(title_apps) // 6
+            if (drawn and title_apps == prev) or time.time() > deadline: break
             prev = title_apps; time.sleep(0.5)
         for _ in range(idx % 5): key("d")
         for _ in range(idx // 5): key("s")
