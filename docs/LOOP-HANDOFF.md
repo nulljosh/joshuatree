@@ -1,4 +1,4 @@
-# Joshua Tree loop handoff (2026-09-28, after midnight)
+# Joshua Tree loop handoff (2026-09-28, afternoon)
 
 ## What the loop is
 
@@ -16,16 +16,18 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-Main is 1.7.11 and live. 1.7.12 puts a third app in ring 3: Calculator runs as its own program next to Keyrate and Toroid, still one row in `kernel/ring3app.c`'s table-driven launcher (name, embedded binary, VFS filename), and the in-kernel copy is deleted. Three apps out, the rest still in kernel.c. That number going down is the real progress bar for 2.0. Quotes is next.
+Main is 1.8.10. Four apps run in ring 3 (Keyrate, Toroid, Calculator, Quotes); the rest are still in kernel.c, which is 9433 lines under a ceiling that only ratchets down. Phones get a home screen, tap to hear Samantha, and she finishes talking before the tour moves on. Every check picks its own free QMP port once #289 lands.
+
+Merge train landed: #290 done. Waiting to land: #291 docs to 100%, #289 free QMP ports. #296 is the 3.0 hardware blueprint (draft): the Strata enclosure with CAD, drawing and build steps, the two-box money fix (Strata Kit $199, Strata Complete $349), the ad re-voiced and re-captioned as Strata (v6, joshua-tree-ad-v6.mp4 on GitHub release), docs/DEMO.md folded into README.md ("Watch it" section) and deleted (commit e1607b6). Trademark search for Strata still needed. Landing fix PR queued.
 
 ## Next, in order
 
-1. Land what is in flight, one at a time (main requires up to date branches): Quotes to ring 3, 1.8 phone home screen, 1.8.1 Esc no longer quits the desktop, Mail compose in its own window, Settings redesign.
-2. Audio: 1.7.16 stopped the tour reboot from dropping facehost. Drive a real message into Samantha (headless Chromium, ?audiodebug), confirm "speak: status=200" in serial and non-zero output RMS; then Joshua checks ?audiodebug on his iPhone.
-3. Test infra: every check picks a free QMP port instead of a fixed one, so parallel agents stop colliding.
-4. 1.9: touch and an on-screen keyboard, so a phone visitor can type to Samantha, and every app readable at phone size.
-5. 2.0: move the remaining apps to ring 3, smallest first, each with its crash check; real icons for Activity and Clock.
-6. 2.1 Music, 2.2 Video.
+1. Land the train: #290, #291, #289. Rebump each with the version-stamp helper; resolve real conflicts by hunk, never by taking a whole side.
+2. Landing fixes from the grade: put the ad and a Strata render in "Want one?", one app count everywhere, the phone benchmark labels that collide, the unstyled Samantha link, sections visible without scrolling.
+3. Ship Bookrank and Homeqi in ring 3 (both have WIP branches), then resume Notes folders.
+4. 1.9: touch and an on-screen keyboard, every app readable at phone size.
+5. 2.0: the remaining apps to ring 3, smallest first, each with its crash check; input by focus.
+6. 2.1 Music, 2.2 Video. Then 3.0 on the ASRock J4125B-ITX, and the Strata Kit at 3.1.
 
 ## Restart prompt
 
