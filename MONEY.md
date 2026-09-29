@@ -168,3 +168,5 @@ Touch works now and Notes gets its own on-screen keyboard on a phone screen, so 
 Lexly now runs on its own at ring 3, seven apps out of the kernel. A crash in a flashcard drill can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
 
 Plan now runs on its own at ring 3, eight apps out of the kernel. A crash in the roadmap app can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
+
+Fieldbook now runs on its own at ring 3, nine apps out of the kernel. A crash in the science explainer can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*

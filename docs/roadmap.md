@@ -23,6 +23,7 @@ Samantha runs the machine. Mobile first by 2026-10-04: phone mode, the landing d
 - [x] [Opus] Step five, 1.8.22: Homeqi runs at ring 3 (`user/homeqi.c`, the same eight yes/no questions and scoring). It had gone dead in the kernel: APPS[] opened it through the generic static-page viewer. It is one more row in `RING3_APPS`, and the old copy is deleted. `tools/checks/ring3homeqi-check.py` proves it scores a real answer, draws, closes both ways, crashes safely.
 - [x] [Opus] Step six, 1.9.1: Lexly runs at ring 3 (`user/lexly.c`, the same 30-word deck and drill), one more row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3lexly-check.py` proves it opens, draws, scores keys, crashes safely and leaves the desktop alive.
 - [x] [Opus] Step seven, 1.9.2: Plan runs at ring 3 (`user/plan.c`, the same five milestones and two-pane layout), one more row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3plan-check.py` proves it opens, draws, selects by key and click, crashes safely and leaves the desktop alive.
+- [x] [Opus] Step eight, 1.9.3: Fieldbook runs at ring 3 (`user/fieldbook.c`, the same twelve fields and two-pane layout), one more row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3fieldbook-check.py` proves it opens, draws, selects by key and click, crashes safely and leaves the desktop alive.
 - [ ] [Sonnet] Port the remaining apps the same way, one PR each. Each PR: `user/<app>.c`, a row in `RING3_APPS`, the in-kernel copy deleted once the check passes.
 - [ ] [Fable] What the ports will need from the ABI: a font syscall (Keyrate carries its own 8x16 bitmap), a tick clock finer than `SYS_TIME`'s seconds, more than one program window at a time, and the framebuffer pages flipped back to supervisor-only on release (today they are zeroed and re-mapped on the next open).
 
@@ -34,7 +35,7 @@ Measured against the closest from-scratch peers: SerenityOS (the one-person-scal
 3. **Native TLS.** HTTPS goes through the worker proxy, so a browser can't happen yet.
 4. **Sound beyond the demo.** The Sound Blaster driver plays audio in QEMU (1.6.9), but every peer ships a music player, and real PCs need AC97 or HD Audio. See Desktop and apps, Our own computer.
 5. **Desktop basics.** Undo, right-click menus, drag and drop, an app switcher, a screenshot key. SerenityOS, ToaruOS and KolibriOS all have these (the clipboard landed in 1.0.6, text selection in 1.2.0).
-6. **Apps from outside the kernel.** Most apps compile into the kernel; eight ring-3 programs exist (Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan). No installer, no update path.
+6. **Apps from outside the kernel.** Most apps compile into the kernel; nine ring-3 programs exist (Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook). No installer, no update path.
 7. **Everyday apps peers ship.** An image viewer, a music player, a few games. KolibriOS ships dozens in under 2MB. See Desktop and apps.
 
 Kernel.c is ~9,800 lines with 84 files pasted in; an Opus agent is building the app interface (`feat/app-interface`) so apps move to ring 3. Grading is currently C+.

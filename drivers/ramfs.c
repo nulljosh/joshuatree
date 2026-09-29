@@ -3,7 +3,7 @@
 
 #define RAMFS_MAX_FILES 8
 #define RAMFS_NAME_LEN  32
-#define RAMFS_FILE_SIZE 4096
+#define RAMFS_FILE_SIZE 8192 /* 1.9.3: ring-3 binaries are written here when no disk is mounted; Fieldbook is 6.3KB and was silently cut at 4096 */
 
 struct ramfs_file {
     char name[RAMFS_NAME_LEN];

@@ -55,7 +55,7 @@ ratchet_ceiling() {
         # 2026-09-28: dock band/tray/icon drawing moved to
         # kernel/dock_draw.c/.h (refactor/kernel-split-1). Ceiling lowered
         # to match, never to go back up.
-        kernel/kernel.c) echo 9410 ;;
+        kernel/kernel.c) echo 9409 ;;
         *) echo "$LIMIT" ;;
     esac
 }
