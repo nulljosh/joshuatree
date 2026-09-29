@@ -4546,6 +4546,7 @@ static int text_ink(int a, unsigned int fg, unsigned int dst){
 #include "ttf_render.h"
 #include "gui_prompt.h"
 #include "auth.h"
+#include "osk.h" /* roadmap 1.9: on-screen keyboard for phone, used by editor.h */
 #include "editor.h"
 #include "reminders.h"
 #include "calendar.h"

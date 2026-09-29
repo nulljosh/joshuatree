@@ -87,7 +87,7 @@ drivers/app_quotestreak.h:
 	./tools/gen/gen_app.sh "$$HOME/Documents/Code/quotestreak/index.html" drivers/app_quotestreak.h app_quotestreak
 
 kernel/kernel.o: drivers/app_weather.h drivers/app_curbfind.h drivers/app_keyrate.h drivers/app_bookrank.h drivers/app_quotestreak.h
-kernel/kernel.o: kernel/editor.h drivers/editor_fonts.h drivers/png.h drivers/png_testdata.h drivers/jpeg.h drivers/jpeg_testdata.h
+kernel/kernel.o: kernel/editor.h kernel/osk.h drivers/editor_fonts.h drivers/png.h drivers/png_testdata.h drivers/jpeg.h drivers/jpeg_testdata.h
 
 # v74: pngtest's fixtures are real PNGs cut from drivers/wallpaper.h; the
 # generator also computes the host-side reference hashes. Committed like
