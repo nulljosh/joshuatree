@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Headless proof that the Portfolio app (kernel/portfolio.h, v0.87.0) is
+"""Headless proof that the Portfolio app (user/portfolio.c, ring 3 since 1.9.5) is
 real: it opens from the Apps folder, shows the real About block up top
 (name, plain line, link rows) plus the compiled-in fleet catalog (grouped
-headers + app rows, PF_ROWS in kernel/portfolio.h), the initially-selected
+headers + app rows, PF_ROWS in user/portfolio.c), the initially-selected
 row highlights and shows its URL on the bottom detail line, and the list
 actually scrolls with the keyboard rather than being a static screenshot.
 Same QMP absolute-pointer + qcode-keyboard + pmemsave shape as
@@ -25,7 +25,7 @@ Two real, discriminating assertions:
      show real text, and the selected row's highlight fill is present.
   2. Ten KEY_DOWN presses walk the selection from Epiphany down to
      Sidewise (skipping the Read header in between, real header-skip
-     logic in gui_launch_portfolio), past the 12-row visible window, so
+     logic in user/portfolio.c), past the 12-row visible window, so
      the list scrolls: the top visible row changes from the Life header
      to the Epiphany row. Reverting pf_clamp_scroll to a no-op (never
      move pf_scroll) makes this fail, the top row would stay "Life".
@@ -48,7 +48,7 @@ ICON_ROW_Y = 487
 CLOSE_X, CLOSE_Y = 56 + 24, 30 + 16
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 VX, VY = 56 + 8, 30 + 32  # viewport origin
-ROW0_Y = VY + 68   # pf_draw_content's list_top, relative y=68 (row r=0)
+ROW0_Y = VY + 68   # pf_draw's PF_TOP, relative y=68 (row r=0)
 ROW_X0, ROW_X1 = VX + 18, VX + 400
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -119,7 +119,7 @@ try:
     else:
         print("Portfolio opened (outer window chrome present)")
 
-    # PF_ROWS layout (kernel/portfolio.h): 5 About rows (title, plain line,
+    # PF_ROWS layout (user/portfolio.c): 5 About rows (title, plain line,
     # 3 links), then Life header (row 5), then Epiphany (row 6, selected by
     # default: the first PF_KIND_APP row).
     title_px = row_dark_px(img, ROW0_Y)            # row 0: "Joshua Trommel"

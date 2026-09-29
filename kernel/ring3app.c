@@ -8,10 +8,11 @@
    1.9.2: Plan joins it, the eighth app out.
    1.9.3: Fieldbook joins it, the ninth app out.
    1.9.4: Clock joins it, the tenth app out.
+   1.9.5: Portfolio joins it, the eleventh app out.
 
    Roadmap 2.0 says apps leave the kernel, so a crash in one cannot take
    the machine down. Keyrate, the smallest real app, went first; Toroid,
-   Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook and Clock followed the same path. Each app's dock entry lands here,
+   Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock and Portfolio followed the same path. Each app's dock entry lands here,
    and everything else stays as it was: gui_launch_from_dock has already
    drawn the window chrome and set the viewport by the time this runs,
    just as for an in-kernel app.
@@ -46,6 +47,7 @@
 #include "user_plan.h"
 #include "user_fieldbook.h"
 #include "user_clock.h"
+#include "user_portfolio.h"
 #include "user_fbpoke.h"
 #include "app.h"
 #include "irq.h"
@@ -87,6 +89,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Plan",       user_plan,       USER_PLAN_LEN,       "PLAN.BIN"},
     {"Fieldbook",  user_fieldbook,  USER_FIELDBOOK_LEN,  "FIELDBOOK.BIN"},
     {"Clock",      user_clock,      USER_CLOCK_LEN,      "CLOCK.BIN"},
+    {"Portfolio",  user_portfolio,  USER_PORTFOLIO_LEN,  "PORTFOLIO.BIN"},
 };
 
 static void ring3app_launch(const struct ring3_app *a) {
@@ -127,6 +130,7 @@ static void ring3app_launch(const struct ring3_app *a) {
     serial_puts("ring3app: launching "); serial_puts(a->file); serial_puts(" at ring 3\n");
     int status = -1;
     const char *argv[] = { a->file };
+    (void)mouse_get_wheel(); /* drop a wheel tick banked before the window existed, so a list app does not open already scrolled */
     if (!exec_user(a->file, argv, 1, &status)) {
         serial_puts("ring3app: exec_user failed (not found, too big, or no free task slot)\n");
         return;
@@ -155,6 +159,7 @@ void lexly_ring3_open(void)      { ring3app_launch(&RING3_APPS[6]); }
 void plan_ring3_open(void)       { ring3app_launch(&RING3_APPS[7]); }
 void fieldbook_ring3_open(void)  { ring3app_launch(&RING3_APPS[8]); }
 void clock_ring3_open(void)      { ring3app_launch(&RING3_APPS[9]); }
+void portfolio_ring3_open(void)  { ring3app_launch(&RING3_APPS[10]); }
 
 /* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
    run user/fbpoke.c with no window: it must be refused a pointer into
@@ -195,6 +200,7 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='p' && pc[6]=='l' && pc[7]=='a' && pc[8]=='n') { ring3app_autoopen_slot = 12; serial_puts("autoopen=plan\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='f' && pc[6]=='i' && pc[7]=='e' && pc[8]=='l') { ring3app_autoopen_slot = 17; serial_puts("autoopen=fieldbook\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='l' && pc[7]=='o' && pc[8]=='c') { ring3app_autoopen_slot = 25; serial_puts("autoopen=clock\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='p' && pc[6]=='o' && pc[7]=='r' && pc[8]=='t' && pc[9]=='f' && pc[10]!='o') { ring3app_autoopen_slot = 23; serial_puts("autoopen=portfolio\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
     }
 }
@@ -202,7 +208,7 @@ void ring3app_autoopen_run(int mx, int my){
     if (ring3app_autoopen_slot < 0) return;
     int slot = ring3app_autoopen_slot; ring3app_autoopen_slot = -1;
     editor_mouse_x = mx; editor_mouse_y = my;
-    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Lexly's, Plan's, Fieldbook's or Clock's APPS slot */
+    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Lexly's, Plan's, Fieldbook's, Clock's or Portfolio's APPS slot */
     if (fbpoke_armed) { fbpoke_armed = 0; fbpoke_run(); }
     gui_draw_desktop(-1, -1, 0, 0);
     cursor_saved_x = cursor_saved_y = -1;
