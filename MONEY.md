@@ -176,3 +176,5 @@ Clock now runs on its own at ring 3, ten apps out of the kernel. A crash in the 
 Portfolio now runs on its own at ring 3, eleven apps out of the kernel. A crash in the catalog app can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
 
 Activity now runs on its own at ring 3, twelve apps out of the kernel. A crash in the task monitor can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
+
+Contacts now runs on its own at ring 3, thirteen apps out of the kernel. A crash in the address book can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
