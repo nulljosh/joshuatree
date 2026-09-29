@@ -225,9 +225,17 @@ try:
             gap = rows[0] - FOLDER_VIEW[1]
             print(f"{name}: first ink {gap}px below the title bar")
             if gap > MAX_GAP: fails.append(f"{name}: blank strip under the title bar, first ink {gap}px down (max {MAX_GAP})")
+        # Esc can be lost on a loaded runner (scancode drop). Poll for the
+        # restored title; if the app is still on screen when the wait ends,
+        # the Esc never arrived, so send exactly one more.
         key("esc")
-        deadline = time.time() + 8
-        while title(dump()) != title_apps and time.time() < deadline: time.sleep(0.5)
+        for attempt in range(2):
+            deadline = time.time() + 10
+            while title(dump()) != title_apps and time.time() < deadline: time.sleep(0.5)
+            img = dump()
+            if title(img) == title_apps or attempt or app_bg(img) < 80: break
+            key("esc")
+        time.sleep(0.3)
         if title(dump()) != title_apps: fails.append(f"{name}: frame title not restored to Apps after closing it")
         click_at(*FOLDER_CLOSE, 1.0)
         move(*PARK); time.sleep(0.4)
