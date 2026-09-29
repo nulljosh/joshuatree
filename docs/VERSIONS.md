@@ -21,6 +21,7 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
   - 1.9.2: eight apps in ring 3 now. Plan followed Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi and Lexly out, the in-kernel copy is gone, and the same table-driven launcher runs it.
   - 1.9.3: nine apps in ring 3 now. Fieldbook followed Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly and Plan out, the in-kernel copy is gone, and the same table-driven launcher runs it.
   - 1.9.4: ten apps in ring 3 now. Clock followed Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan and Fieldbook out, the in-kernel copy is gone, and the same table-driven launcher runs it.
+  - 1.9.5: eleven apps in ring 3 now. Portfolio followed Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook and Clock out, the in-kernel copy is gone, and the same table-driven launcher runs it.
 - 2.1: Music. A player app in its own protected space: WAV first, then MP3 through a small public-domain decoder, a library from Files, play and pause through the sound driver it already has.
 - 2.2: Video. A player app: motion-JPEG first (reusing the JPEG decoder the kernel already has) with sound in sync, then a real codec when the hardware allows.
 - 3.0: It boots a real computer. One reference mini PC: UEFI, USB keyboard, mouse and stick, a real disk, a real network card, real sound.
