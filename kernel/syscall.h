@@ -34,6 +34,8 @@
 #define SYS_WINDOW_OPEN 384  /* ebx = struct jt_window_info* (user); fills it, maps the framebuffer user-accessible; 0 or -errno */
 #define SYS_WINDOW_POLL 385  /* ebx = struct jt_event* (user), ecx = flags (JT_POLL_PRESENT); 1 event written, -EAGAIN none */
 
+#define SYS_TASKS       386  /* 1.9.6: ebx = struct jt_tasks* (user), ecx = slot to kill or -1; fills the snapshot, 0 or -errno */
+
 #define JT_POLL_PRESENT 1    /* copy the framebuffer to the screen before looking for an event */
 
 /* Event kinds SYS_WINDOW_POLL writes. a/b depend on the kind: KEY carries
@@ -46,6 +48,9 @@
 
 struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
 struct jt_event { unsigned int kind; int a, b; };
+/* SYS_TASKS: uptime ticks (100Hz), free and total memory in KB, the calling
+   task's own slot, and a bitmask of the used scheduler slots. */
+struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
 
 /* v2 open() flags. Linux i386's own values, the same borrow the call
    numbers are: O_RDONLY/O_WRONLY/O_RDWR are the low two bits, the rest

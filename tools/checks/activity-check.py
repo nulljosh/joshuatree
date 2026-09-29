@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
-"""Headless proof that the Activity app (kernel/activity.h, v0.88.0) is
+"""Headless proof that the Activity app (user/activity.c, ring 3 since 1.9.6; kernel/activity.h before) is
 real: it reads real scheduler state through the exact same primitives the
 shell's own `ps`/`kill`/`mem` commands already call (task_used/task_kill/
 pmm_free_frames, kernel/task.c + kernel/pmm.c), not a fabricated process
@@ -60,7 +60,7 @@ ICON_ROW_Y = 487
 APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46  # the Apps folder's own outer window red dot (56+24, 30+16)
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 # gui_launch_apps' content viewport (same derivation search-check.py/launchpad-click-check.py use).
-VX, VY = 64, 62
+VX, VY = 78, 72  # 1.9.6: the ring-3 app's viewport, same as the ring3*-check.py files
 ROW_X0, ROW_X1 = VX + 76, VX + 260  # spans the STATE column text for any row
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -172,7 +172,7 @@ try:
     else:
         print(f"activitycontent redraw markers so far: {markers_before}")
 
-    row_y = VY + 108 + spawn_id * 22
+    row_y = VY + 82 + spawn_id * 22  # user/activity.c: TOP 82, row pitch 22
     before_px = row_has_text(img, row_y)
     print(f"row {spawn_id} ('running') dark-px before kill = {before_px}")
     if before_px < 4:
