@@ -202,14 +202,6 @@ class Machine:
             time.sleep(.1)
         raise AssertionError('Notes dock click did not launch editor')
 
-    def close_notes(self):
-        """Esc now steps back one screen at a time (editor -> note list ->
-        closed) instead of closing in one press, so a full close is two."""
-        self.key('esc')
-        time.sleep(.2)
-        self.key('esc')
-        time.sleep(.2)
-
     def close(self):
         try:
             self.command('quit')
@@ -337,7 +329,7 @@ try:
     machine.saved()
     machine.expect(initial + 'No disk. Keep this text!')
     machine.screenshot('ramfs-save')
-    machine.close_notes()
+    machine.key('esc')
     machine.open_notes()
     machine.expect(initial + 'No disk. Keep this text!')
 finally:

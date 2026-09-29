@@ -4,7 +4,7 @@ static char editor_buffer[4096];
 static int editor_length, editor_position, editor_loaded, editor_dirty;
 static int editor_family, editor_size = 1, editor_weight, editor_scroll;
 int editor_mouse_x = 400, editor_mouse_y = 300;
-static const char *editor_status = "Ctrl+S saves   Esc: back to Notes";
+static const char *editor_status = "Ctrl+S saves   Esc closes";
 
 /* v1.2.0: real text selection. -1 means no selection; otherwise this is
    the position Shift+arrow/Ctrl+A started extending from, and the active
@@ -313,6 +313,12 @@ static void editor_draw(void) {
    folder (notes_enter_current_folder) before this runs, so a plain
    filename here still reaches the right file. */
 static char notes_current_file[13] = "";
+/* notes_direct: this editor session was opened straight from the dock/chat
+   (not picked from the browser), so Esc closes the whole app like every
+   other app's Esc. notes_exit_all: the editor asked for the app to close
+   entirely (that Esc, or a click on the close light / outside), so the
+   browser must not linger. Ctrl+L from the editor steps back to the list. */
+static int notes_direct = 0, notes_exit_all = 0;
 
 static int editor_save(void) {
     editor_buffer[editor_length] = 0;
@@ -321,7 +327,7 @@ static int editor_save(void) {
         return 0;
     }
     editor_dirty = 0;
-    editor_status = "Saved   |   Ctrl+S saves   Esc: back to Notes";
+    editor_status = notes_direct ? "Saved   |   Ctrl+S saves   Ctrl+L notes list   Esc closes" : "Saved   |   Ctrl+S saves   Esc: back to Notes";
     return 1;
 }
 
@@ -422,6 +428,7 @@ static void notes_edit_loop(void) {
         }
         if (mouse_click_edge()) {
             gui_close_was_click = 1;
+            notes_exit_all = 1;
             int outside = editor_mouse_x < 0 || editor_mouse_y < 0
                        || editor_mouse_x >= (int)window_width() || editor_mouse_y >= (int)window_height();
             if (outside || (!gui_app_windowed && editor_mouse_y < 32 && editor_mouse_x < 38)) close = 1;
@@ -451,8 +458,9 @@ static void notes_edit_loop(void) {
                        clear) closes Notes, so a selection never eats the
                        one key every read-only viewer already relies on to
                        leave the app. */
-                    { int lo, hi; if (!editor_selection_range(&lo, &hi)) close = 1; editor_sel_anchor = -1; }
+                    { int lo, hi; if (!editor_selection_range(&lo, &hi)) { close = 1; if (notes_direct) notes_exit_all = 1; } editor_sel_anchor = -1; }
                 }
+                else if (control && code == 0x26) close = 1; /* Ctrl+L: back to the notes list */
                 else if (code == 0x3B) editor_family = (editor_family + 1) % 3;
                 else if (code == 0x3C) editor_size = (editor_size + 1) % EDITOR_N_SIZES;
                 else if (code == 0x3D) editor_weight ^= 1;
@@ -822,7 +830,7 @@ static void notes_new_note(void) {
     notes_load_notes();
     for (int i = 0; i < notes_note_count; i++) if (!strcmp(notes_notes[i].file, fname)) { notes_note_sel = i; break; }
     editor_loaded = 0;
-    editor_status = "Ctrl+S saves   Esc: back to Notes";
+    editor_status = notes_direct ? "Ctrl+S saves   Ctrl+L notes list   Esc closes" : "Ctrl+S saves   Esc: back to Notes";
     notes_enter_current_folder();
     notes_edit_loop();
     notes_leave_current_folder();
@@ -833,7 +841,7 @@ static void notes_open_selected(void) {
     if (notes_note_count == 0) return;
     notes_strcopy(notes_current_file, notes_notes[notes_note_sel].file, 13);
     editor_loaded = 0;
-    editor_status = "Ctrl+S saves   Esc: back to Notes";
+    editor_status = notes_direct ? "Ctrl+S saves   Ctrl+L notes list   Esc closes" : "Ctrl+S saves   Esc: back to Notes";
     notes_enter_current_folder();
     notes_edit_loop();
     notes_leave_current_folder();
@@ -910,8 +918,11 @@ static void gui_launch_editor(void) {
        one-note editor always did (and like macOS Notes reopening on its
        last note). Esc from the editor then reveals the folder browser. */
     if ((int)window_width() >= NOTES_WIDE_MIN) {
+        notes_direct = 1; notes_exit_all = 0;
         if (notes_note_count > 0) notes_open_selected();
         else notes_new_note();
+        notes_direct = 0;
+        if (notes_exit_all) return;
     }
 
     for (;;) {
@@ -963,6 +974,7 @@ static void gui_launch_editor(void) {
         if (k == 'n') {
             if (list_focus == NOTES_FOCUS_FOLDERS && !wide) { notes_phone_level = 1; continue; }
             notes_new_note();
+            if (notes_exit_all) return;
             continue;
         }
         if (list_focus == NOTES_FOCUS_FOLDERS) {
@@ -973,7 +985,7 @@ static void gui_launch_editor(void) {
             if (k == KEY_UP && notes_note_sel > 0) notes_note_sel--;
             else if (k == KEY_DOWN && notes_note_sel < notes_note_count - 1) notes_note_sel++;
             else if (k == KEY_LEFT && !wide) notes_phone_level = 0;
-            else if (k == KEY_ENTER) notes_open_selected();
+            else if (k == KEY_ENTER) { notes_open_selected(); if (notes_exit_all) return; }
             else if (k == 'd') notes_delete_selected();
         }
     }

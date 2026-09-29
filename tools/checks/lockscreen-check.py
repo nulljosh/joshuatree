@@ -460,8 +460,6 @@ try:
     m3.wait_int('editor_loaded', lambda v: (v & 0xff) == 1, 'Desktop did not become interactive after unlocking', timeout=5)
     check('unlock: the desktop is interactive again (Notes opens, same signal auth-flow-check.py uses)', True)
     m3.key('esc')
-    time.sleep(0.2)
-    m3.key('esc')
     time.sleep(0.3)
     m3.screenshot('03-unlocked')
 finally:
