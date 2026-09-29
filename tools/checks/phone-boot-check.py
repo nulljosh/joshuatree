@@ -162,17 +162,18 @@ try:
     LABEL_LOG = "/tmp/jt-phoneboot-label.log"
     LABEL_DUMP = "/tmp/jt-phoneboot-label.raw"
     LABEL_PNG = "/tmp/jt-facelabel-after.png"
+    LABEL_PORT = free_port()  # not LABEL_PORT: the stub servers' free_port() calls hand out neighbours, QEMU then fails to bind and readline() hangs
     for f in (LABEL_LOG, LABEL_DUMP):
         try: os.remove(f)
         except FileNotFoundError: pass
     args = ["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std", "-no-reboot",
-            "-qmp", f"tcp:127.0.0.1:{PORT + 1},server,nowait", "-serial", "file:" + LABEL_LOG,
+            "-qmp", f"tcp:127.0.0.1:{LABEL_PORT},server,nowait", "-serial", "file:" + LABEL_LOG,
             "-net", "nic,model=rtl8139", "-net", "user",
             "-append", f"phone samantha facehost=10.0.2.2:{_port}"]
     q2 = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         time.sleep(1.0)
-        s2 = socket.create_connection(("127.0.0.1", PORT + 1)); f2 = s2.makefile("rw")
+        s2 = socket.create_connection(("127.0.0.1", LABEL_PORT)); f2 = s2.makefile("rw")
 
         def cmd2(o):
             f2.write(json.dumps(o) + "\n"); f2.flush()
@@ -239,7 +240,7 @@ try:
 
     PW, PH = 860, 1520          # 430x760 logical at 2x, same convention as the rest of this file
     LOGICAL_W, LOGICAL_H, SC = 430, 760, 2
-    FIT_PORT = PORT + 2
+    FIT_PORT = free_port()
     FIT_LOG = "/tmp/jt-phonehome-serial.log"
     HOME_DUMP = "/tmp/jt-phonehome-grid.raw"
     CAL_DUMP = "/tmp/jt-phonehome-calendar.raw"
@@ -453,7 +454,7 @@ try:
     _th4.Thread(target=_srv4.serve_forever, daemon=True).start()
     _port4 = _srv4.server_address[1]
 
-    TAP_PORT = PORT + 3
+    TAP_PORT = free_port()
     TAP_LOG = "/tmp/jt-phonetap-serial.log"
     TAP_BEFORE = "/tmp/jt-phonetap-before.raw"
     TAP_AFTER_CLICK = "/tmp/jt-phonetap-afterclick.raw"
