@@ -11,10 +11,11 @@ Writes <out>-dock.png (1:1) and <out>-dock4x.png (nearest 4x) for eyeballing.
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/jt-iconedge"
 LOG = "/tmp/jt-iconedge-serial.log"; DUMP = "/tmp/jt-iconedge.raw"
-FB = 0xfd000000; W, H = 1920, 1080; PORT = 4461
+FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()
 DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_TOP_Y, SCALE, SLOTS = 37, 6, 247, 469, 2, 11
 PITCH = DOCK_ICON + DOCK_GAP
 

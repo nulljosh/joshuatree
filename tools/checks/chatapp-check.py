@@ -30,11 +30,12 @@ Usage: python3 tools/checks/chatapp-check.py   (from the repo root, after make k
 """
 import http.server, json, os, socket, subprocess, sys, threading, time
 from PIL import Image
+from freeport import free_port
 
 QUESTION = "what is the capital of france"
 REPLY = "The capital of France is Paris, a city famous for the Eiffel Tower and croissants."
 LOG = "/tmp/jt-chatapp-serial.log"; DUMP = "/tmp/jt-chatapp.raw"
-FB = 0xfd000000; W, H = 1920, 1080; PORT = 4470
+FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247; PITCH = DOCK_ICON + DOCK_GAP; ICON_ROW_Y = 487
 CLOSE_X, CLOSE_Y = 94, 56; CLOSE_RED = (0xFF, 0x5F, 0x57)

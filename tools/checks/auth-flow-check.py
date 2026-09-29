@@ -68,11 +68,12 @@ import time
 from pathlib import Path
 
 from PIL import Image
+from freeport import free_port
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 WORKDIR = Path(tempfile.mkdtemp(prefix='jt-auth-flow-', dir='/tmp'))
 DISK = WORKDIR / 'disk.img'
-QMP_PORT = 4640
+QMP_PORT = free_port()
 LOGICAL_W, LOGICAL_H = 960, 540
 
 USERNAME = 'joshua'

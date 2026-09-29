@@ -27,11 +27,12 @@ if any scenario or the running max is over its budget.
 Usage: tools/checks/frametime-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, re, shutil, socket, subprocess, sys, time
+from freeport import free_port
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 os.chdir(ROOT)
 LOG = "/tmp/jt-frametime-serial.log"
-PORT = 4670
+PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP

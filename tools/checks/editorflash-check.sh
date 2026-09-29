@@ -8,6 +8,7 @@
 # region, redrawing chrome only when its own tracked state changes.
 #
 # This proves the fix holds for real: opens Notes, types 8 plain
+source "$(dirname "$0")/freeport.sh"
 # characters (no toolbar interaction), and demands the chrome redraw
 # marker ("editorchrome", serial_puts'd once per real editor_draw_chrome()
 # call) settles at exactly 2 -- one for the initial open, one more for
@@ -22,7 +23,7 @@ set -e
 cd "$(dirname "$0")/../.."
 make -s kernel.elf
 
-PORT=4453
+PORT=$(free_port)
 LOG=$(mktemp /tmp/jt-editorflash-XXXX.log)
 
 qemu-system-i386 -kernel kernel.elf -display none -vga std \

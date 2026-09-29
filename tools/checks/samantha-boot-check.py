@@ -23,9 +23,10 @@ Two boots:
 
 Usage: tools/checks/samantha-boot-check.py   (from the repo root, after make kernel.elf)
 """
+from freeport import free_port
 import json, os, socket, subprocess, sys, time
 
-PORT = 4479
+PORT = free_port()
 FB = 0xfd000000
 W, H = 1920, 1080
 

@@ -11,11 +11,12 @@ Exit 1 if any crash detected in serial log.
 """
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image, ImageChops
+from freeport import free_port
 
 LOG = "/tmp/jt-soak-check-serial.log"
 DUMP = "/tmp/jt-soak-check.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4620
+PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP

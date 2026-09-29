@@ -21,6 +21,8 @@ user/calculator.bin
 drivers/user_calculator.h
 user/quotes.bin
 drivers/user_quotes.h
+user/bookrank.bin
+drivers/user_bookrank.h
 user/libjt.a
 landing/kernel.elf
 landing/v86/kernel.elf

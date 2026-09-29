@@ -96,6 +96,7 @@ if (typeof document !== "undefined") (function () {
   // e.g. whether the backdoor probe found v86's vmmouse and whether an
   // absolute packet really arrived, not just whether the page sent one.
   var serialLog = "";
+  var speakCount = 0, lastSpeakBytes = 0; // every "speak: status=200 bytes=N" line, counted as it arrives (serialLog stops growing at 64KB)
   // v0.73.5: fetched once and reused by the idle tour's reboot sequence
   // below (see the comment above the reboot block in tourLoop) to
   // re-inject the kernel image after each lap's reset_memory(); this
@@ -156,23 +157,154 @@ if (typeof document !== "undefined") (function () {
   var AUDIO_DEBUG = /[?&]audiodebug\b/.test(location.search);
   var audioDebugState = { unlockAttempts: 0, lastUnlockEvent: "-", chunkCount: 0, lastLevel: 0 };
   var audioDebugEl = null;
+  // 1.8.4: splitting "her voice never played on a real iPhone" in two
+  // without ever hearing a real iPhone ourselves. A tone button proves (or
+  // disproves) plain AudioContext output on the visitor's own phone,
+  // separate from whether v86's SB16 emulation ever gets that far; a live
+  // meter tapped after the real speaker output means one screenshot shows
+  // both halves at once instead of a back-and-forth over text.
+  var audioMeterState = { analyser: null, data: null, rms: 0, peak: 0 };
+  var audioWorkletState = { moduleRequested: false, moduleAdded: false, nodeCreated: false };
+  var audioDebugToneCtx = null; // only created if v86's own context doesn't exist yet
   if (AUDIO_DEBUG) {
+    // Tap whatever actually reaches an AudioContext's real output. v86's
+    // speaker adapter (and the tone button below) both eventually call
+    // .connect(ctx.destination); wrapping AudioNode.prototype.connect is
+    // the only way to insert an AnalyserNode on that path without touching
+    // v86's own vendored code. One analyser per context, reused across
+    // every node that connects to that context's destination.
+    var origConnect = AudioNode.prototype.connect;
+    AudioNode.prototype.connect = function () {
+      var dest = arguments[0];
+      var ctx = this.context;
+      try {
+        if (ctx && dest === ctx.destination) {
+          if (!ctx.__jtDebugAnalyser) {
+            var analyser = ctx.createAnalyser();
+            analyser.fftSize = 2048;
+            ctx.__jtDebugAnalyser = analyser; // set before connecting: connect() below re-enters this same wrapper
+            origConnect.call(this, analyser);
+            origConnect.call(analyser, ctx.destination);
+            audioMeterState.analyser = analyser;
+            audioMeterState.data = new Float32Array(analyser.fftSize);
+          } else {
+            origConnect.call(this, ctx.__jtDebugAnalyser);
+          }
+        }
+      } catch (e) {}
+      return origConnect.apply(this, arguments);
+    };
+    // AudioWorklet status: did dac-processor's module ever get requested/
+    // resolved, and was a node for it ever constructed. Both answer "is
+    // the worklet path even running" without needing devtools on a phone.
+    if (window.AudioWorklet && AudioWorklet.prototype.addModule) {
+      var origAddModule = AudioWorklet.prototype.addModule;
+      AudioWorklet.prototype.addModule = function () {
+        audioWorkletState.moduleRequested = true;
+        var p = origAddModule.apply(this, arguments);
+        p.then(function () { audioWorkletState.moduleAdded = true; }).catch(function () {});
+        return p;
+      };
+    }
+    if (window.AudioWorkletNode) {
+      var OrigAudioWorkletNode = window.AudioWorkletNode;
+      window.AudioWorkletNode = function () {
+        audioWorkletState.nodeCreated = true;
+        return Reflect.construct(OrigAudioWorkletNode, arguments, new.target || window.AudioWorkletNode);
+      };
+      window.AudioWorkletNode.prototype = OrigAudioWorkletNode.prototype;
+    }
+    // Meter polls fast (rAF) so a 0.5s test tone isn't missed between
+    // ticks; the text render below stays on its own slower interval.
+    var meterTick = function () {
+      var m = audioMeterState;
+      if (m.analyser && m.data) {
+        m.analyser.getFloatTimeDomainData(m.data);
+        var sum = 0;
+        for (var i = 0; i < m.data.length; i++) sum += m.data[i] * m.data[i];
+        var rms = Math.sqrt(sum / m.data.length);
+        m.rms = rms;
+        if (rms > m.peak) m.peak = rms;
+      }
+      requestAnimationFrame(meterTick);
+    };
+    requestAnimationFrame(meterTick);
+
     audioDebugEl = document.createElement("div");
     audioDebugEl.id = "audio-debug-overlay";
-    audioDebugEl.style.cssText = "position:fixed;top:8px;left:8px;z-index:99999;background:#fff;color:#111;border:1px solid #111;padding:8px 10px;font:12px/1.5 -apple-system,Helvetica,Arial,sans-serif;white-space:pre;pointer-events:none;max-width:80vw;";
+    audioDebugEl.style.cssText = "position:fixed;top:8px;left:8px;z-index:99999;background:#fff;color:#111;border:1px solid #111;padding:8px 10px;font:12px/1.5 -apple-system,Helvetica,Arial,sans-serif;pointer-events:none;max-width:80vw;";
+    var audioDebugText = document.createElement("div");
+    audioDebugText.style.cssText = "white-space:pre;";
+    var toneButton = document.createElement("button");
+    toneButton.id = "audio-debug-tone-btn";
+    toneButton.textContent = "Play test tone";
+    toneButton.style.cssText = "pointer-events:auto;display:block;width:100%;margin-top:8px;padding:12px 10px;font:13px/1 -apple-system,Helvetica,Arial,sans-serif;background:#111;color:#fff;border:1px solid #111;cursor:pointer;";
+    var toneStatus = document.createElement("div");
+    toneStatus.style.cssText = "white-space:pre-wrap;margin-top:4px;";
+    audioDebugEl.appendChild(audioDebugText);
+    audioDebugEl.appendChild(toneButton);
+    audioDebugEl.appendChild(toneStatus);
     document.body.appendChild(audioDebugEl);
+
+    // Plays through whatever context v86 will actually use (creating one
+    // early, with a note, if the emulator hasn't started yet). If the
+    // visitor hears this but not Samantha, the problem is v86/dac-processor,
+    // not iOS's audio policy; if this is silent too, it never was v86 at
+    // all.
+    var playTestTone = function () {
+      var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
+      var createdNew = false;
+      if (!ac) {
+        try {
+          audioDebugToneCtx = audioDebugToneCtx || new (window.AudioContext || window.webkitAudioContext)();
+          ac = audioDebugToneCtx;
+          createdNew = true;
+        } catch (e) {
+          toneStatus.textContent = "tone: could not create an AudioContext - " + e.message;
+          return;
+        }
+      }
+      try {
+        if (ac.state !== "running") ac.resume().catch(function () {});
+        var osc = ac.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = 440;
+        var gain = ac.createGain();
+        gain.gain.value = 0.2;
+        osc.connect(gain);
+        gain.connect(ac.destination);
+        var now = ac.currentTime;
+        osc.start(now);
+        osc.stop(now + 0.5);
+        toneStatus.textContent = "tone: playing 440hz for 0.5s" +
+          (createdNew ? " (v86's own context did not exist yet, created a new one)" : " (same context v86's speaker uses)");
+      } catch (e) {
+        toneStatus.textContent = "tone: error - " + e.message;
+      }
+    };
+    toneButton.addEventListener("click", playTestTone);
+    toneButton.addEventListener("touchend", function (ev) { ev.preventDefault(); playTestTone(); }, { passive: false });
+
     var renderAudioDebug = function () {
       var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
+      var lastSpeak = /speak: status=\d+[^\n]*/g;
+      var speakMatches = serialLog.match(lastSpeak);
       var lines = [
         "audio debug",
         "context state: " + (ac ? ac.state : "no speaker_adapter"),
         "sample rate: " + (ac ? ac.sampleRate : "-"),
+        "base latency: " + (ac && ac.baseLatency !== undefined ? ac.baseLatency : "-"),
+        "output latency: " + (ac && ac.outputLatency !== undefined ? ac.outputLatency : "-"),
         "audioSession.type: " + (navigator.audioSession ? navigator.audioSession.type : "n/a"),
         "unlock attempts: " + audioDebugState.unlockAttempts + " (last: " + audioDebugState.lastUnlockEvent + ")",
         "dac chunks received: " + audioDebugState.chunkCount,
-        "last non-zero sample: " + audioDebugState.lastLevel
+        "last non-zero sample: " + audioDebugState.lastLevel,
+        "worklet module: requested=" + audioWorkletState.moduleRequested + " added=" + audioWorkletState.moduleAdded,
+        "worklet node created: " + audioWorkletState.nodeCreated,
+        "output meter: rms=" + audioMeterState.rms.toFixed(4) + " peak=" + audioMeterState.peak.toFixed(4),
+        "last serial speak line: " + (speakMatches ? speakMatches[speakMatches.length - 1] : "none yet")
       ];
-      audioDebugEl.textContent = lines.join("\n");
+      audioDebugText.textContent = lines.join("\n");
     };
     setInterval(renderAudioDebug, 200);
     renderAudioDebug();
@@ -372,6 +504,7 @@ if (typeof document !== "undefined") (function () {
       // middle of her spoken reply, since listening involves no clicks.
       if (b === 10) {
         var m = /^speak: status=200 bytes=(\d+)/.exec(serialLine);
+        if (m) { speakCount++; lastSpeakBytes = Number(m[1]); }
         if (m) lastInteractionTime = Date.now() + Math.ceil(Number(m[1]) / 16); // 16000 samples/s = 16 per ms
         else if (/^chatreply=|^chattool=/.test(serialLine)) lastInteractionTime = Date.now();
         serialLine = "";
@@ -546,6 +679,40 @@ if (typeof document !== "undefined") (function () {
     var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
     if (ac && ac.state !== "running") ac.resume().catch(function () {});
   });
+  // 1.8.x: tap to talk. iPhone plays no sound before a tap, and the phone
+  // intro used to have Samantha answer before anyone touched the page, so her
+  // first line was thrown away (measured in the iOS Simulator: context
+  // "interrupted", speak 200, zero DAC chunks). On phones the intro now waits
+  // for this button; the tap unlocks audio (the document listeners above run
+  // first) and she speaks right after. The button eats its own touch so the
+  // tap doesn't count as a visitor takeover (focusIn would stop the tour).
+  function audioRunning() {
+    var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
+    return !!ac && ac.state === "running";
+  }
+  var tapTalkBtn = null, tapTalkResolve = null;
+  var tapTalkPromise = new Promise(function (r) { tapTalkResolve = r; });
+  if (IS_PHONE) {
+    tapTalkBtn = document.createElement("button");
+    tapTalkBtn.type = "button";
+    tapTalkBtn.id = "tap-to-talk";
+    tapTalkBtn.textContent = "Tap to hear Samantha";
+    tapTalkBtn.hidden = true;
+    tapTalkBtn.style.cssText = "position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:7;" +
+      "background:var(--fg);color:var(--bg);border:none;border-radius:999px;padding:14px 22px;min-height:44px;" +
+      "font:600 15px/1 -apple-system,Helvetica,Arial,sans-serif;letter-spacing:0.01em;cursor:pointer;" +
+      "box-shadow:0 4px 18px rgba(0,0,0,0.18);white-space:nowrap;";
+    ["touchstart", "mousedown", "pointerdown"].forEach(function (t) {
+      tapTalkBtn.addEventListener(t, function (ev) { ev.stopPropagation(); }, { passive: true });
+    });
+    tapTalkBtn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      unlockAudio(ev);
+      tapTalkBtn.hidden = true;
+      tapTalkResolve();
+    });
+    container.appendChild(tapTalkBtn);
+  }
   container.addEventListener("mousedown", focusIn);
   container.addEventListener("touchstart", focusIn, { passive: true });
   container.addEventListener("keydown", focusIn);
@@ -1381,6 +1548,47 @@ if (typeof document !== "undefined") (function () {
   var CLOSE_X = 94, CLOSE_Y = 56;
   var DWELL_MS = 7000; // v0.72.2: cut from 15s once the app count went back to 8, keeps the full loop under a minute
   var tourTimer = 0, tourRunning = false, tourGen = 0;
+  // fix/demo-aplus-1 item 6: a visitor who watches two laps back to back used to
+  // hear the exact same Samantha exchange twice. lapIndex increments once per
+  // lap (tourLoop's own while loop, right before this scene runs) and picks a
+  // different real chat_run_tool round trip each time, cycling every 3 laps --
+  // each still ends on "open calculator" so the scene's real close (Chat
+  // handing off to Calculator) is unchanged.
+  var lapIndex = 0;
+  var SAMANTHA_LAP_SCRIPTS = [
+    [ // lap 0: reminder + note
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: SAMANTHA_REMINDER_LINE + '\n', speed: 55 },
+      { type: 'wait', ms: 3000 },
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: 'note: pick up dry cleaning\n', speed: 55 },
+      { type: 'wait', ms: 3000 }
+    ],
+    [ // lap 1: weather
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: "what's the weather like\n", speed: 55 },
+      { type: 'wait', ms: 3000 }
+    ],
+    [ // lap 2: a real fact question (today's calendar)
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: "what's on my calendar today\n", speed: 55 },
+      { type: 'wait', ms: 3000 }
+    ]
+  ];
+  var SAMANTHA_LAP_CLOSE = [
+    { type: 'keys', text: 'n', speed: 200 },
+    { type: 'wait', ms: 400 },
+    { type: 'keys', text: 'open calculator\n', speed: 55 }, // closes Chat and opens Calculator -- the scene's own real ending, not a scripted close
+    { type: 'wait', ms: 1200 }
+  ];
+  function samanthaScriptForLap(lap) { return SAMANTHA_LAP_SCRIPTS[lap % SAMANTHA_LAP_SCRIPTS.length].concat(SAMANTHA_LAP_CLOSE); }
+  // Phone's already-open avatar box only gets one line (see
+  // phoneSamanthaIntro below), so it cycles the same three real requests.
+  var PHONE_LAP_LINES = [SAMANTHA_REMINDER_LINE, "what's the weather like", "what's on my calendar today"];
   // Every soft reboot re-injects the kernel. v86's own load_multiboot() hardcodes an
   // empty command line, so portfolio mode calls the same two steps it does (read from
   // the vendored libv86.js) with "portfolio" passed through, or the dock would reset
@@ -1885,9 +2093,29 @@ if (typeof document !== "undefined") (function () {
       await sleep(150);
     }
     if (focused || tourGen !== gen) return;
+    if (tapTalkBtn && !audioRunning()) {
+      // Wait for the tap so her reply is audible; give up after 20s and run
+      // silently so the demo still moves (the button stays up for later).
+      tapTalkBtn.hidden = false;
+      await Promise.race([tapTalkPromise, new Promise(function (r) { setTimeout(r, 20000); })]);
+      if (focused || tourGen !== gen) return;
+      await new Promise(function (r) { setTimeout(r, 400); }); // let resume() settle
+    }
     updateHeadline('Samantha');
-    await emulator.keyboard_send_text(SAMANTHA_REMINDER_LINE + '\n', 55); // straight into her already-open input box, exactly like a real visitor's first tap-and-type would
-    await sleep(3000); // real /api/pick + local reminder-tool round trip, same dwell the windowed scene's own script already gives each turn
+    var speakSeen = speakCount;
+    await emulator.keyboard_send_text(PHONE_LAP_LINES[lapIndex % PHONE_LAP_LINES.length] + '\n', 55); // straight into her already-open input box, exactly like a real visitor's first tap-and-type would
+    // Wait for her real reply to finish speaking before closing her. A fixed
+    // 3s dwell closed the avatar before /api/speak even returned on a slow
+    // phone, so iOS visitors never heard her. The kernel logs
+    // "speak: status=N bytes=M" and plays pcm8 at 16 kHz (drivers/speak.h),
+    // so the clip lasts M/16000 s.
+    var waitStart = Date.now(), speakMs = 0;
+    while (Date.now() - waitStart < 15000) {
+      if (focused || tourGen !== gen) return;
+      if (speakCount > speakSeen) { speakMs = Math.min(12000, Math.round(lastSpeakBytes / 16)) + 800; break; }
+      await sleep(200);
+    }
+    await sleep(speakMs || 3000);
     if (focused || tourGen !== gen) return;
     if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80); // Escape: closes the now-windowed console back to the desktop
     await sleep(800);
@@ -1905,6 +2133,7 @@ if (typeof document !== "undefined") (function () {
       }
     }
     while (!focused && tourGen === gen) {
+      lapIndex++; // fix/demo-aplus-1 item 6: picks this lap's Samantha exchange below
       // v0.76.29: reset headline at the start of each lap to a default
       resetHeadline();
       await sleep(800); // brief pause before the first app shows, so the headline is visible
@@ -1939,7 +2168,13 @@ if (typeof document !== "undefined") (function () {
       await sleep(1500);
       for (var i = 0; i < TOUR_APPS.length; i++) {
         if (focused || tourGen !== gen || !adaptersReady) return;
-        await runSoloApp(gen, TOUR_APPS[i]);
+        // item 1: Terminal reads as dead time on phone (no visible result
+        // to a visitor who can't read a shell prompt at that size) -- skip
+        // it there, desktop tour unchanged.
+        if (IS_PHONE && TOUR_APPS[i].name === 'Terminal') continue;
+        var app = TOUR_APPS[i];
+        if (app.name === 'Samantha') app = Object.assign({}, app, { script: samanthaScriptForLap(lapIndex) }); // item 6: a different real exchange each lap
+        await runSoloApp(gen, app);
       }
       // Direct request: "after showing all the apps", so this runs right
       // here, once every real dock app has had its turn and before the

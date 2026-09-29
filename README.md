@@ -15,6 +15,12 @@ Try it now: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 
 You can talk to it. Ask Samantha to set a reminder, take a note or open an app. She does it, out loud, with a face that talks while she speaks. (Samantha is the assistant from [Turing](https://github.com/nulljosh/turing). Joshua Tree is the machine she runs.)
 
+## Watch it
+
+[![Joshua Tree ad, 36 seconds. Click to play.](docs/hardware/ad-poster.jpg)](https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4)
+
+A 36 second ad. Samantha narrates it in her own voice, the OS shots are the real system booting in a browser, and the case is [Strata](docs/HARDWARE.md#enclosure-strata), a concept rendered from its CAD file. The case shots are Blender, the voice is ElevenLabs, the music is original and written in code, and the cut is ffmpeg with San Francisco type. All of it lives in `docs/hardware/ad/`.
+
 ## How it fits together
 
 Top to bottom: where it runs, what you see, the engine underneath, the parts that talk to hardware, the outside services it calls, and where your files live.
@@ -65,9 +71,11 @@ Measured headless in QEMU on a Mac Mini M4 by `tools/bench.sh`. Run it yourself;
 
 - [docs/WHITEPAPER.md](docs/WHITEPAPER.md) - why and how
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - every file
+- [docs/HARDWARE.md](docs/HARDWARE.md) - the real board pick and the 3.0 bring-up plan
 - [docs/VERSIONS.md](docs/VERSIONS.md) - release history
 - [docs/PLAYLIST.md](docs/PLAYLIST.md) - the Building an OS video series, mapped to what we have
 - [docs/TESTING.md](docs/TESTING.md) - every test
 - [docs/roadmap.md](docs/roadmap.md) - what's next
+- [MONEY.md](MONEY.md) - how it makes money
 
 Apache License 2.0, © 2026 Joshua Trommel

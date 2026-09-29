@@ -73,7 +73,7 @@ static void gui_launch_reminders(void) {
             font_draw_string("No reminders yet.", 20, T + 52, 0x001C1C1E, -1);
             font_draw_string("Press a to add one.", 20, T + 76, 0x00807468, -1);
         } else {
-            font_draw_string("up/down to pick   space toggles done   d deletes   a adds   esc closes", 20, T + 52, 0x00807468, -1);
+            gui_draw_hint(20, T + 52, "up/down to pick   space toggles done   d deletes   a adds   esc closes", 0x00807468);
             for (int i = 0; i < reminders_count; i++) {
                 int y = T + 84 + i * 22;
                 if (i == sel) window_rect(16, y - 4, (int)window_width() - 32, 20, 0x00EDE6DC);
@@ -136,7 +136,7 @@ static void gui_draw_reminders_content(void){
         font_draw_string("Press a to add one.", 20, T + 76, 0x00807468, -1);
         return;
     }
-    font_draw_string("up/down to pick   space toggles done   d deletes   a adds   esc closes", 20, T + 52, 0x00807468, -1);
+    gui_draw_hint(20, T + 52, "up/down to pick   space toggles done   d deletes   a adds   esc closes", 0x00807468);
     if (reminders_mw_sel >= reminders_count) reminders_mw_sel = reminders_count - 1;
     for (int i = 0; i < reminders_count; i++) {
         int y = T + 84 + i * 22;

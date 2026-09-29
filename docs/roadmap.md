@@ -6,7 +6,7 @@ releases](https://github.com/nulljosh/joshuatree/releases), not here.
 
 See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
-**Latest**: Introducing Samantha on your phone. Open the demo on a phone and she boots straight up, face and all.
+**Latest**: A real phone home screen, and Settings rebuilt.
 
 <!-- NOTE: The **Latest** field is public-facing copy synced to the landing page's h1/eyebrow. Must read as a feature announcement ("Introducing X."), never a changelog line. Update alongside version bumps. tools/gen/inject-landing-headline.sh reads this line automatically. -->
 
@@ -20,6 +20,7 @@ Samantha runs the machine. Mobile first by 2026-10-04: phone mode, the landing d
 - [x] [Fable] Step two, 1.7.11: Toroid runs at ring 3 (`user/toroid.c`, bit-packed grids in its own .data), `kernel/ring3app.c` is one table-driven launcher (`RING3_APPS`), and the in-kernel copies of both Keyrate and Toroid are deleted. `tools/checks/ring3toroid-check.py` proves it draws, closes both ways, crashes safely.
 - [x] [Opus] Step three, 1.7.12: Calculator runs at ring 3 (`user/calculator.c`, the same recursive-descent grammar evaluated straight into a double instead of an expr_node tree, since a flat binary has no .bss and no kmalloc), still one row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3calc-check.py` proves it evaluates through the real parser (`12*3 = 36`, `5/0 = 0`), draws, closes both ways, crashes safely.
 - [x] [Opus] Step four, 1.7.14: Quotes runs at ring 3 (`user/quotes.c`, the same fixed deck and answer-rotation, streak and best kept in its own `.data`), still one row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3quotes-check.py` proves it draws the option grid, answers right and wrong through the real logic, closes both ways, crashes safely.
+- [x] [Opus] Step five, 1.8.22: Homeqi runs at ring 3 (`user/homeqi.c`, the same eight yes/no questions and scoring). It had gone dead in the kernel: APPS[] opened it through the generic static-page viewer. It is one more row in `RING3_APPS`, and the old copy is deleted. `tools/checks/ring3homeqi-check.py` proves it scores a real answer, draws, closes both ways, crashes safely.
 - [ ] [Sonnet] Port the remaining apps the same way, one PR each. Each PR: `user/<app>.c`, a row in `RING3_APPS`, the in-kernel copy deleted once the check passes.
 - [ ] [Fable] What the ports will need from the ABI: a font syscall (Keyrate carries its own 8x16 bitmap), a tick clock finer than `SYS_TIME`'s seconds, more than one program window at a time, and the framebuffer pages flipped back to supervisor-only on release (today they are zeroed and re-mapped on the next open).
 
@@ -31,7 +32,7 @@ Measured against the closest from-scratch peers: SerenityOS (the one-person-scal
 3. **Native TLS.** HTTPS goes through the worker proxy, so a browser can't happen yet.
 4. **Sound beyond the demo.** The Sound Blaster driver plays audio in QEMU (1.6.9), but every peer ships a music player, and real PCs need AC97 or HD Audio. See Desktop and apps, Our own computer.
 5. **Desktop basics.** Undo, right-click menus, drag and drop, an app switcher, a screenshot key. SerenityOS, ToaruOS and KolibriOS all have these (the clipboard landed in 1.0.6, text selection in 1.2.0).
-6. **Apps from outside the kernel.** Most apps compile into the kernel; four ring-3 programs exist (Keyrate, Toroid, Calculator, Quotes). No installer, no update path.
+6. **Apps from outside the kernel.** Most apps compile into the kernel; four ring-3 programs exist (Keyrate, Toroid, Calculator, Quotes, Homeqi). No installer, no update path.
 7. **Everyday apps peers ship.** An image viewer, a music player, a few games. KolibriOS ships dozens in under 2MB. See Desktop and apps.
 
 Kernel.c is ~9,800 lines with 84 files pasted in; an Opus agent is building the app interface (`feat/app-interface`) so apps move to ring 3. Grading is currently C+.
@@ -194,13 +195,12 @@ Needs a call from Joshua before scoping:
 
 ## Session task queue
 Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current. Each item also needs a `(plain: ...)` phrase right after the title, a few plain words a 20-year-old visitor would understand with zero dev background, that phrase is what actually shows on the landing page, never the dev title. Internal refactor work that a visitor has no way to try (nothing to click, nothing that looks different) uses `(plain: skip)`, which the generator drops from the card entirely instead of translating it into vague visitor-facing words.
-1. **Samantha speaks on the landing demo** (plain: hear her voice on the demo) [Sonnet]: measure a real reply end to end (serial speak status, output RMS) now that the tour reboot keeps facehost.
-2. **Touch and an on-screen keyboard** (plain: type to her on your phone) [Sonnet]: VERSIONS 1.9.
-3. **Apps leave the kernel, each in its own protected space** (plain: apps that can't crash each other) [Sonnet]: the 2.0 gate; one app per PR with its crash check.
-4. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
-5. **Real Activity and Clock icons** (plain: skip) [Sonnet]: they show placeholder art on the phone grid.
-6. **Music and Video players** (plain: music and video apps) [Sonnet]: VERSIONS 2.1 and 2.2.
-7. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after 2.0.
+1. **Touch and an on-screen keyboard** (plain: type to her on your phone) [Sonnet]: VERSIONS 1.9.
+2. **Apps leave the kernel, each in its own protected space** (plain: apps that can't crash each other) [Sonnet]: the 2.0 gate; one app per PR with its crash check.
+3. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
+4. **Real Activity and Clock icons** (plain: skip) [Sonnet]: they show placeholder art on the phone grid.
+5. **Music and Video players** (plain: music and video apps) [Sonnet]: VERSIONS 2.1 and 2.2.
+6. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after 2.0.
 
 ## Landing roadmap summary
 `tools/gen/landing-roadmap.py` reads this file's Session task queue and takes up to three open, numbered, bold task titles for the landing page's "Where it's going" card, skipping completed entries and escaping for HTML. `tools/checks/landing-roadmap-check.py` and `tools/gen/landing-roadmap.py --check` are the regression checks. A roadmap change triggers the landing deploy workflow, which regenerates the card before upload.

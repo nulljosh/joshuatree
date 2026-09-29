@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""Homeqi runs as a real ring-3 process, the fourth app out of the kernel,
+and crashing it does not take the desktop with it (roadmap 2.0, 1.7.13).
+
+Boots headless with `open=homeqi`, which launches Homeqi from the dock
+path the moment the desktop is up. Homeqi is user/homeqi.c, a flat binary
+loaded off the VFS by exec_user and run at CPL 3 through the same
+table-driven launcher Keyrate, Toroid and Calculator use (kernel/ring3app.c,
+RING3_APPS). The eight yes/no questions and the yes_is_good/reasoning table
+are the same data kernel/homeqi.h's hq_draw/gui_launch_homeqi carried
+(that path had gone dead: APPS[] actually opened Homeqi through the
+generic gui_launch_html static-page viewer, a duplicate-wiring bug that
+file's own comment noted); this is now the one real Homeqi. The check
+then:
+
+  1. asserts, off the serial log, that the program opened a window of the
+     dock viewport's size (804x345) and the kernel saw the open come from
+     ring 3;
+  2. presses "1" (yes) on question 1, asserts the ring-3 program logged a
+     scored answer, presses again to advance past the reasoning screen to
+     question 2, proving the real question/reasoning/score state machine
+     round-trips through the ring-3 program;
+  3. presses the backquote, the deliberate crash key: a null write, a page
+     fault at ring 3. Asserts the kernel reaped the task, released the
+     window, the launcher logged the crash by name, and the desktop is
+     back: the dock is on screen and Mail opens from a dock click;
+  4. opens Homeqi from the Apps folder grid (row 3, col 1, the 832x450
+     folder viewport) and closes it with Esc, then again with the red
+     close dot; after each it must have exited 0, released its window,
+     and Mail must open from the dock;
+  5. opens the Apps folder by keyboard (Enter on a bare desktop), launches
+     Homeqi from the grid, confirms it got a real window and no BUG line,
+     backs out with two Esc, and confirms the desktop still takes a click.
+
+Discriminating: replace the null write in user/homeqi.c with jt_exit(0)
+and step 3 fails; break the yes_is_good scoring and the "answered q1
+score=" line never appears; break gui_apps_launch's viewport setup and
+steps 4 and 5 fail.
+
+Usage: tools/checks/ring3homeqi-check.py   (from the repo root, after make kernel.elf)
+"""
+import json, os, socket, subprocess, sys, time
+from PIL import Image
+
+LOG = "/tmp/jt-ring3homeqi-serial.log"
+DUMP = "/tmp/jt-ring3homeqi.raw"
+FB = 0xfd000000; W, H = 1920, 1080
+PORT = 4471
+LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
+DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
+PITCH = DOCK_ICON + DOCK_GAP
+ICON_ROW_Y = 487
+CLOSE_X, CLOSE_Y = 94, 56
+CLOSE_RED = (0xFF, 0x5F, 0x57)
+PARK = (480, 200)
+
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+for f in (LOG, DUMP):
+    try: os.remove(f)
+    except FileNotFoundError: pass
+
+q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-append", "open=homeqi",
+                      "-display", "none", "-vga", "std",
+                      "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+fails = []
+def serial():
+    try: return open(LOG, errors="replace").read()
+    except OSError: return ""
+def wait_serial(needle, secs):
+    for _ in range(int(secs * 10)):
+        if needle in serial(): return True
+        time.sleep(0.1)
+    return False
+try:
+    s = None
+    for _ in range(50):
+        time.sleep(0.2)
+        try: s = socket.create_connection(("127.0.0.1", PORT)); break
+        except OSError: pass
+    if s is None: raise SystemExit("FAIL: QEMU's QMP socket never came up")
+    f = s.makefile("rw")
+    def cmd(o):
+        f.write(json.dumps(o) + "\n"); f.flush()
+        while True:
+            r = json.loads(f.readline())
+            if "return" in r or "error" in r: return r
+    f.readline()
+    cmd({"execute": "qmp_capabilities"})
+    def keys(*qcodes):
+        r = cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in qcodes]}})
+        if "error" in r: raise SystemExit(f"FAIL: QMP rejected send-key {qcodes}: {r['error']}")
+    def move(x, y):
+        cmd({"execute": "input-send-event", "arguments": {"events": [
+            {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
+            {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
+    def click():
+        cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
+        time.sleep(0.1)
+        cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
+    def frame():
+        cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
+        return Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
+    def pixel(x, y, img=None):
+        return (img or frame()).getpixel((x * SCALE + 1, y * SCALE + 1))
+    def near(p, c, tol=12): return max(abs(p[i] - c[i]) for i in range(3)) <= tol
+
+    # 1. the program is up and has its window
+    if not wait_serial("ring3app: launching HOMEQI.BIN at ring 3", 40):
+        fails.append("Homeqi was never launched as a ring-3 program (open=homeqi flag or ring3app.c broken)")
+    if not wait_serial("syscall: window opened for ring-3 task", 10):
+        fails.append("SYS_WINDOW_OPEN never succeeded from ring 3")
+    if not wait_serial("homeqi: ring-3 window 804x345", 10):
+        fails.append("the program did not report the app viewport's size (expected 804x345) through write()")
+    time.sleep(0.5)
+
+    # 2. press "1" (yes) on question 1, proving the real scoring state
+    #    machine, then advance to question 2.
+    keys("1"); time.sleep(0.3)
+    if not wait_serial("homeqi: answered q1 score=", 5):
+        fails.append("question 1 was not scored (the '1' key never reached the ring-3 quiz)")
+    keys("2"); time.sleep(0.3)  # any key advances past the reasoning screen
+    if "syscall: write(1) from ring 3: homeqi: crashing" in serial():
+        fails.append("the program crashed before the crash key was pressed")
+
+    # 3. the deliberate crash, and the supervisor's answer to it
+    keys("grave_accent"); time.sleep(0.2)
+    if not wait_serial("homeqi: crashing on purpose", 5):
+        fails.append("the crash key did not reach the program")
+    if not wait_serial("exception: ring-3 task hit page-fault, reaped", 5):
+        fails.append("the kernel did not reap the ring-3 task on its page fault")
+    if not wait_serial("syscall: window released, task gone", 5):
+        fails.append("the window was not released when the task died")
+    if not wait_serial("ring3app: HOMEQI.BIN crashed (page-fault), window torn down, desktop alive", 5):
+        fails.append("the launcher did not log the crash by name and return")
+    if not wait_serial("autoopen: back on the desktop", 5):
+        fails.append("the desktop loop was never re-entered after the crash")
+    if "exception: ring-0" in serial() or "panic in" in serial():
+        fails.append("the KERNEL faulted: the crash was not contained to the ring-3 task")
+
+    # the desktop is alive and takes input
+    move(*PARK); time.sleep(0.5)
+    dock = pixel(480, 511)
+    print(f"dock tray after crash: {dock}")
+    if dock != (0xEF, 0xEB, 0xE4):
+        fails.append(f"desktop dock not on screen after the crash (got {dock})")
+    if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED):
+        fails.append("an app window is still open after the crash; the dead app's window was not torn down")
+    move(SLOT0_X + 2 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
+    opened = False
+    for _ in range(40):
+        time.sleep(0.1)
+        if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): opened = True; break
+    print(f"Mail opens from the dock after the crash: {'yes' if opened else 'NO'}")
+    if not opened: fails.append("Mail did not open from a dock click after the crash: desktop not responsive")
+    keys("esc"); time.sleep(1.0)
+    if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED):
+        fails.append("Mail did not close on Esc after the crash")
+
+    # 4. a normal close, both ways, from the Apps folder grid: Homeqi is
+    #    APPS[] index 16 = row 3, col 1 (5 columns wide), whose viewport
+    #    is the folder's 832x450, not the dock's 804x345.
+    APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
+    def open_homeqi_from_grid(tag):
+        seen = serial().count("homeqi: ring-3 window")
+        move(*PARK); time.sleep(0.2)
+        move(SLOT0_X + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.0)
+        keys("d"); time.sleep(0.35)  # right x1 -> col 1
+        for _ in range(3): keys("s"); time.sleep(0.35)  # down x3 -> row 3, index 16
+        keys("ret")
+        for _ in range(60):
+            time.sleep(0.1)
+            if serial().count("homeqi: ring-3 window") > seen: break
+        else:
+            fails.append(f"{tag}: Homeqi did not open a ring-3 window from the Apps folder grid"); return False
+        if "homeqi: ring-3 window 832x450" not in serial():
+            fails.append(f"{tag}: the folder-launched window is not the folder viewport's 832x450")
+        if "ring3app: BUG" in serial():
+            fails.append(f"{tag}: ring3app logged a BUG line")
+        time.sleep(0.5)
+        return True
+    def assert_closed(tag, exits_before):
+        if not wait_serial("syscall: window released, task gone", 5) or serial().count("HOMEQI.BIN exited 0") <= exits_before:
+            fails.append(f"{tag}: Homeqi did not exit 0 and release its window on a normal close")
+        keys("esc"); time.sleep(0.8)  # the Apps folder itself
+        move(*PARK); time.sleep(0.3)
+        if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED) or near(pixel(APPS_CLOSE_X, APPS_CLOSE_Y), CLOSE_RED):
+            fails.append(f"{tag}: a window is still open after the close")
+        move(SLOT0_X + 2 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
+        ok = False
+        for _ in range(40):
+            time.sleep(0.1)
+            if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): ok = True; break
+        print(f"{tag}: Mail opens from the dock afterwards: {'yes' if ok else 'NO'}")
+        if not ok: fails.append(f"{tag}: Mail did not open from a dock click after the close: desktop stuck")
+        keys("esc"); time.sleep(1.0)
+    exits = serial().count("HOMEQI.BIN exited 0")
+    if open_homeqi_from_grid("esc-close"):
+        keys("esc"); time.sleep(0.5)
+        assert_closed("esc-close", exits)
+    exits = serial().count("HOMEQI.BIN exited 0")
+    if open_homeqi_from_grid("dot-close"):
+        move(APPS_CLOSE_X, APPS_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.5)
+        assert_closed("dot-close", exits)
+
+    # 5. the keyboard path into the Apps folder, not the dock click.
+    seen = serial().count("homeqi: ring-3 window")
+    move(*PARK); time.sleep(0.3)
+    keys("ret"); time.sleep(1.0)  # bare desktop -> Apps folder, by keyboard
+    keys("d"); time.sleep(0.35)
+    for _ in range(3): keys("s"); time.sleep(0.35)
+    keys("ret")  # launch Homeqi from the grid selection
+    for _ in range(60):
+        time.sleep(0.1)
+        if serial().count("homeqi: ring-3 window") > seen: break
+    else:
+        fails.append("keyboard-open: Homeqi did not open a ring-3 window after Enter opened the Apps folder by keyboard")
+    if "ring3app: BUG" in serial():
+        fails.append("keyboard-open: ring3app logged a BUG line launching Homeqi from a keyboard-opened Apps folder")
+    keys("esc"); time.sleep(0.5)  # closes Homeqi
+    keys("esc"); time.sleep(0.5)  # closes the Apps folder
+    move(*PARK); time.sleep(0.3)
+    if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED) or near(pixel(APPS_CLOSE_X, APPS_CLOSE_Y), CLOSE_RED):
+        fails.append("keyboard-open: a window is still open after the two Esc presses")
+    move(SLOT0_X + 2 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
+    opened = False
+    for _ in range(40):
+        time.sleep(0.1)
+        if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): opened = True; break
+    print(f"keyboard-open: Mail opens from the dock afterwards: {'yes' if opened else 'NO'}")
+    if not opened: fails.append("keyboard-open: Mail did not open from a dock click after the keyboard-opened Apps folder closed: desktop stuck")
+    keys("esc"); time.sleep(1.0)
+finally:
+    q.terminate()
+    try: q.wait(5)
+    except subprocess.TimeoutExpired: q.kill()
+
+if fails:
+    print("FAIL:")
+    for x in fails: print("  - " + x)
+    print("--- serial tail ---")
+    print(serial()[-1500:])
+    sys.exit(1)
+print("PASS: Homeqi ran at ring 3 with its own window, scored a real answer through the ring-3 quiz, crashed on demand, closed normally both ways from the Apps folder, and the desktop stayed alive")
