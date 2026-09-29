@@ -6,7 +6,7 @@
    process, and whether the program exited on its own or was reaped by
    idt.c's ring-3 fault path, it tears the window down and hands the
    desktop back. Keyrate went first (1.7.7), Toroid second (1.7.11),
-   Calculator third (1.7.12), Quotes fourth (1.7.14), Bookrank fifth (2.0), Homeqi sixth (1.8.22), Lexly seventh (1.9.1). */
+   Calculator third (1.7.12), Quotes fourth (1.7.14), Bookrank fifth (2.0), Homeqi sixth (1.8.22), Lexly seventh (1.9.1), Plan eighth (1.9.2). */
 void keyrate_ring3_open(void);
 void toroid_ring3_open(void);
 void calculator_ring3_open(void);
@@ -14,15 +14,16 @@ void quotestreak_ring3_open(void);
 void bookrank_ring3_open(void);
 void homeqi_ring3_open(void);
 void lexly_ring3_open(void);
+void plan_ring3_open(void);
 
-/* `open=keyrate` / `open=toroid` / `open=calc` / `open=quote` / `open=bookr` / `open=homeqi` / `open=lexly`
+/* `open=keyrate` / `open=toroid` / `open=calc` / `open=quote` / `open=bookr` / `open=homeqi` / `open=lexly` / `open=plan`
    launches that app from the dock path the moment the desktop is up, so
    tools/checks/ring3app-check.py, ring3toroid-check.py, ring3calc-check.py,
-   ring3quotes-check.py, ring3bookrank-check.py, ring3homeqi-check.py and ring3lexly-check.py can drive a ring-3 app
+   ring3quotes-check.py, ring3bookrank-check.py, ring3homeqi-check.py, ring3lexly-check.py and ring3plan-check.py can drive a ring-3 app
    without locating its tile in the Apps folder first.
    ring3app_autoopen_arm: kmain calls this with the boot command line;
    remembers the APPS slot if it says `open=keyrate`, `open=toroid`,
-   `open=calc`, `open=quote`, `open=bookr`, `open=homeqi` or `open=lexly`.
+   `open=calc`, `open=quote`, `open=bookr`, `open=homeqi`, `open=lexly` or `open=plan`.
    ring3app_autoopen_run: gui_run calls this once, right after the first
    desktop paint; if armed, launches that app from the dock path (mx, my
    are the cursor position to restore after) and disarms. No-op otherwise. */

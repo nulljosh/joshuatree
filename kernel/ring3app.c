@@ -5,10 +5,11 @@
    2.0: Bookrank joins it, the fifth app out.
    1.8.22: Homeqi joins it, the sixth app out.
    1.9.1: Lexly joins it, the seventh app out.
+   1.9.2: Plan joins it, the eighth app out.
 
    Roadmap 2.0 says apps leave the kernel, so a crash in one cannot take
    the machine down. Keyrate, the smallest real app, went first; Toroid,
-   Calculator, Quotes, Bookrank, Homeqi and Lexly followed the same path. Each app's dock entry lands here,
+   Calculator, Quotes, Bookrank, Homeqi, Lexly and Plan followed the same path. Each app's dock entry lands here,
    and everything else stays as it was: gui_launch_from_dock has already
    drawn the window chrome and set the viewport by the time this runs,
    just as for an in-kernel app.
@@ -40,6 +41,7 @@
 #include "user_bookrank.h"
 #include "user_homeqi.h"
 #include "user_lexly.h"
+#include "user_plan.h"
 #include "user_fbpoke.h"
 #include "app.h"
 #include "irq.h"
@@ -78,6 +80,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Bookrank",   user_bookrank,   USER_BOOKRANK_LEN,   "BOOKRANK.BIN"},
     {"Homeqi",     user_homeqi,     USER_HOMEQI_LEN,     "HOMEQI.BIN"},
     {"Lexly",      user_lexly,      USER_LEXLY_LEN,      "LEXLY.BIN"},
+    {"Plan",       user_plan,       USER_PLAN_LEN,       "PLAN.BIN"},
 };
 
 static void ring3app_launch(const struct ring3_app *a) {
@@ -143,6 +146,7 @@ void quotestreak_ring3_open(void){ ring3app_launch(&RING3_APPS[3]); }
 void bookrank_ring3_open(void)   { ring3app_launch(&RING3_APPS[4]); }
 void homeqi_ring3_open(void)     { ring3app_launch(&RING3_APPS[5]); }
 void lexly_ring3_open(void)      { ring3app_launch(&RING3_APPS[6]); }
+void plan_ring3_open(void)       { ring3app_launch(&RING3_APPS[7]); }
 
 /* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
    run user/fbpoke.c with no window: it must be refused a pointer into
@@ -180,6 +184,7 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='b' && pc[6]=='o' && pc[7]=='o' && pc[8]=='k') { ring3app_autoopen_slot = 10; serial_puts("autoopen=bookrank\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='h' && pc[6]=='o' && pc[7]=='m' && pc[8]=='e') { ring3app_autoopen_slot = 16; serial_puts("autoopen=homeqi\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='l' && pc[6]=='e' && pc[7]=='x' && pc[8]=='l') { ring3app_autoopen_slot = 13; serial_puts("autoopen=lexly\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='p' && pc[6]=='l' && pc[7]=='a' && pc[8]=='n') { ring3app_autoopen_slot = 12; serial_puts("autoopen=plan\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
     }
 }
@@ -187,7 +192,7 @@ void ring3app_autoopen_run(int mx, int my){
     if (ring3app_autoopen_slot < 0) return;
     int slot = ring3app_autoopen_slot; ring3app_autoopen_slot = -1;
     editor_mouse_x = mx; editor_mouse_y = my;
-    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's or Lexly's APPS slot */
+    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Lexly's or Plan's APPS slot */
     if (fbpoke_armed) { fbpoke_armed = 0; fbpoke_run(); }
     gui_draw_desktop(-1, -1, 0, 0);
     cursor_saved_x = cursor_saved_y = -1;

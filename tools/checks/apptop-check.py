@@ -194,7 +194,10 @@ try:
         prev, deadline = None, time.time() + 8
         while True:
             title_apps = title(dump())
-            if title_apps == prev or time.time() > deadline: break
+            # A stale wallpaper frame is also "still" across two dumps: the
+            # reference must hold the folder's own title strip (light frame).
+            drawn = sum(1 for i in range(0, len(title_apps), 3) if title_apps[i] >= 0xF0 and title_apps[i+1] >= 0xEE) > len(title_apps) // 6
+            if (drawn and title_apps == prev) or time.time() > deadline: break
             prev = title_apps; time.sleep(0.5)
         for _ in range(idx % 5): key("d")
         for _ in range(idx // 5): key("s")
@@ -225,10 +228,30 @@ try:
             gap = rows[0] - FOLDER_VIEW[1]
             print(f"{name}: first ink {gap}px below the title bar")
             if gap > MAX_GAP: fails.append(f"{name}: blank strip under the title bar, first ink {gap}px down (max {MAX_GAP})")
+        # Esc can be lost on a loaded runner (scancode drop). Poll for the
+        # restored title; if the app is still on screen when the wait ends,
+        # the Esc never arrived, so send exactly one more.
+        def repaints():
+            try: return open(LOG, "rb").read().count(b"appsfullrepaint")
+            except OSError: return 0
+        seen_repaints = repaints()
         key("esc")
-        deadline = time.time() + 8
-        while title(dump()) != title_apps and time.time() < deadline: time.sleep(0.5)
-        if title(dump()) != title_apps: fails.append(f"{name}: frame title not restored to Apps after closing it")
+        # The kernel repaints the whole folder (and restores its title) once
+        # the app returns; wait for that marker before reading pixels.
+        for _ in range(100):
+            if repaints() > seen_repaints: break
+            time.sleep(0.1)
+        time.sleep(0.5)
+        for attempt in range(2):
+            deadline = time.time() + 10
+            while title(dump()) != title_apps and time.time() < deadline: time.sleep(0.5)
+            img = dump()
+            if title(img) == title_apps or attempt or app_bg(img) < 80: break
+            key("esc")
+        time.sleep(0.3)
+        if title(dump()) != title_apps:
+            dump().save(f"/tmp/jt-apptop-{name.lower()}-after-esc.png")
+            fails.append(f"{name}: frame title not restored to Apps after closing it")
         click_at(*FOLDER_CLOSE, 1.0)
         move(*PARK); time.sleep(0.4)
     try: cmd({"execute": "quit"})

@@ -2122,7 +2122,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
@@ -5447,7 +5447,6 @@ static void gui_launch_trash(void){
 
 #include "stocks.h"
 #include "fieldbook.h"
-#include "plan.h"
 #include "curbfind.h"
 #include "sparkjar.h"
 #include "epiphany.h"
@@ -5728,7 +5727,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c */
     /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       bookrank_ring3_open,   0, 0}, /* 2.0: ring 3 too (user/bookrank.c) */
     /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_ring3_open, 0, 0}, /* 1.7.14: ring 3 too (user/quotes.c) */
-    /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       gui_launch_plan,       0, 0},
+    /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       plan_ring3_open,       0, 0}, /* 1.9.2: ring 3 too (user/plan.c) */
     /* 13 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      lexly_ring3_open,      0, 0}, /* 1.9.1: ring 3 too (user/lexly.c) */
     /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */
     /* 15 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   gui_launch_sparkjar,   0, 0},
