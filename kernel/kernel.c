@@ -2122,7 +2122,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
@@ -5452,7 +5452,6 @@ static void gui_launch_trash(void){
 #include "activity.h"
 static int fs_ok_global = 0;
 #include "bench.h"
-#include "clock.h"
 
 /* One app window's frame: rounded body, content well, traffic lights, title. */
 static void gui_draw_window_frame(int x, int y, int w, int h, const char *name){
@@ -5739,7 +5738,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 22 */ {"Epiphany",   0x001F5FA8, gui_icon_stocks,     gui_launch_epiphany,   0, 0}, /* art covers it; primitive fallback only */
     /* 23 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       gui_launch_portfolio,  0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph */
     /* 24 */ {"Activity",   0x003E4C58, gui_icon_activity,   gui_launch_activity,   0, 0},
-    /* 25 */ {"Clock",      0x00565A7A, gui_icon_apps,       gui_launch_clock,      0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph */
+    /* 25 */ {"Clock",      0x00565A7A, gui_icon_apps,       clock_ring3_open,      0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph; 1.9.4: ring 3 (user/clock.c) */
     /* Apps and Trash aren't real apps with their own brand color, so their
        tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
        tinted background like every real app above. 2026-09-27: this used
