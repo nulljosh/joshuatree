@@ -218,24 +218,29 @@ try:
     else:
         for _ in range(18): key("d")  # sel 0 -> 18 (Contacts)
         keys("ret"); time.sleep(0.8)
-        wait_value('contacts_loaded', 1)
+        def wait_log(needle, secs=8):
+            for _ in range(int(secs * 10)):
+                try:
+                    if needle in open(LOG, errors="replace").read(): return True
+                except OSError: pass
+                time.sleep(0.1)
+            return False
+        # 1.9.7: Contacts is a ring-3 program now, so its state is not in kernel
+        # memory to read; it reports every load and save on the serial log.
+        if not wait_log("contacts: loaded 1"): fails.append("Contacts: the ring-3 app never reported its load")
         key("a"); time.sleep(0.4)
         type_str("qa-contact-marker"); keys("ret"); time.sleep(0.3)  # name
         type_str("555-0100"); keys("ret"); time.sleep(0.3)           # phone
         type_str("qa@test.local"); keys("ret"); time.sleep(0.6)      # email, saves
-        wait_value('contacts_count', 2)
-        assert memory('contacts', 192)[96:128].split(b'\0')[0] == b'qa-contact-marker'
+        if not wait_log("contacts: count 2"): fails.append("Contacts: the add never reported count 2")
         # delete the DEFAULT "Joshua" row (sel starts at 0 after an add),
         # not the one just added -- deleting the marker contact would make
         # the disk check below fail by construction (checking for text
-        # that was deliberately just removed), a real gap this test found
-        # in an earlier draft of itself. This still exercises a real
-        # contacts_delete_at() + contacts_save() round trip, just against
-        # the other row, and leaves the marker contact as the one the
-        # disk check below actually needs to find.
-        key("d"); time.sleep(0.6)  # sel is already 0 (Joshua) right after an add
-        wait_value('contacts_count', 1)
-        assert memory('contacts', 32).split(b'\0')[0] == b'qa-contact-marker'
+        # that was deliberately just removed). This still exercises a real
+        # delete + save round trip, just against the other row, and leaves
+        # the marker contact as the one the disk check below needs to find.
+        key("d"); time.sleep(0.6)
+        if not wait_log("contacts: count 1"): fails.append("Contacts: the delete never reported count 1")
         keys("esc"); time.sleep(1.0)  # back to the folder grid
         print("Contacts : added a real contact, deleted the default one, esc back to the folder (see disk check below)")
 
@@ -322,5 +327,5 @@ else:
 if fails:
     for x in fails: print("FAIL:", x)
     sys.exit(1)
-print("PASS: seven app interaction flows; all five expected files verified on disk; Contacts add/delete verified in memory; desktop remains responsive")
+print("PASS: seven app interaction flows; all five expected files verified on disk; Contacts add/delete verified on the serial log; desktop remains responsive")
 print(f"Artifacts: {ARTIFACTS}")

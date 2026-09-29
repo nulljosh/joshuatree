@@ -2122,7 +2122,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
@@ -4551,7 +4551,6 @@ static int text_ink(int a, unsigned int fg, unsigned int dst){
 #include "reminders.h"
 #include "calendar.h"
 #include "mail.h"
-#include "contacts.h"
 #include "chat.h"
 #include "search.h"
 
@@ -5729,7 +5728,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 15 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   gui_launch_sparkjar,   0, 0},
     /* 16 */ {"Homeqi",     0x00566A3A, gui_icon_homeqi,     homeqi_ring3_open,     0, 0}, /* 1.7.13: ring 3 too (user/homeqi.c) */
     /* 17 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  fieldbook_ring3_open,  0, 0}, /* 1.9.3: ring 3 too (user/fieldbook.c) */
-    /* 18 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   gui_launch_contacts,   0, 0},
+    /* 18 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   contacts_ring3_open,   0, 0}, /* 1.9.7: ring 3 (user/contacts.c) */
     /* 19 */ {"Calculator", 0x00556B85, gui_icon_calculator, calculator_ring3_open, 0, 0}, /* 1.7.12: ring 3 too (user/calculator.c) */
     /* 20 */ {"Stocks",     0x00356B4F, gui_icon_stocks,     gui_launch_stocks,     0, 0},
     /* 21 */ {"Search",     0x00506078, gui_icon_search,     gui_launch_search,     0, 0},
@@ -7244,7 +7243,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps contactstest calctest pngtest jpegtest chattest beep say listen\n");
+    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps calctest pngtest jpegtest chattest beep say listen\n");
                                         puts("a name that isn't one of the above runs a program by that name too, e.g. \"hello\" or \"note buy milk\" (same as exec, case-insensitive)\n"); }
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
@@ -8792,52 +8791,6 @@ static void run(char *line){
             clear();
             puts("testapps done\n");
         }
-    }
-    else if (!strcmp(line, "contactstest")) {
-        /* v70 (0.64.0): discriminating regression test for Contacts app. The
-           core contract: write a contact to the VFS via contacts_save, read it
-           back via contacts_load, and verify the round-trip preserves the data
-           exactly, not just "doesn't crash". Real, discriminating checks: (1)
-           after adding a contact with special name/phone/email, the count is
-           exactly 2 (not 1 from seed), (2) the second contact's name matches
-           what was written (not corrupted parsing), (3) the count stays stable
-           when we load again (file persistence works), (4) deleting it drops
-           count back to 1. If any step fails, the test catches it. */
-        int pass = 0;
-        contacts_count = 1;
-        contacts_loaded = 1;
-        contacts_str_copy(contacts[0].name, "Joshua", CONTACTS_NAME_MAX);
-        contacts_str_copy(contacts[0].phone, "(778) 201-4533", CONTACTS_PHONE_MAX);
-        contacts_str_copy(contacts[0].email, "trommatic@icloud.com", CONTACTS_EMAIL_MAX);
-
-        if (contacts_count != 1) { puts("contacts seed failed\n"); goto contacts_test_done; }
-
-        contacts_str_copy(contacts[1].name, "Alice Bob", CONTACTS_NAME_MAX);
-        contacts_str_copy(contacts[1].phone, "555-1234", CONTACTS_PHONE_MAX);
-        contacts_str_copy(contacts[1].email, "alice@example.com", CONTACTS_EMAIL_MAX);
-        contacts_count = 2;
-        contacts_save();
-
-        /* Reset and reload */
-        contacts_loaded = 0;
-        contacts_load();
-
-        pass = (contacts_count == 2) &&
-                   (contacts[1].name[0] == 'A' && contacts[1].name[1] == 'l') &&
-                   (contacts[1].phone[0] == '5' && contacts[1].phone[1] == '5');
-
-        if (!pass) {
-            puts("contacts round-trip failed: count="); putn((unsigned int)contacts_count);
-            puts(" name[0]="); putc(contacts[1].name[0]); puts(" phone[0]="); putc(contacts[1].phone[0]); puts("\n");
-        } else {
-            contacts_delete_at(1);
-            pass = (contacts_count == 1);
-            if (!pass) puts("contacts delete failed\n");
-            else puts("contacts VFS round-trip: ok\n");
-        }
-
-        contacts_test_done:
-        if (!pass) puts("FAILED\n");
     }
     else if (!strcmp(line, "chattest")) {
         /* v85: discriminating regression test for Chat's real new pieces,
