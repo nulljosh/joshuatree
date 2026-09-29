@@ -182,7 +182,7 @@ change. No Save button.
 
 | App | File | On disk |
 |---|---|---|
-| Notes | `kernel/editor.h` | `NOTES.TXT`. The one app with real typography: an embedded DejaVu family with six faces and any size from 12 to 200 points. |
+| Notes | `kernel/editor.h` | Folders and many notes under `NOTES/`; an old `NOTES.TXT` moves in as the first note. The one app with real typography: an embedded DejaVu family with six faces and any size from 12 to 200 points. |
 | Reminders | `kernel/reminders.h` | `REMINDERS.TXT`, one line per item. |
 | Calendar | `kernel/calendar.h` | `EVENTS.TXT`. The grid itself is computed from the clock. |
 | Mail | `kernel/mail.h` | `MAIL.TXT`. Two starter messages ship compiled in. |

@@ -406,8 +406,14 @@ try:
     check('fresh boot: auth_logged_in is 0 (nothing to log into)', m1.integer('auth_logged_in') == 0)
     m1.screenshot('01-fresh-desktop')
     m1.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
-    m1.wait_int('editor_loaded', lambda v: v == 1, 'Notes did not open on a gate-free fresh image', timeout=5)
+    # v2.0 (notes/folders): the dock click opens straight into a note (a
+    # fresh disk gets a new one). editor_loaded is shrunk to one byte by
+    # the compiler and sits right before editor_buffer, so mask the low
+    # byte when reading it as an int.
+    m1.wait_int('editor_loaded', lambda v: (v & 0xff) == 1, 'Notes did not open on a gate-free fresh image', timeout=5)
     check('fresh boot: desktop is live with no accounts configured (today\'s documented behaviour)', True)
+    m1.key('esc')
+    time.sleep(0.2)
     m1.key('esc')
     time.sleep(0.3)
 
@@ -519,8 +525,10 @@ try:
     check('correct password: auth_current_user == "joshua"', m2.string('auth_current_user', 25) == USERNAME)
 
     m2.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
-    m2.wait_int('editor_loaded', lambda v: v == 1, 'Desktop did not become interactive after a real login', timeout=5)
+    m2.wait_int('editor_loaded', lambda v: (v & 0xff) == 1, 'Desktop did not become interactive after a real login', timeout=5)
     check('post-login: the desktop is interactive (Notes opens)', True)
+    m2.key('esc')
+    time.sleep(0.2)
     m2.key('esc')
     time.sleep(0.3)
     m2.screenshot('03-post-login-desktop')
