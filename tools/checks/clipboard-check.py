@@ -199,14 +199,9 @@ try:
     move(*PARK); time.sleep(0.5)
 
     # ---- 1: Notes, type a line, Ctrl+C, Ctrl+V pastes it again ----
-    # v2.0 (notes/folders): a dock click now lands on the folder/note
-    # browser, not straight in the editor -- 'n' creates a note in the
-    # current folder and opens it for editing, same landing the old
-    # direct-open gave.
     open_slot(NOTES_SLOT)
     if not window_open(): fails.append("Notes: dock click did not open a window")
     else:
-        key("n"); time.sleep(0.5)
         type_str("clip-roundtrip")
         ctrl("c")
         log = wait_marker("CLIPCOPY:" + m("clip-roundtrip"))
@@ -224,14 +219,10 @@ try:
     open_slot(NOTES_SLOT)
     if not window_open(): fails.append("Notes: dock click did not open a window (scenario 2)")
     else:
-        # v2.0 (notes/folders): the dock click lands on the browse screen
-        # again; Enter opens the one note scenario 1 created (its content
-        # now reloads from disk on every open rather than staying in RAM
-        # across a close, so what's there is whatever was last saved --
-        # scenario 1 never saved, so this is really opening it empty). A
-        # second Enter starts a fresh line either way, so Ctrl+X below
-        # cuts only the line this scenario actually types.
-        keys("ret")
+        # Notes keeps its buffer in RAM across a close/reopen within the same
+        # boot (editor.h's own documented contract), so scenario 1's text is
+        # still there; Enter starts a fresh line so Ctrl+X below cuts only
+        # the line this scenario actually types.
         keys("ret")
         type_str("echo cross-app-clip")
         ctrl("x")
@@ -271,8 +262,7 @@ try:
     open_slot(NOTES_SLOT)
     if not window_open(): fails.append("Notes: dock click did not open a window (scenario 3)")
     else:
-        keys("ret")  # opens the note (v2.0 browse screen)
-        keys("ret")  # fresh line, so Ctrl+C below copies only long_text
+        keys("ret")
         type_str(long_text)
         ctrl("c")
         log = wait_marker("CLIPCOPY:" + m(long_text), timeout=long_timeout)

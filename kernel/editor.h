@@ -906,6 +906,14 @@ static void gui_launch_editor(void) {
     notes_phone_level = 0;
     mouse_click_edge_sync();
 
+    /* Opening Notes lands straight in a note, ready to type, like the
+       one-note editor always did (and like macOS Notes reopening on its
+       last note). Esc from the editor then reveals the folder browser. */
+    if ((int)window_width() >= NOTES_WIDE_MIN) {
+        if (notes_note_count > 0) notes_open_selected();
+        else notes_new_note();
+    }
+
     for (;;) {
         int wide = (int)window_width() >= NOTES_WIDE_MIN;
         window_clear(0x00FAF8F6);

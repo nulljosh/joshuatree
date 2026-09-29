@@ -193,23 +193,8 @@ class Machine:
         return frame
 
     def open_notes(self):
-        # v2.0 (notes/folders): a dock click now lands on Notes' folder +
-        # note browser, not straight in the editor. Enter opens whatever
-        # note is already selected (index 0, exactly the one note every
-        # scenario below cares about, so a same-disk reopen keeps editing
-        # the same file); a totally empty disk has no note to select yet,
-        # so 'n' creates one in the current folder and opens it, the same
-        # editor_loaded==1 landing the old direct-open used to give.
         self.move(458, 487)
         self.click()
-        time.sleep(.5)
-        self.key('ret')
-        for attempt in range(20):
-            if self.integer('editor_loaded'):
-                time.sleep(.5)
-                return
-            time.sleep(.1)
-        self.key('n')
         for attempt in range(50):
             if self.integer('editor_loaded') and self.integer('gui_app_windowed'):
                 time.sleep(.5)

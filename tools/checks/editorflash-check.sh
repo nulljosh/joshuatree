@@ -83,12 +83,6 @@ def key(qcode):
 centre = SLOT0_X + NOTES_SLOT * PITCH + DOCK_ICON // 2
 move(centre, ICON_ROW_Y); time.sleep(0.3)
 click(); time.sleep(1.2)
-# v2.0 (notes/folders): dock click lands on the folder/note browser, not
-# the editor -- no "editorchrome" marker fires until a note is actually
-# opened. This disk-less boot seeds one demo note (kernel.c's ramfs
-# fallback), already selected, so Enter opens it same as the old
-# direct-open did.
-key("ret"); time.sleep(0.5)
 
 after_open = chrome_count()
 

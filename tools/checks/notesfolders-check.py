@@ -145,6 +145,8 @@ class Machine:
 
 def open_notes(m):
     m.move(458, 487); m.click(); time.sleep(0.5)
+    # A dock click opens straight into a note; Esc reveals the browser.
+    m.key("esc"); time.sleep(0.4)
 
 
 def to_shell(m):
