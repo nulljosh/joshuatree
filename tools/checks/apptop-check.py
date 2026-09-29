@@ -228,7 +228,17 @@ try:
         # Esc can be lost on a loaded runner (scancode drop). Poll for the
         # restored title; if the app is still on screen when the wait ends,
         # the Esc never arrived, so send exactly one more.
+        def repaints():
+            try: return open(LOG, "rb").read().count(b"appsfullrepaint")
+            except OSError: return 0
+        seen_repaints = repaints()
         key("esc")
+        # The kernel repaints the whole folder (and restores its title) once
+        # the app returns; wait for that marker before reading pixels.
+        for _ in range(100):
+            if repaints() > seen_repaints: break
+            time.sleep(0.1)
+        time.sleep(0.5)
         for attempt in range(2):
             deadline = time.time() + 10
             while title(dump()) != title_apps and time.time() < deadline: time.sleep(0.5)
@@ -236,7 +246,9 @@ try:
             if title(img) == title_apps or attempt or app_bg(img) < 80: break
             key("esc")
         time.sleep(0.3)
-        if title(dump()) != title_apps: fails.append(f"{name}: frame title not restored to Apps after closing it")
+        if title(dump()) != title_apps:
+            dump().save(f"/tmp/jt-apptop-{name.lower()}-after-esc.png")
+            fails.append(f"{name}: frame title not restored to Apps after closing it")
         click_at(*FOLDER_CLOSE, 1.0)
         move(*PARK); time.sleep(0.4)
     try: cmd({"execute": "quit"})

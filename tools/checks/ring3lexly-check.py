@@ -181,6 +181,9 @@ try:
     print(f"dock tray after crash: {dock}")
     if dock != (0xEF, 0xEB, 0xE4):
         fails.append(f"desktop dock not on screen after the crash (got {dock})")
+    for _ in range(100):
+        if not near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): break
+        time.sleep(0.1)
     if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED):
         fails.append("an app window is still open after the crash; the dead app's window was not torn down")
     move(SLOT0_X + 2 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
@@ -198,6 +201,17 @@ try:
     #    APPS[] index 11 = row 2, col 3 (5 columns wide), whose viewport is
     #    the folder's 832x450, not the dock's 804x345.
     APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
+    def wait_closed(resend=True):
+        # Poll the screen (10s) instead of reading it once: on a slow runner
+        # the post-Esc repaint lands after a fixed sleep. One resend of Esc
+        # at 4s covers an Esc lost mid-repaint.
+        for i in range(100):
+            img = frame()
+            if not near(pixel(CLOSE_X, CLOSE_Y, img), CLOSE_RED) and not near(pixel(APPS_CLOSE_X, APPS_CLOSE_Y, img), CLOSE_RED):
+                return True
+            if resend and i == 40: keys("esc")
+            time.sleep(0.1)
+        return False
     def open_lexly_from_grid(tag):
         seen = serial().count("lexly: ring-3 window")
         move(*PARK); time.sleep(0.2)
@@ -221,7 +235,7 @@ try:
             fails.append(f"{tag}: Lexly did not exit 0 and release its window on a normal close")
         keys("esc"); time.sleep(0.8)  # the Apps folder itself
         move(*PARK); time.sleep(0.3)
-        if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED) or near(pixel(APPS_CLOSE_X, APPS_CLOSE_Y), CLOSE_RED):
+        if not wait_closed():
             fails.append(f"{tag}: a window is still open after the close")
         move(SLOT0_X + 2 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
         ok = False
@@ -257,7 +271,7 @@ try:
     keys("esc"); time.sleep(0.5)  # closes Lexly
     keys("esc"); time.sleep(0.5)  # closes the Apps folder
     move(*PARK); time.sleep(0.3)
-    if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED) or near(pixel(APPS_CLOSE_X, APPS_CLOSE_Y), CLOSE_RED):
+    if not wait_closed():
         fails.append("keyboard-open: a window is still open after the two Esc presses")
     move(SLOT0_X + 2 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
     opened = False

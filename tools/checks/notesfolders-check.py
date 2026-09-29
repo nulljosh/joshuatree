@@ -117,7 +117,7 @@ class Machine:
         if "-" in qcode:  # a chord ("shift-n", "ctrl-s", ...): route to combo()
             self.combo(qcode); return
         self.cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qcode}]}})
-        time.sleep(0.1)
+        time.sleep(0.25)  # 0.1 drops scancodes on a slow runner
 
     def type_text(self, text):
         punctuation = {" ": "spc", "\n": "ret", ".": "dot", ",": "comma"}
@@ -150,9 +150,9 @@ class Machine:
 
 
 def open_notes(m):
-    m.move(458, 487); m.click(); time.sleep(0.5)
+    m.move(458, 487); m.click(); time.sleep(2.0)
     # A dock click opens straight into a note; Ctrl+L reveals the browser.
-    m.combo("ctrl-l"); time.sleep(0.4)
+    m.combo("ctrl-l"); time.sleep(1.0)
 
 
 def to_shell(m):
@@ -191,16 +191,16 @@ try:
     m1.key("ret"); time.sleep(0.5)
     m1.combo("ctrl-end")
     m1.type_text(EDIT_APPEND)
-    m1.combo("ctrl-s"); time.sleep(0.5)
+    m1.combo("ctrl-s"); time.sleep(2.0)
     m1.key("esc"); time.sleep(0.2)
     m1.key("esc"); time.sleep(0.3)  # back to browse, then fully closed
 
     # New note, current folder, opens for editing immediately. The app
     # was just closed (two Escs), so it needs a fresh dock click first.
     open_notes(m1)
-    m1.key("n"); time.sleep(0.5)
+    m1.key("n"); time.sleep(2.0)
     m1.type_text(SECOND_TEXT)
-    m1.combo("ctrl-s"); time.sleep(0.5)
+    m1.combo("ctrl-s"); time.sleep(2.0)
     m1.key("esc"); time.sleep(0.2)
     m1.key("esc"); time.sleep(0.3)
 
