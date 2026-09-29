@@ -8,6 +8,7 @@
 # emulation, not this repo's local build, and asserted on a screenshot
 # pixel-diff fingerprint. That test reported "0.0% pixel difference" --
 # looked like a broken test, but root-causing it against the real kernel
+source "$(dirname "$0")/freeport.sh"
 # (headless QEMU + QMP, the same pattern appsfolder-redraw-check.sh
 # already uses) found two real, separate kernel bugs, confirmed live by
 # instrumenting the real code, not by reasoning about it:
@@ -58,7 +59,7 @@ make -s kernel.elf
 cleanup() { pkill -9 -f "qemu-system-i386.*jt-wheelscroll" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-PORT=4507
+PORT=$(free_port)
 LOG=/tmp/jt-wheelscroll-check.log
 rm -f "$LOG"
 qemu-system-i386 -kernel kernel.elf -display none -vga std \

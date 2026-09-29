@@ -27,10 +27,11 @@ chat_process_message, scenarios (b)/(c) fall through to chat_send instead
 
 Usage: python3 tools/checks/notestools-check.py
 """
+from freeport import free_port
 import http.server, json, os, socket, subprocess, sys, threading, time
 
 LOG = "/tmp/jt-notestools-serial.log"
-PORT = 44730
+PORT = free_port()
 
 DOCK_CHAT = 7  # GUI_DOCK_DEFAULT slots: Apps,Files,Mail,Calendar,Notes,Reminders,Terminal,Chat,...
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247

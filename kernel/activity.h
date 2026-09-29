@@ -129,7 +129,7 @@ static void gui_launch_activity(void) {
        app is open, same split search.h already uses. */
     window_clear(GUI_BG);
     gui_draw_app_titlebar("Activity");
-    font_draw_string("up/down select   k kills   esc closes", 20, 42, 0x0075726E, -1);
+    gui_draw_hint(20, 42, "up/down select   k kills   esc closes", 0x0075726E);
 
     unsigned int next_refresh = ticks();
 

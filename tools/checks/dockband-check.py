@@ -12,11 +12,12 @@ Usage: tools/checks/dockband-check.py   (from the repo root, after make kernel.e
 """
 import json, os, re, shutil, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 LOG = "/tmp/jt-dockband-serial.log"
 DUMP = "/tmp/jt-dockband.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4491
+PORT = free_port()
 
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))

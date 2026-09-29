@@ -52,7 +52,10 @@ ratchet_ceiling() {
         # on top of that 9841 ceiling, each adding real kmain command-line
         # handling and feature code, not silent bloat. Ratcheted up once
         # more to the merged total; still only shrinks from here.
-        kernel/kernel.c) echo 9877 ;;
+        # 2026-09-28: dock band/tray/icon drawing moved to
+        # kernel/dock_draw.c/.h (refactor/kernel-split-1). Ceiling lowered
+        # to match, never to go back up.
+        kernel/kernel.c) echo 9435 ;;
         *) echo "$LIMIT" ;;
     esac
 }

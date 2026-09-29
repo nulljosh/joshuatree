@@ -1548,6 +1548,47 @@ if (typeof document !== "undefined") (function () {
   var CLOSE_X = 94, CLOSE_Y = 56;
   var DWELL_MS = 7000; // v0.72.2: cut from 15s once the app count went back to 8, keeps the full loop under a minute
   var tourTimer = 0, tourRunning = false, tourGen = 0;
+  // fix/demo-aplus-1 item 6: a visitor who watches two laps back to back used to
+  // hear the exact same Samantha exchange twice. lapIndex increments once per
+  // lap (tourLoop's own while loop, right before this scene runs) and picks a
+  // different real chat_run_tool round trip each time, cycling every 3 laps --
+  // each still ends on "open calculator" so the scene's real close (Chat
+  // handing off to Calculator) is unchanged.
+  var lapIndex = 0;
+  var SAMANTHA_LAP_SCRIPTS = [
+    [ // lap 0: reminder + note
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: SAMANTHA_REMINDER_LINE + '\n', speed: 55 },
+      { type: 'wait', ms: 3000 },
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: 'note: pick up dry cleaning\n', speed: 55 },
+      { type: 'wait', ms: 3000 }
+    ],
+    [ // lap 1: weather
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: "what's the weather like\n", speed: 55 },
+      { type: 'wait', ms: 3000 }
+    ],
+    [ // lap 2: a real fact question (today's calendar)
+      { type: 'keys', text: 'n', speed: 200 },
+      { type: 'wait', ms: 400 },
+      { type: 'keys', text: "what's on my calendar today\n", speed: 55 },
+      { type: 'wait', ms: 3000 }
+    ]
+  ];
+  var SAMANTHA_LAP_CLOSE = [
+    { type: 'keys', text: 'n', speed: 200 },
+    { type: 'wait', ms: 400 },
+    { type: 'keys', text: 'open calculator\n', speed: 55 }, // closes Chat and opens Calculator -- the scene's own real ending, not a scripted close
+    { type: 'wait', ms: 1200 }
+  ];
+  function samanthaScriptForLap(lap) { return SAMANTHA_LAP_SCRIPTS[lap % SAMANTHA_LAP_SCRIPTS.length].concat(SAMANTHA_LAP_CLOSE); }
+  // Phone's already-open avatar box only gets one line (see
+  // phoneSamanthaIntro below), so it cycles the same three real requests.
+  var PHONE_LAP_LINES = [SAMANTHA_REMINDER_LINE, "what's the weather like", "what's on my calendar today"];
   // Every soft reboot re-injects the kernel. v86's own load_multiboot() hardcodes an
   // empty command line, so portfolio mode calls the same two steps it does (read from
   // the vendored libv86.js) with "portfolio" passed through, or the dock would reset
@@ -2062,7 +2103,7 @@ if (typeof document !== "undefined") (function () {
     }
     updateHeadline('Samantha');
     var speakSeen = speakCount;
-    await emulator.keyboard_send_text(SAMANTHA_REMINDER_LINE + '\n', 55); // straight into her already-open input box, exactly like a real visitor's first tap-and-type would
+    await emulator.keyboard_send_text(PHONE_LAP_LINES[lapIndex % PHONE_LAP_LINES.length] + '\n', 55); // straight into her already-open input box, exactly like a real visitor's first tap-and-type would
     // Wait for her real reply to finish speaking before closing her. A fixed
     // 3s dwell closed the avatar before /api/speak even returned on a slow
     // phone, so iOS visitors never heard her. The kernel logs
@@ -2092,6 +2133,7 @@ if (typeof document !== "undefined") (function () {
       }
     }
     while (!focused && tourGen === gen) {
+      lapIndex++; // fix/demo-aplus-1 item 6: picks this lap's Samantha exchange below
       // v0.76.29: reset headline at the start of each lap to a default
       resetHeadline();
       await sleep(800); // brief pause before the first app shows, so the headline is visible
@@ -2126,7 +2168,13 @@ if (typeof document !== "undefined") (function () {
       await sleep(1500);
       for (var i = 0; i < TOUR_APPS.length; i++) {
         if (focused || tourGen !== gen || !adaptersReady) return;
-        await runSoloApp(gen, TOUR_APPS[i]);
+        // item 1: Terminal reads as dead time on phone (no visible result
+        // to a visitor who can't read a shell prompt at that size) -- skip
+        // it there, desktop tour unchanged.
+        if (IS_PHONE && TOUR_APPS[i].name === 'Terminal') continue;
+        var app = TOUR_APPS[i];
+        if (app.name === 'Samantha') app = Object.assign({}, app, { script: samanthaScriptForLap(lapIndex) }); // item 6: a different real exchange each lap
+        await runSoloApp(gen, app);
       }
       // Direct request: "after showing all the apps", so this runs right
       // here, once every real dock app has had its turn and before the

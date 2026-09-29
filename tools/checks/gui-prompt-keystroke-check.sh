@@ -8,6 +8,7 @@
 # v0.76.23 (Contacts) established.
 #
 # This test counts "guiprompt" serial markers emitted by the content redraw
+source "$(dirname "$0")/freeport.sh"
 # loop to verify that chrome (titlebar) doesn't cause full window redraws on
 # every keystroke. Opens each in-kernel app type still on this path
 # (Reminders, Mail), triggers a prompt, types several characters, and
@@ -77,7 +78,7 @@ set -e
 cd "$(dirname "$0")/../.."
 make -s kernel.elf
 
-PORT=4458
+PORT=$(free_port)
 LOG=$(mktemp /tmp/jt-guiprompt-XXXX.log)
 
 qemu-system-i386 -kernel kernel.elf -display none -vga std \

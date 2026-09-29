@@ -156,3 +156,5 @@ The computer after the phone. Joshua Tree becomes what people talk to instead of
 Real drivers for one real board. That's the first dollar.
 
 *Set 2026-09-28.*
+
+*Landing synced 2026-09-28: the 36 second ad and the Strata case concept sit under "Want one?". Strata is a concept, not for sale, no price set.*

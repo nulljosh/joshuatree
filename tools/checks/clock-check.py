@@ -15,11 +15,12 @@ Usage: tools/checks/clock-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 LOG = "/tmp/jt-clock-serial.log"
 DUMP = "/tmp/jt-clock.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4712
+PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
