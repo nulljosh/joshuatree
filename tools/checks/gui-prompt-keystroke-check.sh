@@ -91,10 +91,10 @@ import json, socket, sys, time
 port = int(sys.argv[1])
 log_path = sys.argv[2]
 
-def prompt_count():
+def prompt_count(marker="guiprompt\n"):
     try:
         with open(log_path) as f:
-            return f.read().count("guiprompt\n")
+            return f.read().count(marker)
     except FileNotFoundError:
         return 0
 
@@ -161,17 +161,18 @@ dock_click(0)
 # Test 1: Reminders is grid index 4, inside the '1'-'9' digit-shortcut
 # range: digit '5' launches it directly (kernel.c: sel = k - '1').
 key("5"); time.sleep(0.6)
-key("a")  # open the add-item prompt (reminders.h requires this, typing alone does nothing)
+key("a")  # open the add-item prompt (typing alone does nothing). Reminders is a ring-3 program since 1.9.9, so
+# its per-redraw marker is the "remindersprompt" line user/reminders.c writes
 time.sleep(0.4)
 
-before = prompt_count()
+before = prompt_count("remindersprompt\n")
 for c in "hello":
     key(c)
     time.sleep(0.1)
 # Keys dropped on slow runners if sent in burst; poll for redraw markers
 after = 0
 for _ in range(50):
-    after = prompt_count()
+    after = prompt_count("remindersprompt\n")
     if after > before + 2:
         break
     time.sleep(0.1)

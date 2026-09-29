@@ -13,7 +13,7 @@ window chrome) is visible where the window used to be on the right.
 Case 2: drags that same window on to the top-left corner and checks the
 quarter rect the same way.
 
-Cases 3-5 (the 1.0 QA follow-up): Mail, Calendar and Reminders each get
+Cases 3-5 (the 1.0 QA follow-up): Mail and Calendar each get
 their own real drag-to-quarter run -- the quarter is the smallest,
 hardest-to-lay-out-in target, not just the easier halves -- and each run
 proves three things from the framebuffer, not two: the close button is at
@@ -23,8 +23,8 @@ the rect's right and bottom edges, compared against a real clean-desktop
 baseline captured before any window ever opened, since gui_run's viewport
 clipping is a real per-pixel bound in drivers/window.c, not just a
 visual convention, and this proves that bound actually holds for these
-three apps' own content functions, not just Files/Weather's). Case 5
-(Reminders) goes one step further: types one real character while
+three apps' own content functions, not just Files/Weather's). Case 4
+(Calendar) goes one step further: types one real character while
 snapped to the quarter and re-checks the same three things, since the
 keystroke repaint path (gui_run's mw_key_repaint, gui_multiwin_draw_content_only)
 is a different code path from the drag-release repaint the other cases
@@ -78,7 +78,7 @@ QX, QY, QW, QH = TOP_LEFT_QUARTER
 EDGE_POINTS = [(QX + QW + 20, QY + 40), (QX + 200, QY + QH + 15)]
 # Dock slots (SLOTS order in appclose-check.py/multiwindow-check.py):
 # 0 Apps, 1 Files, 2 Mail, 3 Calendar, 4 Notes, 5 Reminders, ...
-SLOT = {"Files": 1, "Mail": 2, "Calendar": 3, "Reminders": 5}
+SLOT = {"Files": 1, "Mail": 2, "Calendar": 3}
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -206,9 +206,9 @@ try:
     print(f"cleanup (Files): window closed via its own X={'yes' if closed_ok else 'NO'}")
     if not closed_ok: fails.append("cleanup: the snapped Files window did not close via its own X afterward")
 
-    # ---- cases 3-5: Mail, Calendar, Reminders, each dragged straight
+    # ---- cases 3-5: Mail and Calendar, each dragged straight
     #      to the (hardest, smallest) top-left quarter ----
-    for name in ("Mail", "Calendar", "Reminders"):
+    for name in ("Mail", "Calendar"):
         open_app(name)
         imgA = dump()
         if not is_red(pixel(imgA, *W0_CLOSE)):
@@ -218,30 +218,32 @@ try:
         imgB = dump()
         ok = assert_quarter(f"top-left quarter snap ({name})", imgB)
 
-        if name == "Reminders" and ok:
-            # 'a' opens add mode (see kernel/reminders.h gui_reminders_on_key),
+        if name == "Calendar" and ok:
+            # Enter opens the day editor (see kernel/calendar.h gui_calendar_on_key;
+            # Calendar took this test over from Reminders when that became a ring-3
+            # program in 1.9.9),
             # then one real keystroke, all while still snapped to the
             # quarter -- gui_run's mw_key_repaint path
             # (gui_multiwin_draw_content_only), a different repaint path
             # from the drag-release full repaint the assert above just
             # checked.
             move(QX + QW // 2, QY + QH // 2); time.sleep(0.2)  # focus stays on the topmost window regardless; just park inside it
-            key("a")
+            key("ret")
             key("x")
             imgC = dump()
-            # The add-mode text box: window_rect(20,76,width-40,20,WHITE)
-            # in reminders.h's own content-relative coords; absolute
-            # screen position is win.x+8+20, win.y+32+76 for the
+            # The event text box: window_rect(20,T+96,width-40,20,WHITE)
+            # in calendar.h's own content-relative coords; absolute
+            # screen position is win.x+8+20, win.y+32+96 for the
             # top-left-quarter window.
-            box_x, box_y = QX + 8 + 30, QY + 32 + 84
+            box_x, box_y = QX + 8 + 30, QY + 32 + 104
             box_ok = close(pixel(imgC, box_x, box_y), (0xFF, 0xFF, 0xFF)) <= 12
             edge_clean_after_key = all(close(pixel(imgC, x, y), base) <= 6
                                         for (x, y), base in zip(EDGE_POINTS, baseline_edges))
-            print(f"Reminders keystroke while snapped: add-mode text box visible inside the quarter={'yes' if box_ok else 'NO'}"
+            print(f"Calendar keystroke while snapped: day-editor text box visible inside the quarter={'yes' if box_ok else 'NO'}"
                   f"  still nothing drawn past the quarter's edges={'yes' if edge_clean_after_key else 'NO'}")
-            if not box_ok: fails.append("Reminders keystroke: add-mode text box not where the snapped quarter's content viewport puts it")
-            if not edge_clean_after_key: fails.append("Reminders keystroke: the keystroke repaint drew something past the quarter rect's own edges")
-            key("esc")  # cancel add mode before closing, same as reminders.h's own esc contract
+            if not box_ok: fails.append("Calendar keystroke: day-editor text box not where the snapped quarter's content viewport puts it")
+            if not edge_clean_after_key: fails.append("Calendar keystroke: the keystroke repaint drew something past the quarter rect's own edges")
+            key("esc")  # cancel the editor before closing, same as calendar.h's own esc contract
 
         close_at(QX + 24, QY + 16)
         imgD = dump()
@@ -303,4 +305,4 @@ finally:
 if fails:
     for x in fails: print("FAIL:", x)
     sys.exit(1)
-print("PASS: Files/Mail/Calendar/Reminders all snap correctly to the left half, top-left quarter (each app's own content proven inside the rect and nothing drawn past its edges, including a live Reminders keystroke while snapped), and a real free-move drop, all from real framebuffer pixels")
+print("PASS: Files/Mail/Calendar all snap correctly to the left half, top-left quarter (each app's own content proven inside the rect and nothing drawn past its edges, including a live Calendar keystroke while snapped), and a real free-move drop, all from real framebuffer pixels")

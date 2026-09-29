@@ -39,11 +39,11 @@ before the fix and passes after it. Verified both ways below the fold in
 roadmap.md's v0.73.0 entry.
 
 v0.75.0 (multi-window batch 2) extends this in place with step 6: a real
-two-window combination involving a NEWLY-converted app (Reminders), the
+two-window combination involving a NEWLY-converted app (Calendar, which took over from Reminders in 1.9.9), the
 exact scenario the batch-2 task itself named as the required evidence --
-Reminders open alongside Files, add a real reminder, close Reminders via
-its own X, confirm Files is untouched AND the reminder was really saved
-to the real FAT disk (REMINDER.TXT), not just that the UI didn't crash.
+Calendar open alongside Files, add a real event, close Calendar via
+its own X, confirm Files is untouched AND the event was really saved
+to the real FAT disk (EVENTS.TXT), not just that the UI didn't crash.
 Needs the same real FAT16 test image app-interact-check.py uses
 (tools/mkdisk.sh if /tmp/jt-qa-test.img doesn't exist yet), so this script
 now boots QEMU with that disk attached too.
@@ -155,7 +155,7 @@ try:
         move(*PARK); time.sleep(0.5)
 
     # Same QMP send-key shape app-interact-check.py already established,
-    # reused here rather than re-invented, for step 6's real Reminders typing.
+    # reused here rather than re-invented, for step 6's real Calendar typing.
     QCODE = {" ": "spc", ".": "dot", "-": "minus", "/": "slash", "@": "shift-2",
              "\n": "ret", "\b": "backspace"}
     def key(c):
@@ -306,60 +306,60 @@ try:
         fails.append("cleanup: Weather did not close after the click-to-focus test sequence")
 
     # 6. v0.75.0 (batch 2): the real, required two-window evidence -- a
-    #    newly-converted interactive app (Reminders) open ALONGSIDE Files,
-    #    interacted with for real (add a reminder via its own keyboard
+    #    newly-converted interactive app (Calendar; it stood in for Calendar once that became a ring-3 program, 1.9.9) open ALONGSIDE Files,
+    #    interacted with for real (add an event via its own keyboard
     #    path), closed via its own X, with Files proven untouched and the
-    #    reminder proven really saved to the real FAT disk, not just that
+    #    event proven really saved to the real FAT disk, not just that
     #    the screen didn't crash. Files opens first (window 0, x=70,y=40),
-    #    Reminders second (window 1, x=130,y=100, W1_CLOSE=(154,116)),
+    #    Calendar second (window 1, x=130,y=100, W1_CLOSE=(154,116)),
     #    same geometry step 2 above already established.
     open_slot(1)  # Files (window 0)
     files_title_for_mw2 = pixel(dump(), 166, 48)
-    open_slot(5)  # Reminders (window 1, dock slot 5 per SLOTS above)
+    open_slot(3)  # Calendar (window 1, dock slot 3 per SLOTS above)
     img6a = dump()
     both_open_for_add = is_red(pixel(img6a, *W0_CLOSE)) and is_red(pixel(img6a, *W1_CLOSE))
-    print(f"batch2: Files + Reminders both open together: {'yes' if both_open_for_add else 'NO'}")
+    print(f"batch2: Files + Calendar both open together: {'yes' if both_open_for_add else 'NO'}")
     if not both_open_for_add:
-        fails.append("batch2: opening Reminders alongside Files did not leave both windows open")
+        fails.append("batch2: opening Calendar alongside Files did not leave both windows open")
 
     # Real interaction: 'a' enters add mode, type a marker, enter commits
     # -- the exact same real per-keystroke state (add-mode + typed buffer)
     # this batch had to make persist across repaints while Files' own
     # window keeps redrawing alongside it every frame.
-    key("a"); time.sleep(0.4)
-    type_str("qa-mw-reminder-marker")
+    key("\n"); time.sleep(0.4)  # Enter opens the day editor
+    type_str("qa-mw-event-marker")
     keys("ret"); time.sleep(0.4)
 
     img6b = dump()
     files_untouched_during_add = is_red(pixel(img6b, *W0_CLOSE)) and pixel(img6b, 166, 48) == files_title_for_mw2
-    print(f"batch2: Files untouched while typing into Reminders: {'yes' if files_untouched_during_add else 'NO'}")
+    print(f"batch2: Files untouched while typing into Calendar: {'yes' if files_untouched_during_add else 'NO'}")
     if not files_untouched_during_add:
-        fails.append("batch2: Files' own window changed while Reminders was being typed into (cross-window bleed)")
+        fails.append("batch2: Files' own window changed while Calendar was being typed into (cross-window bleed)")
 
-    # Close Reminders via its own X (window 1's close hitbox). Files (window
+    # Close Calendar via its own X (window 1's close hitbox). Files (window
     # 0) must stay open and untouched, the same independence proof step 3
     # already established for Files/Weather, now for a real-input app.
     click_at(*W1_CLOSE)
     img6c = dump()
-    reminders_closed = not is_red(pixel(img6c, *W1_CLOSE))
-    files_survived_reminders_close = is_red(pixel(img6c, *W0_CLOSE)) and pixel(img6c, 166, 48) == files_title_for_mw2
-    print(f"batch2: Reminders closed via its own X={'yes' if reminders_closed else 'NO'}   Files survived={'yes' if files_survived_reminders_close else 'NO'}")
-    if not reminders_closed:
-        fails.append("batch2: Reminders did not close via its own X")
-    if not files_survived_reminders_close:
-        fails.append("batch2: closing Reminders also closed/corrupted Files (the other window is not independent)")
+    calendar_closed = not is_red(pixel(img6c, *W1_CLOSE))
+    files_survived_calendar_close = is_red(pixel(img6c, *W0_CLOSE)) and pixel(img6c, 166, 48) == files_title_for_mw2
+    print(f"batch2: Calendar closed via its own X={'yes' if calendar_closed else 'NO'}   Files survived={'yes' if files_survived_calendar_close else 'NO'}")
+    if not calendar_closed:
+        fails.append("batch2: Calendar did not close via its own X")
+    if not files_survived_calendar_close:
+        fails.append("batch2: closing Calendar also closed/corrupted Files (the other window is not independent)")
 
     # Clean up: close Files too before the final Mail sanity check.
     click_at(*W0_CLOSE)
     img6d = dump()
     if is_red(pixel(img6d, *W0_CLOSE)):
-        fails.append("batch2 cleanup: Files did not close after the Reminders-alongside-Files sequence")
+        fails.append("batch2 cleanup: Files did not close after the Calendar-alongside-Files sequence")
 
     # 7. v1.9.0: Mail's Compose is its own real second window (like macOS
     #    Mail: New Message doesn't take over the mailbox). Open Mail (dock
     #    slot 2, window 0), press 'c' -- this must NOT flip window 0's own
     #    mode in place, it must open Compose as window 1 via the same
-    #    gui_multiwin_open path step 6 just proved for Reminders, with the
+    #    gui_multiwin_open path step 6 just proved for Calendar, with the
     #    list window untouched and still open behind it.
     open_slot(2)  # Mail (window 0)
     mail_list_open = is_red(pixel(dump(), *W0_CLOSE))
@@ -418,25 +418,24 @@ finally:
     try: q.wait(timeout=5)
     except subprocess.TimeoutExpired: q.kill()
 
-# ---- host-side verification: the reminder added in step 6 must have
+# ---- host-side verification: the event added in step 6 must have
 # really reached the real FAT disk, not just RAM, same real-artifact bar
 # app-interact-check.py already holds every persisted app to. fat.c's
-# to_fat_name() truncates "REMINDERS.TXT" to "REMINDER.TXT" on disk (8.3
-# names), confirmed there and reused here rather than re-derived. ----
+# to_fat_name() keeps "EVENTS.TXT" as is (it fits 8.3). ----
 if HAVE_DISK:
     mount = tempfile.mkdtemp(prefix="/tmp/jt-mw-mount-")
     try:
         subprocess.run(["hdiutil", "attach", "-nobrowse", "-mountpoint", mount, DISK],
                         check=True, capture_output=True)
-        path = os.path.join(mount, "REMINDER.TXT")
+        path = os.path.join(mount, "EVENTS.TXT")
         if not os.path.exists(path):
-            fails.append("batch2 disk: REMINDER.TXT does not exist on the real FAT disk after the session")
+            fails.append("batch2 disk: EVENTS.TXT does not exist on the real FAT disk after the session")
         else:
             content = open(path, "r", errors="replace").read()
-            if "qa-mw-reminder-marker" in content:
-                print("batch2 disk verified: REMINDER.TXT contains 'qa-mw-reminder-marker' (real VFS write while a second window, Files, was also open)")
+            if "qa-mw-event-marker" in content:
+                print("batch2 disk verified: EVENTS.TXT contains 'qa-mw-event-marker' (real VFS write while a second window, Files, was also open)")
             else:
-                fails.append("batch2 disk: REMINDER.TXT exists but does not contain 'qa-mw-reminder-marker' -- save did not reach the real disk")
+                fails.append("batch2 disk: EVENTS.TXT exists but does not contain 'qa-mw-event-marker' -- save did not reach the real disk")
     finally:
         subprocess.run(["hdiutil", "detach", mount], capture_output=True)
         shutil.rmtree(mount, ignore_errors=True)
@@ -446,4 +445,4 @@ else:
 if fails:
     for x in fails: print("FAIL:", x)
     sys.exit(1)
-print("PASS: two real windows (Files + Weather) open, draw real distinct content, and close independently; batch-2 (Files + Reminders) proven the same way with a real disk write; batch-3 (Mail's Compose) proven as its own second window, list window stays open behind it, and the sent message shows in the list after Compose closes")
+print("PASS: two real windows (Files + Weather) open, draw real distinct content, and close independently; batch-2 (Files + Calendar) proven the same way with a real disk write; batch-3 (Mail's Compose) proven as its own second window, list window stays open behind it, and the sent message shows in the list after Compose closes")

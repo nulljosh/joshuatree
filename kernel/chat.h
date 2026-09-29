@@ -427,6 +427,52 @@ static int chat_match_app(const char *arg) {
     return -1;
 }
 
+/* Samantha's new_reminder and list_reminders tools. Reminders itself is a
+   ring-3 program now (user/reminders.c, 1.9.9) that owns REMINDERS.TXT while
+   it is open, so the kernel keeps no copy between calls: every tool call
+   reads the file fresh and writes it whole, the same one-line-per-item
+   format ("1 buy milk", done flag, space, text) the app uses. Blank lines
+   are skipped. */
+#define REMINDERS_MAX 24
+#define REMINDERS_TEXT_MAX 48
+static char reminders_text[REMINDERS_MAX][REMINDERS_TEXT_MAX];
+static int reminders_done[REMINDERS_MAX];
+static int reminders_count = 0;
+
+static void reminders_load(void) {
+    static char buf[2048];
+    int n = vfs_read_file("REMINDERS.TXT", buf, sizeof(buf) - 1);
+    if (n < 0) n = 0;
+    buf[n] = 0;
+    int i = 0;
+    reminders_count = 0;
+    while (i < n && reminders_count < REMINDERS_MAX) {
+        int ls = i;
+        while (i < n && buf[i] != '\n') i++;
+        int le = i;
+        if (i < n) i++;
+        if (le - ls < 3) continue; /* blank line */
+        int j = 0;
+        for (int k = ls + 2; k < le && j < REMINDERS_TEXT_MAX - 1; k++) reminders_text[reminders_count][j++] = buf[k];
+        reminders_text[reminders_count][j] = 0;
+        reminders_done[reminders_count] = (buf[ls] == '1');
+        reminders_count++;
+    }
+}
+
+static void reminders_save(void) {
+    static char buf[2048];
+    int n = 0;
+    for (int idx = 0; idx < reminders_count; idx++) {
+        buf[n++] = reminders_done[idx] ? '1' : '0';
+        buf[n++] = ' ';
+        const char *s = reminders_text[idx];
+        while (*s && n < (int)sizeof(buf) - 2) buf[n++] = *s++;
+        buf[n++] = '\n';
+    }
+    vfs_replace_file("REMINDERS.TXT", buf, (unsigned int)n);
+}
+
 /* Tools chat_pick can name that this OS can actually do locally, no
    further network round trip. Returns 1 with `reply` filled (the caller
    shows it as the assistant turn and skips chat_send entirely) when
