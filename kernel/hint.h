@@ -4,7 +4,7 @@
 #define JT_HINT_H
 /* v1.8.5 demo A+ pass, rubric item 3: every app drew its own keyboard-only
    hint line ("up/down to pick ... esc closes") by calling font_draw_string
-   directly, one call site per app (~20 of them across mail.h, fieldbook.h,
+   directly, one call site per app (~20 of them across mail.h,
    reminders.h, etc, plus kernel.c's own Trash/Recents/Terminal). On a phone
    there is no keyboard and no Esc key (phone_home.h's back chevron is the
    only way back), so that whole line was dead advice shown to a visitor

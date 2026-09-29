@@ -1,13 +1,14 @@
 #include "ramfs.h"
 #include "vfs.h"
+#include "kheap.h"
 
 #define RAMFS_MAX_FILES 8
 #define RAMFS_NAME_LEN  32
-#define RAMFS_FILE_SIZE 4096
+#define RAMFS_FILE_SIZE 8192 /* 1.9.3: ring-3 binaries are written here when no disk is mounted; Fieldbook is 6.3KB and was silently cut at 4096 */
 
 struct ramfs_file {
     char name[RAMFS_NAME_LEN];
-    unsigned char data[RAMFS_FILE_SIZE];
+    unsigned char *data; /* kmalloc'd on first write, kept for reuse: 64KB of static bss would eat the kernel/program-window gap */
     unsigned int len;
     int used;
 };
@@ -56,6 +57,8 @@ static int ramfs_write_common(const char *name, const void *data, unsigned int l
         for (int j = 0; j < RAMFS_MAX_FILES; j++) if (!files[j].used) { i = j; break; }
         if (i < 0) return 0; /* full */
     }
+    if (!files[i].data) files[i].data = (unsigned char *)kmalloc(RAMFS_FILE_SIZE);
+    if (!files[i].data) return 0;
     unsigned int n = len < RAMFS_FILE_SIZE ? len : RAMFS_FILE_SIZE;
     int k = 0; while (name[k] && k < RAMFS_NAME_LEN - 1) { files[i].name[k] = name[k]; k++; } files[i].name[k] = 0;
     for (unsigned int j = 0; j < n; j++) files[i].data[j] = ((const unsigned char *)data)[j];

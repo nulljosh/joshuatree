@@ -80,6 +80,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `user/homeqi.c` | Homeqi, eight yes/no feng shui questions about your home and a score, as a ring-3 program: the sixth app out of the kernel (1.8.22). Same questions and scoring as the old in-kernel copy, which had gone dead: APPS[] was opening Homeqi through the generic static-page viewer. The backquote key crashes it on purpose. |
 | `user/lexly.c` | Lexly, a Spanish word and four English choices with a streak, as a ring-3 program: the seventh app out of the kernel (1.9.1). Same 30-word deck and drill as the old in-kernel copy, keys 1 to 4 or a click answer, streak and best kept in its own `.data`. The backquote key crashes it on purpose for `tools/checks/ring3lexly-check.py`. |
 | `user/plan.c` | Plan, Joshua's ten-year education and career roadmap, as a ring-3 program: the eighth app out of the kernel (1.9.2). Same five milestones and two-pane layout as the old in-kernel copy, up/down or a click selects, the detail word-wraps by character count. The backquote key crashes it on purpose for `tools/checks/ring3plan-check.py`. |
+| `user/fieldbook.c` | Fieldbook, every field of science and math explained plainly, as a ring-3 program: the ninth app out of the kernel (1.9.3). Same twelve fields and two-pane layout as the old in-kernel copy, up/down or a click selects, the explanation word-wraps by character count in the 8x16 font, and backquote is the deliberate crash `tools/checks/ring3fieldbook-check.py` presses. |
 | `kernel/ring3app.c` + `kernel/ring3app.h` | The table-driven launcher and supervisor for apps that run as ring-3 processes (`RING3_APPS`: name, embedded binary, VFS filename). Seeds the binary onto the VFS, runs it with `exec_user`, and when it exits or is reaped after a fault, logs what happened and hands the desktop back. |
 
 ### Storage
@@ -210,7 +211,7 @@ sibling web apps, kept small on purpose.
 |---|---|---|
 | Curbfind | `kernel/curbfind.h` | Craigslist deals for Vancouver, ranked by score. |
 | Lexly | `user/lexly.c`, `kernel/ring3app.c` | Spanish vocabulary drill, four choices. The seventh ring-3 app (1.9.1); its in-kernel copy is gone. |
-| Fieldbook | `kernel/fieldbook.h` | Every field of science and math, explained plainly. |
+| Fieldbook | `user/fieldbook.c`, `kernel/ring3app.c` | Every field of science and math, explained plainly. The ninth ring-3 app (1.9.3); its in-kernel copy is gone. |
 | Plan | `user/plan.c`, `kernel/ring3app.c` | A ten-year timeline with a detail panel. The eighth ring-3 app (1.9.2); its in-kernel copy is gone. |
 | Sparkjar | `kernel/sparkjar.h` | Post an idea, vote on ideas. |
 | Keyrate | `user/keyrate.c`, `kernel/ring3app.c` | Typing test with endless random words and a live words-per-minute count. The first app running outside the kernel as a ring-3 process (1.7.7); its in-kernel copy is gone. |

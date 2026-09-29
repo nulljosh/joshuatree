@@ -6,7 +6,7 @@
    process, and whether the program exited on its own or was reaped by
    idt.c's ring-3 fault path, it tears the window down and hands the
    desktop back. Keyrate went first (1.7.7), Toroid second (1.7.11),
-   Calculator third (1.7.12), Quotes fourth (1.7.14), Bookrank fifth (2.0), Homeqi sixth (1.8.22), Lexly seventh (1.9.1), Plan eighth (1.9.2). */
+   Calculator third (1.7.12), Quotes fourth (1.7.14), Bookrank fifth (2.0), Homeqi sixth (1.8.22), Lexly seventh (1.9.1), Plan eighth (1.9.2), Fieldbook ninth (1.9.3). */
 void keyrate_ring3_open(void);
 void toroid_ring3_open(void);
 void calculator_ring3_open(void);
@@ -15,15 +15,16 @@ void bookrank_ring3_open(void);
 void homeqi_ring3_open(void);
 void lexly_ring3_open(void);
 void plan_ring3_open(void);
+void fieldbook_ring3_open(void);
 
-/* `open=keyrate` / `open=toroid` / `open=calc` / `open=quote` / `open=bookr` / `open=homeqi` / `open=lexly` / `open=plan`
+/* `open=keyrate` / `open=toroid` / `open=calc` / `open=quote` / `open=bookr` / `open=homeqi` / `open=lexly` / `open=plan` / `open=field`
    launches that app from the dock path the moment the desktop is up, so
    tools/checks/ring3app-check.py, ring3toroid-check.py, ring3calc-check.py,
-   ring3quotes-check.py, ring3bookrank-check.py, ring3homeqi-check.py, ring3lexly-check.py and ring3plan-check.py can drive a ring-3 app
+   ring3quotes-check.py, ring3bookrank-check.py, ring3homeqi-check.py, ring3lexly-check.py, ring3plan-check.py and ring3fieldbook-check.py can drive a ring-3 app
    without locating its tile in the Apps folder first.
    ring3app_autoopen_arm: kmain calls this with the boot command line;
    remembers the APPS slot if it says `open=keyrate`, `open=toroid`,
-   `open=calc`, `open=quote`, `open=bookr`, `open=homeqi`, `open=lexly` or `open=plan`.
+   `open=calc`, `open=quote`, `open=bookr`, `open=homeqi`, `open=lexly`, `open=plan` or `open=field`.
    ring3app_autoopen_run: gui_run calls this once, right after the first
    desktop paint; if armed, launches that app from the dock path (mx, my
    are the cursor position to restore after) and disarms. No-op otherwise. */
