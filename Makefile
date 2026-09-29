@@ -196,6 +196,13 @@ user/quotes.o: user/quotes.c user/jtsys.h drivers/vgafont.h
 user/quotes.bin: user/quotes.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/quotes.o user/libjt.a
 
+# 2.0: Bookrank, the fifth app out of the kernel, built the same way.
+user/bookrank.o: user/bookrank.c user/jtsys.h drivers/vgafont.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/bookrank.bin: user/bookrank.o user/libjt.a user/note.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/bookrank.o user/libjt.a
+
 # 1.7.8: fbpoke, the program that pokes the released window framebuffer
 # and must fault. Run by kernel/ring3app.c under the `fbpoke` boot flag.
 user/fbpoke.o: user/fbpoke.c user/jtsys.h
@@ -228,11 +235,14 @@ drivers/user_calculator.h: user/calculator.bin tools/gen/gen_user_bin.py
 drivers/user_quotes.h: user/quotes.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/quotes.bin drivers/user_quotes.h user_quotes
 
+drivers/user_bookrank.h: user/bookrank.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/bookrank.bin drivers/user_bookrank.h user_bookrank
+
 kernel/kernel.o: drivers/user_hello.h drivers/user_note.h drivers/user_wc.h
 drivers/user_fbpoke.h: user/fbpoke.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/fbpoke.bin drivers/user_fbpoke.h user_fbpoke
 
-kernel/ring3app.o: drivers/user_keyrate.h drivers/user_toroid.h drivers/user_calculator.h drivers/user_quotes.h drivers/user_fbpoke.h
+kernel/ring3app.o: drivers/user_keyrate.h drivers/user_toroid.h drivers/user_calculator.h drivers/user_quotes.h drivers/user_bookrank.h drivers/user_fbpoke.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
