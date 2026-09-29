@@ -93,6 +93,7 @@ retry|2|Homeqi runs as a ring-3 process through the table-driven launcher: score
 retry|2|Lexly runs as a ring-3 process through the table-driven launcher: draws the word and choices, answers right and wrong through the real drill, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3lexly-check.py
 retry|2|Plan runs as a ring-3 process through the table-driven launcher: draws the milestone list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3plan-check.py
 retry|2|Fieldbook runs as a ring-3 process through the table-driven launcher: draws the ranked field list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3fieldbook-check.py
+retry|2|Clock runs as a ring-3 process through the table-driven launcher: draws the moving time, takes a timer through the real input logic, closes on Esc, desktop alive|python3 ./tools/checks/ring3clock-check.py
 retry|5|A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT|python3 ./tools/checks/userfb-release-check.py
 retry|7|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
 retry|0|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh

@@ -81,6 +81,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `user/lexly.c` | Lexly, a Spanish word and four English choices with a streak, as a ring-3 program: the seventh app out of the kernel (1.9.1). Same 30-word deck and drill as the old in-kernel copy, keys 1 to 4 or a click answer, streak and best kept in its own `.data`. The backquote key crashes it on purpose for `tools/checks/ring3lexly-check.py`. |
 | `user/plan.c` | Plan, Joshua's ten-year education and career roadmap, as a ring-3 program: the eighth app out of the kernel (1.9.2). Same five milestones and two-pane layout as the old in-kernel copy, up/down or a click selects, the detail word-wraps by character count. The backquote key crashes it on purpose for `tools/checks/ring3plan-check.py`. |
 | `user/fieldbook.c` | Fieldbook, every field of science and math explained plainly, as a ring-3 program: the ninth app out of the kernel (1.9.3). Same twelve fields and two-pane layout as the old in-kernel copy, up/down or a click selects, the explanation word-wraps by character count in the 8x16 font, and backquote is the deliberate crash `tools/checks/ring3fieldbook-check.py` presses. |
+| `user/clock.c` | Clock, the time of day, a countdown timer and one alarm, as a ring-3 program: the tenth app out of the kernel (1.9.4). Same three jobs as the old in-kernel copy, the time comes from `SYS_TIME`, and the timer minutes and alarm are typed on the program's own line since a ring-3 program has no prompt box. Backquote is the deliberate crash `tools/checks/ring3clock-check.py` can press. |
 | `kernel/ring3app.c` + `kernel/ring3app.h` | The table-driven launcher and supervisor for apps that run as ring-3 processes (`RING3_APPS`: name, embedded binary, VFS filename). Seeds the binary onto the VFS, runs it with `exec_user`, and when it exits or is reaped after a fault, logs what happened and hands the desktop back. |
 
 ### Storage
@@ -202,7 +203,7 @@ change. No Save button.
 | Search | `kernel/search.h` | Filters the current directory as you type. Enter opens a folder or shows a file. Scoped to what the VFS can list, no whole-disk index. |
 | Portfolio | `kernel/portfolio.h` | A catalog of every app in the fleet with its URL. |
 | Activity | `kernel/activity.h` | Activity Monitor over the real scheduler and memory counters. Refreshes on a timer, can kill a task. |
-| Clock | `kernel/clock.h` | Current time from the RTC, a countdown timer you can start and pause, and an alarm. |
+| Clock | `user/clock.c`, `kernel/ring3app.c` | Current time from the RTC, a countdown timer you can start and pause, and an alarm. The tenth ring-3 app (1.9.4); its in-kernel copy is gone. |
 
 **Apps ported from the fleet.** Each is a native rewrite of one of the
 sibling web apps, kept small on purpose.

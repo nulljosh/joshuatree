@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Headless proof that the Clock app (kernel/clock.h) is real: it opens,
+"""Headless proof that the Clock app (user/clock.c, ring 3) is real: it opens,
 displays the current time, and a countdown timer updates live.
 
 Flow:
