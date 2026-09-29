@@ -26,6 +26,7 @@
 #include "exec.h"
 #include "window.h"
 #include "app.h"
+#include "pmm.h"
 
 typedef unsigned int u32;
 typedef unsigned char u8;
@@ -45,6 +46,7 @@ typedef int (*syscall_fn)(u32 a, u32 b, u32 c);
 #define ENOENT   2
 #define EBUSY   16
 #define ENODEV  19
+#define EPERM    1
 
 extern void syscall_entry(void);
 static void window_release(int id); /* v3 windows, below */
@@ -529,6 +531,30 @@ static int sys_window_poll(u32 ev, u32 flags, u32 c) {
     return 1;
 }
 
+/* 1.9.6: SYS_TASKS, what the Activity app shows. One call: fill the
+   snapshot (uptime, memory, which scheduler slots are live), and if ecx
+   names a slot, kill it first through task_kill, the same primitive the
+   shell's `kill` uses. Slot 0 is the shell/GUI and the caller's own slot is
+   the app itself, so both are refused with -EPERM; a free slot is -ENOENT. */
+static int sys_tasks(u32 out, u32 kill, u32 c) {
+    (void)c;
+    if (!paging_user_range_ok(out, sizeof(struct jt_tasks))) return -EFAULT;
+    int rc = 0;
+    if (kill != 0xFFFFFFFFu) {
+        if (kill == 0 || kill >= TASK_SLOTS || (int)kill == task_current()) rc = -EPERM;
+        else if (!task_used((int)kill)) rc = -ENOENT;
+        else task_kill((int)kill);
+    }
+    struct jt_tasks *o = (struct jt_tasks *)out;
+    o->ticks = ticks();
+    o->free_kb = pmm_free_frames() * 4;
+    o->total_kb = pmm_total_frames() * 4;
+    o->current = (u32)task_current();
+    o->used = 0;
+    for (int i = 0; i < TASK_SLOTS; i++) if (task_used(i)) o->used |= 1u << i;
+    return rc;
+}
+
 /* Called from syscall_release_task on exit or fault. 1.7.8: the pages go
    back to supervisor-only here, not just zeroed. Before this, a program
    that had opened a window left JT_USER_FB user-accessible for good, so
@@ -557,6 +583,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_SCHED_YIELD] = sys_sched_yield,
     [SYS_WINDOW_OPEN] = sys_window_open,
     [SYS_WINDOW_POLL] = sys_window_poll,
+    [SYS_TASKS]       = sys_tasks,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {

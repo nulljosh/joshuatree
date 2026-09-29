@@ -46,6 +46,7 @@
    is no close call: exiting (or crashing) releases the window. */
 #define JT_SYS_WINDOW_OPEN 384
 #define JT_SYS_WINDOW_POLL 385
+#define JT_SYS_TASKS       386 /* 1.9.6: uptime, memory, live slots; optional kill */
 #define JT_POLL_PRESENT 1
 #define JT_EV_KEY   1
 #define JT_EV_CLICK 2
@@ -59,6 +60,7 @@
 #define JT_KEY_RIGHT 262
 struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
 struct jt_event { unsigned int kind; int a, b; };
+struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
 
 /* v2 open() flags and lseek() whence values, Linux i386's own numbers.
    O_RDONLY is 0, which is exactly what v1 required, so a v1 program's
@@ -125,6 +127,7 @@ static inline int jt_getpid(void)                                 { return jt_sy
 static inline int jt_sched_yield(void)                            { return jt_syscall(JT_SYS_SCHED_YIELD, 0, 0, 0); }
 static inline int jt_lseek(int fd, int off, int whence)           { return jt_syscall(JT_SYS_LSEEK, (unsigned)fd, (unsigned)off, (unsigned)whence); }
 static inline int jt_window_open(struct jt_window_info *info)     { return jt_syscall(JT_SYS_WINDOW_OPEN, (unsigned)info, 0, 0); }
+static inline int jt_tasks(struct jt_tasks *t, int kill)          { return jt_syscall(JT_SYS_TASKS, (unsigned)t, (unsigned)kill, 0); }
 static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
 
 #endif

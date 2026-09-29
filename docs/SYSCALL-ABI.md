@@ -522,3 +522,20 @@ after a window closes and asserts both refusals and the fault.
 (which is kept for now). The backquote key makes it write through a null
 pointer on purpose; the check presses it and asserts the desktop is still
 alive afterwards, with the serial log naming the fault.
+
+## tasks (1.9.6)
+
+| # | Name | ebx | ecx | Returns |
+|---|---|---|---|---|
+| 386 | `tasks` | `struct jt_tasks *` | slot to kill, or -1 | 0, or -errno |
+
+```c
+struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
+```
+
+**tasks** is what the Activity app shows: uptime in 100Hz ticks, free and total
+memory in KB, the caller's own slot, and a bitmask of the live scheduler slots.
+If `ecx` names a slot it is killed first through `task_kill`, the same call the
+shell's `kill` makes. Slot 0 (the shell) and the caller's own slot are refused
+with -EPERM, a free slot is -ENOENT, and the snapshot is filled either way.
+Errors: -EFAULT (bad pointer).

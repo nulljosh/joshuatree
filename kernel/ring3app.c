@@ -9,10 +9,11 @@
    1.9.3: Fieldbook joins it, the ninth app out.
    1.9.4: Clock joins it, the tenth app out.
    1.9.5: Portfolio joins it, the eleventh app out.
+   1.9.6: Activity joins it, the twelfth app out.
 
    Roadmap 2.0 says apps leave the kernel, so a crash in one cannot take
    the machine down. Keyrate, the smallest real app, went first; Toroid,
-   Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock and Portfolio followed the same path. Each app's dock entry lands here,
+   Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio and Activity followed the same path. Each app's dock entry lands here,
    and everything else stays as it was: gui_launch_from_dock has already
    drawn the window chrome and set the viewport by the time this runs,
    just as for an in-kernel app.
@@ -48,6 +49,7 @@
 #include "user_fieldbook.h"
 #include "user_clock.h"
 #include "user_portfolio.h"
+#include "user_activity.h"
 #include "user_fbpoke.h"
 #include "app.h"
 #include "irq.h"
@@ -90,6 +92,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Fieldbook",  user_fieldbook,  USER_FIELDBOOK_LEN,  "FIELDBOOK.BIN"},
     {"Clock",      user_clock,      USER_CLOCK_LEN,      "CLOCK.BIN"},
     {"Portfolio",  user_portfolio,  USER_PORTFOLIO_LEN,  "PORTFOLIO.BIN"},
+    {"Activity",   user_activity,   USER_ACTIVITY_LEN,   "ACTIVITY.BIN"},
 };
 
 static void ring3app_launch(const struct ring3_app *a) {
@@ -160,6 +163,7 @@ void plan_ring3_open(void)       { ring3app_launch(&RING3_APPS[7]); }
 void fieldbook_ring3_open(void)  { ring3app_launch(&RING3_APPS[8]); }
 void clock_ring3_open(void)      { ring3app_launch(&RING3_APPS[9]); }
 void portfolio_ring3_open(void)  { ring3app_launch(&RING3_APPS[10]); }
+void activity_ring3_open(void)   { ring3app_launch(&RING3_APPS[11]); }
 
 /* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
    run user/fbpoke.c with no window: it must be refused a pointer into
@@ -201,6 +205,7 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='f' && pc[6]=='i' && pc[7]=='e' && pc[8]=='l') { ring3app_autoopen_slot = 17; serial_puts("autoopen=fieldbook\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='l' && pc[7]=='o' && pc[8]=='c') { ring3app_autoopen_slot = 25; serial_puts("autoopen=clock\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='p' && pc[6]=='o' && pc[7]=='r' && pc[8]=='t' && pc[9]=='f' && pc[10]!='o') { ring3app_autoopen_slot = 23; serial_puts("autoopen=portfolio\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='a' && pc[6]=='c' && pc[7]=='t' && pc[8]=='i' && pc[9]=='v') { ring3app_autoopen_slot = 24; serial_puts("autoopen=activity\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
     }
 }
@@ -208,7 +213,7 @@ void ring3app_autoopen_run(int mx, int my){
     if (ring3app_autoopen_slot < 0) return;
     int slot = ring3app_autoopen_slot; ring3app_autoopen_slot = -1;
     editor_mouse_x = mx; editor_mouse_y = my;
-    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Lexly's, Plan's, Fieldbook's, Clock's or Portfolio's APPS slot */
+    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Lexly's, Plan's, Fieldbook's, Clock's, Portfolio's or Activity's APPS slot */
     if (fbpoke_armed) { fbpoke_armed = 0; fbpoke_run(); }
     gui_draw_desktop(-1, -1, 0, 0);
     cursor_saved_x = cursor_saved_y = -1;
