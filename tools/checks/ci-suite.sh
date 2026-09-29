@@ -88,6 +88,7 @@ retry|2|Toroid runs as a ring-3 process through the table-driven launcher: draws
 retry|2|Calculator runs as a ring-3 process through the table-driven launcher: evaluates 12*3=36 and 5/0=0 through the real parser, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3calc-check.py
 retry|2|Quotes runs as a ring-3 process through the table-driven launcher: draws the option grid, answers right and wrong through the real logic, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3quotes-check.py
 retry|2|Bookrank runs as a ring-3 process through the table-driven launcher: draws the ranked list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3bookrank-check.py
+retry|2|Homeqi runs as a ring-3 process through the table-driven launcher: scores a real answer through the quiz, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3homeqi-check.py
 retry|5|A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT|python3 ./tools/checks/userfb-release-check.py
 retry|7|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
 retry|0|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
