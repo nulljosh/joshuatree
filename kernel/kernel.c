@@ -2122,7 +2122,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
@@ -5445,7 +5445,6 @@ static void gui_launch_trash(void){
 
 #include "stocks.h"
 #include "curbfind.h"
-#include "sparkjar.h"
 #include "epiphany.h"
 static int fs_ok_global = 0;
 #include "bench.h"
@@ -5725,7 +5724,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       plan_ring3_open,       0, 0}, /* 1.9.2: ring 3 too (user/plan.c) */
     /* 13 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      lexly_ring3_open,      0, 0}, /* 1.9.1: ring 3 too (user/lexly.c) */
     /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */
-    /* 15 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   gui_launch_sparkjar,   0, 0},
+    /* 15 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   sparkjar_ring3_open,   0, 0}, /* 1.9.8: ring 3 (user/sparkjar.c) */
     /* 16 */ {"Homeqi",     0x00566A3A, gui_icon_homeqi,     homeqi_ring3_open,     0, 0}, /* 1.7.13: ring 3 too (user/homeqi.c) */
     /* 17 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  fieldbook_ring3_open,  0, 0}, /* 1.9.3: ring 3 too (user/fieldbook.c) */
     /* 18 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   contacts_ring3_open,   0, 0}, /* 1.9.7: ring 3 (user/contacts.c) */
