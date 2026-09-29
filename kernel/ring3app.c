@@ -78,8 +78,16 @@ static void ring3app_launch(const struct ring3_app *a) {
     unsigned char probe[1];
     if (vfs_read_file(a->file, probe, 1) < 0 &&
         !vfs_write_file(a->file, a->bin, a->len)) {
-        serial_puts("ring3app: could not seed "); serial_puts(a->file); serial_puts(", not started\n");
-        return;
+        /* The root filesystem holds a handful of files. Once earlier ring-3
+           apps have each left their binary behind (and the user has saved a
+           few files), there is no slot for this one. The other apps' copies
+           are re-seeded on their next launch, so evict them and retry once. */
+        for (unsigned int i = 0; i < sizeof RING3_APPS / sizeof RING3_APPS[0]; i++)
+            if (&RING3_APPS[i] != a) vfs_delete(RING3_APPS[i].file);
+        if (!vfs_write_file(a->file, a->bin, a->len)) {
+            serial_puts("ring3app: could not seed "); serial_puts(a->file); serial_puts(", not started\n");
+            return;
+        }
     }
     /* The viewport must fit the ring-3 framebuffer, or SYS_WINDOW_OPEN
        fails and the program exits before it draws a thing. Checked here,
