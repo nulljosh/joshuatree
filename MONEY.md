@@ -164,3 +164,5 @@ Homeqi now runs on its own at ring 3, so one more app can crash without taking t
 Notes now has folders and lets you keep more than one note, so it starts to feel like a real app on a real board. Still free, nothing to sell. *2026-09-28.*
 
 Touch works now and Notes gets its own on-screen keyboard on a phone screen, so you can tap a note and type it with no keys attached. That is the first thing a phone buyer tries, so it earns its place in the pitch. Still free, nothing to sell yet. *2026-09-28.*
+
+Lexly now runs on its own at ring 3, seven apps out of the kernel. A crash in a flashcard drill can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*

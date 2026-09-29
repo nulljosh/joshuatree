@@ -78,6 +78,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `user/quotes.c` | Quotes, the film-quote guessing game, as a ring-3 program: the fourth app out of the kernel (1.7.14). Same fixed deck and answer-rotation as the in-kernel version, streak and best kept in its own `.data`. The backquote key crashes it on purpose. |
 | `user/bookrank.c` | Bookrank, the ranked non-fiction shelf, as a ring-3 program: the fifth app out of the kernel (2.0). Same fixed book list and two-pane layout as the in-kernel version, up/down or a click selects, the summary word-wraps by character count in its own `.data`. The backquote key crashes it on purpose. |
 | `user/homeqi.c` | Homeqi, eight yes/no feng shui questions about your home and a score, as a ring-3 program: the sixth app out of the kernel (1.8.22). Same questions and scoring as the old in-kernel copy, which had gone dead: APPS[] was opening Homeqi through the generic static-page viewer. The backquote key crashes it on purpose. |
+| `user/lexly.c` | Lexly, a Spanish word and four English choices with a streak, as a ring-3 program: the seventh app out of the kernel (1.9.1). Same 30-word deck and drill as the old in-kernel copy, keys 1 to 4 or a click answer, streak and best kept in its own `.data`. The backquote key crashes it on purpose for `tools/checks/ring3lexly-check.py`. |
 | `kernel/ring3app.c` + `kernel/ring3app.h` | The table-driven launcher and supervisor for apps that run as ring-3 processes (`RING3_APPS`: name, embedded binary, VFS filename). Seeds the binary onto the VFS, runs it with `exec_user`, and when it exits or is reaped after a fault, logs what happened and hands the desktop back. |
 
 ### Storage
@@ -207,7 +208,7 @@ sibling web apps, kept small on purpose.
 | App | File | What it is |
 |---|---|---|
 | Curbfind | `kernel/curbfind.h` | Craigslist deals for Vancouver, ranked by score. |
-| Lexly | `kernel/lexly.h` | Spanish vocabulary drill, four choices. |
+| Lexly | `user/lexly.c`, `kernel/ring3app.c` | Spanish vocabulary drill, four choices. The seventh ring-3 app (1.9.1); its in-kernel copy is gone. |
 | Fieldbook | `kernel/fieldbook.h` | Every field of science and math, explained plainly. |
 | Plan | `kernel/plan.h` | A ten-year timeline with a detail panel. |
 | Sparkjar | `kernel/sparkjar.h` | Post an idea, vote on ideas. |
