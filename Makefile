@@ -210,6 +210,13 @@ user/homeqi.o: user/homeqi.c user/jtsys.h drivers/vgafont.h
 user/homeqi.bin: user/homeqi.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/homeqi.o user/libjt.a
 
+# 1.9.1: Lexly, the seventh app out of the kernel, built the same way.
+user/lexly.o: user/lexly.c user/jtsys.h drivers/vgafont.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/lexly.bin: user/lexly.o user/libjt.a user/note.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/lexly.o user/libjt.a
+
 # 1.7.8: fbpoke, the program that pokes the released window framebuffer
 # and must fault. Run by kernel/ring3app.c under the `fbpoke` boot flag.
 user/fbpoke.o: user/fbpoke.c user/jtsys.h
@@ -248,11 +255,14 @@ drivers/user_bookrank.h: user/bookrank.bin tools/gen/gen_user_bin.py
 drivers/user_homeqi.h: user/homeqi.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/homeqi.bin drivers/user_homeqi.h user_homeqi
 
+drivers/user_lexly.h: user/lexly.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/lexly.bin drivers/user_lexly.h user_lexly
+
 kernel/kernel.o: drivers/user_hello.h drivers/user_note.h drivers/user_wc.h
 drivers/user_fbpoke.h: user/fbpoke.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/fbpoke.bin drivers/user_fbpoke.h user_fbpoke
 
-kernel/ring3app.o: drivers/user_keyrate.h drivers/user_toroid.h drivers/user_calculator.h drivers/user_quotes.h drivers/user_bookrank.h drivers/user_homeqi.h drivers/user_fbpoke.h
+kernel/ring3app.o: drivers/user_keyrate.h drivers/user_toroid.h drivers/user_calculator.h drivers/user_quotes.h drivers/user_bookrank.h drivers/user_homeqi.h drivers/user_lexly.h drivers/user_fbpoke.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -290,7 +300,7 @@ talk: kernel.elf dotfiles.img
 clean:
 	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf kernel.elf.pass1 kernel/symtab.c kernel/symtab_stub.o kernel/symtab_stub.d user/hello.o user/hello.bin drivers/user_hello.h \
 	      user/note.o user/note.bin drivers/user_note.h user/keyrate.o user/keyrate.bin drivers/user_keyrate.h user/toroid.o user/toroid.bin drivers/user_toroid.h \
-	      user/calculator.o user/calculator.bin drivers/user_calculator.h user/quotes.o user/quotes.bin drivers/user_quotes.h user/bookrank.o user/bookrank.bin drivers/user_bookrank.h user/homeqi.o user/homeqi.bin drivers/user_homeqi.h
+	      user/calculator.o user/calculator.bin drivers/user_calculator.h user/quotes.o user/quotes.bin drivers/user_quotes.h user/bookrank.o user/bookrank.bin drivers/user_bookrank.h user/homeqi.o user/homeqi.bin drivers/user_homeqi.h user/lexly.o user/lexly.bin drivers/user_lexly.h
 	rm -f joshuatree.iso
 	rm -rf build/iso_root
 
