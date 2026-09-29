@@ -44,8 +44,9 @@ Usage: tools/checks/baseline-check.py   (repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
-PORT = 4495
+PORT = free_port()
 DUMP = "/tmp/jt-baseline.raw"
 LOG = "/tmp/jt-baseline-serial.log"
 FB = 0xfd000000; W, H = 1920, 1080

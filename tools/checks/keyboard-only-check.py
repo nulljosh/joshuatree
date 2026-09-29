@@ -13,11 +13,12 @@ Usage: tools/checks/keyboard-only-check.py   (from the repo root, after make ker
 """
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image, ImageChops
+from freeport import free_port
 
 LOG = "/tmp/jt-keyboard-only-serial.log"
 DUMP = "/tmp/jt-keyboard-only.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4631
+PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 # Close button coordinates for app windows opened via keyboard (top-left corner)
 # Scanned from actual framebuffer: red pixels at logical ~26, 15

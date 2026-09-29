@@ -8,6 +8,7 @@
 # instead of the whole desktop, but it called the OLD gui_multiwin_draw_one,
 # which unconditionally redrew that window's ENTIRE chrome -- the rounded-
 # rect wallpaper blend across the whole ~820x385 rect, all three traffic
+source "$(dirname "$0")/freeport.sh"
 # lights, and the title -- before ever touching content, on every single
 # keystroke. None of that chrome depends on what's being typed.
 #
@@ -34,7 +35,7 @@ make -s kernel.elf
 cleanup() { pkill -9 -f "qemu-system-i386.*jt-mwkeyflash" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-PORT=4485
+PORT=$(free_port)
 LOG=/tmp/jt-mwkeyflash-check.log
 rm -f "$LOG"
 qemu-system-i386 -kernel kernel.elf -display none -vga std \

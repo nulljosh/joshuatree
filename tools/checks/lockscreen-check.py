@@ -58,12 +58,13 @@ import time
 from pathlib import Path
 
 from PIL import Image
+from freeport import free_port
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 WORKDIR = Path(tempfile.mkdtemp(prefix='jt-lockscreen-', dir='/tmp'))
 DISK = WORKDIR / 'disk.img'
 LOG = WORKDIR / 'serial.log'
-QMP_PORT = 4661
+QMP_PORT = free_port()
 LOGICAL_W, LOGICAL_H = 960, 540
 
 # Framebuffer pixel sampling: same pmemsave technique and the same tray

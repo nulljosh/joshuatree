@@ -16,9 +16,10 @@ as noise, not the specific colors this checks for at specific offsets).
 
 Usage: tools/checks/phone-boot-check.py   (from the repo root, after make kernel.elf)
 """
+from freeport import free_port
 import json, os, socket, subprocess, sys, time
 
-PORT = 4480
+PORT = free_port()
 FB = 0xfd000000
 W, H = 860, 1520  # 430x760 logical at 2x
 GUI_BG = (0xFA, 0xF8, 0xF6)

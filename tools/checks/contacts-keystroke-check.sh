@@ -8,6 +8,7 @@
 #
 # Split chrome (titlebar + prompt label) from content (text box + typed text)
 # so the chrome redraws only once (outside the loop) and content redraws every
+source "$(dirname "$0")/freeport.sh"
 # keystroke without touching the unchanged chrome. This test counts "contactsprompt"
 # serial markers to verify that the content redraw loop is called multiple times
 # (once per keystroke plus the initial render, ~8+ times for 8 keystrokes), proving
@@ -44,7 +45,7 @@ set -e
 cd "$(dirname "$0")/../.."
 make -s kernel.elf
 
-PORT=4457
+PORT=$(free_port)
 LOG=$(mktemp /tmp/jt-contactskeypress-XXXX.log)
 
 cleanup() { kill "$QEMU_PID" 2>/dev/null || true; rm -f "$LOG"; }

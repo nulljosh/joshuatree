@@ -16,6 +16,7 @@ Usage: tools/checks/bootmark-check.py   (from the repo root, after make kernel.e
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image
+from freeport import free_port
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 os.chdir(ROOT)
@@ -23,7 +24,7 @@ os.chdir(ROOT)
 LOG = "/tmp/jt-bootmark-check-serial.log"
 DUMP = "/tmp/jt-bootmark-check.raw"
 FB = 0xfd000000; W, H = 1920, 1080
-PORT = 4464
+PORT = free_port()
 
 for f in (LOG, DUMP):
     try: os.remove(f)

@@ -38,11 +38,12 @@ working.)
 Usage: tools/checks/walldemo-regression-check.py
 """
 import json, os, re, shutil, socket, subprocess, sys, tempfile, time
+from freeport import free_port
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')
 os.chdir(ROOT)
 LOGICAL_W, LOGICAL_H = 960, 540
-PORT = 4462
+PORT = free_port()
 LOGO_X, LOGO_Y = 16, 13
 SETTINGS_MENU_X, SETTINGS_MENU_Y = 94, 111
 
