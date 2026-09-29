@@ -76,7 +76,13 @@ class Machine:
         self.f = self.sock.makefile("rw")
         self.f.readline()
         self.cmd({"execute": "qmp_capabilities"})
-        time.sleep(5.0)
+        # Wait for the desktop's own serial marker instead of a fixed 5s:
+        # on a loaded runner the boot can take longer than that, and every
+        # key sent before the desktop is up is lost.
+        for _ in range(600):
+            if "guidesktop" in self.serial(): break
+            time.sleep(0.1)
+        time.sleep(1.0)
 
     def cmd(self, obj):
         import json
