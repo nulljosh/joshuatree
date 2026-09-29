@@ -82,7 +82,8 @@ try:
     time.sleep(0.5)
     cmd({"execute": "pmemsave", "arguments": {"val": BUF, "size": 16, "filename": DUMP}})
     buf = open(DUMP, "rb").read().split(b"\0")[0].decode(errors="replace")
-    cmd({"execute": "quit"})
+    try: cmd({"execute": "quit"})
+    except (ConnectionResetError, BrokenPipeError, OSError, ValueError): pass  # QEMU closes the socket on quit; same teardown phone-boot-check uses
 finally:
     try: q.wait(timeout=5)
     except subprocess.TimeoutExpired: q.kill()
