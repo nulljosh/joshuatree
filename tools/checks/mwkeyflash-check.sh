@@ -19,8 +19,9 @@ source "$(dirname "$0")/freeport.sh"
 # both via the unchanged gui_multiwin_draw_one.
 #
 # Proven here via a new serial marker, "mwchrome\n" (only emitted by
-# gui_multiwin_draw_chrome): opens Reminders (multi-window), presses 'a'
-# to start adding one, types "milk" (4 plain keystrokes), and demands the
+# gui_multiwin_draw_chrome): opens Calendar (multi-window, it stood in for
+# Reminders once that became a ring-3 program), presses Enter to start an
+# event, types "milk" (4 plain keystrokes), and demands the
 # chrome-draw count stay flat at 1 (the one real draw from opening the
 # window) through all five following keystrokes.
 #
@@ -71,7 +72,7 @@ LOGICAL_W, LOGICAL_H = 960, 540
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247  # same dock constants as appclose-check.py
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-REMINDERS_SLOT = 5  # Apps,Files,Mail,Calendar,Notes,Reminders,...
+CALENDAR_SLOT = 3  # Apps,Files,Mail,Calendar,Notes,Reminders,...  (1.9.9: Reminders is a ring-3 program now, Calendar stands in as the typed-into multi-window app)
 
 def move(x, y):
     cmd({"execute": "input-send-event", "arguments": {"events": [
@@ -85,11 +86,11 @@ def key(qcode):
     cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qcode}]}})
     time.sleep(0.1)
 
-centre = SLOT0_X + REMINDERS_SLOT * PITCH + DOCK_ICON // 2
-move(centre, ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.0)  # open Reminders (multi-window)
+centre = SLOT0_X + CALENDAR_SLOT * PITCH + DOCK_ICON // 2
+move(centre, ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.0)  # open Calendar (multi-window)
 after_open = count("mwchrome\n")
 
-key("a"); time.sleep(0.3)  # start adding
+key("ret"); time.sleep(0.3)  # Enter opens the day editor
 for c in "milk":
     key(c)
 time.sleep(0.3)
@@ -98,10 +99,10 @@ after_typing = count("mwchrome\n")
 cmd({"execute": "quit"})
 print("after_open=%d after_typing=%d" % (after_open, after_typing))
 if after_open != 1:
-    print("FAIL: expected exactly 1 chrome draw right after opening Reminders, got %d" % after_open); sys.exit(1)
+    print("FAIL: expected exactly 1 chrome draw right after opening Calendar, got %d" % after_open); sys.exit(1)
 if after_typing != 1:
-    print("FAIL: expected chrome draw count to stay at 1 through 'a' + 'milk', got %d" % after_typing); sys.exit(1)
-print("PASS: Reminders' multi-window chrome drew once on open and stayed flat through real typing")
+    print("FAIL: expected chrome draw count to stay at 1 through Enter + 'milk', got %d" % after_typing); sys.exit(1)
+print("PASS: Calendar's multi-window chrome drew once on open and stayed flat through real typing")
 PYEOF
 STATUS=$?
 cleanup
