@@ -16,9 +16,9 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-Main is 1.8.10. Four apps run in ring 3 (Keyrate, Toroid, Calculator, Quotes); the rest are still in kernel.c, which is 9433 lines under a ceiling that only ratchets down. Phones get a home screen, tap to hear Samantha, and she finishes talking before the tour moves on. Every check picks its own free QMP port once #289 lands.
+Main is 1.9.10. Sixteen apps run in ring 3 (Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind); the rest are still in kernel.c, which is 9356 lines under a ceiling that only ratchets down. Curbfind is the first ring-3 app to reach the network, through `SYS_HTTP_GET` (387): host fixed in the kernel, path and buffer checked before the network is touched. Phones get a home screen, tap to hear Samantha, and she finishes talking before the tour moves on. Every check picks its own free QMP port.
 
-Merge train landed: #290 done. Waiting to land: #291 docs to 100%, #289 free QMP ports. #296 is the 3.0 hardware blueprint (draft): the Strata enclosure with CAD, drawing and build steps, the two-box money fix (Strata Kit $199, Strata Complete $349), the ad re-voiced and re-captioned as Strata (v6, joshua-tree-ad-v6.mp4 on GitHub release), docs/DEMO.md folded into README.md ("Watch it" section) and deleted (commit e1607b6). Trademark search for Strata still needed. Landing fix PR queued.
+The merge train is empty. #296 is the 3.0 hardware blueprint (draft): the Strata enclosure with CAD, drawing and build steps, the two-box money fix (Strata Kit $199, Strata Complete $349), the ad re-voiced and re-captioned as Strata (v6, joshua-tree-ad-v6.mp4 on GitHub release), docs/DEMO.md folded into README.md ("Watch it" section) and deleted (commit e1607b6). Trademark search for Strata still needed.
 
 ## Next, in order
 

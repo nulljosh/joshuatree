@@ -36,6 +36,26 @@
 
 #define SYS_TASKS       386  /* 1.9.6: ebx = struct jt_tasks* (user), ecx = slot to kill or -1; fills the snapshot, 0 or -errno */
 
+/* 1.9.10: SYS_HTTP_GET, the one call the Curbfind port needed. One HTTP
+   GET to the fixed host joshuatree.heyitsmejosh.com, port 80: userland
+   names only the path, never the host, so a ring-3 program cannot point
+   the kernel's network stack anywhere else.
+     ebx = path (user, NUL-terminated): at most JT_HTTP_PATH_MAX bytes
+           before the NUL, must start with '/', printable ASCII 0x21..0x7E
+           only (no spaces, no CR or LF, nothing that could end the request
+           line or start a header); anything else is -EINVAL, and -EFAULT
+           if the string walks off user memory.
+     ecx = out buffer (user, writable), edx = its length, clamped to
+           JT_HTTP_BODY_MAX; -EFAULT unless the whole range is user memory.
+   Returns the body byte count (0..edx) when the reply was HTTP 200.
+   A non-200 reply returns minus its status, -(100..599), which can never
+   collide with an errno (all below 100). -ENODEV when there is no NIC,
+   -EIO when the host did not answer within the 1500ms reply budget.
+   Nothing is written to the buffer on any failure. */
+#define SYS_HTTP_GET    387
+#define JT_HTTP_PATH_MAX 128
+#define JT_HTTP_BODY_MAX 2048
+
 #define JT_POLL_PRESENT 1    /* copy the framebuffer to the screen before looking for an event */
 
 /* Event kinds SYS_WINDOW_POLL writes. a/b depend on the kind: KEY carries
@@ -81,7 +101,7 @@ struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
    assigned below is a null the dispatcher turns into -ENOSYS rather than
    a jump into nothing, and any number >= NSYSCALLS gets the same answer,
    so the gaps in Linux's numbering cost nothing and hide nothing. */
-#define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3 */
+#define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3. 386 (tasks) and 387 (http_get) fit under it */
 
 /* Exactly the stack shape syscall_entry (isr.S) builds, lowest address
    first: the four data segments pushed last, pusha's eight, then the CPU's

@@ -34,7 +34,13 @@
 typedef unsigned int u32;
 
 #define MAX_TASKS  TASK_SLOTS
-#define STACK_SIZE 4096
+/* 1.9.10: 16KB, up from 4KB. SYS_HTTP_GET runs the network stack on the
+   calling ring-3 task's kernel stack, and one fetch is http_get_timeout's
+   512-byte request plus a 1514-byte receive buffer in tcp_get_timeout plus
+   another frame that size in tcp_send_segment, about 3.7KB before a timer
+   IRQ pushes its own frame on top. 4KB was enough for the file and window
+   calls and nothing deeper; six slots at 16KB is 96KB of heap. */
+#define STACK_SIZE 16384
 
 /* Saved-frame layout, u32 indices from the saved esp upward. Exactly what
    irq0 (irq_stubs.S) pushes, in reverse: pusha, then ds/es/fs/gs. */
