@@ -36,8 +36,27 @@
 
 #define SYS_TASKS       386  /* 1.9.6: ebx = struct jt_tasks* (user), ecx = slot to kill or -1; fills the snapshot, 0 or -errno */
 
-/* 1.9.12: SYS_READDIR, the directory listing Search needs and Files will
-   reuse. 387 is SYS_HTTP_GET (Curbfind, 1.9.10), so this is 388.
+/* 1.9.11: SYS_HTTP_GET, the one call the Curbfind port needed. One HTTP
+   GET to the fixed host joshuatree.heyitsmejosh.com, port 80: userland
+   names only the path, never the host, so a ring-3 program cannot point
+   the kernel's network stack anywhere else.
+     ebx = path (user, NUL-terminated): at most JT_HTTP_PATH_MAX bytes
+           before the NUL, must start with '/', printable ASCII 0x21..0x7E
+           only (no spaces, no CR or LF, nothing that could end the request
+           line or start a header); anything else is -EINVAL, and -EFAULT
+           if the string walks off user memory.
+     ecx = out buffer (user, writable), edx = its length, clamped to
+           JT_HTTP_BODY_MAX; -EFAULT unless the whole range is user memory.
+   Returns the body byte count (0..edx) when the reply was HTTP 200.
+   A non-200 reply returns minus its status, -(100..599), which can never
+   collide with an errno (all below 100). -ENODEV when there is no NIC,
+   -EIO when the host did not answer within the 1500ms reply budget.
+   Nothing is written to the buffer on any failure. */
+#define SYS_HTTP_GET    387
+#define JT_HTTP_PATH_MAX 128
+#define JT_HTTP_BODY_MAX 2048
+/* 1.9.13: SYS_READDIR, the directory listing Search needs and Files will
+   reuse. 387 is SYS_HTTP_GET (Curbfind, 1.9.11), so this is 388.
      ebx = path (user, NUL-terminated, at most PATH_MAX = 63 bytes before
            the NUL; longer, or no NUL within 64 bytes, is -EINVAL)
      ecx = struct jt_dirent* (user), an array of edx records
@@ -55,7 +74,7 @@
    ring 3 never moves the kernel's own cwd: a program that wants to
    descend keeps its own cwd string and passes it here. "" and "." list
    the current directory. SYS_OPEN takes the same relative paths since
-   1.9.12, so a file a listing named under DOCS opens as "DOCS/NAME".
+   1.9.13, so a file a listing named under DOCS opens as "DOCS/NAME".
    Every record is fixed-size: the name NUL-terminated and cut to fit,
    the size in bytes (0 for a directory), and is_dir 1 or 0. The array is
    only written after the whole range passed paging_user_range_ok, and
@@ -111,7 +130,7 @@ struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
    assigned below is a null the dispatcher turns into -ENOSYS rather than
    a jump into nothing, and any number >= NSYSCALLS gets the same answer,
    so the gaps in Linux's numbering cost nothing and hide nothing. */
-#define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3 */
+#define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3. 386 (tasks), 387 (http_get) and 388 (readdir) fit under it */
 
 /* Exactly the stack shape syscall_entry (isr.S) builds, lowest address
    first: the four data segments pushed last, pusha's eight, then the CPU's

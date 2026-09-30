@@ -27,6 +27,8 @@
 #include "window.h"
 #include "app.h"
 #include "pmm.h"
+#include "net.h"  /* 1.9.11: SYS_HTTP_GET */
+#include "http.h"
 
 typedef unsigned int u32;
 typedef unsigned char u8;
@@ -154,7 +156,7 @@ static int copy_path_from_user(u32 addr, char *out) {
     return -EINVAL;
 }
 
-/* 1.9.12: relative paths. The VFS has one current directory (the shell's)
+/* 1.9.13: relative paths. The VFS has one current directory (the shell's)
    and every vfs_* call is relative to it; the only way to reach a file in
    a subdirectory is vfs_chdir, which moves that one global. A ring-3
    program must not be able to move it, so a path with slashes is walked
@@ -234,7 +236,7 @@ static int sys_open(u32 path, u32 flags, u32 c) {
     for (int i = FIRST_FD; i < MAX_FDS; i++) if (!fds[id][i].data) { fd = i; break; }
     if (fd < 0) return -EMFILE;
 
-    /* 1.9.12: "DOCS/NOTE.TXT" opens NOTE.TXT inside DOCS. The walk is
+    /* 1.9.13: "DOCS/NOTE.TXT" opens NOTE.TXT inside DOCS. The walk is
        undone before this returns, whichever way it returns; the full path
        is what close() will need to walk again. */
     char walk[PATH_MAX + 1];
@@ -380,7 +382,7 @@ static int sys_read(u32 fd, u32 buf, u32 len) {
    and it is paid only then. */
 static int flush_fd(struct open_file *f) {
     if (!f->dirty) return 0;
-    /* 1.9.12: the name is the relative path open() was given; walk into
+    /* 1.9.13: the name is the relative path open() was given; walk into
        its directory the same way, and back out before returning. */
     char walk[PATH_MAX + 1];
     for (int i = 0; i <= PATH_MAX; i++) { walk[i] = f->name[i]; if (!f->name[i]) break; }
@@ -625,7 +627,67 @@ static int sys_tasks(u32 out, u32 kill, u32 c) {
     return rc;
 }
 
-/* 1.9.12: SYS_READDIR, the listing the Search app shows (and Files will).
+/* 1.9.11: SYS_HTTP_GET, what the Curbfind app fetches its live rows with.
+   This is the first syscall that puts the kernel's network stack behind a
+   ring-3 caller, so it is deliberately narrow: the host and port are
+   fixed here, the caller names only the path, and the path is copied out
+   of user memory with the same per-byte check copy_path_from_user does,
+   then refused unless it is a plain absolute path of printable ASCII.
+   The request line is "GET <path> HTTP/1.0\r\n" followed by headers, so a
+   space would end the path early and a CR or LF would let the caller
+   write a header of its own; neither can get through.
+
+   The fetch itself runs with interrupts on. The syscall gate clears IF,
+   but net.c times every wait off ticks(), which only advances on the
+   timer IRQ, so with IF clear a missing reply would spin forever instead
+   of timing out. Re-enabling IF here is the same preemption a ring-3
+   program lives under between syscalls (sys_sched_yield's int $32 already
+   lets the scheduler run inside this gate), and IF is cleared again before
+   the iret restores the caller's own flags. The reply lands in a kernel
+   bounce buffer and is copied out only after the whole exchange is over
+   and only if the status was 200. One caller at a time: a second task
+   calling while a fetch is in flight is -EBUSY, since the bounce buffer
+   and net.c's one-connection stack are both singletons. */
+#define HTTP_HOST "joshuatree.heyitsmejosh.com"
+#define HTTP_PORT 80
+#define HTTP_REPLY_TICKS 150 /* 1500ms at 100Hz, the same budget kernel/curbfind.h used */
+static char http_bounce[JT_HTTP_BODY_MAX];
+static int http_busy = 0;
+static int sys_http_get(u32 path, u32 buf, u32 len) {
+    char kpath[JT_HTTP_PATH_MAX + 1];
+    u32 i;
+    for (i = 0; i <= JT_HTTP_PATH_MAX; i++) {
+        if (!paging_user_range_ok(path + i, 1)) return -EFAULT;
+        char ch = ((const char *)path)[i];
+        kpath[i] = ch;
+        if (!ch) break;
+        if (ch < 0x21 || ch > 0x7E) return -EINVAL; /* space, CR, LF, control, high bit: not a path */
+    }
+    if (i > JT_HTTP_PATH_MAX) return -EINVAL; /* no NUL within the cap */
+    if (i == 0 || kpath[0] != '/') return -EINVAL;
+    if (len > JT_HTTP_BODY_MAX) len = JT_HTTP_BODY_MAX;
+    if (!paging_user_range_ok(buf, len ? len : 1)) return -EFAULT;
+    if (http_busy) return -EBUSY;
+    http_busy = 1;
+    __asm__ volatile ("sti");
+    int n = -1, st = 0;
+    if (!net_init(0x0A00020F)) { n = -ENODEV; }
+    else {
+        n = http_get_timeout(HTTP_HOST, kpath, HTTP_PORT, http_bounce, sizeof(http_bounce), HTTP_REPLY_TICKS);
+        st = http_last_status();
+        if (n < 0) n = -EIO;
+        else if (st != 200) n = st >= 100 && st <= 599 ? -st : -EIO;
+    }
+    __asm__ volatile ("cli");
+    http_busy = 0;
+    if (n < 0) return n;
+    if ((u32)n > len) n = (int)len;
+    char *out = (char *)buf;
+    for (i = 0; i < (u32)n; i++) out[i] = http_bounce[i];
+    return n;
+}
+
+/* 1.9.13: SYS_READDIR, the listing the Search app shows (and Files will).
    The contract is in syscall.h. Order of operations is the point: the
    path is copied out of user space with a hard cap and the output range
    is checked for the whole array before a single vfs call runs; the
@@ -694,6 +756,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_WINDOW_OPEN] = sys_window_open,
     [SYS_WINDOW_POLL] = sys_window_poll,
     [SYS_TASKS]       = sys_tasks,
+    [SYS_HTTP_GET]    = sys_http_get,
     [SYS_READDIR]     = sys_readdir,
 };
 

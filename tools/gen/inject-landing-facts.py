@@ -70,6 +70,15 @@ def count_apps():
     return len(real)
 
 
+def count_ring3():
+    # Apps that run as their own ring-3 program: one row each in RING3_APPS.
+    src = (ROOT / "kernel/ring3app.c").read_text()
+    m = re.search(r"RING3_APPS\[\]\s*=\s*\{(.*?)\n\};", src, re.S)
+    if not m:
+        raise ValueError("Could not find RING3_APPS in kernel/ring3app.c")
+    return len(re.findall(r'\{"[^"]+",', m[1]))
+
+
 def count_documented():
     # Read the same % the progress chart's caption already states (real
     # architecture-doc coverage, computed once in tools/gen/progress.sh),
@@ -94,6 +103,7 @@ def read_version():
 def compute_facts():
     return {
         "apps": str(count_apps()),
+        "ring3": str(count_ring3()),
         "documented": count_documented(),
         "version": read_version(),
     }

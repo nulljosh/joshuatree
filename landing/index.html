@@ -136,14 +136,14 @@
     .hero h1 { font-size: 34px; }
   }
 
-  /* Sections reveal on scroll, the same "content arrives as you get to
-     it" beat every section of the real Apple page above uses. Plain
-     opacity+translate, gated behind prefers-reduced-motion, no scroll
-     library: IntersectionObserver is a real, already-universal browser
-     API, nothing to add for this. */
-  .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
-  .reveal.in { opacity: 1; transform: none; }
-  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+  /* Sections are visible by default. They used to start at opacity 0 and
+     wait for an IntersectionObserver to fade them in, so a page whose
+     observer never fired (a print, a screenshot, a crawler, a headless
+     check that never scrolls) showed a blank page below the demo. The
+     class stays as a hook and the observer still tags `.in`, but nothing
+     is hidden until it fires. tools/checks/landing-layout-check.mjs
+     guards this. */
+  .reveal { opacity: 1; }
 
   section { position: relative; }
 
@@ -388,6 +388,13 @@
   .plate-cap a#samantha-boot-link { color: var(--accent2); text-decoration: none; font-weight: 600; }
   .plate-cap a#samantha-boot-link:hover { text-decoration: underline; }
   .ad-video, .strata-img { display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--border); margin: 28px auto 0; background: var(--card); }
+  .strata-link { display: block; }
+  .strata-cap a { color: var(--accent2); text-decoration: none; font-weight: 600; }
+  .strata-cap a:hover { text-decoration: underline; }
+  .protected { padding: 8px 20px 48px; max-width: 640px; margin: 0 auto; text-align: center; }
+  .protected h2 { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 12px; }
+  .protected p { color: var(--sub); font-size: 16px; line-height: 1.5; margin: 0 auto; max-width: 52ch; }
+  @media (max-width: 700px) { .protected h2 { font-size: 26px; } }
   .strata-cap { margin: 10px 0 0; font-size: 14px; color: var(--sub); }
   .audience { max-width: 480px; margin: 0 auto 12px; }
   .waitlist-section { padding: 24px 20px 72px; text-align: center; }
@@ -489,8 +496,8 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row">
     <div class="fact"><strong><span data-fact="apps">26</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><a class="fact-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md"><strong><span data-fact="documented">86</span>%</strong><span class="label">Documented</span></a></div>
-    <div class="fact"><strong>v<span data-fact="version">1.9.12</span></strong><span class="label">Version</span></div>
+    <div class="fact"><a class="fact-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md"><strong><span data-fact="documented">100</span>%</strong><span class="label">Documented</span></a></div>
+    <div class="fact"><strong>v<span data-fact="version">1.9.13</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a>
@@ -513,11 +520,11 @@
 
 <section class="meet-samantha reveal" aria-label="Meet Samantha">
   <h2>Meet Samantha.</h2>
-  <p class="sub">Boot straight into her. Tell her what to do, and she runs the machine.</p>
+  <p class="sub">Boot straight into her. Type what you want, and she runs the machine.</p>
   <div class="tile-grid" style="grid-template-columns: minmax(0, 480px); justify-content: center;">
     <div class="tile">
       <img src="shots/samantha-chat.webp" alt="Chat with Samantha, showing suggestions like remind me to call mom, jot a note, check the weather, and look at today's calendar" loading="lazy" width="984" height="462">
-      <p>Tell her what to do and she opens an app, sets a reminder, jots a note, or checks the weather. She opens with her eyes open and talks back with her portrait on the dock.</p>
+      <p>Type what you want and she opens an app, sets a reminder, jots a note, or checks the weather. She opens with her eyes open and talks back with her portrait on the dock.</p>
     </div>
   </div>
   <p class="sub" style="margin-top:16px">Samantha comes from Turing, a separate project. Joshua Tree is the machine she runs.</p>
@@ -556,11 +563,16 @@
 
 <section class="more reveal" aria-label="And so much more">
   <h2>And so much more.</h2>
-  <ul class="more-list"><li>Files</li><li>Mail</li><li>Calendar</li><li>Notes</li><li>Reminders</li><li>Terminal</li><li>Chat</li><li>Weather</li><li>Contacts</li><li>Calculator</li><li>Stocks</li><li>Search</li><li>Epiphany</li><li>Activity</li><li>Curbfind</li><li>Bookrank</li><li>Quotes</li><li>Lexly</li><li>Toroid</li><li>Sparkjar</li></ul>
+  <ul class="more-list"><li>Files</li><li>Mail</li><li>Calendar</li><li>Notes</li><li>Reminders</li><li>Terminal</li><li>Samantha</li><li>Weather</li><li>Contacts</li><li>Calculator</li><li>Stocks</li><li>Search</li><li>Epiphany</li><li>Activity</li><li>Curbfind</li><li>Bookrank</li><li>Quotes</li><li>Lexly</li><li>Toroid</li><li>Sparkjar</li><li>Keyrate</li><li>Plan</li><li>Homeqi</li><li>Fieldbook</li><li>Portfolio</li><li>Clock</li></ul>
 </section>
+<section class="protected reveal" aria-label="Protected apps">
+  <h2>One app crashes. The desktop stays up.</h2>
+  <p>Each app runs as its own protected program, walled off from the kernel and from every other app. <span data-fact="ring3">18</span> of the <span data-fact="apps">26</span> already run that way, and the rest are on their way out.</p>
+</section>
+
 <section class="progress-section reveal">
   <h2>Growing every week.</h2>
-  <p class="sub"><!-- progress-lede:start -->From a blank screen on Aug 31 to 26 apps today.<!-- progress-lede:end --></p>
+  <p class="sub"><!-- progress-lede:start -->From a blank screen on Sep 27 to 26 apps today.<!-- progress-lede:end --></p>
   <div class="progress-card">
     <!-- Real interactive version for this page specifically, not the same
          static image README.md embeds (README can't run JS). Generated
@@ -570,7 +582,7 @@
          fetched-and-reparsed image. Hover a point (or tap it on touch)
          to see its real date and real line count. -->
     <!-- progress-chart:start -->
-<svg xmlns="http://www.w3.org/2000/svg" width="457" height="190" viewBox="0 0 457 190" id="progress-chart-live" role="img" aria-label="Apps shipped over time, 26 apps as of Sep 28"><style>
+<svg xmlns="http://www.w3.org/2000/svg" width="457" height="190" viewBox="0 0 457 190" id="progress-chart-live" role="img" aria-label="Apps shipped over time, 26 apps as of Sep 29"><style>
   #progress-chart-live {
     --grid: var(--border); --axis: var(--sub); --muted: var(--sub);
     --label: var(--sub); --strong: var(--fg); --line: var(--fg); --line2: var(--accent); --line2-pct: var(--accent);
@@ -584,9 +596,9 @@
   #progress-chart-live .progress-pt:focus .progress-dot,
   #progress-chart-live .progress-pt.is-active .progress-dot { r: 5.5; stroke-width: 2.5; }
   #progress-chart-live .progress-pt:focus { outline: none; }
-</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="17" y1="10" x2="437" y2="10" stroke="var(--grid)"/><line x1="17" y1="80" x2="437" y2="80" stroke="var(--grid)"/><text x="13" y="13" font-size="9" fill="var(--muted)" text-anchor="end">26</text><text x="13" y="83" font-size="9" fill="var(--muted)" text-anchor="end">13</text><text x="13" y="153" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="17" y1="10" x2="17" y2="150" stroke="var(--axis)"/><line x1="17" y1="150" x2="437" y2="150" stroke="var(--axis)"/><polyline points="17,150 27,150 37,150 47,150 57,150 68,150 78,150 88,150 98,150 109,113 119,113 129,107 139,107 150,70 160,70 170,59 180,54 191,54 201,43 211,37 221,37 232,37 242,37 252,37 262,37 273,37 283,37 293,27 303,21 314,16 324,16 334,16 344,16 355,16 365,16 375,16 385,10 396,10 406,10 416,10 426,10 437,10" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 0 apps shipped" data-tooltip="Aug 31 &#183; 0 apps"><circle class="progress-hit" cx="17" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="17" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="57" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="57" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="98" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="98" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 8 apps shipped" data-tooltip="Sep 13 &#183; 8 apps"><circle class="progress-hit" cx="139" cy="107" r="11" fill="transparent"/><circle class="progress-dot" cx="139" cy="107" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 18 apps shipped" data-tooltip="Sep 14 &#183; 18 apps"><circle class="progress-hit" cx="180" cy="54" r="11" fill="transparent"/><circle class="progress-dot" cx="180" cy="54" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 21 apps shipped" data-tooltip="Sep 15 &#183; 21 apps"><circle class="progress-hit" cx="221" cy="37" r="11" fill="transparent"/><circle class="progress-dot" cx="221" cy="37" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 19, 21 apps shipped" data-tooltip="Sep 19 &#183; 21 apps"><circle class="progress-hit" cx="262" cy="37" r="11" fill="transparent"/><circle class="progress-dot" cx="262" cy="37" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 22, 24 apps shipped" data-tooltip="Sep 22 &#183; 24 apps"><circle class="progress-hit" cx="303" cy="21" r="11" fill="transparent"/><circle class="progress-dot" cx="303" cy="21" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 24, 25 apps shipped" data-tooltip="Sep 24 &#183; 25 apps"><circle class="progress-hit" cx="344" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="344" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 26 apps shipped" data-tooltip="Sep 27 &#183; 26 apps"><circle class="progress-hit" cx="385" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="385" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 28, 26 apps shipped" data-tooltip="Sep 28 &#183; 26 apps"><circle class="progress-hit" cx="426" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="426" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 28, 26 apps shipped" data-tooltip="Sep 28 &#183; 26 apps"><circle class="progress-hit" cx="437" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="437" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><text x="17" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="150" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="221" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 15</text><text x="273" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 20</text><text x="324" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 23</text><text x="396" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 28</text><text x="17" y="184" font-size="14" fill="var(--muted)">26 apps &#183; 86% documented</text></svg>
+</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="17" y1="10" x2="437" y2="10" stroke="var(--grid)"/><line x1="17" y1="80" x2="437" y2="80" stroke="var(--grid)"/><text x="13" y="13" font-size="9" fill="var(--muted)" text-anchor="end">26</text><text x="13" y="83" font-size="9" fill="var(--muted)" text-anchor="end">13</text><text x="13" y="153" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="17" y1="10" x2="17" y2="150" stroke="var(--axis)"/><line x1="17" y1="150" x2="437" y2="150" stroke="var(--axis)"/><polyline points="17,16 26,16 35,16 45,16 54,16 63,16 73,16 82,16 91,16 101,16 110,16 119,16 129,16 138,16 147,16 157,16 166,16 175,16 185,16 194,10 203,10 213,10 222,10 231,10 241,10 250,10 259,10 269,10 278,10 287,10 297,10 306,10 315,10 325,10 334,10 343,10 353,10 362,10 371,10 381,10 390,10 399,10 409,10 418,10 427,10 437,10" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 25 apps shipped" data-tooltip="Sep 27 &#183; 25 apps"><circle class="progress-hit" cx="17" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="17" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 25 apps shipped" data-tooltip="Sep 27 &#183; 25 apps"><circle class="progress-hit" cx="63" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="63" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 25 apps shipped" data-tooltip="Sep 27 &#183; 25 apps"><circle class="progress-hit" cx="110" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="110" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 25 apps shipped" data-tooltip="Sep 27 &#183; 25 apps"><circle class="progress-hit" cx="157" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="157" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 26 apps shipped" data-tooltip="Sep 27 &#183; 26 apps"><circle class="progress-hit" cx="203" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="203" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 28, 26 apps shipped" data-tooltip="Sep 28 &#183; 26 apps"><circle class="progress-hit" cx="250" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="250" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 28, 26 apps shipped" data-tooltip="Sep 28 &#183; 26 apps"><circle class="progress-hit" cx="297" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="297" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 28, 26 apps shipped" data-tooltip="Sep 28 &#183; 26 apps"><circle class="progress-hit" cx="343" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="343" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 29, 26 apps shipped" data-tooltip="Sep 29 &#183; 26 apps"><circle class="progress-hit" cx="390" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="390" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 30, 26 apps shipped" data-tooltip="Sep 30 &#183; 26 apps"><circle class="progress-hit" cx="437" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="437" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><text x="17" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 27</text><text x="231" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 28</text><text x="362" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 29</text><text x="437" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 30</text><text x="17" y="184" font-size="14" fill="var(--muted)">26 apps &#183; 100% documented</text></svg>
 <!-- progress-chart:end -->
-    <!-- roadmap-summary:start --><p class="roadmap-next">Next up: apps that can&#x27;t crash each other, apps kept out of each other&#x27;s memory, and safer stored passwords.</p><!-- roadmap-summary:end -->
+    <!-- roadmap-summary:start --><p class="roadmap-next">Next up: type to her on your phone, apps that can&#x27;t crash each other, and music and video apps.</p><!-- roadmap-summary:end -->
   </div>
 </section>
 
@@ -603,8 +615,8 @@
     <p class="waitlist-status" id="waitlist-status" role="status" aria-live="polite"></p>
     <video class="ad-video" controls preload="none" playsinline poster="ad-poster.jpg" aria-label="A 36 second ad for Joshua Tree"><source src="https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4" type="video/mp4"></video>
     <p class="strata-cap">The 36 second version.</p>
-    <img class="strata-img" src="strata-hero.jpg" alt="A render of Strata, the case for the Joshua Tree board" width="1200" height="750" loading="lazy">
-    <p class="strata-cap">Strata, the case. A concept for now, not for sale yet.</p>
+    <a class="strata-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md"><img class="strata-img" src="strata-hero.jpg" alt="A render of Strata, the case for the Joshua Tree board" width="1200" height="750" loading="lazy"></a>
+    <p class="strata-cap">Strata, the case. A concept for now, not for sale yet. <a class="strata-more" href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md">See the plans</a>.</p>
     <p class="strata-cap">Apps already running in their own protected space can crash without taking the desktop down.</p>
   </div>
 </section>
@@ -709,7 +721,7 @@
   var items = [
     'A whole computer, built from nothing',
     'Ask Samantha, and she does it',
-    'Your notes, reminders and calendar, saved for real',
+    'Your notes, reminders and calendar, built right in',
     'Live weather, right where you are',
     'Two apps side by side, drag them anywhere',
     'Running right here in your browser'

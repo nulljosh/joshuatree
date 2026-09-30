@@ -47,7 +47,10 @@
 #define JT_SYS_WINDOW_OPEN 384
 #define JT_SYS_WINDOW_POLL 385
 #define JT_SYS_TASKS       386 /* 1.9.6: uptime, memory, live slots; optional kill */
-#define JT_SYS_READDIR     388 /* 1.9.12: list a directory into fixed-size records (387 is Curbfind's http_get) */
+#define JT_SYS_HTTP_GET    387 /* 1.9.11: one GET from joshuatree.heyitsmejosh.com; path only, see kernel/syscall.h */
+#define JT_HTTP_PATH_MAX 128   /* longest path SYS_HTTP_GET accepts, bytes before the NUL */
+#define JT_HTTP_BODY_MAX 2048  /* longest body it hands back */
+#define JT_SYS_READDIR     388 /* 1.9.13: list a directory into fixed-size records (387 is Curbfind's http_get) */
 #define JT_DIRENT_NAME  32
 #define JT_READDIR_MAX  64
 #define JT_PATH_MAX     63     /* bytes of path before the NUL the kernel will read; longer is -EINVAL */
@@ -142,6 +145,10 @@ static inline int jt_sched_yield(void)                            { return jt_sy
 static inline int jt_lseek(int fd, int off, int whence)           { return jt_syscall(JT_SYS_LSEEK, (unsigned)fd, (unsigned)off, (unsigned)whence); }
 static inline int jt_window_open(struct jt_window_info *info)     { return jt_syscall(JT_SYS_WINDOW_OPEN, (unsigned)info, 0, 0); }
 static inline int jt_tasks(struct jt_tasks *t, int kill)          { return jt_syscall(JT_SYS_TASKS, (unsigned)t, (unsigned)kill, 0); }
+/* Body bytes on HTTP 200 (at most len), minus the status on any other reply
+   (-100..-599), or -errno: -EINVAL bad path, -EFAULT bad pointer, -ENODEV no
+   NIC, -EIO no answer. The host is fixed in the kernel; only the path is ours. */
+static inline int jt_http_get(const char *path, void *buf, unsigned len) { return jt_syscall(JT_SYS_HTTP_GET, (unsigned)path, (unsigned)buf, len); }
 static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned max) { return jt_syscall(JT_SYS_READDIR, (unsigned)path, (unsigned)out, max); }
 static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
 

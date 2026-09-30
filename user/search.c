@@ -8,7 +8,7 @@
  * no kernel include path, linked flat, loaded off the VFS by exec_user, and
  * it reaches the machine only through int 0x80: SYS_WINDOW_OPEN and
  * SYS_WINDOW_POLL for the window, the ordinary open/read/close for a file's
- * bytes, and the one new call this port needed, SYS_READDIR (1.9.12), which
+ * bytes, and the one new call this port needed, SYS_READDIR (1.9.13), which
  * fills fixed-size records with a directory's names, sizes and kinds.
  *
  * The in-kernel copy stepped into a folder with vfs_chdir, which moved the

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Search runs as a real ring-3 process, the sixteenth app out of the kernel
-(roadmap 2.0, 1.9.12), on top of the one new call, SYS_READDIR (388).
+(roadmap 2.0, 1.9.13), on top of the one new call, SYS_READDIR (388).
 
 Two headless boots, both with `open=sear`, which launches Search from the
 dock path the moment the desktop is up. Search is user/search.c, a flat
