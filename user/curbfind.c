@@ -257,6 +257,7 @@ static int cf_handle(const struct jt_event *ev) {
         } else return 0; /* the titlebar X, or anywhere off the list */
     } else if (ev->kind == JT_EV_KEY) {
         if (ev->a == JT_KEY_ESC) return 0;
+        if (ev->a == '`') { jt_write(1, "curbfind: crashing on purpose\n", 30); *(volatile int *)0 = 1; } /* deliberate crash, as in every ring-3 app */
         if (ev->a == JT_KEY_UP && cf_sel > 0) cf_sel--;
         else if (ev->a == JT_KEY_DOWN && cf_sel < cf_n - 1) cf_sel++;
         else if (ev->a == 'p' || ev->a == 'P') cf_probe();

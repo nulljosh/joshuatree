@@ -11,7 +11,7 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 1. 1.8 done: a phone home screen, an app grid, one app full screen at a time, a back button.
 2. 1.9 done: touch works, an on-screen keyboard, every app readable at phone size.
 3. Every app in the APPS[] table runs as its own ring 3 program. No app code left in kernel.c.
-4. A check crashes each app on purpose and proves the desktop is still alive after every one.
+4. A check crashes each app on purpose and proves the desktop is still alive after every one. Done in 1.9.16 (`tools/checks/ring3crash-all-check.py`, 17 of 17).
 5. Input goes to the focused window only, not a global key pull.
 
 ## Where things stand
