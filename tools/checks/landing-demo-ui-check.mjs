@@ -7,7 +7,11 @@
 //     taking the keyboard over, the demo shows a focus ring, a key press or a
 //     click takes it over, and Shift+Escape gives it back
 //   - on a phone the Full screen button is top right of the demo, not over
-//     the kernel's own bottom input line
+//     the kernel's own bottom input line, and the Full screen and Send
+//     buttons are icons
+//   - a phone on its side gets a real demo, not a 128x72 strip
+//   - an iPad (touch, no keyboard) gets the chat bar too
+//   - on a touch screen the waitlist fields are at least 44px tall
 //
 // LANDING_DIR points the check at another copy of landing/ (used to prove it
 // fails on the old page). CHROMIUM_PATH points at an installed Chromium when
@@ -95,6 +99,43 @@ try {
       return { top: b.top - w.top, right: w.right - b.right, bottom: w.bottom - b.bottom };
     });
     ok(g.top >= 0 && g.top < 30 && g.right >= 0 && g.right < 24, `on a phone Full screen sits top right of the demo (top ${g.top.toFixed(0)}px, right ${g.right.toFixed(0)}px)`);
+    await ctx.close();
+  }
+  // ---- phone on its side: the demo is not a strip ----
+  {
+    const { ctx, page } = await open({ ...devices['iPhone 13 landscape'] });
+    const h = await page.evaluate(() => document.getElementById('stage-wrap').getBoundingClientRect().height);
+    ok(h >= 300, `a phone on its side gets a usable demo (${h.toFixed(0)}px tall)`);
+    await ctx.close();
+  }
+
+  // ---- iPad: touch, no keyboard ----
+  {
+    const { ctx, page } = await open({ ...devices['iPad Mini'] });
+    await page.waitForTimeout(1500);
+    ok(await page.locator('#demo-composer').isVisible(), 'an iPad shows the chat bar too');
+    await ctx.close();
+  }
+
+  // ---- touch screen: icon buttons, big enough targets ----
+  {
+    const { ctx, page } = await open({ ...devices['iPhone 13'] });
+    await page.waitForTimeout(1500);
+    const t = await page.evaluate(() => {
+      const h = sel => { const e = document.querySelector(sel); return e ? Math.round(e.getBoundingClientRect().height) : 0; };
+      const exit = document.getElementById('demo-exit');
+      const send = document.getElementById('demo-compose-send');
+      return {
+        exitIcon: parseFloat(getComputedStyle(exit).fontSize) === 0 && exit.getBoundingClientRect().width <= 44,
+        exitName: exit.getAttribute('aria-label') || exit.textContent.trim(),
+        sendIcon: !!send.querySelector('svg') && send.textContent.trim() === '',
+        sendName: send.getAttribute('aria-label'),
+        emailField: h('.waitlist-form input[type="email"]'), sendButton: h('.waitlist-form button'),
+      };
+    });
+    ok(t.exitIcon && !!t.exitName, `Full screen is an icon with an accessible name (${JSON.stringify(t.exitName)})`);
+    ok(t.sendIcon && t.sendName === 'Send', 'Send is an icon with an accessible name');
+    ok(t.emailField >= 44 && t.sendButton >= 44, `the waitlist fields are big enough to tap (email ${t.emailField}px, button ${t.sendButton}px)`);
     await ctx.close();
   }
 } catch (e) {

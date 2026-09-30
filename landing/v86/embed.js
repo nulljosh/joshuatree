@@ -727,11 +727,15 @@ if (typeof document !== "undefined") (function () {
   // the Enter key. The field is compared with what the kernel already holds,
   // so autocorrect, a pasted word or a cursor edit all work: only the
   // difference is sent, as Backspaces then new letters.
-  if (IS_PHONE) {
+  // Phones, and touch tablets (an iPad runs the desktop layout but has no
+  // keyboard either).
+  if (IS_PHONE || (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches)) {
     var composer = document.getElementById("demo-composer");
     var composeInput = document.getElementById("demo-compose-input");
     if (composer && composeInput) {
       composer.hidden = false;
+      var frameEl = document.getElementById("demo-frame");
+      if (frameEl) frameEl.classList.add("has-composer");
       var mirrored = ""; // what the kernel's input line holds now
       // One queue, one key at a time at the tour's own 60ms spacing: sent
       // overlapped at 30ms the kernel dropped letters. (v86 already ignores
@@ -746,7 +750,28 @@ if (typeof document !== "undefined") (function () {
         if (del) { var bs = []; for (var k = 0; k < del; k++) bs.push(8); typeSend(function () { return emulator.keyboard_send_keys(bs, 60); }); }
         if (add) typeSend(function () { return emulator.keyboard_send_text(add, 60); });
       };
-      composeInput.addEventListener("focus", function () { focusIn(); trackActivity(); });
+      // The phone keyboard covers the bottom half of the page, and with it the
+      // demo, so you could not see her while you typed. Focusing the bar puts
+      // the demo in full screen, and while it is full screen the frame follows
+      // the visible area (visualViewport), so the screen shrinks to fit above
+      // the keyboard with the bar right on top of it.
+      var demoFrameEl = document.getElementById("demo-frame");
+      var syncViewport = function () {
+        var v = window.visualViewport;
+        if (!demoFrameEl || !v) return;
+        demoFrameEl.style.setProperty("--demo-h", v.height + "px");
+        demoFrameEl.style.setProperty("--demo-top", v.offsetTop + "px");
+      };
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", syncViewport);
+        window.visualViewport.addEventListener("scroll", syncViewport);
+      }
+      composeInput.addEventListener("focus", function () {
+        focusIn(); trackActivity();
+        var toggle = document.getElementById("demo-exit");
+        if (demoFrameEl && toggle && !demoFrameEl.classList.contains("demo-full")) toggle.click();
+        syncViewport();
+      });
       composeInput.addEventListener("input", function () {
         trackActivity();
         if (emulator && adaptersReady) mirrorToKernel();

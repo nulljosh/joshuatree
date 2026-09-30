@@ -73,14 +73,45 @@ try {
   const input = page.locator('#demo-compose-input');
   const send = page.locator('#demo-compose-send');
   ok(await page.locator('#demo-composer').isVisible(), 'phone viewport shows the chat bar');
-  ok(await send.isVisible(), 'phone viewport shows the Send button');
+  ok(await send.isVisible(), 'phone viewport shows the Send button (an icon)');
 
   // Open Samantha from the phone home screen with a real tap, then give the
   // kernel a few seconds to draw her empty prompt.
-  const rect = await page.evaluate(() => { const r = document.getElementById('screen_canvas').getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
-  await page.touchscreen.tap(rect[0] + rect[2] * 0.30, rect[1] + rect[3] * 0.23);
+  const rect0 = await page.evaluate(() => { const r = document.getElementById('screen_canvas').getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
+  await page.touchscreen.tap(rect0[0] + rect0[2] * 0.30, rect0[1] + rect0[3] * 0.23);
   await page.waitForTimeout(7000);
-  // The input bar is the strip just above the bottom buttons.
+
+  // 2. a real touch tap in the chat bar. The demo goes full screen so she can
+  // be seen above the keyboard.
+  await input.tap();
+  await page.waitForTimeout(800);
+  const afterTap = await page.evaluate(() => ({
+    active: document.activeElement && document.activeElement.id,
+    focused: window.__jt.focused,
+    full: document.getElementById('demo-frame').classList.contains('demo-full'),
+  }));
+  ok(afterTap.active === 'demo-compose-input', 'tapping the bar focuses the text field (this is what raises the phone keyboard)');
+  ok(afterTap.focused === true, 'tapping the bar takes the demo over');
+  ok(afterTap.full === true, 'tapping the bar puts the demo in full screen so she stays in view');
+
+  // A phone keyboard covers the bottom of the screen and shrinks the visible
+  // area. Fake that by narrowing the visual viewport's height the way
+  // embed.js reads it, then check the whole screen and the bar still fit.
+  await page.setViewportSize({ width: 390, height: 430 });
+  await page.evaluate(() => { const f = document.getElementById('demo-frame'); f.style.setProperty('--demo-h', '430px'); });
+  await page.waitForTimeout(800);
+  const fit = await page.evaluate(() => {
+    const c = document.getElementById('screen_canvas').getBoundingClientRect();
+    const b = document.getElementById('demo-composer').getBoundingClientRect();
+    return { canvasBottom: c.bottom, barTop: b.top, barBottom: b.bottom, h: innerHeight };
+  });
+  ok(fit.canvasBottom <= fit.barTop + 1 && fit.barBottom <= fit.h + 1, `with a short (keyboard-sized) screen she still fits above the bar (screen ends ${fit.canvasBottom.toFixed(0)}, bar ${fit.barTop.toFixed(0)}-${fit.barBottom.toFixed(0)} of ${fit.h})`);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => { const f = document.getElementById('demo-frame'); f.style.removeProperty('--demo-h'); });
+  await page.waitForTimeout(800);
+
+  // The input bar is the strip just above the bottom of the kernel's screen.
+  const rect = await page.evaluate(() => { const r = document.getElementById('screen_canvas').getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
   const bar = { x: rect[0], y: rect[1] + rect[3] * 0.86, width: rect[2], height: rect[3] * 0.06 };
   const before = await page.screenshot({ clip: bar });
 
@@ -92,16 +123,6 @@ try {
     e.keyboard_send_text = (s, d) => { window.__sent.text.push(s); return t(s, d); };
     e.keyboard_send_keys = (c, d) => { window.__sent.keys.push(...c); return k(c, d); };
   });
-
-  // 2. a real touch tap in the field
-  await input.tap();
-  await page.waitForTimeout(500);
-  const afterTap = await page.evaluate(() => ({
-    active: document.activeElement && document.activeElement.id,
-    focused: window.__jt.focused,
-  }));
-  ok(afterTap.active === 'demo-compose-input', 'tapping the bar focuses the text field (this is what raises the phone keyboard)');
-  ok(afterTap.focused === true, 'tapping the bar takes the demo over');
 
   // 3. type like a soft keyboard would, then correct one letter
   await page.keyboard.type('hellp');

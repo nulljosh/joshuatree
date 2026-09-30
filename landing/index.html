@@ -243,7 +243,7 @@
      visitor sees with the live boot. */
   #demo-frame { position: relative; width: 100%; padding: 14px 16px 0; box-sizing: border-box; z-index: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
   /* Full screen is opt-in (the button, bottom right). A fixed full-viewport box rather than only the Fullscreen API, because iPhone Safari has no element fullscreen. */
-  #demo-frame.demo-full { position: fixed; inset: 0; z-index: 50; padding: 0; background: #000; height: 100dvh; }
+  #demo-frame.demo-full { position: fixed; inset: 0; z-index: 50; padding: 0; background: #000; top: var(--demo-top, 0px); height: var(--demo-h, 100dvh); }
   body.demo-full-open { overflow: hidden; }
   #demo-frame.demo-full .plate-cap { display: none; }
   /* v0.76.51: real bug, direct report ("demo cut off when window rescales")
@@ -257,8 +257,12 @@
      matching height from whichever width actually won, no competing
      explicit height to disagree with it. */
   #stage-wrap { background: #000; position: relative; --stage-h: min(80svh, calc(100svh - 270px)); width: min(100%, calc(var(--stage-h) * 16 / 9)); height: auto; max-height: var(--stage-h); aspect-ratio: 16 / 9; z-index: 0; overflow: hidden; border-radius: 6px; }
-  #demo-frame.demo-full #stage-wrap { width: min(100vw, calc(100dvh * 16 / 9)); max-height: 100dvh; border-radius: 0; }
+  #demo-frame.demo-full #stage-wrap { width: min(100vw, calc(var(--demo-h, 100dvh) * 16 / 9)); max-height: var(--demo-h, 100dvh); border-radius: 0; }
+  #demo-frame.demo-full.has-composer { box-sizing: border-box; padding-bottom: 76px; }
+  #demo-frame.demo-full.has-composer #stage-wrap { width: min(100vw, calc((var(--demo-h, 100dvh) - 76px) * 16 / 9)); max-height: calc(var(--demo-h, 100dvh) - 76px); }
   @media (max-width: 600px) { #stage-wrap { width: 100%; max-height: none; } }
+  /* A phone on its side (844x390): the 270px of page chrome the formula reserves left a 128x72 strip. Let the demo have the short screen. */
+  @media (orientation: landscape) and (max-height: 520px) { #stage-wrap { --stage-h: calc(100svh - 24px); } }
   /* Phone boot (embed.js's IS_PHONE, <=520px): the kernel opens a real
      430x760 portrait mode instead of the desktop's 16:9, so the box has
      to actually be that shape, not 16:9 squeezed into a narrow column --
@@ -268,30 +272,30 @@
      phone shape, not an arbitrary number. */
   @media (max-width: 520px) {
     #stage-wrap { aspect-ratio: 430 / 760; width: 100%; max-height: none; } /* 1.7.6: full width on phones, the page scrolls; a height cap made it a narrow strip */
-    #demo-frame.demo-full #stage-wrap { width: min(100vw, calc(100dvh * 430 / 760)); aspect-ratio: 430 / 760; }
+    #demo-frame.demo-full #stage-wrap { width: min(100vw, calc(var(--demo-h, 100dvh) * 430 / 760)); aspect-ratio: 430 / 760; }
   }
   /* The demo's full screen toggle (#demo-frame.demo-full, wired in the
      script below): always shown, a tap target plus Esc to leave. Nothing
      hides the hero copy on click any more. */
-  #demo-exit { position: absolute; right: 14px; bottom: 14px; z-index: 6; display: inline-flex; align-items: center; gap: 7px; background: rgba(28,28,30,0.78); color: #fff; border: none; border-radius: 999px; padding: 9px 16px 9px 13px; font-size: 13px; font-weight: 600; letter-spacing: 0.01em; cursor: pointer; font-family: inherit; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14), 0 2px 10px rgba(0,0,0,0.2); }
+  #demo-exit { position: absolute; right: 14px; bottom: 14px; z-index: 6; display: inline-flex; align-items: center; justify-content: center; gap: 0; width: 40px; height: 40px; font-size: 0; background: rgba(28,28,30,0.78); color: #fff; border: none; border-radius: 999px; padding: 0; font-weight: 600; letter-spacing: 0.01em; cursor: pointer; font-family: inherit; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14), 0 2px 10px rgba(0,0,0,0.2); }
   #demo-exit:hover { background: rgba(28,28,30,0.9); }
   #demo-exit:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-  #demo-exit::before { content: ""; width: 13px; height: 13px; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cpath%20d='M2%206V2h4M10%202h4v4M14%2010v4h-4M6%2014H2v-4'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cpath%20d='M2%206V2h4M10%202h4v4M14%2010v4h-4M6%2014H2v-4'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; }
+  #demo-exit::before { content: ""; width: 18px; height: 18px; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cpath%20d='M2%206V2h4M10%202h4v4M14%2010v4h-4M6%2014H2v-4'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cpath%20d='M2%206V2h4M10%202h4v4M14%2010v4h-4M6%2014H2v-4'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; }
   #demo-exit[aria-pressed="true"]::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cpath%20d='M6%202v4H2M14%206h-4V2M10%2014v-4h4M2%2010h4v4'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%3E%3Cpath%20d='M6%202v4H2M14%206h-4V2M10%2014v-4h4M2%2010h4v4'%20fill='none'%20stroke='black'%20stroke-width='1.8'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E"); }
   #demo-exit::after { content: ""; position: absolute; inset: -10px; }
   #demo-composer { display: flex; gap: 8px; width: 100%; max-width: 430px; margin: 10px auto 0; box-sizing: border-box; }
   #demo-composer[hidden] { display: none; }
   #demo-composer input { flex: 1; min-width: 0; min-height: 44px; box-sizing: border-box; padding: 0 16px; font: 16px/1.2 inherit; font-family: inherit; color: var(--fg); background: var(--bg); border: 1px solid rgba(128,128,128,0.45); border-radius: 999px; }
   #demo-composer input:focus { outline: 2px solid var(--fg); outline-offset: 1px; }
-  #demo-composer button { min-height: 44px; padding: 0 20px; border: none; border-radius: 999px; background: var(--fg); color: var(--bg); font: 600 15px/1 inherit; font-family: inherit; cursor: pointer; }
+  #demo-composer button { flex: none; width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border: none; border-radius: 50%; background: var(--fg); color: var(--bg); cursor: pointer; }
   /* Full screen on a phone: the bar sits under the demo instead of over it. */
-  #demo-frame.demo-full #demo-composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 52; max-width: none; margin: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: #000; }
+  #demo-frame.demo-full #demo-composer { position: absolute; left: 0; right: 0; bottom: 0; z-index: 52; box-sizing: border-box; max-width: none; margin: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: #000; }
   #demo-frame.demo-full #demo-composer input { background: #1c1c1e; color: #fff; }
   #demo-frame.demo-full #demo-composer button { background: #fff; color: #000; }
-  @media (max-width: 520px) { #demo-frame.demo-full #stage-wrap { width: min(100vw, calc((100dvh - 76px) * 430 / 760)); } }
+  @media (max-width: 520px) { #demo-frame.demo-full.has-composer #stage-wrap { max-height: none; } #demo-frame.demo-full #stage-wrap { width: min(100vw, calc((var(--demo-h, 100dvh) - 76px) * 430 / 760)); } }
   /* Small on a phone so it does not sit on the dock; the ::after keeps a 44px tap target. */
   /* Phones: top right, where every in-demo screen has room (the back arrow is top left, titles are centred). Desktop keeps it bottom right because the kernel's menu-bar clock sits at the top right there. */
-  @media (max-width: 600px) { #demo-exit { right: 10px; top: 10px; bottom: auto; padding: 7px 12px 7px 10px; font-size: 12px; gap: 6px; } #demo-exit::after { content: ""; position: absolute; inset: -10px; } }
+  @media (max-width: 600px) { #demo-exit { right: 10px; top: 10px; bottom: auto; width: 36px; height: 36px; } #demo-exit::before { width: 16px; height: 16px; } #demo-exit::after { content: ""; position: absolute; inset: -4px; } }
   /* v52.5: real boot moment instead of a blank black flash, direct
      request ("bridge the gap between css/html and the actual demo
      loading"). The logo shows immediately (it's a tiny inline SVG,
@@ -424,6 +428,8 @@
   .waitlist-form input[type="email"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .waitlist-form button { background: var(--accent); color: var(--bg); border: none; font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px 22px; border-radius: 999px; cursor: pointer; font-family: inherit; white-space: nowrap; }
   .waitlist-form button:disabled { opacity: 0.6; cursor: default; }
+  /* Touch screens: the form fields are at least 44px tall (links already get a 44px invisible hit area from the ::after rules above). */
+  @media (pointer: coarse) { .waitlist-form input[type="email"], .waitlist-form button { min-height: 44px; box-sizing: border-box; } }
   .waitlist-status { min-height: 20px; margin: 12px 0 0; font-size: 14px; color: var(--sub); }
   .waitlist-status[data-state="ok"] { color: var(--accent); }
   .waitlist-status[data-state="error"] { color: var(--accent2); }
@@ -456,7 +462,7 @@
   <!-- Phones only (embed.js unhides it). A phone raises its keyboard only for a real text field, and v86 listens for keys on the window, so this field is mirrored into the demo as it is typed and Send is Enter. -->
   <form id="demo-composer" autocomplete="off" hidden>
     <input id="demo-compose-input" type="text" enterkeyhint="send" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false" placeholder="Message Samantha" aria-label="Type to the demo">
-    <button id="demo-compose-send" type="submit" aria-label="Send">Send</button>
+    <button id="demo-compose-send" type="submit" aria-label="Send"><svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
   </form>
   <p class="plate-cap">
     <span class="plate-cap-desktop">Fig. 1 &middot; Joshua Tree, booting live in your browser</span>
