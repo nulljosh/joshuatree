@@ -1,7 +1,7 @@
 // Landing grade fixes (LOOP-HANDOFF "Landing fixes from the grade"), held in
 // place. At a phone width (390, 360) and a desktop width (1280) it loads
 // landing/index.html with no scrolling and asserts:
-//   1. The "Fast on nothing" benchmark values and labels never overlap each
+//   1. The "Fast on nothing" benchmark values (inside the Tech specs accordion, opened first) and labels never overlap each
 //      other, and no value spills out of its own cell.
 //   2. Every app count the page states (the facts row, the closing line,
 //      the progress lede, the progress chart's caption and aria-label) is
@@ -45,15 +45,19 @@ const realApps = names.filter(n => !['Apps', 'Trash', 'Compose'].includes(n)).le
 console.log(`APPS[] has ${realApps} real apps`);
 
 const overlap = (a, b) => a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5 && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5;
-const KEY = ['Joshua Tree by the numbers', 'How fast', 'Meet Samantha', 'Apps built in', 'And so much more', 'Protected apps', 'Dev kit waitlist'];
+const KEY = ['Joshua Tree by the numbers', 'Fast on nothing', 'Meet Samantha', 'Apps built in', 'And so much more', 'Protected apps', 'Dev kit waitlist'];
 const realNames = names.filter(n => !['Apps', 'Trash', 'Compose'].includes(n));
 
-const browser = await chromium.launch();
+const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 try {
   for (const w of [390, 360, 1280]) {
     const page = await browser.newPage({ viewport: { width: w, height: 844 } });
     await page.goto(url, { waitUntil: 'load' });
     await page.waitForTimeout(700);
+    // The benchmarks and chart live in collapsed Tech specs accordions; a
+    // collapsed <details> has no measurable boxes, so open every one first.
+    await page.evaluate(() => document.querySelectorAll('details').forEach(d => { d.open = true; }));
+    await page.waitForTimeout(150);
     const d = await page.evaluate((KEY) => {
       const more = [...document.querySelectorAll('section[aria-label="And so much more"] li')].map(li => li.textContent.trim());
       const box = (e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y + scrollY, w: r.width, h: r.height }; };

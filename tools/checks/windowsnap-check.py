@@ -79,7 +79,7 @@ QX, QY, QW, QH = TOP_LEFT_QUARTER
 EDGE_POINTS = [(QX + QW + 20, QY + 40), (QX + 200, QY + QH + 15)]
 # Dock slots (SLOTS order in appclose-check.py/multiwindow-check.py):
 # 0 Apps, 1 Files, 2 Mail, 3 Calendar, 4 Notes, 5 Reminders, ...
-SLOT = {"Files": 1, "Mail": 2, "Weather": 8}  # 1.9.12: Calendar is a ring-3 program with a fixed viewport now, Weather stands in
+SLOT = {"Burrow": 1, "Mail": 2, "Weather": 8}  # 1.9.12: Calendar is a ring-3 program with a fixed viewport now, Weather stands in
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -171,7 +171,7 @@ try:
         move(*PARK); time.sleep(0.5)
 
     # ---- case 1 & 2: Files, left half then top-left quarter ----
-    open_app("Files")
+    open_app("Burrow")
     img0 = dump()
     if not is_red(pixel(img0, *W0_CLOSE)):
         raise SystemExit("FAIL: Files did not open at its expected starting rect, cannot test dragging it")
@@ -256,7 +256,7 @@ try:
 
     # ---- case 6: real free-move (Files, dropped in the interior, not
     #      inside any snap zone) ----
-    open_app("Files")
+    open_app("Burrow")
     imgE = dump()
     if not is_red(pixel(imgE, *W0_CLOSE)):
         fails.append("free-move: Files did not open at its expected starting rect")

@@ -424,6 +424,11 @@ static int chat_match_app(const char *arg) {
             if (!*w) break;
         }
     }
+    /* Files was renamed Burrow (APPS[0]); the old names stay as aliases so "open files" and "open the file browser" still work. */
+    for (const char *w = b; ; w++) {
+        if ((w == b || *(w - 1) == ' ') && (chat_word_prefix_ci("files", w) || chat_word_prefix_ci("file browser", w))) return 0;
+        if (!*w) break;
+    }
     return -1;
 }
 

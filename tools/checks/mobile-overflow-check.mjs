@@ -27,7 +27,7 @@ await new Promise(r => server.listen(0, r));
 const url = `http://127.0.0.1:${server.address().port}/index.html`;
 
 const fail = (msg) => { console.log('FAIL: ' + msg); process.exitCode = 1; };
-const browser = await chromium.launch();
+const browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
 try {
   for (const [w, h] of [[390, 844], [360, 780]]) {
     const page = await browser.newPage({ viewport: { width: w, height: h } });

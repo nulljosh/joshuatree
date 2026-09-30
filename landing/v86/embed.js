@@ -332,6 +332,10 @@ if (typeof document !== "undefined") (function () {
     if (ev.key === "Escape" || ev.keyCode === 27 || ev.code === "Escape") {
       ev.preventDefault();
       ev.stopImmediatePropagation();
+      // Shift+Escape is the visitor's way out of the demo (WCAG 2.1.2, no
+      // keyboard trap): it gives the keyboard back to the page. Plain Escape
+      // still never reaches the kernel.
+      if (ev.shiftKey && focused) releaseKeyboard();
     }
   }, true); // capture phase, BEFORE v86's own global listener (both on window, FIFO order)
 
@@ -713,9 +717,90 @@ if (typeof document !== "undefined") (function () {
     });
     container.appendChild(tapTalkBtn);
   }
+  // Phones have no keyboard for the demo to listen to, and v86 only hears
+  // `keydown` on window, so the Samantha, Notes and Terminal screens, which
+  // all want typed keys, could be tapped but never typed into. On phones the
+  // page shows a real chat bar under the demo (#demo-composer: a text field
+  // and a Send button). A real field is what makes iOS and Android raise
+  // their own keyboard. What is typed in it is mirrored into the kernel's
+  // own input line as it changes, so the kernel shows it live, and Send is
+  // the Enter key. The field is compared with what the kernel already holds,
+  // so autocorrect, a pasted word or a cursor edit all work: only the
+  // difference is sent, as Backspaces then new letters.
+  // Phones, and touch tablets (an iPad runs the desktop layout but has no
+  // keyboard either).
+  if (IS_PHONE || (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches)) {
+    var composer = document.getElementById("demo-composer");
+    var composeInput = document.getElementById("demo-compose-input");
+    if (composer && composeInput) {
+      composer.hidden = false;
+      var frameEl = document.getElementById("demo-frame");
+      if (frameEl) frameEl.classList.add("has-composer");
+      var mirrored = ""; // what the kernel's input line holds now
+      // One queue, one key at a time at the tour's own 60ms spacing: sent
+      // overlapped at 30ms the kernel dropped letters. (v86 already ignores
+      // key events that come from a text field, so nothing is typed twice.)
+      var typeQueue = Promise.resolve();
+      var typeSend = function (fn) { typeQueue = typeQueue.then(fn).catch(function () {}); };
+      var mirrorToKernel = function () {
+        var v = composeInput.value, i = 0;
+        while (i < mirrored.length && i < v.length && mirrored.charAt(i) === v.charAt(i)) i++;
+        var del = mirrored.length - i, add = v.slice(i);
+        mirrored = v;
+        if (del) { var bs = []; for (var k = 0; k < del; k++) bs.push(8); typeSend(function () { return emulator.keyboard_send_keys(bs, 60); }); }
+        if (add) typeSend(function () { return emulator.keyboard_send_text(add, 60); });
+      };
+      // The phone keyboard covers the bottom half of the page, and with it the
+      // demo, so you could not see her while you typed. Focusing the bar puts
+      // the demo in full screen, and while it is full screen the frame follows
+      // the visible area (visualViewport), so the screen shrinks to fit above
+      // the keyboard with the bar right on top of it.
+      var demoFrameEl = document.getElementById("demo-frame");
+      var syncViewport = function () {
+        var v = window.visualViewport;
+        if (!demoFrameEl || !v) return;
+        demoFrameEl.style.setProperty("--demo-h", v.height + "px");
+        demoFrameEl.style.setProperty("--demo-top", v.offsetTop + "px");
+      };
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", syncViewport);
+        window.visualViewport.addEventListener("scroll", syncViewport);
+      }
+      composeInput.addEventListener("focus", function () {
+        focusIn(); trackActivity();
+        var toggle = document.getElementById("demo-exit");
+        if (demoFrameEl && toggle && !demoFrameEl.classList.contains("demo-full")) toggle.click();
+        syncViewport();
+      });
+      composeInput.addEventListener("input", function () {
+        trackActivity();
+        if (emulator && adaptersReady) mirrorToKernel();
+      });
+      composer.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        trackActivity();
+        if (!emulator || !adaptersReady) return;
+        focusIn();
+        typeSend(function () { return emulator.keyboard_send_keys([13], 60); });
+        mirrored = "";
+        composeInput.value = "";
+        composeInput.focus(); // keep the keyboard up for the next message
+      });
+    }
+  }
   container.addEventListener("mousedown", focusIn);
   container.addEventListener("touchstart", focusIn, { passive: true });
-  container.addEventListener("keydown", focusIn);
+  // Tab must still walk past the demo: only a key that means "type to it"
+  // takes the keyboard over, and Shift+Escape gives it back (WCAG 2.1.2,
+  // no keyboard trap); the release itself lives in the Escape listener near the
+  // top of this file, which has to run before v86's own.
+  container.addEventListener("keydown", function (ev) { if (ev.key === "Tab") return; focusIn(); });
+  function releaseKeyboard() {
+    focused = false;
+    if (emulator && emulator.keyboard_adapter) emulator.keyboard_adapter.emu_enabled = false;
+    if (emulator && emulator.mouse_adapter) emulator.mouse_adapter.emu_enabled = false;
+    container.focus();
+  }
   container.addEventListener("mousemove", trackActivity);
   container.addEventListener("touchmove", trackActivity, { passive: true });
   // v0.76.26: after focusIn() sets focused=true, subsequent keydown events
@@ -1522,7 +1607,7 @@ if (typeof document !== "undefined") (function () {
   // capable and keeps the exact same add-a-reminder script the old
   // sequential entry used, just now run while a second window (Files) is
   // genuinely open alongside it, not before/after it.
-  var MW_FILES = { name: 'Files', slot: 1 };
+  var MW_FILES = { name: 'Burrow', slot: 1 };
   var MW_WEATHER = { name: 'Weather', slot: 8 };
   var MW_REMINDERS = { name: 'Reminders', slot: 5, script: [
     { type: 'keys', text: 'a', speed: 200 },
@@ -1966,7 +2051,7 @@ if (typeof document !== "undefined") (function () {
   // H1 just named instead of cycling through unrelated captions underneath
   // it. Direct request: the two headings should read as one thought.
   var APP_CAPTION = {
-    'Files': 'Real FAT16, real reads and writes',
+    'Burrow': 'Real FAT16, real reads and writes',
     'Weather': 'Live data over its own network stack',
     'Mail': 'A real mailbox on a real filesystem',
     'Calendar': 'Real events, persisted across reboots',

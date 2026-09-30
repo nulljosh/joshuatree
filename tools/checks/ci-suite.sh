@@ -61,6 +61,7 @@ retry|0|DHCP client leases real SLIRP config, DNS+HTTP still work, nodhcp keeps 
 retry|0|Benchmarks run and report every number|./tools/checks/bench-check.sh
 retry|4|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
 once |7|PNG decoder, host harness|./tools/checks/png-host-check.sh
+once |3|Burrow: Files renamed, Samantha still opens it as files / file browser, icon art is the new fox|python3 ./tools/checks/burrow-rename-check.py
 retry|2|Clock opens and its countdown timer updates live|python3 ./tools/checks/clock-check.py
 once |3|TTF rasterizer, host harness|./tools/checks/ttf-host-check.sh
 once |1|libjt string/stdlib, host harness|./tools/checks/libjt-host-check.sh
@@ -102,6 +103,7 @@ retry|2|Reminders runs as a ring-3 process through the table-driven launcher: ad
 retry|2|Curbfind runs as a ring-3 process through the table-driven launcher: falls back to the samples when SYS_HTTP_GET finds no NIC, selects by key and click, the kernel refuses every bad path and pointer the probe hands the syscall, closes on Esc, desktop alive|python3 ./tools/checks/ring3curbfind-check.py
 retry|2|Calendar runs as a ring-3 process through the table-driven launcher: gets today from SYS_TIME, draws the month grid, saves an event through the real editor, keeps EVENTS.TXT across fresh runs, feeds Samantha's calendar_today, closes on Esc, desktop alive|python3 ./tools/checks/ring3calendar-check.py
 retry|2|Search runs as a ring-3 process through the table-driven launcher: SYS_READDIR refuses a kernel pointer, an over-long path and a missing folder, the list filters live, a file shows its real bytes, a FAT folder opens by relative path with the kernel's cwd untouched, closes on Esc, crashes safely, desktop alive|python3 ./tools/checks/ring3search-check.py
+retry|2|Every ring-3 app (parsed from RING3_APPS) crashes on purpose, is reaped, and the desktop keeps drawing and opens a different app after each one|python3 ./tools/checks/ring3crash-all-check.py
 retry|5|A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT|python3 ./tools/checks/userfb-release-check.py
 retry|7|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
 retry|0|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
@@ -186,6 +188,9 @@ retry|3|Files view switcher: Icons grid renders and the chosen view persists acr
 retry|7|Demo canvas fills its frame, pixelated only at an exact 1:1 map|node ./tools/checks/democrisp-check.mjs
 once |7|Landing page never overflows horizontally at phone widths|node ./tools/checks/mobile-overflow-check.mjs
 once |7|Landing: benchmark labels clear, one app count, Samantha link styled, sections visible on load|node ./tools/checks/landing-layout-check.mjs
+once |7|Landing demo on a phone: the chat bar raises the keyboard, typed letters reach Samantha once each and Send is Enter|node ./tools/checks/mobile-type-check.mjs
+once |7|Landing: Tech specs accordions hold every developer number collapsed, and the footer is a four-column directory of real links|node ./tools/checks/landing-specs-footer-check.mjs
+once |7|Landing demo: no keyboard trap, one main landmark, Full screen top right on phones|node ./tools/checks/landing-demo-ui-check.mjs
 retry|1|App switcher: Ctrl+Tab cycles open windows and focuses the highlighted one|python3 ./tools/checks/appswitcher-check.py
 retry|2|Screenshot key: Ctrl+Shift+3 saves a real framebuffer BMP, numbered and visible in Files|python3 ./tools/checks/screenshot-check.py
 retry|5|Drunk mode easter egg: horizontal sway applied to framebuffer rows|python3 ./tools/checks/drunk-mode-check.py
