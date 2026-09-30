@@ -9,7 +9,7 @@
 // same way every check in this repo is: this failed (3 apps) before the
 // v0.72.2 restore and passes (8 apps) after it.
 //
-// v0.76.12: 3 of the 8 (Files, Weather, Reminders) moved out of the flat
+// v0.76.12: 3 of the 8 (Burrow, Weather, Reminders) moved out of the flat
 // TOUR_APPS array and into MW_FILES/MW_WEATHER/MW_REMINDERS, driven by
 // multiWindowRound() instead of the plain sequential loop -- a real
 // architecture change (they're genuinely multi-window apps now, shown two
@@ -21,7 +21,7 @@
 // MW_* multi-window ones) and checks the union covers all 8.
 import { readFileSync } from 'fs';
 
-const EXPECTED = ['Files', 'Mail', 'Calendar', 'Notes', 'Reminders', 'Terminal', 'Samantha', 'Weather'];
+const EXPECTED = ['Burrow', 'Mail', 'Calendar', 'Notes', 'Reminders', 'Terminal', 'Samantha', 'Weather'];
 
 const src = readFileSync(new URL('../../landing/v86/embed.js', import.meta.url), 'utf8');
 const names = [...src.matchAll(/name:\s*'([^']+)'/g)].map(x => x[1]);
