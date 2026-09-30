@@ -14,10 +14,11 @@
    1.9.8: Sparkjar joins it, the fourteenth app out.
    1.9.9: Reminders joins it, the fifteenth app out.
    1.9.11: Curbfind joins it, the sixteenth app out, with one new syscall (SYS_HTTP_GET).
+   1.9.12: Calendar joins it, the seventeenth app out.
 
    Roadmap 2.0 says apps leave the kernel, so a crash in one cannot take
    the machine down. Keyrate, the smallest real app, went first; Toroid,
-   Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders and Curbfind followed the same path. Each app's dock entry lands here,
+   Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind and Calendar followed the same path. Each app's dock entry lands here,
    and everything else stays as it was: gui_launch_from_dock has already
    drawn the window chrome and set the viewport by the time this runs,
    just as for an in-kernel app.
@@ -58,6 +59,7 @@
 #include "user_sparkjar.h"
 #include "user_reminders.h"
 #include "user_curbfind.h"
+#include "user_calendar.h"
 #include "user_fbpoke.h"
 #include "app.h"
 #include "irq.h"
@@ -105,6 +107,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Sparkjar",   user_sparkjar,   USER_SPARKJAR_LEN,   "SPARKJAR.BIN"},
     {"Reminders",  user_reminders,  USER_REMINDERS_LEN,  "REMINDERS.BIN"},
     {"Curbfind",   user_curbfind,   USER_CURBFIND_LEN,   "CURBFIND.BIN"},
+    {"Calendar",   user_calendar,   USER_CALENDAR_LEN,   "CALENDAR.BIN"},
 };
 
 static void ring3app_launch(const struct ring3_app *a) {
@@ -146,6 +149,14 @@ static void ring3app_launch(const struct ring3_app *a) {
     int status = -1;
     const char *argv[] = { a->file };
     (void)mouse_get_wheel(); /* drop a wheel tick banked before the window existed, so a list app does not open already scrolled */
+    /* 1.9.12: the same baseline every blocking in-kernel app takes before
+       its first poll. gui_poll_event reports a click off mouse_click_edge,
+       which also counts presses banked by the backdoor mouse; a multi-window
+       session (Mail, Files, Weather) tracks its own presses and never takes
+       them, so the click that closed it was still banked and the next
+       ring-3 program's first poll read it as a click on itself and closed.
+       apptop-check.py (Mail, then Calendar from the dock) caught it. */
+    mouse_click_edge_sync();
     if (!exec_user(a->file, argv, 1, &status)) {
         serial_puts("ring3app: exec_user failed (not found, too big, or no free task slot)\n");
         return;
@@ -180,6 +191,7 @@ void contacts_ring3_open(void)   { ring3app_launch(&RING3_APPS[12]); }
 void sparkjar_ring3_open(void)   { ring3app_launch(&RING3_APPS[13]); }
 void reminders_ring3_open(void)  { ring3app_launch(&RING3_APPS[14]); }
 void curbfind_ring3_open(void)   { ring3app_launch(&RING3_APPS[15]); }
+void calendar_ring3_open(void)   { ring3app_launch(&RING3_APPS[16]); }
 
 /* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
    run user/fbpoke.c with no window: it must be refused a pointer into
@@ -226,6 +238,7 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='p' && pc[7]=='a' && pc[8]=='r') { ring3app_autoopen_slot = 15; serial_puts("autoopen=sparkjar\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='r' && pc[6]=='e' && pc[7]=='m' && pc[8]=='i') { ring3app_autoopen_slot = 4; serial_puts("autoopen=reminders\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='u' && pc[7]=='r' && pc[8]=='b') { ring3app_autoopen_slot = 8; serial_puts("autoopen=curbfind\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='a' && pc[7]=='l' && pc[8]=='e') { ring3app_autoopen_slot = 2; serial_puts("autoopen=calendar\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
     }
 }
@@ -233,7 +246,7 @@ void ring3app_autoopen_run(int mx, int my){
     if (ring3app_autoopen_slot < 0) return;
     int slot = ring3app_autoopen_slot; ring3app_autoopen_slot = -1;
     editor_mouse_x = mx; editor_mouse_y = my;
-    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Lexly's, Plan's, Fieldbook's, Clock's, Portfolio's, Activity's, Contacts', Sparkjar's, Reminders' or Curbfind's APPS slot */
+    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Lexly's, Plan's, Fieldbook's, Clock's, Portfolio's, Activity's, Contacts', Sparkjar's, Reminders', Curbfind's or Calendar's APPS slot */
     if (fbpoke_armed) { fbpoke_armed = 0; fbpoke_run(); }
     gui_draw_desktop(-1, -1, 0, 0);
     cursor_saved_x = cursor_saved_y = -1;

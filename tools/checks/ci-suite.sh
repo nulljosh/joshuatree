@@ -100,6 +100,7 @@ retry|2|Contacts runs as a ring-3 process through the table-driven launcher: dra
 retry|2|Sparkjar runs as a ring-3 process through the table-driven launcher: draws the ranked list, moves the selection, re-sorts when an upvote passes the leader, closes on Esc, desktop alive|python3 ./tools/checks/ring3sparkjar-check.py
 retry|2|Reminders runs as a ring-3 process through the table-driven launcher: adds, ticks and deletes items through the real prompt, keeps REMINDERS.TXT across fresh runs, closes on Esc, desktop alive|python3 ./tools/checks/ring3reminders-check.py
 retry|2|Curbfind runs as a ring-3 process through the table-driven launcher: falls back to the samples when SYS_HTTP_GET finds no NIC, selects by key and click, the kernel refuses every bad path and pointer the probe hands the syscall, closes on Esc, desktop alive|python3 ./tools/checks/ring3curbfind-check.py
+retry|2|Calendar runs as a ring-3 process through the table-driven launcher: gets today from SYS_TIME, draws the month grid, saves an event through the real editor, keeps EVENTS.TXT across fresh runs, feeds Samantha's calendar_today, closes on Esc, desktop alive|python3 ./tools/checks/ring3calendar-check.py
 retry|5|A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT|python3 ./tools/checks/userfb-release-check.py
 retry|7|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
 retry|0|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
@@ -140,7 +141,7 @@ retry|6|Multi-window (click-to-focus, real z-order compositing)|python3 ./tools/
 retry|4|Window snapping (title-bar drag to edge/corner, real pixel proof)|python3 ./tools/checks/windowsnap-check.py
 retry|3|Windows drag live by their title bar (single-window Notes and multi-window Files)|python3 ./tools/checks/windowdrag-check.py
 retry|7|Windowed apps start under the title bar, Calendar fits six weeks|python3 ./tools/checks/apptop-check.py
-retry|4|Calendar Day, Week, Month and Year views|python3 ./tools/checks/calviews-check.py
+retry|4|Calendar Day, Week, Month and Year views (ring-3 program)|python3 ./tools/checks/calviews-check.py
 retry|1|QA gallery: every app opens, screenshots, closes, no crash|python3 ./tools/checks/qa-gallery.py /tmp/jt-gallery
 retry|0|Every app's main action, headless|python3 ./tools/checks/feature-drive.py
 retry|0|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
