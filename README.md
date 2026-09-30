@@ -9,7 +9,7 @@
 
 A computer's brain, built from scratch.
 
-Every computer runs an operating system. It boots when you press the power button, draws the screen, hears the keyboard, saves your files and runs your apps. Joshua Tree is a complete OS from the first chip instruction to the last pixel, written from zero, with its own windows, dock, fonts, sound, internet and 25 apps.
+Every computer runs an operating system. It boots when you press the power button, draws the screen, hears the keyboard, saves your files and runs your apps. Joshua Tree is a complete OS from the first chip instruction to the last pixel, written from zero, with its own windows, dock, fonts, sound, internet and 26 apps.
 
 Try it now: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 

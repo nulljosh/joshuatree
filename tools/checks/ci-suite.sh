@@ -182,6 +182,7 @@ retry|4|Chat face: idle frame before, talk frames while she speaks, idle after; 
 retry|3|Files view switcher: Icons grid renders and the chosen view persists across close/reopen|python3 ./tools/checks/filesview-check.py
 retry|7|Demo canvas fills its frame, pixelated only at an exact 1:1 map|node ./tools/checks/democrisp-check.mjs
 once |7|Landing page never overflows horizontally at phone widths|node ./tools/checks/mobile-overflow-check.mjs
+once |7|Landing: benchmark labels clear, one app count, Samantha link styled, sections visible on load|node ./tools/checks/landing-layout-check.mjs
 retry|1|App switcher: Ctrl+Tab cycles open windows and focuses the highlighted one|python3 ./tools/checks/appswitcher-check.py
 retry|2|Screenshot key: Ctrl+Shift+3 saves a real framebuffer BMP, numbered and visible in Files|python3 ./tools/checks/screenshot-check.py
 retry|5|Drunk mode easter egg: horizontal sway applied to framebuffer rows|python3 ./tools/checks/drunk-mode-check.py

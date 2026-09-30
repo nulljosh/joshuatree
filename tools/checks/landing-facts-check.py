@@ -21,7 +21,7 @@ def main():
     page = (ROOT / "landing/index.html").read_text()
     expected = gen.compute_facts()
 
-    found = dict(re.findall(r'<span data-fact="([a-z]+)">([^<]*)</span>', page))
+    found = dict(re.findall(r'<span data-fact="([a-z0-9]+)">([^<]*)</span>', page))
     missing_marks = [name for name in expected if name not in found]
     if missing_marks:
         print("FAIL: landing/index.html is missing data-fact spans for: " + ", ".join(missing_marks))

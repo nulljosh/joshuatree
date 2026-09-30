@@ -215,7 +215,7 @@ jobs:
         if: needs.changes.outputs.kernel == 'false'
         run: |
           fail=0
-          for c in democrisp-check.mjs tourappcount-check.mjs idletour-arm-reset-check.mjs rtc-timezone-check.mjs stocks-live-check.mjs mobile-overflow-check.mjs; do
+          for c in democrisp-check.mjs tourappcount-check.mjs idletour-arm-reset-check.mjs rtc-timezone-check.mjs stocks-live-check.mjs mobile-overflow-check.mjs landing-layout-check.mjs; do
             node tools/checks/$c || fail=1
           done
           ./tools/checks/landing-headline-check.sh || fail=1
