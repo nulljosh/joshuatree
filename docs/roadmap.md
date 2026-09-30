@@ -64,7 +64,7 @@ Kernel.c is ~9,800 lines with 84 files pasted in; an Opus agent is building the 
 - [ ] [Haiku] `landing/icon.svg`, root `icon.svg`, and the app `.icns` redrawn as the simplified tree.
 - [ ] [Haiku] Audit that every fleet app has a native port or a line in this roadmap.
 - [ ] [Sonnet] File search, Spotlight-style. Needs an index-or-scan design, not a stub.
-- [ ] [Sonnet] An Activity Monitor app over the shell's `ps`/`kill`/`mem`. (In PR #62, not merged.)
+- [x] [Sonnet] An Activity Monitor app over the shell's `ps`/`kill`/`mem`. Shipped in 1.9.6, at ring 3.
 - [ ] [Fable] A second privilege tier (sudo/admin) on top of the accounts that already exist.
 - [ ] [Fable] Text rendering: a dedicated pass on AA quality, separate from the font size/weight controls that already exist.
 - [ ] [Fable] Multi-core (SMP).

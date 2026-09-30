@@ -11,7 +11,8 @@
 //      the browser's default link blue or the body text color.
 //   4. The key sections are visible (opacity > 0) on load. They used to sit
 //      at opacity 0 until a scroll observer fired.
-//   5. The "Want one?" section carries the ad video and the Strata render.
+//   5. The "And so much more" list names every app in APPS[].
+//   6. The "Want one?" section carries the ad video and the Strata render.
 // Headless Chromium only, local static server.
 import { chromium } from 'playwright';
 import { createServer } from 'http';
@@ -44,7 +45,8 @@ const realApps = names.filter(n => !['Apps', 'Trash', 'Compose'].includes(n)).le
 console.log(`APPS[] has ${realApps} real apps`);
 
 const overlap = (a, b) => a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5 && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5;
-const KEY = ['Joshua Tree by the numbers', 'How fast', 'Meet Samantha', 'Apps built in', 'And so much more', 'Dev kit waitlist'];
+const KEY = ['Joshua Tree by the numbers', 'How fast', 'Meet Samantha', 'Apps built in', 'And so much more', 'Protected apps', 'Dev kit waitlist'];
+const realNames = names.filter(n => !['Apps', 'Trash', 'Compose'].includes(n));
 
 const browser = await chromium.launch();
 try {
@@ -53,6 +55,7 @@ try {
     await page.goto(url, { waitUntil: 'load' });
     await page.waitForTimeout(700);
     const d = await page.evaluate((KEY) => {
+      const more = [...document.querySelectorAll('section[aria-label="And so much more"] li')].map(li => li.textContent.trim());
       const box = (e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y + scrollY, w: r.width, h: r.height }; };
       const facts = [...document.querySelectorAll('[aria-label="How fast"] .fact')].map(f => ({
         cell: box(f),
@@ -81,7 +84,7 @@ try {
       });
       const want = document.querySelector('section[aria-label="Dev kit waitlist"]');
       return {
-        facts, counts, sections,
+        facts, counts, sections, more,
         linkColor: ls && ls.color, bodyColor: body,
         ad: !!(want && want.querySelector('video source[src*="joshua-tree-ad-v6.mp4"]')),
         strata: !!(want && want.querySelector('img[src="strata-hero.jpg"]')),
@@ -118,6 +121,9 @@ try {
       if (o === null) fail(`${tag}: section "${k}" missing`);
       else if (!(o > 0)) fail(`${tag}: section "${k}" is invisible on load (opacity ${o})`);
     }
+    // 2b. the "And so much more" list names every real app, once
+    for (const n of realNames) if (!d.more.includes(n)) fail(`${tag}: "And so much more" is missing ${n}`);
+    if (d.more.length !== realNames.length) fail(`${tag}: "And so much more" lists ${d.more.length} apps, APPS[] has ${realNames.length}`);
     // 5. Want one
     if (!d.ad) fail(`${tag}: "Want one?" has no joshua-tree-ad-v6.mp4 video`);
     if (!d.strata) fail(`${tag}: "Want one?" has no Strata render`);
