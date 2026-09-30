@@ -539,3 +539,35 @@ If `ecx` names a slot it is killed first through `task_kill`, the same call the
 shell's `kill` makes. Slot 0 (the shell) and the caller's own slot are refused
 with -EPERM, a free slot is -ENOENT, and the snapshot is filled either way.
 Errors: -EFAULT (bad pointer).
+
+## readdir (1.9.12)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 388 | `readdir` | `const char *path` | `struct jt_dirent *` | records the array holds | entries in the directory, or -errno |
+
+```c
+struct jt_dirent { char name[32]; unsigned int size, is_dir; };
+```
+
+**readdir** is what the Search app lists (and what Files will). `path` is
+relative to the shell's current directory: `""` or `"."` is that directory,
+`"DOCS"` a folder inside it, `"DOCS/SUB"` two levels down. No leading slash,
+no `.` or `..` parts, at most 63 bytes before the NUL, at most 8 parts. The
+kernel walks the path one `vfs_chdir` at a time, lists, and walks back with
+`..` before returning, all inside the gate with interrupts off, so a program
+can never move the kernel's own current directory: it keeps its own cwd
+string and passes it each call. One record per entry, fixed size: the name
+NUL-terminated and cut to fit, `size` in bytes (0 for a folder), `is_dir`
+1 or 0. `edx` is clamped to 64. The return value is the number of entries the
+directory holds, which can be more than `edx`: only the first `edx` records
+are written, so a caller that gets back more than it asked for knows the
+listing was cut. The array is checked whole before anything runs and is not
+touched on an error. Errors: -EFAULT (path or array not user memory),
+-EINVAL (path too long or malformed), -ENOENT (a part is not a folder, or the
+backend has no folders at all, which is ramfs).
+
+Since 1.9.12 **open** takes the same relative paths, so the file a listing
+named inside `DOCS` opens as `"DOCS/NAME"`. The walk in and back out happens
+at open and again at close, when the buffer is written back. An empty path
+is -EINVAL.

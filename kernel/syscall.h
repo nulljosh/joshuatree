@@ -36,6 +36,36 @@
 
 #define SYS_TASKS       386  /* 1.9.6: ebx = struct jt_tasks* (user), ecx = slot to kill or -1; fills the snapshot, 0 or -errno */
 
+/* 1.9.12: SYS_READDIR, the directory listing Search needs and Files will
+   reuse. 387 is SYS_HTTP_GET (Curbfind, 1.9.10), so this is 388.
+     ebx = path (user, NUL-terminated, at most PATH_MAX = 63 bytes before
+           the NUL; longer, or no NUL within 64 bytes, is -EINVAL)
+     ecx = struct jt_dirent* (user), an array of edx records
+     edx = how many records the array holds; clamped to JT_READDIR_MAX
+   Returns the number of entries in the directory, which can be larger
+   than edx: only the first edx are written, so a caller that gets back
+   more than it asked for knows the listing was cut. Or -errno: -EFAULT
+   (a pointer that is not user memory for the whole array), -EINVAL (path
+   too long, an empty, "." or ".." component, a leading slash, more than
+   JT_PATH_DEPTH components), -ENOENT (a component is not a directory, or
+   the backend has no directories at all, as ramfs does not).
+   The path is relative to the shell's current directory and walked one
+   component at a time with vfs_chdir, then walked back with ".." before
+   the call returns, all inside the int 0x80 gate with interrupts off, so
+   ring 3 never moves the kernel's own cwd: a program that wants to
+   descend keeps its own cwd string and passes it here. "" and "." list
+   the current directory. SYS_OPEN takes the same relative paths since
+   1.9.12, so a file a listing named under DOCS opens as "DOCS/NAME".
+   Every record is fixed-size: the name NUL-terminated and cut to fit,
+   the size in bytes (0 for a directory), and is_dir 1 or 0. The array is
+   only written after the whole range passed paging_user_range_ok, and
+   never past edx records. */
+#define SYS_READDIR     388
+#define JT_DIRENT_NAME  32   /* ramfs's own name cap; FAT 8.3 names are 12 */
+#define JT_READDIR_MAX  64   /* records per call, the most any backend lists today (files.h's own cap) */
+#define JT_PATH_DEPTH    8   /* components a relative path may have */
+struct jt_dirent { char name[JT_DIRENT_NAME]; unsigned int size, is_dir; };
+
 #define JT_POLL_PRESENT 1    /* copy the framebuffer to the screen before looking for an event */
 
 /* Event kinds SYS_WINDOW_POLL writes. a/b depend on the kind: KEY carries

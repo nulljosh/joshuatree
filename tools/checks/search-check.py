@@ -2,10 +2,12 @@
 # MANUAL: never ran on the GitHub runner before 2026-09-23; promote to ci-suite.sh one at a time after three green runs on main.
 """Headless proof that the Search app (kernel/search.h, v0.86.0) is real:
 it opens from the Apps folder, lists real files off the active VFS backend
-(vfs_list, the same driver-level call Files already uses), filters them
+(SYS_READDIR over vfs_list, the same driver-level call Files already uses), filters them
 live as you type (a real substring match recomputed on every keystroke,
 not a static list), and Enter on a match shows its real content the way
-`cat` does (vfs_read_file). Same QMP absolute-pointer + qcode-keyboard +
+`cat` does (open/read over vfs_read_file). The row and footer geometry
+below is unchanged by the port: the ring-3 app draws its rows and footer at
+the same viewport offsets the in-kernel copy did. Same QMP absolute-pointer + qcode-keyboard +
 pmemsave shape as appclose-check.py / contacts-keystroke-check.sh.
 
 This boots with no `-hda`, the same config every other headless check in
@@ -132,7 +134,15 @@ try:
     # icon 18 (row 3 col 1).
     for c in ("d", "s", "s", "s", "s"):
         key(c)
-    key("ret"); time.sleep(1.0)  # launch Search
+    key("ret")  # launch Search
+    # 1.9.12: Search is a ring-3 program now, seeded onto the VFS and exec'd on
+    # launch, so wait for its first content draw instead of a fixed second.
+    for _ in range(150):
+        try:
+            if "searchcontent\n" in open(LOG).read(): break
+        except FileNotFoundError: pass
+        time.sleep(0.1)
+    time.sleep(0.5)
 
     img = dump()
     if not is_red(img, APPS_CLOSE_X, APPS_CLOSE_Y):

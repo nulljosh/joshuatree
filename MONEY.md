@@ -182,3 +182,5 @@ Contacts now runs on its own at ring 3, thirteen apps out of the kernel. A crash
 Sparkjar now runs on its own at ring 3, fourteen apps out of the kernel. A crash in the idea jar can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
 
 Reminders now runs on its own at ring 3, fifteen apps out of the kernel. A crash in the checklist can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
+
+Search now runs on its own at ring 3, sixteen apps out of the kernel, and stepping into a folder no longer moves the kernel's own working directory from inside an app. A crash in the search box can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-30.*

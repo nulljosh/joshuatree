@@ -1,7 +1,7 @@
 #ifndef FILES_H
 #define FILES_H
 
-/* Files app, split out of kernel.c (mirrors the search.h
+/* Files app, split out of kernel.c (the header-only
    pattern: header-only, included straight into kernel.c so every
    window, vfs and settings primitive and the files_view global stay
    visible with no new declarations needed). */

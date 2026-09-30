@@ -47,6 +47,10 @@
 #define JT_SYS_WINDOW_OPEN 384
 #define JT_SYS_WINDOW_POLL 385
 #define JT_SYS_TASKS       386 /* 1.9.6: uptime, memory, live slots; optional kill */
+#define JT_SYS_READDIR     388 /* 1.9.12: list a directory into fixed-size records (387 is Curbfind's http_get) */
+#define JT_DIRENT_NAME  32
+#define JT_READDIR_MAX  64
+#define JT_PATH_MAX     63     /* bytes of path before the NUL the kernel will read; longer is -EINVAL */
 #define JT_POLL_PRESENT 1
 #define JT_EV_KEY   1
 #define JT_EV_CLICK 2
@@ -61,6 +65,16 @@
 struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
 struct jt_event { unsigned int kind; int a, b; };
 struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
+/* SYS_READDIR: one record per entry. The name is NUL-terminated and cut to
+   fit, size is 0 for a directory, is_dir is 1 or 0. The path is relative
+   to the shell's current directory ("" or "." is that directory itself,
+   "DOCS/SUB" two levels down, no leading slash, no "." or ".." parts); the
+   kernel walks it and walks back inside the call, so a program keeps its
+   own cwd string and passes it every time. The call returns the number of
+   entries the directory holds, which can be more than the records it was
+   handed: only the first `max` are written. SYS_OPEN takes the same
+   relative paths. */
+struct jt_dirent { char name[JT_DIRENT_NAME]; unsigned int size, is_dir; };
 
 /* v2 open() flags and lseek() whence values, Linux i386's own numbers.
    O_RDONLY is 0, which is exactly what v1 required, so a v1 program's
@@ -128,6 +142,7 @@ static inline int jt_sched_yield(void)                            { return jt_sy
 static inline int jt_lseek(int fd, int off, int whence)           { return jt_syscall(JT_SYS_LSEEK, (unsigned)fd, (unsigned)off, (unsigned)whence); }
 static inline int jt_window_open(struct jt_window_info *info)     { return jt_syscall(JT_SYS_WINDOW_OPEN, (unsigned)info, 0, 0); }
 static inline int jt_tasks(struct jt_tasks *t, int kill)          { return jt_syscall(JT_SYS_TASKS, (unsigned)t, (unsigned)kill, 0); }
+static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned max) { return jt_syscall(JT_SYS_READDIR, (unsigned)path, (unsigned)out, max); }
 static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
 
 #endif

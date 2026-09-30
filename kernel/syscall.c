@@ -154,6 +154,59 @@ static int copy_path_from_user(u32 addr, char *out) {
     return -EINVAL;
 }
 
+/* 1.9.12: relative paths. The VFS has one current directory (the shell's)
+   and every vfs_* call is relative to it; the only way to reach a file in
+   a subdirectory is vfs_chdir, which moves that one global. A ring-3
+   program must not be able to move it, so a path with slashes is walked
+   here, one vfs_chdir per component, and walked back with ".." before the
+   syscall returns. int 0x80 is an interrupt gate, so nothing else runs in
+   between and the move is invisible to every other task.
+
+   path_enter splits `path` in place, enters every component but the last
+   `keep` of them (keep is 1 for open, which wants the file's own name left
+   over; 0 for readdir, which wants to stand inside the directory itself),
+   and hands back the number of directories entered and a pointer to the
+   leaf. A component that is empty, "." or "..", a leading slash, or more
+   than JT_PATH_DEPTH components is -EINVAL; a component that vfs_chdir
+   refuses is -ENOENT (ramfs refuses them all: it has no directories). On
+   any failure it has already walked back, so the cwd is what it was.
+   path_leave walks back; a ".." that fails is logged, since the cwd is
+   then genuinely wrong and the shell's next `ls` will show it. */
+static int path_leave(int depth) {
+    int ok = 1;
+    while (depth-- > 0) if (!vfs_chdir("..")) ok = 0;
+    if (!ok) serial_puts("syscall: BUG chdir(..) failed walking back a relative path\n");
+    return ok;
+}
+static int path_enter(char *path, int keep, char **leaf, int *depth) {
+    *depth = 0; *leaf = path;
+    if (path[0] == '/') return -EINVAL;
+    char *comp[JT_PATH_DEPTH + 1];
+    int n = 0;
+    if (path[0]) {
+        char *p = path;
+        for (;;) {
+            if (n > JT_PATH_DEPTH) return -EINVAL;
+            comp[n++] = p;
+            char *q = p;
+            while (*q && *q != '/') q++;
+            int len = (int)(q - p);
+            if (len == 0 || (len == 1 && p[0] == '.') || (len == 2 && p[0] == '.' && p[1] == '.')) return -EINVAL;
+            if (!*q) break;
+            *q = 0;
+            p = q + 1;
+        }
+    }
+    if (n < keep) return -EINVAL; /* open("") or open("DOCS/") */
+    if (n - keep > JT_PATH_DEPTH) return -EINVAL;
+    for (int i = 0; i < n - keep; i++) {
+        if (!vfs_chdir(comp[i])) { path_leave(*depth); *depth = 0; return -ENOENT; }
+        (*depth)++;
+    }
+    *leaf = n ? comp[n - 1] : path;
+    return 0;
+}
+
 static int sys_open(u32 path, u32 flags, u32 c) {
     (void)c;
     /* Only bits this kernel actually implements are accepted. An
@@ -181,15 +234,24 @@ static int sys_open(u32 path, u32 flags, u32 c) {
     for (int i = FIRST_FD; i < MAX_FDS; i++) if (!fds[id][i].data) { fd = i; break; }
     if (fd < 0) return -EMFILE;
 
+    /* 1.9.12: "DOCS/NOTE.TXT" opens NOTE.TXT inside DOCS. The walk is
+       undone before this returns, whichever way it returns; the full path
+       is what close() will need to walk again. */
+    char walk[PATH_MAX + 1];
+    for (int i = 0; i <= PATH_MAX; i++) { walk[i] = name[i]; if (!name[i]) break; }
+    char *leaf; int depth;
+    err = path_enter(walk, 1, &leaf, &depth);
+    if (err) return err;
+
     char *buf = (char *)kmalloc(OPEN_MAX_FILE + 1);
-    if (!buf) return -ENOMEM;
-    int n = vfs_read_file(name, buf, OPEN_MAX_FILE + 1);
-    if (n > OPEN_MAX_FILE) { kfree(buf); return -EINVAL; } /* bigger than one open can hold; refused, never truncated */
+    if (!buf) { path_leave(depth); return -ENOMEM; }
+    int n = vfs_read_file(leaf, buf, OPEN_MAX_FILE + 1);
+    if (n > OPEN_MAX_FILE) { kfree(buf); path_leave(depth); return -EINVAL; } /* bigger than one open can hold; refused, never truncated */
     /* A backend read returns a byte count and nothing else, so a
        zero-length file and a missing file are the same answer here. v1
        already resolved that ambiguity as "missing" and this keeps it. */
     int exists = (n > 0);
-    if (!exists && !(flags & JT_O_CREAT)) { kfree(buf); return -ENOENT; }
+    if (!exists && !(flags & JT_O_CREAT)) { kfree(buf); path_leave(depth); return -ENOENT; }
 
     u32 size = exists ? (u32)n : 0;
     if (flags & JT_O_TRUNC) size = 0;
@@ -199,8 +261,9 @@ static int sys_open(u32 path, u32 flags, u32 c) {
        goes on to write are deferred to close. Doing half of it at open and
        half at close would be the confusing shape. */
     if (!exists || (flags & JT_O_TRUNC)) {
-        if (!vfs_replace_file(name, "", 0)) { kfree(buf); return -ENOSPC; }
+        if (!vfs_replace_file(leaf, "", 0)) { kfree(buf); path_leave(depth); return -ENOSPC; }
     }
+    path_leave(depth);
 
     fds[id][fd].data  = buf;
     fds[id][fd].size  = size;
@@ -317,13 +380,20 @@ static int sys_read(u32 fd, u32 buf, u32 len) {
    and it is paid only then. */
 static int flush_fd(struct open_file *f) {
     if (!f->dirty) return 0;
-    if (!vfs_replace_file(f->name, f->data, f->size)) return -EIO;
+    /* 1.9.12: the name is the relative path open() was given; walk into
+       its directory the same way, and back out before returning. */
+    char walk[PATH_MAX + 1];
+    for (int i = 0; i <= PATH_MAX; i++) { walk[i] = f->name[i]; if (!f->name[i]) break; }
+    char *leaf; int depth;
+    if (path_enter(walk, 1, &leaf, &depth)) return -EIO; /* the directory went away since open */
+    if (!vfs_replace_file(leaf, f->data, f->size)) { path_leave(depth); return -EIO; }
     char *back = (char *)kmalloc(OPEN_MAX_FILE + 1);
-    if (!back) return -ENOMEM;
-    int n = vfs_read_file(f->name, back, OPEN_MAX_FILE + 1);
+    if (!back) { path_leave(depth); return -ENOMEM; }
+    int n = vfs_read_file(leaf, back, OPEN_MAX_FILE + 1);
     int ok = (n >= 0) && ((u32)n == f->size);
     for (u32 i = 0; ok && i < f->size; i++) if (back[i] != f->data[i]) ok = 0;
     kfree(back);
+    path_leave(depth);
     if (!ok) return -EIO;
     f->dirty = 0;
     return 0;
@@ -555,6 +625,46 @@ static int sys_tasks(u32 out, u32 kill, u32 c) {
     return rc;
 }
 
+/* 1.9.12: SYS_READDIR, the listing the Search app shows (and Files will).
+   The contract is in syscall.h. Order of operations is the point: the
+   path is copied out of user space with a hard cap and the output range
+   is checked for the whole array before a single vfs call runs; the
+   entries are collected into a kernel-side staging table (static, not on
+   the 4KB kernel stack) with a hard count; the walk into the directory
+   is undone before anything is copied out; and the copy stops at the
+   smaller of what was found and what the caller asked for. The user array
+   is never touched on an error path. */
+static struct jt_dirent readdir_stage[JT_READDIR_MAX];
+static u32 readdir_total;
+static void readdir_collect(const char *name, unsigned int size, int is_dir) {
+    u32 i = readdir_total++;
+    if (i >= JT_READDIR_MAX) return; /* counted, not stored: the return value says the listing was cut */
+    struct jt_dirent *d = &readdir_stage[i];
+    int k = 0;
+    while (name[k] && k < JT_DIRENT_NAME - 1) { d->name[k] = name[k]; k++; }
+    while (k < JT_DIRENT_NAME) d->name[k++] = 0;
+    d->size = is_dir ? 0 : size;
+    d->is_dir = is_dir ? 1u : 0u;
+}
+static int sys_readdir(u32 path, u32 out, u32 max) {
+    char walk[PATH_MAX + 1];
+    int err = copy_path_from_user(path, walk);
+    if (err) return err;
+    if (max > JT_READDIR_MAX) max = JT_READDIR_MAX;
+    if (max && !paging_user_range_ok(out, max * sizeof(struct jt_dirent))) return -EFAULT;
+    if (walk[0] == '.' && !walk[1]) walk[0] = 0; /* "." is the cwd, same as "" */
+    char *leaf; int depth;
+    err = path_enter(walk, 0, &leaf, &depth);
+    if (err) return err;
+    readdir_total = 0;
+    vfs_list(readdir_collect);
+    path_leave(depth);
+    u32 n = readdir_total < max ? readdir_total : max;
+    struct jt_dirent *dst = (struct jt_dirent *)out;
+    for (u32 i = 0; i < n; i++) dst[i] = readdir_stage[i];
+    return (int)readdir_total;
+}
+
 /* Called from syscall_release_task on exit or fault. 1.7.8: the pages go
    back to supervisor-only here, not just zeroed. Before this, a program
    that had opened a window left JT_USER_FB user-accessible for good, so
@@ -584,6 +694,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_WINDOW_OPEN] = sys_window_open,
     [SYS_WINDOW_POLL] = sys_window_poll,
     [SYS_TASKS]       = sys_tasks,
+    [SYS_READDIR]     = sys_readdir,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {

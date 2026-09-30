@@ -99,6 +99,7 @@ retry|2|Activity runs as a ring-3 process through the table-driven launcher: dra
 retry|2|Contacts runs as a ring-3 process through the table-driven launcher: draws the list, adds and deletes a person through the real prompt, keeps CONTACTS.TXT across fresh runs, closes on Esc, desktop alive|python3 ./tools/checks/ring3contacts-check.py
 retry|2|Sparkjar runs as a ring-3 process through the table-driven launcher: draws the ranked list, moves the selection, re-sorts when an upvote passes the leader, closes on Esc, desktop alive|python3 ./tools/checks/ring3sparkjar-check.py
 retry|2|Reminders runs as a ring-3 process through the table-driven launcher: adds, ticks and deletes items through the real prompt, keeps REMINDERS.TXT across fresh runs, closes on Esc, desktop alive|python3 ./tools/checks/ring3reminders-check.py
+retry|2|Search runs as a ring-3 process through the table-driven launcher: SYS_READDIR refuses a kernel pointer, an over-long path and a missing folder, the list filters live, a file shows its real bytes, a FAT folder opens by relative path with the kernel's cwd untouched, closes on Esc, crashes safely, desktop alive|python3 ./tools/checks/ring3search-check.py
 retry|5|A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT|python3 ./tools/checks/userfb-release-check.py
 retry|7|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
 retry|0|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
