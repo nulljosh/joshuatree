@@ -117,11 +117,11 @@ try {
   // Long enough to cover several typewriter items: the height difference
   // only shows up between items of different length, not within one.
   for (let i = 0; i < 120; i++) {
-    heights.add(await page.locator('h2.eyebrow').evaluate((el) => el.offsetHeight));
+    heights.add(await page.locator('.eyebrow').evaluate((el) => el.offsetHeight));
     await page.waitForTimeout(120);
   }
   console.log('eyebrow heights seen: ' + [...heights].join(', '));
-  if (heights.size > 1) fail('eyebrow h2 changes height while typing (page shifts): ' + [...heights].join(', '));
+  if (heights.size > 1) fail('eyebrow changes height while typing (page shifts): ' + [...heights].join(', '));
 
   // 1. the headline the tour resets to is the injected one, not a hardcoded other
   const source = await (await fetch(url.replace('index.html', 'v86/embed.js'))).text();
