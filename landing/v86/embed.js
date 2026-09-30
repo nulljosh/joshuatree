@@ -332,6 +332,10 @@ if (typeof document !== "undefined") (function () {
     if (ev.key === "Escape" || ev.keyCode === 27 || ev.code === "Escape") {
       ev.preventDefault();
       ev.stopImmediatePropagation();
+      // Shift+Escape is the visitor's way out of the demo (WCAG 2.1.2, no
+      // keyboard trap): it gives the keyboard back to the page. Plain Escape
+      // still never reaches the kernel.
+      if (ev.shiftKey && focused) releaseKeyboard();
     }
   }, true); // capture phase, BEFORE v86's own global listener (both on window, FIFO order)
 
@@ -761,7 +765,17 @@ if (typeof document !== "undefined") (function () {
   }
   container.addEventListener("mousedown", focusIn);
   container.addEventListener("touchstart", focusIn, { passive: true });
-  container.addEventListener("keydown", focusIn);
+  // Tab must still walk past the demo: only a key that means "type to it"
+  // takes the keyboard over, and Shift+Escape gives it back (WCAG 2.1.2,
+  // no keyboard trap); the release itself lives in the Escape listener near the
+  // top of this file, which has to run before v86's own.
+  container.addEventListener("keydown", function (ev) { if (ev.key === "Tab") return; focusIn(); });
+  function releaseKeyboard() {
+    focused = false;
+    if (emulator && emulator.keyboard_adapter) emulator.keyboard_adapter.emu_enabled = false;
+    if (emulator && emulator.mouse_adapter) emulator.mouse_adapter.emu_enabled = false;
+    container.focus();
+  }
   container.addEventListener("mousemove", trackActivity);
   container.addEventListener("touchmove", trackActivity, { passive: true });
   // v0.76.26: after focusIn() sets focused=true, subsequent keydown events
