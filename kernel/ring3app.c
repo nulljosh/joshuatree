@@ -15,10 +15,11 @@
    1.9.9: Reminders joins it, the fifteenth app out.
    1.9.11: Curbfind joins it, the sixteenth app out, with one new syscall (SYS_HTTP_GET).
    1.9.12: Calendar joins it, the seventeenth app out.
+   1.9.13: Search joins it, the eighteenth app out, with one new syscall (SYS_READDIR).
 
    Roadmap 2.0 says apps leave the kernel, so a crash in one cannot take
    the machine down. Keyrate, the smallest real app, went first; Toroid,
-   Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind and Calendar followed the same path. Each app's dock entry lands here,
+   Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind, Calendar and Search followed the same path. Each app's dock entry lands here,
    and everything else stays as it was: gui_launch_from_dock has already
    drawn the window chrome and set the viewport by the time this runs,
    just as for an in-kernel app.
@@ -60,6 +61,7 @@
 #include "user_reminders.h"
 #include "user_curbfind.h"
 #include "user_calendar.h"
+#include "user_search.h"
 #include "user_fbpoke.h"
 #include "app.h"
 #include "irq.h"
@@ -108,6 +110,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Reminders",  user_reminders,  USER_REMINDERS_LEN,  "REMINDERS.BIN"},
     {"Curbfind",   user_curbfind,   USER_CURBFIND_LEN,   "CURBFIND.BIN"},
     {"Calendar",   user_calendar,   USER_CALENDAR_LEN,   "CALENDAR.BIN"},
+    {"Search",     user_search,     USER_SEARCH_LEN,     "SEARCH.BIN"},
 };
 
 static void ring3app_launch(const struct ring3_app *a) {
@@ -192,6 +195,7 @@ void sparkjar_ring3_open(void)   { ring3app_launch(&RING3_APPS[13]); }
 void reminders_ring3_open(void)  { ring3app_launch(&RING3_APPS[14]); }
 void curbfind_ring3_open(void)   { ring3app_launch(&RING3_APPS[15]); }
 void calendar_ring3_open(void)   { ring3app_launch(&RING3_APPS[16]); }
+void search_ring3_open(void)     { ring3app_launch(&RING3_APPS[17]); }
 
 /* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
    run user/fbpoke.c with no window: it must be refused a pointer into
@@ -239,6 +243,7 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='r' && pc[6]=='e' && pc[7]=='m' && pc[8]=='i') { ring3app_autoopen_slot = 4; serial_puts("autoopen=reminders\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='u' && pc[7]=='r' && pc[8]=='b') { ring3app_autoopen_slot = 8; serial_puts("autoopen=curbfind\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='a' && pc[7]=='l' && pc[8]=='e') { ring3app_autoopen_slot = 2; serial_puts("autoopen=calendar\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='e' && pc[7]=='a' && pc[8]=='r') { ring3app_autoopen_slot = 21; serial_puts("autoopen=search\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
     }
 }
@@ -246,7 +251,7 @@ void ring3app_autoopen_run(int mx, int my){
     if (ring3app_autoopen_slot < 0) return;
     int slot = ring3app_autoopen_slot; ring3app_autoopen_slot = -1;
     editor_mouse_x = mx; editor_mouse_y = my;
-    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Lexly's, Plan's, Fieldbook's, Clock's, Portfolio's, Activity's, Contacts', Sparkjar's, Reminders', Curbfind's or Calendar's APPS slot */
+    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Lexly's, Plan's, Fieldbook's, Clock's, Portfolio's, Activity's, Contacts', Sparkjar's, Reminders', Curbfind's, Calendar's or Search's APPS slot */
     if (fbpoke_armed) { fbpoke_armed = 0; fbpoke_run(); }
     gui_draw_desktop(-1, -1, 0, 0);
     cursor_saved_x = cursor_saved_y = -1;

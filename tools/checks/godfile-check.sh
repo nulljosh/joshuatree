@@ -56,7 +56,8 @@ ratchet_ceiling() {
         # kernel/dock_draw.c/.h (refactor/kernel-split-1). Ceiling lowered
         # to match, never to go back up.
         # 2026-09-30: 1.9.12 moved Calendar to ring 3 (user/calendar.c).
-        kernel/kernel.c) echo 9355 ;;
+        # 2026-09-30: 1.9.13 dropped the search.h include. Down one more.
+        kernel/kernel.c) echo 9354 ;;
         *) echo "$LIMIT" ;;
     esac
 }
