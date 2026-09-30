@@ -143,7 +143,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Demo canvas fills its frame, pixelated only at an exact 1:1 map | `tools/checks/democrisp-check.mjs` | retry |
 | Landing page never overflows horizontally at phone widths | `tools/checks/mobile-overflow-check.mjs` | once |
 | Landing: benchmark labels clear, one app count, Samantha link styled, sections visible on load | `tools/checks/landing-layout-check.mjs` | once |
-| Landing demo on a phone: the Type button raises the keyboard and typed letters reach Samantha once each | `tools/checks/mobile-type-check.mjs` | once |
+| Landing demo on a phone: the chat bar raises the keyboard, typed letters reach Samantha once each and Send is Enter | `tools/checks/mobile-type-check.mjs` | once |
 | App switcher: Ctrl+Tab cycles open windows and focuses the highlighted one | `tools/checks/appswitcher-check.py` | retry |
 | Screenshot key: Ctrl+Shift+3 saves a real framebuffer BMP, numbered and visible in Files | `tools/checks/screenshot-check.py` | retry |
 | Drunk mode easter egg: horizontal sway applied to framebuffer rows | `tools/checks/drunk-mode-check.py` | retry |

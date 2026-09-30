@@ -272,6 +272,16 @@
      hides the hero copy on click any more. */
   #demo-exit { position: absolute; right: 14px; bottom: 14px; z-index: 6; background: var(--fg); color: var(--bg); border: none; border-radius: 999px; padding: 10px 18px; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; cursor: pointer; font-family: inherit; }
   #demo-exit::after { content: ""; position: absolute; inset: -10px; }
+  #demo-composer { display: flex; gap: 8px; width: 100%; max-width: 430px; margin: 10px auto 0; box-sizing: border-box; }
+  #demo-composer[hidden] { display: none; }
+  #demo-composer input { flex: 1; min-width: 0; min-height: 44px; box-sizing: border-box; padding: 0 16px; font: 16px/1.2 inherit; font-family: inherit; color: var(--fg); background: var(--bg); border: 1px solid rgba(128,128,128,0.45); border-radius: 999px; }
+  #demo-composer input:focus { outline: 2px solid var(--fg); outline-offset: 1px; }
+  #demo-composer button { min-height: 44px; padding: 0 20px; border: none; border-radius: 999px; background: var(--fg); color: var(--bg); font: 600 15px/1 inherit; font-family: inherit; cursor: pointer; }
+  /* Full screen on a phone: the bar sits under the demo instead of over it. */
+  #demo-frame.demo-full #demo-composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 52; max-width: none; margin: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: #000; }
+  #demo-frame.demo-full #demo-composer input { background: #1c1c1e; color: #fff; }
+  #demo-frame.demo-full #demo-composer button { background: #fff; color: #000; }
+  @media (max-width: 520px) { #demo-frame.demo-full #stage-wrap { width: min(100vw, calc((100dvh - 76px) * 430 / 760)); } }
   /* Small on a phone so it does not sit on the dock; the ::after keeps a 44px tap target. */
   @media (max-width: 600px) { #demo-exit { right: 8px; bottom: 8px; padding: 6px 11px; font-size: 11px; opacity: 0.92; } #demo-exit::after { content: ""; position: absolute; inset: -10px; } }
   /* v52.5: real boot moment instead of a blank black flash, direct
@@ -432,13 +442,15 @@
     </div>
     <button id="demo-exit" type="button" aria-pressed="false">Full screen</button>
   </div>
+  <!-- Phones only (embed.js unhides it). A phone raises its keyboard only for a real text field, and v86 listens for keys on the window, so this field is mirrored into the demo as it is typed and Send is Enter. -->
+  <form id="demo-composer" autocomplete="off" hidden>
+    <input id="demo-compose-input" type="text" enterkeyhint="send" autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false" placeholder="Message Samantha" aria-label="Type to the demo">
+    <button id="demo-compose-send" type="submit" aria-label="Send">Send</button>
+  </form>
   <p class="plate-cap">
     <span class="plate-cap-desktop">Fig. 1 &middot; Joshua Tree, booting live in your browser</span>
-    <!-- v86's keyboard input listens on the document, not a focused text
-         field, so there is no on-screen keyboard on a touch device: typing
-         inside the guest is not usable on a phone even though tapping
-         icons and dragging windows works fine. Saying so plainly beats a
-         caption that implies full control. -->
+    <!-- Phones get a chat bar (#demo-composer) under the demo, because v86
+         only hears keys on the window and a phone has no keyboard for it. -->
     <span class="plate-cap-mobile">Tap to look around.</span>
   </p>
   <!-- ?samantha reload, same opt-in shape as os.html's ?portfolio embed:

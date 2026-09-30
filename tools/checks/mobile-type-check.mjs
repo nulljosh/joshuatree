@@ -4,21 +4,22 @@
 // Reported: "the Samantha demo on the mobile landing page does not work, I
 // can't type anything". The kernel's Samantha, Notes and Terminal screens
 // take typed keys, v86 only listens for keydown on window, and a phone has
-// no keyboard for it to hear. The page now adds a "Type" button (phones
-// only) that focuses a real text field inside the tap, which is what makes
-// iOS and Android raise their keyboard, and replays every character, Enter
-// and Backspace typed into it as a key.
+// no keyboard for it to hear. On phones the page now shows a chat bar under
+// the demo (a real text field and a Send button, which is what makes iOS and
+// Android raise their keyboard). What is typed is mirrored into the kernel's
+// own input line as it changes, and Send is the Enter key.
 //
-// Real iPhone emulation, real touch tap, the real demo booted from
+// Real iPhone emulation, real touch taps, the real demo booted from
 // landing/v86. Hermetic: the demo's /api/proxy is answered with a 403 and
 // the idle tour is off (prefers-reduced-motion), so nothing reaches the
 // network and nothing else types.
 //
 // Asserts, in order:
-//   1. a phone has the Type button and the field; a desktop viewport has neither
-//   2. tapping Type focuses the field and takes the demo over (focused=true)
-//   3. typing into it puts the letters on Samantha's screen, sends them
-//      exactly once (not doubled), Backspace as keyCode 8, Enter as keyCode 13
+//   1. a phone shows the chat bar and Send; a desktop viewport does not
+//   2. tapping the field focuses it and takes the demo over (focused=true)
+//   3. typing puts the letters on Samantha's screen, each sent exactly once
+//      (not doubled), a correction sends Backspace (keyCode 8)
+//   4. tapping Send sends Enter (keyCode 13) and empties the field
 import { chromium, devices } from 'playwright';
 import { createServer } from 'http';
 import { readFile } from 'fs/promises';
@@ -59,8 +60,8 @@ try {
   // 1b. desktop: no Type button, no field
   {
     const { ctx, page } = await open({ viewport: { width: 1280, height: 900 } });
-    const n = await page.evaluate(() => document.querySelectorAll('#demo-type-btn, #demo-type-field').length);
-    ok(n === 0, 'desktop viewport has no Type button or field');
+    const shown = await page.locator('#demo-composer').isVisible();
+    ok(!shown, 'desktop viewport does not show the chat bar');
     await ctx.close();
   }
 
@@ -69,9 +70,10 @@ try {
   await page.waitForFunction(() => window.__jt && window.__jt.ready, null, { timeout: 120000 });
   await page.waitForTimeout(8000); // let the kernel reach its home screen
 
-  const btn = page.locator('#demo-type-btn');
-  ok(await btn.count() === 1, 'phone viewport has the Type button');
-  ok(await page.locator('#demo-type-field').count() === 1, 'phone viewport has the hidden text field');
+  const input = page.locator('#demo-compose-input');
+  const send = page.locator('#demo-compose-send');
+  ok(await page.locator('#demo-composer').isVisible(), 'phone viewport shows the chat bar');
+  ok(await send.isVisible(), 'phone viewport shows the Send button');
 
   // Open Samantha from the phone home screen with a real tap, then give the
   // kernel a few seconds to draw her empty prompt.
@@ -91,28 +93,33 @@ try {
     e.keyboard_send_keys = (c, d) => { window.__sent.keys.push(...c); return k(c, d); };
   });
 
-  // 2. a real touch tap on Type
-  await btn.tap();
+  // 2. a real touch tap in the field
+  await input.tap();
   await page.waitForTimeout(500);
   const afterTap = await page.evaluate(() => ({
     active: document.activeElement && document.activeElement.id,
     focused: window.__jt.focused,
   }));
-  ok(afterTap.active === 'demo-type-field', 'tapping Type focuses the text field (this is what raises the phone keyboard)');
-  ok(afterTap.focused === true, 'tapping Type takes the demo over');
+  ok(afterTap.active === 'demo-compose-input', 'tapping the bar focuses the text field (this is what raises the phone keyboard)');
+  ok(afterTap.focused === true, 'tapping the bar takes the demo over');
 
-  // 3. type into the field like a soft keyboard would
-  await page.keyboard.type('hello');
+  // 3. type like a soft keyboard would, then correct one letter
+  await page.keyboard.type('hellp');
   await page.waitForTimeout(4500); // the keys are replayed one at a time
-  const after = await page.screenshot({ clip: bar });
-  ok(!before.equals(after), "the typed letters show up in Samantha's input bar");
+  const typed = await page.screenshot({ clip: bar });
+  ok(!before.equals(typed), "the typed letters show up in Samantha's input bar");
   await page.keyboard.press('Backspace');
-  await page.keyboard.press('Enter');
-  await page.waitForTimeout(1500);
+  await page.keyboard.type('o');
+  await page.waitForTimeout(2500);
+
+  // 4. Send is Enter and clears the field
+  await send.tap();
+  await page.waitForTimeout(3000);
   const sent = await page.evaluate(() => window.__sent);
-  ok(sent.text.join('') === 'hello', `typed "hello" reaches the kernel exactly once (got ${JSON.stringify(sent.text.join(''))})`);
-  ok(sent.keys.includes(8), 'Backspace reaches the kernel as keyCode 8');
-  ok(sent.keys.includes(13), 'Enter reaches the kernel as keyCode 13');
+  ok(sent.text.join('') === 'hellpo', `each letter reaches the kernel exactly once (got ${JSON.stringify(sent.text.join(''))})`);
+  ok(sent.keys.includes(8), 'a correction reaches the kernel as Backspace (keyCode 8)');
+  ok(sent.keys.includes(13), 'Send reaches the kernel as Enter (keyCode 13)');
+  ok(await input.inputValue() === '', 'Send empties the field');
   await ctx.close();
 } catch (e) {
   failures.push('check crashed: ' + e.message);

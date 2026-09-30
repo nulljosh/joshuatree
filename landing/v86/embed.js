@@ -714,70 +714,50 @@ if (typeof document !== "undefined") (function () {
     container.appendChild(tapTalkBtn);
   }
   // Phones have no keyboard for the demo to listen to, and v86 only hears
-  // `keydown` on window. So the Samantha, Notes and Terminal screens, which
-  // all want typed keys, were unusable by touch. The "Type" button focuses
-  // a real (transparent) text field inside the tap, which is what makes
-  // iOS and Android raise their own keyboard, and every character, Enter
-  // and Backspace typed into it is replayed into the kernel as a key. The
-  // field always holds two spaces so Backspace has something to delete and
-  // shows up as a shorter value; anything longer is new text.
+  // `keydown` on window, so the Samantha, Notes and Terminal screens, which
+  // all want typed keys, could be tapped but never typed into. On phones the
+  // page shows a real chat bar under the demo (#demo-composer: a text field
+  // and a Send button). A real field is what makes iOS and Android raise
+  // their own keyboard. What is typed in it is mirrored into the kernel's
+  // own input line as it changes, so the kernel shows it live, and Send is
+  // the Enter key. The field is compared with what the kernel already holds,
+  // so autocorrect, a pasted word or a cursor edit all work: only the
+  // difference is sent, as Backspaces then new letters.
   if (IS_PHONE) {
-    var typeField = document.createElement("input");
-    typeField.type = "text";
-    typeField.id = "demo-type-field";
-    typeField.setAttribute("aria-label", "Type to the demo");
-    typeField.setAttribute("autocomplete", "off");
-    typeField.setAttribute("autocorrect", "off");
-    typeField.setAttribute("autocapitalize", "off");
-    typeField.setAttribute("spellcheck", "false");
-    typeField.setAttribute("enterkeyhint", "send");
-    typeField.style.cssText = "position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;" +
-      "font-size:16px;pointer-events:none;"; // 16px: iOS zooms the page for anything smaller
-    var TYPE_BASE = "  ";
-    var typeBtn = document.createElement("button");
-    typeBtn.type = "button";
-    typeBtn.id = "demo-type-btn";
-    typeBtn.textContent = "Type";
-    typeBtn.style.cssText = "position:absolute;right:16px;top:12px;z-index:7;background:var(--fg);color:var(--bg);" +
-      "border:none;border-radius:999px;padding:12px 22px;min-height:44px;font:600 15px/1 -apple-system,Helvetica,Arial,sans-serif;" +
-      "cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,0.18);";
-    var resetTypeField = function () {
-      typeField.value = TYPE_BASE;
-      try { typeField.setSelectionRange(TYPE_BASE.length, TYPE_BASE.length); } catch (e) {}
-    };
-    ["touchstart", "mousedown", "pointerdown"].forEach(function (t) {
-      typeBtn.addEventListener(t, function (ev) { ev.stopPropagation(); }, { passive: true });
-    });
-    typeBtn.addEventListener("click", function (ev) {
-      ev.stopPropagation();
-      focusIn();           // the tap is the visitor taking over, same as a tap on the screen
-      resetTypeField();
-      typeField.focus();   // inside the tap, or the phone will not raise its keyboard
-      trackActivity();
-    });
-    // One queue, one key at a time at the tour's own 60ms spacing: sent
-    // overlapped at 30ms the kernel dropped letters.
-    var typeQueue = Promise.resolve();
-    var typeSend = function (fn) { typeQueue = typeQueue.then(fn).catch(function () {}); };
-    typeField.addEventListener("input", function () {
-      trackActivity();
-      if (!emulator || !adaptersReady) { resetTypeField(); return; }
-      var v = typeField.value;
-      if (v.length < TYPE_BASE.length) { typeSend(function () { return emulator.keyboard_send_keys([8], 60); }); }
-      else if (v.length > TYPE_BASE.length) {
-        var added = v.slice(TYPE_BASE.length);
-        typeSend(function () { return emulator.keyboard_send_text(added, 60); });
-      }
-      resetTypeField();
-    });
-    typeField.addEventListener("keydown", function (ev) {
-      if (ev.key !== "Enter") return;
-      ev.preventDefault();
-      trackActivity();
-      if (emulator && adaptersReady) typeSend(function () { return emulator.keyboard_send_keys([13], 60); });
-    });
-    container.appendChild(typeField);
-    container.appendChild(typeBtn);
+    var composer = document.getElementById("demo-composer");
+    var composeInput = document.getElementById("demo-compose-input");
+    if (composer && composeInput) {
+      composer.hidden = false;
+      var mirrored = ""; // what the kernel's input line holds now
+      // One queue, one key at a time at the tour's own 60ms spacing: sent
+      // overlapped at 30ms the kernel dropped letters. (v86 already ignores
+      // key events that come from a text field, so nothing is typed twice.)
+      var typeQueue = Promise.resolve();
+      var typeSend = function (fn) { typeQueue = typeQueue.then(fn).catch(function () {}); };
+      var mirrorToKernel = function () {
+        var v = composeInput.value, i = 0;
+        while (i < mirrored.length && i < v.length && mirrored.charAt(i) === v.charAt(i)) i++;
+        var del = mirrored.length - i, add = v.slice(i);
+        mirrored = v;
+        if (del) { var bs = []; for (var k = 0; k < del; k++) bs.push(8); typeSend(function () { return emulator.keyboard_send_keys(bs, 60); }); }
+        if (add) typeSend(function () { return emulator.keyboard_send_text(add, 60); });
+      };
+      composeInput.addEventListener("focus", function () { focusIn(); trackActivity(); });
+      composeInput.addEventListener("input", function () {
+        trackActivity();
+        if (emulator && adaptersReady) mirrorToKernel();
+      });
+      composer.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        trackActivity();
+        if (!emulator || !adaptersReady) return;
+        focusIn();
+        typeSend(function () { return emulator.keyboard_send_keys([13], 60); });
+        mirrored = "";
+        composeInput.value = "";
+        composeInput.focus(); // keep the keyboard up for the next message
+      });
+    }
   }
   container.addEventListener("mousedown", focusIn);
   container.addEventListener("touchstart", focusIn, { passive: true });
