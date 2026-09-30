@@ -16,16 +16,15 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-Checkpoint 2026-09-30. Weekly usage hit 75%, so the loop paused. Main is 1.9.9, and 15 of 26 apps run in ring 3.
+Checkpoint 2026-09-30. Weekly usage hit 75%, so the loop paused. Main is 1.9.10, and 15 of 26 apps run in ring 3.
 
 In flight, each on its own branch:
 
-- #316 `landing-grade-fixes` (1.9.10): sections visible on load, all 26 apps listed, protected-apps section, docs at 100%. New landing-layout-check.mjs.
-- `curbfind-ring3`: Curbfind to ring 3, plus SYS_HTTP_GET (387). The kernel fixes the host; the app passes only a checked path.
+- #317 `curbfind-ring3` (1.9.11): Curbfind to ring 3, plus SYS_HTTP_GET (387). The kernel fixes the host; the app passes only a checked path.
 - `calendar-ring3`: Calendar to ring 3, file calls only. Moves the multi-window checks off Calendar.
 - `search-ring3`: Search to ring 3, plus SYS_READDIR (388). Files will reuse it.
 
-Each port bumps VERSION on its own. Renumber at merge, in order: landing 1.9.10, then Curbfind, Calendar, Search. After each merge, rerun `tools/gen/inject-landing-facts.py` so the landing's ring-3 count stays right.
+Each port bumps VERSION on its own. Renumber at merge, in order: Curbfind 1.9.11, then Calendar, then Search. After each merge, rerun `tools/gen/inject-landing-facts.py` so the landing's ring-3 count stays right.
 
 Building on Linux changes every other app's committed `.bin` and `drivers/user_*.h`. Never commit those; `git checkout` them.
 
