@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Headless pixel proof of Calendar's Day, Week, Month and Year views
-(user/calendar.c, a ring-3 program since 1.9.11; kernel/calendar.h before).
+(user/calendar.c, a ring-3 program since 1.9.12; kernel/calendar.h before).
 
 Boots with the clock pinned to 2026-08-15 (a Saturday), opens Calendar from
 the dock, and drives it with the real keys: 1/2/3/4 pick a view, right steps
@@ -22,7 +22,7 @@ From real framebuffer dumps it checks:
 Before this change the Calendar had one view: keys 1-4 did nothing, so the
 segment and every per-view assertion fail.
 
-1.9.11: the old step 6 (snap the window to the left half and check the
+1.9.12: the old step 6 (snap the window to the left half and check the
 grid narrows) is gone. Calendar is a ring-3 program now and a ring-3
 window's framebuffer is fixed at the size SYS_WINDOW_OPEN handed out, so
 it opens as a single window that the desktop does not drag or snap; the

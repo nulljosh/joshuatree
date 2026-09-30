@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Calendar runs as a real ring-3 process, the sixteenth app out of the kernel
-(roadmap 2.0, 1.9.11).
+"""Calendar runs as a real ring-3 process, the seventeenth app out of the kernel
+(roadmap 2.0, 1.9.12).
 
 Boots headless with `open=cale`, which launches Calendar from the dock path
 the moment the desktop is up, and with the clock pinned to 2026-08-15 (a

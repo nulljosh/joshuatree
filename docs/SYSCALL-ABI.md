@@ -539,3 +539,32 @@ If `ecx` names a slot it is killed first through `task_kill`, the same call the
 shell's `kill` makes. Slot 0 (the shell) and the caller's own slot are refused
 with -EPERM, a free slot is -ENOENT, and the snapshot is filled either way.
 Errors: -EFAULT (bad pointer).
+
+## http_get (1.9.11)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 387 | `http_get` | `const char *path` | `void *buf` | `len` | body bytes, -status, or -errno |
+
+**http_get** is what the Curbfind app fetches its live rows with, and the
+first call that puts the kernel's network stack behind a ring-3 program. It
+sends one `GET <path> HTTP/1.0` to `joshuatree.heyitsmejosh.com` port 80; the
+host and port are fixed in the kernel and a program cannot name another. The
+path is copied out of user memory a byte at a time with the same check every
+other pointer gets, and is refused with -EINVAL unless it is at most 128 bytes
+before the NUL, starts with `/`, and is printable ASCII (0x21 to 0x7E) all the
+way: no space, which would end the request line early, and no CR or LF, which
+would let a program write a header of its own. `buf` and `len` must lie inside
+user memory or the call is -EFAULT; `len` is clamped to 2048, the kernel's
+bounce buffer. The reply waits at most 1500ms.
+
+On an HTTP 200 the body is copied out, at most `len` bytes, and the count is
+returned. Any other status returns minus that status, -100 to -599, which can
+never collide with an errno (all below 100). -ENODEV means no NIC, -EIO no
+answer in time, -EBUSY a fetch already in flight from another task. Nothing is
+written to `buf` on any failure. Every one of the refusals happens before the
+network is touched, so `tools/checks/ring3curbfind-check.py` can prove them on
+a guest with no NIC at all: Curbfind's `p` key hands the call a relative path,
+a CR LF, a space, an over-long path, a null buffer, a buffer in kernel text and
+a path pointer in kernel text, and each must come back -22 or -14 with the
+buffer untouched.

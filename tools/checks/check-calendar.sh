@@ -2,13 +2,13 @@
 # Real check for the Calendar's date math, the part tagged [Fable] in
 # roadmap.md for its "looks right, subtly isn't" risk: compiles the same
 # cal_dow / cal_days_in_month / cal_is_leap the ring-3 program links
-# (user/calendar.c since 1.9.11, kernel/calendar.h before that; pulled in
+# (user/calendar.c since 1.9.12, kernel/calendar.h before that; pulled in
 # under CALENDAR_MATH_ONLY, nothing else from the program) with the host
 # clang, then walks every single day from 1900-01-01 to 2099-12-31 and
 # compares against libc's own tm_wday from timegm(3). 73,049 dates, any
 # mismatch fails. Run it after touching calendar.c's math at all.
 #
-# 1.9.11: Calendar runs at ring 3 and gets today from SYS_TIME (seconds
+# 1.9.12: Calendar runs at ring 3 and gets today from SYS_TIME (seconds
 # since the epoch) instead of the CMOS date registers, so the same sweep
 # now also feeds each date's timegm() through cal_ymd_from_epoch and
 # demands the year, month and day back unchanged (1970 on: the epoch

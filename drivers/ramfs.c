@@ -4,7 +4,7 @@
 
 #define RAMFS_MAX_FILES 8
 #define RAMFS_NAME_LEN  32
-#define RAMFS_FILE_SIZE 16384 /* 1.9.3: ring-3 binaries are written here when no disk is mounted; Fieldbook is 6.3KB and was silently cut at 4096. 1.9.11: Calendar is 13.3KB and was cut at 8192 the same way (its .rodata never loaded) */
+#define RAMFS_FILE_SIZE 16384 /* 1.9.3: ring-3 binaries are written here when no disk is mounted; Fieldbook is 6.3KB and was silently cut at 4096. 1.9.12: Calendar is 13.3KB and was cut at 8192 the same way (its .rodata never loaded) */
 
 struct ramfs_file {
     char name[RAMFS_NAME_LEN];

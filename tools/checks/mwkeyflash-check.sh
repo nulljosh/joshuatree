@@ -20,7 +20,7 @@ source "$(dirname "$0")/freeport.sh"
 #
 # Proven here via a new serial marker, "mwchrome\n" (only emitted by
 # gui_multiwin_draw_chrome): opens Mail (multi-window; it stood in for
-# Calendar once that became a ring-3 program in 1.9.11, as Calendar had
+# Calendar once that became a ring-3 program in 1.9.12, as Calendar had
 # for Reminders in 1.9.9), then moves the selection down and up five times
 # (five plain keystrokes, each a real content repaint of the list), and
 # demands the chrome-draw count stay flat at 1 (the one real draw from
@@ -73,7 +73,7 @@ LOGICAL_W, LOGICAL_H = 960, 540
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247  # same dock constants as appclose-check.py
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-MAIL_SLOT = 2  # Apps,Files,Mail,Calendar,Notes,Reminders,...  (1.9.9: Reminders is a ring-3 program now, 1.9.11: Calendar too; Mail is the multi-window app driven here)
+MAIL_SLOT = 2  # Apps,Files,Mail,Calendar,Notes,Reminders,...  (1.9.9: Reminders is a ring-3 program now, 1.9.12: Calendar too; Mail is the multi-window app driven here)
 
 def move(x, y):
     cmd({"execute": "input-send-event", "arguments": {"events": [

@@ -79,7 +79,7 @@ QX, QY, QW, QH = TOP_LEFT_QUARTER
 EDGE_POINTS = [(QX + QW + 20, QY + 40), (QX + 200, QY + QH + 15)]
 # Dock slots (SLOTS order in appclose-check.py/multiwindow-check.py):
 # 0 Apps, 1 Files, 2 Mail, 3 Calendar, 4 Notes, 5 Reminders, ...
-SLOT = {"Files": 1, "Mail": 2, "Weather": 8}  # 1.9.11: Calendar is a ring-3 program with a fixed viewport now, Weather stands in
+SLOT = {"Files": 1, "Mail": 2, "Weather": 8}  # 1.9.12: Calendar is a ring-3 program with a fixed viewport now, Weather stands in
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -222,7 +222,7 @@ try:
         if name == "Mail" and ok:
             # Down moves the list's selection to the second message (see
             # kernel/mail.h gui_mail_on_key; Mail took this test over from
-            # Calendar when that became a ring-3 program in 1.9.11, as
+            # Calendar when that became a ring-3 program in 1.9.12, as
             # Calendar had from Reminders in 1.9.9), one real keystroke
             # while still snapped to the quarter -- gui_run's
             # mw_key_repaint path (gui_multiwin_draw_content_only), a

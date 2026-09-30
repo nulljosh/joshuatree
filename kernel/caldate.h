@@ -1,4 +1,4 @@
-/* 1.9.11: the date math the kernel still needs after Calendar itself moved
+/* 1.9.12: the date math the kernel still needs after Calendar itself moved
    to ring 3 (user/calendar.c). Two callers: Samantha's calendar_today tool
    in chat.h, which reads EVENTS.TXT fresh on every call because the ring-3
    program owns the file while it is open, and stocks.h, which turns a quote

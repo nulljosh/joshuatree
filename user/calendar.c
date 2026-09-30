@@ -1,6 +1,6 @@
 /* calendar: Day, Week, Month and Year views over EVENTS.TXT, as a real ring-3 program.
  *
- * The sixteenth app to leave the kernel (roadmap 2.0), done the way
+ * The seventeenth app to leave the kernel (roadmap 2.0), done the way
  * user/reminders.c was. Same job kernel/calendar.h did in ring 0: the four
  * views, 1-4 to pick one, left/right (up/down, a/d) to step by the view's own
  * unit, [ and ] to move the selected day, t for today, Enter to edit the

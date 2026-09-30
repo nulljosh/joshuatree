@@ -40,7 +40,7 @@ roadmap.md's v0.73.0 entry.
 
 v0.75.0 (multi-window batch 2) extends this in place with step 6: a real
 two-window combination involving an interactive app (Mail; it took over
-from Calendar in 1.9.11, as Calendar had from Reminders in 1.9.9, each
+from Calendar in 1.9.12, as Calendar had from Reminders in 1.9.9, each
 leaving for ring 3), the exact scenario the batch-2 task itself named as
 the required evidence -- Mail open alongside Files, delete a message with
 a real keystroke, close Mail via its own X, confirm Files is untouched AND
@@ -328,7 +328,7 @@ try:
 
     # 6. v0.75.0 (batch 2): the real, required two-window evidence -- an
     #    interactive app (Mail; it took over here when Calendar became a
-    #    ring-3 program in 1.9.11) open ALONGSIDE Files, interacted with
+    #    ring-3 program in 1.9.12) open ALONGSIDE Files, interacted with
     #    for real (delete the selected message via its own keyboard path,
     #    which rewrites MAIL.TXT), closed via its own X, with Files proven
     #    untouched and the change proven really saved to the real FAT disk,

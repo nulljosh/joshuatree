@@ -55,8 +55,8 @@ ratchet_ceiling() {
         # 2026-09-28: dock band/tray/icon drawing moved to
         # kernel/dock_draw.c/.h (refactor/kernel-split-1). Ceiling lowered
         # to match, never to go back up.
-        # 2026-09-30: 1.9.11 moved Calendar to ring 3 (user/calendar.c).
-        kernel/kernel.c) echo 9356 ;;
+        # 2026-09-30: 1.9.12 moved Calendar to ring 3 (user/calendar.c).
+        kernel/kernel.c) echo 9355 ;;
         *) echo "$LIMIT" ;;
     esac
 }
