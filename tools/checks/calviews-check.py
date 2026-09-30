@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Headless pixel proof of Calendar's Day, Week, Month and Year views
-(kernel/calendar.h).
+(user/calendar.c, a ring-3 program since 1.9.12; kernel/calendar.h before).
 
 Boots with the clock pinned to 2026-08-15 (a Saturday), opens Calendar from
 the dock, and drives it with the real keys: 1/2/3/4 pick a view, right steps
@@ -18,12 +18,17 @@ From real framebuffer dumps it checks:
      row 2 of the 4x3 layout).
   5. Month view is still the default and still fits six weeks (the
      apptop-check.py contract), after visiting the other views.
-  6. Snapped to the left half (a 464px viewport), the month grid stays
-     inside the window and the hint is dropped instead of overlapping the
-     view control.
 
 Before this change the Calendar had one view: keys 1-4 did nothing, so the
 segment and every per-view assertion fail.
+
+1.9.12: the old step 6 (snap the window to the left half and check the
+grid narrows) is gone. Calendar is a ring-3 program now and a ring-3
+window's framebuffer is fixed at the size SYS_WINDOW_OPEN handed out, so
+it opens as a single window that the desktop does not drag or snap; the
+narrow-window layout code still runs whenever the viewport is narrow (a
+phone). The same coordinates apply as before: the program draws with the
+same T=-32 offsets calendar.h used inside a dock window.
 
 Usage: tools/checks/calviews-check.py   (from the repo root, after make kernel.elf)
 """
@@ -165,31 +170,15 @@ try:
     seg = active_segment(img)
     if seg != [2]: fails.append(f"Month: active segment {seg}, want [2]")
 
-    # ---- Snapped to the left half (464px viewport at (8, 58), gui_snap_area) ----
-    # The 504px month grid used to start at x=-20 there, clipping Sunday and
-    # Saturday, and the hint was drawn over the view control.
-    move(370, 50); time.sleep(0.3)
-    cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
-    time.sleep(0.15)
-    for i in range(1, 7):
-        move(370 + (2 - 370) * i // 6, 50 + (270 - 50) * i // 6); time.sleep(0.15)
-    time.sleep(0.2)
-    cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
-    time.sleep(0.8); move(*PARK); time.sleep(0.5)
-    img = dump("snapped")
-    SX0, SY0, SX1 = 8, 58, 472
-    rule_y = SY0 + T + 142
-    rule = [x for x in range(SX0, SX1) if near(px(img, x, rule_y), (0xDD, 0xD9, 0xD3), 4)]
-    print(f"Snapped: weekday rule spans x {rule[:1]}..{rule[-1:]} (viewport {SX0}..{SX1 - 1})")
-    if not rule: fails.append("Snapped: month grid's weekday rule not found in the left-half window")
-    elif rule[0] <= SX0 + 1 or rule[-1] >= SX1 - 2: fails.append(f"Snapped: month grid runs off the window (rule {rule[0]}..{rule[-1]})")
-    hint_ink = sum(1 for y in range(SY0 + T + 50, SY0 + T + 68) for x in range(SX0 + 20 + 256 + 4, SX1 - 4)
-                   if sum(px(img, x, y)) < 520)
-    print(f"Snapped: ink right of the view control {hint_ink}")
-    if hint_ink > 0: fails.append(f"Snapped: hint drawn over/against the view control in a narrow window ({hint_ink} px)")
-    CLOSE_SNAP = (24, 42)  # left-half window's red dot: (x+24, y+16), x=0, y=26
+    # Month view's weekday rule must still span the 504px grid centred in
+    # the 804px viewport (x0 = 150), the same layout the six-week
+    # apptop-check.py contract rests on.
+    rule_y = vy(T + 142)
+    rule = [x for x in range(VX0, VX1) if near(px(img, x, rule_y), (0xDD, 0xD9, 0xD3), 4)]
+    print(f"Month: weekday rule spans x {rule[:1]}..{rule[-1:]} (viewport {VX0}..{VX1 - 1})")
+    if len(rule) < 300: fails.append("Month: the weekday rule is missing or short after visiting the other views")
 
-    move(*CLOSE_SNAP); time.sleep(0.3); click(); time.sleep(0.8)
+    move(*CLOSE); time.sleep(0.3); click(); time.sleep(0.8)  # a click closes the ring-3 window
     try: cmd({"execute": "quit"})
     except (ConnectionResetError, BrokenPipeError, json.JSONDecodeError): pass
 finally:

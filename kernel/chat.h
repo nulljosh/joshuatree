@@ -564,7 +564,7 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
     }
 
     if (!strcmp(tool, "calendar_today")) {
-        cal_events_load();
+        cal_events_load(); /* fresh every call: Calendar is a ring-3 program (user/calendar.c, 1.9.12) that owns EVENTS.TXT while it is open */
         int y, m, d; cal_read_today(&y, &m, &d);
         char ds[CAL_DATE_LEN + 1]; cal_date_str(y, m, d, ds);
         int idx = cal_events_find(ds);

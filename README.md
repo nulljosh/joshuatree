@@ -4,58 +4,35 @@
 
 ![version](https://img.shields.io/github/v/release/nulljosh/joshuatree?label=version&color=blue)
 ![ci](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/check.yml?event=pull_request&label=ci)
-![platform](https://img.shields.io/badge/platform-i386-lightgrey)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-A computer's brain, built from scratch.
+A whole computer, built from scratch: its own windows, dock, fonts, sound, internet and 26 apps, from the first chip instruction to the last pixel. No libc, no dependencies.
 
-Every computer runs an operating system. It boots when you press the power button, draws the screen, hears the keyboard, saves your files and runs your apps. Joshua Tree is a complete OS from the first chip instruction to the last pixel, written from zero, with its own windows, dock, fonts, sound, internet and 26 apps.
+**Try it in your browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 
-Try it now: [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
-
-You can talk to it. Ask Samantha to set a reminder, take a note or open an app. She does it, out loud, with a face that talks while she speaks. (Samantha is the assistant from [Turing](https://github.com/nulljosh/turing). Joshua Tree is the machine she runs.)
-
-## Watch it
+You can talk to it. Ask Samantha to set a reminder, take a note or open an app, and she answers out loud. (She is the assistant from [Turing](https://github.com/nulljosh/turing). Joshua Tree is the machine she runs.)
 
 [![Joshua Tree ad, 36 seconds. Click to play.](docs/hardware/ad-poster.jpg)](https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4)
 
-A 36 second ad. Samantha narrates it in her own voice, the OS shots are the real system booting in a browser, and the case is [Strata](docs/HARDWARE.md#enclosure-strata), a concept rendered from its CAD file. The case shots are Blender, the voice is ElevenLabs, the music is original and written in code, and the cut is ffmpeg with San Francisco type. All of it lives in `docs/hardware/ad/`.
-
-## How it fits together
-
-Top to bottom: where it runs, what you see, the engine underneath, the parts that talk to hardware, the outside services it calls, and where your files live.
-
-<img src="architecture.svg" width="600">
-
 ## Boot it
 
-**Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
-
-**USB stick:** Download from [Releases](https://github.com/nulljosh/joshuatree/releases):
-```sh
-# macOS
-sudo dd if=joshuatree-X.Y.Z.iso of=/dev/rdiskN bs=4m
-# Linux
-sudo dd if=joshuatree-X.Y.Z.iso of=/dev/sdX bs=4M status=progress
-```
-
-Talk to her: `make talk`, hold **F2**, speak. (Real hardware and a real mic only -- QEMU's own Sound Blaster emulation has no recording path today, so a real "hearing" Samantha only exists on real hardware or a card QEMU emulates more fully; see `kernel/chat.h`.)
+- **Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
+- **USB stick:** download the ISO from [Releases](https://github.com/nulljosh/joshuatree/releases). The release notes have the copy steps.
+- **Talk to her:** `make talk`, then hold **F2**. Needs real hardware and a mic (see `kernel/chat.h`).
 
 ## Build it
 
 ```sh
 brew install lld qemu
-make run              # boot to shell; type gui for desktop
-make samantha         # boot straight into Samantha, full screen, input focused
-make talk             # boot with a real Sound Blaster on this Mac's mic/speakers
-make iso              # build bootable ISO
-./check.sh            # run tests
-./tools/bench.sh      # run benchmarks
+make run       # boot it (type gui for the desktop)
+./check.sh     # test it
 ```
+
+More in the Makefile: `make samantha`, `make talk`, `make iso`.
 
 ## How fast
 
-Measured headless in QEMU on a Mac Mini M4 by `tools/bench.sh`. Run it yourself; the numbers move with the host.
+Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 
 <!-- bench:start -->
 | Benchmark | Result |
@@ -69,13 +46,10 @@ Measured headless in QEMU on a Mac Mini M4 by `tools/bench.sh`. Run it yourself;
 
 ## Read more
 
-- [docs/WHITEPAPER.md](docs/WHITEPAPER.md) - why and how
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - every file
-- [docs/HARDWARE.md](docs/HARDWARE.md) - the real board pick and the 3.0 bring-up plan
-- [docs/VERSIONS.md](docs/VERSIONS.md) - release history
-- [docs/PLAYLIST.md](docs/PLAYLIST.md) - the Building an OS video series, mapped to what we have
-- [docs/TESTING.md](docs/TESTING.md) - every test
-- [docs/roadmap.md](docs/roadmap.md) - what's next
-- [MONEY.md](MONEY.md) - how it makes money
+- [Whitepaper](docs/WHITEPAPER.md): why and how
+- [Architecture](docs/ARCHITECTURE.md): how it fits together, every file
+- [Hardware](docs/HARDWARE.md): the real board and the 3.0 plan
+- [Roadmap](docs/roadmap.md): what is next
+- [All docs](docs/)
 
 Apache License 2.0, © 2026 Joshua Trommel

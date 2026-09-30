@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
-# Real check for kernel/calendar.h's date math, the part tagged [Fable] in
+# Real check for the Calendar's date math, the part tagged [Fable] in
 # roadmap.md for its "looks right, subtly isn't" risk: compiles the same
-# cal_dow / cal_days_in_month / cal_is_leap the kernel links (pulled in
-# under CALENDAR_MATH_ONLY, nothing else from the kernel) with the host
+# cal_dow / cal_days_in_month / cal_is_leap the ring-3 program links
+# (user/calendar.c since 1.9.12, kernel/calendar.h before that; pulled in
+# under CALENDAR_MATH_ONLY, nothing else from the program) with the host
 # clang, then walks every single day from 1900-01-01 to 2099-12-31 and
 # compares against libc's own tm_wday from timegm(3). 73,049 dates, any
-# mismatch fails. Run it after touching calendar.h's math at all.
+# mismatch fails. Run it after touching calendar.c's math at all.
+#
+# 1.9.12: Calendar runs at ring 3 and gets today from SYS_TIME (seconds
+# since the epoch) instead of the CMOS date registers, so the same sweep
+# now also feeds each date's timegm() through cal_ymd_from_epoch and
+# demands the year, month and day back unchanged (1970 on: the epoch
+# is unsigned, so earlier dates cannot reach the program).
 #
 # v55: also checks cal_date_str, the YYYY-MM-DD formatter the events
 # feature writes into EVENTS.TXT and matches the grid's event dot
@@ -26,7 +33,7 @@ cat > "$tmp/t.c" << 'EOF'
 #include <string.h>
 #include <time.h>
 #define CALENDAR_MATH_ONLY
-#include "kernel/calendar.h"
+#include "user/calendar.c"
 int main(void){
     long checked = 0, bad = 0;
     for (int y = 1900; y <= 2099; y++)
@@ -43,6 +50,13 @@ int main(void){
                 checked++;
                 if (want != got) { bad++; if (bad < 20) printf("dow %d-%02d-%02d: got %d want %d\n", y, m, d, got, want); }
 
+                if (y >= 1970) { /* SYS_TIME is an unsigned 32-bit epoch: nothing before 1970 can reach the program */
+                    int ey, em, ed;
+                    cal_ymd_from_epoch((unsigned)timegm(&t) + 43200u, &ey, &em, &ed); /* noon, so any second of the day lands on it */
+                    checked++;
+                    if (ey != y || em != m || ed != d) { bad++; if (bad < 20) printf("ymd_from_epoch %d-%02d-%02d: got %d-%02d-%02d\n", y, m, d, ey, em, ed); }
+                }
+
                 char got_str[CAL_DATE_LEN + 1], want_str[CAL_DATE_LEN + 1];
                 cal_date_str(y, m, d, got_str);
                 snprintf(want_str, sizeof(want_str), "%04d-%02d-%02d", y, m, d);
@@ -54,7 +68,7 @@ int main(void){
 
     /* Event-dot matching: the grid builds one YYYY-MM-DD string per cell
        and does an exact strcmp against every stored event date (see
-       cal_events_find in calendar.h). Real cases for the ways that could
+       find() in user/calendar.c). Real cases for the ways that could
        go wrong: a short prefix ("2026-09-1") must not falsely light up
        day 14, a single stored event must only match its own exact day,
        and zero-padding must line up so day 1 and day 10 never collide. */

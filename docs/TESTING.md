@@ -59,6 +59,8 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Sparkjar runs as a ring-3 process through the table-driven launcher: draws the ranked list, moves the selection, re-sorts when an upvote passes the leader, closes on Esc, desktop alive | `tools/checks/ring3sparkjar-check.py` | retry |
 | Reminders runs as a ring-3 process through the table-driven launcher: adds, ticks and deletes items through the real prompt, keeps REMINDERS.TXT across fresh runs, closes on Esc, desktop alive | `tools/checks/ring3reminders-check.py` | retry |
 | Curbfind runs as a ring-3 process through the table-driven launcher: falls back to the samples when SYS_HTTP_GET finds no NIC, selects by key and click, the kernel refuses every bad path and pointer the probe hands the syscall, closes on Esc, desktop alive | `tools/checks/ring3curbfind-check.py` | retry |
+| Calendar runs as a ring-3 process through the table-driven launcher: gets today from SYS_TIME, draws the month grid, saves an event through the real editor, keeps EVENTS.TXT across fresh runs, feeds Samantha's calendar_today, closes on Esc, desktop alive | `tools/checks/ring3calendar-check.py` | retry |
+| Search runs as a ring-3 process through the table-driven launcher: SYS_READDIR refuses a kernel pointer, an over-long path and a missing folder, the list filters live, a file shows its real bytes, a FAT folder opens by relative path with the kernel's cwd untouched, closes on Esc, crashes safely, desktop alive | `tools/checks/ring3search-check.py` | retry |
 | A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT | `tools/checks/userfb-release-check.py` | retry |
 | Shell launches a ring-3 program by bare name, case-insensitively | `tools/checks/shellname-check.sh` | retry |
 | QEMU vmmouse absolute-pointer round trip | `tools/checks/vmmouse-check.sh` | retry |
@@ -99,7 +101,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Window snapping (title-bar drag to edge/corner, real pixel proof) | `tools/checks/windowsnap-check.py` | retry |
 | Windows drag live by their title bar (single-window Notes and multi-window Files) | `tools/checks/windowdrag-check.py` | retry |
 | Windowed apps start under the title bar, Calendar fits six weeks | `tools/checks/apptop-check.py` | retry |
-| Calendar Day, Week, Month and Year views | `tools/checks/calviews-check.py` | retry |
+| Calendar Day, Week, Month and Year views (ring-3 program) | `tools/checks/calviews-check.py` | retry |
 | QA gallery: every app opens, screenshots, closes, no crash | `tools/checks/qa-gallery.py` | retry |
 | Every app's main action, headless | `tools/checks/feature-drive.py` | retry |
 | Dock icon edge quality (no staircased corners) | `tools/checks/iconedge-check.py` | retry |
@@ -158,7 +160,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 |---|---|
 | Files | `tools/checks/fatcyclehang-check.sh`, `tools/checks/filesview-check.py`, `tools/checks/ramfs-demo-check.sh`, `tools/checks/screenshot-check.py`, `tools/checks/windowdrag-check.py` |
 | Mail | `tools/checks/esc-desktop-check.py`, `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/mailtools-check.py` |
-| Calendar | `tools/checks/apptop-check.py`, `tools/checks/calicon-check.py`, `tools/checks/calviews-check.py`, `tools/checks/check-calendar.sh` |
+| Calendar | `tools/checks/apptop-check.py`, `tools/checks/calicon-check.py`, `tools/checks/calviews-check.py`, `tools/checks/check-calendar.sh`, `tools/checks/ring3calendar-check.py` |
 | Notes | `tools/checks/clipboard-check.py`, `tools/checks/editor_qa.py`, `tools/checks/editorflash-check.sh`, `tools/checks/notesfolders-check.py`, `tools/checks/notessharp-check.py`, `tools/checks/notestools-check.py`, `tools/checks/textselect-check.py`, `tools/checks/touch-osk-check.py`, `tools/checks/windowdrag-check.py` |
 | Reminders | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/notestools-check.py`, `tools/checks/ring3reminders-check.py` |
 | Terminal | `tools/checks/clipboard-check.py`, `tools/checks/termchatflash-check.sh`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
@@ -177,7 +179,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Contacts | `tools/checks/ring3contacts-check.py` |
 | Calculator | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/ring3calc-check.py` |
 | Stocks | `tools/checks/stocks-aa-check.py`, `tools/checks/stocks-dock-check.py`, `tools/checks/stocks-live-check.mjs` |
-| Search | none yet |
+| Search | `tools/checks/ring3search-check.py` |
 | Epiphany | `tools/checks/epiphany-cmdbar-check.py` |
 | Portfolio | `tools/checks/portfolio-check.py`, `tools/checks/ring3portfolio-check.py` |
 | Activity | `tools/checks/ring3activity-check.py` |
@@ -186,4 +188,4 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Trash | none yet |
 | Compose | `tools/checks/wallcompose-check.py` |
 
-Apps with no check yet: Search, Trash.
+Apps with no check yet: Trash.
