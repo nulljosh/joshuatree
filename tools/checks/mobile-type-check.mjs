@@ -95,19 +95,21 @@ try {
   ok(afterTap.full === true, 'tapping the bar puts the demo in full screen so she stays in view');
 
   // A phone keyboard covers the bottom of the screen and shrinks the visible
-  // area. Fake that by narrowing the visual viewport's height the way
-  // embed.js reads it, then check the whole screen and the bar still fit.
-  await page.setViewportSize({ width: 390, height: 430 });
-  await page.evaluate(() => { const f = document.getElementById('demo-frame'); f.style.setProperty('--demo-h', '430px'); });
+  // area, and embed.js follows it through --demo-h (the visual viewport's
+  // height). Fake that by setting the variable to a keyboard-sized height,
+  // then check the whole screen and the bar still fit inside it. (Not by
+  // resizing the window: in real fullscreen Chromium refuses to.)
+  await page.evaluate(() => { document.getElementById('demo-frame').style.setProperty('--demo-h', '430px'); });
   await page.waitForTimeout(800);
   const fit = await page.evaluate(() => {
+    const f = document.getElementById('demo-frame').getBoundingClientRect();
     const c = document.getElementById('screen_canvas').getBoundingClientRect();
     const b = document.getElementById('demo-composer').getBoundingClientRect();
-    return { canvasBottom: c.bottom, barTop: b.top, barBottom: b.bottom, h: innerHeight };
+    return { frameH: f.height, frameBottom: f.bottom, canvasBottom: c.bottom, barTop: b.top, barBottom: b.bottom };
   });
-  ok(fit.canvasBottom <= fit.barTop + 1 && fit.barBottom <= fit.h + 1, `with a short (keyboard-sized) screen she still fits above the bar (screen ends ${fit.canvasBottom.toFixed(0)}, bar ${fit.barTop.toFixed(0)}-${fit.barBottom.toFixed(0)} of ${fit.h})`);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.evaluate(() => { const f = document.getElementById('demo-frame'); f.style.removeProperty('--demo-h'); });
+  ok(Math.abs(fit.frameH - 430) <= 1, `the frame follows the short visible area (${fit.frameH.toFixed(0)}px)`);
+  ok(fit.canvasBottom <= fit.barTop + 1 && fit.barBottom <= fit.frameBottom + 1, `with a short (keyboard-sized) screen she still fits above the bar (screen ends ${fit.canvasBottom.toFixed(0)}, bar ${fit.barTop.toFixed(0)}-${fit.barBottom.toFixed(0)}, frame ends ${fit.frameBottom.toFixed(0)})`);
+  await page.evaluate(() => { document.getElementById('demo-frame').style.removeProperty('--demo-h'); });
   await page.waitForTimeout(800);
 
   // The input bar is the strip just above the bottom of the kernel's screen.
