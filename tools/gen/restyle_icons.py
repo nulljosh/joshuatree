@@ -124,7 +124,7 @@ DOCK = {
                + lg("dirt", (0, "#C08A52"), (1, "#8F5E33"))
                + lg("cream", (0, "#FFF8EA"), (1, "#F6E6C8")),
                """
-      <g stroke="#2A1A10" stroke-linecap="round" stroke-linejoin="round" transform="translate(64 14) scale(0.86) translate(-64 -14)">
+      <g stroke="#2A1A10" stroke-linecap="round" stroke-linejoin="round" transform="translate(64 18) scale(0.80) translate(-64 -14)">
         <ellipse cx="64" cy="98" rx="50" ry="22" fill="url(#dirt)" stroke-width="3"/>
         <ellipse cx="64" cy="94" rx="38" ry="13" fill="#3A2414" stroke="none"/>
         <path d="M33 54 L27 15 Q49 18 57 40 Z" fill="url(#fur)" stroke-width="3"/>
