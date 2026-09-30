@@ -279,6 +279,7 @@ void _start(int argc, char **argv) {
         } else if (mode == 1) {
             if (k == JT_KEY_ESC || k == JT_KEY_ENTER) mode = 0;
         } else if (k == JT_KEY_ESC) break;
+        else if (k == '`') { jt_write(1, "contacts: crashing on purpose\n", 30); *(volatile int *)0 = 1; } /* deliberate crash, as in every ring-3 app */
         else if (k == 'a') begin_add();
         else if (count > 0) {
             if (k == JT_KEY_UP && sel > 0) { sel--; keep_sel_visible(); say("contacts: sel ", (unsigned)sel); }

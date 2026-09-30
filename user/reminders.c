@@ -254,6 +254,7 @@ void _start(int argc, char **argv) {
                 entry[entry_len++] = (char)k; entry[entry_len] = 0;
             }
         } else if (k == JT_KEY_ESC) break;
+        else if (k == '`') { jt_write(1, "reminders: crashing on purpose\n", 31); *(volatile int *)0 = 1; } /* deliberate crash, as in every ring-3 app */
         else if (k == 'a') {
             if (count < MAXR) { adding = 1; entry_len = 0; entry[0] = 0; }
         } else if (count > 0) {

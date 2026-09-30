@@ -509,6 +509,7 @@ static int on_key(int k){
         return 0;
     }
     if (k == JT_KEY_ESC) return 1;
+    if (k == '`') { jt_write(1, "calendar: crashing on purpose\n", 30); *(volatile int *)0 = 1; } /* deliberate crash, as in every ring-3 app */
     if (k >= '1' && k <= '4') { view = k - '1'; say_num("calendar: view ", view); return 0; }
     int step = 0;
     if (k == JT_KEY_LEFT || k == JT_KEY_UP || k == 'a') step = -1;

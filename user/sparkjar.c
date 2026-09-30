@@ -192,6 +192,7 @@ void _start(int argc, char **argv) {
             } else break; /* the titlebar X, or anywhere off the list */
         } else if (ev.kind == JT_EV_KEY) {
             if (ev.a == JT_KEY_ESC) break;
+            if (ev.a == '`') { jt_write(1, "sparkjar: crashing on purpose\n", 30); *(volatile int *)0 = 1; } /* deliberate crash, as in every ring-3 app */
             if (ev.a == JT_KEY_UP && sj_sel > 0) sj_sel--;
             else if (ev.a == JT_KEY_DOWN && sj_sel < SJ_COUNT - 1) sj_sel++;
             else if (ev.a == 'u' || ev.a == 'U') {
