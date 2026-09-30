@@ -34,7 +34,7 @@
 typedef unsigned int u32;
 
 #define MAX_TASKS  TASK_SLOTS
-/* 1.9.10: 16KB, up from 4KB. SYS_HTTP_GET runs the network stack on the
+/* 1.9.11: 16KB, up from 4KB. SYS_HTTP_GET runs the network stack on the
    calling ring-3 task's kernel stack, and one fetch is http_get_timeout's
    512-byte request plus a 1514-byte receive buffer in tcp_get_timeout plus
    another frame that size in tcp_send_segment, about 3.7KB before a timer

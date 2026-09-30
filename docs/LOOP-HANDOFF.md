@@ -1,4 +1,4 @@
-# Joshua Tree loop handoff (2026-09-28, afternoon)
+# Joshua Tree loop handoff (2026-09-30)
 
 ## What the loop is
 
@@ -16,18 +16,27 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-Main is 1.9.10. Sixteen apps run in ring 3 (Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind); the rest are still in kernel.c, which is 9356 lines under a ceiling that only ratchets down. Curbfind is the first ring-3 app to reach the network, through `SYS_HTTP_GET` (387): host fixed in the kernel, path and buffer checked before the network is touched. Phones get a home screen, tap to hear Samantha, and she finishes talking before the tour moves on. Every check picks its own free QMP port.
+Checkpoint 2026-09-30. Weekly usage hit 75%, so the loop paused. Main is 1.9.10, and 15 of 26 apps run in ring 3.
 
-The merge train is empty. #296 is the 3.0 hardware blueprint (draft): the Strata enclosure with CAD, drawing and build steps, the two-box money fix (Strata Kit $199, Strata Complete $349), the ad re-voiced and re-captioned as Strata (v6, joshua-tree-ad-v6.mp4 on GitHub release), docs/DEMO.md folded into README.md ("Watch it" section) and deleted (commit e1607b6). Trademark search for Strata still needed.
+In flight, each on its own branch:
+
+- #317 `curbfind-ring3` (1.9.11): Curbfind to ring 3, plus SYS_HTTP_GET (387). The kernel fixes the host; the app passes only a checked path.
+- `calendar-ring3`: Calendar to ring 3, file calls only. Moves the multi-window checks off Calendar.
+- `search-ring3`: Search to ring 3, plus SYS_READDIR (388). Files will reuse it.
+
+Each port bumps VERSION on its own. Renumber at merge, in order: Curbfind 1.9.11, then Calendar, then Search. After each merge, rerun `tools/gen/inject-landing-facts.py` so the landing's ring-3 count stays right.
+
+Building on Linux changes every other app's committed `.bin` and `drivers/user_*.h`. Never commit those; `git checkout` them.
 
 ## Next, in order
 
-1. Land the train: #290, #291, #289. Rebump each with the version-stamp helper; resolve real conflicts by hunk, never by taking a whole side.
-2. Landing fixes from the grade: put the ad and a Strata render in "Want one?", one app count everywhere, the phone benchmark labels that collide, the unstyled Samantha link, sections visible without scrolling.
-3. Ship Bookrank and Homeqi in ring 3 (both have WIP branches), then resume Notes folders.
-4. 1.9: touch and an on-screen keyboard, every app readable at phone size.
-5. 2.0: the remaining apps to ring 3, smallest first, each with its crash check; input by focus.
-6. 2.1 Music, 2.2 Video. Then 3.0 on the ASRock J4125B-ITX, and the Strata Kit at 3.1.
+1. Land whatever in-flight branch is pushed and green, one at a time, renumbering as above.
+2. Weather, Stocks and Epiphany to ring 3 as one batch, all on SYS_HTTP_GET.
+3. Tour scenes for Activity and the Apps folder (landing/v86/embed.js, tourappcount-check.mjs).
+4. The big four: Files (on SYS_READDIR), Terminal, Notes, Mail, then Samantha.
+5. 1.9: touch and an on-screen keyboard, every app readable at phone size.
+6. 2.0: input by focus, then tag 2.0.0.
+7. 2.1 Music, 2.2 Video, 3.0 on the ASRock J4125B-ITX, the Strata Kit at 3.1.
 
 ## Restart prompt
 

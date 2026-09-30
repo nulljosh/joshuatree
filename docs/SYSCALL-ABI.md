@@ -540,7 +540,7 @@ shell's `kill` makes. Slot 0 (the shell) and the caller's own slot are refused
 with -EPERM, a free slot is -ENOENT, and the snapshot is filled either way.
 Errors: -EFAULT (bad pointer).
 
-## http_get (1.9.10)
+## http_get (1.9.11)
 
 | # | Name | ebx | ecx | edx | Returns |
 |---|---|---|---|---|---|

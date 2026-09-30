@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Curbfind runs as a real ring-3 process, the sixteenth app out of the kernel
-(roadmap 2.0, 1.9.10), and the one syscall it needed refuses what it must.
+(roadmap 2.0, 1.9.11), and the one syscall it needed refuses what it must.
 
 Boots headless with `open=curb`, which launches Curbfind from the dock path
 the moment the desktop is up. Curbfind is user/curbfind.c, a flat binary

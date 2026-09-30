@@ -47,7 +47,7 @@
 #define JT_SYS_WINDOW_OPEN 384
 #define JT_SYS_WINDOW_POLL 385
 #define JT_SYS_TASKS       386 /* 1.9.6: uptime, memory, live slots; optional kill */
-#define JT_SYS_HTTP_GET    387 /* 1.9.10: one GET from joshuatree.heyitsmejosh.com; path only, see kernel/syscall.h */
+#define JT_SYS_HTTP_GET    387 /* 1.9.11: one GET from joshuatree.heyitsmejosh.com; path only, see kernel/syscall.h */
 #define JT_HTTP_PATH_MAX 128   /* longest path SYS_HTTP_GET accepts, bytes before the NUL */
 #define JT_HTTP_BODY_MAX 2048  /* longest body it hands back */
 #define JT_POLL_PRESENT 1

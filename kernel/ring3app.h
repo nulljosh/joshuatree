@@ -6,7 +6,7 @@
    process, and whether the program exited on its own or was reaped by
    idt.c's ring-3 fault path, it tears the window down and hands the
    desktop back. Keyrate went first (1.7.7), Toroid second (1.7.11),
-   Calculator third (1.7.12), Quotes fourth (1.7.14), Bookrank fifth (2.0), Homeqi sixth (1.8.22), Lexly seventh (1.9.1), Plan eighth (1.9.2), Fieldbook ninth (1.9.3), Clock tenth (1.9.4), Portfolio eleventh (1.9.5), Activity twelfth (1.9.6), Contacts thirteenth (1.9.7), Sparkjar fourteenth (1.9.8), Reminders fifteenth (1.9.9), Curbfind sixteenth (1.9.10). */
+   Calculator third (1.7.12), Quotes fourth (1.7.14), Bookrank fifth (2.0), Homeqi sixth (1.8.22), Lexly seventh (1.9.1), Plan eighth (1.9.2), Fieldbook ninth (1.9.3), Clock tenth (1.9.4), Portfolio eleventh (1.9.5), Activity twelfth (1.9.6), Contacts thirteenth (1.9.7), Sparkjar fourteenth (1.9.8), Reminders fifteenth (1.9.9), Curbfind sixteenth (1.9.11). */
 void keyrate_ring3_open(void);
 void toroid_ring3_open(void);
 void calculator_ring3_open(void);

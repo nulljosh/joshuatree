@@ -93,12 +93,12 @@ def apps_at(sha):
     # Sep 27: the labels moved into the APPS[] registry rows.
     m = re.search(r"struct app APPS\[GUI_APP_COUNT\]\s*=\s*\{(.*?)\n\};", src, re.S)
     if m:
-        return len([l for l in re.findall(r'\{"([^"]*)",', m[1]) if l not in ("Apps", "Trash")])
+        return len([l for l in re.findall(r'\{"([^"]*)",', m[1]) if l not in ("Apps", "Trash", "Compose")])
     m = re.search(r"GUI_LABELS\[GUI_(?:APP|ICON)_COUNT\]\s*=\s*\{(.*?)\};", src, re.S)
     if not m:
         return 0
     labels = re.findall(r'"([^"]*)"', m[1])
-    return len([l for l in labels if l not in ("Apps", "Trash")])
+    return len([l for l in labels if l not in ("Apps", "Trash", "Compose")])
 
 log = subprocess.run(
     ["git", "log", "--reverse", "--numstat", "--pretty=format:@@%H|%ad", "--date=short"],

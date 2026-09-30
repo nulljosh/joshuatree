@@ -261,7 +261,7 @@ user/reminders.o: user/reminders.c user/jtsys.h drivers/vgafont.h
 user/reminders.bin: user/reminders.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/reminders.o user/libjt.a
 
-# 1.9.10: Curbfind, the sixteenth app out of the kernel, built the same way.
+# 1.9.11: Curbfind, the sixteenth app out of the kernel, built the same way.
 user/curbfind.o: user/curbfind.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 

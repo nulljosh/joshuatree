@@ -36,7 +36,7 @@
 
 #define SYS_TASKS       386  /* 1.9.6: ebx = struct jt_tasks* (user), ecx = slot to kill or -1; fills the snapshot, 0 or -errno */
 
-/* 1.9.10: SYS_HTTP_GET, the one call the Curbfind port needed. One HTTP
+/* 1.9.11: SYS_HTTP_GET, the one call the Curbfind port needed. One HTTP
    GET to the fixed host joshuatree.heyitsmejosh.com, port 80: userland
    names only the path, never the host, so a ring-3 program cannot point
    the kernel's network stack anywhere else.

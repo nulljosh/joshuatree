@@ -13,7 +13,7 @@
    1.9.7: Contacts joins it, the thirteenth app out.
    1.9.8: Sparkjar joins it, the fourteenth app out.
    1.9.9: Reminders joins it, the fifteenth app out.
-   1.9.10: Curbfind joins it, the sixteenth app out, with one new syscall (SYS_HTTP_GET).
+   1.9.11: Curbfind joins it, the sixteenth app out, with one new syscall (SYS_HTTP_GET).
 
    Roadmap 2.0 says apps leave the kernel, so a crash in one cannot take
    the machine down. Keyrate, the smallest real app, went first; Toroid,
