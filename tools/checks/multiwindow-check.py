@@ -39,11 +39,13 @@ before the fix and passes after it. Verified both ways below the fold in
 roadmap.md's v0.73.0 entry.
 
 v0.75.0 (multi-window batch 2) extends this in place with step 6: a real
-two-window combination involving a NEWLY-converted app (Calendar, which took over from Reminders in 1.9.9), the
-exact scenario the batch-2 task itself named as the required evidence --
-Calendar open alongside Files, add a real event, close Calendar via
-its own X, confirm Files is untouched AND the event was really saved
-to the real FAT disk (EVENTS.TXT), not just that the UI didn't crash.
+two-window combination involving an interactive app (Mail; it took over
+from Calendar in 1.9.11, as Calendar had from Reminders in 1.9.9, each
+leaving for ring 3), the exact scenario the batch-2 task itself named as
+the required evidence -- Mail open alongside Files, delete a message with
+a real keystroke, close Mail via its own X, confirm Files is untouched AND
+the change was really saved to the real FAT disk (MAIL.TXT has one line
+fewer than before the session), not just that the UI didn't crash.
 Needs the same real FAT16 test image app-interact-check.py uses
 (tools/mkdisk.sh if /tmp/jt-qa-test.img doesn't exist yet), so this script
 now boots QEMU with that disk attached too.
@@ -90,6 +92,25 @@ for f in (LOG, DUMP):
     except FileNotFoundError: pass
 
 HAVE_DISK = os.path.exists(DISK)
+
+def disk_read(fname):
+    """The named file's text off the real FAT image, or None when absent.
+    macOS mounts it with hdiutil; Linux reads it in userspace with mtools'
+    mtype, the same split app-interact-check.py already uses."""
+    if sys.platform == "darwin":
+        mount = tempfile.mkdtemp(prefix="/tmp/jt-mw-mount-")
+        try:
+            subprocess.run(["hdiutil", "attach", "-nobrowse", "-mountpoint", mount, DISK],
+                            check=True, capture_output=True)
+            path = os.path.join(mount, fname)
+            return open(path, "r", errors="replace").read() if os.path.exists(path) else None
+        finally:
+            subprocess.run(["hdiutil", "detach", mount], capture_output=True)
+            shutil.rmtree(mount, ignore_errors=True)
+    r = subprocess.run(["mtype", "-i", DISK, "::" + fname], capture_output=True, text=True)
+    return r.stdout if r.returncode == 0 else None
+
+mail_before = disk_read("MAIL.TXT") if HAVE_DISK else None
 qemu_args = ["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
              "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG]
 if HAVE_DISK:
@@ -155,7 +176,7 @@ try:
         move(*PARK); time.sleep(0.5)
 
     # Same QMP send-key shape app-interact-check.py already established,
-    # reused here rather than re-invented, for step 6's real Calendar typing.
+    # reused here rather than re-invented, for step 6's real Mail keystroke.
     QCODE = {" ": "spc", ".": "dot", "-": "minus", "/": "slash", "@": "shift-2",
              "\n": "ret", "\b": "backspace"}
     def key(c):
@@ -305,61 +326,67 @@ try:
     if is_red(pixel(img5d, *W1_CLOSE)):
         fails.append("cleanup: Weather did not close after the click-to-focus test sequence")
 
-    # 6. v0.75.0 (batch 2): the real, required two-window evidence -- a
-    #    newly-converted interactive app (Calendar; it stood in for Calendar once that became a ring-3 program, 1.9.9) open ALONGSIDE Files,
-    #    interacted with for real (add an event via its own keyboard
-    #    path), closed via its own X, with Files proven untouched and the
-    #    event proven really saved to the real FAT disk, not just that
-    #    the screen didn't crash. Files opens first (window 0, x=70,y=40),
-    #    Calendar second (window 1, x=130,y=100, W1_CLOSE=(154,116)),
-    #    same geometry step 2 above already established.
+    # 6. v0.75.0 (batch 2): the real, required two-window evidence -- an
+    #    interactive app (Mail; it took over here when Calendar became a
+    #    ring-3 program in 1.9.11) open ALONGSIDE Files, interacted with
+    #    for real (delete the selected message via its own keyboard path,
+    #    which rewrites MAIL.TXT), closed via its own X, with Files proven
+    #    untouched and the change proven really saved to the real FAT disk,
+    #    not just that the screen didn't crash. Files opens first (window
+    #    0, x=70,y=40), Mail second (window 1, x=130,y=100,
+    #    W1_CLOSE=(154,116)), same geometry step 2 above already established.
     open_slot(1)  # Files (window 0)
     files_title_for_mw2 = pixel(dump(), 166, 48)
-    open_slot(3)  # Calendar (window 1, dock slot 3 per SLOTS above)
+    open_slot(2)  # Mail (window 1, dock slot 2 per SLOTS above)
     img6a = dump()
     both_open_for_add = is_red(pixel(img6a, *W0_CLOSE)) and is_red(pixel(img6a, *W1_CLOSE))
-    print(f"batch2: Files + Calendar both open together: {'yes' if both_open_for_add else 'NO'}")
+    print(f"batch2: Files + Mail both open together: {'yes' if both_open_for_add else 'NO'}")
     if not both_open_for_add:
-        fails.append("batch2: opening Calendar alongside Files did not leave both windows open")
+        fails.append("batch2: opening Mail alongside Files did not leave both windows open")
 
-    # Real interaction: 'a' enters add mode, type a marker, enter commits
-    # -- the exact same real per-keystroke state (add-mode + typed buffer)
-    # this batch had to make persist across repaints while Files' own
-    # window keeps redrawing alongside it every frame.
-    key("\n"); time.sleep(0.4)  # Enter opens the day editor
-    type_str("qa-mw-event-marker")
-    keys("ret"); time.sleep(0.4)
+    # Real interaction: 'd' deletes the selected (first) message -- a real
+    # per-keystroke state change (one list row gone, the rest move up) that
+    # has to survive repaints while Files' own window keeps redrawing
+    # alongside it every frame. Window 1's content viewport is (x+8, y+32)
+    # for x=130, y=100, the same (w-16, h-40) inset window 0 uses.
+    W1X, W1Y = 138, 132
+    ink_before_delete = ink_count(img6a, W1X, W1Y, VW, VH)
+    key("d"); time.sleep(0.6)
 
     img6b = dump()
+    ink_after_delete = ink_count(img6b, W1X, W1Y, VW, VH)
+    print(f"batch2: Mail list ink before delete={ink_before_delete}  after={ink_after_delete}")
+    if not (0 < ink_after_delete < ink_before_delete):
+        fails.append("batch2: Mail's list did not lose a row after 'd' while Files was open (the keystroke never reached the focused window, or it repainted wrong)")
     files_untouched_during_add = is_red(pixel(img6b, *W0_CLOSE)) and pixel(img6b, 166, 48) == files_title_for_mw2
-    print(f"batch2: Files untouched while typing into Calendar: {'yes' if files_untouched_during_add else 'NO'}")
+    print(f"batch2: Files untouched while Mail took a keystroke: {'yes' if files_untouched_during_add else 'NO'}")
     if not files_untouched_during_add:
-        fails.append("batch2: Files' own window changed while Calendar was being typed into (cross-window bleed)")
+        fails.append("batch2: Files' own window changed while Mail took a keystroke (cross-window bleed)")
 
-    # Close Calendar via its own X (window 1's close hitbox). Files (window
-    # 0) must stay open and untouched, the same independence proof step 3
+    # Close Mail via its own X (window 1's close hitbox). Files (window 0)
+    # must stay open and untouched, the same independence proof step 3
     # already established for Files/Weather, now for a real-input app.
     click_at(*W1_CLOSE)
     img6c = dump()
-    calendar_closed = not is_red(pixel(img6c, *W1_CLOSE))
-    files_survived_calendar_close = is_red(pixel(img6c, *W0_CLOSE)) and pixel(img6c, 166, 48) == files_title_for_mw2
-    print(f"batch2: Calendar closed via its own X={'yes' if calendar_closed else 'NO'}   Files survived={'yes' if files_survived_calendar_close else 'NO'}")
-    if not calendar_closed:
-        fails.append("batch2: Calendar did not close via its own X")
-    if not files_survived_calendar_close:
-        fails.append("batch2: closing Calendar also closed/corrupted Files (the other window is not independent)")
+    mail_closed = not is_red(pixel(img6c, *W1_CLOSE))
+    files_survived_mail_close = is_red(pixel(img6c, *W0_CLOSE)) and pixel(img6c, 166, 48) == files_title_for_mw2
+    print(f"batch2: Mail closed via its own X={'yes' if mail_closed else 'NO'}   Files survived={'yes' if files_survived_mail_close else 'NO'}")
+    if not mail_closed:
+        fails.append("batch2: Mail did not close via its own X")
+    if not files_survived_mail_close:
+        fails.append("batch2: closing Mail also closed/corrupted Files (the other window is not independent)")
 
     # Clean up: close Files too before the final Mail sanity check.
     click_at(*W0_CLOSE)
     img6d = dump()
     if is_red(pixel(img6d, *W0_CLOSE)):
-        fails.append("batch2 cleanup: Files did not close after the Calendar-alongside-Files sequence")
+        fails.append("batch2 cleanup: Files did not close after the Mail-alongside-Files sequence")
 
     # 7. v1.9.0: Mail's Compose is its own real second window (like macOS
     #    Mail: New Message doesn't take over the mailbox). Open Mail (dock
     #    slot 2, window 0), press 'c' -- this must NOT flip window 0's own
     #    mode in place, it must open Compose as window 1 via the same
-    #    gui_multiwin_open path step 6 just proved for Calendar, with the
+    #    gui_multiwin_open path step 6 just proved for Mail's own list, with the
     #    list window untouched and still open behind it.
     open_slot(2)  # Mail (window 0)
     mail_list_open = is_red(pixel(dump(), *W0_CLOSE))
@@ -418,31 +445,27 @@ finally:
     try: q.wait(timeout=5)
     except subprocess.TimeoutExpired: q.kill()
 
-# ---- host-side verification: the event added in step 6 must have
-# really reached the real FAT disk, not just RAM, same real-artifact bar
+# ---- host-side verification: the delete in step 6 must have really
+# reached the real FAT disk, not just RAM, same real-artifact bar
 # app-interact-check.py already holds every persisted app to. fat.c's
-# to_fat_name() keeps "EVENTS.TXT" as is (it fits 8.3). ----
+# to_fat_name() keeps "MAIL.TXT" as is (it fits 8.3). Mail ships two
+# compiled-in starter messages that stand in until MAIL.TXT exists, so
+# "before" is the file's line count when there was one, else 2. ----
 if HAVE_DISK:
-    mount = tempfile.mkdtemp(prefix="/tmp/jt-mw-mount-")
-    try:
-        subprocess.run(["hdiutil", "attach", "-nobrowse", "-mountpoint", mount, DISK],
-                        check=True, capture_output=True)
-        path = os.path.join(mount, "EVENTS.TXT")
-        if not os.path.exists(path):
-            fails.append("batch2 disk: EVENTS.TXT does not exist on the real FAT disk after the session")
+    mail_after = disk_read("MAIL.TXT")
+    before_n = len(mail_before.splitlines()) if mail_before is not None else 2
+    if mail_after is None:
+        fails.append("batch2 disk: MAIL.TXT does not exist on the real FAT disk after the session")
+    else:
+        after_n = len(mail_after.splitlines())
+        if after_n == before_n - 1:
+            print(f"batch2 disk verified: MAIL.TXT has {after_n} messages, one fewer than the {before_n} before (real VFS write while a second window, Files, was also open)")
         else:
-            content = open(path, "r", errors="replace").read()
-            if "qa-mw-event-marker" in content:
-                print("batch2 disk verified: EVENTS.TXT contains 'qa-mw-event-marker' (real VFS write while a second window, Files, was also open)")
-            else:
-                fails.append("batch2 disk: EVENTS.TXT exists but does not contain 'qa-mw-event-marker' -- save did not reach the real disk")
-    finally:
-        subprocess.run(["hdiutil", "detach", mount], capture_output=True)
-        shutil.rmtree(mount, ignore_errors=True)
+            fails.append(f"batch2 disk: MAIL.TXT has {after_n} messages, expected {before_n - 1} -- the delete did not reach the real disk")
 else:
     print("batch2 disk check skipped: no /tmp/jt-qa-test.img (see tools/mkdisk.sh); on-screen step 6 evidence above still real and required")
 
 if fails:
     for x in fails: print("FAIL:", x)
     sys.exit(1)
-print("PASS: two real windows (Files + Weather) open, draw real distinct content, and close independently; batch-2 (Files + Calendar) proven the same way with a real disk write; batch-3 (Mail's Compose) proven as its own second window, list window stays open behind it, and the sent message shows in the list after Compose closes")
+print("PASS: two real windows (Files + Weather) open, draw real distinct content, and close independently; batch-2 (Files + Mail) proven the same way with a real disk write; batch-3 (Mail's Compose) proven as its own second window, list window stays open behind it, and the sent message shows in the list after Compose closes")

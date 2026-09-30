@@ -2122,7 +2122,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void calendar_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
@@ -4548,7 +4548,7 @@ static int text_ink(int a, unsigned int fg, unsigned int dst){
 #include "auth.h"
 #include "osk.h" /* roadmap 1.9: on-screen keyboard for phone, used by editor.h */
 #include "editor.h"
-#include "calendar.h"
+#include "caldate.h" /* 1.9.11: Calendar is user/calendar.c now; chat.h and stocks.h still need the date math */
 #include "mail.h"
 #include "chat.h"
 #include "search.h"
@@ -5563,15 +5563,14 @@ typedef struct {
 static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
 static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
 
-static int gui_multiwin_supported(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].draw; } /* apps with a draw hook: Files, Mail, Calendar, Reminders, Weather */
+static int gui_multiwin_supported(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].draw; } /* apps with a draw hook: Files, Mail, Weather */
 
-/* v0.75.0 (batch 2): Mail/Calendar/Reminders have real per-keystroke
-   interaction (adding a reminder, navigating calendar days/months,
-   composing mail), a real, distinct shape from Files/Weather's static
-   gui_wait_close-only viewers, per roadmap.md's own note. gui_run's
-   input loop below only ever forwards a keystroke to the app whose
-   window is currently topmost/focused (the same "topmost owns input"
-   rule click-to-focus already established for clicks). */
+/* v0.75.0 (batch 2): Mail has real per-keystroke interaction (its list,
+   read and compose modes), unlike Files/Weather's static viewers; Reminders
+   (1.9.9) and Calendar (1.9.11) left this set when they became ring-3
+   programs. gui_run's input loop below only ever forwards a keystroke to
+   the app whose window is currently topmost/focused (the same "topmost
+   owns input" rule click-to-focus already established for clicks). */
 static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].key; } /* apps with a key hook; Files for its 1/2 view-switch keys, Weather for R-to-retry */
 
 /* Window 0 keeps the exact single-window rect the existing dock-app tests
@@ -5710,7 +5709,7 @@ static int gui_weather_mw_key(int k){ return gui_weather_key(k, gui_weather_mw_r
 const struct app APPS[GUI_APP_COUNT] = {
     /*  0 */ {"Files",      0x00707070, gui_icon_folder,     gui_launch_files,      gui_draw_files_content,     gui_files_on_key},
     /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       gui_launch_mail,       gui_draw_mail_content,      gui_mail_on_key},
-    /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   gui_launch_calendar,   gui_draw_calendar_content,  gui_calendar_on_key},
+    /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   calendar_ring3_open,   0, 0}, /* 1.9.11: ring 3 (user/calendar.c) */
     /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      gui_launch_editor,     0, 0},
     /*  4 */ {"Reminders",  0x00375A4A, gui_icon_reminders,  reminders_ring3_open,  0, 0}, /* 1.9.9: ring 3 (user/reminders.c) */
     /*  5 */ {"Terminal",   0x002B2B2B, gui_icon_terminal,   gui_launch_terminal,   0, 0},
