@@ -166,8 +166,8 @@ changed.
 
 | File | What it does |
 |---|---|
-| `kernel/kernel.c` | The big one. The text console, the keyboard scancode table, the clock, the shell, and the whole desktop: menu bar, dock, windows, Apps folder, Files, Settings, Weather, Lock Screen, the wind-swayed tree. Most apps are still drawn from here. |
-| `kernel/files.h` | The Files app: browse the disk, open, rename, delete, restore from Trash. Split out of `kernel.c` and included straight back in. |
+| `kernel/kernel.c` | The big one. The text console, the keyboard scancode table, the clock, the shell, and the whole desktop: menu bar, dock, windows, Apps folder, Burrow (the file browser), Settings, Weather, Lock Screen, the wind-swayed tree. Most apps are still drawn from here. |
+| `kernel/files.h` | Burrow, the file browser app: browse the disk, open, rename, delete, restore from Trash. Split out of `kernel.c` and included straight back in. |
 | `kernel/ttf_render.h` | The shared glyph path for anything drawing real DejaVu text at physical resolution: a per-face cache, a glyph cache, the antialiased ink blend. Notes and the Terminal both draw through it. |
 | `kernel/gui_prims.c` | Tiny pure helpers split out of `kernel.c`: blend two colours, square root for antialiased lines. |
 | `kernel/dock_geom.c` | Dock geometry and hit-testing: where each icon sits at the current scale, and which slot a click landed on. |

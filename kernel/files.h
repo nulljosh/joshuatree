@@ -89,7 +89,7 @@ static void gui_draw_file_glyph(int x, int y, int size, int is_dir){
 /* Same split as gui_draw_weather_content above. */
 static int gui_files_sel = 0;
 static void gui_draw_files_content(void){
-    app_begin("Files", 0x00FAF8F6);
+    app_begin("Burrow", 0x00FAF8F6);
 
     /* Toolbar: List / Icons. Cmd/Ctrl+1/2 or plain 1/2, or a tap, switch
        views; the highlighted button always reflects files_view, never a
@@ -132,7 +132,7 @@ static void gui_draw_files_content(void){
 }
 
 /* Shared by both the old blocking single-window path (gui_launch_files,
-   still used from the Apple-menu "Files" item) and the real running path,
+   still used from the Apple-menu "Burrow" item) and the real running path,
    the multi-window compositor's per-frame key dispatch in gui_run (see
    gui_multiwin_interactive/mw_topmost_icon above) -- Files opens through
    gui_multiwin_open from the dock, same as Mail/Calendar/Reminders/

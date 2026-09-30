@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Burrow: the Files app was renamed and given a kit-fox icon.
+
+What this proves, from the real sources (no QEMU, so it is fast):
+  1. APPS[0] in kernel/kernel.c is "Burrow", and no APPS row is named
+     "Files" any more. The dock label, title bar, Apps folder, phone grid,
+     Launchpad and Spotlight all read that one field. The menu-bar list
+     and the window title (kernel/files.h) say Burrow too.
+  2. Samantha's open_app matcher (chat_match_app in kernel/chat.h, compiled
+     here for the host against the real APPS names) opens index 0 for
+     "burrow", "files" and "file browser" (plus the "the ... app" forms),
+     keeps every other app matching, and still refuses a name it does not
+     know.
+  3. Icon art slot 0 in kernel/icon_art.h is the new burrow art, and its
+     bytes are not the old blue-folder art (sha256 pinned below).
+  4. The authored SVG exists, the old files.svg is gone, and the generated
+     header is current.
+
+Fails on origin/main (APPS[0] is "Files", no alias table, slot 0 is
+icon_art_files) and passes on this branch.
+"""
+import hashlib, os, re, subprocess, sys, tempfile
+
+ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
+OLD_FOLDER_SHA = "b214168dec7b34df23372dbaf059178e4db957896ca661b38e7337f288da5a6c"
+fails = []
+
+
+def check(ok, msg):
+    print(("PASS: " if ok else "FAIL: ") + msg)
+    if not ok:
+        fails.append(msg)
+
+
+def read(p):
+    return open(os.path.join(ROOT, p)).read()
+
+
+kernel = read("kernel/kernel.c")
+m = re.search(r"const struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", kernel, re.S)
+names = re.findall(r'/\*\s*\d+\s*\*/\s*\{"([^"]+)"', m.group(1))
+check(len(names) >= 26, "APPS table parsed (%d rows)" % len(names))
+check(names[0] == "Burrow", "APPS[0] is %r, want 'Burrow'" % names[0])
+check("Files" not in names, "no APPS row is named 'Files'")
+menu = re.search(r'"About Joshua Tree",([^}]*?)"Shut Down"', kernel, re.S).group(1)
+check('"Burrow"' in menu and '"Files"' not in menu, "menu-bar list says Burrow, not Files")
+check('app_begin("Burrow"' in read("kernel/files.h"), "Burrow window title in kernel/files.h")
+
+# --- chat_match_app on the host, against the real APPS names -------------
+chat = read("kernel/chat.h")
+a = chat.index("static int chat_word_prefix_ci")
+b = chat.index("/* Samantha's new_reminder and list_reminders tools.")
+folder = int(re.search(r"#define GUI_APPS_FOLDER\s+(\d+)", kernel + read("kernel/app.h")).group(1)) \
+    if re.search(r"#define GUI_APPS_FOLDER\s+(\d+)", kernel + read("kernel/app.h")) else len(names) - 2
+harness = r'''
+#include <stdio.h>
+#include <string.h>
+#define GUI_APPS_FOLDER %d
+struct app { const char *name; };
+static const struct app APPS[] = { %s };
+%s
+int main(void) {
+    char line[128];
+    while (fgets(line, sizeof line, stdin)) {
+        line[strcspn(line, "\n")] = 0;
+        printf("%%d\n", chat_match_app(line));
+    }
+    return 0;
+}
+''' % (folder, ",".join('{"%s"}' % n for n in names), chat[a:b])
+with tempfile.TemporaryDirectory() as d:
+    src = os.path.join(d, "h.c"); exe = os.path.join(d, "h")
+    open(src, "w").write(harness)
+    r = subprocess.run(["clang", "-w", "-o", exe, src], capture_output=True, text=True)
+    check(r.returncode == 0, "chat_match_app host harness compiles" + (": " + r.stderr[:300] if r.returncode else ""))
+    if r.returncode == 0:
+        cases = [("burrow", 0), ("Burrow", 0), ("the burrow app", 0), ("open burrow", 0),
+                 ("files", 0), ("Files", 0), ("the files app", 0),
+                 ("file browser", 0), ("the file browser", 0),
+                 ("notes", names.index("Notes")), ("mail", names.index("Mail")),
+                 ("chat", names.index("Samantha")), ("finder", -1), ("file", -1)]
+        out = subprocess.run([exe], input="\n".join(c for c, _ in cases) + "\n",
+                             capture_output=True, text=True).stdout.split()
+        for (c, want), got in zip(cases, out):
+            check(int(got) == want, "open_app %r -> %s (want %d)" % (c, got, want))
+
+# --- icon art slot 0 -----------------------------------------------------
+art = read("kernel/icon_art.h")
+slot0 = re.search(r"ICON_ART\[\d+\] = \{\s*(\w+),", art).group(1)
+check(slot0 == "icon_art_burrow", "ICON_ART[0] is %s, want icon_art_burrow" % slot0)
+body = re.search(r"static const unsigned char %s\[\d+\] = \{(.*?)\};" % slot0, art, re.S)
+data = bytes(int(x) for x in re.findall(r"\d+", body.group(1))) if body else b""
+check(data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) > 8000, "slot 0 art is a real PNG (%d bytes)" % len(data))
+check(hashlib.sha256(data).hexdigest() != OLD_FOLDER_SHA, "slot 0 art is no longer the old folder art")
+check(os.path.exists(os.path.join(ROOT, "art/icons/burrow.svg")), "art/icons/burrow.svg exists")
+check(not os.path.exists(os.path.join(ROOT, "art/icons/files.svg")), "old art/icons/files.svg is gone")
+r = subprocess.run([sys.executable, os.path.join(ROOT, "tools/gen/gen_icon_art.py"), "--check"], capture_output=True, text=True)
+check(r.returncode == 0, "kernel/icon_art.h matches the SVGs")
+
+print("FAIL: %d problem(s)" % len(fails) if fails else "PASS: Burrow rename, aliases and icon art all hold")
+sys.exit(1 if fails else 0)

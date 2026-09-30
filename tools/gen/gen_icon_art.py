@@ -54,7 +54,7 @@ SIZE = 148  # 2 x the dock's 74 physical px, see the docstring
 # Only the icons that have real authored art are listed; every other index
 # keeps the existing primitive path, so this can be filled in incrementally.
 ART = {
-    0: "files",
+    0: "burrow",
     1: "mail",
     2: "calendar",
     3: "notes",

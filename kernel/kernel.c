@@ -5706,7 +5706,7 @@ static void gui_weather_mw_repaint(void){
    bump of GUI_APP_COUNT/GUI_APPS_FOLDER/GUI_TRASH above. */
 static int gui_weather_mw_key(int k){ return gui_weather_key(k, gui_weather_mw_repaint); }
 const struct app APPS[GUI_APP_COUNT] = {
-    /*  0 */ {"Files",      0x00707070, gui_icon_folder,     gui_launch_files,      gui_draw_files_content,     gui_files_on_key},
+    /*  0 */ {"Burrow",     0x00707070, gui_icon_folder,     gui_launch_files,      gui_draw_files_content,     gui_files_on_key},
     /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       gui_launch_mail,       gui_draw_mail_content,      gui_mail_on_key},
     /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   calendar_ring3_open,   0, 0}, /* 1.9.12: ring 3 (user/calendar.c) */
     /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      gui_launch_editor,     0, 0},
@@ -6123,7 +6123,7 @@ static void gui_launch_about(void){
    the CPU. "-" is a separator row, not a real item. */
 #define GUI_MENU_ITEM_COUNT 8
 static const char *GUI_MENU_LABELS[GUI_MENU_ITEM_COUNT] = {
-    "About Joshua Tree", "Files", "Notes", "Settings", "Lock Screen", "-", "Restart", "Shut Down"
+    "About Joshua Tree", "Burrow", "Notes", "Settings", "Lock Screen", "-", "Restart", "Shut Down"
 };
 #define GUI_MENU_ROW_H  22
 #define GUI_MENU_SEP_H  9

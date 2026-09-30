@@ -70,7 +70,7 @@ INK = (0x1C, 0x1C, 0x1E)
 QROW_TOP = VY + (-32 + 76)           # viewport y of the question row (T=-32 windowed)
 REPLY_TOP = QROW_TOP + 20
 
-DOCK_CHAT, DOCK_NOTES, DOCK_REMINDERS = 7, 4, 5  # GUI_DOCK_DEFAULT slots (see kernel.c: Apps,Files,Mail,Calendar,Notes,Reminders,Terminal,Chat,Weather,Stocks,Trash)
+DOCK_CHAT, DOCK_NOTES, DOCK_REMINDERS = 7, 4, 5  # GUI_DOCK_DEFAULT slots (see kernel.c: Apps,Burrow,Mail,Calendar,Notes,Reminders,Terminal,Chat,Weather,Stocks,Trash)
 
 REPLY_CHAT = "The capital of France is Paris, a city famous for the Eiffel Tower and croissants."
 
