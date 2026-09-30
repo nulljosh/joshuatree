@@ -61,6 +61,7 @@ retry|0|DHCP client leases real SLIRP config, DNS+HTTP still work, nodhcp keeps 
 retry|0|Benchmarks run and report every number|./tools/checks/bench-check.sh
 retry|4|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
 once |7|PNG decoder, host harness|./tools/checks/png-host-check.sh
+once |3|Burrow: Files renamed, Samantha still opens it as files / file browser, icon art is the new fox|python3 ./tools/checks/burrow-rename-check.py
 retry|2|Clock opens and its countdown timer updates live|python3 ./tools/checks/clock-check.py
 once |3|TTF rasterizer, host harness|./tools/checks/ttf-host-check.sh
 once |1|libjt string/stdlib, host harness|./tools/checks/libjt-host-check.sh

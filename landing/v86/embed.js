@@ -1607,7 +1607,7 @@ if (typeof document !== "undefined") (function () {
   // capable and keeps the exact same add-a-reminder script the old
   // sequential entry used, just now run while a second window (Files) is
   // genuinely open alongside it, not before/after it.
-  var MW_FILES = { name: 'Files', slot: 1 };
+  var MW_FILES = { name: 'Burrow', slot: 1 };
   var MW_WEATHER = { name: 'Weather', slot: 8 };
   var MW_REMINDERS = { name: 'Reminders', slot: 5, script: [
     { type: 'keys', text: 'a', speed: 200 },
@@ -2051,7 +2051,7 @@ if (typeof document !== "undefined") (function () {
   // H1 just named instead of cycling through unrelated captions underneath
   // it. Direct request: the two headings should read as one thought.
   var APP_CAPTION = {
-    'Files': 'Real FAT16, real reads and writes',
+    'Burrow': 'Real FAT16, real reads and writes',
     'Weather': 'Live data over its own network stack',
     'Mail': 'A real mailbox on a real filesystem',
     'Calendar': 'Real events, persisted across reboots',

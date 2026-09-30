@@ -19,7 +19,7 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 Checkpoint 2026-09-30. Main is 1.9.14 once the landing PR merges, and 18 of 26 apps run in ring 3.
 
 - In ring 3: Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind, Calendar, Search.
-- Still in the kernel: Files, Mail, Notes, Terminal, Samantha, Weather, Stocks, Epiphany.
+- Still in the kernel: Burrow (was Files), Mail, Notes, Terminal, Samantha, Weather, Stocks, Epiphany.
 - Gate item 4 (crash every app) is done for all ring-3 apps. The check parses `RING3_APPS`, so a new port is covered on its own.
 - New syscalls: 386 tasks, 387 http_get (Curbfind), 388 readdir (Search, for Files next).
 - The 1.9.14 PR also carries the landing work: chat bar on phones, icon buttons, QA fixes, Tech specs, the footer directory.
@@ -43,7 +43,7 @@ QA backlog:
 ## Next, in order
 
 1. Weather, Stocks and Epiphany to ring 3 in one PR on SYS_HTTP_GET. Check `weather_text` in `phone_home.h` and Samantha's weather tool still work.
-2. Files (the Burrow rename is on branch `files-rename` if not merged), then Terminal, Notes, Mail, Samantha to ring 3.
+2. Burrow (the old Files app, renamed in 1.9.14), then Terminal, Notes, Mail, Samantha to ring 3.
 3. 1.9 phone work: touch everywhere, an on-screen keyboard (only Notes has one), every app readable at phone size.
 4. Input by focus, then tag 2.0.0.
 5. Tour scenes for Activity and the Apps folder (`landing/v86/embed.js`, `tourappcount-check.mjs`).

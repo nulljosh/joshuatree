@@ -46,7 +46,7 @@ CLOSE_X, CLOSE_Y = 94, 56          # gui_launch_from_dock: red circle at (x+24, 
 APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46  # the Apps folder's own larger window origin (56, 30)
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)                  # open wallpaper, away from every hit target
-SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
+SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):

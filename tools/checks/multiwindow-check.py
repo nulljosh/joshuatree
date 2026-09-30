@@ -19,7 +19,7 @@ closing Files first, and proves from the real framebuffer that:
      depends on; window 1 is offset to x=130,y=100), not just two list
      entries with nothing actually drawn.
   2. Both windows' real, distinguishing content is visible simultaneously:
-     Files' real "Files" title text and Weather's real gradient panel
+     Files' real "Burrow" title text and Weather's real gradient panel
      background, sampled at each window's own content rect.
   3. Closing Weather (the focused/topmost window) via its own X leaves
      Files still open and still showing its real content, i.e. the other
@@ -84,7 +84,7 @@ PARK = (480, 200)
 # reused here for step 7's Compose-sends-into-the-list-window proof.
 VX, VY, VW, VH = 78, 72, 804, 345
 INK = (0x1C, 0x1C, 0x1E)
-SLOTS = ["Apps", "Files", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
+SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
