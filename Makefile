@@ -317,6 +317,13 @@ user/mail.o: user/mail.c user/jtsys.h user/libjt/text.h
 user/mail.bin: user/mail.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/mail.o user/libjt.a
 
+# Notes browse view as a ring-3 program (slice 1; not yet in RING3_APPS).
+user/notes.o: user/notes.c user/jtsys.h user/libjt/text.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/notes.bin: user/notes.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/notes.o user/libjt.a
+
 # 1.9.22: Weather, the twentieth, reads the kernel's WEATHER.TXT.
 user/weather.o: user/weather.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
