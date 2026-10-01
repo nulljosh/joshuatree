@@ -8,15 +8,16 @@ with read and write, OAuth 1.0a user keys). Without them it prints the post
 and exits 0: a dry run, so releases never fail over a missing key.
 Stdlib only: OAuth 1.0a signing is a few lines of HMAC-SHA1.
 """
-import base64, hashlib, hmac, json, os, secrets, sys, time, urllib.parse, urllib.request
+import base64, hashlib, hmac, json, os, re, secrets, sys, time, urllib.parse, urllib.request
 
 AVATAR = sys.argv[2] if sys.argv[1:2] == ["--avatar"] else None
 v, title = (None, None) if AVATAR else sys.argv[1:3]
 # No link in the post: X charges $0.20 for a post with a URL and $0.015
 # without (pay-per-use, 2026-09). The profile bio links the site.
-text = "" if AVATAR else f"Joshua Tree {v}: {title}\n\nA computer built from scratch. Try it in your browser, link in bio."
-if len(text) > 280:
-    text = f"Joshua Tree {v}: {title[:200]}..."
+# Changelog note only, like @ClaudeCodeLog: no tagline repeated on every post,
+# and only the first clause of the title (the rest is usually dev notes).
+note = re.split(r";\s*", title or "")[0].strip()
+text = "" if AVATAR else f"Joshua Tree {v}: {note}"[:280]
 keys = [os.environ.get(k, "") for k in ("X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET")]
 if not all(keys):
     print("dry run (no X keys), would " + (f"set avatar {AVATAR}" if AVATAR else "post:\n" + text))
