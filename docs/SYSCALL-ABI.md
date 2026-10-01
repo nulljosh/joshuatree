@@ -635,13 +635,13 @@ the backend answers only yes or no.
 
 | # | Name | ebx | ecx | edx | Returns |
 |---|---|---|---|---|---|
-| 391 | `shell_run` | `const char *line` | `char *out` | `unsigned outlen` | bytes written to `out`, or -errno |
+| 391 | `shell_run` | `const char *line` (`"<cwd>\n<command>"`) | `char *out` | `unsigned outlen` | bytes written to `out`, or -errno |
 
 **shell_run** is the one call behind the window Terminal (`user/terminal.c`). It
 runs a single shell line and writes the text the shell would have printed into
 `out`, NUL terminated and cut to `outlen - 1`. `line` is copied in byte by byte
-with each byte checked by `paging_user_range_ok`, at most 95 bytes before the
-NUL (`JT_SHELL_LINE_MAX`); `out` is checked whole, and `outlen` must be 1 to
+with each byte checked by `paging_user_range_ok`, at most 160 bytes before the
+NUL (`JT_SHELL_LINE_MAX`: a 63 byte cwd, the newline, a 95 byte command); `out` is checked whole, and `outlen` must be 1 to
 4096. Errors: -EFAULT (either pointer not user memory), -EINVAL (`outlen` out
 of range, line too long). A refused command is not an error: it returns a
 one-line message.
@@ -659,18 +659,26 @@ and an explicit allowlist instead, in the text shell's own wording:
 | `uptime` | seconds since boot |
 | `mem` | free and total memory in K |
 | `ps` | each task slot, used or free |
-| `ls` | the root directory, name and size |
-| `cat <file>` | a root file, up to 2047 bytes, non-printable bytes shown as `.` |
+| `ls [dir]` | the cwd (or `dir` under it), name and size |
+| `cat <file>` | a file under the cwd, up to 2047 bytes, non-printable bytes shown as `.` |
 
 Everything else is refused with `<name>: not available in the window terminal
 (allowed: ...)`. That covers anything that blocks (`sleep`, `bench`, the
 `*test` family), waits on the network (`ifconfig`, `netscan`, `web`, `chat`,
 `say`), opens a GUI app or window (`gui`, `browse`, `notes`, `exec`), reboots or
-halts, or re-enters the window system. `cd` is refused too: a syscall must not
-move the desktop's directory, so `ls` and `cat` always start at the root
-(`vfs_cwd_set(0)`, put back before returning), and `cat` takes a bare file name,
-not a path. `clear` never reaches the kernel; the Terminal empties its own
-scrollback.
+halts, or re-enters the window system.
+
+The working directory belongs to the caller. `line` is `<cwd>\n<command>`: the
+Terminal keeps its own cwd as a relative path from the root (empty is the
+root, at most 63 bytes, up to `JT_PATH_DEPTH` components) and sends it with
+every call. The kernel joins it with the argument of `ls` or `cat` and resolves
+it with the same `path_enter` / `path_leave` walk the file syscalls use, so
+the desktop's cwd is never moved and is restored exactly before the call
+returns. A line with no newline means the root. `cd` never reaches the kernel:
+the Terminal validates the target with `readdir` (-ENOENT or a file means "no
+such folder"), then updates its own string; `cd ..` pops a component and `cd`
+or `cd /` returns to the root. `clear` is local too. A cwd or path that does
+not resolve answers `ls: no such folder` or `<file>: not found`.
 
 Since 1.9.24 the ring-3 key paths also deliver Home, End, Delete (0xE0 0x47,
 0x4F, 0x53) as `JT_KEY_HOME` 305, `JT_KEY_END` 306, `JT_KEY_DELETE` 307, and

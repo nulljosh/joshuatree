@@ -2,14 +2,18 @@
  *
  * Same look as the old in-kernel terminal: warm near-black page, scrollback
  * in sand, a "> " prompt pinned to the bottom in amber, a block cursor and a
- * hint line. Text is libjt's antialiased DejaVu Sans (libjt has no mono face,
- * so this uses the body face, drawn one glyph per fixed 8 px cell so columns
- * still line up like a terminal).
+ * hint line. Text is libjt's antialiased DejaVu Sans Mono (jt_mono_draw, every
+ * glyph an 8 px advance, so the scrollback and prompt columns line up); the
+ * hint line stays in the proportional body face.
  *
  * Commands go to the kernel through the one syscall SYS_SHELL_RUN, which
  * answers from a short allowlist (help echo uptime mem ps ls cat, see
  * kernel/shellsys.c); anything else comes back as a one-line refusal. "clear"
- * is local: it empties the scrollback.
+ * is local: it empties the scrollback. So is "cd": the app keeps its own
+ * working directory (cwd, a relative path, "" is the root), shows it in the
+ * prompt, validates a target with jt_readdir, and sends "<cwd>\n<line>" with
+ * every command so the kernel resolves ls and cat there without ever moving
+ * the desktop's directory.
  *
  * Keys: typing, Backspace, Enter runs the line, copy/cut take the whole input
  * line into an in-app clipboard and paste inserts it at the end (the same
@@ -29,6 +33,7 @@
 #define LH     17
 #define MARGIN 16
 #define LINE_MAX 95
+#define CWD_MAX 63
 #define SCROLL 8192
 #define OUT_MAX 2048
 #define KEY_COPY 302
@@ -37,7 +42,7 @@
 
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 extern char _user_end[];
-struct arena { char sb[SCROLL + 1]; char out[OUT_MAX]; char in[LINE_MAX + 1]; char clip[LINE_MAX + 1]; unsigned starts[80]; };
+struct arena { char sb[SCROLL + 1]; char out[OUT_MAX]; char in[LINE_MAX + 1]; char clip[LINE_MAX + 1]; char cwd[CWD_MAX + 1]; char req[CWD_MAX + LINE_MAX + 3]; unsigned starts[80]; };
 static struct arena *ar JT_DATA = 0;
 static unsigned slen JT_DATA = 0, inlen JT_DATA = 0, cliplen JT_DATA = 0;
 
@@ -51,12 +56,11 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-/* One glyph per fixed cell, so a column is a column. */
+/* Mono face: every glyph advances CELL (JT_MONO_ADV), so a column is a column. */
 static void cell(int x, int y, char c, unsigned fg) {
     if (c == ' ') return;
     char g[2] = {c, 0};
-    int gw = jt_text_width(JT_FACE_BODY, g);
-    jt_text_draw(&win, JT_FACE_BODY, x + (CELL - gw) / 2, y, fg, g);
+    jt_mono_draw(&win, x, y, fg, g);
 }
 static void sputc(char c) {
     if (slen + 1 >= SCROLL) {
@@ -110,20 +114,59 @@ static void draw(void) {
     }
 
     /* Prompt, pinned to the bottom so typing never scrolls out of view. */
-    cell(MARGIN, prompt_y, '>', AMBER);
-    int x = MARGIN + 2 * CELL;
+    int x = MARGIN;
+    cell(x, prompt_y, '~', AMBER); x += CELL;
+    for (const char *p = ar->cwd; *p; p++, x += CELL) cell(x, prompt_y, *p, AMBER);
+    cell(x, prompt_y, '>', AMBER); x += 2 * CELL;
     for (unsigned i = 0; i < inlen && x < (int)win.width - MARGIN - CELL; i++, x += CELL) cell(x, prompt_y, ar->in[i], TYPED);
     rect(x, prompt_y + 1, CELL, LH - 3, AMBER); /* block cursor */
-    jt_text_draw(&win, JT_FACE_BODY, MARGIN, hint_y, HINT, "esc closes   |   allowlisted shell: help echo uptime mem ps ls cat");
+    jt_text_draw(&win, JT_FACE_BODY, MARGIN, hint_y, HINT, "esc closes   |   help echo uptime mem ps cd ls cat");
+}
+
+/* cd: validate with jt_readdir (relative to the root, where cwd lives), then
+   move this app's own cwd. The kernel never learns it except per call. */
+static void do_cd(const char *arg) {
+    char t[CWD_MAX + 1];
+    unsigned n = 0;
+    if (!*arg || (arg[0] == '/' && !arg[1])) { ar->cwd[0] = 0; return; }
+    if (arg[0] == '.' && arg[1] == '.' && !arg[2]) {
+        while (ar->cwd[n]) n++;
+        while (n && ar->cwd[n - 1] != '/') n--;
+        if (n) n--;
+        ar->cwd[n] = 0;
+        return;
+    }
+    for (const char *c = ar->cwd; *c; c++) { if (n >= CWD_MAX) goto toolong; t[n++] = *c; }
+    if (n) { if (n >= CWD_MAX) goto toolong; t[n++] = '/'; }
+    for (; *arg; arg++) { if (n >= CWD_MAX) goto toolong; t[n++] = *arg; }
+    t[n] = 0;
+    struct jt_dirent d;
+    if (jt_readdir(t, &d, 1) < 0) { sputs("cd: no such folder\n"); return; }
+    for (unsigned i = 0; i <= n; i++) ar->cwd[i] = t[i];
+    return;
+toolong:
+    sputs("cd: path too long\n");
 }
 
 static void run_line(void) {
     ar->in[inlen] = 0;
-    sputs("> "); sputs(ar->in); sputc('\n');
+    sputs("~"); sputs(ar->cwd); sputs("> "); sputs(ar->in); sputc('\n');
     if (inlen) {
+        const char *a = ar->in;
+        while (*a == ' ') a++;
         if (seq(ar->in, "clear")) { slen = 0; ar->sb[0] = 0; }
+        else if (a[0] == 'c' && a[1] == 'd' && (!a[2] || a[2] == ' ')) {
+            a += 2;
+            while (*a == ' ') a++;
+            do_cd(a);
+        }
         else {
-            int n = jt_shell_run(ar->in, ar->out, OUT_MAX);
+            unsigned q = 0;
+            for (const char *c = ar->cwd; *c; c++) ar->req[q++] = *c;
+            ar->req[q++] = '\n';
+            for (unsigned i = 0; i < inlen; i++) ar->req[q++] = ar->in[i];
+            ar->req[q] = 0;
+            int n = jt_shell_run(ar->req, ar->out, OUT_MAX);
             if (n < 0) sputs("shell: refused\n");
             else for (int i = 0; i < n; i++) sputc(ar->out[i]);
             char m[32] = "terminal: ran=";

@@ -19,4 +19,15 @@ int jt_text_ascent(int face);
    Clipped to the window. Returns the x after the last glyph. */
 int jt_text_draw(struct jt_window_info *w, int face, int x, int y, unsigned rgb, const char *s);
 
+
+/* Mono face: DejaVu Sans Mono, ASCII 0x20..0x7E only (anything else draws
+   '?'), one size, every glyph the same 8 px advance. Lives in its own object
+   (user/libjt/mono.c, own atlas) so only apps that call it pay for it; this
+   is JT_FACE_MONO's role, kept out of the shared face table on purpose, since
+   every ring-3 image has to fit the 28KB window. */
+#define JT_MONO_ADV 8
+int jt_mono_height(void);
+/* Draws s at pen x, line top y; each glyph advances JT_MONO_ADV. Returns the x after the last glyph. */
+int jt_mono_draw(struct jt_window_info *w, int x, int y, unsigned rgb, const char *s);
+
 #endif

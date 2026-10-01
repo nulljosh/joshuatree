@@ -13,8 +13,9 @@
    (nettest, netscan, ifconfig...), opens a GUI app or window (gui, browse,
    notes...), reboots or halts, or re-enters the window system, is refused
    with a one-line message. cd is refused too: a syscall must not move the
-   desktop's cwd, so the terminal always works at the root. ls and cat run
-   there and put the cwd back exactly as they found it. */
+   desktop's cwd. The terminal keeps its own cwd and sends it with each line;
+   ls and cat resolve against it with path_enter/path_leave, which restore the
+   desktop's cwd exactly. */
 #include "shellsys.h"
 #include "vfs.h"
 #include "task.h"
@@ -22,6 +23,9 @@
 #include "irq.h"
 
 #define SH_OUT_MAX 2048
+#define SH_PATH_MAX 63
+extern int path_enter(char *path, int keep, char **leaf, int *depth);
+extern int path_leave(int depth);
 static char sh_out[SH_OUT_MAX];
 static unsigned int sh_len;
 static char sh_file[SH_OUT_MAX];
@@ -43,9 +47,14 @@ static void sh_ls_cb(const char *name, unsigned int size, int is_dir) {
     sh_puts("  "); sh_putn(size); sh_puts(" bytes\n");
 }
 
-/* line is a kernel copy, NUL terminated, already length bounded. */
+/* line is a kernel copy, NUL terminated, already length bounded: "<cwd>\n<command>".
+   The cwd is the caller's own, a relative path from the root ("" = root); the
+   desktop's cwd is never moved (path_enter/path_leave restore it). */
 unsigned int shellsys_run(char *line, char **out) {
     sh_len = 0;
+    char *cwd = "", *nl = line;
+    while (*nl && *nl != '\n') nl++;
+    if (*nl) { *nl = 0; cwd = line; line = nl + 1; } /* no newline: root, whole line is the command */
     while (*line == ' ') line++;
     char *arg = line;
     while (*arg && *arg != ' ') arg++;
@@ -67,27 +76,33 @@ unsigned int shellsys_run(char *line, char **out) {
             sh_puts(task_used(i) ? "used\n" : "free\n");
         }
     } else if (sh_eq(line, "ls") || sh_eq(line, "cat")) {
-        unsigned int saved = vfs_cwd_get();
-        vfs_cwd_set(0); /* the desktop may be standing inside NOTES/; this starts at the root */
-        if (line[0] == 'l') vfs_list(sh_ls_cb);
-        else if (!*arg) sh_puts("usage: cat <file>\n");
+        /* cwd (caller's, relative to the root) joined with the argument. */
+        char path[SH_PATH_MAX + 1];
+        unsigned int pn = 0, i;
+        int ok = 1;
+        for (i = 0; cwd[i]; i++) { if (pn >= SH_PATH_MAX) ok = 0; else path[pn++] = cwd[i]; }
+        if (*arg && pn) { if (pn >= SH_PATH_MAX) ok = 0; else path[pn++] = '/'; }
+        for (i = 0; arg[i]; i++) { if (pn >= SH_PATH_MAX) ok = 0; else path[pn++] = arg[i]; }
+        path[pn] = 0;
+        char *leaf; int depth;
+        if (!ok) sh_puts("path too long\n");
+        else if (line[0] == 'l') {
+            if (path_enter(path, 0, &leaf, &depth) < 0) sh_puts("ls: no such folder\n");
+            else { vfs_list(sh_ls_cb); path_leave(depth); }
+        } else if (!*arg) sh_puts("usage: cat <file>\n");
+        else if (path_enter(path, 1, &leaf, &depth) < 0) { sh_puts(arg); sh_puts(": not found\n"); }
         else {
-            int slash = 0;
-            for (const char *p = arg; *p; p++) if (*p == '/') slash = 1;
-            if (slash) sh_puts("cat: root files only, no folders\n");
+            int n = vfs_read_file(leaf, sh_file, sizeof(sh_file) - 1);
+            path_leave(depth);
+            if (n < 0) { sh_puts(arg); sh_puts(": not found\n"); }
             else {
-                int n = vfs_read_file(arg, sh_file, sizeof(sh_file) - 1);
-                if (n < 0) { sh_puts(arg); sh_puts(": not found\n"); }
-                else {
-                    for (int i = 0; i < n; i++) {
-                        char c = sh_file[i];
-                        sh_putc(c == '\n' || (c >= 32 && c < 127) ? c : '.');
-                    }
-                    sh_putc('\n');
+                for (int j = 0; j < n; j++) {
+                    char c = sh_file[j];
+                    sh_putc(c == '\n' || (c >= 32 && c < 127) ? c : '.');
                 }
+                sh_putc('\n');
             }
         }
-        vfs_cwd_set(saved);
     } else {
         sh_puts(line);
         sh_puts(": not available in the window terminal (allowed: help echo uptime mem ps ls cat)\n");

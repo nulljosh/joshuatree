@@ -183,14 +183,14 @@ static int copy_path_from_user(u32 addr, char *out) {
    while standing inside NOTES/, so a syscall path starts at the root and
    the cursor is put back exactly where it was before the gate returns. */
 static unsigned int path_saved_cwd;
-static int path_leave(int depth) {
+int path_leave(int depth) {
     int ok = 1;
     while (depth-- > 0) if (!vfs_chdir("..")) ok = 0;
     if (!ok) serial_puts("syscall: BUG chdir(..) failed walking back a relative path\n");
     vfs_cwd_set(path_saved_cwd);
     return ok;
 }
-static int path_enter(char *path, int keep, char **leaf, int *depth) {
+int path_enter(char *path, int keep, char **leaf, int *depth) {
     *depth = 0; *leaf = path;
     if (path[0] == '/') return -EINVAL;
     char *comp[JT_PATH_DEPTH + 1];

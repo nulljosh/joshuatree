@@ -54,7 +54,7 @@
 #define JT_SYS_MKDIR       389 /* make a folder; relative path like open */
 #define JT_SYS_UNLINK      390 /* delete a file; relative path like open */
 #define JT_SYS_SHELL_RUN   391 /* 1.9.24: run one allowlisted shell line, output into a buffer; see kernel/shellsys.c */
-#define JT_SHELL_LINE_MAX 95   /* longest line the kernel copies in, bytes before the NUL */
+#define JT_SHELL_LINE_MAX 160  /* longest line the kernel copies in, bytes before the NUL: "<cwd>\n<command>" */
 #define JT_DIRENT_NAME  32
 #define JT_READDIR_MAX  64
 #define JT_PATH_MAX     63     /* bytes of path before the NUL the kernel will read; longer is -EINVAL */
