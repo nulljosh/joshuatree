@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Headless proof of Epiphany's command bar (kernel/epiphany.h, "AAPL GP" /
+"""Headless proof of Epiphany's command bar (user/epiphany.c, "AAPL GP" /
 "AAPL DES"): opens Epiphany from the Apps folder (grid index 22, same nav
 as feature-drive.py), presses `/` to focus the bar, types "aapl gp" and
 Enter, and checks two things: the GP chart panel actually drew (a real
 line, not a blank pane, at the panel's chart row) and the kernel logged
-the real discriminating marker (epi_cmd_run's serial_puts, kernel/epiphany.h)
+the real discriminating marker (epi_cmd_run's serial_puts, user/epiphany.c)
 rather than a screenshot coincidence. Then it clears with Esc, types a
 bogus code ("aapl zz") and asserts the one-line error lands in the bar
 and its own serial marker fires, with no crash either time.
@@ -136,13 +136,16 @@ try:
         fails.append("Epiphany crashed or closed after running a valid GP command")
 
     # Esc clears, then a bogus code shows a one-line error and its own marker
-    keyname("esc"); time.sleep(0.2)
-    keyname("slash"); time.sleep(0.5)
+    keyname("esc"); time.sleep(0.5)
+    keyname("slash"); time.sleep(0.8)
     type_str("aapl zz")
     keyname("ret")
-    time.sleep(0.4)
-
-    log = open(LOG, errors="replace").read() if os.path.exists(LOG) else ""
+    # poll with a deadline, same as above: a fixed 0.4s missed the marker on CI
+    for _ in range(40):
+        time.sleep(0.25)
+        log = open(LOG, errors="replace").read() if os.path.exists(LOG) else ""
+        if "epicmd=unknown_code:ZZ" in log:
+            break
     if "epicmd=unknown_code:ZZ" not in log:
         fails.append(f"serial log missing 'epicmd=unknown_code:ZZ' marker; got tail: {log[-400:]!r}")
     img = dump()

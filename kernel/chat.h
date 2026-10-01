@@ -1018,10 +1018,10 @@ static void gui_launch_chat_app(void) {
                 if (i == chat_suggest_sel) window_rect(x - 4, ry - 4, body_w, 20, 0x00EDE6DC);
                 font_draw_string(CHAT_SUGGESTIONS[i].text, x, ry, CHAT_INK, -1);
             }
-            font_draw_string("up/down select   enter sends   hold F2 to talk   or just type   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
+            font_draw_string(boot_to_phone ? "tap a line or just type" : "up/down select   enter sends   hold F2 to talk   or just type   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
         } else {
             chat_draw_conversation(T, x, you_w, sam_w, body_w);
-            font_draw_string("type to send   hold F2 to talk   n prompt   c clear   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
+            font_draw_string(boot_to_phone ? "type to send" : "type to send   hold F2 to talk   n prompt   c clear   esc close", 20, (int)window_height() - 28, CHAT_DIM, -1);
         }
 
         sleep_ticks(5);
@@ -1140,6 +1140,7 @@ static void chat_boot_samantha_open(void) {
     char msg[CHAT_CONTENT_MAX];
     msg[0] = 0;
     mouse_click_edge_sync();
+    int pmx = 0, pmy = 0; /* phone: pointer, polled on each tap (gui_app_mouse_tick is a no-op here, no windowed viewport) */
     for (;;) {
         window_rect(20, bottom - 30, (int)window_width() - 40, 20, 0x00FFFFFF);
         msg[n] = 0;
@@ -1155,6 +1156,18 @@ static void chat_boot_samantha_open(void) {
            input box still drawn and still reading keys, i.e. still
            focused, so a face-tap keeps her open and ready to type into. */
         if (k == KEY_ESC) { gui_launch_chat_app(); return; }
+        if (k == KEY_CLICK && boot_to_phone) {
+            /* v1.9.18: the back chevron's 44x40 tap zone (phone_back_zone_tick
+               in phone_home.h) never ran in this view, so Samantha's own back
+               did nothing. The click edge is already consumed here, so hit-test
+               the same zone directly and leave exactly like the Esc path. */
+            int dx = 0, dy = 0, bt = 0;
+            mouse_get_delta(&dx, &dy, &bt);
+            pmx += dx; pmy += dy;
+            mouse_get_absolute(&pmx, &pmy, (int)window_width(), (int)window_height());
+            if (pmy < 40 && pmx < 44) { serial_puts("samback\n"); gui_launch_chat_app(); return; }
+            continue;
+        }
         if (k == KEY_ENTER) break;
         if (k == '\b') { if (n > 0) n--; continue; }
         if (k >= 32 && k < 127 && n < sizeof(msg) - 1) msg[n++] = (char)k;

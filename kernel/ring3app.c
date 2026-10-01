@@ -16,6 +16,7 @@
    1.9.11: Curbfind joins it, the sixteenth app out, with one new syscall (SYS_HTTP_GET).
    1.9.12: Calendar joins it, the seventeenth app out.
    1.9.13: Search joins it, the eighteenth app out, with one new syscall (SYS_READDIR).
+   1.9.19: Epiphany joins it, the nineteenth app out, on SYS_HTTP_GET like Curbfind.
 
    Roadmap 2.0 says apps leave the kernel, so a crash in one cannot take
    the machine down. Keyrate, the smallest real app, went first; Toroid,
@@ -62,6 +63,7 @@
 #include "user_curbfind.h"
 #include "user_calendar.h"
 #include "user_search.h"
+#include "user_epiphany.h"
 #include "user_fbpoke.h"
 #include "app.h"
 #include "irq.h"
@@ -111,6 +113,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Curbfind",   user_curbfind,   USER_CURBFIND_LEN,   "CURBFIND.BIN"},
     {"Calendar",   user_calendar,   USER_CALENDAR_LEN,   "CALENDAR.BIN"},
     {"Search",     user_search,     USER_SEARCH_LEN,     "SEARCH.BIN"},
+    {"Epiphany",   user_epiphany,   USER_EPIPHANY_LEN,   "EPIPHANY.BIN"},
 };
 
 static void ring3app_launch(const struct ring3_app *a) {
@@ -196,6 +199,7 @@ void reminders_ring3_open(void)  { ring3app_launch(&RING3_APPS[14]); }
 void curbfind_ring3_open(void)   { ring3app_launch(&RING3_APPS[15]); }
 void calendar_ring3_open(void)   { ring3app_launch(&RING3_APPS[16]); }
 void search_ring3_open(void)     { ring3app_launch(&RING3_APPS[17]); }
+void epiphany_ring3_open(void)   { ring3app_launch(&RING3_APPS[18]); }
 
 /* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
    run user/fbpoke.c with no window: it must be refused a pointer into
@@ -244,6 +248,7 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='u' && pc[7]=='r' && pc[8]=='b') { ring3app_autoopen_slot = 8; serial_puts("autoopen=curbfind\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='a' && pc[7]=='l' && pc[8]=='e') { ring3app_autoopen_slot = 2; serial_puts("autoopen=calendar\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='e' && pc[7]=='a' && pc[8]=='r') { ring3app_autoopen_slot = 21; serial_puts("autoopen=search\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='e' && pc[6]=='p' && pc[7]=='i' && pc[8]=='p') { ring3app_autoopen_slot = 22; serial_puts("autoopen=epiphany\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
     }
 }

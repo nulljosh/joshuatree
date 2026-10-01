@@ -993,3 +993,43 @@ static void gui_launch_editor(void) {
         }
     }
 }
+
+/* 1.9.19: compositor hooks. Notes' browser (folders and notes columns)
+   draws into a multi-window viewport and takes keys without blocking, so
+   Notes can stand in for Weather as a second window. Editing still goes
+   through the blocking gui_launch_editor (a lone Notes click keeps that). */
+static void gui_draw_notes_content(void) {
+    int T = gui_app_dy();
+    if (!notes_inited) {
+        notes_inited = 1;
+        notes_migrate_legacy();
+        notes_load_folders();
+        notes_load_notes();
+    }
+    window_rect(0, 0, (int)window_width(), (int)window_height(), 0x00FAF8F6);
+    gui_draw_app_titlebar("Notes");
+    font_draw_string("tab switch   up/down pick   esc closes", 20, T + 14, 0x0075726E, (int)window_width() - 40);
+    notes_draw_list(20, NOTES_FOLDER_W, T + 44, "FOLDERS", notes_focus == NOTES_FOCUS_FOLDERS, notes_folder_count, notes_folder_sel, 1);
+    for (int i = 0; i < notes_folder_count; i++)
+        font_draw_string(notes_folders[i].name, 32, T + 70 + i * 22, 0x001C1C1E, NOTES_FOLDER_W - 20);
+    int nx = 20 + NOTES_FOLDER_W + 16;
+    notes_draw_list(nx, NOTES_LIST_W, T + 44, "NOTES", notes_focus == NOTES_FOCUS_NOTES, notes_note_count, notes_note_sel, 1);
+    for (int i = 0; i < notes_note_count; i++)
+        font_draw_string(notes_notes[i].title, nx + 12, T + 70 + i * 22, 0x001C1C1E, NOTES_LIST_W - 24);
+    window_rect(nx + NOTES_LIST_W, T + 44, 1, (int)window_height() - T - 60, 0x00E4DDD3);
+}
+
+/* Returns 1 when the window should close. */
+static int gui_notes_mw_key(int k) {
+    if (k == KEY_ESC) return 1;
+    if (!notes_inited) return 0;
+    if (k == '\t') notes_focus = (notes_focus == NOTES_FOCUS_FOLDERS) ? NOTES_FOCUS_NOTES : NOTES_FOCUS_FOLDERS;
+    else if (notes_focus == NOTES_FOCUS_FOLDERS) {
+        if (k == KEY_UP && notes_folder_sel > 0) { notes_folder_sel--; notes_note_sel = 0; notes_load_notes(); }
+        else if (k == KEY_DOWN && notes_folder_sel < notes_folder_count - 1) { notes_folder_sel++; notes_note_sel = 0; notes_load_notes(); }
+    } else {
+        if (k == KEY_UP && notes_note_sel > 0) notes_note_sel--;
+        else if (k == KEY_DOWN && notes_note_sel < notes_note_count - 1) notes_note_sel++;
+    }
+    return 0;
+}

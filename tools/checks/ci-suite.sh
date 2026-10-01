@@ -31,6 +31,12 @@
 # Nothing in .github/ needs to change either way.
 
 set -uo pipefail
+
+# Every check's tempfile.mkdtemp(prefix='jt-...') used to land in the shared
+# TMPDIR and never get deleted: thousands of 37-75MB dirs, 12GB+, a full
+# disk on 2026-10-01. One scratch TMPDIR per suite run, gone on exit.
+export TMPDIR=$(mktemp -d "${TMPDIR:-/tmp}/jt-suite-XXXXXX")
+trap 'rm -rf "$TMPDIR"' EXIT
 # SHARD=i runs only the checks assigned to shard i below, so CI can split the
 # suite across parallel runners. Unset, it runs everything, same as before.
 # Each check carries an explicit shard number (2nd manifest field) instead
@@ -79,6 +85,7 @@ retry|1|Chat mail tools: "read my email" lists a real message, "email <someone> 
 retry|1|Chat notes/reminders tools: list_reminders and read_notes work via the local keyword fallback when the picker doesn't know them|python3 ./tools/checks/notestools-check.py
 retry|2|"samantha" boot flag opens Chat's full-screen avatar view, input focused, before the desktop|python3 ./tools/checks/samantha-boot-check.py
 retry|2|"phone" boot flag opens a real 430x932 portrait frame straight into Samantha's view|python3 ./tools/checks/phone-boot-check.py
+retry|2|Phone Samantha back chevron exits her view and F2/Esc hints are hidden on phones|python3 ./tools/checks/phone-samantha-back-check.py
 retry|2|Touch: a tap opens the on-screen keyboard on phone and a tapped key reaches the Notes editor|python3 ./tools/checks/touch-osk-check.py
 retry|2|Chat bounds a connected-but-silent LLM host instead of hanging on net.c's old multi-minute default|python3 ./tools/checks/chat-timeout-check.py
 retry|4|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ramfs-demo-check.sh
@@ -103,6 +110,7 @@ retry|2|Reminders runs as a ring-3 process through the table-driven launcher: ad
 retry|2|Curbfind runs as a ring-3 process through the table-driven launcher: falls back to the samples when SYS_HTTP_GET finds no NIC, selects by key and click, the kernel refuses every bad path and pointer the probe hands the syscall, closes on Esc, desktop alive|python3 ./tools/checks/ring3curbfind-check.py
 retry|2|Calendar runs as a ring-3 process through the table-driven launcher: gets today from SYS_TIME, draws the month grid, saves an event through the real editor, keeps EVENTS.TXT across fresh runs, feeds Samantha's calendar_today, closes on Esc, desktop alive|python3 ./tools/checks/ring3calendar-check.py
 retry|2|Search runs as a ring-3 process through the table-driven launcher: SYS_READDIR refuses a kernel pointer, an over-long path and a missing folder, the list filters live, a file shows its real bytes, a FAT folder opens by relative path with the kernel's cwd untouched, closes on Esc, crashes safely, desktop alive|python3 ./tools/checks/ring3search-check.py
+retry|2|Epiphany runs as a ring-3 process through the table-driven launcher: falls back to the offline prices when SYS_HTTP_GET finds no NIC, switches tabs by key and click, runs the command bar, closes on Esc, desktop alive|python3 ./tools/checks/ring3epiphany-check.py
 retry|2|Every ring-3 app (parsed from RING3_APPS) crashes on purpose, is reaped, and the desktop keeps drawing and opens a different app after each one|python3 ./tools/checks/ring3crash-all-check.py
 retry|5|A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT|python3 ./tools/checks/userfb-release-check.py
 retry|7|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
