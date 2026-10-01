@@ -5709,7 +5709,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /*  0 */ {"Burrow",     0x00707070, gui_icon_folder,     gui_launch_files,      gui_draw_files_content,     gui_files_on_key},
     /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       gui_launch_mail,       gui_draw_mail_content,      gui_mail_on_key},
     /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   calendar_ring3_open,   0, 0}, /* 1.9.12: ring 3 (user/calendar.c) */
-    /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      gui_launch_editor,     gui_draw_notes_content,     gui_notes_mw_key}, /* 1.9.19: compositor hooks, opened as a window only beside another one */
+    /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      gui_launch_editor,     gui_draw_notes_content,     gui_notes_mw_key}, /* 1.9.20: compositor hooks, opened as a window only beside another one */
     /*  4 */ {"Reminders",  0x00375A4A, gui_icon_reminders,  reminders_ring3_open,  0, 0}, /* 1.9.9: ring 3 (user/reminders.c) */
     /*  5 */ {"Terminal",   0x002B2B2B, gui_icon_terminal,   gui_launch_terminal,   0, 0},
     /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       gui_launch_chat_app,   0, 0},
