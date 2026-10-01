@@ -28,6 +28,7 @@ void search_ring3_open(void);
 void epiphany_ring3_open(void);
 int  weather_ring3_run(void);   /* runs user/weather.c, returns its exit status (7 = refetch and run again) */
 void weather_ring3_open(void);
+int  stocks_ring3_run(void);     /* runs user/stocks.c, returns its exit status (16 + sel*5 + range, +64 refresh) */
 
 /* `open=keyrate` / `open=toroid` / `open=calc` / `open=quote` / `open=bookr` / `open=homeqi` / `open=lexly` / `open=plan` / `open=field` / `open=clock` / `open=portf` / `open=activ` / `open=remi` / `open=curb` / `open=cale` / `open=sear` / `open=epip` / `open=weat`
    launches that app from the dock path the moment the desktop is up, so
