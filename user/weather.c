@@ -14,11 +14,11 @@
  * the last good reading (labelled stale), or a labelled sample. It writes
  * "wxwin=" and "wxrow=" lines that tools/checks/weather-app-check.sh reads.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font (bold is drawn twice), the
- * big temperature at 4x.
+ * Glyphs: antialiased DejaVu Sans from libjt/text.h, the big temperature in
+ * the display face.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG     0x00F5F0EB
 #define CARD   0x00ECE5DC
@@ -47,7 +47,7 @@ static int itoa10(int v, char *b) {
     b[n] = 0;
     return n;
 }
-static int deg(char *b, int v) { int n = itoa10(v, b); b[n++] = (char)0xF8; b[n] = 0; return n; }
+static int deg(char *b, int v) { int n = itoa10(v, b); b[n++] = (char)0xB0; b[n] = 0; return n; }
 
 static void pset(int x, int y, unsigned c) {
     if (x >= 0 && y >= 0 && x < (int)win.width && y < (int)win.height) win.pixels[(unsigned)y * win.width + (unsigned)x] = c;
@@ -64,24 +64,13 @@ static void cap(int x0, int y0, int x1, int y1, int t, unsigned c) { /* a line w
 }
 static void card(int x, int y, int w, int h) { rect(x + 6, y, w - 12, h, CARD); rect(x, y + 6, w, h - 12, CARD); disc(x + 6, y + 6, 6, CARD); disc(x + w - 7, y + 6, 6, CARD); disc(x + 6, y + h - 7, 6, CARD); disc(x + w - 7, y + h - 7, 6, CARD); }
 
-/* One glyph cell at scale mul, bold by drawing it twice. Degree is code 0xF8, drawn as a ring. */
-static int text(const char *s, int x, int y, unsigned fg, int mul, int bold) {
-    for (; *s; s++) {
-        unsigned char ch = (unsigned char)*s;
-        if (ch == 0xF8) { disc(x + 3 * mul, y + 4 * mul, 2 * mul + 1, fg); disc(x + 3 * mul, y + 4 * mul, 2 * mul - 1 > 0 ? 2 * mul - 1 : 0, BG); x += 6 * mul; continue; }
-        if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-        const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-        for (int r = 0; r < 16; r++) for (int c = 0; c < 8; c++) if (g[r] & (0x80 >> c)) {
-            rect(x + c * mul, y + r * mul, mul, mul, fg);
-            if (bold) rect(x + c * mul + 1, y + r * mul, mul, mul, fg);
-        }
-        x += 8 * mul;
-    }
-    return x;
+/* Antialiased text, line top at y. Bold is the real bold cut. */
+static int text(const char *s, int x, int y, unsigned fg, int bold) {
+    return jt_text_draw(&win, bold ? JT_FACE_BOLD : JT_FACE_BODY, x, y, fg, s);
 }
-static int tw(const char *s, int mul) { int w = 0; for (; *s; s++) w += (unsigned char)*s == 0xF8 ? 6 * mul : 8 * mul; return w; }
-static void right(const char *s, int xr, int y, unsigned fg, int bold) { text(s, xr - tw(s, 1), y, fg, 1, bold); }
-static void center(const char *s, int cx, int y, unsigned fg, int bold) { text(s, cx - tw(s, 1) / 2, y, fg, 1, bold); }
+static int tw(const char *s) { return jt_text_width(JT_FACE_BODY, s); }
+static void right(const char *s, int xr, int y, unsigned fg, int bold) { text(s, xr - jt_text_width(bold ? JT_FACE_BOLD : JT_FACE_BODY, s), y, fg, bold); }
+static void center(const char *s, int cx, int y, unsigned fg, int bold) { text(s, cx - jt_text_width(bold ? JT_FACE_BOLD : JT_FACE_BODY, s) / 2, y, fg, bold); }
 
 /* Condition glyphs from discs and capsules; u is one eighth of the half size. */
 static void sun(int cx, int cy, int u, int r8) {
@@ -159,8 +148,8 @@ static void draw(void) {
     char b[128], q[8];
     rect(0, 0, vw, vh, BG);
 
-    text(city[0] ? city : real ? "Your location" : "Sample location", x0, y, TEXT, 1, 1);
-    text(live ? "Current conditions, live" : stale ? "Last good reading, may be out of date" : "Sample data, not a live reading", x0, y + 20, live ? DIM : MID, 1, 0);
+    text(city[0] ? city : real ? "Your location" : "Sample location", x0, y, TEXT, 1);
+    text(live ? "Current conditions, live" : stale ? "Last good reading, may be out of date" : "Sample data, not a live reading", x0, y + 20, live ? DIM : MID, 0);
     if (fetching) right("Fetching...", x1, y + 1, MID, 1);
     else if (!live) {
         const char *head = state[0] == 'o' && state[1] == 'f' ? "Offline" : state[0] == 't' ? "Timed out" : state[0] == 'b' ? "Bad response" : state[0] == 'f' ? "Request failed" : "Not fetched yet";
@@ -172,25 +161,25 @@ static void draw(void) {
 
     int hy = y + 50;
     deg(b, t);
-    int bx = text(b, x0 - 2, hy, TEXT, 4, 0) + 22;
-    text(real ? word : "Clear", bx, hy + 8, TEXT, 1, 1);
-    if (n > 0) { int p = cat(b, 0, "High "); p += deg(b + p, dh[0]); p = cat(b, p, "   Low "); deg(b + p, dl[0]); text(b, bx, hy + 31, MID, 1, 0); }
+    int bx = jt_text_draw(&win, JT_FACE_DISPLAY, x0 - 2, hy, TEXT, b) + 22;
+    text(real ? word : "Clear", bx, hy + 8, TEXT, 1);
+    if (n > 0) { int p = cat(b, 0, "High "); p += deg(b + p, dh[0]); p = cat(b, p, "   Low "); deg(b + p, dl[0]); text(b, bx, hy + 31, MID, 0); }
     glyph(c, x1 - 52, hy + 24, 5, BG);
 
     int fy = hy + 72, fh = 50, gap = 12, fw = (cw - 2 * gap) / 3;
     for (int i = 0; i < 3; i++) {
         int fx = x0 + i * (fw + gap);
         card(fx, fy, fw, fh);
-        text(i == 0 ? "Feels like" : i == 1 ? "Humidity" : "Wind", fx + 16, fy + 8, DIM, 1, 0);
-        if (!hx) { text("Not reported", fx + 16, fy + 28, MID, 1, 0); continue; }
+        text(i == 0 ? "Feels like" : i == 1 ? "Humidity" : "Wind", fx + 16, fy + 8, DIM, 0);
+        if (!hx) { text("Not reported", fx + 16, fy + 28, MID, 0); continue; }
         if (i == 0) deg(b, f); else { int p = itoa10(i == 1 ? h : w, b); cat(b, p, i == 1 ? "%" : " km/h"); }
-        text(b, fx + 16, fy + 27, TEXT, 1, 1);
+        text(b, fx + 16, fy + 27, TEXT, 1);
     }
 
     int ry = fy + fh + 16, cy0 = ry + 18, ch = vh - cy0 - 14, drawn = 0;
     if (ch > 118) ch = 118;
-    text(live ? "5-day forecast" : stale ? "5-day forecast, last good reading" : "5-day forecast, sample data", x0, ry, MID, 1, 1);
-    if (n <= 0) { card(x0, cy0, cw, ch); text("No forecast in the last reply", x0 + 16, cy0 + ch / 2 - 8, MID, 1, 0); }
+    text(live ? "5-day forecast" : stale ? "5-day forecast, last good reading" : "5-day forecast, sample data", x0, ry, MID, 1);
+    if (n <= 0) { card(x0, cy0, cw, ch); text("No forecast in the last reply", x0 + 16, cy0 + ch / 2 - 8, MID, 0); }
     else {
         int dwid = (cw - (DAYS - 1) * gap) / DAYS;
         for (int i = 0; i < n && i < DAYS; i++, drawn++) {
@@ -198,9 +187,9 @@ static void draw(void) {
             card(dx, cy0, dwid, ch);
             center(i == 0 && real ? "Today" : WEEKDAY[dw[i] % 7], mx, cy0 + 8, TEXT, 1);
             glyph(dc[i], mx, cy0 + ch / 2 - 4, 2, CARD);
-            char lw[8]; int hn = deg(q, dh[i]), ln = deg(lw, dl[i]), sx = mx - (hn * 8 + 8 + ln * 8 - 4) / 2;
-            sx = text(q, sx, cy0 + ch - 24, TEXT, 1, 1) + 8;
-            text(lw, sx, cy0 + ch - 24, DIM, 1, 0);
+            char lw[8]; deg(q, dh[i]); deg(lw, dl[i]); int sx = mx - (jt_text_width(JT_FACE_BOLD, q) + 8 + tw(lw)) / 2;
+            sx = text(q, sx, cy0 + ch - 24, TEXT, 1) + 8;
+            text(lw, sx, cy0 + ch - 24, DIM, 0);
         }
     }
     { /* what the window really showed, for tools/checks/weather-app-check.sh */

@@ -136,7 +136,7 @@ user/note.bin: user/note.o user/note.ld
 # shaped calls without a real libc or a kernel include path. llvm-ar
 # rather than plain `ar` because this toolchain is clang/lld throughout,
 # see USER_CFLAGS above.
-LIBJT_SRCS := user/libjt/string.c user/libjt/stdlib.c user/libjt/stdio.c
+LIBJT_SRCS := user/libjt/string.c user/libjt/stdlib.c user/libjt/stdio.c user/libjt/text.c
 LIBJT_OBJS := $(LIBJT_SRCS:.c=.o)
 # Plain `llvm-ar` first (on PATH on most CI images); then a versioned
 # `llvm-ar-NN` apt sometimes installs instead of the unversioned name;
@@ -156,6 +156,14 @@ AR := $(firstword $(AR))
 
 user/libjt/%.o: user/libjt/%.c
 	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+# 1.9.23: antialiased ring-3 text. aafont.h is baked from the kernel's own
+# DejaVu data through drivers/ttf.c by a host program; text.o needs it.
+user/libjt/aafont.h: tools/gen/gen_user_text.c drivers/ttf.c drivers/ttf.h drivers/dejavu_font.h drivers/dejavu_bold_font.h
+	clang -O2 -DTTF_HOST_BUILD -Itools/ttf-host -Idrivers -o /tmp/jt-gen-user-text tools/gen/gen_user_text.c drivers/ttf.c -lm
+	/tmp/jt-gen-user-text $@
+
+user/libjt/text.o: user/libjt/text.c user/libjt/text.h user/libjt/aafont.h user/jtsys.h
 
 user/libjt.a: $(LIBJT_OBJS)
 	$(AR) rcs $@ $(LIBJT_OBJS)
@@ -290,7 +298,7 @@ user/epiphany.bin: user/epiphany.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/epiphany.o user/libjt.a
 
 # 1.9.22: Weather, the twentieth, reads the kernel's WEATHER.TXT.
-user/weather.o: user/weather.c user/jtsys.h drivers/vgafont.h
+user/weather.o: user/weather.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/weather.bin: user/weather.o user/libjt.a user/note.ld

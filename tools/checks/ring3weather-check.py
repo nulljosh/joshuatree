@@ -15,6 +15,10 @@ must show the honest offline face over labelled sample data. The check:
   2. presses R: the app draws "Fetching..." (wxwin=fetching), exits 7, the
      kernel fetches exactly once more and starts Weather again, which shows
      the offline face again;
+     Also crops the big temperature and the location label and asserts the
+     type is antialiased: real intermediate colours along glyph edges, many
+     distinct levels between the ink and the cream, not just two colours
+     (ring-3 text comes from user/libjt/text.c);
   3. closes on Esc with a clean exit 0 and a released window, and asserts
      the desktop is back (Mail opens).
 
@@ -107,6 +111,27 @@ try:
     bg = pixel(VIEW_X + 5, VIEW_Y + 5)
     print(f"surface pixel: {bg}")
     if not near(bg, (0xF5, 0xF0, 0xEB), 6): fails.append(f"the window is not Weather's cream surface (got {bg})")
+
+    # 1b. antialiased type: temperature (display face) and a label (body face)
+    img = frame()
+    if os.environ.get("JT_AA_DUMP"): img.save(os.environ["JT_AA_DUMP"])
+    def aa_stats(x0, y0, x1, y1):
+        lum = lambda p: (p[0] * 77 + p[1] * 150 + p[2] * 29) >> 8
+        ink = mid = 0; levels = set()
+        for yy in range(y0 * SCALE, y1 * SCALE):
+            for xx in range(x0 * SCALE, x1 * SCALE):
+                p = img.getpixel((xx, yy))
+                if near(p, (0xF5, 0xF0, 0xEB), 4): continue
+                if near(p, (0x40, 0x34, 0x39), 4) or near(p, (0x64, 0x50, 0x57), 4): ink += 1
+                else: mid += 1; levels.add(lum(p) // 6)
+        return ink, mid, len(levels)
+    for name, box in (("temperature", (VIEW_X, VIEW_Y + 70, VIEW_X + 260, VIEW_Y + 140)),
+                      ("label", (VIEW_X, VIEW_Y + 16, VIEW_X + 300, VIEW_Y + 38))):
+        ink, mid, lv = aa_stats(*box)
+        print(f"{name}: {ink} solid ink px, {mid} intermediate px, {lv} distinct levels")
+        if ink < 20: fails.append(f"no {name} text found to measure (ink={ink})")
+        elif mid < ink * 0.15 or lv < 5:
+            fails.append(f"{name} is not antialiased: {mid} intermediate pixels vs {ink} solid, {lv} distinct levels")
 
     # 2. R: Fetching..., one more kernel fetch, a fresh run of the app
     fetches, launches = serial().count("wxfetch"), serial().count("launching WEATHER.BIN")
