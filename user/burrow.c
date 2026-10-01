@@ -181,7 +181,6 @@ void _start(int argc, char **argv) {
         if (r == -11) { jt_sched_yield(); continue; }
         if (r != 1) break;
         if (ev.kind == JT_EV_CLICK) {
-            if (ev.a < 0 || ev.b < 0 || ev.a >= (int)win.width || ev.b >= (int)win.height) break; /* chrome X or dock */
             int tb = tb_at(ev.a, ev.b);
             if (tb >= 0) view = tb;
             else {

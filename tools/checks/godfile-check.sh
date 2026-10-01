@@ -57,7 +57,7 @@ ratchet_ceiling() {
         # to match, never to go back up.
         # 2026-09-30: 1.9.12 moved Calendar to ring 3 (user/calendar.c).
         # 2026-09-30: 1.9.13 dropped the search.h include. Down one more.
-        kernel/kernel.c) echo 9145 ;;
+        kernel/kernel.c) echo 9133 ;;
         *) echo "$LIMIT" ;;
     esac
 }

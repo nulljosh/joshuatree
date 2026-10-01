@@ -2113,7 +2113,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 static int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
@@ -4484,7 +4484,6 @@ void gui_draw_app_titlebar(const char *title){
     font_draw_string(title, 84, 12, 0x00555555, -1);
 }
 
-#include "files.h"
 
 /* v85: the old one-shot gui_launch_chat (no history, /api/generate, a
    200-byte message cap) lived here; replaced by chat.h's real GUI app
@@ -5340,7 +5339,7 @@ typedef struct {
 int ring3app_launch_window(const char *name, unsigned int w, unsigned int h);
 void ring3app_window_reaped(int task, int status);
 void ring3app_window_blit(int task, int vw, int vh);
-static int gui_ring3_windowed(int icon){ return icon == 4; } /* Reminders */
+static int gui_ring3_windowed(int icon){ return icon == 4 || icon == 0; } /* Reminders, Burrow */
 static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
 static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
 
@@ -5462,7 +5461,7 @@ static void gui_multiwin_draw_one(const gui_window_t *win){
    window list all key off it), so a new app is one row here plus one
    bump of GUI_APP_COUNT/GUI_APPS_FOLDER/GUI_TRASH above. */
 const struct app APPS[GUI_APP_COUNT] = {
-    /*  0 */ {"Burrow",     0x00707070, gui_icon_folder,     gui_launch_files,      gui_draw_files_content,     gui_files_on_key},
+    /*  0 */ {"Burrow",     0x00707070, gui_icon_folder,     burrow_ring3_open,     0, 0}, /* ring 3 (user/burrow.c), a compositor window */
     /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       gui_launch_mail,       gui_draw_mail_content,      gui_mail_on_key},
     /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   calendar_ring3_open,   0, 0}, /* 1.9.12: ring 3 (user/calendar.c) */
     /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      gui_launch_editor,     gui_draw_notes_content,     gui_notes_mw_key}, /* 1.9.20: compositor hooks, opened as a window only beside another one */
@@ -6162,7 +6161,7 @@ static void gui_lock_screen(void){
 
 static void gui_menu_run_item(int item){
     if (item == 0) gui_launch_about();
-    else if (item == 1) gui_launch_files();
+    else if (item == 1) gui_launch_from_dock(0);
     else if (item == 2) gui_launch_editor();
     else if (item == 3) gui_launch_settings();
     else if (item == 4) gui_lock_screen();
@@ -6573,17 +6572,6 @@ static void gui_run(void){
                     dw->x = nx; dw->y = ny;
                 }
                 launched = 1;
-            } else if (press_window >= 0 && gui_windows[press_window].icon == 0
-                       && gui_files_click(gui_windows[press_window].x, gui_windows[press_window].y, mx, my)) {
-                /* Files' own toolbar (List/Icons): consumed by the toolbar
-                   hit-test above, not the generic close contract right
-                   below -- a click on List/Icons switches the view and
-                   keeps the window open, instead of dismissing it like any
-                   other click inside the window would. */
-                gui_cursor_restore();
-                gui_multiwin_draw_content_only(&gui_windows[press_window]);
-                gui_cursor_save(last_mx, last_my);
-                gui_draw_cursor(last_mx, last_my);
             } else if (press_window >= 0 && gui_windows[press_window].task >= 0
                        && !(mx >= gui_windows[press_window].x + 16 && mx <= gui_windows[press_window].x + 32
                             && my >= gui_windows[press_window].y + 8 && my <= gui_windows[press_window].y + 24)) {
