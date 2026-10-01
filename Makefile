@@ -297,6 +297,13 @@ user/epiphany.o: user/epiphany.c user/jtsys.h drivers/vgafont.h
 user/epiphany.bin: user/epiphany.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/epiphany.o user/libjt.a
 
+# Burrow, the Files app, as a ring-3 program (not yet in RING3_APPS).
+user/burrow.o: user/burrow.c user/jtsys.h user/libjt/text.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/burrow.bin: user/burrow.o user/libjt.a user/note.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/burrow.o user/libjt.a
+
 # 1.9.22: Weather, the twentieth, reads the kernel's WEATHER.TXT.
 user/weather.o: user/weather.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
