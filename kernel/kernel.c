@@ -5560,7 +5560,9 @@ typedef struct {
 static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
 static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
 
-static int gui_multiwin_supported(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].draw; } /* apps with a draw hook: Files, Mail, Weather */
+static int gui_multiwin_supported(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].draw; }
+/* Notes' draw hook is browse-only, so a lone Notes click keeps the blocking editor; it joins the compositor only as a second window. */
+static int gui_multiwin_dock_ok(int icon){ return gui_multiwin_supported(icon) && (icon != 3 || gui_window_count > 0); } /* apps with a draw hook: Files, Mail, Weather */
 
 /* v0.75.0 (batch 2): Mail has real per-keystroke interaction (its list,
    read and compose modes), unlike Files/Weather's static viewers; Reminders
@@ -5707,7 +5709,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /*  0 */ {"Burrow",     0x00707070, gui_icon_folder,     gui_launch_files,      gui_draw_files_content,     gui_files_on_key},
     /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       gui_launch_mail,       gui_draw_mail_content,      gui_mail_on_key},
     /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   calendar_ring3_open,   0, 0}, /* 1.9.12: ring 3 (user/calendar.c) */
-    /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      gui_launch_editor,     0, 0},
+    /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      gui_launch_editor,     gui_draw_notes_content,     gui_notes_mw_key}, /* 1.9.19: compositor hooks, opened as a window only beside another one */
     /*  4 */ {"Reminders",  0x00375A4A, gui_icon_reminders,  reminders_ring3_open,  0, 0}, /* 1.9.9: ring 3 (user/reminders.c) */
     /*  5 */ {"Terminal",   0x002B2B2B, gui_icon_terminal,   gui_launch_terminal,   0, 0},
     /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       gui_launch_chat_app,   0, 0},
@@ -6810,7 +6812,7 @@ static void gui_run(void){
                 int tmp = gui_order[drag_slot];
                 gui_order[drag_slot] = gui_order[target];
                 gui_order[target] = tmp;
-            } else if (press_slot >= 0 && press_slot == slot_here && gui_multiwin_supported(gui_order[press_slot])) {
+            } else if (press_slot >= 0 && press_slot == slot_here && gui_multiwin_dock_ok(gui_order[press_slot])) {
                 /* v0.73.0: real phase-1 multi-window path for Files/Weather,
                    see the big comment above gui_multiwin_open. Non-blocking
                    on purpose: adds/focuses the window in the real list and
