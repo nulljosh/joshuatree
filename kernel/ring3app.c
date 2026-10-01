@@ -154,7 +154,7 @@ static const char *r3w_file[TASK_SLOTS];
 int ring3app_launch_window(const char *name, unsigned int w, unsigned int h) {
     const struct ring3_app *a = 0;
     /* Stocks also exits to be relaunched for a fresh quote fetch. */
-    if (name[0] == 'S' && name[1] == 't' && name[2] == 'o' && name[3] == 'c' && name[4] == 'k' && name[5] == 's' && !name[6]) return 0;
+    if (name[0] == 'S' && name[1] == 't' && name[2] == 'o' && name[3] == 'c' && name[4] == 'k' && name[5] == 's' && !name[6]) return -1; /* -1 = blocking path; 0 is a valid task id */
     for (unsigned int i = 0; i < sizeof RING3_APPS / sizeof RING3_APPS[0]; i++) {
         const char *p = RING3_APPS[i].name, *q = name;
         while (*p && *p == *q) { p++; q++; }
@@ -204,6 +204,7 @@ int ring3app_is_windowable(const char *name) {
     if (!name) return 0;
     /* Weather exits 7 to ask the blocking launcher for a refetch; a window has no such loop. */
     if (name[0] == 'W' && name[1] == 'e' && name[2] == 'a' && name[3] == 't' && name[4] == 'h' && name[5] == 'e' && name[6] == 'r' && !name[7]) return 0;
+    if (name[0] == 'S' && name[1] == 't' && name[2] == 'o' && name[3] == 'c' && name[4] == 'k' && name[5] == 's' && !name[6]) return 0; /* exits 16+ to ask the blocking launcher for a refetch */
     for (unsigned int i = 0; i < sizeof RING3_APPS / sizeof RING3_APPS[0]; i++) {
         const char *p = RING3_APPS[i].name, *q = name;
         while (*p && *p == *q) { p++; q++; }
