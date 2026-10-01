@@ -459,8 +459,10 @@ int fat_replace_file(const char *name, const void *data, unsigned int len) {
 
 /* v29: fat's own functions already match struct vfs_ops's signatures
    exactly, no adapter shims needed, just point the table at them. */
+static unsigned int fat_cwd_get(void) { return current_dir_cluster; }
+static void fat_cwd_set(unsigned int c) { current_dir_cluster = (u16)c; }
 static const struct vfs_ops fat_vfs_ops = {
-    "fat", fat_read_file, fat_list, fat_delete, fat_chdir, fat_mkdir, fat_write_file, fat_replace_file
+    "fat", fat_read_file, fat_list, fat_delete, fat_chdir, fat_mkdir, fat_write_file, fat_replace_file, fat_cwd_get, fat_cwd_set
 };
 
 void fat_vfs_register(void) {

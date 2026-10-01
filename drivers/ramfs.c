@@ -71,7 +71,7 @@ static int ramfs_write_file(const char *name, const void *data, unsigned int len
 static int ramfs_replace_file(const char *name, const void *data, unsigned int len) { return ramfs_write_common(name, data, len, 1); }
 
 static const struct vfs_ops ramfs_ops = {
-    "ramfs", ramfs_read_file, ramfs_list, ramfs_delete, ramfs_chdir, ramfs_mkdir, ramfs_write_file, ramfs_replace_file
+    "ramfs", ramfs_read_file, ramfs_list, ramfs_delete, ramfs_chdir, ramfs_mkdir, ramfs_write_file, ramfs_replace_file, 0, 0 /* no directories, no cwd */
 };
 
 void ramfs_init(void) {

@@ -30,6 +30,8 @@
 #include "kheap.h"
 #include "pmm.h"
 #include "paging.h"
+#include "irqlock.h"
+#include "serial.h"
 
 typedef unsigned int u32;
 
@@ -94,7 +96,7 @@ static int grow_heap(u32 need) {
     return 1;
 }
 
-void *kmalloc(u32 size) {
+static void *kmalloc_locked(u32 size) {
     size = ALIGN(size);
 
     struct block *prev = 0;
@@ -133,7 +135,7 @@ void *kmalloc(u32 size) {
     return (void *)(b + 1);
 }
 
-void kfree(void *ptr) {
+static void kfree_locked(void *ptr) {
     if (!ptr) return;
     struct block *b = (struct block *)ptr - 1;
     b->free = 1;
@@ -167,4 +169,59 @@ void kfree(void *ptr) {
             cur = cur->next;
         }
     }
+}
+
+/* 1.9.23: the public entry points are cli critical sections (irqlock.h).
+   Task 0 runs with interrupts on and a timer tick can land anywhere inside
+   the free-list walk above; the ring-3 task it switches to then enters the
+   same walk through a syscall. Two walkers on one singly linked list is a
+   double handout or a lost block, so neither walker can be interrupted. */
+void *kmalloc(u32 size) { unsigned int f = irq_save(); void *p = kmalloc_locked(size); irq_restore(f); return p; }
+void kfree(void *ptr) { unsigned int f = irq_save(); kfree_locked(ptr); irq_restore(f); }
+
+/* 1.9.23: consistency walk, the proof behind tools/checks/ring3stress-check.py.
+   Every header must sit inside the frame-backed region, carry a sane size
+   and flag, and sit above its list successor (the decreasing-address
+   invariant kfree's coalescing relies on). A cycle shows up as the walk
+   running past any plausible block count. Logs one serial line, returns 1
+   when the heap is intact. */
+int kheap_check(void) {
+    unsigned int f = irq_save();
+    u32 n = 0, bad = 0;
+    for (struct block *b = heap_head; b; b = b->next) {
+        if (++n > 200000u) { bad = 1; break; }
+        if ((u32)b < 0x100000u || (u32)b + sizeof(struct block) > heap_limit) { bad = 2; break; }
+        if (b->size > 0x1000000u || (b->free != 0 && b->free != 1)) { bad = 3; break; }
+        if (b->next && (u32)b->next >= (u32)b) { bad = 4; break; }
+    }
+    irq_restore(f);
+    if (bad) { static const char *why[] = { "", "cycle", "header outside heap", "bad size or flag", "order" }; serial_puts("kheap: CORRUPT "); serial_puts(why[bad]); serial_puts("\n"); return 0; }
+    serial_puts("kheap: ok\n");
+    return 1;
+}
+
+/* 1.9.23: one round of churn for the stress check. Each side keeps a
+   rotating set of live blocks across rounds (desktop and syscall sets are
+   separate), so the free list changes shape between a preempted walk and
+   its resumption instead of snapping back. A round frees the oldest held
+   block after re-checking its stamp (a second owner of the same block
+   would have overwritten it), then allocates a fresh one of a mixed size
+   and stamps it with a pattern derived from its own address. Returns 1
+   when every stamp held. */
+#define STRESS_HOLD 24
+struct stress_set { u32 *p[STRESS_HOLD]; u32 sz[STRESS_HOLD]; u32 at; };
+static struct stress_set stress_sets[2];
+int kheap_stress_round(u32 seed, int side) {
+    struct stress_set *st = &stress_sets[side & 1];
+    int ok = 1;
+    for (int n = 0; n < 4; n++) {
+        u32 i = st->at++ % STRESS_HOLD;
+        if (st->p[i]) { for (u32 j = 0; j < st->sz[i] / 4; j++) if (st->p[i][j] != ((u32)st->p[i] ^ j)) ok = 0; kfree(st->p[i]); st->p[i] = 0; }
+        u32 sz = 16 + ((seed * 2654435761u >> ((n + (int)i) % 13)) & 0x7F0);
+        u32 *q = (u32 *)kmalloc(sz);
+        if (q) for (u32 j = 0; j < sz / 4; j++) q[j] = (u32)q ^ j;
+        st->p[i] = q; st->sz[i] = sz;
+    }
+    if (!ok) serial_puts("kheap: CORRUPT stamp mismatch\n");
+    return ok;
 }

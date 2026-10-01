@@ -30,6 +30,7 @@
 #include "paging.h"
 #include "gdt.h"
 #include "syscall.h"
+#include "irqlock.h"
 
 typedef unsigned int u32;
 
@@ -186,12 +187,14 @@ void task_kill(int id) {
        same-privilege return straight into task_exit on the kernel stack
        it's already on. The now-unused user ESP/SS words above the frame
        are just dead stack, and task_exit never returns to care. */
+    unsigned int fl = irq_save(); /* 1.9.23: the frame is patched in two steps; a tick between them would resume the task at kernel code with a ring-3 CS */
     u32 *frame = (u32 *)tasks[id].esp;
     frame[F_EIP] = (u32)task_exit;
     if ((frame[F_CS] & 3) == 3) {
         frame[F_CS] = KCODE;
         frame[F_DS] = frame[F_ES] = frame[F_FS] = frame[F_GS] = KDATA;
     }
+    irq_restore(fl);
 }
 
 /* Frees the calling task's own stack and removes it from the round-robin

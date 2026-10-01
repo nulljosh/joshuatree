@@ -29,6 +29,7 @@
 #include "pmm.h"
 #include "net.h"  /* 1.9.11: SYS_HTTP_GET */
 #include "http.h"
+#include "irqlock.h"
 
 typedef unsigned int u32;
 typedef unsigned char u8;
@@ -51,6 +52,8 @@ typedef int (*syscall_fn)(u32 a, u32 b, u32 c);
 #define EPERM    1
 
 extern void syscall_entry(void);
+int syscall_stress_on; /* 1.9.23: set by r3stress_arm when the command line says stress=r3 */
+void r3stress_syscall_round(void);
 static void window_release(int id); /* v3 windows, below */
 static int window_owned(void);
 
@@ -174,10 +177,15 @@ static int copy_path_from_user(u32 addr, char *out) {
    any failure it has already walked back, so the cwd is what it was.
    path_leave walks back; a ".." that fails is logged, since the cwd is
    then genuinely wrong and the shell's next `ls` will show it. */
+/* 1.9.23: the cwd cursor is the desktop's. Task 0 may have been preempted
+   while standing inside NOTES/, so a syscall path starts at the root and
+   the cursor is put back exactly where it was before the gate returns. */
+static unsigned int path_saved_cwd;
 static int path_leave(int depth) {
     int ok = 1;
     while (depth-- > 0) if (!vfs_chdir("..")) ok = 0;
     if (!ok) serial_puts("syscall: BUG chdir(..) failed walking back a relative path\n");
+    vfs_cwd_set(path_saved_cwd);
     return ok;
 }
 static int path_enter(char *path, int keep, char **leaf, int *depth) {
@@ -201,6 +209,7 @@ static int path_enter(char *path, int keep, char **leaf, int *depth) {
     }
     if (n < keep) return -EINVAL; /* open("") or open("DOCS/") */
     if (n - keep > JT_PATH_DEPTH) return -EINVAL;
+    path_saved_cwd = vfs_cwd_get(); vfs_cwd_set(0);
     for (int i = 0; i < n - keep; i++) {
         if (!vfs_chdir(comp[i])) { path_leave(*depth); *depth = 0; return -ENOENT; }
         (*depth)++;
@@ -600,11 +609,13 @@ const u32 *syscall_window_fb(int task, u32 *w, u32 *h, int *dirty) {
     return r->fb;
 }
 void syscall_window_push_event(int task, int kind, int a, int b) {
+    unsigned int f = irq_save(); /* 1.9.23: the compositor fills with IF on, SYS_WINDOW_POLL drains under the gate; the slot is written before rt moves */
     struct r3win *r = r3win_of(task);
-    if (!r) return;
-    if (r->rt - r->rh >= R3WIN_RING) return; /* full: the oldest stays, the newest is dropped, same as a full keyboard ring */
-    struct jt_event *e = &r->ring[r->rt % R3WIN_RING];
-    e->kind = (u32)kind; e->a = a; e->b = b; r->rt++;
+    if (r && r->rt - r->rh < R3WIN_RING) { /* full: the oldest stays, the newest is dropped, same as a full keyboard ring */
+        struct jt_event *e = &r->ring[r->rt % R3WIN_RING];
+        e->kind = (u32)kind; e->a = a; e->b = b; r->rt++;
+    }
+    irq_restore(f);
 }
 static void r3win_release(int task) {
     struct r3win *r = r3win_of(task);
@@ -658,6 +669,7 @@ static int sys_window_poll(u32 ev, u32 flags, u32 c) {
     if (flags & ~(u32)JT_POLL_PRESENT) return -EINVAL;
     struct r3win *r = r3win_of(task_current());
     if (r) {
+        if (syscall_stress_on) r3stress_syscall_round(); /* 1.9.23: stress=r3 boot flag, see r3stress.c */
         if (flags & JT_POLL_PRESENT) r->dirty = 1;
         if (r->rh == r->rt) return -EAGAIN;
         struct jt_event *out = (struct jt_event *)ev;

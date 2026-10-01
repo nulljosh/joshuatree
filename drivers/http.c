@@ -36,6 +36,11 @@ static int resolve_host(const char *host, u32 *ip) {
    line and headers down to just the body; shared here since that part is
    identical either way. */
 static int last_status = 0;
+/* 1.9.23: net.c is a one-connection stack and this file keeps one status.
+   The desktop (Burrow, Weather) and a ring-3 SYS_HTTP_GET (which runs with
+   interrupts on while it waits) can both be inside a fetch, so a second
+   entry while one is in flight fails fast instead of sharing the socket. */
+static int in_flight = 0;
 int http_last_status(void) { return last_status; }
 
 static int http_body_only(u32 ip, unsigned short port, const char *req, u32 req_len,
@@ -68,6 +73,8 @@ static int http_body_only(u32 ip, unsigned short port, const char *req, u32 req_
     return (int)copy;
 }
 
+static int http_get_locked(u32 ip, const char *host, const char *path, unsigned short port, void *body_out, unsigned int body_maxlen, unsigned int reply_timeout_ticks);
+static int http_post_locked(u32 ip, const char *host, const char *path, unsigned short port, const char *body, unsigned int body_len, void *response_out, unsigned int response_maxlen, unsigned int reply_timeout_ticks);
 int http_get(const char *host, const char *path, unsigned short port,
              void *body_out, unsigned int body_maxlen) {
     return http_get_timeout(host, path, port, body_out, body_maxlen, 0);
@@ -77,7 +84,15 @@ int http_get_timeout(const char *host, const char *path, unsigned short port,
                      void *body_out, unsigned int body_maxlen, unsigned int reply_timeout_ticks) {
     u32 ip;
     last_status = 0;
-    if (!resolve_host(host, &ip)) return -1;
+    if (in_flight) return -1;
+    in_flight = 1;
+    int r = -1;
+    if (resolve_host(host, &ip)) r = http_get_locked(ip, host, path, port, body_out, body_maxlen, reply_timeout_ticks);
+    in_flight = 0;
+    return r;
+}
+static int http_get_locked(u32 ip, const char *host, const char *path, unsigned short port,
+                           void *body_out, unsigned int body_maxlen, unsigned int reply_timeout_ticks) {
 
     char req[512];
     u32 n = 0;
@@ -128,7 +143,17 @@ int http_post_timeout(const char *host, const char *path, unsigned short port,
                        void *response_out, unsigned int response_maxlen,
                        unsigned int reply_timeout_ticks) {
     u32 ip;
-    if (!resolve_host(host, &ip)) return -1;
+    if (in_flight) return -1;
+    in_flight = 1;
+    int r = -1;
+    if (resolve_host(host, &ip)) r = http_post_locked(ip, host, path, port, body, body_len, response_out, response_maxlen, reply_timeout_ticks);
+    in_flight = 0;
+    return r;
+}
+static int http_post_locked(u32 ip, const char *host, const char *path, unsigned short port,
+                            const char *body, unsigned int body_len,
+                            void *response_out, unsigned int response_maxlen,
+                            unsigned int reply_timeout_ticks) {
 
     /* v85 (chat history / /api/chat): this used to be a fixed 1024-byte
        stack buffer, which silently truncated ANY POST body over roughly

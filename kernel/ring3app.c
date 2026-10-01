@@ -40,6 +40,7 @@
    the VFS on first launch, the same way `usertest` seeds HELLO.BIN: the
    headless checks and the browser demo have no disk. */
 #include "ring3app.h"
+#include "irqlock.h"
 #include "exec.h"
 #include "syscall.h"
 #include "task.h"
@@ -156,8 +157,10 @@ int ring3app_launch_window(const char *name, unsigned int w, unsigned int h) {
     void *image = 0;
     serial_puts("ring3app: launching "); serial_puts(a->file); serial_puts(" at ring 3 as a window\n");
     __asm__ volatile ("cli"); /* the task must not get a tick before its window row exists */
+    unsigned int f = irq_save(); /* 1.9.23: the slot is marked used before its private mapping and window exist; a tick in between would run the task against nothing */
     int id = exec_user_window(a->file, argv, 1, &image);
     if (id >= 0 && !syscall_window_register(id, w, h, image)) { task_kill(id); id = -1; }
+    irq_restore(f);
     __asm__ volatile ("sti");
     if (id < 0) { serial_puts("ring3app: window launch failed, falling back\n"); return -1; }
     r3w_file[id] = a->file;
