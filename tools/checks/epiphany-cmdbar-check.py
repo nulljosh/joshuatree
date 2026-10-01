@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Headless proof of Epiphany's command bar (kernel/epiphany.h, "AAPL GP" /
+"""Headless proof of Epiphany's command bar (user/epiphany.c, "AAPL GP" /
 "AAPL DES"): opens Epiphany from the Apps folder (grid index 22, same nav
 as feature-drive.py), presses `/` to focus the bar, types "aapl gp" and
 Enter, and checks two things: the GP chart panel actually drew (a real
 line, not a blank pane, at the panel's chart row) and the kernel logged
-the real discriminating marker (epi_cmd_run's serial_puts, kernel/epiphany.h)
+the real discriminating marker (epi_cmd_run's serial_puts, user/epiphany.c)
 rather than a screenshot coincidence. Then it clears with Esc, types a
 bogus code ("aapl zz") and asserts the one-line error lands in the bar
 and its own serial marker fires, with no crash either time.

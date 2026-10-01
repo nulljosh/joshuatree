@@ -11,17 +11,17 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 1. 1.8 done: a phone home screen, an app grid, one app full screen at a time, a back button.
 2. 1.9 done: touch works, an on-screen keyboard, every app readable at phone size.
 3. Every app in the APPS[] table runs as its own ring 3 program. No app code left in kernel.c.
-4. A check crashes each app on purpose and proves the desktop is still alive after every one. Done for every ring-3 app in 1.9.14 (`tools/checks/ring3crash-all-check.py`, 18 of 18).
+4. A check crashes each app on purpose and proves the desktop is still alive after every one. Done for every ring-3 app (`tools/checks/ring3crash-all-check.py`, 19 of 19 as of 1.9.19).
 5. Input goes to the focused window only, not a global key pull.
 
 ## Where things stand
 
-Checkpoint 2026-09-30. Main is 1.9.14 once the landing PR merges, and 18 of 26 apps run in ring 3.
+Checkpoint 2026-10-01. Epiphany went to ring 3 in 1.9.19, so 19 of 26 apps run in ring 3.
 
-- In ring 3: Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind, Calendar, Search.
-- Still in the kernel: Burrow (was Files), Mail, Notes, Terminal, Samantha, Weather, Stocks, Epiphany.
+- In ring 3: Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind, Calendar, Search, Epiphany.
+- Still in the kernel: Burrow (was Files), Mail, Notes, Terminal, Samantha, Weather, Stocks.
 - Gate item 4 (crash every app) is done for all ring-3 apps. The check parses `RING3_APPS`, so a new port is covered on its own.
-- New syscalls: 386 tasks, 387 http_get (Curbfind), 388 readdir (Search, for Files next).
+- New syscalls: 386 tasks, 387 http_get (Curbfind, Epiphany), 388 readdir (Search, for Files next).
 - The 1.9.14 PR also carries the landing work: chat bar on phones, icon buttons, QA fixes, Tech specs, the footer directory.
 
 Lesson: main requires up-to-date branches, so every merge forces the next PR to re-run CI (about 15 minutes). Batch where possible.
@@ -42,7 +42,7 @@ QA backlog:
 
 ## Next, in order
 
-1. Weather, Stocks and Epiphany to ring 3 in one PR on SYS_HTTP_GET. Check `weather_text` in `phone_home.h` and Samantha's weather tool still work. Findings from the 1.9.15 pass (no port landed, the session was cut short):
+1. Weather and Stocks to ring 3 on SYS_HTTP_GET (Epiphany shipped in 1.9.19: its GP chart now draws previous close to last from `/api/quotes`, since `stx_data` is kernel-only and too big for the 2 KB body). Check `weather_text` in `phone_home.h` and Samantha's weather tool still work. Findings from the 1.9.15 pass (no port landed, the session was cut short):
    - Stocks cannot come through `SYS_HTTP_GET` as it is: `/api/stocks?range=N` is eight rows of up to 64 prices (about 3.2 KB) and the call clamps the body to `JT_HTTP_BODY_MAX` (2048 bytes), so the later symbols are cut. Either the Worker gains a per-symbol path or the app keeps the kernel's `stocks_fetch` as the feed. Epiphany's 40-line `/api/quotes` (about 700 bytes) fits, but its GP chart reads the same `stx_data`.
    - Weather is one of only three compositor apps with draw/on_key hooks (with Burrow and Mail). Seven checks use it as the second window (`multiwindow-check.py`, `windowsnap-check.py`, `dockcap-fallback-check.sh`, `appswitcher-check.py`, `titlebar-aa-check.py`, `textsharp-check.py`, `weather-app-check.sh`), and the cap check needs three such apps. Give Notes or Terminal draw hooks first, re-home those checks, then port Weather with the kernel's `weather_fetch` writing a small `WEATHER.TXT` the app reads (the menu bar, wind sway, phone home and Samantha keep reading the kernel's own fields).
 2. Burrow (the old Files app, renamed in 1.9.14), then Terminal, Notes, Mail, Samantha to ring 3.
