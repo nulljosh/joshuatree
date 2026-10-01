@@ -82,3 +82,8 @@ void paging_free_task_directory(unsigned int dir_phys);
 void paging_load_directory(unsigned int dir_phys); /* loads CR3 */
 unsigned int paging_kernel_directory(void); /* the shared kernel directory's own physical address, what task 0 runs on */
 #endif
+
+/* 1.9.23: per-task private user window, see paging.c. */
+int  paging_task_map_private(unsigned int dir_phys, unsigned int vaddr, unsigned int phys, unsigned int len);
+void paging_task_unmap_private(unsigned int dir_phys);
+int  paging_user_range_ok_current(unsigned int addr, unsigned int len);

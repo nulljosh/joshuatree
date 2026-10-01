@@ -523,6 +523,15 @@ after a window closes and asserts both refusals and the fault.
 pointer on purpose; the check presses it and asserts the desktop is still
 alive afterwards, with the serial log naming the fault.
 
+## Windows as compositor windows (1.9.23)
+
+The calls did not change. What changed is what they mean for a program the desktop launched on the window path (`kernel/ring3app.c` `ring3app_launch_window`):
+
+- `window_open` fills the same `jt_window_info`; `pixels` is still `JT_USER_FB`, but the frames behind it belong to this task alone, mapped into no other directory.
+- `window_poll` with `JT_POLL_PRESENT` no longer copies the buffer to the screen inside the call. It marks the window dirty and the desktop blits it on its next frame, so a program that presents every loop costs the kernel nothing extra.
+- Events come from a per-window queue of 16. The desktop puts a key or click there only while this window is focused; a full queue drops the newest. `JT_EV_CLICK` coordinates are relative to the content area, as before.
+- A program on the blocking path (every app not named in `gui_ring3_windowed`) sees the old behaviour exactly.
+
 ## tasks (1.9.6)
 
 | # | Name | ebx | ecx | Returns |

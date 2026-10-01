@@ -12,11 +12,11 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 2. 1.9 done: touch works, an on-screen keyboard, every app readable at phone size.
 3. Every app in the APPS[] table runs as its own ring 3 program. No app code left in kernel.c.
 4. A check crashes each app on purpose and proves the desktop is still alive after every one. Done for every ring-3 app (`tools/checks/ring3crash-all-check.py`, 20 of 20 as of 1.9.22).
-5. Input goes to the focused window only, not a global key pull.
+5. Input goes to the focused window only, not a global key pull. Done for ring-3 window apps (1.9.23, `tools/checks/ring3window-check.py`): Reminders beside Notes, keys reach only the focused one. The other nineteen still use the blocking launch and `gui_poll_event`'s global pull until they move to the window path (one row in `gui_ring3_windowed`).
 
 ## Where things stand
 
-Checkpoint 2026-10-01. Weather went to ring 3 in 1.9.22, so 20 of 26 apps run in ring 3.
+Checkpoint 2026-10-01. Weather went to ring 3 in 1.9.22, so 20 of 26 apps run in ring 3. 1.9.23 added the window path (`exec_user_window`, `paging_task_map_private`, `r3wins` in syscall.c, `gui_ring3_windowed` in kernel.c): a ring-3 program as a compositor window with private memory and per-window input. Reminders is on it; the rest are one row each, and Burrow, Notes and Mail can now leave the kernel without losing multi-window.
 
 - In ring 3: Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind, Calendar, Search, Epiphany, Weather.
 - Still in the kernel: Burrow (was Files), Mail, Notes, Terminal, Samantha, Stocks.

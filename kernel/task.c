@@ -218,7 +218,7 @@ void task_exit_with(int code) {
        this slot must not inherit its descriptors. */
     syscall_release_task(id);
     if (tasks[id].stack_base) kfree(tasks[id].stack_base);
-    if (tasks[id].page_dir && tasks[id].page_dir != paging_kernel_directory()) paging_free_task_directory(tasks[id].page_dir);
+    if (tasks[id].page_dir && tasks[id].page_dir != paging_kernel_directory()) { paging_task_unmap_private(tasks[id].page_dir); paging_free_task_directory(tasks[id].page_dir); }
     tasks[id].stack_base = 0;
     tasks[id].page_dir = 0;
     tasks[id].used = 0;
@@ -238,3 +238,6 @@ void sleep_ticks(unsigned int n) {
         yield();
     }
 }
+
+/* 1.9.23: the task's own directory, for exec_user_window's private mapping. */
+unsigned int task_page_dir(int id) { return (id >= 0 && id < MAX_TASKS && tasks[id].used) ? tasks[id].page_dir : 0; }

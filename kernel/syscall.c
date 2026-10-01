@@ -424,6 +424,7 @@ static int sys_close(u32 fd, u32 b, u32 c) {
     return close_fd(id, fd);
 }
 
+static void r3win_release(int task);
 void syscall_release_task(int id) {
     if (id < 0 || id >= TASK_SLOTS) return;
     window_release(id);
@@ -560,11 +561,73 @@ static int window_owned(void) { return win_owner >= 0; }
 int  gui_app_view_size(unsigned int *w, unsigned int *h); /* 1 if an app viewport is open */
 int  gui_poll_event(int *a, int *b);                        /* non-blocking: JT_EV_* or 0 */
 
+/* 1.9.23: compositor windows. A ring-3 program launched through
+   exec_user_window gets a row here before it runs: a framebuffer of the
+   window's size, kmalloc'd and mapped only into that task's directory at
+   JT_USER_FB (paging_task_map_private), plus a 16-deep event ring the
+   desktop fills (syscall_window_push_event) and SYS_WINDOW_POLL drains.
+   JT_POLL_PRESENT no longer copies anything: it marks the row dirty and
+   kernel.c's compositor blits the buffer at the window's position on its
+   next frame. The legacy single owner (win_owner, above) stays for the
+   blocking launcher, so nothing unconverted changes. */
+#define R3WIN_MAX 4
+#define R3WIN_RING 16
+struct r3win { int task; u32 *fb; void *fb_raw; void *image; u32 w, h; int dirty; struct jt_event ring[R3WIN_RING]; u32 rh, rt; };
+static struct r3win r3wins[R3WIN_MAX];
+static struct r3win *r3win_of(int task) {
+    if (task < 0) return 0;
+    for (int i = 0; i < R3WIN_MAX; i++) if (r3wins[i].task == task) return &r3wins[i];
+    return 0;
+}
+int syscall_window_register(int task, u32 w, u32 h, void *image) {
+    if (task <= 0 || !w || !h || w * h * 4 > JT_USER_FB_BYTES) return 0;
+    struct r3win *r = 0;
+    for (int i = 0; i < R3WIN_MAX; i++) if (r3wins[i].task <= 0) { r = &r3wins[i]; break; }
+    if (!r) return 0;
+    u32 bytes = (w * h * 4 + 4095) & ~4095u;
+    u8 *raw = (u8 *)kmalloc(bytes + 4096);
+    if (!raw) return 0;
+    u32 *fb = (u32 *)(((u32)raw + 4095) & ~4095u);
+    for (u32 i = 0; i < w * h; i++) fb[i] = 0;
+    if (!paging_task_map_private(task_page_dir(task), JT_USER_FB, (u32)fb, bytes)) { kfree(raw); return 0; }
+    r->task = task; r->fb = fb; r->fb_raw = raw; r->image = image; r->w = w; r->h = h; r->dirty = 0; r->rh = r->rt = 0;
+    return 1;
+}
+const u32 *syscall_window_fb(int task, u32 *w, u32 *h, int *dirty) {
+    struct r3win *r = r3win_of(task);
+    if (!r) return 0;
+    *w = r->w; *h = r->h; *dirty = r->dirty; r->dirty = 0;
+    return r->fb;
+}
+void syscall_window_push_event(int task, int kind, int a, int b) {
+    struct r3win *r = r3win_of(task);
+    if (!r) return;
+    if (r->rt - r->rh >= R3WIN_RING) return; /* full: the oldest stays, the newest is dropped, same as a full keyboard ring */
+    struct jt_event *e = &r->ring[r->rt % R3WIN_RING];
+    e->kind = (u32)kind; e->a = a; e->b = b; r->rt++;
+}
+static void r3win_release(int task) {
+    struct r3win *r = r3win_of(task);
+    if (!r) return;
+    for (u32 i = 0; i < r->w * r->h; i++) r->fb[i] = 0;
+    kfree(r->fb_raw); kfree(r->image);
+    r->task = -1; r->fb = 0; r->fb_raw = 0; r->image = 0; r->w = r->h = 0;
+    serial_puts("syscall: window released, task gone\n");
+}
+void syscall_windows_init(void) { for (int i = 0; i < R3WIN_MAX; i++) r3wins[i].task = -1; }
+
 static int sys_window_open(u32 info, u32 b, u32 c) {
     (void)b; (void)c;
     if (!paging_user_range_ok(info, sizeof(struct jt_window_info))) return -EFAULT;
     int id = task_current();
     if (id <= 0 || id >= TASK_SLOTS) return -EBADF;
+    struct r3win *r = r3win_of(id);
+    if (r) {
+        struct jt_window_info *out = (struct jt_window_info *)info;
+        out->width = r->w; out->height = r->h; out->pitch = r->w * 4; out->pixels = (u32 *)JT_USER_FB;
+        serial_puts("syscall: window opened for ring-3 task\n");
+        return 0;
+    }
     if (win_owner >= 0 && win_owner != id) return -EBUSY;
     u32 w, h;
     if (!gui_app_view_size(&w, &h) || !w || !h) return -ENODEV;
@@ -592,8 +655,16 @@ static void window_present_user(void) {
 static int sys_window_poll(u32 ev, u32 flags, u32 c) {
     (void)c;
     if (!paging_user_range_ok(ev, sizeof(struct jt_event))) return -EFAULT;
-    if (win_owner != task_current()) return -EBADF;
     if (flags & ~(u32)JT_POLL_PRESENT) return -EINVAL;
+    struct r3win *r = r3win_of(task_current());
+    if (r) {
+        if (flags & JT_POLL_PRESENT) r->dirty = 1;
+        if (r->rh == r->rt) return -EAGAIN;
+        struct jt_event *out = (struct jt_event *)ev;
+        *out = r->ring[r->rh % R3WIN_RING]; r->rh++;
+        return 1;
+    }
+    if (win_owner != task_current()) return -EBADF;
     if (flags & JT_POLL_PRESENT) window_present_user();
     int a = 0, b = 0;
     int kind = gui_poll_event(&a, &b);
@@ -735,6 +806,7 @@ static int sys_readdir(u32 path, u32 out, u32 max) {
    handed a pointer into them would have passed paging_user_range_ok.
    tools/checks/userfb-release-check.py proves both doors are shut. */
 static void window_release(int id) {
+    r3win_release(id); /* 1.9.23: a compositor window, if this task had one */
     if (win_owner != id) return;
     u32 *fb = (u32 *)JT_USER_FB;
     for (u32 i = 0; i < win_w * win_h; i++) fb[i] = 0;

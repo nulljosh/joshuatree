@@ -67,6 +67,7 @@
 #include "user_weather.h"
 #include "user_fbpoke.h"
 #include "app.h"
+#include "window.h"
 #include "irq.h"
 #include "mouse.h"
 
@@ -118,7 +119,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Weather",    user_weather,    USER_WEATHER_LEN,    "WEATHER.BIN"},
 };
 
-static int ring3app_launch(const struct ring3_app *a) {
+static int ring3app_seed(const struct ring3_app *a) {
     unsigned char probe[1];
     if (vfs_read_file(a->file, probe, 1) < 0 &&
         !vfs_write_file(a->file, a->bin, a->len)) {
@@ -133,6 +134,61 @@ static int ring3app_launch(const struct ring3_app *a) {
             return -1;
         }
     }
+    return 0;
+}
+
+/* 1.9.23: the non-blocking launcher behind a compositor window. The
+   program is scheduled beside the desktop loop (exec_user_window), draws
+   into a framebuffer that exists only in its own directory, and gets its
+   keys and clicks from the window's event ring, never from a global key
+   pull. Returns the task id for kernel.c's window row, or -1, in which
+   case the caller falls back to the blocking path. */
+static const char *r3w_file[TASK_SLOTS];
+int ring3app_launch_window(const char *name, unsigned int w, unsigned int h) {
+    const struct ring3_app *a = 0;
+    for (unsigned int i = 0; i < sizeof RING3_APPS / sizeof RING3_APPS[0]; i++) {
+        const char *p = RING3_APPS[i].name, *q = name;
+        while (*p && *p == *q) { p++; q++; }
+        if (!*p && !*q) { a = &RING3_APPS[i]; break; }
+    }
+    if (!a || ring3app_seed(a) < 0) return -1;
+    const char *argv[] = { a->file };
+    void *image = 0;
+    serial_puts("ring3app: launching "); serial_puts(a->file); serial_puts(" at ring 3 as a window\n");
+    __asm__ volatile ("cli"); /* the task must not get a tick before its window row exists */
+    int id = exec_user_window(a->file, argv, 1, &image);
+    if (id >= 0 && !syscall_window_register(id, w, h, image)) { task_kill(id); id = -1; }
+    __asm__ volatile ("sti");
+    if (id < 0) { serial_puts("ring3app: window launch failed, falling back\n"); return -1; }
+    r3w_file[id] = a->file;
+    return id;
+}
+/* The compositor's blit of one window's private buffer into the viewport
+   kernel.c has already set, through window_pixel, so clipping and the back
+   buffer come for free. The program never touches the screen. */
+void ring3app_window_blit(int task, int vw, int vh) {
+    unsigned int fw = 0, fh = 0; int dirty = 0;
+    const unsigned int *fb = syscall_window_fb(task, &fw, &fh, &dirty);
+    if (!fb || vw <= 0 || vh <= 0) return;
+    unsigned int cw = fw < (unsigned int)vw ? fw : (unsigned int)vw;
+    unsigned int ch = fh < (unsigned int)vh ? fh : (unsigned int)vh;
+    for (unsigned int yy = 0; yy < ch; yy++)
+        for (unsigned int xx = 0; xx < cw; xx++)
+            window_pixel((int)xx, (int)yy, fb[yy * fw + xx]);
+}
+/* Called by the compositor when it finds a window's task gone: the same
+   crash/exit line the blocking launcher logs, so the crash checks read it. */
+void ring3app_window_reaped(int task, int status) {
+    const char *file = (task >= 0 && task < TASK_SLOTS && r3w_file[task]) ? r3w_file[task] : "?";
+    char num[12]; put_dec(num, status);
+    serial_puts("ring3app: "); serial_puts(file);
+    if (status < 0 && -status < 32) { serial_puts(" crashed ("); serial_puts(EXC_SHORT[-status]); serial_puts("), window torn down, desktop alive\n"); }
+    else { serial_puts(" exited "); serial_puts(num); serial_puts(", window torn down, desktop alive\n"); }
+    if (task >= 0 && task < TASK_SLOTS) r3w_file[task] = 0;
+}
+
+static int ring3app_launch(const struct ring3_app *a) {
+    if (ring3app_seed(a) < 0) return -1;
     /* The viewport must fit the ring-3 framebuffer, or SYS_WINDOW_OPEN
        fails and the program exits before it draws a thing. Checked here,
        loudly, so a viewport that outgrows .userfb (boot/linker.ld) shows

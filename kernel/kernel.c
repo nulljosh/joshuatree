@@ -2115,6 +2115,7 @@ struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
 static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
+static int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
     struct wp_row c;
@@ -5254,7 +5255,12 @@ static void gui_launch(int icon){
     if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
 }
 
+static int gui_multiwin_open(int icon);
 void gui_launch_from_dock(int icon){
+    /* 1.9.23: a ring-3 window app opens as a compositor window from every
+       path (dock, keyboard, open= boot flag); the blocking viewport below
+       is only the fallback when the launch failed. */
+    if (gui_ring3_windowed(icon) && gui_multiwin_open(icon) >= 0) return;
 again:
     /* Keep the desktop visible around the app. The framebuffer viewport
        clips every app draw, including window_clear and physical AA text. */
@@ -5320,41 +5326,25 @@ again:
    screen at the same time, each redrawn from its own real state on every
    repaint, neither frozen nor a fake snapshot.
 
-   Deliberately NOT attempted here, the real reasons this stays phase 1:
-   - Only Files and Weather are wired to this path. They're the two
-     simplest gui_wait_close-shaped read-only viewers (roadmap.md's own
-     staggering plan calls this batch 1 of the app conversion). Every
-     other dock app (Mail, Calendar, Notes, Reminders, Terminal, Chat) has
-     real per-keystroke state and keeps the old blocking
-     gui_launch_from_dock path untouched, on purpose: converting an app
-     with a real input loop into a non-blocking draw()/on_key() handler
-     with no shared-state hazard is real work per app, not a bulk
-     find/replace, and roadmap.md is explicit that this is the multi-
-     session part.
-   - No real z-order/overlap compositing: the naive back-to-front redraw
-     draws window 0 then window 1, and a click always tests only the
-     most-recently-opened (topmost) window's full rect. Real
-     click-through-to-lower-window hit testing is phase 2, not attempted.
-   - No click-to-focus: opening a window focuses it (the same
-     "most-recently-opened owns input" model the single-window kernel
-     already had, just no longer tearing the previous window down first).
-     Clicking the background window does nothing yet; that's real
-     click-to-focus, phase 2's job.
-   - Capped at 2 concurrent windows (GUI_MULTIWIN_MAX): exactly what this
-     pass needs to prove and no more; a real 4-6 slot cap is a phase-2
-     decision once more apps are converted and the memory cost (each
-     window drawing straight into the shared framebuffer today, no
-     per-window backing store yet, see roadmap.md's sizing note) is
-     actually being paid by something that needs it. */
+   Phase 2 (click-to-focus, z-order hit testing) landed in v0.73.6; the
+   2-window cap (GUI_MULTIWIN_MAX) is the one scoping choice still here. */
 #define GUI_MULTIWIN_MAX 2
 typedef struct {
     int icon;
     int x, y, w, h;
+    int task; /* 1.9.23: the ring-3 task drawing this window, -1 for an in-kernel draw hook */
+    int shown; /* 1.9.23: 0 until the compositor has drawn it once (an open= boot launch lands before the first frame) */
 } gui_window_t;
+/* 1.9.23: ring-3 apps that open as compositor windows (ring3app_launch_window)
+   instead of the blocking viewport. Reminders is the proof; one row moves another. */
+int ring3app_launch_window(const char *name, unsigned int w, unsigned int h);
+void ring3app_window_reaped(int task, int status);
+void ring3app_window_blit(int task, int vw, int vh);
+static int gui_ring3_windowed(int icon){ return icon == 4; } /* Reminders */
 static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
 static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
 
-static int gui_multiwin_supported(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].draw; }
+static int gui_multiwin_supported(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && (APPS[icon].draw || gui_ring3_windowed(icon)); }
 /* Notes' draw hook is browse-only, so a lone Notes click keeps the blocking editor; it joins the compositor only as a second window. */
 static int gui_multiwin_dock_ok(int icon){ return gui_multiwin_supported(icon) && (icon != 3 || gui_window_count > 0); } /* apps with a draw hook: Files, Mail, Weather */
 
@@ -5364,7 +5354,7 @@ static int gui_multiwin_dock_ok(int icon){ return gui_multiwin_supported(icon) &
    programs. gui_run's input loop below only ever forwards a keystroke to
    the app whose window is currently topmost/focused (the same "topmost
    owns input" rule click-to-focus already established for clicks). */
-static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].key; } /* apps with a key hook; Files for its 1/2 view-switch keys, Weather for R-to-retry */
+static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && (APPS[icon].key || gui_ring3_windowed(icon)); } /* apps with a key hook; Files for its 1/2 view-switch keys, Weather for R-to-retry */
 
 /* Window 0 keeps the exact single-window rect the existing dock-app tests
    already assert against (gui_launch_from_dock's own x=70,y=40,w=820,h=385;
@@ -5434,22 +5424,8 @@ static void gui_snap_outline(int zone){
     window_rect(x + w - 1, y, 1, h, c);
 }
 
-/* v0.76.18: split out of what used to be one gui_multiwin_draw_one, direct
-   report ("keystroke re-rendering glitch still present" after the earlier
-   Notes/Terminal/Chat chrome fixes). Root cause, same bug shape those
-   fixes already established, just never extended here: every keystroke
-   into a multi-window Mail/Calendar/Reminders window went through the
-   v0.75.0 "cheap tier" at gui_run's mw_key_repaint path, which called the
-   OLD gui_multiwin_draw_one every time -- and that function unconditionally
-   redrew this window's ENTIRE chrome (gui_rounded_rect_on_wallpaper's real
-   per-row alpha blend across the whole ~820x385 rect, plus all three
-   traffic lights and the title) before ever touching content, on every
-   single character typed. None of that chrome depends on what's being
-   typed; only the content viewport does. With no double buffer in this
-   framebuffer (this kernel's own standing, tracked limitation), redrawing
-   that much unchanged chrome on every keystroke is exactly the kind of
-   real mid-scan tear the dock/menu cheap tiers already exist to avoid,
-   just never plugged into this path. */
+/* v0.76.18: chrome and content split so a keystroke repaints only the
+   content viewport, never the whole alpha-blended frame (mwkeyflash-check.sh). */
 static void gui_multiwin_draw_chrome(const gui_window_t *win){
     serial_puts("mwchrome\n"); /* discriminating marker for tools/checks/mwkeyflash-check.sh */
     int x = win->x, y = win->y, w = win->w, h = win->h;
@@ -5458,28 +5434,21 @@ static void gui_multiwin_draw_chrome(const gui_window_t *win){
 static void gui_multiwin_draw_content_only(const gui_window_t *win){
     int x = win->x, y = win->y, w = win->w, h = win->h;
     window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
-    /* v0.76.19: real, standing bug, direct report ("two toolbars on
-       windows, two x buttons two minimize buttons") -- present since
-       multi-window Files/Weather shipped (v0.73.0) and Mail/Calendar/
-       Reminders (v0.75.0), not something this pass's chrome/content split
-       introduced. Every one of the five *_content functions below calls
-       the shared gui_draw_app_titlebar(), which only skips drawing its
-       OWN traffic-light circles + "x"/"-" when the global gui_app_windowed
-       flag is set -- but that flag was only ever set by the OLD single-
-       window gui_launch_from_dock path (bracketing its blocking
-       gui_launch() call), never by this multi-window content path. So
-       every multiwin content redraw drew a second, real, viewport-
-       relative (26,20)/(46,20)/(66,20) set of traffic lights on top of
-       gui_multiwin_draw_chrome's own real ones -- two visibly offset
-       toolbars, exactly as reported, not a rendering glitch, a real
-       missing flag. */
+    /* v0.76.19: gui_draw_app_titlebar skips its own traffic lights only
+       under this flag; without it every content redraw drew a second set. */
     gui_app_windowed = 1;
     /* Real per-repaint content, not a cached bitmap: each call re-derives
        the window's content from the same live state its single-window
        counterpart reads (vfs_list for Files, weather_text for Weather),
        so a second window opening never leaves the first one's content
        stale or frozen. */
-    if (gui_multiwin_supported(win->icon)) APPS[win->icon].draw();
+    if (win->task >= 0) {
+        /* 1.9.23: a ring-3 window: blit its private framebuffer through
+           window_pixel, the same clipped primitive every in-kernel app
+           draws with, at this window's position. The program never
+           touches the screen. */
+        ring3app_window_blit(win->task, w - 16, h - 40);
+    } else if (gui_multiwin_supported(win->icon)) APPS[win->icon].draw();
     gui_app_windowed = 0;
     window_clear_viewport();
 }
@@ -5692,7 +5661,17 @@ static int gui_multiwin_open(int icon){
     if (gui_window_count >= GUI_MULTIWIN_MAX) return -1; /* the real cap this pass proves, see the comment above */
     int slot = gui_window_count;
     gui_windows[slot].icon = icon;
+    gui_windows[slot].task = -1;
+    gui_windows[slot].shown = 0;
     gui_multiwin_geom(slot, &gui_windows[slot].x, &gui_windows[slot].y, &gui_windows[slot].w, &gui_windows[slot].h);
+    if (gui_ring3_windowed(icon)) {
+        /* 1.9.23: the program is scheduled now and draws into its own
+           buffer; this loop keeps running. -1 hands the click to the
+           blocking path, so a failed launch is a slower open, not a lost one. */
+        int t = ring3app_launch_window(APPS[icon].name, (unsigned int)(gui_windows[slot].w - 16), (unsigned int)(gui_windows[slot].h - 40));
+        if (t < 0) return -1;
+        gui_windows[slot].task = t;
+    }
     gui_window_count++;
     return slot;
 }
@@ -6353,6 +6332,21 @@ static void gui_run(void){
            branches can't double-consume the same scancode. */
         int mw_topmost_icon = gui_window_count > 0 ? gui_windows[gui_window_count - 1].icon : -1;
         int mw_key_repaint = 0;
+        int r3_dirty_top = 0; /* 1.9.23: the focused ring-3 window presented a frame; cheap content-only blit below */
+        for (int i = 0; i < gui_window_count; i++) {
+            if (!gui_windows[i].shown) { gui_windows[i].shown = 1; mw_key_repaint = 1; }
+            if (gui_windows[i].task < 0) continue;
+            if (!task_used(gui_windows[i].task)) {
+                /* The program exited or was reaped (idt.c): close only its
+                   window. Everything else on screen stays. */
+                ring3app_window_reaped(gui_windows[i].task, task_last_exit_code());
+                gui_multiwin_close(i); i--; mw_key_repaint = 1;
+                continue;
+            }
+            unsigned int fw, fh; int dirty = 0;
+            syscall_window_fb(gui_windows[i].task, &fw, &fh, &dirty);
+            if (dirty) { if (i == gui_window_count - 1) r3_dirty_top = 1; else mw_key_repaint = 1; }
+        }
         /* App switcher hotkey, checked before the per-app dispatch just
            below gets its own single kbd_pop() this frame. kbd_peek()
            (irq.c) only tells us what's next without eating it, so a plain
@@ -6407,7 +6401,12 @@ static void gui_run(void){
         }
         if (gui_multiwin_interactive(mw_topmost_icon)) {
             int mwk = gui_multiwin_key_nonblock();
-            if (mwk >= 0) {
+            if (mwk >= 0 && gui_windows[gui_window_count - 1].task >= 0) {
+                /* 1.9.23: the focused window is a ring-3 program: the key
+                   goes into its event ring and nowhere else. It redraws
+                   through JT_POLL_PRESENT, which the dirty pass below picks up. */
+                syscall_window_push_event(gui_windows[gui_window_count - 1].task, JT_EV_KEY, mwk, 0);
+            } else if (mwk >= 0) {
                 int mw_should_close = 0, mw_count_before_key = gui_window_count;
                 mw_should_close = APPS[mw_topmost_icon].key(mwk);
                 if (mw_should_close) {
@@ -6585,6 +6584,16 @@ static void gui_run(void){
                 gui_multiwin_draw_content_only(&gui_windows[press_window]);
                 gui_cursor_save(last_mx, last_my);
                 gui_draw_cursor(last_mx, last_my);
+            } else if (press_window >= 0 && gui_windows[press_window].task >= 0
+                       && !(mx >= gui_windows[press_window].x + 16 && mx <= gui_windows[press_window].x + 32
+                            && my >= gui_windows[press_window].y + 8 && my <= gui_windows[press_window].y + 24)) {
+                /* 1.9.23: a click inside a ring-3 window's content is the
+                   program's, in viewport coordinates; only its red dot closes
+                   it (task_kill, reaped on its next turn, window closed below). */
+                syscall_window_push_event(gui_windows[press_window].task, JT_EV_CLICK,
+                                          mx - (gui_windows[press_window].x + 8), my - (gui_windows[press_window].y + 32));
+            } else if (press_window >= 0 && gui_windows[press_window].task >= 0) {
+                task_kill(gui_windows[press_window].task);
             } else if (press_window >= 0) {
                 /* v0.73.0: closing this window is exactly it, no reopen/
                    switch behaviour (that's v68's dock-tile close-and-open,
@@ -6608,24 +6617,9 @@ static void gui_run(void){
                    everything) instead of blocking inside gui_wait_close the
                    way every other app still does. */
                 editor_mouse_x = mx; editor_mouse_y = my;
-                /* v0.76.56: real bug, confirmed headless (three windows
-                   opened back to back, gui_window_count dumped via the
-                   QEMU monitor): once GUI_MULTIWIN_MAX (2) windows are
-                   already open, gui_multiwin_open silently returns -1 and
-                   this click does NOTHING -- no window opens, nothing
-                   closes, no error, the previously-topmost window just
-                   stays exactly as it was. From the outside that reads as
-                   "I clicked App X's dock icon and got App Y" (whatever
-                   was already on top), the same symptom class the
-                   roadmap's live-QA pass reported for Calendar/Reminders,
-                   even though the real cause is a swallowed click at the
-                   window cap, not a wrong icon index (gui_order/gui_launch
-                   dispatch were re-verified correct via the same headless
-                   harness and are not the bug). Real fix: when the cap
-                   blocks the multi-window path, fall through to the
-                   existing blocking single-window path below instead of
-                   dropping the click, so the user's click always does
-                   *something* visible. */
+                /* v0.76.56: at the GUI_MULTIWIN_MAX cap the window path
+                   returns -1; fall through to the blocking path so the click
+                   always does something visible (dockcap-fallback-check.py). */
                 if (gui_multiwin_open(gui_order[press_slot]) < 0) {
                     serial_puts("mwcapfallback\n"); /* discriminating marker for tools/checks/dockcap-fallback-check.py */
                     gui_launch_from_dock(gui_order[press_slot]);
@@ -6776,6 +6770,14 @@ static void gui_run(void){
             if (drag_slot < 0) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
             last_mx = mx; last_my = my; last_hover = hover_slot; last_drag = drag_slot;
             last_menu_open = menu_open; last_menu_hover = menu_hover;
+        }
+        else if (r3_dirty_top) {
+            /* 1.9.23: the focused ring-3 window has a new frame: blit just
+               its content, the same cheap tier a Mail keystroke takes. */
+            gui_cursor_restore();
+            gui_multiwin_draw_content_only(&gui_windows[gui_window_count - 1]);
+            gui_cursor_save(mx, my);
+            gui_draw_cursor(mx, my);
         }
     }
     window_close();
@@ -9046,6 +9048,7 @@ void kmain(unsigned int multiboot_info_addr){
     paging_install();
     klog("paging_install: higher-half paging active");
     tasks_init();
+    syscall_windows_init(); /* 1.9.23: compositor window rows start empty */
     klog("tasks_init: scheduler ready");
     klog(sb16_init() ? "sb16_init: Sound Blaster 16 found" : "sb16_init: no sound card");
     ata_blockdev_register(); /* v33 (0.33.0): register real backends before anything tries to mount a filesystem over one */

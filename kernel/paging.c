@@ -234,7 +234,12 @@ void paging_clear_user(void *addr, unsigned int len) {
    outside it is a kernel-only address by construction. Within it, every
    page in the range needs both present and U/S set in the shared base
    table for its 4MB slot, which every task directory points at by value. */
+int paging_user_range_ok_current(unsigned int addr, unsigned int len);
 int paging_user_range_ok(unsigned int addr, unsigned int len) {
+    return paging_user_range_ok_current(addr, len); /* 1.9.23: walk CR3, so a private window (paging_task_map_private) is judged by its own tables */
+}
+static int paging_user_range_ok_shared(unsigned int addr, unsigned int len) __attribute__((unused));
+static int paging_user_range_ok_shared(unsigned int addr, unsigned int len) {
     if (len == 0) return 1;
     unsigned int end = addr + len;
     if (end < addr) return 0; /* wrapped */
@@ -326,4 +331,66 @@ void paging_free_task_directory(unsigned int dir_phys) {
 
 void paging_load_directory(unsigned int dir_phys) {
     __asm__ volatile ("mov %0, %%cr3" :: "r"(dir_phys));
+}
+
+/* 1.9.23: a private user window for one task. Every task directory
+   shares base_page_tables[1] by value, which is why two ring-3 programs
+   could never run at once: JT_USER_BASE and JT_USER_FB are the same
+   physical frames in every directory. This gives one directory its own
+   copy of that table (a pmm frame, identity-mapped) with the image, stack
+   and framebuffer PTEs pointing at frames only this task maps, user
+   accessible there and nowhere else. The low identity alias (PDE 1) keeps
+   the shared supervisor-only table, so no task reaches another's pages
+   through it. Returns 0 on OOM. */
+int paging_task_map_private(unsigned int dir_phys, unsigned int vaddr, unsigned int pa, unsigned int len) {
+    u32 *dir = (u32 *)dir_phys;
+    u32 pde = vaddr >> 22;
+    if (base_table_index(vaddr) != 1 || pde != KERNEL_PDE_INDEX + 1) return 0;
+    u32 table_phys;
+    if ((dir[pde] & ~0xFFFu) == phys(base_page_tables[1])) {
+        table_phys = pmm_alloc_frame();
+        if (!table_phys) return 0;
+        if (table_phys >= IDENTITY_MAP_LIMIT && !paging_map_region(table_phys, 0x1000)) { pmm_free_frame(table_phys); return 0; }
+        u32 *t = (u32 *)table_phys;
+        for (int i = 0; i < 1024; i++) t[i] = base_page_tables[1][i] & ~0x4u; /* kernel pages, supervisor only */
+        dir[pde] = table_phys | 0x7;
+    } else table_phys = dir[pde] & ~0xFFFu;
+    u32 *t = (u32 *)table_phys;
+    for (u32 off = 0; off < len; off += 0x1000) {
+        u32 pte = ((vaddr + off) >> 12) & 0x3FF;
+        t[pte] = ((pa + off) & ~0xFFFu) | 0x7;
+    }
+    return 1;
+}
+
+/* 1.9.23: the reverse, for paging_free_task_directory's caller: hand the
+   private table frame back. The frames it pointed at are the window's
+   own kmalloc'd buffers, freed by their owner. */
+void paging_task_unmap_private(unsigned int dir_phys) {
+    u32 *dir = (u32 *)dir_phys;
+    u32 pde = KERNEL_PDE_INDEX + 1;
+    u32 table_phys = dir[pde] & ~0xFFFu;
+    if (table_phys == phys(base_page_tables[1])) return;
+    dir[pde] = phys(base_page_tables[1]) | 0x3;
+    pmm_free_frame(table_phys);
+}
+
+/* 1.9.23: access_ok against the directory the CPU is actually using
+   (CR3), so a task with a private window (paging_task_map_private) is
+   checked against its own tables, and a legacy task against the shared
+   ones. Tables are pmm frames or kernel statics, both identity-mapped. */
+int paging_user_range_ok_current(unsigned int addr, unsigned int len) {
+    if (len == 0) return 1;
+    unsigned int end = addr + len;
+    if (end < addr) return 0;
+    u32 cr3; __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));
+    const u32 *dir = (const u32 *)(cr3 & ~0xFFFu);
+    for (u32 p = addr & ~0xFFFu; p < end; p += 0x1000) {
+        u32 pde = dir[p >> 22];
+        if ((pde & 0x5) != 0x5) return 0;
+        const u32 *t = (const u32 *)(pde & ~0xFFFu);
+        if ((t[(p >> 12) & 0x3FF] & 0x5) != 0x5) return 0;
+        if (p > 0xFFFFF000u - 0x1000) break;
+    }
+    return 1;
 }

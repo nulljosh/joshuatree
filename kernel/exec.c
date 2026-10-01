@@ -38,7 +38,12 @@ static u8 *const user_image = (u8 *)JT_USER_BASE;
  * own arguments and nothing else can. Returns the initial esp, or 0 if
  * the block does not fit inside JT_ARGC_MAX/JT_ARGV_BYTES, which fails
  * the exec rather than silently dropping arguments. */
-static u32 build_user_stack(const char *const *argv, int argc) {
+static u32 build_user_stack_at(const char *const *argv, int argc, u32 bias);
+static u32 build_user_stack(const char *const *argv, int argc) { return build_user_stack_at(argv, argc, 0); }
+/* 1.9.23: `bias` is kernel-pointer minus user-virtual for a private
+   window (exec_user_window writes the stack page through its kmalloc'd
+   buffer, while every pointer stored on it stays a JT_USER_* address). */
+static u32 build_user_stack_at(const char *const *argv, int argc, u32 bias) {
     if (argc < 0 || argc > JT_ARGC_MAX) return 0;
 
     u32 ptrs[JT_ARGC_MAX];
@@ -56,19 +61,19 @@ static u32 build_user_stack(const char *const *argv, int argc) {
         used += len;
         if (used > JT_ARGV_BYTES) return 0;
         sp -= len;
-        for (u32 j = 0; j < len; j++) ((char *)sp)[j] = a[j];
+        for (u32 j = 0; j < len; j++) ((char *)(sp + bias))[j] = a[j];
         ptrs[i] = sp;
     }
 
     sp &= ~3u; /* the pointer array below has to be aligned to read as u32 */
 
-    sp -= 4; *(u32 *)sp = 0; /* argv[argc] == NULL, so a program can walk argv without argc */
-    for (int i = argc - 1; i >= 0; i--) { sp -= 4; *(u32 *)sp = ptrs[i]; }
+    sp -= 4; *(u32 *)(sp + bias) = 0; /* argv[argc] == NULL, so a program can walk argv without argc */
+    for (int i = argc - 1; i >= 0; i--) { sp -= 4; *(u32 *)(sp + bias) = ptrs[i]; }
     u32 argv_addr = sp;
 
-    sp -= 4; *(u32 *)sp = argv_addr;  /* 8(%esp) at entry */
-    sp -= 4; *(u32 *)sp = (u32)argc;  /* 4(%esp) at entry */
-    sp -= 4; *(u32 *)sp = 0;          /* 0(%esp): the return address _start does not have */
+    sp -= 4; *(u32 *)(sp + bias) = argv_addr;  /* 8(%esp) at entry */
+    sp -= 4; *(u32 *)(sp + bias) = (u32)argc;  /* 4(%esp) at entry */
+    sp -= 4; *(u32 *)(sp + bias) = 0;          /* 0(%esp): the return address _start does not have */
     return sp;
 }
 
@@ -146,4 +151,30 @@ int exec_user(const char *name, const char *const *argv, int argc, int *status) 
 
     if (status) *status = task_last_exit_code();
     return 1;
+}
+
+/* 1.9.23: the non-blocking twin of exec_user, for compositor windows.
+   The image and stack go into a kmalloc'd, page-aligned buffer of the
+   window's own (never the shared JT_USER_BASE frames), mapped at the same
+   JT_USER_BASE virtual address inside this task's private page table
+   (paging_task_map_private), so the binary links exactly as before and
+   two programs can run at once without seeing each other's memory. Returns
+   the task id, or -1; the caller owns `image` until the task is gone. */
+#include "kheap.h"
+int exec_user_window(const char *name, const char *const *argv, int argc, void **image_out) {
+    u32 span = JT_USER_STACK_TOP - JT_USER_BASE;
+    u8 *raw = (u8 *)kmalloc(span + 4096);
+    if (!raw) return -1;
+    u8 *img = (u8 *)(((u32)raw + 4095) & ~4095u);
+    for (u32 i = 0; i < span; i++) img[i] = 0;
+    int n = vfs_read_file(name, img, JT_USER_IMAGE_MAX);
+    if (n <= 0) { kfree(raw); return -1; }
+    u32 esp = build_user_stack_at(argv, argc, (u32)img - JT_USER_BASE);
+    if (!esp) { kfree(raw); return -1; }
+    int id = task_create_user(JT_USER_BASE, esp);
+    if (id < 0) { kfree(raw); return -1; }
+    if (!paging_task_map_private(task_page_dir(id), JT_USER_BASE, (u32)img, span)) { task_kill(id); kfree(raw); return -1; }
+    *image_out = raw;
+    serial_puts("exec: started ring-3 window task from VFS\n");
+    return id;
 }

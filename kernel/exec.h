@@ -76,6 +76,7 @@
    case the program gets argc == 0 and an argv holding only its NULL
    terminator. */
 int exec_user(const char *name, const char *const *argv, int argc, int *status);
+int exec_user_window(const char *name, const char *const *argv, int argc, void **image_out); /* 1.9.23: non-blocking, private image; task id or -1 */
 
 /* 1.0.0: a real shell launches a program by name, not just exec's exact
  * on-disk spelling. Resolves `typed` to a filename that actually exists

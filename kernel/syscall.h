@@ -158,3 +158,9 @@ void syscall_release_task(int id);
    whether the window was released cleanly. */
 int syscall_window_owner(void);
 #endif
+
+/* 1.9.23: compositor windows for ring-3 programs (kernel/syscall.c r3wins). */
+void syscall_windows_init(void);
+int  syscall_window_register(int task, unsigned int w, unsigned int h, void *image);
+const unsigned int *syscall_window_fb(int task, unsigned int *w, unsigned int *h, int *dirty); /* kernel pointer to the window's buffer, clears dirty */
+void syscall_window_push_event(int task, int kind, int a, int b);
