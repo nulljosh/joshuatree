@@ -31,6 +31,12 @@
 # Nothing in .github/ needs to change either way.
 
 set -uo pipefail
+
+# Every check's tempfile.mkdtemp(prefix='jt-...') used to land in the shared
+# TMPDIR and never get deleted: thousands of 37-75MB dirs, 12GB+, a full
+# disk on 2026-10-01. One scratch TMPDIR per suite run, gone on exit.
+export TMPDIR=$(mktemp -d "${TMPDIR:-/tmp}/jt-suite-XXXXXX")
+trap 'rm -rf "$TMPDIR"' EXIT
 # SHARD=i runs only the checks assigned to shard i below, so CI can split the
 # suite across parallel runners. Unset, it runs everything, same as before.
 # Each check carries an explicit shard number (2nd manifest field) instead

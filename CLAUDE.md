@@ -172,3 +172,11 @@ Gecko" idea is dropped and not coming back. Not to be confused with gato
 An Activity Monitor app is in PR #62. A file write/read round-trip check
 across reboots is in PR #61. Do not document either as shipped until
 merged to `main`.
+
+## Debug QEMU runs always get a timeout
+
+Never start QEMU with `-d int` (or any `-d` trace) and `-D <file>` without a
+`timeout` in front of it. On 2026-09-29 one was left running for two days,
+grew `/tmp/fbq.log` to 5GB, filled the disk and took down everything else on
+the Mac twice. `timeout 60 qemu-system-i386 ... -d int -D /tmp/x.log`, then
+delete the log when you're done reading it.
