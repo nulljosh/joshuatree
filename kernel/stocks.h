@@ -65,6 +65,34 @@ static int stx_parse_row(const char *p, int range, int i) {
     stocks_entries[i].change_x100 = values[0] - values[1];
     return 1;
 }
+/* Ring-3 Stocks (user/stocks.c) cannot see these statics and SYS_HTTP_GET caps
+   a body at 2KB, so after every fetch the kernel leaves STOCKS.TXT for it, the
+   Weather way. Line 1 "range R sel S"; then one line per symbol:
+   "i stale price prev time dprice dprev n p0 .. pn-1" (dprice/dprev are the 1D
+   quote the sidebar pill uses; points are cut to STX_FILE_PTS by even
+   sampling). About 2KB, far under the 28KB ramfs file. */
+#define STX_FILE_PTS 32
+static int stx_sel_hint;
+char *wx_put_int(char *o, int v);
+static void stocks_write_file(int range, int sel) {
+    static char b[4096];
+    char *o = b;
+    *o++ = 'r'; *o++ = ' '; o = wx_put_int(o, range); *o++ = ' '; o = wx_put_int(o, sel); *o++ = '\n';
+    for (int i = 0; i < STOCKS_MAX; i++) {
+        int n = stx_data[range][i].n, m = n > STX_FILE_PTS ? STX_FILE_PTS : n;
+        o = wx_put_int(o, i); *o++ = ' ';
+        o = wx_put_int(o, stx_data[range][i].stale); *o++ = ' ';
+        o = wx_put_int(o, stx_data[range][i].price); *o++ = ' ';
+        o = wx_put_int(o, stx_data[range][i].prev); *o++ = ' ';
+        o = wx_put_int(o, stx_data[range][i].time); *o++ = ' ';
+        o = wx_put_int(o, stx_data[0][i].price); *o++ = ' ';
+        o = wx_put_int(o, stx_data[0][i].prev); *o++ = ' ';
+        o = wx_put_int(o, m);
+        for (int j = 0; j < m; j++) { *o++ = ' '; o = wx_put_int(o, stx_data[range][i].points[m > 1 ? j * (n - 1) / (m - 1) : 0]); }
+        *o++ = '\n';
+    }
+    vfs_replace_file("STOCKS.TXT", b, (unsigned int)(o - b));
+}
 static void stocks_fetch(int range) {
     static char body[8192];
     char path[] = "/api/stocks?range=0";
@@ -80,6 +108,7 @@ static void stocks_fetch(int range) {
         }
     }
     stx_refresh_tick = ticks();
+    stocks_write_file(range, stx_sel_hint);
 }
 
 static void stocks_format_price(int x100, char *buf, int max) {

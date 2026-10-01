@@ -311,6 +311,13 @@ user/weather.o: user/weather.c user/jtsys.h user/libjt/text.h
 user/weather.bin: user/weather.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/weather.o user/libjt.a
 
+# Stocks as a ring-3 program (not yet in RING3_APPS): reads the kernel's STOCKS.TXT.
+user/stocks.o: user/stocks.c user/jtsys.h user/libjt/text.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/stocks.bin: user/stocks.o user/libjt.a user/note.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/stocks.o user/libjt.a
+
 user/contacts.o: user/contacts.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
