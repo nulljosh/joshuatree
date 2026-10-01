@@ -5340,7 +5340,8 @@ typedef struct {
 int ring3app_launch_window(const char *name, unsigned int w, unsigned int h);
 void ring3app_window_reaped(int task, int status);
 void ring3app_window_blit(int task, int vw, int vh);
-static int gui_ring3_windowed(int icon){ return icon == 4; } /* Reminders */
+int ring3app_is_windowable(const char *name);
+static int gui_ring3_windowed(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && ring3app_is_windowable(APPS[icon].name); } /* every RING3_APPS row; a full window table or failed launch falls back to the blocking path */
 static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
 static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
 

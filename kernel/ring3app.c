@@ -190,6 +190,20 @@ void ring3app_window_reaped(int task, int status) {
     if (task >= 0 && task < TASK_SLOTS) r3w_file[task] = 0;
 }
 
+/* 1.9.24: kernel.c asks here whether an APPS[] name is a ring-3 program, so
+   every RING3_APPS row can open as a compositor window with no second list. */
+int ring3app_is_windowable(const char *name) {
+    if (!name) return 0;
+    /* Weather exits 7 to ask the blocking launcher for a refetch; a window has no such loop. */
+    if (name[0] == 'W' && name[1] == 'e' && name[2] == 'a' && name[3] == 't' && name[4] == 'h' && name[5] == 'e' && name[6] == 'r' && !name[7]) return 0;
+    for (unsigned int i = 0; i < sizeof RING3_APPS / sizeof RING3_APPS[0]; i++) {
+        const char *p = RING3_APPS[i].name, *q = name;
+        while (*p && *p == *q) { p++; q++; }
+        if (!*p && !*q) return 1;
+    }
+    return 0;
+}
+
 static int ring3app_launch(const struct ring3_app *a) {
     if (ring3app_seed(a) < 0) return -1;
     /* The viewport must fit the ring-3 framebuffer, or SYS_WINDOW_OPEN
