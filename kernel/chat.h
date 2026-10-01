@@ -596,6 +596,7 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
 
     if (!strcmp(tool, "read_mail")) {
         /* The newest message, or the newest from whoever she was asked about. */
+        mail_loaded = 0; /* the ring-3 app owns MAIL.TXT: reload every call */
         mail_load();
         int idx = -1;
         for (int i = mail_count - 1; i >= 0 && idx < 0; i--) {
@@ -631,6 +632,7 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
             if (chat_starts(c, " saying ")) { body = c + 8; break; }
         }
         while (*body == ' ') body++;
+        mail_loaded = 0; /* never overwrite what the app saved */
         mail_load();
         if (mail_count >= MAIL_MAX) {
             chat_fmt_reply(reply, replysz, "", "Mail is full, nothing sent.");

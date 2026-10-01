@@ -902,10 +902,9 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-#define GUI_APP_COUNT   29 /* 26 real apps + the Apps folder + Trash + Mail Compose */
+#define GUI_APP_COUNT   28 /* 26 real apps + the Apps folder + Trash */
 #define GUI_APPS_FOLDER 26 /* not an app: the dock tile that opens the folder */
 #define GUI_TRASH       27
-#define GUI_MAIL_COMPOSE 28 /* v1.9.0: Mail's own 2nd window, see mail.h; not in the dock or Apps folder */
 /* Every app's name, color, glyph and hooks live in one table, APPS[],
    defined further down once every hook it points at exists (see "The app
    registry" below). This tentative definition lets the dock and Launchpad
@@ -2106,7 +2105,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 static int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
@@ -5332,7 +5331,7 @@ typedef struct {
 int ring3app_launch_window(const char *name, unsigned int w, unsigned int h);
 void ring3app_window_reaped(int task, int status);
 void ring3app_window_blit(int task, int vw, int vh);
-static int gui_ring3_windowed(int icon){ return icon == 4 || icon == 0; } /* Reminders, Burrow */
+static int gui_ring3_windowed(int icon){ return icon == 4 || icon == 0 || icon == 1; } /* Reminders, Burrow, Mail */
 static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
 static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
 
@@ -5455,7 +5454,7 @@ static void gui_multiwin_draw_one(const gui_window_t *win){
    bump of GUI_APP_COUNT/GUI_APPS_FOLDER/GUI_TRASH above. */
 const struct app APPS[GUI_APP_COUNT] = {
     /*  0 */ {"Burrow",     0x00707070, gui_icon_folder,     burrow_ring3_open,     0, 0}, /* ring 3 (user/burrow.c), a compositor window */
-    /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       gui_launch_mail,       gui_draw_mail_content,      gui_mail_on_key},
+    /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       mail_ring3_open,       0, 0}, /* ring 3 (user/mail.c), a compositor window */
     /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   calendar_ring3_open,   0, 0}, /* 1.9.12: ring 3 (user/calendar.c) */
     /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      gui_launch_editor,     gui_draw_notes_content,     gui_notes_mw_key}, /* 1.9.20: compositor hooks, opened as a window only beside another one */
     /*  4 */ {"Reminders",  0x00375A4A, gui_icon_reminders,  reminders_ring3_open,  0, 0}, /* 1.9.9: ring 3 (user/reminders.c) */
@@ -5491,7 +5490,6 @@ const struct app APPS[GUI_APP_COUNT] = {
        stubs" failure). DOCK_TRAY_COLOR is the real, intended value. */
     [GUI_APPS_FOLDER] = {"Apps",  DOCK_TRAY_COLOR, gui_icon_apps,  gui_launch_apps,  0, 0},
     [GUI_TRASH]       = {"Trash", DOCK_TRAY_COLOR, gui_icon_trash, gui_launch_trash, 0, 0},
-    [GUI_MAIL_COMPOSE] = {"Compose", 0x00A13F3F, gui_icon_mail, 0, gui_draw_mail_compose_content, gui_mail_compose_on_key}, /* no .open: only Mail's 'c' opens it */
 };
 
 /* Called from gui_run's own full-repaint branch, right alongside the
