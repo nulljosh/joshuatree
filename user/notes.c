@@ -11,8 +11,20 @@
  * Keys: up/down pick, Enter on a folder goes into it, Backspace or left goes
  * back up, tab swaps columns, n makes a new empty note in the open folder,
  * Esc closes, backquote is the deliberate crash. Clicks select and never
- * close. Enter on a note is the slice 2 stub (the editor).
- * Serial markers: notes: folders=N notes=N, notes: new=FILE.
+ * close. Enter on a note opens the editor (slice 2) in the same window.
+ *
+ * Editor (slice 2): the whole file is read into a 4 KB buffer (the kernel's
+ * editor_buffer size), laid out with word wrap exactly like editor_layout in
+ * kernel/editor.h (56 px margins, wrap at the first letter of a word that no
+ * longer fits), caret 2 px wide in 0x85144B, ink on the 0xFAF8F6 page,
+ * 14 px line pitch of 33. Keys that reach a ring-3 app through
+ * SYS_WINDOW_POLL: typing, Backspace, Enter, the four arrows, Esc, and
+ * KEY_COPY/CUT/PASTE (302..304). Copy and cut take the current logical line
+ * (the kernel editor's own contract) into an in-app clipboard; paste inserts
+ * it. Esc saves (truncate-write, only if edited) and returns to browse.
+ * Not deliverable yet (the poll path drops them): Ctrl+S, Home, End, Delete.
+ * Serial markers: notes: folders=N notes=N, notes: new=FILE, notes: edit=FILE,
+ * notes: saved=N.
  */
 #include "jtsys.h"
 #include "libjt/text.h"
@@ -33,6 +45,9 @@
 #define LIST_W 220
 #define COL_Y 40
 #define ROW_H 22
+#define KEY_COPY 302
+#define KEY_CUT 303
+#define KEY_PASTE 304
 
 struct nfolder { char name[9]; };
 struct nnote { char file[13]; char title[TITLE_MAX]; };
@@ -40,13 +55,23 @@ struct nnote { char file[13]; char title[TITLE_MAX]; };
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 extern char _user_end[];
 /* Big buffers live past _user_end (a flat image has no .bss), like user/mail.c. */
-struct arena { struct nfolder fo[MAX_FOLDERS]; struct nnote no[MAX_NOTES]; struct jt_dirent de[JT_READDIR_MAX]; char buf[512]; };
+#define ED_MAX 4096
+#define CLIP_MAX 256
+#define ED_MARGIN 56
+#define ED_TOP 28
+#define ED_LH 33
+#define ED_CARET 0x0085144B
+struct arena { struct nfolder fo[MAX_FOLDERS]; struct nnote no[MAX_NOTES]; struct jt_dirent de[JT_READDIR_MAX]; char buf[512];
+    char ed[ED_MAX + 1]; unsigned short lx[ED_MAX + 1], ll[ED_MAX + 1]; unsigned char adv[96]; char clip[CLIP_MAX]; };
 static struct arena *ar JT_DATA = 0;
 static int nfo JT_DATA = 0, nno JT_DATA = 0;
 static int fsel JT_DATA = 0, nsel JT_DATA = 0;
 static int focus JT_DATA = 1;   /* 0 folders, 1 notes */
 static int flat JT_DATA = 0;    /* ramfs: no directories */
 static const char *note JT_DATA = 0;
+static int editing JT_DATA = 0, elen JT_DATA = 0, epos JT_DATA = 0, escroll JT_DATA = 0;
+static int edirty JT_DATA = 0, goalx JT_DATA = -1, clen JT_DATA = 0;
+static char efile[13] JT_DATA = {0};
 
 static void rect(int x, int y, int w, int h, unsigned c) {
     if (x < 0) { w += x; x = 0; }
@@ -95,6 +120,8 @@ static void note_path(char *out, const char *file) {
     if (l) out[l++] = '/';
     scopy(out + l, file, 13);
 }
+
+static void edit_open(const char *file);
 
 static void load_folders(void) {
     nfo = 0;
@@ -164,6 +191,162 @@ static void next_filename(char *out) {
     }
 }
 
+
+/* ---- editor (slice 2) ---- */
+static int ed_adv(unsigned char c) {
+    if (c < 32 || c > 126) c = '?';
+    return ar->adv[c - 32];
+}
+
+/* Fills lx/ll for every index 0..elen: where the caret sits before that
+   char. Same wrap rules as editor_layout in kernel/editor.h. */
+static void ed_layout(void) {
+    int x = ED_MARGIN, line = 0, word_start = 1;
+    int limit = (int)win.width - ED_MARGIN;
+    for (int i = 0; i <= elen; i++) {
+        unsigned char c = (unsigned char)ar->ed[i];
+        int a = ed_adv(c);
+        if (word_start && x > ED_MARGIN && c != ' ' && c != '\n' && i < elen) {
+            int w = 0;
+            for (int j = i; j < elen; j++) {
+                unsigned char cj = (unsigned char)ar->ed[j];
+                if (cj == ' ' || cj == '\n') break;
+                w += ed_adv(cj);
+                if (x + w > limit) break;
+            }
+            if (x + w > limit && w <= limit - ED_MARGIN) { x = ED_MARGIN; line++; }
+        }
+        word_start = (c == ' ');
+        if (x + a > limit && c != '\n') { x = ED_MARGIN; line++; }
+        ar->lx[i] = (unsigned short)x; ar->ll[i] = (unsigned short)line;
+        if (i == elen) break;
+        if (c == '\n') { x = ED_MARGIN; line++; continue; }
+        x += a;
+    }
+}
+
+static int ed_visible(void) {
+    int n = ((int)win.height - ED_TOP - 30) / ED_LH;
+    return n < 1 ? 1 : n;
+}
+
+static void ed_draw(void) {
+    rect(0, 0, (int)win.width, (int)win.height, BG);
+    ed_layout();
+    int vis = ed_visible(), cl = ar->ll[epos];
+    if (cl < escroll) escroll = cl;
+    if (cl >= escroll + vis) escroll = cl - vis + 1;
+    for (int i = 0; i < elen; i++) {
+        int l = ar->ll[i];
+        char c = ar->ed[i];
+        if (l < escroll) continue;
+        if (l >= escroll + vis) break;
+        if (c < 33 || c > 126) continue;
+        char g[2] = {c, 0};
+        jt_text_draw(&win, JT_FACE_BODY, ar->lx[i], ED_TOP + (l - escroll) * ED_LH + 6, INK, g);
+    }
+    rect(ar->lx[epos], ED_TOP + (cl - escroll) * ED_LH + 2, 2, 24, ED_CARET);
+    text(edirty ? "Notes *" : "Notes", 20, 4, DIM);
+    text(note ? note : (edirty ? "Edited   |   Esc saves and goes back to Notes" : "Esc: back to Notes"),
+         20, (int)win.height - 28, DIM);
+}
+
+static void edit_open(const char *file) {
+    char p[40];
+    scopy(efile, file, 13);
+    note_path(p, efile);
+    elen = 0;
+    int fd = jt_open(p, JT_O_RDONLY);
+    if (fd >= 0) {
+        for (;;) {
+            int r = jt_read(fd, ar->ed + elen, (unsigned)(ED_MAX - elen));
+            if (r <= 0) break;
+            elen += r;
+            if (elen >= ED_MAX) break;
+        }
+        jt_close(fd);
+    }
+    ar->ed[elen] = 0;
+    epos = elen; escroll = 0; edirty = 0; goalx = -1; editing = 1; note = 0;
+    say("notes: edit=", -1);
+    jt_write(1, efile, (unsigned)slen(efile));
+    jt_write(1, "\n", 1);
+}
+
+static void edit_close(void) {
+    if (edirty) {
+        char p[40];
+        note_path(p, efile);
+        int fd = jt_open(p, JT_O_WRONLY | JT_O_CREAT | JT_O_TRUNC);
+        if (fd >= 0) {
+            int off = 0;
+            while (off < elen) {
+                int w = jt_write(fd, ar->ed + off, (unsigned)(elen - off));
+                if (w <= 0) break;
+                off += w;
+            }
+            jt_close(fd);
+            say("notes: saved=", off);
+        } else note = "Save failed.";
+    }
+    editing = 0;
+    load_notes();
+    for (int i = 0; i < nno; i++) if (seq(ar->no[i].file, efile)) { nsel = i; break; }
+}
+
+static void ed_insert(const char *s, int n) {
+    if (n <= 0 || elen + n > ED_MAX - 1) return;
+    for (int i = elen; i >= epos; i--) ar->ed[i + n] = ar->ed[i];
+    for (int i = 0; i < n; i++) ar->ed[epos + i] = s[i];
+    elen += n; epos += n; edirty = 1; goalx = -1;
+}
+
+static void ed_remove(int at, int n) {
+    if (n <= 0 || at < 0 || at + n > elen) return;
+    for (int i = at; i + n <= elen; i++) ar->ed[i] = ar->ed[i + n];
+    elen -= n; edirty = 1; goalx = -1;
+    if (epos > at) epos = epos >= at + n ? epos - n : at;
+}
+
+static void ed_vertical(int dir) {
+    ed_layout();
+    int target = (int)ar->ll[epos] + dir;
+    if (target < 0 || target > (int)ar->ll[elen]) return;
+    if (goalx < 0) goalx = ar->lx[epos];
+    int best = -1, bd = 1 << 30;
+    for (int i = 0; i <= elen; i++) {
+        if ((int)ar->ll[i] != target) continue;
+        int d = (int)ar->lx[i] - goalx;
+        if (d < 0) d = -d;
+        if (d < bd) { bd = d; best = i; }
+    }
+    if (best >= 0) epos = best;
+}
+
+static void ed_line_bounds(int *s, int *e) {
+    int a = epos, b = epos;
+    while (a > 0 && ar->ed[a - 1] != '\n') a--;
+    while (b < elen && ar->ed[b] != '\n') b++;
+    *s = a; *e = b;
+}
+
+static void ed_key(int k) {
+    if (k == JT_KEY_LEFT) { if (epos > 0) epos--; goalx = -1; }
+    else if (k == JT_KEY_RIGHT) { if (epos < elen) epos++; goalx = -1; }
+    else if (k == JT_KEY_UP) ed_vertical(-1);
+    else if (k == JT_KEY_DOWN) ed_vertical(1);
+    else if (k == 8) { if (epos > 0) { epos--; ed_remove(epos, 1); } }
+    else if (k == JT_KEY_ENTER) ed_insert("\n", 1);
+    else if (k >= 32 && k <= 126) { char c = (char)k; ed_insert(&c, 1); }
+    else if (k == KEY_COPY || k == KEY_CUT) {
+        int s, e; ed_line_bounds(&s, &e);
+        clen = e - s > CLIP_MAX ? CLIP_MAX : e - s;
+        for (int i = 0; i < clen; i++) ar->clip[i] = ar->ed[s + i];
+        if (k == KEY_CUT) { ed_remove(s, e - s + (e < elen ? 1 : 0)); epos = s; }
+    }
+    else if (k == KEY_PASTE) ed_insert(ar->clip, clen);
+}
+
 /* n: an empty note lands in the open folder, selected. */
 static void new_note(void) {
     if (nno >= MAX_NOTES) { note = "This folder is full."; return; }
@@ -179,15 +362,12 @@ static void new_note(void) {
     say("notes: new=", -1);
     jt_write(1, f, (unsigned)slen(f));
     jt_write(1, "\n", 1);
-    /* SLICE 2: opening the editor on this fresh note goes here, as it does
-       in kernel/editor.h notes_new_note (it opens the editor right away). */
+    edit_open(f);
 }
 
 static void open_note(void) {
     if (!nno) return;
-    /* SLICE 2 STUB: Enter on a note opens the editor on ar->no[nsel].file in
-       the open folder (note_path). Slice 1 is browse only. */
-    note = "The editor arrives in the next slice.";
+    edit_open(ar->no[nsel].file);
 }
 
 static void fit(char *out, const char *s, int maxw) {
@@ -244,6 +424,8 @@ void _start(int argc, char **argv) {
     (void)argc; (void)argv;
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "notes: no window\n", 17); jt_exit(1); }
     ar = (struct arena *)(((unsigned)_user_end + 15u) & ~15u);
+    for (int c = 32; c < 127; c++) { char g[2] = {(char)c, 0}; ar->adv[c - 32] = (unsigned char)jt_text_width(JT_FACE_BODY, g); }
+    ar->adv[0] = (unsigned char)(ar->adv[0] ? ar->adv[0] : 4);
     load_folders();
     load_notes();
     draw();
@@ -266,6 +448,14 @@ void _start(int argc, char **argv) {
         flags = 0;
         if (r == -11) { jt_sched_yield(); continue; }
         if (r != 1) break;
+        if (editing) {
+            if (ev.kind != JT_EV_KEY) { flags = JT_POLL_PRESENT; continue; }
+            note = 0;
+            if (ev.a == JT_KEY_ESC) { edit_close(); draw(); }
+            else { ed_key(ev.a); ed_draw(); }
+            flags = JT_POLL_PRESENT;
+            continue;
+        }
         if (ev.kind == JT_EV_CLICK) {
             note = 0;
             click(ev.a, ev.b);
@@ -275,7 +465,7 @@ void _start(int argc, char **argv) {
             if (k == '`') { jt_write(1, "notes: crashing on purpose\n", 27); *(volatile int *)0 = 1; }
             if (k == JT_KEY_ESC) break;
             else if (k == '\t') focus = !focus;
-            else if (k == 'n') new_note();
+            else if (k == 'n') { new_note(); if (editing) { ed_draw(); flags = JT_POLL_PRESENT; continue; } }
             else if (focus == 0) {
                 if (k == JT_KEY_UP && fsel > 0) { fsel--; nsel = 0; load_notes(); }
                 else if (k == JT_KEY_DOWN && fsel < nfo - 1) { fsel++; nsel = 0; load_notes(); }
