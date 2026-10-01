@@ -188,7 +188,6 @@ void _start(int argc, char **argv) {
         }
         if (r != 1) break;
 
-        if (ev.kind == JT_EV_CLICK) break; /* the titlebar X, or anywhere in the window */
         if (ev.kind != JT_EV_KEY) { flags = JT_POLL_PRESENT; continue; }
         int k = ev.a;
         if (k == '`') {

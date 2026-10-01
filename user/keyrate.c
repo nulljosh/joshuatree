@@ -147,12 +147,11 @@ void _start(int argc, char **argv) {
             buf[n++] = ' '; buf[n++] = 'w'; buf[n++] = 'p'; buf[n++] = 'm'; buf[n] = 0;
             text(buf, 20, H - 30, DONE);
         } else {
-            text("type to begin, esc or click to close", 20, H - 30, HINT);
+            text("type to begin, esc to close", 20, H - 30, HINT);
         }
 
         struct jt_event ev;
         if (!next_event(&ev, 1)) break;
-        if (ev.kind == JT_EV_CLICK) break;
         if (ev.kind != JT_EV_KEY) continue;
         if (ev.a == JT_KEY_ESC) break;
         if (ev.a == '`') {

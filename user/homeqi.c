@@ -174,7 +174,6 @@ void _start(int argc, char **argv) {
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;
-        if (ev.kind == JT_EV_CLICK) break; /* titlebar X: closes, like Keyrate */
         if (ev.kind != JT_EV_KEY) { flags = JT_POLL_PRESENT; continue; }
 
         if (ev.a == JT_KEY_ESC) break;
