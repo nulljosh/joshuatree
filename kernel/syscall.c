@@ -50,6 +50,7 @@ typedef int (*syscall_fn)(u32 a, u32 b, u32 c);
 #define EBUSY   16
 #define ENODEV  19
 #define EPERM    1
+#define EISDIR  21
 
 extern void syscall_entry(void);
 int syscall_stress_on; /* 1.9.23: set by r3stress_arm when the command line says stress=r3 */
@@ -826,6 +827,22 @@ static int sys_mkdir(u32 path, u32 b, u32 c) {
     path_leave(depth);
     return ok ? 0 : -ENOSPC;
 }
+/* SYS_UNLINK must never take a folder (vfs_delete would remove a directory
+   entry as readily as a file): the listing says which the leaf is. */
+static const char *unlink_leaf;
+static int unlink_leaf_is_dir;
+static void unlink_probe(const char *name, unsigned int size, int is_dir) {
+    (void)size;
+    const char *a = name, *b = unlink_leaf;
+    for (; *a && *b; a++, b++) {
+        char x = *a, y = *b;
+        if (x >= 'a' && x <= 'z') x -= 32;
+        if (y >= 'a' && y <= 'z') y -= 32;
+        if (x != y) return;
+    }
+    if (*a || *b) return;
+    if (is_dir) unlink_leaf_is_dir = 1;
+}
 static int sys_unlink(u32 path, u32 b, u32 c) {
     (void)b; (void)c;
     char name[PATH_MAX + 1];
@@ -834,6 +851,9 @@ static int sys_unlink(u32 path, u32 b, u32 c) {
     char *leaf; int depth;
     err = path_enter(name, 1, &leaf, &depth);
     if (err) return err;
+    unlink_leaf = leaf; unlink_leaf_is_dir = 0;
+    vfs_list(unlink_probe);
+    if (unlink_leaf_is_dir) { path_leave(depth); return -EISDIR; }
     int ok = vfs_delete(leaf);
     path_leave(depth);
     return ok ? 0 : -ENOENT;

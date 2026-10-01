@@ -138,7 +138,8 @@ struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
                parent is not a folder, or the backend has no folders, ramfs),
                -ENOSPC (name taken, disk full or directory full: the backend
                says only yes or no).
-     unlink -> 0, or -errno: -EFAULT, -EINVAL, -ENOENT (no such file).
+     unlink -> 0, or -errno: -EFAULT, -EINVAL, -ENOENT (no such file),
+               -EISDIR (the name is a folder; unlink never removes one).
    Neither is reachable from a path that open could not reach. */
 #define SYS_MKDIR       389
 #define SYS_UNLINK      390

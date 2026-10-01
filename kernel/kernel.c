@@ -2105,7 +2105,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 static int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
@@ -4405,55 +4405,6 @@ void gui_app_mouse_tick(void){
     if (!boot_to_phone) { gui_cursor_save(app_cursor_x, app_cursor_y); gui_draw_cursor(app_cursor_x, app_cursor_y); } /* phone_home.h: touch has no cursor, never draw the desktop arrow over an open app */
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
-/* v67 (0.62.2): for an app that repaints its whole viewport itself on
-   every keystroke (Notes). Lift the pointer sprite before the repaint so
-   the backup under it can't go stale and get restored over fresh content
-   on the next move; the next gui_app_mouse_tick sees no saved cursor and
-   draws it again on top of whatever the app just painted. */
-static void gui_app_cursor_hide(void){
-    if (!gui_app_windowed) return;
-    window_clear_viewport();
-    gui_cursor_restore();
-    window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
-}
-
-/* get_key() alone left a real, reported bug: a visitor with no physical
-   keyboard (a touch-only phone, or the live v86 embed before real
-   keystrokes reach it) had no way to ever leave an app screen once
-   opened, since "any key" was the only exit. A real click is the one
-   input a mouse- or touch-only visitor can always produce, so it closes
-   the app too now, not just a keypress. */
-static void gui_wait_close(void){
-    font_draw_string("esc or click to go back", 20, (int)window_height() - 30, 0x0075726E, -1);
-    /* Real hardware and real QEMU continuously re-scan actual VRAM, so any
-       write shows up on the very next real refresh, confirmed directly: a
-       real screendump of this exact draw sequence rendered perfectly. v86,
-       a JS/wasm emulator, samples its own canvas on some interval instead
-       of continuously, and this whole app view draws its content then
-       immediately blocks on input with nothing forcing a real wall-clock
-       gap first, apparently landing between v86's own sampling points
-       often enough that the text never visibly appears there, even though
-       it's genuinely written to the framebuffer. A few real PIT ticks of
-       settle time here, comfortably more than one real display frame,
-       gives it that gap without real hardware/QEMU visitors ever noticing
-       an unnecessary pause, they didn't need it in the first place. */
-    window_present(); sleep_ticks(5);
-    mouse_click_edge_sync(); /* a button already held (e.g. the click that opened this app) is the baseline, not a fresh click */
-    for (;;) {
-        gui_app_mouse_tick();
-        int sc = kbd_pop();
-        /* Real, reported bug: "any key" closed every read-only viewer,
-           including Keyrate once it became a real typing test, the first
-           keystroke anyone typed closed the app instead of registering.
-           Esc (or a click, unchanged) closes now; every other key is
-           just consumed and ignored, harmless on a page with nothing
-           else to do with a keypress, and no longer surprising on one
-           that does. */
-        if (sc >= 0 && !(sc & 0x80) && kbd_map(sc) == 27) { gui_close_was_click = 0; return; }
-        if (mouse_click_edge()) { gui_close_was_click = 1; return; }
-        window_present(); __asm__ volatile ("hlt");
-    }
-}
 
 /* A real macOS-style traffic light, not a fake one: red is a genuine close
    affordance, clicking anywhere already closes the app view (gui_wait_close
@@ -5331,13 +5282,12 @@ typedef struct {
 int ring3app_launch_window(const char *name, unsigned int w, unsigned int h);
 void ring3app_window_reaped(int task, int status);
 void ring3app_window_blit(int task, int vw, int vh);
-static int gui_ring3_windowed(int icon){ return icon == 4 || icon == 0 || icon == 1; } /* Reminders, Burrow, Mail */
+static int gui_ring3_windowed(int icon){ return icon == 4 || icon == 0 || icon == 1 || icon == 3; } /* Reminders, Burrow, Mail, Notes */
 static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
 static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
 
 static int gui_multiwin_supported(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && (APPS[icon].draw || gui_ring3_windowed(icon)); }
-/* Notes' draw hook is browse-only, so a lone Notes click keeps the blocking editor; it joins the compositor only as a second window. */
-static int gui_multiwin_dock_ok(int icon){ return gui_multiwin_supported(icon) && (icon != 3 || gui_window_count > 0); } /* apps with a draw hook: Files, Mail, Weather */
+static int gui_multiwin_dock_ok(int icon){ return gui_multiwin_supported(icon); } /* apps with a draw hook or a ring-3 window */
 
 /* v0.75.0 (batch 2): Mail has real per-keystroke interaction (its list,
    read and compose modes), unlike Files/Weather's static viewers; Reminders
@@ -5456,7 +5406,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /*  0 */ {"Burrow",     0x00707070, gui_icon_folder,     burrow_ring3_open,     0, 0}, /* ring 3 (user/burrow.c), a compositor window */
     /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       mail_ring3_open,       0, 0}, /* ring 3 (user/mail.c), a compositor window */
     /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   calendar_ring3_open,   0, 0}, /* 1.9.12: ring 3 (user/calendar.c) */
-    /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      gui_launch_editor,     gui_draw_notes_content,     gui_notes_mw_key}, /* 1.9.20: compositor hooks, opened as a window only beside another one */
+    /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      notes_ring3_open,      0, 0}, /* ring 3 (user/notes.c), a compositor window */
     /*  4 */ {"Reminders",  0x00375A4A, gui_icon_reminders,  reminders_ring3_open,  0, 0}, /* 1.9.9: ring 3 (user/reminders.c) */
     /*  5 */ {"Terminal",   0x002B2B2B, gui_icon_terminal,   gui_launch_terminal,   0, 0},
     /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       gui_launch_chat_app,   0, 0},
@@ -6157,7 +6107,7 @@ static void gui_lock_screen(void){
 static void gui_menu_run_item(int item){
     if (item == 0) gui_launch_about();
     else if (item == 1) gui_launch_from_dock(0);
-    else if (item == 2) gui_launch_editor();
+    else if (item == 2) gui_launch_from_dock(3);
     else if (item == 3) gui_launch_settings();
     else if (item == 4) gui_lock_screen();
     else if (item == 6) reboot();
@@ -8503,7 +8453,7 @@ static void run(char *line){
     }
     else if (!strcmp(line, "notes")) {
         if (window_open(800, 600, 32)) {
-            gui_launch_editor();
+            notes_ring3_open();
             window_close();
             clear();
         }

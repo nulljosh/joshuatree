@@ -58,7 +58,8 @@ ratchet_ceiling() {
         # 2026-09-30: 1.9.12 moved Calendar to ring 3 (user/calendar.c).
         # 2026-09-30: 1.9.13 dropped the search.h include. Down one more.
         # 2026-10-01: Stocks moved to ring 3; the dock row points at stocks_ring3_open (stocks.h).
-        kernel/kernel.c) echo 9124 ;;
+        # 2026-10-01: Notes moved to ring 3 (user/notes.c); dead gui_wait_close and gui_app_cursor_hide dropped.
+        kernel/kernel.c) echo 9078 ;;
         *) echo "$LIMIT" ;;
     esac
 }

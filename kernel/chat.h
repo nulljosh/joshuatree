@@ -534,7 +534,7 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
     }
 
     if (!strcmp(tool, "read_notes")) {
-        static char buf[4096]; /* same NOTES.TXT bound new_note/editor.h already keep */
+        static char buf[4096]; /* read fresh from disk every call, Notes is a ring-3 program that owns its files */
         int n = vfs_read_file("NOTES.TXT", buf, sizeof(buf) - 1);
         if (n <= 0) {
             chat_fmt_reply(reply, replysz, "", "No notes yet.");
@@ -548,14 +548,13 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
     }
 
     if (!strcmp(tool, "new_note")) {
-        static char buf[4096]; /* same bound editor.h's own editor_buffer keeps for NOTES.TXT */
+        static char buf[4096]; /* read fresh from disk, never a cached copy */
         int n = vfs_read_file("NOTES.TXT", buf, sizeof(buf) - 1);
         if (n < 0) n = 0;
         if (n > 0 && buf[n - 1] != '\n' && n < (int)sizeof(buf) - 1) buf[n++] = '\n';
         for (const char *s = arg; *s && n < (int)sizeof(buf) - 2; s++) buf[n++] = *s;
         buf[n++] = '\n';
         vfs_replace_file("NOTES.TXT", buf, (unsigned int)n);
-        editor_loaded = 0; /* forces Notes to re-read from disk next time it opens, instead of silently overwriting this with a stale in-memory buffer */
         chat_fmt_reply(reply, replysz, "Noted: ", arg);
         serial_puts("chattool=new_note:"); serial_puts(arg); serial_puts("\n");
         return 1;
