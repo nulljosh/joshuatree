@@ -189,7 +189,7 @@ static void calc_format_result(double result, char *buf, int max) {
 
 static void calc_draw(void) {
     rect(0, 0, (int)win.width, (int)win.height, BG);
-    text("expr: + - * / ( ) enter evaluate  esc closes", 20, 20, HINT);
+    text("expr: + - * / ( ) enter evaluate  esc to close", 20, 20, HINT);
     rect(20, 44, (int)win.width - 40, 20, BOX);
     text(input, 24, 46, INK);
     if (has_output) {
@@ -225,7 +225,6 @@ void _start(int argc, char **argv) {
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;
-        if (ev.kind == JT_EV_CLICK) break; /* titlebar X, or a click off the input: closes, like Keyrate */
         if (ev.kind != JT_EV_KEY) { flags = JT_POLL_PRESENT; continue; }
 
         if (ev.a == JT_KEY_ESC) break;
