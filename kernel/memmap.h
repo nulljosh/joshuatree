@@ -3,8 +3,8 @@
 /* The one place the fixed ring-3 addresses are written down.
  *
  * Three things pin them: kernel/exec.h (the loader), boot/linker.ld (the
- * NOLOAD reservations that keep pmm.c off these frames), and user/*.ld
- * (where flat binaries are linked, since a headerless image runs at one
+ * NOLOAD reservations that keep pmm.c off these frames), and the user link scripts
+ * (user/hello.ld and user/note.ld, where flat binaries are linked, since a headerless image runs at one
  * address only). A linker script cannot include a C header, so the
  * Makefile turns these #defines into boot/memmap.ld (one `NAME = value;`
  * line each) and the scripts INCLUDE that. Plain hex, no `u` suffix, so
