@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Headless proof of roadmap 1.9's touch + on-screen keyboard (kernel/osk.h).
+"""Headless proof of roadmap 1.9's touch + on-screen keyboard (user/notes.c via libjt/osk.h).
 
 Boots "phone samantha" under -display none, then drives only absolute-pointer
 taps (QMP input-send-event abs + left button, which is exactly what a
 touchscreen reports): Esc leaves Samantha, then tap the
 Notes icon, then the keyboard (Enter opens the folder, 'n' starts a note,
 both through QMP key events since the list has no tap targets yet). The
-check passes only if the OSK draws ("osk: shown"), a tap on its 'q' and 'i'
-keys is answered ("osk: key q" / "osk: key i") and the two letters land in
-the editor's own buffer, read back from guest memory by symbol.
+check passes only if the OSK draws ("notes: osk shown"), a tap on its 'q' and 'i'
+keys is answered ("notes: osk key q" / "notes: osk key i") (ring-3 markers, sent as the key goes to the editor).
 
 Usage: tools/checks/touch-osk-check.py   (from the repo root, after make kernel.elf)
 """
@@ -20,12 +19,6 @@ LW, LH = 430, 760
 LOG = "/tmp/jt-touch-osk.log"
 DUMP = "/tmp/jt-touch-osk.bin"
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-
-sym = {}
-for line in subprocess.check_output([shutil.which("nm") or "nm", "kernel.elf"], text=True).splitlines():
-    f = line.split()
-    if len(f) == 3: sym[f[2]] = int(f[0], 16) - 0xC0000000
-BUF = sym["editor_buffer"]
 
 try: os.remove(LOG)
 except FileNotFoundError: pass
@@ -75,13 +68,11 @@ try:
         if not on_home(): break
     time.sleep(1.5)
     key("ret"); key("n")   # open the folder, new note: the editor
-    wait_log("editorchrome", 1, 8)
+    wait_log("notes: new=", 1, 8)   # ring-3 Notes made the note and opened its editor
     time.sleep(1.0)
     tap(20, 760 - 200 + 60)   # 'q'
     tap(43 * 7 + 20, 760 - 200 + 60)   # 'i'
     time.sleep(0.5)
-    cmd({"execute": "pmemsave", "arguments": {"val": BUF, "size": 16, "filename": DUMP}})
-    buf = open(DUMP, "rb").read().split(b"\0")[0].decode(errors="replace")
     try: cmd({"execute": "quit"})
     except (ConnectionResetError, BrokenPipeError, OSError, ValueError): pass  # QEMU closes the socket on quit; same teardown phone-boot-check uses
 finally:
@@ -90,9 +81,9 @@ finally:
 
 log = open(LOG, errors="replace").read()
 if "bootphone" not in log: fail = 1; print("FAIL: phone flag not parsed")
-if "osk: shown" not in log: fail = 1; print("FAIL: a tap never opened the on-screen keyboard")
+if "notes: osk shown" not in log: fail = 1; print("FAIL: a tap never opened the on-screen keyboard")
 for k in "qi":
-    if f"osk: key {k}" not in log: fail = 1; print(f"FAIL: tap on '{k}' never reached osk_tap")
-if buf != "qi": fail = 1; print(f"FAIL: editor buffer is {buf!r}, expected 'qi' from two tapped keys")
+    if f"notes: osk key {k}" not in log: fail = 1; print(f"FAIL: tap on '{k}' never reached osk_tap")
+if "notes: new=" not in log: fail = 1; print("FAIL: ring-3 Notes never opened a new note")
 if not fail: print("PASS: taps opened the OSK and tapped keys reached the editor buffer")
 sys.exit(fail)

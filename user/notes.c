@@ -65,7 +65,7 @@ extern char _user_end[];
 #define ED_LH 33
 #define ED_CARET 0x0085144B
 struct arena { struct nfolder fo[MAX_FOLDERS]; struct nnote no[MAX_NOTES]; struct jt_dirent de[JT_READDIR_MAX]; char buf[512];
-    char ed[ED_MAX + 1]; unsigned short lx[ED_MAX + 1], ll[ED_MAX + 1]; unsigned char adv[96]; char clip[CLIP_MAX]; };
+    char ed[ED_MAX + 1]; unsigned short lx[ED_MAX + 1], ll[ED_MAX + 1]; unsigned char adv[96]; char clip[CLIP_MAX]; int osk_said; };
 static struct arena *ar JT_DATA = 0;
 static int nfo JT_DATA = 0, nno JT_DATA = 0;
 static int fsel JT_DATA = 0, nsel JT_DATA = 0;
@@ -251,7 +251,7 @@ static void ed_draw(void) {
     }
     rect(ar->lx[epos], ED_TOP + (cl - escroll) * ED_LH + 2, 2, 24, ED_CARET);
     text(edirty ? "Notes *" : "Notes", 20, 4, DIM);
-    if (phone) { jt_osk_draw(&win); return; }
+    if (phone) { jt_osk_draw(&win); if (!ar->osk_said) { ar->osk_said = 1; jt_write(1, "notes: osk shown\n", 17); } return; }
     text(note ? note : (edirty ? "Edited   |   Esc saves and goes back to Notes" : "Esc: back to Notes"),
          20, (int)win.height - 28, DIM);
 }
@@ -503,7 +503,7 @@ void _start(int argc, char **argv) {
         if (r != 1) break;
         if (editing) {
             int key = ev.a;
-            if (phone && ev.kind == JT_EV_CLICK) { key = jt_osk_hit(&win, ev.a, ev.b); if (!key) { flags = JT_POLL_PRESENT; continue; } }
+            if (phone && ev.kind == JT_EV_CLICK) { key = jt_osk_hit(&win, ev.a, ev.b); if (!key) { flags = JT_POLL_PRESENT; continue; } if (key > 32 && key < 127) { char m[20] = "notes: osk key X\n"; m[15] = (char)key; jt_write(1, m, 17); } }
             else if (ev.kind != JT_EV_KEY) { flags = JT_POLL_PRESENT; continue; }
             note = 0;
             ev.a = key;

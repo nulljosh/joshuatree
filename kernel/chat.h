@@ -535,7 +535,25 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
 
     if (!strcmp(tool, "read_notes")) {
         static char buf[4096]; /* read fresh from disk every call, Notes is a ring-3 program that owns its files */
-        int n = vfs_read_file("NOTES.TXT", buf, sizeof(buf) - 1);
+        int n = 0;
+        if (notes_check_support() && notes_enter_folder(NOTES_DEFAULT_FOLDER)) {
+            notes_max_idx = 0;
+            vfs_list(notes_count_cb);
+            /* newest notes first, up to the buffer: N<idx>.TXT counting down from the highest */
+            for (int v = notes_max_idx; v >= 1 && v > notes_max_idx - 5 && n < (int)sizeof(buf) - 2; v--) {
+                char fn[13] = {'N','0','0','0','0','0','0','0','.','T','X','T',0};
+                int t = v;
+                for (int d = 7; d >= 1; d--) { fn[d] = (char)('0' + t % 10); t /= 10; }
+                static char one[1024];
+                int m = vfs_read_file(fn, one, sizeof(one) - 1);
+                if (m <= 0) continue;
+                while (m > 0 && (one[m - 1] == '\n' || one[m - 1] == ' ')) m--;
+                if (n > 0) buf[n++] = ' ';
+                for (int i = 0; i < m && n < (int)sizeof(buf) - 2; i++) buf[n++] = one[i] == '\n' ? ' ' : one[i];
+            }
+        }
+        notes_goto_root();
+        if (n <= 0) n = vfs_read_file("NOTES.TXT", buf, sizeof(buf) - 1);
         if (n <= 0) {
             chat_fmt_reply(reply, replysz, "", "No notes yet.");
             serial_puts("chattool=read_notes:none\n");
