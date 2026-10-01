@@ -93,7 +93,7 @@ drivers/app_quotestreak.h:
 	./tools/gen/gen_app.sh "$$HOME/Documents/Code/quotestreak/index.html" drivers/app_quotestreak.h app_quotestreak
 
 kernel/kernel.o: drivers/app_weather.h drivers/app_curbfind.h drivers/app_keyrate.h drivers/app_bookrank.h drivers/app_quotestreak.h
-kernel/kernel.o: kernel/editor.h kernel/osk.h drivers/editor_fonts.h drivers/png.h drivers/png_testdata.h drivers/jpeg.h drivers/jpeg_testdata.h
+kernel/kernel.o: kernel/editor.h drivers/editor_fonts.h drivers/png.h drivers/png_testdata.h drivers/jpeg.h drivers/jpeg_testdata.h
 
 # v74: pngtest's fixtures are real PNGs cut from drivers/wallpaper.h; the
 # generator also computes the host-side reference hashes. Committed like
@@ -142,7 +142,7 @@ user/note.bin: user/note.o user/note.ld boot/memmap.ld
 # shaped calls without a real libc or a kernel include path. llvm-ar
 # rather than plain `ar` because this toolchain is clang/lld throughout,
 # see USER_CFLAGS above.
-LIBJT_SRCS := user/libjt/string.c user/libjt/stdlib.c user/libjt/stdio.c user/libjt/text.c
+LIBJT_SRCS := user/libjt/string.c user/libjt/stdlib.c user/libjt/stdio.c user/libjt/text.c user/libjt/osk.c
 LIBJT_OBJS := $(LIBJT_SRCS:.c=.o)
 # Plain `llvm-ar` first (on PATH on most CI images); then a versioned
 # `llvm-ar-NN` apt sometimes installs instead of the unversioned name;
@@ -170,6 +170,7 @@ user/libjt/aafont.h: tools/gen/gen_user_text.c drivers/ttf.c drivers/ttf.h drive
 	/tmp/jt-gen-user-text $@
 
 user/libjt/text.o: user/libjt/text.c user/libjt/text.h user/libjt/aafont.h user/jtsys.h
+user/libjt/osk.o: user/libjt/osk.c user/libjt/osk.h user/libjt/text.h user/jtsys.h
 
 user/libjt.a: $(LIBJT_OBJS)
 	$(AR) rcs $@ $(LIBJT_OBJS)

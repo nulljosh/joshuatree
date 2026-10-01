@@ -30,6 +30,7 @@
  */
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "libjt/osk.h"
 
 #define BG    0x00FAF8F6
 #define INK   0x001C1C1E
@@ -72,6 +73,7 @@ static int focus JT_DATA = 1;   /* 0 folders, 1 notes */
 static int flat JT_DATA = 0;    /* ramfs: no directories */
 static const char *note JT_DATA = 0;
 static int editing JT_DATA = 0, elen JT_DATA = 0, epos JT_DATA = 0, escroll JT_DATA = 0;
+static int phone JT_DATA = 0;   /* argv[1] == "phone": show the on-screen keyboard in the editor */
 static int edirty JT_DATA = 0, goalx JT_DATA = -1, clen JT_DATA = 0;
 static char efile[13] JT_DATA = {0};
 
@@ -228,7 +230,7 @@ static void ed_layout(void) {
 }
 
 static int ed_visible(void) {
-    int n = ((int)win.height - ED_TOP - 30) / ED_LH;
+    int n = ((int)win.height - ED_TOP - 30 - (phone ? jt_osk_height() : 0)) / ED_LH;
     return n < 1 ? 1 : n;
 }
 
@@ -249,6 +251,7 @@ static void ed_draw(void) {
     }
     rect(ar->lx[epos], ED_TOP + (cl - escroll) * ED_LH + 2, 2, 24, ED_CARET);
     text(edirty ? "Notes *" : "Notes", 20, 4, DIM);
+    if (phone) { jt_osk_draw(&win); return; }
     text(note ? note : (edirty ? "Edited   |   Esc saves and goes back to Notes" : "Esc: back to Notes"),
          20, (int)win.height - 28, DIM);
 }
@@ -471,7 +474,7 @@ static void click(int x, int y) {
 
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
-    (void)argc; (void)argv;
+    phone = argc > 1 && seq(argv[1], "phone");
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "notes: no window\n", 17); jt_exit(1); }
     ar = (struct arena *)(((unsigned)_user_end + 15u) & ~15u);
     for (int c = 32; c < 127; c++) { char g[2] = {(char)c, 0}; ar->adv[c - 32] = (unsigned char)jt_text_width(JT_FACE_BODY, g); }
@@ -499,8 +502,11 @@ void _start(int argc, char **argv) {
         if (r == -11) { jt_sched_yield(); continue; }
         if (r != 1) break;
         if (editing) {
-            if (ev.kind != JT_EV_KEY) { flags = JT_POLL_PRESENT; continue; }
+            int key = ev.a;
+            if (phone && ev.kind == JT_EV_CLICK) { key = jt_osk_hit(&win, ev.a, ev.b); if (!key) { flags = JT_POLL_PRESENT; continue; } }
+            else if (ev.kind != JT_EV_KEY) { flags = JT_POLL_PRESENT; continue; }
             note = 0;
+            ev.a = key;
             if (ev.a == JT_KEY_ESC) { edit_close(); draw(); }
             else { ed_key(ev.a); ed_draw(); }
             flags = JT_POLL_PRESENT;

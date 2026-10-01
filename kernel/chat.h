@@ -548,13 +548,30 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
     }
 
     if (!strcmp(tool, "new_note")) {
-        static char buf[4096]; /* read fresh from disk, never a cached copy */
-        int n = vfs_read_file("NOTES.TXT", buf, sizeof(buf) - 1);
-        if (n < 0) n = 0;
-        if (n > 0 && buf[n - 1] != '\n' && n < (int)sizeof(buf) - 1) buf[n++] = '\n';
-        for (const char *s = arg; *s && n < (int)sizeof(buf) - 2; s++) buf[n++] = *s;
-        buf[n++] = '\n';
-        vfs_replace_file("NOTES.TXT", buf, (unsigned int)n);
+        /* Notes is a ring-3 app that reads NOTES/NOTES/N*.TXT, so a Samantha note is a
+           new file there, numbered the way user/notes.c's n key numbers them. Ramfs has
+           no folders and notes.c reads the flat NOTES.TXT there, so that one is appended. */
+        static char buf[4096];
+        int wrote = 0, len = 0;
+        if (notes_check_support() && notes_enter_folder(NOTES_DEFAULT_FOLDER)) {
+            while (arg[len] && len < (int)sizeof(buf) - 2) { buf[len] = arg[len]; len++; }
+            buf[len++] = '\n';
+            notes_max_idx = 0;
+            vfs_list(notes_count_cb);
+            char fn[13] = {'N','0','0','0','0','0','0','0','.','T','X','T',0};
+            int v = notes_max_idx + 1;
+            for (int d = 7; d >= 1; d--) { fn[d] = (char)('0' + v % 10); v /= 10; }
+            wrote = vfs_write_file(fn, buf, (unsigned int)len) ? 1 : 0;
+        }
+        notes_goto_root();
+        if (!wrote) {
+            int n = vfs_read_file("NOTES.TXT", buf, sizeof(buf) - 1);
+            if (n < 0) n = 0;
+            if (n > 0 && buf[n - 1] != '\n' && n < (int)sizeof(buf) - 1) buf[n++] = '\n';
+            for (const char *s2 = arg; *s2 && n < (int)sizeof(buf) - 2; s2++) buf[n++] = *s2;
+            buf[n++] = '\n';
+            vfs_replace_file("NOTES.TXT", buf, (unsigned int)n);
+        }
         chat_fmt_reply(reply, replysz, "Noted: ", arg);
         serial_puts("chattool=new_note:"); serial_puts(arg); serial_puts("\n");
         return 1;

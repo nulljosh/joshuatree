@@ -957,6 +957,7 @@ static int boot_to_samantha;
    the demo boots 1:1 into what a phone screen actually is, rather than
    shrinking the desktop's layout down to unreadable text. */
 static int boot_to_phone;
+int jt_phone_mode(void){ return boot_to_phone; } /* ring3app.c: windowed ring-3 apps get argv[1]="phone" so they can show libjt/osk */
 #include "hint.h"
 static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
 static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
@@ -4480,7 +4481,6 @@ static int text_ink(int a, unsigned int fg, unsigned int dst){
 #include "ttf_render.h"
 #include "gui_prompt.h"
 #include "auth.h"
-#include "osk.h" /* roadmap 1.9: on-screen keyboard for phone, used by editor.h */
 #include "editor.h"
 #include "caldate.h" /* 1.9.12: Calendar is user/calendar.c now; chat.h and stocks.h still need the date math */
 #include "mail.h"

@@ -43,10 +43,12 @@ static int notes_check_support(void) {
 }
 
 static int notes_list_tmp_count = 0;
+static int notes_max_idx = 0; /* highest N<digits>.TXT number notes_count_cb saw */
 static void notes_count_cb(const char *name, unsigned int size, int is_dir) {
     (void)size;
     if (is_dir || name[0] == '.') return;
     notes_list_tmp_count++;
+    if (name[0] == 'N') { int v = 0, i = 1; while (name[i] >= '0' && name[i] <= '9' && i < 9) v = v * 10 + (name[i++] - '0'); if (v > notes_max_idx) notes_max_idx = v; }
 }
 
 /* One-time: NOTES.TXT's content must never be lost. On a real disk it
