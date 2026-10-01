@@ -885,10 +885,10 @@ static void notes_delete_selected(void) {
 
 static void notes_draw_list(int x, int w, int top, const char *title, int is_focused,
                              int count, int sel, int wide) {
-    font_draw_string(title, x + 12, top, 0x0075726E, w - 20);
     if (is_focused && wide) window_rect(x, top - 6, w, 18, 0x00EAE4DC);
+    font_draw_string(title, x + 12, top, 0x0075726E, -1);
     if (count == 0) {
-        font_draw_string("(empty)", x + 12, top + 26, 0x00A29A90, w - 20);
+        font_draw_string("(empty)", x + 12, top + 26, 0x00A29A90, -1);
         return;
     }
     for (int i = 0; i < count; i++) {
@@ -935,28 +935,28 @@ static void gui_launch_editor(void) {
 
         if (wide) {
             font_draw_string("n new   f folder   d delete   tab switch   enter opens   esc closes",
-                              20, T + 14, 0x0075726E, (int)window_width() - 40);
+                              20, T + 14, 0x0075726E, -1);
             notes_draw_list(20, NOTES_FOLDER_W, T + 44, "FOLDERS", notes_focus == NOTES_FOCUS_FOLDERS, notes_folder_count, notes_folder_sel, 1);
             for (int i = 0; i < notes_folder_count; i++)
-                font_draw_string(notes_folders[i].name, 32, T + 70 + i * 22, 0x001C1C1E, NOTES_FOLDER_W - 20);
+                font_draw_string(notes_folders[i].name, 32, T + 70 + i * 22, 0x001C1C1E, -1);
             int nx = 20 + NOTES_FOLDER_W + 16;
             notes_draw_list(nx, NOTES_LIST_W, T + 44, "NOTES", notes_focus == NOTES_FOCUS_NOTES, notes_note_count, notes_note_sel, 1);
             for (int i = 0; i < notes_note_count; i++)
-                font_draw_string(notes_notes[i].title, nx + 12, T + 70 + i * 22, 0x001C1C1E, NOTES_LIST_W - 24);
+                font_draw_string(notes_notes[i].title, nx + 12, T + 70 + i * 22, 0x001C1C1E, -1);
             window_rect(nx + NOTES_LIST_W, T + 44, 1, (int)window_height() - T - 60, 0x00E4DDD3);
             font_draw_string("select a note and press enter to write", nx + NOTES_LIST_W + 24, T + 60, 0x00A29A90, -1);
         } else {
             if (notes_phone_level == 1) font_draw_string("< Back (esc)", 20, T + 14, 0x0085144B, -1);
             if (notes_phone_level == 0) {
-                font_draw_string("up/down pick   enter opens   f new folder   esc closes", 20, T + 14, 0x0075726E, (int)window_width() - 40);
+                font_draw_string("up/down pick   enter opens   f new folder   esc closes", 20, T + 14, 0x0075726E, -1);
                 notes_draw_list(20, (int)window_width() - 40, T + 44, "FOLDERS", 1, notes_folder_count, notes_folder_sel, 0);
                 for (int i = 0; i < notes_folder_count; i++)
-                    font_draw_string(notes_folders[i].name, 32, T + 70 + i * 22, 0x001C1C1E, (int)window_width() - 64);
+                    font_draw_string(notes_folders[i].name, 32, T + 70 + i * 22, 0x001C1C1E, -1);
             } else {
-                font_draw_string("up/down pick   enter opens   n new   d delete", 20, T + 14, 0x0075726E, (int)window_width() - 40);
+                font_draw_string("up/down pick   enter opens   n new   d delete", 20, T + 14, 0x0075726E, -1);
                 notes_draw_list(20, (int)window_width() - 40, T + 44, notes_folders[notes_folder_sel].name, 1, notes_note_count, notes_note_sel, 0);
                 for (int i = 0; i < notes_note_count; i++)
-                    font_draw_string(notes_notes[i].title, 32, T + 70 + i * 22, 0x001C1C1E, (int)window_width() - 64);
+                    font_draw_string(notes_notes[i].title, 32, T + 70 + i * 22, 0x001C1C1E, -1);
             }
         }
 
@@ -1008,14 +1008,14 @@ static void gui_draw_notes_content(void) {
     }
     window_rect(0, 0, (int)window_width(), (int)window_height(), 0x00FAF8F6);
     gui_draw_app_titlebar("Notes");
-    font_draw_string("tab switch   up/down pick   esc closes", 20, T + 14, 0x0075726E, (int)window_width() - 40);
+    font_draw_string("tab switch   up/down pick   esc closes", 20, T + 14, 0x0075726E, -1);
     notes_draw_list(20, NOTES_FOLDER_W, T + 44, "FOLDERS", notes_focus == NOTES_FOCUS_FOLDERS, notes_folder_count, notes_folder_sel, 1);
     for (int i = 0; i < notes_folder_count; i++)
-        font_draw_string(notes_folders[i].name, 32, T + 70 + i * 22, 0x001C1C1E, NOTES_FOLDER_W - 20);
+        font_draw_string(notes_folders[i].name, 32, T + 70 + i * 22, 0x001C1C1E, -1);
     int nx = 20 + NOTES_FOLDER_W + 16;
     notes_draw_list(nx, NOTES_LIST_W, T + 44, "NOTES", notes_focus == NOTES_FOCUS_NOTES, notes_note_count, notes_note_sel, 1);
     for (int i = 0; i < notes_note_count; i++)
-        font_draw_string(notes_notes[i].title, nx + 12, T + 70 + i * 22, 0x001C1C1E, NOTES_LIST_W - 24);
+        font_draw_string(notes_notes[i].title, nx + 12, T + 70 + i * 22, 0x001C1C1E, -1);
     window_rect(nx + NOTES_LIST_W, T + 44, 1, (int)window_height() - T - 60, 0x00E4DDD3);
 }
 

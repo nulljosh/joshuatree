@@ -10,9 +10,9 @@ stem-darkening + contrast curve for dark-on-light text (and a contrast-only
 curve for light-on-dark).
 
 What this measures, on real pixels: boots kernel.elf with -display none and
-opens Mail, Notes and Weather from the dock through the real vmmouse path,
+opens Mail, Notes and Notes' browse view from the dock through the real vmmouse path,
 one per text path the curve touches (gui_aa_char, editor_draw_glyph and
-wx_text), waits until each app's text is on screen, pmemsaves the physical
+the compositor window's font_draw_string), waits until each app's text is on screen, pmemsaves the physical
 framebuffer and measures two known text rows per app. For every glyph
 pixel (estimated coverage > 8%, from luminance between the surface and the
 darkest ink pixel) it computes:
@@ -34,11 +34,14 @@ FB = 0xfd000000; W, H = 1920, 1080
 LOGICAL_W, LOGICAL_H = 960, 540
 DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 247, 487
 CLOSE = (94, 56)  # window 0's red dot (x+24, y+16) for the x=70, y=40 dock window
+CLOSE1 = (154, 116)  # window 1's red dot, the second concurrent window at x=130, y=100
 # One app per text path the curve touches, each opened from the dock in its
 # own window at x=70, y=40 (viewport origin logical (78,72)). Physical boxes:
 #   Mail    -> gui_aa_char (every font_draw_string): hint line, first message row
 #   Notes   -> editor_draw_glyph: the seeded NOTES.TXT's first two text lines
-#   Weather -> wx_text (1:1 faces): "Sample location" and the line under it
+#   Notes browse view -> Notes as the second compositor window (Files first,
+#           1.9.20 gave Notes draw hooks, which is how it replaced Weather
+#           here), window at x=130, y=100: the FOLDERS heading and the note row
 APPS = [
     ("Mail", 2, {"Mail hint line": (196, 248, 1000, 280), "Mail message row": (270, 312, 820, 342)}),
     # v-ttf: editor_draw_glyph now rasterizes through ttf_glyph at physical
@@ -47,7 +50,7 @@ APPS = [
     # seeded note's two lines down from where the old bitmap renderer put
     # them. Boxes re-measured against the new physical layout, same lines.
     ("Notes", 4, {"Notes title line": (262, 330, 600, 385), "Notes body line": (262, 462, 1000, 512)}),
-    ("Weather", 8, {"Weather heading": (222, 178, 490, 218), "Weather caption": (222, 224, 548, 250)}),
+    ("Notes browse", 4, {"Notes browse heading": (336, 284, 456, 318), "Notes browse note row": (668, 336, 830, 374)}),
 ]
 CORE_MIN, MID_MIN, LEVELS_MIN = 0.58, 0.12, 12
 
@@ -91,9 +94,12 @@ try:
         cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
         return Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("L")
     for app, slot, rows in APPS:
-        move(480, 200); time.sleep(0.3)
-        move(SLOT0_X + slot * (DOCK_ICON + DOCK_GAP) + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.5)
-        click()
+        # The browse view only joins the compositor as a second window, so
+        # open Files (slot 1) first; the single-window apps open straight.
+        for sl in ((1, slot) if app == "Notes browse" else (slot,)):
+            move(480, 200); time.sleep(0.3)
+            move(SLOT0_X + sl * (DOCK_ICON + DOCK_GAP) + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.5)
+            click(); time.sleep(1.0)
         move(930, 300)  # pointer right of the window, clear of every sampled row
         # Wait for the app's own text to be on screen, not a fixed sleep: a
         # capture taken before the window presents measures the desktop.
@@ -103,6 +109,8 @@ try:
             if all(has_text(img, b) for b in rows.values()): break
         time.sleep(0.5); img = dump()
         shots[app] = img
+        if app == "Notes browse":
+            move(*CLOSE1); time.sleep(0.3); click(); time.sleep(1.0)
         move(*CLOSE); time.sleep(0.3); click(); time.sleep(1.0)
     try: cmd({"execute": "quit"})
     except (ConnectionResetError, BrokenPipeError, OSError): pass
@@ -134,5 +142,5 @@ for app, slot, rows in APPS:
         if mid < MID_MIN or levels < LEVELS_MIN:
             print(f"FAIL: {name}: edges have lost their antialiasing (binary/jagged text)")
             fail = 1
-print("PASS: UI text has dense stems and still-antialiased edges (Mail, Notes, Weather)" if not fail else "textsharp-check: FAILED")
+print("PASS: UI text has dense stems and still-antialiased edges (Mail, Notes, Notes browse view)" if not fail else "textsharp-check: FAILED")
 sys.exit(fail)

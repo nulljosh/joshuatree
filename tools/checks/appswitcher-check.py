@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Headless proof of the app switcher (roadmap.md: "an app switcher, a
 screenshot key", modern-OS desktop basics). Opens two of the real
-concurrent windows (Files and Weather, both wired to gui_multiwin_open --
+concurrent windows (Files and Notes, both wired to gui_multiwin_open --
 see kernel/kernel.c's gui_multiwin_supported), sends Ctrl+Tab (kernel.c
 treats Alt and Ctrl the same for this hotkey, since QEMU/v86's Alt
 delivery to the guest is the less reliable one to bet on), and checks two
@@ -12,10 +12,10 @@ independent things actually changed:
      gui_multiwin_focus -- proof the hotkey's own code path ran, not just
      that a keystroke was sent.
   2. Pixels: window 0 (Files, rect x70,y40,w820,h385) and window 1
-     (Weather, opened second so it starts on top, rect x130,y100,w820,h385)
+     (Notes, opened second so it starts on top, rect x130,y100,w820,h385)
      overlap in x130..890,y100..425. Cropping that whole rect before and
      after the switch and counting changed pixels (real app content --
-     icon grid vs. weather art/text -- differs across many of them, not
+     icon grid vs. notes list/row band -- differs across many of them, not
      just one hand-picked spot) proves the actual z-order flipped, not
      just that the marker fired with no real effect.
 
@@ -34,7 +34,7 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-FILES_SLOT, WEATHER_SLOT = 1, 8  # GUI_DOCK_DEFAULT: slot0 is the Apps folder, then Files(icon0)..Weather(icon7) in order
+FILES_SLOT, NOTES_SLOT = 1, 4  # GUI_DOCK_DEFAULT: slot0 is the Apps folder, then Files(icon0), Mail, Calendar, Notes(icon3) in order; 1.9.20 gave Notes compositor hooks so it replaces Weather as the second window
 CLOSE_X, CLOSE_Y = 94, 56
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
@@ -104,9 +104,9 @@ try:
     def pixel(x, y):
         return framebuffer().getpixel((x * SCALE + 1, y * SCALE + 1))
     def overlap_region():
-        """A logical-pixel crop of the whole Files/Weather overlap rect
+        """A logical-pixel crop of the whole Files/Notes overlap rect
         (x130..890,y100..425), not one guessed sample point: real app
-        content (icon grid vs. weather art/text) differs across many
+        content (icon grid vs. notes list/row band) differs across many
         pixels in there, so counting how many actually changed proves a
         real content swap even if this or that single sampled point
         happens to land on shared cream background in both apps."""
@@ -140,8 +140,8 @@ try:
 
     open_slot(FILES_SLOT)
     if not window_open(): fails.append("Files: dock click did not open a window")
-    open_slot(WEATHER_SLOT)
-    if not window_open(): fails.append("Weather: dock click did not open a second window")
+    open_slot(NOTES_SLOT)
+    if not window_open(): fails.append("Notes: dock click did not open a second window")
 
     if not fails:
         before = overlap_region()
@@ -156,9 +156,9 @@ try:
             after = overlap_region()
             diff = sum(1 for a, b in zip(before.getdata(), after.getdata()) if a != b)
             if diff < 200:
-                fails.append(f"Alt/Ctrl+Tab: only {diff} pixels changed across the whole Files/Weather overlap rect -- the focused window's z-order never actually flipped")
+                fails.append(f"Alt/Ctrl+Tab: only {diff} pixels changed across the whole Files/Notes overlap rect -- the focused window's z-order never actually flipped")
             else:
-                print(f"App switcher: Ctrl+Tab cycled Files/Weather (serial-verified) and {diff} pixels in the overlap rect changed, proving real z-order focus change")
+                print(f"App switcher: Ctrl+Tab cycled Files/Notes (serial-verified) and {diff} pixels in the overlap rect changed, proving real z-order focus change")
 
     cmd({"execute": "quit"})
 except Exception as e:
