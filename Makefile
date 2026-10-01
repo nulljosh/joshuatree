@@ -31,7 +31,13 @@ PASS1_OBJS := $(filter-out kernel/symtab.o,$(OBJS))
 # Neither kernel.elf.pass1 nor the generated kernel/symtab.c is committed
 # (see .gitignore); both regenerate from scratch on every build, same as
 # drivers/version.h.
-kernel.elf.pass1: $(PASS1_OBJS) kernel/symtab_stub.o boot/linker.ld
+# boot/memmap.ld: kernel/memmap.h's #defines as linker-script symbols, so
+# boot/linker.ld and user/*.ld INCLUDE the same ring-3 addresses the kernel
+# compiles against. Generated, not committed (see .gitignore).
+boot/memmap.ld: kernel/memmap.h
+	sed -n 's/^#define \(JT_[A-Z_]*\) *\(0x[0-9A-Fa-f]*\).*/\1 = \2;/p' $< > $@
+
+kernel.elf.pass1: $(PASS1_OBJS) kernel/symtab_stub.o boot/linker.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T boot/linker.ld -o $@ $(PASS1_OBJS) kernel/symtab_stub.o
 
 kernel/symtab.c: kernel.elf.pass1 tools/gen/gen_symtab.py
@@ -39,7 +45,7 @@ kernel/symtab.c: kernel.elf.pass1 tools/gen/gen_symtab.py
 
 kernel/symtab.o: kernel/symtab.c kernel/symtab.h
 
-kernel.elf: $(OBJS) boot/linker.ld
+kernel.elf: $(OBJS) boot/linker.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T boot/linker.ld -o $@ $(OBJS)
 	@cp kernel.elf landing/v86/kernel.elf
 	@gzip -9nc kernel.elf > landing/v86/kernel.elf.gz
@@ -121,13 +127,13 @@ USER_CFLAGS := -target i386-unknown-none -ffreestanding -fno-stack-protector \
 user/hello.o: user/hello.c user/jtsys.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/hello.bin: user/hello.o user/hello.ld
+user/hello.bin: user/hello.o user/hello.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/hello.ld --oformat binary -o $@ user/hello.o
 
 user/note.o: user/note.c user/jtsys.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/note.bin: user/note.o user/note.ld
+user/note.bin: user/note.o user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/note.o
 
 # libjt: a small static archive of userland library code (string/ctype/
@@ -171,7 +177,7 @@ user/libjt.a: $(LIBJT_OBJS)
 user/wc.o: user/wc.c user/jtsys.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/wc.bin: user/wc.o user/libjt.a user/note.ld
+user/wc.bin: user/wc.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/wc.o user/libjt.a
 
 # 1.7.7: Keyrate as a ring-3 program (kernel/ring3app.c launches it from
@@ -180,77 +186,77 @@ user/wc.bin: user/wc.o user/libjt.a user/note.ld
 user/keyrate.o: user/keyrate.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/keyrate.bin: user/keyrate.o user/libjt.a user/note.ld
+user/keyrate.bin: user/keyrate.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/keyrate.o user/libjt.a
 
 # 1.7.11: Toroid, the second app out of the kernel, built the same way.
 user/toroid.o: user/toroid.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/toroid.bin: user/toroid.o user/libjt.a user/note.ld
+user/toroid.bin: user/toroid.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/toroid.o user/libjt.a
 
 # 1.7.12: Calculator, the third app out of the kernel, built the same way.
 user/calculator.o: user/calculator.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/calculator.bin: user/calculator.o user/libjt.a user/note.ld
+user/calculator.bin: user/calculator.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/calculator.o user/libjt.a
 
 # 1.7.14: Quotes, the fourth app out of the kernel, built the same way.
 user/quotes.o: user/quotes.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/quotes.bin: user/quotes.o user/libjt.a user/note.ld
+user/quotes.bin: user/quotes.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/quotes.o user/libjt.a
 
 # 2.0: Bookrank, the fifth app out of the kernel, built the same way.
 user/bookrank.o: user/bookrank.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/bookrank.bin: user/bookrank.o user/libjt.a user/note.ld
+user/bookrank.bin: user/bookrank.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/bookrank.o user/libjt.a
 
 # 1.8.22: Homeqi, the sixth app out of the kernel, built the same way.
 user/homeqi.o: user/homeqi.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/homeqi.bin: user/homeqi.o user/libjt.a user/note.ld
+user/homeqi.bin: user/homeqi.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/homeqi.o user/libjt.a
 
 # 1.9.1: Lexly, the seventh app out of the kernel, built the same way.
 user/lexly.o: user/lexly.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/lexly.bin: user/lexly.o user/libjt.a user/note.ld
+user/lexly.bin: user/lexly.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/lexly.o user/libjt.a
 
 # 1.9.2: Plan, the eighth app out of the kernel, built the same way.
 user/plan.o: user/plan.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/plan.bin: user/plan.o user/libjt.a user/note.ld
+user/plan.bin: user/plan.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/plan.o user/libjt.a
 
 # 1.9.3: Fieldbook, the ninth app out of the kernel, built the same way.
 user/fieldbook.o: user/fieldbook.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/fieldbook.bin: user/fieldbook.o user/libjt.a user/note.ld
+user/fieldbook.bin: user/fieldbook.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/fieldbook.o user/libjt.a
 
 # 1.9.4: Clock, the tenth app out of the kernel, built the same way.
 user/clock.o: user/clock.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/clock.bin: user/clock.o user/libjt.a user/note.ld
+user/clock.bin: user/clock.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/clock.o user/libjt.a
 
 # 1.9.5: Portfolio, the eleventh app out of the kernel, built the same way.
 user/portfolio.o: user/portfolio.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/portfolio.bin: user/portfolio.o user/libjt.a user/note.ld
+user/portfolio.bin: user/portfolio.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/portfolio.o user/libjt.a
 
 # 1.9.6: Activity, the twelfth app out of the kernel, built the same way.
@@ -258,7 +264,7 @@ user/portfolio.bin: user/portfolio.o user/libjt.a user/note.ld
 user/sparkjar.o: user/sparkjar.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/sparkjar.bin: user/sparkjar.o user/libjt.a user/note.ld
+user/sparkjar.bin: user/sparkjar.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/sparkjar.o user/libjt.a
 
 # 1.9.7: Contacts, the thirteenth app out of the kernel, built the same way.
@@ -266,76 +272,76 @@ user/sparkjar.bin: user/sparkjar.o user/libjt.a user/note.ld
 user/search.o: user/search.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/search.bin: user/search.o user/libjt.a user/note.ld
+user/search.bin: user/search.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/search.o user/libjt.a
 
 # 1.9.9: Reminders, the fifteenth app out of the kernel, built the same way.
 user/reminders.o: user/reminders.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/reminders.bin: user/reminders.o user/libjt.a user/note.ld
+user/reminders.bin: user/reminders.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/reminders.o user/libjt.a
 
 # 1.9.11: Curbfind, the sixteenth app out of the kernel, built the same way.
 user/curbfind.o: user/curbfind.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/curbfind.bin: user/curbfind.o user/libjt.a user/note.ld
+user/curbfind.bin: user/curbfind.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/curbfind.o user/libjt.a
 
 # 1.9.12: Calendar, the seventeenth app out of the kernel, built the same way.
 user/calendar.o: user/calendar.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/calendar.bin: user/calendar.o user/libjt.a user/note.ld
+user/calendar.bin: user/calendar.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/calendar.o user/libjt.a
 
 # 1.9.19: Epiphany, the nineteenth app out of the kernel, on SYS_HTTP_GET like Curbfind.
 user/epiphany.o: user/epiphany.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/epiphany.bin: user/epiphany.o user/libjt.a user/note.ld
+user/epiphany.bin: user/epiphany.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/epiphany.o user/libjt.a
 
 # Burrow, the Files app, as a ring-3 program (not yet in RING3_APPS).
 user/burrow.o: user/burrow.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/burrow.bin: user/burrow.o user/libjt.a user/note.ld
+user/burrow.bin: user/burrow.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/burrow.o user/libjt.a
 
 # 1.9.22: Weather, the twentieth, reads the kernel's WEATHER.TXT.
 user/weather.o: user/weather.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/weather.bin: user/weather.o user/libjt.a user/note.ld
+user/weather.bin: user/weather.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/weather.o user/libjt.a
 
 # Stocks as a ring-3 program (not yet in RING3_APPS): reads the kernel's STOCKS.TXT.
 user/stocks.o: user/stocks.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/stocks.bin: user/stocks.o user/libjt.a user/note.ld
+user/stocks.bin: user/stocks.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/stocks.o user/libjt.a
 
 user/contacts.o: user/contacts.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/contacts.bin: user/contacts.o user/libjt.a user/note.ld
+user/contacts.bin: user/contacts.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/contacts.o user/libjt.a
 
 user/activity.o: user/activity.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/activity.bin: user/activity.o user/libjt.a user/note.ld
+user/activity.bin: user/activity.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/activity.o user/libjt.a
 
 # 1.7.8: fbpoke, the program that pokes the released window framebuffer
 # and must fault. Run by kernel/ring3app.c under the `fbpoke` boot flag.
-user/fbpoke.o: user/fbpoke.c user/jtsys.h
+user/fbpoke.o: user/fbpoke.c user/jtsys.h kernel/memmap.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/fbpoke.bin: user/fbpoke.o user/note.ld
+user/fbpoke.bin: user/fbpoke.o user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/fbpoke.o
 
 # The built binaries, embedded so `usertest`/`notetest`/`shell` can seed
@@ -457,7 +463,7 @@ clean:
 	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf kernel.elf.pass1 kernel/symtab.c kernel/symtab_stub.o kernel/symtab_stub.d user/hello.o user/hello.bin drivers/user_hello.h \
 	      user/note.o user/note.bin drivers/user_note.h user/keyrate.o user/keyrate.bin drivers/user_keyrate.h user/toroid.o user/toroid.bin drivers/user_toroid.h \
 	      user/calculator.o user/calculator.bin drivers/user_calculator.h user/quotes.o user/quotes.bin drivers/user_quotes.h user/bookrank.o user/bookrank.bin drivers/user_bookrank.h user/homeqi.o user/homeqi.bin drivers/user_homeqi.h user/lexly.o user/lexly.bin drivers/user_lexly.h user/plan.o user/plan.bin drivers/user_plan.h user/fieldbook.o user/fieldbook.bin drivers/user_fieldbook.h user/clock.o user/clock.bin drivers/user_clock.h user/portfolio.o user/portfolio.bin drivers/user_portfolio.h user/activity.o user/activity.bin drivers/user_activity.h user/contacts.o user/contacts.bin drivers/user_contacts.h user/reminders.o user/reminders.bin drivers/user_reminders.h user/curbfind.o user/curbfind.bin drivers/user_curbfind.h user/search.o user/search.bin drivers/user_search.h user/epiphany.o user/epiphany.bin drivers/user_epiphany.h user/weather.o user/weather.bin drivers/user_weather.h user/burrow.o user/burrow.bin drivers/user_burrow.h user/stocks.o user/stocks.bin drivers/user_stocks.h user/sparkjar.o user/sparkjar.bin drivers/user_sparkjar.h user/calendar.o user/calendar.bin drivers/user_calendar.h
-	rm -f joshuatree.iso
+	rm -f joshuatree.iso boot/memmap.ld
 	rm -rf build/iso_root
 
 # This machine has a global core.hooksPath (~/.git-hooks); this opts THIS

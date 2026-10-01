@@ -6,6 +6,11 @@ ENTRY(_start)
    bootloader at 1MB+ (LMA, via each section's AT()). .text.boot is the one
    piece that must run identically whether paging is on or off yet, so it
    stays unrelocated (VMA == LMA), see boot.S for why. */
+/* The ring-3 addresses below come from kernel/memmap.h via the generated
+   boot/memmap.ld (see the Makefile), so the kernel, the user link scripts
+   and this file cannot disagree. */
+INCLUDE boot/memmap.ld
+
 SECTIONS {
     . = 1M;
     .text.boot : { *(.multiboot) *(.text.boot) }
@@ -32,10 +37,10 @@ SECTIONS {
        pmm.c reserves these frames at boot the same way it reserves the
        rest of the kernel image.
        2026-09-27: moved up 8KB from 0xC0501000 for 1.7.0's integration
-       release, which pushed .bss to a 12KB gap here (under the 16KB
-       bss-margin-check floor). .dmabuf below still has 20KB of slack
-       after this move, so there's real room before the next collision. */
-    .userimg 0xC0507000 (NOLOAD) : AT(0x00507000) {
+       release. 2026-10-01: moved up 512KB with .dmabuf and .userfb (see
+       kernel/memmap.h), because every ring-3 app is rodata in this image
+       and .bss had closed to under 16KB of the window again. */
+    .userimg JT_USER_BASE (NOLOAD) : AT(JT_USER_BASE - 0xC0000000) {
         . += 8 * 4096; /* 7 pages of image + 1 page of user stack */
     }
 
@@ -44,7 +49,7 @@ SECTIONS {
        so this is 64KB at a 64KB-aligned physical address. NOLOAD, like
        .userimg above: it costs nothing in kernel.elf, and sitting before
        _kernel_end keeps pmm.c from handing these frames out. */
-    .dmabuf 0xC0510000 (NOLOAD) : AT(0x00510000) {
+    .dmabuf JT_DMABUF_BASE (NOLOAD) : AT(JT_DMABUF_BASE - 0xC0000000) {
         sb16_dma_buf = .;
         . += 0x10000;
     }
@@ -56,13 +61,17 @@ SECTIONS {
        (804x345 pixels, 32bpp) and for the Apps folder viewport an app
        launched from the grid runs in (832x450, 0x16DA00 bytes). NOLOAD like the two
        above, and still inside the 8MB base map paging_set_user covers. */
-    .userfb 0xC0520000 (NOLOAD) : AT(0x00520000) {
-        . += 0x170000;
+    .userfb JT_USER_FB (NOLOAD) : AT(JT_USER_FB - 0xC0000000) {
+        . += JT_USER_FB_BYTES;
     }
 
     . = ALIGN(4096);
     _kernel_end = . - 0xC0000000; /* physical, matching pmm.c's other physical addresses */
 }
 
-ASSERT(ADDR(.bss) + SIZEOF(.bss) <= 0xC0507000,
-       "kernel .bss has grown into the ring-3 program window at 0xC0507000; move JT_USER_BASE (kernel/exec.h), user/hello.ld and this section together")
+ASSERT(ADDR(.bss) + SIZEOF(.bss) <= JT_USER_BASE,
+       "kernel .bss has grown into the ring-3 program window (JT_USER_BASE); move it up in kernel/memmap.h")
+ASSERT(JT_USER_BASE + 8 * 4096 <= JT_DMABUF_BASE, "kernel/memmap.h: .userimg overlaps .dmabuf")
+ASSERT((JT_DMABUF_BASE & 0xFFFF) == 0, "kernel/memmap.h: .dmabuf must be 64KB aligned for ISA DMA")
+ASSERT(JT_DMABUF_BASE + 0x10000 <= JT_USER_FB, "kernel/memmap.h: .dmabuf overlaps .userfb")
+ASSERT(JT_USER_FB + JT_USER_FB_BYTES <= 0xC0800000, "kernel/memmap.h: .userfb leaves the 4MB table paging_task_map_private copies")

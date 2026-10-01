@@ -4020,7 +4020,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     }
     /* The artwork is stored as PNG, not as decoded RGBA: 24 artworks of
        128x128 RGBA is 1.5MB, which runs into the ring-3 program window
-       boot/linker.ld pins at 0xC0507000, and docs/SYSCALL-ABI.md names that
+       kernel/memmap.h pins at JT_USER_BASE, and docs/SYSCALL-ABI.md names that
        address as part of the published v1 contract. As PNG the same 24 are
        141KB. Decoding here rather than once at boot costs nothing in
        practice: this function is the icon cache's own miss path, so it runs

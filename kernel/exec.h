@@ -43,7 +43,7 @@
  * accessible. argv[argc] is NULL.
  */
 
-#define JT_USER_BASE       0xC0507000u /* must match user/hello.ld and boot/linker.ld's .userimg */
+#include "memmap.h" /* JT_USER_BASE, JT_USER_FB: one source for kernel, boot/linker.ld and user/*.ld */
 #define JT_USER_IMAGE_MAX  (7 * 4096)  /* 28KB of code+data; page 8 of the window is the stack */
 #define JT_USER_STACK_TOP  (JT_USER_BASE + 8 * 4096)
 
@@ -58,8 +58,6 @@
    its pages. One buffer, one windowed program at a time, same rule as the
    image window above. 0x110000 = 272 pages = 1,114,112 bytes, enough for
    the 804x345 app viewport at 32bpp (1,109,520). */
-#define JT_USER_FB        0xC0520000u /* must match boot/linker.ld's .userfb */
-#define JT_USER_FB_BYTES  0x170000u
 
 #define JT_ARGC_MAX   8    /* including argv[0] */
 #define JT_ARGV_BYTES 256  /* total bytes of argument text, NULs included */
