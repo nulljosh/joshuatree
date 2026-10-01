@@ -5,7 +5,8 @@ What this proves, from the real sources (no QEMU, so it is fast):
   1. APPS[0] in kernel/kernel.c is "Burrow", and no APPS row is named
      "Files" any more. The dock label, title bar, Apps folder, phone grid,
      Launchpad and Spotlight all read that one field. The menu-bar list
-     and the window title (kernel/files.h) say Burrow too.
+     says Burrow too, and the ring-3 program's own title (user/burrow.c)
+     and RING3_APPS row (kernel/ring3app.c) carry the name.
   2. Samantha's open_app matcher (chat_match_app in kernel/chat.h, compiled
      here for the host against the real APPS names) opens index 0 for
      "burrow", "files" and "file browser" (plus the "the ... app" forms),
@@ -44,7 +45,10 @@ check(names[0] == "Burrow", "APPS[0] is %r, want 'Burrow'" % names[0])
 check("Files" not in names, "no APPS row is named 'Files'")
 menu = re.search(r'"About Joshua Tree",([^}]*?)"Shut Down"', kernel, re.S).group(1)
 check('"Burrow"' in menu and '"Files"' not in menu, "menu-bar list says Burrow, not Files")
-check('app_begin("Burrow"' in read("kernel/files.h"), "Burrow window title in kernel/files.h")
+check(re.search(r'\{"Burrow",\s*user_burrow,\s*USER_BURROW_LEN,\s*"BURROW\.BIN"\}', read("kernel/ring3app.c")) is not None,
+      "RING3_APPS has the Burrow row (BURROW.BIN)")
+check(not os.path.exists(os.path.join(ROOT, "kernel/files.h")), "the in-kernel kernel/files.h is gone")
+check("burrow: ring-3 window" in read("user/burrow.c"), "user/burrow.c identifies itself as burrow")
 
 # --- chat_match_app on the host, against the real APPS names -------------
 chat = read("kernel/chat.h")

@@ -112,6 +112,7 @@ retry|2|Calendar runs as a ring-3 process through the table-driven launcher: get
 retry|2|Search runs as a ring-3 process through the table-driven launcher: SYS_READDIR refuses a kernel pointer, an over-long path and a missing folder, the list filters live, a file shows its real bytes, a FAT folder opens by relative path with the kernel's cwd untouched, closes on Esc, crashes safely, desktop alive|python3 ./tools/checks/ring3search-check.py
 retry|2|Epiphany runs as a ring-3 process through the table-driven launcher: falls back to the offline prices when SYS_HTTP_GET finds no NIC, switches tabs by key and click, runs the command bar, closes on Esc, desktop alive|python3 ./tools/checks/ring3epiphany-check.py
 retry|2|Weather runs as a ring-3 process through the table-driven launcher: reads the kernel's WEATHER.TXT and shows the offline face over labelled sample data, R refetches once and restarts it, closes on Esc, desktop alive|python3 ./tools/checks/ring3weather-check.py
+retry|2|Burrow runs as a ring-3 process through the table-driven launcher: draws the folder grid, Enter opens a folder and Backspace goes up through SYS_READDIR, closes on Esc, desktop alive|python3 ./tools/checks/ring3burrow-check.py
 retry|2|Every ring-3 app (parsed from RING3_APPS) crashes on purpose, is reaped, and the desktop keeps drawing and opens a different app after each one|python3 ./tools/checks/ring3crash-all-check.py
 retry|5|A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT|python3 ./tools/checks/userfb-release-check.py
 retry|7|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
@@ -196,7 +197,7 @@ retry|7|Sound Blaster 16 detects, beep plays a real 440Hz tone, card-less boot i
 retry|3|Sound Blaster 16 record path: `listen` reaches the driver and times out cleanly (QEMU has no ADC backend), card-less boot is a no-op|python3 ./tools/checks/sb16-record-check.py
 retry|4|Chat speaks: say fetches /api/speak PCM from a stub and plays a real 1000Hz tone|python3 ./tools/checks/chat-speaks-check.py
 retry|4|Chat face: idle frame before, talk frames while she speaks, idle after; no frames means no face|python3 ./tools/checks/chat-face-check.py
-retry|3|Files view switcher: Icons grid renders and the chosen view persists across close/reopen|python3 ./tools/checks/filesview-check.py
+retry|3|Burrow view switcher: List/Icons choice is saved to BURROW.TXT and a fresh run reads it back|python3 ./tools/checks/filesview-check.py
 retry|7|Demo canvas fills its frame, pixelated only at an exact 1:1 map|node ./tools/checks/democrisp-check.mjs
 once |7|Landing page never overflows horizontally at phone widths|node ./tools/checks/mobile-overflow-check.mjs
 once |7|Landing: benchmark labels clear, one app count, Samantha link styled, sections visible on load|node ./tools/checks/landing-layout-check.mjs

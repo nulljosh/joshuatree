@@ -65,6 +65,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Search runs as a ring-3 process through the table-driven launcher: SYS_READDIR refuses a kernel pointer, an over-long path and a missing folder, the list filters live, a file shows its real bytes, a FAT folder opens by relative path with the kernel's cwd untouched, closes on Esc, crashes safely, desktop alive | `tools/checks/ring3search-check.py` | retry |
 | Epiphany runs as a ring-3 process through the table-driven launcher: falls back to the offline prices when SYS_HTTP_GET finds no NIC, switches tabs by key and click, runs the command bar, closes on Esc, desktop alive | `tools/checks/ring3epiphany-check.py` | retry |
 | Weather runs as a ring-3 process through the table-driven launcher: reads the kernel's WEATHER.TXT and shows the offline face over labelled sample data, R refetches once and restarts it, closes on Esc, desktop alive | `tools/checks/ring3weather-check.py` | retry |
+| Burrow runs as a ring-3 process through the table-driven launcher: draws the folder grid, Enter opens a folder and Backspace goes up through SYS_READDIR, closes on Esc, desktop alive | `tools/checks/ring3burrow-check.py` | retry |
 | Every ring-3 app (parsed from RING3_APPS) crashes on purpose, is reaped, and the desktop keeps drawing and opens a different app after each one | `tools/checks/ring3crash-all-check.py` | retry |
 | A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT | `tools/checks/userfb-release-check.py` | retry |
 | Shell launches a ring-3 program by bare name, case-insensitively | `tools/checks/shellname-check.sh` | retry |
@@ -148,7 +149,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Sound Blaster 16 record path: `listen` reaches the driver and times out cleanly (QEMU has no ADC backend), card-less boot is a no-op | `tools/checks/sb16-record-check.py` | retry |
 | Chat speaks: say fetches /api/speak PCM from a stub and plays a real 1000Hz tone | `tools/checks/chat-speaks-check.py` | retry |
 | Chat face: idle frame before, talk frames while she speaks, idle after; no frames means no face | `tools/checks/chat-face-check.py` | retry |
-| Files view switcher: Icons grid renders and the chosen view persists across close/reopen | `tools/checks/filesview-check.py` | retry |
+| Burrow view switcher: List/Icons choice is saved to BURROW.TXT and a fresh run reads it back | `tools/checks/filesview-check.py` | retry |
 | Demo canvas fills its frame, pixelated only at an exact 1:1 map | `tools/checks/democrisp-check.mjs` | retry |
 | Landing page never overflows horizontally at phone widths | `tools/checks/mobile-overflow-check.mjs` | once |
 | Landing: benchmark labels clear, one app count, Samantha link styled, sections visible on load | `tools/checks/landing-layout-check.mjs` | once |
@@ -165,7 +166,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 | App | Checks that name it |
 |---|---|
-| Burrow | `tools/checks/burrow-rename-check.py` |
+| Burrow | `tools/checks/burrow-rename-check.py`, `tools/checks/filesview-check.py`, `tools/checks/ring3burrow-check.py` |
 | Mail | `tools/checks/esc-desktop-check.py`, `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/mailtools-check.py` |
 | Calendar | `tools/checks/apptop-check.py`, `tools/checks/calicon-check.py`, `tools/checks/calviews-check.py`, `tools/checks/check-calendar.sh`, `tools/checks/ring3calendar-check.py` |
 | Notes | `tools/checks/clipboard-check.py`, `tools/checks/editor_qa.py`, `tools/checks/editorflash-check.sh`, `tools/checks/notesfolders-check.py`, `tools/checks/notessharp-check.py`, `tools/checks/notestools-check.py`, `tools/checks/textselect-check.py`, `tools/checks/touch-osk-check.py`, `tools/checks/windowdrag-check.py` |

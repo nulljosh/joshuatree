@@ -1036,9 +1036,6 @@ int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
    a successful fetch shows. */
 static int wall_theme = WALL_SAT;
 static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
-#define FILES_VIEW_LIST 0
-#define FILES_VIEW_ICONS 1
-static int files_view = FILES_VIEW_LIST; /* persisted below by settings_save/settings_load (key "filesview") */
 
 /* v71: real location for weather/map, looked up from the public IP
    (ip-api.com, see geo_fetch further down). Forward of that same v71
@@ -1128,7 +1125,6 @@ static void settings_load(void){
         int is_llmhost  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='h' && buf[start+4]=='o' && buf[start+5]=='s' && buf[start+6]=='t';
         int is_llmport  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='p' && buf[start+4]=='o' && buf[start+5]=='r' && buf[start+6]=='t';
         int is_loc = keylen == 3 && buf[start]=='l' && buf[start+1]=='o' && buf[start+2]=='c';
-        int is_filesview = keylen == 9 && buf[start]=='f' && buf[start+1]=='i' && buf[start+2]=='l' && buf[start+3]=='e' && buf[start+4]=='s' && buf[start+5]=='v' && buf[start+6]=='i' && buf[start+7]=='e' && buf[start+8]=='w';
         if (is_loc) {
             /* value shape: name;lat;lon -- the same three fields
                loc_geocode fills in, ';'-joined since '=' is already the
@@ -1195,7 +1191,6 @@ static void settings_load(void){
         else if (is_dock && val >= 5 && val <= 25) dock_scale_pct = val;
         else if (is_wall && val >= WALL_PHOTO && val <= WALL_SAT) wall_theme = val;
         else if (is_llmport && val > 0 && val <= 65535) llm_port = val;
-        else if (is_filesview && val >= FILES_VIEW_LIST && val <= FILES_VIEW_ICONS) files_view = val;
     }
 }
 
@@ -1222,8 +1217,6 @@ static void settings_save(void){
       while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
       while (nd) buf[n++] = digits[--nd]; }
     buf[n++] = '\n';
-    const char *k8 = "filesview="; while (*k8) buf[n++] = *k8++;
-    buf[n++] = '0' + files_view; buf[n++] = '\n';
     if (loc_have) {
         const char *k7 = "loc="; while (*k7) buf[n++] = *k7++;
         { const char *s = loc_name; while (*s && n < (int)sizeof(buf) - 34) buf[n++] = *s++; }

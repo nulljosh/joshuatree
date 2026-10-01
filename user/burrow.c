@@ -8,8 +8,12 @@
  * user/search.c does, so nothing outside the app moves. Type is the
  * antialiased libjt face. The backquote key is the deliberate crash.
  *
- * Not reproduced (no syscall for it yet): the persisted view choice
- * (SETTINGS.TXT), opening a file in another app, drag to Trash.
+ * The List / Icons choice persists in BURROW.TXT ("view=0" or "view=1"),
+ * read at start and rewritten on every change through the ordinary file
+ * syscalls, so SETTINGS.TXT's other keys are never touched. Serial markers
+ * (burrow: view=N, burrow: saved view=N, burrow: cwd=PATH n=COUNT) let the
+ * ring-3 check follow it. Not reproduced: opening a file in another app,
+ * drag to Trash.
  */
 #include "jtsys.h"
 #include "libjt/text.h"
@@ -72,6 +76,42 @@ static int tb_at(int cx, int cy) {
     return -1;
 }
 static int cols(void) { int w = ((int)win.width - 40) / TILE; return w < 1 ? 1 : w; }
+
+static void view_load(void) {
+    char b[16];
+    int fd = jt_open("BURROW.TXT", JT_O_RDONLY);
+    if (fd < 0) return;
+    int n = jt_read(fd, b, sizeof b - 1);
+    jt_close(fd);
+    if (n >= 6 && b[0] == 'v' && b[1] == 'i' && b[2] == 'e' && b[3] == 'w' && b[4] == '=' && (b[5] == '0' || b[5] == '1'))
+        view = b[5] - '0';
+}
+static void set_view(int v) {
+    if (v == view) return;
+    view = v;
+    char b[8] = {'v', 'i', 'e', 'w', '=', (char)('0' + v), '\n', 0};
+    int fd = jt_open("BURROW.TXT", JT_O_WRONLY | JT_O_CREAT | JT_O_TRUNC);
+    if (fd < 0) return;
+    jt_write(fd, b, 7);
+    jt_close(fd);
+    jt_write(1, "burrow: saved view=", 19);
+    jt_write(1, &b[5], 1);
+    jt_write(1, "\n", 1);
+}
+static void say_cwd(void) {
+    char b[JT_PATH_MAX + 32];
+    int l = 0;
+    const char *h = "burrow: cwd=";
+    while (*h) b[l++] = *h++;
+    for (int i = 0; cwd[i] && l < JT_PATH_MAX + 12; i++) b[l++] = cwd[i];
+    b[l++] = ' '; b[l++] = 'n'; b[l++] = '=';
+    char d[8]; int nd = 0, v = count;
+    if (!v) d[nd++] = '0';
+    while (v) { d[nd++] = (char)('0' + v % 10); v /= 10; }
+    while (nd) b[l++] = d[--nd];
+    b[l++] = '\n';
+    jt_write(1, b, (unsigned)l);
+}
 
 /* Folders first, each group in the kernel's own listing order. */
 static void reload(void) {
@@ -150,6 +190,7 @@ static void open_dir(const char *name) {
         for (int i = 0; i <= JT_PATH_MAX; i++) cwd[i] = saved[i];
     } else sel = 0;
     reload();
+    say_cwd();
 }
 static void go_up(void) {
     int l = 0;
@@ -159,6 +200,7 @@ static void go_up(void) {
     cwd[l] = 0;
     sel = 0;
     reload();
+    say_cwd();
 }
 static void open_sel(void) {
     if (count && raw[order[sel]].is_dir) open_dir(raw[order[sel]].name);
@@ -170,9 +212,12 @@ void _start(int argc, char **argv) {
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "burrow: no window\n", 18); jt_exit(1); }
     raw = (struct jt_dirent *)(((unsigned)_user_end + 15u) & ~15u);
     cwd[0] = 0;
+    view_load();
     reload();
     draw();
     jt_write(1, "burrow: ring-3 window\n", 22);
+    jt_write(1, view ? "burrow: view=1\n" : "burrow: view=0\n", 15);
+    say_cwd();
     unsigned flags = JT_POLL_PRESENT;
     for (;;) {
         struct jt_event ev;
@@ -182,7 +227,7 @@ void _start(int argc, char **argv) {
         if (r != 1) break;
         if (ev.kind == JT_EV_CLICK) {
             int tb = tb_at(ev.a, ev.b);
-            if (tb >= 0) view = tb;
+            if (tb >= 0) set_view(tb);
             else {
                 int hit = -1;
                 if (view == 1) {
@@ -199,8 +244,8 @@ void _start(int argc, char **argv) {
             if (k == JT_KEY_ESC) break;
             if (k == '`') { jt_write(1, "burrow: crashing on purpose\n", 28); *(volatile int *)0 = 1; }
             int c = view == 1 ? cols() : 1;
-            if (k == '1') view = 0;
-            else if (k == '2') view = 1;
+            if (k == '1') set_view(0);
+            else if (k == '2') set_view(1);
             else if (k == 8) go_up();
             else if (k == JT_KEY_ENTER) open_sel();
             else if (k == JT_KEY_UP) { if (sel - c >= 0) sel -= c; }
