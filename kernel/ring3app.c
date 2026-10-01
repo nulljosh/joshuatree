@@ -64,6 +64,7 @@
 #include "user_calendar.h"
 #include "user_search.h"
 #include "user_epiphany.h"
+#include "user_weather.h"
 #include "user_fbpoke.h"
 #include "app.h"
 #include "irq.h"
@@ -114,9 +115,10 @@ static const struct ring3_app RING3_APPS[] = {
     {"Calendar",   user_calendar,   USER_CALENDAR_LEN,   "CALENDAR.BIN"},
     {"Search",     user_search,     USER_SEARCH_LEN,     "SEARCH.BIN"},
     {"Epiphany",   user_epiphany,   USER_EPIPHANY_LEN,   "EPIPHANY.BIN"},
+    {"Weather",    user_weather,    USER_WEATHER_LEN,    "WEATHER.BIN"},
 };
 
-static void ring3app_launch(const struct ring3_app *a) {
+static int ring3app_launch(const struct ring3_app *a) {
     unsigned char probe[1];
     if (vfs_read_file(a->file, probe, 1) < 0 &&
         !vfs_write_file(a->file, a->bin, a->len)) {
@@ -128,7 +130,7 @@ static void ring3app_launch(const struct ring3_app *a) {
             if (&RING3_APPS[i] != a) vfs_delete(RING3_APPS[i].file);
         if (!vfs_write_file(a->file, a->bin, a->len)) {
             serial_puts("ring3app: could not seed "); serial_puts(a->file); serial_puts(", not started\n");
-            return;
+            return -1;
         }
     }
     /* The viewport must fit the ring-3 framebuffer, or SYS_WINDOW_OPEN
@@ -145,11 +147,11 @@ static void ring3app_launch(const struct ring3_app *a) {
            before it draws, which reads as "never opens". Refuse loudly and
            hand control back to the desktop instead. */
         serial_puts("ring3app: BUG no app viewport, not launching\n");
-        return;
+        return -1;
     }
     if (vw * vh * 4 > JT_USER_FB_BYTES) {
         serial_puts("ring3app: BUG app viewport does not fit JT_USER_FB, grow .userfb in boot/linker.ld\n");
-        return;
+        return -1;
     }
     serial_puts("ring3app: launching "); serial_puts(a->file); serial_puts(" at ring 3\n");
     int status = -1;
@@ -165,7 +167,7 @@ static void ring3app_launch(const struct ring3_app *a) {
     mouse_click_edge_sync();
     if (!exec_user(a->file, argv, 1, &status)) {
         serial_puts("ring3app: exec_user failed (not found, too big, or no free task slot)\n");
-        return;
+        return -1;
     }
     /* exec_user returned, so the task slot is free and syscall_release_task
        has already run for it. A negative status is idt.c's -(vector): the
@@ -180,6 +182,7 @@ static void ring3app_launch(const struct ring3_app *a) {
         serial_puts(" exited "); serial_puts(num); serial_puts(", window torn down, desktop alive\n");
     }
     if (syscall_window_owner() >= 0) serial_puts("ring3app: BUG window still owned after the task ended\n");
+    return status;
 }
 void keyrate_ring3_open(void)    { ring3app_launch(&RING3_APPS[0]); }
 void toroid_ring3_open(void)     { ring3app_launch(&RING3_APPS[1]); }
@@ -200,6 +203,7 @@ void curbfind_ring3_open(void)   { ring3app_launch(&RING3_APPS[15]); }
 void calendar_ring3_open(void)   { ring3app_launch(&RING3_APPS[16]); }
 void search_ring3_open(void)     { ring3app_launch(&RING3_APPS[17]); }
 void epiphany_ring3_open(void)   { ring3app_launch(&RING3_APPS[18]); }
+int  weather_ring3_run(void)     { return ring3app_launch(&RING3_APPS[19]); } /* exit status, kernel.c's weather_ring3_open loops on 7 */
 
 /* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
    run user/fbpoke.c with no window: it must be refused a pointer into
@@ -249,6 +253,7 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='a' && pc[7]=='l' && pc[8]=='e') { ring3app_autoopen_slot = 2; serial_puts("autoopen=calendar\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='e' && pc[7]=='a' && pc[8]=='r') { ring3app_autoopen_slot = 21; serial_puts("autoopen=search\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='e' && pc[6]=='p' && pc[7]=='i' && pc[8]=='p') { ring3app_autoopen_slot = 22; serial_puts("autoopen=epiphany\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='w' && pc[6]=='e' && pc[7]=='a' && pc[8]=='t') { ring3app_autoopen_slot = 7; serial_puts("autoopen=weather\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
     }
 }

@@ -64,6 +64,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Calendar runs as a ring-3 process through the table-driven launcher: gets today from SYS_TIME, draws the month grid, saves an event through the real editor, keeps EVENTS.TXT across fresh runs, feeds Samantha's calendar_today, closes on Esc, desktop alive | `tools/checks/ring3calendar-check.py` | retry |
 | Search runs as a ring-3 process through the table-driven launcher: SYS_READDIR refuses a kernel pointer, an over-long path and a missing folder, the list filters live, a file shows its real bytes, a FAT folder opens by relative path with the kernel's cwd untouched, closes on Esc, crashes safely, desktop alive | `tools/checks/ring3search-check.py` | retry |
 | Epiphany runs as a ring-3 process through the table-driven launcher: falls back to the offline prices when SYS_HTTP_GET finds no NIC, switches tabs by key and click, runs the command bar, closes on Esc, desktop alive | `tools/checks/ring3epiphany-check.py` | retry |
+| Weather runs as a ring-3 process through the table-driven launcher: reads the kernel's WEATHER.TXT and shows the offline face over labelled sample data, R refetches once and restarts it, closes on Esc, desktop alive | `tools/checks/ring3weather-check.py` | retry |
 | Every ring-3 app (parsed from RING3_APPS) crashes on purpose, is reaped, and the desktop keeps drawing and opens a different app after each one | `tools/checks/ring3crash-all-check.py` | retry |
 | A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT | `tools/checks/userfb-release-check.py` | retry |
 | Shell launches a ring-3 program by bare name, case-insensitively | `tools/checks/shellname-check.sh` | retry |
@@ -170,7 +171,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Reminders | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/notestools-check.py`, `tools/checks/ring3reminders-check.py` |
 | Terminal | `tools/checks/clipboard-check.py`, `tools/checks/termchatflash-check.sh`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
 | Samantha | `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/landing-layout-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py` |
-| Weather | `tools/checks/weatherproxy-hang-check.mjs` |
+| Weather | `tools/checks/weatherproxy-hang-check.mjs`, `tools/checks/ring3weather-check.py` |
 | Curbfind | `tools/checks/ring3curbfind-check.py` |
 | Keyrate | `tools/checks/ring3app-check.py` |
 | Bookrank | `tools/checks/ring3bookrank-check.py` |
