@@ -21,6 +21,10 @@
 #define KEY_COPY       302
 #define KEY_CUT        303
 #define KEY_PASTE      304
+#define KEY_HOME       305   /* ring-3 delivery paths only (gui_poll_event, compositor push) */
+#define KEY_END        306
+#define KEY_DELETE     307
+#define KEY_SAVE       308   /* Ctrl+S */
 
 /* One app, one entry. Every place the desktop used to switch on an app's
    index (launch, dock glyph, tile color, label, multiwindow content and

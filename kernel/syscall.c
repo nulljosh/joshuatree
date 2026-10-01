@@ -810,6 +810,35 @@ static int sys_readdir(u32 path, u32 out, u32 max) {
     return (int)readdir_total;
 }
 
+/* SYS_MKDIR / SYS_UNLINK: same path rules as sys_open (copy_path_from_user
+   checks every byte with paging_user_range_ok, path_enter keeps one leaf),
+   the walk is undone before return. No heap is touched, so there is no lock
+   to take; the gate already runs with IF clear. */
+static int sys_mkdir(u32 path, u32 b, u32 c) {
+    (void)b; (void)c;
+    char name[PATH_MAX + 1];
+    int err = copy_path_from_user(path, name);
+    if (err) return err;
+    char *leaf; int depth;
+    err = path_enter(name, 1, &leaf, &depth);
+    if (err) return err;
+    int ok = vfs_mkdir(leaf);
+    path_leave(depth);
+    return ok ? 0 : -ENOSPC;
+}
+static int sys_unlink(u32 path, u32 b, u32 c) {
+    (void)b; (void)c;
+    char name[PATH_MAX + 1];
+    int err = copy_path_from_user(path, name);
+    if (err) return err;
+    char *leaf; int depth;
+    err = path_enter(name, 1, &leaf, &depth);
+    if (err) return err;
+    int ok = vfs_delete(leaf);
+    path_leave(depth);
+    return ok ? 0 : -ENOENT;
+}
+
 /* Called from syscall_release_task on exit or fault. 1.7.8: the pages go
    back to supervisor-only here, not just zeroed. Before this, a program
    that had opened a window left JT_USER_FB user-accessible for good, so
@@ -842,6 +871,8 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_TASKS]       = sys_tasks,
     [SYS_HTTP_GET]    = sys_http_get,
     [SYS_READDIR]     = sys_readdir,
+    [SYS_MKDIR]       = sys_mkdir,
+    [SYS_UNLINK]      = sys_unlink,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {

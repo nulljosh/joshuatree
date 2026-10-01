@@ -608,3 +608,30 @@ Since 1.9.13 **open** takes the same relative paths, so the file a listing
 named inside `DOCS` opens as `"DOCS/NAME"`. The walk in and back out happens
 at open and again at close, when the buffer is written back. An empty path
 is -EINVAL.
+
+## mkdir and unlink (1.9.24)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 389 | `mkdir` | `const char *path` | 0 | 0 | 0, or -errno |
+| 390 | `unlink` | `const char *path` | 0 | 0 | 0, or -errno |
+
+**mkdir** makes a folder and **unlink** deletes a file, both for the Notes app.
+`path` follows the exact rules of **open**: relative to the shell's directory,
+no leading slash, no `.` or `..` parts, at most 63 bytes before the NUL, at
+most 8 parts. Every part but the last is entered with `vfs_chdir` and walked
+back with `..` before the call returns, with the cursor put back where the
+desktop had it, so ring 3 never moves the kernel's own directory. The last
+part is the name made or removed. The path is copied out byte by byte, each
+one checked with `paging_user_range_ok`; nothing outside what open can reach
+is reachable here. No heap is touched, so there is no lock to take beyond the
+gate's own interrupts-off. Errors: -EFAULT (path not user memory), -EINVAL
+(too long or malformed), -ENOENT (a part is not a folder, the backend has no
+folders as with ramfs, or for unlink the file is not there), and for mkdir
+-ENOSPC, which covers a taken name, a full disk and a full directory, since
+the backend answers only yes or no.
+
+Since 1.9.24 the ring-3 key paths also deliver Home, End, Delete (0xE0 0x47,
+0x4F, 0x53) as `JT_KEY_HOME` 305, `JT_KEY_END` 306, `JT_KEY_DELETE` 307, and
+Ctrl+S as `JT_KEY_SAVE` 308, both to a blocking app's `gui_poll_event` and to
+a ring-3 window through the compositor's event push.

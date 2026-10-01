@@ -22,7 +22,9 @@
  * KEY_COPY/CUT/PASTE (302..304). Copy and cut take the current logical line
  * (the kernel editor's own contract) into an in-app clipboard; paste inserts
  * it. Esc saves (truncate-write, only if edited) and returns to browse.
- * Not deliverable yet (the poll path drops them): Ctrl+S, Home, End, Delete.
+ * Home, End and Delete work in the editor; Ctrl+S saves and stays in it.
+ * Browse: f makes a folder (F0000001 style names, 8.3), d deletes the
+ * selected note. SYS_MKDIR and SYS_UNLINK do the work.
  * Serial markers: notes: folders=N notes=N, notes: new=FILE, notes: edit=FILE,
  * notes: saved=N.
  */
@@ -273,22 +275,25 @@ static void edit_open(const char *file) {
     jt_write(1, "\n", 1);
 }
 
-static void edit_close(void) {
-    if (edirty) {
-        char p[40];
-        note_path(p, efile);
-        int fd = jt_open(p, JT_O_WRONLY | JT_O_CREAT | JT_O_TRUNC);
-        if (fd >= 0) {
-            int off = 0;
-            while (off < elen) {
-                int w = jt_write(fd, ar->ed + off, (unsigned)(elen - off));
-                if (w <= 0) break;
-                off += w;
-            }
-            jt_close(fd);
-            say("notes: saved=", off);
-        } else note = "Save failed.";
+static int edit_save(void) {
+    char p[40];
+    note_path(p, efile);
+    int fd = jt_open(p, JT_O_WRONLY | JT_O_CREAT | JT_O_TRUNC);
+    if (fd < 0) { note = "Save failed."; return 0; }
+    int off = 0;
+    while (off < elen) {
+        int w = jt_write(fd, ar->ed + off, (unsigned)(elen - off));
+        if (w <= 0) break;
+        off += w;
     }
+    jt_close(fd);
+    say("notes: saved=", off);
+    edirty = 0;
+    return 1;
+}
+
+static void edit_close(void) {
+    if (edirty) edit_save();
     editing = 0;
     load_notes();
     for (int i = 0; i < nno; i++) if (seq(ar->no[i].file, efile)) { nsel = i; break; }
@@ -345,6 +350,10 @@ static void ed_key(int k) {
         if (k == KEY_CUT) { ed_remove(s, e - s + (e < elen ? 1 : 0)); epos = s; }
     }
     else if (k == KEY_PASTE) ed_insert(ar->clip, clen);
+    else if (k == JT_KEY_HOME) { int s, e; ed_line_bounds(&s, &e); epos = s; goalx = -1; }
+    else if (k == JT_KEY_END) { int s, e; ed_line_bounds(&s, &e); epos = e; goalx = -1; }
+    else if (k == JT_KEY_DELETE) { if (epos < elen) ed_remove(epos, 1); }
+    else if (k == JT_KEY_SAVE) { if (edirty) { if (edit_save()) note = "Saved."; } else note = "Saved."; }
 }
 
 /* n: an empty note lands in the open folder, selected. */
@@ -353,6 +362,7 @@ static void new_note(void) {
     char f[13], p[40];
     next_filename(f);
     note_path(p, f);
+    if (!flat) { char d[24]; jt_mkdir("NOTES"); folder_path(d); jt_mkdir(d); } /* harmless when they exist */
     int fd = jt_open(p, JT_O_WRONLY | JT_O_CREAT | JT_O_TRUNC);
     if (fd < 0) { note = "Could not create the note (is the folder there?)."; return; }
     jt_close(fd);
@@ -363,6 +373,46 @@ static void new_note(void) {
     jt_write(1, f, (unsigned)slen(f));
     jt_write(1, "\n", 1);
     edit_open(f);
+}
+
+/* f: a new folder NOTES/Fnnnnnn, made (with NOTES itself) when missing. */
+static void new_folder(void) {
+    if (flat) { note = "This boot has no folders."; return; }
+    if (nfo >= MAX_FOLDERS) { note = "Too many folders."; return; }
+    jt_mkdir("NOTES"); /* fails harmlessly when it is already there */
+    char name[9], p[24];
+    for (int idx = nfo + 1; idx < 10000; idx++) {
+        int v = idx;
+        name[0] = 'F';
+        for (int q = 4; q >= 1; q--) { name[q] = (char)('0' + v % 10); v /= 10; }
+        name[5] = 0;
+        int hit = 0;
+        for (int i = 0; i < nfo; i++) if (seq(ar->fo[i].name, name)) { hit = 1; break; }
+        if (hit) continue;
+        scopy(p, "NOTES/", 8);
+        scopy(p + 6, name, 9);
+        if (jt_mkdir(p) != 0) { note = "Could not make the folder."; return; }
+        break;
+    }
+    load_folders();
+    for (int i = 0; i < nfo; i++) if (seq(ar->fo[i].name, name)) { fsel = i; break; }
+    nsel = 0;
+    load_notes();
+    say("notes: folder=", -1);
+    jt_write(1, name, (unsigned)slen(name));
+    jt_write(1, "\n", 1);
+}
+
+/* d: delete the selected note. */
+static void delete_note(void) {
+    if (!nno) return;
+    char p[40];
+    note_path(p, ar->no[nsel].file);
+    if (jt_unlink(p) != 0) { note = "Could not delete the note."; return; }
+    say("notes: deleted=", -1);
+    jt_write(1, ar->no[nsel].file, (unsigned)slen(ar->no[nsel].file));
+    jt_write(1, "\n", 1);
+    load_notes();
 }
 
 static void open_note(void) {
@@ -391,7 +441,7 @@ static void draw_list(int x, int w, const char *title, int focused, int count, i
 static void draw(void) {
     char t[TITLE_MAX];
     rect(0, 0, (int)win.width, (int)win.height, BG);
-    text("n new   tab switch   up/down pick   enter opens   backspace up   esc closes", 20, 10, DIM);
+    text("n new   f folder   d delete   tab switch   up/down pick   enter opens   backspace up   esc closes", 20, 10, DIM);
     draw_list(20, FOLDER_W, "FOLDERS", focus == 0, nfo, fsel);
     for (int i = 0; i < nfo; i++) text(ar->fo[i].name, 32, COL_Y + 46 + i * ROW_H - 4, INK);
     int nx = 20 + FOLDER_W + 16;
@@ -466,6 +516,8 @@ void _start(int argc, char **argv) {
             if (k == JT_KEY_ESC) break;
             else if (k == '\t') focus = !focus;
             else if (k == 'n') { new_note(); if (editing) { ed_draw(); flags = JT_POLL_PRESENT; continue; } }
+            else if (k == 'f') new_folder();
+            else if (k == 'd') delete_note();
             else if (focus == 0) {
                 if (k == JT_KEY_UP && fsel > 0) { fsel--; nsel = 0; load_notes(); }
                 else if (k == JT_KEY_DOWN && fsel < nfo - 1) { fsel++; nsel = 0; load_notes(); }

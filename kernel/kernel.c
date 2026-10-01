@@ -5710,9 +5710,13 @@ static int gui_multiwin_key_nonblock(void){
         if (sc2 == 0x50) return KEY_DOWN;
         if (sc2 == 0x4B) return KEY_LEFT;
         if (sc2 == 0x4D) return KEY_RIGHT;
+        if (sc2 == 0x47) return KEY_HOME;
+        if (sc2 == 0x4F) return KEY_END;
+        if (sc2 == 0x53) return KEY_DELETE;
         return -1;
     }
     if (sc & 0x80) return -1; /* key release */
+    if (kbd_ctrl && (sc & 0x7F) == 0x1F) return KEY_SAVE;
     char c = kbd_map(sc);
     if (c == '\n') return KEY_ENTER;
     if (c == 27)   return KEY_ESC;

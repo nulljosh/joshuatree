@@ -130,6 +130,18 @@ struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
    assigned below is a null the dispatcher turns into -ENOSYS rather than
    a jump into nothing, and any number >= NSYSCALLS gets the same answer,
    so the gaps in Linux's numbering cost nothing and hide nothing. */
+/* SYS_MKDIR and SYS_UNLINK, what the Notes app makes folders and deletes
+   notes with. Both take one path, ebx, resolved exactly like SYS_OPEN: relative,
+   split in place, every part but the last entered with vfs_chdir and walked
+   back before the call returns; the last part is the name made or removed.
+     mkdir  -> 0, or -errno: -EFAULT, -EINVAL (malformed path), -ENOENT (a
+               parent is not a folder, or the backend has no folders, ramfs),
+               -ENOSPC (name taken, disk full or directory full: the backend
+               says only yes or no).
+     unlink -> 0, or -errno: -EFAULT, -EINVAL, -ENOENT (no such file).
+   Neither is reachable from a path that open could not reach. */
+#define SYS_MKDIR       389
+#define SYS_UNLINK      390
 #define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3. 386 (tasks), 387 (http_get) and 388 (readdir) fit under it */
 
 /* Exactly the stack shape syscall_entry (isr.S) builds, lowest address

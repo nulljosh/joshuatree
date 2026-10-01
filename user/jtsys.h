@@ -51,6 +51,8 @@
 #define JT_HTTP_PATH_MAX 128   /* longest path SYS_HTTP_GET accepts, bytes before the NUL */
 #define JT_HTTP_BODY_MAX 2048  /* longest body it hands back */
 #define JT_SYS_READDIR     388 /* 1.9.13: list a directory into fixed-size records (387 is Curbfind's http_get) */
+#define JT_SYS_MKDIR       389 /* make a folder; relative path like open */
+#define JT_SYS_UNLINK      390 /* delete a file; relative path like open */
 #define JT_DIRENT_NAME  32
 #define JT_READDIR_MAX  64
 #define JT_PATH_MAX     63     /* bytes of path before the NUL the kernel will read; longer is -EINVAL */
@@ -65,6 +67,10 @@
 #define JT_KEY_ESC   259
 #define JT_KEY_LEFT  261
 #define JT_KEY_RIGHT 262
+#define JT_KEY_HOME  305
+#define JT_KEY_END   306
+#define JT_KEY_DELETE 307
+#define JT_KEY_SAVE  308 /* Ctrl+S */
 struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
 struct jt_event { unsigned int kind; int a, b; };
 struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
@@ -150,6 +156,8 @@ static inline int jt_tasks(struct jt_tasks *t, int kill)          { return jt_sy
    NIC, -EIO no answer. The host is fixed in the kernel; only the path is ours. */
 static inline int jt_http_get(const char *path, void *buf, unsigned len) { return jt_syscall(JT_SYS_HTTP_GET, (unsigned)path, (unsigned)buf, len); }
 static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned max) { return jt_syscall(JT_SYS_READDIR, (unsigned)path, (unsigned)out, max); }
+static inline int jt_mkdir(const char *path)                      { return jt_syscall(JT_SYS_MKDIR, (unsigned)path, 0, 0); }
+static inline int jt_unlink(const char *path)                     { return jt_syscall(JT_SYS_UNLINK, (unsigned)path, 0, 0); }
 static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
 
 #endif
