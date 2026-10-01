@@ -34,7 +34,6 @@ QA backlog:
 - Stale cursor glyph in Search and Stocks for a moment after opening.
 - Clock is hard to reach in the desktop Apps folder (scroll is flaky).
 - Mail "New message" should be an inline sheet on phones, not a new window.
-- Clock icon should be a live analog face.
 - Text still looks soft on phones (canvas scale 1.25x on DPR 3, kernel glyph AA).
 - README shields badge showed "invalid" (GitHub side is fine). If it persists, use a self-hosted endpoint badge.
 

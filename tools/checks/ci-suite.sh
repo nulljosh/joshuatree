@@ -160,6 +160,7 @@ retry|7|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/
 retry|6|Dock icon lighting (one soft top light, top highlight, no dark outline)|python3 ./tools/checks/iconlight-check.py
 once |3|Every authored icon shares one tile silhouette, AA edges, glyph margin|python3 ./tools/checks/iconinset-check.py
 retry|7|Calendar dock tile shows today's date, not fixed art|python3 ./tools/checks/calicon-check.py
+retry|2|Clock icon is a live analog face: hands follow the RTC and redraw on the minute|python3 ./tools/checks/clockicon-check.py
 retry|2|Shadow under the dock darkens the photo, no flat bands|python3 ./tools/checks/dockband-check.py
 retry|5|Titlebar traffic-light AA (real coverage blend, not binary)|python3 ./tools/checks/titlebar-aa-check.py
 retry|4|Dock tray corner AA (real coverage blend, not binary)|python3 ./tools/checks/traycorner-check.py

@@ -1258,9 +1258,7 @@ static void settings_save(void){
    to the nearest point on the segment, falling off over a 1px band
    centered on the line's half-width -- exact endpoints included, so the
    line caps flat rather than growing fuzzy stubs past x0,y0/x1,y1. */
-static void gui_aa_line(int x0, int y0, int x1, int y1, unsigned int color, double width){
-    int sc = (int)window_scale(); if (sc < 1) sc = 1;
-    double fx0 = x0 * sc, fy0 = y0 * sc, fx1 = x1 * sc, fy1 = y1 * sc;
+static void gui_aa_line_phys(double fx0, double fy0, double fx1, double fy1, unsigned int color, double width){
     double dx = fx1 - fx0, dy = fy1 - fy0;
     double len = gui_line_sqrt(dx * dx + dy * dy);
     double halfw = width / 2.0;
@@ -1304,6 +1302,10 @@ static void gui_aa_line(int x0, int y0, int x1, int y1, unsigned int color, doub
             window_pixel_phys(x, y, (r << 16) | (g << 8) | b);
         }
     }
+}
+static void gui_aa_line(int x0, int y0, int x1, int y1, unsigned int color, double width){
+    int sc = (int)window_scale(); if (sc < 1) sc = 1;
+    gui_aa_line_phys(x0 * sc, y0 * sc, x1 * sc, y1 * sc, color, width);
 }
 
 /* Channel-wise linear interpolation between two 0x00RRGGBB colors, `t/max`
@@ -2046,17 +2048,6 @@ void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color,
    12-point circle approximation, rounder curves at this radius. */
 #define HELLO_SLANT_NUM 3
 #define HELLO_SLANT_DEN 10
-
-static void gui_draw_script_loop(int cx, int cy, int r, int thick, unsigned int color, unsigned int bg, int skip_mask, int shift){
-    static const int px12[12] = {10, 9, 5, 0, -5, -9, -10, -9, -5, 0, 5, 9};
-    static const int py12[12] = {0, 5, 9, 10, 9, 5, 0, -5, -9, -10, -9, -5};
-    for (int i = 0; i < 12; i++){
-        if (skip_mask & (1 << i)) continue;
-        int j = (i + 1) % 12;
-        gui_draw_capsule(cx + shift + px12[i] * r / 10, cy + py12[i] * r / 10,
-                          cx + shift + px12[j] * r / 10, cy + py12[j] * r / 10, thick, color, bg);
-    }
-}
 
 /* A small hand-plotted script "hello", a real nod to the original 1984
    Macintosh boot screen rather than this file's usual blocky bitmap
@@ -4116,6 +4107,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
    at every one of its draw sites (dock, dock-magnified, Apps-folder
    grid, drag preview all funnel through this one function). */
 static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size);
+#include "clockicon.h"
 
 static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int size, unsigned int under){
     int x = cx_center - size / 2, y = cy_bottom - size;
@@ -4128,7 +4120,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
             for (int px = 0; px < pw; px++)
                 if (tile[py * pw + px] != under)
                     window_pixel_phys(x * (int)sc + px, y * (int)sc + py, tile[py * pw + px]);
-        if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
+        gui_icon_overlay(icon, cx_center, cy_bottom, size);
         return;
     }
     /* out of memory for the cache: draw directly, un-supersampled, rather than draw nothing */
@@ -4137,7 +4129,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
     gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, under, size * 22 / 100);
     gui_draw_gloss(x, y, size, size, bg, size * 22 / 100 + 1);
     gui_draw_icon_glyph(icon, cx_center, y + size / 2, size, bg);
-    if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
+    gui_icon_overlay(icon, cx_center, cy_bottom, size);
 }
 void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){ gui_draw_one_icon_on(icon, cx_center, cy_bottom, size, DOCK_TRAY_COLOR); }
 
@@ -5277,6 +5269,7 @@ static void gui_launch_apps(void){
        alone through gui_apps_redraw_panel. Repainting the wallpaper on every
        poll tick is what made this screen flash while scrolling or typing. */
     int full = 1;
+    int clock_min_seen = -1;
     (void)rows;
 
     for (;;) {
@@ -5310,8 +5303,9 @@ static void gui_launch_apps(void){
            actually catches this frame before we block, and a click/tap
            counting as input so a phone can leave this screen at all. */
         window_present(); sleep_ticks(5);
+        if (gui_clock_tick(&clock_min_seen)) gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w); /* Clock hands follow the minute */
         /* v0.77.0: mouse wheel scroll to browse all apps, one row per scroll. */
-        int k = get_key_or_click();
+        int k = get_key_or_click_until(ticks() + 100); /* wakes each second */
         if (k == KEY_WHEEL_UP || k == KEY_WHEEL_DOWN) {
             /* The view scrolls where the wheel says, full stop. Snapping the
                offset back to keep the selection on screen (what the first cut
@@ -5731,7 +5725,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 22 */ {"Epiphany",   0x001F5FA8, gui_icon_stocks,     epiphany_ring3_open,   0, 0}, /* 1.9.17: ring 3 (user/epiphany.c); art covers the icon */
     /* 23 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       portfolio_ring3_open,  0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph; 1.9.5: ring 3 (user/portfolio.c) */
     /* 24 */ {"Activity",   0x003E4C58, gui_icon_activity,   activity_ring3_open,   0, 0}, /* 1.9.6: ring 3 (user/activity.c) */
-    /* 25 */ {"Clock",      0x00565A7A, gui_icon_apps,       clock_ring3_open,      0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph; 1.9.4: ring 3 (user/clock.c) */
+    /* 25 */ {"Clock",      0x00565A7A, gui_icon_clock,      clock_ring3_open,      0, 0}, /* live analog face (hands overlay, gui_clock_draw_hands); 1.9.4: ring 3 (user/clock.c) */
     /* Apps and Trash aren't real apps with their own brand color, so their
        tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
        tinted background like every real app above. 2026-09-27: this used
