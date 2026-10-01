@@ -70,6 +70,7 @@
 #include "user_burrow.h"
 #include "user_mail.h"
 #include "user_notes.h"
+#include "user_terminal.h"
 #include "user_fbpoke.h"
 #include "app.h"
 #include "window.h"
@@ -126,6 +127,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Stocks",     user_stocks,     USER_STOCKS_LEN,     "STOCKS.BIN"},
     {"Mail",       user_mail,       USER_MAIL_LEN,       "MAIL.BIN"},
     {"Notes",      user_notes,      USER_NOTES_LEN,      "NOTES.BIN"},
+    {"Terminal",   user_terminal,   USER_TERMINAL_LEN,   "TERMINAL.BIN"},
 };
 
 static int ring3app_seed(const struct ring3_app *a) {
@@ -275,6 +277,7 @@ void epiphany_ring3_open(void)   { ring3app_launch(&RING3_APPS[18]); }
 void burrow_ring3_open(void)     { ring3app_launch(&RING3_APPS[20]); }
 int  stocks_ring3_run(void)      { return ring3app_launch(&RING3_APPS[21]); } /* exit status, kernel.c's stocks_ring3_open decodes 16 + sel*5 + range (+64 refresh) */
 void mail_ring3_open(void)       { ring3app_launch(&RING3_APPS[22]); }
+void terminal_ring3_open(void)   { ring3app_launch(&RING3_APPS[24]); }
 void notes_ring3_launch(void)    { ring3app_launch(&RING3_APPS[23]); } /* kernel.c's notes_ring3_open runs the legacy NOTES.TXT migration first */
 int  weather_ring3_run(void)     { return ring3app_launch(&RING3_APPS[19]); } /* exit status, kernel.c's weather_ring3_open loops on 7 */
 

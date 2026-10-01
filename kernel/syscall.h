@@ -143,6 +143,12 @@ struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
    Neither is reachable from a path that open could not reach. */
 #define SYS_MKDIR       389
 #define SYS_UNLINK      390
+/* 1.9.24: SYS_SHELL_RUN, the window Terminal's shell. ebx = const char *line (user, NUL terminated,
+   at most JT_SHELL_LINE_MAX bytes), ecx = char *out (user), edx = outlen. Returns bytes written to out
+   (NUL terminated, truncated to outlen-1), or -EFAULT (either pointer), -EINVAL (outlen 0 or over 4096,
+   line too long). A refused command still returns a one-line message. Allowlist in kernel/shellsys.c. */
+#define SYS_SHELL_RUN   391
+#define JT_SHELL_LINE_MAX 95 /* same number as user/jtsys.h */
 #define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3. 386 (tasks), 387 (http_get) and 388 (readdir) fit under it */
 
 /* Exactly the stack shape syscall_entry (isr.S) builds, lowest address

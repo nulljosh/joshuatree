@@ -30,6 +30,7 @@
 #include "net.h"  /* 1.9.11: SYS_HTTP_GET */
 #include "http.h"
 #include "irqlock.h"
+#include "shellsys.h"
 
 typedef unsigned int u32;
 typedef unsigned char u8;
@@ -859,6 +860,30 @@ static int sys_unlink(u32 path, u32 b, u32 c) {
     return ok ? 0 : -ENOENT;
 }
 
+/* SYS_SHELL_RUN: both user pointers are range checked before anything is
+   read or written, the line is copied in with a hard bound, and the work is
+   shellsys_run's allowlist (static buffers, no blocking, no windows). */
+static int sys_shell_run(u32 line, u32 out, u32 outlen) {
+    if (outlen == 0 || outlen > 4096) return -EINVAL;
+    if (!paging_user_range_ok(out, outlen)) return -EFAULT;
+    char k[JT_SHELL_LINE_MAX + 1];
+    u32 n = 0;
+    for (;; n++) {
+        if (n > JT_SHELL_LINE_MAX) return -EINVAL;
+        if (!paging_user_range_ok(line + n, 1)) return -EFAULT;
+        char c = ((const char *)line)[n];
+        k[n] = c;
+        if (!c) break;
+    }
+    char *res;
+    u32 len = shellsys_run(k, &res);
+    if (len > outlen - 1) len = outlen - 1;
+    char *dst = (char *)out;
+    for (u32 i = 0; i < len; i++) dst[i] = res[i];
+    dst[len] = 0;
+    return (int)len;
+}
+
 /* Called from syscall_release_task on exit or fault. 1.7.8: the pages go
    back to supervisor-only here, not just zeroed. Before this, a program
    that had opened a window left JT_USER_FB user-accessible for good, so
@@ -893,6 +918,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_READDIR]     = sys_readdir,
     [SYS_MKDIR]       = sys_mkdir,
     [SYS_UNLINK]      = sys_unlink,
+    [SYS_SHELL_RUN]   = sys_shell_run,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {

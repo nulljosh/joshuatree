@@ -631,6 +631,47 @@ folders as with ramfs, or for unlink the file is not there), and for mkdir
 -ENOSPC, which covers a taken name, a full disk and a full directory, since
 the backend answers only yes or no.
 
+## shell_run (1.9.24)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 391 | `shell_run` | `const char *line` | `char *out` | `unsigned outlen` | bytes written to `out`, or -errno |
+
+**shell_run** is the one call behind the window Terminal (`user/terminal.c`). It
+runs a single shell line and writes the text the shell would have printed into
+`out`, NUL terminated and cut to `outlen - 1`. `line` is copied in byte by byte
+with each byte checked by `paging_user_range_ok`, at most 95 bytes before the
+NUL (`JT_SHELL_LINE_MAX`); `out` is checked whole, and `outlen` must be 1 to
+4096. Errors: -EFAULT (either pointer not user memory), -EINVAL (`outlen` out
+of range, line too long). A refused command is not an error: it returns a
+one-line message.
+
+It does not call the text shell's `run()`. The call executes inside the int
+0x80 gate on the 4KB kernel stack with interrupts off, and `run()` has
+4KB buffers in its frame and commands that sleep, wait on the network, open
+windows or halt. `kernel/shellsys.c` is a small dispatcher with static buffers
+and an explicit allowlist instead, in the text shell's own wording:
+
+| Command | Does |
+|---|---|
+| `help` | lists the allowlist |
+| `echo <text>` | prints the text |
+| `uptime` | seconds since boot |
+| `mem` | free and total memory in K |
+| `ps` | each task slot, used or free |
+| `ls` | the root directory, name and size |
+| `cat <file>` | a root file, up to 2047 bytes, non-printable bytes shown as `.` |
+
+Everything else is refused with `<name>: not available in the window terminal
+(allowed: ...)`. That covers anything that blocks (`sleep`, `bench`, the
+`*test` family), waits on the network (`ifconfig`, `netscan`, `web`, `chat`,
+`say`), opens a GUI app or window (`gui`, `browse`, `notes`, `exec`), reboots or
+halts, or re-enters the window system. `cd` is refused too: a syscall must not
+move the desktop's directory, so `ls` and `cat` always start at the root
+(`vfs_cwd_set(0)`, put back before returning), and `cat` takes a bare file name,
+not a path. `clear` never reaches the kernel; the Terminal empties its own
+scrollback.
+
 Since 1.9.24 the ring-3 key paths also deliver Home, End, Delete (0xE0 0x47,
 0x4F, 0x53) as `JT_KEY_HOME` 305, `JT_KEY_END` 306, `JT_KEY_DELETE` 307, and
 Ctrl+S as `JT_KEY_SAVE` 308, both to a blocking app's `gui_poll_event` and to

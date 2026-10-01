@@ -53,6 +53,8 @@
 #define JT_SYS_READDIR     388 /* 1.9.13: list a directory into fixed-size records (387 is Curbfind's http_get) */
 #define JT_SYS_MKDIR       389 /* make a folder; relative path like open */
 #define JT_SYS_UNLINK      390 /* delete a file; relative path like open */
+#define JT_SYS_SHELL_RUN   391 /* 1.9.24: run one allowlisted shell line, output into a buffer; see kernel/shellsys.c */
+#define JT_SHELL_LINE_MAX 95   /* longest line the kernel copies in, bytes before the NUL */
 #define JT_DIRENT_NAME  32
 #define JT_READDIR_MAX  64
 #define JT_PATH_MAX     63     /* bytes of path before the NUL the kernel will read; longer is -EINVAL */
@@ -158,6 +160,7 @@ static inline int jt_http_get(const char *path, void *buf, unsigned len) { retur
 static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned max) { return jt_syscall(JT_SYS_READDIR, (unsigned)path, (unsigned)out, max); }
 static inline int jt_mkdir(const char *path)                      { return jt_syscall(JT_SYS_MKDIR, (unsigned)path, 0, 0); }
 static inline int jt_unlink(const char *path)                     { return jt_syscall(JT_SYS_UNLINK, (unsigned)path, 0, 0); }
+static inline int jt_shell_run(const char *line, char *out, unsigned outlen) { return jt_syscall(JT_SYS_SHELL_RUN, (unsigned)line, (unsigned)out, outlen); }
 static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
 
 #endif

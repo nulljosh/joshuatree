@@ -150,29 +150,7 @@ static void scroll(void){
     cy = H - 1;
 }
 
-/* v36 (0.36.0): output capture, the piece a real GUI terminal needs.
-   Every shell command in this kernel prints through putc, which writes
-   straight into VGA *text* memory at 0xB8000, a region that isn't even
-   mapped the same way once the card is in a graphics mode, so a
-   graphical terminal could never see a single character a command
-   produced. Redirecting at putc itself (rather than rewriting ~60 shell
-   commands to take an output sink) means every existing command, and
-   every future one, works in the GUI terminal for free. */
-static char *capture_buf = 0;
-static unsigned int capture_len = 0, capture_cap = 0;
-
-static void capture_begin(char *buf, unsigned int cap){ capture_buf = buf; capture_len = 0; capture_cap = cap; buf[0] = 0; }
-static unsigned int capture_end(void){ unsigned int n = capture_len; capture_buf = 0; return n; }
-
 void putc(char c){
-    if (capture_buf) {
-        /* Backspace has to edit the captured text, not append a control
-           byte the font renderer would draw as a glyph. */
-        if (c == '\b') { if (capture_len) capture_len--; }
-        else if (capture_len + 1 < capture_cap) capture_buf[capture_len++] = c;
-        capture_buf[capture_len] = 0;
-        return;
-    }
     if (c == '\n') { cx = 0; cy++; }
     else if (c == '\b') {
         if (cx) cx--; else if (cy) { cy--; cx = W - 1; }
@@ -2106,7 +2084,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
 
 static int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
@@ -4729,162 +4707,6 @@ char *wx_put_int(char *o, int v){
     return o;
 }
 
-/* v36 (0.36.0): a real terminal inside the desktop, not a second shell.
-   It runs the exact same run() every text-mode command goes through, so
-   there is precisely one shell in this kernel and anything it learns
-   later works here the same day, rather than two implementations drifting
-   apart. Output comes back through putc's capture hook (see capture_begin
-   above), which is why no command needed changing to appear here. */
-static void run(char *line); /* defined after the GUI; one shell, called from both */
-
-#define TERM_COLS 96
-#define TERM_ROWS 24 /* v42: fits 540 logical rows (44 + 24*16 = 428 < 480) */
-#define TERM_SCROLLBACK 8192
-
-static char term_buf[TERM_SCROLLBACK];
-static unsigned int term_len = 0;
-
-static void term_putc(char c){
-    if (term_len + 1 >= TERM_SCROLLBACK) {
-        /* Drop the oldest half rather than the oldest byte: a byte-at-a-
-           time memmove on every character once full would make a long
-           session visibly slow, and nobody scrolls back 4KB in an 800x600
-           window anyway. */
-        unsigned int keep = TERM_SCROLLBACK / 2;
-        for (unsigned int i = 0; i < keep; i++) term_buf[i] = term_buf[term_len - keep + i];
-        term_len = keep;
-    }
-    term_buf[term_len++] = c;
-    term_buf[term_len] = 0;
-}
-static void term_puts(const char *s){ while (*s) term_putc(*s++); }
-
-/* Walks the scrollback once, wrapping at TERM_COLS and on newlines, and
-   draws only the last TERM_ROWS lines. Two passes over the same logic
-   (count, then draw from the right offset) keeps this one source of truth
-   for where a line breaks, instead of a separate wrap calculation that
-   could disagree with what actually gets drawn. */
-#define TERM_CONTENT_TOP 40
-
-/* v0.76.11: direct report, still reproducing after v0.76.10's Notes fix
-   ("every keystroke causes page to re-render") -- that fix only touched
-   editor.h's own chrome/text split; term_render here had the identical
-   shape (a full window_clear + titlebar redraw on every single
-   keystroke, not just Notes' one dirty-flag flip) and was never fixed.
-   Terminal's titlebar text never changes (no dirty-flag toggle Notes
-   needed), so this is simpler: chrome draws exactly once, in
-   term_draw_chrome() below, called before the loop in
-   gui_launch_terminal, never again per keystroke. */
-static void term_draw_chrome(void){
-    serial_puts("termchrome\n"); /* discriminating marker for tools/checks/termchatflash-check.sh, same convention editor.h's "editorchrome" already established */
-    app_begin("Terminal", 0x001A1512); /* warm near-black, the Mojave palette's dark end, not a cold pure black */
-}
-
-static void term_render(const char *input, unsigned int input_len){
-    /* Content-only redraw now, scoped below the titlebar band
-       (TERM_CONTENT_TOP=40; every real content y-coordinate below in
-       this function is already >= 44, confirmed by reading them, so this
-       clears exactly the region that can change and nothing the chrome
-       occupies). */
-    window_rect(0, TERM_CONTENT_TOP, (int)window_width(), (int)window_height() - TERM_CONTENT_TOP, 0x001A1512);
-
-    unsigned int starts[TERM_ROWS + 1];
-    unsigned int total_lines = 0, col = 0, line_start = 0;
-    for (unsigned int i = 0; i <= term_len; i++) {
-        int wrapped = (col == TERM_COLS);
-        int newline = (i < term_len && term_buf[i] == '\n');
-        if (wrapped || newline || i == term_len) {
-            starts[total_lines % (TERM_ROWS + 1)] = line_start;
-            total_lines++;
-            line_start = newline ? i + 1 : i;
-            col = 0;
-            if (newline) continue;
-            if (i == term_len) break;
-        }
-        col++;
-    }
-
-    unsigned int first = total_lines > TERM_ROWS ? total_lines - TERM_ROWS : 0;
-    int y = 44;
-    for (unsigned int ln = first; ln < total_lines && y < (int)window_height() - 80; ln++) {
-        unsigned int p = starts[ln % (TERM_ROWS + 1)];
-        int x = 16;
-        for (unsigned int c = 0; c < TERM_COLS && p < term_len; c++, p++) {
-            if (term_buf[p] == '\n') break;
-            font_draw_char_mono((unsigned char)term_buf[p], x, y, 0x00D8CFC4, -1);
-            x += 8;
-        }
-        y += 16;
-    }
-
-    /* Prompt line, pinned to the bottom so typing never scrolls out of
-       view no matter how much output the last command produced. */
-    int py = (int)window_height() - 60;
-    font_draw_string("> ", 16, py, 0x00C98A3E, -1);
-    int x = 32;
-    for (unsigned int i = 0; i < input_len && x < 780; i++, x += 8)
-        font_draw_char_mono((unsigned char)input[i], x, py, 0x00F2E9D8, -1);
-    window_rect(x, py, 8, 15, 0x00C98A3E); /* block cursor */
-    gui_draw_hint(16, (int)window_height() - 28, "esc closes   |   same shell as text mode", 0x00807468);
-}
-
-static void gui_launch_terminal(void){
-    static char input[TERM_COLS];
-    static char out[4096];
-    unsigned int input_len = 0;
-
-    term_draw_chrome(); /* once per open, never again per keystroke -- see term_draw_chrome's own comment */
-    if (term_len == 0) term_puts("Joshua Tree terminal. Type help.\n");
-    term_render(input, input_len);
-
-    for (;;) {
-        /* See gui_wait_close and the Apps folder: settle for v86's canvas
-           sampler, and treat a click/tap as a real way out for a visitor
-           with no keyboard. */
-        window_present(); sleep_ticks(5);
-        mouse_click_edge_sync();
-        int k = get_key_or_click();
-        if (k == KEY_ESC || k == KEY_CLICK) return;
-        if (k == KEY_ENTER) {
-            input[input_len] = 0;
-            term_puts("> "); term_puts(input); term_putc('\n');
-            if (input_len) {
-                /* Same run() the text-mode shell uses. Its output lands
-                   in `out` instead of VGA memory purely because of the
-                   capture hook, no command knows the difference. */
-                capture_begin(out, sizeof(out));
-                run(input);
-                unsigned int n = capture_end();
-                for (unsigned int i = 0; i < n; i++) term_putc(out[i]);
-            }
-            input_len = 0;
-            term_render(input, input_len);
-            continue;
-        }
-        if (k == '\b') { if (input_len) input_len--; }
-        /* Same "one line, no selection" contract as gui_prompt_line_input:
-           Ctrl+C/X act on the whole current input line, Ctrl+V pastes at
-           the end and stops at TERM_COLS - 1, the same bound plain typing
-           already respects. */
-        else if (k == KEY_COPY || k == KEY_CUT) {
-            clipboard_set(input, input_len);
-            if (k == KEY_CUT) input_len = 0;
-        }
-        else if (k == KEY_PASTE) {
-            unsigned int before = input_len, inserted = 0;
-            for (unsigned int i = 0; i < clipboard_len && input_len < TERM_COLS - 1; i++) {
-                char pc = clipboard_buf[i];
-                if (pc >= 32 && pc < 127) { input[input_len++] = pc; inserted++; }
-            }
-            clip_serial_dump("CLIPPASTE:", &input[before], inserted);
-            if (inserted < clipboard_len) serial_puts("CLIPTRUNC\n");
-        }
-        else if (k >= 32 && k < 127 && input_len < TERM_COLS - 1) input[input_len++] = (char)k;
-        else continue;
-        term_render(input, input_len);
-    }
-}
-
 /* v37: the Apps folder. Every real app, laid out as a grid, so the dock
    can stay a short pinned list instead of growing until the icons are too
    small to read. Arrow keys + enter drive it as well as the mouse: the
@@ -5282,7 +5104,7 @@ typedef struct {
 int ring3app_launch_window(const char *name, unsigned int w, unsigned int h);
 void ring3app_window_reaped(int task, int status);
 void ring3app_window_blit(int task, int vw, int vh);
-static int gui_ring3_windowed(int icon){ return icon == 4 || icon == 0 || icon == 1 || icon == 3; } /* Reminders, Burrow, Mail, Notes */
+static int gui_ring3_windowed(int icon){ return icon == 4 || icon == 0 || icon == 1 || icon == 3 || icon == 5; } /* Reminders, Burrow, Mail, Notes, Terminal */
 static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
 static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
 
@@ -5408,7 +5230,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   calendar_ring3_open,   0, 0}, /* 1.9.12: ring 3 (user/calendar.c) */
     /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      notes_ring3_open,      0, 0}, /* ring 3 (user/notes.c), a compositor window */
     /*  4 */ {"Reminders",  0x00375A4A, gui_icon_reminders,  reminders_ring3_open,  0, 0}, /* 1.9.9: ring 3 (user/reminders.c) */
-    /*  5 */ {"Terminal",   0x002B2B2B, gui_icon_terminal,   gui_launch_terminal,   0, 0},
+    /*  5 */ {"Terminal",   0x002B2B2B, gui_icon_terminal,   terminal_ring3_open,   0, 0}, /* ring 3 (user/terminal.c), a compositor window */
     /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       gui_launch_chat_app,   0, 0},
     /*  7 */ {"Weather",    0x0085144B, gui_icon_weather,    weather_ring3_open,    0, 0}, /* 1.9.22: ring 3 (user/weather.c) */
     /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        curbfind_ring3_open,   0, 0}, /* 1.9.11: ring 3 (user/curbfind.c) */
