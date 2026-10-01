@@ -573,14 +573,14 @@ int  gui_poll_event(int *a, int *b);                        /* non-blocking: JT_
 /* 1.9.23: compositor windows. A ring-3 program launched through
    exec_user_window gets a row here before it runs: a framebuffer of the
    window's size, kmalloc'd and mapped only into that task's directory at
-   JT_USER_FB (paging_task_map_private), plus a 16-deep event ring the
+   JT_USER_FB (paging_task_map_private), plus a 64-deep event ring the
    desktop fills (syscall_window_push_event) and SYS_WINDOW_POLL drains.
    JT_POLL_PRESENT no longer copies anything: it marks the row dirty and
    kernel.c's compositor blits the buffer at the window's position on its
    next frame. The legacy single owner (win_owner, above) stays for the
    blocking launcher, so nothing unconverted changes. */
 #define R3WIN_MAX 4
-#define R3WIN_RING 16
+#define R3WIN_RING 64
 struct r3win { int task; u32 *fb; void *fb_raw; void *image; u32 w, h; int dirty; struct jt_event ring[R3WIN_RING]; u32 rh, rt; };
 static struct r3win r3wins[R3WIN_MAX];
 static struct r3win *r3win_of(int task) {
@@ -620,8 +620,14 @@ void syscall_window_push_event(int task, int kind, int a, int b) {
 static void r3win_release(int task) {
     struct r3win *r = r3win_of(task);
     if (!r) return;
+    /* The exiting task runs this on its own directory, a copy made before
+       the heap grew to where this window's buffers live; those pages are only
+       guaranteed mapped in the kernel directory. Touch them from there. */
+    u32 cr3_was; __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3_was));
+    __asm__ volatile ("mov %0, %%cr3" :: "r"(paging_kernel_directory()) : "memory");
     for (u32 i = 0; i < r->w * r->h; i++) r->fb[i] = 0;
     kfree(r->fb_raw); kfree(r->image);
+    __asm__ volatile ("mov %0, %%cr3" :: "r"(cr3_was) : "memory");
     r->task = -1; r->fb = 0; r->fb_raw = 0; r->image = 0; r->w = r->h = 0;
     serial_puts("syscall: window released, task gone\n");
 }

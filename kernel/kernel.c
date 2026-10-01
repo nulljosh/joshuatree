@@ -6604,6 +6604,8 @@ static void gui_run(void){
                     gui_launch_from_dock(gui_order[press_slot]);
                     mx = app_cursor_x; my = app_cursor_y;
                 }
+                /* the launched=1 full repaint below draws this window's chrome; do not let the first-frame check draw it again */
+                for (int wi = 0; wi < gui_window_count; wi++) gui_windows[wi].shown = 1;
                 launched = 1;
             } else if (press_slot >= 0 && press_slot == slot_here) {
                 editor_mouse_x = mx; editor_mouse_y = my;

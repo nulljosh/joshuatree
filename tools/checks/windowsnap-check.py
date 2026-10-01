@@ -158,7 +158,11 @@ try:
 
     def assert_quarter(label, img):
         q_close_ok = is_red(pixel(img, QX + 24, QY + 16))
-        q_content_ok = close(pixel(img, QX + QW // 2, QY + QH // 2), (0xF5, 0xF0, 0xEB)) <= 20
+        # 1.9.24: Mail is a ring-3 window whose list text can land on the exact
+        # centre, so the body counts as drawn if either the centre or a point
+        # near the bottom-right corner of the quarter shows the page colour.
+        q_content_ok = any(close(pixel(img, px, py), (0xF5, 0xF0, 0xEB)) <= 20
+                           for px, py in ((QX + QW // 2, QY + QH // 2), (QX + QW - 40, QY + QH - 30)))
         edge_clean = all(close(pixel(img, x, y), base) <= 6
                           for (x, y), base in zip(EDGE_POINTS, baseline_edges))
         print(f"{label}: close button at quarter position={'yes' if q_close_ok else 'NO'}"
@@ -258,7 +262,7 @@ try:
             # absolute screen position is win.x+8+16.., win.y+32+48+22*i..
             # for the top-left-quarter window. Row 1 is plain page before
             # the key and the highlight after it.
-            row1_x, row1_y = QX + 8 + 30, QY + 32 + 70 + 8
+            row1_x, row1_y = QX + 8 + 30, QY + 32 + 98 # user/mail.c: rows start at ROW_Y0+16 = 68, 22 apart, so row 1 is about 88..108
             SELC = (0xED, 0xE6, 0xDC)
             row1_before = pixel(imgB, row1_x, row1_y)
             key("down")

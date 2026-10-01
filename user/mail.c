@@ -14,7 +14,7 @@
  * writes the message into the local inbox, and the sheet says so. Type is the
  * antialiased libjt face. The backquote key is the deliberate crash (outside
  * the compose sheet, where it types). Serial markers: mail: n=COUNT,
- * mail: read=I, mail: deleted n=COUNT, mail: filed n=COUNT.
+ * mail: read=I, mail: compose=1 (the inline sheet opened), mail: deleted n=COUNT, mail: filed n=COUNT.
  */
 #include "jtsys.h"
 #include "libjt/text.h"
@@ -268,6 +268,7 @@ static void open_msg(int i) {
 static void compose_begin(void) {
     if (count >= MAX) { note = "Inbox is full (24). Delete something first."; return; }
     mode = 2; field = 0; note = 0;
+    say("mail: compose=", 1);
     for (int f = 0; f < 3; f++) { cl[f] = 0; cf(f)[0] = 0; }
 }
 static void compose_send(void) {
