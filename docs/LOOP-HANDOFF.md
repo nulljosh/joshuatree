@@ -30,8 +30,6 @@ Building on Linux changes every other app's committed `.bin` and `drivers/user_*
 
 QA backlog:
 
-- Samantha's back chevron does nothing in the phone boot-into-Samantha view (`chat_boot_samantha_open` does not run `phone_back_zone_tick`).
-- Real Esc is swallowed on the desktop demo (`embed.js`), so every "esc closes" hint is unusable there. Hide the F2 and Esc hints on phones.
 - Samantha's window closed itself 8 to 14 s after an error reply on desktop (unconfirmed).
 - Stale cursor glyph in Search and Stocks for a moment after opening.
 - Clock is hard to reach in the desktop Apps folder (scroll is flaky).
