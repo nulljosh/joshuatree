@@ -25,15 +25,16 @@ void reminders_ring3_open(void);
 void curbfind_ring3_open(void);
 void calendar_ring3_open(void);
 void search_ring3_open(void);
+void epiphany_ring3_open(void);
 
-/* `open=keyrate` / `open=toroid` / `open=calc` / `open=quote` / `open=bookr` / `open=homeqi` / `open=lexly` / `open=plan` / `open=field` / `open=clock` / `open=portf` / `open=activ` / `open=remi` / `open=curb` / `open=cale` / `open=sear`
+/* `open=keyrate` / `open=toroid` / `open=calc` / `open=quote` / `open=bookr` / `open=homeqi` / `open=lexly` / `open=plan` / `open=field` / `open=clock` / `open=portf` / `open=activ` / `open=remi` / `open=curb` / `open=cale` / `open=sear` / `open=epip`
    launches that app from the dock path the moment the desktop is up, so
    tools/checks/ring3app-check.py, ring3toroid-check.py, ring3calc-check.py,
-   ring3quotes-check.py, ring3bookrank-check.py, ring3homeqi-check.py, ring3lexly-check.py, ring3plan-check.py, ring3fieldbook-check.py, ring3clock-check.py, ring3portfolio-check.py, ring3activity-check.py, ring3contacts-check.py ring3sparkjar-check.py, ring3reminders-check.py, ring3curbfind-check.py, ring3calendar-check.py and ring3search-check.py can drive a ring-3 app
+   ring3quotes-check.py, ring3bookrank-check.py, ring3homeqi-check.py, ring3lexly-check.py, ring3plan-check.py, ring3fieldbook-check.py, ring3clock-check.py, ring3portfolio-check.py, ring3activity-check.py, ring3contacts-check.py ring3sparkjar-check.py, ring3reminders-check.py, ring3curbfind-check.py, ring3calendar-check.py, ring3search-check.py and ring3epiphany-check.py can drive a ring-3 app
    without locating its tile in the Apps folder first.
    ring3app_autoopen_arm: kmain calls this with the boot command line;
    remembers the APPS slot if it says `open=keyrate`, `open=toroid`,
-   `open=calc`, `open=quote`, `open=bookr`, `open=homeqi`, `open=lexly`, `open=plan`, `open=field`, `open=clock`, `open=portf`, `open=activ`, `open=remi` or `open=sear`.
+   `open=calc`, `open=quote`, `open=bookr`, `open=homeqi`, `open=lexly`, `open=plan`, `open=field`, `open=clock`, `open=portf`, `open=activ`, `open=remi`, `open=sear` or `open=epip`.
    ring3app_autoopen_run: gui_run calls this once, right after the first
    desktop paint; if armed, launches that app from the dock path (mx, my
    are the cursor position to restore after) and disarms. No-op otherwise. */

@@ -62,6 +62,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Curbfind runs as a ring-3 process through the table-driven launcher: falls back to the samples when SYS_HTTP_GET finds no NIC, selects by key and click, the kernel refuses every bad path and pointer the probe hands the syscall, closes on Esc, desktop alive | `tools/checks/ring3curbfind-check.py` | retry |
 | Calendar runs as a ring-3 process through the table-driven launcher: gets today from SYS_TIME, draws the month grid, saves an event through the real editor, keeps EVENTS.TXT across fresh runs, feeds Samantha's calendar_today, closes on Esc, desktop alive | `tools/checks/ring3calendar-check.py` | retry |
 | Search runs as a ring-3 process through the table-driven launcher: SYS_READDIR refuses a kernel pointer, an over-long path and a missing folder, the list filters live, a file shows its real bytes, a FAT folder opens by relative path with the kernel's cwd untouched, closes on Esc, crashes safely, desktop alive | `tools/checks/ring3search-check.py` | retry |
+| Epiphany runs as a ring-3 process through the table-driven launcher: falls back to the offline prices when SYS_HTTP_GET finds no NIC, switches tabs by key and click, runs the command bar, closes on Esc, desktop alive | `tools/checks/ring3epiphany-check.py` | retry |
 | Every ring-3 app (parsed from RING3_APPS) crashes on purpose, is reaped, and the desktop keeps drawing and opens a different app after each one | `tools/checks/ring3crash-all-check.py` | retry |
 | A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT | `tools/checks/userfb-release-check.py` | retry |
 | Shell launches a ring-3 program by bare name, case-insensitively | `tools/checks/shellname-check.sh` | retry |
@@ -182,7 +183,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Calculator | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/ring3calc-check.py` |
 | Stocks | `tools/checks/stocks-aa-check.py`, `tools/checks/stocks-dock-check.py`, `tools/checks/stocks-live-check.mjs` |
 | Search | `tools/checks/ring3search-check.py` |
-| Epiphany | `tools/checks/epiphany-cmdbar-check.py` |
+| Epiphany | `tools/checks/epiphany-cmdbar-check.py`, `tools/checks/ring3epiphany-check.py` |
 | Portfolio | `tools/checks/portfolio-check.py`, `tools/checks/ring3portfolio-check.py` |
 | Activity | `tools/checks/ring3activity-check.py` |
 | Clock | `tools/checks/clock-check.py`, `tools/checks/menuclock-check.sh`, `tools/checks/ring3clock-check.py` |
