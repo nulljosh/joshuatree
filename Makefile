@@ -310,6 +310,13 @@ user/burrow.o: user/burrow.c user/jtsys.h user/libjt/text.h
 user/burrow.bin: user/burrow.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/burrow.o user/libjt.a
 
+# Mail as a ring-3 program (not yet in RING3_APPS).
+user/mail.o: user/mail.c user/jtsys.h user/libjt/text.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/mail.bin: user/mail.o user/libjt.a user/note.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/mail.o user/libjt.a
+
 # 1.9.22: Weather, the twentieth, reads the kernel's WEATHER.TXT.
 user/weather.o: user/weather.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
