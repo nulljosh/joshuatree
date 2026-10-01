@@ -77,7 +77,7 @@ LOGICAL_W, LOGICAL_H = 960, 540
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247  # same dock constants as appclose-check.py
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-FILES_SLOT, WEATHER_SLOT, MAIL_SLOT = 1, 4, 2  # Apps,Files,Mail,Calendar,Notes,Reminders,Terminal,Samantha,Weather,... (1.9.9: Reminders left the multi-window set, 1.9.12: Calendar did too; Notes is the second window now: 1.9.20 gave it compositor hooks so Weather can leave the kernel)
+FILES_SLOT, NOTES_SLOT, MAIL_SLOT = 1, 4, 2  # Apps,Files,Mail,Calendar,Notes,Reminders,Terminal,Samantha,Weather,... (1.9.9: Reminders left the multi-window set, 1.9.12: Calendar did too; Notes is the second window now: 1.9.20 gave it compositor hooks so Weather can leave the kernel)
 
 def move(x, y):
     cmd({"execute": "input-send-event", "arguments": {"events": [
@@ -105,7 +105,7 @@ def window_count():
 
 move(480, 200); time.sleep(0.5)
 open_slot(FILES_SLOT)
-open_slot(WEATHER_SLOT)  # slot 4 = Notes
+open_slot(NOTES_SLOT)
 after_two = window_count()
 before_marker = count("mwcapfallback\n")
 

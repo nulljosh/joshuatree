@@ -136,13 +136,16 @@ try:
         fails.append("Epiphany crashed or closed after running a valid GP command")
 
     # Esc clears, then a bogus code shows a one-line error and its own marker
-    keyname("esc"); time.sleep(0.2)
-    keyname("slash"); time.sleep(0.5)
+    keyname("esc"); time.sleep(0.5)
+    keyname("slash"); time.sleep(0.8)
     type_str("aapl zz")
     keyname("ret")
-    time.sleep(0.4)
-
-    log = open(LOG, errors="replace").read() if os.path.exists(LOG) else ""
+    # poll with a deadline, same as above: a fixed 0.4s missed the marker on CI
+    for _ in range(40):
+        time.sleep(0.25)
+        log = open(LOG, errors="replace").read() if os.path.exists(LOG) else ""
+        if "epicmd=unknown_code:ZZ" in log:
+            break
     if "epicmd=unknown_code:ZZ" not in log:
         fails.append(f"serial log missing 'epicmd=unknown_code:ZZ' marker; got tail: {log[-400:]!r}")
     img = dump()
