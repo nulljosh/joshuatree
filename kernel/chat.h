@@ -1207,7 +1207,16 @@ portfolio_next:   /* portfolio: after each answer the face screen stays up for t
            mid-tap). Now it just falls through and loops again with the
            input box still drawn and still reading keys, i.e. still
            focused, so a face-tap keeps her open and ready to type into. */
-        if (k == KEY_ESC) { face_full = 0; gui_launch_chat_app(); return; }
+        if (k == KEY_ESC) {
+            face_full = 0;
+            /* Portfolio: Escape from his face is "show me around", so land on the
+               desktop and its dock, not in the chat console. The landing tour
+               sends this Escape and then clicks the dock; with the console in
+               between, its first click only closed the console and the first app
+               never opened (live, 2026-10-02). */
+            if (portfolio_dock) return;
+            gui_launch_chat_app(); return;
+        }
         if (k == KEY_CLICK && boot_to_phone) {
             /* v1.9.18: the back chevron's 44x40 tap zone (phone_back_zone_tick
                in phone_home.h) never ran in this view, so Samantha's own back
