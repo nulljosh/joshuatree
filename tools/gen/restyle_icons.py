@@ -106,16 +106,15 @@ TRASH_CAN = """
       <path d="M41.6 87 H86.4 L85.3 95.4 A3.4 3.4 0 0 1 81.9 98.4 H46.1 A3.4 3.4 0 0 1 42.7 95.4 Z" fill="#FFFFFF"/>"""
 
 DOCK = {
-    # Launchpad-style grid: nine colour chips on a light tile.
+    # Launchpad-style grid: nine flat colour chips on a light tile.
     "apps": ("#F3F3F6", "#DADBE0",
-             lg("chip", (0, "#FFFFFF"), (1, "#000000")),
+             "",
              "".join(
                  '<rect x="%d" y="%d" width="20" height="20" rx="5.5" fill="%s"/>'
-                 '<rect x="%d" y="%d" width="20" height="20" rx="5.5" fill="url(#chip)" opacity="0.16"/>'
-                 % (26 + 28 * (i % 3), 26 + 28 * (i // 3), c, 26 + 28 * (i % 3), 26 + 28 * (i // 3))
+                 % (26 + 28 * (i % 3), 26 + 28 * (i // 3), c)
                  for i, c in enumerate(["#FF5F57", "#FF9F0A", "#FFD60A",
-                                        "#32D74B", "#40C8E0", "#0A84FF",
-                                        "#5E5CE6", "#BF5AF2", "#FF375F"]))),
+                                        "#32D74B", "#5B9BD5", "#0A84FF",
+                                        "#A87C5B", "#8A8F99", "#FF375F"]))),
 
     # Burrow (the file browser): a kit fox peeking out of its burrow. Warm
     # sand tile, dark 3px outline like Samantha's face, big ears and eyes.
