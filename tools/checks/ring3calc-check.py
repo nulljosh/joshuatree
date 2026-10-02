@@ -118,9 +118,10 @@ try:
     DIGIT_QCODE = {"0": "0", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5",
                    "6": "6", "7": "7", "8": "8", "9": "9",
                    "*": "shift-8", "/": "slash"}
+    SCI_QCODE = {"^": "shift-6", "!": "shift-1", "(": "shift-9", ")": "shift-0", ".": "dot"}
     def type_expr(expr):
         for c in expr:
-            codes = DIGIT_QCODE[c].split('-')
+            codes = (DIGIT_QCODE.get(c) or SCI_QCODE.get(c) or c).split('-')
             cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": code} for code in codes], "hold-time": 30}})
             time.sleep(0.15)
 
@@ -146,6 +147,17 @@ try:
     keys("ret"); time.sleep(0.3)
     if not wait_serial("calculator: 5/0 = 0", 5):
         fails.append("5/0 did not evaluate to 0 (the in-kernel divide-by-zero behavior)")
+    # 3b. scientific: Tab shows the keys, and the math is real (x87, no libm)
+    keys("tab")
+    if not wait_serial("calculator: scientific", 5):
+        fails.append("Tab did not switch Calculator to scientific")
+    for expr, want in (("2^10", "1024"), ("sqrt(2)", "1.4142"), ("sin(pi/2)", "1"), ("5!", "120"), ("ln(e^3)", "3")):
+        for _ in range(12): keys("backspace"); time.sleep(0.03)
+        type_expr(expr)
+        keys("ret"); time.sleep(0.3)
+        if not wait_serial("calculator: %s = %s\n" % (expr, want), 5):
+            got = serial().split("calculator: %s = " % expr)[-1][:12] if ("calculator: %s = " % expr) in serial() else "nothing"
+            fails.append("scientific %s should be %s, got %s" % (expr, want, got))
     if "syscall: write(1) from ring 3: calculator: crashing" in serial():
         fails.append("the program crashed before the crash key was pressed")
 
