@@ -16,27 +16,14 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-Checkpoint 2026-10-01 morning. The loop shipped on branches (not yet merged; a big combined 2.0 PR coming):
+Release branch release/2.0.0 (2026-10-01) holds every 2.0 slice merged in one place: window apps for Weather and Stocks, the clipboard, Mail that really sends, window resize, the three smooth-type sweeps, the new mark, the 2.0 look, the landing and the demo tour. VERSION is 2.0.0. Static checks pass (check-refs, godfile, testing-doc, suite-coverage, bss margin, versionsync). No QEMU has run on the merged tree yet.
 
-- 26 of 26 apps now run as protected ring-3 programs sharing the screen as compositor windows.
-- Apps are real windows: crash one, the desktop and all 25 others stay alive. Input goes to the focused window only.
-- Kernel fixes landed: heap/VFS race condition, stale page directories in task copies, BRK fault handling.
-- Per-task growable heaps (SYS_BRK) and malloc() now work.
-- Kernel user window moved to make room.
-- Antialiased DejaVu type in every app.
-- System clipboard across all apps.
-- Window resize working.
-- Notes with folders and a phone keyboard.
-- Terminal with an allowlisted shell syscall.
-- Mail compose inline with real outgoing mail through the Worker (Resend, token + rate limit, secret not yet set).
-- Weather and Stocks refetch in place.
-- New 2.0 logo (Apple-simple, picked by Joshua) and 2.0 UI pass complete.
-- Landing page synced to 26 of 26 and QA'd.
-- Demo tour update in flight.
+- 26 of 26 apps run as protected ring-3 programs, each its own compositor window with private memory and per-window input.
+- Clipboard (syscall 399), resize, growable memory (SYS_BRK) and smooth type are in every app.
+- Mail compose sends through the Worker (Resend, token and rate limit). The Worker secret is still not set.
+- Weather and Stocks refetch in place (SYS_REFRESH).
 
-Still open: multiwindow check, deleting the old blocking launcher, merging everything into one 2.0 PR, full CI.
-
-Also queued after 3.0: 3D-print plan for Mesa case, ad refresh, Blender model refresh per Joshua's ideas.
+Still open: run tools/ci-local.sh on release/2.0.0 (nothing has booted this tree), fix whatever the merged main loops break, open the one 2.0 PR (draft until green), tag 2.0.0. The blocking launcher and gui_poll_event pull are not deleted yet.
 
 ## Next, in order
 

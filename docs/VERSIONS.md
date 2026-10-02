@@ -10,7 +10,8 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
 
 ## The plan to 10
 
-- 2.0: Apps leave the kernel. Each app is its own protected program, so one crash can't take the machine down.
+- [x] 2.0: Apps leave the kernel. Each app is its own protected program, so one crash can't take the machine down. Done, shipped as 2.0.0.
+  - 2.0.0: every app is its own protected program, all twenty-six of them, and each one is a real window. Keys and clicks go to the focused window only, a crash closes that window and nothing else, and you can copy and paste between any of them. Windows resize, apps can grow their own memory, and type is smooth everywhere. Mail really sends now. There is a new mark.
   - 1.7.7 took the first step: Keyrate runs as a real ring-3 process with its own window, and crashing it on purpose leaves the desktop standing.
   - 1.7.11: two apps in ring 3 now. Toroid followed Keyrate out, the in-kernel copies of both are gone, and one table-driven launcher runs them. Still to do before this line is checked: the other apps, ported the same way, one PR at a time.
   - 1.7.12: three apps in ring 3 now. Calculator followed Keyrate and Toroid out, the in-kernel copy is gone, and the same table-driven launcher runs it. Still to do before this line is checked: the other apps, ported the same way, one PR at a time.

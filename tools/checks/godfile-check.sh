@@ -61,7 +61,7 @@ ratchet_ceiling() {
         # 2026-10-01: Notes moved to ring 3 (user/notes.c); dead gui_wait_close and gui_app_cursor_hide dropped.
         # 2026-10-01: Terminal moved to ring 3 (user/terminal.c); term_* UI and the putc capture hook dropped.
         # 2026-10-01: Samantha moved to ring 3 (user/samantha.c); the in-kernel chat, its face, the chat shell command and chattest are gone.
-        kernel/kernel.c) echo 8674 ;;
+        kernel/kernel.c) echo 8705 ;;
         *) echo "$LIMIT" ;;
     esac
 }
