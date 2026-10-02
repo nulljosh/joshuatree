@@ -6,8 +6,8 @@ Boots with `open=remi stress=r3`. Reminders runs as a ring-3 window task
 (preemptive, int $32 timer) and calls SYS_WINDOW_POLL in a tight loop;
 with stress=r3 every one of those calls does a kmalloc/stamp/verify/free
 round and a FAT replace+read of R3SYS.TXT under the gate (kernel/
-r3stress.c). The desktop loop (task 0, interrupts on) does 128 heap rounds
-and a FAT write inside NOTES/ on every frame for 400 frames, then walks
+r3stress.c). The desktop loop (task 0, interrupts on) does 256 heap rounds
+and a FAT write inside NOTES/ on every frame for 250 frames, then walks
 the heap (kheap_check) and prints a verdict.
 
 Asserts, from serial:
