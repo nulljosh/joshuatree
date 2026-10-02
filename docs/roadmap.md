@@ -177,7 +177,6 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 ## Tests and the loop
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck. See `docs/LOOP-HANDOFF.md` for what's merging right now.
 
-- [ ] [Opus] Real text selection in ring-3 Notes. `user/notes.c` has no selection and `user/jtsys.h` has no Shift-arrow codes, so `tools/checks/textselect-check.py` (Shift-arrow and Ctrl+A highlight, edsel/edcopy/edcut markers) has nothing to drive yet. The work: Shift+arrow codes through `kernel/ring3app.c` gui_poll_event and the compositor key push in `kernel/kernel.c` (gui_multiwin_key_nonblock, the way Home and End went), then selection, highlight and selection-aware copy, cut and delete in Notes. Not done in the 2.0.0 CI slice.
 - [ ] [Sonnet] Notes repaints its whole buffer on every key. `tools/checks/editorflash-check.sh` still counts the old in-kernel `editorchrome` marker, which ring-3 Notes never writes. The work: repaint only the text area on plain keys, draw the chrome once, and assert the present counts. Not done in the 2.0.0 CI slice.
 - [ ] [Sonnet] Dock polish: no white rim on icons, smooth tray and icon corners, hover label with a backing, loading bar drawn at full resolution, Trash visibly empty or full, Terminal out of the default dock (Files, Mail, Calendar, Notes, Reminders, Chat, Weather, Stocks, Settings, Trash).
 - [ ] [Sonnet] Boot splash shows the real engraved tree mark at full resolution, not the stick tree.
