@@ -186,7 +186,7 @@ __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "terminal: no window\n", 20); jt_exit(1); }
-    ar = (struct arena *)(((unsigned)_user_end + 15u) & ~15u);
+    ar = (struct arena *)0xC0710000u; /* JT_USER_HEAP, kernel/memmap.h: the 8-page image window is too small for this arena */
     sputs("Joshua Tree terminal. Type help.\n");
     draw();
     jt_write(1, "terminal: ring-3 window\n", 24);

@@ -476,7 +476,7 @@ __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     phone = argc > 1 && seq(argv[1], "phone");
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "notes: no window\n", 17); jt_exit(1); }
-    ar = (struct arena *)(((unsigned)_user_end + 15u) & ~15u);
+    ar = (struct arena *)0xC0710000u; /* JT_USER_HEAP, kernel/memmap.h: the 8-page image window is too small for this arena */
     for (int c = 32; c < 127; c++) { char g[2] = {(char)c, 0}; ar->adv[c - 32] = (unsigned char)jt_text_width(JT_FACE_BODY, g); }
     ar->adv[0] = (unsigned char)(ar->adv[0] ? ar->adv[0] : 4);
     load_folders();

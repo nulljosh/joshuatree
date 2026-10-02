@@ -26,5 +26,7 @@
 #define JT_DMABUF_BASE    0xC0590000 /* 64KB Sound Blaster DMA, 64KB aligned (.dmabuf) */
 #define JT_USER_FB        0xC05A0000 /* ring-3 window framebuffer (.userfb) */
 #define JT_USER_FB_BYTES  0x170000   /* 832x450 at 32bpp fits */
+#define JT_USER_HEAP      0xC0710000 /* 64KB of big buffers for apps whose arena outgrows the image window (.userheap), right after .userfb */
+#define JT_USER_HEAP_BYTES 0x10000
 
 #endif
