@@ -364,6 +364,7 @@ The ad lives in `landing/ad/` and plays live from the same clock the video was c
 | `landing/ad/stl/*.stl` | Copies of the `docs/hardware/stl` parts, so the live ad page loads them from its own folder on the deployed site. Re-copy them if a part changes. |
 | `tools/ad-capture.mjs` | Deterministic capture for the ad: serves the repo, steps `window.__ad.render(t)` frame by frame in headless Chromium across parallel workers, writes PNG frames or stills; ffmpeg encodes them to h264. |
 | `landing/ad/desktop-a.jpg` | Real 1920x1080 framebuffer capture of today's desktop with Samantha snapped left and Notes snapped right, her input empty. Made by `tools/ad-desktop-capture.py`; the ad grows it from one pixel. |
+| `landing/ad/desktop-typed.jpg` | The same desktop with "Hi Samantha" typed into her input and not yet sent, shown from 23.2 s so the nod has something to react to. |
 | `landing/ad/desktop-b.jpg` | The same desktop one beat later: "Hi Samantha" sent and her reply showing, swapped in when the typed line lands. |
 | `landing/ad/icons/*.png` | The 26 app icons as the OS draws them: 23 rendered from `art/icons/*.svg`, plus Portfolio, Activity and Clock cropped from the Apps grid capture and masked to the same tile shape. |
 | `tools/ad-desktop-capture.py` | Headless QEMU run that drives the real kernel over QMP (Apps grid scroll, snap Samantha and Notes, send a line) and saves the 1920x1080 framebuffer for the ad. |
