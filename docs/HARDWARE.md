@@ -214,19 +214,19 @@ Everything is split to fit a 180 x 180 x 180 mm bed (Bambu A1 mini). All numbers
 
 | Part | Size | How to make it |
 |------|------|----------------|
-| Rings S0 to S5 | 224 down to 209 mm, 3 mm smaller each, 9 / 7 / 10 / 6.5 / 8.5 / 7 mm thick, printed as quarters | FDM PLA or PETG at 0.2 mm, one tone each |
-| Cap | 206 mm square, 4.5 mm, printed as 4 quarters, M3 nut pockets on top | Same print, tree engraved later |
-| Core tray | 178 mm square, 64.8 mm tall, 2 mm walls, vent slots on every gap line, no rear wall | Printed, floor down, no supports |
+| Rings S0 to S5 | 224 down to 209 mm, 3 mm smaller each, 9 / 7 / 10 / 6.5 / 8.5 / 7 mm thick, printed as quarters, 2 mm spacer bosses on the underside of rings 1 to 5, nut pockets under ring 0 | FDM PLA or PETG at 0.2 mm, one tone each |
+| Cap | 206 mm square, 4.5 mm, printed as 4 quarters with spacer bosses, M3 nut pockets on top | Same print, tree engraved later |
+| Core tray | 178 mm square, 59.8 mm tall, 2 mm walls, vent slots on every gap line, 4 board standoffs printed on the floor, no rear wall | Printed, floor down, no supports |
 | Rear plate | 173.6 x 62.8 x 2 mm with the 160 x 46 I/O window | Printed lying flat |
-| Feet | 4 pads, 15.6 mm square, 5 mm, nut pocket underneath | Printed |
-| Spacers | 24, 2 mm tall, 7 mm round | Printed, one plate |
-| Hardware | 4 M3x70 rods, 8 M3 nuts, 4 M3 standoffs 6 mm with 4 M3x6 screws | Off the shelf |
+| Hardware | 4 M3x65 rods, 8 M3 nuts, 4 M3x8 self-tapping screws (16 fasteners, was 20) | Off the shelf |
+
+30 printed pieces in 21 STL files, down from 35 prints and 58 loose pieces. Feet, the 24 loose spacers and the metal standoffs are gone; ring 0 is the base and the spacers and standoffs are printed into parts you already make. Picture version: `hardware/BUILD.md`.
 
 Full STL list with counts: `hardware/stl/manifest.json`. Print settings and steps: `hardware/ASSEMBLY.md`.
 
 ### Build it
 
-Follow `hardware/ASSEMBLY.md`. The short version: nuts in the feet, rods up, tray in, rings and spacers, board on standoffs, rear plate, cap, nuts on top.
+Follow `hardware/ASSEMBLY.md`. The short version: rods and nuts in ring 0, tray in, rings, board on the printed standoffs, rear plate, cap, nuts on top.
 
 ### Check before cutting
 
@@ -257,11 +257,11 @@ blender -b -P docs/hardware/concepts.py -- docs/hardware strata  # renders
 - the I/O window clears the 158.75 x 44.45 mm shield, the mounting holes match the 154.94 x 157.48 mm mini-ITX pattern, and the tray clears a 30 mm heatsink
 - the rods clear the core and keep 1.6 mm of wall in the smallest ring
 
-These caught real mistakes. The first draft's rods didn't fit the top rings. Its tray window was 158 mm, narrower than the 158.75 mm shield. The rear window was a 160 mm unsupported bridge. Rods had nothing to anchor to at the bottom, which is why the feet exist now. The spacer count was 20 and is 24.
+These caught real mistakes. The first draft's rods didn't fit the top rings. Its tray window was 158 mm, narrower than the 158.75 mm shield. The rear window was a 160 mm unsupported bridge. Rods had nothing to anchor to at the bottom, so v2 anchors them with nut pockets under ring 0 and drops the feet. Spacers are now bosses on the rings.
 
 ## Prototype cost
 
-Print it once before anyone is charged. All of this is an **estimate**, no quote yet. The STLs total about 920 cm3 solid, so with walls and 15 to 20% infill it's roughly 450 g of plastic.
+Print it once before anyone is charged. All of this is an **estimate**, no quote yet. The STLs total about 900 cm3 solid, so with walls and 15 to 20% infill it's roughly 450 g of plastic.
 
 | Route | Parts | Shipping | Total | Source |
 |---|---|---|---|---|
@@ -273,9 +273,9 @@ The existing dev kit BOM above is unchanged: its numbers still come from the lis
 
 ## Ordering from JLC3DP
 
-1. Go to jlc3dp.com, pick 3D Printing, upload the STLs from `hardware/stl/`. Upload each file once and set the quantity from `manifest.json` (the front quarters are 2, caps and feet are 4).
+1. Go to jlc3dp.com, pick 3D Printing, upload the STLs from `hardware/stl/`. Upload each file once and set the quantity from `manifest.json` (the front quarters are 2, caps are 4).
 2. Material: PLA or PETG-like FDM if offered, otherwise the cheapest resin (Standard Resin, gray). Layer 0.1 to 0.2 mm. Color: whatever is gray.
-3. Quantity per file: from the manifest. Spacers are one plate of 24, quantity 1.
+3. Quantity per file: from the manifest.
 4. Open the DFM preview. Check: every part lies flat as uploaded, no wall flagged under 1.6 mm, the quarters aren't merged into one body, the rear plate window and the nut pockets show as holes. If it flags the thin L-shaped rear quarters, ask for PETG or accept the risk, they are 32 mm wide and 2 mm thick at the narrowest, stiff once stacked.
 5. Look at the cart total. Write the real number into this page and into MONEY.md in place of the estimate. That one number decides the kit margin.
 6. Nothing is ordered until Joshua says so.

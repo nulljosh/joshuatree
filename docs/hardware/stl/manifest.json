@@ -25,125 +25,125 @@
   "qty": 2,
   "x": 110.5,
   "y": 110.5,
-  "z": 7.0
+  "z": 9.0
  },
  {
   "part": "ring1_rear_left",
   "qty": 1,
   "x": 30.5,
   "y": 110.5,
-  "z": 7.0
+  "z": 9.0
  },
  {
   "part": "ring1_rear_right",
   "qty": 1,
   "x": 30.5,
   "y": 110.5,
-  "z": 7.0
+  "z": 9.0
  },
  {
   "part": "ring2_front_quarter",
   "qty": 2,
   "x": 109.0,
   "y": 109.0,
-  "z": 10.0
+  "z": 12.0
  },
  {
   "part": "ring2_rear_left",
   "qty": 1,
   "x": 29.0,
   "y": 109.0,
-  "z": 10.0
+  "z": 12.0
  },
  {
   "part": "ring2_rear_right",
   "qty": 1,
   "x": 29.0,
   "y": 109.0,
-  "z": 10.0
+  "z": 12.0
  },
  {
   "part": "ring3_front_quarter",
   "qty": 2,
   "x": 107.5,
   "y": 107.5,
-  "z": 6.5
+  "z": 8.5
  },
  {
   "part": "ring3_rear_left",
   "qty": 1,
   "x": 27.5,
   "y": 107.5,
-  "z": 6.5
+  "z": 8.5
  },
  {
   "part": "ring3_rear_right",
   "qty": 1,
   "x": 27.5,
   "y": 107.5,
-  "z": 6.5
+  "z": 8.5
  },
  {
   "part": "ring4_front_quarter",
   "qty": 2,
   "x": 106.0,
   "y": 106.0,
-  "z": 8.5
+  "z": 10.5
  },
  {
   "part": "ring4_rear_left",
   "qty": 1,
   "x": 26.0,
   "y": 106.0,
-  "z": 8.5
+  "z": 10.5
  },
  {
   "part": "ring4_rear_right",
   "qty": 1,
   "x": 26.0,
   "y": 106.0,
-  "z": 8.5
+  "z": 10.5
  },
  {
-  "part": "ring5_quarter",
-  "qty": 4,
+  "part": "ring5_front_quarter",
+  "qty": 2,
   "x": 104.5,
   "y": 104.5,
-  "z": 7.0
+  "z": 9.0
+ },
+ {
+  "part": "ring5_rear_left",
+  "qty": 1,
+  "x": 24.5,
+  "y": 104.5,
+  "z": 9.0
+ },
+ {
+  "part": "ring5_rear_right",
+  "qty": 1,
+  "x": 24.5,
+  "y": 104.5,
+  "z": 9.0
  },
  {
   "part": "cap_quarter",
   "qty": 4,
   "x": 103.0,
   "y": 103.0,
-  "z": 4.5
+  "z": 6.5
  },
  {
   "part": "tray",
   "qty": 1,
   "x": 178.0,
   "y": 178.0,
-  "z": 64.8
+  "z": 59.8
  },
  {
   "part": "rear_plate",
   "qty": 1,
   "x": 173.6,
-  "y": 62.8,
-  "z": 2.0
- },
- {
-  "part": "foot",
-  "qty": 4,
-  "x": 15.6,
-  "y": 15.6,
-  "z": 5.0
- },
- {
-  "part": "spacers_x24",
-  "qty": 1,
-  "x": 57.0,
-  "y": 37.0,
+  "y": 57.8,
   "z": 2.0
  }
 ]

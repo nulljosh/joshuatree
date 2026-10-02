@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600" width="1200" height="1600" font-family="Helvetica, Arial, sans-serif">
+<defs>
+<pattern id="h" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#1a1814" stroke-width="1"/></pattern>
+<g id="ring"><path d="M-90 0 L0 -45 L90 0 L0 45 Z M-60 0 L0 -30 L60 0 L0 30 Z" fill-rule="evenodd" fill="#f0e7d8" stroke="#1a1814" stroke-width="2.5"/><path d="M-90 0 L-90 12 L0 57 L90 12 L90 0 L0 45 Z" fill="url(#h)" stroke="#1a1814" stroke-width="2.5"/></g>
+<g id="rod"><rect x="-3" y="-120" width="6" height="120" fill="#f0e7d8" stroke="#1a1814" stroke-width="2"/></g>
+</defs>
+<rect width="1200" height="1600" fill="#f0e7d8"/>
+<rect x="24" y="24" width="1152" height="1552" fill="none" stroke="#1a1814" stroke-width="3"/>
+<rect x="34" y="34" width="1132" height="1532" fill="none" stroke="#1a1814" stroke-width="1"/>
+<text x="600" y="110" text-anchor="middle" font-size="64" font-weight="700" fill="#1a1814">Build a Strata box</text>
+<text x="600" y="152" text-anchor="middle" font-size="26" fill="#1a1814">Five steps. About 45 minutes. About $250, an estimate.</text>
+<line x1="80" y1="180" x2="1120" y2="180" stroke="#1a1814" stroke-width="2"/>
+
+<g transform="translate(0,0)">
+<text x="80" y="260" font-size="56" font-weight="700" fill="#b9542c">1</text>
+<g transform="translate(330,380)"><use href="#ring"/><g transform="translate(-60,0)"><use href="#rod"/></g><g transform="translate(60,0)"><use href="#rod"/></g></g>
+<text x="560" y="300" font-size="30" font-weight="700" fill="#1a1814">Base</text>
+<text x="560" y="342" font-size="26" fill="#1a1814">Lay the widest rings in a square.</text>
+<text x="560" y="378" font-size="26" fill="#1a1814">Push a rod through each corner</text>
+<text x="560" y="414" font-size="26" fill="#1a1814">and catch a nut underneath.</text>
+</g>
+<line x1="80" y1="470" x2="1120" y2="470" stroke="#1a1814" stroke-width="1"/>
+
+<g>
+<text x="80" y="550" font-size="56" font-weight="700" fill="#b9542c">2</text>
+<g transform="translate(330,680)"><use href="#ring"/><g transform="scale(0.7)"><path d="M-90 -10 L0 -55 L90 -10 L0 35 Z" fill="#f0e7d8" stroke="#1a1814" stroke-width="3"/><path d="M-90 -10 L-90 -60 L0 -105 L0 -55 Z" fill="url(#h)" stroke="#1a1814" stroke-width="3"/><path d="M90 -10 L90 -60 L0 -105 L0 -55 Z" fill="#f0e7d8" stroke="#1a1814" stroke-width="3"/></g></g>
+<text x="560" y="590" font-size="30" font-weight="700" fill="#1a1814">Tray</text>
+<text x="560" y="632" font-size="26" fill="#1a1814">Drop the tray in the middle.</text>
+<text x="560" y="668" font-size="26" fill="#1a1814">The four board posts are</text>
+<text x="560" y="704" font-size="26" fill="#1a1814">already printed on its floor.</text>
+</g>
+<line x1="80" y1="780" x2="1120" y2="780" stroke="#1a1814" stroke-width="1"/>
+
+<g>
+<text x="80" y="860" font-size="56" font-weight="700" fill="#b9542c">3</text>
+<g transform="translate(330,1030)"><use href="#ring"/><g transform="translate(0,-26) scale(0.97)"><use href="#ring"/></g><g transform="translate(0,-52) scale(0.94)"><use href="#ring"/></g><g transform="translate(0,-78) scale(0.91)"><use href="#ring"/></g></g>
+<text x="560" y="900" font-size="30" font-weight="700" fill="#1a1814">Rings</text>
+<text x="560" y="942" font-size="26" fill="#1a1814">Slide the rest down the rods,</text>
+<text x="560" y="978" font-size="26" fill="#1a1814">one on top of the other. Small</text>
+<text x="560" y="1014" font-size="26" fill="#1a1814">feet on each ring leave the air gap.</text>
+</g>
+<line x1="80" y1="1100" x2="1120" y2="1100" stroke="#1a1814" stroke-width="1"/>
+
+<g>
+<text x="80" y="1180" font-size="56" font-weight="700" fill="#b9542c">4</text>
+<g transform="translate(330,1290)"><rect x="-80" y="-30" width="160" height="60" fill="url(#h)" stroke="#1a1814" stroke-width="2.5"/><rect x="-60" y="-48" width="120" height="18" fill="#f0e7d8" stroke="#1a1814" stroke-width="2.5"/><circle cx="-50" cy="-39" r="4" fill="#1a1814"/><circle cx="50" cy="-39" r="4" fill="#1a1814"/></g>
+<text x="560" y="1220" font-size="30" font-weight="700" fill="#1a1814">Board</text>
+<text x="560" y="1262" font-size="26" fill="#1a1814">Screw the board onto the four posts.</text>
+<text x="560" y="1298" font-size="26" fill="#1a1814">Snap on its metal back plate,</text>
+<text x="560" y="1334" font-size="26" fill="#1a1814">slide the rear plate in, plug in power.</text>
+</g>
+<line x1="80" y1="1390" x2="1120" y2="1390" stroke="#1a1814" stroke-width="1"/>
+
+<g>
+<text x="80" y="1470" font-size="56" font-weight="700" fill="#b9542c">5</text>
+<g transform="translate(330,1480) scale(0.8)"><use href="#ring"/><circle cx="-50" cy="0" r="7" fill="#1a1814"/><circle cx="50" cy="0" r="7" fill="#1a1814"/></g>
+<text x="560" y="1450" font-size="30" font-weight="700" fill="#1a1814">Cap</text>
+<text x="560" y="1490" font-size="26" fill="#1a1814">Cap on, a nut on each rod until snug.</text>
+<text x="560" y="1526" font-size="26" fill="#1a1814">USB stick in, power on. Done.</text>
+</g>
+</svg>

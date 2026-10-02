@@ -66,9 +66,9 @@ listing they can buy anywhere.
 
 | Line | Amount | Note |
 |---|---|---|
-| Strata case (6 rings, cap, tray, rear plate, feet, spacers) | ~$40-75 prototype, one-off | estimate, JLC3DP print plus shipping, no real quote yet (`docs/HARDWARE.md`, Prototype cost). Prototype pricing is not volume pricing. $40 is the stock-case estimate above |
+| Strata case (6 rings, cap, tray, rear plate; 30 printed pieces) | ~$40-75 prototype, one-off | estimate, JLC3DP print plus shipping, no real quote yet (`docs/HARDWARE.md`, Prototype cost). Prototype pricing is not volume pricing. $40 is the stock-case estimate above |
 | USB stick, pre-flashed | ~$8 | estimate |
-| Screws, spacers, rods | ~$7 | estimate |
+| Screws, nuts, rods (16 fasteners) | ~$7 | estimate |
 | Payment fees | ~$6 | 3% of $199 |
 | Shipping, small box | ~$15 | estimate, no carrier quote |
 | **Cost without the case** | **~$36** | |
