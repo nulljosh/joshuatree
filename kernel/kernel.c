@@ -173,11 +173,7 @@ void putc(char c){
         capture_buf[capture_len] = 0;
         return;
     }
-    /* Graphics up: 0xB8000 is not a text screen any more. v86 maps the VGA
-       window onto the linear framebuffer, so every console line (each ring-3
-       write to fd 1 lands here) painted dark blank cells across the menu
-       bar, one stray line at y=7 that grew with each app log. */
-    if (window_is_open()) return;
+    if (window_is_open()) return; /* v86 maps 0xB8000 onto the framebuffer: console text drew a stray menu-bar line */
     if (c == '\n') { cx = 0; cy++; }
     else if (c == '\b') {
         if (cx) cx--; else if (cy) { cy--; cx = W - 1; }
