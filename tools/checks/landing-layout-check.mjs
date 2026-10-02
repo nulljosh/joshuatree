@@ -133,6 +133,21 @@ try {
     if (!d.strata) fail(`${tag}: "Want one?" has no Strata render`);
     await page.close();
   }
+  // 7. Portfolio on a phone: his face fills the stage right down to the composer,
+  //    no black band between them (the OS's 430:760 letterbox left ~80px of it).
+  {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true });
+    await page.goto(url + '?full&portfolio', { waitUntil: 'load' });
+    await page.waitForTimeout(1500);
+    const g = await page.evaluate(() => {
+      const st = document.getElementById('stage-wrap').getBoundingClientRect();
+      const co = document.getElementById('demo-composer').getBoundingClientRect();
+      return { stageBottom: st.bottom, composerTop: co.top, w: st.width };
+    });
+    if (g.composerTop - g.stageBottom > 20) fail(`portfolio phone: ${Math.round(g.composerTop - g.stageBottom)}px black band between the face and the composer`);
+    if (g.w < 389) fail(`portfolio phone: stage is ${g.w}px wide, not the full 390`);
+    await page.close();
+  }
   if (!process.exitCode) console.log('PASS: benchmark labels clear, one app count, Samantha link styled, sections visible on load');
 } finally {
   await browser.close();
