@@ -183,23 +183,35 @@ await page.route('**/api/proxy**', async (route) => {
 
 await page.goto(url, { waitUntil: 'load' });
 
-// Exact-INK pixel count over the whole screen, sampled per logical pixel. The
-// desktop photo carries some near-INK pixels, so callers compare against a
-// baseline taken with her window open and still empty.
-async function ink() {
-  return await page.evaluate(([ink, tol]) => {
+// Exact-INK pixel count over one rectangle of the screen, sampled per logical
+// pixel. 2.0: the ring-3 window is not the old console, and counting the whole
+// screen proved nothing: the desktop photo carries thousands of near-INK pixels
+// that shift as the window fades in and the clock ticks (a 29349 baseline then
+// 24002 after the reply, "+-5347", on a run where her reply was drawn fine).
+// So the count is taken over the reply rectangle only: the left-hand column of
+// her transcript below the question bubble. Before she is sent anything that
+// rectangle is bare cream (her "Say something" line sits above it), so its
+// baseline is ~0 and the reply's INK text is the only thing that can fill it.
+async function ink(x0, y0, x1, y1) {
+  return await page.evaluate(([ink, tol, x0, y0, x1, y1]) => {
     const c = document.querySelector('#screen_canvas');
     if (!c || !c.width || !c.height) return null;
     const scale = c.width / 960;
     const data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     let total = 0;
-    for (let y = 0; y < 540; y++) for (let x = 0; x < 960; x++) {
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
       const i = (Math.min(c.height - 1, Math.round(y * scale)) * c.width + Math.min(c.width - 1, Math.round(x * scale))) * 4;
       if (Math.abs(data[i] - ink[0]) <= tol && Math.abs(data[i + 1] - ink[1]) <= tol && Math.abs(data[i + 2] - ink[2]) <= tol) total++;
     }
     return { total, scale, canvasW: c.width, canvasH: c.height };
-  }, [INK, INK_TOL]);
+  }, [INK, INK_TOL, x0, y0, x1, y1]);
 }
+// samantha.c draw(): bubbles start at local y = HEAD_H(36) + FACE_H(64) + 8 = 108
+// and her side is x 20..380 (bw capped at 360); the question bubble is right-aligned
+// (x >= 424 local) and one 30px row tall, so her reply begins at local y 144.
+const RX0 = VX + 20, RX1 = VX + 20 + 360;
+const RY0 = VY + 108 + 30 + 6 - 2, RY1 = VY + VH - 36 - 8; // above her input bar
+const replyInk = () => ink(RX0, RY0, RX1, RY1);
 
 try {
   console.log('serving ' + url);
@@ -227,9 +239,18 @@ try {
   await page.waitForFunction(() => window.__jt.serial.includes('samfocus'), null, { timeout: 30000 });
   ok('samopen/samfocus markers seen: Samantha opened with her input bar focused');
   await page.waitForTimeout(800); // first frame (and her face fetch's 403) settle before typing
-  const before = await ink();
+  // The window fades and slides in over the dark desktop photo, so a baseline taken
+  // a frame too early reads thousands of photo pixels in the rectangle (3825 on one
+  // run). Wait until the rectangle is bare cream, twice in a row, before trusting it.
+  let before = await replyInk(), calm = 0;
+  for (let n = 0; n < 50 && before && calm < 2; n++) {
+    await page.waitForTimeout(200);
+    before = await replyInk();
+    calm = before && before.total <= 40 ? calm + 1 : 0;
+  }
+  if (before && before.total > 40) fail(`her window never settled to a bare reply rectangle (${before.total} INK px sit there before she is sent anything)`);
   if (!before) fail('could not read the v86 canvas at all');
-  else console.log(`ink before sending: ${before.total} (canvas ${before.canvasW}x${before.canvasH})`);
+  else console.log(`reply-rect ink before sending: ${before.total} (canvas ${before.canvasW}x${before.canvasH})`);
 
   // The tour's exact delivery: the sentence plus Enter, typed straight in at
   // 55ms a key. A stray leading 'n' (the old windowed console's hotkey)
@@ -246,11 +267,11 @@ try {
   await page.waitForTimeout(600); // let the redraw after chat_send() returns actually paint
 
   // Her bubble draws in INK; the face band above it never reaches this much of it.
-  const after = await ink();
-  console.log(`ink after the reply: ${after ? after.total : '(no canvas)'}`);
+  const after = await replyInk();
+  console.log(`reply-rect ink after the reply: ${after ? after.total : '(no canvas)'}`);
   if (!after || !before) fail('could not read the v86 canvas after the reply');
-  else if (after.total - before.total < REPLY_INK_THRESHOLD) fail(`reply did not render on screen: only +${after.total - before.total} CHAT_INK px over the empty window (need >= ${REPLY_INK_THRESHOLD})`);
-  else ok(`reply rendered on screen: +${after.total - before.total} CHAT_INK px over the empty window`);
+  else if (after.total - before.total < REPLY_INK_THRESHOLD) fail(`reply did not render on screen: only +${after.total - before.total} CHAT_INK px in the reply rectangle over its empty baseline (need >= ${REPLY_INK_THRESHOLD})`);
+  else ok(`reply rendered on screen: +${after.total - before.total} CHAT_INK px in the reply rectangle over its empty baseline`);
 
   console.log('recorded proxy request: method=' + recordedMethod + ' body=' + (recordedBody || '').slice(0, 300));
   try {
