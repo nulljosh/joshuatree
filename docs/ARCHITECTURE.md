@@ -358,12 +358,17 @@ The ad lives in `landing/ad/` and plays live from the same clock the video was c
 
 | File | What it does |
 |---|---|
-| `landing/ad/index.html` | The Joshua Tree 2.0 and Strata Kit promo, one self-contained page. A single clock function maps t to every camera and scene state: the real Strata STLs as an engraved-ink three.js case that explodes ring by ring, a 2D dive through the board, chip and die, a glyph field resolving into the 26 apps each in its own thin-walled box, one pixel growing into the real desktop with Samantha's face frames, then the 2.0 mark and end card. Exposes `window.__ad = {duration, render(t)}` and a `?t=` query for stills. |
+| `landing/ad/index.html` | The Joshua Tree 2.0 and Strata Kit promo, one self-contained page. A single clock function maps t to every camera and scene state: the real Strata STLs as an engraved-ink three.js case that explodes ring by ring, a 2D dive through the board, chip and die, a glyph field resolving into the OS's real 26 app icons, each in its own thin-walled box, one pixel growing into a real 1920x1080 capture of the desktop with Samantha's face frames (an eased nod and a blink from her frame set when the typed line lands), then the 2.0 mark and end card. The case is laid out from `docs/hardware/stl/manifest.json` and `strata_cad.py` numbers, not by eye. Exposes `window.__ad = {duration, render(t)}` and a `?t=` query for stills. |
 | `landing/ad/vendor/three.module.min.js` | Vendored three.js r160 (pinned, MIT) so the ad has no runtime network dependency. |
 | `landing/ad/vendor/STLLoader.js` | Vendored three.js r160 STLLoader (MIT), loads the real Strata parts. |
 | `landing/ad/stl/*.stl` | Copies of the `docs/hardware/stl` parts, so the live ad page loads them from its own folder on the deployed site. Re-copy them if a part changes. |
 | `tools/ad-capture.mjs` | Deterministic capture for the ad: serves the repo, steps `window.__ad.render(t)` frame by frame in headless Chromium across parallel workers, writes PNG frames or stills; ffmpeg encodes them to h264. |
-| `landing/ad.mp4` | The web cut of the ad: 1280x720 h264, 3 MB, no audio, played on the landing page. Encoded from the 1080p capture with ffmpeg. |
+| `landing/ad/desktop-a.jpg` | Real 1920x1080 framebuffer capture of today's desktop with Samantha snapped left and Notes snapped right, her input empty. Made by `tools/ad-desktop-capture.py`; the ad grows it from one pixel. |
+| `landing/ad/desktop-b.jpg` | The same desktop one beat later: "Hi Samantha" sent and her reply showing, swapped in when the typed line lands. |
+| `landing/ad/icons/*.png` | The 26 app icons as the OS draws them: 23 rendered from `art/icons/*.svg`, plus Portfolio, Activity and Clock cropped from the Apps grid capture and masked to the same tile shape. |
+| `tools/ad-desktop-capture.py` | Headless QEMU run that drives the real kernel over QMP (Apps grid scroll, snap Samantha and Notes, send a line) and saves the 1920x1080 framebuffer for the ad. |
+| `tools/ad-audio.py` | Narration and sound for the ad: Samantha's ElevenLabs voice per line, the `docs/hardware/ad/music2.py` bed cut to 30 s, ffmpeg places each line on its beat and ducks the bed under the voice. |
+| `landing/ad.mp4` | The web cut of the ad: 1280x720 h264 with narration and music (aac), under 5 MB, faststart, played on the landing page. Encoded from the 1080p capture with ffmpeg. |
 | `landing/ad-poster.jpg` | Poster frame for the ad video, a still of the exploded case. |
 
 ## Where to go next
