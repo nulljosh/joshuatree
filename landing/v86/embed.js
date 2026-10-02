@@ -688,6 +688,7 @@ if (typeof document !== "undefined") (function () {
   document.addEventListener("pointerup", unlockAudio, { capture: true, passive: true });
   document.addEventListener("touchend", unlockAudio, { capture: true, passive: true });
   document.addEventListener("click", unlockAudio, { capture: true, passive: true });
+  document.addEventListener("keydown", unlockAudio, { capture: true, passive: true });
   document.addEventListener("visibilitychange", function () {
     if (document.visibilityState !== "visible") return;
     var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
@@ -710,14 +711,14 @@ if (typeof document !== "undefined") (function () {
   }
   var tapTalkBtn = null, tapTalkResolve = null;
   var tapTalkPromise = new Promise(function (r) { tapTalkResolve = r; });
-  if (IS_PHONE) {
+  if (IS_PHONE || /[?&]portfolio\b/.test(location.search)) {
     tapTalkBtn = document.createElement("button");
     tapTalkBtn.type = "button";
     tapTalkBtn.id = "tap-to-talk";
     tapTalkBtn.textContent = /[?&]portfolio\b/.test(location.search) ? "Tap to hear Joshua" : "Tap to hear Samantha";
     tapTalkBtn.hidden = true;
-    tapTalkBtn.style.cssText = "position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:7;" +
-      "background:var(--fg);color:var(--bg);border:none;border-radius:999px;padding:14px 22px;min-height:44px;" +
+    tapTalkBtn.style.cssText = "position:absolute;left:50%;bottom:" + (IS_PHONE ? 64 : 120) + "px;transform:translateX(-50%);z-index:7;" +
+      (/[?&]portfolio\b/.test(location.search) ? "background:#fff;color:#000;" : "background:var(--fg);color:var(--bg);") + "border:none;border-radius:999px;padding:14px 22px;min-height:44px;" +   /* portfolio: his sweater is dark, a dark pill vanishes on it */
       "font:600 15px/1 -apple-system,Helvetica,Arial,sans-serif;letter-spacing:0.01em;cursor:pointer;" +
       "box-shadow:0 4px 18px rgba(0,0,0,0.18);white-space:nowrap;";
     ["touchstart", "mousedown", "pointerdown"].forEach(function (t) {
@@ -730,6 +731,46 @@ if (typeof document !== "undefined") (function () {
       tapTalkResolve();
     });
     container.appendChild(tapTalkBtn);
+  }
+  // Portfolio voice is on by default; this is the way out. Top right, a round
+  // glass button that mutes v86's master volume (mixer.set_volume 0/1), kept
+  // across visits. A browser will not play sound before a gesture, so the first
+  // tap or key anywhere (or the "Tap to hear" button) is what actually starts it.
+  var muteBtn = null, muted = false;
+  function applyMute() {
+    var mx = emulator && emulator.speaker_adapter && emulator.speaker_adapter.mixer;
+    if (mx) mx.set_volume(muted ? 0 : 1, 2);
+    return !!mx;
+  }
+  if (/[?&]portfolio\b/.test(location.search)) {
+    try { muted = localStorage.getItem("jt-muted") === "1"; } catch (e) {}
+    muteBtn = document.createElement("button");
+    muteBtn.type = "button";
+    muteBtn.id = "jt-mute";
+    muteBtn.style.cssText = "position:absolute;top:10px;right:10px;z-index:8;width:36px;height:36px;padding:0;border:none;border-radius:50%;" +
+      "display:flex;align-items:center;justify-content:center;background:rgba(28,28,30,0.78);color:#fff;cursor:pointer;" +
+      "-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 1px 6px rgba(0,0,0,0.18);";
+    var paintMute = function () {
+      muteBtn.setAttribute("aria-pressed", muted ? "true" : "false");
+      muteBtn.setAttribute("aria-label", muted ? "Unmute Joshua" : "Mute Joshua");
+      muteBtn.title = muted ? "Unmute" : "Mute";
+      muteBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor"/>' +
+        (muted ? '<path d="m16 9 5 6M21 9l-5 6"/>' : '<path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>') + '</svg>';
+    };
+    paintMute();
+    ["touchstart", "mousedown", "pointerdown"].forEach(function (t) {
+      muteBtn.addEventListener(t, function (ev) { ev.stopPropagation(); }, { passive: true });
+    });
+    muteBtn.addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      muted = !muted;
+      try { localStorage.setItem("jt-muted", muted ? "1" : "0"); } catch (e) {}
+      applyMute(); paintMute();
+    });
+    container.appendChild(muteBtn);
+    // The mixer exists once the emulator has booted; apply a remembered mute as soon as it does.
+    var muteTries = 0, muteTimer = setInterval(function () { if (applyMute() || ++muteTries > 120) clearInterval(muteTimer); }, 500);
   }
   // Phones have no keyboard for the demo to listen to, and v86 only hears
   // `keydown` on window, so the Samantha, Notes and Terminal screens, which
