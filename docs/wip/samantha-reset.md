@@ -38,3 +38,18 @@ Next: instrument kernel/brk.c (serial on every paging_map_region call from frame
 plus a serial line in the double-fault handler, rebuild (make kernel.elf copies to landing/v86), rerun the check,
 and read the last line before the reboot. Then write the ring-3 window regression check (brkpoke as a window task
 growing to 2 MB in 20 KB steps, matching her malloc pattern, under QEMU -m 64).
+
+## Third pass (15 min): traced to the instant after SYS_BRK returns, hypothesis: her 16 KB kernel stack overflows into her page directory
+Tracing is in kernel/brk.c (frame_ptr, map_one, brk_set) and kernel/idt.c (one `isr: v/eip/err cr2=` line on every exception). Still WIP, strip before merge.
+Run 3 serial (samantha-reset-v86-serial.log, line 1490): the last brk_set finishes cleanly (`brk: done cr3=004f8000 saved=01cdc000 top=ff150000`,
+`brk: back on task dir`) and the very next line is the reboot. No `isr:` line at all, so no exception was ever delivered: a true triple fault.
+The page count at death differs per run (288 pages run 2, 336 pages run 3), so it is timing bound, not a fixed boundary. All brk frames are
+contiguous 0x01df2000.. (28 to 32 MB physical, PDE 7, already identity mapped), MAX_EXTRA_TABLES is not exhausted, and the v86 LFB at 0xE0000000 is untouched.
+What runs between brk returning and the next brk: the user copy into the new pages, then SYS_HTTP_GET (big path) on the task's 16 KB kernel stack with
+interrupts on. Her page directory is pmm frame 0x01cdc000 and her brk page table 0x01df1000; task_create interleaves the kmalloc'd kernel stack with
+paging_new_task_directory's pmm frames (kheap.c's own comment records a triple fault from exactly that adjacency). A kernel stack overflow by the
+net path (nested rtl8139 IRQ on top of a deep http_get frame) scribbles downward into whatever frame sits just below the stack block; if that is the
+directory, the first bytes hit are PDEs 1023 down to 0x3FC, her brk PDEs and the LFB, then 0x300, the kernel itself, and the next instruction fetch
+triple faults with nothing to print. Next: print the kernel stack block range and dir_phys at exec_user_window, confirm adjacency; fix by
+(a) guarding the stack with a canary page / 32 KB stack, (b) allocating dirs and kernel stacks so they are never neighbours, (c) a stack-depth
+check in sys_http_get/post before the net call that returns -ENOMEM instead of overflowing. Regression check: window task, 2 MB brk, many big GETs.
