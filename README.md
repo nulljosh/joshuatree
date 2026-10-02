@@ -18,7 +18,7 @@ You can talk to it. Ask Samantha to set a reminder, take a note or open an app, 
 
 - **Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 - **USB stick:** download the ISO from [Releases](https://github.com/nulljosh/joshuatree/releases). The release notes have the copy steps.
-- **Talk to her:** `make talk`, then hold **F2**. Needs real hardware and a mic (see `kernel/chat.h`).
+- **Talk to her:** `make talk`, then hold **F2**. Needs real hardware and a mic (see `user/samantha.c`).
 
 ## Build it
 

@@ -274,49 +274,9 @@ int gui_getch_or_click(void){
    no entry in SC[]/SCS[]), so it reaches here through get_key_or_click_
    until's ordinary "not a printable key" path and is otherwise silently
    dropped -- same slot every other synthetic key above claims. Chat holds
-   F2 to record (kernel/chat.h's chat_ptt_record) and watches for the
+   F2 to record (user/samantha.c's push-to-talk) and watches for the
    matching break code (0xBC) between DMA chunks to notice release. */
 #define KEY_PTT 305
-#define CLIPBOARD_CAP 4096
-static char clipboard_buf[CLIPBOARD_CAP];
-static unsigned int clipboard_len = 0;
-/* "cliptrace" on the multiboot command line (tools/checks/clipboard-check.py
-   passes it) adds a content hash to the CLIPCOPY/CLIPPASTE serial lines so
-   a check can prove which text moved. A normal boot logs the length only:
-   the serial log is host-readable (v86 exposes it as window.__jt.serial)
-   and an unkeyed 32-bit hash of a short pasted password is dictionary-
-   recoverable. */
-static int clip_trace = 0;
-/* Serial markers, same convention "editorchrome"/"termchrome" already use:
-   a discriminating line a headless check can grep out of the serial log,
-   here proving exactly what text the clipboard held or a paste actually
-   inserted (not just that some copy/paste code path ran). Bounded to a
-   small scratch buffer -- plenty for what any check types -- because
-   serial_puts needs a null terminator and neither clipboard_buf nor an
-   app's own text buffer is guaranteed to have one at an arbitrary slice. */
-static void clip_serial_dump(const char *tag, const char *s, unsigned int n) {
-    /* length, plus an FNV-1a hash only under cliptrace (see clip_trace);
-       never the text: the clipboard can hold a pasted password and the
-       serial log is readable by anyone at the host */
-    char out[24]; int k = 0; char d[10]; int dn = 0; unsigned int v = n;
-    do { d[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
-    while (dn) out[k++] = d[--dn];
-    if (clip_trace) {
-        unsigned int h = 2166136261u;
-        for (unsigned int i = 0; i < n; i++) { h ^= (unsigned char)s[i]; h *= 16777619u; }
-        out[k++] = ':';
-        for (int sh = 28; sh >= 0; sh -= 4) out[k++] = "0123456789abcdef"[(h >> sh) & 15];
-    }
-    out[k++] = '\n'; out[k] = 0;
-    serial_puts(tag);
-    serial_puts(out);
-}
-static void clipboard_set(const char *s, unsigned int n) {
-    if (n > CLIPBOARD_CAP) n = CLIPBOARD_CAP;
-    for (unsigned int i = 0; i < n; i++) clipboard_buf[i] = s[i];
-    clipboard_len = n;
-    clip_serial_dump("CLIPCOPY:", clipboard_buf, clipboard_len);
-}
 int get_key_or_click(void);
 
 static int get_key(void){
@@ -925,7 +885,7 @@ int gui_order[GUI_ICON_COUNT];
    and Trash stay at the ends; everything left out is still in the Apps folder. */
 static int portfolio_dock;
 /* "samantha" on the multiboot command line: skip the desktop and open
-   Chat's full-screen avatar view (chat_boot_samantha_open, kernel/chat.h)
+   ring-3 Samantha's window (user/samantha.c)
    the instant gui_run's first frame would otherwise draw the dock. One
    splash frame still shows (gui_draw_boot_screen runs first, unconditionally);
    this only replaces the icon desktop that would follow it. */
@@ -1276,10 +1236,6 @@ static void gui_aa_line_phys(double fx0, double fy0, double fx1, double fy1, uns
             window_pixel_phys(x, y, (r << 16) | (g << 8) | b);
         }
     }
-}
-static void gui_aa_line(int x0, int y0, int x1, int y1, unsigned int color, double width){
-    int sc = (int)window_scale(); if (sc < 1) sc = 1;
-    gui_aa_line_phys(x0 * sc, y0 * sc, x1 * sc, y1 * sc, color, width);
 }
 
 /* Channel-wise linear interpolation between two 0x00RRGGBB colors, `t/max`
@@ -2087,7 +2043,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void homeqi_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
 
 static int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
@@ -4488,12 +4444,9 @@ static int text_ink(int a, unsigned int fg, unsigned int dst){
 }
 
 #include "ttf_render.h"
-#include "gui_prompt.h"
 #include "auth.h"
 #include "editor.h"
-#include "caldate.h" /* 1.9.12: Calendar is user/calendar.c now; chat.h and stocks.h still need the date math */
 #include "mail.h"
-#include "chat.h"
 
 /* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
    dock hover labels, titlebars) read as monospace/typewriter, not the
@@ -5094,22 +5047,6 @@ again:
         int slot = gui_dock_hit_test(app_cursor_x, app_cursor_y);
         if (slot >= 0) { editor_mouse_x = app_cursor_x; editor_mouse_y = app_cursor_y; icon = gui_order[slot]; goto again; }
     }
-    /* v1.1.0: Chat's "open notes"/"open the weather app" tool (chat.h's
-       chat_run_tool, tool "open_app") sets chat_launch_after and returns
-       out of gui_launch_chat_app so control lands back here, the same
-       tail-call reopen shape the dock-tile-click case just above already
-       established. Scoped to icon == 6 (Chat) alone, not checked
-       unconditionally: chat_launch_after can also be set (and then
-       deliberately cleared straight back to -1) by the text-shell `chat`
-       command, which has no dock of its own to hand this off to -- if
-       that clear were ever missed, this check must not misfire on some
-       later, unrelated app's own close. */
-    if (icon == 6 && chat_launch_after >= 0) {
-        int next_icon = chat_launch_after;
-        chat_launch_after = -1;
-        icon = next_icon;
-        goto again;
-    }
 }
 
 /* v0.73.0: phase 1 of real multi-window, per roadmap.md's "Multi-window,
@@ -5262,7 +5199,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      notes_ring3_open,      0, 0}, /* ring 3 (user/notes.c), a compositor window */
     /*  4 */ {"Reminders",  0x00375A4A, gui_icon_reminders,  reminders_ring3_open,  0, 0}, /* 1.9.9: ring 3 (user/reminders.c) */
     /*  5 */ {"Terminal",   0x002B2B2B, gui_icon_terminal,   terminal_ring3_open,   0, 0}, /* ring 3 (user/terminal.c), a compositor window */
-    /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       gui_launch_chat_app,   0, 0},
+    /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       samantha_ring3_open,   0, 0}, /* 1.9.26: ring 3 (user/samantha.c), the last app out of the kernel */
     /*  7 */ {"Weather",    0x0085144B, gui_icon_weather,    weather_ring3_open,    0, 0}, /* 1.9.22: ring 3 (user/weather.c) */
     /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        curbfind_ring3_open,   0, 0}, /* 1.9.11: ring 3 (user/curbfind.c) */
     /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c */
@@ -6003,7 +5940,7 @@ static void gui_run(void){
     auth_gate(); /* v0.77: real login screen, once per session, before the desktop ever paints */
     gui_draw_boot_screen();
     gui_order_init();
-    if (boot_to_samantha) { boot_to_samantha = 0; chat_boot_samantha_open(); }
+    if (boot_to_samantha) { boot_to_samantha = 0; serial_puts("samopen\n"); if (boot_to_phone) { gui_app_windowed = 0; gui_apps_launch(6); } else gui_launch_from_dock(6); } /* 1.9.26: ring-3 Samantha is the first screen; phone mode lands on the home grid when she closes */
     else if (!boot_to_phone) serial_puts("guidesktop\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: the icon desktop drew first, samantha mode never reaches here before her avatar; phone mode never draws this desktop at all (see below), so it must not claim it did */
     if (boot_to_phone) { phone_home_run(); return; } /* v1.8.0: leaving Samantha lands on a real home screen, not the desktop's dock squeezed into 430px; never returns */
     dock_hover = dock_presented_hover = -1;
@@ -6855,7 +6792,7 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "say"))       puts(!*arg ? "usage: say <text>\n" : !net_init(0x0A00020F) ? "say: no NIC\n"
-                                              : speak_text(llm_host, (unsigned short)llm_port, arg, CHAT_SPEAK_TIMEOUT_TICKS) ? "say: played\n" : "say: nothing played\n");
+                                              : speak_text(llm_host, (unsigned short)llm_port, arg, 1500 /* ~15s at 100Hz */) ? "say: played\n" : "say: nothing played\n");
     else if (!strcmp(line, "heaptest")) {
         char *a = kmalloc(16);
         char *b = kmalloc(32);
@@ -8221,63 +8158,12 @@ static void run(char *line){
             else puts("unknown app, see usage\n");
         }
     }
-    else if (!strcmp(line, "chat")) {
-        /* v10: this kernel's own shell talking to an LLM. No TLS anywhere
-           in this stack (a real, separate project on its own), so this
-           only ever speaks plain HTTP, not the real Anthropic/OpenAI APIs
-           (HTTPS-only). Real design tradeoff, not a default picked blind:
-           building TLS from scratch to talk to a hosted API is its own
-           multi-session project; an Ollama-compatible server over plain
-           HTTP is what "talking to it" can actually mean before that
-           exists.
-
-           v85: switched to /api/chat with real VFS-backed history
-           (chat_send, kernel/chat.h) instead of a fresh one-shot
-           /api/generate prompt every time, so the shell `chat` command
-           and the GUI Chat app share both the same conversation and the
-           same settings-persisted model/host/port (llm_model/llm_host/
-           llm_port), not two independently hardcoded copies.
-
-           1.0.12: the default host is now the Turing project's own
-           Cloudflare Worker over the real internet (turing.heyitsmejosh.com,
-           model "samantha"), not a local Ollama server reached over QEMU's
-           SLIRP gateway -- Settings can still point this back at a local
-           host, so the status line below names whatever host/model are
-           actually configured rather than assuming either. */
-        if (!*arg) { puts("usage: chat <message>\n"); }
-        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
-        else {
-            /* v1.1.0: chat_pick first, same as the GUI Chat app -- see
-               chat.h's own comment above chat_pick/chat_run_tool. The text
-               shell has no dock to hand an open_app request off to, so it
-               just reports what would have opened and clears
-               chat_launch_after right back to -1 rather than leaving it
-               set for some later, unrelated GUI dock launch to pick up. */
-            static char pick_tool[CHAT_TOOL_MAX], pick_arg[CHAT_ARG_MAX], tool_reply[256];
-            int handled = 0;
-            if (chat_pick(arg, pick_tool, sizeof(pick_tool), pick_arg, sizeof(pick_arg))
-                && chat_run_tool(pick_tool, pick_arg, tool_reply, sizeof(tool_reply))) {
-                handled = 1;
-                chat_launch_after = -1;
-                chat_load();
-                chat_push(CHAT_ROLE_USER, arg);
-                chat_push(CHAT_ROLE_ASSISTANT, tool_reply);
-                puts(tool_reply); putc('\n');
-            }
-            if (!handled) {
-                puts("asking "); puts(llm_model); puts(" (");
-                puts(llm_host); puts(")...\n");
-                static char answer[4096]; /* real growth from the old 2048-byte cap */
-                /* 1.0.12: chat_error() names the specific reason (currently
-                   just the HTTPS-redirect case) when chat_send knows one;
-                   the generic message stands for every other failure. */
-                if (!chat_send(arg, answer, sizeof(answer))) {
-                    const char *em = chat_error();
-                    if (em[0]) { puts(em); putc('\n'); }
-                    else puts("FAIL (couldn't reach the LLM host, or no reply)\n");
-                }
-                else { puts(answer); putc('\n'); }
-            }
+    else if (!strcmp(line, "chat") || !strcmp(line, "samantha")) {
+        /* 1.9.26: Samantha is a ring-3 program (user/samantha.c); the text shell opens her window like `notes`. */
+        if (window_open(800, 600, 32)) {
+            samantha_ring3_open();
+            window_close();
+            clear();
         }
     }
     else if (!strcmp(line, "build")) {
@@ -8376,103 +8262,6 @@ static void run(char *line){
             clear();
             puts("testapps done\n");
         }
-    }
-    else if (!strcmp(line, "chattest")) {
-        /* v85: discriminating regression test for Chat's real new pieces,
-           the same shape contactstest/mailtest already use, no network
-           needed (chat_push/chat_save/chat_load/chat_build_request are
-           all pure VFS/string logic, http_post is the only piece that
-           needs a live host, out of scope for a boot-time regression
-           test the same way weathertest already draws that line). Real,
-           discriminating checks, not "doesn't crash":
-           (1) history round-trips through CHAT.TXT: push a user turn and
-               an assistant turn, reset chat_loaded, reload, and both
-               come back with the right role and exact content.
-           (2) the old 512-byte input cap is really gone: a message right
-               at the OLD cap (600 chars, over the old 512) survives a
-               push+save+reload intact end to end, not truncated at 511.
-           (3) chat_build_request includes BOTH turns from history, not
-               just the newest one (the real /api/chat fix, a request
-               that only ever contained the latest message would be
-               functionally identical to the old /api/generate, "history"
-               in name only): scans the built JSON for both "hello there"
-               and the long message's own head, and for '"role":"user"'
-               appearing twice.
-           (4) the ring drops the oldest message once CHAT_MAX is
-               exceeded, proving chat_push's bound is real, not just
-               documented. */
-        int pass = 0;
-        chat_count = 0;
-        chat_loaded = 1;
-
-        char long_msg[600];
-        for (int i = 0; i < 599; i++) long_msg[i] = (char)('a' + (i % 26));
-        long_msg[599] = 0;
-
-        chat_push(CHAT_ROLE_USER, "hello there");
-        chat_push(CHAT_ROLE_ASSISTANT, long_msg);
-
-        if (chat_count != 2) { puts("chat seed failed, count="); putn((unsigned int)chat_count); puts("\n"); goto chat_test_done; }
-
-        chat_loaded = 0;
-        chat_load();
-
-        pass = (chat_count == 2) &&
-               (chat_msgs[0].role == CHAT_ROLE_USER) &&
-               (chat_msgs[0].content[0] == 'h' && chat_msgs[0].content[1] == 'e') &&
-               (chat_msgs[1].role == CHAT_ROLE_ASSISTANT);
-
-        if (!pass) { puts("chat round-trip failed after reload\n"); goto chat_test_done; }
-
-        /* the 600-char message must have survived past the old 512 cap */
-        unsigned int long_len = 0;
-        while (chat_msgs[1].content[long_len]) long_len++;
-        pass = (long_len == 599) && (chat_msgs[1].content[598] == long_msg[598]);
-        if (!pass) {
-            puts("chat buffer-growth failed: stored length="); putn(long_len); puts(" (want 599, old cap was 511)\n");
-            goto chat_test_done;
-        }
-
-        static char req[6144];
-        unsigned int rn = chat_build_request(req, sizeof(req));
-        req[rn < sizeof(req) ? rn : sizeof(req) - 1] = 0;
-
-        int found_hello = 0, found_tail = 0, role_user_count = 0;
-        for (unsigned int i = 0; i < rn; i++) {
-            if (!found_hello && req[i]=='h' && req[i+1]=='e' && req[i+2]=='l' && req[i+3]=='l' && req[i+4]=='o') found_hello = 1;
-            if (req[i]=='"' && req[i+1]=='r' && req[i+2]=='o' && req[i+3]=='l' && req[i+4]=='e' && req[i+5]=='"' && req[i+6]==':' && req[i+7]=='"' && req[i+8]=='u' && req[i+9]=='s' && req[i+10]=='e' && req[i+11]=='r') role_user_count++;
-        }
-        found_tail = (long_len > 0); /* content is escaped/truncated into the request so a literal 599-char scan isn't meaningful; presence of the user turn + role count is the real discriminator */
-        (void)found_tail;
-
-        pass = found_hello && (role_user_count == 1); /* only the user turn should say "role":"user"; the assistant turn must be present too but tagged "assistant" */
-        if (!pass) { puts("chat_build_request missing history (single-shot regression)\n"); goto chat_test_done; }
-
-        int found_assistant_role = 0;
-        for (unsigned int i = 0; i + 15 < rn; i++) {
-            if (req[i]=='"' && req[i+1]=='r' && req[i+2]=='o' && req[i+3]=='l' && req[i+4]=='e' && req[i+5]=='"' && req[i+6]==':' && req[i+7]=='"' && req[i+8]=='a' && req[i+9]=='s' && req[i+10]=='s') { found_assistant_role = 1; break; }
-        }
-        pass = found_assistant_role;
-        if (!pass) { puts("chat_build_request missing assistant turn\n"); goto chat_test_done; }
-
-        /* ring bound: push past CHAT_MAX and confirm the oldest drops */
-        chat_count = 0; chat_save();
-        for (int i = 0; i < CHAT_MAX + 2; i++) {
-            char tag[4]; tag[0] = 'm'; tag[1] = (char)('0' + (i % 10)); tag[2] = 0;
-            chat_push((i % 2) ? CHAT_ROLE_ASSISTANT : CHAT_ROLE_USER, tag);
-        }
-        pass = (chat_count == CHAT_MAX) && (chat_msgs[0].content[0] == 'm') && (chat_msgs[0].content[1] == '0' + (2 % 10));
-        if (!pass) { puts("chat ring bound failed, count="); putn((unsigned int)chat_count); puts("\n"); goto chat_test_done; }
-
-        puts("chat: history round-trips, 600-char message survives (old cap was 511), /api/chat request carries both turns, ring drops oldest past CHAT_MAX: ok\n");
-
-        chat_test_done:
-        chat_count = 0; chat_save(); /* leave a clean CHAT.TXT, this test must not leave the kernel in a weird state for whatever runs next */
-        /* serial mirror, same tools/png-check.sh pattern: a headless
-           harness reads the serial port, not the VGA framebuffer, since
-           this command has no visible screen output of its own. */
-        serial_puts(pass ? "chattest PASS\n" : "chattest FAIL\n");
-        if (!pass) puts("FAILED\n");
     }
     /* calctest retired: the parser it exercised moved to user/calculator.c,
        a real ring-3 program (1.7.12), whose own math is what
@@ -8735,7 +8524,6 @@ void kmain(unsigned int multiboot_info_addr){
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='p' && pc[1]=='o' && pc[2]=='r' && pc[3]=='t' && pc[4]=='f' && pc[5]=='o' && pc[6]=='l' && pc[7]=='i' && pc[8]=='o') { portfolio_dock = 1; serial_puts("portfolio dock\n"); break; }
         for (const char *pc = cl; pc && *pc; pc++)
-            if (pc[0]=='c' && pc[1]=='l' && pc[2]=='i' && pc[3]=='p' && pc[4]=='t' && pc[5]=='r' && pc[6]=='a' && pc[7]=='c' && pc[8]=='e') { clip_trace = 1; serial_puts("cliptrace\n"); break; }
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='b' && pc[1]=='e' && pc[2]=='n' && pc[3]=='c' && pc[4]=='h' && (pc[5]==' ' || pc[5]==0)) { bench_at_boot = 1; break; }
         for (const char *pc = cl; pc && *pc; pc++)
@@ -8822,8 +8610,7 @@ void kmain(unsigned int multiboot_info_addr){
                 break;
             }
         stocks_cmdline(cl0); /* stkhost=HOST:PORT, kernel/stocks.h */
-        chat_face_cmdline(cl0); /* facehost=HOST[:PORT], kernel/chat_face.h */
-        { extern void ring3samantha_cmdline(const char *cl); ring3samantha_cmdline(cl0); } /* ring3samantha: Samantha opens as the ring-3 window (slice 2) */
+        jt_facehost_cmdline(cl0); /* facehost=HOST[:PORT], kernel/syscall.c: where ring-3 Samantha fetches her face and speech */
     }
     vga_text_mode_init(); /* real hardware/QEMU already boot into text mode via their own BIOS; a BIOS-less multiboot path (v86) never sets it at all, so make it explicit rather than inherited */
     klog("vga_text_mode_init: text mode 3 programmed");

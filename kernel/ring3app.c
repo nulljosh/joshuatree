@@ -132,18 +132,8 @@ static const struct ring3_app RING3_APPS[] = {
     {"Mail",       user_mail,       USER_MAIL_LEN,       "MAIL.BIN"},
     {"Notes",      user_notes,      USER_NOTES_LEN,      "NOTES.BIN"},
     {"Terminal",   user_terminal,   USER_TERMINAL_LEN,   "TERMINAL.BIN"},
-    {"Samantha",   user_samantha,   USER_SAMANTHA_LEN,   "SAMANTHA.BIN"}, /* slice 2: windowable only under the ring3samantha cmdline flag; the dock still opens the kernel chat */
+    {"Samantha",   user_samantha,   USER_SAMANTHA_LEN,   "SAMANTHA.BIN"},
 };
-/* 1.9.26: set by the ring3samantha cmdline word (ring3samantha_cmdline, called from kmain). */
-static int ring3samantha_on = 0;
-void ring3samantha_cmdline(const char *cl) {
-    for (const char *p = cl; p && *p; p++) {
-        const char *k = "ring3samantha", *q = p;
-        while (*k && *q == *k) { q++; k++; }
-        if (!*k && (p == cl || p[-1] == ' ') && (*q == 0 || *q == ' ')) { ring3samantha_on = 1; serial_puts("ring3app: samantha at ring 3 (ring3samantha)\n"); return; }
-    }
-}
-static int ring3app_is_samantha(const char *n) { const char *k = "Samantha"; while (*k && *n == *k) { n++; k++; } return !*k && !*n; }
 
 static int ring3app_seed(const struct ring3_app *a) {
     unsigned char probe[1];
@@ -180,7 +170,7 @@ int ring3app_launch_window(const char *name, unsigned int w, unsigned int h) {
         while (*p && *p == *q) { p++; q++; }
         if (!*p && !*q) { a = &RING3_APPS[i]; break; }
     }
-    if (!a || (ring3app_is_samantha(name) && !ring3samantha_on) || ring3app_seed(a) < 0) return -1;
+    if (!a || ring3app_seed(a) < 0) return -1;
     int phone = jt_phone_mode();
     const char *argv[] = { a->file, "phone" };
     void *image = 0;
@@ -225,7 +215,6 @@ int ring3app_is_windowable(const char *name) {
     if (!name) return 0;
     /* Weather exits 7 to ask the blocking launcher for a refetch; a window has no such loop. */
     if (name[0] == 'W' && name[1] == 'e' && name[2] == 'a' && name[3] == 't' && name[4] == 'h' && name[5] == 'e' && name[6] == 'r' && !name[7]) return 0;
-    if (ring3app_is_samantha(name)) return ring3samantha_on; /* the kernel chat stays the default dock launch */
     if (name[0] == 'S' && name[1] == 't' && name[2] == 'o' && name[3] == 'c' && name[4] == 'k' && name[5] == 's' && !name[6]) return 0; /* exits 16+ to ask the blocking launcher for a refetch */
     for (unsigned int i = 0; i < sizeof RING3_APPS / sizeof RING3_APPS[0]; i++) {
         const char *p = RING3_APPS[i].name, *q = name;
@@ -311,6 +300,7 @@ void burrow_ring3_open(void)     { ring3app_launch(&RING3_APPS[20]); }
 int  stocks_ring3_run(void)      { return ring3app_launch(&RING3_APPS[21]); } /* exit status, kernel.c's stocks_ring3_open decodes 16 + sel*5 + range (+64 refresh) */
 void mail_ring3_open(void)       { ring3app_launch(&RING3_APPS[22]); }
 void terminal_ring3_open(void)   { ring3app_launch(&RING3_APPS[24]); }
+void samantha_ring3_open(void)   { ring3app_launch(&RING3_APPS[25]); } /* 1.9.26: dock slot 6, the shell commands and phone mode */
 void notes_ring3_launch(void)    { ring3app_launch(&RING3_APPS[23]); } /* kernel.c's notes_ring3_open runs the legacy NOTES.TXT migration first */
 int  weather_ring3_run(void)     { return ring3app_launch(&RING3_APPS[19]); } /* exit status, kernel.c's weather_ring3_open loops on 7 */
 

@@ -10,16 +10,16 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 1. 1.8 done: a phone home screen, an app grid, one app full screen at a time, a back button.
 2. 1.9 done: touch works, an on-screen keyboard, every app readable at phone size.
-3. Every app in the APPS[] table runs as its own ring 3 program. No app code left in kernel.c.
+3. Every app in the APPS[] table runs as its own ring 3 program. No app code left in kernel.c. Done (1.9.26: Samantha was the last).
 4. A check crashes each app on purpose and proves the desktop is still alive after every one. Done for every ring-3 app (`tools/checks/ring3crash-all-check.py`, 20 of 20 as of 1.9.22).
 5. Input goes to the focused window only, not a global key pull. Done for ring-3 window apps (1.9.23, `tools/checks/ring3window-check.py`): Reminders beside Notes, keys reach only the focused one. The other nineteen still use the blocking launch and `gui_poll_event`'s global pull until they move to the window path (one row in `gui_ring3_windowed`).
 
 ## Where things stand
 
-Checkpoint 2026-10-01. 1.9.25 has 25 of 26 apps in ring 3 (Notes and Terminal joined Burrow, Stocks and Mail), only Samantha left, and every ring-3 app opens as a window except Weather and Stocks. 1.9.23 added the window path (`exec_user_window`, `paging_task_map_private`, `r3wins` in syscall.c, `gui_ring3_windowed` in kernel.c): a ring-3 program as a compositor window with private memory and per-window input. Reminders is on it; the rest are one row each, and Burrow, Notes and Mail can now leave the kernel without losing multi-window.
+Checkpoint 2026-10-01. 1.9.26 has 26 of 26 apps in ring 3: Samantha was the last, and the in-kernel chat (`chat.h`, `chat_face.h`) is deleted. The dock, the `chat`/`samantha` shell commands, `boot_to_samantha` and phone mode all open `user/samantha.c`; `phone_home.h` stays as the phone's home screen. Gate item 3 is done. 1.9.23 added the window path (`exec_user_window`, `paging_task_map_private`, `r3wins` in syscall.c, `gui_ring3_windowed` in kernel.c): a ring-3 program as a compositor window with private memory and per-window input. Every ring-3 app opens as a window except Weather and Stocks.
 
-- In ring 3: Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind, Calendar, Search, Epiphany, Weather, Burrow, Stocks, Mail, Notes, Terminal.
-- Still in the kernel: Samantha.
+- In ring 3: Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind, Calendar, Search, Epiphany, Weather, Burrow, Stocks, Mail, Notes, Terminal, Samantha.
+- Still in the kernel: nothing.
 - Gate item 4 (crash every app) is done for all ring-3 apps. The check parses `RING3_APPS`, so a new port is covered on its own.
 - New syscalls: 386 tasks, 387 http_get (Curbfind, Epiphany), 388 readdir (Search, for Files next).
 - The 1.9.14 PR also carries the landing work: chat bar on phones, icon buttons, QA fixes, Tech specs, the footer directory.
@@ -42,7 +42,7 @@ QA backlog:
 1. Stocks to ring 3 (Weather shipped in 1.9.22: the kernel's `weather_fetch` writes `WEATHER.TXT` and the app reads it, R exits 7 so the kernel refetches, no new syscall; Epiphany shipped in 1.9.19: its GP chart now draws previous close to last from `/api/quotes`, since `stx_data` is kernel-only and too big for the 2 KB body). Check `weather_text` in `phone_home.h` and Samantha's weather tool still work. Findings from the 1.9.15 pass (no port landed, the session was cut short):
    - Stocks cannot come through `SYS_HTTP_GET` as it is: `/api/stocks?range=N` is eight rows of up to 64 prices (about 3.2 KB) and the call clamps the body to `JT_HTTP_BODY_MAX` (2048 bytes), so the later symbols are cut. Either the Worker gains a per-symbol path or the app keeps the kernel's `stocks_fetch` as the feed. Epiphany's 40-line `/api/quotes` (about 700 bytes) fits, but its GP chart reads the same `stx_data`.
    - Weather is out, so the multiwindow compositor now has draw/on_key hooks only on Burrow, Mail and Notes. The window checks all use Notes as the second window.
-2. Burrow (the old Files app, renamed in 1.9.14), then Terminal, Notes, Mail, Samantha to ring 3.
+2. (done) Every app is in ring 3.
 3. 1.9 phone work: touch everywhere, an on-screen keyboard (only Notes has one), every app readable at phone size.
 4. Input by focus, then tag 2.0.0.
 5. Tour scenes for Activity and the Apps folder (`landing/v86/embed.js`, `tourappcount-check.mjs`).

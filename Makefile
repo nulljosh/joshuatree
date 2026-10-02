@@ -324,7 +324,7 @@ user/mail.o: user/mail.c user/jtsys.h user/libjt/text.h
 user/mail.bin: user/mail.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/mail.o user/libjt.a
 
-# Samantha's chat window as a ring-3 program (slice 2; opens only under the ring3samantha cmdline flag).
+# Samantha as a ring-3 program (dock slot 6, the shell commands and phone mode all open it).
 user/samantha.o: user/samantha.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
@@ -493,17 +493,17 @@ run: kernel.elf dotfiles.img
 	qemu-system-i386 -kernel kernel.elf -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file=dotfiles.img,format=raw,if=ide,index=0
 
 # Same boot as `run`, plus "samantha" on the command line: kmain's
-# boot_to_samantha skips the desktop for Chat's full-screen avatar view
-# (kernel/chat.h's chat_boot_samantha_open) the instant the splash clears.
+# boot_to_samantha skips the desktop for ring-3 Samantha's window
+# (user/samantha.c) the instant the splash clears.
 samantha: kernel.elf dotfiles.img
 	qemu-system-i386 -kernel kernel.elf -append samantha -display cocoa,zoom-to-fit=on -rtc base=localtime -net nic,model=rtl8139 -net user -drive file=dotfiles.img,format=raw,if=ide,index=0
 
 # v1.6.23: `run` plus a real Sound Blaster wired to this Mac's default
 # input/output through QEMU's coreaudio backend -- the Yeti (or whatever
 # the Mac's default mic is) reaches the guest's SB16 speaker output too,
-# not just recording, so Chat's speak_text plays over real speakers here
+# not just recording, so Samantha's speak_text plays over real speakers here
 # instead of the silent no-op `run` gets without a card at all. See
-# kernel/chat.h's chat_ptt_record for why holding F2 records nothing under
+# user/samantha.c's push-to-talk for why holding F2 records nothing under
 # plain QEMU emulation today (QEMU's own -device sb16 has no ADC/record
 # path, confirmed against its source) -- coreaudio's "in" side plumbs a
 # real host mic into the DSP's input port, so `talk` is still the right

@@ -744,8 +744,28 @@ static int sys_tasks(u32 out, u32 kill, u32 c) {
    and only if the status was 200. One caller at a time: a second task
    calling while a fetch is in flight is -EBUSY, since the bounce buffer
    and net.c's one-connection stack are both singletons. */
-#define HTTP_HOST "joshuatree.heyitsmejosh.com"
-#define HTTP_PORT 80
+#define HTTP_HOST_MAX 64
+static char http_host_buf[HTTP_HOST_MAX] = "joshuatree.heyitsmejosh.com";
+static unsigned short http_port_val = 80;
+#define HTTP_HOST http_host_buf
+#define HTTP_PORT http_port_val
+/* 1.9.26: facehost=HOST[:PORT] on the boot command line moves where Samantha's face frames come from
+   (the checks point it at a local stub). It lived in the kernel chat's face code; this is its new home. */
+void jt_facehost_cmdline(const char *cl) {
+    for (const char *p = cl; p && *p; p++) {
+        if (p[0]=='f' && p[1]=='a' && p[2]=='c' && p[3]=='e' && p[4]=='h' && p[5]=='o' && p[6]=='s' && p[7]=='t' && p[8]=='=') {
+            p += 9; int n = 0;
+            while (*p && *p != ' ' && *p != ':' && n < HTTP_HOST_MAX - 1) http_host_buf[n++] = *p++;
+            if (n > 0) http_host_buf[n] = 0;
+            if (*p == ':') {
+                unsigned int pt = 0; p++;
+                while (*p >= '0' && *p <= '9') pt = pt * 10 + (unsigned int)(*p++ - '0');
+                if (pt && pt < 65536) http_port_val = (unsigned short)pt;
+            }
+            return;
+        }
+    }
+}
 #define HTTP_BIG_TICKS 300 /* 3s: one face frame */
 #define HTTP_REPLY_TICKS 150 /* 1500ms at 100Hz, the same budget kernel/curbfind.h used */
 static char http_bounce[JT_HTTP_BODY_MAX];
