@@ -1393,14 +1393,14 @@ if (typeof document !== "undefined") (function () {
   var MAIL_APP = { name: 'Mail', slot: 2, script: [
     { type: 'keys', text: 'c', speed: 200 },
     { type: 'wait', ms: 500 },
-    { type: 'keys', text: 'demo@joshuatree.os\n', speed: 55 },
+    { type: 'keys', text: 'demo@jt.os\n', speed: 130 },
     { type: 'wait', ms: 350 },
-    { type: 'keys', text: 'Joshua Tree\n', speed: 55 }, // From name
+    { type: 'keys', text: 'Joshua Tree\n', speed: 130 }, // From name
     { type: 'wait', ms: 350 },
-    { type: 'keys', text: 'A real OS, from scratch.\n', speed: 55 }, // Subject
+    { type: 'keys', text: 'From scratch.\n', speed: 130 }, // Subject
     { type: 'wait', ms: 350 },
-    { type: 'keys', text: 'Every field here really writes to disk.\n', speed: 55 }, // Body; Enter on the last field sends and files it (mail: filed n=)
-    { type: 'wait', ms: 1500 },
+    { type: 'keys', text: 'Written to disk.\n', speed: 130 }, // Body; Enter on the last field sends and files it (mail: filed n=)
+    { type: 'wait', ms: 2500 },
     { type: 'raw', codes: [27], speed: 80 } // Escape backs out of the inline compose sheet if it is still up; the scene's own Escape then closes Mail
   ] };
   var CALENDAR_APP = { name: 'Calendar', slot: 3, script: [
