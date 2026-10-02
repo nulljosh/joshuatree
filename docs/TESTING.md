@@ -136,6 +136,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Epiphany command bar: AAPL GP draws the chart, an unknown code errors cleanly | `tools/checks/epiphany-cmdbar-check.py` | retry |
 | Worker /api/proxy allowlist | `tools/checks/worker-proxy-check.mjs` | once |
 | Worker /api/waitlist store, validate, count | `tools/checks/waitlist-check.mjs` | once |
+| Mail Send: Worker /api/mail/send guards and Resend shape, kernel bearer wiring | `tools/checks/mailsend-check.py` | once |
 | Worker /api/proxy: a silent upstream cannot hang the guest (weather/chat freeze regression) | `tools/checks/weatherproxy-hang-check.mjs` | once |
 | Worker /api/listen: Whisper transcription, 503 without the AI binding, rejects oversize/empty, per-IP rate limit | `tools/checks/listen-worker-check.mjs` | once |
 | Every app opens and closes by keyboard alone | `tools/checks/keyboard-only-check.py` | retry |
