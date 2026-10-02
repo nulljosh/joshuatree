@@ -18,10 +18,11 @@ Same lines as the table in `docs/HARDWARE.md`. The ID is what each step points a
 
 | ID | Part | Qty | Where |
 |---|---|---|---|
-| P1 | Printed rings, quarters (`ring0` to `ring5`), spacer bosses already on them | 24 pieces | `stl/` |
-| P2 | Printed cap quarter, tree already engraved | 4 | `stl/` |
+| P1 | Printed ring pieces (`ring0_*` to `ring5_*`, four per ring, cut at a different spot on every ring), spacer bosses already on them | 24 pieces | `stl/` |
+| P2 | Printed cap: `cap_panel` (the whole tree, engraved) and four `cap_frame_*` pieces | 5 | `stl/` |
 | P3 | Printed tray, board standoffs already on the floor | 1 | `stl/` |
-| P4 | Printed rear plate | 1 | `stl/` |
+| P4 | Printed rear plate, with its outer face flush to the rings | 1 | `stl/` |
+| P5 | Foot, TPU or PLA, recessed under ring 0 | 4 | `stl/` |
 | B1 | ASRock J4125B-ITX board | 1 | listing, ~$120 |
 | B2 | 8GB DDR4 SO-DIMM | 1 | in the board |
 | B3 | 128GB SATA SSD | 1 | in the tray |
@@ -43,34 +44,34 @@ All parts print flat on the bed, in the orientation the STL is already in. No pa
 | P3 tray | 0.2 mm | 3 | 20% gyroid | none |
 | P4 rear plate | 0.2 mm | 3 | 100% | none |
 
-PLA is fine to start. PETG is better if the box will sit near a warm room. Print one tone per ring if you want the terracotta to cream fade: B9542C at the base, F0E7D8 at the top.
+PLA is fine to start. PETG is better if the box will sit near a warm room. Print each ring in its own colour. The hex per part is in `stl/manifest.json` and in the table in `BUILD.md`: ring 0 B9542C, ring 1 C26C49, ring 2 CB8565, ring 3 D49E82, ring 4 DEB69F, ring 5 E7CEBB, cap F0E7D8, tray, rear plate and feet 1E1C1A.
 
 ## Steps
 
 ![Step 1](assembly/step1-feet-and-rods.svg)
 
-**1. Ring 0 and rods.** Lay the four ring 0 pieces (P1, the widest, 200 mm) in a square on the table. Push a rod (B6) down through each corner hole until it is level with the underside. Tip the piece up, spin a nut (B7) onto the rod end, and lower it so the nut drops into the hex pocket. There are no feet any more, ring 0 is the base.
+**1. Ring 0 and rods.** Lay the four ring 0 pieces (P1, the widest, 200 mm) in a square on the table. Drop a nut (B7) into the hex pocket at each corner from below, then push a rod (B6) up through the hole into it. Press a foot (P5) into the round recess under each corner so it closes the pocket and covers the rod end. Nothing metal shows from underneath.
 
 ![Step 2](assembly/step2-tray.svg)
 
-**2. Tray.** Lower the tray (P3) into the middle of ring 0, between the four rods. It stands on the table. The four standoffs are already printed on its floor.
+**2. Tray.** Lower the tray (P3) into the middle of ring 0, between the four rods. The four standoffs are already printed on its floor. Its walls run up flush with the top of ring 5.
 
 ![Step 3](assembly/step3-rings.svg)
 
-**3. Rings.** Slide ring 1 over the rods. Its little 2 mm bosses rest on ring 0 and make the vent gap. Then ring 2, 3, 4, 5. No loose spacers. The rear pieces with the notch between them are for the I/O.
+**3. Rings.** Slide ring 1 over the rods. Its little 2 mm bosses rest on ring 0 and make the vent gap. Then ring 2, 3, 4, 5. No loose spacers. Every ring is cut at a different spot from its neighbours, so the seams stagger. The rear pieces with the notch between them are for the I/O.
 
 **4. Board.** Seat the board (B1, with B2 in it) on the printed standoffs and screw it down with the four M3x8 screws (B8). Clip the I/O shield (B9) onto the back of the board. Plug in the SATA cable (B10) and the SSD (B3).
 
 ![Step 4](assembly/step4-rear-plate.svg)
 
-**5. Rear plate.** Slide the plate (P4) in behind the board, between the tray's side walls, so the shield pokes through the window. It's a 0.2 mm slip fit. One drop of superglue on each side keeps it there. Plug the power supply (B4) into the board.
+**5. Rear plate.** Lower the plate (P4) from above into the notch at the back of the rings, behind the board, so the shield sits in the window. Its outer face ends flush with the rings. It's a 0.2 mm slip fit. One drop of superglue on each side keeps it there. Plug the power supply (B4) into the board.
 
 ![Step 5](assembly/step5-cap-and-nuts.svg)
 
-**6. Top nuts and cap.** Before the cap, drop a nut (B7) into each of the four hex pockets in the top of ring 5 and run it down until the stack is snug. Snug, not crushed. If a ring is rocking, one nut is loose. Then set the four cap pieces (P2) flat on ring 5 and put one drop of superglue under each corner. The cap covers every nut, so nothing shows on top.
+**6. Top nuts and cap.** Before the cap, drop a nut (B7) into each of the four hex pockets in the top of ring 5 and run it down until the stack is snug. Snug, not crushed. If a ring is rocking, one nut is loose. Then set the four frame pieces (P2) flat on ring 5 with one drop of superglue under each. Lay the cap panel (the tree) in the middle, resting on the tray walls. The frame hides every nut, and no seam crosses the tree.
 
 **7. First boot.** Plug a keyboard into the PS/2 port, a monitor into the board, and the USB stick (B5) into a rear USB port. Power on and tap F11 (or F2, then boot menu) for the board's boot menu. Pick the USB stick, the UEFI entry. You'll see the GRUB menu, then Joshua Tree. If the screen stays black, plug a USB serial adapter into the board's header and read the log. `docs/HARDWARE.md` Phase 0 has the whole drill.
 
 ## If something doesn't fit
 
-Cutting down: 35 prints and 58 loose pieces became 30 prints and 30 pieces, and 20 fasteners became 16. Parts have 0.2 mm of clearance on every mating face. If your printer runs tight, sand the edge, don't scale the part. If a ring hole won't clear the tray, you printed too hot. Fix the part in `strata_cad.py`, run it again, reprint. That loop is the whole point.
+Cutting down: 35 prints and 58 loose pieces became 35 printed pieces in 32 files, and 20 fasteners became 16. Parts have 0.2 mm of clearance on every mating face. If your printer runs tight, sand the edge, don't scale the part. If a ring hole won't clear the tray, you printed too hot. Fix the part in `strata_cad.py`, run it again, reprint. That loop is the whole point.

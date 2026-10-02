@@ -220,7 +220,7 @@ Everything is split to fit a 180 x 180 x 180 mm bed (Bambu A1 mini). All numbers
 | Rear plate | 173.6 x 49.8 x 2 mm with the 160 x 45 I/O window | Printed lying flat |
 | Hardware | 4 M3x50 rods, 8 M3 nuts, 4 M3x8 self-tapping screws (16 fasteners, was 20) | Off the shelf |
 
-30 printed pieces in 19 STL files, down from 35 prints and 58 loose pieces. Feet, the 24 loose spacers and the metal standoffs are gone; ring 0 is the base and the spacers and standoffs are printed into parts you already make. Picture version: `hardware/BUILD.md`.
+35 printed pieces in 32 STL files (24 ring pieces, 5 cap pieces, tray, rear plate, 4 feet), down from 58 loose pieces. The 24 loose spacers and the metal standoffs are gone; the spacers and standoffs are printed into parts you already make, and four recessed feet hide the bottom nuts. Picture version: `hardware/BUILD.md`.
 
 Full STL list with counts: `hardware/stl/manifest.json`. Print settings and steps: `hardware/ASSEMBLY.md`.
 
@@ -274,7 +274,7 @@ The existing dev kit BOM above is unchanged: its numbers still come from the lis
 ## Ordering from JLC3DP
 
 1. Go to jlc3dp.com, pick 3D Printing, upload the STLs from `hardware/stl/`. Upload each file once and set the quantity from `manifest.json` (the front quarters are 2, caps are 4).
-2. Material: PLA or PETG-like FDM if offered, otherwise the cheapest resin (Standard Resin, gray). Layer 0.1 to 0.2 mm. Color: whatever is gray.
+2. Material: PLA or PETG-like FDM if offered, otherwise the cheapest resin (Standard Resin, gray). Layer 0.1 to 0.2 mm. Color: one per ring, hex values in `hardware/BUILD.md` and `hardware/stl/manifest.json` (terracotta B9542C at the base to cream F0E7D8 at the cap, black for tray, rear plate and feet). A single grey order has the right shape and no fade.
 3. Quantity per file: from the manifest.
 4. Open the DFM preview. Check: every part lies flat as uploaded, no wall flagged under 1.6 mm, the quarters aren't merged into one body, the rear plate window and the nut pockets show as holes. If it flags the thin L-shaped rear quarters, ask for PETG or accept the risk, they are 32 mm wide and 2 mm thick at the narrowest, stiff once stacked.
 5. Look at the cart total. Write the real number into this page and into MONEY.md in place of the estimate. That one number decides the kit margin.
