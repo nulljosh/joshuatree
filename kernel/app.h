@@ -25,6 +25,8 @@
 #define KEY_END        306
 #define KEY_DELETE     307
 #define KEY_SAVE       308   /* Ctrl+S */
+#define KEY_F2         309   /* F2 make (push-to-talk down), ring-3 delivery paths only */
+#define KEY_F2_UP      310   /* F2 break (push-to-talk released) */
 
 /* One app, one entry. Every place the desktop used to switch on an app's
    index (launch, dock glyph, tile color, label, multiwindow content and

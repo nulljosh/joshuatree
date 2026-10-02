@@ -100,6 +100,8 @@ struct jt_sysinfo {
 #define JT_KEY_END   306
 #define JT_KEY_DELETE 307
 #define JT_KEY_SAVE  308 /* Ctrl+S */
+#define JT_KEY_F2    309 /* F2 pressed: push-to-talk down */
+#define JT_KEY_F2_UP 310 /* F2 released */
 struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
 struct jt_event { unsigned int kind; int a, b; };
 struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };

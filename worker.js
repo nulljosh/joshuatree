@@ -456,6 +456,20 @@ function wrapPcmAsWav(bytes, sampleRate, bitsPerSample, channels) {
 
 const JSON_CORS = { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "no-store" };
 
+// Ring-3 Samantha speaks through SYS_HTTP_GET (up to 64 KB back, host fixed
+// to this one): GET /api/speak?t=<one sentence> forwards to Turing's POST
+// /api/speak and returns the raw 8-bit 16 kHz PCM untouched.
+async function handleSpeakGet(url) {
+  const text = (url.searchParams.get("t") || "").slice(0, 300);
+  if (!text) return new Response("missing t", { status: 400 });
+  const up = await fetch("https://turing.heyitsmejosh.com/api/speak", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, format: "pcm8" }),
+  });
+  return new Response(up.body, { status: up.status, headers: { "Content-Type": "application/octet-stream", "Access-Control-Allow-Origin": "*" } });
+}
+
 async function handleListen(request, env) {
   if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
   if (!env.AI) return new Response(JSON.stringify({ error: "speech recognition is not configured" }), { status: 503, headers: JSON_CORS });
@@ -496,6 +510,7 @@ export default {
     if (url.pathname === "/api/quotes") return handleQuotes();
     if (url.pathname === "/api/deals") return handleDeals(request);
     if (url.pathname === "/api/listen") return handleListen(request, env);
+    if (url.pathname === "/api/speak" && request.method === "GET") return handleSpeakGet(url);
     if (url.pathname === "/api/proxy") {
       return handleProxy(request, env);
     }

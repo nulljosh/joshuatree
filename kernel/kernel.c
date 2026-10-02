@@ -5518,7 +5518,9 @@ static int gui_multiwin_key_nonblock(void){
         if (sc2 == 0x53) return KEY_DELETE;
         return -1;
     }
+    if (sc == 0xBC) return KEY_F2_UP;
     if (sc & 0x80) return -1; /* key release */
+    if (sc == 0x3C) return KEY_F2;
     if (kbd_ctrl && (sc & 0x7F) == 0x1F) return KEY_SAVE;
     char c = kbd_map(sc);
     if (c == '\n') return KEY_ENTER;

@@ -449,8 +449,10 @@ int gui_poll_event(int *a, int *b){
             if (sc == 0x53) { *a = KEY_DELETE; return 1; }
             return 0;
         }
+        if (sc == 0xBC) { *a = KEY_F2_UP; return 1; }
         if (sc & 0x80) return 0;
         gui_close_was_click = 0;
+        if (sc == 0x3C) { *a = KEY_F2; return 1; }
         if (kbd_ctrl) {
             int code = sc & 0x7F;
             if (code == 0x2E) { *a = KEY_COPY; return 1; }

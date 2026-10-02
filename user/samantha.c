@@ -155,10 +155,17 @@ static void push(int mine, const char *s) {
 
 static unsigned now_ticks(void) { struct jt_tasks t; jt_tasks(&t, 0); return t.ticks; }
 
-/* AUDIO SYNC hook (slice 6): true while her mouth should move. Today a shown
-   reply talks for a time proportional to its length; slice 6 replaces the
-   body with jt_audio_status() so the mouth follows the real playback. */
-static int face_talking(unsigned now) { return (int)(talk_until - now) > 0; }
+/* AUDIO SYNC hook (slice 6): true while her mouth should move. While a spoken
+   reply is on the card, the mouth follows jt_audio_status (played samples);
+   with no sound card (or no speech) a shown reply talks for a time
+   proportional to its length, like before. */
+static int spk_active JT_DATA = 0;           /* a reply is being fetched or played */
+static int spk_card JT_DATA = 1;             /* 0 once the card said -ENODEV */
+static unsigned spk_played JT_DATA = 0, spk_rate JT_DATA = 16000;
+static int face_talking(unsigned now) {
+    if (spk_active) return 1;
+    return (int)(talk_until - now) > 0;
+}
 
 /* Draw one frame into the face band, centered under the title. */
 static void face_blit(const unsigned short *f) {
@@ -254,8 +261,14 @@ static int face_step(unsigned now) {
     if ((int)(now - face_next) < 0) return 0;
     face_next = now + FACE_STEP;
     if (face_talking(now) && uface_talk_n) {
-        int a = (face_talk_at + 1) % uface_talk_n, b = (face_talk_at + 2) % uface_talk_n;
-        face_talk_at = (uface_open[b] > uface_open[a] && (now / FACE_STEP) % 2) ? b : a;
+        if (spk_active && spk_card) {
+            /* mouth time in ms = played * 1000 / rate; one cached frame per FACE_STEP*10 ms */
+            unsigned ms = (spk_played / (spk_rate >= 1000 ? spk_rate / 1000 : 16u)); /* samples per ms */
+            face_talk_at = (int)((ms / (FACE_STEP * 10u)) % (unsigned)uface_talk_n);
+        } else {
+            int a = (face_talk_at + 1) % uface_talk_n, b = (face_talk_at + 2) % uface_talk_n;
+            face_talk_at = (uface_open[b] > uface_open[a] && (now / FACE_STEP) % 2) ? b : a;
+        }
         face_blit(face_frame(1, face_talk_at));
     } else {
         face_at = (face_at + 1) % uface_idle_n;
@@ -781,6 +794,180 @@ static int keyword_fallback(const char *msg, char *tool, int toolsz) {
     return 1;
 }
 
+
+/* ---- AUDIO SLICES 6 and 7: speak her reply, hold F2 to talk ---- */
+
+#define JT_HTTP_PATH_MAX 128
+#define SPK_PCM 65536u        /* one /api/speak clip: SYS_HTTP_GET's 64 KB cap, 4 s at 16 kHz */
+#define SPK_TEXT 640
+#define SPK_RATE 16000u
+#define REC_MAX 6144u         /* SYS_HTTP_POST's body cap (JT_HTTP_POST_BODY_MAX): ~0.38 s at 16 kHz */
+static unsigned char *spk_pcm JT_DATA = 0;
+static unsigned spk_len JT_DATA = 0, spk_off JT_DATA = 0;
+static char *spk_text JT_DATA = 0;
+static int spk_pos JT_DATA = 0;
+static unsigned char *rec_buf JT_DATA = 0;
+static unsigned rec_n JT_DATA = 0;
+static int rec_on JT_DATA = 0;
+static unsigned rec_peak JT_DATA = 0;
+
+static void put_num(char *o, int *n, int v) {
+    char d[12]; int k = 0;
+    if (v < 0) { o[(*n)++] = '-'; v = -v; }
+    if (!v) d[k++] = '0';
+    while (v) { d[k++] = (char)('0' + v % 10); v /= 10; }
+    while (k) o[(*n)++] = d[--k];
+}
+
+/* chat.h's speak_text prints "speak: status=N bytes=M"; the facespeak and speaks checks read it. */
+static void speak_line(int status, int bytes) {
+    char b[48]; int n = 0;
+    const char *h = "speak: status="; while (*h) b[n++] = *h++;
+    put_num(b, &n, status);
+    h = " bytes="; while (*h) b[n++] = *h++;
+    put_num(b, &n, bytes > 0 ? bytes : 0);
+    b[n++] = '\n';
+    jt_write(1, b, (unsigned)n);
+}
+
+static void speak_stop(void) {
+    if (spk_active) jt_audio_stop();
+    spk_active = 0; spk_len = spk_off = 0; spk_pos = 0;
+    if (spk_text) spk_text[0] = 0;
+}
+
+static void speak_begin(const char *reply) {
+    if (!spk_card || !reply || !reply[0]) return;
+    if (!spk_pcm) spk_pcm = (unsigned char *)malloc(SPK_PCM);
+    if (!spk_text) spk_text = (char *)malloc(SPK_TEXT);
+    if (!spk_pcm || !spk_text) return;
+    scopy(spk_text, reply, SPK_TEXT);
+    spk_pos = 0; spk_len = spk_off = 0; spk_played = 0;
+    spk_active = 1;
+}
+
+/* Next /api/speak?t=<percent-encoded sentence piece>: the whole path is capped at 128 bytes, so a
+   piece is at most ~100 encoded bytes, cut at the last sentence end or space that fits. */
+static int speak_fetch(void) {
+    static const char hex[] = "0123456789ABCDEF";
+    char path[JT_HTTP_PATH_MAX + 1];
+    int n = 0;
+    const char *h = "/api/speak?t="; while (*h) path[n++] = *h++;
+    while (spk_text[spk_pos] == ' ') spk_pos++;
+    if (!spk_text[spk_pos]) return 0;
+    int start = spk_pos, enc = n, i = start, cut = -1, cutenc = n;
+    while (spk_text[i]) {
+        unsigned char c = (unsigned char)spk_text[i];
+        int plain = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == ',';
+        int w = plain ? 1 : 3;
+        if (enc + w > JT_HTTP_PATH_MAX - 1) break;
+        if (plain) path[enc++] = (char)c;
+        else if (c == ' ') { path[enc++] = '%'; path[enc++] = '2'; path[enc++] = '0'; }
+        else if (c < 32 || c >= 127) { path[enc++] = '%'; path[enc++] = '2'; path[enc++] = '0'; } /* control and high bytes become a space */
+        else { path[enc++] = '%'; path[enc++] = hex[c >> 4]; path[enc++] = hex[c & 15]; }
+        i++;
+        if (c == '.' || c == '!' || c == '?') { cut = i; cutenc = enc; }
+    }
+    if (spk_text[i]) { /* the piece didn't reach the end of the text: back up to a sentence end, else the last space */
+        if (cut < 0) { int j = i; while (j > start && spk_text[j - 1] != ' ') j--; if (j > start) { cut = j; cutenc = -1; } }
+        if (cut >= 0) {
+            if (cutenc >= 0) enc = cutenc;
+            else { /* re-encode up to cut */
+                enc = n;
+                for (int q = start; q < cut; q++) {
+                    unsigned char c = (unsigned char)spk_text[q];
+                    int plain = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == ',';
+                    if (plain) path[enc++] = (char)c;
+                    else if (c < 32 || c >= 127 || c == ' ') { path[enc++] = '%'; path[enc++] = '2'; path[enc++] = '0'; }
+                    else { path[enc++] = '%'; path[enc++] = hex[c >> 4]; path[enc++] = hex[c & 15]; }
+                }
+            }
+            i = cut;
+        }
+    }
+    path[enc] = 0;
+    spk_pos = i;
+    int got = jt_http_get(path, spk_pcm, SPK_PCM);
+    speak_line(got >= 0 ? 200 : (got <= -100 ? -got : 0), got);
+    if (got >= 64) { spk_len = (unsigned)got; spk_off = 0; return 1; }
+    return 0; /* a 404 page or an error body is not sound: skip this piece */
+}
+
+/* Called every pass of the poll loop: never blocks on the card, retries when the ring is full.
+   Returns 1 when it changed what the face should show. */
+static int speak_tick(void) {
+    if (!spk_active) return 0;
+    struct jt_audio_status st;
+    if (jt_audio_status(&st) >= 0) { spk_played = st.played; if (st.rate) spk_rate = st.rate; }
+    if (spk_off < spk_len) {
+        unsigned left = spk_len - spk_off, n = left > JT_AUDIO_CHUNK_MAX ? JT_AUDIO_CHUNK_MAX : left;
+        int r = jt_audio_play(spk_pcm + spk_off, n, SPK_RATE, n == left ? JT_AUDIO_END : 0);
+        if (r == 0) return 0; /* ring full: retry next pass */
+        if (r < 0) { if (r == -19) spk_card = 0; speak_stop(); return 1; } /* -ENODEV: honest silence, the timer talks */
+        spk_off += (unsigned)r;
+        return 1;
+    }
+    if (st.playing || st.queued) return 0; /* the last clip is still sounding */
+    if (spk_text[spk_pos] && speak_fetch()) return 1;
+    if (!spk_text[spk_pos] && spk_off >= spk_len) { spk_active = 0; spk_len = spk_off = 0; return 1; }
+    return 1;
+}
+
+static void listen_stop_and_send(void);
+static void send(void);
+
+static void listen_start(void) {
+    if (rec_on) return; /* key auto-repeat */
+    if (!rec_buf) rec_buf = (unsigned char *)malloc(REC_MAX);
+    if (!rec_buf) { status = "out of memory"; return; }
+    speak_stop();
+    int r = jt_rec_start(16000);
+    if (r < 0) { status = r == -19 ? "no sound card" : "mic busy, try again"; return; }
+    rec_on = 1; rec_n = 0; rec_peak = 0;
+    status = "listening ... (release F2 to send)";
+}
+
+static void listen_tick(void) {
+    if (!rec_on) return;
+    for (;;) {
+        if (rec_n >= REC_MAX) break;
+        unsigned want = REC_MAX - rec_n; if (want > JT_REC_CHUNK_MAX) want = JT_REC_CHUNK_MAX;
+        int got = jt_rec_read(rec_buf + rec_n, want);
+        if (got <= 0) break;
+        for (int i = 0; i < got; i++) {
+            int d = (int)rec_buf[rec_n + (unsigned)i] - 128; if (d < 0) d = -d;
+            if ((unsigned)d > rec_peak) rec_peak = (unsigned)d;
+        }
+        rec_n += (unsigned)got;
+    }
+    if (rec_n >= REC_MAX) listen_stop_and_send(); /* the clip cap reached: send what fits */
+}
+
+static void listen_stop_and_send(void) {
+    if (!rec_on) return;
+    for (int tries = 0; tries < 4 && rec_n < REC_MAX; tries++) { /* bank whatever was still landing */
+        unsigned want = REC_MAX - rec_n; if (want > JT_REC_CHUNK_MAX) want = JT_REC_CHUNK_MAX;
+        int got = jt_rec_read(rec_buf + rec_n, want);
+        if (got <= 0) break;
+        rec_n += (unsigned)got;
+    }
+    jt_rec_stop();
+    rec_on = 0;
+    if (!rec_n) { status = "heard nothing"; serial("listen: ", "nothing recorded"); return; } /* QEMU's SB16 records nothing: the honest path */
+    status = "listening to you ...";
+    draw();
+    struct jt_event dummy; jt_window_poll(&dummy, JT_POLL_PRESENT);
+    struct jt_http_post a = { "/api/listen", (const char *)rec_buf, rec_n, ar->resp, RESP - 1, 3000 };
+    int r = jt_http_post(&a);
+    if (r <= 0) { status = "couldn't hear that"; serial("listen: ", "post failed"); return; }
+    ar->resp[r] = 0;
+    char text[INMAX + 1];
+    if (!extract(ar->resp, "text", text, sizeof text) || !text[0]) { status = "didn't catch that"; return; }
+    serial("listen: ", text);
+    scopy(ar->in, text, INMAX + 1); inlen = slen(ar->in);
+    send();
+}
+
 static void send(void) {
     char msg[INMAX + 1], tool[24], arg[128];
     for (int i = 0; i <= inlen; i++) msg[i] = ar->in[i];
@@ -796,6 +983,7 @@ static void send(void) {
         push(0, ar->reply);
         talk_until = now_ticks() + 100u * 2u + 6u * (unsigned)slen(ar->reply);
         status = "ready";
+        speak_begin(ar->reply);
         return;
     }
     status = "generating ...";
@@ -804,6 +992,7 @@ static void send(void) {
     if (chat()) {
         status = "ready";
         talk_until = now_ticks() + 100u * 2u + 6u * (unsigned)slen(ar->t[nturn - 1].text);
+        speak_begin(ar->t[nturn - 1].text);
     }
 }
 
@@ -826,7 +1015,10 @@ void _start(int argc, char **argv) {
         flags = 0;
         if (r == -11) {
             /* idle: step the face on its tick, otherwise just yield (no spin on redraws) */
+            listen_tick();
+            if (speak_tick()) flags = JT_POLL_PRESENT;
             if (face_step(now_ticks())) flags = JT_POLL_PRESENT;
+            if (rec_on) flags = JT_POLL_PRESENT;
             jt_sched_yield(); continue;
         }
         if (r != 1) break;
@@ -834,7 +1026,10 @@ void _start(int argc, char **argv) {
             int k = ev.a;
             if (k == '`') { jt_write(1, "samantha: crashing on purpose\n", 30); *(volatile int *)0 = 1; }
             if (k == JT_KEY_ESC) break;
-            else if (k == JT_KEY_ENTER) send();
+            else if (k == JT_KEY_F2) listen_start();
+            else if (k == JT_KEY_F2_UP) listen_stop_and_send();
+            else if (spk_active && k != JT_KEY_ENTER) speak_stop(); /* typing skips the rest of her reply */
+            else if (k == JT_KEY_ENTER) { speak_stop(); send(); }
             else if (k == 8) { if (inlen > 0) ar->in[--inlen] = 0; }
             else if (k >= 32 && k < 127 && inlen < INMAX) { ar->in[inlen++] = (char)k; ar->in[inlen] = 0; }
         } else { flags = JT_POLL_PRESENT; continue; } /* clicks and wheel never close and change nothing */
