@@ -22,6 +22,7 @@
    temporary map carries the same count. */
 #include "paging.h"
 #include "pmm.h"
+#include "serial.h"
 
 typedef unsigned int u32;
 
@@ -82,6 +83,53 @@ static signed char pde_to_extra_table[1024 - BASE_MAP_TABLES];
    a framebuffer couldn't reclaim its table slot unless it was the last one.
    v78+ (0.67.3): uses unsigned char instead of int, saving 48 bytes of BSS. */
 static unsigned char extra_table_free[MAX_EXTRA_TABLES];
+
+/* 1.9.24: every ring-3 task directory is a by-value copy of page_directory
+   taken at task_create, so a kernel PDE that appears later (kheap growing
+   through paging_map_region into a 4 MB region that had no table when the
+   task was born) was missing from that copy, and the first syscall or IRQ
+   running on the task's CR3 that touched the new memory page-faulted
+   (Mail's close inside r3win_release was the symptom). Preallocating every
+   identity table is not the right trade here: the identity map covers
+   physical frames on demand, the framebuffer sits at 0xFD000000, and a
+   full table set would be 4 MB of BSS. Instead the shared directory is
+   the single source of truth and every change to a kernel PDE is written
+   through to every live task directory on the spot, skipping the two
+   slots a task owns privately (PAGING_PRIVATE_PDE and the user window
+   table at KERNEL_PDE_INDEX + 1). Zero extra memory, one 6-slot loop per
+   table change, and table changes are rare (once per 4 MB of growth). */
+#include "task.h"
+static int paging_pde_is_private(u32 pde) { return pde == PAGING_PRIVATE_PDE || pde == KERNEL_PDE_INDEX + 1; }
+static unsigned int pde_changes; /* 1.9.24: bumps on every kernel PDE create or remove, read by stress=pde */
+unsigned int paging_pde_change_count(void) { return pde_changes; }
+static void paging_sync_task_dirs(u32 pde) {
+    pde_changes++;
+    if (paging_pde_is_private(pde)) return;
+    u32 me = phys(page_directory);
+    for (int id = 0; id < TASK_SLOTS; id++) {
+        u32 d = task_page_dir(id);
+        if (!d || d == me) continue;
+        ((u32 *)d)[pde] = page_directory[pde];
+    }
+}
+/* 1.9.24: the freeze check. After paging_install the kernel half of every
+   live task directory must equal the shared directory entry for entry;
+   logs one BUG line per drift and returns how many it found. Runs after
+   every sync and from the stress=pde hook. */
+int paging_check_task_dirs(void) {
+    int bad = 0;
+    u32 me = phys(page_directory);
+    for (int id = 0; id < TASK_SLOTS; id++) {
+        u32 d = task_page_dir(id);
+        if (!d || d == me) continue;
+        const u32 *dir = (const u32 *)d;
+        for (u32 pde = 0; pde < 1024; pde++) {
+            if (paging_pde_is_private(pde)) continue;
+            if (dir[pde] != page_directory[pde]) { bad++; serial_puts("BUG: paging: task directory drifted from the kernel PDEs\n"); break; }
+        }
+    }
+    return bad;
+}
 
 void paging_install(void) {
     for (int t = 0; t < BASE_MAP_TABLES; t++)
@@ -150,6 +198,7 @@ int paging_map_region(u32 phys_addr, u32 length) {
             table[i] = (base + i * 0x1000) | 0x3;
         }
         page_directory[pde] = phys(table) | 0x3;
+        paging_sync_task_dirs(pde); /* 1.9.24: write the new kernel PDE through to every live task directory */
 
         /* Track which table this PDE is using, for unmapping later */
         if (pde >= BASE_MAP_TABLES) pde_to_extra_table[pde - BASE_MAP_TABLES] = table_idx;
@@ -178,6 +227,7 @@ void paging_unmap_region(u32 phys_addr, u32 length) {
             int table_idx = pde_to_extra_table[pde - BASE_MAP_TABLES];
             if (table_idx >= 0) {
                 page_directory[pde] = 0x00000002; /* not present, read/write, supervisor */
+                paging_sync_task_dirs(pde); /* 1.9.24: and the removal too, a stale present entry would point at a reused table */
                 pde_to_extra_table[pde - BASE_MAP_TABLES] = -1;
 
                 /* Mark the table slot as free for reuse by paging_map_region.

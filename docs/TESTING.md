@@ -107,6 +107,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Multi-window (click-to-focus, real z-order compositing) | `tools/checks/multiwindow-check.py` | retry |
 | Ring-3 window: Reminders beside Notes, keys to the focused window only, a crash closes only its window | `tools/checks/ring3window-check.py` | retry |
 | Ring-3 stress: window task and desktop hammer heap and FAT at once, heap walk ok, file at root, desktop alive | `tools/checks/ring3stress-check.py` | retry |
+| Ring-3 PDE sync: kernel page table born after the window task is visible on its CR3, close clean, desktop alive | `tools/checks/pdesync-check.py` | retry |
 | Window snapping (title-bar drag to edge/corner, real pixel proof) | `tools/checks/windowsnap-check.py` | retry |
 | Windows drag live by their title bar (single-window Notes and multi-window Files) | `tools/checks/windowdrag-check.py` | retry |
 | Windowed apps start under the title bar, Calendar fits six weeks | `tools/checks/apptop-check.py` | retry |

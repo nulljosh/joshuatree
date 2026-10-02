@@ -80,6 +80,8 @@ unsigned int paging_new_task_directory(void);
 void paging_free_task_directory(unsigned int dir_phys);
 
 void paging_load_directory(unsigned int dir_phys); /* loads CR3 */
+unsigned int paging_pde_change_count(void); /* 1.9.24: how many kernel PDEs were created or removed since boot */
+int paging_check_task_dirs(void); /* 1.9.24: kernel PDEs of every live task directory equal the shared ones; logs BUG, returns drift count */
 unsigned int paging_kernel_directory(void); /* the shared kernel directory's own physical address, what task 0 runs on */
 #endif
 
