@@ -40,6 +40,12 @@ const dir=mkdtempSync(tmpdir()+'/jt-stocks-');
 try {
 writeFileSync(dir+'/test.c',`#include <assert.h>
 #include <string.h>
+#include <stdlib.h>
+static void *kmalloc(unsigned n){return malloc(n);}
+static void kfree(void *p){free(p);}
+static unsigned jt_data_stamp;
+static int vfs_replace_file(const char *n,const char *b,unsigned len){(void)n;(void)b;(void)len;return 0;}
+char *wx_put_int(char *o,int v){char t[12];int k=0;unsigned u=v<0?-(unsigned)v:(unsigned)v;if(v<0)*o++='-';do{t[k++]='0'+u%10;u/=10;}while(u);while(k)*o++=t[--k];return o;}
 static const char *reply; static int status=200, online=1;
 static int net_init(unsigned ip){assert(ip==0x0A00020F);return online;}
 static unsigned int ticks(void){return 7000;}
@@ -66,5 +72,7 @@ int main(void){
 execFileSync('clang',['-fsanitize=address,undefined',dir+'/test.c','-o',dir+'/test']);
 execFileSync(dir+'/test');
 } finally {rmSync(dir,{recursive:true,force:true});}
-assert.match(readFileSync(new URL('../../kernel/stocks.h',import.meta.url),'utf8'),/get_key_or_click_until\(stx_refresh_tick \+ 6000\)/);
+// Refresh is on demand now (the ring-3 Stocks program asks, the desktop loop refetches); the old 6000-tick kernel loop is gone with the in-kernel window.
+assert.match(readFileSync(new URL('../../user/stocks.c',import.meta.url),'utf8'),/jt_refresh\(JT_REFRESH_STOCKS, range \| sel << 8\)/);
+assert.match(readFileSync(new URL('../../kernel/kernel.c',import.meta.url),'utf8'),/rk == JT_REFRESH_STOCKS\) \{[^}]*stocks_fetch\(stx_range_hint\)/);
 console.log('PASS: real Worker routes, quotes/history, partial failures, strict kernel parser, stale retention and refresh');

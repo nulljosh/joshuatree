@@ -7,8 +7,9 @@ What this proves, from the real sources (no QEMU, so it is fast):
      Launchpad and Spotlight all read that one field. The menu-bar list
      says Burrow too, and the ring-3 program's own title (user/burrow.c)
      and RING3_APPS row (kernel/ring3app.c) carry the name.
-  2. Samantha's open_app matcher (chat_match_app in kernel/chat.h, compiled
-     here for the host against the real APPS names) opens index 0 for
+  2. Samantha's open_app matcher (match_app in user/samantha.c, compiled
+     here for the host, its APPNAME table checked against the real APPS
+     names) opens index 0 for
      "burrow", "files" and "file browser" (plus the "the ... app" forms),
      keeps every other app matching, and still refuses a name it does not
      know.
@@ -50,33 +51,31 @@ check(re.search(r'\{"Burrow",\s*user_burrow,\s*USER_BURROW_LEN,\s*"BURROW\.BIN"\
 check(not os.path.exists(os.path.join(ROOT, "kernel/files.h")), "the in-kernel kernel/files.h is gone")
 check("burrow: ring-3 window" in read("user/burrow.c"), "user/burrow.c identifies itself as burrow")
 
-# --- chat_match_app on the host, against the real APPS names -------------
-chat = read("kernel/chat.h")
-a = chat.index("static int chat_word_prefix_ci")
-b = chat.index("/* Samantha's new_reminder and list_reminders tools.")
-folder = int(re.search(r"#define GUI_APPS_FOLDER\s+(\d+)", kernel + read("kernel/app.h")).group(1)) \
-    if re.search(r"#define GUI_APPS_FOLDER\s+(\d+)", kernel + read("kernel/app.h")) else len(names) - 2
+# --- match_app on the host, from user/samantha.c ---------------------------
+sam = read("user/samantha.c")
+a = sam.index("static const char *const APPNAME[]")
+b = sam.index("/* Returns 1 with ar->reply filled when the tool is handled here")
+sam_names = re.findall(r'"([^"]+)"', re.search(r"APPNAME\[\] = \{(.*?)\};", sam, re.S).group(1))
+check(sam_names == names[:len(sam_names)], "samantha.c APPNAME matches the APPS names in order")
 harness = r'''
 #include <stdio.h>
 #include <string.h>
-#define GUI_APPS_FOLDER %d
-struct app { const char *name; };
-static const struct app APPS[] = { %s };
+static int slen(const char *s) { int n = 0; while (s[n]) n++; return n; }
 %s
 int main(void) {
     char line[128];
     while (fgets(line, sizeof line, stdin)) {
         line[strcspn(line, "\n")] = 0;
-        printf("%%d\n", chat_match_app(line));
+        printf("%%d\n", match_app(line));
     }
     return 0;
 }
-''' % (folder, ",".join('{"%s"}' % n for n in names), chat[a:b])
+''' % sam[a:b]
 with tempfile.TemporaryDirectory() as d:
     src = os.path.join(d, "h.c"); exe = os.path.join(d, "h")
     open(src, "w").write(harness)
     r = subprocess.run(["clang", "-w", "-o", exe, src], capture_output=True, text=True)
-    check(r.returncode == 0, "chat_match_app host harness compiles" + (": " + r.stderr[:300] if r.returncode else ""))
+    check(r.returncode == 0, "match_app host harness compiles" + (": " + r.stderr[:300] if r.returncode else ""))
     if r.returncode == 0:
         cases = [("burrow", 0), ("Burrow", 0), ("the burrow app", 0), ("open burrow", 0),
                  ("files", 0), ("Files", 0), ("the files app", 0),
