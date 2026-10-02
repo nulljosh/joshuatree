@@ -1,24 +1,23 @@
 #!/bin/bash
 # v0.76.10: direct report + a real screen recording, "[Notes] redraws the
-# entire screen on every keystroke." Confirmed real by code reading:
-# editor_draw() used to window_clear() the whole window and repaint the
-# titlebar/toolbar on every single character typed, even though that
-# chrome only actually changes on a toolbar click or the dirty-flag's one
-# 0->1 flip. Fixed by splitting chrome (titlebar+toolbar) from the text
-# region, redrawing chrome only when its own tracked state changes.
+# entire screen on every keystroke." Notes is a ring-3 window now (user/notes.c),
+# and its editor splits chrome (title, footer hint, on-screen keyboard) from the
+# text area: ed_draw() clears and repaints only the text area on a plain key, and
+# ed_chrome() does the full clear plus chrome, writing the "editorchrome" marker
+# (one ring-3 write, so the serial line ends in "editorchrome\n") once per real
+# chrome paint. The chrome is painted on open, after a resize, and when what it
+# says changes.
 #
-# This proves the fix holds for real: opens Notes, types 8 plain
+# This proves it holds for real: boots with `open=notes`, presses n for a fresh
+# note, and demands the chrome-paint count is exactly 1 after the editor opens;
+# types 20 plain characters (no toolbar-like key) and demands it settles at
+# exactly 2 -- the one real, legitimate change on the very first keystroke (the
+# dirty flag flips the title to "Notes *"), then nothing across keystrokes 2-20.
+# Then Ctrl+S (a real chrome-relevant change: the footer says "Saved." and the
+# title drops its star) and demands the count becomes exactly 3, proving the
+# mechanism still repaints chrome when chrome-relevant state genuinely changes,
+# not just "never repaints again."
 source "$(dirname "$0")/freeport.sh"
-# characters (no toolbar interaction), and demands the chrome redraw
-# marker ("editorchrome", serial_puts'd once per real editor_draw_chrome()
-# call) settles at exactly 2 -- one for the initial open, one more for
-# the dirty flag's own real, one-time 0->1 flip on the very first
-# keystroke (the title genuinely changes to "Notes *", a legitimate
-# chrome change, not a bug), then nothing further across keystrokes 2-8.
-# Then presses F1 (a real toolbar-relevant change, font family cycles)
-# and demands the count becomes exactly 3, proving the mechanism still
-# correctly redraws chrome when chrome-relevant state genuinely changes,
-# not just "never redraws again."
 set -e
 cd "$(dirname "$0")/../.."
 make -s kernel.elf
@@ -26,7 +25,7 @@ make -s kernel.elf
 PORT=$(free_port)
 LOG=$(mktemp /tmp/jt-editorflash-XXXX.log)
 
-qemu-system-i386 -kernel kernel.elf -display none -vga std \
+qemu-system-i386 -kernel kernel.elf -display none -vga std -append "open=notes" \
     -qmp "tcp:127.0.0.1:$PORT,server,nowait" -serial "file:$LOG" &
 QEMU_PID=$!
 trap 'kill "$QEMU_PID" 2>/dev/null || true; rm -f "$LOG"' EXIT
@@ -62,53 +61,57 @@ f.readline()
 cmd({"execute": "qmp_capabilities"})
 time.sleep(5.0)
 
-LOGICAL_W, LOGICAL_H = 960, 540
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
-PITCH = DOCK_ICON + DOCK_GAP
-ICON_ROW_Y = 487
-NOTES_SLOT = 4
-
-def move(x, y):
-    cmd({"execute": "input-send-event", "arguments": {"events": [
-        {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
-        {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
-def click():
-    cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
-    time.sleep(0.1)
-    cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
-def key(qcode):
-    cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": qcode}]}})
+def key(*qcodes):
+    cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": q} for q in qcodes], "hold-time": 30}})
     time.sleep(0.1)
 
-centre = SLOT0_X + NOTES_SLOT * PITCH + DOCK_ICON // 2
-move(centre, ICON_ROW_Y); time.sleep(0.3)
-click(); time.sleep(1.2)
+def serial():
+    try:
+        with open(log_path) as f:
+            return f.read()
+    except FileNotFoundError:
+        return ""
+
+def wait_for(needle, secs):
+    for _ in range(int(secs * 10)):
+        if needle in serial(): return True
+        time.sleep(0.1)
+    return False
+
+# `open=notes` opens the ring-3 Notes window the moment the desktop is up.
+if not wait_for("notes: ring-3 window", 60):
+    print("FAIL: Notes never opened (no 'notes: ring-3 window' on serial)"); cmd({"execute": "quit"}); sys.exit(0)
+time.sleep(1.5)
+key("n")   # a fresh empty note, opened in the editor
+if not wait_for("notes: edit=", 10):
+    print("FAIL: n did not open a note in the editor"); cmd({"execute": "quit"}); sys.exit(0)
+time.sleep(1.0)
 
 after_open = chrome_count()
 
-for c in "abcdefgh":
+for c in "abcdefghijklmnopqrst":
     key(c)
-time.sleep(0.3)
+time.sleep(0.5)
 after_typing = chrome_count()
 
-key("f1")
-# Wait for F1's redraw to land instead of reading after a fixed 0.3 s:
+key("ctrl", "s")
+# Wait for the save's redraw to land instead of reading after a fixed 0.3 s:
 # on a slow CI runner the read beat the redraw and saw 2.
 for _ in range(50):
     time.sleep(0.1)
-    after_f1 = chrome_count()
-    if after_f1 != after_typing: break
+    after_save = chrome_count()
+    if after_save != after_typing: break
 
 cmd({"execute": "quit"})
 
-print("after_open=%d after_typing=%d after_f1=%d" % (after_open, after_typing, after_f1))
+print("after_open=%d after_typing=%d after_save=%d" % (after_open, after_typing, after_save))
 if after_open != 1:
     print("FAIL: expected exactly 1 chrome redraw right after opening Notes, got %d" % after_open); sys.exit(0)
 if after_typing != 2:
-    print("FAIL: expected chrome redraw count to settle at 2 (open + the one real dirty-flag flip) after 8 plain keystrokes, got %d" % after_typing); sys.exit(0)
-if after_f1 != 3:
-    print("FAIL: expected chrome redraw count to become 3 after F1 (a real toolbar change), got %d" % after_f1); sys.exit(0)
-print("PASS: chrome redrew on open and on the one real dirty-flag flip, stayed flat through the remaining plain keystrokes, and redrew again on a real toolbar change (F1)")
+    print("FAIL: expected chrome redraw count to settle at 2 (open + the one real dirty-flag flip) after 20 plain keystrokes, got %d" % after_typing); sys.exit(0)
+if after_save != 3:
+    print("FAIL: expected chrome redraw count to become 3 after Ctrl+S (a real footer and title change), got %d" % after_save); sys.exit(0)
+print("PASS: chrome redrew on open and on the one real dirty-flag flip, stayed flat through the remaining plain keystrokes, and redrew again on a real chrome change (Ctrl+S)")
 PYEOF
 )
 

@@ -23,6 +23,11 @@
  * (the kernel editor's own contract) into the system clipboard (SYS_CLIPBOARD); paste
  * inserts it. Esc saves (truncate-write, only if edited) and returns to browse.
  * Home, End and Delete work in the editor; Ctrl+S saves and stays in it.
+ * Selection: Shift+arrows extend an anchor-to-caret range (JT_KEY_SLEFT..SDOWN), Ctrl+A
+ * selects all (JT_KEY_SELALL), a 0xB4D5FE band is drawn behind the glyphs, copy and cut
+ * take the selection (the line when there is none), typing, Enter, paste, Backspace and
+ * Delete replace it, a plain arrow, Home, End or Esc clears it. Markers: edsel=<start>,<end>,
+ * edcopy=<n>, edcut=<n>.
  * Browse: f makes a folder (F0000001 style names, 8.3), d asks and a second
  * d deletes the selected note (any other key cancels). SYS_MKDIR and SYS_UNLINK do the work.
  * Serial markers: notes: folders=N notes=N, notes: new=FILE, notes: edit=FILE,
@@ -264,8 +269,29 @@ static void say_range(const char *tag, int a, int b) {
     jt_write(1, m, (unsigned)l);
 }
 
-static void ed_draw(void) {
+/* The editor's chrome is the title, the footer hint and the on-screen keyboard; the text area is
+   everything between. A plain key repaints the text area only. The chrome is painted (with a full
+   clear, and an "editorchrome" marker) when the editor opens, after a resize, and when what it says
+   changes: the dirty flag flipping the title, or a status note appearing or going. */
+static int chrome_stale JT_DATA = 1, ch_dirty JT_DATA = 0;
+static const char *ch_note JT_DATA = 0;
+
+static void ed_chrome(void) {
     rect(0, 0, (int)win.width, (int)win.height, BG);
+    text(edirty ? "Notes *" : "Notes", 20, 4, DIM);
+    if (phone) { jt_osk_draw(&win); if (!ar->osk_said) { ar->osk_said = 1; jt_write(1, "notes: osk shown\n", 17); } }
+    else text(note ? note : (edirty ? "Edited   |   Esc saves and goes back to Notes" : "Esc: back to Notes"),
+              20, (int)win.height - 28, DIM);
+    chrome_stale = 0; ch_dirty = edirty; ch_note = note;
+    jt_write(1, "editorchrome\n", 13);
+}
+
+static void ed_draw(void) {
+    if (chrome_stale || ch_dirty != edirty || ch_note != note) ed_chrome();
+    else {
+        int bottom = (int)win.height - 30 - (phone ? jt_osk_height() : 0);
+        rect(0, ED_TOP, (int)win.width, bottom - ED_TOP, BG);
+    }
     ed_layout();
     int vis = ed_visible(), cl = ar->ll[epos];
     if (cl < escroll) escroll = cl;
@@ -289,10 +315,6 @@ static void ed_draw(void) {
         jt_text_draw(&win, JT_FACE_BODY, ar->lx[i], ED_TOP + (l - escroll) * ED_LH + 6, INK, g);
     }
     rect(ar->lx[epos], ED_TOP + (cl - escroll) * ED_LH + 2, 2, 24, ED_CARET);
-    text(edirty ? "Notes *" : "Notes", 20, 4, DIM);
-    if (phone) { jt_osk_draw(&win); if (!ar->osk_said) { ar->osk_said = 1; jt_write(1, "notes: osk shown\n", 17); } return; }
-    text(note ? note : (edirty ? "Edited   |   Esc saves and goes back to Notes" : "Esc: back to Notes"),
-         20, (int)win.height - 28, DIM);
 }
 
 static void edit_open(const char *file) {
@@ -311,7 +333,7 @@ static void edit_open(const char *file) {
         jt_close(fd);
     }
     ar->ed[elen] = 0;
-    epos = elen; escroll = 0; edirty = 0; goalx = -1; esel = -1; editing = 1; note = 0;
+    epos = elen; escroll = 0; edirty = 0; goalx = -1; esel = -1; editing = 1; note = 0; chrome_stale = 1;
     say_s("notes: edit=", efile);
 }
 
@@ -556,7 +578,7 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
-        if (r == 1 && jt_window_resized(&ev, &win)) { draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
+        if (r == 1 && jt_window_resized(&ev, &win)) { if (editing) { chrome_stale = 1; ed_draw(); } else draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11) { jt_sched_yield(); continue; }
         if (r != 1) break;
@@ -601,7 +623,7 @@ void _start(int argc, char **argv) {
                 else if (k == JT_KEY_ENTER) open_note();
             }
         } else { flags = JT_POLL_PRESENT; continue; }
-        draw();
+        if (editing) ed_draw(); else draw();   /* Enter on a note opens the editor from this very key */
         flags = JT_POLL_PRESENT;
     }
     jt_write(1, "notes: closed\n", 14);
