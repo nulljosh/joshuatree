@@ -1,22 +1,35 @@
-# The Joshua tree mark: four kinked arms, shaggy tufts. Settlers named the tree for Joshua raising his hands to the sky. Run from the repo root.
-import math, sys
-ink="#161513"
-def build(arms, trunk, name, tuft_r=9.5):
-    o=['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">', f'<path d="{trunk}" fill="{ink}"/>']
-    for pts, w in arms:
-        d="M"+" L".join(f"{x} {y}" for x,y in pts)
-        o.append(f'<path d="{d}" fill="none" stroke="{ink}" stroke-width="{w}" stroke-linecap="round" stroke-linejoin="round"/>')
-    for pts, w in arms:
-        x,y=pts[-1]
-        # pom-pom: spikes all around, longest upward, short drooping skirt below (dead leaves)
-        for i in range(16):
-            a=math.radians(i*22.5-90); up=-math.sin(a)
-            r=tuft_r*(0.75+0.35*max(up,0)) if up>-0.3 else tuft_r*0.55
-            o.append(f'<path d="M{x} {y}L{x+r*math.cos(a):.2f} {y-r*up:.2f}" stroke="{ink}" stroke-width="2.3" stroke-linecap="round"/>')
-        o.append(f'<circle cx="{x}" cy="{y}" r="3.6" fill="{ink}"/>')
-    o.append('</svg>'); open(name,"w").write("".join(o))
-trunk="M44 96C45.5 84 46.5 72 47 62L54 62C54 72 54.5 84 56.5 96Z"
-# j1: three arms, angular kinks, left low, center high, right mid
-
-# j2: four arms, one forked, more shaggy classic silhouette
-build([([(50,68),(36,64),(30,52),(20,48)],6), ([(49,62),(44,48),(36,40),(34,26)],6), ([(51,60),(56,44),(62,34),(60,20)],6), ([(51,66),(66,62),(74,50),(84,46)],6)], trunk, "landing/logo.svg", 8.5)
+# The Joshua tree mark, 2.0 (second pass): one solid silhouette from a few primitives.
+# Four tapered arms (quadratic arcs, one weight narrowing into the trunk), a flared trunk,
+# a hub, and a crisp fan of nine tapered blades on a shared arc at each tip, hub circle included.
+# Settlers named the tree for Joshua raising his hands to the sky. Run from the repo root.
+import math
+ink = "#161513"
+def arm(p0, c, p1, w0, w1, n=24):
+    pts = [((1-t)**2*p0[0]+2*(1-t)*t*c[0]+t*t*p1[0], (1-t)**2*p0[1]+2*(1-t)*t*c[1]+t*t*p1[1]) for t in (i/n for i in range(n+1))]
+    l, r = [], []
+    for i, (x, y) in enumerate(pts):
+        a, b = pts[max(i-1, 0)], pts[min(i+1, n)]
+        dx, dy = b[0]-a[0], b[1]-a[1]; d = math.hypot(dx, dy)
+        h = (w0 + (w1-w0)*i/n) / 2
+        l.append((x - dy/d*h, y + dx/d*h)); r.append((x + dy/d*h, y - dx/d*h))
+    return "M" + "L".join(f"{x:.2f} {y:.2f}" for x, y in l + r[::-1]) + "Z"
+def tuft(x, y, R, tilt):
+    o = []
+    n = 9
+    for i in range(n):
+        a = math.radians(tilt - 90 + (i - (n-1)/2) * 24)  # fan of blades on one arc
+        L = R * (1.0 if abs(i-(n-1)/2) < 3.5 else 0.9)
+        px, py = -math.sin(a)*2.3, math.cos(a)*2.3
+        o.append(f'M{x+px:.2f} {y+py:.2f}L{x+math.cos(a)*L:.2f} {y+math.sin(a)*L:.2f}L{x-px:.2f} {y-py:.2f}Z')
+    return "".join(o)
+def build(name):
+    o = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">']
+    o.append(f'<path d="M37 96C44 91 45 76 45.5 62L54.5 62C55 76 56 91 63 96Z" fill="{ink}"/>')
+    tips = [((50,66),(30,66),(22,50),7,4.2,-35), ((49,62),(40,46),(35,31),7,4.2,-12),
+            ((51,62),(60,46),(65,31),7,4.2,12), ((50,66),(70,66),(78,50),7,4.2,35)]
+    for p0, c, p1, w0, w1, tilt in tips:
+        o.append(f'<path d="{arm(p0, c, p1, w0, w1)}" fill="{ink}"/>')
+        o.append(f'<path d="{tuft(p1[0], p1[1], 14, tilt)}" fill="{ink}"/><circle cx="{p1[0]}" cy="{p1[1]}" r="4.6" fill="{ink}"/>')
+    o.append(f'<circle cx="50" cy="65" r="5.6" fill="{ink}"/>')
+    o.append('</svg>'); open(name, "w").write("".join(o))
+build("landing/logo.svg")
