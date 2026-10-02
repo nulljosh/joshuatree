@@ -138,6 +138,11 @@ int http_post(const char *host, const char *path, unsigned short port,
     return http_post_timeout(host, path, port, body, body_len, response_out, response_maxlen, 0);
 }
 
+/* Bearer for the next POST only (SYS_HTTP_POST sets it for /api/mail/send); cleared as soon as
+   the request is built, so no later request can carry it. */
+static const char *post_bearer = 0;
+void http_post_set_bearer(const char *token) { post_bearer = (token && token[0]) ? token : 0; }
+
 int http_post_timeout(const char *host, const char *path, unsigned short port,
                        const char *body, unsigned int body_len,
                        void *response_out, unsigned int response_maxlen,
@@ -167,7 +172,11 @@ static int http_post_locked(u32 ip, const char *host, const char *path, unsigned
        long; ~200 bytes of slack covers any realistic path plus headers),
        the same pattern http_get already uses for its own raw response
        buffer just below. */
-    u32 req_cap = body_len + 256;
+    const char *bearer = post_bearer;
+    post_bearer = 0;
+    u32 bearer_len = 0;
+    while (bearer && bearer[bearer_len]) bearer_len++;
+    u32 req_cap = body_len + 256 + (bearer ? bearer_len + 32 : 0);
     char *req = kmalloc(req_cap);
     if (!req) return -1;
     u32 n = 0;
@@ -176,6 +185,11 @@ static int http_post_locked(u32 ip, const char *host, const char *path, unsigned
     for (int p = 0; p < 4; p++) {
         const char *s = parts[p];
         while (*s && n < req_cap - 1) req[n++] = *s++;
+    }
+    if (bearer) {
+        const char *ah = "\r\nAuthorization: Bearer ";
+        while (*ah && n < req_cap - 1) req[n++] = *ah++;
+        for (u32 bi = 0; bi < bearer_len && n < req_cap - 1; bi++) req[n++] = bearer[bi];
     }
     const char *ct = "\r\nContent-Type: application/json\r\nContent-Length: ";
     while (*ct && n < req_cap - 1) req[n++] = *ct++;

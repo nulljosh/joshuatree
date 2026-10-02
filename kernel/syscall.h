@@ -195,6 +195,8 @@ struct jt_http_post {
 /* kernel.c: the Settings-owned chat host, read by SYS_HTTP_POST. */
 const char *llm_host_get(void);
 int llm_port_get(void);
+/* kernel.c: the Settings-owned Mail token (SETTINGS.TXT mailtoken=), read only by SYS_HTTP_POST. */
+const char *mail_token_get(void);
 /* 1.9.26: SYS_SYSINFO, the read-only state Samantha reports (weather, host, phone flag, clock).
    ebx = struct jt_sysinfo* (user, write), ecx = the caller's sizeof (so the struct can grow:
    an old program passes a smaller size and gets only the fields it knows, a new one on an old

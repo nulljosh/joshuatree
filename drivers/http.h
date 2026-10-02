@@ -34,4 +34,6 @@ int http_post_timeout(const char *host, const char *path, unsigned short port,
                        const char *body, unsigned int body_len,
                        void *response_out, unsigned int response_maxlen,
                        unsigned int reply_timeout_ticks);
+/* Authorization: Bearer <token> on the NEXT http_post_timeout only (then cleared). 0 or "" = none. */
+void http_post_set_bearer(const char *token);
 #endif
