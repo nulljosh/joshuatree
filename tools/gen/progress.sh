@@ -193,6 +193,9 @@ doc_pct = [doc_pct_at(p[1]) for p in sampled]
 cum = [apps_at(p[1]) for p in sampled]
 n = len(cum)
 max_v = max(cum) or 1
+# The headline numbers are today's, not the historical peak: removing an app
+# (HomeQi, 1.9.30) must read as 25, while the y axis keeps the peak.
+now_v = apps_at("HEAD") or cum[-1]
 first_date_short = None
 
 # v53: real layout fix, not a tweak. The rotated y-axis title ("Lines of
@@ -322,7 +325,7 @@ date_labels = "".join(f'<text x="{xf(i)}" y="{pad_t+plot_h+16}" font-size="10" f
 # dev metric, it says nothing about what's actually usable, so it's not
 # in this line anymore even though the git history it's computed from
 # still backs every other number here.
-caption = f'<text x="{pad_l}" y="{height-6}" font-size="14" fill="var(--muted)">{max_v} apps &#183; {doc_pct[-1]}% documented</text>'
+caption = f'<text x="{pad_l}" y="{height-6}" font-size="14" fill="var(--muted)">{now_v} apps &#183; {doc_pct[-1]}% documented</text>'
 
 # v52.4: real dark-mode support, direct feedback ("white graph on dark
 # mode... should be dynamic and native as code, not a screenshot"). A
@@ -418,13 +421,13 @@ interactive_style = f'''
 '''
 interactive_svg = build_svg(
     dots_interactive, svg_id=SVG_ID, extra_style=interactive_style,
-    extra_root_attrs=f' role="img" aria-label="Apps shipped over time, {max_v} apps as of {short_date(points[-1][2])}"',
+    extra_root_attrs=f' role="img" aria-label="Apps shipped over time, {now_v} apps as of {short_date(points[-1][2])}"',
 )
 
 # Lede line above the chart, generated from the same real data (never
 # typed by hand, same "can't drift" contract as the rest of this page):
 # "From a blank screen on <first date> to <N> apps today."
-lede = f"From a blank screen on {short_date(points[0][2])} to {max_v} apps today."
+lede = f"From a blank screen on {short_date(points[0][2])} to {now_v} apps today."
 
 # Splice into landing/index.html between markers, the same inject-
 # between-comments pattern tools/gen/landing-roadmap.py already uses for
@@ -448,6 +451,6 @@ html = html[:lsi + len(lede_start)] + lede + html[lei:]
 with open(landing_path, "w") as f:
     f.write(html)
 
-print(f"wrote progress.svg: {max_v} apps shipped, {doc_pct[-1]}% documented (real architecture-doc coverage), across {n} sampled points, {commit_count} total commits")
+print(f"wrote progress.svg: {now_v} apps shipped, {doc_pct[-1]}% documented (real architecture-doc coverage), across {n} sampled points, {commit_count} total commits")
 print(f"spliced interactive chart into {landing_path}")
 PYEOF

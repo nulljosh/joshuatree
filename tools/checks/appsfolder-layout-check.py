@@ -223,7 +223,17 @@ CELL_W, CELL_H, X0, Y0, APPS_VIS_ROWS = 150, 116, 41, 88, 3
 tail_row_local_y = Y0 + (APPS_VIS_ROWS - 1) * CELL_H
 ghost_hits = 0
 ghost_checked = 0
-for col in (3, 4):  # columns with no real app at max scroll
+# The tail row's empty columns come from the real app count (APPS[] minus
+# the Apps folder and Trash, the same filter tools/gen/progress.sh uses),
+# not a hardcoded 3: removing HomeQi left the last row exactly full.
+import re
+_src = open("kernel/kernel.c").read()
+_m = re.search(r"struct app APPS\[GUI_APP_COUNT\]\s*=\s*\{(.*?)\n\};", _src, re.S)
+_n = len([l for l in re.findall(r'\{"([^"]*)",', _m[1]) if l not in ("Apps", "Trash", "Compose")]) if _m else 0
+_tail = _n % 5
+if _n == 0: fails.append("could not count APPS[] in kernel/kernel.c")
+empty_cols = range(_tail, 5) if _tail else ()  # a full last row has no empty column to check
+for col in empty_cols:  # columns with no real app at max scroll
     cx = X0 + col * CELL_W + CELL_W // 2
     for dy in range(-30, 40, 4):
         ly = VY + tail_row_local_y + dy
