@@ -43,11 +43,20 @@ def main(clip, words, wav, out):
         subprocess.run(["ffmpeg", "-v", "error", "-i", clip, "-vf",
                         f"crop=ih:ih:(iw-ih)/2:0,scale=320:320,fps={FPS}", f"{w}/s-%04d.png"], check=True)
         imgs = [Image.open(f).convert("RGB") for f in sorted(glob.glob(f"{w}/s-*.png"))]
+        boxes = [np.asarray(im.convert("L"), float)[180:245, 110:210] for im in imgs]   # mouth box at 320px
+        # One dark threshold for the whole clip, not per frame. A per-frame
+        # percentile always marks 12% of the box "dark", so counting the rows
+        # they span read Joshua's open mouth (dark pixels bunched inside it) as
+        # closed and his closed mouth (shadows scattered over the box) as open:
+        # the whole plan came out inverted (face_bench words 0). The dark area
+        # under one clip-wide threshold grows as the mouth opens, on any face.
+        thr = np.percentile(np.stack(boxes), 8)
         op, wd = [], []
-        for im in imgs:
-            g = np.asarray(im.convert("L"), float)[180:245, 110:210]   # mouth box at 320px
-            d = g < np.percentile(g, 12)
-            op.append(d.any(1).sum()); wd.append(d.any(0).sum())
+        for g in boxes:
+            d = g < thr
+            op.append(d.sum()); wd.append(d.any(0).sum())
+        if os.environ.get("FV_DEBUG"):
+            print("debug open-area: most open frame %d, most closed frame %d" % (int(np.argmax(op)), int(np.argmin(op))))
         op, wd = (np.array(v, float) for v in (op, wd))
         rank = lambda v: v.argsort().argsort() / max(1, len(v) - 1)
         op, wd = rank(op), rank(wd)

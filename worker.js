@@ -104,7 +104,7 @@ async function handleProxy(request, env) {
     // constrained to exactly the file names chat_face.h ever builds
     // (face_fetch's "/face/" + kind + "-" + i + ".png"), nothing else on
     // this host is reachable through this branch.
-    if (/^\/face\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname) && request.method === "GET") {
+    if (/^\/face(-joshua)?\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname) && request.method === "GET") {   // face-joshua: the portfolio face (kernel/chat_face.h face_fetch)
       // Read the frame from this deploy's own assets: a Worker fetching its
       // own hostname over the network gets Cloudflare's 522, so the guest's
       // face never loaded on the live site.
