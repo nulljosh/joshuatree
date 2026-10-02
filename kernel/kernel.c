@@ -5365,6 +5365,7 @@ static int gui_multiwin_open(int icon){
         /* 1.9.23: the program is scheduled now and draws into its own
            buffer; this loop keeps running. -1 is refused by the caller
            (gui_refuse_open), never a blocking takeover. */
+        if (APPS[icon].open == notes_ring3_open) notes_migrate_legacy(); /* the window path never calls APPS[].open, which is where the one-time NOTES.TXT move into the default folder lives (editor.h) */
         int t = ring3app_launch_window(APPS[icon].name, (unsigned int)(gui_windows[slot].w - 16), (unsigned int)(gui_windows[slot].h - 40));
         if (t < 0) return -1;
         gui_windows[slot].task = t;
