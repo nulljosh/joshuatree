@@ -292,7 +292,7 @@
   #demo-frame.demo-full #demo-composer { position: absolute; left: 0; right: 0; bottom: 0; z-index: 52; box-sizing: border-box; max-width: none; margin: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: #000; }
   #demo-frame.demo-full #demo-composer input { background: #1c1c1e; color: #fff; }
   #demo-frame.demo-full #demo-composer button { background: #fff; color: #000; }
-  @media (max-width: 520px) { #demo-frame.demo-full.has-composer #stage-wrap { max-height: none; } #demo-frame.demo-full #stage-wrap { width: min(100vw, calc((var(--demo-h, 100dvh) - 76px) * 430 / 760)); } }
+  @media (max-width: 520px) { #demo-frame.demo-full.has-composer #stage-wrap { max-height: none; width: min(100vw, calc((var(--demo-h, 100dvh) - 76px) * 430 / 760)); } } /* has-composer's 16:9 width rule above outranks the plain one, so the phone stage stayed full width and its 430:760 screen was cropped top and bottom, hiding Samantha's input bar under the chat bar */
   /* Small on a phone so it does not sit on the dock; the ::after keeps a 44px tap target. */
   /* Phones: top right, where every in-demo screen has room (the back arrow is top left, titles are centred). Desktop keeps it bottom right because the kernel's menu-bar clock sits at the top right there. */
   @media (max-width: 600px) { #demo-exit { right: 10px; top: 10px; bottom: auto; width: 36px; height: 36px; } #demo-exit::before { width: 16px; height: 16px; } #demo-exit::after { content: ""; position: absolute; inset: -4px; } }
