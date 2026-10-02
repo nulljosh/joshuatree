@@ -4,9 +4,8 @@ antialiased line primitive (gui_aa_line in kernel.c), not the old
 Bresenham stx_line that stamped a hard 2x2 window_rect per step with no
 blending. Boots kernel.elf with -display none, drives the real mouse path
 (QMP abs+btn, same as stocks-dock-check.py) to open Stocks from the dock,
-then the 't' key seeds the network-free fixture (stx_seed_fixture in
-stocks.h: a deterministic zigzag series with a real diagonal segment,
-never touching net_init/http_get_timeout), pmemsaves the real physical
+where the kernel's own stocks_fetch reads a deterministic zigzag series
+from a local fake /api/stocks (stkhost= boot flag), pmemsaves the real physical
 framebuffer, and asserts the diagonal segment's edge pixels carry genuine
 intermediate coverage values (not pure line color, not pure background)
 along several rows -- the signature of antialiasing -- where the old
@@ -15,7 +14,7 @@ color on every single row, with only 1-pixel hard jumps between them.
 
 Usage: tools/checks/stocks-aa-check.py   (from the repo root, after make kernel.elf)
 """
-import json, os, socket, subprocess, sys, time
+import http.server, json, os, socket, subprocess, sys, threading, time
 from PIL import Image
 from freeport import free_port
 
@@ -36,7 +35,23 @@ for f in (LOG, DUMP):
     try: os.remove(f)
     except FileNotFoundError: pass
 
+# The honest fixture: a fake /api/stocks the kernel's own stocks_fetch reads
+# over the real net stack (stkhost=10.0.2.2:PORT), so STOCKS.TXT is written by
+# the real path and the ring-3 app draws it. Row: price prev time n p0..pn-1.
+PTS = [10000 + (i * 380 if i < 12 else 4560 - (i - 12) * 330 + (i % 3) * 140) for i in range(24)]
+ROW = ("%d %d 1700000000 %d %s\n" % (PTS[-1], PTS[0], len(PTS), " ".join(map(str, PTS)))).encode()
+BODY = ROW * 8
+class Hd(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_GET(self):
+        self.send_response(200); self.send_header("Content-Type", "text/plain")
+        self.send_header("Content-Length", str(len(BODY))); self.end_headers(); self.wfile.write(BODY)
+srv = http.server.ThreadingHTTPServer(("0.0.0.0", 0), Hd); srv.daemon_threads = True
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+
 q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
+                      "-net", "nic,model=rtl8139", "-net", "user",
+                      "-append", "stkhost=10.0.2.2:%d" % srv.server_address[1],
                       "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:
@@ -71,10 +86,7 @@ try:
 
     # Open Stocks from the dock (no network needed: it opens with empty data).
     move(centre(STOCKS_SLOT), ICON_ROW_Y); time.sleep(0.3)
-    click(); time.sleep(1.0)
-
-    # 't': seed the offline fixture (stx_seed_fixture), fully network-free.
-    key("t"); time.sleep(0.5)
+    click(); time.sleep(6.0)  # fetch from the fake server, STOCKS.TXT, ring-3 window draws
 
     cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
     try: cmd({"execute": "quit"})
@@ -117,7 +129,7 @@ px = img.load()
 # AA'd text or a solid pill fill -- both of which would produce false
 # "intermediate" pixels next to pure color and defeat the discrimination
 # this check exists to prove.
-CHART_BOX = (804, 374, 1716, 650)
+CHART_BOX = (780, 150, 1760, 820)
 
 def scan(box, colors):
     x0, y0, x1, y1 = box

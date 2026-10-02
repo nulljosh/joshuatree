@@ -8778,6 +8778,7 @@ void kmain(unsigned int multiboot_info_addr){
                 if (pt && pt < 65536) llm_port_override = (int)pt;
                 break;
             }
+        stocks_cmdline(cl0); /* stkhost=HOST:PORT, kernel/stocks.h */
         chat_face_cmdline(cl0); /* facehost=HOST[:PORT], kernel/chat_face.h */
     }
     vga_text_mode_init(); /* real hardware/QEMU already boot into text mode via their own BIOS; a BIOS-less multiboot path (v86) never sets it at all, so make it explicit rather than inherited */

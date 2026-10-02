@@ -85,12 +85,26 @@ static void stocks_write_file(int range, int sel) {
     vfs_replace_file("STOCKS.TXT", b, (unsigned int)(o - b));
     kfree(b);
 }
+/* stkhost=HOST:PORT on the multiboot command line points the fetch at a fake
+   server (tools/checks/stocks-aa-check.py), the way wxhost= does for Weather. */
+static char stk_host_override[32];
+static int stk_port_override;
+static void stocks_cmdline(const char *cl) {
+    for (const char *pc = cl; pc && *pc; pc++)
+        if (pc[0]=='s' && pc[1]=='t' && pc[2]=='k' && pc[3]=='h' && pc[4]=='o' && pc[5]=='s' && pc[6]=='t' && pc[7]=='=') {
+            pc += 8; int hp = 0;
+            while (*pc && *pc != ' ' && *pc != ':' && hp < 31) stk_host_override[hp++] = *pc++;
+            stk_host_override[hp] = 0;
+            if (*pc == ':') { pc++; int pt = 0; while (*pc >= '0' && *pc <= '9') pt = pt * 10 + (*pc++ - '0'); stk_port_override = pt; }
+            break;
+        }
+}
 static void stocks_fetch(int range) {
     char *body = kmalloc(8192);
     if (!body) return;
     char path[] = "/api/stocks?range=0";
     path[sizeof(path) - 2] = '0' + range;
-    int n = net_init(0x0A00020F) ? http_get_timeout("joshuatree.heyitsmejosh.com", path, 80, body, 8191, 1000) : -1;
+    int n = net_init(0x0A00020F) ? http_get_timeout(stk_host_override[0] ? stk_host_override : "joshuatree.heyitsmejosh.com", path, stk_port_override ? stk_port_override : 80, body, 8191, 1000) : -1;
     for (int i = 0; i < STOCKS_MAX; i++) stx_data[range][i].stale = 1;
     if (n > 0 && n < 8191 && http_last_status() == 200) {
         body[n] = 0; const char *p = body;
