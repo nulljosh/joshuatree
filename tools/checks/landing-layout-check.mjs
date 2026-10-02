@@ -90,7 +90,7 @@ try {
       return {
         facts, counts, sections, more,
         linkColor: ls && ls.color, bodyColor: body,
-        ad: !!(want && want.querySelector('video source[src*="ad.mp4"]')),
+        ad: !!(want && want.querySelector('video source[src*="joshua-tree-ad-v"][src$=".mp4"]')),
         strata: !!(want && want.querySelector('img[src="strata-hero.jpg"]')),
         scrolled: scrollY,
       };
@@ -129,7 +129,7 @@ try {
     for (const n of realNames) if (!d.more.includes(n)) fail(`${tag}: "And so much more" is missing ${n}`);
     if (d.more.length !== realNames.length) fail(`${tag}: "And so much more" lists ${d.more.length} apps, APPS[] has ${realNames.length}`);
     // 5. Want one
-    if (!d.ad) fail(`${tag}: "Want one?" has no ad.mp4 video`);
+    if (!d.ad) fail(`${tag}: "Want one?" has no joshua-tree-ad video`);
     if (!d.strata) fail(`${tag}: "Want one?" has no Strata render`);
     await page.close();
   }

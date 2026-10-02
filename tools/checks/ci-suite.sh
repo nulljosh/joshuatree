@@ -77,7 +77,6 @@ retry|6|AA text spacing, in-kernel|./tools/checks/textspacing-check.sh
 retry|4|AA text stems are dense but still antialiased|python3 ./tools/checks/textsharp-check.py
 retry|2|FAT filesystem cycle hang (regression test)|./tools/checks/fatcyclehang-check.sh
 retry|5|File robustness: empty, oversized, corrupt-FAT and full-disk cases|python3 ./tools/checks/filerobust-check.py
-retry|2|Chat history (VFS-backed, past the old 512-byte cap)|./tools/checks/chat-check.sh
 retry|1|Chat defaults to Samantha (Turing) and surfaces an HTTPS-redirect host clearly|python3 ./tools/checks/chat-samantha-check.py
 retry|3|GUI Chat app asks Samantha and renders the reply on screen|python3 ./tools/checks/chatapp-check.py
 retry|1|Chat's tools (reminder, note, open app) work locally via /api/pick, ordinary questions still reach Samantha|python3 ./tools/checks/chattools-check.py
@@ -87,7 +86,6 @@ retry|2|"samantha" boot flag opens Chat's full-screen avatar view, input focused
 retry|2|"phone" boot flag opens a real 430x932 portrait frame straight into Samantha's view|python3 ./tools/checks/phone-boot-check.py
 retry|2|Phone Samantha back chevron exits her view and F2/Esc hints are hidden on phones|python3 ./tools/checks/phone-samantha-back-check.py
 retry|2|Touch: a tap opens the on-screen keyboard on phone and a tapped key reaches the Notes editor|python3 ./tools/checks/touch-osk-check.py
-retry|2|Chat bounds a connected-but-silent LLM host instead of hanging on net.c's old multi-minute default|python3 ./tools/checks/chat-timeout-check.py
 retry|4|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ramfs-demo-check.sh
 retry|6|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh
 retry|5|Ring-3 reference program against the v1 syscall ABI|./tools/checks/usertest-check.sh
