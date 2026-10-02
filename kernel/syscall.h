@@ -171,7 +171,16 @@ struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
    -EBUSY a fetch already in flight, -EFAULT any range outside user memory,
    -EINVAL a bad path or an over-long body. Nothing is written to out on failure.
    The body is copied into a kernel bounce buffer before the network is touched,
-   so a program cannot change it mid-request. */
+   so a program cannot change it mid-request.
+   ecx = flags (0 = the original behaviour, so old callers are unchanged):
+     JT_POST_WORKER: send to the fixed joshuatree Worker host (the one SYS_HTTP_GET
+       uses), port 80, instead of the Settings chat host. A selector, never a string.
+     JT_POST_BIG: body up to JT_HTTP_BIG_MAX read straight from the caller buffer and
+       reply up to JT_HTTP_BIG_MAX written straight into out (no kernel bounce; the net
+       layer copies the body into its own request buffer). On failure out may hold
+       scratch bytes. Unknown flag bits are -EINVAL. */ */
+#define JT_POST_WORKER 1u
+#define JT_POST_BIG    2u
 #define SYS_HTTP_POST   392
 #define JT_HTTP_POST_BODY_MAX  6144 /* chat.h's req_body cap: full history to /api/chat */
 #define JT_HTTP_POST_REPLY_MAX 8192 /* chat.h's resp cap for /api/chat */

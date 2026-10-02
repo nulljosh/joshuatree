@@ -459,7 +459,13 @@ const JSON_CORS = { "Content-Type": "application/json", "Access-Control-Allow-Or
 // Ring-3 Samantha speaks through SYS_HTTP_GET (up to 64 KB back, host fixed
 // to this one): GET /api/speak?t=<one sentence> forwards to Turing's POST
 // /api/speak and returns the raw 8-bit 16 kHz PCM untouched.
-async function handleSpeakGet(url) {
+async function handleSpeakGet(url, request, env) {
+  // Same per-IP guard as handleListen, its own binding (a sentence per call, so a looser limit).
+  if (env && env.SPEAK_RATE_LIMITER) {
+    const ip = request.headers.get("cf-connecting-ip") || "unknown";
+    const { success } = await env.SPEAK_RATE_LIMITER.limit({ key: ip });
+    if (!success) return new Response("too many requests", { status: 429 });
+  }
   const text = (url.searchParams.get("t") || "").slice(0, 300);
   if (!text) return new Response("missing t", { status: 400 });
   const up = await fetch("https://turing.heyitsmejosh.com/api/speak", {
@@ -510,7 +516,7 @@ export default {
     if (url.pathname === "/api/quotes") return handleQuotes();
     if (url.pathname === "/api/deals") return handleDeals(request);
     if (url.pathname === "/api/listen") return handleListen(request, env);
-    if (url.pathname === "/api/speak" && request.method === "GET") return handleSpeakGet(url);
+    if (url.pathname === "/api/speak" && request.method === "GET") return handleSpeakGet(url, request, env);
     if (url.pathname === "/api/proxy") {
       return handleProxy(request, env);
     }

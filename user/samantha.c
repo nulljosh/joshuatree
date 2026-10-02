@@ -801,7 +801,7 @@ static int keyword_fallback(const char *msg, char *tool, int toolsz) {
 #define SPK_PCM 65536u        /* one /api/speak clip: SYS_HTTP_GET's 64 KB cap, 4 s at 16 kHz */
 #define SPK_TEXT 640
 #define SPK_RATE 16000u
-#define REC_MAX 6144u         /* SYS_HTTP_POST's body cap (JT_HTTP_POST_BODY_MAX): ~0.38 s at 16 kHz */
+#define REC_MAX 65536u        /* JT_POST_BIG's body cap (JT_HTTP_BIG_MAX): ~4 s at 16 kHz, 8-bit */
 static unsigned char *spk_pcm JT_DATA = 0;
 static unsigned spk_len JT_DATA = 0, spk_off JT_DATA = 0;
 static char *spk_text JT_DATA = 0;
@@ -958,7 +958,7 @@ static void listen_stop_and_send(void) {
     draw();
     struct jt_event dummy; jt_window_poll(&dummy, JT_POLL_PRESENT);
     struct jt_http_post a = { "/api/listen", (const char *)rec_buf, rec_n, ar->resp, RESP - 1, 3000 };
-    int r = jt_http_post(&a);
+    int r = jt_http_post_ex(&a, JT_POST_WORKER | JT_POST_BIG); /* /api/listen lives on the Worker, not Turing */
     if (r <= 0) { status = "couldn't hear that"; serial("listen: ", "post failed"); return; }
     ar->resp[r] = 0;
     char text[INMAX + 1];

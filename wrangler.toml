@@ -31,3 +31,12 @@ namespace_id = "1601"
   [ratelimits.simple]
   limit = 10
   period = 60
+
+# Per-IP limit on GET /api/speak (worker.js's handleSpeakGet): 30/minute.
+[[ratelimits]]
+name = "SPEAK_RATE_LIMITER"
+namespace_id = "1602"
+
+  [ratelimits.simple]
+  limit = 30
+  period = 60

@@ -691,7 +691,7 @@ a ring-3 window through the compositor's event push.
 
 | # | Name | ebx | ecx | edx | Returns |
 |---|---|---|---|---|---|
-| 392 | `http_post` | `struct jt_http_post *` | 0 | 0 | reply body bytes, -status, or -errno |
+| 392 | `http_post` | `struct jt_http_post *` | flags (0) | 0 | reply body bytes, -status, or -errno |
 
 ```c
 struct jt_http_post {
@@ -720,6 +720,16 @@ On HTTP 200 the reply body is copied out, at most `out_len` bytes, and the
 count is returned. Any other status is minus that status, -100 to -599.
 -ENODEV no NIC, -EIO no answer within `reply_ticks`, -EFAULT any range outside
 user memory. Nothing is written to `out` on any failure.
+
+`ecx` is a flags word; 0 is the behaviour above, so old callers are untouched.
+`JT_POST_WORKER` (1) sends to the fixed joshuatree Worker host, port 80, the
+same host `http_get` uses, instead of the chat host; it is a selector, a ring-3
+program can never name a host string. `JT_POST_BIG` (2) lifts the body cap and
+the reply cap to 65536: the body is read straight from the caller buffer and
+the reply written straight into `out`, with no kernel bounce (the network layer
+copies the body into its own request buffer). As with big `http_get`, `out` may
+hold scratch bytes after a failure. Unknown flag bits are -EINVAL. Samantha's
+push-to-talk uses both: up to about 4 s of 16 kHz 8-bit audio to `/api/listen`.
 
 ## audio (1.9.26)
 

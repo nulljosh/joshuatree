@@ -192,6 +192,9 @@ static inline int jt_http_get(const char *path, void *buf, unsigned len) { retur
    or -errno (-EBUSY a fetch is already in flight). */
 struct jt_http_post { const char *path; const char *body; unsigned int body_len; char *out; unsigned int out_len; unsigned int reply_ticks; };
 static inline int jt_http_post(struct jt_http_post *a) { return jt_syscall(JT_SYS_HTTP_POST, (unsigned)a, 0, 0); }
+#define JT_POST_WORKER 1u /* post to the fixed joshuatree Worker host instead of the chat host */
+#define JT_POST_BIG    2u /* body and reply up to JT_HTTP_BIG_MAX, straight from/to the caller buffers */
+static inline int jt_http_post_ex(struct jt_http_post *a, unsigned flags) { return jt_syscall(JT_SYS_HTTP_POST, (unsigned)a, flags, 0); }
 static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned max) { return jt_syscall(JT_SYS_READDIR, (unsigned)path, (unsigned)out, max); }
 static inline int jt_mkdir(const char *path)                      { return jt_syscall(JT_SYS_MKDIR, (unsigned)path, 0, 0); }
 static inline int jt_unlink(const char *path)                     { return jt_syscall(JT_SYS_UNLINK, (unsigned)path, 0, 0); }

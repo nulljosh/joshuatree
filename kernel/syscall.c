@@ -805,8 +805,10 @@ static int sys_http_get(u32 path, u32 buf, u32 len) {
    with http_get through the same http_busy flag. */
 static char http_post_body[JT_HTTP_POST_BODY_MAX];
 static char http_post_reply[JT_HTTP_POST_REPLY_MAX];
-static int sys_http_post(u32 argp, u32 unused1, u32 unused2) {
-    (void)unused1; (void)unused2;
+static int sys_http_post(u32 argp, u32 flags, u32 unused2) {
+    (void)unused2;
+    if (flags & ~(u32)(JT_POST_WORKER | JT_POST_BIG)) return -EINVAL;
+    int big = (flags & JT_POST_BIG) != 0;
     if (!paging_user_range_ok(argp, sizeof(struct jt_http_post))) return -EFAULT;
     struct jt_http_post a = *(const struct jt_http_post *)argp; /* one copy; the user struct is not read again */
     char kpath[JT_HTTP_PATH_MAX + 1];
@@ -820,21 +822,25 @@ static int sys_http_post(u32 argp, u32 unused1, u32 unused2) {
     }
     if (i > JT_HTTP_PATH_MAX) return -EINVAL;
     if (i == 0 || kpath[0] != '/') return -EINVAL;
-    if (a.body_len > JT_HTTP_POST_BODY_MAX) return -EINVAL;
+    if (a.body_len > (big ? (u32)JT_HTTP_BIG_MAX : (u32)JT_HTTP_POST_BODY_MAX)) return -EINVAL;
     if (!paging_user_range_ok((u32)a.body, a.body_len ? a.body_len : 1)) return -EFAULT;
-    if (a.out_len > JT_HTTP_POST_REPLY_MAX) a.out_len = JT_HTTP_POST_REPLY_MAX;
+    if (a.out_len > (big ? (u32)JT_HTTP_BIG_MAX : (u32)JT_HTTP_POST_REPLY_MAX)) a.out_len = big ? JT_HTTP_BIG_MAX : JT_HTTP_POST_REPLY_MAX;
     if (!paging_user_range_ok((u32)a.out, a.out_len ? a.out_len : 1)) return -EFAULT;
     u32 ticks = a.reply_ticks ? a.reply_ticks : JT_HTTP_POST_TICKS_DEFAULT;
     if (ticks > JT_HTTP_POST_TICKS_MAX) ticks = JT_HTTP_POST_TICKS_MAX;
     if (http_busy) return -EBUSY;
-    for (i = 0; i < a.body_len; i++) http_post_body[i] = a.body[i];
+    /* Big: no bounce at all. net's POST builder already copies the body into its own
+       kmalloc'd request, and the reply is written straight into the checked user range. */
+    if (!big) for (i = 0; i < a.body_len; i++) http_post_body[i] = a.body[i];
     http_busy = 1;
     __asm__ volatile ("sti");
     int n, st = 0;
     if (!net_init(0x0A00020F)) { n = -ENODEV; }
     else {
-        n = http_post_timeout(llm_host_get(), kpath, (unsigned short)llm_port_get(),
-                              http_post_body, a.body_len, http_post_reply, sizeof(http_post_reply), ticks);
+        const char *host = (flags & JT_POST_WORKER) ? HTTP_HOST : llm_host_get();
+        unsigned short port = (flags & JT_POST_WORKER) ? HTTP_PORT : (unsigned short)llm_port_get();
+        if (big) n = http_post_timeout(host, kpath, port, a.body, a.body_len, a.out, a.out_len, ticks);
+        else n = http_post_timeout(host, kpath, port, http_post_body, a.body_len, http_post_reply, sizeof(http_post_reply), ticks);
         st = http_last_status();
         if (n < 0) n = -EIO;
         else if (st != 200) n = st >= 100 && st <= 599 ? -st : -EIO;
@@ -843,6 +849,7 @@ static int sys_http_post(u32 argp, u32 unused1, u32 unused2) {
     http_busy = 0;
     if (n < 0) return n;
     if ((u32)n > a.out_len) n = (int)a.out_len;
+    if (big) return n; /* already in place; scratch bytes in out are possible on failure */
     for (i = 0; i < (u32)n; i++) a.out[i] = http_post_reply[i];
     return n;
 }
