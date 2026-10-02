@@ -8,7 +8,7 @@ Five steps. About 45 minutes once you have the parts. About $250 with the board,
 
 1. **Base.** Lay the four ring 0 pieces in a square, drop a nut into each corner pocket from below, push a rod up through it, then press a foot into the round recess under each corner. The feet hide the nut and the rod end.
 2. **Tray.** Drop the tray in the middle. The board posts are already on its floor. Its walls run flush with the top of ring 5.
-3. **Rings.** Slide the rest of the rings down the rods, one on top of the other. The little 2 mm bosses on each ring leave the air gap for you. Each ring is cut into four pieces at a different spot from the ring below it, so no seam lines up.
+3. **Rings.** Slide the rest of the rings down the rods, one on top of the other. The three little 2 mm pads on each ring leave the air gap for you. Each ring is cut into four pieces at a different spot from the ring below it, so no seam lines up.
 4. **Board.** Screw the board onto the four posts, snap its metal back plate on, lower the rear plate into the notch at the back (it ends flush with the rings), plug in power.
 5. **Cap.** Drop a nut into each pocket on top of ring 5 and run it down snug. Glue the four frame pieces on ring 5, then lay the centre panel with the tree in the middle on the tray walls. The tree is one piece and no seam crosses it. Plug in the USB stick and boot.
 

@@ -18,7 +18,7 @@ Same lines as the table in `docs/HARDWARE.md`. The ID is what each step points a
 
 | ID | Part | Qty | Where |
 |---|---|---|---|
-| P1 | Printed ring pieces (`ring0_*` to `ring5_*`, four per ring, cut at a different spot on every ring), spacer bosses already on them | 24 pieces | `stl/` |
+| P1 | Printed ring pieces (`ring0_*` to `ring5_*`, four per ring, cut at a different spot on every ring), spacer pads already on them | 24 pieces | `stl/` |
 | P2 | Printed cap: `cap_panel` (the whole tree, engraved) and four `cap_frame_*` pieces | 5 | `stl/` |
 | P3 | Printed tray, board standoffs already on the floor | 1 | `stl/` |
 | P4 | Printed rear plate, with its outer face flush to the rings | 1 | `stl/` |
@@ -36,11 +36,11 @@ Same lines as the table in `docs/HARDWARE.md`. The ID is what each step points a
 
 ## Print settings
 
-All parts print flat on the bed, in the orientation the STL is already in. No part needs more than 8 mm of bridge, so there are no supports anywhere. Bed: 180 x 180 mm (Bambu A1 mini). Nozzle 0.4 mm.
+All parts print flat on the bed, in the orientation the STL is already in. No part needs more than 10 mm of bridge, so there are no supports anywhere. Bed: 180 x 180 mm (Bambu A1 mini). Nozzle 0.4 mm.
 
 | Part | Layer | Walls | Infill | Supports |
 |---|---|---|---|---|
-| P1 rings, P2 cap (print boss side up, the STLs are already flipped) | 0.2 mm | 3 | 15% gyroid | none |
+| P1 rings, P2 cap (print pad side up, the STLs are already flipped) | 0.2 mm | 3 | 15% gyroid | none |
 | P3 tray | 0.2 mm | 3 | 20% gyroid | none |
 | P4 rear plate | 0.2 mm | 3 | 100% | none |
 
@@ -50,7 +50,7 @@ PLA is fine to start. PETG is better if the box will sit near a warm room. Print
 
 ![Step 1](assembly/step1-feet-and-rods.svg)
 
-**1. Ring 0 and rods.** Lay the four ring 0 pieces (P1, the widest, 200 mm) in a square on the table. Drop a nut (B7) into the hex pocket at each corner from below, then push a rod (B6) up through the hole into it. Press a foot (P5) into the round recess under each corner so it closes the pocket and covers the rod end. Nothing metal shows from underneath.
+**1. Ring 0 and rods.** Lay the four ring 0 pieces (P1, 200 mm like every ring) in a square on the table. Drop a nut (B7) into the hex pocket at each corner from below, then push a rod (B6) up through the hole into it. Press a foot (P5) into the round recess under each corner so it closes the pocket and covers the rod end. Nothing metal shows from underneath.
 
 ![Step 2](assembly/step2-tray.svg)
 
@@ -58,13 +58,13 @@ PLA is fine to start. PETG is better if the box will sit near a warm room. Print
 
 ![Step 3](assembly/step3-rings.svg)
 
-**3. Rings.** Slide ring 1 over the rods. Its little 2 mm bosses rest on ring 0 and make the vent gap. Then ring 2, 3, 4, 5. No loose spacers. Every ring is cut at a different spot from its neighbours, so the seams stagger. The rear pieces with the notch between them are for the I/O.
+**3. Rings.** Slide ring 1 over the rods. Its three little 2 mm pads rest on ring 0 and make the vent gap. Then ring 2, 3, 4, 5. No loose spacers. Every ring is cut at a different spot from its neighbours, so the seams stagger. The pads hug the core, 8.4 mm behind the face, so the 2 mm gap shows only shadow and the corners and the rear stay open for air. The rear pieces with the notch between them are for the I/O. Ring 0 is notched 1.6 mm deep as well, so the plate sits in a recess and shows an even black frame on all four sides.
 
 **4. Board.** Seat the board (B1, with B2 in it) on the printed standoffs and screw it down with the four M3x8 screws (B8). Clip the I/O shield (B9) onto the back of the board. Plug in the SATA cable (B10) and the SSD (B3).
 
 ![Step 4](assembly/step4-rear-plate.svg)
 
-**5. Rear plate.** Lower the plate (P4) from above into the notch at the back of the rings, behind the board, so the shield sits in the window. Its outer face ends flush with the rings. It's a 0.2 mm slip fit. One drop of superglue on each side keeps it there. Plug the power supply (B4) into the board.
+**5. Rear plate.** Lower the plate (P4) from above into the notch at the back of the rings, behind the board, so the shield sits in the window. Its outer face ends flush with the rings, and its top sits level with the cap panel underside, rising to the cap frame rebate behind it. It's a 0.2 mm slip fit. One drop of superglue on each side keeps it there. Plug the power supply (B4) into the board.
 
 ![Step 5](assembly/step5-cap-and-nuts.svg)
 

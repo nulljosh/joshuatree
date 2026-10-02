@@ -79,14 +79,24 @@ for m in json.load(open(os.path.join(mesh_dir, "meshes.json"))):
     h = m["hex"].lstrip("#"); rgb = tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
     load(m["name"], material(m["name"], rgb, 0.6))
 
-# stand-in stock I/O shield (158.75 x 44.45, steel, port cutouts shown as dark openings) seated at the board's rear edge, y = 88
+# stand-in stock I/O shield (158.75 x 44.45, steel) seated at the board's rear edge, y = 88, with the real J4125B-ITX ports cut into it.
+# Left to right seen from behind: PS/2, 2x USB 2.0 stack, VGA, DVI-D, HDMI, 2x USB 3.2 stack, RJ45, three audio jacks. mm: (x0, x1, z0, z1), ports sit on the PCB at z 8.6.
 IO_Z = 29.0
 bpy.ops.mesh.primitive_cube_add(size=1)
 shd = bpy.context.object; shd.name = "shield"; shd.scale = (158.75 * S, 0.8 * S, 44.45 * S); shd.location = (0, 88.4 * S, IO_Z * S)
 bpy.ops.object.transform_apply(scale=True); shd.data.materials.append(material("shield", (158, 156, 150), 0.45))
-for (x0, x1, z0, z1) in [(-64, -52, 18, 30), (-48, -36, 18, 30), (-30, -8, 26, 40), (-2, 22, 28, 40), (-2, 22, 10, 22), (30, 44, 12, 24), (50, 60, 12, 24), (64, 74, 12, 24)]:
+PZ = 9.0
+PORTS = [(-76.8, -65.8, PZ, PZ + 11),                                   # PS/2 mini-DIN
+         (-62.3, -49.3, PZ, PZ + 7), (-62.3, -49.3, PZ + 8.5, PZ + 15.5),  # 2x USB 2.0
+         (-45.8, -17.8, PZ, PZ + 12.5),                                 # VGA
+         (-14.3, 13.7, PZ, PZ + 12.5),                                  # DVI-D
+         (17.2, 31.2, PZ, PZ + 6),                                      # HDMI
+         (34.7, 47.7, PZ, PZ + 7), (34.7, 47.7, PZ + 8.5, PZ + 15.5),  # 2x USB 3.2
+         (51.2, 66.2, PZ, PZ + 13.5),                                   # RJ45
+         (69.7, 76.7, PZ, PZ + 7), (69.7, 76.7, PZ + 8.2, PZ + 15.2), (69.7, 76.7, PZ + 16.4, PZ + 23.4)]   # 3 audio jacks
+for (x0, x1, z0, z1) in PORTS:
     bpy.ops.mesh.primitive_cube_add(size=1); p = bpy.context.object
-    p.scale = ((x1 - x0) * S, 0.4 * S, (z1 - z0) * S); p.location = ((x0 + x1) / 2 * S, 89.1 * S, (z0 + z1) / 2 * S + (IO_Z - 29) * S + 0)
+    p.scale = ((x1 - x0) * S, 0.4 * S, (z1 - z0) * S); p.location = ((x0 + x1) / 2 * S, 88.9 * S, (z0 + z1) / 2 * S)
     bpy.ops.object.transform_apply(scale=True); p.data.materials.append(material("port", INK, 0.7))
 
 # reference block, 127 x 127 x 50 mm, plain matte grey, uniform 4 mm radius, no marks
@@ -116,6 +126,7 @@ bg.inputs["Color"].default_value = lin(CREAM); bg.inputs["Strength"].default_val
 
 def area(name, loc, size, power, target=(0, 0, 0.02)):
     d = bpy.data.lights.new(name, "AREA"); d.size = size; d.energy = power; d.color = (1.0, 0.97, 0.92)
+    if name.startswith("wall"): d.specular_factor = 0.0                 # the backdrop lights only light the sweep, they never mirror in the product
     o = bpy.data.objects.new(name, d); sc.collection.objects.link(o); o.location = loc
     o.rotation_euler = (Vector(target) - Vector(loc)).to_track_quat("-Z", "Y").to_euler()
     return o
@@ -138,7 +149,10 @@ def shoot(name, az, el, dist, lens, target, lights, ev=0.0):
 
 soft = lambda x, y, z: (x, y, z)
 key_front = [("key", (-0.9, -0.45, 0.42), 0.7, 22), ("fill", (0.9, -0.6, 0.5), 1.2, 3.5), ("top", (0.0, 0.0, 1.2), 1.2, 2.0)]
+EV_H, EV_R, EV_T = [float(os.environ.get(k, v)) for k, v in (('EV_H', 1.3), ('EV_R', -3.0), ('EV_T', 1.45))]                         # exposure per view. The rear sweep is lit hard from the front-left so the back wall stays cream, so its exposure is pulled down to keep the floor and the cap under 250
+WALL_K = float(os.environ.get('WALL_K', 7.5))                # rear shot: how hard the back wall of the sweep is lit
+KEY_K = float(os.environ.get('KEY_K', 0.85))                # rear shot: scale on the front-side lights
 ONLY = os.environ.get("STRATA_ONLY")                          # render just one view, e.g. STRATA_ONLY=hero
-if ONLY in (None, "hero"): shoot("hero", -22, 50, 1.2, 85, (72, 0, 8), key_front, 0.0)
-if ONLY in (None, "rear"): shoot("rear", 196, 14, 1.2, 85, (72, 0, 22), [("key", (0.6, 0.8, 0.45), 0.8, 20), ("fill", (-0.8, 0.5, 0.4), 1.2, 4), ("top", (0, 0, 1.2), 1.2, 2)], 0.0)
-if ONLY in (None, "top"): shoot("top", 0, 89, 0.5, 85, (0, 0, 55), [("rake", (-0.9, -0.3, 0.22), 0.4, 26), ("top", (0, 0, 1.0), 1.0, 1.2)], 0.0)
+if ONLY in (None, "hero"): shoot("hero", -22, 32, 1.2, 85, (72, 0, 8), key_front, EV_H)
+if ONLY in (None, "rear"): shoot("rear", 196, 14, 1.2, 85, (72, 0, 22), [("key", (0.6, 0.8, 0.45), 0.8, 20 * KEY_K), ("fill", (-0.8, 0.5, 0.4), 1.2, 4 * KEY_K), ("top", (0, 0, 1.2), 1.2, 2 * KEY_K), ("wall", (0.3, 0.9, 0.8), 2.0, 200 * WALL_K, (0, -2.9, 2.6))], EV_R)
+if ONLY in (None, "top"): shoot("top", 0, 89, 0.253, 85, (0, 0, 55), [("rake", (-0.9, -0.3, 0.22), 0.4, 26), ("top", (0, 0, 1.0), 1.0, 1.2)], EV_T)

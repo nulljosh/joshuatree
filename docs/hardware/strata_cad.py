@@ -29,45 +29,55 @@ STEP_IN = 0.0                    # flush column, every stratum 200 wide
 BASE_W = 200.0
 CAP_T = 3.0                      # flush on ring 5, hides the top nuts
 ROD = 3.4                        # M3 clearance hole (3.0 + 0.4)
-ROD_AT = CORE / 2 + 4            # rods sit 4 mm outside the core wall, inside every ring's corner
+CH, CC = 4.2, 2.5                # vertical corner chamfers: tray outside and tray cavity (the board corner stays 1 mm clear)
+CHR = CH + 0.2 * (2 - 2 ** 0.5) + 0.0   # ring hole chamfer leg, a true 0.2 mm offset of the tray chamfer
+ROD_AT = 91.1                    # rods tuck into the chamfered corners
 NUT_AF, NUT_T = 5.5 + 2 * FIT, 2.4 + FIT   # M3 nut plus clearance
-FOOT_T, FOOT_OD = 1.6, 9.4        # printed or TPU foot, recessed into ring 0's underside, covers the nut pocket and the rod end
+FOOT_T, FOOT_OD = 1.6, 7.6        # printed or TPU foot, recessed into ring 0's underside, covers the nut pocket and the rod end
+CAP_SPLIT = 0.0                  # cap frame cuts sit on the tree's axes, symmetric, never on a ring cut
 SPLIT = 30.0                     # quarter cuts sit at +-30 mm, alternating, so no seam lines up with the ring above or below
 BASE, TOPC, INK = (0xB9, 0x54, 0x2C), (0xF0, 0xE7, 0xD8), (0x1E, 0x1C, 0x1A)
 def mix(a, b, t): return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
 def hexc(c): return "#%02X%02X%02X" % tuple(c)
 TOP_POCKET = 4.0                 # top nut pocket in ring 5: the nut sits on a 3 mm floor, the cap closes it
-SP_OD = 7.0                      # spacer boss outer diameter (printed into the ring above it)
+PAD_T, PAD_L = 2.4, 24.0         # vent spacer pad: 2.4 mm wide, 24 mm long, centred on the front and both side edges, printed into the ring above it, hugging the core so it sits 8.5 mm behind the face
 BOSS_OD, PILOT = 8.0, 2.6        # board standoff printed into the tray floor, 2.6 mm pilot for a self-tapping M3x8
 HOLES = [(sx * HOLE_DX / 2, sy * HOLE_DY / 2) for sx in (-1, 1) for sy in (-1, 1)]
 IO_W, IO_H = 160.0, 45.0         # shield opening 158.75 x 44.45 plus clearance both sides
-PW = IO_W + 4.0                  # rear plate width, window plus a 2 mm frame each side
+PW = IO_W + 2 * MIN_WALL         # rear plate width, window plus a 1.6 mm frame each side
+FAC_Z0 = WALL + STANDOFF - 0.5 - MIN_WALL   # facade bottom: ring 0 is notched to here, the window bottom strip is 1.6 mm
 Z_PLATE_TOP = None
+CAP_R = 2.0                      # panel and frame hole corner radius
 IO_Z = WALL + STANDOFF - 0.5 + IO_H / 2   # window starts 0.5 mm under the PCB, which is exactly where ring 0 ends
 
 C = (Align.CENTER, Align.CENTER, Align.MIN)
 def plate(w, t, r): return extrude(RectangleRounded(w, w, r), t)
+def chamf_sq(w, c, t):
+    h = w / 2; p = [(-h + c, -h), (h - c, -h), (h, -h + c), (h, h - c), (h - c, h), (-h + c, h), (-h, h - c), (-h, -h + c)]
+    return extrude(Face(Wire.make_polygon([Vector(x, y, 0) for x, y in p], close=True)), t)
 def rod_xy(): return [(x * ROD_AT, y * ROD_AT) for x in (-1, 1) for y in (-1, 1)]
-def nut_pocket(x, y, z): return Pos(x, y, z) * extrude(RegularPolygon(NUT_AF / 3 ** 0.5, 6), NUT_T)
+def nut_pocket(x, y, z, t=NUT_T): return Pos(x, y, z) * Rot(0, 0, 15) * extrude(RegularPolygon(NUT_AF / 3 ** 0.5, 6), t)   # flat of the hex faces the corner chamfer
 
 # ---- parts, in assembled coordinates ----
 z = 0.0                         # ring 0 sits on the table, nuts sink into its underside
 ring_z, rings = [], []
 for i, t in enumerate(THICK):
     w = BASE_W - i * STEP_IN
-    s = plate(w, t, 6) - Pos(0, 0, -1) * extrude(Rectangle(CORE + 2 * FIT, CORE + 2 * FIT), t + 2)
+    s = plate(w, t, 6) - Pos(0, 0, -1) * chamf_sq(CORE + 2 * FIT, CHR, t + 2)
     for x, y in rod_xy(): s -= Pos(x, y, -1) * Cylinder(ROD / 2, t + 2, align=C)
     if i == 0:
         for x, y in rod_xy():
             s -= Pos(x, y, -1) * Cylinder(FOOT_OD / 2 + 0.2, FOOT_T + 1, align=C)   # counterbore for the foot
             s -= nut_pocket(x, y, FOOT_T)                        # nut sits above the foot, the foot closes it
     if i == len(THICK) - 1:
-        for x, y in rod_xy(): s -= Pos(x, y, t - TOP_POCKET) * extrude(RegularPolygon(NUT_AF / 3 ** 0.5, 6), TOP_POCKET + 1)   # top nut, closed by the cap
+        for x, y in rod_xy(): s -= nut_pocket(x, y, t - TOP_POCKET, TOP_POCKET + 1)   # top nut, closed by the cap
     s = Pos(0, 0, z) * s
-    if i > 0:                                            # the 2 mm vent spacer is a boss on the ring's underside
-        for x, y in rod_xy(): s += Pos(x, y, z - GAP) * (extrude(Circle(SP_OD / 2), GAP) - Pos(0, 0, -1) * Cylinder(ROD / 2, GAP + 2, align=C))
-    if z < IO_Z + IO_H / 2 and z + t > IO_Z - IO_H / 2:   # any ring the window touches is notched its full height, so no ring has a roof over the notch
-        s -= Pos(0, CORE / 2 + 20, z - 1) * Box(PW + 2 * FIT, 40, t + 2, align=C)
+    if i > 0:                                            # the 2 mm vent spacer is three pads on the ring's underside, right beside the core, deep in the gap shadow; the corners and the rear stay open for air
+        for px, py, dx, dy in ((1, 0, PAD_T, PAD_L), (-1, 0, PAD_T, PAD_L), (0, -1, PAD_L, PAD_T)):
+            s += Pos(px * (CORE / 2 + FIT + PAD_T / 2), py * (CORE / 2 + FIT + PAD_T / 2), z - GAP) * Box(dx, dy, GAP + 0.5, align=(Align.CENTER, Align.CENTER, Align.MIN))
+    nz = max(z, FAC_Z0 - FIT)                              # ring 0's rear wall is notched 1.6 mm so the window gets a bottom frame strip
+    if z < IO_Z + IO_H / 2 and z + t > FAC_Z0:             # any ring the window touches is notched, so no ring has a roof over the notch
+        s -= Pos(0, CORE / 2 + 20, nz) * Box(PW + 2 * FIT, 40, z + t - nz + 1, align=C)
     rings.append(s); ring_z.append(z)
     z += t + (GAP if i < len(THICK) - 1 else 0)   # the cap sits straight on ring 5, no gap
 STACK_TOP = z                    # underside of the cap
@@ -113,8 +123,8 @@ def build_mark():
     return mk
 mark = build_mark()
 # the cap is a panel that carries the whole tree plus a frame: the panel rests on the tray walls, the frame sits on ring 5 and hides the top nuts
-cap_panel = Pos(0, 0, STACK_TOP) * (extrude(Rectangle(CORE, CORE), CAP_T) - mark)
-cap_frame = plate(BASE_W, CAP_T, 6) - Pos(0, 0, -1) * extrude(Rectangle(CORE + 2 * FIT, CORE + 2 * FIT), CAP_T + 2)
+cap_panel = Pos(0, 0, STACK_TOP) * (extrude(RectangleRounded(CORE, CORE, CAP_R), CAP_T) - mark)
+cap_frame = plate(BASE_W, CAP_T, 6) - Pos(0, 0, -1) * extrude(RectangleRounded(CORE + 2 * FIT, CORE + 2 * FIT, CAP_R + FIT), CAP_T + 2)
 cap_frame -= Pos(0, CORE / 2 + 20, -1) * Box(PW + 2 * FIT, 40, Z_PLATE_TOP - STACK_TOP + FIT + 1, align=C)   # rebate over the rear plate top
 cap_frame = Pos(0, 0, STACK_TOP) * cap_frame
 TOP = STACK_TOP + CAP_T
@@ -122,7 +132,7 @@ ROD_LEN = 50.0                   # stock M3 x 50, ends inside the top nut
 
 CORE_H = STACK_TOP               # tray walls run flush to the cap underside and carry the cap panel
 # tray = floor + left, right, front walls. Rear wall is its own plate so nothing prints as a 160 mm bridge.
-tray = Box(CORE, CORE, CORE_H, align=C) - Pos(0, 0, WALL) * Box(CAV, CAV, CORE_H, align=C)
+tray = chamf_sq(CORE, CH, CORE_H) - Pos(0, 0, WALL) * chamf_sq(CAV, CC, CORE_H)
 tray -= Pos(0, CORE / 2 - WALL / 2, WALL) * Box(CORE + 2, WALL + 0.2, CORE_H, align=C)
 zz = 0.0
 for t in THICK:
@@ -137,10 +147,12 @@ for t in THICK:
 for hx, hy in HOLES:                                      # board standoffs are printed into the floor, no metal standoffs
     tray += Pos(hx, hy, WALL - 0.01) * Cylinder(BOSS_OD / 2, STANDOFF + 0.01, align=C)
     tray -= Pos(hx, hy, WALL + STANDOFF - 5) * Cylinder(PILOT / 2, 6, align=C)
-rear = Pos(0, CORE / 2 - WALL / 2, WALL) * Box(CAV - 2 * FIT, WALL, CORE_H - WALL, align=C)
+rear = Pos(0, CORE / 2 - WALL / 2, WALL) * Box(CAV - 2 * FIT, WALL, CORE_H - WALL, align=C) & chamf_sq(CORE, CH, CORE_H)   # clipped to the chamfered corners so it never touches the rings
 # facade: flush with the ring rear faces (y 100), fills the ring notch, sits on ring 0, window frame strips all >= MIN_WALL
 FAC_Y0 = CORE / 2 - WALL                        # starts at the inner plate's front face so nothing overhangs while printing
-rear += Pos(0, (FAC_Y0 + BASE_W / 2) / 2, (IO_Z - IO_H / 2 + Z_PLATE_TOP) / 2) * Box(PW, BASE_W / 2 - FAC_Y0, Z_PLATE_TOP - (IO_Z - IO_H / 2))
+FAC_SLOPE = 2.2                                 # the facade top is level with the cap panel underside until the panel edge, then rises to the rebated frame
+_prof = [(FAC_Y0, FAC_Z0), (BASE_W / 2, FAC_Z0), (BASE_W / 2, Z_PLATE_TOP), (CORE / 2 + FIT + FAC_SLOPE, Z_PLATE_TOP), (CORE / 2 + FIT, STACK_TOP), (FAC_Y0, STACK_TOP)]
+rear += Pos(-PW / 2, 0, 0) * extrude(Face(Wire.make_polygon([Vector(0, y, zz_) for y, zz_ in _prof], close=True)), PW, dir=(1, 0, 0))
 rear -= Pos(0, CORE / 2 + 10, IO_Z) * Box(IO_W, 40, IO_H)
 foot_pos = rod_xy()
 feet = [Pos(x, y, 0) * Cylinder(FOOT_OD / 2, FOOT_T, align=C) for x, y in foot_pos]
@@ -165,9 +177,9 @@ printables = []
 for i, r in enumerate(rings):
     c = SPLIT if i % 2 == 0 else -SPLIT
     for nm, p in split4(r, c, c).items(): printables.append((f"ring{i}_{nm}", p, 1, RING_HEX[i]))
-for nm, p in split4(cap_frame, SPLIT, -SPLIT).items(): printables.append((f"cap_frame_{nm}", p, 1, hexc(TOPC)))
+for nm, p in split4(cap_frame, CAP_SPLIT, CAP_SPLIT).items(): printables.append((f"cap_frame_{nm}", p, 1, hexc(TOPC)))
 printables += [("cap_panel", cap_panel, 1, hexc(TOPC)), ("tray", tray, 1, hexc(INK)), ("rear_plate", rear, 1, hexc(INK)), ("foot", feet[0], 4, hexc(INK))]
-FLIP = lambda n: (n.startswith("ring") and not n.startswith("ring0")) or n.startswith("cap_frame")  # spacer boss goes up, flat face on the bed; the cap prints right side up so the engraving is the last layer
+FLIP = lambda n: (n.startswith("ring") and not n.startswith("ring0")) or n.startswith("cap_frame")  # spacer pad goes up, flat face on the bed; the cap prints right side up so the engraving is the last layer
 
 # ---- checks, in code ----
 def downward_roofs(s):
@@ -201,7 +213,17 @@ for hx, hy in HOLES: assert abs(hx) < BOARD / 2 and abs(hy) < BOARD / 2 and abs(
 assert abs(2 * HOLES[3][0] - HOLE_DX) < 1e-6 and abs(2 * HOLES[3][1] - HOLE_DY) < 1e-6, "hole spacing is not 154.94 x 157.48"
 assert CORE_H >= WALL + STANDOFF + PCB_T + TALLEST, "tray too short for the tallest part on the board"
 # tie rods clear the core, sit inside every ring, and have wall left
-assert ROD_AT - ROD / 2 > CORE / 2 + FIT + MIN_WALL, "rod hole too close to the core"
+hd = lambda r: (2 * ROD_AT - (CORE + 2 * FIT - CHR)) / 2 ** 0.5   # distance from the rod axis to the chamfered ring hole line
+assert hd(0) - ROD / 2 >= MIN_WALL - 1e-9, "rod hole too close to the core"
+assert hd(0) - (FOOT_OD / 2 + 0.2) >= MIN_WALL - 1e-9, "foot recess too close to the core"
+assert hd(0) - NUT_AF / 2 >= MIN_WALL - 1e-9, "nut pocket too close to the core"
+assert (CORE - CH - (CAV - CC)) / 2 ** 0.5 >= MIN_WALL - 1e-9, "tray corner wall under MIN_WALL"
+assert (2 * (CAV / 2) - CC - 2 * BOARD / 2) / 2 ** 0.5 >= 1.0, "cavity chamfer leaves the board corner under 1 mm"
+BOSS_FACE = BASE_W / 2 - (CORE / 2 + FIT + PAD_T)
+assert BOSS_FACE >= 8.0, "spacer pad closer than 8 mm to the outer face"
+assert PAD_L <= 2 * SPLIT - 2 * FIT - 2 and PAD_T >= MIN_WALL, "spacer pad crosses a ring cut or is thin"
+assert abs(CAP_SPLIT - (-SPLIT)) >= 10 and abs(CAP_SPLIT - SPLIT) >= 10, "a cap seam lines up with a ring 5 seam"
+STRIP = lambda: ((PW - IO_W) / 2, IO_Z - IO_H / 2 - FAC_Z0, Z_PLATE_TOP - (IO_Z + IO_H / 2))
 assert ROD_AT + ROD / 2 + MIN_WALL <= top_w / 2, "rod hole leaves under 1.6 mm in the top ring and cap"
 assert STACK_TOP - TOP_POCKET + NUT_T - 1.0 <= FOOT_T + ROD_LEN <= STACK_TOP - 0.3, "rod must reach into the top nut and stay under the cap"
 assert TOP <= 55.0 + 1e-6 and BASE_W <= 200.0, "over the 200 x 200 x 55 target"
@@ -210,13 +232,24 @@ assert CAP_T - MARK_D >= MIN_WALL, "engraving leaves a thin cap"
 # walls
 assert WALL >= MIN_WALL and (top_w - CORE - 2 * FIT) / 2 >= MIN_WALL, "ring frame too thin"
 assert THICK[0] - FOOT_T - NUT_T >= MIN_WALL, "nut pocket leaves a thin floor"
-assert (PW - IO_W) / 2 >= MIN_WALL and Z_PLATE_TOP - (IO_Z + IO_H / 2) >= MIN_WALL - 1e-9, "rear plate frame strip under MIN_WALL"
+assert all(abs(v - MIN_WALL) < 1e-9 for v in STRIP()), "rear plate frame strips are not all 1.6 mm"
 assert CAP_T - (Z_PLATE_TOP - STACK_TOP) >= MIN_WALL, "cap lip over the rear plate under MIN_WALL"
 assert max(THICK) - min(THICK[1:]) < 1e-9, "strata rhythm broken"
-assert (SP_OD - ROD) / 2 >= MIN_WALL, "spacer boss wall too thin"
 assert (BOSS_OD - PILOT) / 2 >= MIN_WALL and abs(HOLES[0][0]) + BOSS_OD / 2 <= CAV / 2, "board standoff wall thin or off the tray"
 assert 13 - 8 >= MIN_WALL and min(THICK) >= MIN_WALL, "vent web too thin"
 assert (CORE + 2 * FIT - CORE) / 2 >= FIT - 1e-9, "ring hole must clear the tray by 0.2 mm"
+# no two printed parts may overlap in the assembled position
+placed = [(n, sh) for n, sh, q, hx in printables if n != "foot"] + [(f"foot{j}", f) for j, f in enumerate(feet)]
+bbs = [sh.bounding_box() for _, sh in placed]
+worst_ov = 0.0
+for a in range(len(placed)):
+    for b in range(a + 1, len(placed)):
+        A, B = bbs[a], bbs[b]
+        if A.max.X < B.min.X or B.max.X < A.min.X or A.max.Y < B.min.Y or B.max.Y < A.min.Y or A.max.Z < B.min.Z or B.max.Z < A.min.Z: continue
+        try: v = (placed[a][1] & placed[b][1]).volume
+        except Exception: v = 0.0
+        worst_ov = max(worst_ov, v)
+        assert v < 0.01, f"{placed[a][0]} and {placed[b][0]} overlap by {v:.3f} mm3"
 asm_parts = rings + [cap_panel, cap_frame, tray, rear, *feet, *rods]
 asm = Compound(asm_parts)
 if os.environ.get("STRATA_MESH"):                  # assembled-position meshes for render_strata.py, one per printed piece
@@ -257,3 +290,17 @@ vol = sum(s.volume * q for _, s, q, _h in printables) / 1000
 print("SOLID VOLUME %.0f cm3 (about %.0f g PLA at 1.24 g/cm3 and 100%% fill)" % (vol, vol * 1.24))
 for r in report: print("  %-22s x%d  %5.1f x %5.1f x %5.1f  %s" % (r["part"], r["qty"], r["x"], r["y"], r["z"], r["hex"]))
 print("PIECES", sum(r["qty"] for r in report), "FILES", len(report))
+print("pad to face %.1f mm, worst part overlap %.4f mm3, strips %s" % (BOSS_FACE, worst_ov, ["%.2f" % v for v in STRIP()]))
+# the parts table in docs/HARDWARE.md is generated here from the constants and manifest.json, so it cannot drift
+npc = lambda pre: sum(r["qty"] for r in report if r["part"].startswith(pre))
+tbl = "\n".join([
+ "| Part | Size | Print |", "|---|---|---|",
+ "| Rings S0 to S5 | %.0f mm square, %s mm thick (base ring first, then equal strata), %.1f mm vent gap between each, %d quarters with cuts at +-%.0f mm alternating, three %.1f x %.1f mm spacer pads on the underside of rings 1 to 5, %.1f mm behind the face, nut pocket under ring 0 and on top of ring 5 | FDM PLA or PETG at 0.2 mm, one tone each |" % (BASE_W, " / ".join("%g" % t for t in THICK), GAP, npc("ring"), SPLIT, PAD_L, PAD_T, BOSS_FACE),
+ "| Cap | %.0f mm square frame in %d pieces (cuts through the centre, never on a ring cut) and a %.0f mm panel in one piece carrying the whole tree, %.0f mm thick, panel and frame hole corners R%.0f, tree from `landing/logo.svg` engraved %.1f mm | Same print, printed right side up |" % (BASE_W, npc("cap_frame"), CORE, CAP_T, CAP_R, MARK_D),
+ "| Core tray | %.0f mm square, %.1f mm tall, %.0f mm walls, corners chamfered %.1f mm, vent slots on every gap line, 4 board standoffs printed on the floor, no rear wall | Printed, floor down, no supports |" % (CORE, CORE_H, WALL, CH),
+ "| Rear plate | %.1f x %.1f mm and %.0f mm deep including the facade, one piece, with the %.0f x %.0f I/O window and a %.1f mm frame on all four sides, flush with the ring faces | Printed lying flat |" % (next(r for r in report if r["part"] == "rear_plate")["x"], next(r for r in report if r["part"] == "rear_plate")["y"], next(r for r in report if r["part"] == "rear_plate")["z"], IO_W, IO_H, MIN_WALL),
+ "| Feet | %.1f mm round, %.1f mm thick, recessed under ring 0, cover the nut and the rod end | TPU or PLA |" % (FOOT_OD, FOOT_T)])
+hw = os.path.join(OUT, "..", "HARDWARE.md")
+if os.path.exists(hw):
+    t = open(hw).read(); a, b = "<!-- parts:start -->", "<!-- parts:end -->"
+    if a in t: open(hw, "w").write(t[:t.index(a) + len(a)] + "\n" + tbl + "\n" + t[t.index(b):])
