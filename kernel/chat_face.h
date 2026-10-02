@@ -206,25 +206,39 @@ static void face_blit_full(const unsigned char *px, const unsigned char *mix) {
     int side = fh - top; if (side > 720 * sc) side = 720 * sc;
     int ox = (fw - side) / 2;
     int x0 = ox < 0 ? 0 : ox, x1 = ox + side > fw ? fw : ox + side;
-    for (int y = top; y < limit; y++) {
-        int sy = (y - top) * FACE_SRC / side;
-        int below = sy >= FACE_SRC;
-        if (below) sy = FACE_SRC - 1;
-        unsigned int ro = (unsigned int)sy * FACE_SRC * 3;
-        if (below) {   /* under the frame: the last row's left edge, a flat fill */
-            unsigned int c = (px[ro] << 16) | (px[ro + 1] << 8) | px[ro + 2];
-            window_fill_rect_phys(0, y, fw, 1, c);
-            continue;
+    if (x1 > 4096) x1 = 4096;
+    int rows = limit - top; if (rows > side) rows = side;
+    /* Per-column source index, rebuilt only when the geometry changes: the
+       division per pixel was most of the cost of a frame. */
+    static unsigned short colmap[4096];
+    static int map_side = -1, map_ox = 0, map_fw = 0;
+    if (map_side != side || map_ox != ox || map_fw != fw) {
+        for (int x = x0; x < x1; x++) colmap[x] = (unsigned short)((x - ox) * FACE_SRC / side);
+        /* The wall beside and below the frame is painted once, from this
+           frame's edge pixels: it is a plain wall, it does not move. */
+        for (int y = top; y < limit; y++) {
+            int sy = (y - top) * FACE_SRC / side; if (sy >= FACE_SRC) sy = FACE_SRC - 1;
+            unsigned int ro = (unsigned int)sy * FACE_SRC * 3, e = ro + (FACE_SRC - 1) * 3;
+            if (y - top >= side) { window_fill_rect_phys(0, y, fw, 1, (px[ro] << 16) | (px[ro + 1] << 8) | px[ro + 2]); continue; }
+            if (x0 > 0) window_fill_rect_phys(0, y, x0, 1, (px[ro] << 16) | (px[ro + 1] << 8) | px[ro + 2]);
+            if (x1 < fw) window_fill_rect_phys(x1, y, fw - x1, 1, (px[e] << 16) | (px[e + 1] << 8) | px[e + 2]);
         }
-        if (x0 > 0) window_fill_rect_phys(0, y, x0, 1, (px[ro] << 16) | (px[ro + 1] << 8) | px[ro + 2]);
-        if (x1 < fw) { unsigned int e = ro + (FACE_SRC - 1) * 3; window_fill_rect_phys(x1, y, fw - x1, 1, (px[e] << 16) | (px[e + 1] << 8) | px[e + 2]); }
-        for (int x = x0; x < x1; x++) {
-            unsigned int o = ro + (unsigned int)((x - ox) * FACE_SRC / side) * 3;
-            unsigned int R = px[o], G = px[o + 1], B = px[o + 2];
-            if (mix) { R = (R + mix[o]) >> 1; G = (G + mix[o + 1]) >> 1; B = (B + mix[o + 2]) >> 1; }
-            window_pixel_phys(x, y, (R << 16) | (G << 8) | B);
+        map_side = side; map_ox = ox; map_fw = fw;
+    }
+    /* The face itself: one row pointer per row, 32-bit stores, damage
+       declared once. Through window_pixel_phys this was ~4 frames a second
+       in v86 (live recording, 2026-10-02); the clip wants 12. */
+    for (int y = top; y < top + rows; y++) {
+        unsigned int ro = (unsigned int)((y - top) * FACE_SRC / side) * FACE_SRC * 3;
+        unsigned int *row = window_phys_row(y);
+        if (row) {
+            if (mix) for (int x = x0; x < x1; x++) { unsigned int o = ro + colmap[x] * 3u; row[x] = (((px[o] + mix[o]) >> 1) << 16) | (((px[o + 1] + mix[o + 1]) >> 1) << 8) | ((px[o + 2] + mix[o + 2]) >> 1); }
+            else for (int x = x0; x < x1; x++) { unsigned int o = ro + colmap[x] * 3u; row[x] = (px[o] << 16) | (px[o + 1] << 8) | px[o + 2]; }
+        } else {
+            for (int x = x0; x < x1; x++) { unsigned int o = ro + colmap[x] * 3u; window_pixel_phys(x, y, (px[o] << 16) | (px[o + 1] << 8) | px[o + 2]); }
         }
     }
+    window_damage(x0, top, x1 - x0, rows);
 }
 
 /* The glass bar: the bottom face_band_h logical rows, full width, of whatever
