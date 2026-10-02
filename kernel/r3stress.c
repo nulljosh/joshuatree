@@ -16,15 +16,67 @@
 #include "kheap.h"
 #include "vfs.h"
 #include "serial.h"
+#include "task.h"
+#include "paging.h"
 
 extern int syscall_stress_on;
 static unsigned int desk_rounds, desk_bad, sys_rounds, sys_bad;
+
+/* 1.9.24: `stress=pde`, the kernel-PDE sync proof (kernel/paging.c,
+   paging_sync_task_dirs). Once the ring-3 window is up the desktop grows
+   the heap in 4 KB steps until a block lands in a 4 MB region that had no
+   page table when the task was created, then hands that block's address
+   to the syscall side, which writes and reads it on the task's own CR3.
+   Before the sync that read page-faulted at ring 0. */
+int pde_stress_on;
+static volatile unsigned int *pde_block;
+static unsigned int pde_first, pde_done, pde_sys_hits;
+#define PDE_GROW_CAP 3072 /* 3072 * 4 KB = 12 MB, enough to cross a 4 MB line from anywhere */
 #define DESK_ROUNDS 400
 #define DESK_BURST 256
 
 void r3stress_arm(const char *cl) {
     for (const char *p = cl; p && *p; p++)
         if (p[0]=='s' && p[1]=='t' && p[2]=='r' && p[3]=='e' && p[4]=='s' && p[5]=='s' && p[6]=='=' && p[7]=='r' && p[8]=='3') { syscall_stress_on = 1; serial_puts("r3stress: armed\n"); }
+    for (const char *p = cl; p && *p; p++)
+        if (p[0]=='s' && p[1]=='t' && p[2]=='r' && p[3]=='e' && p[4]=='s' && p[5]=='s' && p[6]=='=' && p[7]=='p' && p[8]=='d' && p[9]=='e') { pde_stress_on = 1; serial_puts("pdestress: armed\n"); }
+}
+
+/* Under the syscall gate, on the ring-3 task's CR3: touch the block the
+   desktop placed in the freshly mapped region. */
+static unsigned int pde_task_seen;
+void pdestress_syscall_round(void) {
+    pde_task_seen = 1; /* a ring-3 window task is live and polling: only grow after this, so the new table is born after its directory */
+    if (!pde_block || pde_done) return;
+    pde_block[0] = 0x5A5A0000u + pde_sys_hits;
+    if (pde_block[0] != 0x5A5A0000u + pde_sys_hits) { serial_puts("pdestress: readback mismatch\n"); }
+    pde_sys_hits++;
+    if (pde_sys_hits == 1) serial_puts("pdestress: syscall touched the new region\n");
+}
+
+/* Once per frame, task 0, interrupts on: grow the heap past a 4 MB line
+   after a ring-3 task exists, then wait for the syscall side to touch it. */
+void pdestress_desktop_round(void) {
+    if (!pde_stress_on || pde_done) return;
+    if (!pde_task_seen) return;
+    if (!pde_block) {
+        unsigned int *probe = kmalloc(16);
+        if (!probe) { serial_puts("pdestress: first kmalloc failed\n"); pde_done = 1; return; }
+        pde_first = paging_pde_change_count(); (void)probe;
+        for (unsigned int i = 0; i < PDE_GROW_CAP; i++) {
+            unsigned int *b = kmalloc(4096 - 32);
+            if (!b) { serial_puts("pdestress: heap growth stopped early\n"); pde_done = 1; return; }
+            if (paging_pde_change_count() != pde_first) { /* grow_heap just created a kernel page table this task never saw at birth */
+                pde_block = b;
+                serial_puts("pdestress: heap crossed into a new 4 MB region\n");
+                if (paging_check_task_dirs()) serial_puts("pdestress: task directories drifted\n");
+                else serial_puts("pdestress: task directories in sync\n");
+                return;
+            }
+        }
+        serial_puts("pdestress: never crossed a 4 MB line\n"); pde_done = 1; return;
+    }
+    if (pde_sys_hits >= 8) { pde_done = 1; serial_puts("pdestress: done\n"); }
 }
 
 /* Called under the syscall gate by a ring-3 window task. */
