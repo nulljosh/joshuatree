@@ -185,11 +185,11 @@ void _start(int argc, char **argv) {
 
         int old = sj_sel;
         if (ev.kind == JT_EV_CLICK) {
+            if (ev.a < 0 || ev.b < 0 || ev.a >= (int)win.width || ev.b >= (int)win.height) break; /* chrome X or dock */
             if (ev.b >= SJ_TOP && ev.a >= SJ_LIST_X && ev.a < SJ_LIST_X + SJ_LIST_W) {
                 int sel = (ev.b - SJ_TOP) / SJ_ROW_H;
-                if (sel >= SJ_COUNT) break;
-                sj_sel = sel;
-            } else break; /* the titlebar X, or anywhere off the list */
+                if (sel < SJ_COUNT) sj_sel = sel;
+            }
         } else if (ev.kind == JT_EV_KEY) {
             if (ev.a == JT_KEY_ESC) break;
             if (ev.a == '`') { jt_write(1, "sparkjar: crashing on purpose\n", 30); *(volatile int *)0 = 1; } /* deliberate crash, as in every ring-3 app */
