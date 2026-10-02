@@ -1013,6 +1013,11 @@ static int llm_port = 80;
 /* 1.9.26: read-only view for SYS_HTTP_POST (kernel/syscall.c). Settings still owns the write. */
 const char *llm_host_get(void) { return llm_host; }
 int llm_port_get(void) { return llm_port; }
+/* 1.9.27: the Mail token Settings owns (SETTINGS.TXT mailtoken=). Only SYS_HTTP_POST reads it, to
+   build the Authorization header for /api/mail/send; no syscall hands it to ring 3. */
+#define MAIL_TOKEN_MAX 64
+static char mail_token[MAIL_TOKEN_MAX] = "";
+const char *mail_token_get(void) { return mail_token; }
 /* v85: real chat models actually installed on the host (checked via
    `ollama list`), not a free-text field a typo can point at nothing.
    nomic-embed-text is also installed but is embedding-only, deliberately
@@ -1046,7 +1051,7 @@ static const char *LLM_MODELS[] = { "samantha", "qwen3:8b", "llama3.1:8b" };
    existing numeric one rather than a new file format. */
 #define SETTINGS_FILE "SETTINGS.TXT"
 static void settings_load(void){
-    static char buf[384];
+    static char buf[512];
     int n = vfs_read_file(SETTINGS_FILE, buf, sizeof(buf) - 1);
     if (n <= 0) return; /* no file yet: compiled-in defaults stand */
     buf[n] = 0;
@@ -1065,6 +1070,7 @@ static void settings_load(void){
         int is_llmmodel = keylen == 8 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='m' && buf[start+4]=='o' && buf[start+5]=='d' && buf[start+6]=='e' && buf[start+7]=='l';
         int is_llmhost  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='h' && buf[start+4]=='o' && buf[start+5]=='s' && buf[start+6]=='t';
         int is_llmport  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='p' && buf[start+4]=='o' && buf[start+5]=='r' && buf[start+6]=='t';
+        int is_mailtoken = keylen == 9 && buf[start]=='m' && buf[start+1]=='a' && buf[start+2]=='i' && buf[start+3]=='l' && buf[start+4]=='t' && buf[start+5]=='o' && buf[start+6]=='k' && buf[start+7]=='e' && buf[start+8]=='n';
         int is_loc = keylen == 3 && buf[start]=='l' && buf[start+1]=='o' && buf[start+2]=='c';
         if (is_loc) {
             /* value shape: name;lat;lon -- the same three fields
@@ -1117,6 +1123,12 @@ static void settings_load(void){
             int p = 0; while (use[p] && p < LLM_MODEL_MAX - 1) { llm_model[p] = use[p]; p++; } llm_model[p] = 0;
             continue;
         }
+        if (is_mailtoken) {
+            int j = 0, k = eq + 1;
+            while (k < line_end && j < MAIL_TOKEN_MAX - 1) mail_token[j++] = buf[k++];
+            mail_token[j] = 0;
+            continue;
+        }
         if (is_llmhost) {
             int j = 0, k = eq + 1;
             while (k < line_end && j < LLM_HOST_MAX - 1) llm_host[j++] = buf[k++];
@@ -1136,7 +1148,7 @@ static void settings_load(void){
 }
 
 static void settings_save(void){
-    char buf[320];
+    static char buf[512];
     int n = 0;
     const char *k1 = "wind="; while (*k1) buf[n++] = *k1++;
     buf[n++] = wind_enabled ? '1' : '0'; buf[n++] = '\n';
@@ -1158,6 +1170,11 @@ static void settings_save(void){
       while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
       while (nd) buf[n++] = digits[--nd]; }
     buf[n++] = '\n';
+    if (mail_token[0]) {
+        const char *k8 = "mailtoken="; while (*k8) buf[n++] = *k8++;
+        { const char *s = mail_token; while (*s && n < (int)sizeof(buf) - 80) buf[n++] = *s++; }
+        buf[n++] = '\n';
+    }
     if (loc_have) {
         const char *k7 = "loc="; while (*k7) buf[n++] = *k7++;
         { const char *s = loc_name; while (*s && n < (int)sizeof(buf) - 34) buf[n++] = *s++; }

@@ -795,6 +795,7 @@ static int sys_http_get(u32 path, u32 buf, u32 len) {
     if (!net_init(0x0A00020F)) { n = -ENODEV; }
     else if (big) {
         n = http_get_timeout(HTTP_HOST, kpath, HTTP_PORT, (char *)buf, len, HTTP_BIG_TICKS);
+        http_post_set_bearer(0); /* belt and braces: a failed resolve must not leave it armed */
         st = http_last_status();
         if (n < 0) n = -EIO;
         else if (st != 200) n = st >= 100 && st <= 599 ? -st : -EIO;
@@ -823,6 +824,11 @@ static int sys_http_get(u32 path, u32 buf, u32 len) {
    is copied out after the exchange is over and only on a 200. The two bounce
    buffers are static (14 KB would not fit the 4KB kernel stack) and shared
    with http_get through the same http_busy flag. */
+static int path_is_mail_send(const char *p) {
+    const char *m = "/api/mail/send";
+    while (*m && *p == *m) { p++; m++; }
+    return !*m && !*p;
+}
 static char http_post_body[JT_HTTP_POST_BODY_MAX];
 static char http_post_reply[JT_HTTP_POST_REPLY_MAX];
 static int sys_http_post(u32 argp, u32 flags, u32 unused2) {
@@ -859,6 +865,9 @@ static int sys_http_post(u32 argp, u32 flags, u32 unused2) {
     else {
         const char *host = (flags & JT_POST_WORKER) ? HTTP_HOST : llm_host_get();
         unsigned short port = (flags & JT_POST_WORKER) ? HTTP_PORT : (unsigned short)llm_port_get();
+        /* 1.9.27: the Mail token never crosses into ring 3. The kernel adds the bearer itself, only
+           for the Worker's mail route, from the Settings-owned token. */
+        if ((flags & JT_POST_WORKER) && path_is_mail_send(kpath)) http_post_set_bearer(mail_token_get());
         if (big) n = http_post_timeout(host, kpath, port, a.body, a.body_len, a.out, a.out_len, ticks);
         else n = http_post_timeout(host, kpath, port, http_post_body, a.body_len, http_post_reply, sizeof(http_post_reply), ticks);
         st = http_last_status();

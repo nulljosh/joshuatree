@@ -731,6 +731,15 @@ copies the body into its own request buffer). As with big `http_get`, `out` may
 hold scratch bytes after a failure. Unknown flag bits are -EINVAL. Samantha's
 push-to-talk uses both: up to about 4 s of 16 kHz 8-bit audio to `/api/listen`.
 
+One path is special. A `JT_POST_WORKER` post to exactly `/api/mail/send` (the Mail
+app's Send) gets an `Authorization: Bearer <token>` header added by the kernel, from
+the Mail token in Settings (Assistant, `mailtoken=` in `SETTINGS.TXT`). The program
+never supplies, sees or can read that token, no syscall returns it, and the header is
+armed for that one request and cleared straight after, so no other path or later
+request carries it. With no token set the Worker answers 401 and the call returns
+-401. On a failure the Worker's error text is not returned (nothing is written to
+`out`), only the status: Mail maps -401, -429, -400, -503 and -502 to a short reason.
+
 ## audio (1.9.26)
 
 | # | Name | ebx | ecx | edx | Returns |

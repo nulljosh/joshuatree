@@ -509,6 +509,60 @@ async function handleListen(request, env) {
   }
 }
 
+// POST /api/mail/send: the Mail app's outgoing path (user/mail.c). The kernel has no TLS, so it posts
+// plain HTTP here and this relays through Resend, same request shape as sendWaitlistEmail above.
+// Guards, in order: POST only; a bearer token (MAIL_SEND_TOKEN secret, the kernel adds it from
+// Settings, so the public demo cannot relay mail); a per-IP limit (MAIL_RATE_LIMITER, and with no
+// binding it refuses rather than running unlimited); one validated recipient; capped text.
+// Fixed sender, no reply-to, so this can never be used to impersonate anyone.
+const MAIL_SEND_FROM = "Samantha <samantha@epiphany.heyitsmejosh.com>";
+const MAIL_MAX_BODY_BYTES = 8192;
+const MAIL_ADDR_RE = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
+
+function tokenEquals(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+const mailErr = (status, error) => new Response(JSON.stringify({ error }), { status, headers: JSON_CORS });
+// Strip control characters (CR/LF included) so nothing typed can break a header or forge lines.
+const oneLine = (v, max) => String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f]+/g, " ").trim().slice(0, max);
+
+async function handleMailSend(request, env) {
+  if (request.method !== "POST") return mailErr(405, "method not allowed");
+  if (!env.MAIL_SEND_TOKEN || !env.RESEND_API_KEY) return mailErr(503, "mail is not configured");
+  const auth = request.headers.get("authorization") || "";
+  if (!auth.startsWith("Bearer ") || !tokenEquals(auth.slice(7), env.MAIL_SEND_TOKEN)) return mailErr(401, "missing or wrong mail token");
+  if (!env.MAIL_RATE_LIMITER) return mailErr(503, "mail rate limit is not configured");
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  const { success } = await env.MAIL_RATE_LIMITER.limit({ key: ip });
+  if (!success) return mailErr(429, "too many messages, try again later");
+
+  const declared = Number(request.headers.get("content-length") || "0");
+  if (declared > MAIL_MAX_BODY_BYTES) return mailErr(413, "message too large");
+  let data;
+  try { data = JSON.parse(await request.text()); } catch (e) { return mailErr(400, "bad json"); }
+  if (!data || typeof data !== "object") return mailErr(400, "bad json");
+
+  const to = oneLine(data.to, 254);
+  if (!MAIL_ADDR_RE.test(to)) return mailErr(400, "to must be one email address");
+  const subject = oneLine(data.subject, 120) || "(no subject)";
+  const fromName = oneLine(data.from_name, 40) || "someone";
+  const body = String(data.body == null ? "" : data.body).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").slice(0, 2000);
+  if (!body.trim()) return mailErr(400, "body is empty");
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: MAIL_SEND_FROM, to: [to], subject, text: `${body}\n\n--\nSent by ${fromName} from Joshua Tree (joshuatree.heyitsmejosh.com).` }),
+    });
+    if (!res.ok) { console.warn("mail send failed", res.status, await res.text()); return mailErr(502, "the mail service refused the message"); }
+  } catch (e) { console.warn("mail send error", String(e)); return mailErr(502, "the mail service is unreachable"); }
+  return new Response(JSON.stringify({ ok: true }), { status: 200, headers: JSON_CORS });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -516,6 +570,7 @@ export default {
     if (url.pathname === "/api/quotes") return handleQuotes();
     if (url.pathname === "/api/deals") return handleDeals(request);
     if (url.pathname === "/api/listen") return handleListen(request, env);
+    if (url.pathname === "/api/mail/send") return handleMailSend(request, env);
     if (url.pathname === "/api/speak" && request.method === "GET") return handleSpeakGet(url, request, env);
     if (url.pathname === "/api/proxy") {
       return handleProxy(request, env);
@@ -537,4 +592,5 @@ export { isAllowedTarget, handleProxy, ALLOWED_HOSTS };
 
 export { stockWire, handleStocks };
 export { handleWaitlistPost, handleWaitlistCount };
+export { handleMailSend, MAIL_SEND_FROM };
 export { handleListen, wrapPcmAsWav, LISTEN_MAX_BYTES };

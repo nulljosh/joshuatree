@@ -48,7 +48,7 @@ static void mail_load(void) {
     mail_count = 0;
     int i = 0;
     while (i < n && mail_count < MAIL_MAX) {
-        int is_read = (buf[i] == 'r');
+        int is_read = (buf[i] != 'u'); /* r read, u unread, s/x read outgoing (sent / not sent, ring-3 Mail) */
         i += 2; /* flag + the '|' right after it */
         mail_msg_t *m = &mail_msgs[mail_count];
         int j;

@@ -183,6 +183,7 @@ once |7|Stocks live quotes and kernel parsing|node ./tools/checks/stocks-live-ch
 retry|5|Epiphany command bar: AAPL GP draws the chart, an unknown code errors cleanly|python3 ./tools/checks/epiphany-cmdbar-check.py
 once |3|Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs
 once |3|Worker /api/waitlist store, validate, count|node ./tools/checks/waitlist-check.mjs
+once |3|Mail Send: Worker /api/mail/send guards and Resend shape, kernel bearer wiring|python3 ./tools/checks/mailsend-check.py
 once |7|Worker /api/proxy: a silent upstream cannot hang the guest (weather/chat freeze regression)|node ./tools/checks/weatherproxy-hang-check.mjs
 once |3|Worker /api/listen: Whisper transcription, 503 without the AI binding, rejects oversize/empty, per-IP rate limit|node ./tools/checks/listen-worker-check.mjs
 retry|3|Every app opens and closes by keyboard alone|python3 ./tools/checks/keyboard-only-check.py

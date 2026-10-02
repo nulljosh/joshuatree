@@ -8,13 +8,16 @@
  * read and rewritten through the ordinary file syscalls. When MAIL.TXT does
  * not exist the same two starter messages appear, as in the kernel.
  *
- * Compose is an inline sheet over the same window (no second window). From,
- * Subject, Body; Enter moves on, Enter on Body or the Send button files the
- * message, Esc or Cancel drops it. Like the kernel app there is no SMTP: Send
- * writes the message into the local inbox, and the sheet says so. Type is the
- * antialiased libjt face. The backquote key is the deliberate crash (outside
+ * Compose is an inline sheet over the same window (no second window). To, From,
+ * Subject, Body; Enter moves on, Enter on Body or the Send button sends the
+ * message, Esc or Cancel drops it. The kernel has no TLS, so Send POSTs
+ * {from_name,to,subject,body} to the joshuatree Worker's /api/mail/send
+ * (jt_http_post_ex with JT_POST_WORKER); the kernel adds the Mail token from
+ * Settings as the bearer, ring 3 never sees it. The reply is "Sent" or a short
+ * reason, and the message is filed in MAIL.TXT either way, flagged s (sent)
+ * or x (unsent) in the record's first character. Type is the antialiased libjt face. The backquote key is the deliberate crash (outside
  * the compose sheet, where it types). Serial markers: mail: n=COUNT,
- * mail: read=I, mail: compose=1 (the inline sheet opened), mail: deleted n=COUNT, mail: filed n=COUNT.
+ * mail: read=I, mail: compose=1 (the inline sheet opened), mail: deleted n=COUNT, mail: filed n=COUNT, mail: sent=1 or mail: unsent=STATUS.
  */
 #include "jtsys.h"
 #include "libjt/text.h"
@@ -31,6 +34,7 @@
 #define SHEET 0x00F3EEE5
 
 #define MAX 24
+#define TO_MAX 64
 #define FROM_MAX 32
 #define SUBJ_MAX 48
 #define BODY_MAX 240
@@ -38,21 +42,21 @@
 #define ROW_H 22
 
 /* Messages are views into the raw file text: '|' and newline are turned into NULs in place. */
-struct msg { char *from; char *subject; char *body; int read; };
+struct msg { char *from; char *subject; char *body; int read; int sent; }; /* sent: 0 plain, 1 sent, 2 not sent */
 
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 extern char _user_end[];
 /* Big buffers live past _user_end (a flat image has no .bss), like user/contacts.c. */
-struct arena { struct msg msgs[MAX]; char filebuf[4096]; char cfb[FROM_MAX + SUBJ_MAX + BODY_MAX]; int used; };
+struct arena { struct msg msgs[MAX]; char filebuf[4096]; char cfb[TO_MAX + FROM_MAX + SUBJ_MAX + BODY_MAX]; char req[1100]; char rep[96]; int used; };
 static struct arena *ar JT_DATA = 0;
 #define msgs (ar->msgs)
 #define filebuf (ar->filebuf)
 static int count JT_DATA = 0;
 static int sel JT_DATA = 0;
 static int mode JT_DATA = 0;      /* 0 list, 1 read, 2 compose sheet */
-static int field JT_DATA = 0;     /* compose: 0 from, 1 subject, 2 body */
-static int cl[3] JT_DATA = {0, 0, 0};
-static char *cfp(int f) { return ar->cfb + (f == 0 ? 0 : f == 1 ? FROM_MAX : FROM_MAX + SUBJ_MAX); }
+static int field JT_DATA = 0;     /* compose: 0 to, 1 from, 2 subject, 3 body */
+static int cl[4] JT_DATA = {0, 0, 0, 0};
+static char *cfp(int f) { return ar->cfb + (f == 0 ? 0 : f == 1 ? TO_MAX : f == 2 ? TO_MAX + FROM_MAX : TO_MAX + FROM_MAX + SUBJ_MAX); }
 #define cf(f) cfp(f)
 static const char *note JT_DATA = 0;
 
@@ -90,17 +94,17 @@ static char *stash(const char *src) {
     ar->used += n + 1;
     return d;
 }
-static void add_msg(const char *f, const char *s, const char *b, int read) {
+static void add_msg(const char *f, const char *s, const char *b, int read, int sent) {
     struct msg *m = &msgs[count];
-    m->from = stash(f); m->subject = stash(s); m->body = stash(b); m->read = read;
+    m->from = stash(f); m->subject = stash(s); m->body = stash(b); m->read = read; m->sent = sent;
     count++;
 }
 
 static void seed(void) {
     add_msg("Joshua Tree", "Welcome to Mail",
-        "This is a real local inbox, no network behind it. Press enter to read a message, c to compose one, d to delete, esc to close.", 0);
+        "This is a real local inbox. Press enter to read a message, c to compose one (Send goes out through the joshuatree Worker), d to delete, esc to close.", 0, 0);
     add_msg("Joshua Tree", "About this app",
-        "Same shape as Notes and Reminders: everything here is written through to MAIL.TXT on the real FAT disk immediately, no Save button, no draft you can lose.", 0);
+        "Same shape as Notes and Reminders: everything here is written through to MAIL.TXT on the real FAT disk immediately, no Save button, no draft you can lose.", 0, 0);
 }
 
 /* Same format as mail_load in kernel/mail.h: "r|from|subject|body\n". Parsed in
@@ -117,7 +121,8 @@ static void load(void) {
     count = 0;
     while (i < n && count < MAX) {
         struct msg *m = &msgs[count];
-        m->read = (b[i] == 'r');
+        m->read = (b[i] != 'u');
+        m->sent = b[i] == 's' ? 1 : b[i] == 'x' ? 2 : 0;
         i += 2;
         m->from = b + i;
         while (i < n && b[i] != '|' && b[i] != '\n') i++;
@@ -144,7 +149,7 @@ static void save(void) {
     if (fd < 0) { note = "could not save MAIL.TXT"; return; }
     for (int k = 0; k < count; k++) {
         struct msg *m = &msgs[k];
-        put(fd, m->read ? "r|" : "u|");
+        put(fd, m->sent == 1 ? "s|" : m->sent == 2 ? "x|" : m->read ? "r|" : "u|");
         put(fd, m->from); put(fd, "|");
         put(fd, m->subject); put(fd, "|");
         put(fd, m->body); put(fd, "\n");
@@ -199,29 +204,30 @@ static void fit(char *out, const char *s, int maxw) {
 #define SH_X 24
 #define SH_Y 40
 static int sh_w(void) { return (int)win.width - 48; }
-static int fld_y(int f) { return SH_Y + 44 + f * 54; }
-static int btn_y(void) { return fld_y(2) + 90; }
+static int fld_y(int f) { return SH_Y + 40 + f * 46; }
+static int fld_h(int f) { return f == 3 ? 54 : 24; }
+static int btn_y(void) { return fld_y(3) + 64; }
 
 static void draw_sheet(void) {
     char t[BODY_MAX];
     int w = sh_w();
     rect(SH_X - 6, SH_Y - 6, w + 12, btn_y() + 52 - SH_Y, SHEET);
     jt_text_draw(&win, JT_FACE_BOLD, SH_X + 6, SH_Y + 4, INK, "New Message");
-    const char *lab[3] = {"From", "Subject", "Body"};
-    for (int f = 0; f < 3; f++) {
+    const char *lab[4] = {"To", "From name", "Subject", "Body"};
+    for (int f = 0; f < 4; f++) {
         int y = fld_y(f);
         text(lab[f], SH_X + 6, y - 18, DIM);
-        int h = f == 2 ? 70 : 24;
+        int h = fld_h(f);
         rect(SH_X + 6, y, w - 12, h, f == field ? WHITE : BTN);
         if (f == field) { rect(SH_X + 6, y, w - 12, 1, DIM); rect(SH_X + 6, y + h - 1, w - 12, 1, DIM); }
         cf(f)[cl[f]] = 0;
-        if (f == 2) wrapped(cf(f), SH_X + 12, y + 4, w - 24, y + h, INK);
+        if (f == 3) wrapped(cf(f), SH_X + 12, y + 4, w - 24, y + h, INK);
         else { fit(t, cf(f), w - 28); text(t, SH_X + 12, y + 3, INK); }
     }
     int by = btn_y();
     rect(SH_X + 6, by, 80, 24, BTN);        text("Cancel", SH_X + 18, by + 3, INK);
     rect(SH_X + 94, by, 80, 24, BTN_ON);    jt_text_draw(&win, JT_FACE_BOLD, SH_X + 112, by + 3, INK, "Send");
-    text("Local inbox only: nothing leaves this machine, no SMTP.", SH_X + 186, by + 3, DIM);
+    text("Sends through the joshuatree Worker; filed here either way.", SH_X + 186, by + 3, DIM);
 }
 
 static void draw(void) {
@@ -250,8 +256,9 @@ static void draw(void) {
             if (!msgs[i].read) rect(24, y + 5, 6, 6, INK);
             fit(t, msgs[i].from, 150);
             text(t, 40, y - 1, fg);
-            fit(t, msgs[i].subject, W - 220 - 20);
+            fit(t, msgs[i].subject, W - 220 - 20 - (msgs[i].sent ? 90 : 0));
             text(t, 200, y - 1, fg);
+            if (msgs[i].sent) text(msgs[i].sent == 1 ? "sent" : "not sent", W - 100, y - 1, DIM);
         }
     }
     if (note) text(note, 20, (int)win.height - 28, DIM);
@@ -269,19 +276,73 @@ static void compose_begin(void) {
     if (count >= MAX) { note = "Inbox is full (24). Delete something first."; return; }
     mode = 2; field = 0; note = 0;
     say("mail: compose=", 1);
-    for (int f = 0; f < 3; f++) { cl[f] = 0; cf(f)[0] = 0; }
+    for (int f = 0; f < 4; f++) { cl[f] = 0; cf(f)[0] = 0; }
+}
+/* Append src to out as a JSON string body (printable ASCII only, so only " and \\ need escapes). */
+static int jput(char *out, int n, int cap, const char *src) {
+    for (; *src && n < cap - 2; src++) {
+        if (*src == '"' || *src == '\\') out[n++] = '\\';
+        out[n++] = *src;
+    }
+    return n;
+}
+static int jkv(char *out, int n, int cap, const char *key, const char *val, int last) {
+    out[n++] = '"';
+    for (const char *k = key; *k && n < cap - 2; k++) out[n++] = *k;
+    out[n++] = '"'; out[n++] = ':'; out[n++] = '"';
+    n = jput(out, n, cap, val);
+    out[n++] = '"';
+    if (!last) out[n++] = ',';
+    return n;
+}
+static const char *why(int r) {
+    if (r == -401 || r == -403) return "Not sent: the Mail token is missing or wrong (Settings, Assistant).";
+    if (r == -429) return "Not sent: too many messages, try again later.";
+    if (r == -400) return "Not sent: the Worker rejected the address or the text.";
+    if (r == -503) return "Not sent: mail is not configured on the Worker.";
+    if (r <= -100) return "Not sent: the mail service failed.";
+    return "Not sent: no network or no answer.";
+}
+/* POST the composed message to the Worker. Returns 1 on "Sent", else 0 with note set. */
+static int post_mail(void) {
+    char *q = ar->req;
+    int n = 0, cap = (int)sizeof ar->req;
+    q[n++] = '{';
+    n = jkv(q, n, cap, "from_name", cf(1)[0] ? cf(1) : "Joshua Tree", 0);
+    n = jkv(q, n, cap, "to", cf(0), 0);
+    n = jkv(q, n, cap, "subject", cf(2), 0);
+    n = jkv(q, n, cap, "body", cf(3), 1);
+    q[n++] = '}'; q[n] = 0;
+    struct jt_http_post a = { "/api/mail/send", q, (unsigned)n, ar->rep, sizeof ar->rep - 1, 1500 };
+    int r = jt_http_post_ex(&a, JT_POST_WORKER);
+    if (r >= 0) { note = "Sent."; say("mail: sent=", 1); return 1; }
+    note = why(r);
+    say("mail: unsent=", -r);
+    return 0;
+}
+static int plausible_to(const char *t) {
+    int at = 0, n = 0;
+    for (; t[n]; n++) { if (t[n] == '@') at++; else if (t[n] == ' ' || t[n] == ',' || t[n] == ';') return 0; }
+    return at == 1 && t[0] != '@' && t[n - 1] != '@';
 }
 static void compose_send(void) {
     if (!cf(0)[0]) { mode = 0; return; }
-    if (count < MAX && ar->used + cl[0] + cl[1] + cl[2] + 3 <= 4096) {
-        add_msg(cf(0), cf(1), cf(2), 0);
+    if (!plausible_to(cf(0))) { note = "Type one full address in To, like name@example.com."; return; }
+    int sent = post_mail();
+    char who[TO_MAX + 4];
+    int w = 0;
+    who[w++] = 'T'; who[w++] = 'o'; who[w++] = ':'; who[w++] = ' ';
+    for (int i = 0; cf(0)[i] && w < (int)sizeof who - 1; i++) who[w++] = cf(0)[i];
+    who[w] = 0;
+    if (count < MAX && ar->used + w + cl[2] + cl[3] + 3 <= 4096) {
+        add_msg(who, cf(2), cf(3), 1, sent ? 1 : 2);
         save();
         say("mail: filed n=", count);
-        note = "Filed in the local inbox. Not sent anywhere: there is no mail server.";
-    } else note = "No room left in the inbox. Not filed, not sent.";
+        if (!sent) note = "Not sent, kept in the inbox as unsent. Check Settings, Assistant, Mail token.";
+    } else if (sent) note = "Sent, but the inbox is full so it was not filed.";
     mode = 0;
 }
-static int field_max(int f) { return f == 0 ? FROM_MAX : f == 1 ? SUBJ_MAX : BODY_MAX; }
+static int field_max(int f) { return f == 0 ? TO_MAX : f == 1 ? FROM_MAX : f == 2 ? SUBJ_MAX : BODY_MAX; }
 
 static void sheet_click(int x, int y) {
     int by = btn_y();
@@ -290,8 +351,8 @@ static void sheet_click(int x, int y) {
         else if (x >= SH_X + 94 && x < SH_X + 174) compose_send();
         return;
     }
-    for (int f = 0; f < 3; f++) {
-        int h = f == 2 ? 70 : 24;
+    for (int f = 0; f < 4; f++) {
+        int h = fld_h(f);
         if (y >= fld_y(f) && y < fld_y(f) + h) { field = f; return; }
     }
 }
@@ -301,7 +362,7 @@ void _start(int argc, char **argv) {
     (void)argc; (void)argv;
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "mail: no window\n", 16); jt_exit(1); }
     ar = (struct arena *)(((unsigned)_user_end + 15u) & ~15u);
-    for (int f = 0; f < 3; f++) cf(f)[0] = 0;
+    for (int f = 0; f < 4; f++) cf(f)[0] = 0;
     load();
     draw();
     jt_write(1, "mail: ring-3 window\n", 20);
@@ -324,7 +385,7 @@ void _start(int argc, char **argv) {
             note = 0;
             if (mode == 2) {
                 if (k == JT_KEY_ESC) mode = 0;
-                else if (k == JT_KEY_ENTER) { if (field < 2) field++; else compose_send(); }
+                else if (k == JT_KEY_ENTER) { if (field < 3) field++; else compose_send(); }
                 else if (k == 8) { if (cl[field] > 0) cl[field]--; }
                 else if (k == JT_KEY_COPY || k == JT_KEY_CUT) { jt_clip_set(cf(field), (unsigned)cl[field]); if (k == JT_KEY_CUT) cl[field] = 0; } /* the system clipboard */
                 else if (k == JT_KEY_PASTE) {
@@ -333,8 +394,8 @@ void _start(int argc, char **argv) {
                     int n = room > 0 ? jt_clip_get(pb, (unsigned)room) : 0;
                     for (int i = 0; i < n; i++) if (pb[i] >= 32 && pb[i] < 127) cf(field)[cl[field]++] = pb[i];
                 }
-                else if (k == 9 || k == JT_KEY_DOWN) { field = (field + 1) % 3; }
-                else if (k == JT_KEY_UP) { field = (field + 2) % 3; }
+                else if (k == 9 || k == JT_KEY_DOWN) { field = (field + 1) % 4; }
+                else if (k == JT_KEY_UP) { field = (field + 3) % 4; }
                 else if (k >= 32 && k < 127 && cl[field] < field_max(field) - 1) cf(field)[cl[field]++] = (char)k;
             } else {
                 if (k == '`') { jt_write(1, "mail: crashing on purpose\n", 26); *(volatile int *)0 = 1; }
