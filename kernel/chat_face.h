@@ -189,6 +189,106 @@ static void chat_face_load(void) {
 /* Logical pixels the empty Chat's text column gives up on the right. */
 static int chat_face_reserve(void) { return face_idle_n ? FACE_SIDE + 16 : 0; }
 
+/* Portfolio mode: the face is the whole screen. chat_boot_samantha_open sets
+   face_full and face_band_h; every frame the kernel plays then lands here
+   instead of in a rounded square. The 320 px frame is scaled to the screen's
+   height (capped, so a retina screen does not pay for a million pixels a
+   frame), top-aligned under the titlebar and centered. Its background is a
+   plain wall, so the sides take each row's own edge pixel and read as more
+   wall; on a narrow phone the sides are cropped instead. Rows stop above the
+   glass bar, which is drawn once (face_glass_band) and never repainted. */
+static int face_full = 0, face_band_h = 0, face_full_top = 0;
+static void face_blit_full(const unsigned char *px, const unsigned char *mix) {
+    if (!px) return;
+    int sc = (int)window_scale(); if (sc < 1) sc = 1;
+    int fw = (int)window_width() * sc, fh = (int)window_height() * sc;
+    int top = face_full_top * sc, limit = fh - face_band_h * sc;
+    int side = fh - top; if (side > 720 * sc) side = 720 * sc;
+    int ox = (fw - side) / 2;
+    int x0 = ox < 0 ? 0 : ox, x1 = ox + side > fw ? fw : ox + side;
+    for (int y = top; y < limit; y++) {
+        int sy = (y - top) * FACE_SRC / side;
+        int below = sy >= FACE_SRC;
+        if (below) sy = FACE_SRC - 1;
+        unsigned int ro = (unsigned int)sy * FACE_SRC * 3;
+        if (below) {   /* under the frame: the last row's left edge, a flat fill */
+            unsigned int c = (px[ro] << 16) | (px[ro + 1] << 8) | px[ro + 2];
+            window_fill_rect_phys(0, y, fw, 1, c);
+            continue;
+        }
+        if (x0 > 0) window_fill_rect_phys(0, y, x0, 1, (px[ro] << 16) | (px[ro + 1] << 8) | px[ro + 2]);
+        if (x1 < fw) { unsigned int e = ro + (FACE_SRC - 1) * 3; window_fill_rect_phys(x1, y, fw - x1, 1, (px[e] << 16) | (px[e + 1] << 8) | px[e + 2]); }
+        for (int x = x0; x < x1; x++) {
+            unsigned int o = ro + (unsigned int)((x - ox) * FACE_SRC / side) * 3;
+            unsigned int R = px[o], G = px[o + 1], B = px[o + 2];
+            if (mix) { R = (R + mix[o]) >> 1; G = (G + mix[o + 1]) >> 1; B = (B + mix[o + 2]) >> 1; }
+            window_pixel_phys(x, y, (R << 16) | (G << 8) | B);
+        }
+    }
+}
+
+/* The glass bar: the bottom face_band_h logical rows, full width, of whatever
+   is on screen right now, box-blurred and lightened, with a bright hairline
+   on top. Called once after the first full frame; the pixels are kept in
+   face_glass so the input line can repaint its own rows without redoing the
+   blur. Returns 0 if memory is short (the bar then stays a plain light
+   panel). */
+static unsigned int *face_glass = 0;
+static int face_glass_w = 0, face_glass_h = 0, face_glass_y = 0;
+static void face_glass_band(void) {
+    int sc = (int)window_scale(); if (sc < 1) sc = 1;
+    int fw = (int)window_width() * sc, gh = face_band_h * sc, y0 = (int)window_height() * sc - gh;
+    if (!face_glass || face_glass_w != fw || face_glass_h != gh) {
+        if (face_glass) kfree(face_glass);
+        face_glass = (unsigned int *)kmalloc((unsigned int)(fw * gh) * 4u);
+        face_glass_w = fw; face_glass_h = gh;
+    }
+    face_glass_y = y0;
+    unsigned int *g = face_glass;
+    if (!g) { window_fill_rect_phys(0, y0, fw, gh, 0x00F2EEE8); return; }
+    for (int y = 0; y < gh; y++) for (int x = 0; x < fw; x++) g[y * fw + x] = window_get_pixel_phys(x, y0 + y);
+    int r = 7 * sc;
+    static unsigned int *tmp = 0; static int tmp_n = 0;
+    if (!tmp || tmp_n < fw * gh) { if (tmp) kfree(tmp); tmp = (unsigned int *)kmalloc((unsigned int)(fw * gh) * 4u); tmp_n = fw * gh; }
+    if (tmp) {
+        for (int pass = 0; pass < 2; pass++) {   /* horizontal, then vertical, running sums */
+            int len = pass ? gh : fw, lines = pass ? fw : gh;
+            for (int l = 0; l < lines; l++) {
+                int sr = 0, sg = 0, sb = 0, cnt = 0;
+                #define GP(i) (pass ? g[(i) * fw + l] : g[l * fw + (i)])
+                for (int i = 0; i < len + r; i++) {
+                    if (i < len) { unsigned int c = GP(i); sr += (c >> 16) & 255; sg += (c >> 8) & 255; sb += c & 255; cnt++; }
+                    int o = i - r - 1;
+                    if (o >= 0) { unsigned int c = GP(o); sr -= (c >> 16) & 255; sg -= (c >> 8) & 255; sb -= c & 255; cnt--; }
+                    int d = i - r;
+                    if (d >= 0 && d < len && cnt > 0) {
+                        unsigned int v = ((unsigned int)(sr / cnt) << 16) | ((unsigned int)(sg / cnt) << 8) | (unsigned int)(sb / cnt);
+                        if (pass) tmp[d * fw + l] = v; else tmp[l * fw + d] = v;
+                    }
+                }
+                #undef GP
+            }
+            for (int i = 0; i < fw * gh; i++) g[i] = tmp[i];
+        }
+    }
+    for (int y = 0; y < gh; y++) for (int x = 0; x < fw; x++) {   /* lighten toward white, hairline on top */
+        unsigned int c = g[y * fw + x];
+        unsigned int k = y < sc ? 200 : 96;                       /* white mix out of 256 */
+        unsigned int R = (((c >> 16) & 255) * (256 - k) + 255 * k) >> 8, G = (((c >> 8) & 255) * (256 - k) + 255 * k) >> 8, B = ((c & 255) * (256 - k) + 255 * k) >> 8;
+        g[y * fw + x] = (R << 16) | (G << 8) | B;
+        window_pixel_phys(x, y0 + y, g[y * fw + x]);
+    }
+}
+/* Repaint a logical rectangle inside the bar from the saved glass (the input line clearing itself). */
+static void face_glass_restore(int x, int y, int w, int gh) {
+    if (!face_glass) return;
+    int sc = (int)window_scale(); if (sc < 1) sc = 1;
+    for (int py = y * sc; py < (y + gh) * sc; py++) for (int px = x * sc; px < (x + w) * sc; px++) {
+        int gy = py - face_glass_y; if (gy < 0 || gy >= face_glass_h || px >= face_glass_w) continue;
+        window_pixel_phys(px, py, face_glass[gy * face_glass_w + px]);
+    }
+}
+
 /* Draws one frame at face_x/face_y, face_side logical pixels, at full
    physical resolution with rounded corners. */
 /* Draws a frame, or a 50/50 blend of two (mix = 0 for none), at
@@ -196,6 +296,7 @@ static int chat_face_reserve(void) { return face_idle_n ? FACE_SIDE + 16 : 0; }
    rounded corners. The blend is the in-between frame that doubles her
    motion to about 24 a second and turns clip switches into crossfades. */
 static void face_blit_mix(const unsigned char *px, const unsigned char *mix) {
+    if (face_full) { face_blit_full(px, mix); return; }
     if (!px || face_x < 0) return;
     int sc = (int)window_scale(); if (sc < 1) sc = 1;
     int side = face_side * sc, r = (face_side > FACE_SIDE ? 14 : 6) * sc;

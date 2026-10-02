@@ -58,6 +58,22 @@
    need a different port/host"), via chat_error() below. */
 
 #include "chat_face.h"
+/* Portfolio mode (heyitsmejosh.com) is Joshua's own site, so the window and
+   the face say Joshua. Everywhere else it is Samantha. */
+static const char *chat_title(void) { return portfolio_dock ? "Joshua" : "Samantha"; }
+
+/* Portfolio's face screen answers in the glass bar, not in a transcript: the
+   reply (or "Thinking...") is wrapped into the bar's rows. portfolio_caption_up
+   is 1 while a caption holds the bar, so the next keystroke knows to clear it. */
+static int portfolio_caption_up = 0;
+static void portfolio_caption(const char *text, unsigned int color) {
+    if (!face_full || !face_band_h) return;
+    int by = (int)window_height() - face_band_h;
+    face_glass_restore(0, by + 2, (int)window_width(), face_band_h - 2);
+    render_wrapped_text(text, 28, by + 14, (int)window_width() - 56, face_band_h - 24, color);
+    portfolio_caption_up = 1;
+    window_present();
+}
 
 #define CHAT_MAX 8            /* messages kept (4 user/assistant exchanges); oldest drop first once full */
 #define CHAT_CONTENT_MAX 640  /* raw stored content per message; real growth from the old 512-byte input cap */
@@ -218,7 +234,7 @@ static unsigned int chat_build_request(char *out, unsigned int out_cap) {
        llama3.1:8b and Samantha both just ignore a field they don't
        understand, same as any Ollama-compatible server already does for
        any option it doesn't recognize. */
-    const char *head2 = "\",\"stream\":false,\"think\":false,\"messages\":[";
+    const char *head2 = portfolio_dock ? "\",\"persona\":\"joshua\",\"stream\":false,\"think\":false,\"messages\":[" : "\",\"stream\":false,\"think\":false,\"messages\":[";
     while (*head2 && n < out_cap) out[n++] = *head2++;
 
     static char escaped[CHAT_CONTENT_MAX * 2];
@@ -769,16 +785,17 @@ static int chat_wrapped_rows(const char *p, int max_w) {
    use underneath (Settings still edits them); only this status line stopped
    printing them. */
 static void chat_draw_status(const char *state) {
+    if (face_full) { if (state[0] == 'g') portfolio_caption("Thinking...", 0x0075726E); return; }
     char line[LLM_MODEL_MAX + LLM_HOST_MAX + 48];
     int p = 0;
-    const char *s = "Samantha"; while (*s) line[p++] = *s++;
+    const char *s = chat_title(); while (*s) line[p++] = *s++;
     s = "    "; while (*s) line[p++] = *s++;
     while (*state && p < (int)sizeof(line) - 1) line[p++] = *state++;
     line[p] = 0;
     int T = gui_app_dy();
     window_rect(0, T + 40, (int)window_width(), 32, GUI_BG);
     font_draw_string(line, 20, T + 52, CHAT_DIM, -1);
-    font_draw_string("Samantha", 20, T + 52, CHAT_ACCENT, -1); /* her name in her colour, over the dim copy */
+    font_draw_string(chat_title(), 20, T + 52, CHAT_ACCENT, -1); /* her name in her colour, over the dim copy */
     if (chat_count == 0) chat_face_draw(T);
 }
 
@@ -792,6 +809,10 @@ static void chat_draw_status(const char *state) {
    reply; without it, the transcript tail. Drawn before she speaks too, so
    visitors see who is talking. */
 static void chat_draw_conversation(int T, int x, int you_w, int sam_w, int body_w) {
+    if (face_full) {
+        for (int i = chat_count - 1; i >= 0; i--) if (chat_msgs[i].role == CHAT_ROLE_ASSISTANT) { portfolio_caption(chat_msgs[i].content, 0x001C1C1E); break; }
+        return;
+    }
     int y = T + 76, bottom = (int)window_height() - 40;
     window_rect(0, T + 72, (int)window_width(), bottom - (T + 72), GUI_BG);
     if (face_idle_n) {
@@ -840,10 +861,12 @@ static void chat_draw_conversation(int T, int x, int you_w, int sam_w, int body_
 }
 
 static const char *chat_process_message(char *msg, int T, int x, int you_w, int body_w) {
-    window_rect(0, T + 40, (int)window_width(), (int)window_height() - 40 - T, GUI_BG);
-    chat_draw_status("checking for a tool ...");
-    font_draw_string(CHAT_YOU, x, T + 76, CHAT_DIM, -1);
-    render_wrapped_text(msg, x + you_w, T + 76, body_w - you_w, 64, CHAT_INK);
+    if (!face_full) {
+        window_rect(0, T + 40, (int)window_width(), (int)window_height() - 40 - T, GUI_BG);
+        chat_draw_status("checking for a tool ...");
+        font_draw_string(CHAT_YOU, x, T + 76, CHAT_DIM, -1);
+        render_wrapped_text(msg, x + you_w, T + 76, body_w - you_w, 64, CHAT_INK);
+    }
 
     chat_last_user_msg = msg;
 
@@ -992,7 +1015,7 @@ static void gui_launch_chat_app(void) {
     chat_load();
     serial_puts("chatchrome\n"); /* discriminating marker for tools/checks/termchatflash-check.sh, same convention editor.h's "editorchrome" already established */
     window_clear(GUI_BG);
-    gui_draw_app_titlebar("Samantha"); /* v0.76.11: drawn once, not every keystroke -- see chat_prompt_line's own comment */
+    gui_draw_app_titlebar(chat_title()); /* v0.76.11: drawn once, not every keystroke -- see chat_prompt_line's own comment */
     const char *state = "ready";
     int T = gui_app_dy();
     chat_face_load();
@@ -1074,7 +1097,7 @@ static void gui_launch_chat_app(void) {
         if (k == 'c') { chat_clear(); chat_suggest_sel = 0; state = "ready"; continue; }
         if (k == 'n') {
             char msg[CHAT_CONTENT_MAX];
-            if (!gui_prompt_line_input("Samantha", CHAT_YOU "send a message (enter sends, esc cancels)", msg, sizeof(msg))) continue;
+            if (!gui_prompt_line_input(chat_title(), CHAT_YOU "send a message (enter sends, esc cancels)", msg, sizeof(msg))) continue;
             if (msg[0] == 0) continue;
             const char *ns = chat_process_message(msg, T, x, you_w, body_w);
             if (!ns) return;
@@ -1088,7 +1111,7 @@ static void gui_launch_chat_app(void) {
            above this branch so they keep their own meaning). */
         if (k >= 32 && k < 127) {
             char msg[CHAT_CONTENT_MAX];
-            if (!gui_prompt_line_input_seeded("Samantha", CHAT_YOU "send a message (enter sends, esc cancels)", msg, sizeof(msg), k)) continue;
+            if (!gui_prompt_line_input_seeded(chat_title(), CHAT_YOU "send a message (enter sends, esc cancels)", msg, sizeof(msg), k)) continue;
             if (msg[0] == 0) continue;
             const char *ns = chat_process_message(msg, T, x, you_w, body_w);
             if (!ns) return;
@@ -1113,14 +1136,20 @@ static void chat_boot_samantha_open(void) {
     chat_load();
     chat_face_load();
     window_clear(GUI_BG);
-    gui_draw_app_titlebar("Samantha");
+    gui_draw_app_titlebar(chat_title());
     int T = gui_app_dy();
     int bottom = (int)window_height() - 40;
     /* phone: portrait layout -- face centered in the top half sized to the
        screen width, caption right under it, input box stays pinned to the
        bottom same as the desktop layout below. Desktop/samantha-only keeps
        its original bottom-anchored face (unchanged from PR #246). */
-    if (boot_to_phone) {
+    if (portfolio_dock && face_idle_n) {
+        /* Portfolio: his face is the whole screen, the input a frosted bar
+           across the bottom (chat_face.h: face_blit_full, face_glass_band). */
+        face_full = 1; face_band_h = boot_to_phone ? 0 : 96; face_full_top = T;
+        face_blit(face_idle[face_idle_at]);
+        if (face_band_h) face_glass_band();
+    } else if (boot_to_phone) {
         /* T + 44 clears the titlebar's traffic lights (centered at y=20,
            radius 6) and title text (baseline y=12) the same way the
            console's own small-face draw already does (see chat_face_draw's
@@ -1135,19 +1164,41 @@ static void chat_boot_samantha_open(void) {
         chat_face_draw_big(T + 20, bottom - 76);
         render_wrapped_text("Tell me what to do.", 20, bottom - 60, (int)window_width() - 40, 20, CHAT_DIM);
     }
+    int glass_y = (int)window_height() - face_band_h;
     serial_puts("samopen\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: full-screen avatar is up */
 
     unsigned int n = 0;
     char msg[CHAT_CONTENT_MAX];
     msg[0] = 0;
     mouse_click_edge_sync();
+portfolio_next:   /* portfolio: after each answer the face screen stays up for the next question */
+    n = 0; msg[0] = 0;
     int pmx = 0, pmy = 0; /* phone: pointer, polled on each tap (gui_app_mouse_tick is a no-op here, no windowed viewport) */
     for (;;) {
-        window_rect(20, bottom - 30, (int)window_width() - 40, 20, 0x00FFFFFF);
         msg[n] = 0;
-        font_draw_string(msg, 24, bottom - 28, 0x001C1C1E, -1);
+        if (face_full && face_band_h && portfolio_caption_up) {
+            /* an answer is on the bar: leave it until the next key */
+        } else if (face_full && face_band_h) {
+            face_glass_restore(0, glass_y + 22, (int)window_width(), 44);   /* the bar clears itself, no white box */
+            if (n) font_draw_string(msg, 28, glass_y + 34, 0x001C1C1E, -1);
+            else font_draw_string("Ask me anything", 28, glass_y + 34, 0x0075726E, -1);
+        } else if (!face_full) {
+            window_rect(20, bottom - 30, (int)window_width() - 40, 20, 0x00FFFFFF);
+            font_draw_string(msg, 24, bottom - 28, 0x001C1C1E, -1);
+        }
         serial_puts("samfocus\n"); /* discriminating marker: the input box is drawn and reading keys every frame, i.e. focused */
-        int k = get_key_or_click();
+        int k;
+        if (face_full) {
+            /* Breathing: one idle frame every ~80 ms while nobody types (key reads return 0 at the deadline). */
+            do {
+                k = get_key_or_click_until(ticks() + 8);
+                if (k == 0) { chat_face_idle_step(); face_blit(face_idle[face_idle_at]); window_present(); }
+            } while (k == 0);
+            if (portfolio_caption_up && k >= 32 && k < 127) {   /* first key of a new question clears the last answer */
+                portfolio_caption_up = 0;
+                face_glass_restore(0, glass_y + 2, (int)window_width(), face_band_h - 2);
+            }
+        } else k = get_key_or_click();
         /* Only the back chevron (phone_home.h's phone_back_zone_tick)
            exits: it injects the real ESC make code when tapped, so KEY_ESC
            alone is the exit signal here. A raw KEY_CLICK is a tap anywhere
@@ -1156,7 +1207,7 @@ static void chat_boot_samantha_open(void) {
            mid-tap). Now it just falls through and loops again with the
            input box still drawn and still reading keys, i.e. still
            focused, so a face-tap keeps her open and ready to type into. */
-        if (k == KEY_ESC) { gui_launch_chat_app(); return; }
+        if (k == KEY_ESC) { face_full = 0; gui_launch_chat_app(); return; }
         if (k == KEY_CLICK && boot_to_phone) {
             /* v1.9.18: the back chevron's 44x40 tap zone (phone_back_zone_tick
                in phone_home.h) never ran in this view, so Samantha's own back
@@ -1166,7 +1217,7 @@ static void chat_boot_samantha_open(void) {
             mouse_get_delta(&dx, &dy, &bt);
             pmx += dx; pmy += dy;
             mouse_get_absolute(&pmx, &pmy, (int)window_width(), (int)window_height());
-            if (pmy < 40 && pmx < 44) { serial_puts("samback\n"); gui_launch_chat_app(); return; }
+            if (pmy < 40 && pmx < 44) { serial_puts("samback\n"); face_full = 0; gui_launch_chat_app(); return; }
             continue;
         }
         if (k == KEY_ENTER) break;
@@ -1176,7 +1227,9 @@ static void chat_boot_samantha_open(void) {
     if (msg[0] != 0) {
         int x = 20, you_w = font_string_width(CHAT_YOU);
         int body_w = (int)window_width() - 40 - chat_face_reserve();
-        chat_process_message(msg, T, x, you_w, body_w);
+        const char *st = chat_process_message(msg, T, x, you_w, body_w);
+        if (face_full && st) goto portfolio_next;   /* answered on the face screen; ask again */
     }
+    face_full = 0;
     gui_launch_chat_app();
 }
