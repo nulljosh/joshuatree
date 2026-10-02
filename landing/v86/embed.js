@@ -513,12 +513,12 @@ if (typeof document !== "undefined") (function () {
       // here: without this the 15s kiosk reset rebooted the demo in the
       // middle of her spoken reply, since listening involves no clicks.
       if (b === 10) {
-        var m = /^speak: status=200 bytes=(\d+)/.exec(serialLine);
+        var m = /^(?:syscall: write\(1\) from ring 3: )?speak: status=200 bytes=(\d+)/.exec(serialLine); // ring-3 Samantha's writes arrive behind the kernel's syscall trace prefix
         if (m) { speakCount++; lastSpeakBytes = Number(m[1]); }
         if (m) lastInteractionTime = Date.now() + Math.ceil(Number(m[1]) / 16); // 16000 samples/s = 16 per ms
-        else if (/^chatreply=|^chattool=/.test(serialLine)) {
+        else if (/^(?:syscall: write\(1\) from ring 3: )?(?:chatreply=|chattool=)/.test(serialLine)) {
           lastInteractionTime = Date.now();
-          var tm = /^chattool=([a-z_]+):/.exec(serialLine);
+          var tm = /^(?:syscall: write\(1\) from ring 3: )?chattool=([a-z_]+):/.exec(serialLine);
           if (tm) toolCounts[tm[1]] = (toolCounts[tm[1]] || 0) + 1;
         }
         serialLine = "";

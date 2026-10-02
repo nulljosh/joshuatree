@@ -284,7 +284,7 @@ try {
     await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 55); }, scene.q + '\n');
     await page.waitForFunction(([t, n]) => (window.__jt.toolCounts[t] || 0) >= n, [toolName, seenMarker[scene.marker]], { timeout: 15000 })
       .then(() => ok(`tool scene ran: "${scene.q}" -> ${scene.marker}`))
-      .catch(() => fail(`tool scene never fired: "${scene.q}" -> ${scene.marker}`));
+      .catch(async () => { fail(`tool scene never fired: "${scene.q}" -> ${scene.marker}`); const tail = await page.evaluate(() => window.__jt.serial.split('\n').filter(l => !/^(present|fullrepaint|menubarredraw)$/.test(l)).slice(-25).join('\n')); console.log('serial tail:\n' + tail); });
     await page.waitForTimeout(300);
   }
 
