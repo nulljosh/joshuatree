@@ -65,13 +65,6 @@ SECTIONS {
         . += JT_USER_FB_BYTES;
     }
 
-    /* 1.9.26: 64KB of user-accessible scratch for ring-3 apps whose arena
-       (a flat image has no .bss) is bigger than the 8-page window, Notes
-       and Terminal. Private per window task, shared in exec_user. */
-    .userheap JT_USER_HEAP (NOLOAD) : AT(JT_USER_HEAP - 0xC0000000) {
-        . += JT_USER_HEAP_BYTES;
-    }
-
     . = ALIGN(4096);
     _kernel_end = . - 0xC0000000; /* physical, matching pmm.c's other physical addresses */
 }
@@ -81,6 +74,4 @@ ASSERT(ADDR(.bss) + SIZEOF(.bss) <= JT_USER_BASE,
 ASSERT(JT_USER_BASE + (JT_USER_IMAGE_PAGES + 1) * 4096 <= JT_DMABUF_BASE, "kernel/memmap.h: .userimg overlaps .dmabuf")
 ASSERT((JT_DMABUF_BASE & 0xFFFF) == 0, "kernel/memmap.h: .dmabuf must be 64KB aligned for ISA DMA")
 ASSERT(JT_DMABUF_BASE + 0x10000 <= JT_USER_FB, "kernel/memmap.h: .dmabuf overlaps .userfb")
-ASSERT(JT_USER_FB + JT_USER_FB_BYTES <= JT_USER_HEAP, "kernel/memmap.h: .userfb overlaps .userheap")
-ASSERT(JT_USER_HEAP + JT_USER_HEAP_BYTES <= 0xC0800000, "kernel/memmap.h: .userheap leaves the 4MB table")
 ASSERT(JT_USER_FB + JT_USER_FB_BYTES <= 0xC0800000, "kernel/memmap.h: .userfb leaves the 4MB table paging_task_map_private copies")

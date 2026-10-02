@@ -34,8 +34,6 @@
 #define JT_DMABUF_BASE      0xC0610000 /* 64KB Sound Blaster DMA, 64KB aligned (.dmabuf) */
 #define JT_USER_FB          0xC0620000 /* ring-3 window framebuffer (.userfb) */
 #define JT_USER_FB_BYTES  0x170000   /* 832x450 at 32bpp fits */
-#define JT_USER_HEAP      0xC0710000 /* 64KB of big buffers for apps whose arena outgrows the image window (.userheap), right after .userfb */
-#define JT_USER_HEAP_BYTES 0x10000
 
 /* SYS_BRK (1.9.27): a per-task heap that grows above the image, backed by
  * pmm frames mapped only into that task's directory (kernel/brk.c). The

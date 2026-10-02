@@ -142,9 +142,6 @@ int exec_user(const char *name, const char *const *argv, int argc, int *status) 
        the base map stays supervisor-only. */
     for (u32 off = 0; off < JT_USER_STACK_TOP - JT_USER_BASE; off += 4096)
         paging_set_user(user_image + off);
-    /* 1.9.26: the arena heap for Notes and Terminal, zeroed and user-accessible while this program runs. */
-    for (u32 i = 0; i < JT_USER_HEAP_BYTES; i++) ((u8 *)JT_USER_HEAP)[i] = 0;
-    for (u32 off = 0; off < JT_USER_HEAP_BYTES; off += 4096) paging_set_user((void *)(JT_USER_HEAP + off));
 
     int id = task_create_user(JT_USER_BASE, esp);
     if (id < 0) return 0;
@@ -152,7 +149,6 @@ int exec_user(const char *name, const char *const *argv, int argc, int *status) 
     serial_puts("exec: started ring-3 task from VFS\n");
     while (task_used(id)) yield(); /* the shell blocks on its child, which is also what keeps "one program at a time" true */
 
-    paging_clear_user((void *)JT_USER_HEAP, JT_USER_HEAP_BYTES);
     if (status) *status = task_last_exit_code();
     return 1;
 }
@@ -167,18 +163,17 @@ int exec_user(const char *name, const char *const *argv, int argc, int *status) 
 #include "kheap.h"
 int exec_user_window(const char *name, const char *const *argv, int argc, void **image_out) {
     u32 span = JT_USER_STACK_TOP - JT_USER_BASE;
-    u8 *raw = (u8 *)kmalloc(span + JT_USER_HEAP_BYTES + 4096);
+    u8 *raw = (u8 *)kmalloc(span + 4096);
     if (!raw) return -1;
     u8 *img = (u8 *)(((u32)raw + 4095) & ~4095u);
-    for (u32 i = 0; i < span + JT_USER_HEAP_BYTES; i++) img[i] = 0;
+    for (u32 i = 0; i < span; i++) img[i] = 0;
     int n = vfs_read_file(name, img, JT_USER_IMAGE_MAX);
     if (n <= 0) { kfree(raw); return -1; }
     u32 esp = build_user_stack_at(argv, argc, (u32)img - JT_USER_BASE);
     if (!esp) { kfree(raw); return -1; }
     int id = task_create_user(JT_USER_BASE, esp);
     if (id < 0) { kfree(raw); return -1; }
-    if (!paging_task_map_private(task_page_dir(id), JT_USER_BASE, (u32)img, span) ||
-        !paging_task_map_private(task_page_dir(id), JT_USER_HEAP, (u32)img + span, JT_USER_HEAP_BYTES)) { task_kill(id); kfree(raw); return -1; }
+    if (!paging_task_map_private(task_page_dir(id), JT_USER_BASE, (u32)img, span)) { task_kill(id); kfree(raw); return -1; }
     *image_out = raw;
     serial_puts("exec: started ring-3 window task from VFS\n");
     return id;
