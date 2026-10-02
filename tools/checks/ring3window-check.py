@@ -118,15 +118,28 @@ try:
     if not wait_pixel(W1_CLOSE, CLOSE_RED): fails.append("Notes did not open as a second window beside Reminders")
     if not near(pixel(*W0_CLOSE), CLOSE_RED): fails.append("Reminders' window vanished when Notes opened")
 
-    # 3. keys reach the focused window only
-    press("grave_accent"); time.sleep(1.0)
+    # 3. keys reach the focused window only. Notes is a ring-3 task too and
+    # has its own backquote crash key, so with Notes on top the first press
+    # must kill NOTES and leave Reminders untouched.
+    press("grave_accent")
+    if not wait_serial("notes: crashing on purpose", 5): fails.append("the key did not reach Notes, the focused ring-3 window")
+    if not wait_serial("ring3app: NOTES.BIN crashed (page-fault), window torn down, desktop alive", 8): fails.append("Notes' crash was not reaped by name")
     if "reminders: crashing on purpose" in serial(): fails.append("a key reached Reminders while Notes was focused (global key pull)")
+    if not wait_pixel(W1_CLOSE, CLOSE_RED, want=False): fails.append("Notes' window is still on screen after its crash")
+    if not near(pixel(*W0_CLOSE), CLOSE_RED): fails.append("Reminders' window vanished when Notes crashed")
+    # reopen Notes on top, then click inside Reminders (click-to-focus, swallowed
+    # by the compositor) and the same key must now crash Reminders, not Notes
+    move(SLOT0_X + NOTES_SLOT * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(0.5)
+    move(*PARK); time.sleep(0.5)
+    if not wait_pixel(W1_CLOSE, CLOSE_RED): fails.append("Notes did not reopen beside Reminders")
+    n_notes = serial().count("notes: crashing on purpose")
     move(*W0_CONTENT); time.sleep(0.3); click(); time.sleep(0.5)
     move(*PARK); time.sleep(0.3)
     for _ in range(4):
         press("grave_accent")
         if wait_serial("reminders: crashing on purpose", 2): break
     else: fails.append("the crash key never reached Reminders after click-to-focus")
+    if serial().count("notes: crashing on purpose") != n_notes: fails.append("the key reached Notes after Reminders was click-focused")
 
     # 4. only that window dies
     if not wait_serial("exception: ring-3 task hit page-fault, reaped", 8): fails.append("the task was not reaped")

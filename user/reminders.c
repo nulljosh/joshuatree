@@ -240,8 +240,9 @@ void _start(int argc, char **argv) {
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;
 
-        if (ev.kind == JT_EV_CLICK) {  /* the titlebar X, or anywhere in the window */
-            if (!adding) break;
+        if (ev.kind == JT_EV_CLICK) {
+            if (ev.a < 0 || ev.b < 0 || ev.a >= (int)win.width || ev.b >= (int)win.height) break; /* chrome X or dock */
+            if (!adding) { flags = JT_POLL_PRESENT; continue; } /* click inside, no action */
             adding = 0; draw(); flags = JT_POLL_PRESENT; continue;
         }
         if (ev.kind != JT_EV_KEY) { flags = JT_POLL_PRESENT; continue; }
