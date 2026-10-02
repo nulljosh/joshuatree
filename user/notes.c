@@ -23,8 +23,8 @@
  * (the kernel editor's own contract) into the system clipboard (SYS_CLIPBOARD); paste
  * inserts it. Esc saves (truncate-write, only if edited) and returns to browse.
  * Home, End and Delete work in the editor; Ctrl+S saves and stays in it.
- * Browse: f makes a folder (F0000001 style names, 8.3), d deletes the
- * selected note. SYS_MKDIR and SYS_UNLINK do the work.
+ * Browse: f makes a folder (F0000001 style names, 8.3), d asks and a second
+ * d deletes the selected note (any other key cancels). SYS_MKDIR and SYS_UNLINK do the work.
  * Serial markers: notes: folders=N notes=N, notes: new=FILE, notes: edit=FILE,
  * notes: saved=N.
  */
@@ -76,6 +76,7 @@ static int editing JT_DATA = 0, elen JT_DATA = 0, epos JT_DATA = 0, escroll JT_D
 static int phone JT_DATA = 0;   /* argv[1] == "phone": show the on-screen keyboard in the editor */
 static int edirty JT_DATA = 0, goalx JT_DATA = -1;
 static char efile[13] JT_DATA = {0};
+static int del_armed JT_DATA = 0;   /* d once asks, d again deletes, anything else cancels */
 
 static void rect(int x, int y, int w, int h, unsigned c) {
     if (x < 0) { w += x; x = 0; }
@@ -107,6 +108,15 @@ static void say(const char *s, int n) {
         while (v) { d[nd++] = (char)('0' + v % 10); v /= 10; }
         while (nd) b[l++] = d[--nd];
     }
+    b[l++] = '\n';
+    jt_write(1, b, (unsigned)l);
+}
+
+/* A marker with a text tail, in ONE write so the kernel's serial log keeps it on one line. */
+static void say_s(const char *s, const char *t) {
+    char b[80]; int l = 0;
+    while (*s && l < 56) b[l++] = *s++;
+    while (*t && l < 78) b[l++] = *t++;
     b[l++] = '\n';
     jt_write(1, b, (unsigned)l);
 }
@@ -273,9 +283,7 @@ static void edit_open(const char *file) {
     }
     ar->ed[elen] = 0;
     epos = elen; escroll = 0; edirty = 0; goalx = -1; editing = 1; note = 0;
-    say("notes: edit=", -1);
-    jt_write(1, efile, (unsigned)slen(efile));
-    jt_write(1, "\n", 1);
+    say_s("notes: edit=", efile);
 }
 
 static int edit_save(void) {
@@ -376,9 +384,7 @@ static void new_note(void) {
     load_notes();
     for (int i = 0; i < nno; i++) if (seq(ar->no[i].file, f)) { nsel = i; break; }
     focus = 1;
-    say("notes: new=", -1);
-    jt_write(1, f, (unsigned)slen(f));
-    jt_write(1, "\n", 1);
+    say_s("notes: new=", f);
     edit_open(f);
 }
 
@@ -405,9 +411,7 @@ static void new_folder(void) {
     for (int i = 0; i < nfo; i++) if (seq(ar->fo[i].name, name)) { fsel = i; break; }
     nsel = 0;
     load_notes();
-    say("notes: folder=", -1);
-    jt_write(1, name, (unsigned)slen(name));
-    jt_write(1, "\n", 1);
+    say_s("notes: folder=", name);
 }
 
 /* d: delete the selected note. */
@@ -416,9 +420,7 @@ static void delete_note(void) {
     char p[40];
     note_path(p, ar->no[nsel].file);
     if (jt_unlink(p) != 0) { note = "Could not delete the note."; return; }
-    say("notes: deleted=", -1);
-    jt_write(1, ar->no[nsel].file, (unsigned)slen(ar->no[nsel].file));
-    jt_write(1, "\n", 1);
+    say_s("notes: deleted=", ar->no[nsel].file);
     load_notes();
 }
 
@@ -524,11 +526,17 @@ void _start(int argc, char **argv) {
             int k = ev.a;
             note = 0;
             if (k == '`') { jt_write(1, "notes: crashing on purpose\n", 27); *(volatile int *)0 = 1; }
-            if (k == JT_KEY_ESC) break;
+            int armed = del_armed;
+            if (k != 'd') del_armed = 0;
+            if (k == JT_KEY_ESC && !armed) break;
+            else if (k == JT_KEY_ESC) { say("notes: delete cancelled", -1); }
             else if (k == '\t') focus = !focus;
             else if (k == 'n') { new_note(); if (editing) { ed_draw(); flags = JT_POLL_PRESENT; continue; } }
             else if (k == 'f') new_folder();
-            else if (k == 'd') delete_note();
+            else if (k == 'd') {
+                if (armed) delete_note();
+                else if (nno) { del_armed = 1; note = "Delete this note? Press d again to confirm, any other key cancels."; say("notes: delete asks", -1); }
+            }
             else if (focus == 0) {
                 if (k == JT_KEY_UP && fsel > 0) { fsel--; nsel = 0; load_notes(); }
                 else if (k == JT_KEY_DOWN && fsel < nfo - 1) { fsel++; nsel = 0; load_notes(); }
