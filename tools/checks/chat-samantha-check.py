@@ -48,7 +48,20 @@
 # `chathttps=1` and instead just times out waiting for it (json_extract_string
 # finds no "content" field in a redirect's body, the same silent "no
 # reply" every other network failure gave before this pass).
+#
+# 2.0.0: Samantha is the ring-3 window user/samantha.c, not the shell's `chat`
+# command. The boot flag `samantha` opens her straight away, typed text lands
+# in her input bar, and her serial lines come through the kernel's own
+# "syscall: write(1) from ring 3: " prefix, so markers are matched anywhere in
+# a line instead of at its start. She asks /api/pick first (answered here with
+# an empty object so no tool fires) and /api/chat second; the recorded request
+# is the /api/chat one.
 import http.server, json, os, subprocess, sys, tempfile, threading, time
+
+def marker_lines(serial, marker):
+    """Every serial line carrying `marker`, trimmed to start at the marker (the
+    ring-3 prefix "syscall: write(1) from ring 3: " sits in front of it)."""
+    return [l[l.index(marker):] for l in serial.splitlines() if marker in l]
 
 QUESTION = "tell me a fact about bananas"  # letters and spaces only -- keeps the QEMU sendkey mapping below trivial (no punctuation table needed)
 REPLY_CONTENT = "potassium42 is the real reason bananas are famous"  # a unique marker, easy to grep off the chatreply= serial line
@@ -62,6 +75,14 @@ def make_server(mode_holder, recorded):
         def do_POST(self):
             length = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(length)
+            if self.path == "/api/pick" and mode_holder["mode"] != "redirect":
+                reply = b"{}"  # no tool named: Samantha falls through to /api/chat
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(reply)))
+                self.end_headers()
+                self.wfile.write(reply)
+                return
             recorded["path"] = self.path
             recorded["body"] = body
             recorded["content_type"] = self.headers.get("Content-Type", "")
@@ -103,7 +124,8 @@ def send(s):
 
 
 def boot_and_ask(name, append, wait_secs):
-    """Boots kernel.elf headless, drops to the shell, types `chat QUESTION`,
+    """Boots kernel.elf headless with the `samantha` flag (her ring-3 window
+    opens first), types QUESTION into her input bar and presses Enter,
     polls serial for a chatreply=/chathttps= marker up to wait_secs, quits,
     and returns the full serial log. Shared by the fake-server scenarios
     below and --live's real-network run (append=None there: no override,
@@ -115,16 +137,19 @@ def boot_and_ask(name, append, wait_secs):
     args = ["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none",
             "-monitor", "stdio", "-serial", "file:" + log,
             "-net", "nic,model=rtl8139", "-net", "user"]
-    if append:
-        args += ["-append", append]
+    args += ["-append", ("samantha " + append).strip()]
 
     proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        time.sleep(5)
-        proc.stdin.write(b"sendkey ctrl-alt-backspace\n")  # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
-        proc.stdin.flush()
-        time.sleep(2)
-        proc.stdin.write(send("chat " + QUESTION).encode())
+        for _ in range(60):  # her window drew and focused its input bar
+            time.sleep(0.5)
+            try:
+                if "samfocus" in open(log, "r", encoding="latin-1").read():
+                    break
+            except FileNotFoundError:
+                pass
+        time.sleep(1.5)
+        proc.stdin.write(send(QUESTION).encode())
         proc.stdin.flush()
         for _ in range(wait_secs):
             time.sleep(1)
@@ -178,7 +203,7 @@ def run_live():
     serial = boot_and_ask("live", None, wait_secs=90)
     print("---- live serial (chat* lines only) ----")
     for l in serial.splitlines():
-        if l.startswith("chat") or l.startswith("nettest") or l.startswith("wxfetch"):
+        if "chat" in l or l.startswith("nettest") or l.startswith("wxfetch"):
             print(l)
     print("-----------------------------------------")
     if "chathttps=1" in serial:
@@ -186,7 +211,7 @@ def run_live():
               "(chat_send's own chathttps=1 marker fired, the exact status Chat now shows in "
               "Settings/the shell instead of a blank or garbage reply)")
         sys.exit(1)
-    reply_lines = [l for l in serial.splitlines() if l.startswith("chatreply=")]
+    reply_lines = marker_lines(serial, "chatreply=")
     if not reply_lines:
         print("FAIL: no chatreply= and no chathttps=1 on serial -- turing.heyitsmejosh.com:80 "
               "never answered within the timeout (network unreachable, DNS failure, or a real hang)")
@@ -243,7 +268,7 @@ def main():
                 if newest.get("content") != QUESTION:
                     failures.append("newest message content is %r, not the typed question %r" % (newest.get("content"), QUESTION))
 
-    reply_lines = [l for l in serial.splitlines() if l.startswith("chatreply=")]
+    reply_lines = marker_lines(serial, "chatreply=")
     if not reply_lines:
         failures.append("no chatreply= line on serial -- the fake reply's content never made it back through chat_send")
     elif REPLY_CONTENT not in reply_lines[-1]:
