@@ -206,48 +206,74 @@ static unsigned face_openness(const unsigned short *f) {
     return sq / n - m * m;
 }
 
-/* Fetch and decode ONE frame per call (idle first, then talk); runs from the idle poll. A failed
-   frame ends its clip (404, dead network, bad JPEG), no idle-0 means no face, and the "face:" marker
-   is written once when loading ends, as the kernel's chat_face_load does. */
+/* Append the decimal of v (0 to 99) to d at n; returns the new length. */
+static int face_num(char *d, int n, int v) {
+    if (v >= 10) d[n++] = (char)('0' + v / 10);
+    d[n++] = (char)('0' + v % 10);
+    return n;
+}
+
+/* Fetch and decode ONE frame per call (idle first, then talk); runs from the idle poll. A frame that
+   fails (404, dropped connection, bad JPEG) is tried once more on the next poll and then skipped: the
+   clip goes on, so one flaky fetch never truncates her face. Loaded frames pack into the slots
+   (uface_idle_n / uface_talk_n count them), uface_pos walks the clip itself. Only a dead host ends a
+   clip early (FACE_DEAD_RUN skipped frames in a row, so no network costs 48 timeouts), and an idle clip
+   with nothing in it means no face. The "face:" marker is written once when loading ends, as the
+   kernel's chat_face_load does, and says how far each clip got and what was retried or skipped. */
+#define FACE_DEAD_RUN 4
 static void draw(void);
+static int uface_clip JT_DATA = 0;               /* 0 idle, then 1 talk */
+static int uface_pos[2] JT_DATA;                 /* how far each clip got: frames tried */
+static int uface_tries JT_DATA = 0;              /* failed attempts at the current frame */
+static int uface_skipped JT_DATA = 0, uface_retried JT_DATA = 0, uface_run JT_DATA = 0;
+static void face_load_finish(void) {
+    uface_done = 1;
+    char d[80]; int n = 0; const char *t = "face: idle=";
+    while (*t) d[n++] = *t++;
+    n = face_num(d, n, uface_idle_n); t = " talk="; while (*t) d[n++] = *t++;
+    n = face_num(d, n, uface_talk_n); t = " end="; while (*t) d[n++] = *t++;
+    n = face_num(d, n, uface_pos[0]); d[n++] = '/';
+    n = face_num(d, n, uface_pos[1]); t = " skipped="; while (*t) d[n++] = *t++;
+    n = face_num(d, n, uface_skipped); t = " retried="; while (*t) d[n++] = *t++;
+    n = face_num(d, n, uface_retried); d[n++] = '\n'; jt_write(1, d, (unsigned)n);
+    face_at = 0; face_talk_at = 0;
+}
 static void face_load_step(void) {
     if (uface_done) return;
-    int idle = uface_idle_n < UFACE_IDLE_N;
-    int i = idle ? uface_idle_n : uface_talk_n;
-    int ok = 0;
-    if (idle || uface_idle_n) {
-        char path[24]; int n = 0; const char *p = "/face/";
-        while (*p) path[n++] = *p++;
-        p = idle ? "idle" : "talk"; while (*p) path[n++] = *p++;
-        int src = i * UFACE_STRIDE; path[n++] = '-';
-        if (src >= 10) path[n++] = (char)('0' + src / 10);
-        path[n++] = (char)('0' + src % 10);
-        p = ".jpg"; while (*p) path[n++] = *p++;
-        path[n] = 0;
-        int got = jt_http_get(path, uface_file, UFACE_FILE);
-        unsigned w = 0, h = 0;
-        if (got > 0 && uface_cur && jpeg_decode_scaled(uface_file, (unsigned)got, uface_cur, UFACE_SIDE, UFACE_SIDE, &w, &h) == 0 && w == 320 && h == 320) {
-            unsigned char *keep = (unsigned char *)malloc((unsigned long)got);  /* heap, SYS_BRK */
-            if (keep) {
-                for (int k = 0; k < got; k++) keep[k] = uface_file[k];
-                uface_jpg[idle ? 0 : 1][i] = keep; uface_len[idle ? 0 : 1][i] = (unsigned)got;
-                uface_cur_kind = idle ? 0 : 1; uface_cur_i = i;
-                ok = 1;
-            }
+    int clip = uface_clip, total = clip ? UFACE_TALK_N : UFACE_IDLE_N;
+    int pos = uface_pos[clip], slot = clip ? uface_talk_n : uface_idle_n;
+    char path[24]; int n = 0; const char *p = "/face/";
+    while (*p) path[n++] = *p++;
+    p = clip ? "talk" : "idle"; while (*p) path[n++] = *p++;
+    path[n++] = '-';
+    n = face_num(path, n, pos * UFACE_STRIDE);
+    p = ".jpg"; while (*p) path[n++] = *p++;
+    path[n] = 0;
+    int got = jt_http_get(path, uface_file, UFACE_FILE), ok = 0;
+    unsigned w = 0, h = 0;
+    uface_cur_kind = -1;   /* a bad JPEG can leave the decode buffer half written: it no longer holds any cached frame */
+    if (got > 0 && uface_cur && jpeg_decode_scaled(uface_file, (unsigned)got, uface_cur, UFACE_SIDE, UFACE_SIDE, &w, &h) == 0 && w == 320 && h == 320) {
+        unsigned char *keep = (unsigned char *)malloc((unsigned long)got);  /* heap, SYS_BRK */
+        if (keep) {
+            for (int k = 0; k < got; k++) keep[k] = uface_file[k];
+            uface_jpg[clip][slot] = keep; uface_len[clip][slot] = (unsigned)got;
+            uface_cur_kind = clip; uface_cur_i = slot;
+            ok = 1;
         }
     }
     if (ok) {
-        if (idle) uface_idle_n++; else { uface_open[i] = face_openness(uface_cur); uface_talk_n++; }
-        if (uface_idle_n < UFACE_IDLE_N || uface_talk_n < UFACE_TALK_N) return;
+        if (clip) { uface_open[slot] = face_openness(uface_cur); uface_talk_n++; } else uface_idle_n++;
+        uface_tries = 0; uface_run = 0;
+    } else if (uface_tries == 0) {
+        uface_tries = 1; uface_retried++;   /* once more on the next poll */
+        return;
+    } else {
+        uface_tries = 0; uface_skipped++; uface_run++;   /* give up on this frame, the clip goes on */
     }
-    uface_done = 1;   /* clip ended (failure) or both loops full */
-    char d[40]; int n = 0; const char *t = "face: idle=";
-    while (*t) d[n++] = *t++;
-    if (uface_idle_n >= 10) d[n++] = (char)('0' + uface_idle_n / 10);
-    d[n++] = (char)('0' + uface_idle_n % 10); t = " talk="; while (*t) d[n++] = *t++;
-    if (uface_talk_n >= 10) d[n++] = (char)('0' + uface_talk_n / 10);
-    d[n++] = (char)('0' + uface_talk_n % 10); d[n++] = '\n'; jt_write(1, d, (unsigned)n);
-    face_at = 0; face_talk_at = 0;
+    uface_pos[clip]++;
+    if (uface_pos[clip] < total && uface_run < FACE_DEAD_RUN) return;   /* more of this clip to fetch */
+    if (clip == 0 && uface_idle_n) { uface_clip = 1; uface_run = 0; return; }   /* idle in hand: on to the talk clip */
+    face_load_finish();   /* talk clip done, or no idle frame at all (no face, talk is not tried) */
 }
 
 /* Advance the face one step when its tick comes due; returns 1 when it drew.
