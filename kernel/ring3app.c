@@ -277,27 +277,26 @@ void toroid_ring3_open(void)     { ring3app_launch(&RING3_APPS[1]); }
 void calculator_ring3_open(void) { ring3app_launch(&RING3_APPS[2]); }
 void quotestreak_ring3_open(void){ ring3app_launch(&RING3_APPS[3]); }
 void bookrank_ring3_open(void)   { ring3app_launch(&RING3_APPS[4]); }
-void homeqi_ring3_open(void)     { ring3app_launch(&RING3_APPS[5]); }
-void lexly_ring3_open(void)      { ring3app_launch(&RING3_APPS[6]); }
-void plan_ring3_open(void)       { ring3app_launch(&RING3_APPS[7]); }
-void fieldbook_ring3_open(void)  { ring3app_launch(&RING3_APPS[8]); }
-void clock_ring3_open(void)      { ring3app_launch(&RING3_APPS[9]); }
-void portfolio_ring3_open(void)  { ring3app_launch(&RING3_APPS[10]); }
-void activity_ring3_open(void)   { ring3app_launch(&RING3_APPS[11]); }
-void contacts_ring3_open(void)   { ring3app_launch(&RING3_APPS[12]); }
-void sparkjar_ring3_open(void)   { ring3app_launch(&RING3_APPS[13]); }
-void reminders_ring3_open(void)  { ring3app_launch(&RING3_APPS[14]); }
-void curbfind_ring3_open(void)   { ring3app_launch(&RING3_APPS[15]); }
-void calendar_ring3_open(void)   { ring3app_launch(&RING3_APPS[16]); }
-void search_ring3_open(void)     { ring3app_launch(&RING3_APPS[17]); }
-void epiphany_ring3_open(void)   { ring3app_launch(&RING3_APPS[18]); }
-void burrow_ring3_open(void)     { ring3app_launch(&RING3_APPS[20]); }
-int  stocks_ring3_run(void)      { return ring3app_launch(&RING3_APPS[21]); } 
-void mail_ring3_open(void)       { ring3app_launch(&RING3_APPS[22]); }
-void terminal_ring3_open(void)   { ring3app_launch(&RING3_APPS[24]); }
-void samantha_ring3_open(void)   { ring3app_launch(&RING3_APPS[25]); } /* 1.9.26: dock slot 6, the shell commands and phone mode */
-void notes_ring3_launch(void)    { ring3app_launch(&RING3_APPS[23]); } /* kernel.c's notes_ring3_open runs the legacy NOTES.TXT migration first */
-int  weather_ring3_run(void)     { return ring3app_launch(&RING3_APPS[19]); } 
+void lexly_ring3_open(void)      { ring3app_launch(&RING3_APPS[5]); }
+void plan_ring3_open(void)       { ring3app_launch(&RING3_APPS[6]); }
+void fieldbook_ring3_open(void)  { ring3app_launch(&RING3_APPS[7]); }
+void clock_ring3_open(void)      { ring3app_launch(&RING3_APPS[8]); }
+void portfolio_ring3_open(void)  { ring3app_launch(&RING3_APPS[9]); }
+void activity_ring3_open(void)   { ring3app_launch(&RING3_APPS[10]); }
+void contacts_ring3_open(void)   { ring3app_launch(&RING3_APPS[11]); }
+void sparkjar_ring3_open(void)   { ring3app_launch(&RING3_APPS[12]); }
+void reminders_ring3_open(void)  { ring3app_launch(&RING3_APPS[13]); }
+void curbfind_ring3_open(void)   { ring3app_launch(&RING3_APPS[14]); }
+void calendar_ring3_open(void)   { ring3app_launch(&RING3_APPS[15]); }
+void search_ring3_open(void)     { ring3app_launch(&RING3_APPS[16]); }
+void epiphany_ring3_open(void)   { ring3app_launch(&RING3_APPS[17]); }
+void burrow_ring3_open(void)     { ring3app_launch(&RING3_APPS[19]); }
+int  stocks_ring3_run(void)      { return ring3app_launch(&RING3_APPS[20]); } 
+void mail_ring3_open(void)       { ring3app_launch(&RING3_APPS[21]); }
+void terminal_ring3_open(void)   { ring3app_launch(&RING3_APPS[23]); }
+void samantha_ring3_open(void)   { ring3app_launch(&RING3_APPS[24]); } /* 1.9.26: dock slot 6, the shell commands and phone mode */
+void notes_ring3_launch(void)    { ring3app_launch(&RING3_APPS[22]); } /* kernel.c's notes_ring3_open runs the legacy NOTES.TXT migration first */
+int  weather_ring3_run(void)     { return ring3app_launch(&RING3_APPS[18]); } 
 
 /* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
    run user/fbpoke.c with no window: it must be refused a pointer into
@@ -361,7 +360,6 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='a' && pc[7]=='l' && pc[8]=='c') { ring3app_autoopen_slot = 19; serial_puts("autoopen=calculator\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='q' && pc[6]=='u' && pc[7]=='o' && pc[8]=='t') { ring3app_autoopen_slot = 11; serial_puts("autoopen=quotes\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='b' && pc[6]=='o' && pc[7]=='o' && pc[8]=='k') { ring3app_autoopen_slot = 10; serial_puts("autoopen=bookrank\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='h' && pc[6]=='o' && pc[7]=='m' && pc[8]=='e') { ring3app_autoopen_slot = 16; serial_puts("autoopen=homeqi\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='l' && pc[6]=='e' && pc[7]=='x' && pc[8]=='l') { ring3app_autoopen_slot = 13; serial_puts("autoopen=lexly\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='p' && pc[6]=='l' && pc[7]=='a' && pc[8]=='n') { ring3app_autoopen_slot = 12; serial_puts("autoopen=plan\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='f' && pc[6]=='i' && pc[7]=='e' && pc[8]=='l') { ring3app_autoopen_slot = 17; serial_puts("autoopen=fieldbook\n"); }
