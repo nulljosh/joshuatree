@@ -398,26 +398,37 @@ try:
     ink_before_compose = ink_count(dump(), VX, VY, VW, VH)
 
     key("c")
+    # 1.9.24: Compose is an inline sheet inside the Mail window, not a second
+    # window; user/mail.c says so on serial when the sheet opens.
     compose_opened = False
     for _ in range(30):
         time.sleep(0.1)
-        if is_red(pixel(dump(), *W1_CLOSE)): compose_opened = True; break
+        try: compose_opened = "mail: compose=1" in open(LOG, errors="replace").read()
+        except OSError: pass
+        if compose_opened: break
     time.sleep(0.3)
     img7a = dump()
-    compose_opened = compose_opened or is_red(pixel(img7a, *W1_CLOSE))
     list_stayed_open = is_red(pixel(img7a, *W0_CLOSE))
-    print(f"batch3: pressing 'c' opened a real second (Compose) window: {'yes' if compose_opened else 'NO'}   list window stayed open behind it: {'yes' if list_stayed_open else 'NO'}")
-    if not compose_opened: fails.append("batch3: Mail's 'c' did not open a real second Compose window")
-    if not list_stayed_open: fails.append("batch3: Mail's list window closed/hid when Compose opened instead of staying open behind it")
+    no_second_window = not is_red(pixel(img7a, *W1_CLOSE))
+    print(f"batch3: pressing 'c' opened the inline compose sheet: {'yes' if compose_opened else 'NO'}   Mail window still the only one: {'yes' if list_stayed_open and no_second_window else 'NO'}")
+    if not compose_opened: fails.append("batch3: Mail's 'c' did not open the inline compose sheet (no 'mail: compose=1' marker)")
+    if not list_stayed_open: fails.append("batch3: Mail's window closed/hid when the compose sheet opened")
+    if not no_second_window: fails.append("batch3: Compose opened a second window; by design it is an inline sheet now")
 
     # Type the from/subject/body stages into Compose (window 1, focused --
     # it opened on top, so keystrokes go there, not to the list window).
     type_str("qa-mw-compose-from"); keys("ret"); time.sleep(0.3)
     type_str("qa-mw-compose-subject"); keys("ret"); time.sleep(0.3)
-    type_str("qa-mw-compose-body-marker"); keys("ret"); time.sleep(0.5)
+    type_str("qa-mw-compose-body-marker"); keys("ret")
+    for _ in range(50):  # the app drains one key per frame; wait for it to catch up and file the message
+        time.sleep(0.1)
+        try:
+            if "mail: filed n=" in open(LOG, errors="replace").read(): break
+        except OSError: pass
+    time.sleep(0.5)
 
     img7b = dump()
-    compose_closed_after_send = not is_red(pixel(img7b, *W1_CLOSE))
+    compose_closed_after_send = not is_red(pixel(img7b, *W1_CLOSE)) and "mail: filed n=" in open(LOG, errors="replace").read()
     list_still_open_after_send = is_red(pixel(img7b, *W0_CLOSE))
     print(f"batch3: Compose closed itself after send: {'yes' if compose_closed_after_send else 'NO'}   list window still open: {'yes' if list_still_open_after_send else 'NO'}")
     if not compose_closed_after_send: fails.append("batch3: Compose did not close itself after a successful send")
