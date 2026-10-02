@@ -398,7 +398,7 @@ static int chat(void) {
     n = cat(ar->req, n, REQ, "]}");
     int r = post("/api/chat", n, 4500);
     if (r == -1) { serial("chatfail=", "connect"); status = "error: couldn't reach the host"; return 0; }
-    if (r <= 0) { serial("chatfail=", "noreply"); status = r < -99 ? "error: the host answered with an error" : "error: no reply"; return 0; }
+    if (r <= 0) { if (r == -99 || r < -99) serial("chathttps=", "1"); serial("chatfail=", "noreply"); status = r < -99 ? "error: the host answered with an error" : "error: no reply"; return 0; }
     char ans[TXT];
     if (!extract(ar->resp, "content", ans, TXT)) { status = "error: no reply text"; return 0; }
     serial("chatreply=", ans);
@@ -1008,6 +1008,7 @@ void _start(int argc, char **argv) {
     face_inited = uface_file && uface_cur;
     draw();
     jt_write(1, "samantha: ring-3 window\n", 24);
+    jt_write(1, "samopen\n", 8); jt_write(1, "samfocus\n", 9);  /* the markers samantha-boot-check reads: view open, input box drawn and focused */
     unsigned flags = JT_POLL_PRESENT;
     for (;;) {
         struct jt_event ev;

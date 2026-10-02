@@ -53,13 +53,13 @@ static int brk_grow(unsigned long need) {
     if (heap_is_arena) return 0;
     if (!heap_lo) {
         int top = jt_brk(0);
-        if (top <= 0) { heap_lo = jt_arena; heap_hi = jt_arena + sizeof jt_arena; heap_is_arena = 1;
+        if (top == 0 || (top < 0 && top > -4096)) { heap_lo = jt_arena; heap_hi = jt_arena + sizeof jt_arena; heap_is_arena = 1;
                         ((struct jt_block *)heap_lo)->size = sizeof jt_arena - sizeof(struct jt_block); ((struct jt_block *)heap_lo)->free = 1; return 1; }
         heap_lo = heap_hi = (unsigned char *)(unsigned)top;
     }
     unsigned long step = (need + sizeof(struct jt_block) + JT_GROW - 1) / JT_GROW * JT_GROW;
     int top = jt_brk((unsigned)heap_hi + (unsigned)step);
-    if (top <= 0 || (unsigned char *)(unsigned)top != heap_hi + step) {
+    if ((top < 0 && top > -4096) || top == 0 || (unsigned char *)(unsigned)top != heap_hi + step) {
         if (heap_lo == heap_hi) { heap_lo = jt_arena; heap_hi = jt_arena + sizeof jt_arena; heap_is_arena = 1;
                                   ((struct jt_block *)heap_lo)->size = sizeof jt_arena - sizeof(struct jt_block); ((struct jt_block *)heap_lo)->free = 1; return 1; }
         return 0;
