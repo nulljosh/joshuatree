@@ -830,6 +830,33 @@ static int sys_http_post(u32 argp, u32 unused1, u32 unused2) {
     return n;
 }
 
+/* 1.9.26: SYS_SYSINFO and SYS_LAUNCH_REQUEST (contract in syscall.h). Both keep the state on the
+   kernel side of the gate: sysinfo fills a private copy and copies out once, launch only records
+   an index that gui_run picks up with IF on. */
+static int sys_sysinfo(u32 out, u32 size, u32 unused) {
+    (void)unused;
+    struct jt_sysinfo si;
+    if (size < 8) return -EINVAL;
+    if (size > sizeof si) size = sizeof si;
+    if (!paging_user_range_ok(out, size)) return -EFAULT;
+    jt_sysinfo_fill(&si);
+    si.epoch = rtc_epoch_seconds();
+    for (u32 i = 0; i < size; i++) ((char *)out)[i] = ((const char *)&si)[i];
+    return (int)size;
+}
+static int sys_launch_request(u32 name, u32 b, u32 c) {
+    (void)b; (void)c;
+    char kn[JT_APP_NAME_MAX + 1];
+    u32 i;
+    for (i = 0; i <= JT_APP_NAME_MAX; i++) {
+        if (!paging_user_range_ok(name + i, 1)) return -EFAULT;
+        kn[i] = ((const char *)name)[i];
+        if (!kn[i]) break;
+    }
+    if (i > JT_APP_NAME_MAX || i == 0) return -EINVAL;
+    return jt_launch_request(kn);
+}
+
 /* 1.9.13: SYS_READDIR, the listing the Search app shows (and Files will).
    The contract is in syscall.h. Order of operations is the point: the
    path is copied out of user space with a hard cap and the output range
@@ -978,6 +1005,8 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_UNLINK]      = sys_unlink,
     [SYS_SHELL_RUN]   = sys_shell_run,
     [SYS_HTTP_POST]   = sys_http_post,
+    [SYS_SYSINFO]     = sys_sysinfo,
+    [SYS_LAUNCH_REQUEST] = sys_launch_request,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {

@@ -181,6 +181,41 @@ struct jt_http_post {
 /* kernel.c: the Settings-owned chat host, read by SYS_HTTP_POST. */
 const char *llm_host_get(void);
 int llm_port_get(void);
+/* 1.9.26: SYS_SYSINFO, the read-only state Samantha reports (weather, host, phone flag, clock).
+   ebx = struct jt_sysinfo* (user, write), ecx = the caller's sizeof (so the struct can grow:
+   an old program passes a smaller size and gets only the fields it knows, a new one on an old
+   kernel sees a short count). ecx must be at least 8 (version + size). The kernel fills a
+   private copy and copies out min(ecx, sizeof) bytes; returns that count, or -EFAULT (range
+   outside user memory), -EINVAL (ecx under 8). version is JT_SYSINFO_VERSION and comes first. */
+#define SYS_SYSINFO     395
+#define JT_SYSINFO_VERSION 1
+#define JT_WX_TEXT_MAX  24
+#define JT_SYSINFO_HOST_MAX 40
+struct jt_sysinfo {
+    unsigned int version;       /* JT_SYSINFO_VERSION; always first */
+    unsigned int size;          /* sizeof this struct in the kernel that filled it */
+    unsigned int phone;         /* 1 when booted in phone mode */
+    unsigned int epoch;         /* seconds since 1970, same as SYS_TIME */
+    unsigned int wx_have;       /* 1 when a good weather reading exists */
+    unsigned int wx_state;      /* 0 never tried, 1 ok, 2 offline, 3 timeout, 4 failed, 5 bad */
+    int wx_temp_c;              /* whole degrees C, valid when wx_have */
+    int wx_code10;              /* WMO code times 10, valid when wx_have */
+    unsigned int llm_port;      /* Settings-owned chat host port */
+    char wx_text[JT_WX_TEXT_MAX];          /* the menu bar text, NUL terminated, empty when none */
+    char llm_host[JT_SYSINFO_HOST_MAX];    /* the chat host SYS_HTTP_POST talks to */
+};
+/* 1.9.26: SYS_LAUNCH_REQUEST, "open <app>" for a ring-3 Samantha. ebx = const char *name (user,
+   NUL terminated, at most JT_APP_NAME_MAX bytes). The name must match an APPS[] row exactly
+   (case sensitive, real apps only, not the Apps folder or Trash). The kernel records ONE pending
+   index and returns at once; it never launches inside the gate. The desktop loop takes the
+   index on its next pass and opens it the way a dock click does. Returns 0, -EFAULT, -EINVAL
+   (no such app, name too long, empty), or -EBUSY (a request is already pending). */
+#define SYS_LAUNCH_REQUEST 396
+#define JT_APP_NAME_MAX 24
+/* kernel.c: SYS_SYSINFO fill, SYS_LAUNCH_REQUEST validate and store, desktop loop take. */
+void jt_sysinfo_fill(struct jt_sysinfo *si);
+int jt_launch_request(const char *name);
+int jt_launch_take(void);
 #define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3. 386 (tasks), 387 (http_get), 388 (readdir) and 392 (http_post) fit under it */
 
 /* Exactly the stack shape syscall_entry (isr.S) builds, lowest address

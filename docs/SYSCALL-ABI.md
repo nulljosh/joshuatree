@@ -718,3 +718,41 @@ On HTTP 200 the reply body is copied out, at most `out_len` bytes, and the
 count is returned. Any other status is minus that status, -100 to -599.
 -ENODEV no NIC, -EIO no answer within `reply_ticks`, -EFAULT any range outside
 user memory. Nothing is written to `out` on any failure.
+
+## sysinfo and launch_request (1.9.26)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 395 | `sysinfo` | `struct jt_sysinfo *` | caller's `sizeof` | 0 | bytes written, or -errno |
+| 396 | `launch_request` | `const char *name` | 0 | 0 | 0, or -errno |
+
+```c
+struct jt_sysinfo {
+    unsigned int version;      /* 1; always first so the struct can grow */
+    unsigned int size;         /* sizeof in the kernel that filled it */
+    unsigned int phone;        /* 1 in phone mode */
+    unsigned int epoch;        /* seconds since 1970, same clock as time */
+    unsigned int wx_have;      /* 1 when a good weather reading exists */
+    unsigned int wx_state;     /* 0 none, 1 ok, 2 offline, 3 timeout, 4 failed, 5 bad */
+    int wx_temp_c, wx_code10;  /* whole degrees C, WMO code times 10 */
+    unsigned int llm_port;
+    char wx_text[24];          /* the menu bar text, empty when none */
+    char llm_host[40];         /* the chat host http_post talks to */
+};
+```
+
+**sysinfo** hands a program the read-only state Samantha reports. `ecx` is the
+size the caller was built with; `paging_user_range_ok` checks that many bytes,
+the kernel fills a private copy and copies out the smaller of the two sizes, so
+an old program on a new kernel and a new one on an old kernel both work (check
+`size`). `ecx` under 8 is -EINVAL, a range outside user memory is -EFAULT.
+Nothing a program passes in is read.
+
+**launch_request** is `open <app>`. The name is copied out with a 24 byte
+bound and must match an `APPS[]` row exactly (case sensitive, real apps only,
+not the Apps folder or Trash): -EINVAL for no match, empty or too long, -EFAULT
+for a bad pointer. The kernel stores one pending index and returns 0, or -EBUSY
+if one is already waiting. It never launches inside the gate: the desktop loop
+takes the index on its next pass and opens it the way a dock click does, as a
+window for a ring-3 app or through the blocking path otherwise. Numbers 393
+and 394 are held for the audio calls.

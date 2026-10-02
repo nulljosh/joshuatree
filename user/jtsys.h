@@ -55,6 +55,19 @@
 #define JT_SYS_UNLINK      390 /* delete a file; relative path like open */
 #define JT_SYS_SHELL_RUN   391 /* 1.9.24: run one allowlisted shell line, output into a buffer; see kernel/shellsys.c */
 #define JT_SHELL_LINE_MAX 160  /* longest line the kernel copies in, bytes before the NUL: "<cwd>\n<command>" */
+#define JT_SYS_SYSINFO     395 /* 1.9.26: weather, chat host, phone flag, time in one read-only struct; see kernel/syscall.h */
+#define JT_SYS_LAUNCH_REQUEST 396 /* 1.9.26: ask the desktop to open an app by exact APPS[] name; never launches inside the gate */
+#define JT_SYSINFO_VERSION 1
+#define JT_WX_TEXT_MAX  24
+#define JT_SYSINFO_HOST_MAX 40
+#define JT_APP_NAME_MAX 24
+struct jt_sysinfo {
+    unsigned int version, size, phone, epoch, wx_have, wx_state;
+    int wx_temp_c, wx_code10;
+    unsigned int llm_port;
+    char wx_text[JT_WX_TEXT_MAX];
+    char llm_host[JT_SYSINFO_HOST_MAX];
+};
 #define JT_DIRENT_NAME  32
 #define JT_READDIR_MAX  64
 #define JT_PATH_MAX     63     /* bytes of path before the NUL the kernel will read; longer is -EINVAL */
@@ -161,6 +174,11 @@ static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned m
 static inline int jt_mkdir(const char *path)                      { return jt_syscall(JT_SYS_MKDIR, (unsigned)path, 0, 0); }
 static inline int jt_unlink(const char *path)                     { return jt_syscall(JT_SYS_UNLINK, (unsigned)path, 0, 0); }
 static inline int jt_shell_run(const char *line, char *out, unsigned outlen) { return jt_syscall(JT_SYS_SHELL_RUN, (unsigned)line, (unsigned)out, outlen); }
+/* Fills at most size bytes (pass sizeof *si); returns bytes written, -EINVAL under 8, -EFAULT bad pointer.
+   si->version is first so the struct can grow; check si->size for what the kernel really wrote. */
+static inline int jt_sysinfo(struct jt_sysinfo *si)               { return jt_syscall(JT_SYS_SYSINFO, (unsigned)si, sizeof *si, 0); }
+/* 0 queued, -EINVAL no app by that exact name, -EBUSY one is already pending. The desktop opens it on its next pass. */
+static inline int jt_launch(const char *app)                      { return jt_syscall(JT_SYS_LAUNCH_REQUEST, (unsigned)app, 0, 0); }
 static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
 
 #endif

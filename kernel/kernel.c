@@ -2474,6 +2474,34 @@ static char weather_err[48] = "";
 static const char *weather_state_name(int st){
     return st == WX_OK ? "ok" : st == WX_OFFLINE ? "offline" : st == WX_TIMEOUT ? "timeout" : st == WX_FAILED ? "failed" : st == WX_BAD ? "bad" : "none";
 }
+/* 1.9.26: SYS_SYSINFO fill and the SYS_LAUNCH_REQUEST mailbox (kernel/syscall.c). */
+void jt_sysinfo_fill(struct jt_sysinfo *si){
+    char *z = (char *)si;
+    for (unsigned i = 0; i < sizeof *si; i++) z[i] = 0;
+    si->version = JT_SYSINFO_VERSION;
+    si->size = sizeof *si;
+    si->phone = boot_to_phone ? 1u : 0u;
+    si->wx_have = weather_have ? 1u : 0u;
+    si->wx_state = (unsigned)weather_state;
+    si->wx_temp_c = weather_temp_c;
+    si->wx_code10 = weather_code10;
+    si->llm_port = (unsigned)llm_port;
+    for (int i = 0; i < JT_WX_TEXT_MAX - 1 && weather_text[i]; i++) si->wx_text[i] = weather_text[i];
+    for (int i = 0; i < JT_SYSINFO_HOST_MAX - 1 && llm_host[i]; i++) si->llm_host[i] = llm_host[i];
+}
+static volatile int launch_pending = -1;
+int jt_launch_request(const char *name){
+    if (launch_pending >= 0) return -16; /* EBUSY, as in syscall.c */
+    for (int i = 0; i < GUI_APPS_FOLDER; i++) {
+        const char *a = APPS[i].name;
+        if (!a) continue;
+        int k = 0;
+        while (a[k] && a[k] == name[k]) k++;
+        if (!a[k] && !name[k]) { launch_pending = i; return 0; }
+    }
+    return -22; /* EINVAL */
+}
+int jt_launch_take(void){ int i = launch_pending; launch_pending = -1; return i; }
 /* Test/diagnostic override, read once from the multiboot command line
    (`-append "wxhost=10.0.2.2:8099"`, see kmain): both the location and the
    forecast request go to this literal IP:port instead of ip-api.com and
@@ -6057,6 +6085,16 @@ static void gui_run(void){
                until then; a failure leaves the photo up, never a blank. */
             if (wall_theme != WALL_PHOTO && !wall_map && geo_have && wall_fetch()) { wall_apply(1); gui_draw_desktop(-1, -1, 0, 0); gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
         }
+        /* 1.9.26: SYS_LAUNCH_REQUEST pickup. The syscall only stored an index; the launch runs here,
+           IF on, through the same two paths a dock click takes (window first, blocking fallback). */
+        int sys_launched = 0;
+        { int li = jt_launch_take();
+          if (li >= 0) {
+              serial_puts("launchreq=pickup\n");
+              if (!(gui_multiwin_dock_ok(li) && gui_multiwin_open(li) >= 0)) { gui_launch_from_dock(li); mx = app_cursor_x; my = app_cursor_y; }
+              for (int wi = 0; wi < gui_window_count; wi++) gui_windows[wi].shown = 1;
+              sys_launched = 1;
+          } }
         /* v45: wind, 4 frames a second, only while the desktop itself is
            what's on screen. Timed on its first frame; if that frame took
            longer than a tenth of a second the machine is too slow for
@@ -6305,7 +6343,7 @@ static void gui_run(void){
             if (moved > 8) { drag_win = press_window; press_window = -1; } /* real drag now: the release logic below moves/snaps instead of closing */
         }
 
-        int launched = notif_draw_pending || weather_draw_pending || win_focus_changed || mw_key_repaint; notif_draw_pending = 0; weather_draw_pending = 0;
+        int launched = sys_launched || notif_draw_pending || weather_draw_pending || win_focus_changed || mw_key_repaint; notif_draw_pending = 0; weather_draw_pending = 0;
         if (just_released) {
             if (notif_open) {
                 if (notif_opening) notif_opening = 0;
