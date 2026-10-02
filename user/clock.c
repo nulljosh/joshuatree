@@ -165,6 +165,7 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { draw(last_t); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         unsigned now = (unsigned)jt_time(0);
         int dirty = 0;

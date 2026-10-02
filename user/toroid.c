@@ -157,6 +157,7 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { tr_draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == 1) {
             if (ev.kind == JT_EV_CLICK) {

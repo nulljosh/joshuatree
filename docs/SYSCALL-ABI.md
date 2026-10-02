@@ -484,6 +484,7 @@ again. Any other bit in `ecx` is -EINVAL. Event kinds:
 | 1 `JT_EV_KEY` | a key | ASCII, or 256 and up for up/down/enter/esc/left/right, the same values `kernel/app.h` gives in-kernel apps | 0 |
 | 2 `JT_EV_CLICK` | a left click | x in window coordinates | y |
 | 3 `JT_EV_WHEEL` | a wheel tick | +1 up, -1 down | 0 |
+| 4 `JT_EV_RESIZE` | the window rect changed (compositor windows only) | new width | new height |
 
 There is no `window_close`. Exiting releases the window; so does
 crashing. `task_exit_with` runs `syscall_release_task` for a task that
@@ -532,6 +533,7 @@ The calls did not change. What changed is what they mean for a program the deskt
 - `window_open` fills the same `jt_window_info`; `pixels` is still `JT_USER_FB`, but the frames behind it belong to this task alone, mapped into no other directory.
 - `window_poll` with `JT_POLL_PRESENT` no longer copies the buffer to the screen inside the call. It marks the window dirty and the desktop blits it on its next frame, so a program that presents every loop costs the kernel nothing extra.
 - Events come from a per-window queue of 16. The desktop puts a key or click there only while this window is focused; a full queue drops the newest. `JT_EV_CLICK` coordinates are relative to the content area, as before.
+- **Resize (1.10).** When the window rect changes (snap, resize), the desktop queues `JT_EV_RESIZE` (a = new content width, b = new height) once per change. The program answers with `window_open` again: a second open on a window that has a resize pending allocates a new buffer of the new size, zeroes it, maps it at `JT_USER_FB` in this task's directory (the old tail pages go back to supervisor-only, the TLB is flushed) and fills `jt_window_info` with the new width, height and pitch; `pixels` stays `JT_USER_FB`. With no resize pending a second open just returns the current info. Until the program answers, the desktop keeps blitting the old buffer clipped, so nothing tears; the old buffer is freed on the desktop's next look at the window, never mid-blit. A rect larger than `JT_USER_FB_BYTES` is never asked for (-ENOMEM on open keeps the old buffer). `user/jtsys.h` has `jt_window_resized(&ev, &win)`, which does the re-open and returns 1 so the program repaints the whole window (the new buffer starts black): `if (r == 1 && jt_window_resized(&ev, &win)) { draw(); flags = JT_POLL_PRESENT; continue; }`. It logs `ring3: window now WxH`; `tools/checks/ring3resize-check.py` reads it.
 - A program on the blocking path (every app not named in `gui_ring3_windowed`) sees the old behaviour exactly.
 
 ## tasks (1.9.6)

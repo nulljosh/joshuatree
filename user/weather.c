@@ -219,6 +219,7 @@ void _start(int argc, char **argv) {
     unsigned flags = JT_POLL_PRESENT;
     for (;;) {
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) {
             if (jt_sysinfo(&si) > 0 && si.data_stamp != stamp) { stamp = si.data_stamp; fetching = 0; load(); draw(); flags = JT_POLL_PRESENT; }

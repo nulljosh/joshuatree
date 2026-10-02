@@ -587,7 +587,7 @@ int  gui_poll_event(int *a, int *b);                        /* non-blocking: JT_
    blocking launcher, so nothing unconverted changes. */
 #define R3WIN_MAX 4
 #define R3WIN_RING 64
-struct r3win { int task; u32 *fb; void *fb_raw; void *image; u32 w, h; int dirty; struct jt_event ring[R3WIN_RING]; u32 rh, rt; };
+struct r3win { int task; u32 *fb; void *fb_raw; void *old_raw; u32 old_w, old_h; u32 want_w, want_h; void *image; u32 w, h; int dirty; struct jt_event ring[R3WIN_RING]; u32 rh, rt; };
 static struct r3win r3wins[R3WIN_MAX];
 static struct r3win *r3win_of(int task) {
     if (task < 0) return 0;
@@ -605,12 +605,57 @@ int syscall_window_register(int task, u32 w, u32 h, void *image) {
     u32 *fb = (u32 *)(((u32)raw + 4095) & ~4095u);
     for (u32 i = 0; i < w * h; i++) fb[i] = 0;
     if (!paging_task_map_private(task_page_dir(task), JT_USER_FB, (u32)fb, bytes)) { kfree(raw); return 0; }
-    r->task = task; r->fb = fb; r->fb_raw = raw; r->image = image; r->w = w; r->h = h; r->dirty = 0; r->rh = r->rt = 0;
+    r->task = task; r->fb = fb; r->fb_raw = raw; r->old_raw = 0; r->old_w = r->old_h = 0; r->want_w = w; r->want_h = h; r->image = image; r->w = w; r->h = h; r->dirty = 0; r->rh = r->rt = 0;
     return 1;
+}
+/* 1.10.x resize: the buffer a re-open replaced is freed here, on the next
+   compositor look at the window, not inside the swap: a blit that was
+   already reading it (the timer can run the app mid-blit) never sees freed
+   memory. Zeroed first, same rule as the release path. Kernel PDEs are
+   synced into every task directory, so no CR3 switch is needed (and a
+   mid-syscall one is what 1.9.28 removed). */
+static void r3win_free_old(struct r3win *r) {
+    if (!r->old_raw) return;
+    u32 *o = (u32 *)(((u32)r->old_raw + 4095) & ~4095u);
+    for (u32 i = 0; i < r->old_w * r->old_h; i++) o[i] = 0;
+    kfree(r->old_raw);
+    r->old_raw = 0; r->old_w = r->old_h = 0;
+}
+void syscall_window_request_size(int task, u32 w, u32 h) {
+    unsigned int f = irq_save();
+    struct r3win *r = r3win_of(task);
+    if (r && w && h && (w != r->want_w || h != r->want_h) && w * h * 4 <= JT_USER_FB_BYTES
+        && r->rt - r->rh < R3WIN_RING) { /* a full ring defers the ask to the next frame; an oversize rect keeps the old buffer clipped */
+        struct jt_event *e = &r->ring[r->rt % R3WIN_RING];
+        e->kind = JT_EV_RESIZE; e->a = (int)w; e->b = (int)h; r->rt++;
+        r->want_w = w; r->want_h = h;
+    }
+    irq_restore(f);
+}
+/* SYS_WINDOW_OPEN on a window that already has its buffer, with a resize
+   pending: a new buffer at the wanted size replaces the old one. */
+static int r3win_resize(struct r3win *r) {
+    u32 w = r->want_w, h = r->want_h;
+    if (w == r->w && h == r->h) return 0;
+    u32 bytes = (w * h * 4 + 4095) & ~4095u;
+    u8 *raw = (u8 *)kmalloc(bytes + 4096);
+    if (!raw) return -ENOMEM; /* keeps the old buffer; the app stays at its old size */
+    u32 *fb = (u32 *)(((u32)raw + 4095) & ~4095u);
+    for (u32 i = 0; i < w * h; i++) fb[i] = 0; /* zeroed before it is mapped user-accessible */
+    unsigned int f = irq_save();
+    r3win_free_old(r); /* a still-pending earlier swap, if any */
+    u32 old_bytes = (r->w * r->h * 4 + 4095) & ~4095u;
+    if (!paging_task_remap_private(task_page_dir(r->task), JT_USER_FB, (u32)fb, bytes, old_bytes)) { irq_restore(f); kfree(raw); return -ENOMEM; }
+    r->old_raw = r->fb_raw; r->old_w = r->w; r->old_h = r->h;
+    r->fb = fb; r->fb_raw = raw; r->w = w; r->h = h; r->dirty = 1;
+    irq_restore(f);
+    serial_puts("syscall: window resized, new buffer mapped\n");
+    return 0;
 }
 const u32 *syscall_window_fb(int task, u32 *w, u32 *h, int *dirty) {
     struct r3win *r = r3win_of(task);
     if (!r) return 0;
+    r3win_free_old(r);
     *w = r->w; *h = r->h; *dirty = r->dirty; r->dirty = 0;
     return r->fb;
 }
@@ -632,6 +677,7 @@ static void r3win_release(int task) {
     u32 cr3_was; __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3_was));
     __asm__ volatile ("mov %0, %%cr3" :: "r"(paging_kernel_directory()) : "memory");
     for (u32 i = 0; i < r->w * r->h; i++) r->fb[i] = 0;
+    r3win_free_old(r);
     kfree(r->fb_raw); kfree(r->image);
     __asm__ volatile ("mov %0, %%cr3" :: "r"(cr3_was) : "memory");
     r->task = -1; r->fb = 0; r->fb_raw = 0; r->image = 0; r->w = r->h = 0;
@@ -647,6 +693,8 @@ static int sys_window_open(u32 info, u32 b, u32 c) {
     struct r3win *r = r3win_of(id);
     if (r) {
         struct jt_window_info *out = (struct jt_window_info *)info;
+        int rr = r3win_resize(r); /* 1.10.x: a second open is the answer to JT_EV_RESIZE; a no-op when the size already matches */
+        if (rr < 0) return rr;
         out->width = r->w; out->height = r->h; out->pitch = r->w * 4; out->pixels = (u32 *)JT_USER_FB;
         serial_puts("syscall: window opened for ring-3 task\n");
         return 0;

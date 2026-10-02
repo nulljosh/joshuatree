@@ -88,4 +88,5 @@ unsigned int paging_kernel_directory(void); /* the shared kernel directory's own
 /* 1.9.23: per-task private user window, see paging.c. */
 int  paging_task_map_private(unsigned int dir_phys, unsigned int vaddr, unsigned int phys, unsigned int len);
 void paging_task_unmap_private(unsigned int dir_phys);
+int  paging_task_remap_private(unsigned int dir_phys, unsigned int vaddr, unsigned int pa, unsigned int len, unsigned int old_len); /* new buffer in, old tail back to supervisor-only, TLB flushed */
 int  paging_user_range_ok_current(unsigned int addr, unsigned int len);

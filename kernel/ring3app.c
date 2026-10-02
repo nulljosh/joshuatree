@@ -190,6 +190,8 @@ void ring3app_window_blit(int task, int vw, int vh) {
     unsigned int fw = 0, fh = 0; int dirty = 0;
     const unsigned int *fb = syscall_window_fb(task, &fw, &fh, &dirty);
     if (!fb || vw <= 0 || vh <= 0) return;
+    /* A rect change asks the app for a buffer that size (JT_EV_RESIZE); until it answers this keeps blitting the old buffer clipped. */
+    if ((unsigned int)vw != fw || (unsigned int)vh != fh) syscall_window_request_size(task, (unsigned int)vw, (unsigned int)vh);
     unsigned int cw = fw < (unsigned int)vw ? fw : (unsigned int)vw;
     unsigned int ch = fh < (unsigned int)vh ? fh : (unsigned int)vh;
     for (unsigned int yy = 0; yy < ch; yy++)
