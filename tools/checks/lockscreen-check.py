@@ -110,7 +110,17 @@ def settings_section_for_row(row):
     raise ValueError(f'row {row} is not in any settings section')
 # The Notes dock icon, the exact coordinates editor_qa.py's open_notes() /
 # auth-flow-check.py already proved land on it.
-DOCK_NOTES_X, DOCK_NOTES_Y = 458, 487
+# 2.0: Notes is a ring-3 window (dock slot 4: SLOT0_X 247, pitch 43, tile 37) and
+# says so on serial, so "opened" or "inert" is read from that marker, not editor_loaded.
+DOCK_NOTES_X, DOCK_NOTES_Y = 247 + 4 * 43 + 18, 487
+NOTES_OPEN_MARKER = 'ring 3: notes: folders='
+
+
+def notes_opens():
+    try:
+        return LOG.read_text(errors='replace').count(NOTES_OPEN_MARKER)
+    except FileNotFoundError:
+        return 0
 
 # Lock Screen's own row in the Apple menu. kernel/kernel.c's
 # GUI_MENU_LABELS is {"About Joshua Tree", "Files", "Notes", "Settings",
@@ -364,7 +374,9 @@ subprocess.run(['bash', str(ROOT / 'tools' / 'mkdisk.sh'), str(DISK)], check=Tru
 m1 = Machine(DISK)
 try:
     check('fresh boot: auth_user_count is 0 (no USERS.TXT yet)', m1.integer('auth_user_count') == 0)
-    check('fresh boot: dock is visible (no gate to block it)', m1.dock_visible())
+    # 2.0 boots the desktop later than the fixed 2s after the boot marker (every
+    # ring-3 app image loads first), so wait for the tray instead of sampling once.
+    check('fresh boot: dock is visible (no gate to block it)', m1.wait_dock(True, timeout=20))
 
     click_lock_screen(m1)
     time.sleep(0.4)  # let the "No accounts to lock with" message frame present before it's gone
@@ -380,6 +392,7 @@ print('=== Part 2: with an account -- lock really locks, Esc and a wrong passwor
 print('--- create the account through Settings, the flow auth-flow-check.py Phase 2 already proved ---')
 m2 = Machine(DISK)
 try:
+    m2.wait_dock(True, timeout=20)  # 2.0's desktop is not up 2s after the boot marker; clicks before it are lost
     open_settings(m2)
     click_settings_row(m2, ROW_ADDUSER)
     time.sleep(0.4)
@@ -428,8 +441,10 @@ try:
     # never opened in this boot yet), so a click on the Notes dock icon
     # that leaves it at 0 proves the gate, not gui_run's normal dock hit
     # test, is the one eating the click.
+    notes_base = notes_opens()
     m3.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
-    m3.assert_no_int_change('editor_loaded', 0, window=1.0)
+    time.sleep(1.0)
+    assert notes_opens() == notes_base, 'Notes opened behind the lock screen'
     check('locking: the login screen is really back (dock inert, same detection auth-flow-check.py uses)', True)
     check('locking: dock is NOT visible', dock_gone)
     m3.screenshot('02-locked')
@@ -457,7 +472,10 @@ try:
     # that happens to look right.
     m3.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
     # v2.0 (notes/folders): the dock click opens straight into a note.
-    m3.wait_int('editor_loaded', lambda v: (v & 0xff) == 1, 'Desktop did not become interactive after unlocking', timeout=5)
+    for _ in range(100):
+        if notes_opens() > notes_base: break
+        time.sleep(0.05)
+    assert notes_opens() > notes_base, 'Desktop did not become interactive after unlocking'
     check('unlock: the desktop is interactive again (Notes opens, same signal auth-flow-check.py uses)', True)
     m3.key('esc')
     time.sleep(0.3)
