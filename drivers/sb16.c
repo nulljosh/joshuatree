@@ -93,8 +93,25 @@ static volatile int aud_blocking;           /* sb16_play/record owns the DMA buf
 static volatile u32 aud_done;               /* bytes of finished transfers */
 static volatile u32 aud_chunk_n, aud_chunk_t0;
 static void aud_kick(void);
+/* 1.9.26: async capture for SYS_AUDIO_RECORD. Mirror of the play queue: a 32KB ring the IRQ fills
+   from 4KB single-cycle ADC transfers, a reader that drains it. Shares sb16_dma_buf with playback,
+   so it is exclusive with the queue and with sb16_play/record. Touched with irq_save or from the IRQ. */
+static u8 rec_ring[AUD_RING];
+static volatile u32 rec_head, rec_tail;     /* free-running; used = head - tail; overrun drops the oldest */
+static volatile u32 rec_rate = 16000;
+static volatile int rec_on;                 /* START seen, STOP not yet: the IRQ chains the next chunk */
+static volatile int rec_flying;             /* a capture transfer is in flight */
+static void rec_kick(void);
 void sb16_irq(void) {
     (void)inb(DSP_RSTATUS);            /* 8-bit transfer acknowledge */
+    if (rec_flying) {                  /* a capture transfer finished: bank it, chain the next */
+        rec_flying = 0;
+        for (u32 i = 0; i < AUD_CHUNK; i++) rec_ring[(rec_head + i) & (AUD_RING - 1)] = sb16_dma_buf[i];
+        rec_head += AUD_CHUNK;
+        if (rec_head - rec_tail > AUD_RING) rec_tail = rec_head - AUD_RING;
+        rec_kick();
+        return;
+    }
     if (aud_flying) {                  /* an async queue transfer finished: chain the next */
         aud_flying = 0;
         aud_done += aud_chunk_n;
@@ -134,7 +151,7 @@ static int dma_start_out(u32 n, u32 rate) {
 /* Start the next transfer if none is in flight and there is a full chunk (or the tail of an
    ended clip). Caller has interrupts off. */
 static void aud_kick(void) {
-    if (aud_flying || aud_blocking || !present) return;
+    if (aud_flying || aud_blocking || rec_on || rec_flying || !present) return;
     u32 used = aud_head - aud_tail;
     if (!used) { aud_end = 0; return; }
     if (used < AUD_CHUNK && !aud_end) return;       /* wait for more, no underrun clicks */
@@ -148,7 +165,7 @@ static void aud_kick(void) {
 unsigned int sb16_queue(const unsigned char *pcm, unsigned int len, unsigned int rate, int end) {
     if (!present) return 0;
     unsigned int f = irq_save();
-    if (aud_blocking) { irq_restore(f); return 0; }
+    if (aud_blocking || rec_on || rec_flying) { irq_restore(f); return 0; }
     if (!aud_flying && aud_head == aud_tail) {      /* idle: this call picks the rate */
         if (rate < 4000) rate = 4000;
         if (rate > 44100) rate = 44100;
@@ -203,7 +220,7 @@ static int play_chunk(u32 n, u32 rate) {
 static int sb16_play_locked(const unsigned char *pcm, unsigned int len, unsigned int rate);
 int sb16_play(const unsigned char *pcm, unsigned int len, unsigned int rate) {
     if (!present || !pcm || !len) return 0;
-    { unsigned int f = irq_save(); int busy = aud_flying || aud_head != aud_tail; if (!busy) aud_blocking = 1; irq_restore(f); if (busy) return 0; }
+    { unsigned int f = irq_save(); int busy = aud_flying || aud_head != aud_tail || rec_on || rec_flying; if (!busy) aud_blocking = 1; irq_restore(f); if (busy) return 0; }
     int ok = sb16_play_locked(pcm, len, rate);
     aud_blocking = 0;
     return ok;
@@ -262,7 +279,7 @@ int sb16_record(unsigned char *out, unsigned int max_len, unsigned int rate) {
     if (!present || !out || !max_len) return 0;
     if (rate < 4000) rate = 4000;
     if (rate > 44100) rate = 44100;
-    { unsigned int f = irq_save(); int busy = aud_flying || aud_head != aud_tail; if (!busy) aud_blocking = 1; irq_restore(f); if (busy) return 0; }
+    { unsigned int f = irq_save(); int busy = aud_flying || aud_head != aud_tail || rec_on || rec_flying; if (!busy) aud_blocking = 1; irq_restore(f); if (busy) return 0; }
     unsigned int captured = 0;
     serial_puts("sb16: record start\n");
     while (captured < max_len) {
@@ -275,6 +292,53 @@ int sb16_record(unsigned char *out, unsigned int max_len, unsigned int rate) {
     serial_puts("sb16: record done n="); put_uint_serial(captured); serial_puts("\n");
     return (int)captured;
 }
+
+/* One capture transfer of AUD_CHUNK bytes into sb16_dma_buf, started and not waited on (the
+   record_chunk setup minus the poll). The IRQ banks it. Caller has interrupts off. */
+static void rec_kick(void) {
+    if (!rec_on || rec_flying || aud_flying || aud_blocking || !present) return;
+    u32 phys = (u32)sb16_dma_buf - KERNEL_VIRTUAL_BASE, cnt = AUD_CHUNK - 1;
+    outb(0x0A, 0x05); outb(0x0C, 0x00); outb(0x0B, 0x45);
+    outb(0x02, (u8)phys); outb(0x02, (u8)(phys >> 8)); outb(0x83, (u8)(phys >> 16));
+    outb(0x0C, 0x00); outb(0x03, (u8)cnt); outb(0x03, (u8)(cnt >> 8));
+    outb(0x0A, 0x01);
+    u8 tc = (u8)(256u - 1000000u / rec_rate);
+    if (!dsp_write(0x40) || !dsp_write(tc) ||
+        !dsp_write(0x24) || !dsp_write((u8)cnt) || !dsp_write((u8)(cnt >> 8))) { rec_on = 0; return; }
+    rec_flying = 1;
+}
+
+int sb16_rec_start(unsigned int rate) {
+    if (!present) return 0;
+    if (rate < 4000) rate = 4000;
+    if (rate > 44100) rate = 44100;
+    unsigned int f = irq_save();
+    if (aud_blocking || aud_flying || aud_head != aud_tail || (rec_flying && !rec_on)) { irq_restore(f); return 0; }
+    rec_head = rec_tail = 0;                        /* a fresh take (also restarts one left on) */
+    rec_rate = rate; rec_on = 1;
+    rec_kick();
+    int ok = rec_on;
+    irq_restore(f);
+    return ok;
+}
+
+unsigned int sb16_rec_read(unsigned char *out, unsigned int max_len) {
+    unsigned int f = irq_save();
+    u32 n = rec_head - rec_tail;
+    if (n > max_len) n = max_len;
+    for (u32 i = 0; i < n; i++) out[i] = rec_ring[(rec_tail + i) & (AUD_RING - 1)];
+    rec_tail += n;
+    irq_restore(f);
+    return n;
+}
+
+void sb16_rec_stop(void) {
+    unsigned int f = irq_save();
+    rec_on = 0;                                     /* the chunk in flight still lands in the ring */
+    irq_restore(f);
+}
+
+int sb16_rec_active(void) { return rec_on || rec_flying; }
 
 int sb16_beep(unsigned int freq, unsigned int ms) {
     if (!present || !freq || aud_flying) return 0;

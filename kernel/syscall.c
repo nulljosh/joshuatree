@@ -886,6 +886,21 @@ static int sys_audio(u32 op, u32 arg, u32 size) {
     return (int)sb16_queue((const unsigned char *)p.pcm, p.len, p.rate, (p.flags & JT_AUDIO_END) ? 1 : 0);
 }
 
+/* 1.9.26: SYS_AUDIO_RECORD (contract in syscall.h). Start and stop only flip driver state; read
+   copies out of the capture ring after paging_user_range_ok and never waits. */
+static int sys_audio_record(u32 op, u32 arg, u32 size) {
+    if (op == JT_REC_STOP) { sb16_rec_stop(); return 0; }
+    if (op == JT_REC_START) {
+        if (!sb16_present()) return -ENODEV;
+        return sb16_rec_start(arg) ? 0 : -EBUSY;
+    }
+    if (op != JT_REC_READ) return -EINVAL;
+    if (!size) return -EINVAL;
+    if (size > JT_REC_CHUNK_MAX) size = JT_REC_CHUNK_MAX;
+    if (!paging_user_range_ok(arg, size)) return -EFAULT;
+    return (int)sb16_rec_read((unsigned char *)arg, size);
+}
+
 /* 1.9.13: SYS_READDIR, the listing the Search app shows (and Files will).
    The contract is in syscall.h. Order of operations is the point: the
    path is copied out of user space with a hard cap and the output range
@@ -1035,6 +1050,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_SHELL_RUN]   = sys_shell_run,
     [SYS_HTTP_POST]   = sys_http_post,
     [SYS_AUDIO]       = sys_audio,
+    [SYS_AUDIO_RECORD] = sys_audio_record,
     [SYS_SYSINFO]     = sys_sysinfo,
     [SYS_LAUNCH_REQUEST] = sys_launch_request,
 };

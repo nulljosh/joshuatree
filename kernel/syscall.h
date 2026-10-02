@@ -227,12 +227,29 @@ struct jt_sysinfo {
      played}, copies out min(edx, sizeof) bytes, returns that count. played is in samples
      (bytes) since the queue last went idle, so mouth time = played * 1000 / rate ms.
    JT_AUDIO_STOP (3): drops what is not yet in flight (about a quarter second still finishes).
-     Returns 0. 394 stays free for SYS_AUDIO_RECORD. */
+     Returns 0. */
 #define SYS_AUDIO       393
 #define JT_AUDIO_PLAY   1
 #define JT_AUDIO_STATUS 2
 #define JT_AUDIO_STOP   3
 #define JT_AUDIO_END    1
+/* 1.9.26: SYS_AUDIO_RECORD (394), push-to-talk capture. Same format (8-bit unsigned mono) and SB16
+   card as 393, so it is exclusive with playback. The IRQ fills a 32KB kernel ring from 4KB ADC
+   transfers; nothing here waits. ebx = op.
+   JT_REC_START (1): ecx = rate in Hz (a value, not a pointer; clamped to 4000..44100), edx unused.
+     Clears the ring and arms capture (a take left on is restarted). Returns 0, -ENODEV no card,
+     -EBUSY playback queued/running, or a transfer from a previous take still landing (retry).
+   JT_REC_READ (2): ecx = user buffer, edx = max bytes (capped at JT_REC_CHUNK_MAX, 8192).
+     Copies what is banked so far, oldest first, and returns the count (0 = nothing yet). Still
+     drains the remainder after STOP. -EFAULT bad range, -EINVAL edx 0. If the caller falls more
+     than 32KB behind, the oldest samples are dropped.
+   JT_REC_STOP (3): ends capture; the 4KB in flight (about a quarter second at 16 kHz) still lands
+     and stays readable. Returns 0. */
+#define SYS_AUDIO_RECORD 394
+#define JT_REC_START    1
+#define JT_REC_READ     2
+#define JT_REC_STOP     3
+#define JT_REC_CHUNK_MAX 8192
 #define JT_AUDIO_CHUNK_MAX 8192
 #define JT_AUDIO_STATUS_VERSION 1
 struct jt_audio_play { const void *pcm; unsigned int len; unsigned int rate; unsigned int flags; };
