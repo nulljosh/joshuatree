@@ -51,7 +51,10 @@ def wait_serial(needle, secs):
 try:
     if not wait_serial("r3stress: armed", 40): fails.append("stress=r3 was not armed")
     if not wait_serial("ring3app: launching REMINDERS.BIN at ring 3 as a window", 40): fails.append("Reminders was not launched on the window path")
-    if not wait_serial("r3stress: done", 120): fails.append("the desktop never finished its 400 rounds (hung, crashed or corrupt)")
+    # 2.0's compositor frame plus 512 heap rounds and a FAT write per frame is slow
+    # under TCG on a CI runner (no KVM): 120s was not enough there. The wait is
+    # only a ceiling; every assertion below still reads the same serial verdicts.
+    if not wait_serial("r3stress: done", 420): fails.append("the desktop never finished its 400 rounds (hung, crashed or corrupt)")
     s = serial()
     if "r3stress: syscall side ran" not in s: fails.append("the ring-3 side never entered the stress hook")
     if "r3stress: stamp mismatches seen" in s or "kheap: CORRUPT stamp" in s: fails.append("a heap block was handed to two owners")
