@@ -26,7 +26,6 @@ plan|plan|index.html|drivers/app_plan.h|app_plan
 lexly|lexly|index.html|drivers/app_lexly.h|app_lexly
 toroid|conway|index.html|drivers/app_toroid.h|app_toroid
 sparkjar|sparkjar|index.html|drivers/app_sparkjar.h|app_sparkjar
-homeqi|homeqi|index.html|drivers/app_homeqi.h|app_homeqi
 fieldbook|fieldbook|index.html|drivers/app_fieldbook.h|app_fieldbook
 "
 

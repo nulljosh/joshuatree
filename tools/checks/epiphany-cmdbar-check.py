@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Headless proof of Epiphany's command bar (user/epiphany.c, "AAPL GP" /
-"AAPL DES"): opens Epiphany from the Apps folder (grid index 22, same nav
+"AAPL DES"): opens Epiphany from the Apps folder (grid index 21, same nav
 as feature-drive.py), presses `/` to focus the bar, types "aapl gp" and
 Enter, and checks two things: the GP chart panel actually drew (a real
 line, not a blank pane, at the panel's chart row) and the kernel logged
@@ -25,7 +25,7 @@ PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
 CLOSE_RED = (0xFF, 0x5F, 0x57)
-EPI_IDX = 22  # GUI_LABELS index for Epiphany, same table feature-drive.py uses
+EPI_IDX = 21  # GUI_LABELS index for Epiphany, same table feature-drive.py uses
 # Apps-folder viewport for a folder-launched app (portfolio-check.py's real
 # apps=1 geometry: x=56,y=30 -> viewport 64,62); the command bar sits at
 # bar_y = HH-56 in kernel content coords, HH = viewport height.
@@ -100,7 +100,7 @@ try:
         raise SystemExit("FAIL: desktop dock did not appear within 30 seconds")
     time.sleep(0.3)
 
-    # Apps folder -> grid nav to Epiphany (index 22: 2 right, 4 down) -> Enter
+    # Apps folder -> grid nav to Epiphany (index 21: 1 right, 4 down) -> Enter
     apps_centre = SLOT0_X + 0 * PITCH + DOCK_ICON // 2
     move(apps_centre, ICON_ROW_Y); time.sleep(0.3)
     click(); time.sleep(1.0)

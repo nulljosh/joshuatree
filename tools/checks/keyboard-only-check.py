@@ -25,10 +25,10 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 CLOSE_X, CLOSE_Y = 26, 15
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 
-# App names from kernel/kernel.c APPS[].name (indices 0-24, then Apps folder, then Trash)
+# App names from kernel/kernel.c APPS[].name (indices 0-23, then Apps folder, then Trash)
 APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
         "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar",
-        "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
+        "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity"]
 
 CRASH_PATTERNS = [
@@ -94,8 +94,8 @@ try:
         raise SystemExit("FAIL: desktop dock did not appear within 30 seconds")
     time.sleep(0.3)
 
-    # Process all 25 grid apps via keyboard-only navigation
-    for app_idx in range(25):
+    # Process all 24 grid apps via keyboard-only navigation
+    for app_idx in range(24):
         app_name = APPS[app_idx]
         opened = False
 

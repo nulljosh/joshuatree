@@ -48,7 +48,7 @@ SLOTS = {"Mail": 2, "Calendar": 3, "Notes": 4, "Reminders": 5, "Samantha": 7, "T
 # Apps-folder apps open inside the folder window (x=56,y=30,w=848,h=490, see
 # gui_launch_from_dock), viewport (x+8, y+32, w-16, h-40). Grid index i sits
 # at row i/5, col i%5 (APPS_COLS); d moves right, s moves down.
-FOLDER_APPS = {"Contacts": 18, "Calculator": 19, "Search": 21}
+FOLDER_APPS = {"Contacts": 17, "Calculator": 18, "Search": 20}
 FOLDER_VIEW = (64, 62, 896, 512)
 FOLDER_CLOSE = (80, 46)
 
