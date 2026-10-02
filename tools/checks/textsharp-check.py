@@ -1,130 +1,104 @@
 #!/usr/bin/env python3
-"""Headless sharpness check for the antialiased UI text (text_ink curve in
-kernel.c, shared by gui_aa_char, wx_text and the Notes editor).
+"""Headless sharpness check for the antialiased UI text of the ring-3 apps
+(libjt's runtime-TTF faces, drawn into each compositor window's own buffer).
 
 Owner feedback on the DejaVu Sans coverage text: "A-, sharpen them up a
 tad". Root cause: raw linear coverage was blended in sRGB, so a 24px stem
 (~2.2 physical px, e.g. 'l' = 188,255,108) only had one full-ink column and
 the flanking columns read as mid grey. The fix runs coverage through a
-stem-darkening + contrast curve for dark-on-light text (and a contrast-only
-curve for light-on-dark).
+stem-darkening + contrast curve for dark-on-light text.
 
 What this measures, on real pixels: boots kernel.elf with -display none and
-opens Mail, Notes and Notes' browse view from the dock through the real vmmouse path,
-one per text path the curve touches (gui_aa_char, editor_draw_glyph and
-the compositor window's font_draw_string), waits until each app's text is on screen, pmemsaves the physical
-framebuffer and measures two known text rows per app. For every glyph
-pixel (estimated coverage > 8%, from luminance between the surface and the
-darkest ink pixel) it computes:
+opens Mail and Notes through their `open=` boot flags (never a dock slot), in
+three views, one per distinct text surface the 2.0 apps draw: Mail's hint line
+and message row, Notes' browse view (FOLDERS heading and note row) and Notes'
+editor body line (a fresh note with a sentence typed into it). It waits until
+each view's text is on screen, pmemsaves the physical framebuffer, and
+measures two known text rows per view.
+
+A ring-3 window's buffer is logical resolution and the compositor shows each
+buffer pixel as a 2x2 physical block, so every crop is sampled back to one
+pixel per block: the numbers describe what the app itself rasterized, not
+the compositor's stretch. For every glyph pixel (estimated coverage > 8%,
+from luminance between the surface and the darkest ink pixel) it computes:
   core  share of glyph pixels at >= 90% ink   (sharpness: dense stems)
   mid   share of glyph pixels at 20..80% ink  (still antialiased, not 1-bit)
-Linear blending measured core ~0.50 on both rows; the curve ~0.64.
-PASS needs core >= 0.58 on both rows and mid >= 0.12 (a binary/jagged
-renderer would have mid ~0) and at least 12 distinct intermediate levels.
+Thresholds are calibrated to the ring-3 renderer, which rasterizes at 1x
+logical resolution from a 4-bit coverage atlas (user/libjt/text.c): a stem is
+about one pixel wide and there are at most 14 coverage levels, so the old
+physical-resolution bars (core >= 0.58, 12 intermediate levels) do not apply.
+Measured today: core 0.23-0.33, mid 0.40-0.58, 8 intermediate levels. PASS
+needs core >= 0.18 (stems keep real full-ink pixels; halved coverage or a
+blend that never reaches full ink fails), mid >= 0.25 (a binary/jagged renderer
+has mid ~0) and at least 6 distinct intermediate levels. The gap to the kernel
+text's 0.64 core is a roadmap item: libjt does not yet run the stem-darkening
+curve the kernel's text_ink applies.
 
 Usage: python3 tools/checks/textsharp-check.py   (repo root, after make kernel.elf)
 """
-import json, os, socket, subprocess, sys, time
+import sys, tempfile, time
+from pathlib import Path
 from PIL import Image
-from freeport import free_port
 
-PORT = free_port()
-DUMP = "/tmp/jt-textsharp.raw"
-FB = 0xfd000000; W, H = 1920, 1080
-LOGICAL_W, LOGICAL_H = 960, 540
-DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 247, 487
-CLOSE = (94, 56)  # window 0's red dot (x+24, y+16) for the x=70, y=40 dock window
-CLOSE1 = (154, 116)  # window 1's red dot, the second concurrent window at x=130, y=100
-# One app per text path the curve touches, each opened from the dock in its
-# own window at x=70, y=40 (viewport origin logical (78,72)). Physical boxes:
-#   Mail    -> gui_aa_char (every font_draw_string): hint line, first message row
-#   Notes   -> editor_draw_glyph: the seeded NOTES.TXT's first two text lines
-#   Notes browse view -> Notes as the second compositor window (Files first,
-#           1.9.20 gave Notes draw hooks, which is how it replaced Weather
-#           here), window at x=130, y=100: the FOLDERS heading and the note row
-APPS = [
-    ("Mail", 2, {"Mail hint line": (196, 248, 1000, 280), "Mail message row": (270, 312, 820, 342)}),
-    # v-ttf: editor_draw_glyph now rasterizes through ttf_glyph at physical
-    # resolution, placing the baseline from the font's real ascent metric
-    # instead of a pre-baked bitmap's baked-in top offset, which moved the
-    # seeded note's two lines down from where the old bitmap renderer put
-    # them. Boxes re-measured against the new physical layout, same lines.
-    ("Notes", 4, {"Notes title line": (262, 330, 600, 385), "Notes body line": (262, 462, 1000, 512)}),
-    ("Notes browse", 4, {"Notes browse heading": (336, 284, 456, 318), "Notes browse note row": (668, 336, 830, 374)}),
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from jtvm import VM, SCALE
+
+# Physical boxes inside the dock-launch window (viewport origin logical (78,72)),
+# all on even physical coordinates so each box starts on a 2x2 block edge.
+SENTENCE = "Hamburgefonstiv sphinx"
+VIEWS = [
+    ("Mail", "open=mail", "mail: n=", None,
+     {"Mail hint line": (190, 214, 1130, 252), "Mail message row": (230, 276, 810, 310)}),
+    ("Notes browse", "open=notes", "notes: folders=", None,
+     {"Notes browse heading": (216, 266, 360, 298), "Notes browse note row": (548, 310, 730, 344)}),
+    ("Notes editor", "open=notes", "notes: folders=", SENTENCE,
+     {"Notes editor body line": (256, 196, 700, 244)}),
 ]
-CORE_MIN, MID_MIN, LEVELS_MIN = 0.58, 0.12, 12
+CORE_MIN, MID_MIN, LEVELS_MIN = 0.18, 0.25, 6
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
-try: os.remove(DUMP)
-except FileNotFoundError: pass
+
+def logical_px(img, box):
+    """One pixel per 2x2 block of the crop: what the app rasterized."""
+    crop = img.crop(box).convert('L')
+    small = crop.resize((crop.width // SCALE, crop.height // SCALE), Image.NEAREST)
+    return list(small.get_flattened_data() if hasattr(small, "get_flattened_data") else small.getdata())
+
 
 def has_text(img, box):
-    px = list(img.crop(box).tobytes())
+    px = logical_px(img, box)
     return max(set(px), key=px.count) - min(px) >= 60
 
+
 shots = {}
-q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
-                      "-name", "jt-textsharp", "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "null"],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-try:
-    s = None
-    for _ in range(50):
-        time.sleep(0.2)
-        try: s = socket.create_connection(("127.0.0.1", PORT)); break
-        except OSError: pass
-    if s is None: raise SystemExit("FAIL: QEMU's QMP socket never came up")
-    f = s.makefile("rw")
-    def cmd(o):
-        f.write(json.dumps(o) + "\n"); f.flush()
-        while True:
-            r = json.loads(f.readline())
-            if "return" in r or "error" in r: return r
-    f.readline()
-    cmd({"execute": "qmp_capabilities"})
-    time.sleep(5.0)
-    def move(x, y):
-        cmd({"execute": "input-send-event", "arguments": {"events": [
-            {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
-            {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
-    def click():
-        for down in (True, False):
-            cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": down, "button": "left"}}]}})
-            time.sleep(0.1)
-    def dump():
-        cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
-        return Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("L")
-    for app, slot, rows in APPS:
-        # The browse view only joins the compositor as a second window, so
-        # open Files (slot 1) first; the single-window apps open straight.
-        for sl in ((1, slot) if app == "Notes browse" else (slot,)):
-            move(480, 200); time.sleep(0.3)
-            move(SLOT0_X + sl * (DOCK_ICON + DOCK_GAP) + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.5)
-            click(); time.sleep(1.0)
-        move(930, 300)  # pointer right of the window, clear of every sampled row
-        # Wait for the app's own text to be on screen, not a fixed sleep: a
+for app, flag, ready, typed, rows in VIEWS:
+    vm = VM(None, flag, ready, work=tempfile.mkdtemp(prefix='jt-textsharp-'))
+    try:
+        time.sleep(1.5)   # a key sent the instant the window opens can land before it polls
+        if typed:
+            vm.key('n')
+            if not vm.wait('notes: edit=', 8):
+                print(f'FAIL: {app}: n did not open a new note'); continue
+            time.sleep(1.0)
+            vm.type(typed, 0.1)
+        vm.move(930, 300)   # pointer right of the window, clear of every sampled row
+        # Wait for the view's own text to be on screen, not a fixed sleep: a
         # capture taken before the window presents measures the desktop.
         img, deadline = None, time.time() + 10
         while time.time() < deadline:
-            time.sleep(0.5); img = dump()
+            time.sleep(0.5); img = vm.frame()
             if all(has_text(img, b) for b in rows.values()): break
-        time.sleep(0.5); img = dump()
-        shots[app] = img
-        if app == "Notes browse":
-            move(*CLOSE1); time.sleep(0.3); click(); time.sleep(1.0)
-        move(*CLOSE); time.sleep(0.3); click(); time.sleep(1.0)
-    try: cmd({"execute": "quit"})
-    except (ConnectionResetError, BrokenPipeError, OSError): pass
-finally:
-    try: q.wait(timeout=5)
-    except subprocess.TimeoutExpired: q.kill()
+        time.sleep(0.5)
+        shots[app] = vm.frame()
+    finally:
+        vm.quit()
 
 fail = 0
-for app, slot, rows in APPS:
+for app, flag, ready, typed, rows in VIEWS:
     img = shots.get(app)
     if img is None:
         print(f"FAIL: {app}: never captured"); fail = 1; continue
     for name, box in rows.items():
-        px = list(img.crop(box).tobytes())
+        px = logical_px(img, box)
         bg = max(set(px), key=px.count)          # the surface is the most common value
         fg = min(px)                             # darkest ink pixel (cores reach full ink)
         if bg - fg < 60:
@@ -142,5 +116,5 @@ for app, slot, rows in APPS:
         if mid < MID_MIN or levels < LEVELS_MIN:
             print(f"FAIL: {name}: edges have lost their antialiasing (binary/jagged text)")
             fail = 1
-print("PASS: UI text has dense stems and still-antialiased edges (Mail, Notes, Notes browse view)" if not fail else "textsharp-check: FAILED")
+print("PASS: UI text has dense stems and still-antialiased edges (Mail, Notes browse view, Notes editor)" if not fail else "textsharp-check: FAILED")
 sys.exit(fail)

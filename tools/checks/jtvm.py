@@ -22,6 +22,43 @@ PUNCT = {' ': 'spc', '\n': 'ret', '.': 'dot', ',': 'comma', '!': 'shift-1', '?':
          '/': 'slash', ';': 'semicolon', "'": 'apostrophe', ':': 'shift-semicolon', '=': 'equal'}
 
 
+# The ring-3 Terminal (user/terminal.c) opened by `open=term`: its viewport is the
+# dock-launch one (logical 78,72, 805 x 345), the prompt line sits 52 px above the
+# bottom edge and its typed text starts after "~> " at local x 40, so the first
+# typed glyph's cell is at logical (118, 365). Cells are 8 logical px wide (the
+# libjt mono advance), 16 tall; the page colour is 0x1A1512.
+TERM_INPUT_X0, TERM_INPUT_Y0 = 118, 365
+TERM_CELL_L, TERM_BG = 8, (0x1A, 0x15, 0x12)
+
+
+def term_cell_has_ink(img, cell_index):
+    """True if any non-page pixel sits inside this input cell's own physical box."""
+    x0 = (TERM_INPUT_X0 + cell_index * TERM_CELL_L) * SCALE
+    y0 = TERM_INPUT_Y0 * SCALE
+    for y in range(y0, y0 + 16 * SCALE):
+        for x in range(x0, x0 + TERM_CELL_L * SCALE):
+            p = img.getpixel((x, y))
+            if max(abs(p[i] - TERM_BG[i]) for i in range(3)) > 10:
+                return True
+    return False
+
+
+def term_type_line(vm, line):
+    """Types line into the Terminal's prompt like a person watching the screen:
+    each key waits for its own cell to ink before the next goes out (a fixed
+    sleep dropped keys on a slow runner). Returns the last frame."""
+    img = vm.frame()
+    for i, ch in enumerate(line):
+        vm.key('shift-' + ch.lower() if ch.isupper() else {'|': 'shift-backslash'}.get(ch, ch), gap=0.05)
+        for _ in range(60):
+            time.sleep(0.1)
+            img = vm.frame()
+            if term_cell_has_ink(img, i):
+                break
+    time.sleep(0.2)
+    return vm.frame()
+
+
 class VM:
     def __init__(self, disk=None, append='', ready=None, extra=(), work=None, boot_wait=60):
         self.work = Path(work or tempfile.mkdtemp(prefix='jt-vm-'))

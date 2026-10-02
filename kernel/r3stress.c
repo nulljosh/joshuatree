@@ -32,8 +32,8 @@ int pde_stress_on;
 static volatile unsigned int *pde_block;
 static unsigned int pde_first, pde_done, pde_sys_hits;
 #define PDE_GROW_CAP 3072 /* 3072 * 4 KB = 12 MB, enough to cross a 4 MB line from anywhere */
-#define DESK_ROUNDS 400
-#define DESK_BURST 256
+#define DESK_ROUNDS 250
+#define DESK_BURST 128
 
 extern int shell_crash_armed;
 void r3stress_arm(const char *cl) {

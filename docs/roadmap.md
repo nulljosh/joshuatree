@@ -197,6 +197,7 @@ Joshua's call, 2026-09-21: Decided for 1.0, stated in the release notes: no Wi-F
 - [ ] [Joshua] Plugins system. Needs a design pass on what a plugin can touch first.
 - [ ] [Joshua] AI agent accounts: settings, bootstrapping, auth. Too undefined to scope yet.
 - [ ] [Joshua] Boot-to-disk install flow with install-speed numbers. Needs hardware boot support first.
+- [ ] [Sonnet] Ring-3 text stem darkening: libjt/text.c blends its 4-bit atlas with only the pre-boost, not the kernel text_ink curve, so ring-3 stems measure core 0.23-0.33 against the kernel text's 0.64 in textsharp-check.py. Port the curve into libjt and raise the check's bars back.
 
 Explicitly parked:
 - SMP: one CPU is plenty until everything above works (tracked as Multi-core above, but not scheduled).
