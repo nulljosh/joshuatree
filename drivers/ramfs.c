@@ -106,6 +106,22 @@ static const struct vfs_ops ramfs_ops = {
     "ramfs", ramfs_read_file, ramfs_list, ramfs_delete, ramfs_chdir, ramfs_mkdir, ramfs_write_file, ramfs_replace_file, ramfs_cwd_get, ramfs_cwd_set
 };
 
+/* The demo's DOCS folder: Enter on it in Burrow lists two files. */
+void ramfs_seed_demo_docs(void) {
+    static const char readme[] =
+        "Burrow opened this folder.\n\n"
+        "DOCS is a real directory in this tab's memory, listed by the\n"
+        "kernel and walked into through the same syscalls any program uses.\n";
+    static const char notes[] =
+        "Notes\n\n"
+        "Folders live in memory here and are gone when the tab closes.\n";
+    if (ramfs_seed_dir("DOCS") && vfs_chdir("DOCS")) {
+        vfs_write_file("README.TXT", readme, sizeof readme - 1);
+        vfs_write_file("NOTES", notes, sizeof notes - 1);
+        vfs_chdir("..");
+    }
+}
+
 void ramfs_init(void) {
     for (int i = 0; i < RAMFS_MAX_FILES; i++) { files[i].used = 0; files[i].is_dir = 0; files[i].parent = 0; }
     cwd = 0;

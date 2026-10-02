@@ -8649,20 +8649,7 @@ void kmain(unsigned int multiboot_info_addr){
             "kernel right now in your browser.\n";
         vfs_switch("ramfs"); /* switch first: vfs_write_file always targets the active backend, and fat's own write would just fail with no disk anyway */
         vfs_write_file("README.TXT", demo_readme, strlen(demo_readme));
-        vfs_write_file("NOTES.TXT", demo_notes, strlen(demo_notes));
-        /* A real folder, so the tour's Burrow scene has something to open: Enter on DOCS lists two files. */
-        static const char demo_docs_readme[] =
-            "Burrow opened this folder.\n\n"
-            "DOCS is a real directory in this tab's memory, listed by the\n"
-            "kernel and walked into through the same syscalls any program uses.\n";
-        static const char demo_docs_notes[] =
-            "Notes\n\n"
-            "Folders live in memory here and are gone when the tab closes.\n";
-        if (ramfs_seed_dir("DOCS") && vfs_chdir("DOCS")) {
-            vfs_write_file("README.TXT", demo_docs_readme, strlen(demo_docs_readme));
-            vfs_write_file("NOTES", demo_docs_notes, strlen(demo_docs_notes));
-            vfs_chdir("..");
-        }
+        vfs_write_file("NOTES.TXT", demo_notes, strlen(demo_notes)); ramfs_seed_demo_docs(); /* a real folder, so the tour's Burrow scene has something to open */
         klog("vfs: no FAT disk (v86 has none to mount), switched default backend to ramfs with demo files");
     }
     settings_load(); /* v47: real settings, saved defaults if SETTINGS.TXT doesn't exist yet */
