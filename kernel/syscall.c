@@ -33,6 +33,7 @@
 #include "irqlock.h"
 #include "shellsys.h"
 #include "sb16.h"
+#include "font.h"  /* 1.9.21: SYS_TEXT draws through the same AA face as every kernel string */
 
 typedef unsigned int u32;
 typedef unsigned char u8;
@@ -568,6 +569,7 @@ static int sys_sched_yield(u32 a, u32 b, u32 c) {
    supervisor-only and the desktop repaints, nothing waits on a program
    that is no longer there. */
 static int win_owner = -1;
+static u32 text_n = 0, text_used = 0; /* SYS_TEXT queue, below */
 static u32 win_w = 0, win_h = 0;
 
 int syscall_window_owner(void) { return win_owner; }
@@ -710,10 +712,55 @@ static int sys_window_open(u32 info, u32 b, u32 c) {
        fail: a refused open leaves the pages supervisor-only. */
     for (u32 off = 0; off < JT_USER_FB_BYTES; off += 4096) paging_set_user((void *)(JT_USER_FB + off));
     win_owner = id; win_w = w; win_h = h;
+    text_n = 0; text_used = 0;
     struct jt_window_info *out = (struct jt_window_info *)info;
     out->width = w; out->height = h; out->pitch = w * 4; out->pixels = fb;
     serial_puts("syscall: window opened for ring-3 task\n");
     return 0;
+}
+
+/* 1.9.21: SYS_TEXT, real typeface text for a ring-3 window. The window's
+   pixel buffer is logical resolution and is doubled on the way to the
+   screen, so glyphs a program stamps into it itself are blocky. This call
+   queues a string instead; window_present_user draws the queue after the
+   pixel copy, through font_draw_string, which is the physical-resolution
+   anti-aliased path every kernel string uses. The queue lives until the
+   program clears it (op 2), so a present with no redraw keeps its text.
+   Strings are copied out of user memory byte by byte, printable ASCII
+   only, so nothing the kernel later draws can read past the caller's own
+   page. */
+#define TEXT_OPS  192
+#define TEXT_POOL 6144
+struct text_op { int x, y; u32 fg; unsigned short off; };
+static struct text_op text_ops[TEXT_OPS];
+static char text_pool[TEXT_POOL];
+
+static int sys_text(u32 req, u32 op, u32 c) {
+    (void)c;
+    if (win_owner != task_current()) return -EBADF;
+    if (op == JT_TEXT_CLEAR) { text_n = 0; text_used = 0; return 0; }
+    if (op != JT_TEXT_DRAW && op != JT_TEXT_MEASURE) return -EINVAL;
+    if (!paging_user_range_ok(req, sizeof(struct jt_text))) return -EFAULT;
+    const struct jt_text *t = (const struct jt_text *)req;
+    char buf[JT_TEXT_MAX + 1];
+    u32 n = 0;
+    for (;; n++) {
+        if (n > JT_TEXT_MAX) return -EINVAL;
+        if (!paging_user_range_ok((u32)t->s + n, 1)) return -EFAULT;
+        char ch = t->s[n];
+        if (!ch) break;
+        if ((unsigned char)ch < 32 || (unsigned char)ch > 126) return -EINVAL;
+        buf[n] = ch;
+    }
+    buf[n] = 0;
+    int w = font_string_width(buf);
+    if (op == JT_TEXT_MEASURE) return w;
+    if (text_n >= TEXT_OPS || text_used + n + 1 > TEXT_POOL) return -ENOMEM;
+    for (u32 i = 0; i <= n; i++) text_pool[text_used + i] = buf[i];
+    text_ops[text_n].x = t->x; text_ops[text_n].y = t->y; text_ops[text_n].fg = t->fg & 0x00FFFFFFu;
+    text_ops[text_n].off = (unsigned short)text_used;
+    text_n++; text_used += n + 1;
+    return w;
 }
 
 static void window_present_user(void) {
@@ -721,6 +768,8 @@ static void window_present_user(void) {
     for (u32 y = 0; y < win_h; y++)
         for (u32 x = 0; x < win_w; x++)
             window_pixel((int)x, (int)y, fb[y * win_w + x]);
+    for (u32 i = 0; i < text_n; i++)
+        font_draw_string(text_pool + text_ops[i].off, text_ops[i].x, text_ops[i].y, text_ops[i].fg, -1);
     window_present();
 }
 
@@ -1218,6 +1267,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_BRK]         = sys_brk,
     [SYS_REFRESH]     = sys_refresh,
     [SYS_CLIPBOARD]   = sys_clipboard,
+    [SYS_TEXT]        = sys_text,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {

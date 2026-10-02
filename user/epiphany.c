@@ -279,7 +279,7 @@ static void draw_markets(int x, int y, int w) {
     int cw = (w - 32) / 2, x2 = x + cw + 32;
     text(adding ? "Add to watchlist (enter or space adds, esc cancels)" : "Watchlist", x, y, adding ? ACCENT : MUTED);
     int want = adding ? 0 : 1, n = count(want);
-    int vis = ((int)win.height - y - 82) / 22; /* rows end above the command bar rule */ if (vis < 3) vis = 3;
+    int vis = ((int)win.height - y - 84) / 22; /* rows end above the command bar rule */ if (vis < 3) vis = 3;
     if (sel < scroll_top) scroll_top = sel;
     if (sel >= scroll_top + vis) scroll_top = sel - vis + 1;
     if (scroll_top > n - vis) scroll_top = n - vis;
@@ -305,7 +305,7 @@ static void draw_markets(int x, int y, int w) {
     rect(x2, y3 + 24, cw, 10, RULE);
     rect(x2, y3 + 24, cw * fg / 100, 10, col(fg - 50));
     itoa10(fg, b); cat(b, slen(b), "  Greed"); text(b, x2, y3 + 40, INK);
-    if (!adding) text("a add   d remove", x2, y3 + 68, MUTED);
+    if (!adding) text("a add   d remove", x2, y3 + 60, MUTED);
 }
 static void draw_portfolio(int x, int y, int w) {
     char b[64];
@@ -340,7 +340,7 @@ static void draw_portfolio(int x, int y, int w) {
         int sw = (int)((long)hold[i].shares * pool[hold[i].pool].price * w / total);
         rect(ax, ty + 70, sw, 12, seg[i]); ax += sw;
     }
-    text("up/down pick   + / - shares", x, ty + 90, MUTED);
+    right("up/down pick   + / - shares", x + w, ty + 48, MUTED); /* same row as the Allocation label, clear of the command bar below */
 }
 static void draw_sim(int x, int y, int w, int h) {
     char b[64]; int px = sim_px[sim_n - 1];

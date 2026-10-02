@@ -853,3 +853,20 @@ count still mapped across all tasks, which `tools/checks/ring3brk-check.py`
 asserts returns to 0. `user/libjt` `malloc`, `calloc`, `realloc` and `free`
 sit on top of this call (first fit, split and merge, 64 KB steps), with the old
 16 KB static arena as the fallback when brk is refused.
+
+## text (400)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 400 | `text` | `struct jt_text *` (x, y, fg, s) | op: 0 draw, 1 measure, 2 clear | unused | the string's advance in window pixels, or -errno |
+
+**text** gives a ring-3 window the same anti-aliased face every kernel string
+uses. The window's pixel buffer is logical resolution and is doubled on the
+way to the screen, so glyphs a program stamps in itself are blocky. Op 0
+queues the string and the kernel draws the queue after the pixel copy at the
+next present; op 1 only measures; op 2 drops the queue, called at the top of
+each frame. The string is printable ASCII, at most 96 bytes, copied out of
+user memory byte by byte. Layout should use the advance it returns, never a
+fixed glyph width. Errors: -EBADF (caller does not own the window), -EINVAL
+(bad op or string), -EFAULT (pointer outside user memory), -ENOMEM (queue
+full).

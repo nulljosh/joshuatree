@@ -90,6 +90,12 @@ struct jt_sysinfo {
     char llm_host[JT_SYSINFO_HOST_MAX];
     unsigned int data_stamp;
 };
+#define JT_SYS_TEXT        400 /* anti-aliased text for the window (389 is mkdir); see kernel/syscall.h */
+#define JT_TEXT_DRAW    0
+#define JT_TEXT_MEASURE 1
+#define JT_TEXT_CLEAR   2
+#define JT_TEXT_MAX     96
+struct jt_text { int x, y; unsigned int fg; const char *s; };
 #define JT_DIRENT_NAME  32
 #define JT_READDIR_MAX  64
 #define JT_PATH_MAX     63     /* bytes of path before the NUL the kernel will read; longer is -EINVAL */
@@ -238,6 +244,8 @@ static inline int jt_rec_start(unsigned rate)                    { return jt_sys
 /* Copies up to n (max JT_REC_CHUNK_MAX) banked bytes, oldest first; returns the count, 0 = none yet. Never blocks. */
 static inline int jt_rec_read(void *buf, unsigned n)             { return jt_syscall(JT_SYS_AUDIO_RECORD, JT_REC_READ, (unsigned)buf, n); }
 static inline int jt_rec_stop(void)                              { return jt_syscall(JT_SYS_AUDIO_RECORD, JT_REC_STOP, 0, 0); }
+static inline int jt_text(const char *s, int x, int y, unsigned fg, int op) { struct jt_text t = { x, y, fg, s }; return jt_syscall(JT_SYS_TEXT, (unsigned)&t, (unsigned)op, 0); }
+static inline void jt_text_clear(void) { jt_syscall(JT_SYS_TEXT, 0, JT_TEXT_CLEAR, 0); }
 static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
 /* Resize helper, the app's two lines: after a poll, `if (r == 1 && jt_window_resized(&ev, &win)) { draw(); flags = JT_POLL_PRESENT; continue; }`.
    Returns 1 when ev was JT_EV_RESIZE and re-opening the window gave *info a buffer
