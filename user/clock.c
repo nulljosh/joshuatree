@@ -13,13 +13,12 @@
  * minutes and the alarm time through a kernel prompt box; a ring-3 program
  * has none, so it types them on its own line at the bottom of the window.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font, same as the other ring-3
- * apps. The backquote key (`) is the deliberate crash: a write through a
+ * Glyphs: antialiased DejaVu via libjt/text.h, the time in the DISPLAY face. The backquote key (`) is the deliberate crash: a write through a
  * null pointer, a page fault at ring 3, reaped by the kernel.
  * tools/checks/ring3clock-check.py presses it on purpose.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define INK   0x001C1C1E
@@ -28,9 +27,8 @@
 #define RED   0x00A13F3F
 #define PALE  0x00F5F0EB
 
-#define TIME_X 60
-#define TIME_Y 56
-#define TIME_S 4      /* the time is drawn at 4x the 8x16 cell */
+#define TIME_X 24
+#define TIME_Y 40
 
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 static int timer_sec JT_DATA = 0;
@@ -54,22 +52,34 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, int sc, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++)
-        for (int c = 0; c < 8; c++) {
-            if (!(g[r] & (0x80 >> c))) continue;
-            for (int dy = 0; dy < sc; dy++)
-                for (int dx = 0; dx < sc; dx++) {
-                    int px = x + c * sc + dx, py = y + r * sc + dy;
-                    if (px < 0 || px >= (int)win.width || py < 0 || py >= (int)win.height) continue;
-                    win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-                }
-        }
+static int text(const char *s, int x, int y, unsigned fg) { /* returns the x after the last glyph */
+    return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s);
 }
-static void text(const char *s, int x, int y, int sc, unsigned fg) {
-    for (; *s; s++, x += 8 * sc) glyph((unsigned char)*s, x, y, sc, fg);
+/* s fitted to maxw with a trailing "..." (in place, s is a local buffer). */
+static void ellipsize(char *s, int maxw) {
+    int n = 0;
+    while (s[n]) n++;
+    if (jt_text_width(JT_FACE_BODY, s) <= maxw) return;
+    while (n > 1) {
+        s[--n] = 0;
+        char t[48]; int k = 0;
+        while (s[k] && k < 40) { t[k] = s[k]; k++; }
+        t[k++] = '.'; t[k++] = '.'; t[k++] = '.'; t[k] = 0;
+        if (jt_text_width(JT_FACE_BODY, t) <= maxw) { for (int i = 0; i <= k; i++) s[i] = t[i]; return; }
+    }
+}
+/* The time: DISPLAY digits (it has no colon), colons drawn as two dots. */
+static void big_time(const char *hms, int x, int y) {
+    int dh = jt_text_height(JT_FACE_DISPLAY);
+    for (int g = 0; g < 3; g++) {
+        char pair[3] = {hms[g * 3], hms[g * 3 + 1], 0};
+        x = jt_text_draw(&win, JT_FACE_DISPLAY, x, y, INK, pair);
+        if (g < 2) {
+            rect(x + 6, y + dh / 2 - 12, 5, 5, INK);
+            rect(x + 6, y + dh / 2 + 7, 5, 5, INK);
+            x += 18;
+        }
+    }
 }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
@@ -95,35 +105,39 @@ static void draw(unsigned now) {
     two(buf + 6, (int)(sod % 60)); buf[8] = 0;
 
     rect(0, 0, (int)win.width, (int)win.height, BG);
-    text("space starts timer  r resets  a alarm  esc closes", 20, 20, 1, HINT);
-    text(buf, TIME_X, TIME_Y, TIME_S, INK);
+    big_time(buf, TIME_X, TIME_Y);
 
-    int y = TIME_Y + 96;
+    int y = TIME_Y + jt_text_height(JT_FACE_DISPLAY) + 24;
     if (timer_sec > 0) {
         char t[16]; int p = 0, mins = timer_sec / 60, secs = timer_sec % 60;
         if (mins > 0) { two(t, mins); t[2] = ':'; p = 3; }
         two(t + p, secs); t[p + 2] = 0;
-        text("Timer: ", 20, y, 1, HINT);
-        text(t, 90, y, 1, INK);
-        text(timer_paused ? "paused" : "running", 160, y, 1, GREEN);
+        int tx = text("Timer:", 20, y, HINT) + 8;
+        tx = text(t, tx, y, INK) + 10;
+        text(timer_paused ? "paused" : "running", tx, y, GREEN);
     } else {
-        text("Timer: off", 20, y, 1, HINT);
+        text("Timer: off", 20, y, HINT);
     }
     if (alarm_armed) {
         char a[8];
         two(a, alarm_h); a[2] = ':'; two(a + 3, alarm_m); a[5] = 0;
-        text("Alarm: ", 20, y + 25, 1, HINT);
-        text(a, 90, y + 25, 1, INK);
+        int ax = text("Alarm:", 20, y + 25, HINT) + 8;
+        text(a, ax, y + 25, INK);
     }
     if (mode) {
-        text(mode == 1 ? "Timer minutes: " : "Alarm HH:MM: ", 20, y + 60, 1, HINT);
-        text(entry, 20 + (mode == 1 ? 15 : 13) * 8, y + 60, 1, INK);
-        text("enter sets  esc cancels", 20, y + 80, 1, HINT);
+        int ex = text(mode == 1 ? "Timer minutes:" : "Alarm HH:MM:", 20, y + 60, HINT) + 8;
+        ex = text(entry, ex, y + 60, INK);
+        rect(ex + 1, y + 60 + 2, 2, 16, INK); /* caret */
+        text("enter sets  esc cancels", 20, y + 84, HINT);
+    }
+    {   char h[56] = "space starts timer  r resets  a alarm  esc closes";
+        ellipsize(h, (int)win.width - 40);
+        text(h, 20, (int)win.height - 30, HINT);
     }
     if (fired_until && now < fired_until) {
         int by = (int)win.height / 2 - 20;
         rect(40, by, (int)win.width - 80, 40, RED);
-        text("ALARM!", (int)win.width / 2 - 24, by + 12, 1, PALE);
+        jt_text_draw(&win, JT_FACE_BOLD, ((int)win.width - jt_text_width(JT_FACE_BOLD, "ALARM!")) / 2, by + 10, PALE, "ALARM!");
     }
 }
 
