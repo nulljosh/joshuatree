@@ -55,7 +55,9 @@ int http_wait_idle(unsigned int max_ticks) {
     unsigned int deadline = ticks() + max_ticks;
     while (in_flight) {
         if ((int)(ticks() - deadline) >= 0) return 0;
-        __asm__ volatile ("sti; hlt");
+#if defined(__i386__)
+        __asm__ volatile ("sti; hlt"); /* kernel only: the host fuzz build never calls this */
+#endif
     }
     return 1;
 }

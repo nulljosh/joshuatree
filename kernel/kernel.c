@@ -5415,8 +5415,7 @@ static int gui_multiwin_key_nonblock(void){
     int sel_ok = gui_window_count > 0 && gui_windows[gui_window_count - 1].task >= 0;
     if (sc == 0xE0) {
         int sc2 = kbd_pop();
-        if (sc2 < 0) return -1;
-        int sh = sel_ok && kbd_shift; /* shift+arrow extends a selection only in a ring-3 window */
+        if (sc2 < 0) return -1; int sh = sel_ok && kbd_shift; /* shift+arrow extends a selection only in a ring-3 window */
         if (sc2 == 0x48) return sh ? KEY_SUP : KEY_UP;    if (sc2 == 0x50) return sh ? KEY_SDOWN : KEY_DOWN;
         if (sc2 == 0x4B) return sh ? KEY_SLEFT : KEY_LEFT; if (sc2 == 0x4D) return sh ? KEY_SRIGHT : KEY_RIGHT;
         if (sc2 == 0x47) return KEY_HOME;
