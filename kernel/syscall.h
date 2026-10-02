@@ -212,6 +212,39 @@ struct jt_sysinfo {
    (no such app, name too long, empty), or -EBUSY (a request is already pending). */
 #define SYS_LAUNCH_REQUEST 396
 #define JT_APP_NAME_MAX 24
+/* 1.9.26: SYS_AUDIO (393), audio out for a ring-3 Samantha. One number, three ops. ebx = op,
+   ecx = const/non-const struct pointer (user), edx = the caller's sizeof that struct.
+   Format is what sb16_play and /api/speak already use: 8-bit UNSIGNED mono PCM, 4000..44100 Hz
+   (the Worker sends 16000). The kernel copies into a 32KB ring and the SB16 IRQ drains it in 4KB
+   DMA transfers; the gate never waits.
+   JT_AUDIO_PLAY (1): struct jt_audio_play {pcm, len, rate, flags}. Copies at most
+     JT_AUDIO_CHUNK_MAX (8192) bytes per call, fewer if the ring is full. Returns the bytes taken
+     (0 means full or busy: retry on a later frame). Playback starts when 4KB are queued, or at
+     once if flags has JT_AUDIO_END (set it on the call that queues the last bytes of a clip).
+     rate is read only when the queue was idle. -EFAULT bad range, -EINVAL len 0 / bad op /
+     short struct, -ENODEV no card.
+   JT_AUDIO_STATUS (2): fills struct jt_audio_status {version,size,playing,queued,space,rate,
+     played}, copies out min(edx, sizeof) bytes, returns that count. played is in samples
+     (bytes) since the queue last went idle, so mouth time = played * 1000 / rate ms.
+   JT_AUDIO_STOP (3): drops what is not yet in flight (about a quarter second still finishes).
+     Returns 0. 394 stays free for SYS_AUDIO_RECORD. */
+#define SYS_AUDIO       393
+#define JT_AUDIO_PLAY   1
+#define JT_AUDIO_STATUS 2
+#define JT_AUDIO_STOP   3
+#define JT_AUDIO_END    1
+#define JT_AUDIO_CHUNK_MAX 8192
+#define JT_AUDIO_STATUS_VERSION 1
+struct jt_audio_play { const void *pcm; unsigned int len; unsigned int rate; unsigned int flags; };
+struct jt_audio_status {
+    unsigned int version;       /* JT_AUDIO_STATUS_VERSION; always first */
+    unsigned int size;          /* sizeof this struct in the kernel that filled it */
+    unsigned int playing;       /* 1 while a transfer is in flight or bytes are queued */
+    unsigned int queued;        /* bytes waiting in the ring */
+    unsigned int space;         /* bytes the ring can still take */
+    unsigned int rate;          /* Hz of the clip in the ring */
+    unsigned int played;        /* samples heard so far in this clip */
+};
 /* kernel.c: SYS_SYSINFO fill, SYS_LAUNCH_REQUEST validate and store, desktop loop take. */
 void jt_sysinfo_fill(struct jt_sysinfo *si);
 int jt_launch_request(const char *name);

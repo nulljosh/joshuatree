@@ -719,6 +719,23 @@ count is returned. Any other status is minus that status, -100 to -599.
 -ENODEV no NIC, -EIO no answer within `reply_ticks`, -EFAULT any range outside
 user memory. Nothing is written to `out` on any failure.
 
+## audio (1.9.26)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 393 | `audio` | op: 1 play, 2 status, 3 stop | `struct jt_audio_play *` / `struct jt_audio_status *` / 0 | `sizeof` that struct | play: bytes taken; status: bytes written; stop: 0; or -errno |
+
+One number, three ops, so 394 stays free for recording. The format is the one the kernel's own Samantha already feeds the card: 8-bit unsigned mono PCM, 4000 to 44100 Hz (the Worker's `/api/speak` sends 16000). The program fetches the clip itself with `http_post` and queues it here.
+
+```c
+struct jt_audio_play { const void *pcm; unsigned len; unsigned rate; unsigned flags; }; /* flags: JT_AUDIO_END = 1 */
+struct jt_audio_status { unsigned version, size, playing, queued, space, rate, played; };
+```
+
+`play` copies at most 8192 bytes per call into a 32KB kernel ring and returns how many it took. 0 means the ring is full (or the card is busy with the kernel's own chat playback or a recording), so retry on a later frame; the call never waits. The SB16 IRQ drains the ring in 4KB DMA transfers, so playback runs with no caller. It starts when 4KB are queued, or at once when the call carries `JT_AUDIO_END`, which the program sets on the call with the clip's last bytes (a call cut short by a full ring drops the flag, so resend it with the rest). `rate` is read only when the queue was idle. -ENODEV no card, -EINVAL zero length, bad op or short struct, -EFAULT a range outside user memory.
+
+`status` fills the struct (`version` first, `size` is what the kernel wrote) and returns the byte count. `played` counts samples heard since the queue last went idle, interpolated inside the transfer in flight, so mouth time in ms is `played * 1000 / rate`. `stop` drops what is not yet in flight; the current 4KB, about a quarter second at 16 kHz, still finishes. The kernel's `sb16_play` and `sb16_record` return 0 while the queue is busy, and `play` returns 0 while they own the card.
+
 ## sysinfo and launch_request (1.9.26)
 
 | # | Name | ebx | ecx | edx | Returns |

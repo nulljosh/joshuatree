@@ -42,4 +42,19 @@ void sb16_irq(void);
    actually captured (0 if there is no card, or the very first chunk times
    out -- a real recording that ran short still returns what it got). */
 int sb16_record(unsigned char *out, unsigned int max_len, unsigned int rate);
+
+/* 1.9.26: the async queue behind SYS_AUDIO_PLAY. Same format as sb16_play (8-bit unsigned mono PCM,
+   4000..44100 Hz, the Worker's /api/speak clip as is). sb16_queue copies up to len bytes into a
+   32KB kernel ring and returns how many it took (0 when full, no card, or sb16_play/record owns
+   the card); it never waits. The IRQ chains 4KB DMA transfers out of the ring, so playback needs
+   no caller. Playback starts once a full 4KB is queued, or at once when end is nonzero (the last
+   piece of a clip). The rate is taken from the call that finds the queue idle; later calls in the
+   same clip ignore it. sb16_play and sb16_record return 0 while the queue is busy. */
+unsigned int sb16_queue(const unsigned char *pcm, unsigned int len, unsigned int rate, int end);
+struct sb16_qstat { unsigned int present, playing, queued, space, rate, played; };
+/* played counts bytes (= samples) heard since the queue last went idle, interpolated inside the
+   transfer in flight so a 12 fps mouth sees a smooth position. */
+void sb16_queue_status(struct sb16_qstat *st);
+/* Drops everything not yet in flight; the current 4KB (about a quarter second) finishes. */
+void sb16_queue_stop(void);
 #endif

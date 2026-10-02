@@ -31,6 +31,7 @@
 #include "http.h"
 #include "irqlock.h"
 #include "shellsys.h"
+#include "sb16.h"
 
 typedef unsigned int u32;
 typedef unsigned char u8;
@@ -857,6 +858,34 @@ static int sys_launch_request(u32 name, u32 b, u32 c) {
     return jt_launch_request(kn);
 }
 
+/* 1.9.26: SYS_AUDIO (contract in syscall.h). User PCM goes through paging_user_range_ok, then a
+   bounded copy into the driver's ring (sb16_queue takes the irq lock itself). Nothing waits. */
+static int sys_audio(u32 op, u32 arg, u32 size) {
+    if (op == JT_AUDIO_STOP) { sb16_queue_stop(); return 0; }
+    if (op == JT_AUDIO_STATUS) {
+        struct jt_audio_status st;
+        struct sb16_qstat q;
+        if (size < 8) return -EINVAL;
+        if (size > sizeof st) size = sizeof st;
+        if (!paging_user_range_ok(arg, size)) return -EFAULT;
+        sb16_queue_status(&q);
+        st.version = JT_AUDIO_STATUS_VERSION; st.size = sizeof st;
+        st.playing = q.playing; st.queued = q.queued; st.space = q.space;
+        st.rate = q.rate; st.played = q.played;
+        for (u32 i = 0; i < size; i++) ((char *)arg)[i] = ((const char *)&st)[i];
+        return (int)size;
+    }
+    if (op != JT_AUDIO_PLAY) return -EINVAL;
+    if (size < sizeof(struct jt_audio_play)) return -EINVAL;
+    if (!paging_user_range_ok(arg, sizeof(struct jt_audio_play))) return -EFAULT;
+    struct jt_audio_play p = *(const struct jt_audio_play *)arg;
+    if (!p.len) return -EINVAL;
+    if (!sb16_present()) return -ENODEV;
+    if (p.len > JT_AUDIO_CHUNK_MAX) { p.len = JT_AUDIO_CHUNK_MAX; p.flags &= ~(u32)JT_AUDIO_END; }
+    if (!paging_user_range_ok((u32)p.pcm, p.len)) return -EFAULT;
+    return (int)sb16_queue((const unsigned char *)p.pcm, p.len, p.rate, (p.flags & JT_AUDIO_END) ? 1 : 0);
+}
+
 /* 1.9.13: SYS_READDIR, the listing the Search app shows (and Files will).
    The contract is in syscall.h. Order of operations is the point: the
    path is copied out of user space with a hard cap and the output range
@@ -1005,6 +1034,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_UNLINK]      = sys_unlink,
     [SYS_SHELL_RUN]   = sys_shell_run,
     [SYS_HTTP_POST]   = sys_http_post,
+    [SYS_AUDIO]       = sys_audio,
     [SYS_SYSINFO]     = sys_sysinfo,
     [SYS_LAUNCH_REQUEST] = sys_launch_request,
 };

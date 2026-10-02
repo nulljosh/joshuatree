@@ -55,6 +55,12 @@
 #define JT_SYS_UNLINK      390 /* delete a file; relative path like open */
 #define JT_SYS_SHELL_RUN   391 /* 1.9.24: run one allowlisted shell line, output into a buffer; see kernel/shellsys.c */
 #define JT_SHELL_LINE_MAX 160  /* longest line the kernel copies in, bytes before the NUL: "<cwd>\n<command>" */
+#define JT_SYS_AUDIO       393 /* 1.9.26: queue 8-bit unsigned mono PCM / query playback / stop; see kernel/syscall.h (394 is reserved for record) */
+#define JT_AUDIO_PLAY   1
+#define JT_AUDIO_STATUS 2
+#define JT_AUDIO_STOP   3
+#define JT_AUDIO_END    1  /* flags: this call carries the last bytes of the clip, start now */
+#define JT_AUDIO_CHUNK_MAX 8192
 #define JT_SYS_SYSINFO     395 /* 1.9.26: weather, chat host, phone flag, time in one read-only struct; see kernel/syscall.h */
 #define JT_SYS_LAUNCH_REQUEST 396 /* 1.9.26: ask the desktop to open an app by exact APPS[] name; never launches inside the gate */
 #define JT_SYSINFO_VERSION 1
@@ -179,6 +185,18 @@ static inline int jt_shell_run(const char *line, char *out, unsigned outlen) { r
 static inline int jt_sysinfo(struct jt_sysinfo *si)               { return jt_syscall(JT_SYS_SYSINFO, (unsigned)si, sizeof *si, 0); }
 /* 0 queued, -EINVAL no app by that exact name, -EBUSY one is already pending. The desktop opens it on its next pass. */
 static inline int jt_launch(const char *app)                      { return jt_syscall(JT_SYS_LAUNCH_REQUEST, (unsigned)app, 0, 0); }
+struct jt_audio_play { const void *pcm; unsigned int len; unsigned int rate; unsigned int flags; };
+struct jt_audio_status { unsigned int version, size, playing, queued, space, rate, played; };
+/* Queues up to JT_AUDIO_CHUNK_MAX bytes of 8-bit unsigned mono PCM at rate Hz. Returns bytes taken
+   (0 = ring full, retry next frame), -ENODEV no card. Pass JT_AUDIO_END on the call that carries
+   the clip's last bytes; if a chunk is cut short the flag is dropped, so resend it with the rest. */
+static inline int jt_audio_play(const void *pcm, unsigned len, unsigned rate, unsigned flags) {
+    struct jt_audio_play p = { pcm, len, rate, flags };
+    return jt_syscall(JT_SYS_AUDIO, JT_AUDIO_PLAY, (unsigned)&p, sizeof p);
+}
+/* played is in samples: mouth time in ms = played * 1000 / rate. */
+static inline int jt_audio_status(struct jt_audio_status *st)    { return jt_syscall(JT_SYS_AUDIO, JT_AUDIO_STATUS, (unsigned)st, sizeof *st); }
+static inline int jt_audio_stop(void)                            { return jt_syscall(JT_SYS_AUDIO, JT_AUDIO_STOP, 0, 0); }
 static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
 
 #endif
