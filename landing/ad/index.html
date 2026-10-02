@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Joshua Tree 2.0 ad</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+html,body{margin:0;background:#f1ead8;overflow:hidden;height:100%}
+#stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
+canvas{position:absolute;left:0;top:0;width:1920px;height:1080px}
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
+</head><body>
+<div id="stage"><canvas id="c3" width="1920" height="1080"></canvas><canvas id="c2" width="1920" height="1080"></canvas></div>
+<script type="module">
+import * as THREE from 'three';
+import {STLLoader} from './vendor/STLLoader.js';
+const W=1920,H=1080,DUR=30;
+const CREAM='#f1ead8',INK='#161513',TERRA='#b4623c';
+const S=(a,b,t)=>{t=Math.min(1,Math.max(0,(t-a)/(b-a)));return t*t*(3-2*t)};
+const L=(a,b,k)=>a+(b-a)*k;
+const rnd=n=>{const x=Math.sin(n*127.1+311.7)*43758.5453;return x-Math.floor(x)};
+
+// ---------- 3D case ----------
+const r3=new THREE.WebGLRenderer({canvas:document.getElementById('c3'),antialias:true,preserveDrawingBuffer:true});
+r3.setPixelRatio(1);r3.setSize(W,H,false);r3.setClearColor(0xf1ead8,1);
+const scene=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(32,W/H,1,3000);
+const mkMat=(col)=>new THREE.ShaderMaterial({
+ uniforms:{base:{value:col},ink:{value:lc(22,21,19)}},
+ side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1,
+ vertexShader:`varying vec3 vP;void main(){vec4 m=modelViewMatrix*vec4(position,1.);vP=m.xyz;gl_Position=projectionMatrix*m;}`,
+ fragmentShader:`uniform vec3 base;uniform vec3 ink;varying vec3 vP;
+ void main(){vec3 n=normalize(cross(dFdx(vP),dFdy(vP)));if(!gl_FrontFacing)n=-n;
+ vec3 l=normalize(vec3(-.5,.8,.6));float d=dot(n,l)*.5+.5;
+ float s=gl_FragCoord.x+gl_FragCoord.y;vec3 c=base;
+ if(d<.62&&mod(s,7.)<1.3)c=ink;
+ if(d<.40&&mod(gl_FragCoord.x-gl_FragCoord.y,7.)<1.3)c=ink;
+ gl_FragColor=vec4(c,1.);}`});
+const lc=(r,g,b)=>new THREE.Color().setRGB(r/255,g/255,b/255,THREE.LinearSRGBColorSpace);
+const cream=mkMat(lc(246,240,224)),terra=mkMat(lc(190,104,66));
+const lineMat=new THREE.LineBasicMaterial({color:0x161513});
+const root=new THREE.Group();root.rotation.x=-Math.PI/2;scene.add(root); // z-up CAD -> y-up
+const items=[]; // {obj, ring, kind, base:[x,y,z]}
+const THICK=[9,9,12,8.5,10.5,9],GAP=2,BASE_W=224,STEP=1.5;
+const zs=[];{let z=0;for(let i=0;i<6;i++){zs.push(z);z+=THICK[i]+GAP}}
+const STACK_TOP=zs[5]+THICK[5]+GAP;
+const loader=new STLLoader();
+const load=n=>new Promise(r=>loader.load('../../docs/hardware/stl/'+n+'.stl',r));
+function add(geo,mat,pos,scale,kind,ring){
+ const g=new THREE.Group();const m=new THREE.Mesh(geo,mat);
+ const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,28),lineMat);
+ m.add(e);g.add(m);m.scale.set(...scale);m.position.set(...pos);
+ root.add(g);items.push({g,kind,ring});return m;
+}
+const ready=(async()=>{
+ for(let i=0;i<6;i++){
+  const w=224-i*1.5*2/2*2/2; // placeholder, real width comes from geometry
+ }
+ for(let i=0;i<6;i++){
+  const mat=(i%2)?terra:cream, t=THICK[i], z=zs[i];
+  const names=[['front_quarter',[1,-1]],['front_quarter',[-1,-1]],['rear_left',[-1,1]],['rear_right',[1,1]]];
+  for(const [nm,[sx,sy]] of names){
+   const geo=await load(`ring${i}_${nm}`);geo.computeBoundingBox();const b=geo.boundingBox;
+   const half=(b.max.y); // ring half width from the quarter's y extent
+   const fl=i>0?-1:1; // printed flipped for rings above 0
+   let px=0,py=0;
+   if(nm==='front_quarter'){px=0;py=0}
+   else{px=half-b.max.x} // rear strips hug the outer edge
+   const m=add(geo,mat,[sx*(nm==='front_quarter'?0:0)+0,0,0],[sx,sy,fl],'ring',i);
+   // position: mirror about origin, strip offset outward
+   m.position.set(sx*(nm==='front_quarter'?0:px),sy*0,fl<0?t:0);
+   if(nm!=='front_quarter')m.position.x=sx*px;
+   items[items.length-1].g.position.z=z;
+  }
+ }
+ const tray=await load('tray');tray.computeBoundingBox();const tb=tray.boundingBox;
+ const tm=add(tray,cream,[-89,-89,0],[1,1,1],'tray',-1);items[items.length-1].g.position.z=3;
+ const cap=await load('cap_quarter');
+ for(const [sx,sy] of [[1,1],[-1,1],[1,-1],[-1,-1]]){add(cap,terra,[0,0,0],[sx,sy,1],'cap',9);items[items.length-1].g.position.z=STACK_TOP}
+ const rear=await load('rear_plate');
+ const rm=add(rear,cream,[-86.8,0,0],[1,1,1],'rear',-2);rm.rotation.x=Math.PI/2;items[items.length-1].g.position.set(0,98,4);
+})();
+function render3(t){
+ const ex=S(4,7,t);
+ for(const it of items){
+  let off=0;
+  if(it.kind==='ring')off=ex*it.ring*34;
+  if(it.kind==='tray')off=ex*110;
+  if(it.kind==='cap')off=ex*215;
+  if(it.kind==='rear')off=ex*-60;
+  const base=it.base??(it.base=it.g.position.clone());
+  it.g.position.z=base.z+off;
+  if(it.kind==='rear')it.g.position.y=base.y+ex*70;
+ }
+ const az=L(0.55,1.55,S(0,5,t))+S(4,9,t)*0.5, dist=L(520,860,S(0,6.5,t))*(1-S(7.3,9.0,t)*0.96);
+ const el=L(0.42,0.5,S(0,4,t))-S(7,9,t)*0.3;
+ const tz=L(34,120,S(4,7,t))*(1-S(7.5,9,t)*0.5); // target height (world y)
+ const tgt=new THREE.Vector3(0,tz,0);
+ cam.position.set(tgt.x+dist*Math.cos(el)*Math.sin(az),tgt.y+dist*Math.sin(el),tgt.z+dist*Math.cos(el)*Math.cos(az));
+ cam.lookAt(tgt);cam.updateProjectionMatrix();
+ r3.render(scene,cam);
+}
+
+// ---------- 2D worlds ----------
+const c2=document.getElementById('c2'),g=c2.getContext('2d');
+const imgs={};
+const loadImg=(k,src)=>new Promise(r=>{const i=new Image();i.onload=()=>{imgs[k]=i;r()};i.onerror=r;i.src=src});
+const imgReady=Promise.all([loadImg('desk','../shots/samantha-chat.webp'),loadImg('files','../shots/app-files.webp'),loadImg('mark','../logo.svg'),
+ ...Array.from({length:24},(_,i)=>loadImg('idle'+i,`../face/idle-${i}.jpg`)),...Array.from({length:24},(_,i)=>loadImg('talk'+i,`../face/talk-${i}.jpg`))]);
+const FONT='-apple-system,"SF Pro Display","Helvetica Neue",Helvetica,Arial,sans-serif';
+const APPS=['Files','Notes','Terminal','Calendar','Stocks','Weather','Samantha','Epiphany','Search','Browser','Clock','Calculator','Paint','Mail','Maps','Music','Photos','Settings','Radio','Camera','Contacts','Reminders','Books','Draw','Voice','Monitor'];
+function ink(ctx,w){ctx.strokeStyle=INK;ctx.lineWidth=w;ctx.fillStyle=INK}
+function pic(ctx,i,x,y,s){ // flat engraved pictogram for app i inside box at x,y size s
+ ctx.save();ctx.translate(x,y);ctx.strokeStyle=INK;ctx.fillStyle=INK;ctx.lineWidth=s*0.03;
+ const k=i%6;
+ if(k===0){for(let j=0;j<5;j++){ctx.beginPath();ctx.moveTo(-s*.28,-s*.2+j*s*.1);ctx.lineTo(s*.28-(j%2)*s*.12,-s*.2+j*s*.1);ctx.stroke()}}
+ if(k===1){ctx.beginPath();ctx.arc(0,0,s*.26,0,7);ctx.stroke();for(let j=0;j<7;j++){ctx.beginPath();ctx.moveTo(-s*.2,-s*.15+j*s*.05);ctx.lineTo(s*.2,-s*.15+j*s*.05);ctx.stroke()}}
+ if(k===2){ctx.strokeRect(-s*.26,-s*.2,s*.52,s*.4);ctx.fillRect(-s*.2,-s*.1,s*.1,s*.03);ctx.fillRect(-s*.2,-s*.02,s*.2,s*.03)}
+ if(k===3){ctx.beginPath();ctx.moveTo(-s*.28,s*.2);ctx.lineTo(-s*.1,-s*.05);ctx.lineTo(s*.05,s*.08);ctx.lineTo(s*.28,-s*.22);ctx.stroke()}
+ if(k===4){ctx.fillStyle=TERRA;ctx.beginPath();ctx.arc(0,0,s*.2,0,7);ctx.fill();ctx.beginPath();ctx.arc(0,0,s*.28,0,7);ctx.stroke()}
+ if(k===5){ctx.beginPath();ctx.moveTo(0,-s*.28);ctx.lineTo(s*.26,s*.2);ctx.lineTo(-s*.26,s*.2);ctx.closePath();ctx.stroke();ctx.fillStyle=TERRA;ctx.fillRect(-s*.04,s*.0,s*.08,s*.12)}
+ ctx.restore();
+}
+function protBox(ctx,x,y,s,a,i){ // protected app: thin wall box with a terracotta inner gap
+ ctx.save();ctx.globalAlpha=a;
+ ctx.fillStyle='#f6f0e0';ctx.fillRect(x-s/2,y-s/2,s,s);
+ ctx.strokeStyle=INK;ctx.lineWidth=s*0.035;ctx.strokeRect(x-s/2,y-s/2,s,s);
+ ctx.lineWidth=s*0.012;ctx.strokeStyle=TERRA;ctx.strokeRect(x-s/2+s*.07,y-s/2+s*.07,s*.86,s*.86);
+ pic(ctx,i,x,y,s);ctx.restore();
+}
+// world helpers: zoom about focus (fx,fy) in world px, scale sc, centred on screen
+function world(ctx,fx,fy,sc,fn){ctx.save();ctx.translate(W/2,H/2);ctx.scale(sc,sc);ctx.translate(-fx,-fy);fn();ctx.restore()}
+
+function drawBoard(a,sc,t){ // 1200x760 board centred at 0,0 ; chip at 0,0 220px
+ g.save();g.globalAlpha=a;
+ world(g,0,0,sc,()=>{
+  g.fillStyle='#e7dec5';g.fillRect(-600,-380,1200,760);
+  g.strokeStyle=INK;g.lineWidth=2/sc*1.5;g.strokeRect(-600,-380,1200,760);
+  g.lineWidth=0.8/sc*1.5;g.strokeStyle=INK;
+  for(let i=0;i<70;i++){ // traces radiating from chip, 45 degree elbows
+   const side=i%4,o=(Math.floor(i/4)-8)*12;let x0,y0,x1,y1;
+   if(side===0){x0=o;y0=-110;x1=o*2.2;y1=-330}
+   if(side===1){x0=o;y0=110;x1=o*2.2;y1=330}
+   if(side===2){x0=-110;y0=o;x1=-330;y1=o*2.2}
+   if(side===3){x0=110;y0=o;x1=330;y1=o*2.2}
+   g.beginPath();g.moveTo(x0,y0);g.lineTo(L(x0,x1,.35),L(y0,y1,.35));g.lineTo(x1,y1);
+   const fx=side>1?(side===2?-560:560):x1*1.2, fy=side>1?y1*1.2:(side===0?-350:350);
+   g.lineTo(fx,fy);g.stroke();g.beginPath();g.arc(fx,fy,3,0,7);g.stroke();
+  }
+  for(let i=0;i<10;i++){g.strokeRect(-560+i*8,-340+(i%3)*26,70,18)}
+  for(const [cx,cy] of [[-500,250],[480,260],[-420,-260],[400,-250]]){g.strokeRect(cx-60,cy-40,120,80);for(let j=0;j<8;j++){g.strokeRect(cx-60+j*15,cy-52,8,12);g.strokeRect(cx-60+j*15,cy+40,8,12)}}
+  for(const [cx,cy] of [[-560,-340],[560,-340],[-560,340],[560,340]]){g.beginPath();g.arc(cx,cy,10,0,7);g.stroke()}
+  // chip package
+  g.fillStyle='#f6f0e0';g.fillRect(-110,-110,220,220);g.lineWidth=2/sc*1.5;g.strokeRect(-110,-110,220,220);
+  g.lineWidth=0.8/sc*1.5;for(let i=0;i<24;i++){const p=-100+i*8.7;g.beginPath();g.moveTo(p,-110);g.lineTo(p,-122);g.moveTo(p,110);g.lineTo(p,122);g.moveTo(-110,p);g.lineTo(-122,p);g.moveTo(110,p);g.lineTo(122,p);g.stroke()}
+  g.strokeRect(-70,-70,140,140);g.fillStyle=TERRA;g.fillRect(-30,-30,60,60);g.strokeRect(-30,-30,60,60);
+ });g.restore();
+}
+function drawDie(a,sc){ // die 1000px centred
+ g.save();g.globalAlpha=a;
+ world(g,0,0,sc,()=>{
+  g.fillStyle='#f6f0e0';g.fillRect(-500,-500,1000,1000);g.strokeStyle=INK;g.lineWidth=3/sc;g.strokeRect(-500,-500,1000,1000);
+  g.lineWidth=1/sc;
+  for(let cx=0;cx<4;cx++)for(let cy=0;cy<4;cy++){
+   const x=-440+cx*225,y=-440+cy*225;g.strokeRect(x,y,190,190);
+   for(let j=0;j<18;j++){g.beginPath();g.moveTo(x,y+j*10.5);g.lineTo(x+190,y+j*10.5);g.stroke()}
+   if((cx+cy)%3===0){g.fillStyle=TERRA;g.fillRect(x+60,y+60,70,70);g.strokeRect(x+60,y+60,70,70)}
+  }
+  for(let i=0;i<60;i++){g.beginPath();g.moveTo(-500+i*16.6,-470);g.lineTo(-500+i*16.6,-500);g.stroke()}
+ });g.restore();
+}
+const COLS=26,ROWS=14;
+function drawField(a,sc,res,t){ // glyph field, res 0..1 resolves to app icons
+ g.save();g.globalAlpha=a;
+ g.fillStyle=CREAM;g.fillRect(0,0,W,H);
+ world(g,0,0,sc,()=>{
+  const cw=64,ch=64,x0=-COLS*cw/2,y0=-ROWS*ch/2;
+  g.textAlign='center';g.textBaseline='middle';
+  let n=0;
+  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
+   const x=x0+c*cw+cw/2,y=y0+r*ch+ch/2;
+   const isApp=(r===5||r===6||r===7)&&c>=0&&false;
+   const gl='0123456789abcdef'[Math.floor(rnd(r*100+c+Math.floor(t*6))*16)];
+   const local=Math.min(1,Math.max(0,res*1.6-rnd(r*31+c*7)*0.6));
+   g.globalAlpha=a*(1-local);g.fillStyle=INK;g.font=`${22}px ${FONT}`;g.fillText(gl,x,y);
+  }
+  // apps: 26 in a 7x4 grid (two empty) over the field
+  const gx=7,gy=4,sz=118,sx=170;
+  for(let i=0;i<26;i++){
+   const c=i%gx,r=Math.floor(i/gx),x=(c-(gx-1)/2)*sx,y=(r-(gy-1)/2)*200;
+   const k=Math.min(1,Math.max(0,res*1.5-rnd(i*13+2)*0.5));
+   if(k>0){g.globalAlpha=a*k;protBox(g,x,y,sz*(0.4+0.6*k),k,i);g.globalAlpha=a*k;g.fillStyle=INK;g.font=`500 17px ${FONT}`;g.fillText(APPS[i],x,y+sz/2+22)}
+  }
+ });g.restore();
+}
+function ease(x){return x*x*(3-2*x)}
+const FACE=t=>{ // nod + blink schedule
+ const tt=t-21;if(tt<0)return 'idle0';
+ const talking=(tt>1.2&&tt<4.2);
+ const i=Math.floor(tt*12)%24;return (talking?'talk':'idle')+i;
+};
+function drawDesktop(a,k,t){ // k 0..1 growth from pixel to full frame
+ const desk=imgs.desk;if(!desk)return;
+ g.save();g.globalAlpha=a;
+ const sc=L(0.002,1,Math.pow(k,3)); // true zoom from one pixel
+ const vw=1920,vh=Math.round(1920*desk.height/desk.width);
+ g.translate(W/2,H/2);g.scale(sc,sc);
+ g.imageSmoothingEnabled=sc>0.5;
+ g.drawImage(desk,-vw/2,-vh/2,vw,vh);
+ g.restore();
+}
+function drawFace(a,t){
+ const f=imgs[FACE(t)];if(!f||a<=0)return;
+ g.save();g.globalAlpha=a;
+ const s=300,cx=1690,cy=830+Math.sin((t-21)*3)*(t>21.8?4:0)*(t>22.5&&t<25?1:0)+(t>23.4&&t<24.2?10*Math.sin((t-23.4)/0.8*Math.PI):0);
+ g.beginPath();g.arc(cx,cy,s/2+6,0,7);g.fillStyle=CREAM;g.fill();g.lineWidth=3;g.strokeStyle=INK;g.stroke();
+ g.save();g.beginPath();g.arc(cx,cy,s/2,0,7);g.clip();g.drawImage(f,cx-s/2,cy-s/2,s,s);g.restore();
+ g.restore();
+}
+function text(s,x,y,size,w,al,col){g.save();g.globalAlpha=al;g.fillStyle=col||INK;g.font=`${w} ${size}px ${FONT}`;g.textAlign='center';g.textBaseline='middle';g.fillText(s,x,y);g.restore()}
+
+const zoomZ=t=>Math.exp(L(Math.log(0.3),Math.log(90),S(8.8,15,t)));
+function render2(t){
+ g.clearRect(0,0,W,H);
+ if(t<8.6)return;
+ // backdrop for 2D worlds fades in over the 3D dive
+ const bgA=S(8.6,9.4,t);
+ g.fillStyle=CREAM;g.globalAlpha=bgA;g.fillRect(0,0,W,H);g.globalAlpha=1;
+ // board 9-13.5: scale 0.3 -> 9 (chip fills)
+ if(t<12.7){
+  drawBoard(S(8.6,9.4,t)*(1-S(11.6,12.6,t)),zoomZ(t),t);
+ }
+ if(t>11.3&&t<15.3){
+  drawDie(S(11.4,12.6,t)*(1-S(14.2,15.2,t)),zoomZ(t)*0.14);
+ }
+ if(t>14.8&&t<21){
+  const zin=S(14.8,16.2,t);const sc=L(0.5,1,ease(zin))*(1+S(19.6,21,t)*0)*Math.exp(S(19.6,21,t)*5);
+  const res=S(15.4,18.4,t);
+  const a=S(14.8,15.8,t)*(1-S(20.2,21,t));
+  drawField(a,sc,res,t);
+  // protection note
+  text('Every app in its own protected box.',W/2,H-90,40,500,S(17.6,18.6,t)*(1-S(19.4,20,t)));
+ }
+ if(t>20){
+  g.fillStyle=CREAM;g.globalAlpha=S(20.2,21,t);g.fillRect(0,0,W,H);g.globalAlpha=1;
+  const k=S(20.4,24,t);drawDesktop(1,k,t);
+  if(k<0.9){g.fillStyle=INK;g.fillRect(W/2-2,H/2-2,4,4)}
+  drawFace(S(24,24.6,t)*(1-S(27.2,27.8,t)),t);
+ }
+ if(t>=26.6){
+  const a=S(26.6,27.6,t);
+  g.fillStyle=CREAM;g.globalAlpha=a;g.fillRect(0,0,W,H);g.globalAlpha=1;
+  const m=imgs.mark;if(m){const s=300;g.globalAlpha=a;g.drawImage(m,W/2-s/2,150,s,s);g.globalAlpha=1}
+  text('Joshua Tree 2.0',W/2,560,112,600,S(27.1,27.9,t));
+  text('Strata Kit',W/2,670,64,400,S(27.5,28.3,t),TERRA);
+  text('Every app protected. Build one in 45 minutes.',W/2,790,40,400,S(27.9,28.7,t));
+  text('joshuatree.heyitsmejosh.com',W/2,900,32,500,S(28.4,29.2,t));
+ }
+}
+let last=-1;
+async function render(t){
+ await ready;await imgReady;
+ render3(t);
+ c2.style.display='block';
+ document.getElementById('c3').style.opacity=1;
+ render2(t);
+}
+window.__ad={duration:DUR,fps:30,ready:Promise.all([ready,imgReady]),render:async t=>{await render(t);return true}};
+function fit(){const s=Math.min(innerWidth/W,innerHeight/H);document.getElementById('stage').style.transform=`scale(${s})`}
+fit();addEventListener('resize',fit);
+const q=new URLSearchParams(location.search);
+if(q.has('t'))render(parseFloat(q.get('t')));
+else{(async()=>{await ready;await imgReady;const t0=performance.now();const f=()=>{const t=((performance.now()-t0)/1000)%DUR;render(t);requestAnimationFrame(f)};f()})()}
+</script></body></html>

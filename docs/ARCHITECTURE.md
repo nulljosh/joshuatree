@@ -361,3 +361,7 @@ speak a shell command into a running instance through Whisper and Ollama.
 - `docs/SYSCALL-ABI.md` if you want to write a program for it.
 - `docs/BLUEPRINT.md` for the plan after 1.0: apps as real processes and a window server.
 - `docs/THREAT-MODEL.md` for what the login screen does and does not protect.
+| `landing/ad/index.html` | The Joshua Tree 2.0 and Strata Kit promo, one self-contained page. A single clock function maps t to every camera and scene state: the real Strata STLs as an engraved-ink three.js case that explodes ring by ring, a 2D dive through the board, chip and die, a glyph field resolving into the 26 apps each in its own thin-walled box, one pixel growing into the real desktop with Samantha's face frames, then the 2.0 mark and end card. Exposes `window.__ad = {duration, render(t)}` and a `?t=` query for stills. |
+| `landing/ad/vendor/three.module.min.js` | Vendored three.js r160 (pinned, MIT) so the ad has no runtime network dependency. |
+| `landing/ad/vendor/STLLoader.js` | Vendored three.js r160 STLLoader (MIT), loads the real `docs/hardware/stl` parts. |
+| `tools/ad-capture.mjs` | Deterministic capture for the ad: serves the repo, steps `window.__ad.render(t)` frame by frame in headless Chromium across parallel workers, writes PNG frames or stills; ffmpeg encodes them to h264. |
