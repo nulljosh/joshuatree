@@ -158,6 +158,44 @@ static void phone_home_full_repaint(void){
    that gui_apps_launch(hit) below still takes its real full-screen-open
    branch (the one that draws a fresh titlebar and sets up the viewport)
    instead of the nested-inside-an-open-window branch. */
+/* 2.0 gate 5: an app opened from the grid is one compositor window, full screen, same path as a desktop dock click. The back chevron (or Esc) kills it. */
+static void phone_window_run(int icon){
+    int slot = gui_multiwin_open(icon);
+    if (slot < 0) { gui_refuse_open(icon); return; }
+    gui_window_t *w = &gui_windows[slot];
+    int task = w->task, redraw = 1, mx = (int)window_width() / 2, my = (int)window_height() / 2;
+    mouse_click_edge_sync();
+    kbd_drain(); /* a key typed before this app existed (a stale Esc from closing the last one) is not the app's, and would kill it on its first turn */
+    for (;;) {
+        if (task < 0 || !task_used(task)) { ring3app_window_reaped(task, task_last_exit_code()); break; }
+        unsigned int fw, fh; int dirty = 0;
+        syscall_window_fb(task, &fw, &fh, &dirty);
+        if (dirty || redraw) {
+            redraw = 0;
+            window_clear_viewport();
+            phone_app_titlebar_draw(APPS[icon].name);
+            gui_multiwin_draw_content_only(w);
+            window_present();
+        }
+        int dx = 0, dy = 0, buttons = 0;
+        mouse_get_delta(&dx, &dy, &buttons);
+        mx += dx; my += dy;
+        mouse_get_absolute(&mx, &my, (int)window_width(), (int)window_height());
+        if (mx < 0) mx = 0; if (my < 0) my = 0;
+        if (mx >= (int)window_width()) mx = (int)window_width() - 1;
+        if (my >= (int)window_height()) my = (int)window_height() - 1;
+        if (mouse_click_edge()) {
+            if (my < 40 && mx < 44) { task_kill(task); continue; } /* back chevron: reaped on the next turn */
+            if (my >= 40) syscall_window_push_event(task, JT_EV_CLICK, mx, my - 40);
+        }
+        int k = gui_multiwin_key_nonblock();
+        if (k == 27) task_kill(task);
+        else if (k >= 0) syscall_window_push_event(task, JT_EV_KEY, k, 0);
+        __asm__ volatile ("hlt");
+    }
+    for (int i = 0; i < gui_window_count; i++) if (gui_windows[i].task == task) { gui_multiwin_close(i); break; }
+    window_clear_viewport(); gui_app_windowed = 0;
+}
 static void phone_home_run(void){
     gui_app_windowed = 0;
     int mx = (int)window_width() / 2, my = (int)window_height() / 2;
@@ -202,6 +240,6 @@ static void phone_home_run(void){
             int cell_y0 = cy - tile - 6, cell_y1 = cy + 24;
             if (mx >= cell_x0 && mx < cell_x1 && my >= cell_y0 && my < cell_y1) { hit = i; break; }
         }
-        if (hit >= 0) { app_cursor_x = mx; app_cursor_y = my; gui_apps_launch(hit); } /* returns here on Esc or a tap anywhere in the app: back to the grid */
+        if (hit >= 0) { app_cursor_x = mx; app_cursor_y = my; phone_window_run(hit); } /* returns here on Esc or a tap anywhere in the app: back to the grid */
     }
 }

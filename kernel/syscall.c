@@ -901,6 +901,8 @@ static int sys_launch_request(u32 name, u32 b, u32 c) {
     return jt_launch_request(kn);
 }
 
+static int sys_refresh(u32 kind, u32 arg, u32 c) { (void)c; return jt_refresh_request((int)kind, (int)arg); }
+
 /* 1.9.26: SYS_AUDIO (contract in syscall.h). User PCM goes through paging_user_range_ok, then a
    bounded copy into the driver's ring (sb16_queue takes the irq lock itself). Nothing waits. */
 static int sys_audio(u32 op, u32 arg, u32 size) {
@@ -1103,6 +1105,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_SYSINFO]     = sys_sysinfo,
     [SYS_LAUNCH_REQUEST] = sys_launch_request,
     [SYS_BRK]         = sys_brk,
+    [SYS_REFRESH]     = sys_refresh,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {

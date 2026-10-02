@@ -12,9 +12,9 @@ must show the honest offline face over labelled sample data. The check:
   1. asserts the launch, SYS_WINDOW_OPEN, the app's "wxwin=offline sample"
      and the five sample forecast days, and that the window is the cream
      Weather surface;
-  2. presses R: the app draws "Fetching..." (wxwin=fetching), exits 7, the
-     kernel fetches exactly once more and starts Weather again, which shows
-     the offline face again;
+  2. presses R: the app draws "Fetching..." (wxwin=fetching), calls SYS_REFRESH,
+     the desktop loop fetches exactly once more and the same window reloads
+     and shows the offline face again;
      Also crops the big temperature and the location label and asserts the
      type is antialiased: real intermediate colours along glyph edges, many
      distinct levels between the ink and the cream, not just two colours
@@ -24,7 +24,7 @@ must show the honest offline face over labelled sample data. The check:
 
 Every wait has a deadline. Discriminating: drop the RING3_APPS row and step 1
 never sees the launch; stop the kernel writing WEATHER.TXT and the face
-reads "Not fetched yet" with no wxwin=offline; drop the exit-7 retry and
+reads "Not fetched yet" with no wxwin=offline; drop the SYS_REFRESH pickup and
 step 2 sees no second fetch.
 (tools/checks/weather-app-check.sh covers the live, stale, bad and timeout faces.)
 
@@ -137,8 +137,9 @@ try:
     fetches, launches = serial().count("wxfetch"), serial().count("launching WEATHER.BIN")
     keys("r")
     if not wait_serial("wxwin=fetching", 10): fails.append("R did not show the fetching state")
-    if not wait_serial("launching WEATHER.BIN", 30, launches + 1): fails.append("the kernel did not start Weather again after R")
-    if not wait_serial("WEATHER.BIN exited 7", 5): fails.append("R did not make the app exit 7")
+    wait_serial("wxwin=offline sample", 30, 2)  # SYS_REFRESH: the app stays up, reloads when the stamp moves
+    if serial().count("launching WEATHER.BIN") != launches: fails.append("R relaunched the app; it must stay one window")
+    if "WEATHER.BIN exited 7" in serial(): fails.append("the app still exits 7 on R")
     n = serial().count("wxfetch")
     if n != fetches + 1: fails.append(f"R did not cause exactly one more fetch (had {fetches}, now {n})")
     if serial().count("wxwin=offline sample") < 2: fails.append("the relaunched app did not draw the offline face again")
@@ -184,4 +185,4 @@ if fails:
     print("--- serial tail ---")
     print(serial()[-1500:])
     sys.exit(1)
-print("PASS: Weather ran at ring 3 with its own window, showed the offline face from the kernel's WEATHER.TXT, R refetched once and reopened it, Esc closed it, and the desktop stayed alive")
+print("PASS: Weather ran at ring 3 with its own window, showed the offline face from the kernel's WEATHER.TXT, R refetched once in the same window, Esc closed it, and the desktop stayed alive")

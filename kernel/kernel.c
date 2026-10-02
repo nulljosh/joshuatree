@@ -2405,6 +2405,7 @@ static void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; }
    nothing drawn, not an error. */
 static char weather_text[24] = "";
 static unsigned int weather_last_tick = 0;
+static volatile unsigned jt_data_stamp = 0; /* bumped whenever WEATHER.TXT or STOCKS.TXT is rewritten; windows poll it through SYS_SYSINFO */
 static int weather_tried_once = 0;
 /* v53: real fields behind the one-line summary, kept for the dropdown
    panel. Nothing fabricated: temp/code are exactly what weather_fetch
@@ -2442,6 +2443,7 @@ void jt_sysinfo_fill(struct jt_sysinfo *si){
     si->wx_temp_c = weather_temp_c;
     si->wx_code10 = weather_code10;
     si->llm_port = (unsigned)llm_port;
+    si->data_stamp = jt_data_stamp;
     for (int i = 0; i < JT_WX_TEXT_MAX - 1 && weather_text[i]; i++) si->wx_text[i] = weather_text[i];
     for (int i = 0; i < JT_SYSINFO_HOST_MAX - 1 && llm_host[i]; i++) si->llm_host[i] = llm_host[i];
 }
@@ -2458,6 +2460,15 @@ int jt_launch_request(const char *name){
     return -22; /* EINVAL */
 }
 int jt_launch_take(void){ int i = launch_pending; launch_pending = -1; return i; }
+/* 398 SYS_REFRESH mailbox: one pending request, recorded in the gate, served by the desktop loop. */
+static volatile int refresh_kind = -1, refresh_arg = 0;
+int jt_refresh_request(int kind, int arg){
+    if (kind != JT_REFRESH_WEATHER && kind != JT_REFRESH_STOCKS) return -22;
+    if (kind == JT_REFRESH_STOCKS && ((arg & 0xFF) >= 5 || ((arg >> 8) & 0xFF) >= 8)) return -22;
+    if (refresh_kind >= 0) return -16;
+    refresh_arg = arg; refresh_kind = kind; return 0;
+}
+int jt_refresh_take(int *arg){ int k = refresh_kind; if (k >= 0) { *arg = refresh_arg; refresh_kind = -1; } return k; }
 /* Test/diagnostic override, read once from the multiboot command line
    (`-append "wxhost=10.0.2.2:8099"`, see kmain): both the location and the
    forecast request go to this literal IP:port instead of ip-api.com and
@@ -2960,21 +2971,17 @@ static void weather_write_file(void){
         o = wx_put_int(o, wx_day_hi[i]); *o++ = ' '; o = wx_put_int(o, wx_day_lo[i]); *o++ = '\n';
     }
     vfs_replace_file("WEATHER.TXT", b, (unsigned int)(o - b));
+    jt_data_stamp++;
 }
 
-/* The dock's Weather. The first open (or the ten-minute cycle, or R) has the
-   kernel fetch; the app only reads the file. R makes the app exit with
-   JT_WEATHER_RETRY after it draws "Fetching...", the kernel refetches and
-   starts it again. No new syscall. */
+/* The dock's Weather, blocking fallback only (a full window table). The window path in
+   user/weather.c asks for refetches with SYS_REFRESH instead; here the app just runs once. */
 int weather_ring3_run(void);
 void weather_ring3_open(void){
-    int again = !weather_tried_once;
-    do {
-        if (again) { weather_tried_once = 1; weather_fetch(); gui_menubar_force_redraw(); }
-        unsigned int t0 = ticks();
-        again = weather_ring3_run() == 7;
-        weather_last_tick += ticks() - t0; /* time spent inside the app is not time the reading aged: ring-3 runs inflate ticks(), and the ten-minute cycle would refetch on every close */
-    } while (again);
+    if (!weather_tried_once) { weather_tried_once = 1; weather_fetch(); gui_menubar_force_redraw(); }
+    unsigned int t0 = ticks();
+    weather_ring3_run();
+    weather_last_tick += ticks() - t0;
 }
 
 /* v75 (0.67.0): the real location-dynamic wallpaper, the item roadmap.md's
@@ -4794,14 +4801,9 @@ static void gui_app_frame_title(const char *label){
     font_draw_string(label, x + 96, y + 8, 0x00403439, -1);
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
-static void gui_apps_launch(int icon){
-    int was_windowed = gui_app_windowed; /* v1.7.7: ring-3 apps need a real viewport via keyboard Enter too */
-    unsigned int vw = window_width(), vh = window_height() - 40; /* clamped below to fit ring-3 .userfb */
-    if (!was_windowed) { gui_draw_app_titlebar(APPS[icon].name); if (vw * vh * 4 > 0x170000) { vw = 832; vh = 450; }
-        window_set_viewport(0, 40, vw, vh); app_view_x = 0; app_view_y = 40; app_view_w = (int)vw; app_view_h = (int)vh; gui_app_windowed = 1;
-    } else gui_app_frame_title(APPS[icon].name);
-    gui_launch(icon);
-    if (!was_windowed) { gui_app_windowed = 0; window_clear_viewport(); } else gui_app_frame_title(APPS[GUI_APPS_FOLDER].name); }
+static int gui_multiwin_open(int icon); static void gui_refuse_open(int icon);
+/* 2.0 gate 5: the Apps folder has no window of its own to host an app, so a launch closes the folder and opens the app as a compositor window, exactly a dock click (full table: the same refusal notice). */
+static void gui_apps_launch(int icon){ if (gui_multiwin_open(icon) < 0) gui_refuse_open(icon); }
 
 static void gui_launch_apps(void){
     int sel = 0;
@@ -4922,16 +4924,16 @@ static void gui_launch_apps(void){
                 int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
                 if (click_vx >= cell_x0 && click_vx < cell_x1 && click_vy >= cell_y0 && click_vy < cell_y1) { hit = i; break; }
             }
-            if (hit >= 0) { sel = hit; gui_apps_launch(hit); full = 1; continue; } /* the app drew over the screen, so the folder needs a real full repaint */
+            if (hit >= 0) { gui_apps_launch(hit); return; }
             return; /* a tap outside every tile still closes the folder: with no keyboard there is no other way out */
         }
-        if (k == KEY_ENTER) { gui_apps_launch(sel); full = 1; continue; } /* returns here when that app closes, folder still open, same as a real launcher */
+        if (k == KEY_ENTER) { gui_apps_launch(sel); return; }
         int old_sel = sel;
         if (k == 'a' && sel > 0) sel--;                 /* left  */
         else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) sel++; /* right */
         else if (k == 'w' && sel >= APPS_COLS) sel -= APPS_COLS;
         else if (k == 's' && sel + APPS_COLS < GUI_APPS_FOLDER) sel += APPS_COLS;
-        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_apps_launch(sel); full = 1; continue; }
+        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { gui_apps_launch(k - '1'); return; }
         if (sel != old_sel) {
             /* Keyboard selection drags the view with it, the direction that is
                not surprising: move past the last visible row and the grid
@@ -5004,11 +5006,29 @@ static void gui_launch(int icon){
 }
 
 static int gui_multiwin_open(int icon);
+/* 2.0 gate 5: a full window table or a failed window launch is an honest refusal now, never a
+   blocking takeover of the screen. Serial marker plus a notice the next repaint draws. */
+static const char *gui_notice_name = 0; static unsigned int gui_notice_until = 0;
+static void gui_refuse_open(int icon){
+    if (icon < 0 || icon >= GUI_APP_COUNT) return;
+    gui_notice_name = APPS[icon].name; gui_notice_until = ticks() + 300;
+    serial_puts("winrefuse: "); serial_puts(APPS[icon].name); serial_puts("\n"); /* tools/checks/dockcap-fallback-check.sh */
+}
+static void gui_notice_draw(void){
+    if (!gui_notice_name || (int)(ticks() - gui_notice_until) >= 0) { gui_notice_name = 0; return; }
+    char msg[64]; int n = 0; const char *pre = "Close a window to open ";
+    for (const char *q = pre; *q && n < 40; q++) msg[n++] = *q;
+    for (const char *q = gui_notice_name; *q && n < 62; q++) msg[n++] = *q;
+    msg[n] = 0;
+    int w = font_string_width(msg) + 32, h = 32, x = ((int)window_width() - w) / 2, y = GUI_MENUBAR_H + 12;
+    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x002C2C2E, 14);
+    font_draw_string(msg, x + 16, y + 8, 0x00F5F5F7, -1);
+}
 void gui_launch_from_dock(int icon){
     /* 1.9.23: a ring-3 window app opens as a compositor window from every
        path (dock, keyboard, open= boot flag); the blocking viewport below
        is only the fallback when the launch failed. */
-    if (gui_ring3_windowed(icon) && gui_multiwin_open(icon) >= 0) return;
+    if (gui_ring3_windowed(icon)) { if (gui_multiwin_open(icon) < 0) gui_refuse_open(icon); return; }
 again:
     /* Keep the desktop visible around the app. The framebuffer viewport
        clips every app draw, including window_clear and physical AA text. */
@@ -5095,6 +5115,7 @@ static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_AP
    buttons stay fully on screen and visually distinct, not stacked exactly
    on top of each other. */
 static void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
+    if (boot_to_phone) { *x = -8; *y = 8; *w = (int)window_width() + 16; *h = (int)window_height(); return; } /* 2.0 gate 5: one window, full screen under the back chevron strip (content rect 0,40,W,H-40) */
     if (slot_index == 0) { *x = 70; *y = 40; *w = 820; *h = 385; }
     else { *x = 70 + 60; *y = 40 + 60; *w = 820; *h = 385; }
     gui_clamp_win_rect(x, y, w, h); /* Mail/Calendar/Reminders/Files/Weather open here, not gui_launch_from_dock -- phone screens need the same clamp */
@@ -5396,8 +5417,8 @@ static int gui_multiwin_open(int icon){
     gui_multiwin_geom(slot, &gui_windows[slot].x, &gui_windows[slot].y, &gui_windows[slot].w, &gui_windows[slot].h);
     if (gui_ring3_windowed(icon)) {
         /* 1.9.23: the program is scheduled now and draws into its own
-           buffer; this loop keeps running. -1 hands the click to the
-           blocking path, so a failed launch is a slower open, not a lost one. */
+           buffer; this loop keeps running. -1 is refused by the caller
+           (gui_refuse_open), never a blocking takeover. */
         int t = ring3app_launch_window(APPS[icon].name, (unsigned int)(gui_windows[slot].w - 16), (unsigned int)(gui_windows[slot].h - 40));
         if (t < 0) return -1;
         gui_windows[slot].task = t;
@@ -5940,7 +5961,7 @@ static void gui_run(void){
     auth_gate(); /* v0.77: real login screen, once per session, before the desktop ever paints */
     gui_draw_boot_screen();
     gui_order_init();
-    if (boot_to_samantha) { boot_to_samantha = 0; serial_puts("samopen\n"); if (boot_to_phone) { gui_app_windowed = 0; gui_apps_launch(6); } else gui_launch_from_dock(6); } /* 1.9.26: ring-3 Samantha is the first screen; phone mode lands on the home grid when she closes */
+    if (boot_to_samantha) { boot_to_samantha = 0; serial_puts("samopen\n"); if (boot_to_phone) { gui_app_windowed = 0; phone_window_run(6); } else gui_launch_from_dock(6); } /* 1.9.26: ring-3 Samantha is the first screen; phone mode lands on the home grid when she closes */
     else if (!boot_to_phone) serial_puts("guidesktop\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: the icon desktop drew first, samantha mode never reaches here before her avatar; phone mode never draws this desktop at all (see below), so it must not claim it did */
     if (boot_to_phone) { phone_home_run(); return; } /* v1.8.0: leaving Samantha lands on a real home screen, not the desktop's dock squeezed into 430px; never returns */
     dock_hover = dock_presented_hover = -1;
@@ -6027,10 +6048,14 @@ static void gui_run(void){
         /* 1.9.26: SYS_LAUNCH_REQUEST pickup. The syscall only stored an index; the launch runs here,
            IF on, through the same two paths a dock click takes (window first, blocking fallback). */
         int sys_launched = 0;
+        { int ra = 0, rk = jt_refresh_take(&ra); /* SYS_REFRESH pickup: fetch outside the gate, the app sees data_stamp move */
+          if (rk == JT_REFRESH_WEATHER) { weather_tried_once = 1; weather_fetch(); gui_menubar_force_redraw(); }
+          else if (rk == JT_REFRESH_STOCKS) { stx_range_hint = ra & 0xFF; stx_sel_hint = (ra >> 8) & 0xFF; stocks_fetch(stx_range_hint); } }
         { int li = jt_launch_take();
           if (li >= 0) {
               serial_puts("launchreq=pickup\n");
-              if (!(gui_multiwin_dock_ok(li) && gui_multiwin_open(li) >= 0)) { gui_launch_from_dock(li); mx = app_cursor_x; my = app_cursor_y; }
+              if (gui_multiwin_dock_ok(li)) { if (gui_multiwin_open(li) < 0) gui_refuse_open(li); }
+              else { gui_launch_from_dock(li); mx = app_cursor_x; my = app_cursor_y; }
               for (int wi = 0; wi < gui_window_count; wi++) gui_windows[wi].shown = 1;
               sys_launched = 1;
           } }
@@ -6352,14 +6377,9 @@ static void gui_run(void){
                    everything) instead of blocking inside gui_wait_close the
                    way every other app still does. */
                 editor_mouse_x = mx; editor_mouse_y = my;
-                /* v0.76.56: at the GUI_MULTIWIN_MAX cap the window path
-                   returns -1; fall through to the blocking path so the click
-                   always does something visible (dockcap-fallback-check.py). */
-                if (gui_multiwin_open(gui_order[press_slot]) < 0) {
-                    serial_puts("mwcapfallback\n"); /* discriminating marker for tools/checks/dockcap-fallback-check.py */
-                    gui_launch_from_dock(gui_order[press_slot]);
-                    mx = app_cursor_x; my = app_cursor_y;
-                }
+                /* 2.0 gate 5: at the GUI_MULTIWIN_MAX cap (or a failed window launch) the click is an
+                   honest refusal, "winrefuse" on serial and a notice on screen, never a blocking takeover. */
+                if (gui_multiwin_open(gui_order[press_slot]) < 0) gui_refuse_open(gui_order[press_slot]);
                 /* the launched=1 full repaint below draws this window's chrome; do not let the first-frame check draw it again */
                 for (int wi = 0; wi < gui_window_count; wi++) gui_windows[wi].shown = 1;
                 launched = 1;
@@ -6504,6 +6524,7 @@ static void gui_run(void){
             if (menu_open) gui_draw_apple_menu(menu_hover);
             if (notif_open) gui_draw_notif_panel();
             if (weather_open) gui_draw_weather_panel();
+            if (gui_notice_name) gui_notice_draw();
             if (drag_slot < 0) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
             last_mx = mx; last_my = my; last_hover = hover_slot; last_drag = drag_slot;
             last_menu_open = menu_open; last_menu_hover = menu_hover;
@@ -8160,11 +8181,7 @@ static void run(char *line){
     }
     else if (!strcmp(line, "chat") || !strcmp(line, "samantha")) {
         /* 1.9.26: Samantha is a ring-3 program (user/samantha.c); the text shell opens her window like `notes`. */
-        if (window_open(800, 600, 32)) {
-            samantha_ring3_open();
-            window_close();
-            clear();
-        }
+        puts("chat: Samantha is a desktop window now, run gui and click her in the dock\n"); /* 2.0 gate 5: no blocking launch from the text shell */
     }
     else if (!strcmp(line, "build")) {
         /* v10's "build stuff" loop: take a request, ask the LLM to generate
@@ -8205,11 +8222,7 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "notes")) {
-        if (window_open(800, 600, 32)) {
-            notes_ring3_open();
-            window_close();
-            clear();
-        }
+        puts("notes: Notes is a desktop window now, run gui and click it in the dock\n"); /* 2.0 gate 5: no blocking launch from the text shell */
     }
     else if (!strcmp(line, "gfxtest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }

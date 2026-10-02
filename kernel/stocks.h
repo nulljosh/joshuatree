@@ -1,8 +1,7 @@
 /* Stocks data side. The UI is user/stocks.c, a ring-3 program; this file only
    fetches and parses. Quotes and chart closes come from the site's HTTPS Worker
    bridge (/api/stocks?range=N). After every fetch stocks_write_file leaves
-   STOCKS.TXT for the app, and stocks_ring3_open (kernel.c) decodes its exit
-   status (16 + sel*5 + range, +64 to refresh) to refetch and relaunch. */
+   STOCKS.TXT for the app, and the desktop loop refetches on a SYS_REFRESH request (398). */
 
 #define STOCKS_MAX 8
 #define STOCKS_SYMBOL_MAX 8
@@ -83,6 +82,7 @@ static void stocks_write_file(int range, int sel) {
         *o++ = '\n';
     }
     vfs_replace_file("STOCKS.TXT", b, (unsigned int)(o - b));
+    jt_data_stamp++;
     kfree(b);
 }
 /* stkhost=HOST:PORT on the multiboot command line points the fetch at a fake
@@ -149,23 +149,12 @@ static void stocks_format_change(int x100, int *out_dollars, int *out_cents, int
     *out_cents = x100 % 100;
 }
 
-/* The dock's Stocks. The app exits with 16 + sel*5 + range (+64 to refresh);
-   a refresh or a changed range makes the kernel refetch and start it again.
-   Any other status (0 for Esc, a negative crash) is back to the desktop. */
+/* The dock's Stocks, blocking fallback only (a full window table). The window asks for a
+   refetch with SYS_REFRESH (range | sel << 8); here it fetches once and runs once. */
 int stocks_ring3_run(void);
 static int stx_range_hint;
 static void stocks_ring3_open(void){
-    int again, fetched = -1;
     stx_range_hint = 0; stx_sel_hint = 0;
-    do {
-        if (fetched != stx_range_hint || ticks() - stx_refresh_tick >= 6000) { stocks_fetch(stx_range_hint); fetched = stx_range_hint; }
-        else stocks_write_file(stx_range_hint, stx_sel_hint);
-        int st = stocks_ring3_run();
-        again = st >= 16 && st < 16 + 64 + STOCKS_MAX * 5;
-        if (again) {
-            int v = st - 16, refresh = v >= 64; if (refresh) v -= 64;
-            stx_sel_hint = v / 5; stx_range_hint = v % 5;
-            if (refresh) fetched = -1;
-        }
-    } while (again);
+    stocks_fetch(0);
+    stocks_ring3_run();
 }

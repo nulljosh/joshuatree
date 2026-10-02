@@ -158,13 +158,11 @@ static int ring3app_seed(const struct ring3_app *a) {
    into a framebuffer that exists only in its own directory, and gets its
    keys and clicks from the window's event ring, never from a global key
    pull. Returns the task id for kernel.c's window row, or -1, in which
-   case the caller falls back to the blocking path. */
+   case the caller refuses the open (gui_refuse_open). */
 static const char *r3w_file[TASK_SLOTS];
 int jt_phone_mode(void); /* kernel.c: boot_to_phone */
 int ring3app_launch_window(const char *name, unsigned int w, unsigned int h) {
     const struct ring3_app *a = 0;
-    /* Stocks also exits to be relaunched for a fresh quote fetch. */
-    if (name[0] == 'S' && name[1] == 't' && name[2] == 'o' && name[3] == 'c' && name[4] == 'k' && name[5] == 's' && !name[6]) return -1; /* -1 = blocking path; 0 is a valid task id */
     for (unsigned int i = 0; i < sizeof RING3_APPS / sizeof RING3_APPS[0]; i++) {
         const char *p = RING3_APPS[i].name, *q = name;
         while (*p && *p == *q) { p++; q++; }
@@ -181,7 +179,7 @@ int ring3app_launch_window(const char *name, unsigned int w, unsigned int h) {
     if (id >= 0 && !syscall_window_register(id, w, h, image)) { task_kill(id); id = -1; }
     irq_restore(f);
     __asm__ volatile ("sti");
-    if (id < 0) { serial_puts("ring3app: window launch failed, falling back\n"); return -1; }
+    if (id < 0) { serial_puts("ring3app: window launch failed, refused\n"); return -1; }
     r3w_file[id] = a->file;
     return id;
 }
@@ -213,9 +211,6 @@ void ring3app_window_reaped(int task, int status) {
    every RING3_APPS row can open as a compositor window with no second list. */
 int ring3app_is_windowable(const char *name) {
     if (!name) return 0;
-    /* Weather exits 7 to ask the blocking launcher for a refetch; a window has no such loop. */
-    if (name[0] == 'W' && name[1] == 'e' && name[2] == 'a' && name[3] == 't' && name[4] == 'h' && name[5] == 'e' && name[6] == 'r' && !name[7]) return 0;
-    if (name[0] == 'S' && name[1] == 't' && name[2] == 'o' && name[3] == 'c' && name[4] == 'k' && name[5] == 's' && !name[6]) return 0; /* exits 16+ to ask the blocking launcher for a refetch */
     for (unsigned int i = 0; i < sizeof RING3_APPS / sizeof RING3_APPS[0]; i++) {
         const char *p = RING3_APPS[i].name, *q = name;
         while (*p && *p == *q) { p++; q++; }
@@ -297,12 +292,12 @@ void calendar_ring3_open(void)   { ring3app_launch(&RING3_APPS[16]); }
 void search_ring3_open(void)     { ring3app_launch(&RING3_APPS[17]); }
 void epiphany_ring3_open(void)   { ring3app_launch(&RING3_APPS[18]); }
 void burrow_ring3_open(void)     { ring3app_launch(&RING3_APPS[20]); }
-int  stocks_ring3_run(void)      { return ring3app_launch(&RING3_APPS[21]); } /* exit status, kernel.c's stocks_ring3_open decodes 16 + sel*5 + range (+64 refresh) */
+int  stocks_ring3_run(void)      { return ring3app_launch(&RING3_APPS[21]); } 
 void mail_ring3_open(void)       { ring3app_launch(&RING3_APPS[22]); }
 void terminal_ring3_open(void)   { ring3app_launch(&RING3_APPS[24]); }
 void samantha_ring3_open(void)   { ring3app_launch(&RING3_APPS[25]); } /* 1.9.26: dock slot 6, the shell commands and phone mode */
 void notes_ring3_launch(void)    { ring3app_launch(&RING3_APPS[23]); } /* kernel.c's notes_ring3_open runs the legacy NOTES.TXT migration first */
-int  weather_ring3_run(void)     { return ring3app_launch(&RING3_APPS[19]); } /* exit status, kernel.c's weather_ring3_open loops on 7 */
+int  weather_ring3_run(void)     { return ring3app_launch(&RING3_APPS[19]); } 
 
 /* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
    run user/fbpoke.c with no window: it must be refused a pointer into

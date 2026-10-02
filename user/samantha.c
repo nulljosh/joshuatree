@@ -409,11 +409,14 @@ static int chat(void) {
 /* ---- TOOLS SLICE: chat_run_tool from kernel/chat.h, through the file syscalls ---- */
 
 static void sertool(const char *tool, const char *res) {
-    jt_write(1, "chattool=", 9);
-    jt_write(1, tool, (unsigned)slen(tool));
-    jt_write(1, ":", 1);
-    jt_write(1, res, (unsigned)slen(res));
-    jt_write(1, "\n", 1);
+    /* one write, one serial line: a split write lands as separate "syscall: write(1)" lines and the chattool= marker never reads whole */
+    char b[320]; int l = 0; const char *t = "chattool=";
+    while (*t) b[l++] = *t++;
+    while (*tool && l < 60) b[l++] = *tool++;
+    b[l++] = ':';
+    while (*res && l < 318) { char c = *res++; b[l++] = (c == '\n' || c == '\r') ? ' ' : c; }
+    b[l++] = '\n';
+    jt_write(1, b, (unsigned)l);
 }
 static int streq(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
 static int starts(const char *s, const char *p) { while (*p) if (*s++ != *p++) return 0; return 1; }

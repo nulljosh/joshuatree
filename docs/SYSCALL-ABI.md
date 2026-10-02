@@ -449,7 +449,7 @@ changes.
 | # | Name | ebx | ecx | Returns |
 |---|---|---|---|---|
 | 384 | `window_open` | `struct jt_window_info *` | 0 | 0, or -errno |
-| 385 | `window_poll` | `struct jt_event *` | flags | 1 with an event written, -EAGAIN with none, or -errno |
+| 385 | `window_poll` | `struct jt_event *` | flags | 1 with an event written, -EAGAIN with none, or -errno. A compositor window drains its own event ring; the global-keyboard pull is used only by the blocking launch (phone grid, Apps folder, text shell), never by a desktop window. |
 
 ```c
 struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
@@ -801,6 +801,7 @@ and 394 are the audio calls.
 | # | Name | ebx | ecx | edx | Returns |
 |---|---|---|---|---|---|
 | 397 | `brk` | new top, or 0 | 0 | 0 | the heap top after the call, or -errno |
+| 398 | `refresh` | kind (0 weather, 1 stocks) | stocks: range \| sel << 8 | 0 | 0, -EINVAL (bad kind, range, selection) or -EBUSY (one request already pending). Only records the request; the desktop loop fetches outside the gate, rewrites `WEATHER.TXT` / `STOCKS.TXT` and bumps `jt_sysinfo.data_stamp`, which the window polls. |
 
 A program's image window (`JT_USER_IMAGE_PAGES`, 128 KB) is fixed and
 kmalloc'd per running window, so it is the wrong place for anything big.

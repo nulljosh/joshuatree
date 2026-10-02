@@ -26,7 +26,7 @@ void curbfind_ring3_open(void);
 void calendar_ring3_open(void);
 void search_ring3_open(void);
 void epiphany_ring3_open(void);
-int  weather_ring3_run(void);   /* runs user/weather.c, returns its exit status (7 = refetch and run again) */
+int  weather_ring3_run(void);   /* runs user/weather.c, returns its exit status */
 void weather_ring3_open(void);
 int  stocks_ring3_run(void);     /* runs user/stocks.c, returns its exit status (16 + sel*5 + range, +64 refresh) */
 

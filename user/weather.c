@@ -8,9 +8,9 @@
  * WEATHER.TXT, and this program only reads that file through plain open and
  * read. One "key value" line per field, the five days as "d weekday code hi lo".
  *
- * R draws "Fetching...", then exits with status 7. The kernel's launcher sees
- * the 7, fetches again and starts this program again, so a retry needs no new
- * syscall. Esc exits 0. The window shows one of three honest faces: live,
+ * R draws "Fetching..." and calls SYS_REFRESH; the desktop loop refetches, rewrites
+ * the file and bumps jt_sysinfo.data_stamp, which this program polls to reload and
+ * redraw. Esc exits 0. The window shows one of three honest faces: live,
  * the last good reading (labelled stale), or a labelled sample. It writes
  * "wxwin=" and "wxrow=" lines that tools/checks/weather-app-check.sh reads.
  *
@@ -29,7 +29,6 @@
 #define CLOUD  0x00B9AEA6
 #define ERRC   0x009A3B2E
 #define DAYS   5
-#define RETRY  7
 
 static struct jt_window_info win JT_DATA;
 static char file[640] JT_DATA, err[48] JT_DATA, city[40] JT_DATA, word[16] JT_DATA, state[12] JT_DATA;
@@ -111,6 +110,7 @@ static int num(const char **p) {
 static void copy(char *d, int max, const char *s) { int n = 0; while (*s && *s != '\n' && n < max - 1) d[n++] = *s++; d[n] = 0; }
 static int is(const char *l, const char *k) { int n = slen(k); for (int i = 0; i < n; i++) if (l[i] != k[i]) return 0; return l[n] == ' '; }
 static void load(void) {
+    nd = 0; err[0] = 0;
     int fd = jt_open("WEATHER.TXT", JT_O_RDONLY), n = fd < 0 ? 0 : jt_read(fd, file, sizeof file - 1);
     if (fd >= 0) jt_close(fd);
     file[n < 0 ? 0 : n] = 0;
@@ -212,12 +212,18 @@ void _start(int argc, char **argv) {
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "weather: no window\n", 19); jt_exit(1); }
     load();
     draw();
+    struct jt_sysinfo si;
+    unsigned stamp = 0;
+    if (jt_sysinfo(&si) > 0) { stamp = si.data_stamp; if (!si.wx_state) { jt_refresh(JT_REFRESH_WEATHER, 0); } }
     struct jt_event ev;
     unsigned flags = JT_POLL_PRESENT;
     for (;;) {
         int r = jt_window_poll(&ev, flags);
         flags = 0;
-        if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
+        if (r == -11 /* -EAGAIN */) {
+            if (jt_sysinfo(&si) > 0 && si.data_stamp != stamp) { stamp = si.data_stamp; fetching = 0; load(); draw(); flags = JT_POLL_PRESENT; }
+            jt_sched_yield(); continue;
+        }
         if (r != 1) break;
         if (ev.kind == JT_EV_CLICK && (ev.a < 0 || ev.b < 0 || ev.a >= (int)win.width || ev.b >= (int)win.height)) break; /* chrome X or dock */
         if (ev.kind == JT_EV_KEY) {
@@ -226,7 +232,8 @@ void _start(int argc, char **argv) {
             if (ev.a == 'r' || ev.a == 'R') {
                 fetching = 1; draw();
                 jt_window_poll(&ev, JT_POLL_PRESENT); /* put "Fetching..." on screen before the kernel blocks on the network */
-                jt_exit(RETRY);
+                jt_refresh(JT_REFRESH_WEATHER, 0);
+                continue;
             }
         }
         flags = JT_POLL_PRESENT;
