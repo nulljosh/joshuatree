@@ -6,13 +6,13 @@ Grading session to push the portfolio demo from B+ to A+. The focus is sharpness
 
 ## Where things stand
 
-Sharpness push in flight. Merged #333 (ARCHITECTURE.md covers all 159 units, docs 100%). Merged #335 (framebuffer maps to device pixels, no resampling blur). PR #334 pending CI (ring-3 apps get real anti-aliased text via SYS_TEXT syscall 389; Epiphany footer overlap fixed). PR #336 pending CI (all 18 ring-3 apps moved to SYS_TEXT with word-boundary wrapping). Portfolio site moved Classic/Apps links away from the menu bar logo. Demo graded B+ to A-. Open issues: 1px stray line across the menu bar; long waits on the 15-20 minute local CI suite (primary time sink).
+Sharpness push live. Merged #333 (ARCHITECTURE.md covers all 159 units, docs 100%), #335 (framebuffer maps to device pixels, no blur), #334 (1.9.23 live, ring-3 apps get SYS_TEXT syscall). PR #336 (1.9.24, all 18 apps AA text with word wrap) in CI, auto-merge on. PR #338 (1.9.25, menu bar line fix - putc was writing to 0xB8000 while graphics was up, v86 aliased it to framebuffer) stacked on #336, auto-merge on. Portfolio site moved Classic/Apps away from menu bar. Demo graded A-, will be A once #336/#338 merge. Loop stopped per Joshua's request.
 
 ## Next, in order
 
-1. Fix the 1px menu bar line (agent in flight).
-2. Re-grade the portfolio demo for A+ (text sharpness, Launchpad icons, dock legibility).
-3. If A+ achieved, stop. If not, identify the worst remaining gap and fix it, then re-grade.
+1. Both PRs merge and deploy.
+2. Regrade live demo for A+.
+3. Confirm Launchpad crispness 1:1 pixels and any text the user flags; gap to A+ is there.
 
 ## Restart prompt
 
