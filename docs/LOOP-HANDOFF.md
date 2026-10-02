@@ -16,10 +16,10 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-Checkpoint 2026-10-01. Weather went to ring 3 in 1.9.22, so 20 of 26 apps run in ring 3. 1.9.23 added the window path (`exec_user_window`, `paging_task_map_private`, `r3wins` in syscall.c, `gui_ring3_windowed` in kernel.c): a ring-3 program as a compositor window with private memory and per-window input. Reminders is on it; the rest are one row each, and Burrow, Notes and Mail can now leave the kernel without losing multi-window.
+Checkpoint 2026-10-01. 1.9.24 has 23 of 26 apps in ring 3 (Burrow, Stocks and Mail joined Weather), and every ring-3 app opens as a window except Weather and Stocks. 1.9.23 added the window path (`exec_user_window`, `paging_task_map_private`, `r3wins` in syscall.c, `gui_ring3_windowed` in kernel.c): a ring-3 program as a compositor window with private memory and per-window input. Reminders is on it; the rest are one row each, and Burrow, Notes and Mail can now leave the kernel without losing multi-window.
 
-- In ring 3: Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind, Calendar, Search, Epiphany, Weather.
-- Still in the kernel: Burrow (was Files), Mail, Notes, Terminal, Samantha, Stocks.
+- In ring 3: Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind, Calendar, Search, Epiphany, Weather, Burrow, Stocks, Mail.
+- Still in the kernel: Notes, Terminal, Samantha.
 - Gate item 4 (crash every app) is done for all ring-3 apps. The check parses `RING3_APPS`, so a new port is covered on its own.
 - New syscalls: 386 tasks, 387 http_get (Curbfind, Epiphany), 388 readdir (Search, for Files next).
 - The 1.9.14 PR also carries the landing work: chat bar on phones, icon buttons, QA fixes, Tech specs, the footer directory.

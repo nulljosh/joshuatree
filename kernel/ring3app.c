@@ -158,6 +158,8 @@ static const char *r3w_file[TASK_SLOTS];
 int jt_phone_mode(void); /* kernel.c: boot_to_phone */
 int ring3app_launch_window(const char *name, unsigned int w, unsigned int h) {
     const struct ring3_app *a = 0;
+    /* Stocks also exits to be relaunched for a fresh quote fetch. */
+    if (name[0] == 'S' && name[1] == 't' && name[2] == 'o' && name[3] == 'c' && name[4] == 'k' && name[5] == 's' && !name[6]) return -1; /* -1 = blocking path; 0 is a valid task id */
     for (unsigned int i = 0; i < sizeof RING3_APPS / sizeof RING3_APPS[0]; i++) {
         const char *p = RING3_APPS[i].name, *q = name;
         while (*p && *p == *q) { p++; q++; }
@@ -200,6 +202,21 @@ void ring3app_window_reaped(int task, int status) {
     if (status < 0 && -status < 32) { serial_puts(" crashed ("); serial_puts(EXC_SHORT[-status]); serial_puts("), window torn down, desktop alive\n"); }
     else { serial_puts(" exited "); serial_puts(num); serial_puts(", window torn down, desktop alive\n"); }
     if (task >= 0 && task < TASK_SLOTS) r3w_file[task] = 0;
+}
+
+/* 1.9.24: kernel.c asks here whether an APPS[] name is a ring-3 program, so
+   every RING3_APPS row can open as a compositor window with no second list. */
+int ring3app_is_windowable(const char *name) {
+    if (!name) return 0;
+    /* Weather exits 7 to ask the blocking launcher for a refetch; a window has no such loop. */
+    if (name[0] == 'W' && name[1] == 'e' && name[2] == 'a' && name[3] == 't' && name[4] == 'h' && name[5] == 'e' && name[6] == 'r' && !name[7]) return 0;
+    if (name[0] == 'S' && name[1] == 't' && name[2] == 'o' && name[3] == 'c' && name[4] == 'k' && name[5] == 's' && !name[6]) return 0; /* exits 16+ to ask the blocking launcher for a refetch */
+    for (unsigned int i = 0; i < sizeof RING3_APPS / sizeof RING3_APPS[0]; i++) {
+        const char *p = RING3_APPS[i].name, *q = name;
+        while (*p && *p == *q) { p++; q++; }
+        if (!*p && !*q) return 1;
+    }
+    return 0;
 }
 
 static int ring3app_launch(const struct ring3_app *a) {
@@ -330,6 +347,9 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='e' && pc[7]=='a' && pc[8]=='r') { ring3app_autoopen_slot = 21; serial_puts("autoopen=search\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='e' && pc[6]=='p' && pc[7]=='i' && pc[8]=='p') { ring3app_autoopen_slot = 22; serial_puts("autoopen=epiphany\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='w' && pc[6]=='e' && pc[7]=='a' && pc[8]=='t') { ring3app_autoopen_slot = 7; serial_puts("autoopen=weather\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='b' && pc[6]=='u' && pc[7]=='r' && pc[8]=='r') { ring3app_autoopen_slot = 0; serial_puts("autoopen=burrow\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='m' && pc[6]=='a' && pc[7]=='i' && pc[8]=='l') { ring3app_autoopen_slot = 1; serial_puts("autoopen=mail\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='t' && pc[7]=='o' && pc[8]=='c') { ring3app_autoopen_slot = 20; serial_puts("autoopen=stocks\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
     }
 }

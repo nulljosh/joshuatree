@@ -94,9 +94,7 @@ static void set_view(int v) {
     if (fd < 0) return;
     jt_write(fd, b, 7);
     jt_close(fd);
-    jt_write(1, "burrow: saved view=", 19);
-    jt_write(1, &b[5], 1);
-    jt_write(1, "\n", 1);
+    jt_write(1, v ? "burrow: saved view=1\n" : "burrow: saved view=0\n", 21); /* one write: the kernel logs each write as its own serial line */
 }
 static void say_cwd(void) {
     char b[JT_PATH_MAX + 32];
