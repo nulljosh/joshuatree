@@ -1,40 +1,35 @@
-# The Joshua tree mark, 2.0: four kinked arms that taper toward the tips, dense engraved
-# tufts (tapered spikes, two rings, longest upward), a flared trunk and a ground line.
+# The Joshua tree mark, 2.0 (second pass): one solid silhouette from a few primitives.
+# Four tapered arms (quadratic arcs, one weight narrowing into the trunk), a flared trunk,
+# a hub, and a crisp fan of nine tapered blades on a shared arc at each tip, hub circle included.
 # Settlers named the tree for Joshua raising his hands to the sky. Run from the repo root.
-import math, random
+import math
 ink = "#161513"
-def tuft(x, y, r, rng):
+def arm(p0, c, p1, w0, w1, n=24):
+    pts = [((1-t)**2*p0[0]+2*(1-t)*t*c[0]+t*t*p1[0], (1-t)**2*p0[1]+2*(1-t)*t*c[1]+t*t*p1[1]) for t in (i/n for i in range(n+1))]
+    l, r = [], []
+    for i, (x, y) in enumerate(pts):
+        a, b = pts[max(i-1, 0)], pts[min(i+1, n)]
+        dx, dy = b[0]-a[0], b[1]-a[1]; d = math.hypot(dx, dy)
+        h = (w0 + (w1-w0)*i/n) / 2
+        l.append((x - dy/d*h, y + dx/d*h)); r.append((x + dy/d*h, y - dx/d*h))
+    return "M" + "L".join(f"{x:.2f} {y:.2f}" for x, y in l + r[::-1]) + "Z"
+def tuft(x, y, R, tilt):
     o = []
-    n = 34
+    n = 9
     for i in range(n):
-        a = math.radians(i * 360 / n - 90 + rng.uniform(-3, 3))
-        up = -math.sin(a)
-        L = r * (0.8 + 0.4 * max(up, 0)) if up > -0.3 else r * 0.55
-        L *= rng.uniform(0.82, 1.12)
-        hw = 0.95
-        px, py = -math.sin(a) * hw, math.cos(a) * hw
-        bx, by = x + math.cos(a) * 2.5, y - up * 2.5
-        o.append(f'M{bx+px:.2f} {by-py:.2f}L{x+math.cos(a)*L:.2f} {y-up*L:.2f}L{bx-px:.2f} {by+py:.2f}Z')
-    for i in range(17):  # shorter inner ring of tapered spikes fills the gaps
-        a = math.radians(i * 360 / 17 - 80)
-        up = -math.sin(a); L = r * 0.62 * (1 if up > -0.3 else 0.7)
-        px, py = -math.sin(a) * 0.8, math.cos(a) * 0.8
-        o.append(f'M{x+px:.2f} {y-py:.2f}L{x+math.cos(a)*L:.2f} {y-up*L:.2f}L{x-px:.2f} {y+py:.2f}Z')
-    return o
-def build(arms, trunk, name, tuft_r):
-    rng = random.Random(20)
-    o = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">', f'<path d="{trunk}" fill="{ink}"/>']
-    for pts, w in arms:
-        n = len(pts) - 1
-        for i in range(n):
-            (x0, y0), (x1, y1) = pts[i], pts[i + 1]
-            sw = w
-            o.append(f'<path d="M{x0} {y0}L{x1} {y1}" fill="none" stroke="{ink}" stroke-width="{sw:.2f}" stroke-linecap="round" stroke-linejoin="round"/>')
-    for pts, w in arms:
-        x, y = pts[-1]
-        o.append(f'<path d="{"".join(tuft(x, y, tuft_r, rng))}" fill="{ink}"/>')
-        o.append(f'<circle cx="{x}" cy="{y}" r="3.4" fill="{ink}"/>')
-    o.append(f'<path d="M20 97.5H80" stroke="{ink}" stroke-width="1.3" stroke-linecap="round"/>')
+        a = math.radians(tilt - 90 + (i - (n-1)/2) * 24)  # fan of blades on one arc
+        L = R * (1.0 if abs(i-(n-1)/2) < 3.5 else 0.9)
+        px, py = -math.sin(a)*2.3, math.cos(a)*2.3
+        o.append(f'M{x+px:.2f} {y+py:.2f}L{x+math.cos(a)*L:.2f} {y+math.sin(a)*L:.2f}L{x-px:.2f} {y-py:.2f}Z')
+    return "".join(o)
+def build(name):
+    o = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">']
+    o.append(f'<path d="M37 96C44 91 45 76 45.5 62L54.5 62C55 76 56 91 63 96Z" fill="{ink}"/>')
+    tips = [((50,66),(30,66),(22,50),7,4.2,-35), ((49,62),(40,46),(35,31),7,4.2,-12),
+            ((51,62),(60,46),(65,31),7,4.2,12), ((50,66),(70,66),(78,50),7,4.2,35)]
+    for p0, c, p1, w0, w1, tilt in tips:
+        o.append(f'<path d="{arm(p0, c, p1, w0, w1)}" fill="{ink}"/>')
+        o.append(f'<path d="{tuft(p1[0], p1[1], 14, tilt)}" fill="{ink}"/><circle cx="{p1[0]}" cy="{p1[1]}" r="4.6" fill="{ink}"/>')
+    o.append(f'<circle cx="50" cy="65" r="5.6" fill="{ink}"/>')
     o.append('</svg>'); open(name, "w").write("".join(o))
-trunk = "M41 96.5C45 90 46 72 47 62L54 62C54 72 55 90 59 96.5Z"
-build([([(50,68),(36,64),(30,52),(20,48)],6), ([(49,62),(44,48),(36,40),(34,26)],6), ([(51,60),(56,44),(62,34),(60,20)],6), ([(51,66),(66,62),(74,50),(84,46)],6)], trunk, "landing/logo.svg", 12.5)
+build("landing/logo.svg")
