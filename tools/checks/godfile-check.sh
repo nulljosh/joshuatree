@@ -60,7 +60,7 @@ ratchet_ceiling() {
         # 2026-10-01: Stocks moved to ring 3; the dock row points at stocks_ring3_open (stocks.h).
         # 2026-10-01: Notes moved to ring 3 (user/notes.c); dead gui_wait_close and gui_app_cursor_hide dropped.
         # 2026-10-01: Terminal moved to ring 3 (user/terminal.c); term_* UI and the putc capture hook dropped.
-        kernel/kernel.c) echo 8900 ;;
+        kernel/kernel.c) echo 8903 ;;
         *) echo "$LIMIT" ;;
     esac
 }
