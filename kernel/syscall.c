@@ -56,6 +56,7 @@ typedef int (*syscall_fn)(u32 a, u32 b, u32 c);
 extern void syscall_entry(void);
 int syscall_stress_on; /* 1.9.23: set by r3stress_arm when the command line says stress=r3 */
 void r3stress_syscall_round(void);
+extern int pde_stress_on; void pdestress_syscall_round(void); /* 1.9.24: stress=pde */
 static void window_release(int id); /* v3 windows, below */
 static int window_owned(void);
 
@@ -678,6 +679,7 @@ static int sys_window_poll(u32 ev, u32 flags, u32 c) {
     struct r3win *r = r3win_of(task_current());
     if (r) {
         if (syscall_stress_on) r3stress_syscall_round(); /* 1.9.23: stress=r3 boot flag, see r3stress.c */
+        if (pde_stress_on) pdestress_syscall_round(); /* 1.9.24: stress=pde, touches heap mapped after this task was born */
         if (flags & JT_POLL_PRESENT) r->dirty = 1;
         if (r->rh == r->rt) return -EAGAIN;
         struct jt_event *out = (struct jt_event *)ev;
