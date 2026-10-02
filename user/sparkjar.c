@@ -72,6 +72,7 @@ static void glyph(unsigned char ch, int x, int y, unsigned fg) {
     }
 }
 static int text(const char *s, int x, int y, unsigned fg) {
+    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return x + w; } /* SYS_TEXT; bitmap only if its queue is full */
     for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
     return x;
 }
@@ -94,22 +95,13 @@ static void sj_sort(void) {
     for (int i = 0; i < SJ_COUNT; i++) if (sj_order[i] == sel_idea) { sj_sel = i; break; }
 }
 
-/* Word-wrap the plan into the info column, one glyph row per line. */
+/* Word-wrap the plan into the info column on the real advance. */
 static void sj_wrap(const char *s, int x, int y, int max_w, int max_h) {
-    int cols = max_w / 8, col = 0, y0 = y;
-    if (cols < 8) return;
-    while (*s && y + 16 <= y0 + max_h) {
-        int wl = 0;
-        while (s[wl] && s[wl] != ' ') wl++;
-        if (col > 0 && col + 1 + wl > cols) { col = 0; y += 18; if (y + 16 > win.height) return; }
-        if (col > 0) col++;
-        for (int i = 0; i < wl; i++) { glyph((unsigned char)s[i], x + (col + i) * 8, y, INK); }
-        col += wl; s += wl;
-        while (*s == ' ') s++;
-    }
+    if (max_h >= 16) jt_wrap(s, x, y, max_w, 18, (max_h - 16) / 18 + 1, INK);
 }
 
 static void sj_draw(void) {
+    jt_text_clear();
     int w = (int)win.width, h = (int)win.height;
     rect(0, 0, w, h, BG);
     text("up/down or click to select   u upvotes   esc closes", 20, 20, HINT);

@@ -69,6 +69,7 @@ static void glyph(unsigned char ch, int x, int y, int sc, unsigned fg) {
         }
 }
 static void text(const char *s, int x, int y, int sc, unsigned fg) {
+    if (sc == 1 && jt_text(s, x, y, fg, JT_TEXT_DRAW) >= 0) return; /* SYS_TEXT; scaled text stays bitmap */
     for (; *s; s++, x += 8 * sc) glyph((unsigned char)*s, x, y, sc, fg);
 }
 static int utoa10(unsigned v, char *buf) {
@@ -88,6 +89,7 @@ static void say(const char *pfx, unsigned v) { /* one line, one write: what the 
 static void two(char *b, int v) { b[0] = (char)('0' + v / 10); b[1] = (char)('0' + v % 10); }
 
 static void draw(unsigned now) {
+    jt_text_clear();
     unsigned sod = now % 86400u;
     char buf[12];
     two(buf, (int)(sod / 3600)); buf[2] = ':';

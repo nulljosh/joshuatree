@@ -65,6 +65,7 @@ static void glyph(unsigned char ch, int x, int y, unsigned fg) {
     }
 }
 static void text(const char *s, int x, int y, unsigned fg) {
+    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
     for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
 }
 static int utoa10(unsigned v, char *buf) {
@@ -188,6 +189,7 @@ static void calc_format_result(double result, char *buf, int max) {
 }
 
 static void calc_draw(void) {
+    jt_text_clear();
     rect(0, 0, (int)win.width, (int)win.height, BG);
     text("expr: + - * / ( ) enter evaluate  esc closes", 20, 20, HINT);
     rect(20, 44, (int)win.width - 40, 20, BOX);

@@ -78,6 +78,7 @@ static void glyph(unsigned char ch, int x, int y, unsigned fg) {
     }
 }
 static void text(const char *s, int x, int y, unsigned fg) {
+    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
     for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
 }
 static int utoa10(unsigned v, char *buf) {
@@ -88,24 +89,13 @@ static int utoa10(unsigned v, char *buf) {
     return n;
 }
 
-/* Word-wraps s into 8px-wide glyphs across max_w px, top-left at (x, y),
- * one 16px line per row, same shape as kernel.c's render_wrapped_text but
- * self-contained: this binary has no kernel statics to call into. */
+/* Word-wraps s across max_w px on the real advance, 20px per line. */
 static void wrap_text(const char *s, int x, int y, int max_w, unsigned fg) {
-    int cols = max_w / 8;
-    if (cols < 1) cols = 1;
-    int cx = 0, cy = y;
-    while (*s) {
-        int wlen = 0;
-        while (s[wlen] && s[wlen] != ' ') wlen++;
-        if (cx > 0 && cx + wlen > cols) { cx = 0; cy += 20; }
-        for (int i = 0; i < wlen; i++) { glyph((unsigned char)s[i], x + cx * 8, cy, fg); cx++; }
-        s += wlen;
-        if (*s == ' ') { s++; if (cx + 1 <= cols) cx++; else { cx = 0; cy += 20; } }
-    }
+    jt_wrap(s, x, y, max_w, 20, 40, fg);
 }
 
 static void hq_draw(void) {
+    jt_text_clear();
     rect(0, 0, (int)win.width, (int)win.height, BG);
 
     int ctr_y = (int)win.height / 2 - 60;

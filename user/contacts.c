@@ -78,6 +78,7 @@ static void glyph(unsigned char ch, int x, int y, int sc, unsigned fg) {
         }
 }
 static void text(const char *s, int x, int y, int sc, unsigned fg) {
+    if (sc == 1 && jt_text(s, x, y, fg, JT_TEXT_DRAW) >= 0) return; /* SYS_TEXT; scaled text stays bitmap */
     for (; *s; s++, x += 8 * sc) glyph((unsigned char)*s, x, y, sc, fg);
 }
 static int utoa10(unsigned v, char *buf) {
@@ -164,6 +165,7 @@ static int visible_rows(void) {
 }
 
 static void draw(void) {
+    jt_text_clear();
     rect(0, 0, (int)win.width, (int)win.height, BG);
     if (mode == 2) {
         static const char *label[3] = {"name (enter to confirm, esc to cancel):", "phone:", "email:"};

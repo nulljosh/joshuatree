@@ -173,6 +173,7 @@ void putc(char c){
         capture_buf[capture_len] = 0;
         return;
     }
+    if (window_is_open()) return; /* v86 maps 0xB8000 onto the framebuffer: console text drew a stray menu-bar line */
     if (c == '\n') { cx = 0; cy++; }
     else if (c == '\b') {
         if (cx) cx--; else if (cy) { cy--; cx = W - 1; }
@@ -195,6 +196,7 @@ void puthex(unsigned int v){
 }
 
 static void clear(void){
+    if (window_is_open()) return;
     for (int i = 0; i < W * H; i++) VGA[i] = (ATTR << 8) | ' ';
     cx = cy = 0; cursor();
 }

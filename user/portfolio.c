@@ -118,6 +118,7 @@ static void glyph(unsigned char ch, int x, int y, unsigned fg) {
     }
 }
 static int text(const char *s, int x, int y, unsigned fg) {
+    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return x + w; } /* SYS_TEXT; bitmap only if its queue is full */
     for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
     return x;
 }
@@ -149,6 +150,7 @@ static void pf_clamp_scroll(int vis_rows) {
 }
 
 static void pf_draw(void) {
+    jt_text_clear();
     int w = (int)win.width, h = (int)win.height;
     int vis_rows = pf_vis_rows();
     pf_clamp_scroll(vis_rows);

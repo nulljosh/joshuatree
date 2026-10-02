@@ -75,31 +75,18 @@ static void glyph(unsigned char ch, int x, int y, unsigned fg) {
     }
 }
 static void text(const char *s, int x, int y, unsigned fg) {
+    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
     for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
 }
 /* Word-wrap at a fixed character count, the monospace stand-in for
    render_wrapped_text's real pixel measure. max_lines caps how much of
    the summary is shown so it never runs off the bottom of the window. */
 static void wrap_text(const char *s, int x, int y, int max_chars, int max_lines, unsigned fg) {
-    int line = 0;
-    while (*s && line < max_lines) {
-        int len = 0, last_space = -1;
-        while (s[len] && len < max_chars) {
-            if (s[len] == ' ') last_space = len;
-            len++;
-        }
-        int cut = (s[len] == 0 || s[len] == ' ') ? len : (last_space >= 0 ? last_space : len);
-        char buf[96]; int n = cut < 95 ? cut : 95;
-        for (int i = 0; i < n; i++) buf[i] = s[i];
-        buf[n] = 0;
-        text(buf, x, y + line * 20, fg);
-        line++;
-        s += cut;
-        while (*s == ' ') s++;
-    }
+    jt_wrap(s, x, y, max_chars * 8, 20, max_lines, fg);
 }
 
 static void br_draw(void) {
+    jt_text_clear();
     rect(0, 0, (int)win.width, (int)win.height, BG);
 
     int items_shown = BR_COUNT;

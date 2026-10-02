@@ -98,6 +98,7 @@ static void glyph(unsigned char ch, int x, int y, unsigned fg) {
     }
 }
 static int text(const char *s, int x, int y, unsigned fg) {
+    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return x + w; } /* SYS_TEXT; bitmap only if its queue is full */
     for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
     return x;
 }
@@ -110,6 +111,7 @@ static int utoa10(unsigned v, char *buf) {
 }
 
 static void tr_draw(void) {
+    jt_text_clear();
     rect(TR_PAD, TR_TOP, tr_w * TR_CELL, tr_h * TR_CELL, BOARD);
     for (int y = 0; y < tr_h; y++) for (int x = 0; x < tr_w; x++)
         if (get(grid_a, y, x)) rect(TR_PAD + x * TR_CELL + 1, TR_TOP + y * TR_CELL + 1, TR_CELL - 2, TR_CELL - 2, INK);

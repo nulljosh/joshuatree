@@ -94,6 +94,7 @@ static void glyph(unsigned char ch, int x, int y, unsigned fg) {
     }
 }
 static int text(const char *s, int x, int y, unsigned fg) {
+    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return x + w; } /* SYS_TEXT; bitmap only if its queue is full */
     for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
     return x;
 }
@@ -114,19 +115,9 @@ static void say(const char *pfx, int a) {
     jt_write(1, line, (unsigned)l);
 }
 
-/* Word-wrap into the info column, one glyph row per line. */
+/* Word-wrap into the info column on the real advance. */
 static void wrap(const char *s, int x, int y, int max_w, int max_h) {
-    int cols = max_w / 8, col = 0, y0 = y;
-    if (cols < 8) return;
-    while (*s && y + 16 <= y0 + max_h) {
-        int wl = 0;
-        while (s[wl] && s[wl] != ' ') wl++;
-        if (col > 0 && col + 1 + wl > cols) { col = 0; y += 18; if (y + 16 > (int)win.height) return; }
-        if (col > 0) col++;
-        for (int i = 0; i < wl; i++) glyph((unsigned char)s[i], x + (col + i) * 8, y, INK);
-        col += wl; s += wl;
-        while (*s == ' ') s++;
-    }
+    if (max_h >= 16 && y + 16 <= (int)win.height) jt_wrap(s, x, y, max_w, 18, (max_h - 16) / 18 + 1, INK);
 }
 
 /* Sort indices by score, descending, the same bubble kernel/curbfind.h ran. */
@@ -171,6 +162,7 @@ static void cf_fetch(void) {
 }
 
 static void cf_draw(void) {
+    jt_text_clear();
     int w = (int)win.width, h = (int)win.height;
     rect(0, 0, w, h, BG);
     if (cf_city[0]) {

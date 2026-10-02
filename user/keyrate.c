@@ -22,7 +22,6 @@
  */
 #include "jtsys.h"
 #include "libjt/string.h"
-#include "../drivers/vgafont.h"
 
 #define BG   0x00FAF8F6
 #define INK  0x001C1C1E
@@ -54,22 +53,9 @@ static void rect(int x, int y, int w, int h, unsigned c) {
     }
 }
 
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (px < 0 || px >= (int)win.width) continue;
-            if (g[r] & (0x80 >> c)) win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
-}
-
+/* SYS_TEXT: the kernel's anti-aliased face; x moves by the real advance. */
 static void text(const char *s, int x, int y, unsigned fg) {
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
+    jt_text(s, x, y, fg, JT_TEXT_DRAW);
 }
 
 static int gen_words(char *buf, int cap, unsigned *rng) {
@@ -135,9 +121,26 @@ void _start(int argc, char **argv) {
     for (;;) {
         rect(20, 60, W - 40, H - 100, BG);
         rect(20, H - 30, W - 40, 16, BG);
-        for (int i = 0, x = 20, y = 60; i < tlen; i++, x += 8) {
-            if (x + 8 > W - 20) { x = 20; y += 16; }
-            glyph((unsigned char)target[i], x, y, i < pos ? DONE : INK);
+        jt_text_clear();
+        /* Lay the target out by word, on the real advance, so a word never
+           splits across lines. The typed part is drawn in DONE, the rest in INK. */
+        for (int i = 0, y = 60; i < tlen; y += 24) {
+            int e = i, last = i;
+            for (;;) {
+                int wl = 0;
+                while (target[e + wl] && target[e + wl] != ' ') wl++;
+                int w = jt_text_n(target + i, e + wl - i, 0, 0, 0, JT_TEXT_MEASURE);
+                if (last > i && w > W - 40) break;
+                last = e + wl; e = last;
+                if (!target[e]) break;
+                e++;                                /* the space */
+            }
+            int d = pos > i ? (pos < last ? pos : last) - i : 0;
+            int x = 20;
+            if (d) x += jt_text_n(target + i, d, x, y, DONE, JT_TEXT_DRAW);
+            if (last - i - d > 0) jt_text_n(target + i + d, last - i - d, x, y, INK, JT_TEXT_DRAW);
+            i = last;
+            while (target[i] == ' ') i++;
         }
         if (started) {
             unsigned t = 0; jt_time(&t);
