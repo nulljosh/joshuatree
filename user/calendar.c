@@ -85,7 +85,7 @@ static void cal_ymd_from_epoch(unsigned t, int *y, int *m, int *d){
 #ifndef CALENDAR_MATH_ONLY
 
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define T (-32) /* calendar.h's gui_app_dy() inside a dock window: same offsets, same pixels */
 
@@ -127,7 +127,7 @@ static int editing JT_DATA = 0;
 static char entry[EVENT_TEXT_MAX] JT_DATA = {0};
 static int entry_len JT_DATA = 0;
 
-/* ---- drawing, the 8x16 VGA font and a few shapes ---- */
+/* ---- drawing: antialiased libjt text and a few shapes ---- */
 static void rect(int x, int y, int w, int h, unsigned c) {
     if (x < 0) { w += x; x = 0; }
     if (y < 0) { h += y; y = 0; }
@@ -142,31 +142,9 @@ static void put(int x, int y, unsigned c) {
     if (x < 0 || x >= (int)win.width || y < 0 || y >= (int)win.height) return;
     win.pixels[(unsigned)y * win.width + (unsigned)x] = c;
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++)
-        for (int c = 0; c < 8; c++)
-            if (g[r] & (0x80 >> c)) put(x + c, y + r, fg);
-}
-static void text(const char *s, int x, int y, unsigned fg) {
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
-}
-static int text_w(const char *s) { int n = 0; while (*s++) n++; return n * 8; }
-/* The Year view's digits: the same glyph at half size (4x8), each output
-   pixel the OR of a 2x2 block so thin strokes survive. */
-static void glyph_half(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 8; r++) {
-        unsigned char bits = g[2 * r] | g[2 * r + 1];
-        for (int c = 0; c < 4; c++)
-            if (bits & (0xC0 >> (2 * c))) put(x + c, y + r, fg);
-    }
-}
-static void text_half(const char *s, int x, int y, unsigned fg) {
-    for (; *s; s++, x += 4) glyph_half((unsigned char)*s, x, y, fg);
-}
+static void text(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
+static int text_w(const char *s) { return jt_text_width(JT_FACE_BODY, s); }
+static void text_bold(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BOLD, x, y, fg, s); }
 static void fill_circle(int cx, int cy, int r, unsigned c) {
     for (int dy = -r; dy <= r; dy++)
         for (int dx = -r; dx <= r; dx++)
@@ -178,20 +156,38 @@ static void capsule(int x0, int x1, int cy, int r, unsigned c) {
     fill_circle(x0, cy, r, c);
     fill_circle(x1, cy, r, c);
 }
-/* Word-wrapped text in the 8x16 font, 18px lines, clipped to w by h. */
+/* Word-wrapped text, 18px lines, clipped to w by h. Breaks at word
+   boundaries by pixel width; a word wider than the box is cut with "...". */
 static void wrapped(const char *s, int x, int y, int w, int h, unsigned fg) {
-    int cols = w / 8, lines = h / 18;
-    if (cols < 1 || lines < 1) return;
-    for (int line = 0; *s && line < lines; line++) {
-        int len = 0; /* characters of s that go on this line: whole words while they fit */
+    int lines = h / 18;
+    if (w < 8 || lines < 1) return;
+    char line[96];
+    for (int ln = 0; *s && ln < lines; ln++) {
+        int len = 0;
         for (;;) {
-            int wl = 0; while (s[len + wl] && s[len + wl] != ' ') wl++;
-            if (len && len + 1 + wl > cols) break;
-            if (!len && wl > cols) wl = cols;
-            len = len ? len + 1 + wl : wl;
+            int st = len ? len + 1 : 0; /* where the next word starts, after one space */
+            int we = st; while (s[we] && s[we] != ' ') we++;
+            if (we >= (int)sizeof line - 4) break;
+            for (int i = 0; i < we; i++) line[i] = s[i];
+            line[we] = 0;
+            if (len && text_w(line) > w) break;
+            len = we;
             if (!s[len]) break;
         }
-        for (int i = 0; i < len; i++) glyph((unsigned char)s[i], x + i * 8, y + line * 18, fg);
+        for (int i = 0; i < len; i++) line[i] = s[i];
+        line[len] = 0;
+        if (text_w(line) > w) {
+            while (len > 0) {
+                line[len] = 0;
+                char t[100]; int k = 0;
+                for (int i = 0; i < len; i++) t[k++] = line[i];
+                t[k++] = '.'; t[k++] = '.'; t[k++] = '.'; t[k] = 0;
+                if (text_w(t) <= w) { for (int i = 0; i <= k; i++) line[i] = t[i]; break; }
+                len--;
+            }
+        }
+        text(line, x, y + ln * 18, fg);
+        while (s[len] && s[len] != ' ') len++; /* skip the rest of a cut word */
         s += len;
         while (*s == ' ') s++;
     }
@@ -330,7 +326,7 @@ static void draw_header(void){
 }
 
 static void draw_title(const char *title){
-    text(title, ((int)win.width - text_w(title)) / 2, T + 92, TITLE);
+    text_bold(title, ((int)win.width - jt_text_width(JT_FACE_BOLD, title)) / 2, T + 92, TITLE);
 }
 
 static void draw_month(void){
@@ -442,7 +438,7 @@ static void draw_year(void){
         int cur = mo == vm;
         int col_w = (mw - 16) / 7;
         int gx0 = gx + (mw - col_w * 7) / 2;
-        text(MONTHS[mo - 1], gx0 + 2, gy, cur ? TITLE : HINT);
+        text_bold(MONTHS[mo - 1], gx0 + 2, gy, cur ? TITLE : HINT);
         int row_top = gy + 20, row_h = (mh - 24) / 6;
         if (row_h < 4) row_h = 4;
         int first = cal_dow(vy, mo, 1), n = cal_days_in_month(vy, mo);
@@ -456,9 +452,9 @@ static void draw_year(void){
             int half = row_h / 2;
             if (sel) rect(cx - col_w / 2 + 1, cy - half, col_w - 2, row_h, SEL);
             if (today) fill_circle(cx, cy, half > 1 ? half : 2, ACCENT);
-            if (row_h >= 9) {
-                char num[4]; int nl = cal_put_num(num, 0, d);
-                text_half(num, cx - nl * 4 / 2, cy - 4, fg);
+            char num[4]; cal_put_num(num, 0, d);
+            if (row_h >= 16 && text_w(num) + 2 <= col_w) {
+                text(num, cx - text_w(num) / 2, cy - 8, fg);
             } else if (!today) {
                 rect(cx - 1, cy - 1, 3, 3, fg);
             }
@@ -472,8 +468,12 @@ static void draw(void){
         char ds[CAL_DATE_LEN + 1]; cal_date_str(vy, vm, sel_d, ds);
         text(ds, 20, T + 52, HINT);
         text("type the event, enter saves, esc cancels:", 20, T + 72, HINT);
-        rect(20, T + 96, (int)win.width - 40, 20, WHITE);
-        text(entry, 24, T + 98, INK);
+        rect(20, T + 96, (int)win.width - 40, 24, WHITE);
+        {   const char *tl = entry; /* keep the tail in view */
+            while (*tl && text_w(tl) > (int)win.width - 40 - 24) tl++;
+            int ex = jt_text_draw(&win, JT_FACE_BODY, 26, T + 100, INK, tl);
+            rect(ex + 1, T + 101, 1, 14, INK); /* caret */
+        }
         jt_write(1, "calendarprompt\n", 15); /* one per redraw: what the keystroke checks count */
         return;
     }

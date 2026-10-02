@@ -17,13 +17,12 @@
  * machine only through int 0x80: SYS_WINDOW_OPEN for a framebuffer,
  * SYS_WINDOW_POLL for input and the present, SYS_EXIT to leave.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font, same as Keyrate and
- * Toroid. The backquote key (`) is the deliberate crash, same as both:
+ * Glyphs: antialiased DejaVu via libjt/text.h. The backquote key (`) is the deliberate crash, same as both:
  * a write through a null pointer, a page fault at ring 3, reaped by the
  * kernel. tools/checks/ring3calc-check.py presses it on purpose.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define BOX   0x00FFFFFF
@@ -51,22 +50,7 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (px < 0 || px >= (int)win.width) continue;
-            if (g[r] & (0x80 >> c)) win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
-}
-static void text(const char *s, int x, int y, unsigned fg) {
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
-}
+static int text(const char *s, int x, int y, unsigned fg) { return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
     do { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (v);
@@ -188,14 +172,26 @@ static void calc_format_result(double result, char *buf, int max) {
 }
 
 static void calc_draw(void) {
-    rect(0, 0, (int)win.width, (int)win.height, BG);
-    text("expr: + - * / ( ) enter evaluate  esc to close", 20, 20, HINT);
-    rect(20, 44, (int)win.width - 40, 20, BOX);
-    text(input, 24, 46, INK);
+    int W = (int)win.width, bw = W - 40;
+    rect(0, 0, W, (int)win.height, BG);
+    text("+ - * / ( )   enter evaluates   esc closes", 20, 36, HINT);
+    rect(20, 60, bw, 28, BOX);
+    if (input_len == 0) {
+        text("Type a sum, like 12 * (3 + 4)", 28, 65, HINT);
+        rect(26, 66, 1, 16, INK); /* caret */
+    } else {
+        /* keep the tail in view: drop leading characters until the text fits */
+        const char *t = input;
+        while (*t && jt_text_width(JT_FACE_BODY, t) > bw - 24) t++;
+        int x = text(t, 28, 65, INK);
+        rect(x + 1, 66, 1, 16, INK); /* caret */
+    }
+    rect(20, 104, bw, 56, BOX);
+    text("Result", 28, 110, LABEL);
     if (has_output) {
-        rect(20, 88, (int)win.width - 40, 1, DIV);
-        text("= ", 20, 104, LABEL);
-        text(output, 40, 104, INK);
+        jt_text_draw(&win, JT_FACE_BOLD, 28, 130, INK, output);
+    } else {
+        text("Nothing yet. Press enter.", 28, 130, HINT);
     }
 }
 
