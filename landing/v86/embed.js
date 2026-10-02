@@ -1365,7 +1365,7 @@ if (typeof document !== "undefined") (function () {
   // is keyboard-only below, using exactly the keys each app's own loop
   // actually reads (confirmed per app in kernel.c/mail.h/calendar.h/
   // reminders.h before scripting it, not guessed): typed text for
-  // Notes/Chat/Terminal (unchanged since v51), 'c' + three Enter-
+  // Notes/Chat/Terminal (unchanged since v51), 'c' + four Enter-
   // confirmed fields for Mail's real compose flow, 'd'/']'/Enter for
   // Calendar's real month/day navigation and event-add (a real day
   // still can't be CLICKED in this kernel, there is no per-cell hit test
@@ -1395,9 +1395,11 @@ if (typeof document !== "undefined") (function () {
     { type: 'wait', ms: 500 },
     { type: 'keys', text: 'demo@joshuatree.os\n', speed: 55 },
     { type: 'wait', ms: 350 },
-    { type: 'keys', text: 'A real OS, from scratch.\n', speed: 55 },
+    { type: 'keys', text: 'Joshua Tree\n', speed: 55 }, // From name
     { type: 'wait', ms: 350 },
-    { type: 'keys', text: 'Every field here really writes to disk.\n', speed: 55 },
+    { type: 'keys', text: 'A real OS, from scratch.\n', speed: 55 }, // Subject
+    { type: 'wait', ms: 350 },
+    { type: 'keys', text: 'Every field here really writes to disk.\n', speed: 55 }, // Body; Enter on the last field sends and files it (mail: filed n=)
     { type: 'wait', ms: 1500 },
     { type: 'raw', codes: [27], speed: 80 } // Escape backs out of the inline compose sheet if it is still up; the scene's own Escape then closes Mail
   ] };
