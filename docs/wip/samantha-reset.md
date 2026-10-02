@@ -26,3 +26,15 @@ suspicious: a failed fetch ends the whole clip in face_load_step), then type. Th
    `check_exception` chain before `reset` and map EIP with `nm kernel.elf`.
 2. Add the regression check: window task with a ~2 MB brk heap then a POST-sized syscall (extend tools/checks/ring3brk-check.py), register in
    tools/checks/ci-suite.sh and tools/gen/testing-doc.py.
+
+## 2026-10-01 second pass (15 min): REPRODUCED locally, not yet fixed
+`ln -s ~/Documents/Code/joshuatree/node_modules node_modules` in the worktree, then
+`node tools/checks/facespeak-demo-check.mjs` reproduces the reset in headless Chromium v86 every time:
+the serial shows a second `=== kmain boot start === v2.0.0` (line 101 of samantha-reset-v86-serial.log, saved beside this file).
+Key fact: it resets BEFORE any key is typed. The last serial lines are seven `present` polls after `samfocus`,
+the proxy had served 59 face frames (of 72), and the `face: idle=` line never printed. So the trigger is the
+face loader itself at roughly frame 59, about 1.2 MB into the SYS_BRK heap, not the keyboard.
+Next: instrument kernel/brk.c (serial on every paging_map_region call from frame_ptr, and on each new BRK PDE table)
+plus a serial line in the double-fault handler, rebuild (make kernel.elf copies to landing/v86), rerun the check,
+and read the last line before the reboot. Then write the ring-3 window regression check (brkpoke as a window task
+growing to 2 MB in 20 KB steps, matching her malloc pattern, under QEMU -m 64).

@@ -1,0 +1,325 @@
+serving http://localhost:49492/index.html
+  ok:   window.__jt.ready
+  ok:   clicked dock slot 7 (Chat) at (565,488)
+  ok:   samopen/samfocus markers seen: ring-3 Samantha opened with her input bar focused
+  ok:   AudioContext.state === "running" after the visitor's first real click (unlocked, not autoplayed)
+  FAIL: no "face: idle=" serial marker within 20s of Chat opening -- chat_face_load never ran or never finished
+face serial line: null (face frames served over the intercepted proxy: 59)
+  FAIL: face frames did not load (null); facehost= cmdline or the /face/ proxy path is not reaching the guest
+distinct colors in face box: 4201
+  ok:   window pixels read back (4201 distinct colors in the old face box; the decode itself is proved by the face: idle=N serial line)
+  ok:   typed "what is the capital of france" + Enter straight into her bar
+  FAIL: the demo never made the intercepted POST to /api/chat
+  FAIL: no chatreply= marker within 30s
+--- full serial log (debug) ---
+=== kmain boot start === v2.0.0
+entropy: sources=rdrand,jitter irq
+vga_text_mode_init: text mode 3 programmed
+gdt_install: GDT loaded
+idt_install: IDT loaded
+syscall_install: int 0x80 gate live
+irq_install: PIC remapped, PIT/keyboard IRQs live
+mouse_init: PS/2 mouse enabled
+vmmouse_init: VMware backdoor answered, absolute pointer on
+font_init: CP437 glyphs dumped from VGA hardware
+pmm: ram_mb=63
+pmm_init: physical memory map parsed
+paging_install: higher-half paging active
+tasks_init: scheduler ready
+sb16: found at 0x220, irq 5, dma 1
+sb16_init: Sound Blaster 16 found
+fat_mount: no filesystem found
+vfs: fat + ramfs backends registered, fat active
+vfs: no FAT disk (v86 has none to mount), switched default backend to ramfs with demo files
+present
+backbuffer=ok
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+guidesktop
+wallsrc=satfallback
+menubarredraw
+present
+wxfetch
+dhcp: lease 10.0.2.15 gw 10.0.2.2 dns 10.0.2.2
+wxstate=bad location: HTTP 403
+vmmouse: first absolute packet x=38604 y=59285
+present
+ring3app: launching SAMANTHA.BIN at ring 3 as a window
+exec: started ring-3 window task from VFS
+syscall: window opened for ring-3 task
+fullrepaint
+syscall: write(1) from ring 3: samantha: ring-3 window
+syscall: write(1) from ring 3: samopen
+syscall: write(1) from ring 3: samfocus
+mwchrome
+present
+present
+present
+present
+present
+present
+present
+=== kmain boot start === v2.0.0
+entropy: sources=rdrand,jitter irq
+vga_text_mode_init: text mode 3 programmed
+gdt_install: GDT loaded
+idt_install: IDT loaded
+syscall_install: int 0x80 gate live
+irq_install: PIC remapped, PIT/keyboard IRQs live
+mouse_init: PS/2 mouse enabled
+vmmouse_init: VMware backdoor answered, absolute pointer on
+font_init: CP437 glyphs dumped from VGA hardware
+pmm: ram_mb=63
+pmm_init: physical memory map parsed
+paging_install: higher-half paging active
+tasks_init: scheduler ready
+sb16: found at 0x220, irq 5, dma 1
+sb16_init: Sound Blaster 16 found
+fat_mount: no filesystem found
+vfs: fat + ramfs backends registered, fat active
+vfs: no FAT disk (v86 has none to mount), switched default backend to ramfs with demo files
+present
+backbuffer=ok
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+guidesktop
+wallsrc=satfallback
+menubarredraw
+present
+wxfetch
+dhcp: lease 10.0.2.15 gw 10.0.2.2 dns 10.0.2.2
+wxstate=bad location: HTTP 403
+wind=6t
+vmmouse: first absolute packet x=33645 y=45354
+present
+present
+present
+present
+menubarredraw
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+present
+appsfullrepaint
+appsgridrepaint
+present
+appsgridrepaint
+present
+appsgridrepaint
+present
+
+--- end serial ---
+  FAIL: speak_text never POSTed to /api/speak (Chat replied but never tried to speak it)
+  FAIL: no "speak: status=200" on the guest serial -- sb16_play never got a real 200
+speakers were loud for 0ms of a 5000ms reply
+440Hz heard 0ms, 880Hz heard 0ms
+  FAIL: the reply didn't reach the speakers intact (loud 0ms, 440Hz 0ms, 880Hz 0ms of 2500 each): a long reply played as a beep, a loop or silence
+sb16 mentioned on serial: true
+saved /tmp/jt-facespeak-after.png
+FAIL:
+  - no "face: idle=" serial marker within 20s of Chat opening -- chat_face_load never ran or never finished
+  - face frames did not load (null); facehost= cmdline or the /face/ proxy path is not reaching the guest
+  - the demo never made the intercepted POST to /api/chat
+  - no chatreply= marker within 30s
+  - speak_text never POSTed to /api/speak (Chat replied but never tried to speak it)
+  - no "speak: status=200" on the guest serial -- sb16_play never got a real 200
+  - the reply didn't reach the speakers intact (loud 0ms, 440Hz 0ms, 880Hz 0ms of 2500 each): a long reply played as a beep, a loop or silence
+exit=1
