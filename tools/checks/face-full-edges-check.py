@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Portfolio face: the wall beside his face is one clean color.
+"""Portfolio face: the wall beside his face is clean: flat above his shoulders, his sweater carried sideways below.
 
 Headless only (-display none, never a window). Boots "portfolio samantha"
 with facehost= at a loopback stub serving /face-joshua/ frames whose left
 edge is the worst case: source column 0..1 stripes black and white every 8
 rows, and the bottom-left corner is a dark block (his sweater reaching the
-edge). face_blit_full (kernel/chat_face.h) must paint the side as one flat
-wall color, so the screen left of the frame stays uniform.
+edge). face_blit_full (kernel/chat_face.h) paints the side from a smoothed
+per-row color: the wall rows must come out flat (the stripes averaged away),
+and the sweater rows must carry on dark, with no light seam in between.
 
 Discriminating: the old fill took each row's own edge pixel, so the stripes
 became stripes across the side and the dark corner a dark bar; the spread
@@ -87,11 +88,14 @@ try:
     cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": dump_path}})
     img = Image.frombytes("RGBA", (W, H), open(dump_path, "rb").read(), "raw", "BGRA").convert("RGB")
     # Left of the frame (it starts past x=400 at 1920x1080), above the glass bar.
-    px = [img.getpixel((x, y)) for x in range(10, 300, 20) for y in range(120, 860, 4)]
+    px = [img.getpixel((x, y)) for x in range(10, 300, 20) for y in range(120, 740, 4)]
     spread = max(max(p[i] for p in px) - min(p[i] for p in px) for i in range(3))
     print(f"side wall: {px[0]}, spread {spread}")
     if spread > 8: fails.append(f"the wall beside the face is not one color: channel spread {spread} (stripes or a dark bar)")
     if max(abs(px[0][i] - WALL[i]) for i in range(3)) > 40: fails.append(f"side is not wall-colored: {px[0]}")
+    low = img.getpixel((100, 880))
+    print(f"side below the shoulders: {low}")
+    if max(low) > 90: fails.append(f"the sweater does not carry on beside the face: {low}")
 finally:
     q.kill(); srv.shutdown()
 
