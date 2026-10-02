@@ -9143,7 +9143,7 @@ void kmain(unsigned int multiboot_info_addr){
         const char *cl = (const char *)*(unsigned int *)(multiboot_info_addr + 16);
         const char *cl0 = cl; /* the loop below mutates cl directly; llmhost=/llmport= (further down) need the untouched start */
         for (const char *pc = cl; pc && *pc; pc++)
-            if (pc[0]=='p' && pc[1]=='o' && pc[2]=='r' && pc[3]=='t' && pc[4]=='f' && pc[5]=='o' && pc[6]=='l' && pc[7]=='i' && pc[8]=='o') { portfolio_dock = 1; serial_puts("portfolio dock\n"); break; }
+            if (pc[0]=='p' && pc[1]=='o' && pc[2]=='r' && pc[3]=='t' && pc[4]=='f' && pc[5]=='o' && pc[6]=='l' && pc[7]=='i' && pc[8]=='o') { portfolio_dock = 1; speak_voice = "joshua"; serial_puts("portfolio dock\n"); break; }
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='c' && pc[1]=='l' && pc[2]=='i' && pc[3]=='p' && pc[4]=='t' && pc[5]=='r' && pc[6]=='a' && pc[7]=='c' && pc[8]=='e') { clip_trace = 1; serial_puts("cliptrace\n"); break; }
         for (const char *pc = cl; pc && *pc; pc++)

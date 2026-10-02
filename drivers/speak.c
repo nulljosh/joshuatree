@@ -33,6 +33,10 @@ unsigned int speak_level(unsigned int elapsed_ticks) {
     return win ? sum / win : 0;
 }
 
+/* Whose voice /api/speak uses: "" is Samantha's default, "joshua" his own clone.
+   kernel.c sets it from the command line (portfolio mode is his site). */
+const char *speak_voice = "";
+
 unsigned int speak_text(const char *host, unsigned short port, const char *text,
                         unsigned int timeout_ticks) {
     if (!sb16_present() || !text || !text[0]) return 0;
@@ -48,8 +52,10 @@ unsigned int speak_text(const char *host, unsigned short port, const char *text,
     const char *head = "{\"text\":\"";
     while (*head) body[b++] = *head++;
     b += json_escape(clipped, body + b, sizeof(body) - b - 24);
-    const char *tail = "\",\"format\":\"pcm8\"}";
+    const char *tail = "\",\"format\":\"pcm8\"";
     while (*tail) body[b++] = *tail++;
+    if (speak_voice[0]) { const char *v = ",\"voice\":\""; while (*v) body[b++] = *v++; v = speak_voice; while (*v) body[b++] = *v++; body[b++] = '"'; }
+    body[b++] = '}';
     body[b] = 0;
 
     unsigned char *pcm = kmalloc(SPEAK_AUDIO_MAX);
