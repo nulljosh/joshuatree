@@ -111,6 +111,15 @@ static void say(const char *s, int n) {
     jt_write(1, b, (unsigned)l);
 }
 
+/* A marker with a text tail, in ONE write so the kernel's serial log keeps it on one line. */
+static void say_s(const char *s, const char *t) {
+    char b[80]; int l = 0;
+    while (*s && l < 56) b[l++] = *s++;
+    while (*t && l < 78) b[l++] = *t++;
+    b[l++] = '\n';
+    jt_write(1, b, (unsigned)l);
+}
+
 /* Path of the open folder's directory: "NOTES/<folder>" or "" (flat root). */
 static void folder_path(char *out) {
     out[0] = 0;
@@ -273,9 +282,7 @@ static void edit_open(const char *file) {
     }
     ar->ed[elen] = 0;
     epos = elen; escroll = 0; edirty = 0; goalx = -1; editing = 1; note = 0;
-    say("notes: edit=", -1);
-    jt_write(1, efile, (unsigned)slen(efile));
-    jt_write(1, "\n", 1);
+    say_s("notes: edit=", efile);
 }
 
 static int edit_save(void) {
@@ -376,9 +383,7 @@ static void new_note(void) {
     load_notes();
     for (int i = 0; i < nno; i++) if (seq(ar->no[i].file, f)) { nsel = i; break; }
     focus = 1;
-    say("notes: new=", -1);
-    jt_write(1, f, (unsigned)slen(f));
-    jt_write(1, "\n", 1);
+    say_s("notes: new=", f);
     edit_open(f);
 }
 
@@ -405,9 +410,7 @@ static void new_folder(void) {
     for (int i = 0; i < nfo; i++) if (seq(ar->fo[i].name, name)) { fsel = i; break; }
     nsel = 0;
     load_notes();
-    say("notes: folder=", -1);
-    jt_write(1, name, (unsigned)slen(name));
-    jt_write(1, "\n", 1);
+    say_s("notes: folder=", name);
 }
 
 /* d: delete the selected note. */
@@ -416,9 +419,7 @@ static void delete_note(void) {
     char p[40];
     note_path(p, ar->no[nsel].file);
     if (jt_unlink(p) != 0) { note = "Could not delete the note."; return; }
-    say("notes: deleted=", -1);
-    jt_write(1, ar->no[nsel].file, (unsigned)slen(ar->no[nsel].file));
-    jt_write(1, "\n", 1);
+    say_s("notes: deleted=", ar->no[nsel].file);
     load_notes();
 }
 
