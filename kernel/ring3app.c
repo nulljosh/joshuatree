@@ -395,6 +395,7 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='m' && pc[6]=='a' && pc[7]=='i' && pc[8]=='l') { ring3app_autoopen_slot = 1; serial_puts("autoopen=mail\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='t' && pc[7]=='o' && pc[8]=='c') { ring3app_autoopen_slot = 20; serial_puts("autoopen=stocks\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='n' && pc[6]=='o' && pc[7]=='t' && pc[8]=='e') { ring3app_autoopen_slot = 3; serial_puts("autoopen=notes\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='a' && pc[7]=='m' && pc[8]=='a') { ring3app_autoopen_slot = 6; ring3samantha_on = 1; serial_puts("autoopen=samantha\n"); } /* open=sama implies the ring3samantha flag: the dock slot launches the ring-3 window */
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='t' && pc[6]=='e' && pc[7]=='r' && pc[8]=='m') { ring3app_autoopen_slot = 5; serial_puts("autoopen=terminal\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
         if (pc[0]=='b' && pc[1]=='r' && pc[2]=='k' && pc[3]=='p' && pc[4]=='o' && pc[5]=='k' && pc[6]=='e') { brkpoke_armed = 1; serial_puts("brkpoke armed\n"); }
