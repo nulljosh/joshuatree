@@ -1,4 +1,4 @@
-# Joshua Tree loop handoff (2026-10-01, morning)
+# Joshua Tree loop handoff (2026-10-02, afternoon)
 
 ## What the loop is
 
@@ -18,15 +18,15 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-PR #331 auto-merge armed. Every fix pushed: parser-fuzz host stub, kernel.c ceiling, window-open frame budget, demo checks slowed for CI. GitHub merges automatically when required checks pass (check, check-refs, network). Tag and release come from repo's release workflow. Strata, licence, ad v2, Reception slice 1 folded or on branches. Apple-style plain-English no-version ad NOT done (stopped for usage; swap landing/ad.mp4 after 2.0). Standing rules saved: 30-minute task refresh, security/stability slice between features, ETAs in minutes, no version in ads.
+PR #331 ready to merge, auto-merge armed, GitHub CI running. Main merge had silently dropped 27-app tour (landing/v86/embed.js) and face-joshua frames (worker.js proxy), plus phone portfolio fix; all restored and verified locally. CI-local green. When GitHub CI passes, release.yml will tag v2.0.0, create the GitHub release, and the handoff is done.
 
-26 of 26 apps ring-3, compositor windows, private memory, crash isolation. Clipboard (syscall 399), resize, growable memory, smooth type. Mail via Worker (Resend, secret pending). Weather/Stocks refetch. Demo covers 26. Logo/UI done. Landing synced.
+26 of 26 apps ring-3, compositor windows, private memory, crash isolation. Clipboard (syscall 399), resize, growable memory, smooth type. Mail via Worker (Resend, secret pending). Weather/Stocks refetch. Demo covers 26 apps in 27-app tour. Logo/UI done. Landing synced.
 
 ## Next, in order
 
-1. Verify tag and release workflow complete.
-2. Deployment confirmation.
-3. Swap landing/ad.mp4 with Apple-style ad.
+1. GitHub CI passes, release.yml tags v2.0.0 and creates release.
+2. Merge release/2.0.0 back to main, deploy landing.
+3. Rewrite this handoff for post-2.0.0 work.
 4. 2.0.1 fold: feat/samantha-live, feat/reception (and textselect/editorflash if still red).
 5. Security audit of syscalls 393-400.
 6. Then the RANKED QUEUE.
@@ -35,5 +35,5 @@ Then: 2.1 Music, 2.2 Video, 3.0 on ASRock J4125B-ITX, Strata Kit at 3.1.
 ## Restart prompt
 
 ```
-/loop build Joshua Tree as far as possible until 3.0 hardware (2.0, then 2.x per docs/VERSIONS.md), zero issues and PRs; then stop and refresh the ad and Blender model with Joshua's ideas.
+/loop ship Joshua Tree 2.0.0: get PR #331 (release/2.0.0) merged on green GitHub CI, confirm release.yml tagged v2.0.0 and made the GitHub release, deploy landing, rewrite docs/LOOP-HANDOFF.md. Zero open PRs and issues. CI_LOCAL_JOBS=2 never more, one QEMU-heavy job at a time. Stop when v2.0.0 is released.
 ```
