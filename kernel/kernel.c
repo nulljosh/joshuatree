@@ -3867,7 +3867,7 @@ static void gui_draw_icon_glyph(int icon, int cx_center, int cy, int size, unsig
    after the v40 cursor fix had already removed the other cause. A blit is
    pw*pw writes, hundreds of times cheaper, and the flash is gone because
    the frame is now finished before anything can be seen mid-draw. */
-#define ICON_CACHE_SLOTS 2 /* normal, magnified */
+#define ICON_CACHE_SLOTS 3 /* normal, magnified, Apps-folder grid (its own surface colour, so it never evicts the dock's tile) */
 static unsigned int *icon_cache[GUI_APP_COUNT][ICON_CACHE_SLOTS];
 static int icon_cache_size[GUI_APP_COUNT][ICON_CACHE_SLOTS];
 static unsigned int icon_cache_under[GUI_APP_COUNT][ICON_CACHE_SLOTS];
@@ -4116,7 +4116,7 @@ static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size);
 
 static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int size, unsigned int under){
     int x = cx_center - size / 2, y = cy_bottom - size;
-    int slot = (size == DOCK_ICON) ? 0 : 1;
+    int slot = (under != DOCK_TRAY_COLOR) ? 2 : (size == DOCK_ICON) ? 0 : 1;
     unsigned int *tile = gui_render_icon_cached(icon, size, slot, under);
     unsigned int sc = window_scale();
     int pw = size * (int)sc;
@@ -5218,7 +5218,7 @@ static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int c
         if (row < 0 || row >= APPS_VIS_ROWS) continue;
         int cx = x0 + col * cell_w + cell_w / 2;
         int cy = y0 + row * cell_h;
-        if (i == sel) gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 14,
+        if (i == sel) gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 4,
                                                  0x00FFF8F1, 0x00E5D8D0, 0x00E9DEE0, 12);
         gui_draw_one_icon_on(i, cx, cy + tile, tile, 0x00E9DEE0);
         int lw = font_string_width(APPS[i].name);
@@ -5262,7 +5262,7 @@ static void gui_apps_launch(int icon){
 static void gui_launch_apps(void){
     int sel = 0;
     int rows = (GUI_APPS_FOLDER + APPS_COLS - 1) / APPS_COLS;
-    int cell_w = 150, cell_h = 108, tile = 60;
+    int cell_w = 150, cell_h = 108, tile = 74; /* 74 = the artwork's 148px at 2x: an exact 1:1 blit like the dock, not a 148 to 120 resample */
     int grid_w = APPS_COLS * cell_w;
     int x0 = ((int)window_width() - grid_w) / 2;
     int y0 = 95;

@@ -82,6 +82,20 @@
 #define SYS_READDIR     388
 #define JT_DIRENT_NAME  32   /* ramfs's own name cap; FAT 8.3 names are 12 */
 #define JT_READDIR_MAX  64   /* records per call, the most any backend lists today (files.h's own cap) */
+/* 1.9.21: SYS_TEXT, anti-aliased text for a ring-3 window.
+     ebx = struct jt_text * (x, y in window pixels, fg 0x00RRGGBB, s = NUL
+           string, printable ASCII, at most JT_TEXT_MAX bytes), ecx = op.
+     op 0 JT_TEXT_DRAW    queue the string; it is drawn at the next present
+     op 1 JT_TEXT_MEASURE return its advance in window pixels, draw nothing
+     op 2 JT_TEXT_CLEAR   drop the queue (call at the top of each frame)
+   Draw returns the advance too. -EINVAL for a bad op or string, -EFAULT for
+   a pointer outside user memory, -ENOMEM when the queue is full. */
+#define SYS_TEXT        389
+#define JT_TEXT_DRAW    0
+#define JT_TEXT_MEASURE 1
+#define JT_TEXT_CLEAR   2
+#define JT_TEXT_MAX     96
+struct jt_text { int x, y; unsigned int fg; const char *s; };
 #define JT_PATH_DEPTH    8   /* components a relative path may have */
 struct jt_dirent { char name[JT_DIRENT_NAME]; unsigned int size, is_dir; };
 
