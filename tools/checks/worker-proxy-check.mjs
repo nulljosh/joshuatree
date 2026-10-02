@@ -307,6 +307,18 @@ try {
 }
 check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the exception is narrow, checked separately)", !isAllowedTarget(new URL("https://turing.heyitsmejosh.com/api/chat")));
 
+// The kernel counts face frames by asking for the next one until it fails, so
+// the end of the clip must not be a 404 (a red console error for every visitor).
+{
+  const env = { ASSETS: { fetch: async (req) => new URL(req.url).pathname.endsWith("talk-0.jpg")
+    ? new Response("jpegbytes", { status: 200, headers: { "Content-Type": "image/jpeg" } })
+    : new Response("nope", { status: 404 }) } };
+  const face = (n) => handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(`https://joshuatree.heyitsmejosh.com/face-joshua/talk-${n}.jpg`)), env);
+  const real = await face(0), past = await face(48);
+  check("an existing face frame passes through with its bytes", real.status === 200 && (await real.text()) === "jpegbytes");
+  check("the frame past the end of the clip is an empty 200, not a console-error 404", past.status === 200 && (await past.text()) === "");
+}
+
 if (failures > 0) {
   console.log(`FAIL: ${failures} check(s) failed`);
   process.exit(1);

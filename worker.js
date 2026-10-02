@@ -111,6 +111,11 @@ async function handleProxy(request, env) {
       const resp = await env.ASSETS.fetch(new Request("https://joshuatree.heyitsmejosh.com" + targetUrl.pathname));
       const headers = new Headers(resp.headers);
       headers.set("Access-Control-Allow-Origin", "*");
+      // The kernel counts frames by asking for the next one until it fails,
+      // so the first missing frame is the normal end of the clip. A 404 there
+      // is a red "Failed to load resource" in every visitor's console; an
+      // empty 200 is the same stop (face_fetch: got <= 0) without the noise.
+      if (resp.status === 404) return new Response(null, { status: 200, headers });
       return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers });
     }
   }
