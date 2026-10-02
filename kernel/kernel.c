@@ -2405,6 +2405,7 @@ static void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; }
    nothing drawn, not an error. */
 static char weather_text[24] = "";
 static unsigned int weather_last_tick = 0;
+static volatile unsigned jt_data_stamp = 0; /* bumped whenever WEATHER.TXT or STOCKS.TXT is rewritten; windows poll it through SYS_SYSINFO */
 static int weather_tried_once = 0;
 /* v53: real fields behind the one-line summary, kept for the dropdown
    panel. Nothing fabricated: temp/code are exactly what weather_fetch
@@ -2442,6 +2443,7 @@ void jt_sysinfo_fill(struct jt_sysinfo *si){
     si->wx_temp_c = weather_temp_c;
     si->wx_code10 = weather_code10;
     si->llm_port = (unsigned)llm_port;
+    si->data_stamp = jt_data_stamp;
     for (int i = 0; i < JT_WX_TEXT_MAX - 1 && weather_text[i]; i++) si->wx_text[i] = weather_text[i];
     for (int i = 0; i < JT_SYSINFO_HOST_MAX - 1 && llm_host[i]; i++) si->llm_host[i] = llm_host[i];
 }
@@ -2458,6 +2460,15 @@ int jt_launch_request(const char *name){
     return -22; /* EINVAL */
 }
 int jt_launch_take(void){ int i = launch_pending; launch_pending = -1; return i; }
+/* 398 SYS_REFRESH mailbox: one pending request, recorded in the gate, served by the desktop loop. */
+static volatile int refresh_kind = -1, refresh_arg = 0;
+int jt_refresh_request(int kind, int arg){
+    if (kind != JT_REFRESH_WEATHER && kind != JT_REFRESH_STOCKS) return -22;
+    if (kind == JT_REFRESH_STOCKS && ((arg & 0xFF) >= 5 || ((arg >> 8) & 0xFF) >= 8)) return -22;
+    if (refresh_kind >= 0) return -16;
+    refresh_arg = arg; refresh_kind = kind; return 0;
+}
+int jt_refresh_take(int *arg){ int k = refresh_kind; if (k >= 0) { *arg = refresh_arg; refresh_kind = -1; } return k; }
 /* Test/diagnostic override, read once from the multiboot command line
    (`-append "wxhost=10.0.2.2:8099"`, see kmain): both the location and the
    forecast request go to this literal IP:port instead of ip-api.com and
@@ -2960,21 +2971,17 @@ static void weather_write_file(void){
         o = wx_put_int(o, wx_day_hi[i]); *o++ = ' '; o = wx_put_int(o, wx_day_lo[i]); *o++ = '\n';
     }
     vfs_replace_file("WEATHER.TXT", b, (unsigned int)(o - b));
+    jt_data_stamp++;
 }
 
-/* The dock's Weather. The first open (or the ten-minute cycle, or R) has the
-   kernel fetch; the app only reads the file. R makes the app exit with
-   JT_WEATHER_RETRY after it draws "Fetching...", the kernel refetches and
-   starts it again. No new syscall. */
+/* The dock's Weather, blocking fallback only (a full window table). The window path in
+   user/weather.c asks for refetches with SYS_REFRESH instead; here the app just runs once. */
 int weather_ring3_run(void);
 void weather_ring3_open(void){
-    int again = !weather_tried_once;
-    do {
-        if (again) { weather_tried_once = 1; weather_fetch(); gui_menubar_force_redraw(); }
-        unsigned int t0 = ticks();
-        again = weather_ring3_run() == 7;
-        weather_last_tick += ticks() - t0; /* time spent inside the app is not time the reading aged: ring-3 runs inflate ticks(), and the ten-minute cycle would refetch on every close */
-    } while (again);
+    if (!weather_tried_once) { weather_tried_once = 1; weather_fetch(); gui_menubar_force_redraw(); }
+    unsigned int t0 = ticks();
+    weather_ring3_run();
+    weather_last_tick += ticks() - t0;
 }
 
 /* v75 (0.67.0): the real location-dynamic wallpaper, the item roadmap.md's
@@ -6027,6 +6034,9 @@ static void gui_run(void){
         /* 1.9.26: SYS_LAUNCH_REQUEST pickup. The syscall only stored an index; the launch runs here,
            IF on, through the same two paths a dock click takes (window first, blocking fallback). */
         int sys_launched = 0;
+        { int ra = 0, rk = jt_refresh_take(&ra); /* SYS_REFRESH pickup: fetch outside the gate, the app sees data_stamp move */
+          if (rk == JT_REFRESH_WEATHER) { weather_tried_once = 1; weather_fetch(); gui_menubar_force_redraw(); }
+          else if (rk == JT_REFRESH_STOCKS) { stx_range_hint = ra & 0xFF; stx_sel_hint = (ra >> 8) & 0xFF; stocks_fetch(stx_range_hint); } }
         { int li = jt_launch_take();
           if (li >= 0) {
               serial_puts("launchreq=pickup\n");

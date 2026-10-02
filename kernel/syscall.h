@@ -217,6 +217,7 @@ struct jt_sysinfo {
     unsigned int llm_port;      /* Settings-owned chat host port */
     char wx_text[JT_WX_TEXT_MAX];          /* the menu bar text, NUL terminated, empty when none */
     char llm_host[JT_SYSINFO_HOST_MAX];    /* the chat host SYS_HTTP_POST talks to */
+    unsigned int data_stamp;    /* bumps each time WEATHER.TXT or STOCKS.TXT is rewritten */
 };
 /* 1.9.26: SYS_LAUNCH_REQUEST, "open <app>" for a ring-3 Samantha. ebx = const char *name (user,
    NUL terminated, at most JT_APP_NAME_MAX bytes). The name must match an APPS[] row exactly
@@ -232,6 +233,16 @@ struct jt_sysinfo {
    (the old top stands). Pages are zeroed, user+writable, mapped into this task's directory
    only, and freed on exit or crash (kernel/brk.c). */
 #define SYS_BRK         397
+
+/* SYS_REFRESH (398), "refetch my data" for the Weather and Stocks windows. ebx = kind
+   (JT_REFRESH_WEATHER 0, JT_REFRESH_STOCKS 1), ecx = arg (stocks: range 0..4 | selection 0..7 << 8;
+   weather: ignored). Records ONE pending request and returns at once; the desktop loop serves it
+   outside the gate (the network fetch), rewrites WEATHER.TXT / STOCKS.TXT and bumps
+   jt_sysinfo.data_stamp, which the window polls to reload and redraw. Returns 0, -EINVAL (bad kind,
+   range or selection) or -EBUSY (a request is already pending). */
+#define SYS_REFRESH     398
+#define JT_REFRESH_WEATHER 0
+#define JT_REFRESH_STOCKS  1
 #define JT_APP_NAME_MAX 24
 /* 1.9.26: SYS_AUDIO (393), audio out for a ring-3 Samantha. One number, three ops. ebx = op,
    ecx = const/non-const struct pointer (user), edx = the caller's sizeof that struct.
@@ -287,6 +298,8 @@ struct jt_audio_status {
 void jt_sysinfo_fill(struct jt_sysinfo *si);
 int jt_launch_request(const char *name);
 int jt_launch_take(void);
+int jt_refresh_request(int kind, int arg);
+int jt_refresh_take(int *arg);
 void jt_facehost_cmdline(const char *cl); /* syscall.c: facehost=HOST[:PORT] */
 #define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3. 386 (tasks), 387 (http_get), 388 (readdir) and 392 (http_post) fit under it */
 

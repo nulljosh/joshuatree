@@ -12,7 +12,7 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 2. 1.9 done: touch works, an on-screen keyboard, every app readable at phone size.
 3. Every app in the APPS[] table runs as its own ring 3 program. No app code left in kernel.c. Done (1.9.26: Samantha was the last).
 4. A check crashes each app on purpose and proves the desktop is still alive after every one. Done for every ring-3 app (`tools/checks/ring3crash-all-check.py`, 20 of 20 as of 1.9.22).
-5. Input goes to the focused window only, not a global key pull. Done for ring-3 window apps (1.9.23, `tools/checks/ring3window-check.py`): Reminders beside Notes, keys reach only the focused one. The other nineteen still use the blocking launch and `gui_poll_event`'s global pull until they move to the window path (one row in `gui_ring3_windowed`).
+5. Input goes to the focused window only, not a global key pull. Done for ring-3 window apps (1.9.23, `tools/checks/ring3window-check.py`): Reminders beside Notes, keys reach only the focused one. Weather and Stocks are windows too now (`SYS_REFRESH` 398 replaced their exit-code relaunch), so every RING3_APPS row opens as a compositor window. Not fully closed: the blocking launcher and `gui_poll_event`'s pull remain as the fallback when the window table is full or a window launch fails (every APPS row's open function and `SYS_WINDOW_POLL`'s non-window path use them), so deleting them needs that fallback replaced first.
 
 ## Where things stand
 

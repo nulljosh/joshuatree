@@ -801,6 +801,7 @@ and 394 are the audio calls.
 | # | Name | ebx | ecx | edx | Returns |
 |---|---|---|---|---|---|
 | 397 | `brk` | new top, or 0 | 0 | 0 | the heap top after the call, or -errno |
+| 398 | `refresh` | kind (0 weather, 1 stocks) | stocks: range \| sel << 8 | 0 | 0, -EINVAL (bad kind, range, selection) or -EBUSY (one request already pending). Only records the request; the desktop loop fetches outside the gate, rewrites `WEATHER.TXT` / `STOCKS.TXT` and bumps `jt_sysinfo.data_stamp`, which the window polls. |
 
 A program's image window (`JT_USER_IMAGE_PAGES`, 128 KB) is fixed and
 kmalloc'd per running window, so it is the wrong place for anything big.

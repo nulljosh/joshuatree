@@ -71,6 +71,9 @@
 #define JT_SYS_SYSINFO     395 /* 1.9.26: weather, chat host, phone flag, time in one read-only struct; see kernel/syscall.h */
 #define JT_SYS_BRK         397 /* 1.9.27: per-task heap top; 0 queries, else sets. Returns the top or -errno; see kernel/brk.c */
 #define JT_SYS_LAUNCH_REQUEST 396 /* 1.9.26: ask the desktop to open an app by exact APPS[] name; never launches inside the gate */
+#define JT_SYS_REFRESH     398 /* ask the desktop to refetch weather or stocks; poll jt_sysinfo.data_stamp; see kernel/syscall.h */
+#define JT_REFRESH_WEATHER 0
+#define JT_REFRESH_STOCKS  1
 #define JT_SYSINFO_VERSION 1
 #define JT_WX_TEXT_MAX  24
 #define JT_SYSINFO_HOST_MAX 40
@@ -81,6 +84,7 @@ struct jt_sysinfo {
     unsigned int llm_port;
     char wx_text[JT_WX_TEXT_MAX];
     char llm_host[JT_SYSINFO_HOST_MAX];
+    unsigned int data_stamp;
 };
 #define JT_DIRENT_NAME  32
 #define JT_READDIR_MAX  64
@@ -203,6 +207,7 @@ static inline int jt_shell_run(const char *line, char *out, unsigned outlen) { r
    si->version is first so the struct can grow; check si->size for what the kernel really wrote. */
 static inline int jt_sysinfo(struct jt_sysinfo *si)               { return jt_syscall(JT_SYS_SYSINFO, (unsigned)si, sizeof *si, 0); }
 /* 0 queued, -EINVAL no app by that exact name, -EBUSY one is already pending. The desktop opens it on its next pass. */
+static inline int jt_refresh(int kind, int arg)                   { return jt_syscall(JT_SYS_REFRESH, (unsigned)kind, (unsigned)arg, 0); }
 static inline int jt_launch(const char *app)                      { return jt_syscall(JT_SYS_LAUNCH_REQUEST, (unsigned)app, 0, 0); }
 struct jt_audio_play { const void *pcm; unsigned int len; unsigned int rate; unsigned int flags; };
 struct jt_audio_status { unsigned int version, size, playing, queued, space, rate, played; };

@@ -6,9 +6,9 @@
  * symbol "i stale price prev time dprice dprev n p0 .. pn-1".
  *
  * Up/down pick a symbol, left/right pick a range, R refreshes, Esc exits,
- * backquote crashes on purpose like every ring-3 app. Range, selection and
- * refresh leave through the exit status so the kernel can refetch and start
- * this program again: status 16 + sel * 5 + range, plus 64 for a refresh.
+ * backquote crashes on purpose like every ring-3 app. A range change or R
+ * calls SYS_REFRESH (range | sel << 8); the desktop loop refetches, rewrites the file
+ * and bumps jt_sysinfo.data_stamp, which this program polls to reload and redraw.
  * Clicks inside the window pick rows and tabs and never close it; only a
  * click outside the window (chrome X, dock) does.
  */
@@ -192,7 +192,7 @@ static void draw(int fetching) {
     }
 }
 
-static void leave(int refresh) { jt_exit(16 + sel * RANGES + range + (refresh ? 64 : 0)); }
+static void ask(void) { jt_refresh(JT_REFRESH_STOCKS, range | sel << 8); }
 
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
@@ -200,12 +200,19 @@ void _start(int argc, char **argv) {
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "stocks: no window\n", 18); jt_exit(1); }
     load();
     draw(0);
+    struct jt_sysinfo si;
+    unsigned stamp = 0;
+    if (jt_sysinfo(&si) > 0) stamp = si.data_stamp;
+    ask();
     struct jt_event ev;
     unsigned flags = JT_POLL_PRESENT;
     for (;;) {
         int r = jt_window_poll(&ev, flags);
         flags = 0;
-        if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
+        if (r == -11 /* -EAGAIN */) {
+            if (jt_sysinfo(&si) > 0 && si.data_stamp != stamp) { int keep = sel; stamp = si.data_stamp; load(); sel = keep; draw(0); flags = JT_POLL_PRESENT; }
+            jt_sched_yield(); continue;
+        }
         if (r != 1) break;
         if (ev.kind == JT_EV_CLICK) {
             int mx = ev.a, my = ev.b;
@@ -215,16 +222,16 @@ void _start(int argc, char **argv) {
                 if (first + row < ROWS && row < rows_visible()) { sel = first + row; draw(0); }
             } else if (my >= tab_y() && my < tab_y() + 24) {
                 for (int t = 0; t < RANGES; t++)
-                    if (mx >= tab_x(t) - 4 && mx < tab_x(t) + 44 && t != range) { range = t; draw(1); jt_window_poll(&ev, JT_POLL_PRESENT); leave(0); }
+                    if (mx >= tab_x(t) - 4 && mx < tab_x(t) + 44 && t != range) { range = t; draw(1); jt_window_poll(&ev, JT_POLL_PRESENT); ask(); }
             }
         } else if (ev.kind == JT_EV_KEY) {
             if (ev.a == '`') { jt_write(1, "stocks: crashing on purpose\n", 28); *(volatile int *)0 = 1; }
             if (ev.a == JT_KEY_ESC) break;
             if (ev.a == JT_KEY_UP && sel > 0) { sel--; draw(0); }
             else if (ev.a == JT_KEY_DOWN && sel < ROWS - 1) { sel++; draw(0); }
-            else if (ev.a == JT_KEY_LEFT && range > 0) { range--; draw(1); jt_window_poll(&ev, JT_POLL_PRESENT); leave(0); }
-            else if (ev.a == JT_KEY_RIGHT && range < RANGES - 1) { range++; draw(1); jt_window_poll(&ev, JT_POLL_PRESENT); leave(0); }
-            else if (ev.a == 'r' || ev.a == 'R') { draw(1); jt_window_poll(&ev, JT_POLL_PRESENT); leave(1); }
+            else if (ev.a == JT_KEY_LEFT && range > 0) { range--; draw(1); jt_window_poll(&ev, JT_POLL_PRESENT); ask(); }
+            else if (ev.a == JT_KEY_RIGHT && range < RANGES - 1) { range++; draw(1); jt_window_poll(&ev, JT_POLL_PRESENT); ask(); }
+            else if (ev.a == 'r' || ev.a == 'R') { draw(1); jt_window_poll(&ev, JT_POLL_PRESENT); ask(); }
         }
         flags = JT_POLL_PRESENT;
     }
