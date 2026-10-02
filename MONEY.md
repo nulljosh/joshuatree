@@ -66,7 +66,7 @@ listing they can buy anywhere.
 
 | Line | Amount | Note |
 |---|---|---|
-| Strata case (6 rings, cap, tray, rods) | unknown | no print quote yet; $40 is the stock-case estimate above |
+| Strata case (6 rings, cap, tray, rear plate, feet, spacers) | ~$40-75 prototype, one-off | estimate, JLC3DP print plus shipping, no real quote yet (`docs/HARDWARE.md`, Prototype cost). Prototype pricing is not volume pricing. $40 is the stock-case estimate above |
 | USB stick, pre-flashed | ~$8 | estimate |
 | Screws, spacers, rods | ~$7 | estimate |
 | Payment fees | ~$6 | 3% of $199 |
@@ -88,9 +88,11 @@ against ~$120 for the current pick, but it has no PS/2 ports, so it only
 works once the kernel has a USB driver for keyboards. That's the xHCI
 item on the roadmap. Not before.
 
-**Next real step:** get an instant quote for the Strata parts from a print
-service using `docs/hardware/strata_cad.py`'s STLs. That one number decides
-the kit margin.
+**Next real step:** upload `docs/hardware/stl/` to JLC3DP and write the real
+cart total here. The prototype estimate (~$40-75) is far under the ~$163
+breakeven, but it is an estimate until the cart says so. At home on a Bambu
+A1 mini ($299) the plastic is about $9. The 5x-cost rule of thumb
+would put the case alone near $200-375, so the Kit price needs the real quote first.
 
 ### The first dollar
 
