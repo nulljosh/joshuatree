@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <!-- Written by tools/gen/restyle_icons.py (the "chat" entry): edit
-       that, not this file. Tile #ECE8DF -> #ECE8DF, lit from the top. -->
+       that, not this file. Tile #F4F1EA -> #DCD6CB, lit from the top. -->
   <defs>
-    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ECE8DF"/><stop offset="1" stop-color="#ECE8DF"/></linearGradient>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F4F1EA"/><stop offset="1" stop-color="#DCD6CB"/></linearGradient>
     <linearGradient id="hl" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="22">
       <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.5"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>

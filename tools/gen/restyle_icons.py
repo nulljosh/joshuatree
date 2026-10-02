@@ -211,11 +211,11 @@ DOCK = {
       </g>"""),
 
     # Chat (Samantha): her real app icon from the turing repo, the oval
-    # portrait she drew, on its own flat paper. art/samantha-icon.svg is a
+    # portrait she drew, on her own paper lit from the top like every tile. art/samantha-icon.svg is a
     # vendored copy of turing/icon.svg; its own rounded rect is dropped so
     # the tile below stays the dock's squircle. Re-copy it when turing's
     # icon changes.
-    "chat": ("#ECE8DF", "#ECE8DF", "",
+    "chat": ("#F4F1EA", "#DCD6CB", "",
              """<svg x="0" y="0" width="128" height="128" viewBox="0 0 200 200">"""
              + "\n".join(l for l in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art", "samantha-icon.svg")).read().split("\n") if not l.lstrip().startswith(("<svg", "</svg>", "<rect")))
              + """</svg>"""),
