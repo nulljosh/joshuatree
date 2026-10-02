@@ -4,7 +4,7 @@ displays the current time, and a countdown timer updates live.
 
 Flow:
   1. Boot to GUI desktop, navigate to Apps folder (dock slot 0).
-  2. Navigate to Clock (icon 25, row 5 col 0: down x5 from top-left).
+  2. Navigate to Clock (icon 24, row 4 col 4: right x4, down x4 from top-left).
   3. Assert the app opened (outer red close dot present).
   4. Start a 1-minute timer (space, type "1", enter).
   5. Wait 2 seconds and dump framebuffer.
@@ -84,9 +84,11 @@ try:
     move(apps_centre, ICON_ROW_Y); time.sleep(0.3)
     click(); time.sleep(1.0)
 
-    # Navigate to Clock (icon 25: row = 25 // 5 = 5, col = 25 % 5 = 0)
-    # down x5 from top-left
-    for _ in range(5):
+    # Navigate to Clock (icon 24: row = 24 // 5 = 4, col = 24 % 5 = 4)
+    # right x4, down x4 from top-left
+    for _ in range(4):
+        key("right")
+    for _ in range(4):
         key("down")
     key("ret"); time.sleep(1.2)
 

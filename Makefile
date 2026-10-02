@@ -203,13 +203,6 @@ user/bookrank.o: user/bookrank.c user/jtsys.h drivers/vgafont.h
 user/bookrank.bin: user/bookrank.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/bookrank.o user/libjt.a
 
-# 1.8.22: Homeqi, the sixth app out of the kernel, built the same way.
-user/homeqi.o: user/homeqi.c user/jtsys.h drivers/vgafont.h
-	$(CC) $(USER_CFLAGS) -c $< -o $@
-
-user/homeqi.bin: user/homeqi.o user/libjt.a user/note.ld
-	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/homeqi.o user/libjt.a
-
 # 1.9.1: Lexly, the seventh app out of the kernel, built the same way.
 user/lexly.o: user/lexly.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
@@ -336,9 +329,6 @@ drivers/user_quotes.h: user/quotes.bin tools/gen/gen_user_bin.py
 drivers/user_bookrank.h: user/bookrank.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/bookrank.bin drivers/user_bookrank.h user_bookrank
 
-drivers/user_homeqi.h: user/homeqi.bin tools/gen/gen_user_bin.py
-	python3 tools/gen/gen_user_bin.py user/homeqi.bin drivers/user_homeqi.h user_homeqi
-
 drivers/user_lexly.h: user/lexly.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/lexly.bin drivers/user_lexly.h user_lexly
 
@@ -380,7 +370,7 @@ kernel/kernel.o: drivers/user_hello.h drivers/user_note.h drivers/user_wc.h
 drivers/user_fbpoke.h: user/fbpoke.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/fbpoke.bin drivers/user_fbpoke.h user_fbpoke
 
-kernel/ring3app.o: drivers/user_keyrate.h drivers/user_toroid.h drivers/user_calculator.h drivers/user_quotes.h drivers/user_bookrank.h drivers/user_homeqi.h drivers/user_lexly.h drivers/user_plan.h drivers/user_fieldbook.h drivers/user_clock.h drivers/user_portfolio.h drivers/user_activity.h drivers/user_contacts.h drivers/user_sparkjar.h drivers/user_reminders.h drivers/user_curbfind.h drivers/user_calendar.h drivers/user_search.h drivers/user_epiphany.h drivers/user_fbpoke.h
+kernel/ring3app.o: drivers/user_keyrate.h drivers/user_toroid.h drivers/user_calculator.h drivers/user_quotes.h drivers/user_bookrank.h drivers/user_lexly.h drivers/user_plan.h drivers/user_fieldbook.h drivers/user_clock.h drivers/user_portfolio.h drivers/user_activity.h drivers/user_contacts.h drivers/user_sparkjar.h drivers/user_reminders.h drivers/user_curbfind.h drivers/user_calendar.h drivers/user_search.h drivers/user_epiphany.h drivers/user_fbpoke.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -418,7 +408,7 @@ talk: kernel.elf dotfiles.img
 clean:
 	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf kernel.elf.pass1 kernel/symtab.c kernel/symtab_stub.o kernel/symtab_stub.d user/hello.o user/hello.bin drivers/user_hello.h \
 	      user/note.o user/note.bin drivers/user_note.h user/keyrate.o user/keyrate.bin drivers/user_keyrate.h user/toroid.o user/toroid.bin drivers/user_toroid.h \
-	      user/calculator.o user/calculator.bin drivers/user_calculator.h user/quotes.o user/quotes.bin drivers/user_quotes.h user/bookrank.o user/bookrank.bin drivers/user_bookrank.h user/homeqi.o user/homeqi.bin drivers/user_homeqi.h user/lexly.o user/lexly.bin drivers/user_lexly.h user/plan.o user/plan.bin drivers/user_plan.h user/fieldbook.o user/fieldbook.bin drivers/user_fieldbook.h user/clock.o user/clock.bin drivers/user_clock.h user/portfolio.o user/portfolio.bin drivers/user_portfolio.h user/activity.o user/activity.bin drivers/user_activity.h user/contacts.o user/contacts.bin drivers/user_contacts.h user/reminders.o user/reminders.bin drivers/user_reminders.h user/curbfind.o user/curbfind.bin drivers/user_curbfind.h user/search.o user/search.bin drivers/user_search.h user/epiphany.o user/epiphany.bin drivers/user_epiphany.h user/sparkjar.o user/sparkjar.bin drivers/user_sparkjar.h user/calendar.o user/calendar.bin drivers/user_calendar.h
+	      user/calculator.o user/calculator.bin drivers/user_calculator.h user/quotes.o user/quotes.bin drivers/user_quotes.h user/bookrank.o user/bookrank.bin drivers/user_bookrank.h user/lexly.o user/lexly.bin drivers/user_lexly.h user/plan.o user/plan.bin drivers/user_plan.h user/fieldbook.o user/fieldbook.bin drivers/user_fieldbook.h user/clock.o user/clock.bin drivers/user_clock.h user/portfolio.o user/portfolio.bin drivers/user_portfolio.h user/activity.o user/activity.bin drivers/user_activity.h user/contacts.o user/contacts.bin drivers/user_contacts.h user/reminders.o user/reminders.bin drivers/user_reminders.h user/curbfind.o user/curbfind.bin drivers/user_curbfind.h user/search.o user/search.bin drivers/user_search.h user/epiphany.o user/epiphany.bin drivers/user_epiphany.h user/sparkjar.o user/sparkjar.bin drivers/user_sparkjar.h user/calendar.o user/calendar.bin drivers/user_calendar.h
 	rm -f joshuatree.iso
 	rm -rf build/iso_root
 

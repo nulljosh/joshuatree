@@ -159,8 +159,6 @@ Real drivers for one real board. That's the first dollar.
 
 *Landing synced 2026-09-28: the 36 second ad and the Strata case concept sit under "Want one?". Strata is a concept, not for sale, no price set.*
 
-Homeqi now runs on its own at ring 3, so one more app can crash without taking the machine with it. Nothing to sell yet, but every app that leaves the kernel makes the real board pitch a bit more believable. *2026-09-28.*
-
 Notes now has folders and lets you keep more than one note, so it starts to feel like a real app on a real board. Still free, nothing to sell. *2026-09-28.*
 
 Touch works now and Notes gets its own on-screen keyboard on a phone screen, so you can tap a note and type it with no keys attached. That is the first thing a phone buyer tries, so it earns its place in the pitch. Still free, nothing to sell yet. *2026-09-28.*

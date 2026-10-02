@@ -20,7 +20,7 @@ from restyle_icons import squircle_path, HL_WIDTH, HL_ALPHA, HL_FADE  # single s
 
 # art/icons name -> repo folder
 FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank", "lexly": "lexly", "sparkjar": "sparkjar",
-         "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "homeqi": "homeqi", "fieldbook": "fieldbook",
+         "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "fieldbook": "fieldbook",
          "plan": "plan"}  # Weather is a system app, it keeps the restyled icon from restyle_icons.py
 
 

@@ -31,7 +31,7 @@ flat user binary has no .bss and no heap (user/note.ld). The check then:
      fault at ring 3. Asserts the kernel reaped the task, released the
      window, the launcher logged the crash by name, and the desktop is
      back: the dock is on screen and Mail opens from a dock click;
-  5. opens Calculator from the Apps folder grid (row 3, col 4, the
+  5. opens Calculator from the Apps folder grid (row 3, col 3, the
      832x450 folder viewport) and closes it with Esc, then again with the
      red close dot; after each it must have exited 0, released its
      window, and Mail must open from the dock;
@@ -199,7 +199,7 @@ try:
         fails.append("Mail did not close on Esc after the crash")
 
     # 5. a normal close, both ways, from the Apps folder grid: Calculator
-    #    is APPS[] index 19 = row 3, col 4 (5 columns wide), whose
+    #    is APPS[] index 18 = row 3, col 3 (5 columns wide), whose
     #    viewport is the folder's 832x450, not the dock's 804x345.
     APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
     def wait_closed(resend=True):
@@ -217,8 +217,8 @@ try:
         seen = serial().count("calculator: ring-3 window")
         move(*PARK); time.sleep(0.2)
         move(SLOT0_X + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.0)
-        for _ in range(4): keys("d"); time.sleep(0.35)  # right x4
-        for _ in range(3): keys("s"); time.sleep(0.35)  # down x3 -> index 19
+        for _ in range(3): keys("d"); time.sleep(0.35)  # right x3
+        for _ in range(3): keys("s"); time.sleep(0.35)  # down x3 -> index 18
         keys("ret")
         for _ in range(60):
             time.sleep(0.1)
@@ -259,7 +259,7 @@ try:
     seen = serial().count("calculator: ring-3 window")
     move(*PARK); time.sleep(0.3)
     keys("ret"); time.sleep(1.0)  # bare desktop -> Apps folder, by keyboard
-    for _ in range(4): keys("d"); time.sleep(0.35)
+    for _ in range(3): keys("d"); time.sleep(0.35)
     for _ in range(3): keys("s"); time.sleep(0.35)
     keys("ret")  # launch Calculator from the grid selection
     for _ in range(60):

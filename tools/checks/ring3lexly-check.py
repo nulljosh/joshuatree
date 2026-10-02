@@ -5,7 +5,7 @@ and crashing it does not take the desktop with it (roadmap 2.0, 1.9.1).
 Boots headless with `open=lexly`, which launches Lexly from the dock path
 the moment the desktop is up. Lexly is user/lexly.c, a flat binary
 loaded off the VFS by exec_user and run at CPL 3 through the same
-table-driven launcher Keyrate, Toroid, Calculator, Quotes, Bookrank and Homeqi use (kernel/ring3app.c,
+table-driven launcher Keyrate, Toroid, Calculator, Quotes and Bookrank use (kernel/ring3app.c,
 RING3_APPS). The deck and answer-rotation are the same drivers/
 app_lexlytreak.c ran in ring 0 (lx_cur/lx_option are deterministic off
 lx_round, so round 0's right answer is always slot 0). The check then:
