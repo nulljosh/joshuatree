@@ -84,6 +84,7 @@ retry|1|Chat's tools (reminder, note, open app) work locally via /api/pick, ordi
 retry|1|Chat mail tools: "read my email" lists a real message, "email <someone> <text>" lands one in Mail|python3 ./tools/checks/mailtools-check.py
 retry|1|Chat notes/reminders tools: list_reminders and read_notes work via the local keyword fallback when the picker doesn't know them|python3 ./tools/checks/notestools-check.py
 retry|2|"samantha" boot flag opens Chat's full-screen avatar view, input focused, before the desktop|python3 ./tools/checks/samantha-boot-check.py
+retry|2|Asking Samantha for the weather fetches it, no "open Weather first"|python3 ./tools/checks/samweather-check.py
 retry|2|"phone" boot flag opens a real 430x932 portrait frame straight into Samantha's view|python3 ./tools/checks/phone-boot-check.py
 retry|2|Phone Samantha back chevron exits her view and F2/Esc hints are hidden on phones|python3 ./tools/checks/phone-samantha-back-check.py
 retry|2|Touch: a tap opens the on-screen keyboard on phone and a tapped key reaches the Notes editor|python3 ./tools/checks/touch-osk-check.py
