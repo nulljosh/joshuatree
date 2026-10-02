@@ -96,7 +96,8 @@ if (typeof document !== "undefined") (function () {
   // e.g. whether the backdoor probe found v86's vmmouse and whether an
   // absolute packet really arrived, not just whether the page sent one.
   var serialLog = "";
-  var speakCount = 0, lastSpeakBytes = 0; // every "speak: status=200 bytes=N" line, counted as it arrives (serialLog stops growing at 64KB)
+  var toolCounts = {}; // every "chattool=<tool>:" line, counted as it arrives, so a check never depends on the window still holding it
+  var speakCount = 0, lastSpeakBytes = 0; // every "speak: status=200 bytes=N" line, counted as it arrives (serialLog is a head+rolling-tail window, see the serial0 listener)
   // v0.73.5: fetched once and reused by the idle tour's reboot sequence
   // below (see the comment above the reboot block in tourLoop) to
   // re-inject the kernel image after each lap's reset_memory(); this
@@ -502,7 +503,12 @@ if (typeof document !== "undefined") (function () {
     emulator.add_listener("vmware-absolute-mouse", function (on) { absoluteMouse = !!on; });
     var serialLine = "";
     emulator.add_listener("serial0-output-byte", function (b) {
-      if (serialLog.length < 65536) serialLog += String.fromCharCode(b);
+      // Head + rolling tail: the first 16KB (boot probes) are kept forever, the
+      // rest is a window over the newest ~48-112KB. A hard 64KB cap used to
+      // freeze the log mid-boot on the syscall trace, so every later
+      // chattool=/chatreply= marker never appeared.
+      serialLog += String.fromCharCode(b);
+      if (serialLog.length > 131072) serialLog = serialLog.slice(0, 16384) + serialLog.slice(-49152);
       // Samantha answering or speaking counts as the visitor still being
       // here: without this the 15s kiosk reset rebooted the demo in the
       // middle of her spoken reply, since listening involves no clicks.
@@ -510,7 +516,11 @@ if (typeof document !== "undefined") (function () {
         var m = /^speak: status=200 bytes=(\d+)/.exec(serialLine);
         if (m) { speakCount++; lastSpeakBytes = Number(m[1]); }
         if (m) lastInteractionTime = Date.now() + Math.ceil(Number(m[1]) / 16); // 16000 samples/s = 16 per ms
-        else if (/^chatreply=|^chattool=/.test(serialLine)) lastInteractionTime = Date.now();
+        else if (/^chatreply=|^chattool=/.test(serialLine)) {
+          lastInteractionTime = Date.now();
+          var tm = /^chattool=([a-z_]+):/.exec(serialLine);
+          if (tm) toolCounts[tm[1]] = (toolCounts[tm[1]] || 0) + 1;
+        }
         serialLine = "";
       } else if (b !== 13 && serialLine.length < 80) serialLine += String.fromCharCode(b);
     });
@@ -873,6 +883,7 @@ if (typeof document !== "undefined") (function () {
     get mouseOn() { return !!(emulator && emulator.mouse_adapter && emulator.mouse_adapter.emu_enabled); },
     get absolute() { return absoluteMouse; }, /* v62: did the kernel enable v86's vmmouse backdoor */
     get serial() { return serialLog; },
+    get toolCounts() { return toolCounts; }, /* demochat-check.mjs: running count per chattool=<tool>: marker, immune to the serial window rolling */
     get started() { return !!emulator || emulatorStarting; }, /* v0.82.x: true once startEmulator() has actually run (construction kicked off, not necessarily finished) -- lets a check script tell "gated, not yet started" apart from "started", the real signal lazy-boot-check.mjs asserts on */
     get audioState() { return emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context ? emulator.speaker_adapter.audio_context.state : "no-speaker-adapter"; }, /* mobile-audio-check.mjs: real iPhone AudioContext unlock state, no ?audiodebug flag needed */
     get audioDebug() { return audioDebugState; }, /* mobile-audio-check.mjs: chunkCount/lastLevel from the dac-send-data hook, only populated under ?audiodebug */
@@ -1476,7 +1487,7 @@ if (typeof document !== "undefined") (function () {
   var ESC_KEY = { type: 'raw', codes: [27], speed: 80 };
   var BURROW_APP = { name: 'Burrow', slot: 1, dwell: 6500, script: [
     { type: 'wait', ms: 700 },
-    { type: 'scancodes', codes: downKeys(2), speed: 300 }, // walk the file list
+    // no arrow walk: Burrow lists folders first, so the cursor already sits on the demo's DOCS folder (kernel.c seeds it with two files)
     ENTER_KEY, // open the folder under the cursor
     { type: 'wait', ms: 1400 },
     { type: 'keys', text: '2', speed: 200 }, // icon view

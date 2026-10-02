@@ -280,8 +280,9 @@ try {
   const seenMarker = {};
   for (const scene of TOOL_SCENES) {
     seenMarker[scene.marker] = (seenMarker[scene.marker] || 0) + 1; // new_note: fires twice, so wait for the Nth occurrence
+    const toolName = scene.marker.replace(/^chattool=|:$/g, '');
     await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 55); }, scene.q + '\n');
-    await page.waitForFunction(([m, n]) => window.__jt.serial.split(m).length - 1 >= n, [scene.marker, seenMarker[scene.marker]], { timeout: 15000 })
+    await page.waitForFunction(([t, n]) => (window.__jt.toolCounts[t] || 0) >= n, [toolName, seenMarker[scene.marker]], { timeout: 15000 })
       .then(() => ok(`tool scene ran: "${scene.q}" -> ${scene.marker}`))
       .catch(() => fail(`tool scene never fired: "${scene.q}" -> ${scene.marker}`));
     await page.waitForTimeout(300);
