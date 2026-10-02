@@ -44,8 +44,8 @@
  */
 
 #include "memmap.h" /* JT_USER_BASE, JT_USER_FB: one source for kernel, boot/linker.ld and the user link scripts */
-#define JT_USER_IMAGE_MAX  (7 * 4096)  /* 28KB of code+data; page 8 of the window is the stack */
-#define JT_USER_STACK_TOP  (JT_USER_BASE + 8 * 4096)
+#define JT_USER_IMAGE_MAX  (JT_USER_IMAGE_PAGES * 4096)  /* 128KB of code+data; the page after it is the stack */
+#define JT_USER_STACK_TOP  (JT_USER_BASE + (JT_USER_IMAGE_PAGES + 1) * 4096)
 
 /* Bounds on the argument block, small on purpose: it is carved out of the
    top of the one 4KB stack page the program also runs on, so every byte

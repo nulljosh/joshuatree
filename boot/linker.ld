@@ -41,7 +41,7 @@ SECTIONS {
        kernel/memmap.h), because every ring-3 app is rodata in this image
        and .bss had closed to under 16KB of the window again. */
     .userimg JT_USER_BASE (NOLOAD) : AT(JT_USER_BASE - 0xC0000000) {
-        . += 8 * 4096; /* 7 pages of image + 1 page of user stack */
+        . += (JT_USER_IMAGE_PAGES + 1) * 4096; /* JT_USER_IMAGE_PAGES of image + 1 page of user stack */
     }
 
     /* Sound Blaster 16 DMA buffer (drivers/sb16.c). ISA DMA can only
@@ -71,7 +71,7 @@ SECTIONS {
 
 ASSERT(ADDR(.bss) + SIZEOF(.bss) <= JT_USER_BASE,
        "kernel .bss has grown into the ring-3 program window (JT_USER_BASE); move it up in kernel/memmap.h")
-ASSERT(JT_USER_BASE + 8 * 4096 <= JT_DMABUF_BASE, "kernel/memmap.h: .userimg overlaps .dmabuf")
+ASSERT(JT_USER_BASE + (JT_USER_IMAGE_PAGES + 1) * 4096 <= JT_DMABUF_BASE, "kernel/memmap.h: .userimg overlaps .dmabuf")
 ASSERT((JT_DMABUF_BASE & 0xFFFF) == 0, "kernel/memmap.h: .dmabuf must be 64KB aligned for ISA DMA")
 ASSERT(JT_DMABUF_BASE + 0x10000 <= JT_USER_FB, "kernel/memmap.h: .dmabuf overlaps .userfb")
 ASSERT(JT_USER_FB + JT_USER_FB_BYTES <= 0xC0800000, "kernel/memmap.h: .userfb leaves the 4MB table paging_task_map_private copies")

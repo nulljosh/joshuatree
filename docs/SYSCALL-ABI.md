@@ -119,9 +119,11 @@ relocations, so its load address is not negotiable:
 
 - A user program is a flat binary. Entry is offset 0, not an ELF entry
   point; `exec_user()` jumps straight at the load address.
-- It is linked at **0xC0587000** and gets **8 pages**: seven for the
-  image (28KB, and a larger one fails to link), one for its stack, whose
-  top, 0xC0588000, is the initial `esp`. (v2 pushes the argument block
+- It is linked at **0xC0587000** and gets **33 pages**: thirty-two for the
+  image (128KB, `JT_USER_IMAGE_PAGES` in kernel/memmap.h; a larger one
+  fails to link), one for its stack, whose top, 0xC05A8000, is the initial
+  `esp`. (Until 2026-10-01 the image was 7 pages, 28KB, and the stack top
+  0xC0588000; the base address did not move.) (v2 pushes the argument block
   onto that page, so the initial `esp` is now a little below the top; see
   "One thing v1 said that v2 makes less than literally true" below. The
   page, its top and its size are unchanged.) `boot/linker.ld` reserves that
@@ -428,7 +430,7 @@ argv), `#include` whichever libjt headers you need, and link
 `user/libjt.a` in after your own object file -- see `user/wc.c` and its
 Makefile rule (`user/wc.bin`) for the pattern. Everything "What this
 contract does NOT cover" says above still applies: no `brk`, no `fork`,
-one program running at a time, the same 7-page image ceiling. libjt does
+one program running at a time, the same 32-page image ceiling. libjt does
 not get around any of that, it just saves you from re-writing `strlen`
 and a decimal formatter in every program that needs one.
 

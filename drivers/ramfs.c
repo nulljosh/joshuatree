@@ -1,15 +1,17 @@
 #include "ramfs.h"
 #include "vfs.h"
 #include "kheap.h"
+#include "../kernel/exec.h" /* JT_USER_IMAGE_MAX: the file cap follows the program window */
 
 #define RAMFS_MAX_FILES 8
 #define RAMFS_NAME_LEN  32
-#define RAMFS_FILE_SIZE 28672 /* 1.9.23: 28KB = JT_USER_IMAGE_MAX, Weather with its antialiased font atlas is 24KB and its .rodata was cut at 16384. Earlier:  1.9.3: ring-3 binaries are written here when no disk is mounted; Fieldbook is 6.3KB and was silently cut at 4096. 1.9.12: Calendar is 13.3KB and was cut at 8192 the same way (its .rodata never loaded) */
+#define RAMFS_FILE_SIZE JT_USER_IMAGE_MAX /* 2026-10-01: 128KB, the window grew; each file now kmallocs only what it holds (grown on a bigger write) so eight slots do not pin 1MB of heap. Earlier: 1.9.23: 28KB = JT_USER_IMAGE_MAX, 1.9.23: 28KB = JT_USER_IMAGE_MAX, Weather with its antialiased font atlas is 24KB and its .rodata was cut at 16384. Earlier:  1.9.3: ring-3 binaries are written here when no disk is mounted; Fieldbook is 6.3KB and was silently cut at 4096. 1.9.12: Calendar is 13.3KB and was cut at 8192 the same way (its .rodata never loaded) */
 
 struct ramfs_file {
     char name[RAMFS_NAME_LEN];
-    unsigned char *data; /* kmalloc'd on first write, kept for reuse: 64KB of static bss would eat the kernel/program-window gap */
+    unsigned char *data; /* kmalloc'd to the write's size, regrown when a bigger one lands: static bss would eat the kernel/program-window gap */
     unsigned int len;
+    unsigned int cap;
     int used;
 };
 
@@ -57,9 +59,10 @@ static int ramfs_write_common(const char *name, const void *data, unsigned int l
         for (int j = 0; j < RAMFS_MAX_FILES; j++) if (!files[j].used) { i = j; break; }
         if (i < 0) return 0; /* full */
     }
-    if (!files[i].data) files[i].data = (unsigned char *)kmalloc(RAMFS_FILE_SIZE);
-    if (!files[i].data) return 0;
     unsigned int n = len < RAMFS_FILE_SIZE ? len : RAMFS_FILE_SIZE;
+    if (files[i].data && files[i].cap < n) { kfree(files[i].data); files[i].data = 0; files[i].cap = 0; }
+    if (!files[i].data) { files[i].data = (unsigned char *)kmalloc(n ? n : 1); files[i].cap = n; }
+    if (!files[i].data) { files[i].cap = 0; return 0; }
     int k = 0; while (name[k] && k < RAMFS_NAME_LEN - 1) { files[i].name[k] = name[k]; k++; } files[i].name[k] = 0;
     for (unsigned int j = 0; j < n; j++) files[i].data[j] = ((const unsigned char *)data)[j];
     files[i].len = n;

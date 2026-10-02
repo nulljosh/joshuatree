@@ -15,7 +15,7 @@
  * one and a missing file brings the starter contact back.
  *
  * A flat binary has no .bss and the RAM file system caps a file at 8KB, so
- * the 3KB list does not live in .data. exec_user zeroes the whole 28KB image
+ * the 3KB list does not live in .data. exec_user zeroes the whole 128KB image
  * window before loading, so the list sits in the zeroed pages just past
  * _user_end, which the link script defines.
  *

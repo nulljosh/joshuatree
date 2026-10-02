@@ -24,7 +24,7 @@ int jt_text_draw(struct jt_window_info *w, int face, int x, int y, unsigned rgb,
    '?'), one size, every glyph the same 8 px advance. Lives in its own object
    (user/libjt/mono.c, own atlas) so only apps that call it pay for it; this
    is JT_FACE_MONO's role, kept out of the shared face table on purpose, since
-   every ring-3 image has to fit the 28KB window. */
+   every ring-3 image has to fit the 128KB window (28KB until 2026-10-01). */
 #define JT_MONO_ADV 8
 int jt_mono_height(void);
 /* Draws s at pen x, line top y; each glyph advances JT_MONO_ADV. Returns the x after the last glyph. */

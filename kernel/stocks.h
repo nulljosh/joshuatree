@@ -61,7 +61,7 @@ static int stx_parse_row(const char *p, int range, int i) {
    Weather way. Line 1 "range R sel S"; then one line per symbol:
    "i stale price prev time dprice dprev n p0 .. pn-1" (dprice/dprev are the 1D
    quote the sidebar pill uses; points are cut to STX_FILE_PTS by even
-   sampling). About 2KB, far under the 28KB ramfs file. */
+   sampling). About 2KB, far under the ramfs file cap (JT_USER_IMAGE_MAX). */
 #define STX_FILE_PTS 32
 static int stx_sel_hint;
 char *wx_put_int(char *o, int v);

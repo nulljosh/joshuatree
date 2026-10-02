@@ -20,11 +20,19 @@
  * 2026-10-01: moved up 512KB from 0xC0507000. Every ring-3 app binary is
  * baked into the kernel as rodata and .bss had closed to under 16KB of
  * the window; this leaves about half a megabyte for more apps before
- * tools/checks/bss-margin-check.py complains again. */
+ * tools/checks/bss-margin-check.py complains again.
+ *
+ * 2026-10-01 (later): the image window grew from 7 pages to
+ * JT_USER_IMAGE_PAGES (32, 128KB): Samantha and Stocks had both closed to
+ * within 1KB of 28KB. JT_USER_BASE did not move (docs/SYSCALL-ABI.md names
+ * it); .dmabuf and .userfb slid up 128KB to make room, and the window end
+ * (0xC0730000) still sits inside the second 4MB table. The page count is
+ * hex so the Makefile's sed renders it into boot/memmap.ld too. */
 
-#define JT_USER_BASE      0xC0587000 /* 8 pages: 7 of image, 1 of stack (.userimg) */
-#define JT_DMABUF_BASE    0xC0590000 /* 64KB Sound Blaster DMA, 64KB aligned (.dmabuf) */
-#define JT_USER_FB        0xC05A0000 /* ring-3 window framebuffer (.userfb) */
+#define JT_USER_BASE        0xC0587000 /* program window: JT_USER_IMAGE_PAGES of image, then 1 page of stack (.userimg) */
+#define JT_USER_IMAGE_PAGES 0x20       /* 32 pages = 128KB of image (code+data+arena) per ring-3 program; was 7 (28KB) until 2026-10-01 */
+#define JT_DMABUF_BASE      0xC05B0000 /* 64KB Sound Blaster DMA, 64KB aligned (.dmabuf) */
+#define JT_USER_FB          0xC05C0000 /* ring-3 window framebuffer (.userfb) */
 #define JT_USER_FB_BYTES  0x170000   /* 832x450 at 32bpp fits */
 
 #endif

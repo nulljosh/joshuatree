@@ -4,7 +4,7 @@
  * It rasterizes through the kernel's own drivers/ttf.c (stb_truetype over the
  * same embedded DejaVu blobs the in-kernel apps use), so ring-3 text is the
  * same glyphs from the same source, only pre-rendered for the few sizes and
- * the glyph range a flat 28KB ring-3 image can afford: a body size in
+ * the glyph range a flat ring-3 image (28KB when this was sized, 128KB now) can afford: a body size in
  * regular and bold, and a display size for digits. Coverage is packed to
  * 4 bits (16 steps is still a smooth edge ramp). Latin-1 degree (0xB0) is
  * included.

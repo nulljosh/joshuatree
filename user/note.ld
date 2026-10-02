@@ -35,7 +35,7 @@ SECTIONS {
     /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) }
 }
 
-ASSERT(_user_end - JT_USER_BASE <= 0x7000,
-       "user flat binary is larger than the 7-page image window exec_user() loads into")
+ASSERT(_user_end - JT_USER_BASE <= JT_USER_IMAGE_PAGES * 4096,
+       "user flat binary is larger than the JT_USER_IMAGE_PAGES image window exec_user() loads into")
 ASSERT(_user_bss_size == 0,
        "a flat user binary cannot have .bss: nothing zeroes it, see user/hello.ld")
