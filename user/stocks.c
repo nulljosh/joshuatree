@@ -204,6 +204,7 @@ void _start(int argc, char **argv) {
     unsigned flags = JT_POLL_PRESENT;
     for (;;) {
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { draw(0); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;

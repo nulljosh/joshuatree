@@ -89,6 +89,7 @@ struct jt_sysinfo {
 #define JT_EV_KEY   1
 #define JT_EV_CLICK 2
 #define JT_EV_WHEEL 3
+#define JT_EV_RESIZE 4
 /* Key codes above ASCII, the same values the desktop's own apps see. */
 #define JT_KEY_UP    256
 #define JT_KEY_DOWN  257
@@ -222,5 +223,25 @@ static inline int jt_rec_start(unsigned rate)                    { return jt_sys
 static inline int jt_rec_read(void *buf, unsigned n)             { return jt_syscall(JT_SYS_AUDIO_RECORD, JT_REC_READ, (unsigned)buf, n); }
 static inline int jt_rec_stop(void)                              { return jt_syscall(JT_SYS_AUDIO_RECORD, JT_REC_STOP, 0, 0); }
 static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
+/* Resize helper, the app's two lines: after a poll, `if (r == 1 && jt_window_resized(&ev, &win)) { draw(); flags = JT_POLL_PRESENT; continue; }`.
+   Returns 1 when ev was JT_EV_RESIZE and re-opening the window gave *info a buffer
+   of the new size (the app must redraw all of it: the new buffer starts zeroed), else 0.
+   Logs "ring3: window now WxH" once the new size is mapped, the line ring3resize-check.py reads. */
+static inline int jt_window_resized(const struct jt_event *ev, struct jt_window_info *info) {
+    if (ev->kind != JT_EV_RESIZE) return 0;
+    struct jt_window_info n;
+    if (jt_window_open(&n) != 0 || !n.pixels) return 0;
+    *info = n;
+    char b[40]; int l = 0; const char *a = "ring3: window now ";
+    while (*a) b[l++] = *a++;
+    for (int k = 0; k < 2; k++) {
+        unsigned v = k ? n.height : n.width, d = 1000000000u; int on = 0;
+        for (; d; d /= 10) { unsigned q = v / d % 10; if (q || on || d == 1) { b[l++] = (char)('0' + q); on = 1; } }
+        if (!k) b[l++] = 'x';
+    }
+    b[l++] = '\n';
+    jt_write(1, b, (unsigned)l);
+    return 1;
+}
 
 #endif

@@ -425,6 +425,23 @@ int paging_task_map_private(unsigned int dir_phys, unsigned int vaddr, unsigned 
     return 1;
 }
 
+/* 1.10.x: re-map a private window at a new size. Pages of the old buffer
+   past the new length go back to the kernel's supervisor-only entries, the
+   new frames are mapped user-accessible, and the CPU's TLB is flushed on
+   the current directory (the caller is the owning task, inside its own
+   syscall). */
+int paging_task_remap_private(unsigned int dir_phys, unsigned int vaddr, unsigned int pa, unsigned int len, unsigned int old_len) {
+    if (!paging_task_map_private(dir_phys, vaddr, pa, len)) return 0;
+    u32 *dir = (u32 *)dir_phys;
+    u32 *t = (u32 *)(dir[vaddr >> 22] & ~0xFFFu);
+    for (u32 off = len; off < old_len; off += 0x1000) {
+        u32 pte = ((vaddr + off) >> 12) & 0x3FF;
+        t[pte] = base_page_tables[1][pte] & ~0x4u;
+    }
+    paging_flush_current();
+    return 1;
+}
+
 /* 1.9.23: the reverse, for paging_free_task_directory's caller: hand the
    private table frame back. The frames it pointed at are the window's
    own kmalloc'd buffers, freed by their owner. */

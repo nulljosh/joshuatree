@@ -152,6 +152,7 @@ void _start(int argc, char **argv) {
 
         struct jt_event ev;
         if (!next_event(&ev, 1)) break;
+        if (jt_window_resized(&ev, &win)) { W = (int)win.width; H = (int)win.height; rect(0, 0, W, H, BG); continue; } /* JT_EV_RESIZE */
         if (ev.kind != JT_EV_KEY) continue;
         if (ev.a == JT_KEY_ESC) break;
         if (ev.a == '`') {
