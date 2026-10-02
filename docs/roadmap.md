@@ -124,6 +124,7 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 3 of 26 apps (Burrow, Weather, Mail) can open in their own window, capped at 2 at once; Reminders (1.9.9) and Calendar (1.9.12) left that set for ring 3.
 
 - [x] [Sonnet] Files is now Burrow, with a kit fox peeking out of its burrow for an icon. Samantha still opens it for "files" and "file browser". `tools/checks/burrow-rename-check.py` proves the name, the aliases and the new icon art.
+- [ ] [Sonnet] Calendar's Year view shows each day as a dot, not a number. A ring-3 window is 345px tall, which leaves about 10px per week row, and a digit needs 16. Either scale the digit font down for the mini months or let the year view use the full window height. `tools/checks/calviews-check.py` now proves the week bands of dots, so it should be tightened to digits when this lands.
 - [ ] [Fable] Per-window backing stores, not drawing straight into the shared framebuffer.
 - [ ] [Fable] A compositor with damage tracking, plus the back buffer this kernel still lacks.
 - [ ] [Fable] Input routing by focus instead of the current global key/click pull.

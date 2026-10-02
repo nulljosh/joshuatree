@@ -84,10 +84,12 @@ PARK = (480, 200)
 # reused here for step 7's Compose-sends-into-the-list-window proof.
 VX, VY, VW, VH = 78, 72, 804, 345
 INK = (0x1C, 0x1C, 0x1E)
-# A pixel inside both windows' rects where Notes' browse view draws its
-# selected-row band (237,230,220) and Files shows its flat (250,248,246)
-# background, so it tells which of the two is on top.
-NOTES_PROBE = (500, 178)
+# A pixel inside both windows' rects where Notes' browse view draws the lit
+# NOTES column header band (user/notes.c draw_list: BAND 0xEAE4DC at window
+# x 186..406, y 58..76, i.e. screen 324..544 x 190..208 for a window at
+# (130,100)) and Files shows its flat (250,248,246) background, so it tells
+# which of the two is on top.
+NOTES_PROBE = (500, 199)
 SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -160,6 +162,15 @@ try:
                 if pixel(img, x, y) == color: n += 1
         return n
 
+    def faint_ink_count(img, vx, vy, vw, vh):
+        """Any text ink, dark or faded: Mail draws a read message in FADE and
+        an unread one in INK, and the message Compose files is already read."""
+        n = 0
+        for y in range(vy, vy + vh - 4):
+            for x in range(vx + 4, vx + vw - 4):
+                if sum(pixel(img, x, y)) < 600: n += 1
+        return n
+
     centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
     def open_slot(slot, ready=None):
         # With `ready`, poll until the window is really there instead of
@@ -184,7 +195,7 @@ try:
     QCODE = {" ": "spc", ".": "dot", "-": "minus", "/": "slash", "@": "shift-2",
              "\n": "ret", "\b": "backspace"}
     def key(c):
-        if c in QCODE: cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": QCODE[c]}]}})
+        if c in QCODE: cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in QCODE[c].split("-")]}})  # "shift-2" is two qcodes held together, QMP rejects it as one
         elif c.isupper(): cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": "shift"}, {"type": "qcode", "data": c.lower()}]}})
         else: cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": c}]}})
         time.sleep(0.08)
@@ -223,11 +234,11 @@ try:
     if not w0_still_here: fails.append("multi-window: opening Notes closed/hid Files instead of both staying open")
     if not w1_here: fails.append("multi-window: Notes' own window never appeared while Files was open")
 
-    # Real content, not just chrome: Notes' browse-view row band lives inside
+    # Real content, not just chrome: Notes' browse-view header band lives inside
     # window 1's content rect, over Files' flat background, so a changed
     # pixel can only be window 1's real content drawn on top.
-    # Measured against a real framebuffer dump: the selected-row band is
-    # (237,230,220) where Files shows its flat (250,248,246) background.
+    # Measured against a real framebuffer dump: the header band is
+    # (234,228,220) where Files shows its flat (250,248,246) background.
     files_bg = pixel(img1, *NOTES_PROBE)
     notes_band = pixel(img2, *NOTES_PROBE)
     notes_band_present = close(notes_band, files_bg) > 12
@@ -395,7 +406,7 @@ try:
     mail_list_open = is_red(pixel(dump(), *W0_CLOSE))
     print(f"batch3: Mail list window open: {'yes' if mail_list_open else 'NO'}")
     if not mail_list_open: fails.append("batch3: Mail did not open from the dock")
-    ink_before_compose = ink_count(dump(), VX, VY, VW, VH)
+    ink_before_compose = faint_ink_count(dump(), VX, VY, VW, VH)
 
     key("c")
     # 1.9.24: Compose is an inline sheet inside the Mail window, not a second
@@ -417,17 +428,26 @@ try:
 
     # Type the from/subject/body stages into Compose (window 1, focused --
     # it opened on top, so keystrokes go there, not to the list window).
+    # The sheet has four fields (user/mail.c: To, From name, Subject, Body) and
+    # Enter on the last one sends. To must be one full address or the sheet
+    # refuses with a note; QEMU has no network here, so the post comes back
+    # unsent and the message is filed as unsent, which is the same "filed" path.
+    type_str("qa@mw.test"); keys("ret"); time.sleep(0.3)
     type_str("qa-mw-compose-from"); keys("ret"); time.sleep(0.3)
     type_str("qa-mw-compose-subject"); keys("ret"); time.sleep(0.3)
     type_str("qa-mw-compose-body-marker"); keys("ret")
-    for _ in range(50):  # the app drains one key per frame; wait for it to catch up and file the message
+    for _ in range(150):  # the app drains one key per frame, then the post waits out its timeout before filing the message
         time.sleep(0.1)
         try:
             if "mail: filed n=" in open(LOG, errors="replace").read(): break
         except OSError: pass
     time.sleep(0.5)
 
-    img7b = dump()
+    for _ in range(25):  # the repaint after filing lands a frame later; poll for the grown list
+        img7b = dump()
+        if faint_ink_count(img7b, VX, VY, VW, VH) > ink_before_compose: break
+        time.sleep(0.2)
+    img7b.save("/tmp/jt-multiwindow-compose.png")
     compose_closed_after_send = not is_red(pixel(img7b, *W1_CLOSE)) and "mail: filed n=" in open(LOG, errors="replace").read()
     list_still_open_after_send = is_red(pixel(img7b, *W0_CLOSE))
     print(f"batch3: Compose closed itself after send: {'yes' if compose_closed_after_send else 'NO'}   list window still open: {'yes' if list_still_open_after_send else 'NO'}")
@@ -439,7 +459,7 @@ try:
     # ink (from/subject text) in its content area must have grown, the
     # same "real content changed" bar mailtools-check.py already holds
     # send_mail to, now proven for the windowed Compose path too.
-    ink_after_send = ink_count(img7b, VX, VY, VW, VH)
+    ink_after_send = faint_ink_count(img7b, VX, VY, VW, VH)
     print(f"batch3: Mail list ink before Compose={ink_before_compose}  after send={ink_after_send}")
     if ink_after_send <= ink_before_compose:
         fails.append("batch3: Mail list window's ink did not grow after sending -- the new message does not appear to show in the list")
