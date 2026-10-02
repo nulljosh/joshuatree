@@ -16,19 +16,18 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-PR #331 awaits green CI then merge. 27 of 29 stale checks repointed and folded into release/2.0.0, CI running, last two (Notes text selection, editor redraw) in agent. Two real bugs found and fixed: OS never forwarded Ctrl+C/X/V to ring-3 windows; single-connection net stack blocked ring-3 HTTP for 20s on desktop weather fetch, now -EBUSY and retry (httpstress-check added). "Guest reset" was demo page's 15s kiosk idle timer, not kernel. Strata Kit A+ loop 4 rounds: C to B, final CAD renders with real port cutouts (feat/strata-simple). Ad A+ loop 2 rounds: B (feat/ad-landing). Fold agent merging feat/ad-landing and feat/strata-simple into release/2.0.0 (Strata CAD, build sheet, CC BY-NC-SA, TRADEMARKS.md, 30s ad). Authmail double opt-in deployed.
+PR #331 auto-merge armed. Every fix pushed: parser-fuzz host stub, kernel.c ceiling, window-open frame budget, demo checks slowed for CI. GitHub merges automatically when required checks pass (check, check-refs, network). Tag and release come from repo's release workflow. Strata, licence, ad v2, Reception slice 1 folded or on branches. Apple-style plain-English no-version ad NOT done (stopped for usage; swap landing/ad.mp4 after 2.0). Standing rules saved: 30-minute task refresh, security/stability slice between features, ETAs in minutes, no version in ads.
 
 26 of 26 apps ring-3, compositor windows, private memory, crash isolation. Clipboard (syscall 399), resize, growable memory, smooth type. Mail via Worker (Resend, secret pending). Weather/Stocks refetch. Demo covers 26. Logo/UI done. Landing synced.
 
 ## Next, in order
 
-After #331 merges and CI green:
-1. feat/samantha-live, feat/reception as 2.0.1 (and textselect/editorflash if still red).
-2. Security audit of syscalls 393-400.
-3. Worker route limits.
-4. Stability root causes.
-5. Then the RANKED QUEUE.
-Joshua's new rules: refresh or stop background tasks at 30 min; one security or stability slice between features; ETAs in minutes only.
+1. Verify tag and release workflow complete.
+2. Deployment confirmation.
+3. Swap landing/ad.mp4 with Apple-style ad.
+4. 2.0.1 fold: feat/samantha-live, feat/reception (and textselect/editorflash if still red).
+5. Security audit of syscalls 393-400.
+6. Then the RANKED QUEUE.
 Then: 2.1 Music, 2.2 Video, 3.0 on ASRock J4125B-ITX, Strata Kit at 3.1.
 
 ## Restart prompt
