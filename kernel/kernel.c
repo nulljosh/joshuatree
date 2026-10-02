@@ -5174,7 +5174,7 @@ static void gui_launch_terminal(void){
    room the top hint line gets, while staying inside the window's own
    450px content viewport (gui_launch_from_dock's `h - 40` for the Apps
    folder), 15px of margin above the window's own bottom edge. */
-#define APPS_PANEL_H 410
+#define APPS_PANEL_H 420
 /* The framebuffer has no alpha channel. Blend each glass pixel against the
    wallpaper already underneath it, keeping the real photo visible. */
 static void gui_apps_glass(int x, int y, int w, int h){
@@ -5262,10 +5262,10 @@ static void gui_apps_launch(int icon){
 static void gui_launch_apps(void){
     int sel = 0;
     int rows = (GUI_APPS_FOLDER + APPS_COLS - 1) / APPS_COLS;
-    int cell_w = 150, cell_h = 108, tile = 74; /* 74 = the artwork's 148px at 2x: an exact 1:1 blit like the dock, not a 148 to 120 resample */
+    int cell_w = 150, cell_h = 116, tile = 74; /* 74 = the artwork's 148px at 2x: an exact 1:1 blit like the dock, not a 148 to 120 resample */
     int grid_w = APPS_COLS * cell_w;
     int x0 = ((int)window_width() - grid_w) / 2;
-    int y0 = 95;
+    int y0 = 88;
     int scroll_offset = 0; /* v0.77.0: mouse wheel scroll support, apps offset by row */
 
     /* The wallpaper behind this folder never changes while it is open, so it
