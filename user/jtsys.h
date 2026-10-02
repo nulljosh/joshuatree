@@ -56,12 +56,17 @@
 #define JT_SYS_UNLINK      390 /* delete a file; relative path like open */
 #define JT_SYS_SHELL_RUN   391 /* 1.9.24: run one allowlisted shell line, output into a buffer; see kernel/shellsys.c */
 #define JT_SHELL_LINE_MAX 160  /* longest line the kernel copies in, bytes before the NUL: "<cwd>\n<command>" */
-#define JT_SYS_AUDIO       393 /* 1.9.26: queue 8-bit unsigned mono PCM / query playback / stop; see kernel/syscall.h (394 is reserved for record) */
+#define JT_SYS_AUDIO       393 /* 1.9.26: queue 8-bit unsigned mono PCM / query playback / stop; see kernel/syscall.h */
 #define JT_AUDIO_PLAY   1
 #define JT_AUDIO_STATUS 2
 #define JT_AUDIO_STOP   3
 #define JT_AUDIO_END    1  /* flags: this call carries the last bytes of the clip, start now */
 #define JT_AUDIO_CHUNK_MAX 8192
+#define JT_SYS_AUDIO_RECORD 394 /* 1.9.26: push-to-talk capture, 8-bit unsigned mono; see kernel/syscall.h */
+#define JT_REC_START 1
+#define JT_REC_READ  2
+#define JT_REC_STOP  3
+#define JT_REC_CHUNK_MAX 8192
 #define JT_SYS_SYSINFO     395 /* 1.9.26: weather, chat host, phone flag, time in one read-only struct; see kernel/syscall.h */
 #define JT_SYS_LAUNCH_REQUEST 396 /* 1.9.26: ask the desktop to open an app by exact APPS[] name; never launches inside the gate */
 #define JT_SYSINFO_VERSION 1
@@ -203,6 +208,11 @@ static inline int jt_audio_play(const void *pcm, unsigned len, unsigned rate, un
 /* played is in samples: mouth time in ms = played * 1000 / rate. */
 static inline int jt_audio_status(struct jt_audio_status *st)    { return jt_syscall(JT_SYS_AUDIO, JT_AUDIO_STATUS, (unsigned)st, sizeof *st); }
 static inline int jt_audio_stop(void)                            { return jt_syscall(JT_SYS_AUDIO, JT_AUDIO_STOP, 0, 0); }
+/* Arms capture at rate Hz: 0, -ENODEV no card, -EBUSY playback owns it (or the last take is still landing; retry). */
+static inline int jt_rec_start(unsigned rate)                    { return jt_syscall(JT_SYS_AUDIO_RECORD, JT_REC_START, rate, 0); }
+/* Copies up to n (max JT_REC_CHUNK_MAX) banked bytes, oldest first; returns the count, 0 = none yet. Never blocks. */
+static inline int jt_rec_read(void *buf, unsigned n)             { return jt_syscall(JT_SYS_AUDIO_RECORD, JT_REC_READ, (unsigned)buf, n); }
+static inline int jt_rec_stop(void)                              { return jt_syscall(JT_SYS_AUDIO_RECORD, JT_REC_STOP, 0, 0); }
 static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
 
 #endif

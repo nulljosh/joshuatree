@@ -727,7 +727,7 @@ user memory. Nothing is written to `out` on any failure.
 |---|---|---|---|---|---|
 | 393 | `audio` | op: 1 play, 2 status, 3 stop | `struct jt_audio_play *` / `struct jt_audio_status *` / 0 | `sizeof` that struct | play: bytes taken; status: bytes written; stop: 0; or -errno |
 
-One number, three ops, so 394 stays free for recording. The format is the one the kernel's own Samantha already feeds the card: 8-bit unsigned mono PCM, 4000 to 44100 Hz (the Worker's `/api/speak` sends 16000). The program fetches the clip itself with `http_post` and queues it here.
+One number, three ops; recording has its own number, 394, below. The format is the one the kernel's own Samantha already feeds the card: 8-bit unsigned mono PCM, 4000 to 44100 Hz (the Worker's `/api/speak` sends 16000). The program fetches the clip itself with `http_post` and queues it here.
 
 ```c
 struct jt_audio_play { const void *pcm; unsigned len; unsigned rate; unsigned flags; }; /* flags: JT_AUDIO_END = 1 */
@@ -737,6 +737,16 @@ struct jt_audio_status { unsigned version, size, playing, queued, space, rate, p
 `play` copies at most 8192 bytes per call into a 32KB kernel ring and returns how many it took. 0 means the ring is full (or the card is busy with the kernel's own chat playback or a recording), so retry on a later frame; the call never waits. The SB16 IRQ drains the ring in 4KB DMA transfers, so playback runs with no caller. It starts when 4KB are queued, or at once when the call carries `JT_AUDIO_END`, which the program sets on the call with the clip's last bytes (a call cut short by a full ring drops the flag, so resend it with the rest). `rate` is read only when the queue was idle. -ENODEV no card, -EINVAL zero length, bad op or short struct, -EFAULT a range outside user memory.
 
 `status` fills the struct (`version` first, `size` is what the kernel wrote) and returns the byte count. `played` counts samples heard since the queue last went idle, interpolated inside the transfer in flight, so mouth time in ms is `played * 1000 / rate`. `stop` drops what is not yet in flight; the current 4KB, about a quarter second at 16 kHz, still finishes. The kernel's `sb16_play` and `sb16_record` return 0 while the queue is busy, and `play` returns 0 while they own the card.
+
+### audio_record (394)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 394 | `audio_record` | op: 1 start, 2 read, 3 stop | start: rate in Hz (a value) / read: user buffer / 0 | 0 / max bytes / 0 | start: 0; read: bytes copied; stop: 0; or -errno |
+
+Push-to-talk capture on the same card and in the same format as `audio` (8-bit unsigned mono, 4000 to 44100 Hz, 16000 for Samantha). `start` clears a 32KB kernel ring and arms capture; the SB16 IRQ then chains 4KB ADC transfers into it (about a quarter second each at 16 kHz), so nothing waits on a caller. `read` copies what has been captured so far, oldest first, at most 8192 bytes per call, and returns the count, 0 when nothing is banked yet. A caller more than 32KB behind loses the oldest samples. `stop` ends capture; the transfer in flight still lands and stays readable, so a program drains with `read` until it returns 0 after `stop`. A `start` on a take left on restarts it.
+
+Capture and playback are exclusive in both directions. `start` returns -EBUSY while `audio` has anything queued or in flight (and while the previous take's last transfer is still landing, so retry on a later frame); `audio` `play` returns 0 while capture runs, and `sb16_play`/`sb16_record` return 0 too. -ENODEV no card, -EINVAL zero length or bad op, -EFAULT a range outside user memory. Same driver and same DSP-2.xx ADC command as the kernel chat's `sb16_record`; QEMU's `-device sb16` does not implement ADC, so under QEMU `start` succeeds but no samples arrive (as with the kernel's own F2). There is no AC97 driver in the kernel.
 
 ## sysinfo and launch_request (1.9.26)
 
@@ -774,4 +784,4 @@ for a bad pointer. The kernel stores one pending index and returns 0, or -EBUSY
 if one is already waiting. It never launches inside the gate: the desktop loop
 takes the index on its next pass and opens it the way a dock click does, as a
 window for a ring-3 app or through the blocking path otherwise. Numbers 393
-and 394 are held for the audio calls.
+and 394 are the audio calls.

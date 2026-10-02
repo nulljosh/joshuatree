@@ -57,4 +57,14 @@ struct sb16_qstat { unsigned int present, playing, queued, space, rate, played; 
 void sb16_queue_status(struct sb16_qstat *st);
 /* Drops everything not yet in flight; the current 4KB (about a quarter second) finishes. */
 void sb16_queue_stop(void);
+/* 1.9.26: async capture behind SYS_AUDIO_RECORD, 8-bit unsigned mono at rate Hz (4000..44100).
+   Same DSP-2.xx ADC command as sb16_record, but chained from the IRQ in 4KB transfers into a 32KB
+   ring (an overrun drops the oldest). Exclusive with the play queue and sb16_play/record, which
+   return 0 while it runs. sb16_rec_start returns 1 armed, 0 busy or no card; it restarts a take
+   left on. sb16_rec_read never waits and returns bytes copied (0 when nothing is banked yet; it
+   still drains what is left after stop). sb16_rec_stop lets the transfer in flight land, then idles. */
+int sb16_rec_start(unsigned int rate);
+unsigned int sb16_rec_read(unsigned char *out, unsigned int max_len);
+void sb16_rec_stop(void);
+int sb16_rec_active(void);
 #endif
