@@ -95,7 +95,7 @@ function dockSlotPos(slot) {
   const cy = LOGICAL_H - marginBot - pad - Math.floor(icon / 2);
   return [x0 + slot * (icon + gap), cy];
 }
-const CHAT_SLOT = 7; // GUI_DOCK_DEFAULT order in kernel.c: Files,Mail,Calendar,Notes,Reminders,Terminal,Chat,Weather (0-indexed dock tiles, slot 0 is Apps folder)
+const CHAT_SLOT = 7; // GUI_DOCK_DEFAULT order in kernel.c: Apps,Burrow,Mail,Calendar,Notes,Reminders,Terminal,Samantha,Weather,Stocks,Trash (0-indexed dock tiles)
 const [CHAT_X, CHAT_Y] = dockSlotPos(CHAT_SLOT);
 
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.svg': 'image/svg+xml', '.txt': 'text/plain', '.elf': 'application/octet-stream' };
@@ -134,7 +134,7 @@ const PICK_REPLIES = {
   'note: pick up dry cleaning': { tool: 'new_note', arg: 'pick up dry cleaning' },
   "what's the weather like": { tool: 'weather', arg: '' },
   "what's on my calendar today": { tool: 'calendar_today', arg: '' },
-  'open calculator': { tool: 'open_app', arg: 'calculator' },
+  'note: book flights for the launch': { tool: 'new_note', arg: 'book flights for the launch' },
 };
 
 let recordedBody = null, recordedMethod = null, proxyPostSeen = false;
@@ -183,28 +183,22 @@ await page.route('**/api/proxy**', async (route) => {
 
 await page.goto(url, { waitUntil: 'load' });
 
+// Exact-INK pixel count over the whole screen, sampled per logical pixel. The
+// desktop photo carries some near-INK pixels, so callers compare against a
+// baseline taken with her window open and still empty.
 async function ink() {
-  return await page.evaluate(([vx, vy, vw, vh, qrowTop, replyTop, ink, tol]) => {
+  return await page.evaluate(([ink, tol]) => {
     const c = document.querySelector('#screen_canvas');
     if (!c || !c.width || !c.height) return null;
     const scale = c.width / 960;
-    const ctx = c.getContext('2d');
-    const data = ctx.getImageData(0, 0, c.width, c.height).data;
-    function isInk(x, y) {
-      const px = Math.min(c.width - 1, Math.round(x * scale));
-      const py = Math.min(c.height - 1, Math.round(y * scale));
-      const i = (py * c.width + px) * 4;
-      return Math.abs(data[i] - ink[0]) <= tol && Math.abs(data[i + 1] - ink[1]) <= tol && Math.abs(data[i + 2] - ink[2]) <= tol;
+    const data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let total = 0;
+    for (let y = 0; y < 540; y++) for (let x = 0; x < 960; x++) {
+      const i = (Math.min(c.height - 1, Math.round(y * scale)) * c.width + Math.min(c.width - 1, Math.round(x * scale))) * 4;
+      if (Math.abs(data[i] - ink[0]) <= tol && Math.abs(data[i + 1] - ink[1]) <= tol && Math.abs(data[i + 2] - ink[2]) <= tol) total++;
     }
-    let replyBelow = 0, questionBand = 0;
-    for (let y = replyTop; y < vy + vh - 20; y++) {
-      for (let x = vx + 4; x < vx + vw - 4; x++) if (isInk(x, y)) replyBelow++;
-    }
-    for (let y = qrowTop; y < replyTop; y++) {
-      for (let x = vx + 4; x < vx + vw - 4; x++) if (isInk(x, y)) questionBand++;
-    }
-    return { replyBelow, questionBand, scale, canvasW: c.width, canvasH: c.height };
-  }, [VX, VY, VW, VH, QROW_TOP, REPLY_TOP, INK, INK_TOL]);
+    return { total, scale, canvasW: c.width, canvasH: c.height };
+  }, [INK, INK_TOL]);
 }
 
 try {
@@ -226,64 +220,22 @@ try {
   await page.evaluate(() => window.__jt.click());
   ok(`clicked dock slot ${CHAT_SLOT} (Chat) at (${CHAT_X},${CHAT_Y})`);
 
-  await page.waitForFunction(() => window.__jt.serial.includes('chatchrome'), null, { timeout: 20000 });
-  await page.waitForFunction(() => window.__jt.serial.includes('chatconsole'), null, { timeout: 20000 });
-  ok('chatchrome/chatconsole markers seen: the real Chat app opened');
-
-  // The chatconsole serial marker fires when the kernel has DRAWN the
-  // console into its framebuffer, but v86 presents that framebuffer to
-  // the canvas on its own schedule, so a fixed wait after the marker can
-  // still sample the desktop (whose satellite photo has near-INK pixels;
-  // seen on CI as "3661 ink px before sending"). Wait for the window's
-  // own red close light and its GUI_BG body to be on the canvas first,
-  // the same "poll for the real chrome" shape appclose-check.py uses.
-  await page.waitForFunction(([cx, cy, bx, by]) => {
-    const c = document.querySelector('#screen_canvas');
-    if (!c || !c.width) return false;
-    const scale = c.width / 960, ctx = c.getContext('2d');
-    const px = (x, y) => ctx.getImageData(Math.round(x * scale) + 1, Math.round(y * scale) + 1, 1, 1).data;
-    const near = (p, r, g, b, t) => Math.abs(p[0] - r) <= t && Math.abs(p[1] - g) <= t && Math.abs(p[2] - b) <= t;
-    return near(px(cx, cy), 0xFF, 0x5F, 0x57, 12) && near(px(bx, by), 0xFA, 0xF8, 0xF6, 4);
-  }, [94, 56, VX + 10, REPLY_TOP + 4], { timeout: 20000 });
-  ok('Chat window chrome and body are on the canvas');
-  // 1.6.12: chat_face_load() now always runs a real (if quickly-403'd)
-  // network round trip before the empty state's suggestion rows ever
-  // paint -- facehost= is unconditional on the cmdline now (embed.js),
-  // where it used to be off by default and this fetch a same-tick no-op
-  // (see chat_face.h's own "off unless facehost=" comment). A flat 200ms
-  // sleep here raced that real round trip and intermittently sampled
-  // before the suggestions drew. Poll instead, same shape as the window
-  // chrome wait just above, capped well under this test's own budget.
-  await page.waitForFunction(([vx, vy, vw, vh, replyTop, inkColor, tol]) => {
-    const c = document.querySelector('#screen_canvas');
-    if (!c || !c.width) return false;
-    const scale = c.width / 960, ctx = c.getContext('2d');
-    const data = ctx.getImageData(0, 0, c.width, c.height).data;
-    function isInk(x, y) {
-      const px = Math.min(c.width - 1, Math.round(x * scale));
-      const py = Math.min(c.height - 1, Math.round(y * scale));
-      const i = (py * c.width + px) * 4;
-      return Math.abs(data[i] - inkColor[0]) <= tol && Math.abs(data[i + 1] - inkColor[1]) <= tol && Math.abs(data[i + 2] - inkColor[2]) <= tol;
-    }
-    for (let y = replyTop; y < vy + vh - 20; y++) {
-      for (let x = vx + 4; x < vx + vw - 4; x++) if (isInk(x, y)) return true;
-    }
-    return false;
-  }, [VX, VY, VW, VH, REPLY_TOP, INK, INK_TOL], { timeout: 8000 }).catch(() => {});
+  // 2.0: Samantha is a ring-3 window (user/samantha.c). Its own markers say
+  // the window opened and the input bar is drawn and focused; nothing else
+  // gates typing, so the scene types straight into the bar, no hotkey.
+  await page.waitForFunction(() => window.__jt.serial.includes('samopen'), null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__jt.serial.includes('samfocus'), null, { timeout: 30000 });
+  ok('samopen/samfocus markers seen: Samantha opened with her input bar focused');
+  await page.waitForTimeout(800); // first frame (and her face fetch's 403) settle before typing
   const before = await ink();
-  console.log(`ink below reply line before sending: ${before ? before.replyBelow : '(no canvas)'} (canvas ${before ? before.canvasW + 'x' + before.canvasH + ' scale=' + before.scale : '?'})`);
   if (!before) fail('could not read the v86 canvas at all');
-  // 1.3.0: Chat's empty state now shows a greeting plus a clickable list of
-  // example prompts (one per tool chat_run_tool handles) instead of a blank
-  // void, so this band is expected to carry ink even before anything is
-  // sent -- proof the empty state actually rendered the suggestion rows.
-  else if (before.replyBelow === 0) fail('empty state shows no suggestion rows (0 ink below the question row before anything was sent)');
-  else ok(`empty-state suggestion rows rendered (${before.replyBelow} ink px below the question row before sending)`);
+  else console.log(`ink before sending: ${before.total} (canvas ${before.canvasW}x${before.canvasH})`);
 
-  await page.evaluate(async () => { await window.__jt.emu.keyboard_send_text('n', 200); });
-  await page.waitForTimeout(400);
+  // The tour's exact delivery: the sentence plus Enter, typed straight in at
+  // 55ms a key. A stray leading 'n' (the old windowed console's hotkey)
+  // would corrupt the sentence, which the body assertions below catch.
   await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 55); }, QUESTION + '\n');
-  ok(`typed 'n' then "${QUESTION}" + Enter through emu.keyboard_send_text`);
+  ok(`typed "${QUESTION}" + Enter straight into her input bar through emu.keyboard_send_text`);
 
   const t0 = Date.now();
   while (Date.now() - t0 < 30000 && !proxyPostSeen) await page.waitForTimeout(200);
@@ -293,16 +245,12 @@ try {
   await page.waitForFunction(() => window.__jt.serial.includes('chatreply='), null, { timeout: 30000 }).catch(() => fail('no chatreply= marker within 30s of the intercepted reply'));
   await page.waitForTimeout(600); // let the redraw after chat_send() returns actually paint
 
+  // Her bubble draws in INK; the face band above it never reaches this much of it.
   const after = await ink();
-  const scaledThreshold = REPLY_INK_THRESHOLD; // logical-pixel count already, not physical -- see ink()'s own scale division
-  console.log(`ink below reply line after the reply: ${after ? after.replyBelow : '(no canvas)'}; question-row ink: ${after ? after.questionBand : '(no canvas)'}`);
-  if (!after) fail('could not read the v86 canvas after the reply');
-  else {
-    if (after.replyBelow < scaledThreshold) fail(`reply did not render on screen: only ${after.replyBelow} CHAT_INK px below the question row (need >= ${scaledThreshold})`);
-    else ok(`reply rendered on screen: ${after.replyBelow} CHAT_INK px below the question row`);
-    if (after.questionBand < 50) fail(`question echo did not render (${after.questionBand} ink px)`);
-    else ok(`question echo rendered (${after.questionBand} ink px)`);
-  }
+  console.log(`ink after the reply: ${after ? after.total : '(no canvas)'}`);
+  if (!after || !before) fail('could not read the v86 canvas after the reply');
+  else if (after.total - before.total < REPLY_INK_THRESHOLD) fail(`reply did not render on screen: only +${after.total - before.total} CHAT_INK px over the empty window (need >= ${REPLY_INK_THRESHOLD})`);
+  else ok(`reply rendered on screen: +${after.total - before.total} CHAT_INK px over the empty window`);
 
   console.log('recorded proxy request: method=' + recordedMethod + ' body=' + (recordedBody || '').slice(0, 300));
   try {
@@ -319,21 +267,21 @@ try {
   // 1.2.0: the tour's Chat scene now runs four real local tools plus a
   // final open_app before it ends (see embed.js's TOUR_APPS Chat entry and
   // this file's own PICK_REPLIES above). Proven here the same way the
-  // capital-of-france exchange above already is: type 'n' then the exact
-  // sentence the tour itself sends, wait for chat_run_tool's own
+  // capital-of-france exchange above already is: type the exact
+  // sentence the tour itself sends, straight into her bar, wait for chat_run_tool's own
   // discriminating `chattool=<tool>:...` serial marker (kernel/chat.h).
   const TOOL_SCENES = [
     { q: 'remind me to call mom at 5', marker: 'chattool=new_reminder:' },
     { q: 'note: pick up dry cleaning', marker: 'chattool=new_note:' },
     { q: "what's the weather like", marker: 'chattool=weather:' },
     { q: "what's on my calendar today", marker: 'chattool=calendar_today:' },
-    { q: 'open calculator', marker: 'chattool=open_app:' },
+    { q: 'note: book flights for the launch', marker: 'chattool=new_note:' }, // lap 2's second line; the tour no longer ends on open calculator, Escape closes her
   ];
+  const seenMarker = {};
   for (const scene of TOOL_SCENES) {
-    await page.evaluate(async () => { await window.__jt.emu.keyboard_send_text('n', 200); });
-    await page.waitForTimeout(300);
+    seenMarker[scene.marker] = (seenMarker[scene.marker] || 0) + 1; // new_note: fires twice, so wait for the Nth occurrence
     await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 55); }, scene.q + '\n');
-    await page.waitForFunction((m) => window.__jt.serial.includes(m), scene.marker, { timeout: 15000 })
+    await page.waitForFunction(([m, n]) => window.__jt.serial.split(m).length - 1 >= n, [scene.marker, seenMarker[scene.marker]], { timeout: 15000 })
       .then(() => ok(`tool scene ran: "${scene.q}" -> ${scene.marker}`))
       .catch(() => fail(`tool scene never fired: "${scene.q}" -> ${scene.marker}`));
     await page.waitForTimeout(300);

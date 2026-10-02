@@ -1303,27 +1303,6 @@ if (typeof document !== "undefined") (function () {
   // at the time, not a simulated multi-window fake this kernel couldn't
   // actually do.
   //
-  // STALE AS OF v0.73.0-v0.75.0: real multi-window shipped (gui_multiwin_*
-  // in kernel.c, GUI_MULTIWIN_MAX=2, real click-to-focus/z-order,
-  // tools/checks/multiwindow-check.py). Direct report (Sep 2026): the
-  // landing header now says "Introducing Multi-Window." but this tour
-  // still only ever showed one window at a time, closing each before the
-  // next opened -- the header claimed a real capability the demo never
-  // actually demonstrated. multiWindowRound() below (added the same pass)
-  // fixes that for the 3 dock apps that are genuinely multi-window
-  // capable in this kernel (Files/Weather/Reminders; see
-  // gui_multiwin_supported in kernel.c) by opening two of them together,
-  // without closing the first, and driving the exact real click-to-focus
-  // switch tools/checks/multiwindow-check.py already proves against the
-  // real kernel. GUI_MULTIWIN_MAX is a real, current cap of 2 concurrent
-  // windows, not 3 -- this tour never asks for a 3rd, since the kernel
-  // itself has no 3rd slot to give it. TOUR_APPS below keeps only the
-  // genuinely single-window-only apps (Notes/Terminal/Chat; confirmed via
-  // gui_multiwin_supported returning false for their icons) plus Mail and
-  // Calendar solo (real multiwin apps too, but shown one at a time here
-  // since the 2-window slots are spent on the Files/Weather/Reminders
-  // rounds -- still real, just not simultaneous in every lap).
-  //
   // Only the 8 apps really pinned to the dock (GUI_DOCK_DEFAULT in
   // kernel.c: Files, Mail, Calendar, Notes, Reminders, Terminal, Chat,
   // Weather) are toured. Every one of them gets real window chrome,
@@ -1394,7 +1373,7 @@ if (typeof document !== "undefined") (function () {
   // cutting DWELL_MS well below, so the whole loop is still a quick,
   // repeating sample rather than either extreme.
   // Mail and Calendar pulled out to named vars (not TOUR_APPS entries)
-  // so tourLoop can interleave them with the multi-window rounds instead
+  // so tourLoop can order them freely instead
   // of running the whole array as one block after both rounds -- direct
   // feedback that leading with pure window-management read as "not much
   // interaction". TOUR_APPS keeps only the genuinely single-window-only
@@ -1722,74 +1701,6 @@ if (typeof document !== "undefined") (function () {
       else if (step.type === "headline") updateHeadline(step.name);
       else if (step.type === "drag") await dragWindow(step.from, step.to, step.steps, step.ms, gen);
     }
-  }
-  // v0.76.12: real two-window demo, the exact click sequence
-  // tools/checks/multiwindow-check.py already proves against the real
-  // kernel (gui_multiwin_open/gui_multiwin_focus/gui_multiwin_hit_test in
-  // kernel.c), not a new/unverified interaction shape. Two fixed points
-  // do all of it, both real consequences of gui_multiwin_geom's own fixed
-  // per-window rects (window 0 = x70,y40,w820,h385; window 1 = offset
-  // +60,+60, never recomputed after either window opens):
-  //   MW_A_POINT  (94,56)   sits ONLY inside window 0's rect (94<130, the
-  //               start of window 1's rect), so a click there always
-  //               targets "whichever app opened first" regardless of
-  //               which is currently on top -- closes it if it's topmost,
-  //               otherwise raises it to the front (gui_multiwin_focus).
-  //   MW_TOP_POINT (154,116) sits inside BOTH windows' overlap, so a click
-  //               there always resolves (topmost-first hit test) to
-  //               whichever window is currently on top, and closes it.
-  // first opens as window 0, second opens as window 1 alongside it --
-  // both genuinely on screen together, the real thing the old sequential
-  // open/close/open/close tour could never show. Only 2 concurrent
-  // windows is the real, current kernel cap (GUI_MULTIWIN_MAX in
-  // kernel.c); this never asks for a 3rd.
-  var MW_A_POINT_X = CLOSE_X, MW_A_POINT_Y = CLOSE_Y; // = 94,56, same rect appclose-check.py/app-interact-check.py already depend on
-  var MW_TOP_POINT_X = 154, MW_TOP_POINT_Y = 116;
-  async function multiWindowRound(gen, first, second) {
-    if (focused || tourGen !== gen || !adaptersReady) return;
-    emulator.mouse_adapter.emu_enabled = true;
-    emulator.keyboard_adapter.emu_enabled = true;
-    var posA = dockSlotPos(first.slot), posB = dockSlotPos(second.slot);
-
-    await clickAt(posA[0], posA[1]); // opens `first` as window 0
-    if (focused || tourGen !== gen) return;
-    await sleep(600);
-    updateHeadline(first.name); // named once its window is really drawn, not when the click was sent
-    await runScript(first.script, gen); // real interaction while it's the only (topmost) window
-    if (focused || tourGen !== gen) return;
-
-    await clickAt(posB[0], posB[1]); // opens `second` as window 1 ALONGSIDE it -- first stays open, the real point being demonstrated
-    if (focused || tourGen !== gen) return;
-    await sleep(600);
-    updateHeadline(second.name); // the second window is now really on top
-    await runScript(second.script, gen); // real interaction with the now-topmost window, first still genuinely on screen behind it
-    if (focused || tourGen !== gen) return;
-    await sleep(1400); // a real beat with both windows visibly open together -- the actual point of this round
-
-    // v0.76.14: direct report, "landing page demo still flashing" --
-    // real root cause, no double buffer in this kernel yet (a known,
-    // already-tracked architecture gap, roadmap.md's own "compositor in
-    // gui_run" entry), so every multiwin open/close/focus event forces a
-    // full desktop repaint (kernel.c's `launched=1` path: wallpaper photo
-    // blit + dock + every open window, every time). This round used to
-    // also click-to-focus `first` back to the top before closing it --
-    // a real, legitimate demonstration of z-order switching, but a 5th
-    // full-desktop repaint packed into the same ~13s window, on top of
-    // the 4 this round already needs. Cut here: `second` closes first
-    // (MW_TOP_POINT always resolves to whichever window is currently
-    // topmost), which leaves `first` as the sole remaining window --
-    // and the sole remaining window is topmost by definition, so
-    // MW_A_POINT correctly closes it next without ever needing the
-    // focus step. Real click-to-focus/z-order switching is still proven
-    // by tools/checks/multiwindow-check.py against the real kernel; this
-    // tour just no longer re-demonstrates it at the cost of an extra
-    // flash every single lap.
-    await clickAt(MW_TOP_POINT_X, MW_TOP_POINT_Y); // closes whichever of the two is currently topmost (`second`)
-    if (focused || tourGen !== gen) return;
-    await sleep(900);
-    await clickAt(MW_A_POINT_X, MW_A_POINT_Y); // `first` is now the sole open window, topmost by definition: closes it too
-    if (focused || tourGen !== gen) return;
-    await sleep(1200);
   }
   // Dock geometry in LOGICAL kernel pixels, the same arithmetic as
   // kernel.c's gui_dock_icon/gui_dock_x0/gui_slot_x: GUI_ICON_COUNT (11) slots, tiles
