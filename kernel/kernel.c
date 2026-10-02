@@ -2320,76 +2320,6 @@ static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned i
     }
 }
 
-/* The real mark, not an approximation invented from scratch: this is the
-   same trunk/two-branch/tufted-yucca structure `icon.svg` actually draws
-   (M100 168 L100 108, then two branches, then a 3-line spiky tuft at the
-   trunk top and each branch tip), simplified to fit a ~16px menu-bar icon
-   instead of traced stroke-for-stroke, drawn with the same primitives
-   every dock icon already uses. A first attempt drew the crown as one
-   filled circle; a real screenshot showed it reading as a lollipop, not a
-   tree, caught by looking, not assumed correct from the code alone. */
-/* `scale` lets the same logo draw crisp at the tiny 16px menu bar size
-   (scale 1, hairline AA strokes) and much larger on the boot splash
-   (scale 4+, real thickness) without two separate drawings to keep in
-   sync. `bg` is whatever this is drawn over, so the branch/tuft capsule
-   strokes' AA can blend into it correctly, the menu bar's white and the
-   boot screen's dark background are not the same color. Real fix, not
-   just a scale knob: the branches and tufts used to be gui_draw_diag,
-   raw single-pixel window_pixel dots approximating a line, the same
-   "8-bit" staircase problem the weather icon's rays had, now on the one
-   piece of branding that appears everywhere including full-size at boot. */
-static void gui_draw_logo(int x, int cy, int scale, unsigned int bg, unsigned int c){
-    if (!window_has_target()){
-        /* Drawn in physical pixels: u is one logo unit, every limb a round-ended
-           stroke. gui_draw_boot_mark replaces this at boot now, so the only
-           caller left is the menu bar; always taking physical pixels here
-           avoids the logical path's scaling artifacts at any window_scale. */
-        int sc = (int)window_scale(), u = scale * sc;
-        int pr = u * 2 / 5; if (pr < 1) pr = 1;
-        int ox = x * sc + u / 2, oy = cy * sc;
-        #define LG(ax, ay, bx, by) gui_capsule_phys(ox + (ax) * u, oy + (ay) * u, ox + (bx) * u, oy + (by) * u, pr, c)
-        LG(0, 5, 0, -7);                                   /* trunk */
-        LG(0, -1, -4, -5); LG(0, -1, 4, -5);               /* two main branches */
-        LG(0, -7, -3, -10); LG(0, -7, 0, -10); LG(0, -7, 3, -10);      /* crown */
-        LG(-4, -5, -6, -7); LG(-4, -5, -6, -5); LG(-4, -5, -6, -3);    /* left tuft */
-        LG(4, -5, 6, -7); LG(4, -5, 6, -5); LG(4, -5, 6, -3);          /* right tuft */
-        #undef LG
-        (void)bg;
-        return;
-    }
-    int split_y = cy - scale, top_y = cy - 7 * scale;
-    int r = scale > 1 ? scale - 1 : 0;
-    /* Real bug, found from a pixel dump not a guess: aa_band is a fixed
-       5px halo (see its definition above), never scaled to the primitive
-       it's softening. At menubar scale (1), every branch capsule is only
-       4-7px long with r=0, so a 5px halo on each side is wider than the
-       shape itself, every branch's halo overlaps its neighbors' and the
-       whole logo collapses into two blurry blobs, unrecognizable as a
-       tree (confirmed: a real macro-zoom pixel dump of the menubar at
-       this exact scale showed exactly that, not a subjective call).
-       Same fix pattern gui_render_icon_cached already uses to override
-       aa_band for its own scale: shrink it here too, only at scale=1,
-       so the branch geometry actually reads instead of drowning in AA. */
-    int saved_aa_band = aa_band;
-    if (scale == 1) aa_band = 1;
-    window_rect(x, split_y, scale, (cy + 5 * scale) - split_y + 1, c); /* trunk, base to branch split */
-    window_rect(x, top_y, scale, split_y - top_y + 1, c);              /* trunk continuing above the split */
-    gui_draw_capsule(x, split_y, x - 4 * scale, split_y - 4 * scale, r, c, bg); /* left branch */
-    gui_draw_capsule(x, split_y, x + 4 * scale, split_y - 4 * scale, r, c, bg); /* right branch */
-
-    int lx = x - 4 * scale, ly = split_y - 4 * scale, rx = x + 4 * scale, ry = split_y - 4 * scale;
-    gui_draw_capsule(x, top_y, x - 3 * scale, top_y - 3 * scale, r, c, bg);
-    gui_draw_capsule(x, top_y, x,             top_y - 3 * scale, r, c, bg);
-    gui_draw_capsule(x, top_y, x + 3 * scale, top_y - 3 * scale, r, c, bg);
-    gui_draw_capsule(lx, ly, lx - 2 * scale, ly - 2 * scale, r, c, bg);
-    gui_draw_capsule(lx, ly, lx - 2 * scale, ly,             r, c, bg);
-    gui_draw_capsule(lx, ly, lx - 2 * scale, ly + 2 * scale, r, c, bg);
-    gui_draw_capsule(rx, ry, rx + 2 * scale, ry - 2 * scale, r, c, bg);
-    gui_draw_capsule(rx, ry, rx + 2 * scale, ry,             r, c, bg);
-    gui_draw_capsule(rx, ry, rx + 2 * scale, ry + 2 * scale, r, c, bg);
-    aa_band = saved_aa_band;
-}
-
 /* Real, user-reported flicker: this whole bar (a solid white rect, the
    logo, "Joshua Tree", the clock) got redrawn identically on every single
    hover-state change, since gui_draw_desktop calls this unconditionally
@@ -3240,6 +3170,7 @@ static void wall_apply(int want_map){
     wall_caches_drop();
 }
 
+static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink);
 static void gui_draw_menubar(void){
     u8 h, m, wd, dom, mon;
     cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
@@ -3263,9 +3194,9 @@ static void gui_draw_menubar(void){
        blur/alpha, but honestly a 50% mix now instead of mostly-white. */
     for (int row = 0; row < GUI_MENUBAR_H; row++)
         window_rect(0, row, (int)window_width(), 1, gui_lerp(gui_wallpaper_color(row), 0x00FFFFFF, 5, 10));
-    window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
-    gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2, 1, 0x00FFFFFF, 0x00000000); /* v0.76.47: menu bar is semi-translucent light chrome, direct correction -- black reads here, not white */
-    font_draw_string(portfolio_dock ? "Joshua Trommel" : "Joshua Tree", 32, 7, 0x001C1C1E, -1); /* portfolio mode is his site, so the corner carries his name */
+    gui_hairline_h(0, GUI_MENUBAR_H - 1, (int)window_width(), 0x00BDB8B0); /* 2.0: one physical pixel, not a doubled logical row */
+    gui_draw_mark_sized(24, GUI_MENUBAR_H / 2, 20, 0x001C1C1E); /* 2.0: the real brand mark (boot_mark) sits in the apple-menu spot */
+    font_draw_string(portfolio_dock ? "Joshua Trommel" : "Joshua Tree", 40, 7, 0x001C1C1E, -1); /* portfolio mode is his site, so the corner carries his name */
 
     static const char *WD[7] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
     static const char *MO[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
@@ -5011,12 +4942,13 @@ static int fs_ok_global = 0;
 static void gui_draw_window_frame(int x, int y, int w, int h, const char *name){
     gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
     window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
+    gui_hairline_h(x + 8, y + 29, w - 16, 0x00D9D3CB); /* 2.0: one physical pixel rule under the title band */
     gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
     gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
     gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
     font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
     font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
-    font_draw_string(name, x + 96, y + 8, 0x00403439, -1);
+    font_draw_string(name, x + (w - font_string_width(name)) / 2, y + 8, 0x001C1C1E, -1); /* 2.0: centered, full ink */
 }
 static void gui_launch(int icon){
     if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
@@ -5530,12 +5462,16 @@ static int gui_multiwin_key_nonblock(void){
    its rasterized 8-bit coverage; blended at PHYSICAL resolution via
    window_pixel_phys, the same pattern gui_aa_char uses for text. cx,cy are
    LOGICAL center coords, converted to physical here. */
-static void gui_draw_boot_mark(int cx, int cy, unsigned int ink){
+static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink){
     int sc = window_has_target() ? 1 : (int)window_scale(); if (sc < 1) sc = 1;
-    int ox = cx * sc - BOOT_MARK_W / 2, oy = cy * sc - BOOT_MARK_H / 2;
-    for (int row = 0; row < BOOT_MARK_H; row++){
-        for (int col = 0; col < BOOT_MARK_W; col++){
-            int a = boot_mark_cov[row * BOOT_MARK_W + col];
+    int T = size * sc; /* box-filtered down from the 160px coverage; T == 160 is a straight copy */
+    int ox = cx * sc - T / 2, oy = cy * sc - T / 2;
+    for (int row = 0; row < T; row++){
+        for (int col = 0; col < T; col++){
+            int c0 = col * BOOT_MARK_W / T, c1 = (col + 1) * BOOT_MARK_W / T, r0 = row * BOOT_MARK_H / T, r1 = (row + 1) * BOOT_MARK_H / T;
+            int sum = 0, n = (c1 - c0) * (r1 - r0);
+            for (int yy = r0; yy < r1; yy++) for (int xx = c0; xx < c1; xx++) sum += boot_mark_cov[yy * BOOT_MARK_W + xx];
+            int a = n ? sum / n : 0;
             if (!a) continue;
             int x = ox + col, y = oy + row;
             unsigned int d = window_get_pixel_phys(x, y);
@@ -5545,6 +5481,10 @@ static void gui_draw_boot_mark(int cx, int cy, unsigned int ink){
             window_pixel_phys(x, y, (r << 16) | (g << 8) | b);
         }
     }
+}
+static void gui_draw_boot_mark(int cx, int cy, unsigned int ink){
+    int sc = window_has_target() ? 1 : (int)window_scale(); if (sc < 1) sc = 1;
+    gui_draw_mark_sized(cx, cy, BOOT_MARK_W / sc, ink);
 }
 
 static void gui_draw_boot_screen(void){
