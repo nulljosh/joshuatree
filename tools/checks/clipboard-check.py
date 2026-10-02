@@ -10,11 +10,16 @@ input line (Terminal); Ctrl+X cuts it; Ctrl+V pastes at the cursor, in
 every text field that already accepts typed input, respecting that
 field's own max length -- never overflowing it.
 
+The clipboard is SYS_CLIPBOARD (399, kernel/syscall.c): ring-3 Notes and
+Terminal call jt_clip_set on Ctrl+C/X and jt_clip_get on Ctrl+V, so the one
+kernel buffer is what crosses from one app (one task) to the other.
+
 Three real scenarios, each verified by grepping a discriminating serial
 marker ("CLIPCOPY:<len>:<hash>" / "CLIPPASTE:<len>:<hash>" / "CLIPTRUNC", never the text) that
-kernel/kernel.c's clipboard_set()/clip_serial_dump() emit at the exact
-moment the clipboard is set or a paste lands -- proof the text actually
-arrived, not just that a key was sent:
+sys_clipboard() emits at the exact moment the buffer is set or a GET
+copies out -- proof the text actually arrived, not just that a key was
+sent. CLIPPASTE logs the bytes the GET returned, so a paste clipped to the
+field's room shows the clipped length and hash, then CLIPTRUNC:
 
   1. Type a line in Notes, Ctrl+C, Ctrl+V pastes it again right after
      itself on the same line -- proves copy-then-paste round-trips real
@@ -26,7 +31,8 @@ arrived, not just that a key was sent:
   3. Type a string longer than Terminal's TERM_COLS-1 input limit into
      Notes, Ctrl+C, switch to Terminal, Ctrl+V -- proves the paste
      truncates cleanly at the field's own limit (CLIPTRUNC marker) and
-     inserts exactly TERM_COLS-1 bytes, never overflowing input[].
+     inserts exactly TERM_COLS-1 bytes (Terminal's LINE_MAX 95 asks the
+     kernel for only the room it has left), never overflowing its input.
 
 Usage: tools/checks/clipboard-check.py   (from the repo root, after make kernel.elf)
 """
@@ -53,7 +59,7 @@ for f in (LOG, DUMP):
     except FileNotFoundError: pass
 
 # "cliptrace" makes the kernel add the content hash to its CLIPCOPY/CLIPPASTE
-# lines (a normal boot logs the length only, see clip_trace in kernel.c).
+# lines (a normal boot logs the length only, see clip_trace in syscall.c).
 q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                       "-append", "cliptrace",
                       "-qmp", f"unix:{SOCKET},server,nowait", "-serial", "file:" + LOG],
@@ -248,7 +254,7 @@ try:
         close_via_x()
 
     # ---- 3: paste bigger than Terminal's input limit truncates cleanly ----
-    TERM_COLS = 96  # kernel/kernel.c's own #define; input[] holds TERM_COLS-1 chars plus the trailing nul
+    TERM_COLS = 96  # Terminal's input holds TERM_COLS-1 chars (user/terminal.c LINE_MAX = 95)
     long_text = "x" * (TERM_COLS + 20)
     # Scaled, not just bumped: scenario 1-2's lines are ~15-19 chars and the
     # 30s default (see wait_marker's own comment) already covers those with

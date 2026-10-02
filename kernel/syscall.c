@@ -901,6 +901,58 @@ static int sys_launch_request(u32 name, u32 b, u32 c) {
     return jt_launch_request(kn);
 }
 
+/* 1.9.28: SYS_CLIPBOARD (contract in syscall.h). One kernel buffer shared by every ring-3 app; the
+   user bytes are range-checked, then copied in or out under irq_save so a paste never sees a
+   half-written copy. The serial lines are what tools/checks/clipboard-check.py greps: the length
+   always, an FNV-1a hash only under `cliptrace` (the serial log is host-readable and an unkeyed
+   hash of a short pasted password is dictionary-recoverable), never the text. */
+static char clip_buf[JT_CLIP_MAX];
+static u32 clip_len = 0;
+static int clip_trace = 0;
+void jt_clip_cmdline(const char *cl) {
+    for (const char *p = cl; p && *p; p++)
+        if (p[0]=='c' && p[1]=='l' && p[2]=='i' && p[3]=='p' && p[4]=='t' && p[5]=='r' && p[6]=='a' && p[7]=='c' && p[8]=='e') { clip_trace = 1; return; }
+}
+static void clip_log(const char *tag, const char *s, u32 n) {
+    char out[24]; int k = 0; char d[10]; int dn = 0; u32 v = n;
+    do { d[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
+    while (dn) out[k++] = d[--dn];
+    if (clip_trace) {
+        u32 h = 2166136261u;
+        for (u32 i = 0; i < n; i++) { h ^= (unsigned char)s[i]; h *= 16777619u; }
+        out[k++] = ':';
+        for (int sh = 28; sh >= 0; sh -= 4) out[k++] = "0123456789abcdef"[(h >> sh) & 15];
+    }
+    out[k++] = '\n'; out[k] = 0;
+    serial_puts(tag);
+    serial_puts(out);
+}
+static int sys_clipboard(u32 op, u32 buf, u32 len) {
+    if (op == JT_CLIP_SET) {
+        if (len > JT_CLIP_MAX) return -EINVAL;
+        if (len && !paging_user_range_ok(buf, len)) return -EFAULT;
+        unsigned int f = irq_save();
+        for (u32 i = 0; i < len; i++) clip_buf[i] = ((const char *)buf)[i];
+        clip_len = len;
+        irq_restore(f);
+        clip_log("CLIPCOPY:", clip_buf, len);
+        return (int)len;
+    }
+    if (op == JT_CLIP_GET) {
+        if (len && !paging_user_range_ok(buf, len)) return -EFAULT;
+        unsigned int f = irq_save();
+        u32 have = clip_len, n = have < len ? have : len;
+        for (u32 i = 0; i < n; i++) ((char *)buf)[i] = clip_buf[i];
+        irq_restore(f);
+        if (n) {
+            clip_log("CLIPPASTE:", clip_buf, n);
+            if (n < have) serial_puts("CLIPTRUNC\n");
+        }
+        return (int)n;
+    }
+    return -EINVAL;
+}
+
 /* 1.9.26: SYS_AUDIO (contract in syscall.h). User PCM goes through paging_user_range_ok, then a
    bounded copy into the driver's ring (sb16_queue takes the irq lock itself). Nothing waits. */
 static int sys_audio(u32 op, u32 arg, u32 size) {
@@ -1103,6 +1155,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_SYSINFO]     = sys_sysinfo,
     [SYS_LAUNCH_REQUEST] = sys_launch_request,
     [SYS_BRK]         = sys_brk,
+    [SYS_CLIPBOARD]   = sys_clipboard,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {

@@ -326,6 +326,13 @@ void _start(int argc, char **argv) {
                 if (k == JT_KEY_ESC) mode = 0;
                 else if (k == JT_KEY_ENTER) { if (field < 2) field++; else compose_send(); }
                 else if (k == 8) { if (cl[field] > 0) cl[field]--; }
+                else if (k == JT_KEY_COPY || k == JT_KEY_CUT) { jt_clip_set(cf(field), (unsigned)cl[field]); if (k == JT_KEY_CUT) cl[field] = 0; } /* the system clipboard */
+                else if (k == JT_KEY_PASTE) {
+                    char pb[BODY_MAX]; /* get asks for exactly the room left, so the log shows a clipped paste */
+                    int room = field_max(field) - 1 - cl[field];
+                    int n = room > 0 ? jt_clip_get(pb, (unsigned)room) : 0;
+                    for (int i = 0; i < n; i++) if (pb[i] >= 32 && pb[i] < 127) cf(field)[cl[field]++] = pb[i];
+                }
                 else if (k == 9 || k == JT_KEY_DOWN) { field = (field + 1) % 3; }
                 else if (k == JT_KEY_UP) { field = (field + 2) % 3; }
                 else if (k >= 32 && k < 127 && cl[field] < field_max(field) - 1) cf(field)[cl[field]++] = (char)k;

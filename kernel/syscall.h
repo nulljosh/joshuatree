@@ -232,6 +232,17 @@ struct jt_sysinfo {
    (the old top stands). Pages are zeroed, user+writable, mapped into this task's directory
    only, and freed on exit or crash (kernel/brk.c). */
 #define SYS_BRK         397
+/* 1.9.28: SYS_CLIPBOARD (399), the one system clipboard. ebx = op, ecx = user buffer, edx = length.
+   JT_CLIP_SET (1) replaces the clipboard with len bytes (0 clears; at most JT_CLIP_MAX, else -EINVAL)
+   and returns len. JT_CLIP_GET (2) copies out at most len bytes and returns how many it copied (0
+   when empty); a len shorter than the clipboard is a clipped paste, not an error. -EFAULT for a bad
+   pointer, -EINVAL for an unknown op. The kernel logs `CLIPCOPY:<n>` and `CLIPPASTE:<n>` (plus
+   `:<fnv1a32>` under the `cliptrace` boot flag, and `CLIPTRUNC` after a clipped paste) but never
+   the text itself. */
+#define SYS_CLIPBOARD   399
+#define JT_CLIP_SET     1
+#define JT_CLIP_GET     2
+#define JT_CLIP_MAX     4096
 #define JT_APP_NAME_MAX 24
 /* 1.9.26: SYS_AUDIO (393), audio out for a ring-3 Samantha. One number, three ops. ebx = op,
    ecx = const/non-const struct pointer (user), edx = the caller's sizeof that struct.
@@ -288,6 +299,7 @@ void jt_sysinfo_fill(struct jt_sysinfo *si);
 int jt_launch_request(const char *name);
 int jt_launch_take(void);
 void jt_facehost_cmdline(const char *cl); /* syscall.c: facehost=HOST[:PORT] */
+void jt_clip_cmdline(const char *cl);     /* syscall.c: cliptrace adds a content hash to the CLIPCOPY/CLIPPASTE lines */
 #define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3. 386 (tasks), 387 (http_get), 388 (readdir) and 392 (http_post) fit under it */
 
 /* Exactly the stack shape syscall_entry (isr.S) builds, lowest address

@@ -796,6 +796,27 @@ takes the index on its next pass and opens it the way a dock click does, as a
 window for a ring-3 app or through the blocking path otherwise. Numbers 393
 and 394 are the audio calls.
 
+## clipboard (1.9.28)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 399 | `clipboard` | op: 1 SET, 2 GET | user buffer | length | bytes stored or copied, or -errno |
+
+One system clipboard, one 4 KB kernel buffer, shared by every ring-3 app. It
+came back when the apps left the kernel: Notes, Terminal, Mail and Samantha
+each used to keep their own copy. **SET** (`ebx` = 1) checks the range with
+`paging_user_range_ok`, then replaces the buffer under `irq_save`. A length of
+0 clears it, one over `JT_CLIP_MAX` (4096) is -EINVAL, a bad pointer is
+-EFAULT. **GET** (`ebx` = 2) copies out at most `edx` bytes and returns how many
+(0 when empty). A length shorter than the clipboard is a clipped paste, not an
+error, so an app asks for exactly the room its field has left. The kernel
+logs `CLIPCOPY:<n>` on SET and `CLIPPASTE:<n>` on a non-empty GET, plus
+`CLIPTRUNC` when the GET clipped, and never the text. Booted with `cliptrace`
+the two lines carry `:<fnv1a32>` after the length, which is what
+`tools/checks/clipboard-check.py` and `textselect-check.py` read. Wrappers:
+`jt_clip_set` and `jt_clip_get` in `user/jtsys.h`; the keys arrive as
+`JT_KEY_COPY`, `JT_KEY_CUT` and `JT_KEY_PASTE` (302 to 304).
+
 ## brk (1.9.27)
 
 | # | Name | ebx | ecx | edx | Returns |
