@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+# Copyright (c) 2026 Joshua Trommel. Hardware design, see docs/hardware/LICENSE-NOTICE.md
 # Joshua Tree dev kit, original form concepts: "strata" (stacked sandstone strata,
 # gaps are the vents) and "monolith" (standing desert stone). Headless EEVEE.
 import bpy, math, sys, os

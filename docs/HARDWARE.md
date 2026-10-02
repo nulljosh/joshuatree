@@ -279,3 +279,6 @@ The existing dev kit BOM above is unchanged: its numbers still come from the lis
 4. Open the DFM preview. Check: every part lies flat as uploaded, no wall flagged under 1.6 mm, the quarters aren't merged into one body, the rear plate window and the nut pockets show as holes. If it flags the thin L-shaped rear quarters, ask for PETG or accept the risk, they are 32 mm wide and 2 mm thick at the narrowest, stiff once stacked.
 5. Look at the cart total. Write the real number into this page and into MONEY.md in place of the estimate. That one number decides the kit margin.
 6. Nothing is ordered until Joshua says so.
+
+---
+Strata Kit and Joshua Tree are trademarks of Joshua Trommel. Designs licensed CC BY-NC-SA 4.0. Build one for yourself; please do not sell copies.

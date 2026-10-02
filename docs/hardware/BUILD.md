@@ -50,3 +50,6 @@ Total about $250, mostly estimate. Only the board price comes from a real listin
 | The back plate will not go in | Sand its edges. It is a 0.2 mm fit. |
 | The board screws will not bite | Start each screw with a firm push and two turns. The posts are plastic. |
 | Black screen on first boot | Check the USB stick is in a rear port, tap F11, pick the stick with UEFI in its name. |
+
+---
+Strata Kit and Joshua Tree are trademarks of Joshua Trommel. Designs licensed CC BY-NC-SA 4.0. Build one for yourself; please do not sell copies.

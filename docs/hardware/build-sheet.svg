@@ -1,12 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1600" width="1200" height="1600" font-family="Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1640" width="1200" height="1640" font-family="Helvetica, Arial, sans-serif">
 <defs>
 <pattern id="h" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#1a1814" stroke-width="1"/></pattern>
 <g id="ring"><path d="M-90 0 L0 -45 L90 0 L0 45 Z M-60 0 L0 -30 L60 0 L0 30 Z" fill-rule="evenodd" fill="#f0e7d8" stroke="#1a1814" stroke-width="2.5"/><path d="M-90 0 L-90 12 L0 57 L90 12 L90 0 L0 45 Z" fill="url(#h)" stroke="#1a1814" stroke-width="2.5"/></g>
 <g id="rod"><rect x="-3" y="-120" width="6" height="120" fill="#f0e7d8" stroke="#1a1814" stroke-width="2"/></g>
 </defs>
-<rect width="1200" height="1600" fill="#f0e7d8"/>
-<rect x="24" y="24" width="1152" height="1552" fill="none" stroke="#1a1814" stroke-width="3"/>
-<rect x="34" y="34" width="1132" height="1532" fill="none" stroke="#1a1814" stroke-width="1"/>
+<rect width="1200" height="1640" fill="#f0e7d8"/>
+<rect x="24" y="24" width="1152" height="1592" fill="none" stroke="#1a1814" stroke-width="3"/>
+<rect x="34" y="34" width="1132" height="1572" fill="none" stroke="#1a1814" stroke-width="1"/>
 <text x="600" y="110" text-anchor="middle" font-size="64" font-weight="700" fill="#1a1814">Build a Strata box</text>
 <text x="600" y="152" text-anchor="middle" font-size="26" fill="#1a1814">Five steps. About 45 minutes. About $250, an estimate.</text>
 <line x1="80" y1="180" x2="1120" y2="180" stroke="#1a1814" stroke-width="2"/>
@@ -58,4 +58,6 @@
 <text x="560" y="1490" font-size="26" fill="#1a1814">Cap on, a nut on each rod until snug.</text>
 <text x="560" y="1526" font-size="26" fill="#1a1814">USB stick in, power on. Done.</text>
 </g>
+<line x1="80" y1="1552" x2="1120" y2="1552" stroke="#1a1814" stroke-width="1"/>
+<text x="600" y="1590" font-size="20" text-anchor="middle" fill="#8a8378">© 2026 Joshua Trommel · Strata Kit™ · CC BY-NC-SA 4.0</text>
 </svg>

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+# Copyright (c) 2026 Joshua Trommel. Hardware design, see docs/hardware/LICENSE-NOTICE.md
 # Strata Kit enclosure, print-ready parts (v2: no feet, no loose spacers, no metal standoffs). build123d -> STL per printable part, one STEP, exploded SVGs.
 # mm throughout. Numbers match docs/HARDWARE.md. Target: Bambu A1 mini (180 x 180 x 180), FDM.
 #   uv run --with build123d python docs/hardware/strata_cad.py docs/hardware
@@ -155,7 +157,7 @@ assert len(asm_parts) == len(rings) + 1 + 1 + 1 + 4
 asm = Compound(asm_parts)
 bb = asm.bounding_box()
 export_step(asm, os.path.join(OUT, "strata.step"))
-json.dump(report, open(os.path.join(STL_DIR, "manifest.json"), "w"), indent=1)
+json.dump({"license": "CC-BY-NC-SA-4.0", "copyright": "2026 Joshua Trommel", "parts": report}, open(os.path.join(STL_DIR, "manifest.json"), "w"), indent=1)
 
 # ---- exploded step diagrams (iso view, visible edges) ----
 def explode(items):

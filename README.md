@@ -52,4 +52,6 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 - [Roadmap](docs/roadmap.md): what is next
 - [All docs](docs/)
 
-Apache License 2.0, © 2026 Joshua Trommel
+## License
+
+Software: Apache License 2.0, © 2026 Joshua Trommel. Hardware designs: CC BY-NC-SA 4.0, free to build for yourself, see [docs/hardware/LICENSE-NOTICE.md](docs/hardware/LICENSE-NOTICE.md). Joshua Tree™ and Strata Kit™ are trademarks, see [TRADEMARKS.md](TRADEMARKS.md).

@@ -36,6 +36,8 @@ In order. Each one feeds the next.
 
 A dev kit. A small board with Joshua Tree flashed on it, sold to the people who build their own computers for fun. The board pick and driver work are in `docs/HARDWARE.md`.
 
+The hardware designs are CC BY-NC-SA 4.0 on purpose: anyone can build one for themselves, but nobody can resell the kit, which protects the kit sales while the OS stays free.
+
 - 5,000 boards at $199 is $1M.
 - Needs: real drivers for one real board (network, sound, USB keyboard and mouse), a landing page that sells it, one launch on Hacker News and the osdev crowd.
 - Proof it's working: the first 100 preorders.

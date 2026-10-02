@@ -74,3 +74,6 @@ PLA is fine to start. PETG is better if the box will sit near a warm room. Print
 ## If something doesn't fit
 
 Cutting down: 35 prints and 58 loose pieces became 30 prints and 30 pieces, and 20 fasteners became 16. Parts have 0.2 mm of clearance on every mating face. If your printer runs tight, sand the edge, don't scale the part. If a ring hole won't clear the tray, you printed too hot. Fix the part in `strata_cad.py`, run it again, reprint. That loop is the whole point.
+
+---
+Strata Kit and Joshua Tree are trademarks of Joshua Trommel. Designs licensed CC BY-NC-SA 4.0. Build one for yourself; please do not sell copies.

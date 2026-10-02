@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+# Copyright (c) 2026 Joshua Trommel. Hardware design, see docs/hardware/LICENSE-NOTICE.md
 # Dimensioned blueprint sheet for Strata: section (front) + plan, drawn from strata_cad.py's own numbers.
 import sys, os
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "strata_cad.py")).read()
