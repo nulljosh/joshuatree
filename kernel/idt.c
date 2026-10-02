@@ -80,7 +80,15 @@ void isr_handler(u32 ebp, u32 vector, u32 err, u32 eip, u32 cs, u32 eflags) {
         { static const char hx[] = "0123456789abcdef"; char b[24]; int k = 0; u32 v;
           b[k++]='e'; b[k++]='i'; b[k++]='p'; b[k++]='='; for (int i = 28; i >= 0; i -= 4) b[k++] = hx[(eip >> i) & 15];
           b[k++]=' '; b[k++]='c'; b[k++]='r'; b[k++]='2'; b[k++]='='; b[k]=0; serial_puts(b); k = 0; v = fault_addr;
-          for (int i = 28; i >= 0; i -= 4) b[k++] = hx[(v >> i) & 15]; b[k++]='\n'; b[k]=0; serial_puts(b); }
+          for (int i = 28; i >= 0; i -= 4) b[k++] = hx[(v >> i) & 15]; b[k++]='\n'; b[k]=0; serial_puts(b);
+          if (vector == 14) { /* 1.9.28: err, the CR3 we faulted on, and that directory's PDE/PTE for cr2 */
+            u32 cr3; __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));
+            u32 td = task_page_dir(task_current());
+            u32 pde = td ? ((u32 *)td)[fault_addr >> 22] : 0, pte = 0;
+            if (pde & 1) pte = ((u32 *)(pde & ~0xFFFu))[(fault_addr >> 12) & 0x3FF];
+            u32 vals[5] = { err, cr3, td, pde, pte }; const char *tag[5] = { "err=", " cr3=", " dir=", " pde=", " pte=" };
+            for (int j = 0; j < 5; j++) { serial_puts(tag[j]); k = 0; v = vals[j]; for (int i = 28; i >= 0; i -= 4) b[k++] = hx[(v >> i) & 15]; b[k]=0; serial_puts(b); }
+            serial_puts("\n"); } }
         task_exit_with(-(int)vector);
     }
 

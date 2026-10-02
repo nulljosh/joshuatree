@@ -99,7 +99,19 @@ static unsigned char extra_table_free[MAX_EXTRA_TABLES];
    table at KERNEL_PDE_INDEX + 1). Zero extra memory, one 6-slot loop per
    table change, and table changes are rare (once per 4 MB of growth). */
 #include "task.h"
-static int paging_pde_is_private(u32 pde) { return pde == PAGING_PRIVATE_PDE || pde == KERNEL_PDE_INDEX + 1; }
+#include "memmap.h"
+#define BRK_PDE_FIRST (JT_BRK_BASE >> 22)
+#define BRK_PDE_LAST ((JT_BRK_BASE + JT_BRK_MAX_PAGES * 4096u - 1) >> 22)
+/* 1.9.28: the brk heap PDEs (kernel/brk.c) are task-private too: the sync must never overwrite them and the check must not count them as drift. */
+static int paging_pde_is_private(u32 pde) { return pde == PAGING_PRIVATE_PDE || pde == KERNEL_PDE_INDEX + 1 || (pde >= BRK_PDE_FIRST && pde <= BRK_PDE_LAST); }
+/* 1.9.28: flush the TLB on whatever directory the CPU is using. Reloading
+   phys(page_directory) here was the ring-3 heap bug: a syscall runs on the
+   task's CR3, and paging_set_user (SYS_WINDOW_OPEN's legacy path) or a
+   kmalloc that grew the identity map silently moved the task onto the
+   kernel directory, so the pages brk_set mapped into task_page_dir() were
+   never the ones the CPU looked at and the first heap write faulted at
+   JT_BRK_BASE. */
+static void paging_flush_current(void) { u32 cr3; __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3)); __asm__ volatile ("mov %0, %%cr3" :: "r"(cr3) : "memory"); }
 static unsigned int pde_changes; /* 1.9.24: bumps on every kernel PDE create or remove, read by stress=pde */
 unsigned int paging_pde_change_count(void) { return pde_changes; }
 static void paging_sync_task_dirs(u32 pde) {
@@ -204,7 +216,7 @@ int paging_map_region(u32 phys_addr, u32 length) {
         if (pde >= BASE_MAP_TABLES) pde_to_extra_table[pde - BASE_MAP_TABLES] = table_idx;
 
         /* reload CR3 to flush the TLB now that the page directory changed */
-        __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
+        paging_flush_current();
     }
     return 1;
 }
@@ -245,7 +257,7 @@ void paging_unmap_region(u32 phys_addr, u32 length) {
     }
 
     /* reload CR3 to flush the TLB now that the page directory changed */
-    __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
+    paging_flush_current();
 }
 
 void paging_set_user(void *virt_addr) {
@@ -256,7 +268,7 @@ void paging_set_user(void *virt_addr) {
     base_page_tables[t][pte] |= 0x4;
     page_directory[t] |= 0x4;
     page_directory[KERNEL_PDE_INDEX + t] |= 0x4;
-    __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
+    paging_flush_current();
 }
 
 /* 1.7.8: see paging.h. Per page, and per alias for the TLB: the same
