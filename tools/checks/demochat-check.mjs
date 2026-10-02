@@ -255,7 +255,7 @@ try {
   // The tour's exact delivery: the sentence plus Enter, typed straight in at
   // 55ms a key. A stray leading 'n' (the old windowed console's hotkey)
   // would corrupt the sentence, which the body assertions below catch.
-  await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 55); }, QUESTION + '\n');
+  await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 140); }, QUESTION + '\n');
   ok(`typed "${QUESTION}" + Enter straight into her input bar through emu.keyboard_send_text`);
 
   const t0 = Date.now();
@@ -302,7 +302,7 @@ try {
   for (const scene of TOOL_SCENES) {
     seenMarker[scene.marker] = (seenMarker[scene.marker] || 0) + 1; // new_note: fires twice, so wait for the Nth occurrence
     const toolName = scene.marker.replace(/^chattool=|:$/g, '');
-    await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 55); }, scene.q + '\n');
+    await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 140); }, scene.q + '\n');
     await page.waitForFunction(([t, n]) => (window.__jt.toolCounts[t] || 0) >= n, [toolName, seenMarker[scene.marker]], { timeout: 15000 })
       .then(() => ok(`tool scene ran: "${scene.q}" -> ${scene.marker}`))
       .catch(async () => { fail(`tool scene never fired: "${scene.q}" -> ${scene.marker}`); const tail = await page.evaluate(() => window.__jt.serial.split('\n').filter(l => !/^(present|fullrepaint|menubarredraw)$/.test(l)).slice(-25).join('\n')); console.log('serial tail:\n' + tail); });
@@ -371,7 +371,7 @@ try {
     // straight into the already-open avatar box, no leading 'n' -- this is
     // what the fix changed (before, runSoloApp's shared script prepended
     // 'n', corrupting the message into "nremind me to call mom at 5").
-    await phonePage.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 55); }, 'remind me to call mom at 5\n');
+    await phonePage.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 140); }, 'remind me to call mom at 5\n');
     ok('phone: typed the reminder sentence directly into the avatar, no leading n');
 
     const t0 = Date.now();

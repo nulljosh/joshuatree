@@ -251,7 +251,7 @@ try {
   else ok(`window pixels read back (${faceInk} distinct colors in the old face box; the decode itself is proved by the face: idle=N serial line)`);
 
   await page.waitForTimeout(1500); // let her face loop and first paint settle before typing
-  await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 55); }, QUESTION + '\n');
+  await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 140); }, QUESTION + '\n');
   ok(`typed "${QUESTION}" + Enter straight into her bar`);
 
   const t0 = Date.now();
