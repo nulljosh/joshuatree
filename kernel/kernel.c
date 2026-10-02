@@ -5427,6 +5427,10 @@ static int gui_multiwin_key_nonblock(void){
     if (sc & 0x80) return -1; /* key release */
     if (sc == 0x3C) return KEY_F2;
     if (kbd_ctrl && (sc & 0x7F) == 0x1F) return KEY_SAVE;
+    /* 2.0.0: the clipboard keys reach a ring-3 window through this push too, or Notes and Terminal never see them */
+    if (kbd_ctrl && (sc & 0x7F) == 0x2E) return KEY_COPY;
+    if (kbd_ctrl && (sc & 0x7F) == 0x2D) return KEY_CUT;
+    if (kbd_ctrl && (sc & 0x7F) == 0x2F) return KEY_PASTE;
     char c = kbd_map(sc);
     if (c == '\n') return KEY_ENTER;
     if (c == 27)   return KEY_ESC;
