@@ -12,22 +12,28 @@ idle frame is red, the talk frames alternate green (even) and blue (odd), and
 talk-47 is garbage bytes (a bad frame must end its clip, not crash anything).
 
 2.0.0: she is the ring-3 compositor window user/samantha.c. She opens with the
-`samantha` boot flag, loads all 24 idle and 48 talk frames one fetch per idle
-poll (so the check waits for "face: idle=24 talk=47" before it types: a fetch
-never runs while typed text is pending), and the mouth now follows playback
-progress (one cached talk frame per 160 ms of audio played) instead of the
-audio's loudness, so the colour alternation below is the mouth following the
-clip. Her serial lines come through the kernel's
-"syscall: write(1) from ring 3: " prefix.
+`samantha` boot flag and loads all 24 idle and 48 talk frames one fetch per idle
+poll (a fetch never runs while typed text is pending, so the check waits for her
+"face:" line before it types). A frame that fails is retried once and then
+skipped, and the clip goes on: one flaky fetch never truncates her face. Her
+"face:" line says how far each clip got ("end=24/48"), how many frames she gave
+up on and how many she retried. The stub serves every frame; it fails the first
+fetch of idle-7 and talk-10 (a flaky network: the retry must recover them) and
+talk-47 is garbage bytes (a bad frame is skipped, not fatal). So the line must
+read idle=24 talk=47 end=24/48 skipped=1 with retried at least 2. The mouth
+follows playback progress (one cached talk frame per 160 ms of audio played), so
+the colour alternation below is the mouth following the clip. Her serial lines
+come through the kernel's "syscall: write(1) from ring 3: " prefix.
 
-Scenario "face": her window opens, assert serial says "face: idle=24 talk=47"
+Scenario "face": her window opens, assert serial says "face: idle=24 talk=47 end=24/48 skipped=1"
 and the face is red. Send a message; the stub answers /api/speak with 4s of
 audio (the 64 KB the call can carry). While it plays the face must cycle
 green and blue. After it ends, red again, and the machine must not have
 rebooted.
 
 Scenario "noface": facehost= points at a closed port. She must still answer,
-serial says "face: idle=0 talk=0", and the face square stays plain background
+serial says "face: idle=0 talk=0" (a dead host ends the idle clip after a few
+skipped frames, it does not cost 24 timeouts), and the face square stays plain background
 (no red). Speech comes from the same closed host, so it is not asserted here.
 
 Discriminating: without the playback hook the square stays red the whole
@@ -61,6 +67,10 @@ FRAMES.update({f"/face/talk-{i}.jpg": jpg(GREEN if i % 2 == 0 else BLUE) for i i
 FRAMES["/face/talk-47.jpg"] = b"\xff\xd8\xff not really a jpeg"
 
 
+FLAKY = {"/face/idle-7.jpg", "/face/talk-10.jpg"}   # fail once, the loader's retry must recover them
+failed_once = set()
+
+
 class Stub(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
@@ -73,6 +83,8 @@ class Stub(http.server.BaseHTTPRequestHandler):
             self.reply(200, TONE, "application/octet-stream")
             return
         body = FRAMES.get(self.path)
+        if self.path in FLAKY and self.path not in failed_once:
+            failed_once.add(self.path); self.reply(503, b"try again", "text/plain"); return
         if body is None: self.reply(404, b"not found", "text/plain")
         else: self.reply(200, body, "image/jpeg")
 
@@ -139,7 +151,7 @@ def run(scenario, facehost):
             try: return open(log, encoding="latin-1").read()
             except FileNotFoundError: return ""
 
-        def face_lines(): return [m.group(0) for m in re.finditer(r"face: idle=\d+ talk=\d+", serial())]
+        def face_lines(): return [m.group(0) for m in re.finditer(r"face: idle=\d+ talk=\d+ end=\d+/\d+ skipped=\d+ retried=\d+", serial())]
 
         for _ in range(200):
             time.sleep(0.2)
@@ -161,8 +173,12 @@ def run(scenario, facehost):
             time.sleep(0.1); before = face()
         lines = face_lines()
         print(tag + (lines[-1] if lines else "(no face: line)"))
-        want = "face: idle=24 talk=47" if scenario == "face" else "face: idle=0 talk=0"
-        if want not in lines: fails.append(tag + f"serial did not say '{want}' (got {lines})")
+        want = "face: idle=24 talk=47 end=24/48 skipped=1" if scenario == "face" else "face: idle=0 talk=0"
+        if not any(l.startswith(want + " ") for l in lines): fails.append(tag + f"serial did not say '{want}' (got {lines})")
+        if scenario == "face" and lines:
+            retried = int(lines[-1].rsplit("retried=", 1)[1])
+            if retried < 2: fails.append(tag + f"the flaky frames were not retried (retried={retried}, want at least 2)")
+            if failed_once != FLAKY: fails.append(tag + f"the stub never saw the flaky frames asked for ({sorted(failed_once)})")
         print(tag + f"face square before sending: {before} ({name(before)})")
         if scenario == "face" and name(before) != "idle": fails.append(tag + f"face square is not the idle frame before sending: {before}")
         if scenario == "noface" and name(before) != "other": fails.append(tag + f"face square drew something with no frames: {before}")
