@@ -117,32 +117,19 @@ DOCK = {
                                         "#32D74B", "#40C8E0", "#0A84FF",
                                         "#5E5CE6", "#BF5AF2", "#FF375F"]))),
 
-    # Burrow (the file browser): a kit fox peeking out of its burrow. Warm
-    # sand tile, dark 3px outline like Samantha's face, big ears and eyes.
+    # Burrow (the file browser): a kit fox peeking out of its burrow. Kept
+    # to a few flat shapes so it reads at dock size: head, two ears, a
+    # white muzzle, two eyes, a nose, and the dirt lip it looks over.
     "burrow": ("#FBEBD0", "#F0CFA0",
-               lg("fur", (0, "#F5A04A"), (1, "#E07F2E"))
-               + lg("dirt", (0, "#C08A52"), (1, "#8F5E33"))
-               + lg("cream", (0, "#FFF8EA"), (1, "#F6E6C8")),
+               "",
                """
-      <g stroke="#2A1A10" stroke-linecap="round" stroke-linejoin="round" transform="translate(64 18) scale(0.80) translate(-64 -14)">
-        <ellipse cx="64" cy="98" rx="50" ry="22" fill="url(#dirt)" stroke-width="3"/>
-        <ellipse cx="64" cy="94" rx="38" ry="13" fill="#3A2414" stroke="none"/>
-        <path d="M33 54 L27 15 Q49 18 57 40 Z" fill="url(#fur)" stroke-width="3"/>
-        <path d="M95 54 L101 15 Q79 18 71 40 Z" fill="url(#fur)" stroke-width="3"/>
-        <path d="M35 47 L32 26 Q44 29 50 41 Z" fill="#F7B8A8" stroke="none"/>
-        <path d="M93 47 L96 26 Q84 29 78 41 Z" fill="#F7B8A8" stroke="none"/>
-        <path d="M27 15 Q38 16 45 24 L32 30 Z" fill="#2A1A10" stroke="none"/>
-        <path d="M101 15 Q90 16 83 24 L96 30 Z" fill="#2A1A10" stroke="none"/>
-        <ellipse cx="64" cy="64" rx="35" ry="29" fill="url(#fur)" stroke-width="3"/>
-        <path d="M30 70 Q44 62 57 71 Q64 76 71 71 Q84 62 98 70 Q94 92 64 93 Q34 92 30 70 Z" fill="url(#cream)" stroke="none"/>
-        <ellipse cx="51" cy="60" rx="6" ry="7.5" fill="#2A1A10" stroke="none"/>
-        <ellipse cx="77" cy="60" rx="6" ry="7.5" fill="#2A1A10" stroke="none"/>
-        <g fill="#FFFFFF" stroke="none"><circle cx="53" cy="57" r="2.4"/><circle cx="79" cy="57" r="2.4"/><circle cx="49.6" cy="63" r="1.1"/><circle cx="75.6" cy="63" r="1.1"/></g>
-        <ellipse cx="64" cy="73" rx="4.6" ry="3.4" fill="#2A1A10" stroke="none"/>
-        <path d="M57 79 Q60.5 83 64 79.5 Q67.5 83 71 79" fill="none" stroke-width="2.4"/>
-        <g fill="#F08C7A" stroke="none" opacity="0.6"><ellipse cx="40" cy="74" rx="5" ry="3.2"/><ellipse cx="88" cy="74" rx="5" ry="3.2"/></g>
-        <path d="M14 101 Q64 84 114 101 Q110 118 64 120 Q18 118 14 101 Z" fill="url(#dirt)" stroke-width="3"/>
-        <g fill="#2A1A10" stroke="none" opacity="0.35"><ellipse cx="34" cy="108" rx="4" ry="2.2"/><ellipse cx="92" cy="110" rx="5" ry="2.4"/><ellipse cx="62" cy="113" rx="3.5" ry="2"/></g>
+      <g stroke="#2A1A10" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" transform="translate(0 -3) translate(64 64) scale(0.84) translate(-64 -64)">
+        <path d="M30 56 L26 20 L56 38 Z" fill="#EE8E36"/>
+        <path d="M98 56 L102 20 L72 38 Z" fill="#EE8E36"/>
+        <ellipse cx="64" cy="64" rx="38" ry="32" fill="#EE8E36"/>
+        <path d="M28 72 Q46 62 64 76 Q82 62 100 72 Q94 94 64 94 Q34 94 28 72 Z" fill="#FFF6E4" stroke="none"/>
+        <g fill="#2A1A10" stroke="none"><circle cx="49" cy="60" r="6.5"/><circle cx="79" cy="60" r="6.5"/><ellipse cx="64" cy="76" rx="5.5" ry="4"/></g>
+        <path d="M16 98 Q64 82 112 98 Q106 114 64 114 Q22 114 16 98 Z" fill="#B9834F"/>
       </g>"""),
 
     # Mail: a white envelope on a blue tile.
