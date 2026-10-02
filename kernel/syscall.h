@@ -178,7 +178,7 @@ struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
      JT_POST_BIG: body up to JT_HTTP_BIG_MAX read straight from the caller buffer and
        reply up to JT_HTTP_BIG_MAX written straight into out (no kernel bounce; the net
        layer copies the body into its own request buffer). On failure out may hold
-       scratch bytes. Unknown flag bits are -EINVAL. */ */
+       scratch bytes. Unknown flag bits are -EINVAL. */
 #define JT_POST_WORKER 1u
 #define JT_POST_BIG    2u
 #define SYS_HTTP_POST   392
