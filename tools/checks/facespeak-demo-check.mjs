@@ -200,6 +200,11 @@ try {
   if (audioState !== 'running') fail(`AudioContext state is "${audioState}" after a real click, expected "running" (speaker_adapter wired but never unlocked)`);
   else ok('AudioContext.state === "running" after the visitor\'s first real click (unlocked, not autoplayed)');
 
+  // 2.0.0: the face takes longer than embed.js's 15s kiosk idle reset to load and
+  // needs no click, so the guest used to reboot mid-load (a second kmain banner,
+  // no fault); guest network through /api/proxy now counts as activity.
+  const bootsBefore = (await page.evaluate(() => window.__jt.serial)).split('=== kmain boot start').length - 1;
+  if (bootsBefore !== 1) fail(`guest booted ${bootsBefore} times before the face finished loading, expected exactly one kmain banner (the kiosk idle reset fired mid-load)`);
   await page.waitForFunction(() => window.__jt.serial.includes('face: idle='), null, { timeout: 20000 })
     .then(() => ok('chat_face_load ran and reported a result over serial'))
     .catch(() => fail('no "face: idle=" serial marker within 20s of Chat opening -- chat_face_load never ran or never finished'));

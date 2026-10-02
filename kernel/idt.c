@@ -59,9 +59,6 @@ static const char *EXC_NAME[32] = {
 };
 
 void isr_handler(u32 ebp, u32 vector, u32 err, u32 eip, u32 cs, u32 eflags) {
-    { static const char hx[] = "0123456789abcdef"; char b[9]; u32 vals[3] = { vector, eip, err }; serial_puts("isr: v/eip/err");
-      for (int j = 0; j < 3; j++) { serial_puts(" "); for (int i = 0; i < 8; i++) b[i] = hx[(vals[j] >> (28 - 4 * i)) & 15]; b[8] = 0; serial_puts(b); }
-      u32 c2; __asm__ volatile ("mov %%cr2, %0" : "=r"(c2)); serial_puts(" cr2="); for (int i = 0; i < 8; i++) b[i] = hx[(c2 >> (28 - 4 * i)) & 15]; serial_puts(b); serial_puts("\n"); }
     (void)err; (void)eflags;
     const char *name = EXC_NAME[vector < 32 ? vector : 31];
     u32 fault_addr = 0;

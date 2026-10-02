@@ -53,3 +53,13 @@ directory, the first bytes hit are PDEs 1023 down to 0x3FC, her brk PDEs and the
 triple faults with nothing to print. Next: print the kernel stack block range and dir_phys at exec_user_window, confirm adjacency; fix by
 (a) guarding the stack with a canary page / 32 KB stack, (b) allocating dirs and kernel stacks so they are never neighbours, (c) a stack-depth
 check in sys_http_get/post before the net call that returns -ENOMEM instead of overflowing. Regression check: window task, 2 MB brk, many big GETs.
+
+## RESOLVED (fourth pass): it was never the kernel
+With the stack hardened (32 KB + guard pad + -ENOMEM guard in sys_http_get/post) the demo still rebooted, and the serial showed her
+kernel stack (0x01098250..0x010a1250) nowhere near her directory (0x01cdc000), no guard hit. The reboot is landing/v86/embed.js's
+retail-kiosk idle reset: 15 s after the last click/key with no serial marker it treats as activity, it calls emulator.restart().
+Her 72 face frames take longer than 15 s to arrive in the browser and need no click, so the demo rebooted mid-load every time, with
+no CPU fault at all (which is why QEMU never showed one). Fix: window.fetch is wrapped so every guest request through /api/proxy
+bumps lastInteractionTime. facespeak-demo-check now also asserts exactly one kmain banner before the face line (fails before, passes after).
+After the fix: one boot, `face: idle=24 talk=48`, chatreply arrives. Separate, pre-existing on fix/facespeak: `speak: status=403`, the speak POST
+never reaches the check's intercept; not this bug.

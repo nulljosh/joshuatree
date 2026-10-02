@@ -31,6 +31,7 @@
 #include "gdt.h"
 #include "syscall.h"
 #include "irqlock.h"
+#include "../drivers/serial.h"
 
 typedef unsigned int u32;
 
@@ -41,7 +42,9 @@ typedef unsigned int u32;
    another frame that size in tcp_send_segment, about 3.7KB before a timer
    IRQ pushes its own frame on top. 4KB was enough for the file and window
    calls and nothing deeper; six slots at 16KB is 96KB of heap. */
-#define STACK_SIZE 16384
+#define STACK_SIZE 32768 /* 2.0.0: 32 KB, up from 16 KB; the Samantha reset (docs/wip/samantha-reset.md) was the net path on a ring-3 task's kernel stack running off the bottom */
+#define STACK_GUARD 4096 /* 2.0.0: a pattern-filled pad below the stack, so an overflow hits the pad (and task_stack_check sees it) before any neighbouring frame, such as the page directory kheap.c describes */
+#define GUARD_WORD 0x5AFE57ACu
 
 /* Saved-frame layout, u32 indices from the saved esp upward. Exactly what
    irq0 (irq_stubs.S) pushes, in reverse: pusha, then ds/es/fs/gs. */
@@ -94,10 +97,11 @@ static int task_create_frame(u32 eip, u32 cs, u32 data_sel, int user, u32 user_e
     int id = -1;
     for (int i = 0; i < MAX_TASKS; i++) if (!tasks[i].used) { id = i; break; }
     if (id < 0) return -1;
-    void *stack = kmalloc(STACK_SIZE);
+    void *stack = kmalloc(STACK_SIZE + STACK_GUARD);
     if (!stack) return -1;
+    for (u32 i = 0; i < STACK_GUARD / 4; i++) ((u32 *)stack)[i] = GUARD_WORD;
 
-    u32 *sp = (u32 *)((char *)stack + STACK_SIZE);
+    u32 *sp = (u32 *)((char *)stack + STACK_GUARD + STACK_SIZE);
     if (user) {
         *(--sp) = UDATA;      /* SS */
         *(--sp) = user_esp;   /* ESP: the user stack, a page the caller already marked user-accessible */
@@ -119,6 +123,21 @@ static int task_create_frame(u32 eip, u32 cs, u32 data_sel, int user, u32 user_e
     tasks[id].used = 1;
     if (id >= n_tasks) n_tasks = id + 1; /* n_tasks is a high-water mark for the round-robin scan below, not a live count */
     return id;
+}
+
+/* 2.0.0: bytes of kernel stack left below the caller's frame for the running
+   task, 0 when the guard pad below it has already been written. The net
+   syscalls refuse to enter the network stack without room (-ENOMEM) instead
+   of running off the block into the next frame, the triple fault behind the
+   Samantha reset. */
+unsigned int task_stack_room(void) {
+    if (!tasks[current].used || !tasks[current].stack_base) return 0xFFFFFFFFu;
+    u32 esp; __asm__ volatile ("mov %%esp, %0" : "=r"(esp));
+    u32 floor = (u32)tasks[current].stack_base + STACK_GUARD;
+    const u32 *g = (const u32 *)tasks[current].stack_base;
+    for (u32 i = 0; i < 16; i++) if (g[STACK_GUARD / 4 - 1 - i] != GUARD_WORD) { serial_puts("BUG: task: kernel stack guard overwritten\n"); return 0; }
+    if (esp < floor || esp > floor + STACK_SIZE) return 0;
+    return esp - floor;
 }
 
 int task_create(void (*entry)(void)) {
@@ -148,7 +167,7 @@ u32 schedule(u32 esp) {
            into the kernel from ring 3 starts at the top, and every exit
            back to ring 3 (iret) has unwound it completely. Harmless for
            a ring-0 task (no privilege change, no stack switch). */
-        gdt_set_kernel_stack(tasks[next].stack_base ? (u32)tasks[next].stack_base + STACK_SIZE : 0);
+        gdt_set_kernel_stack(tasks[next].stack_base ? (u32)tasks[next].stack_base + STACK_GUARD + STACK_SIZE : 0);
     }
     current = next;
     return tasks[current].esp;

@@ -45,14 +45,8 @@ static void put_dec(char *out, u32 v) {
 }
 
 /* Kernel-side pointer to a pmm frame: the identity alias, mapped on demand past 8MB. */
-static void put_hex(u32 v) { static const char hx[] = "0123456789abcdef"; char b[9]; for (int i = 0; i < 8; i++) b[i] = hx[(v >> (28 - 4 * i)) & 15]; b[8] = 0; serial_puts(b); }
 static u32 *frame_ptr(u32 pa) {
-    if (pa >= 0x800000u) {
-        serial_puts("brk: frame_ptr pa="); put_hex(pa);
-        int ok = paging_map_region(pa, 0x1000);
-        serial_puts(ok ? " mapped\n" : " MAP FAILED\n");
-        if (!ok) return 0;
-    }
+    if (pa >= 0x800000u && !paging_map_region(pa, 0x1000)) return 0;
     return (u32 *)pa;
 }
 
@@ -65,7 +59,6 @@ static u32 *table_for(u32 *dir, u32 vaddr, int create) {
     u32 *t = frame_ptr(pa);
     if (!t) { pmm_free_frame(pa); return 0; }
     for (int i = 0; i < 1024; i++) t[i] = 0x2;
-    serial_puts("brk: new table pde="); put_hex(pde); serial_puts(" pa="); put_hex(pa); serial_puts("\n");
     dir[pde] = pa | 0x7;
     return t;
 }
@@ -78,9 +71,7 @@ static int map_one(u32 *dir, u32 vaddr) {
     u32 *z = frame_ptr(pa);
     if (!z) { pmm_free_frame(pa); return 0; }
     for (int i = 0; i < 1024; i++) z[i] = 0; /* never hand a task another task's old bytes */
-    serial_puts("brk: zeroed\n");
     t[(vaddr >> 12) & 0x3FF] = pa | 0x7;
-    serial_puts("brk: pte set v="); put_hex(vaddr); serial_puts("\n");
     return 1;
 }
 
@@ -134,9 +125,7 @@ int brk_set(int task, unsigned int dir_phys, unsigned int new_top) {
         for (u32 v = JT_BRK_BASE; v < have; v += 0x1000) { u32 *t = table_for(dir, v, 0); if (t && (t[(v >> 12) & 0x3FF] & 1)) n++; }
         live_pages -= brk_pages[task]; brk_pages[task] = n; live_pages += n;
     } else brk_top[task] = new_top;
-    { u32 c; __asm__ volatile ("mov %%cr3, %0" : "=r"(c)); serial_puts("brk: done cr3="); put_hex(c); serial_puts(" saved="); put_hex(saved); serial_puts(" top="); put_hex(want); serial_puts("\n"); }
     leave_to(saved);
-    serial_puts("brk: back on task dir\n");
     return err ? err : (int)brk_top[task];
 }
 

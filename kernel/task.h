@@ -33,5 +33,6 @@ void task_kill(int id);
 int  task_max(void);   /* one past the highest slot index ever handed out */
 int  task_used(int id); /* 1 if that slot is a live task right now */
 void sleep_ticks(unsigned int n); /* yield repeatedly until n PIT ticks (100/sec) pass */
+unsigned int task_stack_room(void); /* 2.0.0: kernel stack bytes left for the running task, 0 on guard hit */
 #endif
 unsigned int task_page_dir(int id); /* 1.9.23: physical page directory of a live task, 0 otherwise */

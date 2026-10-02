@@ -41,6 +41,7 @@ typedef int (*syscall_fn)(u32 a, u32 b, u32 c);
 #define EIO      5
 #define EBADF   9
 #define EAGAIN  11
+#define JT_NET_STACK_MIN 12288u /* 2.0.0: the net path (request + 1514-byte receive + tcp/ip frames + one nested IRQ) stays under 8 KB; 12 KB keeps a margin */
 #define ENOMEM  12
 #define EFAULT  14
 #define EINVAL  22
@@ -837,6 +838,7 @@ static int sys_http_get(u32 path, u32 buf, u32 len) {
     if (!paging_user_range_ok(buf, len ? len : 1)) return -EFAULT;
     int big = len > JT_HTTP_BODY_MAX;
     if (http_busy) return -EBUSY;
+    if (task_stack_room() < JT_NET_STACK_MIN) return -ENOMEM; /* 2.0.0: never enter the net path without stack room, see task_stack_room */
     http_busy = 1;
     __asm__ volatile ("sti");
     int n = -1, st = 0;
@@ -903,6 +905,7 @@ static int sys_http_post(u32 argp, u32 flags, u32 unused2) {
     u32 ticks = a.reply_ticks ? a.reply_ticks : JT_HTTP_POST_TICKS_DEFAULT;
     if (ticks > JT_HTTP_POST_TICKS_MAX) ticks = JT_HTTP_POST_TICKS_MAX;
     if (http_busy) return -EBUSY;
+    if (task_stack_room() < JT_NET_STACK_MIN) return -ENOMEM; /* 2.0.0: never enter the net path without stack room, see task_stack_room */
     /* Big: no bounce at all. net's POST builder already copies the body into its own
        kmalloc'd request, and the reply is written straight into the checked user range. */
     if (!big) for (i = 0; i < a.body_len; i++) http_post_body[i] = a.body[i];

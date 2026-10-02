@@ -501,6 +501,20 @@ if (typeof document !== "undefined") (function () {
     // and necessary: the serial log starts at the first boot byte, and the
     // kernel enables the backdoor a few ms into boot, long before ready.
     emulator.add_listener("vmware-absolute-mouse", function (on) { absoluteMouse = !!on; });
+    // 2.0.0: the guest fetching through /api/proxy is an app at work (Samantha's
+    // 72 face frames take longer than 15s to arrive and need no click), so it
+    // counts as the visitor still being here. Without this the kiosk reset
+    // below rebooted the demo mid-load, every time, with no kernel fault at all
+    // (docs/wip/samantha-reset.md). v86's "fetch" relay goes through window.fetch.
+    if (typeof window.fetch === "function" && !window.__jtFetchWrapped) {
+      var realFetch = window.fetch.bind(window);
+      window.__jtFetchWrapped = true;
+      window.fetch = function (input, init) {
+        var u = typeof input === "string" ? input : (input && input.url) || "";
+        if (u.indexOf("/api/proxy") !== -1) lastInteractionTime = Date.now();
+        return realFetch(input, init);
+      };
+    }
     var serialLine = "";
     emulator.add_listener("serial0-output-byte", function (b) {
       // Head + rolling tail: the first 16KB (boot probes) are kept forever, the
