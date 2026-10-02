@@ -179,6 +179,21 @@ static void kfree_locked(void *ptr) {
 void *kmalloc(u32 size) { unsigned int f = irq_save(); void *p = kmalloc_locked(size); irq_restore(f); return p; }
 void kfree(void *ptr) { unsigned int f = irq_save(); kfree_locked(ptr); irq_restore(f); }
 
+/* Free-list census for the http stress check: bytes sitting free in the list, the biggest single
+   free block (what a 64 KB reply buffer actually needs), the block count, and the unused tail of
+   the frame-backed region. A leak or fragmentation shows as free bytes falling or the largest
+   block shrinking while the block count climbs. */
+void kheap_stats(u32 *free_bytes, u32 *largest, u32 *blocks, u32 *tail) {
+    unsigned int f = irq_save();
+    u32 fb = 0, big = 0, nb = 0;
+    for (struct block *b = heap_head; b && nb < 200000u; b = b->next) {
+        nb++;
+        if (b->free) { fb += b->size; if (b->size > big) big = b->size; }
+    }
+    *free_bytes = fb; *largest = big; *blocks = nb; *tail = heap_limit - heap_next;
+    irq_restore(f);
+}
+
 /* 1.9.23: consistency walk, the proof behind tools/checks/ring3stress-check.py.
    Every header must sit inside the frame-backed region, carry a sane size
    and flag, and sit above its list successor (the decreasing-address

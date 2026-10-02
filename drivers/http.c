@@ -1,6 +1,7 @@
 #include "http.h"
 #include "kheap.h"
 #include "net.h"
+#include "irq.h"
 
 typedef unsigned int u32;
 
@@ -42,6 +43,22 @@ static int last_status = 0;
    entry while one is in flight fails fast instead of sharing the socket. */
 static int in_flight = 0;
 int http_last_status(void) { return last_status; }
+
+/* 2.0.0: a ring-3 fetch used to fail with -EIO the instant the desktop (the Weather window's geocode,
+   ip-api and forecast calls, each able to sit out a 20 s DNS or connect wait) held the one connection,
+   and every fetch after it failed the same way until that call ended: Samantha's 72 face frames hit it
+   from about the 23rd. net.c is still one connection at a time, so the honest fix is to queue behind
+   the holder for a bounded time instead of treating it as a network error. Needs interrupts on (the
+   caller sets IF) so ticks advance and the desktop's own fetch keeps running to completion. Returns 1
+   once the stack is free, 0 if it was still held when max_ticks ran out (the caller says -EBUSY). */
+int http_wait_idle(unsigned int max_ticks) {
+    unsigned int deadline = ticks() + max_ticks;
+    while (in_flight) {
+        if ((int)(ticks() - deadline) >= 0) return 0;
+        __asm__ volatile ("sti; hlt");
+    }
+    return 1;
+}
 
 static int http_body_only(u32 ip, unsigned short port, const char *req, u32 req_len,
                            void *body_out, u32 body_maxlen, char *raw, u32 raw_cap, u32 reply_timeout_ticks) {

@@ -19,6 +19,10 @@ int http_get_timeout(const char *host, const char *path, unsigned short port,
    cannot tell a 200 from a proxy's 403 page; callers that care check this. */
 int http_last_status(void);
 
+/* Waits (interrupts must be on) for the one-connection net stack to be free, up to max_ticks.
+   1 = free, 0 = still held by another fetch (the caller reports -EBUSY, not a network error). */
+int http_wait_idle(unsigned int max_ticks);
+
 /* Same idea, HTTP/1.0 POST with a Content-Length body (application/json).
    host also accepts a plain dotted-quad IP literal, skipping DNS, which is
    what reaching a service on the host machine itself needs. */

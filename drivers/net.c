@@ -910,6 +910,10 @@ int tcp_get_timeout(u32 dest_ip, u16 dest_port, const void *request, u32 request
         u32 n = active_receive(rx, sizeof(rx));
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
+        /* A refused connection answers the SYN with an RST: fail now, not after the 20 s SYN-ACK wait
+           (a dead facehost used to cost a full timeout per frame, and held the one connection that
+           whole time against every other fetch). */
+        if (tcp->flags & TCP_RST) { net_err = NET_ERR_CONNECT_TIMEOUT; return -1; }
         if ((tcp->flags & (TCP_SYN | TCP_ACK)) == (TCP_SYN | TCP_ACK) && htonl(tcp->ack) == our_seq) {
             their_seq = htonl(tcp->seq) + 1;
             got_synack = 1;

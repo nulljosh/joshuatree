@@ -849,8 +849,10 @@ static unsigned short http_port_val = 80;
 #define HTTP_PORT http_port_val
 /* 1.9.26: facehost=HOST[:PORT] on the boot command line moves where Samantha's face frames come from
    (the checks point it at a local stub). It lived in the kernel chat's face code; this is its new home. */
+static int http_stat_on = 0; /* `httpstat` on the boot line: one serial census line per ring-3 fetch, for tools/checks/httpstress-check.py */
 void jt_facehost_cmdline(const char *cl) {
     for (const char *p = cl; p && *p; p++) {
+        if (p[0]=='h' && p[1]=='t' && p[2]=='t' && p[3]=='p' && p[4]=='s' && p[5]=='t' && p[6]=='a' && p[7]=='t' && (p == cl || p[-1] == ' ')) http_stat_on = 1;
         if (p[0]=='f' && p[1]=='a' && p[2]=='c' && p[3]=='e' && p[4]=='h' && p[5]=='o' && p[6]=='s' && p[7]=='t' && p[8]=='=') {
             p += 9; int n = 0;
             while (*p && *p != ' ' && *p != ':' && n < HTTP_HOST_MAX - 1) http_host_buf[n++] = *p++;
@@ -865,9 +867,27 @@ void jt_facehost_cmdline(const char *cl) {
     }
 }
 #define HTTP_BIG_TICKS 300 /* 3s: one face frame */
+#define HTTP_WAIT_TICKS 100 /* 1s: how long a ring-3 fetch queues behind the desktop's own fetch before -EBUSY */
 #define HTTP_REPLY_TICKS 150 /* 1500ms at 100Hz, the same budget kernel/curbfind.h used */
 static char http_bounce[JT_HTTP_BODY_MAX];
 static int http_busy = 0;
+static void http_stat_line(int n) {
+    u32 fb, lg, nb, tl; kheap_stats(&fb, &lg, &nb, &tl);
+    char d[96]; int k = 0;
+    const char *pre = "httpstat: n=";
+    while (*pre) d[k++] = *pre++;
+    u32 vals[4] = { (u32)(n < 0 ? -n : n), fb, lg, nb };
+    for (int vi = 0; vi < 4; vi++) {
+        char t[12]; int nt = 0; u32 v = vals[vi];
+        if (!v) t[nt++] = '0';
+        while (v) { t[nt++] = (char)('0' + v % 10); v /= 10; }
+        if (vi == 0 && n < 0) d[k++] = '-';
+        if (vi) { const char *nm = vi == 1 ? " free=" : vi == 2 ? " largest=" : " blocks="; while (*nm) d[k++] = *nm++; }
+        while (nt) d[k++] = t[--nt];
+    }
+    d[k++] = '\n'; d[k] = 0;
+    serial_puts(d);
+}
 static int sys_http_get(u32 path, u32 buf, u32 len) {
     char kpath[JT_HTTP_PATH_MAX + 1];
     u32 i;
@@ -891,7 +911,8 @@ static int sys_http_get(u32 path, u32 buf, u32 len) {
     http_busy = 1;
     __asm__ volatile ("sti");
     int n = -1, st = 0;
-    if (!net_init(0x0A00020F)) { n = -ENODEV; }
+    if (!http_wait_idle(HTTP_WAIT_TICKS)) { n = -EBUSY; } /* the desktop holds the connection: busy, not a network failure */
+    else if (!net_init(0x0A00020F)) { n = -ENODEV; }
     else if (big) {
         n = http_get_timeout(HTTP_HOST, kpath, HTTP_PORT, (char *)buf, len, HTTP_BIG_TICKS);
         http_post_set_bearer(0); /* belt and braces: a failed resolve must not leave it armed */
@@ -907,6 +928,7 @@ static int sys_http_get(u32 path, u32 buf, u32 len) {
     }
     __asm__ volatile ("cli");
     http_busy = 0;
+    if (http_stat_on) http_stat_line(n);
     if (n < 0) return n;
     if ((u32)n > len) n = (int)len;
     if (big) return n; /* already in place */
@@ -961,7 +983,8 @@ static int sys_http_post(u32 argp, u32 flags, u32 unused2) {
     http_busy = 1;
     __asm__ volatile ("sti");
     int n, st = 0;
-    if (!net_init(0x0A00020F)) { n = -ENODEV; }
+    if (!http_wait_idle(HTTP_WAIT_TICKS)) { n = -EBUSY; }
+    else if (!net_init(0x0A00020F)) { n = -ENODEV; }
     else {
         const char *host = (flags & JT_POST_WORKER) ? HTTP_HOST : llm_host_get();
         unsigned short port = (flags & JT_POST_WORKER) ? HTTP_PORT : (unsigned short)llm_port_get();

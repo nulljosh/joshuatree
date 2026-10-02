@@ -201,6 +201,7 @@ retry|7|Sound Blaster 16 detects, beep plays a real 440Hz tone, card-less boot i
 retry|3|Sound Blaster 16 record path: `listen` reaches the driver and times out cleanly (QEMU has no ADC backend), card-less boot is a no-op|python3 ./tools/checks/sb16-record-check.py
 retry|4|Chat speaks: say fetches /api/speak PCM from a stub and plays a real 1000Hz tone|python3 ./tools/checks/chat-speaks-check.py
 retry|4|Chat face: idle frame before, talk frames while she speaks, idle after; no frames means no face|python3 ./tools/checks/chat-face-check.py
+retry|4|HTTP stress: a ring-3 app makes 72 sequential SYS_HTTP_GET calls, all succeed (none -EIO), heap free stays at baseline|python3 ./tools/checks/httpstress-check.py
 retry|3|Burrow view switcher: List/Icons choice is saved to BURROW.TXT and a fresh run reads it back|python3 ./tools/checks/filesview-check.py
 retry|7|Demo canvas fills its frame, pixelated only at an exact 1:1 map|node ./tools/checks/democrisp-check.mjs
 once |7|Landing page never overflows horizontally at phone widths|node ./tools/checks/mobile-overflow-check.mjs

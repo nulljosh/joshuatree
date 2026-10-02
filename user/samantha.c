@@ -251,6 +251,7 @@ static void face_load_step(void) {
     path[n] = 0;
     int got = jt_http_get(path, uface_file, UFACE_FILE), ok = 0;
     unsigned w = 0, h = 0;
+    if (got == -16) return;   /* -EBUSY: the desktop holds the one connection. Not this frame's fault, no retry spent, ask again next poll */
     uface_cur_kind = -1;   /* a bad JPEG can leave the decode buffer half written: it no longer holds any cached frame */
     if (got > 0 && uface_cur && jpeg_decode_scaled(uface_file, (unsigned)got, uface_cur, UFACE_SIDE, UFACE_SIDE, &w, &h) == 0 && w == 320 && h == 320) {
         unsigned char *keep = (unsigned char *)malloc((unsigned long)got);  /* heap, SYS_BRK */
