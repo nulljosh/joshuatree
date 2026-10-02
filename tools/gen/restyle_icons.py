@@ -210,17 +210,15 @@ DOCK = {
         <path d="M61 76 H84"/>
       </g>"""),
 
-    # Chat (Samantha): her own mark from the turing repo (she drew it; one
-    # ink on paper), cropped to her profile so it still reads at dock size.
-    # art/samantha-mark.svg is a vendored copy of turing/art/mark.svg; the
-    # two clips drop the engraved oval's frame lines around her head.
-    "chat": ("#F6EBD5", "#E6D5B5",
-             """<clipPath id="smr"><path d="M300 196 H760 V560 H300 Z"/></clipPath>
-    <clipPath id="sme"><ellipse cx="530" cy="400" rx="225" ry="245"/></clipPath>""",
-             """
-      <svg x="8" y="8" width="112" height="112" viewBox="300 160 460 460"><g clip-path="url(#smr)"><g clip-path="url(#sme)">"""
-             + open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art", "samantha-mark.svg")).read()
-             + """</g></g></svg>"""),
+    # Chat (Samantha): her real app icon from the turing repo, the oval
+    # portrait she drew, on her own paper lit from the top like every tile. art/samantha-icon.svg is a
+    # vendored copy of turing/icon.svg; its own rounded rect is dropped so
+    # the tile below stays the dock's squircle. Re-copy it when turing's
+    # icon changes.
+    "chat": ("#F4F1EA", "#DCD6CB", "",
+             """<svg x="0" y="0" width="128" height="128" viewBox="0 0 200 200">"""
+             + "\n".join(l for l in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art", "samantha-icon.svg")).read().split("\n") if not l.lstrip().startswith(("<svg", "</svg>", "<rect")))
+             + """</svg>"""),
 
     # Weather: a sun half behind a cloud, on a sky-blue tile.
     "weather": ("#47A8F8", "#2A86EC",
@@ -283,6 +281,18 @@ APPS_ONLY = {
         <rect x="34" y="91" width="38" height="8" rx="4"/>
       </g>
       <rect x="78" y="55" width="16" height="44" rx="4" fill="#E8913C"/>"""),
+
+    # Clock: a white face on a graphite tile, hands at 10:10, orange seconds.
+    "clock": ("#4A4F57", "#1C1F24", "",
+              """
+      <circle cx="64" cy="64" r="40" fill="#F7F7F9"/>
+      <g stroke="#1C1F24" stroke-width="3" stroke-linecap="round"><line x1="64.00" y1="31.00" x2="64.00" y2="40.00"/><line x1="80.50" y1="35.42" x2="77.50" y2="40.62"/><line x1="92.58" y1="47.50" x2="87.38" y2="50.50"/><line x1="97.00" y1="64.00" x2="88.00" y2="64.00"/><line x1="92.58" y1="80.50" x2="87.38" y2="77.50"/><line x1="80.50" y1="92.58" x2="77.50" y2="87.38"/><line x1="64.00" y1="97.00" x2="64.00" y2="88.00"/><line x1="47.50" y1="92.58" x2="50.50" y2="87.38"/><line x1="35.42" y1="80.50" x2="40.62" y2="77.50"/><line x1="31.00" y1="64.00" x2="40.00" y2="64.00"/><line x1="35.42" y1="47.50" x2="40.62" y2="50.50"/><line x1="47.50" y1="35.42" x2="50.50" y2="40.62"/></g>
+      <g stroke="#1C1F24" stroke-linecap="round">
+        <line x1="64" y1="64" x2="47.5" y2="54.5" stroke-width="5"/>
+        <line x1="64" y1="64" x2="83" y2="43" stroke-width="3.6"/>
+      </g>
+      <line x1="64" y1="72" x2="64" y2="32" stroke="#F09A37" stroke-width="1.8" stroke-linecap="round"/>
+      <circle cx="64" cy="64" r="3.4" fill="#F09A37"/>"""),
 
     "search": ("#9AA3B1", "#303A48", "",
                """

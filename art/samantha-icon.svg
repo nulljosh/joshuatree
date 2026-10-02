@@ -1,3 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- Samantha's mark. She drew it herself through her own draw path (the image model she paints from), traced to one ink #000000 on one paper #ece8df, no greys, like the Joshua Tree mark. A woman in profile with a constellation for a mind, in a 1970s engraved oval, on the rounded square of the little computer she lives in. The drawing is art/mark.svg. -->
+  <rect width="200" height="200" rx="44" fill="#ece8df"/>
+  <g transform="translate(12,12) scale(0.171875)">
 <g transform="translate(0.000000,1024.000000) scale(0.100000,-0.100000)"
 fill="#000000" stroke="none">
 <path d="M4890 8869 c-153 -10 -300 -30 -475 -64 -213 -42 -320 -75 -630 -190
@@ -1077,3 +1081,5 @@ m-1096 -14 c22 -5 58 -6 81 -3 33 4 45 1 60 -15 10 -11 32 -22 48 -24 16 -1
 <path d="M5220 1770 c-14 -11 -19 -20 -12 -20 7 0 22 9 34 20 28 26 11 26 -22
 0z"/>
 </g>
+  </g>
+</svg>

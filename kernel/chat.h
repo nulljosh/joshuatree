@@ -562,8 +562,9 @@ static int chat_run_tool(const char *tool, const char *arg, char *reply, int rep
     }
 
     if (!strcmp(tool, "weather")) {
+        if (!weather_have) weather_fetch(); /* asking is enough: she fetches it, nobody has to open Weather first */
         if (weather_have && weather_text[0]) chat_fmt_reply(reply, replysz, "", weather_text);
-        else chat_fmt_reply(reply, replysz, "", "No weather reading yet, open Weather first.");
+        else chat_fmt_reply(reply, replysz, "", "I couldn't reach the weather just now.");
         serial_puts("chattool=weather:"); serial_puts(weather_have ? weather_text : "none"); serial_puts("\n");
         return 1;
     }
