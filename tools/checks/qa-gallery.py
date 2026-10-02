@@ -29,6 +29,7 @@ PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
 CLOSE_X, CLOSE_Y = 94, 56
+WIDE_CLOSE_X, WIDE_CLOSE_Y = 34, 56  # 2.0 ring-3 apps open at the full-pane frame; same light feature-drive.py reads
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 
@@ -110,7 +111,9 @@ try:
         p2 = pixel(APPS_CLOSE_X, APPS_CLOSE_Y)
         is_red_1 = max(abs(p1[i] - CLOSE_RED[i]) for i in range(3)) <= 12
         is_red_2 = max(abs(p2[i] - CLOSE_RED[i]) for i in range(3)) <= 12
-        return is_red_1 or is_red_2
+        p3 = pixel(WIDE_CLOSE_X, WIDE_CLOSE_Y)
+        is_red_3 = max(abs(p3[i] - CLOSE_RED[i]) for i in range(3)) <= 12
+        return is_red_1 or is_red_2 or is_red_3
 
     # Wait for desktop to be ready: dock tray color at (480, 511) = 0xEFEBE4
     for _ in range(120):
@@ -130,7 +133,11 @@ try:
             p2 = pixel(APPS_CLOSE_X, APPS_CLOSE_Y)
             is_red_1 = max(abs(p1[i] - CLOSE_RED[i]) for i in range(3)) <= 12
             is_red_2 = max(abs(p2[i] - CLOSE_RED[i]) for i in range(3)) <= 12
-            if is_red_1:
+            p3 = pixel(WIDE_CLOSE_X, WIDE_CLOSE_Y)
+            is_red_3 = max(abs(p3[i] - CLOSE_RED[i]) for i in range(3)) <= 12
+            if is_red_3:
+                move(WIDE_CLOSE_X, WIDE_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)
+            elif is_red_1:
                 move(CLOSE_X, CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)
             elif is_red_2:
                 move(APPS_CLOSE_X, APPS_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)

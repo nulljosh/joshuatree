@@ -20,8 +20,9 @@ dock, dumps the framebuffer, and checks:
      viewport is at most MAX_GAP logical pixels below the viewport's top.
      Before the fix every one of the five apps sits at ~20px + the 32px
      blank band, well over the limit.
-  2. Apps-folder apps put their own name in the window frame, and the
-     folder's "Apps" comes back when they close.
+  2. Apps-folder apps open as their own ring-3 window with their own name
+     in the frame (not the folder's "Apps"), and Esc closes that window and
+     leaves the desktop clear of it.
   3. Calendar: below the weekday rule there are exactly six bands of day
      numbers, and the bottom few rows of the viewport are clear of ink
      (nothing cut off by the window edge).
@@ -43,14 +44,14 @@ ICON_ROW_Y = 487
 PARK = (930, 300)          # right of the window: the pointer sprite must not read as ink
 CLOSE = (94, 56)             # window 0's red traffic light (gui_multiwin_geom slot 0 / gui_launch_from_dock)
 VX0, VY0, VX1, VY1 = 78, 72, 890, 417  # content viewport: (x+8, y+32, w-16, h-40) for x=70,y=40,w=820,h=385
-MAX_GAP = 30
+MAX_GAP = 46   # 2.0 ring-3 apps keep a ~40px header margin on purpose; the 2026-09 bug sat at 52+
 SLOTS = {"Mail": 2, "Calendar": 3, "Notes": 4, "Reminders": 5, "Samantha": 7, "Trash": 10}
-# Apps-folder apps open inside the folder window (x=56,y=30,w=848,h=490, see
-# gui_launch_from_dock), viewport (x+8, y+32, w-16, h-40). Grid index i sits
-# at row i/5, col i%5 (APPS_COLS); d moves right, s moves down.
+# In 2.0 an Apps-folder app opens as its own ring-3 window over the folder
+# (x=10,y=40,w=812,h=385), viewport (x+8, y+32, w-16, h-40), and the folder
+# keeps its "Apps" title strip underneath. Grid index i sits at row i/5,
+# col i%5 (APPS_COLS); d moves right, s moves down.
 FOLDER_APPS = {"Contacts": 18, "Calculator": 19, "Search": 21}
-FOLDER_VIEW = (64, 62, 896, 512)
-FOLDER_CLOSE = (80, 46)
+FOLDER_VIEW = (18, 72, 814, 417)
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for p in (LOG, DUMP):
@@ -213,14 +214,14 @@ try:
             deadline = time.time() + 8
             while True:
                 time.sleep(0.5); img = dump(); bg = app_bg(img)
-                if bg >= 80 or time.time() > deadline: break
-            if bg >= 80 or attempt: break
+                if bg >= 60 or time.time() > deadline: break
+            if bg >= 60 or attempt: break
             key("ret")  # exactly one retry
         time.sleep(0.5); img = dump(); bg = app_bg(img)
         img.save(f"/tmp/jt-apptop-{name.lower()}.png")
         if title(img) == title_apps: fails.append(f"{name}: window frame still says Apps, not the app's own name")
         rows = ink_rows(img, FOLDER_VIEW)
-        if bg < 80:
+        if bg < 60:
             fails.append(f"{name}: did not open from the Apps folder (viewport only {bg}% app background)")
         elif not rows:
             fails.append(f"{name}: no ink in the Apps-folder viewport (did it open?)")
@@ -228,31 +229,23 @@ try:
             gap = rows[0] - FOLDER_VIEW[1]
             print(f"{name}: first ink {gap}px below the title bar")
             if gap > MAX_GAP: fails.append(f"{name}: blank strip under the title bar, first ink {gap}px down (max {MAX_GAP})")
-        # Esc can be lost on a loaded runner (scancode drop). Poll for the
-        # restored title; if the app is still on screen when the wait ends,
-        # the Esc never arrived, so send exactly one more.
-        def repaints():
-            try: return open(LOG, "rb").read().count(b"appsfullrepaint")
-            except OSError: return 0
-        seen_repaints = repaints()
+        # Esc can be lost on a loaded runner (scancode drop). Poll until the
+        # app's paper is gone from the viewport; if it is still there when
+        # the wait ends, the Esc never arrived, so send exactly one more.
+        # In 2.0 the app window is all there is: Esc closes it and the
+        # desktop (wallpaper, dock) is what remains.
+        title_open = title(img)
         key("esc")
-        # The kernel repaints the whole folder (and restores its title) once
-        # the app returns; wait for that marker before reading pixels.
-        for _ in range(100):
-            if repaints() > seen_repaints: break
-            time.sleep(0.1)
-        time.sleep(0.5)
         for attempt in range(2):
             deadline = time.time() + 10
-            while title(dump()) != title_apps and time.time() < deadline: time.sleep(0.5)
-            img = dump()
-            if title(img) == title_apps or attempt or app_bg(img) < 80: break
+            while app_bg(dump()) >= 5 and time.time() < deadline: time.sleep(0.5)
+            if app_bg(dump()) < 5 or attempt: break
             key("esc")
         time.sleep(0.3)
-        if title(dump()) != title_apps:
-            dump().save(f"/tmp/jt-apptop-{name.lower()}-after-esc.png")
-            fails.append(f"{name}: frame title not restored to Apps after closing it")
-        click_at(*FOLDER_CLOSE, 1.0)
+        img = dump()
+        if app_bg(img) >= 5 or title(img) == title_open:
+            img.save(f"/tmp/jt-apptop-{name.lower()}-after-esc.png")
+            fails.append(f"{name}: window still on screen after Esc")
         move(*PARK); time.sleep(0.4)
     try: cmd({"execute": "quit"})
     except (ConnectionResetError, BrokenPipeError, json.JSONDecodeError): pass

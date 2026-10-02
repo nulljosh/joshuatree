@@ -23,16 +23,16 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
+APPS_CLOSE_X, APPS_CLOSE_Y = 34, 56  # 2.0: Epiphany is a ring-3 window at the full-pane frame, its red light sits here
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 EPI_IDX = 22  # GUI_LABELS index for Epiphany, same table feature-drive.py uses
-# Apps-folder viewport for a folder-launched app (portfolio-check.py's real
-# apps=1 geometry: x=56,y=30 -> viewport 64,62); the command bar sits at
-# bar_y = HH-56 in kernel content coords, HH = viewport height.
-VX, VY = 56 + 8, 30 + 32
-VH = 490 - 32  # content height inside the apps=1 window
-BAR_Y = VY + (VH - 56) + 10  # epi_cmd_err/typed-line baseline, matches epi_draw's bar_y+10
-CHART_ROW_Y = VY + 48 + 82 + 20  # x=32,y=T+48 -> chart drawn at y+82 inside epi_cmd_draw_gp
+# 2.0: Epiphany is a ring-3 window at the full-pane frame (x=10,y=40,
+# 812x385), viewport (18,72) 796x345. GP draws a dark green line from about
+# (50,341) up to (782,211) in logical pixels; the command bar's own line
+# (the typed text, or the red one-line error) sits at logical y 368..384.
+LINE_Y0, LINE_Y1 = 200, 350
+LINE_X0, LINE_X1 = 60, 770
+ERR_Y0, ERR_Y1, ERR_X0, ERR_X1 = 366, 388, 38, 300
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -84,13 +84,18 @@ try:
     def pixel(img, x, y): return img.getpixel((x * SCALE + 1, y * SCALE + 1))
     def is_red(p): return max(abs(p[i] - CLOSE_RED[i]) for i in range(3)) <= 12
     def window_open(): return is_red(pixel(dump(), APPS_CLOSE_X, APPS_CLOSE_Y))
-    def row_has_ink(img, y, x0, x1):
-        """A real drawn row has non-background pixels somewhere across it."""
-        bg = img.getpixel((x0 * SCALE, (y - 20) * SCALE))
-        for x in range(x0, x1, 2):
-            if img.getpixel((x * SCALE + 1, y * SCALE + 1)) != bg:
-                return True
-        return False
+    def green(p): return p[1] > p[0] + 25 and p[1] > p[2] + 25
+    def red_ink(p): return p[0] > 0xA0 and p[1] < 0x60 and p[2] < 0x60
+    def chart_columns(img):
+        """How many logical columns hold a green pixel in the chart band: a
+        drawn GP line crosses all of them, a blank pane or the watchlist
+        (green only in a few percent cells) crosses almost none."""
+        n = 0
+        for x in range(LINE_X0, LINE_X1):
+            if any(green(img.getpixel((x * SCALE + 1, y * SCALE + 1))) for y in range(LINE_Y0, LINE_Y1)): n += 1
+        return n
+    def error_px(img):
+        return sum(1 for y in range(ERR_Y0, ERR_Y1) for x in range(ERR_X0, ERR_X1) if red_ink(img.getpixel((x * SCALE + 1, y * SCALE + 1))))
 
     # desktop ready
     for _ in range(120):
@@ -107,8 +112,11 @@ try:
     for _ in range(EPI_IDX % 5): keyname("d")
     for _ in range(EPI_IDX // 5): keyname("s")
     keyname("ret")
-    time.sleep(1.2)
+    for _ in range(40):  # poll for the red light; a loaded runner is slow to draw the ring-3 window
+        time.sleep(0.25)
+        if window_open(): break
     if not window_open():
+        dump().save("/tmp/jt-epicmdbar-noopen.png")
         raise SystemExit("FAIL: Epiphany never opened a window")
 
     # Focus the bar, type "aapl gp", Enter. Wait for Epiphany to finish its
@@ -129,9 +137,11 @@ try:
     if "epicmd=run:AAPL GP" not in log:
         fails.append(f"serial log missing 'epicmd=run:AAPL GP' marker; got tail: {log[-400:]!r}")
 
-    img = dump()
-    if not row_has_ink(img, CHART_ROW_Y, VX + 32, VX + 32 + 400):
-        fails.append("GP chart row shows no drawn line after 'aapl gp' + Enter")
+    img = dump(); img.save("/tmp/jt-epicmdbar-gp.png")
+    cols = chart_columns(img)
+    print(f"GP chart: green line in {cols} of {LINE_X1 - LINE_X0} columns")
+    if cols < (LINE_X1 - LINE_X0) // 2:
+        fails.append(f"GP chart shows no drawn line after 'aapl gp' + Enter ({cols} columns)")
     if not window_open():
         fails.append("Epiphany crashed or closed after running a valid GP command")
 
@@ -148,8 +158,16 @@ try:
             break
     if "epicmd=unknown_code:ZZ" not in log:
         fails.append(f"serial log missing 'epicmd=unknown_code:ZZ' marker; got tail: {log[-400:]!r}")
-    img = dump()
-    if not row_has_ink(img, BAR_Y, VX + 20, VX + 300):
+    # The marker prints as the command is parsed; the error line is drawn on
+    # the frame after. Poll for it rather than reading the same instant.
+    for _ in range(25):
+        time.sleep(0.2)
+        img = dump()
+        if error_px(img) >= 100: break
+    img.save("/tmp/jt-epicmdbar-err.png")
+    errpx = error_px(img)
+    print(f"Unknown code: {errpx} red error px in the command bar")
+    if errpx < 100:
         fails.append("Unknown-code error line did not draw in the command bar")
     if not window_open():
         fails.append("Epiphany crashed or closed after an unknown command code")
