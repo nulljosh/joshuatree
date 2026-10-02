@@ -51,6 +51,12 @@
 #define JT_HTTP_PATH_MAX 128   /* longest path SYS_HTTP_GET accepts, bytes before the NUL */
 #define JT_HTTP_BODY_MAX 2048  /* longest body it hands back */
 #define JT_SYS_READDIR     388 /* 1.9.13: list a directory into fixed-size records (387 is Curbfind's http_get) */
+#define JT_SYS_TEXT        389 /* 1.9.21: anti-aliased text for the window; see kernel/syscall.h */
+#define JT_TEXT_DRAW    0
+#define JT_TEXT_MEASURE 1
+#define JT_TEXT_CLEAR   2
+#define JT_TEXT_MAX     96
+struct jt_text { int x, y; unsigned int fg; const char *s; };
 #define JT_DIRENT_NAME  32
 #define JT_READDIR_MAX  64
 #define JT_PATH_MAX     63     /* bytes of path before the NUL the kernel will read; longer is -EINVAL */
@@ -150,6 +156,8 @@ static inline int jt_tasks(struct jt_tasks *t, int kill)          { return jt_sy
    NIC, -EIO no answer. The host is fixed in the kernel; only the path is ours. */
 static inline int jt_http_get(const char *path, void *buf, unsigned len) { return jt_syscall(JT_SYS_HTTP_GET, (unsigned)path, (unsigned)buf, len); }
 static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned max) { return jt_syscall(JT_SYS_READDIR, (unsigned)path, (unsigned)out, max); }
+static inline int jt_text(const char *s, int x, int y, unsigned fg, int op) { struct jt_text t = { x, y, fg, s }; return jt_syscall(JT_SYS_TEXT, (unsigned)&t, (unsigned)op, 0); }
+static inline void jt_text_clear(void) { jt_syscall(JT_SYS_TEXT, 0, JT_TEXT_CLEAR, 0); }
 static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
 
 #endif

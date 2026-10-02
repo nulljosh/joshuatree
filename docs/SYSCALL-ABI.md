@@ -599,3 +599,20 @@ Since 1.9.13 **open** takes the same relative paths, so the file a listing
 named inside `DOCS` opens as `"DOCS/NAME"`. The walk in and back out happens
 at open and again at close, when the buffer is written back. An empty path
 is -EINVAL.
+
+## text (1.9.21)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 389 | `text` | `struct jt_text *` (x, y, fg, s) | op: 0 draw, 1 measure, 2 clear | unused | the string's advance in window pixels, or -errno |
+
+**text** gives a ring-3 window the same anti-aliased face every kernel string
+uses. The window's pixel buffer is logical resolution and is doubled on the
+way to the screen, so glyphs a program stamps in itself are blocky. Op 0
+queues the string and the kernel draws the queue after the pixel copy at the
+next present; op 1 only measures; op 2 drops the queue, called at the top of
+each frame. The string is printable ASCII, at most 96 bytes, copied out of
+user memory byte by byte. Layout should use the advance it returns, never a
+fixed glyph width. Errors: -EBADF (caller does not own the window), -EINVAL
+(bad op or string), -EFAULT (pointer outside user memory), -ENOMEM (queue
+full).

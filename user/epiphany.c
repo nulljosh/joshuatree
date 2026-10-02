@@ -23,12 +23,11 @@
  * tickers, where the old chart only covered eight. Market cap and P/E in DES
  * still show for those eight, from a compiled-in table.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font. Every state change writes
+ * Glyphs: SYS_TEXT, the kernel's anti-aliased face. Every state change writes
  * one serial line, which the checks read, and the command bar keeps the
  * "epicmd=" markers tools/checks/epiphany-cmdbar-check.py asserts on.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
 
 #define BG     0x00FAF8F6 /* GUI_BG */
 #define INK    0x001C1C1E
@@ -39,7 +38,6 @@
 #define SELBG  0x00E2D9CC
 #define ACCENT 0x000A84FF
 #define TOP    8
-#define GLYPH_W 8
 
 typedef struct { const char *sym, *name; int price, bp; } row_t; /* price x100, change in basis points */
 
@@ -105,22 +103,19 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) r[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (!(g[r] & (0x80 >> c)) || px < 0 || px >= (int)win.width) continue;
-            win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
-}
 static int slen(const char *s) { int n = 0; while (s[n]) n++; return n; }
-static int text(const char *s, int x, int y, unsigned fg) { for (; *s; s++, x += GLYPH_W) glyph((unsigned char)*s, x, y, fg); return x; }
-static void right(const char *s, int xr, int y, unsigned fg) { text(s, xr - slen(s) * GLYPH_W, y, fg); }
+/* Text goes through SYS_TEXT: the kernel queues it and draws it with the
+   desktop's physical-resolution typeface after the pixel copy, so it is no
+   longer the 8x16 bitmap doubled up. Layout uses the real advance it
+   returns, never a fixed glyph width. */
+static int text(const char *s, int x, int y, unsigned fg) {
+    int w = jt_text(s, x, y, fg, JT_TEXT_DRAW);
+    return x + (w > 0 ? w : 0);
+}
+static void right(const char *s, int xr, int y, unsigned fg) {
+    int w = jt_text(s, 0, 0, 0, JT_TEXT_MEASURE);
+    text(s, xr - (w > 0 ? w : 0), y, fg);
+}
 static void pset(int x, int y, unsigned c) {
     if (x >= 0 && y >= 0 && x < (int)win.width && y < (int)win.height) win.pixels[(unsigned)y * win.width + (unsigned)x] = c;
 }
@@ -279,7 +274,7 @@ static void draw_markets(int x, int y, int w) {
     int cw = (w - 32) / 2, x2 = x + cw + 32;
     text(adding ? "Add to watchlist (enter or space adds, esc cancels)" : "Watchlist", x, y, adding ? ACCENT : MUTED);
     int want = adding ? 0 : 1, n = count(want);
-    int vis = ((int)win.height - y - 60) / 22; if (vis < 3) vis = 3;
+    int vis = ((int)win.height - y - 84) / 22; if (vis < 3) vis = 3;
     if (sel < scroll_top) scroll_top = sel;
     if (sel >= scroll_top + vis) scroll_top = sel - vis + 1;
     if (scroll_top > n - vis) scroll_top = n - vis;
@@ -305,7 +300,7 @@ static void draw_markets(int x, int y, int w) {
     rect(x2, y3 + 24, cw, 10, RULE);
     rect(x2, y3 + 24, cw * fg / 100, 10, col(fg - 50));
     itoa10(fg, b); cat(b, slen(b), "  Greed"); text(b, x2, y3 + 40, INK);
-    if (!adding) text("a add   d remove", x2, y3 + 68, MUTED);
+    if (!adding) text("a add   d remove", x2, y3 + 60, MUTED);
 }
 static void draw_portfolio(int x, int y, int w) {
     char b[64];
@@ -340,7 +335,7 @@ static void draw_portfolio(int x, int y, int w) {
         int sw = (int)((long)hold[i].shares * pool[hold[i].pool].price * w / total);
         rect(ax, ty + 70, sw, 12, seg[i]); ax += sw;
     }
-    text("up/down pick   + / - shares", x, ty + 90, MUTED);
+    right("up/down pick   + / - shares", x + w, ty + 48, MUTED); /* same row as the Allocation label, clear of the command bar below */
 }
 static void draw_sim(int x, int y, int w, int h) {
     char b[64]; int px = sim_px[sim_n - 1];
@@ -381,6 +376,7 @@ static void draw_situation(int x, int y) {
 static void draw(void) {
     int WW = (int)win.width, HH = (int)win.height;
     rect(0, 0, WW, HH, BG);
+    jt_text_clear(); /* this frame's text replaces the last one's */
     for (int i = 0; i < 4; i++) {
         int tx = 24 + i * 110;
         if (i == tab) { rect(tx - 8, TOP, 100, 26, ACCENT); text(TAB_NAME[i], tx, TOP + 4, 0x00FFFFFF); }

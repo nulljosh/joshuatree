@@ -65,7 +65,7 @@ DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 247, 487
 # right pixels.
 APPS_COLS = 5
 ROW_X0, ROW_X1 = 250, 1750      # physical x band inside the grid, clear of the window's own border/corner
-SCAN_Y0, SCAN_Y1 = 870, 915     # physical y band that brackets row 2's label ink (a fixed geometric slot; only which app's label lands there can vary)
+SCAN_Y0, SCAN_Y1 = 916, 962     # physical y band that brackets row 2's label ink (a fixed geometric slot; only which app's label lands there can vary)
 BG_LUMA = 244                   # the glass panel's own light fill, measured
 INK_DROP = 80                   # a column counts as "ink" when its darkest pixel is this far below BG_LUMA
 MIN_CLUSTER_W = 40              # physical px; drops stray window-edge noise, real labels are all >= 47px wide

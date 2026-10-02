@@ -85,7 +85,7 @@ APPS_FOLDER_SLOT = 0
 # -> panel spans local (13,25)-(819,400), i.e. logical screen (77,87)-(883,462).
 WIN_X, WIN_Y = 56, 30
 VX, VY = WIN_X + 8, WIN_Y + 32
-PANEL_TOP_LOCAL, PANEL_BOTTOM_LOCAL = 25, 400
+PANEL_TOP_LOCAL, PANEL_BOTTOM_LOCAL = 25, 445  # APPS_PANEL_H 420 + panel_y 25
 TITLEBAR_BOTTOM_LOCAL = 0  # viewport's own top edge; the real title bar is drawn outside it
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -95,7 +95,7 @@ for f in (LOG, DUMP1, DUMP2):
 
 subprocess.run(["make", "-s", "kernel.elf"], check=True)
 
-q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
+q = subprocess.Popen(["qemu-system-i386", "-rtc", "base=2026-09-23T19:30:00", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                       "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG, "-name", "jt-appslayout"],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 try:
@@ -219,7 +219,7 @@ if heading_row_dark > 40:
 # cell_w=150, cell_h=108, tile=60, x0=41, y0=95; at max scroll the tail
 # row (Stocks/Search/Epiphany, cols 0-2) lands at local row APPS_VIS_ROWS-1.
 img2 = load(DUMP2)
-CELL_W, CELL_H, X0, Y0, APPS_VIS_ROWS = 150, 108, 41, 95, 3
+CELL_W, CELL_H, X0, Y0, APPS_VIS_ROWS = 150, 116, 41, 88, 3
 tail_row_local_y = Y0 + (APPS_VIS_ROWS - 1) * CELL_H
 ghost_hits = 0
 ghost_checked = 0
