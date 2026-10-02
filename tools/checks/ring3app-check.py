@@ -99,10 +99,11 @@ try:
         return (img or frame()).getpixel((x * SCALE + 1, y * SCALE + 1))
     def near(p, c, tol=12): return max(abs(p[i] - c[i]) for i in range(3)) <= tol
     def done_glyph_pixels(img):
-        # The text block starts 20px in and 60px down inside the viewport; the
-        # first line of words is 16px tall. Physical coordinates, whole line.
-        x0, y0 = (VIEW_X + 20) * SCALE, (VIEW_Y + 60) * SCALE
-        crop = img.crop((x0, y0, x0 + 760 * SCALE, y0 + 16 * SCALE))
+        # The word block starts 20px in and 44px down inside the viewport and
+        # wraps over up to three 24px lines, all above the wpm readout (which
+        # is the same brown, so it is left out). Physical coordinates.
+        x0, y0 = (VIEW_X + 20) * SCALE, (VIEW_Y + 40) * SCALE
+        crop = img.crop((x0, y0, x0 + 764 * SCALE, y0 + 229 * SCALE))
         data = crop.get_flattened_data() if hasattr(crop, 'get_flattened_data') else crop.getdata()
         return sum(1 for p in data if near(p, DONE, 10))
 
@@ -165,13 +166,15 @@ try:
         fails.append("Mail did not close on Esc after the crash")
 
     # 5. a normal close, both ways, from the path qa-gallery.py takes: the
-    #    Apps folder grid (Keyrate is row 1, col 4), whose viewport is the
-    #    folder's 832x450, not the dock's 804x345. Esc, then the red close
-    #    dot; after each the program must have exited 0, the window must be
-    #    released, and Mail must open from the dock. This is the case that
-    #    left 17 apps "never opened" in 1.7.7: the folder viewport did not
-    #    fit JT_USER_FB, SYS_WINDOW_OPEN failed, and the desktop hung.
-    APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
+    #    Apps folder grid (Keyrate is row 1, col 4), which in 2.0 opens the app
+    #    as its own ring-3 window (796x345 here, red dot at 34,56) over the
+    #    folder. Esc, then the red close dot; after each the program must have
+    #    exited 0, the window must be released, and Mail must open from the
+    #    dock. This is the case that left 17 apps "never opened" in 1.7.7: a
+    #    folder-launched viewport did not fit JT_USER_FB, SYS_WINDOW_OPEN
+    #    failed, and the desktop hung.
+    APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46            # the Apps window's own red dot
+    GRID_APP_CLOSE_X, GRID_APP_CLOSE_Y = 34, 56    # a window launched from the grid sits further left than a dock launch
     def open_keyrate_from_grid(tag):
         seen = serial().count("keyrate: ring-3 window")
         move(*PARK); time.sleep(0.2)
@@ -184,8 +187,9 @@ try:
             if serial().count("keyrate: ring-3 window") > seen: break
         else:
             fails.append(f"{tag}: Keyrate did not open a ring-3 window from the Apps folder grid"); return False
-        if "keyrate: ring-3 window 832x450" not in serial():
-            fails.append(f"{tag}: the folder-launched window is not the folder viewport's 832x450")
+        last = [l for l in serial().splitlines() if "keyrate: ring-3 window " in l][-1]
+        if not last.endswith("keyrate: ring-3 window 796x345"):
+            fails.append(f"{tag}: the folder-launched window is not the 2.0 app viewport's 796x345 (got: {last})")
         if "ring3app: BUG" in serial():
             fails.append(f"{tag}: ring3app logged a BUG line")
         time.sleep(0.5)
@@ -211,7 +215,7 @@ try:
         assert_closed("esc-close", exits)
     exits = serial().count("KEYRATE.BIN exited 0")
     if open_keyrate_from_grid("dot-close"):
-        move(APPS_CLOSE_X, APPS_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.5)
+        move(GRID_APP_CLOSE_X, GRID_APP_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.5)
         assert_closed("dot-close", exits)
 
     # 6. the keyboard path into the Apps folder, not the dock click: Enter on
