@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 // Dev-kit waitlist: worker.js's /api/waitlist (POST) and /api/waitlist/count
 // (GET). Same idea as worker-proxy-check.mjs -- no real Cloudflare Worker or
 // KV namespace here, so this exercises the real handler functions directly
@@ -115,6 +116,13 @@ function postReq(body, headers = {}) {
 {
   const resp = await handleWaitlistPost(postReq({ email: "a@example.com" }), {});
   check("missing WAITLIST binding fails safe (500), not a crash", resp.status === 500);
+}
+
+{
+  // the confirmation email once claimed "26 apps" long after the count moved; never hard-code it
+  const src = readFileSync(new URL("../../worker.js", import.meta.url), "utf8");
+  const mail = src.slice(src.indexOf("const WAITLIST_MAIL_TEXT"), src.indexOf("async function sendWaitlistEmail"));
+  check("confirmation email hard-codes no app count", !/\b\d+\s+apps\b/i.test(mail));
 }
 
 if (failures > 0) {
