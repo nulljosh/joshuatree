@@ -29,6 +29,10 @@ extern int path_leave(int depth);
 static char sh_out[SH_OUT_MAX];
 static unsigned int sh_len;
 static char sh_file[SH_OUT_MAX];
+/* `panicdesk` boot flag (r3stress_arm): turns on a deliberate `crash` command
+   so tools/checks/panic-check.py can fault ring 0 under a live desktop from
+   the real Terminal. Unarmed, `crash` is refused like any other command. */
+int shell_crash_armed;
 
 static void sh_putc(char c) { if (sh_len + 1 < SH_OUT_MAX) sh_out[sh_len++] = c; }
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
@@ -66,6 +70,7 @@ unsigned int shellsys_run(char *line, char **out) {
         sh_puts("help echo uptime mem ps ls cat\n"
                 "other shell commands need the text-mode shell or the desktop\n");
     } else if (sh_eq(line, "echo")) { sh_puts(arg); sh_putc('\n'); }
+    else if (shell_crash_armed && sh_eq(line, "crash")) __asm__ volatile ("int $3");
     else if (sh_eq(line, "uptime")) { sh_putn(ticks() / 100); sh_puts("s\n"); }
     else if (sh_eq(line, "mem")) {
         sh_putn(pmm_free_frames() * 4); sh_puts("K free / ");

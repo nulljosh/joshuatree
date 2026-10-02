@@ -35,7 +35,10 @@ static unsigned int pde_first, pde_done, pde_sys_hits;
 #define DESK_ROUNDS 400
 #define DESK_BURST 256
 
+extern int shell_crash_armed;
 void r3stress_arm(const char *cl) {
+    for (const char *p = cl; p && *p; p++)
+        if (p[0]=='p' && p[1]=='a' && p[2]=='n' && p[3]=='i' && p[4]=='c' && p[5]=='d' && p[6]=='e' && p[7]=='s' && p[8]=='k') { shell_crash_armed = 1; serial_puts("panicdesk: armed\n"); }
     for (const char *p = cl; p && *p; p++)
         if (p[0]=='s' && p[1]=='t' && p[2]=='r' && p[3]=='e' && p[4]=='s' && p[5]=='s' && p[6]=='=' && p[7]=='r' && p[8]=='3') { syscall_stress_on = 1; serial_puts("r3stress: armed\n"); }
     for (const char *p = cl; p && *p; p++)
