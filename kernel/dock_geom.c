@@ -44,12 +44,13 @@ int gui_slot_at(int mx){
    dragged icon should keep tracking the cursor even briefly outside it). */
 void gui_clamp_win_rect(int *x, int *y, int *w, int *h){
     int sw = (int)window_width(), sh = (int)window_height(), m = 10;
+    int top = sw >= 700 ? 28 : m; /* desktop: stay under the 26px menu bar (short res= screens), phone has none */
     if (*w > sw - 2 * m) *w = sw - 2 * m;
-    if (*h > sh - 2 * m) *h = sh - 2 * m;
+    if (*h > sh - top - m) *h = sh - top - m;
     if (*x + *w > sw - m) *x = sw - m - *w;
     if (*x < m) *x = m;
     if (*y + *h > sh - m) *y = sh - m - *h;
-    if (*y < m) *y = m;
+    if (*y < top) *y = top;
 }
 
 int gui_dock_hit_test(int mx, int my){

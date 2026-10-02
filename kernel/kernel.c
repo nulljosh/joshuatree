@@ -958,6 +958,7 @@ static int boot_to_samantha;
    the demo boots 1:1 into what a phone screen actually is, rather than
    shrinking the desktop's layout down to unreadable text. */
 static int boot_to_phone;
+static int boot_res_w, boot_res_h; /* "res=WxH" (physical px, landing/v86/embed.js at dpr 1): gui_run opens logical W/2 x H/2 at scale 2 so the canvas maps 1:1 to the visitor's screen; 0 = default 960x540 */
 #include "hint.h"
 static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
 static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
@@ -6419,7 +6420,11 @@ static void gui_run(void){
        VBE takes any size, and 430x760 is a real phone's own logical
        pixels, not the desktop's 960x540 shrunk to fit. */
     if (boot_to_phone) { if (!window_open_scaled(430, 760, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; } }
-    else if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
+    else {
+        int ok = 0;
+        if (boot_res_w && boot_res_h) { ok = window_open_scaled(boot_res_w / 2, boot_res_h / 2, 32, 2); if (!ok) { boot_res_w = boot_res_h = 0; serial_puts("res= failed, default mode\n"); } }
+        if (!ok && !window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
+    }
     font_set_aa(gui_aa_char, gui_aa_advance); /* v44: real typeface for every string from here on */
     font_set_aa_mono(gui_aa_char_mono); /* term-mono: mono face for the terminal grid and Keyrate's typed line */
     /* v46: no wind in the browser, decided up front rather than measured
@@ -9160,6 +9165,15 @@ void kmain(unsigned int multiboot_info_addr){
            never lands on a desktop that was never designed for 430px. */
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='p' && pc[1]=='h' && pc[2]=='o' && pc[3]=='n' && pc[4]=='e' && (pc[5]==' ' || pc[5]==0)) { boot_to_phone = 1; boot_to_samantha = 1; serial_puts("bootphone\n"); break; }
+        /* "res=WxH": physical pixels, even, W multiple of 8, 1600..3840 x 900..2160; anything else keeps 960x540 */
+        for (const char *pc = cl; pc && *pc; pc++)
+            if (pc[0]=='r' && pc[1]=='e' && pc[2]=='s' && pc[3]=='=' && (pc == cl || pc[-1]==' ')) {
+                const char *q = pc + 4; int rw = 0, rh = 0;
+                while (*q >= '0' && *q <= '9' && rw < 100000) rw = rw * 10 + (*q++ - '0');
+                if (*q == 'x') { q++; while (*q >= '0' && *q <= '9' && rh < 100000) rh = rh * 10 + (*q++ - '0'); }
+                if (rw >= 1600 && rw <= 3840 && rh >= 900 && rh <= 2160 && (rw % 8) == 0 && (rh % 2) == 0) { boot_res_w = rw; boot_res_h = rh; serial_puts("bootres\n"); }
+                break;
+            }
         /* "panictest" on the multiboot command line (tools/checks/
            panic-symbols-check.py passes it) -- deliberately faults from a
            known, named function right after idt_install() so a headless

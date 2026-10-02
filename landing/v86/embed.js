@@ -50,10 +50,23 @@ if (typeof document !== "undefined") (function () {
   // space has to switch to match, 1:1, instead of downscaling a desktop.
   var IS_PHONE = typeof matchMedia === "function" && matchMedia("(max-width: 520px)").matches;
   var LOGICAL_W = IS_PHONE ? 430 : 960, LOGICAL_H = IS_PHONE ? 760 : 540;
+  // Pixel-exact desktop: at dpr 1 with a big enough box, ask the kernel for a
+  // physical mode equal to the box in device px ("res=WxH", W multiple of 8,
+  // both even; kernel opens logical W/2 x H/2 at scale 2) so no CSS scaling.
+  var RES_TOKEN = "", RES_W = 0, RES_H = 0;
+  (function () {
+    var dpr0 = window.devicePixelRatio || 1;
+    var sc0 = document.getElementById("screen_container") || container;
+    var bw = sc0.clientWidth * dpr0, bh = sc0.clientHeight * dpr0;
+    if (IS_PHONE || dpr0 !== 1 || bw < 1600 || bh < 900) return;
+    var rw = Math.min(3840, Math.floor(bw / 8) * 8), rh = Math.min(2160, Math.floor(bh / 2) * 2);
+    RES_W = rw; RES_H = rh; RES_TOKEN = "res=" + rw + "x" + rh + " ";
+    LOGICAL_W = rw / 2; LOGICAL_H = rh / 2;
+  })();
   // 1.7.16: one cmdline for the first boot AND every tour-lap reboot. reinjectKernel
   // used to reload the kernel with no cmdline, so after lap 1 a phone visitor got a
   // letterboxed desktop (no "phone"), and everyone lost facehost.
-  var BOOT_CMDLINE = (IS_PHONE ? "phone samantha " : "") + (/[?&]portfolio\b/.test(location.search) ? "portfolio " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com";
+  var BOOT_CMDLINE = (IS_PHONE ? "phone samantha " : "") + RES_TOKEN + (/[?&]portfolio\b/.test(location.search) ? "portfolio " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com";
   var GLIDE_MAX_MS = 700; // longest tour cursor glide, see moveCursorTo
   // v52.6: real shadow cursor position, kept in sync by every real send
   // this file makes (mousemove, touchmove drags, and moveCursorTo's own
@@ -987,6 +1000,8 @@ if (typeof document !== "undefined") (function () {
     currentScale = visibleFrac >= 0.75 ? coverScale : containScale;
     var crisp = 1 / dpr <= currentScale && 1 / dpr >= currentScale * 0.9;
     if (crisp) currentScale = 1 / dpr;
+    var exact = RES_TOKEN && dpr === 1 && w === RES_W && h === RES_H;
+    if (exact) { currentScale = 1; crisp = true; }
     screenCanvas.style.width = Math.round(w * currentScale) + "px";
     screenCanvas.style.height = Math.round(h * currentScale) + "px";
     screenCanvas.style.imageRendering = crisp ? "pixelated" : "auto";
