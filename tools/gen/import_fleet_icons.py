@@ -20,8 +20,23 @@ from restyle_icons import squircle_path, HL_WIDTH, HL_ALPHA, HL_FADE  # single s
 
 # art/icons name -> repo folder
 FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank", "lexly": "lexly", "sparkjar": "sparkjar",
-         "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "homeqi": "homeqi", "fieldbook": "fieldbook",
+         "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "fieldbook": "fieldbook",
          "plan": "plan"}  # Weather is a system app, it keeps the restyled icon from restyle_icons.py
+
+# Dock tile color per app. Most projects ship a near-black tile, so eight of
+# them side by side read as one black strip; the dock repaints each one's
+# full-size background rect here instead. Only the tile, never the glyph,
+# and only in this OS: the project's own icon.svg is untouched.
+TILE = {"epiphany": "#D6DEE6", "curbfind": "#C8644F", "bookrank": "#3E5C86", "lexly": "#6B9474",
+        "sparkjar": "#8A5A3C", "quotes": "#D8C7A3", "keyrate": "#5A5A5E"}  # toroid stays black: Life is white-on-black
+
+
+def retile(inner, box, color):
+    """Swap the fill of the first rect that covers the whole viewBox (the tile)."""
+    w = box.split()[2]
+    m = re.search(r'<rect\b(?=[^>]*\bwidth="%s")[^>]*?\bfill="[^"]*"' % re.escape(w), inner)
+    if not m: sys.exit("no full-size tile rect to recolor")
+    return inner[:m.start()] + re.sub(r'\bfill="[^"]*"', 'fill="%s"' % color, m.group(0)) + inner[m.end():]
 
 
 def wrap(repo, box, inner):
@@ -56,6 +71,7 @@ def main():
             box = "0 0 %s %s" % (w.group(1), h.group(1))
         else: box = vb.group(1)
         inner = svg[m.end():svg.rindex("</svg>")]
+        if name in TILE: inner = retile(inner, box, TILE[name])
         open(os.path.join(ROOT, "art", "icons", name + ".svg"), "w").write(wrap(repo, box, inner))
         print("imported", name)
 

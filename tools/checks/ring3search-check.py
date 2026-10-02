@@ -163,7 +163,7 @@ class Drive:
         if not wait_serial("appsfullrepaint", 10, n + 1):
             fails.append("the Apps folder did not open from the dock"); return False
         time.sleep(0.6)
-        for c in ("d", "s", "s", "s", "s"): self.keys(c)  # icon 21: row 4, col 1 (APPS_COLS = 5)
+        for c in ("s", "s", "s", "s"): self.keys(c)  # icon 20: row 4, col 0 (APPS_COLS = 5)
         self.keys("ret")
         return True
 
@@ -272,7 +272,7 @@ def ramfs_boot(cmd):
     launches = serial().count("ring3app: launching SEARCH.BIN")
     if d.open_from_folder():
         if not wait_serial("ring3app: launching SEARCH.BIN", 10, launches + 1):
-            fails.append("Search did not launch from the Apps folder grid (icon 21)")
+            fails.append("Search did not launch from the Apps folder grid (icon 20)")
         wait_serial("searchcontent\n", 10, serial().count("searchcontent\n") + 1)
         time.sleep(0.3)
         d.keys("grave_accent")

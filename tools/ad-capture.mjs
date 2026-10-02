@@ -16,7 +16,7 @@ async function worker(frames){
  const b=await chromium.launch({headless:true,args});const pg=await b.newPage({viewport:{width:1920,height:1080}});
  await pg.goto(url);await pg.evaluate(()=>window.__ad.ready);
  for(const [i,t] of frames){await pg.evaluate(t=>window.__ad.render(t),t);
-  await pg.screenshot({path:join(out,stillsCsv?`still-${i}.png`:`f${String(i).padStart(4,'0')}.png`)})}
+  await pg.screenshot({path:join(out,stillsCsv?`still-${i}.png`:`f${String(i).padStart(4,'0')}.jpg`),...(stillsCsv?{}:{type:'jpeg',quality:94})})}
  await b.close();
 }
 const fps=30,dur=30;let all=[];

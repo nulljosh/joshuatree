@@ -50,7 +50,6 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Calculator runs as a ring-3 process through the table-driven launcher: evaluates 12*3=36 and 5/0=0 through the real parser, closes both ways, crashes safely, desktop alive | `tools/checks/ring3calc-check.py` | retry |
 | Quotes runs as a ring-3 process through the table-driven launcher: draws the option grid, answers right and wrong through the real logic, closes both ways, crashes safely, desktop alive | `tools/checks/ring3quotes-check.py` | retry |
 | Bookrank runs as a ring-3 process through the table-driven launcher: draws the ranked list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive | `tools/checks/ring3bookrank-check.py` | retry |
-| Homeqi runs as a ring-3 process through the table-driven launcher: scores a real answer through the quiz, closes both ways, crashes safely, desktop alive | `tools/checks/ring3homeqi-check.py` | retry |
 | Lexly runs as a ring-3 process through the table-driven launcher: draws the word and choices, answers right and wrong through the real drill, closes both ways, crashes safely, desktop alive | `tools/checks/ring3lexly-check.py` | retry |
 | Plan runs as a ring-3 process through the table-driven launcher: draws the milestone list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive | `tools/checks/ring3plan-check.py` | retry |
 | Fieldbook runs as a ring-3 process through the table-driven launcher: draws the ranked field list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive | `tools/checks/ring3fieldbook-check.py` | retry |
@@ -188,7 +187,6 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Lexly | `tools/checks/ring3lexly-check.py` |
 | Toroid | `tools/checks/ring3toroid-check.py` |
 | Sparkjar | `tools/checks/ring3sparkjar-check.py` |
-| Homeqi | `tools/checks/ring3homeqi-check.py` |
 | Fieldbook | `tools/checks/ring3fieldbook-check.py` |
 | Contacts | `tools/checks/ring3contacts-check.py` |
 | Calculator | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/ring3calc-check.py` |

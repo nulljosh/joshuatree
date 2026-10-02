@@ -1,7 +1,7 @@
 import json, os, socket, subprocess, sys, time
 from PIL import Image
-REPO="/tmp/jt-loop/adland"; os.chdir(REPO)
-OUT="/tmp/jt-loop/adloop/cap"; LOG=OUT+"/serial.log"; DUMP=OUT+"/fb.raw"
+REPO=os.path.dirname(os.path.dirname(os.path.abspath(__file__))); os.chdir(REPO); os.makedirs("/tmp/jt-loop/ad7cap",exist_ok=True)
+OUT="/tmp/jt-loop/ad7cap"; LOG=OUT+"/serial.log"; DUMP=OUT+"/fb.raw"
 FB=0xfd000000; W,H=1920,1080; PORT=4476; LW,LH,SC=960,540,2
 SLOT0_X,PITCH,ICON,DOCK_Y=247,43,37,487
 q=subprocess.Popen(["qemu-system-i386","-kernel","kernel.elf","-display","none","-vga","std","-qmp",f"tcp:127.0.0.1:{PORT},server,nowait","-serial","file:"+LOG,"-net","nic,model=rtl8139","-net","user"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
@@ -45,22 +45,16 @@ try:
     time.sleep(2.0)
     move(*PARK);time.sleep(0.5)
     frame("desktop_clean")
-    dock(0)
-    time.sleep(0.5)
-    at(80,46)
-    def drag(sx,sy,tx,ty):
-        move(sx,sy);time.sleep(0.3);btn(True);time.sleep(0.15)
-        for i in range(1,7):
-            move(sx+(tx-sx)*i//6,sy+(ty-sy)*i//6);time.sleep(0.15)
-        time.sleep(0.2);btn(False);time.sleep(0.8);move(*PARK);time.sleep(0.5)
-    dock(7)
-    drag(300,54,4,250)
-    dock(4)
-    drag(540,114,956,250);frame("two_open")
-    at(240,400);move(940,500);time.sleep(0.4);frame("snapped")
-    at(700,148);key("ret");time.sleep(1.2);at(240,420);move(940,500);time.sleep(0.4);frame("desktop_a")
-    typ("Hi Samantha");time.sleep(0.5);move(940,500);time.sleep(0.4);frame("desktop_typed")
-    key("ret");time.sleep(9);move(940,500);time.sleep(0.4);frame("desktop_b")
+    # Samantha opens alone, a single-window app; the cursor rests in the far corner; the corner and the dock tooltip are patched from the clean desktop below
+    REST=(959,538)
+    dock(7);move(*REST);time.sleep(1.2);frame("desktop_a")
+    typ("Hi Samantha");time.sleep(0.5);move(*REST);time.sleep(0.8);frame("desktop_typed")
+    key("ret");time.sleep(9);move(*REST);time.sleep(0.8);frame("desktop_b")
+    clean=Image.open(OUT+"/desktop_clean.png").convert("RGB")
+    for n in ("desktop_a","desktop_typed","desktop_b"):
+        im=Image.open(f"{OUT}/{n}.png").convert("RGB")
+        for box in ((1040,860,1230,916),(1860,1000,1920,1080)): im.paste(clean.crop(box),box[:2])
+        im.save(f"{OUT}/{n}.png")
     print("ok")
 finally:
     q.terminate()

@@ -70,19 +70,20 @@ ART = {
     13: "lexly",
     14: "toroid",
     15: "sparkjar",
-    16: "homeqi",
-    17: "fieldbook",
-    18: "contacts",
-    19: "calculator",
-    20: "stocks",
-    21: "search",
-    22: "epiphany",
-    # 23 Portfolio, 24 Activity and 25 Clock have no authored artwork yet,
-    # they keep the primitive glyph paths (see the icon index table in
-    # kernel/kernel.c). Apps and Trash shifted from 25/26 to 26/27 when
-    # Clock landed at 25 (2026-09-27).
-    26: "apps",
-    27: "trash",
+    16: "fieldbook",
+    17: "contacts",
+    18: "calculator",
+    19: "stocks",
+    20: "search",
+    21: "epiphany",
+    22: "portfolio",
+    24: "clock",
+    # 23 Activity has no authored artwork yet,
+    # it keeps the primitive glyph path (see the icon index table in
+    # kernel/kernel.c). Apps and Trash are 25/26 (Homeqi is its
+    # own product now).
+    25: "apps",
+    26: "trash",
 }
 
 # Icons whose glyph depends on runtime state get a second artwork keyed by
@@ -91,7 +92,7 @@ ART = {
 # trash_count() > 0, and converting it to a single static artwork would have
 # silently thrown that away, turning a real state indicator into decoration.
 VARIANT = {
-    26: "trash_full",
+    25: "trash_full",
 }
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")

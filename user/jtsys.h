@@ -251,6 +251,42 @@ static inline int jt_rec_read(void *buf, unsigned n)             { return jt_sys
 static inline int jt_rec_stop(void)                              { return jt_syscall(JT_SYS_AUDIO_RECORD, JT_REC_STOP, 0, 0); }
 static inline int jt_text(const char *s, int x, int y, unsigned fg, int op) { struct jt_text t = { x, y, fg, s }; return jt_syscall(JT_SYS_TEXT, (unsigned)&t, (unsigned)op, 0); }
 static inline void jt_text_clear(void) { jt_syscall(JT_SYS_TEXT, 0, JT_TEXT_CLEAR, 0); }
+/* n bytes of s as one SYS_TEXT run (op DRAW or MEASURE); the width, or -1. */
+static inline int jt_text_n(const char *s, int n, int x, int y, unsigned fg, int op) {
+    char b[JT_TEXT_MAX + 1];
+    if (n > JT_TEXT_MAX) n = JT_TEXT_MAX;
+    for (int i = 0; i < n; i++) b[i] = s[i];
+    b[n] = 0;
+    return jt_text(b, x, y, fg, op);
+}
+/* Greedy word wrap with the real advance. Breaks only at spaces (a word
+   wider than the column gets its own line). Lines are line_h apart, at most
+   max_lines of them; returns the lines used. fg 0xFFFFFFFF measures only. */
+static inline int jt_wrap(const char *s, int x, int y, int max_w, int line_h, int max_lines, unsigned fg) {
+    int lines = 0;
+    while (*s == ' ') s++;
+    while (*s && lines < max_lines) {
+        int end = 0, e = 0;                  /* end: bytes on this line so far */
+        for (;;) {
+            int wl = 0;
+            while (s[e + wl] && s[e + wl] != ' ') wl++;
+            if (!wl) break;
+            int w = jt_text_n(s, e + wl, 0, 0, 0, JT_TEXT_MEASURE);
+            if (w < 0) w = (e + wl) * 8;
+            if (end && w > max_w) break;
+            end = e + wl; e = end;
+            while (s[e] == ' ') e++;
+            if (!s[e]) break;
+        }
+        if (!end) break;
+        if (end > JT_TEXT_MAX) end = JT_TEXT_MAX;
+        jt_text_n(s, end, x, y + lines * line_h, fg, JT_TEXT_DRAW);
+        lines++;
+        s += end;
+        while (*s == ' ') s++;
+    }
+    return lines;
+}
 static inline int jt_window_poll(struct jt_event *ev, unsigned flags) { return jt_syscall(JT_SYS_WINDOW_POLL, (unsigned)ev, flags, 0); }
 /* Resize helper, the app's two lines: after a poll, `if (r == 1 && jt_window_resized(&ev, &win)) { draw(); flags = JT_POLL_PRESENT; continue; }`.
    Returns 1 when ev was JT_EV_RESIZE and re-opening the window gave *info a buffer

@@ -131,7 +131,7 @@
   .eyebrow { height: 44px; line-height: 22px; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
   @media (max-width: 520px) { .eyebrow { height: 66px; -webkit-line-clamp: 3; line-clamp: 3; } }
   .kernel-version { font-weight: 500; letter-spacing: 0.04em; text-transform: none; }
-  .hero-mark { width: 56px; height: 56px; margin: 0 auto; --src: url(mark-tree.svg); }
+  .hero-mark { width: 56px; height: 43px; margin: 0 auto; --src: url(mark-tree.svg); }
   .hero h1 .brand { display: block; white-space: nowrap; }
   .hero h1 { font-size: 56px; margin: 14px 0 0; letter-spacing: -0.03em; line-height: 1.05; }
   @media (max-width: 520px) {
@@ -292,7 +292,7 @@
   #demo-frame.demo-full #demo-composer { position: absolute; left: 0; right: 0; bottom: 0; z-index: 52; box-sizing: border-box; max-width: none; margin: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: #000; }
   #demo-frame.demo-full #demo-composer input { background: #1c1c1e; color: #fff; }
   #demo-frame.demo-full #demo-composer button { background: #fff; color: #000; }
-  @media (max-width: 520px) { #demo-frame.demo-full.has-composer #stage-wrap { max-height: none; width: min(100vw, calc((var(--demo-h, 100dvh) - 76px) * 430 / 760)); } } /* has-composer's 16:9 width rule above outranks the plain one, so the phone stage stayed full width and its 430:760 screen was cropped top and bottom, hiding Samantha's input bar under the chat bar */
+  @media (max-width: 520px) { #demo-frame.demo-full.has-composer #stage-wrap { max-height: none; } #demo-frame.demo-full #stage-wrap { width: min(100vw, calc((var(--demo-h, 100dvh) - 76px) * 430 / 760)); } }
   /* Small on a phone so it does not sit on the dock; the ::after keeps a 44px tap target. */
   /* Phones: top right, where every in-demo screen has room (the back arrow is top left, titles are centred). Desktop keeps it bottom right because the kernel's menu-bar clock sits at the top right there. */
   @media (max-width: 600px) { #demo-exit { right: 10px; top: 10px; bottom: auto; width: 36px; height: 36px; } #demo-exit::before { width: 16px; height: 16px; } #demo-exit::after { content: ""; position: absolute; inset: -4px; } }
@@ -309,7 +309,7 @@
      rather than a small 72px icon someone could miss at a glance on a
      mostly-black hero, not re-shipping something that was never live. */
   #boot-logo { position: absolute; inset: 0; margin: auto; width: 140px; height: 100px; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; animation: bootpulse 1.6s ease-in-out infinite; transition: opacity 0.3s ease; }
-  #boot-logo .ink-img { width: 64px; height: 64px; background: #ece8df; --src: url(mark-tree.svg); }
+  #boot-logo .ink-img { width: 64px; height: 49px; background: #ece8df; --src: url(mark-tree.svg); }
   #boot-logo span { color: #fff; font-size: 13px; letter-spacing: 0.04em; opacity: 0.8; text-shadow: 0 2px 10px rgba(0,0,0,0.85); }
   #boot-logo[hidden] { display: none; }
   @keyframes bootpulse { 0%,100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
@@ -456,7 +456,6 @@
   .plate-cap a#samantha-boot-link { color: var(--accent2); text-decoration: none; font-weight: 600; }
   .plate-cap a#samantha-boot-link:hover { text-decoration: underline; }
   .ad-video, .strata-img { display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--border); margin: 28px auto 0; background: var(--card); }
-  .ad-video { aspect-ratio: 16 / 9; object-fit: cover; }
   .strata-link { display: block; }
   .strata-cap a { color: var(--accent2); text-decoration: none; font-weight: 600; }
   .strata-cap a:hover { text-decoration: underline; }
@@ -571,7 +570,7 @@
      source it names. -->
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
-    <div class="fact"><strong><span data-fact="apps">26</span></strong><span class="label">Apps</span></div>
+    <div class="fact"><strong><span data-fact="apps">25</span></strong><span class="label">Apps</span></div>
     <div class="fact"><strong>v<span data-fact="version">2.0.0</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
@@ -591,7 +590,7 @@
   <div class="tile-grid" style="grid-template-columns: minmax(0, 480px); justify-content: center;">
     <div class="tile">
       <img src="shots/samantha-chat.webp" alt="Chat with Samantha, showing suggestions like remind me to call mom, jot a note, check the weather, and look at today's calendar" loading="lazy" width="984" height="462">
-      <p>Type what you want and she opens an app, sets a reminder, jots a note, or checks the weather. She has her own face, voice and ears, and she runs as her own protected program like every other app.</p>
+      <p>Type what you want and she opens an app, sets a reminder, jots a note, or checks the weather. She opens with her eyes open and talks back with her portrait on the dock.</p>
     </div>
   </div>
   <p class="sub" style="margin-top:16px">Samantha comes from Turing, a separate project. Joshua Tree is the machine she runs.</p>
@@ -603,7 +602,7 @@
   <div class="tile-grid">
     <div class="tile">
       <img src="shots/app-notes.webp" alt="Notes app showing real TrueType text, large and bold" loading="lazy" width="984" height="462">
-      <p>Notes. Folders, a keyboard on your phone, and smooth type at every size.</p>
+      <p>Notes. Six fonts, any size, sharp at every one.</p>
     </div>
     <div class="tile">
       <img src="shots/app-calendar.webp" alt="Calendar app showing a month view" loading="lazy" width="984" height="462">
@@ -619,7 +618,7 @@
     </div>
     <div class="tile">
       <img src="shots/app-terminal.webp" alt="Terminal app running a command" loading="lazy" width="984" height="462">
-      <p>Terminal. Type a command and it answers back. Mail writes your reply right inside its window.</p>
+      <p>Terminal. Type a command and it answers back.</p>
     </div>
     <div class="tile">
       <img src="shots/app-stocks.webp" alt="Stocks app showing live quotes and an intraday chart" loading="lazy" width="984" height="462">
@@ -630,11 +629,11 @@
 
 <section class="more reveal" aria-label="And so much more">
   <h2>And so much more.</h2>
-  <ul class="more-list"><li>Burrow</li><li>Mail</li><li>Calendar</li><li>Notes</li><li>Reminders</li><li>Terminal</li><li>Samantha</li><li>Weather</li><li>Contacts</li><li>Calculator</li><li>Stocks</li><li>Search</li><li>Epiphany</li><li>Activity</li><li>Curbfind</li><li>Bookrank</li><li>Quotes</li><li>Lexly</li><li>Toroid</li><li>Sparkjar</li><li>Keyrate</li><li>Plan</li><li>Homeqi</li><li>Fieldbook</li><li>Portfolio</li><li>Clock</li></ul>
+  <ul class="more-list"><li>Burrow</li><li>Mail</li><li>Calendar</li><li>Notes</li><li>Reminders</li><li>Terminal</li><li>Samantha</li><li>Weather</li><li>Contacts</li><li>Calculator</li><li>Stocks</li><li>Search</li><li>Epiphany</li><li>Activity</li><li>Curbfind</li><li>Bookrank</li><li>Quotes</li><li>Lexly</li><li>Toroid</li><li>Sparkjar</li><li>Keyrate</li><li>Plan</li><li>Fieldbook</li><li>Portfolio</li><li>Clock</li></ul>
 </section>
 <section class="protected reveal" id="protected" aria-label="Protected apps">
   <h2>One app crashes. The desktop stays up.</h2>
-  <p>Every app runs as its own protected program, walled off from the kernel and from every other app. That is <span data-fact="ring3">26</span> of <span data-fact="apps">26</span>, Samantha included. They share the screen as real windows, so when one crashes, only that window closes.</p>
+  <p>Each app runs as its own protected program, walled off from the kernel and from every other app. <span data-fact="ring3">25</span> of the <span data-fact="apps">25</span> already run that way, and the rest are on their way out.</p>
 </section>
 
 <section class="plain reveal" aria-label="Growing every week">
@@ -668,7 +667,7 @@
       <div class="spec-body">
         <dl class="spec-dl">
           <div><dt>Kernel</dt><dd>A freestanding i386 kernel. No libc, and no dependencies beyond the toolchain.</dd></div>
-          <div><dt>Apps</dt><dd><span data-fact="apps">26</span> built in, <span data-fact="ring3">26</span> of them running as their own protected programs at ring 3, Samantha too. Each gets its own window, and a crash closes only that window.</dd></div>
+          <div><dt>Apps</dt><dd><span data-fact="apps">25</span> built in, <span data-fact="ring3">25</span> of them running as their own protected programs at ring 3.</dd></div>
           <div><dt>Read more</dt><dd><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">Architecture</a> &middot; <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/SYSCALL-ABI.md">System calls</a> &middot; <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/THREAT-MODEL.md">Threat model</a></dd></div>
         </dl>
       </div>
@@ -699,7 +698,7 @@
       <summary>History</summary>
       <div class="spec-body">
         <div class="progress-section">
-          <p class="sub"><!-- progress-lede:start -->From a blank screen on Sep 27 to 26 apps today.<!-- progress-lede:end --></p>
+          <p class="sub"><!-- progress-lede:start -->From a blank screen on Aug 31 to 25 apps today.<!-- progress-lede:end --></p>
           <div class="progress-card">
             <!-- Real interactive version for this page specifically, not the same
                  static image README.md embeds (README can't run JS). Generated
@@ -709,21 +708,21 @@
                  fetched-and-reparsed image. Hover a point (or tap it on touch)
                  to see its real date and real line count. -->
             <!-- progress-chart:start -->
-<svg xmlns="http://www.w3.org/2000/svg" width="457" height="190" viewBox="0 0 457 190" id="progress-chart-live" role="img" aria-label="Apps shipped over time, 26 apps as of Sep 29"><style>
-          #progress-chart-live {
-            --grid: var(--border); --axis: var(--sub); --muted: var(--sub);
-            --label: var(--sub); --strong: var(--fg); --line: var(--fg); --line2: var(--accent); --line2-pct: var(--accent);
-          }
-          #progress-chart-live line[stroke="var(--grid)"] { stroke-dasharray: none; }
-          #progress-chart-live text { font-family: -apple-system, Helvetica, Arial, sans-serif; }
+<svg xmlns="http://www.w3.org/2000/svg" width="457" height="190" viewBox="0 0 457 190" id="progress-chart-live" role="img" aria-label="Apps shipped over time, 25 apps as of Oct 2"><style>
+  #progress-chart-live {
+    --grid: var(--border); --axis: var(--sub); --muted: var(--sub);
+    --label: var(--sub); --strong: var(--fg); --line: var(--fg); --line2: var(--accent); --line2-pct: var(--accent);
+  }
+  #progress-chart-live line[stroke="var(--grid)"] { stroke-dasharray: none; }
+  #progress-chart-live text { font-family: -apple-system, Helvetica, Arial, sans-serif; }
 
-          #progress-chart-live .progress-pt { cursor: pointer; }
-          #progress-chart-live .progress-dot { transition: r 0.15s ease, stroke-width 0.15s ease; }
-          #progress-chart-live .progress-pt:hover .progress-dot,
-          #progress-chart-live .progress-pt:focus .progress-dot,
-          #progress-chart-live .progress-pt.is-active .progress-dot { r: 5.5; stroke-width: 2.5; }
-          #progress-chart-live .progress-pt:focus { outline: none; }
-</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="17" y1="10" x2="437" y2="10" stroke="var(--grid)"/><line x1="17" y1="80" x2="437" y2="80" stroke="var(--grid)"/><text x="13" y="13" font-size="9" fill="var(--muted)" text-anchor="end">26</text><text x="13" y="83" font-size="9" fill="var(--muted)" text-anchor="end">13</text><text x="13" y="153" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="17" y1="10" x2="17" y2="150" stroke="var(--axis)"/><line x1="17" y1="150" x2="437" y2="150" stroke="var(--axis)"/><polyline points="17,16 26,16 35,16 45,16 54,16 63,16 73,16 82,16 91,16 101,16 110,16 119,16 129,16 138,16 147,16 157,16 166,16 175,16 185,16 194,10 203,10 213,10 222,10 231,10 241,10 250,10 259,10 269,10 278,10 287,10 297,10 306,10 315,10 325,10 334,10 343,10 353,10 362,10 371,10 381,10 390,10 399,10 409,10 418,10 427,10 437,10" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 25 apps shipped" data-tooltip="Sep 27 &#183; 25 apps"><circle class="progress-hit" cx="17" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="17" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 25 apps shipped" data-tooltip="Sep 27 &#183; 25 apps"><circle class="progress-hit" cx="63" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="63" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 25 apps shipped" data-tooltip="Sep 27 &#183; 25 apps"><circle class="progress-hit" cx="110" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="110" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 25 apps shipped" data-tooltip="Sep 27 &#183; 25 apps"><circle class="progress-hit" cx="157" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="157" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 26 apps shipped" data-tooltip="Sep 27 &#183; 26 apps"><circle class="progress-hit" cx="203" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="203" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 28, 26 apps shipped" data-tooltip="Sep 28 &#183; 26 apps"><circle class="progress-hit" cx="250" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="250" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 28, 26 apps shipped" data-tooltip="Sep 28 &#183; 26 apps"><circle class="progress-hit" cx="297" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="297" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 28, 26 apps shipped" data-tooltip="Sep 28 &#183; 26 apps"><circle class="progress-hit" cx="343" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="343" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 29, 26 apps shipped" data-tooltip="Sep 29 &#183; 26 apps"><circle class="progress-hit" cx="390" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="390" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 30, 26 apps shipped" data-tooltip="Sep 30 &#183; 26 apps"><circle class="progress-hit" cx="437" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="437" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><text x="17" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 27</text><text x="231" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 28</text><text x="362" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 29</text><text x="437" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 30</text><text x="17" y="184" font-size="14" fill="var(--muted)">26 apps &#183; 100% documented</text></svg>
+  #progress-chart-live .progress-pt { cursor: pointer; }
+  #progress-chart-live .progress-dot { transition: r 0.15s ease, stroke-width 0.15s ease; }
+  #progress-chart-live .progress-pt:hover .progress-dot,
+  #progress-chart-live .progress-pt:focus .progress-dot,
+  #progress-chart-live .progress-pt.is-active .progress-dot { r: 5.5; stroke-width: 2.5; }
+  #progress-chart-live .progress-pt:focus { outline: none; }
+</style><rect width="100%" height="100%" fill="var(--bg)"/><line x1="17" y1="10" x2="437" y2="10" stroke="var(--grid)"/><line x1="17" y1="80" x2="437" y2="80" stroke="var(--grid)"/><text x="13" y="13" font-size="9" fill="var(--muted)" text-anchor="end">26</text><text x="13" y="83" font-size="9" fill="var(--muted)" text-anchor="end">13</text><text x="13" y="153" font-size="9" fill="var(--muted)" text-anchor="end">0</text><line x1="17" y1="10" x2="17" y2="150" stroke="var(--axis)"/><line x1="17" y1="150" x2="437" y2="150" stroke="var(--axis)"/><polyline points="17,150 27,150 37,150 47,150 57,150 68,150 78,150 88,129 98,113 109,107 119,107 129,70 139,59 150,54 160,43 170,37 180,37 191,37 201,37 211,37 221,37 232,37 242,27 252,21 262,16 273,16 283,16 293,16 303,16 314,10 324,10 334,10 344,10 355,10 365,10 375,10 385,10 396,10 406,10 416,10 426,10 437,16" fill="none" stroke="var(--line)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><g class="progress-pt" tabindex="0" role="img" aria-label="Aug 31, 0 apps shipped" data-tooltip="Aug 31 &#183; 0 apps"><circle class="progress-hit" cx="17" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="17" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 0 apps shipped" data-tooltip="Sep 13 &#183; 0 apps"><circle class="progress-hit" cx="57" cy="150" r="11" fill="transparent"/><circle class="progress-dot" cx="57" cy="150" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 13, 7 apps shipped" data-tooltip="Sep 13 &#183; 7 apps"><circle class="progress-hit" cx="98" cy="113" r="11" fill="transparent"/><circle class="progress-dot" cx="98" cy="113" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 14, 17 apps shipped" data-tooltip="Sep 14 &#183; 17 apps"><circle class="progress-hit" cx="139" cy="59" r="11" fill="transparent"/><circle class="progress-dot" cx="139" cy="59" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 15, 21 apps shipped" data-tooltip="Sep 15 &#183; 21 apps"><circle class="progress-hit" cx="180" cy="37" r="11" fill="transparent"/><circle class="progress-dot" cx="180" cy="37" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 20, 21 apps shipped" data-tooltip="Sep 20 &#183; 21 apps"><circle class="progress-hit" cx="221" cy="37" r="11" fill="transparent"/><circle class="progress-dot" cx="221" cy="37" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 23, 25 apps shipped" data-tooltip="Sep 23 &#183; 25 apps"><circle class="progress-hit" cx="262" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="262" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 27, 25 apps shipped" data-tooltip="Sep 27 &#183; 25 apps"><circle class="progress-hit" cx="303" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="303" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 28, 26 apps shipped" data-tooltip="Sep 28 &#183; 26 apps"><circle class="progress-hit" cx="344" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="344" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Sep 29, 26 apps shipped" data-tooltip="Sep 29 &#183; 26 apps"><circle class="progress-hit" cx="385" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="385" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 2, 26 apps shipped" data-tooltip="Oct 2 &#183; 26 apps"><circle class="progress-hit" cx="426" cy="10" r="11" fill="transparent"/><circle class="progress-dot" cx="426" cy="10" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><g class="progress-pt" tabindex="0" role="img" aria-label="Oct 2, 25 apps shipped" data-tooltip="Oct 2 &#183; 25 apps"><circle class="progress-hit" cx="437" cy="16" r="11" fill="transparent"/><circle class="progress-dot" cx="437" cy="16" r="3" fill="var(--bg)" stroke="var(--line2)" stroke-width="2"/></g><text x="17" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Aug 31</text><text x="129" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 14</text><text x="180" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 15</text><text x="252" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 22</text><text x="303" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 27</text><text x="375" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Sep 29</text><text x="426" y="166" font-size="10" fill="var(--label)" text-anchor="middle">Oct 2</text><text x="17" y="184" font-size="14" fill="var(--muted)">25 apps &#183; 100% documented</text></svg>
 <!-- progress-chart:end -->
             <!-- roadmap-summary:start --><p class="roadmap-next">Next up: type to her on your phone, apps that can&#x27;t crash each other, and music and video apps.</p><!-- roadmap-summary:end -->
           </div>
@@ -744,8 +743,8 @@
       <button type="submit" id="waitlist-submit">Notify me</button>
     </form>
     <p class="waitlist-status" id="waitlist-status" role="status" aria-live="polite"></p>
-    <video class="ad-video" id="ad-video" controls muted loop playsinline preload="none" width="1280" height="720" poster="ad-poster.jpg" aria-label="The 30 second ad for Joshua Tree 2.0 and the Strata Kit"><source src="ad.mp4" type="video/mp4"></video>
-    <p class="strata-cap">The 30 second version. Every app protected. <a class="strata-more" href="/ad/">Explore it in 3D</a>.</p>
+    <video class="ad-video" controls preload="none" playsinline poster="https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7-poster.jpg" aria-label="A 30 second ad for Joshua Tree"><source src="https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7.mp4" type="video/mp4"></video>
+    <p class="strata-cap">The 36 second version.</p>
     <a class="strata-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md"><img class="strata-img" src="strata-hero.jpg" alt="A render of Strata, the case for the Joshua Tree board" width="1200" height="750" loading="lazy"></a>
     <p class="strata-cap">Strata, the case. A concept for now, not for sale yet. <a class="strata-more" href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md">See the plans</a>.</p>
   </div>
@@ -754,7 +753,7 @@
 <section class="grain-zone reveal">
   <img class="seal" src="logo.svg" alt="The Joshua Tree mark: a Joshua tree with its branches raised like arms" width="160" height="160" loading="lazy">
   <p class="closing-name">Settlers named the Joshua tree for Joshua, arms raised to the sky.</p>
-  <p class="closing">Joshua Tree is a real desktop built from nothing, not a skin on top of something else. It remembers your files, runs <span data-fact="apps">26</span> apps, and its Chat actually talks back over the internet to a real assistant. Try it live above, no download. It's free and open source, named for the tree that survives on nothing.</p>
+  <p class="closing">Joshua Tree is a real desktop built from nothing, not a skin on top of something else. It remembers your files, runs <span data-fact="apps">25</span> apps, and its Chat actually talks back over the internet to a real assistant. Try it live above, no download. It's free and open source, named for the tree that survives on nothing.</p>
 </section>
 
 </main>
@@ -805,7 +804,6 @@
   </nav>
   <div class="foot-bar">
     <p class="foot-meta">Joshua Tree v<span data-fact="version">2.0.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
-    <p class="foot-meta">Hardware designs <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/hardware/LICENSE-NOTICE.md">CC BY-NC-SA 4.0</a> &middot; <a href="https://github.com/nulljosh/joshuatree/blob/main/TRADEMARKS.md">Joshua Tree&trade; and Strata Kit&trade;</a> are trademarks of Joshua Trommel</p>
     <p class="foot-meta"><a class="foot-cta" href="#waitlist">Want one? Join the dev-kit waitlist.</a></p>
   </div>
 </footer>
@@ -1128,21 +1126,6 @@
       button.disabled = false;
     });
   });
-})();
-</script>
-<script>
-(function () {
-  var v = document.getElementById("ad-video");
-  if (!v || !("IntersectionObserver" in window)) return;
-  var c = navigator.connection || {};
-  if (c.saveData || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  var io = new IntersectionObserver(function (es) {
-    es.forEach(function (e) {
-      if (e.isIntersecting && e.intersectionRatio >= 0.5) { v.preload = "auto"; var p = v.play(); if (p && p.catch) p.catch(function () {}); }
-      else if (!v.paused) v.pause();
-    });
-  }, { threshold: [0, 0.5] });
-  io.observe(v);
 })();
 </script>
 <script src="v86/libv86.js"></script>

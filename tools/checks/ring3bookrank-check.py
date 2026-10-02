@@ -109,7 +109,7 @@ try:
         return (img or frame()).getpixel((x * SCALE + 1, y * SCALE + 1))
     def near(p, c, tol=12): return max(abs(p[i] - c[i]) for i in range(3)) <= tol
     def row_pixel(row, img=None):
-        y = BR_LIST_TOP + row * BR_ITEM_H + 10
+        y = BR_LIST_TOP + row * BR_ITEM_H + 2  # above the title glyphs (y+6), AA text no longer lands on the probe
         return pixel(VIEW_X + BR_LIST_X + 30, VIEW_Y + y, img)
 
     # 1. the program is up and has its window

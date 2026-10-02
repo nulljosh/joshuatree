@@ -18,7 +18,6 @@ Per-app actions:
 - Contacts: press a then Esc (add prompt then cancel)
 - Lexly: press 1 (pick first answer)
 - Quotes: press 1
-- Homeqi: press 1
 - Sparkjar: press u (upvote)
 - Toroid: press space (pause/unpause)
 - Keyrate: type "the"
@@ -47,10 +46,10 @@ WIDE_CLOSE_X, WIDE_CLOSE_Y = 34, 56  # ring-3 windows now open at the resizable 
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 
-# App names from kernel/kernel.c APPS[].name (indices 0-26)
+# App names from kernel/kernel.c APPS[].name (indices 0-25)
 APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
         "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar",
-        "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
+        "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity", "Apps", "Trash"]
 
 # Apps to test with actions: (index, name, action_keys_or_string)
@@ -61,23 +60,22 @@ ACTIONS = [
     (2, "Calendar", ["right"]),
     (5, "Terminal", [("type", "help"), "ret"]),
     (6, "Samantha", [("type", "hi"), "ret"]),
-    (21, "Search", [("type", "read")]),
-    (19, "Calculator", [("type", "2+2"), "ret"]),
-    (20, "Stocks", ["right"]),
-    (22, "Epiphany", ["right"]),
-    (18, "Contacts", ["a", "esc"]),
+    (20, "Search", [("type", "read")]),
+    (18, "Calculator", [("type", "2+2"), "ret"]),
+    (19, "Stocks", ["right"]),
+    (21, "Epiphany", ["right"]),
+    (17, "Contacts", ["a", "esc"]),
     (13, "Lexly", ["1"]),
     (11, "Quotes", ["1"]),
-    (16, "Homeqi", ["1"]),
     (15, "Sparkjar", ["u"]),
     (14, "Toroid", ["space"]),
     (9, "Keyrate", [("type", "the")]),
     (10, "Bookrank", ["down", "down"]),
-    (17, "Fieldbook", ["down", "down"]),
+    (16, "Fieldbook", ["down", "down"]),
     (12, "Plan", ["down", "down"]),
     (8, "Curbfind", ["down", "down"]),
-    (23, "Portfolio", ["down", "down"]),
-    (24, "Activity", ["down", "down"]),
+    (22, "Portfolio", ["down", "down"]),
+    (23, "Activity", ["down", "down"]),
     (0, "Burrow", []),  # open only
     (1, "Mail", []),   # open only
     (7, "Weather", []),  # open only

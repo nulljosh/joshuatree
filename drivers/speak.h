@@ -16,6 +16,7 @@
 #define SPEAK_AUDIO_MAX (256u * 1024u)
 #define SPEAK_RATE      16000u
 
+extern const char *speak_voice;   /* "" = Samantha, "joshua" = his clone; set by kernel.c */
 unsigned int speak_text(const char *host, unsigned short port, const char *text,
                         unsigned int timeout_ticks);
 /* Loudness (mean distance from silence, 0..128) of the clip speak_text is

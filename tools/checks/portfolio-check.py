@@ -106,10 +106,10 @@ try:
     move(apps_centre, ICON_ROW_Y); time.sleep(0.3)
     click(); time.sleep(1.0)
 
-    # Navigate the grid to Portfolio (icon 23, row 4 col 3, APPS_COLS=5):
-    # right x3, down x4 from the top-left cell, same real gui_launch_apps
+    # Navigate the grid to Portfolio (icon 22, row 4 col 2, APPS_COLS=5):
+    # right x2, down x4 from the top-left cell, same real gui_launch_apps
     # nav search-check.py/contacts-keystroke-check.sh already proved.
-    for c in ("d", "d", "d", "s", "s", "s", "s"):
+    for c in ("d", "d", "s", "s", "s", "s"):
         key(c)
     key("ret"); time.sleep(1.0)  # launch Portfolio
 

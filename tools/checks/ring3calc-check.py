@@ -31,7 +31,7 @@ flat user binary has no .bss and no heap (user/note.ld). The check then:
      fault at ring 3. Asserts the kernel reaped the task, released the
      window, the launcher logged the crash by name, and the desktop is
      back: the dock is on screen and Mail opens from a dock click;
-  5. opens Calculator from the Apps folder grid (row 3, col 4, the
+  5. opens Calculator from the Apps folder grid (row 3, col 3, the
      832x450 folder viewport) and closes it with Esc, then again with the
      red close dot; after each it must have exited 0, released its
      window, and Mail must open from the dock;
@@ -118,9 +118,10 @@ try:
     DIGIT_QCODE = {"0": "0", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5",
                    "6": "6", "7": "7", "8": "8", "9": "9",
                    "*": "shift-8", "/": "slash"}
+    SCI_QCODE = {"^": "shift-6", "!": "shift-1", "(": "shift-9", ")": "shift-0", ".": "dot"}
     def type_expr(expr):
         for c in expr:
-            codes = DIGIT_QCODE[c].split('-')
+            codes = (DIGIT_QCODE.get(c) or SCI_QCODE.get(c) or c).split('-')
             cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": code} for code in codes], "hold-time": 30}})
             time.sleep(0.15)
 
@@ -146,6 +147,17 @@ try:
     keys("ret"); time.sleep(0.3)
     if not wait_serial("calculator: 5/0 = 0", 5):
         fails.append("5/0 did not evaluate to 0 (the in-kernel divide-by-zero behavior)")
+    # 3b. scientific: Tab shows the keys, and the math is real (x87, no libm)
+    keys("tab")
+    if not wait_serial("calculator: scientific", 5):
+        fails.append("Tab did not switch Calculator to scientific")
+    for expr, want in (("2^10", "1024"), ("sqrt(2)", "1.4142"), ("sin(pi/2)", "1"), ("5!", "120"), ("ln(e^3)", "3")):
+        for _ in range(12): keys("backspace"); time.sleep(0.03)
+        type_expr(expr)
+        keys("ret"); time.sleep(0.3)
+        if not wait_serial("calculator: %s = %s\n" % (expr, want), 5):
+            got = serial().split("calculator: %s = " % expr)[-1][:12] if ("calculator: %s = " % expr) in serial() else "nothing"
+            fails.append("scientific %s should be %s, got %s" % (expr, want, got))
     if "syscall: write(1) from ring 3: calculator: crashing" in serial():
         fails.append("the program crashed before the crash key was pressed")
 
@@ -187,7 +199,7 @@ try:
         fails.append("Mail did not close on Esc after the crash")
 
     # 5. a normal close, both ways, from the Apps folder grid: Calculator
-    #    is APPS[] index 19 = row 3, col 4 (5 columns wide), whose
+    #    is APPS[] index 18 = row 3, col 3 (5 columns wide), whose
     #    viewport is the folder's 832x450, not the dock's 804x345.
     APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
     def wait_closed(resend=True):
@@ -205,8 +217,8 @@ try:
         seen = serial().count("calculator: ring-3 window")
         move(*PARK); time.sleep(0.2)
         move(SLOT0_X + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.0)
-        for _ in range(4): keys("d"); time.sleep(0.35)  # right x4
-        for _ in range(3): keys("s"); time.sleep(0.35)  # down x3 -> index 19
+        for _ in range(3): keys("d"); time.sleep(0.35)  # right x3
+        for _ in range(3): keys("s"); time.sleep(0.35)  # down x3 -> index 18
         keys("ret")
         for _ in range(60):
             time.sleep(0.1)
@@ -247,7 +259,7 @@ try:
     seen = serial().count("calculator: ring-3 window")
     move(*PARK); time.sleep(0.3)
     keys("ret"); time.sleep(1.0)  # bare desktop -> Apps folder, by keyboard
-    for _ in range(4): keys("d"); time.sleep(0.35)
+    for _ in range(3): keys("d"); time.sleep(0.35)
     for _ in range(3): keys("s"); time.sleep(0.35)
     keys("ret")  # launch Calculator from the grid selection
     for _ in range(60):

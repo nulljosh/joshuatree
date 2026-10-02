@@ -210,28 +210,15 @@ DOCK = {
         <path d="M61 76 H84"/>
       </g>"""),
 
-    # Chat (Samantha): her engraved portrait on a cream tile, black ink on
-    # cream like the rest of the OS. Clay hair with ink hatching, round
-    # glasses, open eyes, a small smile and a speech cue at the corner.
-    "chat": ("#F6EBD5", "#E6D5B5",
-             "",
-             """
-      <g stroke="#15110D" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M27 62 C27 32 44 17 64 17 C84 17 101 32 101 62 L101 98 C101 105 91 106 88 100 L88 72 L40 72 L40 100 C37 106 27 105 27 98 Z" fill="#C98A48" stroke-width="3"/>
-        <g fill="none" stroke-width="1.8" opacity="0.85">
-          <path d="M32 44 L36 66"/><path d="M36 38 L41 62"/><path d="M32 74 L34 96"/><path d="M37 76 L38 94"/>
-          <path d="M96 44 L92 66"/><path d="M92 38 L87 62"/><path d="M96 74 L94 96"/><path d="M91 76 L90 92"/>
-        </g>
-        <ellipse cx="64" cy="63" rx="23" ry="28" fill="#FBF3E2" stroke-width="3"/>
-        <path d="M42 52 C46 34 82 34 86 52 C76 44 52 44 42 52 Z" fill="#C98A48" stroke-width="2.4"/>
-        <g fill="none" stroke-width="3">
-          <circle cx="54" cy="61" r="8.5"/><circle cx="74" cy="61" r="8.5"/><path d="M62.5 60 H65.5"/>
-        </g>
-        <g fill="#15110D" stroke="none"><circle cx="54" cy="61" r="3.2"/><circle cx="74" cy="61" r="3.2"/></g>
-        <path d="M56 79 Q64 85 72 79" fill="none" stroke-width="3"/>
-        <path d="M84 90 C84 82 92 78 100 78 C110 78 117 83 117 91 C117 99 110 104 101 104 L96 104 L91 107 L91.5 103 C86 100 84 96 84 90 Z" fill="#FBF3E2" stroke-width="3"/>
-        <g fill="#15110D" stroke="none"><circle cx="94" cy="91" r="2.2"/><circle cx="101" cy="91" r="2.2"/><circle cx="108" cy="91" r="2.2"/></g>
-      </g>"""),
+    # Chat (Samantha): her real app icon from the turing repo, the oval
+    # portrait she drew, on her own paper lit from the top like every tile. art/samantha-icon.svg is a
+    # vendored copy of turing/icon.svg; its own rounded rect is dropped so
+    # the tile below stays the dock's squircle. Re-copy it when turing's
+    # icon changes.
+    "chat": ("#F4F1EA", "#DCD6CB", "",
+             """<svg x="0" y="0" width="128" height="128" viewBox="0 0 200 200">"""
+             + "\n".join(l for l in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art", "samantha-icon.svg")).read().split("\n") if not l.lstrip().startswith(("<svg", "</svg>", "<rect")))
+             + """</svg>"""),
 
     # Weather: a sun half behind a cloud, on a sky-blue tile.
     "weather": ("#47A8F8", "#2A86EC",
@@ -294,6 +281,18 @@ APPS_ONLY = {
         <rect x="34" y="91" width="38" height="8" rx="4"/>
       </g>
       <rect x="78" y="55" width="16" height="44" rx="4" fill="#E8913C"/>"""),
+
+    # Clock: a white face on a graphite tile, hands at 10:10, orange seconds.
+    "clock": ("#4A4F57", "#1C1F24", "",
+              """
+      <circle cx="64" cy="64" r="40" fill="#F7F7F9"/>
+      <g stroke="#1C1F24" stroke-width="3" stroke-linecap="round"><line x1="64.00" y1="31.00" x2="64.00" y2="40.00"/><line x1="80.50" y1="35.42" x2="77.50" y2="40.62"/><line x1="92.58" y1="47.50" x2="87.38" y2="50.50"/><line x1="97.00" y1="64.00" x2="88.00" y2="64.00"/><line x1="92.58" y1="80.50" x2="87.38" y2="77.50"/><line x1="80.50" y1="92.58" x2="77.50" y2="87.38"/><line x1="64.00" y1="97.00" x2="64.00" y2="88.00"/><line x1="47.50" y1="92.58" x2="50.50" y2="87.38"/><line x1="35.42" y1="80.50" x2="40.62" y2="77.50"/><line x1="31.00" y1="64.00" x2="40.00" y2="64.00"/><line x1="35.42" y1="47.50" x2="40.62" y2="50.50"/><line x1="47.50" y1="35.42" x2="50.50" y2="40.62"/></g>
+      <g stroke="#1C1F24" stroke-linecap="round">
+        <line x1="64" y1="64" x2="47.5" y2="54.5" stroke-width="5"/>
+        <line x1="64" y1="64" x2="83" y2="43" stroke-width="3.6"/>
+      </g>
+      <line x1="64" y1="72" x2="64" y2="32" stroke="#F09A37" stroke-width="1.8" stroke-linecap="round"/>
+      <circle cx="64" cy="64" r="3.4" fill="#F09A37"/>"""),
 
     "search": ("#9AA3B1", "#303A48", "",
                """

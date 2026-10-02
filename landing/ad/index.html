@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Joshua Tree 2.0 and the Strata Kit, in 3D</title>
+<html lang="en"><head><meta charset="utf-8"><title>Joshua Tree and Strata Kit</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="The 30 second Joshua Tree 2.0 ad, running live in your browser. Click or press space to pause, drag the bar to scrub.">
+<meta name="description" content="The 30 second Joshua Tree ad, running live in your browser. Click or press space to pause, drag the bar to scrub.">
 <meta name="theme-color" content="#f1ead8">
 <link rel="icon" href="../icon.svg" type="image/svg+xml">
 <style>
@@ -22,7 +22,7 @@ body.cap #bar,body.cap #state,body.cap #back{display:none}
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
 </head><body>
 <a id="back" href="../">Joshua Tree</a><div id="state" aria-live="polite"></div>
-<div id="frame" role="img" aria-label="The Joshua Tree 2.0 ad. Click or press space to pause."><div id="stage"><canvas id="c3" width="1920" height="1080"></canvas><canvas id="c2" width="1920" height="1080"></canvas></div></div>
+<div id="frame" role="img" aria-label="The Joshua Tree ad. Click or press space to pause."><div id="stage"><canvas id="c3" width="1920" height="1080"></canvas><canvas id="c2" width="1920" height="1080"></canvas></div></div>
 <div id="bar" role="slider" aria-label="Scrub the ad" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0" tabindex="0"><i><b id="prog"></b></i></div>
 <script type="module">
 import * as THREE from 'three';
@@ -38,24 +38,30 @@ const r3=new THREE.WebGLRenderer({canvas:document.getElementById('c3'),antialias
 r3.setPixelRatio(1);r3.setSize(W,H,false);r3.setClearColor(0xf1ead8,1);
 const scene=new THREE.Scene();
 const cam=new THREE.PerspectiveCamera(32,W/H,1,3000);
+const SW={sweep:{value:-999},sw:{value:46}};
 const mkMat=(col)=>new THREE.ShaderMaterial({
- uniforms:{base:{value:col},ink:{value:lc(22,21,19)}},
+ uniforms:{base:{value:col},sweep:SW.sweep,sw:SW.sw},
  side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1,
- vertexShader:`varying vec3 vP;varying vec3 vO;void main(){vO=position;vec4 m=modelViewMatrix*vec4(position,1.);vP=m.xyz;gl_Position=projectionMatrix*m;}`,
- fragmentShader:`uniform vec3 base;uniform vec3 ink;varying vec3 vP;varying vec3 vO;
- void main(){vec3 n=normalize(cross(dFdx(vP),dFdy(vP)));if(!gl_FrontFacing)n=-n;
- vec3 l=normalize(vec3(-.5,.8,.6));float d=dot(n,l)*.5+.5;
- vec3 no=abs(normalize(cross(dFdx(vO),dFdy(vO))));
- vec3 dir=(no.z>=no.x&&no.z>=no.y)?normalize(vec3(1.,1.,0.)):((no.x>=no.y)?normalize(vec3(0.,1.,1.)):normalize(vec3(1.,0.,1.)));
- float h=dot(vO,dir)/3.2;float w=max(fwidth(h),1e-5);float per=1./w;
- float fade=smoothstep(6.,10.,per)*(1.-smoothstep(40.,80.,per));
- float duty=d<.40?.36:(d<.62?.2:0.);float f=fract(h);
- float cover=(1.-smoothstep(duty-w,duty+w,f))*smoothstep(0.,w,f)*step(.001,duty);
- gl_FragColor=vec4(mix(base,ink,cover*fade),1.);}`});
+ vertexShader:`varying vec3 vP;void main(){vec4 m=modelViewMatrix*vec4(position,1.);vP=m.xyz;gl_Position=projectionMatrix*m;}`,
+ fragmentShader:`uniform vec3 base;uniform float sweep;uniform float sw;varying vec3 vP;
+ void main(){vec3 n=normalize(cross(dFdx(vP),dFdy(vP)));vec3 v=normalize(-vP);
+ vec3 l=normalize(vec3(-.5,.8,.55));float d=dot(n,l);
+ float lit=.60+.46*smoothstep(-.55,.85,d);
+ vec3 c=base*lit;
+ c=mix(c*vec3(.95,.91,.86),c,smoothstep(-.3,.55,d));      // warm tan in the shade, like paper
+ float fr=pow(1.-max(dot(n,v),0.),3.);c+=fr*.05;
+ float sp=pow(max(dot(reflect(-l,n),v),0.),28.)*.10;c+=sp;
+ float s=vP.x*.82+vP.y*.57;float band=exp(-pow((s-sweep)/sw,2.));
+ c+=band*(.12+.16*max(d,0.))*vec3(1.,.97,.90);              // the light sweep
+ gl_FragColor=vec4(min(c,vec3(1.)),1.);}`});
 const lc=(r,g,b)=>new THREE.Color().setRGB(r/255,g/255,b/255,THREE.LinearSRGBColorSpace);
 const cream=mkMat(lc(246,240,224)),terra=mkMat(lc(190,104,66));
-const lineMat=new THREE.LineBasicMaterial({color:0x161513});
+const lineMat=new THREE.LineBasicMaterial({color:0x2a2018,transparent:true,opacity:.30});
 const root=new THREE.Group();root.rotation.x=-Math.PI/2;scene.add(root); // z-up CAD -> y-up
+const shadow=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.ShaderMaterial({transparent:true,depthWrite:false,
+ vertexShader:`varying vec2 u;void main(){u=uv*2.-1.;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+ fragmentShader:`varying vec2 u;void main(){float r=length(u);float a=.34*exp(-r*r*9.)+.16*exp(-r*r*2.6);a*=1.-smoothstep(.75,1.,r);gl_FragColor=vec4(.30,.22,.14,a);}`}));
+shadow.rotation.x=-Math.PI/2;shadow.renderOrder=-1;scene.add(shadow);
 const items=[]; // {g, kind, ring}
 // Dimensions straight from docs/hardware/strata_cad.py and stl/manifest.json
 const THICK=[9,7,10,6.5,8.5,7],GAP=2,STEP_IN=3,BASE_W=224,CAP_T=4.5;
@@ -102,7 +108,7 @@ const ready=(async()=>{
 })();
 const EXP_UP=21;
 function render3(t){
- const ex=S(4,6,t)*(1-S(6.9,8.4,t));
+ const ex=S(4.4,6.4,t)*(1-S(7.0,8.4,t));
  for(const it of items){
   let z=0,y=0;
   if(it.kind==='ring')z=ex*(EXP_UP*it.ring+8);
@@ -111,9 +117,12 @@ function render3(t){
   if(it.kind==='rear'){z=-ex*125;y=ex*95}
   it.g.position.set(0,y,z);
  }
- const az=L(0.55,1.55,S(0,5,t))+S(4,9,t)*0.5, dist=L(520,1000,S(0,5.2,t))*(1-S(7.3,9.0,t)*0.96);
- const el=L(0.42,0.5,S(0,4,t))-S(7,9,t)*0.3;
- const tz=(30+26*ex)*(1-S(7.5,9,t)*0.4);
+ shadow.position.set(0,-ex*125-1.2,0);shadow.scale.setScalar(520+160*ex);
+ SW.sweep.value=t<4.6?L(-300,300,S(1.2,4.0,t)):L(-320,320,S(5.0,7.2,t));
+ const dv=S(7.3,9.0,t);
+ const az=L(0.5,1.25,S(0,8,t)), dist=(L(520,545,S(0,4,t))+430*S(4.4,6.0,t))*(1-dv*0.96);
+ const el=L(0.36,0.46,S(0,5,t))-dv*0.3;
+ const tz=(4+18*ex)*(1-dv*0.4);
  const tgt=new THREE.Vector3(0,tz,0);
  cam.position.set(tgt.x+dist*Math.cos(el)*Math.sin(az),tgt.y+dist*Math.sin(el),tgt.z+dist*Math.cos(el)*Math.cos(az));
  cam.lookAt(tgt);cam.updateProjectionMatrix();
@@ -124,86 +133,66 @@ function render3(t){
 const c2=document.getElementById('c2'),g=c2.getContext('2d');
 const imgs={};
 const loadImg=(k,src)=>new Promise(r=>{const i=new Image();i.onload=()=>{imgs[k]=i;r()};i.onerror=r;i.src=src});
-// The OS's own 26 apps, in kernel order: [icon art, label]
-const APPS=[['burrow','Burrow'],['mail','Mail'],['calendar','Calendar'],['notes','Notes'],['reminders','Reminders'],['terminal','Terminal'],['chat','Samantha'],['weather','Weather'],['curbfind','Curbfind'],['keyrate','Keyrate'],['bookrank','Bookrank'],['quotes','Quotes'],['plan','Plan'],['lexly','Lexly'],['toroid','Toroid'],['sparkjar','Sparkjar'],['homeqi','Homeqi'],['fieldbook','Fieldbook'],['contacts','Contacts'],['calculator','Calculator'],['stocks','Stocks'],['search','Search'],['epiphany','Epiphany'],['portfolio','Portfolio'],['activity','Activity'],['clock','Clock']];
+// The OS's own 25 apps, in kernel order: [icon art, label]
+const APPS=[['burrow','Burrow'],['mail','Mail'],['calendar','Calendar'],['notes','Notes'],['reminders','Reminders'],['terminal','Terminal'],['chat','Samantha'],['weather','Weather'],['curbfind','Curbfind'],['keyrate','Keyrate'],['bookrank','Bookrank'],['quotes','Quotes'],['plan','Plan'],['lexly','Lexly'],['toroid','Toroid'],['sparkjar','Sparkjar'],['fieldbook','Fieldbook'],['contacts','Contacts'],['calculator','Calculator'],['stocks','Stocks'],['search','Search'],['epiphany','Epiphany'],['portfolio','Portfolio'],['activity','Activity'],['clock','Clock']];
 const imgReady=Promise.all([loadImg('deskA','desktop-a.jpg'),loadImg('deskT','desktop-typed.jpg'),loadImg('deskB','desktop-b.jpg'),loadImg('mark','../logo.svg'),
  ...APPS.map(([k])=>loadImg('ic_'+k,`icons/${k}.png`)),
  ...Array.from({length:24},(_,i)=>loadImg('idle'+i,`../face/idle-${i}.jpg`)),...Array.from({length:24},(_,i)=>loadImg('talk'+i,`../face/talk-${i}.jpg`))]);
 const FONT='-apple-system,"SF Pro Display","Helvetica Neue",Helvetica,Arial,sans-serif';
 function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
-function protBox(ctx,x,y,s,a,i){ // the protected box: an ink wall, a thin terracotta gap, the real icon inside
+function protBox(ctx,x,y,s,a,i,ia=1){ // the protected box: an ink wall, a thin terracotta gap, the real icon inside
  ctx.save();ctx.globalAlpha=a;
  rr(ctx,x-s/2,y-s/2,s,s,s*.12);ctx.fillStyle='#f6f0e0';ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=s*0.03;ctx.stroke();
  rr(ctx,x-s/2+s*.06,y-s/2+s*.06,s*.88,s*.88,s*.08);ctx.strokeStyle=TERRA;ctx.lineWidth=Math.max(1,s*.012);ctx.stroke();
- const im=imgs['ic_'+APPS[i][0]];if(im){const k=s*.72;ctx.imageSmoothingQuality='high';ctx.drawImage(im,x-k/2,y-k/2,k,k)}
+ const im=imgs['ic_'+APPS[i][0]];if(im&&ia>0){const k=s*.72;ctx.globalAlpha=a*ia;ctx.imageSmoothingQuality='high';ctx.drawImage(im,x-k/2,y-k/2,k,k)}
  ctx.restore();
 }
 // world helpers: zoom about focus (fx,fy) in world px, scale sc, centred on screen
 function world(ctx,fx,fy,sc,fn){ctx.save();ctx.translate(W/2,H/2);ctx.scale(sc,sc);ctx.translate(-fx,-fy);fn();ctx.restore()}
 
-function drawBoard(a,sc,t){ // 1200x760 board centred at 0,0 ; chip at 0,0 220px
- g.save();g.globalAlpha=a;
+function drawChip(a,sc,t){ // abstract: a chip, a warm glow and a few lines of light on open cream
+ if(a<=0)return;g.save();g.globalAlpha=a;
  world(g,0,0,sc,()=>{
-  g.fillStyle='#e7dec5';g.fillRect(-600,-380,1200,760);
-  g.strokeStyle=INK;g.lineWidth=2/sc*1.5;g.strokeRect(-600,-380,1200,760);
-  g.lineWidth=0.8/sc*1.5;g.strokeStyle=INK;
-  for(let i=0;i<70;i++){ // traces radiating from chip, 45 degree elbows
-   const side=i%4,o=(Math.floor(i/4)-8)*12;let x0,y0,x1,y1;
-   if(side===0){x0=o;y0=-110;x1=o*2.2;y1=-330}
-   if(side===1){x0=o;y0=110;x1=o*2.2;y1=330}
-   if(side===2){x0=-110;y0=o;x1=-330;y1=o*2.2}
-   if(side===3){x0=110;y0=o;x1=330;y1=o*2.2}
-   g.beginPath();g.moveTo(x0,y0);g.lineTo(L(x0,x1,.35),L(y0,y1,.35));g.lineTo(x1,y1);
-   const fx=side>1?(side===2?-560:560):x1*1.2, fy=side>1?y1*1.2:(side===0?-350:350);
-   g.lineTo(fx,fy);g.stroke();g.beginPath();g.arc(fx,fy,3,0,7);g.stroke();
+  const gr=g.createRadialGradient(0,0,10,0,0,420);gr.addColorStop(0,'rgba(180,98,60,.34)');gr.addColorStop(.45,'rgba(180,98,60,.10)');gr.addColorStop(1,'rgba(180,98,60,0)');
+  g.fillStyle=gr;g.beginPath();g.arc(0,0,420,0,7);g.fill();
+  const px=1.5/sc;
+  for(let i=0;i<14;i++){ // lines of light leaving the chip, fading as they go
+   const ang=i/14*Math.PI*2+0.2,c=Math.cos(ang),sn=Math.sin(ang),r0=96+rnd(i)*10,r1=300+rnd(i+9)*260;
+   const lg=g.createLinearGradient(c*r0,sn*r0,c*r1,sn*r1);lg.addColorStop(0,'rgba(22,21,19,.55)');lg.addColorStop(1,'rgba(22,21,19,0)');
+   g.strokeStyle=lg;g.lineWidth=px;g.beginPath();g.moveTo(c*r0,sn*r0);g.lineTo(c*r1,sn*r1);g.stroke();
   }
-  for(let i=0;i<10;i++){g.strokeRect(-560+i*8,-340+(i%3)*26,70,18)}
-  for(const [cx,cy] of [[-500,250],[480,260],[-420,-260],[400,-250]]){g.strokeRect(cx-60,cy-40,120,80);for(let j=0;j<8;j++){g.strokeRect(cx-60+j*15,cy-52,8,12);g.strokeRect(cx-60+j*15,cy+40,8,12)}}
-  for(const [cx,cy] of [[-560,-340],[560,-340],[-560,340],[560,340]]){g.beginPath();g.arc(cx,cy,10,0,7);g.stroke()}
-  // chip package
-  g.fillStyle='#f6f0e0';g.fillRect(-110,-110,220,220);g.lineWidth=2/sc*1.5;g.strokeRect(-110,-110,220,220);
-  g.lineWidth=0.8/sc*1.5;for(let i=0;i<24;i++){const p=-100+i*8.7;g.beginPath();g.moveTo(p,-110);g.lineTo(p,-122);g.moveTo(p,110);g.lineTo(p,122);g.moveTo(-110,p);g.lineTo(-122,p);g.moveTo(110,p);g.lineTo(122,p);g.stroke()}
-  g.strokeRect(-70,-70,140,140);g.fillStyle=TERRA;g.fillRect(-30,-30,60,60);g.strokeRect(-30,-30,60,60);
+  g.strokeStyle='rgba(180,98,60,.55)';g.lineWidth=px;for(const r of [190,290]){g.beginPath();g.arc(0,0,r,0,7);g.stroke()}
+  rr(g,-84,-84,168,168,18);g.fillStyle='#f6f0e0';g.fill();g.strokeStyle=INK;g.lineWidth=2*px;g.stroke();
+  rr(g,-30,-30,60,60,8);g.fillStyle=TERRA;g.fill();
  });g.restore();
 }
-function drawDie(a,sc){ // die 1000px centred
- g.save();g.globalAlpha=a;
- world(g,0,0,sc,()=>{
-  g.fillStyle='#f6f0e0';g.fillRect(-500,-500,1000,1000);g.strokeStyle=INK;g.lineWidth=3/sc;g.strokeRect(-500,-500,1000,1000);
-  g.lineWidth=1/sc;
-  for(let cx=0;cx<4;cx++)for(let cy=0;cy<4;cy++){
-   const x=-440+cx*225,y=-440+cy*225;g.strokeRect(x,y,190,190);
-   for(let j=0;j<18;j++){g.beginPath();g.moveTo(x,y+j*10.5);g.lineTo(x+190,y+j*10.5);g.stroke()}
-   if((cx+cy)%3===0){g.fillStyle=TERRA;g.fillRect(x+60,y+60,70,70);g.strokeRect(x+60,y+60,70,70)}
-  }
-  for(let i=0;i<60;i++){g.beginPath();g.moveTo(-500+i*16.6,-470);g.lineTo(-500+i*16.6,-500);g.stroke()}
- });g.restore();
-}
-const COLS=26,ROWS=14;
-function drawField(a,sc,res,t,fx,fy){ // glyph field, res 0..1 resolves to the real app icons in protected boxes
+const COLS=52,ROWS=30;
+function drawField(a,sc,res,t,fx,fy){ // 25 quiet rooms, each with its real app icon, on open cream
  g.save();g.globalAlpha=a;
  g.fillStyle=CREAM;g.fillRect(0,0,W,H);
  world(g,fx,fy,sc,()=>{
-  const cw=64,ch=64,x0=-COLS*cw/2,y0=-ROWS*ch/2;
-  g.textAlign='center';g.textBaseline='middle';
-  for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){
-   const x=x0+c*cw+cw/2,y=y0+r*ch+ch/2;
-   const gl='0123456789abcdef'[Math.floor(rnd(r*100+c+Math.floor(t*6))*16)];
-   const local=Math.min(1,Math.max(0,res*1.6-rnd(r*31+c*7)*0.6));
-   g.globalAlpha=a*(1-local);g.fillStyle=INK;g.font=`${22}px ${FONT}`;g.fillText(gl,x,y);
-  }
   const gx=7,sz=124,sx=172,sy=196;
-  for(let i=0;i<26;i++){
-   const r=Math.floor(i/gx),inRow=r===3?5:gx,c=i%gx;
-   const x=(c-(inRow-1)/2)*sx,y=(r-1.5)*sy-8;
+  for(let i=0;i<25;i++){
+   const r=Math.floor(i/gx),inRow=r===3?4:gx,c=i%gx;
+   let x=(c-(inRow-1)/2)*sx,y=(r-1.5)*sy-8;
    const k=Math.min(1,Math.max(0,res*1.5-rnd(i*13+2)*0.5));
-   if(k>0){protBox(g,x,y,sz*(0.4+0.6*k),k*a,i);g.globalAlpha=a*k;g.fillStyle=INK;g.font=`500 17px ${FONT}`;g.textAlign='center';g.fillText(APPS[i][1],x,y+sz/2+20)}
+   // the other 24 rooms fade out before their art would be scaled past native; Samantha's art fades before the desktop opens inside her room
+   const fo=i===6?1:1-S(17.7,18.6,t),ia=i===6?1-S(17.9,18.7,t):1;
+   const pu=i===9?S(15.0,15.4,t)*(1-S(15.9,16.7,t)):0;if(pu>0)x+=Math.sin(t*70)*3*pu;
+   if(k>0&&fo>0){protBox(g,x,y,sz*(0.4+0.6*k),k*a*fo,i,ia);
+    if(pu>0){g.save();g.globalAlpha=a*fo*pu*.55;rr(g,x-sz/2,y-sz/2,sz,sz,sz*.12);g.fillStyle=TERRA;g.fill();g.restore()}}
+  }
+  const dk=S(18.3,19.1,t);
+  if(dk>0){ // the real desktop, 1920 px at the exact scale the dive ends on, sits inside the terracotta frame of Samantha's room
+   const desk=deskFor(t),dw=1920/(1.06*18),dh=dw*9/16;
+   if(desk){g.globalAlpha=a*dk;g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(desk,516-dw/2,-302-dh/2,dw,dh)}
+   g.globalAlpha=a*dk;rr(g,516-dw/2,-302-dh/2,dw,dh,1.2);g.strokeStyle=INK;g.lineWidth=0.5;g.stroke();
   }
  });g.restore();
 }
 function ease(x){return x*x*(3-2*x)}
 // Samantha: calm idle loop, an eased nod when the typed line lands, a real blink from her blink frames, then her talk frames
-const NOD0=24.35,NOD1=25.0,BLINK0=24.7,BLINK1=25.2,TALK0=25.2,TALK1=26.5;
+const NOD0=22.85,NOD1=23.5,BLINK0=23.2,BLINK1=23.7,TALK0=23.7,TALK1=24.9;
 function faceState(t){
  let key,dy=0,sc=1;
  if(t>=TALK0&&t<TALK1)key='talk'+(Math.floor((t-TALK0)*12)%46<24?Math.floor((t-TALK0)*12)%46:Math.floor((t-TALK0)*12)%24);
@@ -212,16 +201,12 @@ function faceState(t){
  if(t>=NOD0&&t<NOD1){const u=(t-NOD0)/(NOD1-NOD0),e=Math.sin(Math.PI*u);dy=22*e*e*(1-0.15*u);sc=1+0.012*e}
  return {key,dy,sc};
 }
-function drawDesktop(a,u,t){ // the real 1920x1080 desktop grows out of the protected box, then pushes slowly toward Samantha's chat
- const desk=(t>=24.0?imgs.deskB:(t>=23.2?imgs.deskT:imgs.deskA));if(!desk)return;
- g.save();g.globalAlpha=a;
- const p=Math.min(1,Math.max(0,(t-22.5)/4.2));
- const sc=0.0208*Math.exp(Math.log(48)*u)*(1+0.04*p);
- const dv=S(19.0,22.5,t),ox=W/2+(1-dv)*516,oy=H/2-(1-dv)*302; // sits inside Samantha's box until the box fills the screen
- const fx=u<1?W/2:L(W/2,700,p),fy=u<1?H/2:L(H/2,580,p);
- g.translate(ox,oy);g.scale(sc,sc);g.translate(-fx,-fy);
- g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';
- g.drawImage(desk,0,0,W,H);
+const deskFor=t=>t>=22.5?imgs.deskB:(t>=21.7?imgs.deskT:imgs.deskA);
+function drawDesktop(t){ // the push-in is anchored on Samantha's window and never scales below 1, so no edge of the desktop can enter the frame
+ const desk=deskFor(t);if(!desk)return;
+ const p=ease(Math.min(1,Math.max(0,(t-20.6)/4.0))),sc=Math.max(1,1+0.06*p),ax=700,ay=580;
+ g.save();g.translate(ax,ay);g.scale(sc,sc);g.translate(-ax,-ay);
+ g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(desk,0,0,W,H);
  g.restore();
 }
 function drawFace(a,t){
@@ -234,41 +219,33 @@ function drawFace(a,t){
 }
 function text(s,x,y,size,w,al,col){g.save();g.globalAlpha=al;g.fillStyle=col||INK;g.font=`${w} ${size}px ${FONT}`;g.textAlign='center';g.textBaseline='middle';g.fillText(s,x,y);g.restore()}
 
-const zoomZ=t=>Math.exp(L(Math.log(0.3),Math.log(90),S(8.8,13.4,t)));
+function line(str,t0,t1,t,y=H-92,size=72){const a=S(t0,t0+.6,t)*(1-S(t1-.6,t1,t));if(a>0)text(str,W/2,y,size,500,a)}
 function render2(t){
  g.clearRect(0,0,W,H);
- if(t<8.6)return;
- // backdrop for 2D worlds fades in over the 3D dive
- const bgA=S(8.6,9.4,t);
+ if(t<0.8){g.fillStyle=CREAM;g.globalAlpha=1-S(0,0.8,t);g.fillRect(0,0,W,H);g.globalAlpha=1}
+ line('A computer you can print.',1.0,4.1,t);
+ line('Build it in 45 minutes.',4.6,7.6,t);
+ if(t<8.1)return;
+ const bgA=S(8.1,8.9,t);
  g.fillStyle=CREAM;g.globalAlpha=bgA;g.fillRect(0,0,W,H);g.globalAlpha=1;
- // board 9-13.5: scale 0.3 -> 9 (chip fills)
- if(t<12.0){
-  drawBoard(S(8.6,9.4,t)*(1-S(10.6,11.8,t)),zoomZ(t),t);
+ if(t<11.9)drawChip(S(8.3,9.3,t)*(1-S(10.9,11.8,t)),Math.exp(L(Math.log(0.55),Math.log(7),S(8.6,11.8,t))),t);
+ if(t>11.0&&t<20.6){
+  const zin=S(11.2,13.4,t),dive=S(17.5,20.6,t);
+  const sc=L(0.72,1,ease(zin))*(1+0.05*S(13.4,17.5,t))*Math.exp(dive*Math.log(18));
+  const res=S(11.3,13.6,t),a=S(11.0,11.9,t);
+  drawField(a,sc,res,t,516*(1-(1-dive)/sc),-302*(1-(1-dive)/sc)+60*(1-dive));
  }
- if(t>10.3&&t<14.3){
-  drawDie(S(10.6,11.8,t)*(1-S(12.8,13.9,t)),zoomZ(t)*0.14);
- }
- if(t>12.9&&t<22.6){
-  const zin=S(12.9,14.4,t);
-  const dive=S(19.0,22.5,t);
-  const sc=L(0.5,1,ease(zin))*(1+0.06*S(14.4,19,t))*Math.exp(dive*Math.log(18));
-  const res=S(14.0,17.2,t);
-  const a=S(12.9,13.9,t)*(1-S(21.7,22.5,t));
-  drawField(a,sc,res,t,516*(1-(1-dive)/sc),-302*(1-(1-dive)/sc)); // dive into Samantha's own protected box (grid slot 6)
-  text('Every app in its own protected box.',W/2,H-90,40,500,S(16.8,17.8,t)*(1-S(18.6,19.2,t)));
- }
- if(t>20.3){
-  const u=S(20.4,22.5,t);
-  if(t<22.5)drawDesktop(1,u,t);else drawDesktop(1,1,t);
-  drawFace(S(23.4,24.0,t)*(1-S(26.0,26.6,t)),t);
- }
- if(t>=26.3){
-  const a=S(26.3,26.9,t),am=S(26.9,27.5,t);
+ line('Every app gets its own room.',11.4,14.4,t);
+ line('One breaks. The others keep going.',14.8,17.9,t);
+ if(t>=20.6)drawDesktop(t);
+ if(t>19.0)drawFace(S(21.9,22.5,t)*(1-S(24.2,24.8,t)),t);
+ if(t>=24.6){
+  const a=S(24.6,25.2,t),am=S(26.8,27.6,t);
   g.fillStyle=CREAM;g.globalAlpha=a;g.fillRect(0,0,W,H);g.globalAlpha=1;
-  const m=imgs.mark;if(m){const s=300;g.globalAlpha=am;g.drawImage(m,W/2-s/2,150,s,s);g.globalAlpha=1}
-  text('Joshua Tree 2.0',W/2,560,112,600,S(27.0,27.6,t));
-  text('Every app protected. Build one in 45 minutes.',W/2,740,44,400,S(27.3,27.9,t));
-  text('joshuatree.heyitsmejosh.com',W/2,860,40,600,S(27.5,28.0,t),INK);
+  line('Nothing leaves this machine.',25.0,26.8,t,H/2,88);
+  const m=imgs.mark;if(m){const s=280;g.globalAlpha=am;g.drawImage(m,W/2-s/2,170,s,s);g.globalAlpha=1}
+  text('Joshua Tree',W/2,580,128,600,S(27.0,27.8,t));
+  text('Strata Kit',W/2,700,68,400,S(27.4,28.2,t),TERRA);
  }
 }
 let last=-1;

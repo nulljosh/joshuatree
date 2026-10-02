@@ -33,15 +33,15 @@ WIDE_CLOSE_X, WIDE_CLOSE_Y = 34, 56  # 2.0 ring-3 apps open at the full-pane fra
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 
-# App names from kernel/kernel.c APPS[].name (indices 0-26)
+# App names from kernel/kernel.c APPS[].name (indices 0-25)
 APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
         "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar",
-        "Homeqi", "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
+        "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity", "Apps", "Trash"]
 
-# Apps 0-24 launch from the Apps folder grid; Apps (25) and Trash (26) are special:
+# Apps 0-23 launch from the Apps folder grid; Apps (25) and Trash (26) are special:
 # Apps opens when you click the dock slot again, Trash is dock slot 10.
-REGULAR_APPS = list(range(25))
+REGULAR_APPS = list(range(24))
 SPECIAL_APPS = [(10, "Trash")]  # (dock_slot, name)
 
 CRASH_PATTERNS = [
@@ -145,7 +145,7 @@ try:
                 break
         move(*PARK); time.sleep(0.3)
 
-    # Process regular apps (0-24) via the Apps folder grid
+    # Process regular apps (0-23) via the Apps folder grid
     for app_idx in REGULAR_APPS:
         app_name = APPS[app_idx]
         opened = False

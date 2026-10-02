@@ -29,7 +29,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 name = sys.argv[1] if len(sys.argv) > 1 else "samantha"
 src = os.environ.get("FACE_SRC", os.path.expanduser(f"~/.samantha/characters/{name}"))
 crop = os.environ.get("CROP", "ih:ih:(iw-ih)/2:0")
-out = os.path.join(ROOT, "landing", "face")
+out = os.environ.get("FACE_OUT", os.path.join(ROOT, "landing", "face"))   # FACE_OUT=landing/face-joshua for the portfolio face
 SIDE, FPS = 320, 12
 COUNT = {"idle": 24, "talk": 48}
 
@@ -65,14 +65,15 @@ def seamless(paths, n, open_eyes=False):
         return 3 * diff(s, s + n - 1) + sum(step[s:s + n - 1])
     ok = eyes_open(paths) if open_eyes else [True] * len(paths)
     starts = [s for s in range(len(paths) - n + 1) if all(ok[s:s + n])]
-    if not starts:  # no open-eyed stretch that long: take the longest one
-        run, best = 0, (0, 0)
-        for i, o in enumerate(ok + [False]):
-            run = run + 1 if o else 0
-            if run > best[0]:
-                best = (run, i - run + 1)
-        n, starts = best[0], [best[1]]
-        print(f"face_frames: only {n} open-eyed frames in a row, loop is {n} frames")
+    if not starts:  # no open-eyed stretch that long: keep the full length, take the windows with the fewest shut frames
+        # Taking the longest open run instead cut Joshua's talk loop to 8
+        # frames: his glasses rims sit in the eye band, so head drift reads as
+        # blinking and no run is long. A blink or two inside a 4 s loop is
+        # what a real talker does anyway.
+        shut = [sum(1 for o in ok[s:s + n] if not o) for s in range(len(paths) - n + 1)]
+        least = min(shut)
+        starts = [s for s, c in enumerate(shut) if c == least]
+        print(f"face_frames: no {n}-frame open-eyed stretch, best window has {least} frames read as shut")
     start = min(starts, key=cost)
     return paths[start:start + n]
 

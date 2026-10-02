@@ -71,6 +71,7 @@ extern volatile unsigned int window_present_count;
 extern volatile unsigned int window_present_ticks_last;
 extern volatile unsigned int window_present_ticks_max;
 int window_has_back_buffer(void);
+int window_is_open(void);
 /* Declare that [x,y,w,h) in physical pixels was written directly, for a
    caller that bypassed window_pixel_phys (window_phys_row). */
 void window_damage(int x, int y, int w, int h);

@@ -319,11 +319,11 @@ try:
             row, col = icon // COLS, icon % COLS
             return col * CELL_W + CELL_W // 2, Y0 + row * CELL_H + TILE
 
-        # All 26 real apps' cells must land inside the 760px logical
+        # All 25 real apps' cells must land inside the 760px logical
         # screen (no scrolling) -- the exact bug Joshua's screenshot
         # review caught at 4 columns (Activity idx24, Clock idx25 sitting
         # off the bottom, unreachable by any tap).
-        GUI_APPS_FOLDER = 26
+        GUI_APPS_FOLDER = 25
         offscreen = [i for i in range(GUI_APPS_FOLDER) if cell_center(i)[1] + 24 > LOGICAL_H]
         if offscreen:
             fail = 1; print(f"FAIL: {len(offscreen)} app cell(s) fall below the {LOGICAL_H}px screen: {offscreen}")
@@ -332,8 +332,8 @@ try:
 
         cal_cx, cal_cy = cell_center(2)   # Calendar, APPS[2]
         key_cx, key_cy = cell_center(9)   # Keyrate, APPS[9], ring-3
-        act_cx, act_cy = cell_center(24)  # Activity, APPS[24] -- the row the 4-col grid used to drop
-        clk_cx, clk_cy = cell_center(25)  # Clock, APPS[25]
+        act_cx, act_cy = cell_center(23)  # Activity, APPS[23] -- the row the 4-col grid used to drop
+        clk_cx, clk_cy = cell_center(24)  # Clock, APPS[24]
 
         if not not_bg(px_home, cal_cx, cal_cy):
             fail = 1; print(f"FAIL: no icon drawn at Calendar's grid cell ({cal_cx},{cal_cy})")

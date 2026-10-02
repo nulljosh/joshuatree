@@ -51,7 +51,6 @@
 #include "user_calculator.h"
 #include "user_quotes.h"
 #include "user_bookrank.h"
-#include "user_homeqi.h"
 #include "user_lexly.h"
 #include "user_plan.h"
 #include "user_fieldbook.h"
@@ -112,7 +111,6 @@ static const struct ring3_app RING3_APPS[] = {
     {"Calculator", user_calculator, USER_CALCULATOR_LEN, "CALC.BIN"},
     {"Quotes",     user_quotes,     USER_QUOTES_LEN,     "QUOTES.BIN"},
     {"Bookrank",   user_bookrank,   USER_BOOKRANK_LEN,   "BOOKRANK.BIN"},
-    {"Homeqi",     user_homeqi,     USER_HOMEQI_LEN,     "HOMEQI.BIN"},
     {"Lexly",      user_lexly,      USER_LEXLY_LEN,      "LEXLY.BIN"},
     {"Plan",       user_plan,       USER_PLAN_LEN,       "PLAN.BIN"},
     {"Fieldbook",  user_fieldbook,  USER_FIELDBOOK_LEN,  "FIELDBOOK.BIN"},
