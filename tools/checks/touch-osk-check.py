@@ -67,7 +67,7 @@ try:
         tap(3 * 86 + 43, 90); time.sleep(0.8)
         if not on_home(): break
     time.sleep(1.5)
-    key("ret"); key("n")   # open the folder, new note: the editor
+    key("n")   # new note: the editor (ring-3 Notes lists notes first, so a bare Enter would open an existing note and n would only type)
     wait_log("notes: new=", 1, 8)   # ring-3 Notes made the note and opened its editor
     time.sleep(1.0)
     tap(20, 760 - 200 + 60)   # 'q'
