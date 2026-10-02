@@ -113,8 +113,12 @@ static void chat_face_cmdline(const char *cl) {
 /* One frame: 200, a baseline JPEG, exactly FACE_SRC square. Returns an RGB buffer
    or 0. */
 static unsigned char *face_fetch(unsigned char *file, const char *kind, int i) {
-    char path[24]; int n = 0;
-    const char *s = "/face/"; while (*s) path[n++] = *s++;
+    char path[32]; int n = 0;
+    /* Portfolio mode (kernel.c's portfolio_dock, "portfolio" on the command
+       line) is Joshua's own site, so the face is his: landing/face-joshua/,
+       cut by tools/gen/face_frames.py with FACE_OUT. Everywhere else it is
+       Samantha's landing/face/. */
+    const char *s = portfolio_dock ? "/face-joshua/" : "/face/"; while (*s) path[n++] = *s++;
     while (*kind) path[n++] = *kind++;
     path[n++] = '-'; if (i >= 10) path[n++] = (char)('0' + i / 10); path[n++] = (char)('0' + i % 10);
     s = ".jpg"; while (*s) path[n++] = *s++;
