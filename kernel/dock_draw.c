@@ -127,6 +127,13 @@ void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int drag_m
     }
 }
 
+/* 2.0: a true 1px rule. window_rect doubles at scale 2, so the hairline is
+   written per physical pixel on the logical row's last physical line. */
+void gui_hairline_h(int x, int y, int w, unsigned int color){
+    int sc = (int)window_scale(); if (sc < 1) sc = 1;
+    for (int px = x * sc; px < (x + w) * sc; px++) window_pixel_phys(px, y * sc + sc - 1, color);
+}
+
 static void gui_draw_dock_tray(void){
     int y0 = gui_dock_y0(), dock_h = DOCK_ICON + 2 * DOCK_PAD, dock_w = gui_dock_w(), dock_x = gui_dock_x0();
 
@@ -155,7 +162,9 @@ static void gui_draw_dock_tray(void){
        and bottom corners sit against very different points on the
        gradient, one fixed blend sample for both was the real dark-bubble
        bug just found and fixed above. */
-    gui_rounded_rect_on_wallpaper(dock_x, y0, dock_w, dock_h, DOCK_TRAY_COLOR, 20);
+    gui_rounded_rect_on_wallpaper(dock_x, y0, dock_w, dock_h, DOCK_TRAY_COLOR, 18);
+    gui_hairline_h(dock_x + 18, y0, dock_w - 36, 0x00D6D0C6); /* 2.0: same radius as windows, hairline top and bottom edge */
+    gui_hairline_h(dock_x + 18, y0 + dock_h - 1, dock_w - 36, 0x00D6D0C6);
 }
 
 static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
