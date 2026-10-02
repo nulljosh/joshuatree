@@ -16,23 +16,28 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-Release branch release/2.0.0 (2026-10-01) holds every 2.0 slice merged in one place: window apps for Weather and Stocks, the clipboard, Mail that really sends, window resize, the three smooth-type sweeps, the new mark, the 2.0 look, the landing and the demo tour. VERSION is 2.0.0. Static checks pass (check-refs, godfile, testing-doc, suite-coverage, bss margin, versionsync). No QEMU has run on the merged tree yet.
+PR #331 (release/2.0.0) marked ready for ship. GitHub CI red only on 29 stale checks (old in-kernel Samantha, verified fine); fix workflow repointing them to land as 2.0.1 on branches fix/ci-a..d. Joshua will admin-merge #331 himself. VERSION 2.0.0. Static checks pass (check-refs, godfile, testing-doc, suite-coverage, bss margin, versionsync). Full CI: 10 pass, 2 fail (feature-drive, facespeak-demo, both fixed on 2.0.1 branches).
 
 - 26 of 26 apps run as protected ring-3 programs, each its own compositor window with private memory and per-window input.
-- Clipboard (syscall 399), resize, growable memory (SYS_BRK) and smooth type are in every app.
-- Mail compose sends through the Worker (Resend, token and rate limit). The Worker secret is still not set.
+- Clipboard (syscall 399), resize, growable memory (SYS_BRK) and smooth type in every app.
+- Mail compose sends through the Worker (Resend, token and rate limit). Worker secret still pending.
 - Weather and Stocks refetch in place (SYS_REFRESH).
+- Demo tour covers all 26 apps.
+- New 2.0 logo and UI pass done.
+- Landing synced.
 
-Still open: run tools/ci-local.sh on release/2.0.0 (nothing has booted this tree), fix whatever the merged main loops break, open the one 2.0 PR (draft until green), tag 2.0.0. The blocking launcher and gui_poll_event pull are not deleted yet.
+Also shipping with 2.0: authmail /signup double opt-in with rate limits (deployed). Strata Kit: print-ready CAD, 5-step build sheet, CC BY-NC-SA licence, TRADEMARKS.md (branches feat/strata-simple, feat/legal). Ad v1 on landing (feat/ad-landing). Reception slice 1 (feat/reception). Hardware and ad loops: A+ to B, running two more rounds each.
 
 ## Next, in order
 
-1. Multiwindow check and old launcher cleanup.
-2. Merge everything into release/2.0-int as one combined PR.
-3. Full CI pass.
-4. Tag 2.0.0 on main.
-5. 2.1 Music, 2.2 Video.
-6. 3.0 on the ASRock J4125B-ITX, the Strata Kit at 3.1.
+After #331 merges:
+1. fix/ci-a..d (2.0.1 stale check rewrites).
+2. feat/ad-landing (ad deployed).
+3. feat/legal (Strata licence and trademarks).
+4. feat/strata-simple (hardware print-ready).
+5. feat/samantha-live (final Samantha).
+6. feat/reception (Reception slice).
+Then: 2.1 Music, 2.2 Video, 3.0 on the ASRock J4125B-ITX, Strata Kit at 3.1.
 
 ## Restart prompt
 

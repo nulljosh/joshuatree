@@ -44,12 +44,13 @@ int gui_slot_at(int mx){
    dragged icon should keep tracking the cursor even briefly outside it). */
 void gui_clamp_win_rect(int *x, int *y, int *w, int *h){
     int sw = (int)window_width(), sh = (int)window_height(), m = 10;
+    int top = sw >= 700 ? 28 : m; /* desktop: stay under the 26px menu bar (short res= screens), phone has none */
     if (*w > sw - 2 * m) *w = sw - 2 * m;
-    if (*h > sh - 2 * m) *h = sh - 2 * m;
+    if (*h > sh - top - m) *h = sh - top - m;
     if (*x + *w > sw - m) *x = sw - m - *w;
     if (*x < m) *x = m;
     if (*y + *h > sh - m) *y = sh - m - *h;
-    if (*y < m) *y = m;
+    if (*y < top) *y = top;
 }
 
 int gui_dock_hit_test(int mx, int my){
@@ -58,4 +59,17 @@ int gui_dock_hit_test(int mx, int my){
     int x0 = gui_dock_x0(), w = gui_dock_w();
     if (mx < x0 || mx >= x0 + w) return -1;
     return gui_slot_at(mx);
+}
+
+/* "res=WxH" on the command line: physical px, W multiple of 8, H even, 1600..3840 x 900..2160. 0 = absent or out of range. */
+int gui_parse_res(const char *cl, int *rw, int *rh){
+    for (const char *p = cl; p && *p; p++) {
+        if (!(p[0]=='r' && p[1]=='e' && p[2]=='s' && p[3]=='=' && (p == cl || p[-1]==' '))) continue;
+        const char *q = p + 4; int w = 0, h = 0;
+        while (*q >= '0' && *q <= '9' && w < 100000) w = w * 10 + (*q++ - '0');
+        if (*q == 'x') { q++; while (*q >= '0' && *q <= '9' && h < 100000) h = h * 10 + (*q++ - '0'); }
+        if (w < 1600 || w > 3840 || h < 900 || h > 2160 || (w % 8) || (h % 2)) return 0;
+        *rw = w; *rh = h; return 1;
+    }
+    return 0;
 }
