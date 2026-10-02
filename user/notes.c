@@ -23,8 +23,8 @@
  * (the kernel editor's own contract) into the system clipboard (SYS_CLIPBOARD); paste
  * inserts it. Esc saves (truncate-write, only if edited) and returns to browse.
  * Home, End and Delete work in the editor; Ctrl+S saves and stays in it.
- * Browse: f makes a folder (F0000001 style names, 8.3), d deletes the
- * selected note. SYS_MKDIR and SYS_UNLINK do the work.
+ * Browse: f makes a folder (F0000001 style names, 8.3), d asks and a second
+ * d deletes the selected note (any other key cancels). SYS_MKDIR and SYS_UNLINK do the work.
  * Serial markers: notes: folders=N notes=N, notes: new=FILE, notes: edit=FILE,
  * notes: saved=N.
  */
@@ -76,6 +76,7 @@ static int editing JT_DATA = 0, elen JT_DATA = 0, epos JT_DATA = 0, escroll JT_D
 static int phone JT_DATA = 0;   /* argv[1] == "phone": show the on-screen keyboard in the editor */
 static int edirty JT_DATA = 0, goalx JT_DATA = -1;
 static char efile[13] JT_DATA = {0};
+static int del_armed JT_DATA = 0;   /* d once asks, d again deletes, anything else cancels */
 
 static void rect(int x, int y, int w, int h, unsigned c) {
     if (x < 0) { w += x; x = 0; }
@@ -525,11 +526,17 @@ void _start(int argc, char **argv) {
             int k = ev.a;
             note = 0;
             if (k == '`') { jt_write(1, "notes: crashing on purpose\n", 27); *(volatile int *)0 = 1; }
-            if (k == JT_KEY_ESC) break;
+            int armed = del_armed;
+            if (k != 'd') del_armed = 0;
+            if (k == JT_KEY_ESC && !armed) break;
+            else if (k == JT_KEY_ESC) { say("notes: delete cancelled", -1); }
             else if (k == '\t') focus = !focus;
             else if (k == 'n') { new_note(); if (editing) { ed_draw(); flags = JT_POLL_PRESENT; continue; } }
             else if (k == 'f') new_folder();
-            else if (k == 'd') delete_note();
+            else if (k == 'd') {
+                if (armed) delete_note();
+                else if (nno) { del_armed = 1; note = "Delete this note? Press d again to confirm, any other key cancels."; say("notes: delete asks", -1); }
+            }
             else if (focus == 0) {
                 if (k == JT_KEY_UP && fsel > 0) { fsel--; nsel = 0; load_notes(); }
                 else if (k == JT_KEY_DOWN && fsel < nfo - 1) { fsel++; nsel = 0; load_notes(); }
