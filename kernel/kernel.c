@@ -5719,7 +5719,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 19 */ {"Stocks",     0x00356B4F, gui_icon_stocks,     gui_launch_stocks,     0, 0},
     /* 20 */ {"Search",     0x00506078, gui_icon_search,     search_ring3_open,     0, 0}, /* 1.9.13: ring 3 (user/search.c) */
     /* 21 */ {"Epiphany",   0x001F5FA8, gui_icon_stocks,     epiphany_ring3_open,   0, 0}, /* 1.9.17: ring 3 (user/epiphany.c); art covers the icon */
-    /* 22 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       portfolio_ring3_open,  0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph; 1.9.5: ring 3 (user/portfolio.c) */
+    /* 22 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       portfolio_ring3_open,  0, 0}, /* art covers the icon (art/icons/portfolio.svg); 1.9.5: ring 3 (user/portfolio.c) */
     /* 23 */ {"Activity",   0x003E4C58, gui_icon_activity,   activity_ring3_open,   0, 0}, /* 1.9.6: ring 3 (user/activity.c) */
     /* 24 */ {"Clock",      0x00565A7A, gui_icon_apps,       clock_ring3_open,      0, 0}, /* art/icons/clock.svg covers the icon; 1.9.4: ring 3 (user/clock.c) */
     /* Apps and Trash aren't real apps with their own brand color, so their

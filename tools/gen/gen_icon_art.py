@@ -76,9 +76,10 @@ ART = {
     19: "stocks",
     20: "search",
     21: "epiphany",
+    22: "portfolio",
     24: "clock",
-    # 22 Portfolio and 23 Activity have no authored artwork yet,
-    # they keep the primitive glyph paths (see the icon index table in
+    # 23 Activity has no authored artwork yet,
+    # it keeps the primitive glyph path (see the icon index table in
     # kernel/kernel.c). Apps and Trash are 25/26 (Homeqi is its
     # own product now).
     25: "apps",

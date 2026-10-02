@@ -194,16 +194,39 @@ static int chat_face_reserve(void) { return face_idle_n ? FACE_SIDE + 16 : 0; }
    instead of in a rounded square. The 320 px frame is scaled to the screen's
    height (capped, so a retina screen does not pay for a million pixels a
    frame), top-aligned under the titlebar and centered. Its background is a
-   plain wall, so the sides take each row's own edge pixel and read as more
-   wall; on a narrow phone the sides are cropped instead. Rows stop above the
+   plain wall, so each side is one flat wall color (the average of that edge
+   over the frame's upper half, above his shoulders) and the frame's outer
+   columns feather into it. Each row's own edge pixel smeared JPEG noise
+   into stripes, a seam and a dark bar where the sweater reaches the edge.
+   On a narrow phone the sides are cropped instead, and the 720 cap is
+   skipped there (only fw columns are drawn, so the cost is already bounded)
+   or the face stopped short of the screen's bottom. Rows stop above the
    glass bar, which is drawn once (face_glass_band) and never repainted. */
 static int face_full = 0, face_band_h = 0, face_full_top = 0;
+#define FACE_WALL_COLS 4    /* source columns averaged for each side's wall color */
+#define FACE_FEATHER   24   /* source columns at each edge that fade into the wall */
+/* Average color of FACE_WALL_COLS source columns from c0, over the upper half (all wall). */
+static unsigned int face_wall(const unsigned char *px, int c0) {
+    unsigned int r = 0, g = 0, b = 0, n = 0;
+    for (int y = 0; y < FACE_SRC / 2; y++) for (int x = c0; x < c0 + FACE_WALL_COLS; x++) {
+        unsigned int o = ((unsigned int)y * FACE_SRC + (unsigned int)x) * 3u;
+        r += px[o]; g += px[o + 1]; b += px[o + 2]; n++;
+    }
+    return ((r / n) << 16) | ((g / n) << 8) | (b / n);
+}
+/* a toward b by w/256. */
+static unsigned int face_lerp(unsigned int a, unsigned int b, unsigned int w) {
+    unsigned int R = (((a >> 16) & 255) * (256 - w) + ((b >> 16) & 255) * w) >> 8;
+    unsigned int G = (((a >> 8) & 255) * (256 - w) + ((b >> 8) & 255) * w) >> 8;
+    unsigned int B = ((a & 255) * (256 - w) + (b & 255) * w) >> 8;
+    return (R << 16) | (G << 8) | B;
+}
 static void face_blit_full(const unsigned char *px, const unsigned char *mix) {
     if (!px) return;
     int sc = (int)window_scale(); if (sc < 1) sc = 1;
     int fw = (int)window_width() * sc, fh = (int)window_height() * sc;
     int top = face_full_top * sc, limit = fh - face_band_h * sc;
-    int side = fh - top; if (side > 720 * sc) side = 720 * sc;
+    int side = fh - top; if (side > 720 * sc && side < fw) side = 720 * sc;
     int ox = (fw - side) / 2;
     int x0 = ox < 0 ? 0 : ox, x1 = ox + side > fw ? fw : ox + side;
     if (x1 > 4096) x1 = 4096;
@@ -211,17 +234,20 @@ static void face_blit_full(const unsigned char *px, const unsigned char *mix) {
     /* Per-column source index, rebuilt only when the geometry changes: the
        division per pixel was most of the cost of a frame. */
     static unsigned short colmap[4096];
-    static int map_side = -1, map_ox = 0, map_fw = 0;
+    static unsigned short fwt[256];          /* feather weight out of 256, 0 = outer edge column */
+    static unsigned int wall_l = 0, wall_r = 0;
+    static int map_side = -1, map_ox = 0, map_fw = 0, fpx = 0;
     if (map_side != side || map_ox != ox || map_fw != fw) {
         for (int x = x0; x < x1; x++) colmap[x] = (unsigned short)((x - ox) * FACE_SRC / side);
-        /* The wall beside and below the frame is painted once, from this
-           frame's edge pixels: it is a plain wall, it does not move. */
+        wall_l = face_wall(px, 4); wall_r = face_wall(px, FACE_SRC - 4 - FACE_WALL_COLS);   /* 4 in: JPEG's outermost columns ring */
+        fpx = ox > 0 ? side * FACE_FEATHER / FACE_SRC : 0; if (fpx > 256) fpx = 256;
+        for (int i = 0; i < fpx; i++) fwt[i] = (unsigned short)(256 * (fpx - i) / fpx);
+        /* The wall beside and below the frame is painted once: it is a plain
+           wall, it does not move. */
         for (int y = top; y < limit; y++) {
-            int sy = (y - top) * FACE_SRC / side; if (sy >= FACE_SRC) sy = FACE_SRC - 1;
-            unsigned int ro = (unsigned int)sy * FACE_SRC * 3, e = ro + (FACE_SRC - 1) * 3;
-            if (y - top >= side) { window_fill_rect_phys(0, y, fw, 1, (px[ro] << 16) | (px[ro + 1] << 8) | px[ro + 2]); continue; }
-            if (x0 > 0) window_fill_rect_phys(0, y, x0, 1, (px[ro] << 16) | (px[ro + 1] << 8) | px[ro + 2]);
-            if (x1 < fw) window_fill_rect_phys(x1, y, fw - x1, 1, (px[e] << 16) | (px[e + 1] << 8) | px[e + 2]);
+            if (y - top >= side) { unsigned int ro = (FACE_SRC - 1) * FACE_SRC * 3u; window_fill_rect_phys(0, y, fw, 1, (px[ro] << 16) | (px[ro + 1] << 8) | px[ro + 2]); continue; }
+            if (x0 > 0) window_fill_rect_phys(0, y, x0, 1, wall_l);
+            if (x1 < fw) window_fill_rect_phys(x1, y, fw - x1, 1, wall_r);
         }
         map_side = side; map_ox = ox; map_fw = fw;
     }
@@ -234,6 +260,7 @@ static void face_blit_full(const unsigned char *px, const unsigned char *mix) {
         if (row) {
             if (mix) for (int x = x0; x < x1; x++) { unsigned int o = ro + colmap[x] * 3u; row[x] = (((px[o] + mix[o]) >> 1) << 16) | (((px[o + 1] + mix[o + 1]) >> 1) << 8) | ((px[o + 2] + mix[o + 2]) >> 1); }
             else for (int x = x0; x < x1; x++) { unsigned int o = ro + colmap[x] * 3u; row[x] = (px[o] << 16) | (px[o + 1] << 8) | px[o + 2]; }
+            for (int i = 0; i < fpx; i++) { row[x0 + i] = face_lerp(row[x0 + i], wall_l, fwt[i]); row[x1 - 1 - i] = face_lerp(row[x1 - 1 - i], wall_r, fwt[i]); }
         } else {
             for (int x = x0; x < x1; x++) { unsigned int o = ro + colmap[x] * 3u; window_pixel_phys(x, y, (px[o] << 16) | (px[o + 1] << 8) | px[o + 2]); }
         }
