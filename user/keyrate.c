@@ -15,14 +15,14 @@
  * drops its window and goes back to the desktop. tools/checks/
  * ring3app-check.py presses it on purpose and asserts exactly that.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font, included as data. There is
+ * Glyphs: antialiased DejaVu via libjt/text.h. There is
  * no font syscall and a program draws its own pixels, so it carries its
  * own letters. No .bss allowed in a flat binary, so every global is
  * initialised and everything else lives on the one 4KB stack page.
  */
 #include "jtsys.h"
 #include "libjt/string.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG   0x00FAF8F6
 #define INK  0x001C1C1E
@@ -54,22 +54,14 @@ static void rect(int x, int y, int w, int h, unsigned c) {
     }
 }
 
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (px < 0 || px >= (int)win.width) continue;
-            if (g[r] & (0x80 >> c)) win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
-}
+static void text(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 
-static void text(const char *s, int x, int y, unsigned fg) {
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
+/* One glyph at a time so typed and untyped letters take different inks;
+   returns the advance. */
+static int put1(char c, int x, int y, unsigned fg) {
+    char t[2] = { c, 0 };
+    jt_text_draw(&win, JT_FACE_BODY, x, y, fg, t);
+    return jt_text_width(JT_FACE_BODY, t);
 }
 
 static int gen_words(char *buf, int cap, unsigned *rng) {
@@ -133,11 +125,17 @@ void _start(int argc, char **argv) {
 
     rect(0, 0, W, H, BG);
     for (;;) {
-        rect(20, 60, W - 40, H - 100, BG);
-        rect(20, H - 30, W - 40, 16, BG);
-        for (int i = 0, x = 20, y = 60; i < tlen; i++, x += 8) {
-            if (x + 8 > W - 20) { x = 20; y += 16; }
-            glyph((unsigned char)target[i], x, y, i < pos ? DONE : INK);
+        rect(20, 40, W - 40, H - 76, BG);
+        rect(20, H - 34, W - 40, 22, BG);
+        {   /* wrap at word boundaries: a word that will not fit moves down whole */
+            int x = 20, y = 44, i = 0;
+            while (i < tlen) {
+                int e = i, ww = 0;
+                while (e < tlen && target[e] != ' ') { char t[2] = { target[e], 0 }; ww += jt_text_width(JT_FACE_BODY, t); e++; }
+                if (x > 20 && x + ww > W - 20) { x = 20; y += 24; }
+                for (; i < e; i++) x += put1(target[i], x, y, i < pos ? DONE : INK);
+                if (i < tlen) { x += put1(' ', x, y, i < pos ? DONE : INK); i++; }
+            }
         }
         if (started) {
             unsigned t = 0; jt_time(&t);

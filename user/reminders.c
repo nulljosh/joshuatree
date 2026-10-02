@@ -19,12 +19,11 @@
  * window before loading, so the list sits in the zeroed pages just past
  * _user_end, which the link script defines.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font, same as the other ring-3
- * apps. a adds, space toggles done, d deletes, Esc closes.
+ * Glyphs: antialiased DejaVu via libjt/text.h, same as Mail. a adds, space toggles done, d deletes, Esc closes.
  * tools/checks/ring3reminders-check.py drives all of it.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define INK   0x001C1C1E
@@ -37,7 +36,7 @@
 
 #define MAXR   24
 #define TEXT_N 48
-#define ROW_Y  48
+#define ROW_Y  52
 #define ROW_H  22
 
 struct item { char text[TEXT_N]; int done; };
@@ -62,19 +61,22 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++)
-        for (int c = 0; c < 8; c++) {
-            if (!(g[r] & (0x80 >> c))) continue;
-            int px = x + c, py = y + r;
-            if (px < 0 || px >= (int)win.width || py < 0 || py >= (int)win.height) continue;
-            win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-}
-static void text(const char *s, int x, int y, unsigned fg) {
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
+static int text(const char *s, int x, int y, unsigned fg) { return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
+/* Cuts s to maxw pixels, ending in "..." when it had to cut. */
+static void fit(char *out, const char *s, int maxw, int cap) {
+    int n = 0;
+    while (s[n] && n < cap - 1) { out[n] = s[n]; n++; }
+    out[n] = 0;
+    if (jt_text_width(JT_FACE_BODY, out) <= maxw) return;
+    while (n > 0) {
+        out[n] = 0;
+        char t[cap + 4]; int k = 0;
+        for (int i = 0; i < n; i++) t[k++] = out[i];
+        t[k++] = '.'; t[k++] = '.'; t[k++] = '.'; t[k] = 0;
+        if (jt_text_width(JT_FACE_BODY, t) <= maxw) { for (int i = 0; i <= k && i < cap; i++) out[i] = t[i]; out[cap - 1] = 0; return; }
+        n--;
+    }
+    out[0] = 0;
 }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
@@ -153,24 +155,34 @@ static int visible_rows(void) {
 static void draw(void) {
     rect(0, 0, (int)win.width, (int)win.height, BG);
     if (adding) {
-        text("type the reminder, enter adds, esc cancels:", 20, 20, HINT);
-        rect(20, 44, (int)win.width - 40, 20, WHITE);
-        text(entry, 24, 46, INK);
+        text("type the reminder, enter adds, esc cancels:", 20, 36, HINT);
+        rect(20, 60, (int)win.width - 40, 24, WHITE);
+        {   char t[TEXT_N + 4]; int x;
+            fit(t, entry, (int)win.width - 40 - 20, (int)sizeof t);
+            x = text(t, 26, 63, INK);
+            rect(x + 1, 65, 1, 14, INK); /* caret */
+        }
         jt_write(1, "remindersprompt\n", 16); /* one per redraw: what the keystroke check counts */
         return;
     }
     if (count == 0) {
-        text("No reminders yet.", 20, 20, INK);
-        text("Press a to add one.", 20, 44, DIM);
+        text("No reminders yet.", 20, 40, INK);
+        text("Press a to add one.", 20, 64, DIM);
         return;
     }
-    text("up/down to pick   space toggles done   d deletes   a adds   esc closes", 20, 20, DIM);
+    {   char t[96];
+        fit(t, "up/down to pick   space toggles done   d deletes   a adds   esc closes", (int)win.width - 40, (int)sizeof t);
+        text(t, 20, 36, DIM);
+    }
     int v = visible_rows();
     for (int i = top; i < count && i < top + v; i++) {
         int y = ROW_Y + (i - top) * ROW_H;
         if (i == sel) rect(16, y - 4, (int)win.width - 32, 20, SEL);
         text(list[i].done ? "[x]" : "[ ]", 28, y, list[i].done ? GREEN : INK);
-        text(list[i].text, 60, y, list[i].done ? GREY : INK);
+        {   char t[TEXT_N + 4];
+            fit(t, list[i].text, (int)win.width - 60 - 24, (int)sizeof t);
+            text(t, 60, y, list[i].done ? GREY : INK);
+        }
     }
 }
 
