@@ -1,14 +1,29 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Joshua Tree 2.0 ad</title>
+<html lang="en"><head><meta charset="utf-8"><title>Joshua Tree 2.0 and the Strata Kit, in 3D</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="The 30 second Joshua Tree 2.0 ad, running live in your browser. Click or press space to pause, drag the bar to scrub.">
+<meta name="theme-color" content="#f1ead8">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
 <style>
 html,body{margin:0;background:#f1ead8;overflow:hidden;height:100%}
+#frame{position:fixed;left:50%;top:50%;width:min(100vw,calc(100vh*16/9));aspect-ratio:16/9;transform:translate(-50%,-50%);overflow:hidden;cursor:pointer}
 #stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
 canvas{position:absolute;left:0;top:0;width:1920px;height:1080px}
+#bar{position:fixed;left:0;right:0;bottom:0;height:28px;display:flex;align-items:flex-end;cursor:pointer;touch-action:none}
+#bar i{display:block;height:3px;width:100%;background:rgba(22,21,19,.18);position:relative}
+#bar b{position:absolute;left:0;top:0;bottom:0;width:0;background:#b4623c}
+#bar:hover i,#bar.drag i{height:6px}
+#state{position:fixed;right:14px;top:12px;font:500 13px -apple-system,Helvetica,Arial,sans-serif;color:#161513;opacity:0;transition:opacity .2s;pointer-events:none}
+#state.on{opacity:.7}
+#back{position:fixed;left:14px;top:12px;font:500 13px -apple-system,Helvetica,Arial,sans-serif;color:#161513;text-decoration:none;opacity:.7}
+#back:hover{opacity:1}
+body.cap #bar,body.cap #state,body.cap #back{display:none}
 </style>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js"}}</script>
 </head><body>
-<div id="stage"><canvas id="c3" width="1920" height="1080"></canvas><canvas id="c2" width="1920" height="1080"></canvas></div>
+<a id="back" href="../">Joshua Tree</a><div id="state" aria-live="polite"></div>
+<div id="frame" role="img" aria-label="The Joshua Tree 2.0 ad. Click or press space to pause."><div id="stage"><canvas id="c3" width="1920" height="1080"></canvas><canvas id="c2" width="1920" height="1080"></canvas></div></div>
+<div id="bar" role="slider" aria-label="Scrub the ad" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0" tabindex="0"><i><b id="prog"></b></i></div>
 <script type="module">
 import * as THREE from 'three';
 import {STLLoader} from './vendor/STLLoader.js';
@@ -43,7 +58,7 @@ const THICK=[9,9,12,8.5,10.5,9],GAP=2,BASE_W=224,STEP=1.5;
 const zs=[];{let z=0;for(let i=0;i<6;i++){zs.push(z);z+=THICK[i]+GAP}}
 const STACK_TOP=zs[5]+THICK[5]+GAP;
 const loader=new STLLoader();
-const load=n=>new Promise(r=>loader.load('../../docs/hardware/stl/'+n+'.stl',r));
+const load=n=>new Promise(r=>loader.load('stl/'+n+'.stl',r));
 function add(geo,mat,pos,scale,kind,ring){
  const g=new THREE.Group();const m=new THREE.Mesh(geo,mat);
  const e=new THREE.LineSegments(new THREE.EdgesGeometry(geo,28),lineMat);
@@ -264,9 +279,31 @@ async function render(t){
  render2(t);
 }
 window.__ad={duration:DUR,fps:30,ready:Promise.all([ready,imgReady]),render:async t=>{await render(t);return true}};
-function fit(){const s=Math.min(innerWidth/W,innerHeight/H);document.getElementById('stage').style.transform=`scale(${s})`}
+const frame=document.getElementById('frame');
+function fit(){const s=frame.clientWidth/W;document.getElementById('stage').style.transform=`scale(${s})`}
 fit();addEventListener('resize',fit);
 const q=new URLSearchParams(location.search);
-if(q.has('t'))render(parseFloat(q.get('t')));
-else{(async()=>{await ready;await imgReady;const t0=performance.now();const f=()=>{const t=((performance.now()-t0)/1000)%DUR;render(t);requestAnimationFrame(f)};f()})()}
+if(q.has('t')){document.body.classList.add('cap');render(parseFloat(q.get('t')))}
+else{(async()=>{
+ await ready;await imgReady;
+ const bar=document.getElementById('bar'),prog=document.getElementById('prog'),st=document.getElementById('state');
+ const still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+ let pos=still?2.2:0,playing=!still,last=performance.now(),busy=false,drag=false;
+ const note=m=>{st.textContent=m;st.classList.add('on');clearTimeout(note.h);note.h=setTimeout(()=>st.classList.remove('on'),1200)};
+ const draw=async()=>{if(busy)return;busy=true;try{await render(pos)}finally{busy=false}
+  prog.style.width=(pos/DUR*100)+'%';bar.setAttribute('aria-valuenow',pos.toFixed(1))};
+ const toggle=()=>{playing=!playing;last=performance.now();note(playing?'Playing':'Paused')};
+ const seek=e=>{const r=bar.getBoundingClientRect();pos=Math.min(DUR-0.001,Math.max(0,(e.clientX-r.left)/r.width*DUR));draw()};
+ frame.addEventListener('click',toggle);
+ addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();toggle()}
+  else if(e.key==='ArrowRight'){pos=Math.min(DUR-0.001,pos+2);draw()}else if(e.key==='ArrowLeft'){pos=Math.max(0,pos-2);draw()}});
+ bar.addEventListener('pointerdown',e=>{drag=true;bar.classList.add('drag');bar.setPointerCapture(e.pointerId);seek(e)});
+ bar.addEventListener('pointermove',e=>{if(drag)seek(e)});
+ bar.addEventListener('pointerup',()=>{drag=false;bar.classList.remove('drag')});
+ const f=now=>{const dt=(now-last)/1000;last=now;
+  if(playing&&!drag&&!document.hidden){pos=(pos+Math.min(dt,0.25))%DUR;draw()}
+  requestAnimationFrame(f)};
+ draw();requestAnimationFrame(f);
+ window.__adLive={get t(){return pos}};
+})()}
 </script></body></html>

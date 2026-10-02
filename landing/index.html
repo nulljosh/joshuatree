@@ -456,6 +456,7 @@
   .plate-cap a#samantha-boot-link { color: var(--accent2); text-decoration: none; font-weight: 600; }
   .plate-cap a#samantha-boot-link:hover { text-decoration: underline; }
   .ad-video, .strata-img { display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--border); margin: 28px auto 0; background: var(--card); }
+  .ad-video { aspect-ratio: 16 / 9; object-fit: cover; }
   .strata-link { display: block; }
   .strata-cap a { color: var(--accent2); text-decoration: none; font-weight: 600; }
   .strata-cap a:hover { text-decoration: underline; }
@@ -743,8 +744,8 @@
       <button type="submit" id="waitlist-submit">Notify me</button>
     </form>
     <p class="waitlist-status" id="waitlist-status" role="status" aria-live="polite"></p>
-    <video class="ad-video" controls preload="none" playsinline poster="ad-poster.jpg" aria-label="A 36 second ad for Joshua Tree"><source src="https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4" type="video/mp4"></video>
-    <p class="strata-cap">The 36 second version.</p>
+    <video class="ad-video" id="ad-video" controls muted loop playsinline preload="none" width="1280" height="720" poster="ad-poster.jpg" aria-label="The 30 second ad for Joshua Tree 2.0 and the Strata Kit"><source src="ad.mp4" type="video/mp4"></video>
+    <p class="strata-cap">The 30 second version. Every app protected. <a class="strata-more" href="/ad/">Explore it in 3D</a>.</p>
     <a class="strata-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md"><img class="strata-img" src="strata-hero.jpg" alt="A render of Strata, the case for the Joshua Tree board" width="1200" height="750" loading="lazy"></a>
     <p class="strata-cap">Strata, the case. A concept for now, not for sale yet. <a class="strata-more" href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md">See the plans</a>.</p>
   </div>
@@ -1127,6 +1128,21 @@
       button.disabled = false;
     });
   });
+})();
+</script>
+<script>
+(function () {
+  var v = document.getElementById("ad-video");
+  if (!v || !("IntersectionObserver" in window)) return;
+  var c = navigator.connection || {};
+  if (c.saveData || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  var io = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (e.isIntersecting && e.intersectionRatio >= 0.5) { v.preload = "auto"; var p = v.play(); if (p && p.catch) p.catch(function () {}); }
+      else if (!v.paused) v.pause();
+    });
+  }, { threshold: [0, 0.5] });
+  io.observe(v);
 })();
 </script>
 <script src="v86/libv86.js"></script>

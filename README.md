@@ -2,6 +2,10 @@
 
 # Joshua Tree
 
+[![Watch the 30 second ad](landing/ad-poster.jpg)](https://joshuatree.heyitsmejosh.com/ad/)
+
+[Watch the 30 second ad](https://joshuatree.heyitsmejosh.com/ad/), live in 3D in your browser.
+
 ![version](https://img.shields.io/github/v/release/nulljosh/joshuatree?label=version&color=blue)
 ![ci](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/check.yml?event=pull_request&label=ci)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
@@ -11,8 +15,6 @@ A whole computer, built from scratch: its own windows, dock, fonts, sound, inter
 **Try it in your browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 
 You can talk to it. Ask Samantha to set a reminder, take a note or open an app, and she answers out loud. (She is the assistant from [Turing](https://github.com/nulljosh/turing). Joshua Tree is the machine she runs.)
-
-[![Joshua Tree ad, 36 seconds. Click to play.](docs/hardware/ad-poster.jpg)](https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4)
 
 ## Boot it
 

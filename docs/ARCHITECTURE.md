@@ -354,6 +354,18 @@ when the built kernel actually changes. `tools/qa-demo.sh` records a
 headless tour of the desktop to video. `tools/voice-control.sh` lets you
 speak a shell command into a running instance through Whisper and Ollama.
 
+The ad lives in `landing/ad/` and plays live from the same clock the video was captured from.
+
+| File | What it does |
+|---|---|
+| `landing/ad/index.html` | The Joshua Tree 2.0 and Strata Kit promo, one self-contained page. A single clock function maps t to every camera and scene state: the real Strata STLs as an engraved-ink three.js case that explodes ring by ring, a 2D dive through the board, chip and die, a glyph field resolving into the 26 apps each in its own thin-walled box, one pixel growing into the real desktop with Samantha's face frames, then the 2.0 mark and end card. Exposes `window.__ad = {duration, render(t)}` and a `?t=` query for stills. |
+| `landing/ad/vendor/three.module.min.js` | Vendored three.js r160 (pinned, MIT) so the ad has no runtime network dependency. |
+| `landing/ad/vendor/STLLoader.js` | Vendored three.js r160 STLLoader (MIT), loads the real Strata parts. |
+| `landing/ad/stl/*.stl` | Copies of the `docs/hardware/stl` parts, so the live ad page loads them from its own folder on the deployed site. Re-copy them if a part changes. |
+| `tools/ad-capture.mjs` | Deterministic capture for the ad: serves the repo, steps `window.__ad.render(t)` frame by frame in headless Chromium across parallel workers, writes PNG frames or stills; ffmpeg encodes them to h264. |
+| `landing/ad.mp4` | The web cut of the ad: 1280x720 h264, 3 MB, no audio, played on the landing page. Encoded from the 1080p capture with ffmpeg. |
+| `landing/ad-poster.jpg` | Poster frame for the ad video, a still of the exploded case. |
+
 ## Where to go next
 
 - `docs/BENCHMARKS.md` for how fast it is, and `tools/bench.sh` to measure it yourself.
@@ -361,7 +373,3 @@ speak a shell command into a running instance through Whisper and Ollama.
 - `docs/SYSCALL-ABI.md` if you want to write a program for it.
 - `docs/BLUEPRINT.md` for the plan after 1.0: apps as real processes and a window server.
 - `docs/THREAT-MODEL.md` for what the login screen does and does not protect.
-| `landing/ad/index.html` | The Joshua Tree 2.0 and Strata Kit promo, one self-contained page. A single clock function maps t to every camera and scene state: the real Strata STLs as an engraved-ink three.js case that explodes ring by ring, a 2D dive through the board, chip and die, a glyph field resolving into the 26 apps each in its own thin-walled box, one pixel growing into the real desktop with Samantha's face frames, then the 2.0 mark and end card. Exposes `window.__ad = {duration, render(t)}` and a `?t=` query for stills. |
-| `landing/ad/vendor/three.module.min.js` | Vendored three.js r160 (pinned, MIT) so the ad has no runtime network dependency. |
-| `landing/ad/vendor/STLLoader.js` | Vendored three.js r160 STLLoader (MIT), loads the real `docs/hardware/stl` parts. |
-| `tools/ad-capture.mjs` | Deterministic capture for the ad: serves the repo, steps `window.__ad.render(t)` frame by frame in headless Chromium across parallel workers, writes PNG frames or stills; ffmpeg encodes them to h264. |

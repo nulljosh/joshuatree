@@ -1,6 +1,6 @@
 # Assembling the Strata Kit
 
-You have the printed parts, a board, a power supply and a bag of screws. This takes about 45 minutes. A one-page picture version is in [`BUILD.md`](BUILD.md). Nothing here needs a special tool.
+You have the printed parts, a board, a power supply and a bag of screws. This takes about 45 minutes. A one-page picture version is in [`BUILD.md`](BUILD.md). Nothing here needs a special tool. If you want to see it go together first, the [30 second ad](https://joshuatree.heyitsmejosh.com/ad/) runs live in 3D.
 
 The parts come from `strata_cad.py`. Every STL is in `stl/`, and `stl/manifest.json` lists how many of each to print. The whole machine is one stack: four rods hold a ring sandwich together, a tray sits in the middle, the board sits in the tray.
 
