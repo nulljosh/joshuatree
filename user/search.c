@@ -82,6 +82,7 @@ static void glyph(unsigned char ch, int x, int y, unsigned fg) {
         }
 }
 static void text(const char *s, int x, int y, unsigned fg) {
+    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
     for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
 }
 static int utoa10(unsigned v, char *buf) {
@@ -156,12 +157,13 @@ static int rows_fit(void) {
 /* Chrome drawn once per screen: the hint line never changes while typing. */
 static void draw_chrome(void) {
     rect(0, 0, (int)win.width, (int)win.height, BG);
-    text("type to filter   up/down to pick   enter opens   esc closes", 20, 20, HINT);
 }
 
 /* Only the query box and the result list, the chrome/content split the
    in-kernel copy had so filtering as you type never repaints everything. */
 static void draw_content(void) {
+    jt_text_clear();
+    text("type to filter   up/down to pick   enter opens   esc closes", 20, 20, HINT);
     int w = (int)win.width;
     rect(20, BOX_Y, w - 40, 20, WHITE);
     query[qlen] = 0;
@@ -197,6 +199,7 @@ static void path_join(char *out, const char *leaf) {
 static void show_file(const char *name) {
     char path[JT_PATH_MAX + 1];
     path_join(path, name);
+    jt_text_clear();
     says("search: open ", path);
     int n = -1;
     int fd = jt_open(path, JT_O_RDONLY);
@@ -222,21 +225,14 @@ static void show_file(const char *name) {
             head[h] = 0;
             says("search: head ", head);
         }
-        int right = 20 + (((int)win.width - 40) / 8) * 8, x = 20, y = 44, bottom = (int)win.height - 40;
-        int i = 0;
-        while (filebuf[i] && y + 16 <= bottom) {
-            char c = filebuf[i];
-            if (c == '\r') { i++; continue; }
-            if (c == '\n') { x = 20; y += 18; i++; continue; }
-            if (c == ' ') { x += 8; i++; if (x + 8 > right) { x = 20; y += 18; } continue; }
-            int wl = 0;
-            while (filebuf[i + wl] && filebuf[i + wl] != ' ' && filebuf[i + wl] != '\n' && filebuf[i + wl] != '\r') wl++;
-            if (x > 20 && x + wl * 8 > right) { x = 20; y += 18; } /* a word that fits on a fresh line moves there whole */
-            for (int k = 0; k < wl && y + 16 <= bottom; k++) {
-                if (x + 8 > right) { x = 20; y += 18; if (y + 16 > bottom) break; } /* longer than a line: cut it */
-                glyph((unsigned char)filebuf[i + k], x, y, INK); x += 8;
-            }
-            i += wl;
+        int i = 0, y = 44, bottom = (int)win.height - 40;
+        while (filebuf[i] && y + 16 <= bottom) {   /* one wrapped paragraph per file line */
+            char ln[256]; int n = 0;
+            while (filebuf[i] && filebuf[i] != '\n' && n < 255) { if (filebuf[i] != '\r') ln[n++] = filebuf[i]; i++; }
+            ln[n] = 0;
+            if (filebuf[i] == '\n') i++;
+            int used = jt_wrap(ln, 20, y, (int)win.width - 40, 18, (bottom - 16 - y) / 18 + 1, INK);
+            y += (used ? used : 1) * 18;
         }
     }
     text("esc or click to go back", 20, (int)win.height - 30, HINT);

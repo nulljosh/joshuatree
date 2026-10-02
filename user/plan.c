@@ -65,6 +65,7 @@ static void glyph(unsigned char ch, int x, int y, unsigned fg) {
     }
 }
 static void text(const char *s, int x, int y, unsigned fg) {
+    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
     for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
 }
 static int utoa10(unsigned v, char *buf) {
@@ -75,20 +76,13 @@ static int utoa10(unsigned v, char *buf) {
     return n;
 }
 
-/* Greedy word wrap by 8px cells, same idea as render_wrapped_text. */
+/* Word wrap on the real advance (jt_wrap), breaking only at spaces. */
 static void pl_wrap(const char *s, int x, int y, int w, int ymax, unsigned fg) {
-    int cols = w / 8;
-    while (*s && y + 16 <= ymax) {
-        while (*s == ' ') s++;
-        int n = 0, brk = -1;
-        while (s[n] && n < cols) { if (s[n] == ' ') brk = n; n++; }
-        if (s[n] && brk > 0) n = brk;
-        for (int i = 0; i < n; i++) glyph((unsigned char)s[i], x + i * 8, y, fg);
-        s += n; y += 20;
-    }
+    if (y + 16 <= ymax) jt_wrap(s, x, y, w, 20, (ymax - 16 - y) / 20 + 1, fg);
 }
 
 static void pl_draw(void) {
+    jt_text_clear();
     rect(0, 0, (int)win.width, (int)win.height, BG);
     for (int i = 0; i < PL_COUNT; i++) {
         int y = PL_TOP + i * PL_ITEM_H;

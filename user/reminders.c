@@ -74,6 +74,7 @@ static void glyph(unsigned char ch, int x, int y, unsigned fg) {
         }
 }
 static void text(const char *s, int x, int y, unsigned fg) {
+    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
     for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
 }
 static int utoa10(unsigned v, char *buf) {
@@ -151,6 +152,7 @@ static int visible_rows(void) {
 }
 
 static void draw(void) {
+    jt_text_clear();
     rect(0, 0, (int)win.width, (int)win.height, BG);
     if (adding) {
         text("type the reminder, enter adds, esc cancels:", 20, 20, HINT);

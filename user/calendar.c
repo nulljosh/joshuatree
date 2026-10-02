@@ -150,9 +150,10 @@ static void glyph(unsigned char ch, int x, int y, unsigned fg) {
             if (g[r] & (0x80 >> c)) put(x + c, y + r, fg);
 }
 static void text(const char *s, int x, int y, unsigned fg) {
+    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
     for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
 }
-static int text_w(const char *s) { int n = 0; while (*s++) n++; return n * 8; }
+static int text_w(const char *s) { int w = jt_text(s, 0, 0, 0, JT_TEXT_MEASURE); if (w >= 0) return w; int n = 0; while (*s++) n++; return n * 8; }
 /* The Year view's digits: the same glyph at half size (4x8), each output
    pixel the OR of a 2x2 block so thin strokes survive. */
 static void glyph_half(unsigned char ch, int x, int y, unsigned fg) {
@@ -178,23 +179,10 @@ static void capsule(int x0, int x1, int cy, int r, unsigned c) {
     fill_circle(x0, cy, r, c);
     fill_circle(x1, cy, r, c);
 }
-/* Word-wrapped text in the 8x16 font, 18px lines, clipped to w by h. */
+/* Word-wrapped text on the real advance, 18px lines, clipped to w by h. */
 static void wrapped(const char *s, int x, int y, int w, int h, unsigned fg) {
-    int cols = w / 8, lines = h / 18;
-    if (cols < 1 || lines < 1) return;
-    for (int line = 0; *s && line < lines; line++) {
-        int len = 0; /* characters of s that go on this line: whole words while they fit */
-        for (;;) {
-            int wl = 0; while (s[len + wl] && s[len + wl] != ' ') wl++;
-            if (len && len + 1 + wl > cols) break;
-            if (!len && wl > cols) wl = cols;
-            len = len ? len + 1 + wl : wl;
-            if (!s[len]) break;
-        }
-        for (int i = 0; i < len; i++) glyph((unsigned char)s[i], x + i * 8, y + line * 18, fg);
-        s += len;
-        while (*s == ' ') s++;
-    }
+    if (w < 8 || h < 18) return;
+    jt_wrap(s, x, y, w, 18, h / 18, fg);
 }
 
 /* ---- small string builders, no libc ---- */
@@ -467,6 +455,7 @@ static void draw_year(void){
 }
 
 static void draw(void){
+    jt_text_clear();
     rect(0, 0, (int)win.width, (int)win.height, BG);
     if (editing) {
         char ds[CAL_DATE_LEN + 1]; cal_date_str(vy, vm, sel_d, ds);
