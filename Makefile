@@ -324,7 +324,7 @@ user/mail.bin: user/mail.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/mail.o user/libjt.a
 
 # Samantha's chat window as a ring-3 program (slice 2; opens only under the ring3samantha cmdline flag).
-user/samantha.o: user/samantha.c user/jtsys.h user/libjt/text.h
+user/samantha.o: user/samantha.c user/samantha_face.h user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/samantha.bin: user/samantha.o user/libjt.a user/note.ld
