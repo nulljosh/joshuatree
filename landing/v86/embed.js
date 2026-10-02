@@ -109,7 +109,8 @@ if (typeof document !== "undefined") (function () {
   // e.g. whether the backdoor probe found v86's vmmouse and whether an
   // absolute packet really arrived, not just whether the page sent one.
   var serialLog = "";
-  var speakCount = 0, lastSpeakBytes = 0; // every "speak: status=200 bytes=N" line, counted as it arrives (serialLog stops growing at 64KB)
+  var toolCounts = {}; // every "chattool=<tool>:" line, counted as it arrives, so a check never depends on the window still holding it
+  var speakCount = 0, lastSpeakBytes = 0; // every "speak: status=200 bytes=N" line, counted as it arrives (serialLog is a head+rolling-tail window, see the serial0 listener)
   // v0.73.5: fetched once and reused by the idle tour's reboot sequence
   // below (see the comment above the reboot block in tourLoop) to
   // re-inject the kernel image after each lap's reset_memory(); this
@@ -513,17 +514,40 @@ if (typeof document !== "undefined") (function () {
     // and necessary: the serial log starts at the first boot byte, and the
     // kernel enables the backdoor a few ms into boot, long before ready.
     emulator.add_listener("vmware-absolute-mouse", function (on) { absoluteMouse = !!on; });
+    // 2.0.0: the guest fetching through /api/proxy is an app at work (Samantha's
+    // 72 face frames take longer than 15s to arrive and need no click), so it
+    // counts as the visitor still being here. Without this the kiosk reset
+    // below rebooted the demo mid-load, every time, with no kernel fault at all
+    // (docs/wip/samantha-reset.md). v86's "fetch" relay goes through window.fetch.
+    if (typeof window.fetch === "function" && !window.__jtFetchWrapped) {
+      var realFetch = window.fetch.bind(window);
+      window.__jtFetchWrapped = true;
+      window.fetch = function (input, init) {
+        var u = typeof input === "string" ? input : (input && input.url) || "";
+        if (u.indexOf("/api/proxy") !== -1) lastInteractionTime = Date.now();
+        return realFetch(input, init);
+      };
+    }
     var serialLine = "";
     emulator.add_listener("serial0-output-byte", function (b) {
-      if (serialLog.length < 65536) serialLog += String.fromCharCode(b);
+      // Head + rolling tail: the first 16KB (boot probes) are kept forever, the
+      // rest is a window over the newest ~48-112KB. A hard 64KB cap used to
+      // freeze the log mid-boot on the syscall trace, so every later
+      // chattool=/chatreply= marker never appeared.
+      serialLog += String.fromCharCode(b);
+      if (serialLog.length > 131072) serialLog = serialLog.slice(0, 16384) + serialLog.slice(-49152);
       // Samantha answering or speaking counts as the visitor still being
       // here: without this the 15s kiosk reset rebooted the demo in the
       // middle of her spoken reply, since listening involves no clicks.
       if (b === 10) {
-        var m = /^speak: status=200 bytes=(\d+)/.exec(serialLine);
+        var m = /^(?:syscall: write\(1\) from ring 3: )?speak: status=200 bytes=(\d+)/.exec(serialLine); // ring-3 Samantha's writes arrive behind the kernel's syscall trace prefix
         if (m) { speakCount++; lastSpeakBytes = Number(m[1]); }
         if (m) lastInteractionTime = Date.now() + Math.ceil(Number(m[1]) / 16); // 16000 samples/s = 16 per ms
-        else if (/^chatreply=|^chattool=/.test(serialLine)) lastInteractionTime = Date.now();
+        else if (/^(?:syscall: write\(1\) from ring 3: )?(?:chatreply=|chattool=)/.test(serialLine)) {
+          lastInteractionTime = Date.now();
+          var tm = /^(?:syscall: write\(1\) from ring 3: )?chattool=([a-z_]+):/.exec(serialLine);
+          if (tm) toolCounts[tm[1]] = (toolCounts[tm[1]] || 0) + 1;
+        }
         serialLine = "";
       } else if (b !== 13 && serialLine.length < 80) serialLine += String.fromCharCode(b);
     });
@@ -929,6 +953,7 @@ if (typeof document !== "undefined") (function () {
     get mouseOn() { return !!(emulator && emulator.mouse_adapter && emulator.mouse_adapter.emu_enabled); },
     get absolute() { return absoluteMouse; }, /* v62: did the kernel enable v86's vmmouse backdoor */
     get serial() { return serialLog; },
+    get toolCounts() { return toolCounts; }, /* demochat-check.mjs: running count per chattool=<tool>: marker, immune to the serial window rolling */
     get started() { return !!emulator || emulatorStarting; }, /* v0.82.x: true once startEmulator() has actually run (construction kicked off, not necessarily finished) -- lets a check script tell "gated, not yet started" apart from "started", the real signal lazy-boot-check.mjs asserts on */
     get audioState() { return emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context ? emulator.speaker_adapter.audio_context.state : "no-speaker-adapter"; }, /* mobile-audio-check.mjs: real iPhone AudioContext unlock state, no ?audiodebug flag needed */
     get audioDebug() { return audioDebugState; }, /* mobile-audio-check.mjs: chunkCount/lastLevel from the dac-send-data hook, only populated under ?audiodebug */
@@ -1361,27 +1386,6 @@ if (typeof document !== "undefined") (function () {
   // at the time, not a simulated multi-window fake this kernel couldn't
   // actually do.
   //
-  // STALE AS OF v0.73.0-v0.75.0: real multi-window shipped (gui_multiwin_*
-  // in kernel.c, GUI_MULTIWIN_MAX=2, real click-to-focus/z-order,
-  // tools/checks/multiwindow-check.py). Direct report (Sep 2026): the
-  // landing header now says "Introducing Multi-Window." but this tour
-  // still only ever showed one window at a time, closing each before the
-  // next opened -- the header claimed a real capability the demo never
-  // actually demonstrated. multiWindowRound() below (added the same pass)
-  // fixes that for the 3 dock apps that are genuinely multi-window
-  // capable in this kernel (Files/Weather/Reminders; see
-  // gui_multiwin_supported in kernel.c) by opening two of them together,
-  // without closing the first, and driving the exact real click-to-focus
-  // switch tools/checks/multiwindow-check.py already proves against the
-  // real kernel. GUI_MULTIWIN_MAX is a real, current cap of 2 concurrent
-  // windows, not 3 -- this tour never asks for a 3rd, since the kernel
-  // itself has no 3rd slot to give it. TOUR_APPS below keeps only the
-  // genuinely single-window-only apps (Notes/Terminal/Chat; confirmed via
-  // gui_multiwin_supported returning false for their icons) plus Mail and
-  // Calendar solo (real multiwin apps too, but shown one at a time here
-  // since the 2-window slots are spent on the Files/Weather/Reminders
-  // rounds -- still real, just not simultaneous in every lap).
-  //
   // Only the 8 apps really pinned to the dock (GUI_DOCK_DEFAULT in
   // kernel.c: Files, Mail, Calendar, Notes, Reminders, Terminal, Chat,
   // Weather) are toured. Every one of them gets real window chrome,
@@ -1433,7 +1437,7 @@ if (typeof document !== "undefined") (function () {
   // is keyboard-only below, using exactly the keys each app's own loop
   // actually reads (confirmed per app in kernel.c/mail.h/calendar.h/
   // reminders.h before scripting it, not guessed): typed text for
-  // Notes/Chat/Terminal (unchanged since v51), 'c' + three Enter-
+  // Notes/Chat/Terminal (unchanged since v51), 'c' + four Enter-
   // confirmed fields for Mail's real compose flow, 'd'/']'/Enter for
   // Calendar's real month/day navigation and event-add (a real day
   // still can't be CLICKED in this kernel, there is no per-cell hit test
@@ -1452,7 +1456,7 @@ if (typeof document !== "undefined") (function () {
   // cutting DWELL_MS well below, so the whole loop is still a quick,
   // repeating sample rather than either extreme.
   // Mail and Calendar pulled out to named vars (not TOUR_APPS entries)
-  // so tourLoop can interleave them with the multi-window rounds instead
+  // so tourLoop can order them freely instead
   // of running the whole array as one block after both rounds -- direct
   // feedback that leading with pure window-management read as "not much
   // interaction". TOUR_APPS keeps only the genuinely single-window-only
@@ -1461,11 +1465,15 @@ if (typeof document !== "undefined") (function () {
   var MAIL_APP = { name: 'Mail', slot: 2, script: [
     { type: 'keys', text: 'c', speed: 200 },
     { type: 'wait', ms: 500 },
-    { type: 'keys', text: 'demo@joshuatree.os\n', speed: 55 },
+    { type: 'keys', text: 'demo@jt.os\n', speed: 130 },
     { type: 'wait', ms: 350 },
-    { type: 'keys', text: 'A real OS, from scratch.\n', speed: 55 },
+    { type: 'keys', text: 'Joshua Tree\n', speed: 130 }, // From name
     { type: 'wait', ms: 350 },
-    { type: 'keys', text: 'Every field here really writes to disk.\n', speed: 55 }
+    { type: 'keys', text: 'From scratch.\n', speed: 130 }, // Subject
+    { type: 'wait', ms: 350 },
+    { type: 'keys', text: 'Written to disk.\n', speed: 130 }, // Body; Enter on the last field sends and files it (mail: filed n=)
+    { type: 'wait', ms: 2500 },
+    { type: 'raw', codes: [27], speed: 80 } // Escape backs out of the inline compose sheet if it is still up; the scene's own Escape then closes Mail
   ] };
   var CALENDAR_APP = { name: 'Calendar', slot: 3, script: [
     { type: 'keys', text: 'dd', speed: 400 }, // step forward two months, a real render each time
@@ -1540,122 +1548,97 @@ if (typeof document !== "undefined") (function () {
   // sentence -- only the delivery differs (see phoneSamanthaIntro's own
   // comment for why phone skips the leading 'n').
   var SAMANTHA_REMINDER_LINE = 'remind me to call mom at 5';
-  var TOUR_APPS = [
-    { name: 'Notes', slot: 4, dwell: 15500, script: [ // +2.5s over the pre-1.2.0 13000 for the new select/copy/clear beat below
-      { type: 'keys', text: 'Kernel, GUI, browser, terminal, and a dozen real apps, none of it borrowed.', speed: 55 },
-      { type: 'wait', ms: 500 },
-      // v1.2.0: select the last word ("borrowed.", 9 characters incl. the
-      // period) with real Shift+Left presses, the same highlight
-      // tools/checks/textselect-check.py proves against the kernel
-      // itself -- a beat with it visibly selected, a real Ctrl+C, then
-      // Escape clears the selection before the drag below (kernel/
-      // editor.h: a plain nav key or Escape both clear it; Escape here
-      // is a deliberate clear, not "close the app", since the selection
-      // is still active when it's sent).
-      { type: 'scancodes', codes: shiftLeftTimes(9), speed: 90 },
-      { type: 'wait', ms: 700 },
-      { type: 'scancodes', codes: CTRL_C_CODES, speed: 90 },
-      { type: 'wait', ms: 300 },
-      { type: 'raw', codes: [27], speed: 80 }, // Escape: clears the selection
-      { type: 'wait', ms: 400 },
-      { type: 'drag', from: [NOTES_TITLE_X, NOTES_TITLE_Y], to: [NOTES_TITLE_X + NOTES_DRAG_DX, NOTES_TITLE_Y + NOTES_DRAG_DY], steps: 8, ms: 600 },
-      { type: 'wait', ms: 900 },
-      // Drag it back: the press point is wherever the pointer already is
-      // (the moved title band, now at x>=200 since the window itself
-      // moved by NOTES_DRAG_DX), the same real click-to-arm gesture, run
-      // in reverse so the window (and its close light) lands back at its
-      // original rect for the close click at the end of runSoloApp.
-      { type: 'drag', from: [NOTES_TITLE_X + NOTES_DRAG_DX, NOTES_TITLE_Y + NOTES_DRAG_DY], to: [NOTES_TITLE_X, NOTES_TITLE_Y], steps: 8, ms: 600 },
-      { type: 'wait', ms: 500 }
-    ] },
-    { name: 'Terminal', slot: 6, script: [
-      // Real shell commands (see run() in kernel.c). Root cause of the old
-      // garbage-typing: dockSlotPos() still assumed a 10-tile dock after
-      // Stocks became the 11th pinned tile, so every tour click landed
-      // about half a tile off, opening the wrong app and typing each
-      // app's script into its neighbour (Reminders text into Terminal).
-      { type: 'keys', text: 'ls\n', speed: 55 },
-      { type: 'wait', ms: 900 },
-      { type: 'keys', text: 'echo hello from joshua tree\n', speed: 55 },
-      { type: 'wait', ms: 700 },
-      { type: 'keys', text: 'uptime\n', speed: 55 }
-    ] },
-    // v0.76.11: real bug found and fixed here, present since v51 and never
-    // actually looked at on screen (per the v71 rework's own header
-    // comment: "Notes/Chat's typed text was never actually screenshotted
-    // mid-dwell in any prior pass"). Sending the raw string straight into
-    // Chat's OUTER inbox view (no leading 'n') let two of its own letters
-    // get read as real commands mid-string: the kernel's gui_launch_chat_app
-    // only recognizes bare 'n' (compose) and 'c' (clear history) at that
-    // screen -- "what CAN you do?" hits 'c' first (chat_clear(), a real,
-    // unintended side effect on every single tour lap) then immediately
-    // 'n' (enters the compose prompt), silently swallowing every character
-    // typed after that point ("you do?") as if it were a real draft, not
-    // display text. Confirmed live: a real screenshot after this exact
-    // script showed the compose prompt open with "you do" typed into it,
-    // never the intended on-screen text. Real fix: press 'n' FIRST (a
-    // clean, deliberate entry into the compose prompt, where every
-    // character just appends to the buffer -- no collision risk once
-    // inside it), then type the real sentence.
-    //
-    // 1.0.12 (direct owner request, "hook Chat up to our Samantha LLM"):
-    // the trailing Escape here used to be deliberate -- this embed had no
-    // NIC route to a real LLM host, so completing an actual send was never
-    // safe to attempt, and cancelling out was the only honest option. Now
-    // that kernel.c's own llm_host/llm_port default to the Turing project's
-    // real Cloudflare Worker (turing.heyitsmejosh.com) and worker.js's
-    // /api/proxy carries a tight POST exception for exactly that host+path
-    // (v86's own fetch relay turns the guest's plain-HTTP request into a
-    // real, same-origin, server-to-server fetch, same as every other proxied
-    // request this demo already makes), a real send is real and safe: a
-    // trailing newline (gui_prompt_line_input's own "enter sends" contract,
-    // kernel/chat.h) submits it instead of cancelling. chat_send's real
-    // network round trip needs real wall-clock time to land before the app
-    // closes, so this entry overrides the default 7s dwell with a longer
-    // one (default + ~4s) on top of an explicit ~4s post-send wait, giving
-    // the reply room to actually render on screen rather than being
-    // interrupted mid-fetch by the tour's own close click.
-    // 1.2.0 (direct request, "Chat demos on the landing page and doesn't
-    // show much capability"): one "what can you do?" round trip just
-    // printed a wall of text about itself; a visitor never saw a single
-    // tool actually fire. This scene now asks Samantha to run four of the
-    // real local tools chat_run_tool (kernel/chat.h) implements -- a
-    // reminder, a note, the weather, today's calendar -- each a real
-    // /api/pick round trip through worker.js's proxy followed by a real,
-    // local, on-kernel action (no LLM needed for the action itself, only
-    // for deciding which tool a plain sentence names), then finishes by
-    // asking Chat to open another app, which really does close this
-    // window and hand off to Calculator (chat_run_tool's open_app case,
-    // gui_launch_from_dock's own again: relaunch) -- the natural way this
-    // scene ends, not a scripted close. Paced slower than the old single
-    // exchange on purpose (a real request each time, not a canned demo)
-    // so a visitor can actually read each line before the next one types.
-    // tools/checks/demochat-check.mjs intercepts /api/pick the same
-    // deterministic way it already intercepts /api/chat, so this exact
-    // sequence is asserted headless, not just eyeballed live.
-    { name: 'Samantha', slot: 7, dwell: 30000, script: [
-      { type: 'keys', text: 'n', speed: 200 },
-      { type: 'wait', ms: 400 },
-      { type: 'keys', text: SAMANTHA_REMINDER_LINE + '\n', speed: 55 },
-      { type: 'wait', ms: 3000 },
-      { type: 'keys', text: 'n', speed: 200 },
-      { type: 'wait', ms: 400 },
-      { type: 'keys', text: 'note: pick up dry cleaning\n', speed: 55 },
-      { type: 'wait', ms: 3000 },
-      { type: 'keys', text: 'n', speed: 200 },
-      { type: 'wait', ms: 400 },
-      { type: 'keys', text: "what's the weather like\n", speed: 55 },
-      { type: 'wait', ms: 3000 },
-      { type: 'keys', text: 'n', speed: 200 },
-      { type: 'wait', ms: 400 },
-      { type: 'keys', text: "what's on my calendar today\n", speed: 55 },
-      { type: 'wait', ms: 3000 },
-      { type: 'keys', text: 'n', speed: 200 },
-      { type: 'wait', ms: 400 },
-      { type: 'keys', text: 'open calculator\n', speed: 55 }, // closes Chat and opens Calculator -- the scene's own real ending, not a scripted close
-      { type: 'wait', ms: 1200 }
-    ] }
+  // 2.0 tour: every app is a ring-3 compositor window now, so a scene is
+  // just "click the dock tile, type or arrow around, press Escape". Escape
+  // closes a window, a click inside one never does (user/*.c poll loops), so
+  // runSoloApp ends every scene with a real Escape. Dock slots follow
+  // GUI_DOCK_DEFAULT in kernel.c: Apps, Burrow, Mail, Calendar, Notes,
+  // Reminders, Terminal, Samantha, Weather, Stocks, Trash. The other 17 apps
+  // live in the Apps folder and get a short beat each (APPS_FOLDER_TOUR).
+  var DOWN2 = downKeys(2);
+  function downKeys(n) { var c = []; for (var i = 0; i < n; i++) c = c.concat([0xE0, 0x50, 0xE0, 0xD0]); return c; }
+  var ENTER_KEY = { type: 'raw', codes: [13], speed: 80 };
+  var ESC_KEY = { type: 'raw', codes: [27], speed: 80 };
+  var BURROW_APP = { name: 'Burrow', slot: 1, dwell: 6500, script: [
+    { type: 'wait', ms: 700 },
+    // no arrow walk: Burrow lists folders first, so the cursor already sits on the demo's DOCS folder (kernel.c seeds it with two files)
+    ENTER_KEY, // open the folder under the cursor
+    { type: 'wait', ms: 1400 },
+    { type: 'keys', text: '2', speed: 200 }, // icon view
+    { type: 'wait', ms: 1200 },
+    { type: 'keys', text: '1', speed: 200 } // back to the list
+  ] };
+  var NOTES_APP = { name: 'Notes', slot: 4, dwell: 11000, script: [
+    { type: 'wait', ms: 600 },
+    { type: 'scancodes', codes: downKeys(1), speed: 300 }, // pick a folder
+    ENTER_KEY,
+    { type: 'wait', ms: 500 },
+    { type: 'keys', text: 'n', speed: 200 }, // a new note, filed in that folder
+    { type: 'wait', ms: 500 },
+    { type: 'keys', text: 'Kernel, GUI, browser, terminal, and a dozen real apps, none of it borrowed.', speed: 55 },
+    { type: 'wait', ms: 500 },
+    { type: 'scancodes', codes: shiftLeftTimes(9), speed: 90 }, // select the last word
+    { type: 'wait', ms: 700 },
+    { type: 'scancodes', codes: CTRL_C_CODES, speed: 90 },
+    { type: 'wait', ms: 300 },
+    ESC_KEY, // clears the selection, a second Escape leaves the editor
+    { type: 'wait', ms: 700 },
+    ESC_KEY,
+    { type: 'wait', ms: 900 }
+  ] };
+  var TERMINAL_APP = { name: 'Terminal', slot: 6, dwell: 6000, script: [
+    { type: 'wait', ms: 500 },
+    { type: 'keys', text: 'ls\n', speed: 55 },
+    { type: 'wait', ms: 900 },
+    { type: 'keys', text: 'echo hello from joshua tree\n', speed: 55 },
+    { type: 'wait', ms: 700 },
+    { type: 'keys', text: 'uptime\n', speed: 55 }
+  ] };
+  var REMINDERS_APP = { name: 'Reminders', slot: 5, dwell: 7000, script: [
+    { type: 'wait', ms: 500 },
+    { type: 'keys', text: 'a', speed: 200 },
+    { type: 'wait', ms: 500 },
+    { type: 'keys', text: 'Ship the demo tour rework\n', speed: 55 },
+    { type: 'wait', ms: 400 },
+    { type: 'keys', text: 'a', speed: 200 },
+    { type: 'wait', ms: 400 },
+    { type: 'keys', text: 'Real hardware port of the kernel\n', speed: 55 }
+  ] };
+  var WEATHER_APP = { name: 'Weather', slot: 8, dwell: 4500, script: [] };
+  var STOCKS_APP = { name: 'Stocks', slot: 9, dwell: 7500, script: [
+    { type: 'wait', ms: 1800 }, // live quotes land
+    { type: 'scancodes', codes: downKeys(3), speed: 450 }, // walk the watchlist
+    { type: 'wait', ms: 600 },
+    { type: 'scancodes', codes: [0xE0, 0x4D, 0xE0, 0xCD, 0xE0, 0x4D, 0xE0, 0xCD], speed: 500 } // widen the chart range
+  ] };
+  // Samantha is a ring-3 window: typed text lands straight in her input bar,
+  // no leading hotkey, Enter sends, Escape closes her.
+  var SAMANTHA_APP = { name: 'Samantha', slot: 7, dwell: 24000, script: [] }; // script filled per lap
+  var TOUR_APPS = [BURROW_APP, NOTES_APP, TERMINAL_APP, REMINDERS_APP, WEATHER_APP, STOCKS_APP, SAMANTHA_APP];
+  // The Apps folder: arrows walk the grid, Enter opens, Escape returns to the
+  // grid with the same tile selected, so one 'd' then Enter steps through the
+  // 18 slots after the dock's own eight. Stocks has its own dock scene.
+  var APPS_FOLDER_TOUR = [
+    { name: 'Curbfind', dwell: 1800 }, { name: 'Keyrate', dwell: 1800 }, { name: 'Bookrank', dwell: 1800 },
+    { name: 'Quotes', dwell: 1800 }, { name: 'Plan', dwell: 1800 }, { name: 'Lexly', dwell: 1800 },
+    { name: 'Toroid', dwell: 1800 }, { name: 'Sparkjar', dwell: 1800 },
+    { name: 'Fieldbook', dwell: 1800 }, { name: 'Contacts', dwell: 1800 }, { name: 'Calculator', dwell: 1800, keys: '12*7\n' },
+    { skip: 'Stocks' }, { name: 'Search', dwell: 1800 }, { name: 'Epiphany', dwell: 2200 }, { name: 'Portfolio', dwell: 2200 },
+    { name: 'Activity', dwell: 4200, down: 3 }, { name: 'Clock', dwell: 1800 }
   ];
+  function appsFolderScript() {
+    var s = [{ type: 'wait', ms: 1200 }, { type: 'keys', text: 'dddddddd', speed: 120 }, { type: 'wait', ms: 500 }]; // select Curbfind, tile 8
+    APPS_FOLDER_TOUR.forEach(function (a, i) {
+      if (i > 0) s.push({ type: 'keys', text: 'd', speed: 100 });
+      if (a.skip) return;
+      s.push({ type: 'wait', ms: 250 }, ENTER_KEY, { type: 'headline', name: a.name }, { type: 'wait', ms: 700 });
+      if (a.keys) s.push({ type: 'keys', text: a.keys, speed: 80 });
+      if (a.down) s.push({ type: 'scancodes', codes: downKeys(a.down), speed: 500 });
+      s.push({ type: 'wait', ms: a.dwell }, ESC_KEY, { type: 'wait', ms: 500 });
+    });
+    return s;
+  }
+  var APPS_APP = { name: 'Apps', slot: 0, dwell: 1, script: appsFolderScript() };
   // v0.76.12: the real multi-window demo. Files (slot 1) and Weather
   // (slot 8) have no per-app keyboard interaction in this kernel (both are
   // gui_wait_close-only static viewers, confirmed by reading kernel.c --
@@ -1700,34 +1683,26 @@ if (typeof document !== "undefined") (function () {
   var lapIndex = 0;
   var SAMANTHA_LAP_SCRIPTS = [
     [ // lap 0: reminder + note
-      { type: 'keys', text: 'n', speed: 200 },
-      { type: 'wait', ms: 400 },
       { type: 'keys', text: SAMANTHA_REMINDER_LINE + '\n', speed: 55 },
-      { type: 'wait', ms: 3000 },
-      { type: 'keys', text: 'n', speed: 200 },
-      { type: 'wait', ms: 400 },
+      { type: 'wait', ms: 3500 },
       { type: 'keys', text: 'note: pick up dry cleaning\n', speed: 55 },
-      { type: 'wait', ms: 3000 }
+      { type: 'wait', ms: 3500 }
     ],
-    [ // lap 1: weather
-      { type: 'keys', text: 'n', speed: 200 },
-      { type: 'wait', ms: 400 },
+    [ // lap 1: weather + calendar
       { type: 'keys', text: "what's the weather like\n", speed: 55 },
-      { type: 'wait', ms: 3000 }
-    ],
-    [ // lap 2: a real fact question (today's calendar)
-      { type: 'keys', text: 'n', speed: 200 },
-      { type: 'wait', ms: 400 },
+      { type: 'wait', ms: 3500 },
       { type: 'keys', text: "what's on my calendar today\n", speed: 55 },
-      { type: 'wait', ms: 3000 }
+      { type: 'wait', ms: 3500 }
+    ],
+    [ // lap 2: a real fact question, then a tool that opens another app
+      { type: 'keys', text: "what's on my calendar today\n", speed: 55 },
+      { type: 'wait', ms: 3500 },
+      { type: 'keys', text: 'note: book flights for the launch\n', speed: 55 },
+      { type: 'wait', ms: 3500 }
     ]
   ];
-  var SAMANTHA_LAP_CLOSE = [
-    { type: 'keys', text: 'n', speed: 200 },
-    { type: 'wait', ms: 400 },
-    { type: 'keys', text: 'open calculator\n', speed: 55 }, // closes Chat and opens Calculator -- the scene's own real ending, not a scripted close
-    { type: 'wait', ms: 1200 }
-  ];
+  // Escape (the scene's own close, runSoloApp) ends the scene; no scripted close line.
+  var SAMANTHA_LAP_CLOSE = [{ type: 'wait', ms: 600 }];
   function samanthaScriptForLap(lap) { return SAMANTHA_LAP_SCRIPTS[lap % SAMANTHA_LAP_SCRIPTS.length].concat(SAMANTHA_LAP_CLOSE); }
   // Phone's already-open avatar box only gets one line (see
   // phoneSamanthaIntro below), so it cycles the same three real requests.
@@ -1809,76 +1784,9 @@ if (typeof document !== "undefined") (function () {
       // 1.0.13: press/move.../release on a window's title band, data like
       // every other step (see the Notes entry in TOUR_APPS and
       // dragWindow's own comment above).
+      else if (step.type === "headline") updateHeadline(step.name);
       else if (step.type === "drag") await dragWindow(step.from, step.to, step.steps, step.ms, gen);
     }
-  }
-  // v0.76.12: real two-window demo, the exact click sequence
-  // tools/checks/multiwindow-check.py already proves against the real
-  // kernel (gui_multiwin_open/gui_multiwin_focus/gui_multiwin_hit_test in
-  // kernel.c), not a new/unverified interaction shape. Two fixed points
-  // do all of it, both real consequences of gui_multiwin_geom's own fixed
-  // per-window rects (window 0 = x70,y40,w820,h385; window 1 = offset
-  // +60,+60, never recomputed after either window opens):
-  //   MW_A_POINT  (94,56)   sits ONLY inside window 0's rect (94<130, the
-  //               start of window 1's rect), so a click there always
-  //               targets "whichever app opened first" regardless of
-  //               which is currently on top -- closes it if it's topmost,
-  //               otherwise raises it to the front (gui_multiwin_focus).
-  //   MW_TOP_POINT (154,116) sits inside BOTH windows' overlap, so a click
-  //               there always resolves (topmost-first hit test) to
-  //               whichever window is currently on top, and closes it.
-  // first opens as window 0, second opens as window 1 alongside it --
-  // both genuinely on screen together, the real thing the old sequential
-  // open/close/open/close tour could never show. Only 2 concurrent
-  // windows is the real, current kernel cap (GUI_MULTIWIN_MAX in
-  // kernel.c); this never asks for a 3rd.
-  var MW_A_POINT_X = CLOSE_X, MW_A_POINT_Y = CLOSE_Y; // = 94,56, same rect appclose-check.py/app-interact-check.py already depend on
-  var MW_TOP_POINT_X = 154, MW_TOP_POINT_Y = 116;
-  async function multiWindowRound(gen, first, second) {
-    if (focused || tourGen !== gen || !adaptersReady) return;
-    emulator.mouse_adapter.emu_enabled = true;
-    emulator.keyboard_adapter.emu_enabled = true;
-    var posA = dockSlotPos(first.slot), posB = dockSlotPos(second.slot);
-
-    await clickAt(posA[0], posA[1]); // opens `first` as window 0
-    if (focused || tourGen !== gen) return;
-    await sleep(600);
-    updateHeadline(first.name); // named once its window is really drawn, not when the click was sent
-    await runScript(first.script, gen); // real interaction while it's the only (topmost) window
-    if (focused || tourGen !== gen) return;
-
-    await clickAt(posB[0], posB[1]); // opens `second` as window 1 ALONGSIDE it -- first stays open, the real point being demonstrated
-    if (focused || tourGen !== gen) return;
-    await sleep(600);
-    updateHeadline(second.name); // the second window is now really on top
-    await runScript(second.script, gen); // real interaction with the now-topmost window, first still genuinely on screen behind it
-    if (focused || tourGen !== gen) return;
-    await sleep(1400); // a real beat with both windows visibly open together -- the actual point of this round
-
-    // v0.76.14: direct report, "landing page demo still flashing" --
-    // real root cause, no double buffer in this kernel yet (a known,
-    // already-tracked architecture gap, roadmap.md's own "compositor in
-    // gui_run" entry), so every multiwin open/close/focus event forces a
-    // full desktop repaint (kernel.c's `launched=1` path: wallpaper photo
-    // blit + dock + every open window, every time). This round used to
-    // also click-to-focus `first` back to the top before closing it --
-    // a real, legitimate demonstration of z-order switching, but a 5th
-    // full-desktop repaint packed into the same ~13s window, on top of
-    // the 4 this round already needs. Cut here: `second` closes first
-    // (MW_TOP_POINT always resolves to whichever window is currently
-    // topmost), which leaves `first` as the sole remaining window --
-    // and the sole remaining window is topmost by definition, so
-    // MW_A_POINT correctly closes it next without ever needing the
-    // focus step. Real click-to-focus/z-order switching is still proven
-    // by tools/checks/multiwindow-check.py against the real kernel; this
-    // tour just no longer re-demonstrates it at the cost of an extra
-    // flash every single lap.
-    await clickAt(MW_TOP_POINT_X, MW_TOP_POINT_Y); // closes whichever of the two is currently topmost (`second`)
-    if (focused || tourGen !== gen) return;
-    await sleep(900);
-    await clickAt(MW_A_POINT_X, MW_A_POINT_Y); // `first` is now the sole open window, topmost by definition: closes it too
-    if (focused || tourGen !== gen) return;
-    await sleep(1200);
   }
   // Dock geometry in LOGICAL kernel pixels, the same arithmetic as
   // kernel.c's gui_dock_icon/gui_dock_x0/gui_slot_x: GUI_ICON_COUNT (11) slots, tiles
@@ -2190,7 +2098,7 @@ if (typeof document !== "undefined") (function () {
     var remaining = (app.dwell || DWELL_MS) - (Date.now() - dwellStart);
     if (remaining > 0) await sleep(remaining);
     if (focused || tourGen !== gen) return;
-    await clickAt(CLOSE_X, CLOSE_Y); // closes via the app's own real X, never the dock tile that opened it
+    if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80); // Escape closes a ring-3 window; a click inside one never does
     if (focused || tourGen !== gen) return;
     resetHeadline(); // the app is gone, so stop announcing it over an empty desktop
     await sleep(1200); // a beat before the next app opens, reads as a real transition not a jump-cut
@@ -2327,24 +2235,16 @@ if (typeof document !== "undefined") (function () {
       await phoneSamanthaIntro(gen);
       if (focused || tourGen !== gen) return;
       if (IS_PHONE) continue; // phones are Samantha only: the dock tour below clicks desktop dock coordinates
-      await runSoloApp(gen, MAIL_APP);
-      if (focused || tourGen !== gen) return;
-      await multiWindowRound(gen, MW_FILES, MW_REMINDERS); // has real typed interaction (Reminders)
-      if (focused || tourGen !== gen) return;
-      await sleep(1500);
-      if (focused || tourGen !== gen) return;
-      await runSoloApp(gen, CALENDAR_APP);
-      if (focused || tourGen !== gen) return;
-      await multiWindowRound(gen, MW_FILES, MW_WEATHER); // both static viewers, no typed interaction -- kept short, see multiWindowRound's own dwell timings
-      if (focused || tourGen !== gen) return;
-      await sleep(1500);
-      for (var i = 0; i < TOUR_APPS.length; i++) {
+      // 2.0 order: the daily-driver core first (Mail composing inline, Burrow
+      // opening a folder, Calendar, Notes writing into a folder, Reminders),
+      // then the shell and Samantha running her tools, then the live-data
+      // pair (Weather, Stocks), then the Apps folder for the other 17.
+      var lapScenes = [MAIL_APP, BURROW_APP, CALENDAR_APP, NOTES_APP, REMINDERS_APP, TERMINAL_APP, SAMANTHA_APP, WEATHER_APP, STOCKS_APP, APPS_APP];
+      for (var i = 0; i < lapScenes.length; i++) {
         if (focused || tourGen !== gen || !adaptersReady) return;
-        // item 1: Terminal reads as dead time on phone (no visible result
-        // to a visitor who can't read a shell prompt at that size) -- skip
-        // it there, desktop tour unchanged.
-        if (IS_PHONE && TOUR_APPS[i].name === 'Terminal') continue;
-        var app = TOUR_APPS[i];
+        var app = lapScenes[i];
+        // item 1: Terminal reads as dead time on phone (no visible result to a visitor who can't read a shell prompt at that size)
+        if (IS_PHONE && app.name === 'Terminal') continue;
         if (app.name === 'Samantha') app = Object.assign({}, app, { script: samanthaScriptForLap(lapIndex) }); // item 6: a different real exchange each lap
         await runSoloApp(gen, app);
       }

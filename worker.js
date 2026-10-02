@@ -109,7 +109,7 @@ async function handleProxy(request, env) {
     // the browser relay), not at the top-level /api/speak route. Without this
     // it fell through to isAllowedTarget and got the generic 403.
     if (targetUrl.pathname === "/api/speak" && request.method === "GET") return handleSpeakGet(targetUrl, request, env);
-    if (/^\/face\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname) && request.method === "GET") {
+    if (/^\/face(-joshua)?\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname) && request.method === "GET") {   // face-joshua: the portfolio face
       // Read the frame from this deploy's own assets: a Worker fetching its
       // own hostname over the network gets Cloudflare's 522, so the guest's
       // face never loaded on the live site.

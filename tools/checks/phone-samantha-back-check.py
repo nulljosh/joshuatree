@@ -2,8 +2,10 @@
 """Headless guard for two phone fixes in Samantha's boot view (1.9.18):
 1. the back chevron works in `phone samantha` (chat_boot_samantha_open used to
    never run the chevron's tap zone): a tap in the middle must NOT print
-   `samback`, a tap on the chevron (20,20) must.
-2. Chat's F2 and Esc hints are gated off for boot_to_phone (source check)."""
+   `phonehomerepaint`, a tap on the chevron (20,20) must.
+(2.0: Samantha is ring-3 and the old kernel Chat hint strings are gone, so the
+source check for the F2/Esc hints went with them; leaving her view lands on the
+phone home screen, which prints `phonehomerepaint`.)"""
 from freeport import free_port
 import json, os, re, socket, subprocess, sys, time
 
@@ -11,11 +13,6 @@ os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 PORT = free_port(); LOG = "/tmp/jt-phoneback.log"
 LW, LH = 430, 760
 fail = 0
-
-src = open("kernel/chat.h").read()
-for h in ("hold F2 to talk   or just type   esc close", "hold F2 to talk   n prompt   c clear   esc close"):
-    if not re.search(r'boot_to_phone \? "[^"]*" : "[^"]*' + re.escape(h), src):
-        fail = 1; print("FAIL: hint not gated off for phones:", h)
 
 try: os.remove(LOG)
 except FileNotFoundError: pass
@@ -50,9 +47,9 @@ try:
         cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
         time.sleep(0.5)
     tap(215, 300)
-    if "samback" in log(): fail = 1; print("FAIL: a tap on her face exited (samback)")
+    if "phonehomerepaint" in log(): fail = 1; print("FAIL: a tap on her face exited (phonehomerepaint)")
     tap(20, 20)
-    if "samback" not in log(): fail = 1; print("FAIL: tapping the back chevron did nothing (no samback)")
+    if "phonehomerepaint" not in log(): fail = 1; print("FAIL: tapping the back chevron did nothing (no phonehomerepaint)")
     try: cmd({"execute": "quit"})
     except (ConnectionResetError, BrokenPipeError, OSError): pass
 finally:
