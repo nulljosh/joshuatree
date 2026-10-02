@@ -20,9 +20,13 @@ DUMP = "/tmp/jt-keyboard-only.raw"
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-# Close button coordinates for app windows opened via keyboard (top-left corner)
-# Scanned from actual framebuffer: red pixels at logical ~26, 15
-CLOSE_X, CLOSE_Y = 26, 15
+# Red close light of an open window, in logical pixels. 2.0 apps are ring-3
+# compositor windows; the Apps folder under them keeps its own light at (80, 46).
+# A launch from the bare desktop lands at window 0's frame (x=70), whose light
+# is at (94, 56); a launch over the dock-opened folder lands at (10,40), light
+# at (34, 56). Either one counts as the app being up.
+CLOSE_SPOTS = ((94, 56), (34, 56))
+FOLDER_CLOSE_X, FOLDER_CLOSE_Y = 80, 46
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 
 # App names from kernel/kernel.c APPS[].name (indices 0-24, then Apps folder, then Trash)
@@ -80,10 +84,13 @@ try:
         img = Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
         return img.getpixel((x * SCALE + 1, y * SCALE + 1))
 
+    def red_at(img, x, y):
+        p = img.getpixel((x * SCALE + 1, y * SCALE + 1))
+        return max(abs(p[i] - CLOSE_RED[i]) for i in range(3)) <= 12
+
     def window_open():
-        p = pixel(CLOSE_X, CLOSE_Y)
-        is_red = max(abs(p[i] - CLOSE_RED[i]) for i in range(3)) <= 12
-        return is_red
+        img = dump()
+        return any(red_at(img, x, y) for x, y in CLOSE_SPOTS)
 
     # Wait for desktop to be ready: dock tray color at (480, 511) = 0xEFEBE4
     for _ in range(120):
@@ -139,13 +146,24 @@ try:
                 print(f"{app_idx:2d} {app_name:15s} FAIL: never opened")
                 fails.append(f"app {app_idx} ({app_name}) never opened a window")
 
-            # Close the window by Esc
+            # Close the window by Esc: its red light must be gone afterwards.
+            # A lost scancode gets exactly one retry.
             key("esc")
+            for attempt in range(2):
+                for _ in range(20):
+                    time.sleep(0.2)
+                    if not window_open(): break
+                if not window_open() or attempt: break
+                key("esc")
+            if opened and window_open():
+                fails.append(f"app {app_idx} ({app_name}) did not close on Esc")
+            # The Apps folder is a window too; if the launch left it open,
+            # Esc closes it. On a bare desktop a second Esc would quit the
+            # GUI to the text shell, so only send it while its light shows.
             time.sleep(0.5)
-
-            # Close the Apps folder by Esc
-            key("esc")
-            time.sleep(0.5)
+            if red_at(dump(), FOLDER_CLOSE_X, FOLDER_CLOSE_Y):
+                key("esc")
+                time.sleep(0.5)
 
         except Exception as e:
             results.append((app_idx, app_name, False))
@@ -153,11 +171,11 @@ try:
             fails.append(f"app {app_idx} ({app_name}) exception: {e}")
             # Try to recover
             try:
-                key("esc")
+                if window_open(): key("esc")
                 time.sleep(0.3)
-                key("esc")
+                if red_at(dump(), FOLDER_CLOSE_X, FOLDER_CLOSE_Y): key("esc")
                 time.sleep(0.3)
-            except:
+            except Exception:
                 pass
 
     # Check for crashes in the serial log
