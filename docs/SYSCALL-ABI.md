@@ -555,7 +555,7 @@ Errors: -EFAULT (bad pointer).
 
 | # | Name | ebx | ecx | edx | Returns |
 |---|---|---|---|---|---|
-| 387 | `http_get` | `const char *path` | `void *buf` | `len` | body bytes, -status, or -errno |
+| 387 | `http_get` | `const char *path` | `void *buf` | `len` (at most 65536, `JT_HTTP_BIG_MAX`) | body bytes, -status, or -errno. Up to 2048 bytes the reply is bounced and copied out only on a 200; above that it is received straight into `buf` (range-checked whole with `paging_user_range_ok`, 3s budget), so a failed fetch may leave scratch bytes there. Samantha fetches ~21KB face JPEGs this way. |
 
 **http_get** is what the Curbfind app fetches its live rows with, and the
 first call that puts the kernel's network stack behind a ring-3 program. It

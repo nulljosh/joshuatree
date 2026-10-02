@@ -142,7 +142,7 @@ user/note.bin: user/note.o user/note.ld boot/memmap.ld
 # shaped calls without a real libc or a kernel include path. llvm-ar
 # rather than plain `ar` because this toolchain is clang/lld throughout,
 # see USER_CFLAGS above.
-LIBJT_SRCS := user/libjt/string.c user/libjt/stdlib.c user/libjt/stdio.c user/libjt/text.c user/libjt/osk.c user/libjt/mono.c
+LIBJT_SRCS := user/libjt/string.c user/libjt/stdlib.c user/libjt/stdio.c user/libjt/text.c user/libjt/osk.c user/libjt/mono.c user/libjt/jpeg.c
 LIBJT_OBJS := $(LIBJT_SRCS:.c=.o)
 # Plain `llvm-ar` first (on PATH on most CI images); then a versioned
 # `llvm-ar-NN` apt sometimes installs instead of the unversioned name;
@@ -175,6 +175,7 @@ user/libjt/aamono.h: user/libjt/aafont.h
 
 user/libjt/text.o: user/libjt/text.c user/libjt/text.h user/libjt/aafont.h user/jtsys.h
 user/libjt/mono.o: user/libjt/mono.c user/libjt/text.h user/libjt/aamono.h user/jtsys.h
+user/libjt/jpeg.o: user/libjt/jpeg.c drivers/jpeg.c drivers/jpeg.h user/libjt/string.h user/libjt/stdlib.h
 user/libjt/osk.o: user/libjt/osk.c user/libjt/osk.h user/libjt/text.h user/jtsys.h
 
 user/libjt.a: $(LIBJT_OBJS)
@@ -324,7 +325,7 @@ user/mail.bin: user/mail.o user/libjt.a user/note.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/mail.o user/libjt.a
 
 # Samantha's chat window as a ring-3 program (slice 2; opens only under the ring3samantha cmdline flag).
-user/samantha.o: user/samantha.c user/samantha_face.h user/jtsys.h user/libjt/text.h
+user/samantha.o: user/samantha.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/samantha.bin: user/samantha.o user/libjt.a user/note.ld

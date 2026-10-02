@@ -46,7 +46,11 @@
            line or start a header); anything else is -EINVAL, and -EFAULT
            if the string walks off user memory.
      ecx = out buffer (user, writable), edx = its length, clamped to
-           JT_HTTP_BODY_MAX; -EFAULT unless the whole range is user memory.
+           JT_HTTP_BIG_MAX (64KB); -EFAULT unless the whole range is user memory.
+           Up to JT_HTTP_BODY_MAX (2KB) the reply is bounced and copied out only
+           on a 200. Above it the reply is received straight into this buffer
+           (3s budget), so a failed fetch may leave scratch bytes in it; trust
+           only the returned count.
    Returns the body byte count (0..edx) when the reply was HTTP 200.
    A non-200 reply returns minus its status, -(100..599), which can never
    collide with an errno (all below 100). -ENODEV when there is no NIC,
@@ -55,6 +59,7 @@
 #define SYS_HTTP_GET    387
 #define JT_HTTP_PATH_MAX 128
 #define JT_HTTP_BODY_MAX 2048
+#define JT_HTTP_BIG_MAX  65536
 /* 1.9.13: SYS_READDIR, the directory listing Search needs and Files will
    reuse. 387 is SYS_HTTP_GET (Curbfind, 1.9.11), so this is 388.
      ebx = path (user, NUL-terminated, at most PATH_MAX = 63 bytes before

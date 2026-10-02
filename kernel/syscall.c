@@ -742,6 +742,7 @@ static int sys_tasks(u32 out, u32 kill, u32 c) {
    and net.c's one-connection stack are both singletons. */
 #define HTTP_HOST "joshuatree.heyitsmejosh.com"
 #define HTTP_PORT 80
+#define HTTP_BIG_TICKS 300 /* 3s: one face frame */
 #define HTTP_REPLY_TICKS 150 /* 1500ms at 100Hz, the same budget kernel/curbfind.h used */
 static char http_bounce[JT_HTTP_BODY_MAX];
 static int http_busy = 0;
@@ -757,13 +758,23 @@ static int sys_http_get(u32 path, u32 buf, u32 len) {
     }
     if (i > JT_HTTP_PATH_MAX) return -EINVAL; /* no NUL within the cap */
     if (i == 0 || kpath[0] != '/') return -EINVAL;
-    if (len > JT_HTTP_BODY_MAX) len = JT_HTTP_BODY_MAX;
+    /* Caller-supplied larger buffer (Samantha's 320x320 JPEG face frames are ~21KB): over the 2KB
+       bounce size the reply lands straight in the user buffer, checked whole first, capped at
+       JT_HTTP_BIG_MAX. Up to 2KB keeps the bounce copy exactly as before. */
+    if (len > JT_HTTP_BIG_MAX) len = JT_HTTP_BIG_MAX;
     if (!paging_user_range_ok(buf, len ? len : 1)) return -EFAULT;
+    int big = len > JT_HTTP_BODY_MAX;
     if (http_busy) return -EBUSY;
     http_busy = 1;
     __asm__ volatile ("sti");
     int n = -1, st = 0;
     if (!net_init(0x0A00020F)) { n = -ENODEV; }
+    else if (big) {
+        n = http_get_timeout(HTTP_HOST, kpath, HTTP_PORT, (char *)buf, len, HTTP_BIG_TICKS);
+        st = http_last_status();
+        if (n < 0) n = -EIO;
+        else if (st != 200) n = st >= 100 && st <= 599 ? -st : -EIO;
+    }
     else {
         n = http_get_timeout(HTTP_HOST, kpath, HTTP_PORT, http_bounce, sizeof(http_bounce), HTTP_REPLY_TICKS);
         st = http_last_status();
@@ -774,6 +785,7 @@ static int sys_http_get(u32 path, u32 buf, u32 len) {
     http_busy = 0;
     if (n < 0) return n;
     if ((u32)n > len) n = (int)len;
+    if (big) return n; /* already in place */
     char *out = (char *)buf;
     for (i = 0; i < (u32)n; i++) out[i] = http_bounce[i];
     return n;

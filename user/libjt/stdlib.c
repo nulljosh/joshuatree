@@ -47,6 +47,7 @@ struct jt_block { unsigned long size; struct jt_block *next_free; };
    zero-filled bytes in the image rather than an uninitialised page. */
 JT_DATA
 static unsigned char jt_arena[JT_ARENA_SIZE];
+JT_DATA
 static unsigned long jt_arena_used = 0;
 JT_DATA
 static struct jt_block *jt_free_list = 0;
