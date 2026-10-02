@@ -6,22 +6,22 @@ Five steps. About 45 minutes once you have the parts. About $250 with the board,
 
 ## The five steps
 
-1. **Base.** Lay the four widest ring pieces in a square, push a rod through each corner, catch a nut underneath.
+1. **Base.** Lay the four ring 0 pieces in a square, push a rod through each corner, catch a nut underneath.
 2. **Tray.** Drop the tray in the middle. The board posts are already on its floor.
-3. **Rings.** Slide the rest of the rings down the rods, one on top of the other. The little 2 mm feet on each ring leave the air gap for you.
+3. **Rings.** Slide the rest of the rings down the rods, one on top of the other. The little 2 mm bosses on each ring leave the air gap for you.
 4. **Board.** Screw the board onto the four posts, snap its metal back plate on, push the rear plate in behind it, plug in power.
-5. **Cap.** Put the cap on, spin a nut onto each rod until snug. Plug in the USB stick and boot.
+5. **Cap.** Drop a nut into each pocket on top of ring 5 and run it down snug, then glue the four cap pieces on top. The cap hides every nut. Plug in the USB stick and boot.
 
 ## What you need
 
 | Item | Qty | Where to buy | Estimate |
 |---|---|---|---|
-| Printed parts (30 pieces, 21 files in `stl/`) | 1 set | JLC3DP or your own printer | $40 to 75 printed, about $9 at home |
+| Printed parts (30 pieces, 19 files in `stl/`) | 1 set | JLC3DP or your own printer | $40 to 75 printed, about $9 at home |
 | ASRock J4125B-ITX board | 1 | Walmart or Beach Audio listing | about $120 |
 | 8GB DDR4 laptop RAM | 1 | any computer shop | about $25 |
 | 128GB SATA drive and a SATA cable | 1 | any computer shop | about $20 |
 | Small power supply for mini-ITX (picoPSU) | 1 | any computer shop | about $30 |
-| M3 threaded rod 65 mm (4), M3 nuts (8), M3x8 screws (4) | 1 bag | hardware store or Amazon | about $7 |
+| M3 threaded rod 50 mm (4), M3 nuts (8), M3x8 screws (4) | 1 bag | hardware store or Amazon | about $7 |
 | 16GB USB stick with Joshua Tree on it | 1 | ships in the kit | about $8 |
 
 Total about $250, mostly estimate. Only the board price comes from a real listing.
@@ -46,7 +46,7 @@ Total about $250, mostly estimate. Only the board price comes from a real listin
 | It does this | Do this |
 |---|---|
 | A ring will not slide down | Sand the rod hole edge. Do not scale the file. |
-| The stack rocks | One nut is loose. Tighten the four top nuts a little at a time. |
+| The stack rocks | One nut is loose. Lift the cap, tighten the four top nuts a little at a time, glue it back. |
 | The back plate will not go in | Sand its edges. It is a 0.2 mm fit. |
 | The board screws will not bite | Start each screw with a firm push and two turns. The posts are plastic. |
 | Black screen on first boot | Check the USB stick is in a rear port, tap F11, pick the stick with UEFI in its name. |

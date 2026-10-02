@@ -1,4 +1,4 @@
-# Strata Kit enclosure, print-ready parts (v2: no feet, no loose spacers, no metal standoffs). build123d -> STL per printable part, one STEP, exploded SVGs.
+# Strata Kit enclosure, print-ready parts (v3: 200 x 200 x 55 mm, nuts captured under the cap, tree engraved in the cap). build123d -> STL per printable part, one STEP, exploded SVGs.
 # mm throughout. Numbers match docs/HARDWARE.md. Target: Bambu A1 mini (180 x 180 x 180), FDM.
 #   uv run --with build123d python docs/hardware/strata_cad.py docs/hardware
 import sys, os, json
@@ -12,7 +12,7 @@ BOARD = 170.0                    # mini-ITX is 170 x 170
 HOLE_DX, HOLE_DY = 154.94, 157.48  # mini-ITX hole spacing (ATX spec)
 SHIELD_W, SHIELD_H = 158.75, 44.45  # stock I/O shield
 TALLEST = 30.0                   # heatsink + tallest rear part above the PCB; ESTIMATE, measure on the real board
-PCB_T, STANDOFF = 1.6, 6.0
+PCB_T, STANDOFF = 1.6, 5.0
 
 # ---- FDM rules ----
 BED = 180.0                      # A1 mini bed, each axis
@@ -23,18 +23,20 @@ MAX_BRIDGE = 10.0                # longest flat roof printed without supports
 CAV = BOARD + 4                  # 2 mm of air each side of the board
 WALL = 2.0
 CORE = CAV + 2 * WALL            # 178, still under the 180 bed
-THICK = [9.0, 7.0, 10.0, 6.5, 8.5, 7.0]
+THICK = [6.5, 7.0, 8.5, 6.5, 6.5, 7.0]   # ring 0 stops where the I/O window starts, so the base ring is never notched
 GAP = 2.0                        # spacer height = the vent line
-STEP_IN = 3.0                    # each stratum 3 mm narrower than the one below
-BASE_W = 224.0
-CAP_T = 4.5
+STEP_IN = 1.0                    # each stratum 1 mm narrower than the one below, the cap matches ring 5
+BASE_W = 200.0
+CAP_T = 3.0                      # flush on ring 5, hides the top nuts
 ROD = 3.4                        # M3 clearance hole (3.0 + 0.4)
-ROD_AT = CORE / 2 + 8            # rods sit 8 mm outside the core wall
+ROD_AT = CORE / 2 + 4            # rods sit 4 mm outside the core wall, inside every ring's corner
 NUT_AF, NUT_T = 5.5 + 2 * FIT, 2.4 + FIT   # M3 nut plus clearance
+TOP_POCKET = 4.0                 # top nut pocket in ring 5: the nut sits on a 3 mm floor, the cap closes it
 SP_OD = 7.0                      # spacer boss outer diameter (printed into the ring above it)
 BOSS_OD, PILOT = 8.0, 2.6        # board standoff printed into the tray floor, 2.6 mm pilot for a self-tapping M3x8
 HOLES = [(sx * HOLE_DX / 2, sy * HOLE_DY / 2) for sx in (-1, 1) for sy in (-1, 1)]
-IO_W, IO_H, IO_Z = 160.0, 46.0, 30.5   # shield opening 158.75 x 44.45 plus clearance both sides
+IO_W, IO_H = 160.0, 45.0         # shield opening 158.75 x 44.45 plus clearance both sides
+IO_Z = WALL + STANDOFF - 0.5 + IO_H / 2   # window starts 0.5 mm under the PCB, which is exactly where ring 0 ends
 
 C = (Align.CENTER, Align.CENTER, Align.MIN)
 def plate(w, t, r): return extrude(RectangleRounded(w, w, r), t)
@@ -50,23 +52,44 @@ for i, t in enumerate(THICK):
     for x, y in rod_xy(): s -= Pos(x, y, -1) * Cylinder(ROD / 2, t + 2, align=C)
     if i == 0:
         for x, y in rod_xy(): s -= nut_pocket(x, y, 0)   # nut drops in from underneath, so no feet
+    if i == len(THICK) - 1:
+        for x, y in rod_xy(): s -= Pos(x, y, t - TOP_POCKET) * extrude(RegularPolygon(NUT_AF / 3 ** 0.5, 6), TOP_POCKET + 1)   # top nut, closed by the cap
     s = Pos(0, 0, z) * s
     if i > 0:                                            # the 2 mm vent spacer is a boss on the ring's underside
         for x, y in rod_xy(): s += Pos(x, y, z - GAP) * (extrude(Circle(SP_OD / 2), GAP) - Pos(0, 0, -1) * Cylinder(ROD / 2, GAP + 2, align=C))
     if z < IO_Z + IO_H / 2 and z + t > IO_Z - IO_H / 2:   # any ring the window touches is notched its full height, so no ring has a roof over the notch
         s -= Pos(0, CORE / 2 + 20, z - 1) * Box(IO_W, 40, t + 2, align=C)
     rings.append(s); ring_z.append(z)
-    z += t + GAP
+    z += t + (GAP if i < len(THICK) - 1 else 0)   # the cap sits straight on ring 5, no gap
 STACK_TOP = z                    # underside of the cap
-top_w = BASE_W - len(THICK) * STEP_IN
-cap = plate(top_w, CAP_T, 4)
-for x, y in rod_xy():
-    cap -= Pos(x, y, -1) * Cylinder(ROD / 2, CAP_T + 2, align=C)
-    cap -= nut_pocket(x, y, CAP_T - NUT_T)              # nut sinks into the top face
+top_w = BASE_W - (len(THICK) - 1) * STEP_IN
+cap = plate(top_w, CAP_T, 6)
+# the Joshua tree from landing/logo.svg, engraved 0.8 mm into the top face, centred
+def tree_faces(svg):
+    import re
+    polys = []
+    for d in re.findall(r' d="([^"]+)"', svg):
+        for sub in d.split("Z"):
+            pts = [(float(a), float(b)) for a, b in re.findall(r"(-?\d+\.?\d*)[ ,](-?\d+\.?\d*)", sub)]
+            if len(pts) >= 3: polys.append(pts)
+    for cx, cy, r in re.findall(r'<circle cx="([\d.]+)" cy="([\d.]+)" r="([\d.]+)"', svg):
+        import math
+        polys.append([(float(cx) + float(r) * math.cos(a * math.pi / 12), float(cy) + float(r) * math.sin(a * math.pi / 12)) for a in range(24)])
+    return polys
+MARK_W, MARK_D = 64.0, 0.8       # tree width on the cap, engraving depth
+_svg = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "landing", "logo.svg")).read()
+_polys = tree_faces(_svg)
+_xs = [p[0] for q in _polys for p in q]; _ys = [p[1] for q in _polys for p in q]
+_k = MARK_W / (max(_xs) - min(_xs)); _cx = (max(_xs) + min(_xs)) / 2; _cy = (max(_ys) + min(_ys)) / 2
+mark = None
+for q in _polys:
+    f = Face(Wire.make_polygon([Vector((x - _cx) * _k, -(y - _cy) * _k, CAP_T - MARK_D) for x, y in q], close=True))
+    e = extrude(f, MARK_D + 1, dir=(0, 0, 1))
+    mark = e if mark is None else mark + e
+cap -= mark
 cap = Pos(0, 0, STACK_TOP) * cap
-for x, y in rod_xy(): cap += Pos(x, y, STACK_TOP - GAP) * (extrude(Circle(SP_OD / 2), GAP) - Pos(0, 0, -1) * Cylinder(ROD / 2, GAP + 2, align=C))
 TOP = STACK_TOP + CAP_T
-ROD_LEN = 5 * -(-(TOP - 1) // 5)  # next 5 mm up, M3 rods come in 5 mm steps
+ROD_LEN = 50.0                   # stock M3 x 50, ends inside the top nut
 
 CORE_H = STACK_TOP - FIT         # tray top stops 0.2 under the cap
 # tray = floor + left, right, front walls. Rear wall is its own plate so nothing prints as a 160 mm bridge.
@@ -106,7 +129,7 @@ for i, r in enumerate(rings):
     else:
         printables += [(f"ring{i}_front_quarter", fr, 2), (f"ring{i}_rear_left", rl, 1), (f"ring{i}_rear_right", rr, 1)]
 printables += [("cap_quarter", quadrant(cap, 1, -1), 4), ("tray", tray, 1), ("rear_plate", Rot(90, 0, 0) * rear, 1)]  # rear plate printed lying flat, window is just a hole
-FLIP = lambda n: n.startswith("cap") or (n.startswith("ring") and not n.startswith("ring0"))  # spacer boss goes up, flat face on the bed
+FLIP = lambda n: n.startswith("ring") and not n.startswith("ring0")  # spacer boss goes up, flat face on the bed; the cap prints right side up so the engraving is the last layer
 
 # ---- checks, in code ----
 def downward_roofs(s):
@@ -142,10 +165,13 @@ assert CORE_H >= WALL + STANDOFF + PCB_T + TALLEST, "tray too short for the tall
 # tie rods clear the core, sit inside every ring, and have wall left
 assert ROD_AT - ROD / 2 > CORE / 2 + FIT + MIN_WALL, "rod hole too close to the core"
 assert ROD_AT + ROD / 2 + MIN_WALL <= top_w / 2, "rod hole leaves under 1.6 mm in the top ring and cap"
-assert ROD_LEN >= TOP - NUT_T and ROD_LEN <= BED, "rod length"
+assert STACK_TOP - TOP_POCKET + NUT_T - 1.0 <= ROD_LEN <= STACK_TOP - 1.0, "rod must reach into the top nut and stay under the cap"
+assert TOP <= 55.0 + 1e-6 and BASE_W <= 200.0, "over the 200 x 200 x 55 target"
+assert THICK[-1] - TOP_POCKET >= MIN_WALL and TOP_POCKET >= NUT_T, "top nut pocket leaves a thin floor or is too shallow"
+assert CAP_T - MARK_D >= MIN_WALL, "engraving leaves a thin cap"
 # walls
 assert WALL >= MIN_WALL and (top_w - CORE - 2 * FIT) / 2 >= MIN_WALL, "ring frame too thin"
-assert CAP_T - NUT_T >= MIN_WALL and THICK[0] - NUT_T >= MIN_WALL, "nut pocket leaves a thin floor"
+assert THICK[0] - NUT_T >= MIN_WALL, "nut pocket leaves a thin floor"
 assert (SP_OD - ROD) / 2 >= MIN_WALL, "spacer boss wall too thin"
 assert (BOSS_OD - PILOT) / 2 >= MIN_WALL and abs(HOLES[0][0]) + BOSS_OD / 2 <= CAV / 2, "board standoff wall thin or off the tray"
 assert 13 - 8 >= MIN_WALL and min(THICK) >= MIN_WALL, "vent web too thin"
@@ -153,6 +179,10 @@ assert (CORE + 2 * FIT - CORE) / 2 >= FIT - 1e-9, "ring hole must clear the tray
 asm_parts = rings + [cap, tray, rear, *rods]
 assert len(asm_parts) == len(rings) + 1 + 1 + 1 + 4
 asm = Compound(asm_parts)
+if os.environ.get("STRATA_MESH"):                  # assembled-position meshes for render_strata.py
+    os.makedirs(os.environ["STRATA_MESH"], exist_ok=True)
+    for n, sh in [(f"ring{i}", r) for i, r in enumerate(rings)] + [("cap", cap), ("tray", tray), ("rear", rear)] + [(f"rod{i}", r) for i, r in enumerate(rods)]:
+        export_stl(sh, os.path.join(os.environ["STRATA_MESH"], n + ".stl"), tolerance=0.02, angular_tolerance=0.1)
 bb = asm.bounding_box()
 export_step(asm, os.path.join(OUT, "strata.step"))
 json.dump(report, open(os.path.join(STL_DIR, "manifest.json"), "w"), indent=1)

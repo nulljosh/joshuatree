@@ -10,7 +10,7 @@ The parts come from `strata_cad.py`. Every STL is in `stl/`, and `stl/manifest.j
 - Small pliers or a 5.5 mm nut driver
 - A hobby knife and a bit of sandpaper for print blobs
 - Superglue, one drop at a time (rear plate only)
-- A hacksaw or side cutters if your M3 rods are longer than 65 mm
+- A hacksaw or side cutters if your M3 rods are longer than 50 mm
 
 ## Bill of materials
 
@@ -19,7 +19,7 @@ Same lines as the table in `docs/HARDWARE.md`. The ID is what each step points a
 | ID | Part | Qty | Where |
 |---|---|---|---|
 | P1 | Printed rings, quarters (`ring0` to `ring5`), spacer bosses already on them | 24 pieces | `stl/` |
-| P2 | Printed cap quarter, bosses already on it | 4 | `stl/` |
+| P2 | Printed cap quarter, tree already engraved | 4 | `stl/` |
 | P3 | Printed tray, board standoffs already on the floor | 1 | `stl/` |
 | P4 | Printed rear plate | 1 | `stl/` |
 | B1 | ASRock J4125B-ITX board | 1 | listing, ~$120 |
@@ -27,7 +27,7 @@ Same lines as the table in `docs/HARDWARE.md`. The ID is what each step points a
 | B3 | 128GB SATA SSD | 1 | in the tray |
 | B4 | PSU, picoPSU or mini-ITX compatible | 1 | rear, plugs into the board |
 | B5 | 16GB USB stick, OS pre-flashed | 1 | in the kit |
-| B6 | M3 threaded rod, 65 mm | 4 | hardware bag |
+| B6 | M3 threaded rod, 50 mm | 4 | hardware bag |
 | B7 | M3 nut | 8 | hardware bag |
 | B8 | M3x8 self-tapping screw (board to the printed standoffs) | 4 | hardware bag |
 | B9 | Stock I/O shield | 1 | in the board box |
@@ -49,7 +49,7 @@ PLA is fine to start. PETG is better if the box will sit near a warm room. Print
 
 ![Step 1](assembly/step1-feet-and-rods.svg)
 
-**1. Ring 0 and rods.** Lay the four ring 0 pieces (P1, the widest) in a square on the table. Push a rod (B6) down through each corner hole until 5 mm pokes out underneath. Tip the piece up, spin a nut (B7) onto the rod end, and lower it so the nut drops into the hex pocket. Level the rod end with the pocket. There are no feet any more, ring 0 is the base.
+**1. Ring 0 and rods.** Lay the four ring 0 pieces (P1, the widest, 200 mm) in a square on the table. Push a rod (B6) down through each corner hole until it is level with the underside. Tip the piece up, spin a nut (B7) onto the rod end, and lower it so the nut drops into the hex pocket. There are no feet any more, ring 0 is the base.
 
 ![Step 2](assembly/step2-tray.svg)
 
@@ -67,7 +67,7 @@ PLA is fine to start. PETG is better if the box will sit near a warm room. Print
 
 ![Step 5](assembly/step5-cap-and-nuts.svg)
 
-**6. Cap.** Set the four cap pieces (P2) on ring 5, rod holes over the rods. Drop a nut (B7) into each pocket on top and run it down until the stack is snug. Snug, not crushed. If a ring is rocking, one nut is loose.
+**6. Top nuts and cap.** Before the cap, drop a nut (B7) into each of the four hex pockets in the top of ring 5 and run it down until the stack is snug. Snug, not crushed. If a ring is rocking, one nut is loose. Then set the four cap pieces (P2) flat on ring 5 and put one drop of superglue under each corner. The cap covers every nut, so nothing shows on top.
 
 **7. First boot.** Plug a keyboard into the PS/2 port, a monitor into the board, and the USB stick (B5) into a rear USB port. Power on and tap F11 (or F2, then boot menu) for the board's boot menu. Pick the USB stick, the UEFI entry. You'll see the GRUB menu, then Joshua Tree. If the screen stays black, plug a USB serial adapter into the board's header and read the log. `docs/HARDWARE.md` Phase 0 has the whole drill.
 
