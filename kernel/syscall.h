@@ -149,7 +149,39 @@ struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
    line too long). A refused command still returns a one-line message. Allowlist in kernel/shellsys.c. */
 #define SYS_SHELL_RUN   391
 #define JT_SHELL_LINE_MAX 160 /* same number as user/jtsys.h: cwd (63) + newline + command (95) */
-#define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3. 386 (tasks), 387 (http_get) and 388 (readdir) fit under it */
+/* 1.9.26: SYS_HTTP_POST, the first slice of Samantha at ring 3 (docs/ARCHITECTURE.md,
+   "Samantha at ring 3"). One HTTP POST of application/json to the chat host the
+   Settings app keeps (llm_host/llm_port in kernel.c, turing.heyitsmejosh.com:80 by
+   default): the program names only the path, never the host, the same rule as
+   SYS_HTTP_GET. The six arguments do not fit three registers, so ebx is one struct:
+     ebx = struct jt_http_post* (user, read): path (user, NUL terminated, same
+           rules as http_get: at most JT_HTTP_PATH_MAX, starts with '/', printable
+           ASCII 0x21..0x7E), body + body_len (user, read, at most
+           JT_HTTP_POST_BODY_MAX), out + out_len (user, write, clamped to
+           JT_HTTP_POST_REPLY_MAX), reply_ticks (0 = JT_HTTP_POST_TICKS_DEFAULT,
+           clamped to JT_HTTP_POST_TICKS_MAX).
+     ecx, edx unused (0).
+   Returns the reply body byte count (0..out_len) on HTTP 200; a non-200 reply
+   returns minus its status, -(100..599); -ENODEV no NIC, -EIO no answer in time,
+   -EBUSY a fetch already in flight, -EFAULT any range outside user memory,
+   -EINVAL a bad path or an over-long body. Nothing is written to out on failure.
+   The body is copied into a kernel bounce buffer before the network is touched,
+   so a program cannot change it mid-request. */
+#define SYS_HTTP_POST   392
+#define JT_HTTP_POST_BODY_MAX  6144 /* chat.h's req_body cap: full history to /api/chat */
+#define JT_HTTP_POST_REPLY_MAX 8192 /* chat.h's resp cap for /api/chat */
+#define JT_HTTP_POST_TICKS_DEFAULT 1500 /* 15s at 100Hz */
+#define JT_HTTP_POST_TICKS_MAX     4500 /* 45s, chat.h's CHAT_SEND_TIMEOUT_TICKS */
+struct jt_http_post {
+    const char *path;
+    const char *body; unsigned int body_len;
+    char *out;        unsigned int out_len;
+    unsigned int reply_ticks;
+};
+/* kernel.c: the Settings-owned chat host, read by SYS_HTTP_POST. */
+const char *llm_host_get(void);
+int llm_port_get(void);
+#define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3. 386 (tasks), 387 (http_get), 388 (readdir) and 392 (http_post) fit under it */
 
 /* Exactly the stack shape syscall_entry (isr.S) builds, lowest address
    first: the four data segments pushed last, pusha's eight, then the CPU's

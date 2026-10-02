@@ -778,6 +778,58 @@ static int sys_http_get(u32 path, u32 buf, u32 len) {
     return n;
 }
 
+/* 1.9.26: SYS_HTTP_POST, the chat request Samantha needs once she is a ring-3
+   program. Same shape as sys_http_get: every user range is checked before the
+   network is touched, the body is copied into a kernel bounce buffer first (so
+   the program cannot rewrite it mid-send), the host comes from Settings and
+   never from the caller, interrupts go on only around the wait, and the reply
+   is copied out after the exchange is over and only on a 200. The two bounce
+   buffers are static (14 KB would not fit the 4KB kernel stack) and shared
+   with http_get through the same http_busy flag. */
+static char http_post_body[JT_HTTP_POST_BODY_MAX];
+static char http_post_reply[JT_HTTP_POST_REPLY_MAX];
+static int sys_http_post(u32 argp, u32 unused1, u32 unused2) {
+    (void)unused1; (void)unused2;
+    if (!paging_user_range_ok(argp, sizeof(struct jt_http_post))) return -EFAULT;
+    struct jt_http_post a = *(const struct jt_http_post *)argp; /* one copy; the user struct is not read again */
+    char kpath[JT_HTTP_PATH_MAX + 1];
+    u32 i;
+    for (i = 0; i <= JT_HTTP_PATH_MAX; i++) {
+        if (!paging_user_range_ok((u32)a.path + i, 1)) return -EFAULT;
+        char ch = a.path[i];
+        kpath[i] = ch;
+        if (!ch) break;
+        if (ch < 0x21 || ch > 0x7E) return -EINVAL;
+    }
+    if (i > JT_HTTP_PATH_MAX) return -EINVAL;
+    if (i == 0 || kpath[0] != '/') return -EINVAL;
+    if (a.body_len > JT_HTTP_POST_BODY_MAX) return -EINVAL;
+    if (!paging_user_range_ok((u32)a.body, a.body_len ? a.body_len : 1)) return -EFAULT;
+    if (a.out_len > JT_HTTP_POST_REPLY_MAX) a.out_len = JT_HTTP_POST_REPLY_MAX;
+    if (!paging_user_range_ok((u32)a.out, a.out_len ? a.out_len : 1)) return -EFAULT;
+    u32 ticks = a.reply_ticks ? a.reply_ticks : JT_HTTP_POST_TICKS_DEFAULT;
+    if (ticks > JT_HTTP_POST_TICKS_MAX) ticks = JT_HTTP_POST_TICKS_MAX;
+    if (http_busy) return -EBUSY;
+    for (i = 0; i < a.body_len; i++) http_post_body[i] = a.body[i];
+    http_busy = 1;
+    __asm__ volatile ("sti");
+    int n, st = 0;
+    if (!net_init(0x0A00020F)) { n = -ENODEV; }
+    else {
+        n = http_post_timeout(llm_host_get(), kpath, (unsigned short)llm_port_get(),
+                              http_post_body, a.body_len, http_post_reply, sizeof(http_post_reply), ticks);
+        st = http_last_status();
+        if (n < 0) n = -EIO;
+        else if (st != 200) n = st >= 100 && st <= 599 ? -st : -EIO;
+    }
+    __asm__ volatile ("cli");
+    http_busy = 0;
+    if (n < 0) return n;
+    if ((u32)n > a.out_len) n = (int)a.out_len;
+    for (i = 0; i < (u32)n; i++) a.out[i] = http_post_reply[i];
+    return n;
+}
+
 /* 1.9.13: SYS_READDIR, the listing the Search app shows (and Files will).
    The contract is in syscall.h. Order of operations is the point: the
    path is copied out of user space with a hard cap and the output range
@@ -925,6 +977,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_MKDIR]       = sys_mkdir,
     [SYS_UNLINK]      = sys_unlink,
     [SYS_SHELL_RUN]   = sys_shell_run,
+    [SYS_HTTP_POST]   = sys_http_post,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {

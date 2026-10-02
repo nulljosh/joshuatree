@@ -1050,6 +1050,9 @@ static char loc_err[48] = "";
 static char llm_model[LLM_MODEL_MAX] = "samantha";
 static char llm_host[LLM_HOST_MAX] = "turing.heyitsmejosh.com";
 static int llm_port = 80;
+/* 1.9.26: read-only view for SYS_HTTP_POST (kernel/syscall.c). Settings still owns the write. */
+const char *llm_host_get(void) { return llm_host; }
+int llm_port_get(void) { return llm_port; }
 /* v85: real chat models actually installed on the host (checked via
    `ollama list`), not a free-text field a typo can point at nothing.
    nomic-embed-text is also installed but is embedding-only, deliberately

@@ -684,3 +684,37 @@ Since 1.9.24 the ring-3 key paths also deliver Home, End, Delete (0xE0 0x47,
 0x4F, 0x53) as `JT_KEY_HOME` 305, `JT_KEY_END` 306, `JT_KEY_DELETE` 307, and
 Ctrl+S as `JT_KEY_SAVE` 308, both to a blocking app's `gui_poll_event` and to
 a ring-3 window through the compositor's event push.
+
+## http_post (1.9.26)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 392 | `http_post` | `struct jt_http_post *` | 0 | 0 | reply body bytes, -status, or -errno |
+
+```c
+struct jt_http_post {
+    const char *path;                 /* same rules as http_get */
+    const char *body; unsigned int body_len;   /* at most 6144 bytes */
+    char *out;        unsigned int out_len;    /* clamped to 8192 */
+    unsigned int reply_ticks;         /* 0 = 1500 (15s), clamped to 4500 (45s) */
+};
+```
+
+**http_post** is the first call of the Samantha port (docs/ARCHITECTURE.md,
+"Samantha at ring 3"): one `POST <path> HTTP/1.0` of `application/json` to the
+chat host the Settings app keeps (`llm_host:llm_port`, turing.heyitsmejosh.com
+port 80 by default). Six arguments do not fit three registers, so `ebx` names
+one struct, copied out of user memory once after `paging_user_range_ok` on the
+whole of it; the user copy is never read again. `path` gets the exact checks
+`http_get` gives it: at most 128 bytes before the NUL, starts with `/`,
+printable ASCII only. `body` is range checked for `body_len` bytes and refused
+with -EINVAL above 6144, then copied into a kernel bounce buffer before the
+network is touched, so a program cannot rewrite the request mid-send. `out` is
+range checked for `out_len` (clamped to 8192) before anything runs. The wait
+runs with interrupts on, like `http_get`, and shares its one-fetch-at-a-time
+flag: a second caller gets -EBUSY.
+
+On HTTP 200 the reply body is copied out, at most `out_len` bytes, and the
+count is returned. Any other status is minus that status, -100 to -599.
+-ENODEV no NIC, -EIO no answer within `reply_ticks`, -EFAULT any range outside
+user memory. Nothing is written to `out` on any failure.
