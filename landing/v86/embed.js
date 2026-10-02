@@ -586,16 +586,17 @@ if (typeof document !== "undefined") (function () {
 
   var focused = false;
   var idleRestartTimeout = 0;
+  var KIOSK_IDLE_MS = 60000; // was 15s: a visitor reading her reply got rebooted to the boot logo mid-conversation
   var lastInteractionTime = Date.now();
   function resetIdleRestart() {
     if (idleRestartTimeout) clearTimeout(idleRestartTimeout);
     if (!focused) return; // only auto-reset if visitor has taken control
     idleRestartTimeout = setTimeout(async function () {
-      // Retail-kiosk style: after 15 seconds of inactivity, close windows and restart the tour.
-      // Only trigger if 15+ seconds have passed since the last user interaction (click, movement, key).
+      // Retail-kiosk style: after 60 seconds of inactivity, close windows and restart the tour.
+      // Only trigger if KIOSK_IDLE_MS has passed since the last user interaction (click, movement, key).
       var timeSinceActivity = Date.now() - lastInteractionTime;
-      if (focused && !tourRunning && timeSinceActivity < 15000) { idleRestartTimeout = 0; resetIdleRestart(); return; } // still busy (e.g. she's talking): check again later
-      if (focused && !tourRunning && timeSinceActivity >= 15000) { // only if still focused, tour not running, and truly idle
+      if (focused && !tourRunning && timeSinceActivity < KIOSK_IDLE_MS) { idleRestartTimeout = 0; resetIdleRestart(); return; } // still busy (e.g. she's talking): check again later
+      if (focused && !tourRunning && timeSinceActivity >= KIOSK_IDLE_MS) { // only if still focused, tour not running, and truly idle
         // Trigger a soft reset: close any open windows by rebooting the emulator
         // then restart the tour
         if (bootLogo) bootLogo.hidden = false;
@@ -608,7 +609,7 @@ if (typeof document !== "undefined") (function () {
         tourArmed = false;
       }
       idleRestartTimeout = 0;
-    }, 15000);
+    }, KIOSK_IDLE_MS);
   }
   function focusIn() {
     if (focused || !adaptersReady) return;
@@ -1688,7 +1689,8 @@ if (typeof document !== "undefined") (function () {
   function samanthaScriptForLap(lap) { return SAMANTHA_LAP_SCRIPTS[lap % SAMANTHA_LAP_SCRIPTS.length].concat(SAMANTHA_LAP_CLOSE); }
   // Phone's already-open avatar box only gets one line (see
   // phoneSamanthaIntro below), so it cycles the same three real requests.
-  var PHONE_LAP_LINES = [SAMANTHA_REMINDER_LINE, "what's the weather like", "what's on my calendar today"];
+  var PHONE_LAP_LINES = [SAMANTHA_REMINDER_LINE, "what's on my calendar today", "note: pick up dry cleaning"];
+  var phoneSaidFirst = false; // the avatar's own box takes the first line bare; the console after it needs 'n'
   // Every soft reboot re-injects the kernel. v86's own load_multiboot() hardcodes an
   // empty command line, so portfolio mode calls the same two steps it does (read from
   // the vendored libv86.js) with "portfolio" passed through, or the dock would reset
@@ -2197,29 +2199,34 @@ if (typeof document !== "undefined") (function () {
       // Wait for the tap so her reply is audible; give up after 20s and run
       // silently so the demo still moves (the button stays up for later).
       tapTalkBtn.hidden = false;
-      await Promise.race([tapTalkPromise, new Promise(function (r) { setTimeout(r, 20000); })]);
+      await Promise.race([tapTalkPromise, new Promise(function (r) { setTimeout(r, 5000); })]); // 20s read as a frozen demo
       if (focused || tourGen !== gen) return;
       await new Promise(function (r) { setTimeout(r, 400); }); // let resume() settle
     }
     updateHeadline('Samantha');
-    var speakSeen = speakCount;
-    await emulator.keyboard_send_text(PHONE_LAP_LINES[lapIndex % PHONE_LAP_LINES.length] + '\n', 55); // straight into her already-open input box, exactly like a real visitor's first tap-and-type would
-    // Wait for her real reply to finish speaking before closing her. A fixed
-    // 3s dwell closed the avatar before /api/speak even returned on a slow
-    // phone, so iOS visitors never heard her. The kernel logs
-    // "speak: status=N bytes=M" and plays pcm8 at 16 kHz (drivers/speak.h),
-    // so the clip lasts M/16000 s.
-    var waitStart = Date.now(), speakMs = 0;
-    while (Date.now() - waitStart < 15000) {
+    // Phones stay with her: every line, one after another, forever. The old
+    // lap asked one thing, hit Escape to the home grid, then clicked desktop
+    // dock coordinates on a phone grid (it opened Mail's About page), which
+    // read as "tries one prompt, then restarts". The first line goes straight
+    // into the avatar's open box; after that she is the Chat console, where
+    // 'n' starts a new message, same as the desktop lap scripts.
+    for (var li = 0; li < PHONE_LAP_LINES.length; li++) {
       if (focused || tourGen !== gen) return;
-      if (speakCount > speakSeen) { speakMs = Math.min(12000, Math.round(lastSpeakBytes / 16)) + 800; break; }
-      await sleep(200);
+      var speakSeen = speakCount;
+      if (phoneSaidFirst) { await emulator.keyboard_send_text('n', 200); await sleep(400); }
+      phoneSaidFirst = true;
+      await emulator.keyboard_send_text(PHONE_LAP_LINES[li] + '\n', 55);
+      // Wait for her real reply to finish speaking. The kernel logs
+      // "speak: status=N bytes=M" and plays pcm8 at 16 kHz (drivers/speak.h),
+      // so the clip lasts M/16000 s.
+      var waitStart = Date.now(), speakMs = 0;
+      while (Date.now() - waitStart < 15000) {
+        if (focused || tourGen !== gen) return;
+        if (speakCount > speakSeen) { speakMs = Math.min(12000, Math.round(lastSpeakBytes / 16)) + 800; break; }
+        await sleep(200);
+      }
+      await sleep(speakMs || 3000);
     }
-    await sleep(speakMs || 3000);
-    if (focused || tourGen !== gen) return;
-    if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80); // Escape: closes the now-windowed console back to the desktop
-    await sleep(800);
-    resetHeadline();
   }
   async function tourLoop(gen) {
     tourRunning = true;
@@ -2255,6 +2262,7 @@ if (typeof document !== "undefined") (function () {
       // on desktop (IS_PHONE false).
       await phoneSamanthaIntro(gen);
       if (focused || tourGen !== gen) return;
+      if (IS_PHONE) continue; // phones are Samantha only: the dock tour below clicks desktop dock coordinates
       await runSoloApp(gen, MAIL_APP);
       if (focused || tourGen !== gen) return;
       await multiWindowRound(gen, MW_FILES, MW_REMINDERS); // has real typed interaction (Reminders)
@@ -2378,7 +2386,7 @@ if (typeof document !== "undefined") (function () {
     var vga = emulator && emulator.v86 && emulator.v86.cpu.devices.vga;
     if (vga && vga.graphical_mode) {
       tourArmed = true;
-      tourTimer = setTimeout(startTourWhenReady, PORTFOLIO_MODE ? 4000 : 6000);
+      tourTimer = setTimeout(startTourWhenReady, PORTFOLIO_MODE ? 4000 : 2500); // 6s of a still desktop read as "still loading"
     }
   }, 500);
 })();

@@ -38,7 +38,7 @@ CLOSE_X, CLOSE_Y = 94, 56
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 VIEW_X, VIEW_Y = 78, 72   # gui_launch_from_dock: viewport at (x+8, y+32) for x=70, y=40
 PARK = (480, 200)
-TIME_X, TIME_Y, TIME_W, TIME_H = 60, 56, 256, 64   # user/clock.c: the 4x time digits
+TIME_X, TIME_Y, TIME_W, TIME_H = 46, 32, 280, 280  # user/clock.c: the analog face (FACE_CX/CY/R), its hands move every second
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -105,6 +105,7 @@ try:
 
     # 2. the digits are ink on the page color, and they move with the real clock
     a = digits()
+    if os.environ.get("JT_SHOT"): frame().save(os.environ["JT_SHOT"])
     ink = sum(1 for i in range(0, len(a), 3) if a[i] < 0x60 and a[i + 1] < 0x60 and a[i + 2] < 0x60)
     print(f"time digits: {ink} ink pixels")
     if ink < 200:
