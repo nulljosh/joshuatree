@@ -219,6 +219,10 @@ void task_exit_with(int code) {
        the heap. A ring-3 program that exits without closing (the normal
        case for a crashing one) must not leak, and the next task to get
        this slot must not inherit its descriptors. */
+    /* A private task directory is a snapshot of the kernel's PDEs: heap the
+       kernel mapped on demand since (a Mail window buffer past the first
+       few MB) is absent from it, so release runs on the kernel directory. */
+    { unsigned int kd = paging_kernel_directory(); __asm__ volatile ("mov %0, %%cr3" :: "r"(kd) : "memory"); }
     syscall_release_task(id);
     if (tasks[id].stack_base) kfree(tasks[id].stack_base);
     if (tasks[id].page_dir && tasks[id].page_dir != paging_kernel_directory()) { paging_task_unmap_private(tasks[id].page_dir); paging_free_task_directory(tasks[id].page_dir); }
