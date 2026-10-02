@@ -4801,14 +4801,9 @@ static void gui_app_frame_title(const char *label){
     font_draw_string(label, x + 96, y + 8, 0x00403439, -1);
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
-static void gui_apps_launch(int icon){
-    int was_windowed = gui_app_windowed; /* v1.7.7: ring-3 apps need a real viewport via keyboard Enter too */
-    unsigned int vw = window_width(), vh = window_height() - 40; /* clamped below to fit ring-3 .userfb */
-    if (!was_windowed) { gui_draw_app_titlebar(APPS[icon].name); if (vw * vh * 4 > 0x170000) { vw = 832; vh = 450; }
-        window_set_viewport(0, 40, vw, vh); app_view_x = 0; app_view_y = 40; app_view_w = (int)vw; app_view_h = (int)vh; gui_app_windowed = 1;
-    } else gui_app_frame_title(APPS[icon].name);
-    gui_launch(icon);
-    if (!was_windowed) { gui_app_windowed = 0; window_clear_viewport(); } else gui_app_frame_title(APPS[GUI_APPS_FOLDER].name); }
+static int gui_multiwin_open(int icon); static void gui_refuse_open(int icon);
+/* 2.0 gate 5: the Apps folder has no window of its own to host an app, so a launch closes the folder and opens the app as a compositor window, exactly a dock click (full table: the same refusal notice). */
+static void gui_apps_launch(int icon){ if (gui_multiwin_open(icon) < 0) gui_refuse_open(icon); }
 
 static void gui_launch_apps(void){
     int sel = 0;
@@ -4929,16 +4924,16 @@ static void gui_launch_apps(void){
                 int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
                 if (click_vx >= cell_x0 && click_vx < cell_x1 && click_vy >= cell_y0 && click_vy < cell_y1) { hit = i; break; }
             }
-            if (hit >= 0) { sel = hit; gui_apps_launch(hit); full = 1; continue; } /* the app drew over the screen, so the folder needs a real full repaint */
+            if (hit >= 0) { gui_apps_launch(hit); return; }
             return; /* a tap outside every tile still closes the folder: with no keyboard there is no other way out */
         }
-        if (k == KEY_ENTER) { gui_apps_launch(sel); full = 1; continue; } /* returns here when that app closes, folder still open, same as a real launcher */
+        if (k == KEY_ENTER) { gui_apps_launch(sel); return; }
         int old_sel = sel;
         if (k == 'a' && sel > 0) sel--;                 /* left  */
         else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) sel++; /* right */
         else if (k == 'w' && sel >= APPS_COLS) sel -= APPS_COLS;
         else if (k == 's' && sel + APPS_COLS < GUI_APPS_FOLDER) sel += APPS_COLS;
-        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_apps_launch(sel); full = 1; continue; }
+        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { gui_apps_launch(k - '1'); return; }
         if (sel != old_sel) {
             /* Keyboard selection drags the view with it, the direction that is
                not surprising: move past the last visible row and the grid
@@ -5120,6 +5115,7 @@ static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_AP
    buttons stay fully on screen and visually distinct, not stacked exactly
    on top of each other. */
 static void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
+    if (boot_to_phone) { *x = -8; *y = 8; *w = (int)window_width() + 16; *h = (int)window_height(); return; } /* 2.0 gate 5: one window, full screen under the back chevron strip (content rect 0,40,W,H-40) */
     if (slot_index == 0) { *x = 70; *y = 40; *w = 820; *h = 385; }
     else { *x = 70 + 60; *y = 40 + 60; *w = 820; *h = 385; }
     gui_clamp_win_rect(x, y, w, h); /* Mail/Calendar/Reminders/Files/Weather open here, not gui_launch_from_dock -- phone screens need the same clamp */
@@ -5965,7 +5961,7 @@ static void gui_run(void){
     auth_gate(); /* v0.77: real login screen, once per session, before the desktop ever paints */
     gui_draw_boot_screen();
     gui_order_init();
-    if (boot_to_samantha) { boot_to_samantha = 0; serial_puts("samopen\n"); if (boot_to_phone) { gui_app_windowed = 0; gui_apps_launch(6); } else gui_launch_from_dock(6); } /* 1.9.26: ring-3 Samantha is the first screen; phone mode lands on the home grid when she closes */
+    if (boot_to_samantha) { boot_to_samantha = 0; serial_puts("samopen\n"); if (boot_to_phone) { gui_app_windowed = 0; phone_window_run(6); } else gui_launch_from_dock(6); } /* 1.9.26: ring-3 Samantha is the first screen; phone mode lands on the home grid when she closes */
     else if (!boot_to_phone) serial_puts("guidesktop\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: the icon desktop drew first, samantha mode never reaches here before her avatar; phone mode never draws this desktop at all (see below), so it must not claim it did */
     if (boot_to_phone) { phone_home_run(); return; } /* v1.8.0: leaving Samantha lands on a real home screen, not the desktop's dock squeezed into 430px; never returns */
     dock_hover = dock_presented_hover = -1;
@@ -8185,11 +8181,7 @@ static void run(char *line){
     }
     else if (!strcmp(line, "chat") || !strcmp(line, "samantha")) {
         /* 1.9.26: Samantha is a ring-3 program (user/samantha.c); the text shell opens her window like `notes`. */
-        if (window_open(800, 600, 32)) {
-            samantha_ring3_open();
-            window_close();
-            clear();
-        }
+        puts("chat: Samantha is a desktop window now, run gui and click her in the dock\n"); /* 2.0 gate 5: no blocking launch from the text shell */
     }
     else if (!strcmp(line, "build")) {
         /* v10's "build stuff" loop: take a request, ask the LLM to generate
@@ -8230,11 +8222,7 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "notes")) {
-        if (window_open(800, 600, 32)) {
-            notes_ring3_open();
-            window_close();
-            clear();
-        }
+        puts("notes: Notes is a desktop window now, run gui and click it in the dock\n"); /* 2.0 gate 5: no blocking launch from the text shell */
     }
     else if (!strcmp(line, "gfxtest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
