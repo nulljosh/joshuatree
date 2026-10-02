@@ -36,5 +36,6 @@ int gui_dock_hit_test(int mx, int my);
    tuned for the desktop's 960x540, far wider than phone mode's 430x760.
    Desktop is unaffected, everything already fits there. */
 void gui_clamp_win_rect(int *x, int *y, int *w, int *h);
+int gui_parse_res(const char *cl, int *rw, int *rh);
 
 #endif

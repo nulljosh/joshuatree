@@ -953,11 +953,8 @@ static int portfolio_dock;
    splash frame still shows (gui_draw_boot_screen runs first, unconditionally);
    this only replaces the icon desktop that would follow it. */
 static int boot_to_samantha;
-/* "phone" on the command line, see kmain's parse: gui_run opens a real
-   portrait phone mode (430x760) instead of the desktop's 960x540@2x so
-   the demo boots 1:1 into what a phone screen actually is, rather than
-   shrinking the desktop's layout down to unreadable text. */
-static int boot_to_phone;
+/* "phone" (430x760 portrait, kmain's parse) and "res=WxH" (physical px from embed.js at dpr 1, gui_parse_res; opens W/2 x H/2 at scale 2) pick gui_run's mode. */
+static int boot_to_phone, boot_res_w, boot_res_h;
 #include "hint.h"
 static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
 static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
@@ -6419,7 +6416,7 @@ static void gui_run(void){
        VBE takes any size, and 430x760 is a real phone's own logical
        pixels, not the desktop's 960x540 shrunk to fit. */
     if (boot_to_phone) { if (!window_open_scaled(430, 760, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; } }
-    else if (!window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; }
+    else if (!(boot_res_w && window_open_scaled(boot_res_w / 2, boot_res_h / 2, 32, 2)) && !window_open_scaled(960, 540, 32, 2)) { puts("no VGA device found or out of page tables\n"); return; } /* res= (gui_parse_res) first, else the default */
     font_set_aa(gui_aa_char, gui_aa_advance); /* v44: real typeface for every string from here on */
     font_set_aa_mono(gui_aa_char_mono); /* term-mono: mono face for the terminal grid and Keyrate's typed line */
     /* v46: no wind in the browser, decided up front rather than measured
@@ -9160,6 +9157,7 @@ void kmain(unsigned int multiboot_info_addr){
            never lands on a desktop that was never designed for 430px. */
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='p' && pc[1]=='h' && pc[2]=='o' && pc[3]=='n' && pc[4]=='e' && (pc[5]==' ' || pc[5]==0)) { boot_to_phone = 1; boot_to_samantha = 1; serial_puts("bootphone\n"); break; }
+        if (gui_parse_res(cl, &boot_res_w, &boot_res_h)) serial_puts("bootres\n"); /* dock_geom.c: "res=WxH" */
         /* "panictest" on the multiboot command line (tools/checks/
            panic-symbols-check.py passes it) -- deliberately faults from a
            known, named function right after idt_install() so a headless
