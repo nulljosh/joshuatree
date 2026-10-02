@@ -66,7 +66,7 @@ if (typeof document !== "undefined") (function () {
   // 1.7.16: one cmdline for the first boot AND every tour-lap reboot. reinjectKernel
   // used to reload the kernel with no cmdline, so after lap 1 a phone visitor got a
   // letterboxed desktop (no "phone"), and everyone lost facehost.
-  var BOOT_CMDLINE = (IS_PHONE ? "phone samantha " : "") + RES_TOKEN + (/[?&]portfolio\b/.test(location.search) ? "portfolio " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com";
+  var BOOT_CMDLINE = (IS_PHONE ? "phone samantha " : "") + RES_TOKEN + (/[?&]portfolio\b/.test(location.search) ? "portfolio samantha " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com";
   var GLIDE_MAX_MS = 700; // longest tour cursor glide, see moveCursorTo
   // v52.6: real shadow cursor position, kept in sync by every real send
   // this file makes (mousemove, touchmove drags, and moveCursorTo's own
@@ -714,7 +714,7 @@ if (typeof document !== "undefined") (function () {
     tapTalkBtn = document.createElement("button");
     tapTalkBtn.type = "button";
     tapTalkBtn.id = "tap-to-talk";
-    tapTalkBtn.textContent = "Tap to hear Samantha";
+    tapTalkBtn.textContent = /[?&]portfolio\b/.test(location.search) ? "Tap to hear Joshua" : "Tap to hear Samantha";
     tapTalkBtn.hidden = true;
     tapTalkBtn.style.cssText = "position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:7;" +
       "background:var(--fg);color:var(--bg);border:none;border-radius:999px;padding:14px 22px;min-height:44px;" +
@@ -748,6 +748,7 @@ if (typeof document !== "undefined") (function () {
     var composeInput = document.getElementById("demo-compose-input");
     if (composer && composeInput) {
       composer.hidden = false;
+      if (/[?&]portfolio\b/.test(location.search)) composeInput.placeholder = "Message Joshua";   // portfolio mode is his site
       var frameEl = document.getElementById("demo-frame");
       if (frameEl) frameEl.classList.add("has-composer");
       var mirrored = ""; // what the kernel's input line holds now
@@ -2184,14 +2185,14 @@ if (typeof document !== "undefined") (function () {
   // honors -- landing cleanly on the normal desktop the rest of this lap's
   // dock-based tour already assumes.
   async function phoneSamanthaIntro(gen) {
-    if (!IS_PHONE) return;
+    if (!IS_PHONE && !PORTFOLIO_MODE) return;   // portfolio: boots into his face on every device, so this scene runs there too
     if (focused || tourGen !== gen || !adaptersReady) return;
     emulator.mouse_adapter.emu_enabled = true;
     emulator.keyboard_adapter.emu_enabled = true;
     var start = Date.now();
     while (serialLog.indexOf('samfocus') === -1) {
       if (focused || tourGen !== gen) return; // a real visitor took over
-      if (Date.now() - start > 8000) return; // didn't see the avatar boot at all (unexpected cmdline) -- bail, the normal dock tour below still runs as-is
+      if (Date.now() - start > (PORTFOLIO_MODE ? 60000 : 8000)) return; // didn't see the avatar boot at all (portfolio: his 72 frames load first, slower than her 60) (unexpected cmdline) -- bail, the normal dock tour below still runs as-is
       await sleep(150);
     }
     if (focused || tourGen !== gen) return;
@@ -2203,7 +2204,26 @@ if (typeof document !== "undefined") (function () {
       if (focused || tourGen !== gen) return;
       await new Promise(function (r) { setTimeout(r, 400); }); // let resume() settle
     }
-    updateHeadline('Samantha');
+    updateHeadline(PORTFOLIO_MODE ? 'Joshua' : 'Samantha');
+    if (PORTFOLIO_MODE) {
+      // Portfolio: his face is the whole screen on every device. One line
+      // ("show me around"), his reply spoken, then on desktop Escape drops to
+      // the dock so the app tour below can run; a phone stays on his face.
+      var pSeen = speakCount;
+      await emulator.keyboard_send_text(PORTFOLIO_INTRO_LINE + '\n', 55);
+      var pStart = Date.now(), pMs = 0;
+      while (Date.now() - pStart < 15000) {
+        if (focused || tourGen !== gen) return;
+        if (speakCount > pSeen) { pMs = Math.min(12000, Math.round(lastSpeakBytes / 16)) + 800; break; }
+        await sleep(200);
+      }
+      await sleep(pMs || 3000);
+      if (focused || tourGen !== gen) return;
+      if (!IS_PHONE && emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80);
+      await sleep(800);
+      resetHeadline();
+      return;
+    }
     // Phones stay with her: every line, one after another, forever. The old
     // lap asked one thing, hit Escape to the home grid, then clicked desktop
     // dock coordinates on a phone grid (it opened Mail's About page), which
@@ -2234,6 +2254,9 @@ if (typeof document !== "undefined") (function () {
     // same slot order), so the show is just that, each one opened from its real dock
     // tile and closed by its real X. No reboot between laps, nothing here writes state.
     while (PORTFOLIO_MODE && !focused && tourGen === gen) {
+      await phoneSamanthaIntro(gen);   // his face first; the scene ends with Escape, which drops to the dock the tour below drives
+      if (focused || tourGen !== gen) return;
+      if (IS_PHONE) { while (!focused && tourGen === gen) await sleep(5000); return; }   // a phone is his face and nothing else; the dock tour below clicks desktop coordinates
       for (var p = 0; p < PORTFOLIO_TOUR.length; p++) {
         if (focused || tourGen !== gen || !adaptersReady) return;
         await runSoloApp(gen, PORTFOLIO_TOUR[p]);
@@ -2338,6 +2361,7 @@ if (typeof document !== "undefined") (function () {
   // and boots with Joshua's own apps on the dock. The generic kiosk tour is
   // the wrong demo there, so tourLoop runs PORTFOLIO_TOUR instead, four idle seconds in.
   var PORTFOLIO_MODE = /[?&]portfolio\b/.test(location.search);
+  var PORTFOLIO_INTRO_LINE = 'show me around';
   // Real keypresses per app (the same scripted path the main tour uses),
   // so each one is used on camera, not just opened. Direct report
   // (2026-09-26): "demo apps have no interaction".
