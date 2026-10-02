@@ -165,6 +165,7 @@ static void phone_window_run(int icon){
     gui_window_t *w = &gui_windows[slot];
     int task = w->task, redraw = 1, mx = (int)window_width() / 2, my = (int)window_height() / 2;
     mouse_click_edge_sync();
+    kbd_drain(); /* a key typed before this app existed (a stale Esc from closing the last one) is not the app's, and would kill it on its first turn */
     for (;;) {
         if (task < 0 || !task_used(task)) { ring3app_window_reaped(task, task_last_exit_code()); break; }
         unsigned int fw, fh; int dirty = 0;

@@ -10,19 +10,18 @@ dismissed the launchpad; only the keyboard path (arrows+Enter, or digits
 
 Reproduces headlessly with the same QMP absolute-pointer pattern as
 tools/checks/dockhover-check.py: open the dock's Apps-folder tile (dock slot 0),
-wait for the grid to render, click squarely on a fleet-app tile (Curbfind,
-grid index 8), then check a real, unambiguous pixel: the outer window's
-red traffic-light dot at (80,46) in 960x540 logical space (gui_launch_
-from_dock draws it once for the whole windowed app session, whether the
-Apps folder or something launched from inside it is currently showing).
+wait for the grid to render, click squarely on a fleet-app tile (grid index 8,
+row 1 col 3).
 
-  - Before the fix: the click just closes the folder -> back to the full
-    desktop -> that pixel is desktop/menubar colour, not the red dot.
-  - After the fix: the click launches Curbfind inside the SAME outer
-    window -> the red dot is still exactly there.
-
-Proven discriminating below (temporarily reverting the kernel.c hit-test
-block makes this fail, restoring it makes it pass again).
+Since gate 5 the tile does not launch the app inside the folder any more: the
+folder closes and the app opens as its own compositor window (a ring-3 window
+task). So the assertions are the kernel's serial markers, in order:
+  - "appsgridrepaint" (the folder grid was up when the click landed),
+  - "ring3app: launching <APP>.BIN at ring 3 as a window",
+  - "syscall: window opened for ring-3 task",
+  - the app's own open marker "<app>: ring-3 window" written from ring 3.
+Before the 0.62-era hit-test fix a tile click only dismissed the folder, so
+none of the launch lines ever appeared.
 
 Usage: tools/checks/launchpad-click-check.py   (from repo root, after make kernel.elf)
 """
@@ -39,8 +38,7 @@ DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 APPS_FOLDER_SLOT = 0  # GUI_DOCK_DEFAULT[0] == GUI_APPS_FOLDER
-RED_DOT = (56 + 24, 30 + 16)  # gui_launch_from_dock's fixed traffic-light red circle, logical screen coords
-# Curbfind (grid index 8, row 1 col 3) tile centre in the apps-folder
+# Grid index 8 (row 1 col 3, whichever fleet app sits there) tile centre in the apps-folder
 # viewport, converted to full-screen logical coords by hand from
 # gui_launch_apps's own layout math (window x=56,y=30,w=848,h=490 ->
 # viewport origin 64,62,832,450; x0=(832-750)/2=41, y0=95; cell_w=150,
@@ -87,8 +85,12 @@ try:
     click(); time.sleep(1.0)
     # Click squarely on the Curbfind tile.
     move(*CURBFIND_CLICK); time.sleep(0.3)
-    click(); time.sleep(0.8)
-    dump(DUMP)
+    click()
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        time.sleep(0.25)
+        if "window opened for ring-3 task" in open(LOG, errors="replace").read(): break
+    time.sleep(1.0)  # let the app's own marker land after the window opens
     # QEMU can tear down the QMP socket the instant it processes quit,
     # before this side ever reads a reply -- a real race, not a bug in
     # the assertions above (which already ran); a reset here must not
@@ -99,22 +101,22 @@ finally:
     try: q.wait(timeout=5)
     except subprocess.TimeoutExpired: q.kill()
 
-def load(path):
-    return Image.frombytes("RGBA", (W, H), open(path, "rb").read(), "raw", "BGRA").convert("RGB")
-
-img = load(DUMP)
-# Sample a small box around the red dot rather than one pixel: the cursor
-# sprite (moved away from the dock after the tile click, but still
-# somewhere on screen) or antialiasing can land exactly on a single
-# sample point. Any pixel in the box being solidly red is enough.
-cx, cy = RED_DOT[0] * SCALE, RED_DOT[1] * SCALE
-box = [img.getpixel((x, y)) for y in range(cy - 6, cy + 6) for x in range(cx - 6, cx + 6)]
-best = max(box, key=lambda p: p[0] - p[1] - p[2])
-print("reddest pixel near the red-dot position after clicking a launchpad tile:", best)
-is_red = best[0] > 200 and best[1] < 140 and best[2] < 140
-if is_red:
-    print("PASS: outer window chrome still present -> the launchpad tile click launched the app instead of just closing the folder")
-    sys.exit(0)
+log = open(LOG, errors="replace").read()
+import re
+m = re.search(r"ring3app: launching (\w+)\.BIN at ring 3 as a window", log)
+ok = True
+if "appsgridrepaint" not in log:
+    print("FAIL: the Apps folder grid never rendered, so the click did not test a tile"); ok = False
+if not m:
+    print("FAIL: no 'ring3app: launching <APP>.BIN at ring 3 as a window' after the tile click (the click just closed the folder)"); ok = False
 else:
-    print("FAIL: red traffic-light dot is gone -> the click closed the whole window instead of opening the tapped app (launchpad clicks don't open apps)")
-    sys.exit(1)
+    app = m.group(1).lower()
+    print("tile click launched:", app)
+    if "window opened for ring-3 task" not in log[log.index(m.group(0)):]:
+        print("FAIL: 'window opened for ring-3 task' missing after the launch line"); ok = False
+    if (app + ": ring-3 window") not in log:
+        print(f"FAIL: the app's own open marker '{app}: ring-3 window' never appeared"); ok = False
+if ok:
+    print("PASS: the launchpad tile click closed the folder and opened the app as a compositor window")
+    sys.exit(0)
+sys.exit(1)

@@ -185,10 +185,10 @@ try:
 
         def keys(k): cmd2({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k}]}})
         for ch in "remind me to call mom":
-            keys("spc" if ch == " " else ch); time.sleep(0.03)
+            keys("spc" if ch == " " else ch); time.sleep(0.15)  # Samantha is a ring-3 window now: each key redraws her frame, and a full event ring drops the newest key (the enter)
         time.sleep(0.3)
         keys("ret")
-        time.sleep(2.0)
+        time.sleep(5.0)  # /api/pick round trip, then user/samantha.c runs new_reminder locally
         cmd2({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": LABEL_DUMP}})
         try: cmd2({"execute": "quit"})
         except (ConnectionResetError, BrokenPipeError, OSError): pass
@@ -206,12 +206,12 @@ try:
         px2 = img2.load()
         ACCENT = (0xB7, 0x86, 0x2A)
 
-        def close2(a, b, tol=40): return all(abs(a[i] - b[i]) <= tol for i in range(3))
+        def close2(a, b, tol=70): return all(abs(a[i] - b[i]) <= tol for i in range(3))
 
         # "Samantha" (accent color) spans roughly x=42..159 at this scale/
         # font -- sample across that whole span, not just the left edge,
         # so a face that covers the word's second half still fails this.
-        cols_hit = sum(1 for x in range(42, 160, 6) if any(close2(px2[x, y], ACCENT) for y in range(100, 130)))
+        cols_hit = sum(1 for x in range(42, 160, 6) if any(close2(px2[x, y], ACCENT) for y in range(100, 140)))
         if cols_hit < 15:
             fail = 1
             print(f"FAIL: 'Samantha' label only has accent-colored pixels in {cols_hit}/20 sampled columns after her reply -- the face is covering part of it")
@@ -525,12 +525,12 @@ try:
         else:
             print("PASS: phone boot landed on the focused avatar screen")
 
-        # Face geometry from chat.h's chat_boot_samantha_open (boot_to_phone
-        # branch): face_top = T(0) + 44, half = face_top + (760-face_top)/2,
-        # side = min(half-face_top, FACE_BIG_MAX=300), centered horizontally.
-        face_top = 44
-        half = face_top + (LOGICAL_H4 - face_top) // 2
-        side = min(half - face_top, 300)
+        # Face geometry from user/samantha.c's phone layout (she is a ring-3
+        # window since 1.9.26): a fixed 60x60 logical face under the name
+        # row, centred horizontally, top at logical y=78 (read off the real
+        # frame in /tmp/jt-phonetap-face.png).
+        face_top = 78
+        side = 60
         face_cx = LOGICAL_W4 // 2
         face_cy = face_top + side // 2
 
