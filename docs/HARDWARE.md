@@ -215,8 +215,8 @@ Everything is split to fit a 180 x 180 x 180 mm bed (Bambu A1 mini). All numbers
 <!-- parts:start -->
 | Part | Size | Print |
 |---|---|---|
-| Rings S0 to S5 | 200 mm square, 6.5 / 7.1 / 7.1 / 7.1 / 7.1 / 7.1 mm thick (base ring first, then equal strata), 2.0 mm vent gap between each, 24 quarters with cuts at +-30 mm alternating, three 24.0 x 2.4 mm spacer pads on the underside of rings 1 to 5, 8.4 mm behind the face, nut pocket under ring 0 and on top of ring 5 | FDM PLA or PETG at 0.2 mm, one tone each |
-| Cap | 200 mm square frame in 4 pieces (cuts through the centre, never on a ring cut) and a 178 mm panel in one piece carrying the whole tree, 3 mm thick, panel and frame hole corners R2, tree from `landing/logo.svg` engraved 0.8 mm | Same print, printed right side up |
+| Rings S0 to S5 | 200 mm square, 6.5 / 7.1 / 7.1 / 7.1 / 7.1 / 7.1 mm thick (base ring first, then equal strata), 2.0 mm vent gap between each, 3 pieces per ring: one 200 mm front with side returns of 50 and 40 mm alternating, and two rear L pieces, so every seam lands on a side face; rings 1 to 5 carry 5 pads under the front and 3 under each rear L (rod corner, arm end, mid), 16.0 x 2.4 mm and 8.4 mm or more behind the face, nut pocket under ring 0 and on top of ring 5 | FDM PLA or PETG at 0.2 mm, one tone each |
+| Cap | 200 mm square frame in 3 pieces (one front U plus two rear L, side cut at 45 mm, 5 mm from the ring 5 seam) and a 178 mm panel in one piece carrying the whole tree, 3 mm thick, panel and frame hole corners R2, tree from `landing/logo.svg` engraved 0.8 mm | Same print, printed right side up |
 | Core tray | 178 mm square, 52.0 mm tall, 2 mm walls, corners chamfered 4.2 mm, vent slots on every gap line, 4 board standoffs printed on the floor, no rear wall | Printed, floor down, no supports |
 | Rear plate | 173.6 x 51.1 mm and 13 mm deep including the facade, one piece, with the 160 x 45 I/O window and a 1.6 mm frame on all four sides, flush with the ring faces | Printed lying flat |
 | Feet | 7.6 mm round, 1.6 mm thick, recessed under ring 0, cover the nut and the rod end | TPU or PLA |

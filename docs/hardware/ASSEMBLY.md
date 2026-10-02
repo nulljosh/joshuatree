@@ -18,8 +18,8 @@ Same lines as the table in `docs/HARDWARE.md`. The ID is what each step points a
 
 | ID | Part | Qty | Where |
 |---|---|---|---|
-| P1 | Printed ring pieces (`ring0_*` to `ring5_*`, four per ring, cut at a different spot on every ring), spacer pads already on them | 24 pieces | `stl/` |
-| P2 | Printed cap: `cap_panel` (the whole tree, engraved) and four `cap_frame_*` pieces | 5 | `stl/` |
+| P1 | Printed ring pieces (`ring0_*` to `ring5_*`, three per ring: `_front` is the whole 200 mm front with side returns, `_rl` and `_rr` are the rear L pieces), spacer pads already on rings 1 to 5 | 18 pieces | `stl/` |
+| P2 | Printed cap: `cap_panel` (the whole tree, engraved) and three `cap_frame_*` pieces (front U, two rear L) | 4 | `stl/` |
 | P3 | Printed tray, board standoffs already on the floor | 1 | `stl/` |
 | P4 | Printed rear plate, with its outer face flush to the rings | 1 | `stl/` |
 | P5 | Foot, TPU or PLA, recessed under ring 0 | 4 | `stl/` |
@@ -40,7 +40,7 @@ All parts print flat on the bed, in the orientation the STL is already in. No pa
 
 | Part | Layer | Walls | Infill | Supports |
 |---|---|---|---|---|
-| P1 rings, P2 cap (print pad side up, the STLs are already flipped) | 0.2 mm | 3 | 15% gyroid | none |
+| P1 rings, P2 cap (print pad side up, the STLs are already flipped; each `_front` file is already turned 45 degrees so the 200 mm front lies diagonally on the 180 mm bed) | 0.2 mm | 3 | 15% gyroid | none |
 | P3 tray | 0.2 mm | 3 | 20% gyroid | none |
 | P4 rear plate | 0.2 mm | 3 | 100% | none |
 
@@ -50,7 +50,7 @@ PLA is fine to start. PETG is better if the box will sit near a warm room. Print
 
 ![Step 1](assembly/step1-feet-and-rods.svg)
 
-**1. Ring 0 and rods.** Lay the four ring 0 pieces (P1, 200 mm like every ring) in a square on the table. Drop a nut (B7) into the hex pocket at each corner from below, then push a rod (B6) up through the hole into it. Press a foot (P5) into the round recess under each corner so it closes the pocket and covers the rod end. Nothing metal shows from underneath.
+**1. Ring 0 and rods.** Lay the three ring 0 pieces (P1, the front and two rear L pieces, 200 mm like every ring) in a square on the table. Drop a nut (B7) into the hex pocket at each corner from below, then push a rod (B6) up through the hole into it. Press a foot (P5) into the round recess under each corner so it closes the pocket and covers the rod end. Nothing metal shows from underneath.
 
 ![Step 2](assembly/step2-tray.svg)
 
@@ -58,7 +58,7 @@ PLA is fine to start. PETG is better if the box will sit near a warm room. Print
 
 ![Step 3](assembly/step3-rings.svg)
 
-**3. Rings.** Slide ring 1 over the rods. Its three little 2 mm pads rest on ring 0 and make the vent gap. Then ring 2, 3, 4, 5. No loose spacers. Every ring is cut at a different spot from its neighbours, so the seams stagger. The pads hug the core, 8.4 mm behind the face, so the 2 mm gap shows only shadow and the corners and the rear stay open for air. The rear pieces with the notch between them are for the I/O. Ring 0 is notched 1.6 mm deep as well, so the plate sits in a recess and shows an even black frame on all four sides.
+**3. Rings.** Slide ring 1 over the rods. Every piece carries its own 2 mm pads (five under the front, three under each rear L: one at the rod corner along the inner chamfer, one near each arm end, one mid-side), so no piece can drop onto the ring below. Then ring 2, 3, 4, 5. No loose spacers. The front of every ring is one unbroken piece; the cuts land on the side faces at 50 and 40 mm from the front, alternating, so the seams stagger. The pads hug the core, 8.4 mm behind the face, so the 2 mm gap shows only shadow and the corners and the rear stay open for air. The rear pieces with the notch between them are for the I/O. Ring 0 is notched 1.6 mm deep as well, so the plate sits in a recess and shows an even black frame on all four sides.
 
 **4. Board.** Seat the board (B1, with B2 in it) on the printed standoffs and screw it down with the four M3x8 screws (B8). Clip the I/O shield (B9) onto the back of the board. Plug in the SATA cable (B10) and the SSD (B3).
 
@@ -68,10 +68,10 @@ PLA is fine to start. PETG is better if the box will sit near a warm room. Print
 
 ![Step 5](assembly/step5-cap-and-nuts.svg)
 
-**6. Top nuts and cap.** Before the cap, drop a nut (B7) into each of the four hex pockets in the top of ring 5 and run it down until the stack is snug. Snug, not crushed. If a ring is rocking, one nut is loose. Then set the four frame pieces (P2) flat on ring 5 with one drop of superglue under each. Lay the cap panel (the tree) in the middle, resting on the tray walls. The frame hides every nut, and no seam crosses the tree.
+**6. Top nuts and cap.** Before the cap, drop a nut (B7) into each of the four hex pockets in the top of ring 5 and run it down until the stack is snug. Snug, not crushed. If a ring is rocking, one nut is loose. Then set the three frame pieces (P2) flat on ring 5 with one drop of superglue under each. Lay the cap panel (the tree) in the middle, resting on the tray walls. The frame hides every nut, and no seam crosses the tree.
 
 **7. First boot.** Plug a keyboard into the PS/2 port, a monitor into the board, and the USB stick (B5) into a rear USB port. Power on and tap F11 (or F2, then boot menu) for the board's boot menu. Pick the USB stick, the UEFI entry. You'll see the GRUB menu, then Joshua Tree. If the screen stays black, plug a USB serial adapter into the board's header and read the log. `docs/HARDWARE.md` Phase 0 has the whole drill.
 
 ## If something doesn't fit
 
-Cutting down: 35 prints and 58 loose pieces became 35 printed pieces in 32 files, and 20 fasteners became 16. Parts have 0.2 mm of clearance on every mating face. If your printer runs tight, sand the edge, don't scale the part. If a ring hole won't clear the tray, you printed too hot. Fix the part in `strata_cad.py`, run it again, reprint. That loop is the whole point.
+Cutting down: 35 prints and 58 loose pieces became 28 printed pieces in 25 files, and 20 fasteners became 16. Parts have 0.2 mm of clearance on every mating face. If your printer runs tight, sand the edge, don't scale the part. If a ring hole won't clear the tray, you printed too hot. Fix the part in `strata_cad.py`, run it again, reprint. That loop is the whole point.

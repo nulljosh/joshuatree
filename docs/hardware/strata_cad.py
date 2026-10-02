@@ -36,11 +36,15 @@ NUT_AF, NUT_T = 5.5 + 2 * FIT, 2.4 + FIT   # M3 nut plus clearance
 FOOT_T, FOOT_OD = 1.6, 7.6        # printed or TPU foot, recessed into ring 0's underside, covers the nut pocket and the rod end
 CAP_SPLIT = 0.0                  # cap frame cuts sit on the tree's axes, symmetric, never on a ring cut
 SPLIT = 30.0                     # quarter cuts sit at +-30 mm, alternating, so no seam lines up with the ring above or below
-BASE, TOPC, INK = (0xB9, 0x54, 0x2C), (0xF0, 0xE7, 0xD8), (0x1E, 0x1C, 0x1A)
+# one maker's line, Bambu Lab PLA Matte (the A1 mini's own maker): hex as published on its filament listing, check the swatch at purchase
+FILAMENT = [("Terracotta", "#B15533"), ("Caramel", "#AE835B"), ("Latte Brown", "#D3B7A7"), ("Bone White", "#CBC6B8"), ("Desert Tan", "#E8DBB7"), ("Ivory White", "#FFFFFF")]
+CAP_FILAMENT = ("Desert Tan", "#E8DBB7")
+INK = (0x1E, 0x1C, 0x1A)
+TOPC = tuple(int(CAP_FILAMENT[1][i:i + 2], 16) for i in (1, 3, 5))
 def mix(a, b, t): return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
 def hexc(c): return "#%02X%02X%02X" % tuple(c)
 TOP_POCKET = 4.0                 # top nut pocket in ring 5: the nut sits on a 3 mm floor, the cap closes it
-PAD_T, PAD_L = 2.4, 24.0         # vent spacer pad: 2.4 mm wide, 24 mm long, centred on the front and both side edges, printed into the ring above it, hugging the core so it sits 8.5 mm behind the face
+PAD_T, PAD_L = 2.4, 16.0         # vent spacer pad: 2.4 mm wide, 24 mm long, centred on the front and both side edges, printed into the ring above it, hugging the core so it sits 8.5 mm behind the face
 BOSS_OD, PILOT = 8.0, 2.6        # board standoff printed into the tray floor, 2.6 mm pilot for a self-tapping M3x8
 HOLES = [(sx * HOLE_DX / 2, sy * HOLE_DY / 2) for sx in (-1, 1) for sy in (-1, 1)]
 IO_W, IO_H = 160.0, 45.0         # shield opening 158.75 x 44.45 plus clearance both sides
@@ -72,9 +76,6 @@ for i, t in enumerate(THICK):
     if i == len(THICK) - 1:
         for x, y in rod_xy(): s -= nut_pocket(x, y, t - TOP_POCKET, TOP_POCKET + 1)   # top nut, closed by the cap
     s = Pos(0, 0, z) * s
-    if i > 0:                                            # the 2 mm vent spacer is three pads on the ring's underside, right beside the core, deep in the gap shadow; the corners and the rear stay open for air
-        for px, py, dx, dy in ((1, 0, PAD_T, PAD_L), (-1, 0, PAD_T, PAD_L), (0, -1, PAD_L, PAD_T)):
-            s += Pos(px * (CORE / 2 + FIT + PAD_T / 2), py * (CORE / 2 + FIT + PAD_T / 2), z - GAP) * Box(dx, dy, GAP + 0.5, align=(Align.CENTER, Align.CENTER, Align.MIN))
     nz = max(z, FAC_Z0 - FIT)                              # ring 0's rear wall is notched 1.6 mm so the window gets a bottom frame strip
     if z < IO_Z + IO_H / 2 and z + t > FAC_Z0:             # any ring the window touches is notched, so no ring has a roof over the notch
         s -= Pos(0, CORE / 2 + 20, nz) * Box(PW + 2 * FIT, 40, z + t - nz + 1, align=C)
@@ -159,25 +160,53 @@ feet = [Pos(x, y, 0) * Cylinder(FOOT_OD / 2, FOOT_T, align=C) for x, y in foot_p
 rods = [Pos(x, y, FOOT_T) * Cylinder(3.0 / 2, ROD_LEN, align=C) for x, y in rod_xy()]
 
 # ---- printable pieces, in assembled position, cut with a 0.2 mm FIT gap on every seam; (stem, shape, qty, filament hex) ----
-def split4(s, cx, cy, h=FIT / 2):
-    out = {}
-    for nm, xs, ys in (("fl", -1, -1), ("fr", 1, -1), ("rl", -1, 1), ("rr", 1, 1)):
-        bx = cx + h + 150 if xs > 0 else cx - h - 150
-        by = cy + h + 150 if ys > 0 else cy - h - 150
-        p = s & (Pos(bx, by, 150) * Box(300, 300, 300))
-        if p.volume > 1.0:
-            assert len(p.solids()) == 1, "quarter fell into loose pieces"
-            out[nm] = p
-    return out
+def box_y(y0, y1): return Pos(0, (y0 + y1) / 2, 150) * Box(400, y1 - y0, 300)
+def box_x(x0, x1, y0=-300, y1=300): return Pos((x0 + x1) / 2, (y0 + y1) / 2, 150) * Box(x1 - x0, y1 - y0, 300)
+RET = lambda i: 50.0 if i % 2 == 0 else 40.0      # side return of the front piece, alternating so ring seams stagger on the side faces
+CAP_RET = 45.0
+ARM_END = 2.0                                      # pad stays this far off any cut
+from shapely.geometry import box as sbox, Polygon as SPoly
+from shapely import affinity
+def prect(cx, cy, L, T, ang=0.0): return affinity.rotate(sbox(cx - L / 2, cy - T / 2, cx + L / 2, cy + T / 2), ang, origin=(cx, cy))
+CP_T, CP_L = 2.3, 8.0                              # rod-corner pad along the inner chamfer
+def pad_polys(side, ret):
+    """footprints of the pads under one ring piece; side is 'front', 'rl' or 'rr'"""
+    inner = CORE / 2 + FIT; yc = -BASE_W / 2 + ret
+    def chamfer(sx, sy):
+        m = inner - CHR / 2; d = CP_T / 2 / 2 ** 0.5
+        return prect(sx * (m + d), sy * (m + d), CP_L, CP_T, -sx * sy * 45.0)
+    if side == "front":
+        return [chamfer(-1, -1), chamfer(1, -1), prect(0, -(inner + PAD_T / 2), PAD_L, PAD_T)] + \
+               [prect(sx * (inner + PAD_T / 2), yc - FIT / 2 - ARM_END - PAD_L / 2, PAD_T, PAD_L) for sx in (-1, 1)]
+    sx = -1 if side == "rl" else 1
+    return [chamfer(sx, 1), prect(sx * (inner + PAD_T / 2), yc + FIT / 2 + ARM_END + PAD_L / 2, PAD_T, PAD_L), prect(sx * (inner + PAD_T / 2), 35.0, PAD_T, 24.0)]
+def pad_solid(poly, z0):
+    w = Wire.make_polygon([Vector(x, y, z0 - GAP) for x, y in list(poly.exterior.coords)[:-1]], close=True)
+    return extrude(Face(w), GAP + 0.5, dir=(0, 0, 1))
+def three(s, ret, pads_at=None):
+    """front U (whole 200 mm front plus two returns), then two rear L pieces: side bar plus the rear stub"""
+    yc = -BASE_W / 2 + ret; out = {}
+    out["front"] = s & box_y(-300, yc - FIT / 2)
+    rest = s & box_y(yc + FIT / 2, 300)
+    out["rl"] = rest & box_x(-300, -FIT / 2); out["rr"] = rest & box_x(FIT / 2, 300)
+    return out, yc
 def to_bed(s):
     bb = s.bounding_box()
     return Pos(-bb.min.X, -bb.min.Y, -bb.min.Z) * s
-RING_HEX = [hexc(mix(BASE, TOPC, i / 6)) for i in range(len(THICK))]
-printables = []
+RING_HEX = [h for _n, h in FILAMENT]
+printables = []; PADS = {}; SEAMS = {}
 for i, r in enumerate(rings):
-    c = SPLIT if i % 2 == 0 else -SPLIT
-    for nm, p in split4(r, c, c).items(): printables.append((f"ring{i}_{nm}", p, 1, RING_HEX[i]))
-for nm, p in split4(cap_frame, CAP_SPLIT, CAP_SPLIT).items(): printables.append((f"cap_frame_{nm}", p, 1, hexc(TOPC)))
+    pcs, yc = three(r, RET(i)); SEAMS[f"ring{i}"] = yc
+    for nm, p in pcs.items():
+        if i > 0:
+            polys = pad_polys(nm, RET(i)); PADS[f"ring{i}_{nm}"] = polys
+            for pl in polys: p = p + pad_solid(pl, ring_z[i])
+        assert len(p.solids()) == 1, f"ring{i}_{nm} fell into loose pieces"
+        printables.append((f"ring{i}_{nm}", p, 1, RING_HEX[i]))
+cpcs, cyc = three(cap_frame, CAP_RET); SEAMS["cap"] = cyc
+for nm, p in cpcs.items():
+    assert len(p.solids()) == 1, f"cap_frame_{nm} fell into loose pieces"
+    printables.append((f"cap_frame_{nm}", p, 1, hexc(TOPC)))
 printables += [("cap_panel", cap_panel, 1, hexc(TOPC)), ("tray", tray, 1, hexc(INK)), ("rear_plate", rear, 1, hexc(INK)), ("foot", feet[0], 4, hexc(INK))]
 FLIP = lambda n: (n.startswith("ring") and not n.startswith("ring0")) or n.startswith("cap_frame")  # spacer pad goes up, flat face on the bed; the cap prints right side up so the engraving is the last layer
 
@@ -194,7 +223,9 @@ report = []
 os.makedirs(STL_DIR, exist_ok=True); os.makedirs(ASM_DIR, exist_ok=True)
 worst_roof = 0.0
 for name, s, qty, hx in printables:
-    p = to_bed(Rot(180, 0, 0) * s if FLIP(name) else (Rot(90, 0, 0) * s if name == "rear_plate" else s))
+    p = Rot(180, 0, 0) * s if FLIP(name) else (Rot(90, 0, 0) * s if name == "rear_plate" else s)
+    if name.endswith("_front"): p = Rot(0, 0, 45) * p          # the 200 mm front lies diagonally on the bed
+    p = to_bed(p)
     bb = p.bounding_box()
     assert max(bb.size.X, bb.size.Y, bb.size.Z) <= BED, f"{name} {bb.size} does not fit the {BED} mm bed"
     roofs = downward_roofs(p)
@@ -221,8 +252,37 @@ assert (CORE - CH - (CAV - CC)) / 2 ** 0.5 >= MIN_WALL - 1e-9, "tray corner wall
 assert (2 * (CAV / 2) - CC - 2 * BOARD / 2) / 2 ** 0.5 >= 1.0, "cavity chamfer leaves the board corner under 1 mm"
 BOSS_FACE = BASE_W / 2 - (CORE / 2 + FIT + PAD_T)
 assert BOSS_FACE >= 8.0, "spacer pad closer than 8 mm to the outer face"
-assert PAD_L <= 2 * SPLIT - 2 * FIT - 2 and PAD_T >= MIN_WALL, "spacer pad crosses a ring cut or is thin"
-assert abs(CAP_SPLIT - (-SPLIT)) >= 10 and abs(CAP_SPLIT - SPLIT) >= 10, "a cap seam lines up with a ring 5 seam"
+assert PAD_T >= MIN_WALL, "spacer pad thin"
+from shapely.geometry import Point
+from shapely.ops import unary_union
+_h = (CORE + 2 * FIT) / 2
+core_poly = SPoly([(-_h + CHR, -_h), (_h - CHR, -_h), (_h, -_h + CHR), (_h, _h - CHR), (_h - CHR, _h), (-_h + CHR, _h), (-_h, _h - CHR), (-_h, -_h + CHR)])
+rod_pts = [Point(x, y) for x, y in rod_xy()]
+worst_rod = 0.0; worst_com = 0.0
+for nm, polys in PADS.items():
+    assert len(polys) >= 2, f"{nm} has under 2 pads"
+    u = unary_union(polys)
+    assert abs(u.area - sum(p.area for p in polys)) < 1e-6, f"{nm} pads overlap each other"
+    assert u.intersection(core_poly).area < 1e-6, f"{nm} pad hangs into the core"
+    sh = next(sh for n, sh, q, hx in printables if n == nm); cm = sh.center(CenterOf.MASS)
+    hull = u.convex_hull; pt = Point(cm.X, cm.Y)
+    # the pads sit 8.4 mm behind the faces, the side bars are 10.8 mm wide, so the COM of an L piece can lie up to half a wall outboard of the pad line: allow that, nothing more
+    assert hull.buffer(CORE / 2 * 0 + (BASE_W / 2 - CORE / 2) / 2).contains(pt), f"{nm} centre of mass outside its pads"
+    worst_com = max(worst_com, hull.distance(pt))
+    for rp in rod_pts:
+        if nm.endswith("front") and rp.y > 0: continue
+        if nm.endswith("rl") and not (rp.x < 0 and rp.y > 0): continue
+        if nm.endswith("rr") and not (rp.x > 0 and rp.y > 0): continue
+        d = u.distance(rp); worst_rod = max(worst_rod, d); assert d <= 5.0, f"{nm} rod axis {d:.1f} mm from nearest pad"
+    for p in polys:
+        assert (BASE_W / 2 - max(abs(c) for c in p.bounds)) >= 8.4 - 1e-6 or False, f"{nm} pad closer than 8.4 mm to a face"
+        assert all(p.distance(rp) >= ROD / 2 + MIN_WALL - 1e-6 for rp in rod_pts), f"{nm} pad leaves under 1.6 mm round a rod hole"
+assert len(PADS) == 15, "rings 1 to 5 need three pieces each"
+assert all(SEAMS[k] > -BASE_W / 2 + (BASE_W - CORE) / 2 + 20 for k in SEAMS), "a seam reaches the front face"
+assert all(next(sh for n, sh, q, hx in printables if n == f"ring{i}_front").bounding_box().size.X > BASE_W - 0.01 for i in range(6)), "a ring front is not one piece"
+assert next(sh for n, sh, q, hx in printables if n == "cap_frame_front").bounding_box().size.X > BASE_W - 0.01, "the cap front is not one piece"
+assert abs(SEAMS["cap"] - SEAMS["ring5"]) >= 5.0 - 1e-9 and abs(SEAMS["cap"] - SEAMS["ring4"]) >= 5.0 - 1e-9, "cap and ring side seams closer than 5 mm"
+assert all(abs(SEAMS[f"ring{i}"] - SEAMS[f"ring{i + 1}"]) >= 9.9 for i in range(5)), "neighbouring ring seams not staggered"
 STRIP = lambda: ((PW - IO_W) / 2, IO_Z - IO_H / 2 - FAC_Z0, Z_PLATE_TOP - (IO_Z + IO_H / 2))
 assert ROD_AT + ROD / 2 + MIN_WALL <= top_w / 2, "rod hole leaves under 1.6 mm in the top ring and cap"
 assert STACK_TOP - TOP_POCKET + NUT_T - 1.0 <= FOOT_T + ROD_LEN <= STACK_TOP - 0.3, "rod must reach into the top nut and stay under the cap"
@@ -295,8 +355,8 @@ print("pad to face %.1f mm, worst part overlap %.4f mm3, strips %s" % (BOSS_FACE
 npc = lambda pre: sum(r["qty"] for r in report if r["part"].startswith(pre))
 tbl = "\n".join([
  "| Part | Size | Print |", "|---|---|---|",
- "| Rings S0 to S5 | %.0f mm square, %s mm thick (base ring first, then equal strata), %.1f mm vent gap between each, %d quarters with cuts at +-%.0f mm alternating, three %.1f x %.1f mm spacer pads on the underside of rings 1 to 5, %.1f mm behind the face, nut pocket under ring 0 and on top of ring 5 | FDM PLA or PETG at 0.2 mm, one tone each |" % (BASE_W, " / ".join("%g" % t for t in THICK), GAP, npc("ring"), SPLIT, PAD_L, PAD_T, BOSS_FACE),
- "| Cap | %.0f mm square frame in %d pieces (cuts through the centre, never on a ring cut) and a %.0f mm panel in one piece carrying the whole tree, %.0f mm thick, panel and frame hole corners R%.0f, tree from `landing/logo.svg` engraved %.1f mm | Same print, printed right side up |" % (BASE_W, npc("cap_frame"), CORE, CAP_T, CAP_R, MARK_D),
+ "| Rings S0 to S5 | %.0f mm square, %s mm thick (base ring first, then equal strata), %.1f mm vent gap between each, %d pieces per ring: one 200 mm front with side returns of 50 and 40 mm alternating, and two rear L pieces, so every seam lands on a side face; rings 1 to 5 carry 5 pads under the front and 3 under each rear L (rod corner, arm end, mid), %.1f x %.1f mm and 8.4 mm or more behind the face, nut pocket under ring 0 and on top of ring 5 | FDM PLA or PETG at 0.2 mm, one tone each |" % (BASE_W, " / ".join("%g" % t for t in THICK), GAP, npc("ring") // 6, PAD_L, PAD_T),
+ "| Cap | %.0f mm square frame in %d pieces (one front U plus two rear L, side cut at 45 mm, 5 mm from the ring 5 seam) and a %.0f mm panel in one piece carrying the whole tree, %.0f mm thick, panel and frame hole corners R%.0f, tree from `landing/logo.svg` engraved %.1f mm | Same print, printed right side up |" % (BASE_W, npc("cap_frame"), CORE, CAP_T, CAP_R, MARK_D),
  "| Core tray | %.0f mm square, %.1f mm tall, %.0f mm walls, corners chamfered %.1f mm, vent slots on every gap line, 4 board standoffs printed on the floor, no rear wall | Printed, floor down, no supports |" % (CORE, CORE_H, WALL, CH),
  "| Rear plate | %.1f x %.1f mm and %.0f mm deep including the facade, one piece, with the %.0f x %.0f I/O window and a %.1f mm frame on all four sides, flush with the ring faces | Printed lying flat |" % (next(r for r in report if r["part"] == "rear_plate")["x"], next(r for r in report if r["part"] == "rear_plate")["y"], next(r for r in report if r["part"] == "rear_plate")["z"], IO_W, IO_H, MIN_WALL),
  "| Feet | %.1f mm round, %.1f mm thick, recessed under ring 0, cover the nut and the rod end | TPU or PLA |" % (FOOT_OD, FOOT_T)])
