@@ -64,6 +64,7 @@ static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 #define ED_TOP 28
 #define ED_LH 33
 #define ED_CARET 0x0085144B
+#define ED_HILITE 0x00B4D5FE
 struct arena { struct nfolder fo[MAX_FOLDERS]; struct nnote no[MAX_NOTES]; struct jt_dirent de[JT_READDIR_MAX]; char buf[512];
     char ed[ED_MAX + 1]; unsigned short lx[ED_MAX + 1], ll[ED_MAX + 1]; unsigned char adv[96]; char clip[CLIP_MAX]; int osk_said; };
 static struct arena *ar JT_DATA = 0;
@@ -75,6 +76,7 @@ static const char *note JT_DATA = 0;
 static int editing JT_DATA = 0, elen JT_DATA = 0, epos JT_DATA = 0, escroll JT_DATA = 0;
 static int phone JT_DATA = 0;   /* argv[1] == "phone": show the on-screen keyboard in the editor */
 static int edirty JT_DATA = 0, goalx JT_DATA = -1;
+static int esel JT_DATA = -1;       /* selection anchor; the selection is anchor..epos, none while -1 or equal to the caret */
 static char efile[13] JT_DATA = {0};
 static int del_armed JT_DATA = 0;   /* d once asks, d again deletes, anything else cancels */
 
@@ -244,12 +246,39 @@ static int ed_visible(void) {
     return n < 1 ? 1 : n;
 }
 
+static int ed_has_sel(void) { return esel >= 0 && esel != epos; }
+static void ed_sel_range(int *s, int *e) { if (esel < epos) { *s = esel; *e = epos; } else { *s = epos; *e = esel; } }
+
+/* "edsel=3,7": a range marker in one write, the tag says which key made it. */
+static void say_range(const char *tag, int a, int b) {
+    char m[40]; int l = 0;
+    while (*tag && l < 12) m[l++] = *tag++;
+    for (int pass = 0; pass < 2; pass++) {
+        int v = pass ? b : a, nd = 0; char d[8];
+        if (!v) d[nd++] = '0';
+        while (v) { d[nd++] = (char)('0' + v % 10); v /= 10; }
+        while (nd) m[l++] = d[--nd];
+        if (!pass) m[l++] = ',';
+    }
+    m[l++] = '\n';
+    jt_write(1, m, (unsigned)l);
+}
+
 static void ed_draw(void) {
     rect(0, 0, (int)win.width, (int)win.height, BG);
     ed_layout();
     int vis = ed_visible(), cl = ar->ll[epos];
     if (cl < escroll) escroll = cl;
     if (cl >= escroll + vis) escroll = cl - vis + 1;
+    if (ed_has_sel()) {
+        int s0, e0; ed_sel_range(&s0, &e0);
+        for (int i = s0; i < e0; i++) {
+            int l = ar->ll[i];
+            if (l < escroll) continue;
+            if (l >= escroll + vis) break;
+            rect(ar->lx[i], ED_TOP + (l - escroll) * ED_LH + 2, ed_adv(ar->ed[i] == '\n' ? ' ' : (unsigned char)ar->ed[i]), 24, ED_HILITE);
+        }
+    }
     for (int i = 0; i < elen; i++) {
         int l = ar->ll[i];
         char c = ar->ed[i];
@@ -282,7 +311,7 @@ static void edit_open(const char *file) {
         jt_close(fd);
     }
     ar->ed[elen] = 0;
-    epos = elen; escroll = 0; edirty = 0; goalx = -1; editing = 1; note = 0;
+    epos = elen; escroll = 0; edirty = 0; goalx = -1; esel = -1; editing = 1; note = 0;
     say_s("notes: edit=", efile);
 }
 
@@ -346,28 +375,51 @@ static void ed_line_bounds(int *s, int *e) {
     *s = a; *e = b;
 }
 
+/* The selection (anchor..caret) goes before an edit lands; nothing happens when none exists. */
+static void ed_drop_sel(void) {
+    if (ed_has_sel()) { int s, e; ed_sel_range(&s, &e); ed_remove(s, e - s); epos = s; }
+    esel = -1;
+}
+
 static void ed_key(int k) {
+    if (k >= JT_KEY_SLEFT && k <= JT_KEY_SDOWN) {
+        if (esel < 0) esel = epos;            /* the anchor stays where the first Shift+arrow found the caret */
+        if (k == JT_KEY_SLEFT) { if (epos > 0) epos--; goalx = -1; }
+        else if (k == JT_KEY_SRIGHT) { if (epos < elen) epos++; goalx = -1; }
+        else ed_vertical(k == JT_KEY_SUP ? -1 : 1);
+        int s, e; ed_sel_range(&s, &e);
+        say_range("edsel=", s, e);
+        return;
+    }
+    if (k == JT_KEY_SELALL) { esel = 0; epos = elen; goalx = -1; say_range("edsel=", 0, elen); return; }
+    if (k == JT_KEY_LEFT || k == JT_KEY_RIGHT || k == JT_KEY_UP || k == JT_KEY_DOWN || k == JT_KEY_HOME || k == JT_KEY_END) esel = -1;
     if (k == JT_KEY_LEFT) { if (epos > 0) epos--; goalx = -1; }
     else if (k == JT_KEY_RIGHT) { if (epos < elen) epos++; goalx = -1; }
     else if (k == JT_KEY_UP) ed_vertical(-1);
     else if (k == JT_KEY_DOWN) ed_vertical(1);
-    else if (k == 8) { if (epos > 0) { epos--; ed_remove(epos, 1); } }
-    else if (k == JT_KEY_ENTER) ed_insert("\n", 1);
-    else if (k >= 32 && k <= 126) { char c = (char)k; ed_insert(&c, 1); }
-    else if (k == KEY_COPY || k == KEY_CUT) {
-        int s, e; ed_line_bounds(&s, &e);
+    else if (k == 8) { if (ed_has_sel()) ed_drop_sel(); else { esel = -1; if (epos > 0) { epos--; ed_remove(epos, 1); } } }
+    else if (k == JT_KEY_ENTER) { ed_drop_sel(); ed_insert("\n", 1); }
+    else if (k >= 32 && k <= 126) { char c = (char)k; ed_drop_sel(); ed_insert(&c, 1); }
+    else if (k == JT_KEY_COPY || k == JT_KEY_CUT) {
+        int s, e, sel = ed_has_sel();
+        if (sel) ed_sel_range(&s, &e); else ed_line_bounds(&s, &e);
         int clen = e - s > CLIP_MAX ? CLIP_MAX : e - s;
         jt_clip_set(ar->ed + s, (unsigned)clen); /* the system clipboard, shared with Terminal, Mail and Samantha */
-        if (k == KEY_CUT) { ed_remove(s, e - s + (e < elen ? 1 : 0)); epos = s; }
+        if (sel) say(k == JT_KEY_CUT ? "edcut=" : "edcopy=", clen);
+        if (k == JT_KEY_CUT) {
+            if (sel) { ed_remove(s, clen); epos = s; esel = -1; }
+            else { ed_remove(s, e - s + (e < elen ? 1 : 0)); epos = s; }
+        }
     }
-    else if (k == KEY_PASTE) {
+    else if (k == JT_KEY_PASTE) {
+        ed_drop_sel();
         int room = ED_MAX - 1 - elen; if (room > CLIP_MAX) room = CLIP_MAX;
         int n = room > 0 ? jt_clip_get(ar->clip, (unsigned)room) : 0;
         if (n > 0) ed_insert(ar->clip, n);
     }
     else if (k == JT_KEY_HOME) { int s, e; ed_line_bounds(&s, &e); epos = s; goalx = -1; }
     else if (k == JT_KEY_END) { int s, e; ed_line_bounds(&s, &e); epos = e; goalx = -1; }
-    else if (k == JT_KEY_DELETE) { if (epos < elen) ed_remove(epos, 1); }
+    else if (k == JT_KEY_DELETE) { if (ed_has_sel()) ed_drop_sel(); else { esel = -1; if (epos < elen) ed_remove(epos, 1); } }
     else if (k == JT_KEY_SAVE) { if (edirty) { if (edit_save()) note = "Saved."; } else note = "Saved."; }
 }
 
@@ -514,7 +566,8 @@ void _start(int argc, char **argv) {
             else if (ev.kind != JT_EV_KEY) { flags = JT_POLL_PRESENT; continue; }
             note = 0;
             ev.a = key;
-            if (ev.a == JT_KEY_ESC) { edit_close(); draw(); }
+            if (ev.a == JT_KEY_ESC && ed_has_sel()) { esel = -1; ed_draw(); }
+            else if (ev.a == JT_KEY_ESC) { edit_close(); draw(); }
             else { ed_key(ev.a); ed_draw(); }
             flags = JT_POLL_PRESENT;
             continue;

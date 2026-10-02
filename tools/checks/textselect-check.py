@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Headless, real-pixel proof of text selection in Notes (v1.2.0,
-docs/roadmap.md's "Desktop basics" gap). Same QMP absolute-pointer +
-qcode-keyboard + pmemsave shape clipboard-check.py and windowdrag-check.py
-already use.
+"""Headless, real-pixel proof of text selection in the ring-3 Notes window
+(user/notes.c). One QEMU boot through tools/checks/jtvm.py with the kernel's
+`open=notes` boot flag, like clipboard-check.py: `n` makes a fresh, known-empty
+note, and every position asserted below is read off the framebuffer.
 
-Before this pass Notes (kernel/editor.h) had no selection model at all
-(the v1.0.6 clipboard's own comment says so plainly): Ctrl+C/X acted on
-"the current line", Shift+arrow was not read specially, and there was no
-highlight to draw. This proves the real thing landed:
+Notes is a ring-3 program, so it speaks on serial through write(1), which the
+kernel logs behind "syscall: write(1) from ring 3: ". Its markers are
+edsel=<start>,<end> (every Shift+arrow and Ctrl+A), edcopy=<n> and edcut=<n>
+(a copy or cut that took a selection). This proves the real thing:
 
   1. Type a sentence. Shift+Left four times selects its last four
      characters. A real, distinctive highlight band (0xB4D5FE, drawn
@@ -40,37 +40,26 @@ highlight to draw. This proves the real thing landed:
      background again, no leftover glyph ink anywhere (the caret's own
      maroon bar is not glyph ink and is excluded on purpose).
 
-Discriminating: none of edsel/edcopy exist on main, window_rect never
-gets a 0xB4D5FE call anywhere in editor.h, and Shift+Left is read no
-differently from a plain Left -- so step 1's highlight scan finds nothing,
-its marker check finds nothing, and this whole script fails loudly on the
-pre-1.2.0 kernel.
+Discriminating: without a selection model Shift+Left is a plain Left, no
+0xB4D5FE band is ever drawn and no edsel marker is ever written, so step 1's
+highlight scan and marker check fail loudly.
 
 Usage: tools/checks/textselect-check.py   (from the repo root, after make kernel.elf)
 """
-import json, os, socket, subprocess, sys, time, tempfile
+import os, sys, time
+from pathlib import Path
 from PIL import Image
-from freeport import free_port
 
-REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
-os.chdir(REPO)
-ART = tempfile.mkdtemp(prefix="jt-textselect-")
-LOG = os.path.join(ART, "serial.log")
-DUMP = os.path.join(ART, "fb.raw")
-FB = 0xfd000000; W, H = 1920, 1080
-PORT = free_port()
-LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
-PITCH = DOCK_ICON + DOCK_GAP
-ICON_ROW_Y = 487
-NOTES_SLOT = 4
-CLOSE_X, CLOSE_Y = 94, 56
-CLOSE_RED = (0xFF, 0x5F, 0x57)
-PARK = (480, 200)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from jtvm import VM
+
+os.chdir(Path(__file__).resolve().parent.parent.parent)
+SCALE = 2
 SENTENCE = "select four chars"          # 17 characters, no shift/digits needed
 HILITE = (0xB4, 0xD5, 0xFE)
 CARET = (0x85, 0x14, 0x4B)
 BG = (0xFA, 0xF8, 0xF6)
+MARK = "syscall: write(1) from ring 3: "   # the kernel's own prefix for a ring-3 write(1)
 
 def fnv1a(text):
     h = 2166136261
@@ -78,99 +67,51 @@ def fnv1a(text):
         h = ((h ^ b) * 16777619) & 0xFFFFFFFF
     return f"{h:08x}"
 
-# Notes' own text area (kernel/editor.h EDITOR_TEXT_TOP/text_x=56), dock-
-# launched at x=70,y=40 (gui_launch_from_dock), viewport at (x+8,y+32):
-# absolute logical y = 40+32+92-32 = 132, x = 70+8+56 = 134.
-TEXT_TOP, TEXT_LEFT = 132, 134
+# Ring-3 Notes: the dock-launched window sits at x=70,y=40 (w=820), its
+# viewport at (x+8,y+32); user/notes.c draws text from ED_MARGIN=56 and the
+# first line at ED_TOP=28, caret 24px tall starting 2px above the glyph row.
+# Absolute logical: text left x = 70+8+56 = 134, caret/band rows 102..125.
+TEXT_TOP, TEXT_LEFT = 102, 134
 ROW_BOTTOM = TEXT_TOP + 26                # one line's worth, generous
-BODY_TOP, BODY_BOTTOM = 132, 300          # scanned for the "note is empty" proof
-# Notes' own window is x=70,w=820 (gui_launch_from_dock), content inset 8px
-# each side, so real content stops at 70+820-8=882; stay a few px inside
-# that or the scan picks up the satellite wallpaper just past the window's
-# right edge, which is dark and can false-positive as "ink".
+BODY_TOP, BODY_BOTTOM = 98, 300           # scanned for the "note is empty" proof (the "Notes *" title sits above 98)
+# Notes' own window is x=70,w=820, content inset 8px each side, so real
+# content stops at 70+820-8=882; stay a few px inside that or the scan picks
+# up the satellite wallpaper just past the window's right edge, which is dark
+# and can false-positive as "ink".
 WIN_CONTENT_RIGHT = 875
+WIN = (70, 890, 40, 425)                  # x0, x1, y0, y1 of the Notes window rect
 
-q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
-                      "-append", "cliptrace",
-                      "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 fails = []
 def fail(msg): fails.append(msg); print("  FAIL: " + msg)
 def ok(msg): print("  ok:   " + msg)
 
+vm = VM(None, "cliptrace open=notes", "notes: ring-3 window")
 try:
-    s = None
-    for _ in range(50):
-        time.sleep(0.2)
-        try: s = socket.create_connection(("127.0.0.1", PORT)); break
-        except OSError: pass
-    if s is None: raise SystemExit("FAIL: QEMU's QMP socket never came up")
-    f = s.makefile("rw")
-    def cmd(o):
-        f.write(json.dumps(o) + "\n"); f.flush()
-        while True:
-            line = f.readline()
-            if not line:
-                if o["execute"] == "quit": return {}
-                raise ConnectionError("QEMU disconnected before replying")
-            r = json.loads(line)
-            if "error" in r: raise RuntimeError(r["error"])
-            if "return" in r: return r
-    f.readline()
-    cmd({"execute": "qmp_capabilities"})
-    time.sleep(5.0)
-
-    def move(x, y):
-        cmd({"execute": "input-send-event", "arguments": {"events": [
-            {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
-            {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
-    def click():
-        cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
-        time.sleep(0.1)
-        cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
+    keep = []
     def dump():
-        cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
-        return Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
-    def pixel(img, x, y): return img.getpixel((x * SCALE + 1, y * SCALE + 1))
+        # A 2x2 block's centre pixel is the logical pixel (nearest resize samples (2x+1, 2y+1)).
+        im = vm.frame().resize((960, 540), Image.NEAREST)
+        keep.append(im)
+        return im.load()
     def close(p1, p2, tol=10): return max(abs(p1[i] - p2[i]) for i in range(3)) <= tol
-    def is_red(p): return close(p, CLOSE_RED, 12)
 
-    QCODE = {" ": "spc", ".": "dot", "-": "minus", "/": "slash", "\n": "ret", "\b": "backspace"}
-    def key(c):
-        codes = QCODE.get(c, "shift-" + c.lower() if c.isupper() else c).split("-")
-        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": code} for code in codes], "hold-time": 30}})
-        time.sleep(0.08)
-    def keys(*qcodes):
-        cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in qcodes], "hold-time": 30}})
-        time.sleep(0.15)
-    def type_str(s):
-        for c in s: key(c)
+    def key(c, gap=0.08): vm.key(c, gap=gap)
+    def keys(chord, gap=0.15): vm.key(chord, gap=gap)
+    def type_str(t):
+        vm.type(t, gap=0.08)
     def shift_left(n=1):
-        for _ in range(n): keys("shift", "left"); time.sleep(0.1)
+        for _ in range(n): keys("shift-left", gap=0.2)
 
-    def open_slot(slot):
-        move(SLOT0_X + slot * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3)
-        click(); time.sleep(1.2)
-    def window_open(img=None): return is_red(pixel(img if img is not None else dump(), CLOSE_X, CLOSE_Y))
-
-    def serial_text():
-        with open(LOG, "rb") as fh: return fh.read().decode("latin1")
+    def serial_text(): return vm.serial()
     def wait_marker(marker, timeout=15.0):
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            log = serial_text()
-            if marker in log: return log
-            time.sleep(0.05)
+        vm.wait(marker, timeout)
         return serial_text()
+    def marks(prefix):
+        return [l.split(MARK, 1)[1] for l in serial_text().splitlines() if MARK + prefix in l]
 
-    # Scan the whole physical framebuffer at logical resolution for pixels
-    # matching a given colour; returns the list of (x,y) logical hits.
-    def find_color(img, color, tol=10, x0=0, x1=LOGICAL_W, y0=0, y1=LOGICAL_H):
-        hits = []
-        for y in range(y0, y1):
-            for x in range(x0, x1):
-                if close(pixel(img, x, y), color, tol): hits.append((x, y))
-        return hits
+    # Scan the logical framebuffer for pixels matching a given colour; returns the (x,y) hits.
+    def find_color(img, color, tol=10, x0=0, x1=960, y0=0, y1=540):
+        return [(x, y) for y in range(y0, y1) for x in range(x0, x1) if close(img[x, y], color, tol)]
 
     def is_text_ink(p):
         # Real glyph ink: dark and roughly neutral (R~=G~=B). Excludes the
@@ -180,31 +121,14 @@ try:
         if close(p, BG, 10): return False
         return max(p) < 210 and (max(p) - min(p)) < 30
 
-    move(*PARK); time.sleep(0.5)
-    open_slot(NOTES_SLOT)
+    time.sleep(1.5)
+    vm.key("n")
+    if not vm.wait("notes: edit=", 10): raise RuntimeError("Notes: n did not open a fresh note in the editor")
+    time.sleep(1.0)
     img0 = dump()
-    if not window_open(img0): raise RuntimeError("Notes did not open")
-
-    # A no-disk headless boot seeds NOTES.TXT with a real multi-line demo
-    # note (kernel.c's own demo_notes, loaded whenever there's no FAT
-    # disk attached, exactly this check's own QEMU invocation), so the
-    # buffer is never actually empty when Notes first opens. Clear it with
-    # the very feature under test (Ctrl+A, Backspace) so every position
-    # asserted below is relative to a real, known-empty buffer, not
-    # whatever the demo note happened to contain. This also means a
-    # kernel where select-all/selection-delete don't work yet fails right
-    # here, loudly, rather than silently mis-measuring later.
-    keys("ctrl", "a"); time.sleep(0.2)
-    keys("backspace"); time.sleep(0.3)
-    img_cleared = dump()
-    leftover = sum(1 for y in range(BODY_TOP, BODY_BOTTOM) for x in range(TEXT_LEFT - 4, WIN_CONTENT_RIGHT) if is_text_ink(pixel(img_cleared, x, y)))
-    if leftover == 0: ok("cleared the seeded demo note with Ctrl+A, Backspace")
-    else:
-        fail(f"could not clear the seeded NOTES.TXT content before the real test ({leftover} ink px remain) -- Ctrl+A/selection-delete isn't working")
-        print("---- serial log (edsel/edcopy/edcut lines) ----")
-        for line in serial_text().splitlines():
-            if line.startswith(("edsel", "edcopy", "edcut")): print("  " + line)
-        raise RuntimeError("setup: could not establish a clean, known buffer state")
+    caret0 = find_color(img0, CARET, tol=12, x0=TEXT_LEFT - 6, x1=TEXT_LEFT + 10, y0=TEXT_TOP - 6, y1=ROW_BOTTOM + 6)
+    if not caret0: raise RuntimeError("Notes opened but no caret at the expected spot: the text-area geometry in this check is stale")
+    ok(f"fresh empty note open, caret at x={min(x for x, _ in caret0)}")
 
     # ---- 1: type, select the last 4 characters, prove the highlight ----
     type_str(SENTENCE)
@@ -250,7 +174,7 @@ try:
         # Measured on img_sel, not img_typed: the glyph cores stay dark and
         # neutral under the band, and img_typed may predate the last few
         # keystrokes landing on a slow runner.
-        typed_ink_xs = [x for y in range(TEXT_TOP, ROW_BOTTOM) for x in range(TEXT_LEFT - 4, WIN_CONTENT_RIGHT) if is_text_ink(pixel(img_sel, x, y))]
+        typed_ink_xs = [x for y in range(TEXT_TOP, ROW_BOTTOM) for x in range(TEXT_LEFT - 4, WIN_CONTENT_RIGHT) if is_text_ink(img_sel[x, y])]
         if not caret_xs or not typed_ink_xs:
             fail("could not find the caret or the typed line's ink to anchor the highlight position against")
         else:
@@ -265,20 +189,21 @@ try:
                 fail(f"highlight ends at x={max(xs)}, short of the line's last ink at x={line_end}: the last selected glyph is not highlighted")
             else:
                 ok(f"highlight runs from the caret (x={caret_x}) to the line's last ink (x={line_end})")
-        # Nothing highlighted anywhere else on screen at all (menu bar,
-        # dock, chrome, or any other line).
-        # Scoped to the Notes window's own rect (70..890, 40..425), not the
-        # full 960x540 screen: past the window's right edge is real
-        # satellite-photo wallpaper, whose dark greens/blues have no
-        # business being compared against a UI highlight colour at all.
-        whole = find_color(img_sel, HILITE, tol=10, x0=70, x1=890, y0=40, y1=425)
-        if len(whole) != len(hits):
-            fail(f"found {len(whole) - len(hits)} highlight-coloured pixel(s) OUTSIDE the expected text row")
+        # Nothing highlighted anywhere else in the Notes window: count the
+        # highlight colour across the whole window rect before and after the
+        # selection; only the band itself may be new. (A before/after diff, not
+        # an absolute count, because the rounded corners show satellite
+        # wallpaper, which can hold light blues of its own.)
+        w0, w1, wy0, wy1 = WIN
+        whole_before = len(find_color(img_typed, HILITE, x0=w0, x1=w1, y0=wy0, y1=wy1))
+        whole_after = len(find_color(img_sel, HILITE, x0=w0, x1=w1, y0=wy0, y1=wy1))
+        if whole_after - whole_before != len(hits):
+            fail(f"found {whole_after - whole_before - len(hits)} highlight-coloured pixel(s) OUTSIDE the expected text row")
         else:
-            ok("highlight colour appears nowhere else on screen")
+            ok("highlight colour appears nowhere else in the window")
 
     # ---- 2: Ctrl+C, End (clears selection, caret to true end), Ctrl+V ----
-    keys("ctrl", "c"); time.sleep(0.2)
+    keys("ctrl-c"); time.sleep(0.2)
     log = wait_marker("edcopy=4")
     if "edcopy=4" in log: ok("serial reported edcopy=4")
     else: fail("expected 'edcopy=4' in the serial log after Ctrl+C on a 4-char selection")
@@ -297,16 +222,16 @@ try:
     # Real end-of-line x: the rightmost non-background pixel (ink or caret)
     # in the text row before the paste -- derived from the framebuffer
     # itself, not a guessed font-metric offset.
-    row_pixels = [(x, pixel(img_before_paste, x, y)) for y in range(TEXT_TOP, ROW_BOTTOM) for x in range(TEXT_LEFT - 4, WIN_CONTENT_RIGHT)]
+    row_pixels = [(x, img_before_paste[x, y]) for y in range(TEXT_TOP, ROW_BOTTOM) for x in range(TEXT_LEFT - 4, WIN_CONTENT_RIGHT)]
     non_bg_xs = [x for x, p in row_pixels if not close(p, BG, 10)]
     end_x = max(non_bg_xs) if non_bg_xs else TEXT_LEFT
     probe = (end_x + 4, end_x + 160)
 
     def ink_count(img):
-        return sum(1 for y in range(TEXT_TOP, ROW_BOTTOM) for x in range(*probe) if is_text_ink(pixel(img, x, y)))
+        return sum(1 for y in range(TEXT_TOP, ROW_BOTTOM) for x in range(*probe) if is_text_ink(img[x, y]))
     before_ink = ink_count(img_before_paste)
 
-    keys("ctrl", "v"); time.sleep(0.3)
+    keys("ctrl-v"); time.sleep(0.3)
     paste_marker = f"CLIPPASTE:4:{fnv1a(TAIL)}"
     log = wait_marker(paste_marker)
     if paste_marker in log: ok(f"pasted exactly '{TAIL}' ({paste_marker})")
@@ -326,7 +251,7 @@ try:
     if f"edsel={n - 4},{n}" in log: ok(f"serial reported edsel={n - 4},{n} (the pasted tail)")
     else: fail(f"expected 'edsel={n - 4},{n}' after Shift+Left x4 on the pasted line")
     copies_before = serial_text().count(copy_marker)
-    keys("ctrl", "x"); time.sleep(0.3)
+    keys("ctrl-x"); time.sleep(0.3)
     log = wait_marker("edcut=4")
     if "edcut=4" in log: ok("serial reported edcut=4")
     else: fail("expected 'edcut=4' after Ctrl+X on a 4-char selection")
@@ -349,34 +274,43 @@ try:
     keys("delete"); n -= 1                       # Delete removes the 1 selected char
     type_str("ab"); n += 2
     keys("end"); time.sleep(0.1)
-    keys("shift", "right"); time.sleep(0.15)     # at the end: anchor == caret, not a selection
+    keys("shift-right"); time.sleep(0.15)     # at the end: anchor == caret, not a selection
     type_str("yz"); n += 2                       # the buggy kernel replaced 'y' with 'z' here
     time.sleep(0.2)
-    keys("ctrl", "a"); time.sleep(0.2)
+    keys("ctrl-a"); time.sleep(0.2)
     expect_all = f"edsel=0,{n}"
     log = wait_marker(expect_all)
     if expect_all in log: ok(f"serial reported {expect_all}: type-over, Delete and typing after a collapsed anchor all kept the exact length")
     else: fail(f"expected '{expect_all}' after Ctrl+A, got: " + ", ".join(l for l in log.splitlines() if l.startswith("edsel=0,")))
 
+    # ---- 4b: Esc clears the selection and does NOT close the editor ----
+    time.sleep(0.3)
+    row = dict(x0=TEXT_LEFT - 4, x1=WIN_CONTENT_RIGHT, y0=TEXT_TOP - 2, y1=ROW_BOTTOM + 2)
+    if not find_color(dump(), HILITE, **row): fail("select-all drew no highlight band before the Esc test")
+    keys("esc"); time.sleep(0.5)
+    if find_color(dump(), HILITE, **row): fail("highlight still present after Esc")
+    elif "notes: closed" in serial_text() or serial_text().count("notes: saved=") > 0: fail("Esc with a selection closed the editor instead of just clearing the selection")
+    else: ok("Esc cleared the selection and left the editor open")
+    keys("ctrl-a"); time.sleep(0.2)
+    if not vm.wait(expect_all, 10, count=2): fail("Ctrl+A after Esc did not select everything again")
+
     # ---- 5: Backspace on the select-all empties the note ----
     keys("backspace"); time.sleep(0.4)
     img_empty = dump()
-    ink_left = sum(1 for y in range(BODY_TOP, BODY_BOTTOM) for x in range(TEXT_LEFT - 4, WIN_CONTENT_RIGHT) if is_text_ink(pixel(img_empty, x, y)))
+    ink_left = sum(1 for y in range(BODY_TOP, BODY_BOTTOM) for x in range(TEXT_LEFT - 4, WIN_CONTENT_RIGHT) if is_text_ink(img_empty[x, y]))
     print(f"glyph-ink pixels left in the body after Ctrl+A, Backspace: {ink_left}")
     if ink_left == 0: ok("note body is empty, no leftover glyph ink")
     else: fail(f"{ink_left} glyph-ink pixel(s) remain in the body after selecting all and deleting")
 
-    try: cmd({"execute": "quit"})
-    except (ConnectionResetError, BrokenPipeError, OSError): pass
 except Exception as e:
     fails.append(f"exception: {e}")
 finally:
-    try: q.wait(timeout=5)
-    except Exception: q.kill()
+    tail = vm.serial()[-500:]
+    vm.quit()
 
 if fails:
     print("FAIL:")
     for m in fails: print("  - " + m)
-    print(f"artifacts: {ART}")
+    print("serial tail: " + repr(tail))
     sys.exit(1)
 print("PASS: Shift+Left highlights exactly the last 4 characters where the caret says, Ctrl+C/V/X move exactly those bytes (clipboard hashes), typing/Delete replace a selection, a collapsed anchor never eats a character, and Ctrl+A + Backspace empties the note")
