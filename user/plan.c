@@ -8,13 +8,12 @@
  * reaches the machine only through int 0x80: SYS_WINDOW_OPEN for a
  * framebuffer, SYS_WINDOW_POLL for input and the present, SYS_EXIT to leave.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font, same as the other ring-3
- * apps. The backquote key (`) is the deliberate crash: a write through a
+ * Type: the antialiased libjt face, same as Mail and Burrow. The backquote key (`) is the deliberate crash: a write through a
  * null pointer, a page fault at ring 3, reaped by the kernel.
  * tools/checks/ring3plan-check.py presses it on purpose.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define ROW   0x00F1EDE7
@@ -25,7 +24,7 @@
 #define PL_LIST_X 20
 #define PL_LIST_W 220
 #define PL_INFO_X 260
-#define PL_TOP    56
+#define PL_TOP    40
 #define PL_ITEM_H 28
 
 typedef struct { const char *when; const char *what; } PlanMilestone;
@@ -51,22 +50,7 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (px < 0 || px >= (int)win.width) continue;
-            if (g[r] & (0x80 >> c)) win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
-}
-static void text(const char *s, int x, int y, unsigned fg) {
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
-}
+static void text(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
     do { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (v);
@@ -75,16 +59,43 @@ static int utoa10(unsigned v, char *buf) {
     return n;
 }
 
-/* Greedy word wrap by 8px cells, same idea as render_wrapped_text. */
-static void pl_wrap(const char *s, int x, int y, int w, int ymax, unsigned fg) {
-    int cols = w / 8;
-    while (*s && y + 16 <= ymax) {
+/* Copy s into out (cap bytes), cutting with "..." so it fits maxw pixels. */
+static void fit(char *out, int cap, const char *s, int maxw) {
+    int n = 0;
+    while (s[n] && n < cap - 4) { out[n] = s[n]; n++; }
+    out[n] = 0;
+    if (jt_text_width(JT_FACE_BODY, out) <= maxw && !s[n]) return;
+    while (n > 0) {
+        out[n] = '.'; out[n + 1] = '.'; out[n + 2] = '.'; out[n + 3] = 0;
+        if (jt_text_width(JT_FACE_BODY, out) <= maxw) return;
+        out[--n] = 0;
+    }
+    out[0] = 0;
+}
+/* Word-boundary wrap by real glyph widths into at most max_lines lines of
+   width w; if text is left over the last line ends in an ellipsis. */
+static void wrap_text(const char *s, int x, int y, int w, int max_lines, int lh, unsigned fg) {
+    char buf[128];
+    for (int line = 0; *s && line < max_lines; line++) {
         while (*s == ' ') s++;
+        if (!*s) break;
         int n = 0, brk = -1;
-        while (s[n] && n < cols) { if (s[n] == ' ') brk = n; n++; }
-        if (s[n] && brk > 0) n = brk;
-        for (int i = 0; i < n; i++) glyph((unsigned char)s[i], x + i * 8, y, fg);
-        s += n; y += 20;
+        while (s[n] && n < (int)sizeof buf - 1) {
+            buf[n] = s[n]; buf[n + 1] = 0;
+            if (jt_text_width(JT_FACE_BODY, buf) > w) break;
+            if (s[n] == ' ') brk = n;
+            n++;
+        }
+        if (s[n]) { if (brk > 0) n = brk; else if (n == 0) n = 1; }
+        if (line == max_lines - 1 && s[n]) {
+            fit(buf, sizeof buf, s, w);
+            text(buf, x, y + line * lh, fg);
+            return;
+        }
+        for (int i = 0; i < n; i++) buf[i] = s[i];
+        buf[n] = 0;
+        text(buf, x, y + line * lh, fg);
+        s += n;
     }
 }
 
@@ -97,8 +108,9 @@ static void pl_draw(void) {
         text(PL_MS[i].when, PL_LIST_X + 6, y + 6, i == pl_sel ? INK : HINT);
     }
     text("The next ten years", PL_INFO_X, PL_TOP, HINT);
-    int wy = PL_TOP + 24;
-    pl_wrap(PL_MS[pl_sel].what, PL_INFO_X, wy, (int)win.width - PL_INFO_X - 24, (int)win.height - 50, INK);
+    int wy = PL_TOP + 26;
+    int lh = jt_text_height(JT_FACE_BODY) + 4;
+    wrap_text(PL_MS[pl_sel].what, PL_INFO_X, wy, (int)win.width - PL_INFO_X - 24, ((int)win.height - 50 - wy) / lh, lh, INK);
     text("up/down or click to select   esc closes", 20, (int)win.height - 30, HINT);
 }
 

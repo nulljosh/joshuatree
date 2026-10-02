@@ -13,15 +13,14 @@
  * through int 0x80: SYS_WINDOW_OPEN for a framebuffer, SYS_WINDOW_POLL
  * for input and the present, SYS_EXIT to leave.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font, same as Keyrate, Toroid
- * and Calculator. Word-wrap is a small local helper since render_wrapped_
- * text is a kernel.c static this binary cannot reach. The backquote key
+ * Type: the antialiased libjt face. Word-wrap is a small local helper (real
+ * glyph widths, ellipsis on overflow). The backquote key
  * (`) is the deliberate crash, same as the other three: a write through a
  * null pointer, a page fault at ring 3, reaped by the kernel.
  * tools/checks/ring3homeqi-check.py presses it on purpose.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define INK   0x001C1C1E
@@ -64,22 +63,7 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (px < 0 || px >= (int)win.width) continue;
-            if (g[r] & (0x80 >> c)) win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
-}
-static void text(const char *s, int x, int y, unsigned fg) {
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
-}
+static void text(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
     do { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (v);
@@ -88,27 +72,51 @@ static int utoa10(unsigned v, char *buf) {
     return n;
 }
 
-/* Word-wraps s into 8px-wide glyphs across max_w px, top-left at (x, y),
- * one 16px line per row, same shape as kernel.c's render_wrapped_text but
- * self-contained: this binary has no kernel statics to call into. */
-static void wrap_text(const char *s, int x, int y, int max_w, unsigned fg) {
-    int cols = max_w / 8;
-    if (cols < 1) cols = 1;
-    int cx = 0, cy = y;
-    while (*s) {
-        int wlen = 0;
-        while (s[wlen] && s[wlen] != ' ') wlen++;
-        if (cx > 0 && cx + wlen > cols) { cx = 0; cy += 20; }
-        for (int i = 0; i < wlen; i++) { glyph((unsigned char)s[i], x + cx * 8, cy, fg); cx++; }
-        s += wlen;
-        if (*s == ' ') { s++; if (cx + 1 <= cols) cx++; else { cx = 0; cy += 20; } }
+/* Copy s into out (cap bytes), cutting with "..." so it fits maxw pixels. */
+static void fit(char *out, int cap, const char *s, int maxw) {
+    int n = 0;
+    while (s[n] && n < cap - 4) { out[n] = s[n]; n++; }
+    out[n] = 0;
+    if (jt_text_width(JT_FACE_BODY, out) <= maxw && !s[n]) return;
+    while (n > 0) {
+        out[n] = '.'; out[n + 1] = '.'; out[n + 2] = '.'; out[n + 3] = 0;
+        if (jt_text_width(JT_FACE_BODY, out) <= maxw) return;
+        out[--n] = 0;
+    }
+    out[0] = 0;
+}
+/* Word-boundary wrap by real glyph widths into at most max_lines lines of
+   width w; if text is left over the last line ends in an ellipsis. */
+static void wrap_text(const char *s, int x, int y, int w, int max_lines, int lh, unsigned fg) {
+    char buf[128];
+    for (int line = 0; *s && line < max_lines; line++) {
+        while (*s == ' ') s++;
+        if (!*s) break;
+        int n = 0, brk = -1;
+        while (s[n] && n < (int)sizeof buf - 1) {
+            buf[n] = s[n]; buf[n + 1] = 0;
+            if (jt_text_width(JT_FACE_BODY, buf) > w) break;
+            if (s[n] == ' ') brk = n;
+            n++;
+        }
+        if (s[n]) { if (brk > 0) n = brk; else if (n == 0) n = 1; }
+        if (line == max_lines - 1 && s[n]) {
+            fit(buf, sizeof buf, s, w);
+            text(buf, x, y + line * lh, fg);
+            return;
+        }
+        for (int i = 0; i < n; i++) buf[i] = s[i];
+        buf[n] = 0;
+        text(buf, x, y + line * lh, fg);
+        s += n;
     }
 }
 
 static void hq_draw(void) {
     rect(0, 0, (int)win.width, (int)win.height, BG);
 
-    int ctr_y = (int)win.height / 2 - 60;
+    int ctr_y = 44;
+    int lh = jt_text_height(JT_FACE_BODY) + 4;
     int ctr_x = 40;
     int max_w = (int)win.width - 80;
 
@@ -120,7 +128,7 @@ static void hq_draw(void) {
             q_num[qlen++] = '.'; q_num[qlen] = 0;
             text(q_num, ctr_x, ctr_y, HINT);
 
-            wrap_text(HQ_QUESTIONS[hq_q].question, ctr_x + 24, ctr_y, max_w - 24, INK);
+            wrap_text(HQ_QUESTIONS[hq_q].question, ctr_x + 28, ctr_y, max_w - 28, 4, lh, INK);
 
             char score_txt[32]; int slen = 0;
             slen += utoa10((unsigned)hq_score, score_txt);
@@ -129,7 +137,7 @@ static void hq_draw(void) {
 
             text("1 yes   2 no", ctr_x, ctr_y + 130, INK);
         } else {
-            wrap_text(HQ_QUESTIONS[hq_q].reasoning, ctr_x, ctr_y, max_w, INK);
+            wrap_text(HQ_QUESTIONS[hq_q].reasoning, ctr_x, ctr_y, max_w, 4, lh, INK);
             text("any key for next", ctr_x, ctr_y + 140, HINT);
         }
     } else {
