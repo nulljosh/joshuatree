@@ -1032,6 +1032,13 @@ void _start(int argc, char **argv) {
             if (k == JT_KEY_ESC) break;
             else if (k == JT_KEY_F2) listen_start();
             else if (k == JT_KEY_F2_UP) listen_stop_and_send();
+            else if (k == JT_KEY_COPY || k == JT_KEY_CUT) { jt_clip_set(ar->in, (unsigned)inlen); if (k == JT_KEY_CUT) { inlen = 0; ar->in[0] = 0; } } /* the system clipboard */
+            else if (k == JT_KEY_PASTE) {
+                char pb[INMAX + 1];
+                int n = INMAX > inlen ? jt_clip_get(pb, (unsigned)(INMAX - inlen)) : 0;
+                for (int i = 0; i < n; i++) if (pb[i] >= 32 && pb[i] < 127) ar->in[inlen++] = pb[i];
+                ar->in[inlen] = 0;
+            }
             else if (spk_active && k != JT_KEY_ENTER) speak_stop(); /* typing skips the rest of her reply */
             else if (k == JT_KEY_ENTER) { speak_stop(); send(); }
             else if (k == 8) { if (inlen > 0) ar->in[--inlen] = 0; }

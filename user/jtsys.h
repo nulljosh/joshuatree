@@ -70,6 +70,10 @@
 #define JT_REC_CHUNK_MAX 8192
 #define JT_SYS_SYSINFO     395 /* 1.9.26: weather, chat host, phone flag, time in one read-only struct; see kernel/syscall.h */
 #define JT_SYS_BRK         397 /* 1.9.27: per-task heap top; 0 queries, else sets. Returns the top or -errno; see kernel/brk.c */
+#define JT_SYS_CLIPBOARD   399 /* 1.9.28: the one system clipboard, 4 KB; see kernel/syscall.h */
+#define JT_CLIP_SET        1
+#define JT_CLIP_GET        2
+#define JT_CLIP_MAX        4096
 #define JT_SYS_LAUNCH_REQUEST 396 /* 1.9.26: ask the desktop to open an app by exact APPS[] name; never launches inside the gate */
 #define JT_SYS_REFRESH     398 /* ask the desktop to refetch weather or stocks; poll jt_sysinfo.data_stamp; see kernel/syscall.h */
 #define JT_REFRESH_WEATHER 0
@@ -97,6 +101,9 @@ struct jt_sysinfo {
 #define JT_KEY_UP    256
 #define JT_KEY_DOWN  257
 #define JT_KEY_ENTER 258
+#define JT_KEY_COPY  302 /* Ctrl+C, X, V: the clipboard keys, see jt_clip_set / jt_clip_get */
+#define JT_KEY_CUT   303
+#define JT_KEY_PASTE 304
 #define JT_KEY_ESC   259
 #define JT_KEY_LEFT  261
 #define JT_KEY_RIGHT 262
@@ -209,6 +216,10 @@ static inline int jt_sysinfo(struct jt_sysinfo *si)               { return jt_sy
 /* 0 queued, -EINVAL no app by that exact name, -EBUSY one is already pending. The desktop opens it on its next pass. */
 static inline int jt_refresh(int kind, int arg)                   { return jt_syscall(JT_SYS_REFRESH, (unsigned)kind, (unsigned)arg, 0); }
 static inline int jt_launch(const char *app)                      { return jt_syscall(JT_SYS_LAUNCH_REQUEST, (unsigned)app, 0, 0); }
+/* Replace the system clipboard with len bytes (0 clears). Returns len, -EINVAL over JT_CLIP_MAX, -EFAULT. */
+static inline int jt_clip_set(const void *buf, unsigned len)      { return jt_syscall(JT_SYS_CLIPBOARD, JT_CLIP_SET, (unsigned)buf, len); }
+/* Copy out at most len bytes of the clipboard; returns bytes copied (0 when empty), -EFAULT. A short len clips the paste. */
+static inline int jt_clip_get(void *buf, unsigned len)            { return jt_syscall(JT_SYS_CLIPBOARD, JT_CLIP_GET, (unsigned)buf, len); }
 struct jt_audio_play { const void *pcm; unsigned int len; unsigned int rate; unsigned int flags; };
 struct jt_audio_status { unsigned int version, size, playing, queued, space, rate, played; };
 /* Queues up to JT_AUDIO_CHUNK_MAX bytes of 8-bit unsigned mono PCM at rate Hz. Returns bytes taken

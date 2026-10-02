@@ -16,7 +16,7 @@
  * the desktop's directory.
  *
  * Keys: typing, Backspace, Enter runs the line, copy/cut take the whole input
- * line into an in-app clipboard and paste inserts it at the end (the same
+ * line into the system clipboard and paste inserts it at the end (the same
  * one-line contract as before), Esc closes, backquote is the deliberate
  * crash. Clicks never close. Serial markers: terminal: ring-3 window,
  * terminal: ran=N (bytes of output).
@@ -44,7 +44,7 @@ static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 extern char _user_end[];
 struct arena { char sb[SCROLL + 1]; char out[OUT_MAX]; char in[LINE_MAX + 1]; char clip[LINE_MAX + 1]; char cwd[CWD_MAX + 1]; char req[CWD_MAX + LINE_MAX + 3]; unsigned starts[80]; };
 static struct arena *ar JT_DATA = 0;
-static unsigned slen JT_DATA = 0, inlen JT_DATA = 0, cliplen JT_DATA = 0;
+static unsigned slen JT_DATA = 0, inlen JT_DATA = 0;
 
 static void rect(int x, int y, int w, int h, unsigned c) {
     if (x < 0) { w += x; x = 0; }
@@ -205,12 +205,12 @@ void _start(int argc, char **argv) {
         if (k == JT_KEY_ENTER) run_line();
         else if (k == 8) { if (inlen) inlen--; }
         else if (k == KEY_COPY || k == KEY_CUT) {
-            for (unsigned i = 0; i < inlen; i++) ar->clip[i] = ar->in[i];
-            cliplen = inlen;
+            jt_clip_set(ar->in, inlen); /* the system clipboard, shared with Notes, Mail and Samantha */
             if (k == KEY_CUT) inlen = 0;
         }
         else if (k == KEY_PASTE) {
-            for (unsigned i = 0; i < cliplen && inlen < LINE_MAX; i++) {
+            int n = LINE_MAX > inlen ? jt_clip_get(ar->clip, LINE_MAX - inlen) : 0;
+            for (int i = 0; i < n; i++) {
                 char pc = ar->clip[i];
                 if (pc >= 32 && pc < 127) ar->in[inlen++] = pc;
             }

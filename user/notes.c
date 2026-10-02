@@ -20,8 +20,8 @@
  * 14 px line pitch of 33. Keys that reach a ring-3 app through
  * SYS_WINDOW_POLL: typing, Backspace, Enter, the four arrows, Esc, and
  * KEY_COPY/CUT/PASTE (302..304). Copy and cut take the current logical line
- * (the kernel editor's own contract) into an in-app clipboard; paste inserts
- * it. Esc saves (truncate-write, only if edited) and returns to browse.
+ * (the kernel editor's own contract) into the system clipboard (SYS_CLIPBOARD); paste
+ * inserts it. Esc saves (truncate-write, only if edited) and returns to browse.
  * Home, End and Delete work in the editor; Ctrl+S saves and stays in it.
  * Browse: f makes a folder (F0000001 style names, 8.3), d deletes the
  * selected note. SYS_MKDIR and SYS_UNLINK do the work.
@@ -59,7 +59,7 @@ extern char _user_end[];
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 /* Big buffers live past _user_end (a flat image has no .bss), like user/mail.c. */
 #define ED_MAX 4096
-#define CLIP_MAX 256
+#define CLIP_MAX 1024
 #define ED_MARGIN 56
 #define ED_TOP 28
 #define ED_LH 33
@@ -74,7 +74,7 @@ static int flat JT_DATA = 0;    /* ramfs: no directories */
 static const char *note JT_DATA = 0;
 static int editing JT_DATA = 0, elen JT_DATA = 0, epos JT_DATA = 0, escroll JT_DATA = 0;
 static int phone JT_DATA = 0;   /* argv[1] == "phone": show the on-screen keyboard in the editor */
-static int edirty JT_DATA = 0, goalx JT_DATA = -1, clen JT_DATA = 0;
+static int edirty JT_DATA = 0, goalx JT_DATA = -1;
 static char efile[13] JT_DATA = {0};
 
 static void rect(int x, int y, int w, int h, unsigned c) {
@@ -348,11 +348,15 @@ static void ed_key(int k) {
     else if (k >= 32 && k <= 126) { char c = (char)k; ed_insert(&c, 1); }
     else if (k == KEY_COPY || k == KEY_CUT) {
         int s, e; ed_line_bounds(&s, &e);
-        clen = e - s > CLIP_MAX ? CLIP_MAX : e - s;
-        for (int i = 0; i < clen; i++) ar->clip[i] = ar->ed[s + i];
+        int clen = e - s > CLIP_MAX ? CLIP_MAX : e - s;
+        jt_clip_set(ar->ed + s, (unsigned)clen); /* the system clipboard, shared with Terminal, Mail and Samantha */
         if (k == KEY_CUT) { ed_remove(s, e - s + (e < elen ? 1 : 0)); epos = s; }
     }
-    else if (k == KEY_PASTE) ed_insert(ar->clip, clen);
+    else if (k == KEY_PASTE) {
+        int room = ED_MAX - 1 - elen; if (room > CLIP_MAX) room = CLIP_MAX;
+        int n = room > 0 ? jt_clip_get(ar->clip, (unsigned)room) : 0;
+        if (n > 0) ed_insert(ar->clip, n);
+    }
     else if (k == JT_KEY_HOME) { int s, e; ed_line_bounds(&s, &e); epos = s; goalx = -1; }
     else if (k == JT_KEY_END) { int s, e; ed_line_bounds(&s, &e); epos = e; goalx = -1; }
     else if (k == JT_KEY_DELETE) { if (epos < elen) ed_remove(epos, 1); }

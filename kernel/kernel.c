@@ -8623,6 +8623,7 @@ void kmain(unsigned int multiboot_info_addr){
                 break;
             }
         stocks_cmdline(cl0); /* stkhost=HOST:PORT, kernel/stocks.h */
+        jt_clip_cmdline(cl0); /* cliptrace, kernel/syscall.c: content hash on the CLIPCOPY/CLIPPASTE lines */
         jt_facehost_cmdline(cl0); /* facehost=HOST[:PORT], kernel/syscall.c: where ring-3 Samantha fetches her face and speech */
     }
     vga_text_mode_init(); /* real hardware/QEMU already boot into text mode via their own BIOS; a BIOS-less multiboot path (v86) never sets it at all, so make it explicit rather than inherited */
