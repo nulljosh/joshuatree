@@ -50,6 +50,7 @@
 #define JT_SYS_HTTP_GET    387 /* 1.9.11: one GET from joshuatree.heyitsmejosh.com; path only, see kernel/syscall.h */
 #define JT_HTTP_PATH_MAX 128   /* longest path SYS_HTTP_GET accepts, bytes before the NUL */
 #define JT_HTTP_BODY_MAX 2048  /* longest body it hands back */
+#define JT_SYS_HTTP_POST   392 /* 1.9.26: Samantha's chat request, path only, host stays Settings-owned */
 #define JT_SYS_READDIR     388 /* 1.9.13: list a directory into fixed-size records (387 is Curbfind's http_get) */
 #define JT_SYS_MKDIR       389 /* make a folder; relative path like open */
 #define JT_SYS_UNLINK      390 /* delete a file; relative path like open */
@@ -157,6 +158,11 @@ static inline int jt_tasks(struct jt_tasks *t, int kill)          { return jt_sy
    (-100..-599), or -errno: -EINVAL bad path, -EFAULT bad pointer, -ENODEV no
    NIC, -EIO no answer. The host is fixed in the kernel; only the path is ours. */
 static inline int jt_http_get(const char *path, void *buf, unsigned len) { return jt_syscall(JT_SYS_HTTP_GET, (unsigned)path, (unsigned)buf, len); }
+/* One POST of application/json to the chat host. Body at most 6144 bytes, out clamped to 8192,
+   reply_ticks 0 = 15s, clamped to 45s. Reply body bytes on HTTP 200, -status on any other reply,
+   or -errno (-EBUSY a fetch is already in flight). */
+struct jt_http_post { const char *path; const char *body; unsigned int body_len; char *out; unsigned int out_len; unsigned int reply_ticks; };
+static inline int jt_http_post(struct jt_http_post *a) { return jt_syscall(JT_SYS_HTTP_POST, (unsigned)a, 0, 0); }
 static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned max) { return jt_syscall(JT_SYS_READDIR, (unsigned)path, (unsigned)out, max); }
 static inline int jt_mkdir(const char *path)                      { return jt_syscall(JT_SYS_MKDIR, (unsigned)path, 0, 0); }
 static inline int jt_unlink(const char *path)                     { return jt_syscall(JT_SYS_UNLINK, (unsigned)path, 0, 0); }

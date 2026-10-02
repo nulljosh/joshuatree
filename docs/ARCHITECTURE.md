@@ -236,7 +236,7 @@ Samantha (`kernel/chat.h`, `kernel/chat_face.h`, `kernel/phone_home.h`) is the t
 Slices, each sized for one Sonnet agent in about ten minutes, in order:
 
 1. `SYS_HTTP_POST` kernel side (done, this section). Sonnet.
-2. The samantha.c program skeleton under user/: window, conversation list, keyboard, `/api/chat` and `/api/pick` through `SYS_HTTP_POST`, text-only, launched from `RING3_APPS` next to the kernel copy under a `ring3samantha` cmdline. Sonnet.
+2. (done, text path only, opens under the ring3samantha cmdline flag) The samantha.c program skeleton under user/: window, conversation list, keyboard, `/api/chat` and `/api/pick` through `SYS_HTTP_POST`, text-only, launched from `RING3_APPS` next to the kernel copy under a `ring3samantha` cmdline. Sonnet.
 3. The tools: reminders, notes, mail, calendar through the file syscalls, moved line for line from `chat_run_tool`. Haiku.
 4. `SYS_SYSINFO` + weather tool, `SYS_LAUNCH_REQUEST` + `open <app>`, desktop pickup in the main loop. Sonnet.
 5. The face: frame arrays into the user binary, libjt drawing, idle and talking states. Haiku.
