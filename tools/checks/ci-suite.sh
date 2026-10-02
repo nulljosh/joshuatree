@@ -115,6 +115,7 @@ retry|2|Weather runs as a ring-3 process through the table-driven launcher: read
 retry|2|Burrow runs as a ring-3 process through the table-driven launcher: draws the folder grid, Enter opens a folder and Backspace goes up through SYS_READDIR, closes on Esc, desktop alive|python3 ./tools/checks/ring3burrow-check.py
 retry|2|Every ring-3 app (parsed from RING3_APPS) crashes on purpose, is reaped, and the desktop keeps drawing and opens a different app after each one|python3 ./tools/checks/ring3crash-all-check.py
 retry|5|A released window framebuffer is supervisor-only again: store faults, pointer into it or into the kernel is -EFAULT|python3 ./tools/checks/userfb-release-check.py
+retry|5|SYS_BRK: a program grows 3MB of zeroed heap pages, bad tops are -EINVAL, and its crash gives every frame back (brk live=0, pmm free unchanged), desktop alive|python3 ./tools/checks/ring3brk-check.py
 retry|7|Shell launches a ring-3 program by bare name, case-insensitively|./tools/checks/shellname-check.sh
 retry|0|QEMU vmmouse absolute-pointer round trip|./tools/checks/vmmouse-check.sh
 once |7|Calendar date math, host harness|./tools/checks/check-calendar.sh

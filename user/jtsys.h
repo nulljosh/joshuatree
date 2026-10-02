@@ -69,6 +69,7 @@
 #define JT_REC_STOP  3
 #define JT_REC_CHUNK_MAX 8192
 #define JT_SYS_SYSINFO     395 /* 1.9.26: weather, chat host, phone flag, time in one read-only struct; see kernel/syscall.h */
+#define JT_SYS_BRK         397 /* 1.9.27: per-task heap top; 0 queries, else sets. Returns the top or -errno; see kernel/brk.c */
 #define JT_SYS_LAUNCH_REQUEST 396 /* 1.9.26: ask the desktop to open an app by exact APPS[] name; never launches inside the gate */
 #define JT_SYSINFO_VERSION 1
 #define JT_WX_TEXT_MAX  24
@@ -174,6 +175,7 @@ static inline int jt_write(int fd, const void *buf, unsigned len) { return jt_sy
 static inline int jt_open(const char *path, int flags)            { return jt_syscall(JT_SYS_OPEN,  (unsigned)path, (unsigned)flags, 0); }
 static inline int jt_close(int fd)                                { return jt_syscall(JT_SYS_CLOSE, (unsigned)fd, 0, 0); }
 static inline int jt_time(unsigned *out)                          { return jt_syscall(JT_SYS_TIME,  (unsigned)out, 0, 0); }
+static inline int jt_brk(unsigned top)                            { return jt_syscall(JT_SYS_BRK, top, 0, 0); }
 static inline int jt_getpid(void)                                 { return jt_syscall(JT_SYS_GETPID, 0, 0, 0); }
 static inline int jt_sched_yield(void)                            { return jt_syscall(JT_SYS_SCHED_YIELD, 0, 0, 0); }
 static inline int jt_lseek(int fd, int off, int whence)           { return jt_syscall(JT_SYS_LSEEK, (unsigned)fd, (unsigned)off, (unsigned)whence); }

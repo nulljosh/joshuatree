@@ -8,7 +8,7 @@ LD := ld.lld
 # as a general-purpose register and the chain walk has nothing to follow.
 
 KERNEL_SRCS := kernel/gdt.c kernel/idt.c kernel/pic.c kernel/irq.c kernel/pmm.c \
-               kernel/paging.c kernel/kheap.c kernel/task.c kernel/exec.c kernel/ring3.c kernel/ring3app.c kernel/syscall.c kernel/shellsys.c kernel/r3stress.c \
+               kernel/paging.c kernel/kheap.c kernel/task.c kernel/exec.c kernel/ring3.c kernel/ring3app.c kernel/syscall.c kernel/brk.c kernel/shellsys.c kernel/r3stress.c \
                kernel/gui_prims.c kernel/dock_geom.c kernel/dock_draw.c kernel/app.c kernel/backtrace.c kernel/entropy.c kernel/auth_kdf.c kernel/kernel.c
 KERNEL_ASM  := kernel/isr.S kernel/irq_stubs.S kernel/ring3_asm.S
 DRIVER_SRCS := drivers/ata.c drivers/blockdev.c drivers/ramdisk.c drivers/trash.c drivers/fat.c drivers/vfs.c drivers/ramfs.c drivers/pci.c drivers/vbe.c drivers/mouse.c drivers/vmmouse.c \
@@ -373,6 +373,14 @@ user/activity.bin: user/activity.o user/libjt.a user/note.ld boot/memmap.ld
 
 # 1.7.8: fbpoke, the program that pokes the released window framebuffer
 # and must fault. Run by kernel/ring3app.c under the `fbpoke` boot flag.
+# 1.9.27: brkpoke, the SYS_BRK leak probe. Run by kernel/ring3app.c under the `brkpoke` boot flag.
+user/brkpoke.o: user/brkpoke.c user/jtsys.h kernel/memmap.h
+	$(CC) $(USER_CFLAGS) -c -o $@ user/brkpoke.c
+user/brkpoke.bin: user/brkpoke.o user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/brkpoke.o
+drivers/user_brkpoke.h: user/brkpoke.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/brkpoke.bin drivers/user_brkpoke.h user_brkpoke
+
 user/fbpoke.o: user/fbpoke.c user/jtsys.h kernel/memmap.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
@@ -470,7 +478,7 @@ kernel/kernel.o: drivers/user_hello.h drivers/user_note.h drivers/user_wc.h
 drivers/user_fbpoke.h: user/fbpoke.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/fbpoke.bin drivers/user_fbpoke.h user_fbpoke
 
-kernel/ring3app.o: drivers/user_keyrate.h drivers/user_toroid.h drivers/user_calculator.h drivers/user_quotes.h drivers/user_bookrank.h drivers/user_homeqi.h drivers/user_lexly.h drivers/user_plan.h drivers/user_fieldbook.h drivers/user_clock.h drivers/user_portfolio.h drivers/user_activity.h drivers/user_contacts.h drivers/user_sparkjar.h drivers/user_reminders.h drivers/user_curbfind.h drivers/user_calendar.h drivers/user_search.h drivers/user_epiphany.h drivers/user_weather.h drivers/user_burrow.h drivers/user_stocks.h drivers/user_mail.h drivers/user_notes.h drivers/user_terminal.h drivers/user_samantha.h drivers/user_fbpoke.h
+kernel/ring3app.o: drivers/user_keyrate.h drivers/user_toroid.h drivers/user_calculator.h drivers/user_quotes.h drivers/user_bookrank.h drivers/user_homeqi.h drivers/user_lexly.h drivers/user_plan.h drivers/user_fieldbook.h drivers/user_clock.h drivers/user_portfolio.h drivers/user_activity.h drivers/user_contacts.h drivers/user_sparkjar.h drivers/user_reminders.h drivers/user_curbfind.h drivers/user_calendar.h drivers/user_search.h drivers/user_epiphany.h drivers/user_weather.h drivers/user_burrow.h drivers/user_stocks.h drivers/user_mail.h drivers/user_notes.h drivers/user_terminal.h drivers/user_samantha.h drivers/user_fbpoke.h drivers/user_brkpoke.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@

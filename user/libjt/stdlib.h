@@ -1,14 +1,11 @@
 #ifndef LIBJT_STDLIB_H
 #define LIBJT_STDLIB_H
-/* libjt: stdlib.h. malloc/calloc/realloc/free sit over a fixed static
-   arena in .bss (JT_ARENA_SIZE below), because v1/v2 give a program no
-   brk/mmap: the eight pages it is loaded with are all the memory it will
-   ever have, and one page of that is the stack (see jtsys.h and
-   docs/SYSCALL-ABI.md). The arena is a bump allocator with a free list
-   for exact-size reuse; free() cannot reclaim a partial block and merge
-   is not attempted, so long-running allocation churn will eventually
-   exhaust JT_ARENA_SIZE -- that ceiling, not "out of RAM", is the real
-   limit a libjt program has to respect. */
+/* libjt: stdlib.h. malloc/calloc/realloc/free run over the task heap SYS_BRK
+   grows on demand (1.9.27, kernel/brk.c): first-fit over a free list with
+   split and neighbour merge, and the heap top moves up in 64KB steps as
+   blocks are needed. Where brk is refused (a host build, or the kernel's
+   per-task cap and free-memory floor) the small static arena below is
+   the fallback, so a program that never asks for much still works. */
 
 #ifndef JT_ARENA_SIZE
 #define JT_ARENA_SIZE (16 * 1024)

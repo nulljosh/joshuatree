@@ -73,6 +73,9 @@
 #include "user_terminal.h"
 #include "user_samantha.h"
 #include "user_fbpoke.h"
+#include "user_brkpoke.h"
+#include "pmm.h"
+#include "brk.h"
 #include "app.h"
 #include "window.h"
 #include "irq.h"
@@ -337,6 +340,34 @@ static void fbpoke_run(void) {
     }
 }
 
+/* 1.9.27: `brkpoke` boot flag, the SYS_BRK leak probe: pmm free frames and brk
+   live pages before and after a program that grows 3MB and crashes; equal
+   means nothing leaked. tools/checks/ring3brk-check.py reads these lines. */
+static int brkpoke_armed = 0;
+static void brkpoke_run(void) {
+    unsigned char probe[1];
+    if (vfs_read_file("BRKPOKE.BIN", probe, 1) < 0 &&
+        !vfs_write_file("BRKPOKE.BIN", user_brkpoke, USER_BRKPOKE_LEN)) {
+        serial_puts("ring3app: could not seed BRKPOKE.BIN, not started\n");
+        return;
+    }
+    char num[12];
+    put_dec(num, (int)pmm_free_frames()); serial_puts("ring3app: brkpoke baseline free="); serial_puts(num);
+    put_dec(num, (int)brk_live_pages()); serial_puts(" live="); serial_puts(num); serial_puts("\n");
+    serial_puts("ring3app: launching BRKPOKE.BIN at ring 3, no window\n");
+    int status = -1;
+    const char *argv[] = { "BRKPOKE.BIN" };
+    if (!exec_user("BRKPOKE.BIN", argv, 1, &status)) { serial_puts("ring3app: exec_user failed for BRKPOKE.BIN\n"); return; }
+    if (status < 0 && -status < 32) {
+        serial_puts("ring3app: BRKPOKE.BIN crashed ("); serial_puts(EXC_SHORT[-status]); serial_puts(")\n");
+    } else {
+        put_dec(num, status);
+        serial_puts("ring3app: BUG BRKPOKE.BIN exited "); serial_puts(num); serial_puts(" instead of crashing\n");
+    }
+    put_dec(num, (int)pmm_free_frames()); serial_puts("ring3app: brkpoke after free="); serial_puts(num);
+    put_dec(num, (int)brk_live_pages()); serial_puts(" live="); serial_puts(num); serial_puts("\n");
+}
+
 static int ring3app_autoopen_slot = -1; /* APPS[] index to open, -1 when unarmed */
 void ring3app_autoopen_arm(const char *cl){
     for (const char *pc = cl; pc && *pc; pc++) {
@@ -366,6 +397,7 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='n' && pc[6]=='o' && pc[7]=='t' && pc[8]=='e') { ring3app_autoopen_slot = 3; serial_puts("autoopen=notes\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='t' && pc[6]=='e' && pc[7]=='r' && pc[8]=='m') { ring3app_autoopen_slot = 5; serial_puts("autoopen=terminal\n"); }
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
+        if (pc[0]=='b' && pc[1]=='r' && pc[2]=='k' && pc[3]=='p' && pc[4]=='o' && pc[5]=='k' && pc[6]=='e') { brkpoke_armed = 1; serial_puts("brkpoke armed\n"); }
     }
 }
 void ring3app_autoopen_run(int mx, int my){
@@ -374,6 +406,7 @@ void ring3app_autoopen_run(int mx, int my){
     editor_mouse_x = mx; editor_mouse_y = my;
     gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Lexly's, Plan's, Fieldbook's, Clock's, Portfolio's, Activity's, Contacts', Sparkjar's, Reminders', Curbfind's, Calendar's or Search's APPS slot */
     if (fbpoke_armed) { fbpoke_armed = 0; fbpoke_run(); }
+    if (brkpoke_armed) { brkpoke_armed = 0; brkpoke_run(); }
     gui_draw_desktop(-1, -1, 0, 0);
     cursor_saved_x = cursor_saved_y = -1;
     gui_cursor_save(mx, my);

@@ -216,6 +216,13 @@ struct jt_sysinfo {
    index on its next pass and opens it the way a dock click does. Returns 0, -EFAULT, -EINVAL
    (no such app, name too long, empty), or -EBUSY (a request is already pending). */
 #define SYS_LAUNCH_REQUEST 396
+
+/* 1.9.27: SYS_BRK (397), per-task heap. ebx = new top (0 queries). Returns the heap top after
+   the call: JT_BRK_BASE on a fresh task, or -EINVAL for a top outside [JT_BRK_BASE,
+   JT_BRK_BASE + JT_BRK_MAX_PAGES * 4096] and -ENOMEM when the PMM cannot back the growth
+   (the old top stands). Pages are zeroed, user+writable, mapped into this task's directory
+   only, and freed on exit or crash (kernel/brk.c). */
+#define SYS_BRK         397
 #define JT_APP_NAME_MAX 24
 /* 1.9.26: SYS_AUDIO (393), audio out for a ring-3 Samantha. One number, three ops. ebx = op,
    ecx = const/non-const struct pointer (user), edx = the caller's sizeof that struct.

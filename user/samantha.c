@@ -10,11 +10,12 @@
  * kernel's: chatpick=, chatreply=, chatfail=.
  *
  * Face: the band under the title holds her animated face, the same real 320x320 JPEG frames the
- * kernel chat streams (/face/idle-N.jpg, /face/talk-N.jpg), fetched with SYS_HTTP_GET into a 28KB
- * scratch buffer and decoded in ring 3 by the kernel's own decoder (drivers/jpeg.c, built into
- * libjt) down to 64x64 true-colour RGB565, one frame per idle poll so the window never blocks.
- * Every second source frame is kept (12 idle, 24 talk, 288KB in the arena). Idle loop while
- * quiet, talk frames while a reply shows.
+ * kernel chat streams (/face/idle-N.jpg, /face/talk-N.jpg), fetched with SYS_HTTP_GET one frame
+ * per idle poll so the window never blocks. 1.9.27: every JPEG (all 24 idle and 48 talk, about
+ * 1.5MB) lives in the SYS_BRK heap through malloc, and the frame on screen is decoded on demand
+ * by the kernel's own decoder (drivers/jpeg.c, built into libjt) straight to the 60x60 the
+ * kernel's small face uses (FACE_SIDE in kernel/chat_face.h), RGB565. Idle loop while quiet,
+ * talk frames while a reply shows.
  * Tools: a pick runs here (slices 3 and 4): reminders, calendar, mail and notes through the
  * file syscalls, weather through SYS_SYSINFO, "open <app>" through SYS_LAUNCH_REQUEST.
  * Type is the antialiased libjt face.
@@ -25,11 +26,11 @@
 /* decoder from drivers/jpeg.c, compiled into libjt (user/libjt/jpeg.c) */
 int jpeg_decode_scaled(const unsigned char *data, unsigned int len, unsigned short *dst,
                        unsigned int dw, unsigned int dh, unsigned int *w, unsigned int *h);
-#define UFACE_SIDE 64
-#define UFACE_IDLE_N 12   /* idle-0,2,..,22 of the kernel's 24 */
-#define UFACE_TALK_N 24   /* talk-0,2,..,46 of its 48 */
-#define UFACE_STRIDE 2
-#define UFACE_FILE 28672  /* one JPEG, real frames are ~21KB */
+#define UFACE_SIDE 60     /* the kernel's small face side (FACE_SIDE, kernel/chat_face.h) */
+#define UFACE_IDLE_N 24   /* every idle frame the kernel keeps */
+#define UFACE_TALK_N 48   /* every talk frame */
+#define UFACE_STRIDE 1
+#define UFACE_FILE 32768  /* one JPEG fetch, real frames are ~21KB */
 typedef unsigned short uface_t[UFACE_SIDE * UFACE_SIDE];
 
 #define BG     0x00FAF8F6
@@ -80,7 +81,10 @@ static int face_talk_at JT_DATA = 0;       /* talk frame on screen */
 static unsigned face_next JT_DATA = 0;     /* tick of the next frame step */
 static unsigned talk_until JT_DATA = 0;    /* tick the spoken reply is shown until */
 static int face_inited JT_DATA = 0;
-static uface_t *uface_idle JT_DATA = 0, *uface_talk JT_DATA = 0;   /* in the arena, past struct arena */
+static unsigned char *uface_jpg[2][UFACE_TALK_N] JT_DATA;   /* [0]=idle [1]=talk, malloc'd JPEG bytes */
+static unsigned uface_len[2][UFACE_TALK_N] JT_DATA;
+static unsigned short *uface_cur JT_DATA = 0;                /* the one decoded frame, UFACE_SIDE^2 */
+static int uface_cur_kind JT_DATA = -1, uface_cur_i JT_DATA = -1;
 static unsigned char *uface_file JT_DATA = 0;
 static int uface_idle_n JT_DATA = 0, uface_talk_n JT_DATA = 0, uface_done JT_DATA = 0;
 static unsigned uface_open[UFACE_TALK_N] JT_DATA;
@@ -171,6 +175,16 @@ static void face_blit(const unsigned short *f) {
     }
 }
 
+/* Decode frame i of kind (0 idle, 1 talk) into uface_cur unless it is there already; returns it or 0. */
+static const unsigned short *face_frame(int kind, int i) {
+    if (!uface_cur || !uface_jpg[kind][i]) return 0;
+    if (uface_cur_kind == kind && uface_cur_i == i) return uface_cur;
+    unsigned w = 0, h = 0;
+    if (jpeg_decode_scaled(uface_jpg[kind][i], uface_len[kind][i], uface_cur, UFACE_SIDE, UFACE_SIDE, &w, &h) != 0) return 0;
+    uface_cur_kind = kind; uface_cur_i = i;
+    return uface_cur;
+}
+
 /* Mouth contrast in the box where a portrait's mouth sits (centred, 58-74% down): the same measure
    the kernel face uses, here on the decoded 64x64 frame. Teeth by a dark gap = high variance. */
 static unsigned face_openness(const unsigned short *f) {
@@ -205,11 +219,18 @@ static void face_load_step(void) {
         path[n] = 0;
         int got = jt_http_get(path, uface_file, UFACE_FILE);
         unsigned w = 0, h = 0;
-        unsigned short *dst = idle ? uface_idle[i] : uface_talk[i];
-        if (got > 0 && jpeg_decode_scaled(uface_file, (unsigned)got, dst, UFACE_SIDE, UFACE_SIDE, &w, &h) == 0 && w == 320 && h == 320) ok = 1;
+        if (got > 0 && uface_cur && jpeg_decode_scaled(uface_file, (unsigned)got, uface_cur, UFACE_SIDE, UFACE_SIDE, &w, &h) == 0 && w == 320 && h == 320) {
+            unsigned char *keep = (unsigned char *)malloc((unsigned long)got);  /* heap, SYS_BRK */
+            if (keep) {
+                for (int k = 0; k < got; k++) keep[k] = uface_file[k];
+                uface_jpg[idle ? 0 : 1][i] = keep; uface_len[idle ? 0 : 1][i] = (unsigned)got;
+                uface_cur_kind = idle ? 0 : 1; uface_cur_i = i;
+                ok = 1;
+            }
+        }
     }
     if (ok) {
-        if (idle) uface_idle_n++; else { uface_open[i] = face_openness(uface_talk[i]); uface_talk_n++; }
+        if (idle) uface_idle_n++; else { uface_open[i] = face_openness(uface_cur); uface_talk_n++; }
         if (uface_idle_n < UFACE_IDLE_N || uface_talk_n < UFACE_TALK_N) return;
     }
     uface_done = 1;   /* clip ended (failure) or both loops full */
@@ -235,10 +256,10 @@ static int face_step(unsigned now) {
     if (face_talking(now) && uface_talk_n) {
         int a = (face_talk_at + 1) % uface_talk_n, b = (face_talk_at + 2) % uface_talk_n;
         face_talk_at = (uface_open[b] > uface_open[a] && (now / FACE_STEP) % 2) ? b : a;
-        face_blit(uface_talk[face_talk_at]);
+        face_blit(face_frame(1, face_talk_at));
     } else {
         face_at = (face_at + 1) % uface_idle_n;
-        face_blit(uface_idle[face_at]);
+        face_blit(face_frame(0, face_at));
     }
     return 1;
 }
@@ -249,7 +270,7 @@ static void draw(void) {
     text("Samantha", 20, 12, ACCENT);
     text(status, 20 + tw("Samantha") + 16, 12, DIM);
     rect(20, HEAD_H, W - 40, 1, RULE);
-    if (uface_idle_n) face_blit(face_talking(now_ticks()) && uface_talk_n ? uface_talk[face_talk_at] : uface_idle[face_at]);
+    if (uface_idle_n) face_blit(face_talking(now_ticks()) && uface_talk_n ? face_frame(1, face_talk_at) : face_frame(0, face_at));
     int top = HEAD_H + FACE_H + 8, bottom = H - INPUT_H - 8;
     int bw = W - 40 - 80;  /* bubble text width: leaves a margin on the far side */
     if (bw > 360) bw = 360;
@@ -790,12 +811,12 @@ __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "samantha: no window\n", 20); jt_exit(1); }
-    ar = (struct arena *)(((unsigned)_user_end + 15u) & ~15u);
-    { unsigned char *p = (unsigned char *)(((unsigned)ar + sizeof *ar + 15u) & ~15u);
-      uface_file = p; p += UFACE_FILE;
-      uface_idle = (uface_t *)p; p += sizeof(uface_t) * UFACE_IDLE_N;
-      uface_talk = (uface_t *)p; }
-    face_inited = 1;
+    ar = (struct arena *)malloc(sizeof *ar);              /* 1.9.27: the heap, not the image window */
+    if (!ar) { jt_write(2, "samantha: no heap\n", 18); jt_exit(1); }
+    for (unsigned k = 0; k < sizeof *ar; k++) ((unsigned char *)ar)[k] = 0;
+    uface_file = (unsigned char *)malloc(UFACE_FILE);
+    uface_cur = (unsigned short *)malloc(sizeof(uface_t));
+    face_inited = uface_file && uface_cur;
     draw();
     jt_write(1, "samantha: ring-3 window\n", 24);
     unsigned flags = JT_POLL_PRESENT;

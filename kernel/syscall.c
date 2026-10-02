@@ -15,6 +15,7 @@
    without that check, so there is no argument it can pass that makes the
    kernel read a kernel address on its behalf. */
 #include "syscall.h"
+#include "brk.h"
 #include "idt.h"
 #include "task.h"
 #include "paging.h"
@@ -440,6 +441,7 @@ static void r3win_release(int task);
 void syscall_release_task(int id) {
     if (id < 0 || id >= TASK_SLOTS) return;
     window_release(id);
+    brk_release(id, task_page_dir(id)); /* 1.9.27: every heap page back to the PMM, exit or crash alike */
     /* Every teardown path lands here (exit, idt.c's fault reap, and the
        launcher's failed exec never mapped anything), so this is the one
        place to insist: no owner, no user-accessible framebuffer. Cheap,
@@ -1042,6 +1044,12 @@ static void window_release(int id) {
     serial_puts("syscall: window released, task gone\n");
 }
 
+static int sys_brk(u32 top, u32 b, u32 c) {
+    (void)b; (void)c;
+    int id = task_current();
+    return brk_set(id, task_page_dir(id), top);
+}
+
 static const syscall_fn table[NSYSCALLS] = {
     [SYS_EXIT]        = sys_exit,
     [SYS_READ]        = sys_read,
@@ -1065,6 +1073,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_AUDIO_RECORD] = sys_audio_record,
     [SYS_SYSINFO]     = sys_sysinfo,
     [SYS_LAUNCH_REQUEST] = sys_launch_request,
+    [SYS_BRK]         = sys_brk,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {

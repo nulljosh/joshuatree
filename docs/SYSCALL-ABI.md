@@ -785,3 +785,28 @@ if one is already waiting. It never launches inside the gate: the desktop loop
 takes the index on its next pass and opens it the way a dock click does, as a
 window for a ring-3 app or through the blocking path otherwise. Numbers 393
 and 394 are the audio calls.
+
+## brk (1.9.27)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 397 | `brk` | new top, or 0 | 0 | 0 | the heap top after the call, or -errno |
+
+A program's image window (`JT_USER_IMAGE_PAGES`, 128 KB) is fixed and
+kmalloc'd per running window, so it is the wrong place for anything big.
+**brk** gives each task its own heap instead, at `JT_BRK_BASE`
+(0xFF000000, `kernel/memmap.h`) growing up to `JT_BRK_MAX_PAGES` (2048, 8 MB).
+`ebx` of 0 reads the current top; a fresh task answers `JT_BRK_BASE`. Any other
+value sets it: pages between the old and new top come from the PMM one frame at
+a time, zeroed before they are mapped, user and writable, in this task's page
+directory and no other; shrinking frees them. A top below the base or past the
+cap is -EINVAL and nothing moves; -ENOMEM means the PMM could not back the
+growth, either because it is out of frames or because the heap stops 4 MB short
+of empty so one program cannot starve the kernel, and the old top stands (any
+pages mapped before the failure are unmapped again). Exit and crash both run
+`brk_release` from `syscall_release_task`: every frame and both page tables go
+back, and the serial log carries `brk: released N pages, live=M` with the
+count still mapped across all tasks, which `tools/checks/ring3brk-check.py`
+asserts returns to 0. `user/libjt` `malloc`, `calloc`, `realloc` and `free`
+sit on top of this call (first fit, split and merge, 64 KB steps), with the old
+16 KB static arena as the fallback when brk is refused.
