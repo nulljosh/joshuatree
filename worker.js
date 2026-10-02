@@ -104,6 +104,11 @@ async function handleProxy(request, env) {
     // constrained to exactly the file names chat_face.h ever builds
     // (face_fetch's "/face/" + kind + "-" + i + ".png"), nothing else on
     // this host is reachable through this branch.
+    // 2.0.0: the ring-3 Samantha's per-sentence SYS_HTTP_GET /api/speak?t=...
+    // goes to the fixed Worker host, so in the demo it arrives HERE (through
+    // the browser relay), not at the top-level /api/speak route. Without this
+    // it fell through to isAllowedTarget and got the generic 403.
+    if (targetUrl.pathname === "/api/speak" && request.method === "GET") return handleSpeakGet(targetUrl, request, env);
     if (/^\/face\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname) && request.method === "GET") {
       // Read the frame from this deploy's own assets: a Worker fetching its
       // own hostname over the network gets Cloudflare's 522, so the guest's

@@ -134,7 +134,8 @@ await page.route('**/api/proxy**', async (route) => {
   const isFace = targetUrl && targetUrl.hostname === 'joshuatree.heyitsmejosh.com' && /^\/face\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname);
   const isChat = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/chat';
   const isPick = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/pick';
-  const isSpeak = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/speak';
+  // the ring-3 Samantha's GET /api/speak?t= goes to the Worker host (the old kernel chat POSTed to turing's)
+  const isSpeak = targetUrl && (targetUrl.hostname === 'turing.heyitsmejosh.com' || targetUrl.hostname === 'joshuatree.heyitsmejosh.com') && targetUrl.pathname === '/api/speak';
   if (isFace && req.method() === 'GET') {
     const file = path.join(root, 'face', path.basename(targetUrl.pathname));
     if (fs.existsSync(file)) {
