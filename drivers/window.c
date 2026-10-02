@@ -378,6 +378,12 @@ void window_present(void) {
 
 int window_has_back_buffer(void) { return back != 0; }
 
+/* 1 while a graphical mode is up. The VGA text console (kernel.c putc)
+   must stay out of 0xB8000 then: the emulator aliases that legacy window
+   onto the linear framebuffer, so a console line scribbles blank cells
+   across the menu bar. */
+int window_is_open(void) { return fb != 0; }
+
 /* A real, self-contained proof that drawing is genuinely offscreen, not a
    claim about it: write a known value through the normal drawing path,
    read the VISIBLE framebuffer back directly (not window_get_pixel_phys,
