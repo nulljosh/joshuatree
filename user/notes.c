@@ -44,8 +44,8 @@
 #define MAX_FOLDERS 16
 #define MAX_NOTES 64
 #define TITLE_MAX 40
-#define FOLDER_W 150
-#define LIST_W 220
+#define FOLDER_W (win.width < 600 ? 100 : 150)
+#define LIST_W (win.width < 600 ? 170 : 220)
 #define COL_Y 40
 #define ROW_H 22
 #define KEY_COPY 302
@@ -450,7 +450,9 @@ static void draw_list(int x, int w, const char *title, int focused, int count, i
 static void draw(void) {
     char t[TITLE_MAX];
     rect(0, 0, (int)win.width, (int)win.height, BG);
-    text("n new   f folder   d delete   tab switch   up/down pick   enter opens   backspace up   esc closes", 20, 10, DIM);
+    if (win.width < 600) text("n new   f folder   d delete   enter opens", 20, 10, DIM);
+    else if (win.width < 780) text("n new   f folder   d delete   tab switch   enter opens   esc closes", 20, 10, DIM);
+    else text("n new   f folder   d delete   tab switch   up/down pick   enter opens   backspace up   esc closes", 20, 10, DIM);
     draw_list(20, FOLDER_W, "FOLDERS", focus == 0, nfo, fsel);
     for (int i = 0; i < nfo; i++) text(ar->fo[i].name, 32, COL_Y + 46 + i * ROW_H - 4, INK);
     int nx = 20 + FOLDER_W + 16;
@@ -460,7 +462,7 @@ static void draw(void) {
         text(t, nx + 12, COL_Y + 46 + i * ROW_H - 4, INK);
     }
     rect(nx + LIST_W, COL_Y + 24, 1, (int)win.height - COL_Y - 40, RULE);
-    text("select a note and press enter to write", nx + LIST_W + 24, COL_Y + 30, FADE);
+    text(win.width < 600 ? "pick a note" : "select a note and press enter to write", nx + LIST_W + 24, COL_Y + 30, FADE);
     if (note) text(note, 20, (int)win.height - 28, DIM);
 }
 

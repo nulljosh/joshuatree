@@ -36,6 +36,8 @@ In order. Each one feeds the next.
 
 A dev kit. A small board with Joshua Tree flashed on it, sold to the people who build their own computers for fun. The board pick and driver work are in `docs/HARDWARE.md`.
 
+The hardware designs are CC BY-NC-SA 4.0 on purpose: anyone can build one for themselves, but nobody can resell the kit, which protects the kit sales while the OS stays free.
+
 - 5,000 boards at $199 is $1M.
 - Needs: real drivers for one real board (network, sound, USB keyboard and mouse), a landing page that sells it, one launch on Hacker News and the osdev crowd.
 - Proof it's working: the first 100 preorders.
@@ -66,9 +68,9 @@ listing they can buy anywhere.
 
 | Line | Amount | Note |
 |---|---|---|
-| Strata case (6 rings, cap, tray, rods) | unknown | no print quote yet; $40 is the stock-case estimate above |
+| Strata case (6 rings, cap, tray, rear plate; 30 printed pieces) | ~$40-75 prototype, one-off | estimate, JLC3DP print plus shipping, no real quote yet (`docs/HARDWARE.md`, Prototype cost). Prototype pricing is not volume pricing. $40 is the stock-case estimate above |
 | USB stick, pre-flashed | ~$8 | estimate |
-| Screws, spacers, rods | ~$7 | estimate |
+| Screws, nuts, rods (16 fasteners) | ~$7 | estimate |
 | Payment fees | ~$6 | 3% of $199 |
 | Shipping, small box | ~$15 | estimate, no carrier quote |
 | **Cost without the case** | **~$36** | |
@@ -88,9 +90,11 @@ against ~$120 for the current pick, but it has no PS/2 ports, so it only
 works once the kernel has a USB driver for keyboards. That's the xHCI
 item on the roadmap. Not before.
 
-**Next real step:** get an instant quote for the Strata parts from a print
-service using `docs/hardware/strata_cad.py`'s STLs. That one number decides
-the kit margin.
+**Next real step:** upload `docs/hardware/stl/` to JLC3DP and write the real
+cart total here. The prototype estimate (~$40-75) is far under the ~$163
+breakeven, but it is an estimate until the cart says so. At home on a Bambu
+A1 mini ($299) the plastic is about $9. The 5x-cost rule of thumb
+would put the case alone near $200-375, so the Kit price needs the real quote first.
 
 ### The first dollar
 

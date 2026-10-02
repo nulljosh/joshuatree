@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: CC-BY-NC-SA-4.0
+# Copyright (c) 2026 Joshua Trommel. Hardware design, see docs/hardware/LICENSE-NOTICE.md
 # Dimensioned blueprint sheet for Strata: section (front) + plan, drawn from strata_cad.py's own numbers.
 import sys, os
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "strata_cad.py")).read()
@@ -51,7 +53,7 @@ dim_h(cx - top_w / 2 * K, cx + top_w / 2 * K, base - (z + CAP_T) * K - 34, f"{to
 dim_v(cx - BASE_W / 2 * K - 56, base, base - (z + CAP_T) * K, f"{z + CAP_T:g}")
 dim_v(cx - BASE_W / 2 * K - 22, base, base - CORE_H * K, "")
 text(cx - BASE_W / 2 * K - 22, base + 16, f"core {CORE_H:g}", 10, SOFT)
-text(cx, base + 62, f"gaps {GAP:g} mm = vent lines, set by spacers on the M3 rods", 11, INK)
+text(cx, base + 62, f"gaps {GAP:g} mm = vent lines, set by 2 mm bosses printed into each ring", 11, INK)
 
 # plan view
 px, py = 400, 740
@@ -82,15 +84,15 @@ notes = [
     (f"cap  {top_w:g} square, {CAP_T:g} thick, mark engraved", 11, 400),
     (f"core tray  {CORE:g} square, {CORE_H:g} tall, {WALL:g} walls", 11, 400),
     ("vent slots in the tray line up with every gap", 11, 400),
-    ("4 x M3 threaded rod, 20 x 2 mm spacers, 4 nuts", 11, 400),
-    ("4 x M3 standoff 6 mm for the board", 11, 400), ("", 8, 400),
+    ("4 x M3 threaded rod, 8 nuts, bosses printed in", 11, 400),
+    ("4 printed board standoffs, 4 x M3x8 screws", 11, 400), ("", 8, 400),
     ("MAKE IT", 13, 600),
     ("1  print the rings: SLS nylon or FDM PETG, 0.2 mm", 11, 400),
     ("2  colour: dye or paint per ring, base to cap", 11, 400),
     ("    terracotta B9542C to cream F0E7D8", 11, 400),
     ("3  tray: bent 1.5 mm aluminium, or printed", 11, 400),
     ("4  laser engrave the tree on the cap", 11, 400),
-    ("5  stack: tray, rods, then ring, spacer, ring", 11, 400),
+    ("5  stack: tray, rods, then ring over ring", 11, 400),
     ("6  board in, stock I/O shield, cap, nuts", 11, 400), ("", 8, 400),
     ("CHECK BEFORE CUTTING", 13, 600),
     ("board hole spacing 154.94 x 157.48 (mini-ITX spec)", 11, 400),

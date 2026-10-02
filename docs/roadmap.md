@@ -98,6 +98,7 @@ The OS stays free. Monetization is custom hardware built to run it. Everything t
 - [ ] [Joshua] One real PC booted from the USB stick, keyboard and mouse working, photographed. The USB image and non-emulator graphics are only proven in QEMU so far.
 - [ ] [Fable] Install to disk from the USB stick.
 - [ ] [Fable] Wi-Fi.
+- [ ] [Joshua] Trademark search and registration (CIPO or USPTO) for Joshua Tree and the mark before the first boxes ship; a quick search found Joshua Tree Technologies LLC and a JOSHUA TREE VOICE mark, and many STRATA marks in the software and computer classes, so clear the names first.
 
 ## Bloomberg terminal
 Epiphany is the terminal. Stocks stays a basic ticker widget and never grows into this.
