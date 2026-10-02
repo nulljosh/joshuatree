@@ -158,13 +158,11 @@ static int ring3app_seed(const struct ring3_app *a) {
    into a framebuffer that exists only in its own directory, and gets its
    keys and clicks from the window's event ring, never from a global key
    pull. Returns the task id for kernel.c's window row, or -1, in which
-   case the caller falls back to the blocking path. */
+   case the caller refuses the open (gui_refuse_open). */
 static const char *r3w_file[TASK_SLOTS];
 int jt_phone_mode(void); /* kernel.c: boot_to_phone */
 int ring3app_launch_window(const char *name, unsigned int w, unsigned int h) {
     const struct ring3_app *a = 0;
-    /* Stocks also exits to be relaunched for a fresh quote fetch. */
-    if (name[0] == 'S' && name[1] == 't' && name[2] == 'o' && name[3] == 'c' && name[4] == 'k' && name[5] == 's' && !name[6]) return -1; /* -1 = blocking path; 0 is a valid task id */
     for (unsigned int i = 0; i < sizeof RING3_APPS / sizeof RING3_APPS[0]; i++) {
         const char *p = RING3_APPS[i].name, *q = name;
         while (*p && *p == *q) { p++; q++; }
@@ -181,7 +179,7 @@ int ring3app_launch_window(const char *name, unsigned int w, unsigned int h) {
     if (id >= 0 && !syscall_window_register(id, w, h, image)) { task_kill(id); id = -1; }
     irq_restore(f);
     __asm__ volatile ("sti");
-    if (id < 0) { serial_puts("ring3app: window launch failed, falling back\n"); return -1; }
+    if (id < 0) { serial_puts("ring3app: window launch failed, refused\n"); return -1; }
     r3w_file[id] = a->file;
     return id;
 }

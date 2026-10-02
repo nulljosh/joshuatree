@@ -449,7 +449,7 @@ changes.
 | # | Name | ebx | ecx | Returns |
 |---|---|---|---|---|
 | 384 | `window_open` | `struct jt_window_info *` | 0 | 0, or -errno |
-| 385 | `window_poll` | `struct jt_event *` | flags | 1 with an event written, -EAGAIN with none, or -errno |
+| 385 | `window_poll` | `struct jt_event *` | flags | 1 with an event written, -EAGAIN with none, or -errno. A compositor window drains its own event ring; the global-keyboard pull is used only by the blocking launch (phone grid, Apps folder, text shell), never by a desktop window. |
 
 ```c
 struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };

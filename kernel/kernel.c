@@ -5011,11 +5011,29 @@ static void gui_launch(int icon){
 }
 
 static int gui_multiwin_open(int icon);
+/* 2.0 gate 5: a full window table or a failed window launch is an honest refusal now, never a
+   blocking takeover of the screen. Serial marker plus a notice the next repaint draws. */
+static const char *gui_notice_name = 0; static unsigned int gui_notice_until = 0;
+static void gui_refuse_open(int icon){
+    if (icon < 0 || icon >= GUI_APP_COUNT) return;
+    gui_notice_name = APPS[icon].name; gui_notice_until = ticks() + 300;
+    serial_puts("winrefuse: "); serial_puts(APPS[icon].name); serial_puts("\n"); /* tools/checks/dockcap-fallback-check.sh */
+}
+static void gui_notice_draw(void){
+    if (!gui_notice_name || (int)(ticks() - gui_notice_until) >= 0) { gui_notice_name = 0; return; }
+    char msg[64]; int n = 0; const char *pre = "Close a window to open ";
+    for (const char *q = pre; *q && n < 40; q++) msg[n++] = *q;
+    for (const char *q = gui_notice_name; *q && n < 62; q++) msg[n++] = *q;
+    msg[n] = 0;
+    int w = font_string_width(msg) + 32, h = 32, x = ((int)window_width() - w) / 2, y = GUI_MENUBAR_H + 12;
+    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x002C2C2E, 14);
+    font_draw_string(msg, x + 16, y + 8, 0x00F5F5F7, -1);
+}
 void gui_launch_from_dock(int icon){
     /* 1.9.23: a ring-3 window app opens as a compositor window from every
        path (dock, keyboard, open= boot flag); the blocking viewport below
        is only the fallback when the launch failed. */
-    if (gui_ring3_windowed(icon) && gui_multiwin_open(icon) >= 0) return;
+    if (gui_ring3_windowed(icon)) { if (gui_multiwin_open(icon) < 0) gui_refuse_open(icon); return; }
 again:
     /* Keep the desktop visible around the app. The framebuffer viewport
        clips every app draw, including window_clear and physical AA text. */
@@ -5403,8 +5421,8 @@ static int gui_multiwin_open(int icon){
     gui_multiwin_geom(slot, &gui_windows[slot].x, &gui_windows[slot].y, &gui_windows[slot].w, &gui_windows[slot].h);
     if (gui_ring3_windowed(icon)) {
         /* 1.9.23: the program is scheduled now and draws into its own
-           buffer; this loop keeps running. -1 hands the click to the
-           blocking path, so a failed launch is a slower open, not a lost one. */
+           buffer; this loop keeps running. -1 is refused by the caller
+           (gui_refuse_open), never a blocking takeover. */
         int t = ring3app_launch_window(APPS[icon].name, (unsigned int)(gui_windows[slot].w - 16), (unsigned int)(gui_windows[slot].h - 40));
         if (t < 0) return -1;
         gui_windows[slot].task = t;
@@ -6040,7 +6058,8 @@ static void gui_run(void){
         { int li = jt_launch_take();
           if (li >= 0) {
               serial_puts("launchreq=pickup\n");
-              if (!(gui_multiwin_dock_ok(li) && gui_multiwin_open(li) >= 0)) { gui_launch_from_dock(li); mx = app_cursor_x; my = app_cursor_y; }
+              if (gui_multiwin_dock_ok(li)) { if (gui_multiwin_open(li) < 0) gui_refuse_open(li); }
+              else { gui_launch_from_dock(li); mx = app_cursor_x; my = app_cursor_y; }
               for (int wi = 0; wi < gui_window_count; wi++) gui_windows[wi].shown = 1;
               sys_launched = 1;
           } }
@@ -6362,14 +6381,9 @@ static void gui_run(void){
                    everything) instead of blocking inside gui_wait_close the
                    way every other app still does. */
                 editor_mouse_x = mx; editor_mouse_y = my;
-                /* v0.76.56: at the GUI_MULTIWIN_MAX cap the window path
-                   returns -1; fall through to the blocking path so the click
-                   always does something visible (dockcap-fallback-check.py). */
-                if (gui_multiwin_open(gui_order[press_slot]) < 0) {
-                    serial_puts("mwcapfallback\n"); /* discriminating marker for tools/checks/dockcap-fallback-check.py */
-                    gui_launch_from_dock(gui_order[press_slot]);
-                    mx = app_cursor_x; my = app_cursor_y;
-                }
+                /* 2.0 gate 5: at the GUI_MULTIWIN_MAX cap (or a failed window launch) the click is an
+                   honest refusal, "winrefuse" on serial and a notice on screen, never a blocking takeover. */
+                if (gui_multiwin_open(gui_order[press_slot]) < 0) gui_refuse_open(gui_order[press_slot]);
                 /* the launched=1 full repaint below draws this window's chrome; do not let the first-frame check draw it again */
                 for (int wi = 0; wi < gui_window_count; wi++) gui_windows[wi].shown = 1;
                 launched = 1;
@@ -6514,6 +6528,7 @@ static void gui_run(void){
             if (menu_open) gui_draw_apple_menu(menu_hover);
             if (notif_open) gui_draw_notif_panel();
             if (weather_open) gui_draw_weather_panel();
+            if (gui_notice_name) gui_notice_draw();
             if (drag_slot < 0) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
             last_mx = mx; last_my = my; last_hover = hover_slot; last_drag = drag_slot;
             last_menu_open = menu_open; last_menu_hover = menu_hover;
