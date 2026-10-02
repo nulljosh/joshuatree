@@ -62,8 +62,8 @@ def mix(a, b, t): return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3)
 bpy.ops.wm.read_factory_settings(use_empty=True)
 sc = bpy.context.scene
 sc.render.engine = "CYCLES"
-sc.cycles.samples = 16 if PREVIEW else 256
-SAMPLES_REAR = 16 if PREVIEW else 640                      # the rear window reveal shows denoiser smudge below this
+sc.cycles.samples = 16 if PREVIEW else int(os.environ.get("SAMPLES", 256))
+SAMPLES_REAR = 16 if PREVIEW else int(os.environ.get("SAMPLES_REAR", 640))                      # the rear window reveal shows denoiser smudge below this
 sc.cycles.use_denoising = True
 sc.cycles.max_bounces = 6
 sc.render.resolution_x, sc.render.resolution_y, sc.render.resolution_percentage = W, H, 100
@@ -211,9 +211,9 @@ def shoot(name, az, el, dist, lens, target, lights, ev=0.0, samples=None, pts=No
     bpy.ops.render.render(write_still=True)
 
 def env(k, v): return float(os.environ.get(k, v))
-LK_H, LK_R, LK_T = env("LK_H", 0.42), env("LK_R", 0.42), env("LK_T", 0.42)     # light scale per shot, exposure stays at 0 under the Standard transform
-WALL_K = env("WALL_K", 0.9)                                    # back-wall light: low enough that the black rear plate stops mirroring the backdrop
-GRD_K = env("GRD_K", 1.1)
+LK_H, LK_R, LK_T = env("LK_H", 0.4), env("LK_R", 0.42), env("LK_T", 0.42)     # light scale per shot, exposure stays at 0 under the Standard transform
+WALL_K = env("WALL_K", 0.6)                                    # back-wall light: low enough that the black rear plate stops mirroring the backdrop
+GRD_K = env("GRD_K", 0.5)
 ONLY = os.environ.get("STRATA_ONLY")                          # render just one view, e.g. STRATA_ONLY=hero
 hero_lights = [("key", (-0.9, -0.45, 0.85), 0.7, 22 * LK_H), ("fill", (0.9, -0.6, 0.5), 1.2, 3.5 * LK_H),
                ("camleft", (-0.94, -0.03, 0.34), 0.9, 7 * LK_H),                    # weak fill from camera-left at 20 deg elevation, both trunk walls catch a line
