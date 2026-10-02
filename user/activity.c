@@ -16,12 +16,12 @@
  * slots are labeled "Task N" by their real number, since the scheduler keeps
  * no names.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font. The backquote key (`) is the
+ * Glyphs: antialiased DejaVu via libjt/text.h. The backquote key (`) is the
  * deliberate crash: a write through a null pointer, a page fault at ring 3,
  * reaped by the kernel. tools/checks/ring3activity-check.py presses it.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define INK   0x001C1C1E
@@ -33,7 +33,7 @@
 #define SELBG 0x00EDE6DC
 
 #define ROWS    6   /* TASK_SLOTS: every scheduler slot, free or used */
-#define TOP     82  /* first row's y */
+#define TOP     88  /* first row's y */
 #define ROW_H   22
 #define BTN_Y   (TOP + ROWS * ROW_H + 14)
 #define REFRESH 100 /* ticks, one second at the 100Hz PIT */
@@ -54,20 +54,11 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++)
-        for (int c = 0; c < 8; c++) {
-            if (!(g[r] & (0x80 >> c))) continue;
-            int px = x + c, py = y + r;
-            if (px < 0 || px >= (int)win.width || py < 0 || py >= (int)win.height) continue;
-            win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-}
 static int text(const char *s, int x, int y, unsigned fg) { /* returns the x after the last glyph */
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
-    return x;
+    return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s);
+}
+static int btext(const char *s, int x, int y, unsigned fg) {
+    return jt_text_draw(&win, JT_FACE_BOLD, x, y, fg, s);
 }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
@@ -93,24 +84,22 @@ static void draw(unsigned now) {
     int w = (int)win.width;
     char num[12];
     rect(0, 0, w, (int)win.height, BG);
-    text("up/down select   k kills   esc closes", 20, 14, HINT);
-
-    int x = text("Uptime:", 20, 40, HINT) + 8;
+    int x = text("Uptime:", 20, 40, HINT) + 6;
     utoa10(snap.ticks / 100, num);
     x = text(num, x, 40, INK);
     text("s", x, 40, INK);
 
-    x = text("Memory:", 180, 40, HINT) + 8;
+    x = text("Memory:", 180, 40, HINT) + 6;
     utoa10(snap.free_kb, num);
     x = text(num, x, 40, INK);
-    x = text("K free /", x, 40, INK) + 8;
+    x = text("K free /", x, 40, INK) + 6;
     utoa10(snap.total_kb, num);
     x = text(num, x, 40, INK);
     text("K total", x, 40, INK);
 
-    text("PID", 20, 62, HINT);
-    text("NAME", 80, 62, HINT);
-    text("STATE", 200, 62, HINT);
+    btext("PID", 20, 66, HINT);
+    btext("NAME", 80, 66, HINT);
+    btext("STATE", 200, 66, HINT);
 
     for (int i = 0; i < ROWS; i++) {
         int y = TOP + i * ROW_H;
@@ -127,8 +116,9 @@ static void draw(unsigned now) {
     }
 
     rect(20, BTN_Y, 96, 24, RED);
-    text("Kill", 20 + (96 - 4 * 8) / 2, BTN_Y + 4, PALE);
+    btext("Kill", 20 + (96 - jt_text_width(JT_FACE_BOLD, "Kill")) / 2, BTN_Y + 4, PALE);
     if (msg_until && now < msg_until) text(msg, 130, BTN_Y + 4, RED);
+    text("up/down select   k kills   esc closes", 20, BTN_Y + 40, HINT);
     jt_write(1, "activitycontent\n", 16); /* one marker per redraw, what the checks count */
 }
 

@@ -211,7 +211,7 @@ user/calculator.bin: user/calculator.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/calculator.o user/libjt.a
 
 # 1.7.14: Quotes, the fourth app out of the kernel, built the same way.
-user/quotes.o: user/quotes.c user/jtsys.h drivers/vgafont.h
+user/quotes.o: user/quotes.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/quotes.bin: user/quotes.o user/libjt.a user/note.ld boot/memmap.ld
@@ -246,21 +246,21 @@ user/plan.bin: user/plan.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/plan.o user/libjt.a
 
 # 1.9.3: Fieldbook, the ninth app out of the kernel, built the same way.
-user/fieldbook.o: user/fieldbook.c user/jtsys.h drivers/vgafont.h
+user/fieldbook.o: user/fieldbook.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/fieldbook.bin: user/fieldbook.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/fieldbook.o user/libjt.a
 
 # 1.9.4: Clock, the tenth app out of the kernel, built the same way.
-user/clock.o: user/clock.c user/jtsys.h drivers/vgafont.h
+user/clock.o: user/clock.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/clock.bin: user/clock.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/clock.o user/libjt.a
 
 # 1.9.5: Portfolio, the eleventh app out of the kernel, built the same way.
-user/portfolio.o: user/portfolio.c user/jtsys.h drivers/vgafont.h
+user/portfolio.o: user/portfolio.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/portfolio.bin: user/portfolio.o user/libjt.a user/note.ld boot/memmap.ld
@@ -268,7 +268,7 @@ user/portfolio.bin: user/portfolio.o user/libjt.a user/note.ld boot/memmap.ld
 
 # 1.9.6: Activity, the twelfth app out of the kernel, built the same way.
 # 1.9.8: Sparkjar, the fourteenth app out of the kernel, built the same way.
-user/sparkjar.o: user/sparkjar.c user/jtsys.h drivers/vgafont.h
+user/sparkjar.o: user/sparkjar.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/sparkjar.bin: user/sparkjar.o user/libjt.a user/note.ld boot/memmap.ld
@@ -276,7 +276,7 @@ user/sparkjar.bin: user/sparkjar.o user/libjt.a user/note.ld boot/memmap.ld
 
 # 1.9.7: Contacts, the thirteenth app out of the kernel, built the same way.
 # 1.9.12: Search, the sixteenth app out of the kernel, built the same way.
-user/search.o: user/search.c user/jtsys.h drivers/vgafont.h
+user/search.o: user/search.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/search.bin: user/search.o user/libjt.a user/note.ld boot/memmap.ld
@@ -290,7 +290,7 @@ user/reminders.bin: user/reminders.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/reminders.o user/libjt.a
 
 # 1.9.11: Curbfind, the sixteenth app out of the kernel, built the same way.
-user/curbfind.o: user/curbfind.c user/jtsys.h drivers/vgafont.h
+user/curbfind.o: user/curbfind.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/curbfind.bin: user/curbfind.o user/libjt.a user/note.ld boot/memmap.ld
@@ -359,13 +359,13 @@ user/stocks.o: user/stocks.c user/jtsys.h user/libjt/text.h
 user/stocks.bin: user/stocks.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/stocks.o user/libjt.a
 
-user/contacts.o: user/contacts.c user/jtsys.h drivers/vgafont.h
+user/contacts.o: user/contacts.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/contacts.bin: user/contacts.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/contacts.o user/libjt.a
 
-user/activity.o: user/activity.c user/jtsys.h drivers/vgafont.h
+user/activity.o: user/activity.c user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/activity.bin: user/activity.o user/libjt.a user/note.ld boot/memmap.ld
