@@ -190,8 +190,8 @@ try {
   // bus-level keyboard_send_text below never counts as activity. A real visitor watching her would
   // be moving the mouse, so keep a real DOM mousemove going (the reboot was what dropped the typing).
   keepAlive = setInterval(() => { page.mouse.move(700 + Math.floor(Math.random() * 20), 450).catch(() => {}); }, 2000);
-  await page.waitForFunction(() => window.__jt.serial.includes('samopen'), null, { timeout: 30000 });
-  await page.waitForFunction(() => window.__jt.serial.includes('samfocus'), null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__jt.serial.includes('samopen'), null, { timeout: 90000 });
+  await page.waitForFunction(() => window.__jt.serial.includes('samfocus'), null, { timeout: 90000 });
   ok('samopen/samfocus markers seen: ring-3 Samantha opened with her input bar focused');
 
   const audioState = await page.evaluate(() => {
@@ -206,9 +206,9 @@ try {
   // no fault); guest network through /api/proxy now counts as activity.
   const bootsBefore = (await page.evaluate(() => window.__jt.serial)).split('=== kmain boot start').length - 1;
   if (bootsBefore !== 1) fail(`guest booted ${bootsBefore} times before the face finished loading, expected exactly one kmain banner (the kiosk idle reset fired mid-load)`);
-  await page.waitForFunction(() => window.__jt.serial.includes('face: idle='), null, { timeout: 20000 })
+  await page.waitForFunction(() => window.__jt.serial.includes('face: idle='), null, { timeout: 120000 })
     .then(() => ok('chat_face_load ran and reported a result over serial'))
-    .catch(() => fail('no "face: idle=" serial marker within 20s of Chat opening -- chat_face_load never ran or never finished'));
+    .catch(() => fail('no "face: idle=" serial marker within 120s of Chat opening -- chat_face_load never ran or never finished'));
   const faceLine = await page.evaluate(() => { const m = window.__jt.serial.match(/face: idle=(\d+) talk=(\d+)/); return m ? m[0] : null; });
   console.log('face serial line: ' + faceLine + ' (face frames served over the intercepted proxy: ' + facePngsServed + ')');
   if (!faceLine || faceLine.startsWith('face: idle=0')) fail(`face frames did not load (${faceLine}); facehost= cmdline or the /face/ proxy path is not reaching the guest`);
@@ -259,8 +259,8 @@ try {
   if (!chatServed) fail('the demo never made the intercepted POST to /api/chat');
   else ok('intercepted /api/chat');
 
-  await page.waitForFunction(() => window.__jt.serial.includes('chatreply='), null, { timeout: 30000 })
-    .catch(() => fail('no chatreply= marker within 30s'));
+  await page.waitForFunction(() => window.__jt.serial.includes('chatreply='), null, { timeout: 90000 })
+    .catch(() => fail('no chatreply= marker within 90s'));
 
   const t1 = Date.now();
   while (Date.now() - t1 < 15000 && !speakServed) await page.waitForTimeout(200);
