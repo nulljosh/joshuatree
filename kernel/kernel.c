@@ -839,9 +839,9 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-#define GUI_APP_COUNT   28 /* 26 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 26 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       27
+#define GUI_APP_COUNT   27 /* 25 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 25 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       26
 /* Every app's name, color, glyph and hooks live in one table, APPS[],
    defined further down once every hook it points at exists (see "The app
    registry" below). This tentative definition lets the dock and Launchpad
@@ -870,7 +870,7 @@ const struct app APPS[GUI_APP_COUNT];
    layout changes at all, the "auto size" half of the standing v37 dock
    request was already real before this pass, this is just the first
    change to actually exercise it past 8 icons. */
-static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 20, GUI_TRASH};
+static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 19, GUI_TRASH};
 
 /* gui_order is a permutation of icon indices by dock slot: dragging an icon
    and dropping it on another slot swaps the two, so the arrangement is
@@ -894,7 +894,7 @@ static int boot_to_phone, boot_res_w, boot_res_h;
 int jt_phone_mode(void){ return boot_to_phone; } /* ring3app.c: windowed ring-3 apps get argv[1]="phone" so they can show libjt/osk */
 #include "hint.h"
 static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
-static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 23, 22, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
+static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 22, 21, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 int dock_hover = -1; /* slot whose label is showing */
 
