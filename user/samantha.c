@@ -256,7 +256,7 @@ static void face_load_step(void) {
    (a stand-in for loudness until the AUDIO SYNC hook feeds a real level). */
 static int face_step(unsigned now) {
     if (!face_inited) return 0;
-    if (!uface_done) { face_load_step(); if (uface_done) return 1; return 0; }
+    if (!uface_done) { if (inlen > 0) return 0; face_load_step(); if (uface_done) return 1; return 0; } /* a fetch blocks the app for network time: never while she has typed text pending */
     if (!uface_idle_n) return 0;
     if ((int)(now - face_next) < 0) return 0;
     face_next = now + FACE_STEP;

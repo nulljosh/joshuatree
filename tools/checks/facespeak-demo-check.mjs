@@ -159,6 +159,7 @@ await page.route('**/api/proxy**', async (route) => {
 
 await page.goto(url, { waitUntil: 'load' });
 
+let keepAlive = 0;
 try {
   console.log('serving ' + url);
   await page.waitForFunction(() => window.__jt && window.__jt.ready, null, { timeout: 60000 });
@@ -183,6 +184,11 @@ try {
   await page.evaluate(() => window.__jt.click());
   ok(`clicked dock slot ${CHAT_SLOT} (Chat) at (${CHAT_X},${CHAT_Y})`);
 
+  // The page's 15s kiosk idle-reset (embed.js resetIdleRestart) reboots the guest when the visitor
+  // has not moved/clicked/typed for 15s; 72 face fetches plus a speak can outlast that, and the
+  // bus-level keyboard_send_text below never counts as activity. A real visitor watching her would
+  // be moving the mouse, so keep a real DOM mousemove going (the reboot was what dropped the typing).
+  keepAlive = setInterval(() => { page.mouse.move(700 + Math.floor(Math.random() * 20), 450).catch(() => {}); }, 2000);
   await page.waitForFunction(() => window.__jt.serial.includes('samopen'), null, { timeout: 30000 });
   await page.waitForFunction(() => window.__jt.serial.includes('samfocus'), null, { timeout: 30000 });
   ok('samopen/samfocus markers seen: ring-3 Samantha opened with her input bar focused');
@@ -278,6 +284,7 @@ try {
   await page.locator('#screen_canvas').screenshot({ path: outPath });
   console.log('saved ' + outPath);
 } finally {
+  clearInterval(keepAlive);
   await browser.close();
   server.close();
 }
