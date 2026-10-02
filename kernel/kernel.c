@@ -8821,6 +8821,7 @@ void kmain(unsigned int multiboot_info_addr){
             }
         stocks_cmdline(cl0); /* stkhost=HOST:PORT, kernel/stocks.h */
         chat_face_cmdline(cl0); /* facehost=HOST[:PORT], kernel/chat_face.h */
+        { extern void ring3samantha_cmdline(const char *cl); ring3samantha_cmdline(cl0); } /* ring3samantha: Samantha opens as the ring-3 window (slice 2) */
     }
     vga_text_mode_init(); /* real hardware/QEMU already boot into text mode via their own BIOS; a BIOS-less multiboot path (v86) never sets it at all, so make it explicit rather than inherited */
     klog("vga_text_mode_init: text mode 3 programmed");
