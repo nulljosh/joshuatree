@@ -63,8 +63,10 @@ int main(int argc, char **argv) {
         if (big_out[i] < lo) lo = big_out[i];
         if (big_out[i] > hi) hi = big_out[i];
     }
-    CHECK(hi > 100 && lo < 160);
-    CHECK(hi != lo);
+    printf("mp3-host: mono peak-to-peak %d\n", hi - lo);
+    CHECK(hi - lo > 25 && hi - lo < 60);                            /* ffmpeg's default sine is 1/8 scale: about 32 steps in 8 bits */
+    int hz = (int)((uint64_t)count_zero_crossings(big_out + 2304, samples - 2304) * m.rate / (2ull * (samples - 2304)));
+    CHECK(hz >= 430 && hz <= 450);                                  /* the 440 Hz sine came back at 440 Hz */
 
     /* stereo at 44100 Hz */
     uint8_t *stereo44 = slurp(dir, "stereo44.mp3", &n);

@@ -80,7 +80,7 @@ uint32_t mp3_read8(struct mp3 *m, uint8_t *out, uint32_t n) {
 
         if (samples <= 0) break;
         if (info.hz < 4000 || info.hz > 44100) break;
-        if (info.frame_bytes > remaining) break;
+        if (info.frame_bytes <= 0 || (uint32_t)info.frame_bytes > remaining) break;
 
         m->pos += info.frame_bytes;
 
