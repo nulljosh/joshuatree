@@ -614,6 +614,7 @@ if (typeof document !== "undefined") (function () {
   function focusIn() {
     if (focused || !adaptersReady) return;
     focused = true;
+    if (introVideo) introVideo.pause(), introVideo.dispatchEvent(new Event("ended"));   // a visitor took over: the OS, not the recording
     emulator.keyboard_adapter.emu_enabled = true;
     emulator.mouse_adapter.emu_enabled = true;
     // Browsers block audio until a real user gesture. v86 builds
@@ -708,7 +709,7 @@ if (typeof document !== "undefined") (function () {
     var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
     return !!ac && ac.state === "running";
   }
-  var tapTalkBtn = null, tapTalkResolve = null;
+  var tapTalkBtn = null, tapTalkResolve = null, introVideo = null;
   var tapTalkPromise = new Promise(function (r) { tapTalkResolve = r; });
   if (IS_PHONE || /[?&]portfolio\b/.test(location.search)) {   // PORTFOLIO_MODE is assigned further down, still undefined here
     tapTalkBtn = document.createElement("button");
@@ -734,10 +735,29 @@ if (typeof document !== "undefined") (function () {
     // That first gesture is swallowed (600 ms covers its mousedown, mouseup and click):
     // reaching the container it read as a visitor taking over, which stopped the intro
     // before he said a word.
+    // Portfolio intro: one continuous lip-synced take of his 30 s line, played muted on a
+    // loop over the booting kernel until the first tap, then from the top with sound. The
+    // kernel's frame-stitched face ghosted and jumped between clips on a line this long;
+    // it still answers live once the video hands over to the OS.
+    if (/[?&]portfolio\b/.test(location.search)) {
+      introVideo = document.createElement("video");
+      introVideo.src = "face-joshua/intro.mp4";
+      introVideo.muted = introVideo.loop = introVideo.autoplay = introVideo.playsInline = true;
+      introVideo.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:6;background:#e9e2d4;transition:opacity .6s;";
+      container.appendChild(introVideo);
+      introVideo.addEventListener("error", function () { introVideo.dispatchEvent(new Event("ended")); });   // missing or unplayable: the live kernel face takes the intro as before
+      introVideo.addEventListener("ended", function () {   // fade out on its own too, so a slow boot never leaves a frozen last frame over the OS
+        var v = introVideo; if (!v) return; introVideo = null;
+        v.style.opacity = "0"; setTimeout(function () { v.remove(); }, 700);
+      });
+    }
     var firstTapAt = 0;
     ["pointerdown", "mousedown", "mouseup", "click", "touchstart", "touchend", "keydown", "keyup"].forEach(function (t) {
       document.addEventListener(t, function (ev) {
-        if (!firstTapAt) { firstTapAt = Date.now(); unlockAudio(ev); tapTalkBtn.hidden = true; tapTalkResolve(); }
+        if (!firstTapAt) {
+          firstTapAt = Date.now(); unlockAudio(ev); tapTalkBtn.hidden = true; tapTalkResolve();
+          if (introVideo) { introVideo.loop = false; introVideo.currentTime = 0; introVideo.muted = false; introVideo.play().catch(function () {}); }
+        }
         if (Date.now() - firstTapAt < 600) ev.stopPropagation();
       }, { capture: true, passive: true });
     });
@@ -2221,6 +2241,24 @@ if (typeof document !== "undefined") (function () {
       // ("show me around"), his reply spoken, then on desktop Escape drops to
       // the dock so the app tour below can run; a phone stays on his face.
       // (the tap wait above already unlocked audio, so the mouth hears samples)
+      if (introVideo) {
+        // The recorded intro is his first line; wait for it to end, fade it, drop to the dock.
+        introVideo.loop = false;
+        if (introVideo.paused) introVideo.play().catch(function () {});
+        var vStart = Date.now();
+        while (introVideo && Date.now() - vStart < 45000) {   // its "ended" listener fades and clears it
+          if (focused || tourGen !== gen) return;
+          await sleep(200);
+        }
+        if (introVideo) introVideo.dispatchEvent(new Event("ended"));
+        await sleep(700);
+        if (focused || tourGen !== gen) return;
+        if (IS_PHONE) { resetHeadline(); return; }   // a phone stays on his live face for the next lines
+        if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80);
+        await sleep(800);
+        resetHeadline();
+        return;
+      }
       var pSeen = speakCount;
       // A phone stays on his face forever, so each pass says the next line: life, Vancouver, the work.
       var pLine = IS_PHONE ? PORTFOLIO_LINES[portfolioLine++ % PORTFOLIO_LINES.length] : PORTFOLIO_INTRO_LINE;
