@@ -69,7 +69,11 @@ try:
             if "return" in r or "error" in r: return r
     f.readline()
     cmd({"execute": "qmp_capabilities"})
-    time.sleep(5.0)  # desktop up
+    def serial_has(needle): return needle in open(LOG, errors="replace").read()
+    for _ in range(400):   # the kernel says when the desktop is up; a slow runner takes longer than a fixed sleep
+        time.sleep(0.1)
+        if serial_has("guidesktop"): break
+    time.sleep(1.0)
 
     def move(x, y):
         cmd({"execute": "input-send-event", "arguments": {"events": [
@@ -85,8 +89,14 @@ try:
     centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
 
     # Open Stocks from the dock (no network needed: it opens with empty data).
-    move(centre(STOCKS_SLOT), ICON_ROW_Y); time.sleep(0.3)
-    click(); time.sleep(6.0)  # fetch from the fake server, STOCKS.TXT, ring-3 window draws
+    for attempt in range(4):   # a click can land before the dock is ready: look for the launch in the kernel log, click again if it is not there
+        move(centre(STOCKS_SLOT), ICON_ROW_Y); time.sleep(0.4)
+        click()
+        for _ in range(100):
+            time.sleep(0.1)
+            if serial_has("launching STOCKS.BIN"): break
+        if serial_has("launching STOCKS.BIN"): break
+    time.sleep(6.0)  # fetch from the fake server, STOCKS.TXT, ring-3 window draws
 
     cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
     try: cmd({"execute": "quit"})
