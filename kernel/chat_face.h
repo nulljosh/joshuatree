@@ -457,6 +457,18 @@ static void chat_face_idle_tick(void) {
     window_present();
 }
 
+/* Same loop at twice the rate: call every ~40 ms. Odd calls show the
+   in-between blend of this frame and the next, even calls the real next
+   frame, so a blink eases shut and open (~24 a second) instead of
+   snapping through three 12fps frames. */
+static void chat_face_idle_half(void) {
+    static int half = 0;
+    if (!face_idle_n || face_x < 0) return;
+    if ((half ^= 1)) face_blit_mix(face_idle[(face_idle_at + 1) % face_idle_n], face_idle[face_idle_at]);
+    else { chat_face_idle_step(); face_blit(face_idle[face_idle_at]); }
+    window_present();
+}
+
 /* speak_text with her mouth following the audio. */
 static void chat_face_speak(const char *host, unsigned short port, const char *text, unsigned int timeout) {
     int talk = face_talk_n && face_x >= 0;

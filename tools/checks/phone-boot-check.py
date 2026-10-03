@@ -188,7 +188,11 @@ try:
             keys("spc" if ch == " " else ch); time.sleep(0.03)
         time.sleep(0.3)
         keys("ret")
-        time.sleep(2.0)
+        # CI runners are slow: wait for the tool to land in the serial log, not a fixed 2s
+        for _ in range(40):
+            time.sleep(0.5)
+            if "chattool=new_reminder" in open(LABEL_LOG, errors="replace").read(): break
+        time.sleep(1.0)
         cmd2({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": LABEL_DUMP}})
         try: cmd2({"execute": "quit"})
         except (ConnectionResetError, BrokenPipeError, OSError): pass
