@@ -8649,7 +8649,7 @@ void kmain(unsigned int multiboot_info_addr){
             "kernel right now in your browser.\n";
         vfs_switch("ramfs"); /* switch first: vfs_write_file always targets the active backend, and fat's own write would just fail with no disk anyway */
         vfs_write_file("README.TXT", demo_readme, strlen(demo_readme));
-        vfs_write_file("NOTES.TXT", demo_notes, strlen(demo_notes)); ramfs_seed_demo_docs(); /* a real folder, so the tour's Burrow scene has something to open */
+        vfs_write_file("NOTES.TXT", demo_notes, strlen(demo_notes)); ramfs_seed_demo_docs(); if (boot_to_samantha) { u8 hh, mi, wd, dom, mon; cmos_read_time_stable(&hh, &mi, &wd, &dom, &mon); ramfs_seed_demo_events(cmos(9), mon, dom); } /* sample itinerary dated from the RTC; a real folder, so the tour's Burrow scene has something to open */
         klog("vfs: no FAT disk (v86 has none to mount), switched default backend to ramfs with demo files");
     }
     settings_load(); /* v47: real settings, saved defaults if SETTINGS.TXT doesn't exist yet */
