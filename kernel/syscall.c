@@ -1258,6 +1258,26 @@ static void window_release(int id) {
     serial_puts("syscall: window released, task gone\n");
 }
 
+/* SYS_READFILE (401): one whole file straight into a caller buffer, no 8KB open() snapshot. The
+   Music app needs it: SYS_OPEN refuses anything over OPEN_MAX_FILE and SYS_READ moves 255 bytes
+   a call. Same relative paths as open; the buffer is checked as user memory for all cap bytes
+   before the VFS writes a byte of it. Reads at most cap bytes, so a bigger file is a short read
+   the caller can see against the size SYS_READDIR reported. */
+#define READFILE_CAP_MAX (6u << 20)
+static int sys_readfile(u32 path, u32 buf, u32 cap) {
+    if (cap == 0 || cap > READFILE_CAP_MAX) return -EINVAL;
+    char name[PATH_MAX + 1];
+    int err = copy_path_from_user(path, name);
+    if (err) return err;
+    if (!paging_user_range_ok(buf, cap)) return -EFAULT;
+    char *leaf; int depth;
+    err = path_enter(name, 1, &leaf, &depth);
+    if (err) return err;
+    int n = vfs_read_file(leaf, (void *)buf, cap);
+    path_leave(depth);
+    return n > 0 ? n : -ENOENT; /* empty and missing read the same through the VFS, as in open() */
+}
+
 static int sys_brk(u32 top, u32 b, u32 c) {
     (void)b; (void)c;
     int id = task_current();
@@ -1291,6 +1311,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_REFRESH]     = sys_refresh,
     [SYS_CLIPBOARD]   = sys_clipboard,
     [SYS_TEXT]        = sys_text,
+    [SYS_READFILE]    = sys_readfile,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {

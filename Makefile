@@ -122,7 +122,7 @@ drivers/jpeg_testdata.h:
 # this toolchain and none is needed). user/hello.ld pins the link address
 # to the window boot/linker.ld reserves.
 USER_CFLAGS := -target i386-unknown-none -ffreestanding -fno-stack-protector \
-               -fno-pic -mno-sse -mno-mmx -Wall -Wextra -Os -Iuser
+               -fno-pic -mno-sse -mno-mmx -Wall -Wextra -Os -Ithird_party/minimp3 -Iuser
 
 user/hello.o: user/hello.c user/jtsys.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
@@ -142,7 +142,7 @@ user/note.bin: user/note.o user/note.ld boot/memmap.ld
 # shaped calls without a real libc or a kernel include path. llvm-ar
 # rather than plain `ar` because this toolchain is clang/lld throughout,
 # see USER_CFLAGS above.
-LIBJT_SRCS := user/libjt/string.c user/libjt/stdlib.c user/libjt/stdio.c user/libjt/text.c user/libjt/osk.c user/libjt/mono.c user/libjt/jpeg.c
+LIBJT_SRCS := user/libjt/string.c user/libjt/stdlib.c user/libjt/stdio.c user/libjt/text.c user/libjt/osk.c user/libjt/mono.c user/libjt/jpeg.c user/libjt/mp3.c
 LIBJT_OBJS := $(LIBJT_SRCS:.c=.o)
 # Plain `llvm-ar` first (on PATH on most CI images); then a versioned
 # `llvm-ar-NN` apt sometimes installs instead of the unversioned name;
@@ -176,6 +176,7 @@ user/libjt/aamono.h: user/libjt/aafont.h
 user/libjt/text.o: user/libjt/text.c user/libjt/text.h user/libjt/aafont.h user/jtsys.h
 user/libjt/mono.o: user/libjt/mono.c user/libjt/text.h user/libjt/aamono.h user/jtsys.h
 user/libjt/jpeg.o: user/libjt/jpeg.c drivers/jpeg.c drivers/jpeg.h user/libjt/string.h user/libjt/stdlib.h
+user/libjt/mp3.o: user/libjt/mp3.c user/libjt/mp3.h third_party/minimp3/minimp3.h third_party/minimp3/stdlib.h third_party/minimp3/string.h
 user/libjt/osk.o: user/libjt/osk.c user/libjt/osk.h user/libjt/text.h user/jtsys.h
 
 user/libjt.a: $(LIBJT_OBJS)
@@ -244,6 +245,19 @@ user/clock.o: user/clock.c user/jtsys.h user/libjt/text.h
 
 user/clock.bin: user/clock.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/clock.o user/libjt.a
+
+# 2.2: Music, a ring-3 app that plays WAV (and MP3 through the hook in user/music.c). wav.o is
+# linked in directly rather than through libjt.a so the shared LIBJT_SRCS line stays untouched.
+user/music.o: user/music.c user/jtsys.h user/libjt/text.h user/libjt/wav.h user/libjt/mp3.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/music.bin: user/music.o user/libjt/wav.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/music.o user/libjt/wav.o user/libjt.a
+
+drivers/user_music.h: user/music.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/music.bin drivers/user_music.h user_music
+
+kernel/ring3app.o: drivers/user_music.h
 
 # 1.9.5: Portfolio, the eleventh app out of the kernel, built the same way.
 user/portfolio.o: user/portfolio.c user/jtsys.h user/libjt/text.h
@@ -442,6 +456,21 @@ drivers/user_terminal.h: user/terminal.bin tools/gen/gen_user_bin.py
 drivers/user_samantha.h: user/samantha.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/samantha.bin drivers/user_samantha.h user_samantha
 
+# Movies (2.2): motion-JPEG AVI player. Links the AVI reader straight in (not in libjt.a, so Music's LIBJT_SRCS edit never collides).
+user/avi.o: user/libjt/avi.c user/libjt/avi.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/movies.o: user/movies.c user/jtsys.h user/libjt/text.h user/libjt/avi.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/movies.bin: user/movies.o user/avi.o user/libjt.a user/note.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/movies.o user/avi.o user/libjt.a
+
+drivers/user_movies.h: user/movies.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/movies.bin drivers/user_movies.h user_movies
+
+kernel/ring3app.o: drivers/user_movies.h
+
 drivers/user_mail.h: user/mail.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/mail.bin drivers/user_mail.h user_mail
 
@@ -494,9 +523,11 @@ talk: kernel.elf dotfiles.img
 		-audiodev coreaudio,id=snd0 -device sb16,audiodev=snd0
 
 clean:
+	rm -f user/music.o user/music.bin drivers/user_music.h user/libjt/wav.o
 	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf kernel.elf.pass1 kernel/symtab.c kernel/symtab_stub.o kernel/symtab_stub.d user/hello.o user/hello.bin drivers/user_hello.h \
 	      user/note.o user/note.bin drivers/user_note.h user/keyrate.o user/keyrate.bin drivers/user_keyrate.h user/toroid.o user/toroid.bin drivers/user_toroid.h \
 	      user/calculator.o user/calculator.bin drivers/user_calculator.h user/quotes.o user/quotes.bin drivers/user_quotes.h user/bookrank.o user/bookrank.bin drivers/user_bookrank.h user/lexly.o user/lexly.bin drivers/user_lexly.h user/fieldbook.o user/fieldbook.bin drivers/user_fieldbook.h user/clock.o user/clock.bin drivers/user_clock.h user/portfolio.o user/portfolio.bin drivers/user_portfolio.h user/activity.o user/activity.bin drivers/user_activity.h user/contacts.o user/contacts.bin drivers/user_contacts.h user/reminders.o user/reminders.bin drivers/user_reminders.h user/curbfind.o user/curbfind.bin drivers/user_curbfind.h user/search.o user/search.bin drivers/user_search.h user/epiphany.o user/epiphany.bin drivers/user_epiphany.h user/weather.o user/weather.bin drivers/user_weather.h user/burrow.o user/burrow.bin drivers/user_burrow.h user/stocks.o user/stocks.bin drivers/user_stocks.h user/mail.o user/mail.bin drivers/user_mail.h user/notes.o user/notes.bin drivers/user_notes.h user/terminal.o user/terminal.bin drivers/user_terminal.h user/samantha.o user/samantha.bin drivers/user_samantha.h user/sparkjar.o user/sparkjar.bin drivers/user_sparkjar.h user/calendar.o user/calendar.bin drivers/user_calendar.h
+	rm -f user/movies.o user/avi.o user/movies.bin drivers/user_movies.h
 	rm -f joshuatree.iso boot/memmap.ld
 	rm -rf build/iso_root
 

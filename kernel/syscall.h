@@ -95,6 +95,12 @@
      op 2 JT_TEXT_CLEAR   drop the queue (call at the top of each frame)
    Draw returns the advance too. -EINVAL for a bad op or string, -EFAULT for
    a pointer outside user memory, -ENOMEM when the queue is full. */
+/* SYS_READFILE (401), a whole file into one user buffer. ebx = path (relative, like SYS_OPEN),
+   ecx = buffer, edx = capacity (1..6MB). Returns the bytes read (the file size, or the capacity
+   if the file is bigger), -ENOENT for a missing or empty file, -EINVAL for a bad capacity or path,
+   -EFAULT for a buffer that is not user memory for the whole capacity. Runs with interrupts off
+   like every gate call, so it suits a one-time load, not a loop. Music loads a song with it. */
+#define SYS_READFILE    401
 #define SYS_TEXT        400
 #define JT_TEXT_DRAW    0
 #define JT_TEXT_MEASURE 1
@@ -275,18 +281,18 @@ struct jt_sysinfo {
 /* 1.9.26: SYS_AUDIO (393), audio out for a ring-3 Samantha. One number, three ops. ebx = op,
    ecx = const/non-const struct pointer (user), edx = the caller's sizeof that struct.
    Format is what sb16_play and /api/speak already use: 8-bit UNSIGNED mono PCM, 4000..44100 Hz
-   (the Worker sends 16000). The kernel copies into a 32KB ring and the SB16 IRQ drains it in 4KB
+   (the Worker sends 16000). The kernel copies into a 32KB ring and the SB16 IRQ drains it in 1KB
    DMA transfers; the gate never waits.
    JT_AUDIO_PLAY (1): struct jt_audio_play {pcm, len, rate, flags}. Copies at most
      JT_AUDIO_CHUNK_MAX (8192) bytes per call, fewer if the ring is full. Returns the bytes taken
-     (0 means full or busy: retry on a later frame). Playback starts when 4KB are queued, or at
+     (0 means full or busy: retry on a later frame). Playback starts when 1KB is queued, or at
      once if flags has JT_AUDIO_END (set it on the call that queues the last bytes of a clip).
      rate is read only when the queue was idle. -EFAULT bad range, -EINVAL len 0 / bad op /
      short struct, -ENODEV no card.
    JT_AUDIO_STATUS (2): fills struct jt_audio_status {version,size,playing,queued,space,rate,
      played}, copies out min(edx, sizeof) bytes, returns that count. played is in samples
      (bytes) since the queue last went idle, so mouth time = played * 1000 / rate ms.
-   JT_AUDIO_STOP (3): drops what is not yet in flight (about a quarter second still finishes).
+   JT_AUDIO_STOP (3): drops what is not yet in flight (the 1KB transfer already running still finishes).
      Returns 0. */
 #define SYS_AUDIO       393
 #define JT_AUDIO_PLAY   1

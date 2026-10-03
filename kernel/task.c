@@ -70,9 +70,12 @@ struct task {
     void *stack_base;
     u32 page_dir; /* v31 (0.31.0): physical addr of this task's own page directory, loaded into CR3 on switch */
     int used;
+    unsigned char fpu[108]; /* 2.2.0: x87 state (fnsave image), swapped in schedule() so a float-heavy task (the MP3 decoder) and the desktop's float drawing cannot corrupt each other */
 };
 
 static struct task tasks[MAX_TASKS];
+static unsigned char fpu_clean[108];
+static int fpu_clean_ready;
 static int n_tasks = 0;
 static int current = 0;
 static int last_exit_code = 0;
@@ -120,6 +123,8 @@ static int task_create_frame(u32 eip, u32 cs, u32 data_sel, int user, u32 user_e
     u32 dir = paging_new_task_directory();
     if (!dir) { kfree(stack); return -1; } /* real OOM, not swallowed: no isolated directory means no task */
     tasks[id].page_dir = dir;
+    if (!fpu_clean_ready) { __asm__ volatile ("fninit; fnsave %0; fwait" : "=m"(fpu_clean)); fpu_clean_ready = 1; } /* x87 is empty at a call boundary, so resetting it here costs the caller nothing */
+    for (int i = 0; i < 108; i++) tasks[id].fpu[i] = fpu_clean[i];
     tasks[id].used = 1;
     if (id >= n_tasks) n_tasks = id + 1; /* n_tasks is a high-water mark for the round-robin scan below, not a live count */
     return id;
@@ -161,6 +166,8 @@ u32 schedule(u32 esp) {
         if (tasks[next].used) break;
     }
     if (next != current) {
+        __asm__ volatile ("fnsave %0; fwait" : "=m"(tasks[current].fpu)); /* fnsave leaves the x87 clean */
+        __asm__ volatile ("frstor %0" : : "m"(tasks[next].fpu));
         paging_load_directory(tasks[next].page_dir); /* v31 (0.31.0): the actual switch of address space, not just stacks */
         /* v64: where the CPU lands the next time THIS task traps out of
            ring 3. Its kernel stack's top is free by then: every entry

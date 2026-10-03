@@ -224,12 +224,14 @@ tail_row_local_y = Y0 + (APPS_VIS_ROWS - 1) * CELL_H
 ghost_hits = 0
 ghost_checked = 0
 # The tail row's empty columns come from the real app count (APPS[] minus
-# the Apps folder and Trash, the same filter tools/gen/progress.sh uses),
+# the Apps folder and Trash, the same filter tools/gen/progress.sh uses, and
+# Portfolio, which the folder hides outside the portfolio demo: the grid
+# screenshot at max scroll shows Epiphany, Activity, Clock, Music, Movies),
 # not a hardcoded 3: removing HomeQi left the last row exactly full.
 import re
 _src = open("kernel/kernel.c").read()
 _m = re.search(r"struct app APPS\[GUI_APP_COUNT\]\s*=\s*\{(.*?)\n\};", _src, re.S)
-_n = len([l for l in re.findall(r'\{"([^"]*)",', _m[1]) if l not in ("Apps", "Trash", "Compose")]) if _m else 0
+_n = len([l for l in re.findall(r'\{"([^"]*)",', _m[1]) if l not in ("Apps", "Trash", "Compose", "Portfolio")]) if _m else 0
 _tail = _n % 5
 if _n == 0: fails.append("could not count APPS[] in kernel/kernel.c")
 empty_cols = range(_tail, 5) if _tail else ()  # a full last row has no empty column to check
