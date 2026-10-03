@@ -471,7 +471,7 @@ static void chat_face_idle_half(void) {
 
 /* speak_text with her mouth following the audio. */
 static void chat_face_speak(const char *host, unsigned short port, const char *text, unsigned int timeout) {
-    int talk = face_talk_n && face_x >= 0;
+    int talk = face_talk_n && (face_x >= 0 || face_full);   /* portfolio: the face is the whole screen and never sets face_x */
     face_shown = -1;
     if (talk) sb16_set_progress(chat_face_tick);
     speak_text(host, port, text, timeout);

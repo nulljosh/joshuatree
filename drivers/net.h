@@ -106,4 +106,7 @@ int tcp_probe_port(unsigned int dest_ip, unsigned short dest_port);
    accepts the honest frame and rejects the lying one, 0 if either check
    fails (the lying one being accepted is the real bug this guards against). */
 int tcp_match_selftest(void);
+/* Optional idle hook run from the blocking waits (<= every 4 ticks); 0 clears. */
+void net_set_idle_hook(void (*fn)(void));
+
 #endif
