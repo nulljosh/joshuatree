@@ -581,6 +581,18 @@ a guest with no NIC at all: Curbfind's `p` key hands the call a relative path,
 a CR LF, a space, an over-long path, a null buffer, a buffer in kernel text and
 a path pointer in kernel text, and each must come back -22 or -14 with the
 buffer untouched.
+## readfile (2.2)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 401 | `readfile` | `const char *path` | `void *buf` | capacity in bytes (1 to 6MB) | bytes read, or -errno |
+
+**readfile** loads a whole file into one caller buffer. `open` stops at 8KB and `read` moves
+255 bytes a call, which is no use for a song. The path is relative like `open`. The buffer must
+be user memory for all of `cap` bytes, or it is -14. A file bigger than `cap` is a short read, so
+compare against the size `readdir` reported. A missing or empty file is -2. It runs with interrupts
+off, so call it once per load, not in a loop. Music reads a track with it.
+
 ## readdir (1.9.13)
 
 | # | Name | ebx | ecx | edx | Returns |

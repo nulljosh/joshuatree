@@ -90,6 +90,7 @@ struct jt_sysinfo {
     char llm_host[JT_SYSINFO_HOST_MAX];
     unsigned int data_stamp;
 };
+#define JT_SYS_READFILE    401 /* a whole file into one buffer, up to 6MB (open() stops at 8KB); see kernel/syscall.h */
 #define JT_SYS_TEXT        400 /* anti-aliased text for the window (389 is mkdir); see kernel/syscall.h */
 #define JT_TEXT_DRAW    0
 #define JT_TEXT_MEASURE 1
@@ -219,6 +220,8 @@ static inline int jt_http_post(struct jt_http_post *a) { return jt_syscall(JT_SY
 #define JT_POST_BIG    2u /* body and reply up to JT_HTTP_BIG_MAX, straight from/to the caller buffers */
 static inline int jt_http_post_ex(struct jt_http_post *a, unsigned flags) { return jt_syscall(JT_SYS_HTTP_POST, (unsigned)a, flags, 0); }
 static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned max) { return jt_syscall(JT_SYS_READDIR, (unsigned)path, (unsigned)out, max); }
+/* Bytes read (at most cap), -ENOENT missing or empty, -EINVAL, -EFAULT. */
+static inline int jt_readfile(const char *path, void *buf, unsigned cap) { return jt_syscall(JT_SYS_READFILE, (unsigned)path, (unsigned)buf, cap); }
 static inline int jt_mkdir(const char *path)                      { return jt_syscall(JT_SYS_MKDIR, (unsigned)path, 0, 0); }
 static inline int jt_unlink(const char *path)                     { return jt_syscall(JT_SYS_UNLINK, (unsigned)path, 0, 0); }
 static inline int jt_shell_run(const char *line, char *out, unsigned outlen) { return jt_syscall(JT_SYS_SHELL_RUN, (unsigned)line, (unsigned)out, outlen); }

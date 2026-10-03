@@ -95,6 +95,12 @@
      op 2 JT_TEXT_CLEAR   drop the queue (call at the top of each frame)
    Draw returns the advance too. -EINVAL for a bad op or string, -EFAULT for
    a pointer outside user memory, -ENOMEM when the queue is full. */
+/* SYS_READFILE (401), a whole file into one user buffer. ebx = path (relative, like SYS_OPEN),
+   ecx = buffer, edx = capacity (1..6MB). Returns the bytes read (the file size, or the capacity
+   if the file is bigger), -ENOENT for a missing or empty file, -EINVAL for a bad capacity or path,
+   -EFAULT for a buffer that is not user memory for the whole capacity. Runs with interrupts off
+   like every gate call, so it suits a one-time load, not a loop. Music loads a song with it. */
+#define SYS_READFILE    401
 #define SYS_TEXT        400
 #define JT_TEXT_DRAW    0
 #define JT_TEXT_MEASURE 1
