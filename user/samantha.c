@@ -89,7 +89,7 @@ static int uface_cur_kind JT_DATA = -1, uface_cur_i JT_DATA = -1;
 static unsigned char *uface_file JT_DATA = 0;
 static int uface_idle_n JT_DATA = 0, uface_talk_n JT_DATA = 0, uface_done JT_DATA = 0;
 static unsigned uface_open[UFACE_TALK_N] JT_DATA;
-static unsigned last_talk JT_DATA = 0, last_fetch JT_DATA = 0;   /* tick he last talked, tick of the last frame download */
+static unsigned last_talk JT_DATA = 0;   /* tick he last talked */
 #define FACE_STEP 16                        /* ticks per cached frame (every 2nd source frame), ~12 fps of motion at 100 Hz */
 
 static void rect(int x, int y, int w, int h, unsigned c) {
@@ -345,11 +345,11 @@ static int face_step(unsigned now) {
     if (!face_inited) return 0;
     if (!uface_done) {
         if (inlen > 0) return 0;
-        int have = uface_idle_n >= 1, idle_in = uface_clip == 1;   /* the first frame is on screen as soon as it arrives, the loop fills in behind it */
-        /* A download blocks the app for the network's time. Until the idle loop is in, each turn takes one and draws. After that, one at
-           most every 1.5 s and never while she talks, so the face keeps moving and her voice is not starved. */
-        if (!have || !idle_in || (!face_talking(now) && (int)(now - last_fetch) >= 150)) { face_load_step(); last_fetch = now_ticks(); if (uface_done) return 1; }
-        if (!have) return 0;
+        if (!spk_active) {   /* never download while she talks: a blocked app starves her voice */
+            face_load_step(); if (uface_done) return 1;
+            if (!uface_full || !uface_idle_n) return 0;
+            face_at = 0; draw(); return 1;   /* a still, eyes-open portrait until every frame is in; a blink frozen by a download reads as a stall */
+        }
     }
     if (!uface_idle_n) return 0;
     if ((int)(now - face_next) < 0) return 0;

@@ -639,6 +639,7 @@ if (typeof document !== "undefined") (function () {
     }, KIOSK_IDLE_MS);
   }
   function focusIn() {
+    try { showComposer(true); } catch (e) {}   // a visitor taking over mid-tour gets the chat bar back at once
     if (focused || !adaptersReady) return;
     focused = true;
     if (introVideo) introVideo.pause(), introVideo.dispatchEvent(new Event("fade"));   // a visitor took over: the OS, not the recording
@@ -2213,11 +2214,11 @@ if (typeof document !== "undefined") (function () {
         if (focused || tourGen !== gen) return;
         // The video fades into the live full-bleed face (same shot), which holds a few seconds so the
         // visitor sees him in the OS; then Escape drops to the dock for the tour. A phone stays on his face.
-        for (var fw = 0; !faceReady && fw < 150; fw++) { if (focused || tourGen !== gen) return; await sleep(200); }   // the last frame holds while his frames finish loading (30 s at most)
+        // Escape while the video still covers the screen, then fade it: the visitor goes from the video straight into the tour
+        // (the dock, or the phone's home grid), never through a still live face with its eyes shut.
+        if (emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([27], 80); await sleep(700); }
         if (introVideo) introVideo.dispatchEvent(new Event("fade"));
-        await sleep(IS_PHONE ? 3500 : 4500);
-        if (focused || tourGen !== gen) return;
-        if (emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([27], 80); await sleep(700); }   // Escape drops to the dock (desktop) or the home grid (phone), where the tour starts
+        await sleep(700);
         resetHeadline();
         return;
       }
@@ -2281,6 +2282,7 @@ if (typeof document !== "undefined") (function () {
       if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80);   // back to the home grid
       await sleep(800);
       var pos = phoneGridPos(beat.app);
+      showComposer(false);
       await clickAt(pos[0], pos[1]);   // open the app her tool just used
       await sleep(2800);
       if (focused || tourGen !== gen) return;
@@ -2288,6 +2290,7 @@ if (typeof document !== "undefined") (function () {
       await sleep(800);
       var her = phoneGridPos(6);       // Samantha, back to her
       await clickAt(her[0], her[1]);
+      showComposer(true);
       await sleep(900);
     }
   }
@@ -2295,15 +2298,18 @@ if (typeof document !== "undefined") (function () {
   // script the desktop tour uses, press Escape (the phone's back), and finish by opening him again.
   // Grid maths from kernel/phone_home.h: 5 columns of 86 px, rows 96 px apart, the first row starts 56 px down.
   var PHONE_GRID = { Samantha: 6, Curbfind: 8, Keyrate: 9, Bookrank: 10, Quotes: 11, Lexly: 12, Toroid: 13, Sparkjar: 14, Calculator: 17, Epiphany: 20 };
+  function showComposer(on) { var c = document.getElementById("demo-composer"); if (c) c.style.visibility = on ? "" : "hidden"; }   // the phone's chat bar floats over an open app and hides its last rows
   function phoneIconPos(name) { var i = PHONE_GRID[name]; return [(i % 5) * 86 + 43, 56 + Math.floor(i / 5) * 96 + 30]; }
   async function phonePortfolioTour(gen) {
     if (!adaptersReady) return;
     emulator.mouse_adapter.emu_enabled = true;
     emulator.keyboard_adapter.emu_enabled = true;
     await sleep(900);   // the home grid has to be drawn before the first tap
+    showComposer(false);   // the chat bar stays out of the way until he is back on screen
     for (var p = 0; p < PORTFOLIO_TOUR.length; p++) {
       if (focused || tourGen !== gen) return;
       var app = PORTFOLIO_TOUR[p], pos = phoneIconPos(app.name);
+      showComposer(false);
       await clickAt(pos[0], pos[1]);
       if (focused || tourGen !== gen) return;
       var t0 = Date.now();
@@ -2318,9 +2324,10 @@ if (typeof document !== "undefined") (function () {
       resetHeadline();
       await sleep(1000);
     }
-    if (focused || tourGen !== gen) return;
+    if (focused || tourGen !== gen) { showComposer(true); return; }
     var him = phoneIconPos("Samantha");   // in portfolio mode that icon opens him
     await clickAt(him[0], him[1]);
+    showComposer(true);
   }
   async function tourLoop(gen) {
     tourRunning = true;
