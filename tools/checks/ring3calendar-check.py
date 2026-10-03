@@ -165,6 +165,11 @@ try:
                      + repr([l for l in serial().splitlines() if l.startswith("calendar: today")]))
     if not wait_serial("calendar: loaded 0", 10):
         fails.append('expected "calendar: loaded 0" on a disk with no EVENTS.TXT')
+    # The window is only presented once boot's network fetches (geo, weather, wallpaper) let the compositor run,
+    # which on a CI box with a NIC takes seconds: wait for its red close dot, never sample a bare desktop.
+    for _ in range(80):
+        if near(frame().getpixel((CLOSE_X * SCALE + 1, CLOSE_Y * SCALE + 1)), CLOSE_RED): break
+        time.sleep(0.5)
     time.sleep(0.6)
 
     # 2. the month grid is on screen

@@ -113,6 +113,9 @@ try:
     for c in ("d", "s", "s", "s", "s"):
         key(c)
     key("ret"); time.sleep(1.0)  # launch Portfolio
+    for _ in range(60):  # a CI box with a NIC presents the window seconds late (boot fetches hold the compositor)
+        if is_red(dump(), CLOSE_X, CLOSE_Y): break
+        time.sleep(0.5)
 
     img = dump()
     if not is_red(img, CLOSE_X, CLOSE_Y):
