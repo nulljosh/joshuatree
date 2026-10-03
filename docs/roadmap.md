@@ -221,7 +221,7 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 2. **Apps leave the kernel, each in its own protected space** (plain: apps that can't crash each other) [Sonnet]: the 2.0 gate; one app per PR with its crash check.
 3. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
 4. **Real Activity and Clock icons** (plain: skip) [Sonnet]: they show placeholder art on the phone grid.
-5. **Music and Video players** (plain: music and video apps) [Sonnet]: VERSIONS 2.2 and 2.3.
+5. **Music and Video players** (plain: music and video apps) [Sonnet]: VERSIONS 2.1 and 2.2.
 6. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after 2.0.
 
 ## Top of the queue after 2.0.0
