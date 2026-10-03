@@ -110,6 +110,7 @@ if (typeof document !== "undefined") (function () {
   // absolute packet really arrived, not just whether the page sent one.
   var serialLog = "";
   var toolCounts = {}; // every "chattool=<tool>:" line, counted as it arrives, so a check never depends on the window still holding it
+  var ring3Exits = 0;   // ring-3 apps that have exited so far, counted off the kernel's own log
   var faceReady = false;   // ring-3 Joshua wrote "samface: idle ready": his idle frames are in, the live face can take over from the intro video
   var chatDone = 0;   // every chattool= or chatreply= line: one answer finished
   var speakCount = 0, lastSpeakBytes = 0; // every "speak: status=200 bytes=N" line, counted as it arrives (serialLog is a head+rolling-tail window, see the serial0 listener)
@@ -545,6 +546,7 @@ if (typeof document !== "undefined") (function () {
         var m = /^(?:syscall: write\(1\) from ring 3: )?speak: status=200 bytes=(\d+)/.exec(serialLine); // ring-3 Samantha's writes arrive behind the kernel's syscall trace prefix
         if (m) { speakCount++; lastSpeakBytes = Number(m[1]); }
         if (/samface: idle ready/.test(serialLine)) faceReady = true;
+        if (/^ring3app: \S+ (?:exited|crashed)/.test(serialLine)) ring3Exits++;   // an app's window is gone
         if (m) lastInteractionTime = Date.now() + Math.ceil(Number(m[1]) / 16); // 16000 samples/s = 16 per ms
         else if (/^(?:syscall: write\(1\) from ring 3: )?(?:chatreply=|chattool=)/.test(serialLine)) {
           lastInteractionTime = Date.now(); chatDone++;
@@ -2112,6 +2114,18 @@ if (typeof document !== "undefined") (function () {
     if (window.jtEyebrow) window.jtEyebrow.resume();
   }
 
+  // Escape closes a ring-3 window, but an app that is busy (his face is still downloading frames) can miss the key.
+  // So send it, watch the kernel log for the exit, and send it again until the app is really gone.
+  async function escClose() {
+    if (!emulator.keyboard_send_keys) return false;
+    for (var n = 0; n < 12; n++) {
+      var e0 = ring3Exits;
+      await emulator.keyboard_send_keys([27], 80);
+      for (var w = 0; w < 10; w++) { await sleep(150); if (ring3Exits > e0) return true; }
+      if (focused) return false;
+    }
+    return false;
+  }
   async function runSoloApp(gen, app) {
     if (focused || tourGen !== gen || !adaptersReady) return;
     var pos = dockSlotPos(app.slot);
@@ -2141,7 +2155,7 @@ if (typeof document !== "undefined") (function () {
     var remaining = (app.dwell || DWELL_MS) - (Date.now() - dwellStart);
     if (remaining > 0) await sleep(remaining);
     if (focused || tourGen !== gen) return;
-    if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80); // Escape closes a ring-3 window; a click inside one never does
+    await escClose(); // Escape closes a ring-3 window; a click inside one never does
     if (focused || tourGen !== gen) return;
     resetHeadline(); // the app is gone, so stop announcing it over an empty desktop
     await sleep(1200); // a beat before the next app opens, reads as a real transition not a jump-cut
@@ -2216,7 +2230,7 @@ if (typeof document !== "undefined") (function () {
         // visitor sees him in the OS; then Escape drops to the dock for the tour. A phone stays on his face.
         // Escape while the video still covers the screen, then fade it: the visitor goes from the video straight into the tour
         // (the dock, or the phone's home grid), never through a still live face with its eyes shut.
-        if (emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([27], 80); await sleep(700); }
+        await escClose(); await sleep(400);
         if (introVideo) introVideo.dispatchEvent(new Event("fade"));
         await sleep(700);
         resetHeadline();
@@ -2241,7 +2255,7 @@ if (typeof document !== "undefined") (function () {
         if (speakCount === pDone) break;
         pDone = speakCount; pWait = Math.min(40000, Math.round(lastSpeakBytes / 16)) + 600;
       }
-      if (!IS_PHONE && emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80);
+      if (!IS_PHONE) await escClose();
       await sleep(800);
       resetHeadline();
       return;
@@ -2279,14 +2293,14 @@ if (typeof document !== "undefined") (function () {
       while (chatDone === seen && Date.now() - t0 < 9000) { if (focused || tourGen !== gen) return; await sleep(150); }
       await sleep(1700);   // long enough to read her answer
       if (focused || tourGen !== gen) return;
-      if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80);   // back to the home grid
+      await escClose();   // back to the home grid
       await sleep(800);
       var pos = phoneGridPos(beat.app);
       showComposer(false);
       await clickAt(pos[0], pos[1]);   // open the app her tool just used
       await sleep(2800);
       if (focused || tourGen !== gen) return;
-      if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80);
+      await escClose();
       await sleep(800);
       var her = phoneGridPos(6);       // Samantha, back to her
       await clickAt(her[0], her[1]);
@@ -2320,7 +2334,7 @@ if (typeof document !== "undefined") (function () {
       var rest = Math.min(app.dwell || DWELL_MS, 6000) - (Date.now() - t0);
       if (rest > 0) await sleep(rest);
       if (focused || tourGen !== gen) return;
-      if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80);
+      await escClose();
       resetHeadline();
       await sleep(1000);
     }
