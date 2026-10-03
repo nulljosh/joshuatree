@@ -154,7 +154,13 @@ def main():
 
         # her window drew and focused its input bar; give the first keys a clear runway
         wait_for("samfocus", 40, "no samfocus marker: Samantha's window never opened")
-        time.sleep(2.0)
+        # The wallpaper swaps from the baked satellite to the live map once the geo fetch lands (CI has
+        # a network, so it always does, seconds after the window opens). That repaint moves the dark-pixel
+        # count by hundreds of thousands, so take the baseline only after it. No network: the wait just times out.
+        for _ in range(60):
+            if "wallsrc=map" in serial(): break
+            time.sleep(0.5)
+        time.sleep(3.0)
 
         # --- scenario (a): "read my email" -> read_mail -------------------
         before_ink = reply_ink(dump())
