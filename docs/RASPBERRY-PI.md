@@ -81,6 +81,8 @@ booted at EL2
 EL1
 M0 ok
 M1 vectors set
+M1b mmu on
+M1b heap ok
 M1 svc ok
 tick 1
 tick 2
@@ -88,7 +90,7 @@ tick 3
 M1a ok
 ```
 
-The last six lines are the exception table and the timer. They run on QEMU's Pi model; on a real board the interrupt controller setup is the part most likely to need a fix. If the output stops after `M1 svc ok`, send me that line.
+The lines after `M0 ok` are the exception table, the memory map with the caches on, a small heap, and the timer. They run on QEMU's Pi model; on a real board the interrupt controller setup is the part most likely to need a fix. If the output stops after `M1 vectors set`, the memory map is the likely cause on real hardware; if it stops after `M1 svc ok`, it is the interrupt controller. Send me the last line you see.
 
 That is milestone M0 (and M1a) on real hardware. To leave `screen`, press Ctrl-A then K.
 
