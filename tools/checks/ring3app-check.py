@@ -123,8 +123,11 @@ try:
     # 2. real keys through the poll syscall, real pixels through the framebuffer
     for k in "abcdefghijklmnopqrstuvwxyz":
         keys(k); time.sleep(0.08)
-    time.sleep(1.0)
-    after = done_glyph_pixels(frame())
+    # CI is slow: poll for the typed glyphs (up to 15s) instead of sampling once after 1s
+    for _ in range(30):
+        time.sleep(0.5)
+        after = done_glyph_pixels(frame())
+        if after: break
     print(f"typed a..z; typed-brown pixels after: {after}")
     if after == 0:
         fails.append("no glyph turned the typed colour after a..z: keys did not reach the program or its frame never reached the screen")
