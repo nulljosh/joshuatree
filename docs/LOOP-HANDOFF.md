@@ -1,4 +1,4 @@
-# Joshua Tree loop handoff (2026-10-02, afternoon)
+# Joshua Tree loop handoff (2026-10-03, early morning)
 
 ## What the loop is
 
@@ -18,18 +18,21 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-PR #331 ready to merge, auto-merge armed, GitHub CI running. Main merge had silently dropped 27-app tour (landing/v86/embed.js) and face-joshua frames (worker.js proxy), plus phone portfolio fix; all restored and verified locally. CI-local green. When GitHub CI passes, release.yml will tag v2.0.0, create the GitHub release, and the handoff is done.
+PR #331 (release/2.0.0) is ready with auto-merge armed, and GitHub CI had been red all day. Causes found: the live Clock face was hard-coded to icon 25 (the Apps folder) instead of 24, ring-3 checks still used pre-HomeQi and pre-Plan app indices and old pixel probes, the mail check flaked on the wallpaper swap, and shard 2 ran to the 30 minute job cap on stale checks. Those fixes are pushed. Two Haiku agents were recalibrating the rest of the ring-3 pixel probes in separate worktrees; check `git log origin/release/2.0.0` and the PR's check list before assuming any are done.
 
-26 of 26 apps ring-3, compositor windows, private memory, crash isolation. Clipboard (syscall 399), resize, growable memory, smooth type. Mail via Worker (Resend, secret pending). Weather/Stocks refetch. Demo covers 26 apps in 27-app tour. Logo/UI done. Landing synced.
+The public OS is now 24 apps. Plan is deleted (it held private plans). Portfolio is hidden unless the boot line says portfolio, which is the heyitsmejosh.com demo. Activity and Samantha have redrawn icons (Samantha is a voice orb on the landing accent #b5502c). The README no longer carries the ad; the landing video is ad v7, which still shows Plan and needs a re-render.
+
+face-full-edges-check was retired because 2.0 dropped the kernel full-bleed face painter. Portfolio mode now boots to a bare desktop with no Samantha window and no big face. Restoring that in ring 3 is first on docs/roadmap.md.
+
+Use GitHub CI as the oracle (8 parallel shards, 5 to 7 minutes), not tools/ci-local.sh (about 25 minutes, serial). The README badge reads the latest check.yml pull request run, so it goes green when #331 does.
 
 ## Next, in order
 
-1. GitHub CI passes, release.yml tags v2.0.0 and creates release.
-2. Merge release/2.0.0 back to main, deploy landing.
-3. Rewrite this handoff for post-2.0.0 work.
-4. 2.0.1 fold: feat/samantha-live, feat/reception (and textselect/editorflash if still red).
-5. Security audit of syscalls 393-400.
-6. Then the RANKED QUEUE.
+1. #331 green, auto-merge lands it, release.yml tags v2.0.0 and creates the release.
+2. Merge back to main, deploy landing, re-render ad v7 without Plan.
+3. Restore the ring-3 portfolio face and bring its check back.
+4. 2.0.1 fold: feat/samantha-live, feat/reception.
+5. Security audit of syscalls 393-400, then the RANKED QUEUE.
 Then: 2.1 Music, 2.2 Video, 3.0 on ASRock J4125B-ITX, Strata Kit at 3.1.
 
 ## Restart prompt
