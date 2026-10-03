@@ -208,6 +208,8 @@ jobs:
         run: node tools/checks/cursorglide-check.mjs || (sleep 10 && node tools/checks/cursorglide-check.mjs)
       - name: Landing demo shows Samantha's face and plays her voice (retries once)
         run: node tools/checks/facespeak-demo-check.mjs || (sleep 10 && node tools/checks/facespeak-demo-check.mjs)
+      - name: A reply started while browser audio is still locked plays in full (retries once)
+        run: node tools/checks/speak-locked-audio-check.mjs || (sleep 10 && node tools/checks/speak-locked-audio-check.mjs)
       - name: Phone audio unlocks on a real tap (retries once)
         run: node tools/checks/mobile-audio-check.mjs || (sleep 10 && node tools/checks/mobile-audio-check.mjs)
       # Landing-only PR: the suite is skipped, so its landing checks run here.
