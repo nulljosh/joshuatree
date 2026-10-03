@@ -710,7 +710,7 @@ if (typeof document !== "undefined") (function () {
   }
   var tapTalkBtn = null, tapTalkResolve = null;
   var tapTalkPromise = new Promise(function (r) { tapTalkResolve = r; });
-  if (IS_PHONE) {
+  if (IS_PHONE || PORTFOLIO_MODE) {
     tapTalkBtn = document.createElement("button");
     tapTalkBtn.type = "button";
     tapTalkBtn.id = "tap-to-talk";
@@ -2209,6 +2209,13 @@ if (typeof document !== "undefined") (function () {
       // Portfolio: his face is the whole screen on every device. One line
       // ("show me around"), his reply spoken, then on desktop Escape drops to
       // the dock so the app tour below can run; a phone stays on his face.
+      // Wait for audio unlock via tap (same as Samantha on phones) to ensure
+      // the AudioContext is running before speech begins, so mouth animation
+      // (speak_level analysis) receives audio samples instead of zeros.
+      tapTalkBtn.hidden = false;
+      await Promise.race([tapTalkPromise, new Promise(function (r) { setTimeout(r, 5000); })]);
+      if (focused || tourGen !== gen) return;
+      await new Promise(function (r) { setTimeout(r, 400); }); // let resume() settle
       var pSeen = speakCount;
       await emulator.keyboard_send_text(PORTFOLIO_INTRO_LINE + '\n', 55);
       var pStart = Date.now(), pMs = 0;
