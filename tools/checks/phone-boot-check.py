@@ -206,7 +206,11 @@ try:
             keys("spc" if ch == " " else ch); time.sleep(0.15)  # Samantha is a ring-3 window now: each key redraws her frame, and a full event ring drops the newest key (the enter)
         time.sleep(0.3)
         keys("ret")
-        time.sleep(5.0)  # /api/pick round trip, then user/samantha.c runs new_reminder locally
+        # /api/pick round trip, then user/samantha.c runs new_reminder locally; CI is slow, so poll the serial log
+        for _ in range(60):
+            time.sleep(0.5)
+            if "chattool=new_reminder" in open(LABEL_LOG, errors="replace").read(): break
+        time.sleep(1.0)
         cmd2({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": LABEL_DUMP}})
         try: cmd2({"execute": "quit"})
         except (ConnectionResetError, BrokenPipeError, OSError): pass
