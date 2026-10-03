@@ -30,8 +30,7 @@ name = sys.argv[1] if len(sys.argv) > 1 else "samantha"
 src = os.environ.get("FACE_SRC", os.path.expanduser(f"~/.samantha/characters/{name}"))
 crop = os.environ.get("CROP", "ih:ih:(iw-ih)/2:0")
 out = os.environ.get("FACE_OUT", os.path.join(ROOT, "landing", "face"))   # FACE_OUT=landing/face-joshua for the portfolio face
-# 1.9.41: 480px yields sharper retina-quality frames (33KB each at q=88) still under 64KB cap
-SIDE, FPS = int(os.environ.get("FACE_SIDE", "480")), 12
+SIDE, FPS = 320, 12
 COUNT = {"idle": 24, "talk": 48}
 
 for kind in COUNT:
