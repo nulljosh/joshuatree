@@ -123,6 +123,7 @@ echo "-- demo job --"
 run_named "demochat-check.mjs" node tools/checks/demochat-check.mjs
 run_named "cursorglide-check.mjs" node tools/checks/cursorglide-check.mjs
 run_named "facespeak-demo-check.mjs" node tools/checks/facespeak-demo-check.mjs
+run_named "speak-locked-audio-check.mjs" node tools/checks/speak-locked-audio-check.mjs
 run_named "mobile-audio-check.mjs" node tools/checks/mobile-audio-check.mjs
 echo
 
