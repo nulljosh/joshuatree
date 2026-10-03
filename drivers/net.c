@@ -36,6 +36,21 @@ typedef u32 (*nic_receive_fn)(void *buf, u32 maxlen);
 static nic_send_fn    active_send = 0;
 static nic_receive_fn active_receive = 0;
 
+/* Optional idle hook: the caller (chat's full-screen face) keeps an
+   animation alive while a blocking request waits. Called only from the
+   empty-poll path of the ARP/DNS/SYN-ACK/reply waits, at most every 4
+   ticks. Null = one compare. The hook must not touch the network. */
+static void (*idle_hook)(void) = 0;
+static u32 idle_hook_at = 0;
+void net_set_idle_hook(void (*fn)(void)) { idle_hook = fn; idle_hook_at = 0; }
+static inline void net_idle(void) {
+    if (!idle_hook) return;
+    u32 t = ticks();
+    if (t < idle_hook_at) return;
+    idle_hook_at = t + 4;
+    idle_hook();
+}
+
 /* Every wait loop in this file used to be a plain iteration count, tuned
    by guessing how many empty polls a given wait "should" need. That's
    fundamentally broken: how long N iterations take in real time depends on
@@ -440,6 +455,7 @@ int arp_resolve(u32 ip, u8 mac_out[6]) {
     u8 rx[1514];
     u32 deadline = ticks() + LAN_TIMEOUT_TICKS;
     while (ticks() < deadline) {
+        net_idle();
         u32 n = active_receive(rx, sizeof(rx));
         if (n < sizeof(struct eth_header) + sizeof(struct arp_packet)) continue;
 
@@ -637,6 +653,7 @@ int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
     u8 rx[1514];
     u32 deadline = ticks() + WAN_TIMEOUT_TICKS;
     while (ticks() < deadline) {
+        net_idle();
         u32 n = active_receive(rx, sizeof(rx));
         if (n < sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct udp_header)) continue;
 
@@ -907,6 +924,7 @@ int tcp_get_timeout(u32 dest_ip, u16 dest_port, const void *request, u32 request
     int got_synack = 0;
     u32 synack_deadline = ticks() + WAN_TIMEOUT_TICKS;
     while (ticks() < synack_deadline && !got_synack) {
+        net_idle();
         u32 n = active_receive(rx, sizeof(rx));
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;
@@ -941,6 +959,7 @@ int tcp_get_timeout(u32 dest_ip, u16 dest_port, const void *request, u32 request
     int got_fin = 0;
     u32 data_deadline = ticks() + (reply_timeout_ticks ? reply_timeout_ticks : SLOW_REPLY_TIMEOUT_TICKS);
     while (ticks() < data_deadline && !got_fin && total < response_maxlen) {
+        net_idle();
         u32 n = active_receive(rx, sizeof(rx));
         if (n == 0) continue;
         if (!tcp_match(dest_ip, local_port, dest_port, rx, n, &tcp, &payload, &paylen)) continue;

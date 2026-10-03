@@ -860,7 +860,7 @@ static void chat_draw_conversation(int T, int x, int you_w, int sam_w, int body_
     }
 }
 
-static const char *chat_process_message(char *msg, int T, int x, int you_w, int body_w) {
+static const char *chat_process_message_inner(char *msg, int T, int x, int you_w, int body_w) {
     if (!face_full) {
         window_rect(0, T + 40, (int)window_width(), (int)window_height() - 40 - T, GUI_BG);
         chat_draw_status("checking for a tool ...");
@@ -926,6 +926,15 @@ static const char *chat_process_message(char *msg, int T, int x, int you_w, int 
         return e[0] ? e : "error: couldn't reach the host, or no reply";
     }
     return "ready";
+}
+
+/* Full-screen face: keep her breathing and blinking while the blocking
+   /api calls wait (the idle hook only draws, never touches the network). */
+static const char *chat_process_message(char *msg, int T, int x, int you_w, int body_w) {
+    if (face_full) net_set_idle_hook(chat_face_idle_half);
+    const char *r = chat_process_message_inner(msg, T, x, you_w, body_w);
+    net_set_idle_hook(0);
+    return r;
 }
 
 /* Push-to-talk (v1.6.23, direct owner request: "voice-and-video first").
