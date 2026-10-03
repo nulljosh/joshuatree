@@ -332,8 +332,8 @@ try:
 
         cal_cx, cal_cy = cell_center(2)   # Calendar, APPS[2]
         key_cx, key_cy = cell_center(9)   # Keyrate, APPS[9], ring-3
-        act_cx, act_cy = cell_center(22)  # Activity, APPS[22] -- the row the 4-col grid used to drop
-        clk_cx, clk_cy = cell_center(23)  # Clock, APPS[23]
+        act_cx, act_cy = cell_center(21)  # Activity, APPS[22] is grid position 21: Portfolio (APPS[21]) is hidden outside portfolio mode
+        clk_cx, clk_cy = cell_center(22)  # Clock, APPS[23] is grid position 22 (Portfolio hidden)
 
         if not not_bg(px_home, cal_cx, cal_cy):
             fail = 1; print(f"FAIL: no icon drawn at Calendar's grid cell ({cal_cx},{cal_cy})")

@@ -25,9 +25,9 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
+APPS_CLOSE_X, APPS_CLOSE_Y = 34, 56   # 2.0: a folder-launched app is a compositor window at x=10, y=40
 CLOSE_RED = (0xFF, 0x5F, 0x57)
-VX, VY = 64, 62
+VX, VY = 18, 72
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
