@@ -343,7 +343,7 @@ static int face_step(unsigned now) {
     if (!uface_done) {
         if (inlen > 0) return 0;
         face_load_step(); if (uface_done) return 1;
-        if (!(uface_portfolio && uface_clip == 1 && uface_idle_n)) return 0;   /* portfolio: he idles on screen while the talk frames still come */
+        if (!(uface_clip == 1 && uface_idle_n)) return 0;   /* her idle loop is on screen as soon as it is in, while the talk frames still come */
     } /* a fetch blocks the app for network time: never while she has typed text pending */
     if (!uface_idle_n) return 0;
     if ((int)(now - face_next) < 0) return 0;
