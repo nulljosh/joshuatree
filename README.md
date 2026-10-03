@@ -47,6 +47,7 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 - [Whitepaper](docs/WHITEPAPER.md): why and how
 - [Architecture](docs/ARCHITECTURE.md): how it fits together, every file
 - [Hardware](docs/HARDWARE.md): the real board and the 3.0 plan
+- [Raspberry Pi guide](docs/RASPBERRY-PI.md): what to buy, the serial cable, and how to boot it on a real Pi 4. [Printable Pi case](docs/hardware/PI-CASE.md)
 - [ARM64 and the Raspberry Pi](docs/ARM64.md): the second CPU target. Milestone 0 boots under QEMU today (`make -C arch/arm64 run`); the Pi 4B is the first real board
 - [Roadmap](docs/roadmap.md): what is next
 - [All docs](docs/)
