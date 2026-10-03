@@ -41,7 +41,7 @@ CLOSE_RED = (0xFF, 0x5F, 0x57)
 VIEW_X, VIEW_Y = 78, 72   # gui_launch_from_dock: viewport at (x+8, y+32) for x=70, y=40
 PARK = (480, 200)
 ROW_Y, ROW_H = 48, 28     # user/sparkjar.c: first row's top y, row pitch
-PROBE_X = 190             # inside the row, right of the name and left of the vote count
+PROBE_X = 200             # inside the row, right of the name and left of the vote count
 SEL_COLOR, BG_COLOR = (0xE2, 0xD8, 0xCC), (0xF1, 0xED, 0xE7)
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
