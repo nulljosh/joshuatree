@@ -31,9 +31,9 @@
 
 #define JT_USER_BASE        0xC0587000 /* program window: JT_USER_IMAGE_PAGES of image, then 1 page of stack (.userimg) */
 #define JT_USER_IMAGE_PAGES 0x20       /* 32 pages = 128KB of image (code+data) per ring-3 program; was 7 (28KB) until 2026-10-01, briefly 0x80 for face frames before SYS_BRK */
-#define JT_DMABUF_BASE      0xC0610000 /* 64KB Sound Blaster DMA, 64KB aligned (.dmabuf) */
-#define JT_USER_FB          0xC0620000 /* ring-3 window framebuffer (.userfb) */
-#define JT_USER_FB_BYTES  0x170000   /* 832x450 at 32bpp fits */
+#define JT_DMABUF_BASE      0xC05B0000 /* 64KB Sound Blaster DMA, 64KB aligned (.dmabuf) */
+#define JT_USER_FB          0xC05C0000 /* ring-3 window framebuffer (.userfb) */
+#define JT_USER_FB_BYTES  0x220000   /* 960x540 at 32bpp fits: Joshua's full-bleed portfolio face. .dmabuf and .userfb slid down 320KB into the gap under the image window to make room; the end (0xC07E0000) is still inside the 4MB table */
 
 /* SYS_BRK (1.9.27): a per-task heap that grows above the image, backed by
  * pmm frames mapped only into that task's directory (kernel/brk.c). The

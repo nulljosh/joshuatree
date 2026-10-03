@@ -26,12 +26,13 @@
 /* decoder from drivers/jpeg.c, compiled into libjt (user/libjt/jpeg.c) */
 int jpeg_decode_scaled(const unsigned char *data, unsigned int len, unsigned short *dst,
                        unsigned int dw, unsigned int dh, unsigned int *w, unsigned int *h);
-#define UFACE_SIDE 60     /* the kernel's small face side (FACE_SIDE, kernel/chat_face.h) */
+#define UFACE_MAX 320     /* a whole source frame: portfolio mode draws it full screen */
+static int uface_n JT_DATA = 60;  /* decode side: the small 60 px band, or 320 in portfolio mode */
+#define UFACE_SIDE uface_n
 #define UFACE_IDLE_N 24   /* every idle frame the kernel keeps */
 #define UFACE_TALK_N 48   /* every talk frame */
 #define UFACE_STRIDE 1
 #define UFACE_FILE 32768  /* one JPEG fetch, real frames are ~21KB */
-typedef unsigned short uface_t[UFACE_SIDE * UFACE_SIDE];
 
 #define BG     0x00FAF8F6
 #define INK    0x001C1C1E
@@ -182,6 +183,61 @@ static void face_blit(const unsigned short *f) {
     }
 }
 
+/* Portfolio: the 320 px frame fills the window height (square, centred; in a portrait window the
+   sides crop), the rest is wall. Nearest source pixel with a half-step blend on each axis, so the
+   1.7x stretch has no uneven doubled columns and costs a few ops a pixel. */
+static unsigned short *fx_map JT_DATA = 0;   /* per dest column: source x in the low 15 bits, bit 15 = blend with x+1 */
+static int fx_w JT_DATA = 0, fx_s JT_DATA = 0;
+#define AVG565(a, b) ((unsigned short)((((a) & 0xF7DE) >> 1) + (((b) & 0xF7DE) >> 1)))
+static unsigned px888(unsigned c) {
+    unsigned r = (c >> 11) & 31, g = (c >> 5) & 63, b = c & 31;
+    return (((r << 3) | (r >> 2)) << 16) | (((g << 2) | (g >> 4)) << 8) | ((b << 3) | (b >> 2));
+}
+static void face_fill(const unsigned short *f) {
+    int W = (int)win.width, H = (int)win.height, N = UFACE_SIDE, S = H, x0 = (W - S) / 2;
+    if (!fx_map || fx_w != W || fx_s != S) {
+        if (fx_map) free(fx_map);
+        fx_map = (unsigned short *)malloc((unsigned)W * 2); fx_w = W; fx_s = S;
+        if (!fx_map) return;
+        for (int x = 0; x < W; x++) {
+            int sx = (x - x0) * N * 2 / S;               /* half source pixels */
+            if (sx < 0) sx = 0; if (sx > N * 2 - 2) sx = N * 2 - 2;
+            fx_map[x] = (unsigned short)((sx >> 1) | ((sx & 1) ? 0x8000 : 0));
+        }
+    }
+    for (int y = 0; y < H; y++) {
+        int sy = y * N * 2 / S; if (sy > N * 2 - 2) sy = N * 2 - 2;
+        const unsigned short *ra = f + (sy >> 1) * N, *rb = (sy & 1) ? ra + N : 0;
+        unsigned *row = win.pixels + (unsigned)y * win.width, lc = px888(ra[1]), rc = px888(ra[N - 2]); /* the bars carry each row's own edge wall colour, so no seam */
+        for (int x = 0; x < W; x++) {
+            if (x < x0 || x >= x0 + S) { row[x] = x < x0 ? lc : rc; continue; }
+            unsigned m = fx_map[x], i = m & 0x7FFF;
+            unsigned a = ra[i];
+            if (m & 0x8000) a = AVG565(a, ra[i + 1]);
+            if (rb) { unsigned b = rb[i]; if (m & 0x8000) b = AVG565(b, rb[i + 1]); a = AVG565(a, b); }
+            row[x] = px888(a);
+        }
+    }
+}
+
+/* Liquid glass: a rounded rect that lets the face show through, white wash at alpha/256, bright rim. */
+static void glass(int x, int y, int w, int h, int r, int alpha, unsigned wash) {
+    for (int dy = 0; dy < h; dy++) {
+        int yy = y + dy; if (yy < 0 || yy >= (int)win.height) continue;
+        int d = dy < r ? r - dy : (dy >= h - r ? dy - (h - 1 - r) : 0), inset = 0;
+        if (d) { while (inset < r && (r - inset) * (r - inset) + d * d > r * r) inset++; }
+        unsigned *row = win.pixels + (unsigned)yy * win.width;
+        for (int xx = x + inset; xx < x + w - inset; xx++) {
+            if (xx < 0 || xx >= (int)win.width) continue;
+            unsigned c = row[xx], rim = (dy == 0 || dy == h - 1 || xx == x + inset || xx == x + w - inset - 1);
+            unsigned a = rim ? alpha + 70 : (unsigned)alpha; if (a > 255) a = 255;
+            unsigned rb = (((c & 0xFF00FF) * (256 - a) + (wash & 0xFF00FF) * a) >> 8) & 0xFF00FF;
+            unsigned g = (((c & 0x00FF00) * (256 - a) + (wash & 0x00FF00) * a) >> 8) & 0x00FF00;
+            row[xx] = rb | g;
+        }
+    }
+}
+
 /* Decode frame i of kind (0 idle, 1 talk) into uface_cur unless it is there already; returns it or 0. */
 static const unsigned short *face_frame(int kind, int i) {
     if (!uface_cur || !uface_jpg[kind][i]) return 0;
@@ -274,7 +330,7 @@ static void face_load_step(void) {
     }
     uface_pos[clip]++;
     if (uface_pos[clip] < total && uface_run < FACE_DEAD_RUN) return;   /* more of this clip to fetch */
-    if (clip == 0 && uface_idle_n) { uface_clip = 1; uface_run = 0; return; }   /* idle in hand: on to the talk clip */
+    if (clip == 0 && uface_idle_n) { uface_clip = 1; uface_run = 0; if (uface_portfolio) jt_write(1, "samface: idle ready\n", 20); return; }   /* idle in hand: on to the talk clip */
     face_load_finish();   /* talk clip done, or no idle frame at all (no face, talk is not tried) */
 }
 
@@ -284,7 +340,11 @@ static void face_load_step(void) {
    (a stand-in for loudness until the AUDIO SYNC hook feeds a real level). */
 static int face_step(unsigned now) {
     if (!face_inited) return 0;
-    if (!uface_done) { if (inlen > 0) return 0; face_load_step(); if (uface_done) return 1; return 0; } /* a fetch blocks the app for network time: never while she has typed text pending */
+    if (!uface_done) {
+        if (inlen > 0) return 0;
+        face_load_step(); if (uface_done) return 1;
+        if (!(uface_portfolio && uface_clip == 1 && uface_idle_n)) return 0;   /* portfolio: he idles on screen while the talk frames still come */
+    } /* a fetch blocks the app for network time: never while she has typed text pending */
     if (!uface_idle_n) return 0;
     if ((int)(now - face_next) < 0) return 0;
     face_next = now + FACE_STEP;
@@ -297,16 +357,46 @@ static int face_step(unsigned now) {
             int a = (face_talk_at + 1) % uface_talk_n, b = (face_talk_at + 2) % uface_talk_n;
             face_talk_at = (uface_open[b] > uface_open[a] && (now / FACE_STEP) % 2) ? b : a;
         }
+        if (uface_portfolio) { draw(); return 1; }
         face_blit(face_frame(1, face_talk_at));
     } else {
         face_at = (face_at + 1) % uface_idle_n;
+        if (uface_portfolio) { draw(); return 1; }
         face_blit(face_frame(0, face_at));
     }
     return 1;
 }
 
+static unsigned fps_t0 JT_DATA = 0; static int fps_n JT_DATA = 0;
+static void draw_portfolio(void) {
+    int W = (int)win.width, H = (int)win.height;
+    { unsigned t = now_ticks(); fps_n++; if (!fps_t0) fps_t0 = t; if (t - fps_t0 >= 500) { char d[40] = "samface: draws="; int n = 15; n = face_num(d, n, fps_n); d[n++] = '\n'; jt_write(1, d, (unsigned)n); fps_t0 = t; fps_n = 0; } } /* serial: draws per 5 s */
+    const unsigned short *f = uface_idle_n ? (face_talking(now_ticks()) && uface_talk_n ? face_frame(1, face_talk_at) : face_frame(0, face_at)) : 0;
+    if (f) face_fill(f); else rect(0, 0, W, H, BG);
+    int bw = W - 32 > 560 ? 560 : W - 32, bx = (W - bw) / 2, bh = 44, by = H - 24 - bh;
+    if (f && (status[0] != 'r' || status[1] != 'e')) { int pw = tw(status) + 28; glass(16, 16, pw, 30, 15, 150, WHITE); text(status, 30, 23, INK); }
+    int y = by - 12, floor_y = H * 30 / 100;
+    for (int i = nturn - 1; i >= 0 && i >= nturn - 2; i--) {   /* the last exchange floats above the bar */
+        int cw = bw - 40 > 480 ? 480 : bw - 40;
+        int rows = wrap(ar->t[i].text, cw - 28, 0, 0, 0, 0), h = rows * LINE + 22;
+        if (y - h < floor_y) { rows = (y - floor_y - 22) / LINE; if (rows < 1) break; h = rows * LINE + 22; }
+        int cx = ar->t[i].mine ? bx + bw - cw : bx;
+        y -= h;
+        glass(cx, y, cw, h, 16, ar->t[i].mine ? 190 : 228, ar->t[i].mine ? 0x00EDE6DC : WHITE);
+        wrap(ar->t[i].text, cw - 28, cx + 14, y + 11, INK, 1);
+        y -= 8;
+    }
+    glass(bx, by, bw, bh, 22, 228, WHITE);
+    const char *shown = ar->in;
+    while (*shown && tw(shown) > bw - 56) shown++;
+    if (!*shown) text("Message Joshua", bx + 24, by + 14, DIM);
+    else text(shown, bx + 24, by + 14, INK);
+    rect(bx + 24 + (*shown ? tw(shown) + 1 : 0), by + 12, 2, LINE + 4, ACCENT);
+}
+
 static void draw(void) {
     int W = (int)win.width, H = (int)win.height;
+    if (uface_portfolio) { draw_portfolio(); return; }
     rect(0, 0, W, H, BG);
     const char *who = uface_portfolio ? "Joshua" : "Samantha"; /* portfolio mode is his site: his name, his face */
     text(who, 20, 12, ACCENT);
@@ -1033,12 +1123,13 @@ static void send(void) {
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     for (int i = 1; i < argc; i++) { const char *a = argv[i], *b = "portfolio"; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) uface_portfolio = 1; }
+    if (uface_portfolio) uface_n = UFACE_MAX;
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "samantha: no window\n", 20); jt_exit(1); }
     ar = (struct arena *)malloc(sizeof *ar);              /* 1.9.27: the heap, not the image window */
     if (!ar) { jt_write(2, "samantha: no heap\n", 18); jt_exit(1); }
     for (unsigned k = 0; k < sizeof *ar; k++) ((unsigned char *)ar)[k] = 0;
     uface_file = (unsigned char *)malloc(UFACE_FILE);
-    uface_cur = (unsigned short *)malloc(sizeof(uface_t));
+    uface_cur = (unsigned short *)malloc((unsigned)(UFACE_SIDE * UFACE_SIDE * 2));
     face_inited = uface_file && uface_cur;
     draw();
     jt_write(1, "samantha: ring-3 window\n", 24);

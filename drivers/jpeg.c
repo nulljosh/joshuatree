@@ -488,6 +488,6 @@ int jpeg_decode(const unsigned char *data, unsigned int len, unsigned char **out
 int jpeg_decode_scaled(const unsigned char *data, unsigned int len, unsigned short *dst, unsigned int dw, unsigned int dh,
                        unsigned int *w, unsigned int *h) {
     unsigned char *none = 0; unsigned int ch = 0;
-    if (!dst || dw == 0 || dh == 0 || dw > 256) return JPEG_E_FORMAT;
+    if (!dst || dw == 0 || dh == 0 || dw > 320) return JPEG_E_FORMAT;
     return jpeg_run(data, len, &none, w, h, &ch, dst, dw, dh);
 }
