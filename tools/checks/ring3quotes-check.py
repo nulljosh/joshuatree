@@ -229,8 +229,8 @@ try:
             if serial().count("quotes: ring-3 window") > seen: break
         else:
             fails.append(f"{tag}: Quotes did not open a ring-3 window from the Apps folder grid"); return False
-        if "quotes: ring-3 window 832x450" not in serial():
-            fails.append(f"{tag}: the folder-launched window is not the folder viewport's 832x450")
+        if "quotes: ring-3 window 796x345" not in serial():
+            fails.append(f"{tag}: the folder-launched window is not 796x345")
         if "ring3app: BUG" in serial():
             fails.append(f"{tag}: ring3app logged a BUG line")
         time.sleep(0.5)
