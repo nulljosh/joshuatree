@@ -294,6 +294,9 @@
   #demo-frame.demo-full #demo-composer input { background: #1c1c1e; color: #fff; }
   #demo-frame.demo-full #demo-composer button { background: #fff; color: #000; }
   @media (max-width: 520px) { #demo-frame.demo-full.has-composer #stage-wrap { max-height: none; } #demo-frame.demo-full #stage-wrap { width: min(100vw, calc((var(--demo-h, 100dvh) - 76px) * 430 / 760)); } }
+  /* Portfolio on a wide screen: his face is the whole screen too, so the stage takes the full box instead of a 16:9 slab with black page showing either side (the guest paints its own wall color to the edges). */
+  html.portfolio #demo-frame.demo-full #stage-wrap { width: 100vw; aspect-ratio: auto; height: var(--demo-h, 100dvh); max-height: none; }
+  html.portfolio #demo-frame.demo-full.has-composer #stage-wrap { height: calc(var(--demo-h, 100dvh) - 76px); }
   /* Portfolio on a phone: his face is the whole screen, so the stage takes the full box above the composer instead of the OS's 430:760 letterbox (that left a black band under the face). embed.js already covers the box when the canvas fills 75% of it, and the face is a plain wall at the sides, so the crop costs nothing. */
   @media (max-width: 520px) { html.portfolio #demo-frame.demo-full.has-composer #stage-wrap { width: 100vw; aspect-ratio: auto; height: calc(var(--demo-h, 100dvh) - 76px); overflow: hidden; } }
   /* Small on a phone so it does not sit on the dock; the ::after keeps a 44px tap target. */
@@ -574,7 +577,7 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">24</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">2.0.0</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">2.0.1</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a>
@@ -806,7 +809,7 @@
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.0.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.0.1</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
     <p class="foot-meta"><a class="foot-cta" href="#waitlist">Want one? Join the dev-kit waitlist.</a></p>
   </div>
 </footer>

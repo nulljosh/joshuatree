@@ -308,8 +308,9 @@ static int face_step(unsigned now) {
 static void draw(void) {
     int W = (int)win.width, H = (int)win.height;
     rect(0, 0, W, H, BG);
-    text("Samantha", 20, 12, ACCENT);
-    text(status, 20 + tw("Samantha") + 16, 12, DIM);
+    const char *who = uface_portfolio ? "Joshua" : "Samantha"; /* portfolio mode is his site: his name, his face */
+    text(who, 20, 12, ACCENT);
+    text(status, 20 + tw(who) + 16, 12, DIM);
     rect(20, HEAD_H, W - 40, 1, RULE);
     if (uface_idle_n) face_blit(face_talking(now_ticks()) && uface_talk_n ? face_frame(1, face_talk_at) : face_frame(0, face_at));
     int top = HEAD_H + FACE_H + 8, bottom = H - INPUT_H - 8;
@@ -322,7 +323,7 @@ static void draw(void) {
         used += h + 6; start = i;
     }
     int y = top;
-    if (!nturn) text("Say something to Samantha.", 20, top + 4, DIM);
+    if (!nturn) text(uface_portfolio ? "Say something to Joshua." : "Say something to Samantha.", 20, top + 4, DIM);
     for (int i = start; i < nturn; i++) {
         int rows = wrap(ar->t[i].text, bw - 20, 0, 0, 0, 0), h = rows * LINE + 14;
         int bx = ar->t[i].mine ? W - 20 - (bw + 0) : 20;
@@ -414,7 +415,9 @@ static int chat(void) {
         if (size < REQ - 120 || first == nturn - 1) break;
         first++;
     }
-    n = cat(ar->req, n, REQ, "{\"model\":\"samantha\",\"stream\":false,\"think\":false,\"messages\":[");
+    n = cat(ar->req, n, REQ, "{\"model\":\"samantha\",");
+    if (uface_portfolio) n = cat(ar->req, n, REQ, "\"persona\":\"joshua\","); /* answers as him: the worker's fixed lines and his doc pack */
+    n = cat(ar->req, n, REQ, "\"stream\":false,\"think\":false,\"messages\":[");
     for (int i = first; i < nturn; i++) {
         if (i > first) ar->req[n++] = ',';
         n = cat(ar->req, n, REQ, "{\"role\":\"");
@@ -883,7 +886,7 @@ static int speak_fetch(void) {
     static const char hex[] = "0123456789ABCDEF";
     char path[JT_HTTP_PATH_MAX + 1];
     int n = 0;
-    const char *h = "/api/speak?t="; while (*h) path[n++] = *h++;
+    const char *h = uface_portfolio ? "/api/speak?v=joshua&t=" : "/api/speak?t="; while (*h) path[n++] = *h++;
     while (spk_text[spk_pos] == ' ') spk_pos++;
     if (!spk_text[spk_pos]) return 0;
     int start = spk_pos, enc = n, i = start, cut = -1, cutenc = n;
