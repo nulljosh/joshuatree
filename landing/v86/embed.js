@@ -2214,9 +2214,9 @@ if (typeof document !== "undefined") (function () {
         // visitor sees him in the OS; then Escape drops to the dock for the tour. A phone stays on his face.
         for (var fw = 0; !faceReady && fw < 150; fw++) { if (focused || tourGen !== gen) return; await sleep(200); }   // the last frame holds while his frames finish loading (30 s at most)
         if (introVideo) introVideo.dispatchEvent(new Event("fade"));
-        await sleep(IS_PHONE ? 700 : 4500);
+        await sleep(IS_PHONE ? 3500 : 4500);
         if (focused || tourGen !== gen) return;
-        if (!IS_PHONE && emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([27], 80); await sleep(600); }
+        if (emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([27], 80); await sleep(700); }   // Escape drops to the dock (desktop) or the home grid (phone), where the tour starts
         resetHeadline();
         return;
       }
@@ -2268,6 +2268,37 @@ if (typeof document !== "undefined") (function () {
       await sleep(speakMs || 3000);
     }
   }
+  // The phone's version of the app tour. The phone has a home grid, not a dock: tap each app's icon, run the same
+  // script the desktop tour uses, press Escape (the phone's back), and finish by opening him again.
+  // Grid maths from kernel/phone_home.h: 5 columns of 86 px, rows 96 px apart, the first row starts 56 px down.
+  var PHONE_GRID = { Samantha: 6, Curbfind: 8, Keyrate: 9, Bookrank: 10, Quotes: 11, Lexly: 12, Toroid: 13, Sparkjar: 14, Calculator: 17, Epiphany: 20 };
+  function phoneIconPos(name) { var i = PHONE_GRID[name]; return [(i % 5) * 86 + 43, 56 + Math.floor(i / 5) * 96 + 30]; }
+  async function phonePortfolioTour(gen) {
+    if (!adaptersReady) return;
+    emulator.mouse_adapter.emu_enabled = true;
+    emulator.keyboard_adapter.emu_enabled = true;
+    await sleep(900);   // the home grid has to be drawn before the first tap
+    for (var p = 0; p < PORTFOLIO_TOUR.length; p++) {
+      if (focused || tourGen !== gen) return;
+      var app = PORTFOLIO_TOUR[p], pos = phoneIconPos(app.name);
+      await clickAt(pos[0], pos[1]);
+      if (focused || tourGen !== gen) return;
+      var t0 = Date.now();
+      await sleep(700);
+      updateHeadline(app.name);
+      await runScript(app.script, gen);
+      if (focused || tourGen !== gen) return;
+      var rest = Math.min(app.dwell || DWELL_MS, 6000) - (Date.now() - t0);
+      if (rest > 0) await sleep(rest);
+      if (focused || tourGen !== gen) return;
+      if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80);
+      resetHeadline();
+      await sleep(1000);
+    }
+    if (focused || tourGen !== gen) return;
+    var him = phoneIconPos("Samantha");   // in portfolio mode that icon opens him
+    await clickAt(him[0], him[1]);
+  }
   async function tourLoop(gen) {
     tourRunning = true;
     // Portfolio mode: the dock is Joshua's own apps (GUI_DOCK_PORTFOLIO in kernel.c,
@@ -2276,7 +2307,7 @@ if (typeof document !== "undefined") (function () {
     while (PORTFOLIO_MODE && !focused && tourGen === gen) {
       await phoneSamanthaIntro(gen);   // his face first; the scene ends with Escape, which drops to the dock the tour below drives
       if (focused || tourGen !== gen) return;
-      if (IS_PHONE) { while (!focused && tourGen === gen) { await phoneSamanthaIntro(gen); await sleep(1500); } return; }   // his face, one line after another, forever   // a phone is his face and nothing else; the dock tour below clicks desktop coordinates
+      if (IS_PHONE) { await phonePortfolioTour(gen); while (!focused && tourGen === gen) await sleep(1000); return; }   // the phone pokes around the OS like the desktop does, then stays on him; leaving the loop would let the idle watchdog start a new lap that types into his chat
       for (var p = 0; p < PORTFOLIO_TOUR.length; p++) {
         if (focused || tourGen !== gen || !adaptersReady) return;
         await runSoloApp(gen, PORTFOLIO_TOUR[p]);
