@@ -234,11 +234,17 @@ static void face_blit_full(const unsigned char *px, const unsigned char *mix) {
     /* Per-column source index, rebuilt only when the geometry changes: the
        division per pixel was most of the cost of a frame. */
     static unsigned short colmap[4096];
+    static unsigned char cfrac[4096];        /* horizontal blend weight out of 256 toward the next source column */
+    static unsigned char vrow[(FACE_SRC + 1) * 3];   /* one row, already blended vertically, last pixel doubled */
     static unsigned short fwt[256];          /* feather weight out of 256, 0 = outer edge column */
     static unsigned int wall_l = 0, wall_r = 0;
     static int map_side = -1, map_ox = 0, map_fw = 0, fpx = 0;
     if (map_side != side || map_ox != ox || map_fw != fw) {
-        for (int x = x0; x < x1; x++) colmap[x] = (unsigned short)((x - ox) * FACE_SRC / side);
+        for (int x = x0; x < x1; x++) {   /* pixel centres, so the picture does not shift */
+            int p = (2 * (x - ox) + 1) * FACE_SRC * 128 / side - 128;
+            if (p < 0) p = 0;
+            colmap[x] = (unsigned short)(p >> 8); cfrac[x] = (unsigned char)(p & 255);
+        }
         wall_l = face_wall(px, 4); wall_r = face_wall(px, FACE_SRC - 4 - FACE_WALL_COLS);   /* 4 in: JPEG's outermost columns ring */
         fpx = ox > 0 ? side * FACE_FEATHER / FACE_SRC : 0; if (fpx > 256) fpx = 256;
         for (int i = 0; i < fpx; i++) fwt[i] = (unsigned short)(256 * (fpx - i) / fpx);
@@ -255,14 +261,31 @@ static void face_blit_full(const unsigned char *px, const unsigned char *mix) {
        declared once. Through window_pixel_phys this was ~4 frames a second
        in v86 (live recording, 2026-10-02); the clip wants 12. */
     for (int y = top; y < top + rows; y++) {
-        unsigned int ro = (unsigned int)((y - top) * FACE_SRC / side) * FACE_SRC * 3;
+        /* Bilinear: blend the two source rows once per output row (320 pixels),
+           then lerp two neighbouring columns per output pixel. */
+        int py = (2 * (y - top) + 1) * FACE_SRC * 128 / side - 128; if (py < 0) py = 0;
+        unsigned int fy = (unsigned int)(py & 255), r0 = (unsigned int)(py >> 8), r1 = r0 + 1 < FACE_SRC ? r0 + 1 : r0;
+        const unsigned char *a0 = px + r0 * FACE_SRC * 3, *a1 = px + r1 * FACE_SRC * 3;
+        if (mix) {
+            const unsigned char *m0 = mix + r0 * FACE_SRC * 3, *m1 = mix + r1 * FACE_SRC * 3;
+            for (int i = 0; i < FACE_SRC * 3; i++)
+                vrow[i] = (unsigned char)((((a0[i] + m0[i]) >> 1) * (256 - fy) + ((a1[i] + m1[i]) >> 1) * fy) >> 8);
+        } else {
+            for (int i = 0; i < FACE_SRC * 3; i++) vrow[i] = (unsigned char)((a0[i] * (256 - fy) + a1[i] * fy) >> 8);
+        }
+        vrow[FACE_SRC * 3] = vrow[FACE_SRC * 3 - 3]; vrow[FACE_SRC * 3 + 1] = vrow[FACE_SRC * 3 - 2]; vrow[FACE_SRC * 3 + 2] = vrow[FACE_SRC * 3 - 1];
         unsigned int *row = window_phys_row(y);
         if (row) {
-            if (mix) for (int x = x0; x < x1; x++) { unsigned int o = ro + colmap[x] * 3u; row[x] = (((px[o] + mix[o]) >> 1) << 16) | (((px[o + 1] + mix[o + 1]) >> 1) << 8) | ((px[o + 2] + mix[o + 2]) >> 1); }
-            else for (int x = x0; x < x1; x++) { unsigned int o = ro + colmap[x] * 3u; row[x] = (px[o] << 16) | (px[o + 1] << 8) | px[o + 2]; }
+            for (int x = x0; x < x1; x++) {
+                const unsigned char *q = vrow + colmap[x] * 3u; unsigned int f = cfrac[x];
+                row[x] = ((((q[0] << 8) + (q[3] - q[0]) * (int)f) >> 8) << 16) | ((((q[1] << 8) + (q[4] - q[1]) * (int)f) >> 8) << 8) | (((q[2] << 8) + (q[5] - q[2]) * (int)f) >> 8);
+            }
             for (int i = 0; i < fpx; i++) { row[x0 + i] = face_lerp(row[x0 + i], wall_l, fwt[i]); row[x1 - 1 - i] = face_lerp(row[x1 - 1 - i], wall_r, fwt[i]); }
         } else {
-            for (int x = x0; x < x1; x++) { unsigned int o = ro + colmap[x] * 3u; window_pixel_phys(x, y, (px[o] << 16) | (px[o + 1] << 8) | px[o + 2]); }
+            for (int x = x0; x < x1; x++) {
+                const unsigned char *q = vrow + colmap[x] * 3u; unsigned int f = cfrac[x];
+                window_pixel_phys(x, y, ((((q[0] << 8) + (q[3] - q[0]) * (int)f) >> 8) << 16) | ((((q[1] << 8) + (q[4] - q[1]) * (int)f) >> 8) << 8) | (((q[2] << 8) + (q[5] - q[2]) * (int)f) >> 8));
+            }
         }
     }
     window_damage(x0, top, x1 - x0, rows);
