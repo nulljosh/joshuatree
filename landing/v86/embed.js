@@ -731,11 +731,15 @@ if (typeof document !== "undefined") (function () {
     });
     container.appendChild(tapTalkBtn);
     // Any first click or key anywhere counts as the tap; the button is just the hint.
-    ["pointerdown", "keydown"].forEach(function (t) {
+    // That first gesture is swallowed (600 ms covers its mousedown, mouseup and click):
+    // reaching the container it read as a visitor taking over, which stopped the intro
+    // before he said a word.
+    var firstTapAt = 0;
+    ["pointerdown", "mousedown", "mouseup", "click", "touchstart", "touchend", "keydown", "keyup"].forEach(function (t) {
       document.addEventListener(t, function (ev) {
-        if (tapTalkBtn.hidden && !tapTalkResolve) return;
-        unlockAudio(ev); tapTalkBtn.hidden = true; tapTalkResolve();
-      }, { once: true, capture: true });
+        if (!firstTapAt) { firstTapAt = Date.now(); unlockAudio(ev); tapTalkBtn.hidden = true; tapTalkResolve(); }
+        if (Date.now() - firstTapAt < 600) ev.stopPropagation();
+      }, { capture: true, passive: true });
     });
   }
   // Phones have no keyboard for the demo to listen to, and v86 only hears
