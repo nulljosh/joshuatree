@@ -2212,6 +2212,7 @@ if (typeof document !== "undefined") (function () {
       var pSeen = speakCount;
       // A phone stays on his face forever, so each pass says the next line: life, Vancouver, the work.
       var pLine = IS_PHONE ? PORTFOLIO_LINES[portfolioLine++ % PORTFOLIO_LINES.length] : PORTFOLIO_INTRO_LINE;
+      if (IS_PHONE && emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([8], 80); await sleep(200); }   // a reply still playing eats the next key (typing skips her speech): Backspace is that key, and a no-op on an empty bar
       await emulator.keyboard_send_text(pLine + '\n', 55);
       var pStart = Date.now(), pMs = 0;
       while (Date.now() - pStart < 60000) {   // the reply comes over a slow relay: 15 s cut him off before he spoke and dropped to the OS
@@ -2219,8 +2220,14 @@ if (typeof document !== "undefined") (function () {
         if (speakCount > pSeen) { pMs = Math.min(40000, Math.round(lastSpeakBytes / 16)) + 1200; break; }   // the intro is a ~30 s script
         await sleep(200);
       }
-      await sleep(pMs || 3000);
-      if (focused || tourGen !== gen) return;
+      // A long reply is spoken in pieces, one fetch each: keep waiting while a new piece starts.
+      var pDone = speakCount, pWait = pMs || 3000;
+      for (;;) {
+        await sleep(pWait);
+        if (focused || tourGen !== gen) return;
+        if (speakCount === pDone) break;
+        pDone = speakCount; pWait = Math.min(40000, Math.round(lastSpeakBytes / 16)) + 600;
+      }
       if (!IS_PHONE && emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80);
       await sleep(800);
       resetHeadline();
