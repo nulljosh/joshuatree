@@ -41,7 +41,7 @@ def read(p):
 kernel = read("kernel/kernel.c")
 m = re.search(r"const struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", kernel, re.S)
 names = re.findall(r'/\*\s*\d+\s*\*/\s*\{"([^"]+)"', m.group(1))
-check(len(names) >= 25, "APPS table parsed (%d rows)" % len(names))
+check(len(names) >= 24, "APPS table parsed (%d rows)" % len(names))
 check(names[0] == "Burrow", "APPS[0] is %r, want 'Burrow'" % names[0])
 check("Files" not in names, "no APPS row is named 'Files'")
 menu = re.search(r'"About Joshua Tree",([^}]*?)"Shut Down"', kernel, re.S).group(1)

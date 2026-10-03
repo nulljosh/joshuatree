@@ -44,10 +44,10 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-# Real apps=1 geometry (see the note above): x=56,y=30,w=848,h=490
-CLOSE_X, CLOSE_Y = 56 + 24, 30 + 16
+# 2.0: an app launched from the Apps folder is a compositor window at x=10,y=40 (812x385)
+CLOSE_X, CLOSE_Y = 10 + 24, 40 + 16
 CLOSE_RED = (0xFF, 0x5F, 0x57)
-VX, VY = 56 + 8, 30 + 32  # viewport origin
+VX, VY = 10 + 8, 40 + 32  # viewport origin
 ROW0_Y = VY + 68   # pf_draw's PF_TOP, relative y=68 (row r=0)
 ROW_X0, ROW_X1 = VX + 18, VX + 400
 
@@ -57,6 +57,7 @@ for f in (LOG, DUMP):
     except FileNotFoundError: pass
 
 q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
+                      "-append", "portfolio",  # Portfolio is hidden from the default Apps folder (public OS); it only lists in portfolio mode
                       "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 fails = []
