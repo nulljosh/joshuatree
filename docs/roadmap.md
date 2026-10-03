@@ -79,6 +79,18 @@ Kernel.c is ~9,800 lines with 84 files pasted in; an Opus agent is building the 
 
 Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk), and moving the landing page to a `gh-pages` branch.
 
+## Apps after 2.2 (cheapest first, one agent and one PR each)
+
+- [ ] [Haiku] Photos: browse and view JPEG and PNG from Files, next and previous by arrow key. The decoders already exist.
+- [ ] [Haiku] Minesweeper, then Solitaire. One app each, each with a boot check that plays a scripted game.
+- [ ] [Sonnet] Voice Memos: record with `SYS_AUDIO_RECORD`, save a WAV to Files, play it back in Music.
+- [ ] [Sonnet] Samantha media tools: "play something", "pause", "what's playing", one check each.
+- [ ] [Sonnet] Movie trim: cut, split and join clips at frame boundaries and save a new AVI. The iMovie-lite step.
+- [ ] [Sonnet] Preview: opens images and text files from any Files window. PDF is a later, bigger step.
+- [ ] [Sonnet] Step sequencer: a drum and synth loop maker with 8-bit mono sound. The GarageBand-lite step.
+- [ ] [Fable] Stereo and 16-bit audio: a second `SYS_AUDIO` op so music stops sounding flat. Unblocks a real music studio (VERSIONS 54).
+- [ ] [Fable] A real video codec on this CPU class, only after 3.0 hardware shows what it can decode.
+
 ## Our own computer
 The OS stays free. Monetization is custom hardware built to run it. Everything this kernel drives today runs on QEMU's emulated devices; porting to physical hardware comes first, not a coding task yet. 1.0 ships a USB-bootable ISO with a PS/2 fallback; USB is the 1.1 headline, built in this order.
 
