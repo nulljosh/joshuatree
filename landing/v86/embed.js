@@ -2216,15 +2216,11 @@ if (typeof document !== "undefined") (function () {
       // Portfolio: his face is the whole screen on every device. One line
       // ("show me around"), his reply spoken, then on desktop Escape drops to
       // the dock so the app tour below can run; a phone stays on his face.
-      // Wait for audio unlock via tap (same as Samantha on phones) to ensure
-      // the AudioContext is running before speech begins, so mouth animation
-      // (speak_level analysis) receives audio samples instead of zeros.
-      tapTalkBtn.hidden = false;
-      await Promise.race([tapTalkPromise, new Promise(function (r) { setTimeout(r, 5000); })]);
-      if (focused || tourGen !== gen) return;
-      await new Promise(function (r) { setTimeout(r, 400); }); // let resume() settle
+      // (the tap wait above already unlocked audio, so the mouth hears samples)
       var pSeen = speakCount;
-      await emulator.keyboard_send_text(PORTFOLIO_INTRO_LINE + '\n', 55);
+      // A phone stays on his face forever, so each pass says the next line: life, Vancouver, the work.
+      var pLine = IS_PHONE ? PORTFOLIO_LINES[portfolioLine++ % PORTFOLIO_LINES.length] : PORTFOLIO_INTRO_LINE;
+      await emulator.keyboard_send_text(pLine + '\n', 55);
       var pStart = Date.now(), pMs = 0;
       while (Date.now() - pStart < 15000) {
         if (focused || tourGen !== gen) return;
@@ -2270,7 +2266,7 @@ if (typeof document !== "undefined") (function () {
     while (PORTFOLIO_MODE && !focused && tourGen === gen) {
       await phoneSamanthaIntro(gen);   // his face first; the scene ends with Escape, which drops to the dock the tour below drives
       if (focused || tourGen !== gen) return;
-      if (IS_PHONE) { while (!focused && tourGen === gen) await sleep(5000); return; }   // a phone is his face and nothing else; the dock tour below clicks desktop coordinates
+      if (IS_PHONE) { while (!focused && tourGen === gen) { await phoneSamanthaIntro(gen); await sleep(1500); } return; }   // his face, one line after another, forever   // a phone is his face and nothing else; the dock tour below clicks desktop coordinates
       for (var p = 0; p < PORTFOLIO_TOUR.length; p++) {
         if (focused || tourGen !== gen || !adaptersReady) return;
         await runSoloApp(gen, PORTFOLIO_TOUR[p]);
@@ -2376,6 +2372,7 @@ if (typeof document !== "undefined") (function () {
   // the wrong demo there, so tourLoop runs PORTFOLIO_TOUR instead, four idle seconds in.
   var PORTFOLIO_MODE = /[?&]portfolio\b/.test(location.search);
   var PORTFOLIO_INTRO_LINE = 'show me around';
+  var PORTFOLIO_LINES = ['show me around', "what's Vancouver like", 'tell me about your life', 'what are you building right now', 'what should I look at first', 'what do you do for fun'], portfolioLine = 0;
   // Real keypresses per app (the same scripted path the main tour uses),
   // so each one is used on camera, not just opened. Direct report
   // (2026-09-26): "demo apps have no interaction".
