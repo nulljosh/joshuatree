@@ -730,6 +730,13 @@ if (typeof document !== "undefined") (function () {
       tapTalkResolve();
     });
     container.appendChild(tapTalkBtn);
+    // Any first click or key anywhere counts as the tap; the button is just the hint.
+    ["pointerdown", "keydown"].forEach(function (t) {
+      document.addEventListener(t, function (ev) {
+        if (tapTalkBtn.hidden && !tapTalkResolve) return;
+        unlockAudio(ev); tapTalkBtn.hidden = true; tapTalkResolve();
+      }, { once: true, capture: true });
+    });
   }
   // Phones have no keyboard for the demo to listen to, and v86 only hears
   // `keydown` on window, so the Samantha, Notes and Terminal screens, which
