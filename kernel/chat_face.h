@@ -451,7 +451,7 @@ static void chat_face_tick(unsigned int elapsed) {
 /* Chat's idle wait: the next frame of her idle loop. Call about 12 times
    a second while nothing else is happening. */
 static void chat_face_idle_tick(void) {
-    if (!face_idle_n || face_x < 0) return;
+    if (!face_idle_n || (face_x < 0 && !face_full)) return;
     chat_face_idle_step();
     face_blit(face_idle[face_idle_at]);
     window_present();
@@ -471,7 +471,7 @@ static void chat_face_idle_half(void) {
 
 /* speak_text with her mouth following the audio. */
 static void chat_face_speak(const char *host, unsigned short port, const char *text, unsigned int timeout) {
-    int talk = face_talk_n && face_x >= 0;
+    int talk = face_talk_n && (face_x >= 0 || face_full);
     face_shown = -1;
     if (talk) sb16_set_progress(chat_face_tick);
     speak_text(host, port, text, timeout);
