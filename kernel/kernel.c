@@ -458,16 +458,10 @@ static void klog_dump(void){
 static void task_a(void){ for (int i = 0; i < 10; i++) { puts("A"); yield(); } task_exit(); }
 static void task_b(void){ for (int i = 0; i < 10; i++) { puts("B"); yield(); } task_exit(); }
 
-/* 2.2.0: fputest. Each task pushes its own value onto the x87 stack, switches away from inside the
-   same asm, and pops it back. If schedule() did not swap x87 state the two tasks would pop each
-   other's values. Timer ticks preempt it too, so the swap is exercised mid-instruction-stream. */
+/* 2.2.0: fputest. Two tasks each push a value on the x87 stack, switch away inside the same asm, pop it back; crossed values mean schedule() lost per-task float state. */
 static volatile int fpu_bad, fpu_done;
 static void fpu_task(double mark) {
-    for (int i = 0; i < 300; i++) {
-        double in = mark + i, out = 0;
-        __asm__ volatile ("fldl %1; int $32; fstpl %0" : "=m"(out) : "m"(in) : "memory");
-        if (out != in) fpu_bad++;
-    }
+    for (int i = 0; i < 300; i++) { double in = mark + i, out = 0; __asm__ volatile ("fldl %1; int $32; fstpl %0" : "=m"(out) : "m"(in) : "memory"); if (out != in) fpu_bad++; }
     fpu_done++; task_exit();
 }
 static void fpu_a(void){ fpu_task(1000.5); }
@@ -853,7 +847,7 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-/* 2.2: Music (APPS[24]) and Movies (APPS[25]), both Apps folder only, grew GUI_APP_COUNT from 26 to 28 and pushed Apps/Trash to 26/27; gen_icon_art.py's maps moved with it. */
+/* 2.2: Music (24) and Movies (25) pushed Apps/Trash to 26/27. */
 #define GUI_APP_COUNT   28 /* 26 real apps + the Apps folder + Trash */
 #define GUI_APPS_FOLDER 26 /* not an app: the dock tile that opens the folder */
 #define GUI_TRASH       27
@@ -3580,15 +3574,6 @@ static void gui_icon_trash(int cx, int cy, int s, unsigned int bg){
 /* v37: the Apps folder tile, a 3x3 grid of rounded tiles reading as
    "more inside", the same shape every launcher grid has used since the
    first iPhone home screen. */
-/* Music: two beamed notes. art/icons/music.svg covers the icon (kernel/icon_art.h); this is the primitive fallback. */
-static void gui_icon_music(int cx, int cy, int s, unsigned int bg){
-    int r = s / 9, sw = s / 14 > 0 ? s / 14 : 1, x1 = cx - s / 5, x2 = cx + s / 5, yb = cy + s / 5;
-    gui_fill_circle(x1, yb, r, ICON_FG, bg);
-    gui_fill_circle(x2, yb - s / 14, r, ICON_FG, bg);
-    window_rect(x1 + r - sw, cy - s / 4, sw, yb - (cy - s / 4), ICON_FG);
-    window_rect(x2 + r - sw, cy - s / 4 - s / 14, sw, yb - s / 14 - (cy - s / 4 - s / 14), ICON_FG);
-    window_rect(x1 + r - sw, cy - s / 4 - s / 14, x2 - x1, sw * 2, ICON_FG);
-}
 
 static void gui_icon_apps(int cx, int cy, int s, unsigned int bg){
     (void)bg;
@@ -5199,7 +5184,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 21 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       portfolio_ring3_open,  0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph; 1.9.5: ring 3 (user/portfolio.c) */
     /* 22 */ {"Activity",   0x003E4C58, gui_icon_activity,   activity_ring3_open,   0, 0}, /* 1.9.6: ring 3 (user/activity.c) */
     /* 23 */ {"Clock",      0x00565A7A, gui_icon_clock,      clock_ring3_open,      0, 0}, /* live analog face (hands overlay, gui_clock_draw_hands); 1.9.4: ring 3 (user/clock.c) */
-    /* 24 */ {"Music",      0x00B5502C, gui_icon_music,      music_ring3_open,      0, 0}, /* 2.2: ring 3 (user/music.c), Apps folder only like Search */
+    /* 24 */ {"Music",      0x00B5502C, gui_icon_chat,       music_ring3_open,      0, 0}, /* 2.2: ring 3 (user/music.c), Apps folder only like Search */
     /* 25 */ {"Movies",     0x00B5502C, gui_icon_chat,       movies_ring3_open,     0, 0}, /* 2.2: ring 3 (user/movies.c), Apps folder only; authored art (art/icons/movies.svg) covers the icon */
     /* Apps and Trash aren't real apps with their own brand color, so their
        tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
@@ -6891,13 +6876,8 @@ static void run(char *line){
         else if (strcmp(rbuf, content)) serial_puts("filetest: content mismatch\n");
         else serial_puts(read_only ? "filetest: persisted read ok\n" : "filetest: write+read ok\n");
     }
-    else if (!strcmp(line, "fputest")) {
-        fpu_bad = fpu_done = 0;
-        task_create(fpu_a); task_create(fpu_b);
-        for (int i = 0; i < 2000 && fpu_done < 2; i++) yield();
-        if (fpu_done == 2 && !fpu_bad) puts("fputest: x87 state kept per task: ok\n");
-        else puts(fpu_done == 2 ? "fputest: FAIL x87 values crossed between tasks\n" : "fputest: FAIL tasks did not finish\n");
-    }
+    else if (!strcmp(line, "fputest")) { fpu_bad = fpu_done = 0; task_create(fpu_a); task_create(fpu_b); for (int i = 0; i < 2000 && fpu_done < 2; i++) yield();
+        puts(fpu_done == 2 && !fpu_bad ? "fputest: x87 state kept per task: ok\n" : fpu_done == 2 ? "fputest: FAIL x87 values crossed between tasks\n" : "fputest: FAIL tasks did not finish\n"); }
     else if (!strcmp(line, "tasktest")) {
         /* v0.76.8: real, reproduced-on-demand CI flake fixed at the root.
            yield()'s software `int $32` and the hardware PIT's own IRQ0 both
