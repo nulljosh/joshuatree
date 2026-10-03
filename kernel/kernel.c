@@ -5710,7 +5710,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       bookrank_ring3_open,   0, 0}, /* 2.0: ring 3 too (user/bookrank.c) */
     /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_ring3_open, 0, 0}, /* 1.7.14: ring 3 too (user/quotes.c) */
     /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       plan_ring3_open,       0, 0}, /* 1.9.2: ring 3 too (user/plan.c) */
-    /* 13 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      lexly_ring3_open,      0, 0}, /* 1.9.1: ring 3 too (user/lexly.c) */
+    /* 13 */ {"Lexly",       0x002F6FB8, gui_icon_lexly,      lexly_ring3_open,      0, 0}, /* 1.9.1: ring 3 too (user/lexly.c) */
     /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */
     /* 15 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   sparkjar_ring3_open,   0, 0}, /* 1.9.8: ring 3 (user/sparkjar.c) */
     /* 16 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  fieldbook_ring3_open,  0, 0}, /* 1.9.3: ring 3 too (user/fieldbook.c) */
