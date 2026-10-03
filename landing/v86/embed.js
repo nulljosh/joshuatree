@@ -2222,9 +2222,9 @@ if (typeof document !== "undefined") (function () {
       var pLine = IS_PHONE ? PORTFOLIO_LINES[portfolioLine++ % PORTFOLIO_LINES.length] : PORTFOLIO_INTRO_LINE;
       await emulator.keyboard_send_text(pLine + '\n', 55);
       var pStart = Date.now(), pMs = 0;
-      while (Date.now() - pStart < 15000) {
+      while (Date.now() - pStart < 60000) {   // the reply comes over a slow relay: 15 s cut him off before he spoke and dropped to the OS
         if (focused || tourGen !== gen) return;
-        if (speakCount > pSeen) { pMs = Math.min(12000, Math.round(lastSpeakBytes / 16)) + 800; break; }
+        if (speakCount > pSeen) { pMs = Math.min(20000, Math.round(lastSpeakBytes / 16)) + 1200; break; }
         await sleep(200);
       }
       await sleep(pMs || 3000);
