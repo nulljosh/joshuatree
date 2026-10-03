@@ -8,3 +8,8 @@ python3 tools/media/wavgen.py "$T/fx"
 clang -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=undefined -Wall -Wextra \
     tools/media/wav-host.c user/libjt/wav.c -o "$T/wav-host"
 "$T/wav-host" "$T/fx"
+
+python3 tools/media/mp3gen.py "$T/mp3"
+clang -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=undefined -Wall -Wextra \
+    -Ithird_party/minimp3 -Iuser tools/media/mp3-host.c user/libjt/mp3.c -o "$T/mp3-host"
+"$T/mp3-host" "$T/mp3"
