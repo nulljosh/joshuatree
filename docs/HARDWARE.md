@@ -1,5 +1,7 @@
 # Hardware
 
+> **Update, 2026-10-03:** the first real board is now a Raspberry Pi 4B, not the x86 mini PC below. The Mac mini cannot be the board (Apple Silicon, and this kernel is i386), and a Pi boots a plain `kernel8.img` with a documented UART, framebuffer and interrupt controller. That needs an ARM64 port, planned and tracked in [ARM64.md](ARM64.md); milestone M0 already boots under QEMU. The x86 board analysis below stays as the i386 path, and the Strata Kit math (3.1) is unchanged until a Pi build exists.
+
 3.0 is "it boots a real computer." One reference mini PC: UEFI, USB
 keyboard, mouse and stick, a real disk, a real network card, real sound.
 This page picks that board, lists the driver work between here and
