@@ -134,6 +134,9 @@ retry|2|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mw
 retry|7|Drawing lands offscreen, window_present puts it on screen|./tools/checks/backbuffer-check.sh
 retry|5|Multi-window apps draw exactly one toolbar, not two|./tools/checks/mwdupetoolbar-check.sh
 once |6|JPEG decoder, host harness|./tools/checks/jpeg-host-check.sh
+once |6|Media decoders (WAV, MP3), host harness under ASan and UBSan|./tools/checks/media-host-check.sh
+once |6|AVI/MJPEG reader, host harness under ASan and UBSan|./tools/checks/avi-host-check.sh
+retry|7|Tasks keep their own x87 float state across switches|./tools/checks/fpu-check.sh
 once |7|HTML entities decode to ASCII, host harness|./tools/checks/html-host-check.sh
 retry|2|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
 once |6|PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/decoder-fuzz-check.sh
