@@ -21,15 +21,14 @@
  * A flat binary has no .bss, so the record table and the file buffer live in
  * the zeroed pages just past _user_end, which the link script defines.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font, same as the other ring-3
- * apps. The backquote key (`) is the deliberate crash: a write through a
+ * Glyphs: antialiased DejaVu via libjt/text.h. The backquote key (`) is the deliberate crash: a write through a
  * null pointer, a page fault at ring 3, reaped by the kernel.
  * tools/checks/ring3search-check.py drives all of it, including the three
  * refusals probed at startup (a kernel pointer, an over-long path, a
  * directory that is not there), each one a line on the serial log.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define INK   0x001C1C1E
@@ -41,10 +40,10 @@
 #define RED   0x00A33B3B
 
 #define QUERY_MAX 32
-#define BOX_Y   44   /* the query box; the hint line sits at 20 */
-#define LIST_Y  72   /* the result list starts here */
-#define ROW_Y   78   /* first row's text y */
-#define ROW_H   22
+#define BOX_Y   40   /* the query box, under the title bar; the hint sits at the bottom */
+#define LIST_Y  76   /* the result list starts here */
+#define ROW_Y   82   /* first row's text y */
+#define ROW_H   24
 #define FILE_MAX 4096
 
 extern char _user_end[];
@@ -70,20 +69,22 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++)
-        for (int c = 0; c < 8; c++) {
-            if (!(g[r] & (0x80 >> c))) continue;
-            int px = x + c, py = y + r;
-            if (px < 0 || px >= (int)win.width || py < 0 || py >= (int)win.height) continue;
-            win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
+static int text(const char *s, int x, int y, unsigned fg) { /* returns the x after the last glyph */
+    return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s);
 }
-static void text(const char *s, int x, int y, unsigned fg) {
-    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
+static void etext(const char *s, int x, int y, int maxw, unsigned fg) {
+    char t[JT_DIRENT_NAME + 8]; int n = 0;
+    while (s[n] && n < JT_DIRENT_NAME + 2) { t[n] = s[n]; n++; }
+    t[n] = 0;
+    if (jt_text_width(JT_FACE_BODY, t) > maxw) {
+        while (n > 0) {
+            t[n] = '.'; t[n + 1] = '.'; t[n + 2] = '.'; t[n + 3] = 0;
+            if (jt_text_width(JT_FACE_BODY, t) <= maxw) break;
+            t[--n] = 0;
+        }
+        if (n == 0) t[0] = 0;
+    }
+    jt_text_draw(&win, JT_FACE_BODY, x, y, fg, t);
 }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
@@ -150,25 +151,30 @@ static void refilter(void) {
 
 static int rows_fit(void) {
     int n = 0;
-    while (ROW_Y + n * ROW_H + 20 <= (int)win.height - 16) n++;
+    while (ROW_Y + n * ROW_H + 20 <= (int)win.height - 44) n++;
     return n;
 }
 
 /* Chrome drawn once per screen: the hint line never changes while typing. */
 static void draw_chrome(void) {
     rect(0, 0, (int)win.width, (int)win.height, BG);
+    etext("type to filter   up/down to pick   enter opens   esc closes", 20, (int)win.height - 30, (int)win.width - 40, HINT);
 }
 
 /* Only the query box and the result list, the chrome/content split the
    in-kernel copy had so filtering as you type never repaints everything. */
 static void draw_content(void) {
-    jt_text_clear();
-    text("type to filter   up/down to pick   enter opens   esc closes", 20, 20, HINT);
     int w = (int)win.width;
-    rect(20, BOX_Y, w - 40, 20, WHITE);
+    rect(20, BOX_Y, w - 40, 26, WHITE);
     query[qlen] = 0;
-    text(query, 24, BOX_Y + 2, INK);
-    rect(16, LIST_Y, w - 32, (int)win.height - LIST_Y - 16, BG);
+    if (qlen) {
+        int cx = text(query, 28, BOX_Y + 4, INK);
+        rect(cx + 1, BOX_Y + 5, 2, 16, INK); /* caret */
+    } else {
+        rect(28, BOX_Y + 5, 2, 16, INK);     /* caret, blinking-free so it always reads as live */
+        text("Type to search files", 34, BOX_Y + 4, DIM);
+    }
+    rect(16, LIST_Y, w - 32, (int)win.height - LIST_Y - 44, BG);
     jt_write(1, "searchcontent\n", 14); /* one per redraw: the discriminating marker the check counts */
     if (!count) { text("(no files, or no filesystem mounted)", 20, ROW_Y, DIM); return; }
     if (!nmatch) { text("No matches.", 20, ROW_Y, DIM); return; }
@@ -176,18 +182,18 @@ static void draw_content(void) {
     for (int r = 0; r < nmatch && r < fit; r++) {
         int y = ROW_Y + r * ROW_H;
         struct jt_dirent *e = &ents[matches[r]];
-        if (r == sel) rect(16, y - 4, w - 32, 20, SEL);
+        if (r == sel) rect(16, y - 4, w - 32, 22, SEL);
         char label[JT_DIRENT_NAME + 2];
         int i = 0;
         while (e->name[i] && i < JT_DIRENT_NAME - 1) { label[i] = e->name[i]; i++; }
         if (e->is_dir) label[i++] = '/';
         label[i] = 0;
-        text(label, 28, y, e->is_dir ? GREEN : INK);
+        etext(label, 28, y, w - 56, e->is_dir ? GREEN : INK);
     }
 }
 
 /* Read a file whole through open/read/close (read hands back at most 255
-   bytes a call) and show it wrapped at word boundaries in the 8x16 font, the
+   bytes a call) and show it wrapped at word boundaries in the antialiased face, the
    way `cat` would. Esc or a click goes back to the list. */
 static void path_join(char *out, const char *leaf) {
     int l = 0;
@@ -199,7 +205,6 @@ static void path_join(char *out, const char *leaf) {
 static void show_file(const char *name) {
     char path[JT_PATH_MAX + 1];
     path_join(path, name);
-    jt_text_clear();
     says("search: open ", path);
     int n = -1;
     int fd = jt_open(path, JT_O_RDONLY);
@@ -213,9 +218,9 @@ static void show_file(const char *name) {
         jt_close(fd);
     }
     rect(0, 0, (int)win.width, (int)win.height, BG);
-    text(name, 20, 20, INK);
+    etext(name, 20, 40, (int)win.width - 40, INK);
     if (n < 0) {
-        text("Could not read this file.", 20, 50, RED);
+        text("Could not read this file.", 20, 70, RED);
         jt_write(1, "search: file unreadable\n", 24);
     } else {
         filebuf[n] = 0;
@@ -225,14 +230,22 @@ static void show_file(const char *name) {
             head[h] = 0;
             says("search: head ", head);
         }
-        int i = 0, y = 44, bottom = (int)win.height - 40;
-        while (filebuf[i] && y + 16 <= bottom) {   /* one wrapped paragraph per file line */
-            char ln[256]; int n = 0;
-            while (filebuf[i] && filebuf[i] != '\n' && n < 255) { if (filebuf[i] != '\r') ln[n++] = filebuf[i]; i++; }
-            ln[n] = 0;
-            if (filebuf[i] == '\n') i++;
-            int used = jt_wrap(ln, 20, y, (int)win.width - 40, 18, (bottom - 16 - y) / 18 + 1, INK);
-            y += (used ? used : 1) * 18;
+        int right = (int)win.width - 20, x = 20, y = 70, bottom = (int)win.height - 44;
+        int sp = jt_text_width(JT_FACE_BODY, " ");
+        int i = 0;
+        while (filebuf[i] && y + 18 <= bottom) {
+            char c = filebuf[i];
+            if (c == '\r') { i++; continue; }
+            if (c == '\n') { x = 20; y += 20; i++; continue; }
+            if (c == ' ') { x += sp; i++; if (x > right) { x = 20; y += 20; } continue; }
+            char wb[64]; int wl = 0;
+            while (wl < 63 && filebuf[i + wl] && filebuf[i + wl] != ' ' && filebuf[i + wl] != '\n' && filebuf[i + wl] != '\r') { wb[wl] = filebuf[i + wl]; wl++; }
+            wb[wl] = 0;
+            int ww = jt_text_width(JT_FACE_BODY, wb);
+            if (x > 20 && x + ww > right) { x = 20; y += 20; if (y + 18 > bottom) break; } /* a word that fits on a fresh line moves there whole */
+            while (wl > 1 && jt_text_width(JT_FACE_BODY, wb) > right - x) wb[--wl] = 0; /* longer than a line: cut it */
+            x = jt_text_draw(&win, JT_FACE_BODY, x, y, INK, wb);
+            i += wl;
         }
     }
     text("esc or click to go back", 20, (int)win.height - 30, HINT);
@@ -311,6 +324,7 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { draw_chrome(); draw_content(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;
@@ -322,7 +336,7 @@ void _start(int argc, char **argv) {
             int hit = -1, fit = rows_fit();
             for (int i = 0; i < nmatch && i < fit; i++) {
                 int y = ROW_Y + i * ROW_H;
-                if (ev.a >= 16 && ev.a < (int)win.width - 16 && ev.b >= y - 4 && ev.b < y + 16) { hit = i; break; }
+                if (ev.a >= 16 && ev.a < (int)win.width - 16 && ev.b >= y - 4 && ev.b < y + 18) { hit = i; break; }
             }
             if (hit < 0) break;
             sel = hit; open_sel = 1;

@@ -116,8 +116,12 @@ try:
     content_before = crop(img1, WIN_X + 12, WIN_Y + 60, 500, 60)
     move(*TITLE); time.sleep(0.3); button(True); time.sleep(0.25)
     drag_steps(TITLE[0], TITLE[1], TITLE[0] + DX, TITLE[1] + DY)
-    time.sleep(0.3)
-    mid = dump(); mid.save(os.path.join(ART, "notes-mid.png"))
+    # A slow CI guest can take a beat to repaint a ring-3 window, so poll
+    # (button still held) instead of trusting one frame 0.3 s in.
+    for _ in range(10):
+        time.sleep(0.2); mid = dump()
+        if is_red(pixel(mid, WIN_X + DX + 24, WIN_Y + DY + 16)): break
+    mid.save(os.path.join(ART, "notes-mid.png"))
     button(False); time.sleep(0.6)
     img2 = dump(); img2.save(os.path.join(ART, "notes-after.png")); img1.save(os.path.join(ART, "notes-before.png"))
     if is_red(pixel(img2, WIN_X + DX + 24, WIN_Y + DY + 16)): ok(f"close light moved to ({WIN_X + DX + 24},{WIN_Y + DY + 16})")
@@ -142,8 +146,11 @@ try:
     else: fail("typing after the drag changed nothing inside the moved window")
     if differing_fraction(uncovered_before, crop(img3, WIN_X, WIN_Y + DY, DX - 2, WIN_H - DY)) < 0.001: ok("nothing drew into the uncovered part of the old rect")
     else: fail("something drew into the window's old, uncovered rect after the drag")
-    if serial().count("windrag") > 0: ok("kernel logged windrag")
-    else: fail("no windrag marker in the serial log")
+    # 1.9.25: Notes is a ring-3 compositor window now, moved by the multi-window
+    # drag path (r3win), not gui_app_mouse_tick, so it never logs windrag. The
+    # framebuffer assertions above are the proof; accept either marker.
+    if serial().count("windrag") > 0 or "syscall: window opened for ring-3 task" in serial(): ok("kernel dragged it (windrag, or a ring-3 compositor window)")
+    else: fail("no windrag marker and no ring-3 window open in the serial log")
     move(WIN_X + DX + 24, WIN_Y + DY + 16); time.sleep(0.3); click(); time.sleep(0.8)
     img4 = dump()
     if not is_red(pixel(img4, WIN_X + DX + 24, WIN_Y + DY + 16)): ok("close light at the new place still closes the app")

@@ -170,16 +170,16 @@ try:
         seen = serial().count("toroid: ring-3 window")
         move(*PARK); time.sleep(0.2)
         move(SLOT0_X + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.0)
-        for _ in range(4): keys("d"); time.sleep(0.35)  # the grid moves on wasd, as qa-gallery.py does
-        for _ in range(2): keys("s"); time.sleep(0.35)
+        for _ in range(3): keys("d"); time.sleep(0.35)  # right x3
+        for _ in range(2): keys("s"); time.sleep(0.35)  # down x2 -> index 13
         keys("ret")
         for _ in range(60):
             time.sleep(0.1)
             if serial().count("toroid: ring-3 window") > seen: break
         else:
             fails.append(f"{tag}: Toroid did not open a ring-3 window from the Apps folder grid"); return False
-        if "toroid: ring-3 window 832x450" not in serial():
-            fails.append(f"{tag}: the folder-launched window is not the folder viewport's 832x450")
+        if "toroid: ring-3 window 796x345" not in serial():
+            fails.append(f"{tag}: the folder-launched window is not 796x345")
         if "ring3app: BUG" in serial():
             fails.append(f"{tag}: ring3app logged a BUG line")
         time.sleep(0.5)
@@ -218,8 +218,8 @@ try:
     seen = serial().count("toroid: ring-3 window")
     move(*PARK); time.sleep(0.3)
     keys("ret"); time.sleep(1.0)  # bare desktop -> Apps folder, by keyboard
-    for _ in range(4): keys("d"); time.sleep(0.35)
-    for _ in range(2): keys("s"); time.sleep(0.35)
+    for _ in range(3): keys("d"); time.sleep(0.35)  # right x3
+    for _ in range(2): keys("s"); time.sleep(0.35)  # down x2 -> index 13
     keys("ret")  # launch Toroid from the grid selection
     for _ in range(60):
         time.sleep(0.1)

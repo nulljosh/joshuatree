@@ -22,13 +22,12 @@
  * The math is the x87's own instructions (fsin, fsqrt, fyl2x, f2xm1...),
  * since a flat user binary has no libm. Tab shows the scientific keys.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font, same as Keyrate and
- * Toroid. The backquote key (`) is the deliberate crash, same as both:
+ * Glyphs: antialiased DejaVu via libjt/text.h. The backquote key (`) is the deliberate crash, same as both:
  * a write through a null pointer, a page fault at ring 3, reaped by the
  * kernel. tools/checks/ring3calc-check.py presses it on purpose.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define BOX   0x00FFFFFF
@@ -58,23 +57,7 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (px < 0 || px >= (int)win.width) continue;
-            if (g[r] & (0x80 >> c)) win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
-}
-static void text(const char *s, int x, int y, unsigned fg) {
-    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
-}
+static int text(const char *s, int x, int y, unsigned fg) { return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
     do { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (v);
@@ -286,26 +269,36 @@ static const char *const SCI_KEYS[] = {
 };
 
 static void calc_draw(void) {
-    jt_text_clear();
-    rect(0, 0, (int)win.width, (int)win.height, BG);
+    int W = (int)win.width, bw = W - 40;
+    rect(0, 0, W, (int)win.height, BG);
     text(sci ? "Scientific   radians   Tab for basic   Enter evaluates   Esc closes"
-             : "+ - * / ( )   Tab for scientific   Enter evaluates   Esc closes", 20, 20, HINT);
-    rect(20, 44, (int)win.width - 40, 20, BOX);
-    text(input, 24, 46, INK);
+             : "+ - * / ( )   Tab for scientific   Enter evaluates   Esc closes", 20, 36, HINT);
+    rect(20, 60, bw, 28, BOX);
+    if (input_len == 0) {
+        text("Type a sum, like 12 * (3 + 4)", 28, 65, HINT);
+        rect(26, 66, 1, 16, INK); /* caret */
+    } else {
+        /* keep the tail in view: drop leading characters until the text fits */
+        const char *t = input;
+        while (*t && jt_text_width(JT_FACE_BODY, t) > bw - 24) t++;
+        int x = text(t, 28, 65, INK);
+        rect(x + 1, 66, 1, 16, INK); /* caret */
+    }
+    rect(20, 104, bw, 56, BOX);
+    text("Result", 28, 110, LABEL);
     if (has_output) {
-        rect(20, 88, (int)win.width - 40, 1, DIV);
-        text("= ", 20, 104, LABEL);
-        text(output, 40, 104, INK);
+        jt_text_draw(&win, JT_FACE_BOLD, 28, 130, INK, output);
+    } else {
+        text("Nothing yet. Press enter.", 28, 130, HINT);
     }
     if (sci) {
-        int cols = 6, gap = 8, x0 = 20, y0 = 140, kh = 40;
+        int cols = 6, gap = 8, x0 = 20, y0 = 176, kh = 40;
         int kw = ((int)win.width - 40 - gap * (cols - 1)) / cols;
         for (int k = 0; k < (int)(sizeof SCI_KEYS / sizeof SCI_KEYS[0]); k++) {
             int x = x0 + (k % cols) * (kw + gap), y = y0 + (k / cols) * (kh + gap);
             rect(x, y, kw, kh, DIV);
             rect(x + 1, y + 1, kw - 2, kh - 2, BOX);
-            int tw = jt_text(SCI_KEYS[k], 0, 0, INK, JT_TEXT_MEASURE);
-            if (tw < 0) tw = 8 * 4;
+            int tw = jt_text_width(JT_FACE_BODY, SCI_KEYS[k]);
             text(SCI_KEYS[k], x + (kw - tw) / 2, y + 12, INK);
         }
     }
@@ -334,10 +327,10 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { calc_draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;
-        if (ev.kind == JT_EV_CLICK) break; /* titlebar X, or a click off the input: closes, like Keyrate */
         if (ev.kind != JT_EV_KEY) { flags = JT_POLL_PRESENT; continue; }
 
         if (ev.a == JT_KEY_ESC) break;

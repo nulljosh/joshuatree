@@ -165,6 +165,11 @@ try:
                      + repr([l for l in serial().splitlines() if l.startswith("calendar: today")]))
     if not wait_serial("calendar: loaded 0", 10):
         fails.append('expected "calendar: loaded 0" on a disk with no EVENTS.TXT')
+    # The window is only presented once boot's network fetches (geo, weather, wallpaper) let the compositor run,
+    # which on a CI box with a NIC takes seconds: wait for its red close dot, never sample a bare desktop.
+    for _ in range(80):
+        if near(frame().getpixel((CLOSE_X * SCALE + 1, CLOSE_Y * SCALE + 1)), CLOSE_RED): break
+        time.sleep(0.5)
     time.sleep(0.6)
 
     # 2. the month grid is on screen
@@ -240,12 +245,7 @@ try:
         if not wait_serial("calendar: loaded 1", 10):
             fails.append('the reopened app did not report "calendar: loaded 1": the event did not persist in EVENTS.TXT')
         time.sleep(0.5)
-        n = serial().count("appsfullrepaint")
-        keys("esc")
-        if not wait_serial("appsfullrepaint", 10, n + 1):
-            fails.append("the Apps folder did not come back after Calendar closed")
-        time.sleep(0.5)
-        keys("esc"); time.sleep(0.8)  # close the folder
+        keys("esc"); time.sleep(0.8)  # 2.0: closing a folder-launched app returns to the desktop, not the folder
 
     # 7. Samantha's calendar_today tool reads the same file
     move(SLOT0_X + DOCK_CHAT * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()

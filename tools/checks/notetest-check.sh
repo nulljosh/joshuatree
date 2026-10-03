@@ -37,11 +37,10 @@ make -s kernel.elf >/dev/null
 # address lives in four places now (a linker script cannot include a C
 # header). user/hello.ld is checked by usertest-check.sh; user/note.ld is
 # this one's job.
-base_c=$(grep -o '0xC0507000' kernel/exec.h | head -1)
-base_u=$(grep -o '0xC0507000' user/note.ld | head -1)
-base_l=$(grep -o '0xC0507000' boot/linker.ld | head -1)
-if [ "$base_c" != "0xC0507000" ] || [ "$base_u" != "0xC0507000" ] || [ "$base_l" != "0xC0507000" ]; then
-    echo "FAIL: JT_USER_BASE disagrees across kernel/exec.h, user/note.ld and boot/linker.ld"
+base_h=$(sed -n 's/^#define JT_USER_BASE *\(0x[0-9A-Fa-f]*\).*/\1/p' kernel/memmap.h)
+if [ -z "$base_h" ] || ! grep -q 'INCLUDE boot/memmap.ld' user/note.ld || ! grep -q 'INCLUDE boot/memmap.ld' boot/linker.ld \
+   || ! grep -q '^#include "memmap.h"' kernel/exec.h || ! grep -q "^JT_USER_BASE = $base_h;" boot/memmap.ld; then
+    echo "FAIL: JT_USER_BASE is not flowing from kernel/memmap.h to kernel/exec.h, user/note.ld and boot/linker.ld"
     exit 1
 fi
 

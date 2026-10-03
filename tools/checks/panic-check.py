@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """Headless proof that a ring-0 exception paints a readable panic screen over
-the running desktop instead of a silent freeze: boots to the desktop, opens
-Terminal from the dock, types the shell's own `crash` (int $3), waits for
+the running desktop instead of a silent freeze: boots to the desktop with the
+ring-3 Terminal window open (`open=terminal`, and `panicdesk`, which arms a
+deliberate `crash` command in the Terminal's shell; unarmed it is refused),
+types `crash` (int $3 inside the syscall gate, so a real ring-0 fault), waits for
 "exception: ring-0" on serial, then checks the frame is the cream panic fill,
 the dock is gone and there is ink where the reason is drawn.
 Usage: tools/checks/panic-check.py   (from the repo root, after make kernel.elf)
 """
 import json,socket,subprocess,time,sys
 from PIL import Image
-port=4651; dump='/tmp/jt-panic.raw'; log='/tmp/jt-panic-serial.log'
-q=subprocess.Popen(["qemu-system-i386","-name","jt-panictest","-kernel","kernel.elf","-display","none","-vga","std","-no-reboot","-serial","file:"+log,"-qmp","tcp:127.0.0.1:%d,server,nowait"%port],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+port=int(__import__("os").environ.get("JT_QMP_PORT","4651")); dump='/tmp/jt-panic.raw'; log='/tmp/jt-panic-serial.log'
+q=subprocess.Popen(["qemu-system-i386","-name","jt-panictest","-kernel","kernel.elf","-append","open=terminal panicdesk","-display","none","-vga","std","-no-reboot","-serial","file:"+log,"-qmp","tcp:127.0.0.1:%d,server,nowait"%port],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 time.sleep(0.5); s=socket.create_connection(("127.0.0.1",port)); f=s.makefile("rw"); f.readline()
 def cmd(o):
     f.write(json.dumps(o)+"\n"); f.flush()
@@ -27,7 +29,10 @@ cmd({"execute":"qmp_capabilities"})
 for _ in range(100):
     if shot('/tmp/jt-panic0.png').getpixel((961,1023))==(0xEF,0xEB,0xE4): break
     time.sleep(0.2)
-time.sleep(1); move(247+6*43+18,487); time.sleep(0.3); click(); time.sleep(1.5)
+for _ in range(100):
+    if "ring 3: terminal: ring-3 window" in open(log,errors="replace").read(): break
+    time.sleep(0.2)
+time.sleep(1.5)
 for c in "crash": key(c)
 key("ret")
 for _ in range(50):

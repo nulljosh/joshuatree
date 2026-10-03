@@ -22,7 +22,6 @@ curbfind|curbfind|web/index.html|drivers/app_curbfind.h|app_curbfind
 keyrate|keyrate|index.html|drivers/app_keyrate.h|app_keyrate
 bookrank|bookrank|index.html|drivers/app_bookrank.h|app_bookrank
 quotestreak|quotestreak|index.html|drivers/app_quotestreak.h|app_quotestreak
-plan|plan|index.html|drivers/app_plan.h|app_plan
 lexly|lexly|index.html|drivers/app_lexly.h|app_lexly
 toroid|conway|index.html|drivers/app_toroid.h|app_toroid
 sparkjar|sparkjar|index.html|drivers/app_sparkjar.h|app_sparkjar

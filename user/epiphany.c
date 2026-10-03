@@ -23,11 +23,12 @@
  * tickers, where the old chart only covered eight. Market cap and P/E in DES
  * still show for those eight, from a compiled-in table.
  *
- * Glyphs: SYS_TEXT, the kernel's anti-aliased face. Every state change writes
+ * Type: the antialiased libjt face. Every state change writes
  * one serial line, which the checks read, and the command bar keeps the
  * "epicmd=" markers tools/checks/epiphany-cmdbar-check.py asserts on.
  */
 #include "jtsys.h"
+#include "libjt/text.h"
 
 #define BG     0x00FAF8F6 /* GUI_BG */
 #define INK    0x001C1C1E
@@ -104,17 +105,21 @@ static void rect(int x, int y, int w, int h, unsigned c) {
     }
 }
 static int slen(const char *s) { int n = 0; while (s[n]) n++; return n; }
-/* Text goes through SYS_TEXT: the kernel queues it and draws it with the
-   desktop's physical-resolution typeface after the pixel copy, so it is no
-   longer the 8x16 bitmap doubled up. Layout uses the real advance it
-   returns, never a fixed glyph width. */
-static int text(const char *s, int x, int y, unsigned fg) {
-    int w = jt_text(s, x, y, fg, JT_TEXT_DRAW);
-    return x + (w > 0 ? w : 0);
-}
-static void right(const char *s, int xr, int y, unsigned fg) {
-    int w = jt_text(s, 0, 0, 0, JT_TEXT_MEASURE);
-    text(s, xr - (w > 0 ? w : 0), y, fg);
+static int text(const char *s, int x, int y, unsigned fg) { return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
+static void right(const char *s, int xr, int y, unsigned fg) { text(s, xr - jt_text_width(JT_FACE_BODY, s), y, fg); }
+/* Draw s at (x, y) cut with "..." so it never runs past maxw pixels. */
+static void text_fit(const char *s, int x, int y, int maxw, unsigned fg) {
+    char out[128]; int n = 0;
+    while (s[n] && n < (int)sizeof out - 4) { out[n] = s[n]; n++; }
+    out[n] = 0;
+    if (s[n] || jt_text_width(JT_FACE_BODY, out) > maxw) {
+        while (n > 0) {
+            out[n] = '.'; out[n + 1] = '.'; out[n + 2] = '.'; out[n + 3] = 0;
+            if (jt_text_width(JT_FACE_BODY, out) <= maxw) break;
+            out[--n] = 0;
+        }
+    }
+    text(out, x, y, fg);
 }
 static void pset(int x, int y, unsigned c) {
     if (x >= 0 && y >= 0 && x < (int)win.width && y < (int)win.height) win.pixels[(unsigned)y * win.width + (unsigned)x] = c;
@@ -256,7 +261,7 @@ static void draw_gp(int x, int y, int w, int h) {
     rect(x, y + 74, w, 1, RULE);
     int prev = (int)((long)s->price * 10000 / (10000 + s->bp)), v[2] = {prev, s->price};
     chart(x, y + 82, w, ch, v, 2, col(s->bp));
-    text("Previous close to last price. Intraday history is not in ring 3 yet.", x, y + 82 + ch + 14, MUTED);
+    text_fit("Previous close to last price. Intraday history is not in ring 3 yet.", x, y + 82 + ch + 14, w, MUTED);
 }
 static void draw_des(int x, int y) {
     const row_t *s = &pool[cmd_idx]; char b[64];
@@ -274,7 +279,7 @@ static void draw_markets(int x, int y, int w) {
     int cw = (w - 32) / 2, x2 = x + cw + 32;
     text(adding ? "Add to watchlist (enter or space adds, esc cancels)" : "Watchlist", x, y, adding ? ACCENT : MUTED);
     int want = adding ? 0 : 1, n = count(want);
-    int vis = ((int)win.height - y - 84) / 22; if (vis < 3) vis = 3;
+    int vis = ((int)win.height - y - 84) / 22; /* rows end above the command bar rule */ if (vis < 3) vis = 3;
     if (sel < scroll_top) scroll_top = sel;
     if (sel >= scroll_top + vis) scroll_top = sel - vis + 1;
     if (scroll_top > n - vis) scroll_top = n - vis;
@@ -369,14 +374,13 @@ static void draw_situation(int x, int y) {
     }
     int by = y + 24 + 5 * 22 + 16;
     text("Daily brief", x, by, MUTED);
-    text("Risk appetite firm: fear and greed sits in Greed, volatility is soft.", x, by + 24, INK);
-    text("Rates steady, dollar flat. Mega-cap tech leads, autos and retail lag.", x, by + 46, INK);
-    text("Sample macro data. The live map and People graph are not ported yet.", x, by + 78, MUTED);
+    text_fit("Risk appetite firm: fear and greed sits in Greed, volatility is soft.", x, by + 24, (int)win.width - x - 20, INK);
+    text_fit("Rates steady, dollar flat. Mega-cap tech leads, autos and retail lag.", x, by + 46, (int)win.width - x - 20, INK);
+    text_fit("Sample macro data. The live map and People graph are not ported yet.", x, by + 78, (int)win.width - x - 20, MUTED);
 }
 static void draw(void) {
     int WW = (int)win.width, HH = (int)win.height;
     rect(0, 0, WW, HH, BG);
-    jt_text_clear(); /* this frame's text replaces the last one's */
     for (int i = 0; i < 4; i++) {
         int tx = 24 + i * 110;
         if (i == tab) { rect(tx - 8, TOP, 100, 26, ACCENT); text(TAB_NAME[i], tx, TOP + 4, 0x00FFFFFF); }
@@ -392,11 +396,11 @@ static void draw(void) {
     else if (tab == 2) draw_sim(x, y, w, bar_y - y);
     else draw_situation(x, y);
     rect(20, bar_y, WW - 40, 1, RULE);
-    if (cmd_err[0]) text(cmd_err, 20, bar_y + 10, RED);
-    else if (cmd_focus) { char s[CMD_MAX + 4]; int p = cat(s, 0, "/ "); p = cat(s, p, cmd_buf); cat(s, p, "_"); text(s, 20, bar_y + 10, ACCENT); }
-    else text("/ command   AAPL GP   AAPL DES", 20, bar_y + 10, MUTED);
-    text(live ? "Live quotes, crypto and macro are sample   r refresh   left/right tabs   esc closes"
-              : "Offline, sample prices   r retry   left/right tabs   esc closes", 20, HH - 24, MUTED);
+    if (cmd_err[0]) text(cmd_err, 20, bar_y + 8, RED);
+    else if (cmd_focus) { char s[CMD_MAX + 4]; int p = cat(s, 0, "/ "); p = cat(s, p, cmd_buf); cat(s, p, "_"); text(s, 20, bar_y + 8, ACCENT); }
+    else text("/ command   AAPL GP   AAPL DES", 20, bar_y + 8, MUTED);
+    text_fit(live ? "Live quotes, crypto and macro are sample   r refresh   left/right tabs   esc closes"
+                  : "Offline, sample prices   r retry   left/right tabs   esc closes", 20, HH - 26, WW - 40, MUTED);
 }
 
 /* Returns 0 when the program should close. */
@@ -472,6 +476,7 @@ void _start(int argc, char **argv) {
     unsigned flags = JT_POLL_PRESENT;
     for (;;) {
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) {
             jt_tasks(&t, 0);

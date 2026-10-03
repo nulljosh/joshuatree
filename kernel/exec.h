@@ -43,9 +43,9 @@
  * accessible. argv[argc] is NULL.
  */
 
-#define JT_USER_BASE       0xC0507000u /* must match user/hello.ld and boot/linker.ld's .userimg */
-#define JT_USER_IMAGE_MAX  (7 * 4096)  /* 28KB of code+data; page 8 of the window is the stack */
-#define JT_USER_STACK_TOP  (JT_USER_BASE + 8 * 4096)
+#include "memmap.h" /* JT_USER_BASE, JT_USER_FB: one source for kernel, boot/linker.ld and the user link scripts */
+#define JT_USER_IMAGE_MAX  (JT_USER_IMAGE_PAGES * 4096)  /* 128KB of code+data; the page after it is the stack */
+#define JT_USER_STACK_TOP  (JT_USER_BASE + (JT_USER_IMAGE_PAGES + 1) * 4096)
 
 /* Bounds on the argument block, small on purpose: it is carved out of the
    top of the one 4KB stack page the program also runs on, so every byte
@@ -58,8 +58,6 @@
    its pages. One buffer, one windowed program at a time, same rule as the
    image window above. 0x110000 = 272 pages = 1,114,112 bytes, enough for
    the 804x345 app viewport at 32bpp (1,109,520). */
-#define JT_USER_FB        0xC0520000u /* must match boot/linker.ld's .userfb */
-#define JT_USER_FB_BYTES  0x170000u
 
 #define JT_ARGC_MAX   8    /* including argv[0] */
 #define JT_ARGV_BYTES 256  /* total bytes of argument text, NULs included */
@@ -76,6 +74,7 @@
    case the program gets argc == 0 and an argv holding only its NULL
    terminator. */
 int exec_user(const char *name, const char *const *argv, int argc, int *status);
+int exec_user_window(const char *name, const char *const *argv, int argc, void **image_out); /* 1.9.23: non-blocking, private image; task id or -1 */
 
 /* 1.0.0: a real shell launches a program by name, not just exec's exact
  * on-disk spelling. Resolves `typed` to a filename that actually exists

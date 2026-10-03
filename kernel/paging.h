@@ -80,5 +80,13 @@ unsigned int paging_new_task_directory(void);
 void paging_free_task_directory(unsigned int dir_phys);
 
 void paging_load_directory(unsigned int dir_phys); /* loads CR3 */
+unsigned int paging_pde_change_count(void); /* 1.9.24: how many kernel PDEs were created or removed since boot */
+int paging_check_task_dirs(void); /* 1.9.24: kernel PDEs of every live task directory equal the shared ones; logs BUG, returns drift count */
 unsigned int paging_kernel_directory(void); /* the shared kernel directory's own physical address, what task 0 runs on */
 #endif
+
+/* 1.9.23: per-task private user window, see paging.c. */
+int  paging_task_map_private(unsigned int dir_phys, unsigned int vaddr, unsigned int phys, unsigned int len);
+void paging_task_unmap_private(unsigned int dir_phys);
+int  paging_task_remap_private(unsigned int dir_phys, unsigned int vaddr, unsigned int pa, unsigned int len, unsigned int old_len); /* new buffer in, old tail back to supervisor-only, TLB flushed */
+int  paging_user_range_ok_current(unsigned int addr, unsigned int len);

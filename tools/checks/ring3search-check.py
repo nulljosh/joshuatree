@@ -163,7 +163,7 @@ class Drive:
         if not wait_serial("appsfullrepaint", 10, n + 1):
             fails.append("the Apps folder did not open from the dock"); return False
         time.sleep(0.6)
-        for c in ("s", "s", "s", "s"): self.keys(c)  # icon 20: row 4, col 0 (APPS_COLS = 5)
+        for c in ("d", "d", "d", "d", "s", "s", "s"): self.keys(c)  # icon 19: row 3, col 4 (APPS_COLS = 5)
         self.keys("ret")
         return True
 
@@ -210,8 +210,8 @@ def ramfs_boot(cmd):
     print(f"ramfs listing: {listed} entries")
     if listed is None or listed < 2:
         fails.append(f"expected README.TXT and NOTES.TXT in the ramfs listing, got {listed}")
-    if "dirs 0" not in serial():
-        fails.append("ramfs has no directories but the listing reported some")
+    if "dirs 1" not in serial():  # ramfs_seed_demo_docs() seeds one real folder for the tour's Burrow scene
+        fails.append("ramfs has exactly the one seeded demo folder but the listing did not report it")
     time.sleep(0.5)
 
     # 2. two rows of ink, row 0 highlighted
@@ -272,7 +272,7 @@ def ramfs_boot(cmd):
     launches = serial().count("ring3app: launching SEARCH.BIN")
     if d.open_from_folder():
         if not wait_serial("ring3app: launching SEARCH.BIN", 10, launches + 1):
-            fails.append("Search did not launch from the Apps folder grid (icon 20)")
+            fails.append("Search did not launch from the Apps folder grid (icon 19)")
         wait_serial("searchcontent\n", 10, serial().count("searchcontent\n") + 1)
         time.sleep(0.3)
         d.keys("grave_accent")

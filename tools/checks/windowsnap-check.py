@@ -13,7 +13,7 @@ window chrome) is visible where the window used to be on the right.
 Case 2: drags that same window on to the top-left corner and checks the
 quarter rect the same way.
 
-Cases 3-5 (the 1.0 QA follow-up): Mail and Weather each get
+Cases 3-5 (the 1.0 QA follow-up): Mail and Notes each get
 their own real drag-to-quarter run -- the quarter is the smallest,
 hardest-to-lay-out-in target, not just the easier halves -- and each run
 proves three things from the framebuffer, not two: the close button is at
@@ -79,7 +79,10 @@ QX, QY, QW, QH = TOP_LEFT_QUARTER
 EDGE_POINTS = [(QX + QW + 20, QY + 40), (QX + 200, QY + QH + 15)]
 # Dock slots (SLOTS order in appclose-check.py/multiwindow-check.py):
 # 0 Apps, 1 Files, 2 Mail, 3 Calendar, 4 Notes, 5 Reminders, ...
-SLOT = {"Burrow": 1, "Mail": 2, "Weather": 8}  # 1.9.12: Calendar is a ring-3 program with a fixed viewport now, Weather stands in
+SLOT = {"Burrow": 1, "Mail": 2, "Notes": 4}  # 1.9.12: Calendar is a ring-3 program with a fixed viewport now; 1.9.20 gave Notes compositor hooks so it stands in for Weather (a lone Notes click opens the blocking editor, so it is opened as a second window)
+W1_CLOSE = (154, 116)             # window 1 (second concurrent window): x=130,y=100
+NOTES_TITLEBAR = (130 + 300, 100 + 10)
+BAND = (0xED, 0xE6, 0xDC)         # Notes browse view's selected-row band
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -155,7 +158,11 @@ try:
 
     def assert_quarter(label, img):
         q_close_ok = is_red(pixel(img, QX + 24, QY + 16))
-        q_content_ok = close(pixel(img, QX + QW // 2, QY + QH // 2), (0xF5, 0xF0, 0xEB)) <= 20
+        # 1.9.24: Mail is a ring-3 window whose list text can land on the exact
+        # centre, so the body counts as drawn if either the centre or a point
+        # near the bottom-right corner of the quarter shows the page colour.
+        q_content_ok = any(close(pixel(img, px, py), (0xF5, 0xF0, 0xEB)) <= 20
+                           for px, py in ((QX + QW // 2, QY + QH // 2), (QX + QW - 40, QY + QH - 30)))
         edge_clean = all(close(pixel(img, x, y), base) <= 6
                           for (x, y), base in zip(EDGE_POINTS, baseline_edges))
         print(f"{label}: close button at quarter position={'yes' if q_close_ok else 'NO'}"
@@ -209,15 +216,36 @@ try:
 
     # ---- cases 3-5: Mail and Weather, each dragged straight
     #      to the (hardest, smallest) top-left quarter ----
-    for name in ("Mail", "Weather"):
-        open_app(name)
-        imgA = dump()
-        if not is_red(pixel(imgA, *W0_CLOSE)):
-            fails.append(f"{name} did not open at its expected starting rect, could not test dragging it")
-            continue
-        drag_from(*TITLEBAR, 5, TOP + 5)
+    for name in ("Mail", "Notes"):
+        if name == "Notes":
+            # A lone Notes click opens the blocking editor; it joins the
+            # compositor only as a second window. Open Files, then Notes on
+            # top, then close Files (first click focuses it, second closes
+            # it) so Notes is the only window left, at window 1's rect.
+            open_app("Burrow"); open_app("Notes")
+            close_at(*W0_CLOSE); close_at(*W0_CLOSE)
+            imgA = dump()
+            if not (is_red(pixel(imgA, *W1_CLOSE)) and not is_red(pixel(imgA, *W0_CLOSE))):
+                fails.append("Notes did not end up alone at window 1's rect, could not test dragging it")
+                continue
+            drag_from(*NOTES_TITLEBAR, 5, TOP + 5)
+        else:
+            open_app(name)
+            imgA = dump()
+            if not is_red(pixel(imgA, *W0_CLOSE)):
+                fails.append(f"{name} did not open at its expected starting rect, could not test dragging it")
+                continue
+            drag_from(*TITLEBAR, 5, TOP + 5)
         imgB = dump()
         ok = assert_quarter(f"top-left quarter snap ({name})", imgB)
+        if name == "Notes":
+            # Notes' own pixels: its browse view's selected-row band (about
+            # 7000 logical pixels when laid out in the quarter) must be
+            # drawn inside the snapped rect, not just the window chrome.
+            band = sum(1 for y in range(QY, QY + QH) for x in range(QX, QX + QW)
+                       if close(pixel(imgB, x, y), BAND) <= 4)
+            print(f"Notes browse-view row band pixels inside the quarter: {band}")
+            if band < 1500: fails.append("Notes: its browse view's row band is missing from the snapped quarter (content not drawn in the new viewport)")
 
         if name == "Mail" and ok:
             # Down moves the list's selection to the second message (see
@@ -234,7 +262,7 @@ try:
             # absolute screen position is win.x+8+16.., win.y+32+48+22*i..
             # for the top-left-quarter window. Row 1 is plain page before
             # the key and the highlight after it.
-            row1_x, row1_y = QX + 8 + 30, QY + 32 + 70 + 8
+            row1_x, row1_y = QX + 8 + 30, QY + 32 + 98 # user/mail.c: rows start at ROW_Y0+16 = 68, 22 apart, so row 1 is about 88..108
             SELC = (0xED, 0xE6, 0xDC)
             row1_before = pixel(imgB, row1_x, row1_y)
             key("down")
@@ -308,4 +336,4 @@ finally:
 if fails:
     for x in fails: print("FAIL:", x)
     sys.exit(1)
-print("PASS: Files/Mail/Weather all snap correctly to the left half, top-left quarter (each app's own content proven inside the rect and nothing drawn past its edges, including a live Mail keystroke while snapped), and a real free-move drop, all from real framebuffer pixels")
+print("PASS: Files/Mail/Notes all snap correctly to the left half, top-left quarter (each app's own content proven inside the rect and nothing drawn past its edges, including a live Mail keystroke while snapped), and a real free-move drop, all from real framebuffer pixels")

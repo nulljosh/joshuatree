@@ -36,44 +36,62 @@ int abs(int v) { return v < 0 ? -v : v; }
 
 void exit(int code) { jt_exit(code); }
 
-/* Bump allocator with a singly-linked free list. Each live or free block
-   is preceded by a header carrying its usable size, so free()/realloc()
-   need no separate bookkeeping table. */
-struct jt_block { unsigned long size; struct jt_block *next_free; };
-
-/* Flat user binaries get no .bss (see user/hello.ld): nothing zeroes it
-   and there is no crt0 to do it at startup. Force this into .data, which
-   the linker script does write out, so the arena is genuinely
-   zero-filled bytes in the image rather than an uninitialised page. */
-JT_DATA
-static unsigned char jt_arena[JT_ARENA_SIZE];
-static unsigned long jt_arena_used = 0;
-JT_DATA
-static struct jt_block *jt_free_list = 0;
-
+/* First-fit heap over SYS_BRK. Every block carries a header {size, free};
+   blocks are contiguous between heap_lo and heap_hi, so free() can merge
+   with the next block in place and malloc() can split a large free one.
+   brk_grow() asks the kernel for 64KB more at a time; if the first ask is
+   refused the static arena stands in as the one and only region. */
+struct jt_block { unsigned long size; unsigned long free; };
 #define JT_ALIGN 8
+#define JT_GROW (64u * 1024u)
+JT_DATA static unsigned char jt_arena[JT_ARENA_SIZE];
+JT_DATA static unsigned char *heap_lo = 0, *heap_hi = 0;
+JT_DATA static int heap_is_arena = 0;
 static unsigned long jt_align_up(unsigned long n) { return (n + (JT_ALIGN - 1)) & ~(unsigned long)(JT_ALIGN - 1); }
+
+static int brk_grow(unsigned long need) {
+    if (heap_is_arena) return 0;
+    if (!heap_lo) {
+        int top = jt_brk(0);
+        if (top == 0 || (top < 0 && top > -4096)) { heap_lo = jt_arena; heap_hi = jt_arena + sizeof jt_arena; heap_is_arena = 1;
+                        ((struct jt_block *)heap_lo)->size = sizeof jt_arena - sizeof(struct jt_block); ((struct jt_block *)heap_lo)->free = 1; return 1; }
+        heap_lo = heap_hi = (unsigned char *)(unsigned)top;
+    }
+    unsigned long step = (need + sizeof(struct jt_block) + JT_GROW - 1) / JT_GROW * JT_GROW;
+    int top = jt_brk((unsigned)heap_hi + (unsigned)step);
+    if ((top < 0 && top > -4096) || top == 0 || (unsigned char *)(unsigned)top != heap_hi + step) {
+        if (heap_lo == heap_hi) { heap_lo = jt_arena; heap_hi = jt_arena + sizeof jt_arena; heap_is_arena = 1;
+                                  ((struct jt_block *)heap_lo)->size = sizeof jt_arena - sizeof(struct jt_block); ((struct jt_block *)heap_lo)->free = 1; return 1; }
+        return 0;
+    }
+    struct jt_block *b = (struct jt_block *)heap_hi;
+    b->size = step - sizeof *b; b->free = 1;
+    heap_hi += step;
+    /* merge with a free tail block */
+    struct jt_block *p = (struct jt_block *)heap_lo, *prev = 0;
+    while ((unsigned char *)p < (unsigned char *)b) { prev = p; p = (struct jt_block *)((unsigned char *)(p + 1) + p->size); }
+    if (prev && prev->free) prev->size += sizeof *b + b->size;
+    return 1;
+}
 
 void *malloc(unsigned long size) {
     if (size == 0) return 0;
     unsigned long need = jt_align_up(size);
-
-    /* First-fit reuse before growing the arena. */
-    struct jt_block **prev = &jt_free_list;
-    for (struct jt_block *b = jt_free_list; b; b = b->next_free) {
-        if (b->size >= need) {
-            *prev = b->next_free;
+    for (int pass = 0; pass < 2; pass++) {
+        for (struct jt_block *b = (struct jt_block *)heap_lo; heap_lo && (unsigned char *)b < heap_hi;
+             b = (struct jt_block *)((unsigned char *)(b + 1) + b->size)) {
+            if (!b->free || b->size < need) continue;
+            if (b->size >= need + sizeof *b + JT_ALIGN) {
+                struct jt_block *rest = (struct jt_block *)((unsigned char *)(b + 1) + need);
+                rest->size = b->size - need - sizeof *rest; rest->free = 1;
+                b->size = need;
+            }
+            b->free = 0;
             return (void *)(b + 1);
         }
-        prev = &b->next_free;
+        if (!brk_grow(need)) return 0;
     }
-
-    unsigned long total = sizeof(struct jt_block) + need;
-    if (jt_arena_used + total > sizeof(jt_arena)) return 0; /* arena ceiling hit */
-    struct jt_block *b = (struct jt_block *)(jt_arena + jt_arena_used);
-    b->size = need;
-    jt_arena_used += total;
-    return (void *)(b + 1);
+    return 0;
 }
 
 void *calloc(unsigned long nmemb, unsigned long size) {
@@ -86,8 +104,9 @@ void *calloc(unsigned long nmemb, unsigned long size) {
 void free(void *ptr) {
     if (!ptr) return;
     struct jt_block *b = (struct jt_block *)ptr - 1;
-    b->next_free = jt_free_list;
-    jt_free_list = b;
+    b->free = 1;
+    struct jt_block *n = (struct jt_block *)((unsigned char *)(b + 1) + b->size);
+    while ((unsigned char *)n < heap_hi && n->free) { b->size += sizeof *n + n->size; n = (struct jt_block *)((unsigned char *)(b + 1) + b->size); }
 }
 
 void *realloc(void *ptr, unsigned long size) {

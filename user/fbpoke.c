@@ -16,7 +16,8 @@
 #include "jtsys.h"
 
 #define KERNEL_TEXT 0xC0100000u /* inside the kernel image, never user */
-#define USER_FB     0xC0520000u /* kernel/exec.h JT_USER_FB */
+#include "../kernel/memmap.h"
+#define USER_FB     ((unsigned)JT_USER_FB)
 #define EFAULT      14
 
 static unsigned slen(const char *s) { unsigned n = 0; while (s[n]) n++; return n; }

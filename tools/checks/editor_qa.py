@@ -1,339 +1,199 @@
-import json
+#!/usr/bin/env python3
+"""Notes typing, typography, pointer controls, persistence, against the ring-3 Notes.
+
+Notes is user/notes.c now: a compositor window drawing antialiased libjt text,
+with a folder/notes browser and a word-wrapping editor. Nothing about it is in
+kernel memory any more, so every claim here is read from what a person could
+see or keep: the app's own serial markers, the framebuffer, and the bytes
+that land on the FAT image (read back with mtools, never from the guest).
+
+  1. typing: n makes a note, Shift, punctuation, Enter, Backspace, Left, Delete,
+     Home, End and Caps Lock build one exact string; Ctrl+S saves it and the
+     note file on disk holds exactly those bytes.
+  2. typography: the page is the cream sheet, the ink is antialiased (real
+     intermediate coverage, not a 1-bit face), and the 2 px caret is drawn.
+  3. persistence: a fresh boot on the same disk reopens the note with its text
+     (the saved byte count proves what was read back), appends, saves again.
+  4. scrolling: 24 blank lines push the caret past the window; it stays on
+     screen because the view follows it.
+  5. pointer controls: a click on a row in the notes list selects it, and
+     Enter opens exactly that note.
+  6. no disk: on a ramfs boot a save is read back by a second edit session.
+
+Usage: python3 tools/checks/editor_qa.py   (repo root, after make kernel.elf)
+"""
+import sys, tempfile, time
 from pathlib import Path
-import re
-import shutil
-import socket
-import struct
-import subprocess
-import tempfile
-import time
-from PIL import Image
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from jtvm import VM, make_disk, disk_files, SCALE
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-ARTIFACTS = Path(tempfile.mkdtemp(prefix='jt-editor-qa-'))
-symbols = {}
-# v0.76.9: plain `nm` (binutils), not `llvm-nm`. The macOS-homebrew
-# fallback here was never actually exercised on Linux CI (this script isn't
-# wired into check.yml yet), but walldefault-check.sh hit the identical
-# trap for real once it was: `llvm-nm` comes from the separate `llvm` apt
-# package, which check.yml's own install line never pulls in, only
-# clang/lld. `nm` ships with `binutils`, already present on every Ubuntu
-# image and every macOS Xcode CLT install, no extra fallback path needed.
-nm = shutil.which('nm') or 'nm'
-for line in subprocess.check_output([nm, str(ROOT / 'kernel.elf')], text=True).splitlines():
-    fields = line.split()
-    if len(fields) == 3:
-        symbols[fields[2]] = int(fields[0], 16) - 0xC0000000
+VIEW_X, VIEW_Y, VIEW_W, VIEW_H = 78, 72, 804, 345   # gui_launch_from_dock: viewport at (x+8, y+32)
+PAGE = (0xFA, 0xF8, 0xF6)
+CARET = (0x85, 0x14, 0x4B)
+ROW0_Y = 40 + 24 + 22 - 4                            # user/notes.c click(): first list row
+fails = []
 
 
-def make_disk(path):
-    disk = bytearray(16 * 1024 * 1024)
-    disk[:3] = b'\xeb\x3c\x90'
-    disk[3:11] = b'JT QA   '
-    struct.pack_into('<HBHBHHBHHHII', disk, 11, 512, 2, 1, 2, 512, 32768, 248, 64, 32, 64, 0, 0)
-    disk[510:512] = b'\x55\xaa'
-    for sector in (1, 65):
-        disk[sector * 512:sector * 512 + 4] = b'\xf8\xff\xff\xff'
-    path.write_bytes(disk)
+def fail(msg):
+    fails.append(msg)
+    print('FAIL: ' + msg)
 
 
-class Machine:
-    def __init__(self, disk=None):
-        self.socket_path = ARTIFACTS / 'qmp.sock'
-        self.socket_path.unlink(missing_ok=True)
-        arguments = ['qemu-system-i386', '-kernel', str(ROOT / 'kernel.elf'), '-display', 'none', '-vga', 'std',
-                     '-qmp', f'unix:{self.socket_path},server=on,wait=off']
-        if disk:
-            arguments += ['-drive', f'file={disk},format=raw,if=ide']
-        self.process = subprocess.Popen(arguments, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        self.connection = socket.socket(socket.AF_UNIX)
-        for attempt in range(100):
-            try:
-                self.connection.connect(str(self.socket_path))
-                break
-            except (FileNotFoundError, ConnectionRefusedError):
-                time.sleep(.05)
-        self.connection.settimeout(10)
-        self.stream = self.connection.makefile('rwb', buffering=0)
-        self.stream.readline()
-        self.command('qmp_capabilities')
-        for attempt in range(100):
-            if 'b007c0de' in self.monitor('xp /1xw 0x9000'):
-                break
-            time.sleep(.1)
-        else:
-            self.close()
-            raise AssertionError('Boot marker not reached')
-        time.sleep(2)
-
-    def command(self, name, arguments=None):
-        self.stream.write((json.dumps({'execute': name, 'arguments': arguments or {}}) + '\n').encode())
-        while True:
-            result = json.loads(self.stream.readline())
-            if 'error' in result:
-                raise RuntimeError(result)
-            if 'return' in result:
-                return result['return']
-
-    def monitor(self, command):
-        return self.command('human-monitor-command', {'command-line': command})
-
-    def key(self, key):
-        self.monitor(f'sendkey {key} 30')
-        time.sleep(.065)
-
-    def move(self, target_x, target_y):
-        self.command('input-send-event', {'events': [
-            {'type': 'abs', 'data': {'axis': 'x', 'value': target_x * 32768 // 960}},
-            {'type': 'abs', 'data': {'axis': 'y', 'value': target_y * 32768 // 540}}]})
-        time.sleep(.2)
-
-    def toolbar(self, local_x):
-        # Windowed Notes draws its toolbar at EDITOR_BAR_Y = 42 + gui_app_dy()
-        # = 10 .. 44 viewport-local (editor.h); 27 is its centre line.
-        self.move(self.integer('app_view_x') + local_x, self.integer('app_view_y') + 27)
-        self.click()
-        time.sleep(.3)
-
-    def click(self):
-        for down in (True, False):
-            self.command('input-send-event', {'events': [{'type': 'btn', 'data': {'down': down, 'button': 'left'}}]})
-            time.sleep(.15)
-
-    def type(self, text):
-        punctuation = {' ': 'spc', '\n': 'ret', '\t': 'tab', '.': 'dot', ',': 'comma', '!': 'shift-1', '?': 'shift-slash'}
-        # Each key waits for the buffer to take it before the next goes out.
-        # A burst at a fixed pace dropped trailing keys on a slow CI runner
-        # ('Beautiful typ'); a person watching the screen never outruns it.
-        for character in text:
-            before = self.integer('editor_length')
-            self.key(punctuation.get(character, 'shift-' + character.lower() if character.isupper() else character))
-            for _ in range(50):
-                if self.integer('editor_length') != before:
-                    break
-                time.sleep(0.05)
-
-    def memory(self, symbol, count):
-        result = self.monitor(f'xp /{count}xb 0x{symbols[symbol]:x}')
-        return bytes(int(value, 16) for line in result.splitlines() if ':' in line
-                     for value in re.findall(r'0x([0-9a-f]{2})\b', line.split(':', 1)[1]))
-
-    def integer(self, symbol):
-        return int.from_bytes(self.memory(symbol, 4), 'little')
-
-    def wait_int(self, symbol, predicate, desc=''):
-        # v0.76.32: the same buffer-settle race expect() already fixed
-        # (v0.76.26/27) also hits every raw `assert machine.integer(...)`
-        # in this file -- 3 separate CI runs failed on 3 different
-        # assertions here, each passing locally every time. One shared
-        # poll instead of patching each of the 8 call sites separately.
-        value = None
-        for _ in range(50):
-            value = self.integer(symbol)
-            if predicate(value):
-                return value
-            time.sleep(0.1)
-        assert predicate(value), (desc or symbol, value)
-        return value
-
-    def expect(self, expected):
-        # v0.76.27: the buffer read can race the keyboard event that
-        # produced `expected` on a slower/CI runner -- proven real by two
-        # separate failures on two separate assertions in this same file
-        # (a missing trailing '\n', then later a dropped space), both
-        # passing locally every time. Same "settle time varies by
-        # environment" shape appclose-check.py's own v0.76.18 flake fix
-        # already established. Poll for the buffer to match before
-        # asserting, instead of patching each of this file's 9 call
-        # sites individually -- fix it once, where every caller routes
-        # through.
-        target_len = len(expected.encode())
-        actual = None
-        for attempt in range(50):
-            length = self.integer('editor_length')
-            if length == target_len:
-                actual = self.memory('editor_buffer', length).decode()
-                if actual == expected:
-                    return
-            time.sleep(0.1)
-        if actual is None:
-            length = self.integer('editor_length')
-            actual = self.memory('editor_buffer', length).decode()
-        assert actual == expected, (actual, expected)
-
-    def saved(self):
-        for attempt in range(100):
-            if self.integer('editor_dirty') == 0:
-                return
-            time.sleep(.1)
-        self.screenshot('save-timeout')
-        raise AssertionError('Save did not complete')
-
-    def presented(self):
-        """Wait for a real frame to reach the visible framebuffer.
-
-        Since v0.78.0 drawing lands in a back buffer and only window_present
-        copies it to the screen, so a kernel variable changing no longer
-        means the screen has changed. Sampling on the variable alone raced
-        the present and read the previous frame, which is exactly how this
-        check started failing in CI."""
-        before = self.integer('window_present_count')
-        for attempt in range(100):
-            if self.integer('window_present_count') != before:
-                time.sleep(.05)
-                return
-            time.sleep(.05)
-        raise AssertionError('No frame was presented, the screen never updated')
-
-    def screenshot(self, name):
-        raw = ARTIFACTS / 'framebuffer.raw'
-        self.command('pmemsave', {'val': 0xfd000000, 'size': 1920 * 1080 * 4, 'filename': str(raw)})
-        frame = Image.frombytes('RGB', (1920, 1080), raw.read_bytes(), 'raw', 'BGRX')
-        frame.save(ARTIFACTS / (name + '.png'))
-        return frame
-
-    def open_notes(self):
-        self.move(458, 487)
-        self.click()
-        for attempt in range(50):
-            if self.integer('editor_loaded') and self.integer('gui_app_windowed'):
-                time.sleep(.5)
-                return
-            time.sleep(.1)
-        raise AssertionError('Notes dock click did not launch editor')
-
-    def close(self):
-        try:
-            self.command('quit')
-        except (OSError, ValueError):
-            pass
-        finally:
-            try:
-                self.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait()
-            self.stream.close()
-            self.connection.close()
+def near(p, c, tol=10):
+    return max(abs(p[i] - c[i]) for i in range(3)) <= tol
 
 
-disk = ARTIFACTS / 'disk.img'
+def view(frame):
+    return frame.crop((VIEW_X * SCALE, VIEW_Y * SCALE, (VIEW_X + VIEW_W) * SCALE, (VIEW_Y + VIEW_H) * SCALE))
+
+
+def stats(img):
+    """(ink, antialiased, caret) pixel counts in a viewport crop."""
+    ink = aa = caret = 0
+    for r, g, b in img.get_flattened_data() if hasattr(img, 'get_flattened_data') else img.getdata():
+        if near((r, g, b), CARET, 6):
+            caret += 1
+        elif max(r, g, b) < 0x50:
+            ink += 1
+        elif min(r, g, b) < 0xE0 and not near((r, g, b), PAGE, 10):
+            aa += 1
+    return ink, aa, caret
+
+
+def saved_bytes(vm, n=1):
+    """The Nth 'notes: saved=N' value the app has logged so far."""
+    vals = [int(l.split('saved=')[1].split()[0]) for l in vm.serial().splitlines() if 'notes: saved=' in l]
+    return vals[n - 1] if len(vals) >= n else None
+
+
+def note_on_disk(disk, name):
+    for path, data in disk_files(disk).items():
+        if path.split('/')[-1] == name:
+            return data
+    return None
+
+
+work = Path(tempfile.mkdtemp(prefix='jt-editor-qa-'))
+disk = work / 'disk.img'
 make_disk(disk)
-machine = Machine(disk)
-try:
-    machine.screenshot('boot-desktop')
-    machine.open_notes()
-    machine.screenshot('dock-open')
-    machine.wait_int('editor_loaded', lambda v: v == 1, 'Notes dock click did not launch editor')
-    machine.toolbar(112)
-    machine.wait_int('editor_family', lambda v: v == 1, 'One font click must advance exactly one family')
-    machine.key('f1')
-    machine.key('f1')
-    machine.toolbar(312)
-    machine.wait_int('editor_size', lambda v: v == 2, 'Size toolbar click failed')
-    for repeat in range(3):
-        machine.key('f2')
-    machine.toolbar(542)
-    machine.wait_int('editor_weight', lambda v: v == 1, 'Weight toolbar click failed')
-    machine.key('f3')
-    machine.move(480, 300)
-    machine.click()
-    machine.type('Hello, Joshua Tree!\nBeautiful type.\n')
-    expected = 'Hello, Joshua Tree!\nBeautiful type.\n'
-    machine.expect(expected)
-    machine.key('backspace')
-    machine.key('left')
-    machine.key('delete')
-    machine.type('!')
-    expected = 'Hello, Joshua Tree!\nBeautiful type!'
-    machine.expect(expected)
-    machine.key('home')
-    machine.type('Really ')
-    expected = 'Hello, Joshua Tree!\nReally Beautiful type!'
-    machine.expect(expected)
-    machine.key('ctrl-end')
-    machine.type('\n\t')
-    machine.key('caps_lock')
-    machine.type('qa')
-    machine.key('caps_lock')
-    expected += '\n\tQA'
-    machine.expect(expected)
-    # v-ttf: the size control now cycles 11 point sizes (12..200, see
-    # EDITOR_PT_SIZES), not 4, and past ~72pt a single line of "Hello,
-    # Joshua Tree!" overflows this crop's fixed small viewport -- true, but
-    # it makes "distinct rendering at every size" a bad signal for a crop
-    # this size. Size scaling itself gets its own real test in
-    # notessharp-check.py (12pt vs 200pt, checked for antialiased edges and
-    # no duplicated blocks); this loop keeps doing what it always did --
-    # proving F1 (family) and F3 (weight) each produce a genuinely
-    # different rendering, not a relabelled one -- at whatever size is
-    # already selected, without also re-deriving the size control's own
-    # index math here.
-    rendered_styles = set()
-    for family in range(3):
-        for weight in range(2):
-            machine.wait_int('editor_family', lambda v, family=family: v == family)
-            machine.wait_int('editor_weight', lambda v, weight=weight: v == weight)
-            # Since v0.78.0 drawing lands in a back buffer, so a kernel
-            # variable changing no longer means the screen has changed
-            # yet. Give the editor's own loop a real pass to present
-            # before sampling the framebuffer.
-            time.sleep(.4)
-            frame = machine.screenshot(f'type-{family}-{weight}')
-            origin_x, origin_y = machine.integer('app_view_x'), machine.integer('app_view_y')
-            crop = frame.crop(((origin_x + 40) * 2, (origin_y + 92) * 2,
-                               (origin_x + 740) * 2, (origin_y + 210) * 2))
-            rendered_styles.add(crop.tobytes())
-            machine.key('f3')
-        machine.key('f1')
-    assert len(rendered_styles) == 6, 'Family/weight controls did not produce 6 distinct text renderings'
-    machine.expect(expected)
-    machine.key('ctrl-s')
-    machine.saved()
-    machine.key('esc')
-finally:
-    machine.close()
 
-machine = Machine(disk)
-try:
-    machine.open_notes()
-    machine.expect(expected)
-    machine.key('ctrl-end')
-    machine.type('\nSaved twice.')
-    expected += '\nSaved twice.'
-    machine.key('ctrl-s')
-    machine.saved()
-    machine.screenshot('saved-note')
-finally:
-    machine.close()
+first = 'Hello, Joshua Tree!\nReally Beautiful type!\nQA'
 
-machine = Machine(disk)
+# ---- boot 1: typing, typography, save ----
+vm = VM(disk, 'open=notes', 'notes: folders=', work=work)
 try:
-    machine.open_notes()
-    machine.expect(expected)
-    machine.key('ctrl-end')
-    machine.type('\n' * 24 + 'Still visible.')
-    machine.wait_int('editor_scroll', lambda v: v > 0)
-    machine.screenshot('scrolled-note')
-    machine.key('ctrl-home')
-    machine.wait_int('editor_scroll', lambda v: v == 0)
+    page = vm.frame().getpixel(((VIEW_X + 400) * SCALE, (VIEW_Y + 300) * SCALE))
+    if not near(page, PAGE):
+        fail(f'the Notes page is not the cream sheet {PAGE} (got {page})')
+    time.sleep(1.5)   # a key sent the instant the window is up can land before the app polls
+    vm.key('n')
+    if not (vm.wait('notes: new=N0000001.TXT', 8) and vm.wait('notes: edit=N0000001.TXT', 8)):
+        fail('n did not make a new note and open it in the editor')
+    time.sleep(1.0)
+    vm.type('Hello, Joshua Tree!\nBeautiful type.\n')
+    vm.key('backspace'); vm.key('left'); vm.key('delete'); vm.type('!')
+    vm.key('home'); vm.type('Really ')
+    vm.key('end'); vm.type('\n')
+    vm.key('caps_lock'); vm.type('qa'); vm.key('caps_lock')
+    shot = view(vm.frame())
+    ink, aa, caret = stats(shot)
+    print(f'typed page: ink {ink}, antialiased {aa}, caret {caret}')
+    if ink < 300:
+        fail(f'the typed text is not on the page (only {ink} ink pixels)')
+    if aa < 150:
+        fail(f'the text is not antialiased: only {aa} intermediate-coverage pixels (a 1-bit face has none)')
+    if caret < 20:
+        fail(f'the 2 px caret ({CARET}) is not drawn ({caret} pixels)')
+    vm.key('ctrl-s')
+    if not vm.wait('notes: saved=', 8):
+        fail('Ctrl+S did not save')
+    elif saved_bytes(vm) != len(first):
+        fail(f'saved {saved_bytes(vm)} bytes, expected {len(first)} for {first!r}: a keystroke was lost or mangled')
+    vm.key('esc'); vm.key('esc')
+    vm.wait('notes: closed', 5)
+    time.sleep(1.0)
 finally:
-    machine.close()
+    vm.quit()
+data = note_on_disk(disk, 'N0000001.TXT')
+if data != first.encode():
+    fail(f'the note on disk is {data!r}, expected {first!r}')
+else:
+    print('PASS: typing, editing keys and Caps Lock built the exact text; it is on the disk byte for byte')
 
-machine = Machine()
+# ---- boot 2: persistence, scrolling, pointer ----
+second = first + '\nSaved twice.'
+vm = VM(disk, 'open=notes', 'notes: folders=', work=work)
 try:
-    machine.open_notes()
-    initial = machine.memory('editor_buffer', machine.integer('editor_length')).decode()
-    machine.type('No disk. Keep this text!')
-    machine.key('ctrl-s')
-    machine.saved()
-    machine.expect(initial + 'No disk. Keep this text!')
-    machine.screenshot('ramfs-save')
-    machine.key('esc')
-    machine.open_notes()
-    machine.expect(initial + 'No disk. Keep this text!')
+    if not vm.wait('notes: folders=01 notes=01', 5):
+        fail('a fresh boot did not list the saved note')
+    time.sleep(1.5)
+    vm.key('ret')
+    if not vm.wait('notes: edit=N0000001.TXT', 8):
+        fail('Enter on the note did not open it')
+    time.sleep(1.0)
+    vm.type('\nSaved twice.')
+    vm.key('ctrl-s')
+    vm.wait('notes: saved=', 8)
+    if saved_bytes(vm) != len(second):
+        fail(f'after reopening and appending, saved {saved_bytes(vm)} bytes, expected {len(second)}: the old text did not come back')
+    else:
+        print('PASS: a fresh boot reopened the note with its text and a second save kept both')
+    for _ in range(24):
+        vm.key('ret', 0.12)
+    vm.type('Still visible.')
+    ink, aa, caret = stats(view(vm.frame()))
+    if caret < 20:
+        fail('after 24 blank lines the caret left the window: the view did not scroll to follow it')
+    else:
+        print('PASS: 24 blank lines later the caret is still on screen (the editor scrolled)')
+    vm.key('esc')
+    # a second note, so the list has two rows and the newest is selected
+    vm.key('n')
+    vm.wait('notes: edit=N0000002.TXT', 8)
+    time.sleep(1.0)
+    vm.type('other')
+    vm.key('esc')
+    vm.wait('notes: saved=', 8, 3)
+    n_before = vm.count('notes: edit=N0000001.TXT')
+    vm.move(VIEW_X + 200, VIEW_Y + ROW0_Y + 8)
+    vm.click()
+    vm.key('ret')
+    if not vm.wait('notes: edit=N0000001.TXT', 8, n_before + 1):
+        fail('clicking the first row and pressing Enter did not open the first note: the pointer did not select it')
+    else:
+        print('PASS: a click on a notes-list row selects it and Enter opens exactly that note')
+    vm.key('esc'); vm.key('esc')
+    time.sleep(1.0)
 finally:
-    machine.close()
+    vm.quit()
 
-print('PASS: boot, dock and toolbar clicks, typing, Shift, Caps Lock, Enter, Tab, insertion, deletion, 24 distinct typography renderings, scrolling, save/reboot/overwrite, ramfs reopen')
-print(f'Artifacts: {ARTIFACTS}')
+# ---- boot 3: no disk, ramfs keeps a save across edit sessions ----
+vm = VM(None, 'open=notes', 'notes: folders=', work=work)
+try:
+    time.sleep(1.5)
+    vm.key('ret')
+    if not vm.wait('notes: edit=', 8):
+        fail('ramfs boot: Enter did not open the seeded note')
+    vm.type('No disk. Keep this text!')
+    vm.key('ctrl-s')
+    vm.wait('notes: saved=', 8)
+    a = saved_bytes(vm)
+    vm.key('esc')
+    vm.key('ret')
+    vm.wait('notes: edit=', 8, 2)
+    vm.type('.')
+    vm.key('ctrl-s')
+    vm.wait('notes: saved=', 8, 2)
+    b = saved_bytes(vm, 2)
+    if a is None or b != a + 1:
+        fail(f'ramfs: the second session saved {b} bytes, expected {a} + 1: the first save was not read back')
+    else:
+        print('PASS: with no disk the ramfs file keeps the save and the next session reads it back')
+finally:
+    vm.quit()
+
+if fails:
+    print(f'\n{len(fails)} FAILURE(S)')
+    sys.exit(1)
+print('PASS: Notes typing, antialiased type, caret, scrolling, pointer selection, save and reboot, ramfs reopen')
+print(f'Artifacts: {work}')

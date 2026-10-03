@@ -55,4 +55,11 @@ int jpeg_decode(const unsigned char *data, unsigned int len,
                 unsigned char **out, unsigned int *w, unsigned int *h,
                 unsigned int *channels);
 
+/* Streaming variant for ring 3 (user/libjt/jpeg.c builds this same file): decodes a 3-channel JPEG one
+   MCU row at a time and box-averages it into dst, dw x dh RGB565, top-down. Only one MCU row of planes is
+   ever allocated, so a 320x320 frame costs about 8KB of working memory instead of 450KB. w and h get the
+   source size. Same JPEG_E_* codes as jpeg_decode. */
+int jpeg_decode_scaled(const unsigned char *data, unsigned int len, unsigned short *dst,
+                       unsigned int dw, unsigned int dh, unsigned int *w, unsigned int *h);
+
 #endif

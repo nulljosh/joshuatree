@@ -4,8 +4,19 @@
    upsampling. No recursion, no dynamic tables beyond one kmalloc per
    component plane plus the final RGB/gray output buffer. */
 #include "jpeg.h"
+#ifdef JPEG_USER
+/* Built into user/libjt (user/libjt/jpeg.c includes this file): the same decoder
+   in ring 3, no libc, planes from libjt's malloc arena. */
+#include "../user/libjt/string.h"
+#include "../user/libjt/stdlib.h"
+#define JPEG_STATIC __attribute__((section(".data"))) /* flat ring-3 images have no .bss */
+#define kmalloc malloc
+#define kfree free
+#else
 #include "kheap.h"
 #include "libc.h"
+#define JPEG_STATIC
+#endif
 
 typedef unsigned int u32;
 typedef unsigned short u16;
@@ -168,14 +179,28 @@ struct jcomp {
 
 static u32 be16(const u8 *p) { return ((u32)p[0] << 8) | p[1]; }
 
-int jpeg_decode(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *channels) {
+/* Average one accumulated destination row (dw sums of R,G,B,count) into RGB565 and clear it. */
+static void jpeg_flush_row(u16 *dst, u32 *acc, u32 dw, u32 dy) {
+    for (u32 x = 0; x < dw; x++) {
+        u32 *a = acc + x * 4, n = a[3] ? a[3] : 1;
+        u32 r = a[0] / n, g = a[1] / n, b = a[2] / n;
+        dst[dy * dw + x] = (u16)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+        a[0] = a[1] = a[2] = a[3] = 0;
+    }
+}
+
+/* One decode, two outputs. dst == 0: the full RGB/gray buffer (jpeg_decode). dst != 0 (3-channel
+   only): a box-filtered dw x dh RGB565 frame decoded one MCU row at a time, so only one MCU row of
+   planes is ever held (jpeg_decode_scaled, what ring 3 uses; a 320x320 frame cannot be held whole
+   inside a ring-3 image). */
+static int jpeg_run(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *channels, u16 *dst, u32 dw, u32 dh) {
     *out = 0;
     if (len < 4) return JPEG_E_TRUNCATED;
     if (data[0] != 0xFF || data[1] != 0xD8) return JPEG_E_SIGNATURE;
 
-    static u16 qtab[4][64];
+    static JPEG_STATIC u16 qtab[4][64] = {{0}};
     int have_q[4] = { 0, 0, 0, 0 };
-    static struct jhuff dc_huff[4], ac_huff[4];
+    static JPEG_STATIC struct jhuff dc_huff[4] = {{0}}, ac_huff[4] = {{0}};
     for (int i = 0; i < 4; i++) { dc_huff[i].present = 0; ac_huff[i].present = 0; }
 
     int have_sof = 0, have_dri = 0;
@@ -316,7 +341,7 @@ int jpeg_decode(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *channels
 
     for (int i = 0; i < nf; i++) {
         comp[i].plane_w = mcus_x * comp[i].h * 8;
-        comp[i].plane_h = mcus_y * comp[i].v * 8;
+        comp[i].plane_h = (dst ? 1 : mcus_y) * comp[i].v * 8;
         u32 psize = comp[i].plane_w * comp[i].plane_h;
         if (comp[i].plane_w == 0 || psize / comp[i].plane_w != comp[i].plane_h) {
             for (int j = 0; j < i; j++) kfree(comp[j].plane);
@@ -329,6 +354,12 @@ int jpeg_decode(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *channels
         }
     }
 
+    u32 *acc = 0, acc_dy = 0;
+    if (dst) {
+        acc = kmalloc(dw * 16u);
+        if (!acc) { for (int i = 0; i < nf; i++) kfree(comp[i].plane); return JPEG_E_NOMEM; }
+        memset(acc, 0, dw * 16u);
+    }
     struct jbits bits = { data, len, sos_header_end, 0, 0, 0, 0 };
     i32 coef[64];
     int decode_err = 0;
@@ -370,17 +401,47 @@ int jpeg_decode(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *channels
 
                         u8 block[64];
                         idct8x8(coef, block);
-                        u32 ox = (mx * cc->h + bx) * 8, oy = (my * cc->v + by) * 8;
+                        u32 ox = (mx * cc->h + bx) * 8, oy = ((dst ? 0 : my) * cc->v + by) * 8;
                         for (int py = 0; py < 8; py++)
                             memcpy(cc->plane + (oy + (u32)py) * cc->plane_w + ox, block + py * 8, 8);
                     }
                 }
             }
         }
+        if (dst && !decode_err) {
+            if (nf != 3) { for (int i = 0; i < nf; i++) kfree(comp[i].plane); kfree(acc); return JPEG_E_UNSUPPORTED; }
+            int sx_cb = hmax / comp[1].h, sy_cb = vmax / comp[1].v;
+            int sx_cr = hmax / comp[2].h, sy_cr = vmax / comp[2].v;
+            for (u32 ry = 0; ry < (u32)vmax * 8; ry++) {
+                u32 y = my * (u32)vmax * 8 + ry;
+                if (y >= height) break;
+                const u8 *yrow = comp[0].plane + ry * comp[0].plane_w;
+                const u8 *cbrow = comp[1].plane + (ry / (u32)sy_cb) * comp[1].plane_w;
+                const u8 *crrow = comp[2].plane + (ry / (u32)sy_cr) * comp[2].plane_w;
+                u32 dy = y * dh / height;
+                if (dy != acc_dy) { jpeg_flush_row(dst, acc, dw, acc_dy); acc_dy = dy; }
+                for (u32 x = 0; x < width; x++) {
+                    i32 Y = yrow[x], Cb = cbrow[x / (u32)sx_cb] - 128, Cr = crrow[x / (u32)sx_cr] - 128;
+                    u32 *a = acc + (x * dw / width) * 4;
+                    a[0] += (u32)clampi(Y + ((91881 * Cr) >> 16), 0, 255);
+                    a[1] += (u32)clampi(Y + ((-22554 * Cb - 46802 * Cr) >> 16), 0, 255);
+                    a[2] += (u32)clampi(Y + ((116130 * Cb) >> 16), 0, 255);
+                    a[3]++;
+                }
+            }
+        }
     }
     if (decode_err || bits.overrun) {
         for (int i = 0; i < nf; i++) kfree(comp[i].plane);
+        if (acc) kfree(acc);
         return JPEG_E_HUFFMAN;
+    }
+    if (dst) {
+        jpeg_flush_row(dst, acc, dw, acc_dy);
+        for (int i = 0; i < nf; i++) kfree(comp[i].plane);
+        kfree(acc);
+        *w = width; *h = height;
+        return 0;
     }
 
     u32 outch = (nf == 1) ? 1 : 3;
@@ -418,4 +479,15 @@ int jpeg_decode(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *channels
     for (int i = 0; i < nf; i++) kfree(comp[i].plane);
     *out = px; *w = width; *h = height; *channels = outch;
     return 0;
+}
+
+int jpeg_decode(const unsigned char *data, unsigned int len, unsigned char **out, unsigned int *w, unsigned int *h, unsigned int *channels) {
+    return jpeg_run(data, len, out, w, h, channels, 0, 0, 0);
+}
+
+int jpeg_decode_scaled(const unsigned char *data, unsigned int len, unsigned short *dst, unsigned int dw, unsigned int dh,
+                       unsigned int *w, unsigned int *h) {
+    unsigned char *none = 0; unsigned int ch = 0;
+    if (!dst || dw == 0 || dh == 0 || dw > 256) return JPEG_E_FORMAT;
+    return jpeg_run(data, len, &none, w, h, &ch, dst, dw, dh);
 }

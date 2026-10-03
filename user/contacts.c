@@ -15,16 +15,16 @@
  * one and a missing file brings the starter contact back.
  *
  * A flat binary has no .bss and the RAM file system caps a file at 8KB, so
- * the 3KB list does not live in .data. exec_user zeroes the whole 28KB image
+ * the 3KB list does not live in .data. exec_user zeroes the whole 128KB image
  * window before loading, so the list sits in the zeroed pages just past
  * _user_end, which the link script defines.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font, same as the other ring-3
+ * Glyphs: antialiased DejaVu via libjt/text.h, same as the other ring-3
  * apps. Enter views a person, a adds, d deletes, Esc closes.
  * tools/checks/ring3contacts-check.py drives all of it.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define INK   0x001C1C1E
@@ -37,8 +37,8 @@
 #define NAME_N  32
 #define PHONE_N 24
 #define EMAIL_N 40
-#define ROW_Y   48
-#define ROW_H   22
+#define ROW_Y   72
+#define ROW_H   24
 
 struct contact { char name[NAME_N]; char phone[PHONE_N]; char email[EMAIL_N]; };
 extern char _user_end[];
@@ -63,23 +63,23 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, int sc, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++)
-        for (int c = 0; c < 8; c++) {
-            if (!(g[r] & (0x80 >> c))) continue;
-            for (int dy = 0; dy < sc; dy++)
-                for (int dx = 0; dx < sc; dx++) {
-                    int px = x + c * sc + dx, py = y + r * sc + dy;
-                    if (px < 0 || px >= (int)win.width || py < 0 || py >= (int)win.height) continue;
-                    win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-                }
-        }
+static int text(const char *s, int x, int y, int sc, unsigned fg) { /* returns the x after the last glyph; sc 2 = bold */
+    return jt_text_draw(&win, sc > 1 ? JT_FACE_BOLD : JT_FACE_BODY, x, y, fg, s);
 }
-static void text(const char *s, int x, int y, int sc, unsigned fg) {
-    if (sc == 1 && jt_text(s, x, y, fg, JT_TEXT_DRAW) >= 0) return; /* SYS_TEXT; scaled text stays bitmap */
-    for (; *s; s++, x += 8 * sc) glyph((unsigned char)*s, x, y, sc, fg);
+/* text clipped to maxw px with a trailing "..." */
+static int etext(const char *s, int x, int y, int maxw, unsigned fg) {
+    char t[72]; int n = 0;
+    while (s[n] && n < 64) { t[n] = s[n]; n++; }
+    t[n] = 0;
+    if (jt_text_width(JT_FACE_BODY, t) > maxw) {
+        while (n > 0) {
+            t[n] = '.'; t[n + 1] = '.'; t[n + 2] = '.'; t[n + 3] = 0;
+            if (jt_text_width(JT_FACE_BODY, t) <= maxw) break;
+            t[--n] = 0;
+        }
+        if (n == 0) t[0] = 0;
+    }
+    return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, t);
 }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
@@ -165,35 +165,40 @@ static int visible_rows(void) {
 }
 
 static void draw(void) {
-    jt_text_clear();
     rect(0, 0, (int)win.width, (int)win.height, BG);
     if (mode == 2) {
         static const char *label[3] = {"name (enter to confirm, esc to cancel):", "phone:", "email:"};
-        text(label[field], 20, 20, 1, HINT);
-        rect(20, 44, (int)win.width - 40, 20, WHITE);
-        text(entry[field], 24, 46, 1, INK);
+        text(label[field], 20, 40, 1, HINT);
+        rect(20, 66, (int)win.width - 40, 26, WHITE);
+        if (entry[field][0]) {
+            int cx = text(entry[field], 28, 70, 1, INK);
+            rect(cx + 1, 71, 2, 16, INK); /* caret */
+        } else {
+            rect(28, 71, 2, 16, INK);
+            text("type here", 34, 70, 1, DIM);
+        }
         jt_write(1, "contactsprompt\n", 15); /* one per redraw: what the keystroke check counts */
         return;
     }
     if (mode == 1) {
-        text(list[sel].name, 20, 20, 2, INK);
-        text(list[sel].phone, 20, 64, 1, DIM);
-        text(list[sel].email, 20, 88, 1, DIM);
-        text("esc goes back", 20, 128, 1, HINT);
+        etext(list[sel].name, 20, 40, (int)win.width - 40, INK);
+        etext(list[sel].phone, 20, 76, (int)win.width - 40, DIM);
+        etext(list[sel].email, 20, 100, (int)win.width - 40, DIM);
+        text("esc goes back", 20, 140, 1, HINT);
         return;
     }
     if (count == 0) {
-        text("No contacts yet.", 20, 20, 1, INK);
-        text("Press a to add one.", 20, 44, 1, DIM);
+        text("No contacts yet.", 20, 40, 1, INK);
+        text("Press a to add one.", 20, 64, 1, DIM);
         return;
     }
-    text("up/down to pick   enter views   a adds   d deletes   esc closes", 20, 20, 1, DIM);
+    etext("up/down to pick   enter views   a adds   d deletes   esc closes", 20, 40, (int)win.width - 40, DIM);
     int v = visible_rows();
     for (int i = top; i < count && i < top + v; i++) {
         int y = ROW_Y + (i - top) * ROW_H;
         if (i == sel) rect(16, y - 4, (int)win.width - 32, 20, SEL);
-        text(list[i].name, 28, y, 1, INK);
-        text(list[i].phone, 220, y, 1, DIM);
+        etext(list[i].name, 28, y, 180, INK);
+        etext(list[i].phone, 220, y, (int)win.width - 240, DIM);
     }
 }
 
@@ -258,12 +263,14 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;
 
-        if (ev.kind == JT_EV_CLICK) {  /* the titlebar X, or anywhere in the window */
-            if (mode == 0) break;
+        if (ev.kind == JT_EV_CLICK) {
+            if (ev.a < 0 || ev.b < 0 || ev.a >= (int)win.width || ev.b >= (int)win.height) break; /* chrome X or dock */
+            if (mode == 0) { flags = JT_POLL_PRESENT; continue; } /* click inside, no action */
             mode = 0; draw(); flags = JT_POLL_PRESENT; continue;
         }
         if (ev.kind != JT_EV_KEY) { flags = JT_POLL_PRESENT; continue; }

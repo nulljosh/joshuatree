@@ -14,6 +14,8 @@ struct vfs_ops {
     int  (*mkdir)(const char *name);
     int  (*write_file)(const char *name, const void *data, unsigned int len);
     int  (*replace_file)(const char *name, const void *data, unsigned int len);
+    unsigned int (*cwd_get)(void); /* 1.9.23: opaque cwd cursor, 0 = root; may be null */
+    void (*cwd_set)(unsigned int);
 };
 
 /* Registers a backend as active. Both fat and ramfs call this once at
@@ -30,4 +32,6 @@ int  vfs_chdir(const char *name);
 int  vfs_mkdir(const char *name);
 int  vfs_write_file(const char *name, const void *data, unsigned int len);
 int  vfs_replace_file(const char *name, const void *data, unsigned int len);
+unsigned int vfs_cwd_get(void); /* 1.9.23: see vfs.c */
+void vfs_cwd_set(unsigned int c);
 #endif

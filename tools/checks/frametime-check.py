@@ -68,7 +68,7 @@ FILES_SLOT = 1
 # unfixed per-pixel path would land even on an idle one.
 BUDGET_IDLE = 12      # ambient wind-sway/clock redraw while nothing moves
 BUDGET_HOVER = 12     # dock hover band repaint
-BUDGET_OPEN = 60      # Files opening (full desktop + window content repaint)
+BUDGET_OPEN = 90      # Burrow opening as a ring-3 window: desktop repaint plus seeding the binary, a private page table and the first draw (640 ms measured in 2.0.0 CI; cutting it is a roadmap item)
 
 nm = shutil.which('nm') or 'nm'
 symbols = {}

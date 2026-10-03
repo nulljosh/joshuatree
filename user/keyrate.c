@@ -15,13 +15,14 @@
  * drops its window and goes back to the desktop. tools/checks/
  * ring3app-check.py presses it on purpose and asserts exactly that.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font, included as data. There is
+ * Glyphs: antialiased DejaVu via libjt/text.h. There is
  * no font syscall and a program draws its own pixels, so it carries its
  * own letters. No .bss allowed in a flat binary, so every global is
  * initialised and everything else lives on the one 4KB stack page.
  */
 #include "jtsys.h"
 #include "libjt/string.h"
+#include "libjt/text.h"
 
 #define BG   0x00FAF8F6
 #define INK  0x001C1C1E
@@ -53,9 +54,14 @@ static void rect(int x, int y, int w, int h, unsigned c) {
     }
 }
 
-/* SYS_TEXT: the kernel's anti-aliased face; x moves by the real advance. */
-static void text(const char *s, int x, int y, unsigned fg) {
-    jt_text(s, x, y, fg, JT_TEXT_DRAW);
+static void text(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
+
+/* One glyph at a time so typed and untyped letters take different inks;
+   returns the advance. */
+static int put1(char c, int x, int y, unsigned fg) {
+    char t[2] = { c, 0 };
+    jt_text_draw(&win, JT_FACE_BODY, x, y, fg, t);
+    return jt_text_width(JT_FACE_BODY, t);
 }
 
 static int gen_words(char *buf, int cap, unsigned *rng) {
@@ -119,28 +125,17 @@ void _start(int argc, char **argv) {
 
     rect(0, 0, W, H, BG);
     for (;;) {
-        rect(20, 60, W - 40, H - 100, BG);
-        rect(20, H - 30, W - 40, 16, BG);
-        jt_text_clear();
-        /* Lay the target out by word, on the real advance, so a word never
-           splits across lines. The typed part is drawn in DONE, the rest in INK. */
-        for (int i = 0, y = 60; i < tlen; y += 24) {
-            int e = i, last = i;
-            for (;;) {
-                int wl = 0;
-                while (target[e + wl] && target[e + wl] != ' ') wl++;
-                int w = jt_text_n(target + i, e + wl - i, 0, 0, 0, JT_TEXT_MEASURE);
-                if (last > i && w > W - 40) break;
-                last = e + wl; e = last;
-                if (!target[e]) break;
-                e++;                                /* the space */
+        rect(20, 40, W - 40, H - 76, BG);
+        rect(20, H - 34, W - 40, 22, BG);
+        {   /* wrap at word boundaries: a word that will not fit moves down whole */
+            int x = 20, y = 44, i = 0;
+            while (i < tlen) {
+                int e = i, ww = 0;
+                while (e < tlen && target[e] != ' ') { char t[2] = { target[e], 0 }; ww += jt_text_width(JT_FACE_BODY, t); e++; }
+                if (x > 20 && x + ww > W - 20) { x = 20; y += 24; }
+                for (; i < e; i++) x += put1(target[i], x, y, i < pos ? DONE : INK);
+                if (i < tlen) { x += put1(' ', x, y, i < pos ? DONE : INK); i++; }
             }
-            int d = pos > i ? (pos < last ? pos : last) - i : 0;
-            int x = 20;
-            if (d) x += jt_text_n(target + i, d, x, y, DONE, JT_TEXT_DRAW);
-            if (last - i - d > 0) jt_text_n(target + i + d, last - i - d, x, y, INK, JT_TEXT_DRAW);
-            i = last;
-            while (target[i] == ' ') i++;
         }
         if (started) {
             unsigned t = 0; jt_time(&t);
@@ -150,12 +145,12 @@ void _start(int argc, char **argv) {
             buf[n++] = ' '; buf[n++] = 'w'; buf[n++] = 'p'; buf[n++] = 'm'; buf[n] = 0;
             text(buf, 20, H - 30, DONE);
         } else {
-            text("type to begin, esc or click to close", 20, H - 30, HINT);
+            text("type to begin, esc to close", 20, H - 30, HINT);
         }
 
         struct jt_event ev;
         if (!next_event(&ev, 1)) break;
-        if (ev.kind == JT_EV_CLICK) break;
+        if (jt_window_resized(&ev, &win)) { W = (int)win.width; H = (int)win.height; rect(0, 0, W, H, BG); continue; } /* JT_EV_RESIZE */
         if (ev.kind != JT_EV_KEY) continue;
         if (ev.a == JT_KEY_ESC) break;
         if (ev.a == '`') {

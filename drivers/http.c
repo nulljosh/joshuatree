@@ -1,6 +1,7 @@
 #include "http.h"
 #include "kheap.h"
 #include "net.h"
+#include "irq.h"
 
 typedef unsigned int u32;
 
@@ -36,7 +37,30 @@ static int resolve_host(const char *host, u32 *ip) {
    line and headers down to just the body; shared here since that part is
    identical either way. */
 static int last_status = 0;
+/* 1.9.23: net.c is a one-connection stack and this file keeps one status.
+   The desktop (Burrow, Weather) and a ring-3 SYS_HTTP_GET (which runs with
+   interrupts on while it waits) can both be inside a fetch, so a second
+   entry while one is in flight fails fast instead of sharing the socket. */
+static int in_flight = 0;
 int http_last_status(void) { return last_status; }
+
+/* 2.0.0: a ring-3 fetch used to fail with -EIO the instant the desktop (the Weather window's geocode,
+   ip-api and forecast calls, each able to sit out a 20 s DNS or connect wait) held the one connection,
+   and every fetch after it failed the same way until that call ended: Samantha's 72 face frames hit it
+   from about the 23rd. net.c is still one connection at a time, so the honest fix is to queue behind
+   the holder for a bounded time instead of treating it as a network error. Needs interrupts on (the
+   caller sets IF) so ticks advance and the desktop's own fetch keeps running to completion. Returns 1
+   once the stack is free, 0 if it was still held when max_ticks ran out (the caller says -EBUSY). */
+int http_wait_idle(unsigned int max_ticks) {
+    unsigned int deadline = ticks() + max_ticks;
+    while (in_flight) {
+        if ((int)(ticks() - deadline) >= 0) return 0;
+#if defined(__i386__)
+        __asm__ volatile ("sti; hlt"); /* kernel only: the host fuzz build never calls this */
+#endif
+    }
+    return 1;
+}
 
 static int http_body_only(u32 ip, unsigned short port, const char *req, u32 req_len,
                            void *body_out, u32 body_maxlen, char *raw, u32 raw_cap, u32 reply_timeout_ticks) {
@@ -68,6 +92,8 @@ static int http_body_only(u32 ip, unsigned short port, const char *req, u32 req_
     return (int)copy;
 }
 
+static int http_get_locked(u32 ip, const char *host, const char *path, unsigned short port, void *body_out, unsigned int body_maxlen, unsigned int reply_timeout_ticks);
+static int http_post_locked(u32 ip, const char *host, const char *path, unsigned short port, const char *body, unsigned int body_len, void *response_out, unsigned int response_maxlen, unsigned int reply_timeout_ticks);
 int http_get(const char *host, const char *path, unsigned short port,
              void *body_out, unsigned int body_maxlen) {
     return http_get_timeout(host, path, port, body_out, body_maxlen, 0);
@@ -77,7 +103,15 @@ int http_get_timeout(const char *host, const char *path, unsigned short port,
                      void *body_out, unsigned int body_maxlen, unsigned int reply_timeout_ticks) {
     u32 ip;
     last_status = 0;
-    if (!resolve_host(host, &ip)) return -1;
+    if (in_flight) return -1;
+    in_flight = 1;
+    int r = -1;
+    if (resolve_host(host, &ip)) r = http_get_locked(ip, host, path, port, body_out, body_maxlen, reply_timeout_ticks);
+    in_flight = 0;
+    return r;
+}
+static int http_get_locked(u32 ip, const char *host, const char *path, unsigned short port,
+                           void *body_out, unsigned int body_maxlen, unsigned int reply_timeout_ticks) {
 
     char req[512];
     u32 n = 0;
@@ -123,12 +157,27 @@ int http_post(const char *host, const char *path, unsigned short port,
     return http_post_timeout(host, path, port, body, body_len, response_out, response_maxlen, 0);
 }
 
+/* Bearer for the next POST only (SYS_HTTP_POST sets it for /api/mail/send); cleared as soon as
+   the request is built, so no later request can carry it. */
+static const char *post_bearer = 0;
+void http_post_set_bearer(const char *token) { post_bearer = (token && token[0]) ? token : 0; }
+
 int http_post_timeout(const char *host, const char *path, unsigned short port,
                        const char *body, unsigned int body_len,
                        void *response_out, unsigned int response_maxlen,
                        unsigned int reply_timeout_ticks) {
     u32 ip;
-    if (!resolve_host(host, &ip)) return -1;
+    if (in_flight) return -1;
+    in_flight = 1;
+    int r = -1;
+    if (resolve_host(host, &ip)) r = http_post_locked(ip, host, path, port, body, body_len, response_out, response_maxlen, reply_timeout_ticks);
+    in_flight = 0;
+    return r;
+}
+static int http_post_locked(u32 ip, const char *host, const char *path, unsigned short port,
+                            const char *body, unsigned int body_len,
+                            void *response_out, unsigned int response_maxlen,
+                            unsigned int reply_timeout_ticks) {
 
     /* v85 (chat history / /api/chat): this used to be a fixed 1024-byte
        stack buffer, which silently truncated ANY POST body over roughly
@@ -142,7 +191,11 @@ int http_post_timeout(const char *host, const char *path, unsigned short port,
        long; ~200 bytes of slack covers any realistic path plus headers),
        the same pattern http_get already uses for its own raw response
        buffer just below. */
-    u32 req_cap = body_len + 256;
+    const char *bearer = post_bearer;
+    post_bearer = 0;
+    u32 bearer_len = 0;
+    while (bearer && bearer[bearer_len]) bearer_len++;
+    u32 req_cap = body_len + 256 + (bearer ? bearer_len + 32 : 0);
     char *req = kmalloc(req_cap);
     if (!req) return -1;
     u32 n = 0;
@@ -151,6 +204,11 @@ int http_post_timeout(const char *host, const char *path, unsigned short port,
     for (int p = 0; p < 4; p++) {
         const char *s = parts[p];
         while (*s && n < req_cap - 1) req[n++] = *s++;
+    }
+    if (bearer) {
+        const char *ah = "\r\nAuthorization: Bearer ";
+        while (*ah && n < req_cap - 1) req[n++] = *ah++;
+        for (u32 bi = 0; bi < bearer_len && n < req_cap - 1; bi++) req[n++] = bearer[bi];
     }
     const char *ct = "\r\nContent-Type: application/json\r\nContent-Length: ";
     while (*ct && n < req_cap - 1) req[n++] = *ct++;

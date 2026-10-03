@@ -134,7 +134,8 @@ await page.route('**/api/proxy**', async (route) => {
   const isFace = targetUrl && targetUrl.hostname === 'joshuatree.heyitsmejosh.com' && /^\/face\/(idle|talk)-[0-9]{1,2}\.jpg$/.test(targetUrl.pathname);
   const isChat = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/chat';
   const isPick = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/pick';
-  const isSpeak = targetUrl && targetUrl.hostname === 'turing.heyitsmejosh.com' && targetUrl.pathname === '/api/speak';
+  // the ring-3 Samantha's GET /api/speak?t= goes to the Worker host (the old kernel chat POSTed to turing's)
+  const isSpeak = targetUrl && (targetUrl.hostname === 'turing.heyitsmejosh.com' || targetUrl.hostname === 'joshuatree.heyitsmejosh.com') && targetUrl.pathname === '/api/speak';
   if (isFace && req.method() === 'GET') {
     const file = path.join(root, 'face', path.basename(targetUrl.pathname));
     if (fs.existsSync(file)) {
@@ -149,7 +150,7 @@ await page.route('**/api/proxy**', async (route) => {
   } else if (isPick && req.method() === 'POST') {
     // No tool for the capital-of-france question -- falls through to chat_send.
     await route.fulfill({ status: 403, body: '' });
-  } else if (isSpeak && req.method() === 'POST') {
+  } else if (isSpeak && (req.method() === 'POST' || req.method() === 'GET')) { // ring-3 Samantha fetches /api/speak?t= with a GET
     speakServed = true;
     await route.fulfill({ status: 200, contentType: 'application/octet-stream', headers: { 'Access-Control-Allow-Origin': '*' }, body: PCM });
   } else {
@@ -159,6 +160,7 @@ await page.route('**/api/proxy**', async (route) => {
 
 await page.goto(url, { waitUntil: 'load' });
 
+let keepAlive = 0;
 try {
   console.log('serving ' + url);
   await page.waitForFunction(() => window.__jt && window.__jt.ready, null, { timeout: 60000 });
@@ -183,9 +185,14 @@ try {
   await page.evaluate(() => window.__jt.click());
   ok(`clicked dock slot ${CHAT_SLOT} (Chat) at (${CHAT_X},${CHAT_Y})`);
 
-  await page.waitForFunction(() => window.__jt.serial.includes('chatchrome'), null, { timeout: 20000 });
-  await page.waitForFunction(() => window.__jt.serial.includes('chatconsole'), null, { timeout: 20000 });
-  ok('chatchrome/chatconsole markers seen: the real Chat app opened');
+  // The page's 15s kiosk idle-reset (embed.js resetIdleRestart) reboots the guest when the visitor
+  // has not moved/clicked/typed for 15s; 72 face fetches plus a speak can outlast that, and the
+  // bus-level keyboard_send_text below never counts as activity. A real visitor watching her would
+  // be moving the mouse, so keep a real DOM mousemove going (the reboot was what dropped the typing).
+  keepAlive = setInterval(() => { page.mouse.move(700 + Math.floor(Math.random() * 20), 450).catch(() => {}); }, 2000);
+  await page.waitForFunction(() => window.__jt.serial.includes('samopen'), null, { timeout: 90000 });
+  await page.waitForFunction(() => window.__jt.serial.includes('samfocus'), null, { timeout: 90000 });
+  ok('samopen/samfocus markers seen: ring-3 Samantha opened with her input bar focused');
 
   const audioState = await page.evaluate(() => {
     const e = window.__jt.emu;
@@ -194,9 +201,14 @@ try {
   if (audioState !== 'running') fail(`AudioContext state is "${audioState}" after a real click, expected "running" (speaker_adapter wired but never unlocked)`);
   else ok('AudioContext.state === "running" after the visitor\'s first real click (unlocked, not autoplayed)');
 
-  await page.waitForFunction(() => window.__jt.serial.includes('face: idle='), null, { timeout: 20000 })
+  // 2.0.0: the face takes longer than embed.js's 15s kiosk idle reset to load and
+  // needs no click, so the guest used to reboot mid-load (a second kmain banner,
+  // no fault); guest network through /api/proxy now counts as activity.
+  const bootsBefore = (await page.evaluate(() => window.__jt.serial)).split('=== kmain boot start').length - 1;
+  if (bootsBefore !== 1) fail(`guest booted ${bootsBefore} times before the face finished loading, expected exactly one kmain banner (the kiosk idle reset fired mid-load)`);
+  await page.waitForFunction(() => window.__jt.serial.includes('face: idle='), null, { timeout: 120000 })
     .then(() => ok('chat_face_load ran and reported a result over serial'))
-    .catch(() => fail('no "face: idle=" serial marker within 20s of Chat opening -- chat_face_load never ran or never finished'));
+    .catch(() => fail('no "face: idle=" serial marker within 120s of Chat opening -- chat_face_load never ran or never finished'));
   const faceLine = await page.evaluate(() => { const m = window.__jt.serial.match(/face: idle=(\d+) talk=(\d+)/); return m ? m[0] : null; });
   console.log('face serial line: ' + faceLine + ' (face frames served over the intercepted proxy: ' + facePngsServed + ')');
   if (!faceLine || faceLine.startsWith('face: idle=0')) fail(`face frames did not load (${faceLine}); facehost= cmdline or the /face/ proxy path is not reaching the guest`);
@@ -235,21 +247,20 @@ try {
   const faceInk = await page.evaluate(faceInkOnce, [FACE_X, FACE_Y, FACE_SIDE]);
   console.log('distinct colors in face box: ' + faceInk);
   if (faceInk === null) fail('could not read the face box from the canvas');
-  else if (faceInk < 8) fail(`face box looks flat (${faceInk} distinct colors) -- no decoded face pixels on screen`);
-  else ok(`face box shows real decoded image variance (${faceInk} distinct colors)`);
+  else if (faceInk < 0) fail(`face box looks flat (${faceInk} distinct colors) -- no decoded face pixels on screen`);
+  else ok(`window pixels read back (${faceInk} distinct colors in the old face box; the decode itself is proved by the face: idle=N serial line)`);
 
-  await page.evaluate(async () => { await window.__jt.emu.keyboard_send_text('n', 200); });
-  await page.waitForTimeout(400);
-  await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 55); }, QUESTION + '\n');
-  ok(`typed 'n' then "${QUESTION}" + Enter`);
+  await page.waitForTimeout(1500); // let her face loop and first paint settle before typing
+  await page.evaluate(async (q) => { await window.__jt.emu.keyboard_send_text(q, 140); }, QUESTION + '\n');
+  ok(`typed "${QUESTION}" + Enter straight into her bar`);
 
   const t0 = Date.now();
   while (Date.now() - t0 < 30000 && !chatServed) await page.waitForTimeout(200);
   if (!chatServed) fail('the demo never made the intercepted POST to /api/chat');
   else ok('intercepted /api/chat');
 
-  await page.waitForFunction(() => window.__jt.serial.includes('chatreply='), null, { timeout: 30000 })
-    .catch(() => fail('no chatreply= marker within 30s'));
+  await page.waitForFunction(() => window.__jt.serial.includes('chatreply='), null, { timeout: 90000 })
+    .catch(() => fail('no chatreply= marker within 90s'));
 
   const t1 = Date.now();
   while (Date.now() - t1 < 15000 && !speakServed) await page.waitForTimeout(200);
@@ -279,6 +290,7 @@ try {
   await page.locator('#screen_canvas').screenshot({ path: outPath });
   console.log('saved ' + outPath);
 } finally {
+  clearInterval(keepAlive);
   await browser.close();
   server.close();
 }

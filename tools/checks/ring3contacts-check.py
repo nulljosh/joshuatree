@@ -46,7 +46,7 @@ CLOSE_X, CLOSE_Y = 94, 56
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 VIEW_X, VIEW_Y = 78, 72   # gui_launch_from_dock: viewport at (x+8, y+32) for x=70, y=40
 PARK = (480, 200)
-ROW_Y, ROW_H = 48, 22     # user/contacts.c: first row's text y, row pitch
+ROW_Y, ROW_H = 68, 22     # user/contacts.c: first row's text y, row pitch
 PROBE_X = 600             # right of the phone column: only the highlight or the page color
 SEL_COLOR, BG_COLOR = (0xED, 0xE6, 0xDC), (0xFA, 0xF8, 0xF6)
 
@@ -187,13 +187,13 @@ try:
         if not wait_serial("appsfullrepaint", 10, n + 1):
             fails.append("the Apps folder did not open from the dock"); return False
         time.sleep(0.6)
-        for c in ("d", "d", "s", "s", "s"): keys(c)
+        for c in ("d", "s", "s", "s"): keys(c)
         keys("ret")
         return True
     launches = serial().count("ring3app: launching CONTACTS.BIN")
     if open_from_folder():
         if not wait_serial("ring3app: launching CONTACTS.BIN", 10, launches + 1):
-            fails.append("Contacts did not launch from the Apps folder grid (icon 17)")
+            fails.append("Contacts did not launch from the Apps folder grid (icon 16)")
         if not wait_serial("contacts: loaded 2", 10):
             fails.append('the reopened app did not report "contacts: loaded 2": the add did not persist in CONTACTS.TXT')
         time.sleep(0.5)
@@ -207,12 +207,9 @@ try:
             fails.append('deleting the new person did not log "contacts: count 1"')
         if not wait_serial("contacts: saved 1", 5):
             fails.append('the delete did not write CONTACTS.TXT ("contacts: saved 1")')
-        n = serial().count("appsfullrepaint")
-        keys("esc")
-        if not wait_serial("appsfullrepaint", 10, n + 1):
-            fails.append("the Apps folder did not come back after Contacts closed")
-        time.sleep(0.6)
-        keys("ret")
+        keys("esc"); time.sleep(0.8)   # 2.0: closing a folder-launched app returns to the desktop, not the folder
+        if not open_from_folder():
+            pass
         if not wait_serial("contacts: loaded 1", 10, 2):
             fails.append('the third open did not report "contacts: loaded 1" (loaded lines: %d): the delete did not persist' % serial().count("contacts: loaded 1"))
         time.sleep(0.4)

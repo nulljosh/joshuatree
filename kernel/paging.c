@@ -22,6 +22,7 @@
    temporary map carries the same count. */
 #include "paging.h"
 #include "pmm.h"
+#include "serial.h"
 
 typedef unsigned int u32;
 
@@ -82,6 +83,65 @@ static signed char pde_to_extra_table[1024 - BASE_MAP_TABLES];
    a framebuffer couldn't reclaim its table slot unless it was the last one.
    v78+ (0.67.3): uses unsigned char instead of int, saving 48 bytes of BSS. */
 static unsigned char extra_table_free[MAX_EXTRA_TABLES];
+
+/* 1.9.24: every ring-3 task directory is a by-value copy of page_directory
+   taken at task_create, so a kernel PDE that appears later (kheap growing
+   through paging_map_region into a 4 MB region that had no table when the
+   task was born) was missing from that copy, and the first syscall or IRQ
+   running on the task's CR3 that touched the new memory page-faulted
+   (Mail's close inside r3win_release was the symptom). Preallocating every
+   identity table is not the right trade here: the identity map covers
+   physical frames on demand, the framebuffer sits at 0xFD000000, and a
+   full table set would be 4 MB of BSS. Instead the shared directory is
+   the single source of truth and every change to a kernel PDE is written
+   through to every live task directory on the spot, skipping the two
+   slots a task owns privately (PAGING_PRIVATE_PDE and the user window
+   table at KERNEL_PDE_INDEX + 1). Zero extra memory, one 6-slot loop per
+   table change, and table changes are rare (once per 4 MB of growth). */
+#include "task.h"
+#include "memmap.h"
+#define BRK_PDE_FIRST (JT_BRK_BASE >> 22)
+#define BRK_PDE_LAST ((JT_BRK_BASE + JT_BRK_MAX_PAGES * 4096u - 1) >> 22)
+/* 1.9.28: the brk heap PDEs (kernel/brk.c) are task-private too: the sync must never overwrite them and the check must not count them as drift. */
+static int paging_pde_is_private(u32 pde) { return pde == PAGING_PRIVATE_PDE || pde == KERNEL_PDE_INDEX + 1 || (pde >= BRK_PDE_FIRST && pde <= BRK_PDE_LAST); }
+/* 1.9.28: flush the TLB on whatever directory the CPU is using. Reloading
+   phys(page_directory) here was the ring-3 heap bug: a syscall runs on the
+   task's CR3, and paging_set_user (SYS_WINDOW_OPEN's legacy path) or a
+   kmalloc that grew the identity map silently moved the task onto the
+   kernel directory, so the pages brk_set mapped into task_page_dir() were
+   never the ones the CPU looked at and the first heap write faulted at
+   JT_BRK_BASE. */
+static void paging_flush_current(void) { u32 cr3; __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3)); __asm__ volatile ("mov %0, %%cr3" :: "r"(cr3) : "memory"); }
+static unsigned int pde_changes; /* 1.9.24: bumps on every kernel PDE create or remove, read by stress=pde */
+unsigned int paging_pde_change_count(void) { return pde_changes; }
+static void paging_sync_task_dirs(u32 pde) {
+    pde_changes++;
+    if (paging_pde_is_private(pde)) return;
+    u32 me = phys(page_directory);
+    for (int id = 0; id < TASK_SLOTS; id++) {
+        u32 d = task_page_dir(id);
+        if (!d || d == me) continue;
+        ((u32 *)d)[pde] = page_directory[pde];
+    }
+}
+/* 1.9.24: the freeze check. After paging_install the kernel half of every
+   live task directory must equal the shared directory entry for entry;
+   logs one BUG line per drift and returns how many it found. Runs after
+   every sync and from the stress=pde hook. */
+int paging_check_task_dirs(void) {
+    int bad = 0;
+    u32 me = phys(page_directory);
+    for (int id = 0; id < TASK_SLOTS; id++) {
+        u32 d = task_page_dir(id);
+        if (!d || d == me) continue;
+        const u32 *dir = (const u32 *)d;
+        for (u32 pde = 0; pde < 1024; pde++) {
+            if (paging_pde_is_private(pde)) continue;
+            if (dir[pde] != page_directory[pde]) { bad++; serial_puts("BUG: paging: task directory drifted from the kernel PDEs\n"); break; }
+        }
+    }
+    return bad;
+}
 
 void paging_install(void) {
     for (int t = 0; t < BASE_MAP_TABLES; t++)
@@ -150,12 +210,13 @@ int paging_map_region(u32 phys_addr, u32 length) {
             table[i] = (base + i * 0x1000) | 0x3;
         }
         page_directory[pde] = phys(table) | 0x3;
+        paging_sync_task_dirs(pde); /* 1.9.24: write the new kernel PDE through to every live task directory */
 
         /* Track which table this PDE is using, for unmapping later */
         if (pde >= BASE_MAP_TABLES) pde_to_extra_table[pde - BASE_MAP_TABLES] = table_idx;
 
         /* reload CR3 to flush the TLB now that the page directory changed */
-        __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
+        paging_flush_current();
     }
     return 1;
 }
@@ -178,6 +239,7 @@ void paging_unmap_region(u32 phys_addr, u32 length) {
             int table_idx = pde_to_extra_table[pde - BASE_MAP_TABLES];
             if (table_idx >= 0) {
                 page_directory[pde] = 0x00000002; /* not present, read/write, supervisor */
+                paging_sync_task_dirs(pde); /* 1.9.24: and the removal too, a stale present entry would point at a reused table */
                 pde_to_extra_table[pde - BASE_MAP_TABLES] = -1;
 
                 /* Mark the table slot as free for reuse by paging_map_region.
@@ -195,7 +257,7 @@ void paging_unmap_region(u32 phys_addr, u32 length) {
     }
 
     /* reload CR3 to flush the TLB now that the page directory changed */
-    __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
+    paging_flush_current();
 }
 
 void paging_set_user(void *virt_addr) {
@@ -206,7 +268,7 @@ void paging_set_user(void *virt_addr) {
     base_page_tables[t][pte] |= 0x4;
     page_directory[t] |= 0x4;
     page_directory[KERNEL_PDE_INDEX + t] |= 0x4;
-    __asm__ volatile ("mov %0, %%cr3" :: "r"(phys(page_directory)));
+    paging_flush_current();
 }
 
 /* 1.7.8: see paging.h. Per page, and per alias for the TLB: the same
@@ -234,7 +296,12 @@ void paging_clear_user(void *addr, unsigned int len) {
    outside it is a kernel-only address by construction. Within it, every
    page in the range needs both present and U/S set in the shared base
    table for its 4MB slot, which every task directory points at by value. */
+int paging_user_range_ok_current(unsigned int addr, unsigned int len);
 int paging_user_range_ok(unsigned int addr, unsigned int len) {
+    return paging_user_range_ok_current(addr, len); /* 1.9.23: walk CR3, so a private window (paging_task_map_private) is judged by its own tables */
+}
+static int paging_user_range_ok_shared(unsigned int addr, unsigned int len) __attribute__((unused));
+static int paging_user_range_ok_shared(unsigned int addr, unsigned int len) {
     if (len == 0) return 1;
     unsigned int end = addr + len;
     if (end < addr) return 0; /* wrapped */
@@ -326,4 +393,83 @@ void paging_free_task_directory(unsigned int dir_phys) {
 
 void paging_load_directory(unsigned int dir_phys) {
     __asm__ volatile ("mov %0, %%cr3" :: "r"(dir_phys));
+}
+
+/* 1.9.23: a private user window for one task. Every task directory
+   shares base_page_tables[1] by value, which is why two ring-3 programs
+   could never run at once: JT_USER_BASE and JT_USER_FB are the same
+   physical frames in every directory. This gives one directory its own
+   copy of that table (a pmm frame, identity-mapped) with the image, stack
+   and framebuffer PTEs pointing at frames only this task maps, user
+   accessible there and nowhere else. The low identity alias (PDE 1) keeps
+   the shared supervisor-only table, so no task reaches another's pages
+   through it. Returns 0 on OOM. */
+int paging_task_map_private(unsigned int dir_phys, unsigned int vaddr, unsigned int pa, unsigned int len) {
+    u32 *dir = (u32 *)dir_phys;
+    u32 pde = vaddr >> 22;
+    if (base_table_index(vaddr) != 1 || pde != KERNEL_PDE_INDEX + 1) return 0;
+    u32 table_phys;
+    if ((dir[pde] & ~0xFFFu) == phys(base_page_tables[1])) {
+        table_phys = pmm_alloc_frame();
+        if (!table_phys) return 0;
+        if (table_phys >= IDENTITY_MAP_LIMIT && !paging_map_region(table_phys, 0x1000)) { pmm_free_frame(table_phys); return 0; }
+        u32 *t = (u32 *)table_phys;
+        for (int i = 0; i < 1024; i++) t[i] = base_page_tables[1][i] & ~0x4u; /* kernel pages, supervisor only */
+        dir[pde] = table_phys | 0x7;
+    } else table_phys = dir[pde] & ~0xFFFu;
+    u32 *t = (u32 *)table_phys;
+    for (u32 off = 0; off < len; off += 0x1000) {
+        u32 pte = ((vaddr + off) >> 12) & 0x3FF;
+        t[pte] = ((pa + off) & ~0xFFFu) | 0x7;
+    }
+    return 1;
+}
+
+/* 1.10.x: re-map a private window at a new size. Pages of the old buffer
+   past the new length go back to the kernel's supervisor-only entries, the
+   new frames are mapped user-accessible, and the CPU's TLB is flushed on
+   the current directory (the caller is the owning task, inside its own
+   syscall). */
+int paging_task_remap_private(unsigned int dir_phys, unsigned int vaddr, unsigned int pa, unsigned int len, unsigned int old_len) {
+    if (!paging_task_map_private(dir_phys, vaddr, pa, len)) return 0;
+    u32 *dir = (u32 *)dir_phys;
+    u32 *t = (u32 *)(dir[vaddr >> 22] & ~0xFFFu);
+    for (u32 off = len; off < old_len; off += 0x1000) {
+        u32 pte = ((vaddr + off) >> 12) & 0x3FF;
+        t[pte] = base_page_tables[1][pte] & ~0x4u;
+    }
+    paging_flush_current();
+    return 1;
+}
+
+/* 1.9.23: the reverse, for paging_free_task_directory's caller: hand the
+   private table frame back. The frames it pointed at are the window's
+   own kmalloc'd buffers, freed by their owner. */
+void paging_task_unmap_private(unsigned int dir_phys) {
+    u32 *dir = (u32 *)dir_phys;
+    u32 pde = KERNEL_PDE_INDEX + 1;
+    u32 table_phys = dir[pde] & ~0xFFFu;
+    if (table_phys == phys(base_page_tables[1])) return;
+    dir[pde] = phys(base_page_tables[1]) | 0x3;
+    pmm_free_frame(table_phys);
+}
+
+/* 1.9.23: access_ok against the directory the CPU is actually using
+   (CR3), so a task with a private window (paging_task_map_private) is
+   checked against its own tables, and a legacy task against the shared
+   ones. Tables are pmm frames or kernel statics, both identity-mapped. */
+int paging_user_range_ok_current(unsigned int addr, unsigned int len) {
+    if (len == 0) return 1;
+    unsigned int end = addr + len;
+    if (end < addr) return 0;
+    u32 cr3; __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3));
+    const u32 *dir = (const u32 *)(cr3 & ~0xFFFu);
+    for (u32 p = addr & ~0xFFFu; p < end; p += 0x1000) {
+        u32 pde = dir[p >> 22];
+        if ((pde & 0x5) != 0x5) return 0;
+        const u32 *t = (const u32 *)(pde & ~0xFFFu);
+        if ((t[(p >> 12) & 0x3FF] & 0x5) != 0x5) return 0;
+        if (p > 0xFFFFF000u - 0x1000) break;
+    }
+    return 1;
 }

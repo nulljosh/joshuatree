@@ -4,7 +4,7 @@ displays the current time, and a countdown timer updates live.
 
 Flow:
   1. Boot to GUI desktop, navigate to Apps folder (dock slot 0).
-  2. Navigate to Clock (icon 24, row 4 col 4: right x4, down x4 from top-left).
+  2. Navigate to Clock (icon 23, grid position 22 with Portfolio hidden: row 4 col 2, right x2, down x4 from top-left).
   3. Assert the app opened (outer red close dot present).
   4. Start a 1-minute timer (space, type "1", enter).
   5. Wait 2 seconds and dump framebuffer.
@@ -25,9 +25,9 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
+APPS_CLOSE_X, APPS_CLOSE_Y = 34, 56   # 2.0: a folder-launched app is a compositor window at x=10, y=40
 CLOSE_RED = (0xFF, 0x5F, 0x57)
-VX, VY = 64, 62
+VX, VY = 18, 72
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -84,9 +84,9 @@ try:
     move(apps_centre, ICON_ROW_Y); time.sleep(0.3)
     click(); time.sleep(1.0)
 
-    # Navigate to Clock (icon 24: row = 24 // 5 = 4, col = 24 % 5 = 4)
-    # right x4, down x4 from top-left
-    for _ in range(4):
+    # Navigate to Clock (icon 23, grid position 22 with Portfolio hidden: row 4, col 2)
+    # right x2, down x4 from top-left
+    for _ in range(2):
         key("right")
     for _ in range(4):
         key("down")

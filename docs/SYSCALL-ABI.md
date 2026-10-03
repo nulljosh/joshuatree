@@ -119,9 +119,11 @@ relocations, so its load address is not negotiable:
 
 - A user program is a flat binary. Entry is offset 0, not an ELF entry
   point; `exec_user()` jumps straight at the load address.
-- It is linked at **0xC0507000** and gets **8 pages**: seven for the
-  image (28KB, and a larger one fails to link), one for its stack, whose
-  top, 0xC0508000, is the initial `esp`. (v2 pushes the argument block
+- It is linked at **0xC0587000** and gets **33 pages**: thirty-two for the
+  image (128KB, `JT_USER_IMAGE_PAGES` in kernel/memmap.h; a larger one
+  fails to link), one for its stack, whose top, 0xC05A8000, is the initial
+  `esp`. (Until 2026-10-01 the image was 7 pages, 28KB, and the stack top
+  0xC0588000; the base address did not move.) (v2 pushes the argument block
   onto that page, so the initial `esp` is now a little below the top; see
   "One thing v1 said that v2 makes less than literally true" below. The
   page, its top and its size are unchanged.) `boot/linker.ld` reserves that
@@ -279,7 +281,7 @@ esp+4   argc
 esp+8   argv  ->  [ argv[0], ..., argv[argc-1], NULL ]
 ...     the argv pointer array
 ...     the argument strings, NUL-terminated
-top     0xC0508000, the top of the program's stack page
+top     0xC0588000, the top of the program's stack page
 ```
 
 Why this layout and not Linux's: real Linux puts `argc` at `0(%esp)` with
@@ -314,7 +316,7 @@ Flagged rather than buried, because v1 is frozen and this is the one place
 the frozen text and the running kernel no longer read the same.
 
 v1's "How a program is built and loaded" says the stack page's top,
-0xC0508000, is the initial `esp`. With arguments on the stack that is no
+0xC0588000, is the initial `esp`. With arguments on the stack that is no
 longer exact: `esp` starts below the argument block, by twelve bytes plus
 the pointer array plus the strings, and at most 256 + 8*4 + 12 bytes below
 the top in the worst case v2's own limits allow.
@@ -327,7 +329,7 @@ Why this is not treated as a MAJOR break:
   `user/jtsys.h` exposes no stack pointer, and a v1 `_start(void)` is
   defined as taking nothing, so there is nothing above `esp` it is entitled
   to read. A program that read its own `esp` and compared it to a literal
-  0xC0508000 would notice, and no such program exists or could have been
+  0xC0588000 would notice, and no such program exists or could have been
   written usefully.
 - `user/hello.c` is unmodified and `tools/checks/usertest-check.sh` passes
   unmodified, which is the practical version of the same claim.
@@ -428,7 +430,7 @@ argv), `#include` whichever libjt headers you need, and link
 `user/libjt.a` in after your own object file -- see `user/wc.c` and its
 Makefile rule (`user/wc.bin`) for the pattern. Everything "What this
 contract does NOT cover" says above still applies: no `brk`, no `fork`,
-one program running at a time, the same 7-page image ceiling. libjt does
+one program running at a time, the same 32-page image ceiling. libjt does
 not get around any of that, it just saves you from re-writing `strlen`
 and a decimal formatter in every program that needs one.
 
@@ -447,7 +449,7 @@ changes.
 | # | Name | ebx | ecx | Returns |
 |---|---|---|---|---|
 | 384 | `window_open` | `struct jt_window_info *` | 0 | 0, or -errno |
-| 385 | `window_poll` | `struct jt_event *` | flags | 1 with an event written, -EAGAIN with none, or -errno |
+| 385 | `window_poll` | `struct jt_event *` | flags | 1 with an event written, -EAGAIN with none, or -errno. A compositor window drains its own event ring; the global-keyboard pull is used only by the blocking launch (phone grid, Apps folder, text shell), never by a desktop window. |
 
 ```c
 struct jt_window_info { unsigned int width, height, pitch; unsigned int *pixels; };
@@ -462,7 +464,7 @@ launcher (`kernel/ring3app.c`) runs the program, and the program asks for
 that viewport. It gets its size in `width`/`height`, `pitch` in bytes
 (always `width * 4`), and `pixels`, a framebuffer of exactly that size,
 32 bits per pixel, `0x00RRGGBB`, mapped user-accessible at a fixed address
-(`JT_USER_FB`, 0xC0520000, reserved by `boot/linker.ld`). The program
+(`JT_USER_FB`, 0xC05A0000, reserved by `boot/linker.ld`). The program
 draws into it directly. Errors: -EFAULT (bad pointer), -EBUSY (another
 program owns the window), -ENODEV (no app viewport is open, e.g. the
 program was run from the text shell), -ENOMEM (viewport bigger than the
@@ -482,6 +484,7 @@ again. Any other bit in `ecx` is -EINVAL. Event kinds:
 | 1 `JT_EV_KEY` | a key | ASCII, or 256 and up for up/down/enter/esc/left/right, the same values `kernel/app.h` gives in-kernel apps | 0 |
 | 2 `JT_EV_CLICK` | a left click | x in window coordinates | y |
 | 3 `JT_EV_WHEEL` | a wheel tick | +1 up, -1 down | 0 |
+| 4 `JT_EV_RESIZE` | the window rect changed (compositor windows only) | new width | new height |
 
 There is no `window_close`. Exiting releases the window; so does
 crashing. `task_exit_with` runs `syscall_release_task` for a task that
@@ -510,7 +513,7 @@ Release is complete, as of 1.7.8. When the owning task ends, by `exit` or
 by a fault, the buffer is zeroed and its pages are flipped back to
 supervisor-only (`paging_clear_user`), on every teardown path. The next
 program, with no `window_open` of its own, page-faults if it stores into
-`0xC0520000`, and a syscall handed a pointer into that range gets
+`0xC05A0000`, and a syscall handed a pointer into that range gets
 `-EFAULT`, the same answer as for a pointer into the kernel. 1.7.7 only
 zeroed; `tools/checks/userfb-release-check.py` runs `user/fbpoke.c` right
 after a window closes and asserts both refusals and the fault.
@@ -522,6 +525,16 @@ after a window closes and asserts both refusals and the fault.
 (which is kept for now). The backquote key makes it write through a null
 pointer on purpose; the check presses it and asserts the desktop is still
 alive afterwards, with the serial log naming the fault.
+
+## Windows as compositor windows (1.9.23)
+
+The calls did not change. What changed is what they mean for a program the desktop launched on the window path (`kernel/ring3app.c` `ring3app_launch_window`):
+
+- `window_open` fills the same `jt_window_info`; `pixels` is still `JT_USER_FB`, but the frames behind it belong to this task alone, mapped into no other directory.
+- `window_poll` with `JT_POLL_PRESENT` no longer copies the buffer to the screen inside the call. It marks the window dirty and the desktop blits it on its next frame, so a program that presents every loop costs the kernel nothing extra.
+- Events come from a per-window queue of 16. The desktop puts a key or click there only while this window is focused; a full queue drops the newest. `JT_EV_CLICK` coordinates are relative to the content area, as before.
+- **Resize (1.10).** When the window rect changes (snap, resize), the desktop queues `JT_EV_RESIZE` (a = new content width, b = new height) once per change. The program answers with `window_open` again: a second open on a window that has a resize pending allocates a new buffer of the new size, zeroes it, maps it at `JT_USER_FB` in this task's directory (the old tail pages go back to supervisor-only, the TLB is flushed) and fills `jt_window_info` with the new width, height and pitch; `pixels` stays `JT_USER_FB`. With no resize pending a second open just returns the current info. Until the program answers, the desktop keeps blitting the old buffer clipped, so nothing tears; the old buffer is freed on the desktop's next look at the window, never mid-blit. A rect larger than `JT_USER_FB_BYTES` is never asked for (-ENOMEM on open keeps the old buffer). `user/jtsys.h` has `jt_window_resized(&ev, &win)`, which does the re-open and returns 1 so the program repaints the whole window (the new buffer starts black): `if (r == 1 && jt_window_resized(&ev, &win)) { draw(); flags = JT_POLL_PRESENT; continue; }`. It logs `ring3: window now WxH`; `tools/checks/ring3resize-check.py` reads it.
+- A program on the blocking path (every app not named in `gui_ring3_windowed`) sees the old behaviour exactly.
 
 ## tasks (1.9.6)
 
@@ -544,7 +557,7 @@ Errors: -EFAULT (bad pointer).
 
 | # | Name | ebx | ecx | edx | Returns |
 |---|---|---|---|---|---|
-| 387 | `http_get` | `const char *path` | `void *buf` | `len` | body bytes, -status, or -errno |
+| 387 | `http_get` | `const char *path` | `void *buf` | `len` (at most 65536, `JT_HTTP_BIG_MAX`) | body bytes, -status, or -errno. Up to 2048 bytes the reply is bounced and copied out only on a 200; above that it is received straight into `buf` (range-checked whole with `paging_user_range_ok`, 3s budget), so a failed fetch may leave scratch bytes there. Samantha fetches ~21KB face JPEGs this way. |
 
 **http_get** is what the Curbfind app fetches its live rows with, and the
 first call that puts the kernel's network stack behind a ring-3 program. It
@@ -600,11 +613,252 @@ named inside `DOCS` opens as `"DOCS/NAME"`. The walk in and back out happens
 at open and again at close, when the buffer is written back. An empty path
 is -EINVAL.
 
-## text (1.9.21)
+## mkdir and unlink (1.9.24)
 
 | # | Name | ebx | ecx | edx | Returns |
 |---|---|---|---|---|---|
-| 389 | `text` | `struct jt_text *` (x, y, fg, s) | op: 0 draw, 1 measure, 2 clear | unused | the string's advance in window pixels, or -errno |
+| 389 | `mkdir` | `const char *path` | 0 | 0 | 0, or -errno |
+| 390 | `unlink` | `const char *path` | 0 | 0 | 0, or -errno |
+
+**mkdir** makes a folder and **unlink** deletes a file, both for the Notes app.
+`path` follows the exact rules of **open**: relative to the shell's directory,
+no leading slash, no `.` or `..` parts, at most 63 bytes before the NUL, at
+most 8 parts. Every part but the last is entered with `vfs_chdir` and walked
+back with `..` before the call returns, with the cursor put back where the
+desktop had it, so ring 3 never moves the kernel's own directory. The last
+part is the name made or removed. The path is copied out byte by byte, each
+one checked with `paging_user_range_ok`; nothing outside what open can reach
+is reachable here. No heap is touched, so there is no lock to take beyond the
+gate's own interrupts-off. Errors: -EFAULT (path not user memory), -EINVAL
+(too long or malformed), -ENOENT (a part is not a folder, the backend has no
+folders as with ramfs, or for unlink the file is not there), and for mkdir
+-ENOSPC, which covers a taken name, a full disk and a full directory, since
+the backend answers only yes or no.
+
+## shell_run (1.9.24)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 391 | `shell_run` | `const char *line` (`"<cwd>\n<command>"`) | `char *out` | `unsigned outlen` | bytes written to `out`, or -errno |
+
+**shell_run** is the one call behind the window Terminal (`user/terminal.c`). It
+runs a single shell line and writes the text the shell would have printed into
+`out`, NUL terminated and cut to `outlen - 1`. `line` is copied in byte by byte
+with each byte checked by `paging_user_range_ok`, at most 160 bytes before the
+NUL (`JT_SHELL_LINE_MAX`: a 63 byte cwd, the newline, a 95 byte command); `out` is checked whole, and `outlen` must be 1 to
+4096. Errors: -EFAULT (either pointer not user memory), -EINVAL (`outlen` out
+of range, line too long). A refused command is not an error: it returns a
+one-line message.
+
+It does not call the text shell's `run()`. The call executes inside the int
+0x80 gate on the 4KB kernel stack with interrupts off, and `run()` has
+4KB buffers in its frame and commands that sleep, wait on the network, open
+windows or halt. `kernel/shellsys.c` is a small dispatcher with static buffers
+and an explicit allowlist instead, in the text shell's own wording:
+
+| Command | Does |
+|---|---|
+| `help` | lists the allowlist |
+| `echo <text>` | prints the text |
+| `uptime` | seconds since boot |
+| `mem` | free and total memory in K |
+| `ps` | each task slot, used or free |
+| `ls [dir]` | the cwd (or `dir` under it), name and size |
+| `cat <file>` | a file under the cwd, up to 2047 bytes, non-printable bytes shown as `.` |
+
+Everything else is refused with `<name>: not available in the window terminal
+(allowed: ...)`. That covers anything that blocks (`sleep`, `bench`, the
+`*test` family), waits on the network (`ifconfig`, `netscan`, `web`, `chat`,
+`say`), opens a GUI app or window (`gui`, `browse`, `notes`, `exec`), reboots or
+halts, or re-enters the window system.
+
+The working directory belongs to the caller. `line` is `<cwd>\n<command>`: the
+Terminal keeps its own cwd as a relative path from the root (empty is the
+root, at most 63 bytes, up to `JT_PATH_DEPTH` components) and sends it with
+every call. The kernel joins it with the argument of `ls` or `cat` and resolves
+it with the same `path_enter` / `path_leave` walk the file syscalls use, so
+the desktop's cwd is never moved and is restored exactly before the call
+returns. A line with no newline means the root. `cd` never reaches the kernel:
+the Terminal validates the target with `readdir` (-ENOENT or a file means "no
+such folder"), then updates its own string; `cd ..` pops a component and `cd`
+or `cd /` returns to the root. `clear` is local too. A cwd or path that does
+not resolve answers `ls: no such folder` or `<file>: not found`.
+
+Since 1.9.24 the ring-3 key paths also deliver Home, End, Delete (0xE0 0x47,
+0x4F, 0x53) as `JT_KEY_HOME` 305, `JT_KEY_END` 306, `JT_KEY_DELETE` 307, and
+Ctrl+S as `JT_KEY_SAVE` 308, both to a blocking app's `gui_poll_event` and to
+a ring-3 window through the compositor's event push.
+
+## http_post (1.9.26)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 392 | `http_post` | `struct jt_http_post *` | flags (0) | 0 | reply body bytes, -status, or -errno |
+
+```c
+struct jt_http_post {
+    const char *path;                 /* same rules as http_get */
+    const char *body; unsigned int body_len;   /* at most 6144 bytes */
+    char *out;        unsigned int out_len;    /* clamped to 8192 */
+    unsigned int reply_ticks;         /* 0 = 1500 (15s), clamped to 4500 (45s) */
+};
+```
+
+**http_post** is the first call of the Samantha port (docs/ARCHITECTURE.md,
+"Samantha at ring 3"): one `POST <path> HTTP/1.0` of `application/json` to the
+chat host the Settings app keeps (`llm_host:llm_port`, turing.heyitsmejosh.com
+port 80 by default). Six arguments do not fit three registers, so `ebx` names
+one struct, copied out of user memory once after `paging_user_range_ok` on the
+whole of it; the user copy is never read again. `path` gets the exact checks
+`http_get` gives it: at most 128 bytes before the NUL, starts with `/`,
+printable ASCII only. `body` is range checked for `body_len` bytes and refused
+with -EINVAL above 6144, then copied into a kernel bounce buffer before the
+network is touched, so a program cannot rewrite the request mid-send. `out` is
+range checked for `out_len` (clamped to 8192) before anything runs. The wait
+runs with interrupts on, like `http_get`, and shares its one-fetch-at-a-time
+flag: a second caller gets -EBUSY.
+
+On HTTP 200 the reply body is copied out, at most `out_len` bytes, and the
+count is returned. Any other status is minus that status, -100 to -599.
+-ENODEV no NIC, -EIO no answer within `reply_ticks`, -EFAULT any range outside
+user memory. Nothing is written to `out` on any failure.
+
+`ecx` is a flags word; 0 is the behaviour above, so old callers are untouched.
+`JT_POST_WORKER` (1) sends to the fixed joshuatree Worker host, port 80, the
+same host `http_get` uses, instead of the chat host; it is a selector, a ring-3
+program can never name a host string. `JT_POST_BIG` (2) lifts the body cap and
+the reply cap to 65536: the body is read straight from the caller buffer and
+the reply written straight into `out`, with no kernel bounce (the network layer
+copies the body into its own request buffer). As with big `http_get`, `out` may
+hold scratch bytes after a failure. Unknown flag bits are -EINVAL. Samantha's
+push-to-talk uses both: up to about 4 s of 16 kHz 8-bit audio to `/api/listen`.
+
+One path is special. A `JT_POST_WORKER` post to exactly `/api/mail/send` (the Mail
+app's Send) gets an `Authorization: Bearer <token>` header added by the kernel, from
+the Mail token in Settings (Assistant, `mailtoken=` in `SETTINGS.TXT`). The program
+never supplies, sees or can read that token, no syscall returns it, and the header is
+armed for that one request and cleared straight after, so no other path or later
+request carries it. With no token set the Worker answers 401 and the call returns
+-401. On a failure the Worker's error text is not returned (nothing is written to
+`out`), only the status: Mail maps -401, -429, -400, -503 and -502 to a short reason.
+
+## audio (1.9.26)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 393 | `audio` | op: 1 play, 2 status, 3 stop | `struct jt_audio_play *` / `struct jt_audio_status *` / 0 | `sizeof` that struct | play: bytes taken; status: bytes written; stop: 0; or -errno |
+
+One number, three ops; recording has its own number, 394, below. The format is the one the kernel's own Samantha already feeds the card: 8-bit unsigned mono PCM, 4000 to 44100 Hz (the Worker's `/api/speak` sends 16000). The program fetches the clip itself with `http_post` and queues it here.
+
+```c
+struct jt_audio_play { const void *pcm; unsigned len; unsigned rate; unsigned flags; }; /* flags: JT_AUDIO_END = 1 */
+struct jt_audio_status { unsigned version, size, playing, queued, space, rate, played; };
+```
+
+`play` copies at most 8192 bytes per call into a 32KB kernel ring and returns how many it took. 0 means the ring is full (or the card is busy with the kernel's own chat playback or a recording), so retry on a later frame; the call never waits. The SB16 IRQ drains the ring in 4KB DMA transfers, so playback runs with no caller. It starts when 4KB are queued, or at once when the call carries `JT_AUDIO_END`, which the program sets on the call with the clip's last bytes (a call cut short by a full ring drops the flag, so resend it with the rest). `rate` is read only when the queue was idle. -ENODEV no card, -EINVAL zero length, bad op or short struct, -EFAULT a range outside user memory.
+
+`status` fills the struct (`version` first, `size` is what the kernel wrote) and returns the byte count. `played` counts samples heard since the queue last went idle, interpolated inside the transfer in flight, so mouth time in ms is `played * 1000 / rate`. `stop` drops what is not yet in flight; the current 4KB, about a quarter second at 16 kHz, still finishes. The kernel's `sb16_play` and `sb16_record` return 0 while the queue is busy, and `play` returns 0 while they own the card.
+
+### audio_record (394)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 394 | `audio_record` | op: 1 start, 2 read, 3 stop | start: rate in Hz (a value) / read: user buffer / 0 | 0 / max bytes / 0 | start: 0; read: bytes copied; stop: 0; or -errno |
+
+Push-to-talk capture on the same card and in the same format as `audio` (8-bit unsigned mono, 4000 to 44100 Hz, 16000 for Samantha). `start` clears a 32KB kernel ring and arms capture; the SB16 IRQ then chains 4KB ADC transfers into it (about a quarter second each at 16 kHz), so nothing waits on a caller. `read` copies what has been captured so far, oldest first, at most 8192 bytes per call, and returns the count, 0 when nothing is banked yet. A caller more than 32KB behind loses the oldest samples. `stop` ends capture; the transfer in flight still lands and stays readable, so a program drains with `read` until it returns 0 after `stop`. A `start` on a take left on restarts it.
+
+Capture and playback are exclusive in both directions. `start` returns -EBUSY while `audio` has anything queued or in flight (and while the previous take's last transfer is still landing, so retry on a later frame); `audio` `play` returns 0 while capture runs, and `sb16_play`/`sb16_record` return 0 too. -ENODEV no card, -EINVAL zero length or bad op, -EFAULT a range outside user memory. Same driver and same DSP-2.xx ADC command as the kernel chat's `sb16_record`; QEMU's `-device sb16` does not implement ADC, so under QEMU `start` succeeds but no samples arrive (as with the kernel's own F2). There is no AC97 driver in the kernel.
+
+## sysinfo and launch_request (1.9.26)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 395 | `sysinfo` | `struct jt_sysinfo *` | caller's `sizeof` | 0 | bytes written, or -errno |
+| 396 | `launch_request` | `const char *name` | 0 | 0 | 0, or -errno |
+
+```c
+struct jt_sysinfo {
+    unsigned int version;      /* 1; always first so the struct can grow */
+    unsigned int size;         /* sizeof in the kernel that filled it */
+    unsigned int phone;        /* 1 in phone mode */
+    unsigned int epoch;        /* seconds since 1970, same clock as time */
+    unsigned int wx_have;      /* 1 when a good weather reading exists */
+    unsigned int wx_state;     /* 0 none, 1 ok, 2 offline, 3 timeout, 4 failed, 5 bad */
+    int wx_temp_c, wx_code10;  /* whole degrees C, WMO code times 10 */
+    unsigned int llm_port;
+    char wx_text[24];          /* the menu bar text, empty when none */
+    char llm_host[40];         /* the chat host http_post talks to */
+};
+```
+
+**sysinfo** hands a program the read-only state Samantha reports. `ecx` is the
+size the caller was built with; `paging_user_range_ok` checks that many bytes,
+the kernel fills a private copy and copies out the smaller of the two sizes, so
+an old program on a new kernel and a new one on an old kernel both work (check
+`size`). `ecx` under 8 is -EINVAL, a range outside user memory is -EFAULT.
+Nothing a program passes in is read.
+
+**launch_request** is `open <app>`. The name is copied out with a 24 byte
+bound and must match an `APPS[]` row exactly (case sensitive, real apps only,
+not the Apps folder or Trash): -EINVAL for no match, empty or too long, -EFAULT
+for a bad pointer. The kernel stores one pending index and returns 0, or -EBUSY
+if one is already waiting. It never launches inside the gate: the desktop loop
+takes the index on its next pass and opens it the way a dock click does, as a
+window for a ring-3 app or through the blocking path otherwise. Numbers 393
+and 394 are the audio calls.
+
+## clipboard (1.9.28)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 399 | `clipboard` | op: 1 SET, 2 GET | user buffer | length | bytes stored or copied, or -errno |
+
+One system clipboard, one 4 KB kernel buffer, shared by every ring-3 app. It
+came back when the apps left the kernel: Notes, Terminal, Mail and Samantha
+each used to keep their own copy. **SET** (`ebx` = 1) checks the range with
+`paging_user_range_ok`, then replaces the buffer under `irq_save`. A length of
+0 clears it, one over `JT_CLIP_MAX` (4096) is -EINVAL, a bad pointer is
+-EFAULT. **GET** (`ebx` = 2) copies out at most `edx` bytes and returns how many
+(0 when empty). A length shorter than the clipboard is a clipped paste, not an
+error, so an app asks for exactly the room its field has left. The kernel
+logs `CLIPCOPY:<n>` on SET and `CLIPPASTE:<n>` on a non-empty GET, plus
+`CLIPTRUNC` when the GET clipped, and never the text. Booted with `cliptrace`
+the two lines carry `:<fnv1a32>` after the length, which is what
+`tools/checks/clipboard-check.py` and `textselect-check.py` read. Wrappers:
+`jt_clip_set` and `jt_clip_get` in `user/jtsys.h`; the keys arrive as
+`JT_KEY_COPY`, `JT_KEY_CUT` and `JT_KEY_PASTE` (302 to 304).
+
+## brk (1.9.27)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 397 | `brk` | new top, or 0 | 0 | 0 | the heap top after the call, or -errno |
+| 398 | `refresh` | kind (0 weather, 1 stocks) | stocks: range \| sel << 8 | 0 | 0, -EINVAL (bad kind, range, selection) or -EBUSY (one request already pending). Only records the request; the desktop loop fetches outside the gate, rewrites `WEATHER.TXT` / `STOCKS.TXT` and bumps `jt_sysinfo.data_stamp`, which the window polls. |
+
+A program's image window (`JT_USER_IMAGE_PAGES`, 128 KB) is fixed and
+kmalloc'd per running window, so it is the wrong place for anything big.
+**brk** gives each task its own heap instead, at `JT_BRK_BASE`
+(0xFF000000, `kernel/memmap.h`) growing up to `JT_BRK_MAX_PAGES` (2048, 8 MB).
+`ebx` of 0 reads the current top; a fresh task answers `JT_BRK_BASE`. Any other
+value sets it: pages between the old and new top come from the PMM one frame at
+a time, zeroed before they are mapped, user and writable, in this task's page
+directory and no other; shrinking frees them. A top below the base or past the
+cap is -EINVAL and nothing moves; -ENOMEM means the PMM could not back the
+growth, either because it is out of frames or because the heap stops 4 MB short
+of empty so one program cannot starve the kernel, and the old top stands (any
+pages mapped before the failure are unmapped again). Exit and crash both run
+`brk_release` from `syscall_release_task`: every frame and both page tables go
+back, and the serial log carries `brk: released N pages, live=M` with the
+count still mapped across all tasks, which `tools/checks/ring3brk-check.py`
+asserts returns to 0. `user/libjt` `malloc`, `calloc`, `realloc` and `free`
+sit on top of this call (first fit, split and merge, 64 KB steps), with the old
+16 KB static arena as the fallback when brk is refused.
+
+## text (400)
+
+| # | Name | ebx | ecx | edx | Returns |
+|---|---|---|---|---|---|
+| 400 | `text` | `struct jt_text *` (x, y, fg, s) | op: 0 draw, 1 measure, 2 clear | unused | the string's advance in window pixels, or -errno |
 
 **text** gives a ring-3 window the same anti-aliased face every kernel string
 uses. The window's pixel buffer is logical resolution and is doubled on the

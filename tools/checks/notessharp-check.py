@@ -1,141 +1,32 @@
-"""Headless sharpness check for Notes' runtime-TTF text at both ends of the
-size range: 12pt (the smallest EDITOR_PT_SIZES entry) and 200pt (the
-largest, the owner's "scale nicely to 200pt" ask). Types "Ag" at each size,
-pmemsaves the physical framebuffer, and proves the rendering is real
-antialiased TrueType, not a scaled-up bitmap:
-  - real antialiasing: at least a few glyph pixels land at intermediate
-    coverage (20..80% ink), the same signal textsharp-check.py uses to
-    catch a binary/jagged renderer.
-  - no 2x2 duplicated blocks: a naive nearest-neighbour bitmap upscale (the
-    bug this guards against) makes every 2x2 pixel block four copies of
-    the same value; a real per-pixel rasterization at the target size does
-    not. Sampled across the glyph's bounding box.
+"""Headless sharpness check for Notes' text: real antialiased TrueType, not a
+scaled-up bitmap.
+
+Notes is user/notes.c now and draws through libjt's runtime-TTF faces. The old
+in-kernel Notes had a size control from 12pt to 200pt; the ring-3 one has a
+single body size (libjt's jt_text_draw takes a face, never a point size), so
+the two-ends-of-the-range half of this check has nothing left to drive. What
+it proved is still true and still checked: types "Ag" into a new note, takes
+the physical framebuffer, reads it back at the window's own pixel grid and proves
+
+  - real antialiasing: glyph pixels at intermediate coverage (20..80% ink),
+    the signal that catches a binary/jagged renderer;
+  - no 2x2 duplicated blocks on the glyph edges: a nearest-neighbour bitmap
+    upscale (the bug this guards against) makes every edge block four copies
+    of one value; real per-pixel rasterization does not.
+
+assert_sharp() below is shared: termsharp-check.py loads this file by path and
+reuses it against the Terminal's crop.
 
 Usage: python3 tools/checks/notessharp-check.py   (repo root, after make kernel.elf)
 """
-import json, re, shutil, socket, subprocess, sys, tempfile, time
+import sys, tempfile
 from pathlib import Path
-from PIL import Image
-
-# editor_qa.py runs its whole check suite at import time (script-style), so
-# this doesn't import it -- it re-implements the small slice of its Machine
-# class needed here, against the same disk-less boot and dock-click-to-
-# open-Notes path.
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-ARTIFACTS = Path(tempfile.mkdtemp(prefix='jt-notessharp-'))
-symbols = {}
-nm = shutil.which('nm') or 'nm'
-for line in subprocess.check_output([nm, str(ROOT / 'kernel.elf')], text=True).splitlines():
-    fields = line.split()
-    if len(fields) == 3:
-        symbols[fields[2]] = int(fields[0], 16) - 0xC0000000
-
-
-class Machine:
-    def __init__(self):
-        self.socket_path = ARTIFACTS / 'qmp.sock'
-        self.socket_path.unlink(missing_ok=True)
-        arguments = ['qemu-system-i386', '-kernel', str(ROOT / 'kernel.elf'), '-display', 'none', '-vga', 'std',
-                     '-qmp', f'unix:{self.socket_path},server=on,wait=off']
-        self.process = subprocess.Popen(arguments, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        self.stream = None
-        sock = socket.socket(socket.AF_UNIX)
-        for attempt in range(100):
-            try:
-                sock.connect(str(self.socket_path))
-                break
-            except (FileNotFoundError, ConnectionRefusedError):
-                time.sleep(.05)
-        self.stream = sock.makefile('rwb')
-        self.stream.readline()
-        self.command('qmp_capabilities')
-        time.sleep(3.0)  # let the kernel finish boot and register its input devices before the first move()
-
-    def command(self, name, arguments=None):
-        self.stream.write((json.dumps({'execute': name, 'arguments': arguments or {}}) + '\n').encode())
-        self.stream.flush()
-        while True:
-            result = json.loads(self.stream.readline())
-            if 'error' in result:
-                raise RuntimeError(result)
-            if 'return' in result:
-                return result['return']
-
-    def monitor(self, command):
-        return self.command('human-monitor-command', {'command-line': command})
-
-    def key(self, key):
-        self.monitor(f'sendkey {key} 30')
-        time.sleep(.065)
-
-    def move(self, target_x, target_y):
-        self.command('input-send-event', {'events': [
-            {'type': 'abs', 'data': {'axis': 'x', 'value': target_x * 32768 // 960}},
-            {'type': 'abs', 'data': {'axis': 'y', 'value': target_y * 32768 // 540}}]})
-        time.sleep(.2)
-
-    def click(self):
-        for down in (True, False):
-            self.command('input-send-event', {'events': [{'type': 'btn', 'data': {'down': down, 'button': 'left'}}]})
-            time.sleep(.15)
-
-    def type(self, text):
-        punctuation = {' ': 'spc', '\n': 'ret'}
-        for character in text:
-            before = self.integer('editor_length')
-            self.key(punctuation.get(character, 'shift-' + character.lower() if character.isupper() else character))
-            for _ in range(50):
-                if self.integer('editor_length') != before:
-                    break
-                time.sleep(0.05)
-
-    def memory(self, symbol, count):
-        result = self.monitor(f'xp /{count}xb 0x{symbols[symbol]:x}')
-        return bytes(int(value, 16) for line in result.splitlines() if ':' in line
-                     for value in re.findall(r'0x([0-9a-f]{2})\b', line.split(':', 1)[1]))
-
-    def integer(self, symbol):
-        return int.from_bytes(self.memory(symbol, 4), 'little')
-
-    def screenshot(self):
-        raw = ARTIFACTS / 'framebuffer.raw'
-        self.command('pmemsave', {'val': 0xfd000000, 'size': 1920 * 1080 * 4, 'filename': str(raw)})
-        return Image.frombytes('RGB', (1920, 1080), raw.read_bytes(), 'raw', 'BGRX').convert('L')
-
-    def open_notes(self):
-        self.move(458, 487)
-        self.click()
-        for attempt in range(50):
-            if self.integer('editor_loaded') and self.integer('gui_app_windowed'):
-                time.sleep(.5)
-                return
-            time.sleep(.1)
-        raise AssertionError('Notes dock click did not launch editor')
-
-    def close(self):
-        try:
-            self.command('quit')
-        except (OSError, ValueError):
-            pass
-        try:
-            self.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            self.process.kill()
-
-
-def set_size(machine, index):
-    """editor_size defaults to 1; F2 advances it by one, mod EDITOR_N_SIZES
-    (11), same as the kernel's own key handler. Presses one at a time and
-    confirms each landed before the next, self-correcting for any missed
-    or double-counted key event instead of trusting a fixed press count."""
-    for _ in range(20):
-        current = machine.integer('editor_size')
-        if current == index:
-            return
-        machine.key('f2')
-        time.sleep(.1)
-    raise AssertionError(('editor_size never reached', machine.integer('editor_size'), index))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+SCALE = 2
+VIEW_X, VIEW_Y = 78, 72     # the dock-opened window's viewport
+TEXT_X, TEXT_Y = 56, 34     # user/notes.c: ED_MARGIN, ED_TOP + 6, where the first line's glyphs start
 
 
 def assert_sharp(crop, label):
@@ -187,35 +78,34 @@ def assert_sharp(crop, label):
     print(f'PASS: {label}: {mid} mid-tone px, {duplicated_ratio:.0%} duplicated 2x2 blocks (< 50%)')
 
 
-def check_size(index, label):
-    machine = Machine()
+def check_notes_face():
+    from jtvm import VM
+    vm = VM(None, 'open=notes', 'notes: folders=', work=tempfile.mkdtemp(prefix='jt-notessharp-'))
     try:
-        machine.open_notes()
-        set_size(machine, index)
-        machine.move(480, 300)
-        machine.click()
-        machine.type('Ag')
-        for _ in range(50):
-            if machine.integer('editor_length') == 2:
-                break
-            time.sleep(0.1)
-        time.sleep(.4)
-        img = machine.screenshot()
-        # The typed text starts at the text area's left/top; a box comfortably
-        # larger than any of the 11 point sizes' "Ag" at physical resolution
-        # (scale 2) covers it without also picking up chrome.
-        origin_x, origin_y = machine.integer('app_view_x'), machine.integer('app_view_y')
-        box = ((origin_x + 40) * 2, (origin_y + 60) * 2, (origin_x + 40) * 2 + 620, (origin_y + 60) * 2 + 460)
-        crop = img.crop(box)
-        assert_sharp(crop, label)
+        vm.key('n')
+        assert vm.wait('notes: edit=', 8), 'n did not open a new note in the editor'
+        import time
+        time.sleep(1.0)   # a key sent the instant the editor opens can land before it polls
+        vm.type('Ag')
+        time.sleep(0.8)
+        img = vm.frame().convert('L')
+        x0, y0 = (VIEW_X + TEXT_X - 6) * SCALE, (VIEW_Y + TEXT_Y - 6) * SCALE
+        crop = img.crop((x0, y0, x0 + 90 * SCALE, y0 + 44 * SCALE))
+        # A ring-3 window's buffer is logical resolution; the compositor shows each
+        # buffer pixel as a 2x2 physical block. So the physical crop is duplicated
+        # blocks by construction. Sample one pixel per block to get back the pixels
+        # the app itself rasterized, and hold THOSE to the bar: real coverage values
+        # at the glyph edges, and no duplicated 2x2 blocks among them (which would
+        # mean Notes drew a half-resolution bitmap and stretched it twice).
+        from PIL import Image
+        logical = crop.resize((crop.width // 2, crop.height // 2), Image.NEAREST)
+        assert_sharp(logical, 'Notes body face "Ag" (logical pixels)')
     finally:
-        machine.close()
+        vm.quit()
 
 
 if __name__ == '__main__':
-    # Guarded so termsharp-check.py can `from notessharp_check import
-    # assert_sharp` (see tools/checks/ci_import.py) without this module's
-    # own Notes/QEMU run firing a second time.
-    check_size(0, '12pt "Ag"')
-    check_size(10, '200pt "Ag"')
-    print('PASS: Notes renders real antialiased TrueType at both 12pt and 200pt, no duplicated-block upscaling')
+    # Guarded so termsharp-check.py can load this module by path for
+    # assert_sharp without a second Notes/QEMU run firing.
+    check_notes_face()
+    print('PASS: Notes renders real antialiased TrueType, no duplicated-block upscaling')

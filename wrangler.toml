@@ -31,3 +31,22 @@ namespace_id = "1601"
   [ratelimits.simple]
   limit = 10
   period = 60
+
+# Per-IP limit on GET /api/speak (worker.js's handleSpeakGet): 30/minute.
+[[ratelimits]]
+name = "SPEAK_RATE_LIMITER"
+namespace_id = "1602"
+
+  [ratelimits.simple]
+  limit = 30
+  period = 60
+
+# Per-IP limit on POST /api/mail/send (worker.js's handleMailSend): 3 per minute (a ratelimit binding only allows a 10 or 60 second period).
+# The route refuses (503) when this binding is missing, it never runs unlimited.
+[[ratelimits]]
+name = "MAIL_RATE_LIMITER"
+namespace_id = "1603"
+
+  [ratelimits.simple]
+  limit = 3
+  period = 60

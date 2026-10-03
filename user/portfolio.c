@@ -13,7 +13,7 @@
  * reaped by the kernel. tools/checks/ring3portfolio-check.py presses it.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define INK   0x001C1C1E
@@ -87,8 +87,8 @@ static const pf_row_t PF_ROWS[] = {
     {"Conveyer",  "AI plays Factorio",         "", PF_KIND_APP},
 };
 #define PF_ROW_COUNT (int)(sizeof(PF_ROWS) / sizeof(PF_ROWS[0]))
-#define PF_ROW_H 20
-#define PF_TOP   68
+#define PF_ROW_H 22
+#define PF_TOP   40
 
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 static int pf_sel JT_DATA = 0;    /* index into PF_ROWS, always an app row */
@@ -104,23 +104,22 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (!(g[r] & (0x80 >> c)) || px < 0 || px >= (int)win.width) continue;
-            win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
+static int text(const char *s, int x, int y, unsigned fg) { /* returns the x after the last glyph */
+    return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s);
 }
-static int text(const char *s, int x, int y, unsigned fg) {
-    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return x + w; } /* SYS_TEXT; bitmap only if its queue is full */
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
-    return x;
+static void etext(const char *s, int x, int y, int maxw, unsigned fg) {
+    char t[72]; int n = 0;
+    while (s[n] && n < 64) { t[n] = s[n]; n++; }
+    t[n] = 0;
+    if (jt_text_width(JT_FACE_BODY, t) > maxw) {
+        while (n > 0) {
+            t[n] = '.'; t[n + 1] = '.'; t[n + 2] = '.'; t[n + 3] = 0;
+            if (jt_text_width(JT_FACE_BODY, t) <= maxw) break;
+            t[--n] = 0;
+        }
+        if (n == 0) t[0] = 0;
+    }
+    jt_text_draw(&win, JT_FACE_BODY, x, y, fg, t);
 }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
@@ -135,7 +134,7 @@ static int pf_first_app_row(void) {
     return 0;
 }
 static int pf_vis_rows(void) {
-    int list_h = (int)win.height - 34 - PF_TOP;
+    int list_h = (int)win.height - 60 - PF_TOP;
     if (list_h < 0) list_h = 0;
     int v = list_h / PF_ROW_H;
     return v < 1 ? 1 : v;
@@ -150,31 +149,30 @@ static void pf_clamp_scroll(int vis_rows) {
 }
 
 static void pf_draw(void) {
-    jt_text_clear();
     int w = (int)win.width, h = (int)win.height;
     int vis_rows = pf_vis_rows();
     pf_clamp_scroll(vis_rows);
     rect(0, 0, w, h, BG);
-    text("up/down or scroll to browse   esc closes", 20, 48, HINT);
-    for (int r = 0; r < vis_rows; r++) {
+        for (int r = 0; r < vis_rows; r++) {
         int i = pf_scroll + r;
         if (i >= PF_ROW_COUNT) break;
         int y = PF_TOP + r * PF_ROW_H;
         const pf_row_t *row = &PF_ROWS[i];
         if (row->kind == PF_KIND_HEADER) { text(row->desc, 20, y + 2, HEAD); continue; }
         if (row->kind == PF_KIND_TEXT) {
-            if (row->name) text(row->name, 20, y + 2, INK);
-            else if (row->url[0]) text(row->desc, 20, y + 2, LINK);
-            else text(row->desc, 20, y + 2, PLAIN);
+            if (row->name) etext(row->name, 20, y + 2, w - 40, INK);
+            else if (row->url[0]) etext(row->desc, 20, y + 2, w - 40, LINK);
+            else etext(row->desc, 20, y + 2, w - 40, PLAIN);
             continue;
         }
         if (i == pf_sel) rect(20, y - 2, w - 40, PF_ROW_H - 2, SELBG);
         int nx = text(row->name, 32, y + 2, INK) + 14;
-        text(row->desc, nx, y + 2, HINT);
+        etext(row->desc, nx, y + 2, w - 32 - nx, HINT);
     }
     const pf_row_t *sel = &PF_ROWS[pf_sel];
-    if (sel->url[0]) text(sel->url, 20, h - 24, LINK);
-    else text("no web app", 20, h - 24, HEAD);
+    text("up/down or scroll to browse   esc closes", 20, h - 50, HINT);
+    if (sel->url[0]) etext(sel->url, 20, h - 26, w - 40, LINK);
+    else text("no web app", 20, h - 26, HEAD);
 }
 
 __attribute__((section(".text.start"), used))
@@ -201,6 +199,7 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { pf_draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;

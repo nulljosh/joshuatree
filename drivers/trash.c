@@ -1,5 +1,6 @@
 #include "trash.h"
 #include "vfs.h"
+#include "kheap.h"
 
 struct item {
     char name[TRASH_NAME_LEN];
@@ -8,9 +9,12 @@ struct item {
     int used;
 };
 
-static struct item items[TRASH_MAX_ITEMS];
+/* Heap, not .bss: 33KB of static buffer sat between the kernel and the ring-3
+   program window. Allocated once at boot, before anything can use the trash. */
+static struct item *items;
 
 void trash_init(void) {
+    if (!items) items = kmalloc(sizeof(struct item) * TRASH_MAX_ITEMS);
     for (int i = 0; i < TRASH_MAX_ITEMS; i++) items[i].used = 0;
 }
 

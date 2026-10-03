@@ -29,18 +29,20 @@ PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
 CLOSE_X, CLOSE_Y = 94, 56
+WIDE_CLOSE_X, WIDE_CLOSE_Y = 34, 56  # 2.0 ring-3 apps open at the full-pane frame; same light feature-drive.py reads
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 
 # App names from kernel/kernel.c APPS[].name (indices 0-25)
 APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
-        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar",
+        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Lexly", "Toroid", "Sparkjar",
         "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity", "Apps", "Trash"]
 
 # Apps 0-23 launch from the Apps folder grid; Apps (25) and Trash (26) are special:
 # Apps opens when you click the dock slot again, Trash is dock slot 10.
-REGULAR_APPS = list(range(24))
+PORTFOLIO_IDX = 21  # hidden from the default Apps folder (public OS); the grid is compacted around it
+REGULAR_APPS = [i for i in range(24) if i != PORTFOLIO_IDX]
 SPECIAL_APPS = [(10, "Trash")]  # (dock_slot, name)
 
 CRASH_PATTERNS = [
@@ -110,7 +112,9 @@ try:
         p2 = pixel(APPS_CLOSE_X, APPS_CLOSE_Y)
         is_red_1 = max(abs(p1[i] - CLOSE_RED[i]) for i in range(3)) <= 12
         is_red_2 = max(abs(p2[i] - CLOSE_RED[i]) for i in range(3)) <= 12
-        return is_red_1 or is_red_2
+        p3 = pixel(WIDE_CLOSE_X, WIDE_CLOSE_Y)
+        is_red_3 = max(abs(p3[i] - CLOSE_RED[i]) for i in range(3)) <= 12
+        return is_red_1 or is_red_2 or is_red_3
 
     # Wait for desktop to be ready: dock tray color at (480, 511) = 0xEFEBE4
     for _ in range(120):
@@ -130,7 +134,11 @@ try:
             p2 = pixel(APPS_CLOSE_X, APPS_CLOSE_Y)
             is_red_1 = max(abs(p1[i] - CLOSE_RED[i]) for i in range(3)) <= 12
             is_red_2 = max(abs(p2[i] - CLOSE_RED[i]) for i in range(3)) <= 12
-            if is_red_1:
+            p3 = pixel(WIDE_CLOSE_X, WIDE_CLOSE_Y)
+            is_red_3 = max(abs(p3[i] - CLOSE_RED[i]) for i in range(3)) <= 12
+            if is_red_3:
+                move(WIDE_CLOSE_X, WIDE_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)
+            elif is_red_1:
                 move(CLOSE_X, CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)
             elif is_red_2:
                 move(APPS_CLOSE_X, APPS_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)
@@ -153,8 +161,9 @@ try:
             click(); time.sleep(1.0)
 
             # Navigate to the app within the grid: row = app_idx // 5, col = app_idx % 5
-            row = app_idx // 5
-            col = app_idx % 5
+            pos = app_idx - (1 if app_idx > PORTFOLIO_IDX else 0)  # grid position with Portfolio hidden
+            row = pos // 5
+            col = pos % 5
             for _ in range(col):
                 key("d")  # right
             for _ in range(row):
@@ -202,7 +211,7 @@ try:
     # Process Trash (special: dock slot 10)
     try:
         app_name = "Trash"
-        app_idx = 26
+        app_idx = 25
         opened = False
         png_path = None
 

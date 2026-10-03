@@ -117,7 +117,11 @@ def settings_section_for_row(row):
     raise ValueError(f'row {row} is not in any settings section')
 # The Notes dock icon, the exact coordinates editor_qa.py's open_notes()
 # already proved land on it.
-DOCK_NOTES_X, DOCK_NOTES_Y = 458, 487
+# 2.0: Notes is a ring-3 compositor window and the dock has 11 tiles with Notes
+# in slot 4 (SLOT0_X 247, pitch 43, tile 37), so aim at its centre. The proof
+# that it opened is Notes' own serial marker, not a kernel symbol.
+DOCK_NOTES_X, DOCK_NOTES_Y = 247 + 4 * 43 + 18, 487
+NOTES_OPEN_MARKER = 'ring 3: notes: folders='
 
 nm = shutil.which('nm') or 'nm'
 symbols = {}
@@ -129,7 +133,10 @@ for line in subprocess.check_output([nm, str(ROOT / 'kernel.elf')], text=True).s
 
 class Machine:
     def __init__(self, disk):
+        Machine.boots = getattr(Machine, 'boots', 0) + 1
+        self.serial_path = WORKDIR / f'serial-{Machine.boots}.log'
         arguments = ['qemu-system-i386', '-kernel', str(ROOT / 'kernel.elf'), '-display', 'none', '-vga', 'std',
+                     '-serial', f'file:{self.serial_path}',
                      '-drive', f'file={disk},format=raw,if=ide',
                      '-qmp', f'tcp:127.0.0.1:{QMP_PORT},server,nowait']
         self.process = subprocess.Popen(arguments, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
@@ -243,6 +250,27 @@ class Machine:
         value = self.integer(symbol)
         assert predicate(value), (desc or symbol, value)
         return value
+
+    def serial_count(self, marker):
+        try:
+            return self.serial_path.read_text(errors='replace').count(marker)
+        except FileNotFoundError:
+            return 0
+
+    def wait_serial_more(self, marker, baseline, desc, timeout=6):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.serial_count(marker) > baseline:
+                return
+            time.sleep(0.05)
+        raise AssertionError(desc)
+
+    def assert_no_serial_more(self, marker, baseline, window):
+        deadline = time.time() + window
+        while time.time() < deadline:
+            now = self.serial_count(marker)
+            assert now == baseline, (marker, 'appeared behind the login gate', now, 'expected', baseline)
+            time.sleep(0.05)
 
     def wait_present_change(self, baseline, timeout=3):
         # window_present_count only increments at a real frame boundary
@@ -405,12 +433,9 @@ try:
     check('fresh boot: auth_user_count is 0 (no USERS.TXT yet)', m1.integer('auth_user_count') == 0)
     check('fresh boot: auth_logged_in is 0 (nothing to log into)', m1.integer('auth_logged_in') == 0)
     m1.screenshot('01-fresh-desktop')
+    notes_base = m1.serial_count(NOTES_OPEN_MARKER)
     m1.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
-    # v2.0 (notes/folders): the dock click opens straight into a note (a
-    # fresh disk gets a new one). editor_loaded is shrunk to one byte by
-    # the compiler and sits right before editor_buffer, so mask the low
-    # byte when reading it as an int.
-    m1.wait_int('editor_loaded', lambda v: (v & 0xff) == 1, 'Notes did not open on a gate-free fresh image', timeout=5)
+    m1.wait_serial_more(NOTES_OPEN_MARKER, notes_base, 'Notes did not open on a gate-free fresh image', timeout=5)
     check('fresh boot: desktop is live with no accounts configured (today\'s documented behaviour)', True)
     m1.key('esc')
     time.sleep(0.2)
@@ -458,8 +483,9 @@ try:
     # called strictly after auth_gate() returns (kernel.c's gui_run), so
     # there is no desktop app router running behind the prompt to leak a
     # previous session or answer a click.
+    gate_base = m2.serial_count(NOTES_OPEN_MARKER)
     m2.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
-    m2.assert_no_int_change('editor_loaded', 0, window=1.0)
+    m2.assert_no_serial_more(NOTES_OPEN_MARKER, gate_base, window=1.0)
     check('login gate: the dock is inert behind the login prompt (Notes never opens)', True)
 
     # Esc on the username field must not bypass the gate.
@@ -467,7 +493,7 @@ try:
     time.sleep(0.5)
     check('esc on username field: still not logged in', m2.integer('auth_logged_in') == 0)
     m2.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
-    m2.assert_no_int_change('editor_loaded', 0, window=0.6)
+    m2.assert_no_serial_more(NOTES_OPEN_MARKER, gate_base, window=0.6)
     check('esc on username field: does not drop to the desktop', True)
 
     # Esc on the password field must not bypass the gate either.
@@ -478,7 +504,7 @@ try:
     time.sleep(0.5)
     check('esc on password field: still not logged in', m2.integer('auth_logged_in') == 0)
     m2.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
-    m2.assert_no_int_change('editor_loaded', 0, window=0.6)
+    m2.assert_no_serial_more(NOTES_OPEN_MARKER, gate_base, window=0.6)
     check('esc on password field: does not drop to the desktop', True)
 
     # Wrong password: rejected, and the real in-kernel delay is bracketed
@@ -525,7 +551,7 @@ try:
     check('correct password: auth_current_user == "joshua"', m2.string('auth_current_user', 25) == USERNAME)
 
     m2.click_at(DOCK_NOTES_X, DOCK_NOTES_Y)
-    m2.wait_int('editor_loaded', lambda v: (v & 0xff) == 1, 'Desktop did not become interactive after a real login', timeout=5)
+    m2.wait_serial_more(NOTES_OPEN_MARKER, gate_base, 'Desktop did not become interactive after a real login', timeout=5)
     check('post-login: the desktop is interactive (Notes opens)', True)
     m2.key('esc')
     time.sleep(0.2)

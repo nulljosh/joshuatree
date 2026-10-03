@@ -27,7 +27,7 @@
  * one serial line, which the check reads.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define INK   0x001C1C1E
@@ -57,8 +57,8 @@ static const cf_listing_t CF_SAMPLES[] = {
 #define CF_LIST_X 20
 #define CF_LIST_W 220
 #define CF_INFO_X 260
-#define CF_TOP    48
-#define CF_ROW_H  28
+#define CF_TOP    64
+#define CF_ROW_H  30
 
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
 static char cf_body[JT_HTTP_BODY_MAX] JT_DATA;      /* the reply, parsed in place */
@@ -80,25 +80,24 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (!(g[r] & (0x80 >> c)) || px < 0 || px >= (int)win.width) continue;
-            win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
+static int text(const char *s, int x, int y, unsigned fg) { /* returns the x after the last glyph */
+    return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s);
+}
+/* s cut to maxw px with a trailing "...", drawn; returns the x after it */
+static int etext(const char *s, int x, int y, int maxw, unsigned fg) {
+    char t[72]; int n = 0;
+    while (s[n] && n < 64) { t[n] = s[n]; n++; }
+    t[n] = 0;
+    if (jt_text_width(JT_FACE_BODY, t) > maxw) {
+        while (n > 0) {
+            t[n] = '.'; t[n + 1] = '.'; t[n + 2] = '.'; t[n + 3] = 0;
+            if (jt_text_width(JT_FACE_BODY, t) <= maxw) break;
+            t[--n] = 0;
         }
+        if (n == 0) t[0] = 0;
     }
+    return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, t);
 }
-static int text(const char *s, int x, int y, unsigned fg) {
-    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return x + w; } /* SYS_TEXT; bitmap only if its queue is full */
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
-    return x;
-}
-static int slen(const char *s) { int n = 0; while (s[n]) n++; return n; }
 static int itoa10(int v, char *buf) {
     char tmp[12]; int tn = 0, n = 0; unsigned u = v < 0 ? (unsigned)(-v) : (unsigned)v;
     if (v < 0) buf[n++] = '-';
@@ -115,9 +114,27 @@ static void say(const char *pfx, int a) {
     jt_write(1, line, (unsigned)l);
 }
 
-/* Word-wrap into the info column on the real advance. */
+/* Word-wrap into the info column by pixel width, one text line per 20 px. */
 static void wrap(const char *s, int x, int y, int max_w, int max_h) {
-    if (max_h >= 16 && y + 16 <= (int)win.height) jt_wrap(s, x, y, max_w, 18, (max_h - 16) / 18 + 1, INK);
+    char line[96]; int ll = 0, y0 = y;
+    if (max_w < 60) return;
+    while (*s && y + 18 <= y0 + max_h) {
+        int wl = 0;
+        while (s[wl] && s[wl] != ' ') wl++;
+        char trial[96]; int tl = 0;
+        for (int i = 0; i < ll; i++) trial[tl++] = line[i];
+        if (ll) trial[tl++] = ' ';
+        for (int i = 0; i < wl && tl < 94; i++) trial[tl++] = s[i];
+        trial[tl] = 0;
+        if (ll && jt_text_width(JT_FACE_BODY, trial) > max_w) {
+            line[ll] = 0; text(line, x, y, INK); y += 20; ll = 0;
+            continue;
+        }
+        for (int i = 0; i <= tl; i++) line[i] = trial[i];
+        ll = tl; s += wl;
+        while (*s == ' ') s++;
+    }
+    if (ll && y + 18 <= y0 + max_h) { line[ll] = 0; text(line, x, y, INK); }
 }
 
 /* Sort indices by score, descending, the same bubble kernel/curbfind.h ran. */
@@ -162,7 +179,6 @@ static void cf_fetch(void) {
 }
 
 static void cf_draw(void) {
-    jt_text_clear();
     int w = (int)win.width, h = (int)win.height;
     rect(0, 0, w, h, BG);
     if (cf_city[0]) {
@@ -170,9 +186,9 @@ static void cf_draw(void) {
         while (*t) hdr[l++] = *t++;
         for (const char *c = cf_city; *c && l < 62; c++) hdr[l++] = *c;
         hdr[l] = 0;
-        text(hdr, CF_LIST_X, 20, HINT);
+        etext(hdr, CF_LIST_X, 40, w - 2 * CF_LIST_X, HINT);
     } else {
-        text("Offline, sample Vancouver listings   up/down or click to select   esc closes", CF_LIST_X, 20, HINT);
+        text("Offline, sample Vancouver listings", CF_LIST_X, 40, HINT);
     }
 
     int room_rows = (h - CF_TOP - 20) / CF_ROW_H;
@@ -186,36 +202,40 @@ static void cf_draw(void) {
         char rank[4]; int r = 0, n = i + 1;
         if (n >= 10) rank[r++] = (char)('0' + n / 10);
         rank[r++] = (char)('0' + n % 10); rank[r++] = '.'; rank[r] = 0;
-        text(rank, CF_LIST_X + 6, y + 6, fg);
-        /* title, trimmed to the room left of the price (8 px per glyph) */
-        int pw = slen(l->price) * 8;
-        int room = (CF_LIST_W - 30 - pw - 16) / 8, len = slen(l->title);
-        char nm[48]; int k = 0;
-        if (room > 44) room = 44;
-        if (len <= room) { while (k < len) { nm[k] = l->title[k]; k++; } }
-        else { while (k < room - 3) { nm[k] = l->title[k]; k++; } while (k > 0 && nm[k - 1] == ' ') k--; nm[k++] = '.'; nm[k++] = '.'; nm[k++] = '.'; }
-        nm[k] = 0;
-        text(nm, CF_LIST_X + 30, y + 6, fg);
-        text(l->price, CF_LIST_X + CF_LIST_W - pw - 8, y + 6, fg);
+        text(rank, CF_LIST_X + 6, y + 5, fg);
+        /* title, ellipsized to the room left of the price */
+        int pw = jt_text_width(JT_FACE_BODY, l->price);
+        etext(l->title, CF_LIST_X + 30, y + 5, CF_LIST_W - 30 - pw - 20, fg);
+        text(l->price, CF_LIST_X + CF_LIST_W - pw - 8, y + 5, fg);
     }
 
     if (cf_sel < cf_n) {
         const cf_listing_t *l = &cf_rows[cf_order[cf_sel]];
-        int x = text(l->title, CF_INFO_X, CF_TOP, INK); (void)x;
-        x = text(l->price, CF_INFO_X, CF_TOP + 20, HINT);
-        x = text(" | ", x, CF_TOP + 20, HINT);
-        text(l->neighbourhood, x, CF_TOP + 20, HINT);
-        text("Deal score:", CF_INFO_X, CF_TOP + 44, INK);
-        int bar_y = CF_TOP + 60, seg = 16, score = l->score;
+        int x;
+        { char tt[72]; int tn = 0; while (l->title[tn] && tn < 64) { tt[tn] = l->title[tn]; tn++; }
+          tt[tn] = 0;
+          if (jt_text_width(JT_FACE_BOLD, tt) > w - CF_INFO_X - 20) {
+              while (tn > 0) {
+                  tt[tn] = '.'; tt[tn + 1] = '.'; tt[tn + 2] = '.'; tt[tn + 3] = 0;
+                  if (jt_text_width(JT_FACE_BOLD, tt) <= w - CF_INFO_X - 20) break;
+                  tt[--tn] = 0;
+              }
+          }
+          jt_text_draw(&win, JT_FACE_BOLD, CF_INFO_X, CF_TOP, INK, tt); }
+        x = text(l->price, CF_INFO_X, CF_TOP + 24, HINT);
+        x = text(" | ", x, CF_TOP + 24, HINT);
+        text(l->neighbourhood, x, CF_TOP + 24, HINT);
+        text("Deal score:", CF_INFO_X, CF_TOP + 50, INK);
+        int bar_y = CF_TOP + 76, seg = 16, score = l->score;
         rect(CF_INFO_X, bar_y, seg * 10, 8, BAREMPTY);
         if (score > 0 && score <= 10) rect(CF_INFO_X, bar_y, seg * score, 8, BARFULL);
         char ss[8]; int sl = 0;
         if (score >= 10) ss[sl++] = '1';
         ss[sl++] = (char)('0' + score % 10); ss[sl++] = '/'; ss[sl++] = '1'; ss[sl++] = '0'; ss[sl] = 0;
-        text(ss, CF_INFO_X + seg * 10 + 8, bar_y - 4, INK);
-        wrap(l->reason, CF_INFO_X, CF_TOP + 84, w - CF_INFO_X - 24, h - CF_TOP - 84 - 20);
+        text(ss, CF_INFO_X + seg * 10 + 8, bar_y - 5, INK);
+        wrap(l->reason, CF_INFO_X, CF_TOP + 100, w - CF_INFO_X - 24, h - CF_TOP - 84 - 20);
     }
-    if (cf_city[0]) text("Live Craigslist deals for your area   up/down or click to select   esc closes", CF_LIST_X, h - 20, HINT);
+    etext(cf_city[0] ? "Live Craigslist deals for your area   up/down or click to select   esc closes" : "up/down or click to select   esc closes", CF_LIST_X, h - 24, w - 2 * CF_LIST_X, HINT);
 }
 
 /* The probe: every call here must be refused by the kernel's own checks,
@@ -289,6 +309,7 @@ void _start(int argc, char **argv) {
     unsigned flags = JT_POLL_PRESENT;
     for (;;) {
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { cf_draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;

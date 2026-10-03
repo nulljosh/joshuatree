@@ -203,30 +203,34 @@ mini-ITX case.
 
 ![Strata blueprint sheet](hardware/strata-blueprint.svg)
 
-224 x 224 x 64.5 mm outside. Inside is a 178 mm core tray with 2 mm
-walls, which leaves a 174 mm cavity for the 170 mm board. The rear notch
+200 x 200 x 55 mm outside (a Mac mini is 127 x 127 x 50; the 170 mm board and its 158.75 mm I/O shield set the floor). Inside is a 178 mm core tray with 2 mm
+walls and chamfered corners, which leaves a 174 mm cavity for the 170 mm board. The rear notch
 cuts through every ring down to the tray so the stock 158.75 x 44.45 mm
 I/O shield fits.
 
 ### Parts
 
-| Part | Size | How to make it |
-|------|------|----------------|
-| Rings S0 to S5 | 224 down to 209 mm, 3 mm smaller each, 9 / 7 / 10 / 6.5 / 8.5 / 7 mm thick | SLS nylon or FDM PETG at 0.2 mm, dyed or painted one tone each |
-| Cap | 206 mm square, 4.5 mm | Same print, tree laser engraved 0.5 mm deep |
-| Core tray | 178 mm square, 62 mm tall, 2 mm walls, vent slots on every gap line | Bent 1.5 mm aluminium, or printed |
-| Hardware | 4 M3 threaded rods, 20 spacers 2 mm, 4 nuts, 4 M3 standoffs 6 mm | Off the shelf |
+Everything is split to fit a 180 x 180 x 180 mm bed (Bambu A1 mini). All numbers come from `hardware/strata_cad.py`, which fails if any part doesn't fit.
+
+<!-- parts:start -->
+| Part | Size | Print |
+|---|---|---|
+| Rings S0 to S5 | 200 mm square, 6.5 / 7.1 / 7.1 / 7.1 / 7.1 / 7.1 mm thick (base ring first, then equal strata), 2.0 mm vent gap between each, 3 pieces per ring: one 200 mm front with side returns of 50 and 40 mm alternating, and two rear L pieces, so every seam lands on a side face; rings 1 to 5 carry 5 pads under the front and 3 under each rear L (rod corner, arm end, mid), 16.0 x 2.4 mm and 8.4 mm or more behind the face, nut pocket under ring 0 and on top of ring 5 | FDM PLA or PETG at 0.2 mm, one tone each |
+| Cap | 200 mm square frame in 3 pieces (one front U plus two rear L, side cut at 45 mm, 5 mm from the ring 5 seam) and a 178 mm panel in one piece carrying the whole tree, 3 mm thick, panel and frame hole corners R2, tree from `landing/logo.svg` engraved 0.8 mm | Same print, printed right side up |
+| Core tray | 178 mm square, 52.0 mm tall, 2 mm walls, corners chamfered 4.2 mm, vent slots on every gap line, 4 board standoffs printed on the floor, no rear wall | Printed, floor down, no supports |
+| Rear plate | 173.6 x 51.1 mm and 13 mm deep including the facade, one piece, with the 160 x 45 I/O window and a 1.6 mm frame on all four sides, flush with the ring faces | Printed lying flat |
+| Feet | 7.6 mm round, 1.6 mm thick, recessed under ring 0, cover the nut and the rod end | TPU or PLA |
+<!-- parts:end -->
+
+Hardware: 4 M3x50 rods, 8 M3 nuts, 4 M3x8 self-tapping screws (16 fasteners, was 20), all off the shelf.
+
+35 printed pieces in 32 STL files (24 ring pieces, 5 cap pieces, tray, rear plate, 4 feet), down from 58 loose pieces. The 24 loose spacers and the metal standoffs are gone; the spacers and standoffs are printed into parts you already make, and four recessed feet hide the bottom nuts. Picture version: `hardware/BUILD.md`.
+
+Full STL list with counts: `hardware/stl/manifest.json`. Print settings and steps: `hardware/ASSEMBLY.md`.
 
 ### Build it
 
-1. Print the six rings and the cap. Colour runs B9542C at the base to
-   F0E7D8 at the top.
-2. Make the tray. The vent slots sit at each gap height so air goes
-   straight through a ring gap into the board.
-3. Engrave the tree on the cap from `hardware/mark.svg`.
-4. Stack it: tray, four rods, then ring, spacer, ring, spacer, up to S5.
-5. Board onto the standoffs, stock I/O shield into the notch, cap on,
-   nuts on top.
+Follow `hardware/ASSEMBLY.md`. The short version: rods and nuts in ring 0, tray in, rings, board on the printed standoffs, rear plate, nuts in ring 5, cap on top.
 
 ### Check before cutting
 
@@ -237,20 +241,48 @@ I/O shield fits.
   the rear I/O.
 - Passive cooling is fine on paper for this SoC; measure it in the stack
   under load before calling it done.
-- No print or machining quotes yet. Price goes in the BOM only once
-  there's a real quote.
+- No real print quote yet. The prototype cost below is an estimate; replace it with the JLC3DP cart total once the STLs are uploaded.
 
 ### Regenerate
 
 Every file here comes from one set of numbers in `hardware/strata_cad.py`.
 
 ```sh
-uv run --with build123d python docs/hardware/strata_cad.py out   # STEP + one STL per part
+uv run --with build123d python docs/hardware/strata_cad.py docs/hardware   # STEP, STLs, step diagrams
 python3 docs/hardware/blueprint_sheet.py docs/hardware/strata-blueprint.svg
 blender -b -P docs/hardware/concepts.py -- docs/hardware strata  # renders
 ```
 
-`strata_cad.py` asserts that the cap covers the core and the rods sit
-inside the smallest ring. Those two checks caught real mistakes in the
-first draft: the rods didn't fit the top rings, and the I/O window was
-too short for a standard shield.
+`strata_cad.py` asserts, in code, that:
+
+- every printed part fits the 180 mm bed (the tray is the biggest at 178 mm)
+- no flat roof is wider than 10 mm, so nothing needs supports (the tall rear window is its own plate, printed flat)
+- every wall is 1.6 mm or thicker, every mating face has 0.2 mm of clearance
+- the I/O window clears the 158.75 x 44.45 mm shield, the mounting holes match the 154.94 x 157.48 mm mini-ITX pattern, and the tray clears a 30 mm heatsink
+- the rods clear the core and keep 1.6 mm of wall in the smallest ring
+
+These caught real mistakes. The first draft's rods didn't fit the top rings. Its tray window was 158 mm, narrower than the 158.75 mm shield. The rear window was a 160 mm unsupported bridge. Rods had nothing to anchor to at the bottom, so v2 anchors them with nut pockets under ring 0, and the feet now close those pockets from below. Spacers are now pads on the rings, set 8.4 mm behind the face so the gaps read as vents.
+
+## Prototype cost
+
+Print it once before anyone is charged. All of this is an **estimate**, no quote yet. The STLs total about 900 cm3 solid, so with walls and 15 to 20% infill it's roughly 450 g of plastic.
+
+| Route | Parts | Shipping | Total | Source |
+|---|---|---|---|---|
+| JLC3DP, PLA or resin, ugly gray | ~$25-45 | ~$15-30 | **~$40-75** | estimate, replace with the cart total |
+| Bambu A1 mini at home | ~$9 plastic (450 g at ~$20/kg) | none | **~$9 after the $299 printer** | estimate |
+| Hardware bag (rods, nuts, standoffs, screws) | ~$7 | included | **~$7** | same estimate as the existing BOM "cables/misc" line |
+
+The existing dev kit BOM above is unchanged: its numbers still come from the listings and estimates stated there.
+
+## Ordering from JLC3DP
+
+1. Go to jlc3dp.com, pick 3D Printing, upload the STLs from `hardware/stl/`. Upload each file once and set the quantity from `manifest.json` (every ring quarter is 1, the cap frame pieces are 1 each, the feet are 4).
+2. Material: PLA or PETG-like FDM if offered, otherwise the cheapest resin (Standard Resin, gray). Layer 0.1 to 0.2 mm. Color: one per ring, hex values in `hardware/BUILD.md` and `hardware/stl/manifest.json` (terracotta B9542C at the base to cream F0E7D8 at the cap, black for tray, rear plate and feet). A single grey order has the right shape and no fade.
+3. Quantity per file: from the manifest.
+4. Open the DFM preview. Check: every part lies flat as uploaded, no wall flagged under 1.6 mm, the quarters aren't merged into one body, the rear plate window and the nut pockets show as holes. If it flags the rear ring quarters, which are cut away for the I/O plate, ask for PETG or accept the risk, the thinnest strip is 4.7 mm tall and stiff once stacked.
+5. Look at the cart total. Write the real number into this page and into MONEY.md in place of the estimate. That one number decides the kit margin.
+6. Nothing is ordered until Joshua says so.
+
+---
+Strata Kit and Joshua Tree are trademarks of Joshua Trommel. Designs licensed CC BY-NC-SA 4.0. Build one for yourself; please do not sell copies.

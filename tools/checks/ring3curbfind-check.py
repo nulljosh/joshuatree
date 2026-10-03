@@ -49,7 +49,7 @@ CLOSE_X, CLOSE_Y = 94, 56
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 VIEW_X, VIEW_Y = 78, 72   # gui_launch_from_dock: viewport at (x+8, y+32) for x=70, y=40
 PARK = (480, 200)
-LIST_X, ROW_Y, ROW_H = 20, 48, 28   # user/curbfind.c: CF_LIST_X, CF_TOP, CF_ROW_H
+LIST_X, ROW_Y, ROW_H = 20, 65, 30   # user/curbfind.c: CF_LIST_X, CF_TOP, CF_ROW_H
 SEL_COLOR, ROW_COLOR = (0xE2, 0xD8, 0xCC), (0xF1, 0xED, 0xE7)
 EINVAL, EFAULT = -22, -14
 PROBES = {"relative": EINVAL, "crlf": EINVAL, "space": EINVAL, "empty": EINVAL, "long": EINVAL,

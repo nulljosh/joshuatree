@@ -1,29 +1,34 @@
 #!/usr/bin/env python3
-"""1.0.12: headless proof that the real GUI Chat app (kernel/chat.h,
-gui_launch_chat_app, dock slot 7) can ask Samantha a question and put her
-answer on the emulated screen -- not just on serial. chat-samantha-check.py
-covers the shell's `chat` command and the wire shape; this one covers the
-app a visitor actually clicks: QMP absolute-pointer click on the Chat dock
-slot (same shape as appclose-check.py), `n` to open the prompt, the question
-typed with send-key, Enter, then pmemsave of the framebuffer.
+"""1.0.12: headless proof that the real GUI Chat app can ask Samantha a
+question and put her answer on the emulated screen -- not just on serial.
+chat-samantha-check.py covers the wire shape; this one covers the window a
+visitor actually types into.
+
+2.0.0: she is the ring-3 compositor window user/samantha.c now. The check
+boots with the `samantha` flag (her window opens first, input bar focused),
+types straight into the bar (no dock click, no `n` key), presses Enter, then
+pmemsaves the framebuffer. Her serial lines come through the kernel's
+"syscall: write(1) from ring 3: " prefix. Her window is cream; the empty
+state is the "Say something to Samantha." prompt, and it vanishes the moment
+a turn exists, so ink is counted per region instead of against one band.
 
 The fake Samantha is a loopback HTTP server reached through QEMU's user-mode
 NAT at 10.0.2.2 (the kernel's `llmhost=`/`llmport=` multiboot override);
-turing.heyitsmejosh.com is never touched.
+turing.heyitsmejosh.com is never touched. /api/pick answers an empty object so
+no tool fires and the question goes on to /api/chat.
 
-Asserts, in order: the Chat window opened (red close light at (94,56));
-CHAT_INK pixels below the reply line even before anything is sent (1.3.0:
-the empty state's suggestion rows, proof it isn't a blank void any more);
-after `chatreply=` fires on serial, the question row carries ink (the >>>
-echo) AND the band below it carries ink (the rendered answer); the
-recorded request is Ollama-shaped with model samantha and the typed
-question as its newest user message; the serial reply line carries the
-fake answer; and the red close light still closes the window afterwards.
+Asserts, in order: her window opened (samfocus on serial, red close light at
+(94,56)); the empty state carries ink (the prompt line, so the window is not a
+blank void); after `chatreply=` fires on serial, the typed question's bubble on
+the right carries ink (the echo) AND the left half of the transcript carries
+ink (the rendered answer, which was zero dark pixels before); the recorded
+/api/chat request is Ollama-shaped with model samantha and the typed question
+as its newest user message; the serial reply line carries the fake answer;
+and the red close light still closes the window afterwards.
 
-Discriminating: with chat.h's empty-state suggestion list removed, the
-band below the question row stays at zero ink before anything is sent and
-the run fails by name; with the assistant turn's render stubbed out (or
-`chat_send` failing) instead, the after-send band stays too dim and the
+Discriminating: with her empty-state prompt removed the empty-state assertion
+fails by name; with the assistant turn's render stubbed out (or the chat
+send failing) instead, the left-half ink stays at zero and the
 `after_ink < 200` assertion fails by name.
 
 Usage: python3 tools/checks/chatapp-check.py   (from the repo root, after make kernel.elf)
@@ -37,18 +42,25 @@ REPLY = "The capital of France is Paris, a city famous for the Eiffel Tower and 
 LOG = "/tmp/jt-chatapp-serial.log"; DUMP = "/tmp/jt-chatapp.raw"
 FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247; PITCH = DOCK_ICON + DOCK_GAP; ICON_ROW_Y = 487
 CLOSE_X, CLOSE_Y = 94, 56; CLOSE_RED = (0xFF, 0x5F, 0x57)
-VX, VY, VW, VH = 78, 72, 804, 345   # app viewport (x+8, y+32, w-16, h-40) for x=70,y=40,w=820,h=385
-INK = (0x1C, 0x1C, 0x1E)
-QROW_TOP = VY + (-32 + 76)           # viewport y of the question row (T=-32 windowed)
-REPLY_TOP = QROW_TOP + 20
+# Framebuffer pixels (the 2x desktop). Her transcript: replies on the left
+# (x < 880, clear of the face that sits centred above), typed turns on the
+# right; the empty-state prompt sits at y~384 on the left.
+LEFT = (200, 880, 360, 750)      # x0, x1, y0, y1: her reply bubbles
+RIGHT = (1010, 1720, 362, 418)   # the first typed turn's bubble
+PROMPT = (196, 700, 365, 405)    # "Say something to Samantha."
+DARK = 90; GREY = 170
 
 recorded = {}
 class Hd(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def do_POST(self):
         n = int(self.headers.get("Content-Length", "0")); body = self.rfile.read(n)
+        if self.path == "/api/pick":
+            rep = b"{}"  # no tool named: the question falls through to /api/chat
+            self.send_response(200); self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(rep))); self.end_headers(); self.wfile.write(rep)
+            return
         recorded["path"] = self.path; recorded["body"] = body
         rep = json.dumps({"model": "samantha", "message": {"role": "assistant", "content": REPLY}, "done": True}).encode()
         self.send_response(200); self.send_header("Content-Type", "application/json")
@@ -64,7 +76,7 @@ for f in (LOG, DUMP):
 q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                       "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG,
                       "-net", "nic,model=rtl8139", "-net", "user",
-                      "-append", f"llmhost=10.0.2.2 llmport={port}"],
+                      "-append", f"samantha llmhost=10.0.2.2 llmport={port}"],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 fails = []
 try:
@@ -94,37 +106,31 @@ try:
         return Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
     def pixel(img, x, y): return img.getpixel((x * SCALE + 1, y * SCALE + 1))
     def is_red(p): return max(abs(p[i] - CLOSE_RED[i]) for i in range(3)) <= 12
-    def ink_below(img, ytop):
-        n = 0
-        for y in range(ytop, VY + VH - 20):
-            for x in range(VX + 4, VX + VW - 4):
-                if pixel(img, x, y) == INK: n += 1
+    def ink_in(img, box, limit):
+        x0, x1, y0, y1 = box; n = 0
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                p = img.getpixel((x, y))
+                if p[0] < limit and p[1] < limit and p[2] < limit: n += 1
         return n
     def keys(*qc): cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in qc]}})
-    def serial(): 
+    def serial():
         try: return open(LOG, "r", encoding="latin-1").read()
         except FileNotFoundError: return ""
-    for _ in range(120):
-        if pixel(dump(), 480, 511) == (0xEF, 0xEB, 0xE4): break
-        time.sleep(0.25)
-    else: raise SystemExit("FAIL: desktop never appeared")
-    time.sleep(0.5)
-    move(SLOT0_X + 7 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
     for _ in range(200):
-        time.sleep(0.1)
+        time.sleep(0.2)
+        if "samfocus" in serial(): break
+    else: fails.append("Samantha's window never opened (no samfocus marker)")
+    for _ in range(100):  # the compositor paints her window a beat after the marker
+        time.sleep(0.2)
         if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
-    else: fails.append("Chat window never opened from dock slot 7")
-    time.sleep(0.5)
-    if "chatconsole" not in serial(): fails.append("no chatconsole marker")
-    before = dump(); before_ink = ink_below(before, REPLY_TOP)
-    # 1.3.0: Chat's empty state now shows a greeting plus a list of example
-    # prompts (one per tool chat_run_tool handles) instead of a blank void,
-    # so this band is expected to carry the suggestion rows' ink even
-    # before anything is sent -- proof the empty state actually rendered
-    # them. The "did the reply render" proof still happens right after
-    # send below, unchanged in spirit.
-    if before_ink == 0: fails.append("empty state shows no suggestion rows (0 ink below the question row before any message)")
-    keys("n"); time.sleep(0.6)
+    else: fails.append("no red close light on her window at (94,56)")
+    time.sleep(1.5)
+    before = dump(); before_ink = ink_in(before, LEFT, DARK); prompt_ink = ink_in(before, PROMPT, GREY)
+    # The empty state is her "Say something to Samantha." prompt, not a
+    # blank void; it is grey text, so it counts at the looser threshold, and
+    # no dark reply ink exists yet.
+    if prompt_ink == 0: fails.append("empty state shows no prompt text (0 ink px where \"Say something to Samantha.\" belongs)")
     for ch in QUESTION:
         keys("spc" if ch == " " else ch); time.sleep(0.05)
     time.sleep(0.3); keys("ret")
@@ -134,9 +140,9 @@ try:
     else: fails.append("no chatreply= marker within 30s")
     time.sleep(1.5)
     after = dump()
-    after_ink = ink_below(after, REPLY_TOP); q_ink = ink_below(after, QROW_TOP) - after_ink
-    print("ink below reply line: before=%d (empty-state suggestions) after=%d; question-row ink=%d" % (before_ink, after_ink, q_ink))
-    if after_ink < 200: fails.append("reply did not render: only %d ink px below the question row" % after_ink)
+    after_ink = ink_in(after, LEFT, DARK) - before_ink; q_ink = ink_in(after, RIGHT, DARK)
+    print("reply ink: before=%d (prompt ink %d) after=+%d; question-bubble ink=%d" % (before_ink, prompt_ink, after_ink, q_ink))
+    if after_ink < 200: fails.append("reply did not render: only %d new ink px in her transcript" % after_ink)
     if q_ink < 50: fails.append("question echo did not render (%d ink px)" % q_ink)
     body = recorded.get("body", b"").decode("utf-8", "replace")
     print("recorded request:", recorded.get("path"), body[:300])
@@ -145,7 +151,7 @@ try:
         if j.get("model") != "samantha": fails.append("model != samantha: %r" % j.get("model"))
         if j["messages"][-1]["content"] != QUESTION: fails.append("last user message wrong: %r" % j["messages"][-1])
     except Exception as e: fails.append("request not Ollama JSON: %s" % e)
-    rl = [l for l in serial().splitlines() if l.startswith("chatreply=")]
+    rl = [l[l.index("chatreply="):] for l in serial().splitlines() if "chatreply=" in l]
     print("serial:", rl[-1] if rl else "(none)")
     if not rl or "Paris" not in rl[-1]: fails.append("chatreply serial line lacks the fake reply")
     move(CLOSE_X, CLOSE_Y); time.sleep(0.2); click(); time.sleep(0.8)

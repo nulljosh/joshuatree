@@ -209,15 +209,17 @@ DOCK = {
         <path d="M61 76 H84"/>
       </g>"""),
 
-    # Chat (Samantha): her real app icon from the turing repo, the oval
-    # portrait she drew, on her own paper lit from the top like every tile. art/samantha-icon.svg is a
-    # vendored copy of turing/icon.svg; its own rounded rect is dropped so
-    # the tile below stays the dock's squircle. Re-copy it when turing's
-    # icon changes.
-    "chat": ("#F4F1EA", "#DCD6CB", "",
-             """<svg x="0" y="0" width="128" height="128" viewBox="0 0 200 200">"""
-             + "\n".join(l for l in open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art", "samantha-icon.svg")).read().split("\n") if not l.lstrip().startswith(("<svg", "</svg>", "<rect")))
-             + """</svg>"""),
+    # Chat (Samantha): a voice orb, not a speech bubble and not an engraving. She is voice first
+    # (hold F2 to talk), so the icon is a cream disc with five rounded waveform bars, the tallest
+    # in the middle. Tile is the landing design system's --accent #b5502c lit from the top, disc
+    # and bars its --bg #faf8f4 and --accent. Her engraved portrait (art/samantha-icon.svg) is too
+    # fine to read at dock size, so it stays in her window and the Turing mark.
+    "chat": ("#C65E37", "#A24526", "",
+             """
+      <circle cx="64" cy="62" r="38" fill="#FAF8F4"/>
+      <g stroke="#B5502C" stroke-width="8" stroke-linecap="round">
+        <path d="M43 56 V68"/><path d="M53.5 46 V78"/><path d="M64 38 V86"/><path d="M74.5 46 V78"/><path d="M85 56 V68"/>
+      </g>"""),
 
     # Weather: a sun half behind a cloud, on a sky-blue tile.
     "weather": ("#47A8F8", "#2A86EC",
@@ -292,6 +294,11 @@ APPS_ONLY = {
       </g>
       <line x1="64" y1="72" x2="64" y2="32" stroke="#F09A37" stroke-width="1.8" stroke-linecap="round"/>
       <circle cx="64" cy="64" r="3.4" fill="#F09A37"/>"""),
+
+    # Activity: a graphite tile, one green pulse line. Flat, no gloss.
+    "activity": ("#4A4F57", "#1C1F24", "",
+                 """
+      <polyline points="22,66 44,66 54,38 68,92 78,56 84,66 106,66" fill="none" stroke="#34C759" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>"""),
 
     "search": ("#9AA3B1", "#303A48", "",
                """

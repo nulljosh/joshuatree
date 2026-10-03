@@ -25,7 +25,7 @@
  * tools/checks/ring3toroid-check.py presses it on purpose.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG     0x00FAF8F6 /* GUI_BG */
 #define BOARD  0x00F1EDE7
@@ -84,24 +84,7 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (px < 0 || px >= (int)win.width) continue;
-            if (g[r] & (0x80 >> c)) win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
-}
-static int text(const char *s, int x, int y, unsigned fg) {
-    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return x + w; } /* SYS_TEXT; bitmap only if its queue is full */
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
-    return x;
-}
+static int text(const char *s, int x, int y, unsigned fg) { return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
     do { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (v);
@@ -111,7 +94,6 @@ static int utoa10(unsigned v, char *buf) {
 }
 
 static void tr_draw(void) {
-    jt_text_clear();
     rect(TR_PAD, TR_TOP, tr_w * TR_CELL, tr_h * TR_CELL, BOARD);
     for (int y = 0; y < tr_h; y++) for (int x = 0; x < tr_w; x++)
         if (get(grid_a, y, x)) rect(TR_PAD + x * TR_CELL + 1, TR_TOP + y * TR_CELL + 1, TR_CELL - 2, TR_CELL - 2, INK);
@@ -120,8 +102,12 @@ static void tr_draw(void) {
     char num[12]; utoa10((unsigned)tr_gen, num);
     int x = text("generation ", TR_PAD, ly, HINT);
     x = text(num, x, ly, HINT);
-    x = text(tr_paused ? "   paused" : "         ", x, ly, HINT);
-    text("   space pause  r reseed  c clear  click a cell  esc closes", x, ly, HINT);
+    if (tr_paused) x = text("   paused", x, ly, HINT);
+    {   const char *h = "space pause   r reseed   c clear   click a cell   esc closes";
+        int hx = (int)win.width - TR_PAD - jt_text_width(JT_FACE_BODY, h);
+        if (hx < x + 24) { h = "space  r  c  esc"; hx = (int)win.width - TR_PAD - jt_text_width(JT_FACE_BODY, h); }
+        if (hx >= x + 24) text(h, hx, ly, HINT);
+    }
 }
 
 __attribute__((section(".text.start"), used))
@@ -159,6 +145,7 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { tr_draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == 1) {
             if (ev.kind == JT_EV_CLICK) {

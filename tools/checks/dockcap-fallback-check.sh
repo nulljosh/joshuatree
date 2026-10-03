@@ -19,14 +19,14 @@ source "$(dirname "$0")/freeport.sh"
 # though the true cause was a swallowed click at a window-count cap, not a
 # wrong icon index.
 #
-# Fix: when gui_multiwin_open() returns -1, fall through to the existing
-# blocking single-window path (gui_launch_from_dock, the same one
-# unsupported apps already use) instead of dropping the click.
+# 2.0 gate 5: when gui_multiwin_open() returns -1 the click is refused
+# honestly: gui_refuse_open logs "winrefuse: <App>" on serial and the desktop
+# shows "Close a window to open <App>". The old blocking fallback is gone.
 #
-# Proven here via a new serial marker, "mwcapfallback\n" (only emitted on
-# the fallback path): opens two multi-window apps (Files, Weather,
+# Proven here via a new serial marker, "winrefuse: Mail\n" (only emitted on
+# the refusal path): opens two multi-window apps (Files, Weather,
 # hitting the real cap of 2), then clicks a third dock icon (Mail) and
-# demands the fallback marker actually fired and gui_window_count did NOT
+# demands the refusal marker actually fired and gui_window_count did NOT
 # grow past 2 (the fallback path is the blocking single-window one, not a
 # third multi-window slot).
 #
@@ -107,21 +107,21 @@ move(480, 200); time.sleep(0.5)
 open_slot(FILES_SLOT)
 open_slot(NOTES_SLOT)
 after_two = window_count()
-before_marker = count("mwcapfallback\n")
+before_marker = count("winrefuse: Mail\n")
 
-open_slot(MAIL_SLOT)  # cap already hit: must fall back, not drop the click
+open_slot(MAIL_SLOT)  # cap already hit: must refuse with a notice, not drop the click silently
 after_three = window_count()
-after_marker = count("mwcapfallback\n")
+after_marker = count("winrefuse: Mail\n")
 
 cmd({"execute": "quit"})
 print("after_two=%d after_three=%d marker_before=%d marker_after=%d" % (after_two, after_three, before_marker, after_marker))
 if after_two != 2:
     print("FAIL: expected exactly 2 multi-window windows open (Files, Notes), got %d" % after_two); sys.exit(1)
 if after_marker != before_marker + 1:
-    print("FAIL: expected the cap-fallback marker to fire exactly once for the third dock click, got %d -> %d" % (before_marker, after_marker)); sys.exit(1)
+    print("FAIL: expected the winrefuse marker to fire exactly once for the third dock click, got %d -> %d" % (before_marker, after_marker)); sys.exit(1)
 if after_three != 2:
-    print("FAIL: gui_window_count grew past the real cap (%d), fallback should use the blocking single-window path, not a third multiwin slot" % after_three); sys.exit(1)
-print("PASS: third dock click past the multi-window cap fell back to the blocking single-window path instead of being silently dropped")
+    print("FAIL: gui_window_count grew past the real cap (%d), the refusal must not open a third window" % after_three); sys.exit(1)
+print("PASS: third dock click past the multi-window cap was refused with the Close-a-window notice, no blocking takeover")
 PYEOF
 STATUS=$?
 cleanup

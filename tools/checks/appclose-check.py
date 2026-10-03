@@ -200,24 +200,39 @@ try:
                 if window_open(): keys("esc"); time.sleep(0.8)
 
     # The reported "all apps" shape: Notes open, then a dock click on another app.
-    # v67 made that click close Notes; v68 (0.63.0) makes it open the clicked app
-    # in Notes' place, the "close-and-open" the report literally asked for.
-    # Terminal is the target because its content is unmistakable: it clears its
-    # viewport to 0x1A1512, so the viewport centre tells Terminal apart from Notes
-    # (cream), from the desktop (no red close button), and from any other app.
+    # v67 made that click close Notes; v68 (0.63.0) opened the clicked app in
+    # Notes' place. Since the compositor (gate 5) apps are real windows, so the
+    # honest result is a SECOND window: Terminal opens cascaded 60px down and
+    # right of Notes, Notes stays open underneath. Terminal is the target
+    # because its viewport is 0x1A1512, which tells it apart from Notes (cream)
+    # and from the desktop. Then both close by their own red buttons.
+    CASCADE = 60
     open_slot(4)
     if not window_open(): fails.append("scenario: Notes did not open")
     else:
-        move(centre(6), ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.2)
+        move(centre(6), ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.5)
         move(*PARK); time.sleep(0.5)
         p = pixel(78 + 400, 72 + 50)
         still_notes = max(abs(p[i] - (0xEA, 0xE4, 0xDC)[i]) for i in range(3)) <= 8
-        c = pixel(78 + 402, 72 + 172)
-        terminal = window_open() and max(abs(c[i] - (0x1A, 0x15, 0x12)[i]) for i in range(3)) <= 8
-        print(f"scenario  Notes open, click Terminal in dock: {'STUCK on Notes' if still_notes else ('Terminal opened in its place' if terminal else 'Notes closed, Terminal NOT opened')}")
-        if still_notes: fails.append("scenario: dock click with Notes open left the screen stuck on Notes")
-        elif not terminal: fails.append("scenario: dock click with Notes open closed Notes but did not open Terminal (v68 close-and-open)")
-        if window_open(): close_via_x()
+        c = pixel(78 + 402 + CASCADE, 72 + 172 + CASCADE)
+        terminal = max(abs(c[i] - (0x1A, 0x15, 0x12)[i]) for i in range(3)) <= 8
+        top_red = is_red(pixel(CLOSE_X + CASCADE, CLOSE_Y + CASCADE))
+        print(f"scenario  Notes open, click Terminal in dock: {'Terminal opened as a second window' if terminal and top_red else ('STUCK on Notes' if still_notes else 'Terminal NOT opened')}")
+        if not (terminal and top_red): fails.append("scenario: dock click with Notes open did not open Terminal as a second window")
+        elif not is_red(pixel(CLOSE_X, CLOSE_Y)): fails.append("scenario: Notes's own window vanished when Terminal opened")
+        # Close the top window (Terminal) by its red button, then Notes by its own.
+        for at in ((CLOSE_X + CASCADE, CLOSE_Y + CASCADE), (CLOSE_X, CLOSE_Y)):
+            move(*at); time.sleep(0.3)
+            for _ in range(5):
+                click()
+                for _ in range(40):
+                    time.sleep(0.1)
+                    if not is_red(pixel(*at)): break
+                else:
+                    continue
+                break
+        move(*PARK); time.sleep(0.5)
+        if window_open() or is_red(pixel(CLOSE_X + CASCADE, CLOSE_Y + CASCADE)): fails.append("scenario: a window stayed open after both red buttons were clicked")
         for _ in range(2):
             if window_open(): keys("esc"); time.sleep(0.8)
 

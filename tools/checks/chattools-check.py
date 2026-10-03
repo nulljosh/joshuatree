@@ -1,57 +1,46 @@
 #!/usr/bin/env python3
 """1.1.0 ("Samantha's tools work from the Chat app"): headless proof that
-kernel/chat.h's new chat_pick/chat_run_tool really let Chat handle a
-message locally -- new reminder, a note, opening another app -- instead of
-always asking Samantha, and that the ordinary question path (chat_pick
-answers null) still falls straight through to chat_send exactly as before
-this pass.
+Samantha's tool picker really lets her handle a message locally -- new
+reminder, a note, opening another app -- instead of always asking the model,
+and that the ordinary question path (/api/pick answers null) still falls
+straight through to /api/chat exactly as before.
 
-Same shape as tools/checks/chatapp-check.py (QMP absolute-pointer click on
-a dock slot, send-key typing, framebuffer pmemsave/ink-counting) and
-tools/checks/chat-samantha-check.py (a fake HTTP server reached from the
-guest at 10.0.2.2 via the kernel's llmhost=/llmport= multiboot override,
-turing.heyitsmejosh.com never touched). One fake server answers both
-POST /api/pick (scripted per question) and POST /api/chat, all inside one
-continuous boot -- three scenarios run back to back against the one
-running kernel, in the order below, since Reminders/NOTES.TXT state left
-by an earlier scenario is exactly what the later ones check.
+2.0.0: she is the ring-3 compositor window user/samantha.c now, so this boots
+with the `samantha` flag (her window opens first, her input bar focused), types
+straight into the bar (there is no `n` key and the empty-state rows are not
+clickable), and reads her markers behind the kernel's
+"syscall: write(1) from ring 3: " serial prefix. Apps are opened through her
+open_app tool, never by dock coordinates. Same fake-HTTP-server shape as
+tools/checks/chat-samantha-check.py (reached from the guest at 10.0.2.2 via the
+kernel's llmhost=/llmport= override, turing.heyitsmejosh.com never touched).
+One fake server answers both POST /api/pick (scripted per question) and POST
+/api/chat inside one continuous boot, scenarios back to back, since the
+REMINDERS.TXT state an earlier scenario leaves is what the later ones read.
 
 Scenarios:
-  (0) Chat opens to its 1.3.0 empty state (a greeting plus a clickable list
-      of example prompts, one per tool chat_run_tool handles); clicking
-      the "Note: pick up dry cleaning" row sends that exact text with no
-      `n` press. Asserts `chattool=new_note:pick up dry cleaning` fires
-      from the click alone.
-  (a) "remind me to buy milk" -> pick answers new_reminder/"buy milk".
-      Asserts `chattool=new_reminder:` fires on serial, the confirmation
-      ("Reminder added: buy milk") renders as ink in the Chat body, and
-      the fake server's /api/chat handler is never hit at all. Then closes
-      Chat, opens Reminders from its dock slot (5) and confirms its
-      window's ink no longer matches the same window's own empty-list
-      baseline (captured before this scenario ran) -- a real, persisted
-      REMINDERS.TXT row, not just a rendered chat reply. Deliberately not
-      "more ink": a short new row can render with fewer exact-color ink
-      pixels than the longer "No reminders yet." message it replaced, so
-      "different from the known-empty baseline" is what's discriminating.
+  (0) The empty-state example "note pick up dry cleaning" typed into the bar:
+      pick answers new_note; asserts `chattool=new_note:pick up dry cleaning`.
+  (a) "what are my reminders" first: pick answers list_reminders and the
+      list is empty (`chattool=list_reminders:none`). Then "remind me to buy
+      milk": pick answers new_reminder/"buy milk". Asserts
+      `chattool=new_reminder:buy milk` fires, the confirmation renders as ink
+      in her transcript, and /api/chat is never hit. Then "what are my
+      reminders" again: `chattool=list_reminders:` now carries "buy milk",
+      which she reads back off REMINDERS.TXT (rem_load opens the file every
+      time), so the row is a real persisted one and not just a rendered
+      bubble.
   (b) "what is the capital of france" -> pick answers {"tool":null}.
-      Asserts /api/chat WAS called this time and its reply renders (same
-      ink check chatapp-check.py already uses for the plain question
-      path), proving the tool path never swallows an ordinary question.
-  (c) "open notes" -> pick answers open_app/"notes". Asserts Chat closes
-      and Notes opens in its place with no extra click (chat_run_tool's
-      chat_launch_after -> gui_launch_from_dock's own again: reopen path):
-      the `editorchrome` serial marker fires and the red close light
-      shows at (94,56), the same coordinate/marker chatapp-check.py and
-      appclose-check.py already trust for "a real app window opened".
+      Asserts /api/chat WAS called this time and its reply renders as ink
+      in the transcript: the tool path never swallows an ordinary question.
+  (c) "open notes" -> pick answers open_app/"notes". Asserts
+      `chattool=open_app:Notes` and that the Notes ring-3 window really came
+      up (`notes: ring-3 window` on serial) with no extra click.
 
-Discriminating: with chat_run_tool stubbed to `return 0` unconditionally
-(the tool-handling feature reverted), scenario (a) never emits
-`chattool=new_reminder:`, the Chat reply comes from the fake /api/chat
-reply instead of "Reminder added: buy milk", the fake server DOES see a
-POST /api/chat for it, and Reminders' ink never changes -- this script
-fails by name on each of those. Scenario (c) similarly never sees
-`editorchrome`/the close light, because Chat would ask Samantha "open
-notes" as a plain question instead of opening the Notes app itself.
+Discriminating: with run_tool stubbed to `return 0` unconditionally, scenario
+(a) never emits `chattool=new_reminder:`, the reply comes from the fake
+/api/chat instead, the fake server DOES see a POST /api/chat for it, and the
+read-back list stays empty; scenario (c) never sees the Notes window, because
+she would ask the model "open notes" as a plain question.
 
 Usage: python3 tools/checks/chattools-check.py         (from the repo root, after make kernel.elf)
        python3 tools/checks/chattools-check.py --live   (real Turing host, no host overrides; prints chatpick=... if the real picker answers)
@@ -62,25 +51,23 @@ from freeport import free_port
 
 LOG = "/tmp/jt-chattools-serial.log"; DUMP = "/tmp/jt-chattools.raw"
 FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()
-LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247; PITCH = DOCK_ICON + DOCK_GAP; ICON_ROW_Y = 487
-CLOSE_X, CLOSE_Y = 94, 56; CLOSE_RED = (0xFF, 0x5F, 0x57)
-VX, VY, VW, VH = 78, 72, 804, 345   # app viewport (x+8, y+32, w-16, h-40) for x=70,y=40,w=820,h=385 -- the one window rect every dock app (blocking or multi-window slot 0) shares
-INK = (0x1C, 0x1C, 0x1E)
-QROW_TOP = VY + (-32 + 76)           # viewport y of the question row (T=-32 windowed)
-REPLY_TOP = QROW_TOP + 20
 
-DOCK_CHAT, DOCK_NOTES, DOCK_REMINDERS = 7, 4, 5  # GUI_DOCK_DEFAULT slots (see kernel.c: Apps,Burrow,Mail,Calendar,Notes,Reminders,Terminal,Chat,Weather,Stocks,Trash)
+# Her transcript, in framebuffer pixels (the 2x desktop): the left half of the
+# body holds only her own reply bubbles (the typed turns sit on the right, the
+# face above y=340), so dark pixels there are her rendered replies.
+TX0, TX1, TY0, TY1 = 200, 880, 360, 750
+DARK = 90
 
 REPLY_CHAT = "The capital of France is Paris, a city famous for the Eiffel Tower and croissants."
 
 # Scripted /api/pick answers, matched by a substring of the (lowercased)
-# "q" field the kernel actually sends -- real chat_pick behaviour, a small
-# model plus strict validation server-side, is out of scope for a
-# network-free regression test; this stands in for "the picker said X".
+# "q" field she actually sends -- the real picker, a small model plus strict
+# validation server-side, is out of scope for a network-free regression
+# test; this stands in for "the picker said X".
 PICK_ANSWERS = [
     ("pick up dry cleaning", {"tool": "new_note", "arg": "pick up dry cleaning"}),
     ("buy milk", {"tool": "new_reminder", "arg": "buy milk"}),
+    ("my reminders", {"tool": "list_reminders", "arg": ""}),
     ("capital of france", {"tool": None, "arg": ""}),
     ("open notes", {"tool": "open_app", "arg": "notes"}),
 ]
@@ -115,6 +102,12 @@ class Hd(http.server.BaseHTTPRequestHandler):
         self.wfile.write(rep)
 
 
+def marker_lines(text, marker):
+    """Serial lines carrying `marker`, trimmed to start at it (the ring-3
+    prefix "syscall: write(1) from ring 3: " sits in front)."""
+    return [l[l.index(marker):] for l in text.splitlines() if marker in l]
+
+
 def main():
     os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
     subprocess.run(["make", "-s", "kernel.elf"], check=True)
@@ -135,7 +128,7 @@ def main():
     q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                           "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG,
                           "-net", "nic,model=rtl8139", "-net", "user",
-                          "-append", f"llmhost=10.0.2.2 llmport={port}"],
+                          "-append", f"samantha llmhost=10.0.2.2 llmport={port}"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     fails = []
     try:
@@ -154,35 +147,16 @@ def main():
                 if "return" in r or "error" in r: return r
         f.readline(); cmd({"execute": "qmp_capabilities"})
 
-        def move(x, y):
-            cmd({"execute": "input-send-event", "arguments": {"events": [
-                {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
-                {"type": "abs", "data": {"axis": "y", "value": int(y * 32768 / LOGICAL_H)}}]}})
-
-        def click():
-            cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
-            time.sleep(0.1)
-            cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
-
         def dump():
             cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
             return Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
 
-        def pixel(img, x, y): return img.getpixel((x * SCALE + 1, y * SCALE + 1))
-        def is_red(p): return max(abs(p[i] - CLOSE_RED[i]) for i in range(3)) <= 12
-
-        def ink_count(img, color=INK):
+        def reply_ink(img):
             n = 0
-            for y in range(VY, VY + VH - 4):
-                for x in range(VX + 4, VX + VW - 4):
-                    if pixel(img, x, y) == color: n += 1
-            return n
-
-        def ink_below(img, ytop):
-            n = 0
-            for y in range(ytop, VY + VH - 20):
-                for x in range(VX + 4, VX + VW - 4):
-                    if pixel(img, x, y) == INK: n += 1
+            for y in range(TY0, TY1):
+                for x in range(TX0, TX1):
+                    p = img.getpixel((x, y))
+                    if p[0] < DARK and p[1] < DARK and p[2] < DARK: n += 1
             return n
 
         def keys(*qc): cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in qc]}})
@@ -190,145 +164,86 @@ def main():
         def type_msg(msg):
             for ch in msg:
                 keys("spc" if ch == " " else ch); time.sleep(0.05)
+            time.sleep(0.3); keys("ret")
 
         def serial():
             try: return open(LOG, "r", encoding="latin-1").read()
             except FileNotFoundError: return ""
 
-        def wait_for(marker, timeout_s, label):
+        def wait_for(marker, timeout_s, label, after=0):
             for _ in range(int(timeout_s / 0.5)):
                 time.sleep(0.5)
-                if marker in serial(): return True
+                if marker in serial()[after:]: return True
             fails.append("%s within %ss" % (label, timeout_s))
             return False
 
-        def click_dock(slot):
-            move(SLOT0_X + slot * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
+        # her window drew and focused its input bar; the face-frame fetches
+        # settle a moment later, so give the first keys a clear runway
+        wait_for("samfocus", 40, "no samfocus marker: Samantha's window never opened")
+        time.sleep(2.0)
 
-        for _ in range(120):
-            if pixel(dump(), 480, 511) == (0xEF, 0xEB, 0xE4): break
-            time.sleep(0.25)
-        else: raise SystemExit("FAIL: desktop never appeared")
-        time.sleep(0.5)
-
-        # --- scenario (0): clicking an empty-state suggestion row sends it
-        # straight through chat_run_tool, no `n` press at all. Must run
-        # before any other scenario opens a prompt: chat_count > 0 switches
-        # the console over to its transcript view, which is exactly the
-        # thing that stops showing the suggestion list this proves.
-        click_dock(DOCK_CHAT)
-        for _ in range(200):
-            time.sleep(0.1)
-            if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
-        else: fails.append("Chat window never opened from dock slot %d (scenario 0)" % DOCK_CHAT)
-        time.sleep(0.4)
-        suggest_row1_y = QROW_TOP + 60 + 1 * 24 + 6  # row 1: "Note: pick up dry cleaning" (QROW_TOP = screen y of chat.h's own "y" local var, where the suggestion list's y+60+i*24 rows are anchored)
-        move(VX + 60, suggest_row1_y); time.sleep(0.2); click()
-        wait_for("chattool=new_note:", 20, "no chattool=new_note: marker after clicking the empty-state suggestion row")
+        # --- scenario (0): an empty-state example, typed straight in ------
+        type_msg("note pick up dry cleaning")
+        wait_for("chattool=new_note:", 20, "no chattool=new_note: marker for the typed empty-state example")
         sl0 = serial()
-        if "chattool=new_note:pick up dry cleaning" not in sl0:
-            fails.append("scenario 0: clicking the suggestion row ran the wrong tool/arg: %r" %
-                         [l for l in sl0.splitlines() if l.startswith("chattool=")])
+        if not any(l.startswith("chattool=new_note:pick up dry cleaning") for l in marker_lines(sl0, "chattool=new_note:")):
+            fails.append("scenario 0: typing the example ran the wrong tool/arg: %r" % marker_lines(sl0, "chattool="))
         else:
-            print("scenario 0: clicking an empty-state suggestion row fired chattool=new_note: with no `n` press")
-        move(CLOSE_X, CLOSE_Y); time.sleep(0.2); click(); time.sleep(0.6)
+            print("scenario 0: typing an empty-state example fired chattool=new_note: with no `n` press")
+        time.sleep(1.0)
 
-        # --- baseline: Reminders, empty, before scenario (a) ever runs ---
-        click_dock(DOCK_REMINDERS)
-        for _ in range(200):
-            time.sleep(0.1)
-            if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
-        else: fails.append("Reminders window never opened from dock slot %d" % DOCK_REMINDERS)
-        time.sleep(0.4)
-        baseline_ink = ink_count(dump())
-        print("Reminders ink before scenario (a): %d" % baseline_ink)
-        move(CLOSE_X, CLOSE_Y); time.sleep(0.2); click(); time.sleep(0.6)
+        # --- baseline: no reminders yet, read back through the picker ------
+        mark = len(serial())
+        type_msg("what are my reminders")
+        wait_for("chattool=list_reminders:", 20, "scenario a: no chattool=list_reminders: marker for the empty baseline", after=mark)
+        base = marker_lines(serial()[mark:], "chattool=list_reminders:")
+        print("reminders before scenario (a): %r" % (base[-1] if base else None))
+        if not base or base[-1] != "chattool=list_reminders:none":
+            fails.append("scenario a: the reminders list was not empty before anything was added: %r" % base)
+        time.sleep(1.0)
 
         # --- scenario (a): "remind me to buy milk" -> new_reminder ------
-        click_dock(DOCK_CHAT)
-        for _ in range(200):
-            time.sleep(0.1)
-            if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
-        else: fails.append("Chat window never opened from dock slot %d" % DOCK_CHAT)
-        time.sleep(0.4)
-        keys("n"); time.sleep(0.5)
+        before_ink = reply_ink(dump())
+        mark = len(serial())
         type_msg("remind me to buy milk")
-        time.sleep(0.3); keys("ret")
-        wait_for("chattool=new_reminder:", 20, "no chattool=new_reminder: marker")
-        time.sleep(1.0)
-        after_reply = dump()
-        reply_ink = ink_below(after_reply, REPLY_TOP)
-        print("scenario a: chat reply-band ink = %d" % reply_ink)
-        if reply_ink < 100: fails.append("scenario a: confirmation reply did not render in the Chat body (%d ink px)" % reply_ink)
+        wait_for("chattool=new_reminder:", 20, "no chattool=new_reminder: marker", after=mark)
+        time.sleep(1.2)
+        reply_a = reply_ink(dump()) - before_ink
+        print("scenario a: new reply-band ink = %d" % reply_a)
+        if reply_a < 100: fails.append("scenario a: confirmation reply did not render in her transcript (%d new ink px)" % reply_a)
         if state["chat_calls"]: fails.append("scenario a: /api/chat was called (%d time(s)) even though the picker named a locally-handled tool" % len(state["chat_calls"]))
-        sl = serial()
-        if "chattool=new_reminder:buy milk" not in sl:
-            fails.append("scenario a: chattool=new_reminder: marker missing or wrong text: %r" %
-                         [l for l in sl.splitlines() if l.startswith("chattool=")])
-        move(CLOSE_X, CLOSE_Y); time.sleep(0.2); click(); time.sleep(0.6)
+        sl = serial()[mark:]
+        if not any(l == "chattool=new_reminder:buy milk" for l in marker_lines(sl, "chattool=new_reminder:")):
+            fails.append("scenario a: chattool=new_reminder: marker missing or wrong text: %r" % marker_lines(sl, "chattool="))
 
-        # Reminders should now really hold the new row (persisted VFS
-        # write, not just a rendered chat bubble).
-        click_dock(DOCK_REMINDERS)
-        for _ in range(200):
-            time.sleep(0.1)
-            if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
-        else: fails.append("Reminders window never (re)opened from dock slot %d after scenario a" % DOCK_REMINDERS)
-        time.sleep(0.4)
-        after_ink = ink_count(dump())
-        print("Reminders ink after scenario (a): %d (baseline was %d)" % (after_ink, baseline_ink))
-        # Not "more ink": "No reminders yet." is a longer string than
-        # "buy milk" plus a checkbox glyph, so a real new row can render
-        # with FEWER exact-color ink pixels than the empty-list message it
-        # replaced. What's discriminating is that the window is no longer
-        # bit-identical to the empty state at all -- with chat_run_tool's
-        # new_reminder case reverted (returns 0), REMINDERS.TXT is never
-        # touched and this same window renders "No reminders yet." again,
-        # pixel-for-pixel, giving after_ink == baseline_ink exactly (same
-        # deterministic AA text rendering, same boot session).
-        if abs(after_ink - baseline_ink) < 20:
-            fails.append("scenario a: Reminders window looks unchanged from the empty-list baseline (baseline=%d, after=%d) -- the reminder was never really added" % (baseline_ink, after_ink))
-        move(CLOSE_X, CLOSE_Y); time.sleep(0.2); click(); time.sleep(0.6)
+        # the reminder is a real persisted row: she reads it back off REMINDERS.TXT
+        mark = len(serial())
+        type_msg("what are my reminders")
+        wait_for("chattool=list_reminders:", 20, "scenario a: no chattool=list_reminders: marker after adding", after=mark)
+        after = marker_lines(serial()[mark:], "chattool=list_reminders:")
+        print("reminders after scenario (a): %r" % (after[-1] if after else None))
+        if not after or "buy milk" not in after[-1]:
+            fails.append("scenario a: the reminder was never really added, REMINDERS.TXT reads back %r" % after)
+        time.sleep(1.0)
 
         # --- scenario (b): an ordinary question -> pick says null --------
-        click_dock(DOCK_CHAT)
-        for _ in range(200):
-            time.sleep(0.1)
-            if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
-        else: fails.append("Chat window never (re)opened from dock slot %d for scenario b" % DOCK_CHAT)
-        time.sleep(0.4)
-        before_b = ink_below(dump(), REPLY_TOP)
-        keys("n"); time.sleep(0.5)
+        before_b = reply_ink(dump())
+        mark = len(serial())
         type_msg("what is the capital of france")
-        time.sleep(0.3); keys("ret")
-        wait_for("chatreply=", 30, "scenario b: no chatreply= marker")
-        time.sleep(1.2)
-        after_b = dump()
-        after_b_ink = ink_below(after_b, REPLY_TOP)
-        print("scenario b: reply-band ink before=%d after=%d" % (before_b, after_b_ink))
-        if after_b_ink < 200: fails.append("scenario b: Samantha's reply did not render (%d ink px)" % after_b_ink)
+        wait_for("chatreply=", 30, "scenario b: no chatreply= marker", after=mark)
+        time.sleep(1.5)
+        after_b = reply_ink(dump()) - before_b
+        print("scenario b: new reply-band ink = %d" % after_b)
+        if after_b < 200: fails.append("scenario b: her reply did not render (%d new ink px)" % after_b)
         if not state["chat_calls"]: fails.append("scenario b: /api/chat was never called for an ordinary question")
-        rl = [l for l in serial().splitlines() if l.startswith("chatreply=")]
+        rl = marker_lines(serial()[mark:], "chatreply=")
         if not rl or "Paris" not in rl[-1]: fails.append("scenario b: chatreply= serial line lacks the fake reply")
-        move(CLOSE_X, CLOSE_Y); time.sleep(0.2); click(); time.sleep(0.6)
 
         # --- scenario (c): "open notes" -> open_app -----------------------
-        click_dock(DOCK_CHAT)
-        for _ in range(200):
-            time.sleep(0.1)
-            if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
-        else: fails.append("Chat window never (re)opened from dock slot %d for scenario c" % DOCK_CHAT)
-        time.sleep(0.4)
-        keys("n"); time.sleep(0.5)
+        mark = len(serial())
         type_msg("open notes")
-        time.sleep(0.3); keys("ret")
-        wait_for("chattool=open_app:Notes", 20, "scenario c: no chattool=open_app:Notes marker")
-        wait_for("editorchrome", 15, "scenario c: Notes never opened (no editorchrome marker)")
-        time.sleep(0.6)
-        final = dump()
-        if not is_red(pixel(final, CLOSE_X, CLOSE_Y)):
-            fails.append("scenario c: no window open (red close light absent) after Chat should have handed off to Notes")
-        move(CLOSE_X, CLOSE_Y); time.sleep(0.2); click(); time.sleep(0.6)
+        wait_for("chattool=open_app:Notes", 20, "scenario c: no chattool=open_app:Notes marker", after=mark)
+        wait_for("notes: ring-3 window", 20, "scenario c: Notes never opened (no ring-3 window marker)", after=mark)
 
     finally:
         q.kill(); q.wait()
@@ -364,13 +279,16 @@ def run_live():
     log = os.path.join(workdir, "serial.log")
     args = ["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none",
             "-monitor", "stdio", "-serial", "file:" + log,
-            "-net", "nic,model=rtl8139", "-net", "user"]
+            "-net", "nic,model=rtl8139", "-net", "user", "-append", "samantha"]
     proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
-        time.sleep(5)
-        proc.stdin.write(b"sendkey ctrl-alt-backspace\n"); proc.stdin.flush()  # leave the GUI for the text shell (plain esc on a bare desktop is now a no-op, kernel.c gui_run)
+        for _ in range(60):  # her window drew and focused its input bar
+            time.sleep(0.5)
+            try:
+                if "samfocus" in open(log, "r", encoding="latin-1").read(): break
+            except FileNotFoundError: pass
         time.sleep(2)
-        proc.stdin.write(send("chat remind me to test the live picker").encode()); proc.stdin.flush()
+        proc.stdin.write(send("remind me to test the live picker").encode()); proc.stdin.flush()
         serial_text = ""
         for _ in range(90):
             time.sleep(1)
@@ -389,10 +307,10 @@ def run_live():
 
     print("---- live serial (chat*/chattool* lines only) ----")
     for l in serial_text.splitlines():
-        if l.startswith("chat"):
+        if "chat" in l:
             print(l)
     print("----------------------------------------------------")
-    pick_lines = [l for l in serial_text.splitlines() if l.startswith("chatpick=")]
+    pick_lines = marker_lines(serial_text, "chatpick=")
     if not pick_lines:
         print("NOTE: no chatpick= line at all -- /api/pick was unreachable (network/DNS) or the request failed; "
               "this is informational only, not a failure (the pick is an optimisation, chat_send still ran)")

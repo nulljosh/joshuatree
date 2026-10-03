@@ -15,6 +15,7 @@
    without that check, so there is no argument it can pass that makes the
    kernel read a kernel address on its behalf. */
 #include "syscall.h"
+#include "brk.h"
 #include "idt.h"
 #include "task.h"
 #include "paging.h"
@@ -29,6 +30,9 @@
 #include "pmm.h"
 #include "net.h"  /* 1.9.11: SYS_HTTP_GET */
 #include "http.h"
+#include "irqlock.h"
+#include "shellsys.h"
+#include "sb16.h"
 #include "font.h"  /* 1.9.21: SYS_TEXT draws through the same AA face as every kernel string */
 
 typedef unsigned int u32;
@@ -38,6 +42,7 @@ typedef int (*syscall_fn)(u32 a, u32 b, u32 c);
 #define EIO      5
 #define EBADF   9
 #define EAGAIN  11
+#define JT_NET_STACK_MIN 12288u /* 2.0.0: the net path (request + 1514-byte receive + tcp/ip frames + one nested IRQ) stays under 8 KB; 12 KB keeps a margin */
 #define ENOMEM  12
 #define EFAULT  14
 #define EINVAL  22
@@ -50,8 +55,12 @@ typedef int (*syscall_fn)(u32 a, u32 b, u32 c);
 #define EBUSY   16
 #define ENODEV  19
 #define EPERM    1
+#define EISDIR  21
 
 extern void syscall_entry(void);
+int syscall_stress_on; /* 1.9.23: set by r3stress_arm when the command line says stress=r3 */
+void r3stress_syscall_round(void);
+extern int pde_stress_on; void pdestress_syscall_round(void); /* 1.9.24: stress=pde */
 static void window_release(int id); /* v3 windows, below */
 static int window_owned(void);
 
@@ -175,13 +184,18 @@ static int copy_path_from_user(u32 addr, char *out) {
    any failure it has already walked back, so the cwd is what it was.
    path_leave walks back; a ".." that fails is logged, since the cwd is
    then genuinely wrong and the shell's next `ls` will show it. */
-static int path_leave(int depth) {
+/* 1.9.23: the cwd cursor is the desktop's. Task 0 may have been preempted
+   while standing inside NOTES/, so a syscall path starts at the root and
+   the cursor is put back exactly where it was before the gate returns. */
+static unsigned int path_saved_cwd;
+int path_leave(int depth) {
     int ok = 1;
     while (depth-- > 0) if (!vfs_chdir("..")) ok = 0;
     if (!ok) serial_puts("syscall: BUG chdir(..) failed walking back a relative path\n");
+    vfs_cwd_set(path_saved_cwd);
     return ok;
 }
-static int path_enter(char *path, int keep, char **leaf, int *depth) {
+int path_enter(char *path, int keep, char **leaf, int *depth) {
     *depth = 0; *leaf = path;
     if (path[0] == '/') return -EINVAL;
     char *comp[JT_PATH_DEPTH + 1];
@@ -202,6 +216,7 @@ static int path_enter(char *path, int keep, char **leaf, int *depth) {
     }
     if (n < keep) return -EINVAL; /* open("") or open("DOCS/") */
     if (n - keep > JT_PATH_DEPTH) return -EINVAL;
+    path_saved_cwd = vfs_cwd_get(); vfs_cwd_set(0);
     for (int i = 0; i < n - keep; i++) {
         if (!vfs_chdir(comp[i])) { path_leave(*depth); *depth = 0; return -ENOENT; }
         (*depth)++;
@@ -425,9 +440,11 @@ static int sys_close(u32 fd, u32 b, u32 c) {
     return close_fd(id, fd);
 }
 
+static void r3win_release(int task);
 void syscall_release_task(int id) {
     if (id < 0 || id >= TASK_SLOTS) return;
     window_release(id);
+    brk_release(id, task_page_dir(id)); /* 1.9.27: every heap page back to the PMM, exit or crash alike */
     /* Every teardown path lands here (exit, idt.c's fault reap, and the
        launcher's failed exec never mapped anything), so this is the one
        place to insist: no owner, no user-accessible framebuffer. Cheap,
@@ -562,11 +579,129 @@ static int window_owned(void) { return win_owner >= 0; }
 int  gui_app_view_size(unsigned int *w, unsigned int *h); /* 1 if an app viewport is open */
 int  gui_poll_event(int *a, int *b);                        /* non-blocking: JT_EV_* or 0 */
 
+/* 1.9.23: compositor windows. A ring-3 program launched through
+   exec_user_window gets a row here before it runs: a framebuffer of the
+   window's size, kmalloc'd and mapped only into that task's directory at
+   JT_USER_FB (paging_task_map_private), plus a 64-deep event ring the
+   desktop fills (syscall_window_push_event) and SYS_WINDOW_POLL drains.
+   JT_POLL_PRESENT no longer copies anything: it marks the row dirty and
+   kernel.c's compositor blits the buffer at the window's position on its
+   next frame. The legacy single owner (win_owner, above) stays for the
+   blocking launcher, so nothing unconverted changes. */
+#define R3WIN_MAX 4
+#define R3WIN_RING 64
+struct r3win { int task; u32 *fb; void *fb_raw; void *old_raw; u32 old_w, old_h; u32 want_w, want_h; void *image; u32 w, h; int dirty; struct jt_event ring[R3WIN_RING]; u32 rh, rt; };
+static struct r3win r3wins[R3WIN_MAX];
+static struct r3win *r3win_of(int task) {
+    if (task < 0) return 0;
+    for (int i = 0; i < R3WIN_MAX; i++) if (r3wins[i].task == task) return &r3wins[i];
+    return 0;
+}
+int syscall_window_register(int task, u32 w, u32 h, void *image) {
+    if (task <= 0 || !w || !h || w * h * 4 > JT_USER_FB_BYTES) return 0;
+    struct r3win *r = 0;
+    for (int i = 0; i < R3WIN_MAX; i++) if (r3wins[i].task <= 0) { r = &r3wins[i]; break; }
+    if (!r) return 0;
+    u32 bytes = (w * h * 4 + 4095) & ~4095u;
+    u8 *raw = (u8 *)kmalloc(bytes + 4096);
+    if (!raw) return 0;
+    u32 *fb = (u32 *)(((u32)raw + 4095) & ~4095u);
+    for (u32 i = 0; i < w * h; i++) fb[i] = 0;
+    if (!paging_task_map_private(task_page_dir(task), JT_USER_FB, (u32)fb, bytes)) { kfree(raw); return 0; }
+    r->task = task; r->fb = fb; r->fb_raw = raw; r->old_raw = 0; r->old_w = r->old_h = 0; r->want_w = w; r->want_h = h; r->image = image; r->w = w; r->h = h; r->dirty = 0; r->rh = r->rt = 0;
+    return 1;
+}
+/* 1.10.x resize: the buffer a re-open replaced is freed here, on the next
+   compositor look at the window, not inside the swap: a blit that was
+   already reading it (the timer can run the app mid-blit) never sees freed
+   memory. Zeroed first, same rule as the release path. Kernel PDEs are
+   synced into every task directory, so no CR3 switch is needed (and a
+   mid-syscall one is what 1.9.28 removed). */
+static void r3win_free_old(struct r3win *r) {
+    if (!r->old_raw) return;
+    u32 *o = (u32 *)(((u32)r->old_raw + 4095) & ~4095u);
+    for (u32 i = 0; i < r->old_w * r->old_h; i++) o[i] = 0;
+    kfree(r->old_raw);
+    r->old_raw = 0; r->old_w = r->old_h = 0;
+}
+void syscall_window_request_size(int task, u32 w, u32 h) {
+    unsigned int f = irq_save();
+    struct r3win *r = r3win_of(task);
+    if (r && w && h && (w != r->want_w || h != r->want_h) && w * h * 4 <= JT_USER_FB_BYTES
+        && r->rt - r->rh < R3WIN_RING) { /* a full ring defers the ask to the next frame; an oversize rect keeps the old buffer clipped */
+        struct jt_event *e = &r->ring[r->rt % R3WIN_RING];
+        e->kind = JT_EV_RESIZE; e->a = (int)w; e->b = (int)h; r->rt++;
+        r->want_w = w; r->want_h = h;
+    }
+    irq_restore(f);
+}
+/* SYS_WINDOW_OPEN on a window that already has its buffer, with a resize
+   pending: a new buffer at the wanted size replaces the old one. */
+static int r3win_resize(struct r3win *r) {
+    u32 w = r->want_w, h = r->want_h;
+    if (w == r->w && h == r->h) return 0;
+    u32 bytes = (w * h * 4 + 4095) & ~4095u;
+    u8 *raw = (u8 *)kmalloc(bytes + 4096);
+    if (!raw) return -ENOMEM; /* keeps the old buffer; the app stays at its old size */
+    u32 *fb = (u32 *)(((u32)raw + 4095) & ~4095u);
+    for (u32 i = 0; i < w * h; i++) fb[i] = 0; /* zeroed before it is mapped user-accessible */
+    unsigned int f = irq_save();
+    r3win_free_old(r); /* a still-pending earlier swap, if any */
+    u32 old_bytes = (r->w * r->h * 4 + 4095) & ~4095u;
+    if (!paging_task_remap_private(task_page_dir(r->task), JT_USER_FB, (u32)fb, bytes, old_bytes)) { irq_restore(f); kfree(raw); return -ENOMEM; }
+    r->old_raw = r->fb_raw; r->old_w = r->w; r->old_h = r->h;
+    r->fb = fb; r->fb_raw = raw; r->w = w; r->h = h; r->dirty = 1;
+    irq_restore(f);
+    serial_puts("syscall: window resized, new buffer mapped\n");
+    return 0;
+}
+const u32 *syscall_window_fb(int task, u32 *w, u32 *h, int *dirty) {
+    struct r3win *r = r3win_of(task);
+    if (!r) return 0;
+    r3win_free_old(r);
+    *w = r->w; *h = r->h; *dirty = r->dirty; r->dirty = 0;
+    return r->fb;
+}
+void syscall_window_push_event(int task, int kind, int a, int b) {
+    unsigned int f = irq_save(); /* 1.9.23: the compositor fills with IF on, SYS_WINDOW_POLL drains under the gate; the slot is written before rt moves */
+    struct r3win *r = r3win_of(task);
+    if (r && r->rt - r->rh < R3WIN_RING) { /* full: the oldest stays, the newest is dropped, same as a full keyboard ring */
+        struct jt_event *e = &r->ring[r->rt % R3WIN_RING];
+        e->kind = (u32)kind; e->a = a; e->b = b; r->rt++;
+    }
+    irq_restore(f);
+}
+static void r3win_release(int task) {
+    struct r3win *r = r3win_of(task);
+    if (!r) return;
+    /* The exiting task runs this on its own directory, a copy made before
+       the heap grew to where this window's buffers live; those pages are only
+       guaranteed mapped in the kernel directory. Touch them from there. */
+    u32 cr3_was; __asm__ volatile ("mov %%cr3, %0" : "=r"(cr3_was));
+    __asm__ volatile ("mov %0, %%cr3" :: "r"(paging_kernel_directory()) : "memory");
+    for (u32 i = 0; i < r->w * r->h; i++) r->fb[i] = 0;
+    r3win_free_old(r);
+    kfree(r->fb_raw); kfree(r->image);
+    __asm__ volatile ("mov %0, %%cr3" :: "r"(cr3_was) : "memory");
+    r->task = -1; r->fb = 0; r->fb_raw = 0; r->image = 0; r->w = r->h = 0;
+    serial_puts("syscall: window released, task gone\n");
+}
+void syscall_windows_init(void) { for (int i = 0; i < R3WIN_MAX; i++) r3wins[i].task = -1; }
+
 static int sys_window_open(u32 info, u32 b, u32 c) {
     (void)b; (void)c;
     if (!paging_user_range_ok(info, sizeof(struct jt_window_info))) return -EFAULT;
     int id = task_current();
     if (id <= 0 || id >= TASK_SLOTS) return -EBADF;
+    struct r3win *r = r3win_of(id);
+    if (r) {
+        struct jt_window_info *out = (struct jt_window_info *)info;
+        int rr = r3win_resize(r); /* 1.10.x: a second open is the answer to JT_EV_RESIZE; a no-op when the size already matches */
+        if (rr < 0) return rr;
+        out->width = r->w; out->height = r->h; out->pitch = r->w * 4; out->pixels = (u32 *)JT_USER_FB;
+        serial_puts("syscall: window opened for ring-3 task\n");
+        return 0;
+    }
     if (win_owner >= 0 && win_owner != id) return -EBUSY;
     u32 w, h;
     if (!gui_app_view_size(&w, &h) || !w || !h) return -ENODEV;
@@ -641,8 +776,18 @@ static void window_present_user(void) {
 static int sys_window_poll(u32 ev, u32 flags, u32 c) {
     (void)c;
     if (!paging_user_range_ok(ev, sizeof(struct jt_event))) return -EFAULT;
-    if (win_owner != task_current()) return -EBADF;
     if (flags & ~(u32)JT_POLL_PRESENT) return -EINVAL;
+    struct r3win *r = r3win_of(task_current());
+    if (r) {
+        if (syscall_stress_on) r3stress_syscall_round(); /* 1.9.23: stress=r3 boot flag, see r3stress.c */
+        if (pde_stress_on) pdestress_syscall_round(); /* 1.9.24: stress=pde, touches heap mapped after this task was born */
+        if (flags & JT_POLL_PRESENT) r->dirty = 1;
+        if (r->rh == r->rt) return -EAGAIN;
+        struct jt_event *out = (struct jt_event *)ev;
+        *out = r->ring[r->rh % R3WIN_RING]; r->rh++;
+        return 1;
+    }
+    if (win_owner != task_current()) return -EBADF;
     if (flags & JT_POLL_PRESENT) window_present_user();
     int a = 0, b = 0;
     int kind = gui_poll_event(&a, &b);
@@ -697,11 +842,52 @@ static int sys_tasks(u32 out, u32 kill, u32 c) {
    and only if the status was 200. One caller at a time: a second task
    calling while a fetch is in flight is -EBUSY, since the bounce buffer
    and net.c's one-connection stack are both singletons. */
-#define HTTP_HOST "joshuatree.heyitsmejosh.com"
-#define HTTP_PORT 80
+#define HTTP_HOST_MAX 64
+static char http_host_buf[HTTP_HOST_MAX] = "joshuatree.heyitsmejosh.com";
+static unsigned short http_port_val = 80;
+#define HTTP_HOST http_host_buf
+#define HTTP_PORT http_port_val
+/* 1.9.26: facehost=HOST[:PORT] on the boot command line moves where Samantha's face frames come from
+   (the checks point it at a local stub). It lived in the kernel chat's face code; this is its new home. */
+static int http_stat_on = 0; /* `httpstat` on the boot line: one serial census line per ring-3 fetch, for tools/checks/httpstress-check.py */
+void jt_facehost_cmdline(const char *cl) {
+    for (const char *p = cl; p && *p; p++) {
+        if (p[0]=='h' && p[1]=='t' && p[2]=='t' && p[3]=='p' && p[4]=='s' && p[5]=='t' && p[6]=='a' && p[7]=='t' && (p == cl || p[-1] == ' ')) http_stat_on = 1;
+        if (p[0]=='f' && p[1]=='a' && p[2]=='c' && p[3]=='e' && p[4]=='h' && p[5]=='o' && p[6]=='s' && p[7]=='t' && p[8]=='=') {
+            p += 9; int n = 0;
+            while (*p && *p != ' ' && *p != ':' && n < HTTP_HOST_MAX - 1) http_host_buf[n++] = *p++;
+            if (n > 0) http_host_buf[n] = 0;
+            if (*p == ':') {
+                unsigned int pt = 0; p++;
+                while (*p >= '0' && *p <= '9') pt = pt * 10 + (unsigned int)(*p++ - '0');
+                if (pt && pt < 65536) http_port_val = (unsigned short)pt;
+            }
+            return;
+        }
+    }
+}
+#define HTTP_BIG_TICKS 300 /* 3s: one face frame */
+#define HTTP_WAIT_TICKS 100 /* 1s: how long a ring-3 fetch queues behind the desktop's own fetch before -EBUSY */
 #define HTTP_REPLY_TICKS 150 /* 1500ms at 100Hz, the same budget kernel/curbfind.h used */
 static char http_bounce[JT_HTTP_BODY_MAX];
 static int http_busy = 0;
+static void http_stat_line(int n) {
+    u32 fb, lg, nb, tl; kheap_stats(&fb, &lg, &nb, &tl);
+    char d[96]; int k = 0;
+    const char *pre = "httpstat: n=";
+    while (*pre) d[k++] = *pre++;
+    u32 vals[4] = { (u32)(n < 0 ? -n : n), fb, lg, nb };
+    for (int vi = 0; vi < 4; vi++) {
+        char t[12]; int nt = 0; u32 v = vals[vi];
+        if (!v) t[nt++] = '0';
+        while (v) { t[nt++] = (char)('0' + v % 10); v /= 10; }
+        if (vi == 0 && n < 0) d[k++] = '-';
+        if (vi) { const char *nm = vi == 1 ? " free=" : vi == 2 ? " largest=" : " blocks="; while (*nm) d[k++] = *nm++; }
+        while (nt) d[k++] = t[--nt];
+    }
+    d[k++] = '\n'; d[k] = 0;
+    serial_puts(d);
+}
 static int sys_http_get(u32 path, u32 buf, u32 len) {
     char kpath[JT_HTTP_PATH_MAX + 1];
     u32 i;
@@ -714,13 +900,26 @@ static int sys_http_get(u32 path, u32 buf, u32 len) {
     }
     if (i > JT_HTTP_PATH_MAX) return -EINVAL; /* no NUL within the cap */
     if (i == 0 || kpath[0] != '/') return -EINVAL;
-    if (len > JT_HTTP_BODY_MAX) len = JT_HTTP_BODY_MAX;
+    /* Caller-supplied larger buffer (Samantha's 320x320 JPEG face frames are ~21KB): over the 2KB
+       bounce size the reply lands straight in the user buffer, checked whole first, capped at
+       JT_HTTP_BIG_MAX. Up to 2KB keeps the bounce copy exactly as before. */
+    if (len > JT_HTTP_BIG_MAX) len = JT_HTTP_BIG_MAX;
     if (!paging_user_range_ok(buf, len ? len : 1)) return -EFAULT;
+    int big = len > JT_HTTP_BODY_MAX;
     if (http_busy) return -EBUSY;
+    if (task_stack_room() < JT_NET_STACK_MIN) return -ENOMEM; /* 2.0.0: never enter the net path without stack room, see task_stack_room */
     http_busy = 1;
     __asm__ volatile ("sti");
     int n = -1, st = 0;
-    if (!net_init(0x0A00020F)) { n = -ENODEV; }
+    if (!http_wait_idle(HTTP_WAIT_TICKS)) { n = -EBUSY; } /* the desktop holds the connection: busy, not a network failure */
+    else if (!net_init(0x0A00020F)) { n = -ENODEV; }
+    else if (big) {
+        n = http_get_timeout(HTTP_HOST, kpath, HTTP_PORT, (char *)buf, len, HTTP_BIG_TICKS);
+        http_post_set_bearer(0); /* belt and braces: a failed resolve must not leave it armed */
+        st = http_last_status();
+        if (n < 0) n = -EIO;
+        else if (st != 200) n = st >= 100 && st <= 599 ? -st : -EIO;
+    }
     else {
         n = http_get_timeout(HTTP_HOST, kpath, HTTP_PORT, http_bounce, sizeof(http_bounce), HTTP_REPLY_TICKS);
         st = http_last_status();
@@ -729,11 +928,205 @@ static int sys_http_get(u32 path, u32 buf, u32 len) {
     }
     __asm__ volatile ("cli");
     http_busy = 0;
+    if (http_stat_on) http_stat_line(n);
     if (n < 0) return n;
     if ((u32)n > len) n = (int)len;
+    if (big) return n; /* already in place */
     char *out = (char *)buf;
     for (i = 0; i < (u32)n; i++) out[i] = http_bounce[i];
     return n;
+}
+
+/* 1.9.26: SYS_HTTP_POST, the chat request Samantha needs once she is a ring-3
+   program. Same shape as sys_http_get: every user range is checked before the
+   network is touched, the body is copied into a kernel bounce buffer first (so
+   the program cannot rewrite it mid-send), the host comes from Settings and
+   never from the caller, interrupts go on only around the wait, and the reply
+   is copied out after the exchange is over and only on a 200. The two bounce
+   buffers are static (14 KB would not fit the 4KB kernel stack) and shared
+   with http_get through the same http_busy flag. */
+static int path_is_mail_send(const char *p) {
+    const char *m = "/api/mail/send";
+    while (*m && *p == *m) { p++; m++; }
+    return !*m && !*p;
+}
+static char http_post_body[JT_HTTP_POST_BODY_MAX];
+static char http_post_reply[JT_HTTP_POST_REPLY_MAX];
+static int sys_http_post(u32 argp, u32 flags, u32 unused2) {
+    (void)unused2;
+    if (flags & ~(u32)(JT_POST_WORKER | JT_POST_BIG)) return -EINVAL;
+    int big = (flags & JT_POST_BIG) != 0;
+    if (!paging_user_range_ok(argp, sizeof(struct jt_http_post))) return -EFAULT;
+    struct jt_http_post a = *(const struct jt_http_post *)argp; /* one copy; the user struct is not read again */
+    char kpath[JT_HTTP_PATH_MAX + 1];
+    u32 i;
+    for (i = 0; i <= JT_HTTP_PATH_MAX; i++) {
+        if (!paging_user_range_ok((u32)a.path + i, 1)) return -EFAULT;
+        char ch = a.path[i];
+        kpath[i] = ch;
+        if (!ch) break;
+        if (ch < 0x21 || ch > 0x7E) return -EINVAL;
+    }
+    if (i > JT_HTTP_PATH_MAX) return -EINVAL;
+    if (i == 0 || kpath[0] != '/') return -EINVAL;
+    if (a.body_len > (big ? (u32)JT_HTTP_BIG_MAX : (u32)JT_HTTP_POST_BODY_MAX)) return -EINVAL;
+    if (!paging_user_range_ok((u32)a.body, a.body_len ? a.body_len : 1)) return -EFAULT;
+    if (a.out_len > (big ? (u32)JT_HTTP_BIG_MAX : (u32)JT_HTTP_POST_REPLY_MAX)) a.out_len = big ? JT_HTTP_BIG_MAX : JT_HTTP_POST_REPLY_MAX;
+    if (!paging_user_range_ok((u32)a.out, a.out_len ? a.out_len : 1)) return -EFAULT;
+    u32 ticks = a.reply_ticks ? a.reply_ticks : JT_HTTP_POST_TICKS_DEFAULT;
+    if (ticks > JT_HTTP_POST_TICKS_MAX) ticks = JT_HTTP_POST_TICKS_MAX;
+    if (http_busy) return -EBUSY;
+    if (task_stack_room() < JT_NET_STACK_MIN) return -ENOMEM; /* 2.0.0: never enter the net path without stack room, see task_stack_room */
+    /* Big: no bounce at all. net's POST builder already copies the body into its own
+       kmalloc'd request, and the reply is written straight into the checked user range. */
+    if (!big) for (i = 0; i < a.body_len; i++) http_post_body[i] = a.body[i];
+    http_busy = 1;
+    __asm__ volatile ("sti");
+    int n, st = 0;
+    if (!http_wait_idle(HTTP_WAIT_TICKS)) { n = -EBUSY; }
+    else if (!net_init(0x0A00020F)) { n = -ENODEV; }
+    else {
+        const char *host = (flags & JT_POST_WORKER) ? HTTP_HOST : llm_host_get();
+        unsigned short port = (flags & JT_POST_WORKER) ? HTTP_PORT : (unsigned short)llm_port_get();
+        /* 1.9.27: the Mail token never crosses into ring 3. The kernel adds the bearer itself, only
+           for the Worker's mail route, from the Settings-owned token. */
+        if ((flags & JT_POST_WORKER) && path_is_mail_send(kpath)) http_post_set_bearer(mail_token_get());
+        if (big) n = http_post_timeout(host, kpath, port, a.body, a.body_len, a.out, a.out_len, ticks);
+        else n = http_post_timeout(host, kpath, port, http_post_body, a.body_len, http_post_reply, sizeof(http_post_reply), ticks);
+        st = http_last_status();
+        if (n < 0) n = -EIO;
+        else if (st != 200) n = st >= 100 && st <= 599 ? -st : -EIO;
+    }
+    __asm__ volatile ("cli");
+    http_busy = 0;
+    if (n < 0) return n;
+    if ((u32)n > a.out_len) n = (int)a.out_len;
+    if (big) return n; /* already in place; scratch bytes in out are possible on failure */
+    for (i = 0; i < (u32)n; i++) a.out[i] = http_post_reply[i];
+    return n;
+}
+
+/* 1.9.26: SYS_SYSINFO and SYS_LAUNCH_REQUEST (contract in syscall.h). Both keep the state on the
+   kernel side of the gate: sysinfo fills a private copy and copies out once, launch only records
+   an index that gui_run picks up with IF on. */
+static int sys_sysinfo(u32 out, u32 size, u32 unused) {
+    (void)unused;
+    struct jt_sysinfo si;
+    if (size < 8) return -EINVAL;
+    if (size > sizeof si) size = sizeof si;
+    if (!paging_user_range_ok(out, size)) return -EFAULT;
+    jt_sysinfo_fill(&si);
+    si.epoch = rtc_epoch_seconds();
+    for (u32 i = 0; i < size; i++) ((char *)out)[i] = ((const char *)&si)[i];
+    return (int)size;
+}
+static int sys_launch_request(u32 name, u32 b, u32 c) {
+    (void)b; (void)c;
+    char kn[JT_APP_NAME_MAX + 1];
+    u32 i;
+    for (i = 0; i <= JT_APP_NAME_MAX; i++) {
+        if (!paging_user_range_ok(name + i, 1)) return -EFAULT;
+        kn[i] = ((const char *)name)[i];
+        if (!kn[i]) break;
+    }
+    if (i > JT_APP_NAME_MAX || i == 0) return -EINVAL;
+    return jt_launch_request(kn);
+}
+
+static int sys_refresh(u32 kind, u32 arg, u32 c) { (void)c; return jt_refresh_request((int)kind, (int)arg); }
+/* 1.9.28: SYS_CLIPBOARD (contract in syscall.h). One kernel buffer shared by every ring-3 app; the
+   user bytes are range-checked, then copied in or out under irq_save so a paste never sees a
+   half-written copy. The serial lines are what tools/checks/clipboard-check.py greps: the length
+   always, an FNV-1a hash only under `cliptrace` (the serial log is host-readable and an unkeyed
+   hash of a short pasted password is dictionary-recoverable), never the text. */
+static char clip_buf[JT_CLIP_MAX];
+static u32 clip_len = 0;
+static int clip_trace = 0;
+void jt_clip_cmdline(const char *cl) {
+    for (const char *p = cl; p && *p; p++)
+        if (p[0]=='c' && p[1]=='l' && p[2]=='i' && p[3]=='p' && p[4]=='t' && p[5]=='r' && p[6]=='a' && p[7]=='c' && p[8]=='e') { clip_trace = 1; return; }
+}
+static void clip_log(const char *tag, const char *s, u32 n) {
+    char out[24]; int k = 0; char d[10]; int dn = 0; u32 v = n;
+    do { d[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
+    while (dn) out[k++] = d[--dn];
+    if (clip_trace) {
+        u32 h = 2166136261u;
+        for (u32 i = 0; i < n; i++) { h ^= (unsigned char)s[i]; h *= 16777619u; }
+        out[k++] = ':';
+        for (int sh = 28; sh >= 0; sh -= 4) out[k++] = "0123456789abcdef"[(h >> sh) & 15];
+    }
+    out[k++] = '\n'; out[k] = 0;
+    serial_puts(tag);
+    serial_puts(out);
+}
+static int sys_clipboard(u32 op, u32 buf, u32 len) {
+    if (op == JT_CLIP_SET) {
+        if (len > JT_CLIP_MAX) return -EINVAL;
+        if (len && !paging_user_range_ok(buf, len)) return -EFAULT;
+        unsigned int f = irq_save();
+        for (u32 i = 0; i < len; i++) clip_buf[i] = ((const char *)buf)[i];
+        clip_len = len;
+        irq_restore(f);
+        clip_log("CLIPCOPY:", clip_buf, len);
+        return (int)len;
+    }
+    if (op == JT_CLIP_GET) {
+        if (len && !paging_user_range_ok(buf, len)) return -EFAULT;
+        unsigned int f = irq_save();
+        u32 have = clip_len, n = have < len ? have : len;
+        for (u32 i = 0; i < n; i++) ((char *)buf)[i] = clip_buf[i];
+        irq_restore(f);
+        if (n) {
+            clip_log("CLIPPASTE:", clip_buf, n);
+            if (n < have) serial_puts("CLIPTRUNC\n");
+        }
+        return (int)n;
+    }
+    return -EINVAL;
+}
+
+/* 1.9.26: SYS_AUDIO (contract in syscall.h). User PCM goes through paging_user_range_ok, then a
+   bounded copy into the driver's ring (sb16_queue takes the irq lock itself). Nothing waits. */
+static int sys_audio(u32 op, u32 arg, u32 size) {
+    if (op == JT_AUDIO_STOP) { sb16_queue_stop(); return 0; }
+    if (op == JT_AUDIO_STATUS) {
+        struct jt_audio_status st;
+        struct sb16_qstat q;
+        if (size < 8) return -EINVAL;
+        if (size > sizeof st) size = sizeof st;
+        if (!paging_user_range_ok(arg, size)) return -EFAULT;
+        sb16_queue_status(&q);
+        st.version = JT_AUDIO_STATUS_VERSION; st.size = sizeof st;
+        st.playing = q.playing; st.queued = q.queued; st.space = q.space;
+        st.rate = q.rate; st.played = q.played;
+        for (u32 i = 0; i < size; i++) ((char *)arg)[i] = ((const char *)&st)[i];
+        return (int)size;
+    }
+    if (op != JT_AUDIO_PLAY) return -EINVAL;
+    if (size < sizeof(struct jt_audio_play)) return -EINVAL;
+    if (!paging_user_range_ok(arg, sizeof(struct jt_audio_play))) return -EFAULT;
+    struct jt_audio_play p = *(const struct jt_audio_play *)arg;
+    if (!p.len) return -EINVAL;
+    if (!sb16_present()) return -ENODEV;
+    if (p.len > JT_AUDIO_CHUNK_MAX) { p.len = JT_AUDIO_CHUNK_MAX; p.flags &= ~(u32)JT_AUDIO_END; }
+    if (!paging_user_range_ok((u32)p.pcm, p.len)) return -EFAULT;
+    return (int)sb16_queue((const unsigned char *)p.pcm, p.len, p.rate, (p.flags & JT_AUDIO_END) ? 1 : 0);
+}
+
+/* 1.9.26: SYS_AUDIO_RECORD (contract in syscall.h). Start and stop only flip driver state; read
+   copies out of the capture ring after paging_user_range_ok and never waits. */
+static int sys_audio_record(u32 op, u32 arg, u32 size) {
+    if (op == JT_REC_STOP) { sb16_rec_stop(); return 0; }
+    if (op == JT_REC_START) {
+        if (!sb16_present()) return -ENODEV;
+        return sb16_rec_start(arg) ? 0 : -EBUSY;
+    }
+    if (op != JT_REC_READ) return -EINVAL;
+    if (!size) return -EINVAL;
+    if (size > JT_REC_CHUNK_MAX) size = JT_REC_CHUNK_MAX;
+    if (!paging_user_range_ok(arg, size)) return -EFAULT;
+    return (int)sb16_rec_read((unsigned char *)arg, size);
 }
 
 /* 1.9.13: SYS_READDIR, the listing the Search app shows (and Files will).
@@ -776,6 +1169,78 @@ static int sys_readdir(u32 path, u32 out, u32 max) {
     return (int)readdir_total;
 }
 
+/* SYS_MKDIR / SYS_UNLINK: same path rules as sys_open (copy_path_from_user
+   checks every byte with paging_user_range_ok, path_enter keeps one leaf),
+   the walk is undone before return. No heap is touched, so there is no lock
+   to take; the gate already runs with IF clear. */
+static int sys_mkdir(u32 path, u32 b, u32 c) {
+    (void)b; (void)c;
+    char name[PATH_MAX + 1];
+    int err = copy_path_from_user(path, name);
+    if (err) return err;
+    char *leaf; int depth;
+    err = path_enter(name, 1, &leaf, &depth);
+    if (err) return err;
+    int ok = vfs_mkdir(leaf);
+    path_leave(depth);
+    return ok ? 0 : -ENOSPC;
+}
+/* SYS_UNLINK must never take a folder (vfs_delete would remove a directory
+   entry as readily as a file): the listing says which the leaf is. */
+static const char *unlink_leaf;
+static int unlink_leaf_is_dir;
+static void unlink_probe(const char *name, unsigned int size, int is_dir) {
+    (void)size;
+    const char *a = name, *b = unlink_leaf;
+    for (; *a && *b; a++, b++) {
+        char x = *a, y = *b;
+        if (x >= 'a' && x <= 'z') x -= 32;
+        if (y >= 'a' && y <= 'z') y -= 32;
+        if (x != y) return;
+    }
+    if (*a || *b) return;
+    if (is_dir) unlink_leaf_is_dir = 1;
+}
+static int sys_unlink(u32 path, u32 b, u32 c) {
+    (void)b; (void)c;
+    char name[PATH_MAX + 1];
+    int err = copy_path_from_user(path, name);
+    if (err) return err;
+    char *leaf; int depth;
+    err = path_enter(name, 1, &leaf, &depth);
+    if (err) return err;
+    unlink_leaf = leaf; unlink_leaf_is_dir = 0;
+    vfs_list(unlink_probe);
+    if (unlink_leaf_is_dir) { path_leave(depth); return -EISDIR; }
+    int ok = vfs_delete(leaf);
+    path_leave(depth);
+    return ok ? 0 : -ENOENT;
+}
+
+/* SYS_SHELL_RUN: both user pointers are range checked before anything is
+   read or written, the line is copied in with a hard bound, and the work is
+   shellsys_run's allowlist (static buffers, no blocking, no windows). */
+static int sys_shell_run(u32 line, u32 out, u32 outlen) {
+    if (outlen == 0 || outlen > 4096) return -EINVAL;
+    if (!paging_user_range_ok(out, outlen)) return -EFAULT;
+    char k[JT_SHELL_LINE_MAX + 1];
+    u32 n = 0;
+    for (;; n++) {
+        if (n > JT_SHELL_LINE_MAX) return -EINVAL;
+        if (!paging_user_range_ok(line + n, 1)) return -EFAULT;
+        char c = ((const char *)line)[n];
+        k[n] = c;
+        if (!c) break;
+    }
+    char *res;
+    u32 len = shellsys_run(k, &res);
+    if (len > outlen - 1) len = outlen - 1;
+    char *dst = (char *)out;
+    for (u32 i = 0; i < len; i++) dst[i] = res[i];
+    dst[len] = 0;
+    return (int)len;
+}
+
 /* Called from syscall_release_task on exit or fault. 1.7.8: the pages go
    back to supervisor-only here, not just zeroed. Before this, a program
    that had opened a window left JT_USER_FB user-accessible for good, so
@@ -784,12 +1249,19 @@ static int sys_readdir(u32 path, u32 out, u32 max) {
    handed a pointer into them would have passed paging_user_range_ok.
    tools/checks/userfb-release-check.py proves both doors are shut. */
 static void window_release(int id) {
+    r3win_release(id); /* 1.9.23: a compositor window, if this task had one */
     if (win_owner != id) return;
     u32 *fb = (u32 *)JT_USER_FB;
     for (u32 i = 0; i < win_w * win_h; i++) fb[i] = 0;
     win_owner = -1; win_w = win_h = 0;
     paging_clear_user((void *)JT_USER_FB, JT_USER_FB_BYTES);
     serial_puts("syscall: window released, task gone\n");
+}
+
+static int sys_brk(u32 top, u32 b, u32 c) {
+    (void)b; (void)c;
+    int id = task_current();
+    return brk_set(id, task_page_dir(id), top);
 }
 
 static const syscall_fn table[NSYSCALLS] = {
@@ -807,6 +1279,17 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_TASKS]       = sys_tasks,
     [SYS_HTTP_GET]    = sys_http_get,
     [SYS_READDIR]     = sys_readdir,
+    [SYS_MKDIR]       = sys_mkdir,
+    [SYS_UNLINK]      = sys_unlink,
+    [SYS_SHELL_RUN]   = sys_shell_run,
+    [SYS_HTTP_POST]   = sys_http_post,
+    [SYS_AUDIO]       = sys_audio,
+    [SYS_AUDIO_RECORD] = sys_audio_record,
+    [SYS_SYSINFO]     = sys_sysinfo,
+    [SYS_LAUNCH_REQUEST] = sys_launch_request,
+    [SYS_BRK]         = sys_brk,
+    [SYS_REFRESH]     = sys_refresh,
+    [SYS_CLIPBOARD]   = sys_clipboard,
     [SYS_TEXT]        = sys_text,
 };
 

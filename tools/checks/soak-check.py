@@ -27,7 +27,7 @@ CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 
 APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
-        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar",
+        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Lexly", "Toroid", "Sparkjar",
         "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity"]
 
@@ -40,7 +40,7 @@ CRASH_PATTERNS = [
 ]
 
 passes = int(sys.argv[1]) if len(sys.argv) > 1 else 20
-app_indices = list(range(24))
+app_indices = list(range(23))
 if len(sys.argv) > 2:
     app_indices = [int(x) for x in sys.argv[2].split(",")]
 

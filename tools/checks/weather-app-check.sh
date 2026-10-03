@@ -17,8 +17,12 @@
 #             opened three times, still exactly one wxfetch (issue #13: a
 #             failed fetch must not re-run on every open/repaint)
 #
-# The kernel mirrors what it fetched (wxstate=) and what the window actually
-# drew (wxwin=<state> live|stale|sample) to serial; this reads those lines.
+# The kernel mirrors what it fetched (wxstate=) to serial. Since 1.9.22 the
+# window is a ring-3 program (user/weather.c) that reads the kernel's
+# WEATHER.TXT and writes what it drew (wxwin=<state> live|stale|sample, wxrow=,
+# wxshow=<temp> <word>) through write(); this reads those lines, so a pass
+# means the app really displayed the fetched reading, not just that a fetch ran.
+# R makes the app exit 7, the kernel refetches and starts it again.
 # Never opens a window: -display none, input over QMP.
 
 set -e
@@ -125,7 +129,7 @@ def scenario(name, mode, steps):
         b = Boot(name, mode)
         err = steps(b)
         results[name] = err or "ok"
-        if err: results[name] += "\n      serial: " + " | ".join(l for l in b.serial().splitlines() if l.startswith("wx"))[-400:]
+        if err: results[name] += "\n      serial: " + " | ".join(l for l in b.serial().splitlines() if l.startswith("wx") or "WEATHER" in l or "wxwin" in l or "wxrow" in l)[-900:]
     except Exception as e:
         results[name] = "exception: %r" % (e,)
     finally:
@@ -141,6 +145,7 @@ def s_success(b):
     b.click_weather()
     if not b.wait("wxwin=ok live", 20): return "window did not show the live reading"
     if not b.wait(ROW, 10): return "forecast row did not render five day cards with the served weekdays"
+    if "wxshow=14 Cloudy" not in b.serial(): return "the app did not draw the served 14 degrees and its condition word"
     if os.environ.get("WX_SCREENDUMP"): time.sleep(1.0); b.screendump(os.environ["WX_SCREENDUMP"]); time.sleep(0.5)
     b.state["mode"] = "bad"; b.key("r")
     if not b.wait("wxstate=bad", 60): return "R did not trigger a refetch"

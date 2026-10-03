@@ -15,7 +15,7 @@
  * tools/checks/ring3fieldbook-check.py presses it on purpose.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define ROW   0x00F1EDE7
@@ -26,7 +26,7 @@
 #define FB_LIST_X 20
 #define FB_LIST_W 220
 #define FB_INFO_X 260
-#define FB_TOP    56
+#define FB_TOP    40
 #define FB_ITEM_H 28
 
 typedef struct { const char *name; const char *studies; const char *explanation; } FbField;
@@ -59,22 +59,23 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (px < 0 || px >= (int)win.width) continue;
-            if (g[r] & (0x80 >> c)) win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
+static int text(const char *s, int x, int y, unsigned fg) { /* returns the x after the last glyph */
+    return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s);
 }
-static void text(const char *s, int x, int y, unsigned fg) {
-    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
+/* s cut to maxw px with a trailing "...", drawn in the given face */
+static void etext(int face, const char *s, int x, int y, int maxw, unsigned fg) {
+    char t[72]; int n = 0;
+    while (s[n] && n < 64) { t[n] = s[n]; n++; }
+    t[n] = 0;
+    if (jt_text_width(face, t) > maxw) {
+        while (n > 0) {
+            t[n] = '.'; t[n + 1] = '.'; t[n + 2] = '.'; t[n + 3] = 0;
+            if (jt_text_width(face, t) <= maxw) break;
+            t[--n] = 0;
+        }
+        if (n == 0) t[0] = 0;
+    }
+    jt_text_draw(&win, face, x, y, fg, t);
 }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
@@ -84,13 +85,29 @@ static int utoa10(unsigned v, char *buf) {
     return n;
 }
 
-/* Word wrap on the real advance (jt_wrap), breaking only at spaces. */
+/* Greedy word wrap by pixel width, breaking only at spaces. */
 static void fb_wrap(const char *s, int x, int y, int w, int ymax, unsigned fg) {
-    if (y + 16 <= ymax) jt_wrap(s, x, y, w, 20, (ymax - 16 - y) / 20 + 1, fg);
+    char line[120]; int ll = 0;
+    while (*s && y + 18 <= ymax) {
+        int we = 0;
+        while (s[we] && s[we] != ' ') we++;
+        char trial[120]; int tl = 0;
+        for (int i = 0; i < ll; i++) trial[tl++] = line[i];
+        if (ll) trial[tl++] = ' ';
+        for (int i = 0; i < we && tl < 118; i++) trial[tl++] = s[i];
+        trial[tl] = 0;
+        if (ll && jt_text_width(JT_FACE_BODY, trial) > w) {
+            line[ll] = 0; text(line, x, y, fg); y += 20; ll = 0;
+            continue;
+        }
+        for (int i = 0; i <= tl; i++) line[i] = trial[i];
+        ll = tl; s += we;
+        while (*s == ' ') s++;
+    }
+    if (ll && y + 18 <= ymax) { line[ll] = 0; text(line, x, y, fg); }
 }
 
 static void fb_draw(void) {
-    jt_text_clear();
     rect(0, 0, (int)win.width, (int)win.height, BG);
     int max_items = (int)win.height - FB_TOP - 50;
     int shown = FB_COUNT < max_items / FB_ITEM_H ? FB_COUNT : max_items / FB_ITEM_H;
@@ -102,23 +119,15 @@ static void fb_draw(void) {
         if (n >= 10) rank[r++] = (char)('0' + n / 10);
         rank[r++] = (char)('0' + n % 10);
         rank[r++] = '.'; rank[r] = 0;
-        text(rank, FB_LIST_X + 6, y + 6, fg);
-        /* Trim by cell count so a long title ends in "..." inside its row. */
-        const char *name = FB_FIELDS[i].name;
-        int room = (FB_LIST_W - 36) / 8, len = 0;
-        while (name[len]) len++;
-        if (len <= room) text(name, FB_LIST_X + 30, y + 6, fg);
-        else {
-            for (int k = 0; k < room - 3; k++) glyph((unsigned char)name[k], FB_LIST_X + 30 + k * 8, y + 6, fg);
-            text("...", FB_LIST_X + 30 + (room - 3) * 8, y + 6, fg);
-        }
+        text(rank, FB_LIST_X + 6, y + 5, fg);
+        etext(JT_FACE_BODY, FB_FIELDS[i].name, FB_LIST_X + 30, y + 5, FB_LIST_W - 36, fg);
     }
     const FbField *f = &FB_FIELDS[fb_sel];
-    text(f->name, FB_INFO_X, FB_TOP, INK);
-    text(f->studies, FB_INFO_X, FB_TOP + 20, HINT);
-    int wy = FB_TOP + 44;
+    etext(JT_FACE_BOLD, f->name, FB_INFO_X, FB_TOP, (int)win.width - FB_INFO_X - 24, INK);
+    etext(JT_FACE_BODY, f->studies, FB_INFO_X, FB_TOP + 24, (int)win.width - FB_INFO_X - 24, HINT);
+    int wy = FB_TOP + 52;
     fb_wrap(f->explanation, FB_INFO_X, wy, (int)win.width - FB_INFO_X - 24, (int)win.height - 50, INK);
-    text("up/down or click to select   esc closes", 20, (int)win.height - 30, HINT);
+    etext(JT_FACE_BODY, "up/down or click to select   esc closes", 20, (int)win.height - 30, (int)win.width - 40, HINT);
 }
 
 __attribute__((section(".text.start"), used))
@@ -144,6 +153,7 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { fb_draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;

@@ -11,7 +11,7 @@ clicked, so a second dock click while an app was open either did nothing
 useful or (on the pre-v68 kernel) just closed the first app. There was no
 window list, no way to have two apps' real content on screen at once.
 
-This test opens Files (dock slot 1), then Weather (dock slot 8) WITHOUT
+This test opens Files (dock slot 1), then Notes (dock slot 4) WITHOUT
 closing Files first, and proves from the real framebuffer that:
   1. Both windows' close buttons are on screen at the same time, at their
      real, distinct positions (gui_multiwin_geom: window 0 keeps the
@@ -19,9 +19,9 @@ closing Files first, and proves from the real framebuffer that:
      depends on; window 1 is offset to x=130,y=100), not just two list
      entries with nothing actually drawn.
   2. Both windows' real, distinguishing content is visible simultaneously:
-     Files' real "Burrow" title text and Weather's real gradient panel
+     Files' real "Burrow" title text and Notes' real row band
      background, sampled at each window's own content rect.
-  3. Closing Weather (the focused/topmost window) via its own X leaves
+  3. Closing Notes (the focused/topmost window) via its own X leaves
      Files still open and still showing its real content, i.e. the other
      window is untouched, not torn down alongside it.
   4. Closing Files afterwards returns to a clean desktop (no close button
@@ -30,7 +30,7 @@ closing Files first, and proves from the real framebuffer that:
 
 Discriminating: run against a kernel.elf built before this change (any
 commit where dock apps only ever supported one window). Step 1's second
-open (Weather, slot 8, while Files is still open) either does nothing
+open (Notes, slot 4, while Files is still open) either does nothing
 (the QMP click lands inside Files' own gui_wait_close loop, which reads
 "any click closes", so it just closes Files) or, if attempted before v68,
 leaves the screen fully stuck; either way NO second close button ever
@@ -84,6 +84,12 @@ PARK = (480, 200)
 # reused here for step 7's Compose-sends-into-the-list-window proof.
 VX, VY, VW, VH = 78, 72, 804, 345
 INK = (0x1C, 0x1C, 0x1E)
+# A pixel inside both windows' rects where Notes' browse view draws the lit
+# NOTES column header band (user/notes.c draw_list: BAND 0xEAE4DC at window
+# x 186..406, y 58..76, i.e. screen 324..544 x 190..208 for a window at
+# (130,100)) and Files shows its flat (250,248,246) background, so it tells
+# which of the two is on top.
+NOTES_PROBE = (500, 199)
 SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -156,6 +162,15 @@ try:
                 if pixel(img, x, y) == color: n += 1
         return n
 
+    def faint_ink_count(img, vx, vy, vw, vh):
+        """Any text ink, dark or faded: Mail draws a read message in FADE and
+        an unread one in INK, and the message Compose files is already read."""
+        n = 0
+        for y in range(vy, vy + vh - 4):
+            for x in range(vx + 4, vx + vw - 4):
+                if sum(pixel(img, x, y)) < 600: n += 1
+        return n
+
     centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2
     def open_slot(slot, ready=None):
         # With `ready`, poll until the window is really there instead of
@@ -180,7 +195,7 @@ try:
     QCODE = {" ": "spc", ".": "dot", "-": "minus", "/": "slash", "@": "shift-2",
              "\n": "ret", "\b": "backspace"}
     def key(c):
-        if c in QCODE: cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": QCODE[c]}]}})
+        if c in QCODE: cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in QCODE[c].split("-")]}})  # "shift-2" is two qcodes held together, QMP rejects it as one
         elif c.isupper(): cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": "shift"}, {"type": "qcode", "data": c.lower()}]}})
         else: cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": c}]}})
         time.sleep(0.08)
@@ -207,29 +222,28 @@ try:
     # drawn there.
     files_title_bg = pixel(img1, 166, 48)
 
-    # 2. Open Weather (slot 8) WITHOUT closing Files. The real, discriminating
+    # 2. Open Notes (slot 4) WITHOUT closing Files. The real, discriminating
     #    step: on a pre-fix kernel this either closes Files (any-click-closes
     #    inside its own blocking loop) or does nothing; on this kernel it
     #    opens a real second window and keeps the first.
-    open_slot(8, lambda im: is_red(pixel(im, *W1_CLOSE)))
+    open_slot(4, lambda im: is_red(pixel(im, *W1_CLOSE)))
     img2 = dump()
     w0_still_here = is_red(pixel(img2, *W0_CLOSE))
     w1_here = is_red(pixel(img2, *W1_CLOSE))
-    print(f"Files still open after opening Weather: {'yes' if w0_still_here else 'NO'}   Weather window present: {'yes' if w1_here else 'NO'}")
-    if not w0_still_here: fails.append("multi-window: opening Weather closed/hid Files instead of both staying open")
-    if not w1_here: fails.append("multi-window: Weather's own window never appeared while Files was open")
+    print(f"Files still open after opening Notes: {'yes' if w0_still_here else 'NO'}   Notes window present: {'yes' if w1_here else 'NO'}")
+    if not w0_still_here: fails.append("multi-window: opening Notes closed/hid Files instead of both staying open")
+    if not w1_here: fails.append("multi-window: Notes' own window never appeared while Files was open")
 
-    # Real content, not just chrome: Weather's gradient panel lives inside
-    # window 1's content rect, well clear of window 0's own rect (so this
-    # can only be window 1's real content, not window 0 bleeding through).
-    # Measured directly against a real framebuffer dump (tools/checks/
-    # _dbg_mw.py, deleted again once this was pinned down): the panel's
-    # cream/peach gradient is clearly visible around (330, 220), distinct
-    # from the flat 0x00F5F0EB app background it sits on.
-    weather_panel = pixel(img2, 330, 220)
-    weather_panel_present = weather_panel != (0xF5, 0xF0, 0xEB)
-    print(f"Weather gradient panel colour at its real position: {weather_panel} present={weather_panel_present}")
-    if not weather_panel_present: fails.append("multi-window: Weather window open but its real gradient panel content is missing (frozen/blank window)")
+    # Real content, not just chrome: Notes' browse-view header band lives inside
+    # window 1's content rect, over Files' flat background, so a changed
+    # pixel can only be window 1's real content drawn on top.
+    # Measured against a real framebuffer dump: the header band is
+    # (234,228,220) where Files shows its flat (250,248,246) background.
+    files_bg = pixel(img1, *NOTES_PROBE)
+    notes_band = pixel(img2, *NOTES_PROBE)
+    notes_band_present = close(notes_band, files_bg) > 12
+    print(f"Notes' selected-row band colour at its real position: {notes_band} (Files' own pixel there: {files_bg}) present={notes_band_present}")
+    if not notes_band_present: fails.append("multi-window: Notes window open but its real browse-view row band is missing (frozen/blank window)")
 
     # Files' own content must still be real too, not frozen mid-transition:
     # re-sample its title strip, it must differ from flat background same
@@ -241,15 +255,15 @@ try:
         # wiped rather than redrawn.
         pass
 
-    # 3. Close Weather (the focused/topmost window) via its own X. Files
+    # 3. Close Notes (the focused/topmost window) via its own X. Files
     #    must stay open and untouched.
     click_at(*W1_CLOSE)
     img3 = dump()
     w1_gone = not is_red(pixel(img3, *W1_CLOSE))
     w0_survived = is_red(pixel(img3, *W0_CLOSE))
-    print(f"After closing Weather: Weather gone={'yes' if w1_gone else 'NO'}  Files still open={'yes' if w0_survived else 'NO'}")
-    if not w1_gone: fails.append("multi-window: Weather's own X did not close it")
-    if not w0_survived: fails.append("multi-window: closing Weather also closed/corrupted Files (the other window is not independent)")
+    print(f"After closing Notes: Notes gone={'yes' if w1_gone else 'NO'}  Files still open={'yes' if w0_survived else 'NO'}")
+    if not w1_gone: fails.append("multi-window: Notes' own X did not close it")
+    if not w0_survived: fails.append("multi-window: closing Notes also closed/corrupted Files (the other window is not independent)")
 
     # 4. Close Files too. Clean desktop, dock still responsive.
     click_at(*W0_CLOSE)
@@ -259,23 +273,23 @@ try:
     if not all_closed: fails.append("multi-window: Files' own X did not close it (or left a stray close button)")
 
     # 5. v0.73.6 (phase 2): real click-to-focus + real z-order compositing.
-    #    Fresh open sequence, identical to steps 1-2: Files then Weather,
-    #    Weather ends up topmost (opened second). The overlap region
-    #    (330,220) sits inside BOTH windows' content rects; right now
-    #    Weather's real gradient panel is what's visible there.
+    #    Fresh open sequence, identical to steps 1-2: Files then Notes,
+    #    Notes ends up topmost (opened second). The overlap region
+    #    NOTES_PROBE sits inside BOTH windows' content rects; right now
+    #    Notes' real row band is what's visible there.
     open_slot(1)  # Files
-    open_slot(8)  # Weather, on top
+    open_slot(4)  # Notes, on top
     img5a = dump()
-    overlap_before_focus = pixel(img5a, 330, 220)
-    weather_on_top_before = close(overlap_before_focus, weather_panel) <= 12
-    print(f"Fresh open, overlap pixel before any focus click: {overlap_before_focus} (Weather's own gradient was {weather_panel}); Weather on top={'yes' if weather_on_top_before else 'NO'}")
-    if not weather_on_top_before:
-        fails.append("z-order setup: freshly-opened Weather is not on top of the overlap region before the click-to-focus test even starts")
+    overlap_before_focus = pixel(img5a, *NOTES_PROBE)
+    notes_on_top_before = close(overlap_before_focus, notes_band) <= 12
+    print(f"Fresh open, overlap pixel before any focus click: {overlap_before_focus} (Notes' own row band was {notes_band}); Notes on top={'yes' if notes_on_top_before else 'NO'}")
+    if not notes_on_top_before:
+        fails.append("z-order setup: freshly-opened Notes is not on top of the overlap region before the click-to-focus test even starts")
 
-    # Click Files' titlebar at W0_CLOSE=(94,56). Window 1 (Weather, rect
-    # x=130,y=100..) does NOT cover this point at all (y=56 < Weather's
+    # Click Files' titlebar at W0_CLOSE=(94,56). Window 1 (Notes, rect
+    # x=130,y=100..) does NOT cover this point at all (y=56 < Notes'
     # y=100), so this click can only land on window 0 (Files), and Files
-    # is a BACKGROUND window right now (Weather is topmost). The real
+    # is a BACKGROUND window right now (Notes is topmost). The real
     # assertion: this must NOT close Files (the old "any click on the
     # focused window closes it" contract must not fire for a background
     # window) and instead must raise Files to the front of the real
@@ -287,44 +301,44 @@ try:
     if not files_not_closed_by_focus_click:
         fails.append("click-to-focus: clicking Files' background window closed it instead of focusing it")
 
-    # Real z-order proof: the SAME overlap pixel (330,220) that showed
-    # Weather's gradient a moment ago must now show Files' content instead,
+    # Real z-order proof: the SAME overlap pixel NOTES_PROBE that showed
+    # Notes' row band a moment ago must now show Files' content instead,
     # because draw order must follow the same z-order list input
     # hit-testing just updated -- Files is now topmost, so it must win the
-    # overlapped region, not Weather. This is the exact naive
+    # overlapped region, not Notes. This is the exact naive
     # back-to-front bug phase 2 was scoped to fix: on the pre-fix kernel,
-    # draw order never changes (always window 0 then window 1, Weather
+    # draw order never changes (always window 0 then window 1, Notes
     # always drawn last/on top) regardless of which window a click
-    # focused, so this pixel would incorrectly still read as Weather's
+    # focused, so this pixel would incorrectly still read as Notes'
     # gradient even after this "focus" click.
-    overlap_after_focus = pixel(img5b, 330, 220)
-    overlap_now_files = close(overlap_after_focus, weather_panel) > 12
-    print(f"Overlap pixel (330,220) after focusing Files: {overlap_after_focus} (was Weather's {weather_panel}); Files now on top={'yes' if overlap_now_files else 'NO'}")
+    overlap_after_focus = pixel(img5b, *NOTES_PROBE)
+    overlap_now_files = close(overlap_after_focus, notes_band) > 12
+    print(f"Overlap pixel {NOTES_PROBE} after focusing Files: {overlap_after_focus} (was Notes' {notes_band}); Files now on top={'yes' if overlap_now_files else 'NO'}")
     if not overlap_now_files:
-        fails.append("z-order: focusing Files did not bring it in front of Weather in the overlapped region (draw order still ignores real focus)")
+        fails.append("z-order: focusing Files did not bring it in front of Notes in the overlapped region (draw order still ignores real focus)")
 
     # The close-button-close contract must still work once a window really
     # is topmost: a SECOND click at the same spot, now that Files is
     # genuinely focused, must close it -- proving click-to-focus only
     # swallows the FIRST click on a background window, it doesn't disable
-    # closing altogether. Weather (still in the background, untouched by
+    # closing altogether. Notes (still in the background, untouched by
     # either click) must remain open throughout.
     click_at(*W0_CLOSE)
     img5c = dump()
     files_closed_second_click = not is_red(pixel(img5c, *W0_CLOSE))
-    weather_still_open_after = is_red(pixel(img5c, *W1_CLOSE))
-    print(f"Files closes on a second click once genuinely focused: {'yes' if files_closed_second_click else 'NO'}   Weather still open throughout: {'yes' if weather_still_open_after else 'NO'}")
+    notes_still_open_after = is_red(pixel(img5c, *W1_CLOSE))
+    print(f"Files closes on a second click once genuinely focused: {'yes' if files_closed_second_click else 'NO'}   Notes still open throughout: {'yes' if notes_still_open_after else 'NO'}")
     if not files_closed_second_click:
         fails.append("click-to-focus: Files did not close on a second click after becoming the real focused/topmost window")
-    if not weather_still_open_after:
-        fails.append("click-to-focus: focusing/closing Files incorrectly also touched Weather")
+    if not notes_still_open_after:
+        fails.append("click-to-focus: focusing/closing Files incorrectly also touched Notes")
 
-    # Clean up: close Weather too (it's the sole remaining window, topmost
+    # Clean up: close Notes too (it's the sole remaining window, topmost
     # by definition) before the final Mail sanity check below.
     click_at(*W1_CLOSE)
     img5d = dump()
     if is_red(pixel(img5d, *W1_CLOSE)):
-        fails.append("cleanup: Weather did not close after the click-to-focus test sequence")
+        fails.append("cleanup: Notes did not close after the click-to-focus test sequence")
 
     # 6. v0.75.0 (batch 2): the real, required two-window evidence -- an
     #    interactive app (Mail; it took over here when Calendar became a
@@ -365,7 +379,7 @@ try:
 
     # Close Mail via its own X (window 1's close hitbox). Files (window 0)
     # must stay open and untouched, the same independence proof step 3
-    # already established for Files/Weather, now for a real-input app.
+    # already established for Files/Notes, now for a real-input app.
     click_at(*W1_CLOSE)
     img6c = dump()
     mail_closed = not is_red(pixel(img6c, *W1_CLOSE))
@@ -392,29 +406,49 @@ try:
     mail_list_open = is_red(pixel(dump(), *W0_CLOSE))
     print(f"batch3: Mail list window open: {'yes' if mail_list_open else 'NO'}")
     if not mail_list_open: fails.append("batch3: Mail did not open from the dock")
-    ink_before_compose = ink_count(dump(), VX, VY, VW, VH)
+    ink_before_compose = faint_ink_count(dump(), VX, VY, VW, VH)
 
     key("c")
+    # 1.9.24: Compose is an inline sheet inside the Mail window, not a second
+    # window; user/mail.c says so on serial when the sheet opens.
     compose_opened = False
     for _ in range(30):
         time.sleep(0.1)
-        if is_red(pixel(dump(), *W1_CLOSE)): compose_opened = True; break
+        try: compose_opened = "mail: compose=1" in open(LOG, errors="replace").read()
+        except OSError: pass
+        if compose_opened: break
     time.sleep(0.3)
     img7a = dump()
-    compose_opened = compose_opened or is_red(pixel(img7a, *W1_CLOSE))
     list_stayed_open = is_red(pixel(img7a, *W0_CLOSE))
-    print(f"batch3: pressing 'c' opened a real second (Compose) window: {'yes' if compose_opened else 'NO'}   list window stayed open behind it: {'yes' if list_stayed_open else 'NO'}")
-    if not compose_opened: fails.append("batch3: Mail's 'c' did not open a real second Compose window")
-    if not list_stayed_open: fails.append("batch3: Mail's list window closed/hid when Compose opened instead of staying open behind it")
+    no_second_window = not is_red(pixel(img7a, *W1_CLOSE))
+    print(f"batch3: pressing 'c' opened the inline compose sheet: {'yes' if compose_opened else 'NO'}   Mail window still the only one: {'yes' if list_stayed_open and no_second_window else 'NO'}")
+    if not compose_opened: fails.append("batch3: Mail's 'c' did not open the inline compose sheet (no 'mail: compose=1' marker)")
+    if not list_stayed_open: fails.append("batch3: Mail's window closed/hid when the compose sheet opened")
+    if not no_second_window: fails.append("batch3: Compose opened a second window; by design it is an inline sheet now")
 
     # Type the from/subject/body stages into Compose (window 1, focused --
     # it opened on top, so keystrokes go there, not to the list window).
+    # The sheet has four fields (user/mail.c: To, From name, Subject, Body) and
+    # Enter on the last one sends. To must be one full address or the sheet
+    # refuses with a note; QEMU has no network here, so the post comes back
+    # unsent and the message is filed as unsent, which is the same "filed" path.
+    type_str("qa@mw.test"); keys("ret"); time.sleep(0.3)
     type_str("qa-mw-compose-from"); keys("ret"); time.sleep(0.3)
     type_str("qa-mw-compose-subject"); keys("ret"); time.sleep(0.3)
-    type_str("qa-mw-compose-body-marker"); keys("ret"); time.sleep(0.5)
+    type_str("qa-mw-compose-body-marker"); keys("ret")
+    for _ in range(150):  # the app drains one key per frame, then the post waits out its timeout before filing the message
+        time.sleep(0.1)
+        try:
+            if "mail: filed n=" in open(LOG, errors="replace").read(): break
+        except OSError: pass
+    time.sleep(0.5)
 
-    img7b = dump()
-    compose_closed_after_send = not is_red(pixel(img7b, *W1_CLOSE))
+    for _ in range(25):  # the repaint after filing lands a frame later; poll for the grown list
+        img7b = dump()
+        if faint_ink_count(img7b, VX, VY, VW, VH) > ink_before_compose: break
+        time.sleep(0.2)
+    img7b.save("/tmp/jt-multiwindow-compose.png")
+    compose_closed_after_send = not is_red(pixel(img7b, *W1_CLOSE)) and "mail: filed n=" in open(LOG, errors="replace").read()
     list_still_open_after_send = is_red(pixel(img7b, *W0_CLOSE))
     print(f"batch3: Compose closed itself after send: {'yes' if compose_closed_after_send else 'NO'}   list window still open: {'yes' if list_still_open_after_send else 'NO'}")
     if not compose_closed_after_send: fails.append("batch3: Compose did not close itself after a successful send")
@@ -425,7 +459,7 @@ try:
     # ink (from/subject text) in its content area must have grown, the
     # same "real content changed" bar mailtools-check.py already holds
     # send_mail to, now proven for the windowed Compose path too.
-    ink_after_send = ink_count(img7b, VX, VY, VW, VH)
+    ink_after_send = faint_ink_count(img7b, VX, VY, VW, VH)
     print(f"batch3: Mail list ink before Compose={ink_before_compose}  after send={ink_after_send}")
     if ink_after_send <= ink_before_compose:
         fails.append("batch3: Mail list window's ink did not grow after sending -- the new message does not appear to show in the list")
@@ -468,4 +502,4 @@ else:
 if fails:
     for x in fails: print("FAIL:", x)
     sys.exit(1)
-print("PASS: two real windows (Files + Weather) open, draw real distinct content, and close independently; batch-2 (Files + Mail) proven the same way with a real disk write; batch-3 (Mail's Compose) proven as its own second window, list window stays open behind it, and the sent message shows in the list after Compose closes")
+print("PASS: two real windows (Files + Notes) open, draw real distinct content, and close independently; batch-2 (Files + Mail) proven the same way with a real disk write; batch-3 (Mail's Compose) proven as its own second window, list window stays open behind it, and the sent message shows in the list after Compose closes")

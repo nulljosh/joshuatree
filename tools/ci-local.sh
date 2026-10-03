@@ -85,24 +85,23 @@ run_named "npx playwright install chromium" npx playwright install chromium
 run_named "npx playwright install webkit" npx playwright install webkit
 echo
 
-echo "-- suite job: 4 shards in parallel, each its own QEMU (-display none) --"
-SUITE_PIDS=()
+# 2.0.0: shards run at most CI_LOCAL_JOBS at a time (default 2). Eight QEMUs
+# plus their Playwright Chromes at once ran the Mac out of memory and
+# rebooted it twice on 2026-10-02.
+CI_LOCAL_JOBS=${CI_LOCAL_JOBS:-2}
+echo "-- suite job: 8 shards, $CI_LOCAL_JOBS at a time, each its own QEMU (-display none) --"
 SUITE_LOGS=()
+suite_start=$(date +%s)
 for shard in 0 1 2 3 4 5 6 7; do
   log="/tmp/jt-ci-local-$$-shard${shard}.log"
   SUITE_LOGS+=("$log")
-  ( SHARD=$shard SHARDS=8 ./tools/checks/ci-suite.sh > "$log" 2>&1 ) &
-  SUITE_PIDS+=($!)
+  while [ "$(jobs -rp | wc -l)" -ge "$CI_LOCAL_JOBS" ]; do sleep 2; done
+  ( SHARD=$shard SHARDS=8 ./tools/checks/ci-suite.sh > "$log" 2>&1; echo $? > "$log.rc" ) &
 done
-suite_start=$(date +%s)
+wait
 suite_ok=1
-for i in 0 1 2 3 4 5 6 7; do
-  pid=${SUITE_PIDS[$i]}
-  if wait "$pid"; then
-    :
-  else
-    suite_ok=0
-  fi
+for log in "${SUITE_LOGS[@]}"; do
+  [ "$(cat "$log.rc" 2>/dev/null)" = 0 ] || suite_ok=0
 done
 suite_dur=$(( $(date +%s) - suite_start ))
 for i in 0 1 2 3 4 5 6 7; do
@@ -110,7 +109,7 @@ for i in 0 1 2 3 4 5 6 7; do
   tail -n 3 "${SUITE_LOGS[$i]}" | sed 's/^/    /'
 done
 if [ "$suite_ok" = 1 ]; then
-  echo "PASS ($suite_dur s): all 4 suite shards"
+  echo "PASS ($suite_dur s): all 8 suite shards"
   PASS=$((PASS + 1))
 else
   echo "FAIL ($suite_dur s): one or more suite shards"

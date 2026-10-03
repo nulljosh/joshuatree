@@ -16,7 +16,7 @@
  * on purpose.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define OPT   0x00F1EDE7
@@ -72,22 +72,43 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (px < 0 || px >= (int)win.width) continue;
-            if (g[r] & (0x80 >> c)) win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
+static int text(const char *s, int x, int y, unsigned fg) { /* returns the x after the last glyph */
+    return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s);
 }
-static void text(const char *s, int x, int y, unsigned fg) {
-    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
+static void etext(const char *s, int x, int y, int maxw, unsigned fg) {
+    char t[72]; int n = 0;
+    while (s[n] && n < 64) { t[n] = s[n]; n++; }
+    t[n] = 0;
+    if (jt_text_width(JT_FACE_BODY, t) > maxw) {
+        while (n > 0) {
+            t[n] = '.'; t[n + 1] = '.'; t[n + 2] = '.'; t[n + 3] = 0;
+            if (jt_text_width(JT_FACE_BODY, t) <= maxw) break;
+            t[--n] = 0;
+        }
+        if (n == 0) t[0] = 0;
+    }
+    jt_text_draw(&win, JT_FACE_BODY, x, y, fg, t);
+}
+/* Word wrap in the bold face, breaking only at spaces, 22 px a line. */
+static void bwrap(const char *s, int x, int y, int w, int ymax, unsigned fg) {
+    char line[96]; int ll = 0;
+    while (*s && y + 20 <= ymax) {
+        int we = 0;
+        while (s[we] && s[we] != ' ') we++;
+        char trial[96]; int tl = 0;
+        for (int i = 0; i < ll; i++) trial[tl++] = line[i];
+        if (ll) trial[tl++] = ' ';
+        for (int i = 0; i < we && tl < 94; i++) trial[tl++] = s[i];
+        trial[tl] = 0;
+        if (ll && jt_text_width(JT_FACE_BOLD, trial) > w) {
+            line[ll] = 0; jt_text_draw(&win, JT_FACE_BOLD, x, y, fg, line); y += 22; ll = 0;
+            continue;
+        }
+        for (int i = 0; i <= tl; i++) line[i] = trial[i];
+        ll = tl; s += we;
+        while (*s == ' ') s++;
+    }
+    if (ll && y + 20 <= ymax) { line[ll] = 0; jt_text_draw(&win, JT_FACE_BOLD, x, y, fg, line); }
 }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
@@ -98,10 +119,9 @@ static int utoa10(unsigned v, char *buf) {
 }
 
 static void qs_draw(void) {
-    jt_text_clear();
     rect(0, 0, (int)win.width, (int)win.height, BG);
-    text("Which film is this from?", 20, 56, HINT);
-    text(QS_DECK[qs_cur()].line, 20, 96, INK);
+    text("Which film is this from?", 20, 40, HINT);
+    bwrap(QS_DECK[qs_cur()].line, 20, 70, (int)win.width - 40, QS_OPT_Y0 - 8, INK);
     int right = qs_round % 4;
     for (int s = 0; s < 4; s++) {
         int y = QS_OPT_Y0 + s * QS_OPT_H;
@@ -110,18 +130,18 @@ static void qs_draw(void) {
         else if (qs_pick == s) bg = MISS;              /* your miss */
         rect(20, y, (int)win.width - 40, QS_OPT_H - 6, bg);
         char lab[2] = {(char)('1' + s), 0};
-        text(lab, 30, y + 6, HINT);
-        text(QS_DECK[qs_option(s)].film, 56, y + 6, INK);
+        text(lab, 30, y + 5, HINT);
+        etext(QS_DECK[qs_option(s)].film, 56, y + 5, (int)win.width - 96, INK);
     }
-    char line[96]; int l = 0;
+    char line[40]; int l = 0;
     const char *t;
     for (t = "streak "; *t; t++) line[l++] = *t;
     l += utoa10((unsigned)qs_streak, line + l);
     for (t = "   best "; *t; t++) line[l++] = *t;
     l += utoa10((unsigned)qs_best, line + l);
-    for (t = qs_pick < 0 ? "   1-4 or click to answer   esc closes" : (qs_pick == right ? "   right. any key for the next one" : "   missed. any key for the next one"); *t; t++) line[l++] = *t;
     line[l] = 0;
-    text(line, 20, (int)win.height - 30, HINT);
+    text(line, 20, (int)win.height - 52, INK);
+    etext(qs_pick < 0 ? "1-4 or click to answer   esc closes" : (qs_pick == right ? "right. any key for the next one" : "missed. any key for the next one"), 20, (int)win.height - 30, (int)win.width - 40, HINT);
 }
 
 __attribute__((section(".text.start"), used))
@@ -147,6 +167,7 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { qs_draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;

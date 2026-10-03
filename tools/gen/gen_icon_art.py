@@ -66,24 +66,21 @@ ART = {
     9: "keyrate",
     10: "bookrank",
     11: "quotes",
-    12: "plan",
-    13: "lexly",
-    14: "toroid",
-    15: "sparkjar",
-    16: "fieldbook",
-    17: "contacts",
-    18: "calculator",
-    19: "stocks",
-    20: "search",
-    21: "epiphany",
-    22: "portfolio",
-    24: "clock",
-    # 23 Activity has no authored artwork yet,
-    # it keeps the primitive glyph path (see the icon index table in
-    # kernel/kernel.c). Apps and Trash are 25/26 (Homeqi is its
-    # own product now).
-    25: "apps",
-    26: "trash",
+    12: "lexly",
+    13: "toroid",
+    14: "sparkjar",
+    15: "fieldbook",
+    16: "contacts",
+    17: "calculator",
+    18: "stocks",
+    19: "search",
+    20: "epiphany",
+    21: "portfolio",
+    22: "activity",
+    23: "clock",
+    # Apps and Trash are 24/25 (Homeqi and Plan are gone).
+    24: "apps",
+    25: "trash",
 }
 
 # Icons whose glyph depends on runtime state get a second artwork keyed by

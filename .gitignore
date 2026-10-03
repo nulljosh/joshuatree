@@ -46,3 +46,4 @@ drivers/user_fbpoke.h
 
 # Agent scratch notes (per-worktree handoffs), never commit
 HANDOFF.md
+boot/memmap.ld

@@ -28,14 +28,13 @@ cd "$(dirname "$0")/../.."
 make -s kernel.elf >/dev/null
 
 # The one thing a flat binary cannot survive is being linked at a
-# different address than it is loaded at, and that address lives in three
-# places by necessity (a linker script cannot include a C header). Check
-# they still agree before spending a boot on it.
-base_c=$(grep -o '0xC0507000' kernel/exec.h | head -1)
-base_u=$(grep -o '0xC0507000' user/hello.ld | head -1)
-base_l=$(grep -o '0xC0507000' boot/linker.ld | head -1)
-if [ "$base_c" != "0xC0507000" ] || [ "$base_u" != "0xC0507000" ] || [ "$base_l" != "0xC0507000" ]; then
-    echo "FAIL: JT_USER_BASE disagrees across kernel/exec.h, user/hello.ld and boot/linker.ld"
+# different address than it is loaded at. kernel/memmap.h is the one
+# source; the Makefile turns it into boot/memmap.ld for the linker scripts.
+# Check the plumbing is intact before spending a boot on it.
+base_h=$(sed -n 's/^#define JT_USER_BASE *\(0x[0-9A-Fa-f]*\).*/\1/p' kernel/memmap.h)
+if [ -z "$base_h" ] || ! grep -q 'INCLUDE boot/memmap.ld' user/hello.ld || ! grep -q 'INCLUDE boot/memmap.ld' boot/linker.ld \
+   || ! grep -q '^#include "memmap.h"' kernel/exec.h || ! grep -q "^JT_USER_BASE = $base_h;" boot/memmap.ld; then
+    echo "FAIL: JT_USER_BASE is not flowing from kernel/memmap.h to kernel/exec.h, user/hello.ld and boot/linker.ld"
     exit 1
 fi
 

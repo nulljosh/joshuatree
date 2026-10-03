@@ -114,7 +114,7 @@ try:
 
     # 2. content drawn: row 0 is the selected color, row 1 the plain one
     def row_pixel(i, img=None):
-        return pixel(VIEW_X + FB_LIST_X + 200, VIEW_Y + FB_TOP + i * 28 + 10, img)
+        return pixel(VIEW_X + FB_LIST_X, VIEW_Y + FB_TOP + i * 28, img)
     r0, r1 = row_pixel(0), row_pixel(1)
     print(f"row 0 (selected) {r0}, row 1 {r1}")
     if not near(r0, SEL_COLOR):
@@ -178,7 +178,7 @@ try:
         fails.append("Mail did not close on Esc after the crash")
 
     # 6. a normal close, both ways, from the Apps folder grid: Fieldbook is
-    #    APPS[] index 16 = row 3, col 1 (5 columns wide), whose viewport is
+    #    APPS[] index 15 = row 3, col 0 (5 columns wide), whose viewport is
     #    the folder's 832x450, not the dock's 804x345.
     APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
     def wait_closed(resend=True):
@@ -196,16 +196,15 @@ try:
         seen = serial().count("fieldbook: ring-3 window")
         move(*PARK); time.sleep(0.2)
         move(SLOT0_X + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.0)
-        for _ in range(1): keys("d"); time.sleep(0.35)   # right x1
-        for _ in range(3): keys("s"); time.sleep(0.35)  # down x3 -> index 16
+        for _ in range(3): keys("s"); time.sleep(0.35)  # down x3 -> index 15 (row 3, col 0)
         keys("ret")
         for _ in range(60):
             time.sleep(0.1)
             if serial().count("fieldbook: ring-3 window") > seen: break
         else:
             fails.append(f"{tag}: Fieldbook did not open a ring-3 window from the Apps folder grid"); return False
-        if "fieldbook: ring-3 window 832x450" not in serial():
-            fails.append(f"{tag}: the folder-launched window is not the folder viewport's 832x450")
+        if "fieldbook: ring-3 window 796x345" not in serial():
+            fails.append(f"{tag}: the folder-launched window is not 796x345")
         if "ring3app: BUG" in serial():
             fails.append(f"{tag}: ring3app logged a BUG line")
         time.sleep(0.5)
@@ -238,8 +237,7 @@ try:
     seen = serial().count("fieldbook: ring-3 window")
     move(*PARK); time.sleep(0.3)
     keys("ret"); time.sleep(1.0)  # bare desktop -> Apps folder, by keyboard
-    for _ in range(1): keys("d"); time.sleep(0.35)
-    for _ in range(3): keys("s"); time.sleep(0.35)
+    for _ in range(3): keys("s"); time.sleep(0.35)  # down x3 -> index 15 (row 3, col 0)
     keys("ret")  # launch Fieldbook from the grid selection
     for _ in range(60):
         time.sleep(0.1)

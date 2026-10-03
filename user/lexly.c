@@ -14,7 +14,7 @@
  * tools/checks/ring3lexly-check.py presses it on purpose.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define OPT   0x00F1EDE7
@@ -23,7 +23,7 @@
 #define INK   0x001C1C1E
 #define HINT  0x0075726E
 
-#define LX_OPT_Y0 150
+#define LX_OPT_Y0 124
 #define LX_OPT_H  34
 
 typedef struct { const char *spanish; const char *english; } LxWord;
@@ -84,23 +84,7 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (px < 0 || px >= (int)win.width) continue;
-            if (g[r] & (0x80 >> c)) win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
-}
-static void text(const char *s, int x, int y, unsigned fg) {
-    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
-}
+static void text(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
     do { tmp[tn++] = (char)('0' + v % 10); v /= 10; } while (v);
@@ -110,10 +94,9 @@ static int utoa10(unsigned v, char *buf) {
 }
 
 static void lx_draw(void) {
-    jt_text_clear();
     rect(0, 0, (int)win.width, (int)win.height, BG);
-    text("What is this Spanish word?", 20, 56, HINT);
-    text(LX_DECK[lx_cur()].spanish, 20, 96, INK);
+    text("What is this Spanish word?", 20, 40, HINT);
+    text(LX_DECK[lx_cur()].spanish, 20, 76, INK);
     int right = (lx_round * 3 + lx_cur()) % 4;
     for (int s = 0; s < 4; s++) {
         int y = LX_OPT_Y0 + s * LX_OPT_H;
@@ -159,6 +142,7 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { lx_draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;

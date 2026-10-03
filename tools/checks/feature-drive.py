@@ -21,7 +21,7 @@ Per-app actions:
 - Sparkjar: press u (upvote)
 - Toroid: press space (pause/unpause)
 - Keyrate: type "the"
-- Bookrank, Fieldbook, Plan, Curbfind, Portfolio, Activity: press down twice
+- Bookrank, Fieldbook, Curbfind, Portfolio, Activity: press down twice
 - Files, Mail, Weather, Trash: open only (already covered by gallery)
 
 Before/after pixel comparison with PIL ImageChops to detect screen changes.
@@ -42,6 +42,7 @@ PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
 CLOSE_X, CLOSE_Y = 94, 56
+WIDE_CLOSE_X, WIDE_CLOSE_Y = 34, 56  # ring-3 windows now open at the resizable full-pane frame (feat/win-resize)
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 
@@ -59,26 +60,25 @@ ACTIONS = [
     (2, "Calendar", ["right"]),
     (5, "Terminal", [("type", "help"), "ret"]),
     (6, "Samantha", [("type", "hi"), "ret"]),
-    (20, "Search", [("type", "read")]),
-    (18, "Calculator", [("type", "2+2"), "ret"]),
-    (19, "Stocks", ["right"]),
-    (21, "Epiphany", ["right"]),
-    (17, "Contacts", ["a", "esc"]),
-    (13, "Lexly", ["1"]),
+    (19, "Search", [("type", "read")]),
+    (17, "Calculator", [("type", "2+2"), "ret"]),
+    (18, "Stocks", ["right"]),
+    (20, "Epiphany", ["right"]),
+    (16, "Contacts", ["a", "esc"]),
+    (12, "Lexly", ["1"]),
     (11, "Quotes", ["1"]),
-    (15, "Sparkjar", ["u"]),
-    (14, "Toroid", ["space"]),
+    (14, "Sparkjar", ["u"]),
+    (13, "Toroid", ["space"]),
     (9, "Keyrate", [("type", "the")]),
     (10, "Bookrank", ["down", "down"]),
-    (16, "Fieldbook", ["down", "down"]),
-    (12, "Plan", ["down", "down"]),
+    (15, "Fieldbook", ["down", "down"]),
     (8, "Curbfind", ["down", "down"]),
-    (22, "Portfolio", ["down", "down"]),
-    (23, "Activity", ["down", "down"]),
+    (21, "Portfolio", ["down", "down"]),
+    (22, "Activity", ["down", "down"]),
     (0, "Burrow", []),  # open only
     (1, "Mail", []),   # open only
     (7, "Weather", []),  # open only
-    (26, "Trash", []),  # open only
+    (25, "Trash", []),  # open only
 ]
 
 CRASH_PATTERNS = [
@@ -161,7 +161,9 @@ try:
         p2 = pixel(APPS_CLOSE_X, APPS_CLOSE_Y)
         is_red_1 = max(abs(p1[i] - CLOSE_RED[i]) for i in range(3)) <= 12
         is_red_2 = max(abs(p2[i] - CLOSE_RED[i]) for i in range(3)) <= 12
-        return is_red_1 or is_red_2
+        p3 = pixel(WIDE_CLOSE_X, WIDE_CLOSE_Y)
+        is_red_3 = max(abs(p3[i] - CLOSE_RED[i]) for i in range(3)) <= 12
+        return is_red_1 or is_red_2 or is_red_3
 
     # Wait for desktop to be ready
     for _ in range(120):
@@ -194,7 +196,12 @@ try:
             p2 = pixel(APPS_CLOSE_X, APPS_CLOSE_Y)
             is_red_1 = max(abs(p1[i] - CLOSE_RED[i]) for i in range(3)) <= 12
             is_red_2 = max(abs(p2[i] - CLOSE_RED[i]) for i in range(3)) <= 12
-            if is_red_1:
+            p3 = pixel(WIDE_CLOSE_X, WIDE_CLOSE_Y)
+            is_red_3 = max(abs(p3[i] - CLOSE_RED[i]) for i in range(3)) <= 12
+            if is_red_3:
+                move(WIDE_CLOSE_X, WIDE_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)
+                break
+            elif is_red_1:
                 move(CLOSE_X, CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)
                 break
             elif is_red_2:
@@ -213,7 +220,7 @@ try:
         try:
             move(*PARK); time.sleep(0.2)
             grid = dump().crop((200, 120, 1720, 900))
-            if app_idx == 26:
+            if app_idx == 25:
                 # Trash is not in the Apps folder grid; it is dock slot 10.
                 move(SLOT0_X + 10 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3)
                 click()

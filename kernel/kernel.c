@@ -110,7 +110,6 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app.h"
 #include "app_bookrank.h"
 #include "app_quotestreak.h"
-#include "app_plan.h"
 #include "app_lexly.h"
 #include "app_toroid.h"
 #include "app_sparkjar.h"
@@ -149,30 +148,7 @@ static void scroll(void){
     cy = H - 1;
 }
 
-/* v36 (0.36.0): output capture, the piece a real GUI terminal needs.
-   Every shell command in this kernel prints through putc, which writes
-   straight into VGA *text* memory at 0xB8000, a region that isn't even
-   mapped the same way once the card is in a graphics mode, so a
-   graphical terminal could never see a single character a command
-   produced. Redirecting at putc itself (rather than rewriting ~60 shell
-   commands to take an output sink) means every existing command, and
-   every future one, works in the GUI terminal for free. */
-static char *capture_buf = 0;
-static unsigned int capture_len = 0, capture_cap = 0;
-
-static void capture_begin(char *buf, unsigned int cap){ capture_buf = buf; capture_len = 0; capture_cap = cap; buf[0] = 0; }
-static unsigned int capture_end(void){ unsigned int n = capture_len; capture_buf = 0; return n; }
-
 void putc(char c){
-    if (capture_buf) {
-        /* Backspace has to edit the captured text, not append a control
-           byte the font renderer would draw as a glyph. */
-        if (c == '\b') { if (capture_len) capture_len--; }
-        else if (capture_len + 1 < capture_cap) capture_buf[capture_len++] = c;
-        capture_buf[capture_len] = 0;
-        return;
-    }
-    if (window_is_open()) return; /* v86 maps 0xB8000 onto the framebuffer: console text drew a stray menu-bar line */
     if (c == '\n') { cx = 0; cy++; }
     else if (c == '\b') {
         if (cx) cx--; else if (cy) { cy--; cx = W - 1; }
@@ -195,7 +171,6 @@ void puthex(unsigned int v){
 }
 
 static void clear(void){
-    if (window_is_open()) return;
     for (int i = 0; i < W * H; i++) VGA[i] = (ATTR << 8) | ' ';
     cx = cy = 0; cursor();
 }
@@ -297,49 +272,9 @@ int gui_getch_or_click(void){
    no entry in SC[]/SCS[]), so it reaches here through get_key_or_click_
    until's ordinary "not a printable key" path and is otherwise silently
    dropped -- same slot every other synthetic key above claims. Chat holds
-   F2 to record (kernel/chat.h's chat_ptt_record) and watches for the
+   F2 to record (user/samantha.c's push-to-talk) and watches for the
    matching break code (0xBC) between DMA chunks to notice release. */
 #define KEY_PTT 305
-#define CLIPBOARD_CAP 4096
-static char clipboard_buf[CLIPBOARD_CAP];
-static unsigned int clipboard_len = 0;
-/* "cliptrace" on the multiboot command line (tools/checks/clipboard-check.py
-   passes it) adds a content hash to the CLIPCOPY/CLIPPASTE serial lines so
-   a check can prove which text moved. A normal boot logs the length only:
-   the serial log is host-readable (v86 exposes it as window.__jt.serial)
-   and an unkeyed 32-bit hash of a short pasted password is dictionary-
-   recoverable. */
-static int clip_trace = 0;
-/* Serial markers, same convention "editorchrome"/"termchrome" already use:
-   a discriminating line a headless check can grep out of the serial log,
-   here proving exactly what text the clipboard held or a paste actually
-   inserted (not just that some copy/paste code path ran). Bounded to a
-   small scratch buffer -- plenty for what any check types -- because
-   serial_puts needs a null terminator and neither clipboard_buf nor an
-   app's own text buffer is guaranteed to have one at an arbitrary slice. */
-static void clip_serial_dump(const char *tag, const char *s, unsigned int n) {
-    /* length, plus an FNV-1a hash only under cliptrace (see clip_trace);
-       never the text: the clipboard can hold a pasted password and the
-       serial log is readable by anyone at the host */
-    char out[24]; int k = 0; char d[10]; int dn = 0; unsigned int v = n;
-    do { d[dn++] = (char)('0' + v % 10); v /= 10; } while (v);
-    while (dn) out[k++] = d[--dn];
-    if (clip_trace) {
-        unsigned int h = 2166136261u;
-        for (unsigned int i = 0; i < n; i++) { h ^= (unsigned char)s[i]; h *= 16777619u; }
-        out[k++] = ':';
-        for (int sh = 28; sh >= 0; sh -= 4) out[k++] = "0123456789abcdef"[(h >> sh) & 15];
-    }
-    out[k++] = '\n'; out[k] = 0;
-    serial_puts(tag);
-    serial_puts(out);
-}
-static void clipboard_set(const char *s, unsigned int n) {
-    if (n > CLIPBOARD_CAP) n = CLIPBOARD_CAP;
-    for (unsigned int i = 0; i < n; i++) clipboard_buf[i] = s[i];
-    clipboard_len = n;
-    clip_serial_dump("CLIPCOPY:", clipboard_buf, clipboard_len);
-}
 int get_key_or_click(void);
 
 static int get_key(void){
@@ -903,10 +838,10 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-#define GUI_APP_COUNT   28 /* 25 real apps + the Apps folder + Trash + Mail Compose */
-#define GUI_APPS_FOLDER 25 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       26
-#define GUI_MAIL_COMPOSE 27 /* v1.9.0: Mail's own 2nd window, see mail.h; not in the dock or Apps folder */
+#define GUI_APP_COUNT   26 /* 24 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 24 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       25
+#define GUI_APP_PORTFOLIO 21 /* hidden from the Apps folder and phone home unless the boot line says "portfolio" (his site embed); the public OS ships without it */
 /* Every app's name, color, glyph and hooks live in one table, APPS[],
    defined further down once every hook it points at exists (see "The app
    registry" below). This tentative definition lets the dock and Launchpad
@@ -935,7 +870,7 @@ const struct app APPS[GUI_APP_COUNT];
    layout changes at all, the "auto size" half of the standing v37 dock
    request was already real before this pass, this is just the first
    change to actually exercise it past 8 icons. */
-static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 19, GUI_TRASH};
+static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 18, GUI_TRASH};
 
 /* gui_order is a permutation of icon indices by dock slot: dragging an icon
    and dropping it on another slot swaps the two, so the arrangement is
@@ -948,17 +883,21 @@ int gui_order[GUI_ICON_COUNT];
    Joshua's own apps instead of the system set. Same slot count, Apps folder
    and Trash stay at the ends; everything left out is still in the Apps folder. */
 static int portfolio_dock;
+static int gui_apps_n(void){ return portfolio_dock ? GUI_APPS_FOLDER : GUI_APPS_FOLDER - 1; } /* apps the folder and phone home list */
+static int gui_app_at(int k){ return (!portfolio_dock && k >= GUI_APP_PORTFOLIO) ? k + 1 : k; } /* grid position to APPS[] index */
+int jt_portfolio_mode(void){ return portfolio_dock; } /* ring3app.c: windowed ring-3 apps get "portfolio" in argv so Samantha wears Joshua's face */
 /* "samantha" on the multiboot command line: skip the desktop and open
-   Chat's full-screen avatar view (chat_boot_samantha_open, kernel/chat.h)
+   ring-3 Samantha's window (user/samantha.c)
    the instant gui_run's first frame would otherwise draw the dock. One
    splash frame still shows (gui_draw_boot_screen runs first, unconditionally);
    this only replaces the icon desktop that would follow it. */
 static int boot_to_samantha;
 /* "phone" (430x760 portrait, kmain's parse) and "res=WxH" (physical px from embed.js at dpr 1, gui_parse_res; opens W/2 x H/2 at scale 2) pick gui_run's mode. */
 static int boot_to_phone, boot_res_w, boot_res_h;
+int jt_phone_mode(void){ return boot_to_phone; } /* ring3app.c: windowed ring-3 apps get argv[1]="phone" so they can show libjt/osk */
 #include "hint.h"
 static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
-static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 22, 21, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
+static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 21, 20, 8, 10, 12, 14, 11, 9, 13, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 int dock_hover = -1; /* slot whose label is showing */
 
@@ -1034,9 +973,6 @@ int dock_scale_pct = 7; /* non-static: dock_geom.c's gui_dock_icon() reads it */
    a successful fetch shows. */
 static int wall_theme = WALL_SAT;
 static int wind_enabled = 1; /* real definition; forward of the v45 declaration below so settings_load (right here, needs both) can precede it in the file */
-#define FILES_VIEW_LIST 0
-#define FILES_VIEW_ICONS 1
-static int files_view = FILES_VIEW_LIST; /* persisted below by settings_save/settings_load (key "filesview") */
 
 /* v71: real location for weather/map, looked up from the public IP
    (ip-api.com, see geo_fetch further down). Forward of that same v71
@@ -1073,6 +1009,14 @@ static char loc_err[48] = "";
 static char llm_model[LLM_MODEL_MAX] = "samantha";
 static char llm_host[LLM_HOST_MAX] = "turing.heyitsmejosh.com";
 static int llm_port = 80;
+/* 1.9.26: read-only view for SYS_HTTP_POST (kernel/syscall.c). Settings still owns the write. */
+const char *llm_host_get(void) { return llm_host; }
+int llm_port_get(void) { return llm_port; }
+/* 1.9.27: the Mail token Settings owns (SETTINGS.TXT mailtoken=). Only SYS_HTTP_POST reads it, to
+   build the Authorization header for /api/mail/send; no syscall hands it to ring 3. */
+#define MAIL_TOKEN_MAX 64
+static char mail_token[MAIL_TOKEN_MAX] = "";
+const char *mail_token_get(void) { return mail_token; }
 /* v85: real chat models actually installed on the host (checked via
    `ollama list`), not a free-text field a typo can point at nothing.
    nomic-embed-text is also installed but is embedding-only, deliberately
@@ -1106,7 +1050,7 @@ static const char *LLM_MODELS[] = { "samantha", "qwen3:8b", "llama3.1:8b" };
    existing numeric one rather than a new file format. */
 #define SETTINGS_FILE "SETTINGS.TXT"
 static void settings_load(void){
-    static char buf[384];
+    static char buf[512];
     int n = vfs_read_file(SETTINGS_FILE, buf, sizeof(buf) - 1);
     if (n <= 0) return; /* no file yet: compiled-in defaults stand */
     buf[n] = 0;
@@ -1125,8 +1069,8 @@ static void settings_load(void){
         int is_llmmodel = keylen == 8 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='m' && buf[start+4]=='o' && buf[start+5]=='d' && buf[start+6]=='e' && buf[start+7]=='l';
         int is_llmhost  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='h' && buf[start+4]=='o' && buf[start+5]=='s' && buf[start+6]=='t';
         int is_llmport  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='p' && buf[start+4]=='o' && buf[start+5]=='r' && buf[start+6]=='t';
+        int is_mailtoken = keylen == 9 && buf[start]=='m' && buf[start+1]=='a' && buf[start+2]=='i' && buf[start+3]=='l' && buf[start+4]=='t' && buf[start+5]=='o' && buf[start+6]=='k' && buf[start+7]=='e' && buf[start+8]=='n';
         int is_loc = keylen == 3 && buf[start]=='l' && buf[start+1]=='o' && buf[start+2]=='c';
-        int is_filesview = keylen == 9 && buf[start]=='f' && buf[start+1]=='i' && buf[start+2]=='l' && buf[start+3]=='e' && buf[start+4]=='s' && buf[start+5]=='v' && buf[start+6]=='i' && buf[start+7]=='e' && buf[start+8]=='w';
         if (is_loc) {
             /* value shape: name;lat;lon -- the same three fields
                loc_geocode fills in, ';'-joined since '=' is already the
@@ -1178,6 +1122,12 @@ static void settings_load(void){
             int p = 0; while (use[p] && p < LLM_MODEL_MAX - 1) { llm_model[p] = use[p]; p++; } llm_model[p] = 0;
             continue;
         }
+        if (is_mailtoken) {
+            int j = 0, k = eq + 1;
+            while (k < line_end && j < MAIL_TOKEN_MAX - 1) mail_token[j++] = buf[k++];
+            mail_token[j] = 0;
+            continue;
+        }
         if (is_llmhost) {
             int j = 0, k = eq + 1;
             while (k < line_end && j < LLM_HOST_MAX - 1) llm_host[j++] = buf[k++];
@@ -1193,12 +1143,11 @@ static void settings_load(void){
         else if (is_dock && val >= 5 && val <= 25) dock_scale_pct = val;
         else if (is_wall && val >= WALL_PHOTO && val <= WALL_SAT) wall_theme = val;
         else if (is_llmport && val > 0 && val <= 65535) llm_port = val;
-        else if (is_filesview && val >= FILES_VIEW_LIST && val <= FILES_VIEW_ICONS) files_view = val;
     }
 }
 
 static void settings_save(void){
-    char buf[320];
+    static char buf[512];
     int n = 0;
     const char *k1 = "wind="; while (*k1) buf[n++] = *k1++;
     buf[n++] = wind_enabled ? '1' : '0'; buf[n++] = '\n';
@@ -1220,8 +1169,11 @@ static void settings_save(void){
       while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
       while (nd) buf[n++] = digits[--nd]; }
     buf[n++] = '\n';
-    const char *k8 = "filesview="; while (*k8) buf[n++] = *k8++;
-    buf[n++] = '0' + files_view; buf[n++] = '\n';
+    if (mail_token[0]) {
+        const char *k8 = "mailtoken="; while (*k8) buf[n++] = *k8++;
+        { const char *s = mail_token; while (*s && n < (int)sizeof(buf) - 80) buf[n++] = *s++; }
+        buf[n++] = '\n';
+    }
     if (loc_have) {
         const char *k7 = "loc="; while (*k7) buf[n++] = *k7++;
         { const char *s = loc_name; while (*s && n < (int)sizeof(buf) - 34) buf[n++] = *s++; }
@@ -1256,9 +1208,7 @@ static void settings_save(void){
    to the nearest point on the segment, falling off over a 1px band
    centered on the line's half-width -- exact endpoints included, so the
    line caps flat rather than growing fuzzy stubs past x0,y0/x1,y1. */
-static void gui_aa_line(int x0, int y0, int x1, int y1, unsigned int color, double width){
-    int sc = (int)window_scale(); if (sc < 1) sc = 1;
-    double fx0 = x0 * sc, fy0 = y0 * sc, fx1 = x1 * sc, fy1 = y1 * sc;
+static void gui_aa_line_phys(double fx0, double fy0, double fx1, double fy1, unsigned int color, double width){
     double dx = fx1 - fx0, dy = fy1 - fy0;
     double len = gui_line_sqrt(dx * dx + dy * dy);
     double halfw = width / 2.0;
@@ -2045,17 +1995,6 @@ void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color,
 #define HELLO_SLANT_NUM 3
 #define HELLO_SLANT_DEN 10
 
-static void gui_draw_script_loop(int cx, int cy, int r, int thick, unsigned int color, unsigned int bg, int skip_mask, int shift){
-    static const int px12[12] = {10, 9, 5, 0, -5, -9, -10, -9, -5, 0, 5, 9};
-    static const int py12[12] = {0, 5, 9, 10, 9, 5, 0, -5, -9, -10, -9, -5};
-    for (int i = 0; i < 12; i++){
-        if (skip_mask & (1 << i)) continue;
-        int j = (i + 1) % 12;
-        gui_draw_capsule(cx + shift + px12[i] * r / 10, cy + py12[i] * r / 10,
-                          cx + shift + px12[j] * r / 10, cy + py12[j] * r / 10, thick, color, bg);
-    }
-}
-
 /* A small hand-plotted script "hello", a real nod to the original 1984
    Macintosh boot screen rather than this file's usual blocky bitmap
    font: every stroke here is the same AA capsule/loop primitive already
@@ -2120,8 +2059,9 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void lexly_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
 
+static int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
 static inline __attribute__((always_inline)) struct wp_row gui_wallpaper_row(int py, int sway){
     struct wp_row c;
@@ -2379,76 +2319,6 @@ static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned i
     }
 }
 
-/* The real mark, not an approximation invented from scratch: this is the
-   same trunk/two-branch/tufted-yucca structure `icon.svg` actually draws
-   (M100 168 L100 108, then two branches, then a 3-line spiky tuft at the
-   trunk top and each branch tip), simplified to fit a ~16px menu-bar icon
-   instead of traced stroke-for-stroke, drawn with the same primitives
-   every dock icon already uses. A first attempt drew the crown as one
-   filled circle; a real screenshot showed it reading as a lollipop, not a
-   tree, caught by looking, not assumed correct from the code alone. */
-/* `scale` lets the same logo draw crisp at the tiny 16px menu bar size
-   (scale 1, hairline AA strokes) and much larger on the boot splash
-   (scale 4+, real thickness) without two separate drawings to keep in
-   sync. `bg` is whatever this is drawn over, so the branch/tuft capsule
-   strokes' AA can blend into it correctly, the menu bar's white and the
-   boot screen's dark background are not the same color. Real fix, not
-   just a scale knob: the branches and tufts used to be gui_draw_diag,
-   raw single-pixel window_pixel dots approximating a line, the same
-   "8-bit" staircase problem the weather icon's rays had, now on the one
-   piece of branding that appears everywhere including full-size at boot. */
-static void gui_draw_logo(int x, int cy, int scale, unsigned int bg, unsigned int c){
-    if (!window_has_target()){
-        /* Drawn in physical pixels: u is one logo unit, every limb a round-ended
-           stroke. gui_draw_boot_mark replaces this at boot now, so the only
-           caller left is the menu bar; always taking physical pixels here
-           avoids the logical path's scaling artifacts at any window_scale. */
-        int sc = (int)window_scale(), u = scale * sc;
-        int pr = u * 2 / 5; if (pr < 1) pr = 1;
-        int ox = x * sc + u / 2, oy = cy * sc;
-        #define LG(ax, ay, bx, by) gui_capsule_phys(ox + (ax) * u, oy + (ay) * u, ox + (bx) * u, oy + (by) * u, pr, c)
-        LG(0, 5, 0, -7);                                   /* trunk */
-        LG(0, -1, -4, -5); LG(0, -1, 4, -5);               /* two main branches */
-        LG(0, -7, -3, -10); LG(0, -7, 0, -10); LG(0, -7, 3, -10);      /* crown */
-        LG(-4, -5, -6, -7); LG(-4, -5, -6, -5); LG(-4, -5, -6, -3);    /* left tuft */
-        LG(4, -5, 6, -7); LG(4, -5, 6, -5); LG(4, -5, 6, -3);          /* right tuft */
-        #undef LG
-        (void)bg;
-        return;
-    }
-    int split_y = cy - scale, top_y = cy - 7 * scale;
-    int r = scale > 1 ? scale - 1 : 0;
-    /* Real bug, found from a pixel dump not a guess: aa_band is a fixed
-       5px halo (see its definition above), never scaled to the primitive
-       it's softening. At menubar scale (1), every branch capsule is only
-       4-7px long with r=0, so a 5px halo on each side is wider than the
-       shape itself, every branch's halo overlaps its neighbors' and the
-       whole logo collapses into two blurry blobs, unrecognizable as a
-       tree (confirmed: a real macro-zoom pixel dump of the menubar at
-       this exact scale showed exactly that, not a subjective call).
-       Same fix pattern gui_render_icon_cached already uses to override
-       aa_band for its own scale: shrink it here too, only at scale=1,
-       so the branch geometry actually reads instead of drowning in AA. */
-    int saved_aa_band = aa_band;
-    if (scale == 1) aa_band = 1;
-    window_rect(x, split_y, scale, (cy + 5 * scale) - split_y + 1, c); /* trunk, base to branch split */
-    window_rect(x, top_y, scale, split_y - top_y + 1, c);              /* trunk continuing above the split */
-    gui_draw_capsule(x, split_y, x - 4 * scale, split_y - 4 * scale, r, c, bg); /* left branch */
-    gui_draw_capsule(x, split_y, x + 4 * scale, split_y - 4 * scale, r, c, bg); /* right branch */
-
-    int lx = x - 4 * scale, ly = split_y - 4 * scale, rx = x + 4 * scale, ry = split_y - 4 * scale;
-    gui_draw_capsule(x, top_y, x - 3 * scale, top_y - 3 * scale, r, c, bg);
-    gui_draw_capsule(x, top_y, x,             top_y - 3 * scale, r, c, bg);
-    gui_draw_capsule(x, top_y, x + 3 * scale, top_y - 3 * scale, r, c, bg);
-    gui_draw_capsule(lx, ly, lx - 2 * scale, ly - 2 * scale, r, c, bg);
-    gui_draw_capsule(lx, ly, lx - 2 * scale, ly,             r, c, bg);
-    gui_draw_capsule(lx, ly, lx - 2 * scale, ly + 2 * scale, r, c, bg);
-    gui_draw_capsule(rx, ry, rx + 2 * scale, ry - 2 * scale, r, c, bg);
-    gui_draw_capsule(rx, ry, rx + 2 * scale, ry,             r, c, bg);
-    gui_draw_capsule(rx, ry, rx + 2 * scale, ry + 2 * scale, r, c, bg);
-    aa_band = saved_aa_band;
-}
-
 /* Real, user-reported flicker: this whole bar (a solid white rect, the
    logo, "Joshua Tree", the clock) got redrawn identically on every single
    hover-state change, since gui_draw_desktop calls this unconditionally
@@ -2481,6 +2351,7 @@ static void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; }
    nothing drawn, not an error. */
 static char weather_text[24] = "";
 static unsigned int weather_last_tick = 0;
+static volatile unsigned jt_data_stamp = 0; /* bumped whenever WEATHER.TXT or STOCKS.TXT is rewritten; windows poll it through SYS_SYSINFO */
 static int weather_tried_once = 0;
 /* v53: real fields behind the one-line summary, kept for the dropdown
    panel. Nothing fabricated: temp/code are exactly what weather_fetch
@@ -2506,6 +2377,44 @@ static char weather_err[48] = "";
 static const char *weather_state_name(int st){
     return st == WX_OK ? "ok" : st == WX_OFFLINE ? "offline" : st == WX_TIMEOUT ? "timeout" : st == WX_FAILED ? "failed" : st == WX_BAD ? "bad" : "none";
 }
+/* 1.9.26: SYS_SYSINFO fill and the SYS_LAUNCH_REQUEST mailbox (kernel/syscall.c). */
+void jt_sysinfo_fill(struct jt_sysinfo *si){
+    char *z = (char *)si;
+    for (unsigned i = 0; i < sizeof *si; i++) z[i] = 0;
+    si->version = JT_SYSINFO_VERSION;
+    si->size = sizeof *si;
+    si->phone = boot_to_phone ? 1u : 0u;
+    si->wx_have = weather_have ? 1u : 0u;
+    si->wx_state = (unsigned)weather_state;
+    si->wx_temp_c = weather_temp_c;
+    si->wx_code10 = weather_code10;
+    si->llm_port = (unsigned)llm_port;
+    si->data_stamp = jt_data_stamp;
+    for (int i = 0; i < JT_WX_TEXT_MAX - 1 && weather_text[i]; i++) si->wx_text[i] = weather_text[i];
+    for (int i = 0; i < JT_SYSINFO_HOST_MAX - 1 && llm_host[i]; i++) si->llm_host[i] = llm_host[i];
+}
+static volatile int launch_pending = -1;
+int jt_launch_request(const char *name){
+    if (launch_pending >= 0) return -16; /* EBUSY, as in syscall.c */
+    for (int i = 0; i < GUI_APPS_FOLDER; i++) {
+        const char *a = APPS[i].name;
+        if (!a || (!portfolio_dock && i == GUI_APP_PORTFOLIO)) continue;
+        int k = 0;
+        while (a[k] && a[k] == name[k]) k++;
+        if (!a[k] && !name[k]) { launch_pending = i; return 0; }
+    }
+    return -22; /* EINVAL */
+}
+int jt_launch_take(void){ int i = launch_pending; launch_pending = -1; return i; }
+/* 398 SYS_REFRESH mailbox: one pending request, recorded in the gate, served by the desktop loop. */
+static volatile int refresh_kind = -1, refresh_arg = 0;
+int jt_refresh_request(int kind, int arg){
+    if (kind != JT_REFRESH_WEATHER && kind != JT_REFRESH_STOCKS) return -22;
+    if (kind == JT_REFRESH_STOCKS && ((arg & 0xFF) >= 5 || ((arg >> 8) & 0xFF) >= 8)) return -22;
+    if (refresh_kind >= 0) return -16;
+    refresh_arg = arg; refresh_kind = kind; return 0;
+}
+int jt_refresh_take(int *arg){ int k = refresh_kind; if (k >= 0) { *arg = refresh_arg; refresh_kind = -1; } return k; }
 /* Test/diagnostic override, read once from the multiboot command line
    (`-append "wxhost=10.0.2.2:8099"`, see kmain): both the location and the
    forecast request go to this literal IP:port instead of ip-api.com and
@@ -2978,6 +2887,7 @@ static int weather_fetch_inner(void){
     serial_puts("wx="); serial_puts(weather_text); serial_puts("\n"); /* v71: tools/geo-check.sh asserts the fetch really landed, not just that the URL was built */
     return 1;
 }
+static void weather_write_file(void);
 static void weather_fetch(void){
     weather_last_tick = ticks();
     serial_puts("wxfetch\n"); /* tools/checks/weather-app-check.sh counts these: a failed fetch must not re-run on every repaint */
@@ -2986,6 +2896,38 @@ static void weather_fetch(void){
     serial_puts("wxstate="); serial_puts(weather_state_name(weather_state));
     if (weather_err[0]) { serial_puts(" "); serial_puts(weather_err); }
     serial_puts("\n");
+    weather_write_file();
+}
+
+/* 1.9.22: Weather is a ring-3 program (user/weather.c). It cannot see these
+   statics, so every fetch, good or not, leaves WEATHER.TXT for it: one
+   "key value" line per field, the five forecast days as "d weekday code hi lo". */
+static void weather_write_file(void){
+    char b[512], *o = b; const char *c;
+    #define WXPUT(str) do { for (c = (str); *c; c++) *o++ = *c; } while (0)
+    #define WXNUM(key, v) do { WXPUT(key " "); o = wx_put_int(o, (v)); *o++ = '\n'; } while (0)
+    WXPUT("state "); WXPUT(weather_state_name(weather_state)); *o++ = '\n';
+    WXPUT("err "); WXPUT(weather_err); *o++ = '\n';
+    WXPUT("city "); WXPUT(geo_city); *o++ = '\n';
+    WXPUT("word "); WXPUT(weather_word(weather_code10 / 10)); *o++ = '\n';
+    WXNUM("have", weather_have); WXNUM("temp", weather_temp_c); WXNUM("code", weather_code10 / 10);
+    WXNUM("extra", wx_extra_have); WXNUM("feels", wx_feels_c); WXNUM("hum", wx_humidity); WXNUM("wind", wx_wind_kmh);
+    for (int i = 0; i < wx_day_count; i++) {
+        WXPUT("d "); o = wx_put_int(o, wx_day_wd[i]); *o++ = ' '; o = wx_put_int(o, wx_day_code[i]); *o++ = ' ';
+        o = wx_put_int(o, wx_day_hi[i]); *o++ = ' '; o = wx_put_int(o, wx_day_lo[i]); *o++ = '\n';
+    }
+    vfs_replace_file("WEATHER.TXT", b, (unsigned int)(o - b));
+    jt_data_stamp++;
+}
+
+/* The dock's Weather, blocking fallback only (a full window table). The window path in
+   user/weather.c asks for refetches with SYS_REFRESH instead; here the app just runs once. */
+int weather_ring3_run(void);
+void weather_ring3_open(void){
+    if (!weather_tried_once) { weather_tried_once = 1; weather_fetch(); gui_menubar_force_redraw(); }
+    unsigned int t0 = ticks();
+    weather_ring3_run();
+    weather_last_tick += ticks() - t0;
 }
 
 /* v75 (0.67.0): the real location-dynamic wallpaper, the item roadmap.md's
@@ -3227,6 +3169,7 @@ static void wall_apply(int want_map){
     wall_caches_drop();
 }
 
+static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink);
 static void gui_draw_menubar(void){
     u8 h, m, wd, dom, mon;
     cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
@@ -3250,9 +3193,9 @@ static void gui_draw_menubar(void){
        blur/alpha, but honestly a 50% mix now instead of mostly-white. */
     for (int row = 0; row < GUI_MENUBAR_H; row++)
         window_rect(0, row, (int)window_width(), 1, gui_lerp(gui_wallpaper_color(row), 0x00FFFFFF, 5, 10));
-    window_rect(0, GUI_MENUBAR_H - 1, (int)window_width(), 1, 0x00DDD9D3);
-    gui_draw_logo(16, GUI_MENUBAR_H / 2 + 2, 1, 0x00FFFFFF, 0x00000000); /* v0.76.47: menu bar is semi-translucent light chrome, direct correction -- black reads here, not white */
-    font_draw_string(portfolio_dock ? "Joshua Trommel" : "Joshua Tree", 32, 7, 0x001C1C1E, -1); /* portfolio mode is his site, so the corner carries his name */
+    gui_hairline_h(0, GUI_MENUBAR_H - 1, (int)window_width(), 0x00BDB8B0); /* 2.0: one physical pixel, not a doubled logical row */
+    gui_draw_mark_sized(24, GUI_MENUBAR_H / 2, 20, 0x001C1C1E); /* 2.0: the real brand mark (boot_mark) sits in the apple-menu spot */
+    font_draw_string(portfolio_dock ? "Joshua Trommel" : "Joshua Tree", 40, 7, 0x001C1C1E, -1); /* portfolio mode is his site, so the corner carries his name */
 
     static const char *WD[7] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
     static const char *MO[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
@@ -3554,15 +3497,6 @@ static void gui_icon_mail(int cx, int cy, int s, unsigned int bg){
     int t = s / 22 + 1;
     gui_draw_capsule(x0, y0, cx, cy, t, ICON_FG, bg);         /* flap: left seam down to centre */
     gui_draw_capsule(x0 + w - 1, y0, cx, cy, t, ICON_FG, bg); /* flap: right seam down to centre */
-}
-static void gui_icon_plan(int cx, int cy, int s, unsigned int bg){
-    int half = s * 3 / 10;
-    for (int row = 0; row < 3; row++) {
-        int y = cy - half + row * half;
-        int len = half * (3 - row) / 2;
-        gui_fill_circle(cx - half - 3, y, s / 16, ICON_FG, bg);
-        gui_draw_capsule(cx - half + 4, y, cx - half + 4 + len, y, s / 20, ICON_FG, bg);
-    }
 }
 static void gui_icon_lexly(int cx, int cy, int s, unsigned int bg){
     int r = s * 3 / 10;
@@ -3989,7 +3923,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
     }
     /* The artwork is stored as PNG, not as decoded RGBA: 24 artworks of
        128x128 RGBA is 1.5MB, which runs into the ring-3 program window
-       boot/linker.ld pins at 0xC0507000, and docs/SYSCALL-ABI.md names that
+       kernel/memmap.h pins at JT_USER_BASE, and docs/SYSCALL-ABI.md names that
        address as part of the published v1 contract. As PNG the same 24 are
        141KB. Decoding here rather than once at boot costs nothing in
        practice: this function is the icon cache's own miss path, so it runs
@@ -4107,6 +4041,7 @@ static unsigned int *gui_render_icon_cached(int icon, int size, int slot, unsign
    at every one of its draw sites (dock, dock-magnified, Apps-folder
    grid, drag preview all funnel through this one function). */
 static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size);
+#include "clockicon.h"
 
 static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int size, unsigned int under){
     int x = cx_center - size / 2, y = cy_bottom - size;
@@ -4119,7 +4054,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
             for (int px = 0; px < pw; px++)
                 if (tile[py * pw + px] != under)
                     window_pixel_phys(x * (int)sc + px, y * (int)sc + py, tile[py * pw + px]);
-        if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
+        gui_icon_overlay(icon, cx_center, cy_bottom, size);
         return;
     }
     /* out of memory for the cache: draw directly, un-supersampled, rather than draw nothing */
@@ -4128,7 +4063,7 @@ static void gui_draw_one_icon_on(int icon, int cx_center, int cy_bottom, int siz
     gui_rounded_rect_gradient(x, y, size, size, bg_light, bg_dark, under, size * 22 / 100);
     gui_draw_gloss(x, y, size, size, bg, size * 22 / 100 + 1);
     gui_draw_icon_glyph(icon, cx_center, y + size / 2, size, bg);
-    if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
+    gui_icon_overlay(icon, cx_center, cy_bottom, size);
 }
 void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size){ gui_draw_one_icon_on(icon, cx_center, cy_bottom, size, DOCK_TRAY_COLOR); }
 
@@ -4374,55 +4309,6 @@ void gui_app_mouse_tick(void){
     if (!boot_to_phone) { gui_cursor_save(app_cursor_x, app_cursor_y); gui_draw_cursor(app_cursor_x, app_cursor_y); } /* phone_home.h: touch has no cursor, never draw the desktop arrow over an open app */
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
-/* v67 (0.62.2): for an app that repaints its whole viewport itself on
-   every keystroke (Notes). Lift the pointer sprite before the repaint so
-   the backup under it can't go stale and get restored over fresh content
-   on the next move; the next gui_app_mouse_tick sees no saved cursor and
-   draws it again on top of whatever the app just painted. */
-static void gui_app_cursor_hide(void){
-    if (!gui_app_windowed) return;
-    window_clear_viewport();
-    gui_cursor_restore();
-    window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
-}
-
-/* get_key() alone left a real, reported bug: a visitor with no physical
-   keyboard (a touch-only phone, or the live v86 embed before real
-   keystrokes reach it) had no way to ever leave an app screen once
-   opened, since "any key" was the only exit. A real click is the one
-   input a mouse- or touch-only visitor can always produce, so it closes
-   the app too now, not just a keypress. */
-static void gui_wait_close(void){
-    font_draw_string("esc or click to go back", 20, (int)window_height() - 30, 0x0075726E, -1);
-    /* Real hardware and real QEMU continuously re-scan actual VRAM, so any
-       write shows up on the very next real refresh, confirmed directly: a
-       real screendump of this exact draw sequence rendered perfectly. v86,
-       a JS/wasm emulator, samples its own canvas on some interval instead
-       of continuously, and this whole app view draws its content then
-       immediately blocks on input with nothing forcing a real wall-clock
-       gap first, apparently landing between v86's own sampling points
-       often enough that the text never visibly appears there, even though
-       it's genuinely written to the framebuffer. A few real PIT ticks of
-       settle time here, comfortably more than one real display frame,
-       gives it that gap without real hardware/QEMU visitors ever noticing
-       an unnecessary pause, they didn't need it in the first place. */
-    window_present(); sleep_ticks(5);
-    mouse_click_edge_sync(); /* a button already held (e.g. the click that opened this app) is the baseline, not a fresh click */
-    for (;;) {
-        gui_app_mouse_tick();
-        int sc = kbd_pop();
-        /* Real, reported bug: "any key" closed every read-only viewer,
-           including Keyrate once it became a real typing test, the first
-           keystroke anyone typed closed the app instead of registering.
-           Esc (or a click, unchanged) closes now; every other key is
-           just consumed and ignored, harmless on a page with nothing
-           else to do with a keypress, and no longer surprising on one
-           that does. */
-        if (sc >= 0 && !(sc & 0x80) && kbd_map(sc) == 27) { gui_close_was_click = 0; return; }
-        if (mouse_click_edge()) { gui_close_was_click = 1; return; }
-        window_present(); __asm__ volatile ("hlt");
-    }
-}
 
 /* A real macOS-style traffic light, not a fake one: red is a genuine close
    affordance, clicking anywhere already closes the app view (gui_wait_close
@@ -4445,45 +4331,6 @@ void gui_draw_app_titlebar(const char *title){
     font_draw_string(title, 84, 12, 0x00555555, -1);
 }
 
-/* Split into a content-only draw plus the old blocking entry point: the
-   multi-window compositor (gui_multiwin_draw_one, near gui_launch_from_dock)
-   calls the content draw directly, every repaint, with no gui_wait_close in
-   the way; the Apps-folder/test-harness single-window path keeps calling
-   gui_launch_weather() exactly as before, same pixels either way. */
-static int weather_fetching = 0; /* set around a retry so the window can say so before the blocking fetch starts */
-static void gui_draw_weather_content(void); /* defined below the glyph table it draws with, see "Weather window, redesigned" */
-/* R retries right now. Returns 1 when the key should close the window. */
-static int gui_weather_key(int k, void (*repaint)(void)){
-    if (k == KEY_ESC) return 1;
-    if (k == 'r' || k == 'R') {
-        weather_fetching = 1; repaint(); window_present();
-        weather_tried_once = 1;
-        weather_fetch();
-        weather_fetching = 0;
-        gui_menubar_force_redraw();
-        repaint();
-    }
-    return 0;
-}
-static void gui_launch_weather(void){
-    gui_draw_weather_content();
-    /* gui_wait_close, plus the retry key: esc or a click leaves. */
-    font_draw_string("esc or click to go back", 20, (int)window_height() - 30, 0x0075726E, -1);
-    window_present(); sleep_ticks(5);
-    mouse_click_edge_sync();
-    for (;;) {
-        gui_app_mouse_tick();
-        int sc = kbd_pop();
-        if (sc >= 0 && !(sc & 0x80)) {
-            char c = kbd_map(sc);
-            if (gui_weather_key(c == 27 ? KEY_ESC : c, gui_draw_weather_content)) { gui_close_was_click = 0; return; }
-        }
-        if (mouse_click_edge()) { gui_close_was_click = 1; return; }
-        window_present(); __asm__ volatile ("hlt");
-    }
-}
-
-#include "files.h"
 
 /* v85: the old one-shot gui_launch_chat (no history, /api/generate, a
    200-byte message cap) lived here; replaced by chat.h's real GUI app
@@ -4535,13 +4382,9 @@ static int text_ink(int a, unsigned int fg, unsigned int dst){
 }
 
 #include "ttf_render.h"
-#include "gui_prompt.h"
 #include "auth.h"
-#include "osk.h" /* roadmap 1.9: on-screen keyboard for phone, used by editor.h */
 #include "editor.h"
-#include "caldate.h" /* 1.9.12: Calendar is user/calendar.c now; chat.h and stocks.h still need the date math */
 #include "mail.h"
-#include "chat.h"
 
 /* v50: DejaVu Sans, not Mono. Direct feedback: system UI text (menu bar,
    dock hover labels, titlebars) read as monospace/typewriter, not the
@@ -4625,19 +4468,11 @@ static void gui_aa_char_mono(unsigned char c, int px, int py, unsigned int fg, i
     ttfr_blend_glyph(g, base_x, base_y, fg, px, px + cell);
 }
 
-/* Weather window, redesigned. Everything below draws at physical
+/* Physical-resolution text. Everything below draws at physical
    resolution through the same DejaVu Sans coverage glyphs the rest of the
    GUI text uses (editor_glyphs), so the window gets a real size hierarchy:
    16/20/24/28 px faces drawn 1:1, and the hero numeral scaled up from the
    28 px face. No gradient anywhere: flat cream surface, flat cards. */
-#define WX_BG     0x00F5F0EB /* window surface, same cream as every app */
-#define WX_CARD   0x00ECE5DC /* flat card tone, one step down from the surface */
-#define WX_TEXT   0x00403439 /* dark warm text */
-#define WX_MID    0x00645057
-#define WX_DIM    0x00857A7C
-#define WX_ACCENT 0x00C2772B /* the one accent: warm ochre, sun and storm bolt only */
-#define WX_CLOUD  0x00B9AEA6
-#define WX_ERR    0x009A3B2E
 static const int WX_CAPTOP[4] = {3, 4, 5, 6}; /* line-box top to cap top, per face size, physical px */
 static int wx_font_px(int size, int mul){ return (16 + 4 * size) * mul; }
 static int wx_char_adv(unsigned char c, int size, int bold, int mul){
@@ -4716,8 +4551,6 @@ static int wx_text(const char *s, int lx, int ly, int size, int bold, int mul, u
     return (px - x0 + sc - 1) / sc;
 }
 static int wx_text_lw(const char *s, int size, int bold, int mul){ int sc = (int)window_scale(); return (wx_text_w(s, size, bold, mul) + sc - 1) / sc; }
-static void wx_text_center(const char *s, int cx, int ly, int size, int bold, unsigned int fg){ wx_text(s, cx - wx_text_lw(s, size, bold, 1) / 2, ly, size, bold, 1, fg); }
-static void wx_text_right(const char *s, int rx, int ly, int size, int bold, unsigned int fg){ wx_text(s, rx - wx_text_lw(s, size, bold, 1), ly, size, bold, 1, fg); }
 
 /* v0.89.x: the Calendar dock/Apps-folder tile shows the real current date,
    macOS style, instead of a fixed baked-in "SEP 17" (that art still
@@ -4788,357 +4621,12 @@ static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
     wx_text(daybuf, cx_center - lwd / 2, ly_d, face_d, 1, mul_d, 0x001F1F22);
 }
 
-/* Flat rounded card: four anti-aliased corner discs plus two rects. */
-static void wx_card(int x, int y, int w, int h, int r, unsigned int color, unsigned int bg){
-    gui_fill_circle(x + r, y + r, r, color, bg); gui_fill_circle(x + w - r - 1, y + r, r, color, bg);
-    gui_fill_circle(x + r, y + h - r - 1, r, color, bg); gui_fill_circle(x + w - r - 1, y + h - r - 1, r, color, bg);
-    window_rect(x + r, y, w - 2 * r, h, color);
-    window_rect(x, y + r, w, h - 2 * r, color);
-}
-
 /* "18°" style degrees into out. */
 char *wx_put_int(char *o, int v){
     if (v < 0) { *o++ = '-'; v = -v; }
     char d[8]; int n = 0; if (!v) d[n++] = '0'; while (v && n < 7) { d[n++] = (char)('0' + v % 10); v /= 10; }
     while (n) *o++ = d[--n];
     return o;
-}
-static void wx_deg(char *out, int v){ char *o = wx_put_int(out, v); *o++ = (char)0xF8; *o = 0; }
-
-/* Condition glyphs, vector only, built from the two anti-aliased
-   primitives the dock icons use. u = one eighth of the glyph's half size,
-   so u = 2 is a ~32 px glyph and u = 5 an ~80 px one. */
-#define WX_G_SUN 0
-#define WX_G_PARTLY 1
-#define WX_G_CLOUD 2
-#define WX_G_FOG 3
-#define WX_G_RAIN 4
-#define WX_G_SNOW 5
-#define WX_G_STORM 6
-static int wx_glyph_kind(int code){
-    if (code == 0) return WX_G_SUN;
-    if (code <= 2) return WX_G_PARTLY;
-    if (code == 3) return WX_G_CLOUD;
-    if (code <= 48) return WX_G_FOG;
-    if (code <= 67) return WX_G_RAIN;
-    if (code <= 77) return WX_G_SNOW;
-    if (code <= 82) return WX_G_RAIN;
-    if (code <= 86) return WX_G_SNOW;
-    return WX_G_STORM;
-}
-static void wx_g_sun(int cx, int cy, int u, int r8, unsigned int bg){
-    /* r8: disc radius in u; rays run from r8+2 to r8+4 */
-    gui_fill_circle(cx, cy, r8 * u, WX_ACCENT, bg);
-    int a = (r8 + 2) * u, b = (r8 + 4) * u, t = u > 2 ? u / 2 : 1;
-    int ad = a * 707 / 1000, bd = b * 707 / 1000;
-    gui_draw_capsule(cx + a, cy, cx + b, cy, t, WX_ACCENT, bg); gui_draw_capsule(cx - a, cy, cx - b, cy, t, WX_ACCENT, bg);
-    gui_draw_capsule(cx, cy + a, cx, cy + b, t, WX_ACCENT, bg); gui_draw_capsule(cx, cy - a, cx, cy - b, t, WX_ACCENT, bg);
-    gui_draw_capsule(cx + ad, cy + ad, cx + bd, cy + bd, t, WX_ACCENT, bg); gui_draw_capsule(cx - ad, cy - ad, cx - bd, cy - bd, t, WX_ACCENT, bg);
-    gui_draw_capsule(cx + ad, cy - ad, cx + bd, cy - bd, t, WX_ACCENT, bg); gui_draw_capsule(cx - ad, cy + ad, cx - bd, cy + bd, t, WX_ACCENT, bg);
-}
-/* Flat-bottomed cloud, bottom edge at cy + 4u. grow pads every part, used
-   once in the background colour to cut a clean gap out of the sun behind. */
-static void wx_g_cloud(int cx, int cy, int u, int grow, unsigned int color, unsigned int bg){
-    gui_fill_circle(cx - 4 * u, cy + u, 3 * u + grow, color, bg);
-    gui_fill_circle(cx + 5 * u, cy + 2 * u, 2 * u + grow, color, bg);
-    gui_fill_circle(cx, cy - u, 5 * u + grow, color, bg);
-    window_rect(cx - 4 * u, cy + u, 9 * u, 3 * u + grow + 1, color);
-}
-static void wx_glyph(int kind, int cx, int cy, int u, unsigned int bg){
-    int t = u > 2 ? u / 2 : 1;
-    if (kind == WX_G_SUN) { wx_g_sun(cx, cy, u, 3, bg); return; }
-    if (kind == WX_G_PARTLY) {
-        wx_g_sun(cx + 3 * u, cy - 3 * u, u, 2, bg);
-        wx_g_cloud(cx - u, cy + 2 * u, u, t + 1, bg, bg);
-        wx_g_cloud(cx - u, cy + 2 * u, u, 0, WX_CLOUD, bg);
-        return;
-    }
-    if (kind == WX_G_CLOUD) { wx_g_cloud(cx, cy, u, 0, WX_CLOUD, bg); return; }
-    if (kind == WX_G_FOG) {
-        wx_g_cloud(cx, cy - 3 * u, u, 0, WX_CLOUD, bg);
-        gui_draw_capsule(cx - 6 * u, cy + 4 * u, cx + 6 * u, cy + 4 * u, t, WX_DIM, bg);
-        gui_draw_capsule(cx - 4 * u, cy + 7 * u, cx + 4 * u, cy + 7 * u, t, WX_DIM, bg);
-        return;
-    }
-    wx_g_cloud(cx, cy - 2 * u, u, 0, WX_CLOUD, bg);
-    if (kind == WX_G_RAIN) {
-        for (int i = -1; i <= 1; i++) gui_draw_capsule(cx + i * 4 * u + u, cy + 4 * u, cx + i * 4 * u - u, cy + 7 * u, t, WX_MID, bg);
-    } else if (kind == WX_G_SNOW) {
-        for (int i = -1; i <= 1; i++) gui_fill_circle(cx + i * 4 * u, cy + (i ? 5 : 7) * u, t + 1, WX_DIM, bg);
-    } else {
-        gui_draw_capsule(cx + u, cy + 3 * u, cx - 2 * u, cy + 6 * u, t, WX_ACCENT, bg);
-        gui_draw_capsule(cx - 2 * u, cy + 6 * u, cx + u, cy + 6 * u, t, WX_ACCENT, bg);
-        gui_draw_capsule(cx + u, cy + 6 * u, cx - u, cy + 9 * u, t, WX_ACCENT, bg);
-    }
-}
-
-static const char *WX_WEEKDAY[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
-static void gui_draw_weather_content(void){
-    /* Root cause of issue #13: a failed fetch left weather_text empty, so
-       every repaint (mouse move, focus change, tick) re-ran the blocking
-       DNS/TCP fetch and froze the window. Try once per session here; the
-       ten-minute cycle in gui_run and the R key do the retrying. */
-    if (!weather_text[0] && !weather_tried_once) { weather_tried_once = 1; weather_fetch(); }
-    window_clear(WX_BG);
-    gui_draw_app_titlebar("Weather");
-    /* Never empty. Three honest faces: the live reading, the last good
-       reading (kept across a later failure, labelled stale), or a fixed
-       sample that says it is a sample, on the header line AND on the
-       forecast heading, so no part of the window passes for live data. */
-    int live = weather_state == WX_OK && weather_have;
-    int stale = !live && weather_have;
-    int real = live || stale;
-    static const int s_code[WX_DAYS] = {0, 2, 3, 61, 2}, s_hi[WX_DAYS] = {21, 19, 17, 15, 18}, s_lo[WX_DAYS] = {12, 11, 10, 9, 10}, s_wd[WX_DAYS] = {1, 2, 3, 4, 5};
-    int temp = real ? weather_temp_c : 18, code = real ? weather_code10 / 10 : 0;
-    int have_extra = real ? wx_extra_have : 1;
-    int feels = real ? wx_feels_c : 17, hum = real ? wx_humidity : 55, wind = real ? wx_wind_kmh : 9;
-    int nd = real ? wx_day_count : WX_DAYS;
-    const int *d_code = real ? wx_day_code : s_code, *d_hi = real ? wx_day_hi : s_hi, *d_lo = real ? wx_day_lo : s_lo, *d_wd = real ? wx_day_wd : s_wd;
-
-    int vw = (int)window_width(), vh = (int)window_height();
-    int top = gui_app_windowed ? 0 : 40;          /* the full-screen path draws its own title bar above */
-    int cw = vw - 72 > 760 ? 760 : vw - 72;         /* content column */
-    int x0 = (vw - cw) / 2, x1 = x0 + cw;
-    int y = top + 22;
-    char buf[80];
-
-    /* Header: city left, state right. */
-    wx_text(geo_city[0] ? geo_city : (real ? "Your location" : "Sample location"), x0, y, 3, 1, 1, WX_TEXT);
-    wx_text(live ? "Current conditions, live" : stale ? "Last good reading, may be out of date" : "Sample data, not a live reading", x0, y + 20, 1, 0, 1, live ? WX_DIM : WX_MID);
-    if (weather_fetching) {
-        wx_text_right("Fetching...", x1, y + 1, 2, 1, WX_MID);
-    } else if (!live) {
-        const char *head = weather_state == WX_OFFLINE ? "Offline" : weather_state == WX_TIMEOUT ? "Timed out" : weather_state == WX_BAD ? "Bad response" : weather_state == WX_FAILED ? "Request failed" : "Not fetched yet";
-        int p = 0;
-        for (const char *c = head; *c; c++) buf[p++] = *c;
-        if (weather_err[0]) { buf[p++] = ' '; buf[p++] = '('; for (const char *c = weather_err; *c && p < 76; c++) buf[p++] = *c; buf[p++] = ')'; }
-        buf[p] = 0;
-        wx_text_right(buf, x1, y + 1, 2, 1, WX_ERR);
-        wx_text_right("Press R to retry", x1, y + 21, 1, 0, WX_MID);
-    } else {
-        wx_text_right("Press R to refresh", x1, y + 3, 1, 0, WX_DIM);
-    }
-
-    /* Hero: the temperature, 28 px face at 5x (cap height 50 logical). */
-    int hy = y + 50;
-    wx_deg(buf, temp);
-    int tw = wx_text(buf, x0 - 2, hy, 3, 0, 5, WX_TEXT);
-    int bx = x0 + tw + 22;
-    wx_text(weather_word(code), bx, hy + 8, 3, 1, 1, WX_TEXT);
-    if (nd > 0) {
-        char *o = buf; const char *s;
-        for (s = "High "; *s; s++) *o++ = *s; o = wx_put_int(o, d_hi[0]); *o++ = (char)0xF8;
-        for (s = "   Low "; *s; s++) *o++ = *s; o = wx_put_int(o, d_lo[0]); *o++ = (char)0xF8; *o = 0;
-        wx_text(buf, bx, hy + 31, 2, 0, 1, WX_MID);
-    }
-    wx_glyph(wx_glyph_kind(code), x1 - 52, hy + 24, 5, WX_BG);
-
-    /* Secondary facts: three flat cards. */
-    int fy = hy + 72, fh = 50, gap = 12, fw = (cw - 2 * gap) / 3;
-    for (int i = 0; i < 3; i++) {
-        int fx = x0 + i * (fw + gap);
-        wx_card(fx, fy, fw, fh, 10, WX_CARD, WX_BG);
-        wx_text(i == 0 ? "Feels like" : i == 1 ? "Humidity" : "Wind", fx + 16, fy + 11, 1, 0, 1, WX_DIM);
-        if (!have_extra) { wx_text("Not reported", fx + 16, fy + 28, 2, 0, 1, WX_MID); continue; }
-        char *o = buf;
-        if (i == 0) { o = wx_put_int(o, feels); *o++ = (char)0xF8; }
-        else if (i == 1) { o = wx_put_int(o, hum); *o++ = '%'; }
-        else { o = wx_put_int(o, wind); for (const char *s = " km/h"; *s; s++) *o++ = *s; }
-        *o = 0;
-        wx_text(buf, fx + 16, fy + 27, 3, 1, 1, WX_TEXT);
-    }
-
-    /* Forecast row. */
-    int ry = fy + fh + 16;
-    wx_text(live ? "5-day forecast" : stale ? "5-day forecast, last good reading" : "5-day forecast, sample data", x0, ry, 1, 1, 1, WX_MID);
-    int cy0 = ry + 16, ch = vh - cy0 - 14;
-    if (ch > 118) ch = 118;
-    int drawn = 0;
-    if (nd <= 0) {
-        wx_card(x0, cy0, cw, ch, 10, WX_CARD, WX_BG);
-        wx_text("No forecast in the last reply", x0 + 16, cy0 + ch / 2 - 5, 2, 0, 1, WX_MID);
-    } else {
-        int dw = (cw - (WX_DAYS - 1) * gap) / WX_DAYS;
-        for (int i = 0; i < nd && i < WX_DAYS; i++) {
-            int dx = x0 + i * (dw + gap), mx = dx + dw / 2;
-            wx_card(dx, cy0, dw, ch, 10, WX_CARD, WX_BG);
-            wx_text_center(i == 0 && real ? "Today" : WX_WEEKDAY[d_wd[i] % 7], mx, cy0 + 11, 1, 1, WX_TEXT);
-            wx_glyph(wx_glyph_kind(d_code[i]), mx, cy0 + ch / 2 - 4, 2, WX_CARD);
-            char hi[8], lo[8]; wx_deg(hi, d_hi[i]); wx_deg(lo, d_lo[i]);
-            int hw = wx_text_lw(hi, 2, 1, 1), lw = wx_text_lw(lo, 2, 0, 1);
-            int sx = mx - (hw + 8 + lw) / 2;
-            wx_text(hi, sx, cy0 + ch - 22, 2, 1, 1, WX_TEXT);
-            wx_text(lo, sx + hw + 8, cy0 + ch - 22, 2, 0, 1, WX_DIM);
-            drawn++;
-        }
-    }
-    /* Headless proof of what the window actually showed, only when it
-       changes (this draws on every repaint). wxrow= is the forecast row:
-       how many day cards were really drawn, and which weekdays. */
-    { static int last_sig = -1;
-      int sig = ((weather_state * 8 + (live ? 0 : stale ? 1 : 2) * 2 + weather_fetching) * 8 + drawn) * 2 + have_extra;
-      if (sig != last_sig) { last_sig = sig;
-          serial_puts("wxwin="); serial_puts(weather_fetching ? "fetching" : weather_state_name(weather_state));
-          serial_puts(live ? " live\n" : stale ? " stale\n" : " sample\n");
-          serial_puts("wxrow="); { char d[2] = { (char)('0' + drawn), 0 }; serial_puts(d); }
-          for (int i = 0; i < drawn; i++) { serial_puts(i ? "," : " "); serial_puts(WX_WEEKDAY[d_wd[i] % 7]); }
-          serial_puts(have_extra ? " facts=yes\n" : " facts=no\n"); } }
-}
-
-/* v36 (0.36.0): a real terminal inside the desktop, not a second shell.
-   It runs the exact same run() every text-mode command goes through, so
-   there is precisely one shell in this kernel and anything it learns
-   later works here the same day, rather than two implementations drifting
-   apart. Output comes back through putc's capture hook (see capture_begin
-   above), which is why no command needed changing to appear here. */
-static void run(char *line); /* defined after the GUI; one shell, called from both */
-
-#define TERM_COLS 96
-#define TERM_ROWS 24 /* v42: fits 540 logical rows (44 + 24*16 = 428 < 480) */
-#define TERM_SCROLLBACK 8192
-
-static char term_buf[TERM_SCROLLBACK];
-static unsigned int term_len = 0;
-
-static void term_putc(char c){
-    if (term_len + 1 >= TERM_SCROLLBACK) {
-        /* Drop the oldest half rather than the oldest byte: a byte-at-a-
-           time memmove on every character once full would make a long
-           session visibly slow, and nobody scrolls back 4KB in an 800x600
-           window anyway. */
-        unsigned int keep = TERM_SCROLLBACK / 2;
-        for (unsigned int i = 0; i < keep; i++) term_buf[i] = term_buf[term_len - keep + i];
-        term_len = keep;
-    }
-    term_buf[term_len++] = c;
-    term_buf[term_len] = 0;
-}
-static void term_puts(const char *s){ while (*s) term_putc(*s++); }
-
-/* Walks the scrollback once, wrapping at TERM_COLS and on newlines, and
-   draws only the last TERM_ROWS lines. Two passes over the same logic
-   (count, then draw from the right offset) keeps this one source of truth
-   for where a line breaks, instead of a separate wrap calculation that
-   could disagree with what actually gets drawn. */
-#define TERM_CONTENT_TOP 40
-
-/* v0.76.11: direct report, still reproducing after v0.76.10's Notes fix
-   ("every keystroke causes page to re-render") -- that fix only touched
-   editor.h's own chrome/text split; term_render here had the identical
-   shape (a full window_clear + titlebar redraw on every single
-   keystroke, not just Notes' one dirty-flag flip) and was never fixed.
-   Terminal's titlebar text never changes (no dirty-flag toggle Notes
-   needed), so this is simpler: chrome draws exactly once, in
-   term_draw_chrome() below, called before the loop in
-   gui_launch_terminal, never again per keystroke. */
-static void term_draw_chrome(void){
-    serial_puts("termchrome\n"); /* discriminating marker for tools/checks/termchatflash-check.sh, same convention editor.h's "editorchrome" already established */
-    app_begin("Terminal", 0x001A1512); /* warm near-black, the Mojave palette's dark end, not a cold pure black */
-}
-
-static void term_render(const char *input, unsigned int input_len){
-    /* Content-only redraw now, scoped below the titlebar band
-       (TERM_CONTENT_TOP=40; every real content y-coordinate below in
-       this function is already >= 44, confirmed by reading them, so this
-       clears exactly the region that can change and nothing the chrome
-       occupies). */
-    window_rect(0, TERM_CONTENT_TOP, (int)window_width(), (int)window_height() - TERM_CONTENT_TOP, 0x001A1512);
-
-    unsigned int starts[TERM_ROWS + 1];
-    unsigned int total_lines = 0, col = 0, line_start = 0;
-    for (unsigned int i = 0; i <= term_len; i++) {
-        int wrapped = (col == TERM_COLS);
-        int newline = (i < term_len && term_buf[i] == '\n');
-        if (wrapped || newline || i == term_len) {
-            starts[total_lines % (TERM_ROWS + 1)] = line_start;
-            total_lines++;
-            line_start = newline ? i + 1 : i;
-            col = 0;
-            if (newline) continue;
-            if (i == term_len) break;
-        }
-        col++;
-    }
-
-    unsigned int first = total_lines > TERM_ROWS ? total_lines - TERM_ROWS : 0;
-    int y = 44;
-    for (unsigned int ln = first; ln < total_lines && y < (int)window_height() - 80; ln++) {
-        unsigned int p = starts[ln % (TERM_ROWS + 1)];
-        int x = 16;
-        for (unsigned int c = 0; c < TERM_COLS && p < term_len; c++, p++) {
-            if (term_buf[p] == '\n') break;
-            font_draw_char_mono((unsigned char)term_buf[p], x, y, 0x00D8CFC4, -1);
-            x += 8;
-        }
-        y += 16;
-    }
-
-    /* Prompt line, pinned to the bottom so typing never scrolls out of
-       view no matter how much output the last command produced. */
-    int py = (int)window_height() - 60;
-    font_draw_string("> ", 16, py, 0x00C98A3E, -1);
-    int x = 32;
-    for (unsigned int i = 0; i < input_len && x < 780; i++, x += 8)
-        font_draw_char_mono((unsigned char)input[i], x, py, 0x00F2E9D8, -1);
-    window_rect(x, py, 8, 15, 0x00C98A3E); /* block cursor */
-    gui_draw_hint(16, (int)window_height() - 28, "esc closes   |   same shell as text mode", 0x00807468);
-}
-
-static void gui_launch_terminal(void){
-    static char input[TERM_COLS];
-    static char out[4096];
-    unsigned int input_len = 0;
-
-    term_draw_chrome(); /* once per open, never again per keystroke -- see term_draw_chrome's own comment */
-    if (term_len == 0) term_puts("Joshua Tree terminal. Type help.\n");
-    term_render(input, input_len);
-
-    for (;;) {
-        /* See gui_wait_close and the Apps folder: settle for v86's canvas
-           sampler, and treat a click/tap as a real way out for a visitor
-           with no keyboard. */
-        window_present(); sleep_ticks(5);
-        mouse_click_edge_sync();
-        int k = get_key_or_click();
-        if (k == KEY_ESC || k == KEY_CLICK) return;
-        if (k == KEY_ENTER) {
-            input[input_len] = 0;
-            term_puts("> "); term_puts(input); term_putc('\n');
-            if (input_len) {
-                /* Same run() the text-mode shell uses. Its output lands
-                   in `out` instead of VGA memory purely because of the
-                   capture hook, no command knows the difference. */
-                capture_begin(out, sizeof(out));
-                run(input);
-                unsigned int n = capture_end();
-                for (unsigned int i = 0; i < n; i++) term_putc(out[i]);
-            }
-            input_len = 0;
-            term_render(input, input_len);
-            continue;
-        }
-        if (k == '\b') { if (input_len) input_len--; }
-        /* Same "one line, no selection" contract as gui_prompt_line_input:
-           Ctrl+C/X act on the whole current input line, Ctrl+V pastes at
-           the end and stops at TERM_COLS - 1, the same bound plain typing
-           already respects. */
-        else if (k == KEY_COPY || k == KEY_CUT) {
-            clipboard_set(input, input_len);
-            if (k == KEY_CUT) input_len = 0;
-        }
-        else if (k == KEY_PASTE) {
-            unsigned int before = input_len, inserted = 0;
-            for (unsigned int i = 0; i < clipboard_len && input_len < TERM_COLS - 1; i++) {
-                char pc = clipboard_buf[i];
-                if (pc >= 32 && pc < 127) { input[input_len++] = pc; inserted++; }
-            }
-            clip_serial_dump("CLIPPASTE:", &input[before], inserted);
-            if (inserted < clipboard_len) serial_puts("CLIPTRUNC\n");
-        }
-        else if (k >= 32 && k < 127 && input_len < TERM_COLS - 1) input[input_len++] = (char)k;
-        else continue;
-        term_render(input, input_len);
-    }
 }
 
 /* v37: the Apps folder. Every real app, laid out as a grid, so the dock
@@ -5161,7 +4649,7 @@ static void gui_launch_terminal(void){
    grid actually starts 70px lower, at y0=95, to leave room for the "arrow
    keys to move" hint line above it (panel top is 25). The real bottom
    needed is 70 + 324 = 394, 19px past the old 375, so the last visible
-   row's labels ("Bookrank", "Quotes", "Plan", "Lexly", "Toroid" at the
+   row's labels ("Bookrank", "Quotes", "Lexly", "Toroid" at the
    default scroll offset) landed only ~8 logical px above the glass
    panel's true bottom edge -- title-bar-tight everywhere else in this UI,
    here almost touching. 410 gives that row the same order of breathing
@@ -5192,9 +4680,10 @@ static void gui_apps_glass(int x, int y, int w, int h){
 }
 static void gui_launch(int icon); /* mutually recursive with the folder: the folder launches apps, and the dock launches the folder */
 static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int cell_w, int cell_h, int tile){
-    for (int i = 0; i < GUI_APPS_FOLDER; i++) {
-        int row = i / APPS_COLS - scroll_offset;
-        int col = i % APPS_COLS;
+    for (int k = 0; k < gui_apps_n(); k++) {
+        int i = gui_app_at(k);
+        int row = k / APPS_COLS - scroll_offset;
+        int col = k % APPS_COLS;
         /* Bounded by row count, not a pixel guess: row*cell_h (324) still
            clears the 375px panel_h even for the row that doesn't fit, so
            that stray row used to get drawn anyway, spilling past the
@@ -5212,7 +4701,7 @@ static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int c
         if (row < 0 || row >= APPS_VIS_ROWS) continue;
         int cx = x0 + col * cell_w + cell_w / 2;
         int cy = y0 + row * cell_h;
-        if (i == sel) gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 4,
+        if (k == sel) gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 4,
                                                  0x00FFF8F1, 0x00E5D8D0, 0x00E9DEE0, 12);
         gui_draw_one_icon_on(i, cx, cy + tile, tile, 0x00E9DEE0);
         int lw = font_string_width(APPS[i].name);
@@ -5244,18 +4733,13 @@ static void gui_app_frame_title(const char *label){
     font_draw_string(label, x + 96, y + 8, 0x00403439, -1);
     window_set_viewport(app_view_x, app_view_y, (unsigned int)app_view_w, (unsigned int)app_view_h);
 }
-static void gui_apps_launch(int icon){
-    int was_windowed = gui_app_windowed; /* v1.7.7: ring-3 apps need a real viewport via keyboard Enter too */
-    unsigned int vw = window_width(), vh = window_height() - 40; /* clamped below to fit ring-3 .userfb */
-    if (!was_windowed) { gui_draw_app_titlebar(APPS[icon].name); if (vw * vh * 4 > 0x170000) { vw = 832; vh = 450; }
-        window_set_viewport(0, 40, vw, vh); app_view_x = 0; app_view_y = 40; app_view_w = (int)vw; app_view_h = (int)vh; gui_app_windowed = 1;
-    } else gui_app_frame_title(APPS[icon].name);
-    gui_launch(icon);
-    if (!was_windowed) { gui_app_windowed = 0; window_clear_viewport(); } else gui_app_frame_title(APPS[GUI_APPS_FOLDER].name); }
+static int gui_multiwin_open(int icon); static void gui_refuse_open(int icon);
+/* 2.0 gate 5: the Apps folder has no window of its own to host an app, so a launch closes the folder and opens the app as a compositor window, exactly a dock click (full table: the same refusal notice). */
+static void gui_apps_launch(int icon){ if (gui_multiwin_open(icon) < 0) gui_refuse_open(icon); }
 
 static void gui_launch_apps(void){
     int sel = 0;
-    int rows = (GUI_APPS_FOLDER + APPS_COLS - 1) / APPS_COLS;
+    int rows = (gui_apps_n() + APPS_COLS - 1) / APPS_COLS;
     int cell_w = 150, cell_h = 116, tile = 74; /* 74 = the artwork's 148px at 2x: an exact 1:1 blit like the dock, not a 148 to 120 resample */
     int grid_w = APPS_COLS * cell_w;
     int x0 = ((int)window_width() - grid_w) / 2;
@@ -5268,6 +4752,7 @@ static void gui_launch_apps(void){
        alone through gui_apps_redraw_panel. Repainting the wallpaper on every
        poll tick is what made this screen flash while scrolling or typing. */
     int full = 1;
+    int clock_min_seen = -1;
     (void)rows;
 
     for (;;) {
@@ -5301,8 +4786,9 @@ static void gui_launch_apps(void){
            actually catches this frame before we block, and a click/tap
            counting as input so a phone can leave this screen at all. */
         window_present(); sleep_ticks(5);
+        if (gui_clock_tick(&clock_min_seen)) gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w); /* Clock hands follow the minute */
         /* v0.77.0: mouse wheel scroll to browse all apps, one row per scroll. */
-        int k = get_key_or_click();
+        int k = get_key_or_click_until(ticks() + 100); /* wakes each second */
         if (k == KEY_WHEEL_UP || k == KEY_WHEEL_DOWN) {
             /* The view scrolls where the wheel says, full stop. Snapping the
                offset back to keep the selection on screen (what the first cut
@@ -5355,9 +4841,10 @@ static void gui_launch_apps(void){
                comparing, or every hit test here silently misses. */
             int click_vx = app_cursor_x - app_view_x, click_vy = app_cursor_y - app_view_y;
             int hit = -1;
-            for (int i = 0; i < GUI_APPS_FOLDER; i++) {
-                int row = i / APPS_COLS - scroll_offset;
-                int col = i % APPS_COLS;
+            for (int k = 0; k < gui_apps_n(); k++) {
+                int i = gui_app_at(k);
+                int row = k / APPS_COLS - scroll_offset;
+                int col = k % APPS_COLS;
                 /* Skip rows that are scrolled off-screen. Bounded by row
                    count (APPS_VIS_ROWS), not a repeated pixel-height
                    literal: this hit test used to compare against the
@@ -5370,16 +4857,16 @@ static void gui_launch_apps(void){
                 int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
                 if (click_vx >= cell_x0 && click_vx < cell_x1 && click_vy >= cell_y0 && click_vy < cell_y1) { hit = i; break; }
             }
-            if (hit >= 0) { sel = hit; gui_apps_launch(hit); full = 1; continue; } /* the app drew over the screen, so the folder needs a real full repaint */
+            if (hit >= 0) { gui_apps_launch(hit); return; }
             return; /* a tap outside every tile still closes the folder: with no keyboard there is no other way out */
         }
-        if (k == KEY_ENTER) { gui_apps_launch(sel); full = 1; continue; } /* returns here when that app closes, folder still open, same as a real launcher */
+        if (k == KEY_ENTER) { gui_apps_launch(gui_app_at(sel)); return; }
         int old_sel = sel;
         if (k == 'a' && sel > 0) sel--;                 /* left  */
-        else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) sel++; /* right */
+        else if (k == 'd' && sel < gui_apps_n() - 1) sel++; /* right */
         else if (k == 'w' && sel >= APPS_COLS) sel -= APPS_COLS;
-        else if (k == 's' && sel + APPS_COLS < GUI_APPS_FOLDER) sel += APPS_COLS;
-        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { sel = k - '1'; gui_apps_launch(sel); full = 1; continue; }
+        else if (k == 's' && sel + APPS_COLS < gui_apps_n()) sel += APPS_COLS;
+        else if (k >= '1' && k <= '9' && (k - '1') < gui_apps_n()) { gui_apps_launch(gui_app_at(k - '1')); return; }
         if (sel != old_sel) {
             /* Keyboard selection drags the view with it, the direction that is
                not surprising: move past the last visible row and the grid
@@ -5440,18 +4927,42 @@ static int fs_ok_global = 0;
 static void gui_draw_window_frame(int x, int y, int w, int h, const char *name){
     gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
     window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
+    gui_hairline_h(x + 8, y + 29, w - 16, 0x00D9D3CB); /* 2.0: one physical pixel rule under the title band */
     gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
     gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
     gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
     font_draw_string("x", x + 21, y + 8, 0x00602B28, -1);
     font_draw_string("-", x + 43, y + 8, 0x00624A20, -1);
-    font_draw_string(name, x + 96, y + 8, 0x00403439, -1);
+    font_draw_string(name, x + (w - font_string_width(name)) / 2, y + 8, 0x001C1C1E, -1); /* 2.0: centered, full ink */
 }
 static void gui_launch(int icon){
     if (icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open) APPS[icon].open();
 }
 
+static int gui_multiwin_open(int icon);
+/* 2.0 gate 5: a full window table or a failed window launch is an honest refusal now, never a
+   blocking takeover of the screen. Serial marker plus a notice the next repaint draws. */
+static const char *gui_notice_name = 0; static unsigned int gui_notice_until = 0;
+static void gui_refuse_open(int icon){
+    if (icon < 0 || icon >= GUI_APP_COUNT) return;
+    gui_notice_name = APPS[icon].name; gui_notice_until = ticks() + 300;
+    serial_puts("winrefuse: "); serial_puts(APPS[icon].name); serial_puts("\n"); /* tools/checks/dockcap-fallback-check.sh */
+}
+static void gui_notice_draw(void){
+    if (!gui_notice_name || (int)(ticks() - gui_notice_until) >= 0) { gui_notice_name = 0; return; }
+    char msg[64]; int n = 0; const char *pre = "Close a window to open ";
+    for (const char *q = pre; *q && n < 40; q++) msg[n++] = *q;
+    for (const char *q = gui_notice_name; *q && n < 62; q++) msg[n++] = *q;
+    msg[n] = 0;
+    int w = font_string_width(msg) + 32, h = 32, x = ((int)window_width() - w) / 2, y = GUI_MENUBAR_H + 12;
+    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x002C2C2E, 14);
+    font_draw_string(msg, x + 16, y + 8, 0x00F5F5F7, -1);
+}
 void gui_launch_from_dock(int icon){
+    /* 1.9.23: a ring-3 window app opens as a compositor window from every
+       path (dock, keyboard, open= boot flag); the blocking viewport below
+       is only the fallback when the launch failed. */
+    if (gui_ring3_windowed(icon)) { if (gui_multiwin_open(icon) < 0) gui_refuse_open(icon); return; }
 again:
     /* Keep the desktop visible around the app. The framebuffer viewport
        clips every app draw, including window_clear and physical AA text. */
@@ -5490,22 +5001,6 @@ again:
         int slot = gui_dock_hit_test(app_cursor_x, app_cursor_y);
         if (slot >= 0) { editor_mouse_x = app_cursor_x; editor_mouse_y = app_cursor_y; icon = gui_order[slot]; goto again; }
     }
-    /* v1.1.0: Chat's "open notes"/"open the weather app" tool (chat.h's
-       chat_run_tool, tool "open_app") sets chat_launch_after and returns
-       out of gui_launch_chat_app so control lands back here, the same
-       tail-call reopen shape the dock-tile-click case just above already
-       established. Scoped to icon == 6 (Chat) alone, not checked
-       unconditionally: chat_launch_after can also be set (and then
-       deliberately cleared straight back to -1) by the text-shell `chat`
-       command, which has no dock of its own to hand this off to -- if
-       that clear were ever missed, this check must not misfire on some
-       later, unrelated app's own close. */
-    if (icon == 6 && chat_launch_after >= 0) {
-        int next_icon = chat_launch_after;
-        chat_launch_after = -1;
-        icon = next_icon;
-        goto again;
-    }
 }
 
 /* v0.73.0: phase 1 of real multi-window, per roadmap.md's "Multi-window,
@@ -5517,43 +5012,26 @@ again:
    screen at the same time, each redrawn from its own real state on every
    repaint, neither frozen nor a fake snapshot.
 
-   Deliberately NOT attempted here, the real reasons this stays phase 1:
-   - Only Files and Weather are wired to this path. They're the two
-     simplest gui_wait_close-shaped read-only viewers (roadmap.md's own
-     staggering plan calls this batch 1 of the app conversion). Every
-     other dock app (Mail, Calendar, Notes, Reminders, Terminal, Chat) has
-     real per-keystroke state and keeps the old blocking
-     gui_launch_from_dock path untouched, on purpose: converting an app
-     with a real input loop into a non-blocking draw()/on_key() handler
-     with no shared-state hazard is real work per app, not a bulk
-     find/replace, and roadmap.md is explicit that this is the multi-
-     session part.
-   - No real z-order/overlap compositing: the naive back-to-front redraw
-     draws window 0 then window 1, and a click always tests only the
-     most-recently-opened (topmost) window's full rect. Real
-     click-through-to-lower-window hit testing is phase 2, not attempted.
-   - No click-to-focus: opening a window focuses it (the same
-     "most-recently-opened owns input" model the single-window kernel
-     already had, just no longer tearing the previous window down first).
-     Clicking the background window does nothing yet; that's real
-     click-to-focus, phase 2's job.
-   - Capped at 2 concurrent windows (GUI_MULTIWIN_MAX): exactly what this
-     pass needs to prove and no more; a real 4-6 slot cap is a phase-2
-     decision once more apps are converted and the memory cost (each
-     window drawing straight into the shared framebuffer today, no
-     per-window backing store yet, see roadmap.md's sizing note) is
-     actually being paid by something that needs it. */
+   Phase 2 (click-to-focus, z-order hit testing) landed in v0.73.6; the
+   2-window cap (GUI_MULTIWIN_MAX) is the one scoping choice still here. */
 #define GUI_MULTIWIN_MAX 2
 typedef struct {
     int icon;
     int x, y, w, h;
+    int task; /* 1.9.23: the ring-3 task drawing this window, -1 for an in-kernel draw hook */
+    int shown; /* 1.9.23: 0 until the compositor has drawn it once (an open= boot launch lands before the first frame) */
 } gui_window_t;
+/* 1.9.23: ring-3 apps that open as compositor windows (ring3app_launch_window)
+   instead of the blocking viewport. Reminders is the proof; one row moves another. */
+int ring3app_launch_window(const char *name, unsigned int w, unsigned int h);
+void ring3app_window_reaped(int task, int status);
+void ring3app_window_blit(int task, int vw, int vh); int ring3app_is_windowable(const char *name);
+static int gui_ring3_windowed(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && ring3app_is_windowable(APPS[icon].name); } /* every RING3_APPS row; a full window table or failed launch falls back to the blocking path */
 static gui_window_t gui_windows[GUI_MULTIWIN_MAX];
 static int gui_window_count = 0; /* gui_windows[0..gui_window_count-1] are the real open windows, back-to-front */
 
-static int gui_multiwin_supported(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].draw; }
-/* Notes' draw hook is browse-only, so a lone Notes click keeps the blocking editor; it joins the compositor only as a second window. */
-static int gui_multiwin_dock_ok(int icon){ return gui_multiwin_supported(icon) && (icon != 3 || gui_window_count > 0); } /* apps with a draw hook: Files, Mail, Weather */
+static int gui_multiwin_supported(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && (APPS[icon].draw || gui_ring3_windowed(icon)); }
+static int gui_multiwin_dock_ok(int icon){ return gui_multiwin_supported(icon); } /* apps with a draw hook or a ring-3 window */
 
 /* v0.75.0 (batch 2): Mail has real per-keystroke interaction (its list,
    read and compose modes), unlike Files/Weather's static viewers; Reminders
@@ -5561,7 +5039,7 @@ static int gui_multiwin_dock_ok(int icon){ return gui_multiwin_supported(icon) &
    programs. gui_run's input loop below only ever forwards a keystroke to
    the app whose window is currently topmost/focused (the same "topmost
    owns input" rule click-to-focus already established for clicks). */
-static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].key; } /* apps with a key hook; Files for its 1/2 view-switch keys, Weather for R-to-retry */
+static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_APP_COUNT && (APPS[icon].key || gui_ring3_windowed(icon)); } /* apps with a key hook; Files for its 1/2 view-switch keys, Weather for R-to-retry */
 
 /* Window 0 keeps the exact single-window rect the existing dock-app tests
    already assert against (gui_launch_from_dock's own x=70,y=40,w=820,h=385;
@@ -5571,6 +5049,7 @@ static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_AP
    buttons stay fully on screen and visually distinct, not stacked exactly
    on top of each other. */
 static void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
+    if (boot_to_phone) { *x = -8; *y = 8; *w = (int)window_width() + 16; *h = (int)window_height(); return; } /* 2.0 gate 5: one window, full screen under the back chevron strip (content rect 0,40,W,H-40) */
     if (slot_index == 0) { *x = 70; *y = 40; *w = 820; *h = 385; }
     else { *x = 70 + 60; *y = 40 + 60; *w = 820; *h = 385; }
     gui_clamp_win_rect(x, y, w, h); /* Mail/Calendar/Reminders/Files/Weather open here, not gui_launch_from_dock -- phone screens need the same clamp */
@@ -5631,22 +5110,8 @@ static void gui_snap_outline(int zone){
     window_rect(x + w - 1, y, 1, h, c);
 }
 
-/* v0.76.18: split out of what used to be one gui_multiwin_draw_one, direct
-   report ("keystroke re-rendering glitch still present" after the earlier
-   Notes/Terminal/Chat chrome fixes). Root cause, same bug shape those
-   fixes already established, just never extended here: every keystroke
-   into a multi-window Mail/Calendar/Reminders window went through the
-   v0.75.0 "cheap tier" at gui_run's mw_key_repaint path, which called the
-   OLD gui_multiwin_draw_one every time -- and that function unconditionally
-   redrew this window's ENTIRE chrome (gui_rounded_rect_on_wallpaper's real
-   per-row alpha blend across the whole ~820x385 rect, plus all three
-   traffic lights and the title) before ever touching content, on every
-   single character typed. None of that chrome depends on what's being
-   typed; only the content viewport does. With no double buffer in this
-   framebuffer (this kernel's own standing, tracked limitation), redrawing
-   that much unchanged chrome on every keystroke is exactly the kind of
-   real mid-scan tear the dock/menu cheap tiers already exist to avoid,
-   just never plugged into this path. */
+/* v0.76.18: chrome and content split so a keystroke repaints only the
+   content viewport, never the whole alpha-blended frame (mwkeyflash-check.sh). */
 static void gui_multiwin_draw_chrome(const gui_window_t *win){
     serial_puts("mwchrome\n"); /* discriminating marker for tools/checks/mwkeyflash-check.sh */
     int x = win->x, y = win->y, w = win->w, h = win->h;
@@ -5655,28 +5120,21 @@ static void gui_multiwin_draw_chrome(const gui_window_t *win){
 static void gui_multiwin_draw_content_only(const gui_window_t *win){
     int x = win->x, y = win->y, w = win->w, h = win->h;
     window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));
-    /* v0.76.19: real, standing bug, direct report ("two toolbars on
-       windows, two x buttons two minimize buttons") -- present since
-       multi-window Files/Weather shipped (v0.73.0) and Mail/Calendar/
-       Reminders (v0.75.0), not something this pass's chrome/content split
-       introduced. Every one of the five *_content functions below calls
-       the shared gui_draw_app_titlebar(), which only skips drawing its
-       OWN traffic-light circles + "x"/"-" when the global gui_app_windowed
-       flag is set -- but that flag was only ever set by the OLD single-
-       window gui_launch_from_dock path (bracketing its blocking
-       gui_launch() call), never by this multi-window content path. So
-       every multiwin content redraw drew a second, real, viewport-
-       relative (26,20)/(46,20)/(66,20) set of traffic lights on top of
-       gui_multiwin_draw_chrome's own real ones -- two visibly offset
-       toolbars, exactly as reported, not a rendering glitch, a real
-       missing flag. */
+    /* v0.76.19: gui_draw_app_titlebar skips its own traffic lights only
+       under this flag; without it every content redraw drew a second set. */
     gui_app_windowed = 1;
     /* Real per-repaint content, not a cached bitmap: each call re-derives
        the window's content from the same live state its single-window
        counterpart reads (vfs_list for Files, weather_text for Weather),
        so a second window opening never leaves the first one's content
        stale or frozen. */
-    if (gui_multiwin_supported(win->icon)) APPS[win->icon].draw();
+    if (win->task >= 0) {
+        /* 1.9.23: a ring-3 window: blit its private framebuffer through
+           window_pixel, the same clipped primitive every in-kernel app
+           draws with, at this window's position. The program never
+           touches the screen. */
+        ring3app_window_blit(win->task, w - 16, h - 40);
+    } else if (gui_multiwin_supported(win->icon)) APPS[win->icon].draw();
     gui_app_windowed = 0;
     window_clear_viewport();
 }
@@ -5685,43 +5143,35 @@ static void gui_multiwin_draw_one(const gui_window_t *win){
     gui_multiwin_draw_content_only(win);
 }
 
-/* Weather's retry repaints its own (topmost) window content before and
-   after the blocking fetch, so "Fetching..." is on screen while it runs. */
-static void gui_weather_mw_repaint(void){
-    if (gui_window_count > 0 && gui_windows[gui_window_count - 1].icon == 7) gui_multiwin_draw_content_only(&gui_windows[gui_window_count - 1]);
-}
-
 /* The app registry: the one place an app is wired into the desktop. Its
    index is its identity (dock order, gui_order, icon art slots and the
    window list all key off it), so a new app is one row here plus one
    bump of GUI_APP_COUNT/GUI_APPS_FOLDER/GUI_TRASH above. */
-static int gui_weather_mw_key(int k){ return gui_weather_key(k, gui_weather_mw_repaint); }
 const struct app APPS[GUI_APP_COUNT] = {
-    /*  0 */ {"Burrow",     0x00707070, gui_icon_folder,     gui_launch_files,      gui_draw_files_content,     gui_files_on_key},
-    /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       gui_launch_mail,       gui_draw_mail_content,      gui_mail_on_key},
+    /*  0 */ {"Burrow",     0x00707070, gui_icon_folder,     burrow_ring3_open,     0, 0}, /* ring 3 (user/burrow.c), a compositor window */
+    /*  1 */ {"Mail",       0x00A13F3F, gui_icon_mail,       mail_ring3_open,       0, 0}, /* ring 3 (user/mail.c), a compositor window */
     /*  2 */ {"Calendar",   0x00A0553F, gui_icon_calendar,   calendar_ring3_open,   0, 0}, /* 1.9.12: ring 3 (user/calendar.c) */
-    /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      gui_launch_editor,     gui_draw_notes_content,     gui_notes_mw_key}, /* 1.9.20: compositor hooks, opened as a window only beside another one */
+    /*  3 */ {"Notes",      0x006B4423, gui_icon_notes,      notes_ring3_open,      0, 0}, /* ring 3 (user/notes.c), a compositor window */
     /*  4 */ {"Reminders",  0x00375A4A, gui_icon_reminders,  reminders_ring3_open,  0, 0}, /* 1.9.9: ring 3 (user/reminders.c) */
-    /*  5 */ {"Terminal",   0x002B2B2B, gui_icon_terminal,   gui_launch_terminal,   0, 0},
-    /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       gui_launch_chat_app,   0, 0},
-    /*  7 */ {"Weather",    0x0085144B, gui_icon_weather,    gui_launch_weather,    gui_draw_weather_content,   gui_weather_mw_key},
+    /*  5 */ {"Terminal",   0x002B2B2B, gui_icon_terminal,   terminal_ring3_open,   0, 0}, /* ring 3 (user/terminal.c), a compositor window */
+    /*  6 */ {"Samantha",   0x00365E8C, gui_icon_chat,       samantha_ring3_open,   0, 0}, /* 1.9.26: ring 3 (user/samantha.c), the last app out of the kernel */
+    /*  7 */ {"Weather",    0x0085144B, gui_icon_weather,    weather_ring3_open,    0, 0}, /* 1.9.22: ring 3 (user/weather.c) */
     /*  8 */ {"Curbfind",   0x007A2048, gui_icon_pin,        curbfind_ring3_open,   0, 0}, /* 1.9.11: ring 3 (user/curbfind.c) */
     /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c */
     /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       bookrank_ring3_open,   0, 0}, /* 2.0: ring 3 too (user/bookrank.c) */
     /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_ring3_open, 0, 0}, /* 1.7.14: ring 3 too (user/quotes.c) */
-    /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       plan_ring3_open,       0, 0}, /* 1.9.2: ring 3 too (user/plan.c) */
-    /* 13 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      lexly_ring3_open,      0, 0}, /* 1.9.1: ring 3 too (user/lexly.c) */
-    /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */
-    /* 15 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   sparkjar_ring3_open,   0, 0}, /* 1.9.8: ring 3 (user/sparkjar.c) */
-    /* 16 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  fieldbook_ring3_open,  0, 0}, /* 1.9.3: ring 3 too (user/fieldbook.c) */
-    /* 17 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   contacts_ring3_open,   0, 0}, /* 1.9.7: ring 3 (user/contacts.c) */
-    /* 18 */ {"Calculator", 0x00556B85, gui_icon_calculator, calculator_ring3_open, 0, 0}, /* 1.7.12: ring 3 too (user/calculator.c) */
-    /* 19 */ {"Stocks",     0x00356B4F, gui_icon_stocks,     gui_launch_stocks,     0, 0},
-    /* 20 */ {"Search",     0x00506078, gui_icon_search,     search_ring3_open,     0, 0}, /* 1.9.13: ring 3 (user/search.c) */
-    /* 21 */ {"Epiphany",   0x001F5FA8, gui_icon_stocks,     epiphany_ring3_open,   0, 0}, /* 1.9.17: ring 3 (user/epiphany.c); art covers the icon */
-    /* 22 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       portfolio_ring3_open,  0, 0}, /* art covers the icon (art/icons/portfolio.svg); 1.9.5: ring 3 (user/portfolio.c) */
-    /* 23 */ {"Activity",   0x003E4C58, gui_icon_activity,   activity_ring3_open,   0, 0}, /* 1.9.6: ring 3 (user/activity.c) */
-    /* 24 */ {"Clock",      0x00565A7A, gui_icon_apps,       clock_ring3_open,      0, 0}, /* art/icons/clock.svg covers the icon; 1.9.4: ring 3 (user/clock.c) */
+    /* 12 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      lexly_ring3_open,      0, 0}, /* 1.9.1: ring 3 too (user/lexly.c) */
+    /* 13 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */
+    /* 14 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   sparkjar_ring3_open,   0, 0}, /* 1.9.8: ring 3 (user/sparkjar.c) */
+    /* 15 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  fieldbook_ring3_open,  0, 0}, /* 1.9.3: ring 3 too (user/fieldbook.c) */
+    /* 16 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   contacts_ring3_open,   0, 0}, /* 1.9.7: ring 3 (user/contacts.c) */
+    /* 17 */ {"Calculator", 0x00556B85, gui_icon_calculator, calculator_ring3_open, 0, 0}, /* 1.7.12: ring 3 too (user/calculator.c) */
+    /* 18 */ {"Stocks",     0x00356B4F, gui_icon_stocks,     stocks_ring3_open,     0, 0},
+    /* 19 */ {"Search",     0x00506078, gui_icon_search,     search_ring3_open,     0, 0}, /* 1.9.13: ring 3 (user/search.c) */
+    /* 20 */ {"Epiphany",   0x001F5FA8, gui_icon_stocks,     epiphany_ring3_open,   0, 0}, /* 1.9.17: ring 3 (user/epiphany.c); art covers the icon */
+    /* 21 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       portfolio_ring3_open,  0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph; 1.9.5: ring 3 (user/portfolio.c) */
+    /* 22 */ {"Activity",   0x003E4C58, gui_icon_activity,   activity_ring3_open,   0, 0}, /* 1.9.6: ring 3 (user/activity.c) */
+    /* 23 */ {"Clock",      0x00565A7A, gui_icon_clock,      clock_ring3_open,      0, 0}, /* live analog face (hands overlay, gui_clock_draw_hands); 1.9.4: ring 3 (user/clock.c) */
     /* Apps and Trash aren't real apps with their own brand color, so their
        tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
        tinted background like every real app above. 2026-09-27: this used
@@ -5733,7 +5183,6 @@ const struct app APPS[GUI_APP_COUNT] = {
        stubs" failure). DOCK_TRAY_COLOR is the real, intended value. */
     [GUI_APPS_FOLDER] = {"Apps",  DOCK_TRAY_COLOR, gui_icon_apps,  gui_launch_apps,  0, 0},
     [GUI_TRASH]       = {"Trash", DOCK_TRAY_COLOR, gui_icon_trash, gui_launch_trash, 0, 0},
-    [GUI_MAIL_COMPOSE] = {"Compose", 0x00A13F3F, gui_icon_mail, 0, gui_draw_mail_compose_content, gui_mail_compose_on_key}, /* no .open: only Mail's 'c' opens it */
 };
 
 /* Called from gui_run's own full-repaint branch, right alongside the
@@ -5895,7 +5344,18 @@ static int gui_multiwin_open(int icon){
     if (gui_window_count >= GUI_MULTIWIN_MAX) return -1; /* the real cap this pass proves, see the comment above */
     int slot = gui_window_count;
     gui_windows[slot].icon = icon;
+    gui_windows[slot].task = -1;
+    gui_windows[slot].shown = 0;
     gui_multiwin_geom(slot, &gui_windows[slot].x, &gui_windows[slot].y, &gui_windows[slot].w, &gui_windows[slot].h);
+    if (gui_ring3_windowed(icon)) {
+        /* 1.9.23: the program is scheduled now and draws into its own
+           buffer; this loop keeps running. -1 is refused by the caller
+           (gui_refuse_open), never a blocking takeover. */
+        if (APPS[icon].open == notes_ring3_open) notes_migrate_legacy(); /* the window path never calls APPS[].open, which is where the one-time NOTES.TXT move into the default folder lives (editor.h) */
+        int t = ring3app_launch_window(APPS[icon].name, (unsigned int)(gui_windows[slot].w - 16), (unsigned int)(gui_windows[slot].h - 40));
+        if (t < 0) return -1;
+        gui_windows[slot].task = t;
+    }
     gui_window_count++;
     return slot;
 }
@@ -5937,16 +5397,23 @@ static void gui_multiwin_close(int idx){
 static int gui_multiwin_key_nonblock(void){
     int sc = kbd_pop();
     if (sc < 0) return -1;
+    /* 2.0.0: the selection keys (Shift+arrow, Ctrl+A) go to a ring-3 window only; an in-kernel app keeps plain arrows */
+    int sel_ok = gui_window_count > 0 && gui_windows[gui_window_count - 1].task >= 0;
     if (sc == 0xE0) {
         int sc2 = kbd_pop();
-        if (sc2 < 0) return -1;
-        if (sc2 == 0x48) return KEY_UP;
-        if (sc2 == 0x50) return KEY_DOWN;
-        if (sc2 == 0x4B) return KEY_LEFT;
-        if (sc2 == 0x4D) return KEY_RIGHT;
+        if (sc2 < 0) return -1; int sh = sel_ok && kbd_shift; /* shift+arrow extends a selection only in a ring-3 window */
+        if (sc2 == 0x48) return sh ? KEY_SUP : KEY_UP;    if (sc2 == 0x50) return sh ? KEY_SDOWN : KEY_DOWN;
+        if (sc2 == 0x4B) return sh ? KEY_SLEFT : KEY_LEFT; if (sc2 == 0x4D) return sh ? KEY_SRIGHT : KEY_RIGHT;
+        if (sc2 == 0x47) return KEY_HOME;
+        if (sc2 == 0x4F) return KEY_END;
+        if (sc2 == 0x53) return KEY_DELETE;
         return -1;
     }
+    if (sc == 0xBC) return KEY_F2_UP;
     if (sc & 0x80) return -1; /* key release */
+    if (sc == 0x3C) return KEY_F2;
+    if (kbd_ctrl && (sc & 0x7F) == 0x1F) return KEY_SAVE;
+    if (kbd_ctrl) { int k = sc & 0x7F; if (k == 0x2E) return KEY_COPY; if (k == 0x2D) return KEY_CUT; if (k == 0x2F) return KEY_PASTE; if (sel_ok && k == 0x1E) return KEY_SELALL; } /* clipboard and select-all keys reach ring-3 windows too */
     char c = kbd_map(sc);
     if (c == '\n') return KEY_ENTER;
     if (c == 27)   return KEY_ESC;
@@ -5980,12 +5447,16 @@ static int gui_multiwin_key_nonblock(void){
    its rasterized 8-bit coverage; blended at PHYSICAL resolution via
    window_pixel_phys, the same pattern gui_aa_char uses for text. cx,cy are
    LOGICAL center coords, converted to physical here. */
-static void gui_draw_boot_mark(int cx, int cy, unsigned int ink){
+static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink){
     int sc = window_has_target() ? 1 : (int)window_scale(); if (sc < 1) sc = 1;
-    int ox = cx * sc - BOOT_MARK_W / 2, oy = cy * sc - BOOT_MARK_H / 2;
-    for (int row = 0; row < BOOT_MARK_H; row++){
-        for (int col = 0; col < BOOT_MARK_W; col++){
-            int a = boot_mark_cov[row * BOOT_MARK_W + col];
+    int T = size * sc; /* box-filtered down from the 160px coverage; T == 160 is a straight copy */
+    int ox = cx * sc - T / 2, oy = cy * sc - T / 2;
+    for (int row = 0; row < T; row++){
+        for (int col = 0; col < T; col++){
+            int c0 = col * BOOT_MARK_W / T, c1 = (col + 1) * BOOT_MARK_W / T, r0 = row * BOOT_MARK_H / T, r1 = (row + 1) * BOOT_MARK_H / T;
+            int sum = 0, n = (c1 - c0) * (r1 - r0);
+            for (int yy = r0; yy < r1; yy++) for (int xx = c0; xx < c1; xx++) sum += boot_mark_cov[yy * BOOT_MARK_W + xx];
+            int a = n ? sum / n : 0;
             if (!a) continue;
             int x = ox + col, y = oy + row;
             unsigned int d = window_get_pixel_phys(x, y);
@@ -5995,6 +5466,10 @@ static void gui_draw_boot_mark(int cx, int cy, unsigned int ink){
             window_pixel_phys(x, y, (r << 16) | (g << 8) | b);
         }
     }
+}
+static void gui_draw_boot_mark(int cx, int cy, unsigned int ink){
+    int sc = window_has_target() ? 1 : (int)window_scale(); if (sc < 1) sc = 1;
+    gui_draw_mark_sized(cx, cy, BOOT_MARK_W / sc, ink);
 }
 
 static void gui_draw_boot_screen(void){
@@ -6386,8 +5861,8 @@ static void gui_lock_screen(void){
 
 static void gui_menu_run_item(int item){
     if (item == 0) gui_launch_about();
-    else if (item == 1) gui_launch_files();
-    else if (item == 2) gui_launch_editor();
+    else if (item == 1) gui_launch_from_dock(0);
+    else if (item == 2) gui_launch_from_dock(3);
     else if (item == 3) gui_launch_settings();
     else if (item == 4) gui_lock_screen();
     else if (item == 6) reboot();
@@ -6428,7 +5903,7 @@ static void gui_run(void){
     auth_gate(); /* v0.77: real login screen, once per session, before the desktop ever paints */
     gui_draw_boot_screen();
     gui_order_init();
-    if (boot_to_samantha) { boot_to_samantha = 0; chat_boot_samantha_open(); }
+    if (boot_to_samantha) { boot_to_samantha = 0; serial_puts("samopen\n"); if (boot_to_phone) { gui_app_windowed = 0; phone_window_run(6); } else gui_launch_from_dock(6); } /* 1.9.26: ring-3 Samantha is the first screen; phone mode lands on the home grid when she closes */
     else if (!boot_to_phone) serial_puts("guidesktop\n"); /* discriminating marker for tools/checks/samantha-boot-check.py: the icon desktop drew first, samantha mode never reaches here before her avatar; phone mode never draws this desktop at all (see below), so it must not claim it did */
     if (boot_to_phone) { phone_home_run(); return; } /* v1.8.0: leaving Samantha lands on a real home screen, not the desktop's dock squeezed into 430px; never returns */
     dock_hover = dock_presented_hover = -1;
@@ -6477,7 +5952,7 @@ static void gui_run(void){
     gui_draw_cursor(mx, my);
     gui_dock_prewarm(); ring3app_autoopen_run(mx, my); /* `open=keyrate` / `open=toroid` boot flag, if set */
     for (;;) {
-        window_present(); __asm__ volatile ("hlt");
+        window_present(); r3stress_desktop_round(); pdestress_desktop_round(); __asm__ volatile ("hlt"); /* 1.9.23: stress=r3 hook, dead unless armed */
         /* v0.76.17: direct request ("time in top right needs live reload
            accuracy, right now it doesn't load when the minute or hour
            changes"). Root cause: gui_draw_menubar() already self-gates on
@@ -6512,6 +5987,20 @@ static void gui_run(void){
                until then; a failure leaves the photo up, never a blank. */
             if (wall_theme != WALL_PHOTO && !wall_map && geo_have && wall_fetch()) { wall_apply(1); gui_draw_desktop(-1, -1, 0, 0); gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
         }
+        /* 1.9.26: SYS_LAUNCH_REQUEST pickup. The syscall only stored an index; the launch runs here,
+           IF on, through the same two paths a dock click takes (window first, blocking fallback). */
+        int sys_launched = 0;
+        { int ra = 0, rk = jt_refresh_take(&ra); /* SYS_REFRESH pickup: fetch outside the gate, the app sees data_stamp move */
+          if (rk == JT_REFRESH_WEATHER) { weather_tried_once = 1; weather_fetch(); gui_menubar_force_redraw(); }
+          else if (rk == JT_REFRESH_STOCKS) { stx_range_hint = ra & 0xFF; stx_sel_hint = (ra >> 8) & 0xFF; stocks_fetch(stx_range_hint); } }
+        { int li = jt_launch_take();
+          if (li >= 0) {
+              serial_puts("launchreq=pickup\n");
+              if (gui_multiwin_dock_ok(li)) { if (gui_multiwin_open(li) < 0) gui_refuse_open(li); }
+              else { gui_launch_from_dock(li); mx = app_cursor_x; my = app_cursor_y; }
+              for (int wi = 0; wi < gui_window_count; wi++) gui_windows[wi].shown = 1;
+              sys_launched = 1;
+          } }
         /* v45: wind, 4 frames a second, only while the desktop itself is
            what's on screen. Timed on its first frame; if that frame took
            longer than a tenth of a second the machine is too slow for
@@ -6556,6 +6045,21 @@ static void gui_run(void){
            branches can't double-consume the same scancode. */
         int mw_topmost_icon = gui_window_count > 0 ? gui_windows[gui_window_count - 1].icon : -1;
         int mw_key_repaint = 0;
+        int r3_dirty_top = 0; /* 1.9.23: the focused ring-3 window presented a frame; cheap content-only blit below */
+        for (int i = 0; i < gui_window_count; i++) {
+            if (!gui_windows[i].shown) { gui_windows[i].shown = 1; mw_key_repaint = 1; }
+            if (gui_windows[i].task < 0) continue;
+            if (!task_used(gui_windows[i].task)) {
+                /* The program exited or was reaped (idt.c): close only its
+                   window. Everything else on screen stays. */
+                ring3app_window_reaped(gui_windows[i].task, task_last_exit_code());
+                gui_multiwin_close(i); i--; mw_key_repaint = 1;
+                continue;
+            }
+            unsigned int fw, fh; int dirty = 0;
+            syscall_window_fb(gui_windows[i].task, &fw, &fh, &dirty);
+            if (dirty) { if (i == gui_window_count - 1) r3_dirty_top = 1; else mw_key_repaint = 1; }
+        }
         /* App switcher hotkey, checked before the per-app dispatch just
            below gets its own single kbd_pop() this frame. kbd_peek()
            (irq.c) only tells us what's next without eating it, so a plain
@@ -6610,7 +6114,12 @@ static void gui_run(void){
         }
         if (gui_multiwin_interactive(mw_topmost_icon)) {
             int mwk = gui_multiwin_key_nonblock();
-            if (mwk >= 0) {
+            if (mwk >= 0 && gui_windows[gui_window_count - 1].task >= 0) {
+                /* 1.9.23: the focused window is a ring-3 program: the key
+                   goes into its event ring and nowhere else. It redraws
+                   through JT_POLL_PRESENT, which the dirty pass below picks up. */
+                syscall_window_push_event(gui_windows[gui_window_count - 1].task, JT_EV_KEY, mwk, 0);
+            } else if (mwk >= 0) {
                 int mw_should_close = 0, mw_count_before_key = gui_window_count;
                 mw_should_close = APPS[mw_topmost_icon].key(mwk);
                 if (mw_should_close) {
@@ -6740,7 +6249,7 @@ static void gui_run(void){
             if (moved > 8) { drag_win = press_window; press_window = -1; } /* real drag now: the release logic below moves/snaps instead of closing */
         }
 
-        int launched = notif_draw_pending || weather_draw_pending || win_focus_changed || mw_key_repaint; notif_draw_pending = 0; weather_draw_pending = 0;
+        int launched = sys_launched || notif_draw_pending || weather_draw_pending || win_focus_changed || mw_key_repaint; notif_draw_pending = 0; weather_draw_pending = 0;
         if (just_released) {
             if (notif_open) {
                 if (notif_opening) notif_opening = 0;
@@ -6777,17 +6286,16 @@ static void gui_run(void){
                     dw->x = nx; dw->y = ny;
                 }
                 launched = 1;
-            } else if (press_window >= 0 && gui_windows[press_window].icon == 0
-                       && gui_files_click(gui_windows[press_window].x, gui_windows[press_window].y, mx, my)) {
-                /* Files' own toolbar (List/Icons): consumed by the toolbar
-                   hit-test above, not the generic close contract right
-                   below -- a click on List/Icons switches the view and
-                   keeps the window open, instead of dismissing it like any
-                   other click inside the window would. */
-                gui_cursor_restore();
-                gui_multiwin_draw_content_only(&gui_windows[press_window]);
-                gui_cursor_save(last_mx, last_my);
-                gui_draw_cursor(last_mx, last_my);
+            } else if (press_window >= 0 && gui_windows[press_window].task >= 0
+                       && !(mx >= gui_windows[press_window].x + 16 && mx <= gui_windows[press_window].x + 32
+                            && my >= gui_windows[press_window].y + 8 && my <= gui_windows[press_window].y + 24)) {
+                /* 1.9.23: a click inside a ring-3 window's content is the
+                   program's, in viewport coordinates; only its red dot closes
+                   it (task_kill, reaped on its next turn, window closed below). */
+                syscall_window_push_event(gui_windows[press_window].task, JT_EV_CLICK,
+                                          mx - (gui_windows[press_window].x + 8), my - (gui_windows[press_window].y + 32));
+            } else if (press_window >= 0 && gui_windows[press_window].task >= 0) {
+                task_kill(gui_windows[press_window].task);
             } else if (press_window >= 0) {
                 /* v0.73.0: closing this window is exactly it, no reopen/
                    switch behaviour (that's v68's dock-tile close-and-open,
@@ -6811,29 +6319,11 @@ static void gui_run(void){
                    everything) instead of blocking inside gui_wait_close the
                    way every other app still does. */
                 editor_mouse_x = mx; editor_mouse_y = my;
-                /* v0.76.56: real bug, confirmed headless (three windows
-                   opened back to back, gui_window_count dumped via the
-                   QEMU monitor): once GUI_MULTIWIN_MAX (2) windows are
-                   already open, gui_multiwin_open silently returns -1 and
-                   this click does NOTHING -- no window opens, nothing
-                   closes, no error, the previously-topmost window just
-                   stays exactly as it was. From the outside that reads as
-                   "I clicked App X's dock icon and got App Y" (whatever
-                   was already on top), the same symptom class the
-                   roadmap's live-QA pass reported for Calendar/Reminders,
-                   even though the real cause is a swallowed click at the
-                   window cap, not a wrong icon index (gui_order/gui_launch
-                   dispatch were re-verified correct via the same headless
-                   harness and are not the bug). Real fix: when the cap
-                   blocks the multi-window path, fall through to the
-                   existing blocking single-window path below instead of
-                   dropping the click, so the user's click always does
-                   *something* visible. */
-                if (gui_multiwin_open(gui_order[press_slot]) < 0) {
-                    serial_puts("mwcapfallback\n"); /* discriminating marker for tools/checks/dockcap-fallback-check.py */
-                    gui_launch_from_dock(gui_order[press_slot]);
-                    mx = app_cursor_x; my = app_cursor_y;
-                }
+                /* 2.0 gate 5: at the GUI_MULTIWIN_MAX cap (or a failed window launch) the click is an
+                   honest refusal, "winrefuse" on serial and a notice on screen, never a blocking takeover. */
+                if (gui_multiwin_open(gui_order[press_slot]) < 0) gui_refuse_open(gui_order[press_slot]);
+                /* the launched=1 full repaint below draws this window's chrome; do not let the first-frame check draw it again */
+                for (int wi = 0; wi < gui_window_count; wi++) gui_windows[wi].shown = 1;
                 launched = 1;
             } else if (press_slot >= 0 && press_slot == slot_here) {
                 editor_mouse_x = mx; editor_mouse_y = my;
@@ -6976,9 +6466,18 @@ static void gui_run(void){
             if (menu_open) gui_draw_apple_menu(menu_hover);
             if (notif_open) gui_draw_notif_panel();
             if (weather_open) gui_draw_weather_panel();
+            if (gui_notice_name) gui_notice_draw();
             if (drag_slot < 0) { gui_cursor_save(mx, my); gui_draw_cursor(mx, my); }
             last_mx = mx; last_my = my; last_hover = hover_slot; last_drag = drag_slot;
             last_menu_open = menu_open; last_menu_hover = menu_hover;
+        }
+        else if (r3_dirty_top) {
+            /* 1.9.23: the focused ring-3 window has a new frame: blit just
+               its content, the same cheap tier a Mail keystroke takes. */
+            gui_cursor_restore();
+            gui_multiwin_draw_content_only(&gui_windows[gui_window_count - 1]);
+            gui_cursor_save(mx, my);
+            gui_draw_cursor(mx, my);
         }
     }
     window_close();
@@ -7256,7 +6755,7 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "say"))       puts(!*arg ? "usage: say <text>\n" : !net_init(0x0A00020F) ? "say: no NIC\n"
-                                              : speak_text(llm_host, (unsigned short)llm_port, arg, CHAT_SPEAK_TIMEOUT_TICKS) ? "say: played\n" : "say: nothing played\n");
+                                              : speak_text(llm_host, (unsigned short)llm_port, arg, 1500 /* ~15s at 100Hz */) ? "say: played\n" : "say: nothing played\n");
     else if (!strcmp(line, "heaptest")) {
         char *a = kmalloc(16);
         char *b = kmalloc(32);
@@ -8605,7 +8104,7 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "serveapp")) {
-        if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak|plan|lexly|toroid|sparkjar|fieldbook\n"); }
+        if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak|lexly|toroid|sparkjar|fieldbook\n"); }
         else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
             if (!strcmp(arg, "weather"))          serve_app("weather", app_weather_html, app_weather_len);
@@ -8613,7 +8112,6 @@ static void run(char *line){
             else if (!strcmp(arg, "keyrate"))     serve_app("keyrate", app_keyrate_html, app_keyrate_len);
             else if (!strcmp(arg, "bookrank"))    serve_app("bookrank", app_bookrank_html, app_bookrank_len);
             else if (!strcmp(arg, "quotestreak")) serve_app("quotestreak", app_quotestreak_html, app_quotestreak_len);
-            else if (!strcmp(arg, "plan"))        serve_app("plan", app_plan_html, app_plan_len);
             else if (!strcmp(arg, "lexly"))       serve_app("lexly", app_lexly_html, app_lexly_len);
             else if (!strcmp(arg, "toroid"))      serve_app("toroid", app_toroid_html, app_toroid_len);
             else if (!strcmp(arg, "sparkjar"))    serve_app("sparkjar", app_sparkjar_html, app_sparkjar_len);
@@ -8621,64 +8119,9 @@ static void run(char *line){
             else puts("unknown app, see usage\n");
         }
     }
-    else if (!strcmp(line, "chat")) {
-        /* v10: this kernel's own shell talking to an LLM. No TLS anywhere
-           in this stack (a real, separate project on its own), so this
-           only ever speaks plain HTTP, not the real Anthropic/OpenAI APIs
-           (HTTPS-only). Real design tradeoff, not a default picked blind:
-           building TLS from scratch to talk to a hosted API is its own
-           multi-session project; an Ollama-compatible server over plain
-           HTTP is what "talking to it" can actually mean before that
-           exists.
-
-           v85: switched to /api/chat with real VFS-backed history
-           (chat_send, kernel/chat.h) instead of a fresh one-shot
-           /api/generate prompt every time, so the shell `chat` command
-           and the GUI Chat app share both the same conversation and the
-           same settings-persisted model/host/port (llm_model/llm_host/
-           llm_port), not two independently hardcoded copies.
-
-           1.0.12: the default host is now the Turing project's own
-           Cloudflare Worker over the real internet (turing.heyitsmejosh.com,
-           model "samantha"), not a local Ollama server reached over QEMU's
-           SLIRP gateway -- Settings can still point this back at a local
-           host, so the status line below names whatever host/model are
-           actually configured rather than assuming either. */
-        if (!*arg) { puts("usage: chat <message>\n"); }
-        else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
-        else {
-            /* v1.1.0: chat_pick first, same as the GUI Chat app -- see
-               chat.h's own comment above chat_pick/chat_run_tool. The text
-               shell has no dock to hand an open_app request off to, so it
-               just reports what would have opened and clears
-               chat_launch_after right back to -1 rather than leaving it
-               set for some later, unrelated GUI dock launch to pick up. */
-            static char pick_tool[CHAT_TOOL_MAX], pick_arg[CHAT_ARG_MAX], tool_reply[256];
-            int handled = 0;
-            if (chat_pick(arg, pick_tool, sizeof(pick_tool), pick_arg, sizeof(pick_arg))
-                && chat_run_tool(pick_tool, pick_arg, tool_reply, sizeof(tool_reply))) {
-                handled = 1;
-                chat_launch_after = -1;
-                chat_load();
-                chat_push(CHAT_ROLE_USER, arg);
-                chat_push(CHAT_ROLE_ASSISTANT, tool_reply);
-                puts(tool_reply); putc('\n');
-            }
-            if (!handled) {
-                puts("asking "); puts(llm_model); puts(" (");
-                puts(llm_host); puts(")...\n");
-                static char answer[4096]; /* real growth from the old 2048-byte cap */
-                /* 1.0.12: chat_error() names the specific reason (currently
-                   just the HTTPS-redirect case) when chat_send knows one;
-                   the generic message stands for every other failure. */
-                if (!chat_send(arg, answer, sizeof(answer))) {
-                    const char *em = chat_error();
-                    if (em[0]) { puts(em); putc('\n'); }
-                    else puts("FAIL (couldn't reach the LLM host, or no reply)\n");
-                }
-                else { puts(answer); putc('\n'); }
-            }
-        }
+    else if (!strcmp(line, "chat") || !strcmp(line, "samantha")) {
+        /* 1.9.26: Samantha is a ring-3 program (user/samantha.c); the text shell opens her window like `notes`. */
+        puts("chat: Samantha is a desktop window now, run gui and click her in the dock\n"); /* 2.0 gate 5: no blocking launch from the text shell */
     }
     else if (!strcmp(line, "build")) {
         /* v10's "build stuff" loop: take a request, ask the LLM to generate
@@ -8719,11 +8162,7 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "notes")) {
-        if (window_open(800, 600, 32)) {
-            gui_launch_editor();
-            window_close();
-            clear();
-        }
+        puts("notes: Notes is a desktop window now, run gui and click it in the dock\n"); /* 2.0 gate 5: no blocking launch from the text shell */
     }
     else if (!strcmp(line, "gfxtest")) {
         if (!window_open(800, 600, 32)) { puts("no VGA device found or out of page tables\n"); }
@@ -8776,103 +8215,6 @@ static void run(char *line){
             clear();
             puts("testapps done\n");
         }
-    }
-    else if (!strcmp(line, "chattest")) {
-        /* v85: discriminating regression test for Chat's real new pieces,
-           the same shape contactstest/mailtest already use, no network
-           needed (chat_push/chat_save/chat_load/chat_build_request are
-           all pure VFS/string logic, http_post is the only piece that
-           needs a live host, out of scope for a boot-time regression
-           test the same way weathertest already draws that line). Real,
-           discriminating checks, not "doesn't crash":
-           (1) history round-trips through CHAT.TXT: push a user turn and
-               an assistant turn, reset chat_loaded, reload, and both
-               come back with the right role and exact content.
-           (2) the old 512-byte input cap is really gone: a message right
-               at the OLD cap (600 chars, over the old 512) survives a
-               push+save+reload intact end to end, not truncated at 511.
-           (3) chat_build_request includes BOTH turns from history, not
-               just the newest one (the real /api/chat fix, a request
-               that only ever contained the latest message would be
-               functionally identical to the old /api/generate, "history"
-               in name only): scans the built JSON for both "hello there"
-               and the long message's own head, and for '"role":"user"'
-               appearing twice.
-           (4) the ring drops the oldest message once CHAT_MAX is
-               exceeded, proving chat_push's bound is real, not just
-               documented. */
-        int pass = 0;
-        chat_count = 0;
-        chat_loaded = 1;
-
-        char long_msg[600];
-        for (int i = 0; i < 599; i++) long_msg[i] = (char)('a' + (i % 26));
-        long_msg[599] = 0;
-
-        chat_push(CHAT_ROLE_USER, "hello there");
-        chat_push(CHAT_ROLE_ASSISTANT, long_msg);
-
-        if (chat_count != 2) { puts("chat seed failed, count="); putn((unsigned int)chat_count); puts("\n"); goto chat_test_done; }
-
-        chat_loaded = 0;
-        chat_load();
-
-        pass = (chat_count == 2) &&
-               (chat_msgs[0].role == CHAT_ROLE_USER) &&
-               (chat_msgs[0].content[0] == 'h' && chat_msgs[0].content[1] == 'e') &&
-               (chat_msgs[1].role == CHAT_ROLE_ASSISTANT);
-
-        if (!pass) { puts("chat round-trip failed after reload\n"); goto chat_test_done; }
-
-        /* the 600-char message must have survived past the old 512 cap */
-        unsigned int long_len = 0;
-        while (chat_msgs[1].content[long_len]) long_len++;
-        pass = (long_len == 599) && (chat_msgs[1].content[598] == long_msg[598]);
-        if (!pass) {
-            puts("chat buffer-growth failed: stored length="); putn(long_len); puts(" (want 599, old cap was 511)\n");
-            goto chat_test_done;
-        }
-
-        static char req[6144];
-        unsigned int rn = chat_build_request(req, sizeof(req));
-        req[rn < sizeof(req) ? rn : sizeof(req) - 1] = 0;
-
-        int found_hello = 0, found_tail = 0, role_user_count = 0;
-        for (unsigned int i = 0; i < rn; i++) {
-            if (!found_hello && req[i]=='h' && req[i+1]=='e' && req[i+2]=='l' && req[i+3]=='l' && req[i+4]=='o') found_hello = 1;
-            if (req[i]=='"' && req[i+1]=='r' && req[i+2]=='o' && req[i+3]=='l' && req[i+4]=='e' && req[i+5]=='"' && req[i+6]==':' && req[i+7]=='"' && req[i+8]=='u' && req[i+9]=='s' && req[i+10]=='e' && req[i+11]=='r') role_user_count++;
-        }
-        found_tail = (long_len > 0); /* content is escaped/truncated into the request so a literal 599-char scan isn't meaningful; presence of the user turn + role count is the real discriminator */
-        (void)found_tail;
-
-        pass = found_hello && (role_user_count == 1); /* only the user turn should say "role":"user"; the assistant turn must be present too but tagged "assistant" */
-        if (!pass) { puts("chat_build_request missing history (single-shot regression)\n"); goto chat_test_done; }
-
-        int found_assistant_role = 0;
-        for (unsigned int i = 0; i + 15 < rn; i++) {
-            if (req[i]=='"' && req[i+1]=='r' && req[i+2]=='o' && req[i+3]=='l' && req[i+4]=='e' && req[i+5]=='"' && req[i+6]==':' && req[i+7]=='"' && req[i+8]=='a' && req[i+9]=='s' && req[i+10]=='s') { found_assistant_role = 1; break; }
-        }
-        pass = found_assistant_role;
-        if (!pass) { puts("chat_build_request missing assistant turn\n"); goto chat_test_done; }
-
-        /* ring bound: push past CHAT_MAX and confirm the oldest drops */
-        chat_count = 0; chat_save();
-        for (int i = 0; i < CHAT_MAX + 2; i++) {
-            char tag[4]; tag[0] = 'm'; tag[1] = (char)('0' + (i % 10)); tag[2] = 0;
-            chat_push((i % 2) ? CHAT_ROLE_ASSISTANT : CHAT_ROLE_USER, tag);
-        }
-        pass = (chat_count == CHAT_MAX) && (chat_msgs[0].content[0] == 'm') && (chat_msgs[0].content[1] == '0' + (2 % 10));
-        if (!pass) { puts("chat ring bound failed, count="); putn((unsigned int)chat_count); puts("\n"); goto chat_test_done; }
-
-        puts("chat: history round-trips, 600-char message survives (old cap was 511), /api/chat request carries both turns, ring drops oldest past CHAT_MAX: ok\n");
-
-        chat_test_done:
-        chat_count = 0; chat_save(); /* leave a clean CHAT.TXT, this test must not leave the kernel in a weird state for whatever runs next */
-        /* serial mirror, same tools/png-check.sh pattern: a headless
-           harness reads the serial port, not the VGA framebuffer, since
-           this command has no visible screen output of its own. */
-        serial_puts(pass ? "chattest PASS\n" : "chattest FAIL\n");
-        if (!pass) puts("FAILED\n");
     }
     /* calctest retired: the parser it exercised moved to user/calculator.c,
        a real ring-3 program (1.7.12), whose own math is what
@@ -9133,9 +8475,8 @@ void kmain(unsigned int multiboot_info_addr){
         const char *cl = (const char *)*(unsigned int *)(multiboot_info_addr + 16);
         const char *cl0 = cl; /* the loop below mutates cl directly; llmhost=/llmport= (further down) need the untouched start */
         for (const char *pc = cl; pc && *pc; pc++)
-            if (pc[0]=='p' && pc[1]=='o' && pc[2]=='r' && pc[3]=='t' && pc[4]=='f' && pc[5]=='o' && pc[6]=='l' && pc[7]=='i' && pc[8]=='o') { portfolio_dock = 1; speak_voice = "joshua"; serial_puts("portfolio dock\n"); break; }
+            if (pc[0]=='p' && pc[1]=='o' && pc[2]=='r' && pc[3]=='t' && pc[4]=='f' && pc[5]=='o' && pc[6]=='l' && pc[7]=='i' && pc[8]=='o') { portfolio_dock = 1; serial_puts("portfolio dock\n"); break; }
         for (const char *pc = cl; pc && *pc; pc++)
-            if (pc[0]=='c' && pc[1]=='l' && pc[2]=='i' && pc[3]=='p' && pc[4]=='t' && pc[5]=='r' && pc[6]=='a' && pc[7]=='c' && pc[8]=='e') { clip_trace = 1; serial_puts("cliptrace\n"); break; }
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='b' && pc[1]=='e' && pc[2]=='n' && pc[3]=='c' && pc[4]=='h' && (pc[5]==' ' || pc[5]==0)) { bench_at_boot = 1; break; }
         for (const char *pc = cl; pc && *pc; pc++)
@@ -9167,7 +8508,7 @@ void kmain(unsigned int multiboot_info_addr){
             if (pc[0]=='n' && pc[1]=='o' && pc[2]=='d' && pc[3]=='h' && pc[4]=='c' && pc[5]=='p' && (pc[6]==' ' || pc[6]==0)) { net_nodhcp = 1; break; }
         for (const char *pc = cl; pc && *pc; pc++)
             if (pc[0]=='d' && pc[1]=='r' && pc[2]=='u' && pc[3]=='n' && pc[4]=='k' && (pc[5]==' ' || pc[5]==0)) { extern void window_set_drunk(int); window_set_drunk(1); serial_puts("drunk\n"); break; }
-        ring3app_autoopen_arm(cl); /* `open=keyrate` / `open=toroid` boot flag */
+        ring3app_autoopen_arm(cl); r3stress_arm(cl); /* `open=keyrate` / `open=toroid` boot flag */
         for (; cl && *cl; cl++) {
             if (cl[0]=='w' && cl[1]=='x' && cl[2]=='h' && cl[3]=='o' && cl[4]=='s' && cl[5]=='t' && cl[6]=='=') {
                 cl += 7; int hp = 0;
@@ -9222,7 +8563,9 @@ void kmain(unsigned int multiboot_info_addr){
                 if (pt && pt < 65536) llm_port_override = (int)pt;
                 break;
             }
-        chat_face_cmdline(cl0); /* facehost=HOST[:PORT], kernel/chat_face.h */
+        stocks_cmdline(cl0); /* stkhost=HOST:PORT, kernel/stocks.h */
+        jt_clip_cmdline(cl0); /* cliptrace, kernel/syscall.c: content hash on the CLIPCOPY/CLIPPASTE lines */
+        jt_facehost_cmdline(cl0); /* facehost=HOST[:PORT], kernel/syscall.c: where ring-3 Samantha fetches her face and speech */
     }
     vga_text_mode_init(); /* real hardware/QEMU already boot into text mode via their own BIOS; a BIOS-less multiboot path (v86) never sets it at all, so make it explicit rather than inherited */
     klog("vga_text_mode_init: text mode 3 programmed");
@@ -9249,6 +8592,7 @@ void kmain(unsigned int multiboot_info_addr){
     paging_install();
     klog("paging_install: higher-half paging active");
     tasks_init();
+    syscall_windows_init(); /* 1.9.23: compositor window rows start empty */
     klog("tasks_init: scheduler ready");
     klog(sb16_init() ? "sb16_init: Sound Blaster 16 found" : "sb16_init: no sound card");
     ata_blockdev_register(); /* v33 (0.33.0): register real backends before anything tries to mount a filesystem over one */
@@ -9289,7 +8633,7 @@ void kmain(unsigned int multiboot_info_addr){
             "kernel right now in your browser.\n";
         vfs_switch("ramfs"); /* switch first: vfs_write_file always targets the active backend, and fat's own write would just fail with no disk anyway */
         vfs_write_file("README.TXT", demo_readme, strlen(demo_readme));
-        vfs_write_file("NOTES.TXT", demo_notes, strlen(demo_notes));
+        vfs_write_file("NOTES.TXT", demo_notes, strlen(demo_notes)); ramfs_seed_demo_docs(); /* a real folder, so the tour's Burrow scene has something to open */
         klog("vfs: no FAT disk (v86 has none to mount), switched default backend to ramfs with demo files");
     }
     settings_load(); /* v47: real settings, saved defaults if SETTINGS.TXT doesn't exist yet */

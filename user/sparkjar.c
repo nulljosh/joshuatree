@@ -14,7 +14,7 @@
  * one serial line, which tools/checks/ring3sparkjar-check.py reads.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define INK   0x001C1C1E
@@ -40,7 +40,7 @@ static const sj_idea_t SJ_IDEAS[] = {
 #define SJ_LIST_X 20
 #define SJ_LIST_W 220
 #define SJ_INFO_X 260
-#define SJ_TOP    48
+#define SJ_TOP    40
 #define SJ_ROW_H  28
 
 static struct jt_window_info win JT_DATA = {0, 0, 0, 0};
@@ -58,23 +58,22 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (!(g[r] & (0x80 >> c)) || px < 0 || px >= (int)win.width) continue;
-            win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
-    }
+static int text(const char *s, int x, int y, unsigned fg) { /* returns the x after the last glyph */
+    return jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s);
 }
-static int text(const char *s, int x, int y, unsigned fg) {
-    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return x + w; } /* SYS_TEXT; bitmap only if its queue is full */
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
-    return x;
+static void etext(int face, const char *s, int x, int y, int maxw, unsigned fg) {
+    char t[72]; int n = 0;
+    while (s[n] && n < 64) { t[n] = s[n]; n++; }
+    t[n] = 0;
+    if (jt_text_width(face, t) > maxw) {
+        while (n > 0) {
+            t[n] = '.'; t[n + 1] = '.'; t[n + 2] = '.'; t[n + 3] = 0;
+            if (jt_text_width(face, t) <= maxw) break;
+            t[--n] = 0;
+        }
+        if (n == 0) t[0] = 0;
+    }
+    jt_text_draw(&win, face, x, y, fg, t);
 }
 static int utoa10(unsigned v, char *buf) {
     char tmp[12]; int tn = 0, n = 0;
@@ -95,18 +94,34 @@ static void sj_sort(void) {
     for (int i = 0; i < SJ_COUNT; i++) if (sj_order[i] == sel_idea) { sj_sel = i; break; }
 }
 
-/* Word-wrap the plan into the info column on the real advance. */
+/* Word-wrap the plan into the info column by pixel width, 20 px a line. */
 static void sj_wrap(const char *s, int x, int y, int max_w, int max_h) {
-    if (max_h >= 16) jt_wrap(s, x, y, max_w, 18, (max_h - 16) / 18 + 1, INK);
+    char line[120]; int ll = 0, y0 = y;
+    if (max_w < 60) return;
+    while (*s && y + 18 <= y0 + max_h) {
+        int we = 0;
+        while (s[we] && s[we] != ' ') we++;
+        char trial[120]; int tl = 0;
+        for (int i = 0; i < ll; i++) trial[tl++] = line[i];
+        if (ll) trial[tl++] = ' ';
+        for (int i = 0; i < we && tl < 118; i++) trial[tl++] = s[i];
+        trial[tl] = 0;
+        if (ll && jt_text_width(JT_FACE_BODY, trial) > max_w) {
+            line[ll] = 0; text(line, x, y, INK); y += 20; ll = 0;
+            continue;
+        }
+        for (int i = 0; i <= tl; i++) line[i] = trial[i];
+        ll = tl; s += we;
+        while (*s == ' ') s++;
+    }
+    if (ll && y + 18 <= y0 + max_h) { line[ll] = 0; text(line, x, y, INK); }
 }
 
 static void sj_draw(void) {
-    jt_text_clear();
     int w = (int)win.width, h = (int)win.height;
     rect(0, 0, w, h, BG);
-    text("up/down or click to select   u upvotes   esc closes", 20, 20, HINT);
 
-    int room_rows = (h - SJ_TOP - 20) / SJ_ROW_H;
+    int room_rows = (h - SJ_TOP - 44) / SJ_ROW_H;
     int shown = SJ_COUNT < room_rows ? SJ_COUNT : room_rows;
     for (int i = 0; i < shown; i++) {
         int y = SJ_TOP + i * SJ_ROW_H, idea = sj_order[i];
@@ -116,24 +131,18 @@ static void sj_draw(void) {
         char rank[4]; int r = 0, n = i + 1;
         if (n >= 10) rank[r++] = (char)('0' + n / 10);
         rank[r++] = (char)('0' + n % 10); rank[r++] = '.'; rank[r] = 0;
-        text(rank, SJ_LIST_X + 6, y + 6, fg);
-        /* name, trimmed to the room left of the vote count (8 px per glyph) */
-        const char *name = SJ_IDEAS[idea].name;
-        int room = (SJ_LIST_W - 70) / 8, len = 0;
-        while (name[len]) len++;
-        char nm[32]; int k = 0;
-        if (len <= room) { while (k < len) { nm[k] = name[k]; k++; } }
-        else { while (k < room - 3) { nm[k] = name[k]; k++; } while (k > 0 && nm[k - 1] == ' ') k--; nm[k++] = '.'; nm[k++] = '.'; nm[k++] = '.'; }
-        nm[k] = 0;
-        text(nm, SJ_LIST_X + 30, y + 6, fg);
+        text(rank, SJ_LIST_X + 6, y + 5, fg);
         char vs[12]; int vl = utoa10((unsigned)sj_votes[idea], vs);
-        text(vs, SJ_LIST_X + SJ_LIST_W - vl * 8 - 8, y + 6, fg);
+        int vw = jt_text_width(JT_FACE_BODY, vs); (void)vl;
+        etext(JT_FACE_BODY, SJ_IDEAS[idea].name, SJ_LIST_X + 30, y + 5, SJ_LIST_W - 30 - vw - 20, fg);
+        text(vs, SJ_LIST_X + SJ_LIST_W - vw - 8, y + 5, fg);
     }
 
     const sj_idea_t *idea = &SJ_IDEAS[sj_order[sj_sel]];
-    text(idea->name, SJ_INFO_X, SJ_TOP, INK);
-    text(idea->pitch, SJ_INFO_X, SJ_TOP + 20, HINT);
-    sj_wrap(idea->plan, SJ_INFO_X, SJ_TOP + 44, w - SJ_INFO_X - 24, h - SJ_TOP - 44 - 20);
+    etext(JT_FACE_BOLD, idea->name, SJ_INFO_X, SJ_TOP, w - SJ_INFO_X - 24, INK);
+    etext(JT_FACE_BODY, idea->pitch, SJ_INFO_X, SJ_TOP + 24, w - SJ_INFO_X - 24, HINT);
+    sj_wrap(idea->plan, SJ_INFO_X, SJ_TOP + 52, w - SJ_INFO_X - 24, h - SJ_TOP - 52 - 44);
+    etext(JT_FACE_BODY, "up/down or click to select   u upvotes   esc closes", 20, h - 30, w - 40, HINT);
 }
 
 static void say(const char *pfx, int a, int b) {
@@ -171,17 +180,18 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { sj_draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;
 
         int old = sj_sel;
         if (ev.kind == JT_EV_CLICK) {
+            if (ev.a < 0 || ev.b < 0 || ev.a >= (int)win.width || ev.b >= (int)win.height) break; /* chrome X or dock */
             if (ev.b >= SJ_TOP && ev.a >= SJ_LIST_X && ev.a < SJ_LIST_X + SJ_LIST_W) {
                 int sel = (ev.b - SJ_TOP) / SJ_ROW_H;
-                if (sel >= SJ_COUNT) break;
-                sj_sel = sel;
-            } else break; /* the titlebar X, or anywhere off the list */
+                if (sel < SJ_COUNT) sj_sel = sel;
+            }
         } else if (ev.kind == JT_EV_KEY) {
             if (ev.a == JT_KEY_ESC) break;
             if (ev.a == '`') { jt_write(1, "sparkjar: crashing on purpose\n", 30); *(volatile int *)0 = 1; } /* deliberate crash, as in every ring-3 app */

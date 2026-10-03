@@ -20,8 +20,7 @@ from restyle_icons import squircle_path, HL_WIDTH, HL_ALPHA, HL_FADE  # single s
 
 # art/icons name -> repo folder
 FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank", "lexly": "lexly", "sparkjar": "sparkjar",
-         "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "fieldbook": "fieldbook",
-         "plan": "plan"}  # Weather is a system app, it keeps the restyled icon from restyle_icons.py
+         "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "fieldbook": "fieldbook"}  # Weather is a system app, it keeps the restyled icon from restyle_icons.py
 
 # Dock tile color per app. Most projects ship a near-black tile, so eight of
 # them side by side read as one black strip; the dock repaints each one's

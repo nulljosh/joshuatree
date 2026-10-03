@@ -2,21 +2,21 @@
  *
  * A flat binary has no headers and no relocations, so it only works at one
  * address: the one the kernel loads it at. That address is JT_USER_BASE
- * (kernel/exec.h), inside the kernel's base identity map, on pages
- * exec_user() marks user-accessible before the task starts. It is repeated
- * here as a literal rather than shared with the C side because a linker
- * script cannot include a header; tools/checks/usertest-check.sh asserts
- * the two agree, so a change to one that misses the other fails loudly
- * instead of loading code at an address it was not linked for.
+ * (kernel/memmap.h), inside the kernel's base identity map, on pages
+ * exec_user() marks user-accessible before the task starts. It comes in
+ * through boot/memmap.ld, which the Makefile generates from that header,
+ * so there is one source of truth; tools/checks/usertest-check.sh still
+ * asserts the scripts include it.
  *
  * .text.start comes first so _start sits at offset 0: exec_user() jumps
  * straight to the load address, there is no ELF header for it to read an
  * entry point out of.
  */
+INCLUDE boot/memmap.ld
 ENTRY(_start)
 
 SECTIONS {
-    . = 0xC0507000;
+    . = JT_USER_BASE;
 
     .text : {
         *(.text.start)
@@ -37,8 +37,8 @@ SECTIONS {
     /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) }
 }
 
-ASSERT(_user_end - 0xC0507000 <= 0x7000,
-       "user flat binary is larger than the 7-page image window exec_user() loads into")
+ASSERT(_user_end - JT_USER_BASE <= JT_USER_IMAGE_PAGES * 4096,
+       "user flat binary is larger than the JT_USER_IMAGE_PAGES image window exec_user() loads into")
 ASSERT(_user_bss_size == 0,
        "a flat user binary cannot have .bss: nothing zeroes it, see the comment above")
 

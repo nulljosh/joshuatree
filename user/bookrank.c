@@ -10,16 +10,16 @@
  * machine only through int 0x80: SYS_WINDOW_OPEN for a framebuffer,
  * SYS_WINDOW_POLL for input and the present, SYS_EXIT to leave.
  *
- * Glyphs: the kernel's 8x16 VGA fallback font, same as Keyrate, Toroid,
- * Calculator and Quotes. Monospaced, so a summary wraps at a fixed
- * character count rather than a real pixel-width measure.
+ * Type: the antialiased libjt face.
+ * A summary wraps at word
+ * boundaries by real pixel width, and long titles end in an ellipsis.
  *
  * The backquote key (`) is the deliberate crash, same as the other four:
  * a write through a null pointer, a page fault at ring 3, reaped by the
  * kernel. tools/checks/ring3bookrank-check.py presses it on purpose.
  */
 #include "jtsys.h"
-#include "../drivers/vgafont.h"
+#include "libjt/text.h"
 
 #define BG    0x00FAF8F6 /* GUI_BG */
 #define ROW   0x00F1EDE7
@@ -31,7 +31,7 @@
 #define BR_LIST_W  220
 #define BR_INFO_X  260
 #define BR_ITEM_H  28
-#define BR_LIST_TOP 56
+#define BR_LIST_TOP 40
 
 typedef struct { const char *title; const char *author; const char *summary; } BrBook;
 static const BrBook BR_BOOKS[] = {
@@ -61,32 +61,49 @@ static void rect(int x, int y, int w, int h, unsigned c) {
         for (int xx = 0; xx < w; xx++) row[xx] = c;
     }
 }
-static void glyph(unsigned char ch, int x, int y, unsigned fg) {
-    if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) ch = '?';
-    const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
-    for (int r = 0; r < 16; r++) {
-        int py = y + r;
-        if (py < 0 || py >= (int)win.height) continue;
-        for (int c = 0; c < 8; c++) {
-            int px = x + c;
-            if (px < 0 || px >= (int)win.width) continue;
-            if (g[r] & (0x80 >> c)) win.pixels[(unsigned)py * win.width + (unsigned)px] = fg;
-        }
+static void text(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
+
+/* Copy s into out (cap bytes), cutting with "..." so it fits maxw pixels. */
+static void fit(char *out, int cap, const char *s, int maxw) {
+    int n = 0;
+    while (s[n] && n < cap - 4) { out[n] = s[n]; n++; }
+    out[n] = 0;
+    if (jt_text_width(JT_FACE_BODY, out) <= maxw && !s[n]) return;
+    while (n > 0) {
+        out[n] = '.'; out[n + 1] = '.'; out[n + 2] = '.'; out[n + 3] = 0;
+        if (jt_text_width(JT_FACE_BODY, out) <= maxw) return;
+        out[--n] = 0;
     }
+    out[0] = 0;
 }
-static void text(const char *s, int x, int y, unsigned fg) {
-    { int w = jt_text(s, x, y, fg, JT_TEXT_DRAW); if (w >= 0) return; } /* SYS_TEXT; bitmap only if its queue is full */
-    for (; *s; s++, x += 8) glyph((unsigned char)*s, x, y, fg);
-}
-/* Word-wrap at a fixed character count, the monospace stand-in for
-   render_wrapped_text's real pixel measure. max_lines caps how much of
-   the summary is shown so it never runs off the bottom of the window. */
-static void wrap_text(const char *s, int x, int y, int max_chars, int max_lines, unsigned fg) {
-    jt_wrap(s, x, y, max_chars * 8, 20, max_lines, fg);
+/* Word-boundary wrap by real glyph widths into at most max_lines lines of
+   width w; if text is left over the last line ends in an ellipsis. */
+static void wrap_text(const char *s, int x, int y, int w, int max_lines, int lh, unsigned fg) {
+    char buf[128];
+    for (int line = 0; *s && line < max_lines; line++) {
+        while (*s == ' ') s++;
+        if (!*s) break;
+        int n = 0, brk = -1;
+        while (s[n] && n < (int)sizeof buf - 1) {
+            buf[n] = s[n]; buf[n + 1] = 0;
+            if (jt_text_width(JT_FACE_BODY, buf) > w) break;
+            if (s[n] == ' ') brk = n;
+            n++;
+        }
+        if (s[n]) { if (brk > 0) n = brk; else if (n == 0) n = 1; }
+        if (line == max_lines - 1 && s[n]) {
+            fit(buf, sizeof buf, s, w);
+            text(buf, x, y + line * lh, fg);
+            return;
+        }
+        for (int i = 0; i < n; i++) buf[i] = s[i];
+        buf[n] = 0;
+        text(buf, x, y + line * lh, fg);
+        s += n;
+    }
 }
 
 static void br_draw(void) {
-    jt_text_clear();
     rect(0, 0, (int)win.width, (int)win.height, BG);
 
     int items_shown = BR_COUNT;
@@ -104,23 +121,23 @@ static void br_draw(void) {
         rank[r++] = '.'; rank[r] = 0;
         text(rank, BR_LIST_X + 6, y + 6, fg);
 
-        char short_title[40]; int len = 0;
-        const char *title = BR_BOOKS[i].title;
-        while (title[len] && len < 26) { short_title[len] = title[len]; len++; }
-        if (title[len]) { short_title[len] = '.'; short_title[len+1] = '.'; short_title[len+2] = '.'; len += 3; }
-        short_title[len] = 0;
+        char short_title[64];
+        fit(short_title, sizeof short_title, BR_BOOKS[i].title, BR_LIST_W - 30 - 8);
         text(short_title, BR_LIST_X + 30, y + 6, fg);
     }
 
     if (br_sel < BR_COUNT) {
         const BrBook *b = &BR_BOOKS[br_sel];
         int info_top = BR_LIST_TOP;
-        text(b->title, BR_INFO_X, info_top, INK);
-        text(b->author, BR_INFO_X, info_top + 20, HINT);
-        int info_w_chars = ((int)win.width - BR_INFO_X - 20) / 8;
-        if (info_w_chars > 60) info_w_chars = 60;
-        int max_lines = ((int)win.height - info_top - 44 - 40) / 20;
-        wrap_text(b->summary, BR_INFO_X, info_top + 44, info_w_chars, max_lines, INK);
+        int info_w = (int)win.width - BR_INFO_X - 20;
+        char head[80];
+        fit(head, sizeof head, b->title, info_w);
+        text(head, BR_INFO_X, info_top, INK);
+        fit(head, sizeof head, b->author, info_w);
+        text(head, BR_INFO_X, info_top + 22, HINT);
+        int lh = jt_text_height(JT_FACE_BODY) + 4;
+        int max_lines = ((int)win.height - info_top - 48 - 40) / lh;
+        wrap_text(b->summary, BR_INFO_X, info_top + 48, info_w, max_lines, lh, INK);
     }
 
     text("up/down or click to select   esc closes", 20, (int)win.height - 30, HINT);
@@ -156,6 +173,7 @@ void _start(int argc, char **argv) {
     for (;;) {
         struct jt_event ev;
         int r = jt_window_poll(&ev, flags);
+        if (r == 1 && jt_window_resized(&ev, &win)) { br_draw(); flags = JT_POLL_PRESENT; continue; } /* JT_EV_RESIZE: remapped, repaint at the new size */
         flags = 0;
         if (r == -11 /* -EAGAIN */) { jt_sched_yield(); continue; }
         if (r != 1) break;

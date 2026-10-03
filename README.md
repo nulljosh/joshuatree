@@ -12,13 +12,11 @@ A whole computer, built from scratch: its own windows, dock, fonts, sound, inter
 
 You can talk to it. Ask Samantha to set a reminder, take a note or open an app, and she answers out loud. (She is the assistant from [Turing](https://github.com/nulljosh/turing). Joshua Tree is the machine she runs.)
 
-[![Joshua Tree ad, 36 seconds. Click to play.](docs/hardware/ad-poster.jpg)](https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4)
-
 ## Boot it
 
 - **Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 - **USB stick:** download the ISO from [Releases](https://github.com/nulljosh/joshuatree/releases). The release notes have the copy steps.
-- **Talk to her:** `make talk`, then hold **F2**. Needs real hardware and a mic (see `kernel/chat.h`).
+- **Talk to her:** `make talk`, then hold **F2**. Needs real hardware and a mic (see `user/samantha.c`).
 
 ## Build it
 
@@ -52,4 +50,6 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 - [Roadmap](docs/roadmap.md): what is next
 - [All docs](docs/)
 
-Apache License 2.0, © 2026 Joshua Trommel
+## License
+
+Software: Apache License 2.0, © 2026 Joshua Trommel. Hardware designs: CC BY-NC-SA 4.0, free to build for yourself, see [docs/hardware/LICENSE-NOTICE.md](docs/hardware/LICENSE-NOTICE.md). Joshua Tree™ and Strata Kit™ are trademarks, see [TRADEMARKS.md](TRADEMARKS.md).

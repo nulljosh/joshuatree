@@ -63,7 +63,7 @@ static int settings_prompt_line(const char *prompt, char *out, int max, int mask
     return 1;
 }
 
-#define SETTINGS_ROW_COUNT 8 /* v75: + wallpaper source; v85: + LLM model, + LLM host:port; v0.77: + Account (change password), + Add user; v0.85.5: + Location */
+#define SETTINGS_ROW_COUNT 9 /* 1.9.27: + Mail token */ /* v75: + wallpaper source; v85: + LLM model, + LLM host:port; v0.77: + Account (change password), + Add user; v0.85.5: + Location */
 
 /* 1.8: redesign modeled on macOS System Settings -- a left sidebar of
    sections (icon + label, selected row highlighted) and a right detail
@@ -80,7 +80,7 @@ static const char *SETTINGS_SECTION_NAMES[SETTINGS_SECTION_COUNT] = {"General", 
    array (plain C array, no VLAs in this freestanding build). */
 static const int SETTINGS_SECTION_ROWS[SETTINGS_SECTION_COUNT][4] = {
     {0, 1, 2, 7},   /* General: Wind, Dock size, Wallpaper, Location */
-    {3, 4, -1, -1}, /* Assistant: LLM model, LLM host:port */
+    {3, 4, 8, -1},  /* Assistant: LLM model, LLM host:port, Mail token */
     {5, 6, -1, -1}, /* Account: Account, Add user */
 };
 static int settings_section_row_count(int sec){
@@ -331,6 +331,11 @@ static void gui_launch_settings(void){
             } else if (i == 6) {
                 font_draw_string("Add user (new account)", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
                 font_draw_string("tap or enter", detail_right - font_string_width("tap or enter"), y, 0x00807468, -1);
+            } else if (i == 8) {
+                /* 1.9.27: never draw the token itself, only whether one is set. */
+                font_draw_string("Mail token", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
+                const char *mt = mail_token[0] ? "set" : "(not set: Mail cannot send)";
+                font_draw_string(mt, detail_right - font_string_width(mt), y, mail_token[0] ? 0x002F7B4F : 0x00807468, -1);
             } else {
                 /* v0.85.5: the Location field roadmap.md asked for. Empty
                    means "no override", the same honest-label convention
@@ -559,6 +564,16 @@ static void gui_launch_settings(void){
                     memset(pbuf, 0, sizeof(pbuf));
                 }
             }
+            else if (sel == 8 && k != 'a' && k != 'd') {
+                /* 1.9.27: the bearer token the Worker's POST /api/mail/send requires. Typed masked,
+                   saved to SETTINGS.TXT, injected by SYS_HTTP_POST only for that path. Empty clears it. */
+                char tbuf[MAIL_TOKEN_MAX]; tbuf[0] = 0; /* starts empty: retype to replace, never echo the old one */
+                if (settings_prompt_line("Mail token (enter to confirm, empty clears, esc to cancel):", tbuf, sizeof(tbuf), 1)) {
+                    int j = 0; while (tbuf[j] && j < MAIL_TOKEN_MAX - 1) { mail_token[j] = tbuf[j]; j++; } mail_token[j] = 0;
+                    settings_save();
+                }
+                memset(tbuf, 0, sizeof(tbuf));
+            }
             else if (sel == 7 && k != 'a' && k != 'd') {
                 /* v0.85.5: Location, city or postal code, resolved through
                    Open-Meteo's own geocoding endpoint (loc_geocode above),
@@ -609,7 +624,7 @@ static void gui_launch_settings(void){
                     sleep_ticks(60);
                 }
             }
-            else if (sel != 5 && sel != 6 && sel != 7) {
+            else if (sel != 5 && sel != 6 && sel != 7 && sel != 8) {
                 int dir = (k == 'a') ? -1 : 1; /* a tap always steps up; a real direction only from the keyboard */
                 if (k == KEY_CLICK) dir = 1;
                 int v = dock_scale_pct + dir;
