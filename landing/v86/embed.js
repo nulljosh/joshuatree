@@ -2224,7 +2224,7 @@ if (typeof document !== "undefined") (function () {
       var pStart = Date.now(), pMs = 0;
       while (Date.now() - pStart < 60000) {   // the reply comes over a slow relay: 15 s cut him off before he spoke and dropped to the OS
         if (focused || tourGen !== gen) return;
-        if (speakCount > pSeen) { pMs = Math.min(20000, Math.round(lastSpeakBytes / 16)) + 1200; break; }
+        if (speakCount > pSeen) { pMs = Math.min(40000, Math.round(lastSpeakBytes / 16)) + 1200;   // the intro is a ~30 s script break; }
         await sleep(200);
       }
       await sleep(pMs || 3000);

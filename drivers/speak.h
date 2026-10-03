@@ -12,8 +12,8 @@
    256KB (about 16s) needs the landing demo's 64MB guest (embed.js's
    memory_size); at 32MB, with her face frames loaded, it didn't fit and
    replies were clipped to a 64KB cap (about 4s). */
-#define SPEAK_TEXT_MAX  300
-#define SPEAK_AUDIO_MAX (256u * 1024u)
+#define SPEAK_TEXT_MAX  600   /* the portfolio intro is a ~30 s script */
+#define SPEAK_AUDIO_MAX (640u * 1024u)   /* 40 s of 16 kHz pcm8 */
 #define SPEAK_RATE      16000u
 
 extern const char *speak_voice;   /* "" = Samantha, "joshua" = his clone; set by kernel.c */
