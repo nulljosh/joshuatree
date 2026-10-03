@@ -12,7 +12,7 @@ A whole computer, built from scratch: its own windows, dock, fonts, sound, inter
 
 You can talk to it. Ask Samantha to set a reminder, take a note or open an app, and she answers out loud. (She is the assistant from [Turing](https://github.com/nulljosh/turing). Joshua Tree is the machine she runs.)
 
-[![Joshua Tree ad, 36 seconds. Click to play.](docs/hardware/ad-poster.jpg)](https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4)
+[![Joshua Tree ad, 30 seconds. Click for sound.](docs/hardware/ad-v7.gif)](https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7.mp4)
 
 ## Boot it
 
