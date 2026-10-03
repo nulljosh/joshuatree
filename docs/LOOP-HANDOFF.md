@@ -1,4 +1,4 @@
-# Joshua Tree loop handoff (2026-09-30)
+# Joshua Tree loop handoff (2026-10-02)
 
 ## What the loop is
 
@@ -16,7 +16,7 @@ Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map:
 
 ## Where things stand
 
-Checkpoint 2026-10-01. Epiphany went to ring 3 in 1.9.19, so 19 of 26 apps run in ring 3.
+Checkpoint 2026-10-02. Epiphany went to ring 3 in 1.9.19, so 19 of 26 apps run in ring 3. v2.0.0 PR #331 (release/2.0.0, auto-merge armed) CI fixed: clockicon overlay, ring-3 checks, wallpaper swap flake all resolved. Idle face blink smoothed 3-frame 12fps stutter to 24fps via half-step blending (PR #355, auto-merge armed, CI nearly green). Draft PR #357: letterbox bands fix for 16:10 screens (CSS only). Draft PR #358: mouth talks without audio until tap (unverified in real browser, Joshua deciding tap vs auto), adds "Tap to hear Joshua" button. Retina sharpness needs kernel change (480px frame rejected at kernel/chat_face.h:130). Portfolio removed classic.html, priced all buy.html apps at $0.99 per Joshua's rebrand.
 
 - In ring 3: Keyrate, Toroid, Calculator, Quotes, Bookrank, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind, Calendar, Search, Epiphany.
 - Still in the kernel: Burrow (was Files), Mail, Notes, Terminal, Samantha, Weather, Stocks.
