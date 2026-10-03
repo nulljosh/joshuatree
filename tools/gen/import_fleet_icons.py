@@ -26,8 +26,12 @@ FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank",
 # them side by side read as one black strip; the dock repaints each one's
 # full-size background rect here instead. Only the tile, never the glyph,
 # and only in this OS: the project's own icon.svg is untouched.
-TILE = {"epiphany": "#D6DEE6", "curbfind": "#C8644F", "bookrank": "#3E5C86", "lexly": "#6B9474",
+TILE = {"epiphany": "#D6DEE6", "curbfind": "#C8644F", "bookrank": "#3E5C86", "lexly": "#2E86DE",
         "sparkjar": "#8A5A3C", "quotes": "#D8C7A3", "keyrate": "#5A5A5E"}  # toroid stays black: Life is white-on-black
+
+# Lexly ships sky blue (#2E86DE, its App Store icon). Its icon.svg has a black tile and blue dots, so the dock tile is
+# repainted blue above and the dots take the tile color: they punch through the bubble, as in the store icon.
+GLYPH = {"lexly": ("#5B9BD5", TILE["lexly"])}
 
 
 def retile(inner, box, color):
@@ -71,6 +75,7 @@ def main():
         else: box = vb.group(1)
         inner = svg[m.end():svg.rindex("</svg>")]
         if name in TILE: inner = retile(inner, box, TILE[name])
+        if name in GLYPH: inner = inner.replace('fill="%s"' % GLYPH[name][0], 'fill="%s"' % GLYPH[name][1])
         open(os.path.join(ROOT, "art", "icons", name + ".svg"), "w").write(wrap(repo, box, inner))
         print("imported", name)
 
