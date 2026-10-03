@@ -614,7 +614,7 @@ if (typeof document !== "undefined") (function () {
   function focusIn() {
     if (focused || !adaptersReady) return;
     focused = true;
-    if (introVideo) introVideo.pause(), introVideo.dispatchEvent(new Event("ended"));   // a visitor took over: the OS, not the recording
+    if (introVideo) introVideo.pause(), introVideo.dispatchEvent(new Event("fade"));   // a visitor took over: the OS, not the recording
     emulator.keyboard_adapter.emu_enabled = true;
     emulator.mouse_adapter.emu_enabled = true;
     // Browsers block audio until a real user gesture. v86 builds
@@ -745,8 +745,8 @@ if (typeof document !== "undefined") (function () {
       introVideo.muted = introVideo.loop = introVideo.autoplay = introVideo.playsInline = true;
       introVideo.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:6;background:#e9e2d4;transition:opacity .6s;";
       container.appendChild(introVideo);
-      introVideo.addEventListener("error", function () { introVideo.dispatchEvent(new Event("ended")); });   // missing or unplayable: the live kernel face takes the intro as before
-      introVideo.addEventListener("ended", function () {   // fade out on its own too, so a slow boot never leaves a frozen last frame over the OS
+      introVideo.addEventListener("error", function () { introVideo.dispatchEvent(new Event("fade")); });   // missing or unplayable: the live kernel face takes the intro as before
+      introVideo.addEventListener("fade", function () {   // the intro scene fires this once the desktop is underneath; a natural end just holds the last frame
         var v = introVideo; if (!v) return; introVideo = null;
         v.style.opacity = "0"; setTimeout(function () { v.remove(); }, 700);
       });
@@ -2246,16 +2246,16 @@ if (typeof document !== "undefined") (function () {
         introVideo.loop = false;
         if (introVideo.paused) introVideo.play().catch(function () {});
         var vStart = Date.now();
-        while (introVideo && Date.now() - vStart < 45000) {   // its "ended" listener fades and clears it
+        while (introVideo && !introVideo.ended && Date.now() - vStart < 45000) {
           if (focused || tourGen !== gen) return;
           await sleep(200);
         }
-        if (introVideo) introVideo.dispatchEvent(new Event("ended"));
-        await sleep(700);
         if (focused || tourGen !== gen) return;
-        if (IS_PHONE) { resetHeadline(); return; }   // a phone stays on his live face for the next lines
-        if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80);
-        await sleep(800);
+        // Drop to the desktop while the video still covers the screen, then fade it, so the
+        // handoff lands on the OS instead of flashing the live face first.
+        if (!IS_PHONE && emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([27], 80); await sleep(600); }
+        if (introVideo) introVideo.dispatchEvent(new Event("fade"));
+        await sleep(700);
         resetHeadline();
         return;
       }
