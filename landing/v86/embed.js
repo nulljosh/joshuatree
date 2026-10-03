@@ -638,6 +638,7 @@ if (typeof document !== "undefined") (function () {
   function focusIn() {
     if (focused || !adaptersReady) return;
     focused = true;
+    if (introVideo) introVideo.pause(), introVideo.dispatchEvent(new Event("fade"));   // a visitor took over: the OS, not the recording
     emulator.keyboard_adapter.emu_enabled = true;
     emulator.mouse_adapter.emu_enabled = true;
     // Browsers block audio until a real user gesture. v86 builds
@@ -733,9 +734,9 @@ if (typeof document !== "undefined") (function () {
     var ac = emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context;
     return !!ac && ac.state === "running";
   }
-  var tapTalkBtn = null, tapTalkResolve = null;
+  var tapTalkBtn = null, tapTalkResolve = null, introVideo = null;
   var tapTalkPromise = new Promise(function (r) { tapTalkResolve = r; });
-  if (IS_PHONE || /[?&]portfolio\b/.test(location.search)) {
+  if (IS_PHONE || /[?&]portfolio\b/.test(location.search)) {   // PORTFOLIO_MODE is assigned further down, still undefined here
     tapTalkBtn = document.createElement("button");
     tapTalkBtn.type = "button";
     tapTalkBtn.id = "tap-to-talk";
@@ -755,6 +756,36 @@ if (typeof document !== "undefined") (function () {
       tapTalkResolve();
     });
     container.appendChild(tapTalkBtn);
+    // Any first click or key anywhere counts as the tap; the button is just the hint.
+    // That first gesture is swallowed (600 ms covers its mousedown, mouseup and click):
+    // reaching the container it read as a visitor taking over, which stopped the intro
+    // before he said a word.
+    // Portfolio intro: one continuous lip-synced take of his 30 s line, played muted on a
+    // loop over the booting kernel until the first tap, then from the top with sound. The
+    // kernel's frame-stitched face ghosted and jumped between clips on a line this long;
+    // it still answers live once the video hands over to the OS.
+    if (/[?&]portfolio\b/.test(location.search)) {
+      introVideo = document.createElement("video");
+      introVideo.src = "face-joshua/intro.mp4";
+      introVideo.muted = introVideo.loop = introVideo.autoplay = introVideo.playsInline = true;
+      introVideo.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:6;background:#e9e2d4;transition:opacity .6s;";
+      container.appendChild(introVideo);
+      introVideo.addEventListener("error", function () { introVideo.dispatchEvent(new Event("fade")); });   // missing or unplayable: the live kernel face takes the intro as before
+      introVideo.addEventListener("fade", function () {   // the intro scene fires this once the desktop is underneath; a natural end just holds the last frame
+        var v = introVideo; if (!v) return; introVideo = null;
+        v.style.opacity = "0"; setTimeout(function () { v.remove(); }, 700);
+      });
+    }
+    var firstTapAt = 0;
+    ["pointerdown", "mousedown", "mouseup", "click", "touchstart", "touchend", "keydown", "keyup"].forEach(function (t) {
+      document.addEventListener(t, function (ev) {
+        if (!firstTapAt) {
+          firstTapAt = Date.now(); unlockAudio(ev); tapTalkBtn.hidden = true; tapTalkResolve();
+          if (introVideo) { introVideo.loop = false; introVideo.currentTime = 0; introVideo.muted = false; introVideo.play().catch(function () {}); }
+        }
+        if (Date.now() - firstTapAt < 600) ev.stopPropagation();
+      }, { capture: true, passive: true });
+    });
   }
   // Portfolio voice is on by default; this is the way out. Top right, a round
   // glass button that mutes v86's master volume (mixer.set_volume 0/1), kept
@@ -2149,7 +2180,7 @@ if (typeof document !== "undefined") (function () {
       // Wait for the tap so her reply is audible; give up after 20s and run
       // silently so the demo still moves (the button stays up for later).
       tapTalkBtn.hidden = false;
-      await Promise.race([tapTalkPromise, new Promise(function (r) { setTimeout(r, 5000); })]); // 20s read as a frozen demo
+      await Promise.race([tapTalkPromise, new Promise(function (r) { setTimeout(r, PORTFOLIO_MODE ? 120000 : 5000); })]); // portfolio: he waits for the first click so his voice is heard, not spoken into a suspended AudioContext
       if (focused || tourGen !== gen) return;
       await new Promise(function (r) { setTimeout(r, 400); }); // let resume() settle
     }
@@ -2158,12 +2189,33 @@ if (typeof document !== "undefined") (function () {
       // Portfolio: his face is the whole screen on every device. One line
       // ("show me around"), his reply spoken, then on desktop Escape drops to
       // the dock so the app tour below can run; a phone stays on his face.
-      var pSeen = speakCount;
-      await emulator.keyboard_send_text(PORTFOLIO_INTRO_LINE + '\n', 55);
-      var pStart = Date.now(), pMs = 0;
-      while (Date.now() - pStart < 15000) {
+      // (the tap wait above already unlocked audio, so the mouth hears samples)
+      if (introVideo) {
+        // The recorded intro is his first line; wait for it to end, fade it, drop to the dock.
+        introVideo.loop = false;
+        if (introVideo.paused) introVideo.play().catch(function () {});
+        var vStart = Date.now();
+        while (introVideo && !introVideo.ended && Date.now() - vStart < 45000) {
+          if (focused || tourGen !== gen) return;
+          await sleep(200);
+        }
         if (focused || tourGen !== gen) return;
-        if (speakCount > pSeen) { pMs = Math.min(12000, Math.round(lastSpeakBytes / 16)) + 800; break; }
+        // Drop to the desktop while the video still covers the screen, then fade it, so the
+        // handoff lands on the OS instead of flashing the live face first.
+        if (!IS_PHONE && emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([27], 80); await sleep(600); }
+        if (introVideo) introVideo.dispatchEvent(new Event("fade"));
+        await sleep(700);
+        resetHeadline();
+        return;
+      }
+      var pSeen = speakCount;
+      // A phone stays on his face forever, so each pass says the next line: life, Vancouver, the work.
+      var pLine = IS_PHONE ? PORTFOLIO_LINES[portfolioLine++ % PORTFOLIO_LINES.length] : PORTFOLIO_INTRO_LINE;
+      await emulator.keyboard_send_text(pLine + '\n', 55);
+      var pStart = Date.now(), pMs = 0;
+      while (Date.now() - pStart < 60000) {   // the reply comes over a slow relay: 15 s cut him off before he spoke and dropped to the OS
+        if (focused || tourGen !== gen) return;
+        if (speakCount > pSeen) { pMs = Math.min(40000, Math.round(lastSpeakBytes / 16)) + 1200; break; }   // the intro is a ~30 s script
         await sleep(200);
       }
       await sleep(pMs || 3000);
@@ -2205,7 +2257,7 @@ if (typeof document !== "undefined") (function () {
     while (PORTFOLIO_MODE && !focused && tourGen === gen) {
       await phoneSamanthaIntro(gen);   // his face first; the scene ends with Escape, which drops to the dock the tour below drives
       if (focused || tourGen !== gen) return;
-      if (IS_PHONE) { while (!focused && tourGen === gen) await sleep(5000); return; }   // a phone is his face and nothing else; the dock tour below clicks desktop coordinates
+      if (IS_PHONE) { while (!focused && tourGen === gen) { await phoneSamanthaIntro(gen); await sleep(1500); } return; }   // his face, one line after another, forever   // a phone is his face and nothing else; the dock tour below clicks desktop coordinates
       for (var p = 0; p < PORTFOLIO_TOUR.length; p++) {
         if (focused || tourGen !== gen || !adaptersReady) return;
         await runSoloApp(gen, PORTFOLIO_TOUR[p]);
@@ -2303,6 +2355,7 @@ if (typeof document !== "undefined") (function () {
   // the wrong demo there, so tourLoop runs PORTFOLIO_TOUR instead, four idle seconds in.
   var PORTFOLIO_MODE = /[?&]portfolio\b/.test(location.search);
   var PORTFOLIO_INTRO_LINE = 'show me around';
+  var PORTFOLIO_LINES = ['show me around', "what's Vancouver like", 'tell me about your life', 'what are you building right now', 'what should I look at first', 'what do you do for fun'], portfolioLine = 0;
   // Real keypresses per app (the same scripted path the main tour uses),
   // so each one is used on camera, not just opened. Direct report
   // (2026-09-26): "demo apps have no interaction".

@@ -481,7 +481,7 @@ async function handleSpeakGet(url, request, env) {
   const up = await fetch("https://turing.heyitsmejosh.com/api/speak", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, format: "pcm8" }),
+    body: JSON.stringify({ text, format: "pcm8", voice: url.searchParams.get("v") === "joshua" ? "joshua" : undefined }), // his cloned voice in portfolio mode
   });
   return new Response(up.body, { status: up.status, headers: { "Content-Type": "application/octet-stream", "Access-Control-Allow-Origin": "*" } });
 }
