@@ -3,7 +3,7 @@
 
 A 16MB FAT16 disk (tools/mkdisk.sh) holding three songs, so no media rides in the kernel image:
 
-  ALPHA.WAV   in the root:   440Hz tone, 8-bit mono 8000Hz, 14 s (112KB)
+  ALPHA.WAV   in the root:   440Hz tone, 8-bit mono 8000Hz, 30 s (240KB), long enough that it cannot end on its own during the check
   MUSIC/BRAVO.WAV:           660Hz tone, 16-bit stereo 11025Hz, 12 s (529KB), exercises the downmix
   MUSIC/ZHUGE.WAV:           a valid WAV of 3.3MB, over the player's 3MB cap, so it must be refused
 
@@ -36,7 +36,7 @@ def main():
     img = sys.argv[1]
     subprocess.run(["bash", os.path.join(ROOT, "tools", "mkdisk.sh"), img], check=True, stdout=subprocess.DEVNULL)
     songs = {
-        "ALPHA.WAV": ("::", wav(1, 8, 8000, 14, 440)),
+        "ALPHA.WAV": ("::", wav(1, 8, 8000, 30, 440)),
         "BRAVO.WAV": ("::MUSIC/", wav(2, 16, 11025, 12, 660)),
         "ZHUGE.WAV": ("::MUSIC/", riff(1, 8, 8000, b"\x80" * 3_300_000)),
     }

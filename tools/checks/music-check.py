@@ -35,7 +35,7 @@ VIEW_X, VIEW_Y = 78, 72          # gui_launch_from_dock: the app viewport sits a
 LOG = "/tmp/jt-music-serial.log"
 DISK = "/tmp/jt-music-fat.img"
 WAVOUT = "/tmp/jt-music-out.wav"
-ALPHA_MS = 14000
+ALPHA_MS = 30000
 
 for f in (LOG, WAVOUT):
     try: os.remove(f)
@@ -196,9 +196,10 @@ try:
     # 6. next song: BRAVO, a 16-bit stereo file
     a = mark()
     key("n")
-    i, _ = wait_line(r"music: playing BRAVO\.WAV", 20, a)
-    if i is None: fails.append("n did not move to BRAVO.WAV (title did not change)")
+    i, _ = wait_line(r"music: playing BRAVO\.WAV", 8, a)
+    if i is None: fails.append("n did not move to BRAVO.WAV within 8s (ALPHA is 30s long, so it did not just end by itself)")
     else:
+        if any("music: ended ALPHA" in l for l in lines()[a:i]): fails.append("ALPHA ended on its own before n took effect: the check proved nothing about n")
         pl = [int(m.group(1)) for m in wait_n(r"music: at playing pos=(\d+)", 3, 12, i)]
         print(f"BRAVO positions (ms): {pl}")
         if len(pl) < 3 or not all(pl[k] < pl[k + 1] for k in range(len(pl) - 1)): fails.append(f"BRAVO did not advance: {pl}")
