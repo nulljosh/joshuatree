@@ -463,7 +463,7 @@ static void chat_face_idle_tick(void) {
    snapping through three 12fps frames. */
 static void chat_face_idle_half(void) {
     static int half = 0;
-    if (!face_idle_n || face_x < 0) return;
+    if (!face_idle_n || (!face_full && face_x < 0)) return;
     if ((half ^= 1)) face_blit_mix(face_idle[(face_idle_at + 1) % face_idle_n], face_idle[face_idle_at]);
     else { chat_face_idle_step(); face_blit(face_idle[face_idle_at]); }
     window_present();
