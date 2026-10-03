@@ -364,10 +364,11 @@ try:
     if pixel(480, 511) != (0xEF, 0xEB, 0xE4): fails.append("desktop dock not on screen after the close")
     move(SLOT0_X + 2 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
     opened = False
-    for _ in range(40):
+    for _ in range(150):   # 15 s: a loaded CI runner launches Mail slowly after a movie
         time.sleep(0.1)
         if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): opened = True; break
     print(f"Mail opens from the dock after the close: {'yes' if opened else 'NO'}")
+    if not opened: print(f"  diagnostic: pixel at the close circle {pixel(CLOSE_X, CLOSE_Y)}, at the cascaded circle {pixel(CLOSE_X + 60, CLOSE_Y + 60)}, mail launched per serial: {'mail: ring-3 window' in serial()}")
     if not opened: fails.append("Mail did not open from a dock click after Movies closed: desktop not responsive")
     keys("esc"); time.sleep(0.5)
 finally:
