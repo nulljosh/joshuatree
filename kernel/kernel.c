@@ -458,6 +458,21 @@ static void klog_dump(void){
 static void task_a(void){ for (int i = 0; i < 10; i++) { puts("A"); yield(); } task_exit(); }
 static void task_b(void){ for (int i = 0; i < 10; i++) { puts("B"); yield(); } task_exit(); }
 
+/* 2.2.0: fputest. Each task pushes its own value onto the x87 stack, switches away from inside the
+   same asm, and pops it back. If schedule() did not swap x87 state the two tasks would pop each
+   other's values. Timer ticks preempt it too, so the swap is exercised mid-instruction-stream. */
+static volatile int fpu_bad, fpu_done;
+static void fpu_task(double mark) {
+    for (int i = 0; i < 300; i++) {
+        double in = mark + i, out = 0;
+        __asm__ volatile ("fldl %1; int $32; fstpl %0" : "=m"(out) : "m"(in) : "memory");
+        if (out != in) fpu_bad++;
+    }
+    fpu_done++; task_exit();
+}
+static void fpu_a(void){ fpu_task(1000.5); }
+static void fpu_b(void){ fpu_task(7000.25); }
+
 /* ---- preemption demo: two tasks that never call yield() or hlt, proving
    the timer itself forces a switch. The shell's own wait loop below also
    never yields/hlts on purpose, so if preemption weren't real this whole
@@ -6728,7 +6743,7 @@ static void run(char *line){
     if (*arg) *arg++ = 0;
 
     if (!*line)                    return;
-    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps calctest pngtest jpegtest chattest beep say listen\n");
+    if (!strcmp(line, "help"))       { puts("help clear echo time uptime dmesg mem reboot crash pagefault bench heaptest heapgrow tasktest fputest preempttest weathertest daynighttest maptinttest walltest weatherfxtest weatherfxcliptest geotest weatherpaneltest windweathertest cursortest texttest wraptest mailtest dockstyletest wind isotest reaptest ring3test usertest notetest filetest ps kill killtest sleep disktest diskuse fsuse ls cat exec rm cd mkdir write browse lspci gfxtest fonttest mousetest nettest ifconfig netscan web serve serveapp chat build gui testapps calctest pngtest jpegtest chattest beep say listen\n");
                                         puts("a name that isn't one of the above runs a program by that name too, e.g. \"hello\" or \"note buy milk\" (same as exec, case-insensitive)\n"); }
     else if (!strcmp(line, "clear")) clear();
     else if (!strcmp(line, "echo"))  { puts(arg); putc('\n'); }
@@ -6861,6 +6876,13 @@ static void run(char *line){
         else if (!vfs_read_file(filename, rbuf, sizeof(rbuf) - 1)) serial_puts("filetest: read failed\n");
         else if (strcmp(rbuf, content)) serial_puts("filetest: content mismatch\n");
         else serial_puts(read_only ? "filetest: persisted read ok\n" : "filetest: write+read ok\n");
+    }
+    else if (!strcmp(line, "fputest")) {
+        fpu_bad = fpu_done = 0;
+        task_create(fpu_a); task_create(fpu_b);
+        for (int i = 0; i < 2000 && fpu_done < 2; i++) yield();
+        if (fpu_done == 2 && !fpu_bad) puts("fputest: x87 state kept per task: ok\n");
+        else puts(fpu_done == 2 ? "fputest: FAIL x87 values crossed between tasks\n" : "fputest: FAIL tasks did not finish\n");
     }
     else if (!strcmp(line, "tasktest")) {
         /* v0.76.8: real, reproduced-on-demand CI flake fixed at the root.
