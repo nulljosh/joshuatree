@@ -34,7 +34,14 @@ _start:
 at_el1:
     ldr x0, =_stack_top
     mov sp, x0
-    bl main
+    /* zero .bss: a real board's RAM is not cleared for us, and every uninitialised global assumes zero */
+    ldr x0, =_bss_start
+    ldr x1, =_bss_end
+1:  cmp x0, x1
+    b.hs 2f
+    str xzr, [x0], #8
+    b 1b
+2:  bl main
 park:
     wfe
     b park

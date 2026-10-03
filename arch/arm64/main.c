@@ -86,9 +86,56 @@ void exc_irq(struct frame *f) {
 void exc_bad(struct frame *f) {
     uart_puts("unexpected exception, ESR "); uart_hex(f->esr); uart_puts(" ELR "); uart_hex(f->elr); uart_puts("\n");
 }
+/* ---- M1b: the MMU, the caches, a heap ---- */
+extern char _heap_start[];
+static unsigned long l1[512] __attribute__((aligned(4096)));   /* one table of 1 GiB blocks, enough for a flat map */
+static unsigned long heap_next;
+#define HEAP_SIZE (16UL << 20)
+static void *kmalloc(unsigned long n) {
+    unsigned long p = (heap_next + 15) & ~15UL;
+    if (p + n > (unsigned long)_heap_start + HEAP_SIZE) return 0;
+    heap_next = p + n;
+    return (void *)p;
+}
+/* Identity map the first 4 GiB in four 1 GiB blocks: RAM is normal write-back memory, the peripherals are device
+   memory (strongly ordered, no caching, no unaligned access). QEMU's virt keeps its devices in the first GiB and RAM in
+   the second; a Pi 4 has RAM from 0 and its peripherals in the last GiB. */
+static void mmu_init(void) {
+    const unsigned long NORMAL = 0x1UL | (1UL << 2) /* attr 1 */ | (3UL << 8) /* inner shareable */ | (1UL << 10) /* access flag */;
+    const unsigned long DEVICE = 0x1UL | (0UL << 2) /* attr 0 */ | (1UL << 10) | (1UL << 53) | (1UL << 54);   /* never executable */
+    for (int i = 0; i < 512; i++) l1[i] = 0;
+    for (int i = 0; i < 4; i++) {
+        unsigned long base = (unsigned long)i << 30;
+#ifdef PI_BUILD
+        int dev = i == 3;
+#else
+        int dev = i == 0;
+#endif
+        l1[i] = base | (dev ? DEVICE : NORMAL);
+    }
+    unsigned long mair = (0xFFUL << 8) | 0x00UL;                       /* attr 1 normal write-back, attr 0 device-nGnRnE */
+    unsigned long tcr = 25UL | (1UL << 8) | (1UL << 10) | (3UL << 12) | (1UL << 23) | (2UL << 32);   /* 39-bit VA, 4 KiB pages, write-back, TTBR1 off, 40-bit PA */
+    unsigned long sctlr;
+    __asm__ volatile ("msr mair_el1, %0\n msr tcr_el1, %1\n msr ttbr0_el1, %2\n dsb sy\n isb\n tlbi vmalle1\n dsb sy\n isb" :: "r"(mair), "r"(tcr), "r"((unsigned long)l1) : "memory");
+    __asm__ volatile ("mrs %0, sctlr_el1" : "=r"(sctlr));
+    sctlr |= (1UL << 0) | (1UL << 2) | (1UL << 12);                   /* MMU, data cache, instruction cache */
+    __asm__ volatile ("msr sctlr_el1, %0\n isb" :: "r"(sctlr) : "memory");
+}
+static void m1b_selftest(void) {
+    heap_next = (unsigned long)_heap_start;
+    mmu_init();
+    uart_puts("M1b mmu on\n");
+    unsigned long *a = kmalloc(4096), *b = kmalloc(100), *c = kmalloc(8);
+    if (!a || !b || !c || (unsigned long)a % 16 || (unsigned long)b % 16 || b == a || c <= b) { uart_puts("M1b heap FAIL\n"); return; }
+    for (int i = 0; i < 512; i++) a[i] = 0xA5A5A5A500000000UL | (unsigned long)i;
+    for (int i = 0; i < 512; i++) if (a[i] != (0xA5A5A5A500000000UL | (unsigned long)i)) { uart_puts("M1b heap FAIL\n"); return; }
+    uart_puts("M1b heap ok\n");
+}
+
 static void m1_selftest(void) {
     __asm__ volatile ("msr vbar_el1, %0\n isb" :: "r"(vectors));
     uart_puts("M1 vectors set\n");
+    m1b_selftest();   /* with the exception table in place a bad map prints instead of hanging */
     __asm__ volatile ("svc #0");                   /* proves the sync path and the return */
     unsigned long freq; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(freq));
     timer_step = freq / 20;                        /* 50 ms */
