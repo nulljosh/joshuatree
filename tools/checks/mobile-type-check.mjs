@@ -114,7 +114,7 @@ try {
 
   // The input bar is the strip just above the bottom of the kernel's screen. Ring-3 Samantha keeps it about 93 to 96 percent down, under her window's title row, lower than the old in-kernel chat did.
   const rect = await page.evaluate(() => { const r = document.getElementById('screen_canvas').getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
-  const bar = { x: rect[0], y: rect[1] + rect[3] * 0.925, width: rect[2], height: rect[3] * 0.045 };
+  const bar = { x: rect[0], y: rect[1] + rect[3] * 0.93, width: rect[2], height: rect[3] * 0.07 };
   const before = await page.screenshot({ clip: bar });
 
   // Record what the page sends into the kernel.
