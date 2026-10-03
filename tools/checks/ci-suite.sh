@@ -197,6 +197,7 @@ once |2|Every check in tools/checks/ is in this manifest or says why not|./tools
 retry|5|Text selection in Notes: Shift-arrow/Ctrl+A highlight, edsel/edcopy/edcut markers, selection-aware copy/cut/paste/delete|python3 ./tools/checks/textselect-check.py
 retry|6|Window top edge and corner arc are one continuous AA shape|python3 ./tools/checks/windowedge-check.py
 retry|7|Sound Blaster 16 detects, beep plays a real 440Hz tone, card-less boot is a no-op|python3 ./tools/checks/sb16-check.py
+retry|3|Music runs as a ring-3 app: plays a fixture WAV off a FAT disk (position from the driver, pause holds, bar and arrow seeks land, next changes the song, oversize file refused) and the sound card hears the tones|python3 ./tools/checks/music-check.py
 retry|3|Sound Blaster 16 record path: `listen` reaches the driver and times out cleanly (QEMU has no ADC backend), card-less boot is a no-op|python3 ./tools/checks/sb16-record-check.py
 retry|4|Chat speaks: say fetches /api/speak PCM from a stub and plays a real 1000Hz tone|python3 ./tools/checks/chat-speaks-check.py
 retry|4|Chat face: idle frame before, talk frames while she speaks, idle after; no frames means no face|python3 ./tools/checks/chat-face-check.py
