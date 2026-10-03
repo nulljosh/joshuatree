@@ -779,13 +779,17 @@ if (typeof document !== "undefined") (function () {
       });
     }
     var firstTapAt = 0;
+    // The first gesture starts the sound: audio unlocked, the intro video restarted from the top with its own audio on.
+    // The speaker button is that gesture too (on a phone it is the obvious thing to press), so it calls this as well.
+    var startSound = function (ev) {
+      if (firstTapAt) return;
+      firstTapAt = Date.now(); unlockAudio(ev); tapTalkBtn.hidden = true; tapTalkResolve();
+      if (introVideo) { introVideo.loop = false; introVideo.currentTime = 0; introVideo.muted = false; introVideo.play().catch(function () {}); }
+    };
     ["pointerdown", "mousedown", "mouseup", "click", "touchstart", "touchend", "keydown", "keyup"].forEach(function (t) {
       document.addEventListener(t, function (ev) {
         if (ev.target && ev.target.closest && ev.target.closest("#jt-mute")) return;   // the mute button is its own control, not the first tap
-        if (!firstTapAt) {
-          firstTapAt = Date.now(); unlockAudio(ev); tapTalkBtn.hidden = true; tapTalkResolve();
-          if (introVideo) { introVideo.loop = false; introVideo.currentTime = 0; introVideo.muted = false; introVideo.play().catch(function () {}); }
-        }
+        startSound(ev);
         if (Date.now() - firstTapAt < 600) ev.stopPropagation();
       }, { capture: true, passive: true });
     });
@@ -822,7 +826,9 @@ if (typeof document !== "undefined") (function () {
     });
     muteBtn.addEventListener("click", function (ev) {
       ev.stopPropagation();
+      if (typeof startSound === "function" && !firstTapAt) { if (muted) { muted = false; try { localStorage.setItem("jt-muted", "0"); } catch (e) {} applyMute(); paintMute(); } startSound(ev); return; }   // a first press means "let me hear him", never "mute"
       muted = !muted;
+      if (introVideo) introVideo.muted = muted;   // the intro video carries its own audio, the emulator's mixer is not it
       try { localStorage.setItem("jt-muted", muted ? "1" : "0"); } catch (e) {}
       applyMute(); paintMute();
     });

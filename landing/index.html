@@ -299,6 +299,15 @@
   html.portfolio #demo-frame.demo-full.has-composer #stage-wrap { height: calc(var(--demo-h, 100dvh) - 76px); }
   /* Portfolio on a phone: his face is the whole screen, so the stage takes the full box above the composer instead of the OS's 430:760 letterbox (that left a black band under the face). embed.js already covers the box when the canvas fills 75% of it, and the face is a plain wall at the sides, so the crop costs nothing. */
   @media (max-width: 520px) { html.portfolio #demo-frame.demo-full.has-composer #stage-wrap { width: 100vw; aspect-ratio: auto; height: calc(var(--demo-h, 100dvh) - 76px); overflow: hidden; } }
+  /* Portfolio: his face runs to the bottom edge and the chat bar floats over it as glass, no black strip. */
+  html.portfolio #demo-frame.demo-full.has-composer { padding-bottom: 0; }
+  html.portfolio #demo-frame.demo-full.has-composer #stage-wrap { height: var(--demo-h, 100dvh); }
+  @media (max-width: 520px) { html.portfolio #demo-frame.demo-full.has-composer #stage-wrap { height: var(--demo-h, 100dvh); } }
+  html.portfolio #demo-frame.demo-full #demo-composer { background: transparent; pointer-events: none; }
+  html.portfolio #demo-frame.demo-full #demo-composer input, html.portfolio #demo-frame.demo-full #demo-composer button { pointer-events: auto; }
+  html.portfolio #demo-frame.demo-full #demo-composer input { background: rgba(255,255,255,0.58); color: #1c1c1e; border: 1px solid rgba(255,255,255,0.75); -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7); box-shadow: 0 6px 24px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.8); }
+  html.portfolio #demo-frame.demo-full #demo-composer input::placeholder { color: rgba(28,28,30,0.55); }
+  html.portfolio #demo-frame.demo-full #demo-composer button { background: rgba(255,255,255,0.7); color: #1c1c1e; -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7); box-shadow: 0 6px 24px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.8); }
   /* Small on a phone so it does not sit on the dock; the ::after keeps a 44px tap target. */
   /* Phones: top right, where every in-demo screen has room (the back arrow is top left, titles are centred). Desktop keeps it bottom right because the kernel's menu-bar clock sits at the top right there. */
   @media (max-width: 600px) { #demo-exit { right: 10px; top: 10px; bottom: auto; width: 36px; height: 36px; } #demo-exit::before { width: 16px; height: 16px; } #demo-exit::after { content: ""; position: absolute; inset: -4px; } }

@@ -42,6 +42,7 @@ static void phone_chevron_draw(int tip_x, int tip_y, int reach, int thick, unsig
     }
 }
 static void phone_app_titlebar_draw(const char *title){
+    if (portfolio_dock && title && title[0] == 'S' && title[1] == 'a' && title[2] == 'm' && title[3] == 'a') title = "Joshua"; /* portfolio mode: the chat is him */
     /* The home grid's status bar (its clock, centered at this same y)
        and this titlebar share the same top strip, and nothing else
        clears it before drawing -- without this the app's title rendered
