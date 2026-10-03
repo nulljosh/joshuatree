@@ -300,6 +300,18 @@ APPS_ONLY = {
                  """
       <polyline points="22,66 44,66 54,38 68,92 78,56 84,66 106,66" fill="none" stroke="#34C759" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>"""),
 
+    # Music: two beamed notes, cream on the design-system accent #b5502c. Flat: the tile ramp has
+    # the same colour at both ends, so only the shared top lip and the contact shadow remain. No text.
+    "music": ("#B5502C", "#B5502C", "",
+              """
+      <g fill="#FAF8F4">
+        <circle cx="45" cy="92" r="14"/>
+        <circle cx="83" cy="84" r="14"/>
+        <rect x="55" y="34" width="7" height="58"/>
+        <rect x="93" y="26" width="7" height="58"/>
+        <polygon points="55,34 100,26 100,44 55,52"/>
+      </g>"""),
+
     "search": ("#9AA3B1", "#303A48", "",
                """
       <circle cx="52" cy="52" r="23" fill="none" stroke="#ECEFF3" stroke-width="11"/>
