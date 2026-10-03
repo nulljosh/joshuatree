@@ -29,6 +29,10 @@ FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank",
 TILE = {"epiphany": "#D6DEE6", "curbfind": "#C8644F", "bookrank": "#3E5C86", "lexly": "#6B9474",
         "sparkjar": "#8A5A3C", "quotes": "#D8C7A3", "keyrate": "#5A5A5E"}  # toroid stays black: Life is white-on-black
 
+# Glyph colors that clash with the dock tile: Lexly's own dots are sky blue, so on the sage tile the whole icon
+# read as blue. The dots take the tile color instead (they punch through the bubble, as in its App Store icon).
+GLYPH = {"lexly": ("#5B9BD5", TILE["lexly"])}
+
 
 def retile(inner, box, color):
     """Swap the fill of the first rect that covers the whole viewBox (the tile)."""
@@ -71,6 +75,7 @@ def main():
         else: box = vb.group(1)
         inner = svg[m.end():svg.rindex("</svg>")]
         if name in TILE: inner = retile(inner, box, TILE[name])
+        if name in GLYPH: inner = inner.replace('fill="%s"' % GLYPH[name][0], 'fill="%s"' % GLYPH[name][1])
         open(os.path.join(ROOT, "art", "icons", name + ".svg"), "w").write(wrap(repo, box, inner))
         print("imported", name)
 
