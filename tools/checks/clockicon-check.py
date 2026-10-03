@@ -63,7 +63,8 @@ def boot(port, rtc, tag, later=0):
         time.sleep(0.1)
         cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
         time.sleep(1.0)
-        for _ in range(5): key("s")  # the folder reads w/a/s/d: five rows down lands on Clock (index 25)
+        for _ in range(4): key("d")  # the folder reads w/a/s/d: Clock is APPS[24], row 4 col 4
+        for _ in range(4): key("s")
         time.sleep(1.5)
         cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": dump}})
         img = Image.frombytes("RGBA", (W, H), open(dump, "rb").read(), "raw", "BGRA").convert("RGB")

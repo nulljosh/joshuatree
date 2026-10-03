@@ -55,7 +55,7 @@ static int gui_clock_tick(int *seen){
 /* Live overlays drawn over a cached tile: Calendar's date, Clock's hands. */
 static void gui_icon_overlay(int icon, int cx_center, int cy_bottom, int size){
     if (icon == 2) gui_calendar_draw_date(cx_center, cy_bottom, size);
-    else if (icon == 25) gui_clock_draw_hands(cx_center, cy_bottom, size);
+    else if (icon == 24) gui_clock_draw_hands(cx_center, cy_bottom, size);
 }
 
 #endif

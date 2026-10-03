@@ -159,6 +159,7 @@ static int ring3app_seed(const struct ring3_app *a) {
    case the caller refuses the open (gui_refuse_open). */
 static const char *r3w_file[TASK_SLOTS];
 int jt_phone_mode(void); /* kernel.c: boot_to_phone */
+int jt_portfolio_mode(void); /* kernel.c: portfolio_dock */
 int ring3app_launch_window(const char *name, unsigned int w, unsigned int h) {
     const struct ring3_app *a = 0;
     for (unsigned int i = 0; i < sizeof RING3_APPS / sizeof RING3_APPS[0]; i++) {
@@ -167,13 +168,14 @@ int ring3app_launch_window(const char *name, unsigned int w, unsigned int h) {
         if (!*p && !*q) { a = &RING3_APPS[i]; break; }
     }
     if (!a || ring3app_seed(a) < 0) return -1;
-    int phone = jt_phone_mode();
-    const char *argv[] = { a->file, "phone" };
+    int phone = jt_phone_mode(), port = jt_portfolio_mode();
+    const char *argv[] = { a->file, phone ? "phone" : "portfolio", "portfolio" };
+    int argc = 1 + (phone || port) + (phone && port); /* argv[1]=="phone" stays the phone test; "portfolio" is last */
     void *image = 0;
     serial_puts("ring3app: launching "); serial_puts(a->file); serial_puts(" at ring 3 as a window\n");
     __asm__ volatile ("cli"); /* the task must not get a tick before its window row exists */
     unsigned int f = irq_save(); /* 1.9.23: the slot is marked used before its private mapping and window exist; a tick in between would run the task against nothing */
-    int id = exec_user_window(a->file, argv, phone ? 2 : 1, &image);
+    int id = exec_user_window(a->file, argv, argc, &image);
     if (id >= 0 && !syscall_window_register(id, w, h, image)) { task_kill(id); id = -1; }
     irq_restore(f);
     __asm__ volatile ("sti");

@@ -79,11 +79,11 @@ try:
         except FileNotFoundError: return ""
 
     for _ in range(300):
-        if any(l.startswith("face: ") for l in serial().splitlines()): break
+        if "face: idle=" in serial(): break
         time.sleep(0.2)
-    lines = [l for l in serial().splitlines() if l.startswith("face: ")]
+    lines = [l[l.index("face: "):] for l in serial().splitlines() if "face: idle=" in l]
     print("serial: " + (lines[-1] if lines else "(no face: line)"))
-    if "face: idle=4 talk=4" not in lines: fails.append(f"frames did not load (got {lines})")
+    if not any(l.startswith("face: idle=4 talk=4") for l in lines): fails.append(f"frames did not load (got {lines})")
     time.sleep(3)
     cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": dump_path}})
     img = Image.frombytes("RGBA", (W, H), open(dump_path, "rb").read(), "raw", "BGRA").convert("RGB")

@@ -222,6 +222,7 @@ static int face_num(char *d, int n, int v) {
    kernel's chat_face_load does, and says how far each clip got and what was retried or skipped. */
 #define FACE_DEAD_RUN 4
 static void draw(void);
+static int uface_portfolio JT_DATA = 0;         /* argv has "portfolio": Joshua's own face, landing/face-joshua/ */
 static int uface_clip JT_DATA = 0;               /* 0 idle, then 1 talk */
 static int uface_pos[2] JT_DATA;                 /* how far each clip got: frames tried */
 static int uface_tries JT_DATA = 0;              /* failed attempts at the current frame */
@@ -242,7 +243,7 @@ static void face_load_step(void) {
     if (uface_done) return;
     int clip = uface_clip, total = clip ? UFACE_TALK_N : UFACE_IDLE_N;
     int pos = uface_pos[clip], slot = clip ? uface_talk_n : uface_idle_n;
-    char path[24]; int n = 0; const char *p = "/face/";
+    char path[32]; int n = 0; const char *p = uface_portfolio ? "/face-joshua/" : "/face/";
     while (*p) path[n++] = *p++;
     p = clip ? "talk" : "idle"; while (*p) path[n++] = *p++;
     path[n++] = '-';
@@ -1028,7 +1029,7 @@ static void send(void) {
 
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
-    (void)argc; (void)argv;
+    for (int i = 1; i < argc; i++) { const char *a = argv[i], *b = "portfolio"; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) uface_portfolio = 1; }
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "samantha: no window\n", 20); jt_exit(1); }
     ar = (struct arena *)malloc(sizeof *ar);              /* 1.9.27: the heap, not the image window */
     if (!ar) { jt_write(2, "samantha: no heap\n", 18); jt_exit(1); }

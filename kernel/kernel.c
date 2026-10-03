@@ -883,6 +883,7 @@ int gui_order[GUI_ICON_COUNT];
    Joshua's own apps instead of the system set. Same slot count, Apps folder
    and Trash stay at the ends; everything left out is still in the Apps folder. */
 static int portfolio_dock;
+int jt_portfolio_mode(void){ return portfolio_dock; } /* ring3app.c: windowed ring-3 apps get "portfolio" in argv so Samantha wears Joshua's face */
 /* "samantha" on the multiboot command line: skip the desktop and open
    ring-3 Samantha's window (user/samantha.c)
    the instant gui_run's first frame would otherwise draw the dock. One
