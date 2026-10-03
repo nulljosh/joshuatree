@@ -276,7 +276,8 @@ static void draw_des(int x, int y) {
 }
 static void draw_markets(int x, int y, int w) {
     char b[64];
-    int cw = (w - 32) / 2, x2 = x + cw + 32;
+    int narrow = w < 560;   /* a phone: one full-width list, the side column would collide with it */
+    int cw = narrow ? w - 8 : (w - 32) / 2, x2 = x + cw + 32;
     text(adding ? "Add to watchlist (enter or space adds, esc cancels)" : "Watchlist", x, y, adding ? ACCENT : MUTED);
     int want = adding ? 0 : 1, n = count(want);
     int vis = ((int)win.height - y - 84) / 22; /* rows end above the command bar rule */ if (vis < 3) vis = 3;
@@ -290,9 +291,10 @@ static void draw_markets(int x, int y, int w) {
         const row_t *s = &pool[nth(want, r)]; int ry = y + 24 + (r - scroll_top) * 22;
         if (r == sel) rect(x - 8, ry - 4, cw + 16, 22, SELBG);
         text(s->sym, x, ry, INK);
-        price_fmt(s->price, b); right(b, x + cw - 90, ry, INK);
+        price_fmt(s->price, b); right(b, x + cw - (narrow ? 76 : 90), ry, INK);
         pct(s->bp, b); right(b, x + cw, ry, col(s->bp));
     }
+    if (narrow) { if (!adding) text("a add   d remove", x, y + 24 + vis * 22 + 4, MUTED); return; }
     text("Crypto and commodities", x2, y, MUTED);
     for (int i = 0; i < ALT_N; i++) {
         int ry = y + 24 + i * 22;
@@ -311,6 +313,7 @@ static void draw_portfolio(int x, int y, int w) {
     char b[64];
     static const char *hd[4] = {"Shares", "Cost", "Value", "P/L"};
     int cx[4] = {x + 170, x + 290, x + 430, x + w};
+    if (w < 560) { cx[0] = x + w * 30 / 100; cx[1] = x + w * 52 / 100; cx[2] = x + w * 76 / 100; }   /* a phone: the columns scale with the window */
     text("Holding", x, y, MUTED);
     for (int i = 0; i < 4; i++) right(hd[i], cx[i], y, MUTED);
     int total = 0, cost = 0;
@@ -352,14 +355,15 @@ static void draw_sim(int x, int y, int w, int h) {
     rect(x, y + 54, w, 1, RULE);
     if (sim_n > 1) chart(x, y + 62, w, ch, sim_px, sim_n, col(chg));
     int by = y + 62 + ch + 16, eq = sim_equity();
+    int n1 = w < 560 ? w * 28 / 100 : 180, n2 = w < 560 ? w * 54 / 100 : 360, n3 = w < 560 ? w * 76 / 100 : 520;   /* the stats row scales on a phone */
     money(eq, b); text("Equity", x, by, MUTED); text(b, x, by + 20, INK);
-    money(eq - 1000000, b); text("P/L", x + 180, by, MUTED); text(b, x + 180, by + 20, col(eq - 1000000));
-    itoa10(sim_pos, b); text("Position", x + 360, by, MUTED); text(b, x + 360, by + 20, INK);
+    money(eq - 1000000, b); text("P/L", x + n1, by, MUTED); text(b, x + n1, by + 20, col(eq - 1000000));
+    itoa10(sim_pos, b); text("Position", x + n2, by, MUTED); text(b, x + n2, by + 20, INK);
     int mean = 0, m = sim_n < 20 ? sim_n : 20;
     for (int i = sim_n - m; i < sim_n; i++) mean += sim_px[i];
     mean /= m;
     int edge = (int)((long)(px - mean) * 10000 / mean);
-    pct(edge, b); text("Vs 20-tick mean", x + 520, by, MUTED); text(b, x + 520, by + 20, col(-edge));
+    pct(edge, b); text(w < 560 ? "Vs mean" : "Vs 20-tick mean", x + n3, by, MUTED); text(b, x + n3, by + 20, col(-edge));
     text(sim_paused ? "b buy 10   s sell 10   space resume   r reset" : "b buy 10   s sell 10   space pause   r reset", x, by + 52, MUTED);
 }
 static void draw_situation(int x, int y) {
