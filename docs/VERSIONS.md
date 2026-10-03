@@ -40,6 +40,8 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
   - 1.9.5: eleven apps in ring 3 now. Portfolio followed Keyrate, Toroid, Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook and Clock out, the in-kernel copy is gone, and the same table-driven launcher runs it.
 - 2.1: Music. A player app in its own protected space: WAV first, then MP3 through a small public-domain decoder, a library from Files, play and pause through the sound driver it already has.
 - 2.2: Video. A player app: motion-JPEG first (reusing the JPEG decoder the kernel already has) with sound in sync, then a real codec when the hardware allows.
+- [x] 2.5: Joshua on the web. Numbered 2.5 on Joshua's call, so the plan's 2.1 Music and 2.2 Video are still open. The portfolio at heyitsmejosh.com is Joshua's own: the chat is titled Joshua, answers in the first person and speaks in his cloned voice, and the page opens on a 28 second lip-synced intro of him before the live OS takes over. Done, shipped as 2.5.0.
+  - 2.5.0: the ring-3 Chat app learned portfolio mode again after 2.0 moved it out of the kernel (title, persona and voice follow the portfolio flag); the landing plays the recorded intro; the phone demo waits out a spoken reply before it asks the next question. Still open: the full-bleed face after the intro.
 - 3.0: It boots a real computer. One reference mini PC: UEFI, USB keyboard, mouse and stick, a real disk, a real network card, real sound.
 - 3.1: The Strata Kit ships. The $199 case and OS stick for the 3.0 board, bring your own parts (MONEY.md has the math).
 - 4.0: True multitasking. A compositor, many windows, resize and minimize, apps that never freeze each other.
