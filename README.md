@@ -6,13 +6,13 @@
 ![ci](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/check.yml?event=pull_request&label=ci)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
 
-A whole computer, built from scratch: its own windows, dock, fonts, sound, internet and 26 apps, from the first chip instruction to the last pixel. No libc, no dependencies.
+A whole computer, built from scratch: its own windows, dock, fonts, sound, internet and 25 apps, from the first chip instruction to the last pixel. No libc, no dependencies.
 
 **Try it in your browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 
 You can talk to it. Ask Samantha to set a reminder, take a note or open an app, and she answers out loud. (She is the assistant from [Turing](https://github.com/nulljosh/turing). Joshua Tree is the machine she runs.)
 
-[![Joshua Tree ad, 36 seconds. Click to play.](docs/hardware/ad-poster.jpg)](https://github.com/nulljosh/joshuatree/releases/download/1.8.8/joshua-tree-ad-v6.mp4)
+[![Joshua Tree ad. Click to play.](https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7-poster.jpg)](https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7.mp4)
 
 ## Boot it
 
