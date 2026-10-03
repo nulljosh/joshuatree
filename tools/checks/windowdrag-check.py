@@ -166,8 +166,10 @@ try:
         raise SystemExit("FAIL: Files did not open at its expected rect")
     move(*TITLE); time.sleep(0.3); button(True); time.sleep(0.25)
     drag_steps(TITLE[0], TITLE[1], TITLE[0] + DX, TITLE[1] + DY)
-    time.sleep(0.4)
-    mid = dump(); mid.save(os.path.join(ART, "files-mid.png"))
+    for _ in range(15):   # a loaded CI guest repaints a moved window late: poll with the button still held, as the Notes case does
+        time.sleep(0.2); mid = dump()
+        if is_red(pixel(mid, WIN_X + DX + 24, WIN_Y + DY + 16)) and not is_red(pixel(mid, WIN_X + 24, WIN_Y + 16)): break
+    mid.save(os.path.join(ART, "files-mid.png"))
     if is_red(pixel(mid, WIN_X + DX + 24, WIN_Y + DY + 16)) and not is_red(pixel(mid, WIN_X + 24, WIN_Y + 16)):
         ok("Files followed the pointer live, before release")
     else: fail("Files did not move live mid-drag (old outline-only behaviour)")
