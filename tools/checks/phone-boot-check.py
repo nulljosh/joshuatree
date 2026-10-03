@@ -341,7 +341,7 @@ try:
         # screen (no scrolling) -- the exact bug Joshua's screenshot
         # review caught at 4 columns (Activity idx24, Clock idx25 sitting
         # off the bottom, unreachable by any tap).
-        GUI_APPS_FOLDER = 24
+        GUI_APPS_FOLDER = 25
         offscreen = [i for i in range(GUI_APPS_FOLDER) if cell_center(i)[1] + 24 > LOGICAL_H]
         if offscreen:
             fail = 1; print(f"FAIL: {len(offscreen)} app cell(s) fall below the {LOGICAL_H}px screen: {offscreen}")
