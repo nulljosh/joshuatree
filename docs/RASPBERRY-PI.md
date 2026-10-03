@@ -80,9 +80,17 @@ Joshua Tree on ARM64
 booted at EL2
 EL1
 M0 ok
+M1 vectors set
+M1 svc ok
+tick 1
+tick 2
+tick 3
+M1a ok
 ```
 
-That is milestone M0 on real hardware. To leave `screen`, press Ctrl-A then K.
+The last six lines are the exception table and the timer. They run on QEMU's Pi model; on a real board the interrupt controller setup is the part most likely to need a fix. If the output stops after `M1 svc ok`, send me that line.
+
+That is milestone M0 (and M1a) on real hardware. To leave `screen`, press Ctrl-A then K.
 
 ## If nothing prints
 
