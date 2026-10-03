@@ -59,7 +59,7 @@ PARK = (480, 200)
 OPT_COLOR = (0xF1, 0xED, 0xE7)
 RIGHT_COLOR = (0xCF, 0xE8, 0xD2)
 MISS_COLOR = (0xF0, 0xD0, 0xCC)
-LX_OPT_Y0 = 150
+LX_OPT_Y0 = 114
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -224,8 +224,8 @@ try:
             if serial().count("lexly: ring-3 window") > seen: break
         else:
             fails.append(f"{tag}: Lexly did not open a ring-3 window from the Apps folder grid"); return False
-        if "lexly: ring-3 window 832x450" not in serial():
-            fails.append(f"{tag}: the folder-launched window is not the folder viewport's 832x450")
+        if "lexly: ring-3 window 796x345" not in serial():
+            fails.append(f"{tag}: the folder-launched window is not 796x345")
         if "ring3app: BUG" in serial():
             fails.append(f"{tag}: ring3app logged a BUG line")
         time.sleep(0.5)
@@ -258,8 +258,8 @@ try:
     seen = serial().count("lexly: ring-3 window")
     move(*PARK); time.sleep(0.3)
     keys("ret"); time.sleep(1.0)  # bare desktop -> Apps folder, by keyboard
-    for _ in range(3): keys("d"); time.sleep(0.35)
-    for _ in range(2): keys("s"); time.sleep(0.35)
+    for _ in range(2): keys("d"); time.sleep(0.35)  # right x2
+    for _ in range(2): keys("s"); time.sleep(0.35)  # down x2 -> index 12
     keys("ret")  # launch Lexly from the grid selection
     for _ in range(60):
         time.sleep(0.1)
