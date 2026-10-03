@@ -110,6 +110,7 @@ if (typeof document !== "undefined") (function () {
   // absolute packet really arrived, not just whether the page sent one.
   var serialLog = "";
   var toolCounts = {}; // every "chattool=<tool>:" line, counted as it arrives, so a check never depends on the window still holding it
+  var faceReady = false;   // ring-3 Joshua wrote "samface: idle ready": his idle frames are in, the live face can take over from the intro video
   var speakCount = 0, lastSpeakBytes = 0; // every "speak: status=200 bytes=N" line, counted as it arrives (serialLog is a head+rolling-tail window, see the serial0 listener)
   // v0.73.5: fetched once and reused by the idle tour's reboot sequence
   // below (see the comment above the reboot block in tourLoop) to
@@ -542,6 +543,7 @@ if (typeof document !== "undefined") (function () {
       if (b === 10) {
         var m = /^(?:syscall: write\(1\) from ring 3: )?speak: status=200 bytes=(\d+)/.exec(serialLine); // ring-3 Samantha's writes arrive behind the kernel's syscall trace prefix
         if (m) { speakCount++; lastSpeakBytes = Number(m[1]); }
+        if (/samface: idle ready/.test(serialLine)) faceReady = true;
         if (m) lastInteractionTime = Date.now() + Math.ceil(Number(m[1]) / 16); // 16000 samples/s = 16 per ms
         else if (/^(?:syscall: write\(1\) from ring 3: )?(?:chatreply=|chattool=)/.test(serialLine)) {
           lastInteractionTime = Date.now();
@@ -2201,11 +2203,13 @@ if (typeof document !== "undefined") (function () {
           await sleep(200);
         }
         if (focused || tourGen !== gen) return;
-        // Drop to the desktop while the video still covers the screen, then fade it, so the
-        // handoff lands on the OS instead of flashing the live face first.
-        if (!IS_PHONE && emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([27], 80); await sleep(600); }
+        // The video fades into the live full-bleed face (same shot), which holds a few seconds so the
+        // visitor sees him in the OS; then Escape drops to the dock for the tour. A phone stays on his face.
+        for (var fw = 0; !faceReady && fw < 150; fw++) { if (focused || tourGen !== gen) return; await sleep(200); }   // the last frame holds while his frames finish loading (30 s at most)
         if (introVideo) introVideo.dispatchEvent(new Event("fade"));
-        await sleep(700);
+        await sleep(IS_PHONE ? 700 : 4500);
+        if (focused || tourGen !== gen) return;
+        if (!IS_PHONE && emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([27], 80); await sleep(600); }
         resetHeadline();
         return;
       }

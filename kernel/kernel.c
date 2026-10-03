@@ -3170,7 +3170,9 @@ static void wall_apply(int want_map){
 }
 
 static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink);
+static int gui_bleed_open(void); /* a full-bleed window covers the menu bar */
 static void gui_draw_menubar(void){
+    if (gui_bleed_open()) { gui_menubar_last_min = -1; return; } /* repaints on the first call after it closes */
     u8 h, m, wd, dom, mon;
     cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
     u8 hv = (h & 0x0F) + ((h >> 4) * 10), mv = (m & 0x0F) + ((m >> 4) * 10);
@@ -5048,6 +5050,9 @@ static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_AP
    concurrently-open window is offset so both titlebars and both close
    buttons stay fully on screen and visually distinct, not stacked exactly
    on top of each other. */
+/* Portfolio mode: Samantha's window is Joshua's face, full bleed. Esc still closes it. */
+static int gui_window_bleed(int icon){ return portfolio_dock && !boot_to_phone && icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open == samantha_ring3_open; }
+static int gui_bleed_open(void){ for (int i = 0; i < gui_window_count; i++) if (gui_window_bleed(gui_windows[i].icon)) return 1; return 0; }
 static void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
     if (boot_to_phone) { *x = -8; *y = 8; *w = (int)window_width() + 16; *h = (int)window_height(); return; } /* 2.0 gate 5: one window, full screen under the back chevron strip (content rect 0,40,W,H-40) */
     if (slot_index == 0) { *x = 70; *y = 40; *w = 820; *h = 385; }
@@ -5113,6 +5118,7 @@ static void gui_snap_outline(int zone){
 /* v0.76.18: chrome and content split so a keystroke repaints only the
    content viewport, never the whole alpha-blended frame (mwkeyflash-check.sh). */
 static void gui_multiwin_draw_chrome(const gui_window_t *win){
+    if (gui_window_bleed(win->icon)) return; /* no frame, no traffic lights: his face is the screen */
     serial_puts("mwchrome\n"); /* discriminating marker for tools/checks/mwkeyflash-check.sh */
     int x = win->x, y = win->y, w = win->w, h = win->h;
     gui_draw_window_frame(x, y, w, h, APPS[win->icon].name);
@@ -5347,6 +5353,7 @@ static int gui_multiwin_open(int icon){
     gui_windows[slot].task = -1;
     gui_windows[slot].shown = 0;
     gui_multiwin_geom(slot, &gui_windows[slot].x, &gui_windows[slot].y, &gui_windows[slot].w, &gui_windows[slot].h);
+    if (gui_window_bleed(icon)) { gui_windows[slot].x = -8; gui_windows[slot].y = -32; gui_windows[slot].w = (int)window_width() + 16; gui_windows[slot].h = (int)window_height() + 40; } /* content rect = the whole screen */
     if (gui_ring3_windowed(icon)) {
         /* 1.9.23: the program is scheduled now and draws into its own
            buffer; this loop keeps running. -1 is refused by the caller
@@ -5380,8 +5387,10 @@ static int gui_multiwin_hit_test(int mx, int my){
 
 static void gui_multiwin_close(int idx){
     if (idx < 0 || idx >= gui_window_count) return;
+    int bleed = gui_window_bleed(gui_windows[idx].icon);
     for (int j = idx; j < gui_window_count - 1; j++) gui_windows[j] = gui_windows[j + 1];
     gui_window_count--;
+    if (bleed) { gui_menubar_force_redraw(); gui_draw_menubar(); } /* the bar was held back while his face covered it */
 }
 
 /* v0.75.0 (batch 2): the same SC[]/extended-0xE0 decode get_key_or_click
