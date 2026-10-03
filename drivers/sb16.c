@@ -32,7 +32,12 @@ extern u8 sb16_dma_buf[];              /* boot/linker.ld, 64KB, 64KB-aligned */
 static int present = 0;
 static volatile int irq_done = 0;
 static void (*progress_fn)(unsigned int) = 0;
-static u32 play_start = 0;
+static u32 play_off = 0;          /* bytes of this clip already played by earlier chunks */
+/* A chunk that makes no DMA progress for this long is given up on. The
+   browser demo keeps audio locked until the visitor's first click, and the
+   old fixed (chunk length + 1s) limit expired while it was still locked, so
+   she spoke the first two seconds and then went silent. */
+#define STALL_TICKS  1200u        /* 12s at 100Hz */
 
 void sb16_set_progress(void (*fn)(unsigned int elapsed_ticks)) { progress_fn = fn; }
 
@@ -84,6 +89,16 @@ void sb16_irq(void) {
     irq_done = 1;
 }
 
+/* How many of the n bytes of the running transfer the DMA controller has
+   handed to the DSP so far (channel 1 count register: counts down, wraps to
+   0xFFFF at terminal count). This is the real playback position, so the
+   mouth follows the sound even when the speaker started late. */
+static u32 dma_done(u32 n) {
+    outb(0x0C, 0x00);
+    u32 lo = inb(0x03), hi = inb(0x03), left = (hi << 8 | lo) + 1;
+    return left > n ? n : n - left;
+}
+
 /* One single-cycle transfer of n bytes (1..64KB) already sitting in the
    DMA buffer. */
 static int play_chunk(u32 n, u32 rate) {
@@ -106,11 +121,18 @@ static int play_chunk(u32 n, u32 rate) {
     if (!dsp_write(0xC0) || !dsp_write(0x00) ||           /* 8-bit single-cycle output, mono unsigned */
         !dsp_write((u8)cnt) || !dsp_write((u8)(cnt >> 8))) return 0;
 
-    /* Wait for IRQ 5, bounded by the clip length plus one second of slack
-       (ticks() runs at 100Hz). */
-    u32 limit = (n * 100u) / rate + 100u, start = ticks();
-    while (!irq_done && ticks() - start < limit) {
-        if (progress_fn) progress_fn(ticks() - play_start);
+    /* Wait for IRQ 5 while the count register moves; give up only when it
+       stalls. progress_fn gets elapsed ticks of the clip as played (the
+       DMA runs about one 1KB block ahead of the sound, so back off 40ms). */
+    u32 last = 0, moved = ticks();
+    while (!irq_done) {
+        u32 pos = dma_done(n);
+        if (pos != last) { last = pos; moved = ticks(); }
+        else if (ticks() - moved > STALL_TICKS) break;
+        if (progress_fn) {
+            u32 at = play_off + pos, back = rate / 25u;
+            progress_fn((at > back ? at - back : 0) * 100u / rate);
+        }
         __asm__ volatile("pause");
     }
     if (!irq_done) { serial_puts("sb16: transfer timed out\n"); return 0; }
@@ -121,13 +143,13 @@ int sb16_play(const unsigned char *pcm, unsigned int len, unsigned int rate) {
     if (!present || !pcm || !len) return 0;
     if (rate < 4000) rate = 4000;
     if (rate > 44100) rate = 44100;
-    play_start = ticks();
+    play_off = 0;
     while (len) {
         u32 n = len > DMA_CHUNK ? DMA_CHUNK : len;
         if (pcm != sb16_dma_buf)
             for (u32 i = 0; i < n; i++) sb16_dma_buf[i] = pcm[i];
         if (!play_chunk(n, rate)) return 0;
-        pcm += n; len -= n;
+        pcm += n; len -= n; play_off += n;
     }
     return 1;
 }
