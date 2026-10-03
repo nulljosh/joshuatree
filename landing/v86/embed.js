@@ -67,6 +67,7 @@ if (typeof document !== "undefined") (function () {
   // used to reload the kernel with no cmdline, so after lap 1 a phone visitor got a
   // letterboxed desktop (no "phone"), and everyone lost facehost.
   var BOOT_CMDLINE = (IS_PHONE ? "phone samantha " : "") + RES_TOKEN + (/[?&]portfolio\b/.test(location.search) ? "portfolio samantha " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com";
+  if (/[?&]portfolio\b/.test(location.search)) { var sbl = document.getElementById("samantha-boot-link"); if (sbl) sbl.parentNode.style.display = "none"; }   // his site, not Samantha's: no link to her
   var GLIDE_MAX_MS = 700; // longest tour cursor glide, see moveCursorTo
   // v52.6: real shadow cursor position, kept in sync by every real send
   // this file makes (mousemove, touchmove drags, and moveCursorTo's own

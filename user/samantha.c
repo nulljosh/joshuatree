@@ -396,7 +396,7 @@ static void draw_portfolio(void) {
     glass(bx, by, bw, bh, 22, 228, WHITE);
     const char *shown = ar->in;
     while (*shown && tw(shown) > bw - 56) shown++;
-    if (!*shown) text("Message Joshua", bx + 24, by + 14, DIM);
+    if (!*shown) text(uface_portfolio ? "Message Joshua" : "Message Samantha", bx + 24, by + 14, DIM);
     else text(shown, bx + 24, by + 14, INK);
     rect(bx + 24 + (*shown ? tw(shown) + 1 : 0), by + 12, 2, LINE + 4, ACCENT);
 }
