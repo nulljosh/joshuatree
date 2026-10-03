@@ -1050,9 +1050,9 @@ static void gui_launch_chat_app(void) {
 
         sleep_ticks(5);
         mouse_click_edge_sync();
-        /* While waiting, her idle loop plays (12fps); no face, plain wait. */
+        /* While waiting, her idle loop plays (12fps, blended to 24); no face, plain wait. */
         int k;
-        while (!(k = get_key_or_click_until(face_idle_n ? ticks() + 8 : 0))) chat_face_idle_tick();
+        while (!(k = get_key_or_click_until(face_idle_n ? ticks() + 4 : 0))) chat_face_idle_half();
         if (k == KEY_ESC) return;
         if (k == KEY_PTT) {
             const char *ns = chat_ptt_record(T, x, you_w, body_w);
@@ -1189,10 +1189,10 @@ portfolio_next:   /* portfolio: after each answer the face screen stays up for t
         serial_puts("samfocus\n"); /* discriminating marker: the input box is drawn and reading keys every frame, i.e. focused */
         int k;
         if (face_full) {
-            /* Breathing: one idle frame every ~80 ms while nobody types (key reads return 0 at the deadline). */
+            /* Breathing: a half step every ~40 ms (blend, then frame) while nobody types (key reads return 0 at the deadline). */
             do {
-                k = get_key_or_click_until(ticks() + 8);
-                if (k == 0) { chat_face_idle_step(); face_blit(face_idle[face_idle_at]); window_present(); }
+                k = get_key_or_click_until(ticks() + 4);
+                if (k == 0) chat_face_idle_half();
             } while (k == 0);
             if (portfolio_caption_up && k >= 32 && k < 127) {   /* first key of a new question clears the last answer */
                 portfolio_caption_up = 0;
