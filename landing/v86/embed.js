@@ -779,6 +779,7 @@ if (typeof document !== "undefined") (function () {
     var firstTapAt = 0;
     ["pointerdown", "mousedown", "mouseup", "click", "touchstart", "touchend", "keydown", "keyup"].forEach(function (t) {
       document.addEventListener(t, function (ev) {
+        if (ev.target && ev.target.closest && ev.target.closest("#jt-mute")) return;   // the mute button is its own control, not the first tap
         if (!firstTapAt) {
           firstTapAt = Date.now(); unlockAudio(ev); tapTalkBtn.hidden = true; tapTalkResolve();
           if (introVideo) { introVideo.loop = false; introVideo.currentTime = 0; introVideo.muted = false; introVideo.play().catch(function () {}); }
