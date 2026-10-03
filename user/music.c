@@ -1,6 +1,6 @@
 /* music: a song player, as a real ring-3 program with its own window.
  *
- * The library is every .WAV (and .MP3, see the hook below) in the Files root and in a MUSIC
+ * The library is every .WAV (and .MP3) in the Files root and in a MUSIC
  * folder, found with SYS_READDIR. One track at a time is read whole into the SYS_BRK heap with
  * SYS_READFILE (open() stops at 8KB) and refused with a visible message above MAX_BYTES.
  * user/libjt/wav.c turns it into 8-bit unsigned mono PCM, which this program volume-scales and
@@ -19,6 +19,7 @@
 #include "jtsys.h"
 #include "libjt/text.h"
 #include "libjt/wav.h"
+#include "libjt/mp3.h"
 #include "libjt/string.h"
 #include "libjt/stdlib.h"
 
@@ -59,6 +60,8 @@ static unsigned rng JT_DATA = 2463534242u;
 
 static unsigned char *file JT_DATA = 0;   /* the whole song, on the heap */
 static struct wav w JT_DATA;
+static struct mp3 mp JT_DATA;
+static int is_mp3 JT_DATA; /* the open song is an MP3: w.rate and w.frames mirror it so the time math is one path */
 static unsigned char chunk[CHUNK] JT_DATA;
 static unsigned base JT_DATA = 0;         /* frame the current stream started at */
 static unsigned fed JT_DATA = 0;          /* frames queued since then */
@@ -197,15 +200,20 @@ static void scan_library(void) {
 }
 
 /* ---- decoders ---------------------------------------------------------------------------
-   MP3 HOOK. user/libjt/mp3.{c,h} (minimp3) is in libjt.a, but a ring-3 program has a one page
-   (4KB) stack and the decoder's frame buffers alone are bigger, so mp3 playback is not wired:
-   open_mp3 refuses with a visible message. To wire it: open with mp3_open (which reports the
-   rate), fill w.rate and w.frames, and make src_read8 read forward with mp3_read8. */
+   WAV through libjt/wav, MP3 through libjt/mp3 (minimp3 on a 64KB heap stack of its own, since a ring-3
+   program has a 4KB one). Either way the rest of the player sees w.rate and w.frames and src_read8. */
+static void close_song(void) { if (is_mp3) mp3_close(&mp); is_mp3 = 0; }
 static int open_mp3(const unsigned char *buf, unsigned len) {
-    (void)buf; (void)len;
-    return -1;
+    if (mp3_open(&mp, buf, len) != MP3_OK) return -1;
+    w.rate = mp.rate; w.frames = mp.frames; w.channels = 1; w.bits = 8; w.pcm = 0;
+    is_mp3 = 1;
+    return 0;
 }
-static unsigned src_read8(unsigned from, unsigned char *out, unsigned n) { return wav_read8(&w, from, out, n); }
+static unsigned src_read8(unsigned from, unsigned char *out, unsigned n) {
+    if (!is_mp3) return wav_read8(&w, from, out, n);
+    if (from != mp.next && mp3_seek(&mp, from) != MP3_OK) return 0;   /* only a seek or a restart lands here */
+    return mp3_read8(&mp, out, n);
+}
 
 static int load_file(const struct track *t, unsigned char *buf, unsigned size) {
     char path[JT_PATH_MAX + 1]; int l = 0;
@@ -257,6 +265,7 @@ static void stop_all(void) {
 static int start_track(int i) {
     struct track *t = &tracks[i];
     stop_all();
+    close_song();
     if (file) { free(file); file = 0; }
     cur = -1; sel = i; msg[0] = 0;
     if (t->size > MAX_BYTES || t->size == 0) {
@@ -270,7 +279,7 @@ static int start_track(int i) {
     if (n != (int)t->size) { set_msg("Could not read that file"); free(file); file = 0; say("music: unreadable ", t->file, 0, 0); return -1; }
     int r = ext_is(t->file, "MP3") ? open_mp3(file, t->size) : wav_open(&w, file, t->size);
     if (r != 0) {
-        set_msg(ext_is(t->file, "MP3") ? "MP3 playback is not available yet" : "Not a WAV this player can read");
+        set_msg(ext_is(t->file, "MP3") ? "Not an MP3 this player can read" : "Not a WAV this player can read");
         free(file); file = 0; say("music: unsupported ", t->file, 0, 0);
         return -1;
     }

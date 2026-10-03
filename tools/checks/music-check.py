@@ -118,8 +118,8 @@ try:
     i, _ = wait_line(r"ring3app: launching MUSIC\.BIN at ring 3", 45)
     if i is None: fails.append("Music was never launched as a ring-3 program (open=musi or the RING3_APPS row is broken)")
     i, m = wait_line(r"music: library n=(\d+)", 15)
-    if i is None or int(m.group(1)) != 3:
-        fails.append(f"the library did not list the three fixture songs ({m.group(0) if m else 'no library line'}): SYS_READDIR on the root and MUSIC/")
+    if i is None or int(m.group(1)) != 4:
+        fails.append(f"the library did not list the four fixture songs ({m.group(0) if m else 'no library line'}): SYS_READDIR on the root and MUSIC/")
     i, m = wait_line(r"music: ui bar=(\d+),(\d+),(\d+)", 10)
     if i is None: raise SystemExit("FAIL: the app never announced its seek bar\n" + "\n".join(lines()[-15:]))
     bx0, bx1, by = (int(m.group(k)) for k in (1, 2, 3))
@@ -205,6 +205,27 @@ try:
         if len(pl) < 3 or not all(pl[k] < pl[k + 1] for k in range(len(pl) - 1)): fails.append(f"BRAVO did not advance: {pl}")
         elif pl[0] > 3000: fails.append(f"BRAVO did not start from the top: first line {pl[0]}ms")
 
+    # 6b. next song: CHARLIE.MP3 (880Hz), played through the real MP3 decoder at ring 3
+    a = mark()
+    key("n")
+    i, _ = wait_line(r"music: playing CHARLIE\.MP3", 10, a)
+    if i is None: fails.append("n did not move to CHARLIE.MP3 (the MP3 did not open)")
+    else:
+        pl = [int(m.group(1)) for m in wait_n(r"music: at playing pos=(\d+)", 3, 12, i)]
+        print(f"MP3 positions (ms): {pl}")
+        if len(pl) < 3 or not all(pl[k] < pl[k + 1] for k in range(len(pl) - 1)): fails.append(f"the MP3 did not advance: {pl}")
+        elif pl[0] > 3000: fails.append(f"the MP3 did not start from the top: first line {pl[0]}ms")
+        else:
+            a = mark()
+            key("right")
+            i, m = wait_line(r"music: seek pos=(\d+)", 10, a)
+            if i is None: fails.append("the right arrow did not seek inside the MP3")
+            else:
+                S4 = int(m.group(1)); print(f"MP3 right arrow -> {S4}ms")
+                if not (pl[-1] + 3500 <= S4 <= pl[-1] + 7500): fails.append(f"the MP3 seek landed at {S4}ms, not about 5s past {pl[-1]}ms")
+                pl2 = [int(x.group(1)) for x in wait_n(r"music: at playing pos=(\d+)", 3, 12, i)]
+                if len(pl2) < 3 or not all(pl2[k] < pl2[k + 1] for k in range(len(pl2) - 1)) or pl2[0] < S4 - 200: fails.append(f"the MP3 did not play on from its seek point {S4}ms: {pl2}")
+
     # 7. next again: ZHUGE is over the cap, refused visibly
     a = mark()
     key("n")
@@ -254,15 +275,17 @@ if os.path.exists(WAVOUT) and os.path.getsize(WAVOUT) > 44:
         seg = mono[k:k + win]
         rms = math.sqrt(sum(v * v for v in seg) / len(seg))
         if rms < 800: continue
-        e440, e660 = goertzel(seg, rate, 440), goertzel(seg, rate, 660)
-        if e440 > 10 * e660: heard.append(440)
-        elif e660 > 10 * e440: heard.append(660)
+        e440, e660, e880 = goertzel(seg, rate, 440), goertzel(seg, rate, 660), goertzel(seg, rate, 880)
+        if e440 > 10 * max(e660, e880): heard.append(440)
+        elif e660 > 10 * max(e440, e880): heard.append(660)
+        elif e880 > 10 * max(e440, e660): heard.append(880)
     print(f"sound card output, half-second windows by tone: {heard}")
 else:
     fails.append("QEMU's sound card received no audio at all")
 if heard:
     if heard.count(440) < 4: fails.append(f"too little 440Hz (ALPHA) reached the speaker: {heard.count(440)} half-second windows")
     if heard.count(660) < 4: fails.append(f"too little 660Hz (BRAVO) reached the speaker: {heard.count(660)} half-second windows")
+    if heard.count(880) < 4: fails.append(f"too little 880Hz (the MP3) reached the speaker: {heard.count(880)} half-second windows")
     if 440 in heard and 660 in heard and heard.index(660) < len(heard) - 1 - heard[::-1].index(440):
         fails.append("the tones came out of order: a 440Hz stretch after 660Hz began")
 elif not fails or "no audio" not in " ".join(fails):
@@ -274,4 +297,4 @@ if fails:
     print("--- serial tail ---")
     print("\n".join(lines()[-25:]))
     sys.exit(1)
-print("PASS: Music played real sound (440Hz then 660Hz at the card), played advanced, pause held, bar and arrow seeks landed, next changed the song, an oversize file was refused, Esc closed it")
+print("PASS: Music played real sound (440Hz, 660Hz, then the MP3's 880Hz at the card), played advanced, pause held, bar and arrow seeks landed, next changed the song, an oversize file was refused, Esc closed it")

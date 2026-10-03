@@ -5,6 +5,7 @@ A 16MB FAT16 disk (tools/mkdisk.sh) holding three songs, so no media rides in th
 
   ALPHA.WAV   in the root:   440Hz tone, 8-bit mono 8000Hz, 30 s (240KB), long enough that it cannot end on its own during the check
   MUSIC/BRAVO.WAV:           660Hz tone, 16-bit stereo 11025Hz, 12 s (529KB), exercises the downmix
+  MUSIC/CHARLIE.MP3:         880Hz, 22050Hz mono, 12 s (a committed fixture), so the MP3 path plays through the real decoder
   MUSIC/ZHUGE.WAV:           a valid WAV of 3.3MB, over the player's 3MB cap, so it must be refused
 
 Needs mtools (mmd, mcopy), the same as tools/checks/ring3burrow-check.py.
@@ -43,6 +44,7 @@ def main():
     work = sys.argv[2] if len(sys.argv) > 2 else tempfile.mkdtemp(prefix="jt-musicfix-")
     os.makedirs(work, exist_ok=True)
     subprocess.run(["mmd", "-i", img, "::MUSIC"], check=True)
+    songs["CHARLIE.MP3"] = ("::MUSIC/", open(os.path.join(ROOT, "tools", "media", "fixtures", "tone880.mp3"), "rb").read())
     for name, (dest, blob) in songs.items():
         path = os.path.join(work, name)
         open(path, "wb").write(blob)
