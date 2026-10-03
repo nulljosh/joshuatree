@@ -89,6 +89,7 @@ static int uface_cur_kind JT_DATA = -1, uface_cur_i JT_DATA = -1;
 static unsigned char *uface_file JT_DATA = 0;
 static int uface_idle_n JT_DATA = 0, uface_talk_n JT_DATA = 0, uface_done JT_DATA = 0;
 static unsigned uface_open[UFACE_TALK_N] JT_DATA;
+static unsigned last_talk JT_DATA = 0, last_fetch JT_DATA = 0;   /* tick he last talked, tick of the last frame download */
 #define FACE_STEP 16                        /* ticks per cached frame (every 2nd source frame), ~12 fps of motion at 100 Hz */
 
 static void rect(int x, int y, int w, int h, unsigned c) {
@@ -115,11 +116,12 @@ static void serial(const char *tag, const char *s) {
 /* Greedy word wrap of s into lines of at most maxw pixels. Draws each line at
    (x, y + row * LINE) when draw is set; returns the line count. A word wider
    than a line is cut where it stops fitting. */
+static int wrap_cap JT_DATA = 0;   /* when set, rows past this many are counted but not drawn */
 static int wrap(const char *s, int maxw, int x, int y, unsigned fg, int draw) {
     char ln[260], w[82], t[264];
     int n = 0, rows = 0;
     ln[0] = 0;
-#define FLUSH() do { if (draw) text(ln, x, y + rows * LINE, fg); rows++; n = 0; ln[0] = 0; } while (0)
+#define FLUSH() do { if (draw && (!wrap_cap || rows < wrap_cap)) text(ln, x, y + rows * LINE, fg); rows++; n = 0; ln[0] = 0; } while (0)
     for (;;) {
         if (*s == '\n') { FLUSH(); s++; continue; }
         while (*s == ' ') s++;
@@ -342,9 +344,12 @@ static int face_step(unsigned now) {
     if (!face_inited) return 0;
     if (!uface_done) {
         if (inlen > 0) return 0;
-        face_load_step(); if (uface_done) return 1;
-        if (!(uface_clip == 1 && uface_idle_n)) return 0;   /* her idle loop is on screen as soon as it is in, while the talk frames still come */
-    } /* a fetch blocks the app for network time: never while she has typed text pending */
+        int have = uface_idle_n >= 1, idle_in = uface_clip == 1;   /* the first frame is on screen as soon as it arrives, the loop fills in behind it */
+        /* A download blocks the app for the network's time. Until the idle loop is in, each turn takes one and draws. After that, one at
+           most every 1.5 s and never while she talks, so the face keeps moving and her voice is not starved. */
+        if (!have || !idle_in || (!face_talking(now) && (int)(now - last_fetch) >= 150)) { face_load_step(); last_fetch = now_ticks(); if (uface_done) return 1; }
+        if (!have) return 0;
+    }
     if (!uface_idle_n) return 0;
     if ((int)(now - face_next) < 0) return 0;
     face_next = now + FACE_STEP;
@@ -368,6 +373,7 @@ static int face_step(unsigned now) {
 }
 
 static unsigned fps_t0 JT_DATA = 0; static int fps_n JT_DATA = 0;
+static unsigned *backbuf JT_DATA = 0; static int back_w JT_DATA = 0, back_h JT_DATA = 0;
 static void draw_portfolio(void) {
     int W = (int)win.width, H = (int)win.height;
     { unsigned t = now_ticks(); fps_n++; if (!fps_t0) fps_t0 = t; if (t - fps_t0 >= 500) { char d[40] = "samface: draws="; int n = 15; n = face_num(d, n, fps_n); d[n++] = '\n'; jt_write(1, d, (unsigned)n); fps_t0 = t; fps_n = 0; } } /* serial: draws per 5 s */
@@ -375,16 +381,16 @@ static void draw_portfolio(void) {
     if (f) face_fill(f); else rect(0, 0, W, H, BG);
     int bw = W - 32 > 560 ? 560 : W - 32, bx = (W - bw) / 2, bh = 44, by = H - 24 - bh;
     if (f && (status[0] != 'r' || status[1] != 'e')) { int pw = tw(status) + 28; glass(16, 16, pw, 30, 15, 150, WHITE); text(status, 30, 23, INK); }
-    int y = by - 12, floor_y = H * 30 / 100;
-    for (int i = nturn - 1; i >= 0 && i >= nturn - 2; i--) {   /* the last exchange floats above the bar */
-        int cw = bw - 40 > 480 ? 480 : bw - 40;
-        int rows = wrap(ar->t[i].text, cw - 28, 0, 0, 0, 0), h = rows * LINE + 22;
-        if (y - h < floor_y) { rows = (y - floor_y - 22) / LINE; if (rows < 1) break; h = rows * LINE + 22; }
-        int cx = ar->t[i].mine ? bx + bw - cw : bx;
-        y -= h;
-        glass(cx, y, cw, h, 16, ar->t[i].mine ? 190 : 228, ar->t[i].mine ? 0x00EDE6DC : WHITE);
-        wrap(ar->t[i].text, cw - 28, cx + 14, y + 11, INK, 1);
-        y -= 8;
+    /* His latest reply floats above the bar while he talks and for six seconds after, then the face is clear again.
+       Your own message is not echoed: the bar holds it while you type, and the picture stays his. */
+    unsigned now = now_ticks();
+    if (face_talking(now)) last_talk = now;
+    if (nturn > 0 && !ar->t[nturn - 1].mine && last_talk && (int)(now - last_talk) < 600) {
+        int cw = bw - 40 > 480 ? 480 : bw - 40, rows = wrap(ar->t[nturn - 1].text, cw - 28, 0, 0, 0, 0);
+        if (rows > 6) rows = 6;
+        int h = rows * LINE + 22, y = by - 12 - h, cx = bx;
+        glass(cx, y, cw, h, 16, 228, WHITE);
+        wrap_cap = rows; wrap(ar->t[nturn - 1].text, cw - 28, cx + 14, y + 11, INK, 1); wrap_cap = 0;
     }
     glass(bx, by, bw, bh, 22, 228, WHITE);
     const char *shown = ar->in;
@@ -394,9 +400,23 @@ static void draw_portfolio(void) {
     rect(bx + 24 + (*shown ? tw(shown) + 1 : 0), by + 12, 2, LINE + 4, ACCENT);
 }
 
+/* The picture is built off screen and copied to the window in one pass. Drawing straight into the window let the
+   compositor grab a half-finished frame (face without the bar, bar without the bubble): torn, flickering bands. */
+static void draw_portfolio_buffered(void) {
+    unsigned *real = win.pixels; unsigned n = win.width * win.height;
+    if (!backbuf || back_w != (int)win.width || back_h != (int)win.height) {
+        if (backbuf) free(backbuf);
+        backbuf = (unsigned *)malloc(n * 4); back_w = (int)win.width; back_h = (int)win.height;
+    }
+    if (!backbuf) { draw_portfolio(); return; }
+    win.pixels = backbuf; draw_portfolio(); win.pixels = real;
+    unsigned *d = real, *src = backbuf, c = n;
+    __asm__ volatile ("rep movsl" : "+D"(d), "+S"(src), "+c"(c) : : "memory");
+}
+
 static void draw(void) {
     int W = (int)win.width, H = (int)win.height;
-    if (uface_portfolio) { draw_portfolio(); return; }
+    if (uface_portfolio) { draw_portfolio_buffered(); return; }
     rect(0, 0, W, H, BG);
     const char *who = uface_portfolio ? "Joshua" : "Samantha"; /* portfolio mode is his site: his name, his face */
     text(who, 20, 12, ACCENT);
