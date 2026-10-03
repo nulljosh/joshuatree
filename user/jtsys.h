@@ -199,6 +199,7 @@ static inline void jt_exit(int code) {
 static inline int jt_read(int fd, void *buf, unsigned len)        { return jt_syscall(JT_SYS_READ,  (unsigned)fd, (unsigned)buf, len); }
 static inline int jt_write(int fd, const void *buf, unsigned len) { return jt_syscall(JT_SYS_WRITE, (unsigned)fd, (unsigned)buf, len); }
 static inline int jt_open(const char *path, int flags)            { return jt_syscall(JT_SYS_OPEN,  (unsigned)path, (unsigned)flags, 0); }
+/* Whole file into buf (at most max bytes): the byte count, 0 for an empty file, -ENOENT, -EFBIG (too big, nothing copied), -EFAULT. */
 static inline int jt_close(int fd)                                { return jt_syscall(JT_SYS_CLOSE, (unsigned)fd, 0, 0); }
 static inline int jt_time(unsigned *out)                          { return jt_syscall(JT_SYS_TIME,  (unsigned)out, 0, 0); }
 static inline int jt_brk(unsigned top)                            { return jt_syscall(JT_SYS_BRK, top, 0, 0); }

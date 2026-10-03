@@ -98,6 +98,8 @@ retry|2|Bookrank runs as a ring-3 process through the table-driven launcher: dra
 retry|2|Lexly runs as a ring-3 process through the table-driven launcher: draws the word and choices, answers right and wrong through the real drill, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3lexly-check.py
 retry|2|Fieldbook runs as a ring-3 process through the table-driven launcher: draws the ranked field list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3fieldbook-check.py
 retry|2|Clock runs as a ring-3 process through the table-driven launcher: draws the moving time, takes a timer through the real input logic, closes on Esc, desktop alive|python3 ./tools/checks/ring3clock-check.py
+retry|0|Movies plays a real AVI with sound at ring 3, audio-led: frame within one of the audio clock, drift under 100 ms, pause holds frame and sound (checked in the wav and on the framebuffer), seek by bar and keys, fullscreen, a damaged clip / non-AVI / over-cap file each show an error, closes on Esc, desktop alive|python3 ./tools/checks/movie-check.py
+once |0|AVI reader, host harness (real JPEG frames, bad headers, truncation, mutation fuzz under ASan/UBSan)|./tools/checks/avi-host-check.sh
 retry|2|Portfolio runs as a ring-3 process through the table-driven launcher: draws the fleet catalog, moves the selection by keyboard and mouse through the real logic, closes on Esc, desktop alive|python3 ./tools/checks/ring3portfolio-check.py
 retry|2|Activity runs as a ring-3 process through the table-driven launcher: draws the live task list, refreshes it on its own, has the kernel refuse to kill the shell, closes on Esc, desktop alive|python3 ./tools/checks/ring3activity-check.py
 retry|2|Contacts runs as a ring-3 process through the table-driven launcher: draws the list, adds and deletes a person through the real prompt, keeps CONTACTS.TXT across fresh runs, closes on Esc, desktop alive|python3 ./tools/checks/ring3contacts-check.py
@@ -135,7 +137,6 @@ retry|7|Drawing lands offscreen, window_present puts it on screen|./tools/checks
 retry|5|Multi-window apps draw exactly one toolbar, not two|./tools/checks/mwdupetoolbar-check.sh
 once |6|JPEG decoder, host harness|./tools/checks/jpeg-host-check.sh
 once |6|Media decoders (WAV, MP3), host harness under ASan and UBSan|./tools/checks/media-host-check.sh
-once |6|AVI/MJPEG reader, host harness under ASan and UBSan|./tools/checks/avi-host-check.sh
 retry|7|Tasks keep their own x87 float state across switches|./tools/checks/fpu-check.sh
 once |7|HTML entities decode to ASCII, host harness|./tools/checks/html-host-check.sh
 retry|2|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
