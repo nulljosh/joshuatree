@@ -2,10 +2,6 @@
 
 # Joshua Tree
 
-[![Watch the 30 second ad](landing/ad-poster.jpg)](https://joshuatree.heyitsmejosh.com/ad/)
-
-[Watch the 30 second ad](https://joshuatree.heyitsmejosh.com/ad/), live in 3D in your browser.
-
 ![version](https://img.shields.io/github/v/release/nulljosh/joshuatree?label=version&color=blue)
 ![ci](https://img.shields.io/github/actions/workflow/status/nulljosh/joshuatree/check.yml?event=pull_request&label=ci)
 ![license](https://img.shields.io/badge/license-Apache_2.0-green)
