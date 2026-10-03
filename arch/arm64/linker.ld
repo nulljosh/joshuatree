@@ -1,6 +1,6 @@
 ENTRY(_start)
 SECTIONS {
-    . = 0x40000000;
+    . = KBASE;
     .text : { *(.text.boot) *(.text*) }
     .rodata : { *(.rodata*) }
     .data : { *(.data*) }
