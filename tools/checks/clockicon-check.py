@@ -80,10 +80,10 @@ def boot(port, rtc, tag, later=0):
         except subprocess.TimeoutExpired: q.kill()
 
 def tile_box(img):
-    # Scrolled to the end, Clock is alone in the last visible row, col 0
-    # (gui_launch_apps: viewport 64,62, grid x0=41 y0=95, cell 150x108, tile 60, 2x scale).
-    x0, y0 = (64 + 41 + 75 - 30) * 2, (62 + 95 + 2 * 108) * 2
-    return x0, y0, x0 + 120, y0 + 120
+    # Clock is APPS[24]: row 4, col 4. Selecting it scrolls the grid to offset 2, so it sits in the
+    # last visible row (gui_launch_apps: x0=(960-5*150)/2=105, y0=88, cell 150x116, tile 74, 2x scale).
+    cx, cy = (105 + 4 * 150 + 75) * 2, (62 + 88 + 2 * 116 + 37) * 2  # +62: the Apps window's viewport top
+    return cx - 60, cy - 60, cx + 60, cy + 60
 
 def lum(p): return (p[0] * 299 + p[1] * 587 + p[2] * 114) // 1000
 
