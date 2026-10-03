@@ -260,6 +260,8 @@
   #demo-frame.demo-full #stage-wrap { width: min(100vw, calc(var(--demo-h, 100dvh) * 16 / 9)); max-height: var(--demo-h, 100dvh); border-radius: 0; }
   #demo-frame.demo-full.has-composer { box-sizing: border-box; padding-bottom: 76px; }
   #demo-frame.demo-full.has-composer #stage-wrap { width: min(100vw, calc((var(--demo-h, 100dvh) - 76px) * 16 / 9)); max-height: calc(var(--demo-h, 100dvh) - 76px); }
+  /* 1.9.41: widescreen (16:10+) letterbox fix. On 16:10 screens, fill the full width without leaving black bands at the sides. Expand height allowance to 85svh to fit full width while maintaining 16:9 aspect. */
+  @media (min-aspect-ratio: 16 / 10) { #stage-wrap { width: 100%; --stage-h: min(85svh, calc(100svh - 100px)); } }
   @media (max-width: 600px) { #stage-wrap { width: 100%; max-height: none; } }
   /* A phone on its side (844x390): the 270px of page chrome the formula reserves left a 128x72 strip. Let the demo have the short screen. */
   @media (orientation: landscape) and (max-height: 520px) { #stage-wrap { --stage-h: calc(100svh - 24px); } }
@@ -574,7 +576,7 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">25</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">1.9.39</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">1.9.41</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a>
@@ -806,7 +808,7 @@
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">1.9.39</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">1.9.41</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
     <p class="foot-meta"><a class="foot-cta" href="#waitlist">Want one? Join the dev-kit waitlist.</a></p>
   </div>
 </footer>
