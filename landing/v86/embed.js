@@ -748,6 +748,7 @@ if (typeof document !== "undefined") (function () {
       (/[?&]portfolio\b/.test(location.search) ? "background:#fff;color:#000;" : "background:var(--fg);color:var(--bg);") + "border:none;border-radius:999px;padding:14px 22px;min-height:44px;" +   /* portfolio: his sweater is dark, a dark pill vanishes on it */
       "font:600 15px/1 -apple-system,Helvetica,Arial,sans-serif;letter-spacing:0.01em;cursor:pointer;" +
       "box-shadow:0 4px 18px rgba(0,0,0,0.18);white-space:nowrap;";
+    tapTalkBtn.style.display = "none";   // the speaker button, top right, is how a visitor starts the sound; the first tap anywhere still counts
     ["touchstart", "mousedown", "pointerdown"].forEach(function (t) {
       tapTalkBtn.addEventListener(t, function (ev) { ev.stopPropagation(); }, { passive: true });
     });
@@ -778,12 +779,12 @@ if (typeof document !== "undefined") (function () {
         v.style.opacity = "0"; setTimeout(function () { v.remove(); }, 700);
       });
     }
-    var firstTapAt = 0;
+    var firstTapAt = 0, repaintMute = null;
     // The first gesture starts the sound: audio unlocked, the intro video restarted from the top with its own audio on.
     // The speaker button is that gesture too (on a phone it is the obvious thing to press), so it calls this as well.
     var startSound = function (ev) {
       if (firstTapAt) return;
-      firstTapAt = Date.now(); unlockAudio(ev); tapTalkBtn.hidden = true; tapTalkResolve();
+      firstTapAt = Date.now(); unlockAudio(ev); tapTalkBtn.hidden = true; tapTalkResolve(); if (repaintMute) repaintMute();
       if (introVideo) { introVideo.loop = false; introVideo.currentTime = 0; introVideo.muted = false; introVideo.play().catch(function () {}); }
     };
     ["pointerdown", "mousedown", "mouseup", "click", "touchstart", "touchend", "keydown", "keyup"].forEach(function (t) {
@@ -804,12 +805,12 @@ if (typeof document !== "undefined") (function () {
     if (mx) mx.set_volume(muted ? 0 : 1, 2);
     return !!mx;
   }
-  if (/[?&]portfolio\b/.test(location.search)) {
+  if (/[?&]portfolio\b/.test(location.search) || IS_PHONE) {
     try { muted = localStorage.getItem("jt-muted") === "1"; } catch (e) {}
     muteBtn = document.createElement("button");
     muteBtn.type = "button";
     muteBtn.id = "jt-mute";
-    muteBtn.style.cssText = "position:absolute;top:10px;right:10px;z-index:8;width:36px;height:36px;padding:0;border:none;border-radius:50%;" +
+    muteBtn.style.cssText = "position:absolute;top:10px;right:" + (/[?&]portfolio\b/.test(location.search) ? 10 : 56) + "px;z-index:8;width:36px;height:36px;padding:0;border:none;border-radius:50%;" +
       "display:flex;align-items:center;justify-content:center;background:rgba(28,28,30,0.78);color:#fff;cursor:pointer;" +
       "-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 1px 6px rgba(0,0,0,0.18);";
     var paintMute = function () {
@@ -818,9 +819,9 @@ if (typeof document !== "undefined") (function () {
       muteBtn.title = muted ? "Unmute" : "Mute";
       muteBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
         '<path d="M11 5 6 9H3v6h3l5 4z" fill="currentColor"/>' +
-        (muted ? '<path d="m16 9 5 6M21 9l-5 6"/>' : '<path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>') + '</svg>';
+        ((muted || !firstTapAt) ? '<path d="m16 9 5 6M21 9l-5 6"/>' : '<path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>') + '</svg>';
     };
-    paintMute();
+    paintMute(); repaintMute = paintMute;
     ["touchstart", "mousedown", "pointerdown"].forEach(function (t) {
       muteBtn.addEventListener(t, function (ev) { ev.stopPropagation(); }, { passive: true });
     });
@@ -2252,7 +2253,7 @@ if (typeof document !== "undefined") (function () {
     for (var li = 0; li < PHONE_LAP_LINES.length; li++) {
       if (focused || tourGen !== gen) return;
       var speakSeen = speakCount;
-      if (phoneSaidFirst) { await emulator.keyboard_send_text('n', 200); await sleep(400); }
+      if (phoneSaidFirst && emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([8], 80); await sleep(200); }   // Samantha is a ring-3 app now: there is no 'n' console, and a key pressed over her speaking only skips the speech, so Backspace (a no-op on an empty bar) goes first
       phoneSaidFirst = true;
       await emulator.keyboard_send_text(PHONE_LAP_LINES[li] + '\n', 55);
       // Wait for her real reply to finish speaking. The kernel logs
