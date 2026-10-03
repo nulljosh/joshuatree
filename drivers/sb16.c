@@ -83,7 +83,11 @@ int sb16_present(void) { return present; }
 /* 1.9.26: async queue state (see sb16_queue below). Shared with the IRQ: only touched with
    interrupts off, or from the IRQ itself. */
 #define AUD_RING   32768u      /* power of two */
-#define AUD_CHUNK  4096u       /* bytes per DMA transfer, a quarter second at 16 kHz */
+#define AUD_CHUNK  4096u       /* bytes per capture transfer, a quarter second at 16 kHz */
+/* Bytes per playback DMA transfer. `played` is exact only when a transfer finishes; inside one it is
+   extrapolated from the tick counter, so the transfer size bounds how far a picture that follows it
+   (Movies) can be out. 1KB is 93 ms at 11 kHz and 23 ms at 44.1 kHz; the old 4KB was 370 ms and 93 ms. */
+#define AUD_OUT_CHUNK 1024u
 static u8 aud_ring[AUD_RING];
 static volatile u32 aud_head, aud_tail;     /* free-running counts; used = head - tail */
 static volatile u32 aud_rate = 16000;
@@ -154,8 +158,8 @@ static void aud_kick(void) {
     if (aud_flying || aud_blocking || rec_on || rec_flying || !present) return;
     u32 used = aud_head - aud_tail;
     if (!used) { aud_end = 0; return; }
-    if (used < AUD_CHUNK && !aud_end) return;       /* wait for more, no underrun clicks */
-    u32 n = used > AUD_CHUNK ? AUD_CHUNK : used;
+    if (used < AUD_OUT_CHUNK && !aud_end) return;   /* wait for more, no underrun clicks */
+    u32 n = used > AUD_OUT_CHUNK ? AUD_OUT_CHUNK : used;
     for (u32 i = 0; i < n; i++) sb16_dma_buf[i] = aud_ring[(aud_tail + i) & (AUD_RING - 1)];
     aud_tail += n;
     if (!dma_start_out(n, aud_rate)) { aud_tail = aud_head; return; }   /* DSP wedged: drop the clip */

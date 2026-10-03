@@ -88,7 +88,9 @@ if face and (face.group(1), face.group(2), face.group(5)) != ("24", "48", "0"):
     fails.append(f"expected idle=24 talk=48 skipped=0, got {face.group(0)}")
 if any(n == -5 for n, _, _ in stats): fails.append(f"{sum(1 for n, _, _ in stats if n == -5)} fetches came back -EIO (-5)")
 if stats:
-    ok = [(fb, lg) for n, fb, lg in stats if n > 0]
+    sizes = {len(b) for b in FRAMES.values()}   # only the face frames count: the kernel's own weather fetch can land in the window on a slow runner and its census is not the app's
+    ok = [(fb, lg) for n, fb, lg in stats if n in sizes]
+    if len(ok) < 72: fails.append(f"only {len(ok)} of 72 face fetches were counted (a reply length did not match a stub frame)")
     warm = ok[8:]   # the first few fetches grow the heap to fit their reply buffers
     if warm and min(lg for _, lg in warm) < 66 * 1024: fails.append(f"largest free heap block fell to {min(lg for _, lg in warm)} bytes, under a face reply buffer")
     tail = [fb for fb, _ in ok[-20:]]

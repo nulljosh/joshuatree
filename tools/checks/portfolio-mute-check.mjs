@@ -1,7 +1,7 @@
 // Portfolio voice: on by default, with a mute button at the top right.
 // Headless Chromium against landing/index.html?full&portfolio on a local static
 // server (no kernel needed, the button is page chrome). Asserts: the button
-// exists, sits in the top right corner, starts unmuted; one click mutes it
+// exists, sits in the top right corner, starts unmuted; the first press starts the sound, the next click mutes it
 // (aria-pressed, label, remembered across a reload); a second click unmutes;
 // and the dead fullscreen button no longer shows where the mute button lives.
 // Without ?portfolio there is no mute button at all (Samantha's page is unchanged).
@@ -37,6 +37,8 @@ try {
     if (s.pressed !== 'false') fail(`${tag}: voice is not on by default (aria-pressed ${s.pressed})`);
     if (s.top > 70 || s.right > 30) fail(`${tag}: mute button is not top right (top ${s.top}, right gap ${s.right})`);
     if (s.exit !== 'none') fail(`${tag}: the dead fullscreen button still shows (${s.exit})`);
+    await page.click('#jt-mute'); s = await g();   // the first press starts the sound (a browser needs a gesture): it never mutes
+    if (s.pressed !== 'false') fail(`${tag}: the first press muted instead of starting the sound: ${JSON.stringify(s)}`);
     await page.click('#jt-mute'); s = await g();
     if (s.pressed !== 'true' || !/^Unmute/.test(s.label) || s.ls !== '1') fail(`${tag}: one click did not mute and remember it: ${JSON.stringify(s)}`);
     await page.reload({ waitUntil: 'load' }); await page.waitForSelector('#jt-mute'); s = await g();

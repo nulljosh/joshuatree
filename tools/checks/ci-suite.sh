@@ -98,6 +98,8 @@ retry|2|Bookrank runs as a ring-3 process through the table-driven launcher: dra
 retry|2|Lexly runs as a ring-3 process through the table-driven launcher: draws the word and choices, answers right and wrong through the real drill, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3lexly-check.py
 retry|2|Fieldbook runs as a ring-3 process through the table-driven launcher: draws the ranked field list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3fieldbook-check.py
 retry|2|Clock runs as a ring-3 process through the table-driven launcher: draws the moving time, takes a timer through the real input logic, closes on Esc, desktop alive|python3 ./tools/checks/ring3clock-check.py
+retry|0|Movies plays a real AVI with sound at ring 3, audio-led: frame within one of the audio clock, drift under 100 ms, pause holds frame and sound (checked in the wav and on the framebuffer), seek by bar and keys, fullscreen, a damaged clip / non-AVI / over-cap file each show an error, closes on Esc, desktop alive|python3 ./tools/checks/movie-check.py
+once |0|AVI reader, host harness (real JPEG frames, bad headers, truncation, mutation fuzz under ASan/UBSan)|./tools/checks/avi-host-check.sh
 retry|2|Portfolio runs as a ring-3 process through the table-driven launcher: draws the fleet catalog, moves the selection by keyboard and mouse through the real logic, closes on Esc, desktop alive|python3 ./tools/checks/ring3portfolio-check.py
 retry|2|Activity runs as a ring-3 process through the table-driven launcher: draws the live task list, refreshes it on its own, has the kernel refuse to kill the shell, closes on Esc, desktop alive|python3 ./tools/checks/ring3activity-check.py
 retry|2|Contacts runs as a ring-3 process through the table-driven launcher: draws the list, adds and deletes a person through the real prompt, keeps CONTACTS.TXT across fresh runs, closes on Esc, desktop alive|python3 ./tools/checks/ring3contacts-check.py
@@ -134,6 +136,8 @@ retry|2|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mw
 retry|7|Drawing lands offscreen, window_present puts it on screen|./tools/checks/backbuffer-check.sh
 retry|5|Multi-window apps draw exactly one toolbar, not two|./tools/checks/mwdupetoolbar-check.sh
 once |6|JPEG decoder, host harness|./tools/checks/jpeg-host-check.sh
+once |6|Media decoders (WAV, MP3), host harness under ASan and UBSan|./tools/checks/media-host-check.sh
+retry|7|Tasks keep their own x87 float state across switches|./tools/checks/fpu-check.sh
 once |7|HTML entities decode to ASCII, host harness|./tools/checks/html-host-check.sh
 retry|2|JPEG decoder, in-kernel|./tools/checks/jpeg-check.sh
 once |6|PNG/JPEG decoder fuzz (ASan/UBSan, truncation+mutation+nasties)|./tools/checks/decoder-fuzz-check.sh
@@ -194,6 +198,7 @@ once |2|Every check in tools/checks/ is in this manifest or says why not|./tools
 retry|5|Text selection in Notes: Shift-arrow/Ctrl+A highlight, edsel/edcopy/edcut markers, selection-aware copy/cut/paste/delete|python3 ./tools/checks/textselect-check.py
 retry|6|Window top edge and corner arc are one continuous AA shape|python3 ./tools/checks/windowedge-check.py
 retry|7|Sound Blaster 16 detects, beep plays a real 440Hz tone, card-less boot is a no-op|python3 ./tools/checks/sb16-check.py
+retry|3|Music runs as a ring-3 app: plays a fixture WAV off a FAT disk (position from the driver, pause holds, bar and arrow seeks land, next changes the song, oversize file refused) and the sound card hears the tones|python3 ./tools/checks/music-check.py
 retry|3|Sound Blaster 16 record path: `listen` reaches the driver and times out cleanly (QEMU has no ADC backend), card-less boot is a no-op|python3 ./tools/checks/sb16-record-check.py
 retry|4|Chat speaks: say fetches /api/speak PCM from a stub and plays a real 1000Hz tone|python3 ./tools/checks/chat-speaks-check.py
 retry|4|Chat face: idle frame before, talk frames while she speaks, idle after; no frames means no face|python3 ./tools/checks/chat-face-check.py
