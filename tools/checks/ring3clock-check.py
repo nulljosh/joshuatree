@@ -131,7 +131,14 @@ try:
     keys("esc")
     if not wait_serial("clock: closed", 5):
         fails.append("Esc did not reach the program (no closed line)")
-    if not wait_serial("syscall: window released, task gone", 5) or serial().count("CLOCK.BIN exited 0") <= exits:
+    released = wait_serial("syscall: window released, task gone", 5)
+    # The "exited 0" line is logged a beat AFTER "window released" (the reaper
+    # runs on a later tick), so read it with its own deadline: a single read right
+    # after the release line lost that race on a slow CI runner.
+    for _ in range(50):
+        if serial().count("CLOCK.BIN exited 0") > exits: break
+        time.sleep(0.1)
+    if not released or serial().count("CLOCK.BIN exited 0") <= exits:
         fails.append("Clock did not exit 0 and release its window on Esc")
     if "exception: ring-0" in serial() or "panic in" in serial() or "ring3app: BUG" in serial():
         fails.append("the kernel faulted or ring3app logged a BUG line")

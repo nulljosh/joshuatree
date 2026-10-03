@@ -40,7 +40,7 @@ VIEW_X, VIEW_Y = 78, 72   # gui_launch_from_dock: viewport at (x+8, y+32) for x=
 PARK = (480, 200)
 ROW_COLOR = (0xFA, 0xF8, 0xF6)
 SEL_COLOR = (0xED, 0xE6, 0xDC)
-PF_TOP, PF_ROW_H = 68, 20   # user/portfolio.c: list top and row pitch
+PF_TOP, PF_ROW_H = 40, 22   # user/portfolio.c: list top and row pitch (was 68/20 before the antialiased-type pass)
 PROBE_X = 700               # right of the text, inside the highlight bar
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -135,7 +135,14 @@ try:
     keys("esc")
     if not wait_serial("portfolio: closed", 5):
         fails.append("Esc did not reach the program (no closed line)")
-    if not wait_serial("syscall: window released, task gone", 5) or serial().count("PORTFOLIO.BIN exited 0") <= exits:
+    released = wait_serial("syscall: window released, task gone", 5)
+    # The "exited 0" line is logged a beat AFTER "window released" (the reaper
+    # runs on a later tick), so read it with its own deadline: a single read right
+    # after the release line lost that race on a slow CI runner.
+    for _ in range(50):
+        if serial().count("PORTFOLIO.BIN exited 0") > exits: break
+        time.sleep(0.1)
+    if not released or serial().count("PORTFOLIO.BIN exited 0") <= exits:
         fails.append("Portfolio did not exit 0 and release its window on Esc")
     if "exception: ring-0" in serial() or "panic in" in serial() or "ring3app: BUG" in serial():
         fails.append("the kernel faulted or ring3app logged a BUG line")

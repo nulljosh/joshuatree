@@ -30,6 +30,12 @@ PITCH = DOCK_ICON + DOCK_GAP
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
+TRAY = (239, 235, 228)
+FACE_WHITE_MIN = 3000  # Clock's face disc measures ~4400 white px in the tile box, Calculator ~1800
+CLOSE_X, CLOSE_Y, CLOSE_RED = 80, 46, (0xFF, 0x5F, 0x57)  # the Apps folder window's close dot (ring-3 app windows sit lower, at 94,56)
+
+def near(p, c, tol=12): return max(abs(p[i] - c[i]) for i in range(3)) <= tol
+
 def boot(port, rtc, tag, later=0):
     log, dump = "/tmp/jt-clockicon-%s.log" % tag, "/tmp/jt-clockicon-%s.raw" % tag
     for f in (log, dump):
@@ -51,7 +57,20 @@ def boot(port, rtc, tag, later=0):
             while True:
                 r = json.loads(f.readline())
                 if "return" in r or "error" in r: return r
-        f.readline(); cmd({"execute": "qmp_capabilities"}); time.sleep(5.0)
+        f.readline(); cmd({"execute": "qmp_capabilities"})
+        def grab():
+            cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": dump}})
+            return Image.frombytes("RGBA", (W, H), open(dump, "rb").read(), "raw", "BGRA").convert("RGB")
+        def wait_for(pred, secs, what):
+            end = time.time() + secs
+            while time.time() < end:
+                if pred(grab()): return True
+                time.sleep(0.3)
+            print("note: timed out waiting for " + what); return False
+        # Every wait below is for a state, not a delay: a loaded CI runner boots
+        # and animates several times slower, and fixed sleeps captured the grid
+        # mid-open (white disc 1756 px instead of ~4487) and mid-scroll.
+        wait_for(lambda im: any(im.getpixel((960, y)) == TRAY for y in range(900, H, 4)), 90, "the desktop dock")
         def move(x, y):
             cmd({"execute": "input-send-event", "arguments": {"events": [
                 {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / LOGICAL_W)}},
@@ -62,16 +81,28 @@ def boot(port, rtc, tag, later=0):
         cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": True, "button": "left"}}]}})
         time.sleep(0.1)
         cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
+        wait_for(lambda im: near(im.getpixel((CLOSE_X * 2 + 1, CLOSE_Y * 2 + 1)), CLOSE_RED), 60, "the Apps folder window")
         time.sleep(1.0)
         for _ in range(2): key("d")  # the folder reads w/a/s/d: Clock is APPS[23], grid position 22 (Portfolio hidden), row 4 col 2
         for _ in range(4): key("s")
-        time.sleep(1.5)
-        cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": dump}})
-        img = Image.frombytes("RGBA", (W, H), open(dump, "rb").read(), "raw", "BGRA").convert("RGB")
+        # Settled: the grid has scrolled to Clock (its full white face disc, ~4400 px;
+        # the neighbouring Calculator tile has ~1800, and that is where a starved
+        # runner's selection sits while the arrow keys are still queued) and the tile
+        # is byte-identical across two frames half a second apart (hands drawn).
+        img, prev, end = None, None, time.time() + 120
+        while time.time() < end:
+            img = grab(); box = tile_box(img)
+            crop = img.crop(box).tobytes()
+            if crop == prev and measure(img, box)[3] >= FACE_WHITE_MIN: break
+            prev = crop; time.sleep(0.5)
         if later:
-            time.sleep(later)  # the folder stays open; the minute rolls over meanwhile
-            cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": dump}})
-            img = (img, Image.frombytes("RGBA", (W, H), open(dump, "rb").read(), "raw", "BGRA").convert("RGB"))
+            # The folder stays open; poll until the minute rolls over and the hands move.
+            before, after, end = img, img, time.time() + later
+            while time.time() < end:
+                time.sleep(1.0)
+                after = grab()
+                if face_diff(before, after) >= 20: break
+            img = (before, after)
         try: cmd({"execute": "quit"})
         except (ConnectionResetError, BrokenPipeError, OSError): pass
         return img
@@ -104,6 +135,11 @@ def measure(img, box):
                 if y < cy - 3 and abs(x - cx) <= 3: up += 1
     return left, right, up, white
 
+def face_diff(before, after):
+    x0, y0, x1, y1 = tile_box(before)
+    return sum(1 for y in range(y0 + 10, y1 - 10) for x in range(x0 + 10, x1 - 10)
+               if (lum(before.getpixel((x, y))) < 90) != (lum(after.getpixel((x, y))) < 90))
+
 fails = []
 res = {}
 for port, rtc, tag in ((4513, "2026-03-10T03:00:00", "a"), (4514, "2026-03-10T09:00:00", "b")):
@@ -121,11 +157,8 @@ if "a" in res and "b" in res:
     if ua < 15 or ub < 15: fails.append("minute hand at 12 missing (up ink %d, %d)" % (ua, ub))
     if wa < 400 or wb < 400: fails.append("no white face disc (white px %d, %d)" % (wa, wb))
 # Redraw on the minute: seeded 25s before :30, the folder open and untouched.
-before, after = boot(4515, "2026-03-10T03:29:35", "c", later=30)
-box = tile_box(before)
-x0, y0, x1, y1 = box
-diff = sum(1 for y in range(y0 + 10, y1 - 10) for x in range(x0 + 10, x1 - 10)
-           if (lum(before.getpixel((x, y))) < 90) != (lum(after.getpixel((x, y))) < 90))
+before, after = boot(4515, "2026-03-10T03:29:35", "c", later=130)
+diff = face_diff(before, after)
 print("minute rollover: %d face pixels changed" % diff)
 if diff < 20: fails.append("hands did not redraw when the minute changed (%d pixels differ)" % diff)
 if fails:

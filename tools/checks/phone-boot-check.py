@@ -131,11 +131,28 @@ except Exception as e:
 # but on a 430-wide phone frame the face is nearly the full screen width,
 # so it covered the label's right half ("Samant" then face). Boot with a
 # facehost stub serving solid-color frames, send a message that answers
-# locally (chat_run_tool's new_reminder, no llmhost needed), and assert
+# locally (Samantha runs new_reminder after the stub answers /api/pick), and assert
 # CHAT_ACCENT-colored pixels (her name, drawn in 0x00B7862A) still exist
 # across the label's known column span -- not just at x=20, which a
 # half-covered label would still pass.
 import http.server, io, threading
+
+def _stub_post(h):
+    """Answer Samantha's /api/pick and /api/chat locally, instantly. These two
+    scenarios used to boot with no llmhost, so /api/pick went to the real
+    internet: green on a box with a route, but on a runner without a fast one
+    the pick blocked her for seconds (the reminder never ran, and the back
+    chevron tap queued behind the blocked request). Hermetic and immediate now."""
+    body = h.rfile.read(int(h.headers.get("Content-Length", "0")))
+    if h.path == "/api/pick":
+        try: q = json.loads(body.decode("utf-8")).get("q", "").lower()
+        except Exception: q = ""
+        ans = {"tool": "new_reminder", "arg": "call mom"} if "remind" in q else {"tool": None, "arg": ""}
+    else:
+        ans = {"model": "samantha", "message": {"role": "assistant", "content": "ok"}, "done": True}
+    rep = json.dumps(ans).encode()
+    h.send_response(200); h.send_header("Content-Type", "application/json")
+    h.send_header("Content-Length", str(len(rep))); h.end_headers(); h.wfile.write(rep)
 
 try:
     from PIL import Image as _Image2
@@ -148,6 +165,7 @@ try:
 
     class _Stub(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a): pass
+        def do_POST(self): _stub_post(self)
         def do_GET(self):
             body = FRAMES.get(self.path)
             if body is None: self.send_response(404); self.end_headers()
@@ -169,7 +187,7 @@ try:
     args = ["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std", "-no-reboot",
             "-qmp", f"tcp:127.0.0.1:{LABEL_PORT},server,nowait", "-serial", "file:" + LABEL_LOG,
             "-net", "nic,model=rtl8139", "-net", "user",
-            "-append", f"phone samantha facehost=10.0.2.2:{_port}"]
+            "-append", f"phone samantha facehost=10.0.2.2:{_port} llmhost=10.0.2.2 llmport={_port}"]
     q2 = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         time.sleep(1.0)
@@ -443,6 +461,7 @@ try:
 
     class _Stub4(_hs4.BaseHTTPRequestHandler):
         def log_message(self, *a): pass
+        def do_POST(self): _stub_post(self)
         def do_GET(self):
             body = FRAMES4.get(self.path)
             if body is None: self.send_response(404); self.end_headers()
@@ -473,7 +492,7 @@ try:
     args4 = ["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std", "-no-reboot",
              "-qmp", f"tcp:127.0.0.1:{TAP_PORT},server,nowait", "-serial", "file:" + TAP_LOG,
              "-net", "nic,model=rtl8139", "-net", "user",
-             "-append", f"phone samantha facehost=10.0.2.2:{_port4}"]
+             "-append", f"phone samantha facehost=10.0.2.2:{_port4} llmhost=10.0.2.2 llmport={_port4}"]
     q4 = subprocess.Popen(args4, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         time.sleep(1.0)
@@ -587,9 +606,6 @@ try:
         # windowed chat console gui_launch_chat_app landed on after enter).
         # ESC from there returns to gui_run's caller, which for
         # boot_to_phone always lands on phone_home_run's grid.
-        move4(20, 15); time.sleep(0.3); click4(); time.sleep(0.8)
-        dump4(TAP_HOME)
-        img_home, px_home = load4(TAP_HOME)
         # Mail is APPS[1]: grid geometry from phone_home.h's
         # phone_home_grid_geom, same COLS/CELL_W/CELL_H/TILE/Y0 constants
         # scenario 3 above already established.
@@ -607,6 +623,17 @@ try:
                         return True
             return False
 
+        # Samantha is a ring-3 program: right after a reply she is inside her
+        # blocking /api/speak request and only sees the close when it returns,
+        # so the home grid arrives a moment after the tap, not within a fixed
+        # 0.8 s. Poll for it (Mail's cell is blank on her chat screen, drawn on
+        # the grid) with a deadline: a tap that never closes her still fails.
+        move4(20, 15); time.sleep(0.3); click4()
+        for _ in range(60):
+            time.sleep(0.5)
+            dump4(TAP_HOME)
+            img_home, px_home = load4(TAP_HOME)
+            if not_bg4(px_home, mail_cx, mail_cy): break
         if not not_bg4(px_home, mail_cx, mail_cy):
             fail = 1; print(f"FAIL: back chevron tap didn't land on the home grid -- Mail's cell ({mail_cx},{mail_cy}) is blank")
         else:

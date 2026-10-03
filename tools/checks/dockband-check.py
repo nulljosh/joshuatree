@@ -63,8 +63,11 @@ img = Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").co
 
 
 TRAY = (239, 235, 228)
+HAIRLINE = (214, 208, 198)  # 2.0: the tray's 1px bottom edge, one flat colour by design
 X = 960
-y = max(y for y in range(700, H) if img.getpixel((X, y)) == TRAY) + 1  # first row under the tray
+# First row under the tray AND its hairline: the hairline is part of the tray,
+# not the shadow, so it is exempt from the "no flat row" rule.
+y = max(y for y in range(700, H) if img.getpixel((X, y)) in (TRAY, HAIRLINE)) + 1
 fail = 0
 for row in range(y, y + 16):
     px = [img.getpixel((x, row)) for x in range(560, 1360)]
