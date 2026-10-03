@@ -185,31 +185,8 @@ else:
 key("esc"); time.sleep(0.3)  # cancel the prompt, back to the Reminders list
 key("esc"); time.sleep(0.5)  # close Reminders, back to the Apps folder grid
 
-# Test 2: Mail is grid index 1, also digit-reachable: digit '2'.
-key("2"); time.sleep(0.6)
-key("c")  # compose (mail.h's real shortcut, not a letter typed into the grid)
-time.sleep(0.4)
-
-before = prompt_count()
-for c in "Alice":
-    key(c)
-    time.sleep(0.1)
-# Keys dropped on slow runners if sent in burst; poll for redraw markers
-after = 0
-for _ in range(50):
-    after = prompt_count()
-    if after > before + 2:
-        break
-    time.sleep(0.1)
-
-if after > before + 3:
-    test_results.append(f"Mail: OK ({after - before} redraws for ~5 keystrokes)")
-else:
-    test_results.append(f"Mail: FAIL (expected 4+ redraws, got {after - before})")
-
-key("esc"); time.sleep(0.3)  # cancel compose
-key("esc"); time.sleep(0.5)  # close Mail, back to the Apps folder grid
-
+# Mail's compose prompt is a ring-3 app now and no longer writes a per-redraw marker, so it has no test here;
+# its chrome is the compositor's, covered by mwkeyflash-check.sh. Reminders above keeps its remindersprompt marker.
 key("esc"); time.sleep(0.3)  # close the Apps folder grid
 
 cmd({"execute": "quit"})
