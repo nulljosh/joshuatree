@@ -20,7 +20,7 @@ About 163,000 lines of C and headers across boot, kernel, drivers and lib, plus 
 ## Milestones, each one runs
 
 1. **M0, serial hello. Done (`arch/arm64`, `tools/checks/arm64-m0-check.py`). Also builds for a real Pi 4 (`make -C arch/arm64 pi`), tried on QEMU's raspi4b model; the first boot on a real board is still to do, see [RASPBERRY-PI.md](RASPBERRY-PI.md).** `clang -target aarch64-none-elf` plus `ld.lld` (both installed here) build a kernel that prints on the PL011 UART under `qemu-system-aarch64 -machine virt`. Days.
-2. **M1, a machine.** Exception vectors, MMU, the generic timer, the GIC, a heap and the memory manager. Draw the existing desktop to a `ramfb` framebuffer. Days to a couple of weeks.
+2. **M1, a machine. Started: M1a is done** (exception vectors that print faults, the interrupt controller and a timer tick, on QEMU's virt machine and its Pi 4 model; `tools/checks/arm64-m0-check.py`). Still to do: the MMU, a heap, and the desktop on a framebuffer. Exception vectors, MMU, the generic timer, the GIC, a heap and the memory manager. Draw the existing desktop to a `ramfb` framebuffer. Days to a couple of weeks.
 3. **M2, input and net in QEMU.** `virtio` keyboard, mouse, network and block drivers. With the HVF accelerator on the Mac mini this runs at native speed, far faster than today's i386 emulation, so the ARM build helps the browser demo too once v86 is not the only target. Weeks.
 4. **M3, userland.** EL0 programs, the syscall layer, per-window address spaces, and all 46 apps rebuilt. Weeks.
 5. **M4, a real Pi 4.** Firmware config, mailbox framebuffer, PL011, SD card through EMMC2, USB keyboard and mouse through xHCI, Ethernet through the Genet MAC. Sound last (HDMI or I2S, the hardest). Weeks.

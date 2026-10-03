@@ -7,18 +7,20 @@ CC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgenera
 all: kernel8.elf
 start.o: start.S
 	$(CC) -c $< -o $@
+vectors.o: vectors.S
+	$(CC) -c $< -o $@
 main.o: main.c
 	$(CC) -c $< -o $@
 pi-start.o: start.S
 	$(CC) -c $< -o $@
 pi-main.o: main.c
 	$(CC) -DPI_BUILD -c $< -o $@
-kernel8.elf: start.o main.o linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o main.o
-pi-kernel8.elf: pi-start.o pi-main.o linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o pi-main.o
+kernel8.elf: start.o vectors.o main.o linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o main.o
+pi-kernel8.elf: pi-start.o vectors.o pi-main.o linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o pi-main.o
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o pi-main.o
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o pi-main.o
 pi: kernel8.img
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf
