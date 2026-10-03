@@ -1,56 +1,32 @@
-# Joshua Tree loop handoff (2026-09-30)
+# Joshua Tree loop handoff (2026-10-03, afternoon)
 
 ## What the loop is
 
-Build Joshua Tree to 2.0.0, one small PR at a time. docs/VERSIONS.md is the map: 1.8, then 1.9, then 2.0. Each agent gets one shippable slice, about 10 minutes, headless QEMU only, one VM at a time. Two agents at once if either is Fable or Opus, otherwise three. PRs stay draft until `tools/ci-local.sh` is green, then merge on green without asking. While a big PR waits, hold every other merge (main requires up to date branches), and fold small docs changes into a PR that is already open. Keep README, landing, docs/TESTING.md and ARCHITECTURE.md current in the same PR as the change. Zero open issues, always. At 90% session usage, checkpoint and stop starting new work.
-
-## The 2.0.0 gate
-
-2.0.0 ships only when all of these are true and each has a headless check in ci-suite.sh:
-
-1. 1.8 done: a phone home screen, an app grid, one app full screen at a time, a back button.
-2. 1.9 done: touch works, an on-screen keyboard, every app readable at phone size.
-3. Every app in the APPS[] table runs as its own ring 3 program. No app code left in kernel.c.
-4. A check crashes each app on purpose and proves the desktop is still alive after every one. Done for every ring-3 app (`tools/checks/ring3crash-all-check.py`, 19 of 19 as of 1.9.19).
-5. Input goes to the focused window only, not a global key pull.
+Ship PR #358 (Joshua's face demo), then resume toward 2.0.0. One shippable slice per agent, about 10 minutes, headless QEMU only, one VM at a time. PRs stay draft until `tools/ci-local.sh` passes, then mark ready and merge on GitHub CI green. While a big PR waits, hold other merges. Keep README, landing, docs/TESTING.md and ARCHITECTURE.md current in the same PR. Zero issues always. Stop new work at 90% usage.
 
 ## Where things stand
 
-Checkpoint 2026-10-01. Epiphany went to ring 3 in 1.9.19, so 19 of 26 apps run in ring 3.
+Checkpoint 2026-10-03. PR #358 (Joshua's face fills the screen, light glass chat bar, 24fps blink and breathing, lip sync follows audio, "Tap to hear Joshua" button, demo MP4 recorded) ready for ci-local and merge. After that, remain on PR #331/2.0.0 gate work or pare back to smaller fixes.
 
-- In ring 3: Keyrate, Toroid, Calculator, Quotes, Bookrank, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind, Calendar, Search, Epiphany.
-- Still in the kernel: Burrow (was Files), Mail, Notes, Terminal, Samantha, Weather, Stocks.
-- Gate item 4 (crash every app) is done for all ring-3 apps. The check parses `RING3_APPS`, so a new port is covered on its own.
-- New syscalls: 386 tasks, 387 http_get (Curbfind, Epiphany), 388 readdir (Search, for Files next).
-- The 1.9.14 PR also carries the landing work: chat bar on phones, icon buttons, QA fixes, Tech specs, the footer directory.
-
-Lesson: main requires up-to-date branches, so every merge forces the next PR to re-run CI (about 15 minutes). Batch where possible.
-
-Building on Linux changes every other app's committed `.bin` and `drivers/user_*.h`. Never commit those; `git checkout` them.
-
-QA backlog:
-
-- Samantha's window closed itself 8 to 14 s after an error reply on desktop (unconfirmed).
-- Stale cursor glyph in Search and Stocks for a moment after opening.
-- Clock is hard to reach in the desktop Apps folder (scroll is flaky).
-- Mail "New message" should be an inline sheet on phones, not a new window.
-- Clock icon should be a live analog face.
-- Text still looks soft on phones (canvas scale 1.25x on DPR 3, kernel glyph AA).
-- README shields badge showed "invalid" (GitHub side is fine). If it persists, use a self-hosted endpoint badge.
+PR #358 complete: Joshua face, light glass chat bar, 24fps idle breathing and smooth blinks, lip sync from audio position, emulated sound card playback even when browser locks audio, tap-to-hear button unlocks without stopping intro. Demo MP4 recorded and sent.
 
 ## Next, in order
 
-1. Weather and Stocks to ring 3 on SYS_HTTP_GET (Epiphany shipped in 1.9.19: its GP chart now draws previous close to last from `/api/quotes`, since `stx_data` is kernel-only and too big for the 2 KB body). Check `weather_text` in `phone_home.h` and Samantha's weather tool still work. Findings from the 1.9.15 pass (no port landed, the session was cut short):
-   - Stocks cannot come through `SYS_HTTP_GET` as it is: `/api/stocks?range=N` is eight rows of up to 64 prices (about 3.2 KB) and the call clamps the body to `JT_HTTP_BODY_MAX` (2048 bytes), so the later symbols are cut. Either the Worker gains a per-symbol path or the app keeps the kernel's `stocks_fetch` as the feed. Epiphany's 40-line `/api/quotes` (about 700 bytes) fits, but its GP chart reads the same `stx_data`.
-   - Weather is one of only three compositor apps with draw/on_key hooks (with Burrow and Mail). Seven checks use it as the second window (`multiwindow-check.py`, `windowsnap-check.py`, `dockcap-fallback-check.sh`, `appswitcher-check.py`, `titlebar-aa-check.py`, `textsharp-check.py`, `weather-app-check.sh`), and the cap check needs three such apps. 1.9.20 gave Notes draw/on_key hooks (browse view; a lone Notes click still opens the blocking editor, it joins the compositor only as a second window) and re-homed `dockcap-fallback-check.sh` (Files, Notes, Mail). Still on Weather: `multiwindow-check.py`, `windowsnap-check.py`, `appswitcher-check.py`, `titlebar-aa-check.py`, `textsharp-check.py`, `weather-app-check.sh` (they assert Weather's own pixels; Notes slot is 4). Then port Weather with the kernel's `weather_fetch` writing a small `WEATHER.TXT` the app reads (the menu bar, wind sway, phone home and Samantha keep reading the kernel's own fields).
-2. Burrow (the old Files app, renamed in 1.9.14), then Terminal, Notes, Mail, Samantha to ring 3.
-3. 1.9 phone work: touch everywhere, an on-screen keyboard (only Notes has one), every app readable at phone size.
-4. Input by focus, then tag 2.0.0.
-5. Tour scenes for Activity and the Apps folder (`landing/v86/embed.js`, `tourappcount-check.mjs`).
-6. 2.1 Music, 2.2 Video, 3.0 on the ASRock J4125B-ITX, the Strata Kit at 3.1.
+1. Run `tools/ci-local.sh` on PR #358 (keep under 15 minutes), mark ready when green, merge.
+2. Deploy to heyitsmejosh.com, verify live Joshua face and audio.
+3. Joshua decides: ten apps still listed Free in buy.html; decide which stay free or move to $0.99.
+4. Loop: remain on 2.0.0 gate, or pare back to smaller fixes as usage allows.
+
+## Outstanding from 2.0.0 gate
+
+- Every app in APPS[] runs as ring 3 (19 of 26 done).
+- All ring-3 apps crash-tested headless.
+- Phone: touch, on-screen keyboard, every app readable at phone size.
+- Input by focus only, not global key pull.
+- Tour scenes for Activity and Apps folder.
 
 ## Restart prompt
 
 ```
-/loop build Joshua Tree to 2.0.0: docs/LOOP-HANDOFF.md has the gate and the order. One ~10 minute slice per agent, two at once if Fable, headless only, draft until ci-local is green, merge on green, hold merges while a big PR waits, zero issues, docs and landing in the same PR, MONEY.md dated line each pitch. Stop starting work at 90% usage.
+/loop ship Joshua Tree PR #358 (Joshua's face, light glass chat bar, 24fps blink, lip sync, tap-to-hear button, MP4 demo recorded) then stay on 2.0.0. Run ci-local.sh (under 15 minutes), mark ready, merge when GitHub CI green. Deploy to heyitsmejosh.com and verify live. Joshua decides: ten apps still free in buy.html. One ~10 minute slice per agent, headless only, draft until ci-local green, merge on green, zero issues, docs current. Stop at 90% usage.
 ```
