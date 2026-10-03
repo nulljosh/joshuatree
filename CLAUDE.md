@@ -161,6 +161,10 @@ This project has no finish line. Each pass:
 Constraints in this file and in `docs/roadmap.md`'s model-routing legend get
 tightened in place as gaps turn up, not left to drift.
 
+## ARM64 port
+
+`arch/arm64/` is a second, separate build for the Raspberry Pi (plan and milestones in `docs/ARM64.md`). `make -C arch/arm64 run` boots it under `qemu-system-aarch64`; `tools/checks/arm64-m0-check.py` proves it. Nothing in the i386 Makefile changes.
+
 ## Naming
 
 "Joshua Tree" is the project's name, full stop. The earlier "Leopard
