@@ -1147,7 +1147,11 @@ static void chat_boot_samantha_open(void) {
         /* Portfolio: his face is the whole screen, the input a frosted bar
            across the bottom (chat_face.h: face_blit_full, face_glass_band). */
         face_full = 1; face_band_h = boot_to_phone ? 0 : 96; face_full_top = T;
+        /* Paint the frame the full height first so the glass blurs the lower
+           face (not the empty desktop behind it, which read as a white panel). */
+        int band_keep = face_band_h; face_band_h = 0;
         face_blit(face_idle[face_idle_at]);
+        face_band_h = band_keep;
         if (face_band_h) face_glass_band();
     } else if (boot_to_phone) {
         /* T + 44 clears the titlebar's traffic lights (centered at y=20,
