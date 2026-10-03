@@ -16,9 +16,9 @@ then reports no disk and `kmain` seeds two real files into ramfs and
 switches the active backend to it: README.TXT and NOTES.TXT. Those are
 the two real filenames this check searches for, not fabricated fixtures.
 
-Grid navigation to Search (icon 20, row 4 col 0 of the Apps-folder grid,
+Grid navigation to Search (icon 19, row 3 col 4 of the Apps-folder grid,
 APPS_COLS=5) reuses the exact keyboard path contacts-keystroke-check.sh
-already proved reliable for icon 17 (row 3 col 2): 'd' moves right, 's'
+already proved reliable for icon 16 (row 3 col 1): 'd' moves right, 's'
 moves down, real gui_launch_apps() navigation, not a mouse-only path.
 QMP's `send-key` "ret" qcode is what that check already relies on to
 launch an app; CLAUDE.md's caution is specifically about the QEMU
@@ -127,12 +127,12 @@ try:
     move(apps_centre, ICON_ROW_Y); time.sleep(0.3)
     click(); time.sleep(1.0)
 
-    # Navigate the grid to Search (icon 20, row 4 col 0): down x4
+    # Navigate the grid to Search (icon 19, row 3 col 4): right x4, down x3
     # from the top-left cell, the exact math gui_launch_apps itself uses
     # (row = i / APPS_COLS, col = i % APPS_COLS, APPS_COLS = 5), the same
     # keyboard path contacts-keystroke-check.sh already proved reliable for
-    # icon 17 (row 3 col 2).
-    for c in ("s", "s", "s", "s"):
+    # icon 16 (row 3 col 1).
+    for c in ("d", "d", "d", "d", "s", "s", "s"):
         key(c)
     key("ret")  # launch Search
     # 1.9.12: Search is a ring-3 program now, seeded onto the VFS and exec'd on

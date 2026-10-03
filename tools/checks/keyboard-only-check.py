@@ -31,7 +31,7 @@ CLOSE_RED = (0xFF, 0x5F, 0x57)
 
 # App names from kernel/kernel.c APPS[].name (indices 0-23, then Apps folder, then Trash)
 APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
-        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar",
+        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Lexly", "Toroid", "Sparkjar",
         "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity"]
 
@@ -102,7 +102,7 @@ try:
     time.sleep(0.3)
 
     # Process all 24 grid apps via keyboard-only navigation
-    for app_idx in range(24):
+    for app_idx in range(23):
         app_name = APPS[app_idx]
         opened = False
 

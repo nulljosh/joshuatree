@@ -589,7 +589,7 @@ static void civil(unsigned days, int *y, int *m, int *d) {
 
 static const char *const APPNAME[] = {
     "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Curbfind", "Keyrate",
-    "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar", "Fieldbook", "Contacts", "Calculator",
+    "Bookrank", "Quotes", "Lexly", "Toroid", "Sparkjar", "Fieldbook", "Contacts", "Calculator",
     "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Clock",
 };
 #define NAPPS ((int)(sizeof APPNAME / sizeof APPNAME[0]))

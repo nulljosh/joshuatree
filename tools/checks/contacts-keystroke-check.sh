@@ -21,7 +21,7 @@ source "$(dirname "$0")/freeport.sh"
 #   (kernel.c) navigates the grid with a/d/w/s (left/right/up/down) plus
 #   Enter to launch, or digits '1'-'9' for the first 9 of 21 apps; 'a' there
 #   means "move left" (a no-op at the leftmost cell), not "add a contact".
-#   Contacts (icon 17) was never launched at all, so the typed characters
+#   Contacts (icon 16) was never launched at all, so the typed characters
 #   after it landed on the still-open grid, where they do nothing (no letter
 #   shortcuts exist), and contacts_add/contacts_prompt_line (the only place
 #   that emits "contactsprompt") never ran.
@@ -32,7 +32,7 @@ source "$(dirname "$0")/freeport.sh"
 #   here, unlike Reminders/Mail in gui-prompt-keystroke-check.sh.
 #
 # Real flow now driven: open the Apps folder (dock slot 0), navigate the
-# grid to icon 17 (row 3, col 2: right x2, down x3 from the top-left cell,
+# grid to icon 16 (row 3, col 1: right x1, down x3 from the top-left cell,
 # the same cell math gui_launch_apps itself uses), press Enter to launch
 # Contacts, press 'a' to open the add-contact name prompt (contacts.h:
 # "if (k == 'a') { contacts_add(); continue; }"), then type real characters
@@ -108,10 +108,10 @@ apps_centre = SLOT0_X + 0 * PITCH + DOCK_ICON // 2
 move(apps_centre, ICON_ROW_Y); time.sleep(0.3)
 click(); time.sleep(0.8)
 
-# Navigate the grid to Contacts (icon 17, row 3 col 2): right x2, down x3
+# Navigate the grid to Contacts (icon 16, row 3 col 1): right x1, down x3
 # from the top-left cell (index 0), the same layout math gui_launch_apps
 # itself uses (row = i / APPS_COLS, col = i % APPS_COLS, APPS_COLS = 5).
-for c in ("d", "d", "s", "s", "s"):
+for c in ("d", "s", "s", "s"):
     key(c)
 key("ret"); time.sleep(0.6)  # launch Contacts
 

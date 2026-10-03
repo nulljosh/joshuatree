@@ -125,8 +125,9 @@ static void phone_home_grid_geom(int *x0, int *y0, int *cell_w, int *cell_h, int
 static void phone_home_draw_grid(void){
     int x0, y0, cell_w, cell_h, tile;
     phone_home_grid_geom(&x0, &y0, &cell_w, &cell_h, &tile);
-    for (int i = 0; i < GUI_APPS_FOLDER; i++) {
-        int row = i / PHONE_HOME_COLS, col = i % PHONE_HOME_COLS;
+    for (int k = 0; k < gui_apps_n(); k++) {
+        int i = gui_app_at(k);
+        int row = k / PHONE_HOME_COLS, col = k % PHONE_HOME_COLS;
         int cx = x0 + col * cell_w + cell_w / 2;
         int cy = y0 + row * cell_h + tile;
         if (cy + 24 > (int)window_height()) break; /* off the bottom of a real phone's 760px: nothing to scroll to yet, every app still reachable at 4 cols x 6+ rows */
@@ -231,8 +232,9 @@ static void phone_home_run(void){
         int x0, y0, cell_w, cell_h, tile;
         phone_home_grid_geom(&x0, &y0, &cell_w, &cell_h, &tile);
         int hit = -1;
-        for (int i = 0; i < GUI_APPS_FOLDER; i++) {
-            int row = i / PHONE_HOME_COLS, col = i % PHONE_HOME_COLS;
+        for (int k = 0; k < gui_apps_n(); k++) {
+            int i = gui_app_at(k);
+            int row = k / PHONE_HOME_COLS, col = k % PHONE_HOME_COLS;
             int cx = x0 + col * cell_w + cell_w / 2;
             int cy = y0 + row * cell_h + tile;
             if (cy + 24 > (int)window_height()) break;

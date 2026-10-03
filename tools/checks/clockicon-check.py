@@ -63,7 +63,7 @@ def boot(port, rtc, tag, later=0):
         time.sleep(0.1)
         cmd({"execute": "input-send-event", "arguments": {"events": [{"type": "btn", "data": {"down": False, "button": "left"}}]}})
         time.sleep(1.0)
-        for _ in range(4): key("d")  # the folder reads w/a/s/d: Clock is APPS[24], row 4 col 4
+        for _ in range(2): key("d")  # the folder reads w/a/s/d: Clock is APPS[23], grid position 22 (Portfolio hidden), row 4 col 2
         for _ in range(4): key("s")
         time.sleep(1.5)
         cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": dump}})
@@ -80,9 +80,9 @@ def boot(port, rtc, tag, later=0):
         except subprocess.TimeoutExpired: q.kill()
 
 def tile_box(img):
-    # Clock is APPS[24]: row 4, col 4. Selecting it scrolls the grid to offset 2, so it sits in the
+    # Clock is APPS[23]: row 4, col 3. Selecting it scrolls the grid to offset 2, so it sits in the
     # last visible row (gui_launch_apps: x0=(960-5*150)/2=105, y0=88, cell 150x116, tile 74, 2x scale).
-    cx, cy = (105 + 4 * 150 + 75) * 2, (62 + 88 + 2 * 116 + 37) * 2  # +62: the Apps window's viewport top
+    cx, cy = (105 + 2 * 150 + 75) * 2, (62 + 88 + 2 * 116 + 37) * 2  # +62: the Apps window's viewport top
     return cx - 60, cy - 60, cx + 60, cy + 60
 
 def lum(p): return (p[0] * 299 + p[1] * 587 + p[2] * 114) // 1000

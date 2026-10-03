@@ -52,7 +52,6 @@
 #include "user_quotes.h"
 #include "user_bookrank.h"
 #include "user_lexly.h"
-#include "user_plan.h"
 #include "user_fieldbook.h"
 #include "user_clock.h"
 #include "user_portfolio.h"
@@ -112,7 +111,6 @@ static const struct ring3_app RING3_APPS[] = {
     {"Quotes",     user_quotes,     USER_QUOTES_LEN,     "QUOTES.BIN"},
     {"Bookrank",   user_bookrank,   USER_BOOKRANK_LEN,   "BOOKRANK.BIN"},
     {"Lexly",      user_lexly,      USER_LEXLY_LEN,      "LEXLY.BIN"},
-    {"Plan",       user_plan,       USER_PLAN_LEN,       "PLAN.BIN"},
     {"Fieldbook",  user_fieldbook,  USER_FIELDBOOK_LEN,  "FIELDBOOK.BIN"},
     {"Clock",      user_clock,      USER_CLOCK_LEN,      "CLOCK.BIN"},
     {"Portfolio",  user_portfolio,  USER_PORTFOLIO_LEN,  "PORTFOLIO.BIN"},
@@ -280,25 +278,24 @@ void calculator_ring3_open(void) { ring3app_launch(&RING3_APPS[2]); }
 void quotestreak_ring3_open(void){ ring3app_launch(&RING3_APPS[3]); }
 void bookrank_ring3_open(void)   { ring3app_launch(&RING3_APPS[4]); }
 void lexly_ring3_open(void)      { ring3app_launch(&RING3_APPS[5]); }
-void plan_ring3_open(void)       { ring3app_launch(&RING3_APPS[6]); }
-void fieldbook_ring3_open(void)  { ring3app_launch(&RING3_APPS[7]); }
-void clock_ring3_open(void)      { ring3app_launch(&RING3_APPS[8]); }
-void portfolio_ring3_open(void)  { ring3app_launch(&RING3_APPS[9]); }
-void activity_ring3_open(void)   { ring3app_launch(&RING3_APPS[10]); }
-void contacts_ring3_open(void)   { ring3app_launch(&RING3_APPS[11]); }
-void sparkjar_ring3_open(void)   { ring3app_launch(&RING3_APPS[12]); }
-void reminders_ring3_open(void)  { ring3app_launch(&RING3_APPS[13]); }
-void curbfind_ring3_open(void)   { ring3app_launch(&RING3_APPS[14]); }
-void calendar_ring3_open(void)   { ring3app_launch(&RING3_APPS[15]); }
-void search_ring3_open(void)     { ring3app_launch(&RING3_APPS[16]); }
-void epiphany_ring3_open(void)   { ring3app_launch(&RING3_APPS[17]); }
-void burrow_ring3_open(void)     { ring3app_launch(&RING3_APPS[19]); }
-int  stocks_ring3_run(void)      { return ring3app_launch(&RING3_APPS[20]); } 
-void mail_ring3_open(void)       { ring3app_launch(&RING3_APPS[21]); }
-void terminal_ring3_open(void)   { ring3app_launch(&RING3_APPS[23]); }
-void samantha_ring3_open(void)   { ring3app_launch(&RING3_APPS[24]); } /* 1.9.26: dock slot 6, the shell commands and phone mode */
-void notes_ring3_launch(void)    { ring3app_launch(&RING3_APPS[22]); } /* kernel.c's notes_ring3_open runs the legacy NOTES.TXT migration first */
-int  weather_ring3_run(void)     { return ring3app_launch(&RING3_APPS[18]); } 
+void fieldbook_ring3_open(void)  { ring3app_launch(&RING3_APPS[6]); }
+void clock_ring3_open(void)      { ring3app_launch(&RING3_APPS[7]); }
+void portfolio_ring3_open(void)  { ring3app_launch(&RING3_APPS[8]); }
+void activity_ring3_open(void)   { ring3app_launch(&RING3_APPS[9]); }
+void contacts_ring3_open(void)   { ring3app_launch(&RING3_APPS[10]); }
+void sparkjar_ring3_open(void)   { ring3app_launch(&RING3_APPS[11]); }
+void reminders_ring3_open(void)  { ring3app_launch(&RING3_APPS[12]); }
+void curbfind_ring3_open(void)   { ring3app_launch(&RING3_APPS[13]); }
+void calendar_ring3_open(void)   { ring3app_launch(&RING3_APPS[14]); }
+void search_ring3_open(void)     { ring3app_launch(&RING3_APPS[15]); }
+void epiphany_ring3_open(void)   { ring3app_launch(&RING3_APPS[16]); }
+void burrow_ring3_open(void)     { ring3app_launch(&RING3_APPS[18]); }
+int  stocks_ring3_run(void)      { return ring3app_launch(&RING3_APPS[19]); } 
+void mail_ring3_open(void)       { ring3app_launch(&RING3_APPS[20]); }
+void terminal_ring3_open(void)   { ring3app_launch(&RING3_APPS[22]); }
+void samantha_ring3_open(void)   { ring3app_launch(&RING3_APPS[23]); } /* 1.9.26: dock slot 6, the shell commands and phone mode */
+void notes_ring3_launch(void)    { ring3app_launch(&RING3_APPS[21]); } /* kernel.c's notes_ring3_open runs the legacy NOTES.TXT migration first */
+int  weather_ring3_run(void)     { return ring3app_launch(&RING3_APPS[17]); } 
 
 /* 1.7.8: `fbpoke` boot flag. After the auto-opened Keyrate has exited,
    run user/fbpoke.c with no window: it must be refused a pointer into
@@ -358,27 +355,26 @@ static int ring3app_autoopen_slot = -1; /* APPS[] index to open, -1 when unarmed
 void ring3app_autoopen_arm(const char *cl){
     for (const char *pc = cl; pc && *pc; pc++) {
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='k' && pc[6]=='e' && pc[7]=='y' && pc[8]=='r') { ring3app_autoopen_slot = 9; serial_puts("autoopen=keyrate\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='t' && pc[6]=='o' && pc[7]=='r' && pc[8]=='o') { ring3app_autoopen_slot = 14; serial_puts("autoopen=toroid\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='a' && pc[7]=='l' && pc[8]=='c') { ring3app_autoopen_slot = 18; serial_puts("autoopen=calculator\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='t' && pc[6]=='o' && pc[7]=='r' && pc[8]=='o') { ring3app_autoopen_slot = 13; serial_puts("autoopen=toroid\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='a' && pc[7]=='l' && pc[8]=='c') { ring3app_autoopen_slot = 17; serial_puts("autoopen=calculator\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='q' && pc[6]=='u' && pc[7]=='o' && pc[8]=='t') { ring3app_autoopen_slot = 11; serial_puts("autoopen=quotes\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='b' && pc[6]=='o' && pc[7]=='o' && pc[8]=='k') { ring3app_autoopen_slot = 10; serial_puts("autoopen=bookrank\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='l' && pc[6]=='e' && pc[7]=='x' && pc[8]=='l') { ring3app_autoopen_slot = 13; serial_puts("autoopen=lexly\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='p' && pc[6]=='l' && pc[7]=='a' && pc[8]=='n') { ring3app_autoopen_slot = 12; serial_puts("autoopen=plan\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='f' && pc[6]=='i' && pc[7]=='e' && pc[8]=='l') { ring3app_autoopen_slot = 16; serial_puts("autoopen=fieldbook\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='l' && pc[7]=='o' && pc[8]=='c') { ring3app_autoopen_slot = 24; serial_puts("autoopen=clock\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='p' && pc[6]=='o' && pc[7]=='r' && pc[8]=='t' && pc[9]=='f' && pc[10]!='o') { ring3app_autoopen_slot = 22; serial_puts("autoopen=portfolio\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='a' && pc[6]=='c' && pc[7]=='t' && pc[8]=='i' && pc[9]=='v') { ring3app_autoopen_slot = 23; serial_puts("autoopen=activity\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='o' && pc[7]=='n' && pc[8]=='t') { ring3app_autoopen_slot = 17; serial_puts("autoopen=contacts\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='p' && pc[7]=='a' && pc[8]=='r') { ring3app_autoopen_slot = 15; serial_puts("autoopen=sparkjar\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='l' && pc[6]=='e' && pc[7]=='x' && pc[8]=='l') { ring3app_autoopen_slot = 12; serial_puts("autoopen=lexly\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='f' && pc[6]=='i' && pc[7]=='e' && pc[8]=='l') { ring3app_autoopen_slot = 15; serial_puts("autoopen=fieldbook\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='l' && pc[7]=='o' && pc[8]=='c') { ring3app_autoopen_slot = 23; serial_puts("autoopen=clock\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='p' && pc[6]=='o' && pc[7]=='r' && pc[8]=='t' && pc[9]=='f' && pc[10]!='o') { ring3app_autoopen_slot = 21; serial_puts("autoopen=portfolio\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='a' && pc[6]=='c' && pc[7]=='t' && pc[8]=='i' && pc[9]=='v') { ring3app_autoopen_slot = 22; serial_puts("autoopen=activity\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='o' && pc[7]=='n' && pc[8]=='t') { ring3app_autoopen_slot = 16; serial_puts("autoopen=contacts\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='p' && pc[7]=='a' && pc[8]=='r') { ring3app_autoopen_slot = 14; serial_puts("autoopen=sparkjar\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='r' && pc[6]=='e' && pc[7]=='m' && pc[8]=='i') { ring3app_autoopen_slot = 4; serial_puts("autoopen=reminders\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='u' && pc[7]=='r' && pc[8]=='b') { ring3app_autoopen_slot = 8; serial_puts("autoopen=curbfind\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='a' && pc[7]=='l' && pc[8]=='e') { ring3app_autoopen_slot = 2; serial_puts("autoopen=calendar\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='e' && pc[7]=='a' && pc[8]=='r') { ring3app_autoopen_slot = 20; serial_puts("autoopen=search\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='e' && pc[6]=='p' && pc[7]=='i' && pc[8]=='p') { ring3app_autoopen_slot = 21; serial_puts("autoopen=epiphany\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='e' && pc[7]=='a' && pc[8]=='r') { ring3app_autoopen_slot = 19; serial_puts("autoopen=search\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='e' && pc[6]=='p' && pc[7]=='i' && pc[8]=='p') { ring3app_autoopen_slot = 20; serial_puts("autoopen=epiphany\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='w' && pc[6]=='e' && pc[7]=='a' && pc[8]=='t') { ring3app_autoopen_slot = 7; serial_puts("autoopen=weather\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='b' && pc[6]=='u' && pc[7]=='r' && pc[8]=='r') { ring3app_autoopen_slot = 0; serial_puts("autoopen=burrow\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='m' && pc[6]=='a' && pc[7]=='i' && pc[8]=='l') { ring3app_autoopen_slot = 1; serial_puts("autoopen=mail\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='t' && pc[7]=='o' && pc[8]=='c') { ring3app_autoopen_slot = 19; serial_puts("autoopen=stocks\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='t' && pc[7]=='o' && pc[8]=='c') { ring3app_autoopen_slot = 18; serial_puts("autoopen=stocks\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='n' && pc[6]=='o' && pc[7]=='t' && pc[8]=='e') { ring3app_autoopen_slot = 3; serial_puts("autoopen=notes\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='a' && pc[7]=='m' && pc[8]=='a') { ring3app_autoopen_slot = 6; serial_puts("autoopen=samantha\n"); } /* ring-3 Samantha is the default now, so open=sama needs no flag */
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='t' && pc[6]=='e' && pc[7]=='r' && pc[8]=='m') { ring3app_autoopen_slot = 5; serial_puts("autoopen=terminal\n"); }

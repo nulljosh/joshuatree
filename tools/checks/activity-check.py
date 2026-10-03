@@ -17,7 +17,7 @@ Flow:
      is printed over serial ("spawntest id=N") so this script knows which
      Activity row to expect, target and re-check -- not a hardcoded id.
   3. Type `gui` to re-enter the desktop, open the Apps folder (dock slot
-     0), navigate the grid to Activity (icon 23, row 4 col 3: right x3,
+     0), navigate the grid to Activity (icon 22, grid position 21 with Portfolio hidden: row 4 col 1: right x1,
      down x4 from the top-left cell, the same cell math gui_launch_apps
      itself uses, already proven reliable for Search/Contacts by their own
      checks), Enter to launch it.
@@ -142,7 +142,7 @@ try:
         raise SystemExit("FAIL: spawntest never printed a real task id over serial, can't proceed")
     print(f"spawned real task id={spawn_id}")
 
-    # Step 3: back to the desktop, open Apps, navigate to Activity (icon 23).
+    # Step 3: back to the desktop, open Apps, navigate to Activity (icon 22).
     for c in "gui":
         key(c)
     key("ret"); time.sleep(2.0)  # gui_run's own boot screen + first frame
@@ -151,9 +151,9 @@ try:
     move(apps_centre, ICON_ROW_Y); time.sleep(0.3)
     click(); time.sleep(1.0)
 
-    # icon 23: row = 23 // 5 = 4, col = 23 % 5 = 3 -- right x3, down x4 from
+    # icon 22 is grid position 21 (Portfolio hidden): row 4, col 1 -- right x1, down x4 from
     # the grid's top-left cell, the same math gui_launch_apps itself uses.
-    for c in ("d", "d", "d", "s", "s", "s", "s"):
+    for c in ("d", "s", "s", "s", "s"):
         key(c)
     key("ret"); time.sleep(1.2)  # launch Activity
 

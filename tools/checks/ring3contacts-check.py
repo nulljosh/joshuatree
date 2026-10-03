@@ -187,13 +187,13 @@ try:
         if not wait_serial("appsfullrepaint", 10, n + 1):
             fails.append("the Apps folder did not open from the dock"); return False
         time.sleep(0.6)
-        for c in ("d", "d", "s", "s", "s"): keys(c)
+        for c in ("d", "s", "s", "s"): keys(c)
         keys("ret")
         return True
     launches = serial().count("ring3app: launching CONTACTS.BIN")
     if open_from_folder():
         if not wait_serial("ring3app: launching CONTACTS.BIN", 10, launches + 1):
-            fails.append("Contacts did not launch from the Apps folder grid (icon 17)")
+            fails.append("Contacts did not launch from the Apps folder grid (icon 16)")
         if not wait_serial("contacts: loaded 2", 10):
             fails.append('the reopened app did not report "contacts: loaded 2": the add did not persist in CONTACTS.TXT')
         time.sleep(0.5)

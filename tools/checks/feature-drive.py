@@ -21,7 +21,7 @@ Per-app actions:
 - Sparkjar: press u (upvote)
 - Toroid: press space (pause/unpause)
 - Keyrate: type "the"
-- Bookrank, Fieldbook, Plan, Curbfind, Portfolio, Activity: press down twice
+- Bookrank, Fieldbook, Curbfind, Portfolio, Activity: press down twice
 - Files, Mail, Weather, Trash: open only (already covered by gallery)
 
 Before/after pixel comparison with PIL ImageChops to detect screen changes.
@@ -60,26 +60,25 @@ ACTIONS = [
     (2, "Calendar", ["right"]),
     (5, "Terminal", [("type", "help"), "ret"]),
     (6, "Samantha", [("type", "hi"), "ret"]),
-    (20, "Search", [("type", "read")]),
-    (18, "Calculator", [("type", "2+2"), "ret"]),
-    (19, "Stocks", ["right"]),
-    (21, "Epiphany", ["right"]),
-    (17, "Contacts", ["a", "esc"]),
-    (13, "Lexly", ["1"]),
+    (19, "Search", [("type", "read")]),
+    (17, "Calculator", [("type", "2+2"), "ret"]),
+    (18, "Stocks", ["right"]),
+    (20, "Epiphany", ["right"]),
+    (16, "Contacts", ["a", "esc"]),
+    (12, "Lexly", ["1"]),
     (11, "Quotes", ["1"]),
-    (15, "Sparkjar", ["u"]),
-    (14, "Toroid", ["space"]),
+    (14, "Sparkjar", ["u"]),
+    (13, "Toroid", ["space"]),
     (9, "Keyrate", [("type", "the")]),
     (10, "Bookrank", ["down", "down"]),
-    (16, "Fieldbook", ["down", "down"]),
-    (12, "Plan", ["down", "down"]),
+    (15, "Fieldbook", ["down", "down"]),
     (8, "Curbfind", ["down", "down"]),
-    (22, "Portfolio", ["down", "down"]),
-    (23, "Activity", ["down", "down"]),
+    (21, "Portfolio", ["down", "down"]),
+    (22, "Activity", ["down", "down"]),
     (0, "Burrow", []),  # open only
     (1, "Mail", []),   # open only
     (7, "Weather", []),  # open only
-    (26, "Trash", []),  # open only
+    (25, "Trash", []),  # open only
 ]
 
 CRASH_PATTERNS = [
@@ -221,7 +220,7 @@ try:
         try:
             move(*PARK); time.sleep(0.2)
             grid = dump().crop((200, 120, 1720, 900))
-            if app_idx == 26:
+            if app_idx == 25:
                 # Trash is not in the Apps folder grid; it is dock slot 10.
                 move(SLOT0_X + 10 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3)
                 click()

@@ -1620,7 +1620,7 @@ if (typeof document !== "undefined") (function () {
   // 18 slots after the dock's own eight. Stocks has its own dock scene.
   var APPS_FOLDER_TOUR = [
     { name: 'Curbfind', dwell: 1800 }, { name: 'Keyrate', dwell: 1800 }, { name: 'Bookrank', dwell: 1800 },
-    { name: 'Quotes', dwell: 1800 }, { name: 'Plan', dwell: 1800 }, { name: 'Lexly', dwell: 1800 },
+    { name: 'Quotes', dwell: 1800 }, { name: 'Lexly', dwell: 1800 },
     { name: 'Toroid', dwell: 1800 }, { name: 'Sparkjar', dwell: 1800 },
     { name: 'Fieldbook', dwell: 1800 }, { name: 'Contacts', dwell: 1800 }, { name: 'Calculator', dwell: 1800, keys: '12*7\n' },
     { skip: 'Stocks' }, { name: 'Search', dwell: 1800 }, { name: 'Epiphany', dwell: 2200 }, { name: 'Portfolio', dwell: 2200 },

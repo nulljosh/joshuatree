@@ -35,13 +35,14 @@ PARK = (480, 200)
 
 # App names from kernel/kernel.c APPS[].name (indices 0-25)
 APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
-        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Sparkjar",
+        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Lexly", "Toroid", "Sparkjar",
         "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity", "Apps", "Trash"]
 
 # Apps 0-23 launch from the Apps folder grid; Apps (25) and Trash (26) are special:
 # Apps opens when you click the dock slot again, Trash is dock slot 10.
-REGULAR_APPS = list(range(24))
+PORTFOLIO_IDX = 21  # hidden from the default Apps folder (public OS); the grid is compacted around it
+REGULAR_APPS = [i for i in range(24) if i != PORTFOLIO_IDX]
 SPECIAL_APPS = [(10, "Trash")]  # (dock_slot, name)
 
 CRASH_PATTERNS = [
@@ -160,8 +161,9 @@ try:
             click(); time.sleep(1.0)
 
             # Navigate to the app within the grid: row = app_idx // 5, col = app_idx % 5
-            row = app_idx // 5
-            col = app_idx % 5
+            pos = app_idx - (1 if app_idx > PORTFOLIO_IDX else 0)  # grid position with Portfolio hidden
+            row = pos // 5
+            col = pos % 5
             for _ in range(col):
                 key("d")  # right
             for _ in range(row):
@@ -209,7 +211,7 @@ try:
     # Process Trash (special: dock slot 10)
     try:
         app_name = "Trash"
-        app_idx = 26
+        app_idx = 25
         opened = False
         png_path = None
 

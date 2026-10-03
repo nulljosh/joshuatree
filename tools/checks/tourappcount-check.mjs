@@ -21,12 +21,12 @@
 // MW_* multi-window ones) and checks the union covers all 8.
 import { readFileSync } from 'fs';
 
-// 2.0: every one of the 26 apps is a ring-3 window and the tour shows each
+// 2.0: every one of the 25 apps is a ring-3 window and the tour shows each
 // once per lap: the 9 dock apps (Burrow, Mail, Calendar, Notes, Reminders,
-// Terminal, Samantha, Weather, Stocks), the Apps folder itself, and the 17
+// Terminal, Samantha, Weather, Stocks), the Apps folder itself, and the 16
 // other apps it opens one by one (APPS_FOLDER_TOUR).
 const EXPECTED = ['Burrow', 'Mail', 'Calendar', 'Notes', 'Reminders', 'Terminal', 'Samantha', 'Weather', 'Stocks', 'Apps',
-  'Curbfind', 'Keyrate', 'Bookrank', 'Quotes', 'Plan', 'Lexly', 'Toroid', 'Sparkjar', 'Fieldbook', 'Contacts',
+  'Curbfind', 'Keyrate', 'Bookrank', 'Quotes', 'Lexly', 'Toroid', 'Sparkjar', 'Fieldbook', 'Contacts',
   'Calculator', 'Search', 'Epiphany', 'Portfolio', 'Activity', 'Clock'];
 
 const src = readFileSync(new URL('../../landing/v86/embed.js', import.meta.url), 'utf8');
@@ -35,7 +35,7 @@ console.log('Tour dock apps (TOUR_APPS + multi-window rounds):', names.join(', '
 const missing = EXPECTED.filter(n => !names.includes(n));
 const extra = names.filter(n => !EXPECTED.includes(n));
 if (missing.length === 0 && extra.length === 0 && names.length === EXPECTED.length) {
-  console.log('PASS: tour cycles all 26 apps plus the Apps folder');
+  console.log('PASS: tour cycles all 25 apps plus the Apps folder');
   process.exit(0);
 } else {
   console.log('FAIL: tour app list does not match the 27 expected names.', missing.length ? `missing: ${missing.join(', ')}` : '', extra.length ? `extra: ${extra.join(', ')}` : '');

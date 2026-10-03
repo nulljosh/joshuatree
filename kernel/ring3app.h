@@ -13,7 +13,6 @@ void calculator_ring3_open(void);
 void quotestreak_ring3_open(void);
 void bookrank_ring3_open(void);
 void lexly_ring3_open(void);
-void plan_ring3_open(void);
 void fieldbook_ring3_open(void);
 void clock_ring3_open(void);
 void portfolio_ring3_open(void);

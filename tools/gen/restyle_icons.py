@@ -293,6 +293,11 @@ APPS_ONLY = {
       <line x1="64" y1="72" x2="64" y2="32" stroke="#F09A37" stroke-width="1.8" stroke-linecap="round"/>
       <circle cx="64" cy="64" r="3.4" fill="#F09A37"/>"""),
 
+    # Activity: a graphite tile, one green pulse line. Flat, no gloss.
+    "activity": ("#4A4F57", "#1C1F24", "",
+                 """
+      <polyline points="22,66 44,66 54,38 68,92 78,56 84,66 106,66" fill="none" stroke="#34C759" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>"""),
+
     "search": ("#9AA3B1", "#303A48", "",
                """
       <circle cx="52" cy="52" r="23" fill="none" stroke="#ECEFF3" stroke-width="11"/>

@@ -110,7 +110,6 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app.h"
 #include "app_bookrank.h"
 #include "app_quotestreak.h"
-#include "app_plan.h"
 #include "app_lexly.h"
 #include "app_toroid.h"
 #include "app_sparkjar.h"
@@ -839,9 +838,10 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-#define GUI_APP_COUNT   27 /* 25 real apps + the Apps folder + Trash */
-#define GUI_APPS_FOLDER 25 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       26
+#define GUI_APP_COUNT   26 /* 24 real apps + the Apps folder + Trash */
+#define GUI_APPS_FOLDER 24 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       25
+#define GUI_APP_PORTFOLIO 21 /* hidden from the Apps folder and phone home unless the boot line says "portfolio" (his site embed); the public OS ships without it */
 /* Every app's name, color, glyph and hooks live in one table, APPS[],
    defined further down once every hook it points at exists (see "The app
    registry" below). This tentative definition lets the dock and Launchpad
@@ -870,7 +870,7 @@ const struct app APPS[GUI_APP_COUNT];
    layout changes at all, the "auto size" half of the standing v37 dock
    request was already real before this pass, this is just the first
    change to actually exercise it past 8 icons. */
-static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 19, GUI_TRASH};
+static const int GUI_DOCK_DEFAULT[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 18, GUI_TRASH};
 
 /* gui_order is a permutation of icon indices by dock slot: dragging an icon
    and dropping it on another slot swaps the two, so the arrangement is
@@ -883,6 +883,8 @@ int gui_order[GUI_ICON_COUNT];
    Joshua's own apps instead of the system set. Same slot count, Apps folder
    and Trash stay at the ends; everything left out is still in the Apps folder. */
 static int portfolio_dock;
+static int gui_apps_n(void){ return portfolio_dock ? GUI_APPS_FOLDER : GUI_APPS_FOLDER - 1; } /* apps the folder and phone home list */
+static int gui_app_at(int k){ return (!portfolio_dock && k >= GUI_APP_PORTFOLIO) ? k + 1 : k; } /* grid position to APPS[] index */
 int jt_portfolio_mode(void){ return portfolio_dock; } /* ring3app.c: windowed ring-3 apps get "portfolio" in argv so Samantha wears Joshua's face */
 /* "samantha" on the multiboot command line: skip the desktop and open
    ring-3 Samantha's window (user/samantha.c)
@@ -895,7 +897,7 @@ static int boot_to_phone, boot_res_w, boot_res_h;
 int jt_phone_mode(void){ return boot_to_phone; } /* ring3app.c: windowed ring-3 apps get argv[1]="phone" so they can show libjt/osk */
 #include "hint.h"
 static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
-static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 22, 21, 8, 10, 13, 15, 11, 9, 14, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
+static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 21, 20, 8, 10, 12, 14, 11, 9, 13, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 int dock_hover = -1; /* slot whose label is showing */
 
@@ -2057,7 +2059,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void lexly_ring3_open(void); void plan_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
+static int wind_base_width = 0; void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void lexly_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
 
 static int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
@@ -2396,7 +2398,7 @@ int jt_launch_request(const char *name){
     if (launch_pending >= 0) return -16; /* EBUSY, as in syscall.c */
     for (int i = 0; i < GUI_APPS_FOLDER; i++) {
         const char *a = APPS[i].name;
-        if (!a) continue;
+        if (!a || (!portfolio_dock && i == GUI_APP_PORTFOLIO)) continue;
         int k = 0;
         while (a[k] && a[k] == name[k]) k++;
         if (!a[k] && !name[k]) { launch_pending = i; return 0; }
@@ -3495,15 +3497,6 @@ static void gui_icon_mail(int cx, int cy, int s, unsigned int bg){
     int t = s / 22 + 1;
     gui_draw_capsule(x0, y0, cx, cy, t, ICON_FG, bg);         /* flap: left seam down to centre */
     gui_draw_capsule(x0 + w - 1, y0, cx, cy, t, ICON_FG, bg); /* flap: right seam down to centre */
-}
-static void gui_icon_plan(int cx, int cy, int s, unsigned int bg){
-    int half = s * 3 / 10;
-    for (int row = 0; row < 3; row++) {
-        int y = cy - half + row * half;
-        int len = half * (3 - row) / 2;
-        gui_fill_circle(cx - half - 3, y, s / 16, ICON_FG, bg);
-        gui_draw_capsule(cx - half + 4, y, cx - half + 4 + len, y, s / 20, ICON_FG, bg);
-    }
 }
 static void gui_icon_lexly(int cx, int cy, int s, unsigned int bg){
     int r = s * 3 / 10;
@@ -4656,7 +4649,7 @@ char *wx_put_int(char *o, int v){
    grid actually starts 70px lower, at y0=95, to leave room for the "arrow
    keys to move" hint line above it (panel top is 25). The real bottom
    needed is 70 + 324 = 394, 19px past the old 375, so the last visible
-   row's labels ("Bookrank", "Quotes", "Plan", "Lexly", "Toroid" at the
+   row's labels ("Bookrank", "Quotes", "Lexly", "Toroid" at the
    default scroll offset) landed only ~8 logical px above the glass
    panel's true bottom edge -- title-bar-tight everywhere else in this UI,
    here almost touching. 410 gives that row the same order of breathing
@@ -4687,9 +4680,10 @@ static void gui_apps_glass(int x, int y, int w, int h){
 }
 static void gui_launch(int icon); /* mutually recursive with the folder: the folder launches apps, and the dock launches the folder */
 static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int cell_w, int cell_h, int tile){
-    for (int i = 0; i < GUI_APPS_FOLDER; i++) {
-        int row = i / APPS_COLS - scroll_offset;
-        int col = i % APPS_COLS;
+    for (int k = 0; k < gui_apps_n(); k++) {
+        int i = gui_app_at(k);
+        int row = k / APPS_COLS - scroll_offset;
+        int col = k % APPS_COLS;
         /* Bounded by row count, not a pixel guess: row*cell_h (324) still
            clears the 375px panel_h even for the row that doesn't fit, so
            that stray row used to get drawn anyway, spilling past the
@@ -4707,7 +4701,7 @@ static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int c
         if (row < 0 || row >= APPS_VIS_ROWS) continue;
         int cx = x0 + col * cell_w + cell_w / 2;
         int cy = y0 + row * cell_h;
-        if (i == sel) gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 4,
+        if (k == sel) gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 4,
                                                  0x00FFF8F1, 0x00E5D8D0, 0x00E9DEE0, 12);
         gui_draw_one_icon_on(i, cx, cy + tile, tile, 0x00E9DEE0);
         int lw = font_string_width(APPS[i].name);
@@ -4745,7 +4739,7 @@ static void gui_apps_launch(int icon){ if (gui_multiwin_open(icon) < 0) gui_refu
 
 static void gui_launch_apps(void){
     int sel = 0;
-    int rows = (GUI_APPS_FOLDER + APPS_COLS - 1) / APPS_COLS;
+    int rows = (gui_apps_n() + APPS_COLS - 1) / APPS_COLS;
     int cell_w = 150, cell_h = 116, tile = 74; /* 74 = the artwork's 148px at 2x: an exact 1:1 blit like the dock, not a 148 to 120 resample */
     int grid_w = APPS_COLS * cell_w;
     int x0 = ((int)window_width() - grid_w) / 2;
@@ -4847,9 +4841,10 @@ static void gui_launch_apps(void){
                comparing, or every hit test here silently misses. */
             int click_vx = app_cursor_x - app_view_x, click_vy = app_cursor_y - app_view_y;
             int hit = -1;
-            for (int i = 0; i < GUI_APPS_FOLDER; i++) {
-                int row = i / APPS_COLS - scroll_offset;
-                int col = i % APPS_COLS;
+            for (int k = 0; k < gui_apps_n(); k++) {
+                int i = gui_app_at(k);
+                int row = k / APPS_COLS - scroll_offset;
+                int col = k % APPS_COLS;
                 /* Skip rows that are scrolled off-screen. Bounded by row
                    count (APPS_VIS_ROWS), not a repeated pixel-height
                    literal: this hit test used to compare against the
@@ -4865,13 +4860,13 @@ static void gui_launch_apps(void){
             if (hit >= 0) { gui_apps_launch(hit); return; }
             return; /* a tap outside every tile still closes the folder: with no keyboard there is no other way out */
         }
-        if (k == KEY_ENTER) { gui_apps_launch(sel); return; }
+        if (k == KEY_ENTER) { gui_apps_launch(gui_app_at(sel)); return; }
         int old_sel = sel;
         if (k == 'a' && sel > 0) sel--;                 /* left  */
-        else if (k == 'd' && sel < GUI_APPS_FOLDER - 1) sel++; /* right */
+        else if (k == 'd' && sel < gui_apps_n() - 1) sel++; /* right */
         else if (k == 'w' && sel >= APPS_COLS) sel -= APPS_COLS;
-        else if (k == 's' && sel + APPS_COLS < GUI_APPS_FOLDER) sel += APPS_COLS;
-        else if (k >= '1' && k <= '9' && (k - '1') < GUI_APPS_FOLDER) { gui_apps_launch(k - '1'); return; }
+        else if (k == 's' && sel + APPS_COLS < gui_apps_n()) sel += APPS_COLS;
+        else if (k >= '1' && k <= '9' && (k - '1') < gui_apps_n()) { gui_apps_launch(gui_app_at(k - '1')); return; }
         if (sel != old_sel) {
             /* Keyboard selection drags the view with it, the direction that is
                not surprising: move past the last visible row and the grid
@@ -5165,19 +5160,18 @@ const struct app APPS[GUI_APP_COUNT] = {
     /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c */
     /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       bookrank_ring3_open,   0, 0}, /* 2.0: ring 3 too (user/bookrank.c) */
     /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_ring3_open, 0, 0}, /* 1.7.14: ring 3 too (user/quotes.c) */
-    /* 12 */ {"Plan",       0x00475C6B, gui_icon_plan,       plan_ring3_open,       0, 0}, /* 1.9.2: ring 3 too (user/plan.c) */
-    /* 13 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      lexly_ring3_open,      0, 0}, /* 1.9.1: ring 3 too (user/lexly.c) */
-    /* 14 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */
-    /* 15 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   sparkjar_ring3_open,   0, 0}, /* 1.9.8: ring 3 (user/sparkjar.c) */
-    /* 16 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  fieldbook_ring3_open,  0, 0}, /* 1.9.3: ring 3 too (user/fieldbook.c) */
-    /* 17 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   contacts_ring3_open,   0, 0}, /* 1.9.7: ring 3 (user/contacts.c) */
-    /* 18 */ {"Calculator", 0x00556B85, gui_icon_calculator, calculator_ring3_open, 0, 0}, /* 1.7.12: ring 3 too (user/calculator.c) */
-    /* 19 */ {"Stocks",     0x00356B4F, gui_icon_stocks,     stocks_ring3_open,     0, 0},
-    /* 20 */ {"Search",     0x00506078, gui_icon_search,     search_ring3_open,     0, 0}, /* 1.9.13: ring 3 (user/search.c) */
-    /* 21 */ {"Epiphany",   0x001F5FA8, gui_icon_stocks,     epiphany_ring3_open,   0, 0}, /* 1.9.17: ring 3 (user/epiphany.c); art covers the icon */
-    /* 22 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       portfolio_ring3_open,  0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph; 1.9.5: ring 3 (user/portfolio.c) */
-    /* 23 */ {"Activity",   0x003E4C58, gui_icon_activity,   activity_ring3_open,   0, 0}, /* 1.9.6: ring 3 (user/activity.c) */
-    /* 24 */ {"Clock",      0x00565A7A, gui_icon_clock,      clock_ring3_open,      0, 0}, /* live analog face (hands overlay, gui_clock_draw_hands); 1.9.4: ring 3 (user/clock.c) */
+    /* 12 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      lexly_ring3_open,      0, 0}, /* 1.9.1: ring 3 too (user/lexly.c) */
+    /* 13 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */
+    /* 14 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   sparkjar_ring3_open,   0, 0}, /* 1.9.8: ring 3 (user/sparkjar.c) */
+    /* 15 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  fieldbook_ring3_open,  0, 0}, /* 1.9.3: ring 3 too (user/fieldbook.c) */
+    /* 16 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   contacts_ring3_open,   0, 0}, /* 1.9.7: ring 3 (user/contacts.c) */
+    /* 17 */ {"Calculator", 0x00556B85, gui_icon_calculator, calculator_ring3_open, 0, 0}, /* 1.7.12: ring 3 too (user/calculator.c) */
+    /* 18 */ {"Stocks",     0x00356B4F, gui_icon_stocks,     stocks_ring3_open,     0, 0},
+    /* 19 */ {"Search",     0x00506078, gui_icon_search,     search_ring3_open,     0, 0}, /* 1.9.13: ring 3 (user/search.c) */
+    /* 20 */ {"Epiphany",   0x001F5FA8, gui_icon_stocks,     epiphany_ring3_open,   0, 0}, /* 1.9.17: ring 3 (user/epiphany.c); art covers the icon */
+    /* 21 */ {"Portfolio",  0x004A5A3E, gui_icon_apps,       portfolio_ring3_open,  0, 0}, /* no authored art yet, reuses the grid-of-tiles glyph; 1.9.5: ring 3 (user/portfolio.c) */
+    /* 22 */ {"Activity",   0x003E4C58, gui_icon_activity,   activity_ring3_open,   0, 0}, /* 1.9.6: ring 3 (user/activity.c) */
+    /* 23 */ {"Clock",      0x00565A7A, gui_icon_clock,      clock_ring3_open,      0, 0}, /* live analog face (hands overlay, gui_clock_draw_hands); 1.9.4: ring 3 (user/clock.c) */
     /* Apps and Trash aren't real apps with their own brand color, so their
        tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
        tinted background like every real app above. 2026-09-27: this used
@@ -8110,7 +8104,7 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "serveapp")) {
-        if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak|plan|lexly|toroid|sparkjar|fieldbook\n"); }
+        if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak|lexly|toroid|sparkjar|fieldbook\n"); }
         else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
             if (!strcmp(arg, "weather"))          serve_app("weather", app_weather_html, app_weather_len);
@@ -8118,7 +8112,6 @@ static void run(char *line){
             else if (!strcmp(arg, "keyrate"))     serve_app("keyrate", app_keyrate_html, app_keyrate_len);
             else if (!strcmp(arg, "bookrank"))    serve_app("bookrank", app_bookrank_html, app_bookrank_len);
             else if (!strcmp(arg, "quotestreak")) serve_app("quotestreak", app_quotestreak_html, app_quotestreak_len);
-            else if (!strcmp(arg, "plan"))        serve_app("plan", app_plan_html, app_plan_len);
             else if (!strcmp(arg, "lexly"))       serve_app("lexly", app_lexly_html, app_lexly_len);
             else if (!strcmp(arg, "toroid"))      serve_app("toroid", app_toroid_html, app_toroid_len);
             else if (!strcmp(arg, "sparkjar"))    serve_app("sparkjar", app_sparkjar_html, app_sparkjar_len);
