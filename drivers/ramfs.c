@@ -122,6 +122,26 @@ void ramfs_seed_demo_docs(void) {
     }
 }
 
+/* The demo calendar: a short trip dated from the RTC (BCD year, month, day) so "today" always has an itinerary.
+   EVENTS.TXT lines are YYYY-MM-DD|text, 39 characters of text at most (the calendar tool's cap). */
+void ramfs_seed_demo_events(unsigned char bcd_year, unsigned char bcd_mon, unsigned char bcd_day) {
+    static const char *trip[4] = { "9:40 YVR to SFO, dinner with Alex 7pm", "Demo day 10am, hotel check-in 3pm", "Coffee with Sam 9am, flight home 6pm", "Back at the desk, ship 2.6" };
+    static const unsigned char mdays[12] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    int yy = 2000 + (bcd_year & 0x0F) + (bcd_year >> 4) * 10, mm = (bcd_mon & 0x0F) + (bcd_mon >> 4) * 10, dd = (bcd_day & 0x0F) + (bcd_day >> 4) * 10;
+    if (mm < 1 || mm > 12) mm = 1;
+    if (dd < 1 || dd > 31) dd = 1;
+    char ev[256]; int n = 0;
+    for (int k = 0; k < 4; k++) {
+        int md = mdays[mm - 1] + (mm == 2 && yy % 4 == 0 ? 1 : 0);
+        ev[n++] = (char)('0' + yy / 1000 % 10); ev[n++] = (char)('0' + yy / 100 % 10); ev[n++] = (char)('0' + yy / 10 % 10); ev[n++] = (char)('0' + yy % 10); ev[n++] = '-';
+        ev[n++] = (char)('0' + mm / 10); ev[n++] = (char)('0' + mm % 10); ev[n++] = '-'; ev[n++] = (char)('0' + dd / 10); ev[n++] = (char)('0' + dd % 10); ev[n++] = '|';
+        for (const char *t = trip[k]; *t; t++) ev[n++] = *t;
+        ev[n++] = '\n';
+        if (++dd > md) { dd = 1; if (++mm > 12) { mm = 1; yy++; } }
+    }
+    vfs_write_file("EVENTS.TXT", ev, n);
+}
+
 void ramfs_init(void) {
     for (int i = 0; i < RAMFS_MAX_FILES; i++) { files[i].used = 0; files[i].is_dir = 0; files[i].parent = 0; }
     cwd = 0;

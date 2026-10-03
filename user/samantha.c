@@ -280,6 +280,7 @@ static int face_num(char *d, int n, int v) {
    kernel's chat_face_load does, and says how far each clip got and what was retried or skipped. */
 #define FACE_DEAD_RUN 4
 static void draw(void);
+static int uface_full JT_DATA = 0;                /* a full-bleed face: portfolio mode and the phone's Samantha */
 static int uface_portfolio JT_DATA = 0;         /* argv has "portfolio": Joshua's own face, landing/face-joshua/ */
 static int uface_clip JT_DATA = 0;               /* 0 idle, then 1 talk */
 static int uface_pos[2] JT_DATA;                 /* how far each clip got: frames tried */
@@ -332,7 +333,7 @@ static void face_load_step(void) {
     }
     uface_pos[clip]++;
     if (uface_pos[clip] < total && uface_run < FACE_DEAD_RUN) return;   /* more of this clip to fetch */
-    if (clip == 0 && uface_idle_n) { uface_clip = 1; uface_run = 0; if (uface_portfolio) jt_write(1, "samface: idle ready\n", 20); return; }   /* idle in hand: on to the talk clip */
+    if (clip == 0 && uface_idle_n) { uface_clip = 1; uface_run = 0; if (uface_full) jt_write(1, "samface: idle ready\n", 20); return; }   /* idle in hand: on to the talk clip */
     face_load_finish();   /* talk clip done, or no idle frame at all (no face, talk is not tried) */
 }
 
@@ -362,11 +363,11 @@ static int face_step(unsigned now) {
             int a = (face_talk_at + 1) % uface_talk_n, b = (face_talk_at + 2) % uface_talk_n;
             face_talk_at = (uface_open[b] > uface_open[a] && (now / FACE_STEP) % 2) ? b : a;
         }
-        if (uface_portfolio) { draw(); return 1; }
+        if (uface_full) { draw(); return 1; }
         face_blit(face_frame(1, face_talk_at));
     } else {
         face_at = (face_at + 1) % uface_idle_n;
-        if (uface_portfolio) { draw(); return 1; }
+        if (uface_full) { draw(); return 1; }
         face_blit(face_frame(0, face_at));
     }
     return 1;
@@ -416,7 +417,7 @@ static void draw_portfolio_buffered(void) {
 
 static void draw(void) {
     int W = (int)win.width, H = (int)win.height;
-    if (uface_portfolio) { draw_portfolio_buffered(); return; }
+    if (uface_full) { draw_portfolio_buffered(); return; }
     rect(0, 0, W, H, BG);
     const char *who = uface_portfolio ? "Joshua" : "Samantha"; /* portfolio mode is his site: his name, his face */
     text(who, 20, 12, ACCENT);
@@ -796,6 +797,7 @@ static int run_tool(const char *tool, const char *arg, const char *said) {
     }
 
     if (streq(tool, "new_note")) {
+        if (starts(arg, "note:")) { arg += 5; while (*arg == ' ') arg++; }   /* "note: pick up dry cleaning" is the note "pick up dry cleaning", not "note: ..." twice */
         char *buf = ar->fbuf;
         int wrote = 0, len = 0;
         jt_mkdir("NOTES"); jt_mkdir("NOTES/NOTES"); /* harmless when they exist; fails on ramfs, which has no folders */
@@ -931,7 +933,8 @@ static int keyword_fallback(const char *msg, char *tool, int toolsz) {
     lower[n] = 0;
     int asking = has_word(lower, "what") || has_word(lower, "read") || has_word(lower, "list");
     const char *t = 0;
-    if (asking && has_word(lower, "note")) t = "read_notes";
+    if (has_word(lower, "itinerary") || has_word(lower, "agenda") || has_word(lower, "schedule") || has_word(lower, "calendar") || has_word(lower, "my plans") || has_word(lower, "my day")) t = "calendar_today";
+    else if (asking && has_word(lower, "note")) t = "read_notes";
     else if (asking && has_word(lower, "reminders")) t = "list_reminders";
     if (!t) return 0;
     scopy(tool, t, toolsz);
@@ -1143,7 +1146,9 @@ static void send(void) {
 __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     for (int i = 1; i < argc; i++) { const char *a = argv[i], *b = "portfolio"; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) uface_portfolio = 1; }
-    if (uface_portfolio) uface_n = UFACE_MAX;
+    for (int i = 1; i < argc; i++) { const char *a = argv[i], *b = "phone"; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) uface_full = 1; }   /* the phone's Samantha is full bleed too */
+    if (uface_portfolio) uface_full = 1;
+    if (uface_full) uface_n = UFACE_MAX;
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "samantha: no window\n", 20); jt_exit(1); }
     ar = (struct arena *)malloc(sizeof *ar);              /* 1.9.27: the heap, not the image window */
     if (!ar) { jt_write(2, "samantha: no heap\n", 18); jt_exit(1); }

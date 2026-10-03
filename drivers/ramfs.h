@@ -6,6 +6,7 @@
    file count and size, in-memory only, gone on reboot. Scratch space, not
    a competitor to FAT. */
 int ramfs_seed_dir(const char *name); /* kernel-only: create a root-level folder (programs still cannot mkdir here); 1 on success */
+void ramfs_seed_demo_events(unsigned char bcd_year, unsigned char bcd_mon, unsigned char bcd_day); /* kernel-only: the v86 demo's sample itinerary in EVENTS.TXT */
 void ramfs_seed_demo_docs(void); /* kernel-only: the v86 demo's DOCS folder with two files */
 void ramfs_init(void); /* registers itself with vfs_register(), call once at boot */
 #endif

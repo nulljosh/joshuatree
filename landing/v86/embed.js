@@ -111,6 +111,7 @@ if (typeof document !== "undefined") (function () {
   var serialLog = "";
   var toolCounts = {}; // every "chattool=<tool>:" line, counted as it arrives, so a check never depends on the window still holding it
   var faceReady = false;   // ring-3 Joshua wrote "samface: idle ready": his idle frames are in, the live face can take over from the intro video
+  var chatDone = 0;   // every chattool= or chatreply= line: one answer finished
   var speakCount = 0, lastSpeakBytes = 0; // every "speak: status=200 bytes=N" line, counted as it arrives (serialLog is a head+rolling-tail window, see the serial0 listener)
   // v0.73.5: fetched once and reused by the idle tour's reboot sequence
   // below (see the comment above the reboot block in tourLoop) to
@@ -546,7 +547,7 @@ if (typeof document !== "undefined") (function () {
         if (/samface: idle ready/.test(serialLine)) faceReady = true;
         if (m) lastInteractionTime = Date.now() + Math.ceil(Number(m[1]) / 16); // 16000 samples/s = 16 per ms
         else if (/^(?:syscall: write\(1\) from ring 3: )?(?:chatreply=|chattool=)/.test(serialLine)) {
-          lastInteractionTime = Date.now();
+          lastInteractionTime = Date.now(); chatDone++;
           var tm = /^(?:syscall: write\(1\) from ring 3: )?chattool=([a-z_]+):/.exec(serialLine);
           if (tm) toolCounts[tm[1]] = (toolCounts[tm[1]] || 0) + 1;
         }
@@ -2186,7 +2187,7 @@ if (typeof document !== "undefined") (function () {
       await sleep(150);
     }
     if (focused || tourGen !== gen) return;
-    if (tapTalkBtn && !audioRunning()) {
+    if (tapTalkBtn && PORTFOLIO_MODE && !audioRunning()) {   // the demo starts at once; the speaker button, top right, is how a visitor turns the sound on
       // Wait for the tap so her reply is audible; give up after 20s and run
       // silently so the demo still moves (the button stays up for later).
       tapTalkBtn.hidden = false;
@@ -2250,22 +2251,44 @@ if (typeof document !== "undefined") (function () {
     // read as "tries one prompt, then restarts". The first line goes straight
     // into the avatar's open box; after that she is the Chat console, where
     // 'n' starts a new message, same as the desktop lap scripts.
-    for (var li = 0; li < PHONE_LAP_LINES.length; li++) {
+    await phoneDemo(gen);
+    while (!focused && tourGen === gen) await sleep(1000);   // played once, then she stays: no loop, no repeated questions
+  }
+  // The phone demo: ask her something, watch her answer with a real tool, then go and look at the app it touched.
+  // Escape is the phone's back button; the grid positions come from kernel/phone_home.h (5 columns of 86 px, rows 96 px apart,
+  // first row 56 px down; the public build hides Portfolio, so every app after it sits one place earlier).
+  var PHONE_BEATS = [
+    { say: "what's on my itinerary", app: 2 },            // Calendar: the seeded trip
+    { say: "remind me to call mom at 5", app: 4 },        // Reminders: the new one is in the list
+    { say: "what's the weather", app: 7 },                // Weather
+    { say: "note: pick up dry cleaning", app: 3 }         // Notes
+  ];
+  function phoneGridPos(k) { return [(k % 5) * 86 + 43, 56 + Math.floor(k / 5) * 96 + 30]; }
+  async function phoneDemo(gen) {
+    if (!adaptersReady) return;
+    emulator.mouse_adapter.emu_enabled = true;
+    emulator.keyboard_adapter.emu_enabled = true;
+    for (var bi = 0; bi < PHONE_BEATS.length; bi++) {
+      var beat = PHONE_BEATS[bi];
       if (focused || tourGen !== gen) return;
-      var speakSeen = speakCount;
-      if (phoneSaidFirst && emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([8], 80); await sleep(200); }   // Samantha is a ring-3 app now: there is no 'n' console, and a key pressed over her speaking only skips the speech, so Backspace (a no-op on an empty bar) goes first
-      phoneSaidFirst = true;
-      await emulator.keyboard_send_text(PHONE_LAP_LINES[li] + '\n', 55);
-      // Wait for her real reply to finish speaking. The kernel logs
-      // "speak: status=N bytes=M" and plays pcm8 at 16 kHz (drivers/speak.h),
-      // so the clip lasts M/16000 s.
-      var waitStart = Date.now(), speakMs = 0;
-      while (Date.now() - waitStart < 15000) {
-        if (focused || tourGen !== gen) return;
-        if (speakCount > speakSeen) { speakMs = Math.min(12000, Math.round(lastSpeakBytes / 16)) + 800; break; }
-        await sleep(200);
-      }
-      await sleep(speakMs || 3000);
+      var seen = chatDone;
+      if (emulator.keyboard_send_keys) { await emulator.keyboard_send_keys([8], 80); await sleep(120); }   // a key pressed over her speaking only skips the speech: Backspace goes first, a no-op on an empty bar
+      await emulator.keyboard_send_text(beat.say + '\n', 45);
+      var t0 = Date.now();
+      while (chatDone === seen && Date.now() - t0 < 9000) { if (focused || tourGen !== gen) return; await sleep(150); }
+      await sleep(1700);   // long enough to read her answer
+      if (focused || tourGen !== gen) return;
+      if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80);   // back to the home grid
+      await sleep(800);
+      var pos = phoneGridPos(beat.app);
+      await clickAt(pos[0], pos[1]);   // open the app her tool just used
+      await sleep(2800);
+      if (focused || tourGen !== gen) return;
+      if (emulator.keyboard_send_keys) await emulator.keyboard_send_keys([27], 80);
+      await sleep(800);
+      var her = phoneGridPos(6);       // Samantha, back to her
+      await clickAt(her[0], her[1]);
+      await sleep(900);
     }
   }
   // The phone's version of the app tour. The phone has a home grid, not a dock: tap each app's icon, run the same
@@ -2454,7 +2477,7 @@ if (typeof document !== "undefined") (function () {
     var vga = emulator && emulator.v86 && emulator.v86.cpu.devices.vga;
     if (vga && vga.graphical_mode) {
       tourArmed = true;
-      tourTimer = setTimeout(startTourWhenReady, PORTFOLIO_MODE ? 4000 : 2500); // 6s of a still desktop read as "still loading"
+      tourTimer = setTimeout(startTourWhenReady, PORTFOLIO_MODE ? 4000 : (IS_PHONE ? 300 : 2500)); // 6s of a still desktop read as "still loading"
     }
   }, 500);
 })();

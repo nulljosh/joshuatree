@@ -226,19 +226,19 @@ try:
         img2 = _Image2.frombytes("RGBA", (W, H), open(LABEL_DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
         img2.save(LABEL_PNG)
         px2 = img2.load()
-        ACCENT = (0xB7, 0x86, 0x2A)
+        BG = (0xFA, 0xF8, 0xF6)
 
-        def close2(a, b, tol=70): return all(abs(a[i] - b[i]) <= tol for i in range(3))
+        def close2(a, b, tol=6): return all(abs(a[i] - b[i]) <= tol for i in range(3))
 
-        # "Samantha" (accent color) spans roughly x=42..159 at this scale/
-        # font -- sample across that whole span, not just the left edge,
-        # so a face that covers the word's second half still fails this.
-        cols_hit = sum(1 for x in range(42, 160, 6) if any(close2(px2[x, y], ACCENT) for y in range(100, 140)))
-        if cols_hit < 15:
+        # Her face is full bleed on a phone now (the same renderer as Joshua's portfolio): after a real reply the middle of
+        # the screen is the face, never the plain window colour, and so is a point near each edge of the picture.
+        pts = [(W // 2, H // 2), (W // 2, H // 3), (W // 2, H * 2 // 3)]
+        bad = [pt for pt in pts if close2(px2[pt[0], pt[1]], BG)]
+        if bad:
             fail = 1
-            print(f"FAIL: 'Samantha' label only has accent-colored pixels in {cols_hit}/20 sampled columns after her reply -- the face is covering part of it")
+            print(f"FAIL: the full-bleed face is not on screen after her reply: plain window colour at {bad}")
         else:
-            print(f"PASS: 'Samantha' label reads fully ({cols_hit}/20 columns) after she answers on a phone boot, face included")
+            print("PASS: her face fills the phone screen after she answers a real question")
         print(f"saved {LABEL_PNG}")
 except Exception as e:
     fail = 1; print(f"FAIL: face+label regression check errored ({e})")

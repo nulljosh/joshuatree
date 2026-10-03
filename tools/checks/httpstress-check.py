@@ -94,7 +94,7 @@ if stats:
     warm = ok[8:]   # the first few fetches grow the heap to fit their reply buffers
     if warm and min(lg for _, lg in warm) < 66 * 1024: fails.append(f"largest free heap block fell to {min(lg for _, lg in warm)} bytes, under a face reply buffer")
     tail = [fb for fb, _ in ok[-20:]]
-    if len(tail) == 20 and max(tail) - min(tail) > 4096: fails.append(f"heap free bytes drift across the last 20 fetches ({min(tail)} to {max(tail)}): a buffer leaks per call")
+    if len(tail) == 20 and tail[0] - tail[-1] > 4096: fails.append(f"heap free bytes fell across the last 20 fetches ({tail[0]} to {tail[-1]}): a buffer leaks per call")   # only a fall is a leak: other kernel work (the weather fetch, a freed buffer) can lift free bytes mid-run on a slow runner
 else: fails.append("no httpstat lines in the serial log")
 if "kheap: CORRUPT" in s: fails.append("kheap reported corruption")
 for f in fails: print("FAIL: " + f)
