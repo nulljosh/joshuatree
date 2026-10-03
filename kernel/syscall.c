@@ -1169,6 +1169,43 @@ static int sys_readdir(u32 path, u32 out, u32 max) {
     return (int)readdir_total;
 }
 
+/* SYS_READ_FILE (401): a whole file into a caller buffer, for programs that hold media in memory
+   (Movies). open() cannot: it snapshots at most OPEN_MAX_FILE bytes. The size comes from the
+   directory listing first, so a file bigger than `max` is -EFBIG and nothing is copied, never a
+   cut-off read. The buffer is checked page by page with paging_user_range_ok before the VFS
+   writes a byte into it. Same path rules as open. Returns the byte count (0 for an empty file). */
+static const char *rf_leaf;
+static int rf_size;
+static void rf_probe(const char *name, unsigned int size, int is_dir) {
+    const char *a = name, *b = rf_leaf;
+    for (; *a && *b; a++, b++) {
+        char x = *a, y = *b;
+        if (x >= 'a' && x <= 'z') x -= 32;
+        if (y >= 'a' && y <= 'z') y -= 32;
+        if (x != y) return;
+    }
+    if (*a || *b) return;
+    rf_size = is_dir ? -2 : (int)size;
+}
+static int sys_read_file(u32 path, u32 buf, u32 max) {
+    char name[PATH_MAX + 1];
+    int err = copy_path_from_user(path, name);
+    if (err) return err;
+    char *leaf; int depth;
+    err = path_enter(name, 1, &leaf, &depth);
+    if (err) return err;
+    rf_leaf = leaf; rf_size = -1;
+    vfs_list(rf_probe);
+    int size = rf_size;
+    if (size < 0) { path_leave(depth); return -ENOENT; }
+    if ((u32)size > max) { path_leave(depth); return -EFBIG; }
+    if (size == 0) { path_leave(depth); return 0; }
+    if (!paging_user_range_ok(buf, (u32)size)) { path_leave(depth); return -EFAULT; }
+    int n = vfs_read_file(leaf, (void *)buf, (unsigned int)size);
+    path_leave(depth);
+    return n < 0 ? -ENOENT : n;
+}
+
 /* SYS_MKDIR / SYS_UNLINK: same path rules as sys_open (copy_path_from_user
    checks every byte with paging_user_range_ok, path_enter keeps one leaf),
    the walk is undone before return. No heap is touched, so there is no lock
@@ -1291,6 +1328,7 @@ static const syscall_fn table[NSYSCALLS] = {
     [SYS_REFRESH]     = sys_refresh,
     [SYS_CLIPBOARD]   = sys_clipboard,
     [SYS_TEXT]        = sys_text,
+    [SYS_READ_FILE]   = sys_read_file,
 };
 
 void syscall_dispatch(struct syscall_frame *f) {
