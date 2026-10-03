@@ -240,12 +240,7 @@ try:
         if not wait_serial("calendar: loaded 1", 10):
             fails.append('the reopened app did not report "calendar: loaded 1": the event did not persist in EVENTS.TXT')
         time.sleep(0.5)
-        n = serial().count("appsfullrepaint")
-        keys("esc")
-        if not wait_serial("appsfullrepaint", 10, n + 1):
-            fails.append("the Apps folder did not come back after Calendar closed")
-        time.sleep(0.5)
-        keys("esc"); time.sleep(0.8)  # close the folder
+        keys("esc"); time.sleep(0.8)  # 2.0: closing a folder-launched app returns to the desktop, not the folder
 
     # 7. Samantha's calendar_today tool reads the same file
     move(SLOT0_X + DOCK_CHAT * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
