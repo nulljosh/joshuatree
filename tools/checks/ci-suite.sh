@@ -60,6 +60,7 @@ once |7|Dock slot constants agree with kernel.c (static drift guard)|python3 ./t
 once |7|Kernel memory keeps 16KB clear of the program window (toolchain drift guard)|python3 ./tools/checks/bss-margin-check.py
 once |7|Samantha's face loops wrap without a seam|python3 ./tools/checks/face-frames-check.py
 once |7|docs/TESTING.md lists every check in this suite|./tools/checks/testing-doc-check.sh
+once |7|Local Samantha tools all exist in Turing's tool list or are OS-only (upstream drift guard)|python3 ./tools/checks/turing-sync-check.py
 once |5|The landing logo rebuilds byte for byte from tools/gen/logo.py|./tools/checks/logo-check.sh
 once |6|The landing demo downloads the kernel once, gzipped|./tools/checks/kernel-gz-check.sh
 retry|0|Boot check|./check.sh
