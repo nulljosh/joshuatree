@@ -710,7 +710,7 @@ if (typeof document !== "undefined") (function () {
   }
   var tapTalkBtn = null, tapTalkResolve = null;
   var tapTalkPromise = new Promise(function (r) { tapTalkResolve = r; });
-  if (IS_PHONE || PORTFOLIO_MODE) {
+  if (IS_PHONE || /[?&]portfolio\b/.test(location.search)) {   // PORTFOLIO_MODE is assigned further down, still undefined here
     tapTalkBtn = document.createElement("button");
     tapTalkBtn.type = "button";
     tapTalkBtn.id = "tap-to-talk";
@@ -2207,7 +2207,7 @@ if (typeof document !== "undefined") (function () {
       // Wait for the tap so her reply is audible; give up after 20s and run
       // silently so the demo still moves (the button stays up for later).
       tapTalkBtn.hidden = false;
-      await Promise.race([tapTalkPromise, new Promise(function (r) { setTimeout(r, 5000); })]); // 20s read as a frozen demo
+      await Promise.race([tapTalkPromise, new Promise(function (r) { setTimeout(r, PORTFOLIO_MODE ? 120000 : 5000); })]); // portfolio: he waits for the first click so his voice is heard, not spoken into a suspended AudioContext
       if (focused || tourGen !== gen) return;
       await new Promise(function (r) { setTimeout(r, 400); }); // let resume() settle
     }
