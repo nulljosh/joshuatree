@@ -310,7 +310,10 @@ try:
     if code is None or code > 6: fails.append(f"seeking left while paused did not move the picture to the start (screen shows {code})")
     keys("spc"); time.sleep(0.3)                   # play on, mid-play pixel read within a few frames of the last marker
     time.sleep(0.5)
-    lf = last_frame(); code = read_code()
+    for _ in range(8):   # a loaded CI guest can be caught between repaints (the code reads 0): sample again, one in-step sample is the proof
+        lf = last_frame(); code = read_code()
+        if lf and code is not None and code > 0 and abs(code - lf[1]) <= 8: break
+        time.sleep(0.25)
     if lf and code is not None:
         print(f"mid-play: last marker frame {lf[1]}, screen shows {code}")
         if abs(code - lf[1]) > 8: fails.append(f"mid-play the screen shows frame {code} but the app's last marker says {lf[1]}")
