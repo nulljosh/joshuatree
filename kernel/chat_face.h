@@ -226,7 +226,7 @@ static void face_blit_full(const unsigned char *px, const unsigned char *mix) {
     int sc = (int)window_scale(); if (sc < 1) sc = 1;
     int fw = (int)window_width() * sc, fh = (int)window_height() * sc;
     int top = face_full_top * sc, limit = fh - face_band_h * sc;
-    int side = fh - top; if (side > 720 * sc && side < fw) side = 720 * sc;
+    int side = limit - top; if (side > 720 * sc && side < fw) side = 720 * sc;   /* fit above the glass bar, so the bar never hides his neck */
     int ox = (fw - side) / 2;
     int x0 = ox < 0 ? 0 : ox, x1 = ox + side > fw ? fw : ox + side;
     if (x1 > 4096) x1 = 4096;
@@ -244,8 +244,8 @@ static void face_blit_full(const unsigned char *px, const unsigned char *mix) {
         for (int i = 0; i < fpx; i++) fwt[i] = (unsigned short)(256 * (fpx - i) / fpx);
         /* The wall beside and below the frame is painted once: it is a plain
            wall, it does not move. */
-        for (int y = top; y < limit; y++) {
-            if (y - top >= side) { unsigned int ro = (FACE_SRC - 1) * FACE_SRC * 3u; window_fill_rect_phys(0, y, fw, 1, (px[ro] << 16) | (px[ro + 1] << 8) | px[ro + 2]); continue; }
+        for (int y = top; y < fh; y++) {   /* down to the screen bottom: the glass bar blurs these rows */
+            if (y - top >= side) { window_fill_rect_phys(0, y, fw, 1, wall_l); continue; }   /* below the face: the wall, so the glass bar reads light, not a gray slab */
             if (x0 > 0) window_fill_rect_phys(0, y, x0, 1, wall_l);
             if (x1 < fw) window_fill_rect_phys(x1, y, fw - x1, 1, wall_r);
         }
