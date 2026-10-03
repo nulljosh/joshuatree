@@ -460,12 +460,8 @@ static void task_b(void){ for (int i = 0; i < 10; i++) { puts("B"); yield(); } t
 
 /* 2.2.0: fputest. Two tasks each push a value on the x87 stack, switch away inside the same asm, pop it back; crossed values mean schedule() lost per-task float state. */
 static volatile int fpu_bad, fpu_done;
-static void fpu_task(double mark) {
-    for (int i = 0; i < 300; i++) { double in = mark + i, out = 0; __asm__ volatile ("fldl %1; int $32; fstpl %0" : "=m"(out) : "m"(in) : "memory"); if (out != in) fpu_bad++; }
-    fpu_done++; task_exit();
-}
-static void fpu_a(void){ fpu_task(1000.5); }
-static void fpu_b(void){ fpu_task(7000.25); }
+static void fpu_task(double mark) { for (int i = 0; i < 300; i++) { double in = mark + i, out = 0; __asm__ volatile ("fldl %1; int $32; fstpl %0" : "=m"(out) : "m"(in) : "memory"); if (out != in) fpu_bad++; } fpu_done++; task_exit(); }
+static void fpu_a(void){ fpu_task(1000.5); } static void fpu_b(void){ fpu_task(7000.25); }
 
 /* ---- preemption demo: two tasks that never call yield() or hlt, proving
    the timer itself forces a switch. The shell's own wait loop below also
@@ -847,8 +843,7 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-/* 2.2: Music (24) and Movies (25) pushed Apps/Trash to 26/27. */
-#define GUI_APP_COUNT   28 /* 26 real apps + the Apps folder + Trash */
+#define GUI_APP_COUNT   28 /* 26 real apps + the Apps folder + Trash; 2.2 Music (24) and Movies (25) pushed Apps/Trash to 26/27 */
 #define GUI_APPS_FOLDER 26 /* not an app: the dock tile that opens the folder */
 #define GUI_TRASH       27
 #define GUI_APP_PORTFOLIO 21 /* hidden from the Apps folder and phone home unless the boot line says "portfolio" (his site embed); the public OS ships without it */
@@ -2339,7 +2334,7 @@ static void gui_fill_triangle_down(int cx, int y0, int half_w, int h, unsigned i
    redraw entirely once per real minute unless forced, matching the one
    thing in this bar that actually changes on its own. */
 static int gui_menubar_last_min = -1;
-static void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; }
+static void gui_menubar_force_redraw(void){ gui_menubar_last_min = -1; } static int gui_bleed_open(void); /* a full-bleed window covers the menu bar */
 
 /* Real macOS menu bar clock format: weekday, month, day, 12-hour time with
    AM/PM, not the bare 24h HH:MM this used to show. Reads the CMOS weekday
@@ -3181,7 +3176,6 @@ static void wall_apply(int want_map){
 }
 
 static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink);
-static int gui_bleed_open(void); /* a full-bleed window covers the menu bar */
 static void gui_draw_menubar(void){
     if (gui_bleed_open()) { gui_menubar_last_min = -1; return; } /* repaints on the first call after it closes */
     u8 h, m, wd, dom, mon;
@@ -5062,8 +5056,7 @@ static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_AP
    concurrently-open window is offset so both titlebars and both close
    buttons stay fully on screen and visually distinct, not stacked exactly
    on top of each other. */
-/* Portfolio mode: Samantha's window is Joshua's face, full bleed. Esc still closes it. */
-static int gui_window_bleed(int icon){ return portfolio_dock && !boot_to_phone && icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open == samantha_ring3_open; }
+static int gui_window_bleed(int icon){ return portfolio_dock && !boot_to_phone && icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open == samantha_ring3_open; } /* portfolio mode: Samantha's window is Joshua's face, full bleed; Esc still closes it */
 static int gui_bleed_open(void){ for (int i = 0; i < gui_window_count; i++) if (gui_window_bleed(gui_windows[i].icon)) return 1; return 0; }
 static void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
     if (boot_to_phone) { *x = -8; *y = 8; *w = (int)window_width() + 16; *h = (int)window_height(); return; } /* 2.0 gate 5: one window, full screen under the back chevron strip (content rect 0,40,W,H-40) */
@@ -5401,9 +5394,7 @@ static int gui_multiwin_hit_test(int mx, int my){
 
 static void gui_multiwin_close(int idx){
     if (idx < 0 || idx >= gui_window_count) return;
-    int bleed = gui_window_bleed(gui_windows[idx].icon);
-    for (int j = idx; j < gui_window_count - 1; j++) gui_windows[j] = gui_windows[j + 1];
-    gui_window_count--;
+    int bleed = gui_window_bleed(gui_windows[idx].icon); for (int j = idx; j < gui_window_count - 1; j++) gui_windows[j] = gui_windows[j + 1]; gui_window_count--;
     if (bleed) { gui_menubar_force_redraw(); gui_draw_menubar(); } /* the bar was held back while his face covered it */
 }
 
