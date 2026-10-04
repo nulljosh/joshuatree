@@ -11,10 +11,10 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 | Boots under QEMU's generic ARM machine and prints over the UART | Works. `make -C arch/arm64 run` |
 | Boots as a Pi image on QEMU's Pi 4B model, enters at EL2, drops to EL1, prints | Works. `make -C arch/arm64 run-pi` |
 | Boots on a real Pi 4 | Built, never tried. This is the first thing to test. |
-| Anything on the screen | Under QEMU virt only: a ramfb framebuffer with a drawn desktop (`tools/checks/arm64-m1c-check.py`). Not on the Pi yet, which needs the mailbox framebuffer. |
+| A picture on a monitor | Works on QEMU's Pi 4B model: the kernel asks the GPU for a screen through the mailbox and draws a simple desktop (`tools/checks/arm64-m1c-check.py`). Never tried on a real board. |
 | Keyboard, mouse, disk, network on the Pi | Not yet. M2 to M4. |
 
-So on day one you will see text in a serial terminal, not a picture on a monitor. That is on purpose. It is the smallest thing that proves the kernel runs on the real chip.
+So on day one, watch two things: text in a serial terminal, and with a monitor plugged in, a simple desktop of plain boxes (a grey menu bar, a white window with an orange title bar, a dock). The text is the one that tells us what went wrong if the picture does not show.
 
 ## What to buy
 
@@ -23,7 +23,7 @@ So on day one you will see text in a serial terminal, not a picture on a monitor
 - **A microSD card, 16 GB or more.**
 - **A USB to serial cable, 3.3 V.** CP2102, FTDI or CH340 all work. This is how you see the output. Make sure it says 3.3 V, not 5 V.
 - **Three female to female jumper wires.**
-- A micro-HDMI to HDMI cable, a monitor, a USB keyboard and a USB mouse. You need these from milestone M1, not before.
+- A micro-HDMI to HDMI cable and a monitor, to see the first picture. Plug into the HDMI port next to the USB-C power port (HDMI 0). A USB keyboard and mouse come later (M4).
 
 A local store may have the Pi in stock. Check before you drive. Canada Computers and Memory Express are the usual ones in Vancouver, and PiShop.ca ships from Canada.
 
@@ -88,11 +88,14 @@ tick 1
 tick 2
 tick 3
 M1a ok
+M1c fb ok
 ```
 
 The lines after `M0 ok` are the exception table, the memory map with the caches on, a small heap, and the timer. They run on QEMU's Pi model; on a real board the interrupt controller setup is the part most likely to need a fix. If the output stops after `M1 vectors set`, the memory map is the likely cause on real hardware; if it stops after `M1 svc ok`, it is the interrupt controller. Send me the last line you see.
 
-That is milestone M0 (and M1a) on real hardware. To leave `screen`, press Ctrl-A then K.
+`M1c fb ok` means the GPU gave us a screen and the desktop is drawn: the monitor should show it. If the text says `M1c fb ok` and the monitor stays black, the picture is in memory but the GPU is not showing it (photograph both). If it says `M1c mailbox framebuffer refused`, the firmware said no.
+
+That is milestones M0, M1a and the first picture on real hardware. To leave `screen`, press Ctrl-A then K.
 
 ## If nothing prints
 
@@ -110,8 +113,8 @@ If it still fails, send the exact lines you see, even if they look like garbage.
 | Milestone | What you will see |
 |---|---|
 | M0 | Text over the serial cable. Built, waiting for a real board. |
-| M1 | The Joshua Tree desktop on a monitor over HDMI. |
-| M2 | Keyboard, mouse, network and disk, working in QEMU first. |
+| M1 | A picture on a monitor over HDMI. A simple desktop works on QEMU's Pi model; the real Joshua Tree look comes next. |
+| M2 | Keyboard, mouse, network and disk, working in QEMU first. The keyboard works. |
 | M3 | Every app running on ARM. |
 | M4 | The same on the real Pi: SD card, USB, Ethernet. Sound last. |
 | M5 | The Pi 5. |

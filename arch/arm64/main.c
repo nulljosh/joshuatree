@@ -133,14 +133,19 @@ static void m1b_selftest(void) {
 }
 
 /* ---- M1c: a framebuffer. QEMU's virt machine has no display unless one is asked for; ramfb is a plain RAM
-   framebuffer the guest configures through fw_cfg (a DMA write of the "etc/ramfb" file). The real Pi gets the same
-   pixels through the mailbox instead (next step); everything above fb_init stays the same. ---- */
-#ifndef PI_BUILD
-#define FW_CFG 0x09020000UL
+   framebuffer the guest configures through fw_cfg (a DMA write of the "etc/ramfb" file). A Pi asks its GPU firmware
+   for one through the mailbox. Either way fb_setup hands back plain 32-bit pixels and the drawing is shared. ---- */
 #define FB_W 800
 #define FB_H 600
-static unsigned fb_pixels_ok;
 static unsigned int *fb;
+static unsigned fb_pitch;   /* in pixels */
+static int fb_swap;         /* red and blue the other way round in memory */
+static void dcache_clean(void *p, unsigned long n) {   /* push lines out to RAM, where a GPU or DMA engine reads */
+    for (unsigned long a = (unsigned long)p & ~63UL; a < (unsigned long)p + n; a += 64) __asm__ volatile ("dc civac, %0" :: "r"(a) : "memory");
+    __asm__ volatile ("dsb sy" ::: "memory");
+}
+#ifndef PI_BUILD
+#define FW_CFG 0x09020000UL
 static unsigned short fw_sel(unsigned short s) { *(volatile unsigned short *)(FW_CFG + 8) = __builtin_bswap16(s); return s; }
 static unsigned char fw_byte(void) { return *(volatile unsigned char *)FW_CFG; }
 static unsigned fw_be32(void) { unsigned v = 0; for (int i = 0; i < 4; i++) v = v << 8 | fw_byte(); return v; }
@@ -158,13 +163,11 @@ static int fw_find(const char *want) {   /* the file directory: count, then 64-b
 }
 struct fw_dma { unsigned control, length; unsigned long address; } __attribute__((packed, aligned(16)));
 struct ramfb_cfg { unsigned long addr; unsigned fourcc, flags, width, height, stride; } __attribute__((packed));
-static void fb_rect(int x, int y, int w, int h, unsigned c) {
-    for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) fb[j * FB_W + i] = c;
-}
-static void fb_init(void) {
+static int fb_setup(void) {
     int sel = fw_find("etc/ramfb");
-    if (sel < 0) { uart_puts("M1c no ramfb\n"); return; }
+    if (sel < 0) { uart_puts("M1c no ramfb\n"); return 0; }
     fb = kmalloc((unsigned long)FB_W * FB_H * 4);
+    fb_pitch = FB_W;
     static struct ramfb_cfg cfg __attribute__((aligned(16)));
     static struct fw_dma dma;
     cfg.addr = __builtin_bswap64((unsigned long)fb);
@@ -174,23 +177,68 @@ static void fb_init(void) {
     dma.control = __builtin_bswap32(((unsigned)sel << 16) | 8 | 16);   /* select, write */
     dma.length = __builtin_bswap32(sizeof cfg);
     dma.address = __builtin_bswap64((unsigned long)&cfg);
-    /* the DMA engine reads these structs straight from RAM: make sure they have left the cache first */
-    __asm__ volatile ("dc civac, %0\n dc civac, %1\n dsb sy" :: "r"(&cfg), "r"(&dma) : "memory");
+    dcache_clean(&cfg, sizeof cfg); dcache_clean(&dma, sizeof dma);   /* the DMA engine reads these straight from RAM */
     *(volatile unsigned long *)(FW_CFG + 16) = __builtin_bswap64((unsigned long)&dma);
     while (__builtin_bswap32(*(volatile unsigned *)&dma.control) & ~1u) {}
-    if (__builtin_bswap32(*(volatile unsigned *)&dma.control) & 1) { uart_puts("M1c ramfb DMA error\n"); return; }
+    if (__builtin_bswap32(*(volatile unsigned *)&dma.control) & 1) { uart_puts("M1c ramfb DMA error\n"); return 0; }
+    return 1;
+}
+#else
+/* The Pi 4's VideoCore mailbox, property channel 8. One message sets the size and depth and allocates the buffer;
+   the GPU writes its answers into the same message. It lives in cacheable RAM, so it is cleaned out before the GPU
+   reads it and invalidated before we read the answers. */
+#define MBOX_BASE 0xFE00B880UL
+#define MBOX_READ   REG(MBOX_BASE + 0x00)
+#define MBOX_STATUS REG(MBOX_BASE + 0x18)
+#define MBOX_WRITE  REG(MBOX_BASE + 0x20)
+static volatile unsigned mbox[36] __attribute__((aligned(64)));
+static int mbox_call(void) {
+    unsigned long a = (unsigned long)mbox;
+    dcache_clean((void *)mbox, sizeof mbox);
+    while (MBOX_STATUS & 0x80000000u) {}             /* full */
+    MBOX_WRITE = (unsigned)(a & ~15UL) | 8;
+    for (;;) {
+        while (MBOX_STATUS & 0x40000000u) {}         /* empty */
+        unsigned r = MBOX_READ;
+        if (r == ((unsigned)(a & ~15UL) | 8)) break;
+    }
+    dcache_clean((void *)mbox, sizeof mbox);         /* civac also invalidates: the next reads come from RAM */
+    return mbox[1] == 0x80000000u;
+}
+static int fb_setup(void) {
+    unsigned m[] = { sizeof mbox, 0,
+        0x48003, 8, 0, FB_W, FB_H,     /* physical size */
+        0x48004, 8, 0, FB_W, FB_H,     /* virtual size */
+        0x48005, 4, 0, 32,             /* depth */
+        0x48006, 4, 0, 0,              /* pixel order BGR: blue in the low byte, so 0x00RRGGBB as a 32-bit word */
+        0x40001, 8, 0, 4096, 0,        /* allocate, 4 KiB aligned: answers address and size */
+        0x40008, 4, 0, 0,              /* pitch in bytes */
+        0 };
+    for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
+    if (!mbox_call() || !mbox[23]) { uart_puts("M1c mailbox framebuffer refused\n"); return 0; }
+    fb = (unsigned int *)(unsigned long)(mbox[23] & 0x3FFFFFFF);   /* a VideoCore bus address: drop the alias bits */
+    fb_pitch = mbox[28] / 4;
+    fb_swap = mbox[19] == 1;   /* the firmware answers the order it really used; follow it if it overrode us */
+    return 1;
+}
+#endif
+static void fb_rect(int x, int y, int w, int h, unsigned c) {
+    if (fb_swap) c = (c & 0xFF00FF00u) | (c >> 16 & 0xFF) | (c & 0xFF) << 16;
+    for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) fb[j * fb_pitch + i] = c;
+}
+static void fb_init(void) {
+    if (!fb_setup()) return;
     fb_rect(0, 0, FB_W, FB_H, 0x00203040);       /* desktop */
     fb_rect(0, 0, FB_W, 24, 0x00e0e0e0);         /* menu bar */
     fb_rect(150, 100, 500, 350, 0x00ffffff);     /* a window */
     fb_rect(150, 100, 500, 28, 0x00b5502c);      /* its title bar, the house accent */
     fb_rect(300, 540, 200, 44, 0x00505a68);      /* the dock */
-    fb_pixels_ok = fb[200 * FB_W + 200] == 0x00ffffff && fb[10 * FB_W + 10] == 0x00e0e0e0;
-    __asm__ volatile ("dsb sy");
-    uart_puts(fb_pixels_ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
+    /* ponytail: the framebuffer sits in cacheable RAM, so a real GPU only sees pixels once they are cleaned out.
+       One clean after drawing is enough for a still picture; a live desktop wants the buffer mapped write-combining. */
+    dcache_clean(fb, (unsigned long)fb_pitch * FB_H * 4);
+    int ok = fb[200 * fb_pitch + 200] == 0x00ffffff && fb[10 * fb_pitch + 10] == 0x00e0e0e0;   /* grey and white read the same either way */
+    uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
 }
-#else
-static void fb_init(void) {}
-#endif
 
 static void m1_selftest(void) {
     __asm__ volatile ("msr vbar_el1, %0\n isb" :: "r"(vectors));
