@@ -29,9 +29,8 @@ Main is 2.6.13 and live. CI takes about 10 minutes. The 3.0.0 gate is one thing:
 
 ### From the notebook (Joshua, 2026-10-04)
 Two notebook pages checked against the tree. Already shipped and not listed: menu bar with weather, dock, Activity, Trash, clipboard, Burrow (the Finder), Epiphany tabs, Launchpad-style Apps folder, Music, Movies, landing page, docs at 100 percent, CI, Samantha chat with tools. Wi-Fi was ruled out for 1.0 and is under Our own computer.
-- [ ] [Joshua] Name and sketch the hardware: "Neo" (a boxed board with a screen, pitched on mobility and security). Is Neo the product name, and what does mobility mean for a Pi box (battery, portable monitor, carry case)?
+- [ ] [Sonnet] Rename the Strata enclosure to Neo (Joshua, 2026-10-04): `docs/HARDWARE.md`, `docs/hardware/PI-CASE.md` (Strata Pi becomes Neo Pi), the CAD scripts and their output names, the landing. The notebook pitches Neo on mobility and security; what mobility means for a Pi box (battery, portable monitor, carry case) is still [Joshua].
 - [ ] [Joshua] Competitor research as a doc: Apple Mac mini against our box on RAM (8 to 16 GB), integrated CPU, multi-display over HDMI, internal or external design, USB-C ports. A good-computer checklist for `docs/HARDWARE.md`.
-- [ ] [Joshua] "Buy TI(83)": the top of the page is cut off. A TI-83 for reference against the Calculator app, or something else?
 - [ ] [Fable] Time Machine: snapshots of the disk with a browse-the-past view. Nothing exists; needs a FAT snapshot design first.
 - [ ] [Sonnet] Fullscreen avatar, custom: Samantha (or Joshua's face) full screen as a mode, with the face picked in Settings. The page also lists video, audio and GUI mode as three ways to talk to her.
 - [ ] [Fable] Integrated LLM that runs on the box, not through the proxy. Needs the Pi to have the memory and a runtime; decide once M4 is real.
