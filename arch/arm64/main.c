@@ -132,6 +132,66 @@ static void m1b_selftest(void) {
     uart_puts("M1b heap ok\n");
 }
 
+/* ---- M1c: a framebuffer. QEMU's virt machine has no display unless one is asked for; ramfb is a plain RAM
+   framebuffer the guest configures through fw_cfg (a DMA write of the "etc/ramfb" file). The real Pi gets the same
+   pixels through the mailbox instead (next step); everything above fb_init stays the same. ---- */
+#ifndef PI_BUILD
+#define FW_CFG 0x09020000UL
+#define FB_W 800
+#define FB_H 600
+static unsigned fb_pixels_ok;
+static unsigned int *fb;
+static unsigned short fw_sel(unsigned short s) { *(volatile unsigned short *)(FW_CFG + 8) = __builtin_bswap16(s); return s; }
+static unsigned char fw_byte(void) { return *(volatile unsigned char *)FW_CFG; }
+static unsigned fw_be32(void) { unsigned v = 0; for (int i = 0; i < 4; i++) v = v << 8 | fw_byte(); return v; }
+static int fw_find(const char *want) {   /* the file directory: count, then 64-byte entries (size, select, pad, name[56]) */
+    fw_sel(0x19);
+    unsigned n = fw_be32();
+    for (unsigned i = 0; i < n; i++) {
+        fw_be32();
+        unsigned sel = fw_byte() << 8; sel |= fw_byte(); fw_byte(); fw_byte();
+        char name[56]; for (int j = 0; j < 56; j++) name[j] = (char)fw_byte();
+        int k = 0; while (want[k] && name[k] == want[k]) k++;
+        if (!want[k] && !name[k]) return (int)sel;
+    }
+    return -1;
+}
+struct fw_dma { unsigned control, length; unsigned long address; } __attribute__((packed, aligned(16)));
+struct ramfb_cfg { unsigned long addr; unsigned fourcc, flags, width, height, stride; } __attribute__((packed));
+static void fb_rect(int x, int y, int w, int h, unsigned c) {
+    for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) fb[j * FB_W + i] = c;
+}
+static void fb_init(void) {
+    int sel = fw_find("etc/ramfb");
+    if (sel < 0) { uart_puts("M1c no ramfb\n"); return; }
+    fb = kmalloc((unsigned long)FB_W * FB_H * 4);
+    static struct ramfb_cfg cfg __attribute__((aligned(16)));
+    static struct fw_dma dma;
+    cfg.addr = __builtin_bswap64((unsigned long)fb);
+    cfg.fourcc = __builtin_bswap32(0x34325258);   /* 'XR24': 32-bit 0x00RRGGBB */
+    cfg.flags = 0;
+    cfg.width = __builtin_bswap32(FB_W); cfg.height = __builtin_bswap32(FB_H); cfg.stride = __builtin_bswap32(FB_W * 4);
+    dma.control = __builtin_bswap32(((unsigned)sel << 16) | 8 | 16);   /* select, write */
+    dma.length = __builtin_bswap32(sizeof cfg);
+    dma.address = __builtin_bswap64((unsigned long)&cfg);
+    /* the DMA engine reads these structs straight from RAM: make sure they have left the cache first */
+    __asm__ volatile ("dc civac, %0\n dc civac, %1\n dsb sy" :: "r"(&cfg), "r"(&dma) : "memory");
+    *(volatile unsigned long *)(FW_CFG + 16) = __builtin_bswap64((unsigned long)&dma);
+    while (__builtin_bswap32(*(volatile unsigned *)&dma.control) & ~1u) {}
+    if (__builtin_bswap32(*(volatile unsigned *)&dma.control) & 1) { uart_puts("M1c ramfb DMA error\n"); return; }
+    fb_rect(0, 0, FB_W, FB_H, 0x00203040);       /* desktop */
+    fb_rect(0, 0, FB_W, 24, 0x00e0e0e0);         /* menu bar */
+    fb_rect(150, 100, 500, 350, 0x00ffffff);     /* a window */
+    fb_rect(150, 100, 500, 28, 0x00b5502c);      /* its title bar, the house accent */
+    fb_rect(300, 540, 200, 44, 0x00505a68);      /* the dock */
+    fb_pixels_ok = fb[200 * FB_W + 200] == 0x00ffffff && fb[10 * FB_W + 10] == 0x00e0e0e0;
+    __asm__ volatile ("dsb sy");
+    uart_puts(fb_pixels_ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
+}
+#else
+static void fb_init(void) {}
+#endif
+
 static void m1_selftest(void) {
     __asm__ volatile ("msr vbar_el1, %0\n isb" :: "r"(vectors));
     uart_puts("M1 vectors set\n");
@@ -149,6 +209,7 @@ static void m1_selftest(void) {
     __asm__ volatile ("msr daifclr, #2");          /* unmask interrupts */
     while (ticks < 3) __asm__ volatile ("wfi");
     uart_puts("M1a ok\n");
+    fb_init();
 }
 
 void main(void) {
