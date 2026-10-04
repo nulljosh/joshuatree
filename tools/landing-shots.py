@@ -37,7 +37,8 @@ def shoot(name):
         except FileNotFoundError: pass
     q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std",
                           "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG,
-                          "-net", "nic,model=rtl8139", "-net", "user"],
+                          "-net", "nic,model=rtl8139", "-net", "user",
+                          "-rtc", "base=2026-10-03T12:00:00,clock=vm"],   # pinned clock: the Calendar tile is the same on every run
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         s = None
