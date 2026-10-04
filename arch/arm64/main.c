@@ -260,60 +260,78 @@ static void m1_selftest(void) {
     fb_init();
 }
 
-/* ---- M2: keyboard and mouse. QEMU's virt machine has 32 virtio-mmio slots from 0x0A000000, 0x200 apart; a
-   virtio-keyboard or virtio-tablet shows up in one as device 18 (input). Modern virtio (version 2): one event queue the
-   guest fills with 8-byte buffers, the device hands them back with Linux evdev events in them. Both devices speak the
-   same events, so one driver serves both. The Pi gets USB through xHCI instead (M4). ---- */
+/* ---- M2: devices on QEMU's virt machine. 32 virtio-mmio slots from 0x0A000000, 0x200 apart, each says which device
+   sits there: 1 is a network card, 18 is input (keyboard or tablet). Modern virtio (version 2) only: QEMU needs
+   -global virtio-mmio.force-legacy=false. Every device talks through queues of buffers the guest lends it. The Pi gets
+   USB through xHCI and Ethernet through the Genet MAC instead (M4). ---- */
 #ifndef PI_BUILD
 #define VIRTIO_BASE 0x0A000000UL
 #define VQ 16
-#define MAX_INPUT 2
 struct vq_desc { unsigned long addr; unsigned len; unsigned short flags, next; };
 struct vq_avail { unsigned short flags, idx, ring[VQ], used_event; };
 struct vq_used { unsigned short flags, idx; struct { unsigned id, len; } ring[VQ]; unsigned short avail_event; };
-struct input_event { unsigned short type, code; unsigned value; };
-static struct vin {
-    unsigned long base;
-    struct vq_desc *d; struct vq_avail *a; volatile struct vq_used *u; struct input_event *ev;
-    unsigned short seen;
-} vin[MAX_INPUT];
-static int nvin;
-static unsigned mouse_x, mouse_y, mouse_moved;
-static int vin_add(unsigned long b) {
-    struct vin *v = &vin[nvin];
-#define VR(o) REG(b + (o))
-    VR(0x70) = 0;                                   /* reset */
-    VR(0x70) = 1 | 2;                               /* acknowledge, driver */
-    VR(0x24) = 1; VR(0x20) = 1;                     /* features 32..63: VIRTIO_F_VERSION_1 only */
-    VR(0x24) = 0; VR(0x20) = 0;
-    VR(0x70) = 1 | 2 | 8;                           /* features ok */
-    if (!(VR(0x70) & 8)) return 0;
-    VR(0x30) = 0;                                   /* queue 0, the event queue */
-    if (VR(0x34) < VQ) return 0;
-    VR(0x38) = VQ;
-    v->d = kmalloc(sizeof *v->d * VQ); v->a = kmalloc(sizeof *v->a); v->u = kmalloc(sizeof *v->u); v->ev = kmalloc(sizeof *v->ev * VQ);
-    if (!v->d || !v->a || !v->u || !v->ev) return 0;
-    for (int i = 0; i < VQ; i++) {
-        v->d[i] = (struct vq_desc){ (unsigned long)&v->ev[i], sizeof *v->ev, 2 /* device writes */, 0 };
-        v->a->ring[i] = (unsigned short)i;
-    }
-    v->a->flags = 0; v->a->idx = VQ; v->u->idx = 0; v->seen = 0;
-    VR(0x80) = (unsigned)(unsigned long)v->d;  VR(0x84) = (unsigned)((unsigned long)v->d >> 32);
-    VR(0x90) = (unsigned)(unsigned long)v->a;  VR(0x94) = (unsigned)((unsigned long)v->a >> 32);
-    VR(0xA0) = (unsigned)(unsigned long)v->u;  VR(0xA4) = (unsigned)((unsigned long)v->u >> 32);
-    VR(0x44) = 1;                                   /* queue ready */
-    VR(0x70) = 1 | 2 | 8 | 4;                       /* driver ok */
-    __asm__ volatile ("dsb sy" ::: "memory");
-    VR(0x50) = 0;                                   /* buffers are there */
-#undef VR
-    v->base = b;
-    nvin++;
+struct vq { unsigned long base; unsigned q; struct vq_desc *d; struct vq_avail *a; volatile struct vq_used *u; unsigned short seen; };
+#define VR(b, o) REG((b) + (o))
+static unsigned long vio_find(unsigned id, unsigned long after) {   /* the next slot past `after` holding device `id` */
+    for (unsigned long b = after ? after + 0x200 : VIRTIO_BASE; b < VIRTIO_BASE + 32 * 0x200; b += 0x200)
+        if (REG(b) == 0x74726976 && REG(b + 4) == 2 && REG(b + 8) == id) return b;   /* "virt", version 2 */
+    return 0;
+}
+static int vio_start(unsigned long b, unsigned features) {   /* reset, then agree on VIRTIO_F_VERSION_1 plus `features` */
+    VR(b, 0x70) = 0;
+    VR(b, 0x70) = 1 | 2;                            /* acknowledge, driver */
+    VR(b, 0x24) = 1; VR(b, 0x20) = 1;               /* features 32..63: VERSION_1 */
+    VR(b, 0x24) = 0; VR(b, 0x20) = features & VR(b, 0x10);
+    VR(b, 0x70) = 1 | 2 | 8;                        /* features ok */
+    return (VR(b, 0x70) & 8) != 0;
+}
+static int vq_setup(struct vq *v, unsigned long b, unsigned q) {
+    VR(b, 0x30) = q;
+    if (VR(b, 0x34) < VQ) return 0;
+    VR(b, 0x38) = VQ;
+    v->base = b; v->q = q; v->seen = 0;
+    v->d = kmalloc(sizeof *v->d * VQ); v->a = kmalloc(sizeof *v->a); v->u = kmalloc(sizeof *v->u);
+    if (!v->d || !v->a || !v->u) return 0;
+    v->a->flags = 0; v->a->idx = 0; v->u->idx = 0;
+    VR(b, 0x80) = (unsigned)(unsigned long)v->d;  VR(b, 0x84) = (unsigned)((unsigned long)v->d >> 32);
+    VR(b, 0x90) = (unsigned)(unsigned long)v->a;  VR(b, 0x94) = (unsigned)((unsigned long)v->a >> 32);
+    VR(b, 0xA0) = (unsigned)(unsigned long)v->u;  VR(b, 0xA4) = (unsigned)((unsigned long)v->u >> 32);
+    VR(b, 0x44) = 1;                                /* queue ready */
     return 1;
 }
+static void vq_give(struct vq *v, unsigned i, void *buf, unsigned len, int device_writes) {   /* lend descriptor i */
+    v->d[i] = (struct vq_desc){ (unsigned long)buf, len, (unsigned short)(device_writes ? 2 : 0), 0 };
+    v->a->ring[v->a->idx % VQ] = (unsigned short)i;
+    __asm__ volatile ("dsb sy" ::: "memory");
+    v->a->idx++;
+}
+static int vq_take(struct vq *v, unsigned *len) {   /* the next descriptor the device handed back, or -1 */
+    if (v->seen == v->u->idx) return -1;
+    __asm__ volatile ("dsb sy" ::: "memory");
+    unsigned id = v->u->ring[v->seen % VQ].id;
+    if (len) *len = v->u->ring[v->seen % VQ].len;
+    v->seen++;
+    return (int)id;
+}
+static void vq_kick(struct vq *v) { __asm__ volatile ("dsb sy" ::: "memory"); VR(v->base, 0x50) = v->q; }
+
+/* Keyboard and mouse: one event queue each, lent 8-byte buffers the device fills with Linux evdev events. Both devices
+   speak the same events, so one driver serves both. */
+#define MAX_INPUT 2
+struct input_event { unsigned short type, code; unsigned value; };
+static struct vq vin[MAX_INPUT];
+static struct input_event *vin_ev[MAX_INPUT];
+static int nvin;
+static unsigned mouse_x, mouse_y, mouse_moved;
 static int input_init(void) {
-    for (int i = 0; i < 32 && nvin < MAX_INPUT; i++) {
-        unsigned long b = VIRTIO_BASE + 0x200UL * i;
-        if (REG(b) == 0x74726976 && REG(b + 4) == 2 && REG(b + 8) == 18) vin_add(b);   /* "virt", version 2, input */
+    for (unsigned long b = vio_find(18, 0); b && nvin < MAX_INPUT; b = vio_find(18, b)) {
+        struct vq *v = &vin[nvin];
+        struct input_event *ev = kmalloc(sizeof *ev * VQ);
+        if (!ev || !vio_start(b, 0) || !vq_setup(v, b, 0)) continue;
+        for (unsigned i = 0; i < VQ; i++) vq_give(v, i, &ev[i], sizeof *ev, 1);
+        VR(b, 0x70) = 1 | 2 | 8 | 4;                /* driver ok */
+        vq_kick(v);
+        vin_ev[nvin++] = ev;
     }
     return nvin;
 }
@@ -331,22 +349,70 @@ static void input_event(struct input_event e) {
    desktop has an event loop to deliver input to. */
 static void input_poll(void) {
     for (int n = 0; n < nvin; n++) {
-        struct vin *v = &vin[n];
-        while (v->seen != v->u->idx) {
-            __asm__ volatile ("dsb sy" ::: "memory");
-            unsigned id = v->u->ring[v->seen % VQ].id;
-            input_event(v->ev[id]);
-            v->a->ring[v->a->idx % VQ] = (unsigned short)id;   /* hand the buffer back */
-            __asm__ volatile ("dsb sy" ::: "memory");
-            v->a->idx++;
-            v->seen++;
-            REG(v->base + 0x50) = 0;
+        int id;
+        while ((id = vq_take(&vin[n], 0)) >= 0) {
+            input_event(vin_ev[n][id]);
+            vq_give(&vin[n], (unsigned)id, &vin_ev[n][id], sizeof vin_ev[n][id], 1);   /* hand the buffer back */
+            vq_kick(&vin[n]);
         }
     }
+}
+
+/* Network: queue 0 receives, queue 1 sends. Every frame carries a 12-byte virtio-net header in front, all zero here
+   (no checksum offload, no segmentation). The first proof is ARP: ask QEMU's user-mode router (10.0.2.2) for its
+   hardware address and print the answer. */
+#define NET_BUF 1536
+static struct vq net_rx, net_tx;
+static unsigned char *net_rxbuf, *net_txbuf, net_mac[6];
+static const unsigned char my_ip[4] = { 10, 0, 2, 15 }, gw_ip[4] = { 10, 0, 2, 2 };
+static void uart_mac(const unsigned char *m) {
+    for (int i = 0; i < 6; i++) { if (i) uart_putc(':'); uart_putc("0123456789abcdef"[m[i] >> 4]); uart_putc("0123456789abcdef"[m[i] & 15]); }
+}
+static int net_init(void) {
+    unsigned long b = vio_find(1, 0);
+    if (!b || !vio_start(b, 1u << 5 /* VIRTIO_NET_F_MAC */)) return 0;
+    if (!vq_setup(&net_rx, b, 0) || !vq_setup(&net_tx, b, 1)) return 0;
+    net_rxbuf = kmalloc(NET_BUF * VQ); net_txbuf = kmalloc(NET_BUF);
+    if (!net_rxbuf || !net_txbuf) return 0;
+    for (int i = 0; i < 6; i++) net_mac[i] = *(volatile unsigned char *)(b + 0x100 + i);   /* config space: mac first */
+    for (unsigned i = 0; i < VQ; i++) vq_give(&net_rx, i, net_rxbuf + i * NET_BUF, NET_BUF, 1);
+    VR(b, 0x70) = 1 | 2 | 8 | 4;                    /* driver ok */
+    vq_kick(&net_rx);
+    uart_puts("M2 net mac "); uart_mac(net_mac); uart_putc('\n');
+    return 1;
+}
+static void net_arp_probe(void) {
+    unsigned char *f = net_txbuf;
+    for (int i = 0; i < 12; i++) f[i] = 0;          /* virtio-net header */
+    unsigned char *e = f + 12;
+    for (int i = 0; i < 6; i++) { e[i] = 0xFF; e[6 + i] = net_mac[i]; }
+    e[12] = 0x08; e[13] = 0x06;                     /* ARP */
+    const unsigned char hdr[8] = { 0, 1, 8, 0, 6, 4, 0, 1 };   /* Ethernet, IPv4, 6, 4, request */
+    for (int i = 0; i < 8; i++) e[14 + i] = hdr[i];
+    for (int i = 0; i < 6; i++) { e[22 + i] = net_mac[i]; e[32 + i] = 0; }
+    for (int i = 0; i < 4; i++) { e[28 + i] = my_ip[i]; e[38 + i] = gw_ip[i]; }
+    vq_give(&net_tx, 0, f, 12 + 42, 0);
+    vq_kick(&net_tx);
+    unsigned long freq, t0, t; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(freq), "=r"(t0));
+    do {
+        unsigned len; int id;
+        while ((id = vq_take(&net_rx, &len)) >= 0) {
+            unsigned char *r = net_rxbuf + (unsigned)id * NET_BUF + 12;
+            int arp_reply = len >= 12 + 42 && r[12] == 0x08 && r[13] == 0x06 && r[20] == 0 && r[21] == 2;
+            int from_gw = r[28] == gw_ip[0] && r[29] == gw_ip[1] && r[30] == gw_ip[2] && r[31] == gw_ip[3];
+            vq_give(&net_rx, (unsigned)id, net_rxbuf + (unsigned)id * NET_BUF, NET_BUF, 1);
+            vq_kick(&net_rx);
+            if (arp_reply && from_gw) { uart_puts("M2 net gateway 10.0.2.2 is "); uart_mac(r + 22); uart_putc('\n'); return; }
+        }
+        __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(t));
+    } while (t - t0 < freq * 2);
+    uart_puts("M2 net no ARP reply\n");
 }
 #else
 static int input_init(void) { return 0; }
 static void input_poll(void) {}
+static int net_init(void) { return 0; }
+static void net_arp_probe(void) {}
 #endif
 
 void main(void) {
@@ -358,6 +424,7 @@ void main(void) {
     uart_puts(((el >> 2) & 3) == 1 ? "EL1\n" : "not EL1\n");
     uart_puts("M0 ok\n");
     m1_selftest();
+    if (net_init()) net_arp_probe();
     int inputs = input_init();
     if (inputs) {
         uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n');

@@ -114,7 +114,7 @@ If it still fails, send the exact lines you see, even if they look like garbage.
 |---|---|
 | M0 | Text over the serial cable. Built, waiting for a real board. |
 | M1 | A picture on a monitor over HDMI. A simple desktop works on QEMU's Pi model; the real Joshua Tree look comes next. |
-| M2 | Keyboard, mouse, network and disk, working in QEMU first. Keyboard and mouse work. |
+| M2 | Keyboard, mouse, network and disk, working in QEMU first. Keyboard, mouse and the network card work. |
 | M3 | Every app running on ARM. |
 | M4 | The same on the real Pi: SD card, USB, Ethernet. Sound last. |
 | M5 | The Pi 5. |

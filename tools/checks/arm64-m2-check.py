@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""ARM64 M2, keyboard and mouse: the aarch64 kernel finds a virtio keyboard and a virtio tablet on QEMU's virt machine
-and reads real events from both.
+"""ARM64 M2, keyboard, mouse and network: the aarch64 kernel finds a virtio keyboard, a virtio tablet and a virtio network
+card on QEMU's virt machine, reads real events from the first two and gets a real answer over the third.
 
-Boots arch/arm64 with a virtio-keyboard-device and a virtio-tablet-device, waits for "M2 input ready, devices 2" on the UART, then presses keys through QMP
+Boots arch/arm64 with a virtio network card on QEMU's user-mode network, checks the kernel asked the router (10.0.2.2)
+for its hardware address over ARP and printed the answer QEMU gives (52:55:0a:00:02:02), then with the virtio-keyboard-device
+and virtio-tablet-device waits for "M2 input ready, devices 2" on the UART, then presses keys through QMP
 send-key (the same path a real keystroke in the QEMU window takes) and checks the kernel prints each Linux key code
 going down and up: j is 36, t is 20. Then moves the pointer to the middle of the top half and clicks, through QMP
 input-send-event, and checks the kernel prints the position scaled to the 800x600 screen and the left button (272).
@@ -23,6 +25,7 @@ tmp = tempfile.mkdtemp()
 log, sock = tmp + "/uart", tmp + "/qmp"
 q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256",
                       "-global", "virtio-mmio.force-legacy=false", "-device", "virtio-keyboard-device", "-device", "virtio-tablet-device",
+                      "-netdev", "user,id=n", "-device", "virtio-net-device,netdev=n",
                       "-display", "none", "-serial", "file:" + log, "-qmp", "unix:%s,server,nowait" % sock,
                       "-kernel", os.path.join(arch, "kernel8.elf")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 fails = []
@@ -33,6 +36,8 @@ def wait_for(text, tries=100):
         time.sleep(0.1)
     return False
 try:
+    if wait_for("M2 net gateway 10.0.2.2 is 52:55:0a:00:02:02"): print("  ok: ARP to the router answered 52:55:0a:00:02:02")
+    else: fails.append(f"no ARP answer from the router, got {uart()!r}")
     if not wait_for("M2 input ready, devices 2"):
         fails.append(f"kernel did not find both input devices, got {uart()!r}")
     else:
@@ -64,4 +69,4 @@ finally:
     subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
 for m in fails: print("FAIL: " + m)
 if fails: sys.exit(1)
-print("PASS: the aarch64 kernel drives a virtio keyboard and a virtio tablet with one driver: key presses, pointer moves and clicks all arrive")
+print("PASS: the aarch64 kernel drives a virtio network card (a real ARP answer from the router) and a virtio keyboard and tablet with one driver: key presses, pointer moves and clicks all arrive")
