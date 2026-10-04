@@ -111,8 +111,8 @@ static void copy(char *d, int max, const char *s) { int n = 0; while (*s && *s !
 static int is(const char *l, const char *k) { int n = slen(k); for (int i = 0; i < n; i++) if (l[i] != k[i]) return 0; return l[n] == ' '; }
 static void load(void) {
     nd = 0; err[0] = 0;
-    int fd = jt_open("WEATHER.TXT", JT_O_RDONLY), n = fd < 0 ? 0 : jt_read(fd, file, sizeof file - 1);
-    if (fd >= 0) jt_close(fd);
+    /* jt_read moves 255 bytes a call; a long city or error line pushed the forecast past it. Take the whole file. */
+    int n = jt_readfile("WEATHER.TXT", file, sizeof file - 1);
     file[n < 0 ? 0 : n] = 0;
     state[0] = 'n'; state[1] = 'o'; state[2] = 'n'; state[3] = 'e'; state[4] = 0;
     for (const char *l = file; *l; ) {
