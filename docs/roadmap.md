@@ -43,6 +43,15 @@ Two notebook pages checked against the tree. Already shipped and not listed: men
 - [ ] [Fable] The big promise, in his words: say "computer, run the simulation", "build me a game", "publish and monetize my apps", "add X feature", "patch Y bug", and the OS does it. Samantha plus a coding agent plus the publish flow. Scope it as a doc before any code.
 - [ ] [Joshua] Constraints and design system as written rules: one page of what the OS never does (no pixels, no clutter) and the shared icon rules. The icon item under Landing already covers the second half.
 
+### Voice chat, lag and sharing (Joshua, 2026-10-04)
+Voice chat works on the web portfolio and in the OS, laggy and glitchy in both; the portfolio is the better one. Order: measure, stream, then share.
+- [ ] [Sonnet] Log a timestamp at every stage (mic end, STT done, first LLM token, first TTS byte, first audio out) on both, so the lag has numbers before anything changes.
+- [ ] [Sonnet] Stream every stage: STT, LLM tokens, ElevenLabs over its WebSocket TTS, audio chunks played as they land. Add barge-in: talking over her stops her.
+- [ ] [Sonnet] One shared voice module, the portfolio's code, used by both. The OS stays thin: it opens the voice page or calls a small server, no audio pipeline or TLS of its own.
+- [ ] [Sonnet] Hardening: keys server-side only, a per-session cost cap, reconnect on a dropped socket, Claude as the fallback when Turing is down.
+- [ ] [Joshua] Live face: Simli or HeyGen LiveAvatar (credit based, about $30 to $500 a month). Veo and Higgsfield stay for pre-rendered ads and intros only.
+- [ ] [Joshua] ElevenLabs Agents could run the whole loop with any LLM endpoint as the brain (about $0.08 to $0.10 a minute). Decide: their loop, or ours.
+
 ### CI and speed
 - [ ] [Sonnet] Six of the last ten red runs were slow-runner timing flakes (Chat tool scenes, the phone mute button, Keyrate, the Apps folder layout): eight QEMUs share one runner. Find out how many cores the runner has, cap QEMUs per runner or move to 10 shards (the balancer says about 319 s of checks per shard, 12 shards about 266 s), and watch the next ten runs.
 - [ ] [Haiku] Re-balance after adding checks. New manifest lines default to 30 s until timed: run `python3 tools/gen/ci-balance.py <run-id>` on a green run (`--check` shows the numbers first) and commit the result.
