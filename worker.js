@@ -93,6 +93,7 @@ async function handleProxy(request, env) {
     if (targetUrl.pathname === "/api/stocks") return handleStocks(targetUrl);
     if (targetUrl.pathname === "/api/quotes") return handleQuotes();
     if (targetUrl.pathname === "/api/books") return handleBooks();
+    if (targetUrl.pathname === "/api/lexly") return handleLexly(targetUrl);
     if (targetUrl.pathname === "/api/deals") return handleDeals(request); // the guest's request rides the visitor's own browser fetch, so request.cf is the visitor
     // v1.6.12: kernel/chat_face.h's chat_face_load fetches Samantha's Chat
     // face frames (idle-0..5.jpg, talk-0..11.jpg) over the same plain-HTTP
@@ -377,6 +378,101 @@ async function handleBooks() {
   return new Response(wire, {headers: WIRE});
 }
 
+// Lexly, "learn anything": the real app's public course packs
+// (lexly.heyitsmejosh.com/content/catalog.json and /content/courses/<id>.json,
+// static read-only files). Two wires for the Lexly app:
+//   /api/lexly            first line the course count, then `id|name|category`
+//   /api/lexly?c=<id>     first line the question count, then
+//                         `answer index 0-3|question|choice0|choice1|choice2|choice3`
+// The OS font draws ASCII only, so a field is kept only if it survives as
+// ASCII (accents are stripped, a few letters transliterated). A question
+// with any field that does not, or that holds a pipe, or whose four choices
+// are not four distinct strings that include the answer, is dropped, never
+// bent into something else. Courses are an allowlist: those whose packs keep
+// at least 12 readable questions under these rules (checked against the
+// real packs when this shipped, 72 of them). Left out: Japanese, Chinese,
+// Korean, Russian, Arabic, Hindi, Greek, Hebrew, Ukrainian, Persian,
+// Bulgarian, Macedonian and Yiddish, which are written in scripts the font
+// cannot draw, Klingon (two readable questions), and the short math courses
+// (arithmetic, algebra, geometry, trigonometry, statistics, linear algebra,
+// logic, Pre-Calculus 11), which keep only four to six four-choice questions
+// that survive. Accented languages (Polish, Czech, Turkish, Vietnamese and
+// the like) are offered with their accents stripped.
+const LEXLY_SITE = "https://lexly.heyitsmejosh.com";
+const LEXLY_COURSES = [
+  "spanish", "french", "german", "italian", "portuguese", "dutch", "turkish", "polish", "swedish",
+  "vietnamese", "indonesian", "czech", "danish", "finnish", "norwegian", "hungarian", "romanian", "catalan",
+  "croatian", "serbian", "slovak", "lithuanian", "estonian", "icelandic", "galician", "slovenian",
+  "javascript", "python", "rust", "cpp", "java", "go", "sql", "computers", "ai", "hardware",
+  "reverse_engineering", "ios_internals", "git_terminal", "html_css", "swift", "dsa", "servers", "databases",
+  "c_lang", "typescript", "csharp", "kotlin", "ruby", "php", "bash", "assembly", "haskell", "lua",
+  "calculus", "discrete_math", "fieldbook", "physics", "chemistry", "biology", "astronomy", "astrophysics",
+  "anthropology", "anatomy", "physiology", "precalc12", "anatomy12", "chess", "music_theory",
+  "music_history", "world_history", "geography"
+];
+const LEXLY_MAX_COURSES = 80, LEXLY_MAX_Q = 20, LEXLY_Q_CHARS = 90, LEXLY_C_CHARS = 60, LEXLY_MAX_BYTES = 5800;
+const LEXLY_TYPES = new Set(["mathChoice", "translation", "cloze"]);
+const LEXLY_FOLD = {"ß": "ss", "æ": "ae", "Æ": "AE", "ø": "o", "Ø": "O", "ł": "l", "Ł": "L", "đ": "d", "Đ": "D", "ı": "i", "œ": "oe", "Œ": "OE", "ð": "d", "þ": "th"};
+// Plain ASCII, one line, at most max characters, or null when the text cannot
+// survive as it is (non-ASCII left over, a pipe, empty, too long). With cut set,
+// too long is cut instead (a course name is a label; a question never is).
+function lexlyText(v, max, cut = false) {
+  if (typeof v !== "string") return null;
+  const s = v.replace(/[ßæÆøØłŁđĐıœŒðþ]/g, c => LEXLY_FOLD[c])
+    .normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[¿¡]/g, "")
+    .replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, "-").replace(/…/g, "...")
+    .replace(/[\s ]+/g, " ").trim();
+  if (!s || (s.length > max && !cut) || /[^\x20-\x7e]/.test(s) || s.includes("|")) return null;
+  return s.slice(0, max).trim();
+}
+function lexlyQuestions(pack) {
+  const out = [];
+  for (const u of Array.isArray(pack?.units) ? pack.units : [])
+    for (const l of Array.isArray(u?.lessons) ? u.lessons : [])
+      for (const e of Array.isArray(l?.exercises) ? l.exercises : []) {
+        if (!e || !LEXLY_TYPES.has(e.type) || !Array.isArray(e.choices) || e.choices.length !== 4) continue;
+        const q = lexlyText(e.question, LEXLY_Q_CHARS), a = lexlyText(e.answer, LEXLY_C_CHARS);
+        const c = e.choices.map(x => lexlyText(x, LEXLY_C_CHARS));
+        if (!q || !a || c.includes(null) || new Set(c).size !== 4) continue;
+        const idx = c.indexOf(a);
+        if (idx >= 0) out.push([idx, q, ...c].join("|"));
+      }
+  return out;
+}
+function lexlyCourseWire(catalog) {
+  const seen = new Set(), rows = []; let bytes = 8;
+  for (const [cat, group] of Object.entries(catalog?.categories ?? {}))
+    for (const s of Array.isArray(group?.subjects) ? group.subjects : []) {
+      const id = s?.id, name = lexlyText(s?.name, 40, true), kind = lexlyText(cat, 12);
+      if (typeof id !== "string" || !LEXLY_COURSES.includes(id) || seen.has(id) || !name || !kind) continue;
+      seen.add(id);
+      const row = [id, name, kind].join("|");
+      if (rows.length < LEXLY_MAX_COURSES && bytes + row.length + 1 <= LEXLY_MAX_BYTES) { rows.push(row); bytes += row.length + 1; }
+    }
+  return [rows.length, ...rows].join("\n") + "\n";
+}
+function lexlyQuestionWire(pack) {
+  const all = lexlyQuestions(pack);
+  // An even spread through the course, not the first twenty, so every unit is in the drill.
+  const pick = all.length <= LEXLY_MAX_Q ? all : Array.from({length: LEXLY_MAX_Q}, (_, i) => all[Math.floor(i * all.length / LEXLY_MAX_Q)]);
+  const rows = []; let bytes = 8;
+  for (const r of pick) { if (bytes + r.length + 1 > LEXLY_MAX_BYTES) break; rows.push(r); bytes += r.length + 1; }
+  return [rows.length, ...rows].join("\n") + "\n";
+}
+async function handleLexly(url) {
+  const course = url.searchParams.get("c");
+  if (course !== null && !(/^[a-z0-9_]{1,24}$/.test(course) && LEXLY_COURSES.includes(course))) return new Response("", {status: 404});
+  let res;
+  try { res = await fetch(LEXLY_SITE + (course === null ? "/content/catalog.json" : `/content/courses/${course}.json`), {signal: AbortSignal.timeout(8000), cf: {cacheTtl: 3600, cacheEverything: true}}); }
+  catch { return new Response("", {status: 502}); }
+  if (!res.ok) return new Response("", {status: 502});
+  let data;
+  try { data = await res.json(); } catch { return new Response("", {status: 502}); }
+  const wire = course === null ? lexlyCourseWire(data) : lexlyQuestionWire(data);
+  if (wire.split("\n").length < (course === null ? 3 : 6)) return new Response("", {status: 502}); // too few usable rows: let the OS keep its Spanish set
+  return new Response(wire, {headers: WIRE});
+}
+
 // Dev-kit waitlist: one email, one timestamp, key = email so a repeat
 // signup just overwrites its own row instead of growing the namespace.
 // WAITLIST_MAX_BODY guards against someone posting a huge JSON blob;
@@ -613,6 +709,7 @@ export default {
     if (url.pathname === "/api/stocks") return handleStocks(url);
     if (url.pathname === "/api/quotes") return handleQuotes();
     if (url.pathname === "/api/books") return handleBooks();
+    if (url.pathname === "/api/lexly") return handleLexly(url);
     if (url.pathname === "/api/deals") return handleDeals(request);
     if (url.pathname === "/api/listen") return handleListen(request, env);
     if (url.pathname === "/api/mail/send") return handleMailSend(request, env);
@@ -637,6 +734,7 @@ export { isAllowedTarget, handleProxy, ALLOWED_HOSTS };
 
 export { stockWire, handleStocks };
 export { bookrankWire, handleBooks };
+export { lexlyQuestions, lexlyText, lexlyCourseWire, lexlyQuestionWire, handleLexly, LEXLY_COURSES };
 export { handleWaitlistPost, handleWaitlistCount };
 export { handleMailSend, MAIL_SEND_FROM };
 export { handleListen, wrapPcmAsWav, LISTEN_MAX_BYTES };
