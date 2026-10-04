@@ -1,7 +1,7 @@
-#ifndef APP_SPARKJAR_H
-#define APP_SPARKJAR_H
-static const unsigned int app_sparkjar_len = 22543;
-static const unsigned char app_sparkjar_html[] = {
+#ifndef APP_HIKKO_H
+#define APP_HIKKO_H
+static const unsigned int app_hikko_len = 22543;
+static const unsigned char app_hikko_html[] = {
 60,33,68,79,67,84,89,80,69,32,104,116,109,108,62,10,60,104,116,109,
 108,32,108,97,110,103,61,34,101,110,34,62,10,60,104,101,97,100,62,10,
 60,109,101,116,97,32,99,104,97,114,115,101,116,61,34,85,84,70,45,56,

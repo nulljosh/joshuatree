@@ -5339,7 +5339,7 @@ static const unsigned char icon_art_toroid[3940] = {
 };
 #define ICON_ART_TOROID_LEN 3940
 
-static const unsigned char icon_art_sparkjar[5458] = {
+static const unsigned char icon_art_hikko[5458] = {
     137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,
     0,0,0,148,0,0,0,148,8,6,0,0,0,117,60,0,
     212,0,0,0,6,98,75,71,68,0,255,0,255,0,255,160,
@@ -5683,7 +5683,7 @@ static const unsigned char icon_art_sparkjar[5458] = {
     179,117,216,196,206,13,0,0,0,0,73,69,78,68,174,66,
     96,130,
 };
-#define ICON_ART_SPARKJAR_LEN 5458
+#define ICON_ART_HIKKO_LEN 5458
 
 static const unsigned char icon_art_fieldbook[3397] = {
     137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,
@@ -11203,7 +11203,7 @@ static const unsigned char *const ICON_ART[28] = {
     icon_art_quotes,
     icon_art_lexly,
     icon_art_toroid,
-    icon_art_sparkjar,
+    icon_art_hikko,
     icon_art_fieldbook,
     icon_art_contacts,
     icon_art_calculator,
@@ -11233,7 +11233,7 @@ static const unsigned int ICON_ART_LEN[28] = {
     ICON_ART_QUOTES_LEN,
     ICON_ART_LEXLY_LEN,
     ICON_ART_TOROID_LEN,
-    ICON_ART_SPARKJAR_LEN,
+    ICON_ART_HIKKO_LEN,
     ICON_ART_FIELDBOOK_LEN,
     ICON_ART_CONTACTS_LEN,
     ICON_ART_CALCULATOR_LEN,

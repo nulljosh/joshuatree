@@ -440,6 +440,73 @@ check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the
   }
 }
 
+// 2.6.29: Hikko's live ideas. The guest asks the fixed joshuatree host for
+// /api/hikko. The Worker itself reads the real forum's public feed (the top-twelve
+// list, then one post per row for its text and plan), only those fixed URLs, only
+// as plain GETs. Upstream is mocked with a real-shaped list and posts; the wire is
+// the row count, then votes|category|title|text|plan.
+{
+  const realFetch = globalThis.fetch;
+  const asked = [];
+  const post = (id, title, score, content, plan, category = "tech") => ({ id, title, score, category, content, enrichmentPlan: plan });
+  const list = [
+    post("post-1-a", "Caf\u00e9 \u201cOne\u201d | x", 5, null, null, "Sust\u00e9"),
+    post("post-2-b", "Second", -3, null, null),
+    post("post-3-c", "   ", 9, "no title", "no title"),
+    { id: "../etc/passwd", title: "Bad id", score: 4 },
+    { id: 7, title: "Numeric id", score: 4 },
+    post("post-4-d", "Long text", 1, "word ".repeat(80), "plan ".repeat(80)),
+    post("post-5-e", "Gone body", 2, "x", "y"),
+  ];
+  const bodies = {
+    "post-1-a": post("post-1-a", "", 5, "Line one\nline \u2014 two | with a pipe", "Step one\u2026 step two"),
+    "post-2-b": post("post-2-b", "", 0, "", ""),
+    "post-4-d": post("post-4-d", "", 1, "word ".repeat(80), "plan ".repeat(80)),
+  };
+  const upstream = async (url, init) => {
+    const u = String(url); asked.push([u, init]);
+    const m = u.match(/^https:\/\/hikko\.heyitsmejosh\.com\/api\/posts\?id=([A-Za-z0-9_-]+)$/);
+    if (m) return bodies[m[1]] ? Response.json({ post: bodies[m[1]] }) : new Response("gone", { status: 404 });
+    if (u === "https://hikko.heyitsmejosh.com/api/posts?limit=12") return Response.json({ posts: list });
+    return new Response("no", { status: 404 });
+  };
+  globalThis.fetch = upstream;
+  const target = "https://joshuatree.heyitsmejosh.com/api/hikko";
+  const via = () => handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target)));
+  try {
+    const res = await via();
+    const lines = (await res.text()).split("\n");
+    check("/api/hikko answers 200 text with CORS and no-store", res.status === 200 && res.headers.get("access-control-allow-origin") === "*" && res.headers.get("cache-control") === "no-store");
+    check("/api/hikko reads only the real forum feed, as plain GETs", asked.length > 1 && asked.every(([u, init]) => u.startsWith("https://hikko.heyitsmejosh.com/api/posts?") && !(init && (init.method || init.body || init.headers))));
+    check("/api/hikko never fetches a post for an id that is not a plain id", !asked.some(([u]) => u.includes("passwd") || u.includes("id=7")));
+    check("/api/hikko first line is the row count", lines[0] === "4");
+    check("/api/hikko row is votes|category|title|text|plan, ASCII only, no stray pipe or newline", lines[1] === "5|Suste|Cafe \"One\" x|Line one line - two with a pipe|Step one... step two");
+    check("/api/hikko a negative score becomes 0 and empty bodies stay empty", lines[2] === "0|tech|Second||");
+    check("/api/hikko cuts long text at a word with three dots", /^1\|tech\|Long text\|(word )+word\.\.\.\|(plan )+plan\.\.\.$/.test(lines[3]) && lines[3].length < 380);
+    check("/api/hikko keeps a row whose body call failed, with empty text", lines[4] === "2|tech|Gone body||" && lines.length === 6 && lines[5] === "");
+    globalThis.fetch = async () => new Response("down", { status: 503 });
+    const down = await via();
+    check("/api/hikko upstream 503 -> 502 with an empty body, so the guest keeps its demo ideas", down.status === 502 && (await down.text()) === "");
+    globalThis.fetch = async () => Response.json({ posts: [] });
+    check("/api/hikko with no usable rows -> 502", (await via()).status === 502);
+    globalThis.fetch = async () => Response.json({ nope: true });
+    check("/api/hikko with a reply that is not a post list -> 502", (await via()).status === 502);
+    globalThis.fetch = async () => new Response("<html>", { status: 200 });
+    check("/api/hikko with an HTML body -> 502", (await via()).status === 502);
+    globalThis.fetch = async () => { throw new Error("offline"); };
+    check("/api/hikko upstream unreachable -> 502", (await via()).status === 502);
+    const n = asked.length;
+    globalThis.fetch = upstream;
+    const other = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://hikko.heyitsmejosh.com/api/posts")));
+    check("the real Hikko host is still not an open proxy target", other.status === 403 && asked.length === n);
+    const mark = asked.length;
+    await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target), { method: "POST", body: '{"vote":1}', headers: { Authorization: "Bearer x", Cookie: "s=1" } }));
+    check("/api/hikko takes no write path: a guest body, token or cookie never reaches the forum", asked.length > mark && asked.slice(mark).every(([u, init]) => u.startsWith("https://hikko.heyitsmejosh.com/api/posts?") && !(init && (init.method || init.body || init.headers))));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 if (failures > 0) {
   console.log(`FAIL: ${failures} check(s) failed`);
   process.exit(1);

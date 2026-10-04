@@ -70,6 +70,7 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
   - 2.6.26: Bookrank shows the real ranked shelf from the live Bookrank API (rank, rating, review count, badge and the one-line summary), through the Worker and SYS_HTTP_GET, and keeps its ten samples as the offline fallback.
   - 2.6.27: Lexly becomes learn anything. It opens a course picker with 72 live courses (languages, programming, science and more), drills the one you pick with a score, and goes back to the picker on Esc. With no network it opens the Spanish deck, as before.
   - 2.6.28: The landing shows tiles for Bookrank, Lexly, Curbfind and Epiphany, and a check fails when an app changes and its tile is not retaken. The built app binaries are no longer tracked in git.
+  - 2.6.29: Sparkjar is now Hikko inside the OS, and it shows the real forum's top twelve ideas (title, votes, text, plan) through the Worker and SYS_HTTP_GET. The ten demo ideas stay as the offline fallback, votes stay on this machine, and Samantha still opens it when you say Sparkjar or Hotaru.
 - 3.0: It boots a real computer. One reference mini PC: UEFI, USB keyboard, mouse and stick, a real disk, a real network card, real sound.
 - 3.1: The Strata Kit ships. The $199 case and OS stick for the 3.0 board, bring your own parts (MONEY.md has the math).
 - 4.0: True multitasking. A compositor, many windows, resize and minimize, apps that never freeze each other.

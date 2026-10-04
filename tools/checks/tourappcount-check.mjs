@@ -26,7 +26,7 @@ import { readFileSync } from 'fs';
 // Terminal, Samantha, Weather, Stocks), the Apps folder itself, and the 16
 // other apps it opens one by one (APPS_FOLDER_TOUR).
 const EXPECTED = ['Burrow', 'Mail', 'Calendar', 'Notes', 'Reminders', 'Terminal', 'Samantha', 'Weather', 'Stocks', 'Apps',
-  'Curbfind', 'Keyrate', 'Bookrank', 'Quotes', 'Lexly', 'Toroid', 'Sparkjar', 'Fieldbook', 'Contacts',
+  'Curbfind', 'Keyrate', 'Bookrank', 'Quotes', 'Lexly', 'Toroid', 'Hikko', 'Fieldbook', 'Contacts',
   'Calculator', 'Search', 'Epiphany', 'Portfolio', 'Activity', 'Clock'];
 
 const src = readFileSync(new URL('../../landing/v86/embed.js', import.meta.url), 'utf8');
