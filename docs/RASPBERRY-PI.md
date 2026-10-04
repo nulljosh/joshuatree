@@ -11,7 +11,7 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 | Boots under QEMU's generic ARM machine and prints over the UART | Works. `make -C arch/arm64 run` |
 | Boots as a Pi image on QEMU's Pi 4B model, enters at EL2, drops to EL1, prints | Works. `make -C arch/arm64 run-pi` |
 | Boots on a real Pi 4 | Built, never tried. This is the first thing to test. |
-| Anything on the screen | Not yet. That is milestone M1. |
+| Anything on the screen | Under QEMU virt only: a ramfb framebuffer with a drawn desktop (`tools/checks/arm64-m1c-check.py`). Not on the Pi yet, which needs the mailbox framebuffer. |
 | Keyboard, mouse, disk, network on the Pi | Not yet. M2 to M4. |
 
 So on day one you will see text in a serial terminal, not a picture on a monitor. That is on purpose. It is the smallest thing that proves the kernel runs on the real chip.

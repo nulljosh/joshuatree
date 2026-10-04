@@ -54,7 +54,8 @@ Two notebook pages checked against the tree. Already shipped and not listed: men
 ### Raspberry Pi and ARM64
 - [ ] [Joshua] Buy the board (Pi 4B 4 GB, 5 V 3 A supply, 16 GB+ microSD, 3.3 V USB serial cable CP2102 or FTDI, jumper wires) plus a USB-C microSD reader and a USB-A to USB-C adapter, because the Mac mini has no SD slot. Best Buy Bellingham lists CanaKit kits but check stock by phone first. Canada Computers and Memory Express are the Vancouver options for the serial cable.
 - [ ] [Joshua] First real boot over serial, following `docs/RASPBERRY-PI.md`. Photograph the console. Whatever the chip does differently from QEMU becomes the next task.
-- [ ] [Fable] M1c: a framebuffer and the desktop on QEMU's virt machine (ramfb or virtio-gpu), then the first picture on the Pi through the mailbox framebuffer.
+- [x] [Fable] M1c part one, 2.6.21: ramfb framebuffer on QEMU virt through fw_cfg, a first desktop drawn into it, proven by a QEMU screendump (`tools/checks/arm64-m1c-check.py`).
+- [ ] [Fable] M1c part two: the first picture on a Pi through the mailbox framebuffer (same pixels, different setup), then the real UI code (font, window drawing) running on the ARM build instead of rectangles. The mailbox call can only be tested on the real board.
 - [ ] [Fable] M2: virtio keyboard, mouse, network and block drivers, each proven in QEMU. Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
 - [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO) needs a firmware blob and an 802.11 stack. Not scheduled: Ethernet first.
 
