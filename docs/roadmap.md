@@ -27,6 +27,23 @@ Main is 2.6.13 and live. CI takes about 10 minutes. The 3.0.0 gate is one thing:
 - [ ] [Haiku] Lexly's own repo disagrees with itself: `icon.svg` is a black tile with blue dots, `assets/icon.svg` and the store icon are sky blue. Make `icon.svg` the blue one so the import needs no recolor, then drop the `GLYPH` workaround.
 - [ ] [Joshua] Judge the live landing against the Plank landing, the bar for the whole site. List what still falls short, in his words.
 
+### From the notebook (Joshua, 2026-10-04)
+Two notebook pages checked against the tree. Already shipped and not listed: menu bar with weather, dock, Activity, Trash, clipboard, Burrow (the Finder), Epiphany tabs, Launchpad-style Apps folder, Music, Movies, landing page, docs at 100 percent, CI, Samantha chat with tools. Wi-Fi was ruled out for 1.0 and is under Our own computer.
+- [ ] [Joshua] Name and sketch the hardware: "Neo" (a boxed board with a screen, pitched on mobility and security). Is Neo the product name, and what does mobility mean for a Pi box (battery, portable monitor, carry case)?
+- [ ] [Joshua] Competitor research as a doc: Apple Mac mini against our box on RAM (8 to 16 GB), integrated CPU, multi-display over HDMI, internal or external design, USB-C ports. A good-computer checklist for `docs/HARDWARE.md`.
+- [ ] [Joshua] "Buy TI(83)": the top of the page is cut off. A TI-83 for reference against the Calculator app, or something else?
+- [ ] [Fable] Time Machine: snapshots of the disk with a browse-the-past view. Nothing exists; needs a FAT snapshot design first.
+- [ ] [Sonnet] Fullscreen avatar, custom: Samantha (or Joshua's face) full screen as a mode, with the face picked in Settings. The page also lists video, audio and GUI mode as three ways to talk to her.
+- [ ] [Fable] Integrated LLM that runs on the box, not through the proxy. Needs the Pi to have the memory and a runtime; decide once M4 is real.
+- [ ] [Sonnet] Improved chat app: more tools and persistent memory across boots (a file the app reads at start).
+- [ ] [Sonnet] Spotlight: one key opens a search box over apps, files, contacts, events. The Search app does files only; the existing Spotlight-style item under Desktop and apps is the same item.
+- [ ] [Sonnet] Dock position setting: left, bottom, or hidden. Already listed under Desktop and apps as Moveable dock position; this is the second ask for it.
+- [ ] [Fable] Multitasking through a compositor: the same compositor item as under Architecture, bumped because the notebook lists it as a headline feature.
+- [ ] [Sonnet] GarageBand-lite: record and layer a few tracks from the Sound Blaster, then play them back. Movie trim (iMovie) is already listed.
+- [ ] [Sonnet] Sharp image everywhere, no visible pixels: audit the icons and small type at retina scale, same bar as the JT retina polish rule.
+- [ ] [Fable] The big promise, in his words: say "computer, run the simulation", "build me a game", "publish and monetize my apps", "add X feature", "patch Y bug", and the OS does it. Samantha plus a coding agent plus the publish flow. Scope it as a doc before any code.
+- [ ] [Joshua] Constraints and design system as written rules: one page of what the OS never does (no pixels, no clutter) and the shared icon rules. The icon item under Landing already covers the second half.
+
 ### CI and speed
 - [ ] [Sonnet] Six of the last ten red runs were slow-runner timing flakes (Chat tool scenes, the phone mute button, Keyrate, the Apps folder layout): eight QEMUs share one runner. Find out how many cores the runner has, cap QEMUs per runner or move to 10 shards (the balancer says about 319 s of checks per shard, 12 shards about 266 s), and watch the next ten runs.
 - [ ] [Haiku] Re-balance after adding checks. New manifest lines default to 30 s until timed: run `python3 tools/gen/ci-balance.py <run-id>` on a green run (`--check` shows the numbers first) and commit the result.
