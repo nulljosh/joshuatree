@@ -38,6 +38,8 @@ typedef unsigned int ttf_size_t;
 #ifdef TTF_HOST_BUILD
 #include <math.h>
 static float ttf_sqrtf(float x) { return sqrtf(x); }
+#elif defined(__aarch64__)
+static float ttf_sqrtf(float x) { return x <= 0.0f ? 0.0f : __builtin_sqrtf(x); }   /* one fsqrt instruction */
 #else
 static float ttf_sqrtf(float x) {
     if (x <= 0.0f) return 0.0f;
@@ -68,6 +70,22 @@ static float ttf_fmodf(float x, float y) {
 static float ttf_powf(float x, float y) { return powf(x, y); }
 static float ttf_cosf(float x) { return cosf(x); }
 static float ttf_acosf(float x) { return acosf(x); }
+#elif defined(__aarch64__)
+/* The only callers are in the SDF path nothing here uses; a cube-root Newton step and no cos or acos keep it linking. */
+static float ttf_powf(float x, float y) {
+    if (x == 0.0f) return 0.0f;
+    float ax = x < 0.0f ? -x : x, g = ax > 1.0f ? ax : 1.0f, n = 1.0f / y;
+    for (int i = 0; i < 20; i++) {
+        float gn = 1.0f, gnm1 = 1.0f;
+        for (int k = 0; k < (int)n; k++) gnm1 = gn, gn *= g;
+        if (gn == 0.0f) break;
+        g = g - (gn - ax) / (n * gnm1);
+        if (g <= 0.0f) g = 0.0001f;
+    }
+    return x < 0.0f ? -g : g;
+}
+static float ttf_cosf(float x) { (void)x; return 1.0f; }
+static float ttf_acosf(float x) { (void)x; return 0.0f; }
 #else
 static float ttf_powf(float x, float y) {
     /* only used for cube roots (y == 1/3) in the unused SDF path; crude

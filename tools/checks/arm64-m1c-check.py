@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ARM64 M1c: the aarch64 kernel gets a framebuffer, draws a desktop into it and mirrors its boot log in the window, two ways. On QEMU's virt machine
+"""ARM64 M1c: the aarch64 kernel gets a framebuffer, draws a desktop into it and mirrors its boot log in the window in smooth DejaVu text, two ways. On QEMU's virt machine
 through ramfb; on QEMU's Raspberry Pi 4B model through the VideoCore mailbox, the same call a real Pi answers.
 
 Boots each build, waits for "M1c fb ok" on the UART, then asks QEMU for a screendump over QMP and checks real pixels:
@@ -18,7 +18,7 @@ if subprocess.run(["make", "-C", arch], capture_output=True).returncode:
     print("FAIL: arch/arm64 `make` does not build"); sys.exit(1)
 
 fails = []
-WANT = [("menu bar", (10, 10), (0xe0, 0xe0, 0xe0)), ("desktop", (50, 300), (0x20, 0x30, 0x40)), ("window", (400, 446), (0xff, 0xff, 0xff)),
+WANT = [("menu bar", (400, 10), (0xe0, 0xe0, 0xe0)), ("desktop", (50, 300), (0x20, 0x30, 0x40)), ("window", (400, 446), (0xff, 0xff, 0xff)),
         ("title bar", (400, 110), (0xb5, 0x50, 0x2c)), ("dock", (400, 560), (0x50, 0x5a, 0x68))]
 
 def shoot(name, qemu_args, image):
@@ -48,9 +48,12 @@ def shoot(name, qemu_args, image):
         time.sleep(0.3)
         parts = open(shot, "rb").read().split(b"\n", 3); w, h = map(int, parts[1].split()); px = parts[3]
         if (w, h) != (800, 600): fails.append(f"{name}: screen is {w}x{h}, want 800x600"); return
-        ink = sum(1 for y in range(132, 436) for x in range(158, 646) if tuple(px[(y * w + x) * 3:(y * w + x) * 3 + 3]) == (0x20, 0x20, 0x20))
+        win = [tuple(px[(y * w + x) * 3:(y * w + x) * 3 + 3]) for y in range(132, 436) for x in range(158, 646)]
+        ink = sum(1 for c in win if max(c) < 0x90)                  # dark text pixels
+        soft = sum(1 for c in win if 0x30 < c[0] < 0xd0 and c[0] == c[1] == c[2])   # grey edge pixels: only smooth, anti-aliased text has them
         if ink < 300: fails.append(f"{name}: the boot log is not on screen (only {ink} text pixels in the window)")
-        else: print(f"  ok: {name} boot log drawn in the window ({ink} text pixels)")
+        elif soft < 150: fails.append(f"{name}: the text is not anti-aliased ({soft} soft edge pixels), the smooth font is not drawing")
+        else: print(f"  ok: {name} boot log drawn in the window ({ink} text pixels, {soft} soft edge pixels: smooth text)")
         for what, (x, y), want in WANT:
             i = (y * w + x) * 3; got = tuple(px[i:i + 3])
             if got != want: fails.append(f"{name}: {what} at {(x, y)}: got {got}, want {want}")

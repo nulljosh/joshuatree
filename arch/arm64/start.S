@@ -32,6 +32,10 @@ _start:
     msr elr_el2, x0
     eret
 at_el1:
+    mrs x0, cpacr_el1
+    orr x0, x0, #(3 << 20)       /* the floating point unit: the TrueType rasterizer uses it */
+    msr cpacr_el1, x0
+    isb
     ldr x0, =_stack_top
     mov sp, x0
     /* zero .bss: a real board's RAM is not cleared for us, and every uninitialised global assumes zero */
