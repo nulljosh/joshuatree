@@ -13,7 +13,7 @@ MANIFEST = os.path.join(ROOT, "landing", "shots", "sources.json")
 PROGRAM = {
     "app-notes": "notes", "app-calendar": "calendar", "app-weather": "weather", "app-files": "burrow",
     "app-terminal": "terminal", "app-stocks": "stocks", "samantha-chat": "samantha",
-    "app-bookrank": "bookrank", "app-lexly": "lexly", "app-curbfind": "curbfind", "app-epiphany": "epiphany",
+    "app-bookrank": "bookrank", "app-tonchi": "tonchi", "app-curbfind": "curbfind", "app-epiphany": "epiphany",
 }
 # Shared drawing code every program links in. Changing it can change every tile.
 SHARED = ["user/jtsys.h", "user/libjt/text.c", "user/libjt/text.h", "user/libjt/aafont.h",

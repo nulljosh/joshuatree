@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Lexly pulls real courses through SYS_HTTP_GET and falls back to its Spanish deck.
+"""Tonchi pulls real courses through SYS_HTTP_GET and falls back to its Spanish deck.
 
 Headless only (-display none). CI never touches the live site: the replies come from a
 loopback stub, the way tools/checks/ring3bookrank-live-check.py serves the shelf. The stub's
 good replies are not hand-written. They are what worker.js's own handleLexly() produces when
-its upstream fetches return tools/checks/lexly-fixture.json, a captured slice of the real
+its upstream fetches return tools/checks/tonchi-fixture.json, a captured slice of the real
 lexly.heyitsmejosh.com catalog and course packs, so a change to the Worker's wire format changes
 what the guest sees and this check notices.
 
-Each scenario boots a fresh guest with `open=lexly` and a rtl8139 NIC (or none) and reads the
+Each scenario boots a fresh guest with `open=tonchi` and a rtl8139 NIC (or none) and reads the
 program's own serial lines:
 
   live      the stub serves the Worker's text. Expect the course picker ("courses 3"), Down and
@@ -32,7 +32,7 @@ Discriminating: make the guest never adopt the live list (proved by hand, the li
 several ways), accept an answer index above 3, or leave the course list on the live buffer after a
 failed parse, and a scenario here fails.
 
-Usage: tools/checks/ring3lexly-live-check.py [scenario ...]  (from the repo root, after make kernel.elf)
+Usage: tools/checks/ring3tonchi-live-check.py [scenario ...]  (from the repo root, after make kernel.elf)
 """
 import http.server, json, os, re, socket, subprocess, sys, threading, time
 from PIL import Image
@@ -54,7 +54,7 @@ OPT_Y0, OPT_H = 124, 34
 NODE = r"""
 import fs from 'node:fs';
 import {handleLexly} from './worker.js';
-const fx = JSON.parse(fs.readFileSync('tools/checks/lexly-fixture.json', 'utf8'));
+const fx = JSON.parse(fs.readFileSync('tools/checks/tonchi-fixture.json', 'utf8'));
 const asked = [];
 globalThis.fetch = async (url) => {
   const u = String(url); asked.push(u);
@@ -147,7 +147,7 @@ fails = []
 
 def run(name):
     scen = SCENARIOS[name]
-    log = f"/tmp/jt-lexly-live-{name}.log"; dump = f"/tmp/jt-lexly-live-{name}.raw"
+    log = f"/tmp/jt-tonchi-live-{name}.log"; dump = f"/tmp/jt-tonchi-live-{name}.raw"
     for f in (log, dump):
         try: os.remove(f)
         except FileNotFoundError: pass
@@ -156,7 +156,7 @@ def run(name):
     port = free_port()
     args = ["qemu-system-i386", "-kernel", "kernel.elf", "-display", "none", "-vga", "std", "-no-reboot",
             "-qmp", f"tcp:127.0.0.1:{port},server,nowait", "-serial", "file:" + log]
-    cmdline = "open=lexly"
+    cmdline = "open=tonchi"
     if scen is not None:
         args += ["-net", "nic,model=rtl8139", "-net", "user"]
         cmdline += f" facehost=10.0.2.2:{STUB_PORT}"
@@ -197,29 +197,29 @@ def run(name):
         def near(p, c, tol=12): return max(abs(p[i] - c[i]) for i in range(3)) <= tol
         def row_color(k, img): return pix(22, LIST_TOP + k * ITEM_H + 2, img)
 
-        if not wait("lexly: ring-3 window 804x345", 60): bad("Lexly never opened its window"); return
-        if not (wait("lexly: courses ", 30) or wait("lexly: samples ", 5)): bad("the program never said courses or samples"); return
+        if not wait("tonchi: ring-3 window 804x345", 60): bad("Tonchi never opened its window"); return
+        if not (wait("tonchi: courses ", 30) or wait("tonchi: samples ", 5)): bad("the program never said courses or samples"); return
         time.sleep(0.5)
         s = serial()
-        lines = [x.rstrip("\r") for x in re.findall(r"lexly: [^\n]*", s)]
-        fetch = re.search(r"lexly: fetch (-?\d+)", s)
-        print(f"{name}: fetch {fetch and fetch.group(1)}, {[l for l in lines if l.startswith(('lexly: courses', 'lexly: samples'))][:1]}")
+        lines = [x.rstrip("\r") for x in re.findall(r"tonchi: [^\n]*", s)]
+        fetch = re.search(r"tonchi: fetch (-?\d+)", s)
+        print(f"{name}: fetch {fetch and fetch.group(1)}, {[l for l in lines if l.startswith(('tonchi: courses', 'tonchi: samples'))][:1]}")
         if "exception: ring-0" in s or "panic in" in s or "ring3app: BUG" in s or "exception: ring-3" in s:
             bad("a fault in the kernel or in the program")
 
         def printable_ok():
-            for l in re.findall(r"lexly: [^\n]*", serial()):
+            for l in re.findall(r"tonchi: [^\n]*", serial()):
                 l = l.rstrip("\r")
                 if any(ord(c) < 0x20 or ord(c) > 0x7e for c in l): bad(f"a serial line holds non-printable bytes: {l!r}")
                 if len(l) > 130: bad(f"a serial line is not bounded: {len(l)} bytes")
 
         def closes():
             key("esc")
-            if not wait("lexly: closed", 5): bad("Esc did not close the program")
-            if not wait("LEXLY.BIN exited 0", 5): bad("the program did not exit 0")
+            if not wait("tonchi: closed", 5): bad("Esc did not close the program")
+            if not wait("TONCHI.BIN exited 0", 5): bad("the program did not exit 0")
 
         if name == "live":
-            if not re.search(r"lexly: courses 3\b", s): bad(f"expected 'courses 3', got {[l for l in lines if 'courses' in l][:1]}")
+            if not re.search(r"tonchi: courses 3\b", s): bad(f"expected 'courses 3', got {[l for l in lines if 'courses' in l][:1]}")
             if "/api/lexly" not in current["paths"]: bad("the stub never saw GET /api/lexly")
             for _ in range(50):   # the first present can trail the serial line on a slow runner
                 img = frame()
@@ -228,52 +228,52 @@ def run(name):
             if not near(row_color(0, img), SEL_COLOR): bad(f"row 1 is not drawn selected: {row_color(0, img)}")
             if not near(row_color(1, img), OPT_COLOR): bad(f"row 2 is not drawn plain: {row_color(1, img)}")
             key("down")
-            if not wait("lexly: sel 2 " + COURSES[1][1], 5): bad("Down did not select the real second course")
+            if not wait("tonchi: sel 2 " + COURSES[1][1], 5): bad("Down did not select the real second course")
             img = frame()
             if not near(row_color(1, img), SEL_COLOR) or not near(row_color(0, img), OPT_COLOR): bad("the selection did not move on screen")
             key("down"); key("up"); key("up")
-            if not wait("lexly: sel 1 " + COURSES[0][1], 5): bad("Up did not come back to the first course")
+            if not wait("tonchi: sel 1 " + COURSES[0][1], 5): bad("Up did not come back to the first course")
             key("ret")
-            if not wait(f"lexly: course {len(SPANISH)} spanish", 8): bad("Enter did not load the Spanish course"); return
+            if not wait(f"tonchi: course {len(SPANISH)} spanish", 8): bad("Enter did not load the Spanish course"); return
             if "/api/lexly?c=spanish" not in current["paths"]: bad("the stub never saw GET /api/lexly?c=spanish")
             score = 0
             for i, (ans, qtext, choices) in enumerate(SPANISH):
-                if not wait(f"lexly: q {i + 1} {qtext}", 5): bad(f"question {i + 1} ({qtext!r}) was not shown"); break
+                if not wait(f"tonchi: q {i + 1} {qtext}", 5): bad(f"question {i + 1} ({qtext!r}) was not shown"); break
                 pick = ans if i != 1 else (ans + 1) % 4   # miss question 2 on purpose
                 key(str(pick + 1))
                 verdict = "right" if pick == ans else "miss"
-                if not wait(f"lexly: pick {pick + 1} {verdict}", 5): bad(f"question {i + 1}: expected 'pick {pick + 1} {verdict}'")
+                if not wait(f"tonchi: pick {pick + 1} {verdict}", 5): bad(f"question {i + 1}: expected 'pick {pick + 1} {verdict}'")
                 if verdict == "right": score += 1
                 if i == 0:
                     img = frame()
                     if not near(pix(30, OPT_Y0 + ans * OPT_H + 8, img), RIGHT_COLOR): bad(f"the right answer did not turn green: {pix(30, OPT_Y0 + ans * OPT_H + 8, img)}")
                 key("a")   # any key: next
-            if not wait(f"lexly: done {score}", 8): bad(f"the score screen did not say 'done {score}'")
-            n_courses = count("lexly: courses ")
+            if not wait(f"tonchi: done {score}", 8): bad(f"the score screen did not say 'done {score}'")
+            n_courses = count("tonchi: courses ")
             key("a")
-            if not wait(f"lexly: courses 3", 5) or count("lexly: courses ") != n_courses + 1: bad("a key on the score screen did not return to the picker")
+            if not wait(f"tonchi: courses 3", 5) or count("tonchi: courses ") != n_courses + 1: bad("a key on the score screen did not return to the picker")
             key("down"); key("ret")
-            if not wait(f"lexly: course {len(PYTHON)} python", 8): bad("the second course (Python) did not load")
-            if not wait(f"lexly: q 1 {PYTHON[0][1]}", 5): bad("Python's first question was not shown")
-            n_courses = count("lexly: courses ")
+            if not wait(f"tonchi: course {len(PYTHON)} python", 8): bad("the second course (Python) did not load")
+            if not wait(f"tonchi: q 1 {PYTHON[0][1]}", 5): bad("Python's first question was not shown")
+            n_courses = count("tonchi: courses ")
             key("esc")
-            if not wait("lexly: courses 3", 5) or count("lexly: courses ") != n_courses + 1: bad("Esc in the drill did not return to the picker")
+            if not wait("tonchi: courses 3", 5) or count("tonchi: courses ") != n_courses + 1: bad("Esc in the drill did not return to the picker")
             closes()
         elif name == "coursefail":
-            if not re.search(r"lexly: courses 3\b", s): bad("the picker did not open")
+            if not re.search(r"tonchi: courses 3\b", s): bad("the picker did not open")
             key("ret")
-            if not wait("lexly: fetch -500", 8): bad("the guest never asked for the failing course")
+            if not wait("tonchi: fetch -500", 8): bad("the guest never asked for the failing course")
             time.sleep(1.0)
-            if "lexly: course " in serial().replace("lexly: courses", ""): bad("a course opened although its reply was a 500")
+            if "tonchi: course " in serial().replace("tonchi: courses", ""): bad("a course opened although its reply was a 500")
             key("down"); key("ret")
-            if not wait(f"lexly: course {len(PYTHON)} python", 8): bad("the picker did not recover and open the next course")
+            if not wait(f"tonchi: course {len(PYTHON)} python", 8): bad("the picker did not recover and open the next course")
             key("esc")
-            if not wait("lexly: courses 3", 5): bad("Esc did not return to the picker")
+            if not wait("tonchi: courses 3", 5): bad("Esc did not return to the picker")
             closes()
         elif name == "hostile":
-            if not re.search(r"lexly: courses 80\b", s): bad(f"expected the 80-row cap, got {[l for l in lines if 'courses' in l][:1]}")
+            if not re.search(r"tonchi: courses 80\b", s): bad(f"expected the 80-row cap, got {[l for l in lines if 'courses' in l][:1]}")
             for _ in range(11): key("down", 0.25)
-            if not wait("lexly: sel 12 ", 10): bad("could not walk the hostile rows to row 12")
+            if not wait("tonchi: sel 12 ", 10): bad("could not walk the hostile rows to row 12")
             time.sleep(0.4)
             img = frame()
             last = row_color(VISIBLE_ROWS - 1, img)
@@ -285,19 +285,19 @@ def run(name):
             key("ret")
             m = None
             for _ in range(80):
-                m = re.search(r"lexly: course (\d+) spanish", serial())
+                m = re.search(r"tonchi: course (\d+) spanish", serial())
                 if m: break
                 time.sleep(0.1)
             if not m: bad("the usable hostile rows were not kept"); return
             if int(m.group(1)) != 24: bad(f"expected the 24-row cap, got {m.group(1)}")
-            if not wait("lexly: q 1 T", 5): bad("the first hostile question was not shown")
+            if not wait("tonchi: q 1 T", 5): bad("the first hostile question was not shown")
             key("1"); key("a")
-            if not wait("lexly: q 2 Question 1", 5): bad("the second kept row was not the first clean one (bad rows leaked in)")
+            if not wait("tonchi: q 2 Question 1", 5): bad("the second kept row was not the first clean one (bad rows leaked in)")
             printable_ok()
             key("esc"); closes()
         else:
-            if not re.search(r"lexly: samples 30\b", s): bad(f"expected the Spanish deck, got {[l for l in lines if 'samples' in l or 'courses' in l][:1]}")
-            if "lexly: courses " in s: bad("a junk reply opened the picker")
+            if not re.search(r"tonchi: samples 30\b", s): bad(f"expected the Spanish deck, got {[l for l in lines if 'samples' in l or 'courses' in l][:1]}")
+            if "tonchi: courses " in s: bad("a junk reply opened the picker")
             want_fetch = "-19" if name == "offline" else None
             if want_fetch and (fetch is None or fetch.group(1) != want_fetch): bad(f"fetch should be {want_fetch} with no NIC, got {fetch and fetch.group(1)}")
             if name != "offline" and "/api/lexly" not in current["paths"]: bad("the guest never asked the stub for /api/lexly")
@@ -305,7 +305,7 @@ def run(name):
             img = frame()
             if not near(pix(30, OPT_Y0 + 10, img), OPT_COLOR): bad(f"the Spanish option row is not drawn: {pix(30, OPT_Y0 + 10, img)}")
             key("1")
-            if not wait("lexly: pick 1 right", 5): bad("the Spanish deck no longer scores round 0 slot 1 as right")
+            if not wait("tonchi: pick 1 right", 5): bad("the Spanish deck no longer scores round 0 slot 1 as right")
             closes()
     finally:
         try: cmd({"execute": "quit"})
@@ -324,4 +324,4 @@ if fails:
     print("FAIL:")
     for x in fails: print("  - " + x)
     sys.exit(1)
-print("PASS: Lexly lists the real courses from the Worker's text, drills a chosen one with a score and goes back to the picker, keeps only the usable rows of a hostile reply, and falls back to the Spanish deck for junk, a 500, an oversize body and no NIC")
+print("PASS: Tonchi lists the real courses from the Worker's text, drills a chosen one with a score and goes back to the picker, keeps only the usable rows of a hostile reply, and falls back to the Spanish deck for junk, a 500, an oversize body and no NIC")

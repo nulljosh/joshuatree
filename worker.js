@@ -379,9 +379,12 @@ async function handleBooks() {
   return new Response(wire, {headers: WIRE});
 }
 
-// Lexly, "learn anything": the real app's public course packs
+// Tonchi (was Lexly), "learn anything": the real app's public course packs.
+// The App Store rename is not applied and tonchi.heyitsmejosh.com does not
+// exist yet, so the address, the /api/lexly route and the LEXLY_* names stay
+// as they are: a URL is not a label. Flip LEXLY_SITE when the new host answers.
 // (lexly.heyitsmejosh.com/content/catalog.json and /content/courses/<id>.json,
-// static read-only files). Two wires for the Lexly app:
+// static read-only files). Two wires for the Tonchi app:
 //   /api/lexly            first line the course count, then `id|name|category`
 //   /api/lexly?c=<id>     first line the question count, then
 //                         `answer index 0-3|question|choice0|choice1|choice2|choice3`

@@ -66,7 +66,7 @@ ART = {
     9: "keyrate",
     10: "bookrank",
     11: "quotes",
-    12: "lexly",
+    12: "tonchi",
     13: "toroid",
     14: "hikko",
     15: "fieldbook",

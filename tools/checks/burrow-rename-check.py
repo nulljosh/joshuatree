@@ -19,6 +19,8 @@ What this proves, from the real sources (no QEMU, so it is fast):
      header is current.
 
 Also covers the Hikko aliases: "sparkjar" and "hotaru" still open Hikko.
+2.6.30 adds the Tonchi (was Lexly) rename with its "lexly" alias, and the Portfolio
+catalog names (Brick, Notate, Hagaki): it fails if an old name returns.
 
 Fails on origin/main (APPS[0] is "Files", no alias table, slot 0 is
 icon_art_files) and passes on this branch.
@@ -88,11 +90,37 @@ with tempfile.TemporaryDirectory() as d:
                  ("hikko", names.index("Hikko")), ("the hikko app", names.index("Hikko")),
                  ("sparkjar", names.index("Hikko")), ("open sparkjar", names.index("Hikko")),
                  ("Hotaru", names.index("Hikko")), ("the hotaru app", names.index("Hikko")),
-                 ("sparkjars", -1), ("hot", -1)]
+                 ("sparkjars", -1), ("hot", -1),
+                 # Tonchi (2.6.30) was Lexly: both names open slot 12
+                 ("tonchi", names.index("Tonchi")), ("the tonchi app", names.index("Tonchi")),
+                 ("lexly", names.index("Tonchi")), ("open lexly", names.index("Tonchi")),
+                 ("the lexly app", names.index("Tonchi")), ("lexlys", -1)]
         out = subprocess.run([exe], input="\n".join(c for c, _ in cases) + "\n",
                              capture_output=True, text=True).stdout.split()
         for (c, want), got in zip(cases, out):
             check(int(got) == want, "open_app %r -> %s (want %d)" % (c, got, want))
+
+# --- 2.6.30: the fleet names inside the OS ----------------------------------
+check("Tonchi" in names and "Lexly" not in names, "APPS has Tonchi and no Lexly row")
+check(names.index("Tonchi") == 12, "Tonchi keeps slot 12")
+check(os.path.exists(os.path.join(ROOT, "user/tonchi.c")) and not os.path.exists(os.path.join(ROOT, "user/lexly.c")),
+      "user/tonchi.c exists, user/lexly.c is gone")
+check(re.search(r'\{"Tonchi",\s*user_tonchi,\s*USER_TONCHI_LEN,\s*"TONCHI\.BIN"\}', read("kernel/ring3app.c")) is not None,
+      "RING3_APPS has the Tonchi row (TONCHI.BIN)")
+check("tonchi: ring-3 window" in read("user/tonchi.c"), "user/tonchi.c identifies itself as tonchi")
+check(os.path.exists(os.path.join(ROOT, "art/icons/tonchi.svg")) and not os.path.exists(os.path.join(ROOT, "art/icons/lexly.svg")),
+      "art/icons/tonchi.svg exists, lexly.svg is gone")
+check("#2E86DE" in read("tools/gen/import_fleet_icons.py"), "Tonchi's icon is still sky blue #2E86DE")
+pf = read("user/portfolio.c")
+rows = re.findall(r'^\s*\{"([^"]+)",\s*"[^"]*",\s*"([^"]*)",\s*PF_KIND_APP\}', pf, re.M)
+pnames = [n for n, _ in rows]
+purl = dict(rows)
+for old in ("Roost", "Voxprint", "Siftbox", "Lexly", "Sparkjar", "Hotaru", "Wiretext", "Charwork"):
+    check(old not in pnames, "Portfolio catalog has no %r row" % old)
+for new, host in (("Brick", "brick"), ("Notate", "notate"), ("Hagaki", "hagaki"), ("Hikko", "hikko"), ("Tonchi", "lexly")):
+    check(purl.get(new, "").startswith(host + ".heyitsmejosh.com"), "Portfolio row %s answers at %s.heyitsmejosh.com (got %r)" % (new, host, purl.get(new)))
+for old_host in ("roost.", "siftbox.", "voxprint."):
+    check(old_host not in pf, "Portfolio never shows the %s address" % old_host)
 
 # --- icon art slot 0 -----------------------------------------------------
 art = read("kernel/icon_art.h")

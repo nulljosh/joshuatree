@@ -703,11 +703,12 @@ static void civil(unsigned days, int *y, int *m, int *d) {
 
 static const char *const APPNAME[] = {
     "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Curbfind", "Keyrate",
-    "Bookrank", "Quotes", "Lexly", "Toroid", "Hikko", "Fieldbook", "Contacts", "Calculator",
+    "Bookrank", "Quotes", "Tonchi", "Toroid", "Hikko", "Fieldbook", "Contacts", "Calculator",
     "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Clock",
 };
 #define NAPPS ((int)(sizeof APPNAME / sizeof APPNAME[0]))
 #define HIKKO_SLOT 14 /* its index in APPNAME */
+#define TONCHI_SLOT 12
 
 static int word_prefix_ci(const char *lbl, const char *s) {
     while (*lbl) {
@@ -732,6 +733,10 @@ static int match_app(const char *arg) {
     if ((b[0] | 32) == 'c' && (b[1] | 32) == 'h' && (b[2] | 32) == 'a' && (b[3] | 32) == 't' && !b[4]) b = "samantha";
     for (const char *w = b; ; w++) { /* Hikko was Sparkjar, then Hotaru: the old names still open it */
         if ((w == b || *(w - 1) == ' ') && (word_prefix_ci("sparkjar", w) || word_prefix_ci("hotaru", w))) return HIKKO_SLOT;
+        if (!*w) break;
+    }
+    for (const char *w = b; ; w++) { /* Tonchi was Lexly: the old name still opens it */
+        if ((w == b || *(w - 1) == ' ') && word_prefix_ci("lexly", w)) return TONCHI_SLOT;
         if (!*w) break;
     }
     for (int i = 0; i < NAPPS; i++)

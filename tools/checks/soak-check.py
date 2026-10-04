@@ -27,7 +27,7 @@ CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 
 APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
-        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Lexly", "Toroid", "Hikko",
+        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Tonchi", "Toroid", "Hikko",
         "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity"]
 

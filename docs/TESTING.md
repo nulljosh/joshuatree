@@ -50,8 +50,8 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Quotes runs as a ring-3 process through the table-driven launcher: draws the option grid, answers right and wrong through the real logic, closes both ways, crashes safely, desktop alive | `tools/checks/ring3quotes-check.py` | retry |
 | Bookrank runs as a ring-3 process through the table-driven launcher: draws the ranked list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive | `tools/checks/ring3bookrank-check.py` | retry |
 | Bookrank pulls the real shelf live (Worker text from a stub), scrolls it, bounds a hostile reply, and shows the ten samples for junk, a 500, an oversize body and no NIC | `tools/checks/ring3bookrank-live-check.py` | retry |
-| Lexly runs as a ring-3 process through the table-driven launcher: draws the word and choices, answers right and wrong through the real drill, closes both ways, crashes safely, desktop alive | `tools/checks/ring3lexly-check.py` | retry |
-| Lexly lists the real courses live (Worker text from a stub), drills one with a score, bounds a hostile reply, and shows the Spanish deck for junk, a 500, an oversize body and no NIC | `tools/checks/ring3lexly-live-check.py` | retry |
+| Tonchi runs as a ring-3 process through the table-driven launcher: draws the word and choices, answers right and wrong through the real drill, closes both ways, crashes safely, desktop alive | `tools/checks/ring3tonchi-check.py` | retry |
+| Tonchi lists the real courses live (Worker text from a stub), drills one with a score, bounds a hostile reply, and shows the Spanish deck for junk, a 500, an oversize body and no NIC | `tools/checks/ring3tonchi-live-check.py` | retry |
 | Fieldbook runs as a ring-3 process through the table-driven launcher: draws the ranked field list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive | `tools/checks/ring3fieldbook-check.py` | retry |
 | Clock runs as a ring-3 process through the table-driven launcher: draws the moving time, takes a timer through the real input logic, closes on Esc, desktop alive | `tools/checks/ring3clock-check.py` | retry |
 | Movies plays a real AVI with sound at ring 3, audio-led: frame within one of the audio clock, drift under 100 ms, pause holds frame and sound (checked in the wav and on the framebuffer), seek by bar and keys, fullscreen, a damaged clip / non-AVI / over-cap file each show an error, closes on Esc, desktop alive | `tools/checks/movie-check.py` | retry |
@@ -195,7 +195,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Keyrate | `tools/checks/ring3app-check.py` |
 | Bookrank | `tools/checks/ring3bookrank-check.py`, `tools/checks/ring3bookrank-live-check.py` |
 | Quotes | `tools/checks/ring3quotes-check.py`, `tools/checks/stocks-live-check.mjs` |
-| Lexly | `tools/checks/ring3lexly-check.py`, `tools/checks/ring3lexly-live-check.py` |
+| Tonchi | `tools/checks/ring3tonchi-check.py`, `tools/checks/ring3tonchi-live-check.py` |
 | Toroid | `tools/checks/ring3toroid-check.py` |
 | Hikko | `tools/checks/ring3hikko-check.py`, `tools/checks/ring3hikko-live-check.py` |
 | Fieldbook | `tools/checks/ring3fieldbook-check.py` |

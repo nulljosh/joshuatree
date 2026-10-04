@@ -14,7 +14,7 @@ started at the panel's own top edge (APPS_VIS_ROWS(3) * cell_h(108) =
 actually starts 70px lower (y0=95 vs panel_y=25), to leave room for the
 "arrow keys to move" hint line above it. The real bottom needed is
 70 + 324 = 394, so the last visible row's labels (at the default scroll
-offset: "Bookrank", "Quotes", "Lexly", "Toroid") rendered only
+offset: "Bookrank", "Quotes", "Tonchi", "Toroid") rendered only
 ~9 logical px above the glass panel's true bottom edge -- title-bar-tight
 everywhere else in this UI, here almost touching, confirmed with a real
 pmemsave crop (see the before/ folder above). Fixed by sizing the panel
@@ -55,7 +55,7 @@ DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 247, 487
 
 # Row 2 (the Apps folder's default scroll offset, dock slot 0, window
 # opened at gui_launch_from_dock's fixed x=56,y=30 -- deterministic every
-# boot) is usually "Bookrank", "Quotes", "Lexly", "Toroid",
+# boot) is usually "Bookrank", "Quotes", "Tonchi", "Toroid",
 # GUI_LABELS indices 10-14, but this does not assume that scroll offset
 # or that exact text: it only assumes the 3rd row slot (fixed y, whatever
 # labels ended up there) has APPS_COLS words in it. Their x positions

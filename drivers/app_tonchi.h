@@ -1,7 +1,7 @@
-#ifndef APP_LEXLY_H
-#define APP_LEXLY_H
-static const unsigned int app_lexly_len = 33701;
-static const unsigned char app_lexly_html[] = {
+#ifndef APP_TONCHI_H
+#define APP_TONCHI_H
+static const unsigned int app_tonchi_len = 33701;
+static const unsigned char app_tonchi_html[] = {
 60,33,68,79,67,84,89,80,69,32,104,116,109,108,62,10,60,104,116,109,
 108,32,108,97,110,103,61,34,101,110,34,62,10,60,104,101,97,100,62,10,
 60,115,99,114,105,112,116,62,100,111,99,117,109,101,110,116,46,100,111,99,

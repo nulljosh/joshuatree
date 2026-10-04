@@ -110,7 +110,7 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app.h"
 #include "app_bookrank.h"
 #include "app_quotestreak.h"
-#include "app_lexly.h"
+#include "app_tonchi.h"
 #include "app_toroid.h"
 #include "app_hikko.h"
 #include "app_fieldbook.h"
@@ -902,7 +902,7 @@ static int boot_to_phone, boot_res_w, boot_res_h;
 int jt_phone_mode(void){ return boot_to_phone; } /* ring3app.c: windowed ring-3 apps get argv[1]="phone" so they can show libjt/osk */
 #include "hint.h"
 static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
-static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 21, 20, 8, 10, 12, 14, 11, 9, 13, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Hikko, Quotes, Keyrate, Toroid */
+static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 21, 20, 8, 10, 12, 14, 11, 9, 13, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Tonchi, Hikko, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 int dock_hover = -1; /* slot whose label is showing */
 
@@ -2064,7 +2064,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void music_ring3_open(void); void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void lexly_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void hikko_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
+static int wind_base_width = 0; void music_ring3_open(void); void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void tonchi_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void hikko_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
 void movies_ring3_open(void);
 
 static int gui_ring3_windowed(int icon);
@@ -3505,7 +3505,7 @@ static void gui_icon_mail(int cx, int cy, int s, unsigned int bg){
     gui_draw_capsule(x0, y0, cx, cy, t, ICON_FG, bg);         /* flap: left seam down to centre */
     gui_draw_capsule(x0 + w - 1, y0, cx, cy, t, ICON_FG, bg); /* flap: right seam down to centre */
 }
-static void gui_icon_lexly(int cx, int cy, int s, unsigned int bg){
+static void gui_icon_tonchi(int cx, int cy, int s, unsigned int bg){
     int r = s * 3 / 10;
     gui_fill_circle(cx, cy, r, ICON_FG, bg);
     gui_draw_capsule(cx - r, cy - r / 3, cx + r, cy - r / 3, s / 24, bg, ICON_FG); /* "latitude" lines punched through in bg color */
@@ -4657,7 +4657,7 @@ char *wx_put_int(char *o, int v){
    grid actually starts 70px lower, at y0=95, to leave room for the "arrow
    keys to move" hint line above it (panel top is 25). The real bottom
    needed is 70 + 324 = 394, 19px past the old 375, so the last visible
-   row's labels ("Bookrank", "Quotes", "Lexly", "Toroid" at the
+   row's labels ("Bookrank", "Quotes", "Tonchi", "Toroid" at the
    default scroll offset) landed only ~8 logical px above the glass
    panel's true bottom edge -- title-bar-tight everywhere else in this UI,
    here almost touching. 410 gives that row the same order of breathing
@@ -5171,7 +5171,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /*  9 */ {"Keyrate",    0x00B08900, gui_icon_keyrate,    keyrate_ring3_open,    0, 0}, /* 1.7.7: a real ring-3 program (user/keyrate.c), see kernel/ring3app.c */
     /* 10 */ {"Bookrank",   0x002F7B4F, gui_icon_book,       bookrank_ring3_open,   0, 0}, /* 2.0: ring 3 too (user/bookrank.c) */
     /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_ring3_open, 0, 0}, /* 1.7.14: ring 3 too (user/quotes.c) */
-    /* 12 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      lexly_ring3_open,      0, 0}, /* 1.9.1: ring 3 too (user/lexly.c) */
+    /* 12 */ {"Tonchi",     0x00376E5E, gui_icon_tonchi,     tonchi_ring3_open,     0, 0}, /* 1.9.1: ring 3 too (user/tonchi.c) */
     /* 13 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */
     /* 14 */ {"Hikko",   0x00A6741E, gui_icon_hikko,   hikko_ring3_open,   0, 0}, /* 1.9.8: ring 3 (user/hikko.c) */
     /* 15 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  fieldbook_ring3_open,  0, 0}, /* 1.9.3: ring 3 too (user/fieldbook.c) */
@@ -8120,7 +8120,7 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "serveapp")) {
-        if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak|lexly|toroid|hikko|fieldbook\n"); }
+        if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak|tonchi|toroid|hikko|fieldbook\n"); }
         else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
             if (!strcmp(arg, "weather"))          serve_app("weather", app_weather_html, app_weather_len);
@@ -8128,7 +8128,7 @@ static void run(char *line){
             else if (!strcmp(arg, "keyrate"))     serve_app("keyrate", app_keyrate_html, app_keyrate_len);
             else if (!strcmp(arg, "bookrank"))    serve_app("bookrank", app_bookrank_html, app_bookrank_len);
             else if (!strcmp(arg, "quotestreak")) serve_app("quotestreak", app_quotestreak_html, app_quotestreak_len);
-            else if (!strcmp(arg, "lexly"))       serve_app("lexly", app_lexly_html, app_lexly_len);
+            else if (!strcmp(arg, "tonchi") || !strcmp(arg, "lexly")) serve_app("tonchi", app_tonchi_html, app_tonchi_len);
             else if (!strcmp(arg, "toroid"))      serve_app("toroid", app_toroid_html, app_toroid_len);
             else if (!strcmp(arg, "hikko"))    serve_app("hikko", app_hikko_html, app_hikko_len);
             else if (!strcmp(arg, "fieldbook"))   serve_app("fieldbook", app_fieldbook_html, app_fieldbook_len);

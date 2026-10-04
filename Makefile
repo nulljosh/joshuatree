@@ -225,12 +225,12 @@ user/bookrank.o: user/bookrank.c user/jtsys.h drivers/vgafont.h
 user/bookrank.bin: user/bookrank.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/bookrank.o user/libjt.a
 
-# 1.9.1: Lexly, the seventh app out of the kernel, built the same way.
-user/lexly.o: user/lexly.c user/jtsys.h drivers/vgafont.h
+# 1.9.1: Tonchi, the seventh app out of the kernel, built the same way.
+user/tonchi.o: user/tonchi.c user/jtsys.h drivers/vgafont.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
-user/lexly.bin: user/lexly.o user/libjt.a user/note.ld boot/memmap.ld
-	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/lexly.o user/libjt.a
+user/tonchi.bin: user/tonchi.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/tonchi.o user/libjt.a
 
 # 1.9.3: Fieldbook, the ninth app out of the kernel, built the same way.
 user/fieldbook.o: user/fieldbook.c user/jtsys.h user/libjt/text.h
@@ -414,8 +414,8 @@ drivers/user_quotes.h: user/quotes.bin tools/gen/gen_user_bin.py
 drivers/user_bookrank.h: user/bookrank.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/bookrank.bin drivers/user_bookrank.h user_bookrank
 
-drivers/user_lexly.h: user/lexly.bin tools/gen/gen_user_bin.py
-	python3 tools/gen/gen_user_bin.py user/lexly.bin drivers/user_lexly.h user_lexly
+drivers/user_tonchi.h: user/tonchi.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/tonchi.bin drivers/user_tonchi.h user_tonchi
 
 drivers/user_fieldbook.h: user/fieldbook.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/fieldbook.bin drivers/user_fieldbook.h user_fieldbook
@@ -487,7 +487,7 @@ kernel/kernel.o: drivers/user_hello.h drivers/user_note.h drivers/user_wc.h
 drivers/user_fbpoke.h: user/fbpoke.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/fbpoke.bin drivers/user_fbpoke.h user_fbpoke
 
-kernel/ring3app.o: drivers/user_keyrate.h drivers/user_toroid.h drivers/user_calculator.h drivers/user_quotes.h drivers/user_bookrank.h drivers/user_lexly.h drivers/user_fieldbook.h drivers/user_clock.h drivers/user_portfolio.h drivers/user_activity.h drivers/user_contacts.h drivers/user_hikko.h drivers/user_reminders.h drivers/user_curbfind.h drivers/user_calendar.h drivers/user_search.h drivers/user_epiphany.h drivers/user_weather.h drivers/user_burrow.h drivers/user_stocks.h drivers/user_mail.h drivers/user_notes.h drivers/user_terminal.h drivers/user_samantha.h drivers/user_fbpoke.h drivers/user_brkpoke.h
+kernel/ring3app.o: drivers/user_keyrate.h drivers/user_toroid.h drivers/user_calculator.h drivers/user_quotes.h drivers/user_bookrank.h drivers/user_tonchi.h drivers/user_fieldbook.h drivers/user_clock.h drivers/user_portfolio.h drivers/user_activity.h drivers/user_contacts.h drivers/user_hikko.h drivers/user_reminders.h drivers/user_curbfind.h drivers/user_calendar.h drivers/user_search.h drivers/user_epiphany.h drivers/user_weather.h drivers/user_burrow.h drivers/user_stocks.h drivers/user_mail.h drivers/user_notes.h drivers/user_terminal.h drivers/user_samantha.h drivers/user_fbpoke.h drivers/user_brkpoke.h
 
 %.o: %.S
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -526,7 +526,7 @@ clean:
 	rm -f user/music.o user/music.bin drivers/user_music.h user/libjt/wav.o
 	rm -f $(OBJS) $(OBJS:.o=.d) kernel.elf kernel.elf.pass1 kernel/symtab.c kernel/symtab_stub.o kernel/symtab_stub.d user/hello.o user/hello.bin drivers/user_hello.h \
 	      user/note.o user/note.bin drivers/user_note.h user/keyrate.o user/keyrate.bin drivers/user_keyrate.h user/toroid.o user/toroid.bin drivers/user_toroid.h \
-	      user/calculator.o user/calculator.bin drivers/user_calculator.h user/quotes.o user/quotes.bin drivers/user_quotes.h user/bookrank.o user/bookrank.bin drivers/user_bookrank.h user/lexly.o user/lexly.bin drivers/user_lexly.h user/fieldbook.o user/fieldbook.bin drivers/user_fieldbook.h user/clock.o user/clock.bin drivers/user_clock.h user/portfolio.o user/portfolio.bin drivers/user_portfolio.h user/activity.o user/activity.bin drivers/user_activity.h user/contacts.o user/contacts.bin drivers/user_contacts.h user/reminders.o user/reminders.bin drivers/user_reminders.h user/curbfind.o user/curbfind.bin drivers/user_curbfind.h user/search.o user/search.bin drivers/user_search.h user/epiphany.o user/epiphany.bin drivers/user_epiphany.h user/weather.o user/weather.bin drivers/user_weather.h user/burrow.o user/burrow.bin drivers/user_burrow.h user/stocks.o user/stocks.bin drivers/user_stocks.h user/mail.o user/mail.bin drivers/user_mail.h user/notes.o user/notes.bin drivers/user_notes.h user/terminal.o user/terminal.bin drivers/user_terminal.h user/samantha.o user/samantha.bin drivers/user_samantha.h user/hikko.o user/hikko.bin drivers/user_hikko.h user/calendar.o user/calendar.bin drivers/user_calendar.h
+	      user/calculator.o user/calculator.bin drivers/user_calculator.h user/quotes.o user/quotes.bin drivers/user_quotes.h user/bookrank.o user/bookrank.bin drivers/user_bookrank.h user/tonchi.o user/tonchi.bin drivers/user_tonchi.h user/fieldbook.o user/fieldbook.bin drivers/user_fieldbook.h user/clock.o user/clock.bin drivers/user_clock.h user/portfolio.o user/portfolio.bin drivers/user_portfolio.h user/activity.o user/activity.bin drivers/user_activity.h user/contacts.o user/contacts.bin drivers/user_contacts.h user/reminders.o user/reminders.bin drivers/user_reminders.h user/curbfind.o user/curbfind.bin drivers/user_curbfind.h user/search.o user/search.bin drivers/user_search.h user/epiphany.o user/epiphany.bin drivers/user_epiphany.h user/weather.o user/weather.bin drivers/user_weather.h user/burrow.o user/burrow.bin drivers/user_burrow.h user/stocks.o user/stocks.bin drivers/user_stocks.h user/mail.o user/mail.bin drivers/user_mail.h user/notes.o user/notes.bin drivers/user_notes.h user/terminal.o user/terminal.bin drivers/user_terminal.h user/samantha.o user/samantha.bin drivers/user_samantha.h user/hikko.o user/hikko.bin drivers/user_hikko.h user/calendar.o user/calendar.bin drivers/user_calendar.h
 	rm -f user/movies.o user/avi.o user/movies.bin drivers/user_movies.h
 	rm -f joshuatree.iso boot/memmap.ld
 	rm -rf build/iso_root

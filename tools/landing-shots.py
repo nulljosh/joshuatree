@@ -15,7 +15,7 @@ Each retake also records a hash of the sources that draw the tile in landing/sho
 changed and its tile was not retaken. `--record` writes the hashes without retaking (use it
 only when a source change cannot alter the picture, such as a comment).
 
-Fleet apps (bookrank, lexly, curbfind, epiphany) boot with no network, so they show their
+Fleet apps (bookrank, tonchi, curbfind, epiphany) boot with no network, so they show their
 offline samples and never change with the live data.
 
 Usage: python3 tools/landing-shots.py [--record] [name ...]   (from anywhere; default: all)
@@ -38,10 +38,10 @@ SLOT = {"files": 1, "calendar": 3, "notes": 4, "terminal": 6, "chat": 7, "weathe
 # Fleet apps live in the Apps folder, not the dock. They boot with `open=<app>` (the flag the ring3 checks
 # use) and no NIC at all, so each one draws its built-in offline samples and no tile depends on the network.
 FLEET = {"bookrank": ("bookr", "bookrank: ring-3 window", "bookrank: samples"),
-         "lexly": ("lexly", "lexly: ring-3 window", "lexly: samples"),
+         "tonchi": ("tonchi", "tonchi: ring-3 window", "tonchi: samples"),
          "curbfind": ("curb", "curbfind: ring-3 window", "curbfind: samples"),
          "epiphany": ("epip", "epiphany: ring-3 window", "epiphany: fetch")}   # (open= flag, window opened, offline fallback chosen)
-FILE = {"bookrank": "app-bookrank", "lexly": "app-lexly", "curbfind": "app-curbfind", "epiphany": "app-epiphany",
+FILE = {"bookrank": "app-bookrank", "tonchi": "app-tonchi", "curbfind": "app-curbfind", "epiphany": "app-epiphany",
         "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
         "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks"}
 

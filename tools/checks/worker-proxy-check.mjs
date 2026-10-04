@@ -359,9 +359,9 @@ check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the
   }
 }
 
-// 2.6.27: Lexly's live courses. The guest asks the fixed joshuatree host for
+// 2.6.27: Tonchi's live courses. The guest asks the fixed joshuatree host for
 // /api/lexly (the course list) and /api/lexly?c=<id> (one course's questions).
-// The Worker itself calls the real Lexly site's static packs, and only those
+// The Worker itself calls the real Tonchi site's static packs, and only those
 // fixed URLs. Upstream is mocked with a real-shaped catalog and pack.
 {
   const realFetch = globalThis.fetch;
@@ -399,7 +399,7 @@ check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the
   try {
     const list = await via("/api/lexly");
     const lines = (await list.text()).split("\n");
-    check("/api/lexly reads the real Lexly catalog", asked[0] === "https://lexly.heyitsmejosh.com/content/catalog.json");
+    check("/api/lexly reads the real Tonchi catalog", asked[0] === "https://lexly.heyitsmejosh.com/content/catalog.json");
     check("/api/lexly answers 200 text with CORS and no-store", list.status === 200 && list.headers.get("access-control-allow-origin") === "*" && list.headers.get("cache-control") === "no-store");
     check("/api/lexly first line is the course count, then id|name|category", lines[0] === "2" && lines[1] === "spanish|Spanish|languages");
     check("/api/lexly drops a course outside the allowlist, a repeat, a bad id and an empty name, and cuts a long name", lines[2] === "dsa|Data Structures and Algorithms and a ver|programming" && lines.length === 4 && lines[3] === "");
@@ -434,7 +434,7 @@ check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the
     const n = asked.length;
     globalThis.fetch = async (u) => { asked.push(String(u)); return Response.json({}); };
     const other = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://lexly.heyitsmejosh.com/content/catalog.json")));
-    check("the real Lexly host is still not an open proxy target", other.status === 403 && asked.length === n);
+    check("the real Tonchi host is still not an open proxy target", other.status === 403 && asked.length === n);
   } finally {
     globalThis.fetch = realFetch;
   }
