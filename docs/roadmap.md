@@ -55,7 +55,8 @@ Two notebook pages checked against the tree. Already shipped and not listed: men
 - [ ] [Joshua] First real boot over serial, following `docs/RASPBERRY-PI.md`. Photograph the console. Whatever the chip does differently from QEMU becomes the next task.
 - [x] [Fable] M1c part one, 2.6.21: ramfb framebuffer on QEMU virt through fw_cfg, a first desktop drawn into it, proven by a QEMU screendump (`tools/checks/arm64-m1c-check.py`).
 - [ ] [Fable] M1c part two: the first picture on a Pi through the mailbox framebuffer (same pixels, different setup), then the real UI code (font, window drawing) running on the ARM build instead of rectangles. The mailbox call can only be tested on the real board.
-- [ ] [Fable] M2: virtio keyboard, mouse, network and block drivers, each proven in QEMU. Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
+- [x] [Fable] M2 keyboard, 2.6.22: a modern virtio-mmio driver finds the keyboard and reads key down and up events, polled (`tools/checks/arm64-m2-check.py`).
+- [ ] [Fable] M2: virtio mouse (tablet), network and block drivers, each proven in QEMU, and the keyboard moved to its GIC interrupt. Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
 - [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO) needs a firmware blob and an 802.11 stack. Not scheduled: Ethernet first.
 
 ### Known limits to recheck

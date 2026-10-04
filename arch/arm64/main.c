@@ -212,6 +212,74 @@ static void m1_selftest(void) {
     fb_init();
 }
 
+/* ---- M2: a keyboard. QEMU's virt machine has 32 virtio-mmio slots from 0x0A000000, 0x200 apart; a virtio-keyboard
+   shows up in one as device 18 (input). Modern virtio (version 2): one event queue the guest fills with 8-byte buffers,
+   the device hands them back with Linux evdev events in them. The Pi gets USB through xHCI instead (M4). ---- */
+#ifndef PI_BUILD
+#define VIRTIO_BASE 0x0A000000UL
+#define VQ 16
+struct vq_desc { unsigned long addr; unsigned len; unsigned short flags, next; };
+struct vq_avail { unsigned short flags, idx, ring[VQ], used_event; };
+struct vq_used { unsigned short flags, idx; struct { unsigned id, len; } ring[VQ]; unsigned short avail_event; };
+struct input_event { unsigned short type, code; unsigned value; };
+static unsigned long kbd;
+static struct vq_desc *kd;
+static struct vq_avail *ka;
+static volatile struct vq_used *ku;
+static struct input_event *kev;
+static unsigned short kbd_seen;
+#define VR(o) REG(kbd + (o))
+static int kbd_init(void) {
+    for (int i = 0; i < 32 && !kbd; i++) {
+        unsigned long b = VIRTIO_BASE + 0x200UL * i;
+        if (REG(b) == 0x74726976 && REG(b + 4) == 2 && REG(b + 8) == 18) kbd = b;   /* "virt", version 2, input */
+    }
+    if (!kbd) return 0;
+    VR(0x70) = 0;                                   /* reset */
+    VR(0x70) = 1 | 2;                               /* acknowledge, driver */
+    VR(0x24) = 1; VR(0x20) = 1;                     /* features 32..63: VIRTIO_F_VERSION_1 only */
+    VR(0x24) = 0; VR(0x20) = 0;
+    VR(0x70) = 1 | 2 | 8;                           /* features ok */
+    if (!(VR(0x70) & 8)) return 0;
+    VR(0x30) = 0;                                   /* queue 0, the event queue */
+    if (VR(0x34) < VQ) return 0;
+    VR(0x38) = VQ;
+    kd = kmalloc(sizeof *kd * VQ); ka = kmalloc(sizeof *ka); ku = kmalloc(sizeof *ku); kev = kmalloc(sizeof *kev * VQ);
+    if (!kd || !ka || !ku || !kev) return 0;
+    for (int i = 0; i < VQ; i++) {
+        kd[i] = (struct vq_desc){ (unsigned long)&kev[i], sizeof *kev, 2 /* device writes */, 0 };
+        ka->ring[i] = (unsigned short)i;
+    }
+    ka->flags = 0; ka->idx = VQ; ku->idx = 0;
+    VR(0x80) = (unsigned)(unsigned long)kd;  VR(0x84) = (unsigned)((unsigned long)kd >> 32);
+    VR(0x90) = (unsigned)(unsigned long)ka;  VR(0x94) = (unsigned)((unsigned long)ka >> 32);
+    VR(0xA0) = (unsigned)(unsigned long)ku;  VR(0xA4) = (unsigned)((unsigned long)ku >> 32);
+    VR(0x44) = 1;                                   /* queue ready */
+    VR(0x70) = 1 | 2 | 8 | 4;                       /* driver ok */
+    __asm__ volatile ("dsb sy" ::: "memory");
+    VR(0x50) = 0;                                   /* buffers are there */
+    return 1;
+}
+/* ponytail: polled, not interrupt driven. The GIC is already up (M1a), so wiring SPI 16+slot is the upgrade once the
+   desktop has an event loop to deliver keys to. */
+static void kbd_poll(void) {
+    while (kbd_seen != ku->idx) {
+        __asm__ volatile ("dsb sy" ::: "memory");
+        unsigned id = ku->ring[kbd_seen % VQ].id;
+        struct input_event e = kev[id];
+        if (e.type == 1) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* EV_KEY */
+        ka->ring[ka->idx % VQ] = (unsigned short)id;   /* hand the buffer back */
+        __asm__ volatile ("dsb sy" ::: "memory");
+        ka->idx++;
+        kbd_seen++;
+        VR(0x50) = 0;
+    }
+}
+#else
+static int kbd_init(void) { return 0; }
+static void kbd_poll(void) {}
+#endif
+
 void main(void) {
     unsigned long el;
     uart_init();
@@ -221,5 +289,9 @@ void main(void) {
     uart_puts(((el >> 2) & 3) == 1 ? "EL1\n" : "not EL1\n");
     uart_puts("M0 ok\n");
     m1_selftest();
+    if (kbd_init()) {
+        uart_puts("M2 kbd ready\n");
+        for (;;) kbd_poll();
+    }
     for (;;) __asm__ volatile ("wfe");
 }
