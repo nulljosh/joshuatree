@@ -56,7 +56,7 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 - [ ] [Joshua] ElevenLabs Agents could run the whole loop with any LLM endpoint as the brain (about $0.08 to $0.10 a minute). Decide: their loop, or ours.
 
 ### CI and speed
-- [ ] [Sonnet] Add to the flake list, 2026-10-04: the Clock icon check (`clockicon-check.py`) failed twice on one shard of PR 393 with zero ink on the face (the Apps folder had not opened in time) and passed locally and on a re-run. Give it a wait-for-folder step instead of a fixed delay.
+- [x] [Sonnet] Clock icon check flake fixed, 2026-10-04: on a slow runner the face sits still, white and handless for seconds, and the check took that as settled. Reproduced locally under CPU load with the exact CI numbers; it now waits for the hands to have ink (`tools/checks/clockicon-check.py`).
 - [ ] [Sonnet] Six of the last ten red runs were slow-runner timing flakes (Chat tool scenes, the phone mute button, Keyrate, the Apps folder layout): eight QEMUs share one runner. Find out how many cores the runner has, cap QEMUs per runner or move to 10 shards (the balancer says about 319 s of checks per shard, 12 shards about 266 s), and watch the next ten runs.
 - [ ] [Haiku] Re-balance after adding checks. New manifest lines default to 30 s until timed: run `python3 tools/gen/ci-balance.py <run-id>` on a green run (`--check` shows the numbers first) and commit the result.
 - [ ] [Haiku] About a third of recent runs were cancelled by force-pushes to an open PR. Push once per PR, or fold PRs together before CI starts.

@@ -31,6 +31,7 @@ PITCH = DOCK_ICON + DOCK_GAP
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 TRAY = (239, 235, 228)
+HANDS_INK_MIN = 30    # dark hand pixels: a slow runner can hold a still, white, handless face for seconds (reproduced under CPU load)
 FACE_WHITE_MIN = 3000  # Clock's face disc measures ~4400 white px in the tile box, Calculator ~1800
 CLOSE_X, CLOSE_Y, CLOSE_RED = 80, 46, (0xFF, 0x5F, 0x57)  # the Apps folder window's close dot (ring-3 app windows sit lower, at 94,56)
 
@@ -93,7 +94,8 @@ def boot(port, rtc, tag, later=0):
         while time.time() < end:
             img = grab(); box = tile_box(img)
             crop = img.crop(box).tobytes()
-            if crop == prev and measure(img, box)[3] >= FACE_WHITE_MIN: break
+            m = measure(img, box)
+            if crop == prev and m[3] >= FACE_WHITE_MIN and m[0] + m[1] + m[2] >= HANDS_INK_MIN: break   # a still disc with no hands yet is not settled
             prev = crop; time.sleep(0.5)
         if later:
             # The folder stays open; poll until the minute rolls over and the hands move.
