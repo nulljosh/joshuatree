@@ -65,8 +65,8 @@ Voice chat works on the web portfolio and in the OS, laggy and glitchy in both; 
 - [x] [Fable] M1c part one, 2.6.21: ramfb framebuffer on QEMU virt through fw_cfg, a first desktop drawn into it, proven by a QEMU screendump (`tools/checks/arm64-m1c-check.py`).
 - [x] [Fable] M1c part two, 2.6.22: the Pi build asks the GPU for a framebuffer through the VideoCore mailbox and draws the same desktop, proven on QEMU's Pi 4B model by screendump (`tools/checks/arm64-m1c-check.py`). Real board still to try.
 - [ ] [Fable] M1d: the real UI code (font, window drawing, the dock) running on the ARM build instead of rectangles, and the framebuffer mapped write-combining so a live desktop needs no cache cleans.
-- [x] [Fable] M2 keyboard, 2.6.22: a modern virtio-mmio driver finds the keyboard and reads key down and up events, polled (`tools/checks/arm64-m2-check.py`).
-- [ ] [Fable] M2: virtio mouse (tablet), network and block drivers, each proven in QEMU, and the keyboard moved to its GIC interrupt. Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
+- [x] [Fable] M2 keyboard and mouse, 2.6.22: one modern virtio-mmio input driver reads key down and up, pointer position and clicks, polled (`tools/checks/arm64-m2-check.py`).
+- [ ] [Fable] M2: virtio network and block drivers, each proven in QEMU, and input moved to its GIC interrupt. Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
 - [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO) needs a firmware blob and an 802.11 stack. Not scheduled: Ethernet first.
 
 ### Known limits to recheck

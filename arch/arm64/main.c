@@ -260,29 +260,28 @@ static void m1_selftest(void) {
     fb_init();
 }
 
-/* ---- M2: a keyboard. QEMU's virt machine has 32 virtio-mmio slots from 0x0A000000, 0x200 apart; a virtio-keyboard
-   shows up in one as device 18 (input). Modern virtio (version 2): one event queue the guest fills with 8-byte buffers,
-   the device hands them back with Linux evdev events in them. The Pi gets USB through xHCI instead (M4). ---- */
+/* ---- M2: keyboard and mouse. QEMU's virt machine has 32 virtio-mmio slots from 0x0A000000, 0x200 apart; a
+   virtio-keyboard or virtio-tablet shows up in one as device 18 (input). Modern virtio (version 2): one event queue the
+   guest fills with 8-byte buffers, the device hands them back with Linux evdev events in them. Both devices speak the
+   same events, so one driver serves both. The Pi gets USB through xHCI instead (M4). ---- */
 #ifndef PI_BUILD
 #define VIRTIO_BASE 0x0A000000UL
 #define VQ 16
+#define MAX_INPUT 2
 struct vq_desc { unsigned long addr; unsigned len; unsigned short flags, next; };
 struct vq_avail { unsigned short flags, idx, ring[VQ], used_event; };
 struct vq_used { unsigned short flags, idx; struct { unsigned id, len; } ring[VQ]; unsigned short avail_event; };
 struct input_event { unsigned short type, code; unsigned value; };
-static unsigned long kbd;
-static struct vq_desc *kd;
-static struct vq_avail *ka;
-static volatile struct vq_used *ku;
-static struct input_event *kev;
-static unsigned short kbd_seen;
-#define VR(o) REG(kbd + (o))
-static int kbd_init(void) {
-    for (int i = 0; i < 32 && !kbd; i++) {
-        unsigned long b = VIRTIO_BASE + 0x200UL * i;
-        if (REG(b) == 0x74726976 && REG(b + 4) == 2 && REG(b + 8) == 18) kbd = b;   /* "virt", version 2, input */
-    }
-    if (!kbd) return 0;
+static struct vin {
+    unsigned long base;
+    struct vq_desc *d; struct vq_avail *a; volatile struct vq_used *u; struct input_event *ev;
+    unsigned short seen;
+} vin[MAX_INPUT];
+static int nvin;
+static unsigned mouse_x, mouse_y, mouse_moved;
+static int vin_add(unsigned long b) {
+    struct vin *v = &vin[nvin];
+#define VR(o) REG(b + (o))
     VR(0x70) = 0;                                   /* reset */
     VR(0x70) = 1 | 2;                               /* acknowledge, driver */
     VR(0x24) = 1; VR(0x20) = 1;                     /* features 32..63: VIRTIO_F_VERSION_1 only */
@@ -292,40 +291,62 @@ static int kbd_init(void) {
     VR(0x30) = 0;                                   /* queue 0, the event queue */
     if (VR(0x34) < VQ) return 0;
     VR(0x38) = VQ;
-    kd = kmalloc(sizeof *kd * VQ); ka = kmalloc(sizeof *ka); ku = kmalloc(sizeof *ku); kev = kmalloc(sizeof *kev * VQ);
-    if (!kd || !ka || !ku || !kev) return 0;
+    v->d = kmalloc(sizeof *v->d * VQ); v->a = kmalloc(sizeof *v->a); v->u = kmalloc(sizeof *v->u); v->ev = kmalloc(sizeof *v->ev * VQ);
+    if (!v->d || !v->a || !v->u || !v->ev) return 0;
     for (int i = 0; i < VQ; i++) {
-        kd[i] = (struct vq_desc){ (unsigned long)&kev[i], sizeof *kev, 2 /* device writes */, 0 };
-        ka->ring[i] = (unsigned short)i;
+        v->d[i] = (struct vq_desc){ (unsigned long)&v->ev[i], sizeof *v->ev, 2 /* device writes */, 0 };
+        v->a->ring[i] = (unsigned short)i;
     }
-    ka->flags = 0; ka->idx = VQ; ku->idx = 0;
-    VR(0x80) = (unsigned)(unsigned long)kd;  VR(0x84) = (unsigned)((unsigned long)kd >> 32);
-    VR(0x90) = (unsigned)(unsigned long)ka;  VR(0x94) = (unsigned)((unsigned long)ka >> 32);
-    VR(0xA0) = (unsigned)(unsigned long)ku;  VR(0xA4) = (unsigned)((unsigned long)ku >> 32);
+    v->a->flags = 0; v->a->idx = VQ; v->u->idx = 0; v->seen = 0;
+    VR(0x80) = (unsigned)(unsigned long)v->d;  VR(0x84) = (unsigned)((unsigned long)v->d >> 32);
+    VR(0x90) = (unsigned)(unsigned long)v->a;  VR(0x94) = (unsigned)((unsigned long)v->a >> 32);
+    VR(0xA0) = (unsigned)(unsigned long)v->u;  VR(0xA4) = (unsigned)((unsigned long)v->u >> 32);
     VR(0x44) = 1;                                   /* queue ready */
     VR(0x70) = 1 | 2 | 8 | 4;                       /* driver ok */
     __asm__ volatile ("dsb sy" ::: "memory");
     VR(0x50) = 0;                                   /* buffers are there */
+#undef VR
+    v->base = b;
+    nvin++;
     return 1;
 }
+static int input_init(void) {
+    for (int i = 0; i < 32 && nvin < MAX_INPUT; i++) {
+        unsigned long b = VIRTIO_BASE + 0x200UL * i;
+        if (REG(b) == 0x74726976 && REG(b + 4) == 2 && REG(b + 8) == 18) vin_add(b);   /* "virt", version 2, input */
+    }
+    return nvin;
+}
+static void input_event(struct input_event e) {
+    if (e.type == 1) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* EV_KEY: keys and buttons */
+    else if (e.type == 3) {                                                                                /* EV_ABS: the tablet, 0..32767 */
+        if (e.code == 0) mouse_x = e.value * FB_W / 32768; else if (e.code == 1) mouse_y = e.value * FB_H / 32768;
+        mouse_moved = 1;
+    } else if (e.type == 0 && mouse_moved) {                                                               /* EV_SYN: one report done */
+        uart_puts("mouse "); uart_dec(mouse_x); uart_putc(','); uart_dec(mouse_y); uart_putc('\n');
+        mouse_moved = 0;
+    }
+}
 /* ponytail: polled, not interrupt driven. The GIC is already up (M1a), so wiring SPI 16+slot is the upgrade once the
-   desktop has an event loop to deliver keys to. */
-static void kbd_poll(void) {
-    while (kbd_seen != ku->idx) {
-        __asm__ volatile ("dsb sy" ::: "memory");
-        unsigned id = ku->ring[kbd_seen % VQ].id;
-        struct input_event e = kev[id];
-        if (e.type == 1) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* EV_KEY */
-        ka->ring[ka->idx % VQ] = (unsigned short)id;   /* hand the buffer back */
-        __asm__ volatile ("dsb sy" ::: "memory");
-        ka->idx++;
-        kbd_seen++;
-        VR(0x50) = 0;
+   desktop has an event loop to deliver input to. */
+static void input_poll(void) {
+    for (int n = 0; n < nvin; n++) {
+        struct vin *v = &vin[n];
+        while (v->seen != v->u->idx) {
+            __asm__ volatile ("dsb sy" ::: "memory");
+            unsigned id = v->u->ring[v->seen % VQ].id;
+            input_event(v->ev[id]);
+            v->a->ring[v->a->idx % VQ] = (unsigned short)id;   /* hand the buffer back */
+            __asm__ volatile ("dsb sy" ::: "memory");
+            v->a->idx++;
+            v->seen++;
+            REG(v->base + 0x50) = 0;
+        }
     }
 }
 #else
-static int kbd_init(void) { return 0; }
-static void kbd_poll(void) {}
+static int input_init(void) { return 0; }
+static void input_poll(void) {}
 #endif
 
 void main(void) {
@@ -337,9 +358,10 @@ void main(void) {
     uart_puts(((el >> 2) & 3) == 1 ? "EL1\n" : "not EL1\n");
     uart_puts("M0 ok\n");
     m1_selftest();
-    if (kbd_init()) {
-        uart_puts("M2 kbd ready\n");
-        for (;;) kbd_poll();
+    int inputs = input_init();
+    if (inputs) {
+        uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n');
+        for (;;) input_poll();
     }
     for (;;) __asm__ volatile ("wfe");
 }

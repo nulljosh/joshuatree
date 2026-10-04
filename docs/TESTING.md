@@ -170,7 +170,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Drunk mode easter egg: horizontal sway applied to framebuffer rows | `tools/checks/drunk-mode-check.py` | retry |
 | ARM64: the aarch64 kernel boots under QEMU and prints over the UART (skips where the tools are missing) | `tools/checks/arm64-m0-check.py` | retry |
 | ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing) | `tools/checks/arm64-m1c-check.py` | retry |
-| ARM64 M2: the aarch64 kernel drives a virtio keyboard and prints real key presses (skips where the tools are missing) | `tools/checks/arm64-m2-check.py` | retry |
+| ARM64 M2: the aarch64 kernel drives a virtio keyboard and mouse and prints real key presses, moves and clicks (skips where the tools are missing) | `tools/checks/arm64-m2-check.py` | retry |
 
 `retry` checks boot a VM and get one retry for host timing noise; `once` checks are pure and never retried.
 

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""ARM64 M2, keyboard: the aarch64 kernel finds a virtio keyboard on QEMU's virt machine and reads real key events.
+"""ARM64 M2, keyboard and mouse: the aarch64 kernel finds a virtio keyboard and a virtio tablet on QEMU's virt machine
+and reads real events from both.
 
-Boots arch/arm64 with a virtio-keyboard-device, waits for "M2 kbd ready" on the UART, then presses keys through QMP
+Boots arch/arm64 with a virtio-keyboard-device and a virtio-tablet-device, waits for "M2 input ready, devices 2" on the UART, then presses keys through QMP
 send-key (the same path a real keystroke in the QEMU window takes) and checks the kernel prints each Linux key code
-going down and up: j is 36, t is 20.
+going down and up: j is 36, t is 20. Then moves the pointer to the middle of the top half and clicks, through QMP
+input-send-event, and checks the kernel prints the position scaled to the 800x600 screen and the left button (272).
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-m2-check.py   (from the repo root)
 """
@@ -20,7 +22,7 @@ if subprocess.run(["make", "-C", arch], capture_output=True).returncode:
 tmp = tempfile.mkdtemp()
 log, sock = tmp + "/uart", tmp + "/qmp"
 q = subprocess.Popen(["qemu-system-aarch64", "-machine", "virt", "-cpu", "cortex-a72", "-m", "256",
-                      "-global", "virtio-mmio.force-legacy=false", "-device", "virtio-keyboard-device",
+                      "-global", "virtio-mmio.force-legacy=false", "-device", "virtio-keyboard-device", "-device", "virtio-tablet-device",
                       "-display", "none", "-serial", "file:" + log, "-qmp", "unix:%s,server,nowait" % sock,
                       "-kernel", os.path.join(arch, "kernel8.elf")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 fails = []
@@ -31,8 +33,8 @@ def wait_for(text, tries=100):
         time.sleep(0.1)
     return False
 try:
-    if not wait_for("M2 kbd ready"):
-        fails.append(f"kernel did not find the keyboard, got {uart()!r}")
+    if not wait_for("M2 input ready, devices 2"):
+        fails.append(f"kernel did not find both input devices, got {uart()!r}")
     else:
         s = socket.socket(socket.AF_UNIX); s.connect(sock); f = s.makefile("rw")
         f.readline()
@@ -47,10 +49,19 @@ try:
             for want in (f"key {code} down", f"key {code} up"):
                 if wait_for(want, 30): print(f"  ok: {key} printed {want!r}")
                 else: fails.append(f"pressing {key}: no {want!r} on the UART, got {uart()[-200:]!r}")
+        cmd("input-send-event", events=[{"type": "abs", "data": {"axis": "x", "value": 16384}},
+                                        {"type": "abs", "data": {"axis": "y", "value": 8192}}])
+        if wait_for("mouse 400,150", 30): print("  ok: pointer at the middle of the top half printed 'mouse 400,150'")
+        else: fails.append(f"moving the pointer: no 'mouse 400,150' on the UART, got {uart()[-200:]!r}")
+        cmd("input-send-event", events=[{"type": "btn", "data": {"down": True, "button": "left"}}])
+        cmd("input-send-event", events=[{"type": "btn", "data": {"down": False, "button": "left"}}])
+        for want in ("key 272 down", "key 272 up"):
+            if wait_for(want, 30): print(f"  ok: left click printed {want!r}")
+            else: fails.append(f"clicking: no {want!r} on the UART, got {uart()[-200:]!r}")
 finally:
     q.kill(); q.wait()
     shutil.rmtree(tmp, ignore_errors=True)
     subprocess.run(["make", "-C", arch, "clean"], capture_output=True)
 for m in fails: print("FAIL: " + m)
 if fails: sys.exit(1)
-print("PASS: the aarch64 kernel drives a virtio keyboard and prints real key presses and releases")
+print("PASS: the aarch64 kernel drives a virtio keyboard and a virtio tablet with one driver: key presses, pointer moves and clicks all arrive")
