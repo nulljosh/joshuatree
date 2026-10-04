@@ -134,7 +134,7 @@ const c2=document.getElementById('c2'),g=c2.getContext('2d');
 const imgs={};
 const loadImg=(k,src)=>new Promise(r=>{const i=new Image();i.onload=()=>{imgs[k]=i;r()};i.onerror=r;i.src=src});
 // The OS's own 25 apps, in kernel order: [icon art, label]
-const APPS=[['burrow','Burrow'],['mail','Mail'],['calendar','Calendar'],['notes','Notes'],['reminders','Reminders'],['terminal','Terminal'],['chat','Samantha'],['weather','Weather'],['curbfind','Curbfind'],['keyrate','Keyrate'],['bookrank','Bookrank'],['quotes','Quotes'],['plan','Plan'],['lexly','Lexly'],['toroid','Toroid'],['sparkjar','Sparkjar'],['fieldbook','Fieldbook'],['contacts','Contacts'],['calculator','Calculator'],['stocks','Stocks'],['search','Search'],['epiphany','Epiphany'],['portfolio','Portfolio'],['activity','Activity'],['clock','Clock']];
+const APPS=[['burrow','Burrow'],['mail','Mail'],['calendar','Calendar'],['notes','Notes'],['reminders','Reminders'],['terminal','Terminal'],['chat','Samantha'],['weather','Weather'],['curbfind','Curbfind'],['keyrate','Keyrate'],['bookrank','Bookrank'],['quotes','Quotes'],['plan','Plan'],['lexly','Lexly'],['toroid','Toroid'],['hikko','Hikko'],['fieldbook','Fieldbook'],['contacts','Contacts'],['calculator','Calculator'],['stocks','Stocks'],['search','Search'],['epiphany','Epiphany'],['portfolio','Portfolio'],['activity','Activity'],['clock','Clock']];
 const imgReady=Promise.all([loadImg('deskA','desktop-a.jpg'),loadImg('deskT','desktop-typed.jpg'),loadImg('deskB','desktop-b.jpg'),loadImg('mark','../logo.svg'),
  ...APPS.map(([k])=>loadImg('ic_'+k,`icons/${k}.png`)),
  ...Array.from({length:24},(_,i)=>loadImg('idle'+i,`../face/idle-${i}.jpg`)),...Array.from({length:24},(_,i)=>loadImg('talk'+i,`../face/talk-${i}.jpg`))]);

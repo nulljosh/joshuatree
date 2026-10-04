@@ -24,7 +24,7 @@ bookrank|bookrank|index.html|drivers/app_bookrank.h|app_bookrank
 quotestreak|quotestreak|index.html|drivers/app_quotestreak.h|app_quotestreak
 lexly|lexly|index.html|drivers/app_lexly.h|app_lexly
 toroid|conway|index.html|drivers/app_toroid.h|app_toroid
-sparkjar|sparkjar|index.html|drivers/app_sparkjar.h|app_sparkjar
+hikko|hikko|index.html|drivers/app_hikko.h|app_hikko
 fieldbook|fieldbook|index.html|drivers/app_fieldbook.h|app_fieldbook
 "
 

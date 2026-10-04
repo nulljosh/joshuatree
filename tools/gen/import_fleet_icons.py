@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from restyle_icons import squircle_path, HL_WIDTH, HL_ALPHA, HL_FADE  # single source of truth for the shared shape/light
 
 # art/icons name -> repo folder
-FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank", "lexly": "lexly", "sparkjar": "sparkjar",
+FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank", "lexly": "lexly", "hikko": "hikko",
          "quotes": "quotestreak", "keyrate": "keyrate", "toroid": "conway", "fieldbook": "fieldbook"}  # Weather is a system app, it keeps the restyled icon from restyle_icons.py
 
 # Dock tile color per app. Most projects ship a near-black tile, so eight of
@@ -27,7 +27,7 @@ FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank",
 # full-size background rect here instead. Only the tile, never the glyph,
 # and only in this OS: the project's own icon.svg is untouched.
 TILE = {"epiphany": "#D6DEE6", "curbfind": "#C8644F", "bookrank": "#3E5C86", "lexly": "#2E86DE",
-        "sparkjar": "#8A5A3C", "quotes": "#D8C7A3", "keyrate": "#5A5A5E"}  # toroid stays black: Life is white-on-black
+        "hikko": "#8A5A3C", "quotes": "#D8C7A3", "keyrate": "#5A5A5E"}  # toroid stays black: Life is white-on-black
 
 
 

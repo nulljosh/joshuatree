@@ -94,6 +94,7 @@ async function handleProxy(request, env) {
     if (targetUrl.pathname === "/api/quotes") return handleQuotes();
     if (targetUrl.pathname === "/api/books") return handleBooks();
     if (targetUrl.pathname === "/api/lexly") return handleLexly(targetUrl);
+    if (targetUrl.pathname === "/api/hikko") return handleHikko();
     if (targetUrl.pathname === "/api/deals") return handleDeals(request); // the guest's request rides the visitor's own browser fetch, so request.cf is the visitor
     // v1.6.12: kernel/chat_face.h's chat_face_load fetches Samantha's Chat
     // face frames (idle-0..5.jpg, talk-0..11.jpg) over the same plain-HTTP
@@ -473,6 +474,56 @@ async function handleLexly(url) {
   return new Response(wire, {headers: WIRE});
 }
 
+// Hikko, the idea forum: the real app's public, read-only post feed
+// (hikko.heyitsmejosh.com/api/posts, no login, no token). The list call
+// (?limit=12) has the title, score and category; the body and the plan only come
+// from the one-post call (?id=), so the top twelve are read in parallel. Wire:
+//   first line the row count, then `votes|category|title|text|plan`
+// Text is ASCII, one line, cut to a cap with "..." and never holds a pipe. A
+// post with no readable title is dropped. A post whose body call fails keeps its
+// row with empty text, so the OS still shows the idea. No write path: this
+// route never sends a vote, a post or a header from the guest.
+const HIKKO_API = "https://hikko.heyitsmejosh.com/api/posts";
+const HIKKO_MAX_ROWS = 12, HIKKO_TITLE = 60, HIKKO_CAT = 14, HIKKO_TEXT = 150, HIKKO_PLAN = 200, HIKKO_MAX_BYTES = 5800;
+function hikkoText(v, max) {
+  if (typeof v !== "string") return "";
+  const s = wireText(v.replace(/[\u2013\u2014]/g, "-").replace(/\u2026/g, "..."), 100000);
+  if (s.length <= max) return s;
+  return s.slice(0, max - 3).replace(/\s+\S*$/, "").trim() + "...";
+}
+function hikkoWire(list, bodies) {
+  const rows = []; let bytes = 8;
+  for (const p of Array.isArray(list) ? list : []) {
+    if (rows.length >= HIKKO_MAX_ROWS) break;
+    const title = hikkoText(p?.title, HIKKO_TITLE);
+    if (!title) continue;
+    const votes = Number.isInteger(p.score) && p.score > 0 && p.score < 100000 ? p.score : 0;
+    const b = (p.id && bodies?.[p.id]) || {};
+    const row = [votes, hikkoText(p.category, HIKKO_CAT), title, hikkoText(b.content, HIKKO_TEXT), hikkoText(b.enrichmentPlan, HIKKO_PLAN)].join("|");
+    if (bytes + row.length + 1 > HIKKO_MAX_BYTES) break;
+    rows.push(row); bytes += row.length + 1;
+  }
+  return [rows.length, ...rows].join("\n") + "\n";
+}
+async function hikkoGet(url) {
+  const res = await fetch(url, {signal: AbortSignal.timeout(8000), cf: {cacheTtl: 300, cacheEverything: true}});
+  if (!res.ok) throw new Error("http " + res.status);
+  return res.json();
+}
+async function handleHikko() {
+  let list;
+  try { list = (await hikkoGet(`${HIKKO_API}?limit=${HIKKO_MAX_ROWS}`))?.posts; }
+  catch { return new Response("", {status: 502}); }
+  if (!Array.isArray(list)) return new Response("", {status: 502});
+  const top = list.slice(0, HIKKO_MAX_ROWS).filter(p => typeof p?.id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(p.id));
+  const got = await Promise.allSettled(top.map(p => hikkoGet(`${HIKKO_API}?id=${p.id}`)));
+  const bodies = {};
+  top.forEach((p, i) => { if (got[i].status === "fulfilled" && got[i].value?.post) bodies[p.id] = got[i].value.post; });
+  const wire = hikkoWire(top, bodies);
+  if (wire.split("\n").length < 3) return new Response("", {status: 502}); // no usable row: let the OS keep its demo ideas
+  return new Response(wire, {headers: WIRE});
+}
+
 // Dev-kit waitlist: one email, one timestamp, key = email so a repeat
 // signup just overwrites its own row instead of growing the namespace.
 // WAITLIST_MAX_BODY guards against someone posting a huge JSON blob;
@@ -710,6 +761,7 @@ export default {
     if (url.pathname === "/api/quotes") return handleQuotes();
     if (url.pathname === "/api/books") return handleBooks();
     if (url.pathname === "/api/lexly") return handleLexly(url);
+    if (url.pathname === "/api/hikko") return handleHikko();
     if (url.pathname === "/api/deals") return handleDeals(request);
     if (url.pathname === "/api/listen") return handleListen(request, env);
     if (url.pathname === "/api/mail/send") return handleMailSend(request, env);
@@ -734,6 +786,7 @@ export { isAllowedTarget, handleProxy, ALLOWED_HOSTS };
 
 export { stockWire, handleStocks };
 export { bookrankWire, handleBooks };
+export { hikkoWire, hikkoText, handleHikko };
 export { lexlyQuestions, lexlyText, lexlyCourseWire, lexlyQuestionWire, handleLexly, LEXLY_COURSES };
 export { handleWaitlistPost, handleWaitlistCount };
 export { handleMailSend, MAIL_SEND_FROM };

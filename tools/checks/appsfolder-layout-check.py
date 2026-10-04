@@ -27,7 +27,7 @@ scroll):
    not a second index range and not a wraparound -- confirmed live with a
    temporary per-row serial trace: the very first full repaint (scroll
    offset 0) draws that out-of-panel row (bug 2) with indices 15-19
-   (Sparkjar..Calculator); the Apps folder loop's own click-to-open can
+   (Hikko..Calculator); the Apps folder loop's own click-to-open can
    itself trigger one wheel step before the first real scroll input
    (a separate, pre-existing vmmouse quirk, not touched by this fix), and
    the panel-only repaint that follows never clears anything outside the

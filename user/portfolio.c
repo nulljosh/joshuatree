@@ -67,7 +67,7 @@ static const pf_row_t PF_ROWS[] = {
     {"Voxprint",  "on-device transcription",   "", PF_KIND_APP},
     {"Dream",     "dream journal",             "dream.heyitsmejosh.com", PF_KIND_APP},
     {"Costanza",  "poetry",                    "costanza.heyitsmejosh.com", PF_KIND_APP},
-    {"Sparkjar",  "idea forum",                "sparkjar.heyitsmejosh.com", PF_KIND_APP},
+    {"Hikko",  "idea forum",                "hikko.heyitsmejosh.com", PF_KIND_APP},
 
     {0, "Play", "", PF_KIND_HEADER},
     {"Quotestreak", "quote guessing",          "quotestreak.heyitsmejosh.com", PF_KIND_APP},

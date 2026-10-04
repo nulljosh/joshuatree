@@ -31,7 +31,7 @@ CLOSE_RED = (0xFF, 0x5F, 0x57)
 
 # App names from kernel/kernel.c APPS[].name (indices 0-23, then Apps folder, then Trash)
 APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
-        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Lexly", "Toroid", "Sparkjar",
+        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Lexly", "Toroid", "Hikko",
         "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity"]
 

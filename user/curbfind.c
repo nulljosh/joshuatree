@@ -2,7 +2,7 @@
  * program.
  *
  * The sixteenth app to leave the kernel (roadmap 2.0), done the way
- * user/sparkjar.c was. Same screen kernel/curbfind.h drew in ring 0: a
+ * user/hikko.c was. Same screen kernel/curbfind.h drew in ring 0: a
  * ranked list on the left sorted by deal score, the selected listing's
  * title, price, neighbourhood, a ten-segment score bar and the reason on
  * the right. Up and down (or a click) select, Esc closes.

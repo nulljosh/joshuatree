@@ -112,7 +112,7 @@ static int wall_map_is_sat = 0; /* v0.73: which real source wall_map's pixels ac
 #include "app_quotestreak.h"
 #include "app_lexly.h"
 #include "app_toroid.h"
-#include "app_sparkjar.h"
+#include "app_hikko.h"
 #include "app_fieldbook.h"
 #include "png.h"
 #include "png_testdata.h"
@@ -902,7 +902,7 @@ static int boot_to_phone, boot_res_w, boot_res_h;
 int jt_phone_mode(void){ return boot_to_phone; } /* ring3app.c: windowed ring-3 apps get argv[1]="phone" so they can show libjt/osk */
 #include "hint.h"
 static void phone_app_titlebar_draw(const char *title); static void phone_back_zone_tick(int buttons, int app_drag_held, int cursor_x, int cursor_y); /* both defined in kernel/phone_home.h, included near gui_run; forward-declared so gui_draw_app_titlebar/gui_app_mouse_tick (both defined above it) can call them */
-static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 21, 20, 8, 10, 12, 14, 11, 9, 13, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Sparkjar, Quotes, Keyrate, Toroid */
+static const int GUI_DOCK_PORTFOLIO[GUI_ICON_COUNT] = {GUI_APPS_FOLDER, 21, 20, 8, 10, 12, 14, 11, 9, 13, GUI_TRASH}; /* Portfolio, Epiphany, Curbfind, Bookrank, Lexly, Hikko, Quotes, Keyrate, Toroid */
 static void gui_order_init(void){ for (int i = 0; i < GUI_ICON_COUNT; i++) gui_order[i] = portfolio_dock ? GUI_DOCK_PORTFOLIO[i] : GUI_DOCK_DEFAULT[i]; }
 int dock_hover = -1; /* slot whose label is showing */
 
@@ -2064,7 +2064,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
    fixed here.) */
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
-static int wind_base_width = 0; void music_ring3_open(void); void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void lexly_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void sparkjar_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
+static int wind_base_width = 0; void music_ring3_open(void); void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void lexly_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void hikko_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
 void movies_ring3_open(void);
 
 static int gui_ring3_windowed(int icon);
@@ -3519,7 +3519,7 @@ static void gui_icon_toroid(int cx, int cy, int s, unsigned int bg){
         for (int col = 0; col < 3; col++)
             gui_fill_circle(cx + (col - 1) * step, cy + (row - 1) * step, r, alive[row][col] ? ICON_FG : gui_blend(ICON_FG, bg), bg);
 }
-static void gui_icon_sparkjar(int cx, int cy, int s, unsigned int bg){
+static void gui_icon_hikko(int cx, int cy, int s, unsigned int bg){
     int r = s * 3 / 10, base_y = cy + r + s / 10;
     unsigned int glow_top = 0x00FFF3B0, glow_bot = 0x00FFC93C; /* real warm bulb color */
     gui_fill_circle_gradient(cx, cy, r, glow_top, glow_bot, bg);
@@ -5173,7 +5173,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 11 */ {"Quotes",     0x008B4A9C, gui_icon_quotes,     quotestreak_ring3_open, 0, 0}, /* 1.7.14: ring 3 too (user/quotes.c) */
     /* 12 */ {"Lexly",      0x00376E5E, gui_icon_lexly,      lexly_ring3_open,      0, 0}, /* 1.9.1: ring 3 too (user/lexly.c) */
     /* 13 */ {"Toroid",     0x00234A78, gui_icon_toroid,     toroid_ring3_open,     0, 0}, /* 1.7.11: ring 3 too (user/toroid.c) */
-    /* 14 */ {"Sparkjar",   0x00A6741E, gui_icon_sparkjar,   sparkjar_ring3_open,   0, 0}, /* 1.9.8: ring 3 (user/sparkjar.c) */
+    /* 14 */ {"Hikko",   0x00A6741E, gui_icon_hikko,   hikko_ring3_open,   0, 0}, /* 1.9.8: ring 3 (user/hikko.c) */
     /* 15 */ {"Fieldbook",  0x005A3E6B, gui_icon_fieldbook,  fieldbook_ring3_open,  0, 0}, /* 1.9.3: ring 3 too (user/fieldbook.c) */
     /* 16 */ {"Contacts",   0x00A87C5B, gui_icon_contacts,   contacts_ring3_open,   0, 0}, /* 1.9.7: ring 3 (user/contacts.c) */
     /* 17 */ {"Calculator", 0x00556B85, gui_icon_calculator, calculator_ring3_open, 0, 0}, /* 1.7.12: ring 3 too (user/calculator.c) */
@@ -8120,7 +8120,7 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "serveapp")) {
-        if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak|lexly|toroid|sparkjar|fieldbook\n"); }
+        if (!*arg) { puts("usage: serveapp weather|curbfind|keyrate|bookrank|quotestreak|lexly|toroid|hikko|fieldbook\n"); }
         else if (!net_init(0x0A00020F)) { puts("no NIC found (tried RTL8139, NE2000)\n"); }
         else {
             if (!strcmp(arg, "weather"))          serve_app("weather", app_weather_html, app_weather_len);
@@ -8130,7 +8130,7 @@ static void run(char *line){
             else if (!strcmp(arg, "quotestreak")) serve_app("quotestreak", app_quotestreak_html, app_quotestreak_len);
             else if (!strcmp(arg, "lexly"))       serve_app("lexly", app_lexly_html, app_lexly_len);
             else if (!strcmp(arg, "toroid"))      serve_app("toroid", app_toroid_html, app_toroid_len);
-            else if (!strcmp(arg, "sparkjar"))    serve_app("sparkjar", app_sparkjar_html, app_sparkjar_len);
+            else if (!strcmp(arg, "hikko"))    serve_app("hikko", app_hikko_html, app_hikko_len);
             else if (!strcmp(arg, "fieldbook"))   serve_app("fieldbook", app_fieldbook_html, app_fieldbook_len);
             else puts("unknown app, see usage\n");
         }

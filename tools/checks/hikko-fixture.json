@@ -1,0 +1,187 @@
+{
+ "_note": "A slice of the real hikko.heyitsmejosh.com/api/posts, captured 2026-10-04 (list ?limit=12 and one ?id= per row), trimmed to the fields worker.js reads.",
+ "list": [
+  {
+   "id": "post-1788771685045-k789ro",
+   "title": "Recycling guide for local bins",
+   "category": "sustainability",
+   "score": 2,
+   "pinned": false
+  },
+  {
+   "id": "post-1788748135221-wq9iwc",
+   "title": "Branded auth emails for every app from one worker",
+   "category": "tech",
+   "score": 2,
+   "pinned": false
+  },
+  {
+   "id": "post-1772355716310-tkpd47",
+   "title": "Browser history search with local embeddings",
+   "category": "productivity",
+   "score": 1,
+   "pinned": false
+  },
+  {
+   "id": "post-1772355716122-iu9rz6",
+   "title": "Dynamic pricing engine for creators",
+   "category": "business",
+   "score": 1,
+   "pinned": false
+  },
+  {
+   "id": "post-1791104463566-j4car7",
+   "title": "Shared grocery budget tracker for roommates",
+   "category": "finance",
+   "score": 0,
+   "pinned": false
+  },
+  {
+   "id": "post-1791018069852-i1me3d",
+   "title": "Shared credit card tracker for roommates",
+   "category": "finance",
+   "score": 0,
+   "pinned": false
+  },
+  {
+   "id": "post-1790931641580-ee6t1d",
+   "title": "Shared recycling bin tracker for apartment complexes",
+   "category": "sustainability",
+   "score": 0,
+   "pinned": false
+  },
+  {
+   "id": "post-1790845228687-m8nig8",
+   "title": "Shared car maintenance tracker for roommates",
+   "category": "finance",
+   "score": 0,
+   "pinned": false
+  },
+  {
+   "id": "post-1790758829191-k8f9ir",
+   "title": "Shared first-aid kit tracker for roommates",
+   "category": "health",
+   "score": 0,
+   "pinned": false
+  },
+  {
+   "id": "post-1790672429371-h6w9y3",
+   "title": "Shared grocery list that tracks what's in the fridge",
+   "category": "productivity",
+   "score": 0,
+   "pinned": false
+  },
+  {
+   "id": "post-1790586028240-40zgqn",
+   "title": "Shared rainwater collection tracker for neighborhoods",
+   "category": "sustainability",
+   "score": 0,
+   "pinned": false
+  },
+  {
+   "id": "post-1790413225564-9dnrn1",
+   "title": "Shared cough syrup tracker for families",
+   "category": "health",
+   "score": 0,
+   "pinned": false
+  }
+ ],
+ "posts": {
+  "post-1788771685045-k789ro": {
+   "id": "post-1788771685045-k789ro",
+   "title": "Recycling guide for local bins",
+   "content": "A simple app that tells you what goes in each local bin based on your address. It updates automatically when rules change and avoids confusion about what can or can't be recycled.",
+   "category": "sustainability",
+   "score": 2,
+   "enrichmentPlan": "First, research local recycling guidelines and create a database of items and their corresponding bins. Next, develop a simple app interface where users can input their address. Integrate an API to automatically update recycling rules based on location. Then, implement a search function for common items and a map feature for recycling centers. Test the app with a small group of users to gather feedback and make improvements. Finally, launch the app and promote it through local sustainability groups and social media. Continue to monitor and update the database to ensure accuracy and relevance over time."
+  },
+  "post-1788748135221-wq9iwc": {
+   "id": "post-1788748135221-wq9iwc",
+   "title": "Branded auth emails for every app from one worker",
+   "content": "Supabase auth emails all look the same. One tiny worker with a themes table sends each app's confirm and reset emails in its own colours and voice through Resend. Add a row per app, never touch a template again.",
+   "category": "tech",
+   "score": 2,
+   "enrichmentPlan": "First, set up a Supabase project with a themes table to store app-specific email settings. Next, create a worker that listens for auth events (signup, reset). When triggered, the worker fetches the app's theme from the database. Then, use Resend to generate and send personalized emails with dynamic content. Test with a few apps to ensure customization works. Finally, deploy the worker and document how to add new apps by inserting rows into the themes table. Ensure the system is secure and scalable for future expansion."
+  },
+  "post-1772355716310-tkpd47": {
+   "id": "post-1772355716310-tkpd47",
+   "title": "Browser history search with local embeddings",
+   "content": "Full-text search across your entire browsing history. No cloud, instant results. Find that article from months ago.",
+   "category": "productivity",
+   "score": 1,
+   "enrichmentPlan": "Start by building a browser extension to capture and store history data locally. Next, develop a model to generate embeddings for each page's content. Create a desktop app that indexes this data and provides a search interface. Implement semantic search using the embeddings for relevant results. Test performance and accuracy, then optimize for speed and memory usage. Finally, add cross-browser support and ensure data privacy through local storage only."
+  },
+  "post-1772355716122-iu9rz6": {
+   "id": "post-1772355716122-iu9rz6",
+   "title": "Dynamic pricing engine for creators",
+   "content": "Gumroad alternative. ML-based price optimization per customer. Recover revenue from price-sensitive users.",
+   "category": "business",
+   "score": 1,
+   "enrichmentPlan": "Start by building a minimum viable product with basic pricing algorithms and user tracking. Next, integrate machine learning models to analyze customer data and suggest optimal prices. Then, develop a dashboard for creators to monitor performance and adjust pricing strategies. After that, implement A/B testing to refine the algorithm. Finally, add features like discounts, bundles, and analytics to enhance user experience. Focus on scalability and data security throughout the development process."
+  },
+  "post-1791104463566-j4car7": {
+   "id": "post-1791104463566-j4car7",
+   "title": "Shared grocery budget tracker for roommates",
+   "content": "A simple tool for roommates to track how much each person spends on groceries and split the costs evenly. It helps avoid overpaying and keeps everyone honest about their spending.",
+   "category": "finance",
+   "score": 0,
+   "enrichmentPlan": "Start by defining the core features and user roles. Next, design a simple user interface for logging purchases and viewing balances. Develop a backend to store and manage data securely. Implement automatic cost splitting and real-time updates. Add a budget alert system and user authentication. Test the tool with a small group of roommates to gather feedback. Iterate based on user input and add features like expense categorization or historical reports. Finally, launch the tool with a user-friendly onboarding process and support documentation."
+  },
+  "post-1791018069852-i1me3d": {
+   "id": "post-1791018069852-i1me3d",
+   "title": "Shared credit card tracker for roommates",
+   "content": "A simple app to track which roommate used which credit card for shared expenses, so everyone knows who owes what. It logs purchases, splits costs, and shows balances in real time.",
+   "category": "finance",
+   "score": 0,
+   "enrichmentPlan": "Start by designing the user interface and defining the database structure. Next, develop the core features: adding expenses, linking to credit cards, and splitting costs. Implement real-time balance tracking and a transaction history view. Integrate user authentication to secure data. Test the app with a small group of users to gather feedback. Fix bugs and refine the user experience. Launch the app with a simple onboarding process. Add features like reminders and notifications for pending payments. Continuously improve based on user input and expand to support more advanced financial tracking options."
+  },
+  "post-1790931641580-ee6t1d": {
+   "id": "post-1790931641580-ee6t1d",
+   "title": "Shared recycling bin tracker for apartment complexes",
+   "content": "A simple app to track which residents are recycling, what they're recycling, and when bins are full. Helps communities stay organized and meet recycling goals.",
+   "category": "sustainability",
+   "score": 0,
+   "enrichmentPlan": "First, define the core features and user roles. Next, design the app interface and database structure. Then, develop the bin tracking and reporting functionalities. After that, build the resident logging and goal tracking features. Implement alert systems for full bins and test with a pilot group. Gather feedback and refine the app. Finally, launch it for wider use and add analytics for building managers. Regular updates will ensure the app remains effective and user-friendly over time."
+  },
+  "post-1790845228687-m8nig8": {
+   "id": "post-1790845228687-m8nig8",
+   "title": "Shared car maintenance tracker for roommates",
+   "content": "A simple way for roommates to track when each car needs oil changes, inspections, or other maintenance. Everyone can add reminders and see who is responsible for what.",
+   "category": "finance",
+   "score": 0,
+   "enrichmentPlan": "Start by designing a simple UI with a shared calendar and task list. Next, build a backend to store user data and maintenance tasks. Implement user authentication to allow roommates to log in and manage their tasks. Add features for creating reminders, assigning tasks, and setting notifications. Test the app with a small group of users to gather feedback. Once the core features are stable, add advanced options like recurring tasks and maintenance history. Finally, deploy the app and promote it to roommates looking for an organized way to manage car maintenance together."
+  },
+  "post-1790758829191-k8f9ir": {
+   "id": "post-1790758829191-k8f9ir",
+   "title": "Shared first-aid kit tracker for roommates",
+   "content": "A shared list that shows what's in the first-aid kit and who is responsible for restocking supplies. It helps prevent missing bandages or pain pills when someone needs them.",
+   "category": "health",
+   "score": 0,
+   "enrichmentPlan": "Start by designing a simple user interface for adding and updating first-aid items. Next, develop a database to store the list and user assignments. Implement a notification system for low supplies and restocking reminders. Add user authentication to allow multiple roommates to access the tool. Test the app with a small group to gather feedback and make improvements. Finally, deploy the app on both mobile and web platforms. Ensure the system is secure and easy to use, with clear instructions for managing the first-aid kit. Continue to refine based on user input and expand features as needed."
+  },
+  "post-1790672429371-h6w9y3": {
+   "id": "post-1790672429371-h6w9y3",
+   "title": "Shared grocery list that tracks what's in the fridge",
+   "content": "A simple list that everyone in the household can update to show what's in the fridge, so no one buys the same thing twice. It helps keep track of what's available and what needs to be restocked.",
+   "category": "productivity",
+   "score": 0,
+   "enrichmentPlan": "Start by defining user roles and core features. Build a simple prototype with a shared list and basic authentication. Integrate a fridge inventory system using manual input or API connections. Add notification features for low stock and updates. Test with a small group for feedback. Refine the interface and improve sync reliability. Launch a beta version and gather user insights. Iterate based on usage patterns and add advanced features like shopping cart integration and recipe-based suggestions. Ensure the app remains lightweight and easy to use across all devices."
+  },
+  "post-1790586028240-40zgqn": {
+   "id": "post-1790586028240-40zgqn",
+   "title": "Shared rainwater collection tracker for neighborhoods",
+   "content": "A simple app where neighbors can log how much rainwater they collect and reuse, helping everyone track their water savings and share tips for better conservation.",
+   "category": "sustainability",
+   "score": 0,
+   "enrichmentPlan": "Start by designing a simple user interface for logging rainwater collection. Develop a basic backend to store user data securely. Next, create a community feed where users can share tips and updates. Integrate a progress tracker to show individual and neighborhood water savings. Add weather integration for better planning. Conduct a beta test with a small group of neighbors to gather feedback. Refine the app based on user input, then launch it publicly. Promote the app through local community boards and social media. Continue to update with new features like goal tracking and educational content on water conservation."
+  },
+  "post-1790413225564-9dnrn1": {
+   "id": "post-1790413225564-9dnrn1",
+   "title": "Shared cough syrup tracker for families",
+   "content": "A simple app to track when cough syrup was last used and when it needs to be restocked. Keeps everyone in the household aware of what's available and when it's time to buy more.",
+   "category": "health",
+   "score": 0,
+   "enrichmentPlan": "Start by designing the user interface and defining the data structure for tracking usage and stock. Next, develop a basic version with core features like logging usage and setting restock alerts. Integrate user authentication and shared access for multiple family members. Test the app with a small group to gather feedback and refine the experience. Add features like notifications and a history log. Finally, launch the app and collect user insights for future updates. Keep the development process focused on simplicity and usability throughout."
+  }
+ }
+}

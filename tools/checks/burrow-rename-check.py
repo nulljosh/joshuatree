@@ -18,6 +18,8 @@ What this proves, from the real sources (no QEMU, so it is fast):
   4. The authored SVG exists, the old files.svg is gone, and the generated
      header is current.
 
+Also covers the Hikko aliases: "sparkjar" and "hotaru" still open Hikko.
+
 Fails on origin/main (APPS[0] is "Files", no alias table, slot 0 is
 icon_art_files) and passes on this branch.
 """
@@ -81,7 +83,12 @@ with tempfile.TemporaryDirectory() as d:
                  ("files", 0), ("Files", 0), ("the files app", 0),
                  ("file browser", 0), ("the file browser", 0),
                  ("notes", names.index("Notes")), ("mail", names.index("Mail")),
-                 ("chat", names.index("Samantha")), ("finder", -1), ("file", -1)]
+                 ("chat", names.index("Samantha")), ("finder", -1), ("file", -1),
+                 # Hikko (2.6.29) was Sparkjar, briefly Hotaru: all three names open slot 14
+                 ("hikko", names.index("Hikko")), ("the hikko app", names.index("Hikko")),
+                 ("sparkjar", names.index("Hikko")), ("open sparkjar", names.index("Hikko")),
+                 ("Hotaru", names.index("Hikko")), ("the hotaru app", names.index("Hikko")),
+                 ("sparkjars", -1), ("hot", -1)]
         out = subprocess.run([exe], input="\n".join(c for c, _ in cases) + "\n",
                              capture_output=True, text=True).stdout.split()
         for (c, want), got in zip(cases, out):

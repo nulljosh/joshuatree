@@ -11,7 +11,7 @@
    1.9.5: Portfolio joins it, the eleventh app out.
    1.9.6: Activity joins it, the twelfth app out.
    1.9.7: Contacts joins it, the thirteenth app out.
-   1.9.8: Sparkjar joins it, the fourteenth app out.
+   1.9.8: Hikko joins it, the fourteenth app out.
    1.9.9: Reminders joins it, the fifteenth app out.
    1.9.11: Curbfind joins it, the sixteenth app out, with one new syscall (SYS_HTTP_GET).
    1.9.12: Calendar joins it, the seventeenth app out.
@@ -20,7 +20,7 @@
 
    Roadmap 2.0 says apps leave the kernel, so a crash in one cannot take
    the machine down. Keyrate, the smallest real app, went first; Toroid,
-   Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Sparkjar, Reminders, Curbfind, Calendar and Search followed the same path. Each app's dock entry lands here,
+   Calculator, Quotes, Bookrank, Homeqi, Lexly, Plan, Fieldbook, Clock, Portfolio, Activity, Contacts, Hikko, Reminders, Curbfind, Calendar and Search followed the same path. Each app's dock entry lands here,
    and everything else stays as it was: gui_launch_from_dock has already
    drawn the window chrome and set the viewport by the time this runs,
    just as for an in-kernel app.
@@ -57,7 +57,7 @@
 #include "user_portfolio.h"
 #include "user_activity.h"
 #include "user_contacts.h"
-#include "user_sparkjar.h"
+#include "user_hikko.h"
 #include "user_reminders.h"
 #include "user_curbfind.h"
 #include "user_calendar.h"
@@ -118,7 +118,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Portfolio",  user_portfolio,  USER_PORTFOLIO_LEN,  "PORTFOLIO.BIN"},
     {"Activity",   user_activity,   USER_ACTIVITY_LEN,   "ACTIVITY.BIN"},
     {"Contacts",   user_contacts,   USER_CONTACTS_LEN,   "CONTACTS.BIN"},
-    {"Sparkjar",   user_sparkjar,   USER_SPARKJAR_LEN,   "SPARKJAR.BIN"},
+    {"Hikko",   user_hikko,   USER_HIKKO_LEN,   "HIKKO.BIN"},
     {"Reminders",  user_reminders,  USER_REMINDERS_LEN,  "REMINDERS.BIN"},
     {"Curbfind",   user_curbfind,   USER_CURBFIND_LEN,   "CURBFIND.BIN"},
     {"Calendar",   user_calendar,   USER_CALENDAR_LEN,   "CALENDAR.BIN"},
@@ -287,7 +287,7 @@ void clock_ring3_open(void)      { ring3app_launch(&RING3_APPS[7]); }
 void portfolio_ring3_open(void)  { ring3app_launch(&RING3_APPS[8]); }
 void activity_ring3_open(void)   { ring3app_launch(&RING3_APPS[9]); }
 void contacts_ring3_open(void)   { ring3app_launch(&RING3_APPS[10]); }
-void sparkjar_ring3_open(void)   { ring3app_launch(&RING3_APPS[11]); }
+void hikko_ring3_open(void)   { ring3app_launch(&RING3_APPS[11]); }
 void reminders_ring3_open(void)  { ring3app_launch(&RING3_APPS[12]); }
 void curbfind_ring3_open(void)   { ring3app_launch(&RING3_APPS[13]); }
 void calendar_ring3_open(void)   { ring3app_launch(&RING3_APPS[14]); }
@@ -371,7 +371,7 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='p' && pc[6]=='o' && pc[7]=='r' && pc[8]=='t' && pc[9]=='f' && pc[10]!='o') { ring3app_autoopen_slot = 21; serial_puts("autoopen=portfolio\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='a' && pc[6]=='c' && pc[7]=='t' && pc[8]=='i' && pc[9]=='v') { ring3app_autoopen_slot = 22; serial_puts("autoopen=activity\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='o' && pc[7]=='n' && pc[8]=='t') { ring3app_autoopen_slot = 16; serial_puts("autoopen=contacts\n"); }
-        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='s' && pc[6]=='p' && pc[7]=='a' && pc[8]=='r') { ring3app_autoopen_slot = 14; serial_puts("autoopen=sparkjar\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='h' && pc[6]=='i' && pc[7]=='k' && pc[8]=='k') { ring3app_autoopen_slot = 14; serial_puts("autoopen=hikko\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='r' && pc[6]=='e' && pc[7]=='m' && pc[8]=='i') { ring3app_autoopen_slot = 4; serial_puts("autoopen=reminders\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='u' && pc[7]=='r' && pc[8]=='b') { ring3app_autoopen_slot = 8; serial_puts("autoopen=curbfind\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='c' && pc[6]=='a' && pc[7]=='l' && pc[8]=='e') { ring3app_autoopen_slot = 2; serial_puts("autoopen=calendar\n"); }
@@ -394,7 +394,7 @@ void ring3app_autoopen_run(int mx, int my){
     if (ring3app_autoopen_slot < 0) return;
     int slot = ring3app_autoopen_slot; ring3app_autoopen_slot = -1;
     editor_mouse_x = mx; editor_mouse_y = my;
-    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Lexly's, Plan's, Fieldbook's, Clock's, Portfolio's, Activity's, Contacts', Sparkjar's, Reminders', Curbfind's, Calendar's or Search's APPS slot */
+    gui_launch_from_dock(slot); /* Keyrate's, Toroid's, Calculator's, Quotes', Bookrank's, Homeqi's, Lexly's, Plan's, Fieldbook's, Clock's, Portfolio's, Activity's, Contacts', Hikko's, Reminders', Curbfind's, Calendar's or Search's APPS slot */
     if (fbpoke_armed) { fbpoke_armed = 0; fbpoke_run(); }
     if (brkpoke_armed) { brkpoke_armed = 0; brkpoke_run(); }
     gui_draw_desktop(-1, -1, 0, 0);
