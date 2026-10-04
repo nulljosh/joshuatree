@@ -1,6 +1,6 @@
 # Joshua Tree on ARM64 (Raspberry Pi)
 
-Status: M0, M1a, M1b and M1c (a framebuffer with a drawn desktop and the boot log written on it: ramfb on QEMU virt, the VideoCore mailbox on QEMU's Pi 4B model) run under QEMU, and M2 has its first drivers, virtio keyboard, mouse, network and disk (updated 2026-10-04). The first boot on a real Pi 4 is the next step.
+Status: M0, M1a, M1b and M1c (a framebuffer with a drawn desktop and the boot log written on it: ramfb on QEMU virt, the VideoCore mailbox on QEMU's Pi 4B model) run under QEMU with smooth DejaVu text on the screen, and M2 has its first drivers, virtio keyboard, mouse, network and disk (updated 2026-10-04). The first boot on a real Pi 4 is the next step.
 
 If this is accepted it replaces the x86 board in `docs/HARDWARE.md` as the 3.0 reference. The OS stays free; the board is what we sell around it.
 

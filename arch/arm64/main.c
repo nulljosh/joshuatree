@@ -99,7 +99,7 @@ extern char _heap_start[];
 static unsigned long l1[512] __attribute__((aligned(4096)));   /* one table of 1 GiB blocks, enough for a flat map */
 static unsigned long heap_next;
 #define HEAP_SIZE (16UL << 20)
-static void *kmalloc(unsigned long n) {
+void *kmalloc(unsigned int n) {   /* the name and shape drivers/ttf.c expects */
     unsigned long p = (heap_next + 15) & ~15UL;
     if (p + n > (unsigned long)_heap_start + HEAP_SIZE) return 0;
     heap_next = p + n;
@@ -129,6 +129,9 @@ static void mmu_init(void) {
     sctlr |= (1UL << 0) | (1UL << 2) | (1UL << 12);                   /* MMU, data cache, instruction cache */
     __asm__ volatile ("msr sctlr_el1, %0\n isb" :: "r"(sctlr) : "memory");
 }
+void kfree(void *p) { (void)p; }   /* a bump heap never frees; text.c rolls the heap back instead (heap_mark, heap_release) */
+unsigned long heap_mark(void) { return heap_next; }
+void heap_release(unsigned long m) { heap_next = m; }
 static void m1b_selftest(void) {
     heap_next = (unsigned long)_heap_start;
     mmu_init();
@@ -246,10 +249,19 @@ static void fb_rect(int x, int y, int w, int h, unsigned c) {
 #define CON_COLS 61
 #define CON_ROWS 19
 #define CON_FG 0x00202020
+int text_init(void);   /* arch/arm64/text.c: the DejaVu faces through drivers/ttf.c */
+int text_draw(int which, const char *s, int x, int baseline, int px10, unsigned fg, unsigned *fb, unsigned pitch, int w, int h);
+static int text_ok;     /* smooth text is up; until then the old bitmap font draws */
+static unsigned fb_color(unsigned c) { return fb_swap ? (c & 0xFF00FF00u) | (c >> 16 & 0xFF) | (c & 0xFF) << 16 : c; }
 static char con_log[LOG_MAX];
 static unsigned con_len, con_col, con_row;
 static int con_live;   /* the framebuffer is up: draw as we go */
 static void con_glyph(unsigned col, unsigned row, char c) {
+    if (text_ok) {   /* DejaVu Sans Mono at 13.3 px: an 8 px advance, so it sits in the same 8x16 cell grid */
+        char b[2] = { c, 0 };
+        text_draw(0, b, CON_X + (int)col * 8, CON_Y + (int)row * 16 + 12, 133, fb_color(CON_FG), fb, fb_pitch, FB_W, FB_H);
+        return;
+    }
     if (c < VGAFONT_FIRST || c > VGAFONT_LAST) return;
     const unsigned char *g = vgafont_glyphs + (c - VGAFONT_FIRST) * 16;
     unsigned px = CON_FG;
@@ -284,11 +296,17 @@ static void fb_init(void) {
     fb_rect(150, 100, 500, 350, 0x00ffffff);     /* a window */
     fb_rect(150, 100, 500, 28, 0x00b5502c);      /* its title bar, the house accent */
     fb_rect(300, 540, 200, 44, 0x00505a68);      /* the dock */
+    text_ok = text_init();
+    if (text_ok) {
+        text_draw(1, "Joshua Tree", 8, 17, 150, fb_color(0x00202020), fb, fb_pitch, FB_W, FB_H);              /* menu bar */
+        text_draw(1, "Console", 160, 120, 150, fb_color(0x00ffffff), fb, fb_pitch, FB_W, FB_H);               /* title bar */
+        text_draw(2, "ARM64", 720, 17, 130, fb_color(0x00505a68), fb, fb_pitch, FB_W, FB_H);
+    } else uart_puts("M1d text FAIL\n");
     con_start();
     /* ponytail: the framebuffer sits in cacheable RAM, so a real GPU only sees pixels once they are cleaned out.
        One clean after drawing is enough for a still picture; a live desktop wants the buffer mapped write-combining. */
     dcache_clean(fb, (unsigned long)fb_pitch * FB_H * 4);
-    int ok = fb[200 * fb_pitch + 200] == 0x00ffffff && fb[10 * fb_pitch + 10] == 0x00e0e0e0;   /* grey and white read the same either way */
+    int ok = fb[446 * fb_pitch + 400] == 0x00ffffff && fb[10 * fb_pitch + 400] == 0x00e0e0e0;   /* blank spots, clear of any text; grey and white read the same either way */
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
 }
 

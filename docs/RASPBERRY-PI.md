@@ -11,7 +11,7 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 | Boots under QEMU's generic ARM machine and prints over the UART | Works. `make -C arch/arm64 run` |
 | Boots as a Pi image on QEMU's Pi 4B model, enters at EL2, drops to EL1, prints | Works. `make -C arch/arm64 run-pi` |
 | Boots on a real Pi 4 | Built, never tried. This is the first thing to test. |
-| A picture on a monitor | Works on QEMU's Pi 4B model: the kernel asks the GPU for a screen through the mailbox, draws a simple desktop and prints the same boot lines in its window that go out over serial (`tools/checks/arm64-m1c-check.py`). Never tried on a real board. |
+| A picture on a monitor | Works on QEMU's Pi 4B model: the kernel asks the GPU for a screen through the mailbox, draws a simple desktop and prints the same boot lines in its window that go out over serial, in the same smooth DejaVu type as the main desktop (`tools/checks/arm64-m1c-check.py`). Never tried on a real board. |
 | Keyboard, mouse, disk, network on the Pi | Not yet. M2 to M4. |
 
 So on day one, watch two things: the text in a serial terminal, and with a monitor plugged in, a simple desktop of plain boxes with the same boot lines written in its white window. If the serial cable is wrong, the monitor still tells you how far the kernel got. If both are blank, it is the SD card or `config.txt`.
