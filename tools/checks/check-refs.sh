@@ -56,9 +56,13 @@ def gitignored(path):
     # to a real, gitignored, build-generated path is not drift, treat it
     # the same as an existing file rather than assuming every build
     # artifact has already been produced.
+    # A bare name (the docs write `user_lexly.h` after the first mention) is
+    # checked where generated files live, because .gitignore patterns with a
+    # slash only match the full path (2.6.28, drivers/user_*.h untracked).
+    cands = [path] if "/" in path else [path, "drivers/" + path, "user/" + path]
     try:
-        return subprocess.run(["git", "check-ignore", "-q", path],
-                               capture_output=True).returncode == 0
+        return any(subprocess.run(["git", "check-ignore", "-q", c],
+                                  capture_output=True).returncode == 0 for c in cands)
     except FileNotFoundError:
         return False
 
