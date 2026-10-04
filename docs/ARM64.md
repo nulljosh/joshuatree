@@ -1,6 +1,6 @@
 # Joshua Tree on ARM64 (Raspberry Pi)
 
-Status: M0, M1a, M1b and M1c (a framebuffer with a drawn desktop and the boot log written on it: ramfb on QEMU virt, the VideoCore mailbox on QEMU's Pi 4B model) run under QEMU with smooth DejaVu text on the screen, and M2 has its first drivers, virtio keyboard, mouse, network and disk (updated 2026-10-04). The first boot on a real Pi 4 is the next step.
+Status: M0, M1a, M1b and M1c (a framebuffer with a drawn desktop and the boot log written on it: ramfb on QEMU virt, the VideoCore mailbox on QEMU's Pi 4B model) run under QEMU with smooth DejaVu text on the screen, M2 has its first drivers, virtio keyboard, mouse, network and disk, and M3a runs the first program at EL0 with a write/exit syscall layer and a kernel-only page it cannot touch (updated 2026-10-04). The first boot on a real Pi 4 is the next step.
 
 If this is accepted it replaces the x86 board in `docs/HARDWARE.md` as the 3.0 reference. The OS stays free; the board is what we sell around it.
 
@@ -22,7 +22,7 @@ About 163,000 lines of C and headers across boot, kernel, drivers and lib, plus 
 1. **M0, serial hello. Done (`arch/arm64`, `tools/checks/arm64-m0-check.py`). Also builds for a real Pi 4 (`make -C arch/arm64 pi`), tried on QEMU's raspi4b model; the first boot on a real board is still to do, see [RASPBERRY-PI.md](RASPBERRY-PI.md).** `clang -target aarch64-none-elf` plus `ld.lld` (both installed here) build a kernel that prints on the PL011 UART under `qemu-system-aarch64 -machine virt`. Days.
 2. **M1, a machine. Started: M1a and M1b are done** (exception vectors that print faults, the interrupt controller and a timer tick) and M1b (a flat identity map with the MMU and both caches on, a bump heap, `.bss` zeroed on boot), on QEMU's virt machine and its Pi 4 model; `tools/checks/arm64-m0-check.py`. Still to do: the desktop on a framebuffer. Exception vectors, MMU, the generic timer, the GIC, a heap and the memory manager. Draw the existing desktop to a `ramfb` framebuffer. Days to a couple of weeks.
 3. **M2, input and net in QEMU. Started: keyboard, mouse, a disk that reads a real sector and a network card that gets a real ARP answer are done (`tools/checks/arm64-m2-check.py`), woken by GIC interrupts.** `virtio` keyboard, mouse, network and block drivers. With the HVF accelerator on the Mac mini this runs at native speed, far faster than today's i386 emulation, so the ARM build helps the browser demo too once v86 is not the only target. Weeks.
-4. **M3, userland.** EL0 programs, the syscall layer, per-window address spaces, and all 46 apps rebuilt. Weeks.
+4. **M3, userland. Started: M3a is done (`arch/arm64/user.S`, `tools/checks/arm64-m3-check.py`): one EL0 program, `svc` with write and exit, user-only page permissions in the identity map, and a deliberate access to a kernel-only page that faults while the kernel survives. Still to do: per-window address spaces, scheduling more than one program, and the apps.** EL0 programs, the syscall layer, per-window address spaces, and all 46 apps rebuilt. Weeks.
 5. **M4, a real Pi 4.** Firmware config, mailbox framebuffer, PL011, SD card through EMMC2, USB keyboard and mouse through xHCI, Ethernet through the Genet MAC. Sound last (HDMI or I2S, the hardest). Weeks.
 6. **M5, the Pi 5.** RP1 over PCIe for every peripheral.
 

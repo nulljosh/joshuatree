@@ -97,6 +97,17 @@ void exc_bad(struct frame *f) {
 /* ---- M1b: the MMU, the caches, a heap ---- */
 extern char _heap_start[];
 static unsigned long l1[512] __attribute__((aligned(4096)));   /* one table of 1 GiB blocks, enough for a flat map */
+static unsigned long l2[512] __attribute__((aligned(4096)));   /* M3a: the RAM GiB split into 2 MiB blocks... */
+static unsigned long l3[512] __attribute__((aligned(4096)));   /* ...and one of those into 4 KiB pages, for the EL0 arena */
+#ifdef PI_BUILD
+#define RAM_GIB 0
+#else
+#define RAM_GIB 1
+#endif
+#define USER_BASE (((unsigned long)RAM_GIB << 30) + (64UL << 20))   /* the arena: one 2 MiB block, clear of the kernel image and the heap */
+#define UP_CODE  0x0000UL   /* EL0 code, read-only and executable */
+#define UP_STACK 0x2000UL   /* EL0 stack, one page; sp starts at its top */
+#define UP_KERN  0x4000UL   /* a page in the same arena that only EL1 may touch */
 static unsigned long heap_next;
 #define HEAP_SIZE (16UL << 20)
 void *kmalloc(unsigned int n) {   /* the name and shape drivers/ttf.c expects */
@@ -109,7 +120,7 @@ void *kmalloc(unsigned int n) {   /* the name and shape drivers/ttf.c expects */
    memory (strongly ordered, no caching, no unaligned access). QEMU's virt keeps its devices in the first GiB and RAM in
    the second; a Pi 4 has RAM from 0 and its peripherals in the last GiB. */
 static void mmu_init(void) {
-    const unsigned long NORMAL = 0x1UL | (1UL << 2) /* attr 1 */ | (3UL << 8) /* inner shareable */ | (1UL << 10) /* access flag */;
+    const unsigned long NORMAL = 0x1UL | (1UL << 2) /* attr 1 */ | (3UL << 8) /* inner shareable */ | (1UL << 10) /* access flag */ | (1UL << 54) /* EL0 may not execute it: only the user code page can */;
     const unsigned long DEVICE = 0x1UL | (0UL << 2) /* attr 0 */ | (1UL << 10) | (1UL << 53) | (1UL << 54);   /* never executable */
     for (int i = 0; i < 512; i++) l1[i] = 0;
     for (int i = 0; i < 4; i++) {
@@ -121,6 +132,11 @@ static void mmu_init(void) {
 #endif
         l1[i] = base | (dev ? DEVICE : NORMAL);
     }
+    /* M3a: the RAM GiB becomes a table of 2 MiB blocks (all kernel-only, as before), and the arena block a table of 4 KiB pages */
+    for (int i = 0; i < 512; i++) l2[i] = (((unsigned long)RAM_GIB << 30) + ((unsigned long)i << 21)) | NORMAL;
+    for (int i = 0; i < 512; i++) l3[i] = 0;
+    l2[(USER_BASE - ((unsigned long)RAM_GIB << 30)) >> 21] = (unsigned long)l3 | 3;
+    l1[RAM_GIB] = (unsigned long)l2 | 3;
     unsigned long mair = (0xFFUL << 8) | 0x00UL;                       /* attr 1 normal write-back, attr 0 device-nGnRnE */
     unsigned long tcr = 25UL | (1UL << 8) | (1UL << 10) | (3UL << 12) | (1UL << 23) | (2UL << 32);   /* 39-bit VA, 4 KiB pages, write-back, TTBR1 off, 40-bit PA */
     unsigned long sctlr;
@@ -141,6 +157,86 @@ static void m1b_selftest(void) {
     for (int i = 0; i < 512; i++) a[i] = 0xA5A5A5A500000000UL | (unsigned long)i;
     for (int i = 0; i < 512; i++) if (a[i] != (0xA5A5A5A500000000UL | (unsigned long)i)) { uart_puts("M1b heap FAIL\n"); return; }
     uart_puts("M1b heap ok\n");
+}
+
+/* ---- M3a: the first EL0 program, a syscall layer, and a page EL0 may not touch ----
+   The arena is four mapped 4 KiB pages inside the identity map: the program's code (EL0 read and execute, nobody writes),
+   its stack (EL0 read and write, never executable) and a kernel-only page (AP=00: EL1 only) holding a secret. The program
+   is user.S, copied in. Syscalls use svc #0 with the number in x8 (Linux's: write 64, exit 93), arguments in x0 to x2 and
+   the result in x0. A write only reads user memory that really is the program's own; anything else gets -EFAULT. A fault
+   in EL0 kills the program and the kernel carries on. */
+extern char _start[];
+extern char user_start[], user_end[], user_entry_a[], user_entry_b[], user_entry_c[];
+extern unsigned long enter_user(unsigned long entry, unsigned long sp, unsigned long arg, unsigned long arg2);
+extern void leave_user(unsigned long status) __attribute__((noreturn));
+#define SYS_WRITE 64
+#define SYS_EXIT 93
+static unsigned long user_status;
+static int user_in_range(unsigned long a, unsigned long n) {   /* wholly inside the code page or the stack page */
+    if (n > 256) return 0;
+    unsigned long c = USER_BASE + UP_CODE, st = USER_BASE + UP_STACK;
+    return (a >= c && a <= c + 4096 - n) || (a >= st && a <= st + 4096 - n);   /* written so a + n can never wrap */
+}
+void exc_el0_sync(struct frame *f) {
+    unsigned ec = (unsigned)(f->esr >> 26);
+    if (ec == 0x15) {   /* svc from EL0 */
+        unsigned long n = f->x[8];
+        if (n == SYS_WRITE) {
+            const char *p = (const char *)f->x[1]; unsigned long len = f->x[2];
+            if (f->x[0] != 1 || !user_in_range((unsigned long)p, len)) { f->x[0] = (unsigned long)-14; return; }   /* -EFAULT */
+            for (unsigned long i = 0; i < len; i++) uart_putc(p[i]);
+            f->x[0] = len;
+        } else if (n == SYS_EXIT) {
+            uart_puts("M3 EL0 exit "); uart_dec((unsigned)f->x[0]); uart_putc('\n');
+            leave_user(f->x[0]);
+        } else f->x[0] = (unsigned long)-38;   /* -ENOSYS */
+        return;
+    }
+    unsigned long far; __asm__ volatile ("mrs %0, far_el1" : "=r"(far));
+    if (ec == 0x24) {
+        unsigned dfsc = (unsigned)(f->esr & 0x3f);
+        uart_puts("M3 EL0 fault: data abort, ");
+        uart_puts((dfsc & 0x3c) == 0x0c ? "permission fault level " : (dfsc & 0x3c) == 0x04 ? "translation fault level " : "fault code ");
+        uart_dec((dfsc & 0x3c) == 0x0c || (dfsc & 0x3c) == 0x04 ? (dfsc & 3) : dfsc);
+        uart_puts(", address "); uart_hex(far); uart_putc('\n');
+    } else if (ec == 0x20) {
+        unsigned ifsc = (unsigned)(f->esr & 0x3f);
+        uart_puts("M3 EL0 fault: instruction abort, ");
+        uart_puts((ifsc & 0x3c) == 0x0c ? "permission fault level " : (ifsc & 0x3c) == 0x04 ? "translation fault level " : "fault code ");
+        uart_dec((ifsc & 0x3c) == 0x0c || (ifsc & 0x3c) == 0x04 ? (ifsc & 3) : ifsc);
+        uart_puts(", address "); uart_hex(f->elr); uart_putc('\n');
+    } else { uart_puts("M3 EL0 fault: exception class "); uart_hex(ec); uart_puts(", address "); uart_hex(far); uart_putc('\n'); }
+    leave_user((unsigned long)-1);
+}
+static void user_init(void) {
+    const unsigned long PAGE = 0x3UL | (1UL << 2) | (3UL << 8) | (1UL << 10);   /* valid page, normal memory, inner shareable, access flag */
+    const unsigned long AP_EL0_RW = 1UL << 6, AP_RO = 3UL << 6, PXN = 1UL << 53, UXN = 1UL << 54;
+    l3[UP_CODE >> 12] = (USER_BASE + UP_CODE) | PAGE | AP_EL0_RW | PXN | UXN;   /* writable for now, so the kernel can copy the program in */
+    l3[UP_STACK >> 12] = (USER_BASE + UP_STACK) | PAGE | AP_EL0_RW | PXN | UXN;
+    l3[UP_KERN >> 12] = (USER_BASE + UP_KERN) | PAGE | PXN | UXN;               /* AP=00: EL1 only */
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+    char *code = (char *)(USER_BASE + UP_CODE);
+    for (unsigned long i = 0; i < (unsigned long)(user_end - user_start); i++) code[i] = user_start[i];
+    const char *secret = "KERNEL-ONLY-SECRET";
+    for (int i = 0; secret[i]; i++) ((char *)(USER_BASE + UP_KERN))[i] = secret[i];
+    for (unsigned long a = (unsigned long)code & ~63UL; a < (unsigned long)code + (unsigned long)(user_end - user_start); a += 64)
+        __asm__ volatile ("dc cvau, %0" :: "r"(a) : "memory");
+    __asm__ volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory");
+    l3[UP_CODE >> 12] = (USER_BASE + UP_CODE) | PAGE | AP_RO | PXN;             /* now read-only for everyone, executable by EL0 only */
+    __asm__ volatile ("dsb ishst\n tlbi vmalle1\n dsb ish\n isb" ::: "memory");
+}
+static void user_demo(void) {
+    user_init();
+    unsigned long code = USER_BASE + UP_CODE, sp = USER_BASE + UP_STACK + 4096, kpage = USER_BASE + UP_KERN;
+    uart_puts("M3 EL0 task starts\n");
+    enter_user(code + (unsigned long)(user_entry_a - user_start), sp, kpage, 0);
+    uart_puts("M3 kernel survived the fault\n");
+    uart_puts("M3 EL0 jump task starts\n");   /* branch to kernel text: EL0 may not execute it */
+    enter_user(code + (unsigned long)(user_entry_c - user_start), sp, kpage, (unsigned long)_start);
+    uart_puts("M3 kernel survived the jump\n");
+    uart_puts("M3 EL0 second task starts\n");
+    user_status = enter_user(code + (unsigned long)(user_entry_b - user_start), sp, kpage, 0);
+    if (user_status == 7) uart_puts("M3 userland ok\n"); else uart_puts("M3 userland FAIL\n");
 }
 
 /* ---- M1c: a framebuffer. QEMU's virt machine has no display unless one is asked for; ramfb is a plain RAM
@@ -544,6 +640,7 @@ void main(void) {
     uart_puts(((el >> 2) & 3) == 1 ? "EL1\n" : "not EL1\n");
     uart_puts("M0 ok\n");
     m1_selftest();
+    user_demo();
     if (net_init()) net_arp_probe();
     if (blk_init()) blk_probe();
     int inputs = input_init();

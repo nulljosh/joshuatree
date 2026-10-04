@@ -44,6 +44,15 @@ echo "pre-push: every check is wired or says why not..."
 echo "pre-push: no god files..."
 ./tools/checks/godfile-check.sh
 
+# Generated files that go stale when a PR adds a check, an icon or a dock
+# slot. Each takes a second or two here and cost a ten minute red CI run
+# when only the suite caught it (2.6.24, docs/TESTING.md).
+echo "pre-push: generated files are fresh..."
+./tools/checks/testing-doc-check.sh
+python3 ./tools/checks/dockslots-check.py
+./tools/checks/logo-check.sh
+python3 ./tools/checks/iconinset-check.py
+
 echo "pre-push: OK"
 echo "pre-push stays fast on purpose. Before flipping a draft PR ready,"
 echo "run the real suite locally: tools/ci-local.sh"
