@@ -359,6 +359,87 @@ check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the
   }
 }
 
+// 2.6.27: Lexly's live courses. The guest asks the fixed joshuatree host for
+// /api/lexly (the course list) and /api/lexly?c=<id> (one course's questions).
+// The Worker itself calls the real Lexly site's static packs, and only those
+// fixed URLs. Upstream is mocked with a real-shaped catalog and pack.
+{
+  const realFetch = globalThis.fetch;
+  const asked = [];
+  const catalog = { version: 1, categories: {
+    languages: { title: "Choose a language", subjects: [
+      { id: "spanish", name: "Spanish", packPath: "/content/courses/spanish.json" },
+      { id: "japanese", name: "Japanese", packPath: "/content/courses/japanese.json" },
+      { id: "spanish", name: "Spanish again" },
+      { id: "../etc", name: "Bad id" },
+    ] },
+    programming: { title: "Choose a skill", subjects: [
+      { id: "dsa", name: "Data Structures and Algorithms and a very long tail to cut" },
+      { id: "bash", name: "" },
+    ] },
+  } };
+  const mc = (question, choices, answer, type = "mathChoice") => ({ type, question, choices, answer });
+  const rows = [];
+  for (let i = 0; i < 30; i++) rows.push(mc(`Question ${i}`, [`a${i}`, `b${i}`, `c${i}`, `d${i}`], `c${i}`));
+  const pack = { units: [{ lessons: [{ exercises: [
+    mc("¿Cómo estás? “bien”", ["Muy bien", "Mal", "Así así", "Nada"], "Muy bien", "translation"),
+    mc("Pipe | in the question", ["a", "b", "c", "d"], "a"),
+    mc("Japanese", ["こんにちは", "b", "c", "d"], "b"),
+    mc("Answer not offered", ["a", "b", "c", "d"], "z"),
+    mc("Repeated choices", ["a", "a", "c", "d"], "a"),
+    mc("Three choices", ["a", "b", "c"], "a"),
+    mc("Too long " + "x".repeat(100), ["a", "b", "c", "d"], "a"),
+    { type: "listening", question: "Type what you hear", answer: "Hola", choices: ["a", "b", "c", "d"] },
+    { type: "match", question: "Pairs", answer: "matched", pairs: [["a", "b"]] },
+    null,
+    ...rows,
+  ] }] }] };
+  globalThis.fetch = async (url) => { asked.push(String(url)); return String(url).endsWith("catalog.json") ? Response.json(catalog) : Response.json(pack); };
+  const via = (path) => handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://joshuatree.heyitsmejosh.com" + path)));
+  try {
+    const list = await via("/api/lexly");
+    const lines = (await list.text()).split("\n");
+    check("/api/lexly reads the real Lexly catalog", asked[0] === "https://lexly.heyitsmejosh.com/content/catalog.json");
+    check("/api/lexly answers 200 text with CORS and no-store", list.status === 200 && list.headers.get("access-control-allow-origin") === "*" && list.headers.get("cache-control") === "no-store");
+    check("/api/lexly first line is the course count, then id|name|category", lines[0] === "2" && lines[1] === "spanish|Spanish|languages");
+    check("/api/lexly drops a course outside the allowlist, a repeat, a bad id and an empty name, and cuts a long name", lines[2] === "dsa|Data Structures and Algorithms and a ver|programming" && lines.length === 4 && lines[3] === "");
+
+    const q = await via("/api/lexly?c=spanish");
+    const ql = (await q.text()).split("\n");
+    check("/api/lexly?c= reads that course's real pack", asked[1] === "https://lexly.heyitsmejosh.com/content/courses/spanish.json");
+    check("a question row is answer|question|c0|c1|c2|c3, accents stripped, inverted marks and smart quotes made plain", ql[1] === '0|Como estas? "bien"|Muy bien|Mal|Asi asi|Nada');
+    check("the first line is the question count, capped at 20", ql[0] === "20" && ql.length === 22 && ql[21] === "");
+    const bad = ql.slice(1, 21).filter(l => /Pipe|Japanese|not offered|Repeated|Three|Too long|hear|Pairs/.test(l));
+    check("pipes, non-ASCII, a missing answer, repeated choices, three choices, long text, other types and null are all dropped", bad.length === 0);
+    check("every row is ASCII, has six fields and an answer index 0 to 3", ql.slice(1, 21).every(l => /^[0-3]\|[\x20-\x7e]+$/.test(l) && l.split("|").length === 6));
+    check("the 20 are an even spread through the course, not the first 20", ql[2].startsWith("2|Question 0|") && ql[20].startsWith("2|Question 28|"));
+
+    const before = asked.length;
+    const nope = await via("/api/lexly?c=japanese");
+    check("a course outside the allowlist is a 404 and never fetched", nope.status === 404 && asked.length === before);
+    for (const evil of ["..%2Fcatalog", "spanish%0d%0a", "SPANISH", "a".repeat(40), ""]) {
+      const r = await via("/api/lexly?c=" + evil);
+      check(`/api/lexly?c=${evil.slice(0, 12)} is refused and never fetched`, r.status === 404 && asked.length === before);
+    }
+    globalThis.fetch = async () => new Response("down", { status: 503 });
+    check("/api/lexly upstream 503 -> 502 with an empty body, so the guest keeps its Spanish set", (await via("/api/lexly")).status === 502 && (await (await via("/api/lexly?c=spanish")).text()) === "");
+    globalThis.fetch = async () => Response.json({ categories: {} });
+    check("/api/lexly with no usable course -> 502", (await via("/api/lexly")).status === 502);
+    globalThis.fetch = async () => Response.json({ units: [{ lessons: [{ exercises: [mc("Only one", ["a", "b", "c", "d"], "a")] }] }] });
+    check("a course with fewer than four readable questions -> 502", (await via("/api/lexly?c=spanish")).status === 502);
+    globalThis.fetch = async () => new Response("<html>", { status: 200 });
+    check("/api/lexly with an HTML body -> 502", (await via("/api/lexly")).status === 502);
+    globalThis.fetch = async () => { throw new Error("offline"); };
+    check("/api/lexly upstream unreachable -> 502", (await via("/api/lexly")).status === 502);
+    const n = asked.length;
+    globalThis.fetch = async (u) => { asked.push(String(u)); return Response.json({}); };
+    const other = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://lexly.heyitsmejosh.com/content/catalog.json")));
+    check("the real Lexly host is still not an open proxy target", other.status === 403 && asked.length === n);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 if (failures > 0) {
   console.log(`FAIL: ${failures} check(s) failed`);
   process.exit(1);

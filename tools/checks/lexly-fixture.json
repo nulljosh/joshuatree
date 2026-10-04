@@ -1,0 +1,459 @@
+{
+ "catalog": {
+  "categories": {
+   "languages": {
+    "title": "Choose a language",
+    "subjects": [
+     {
+      "id": "spanish",
+      "name": "Spanish",
+      "icon": "fa-solid fa-earth-americas",
+      "level": "Beginner to Advanced",
+      "packPath": "/content/courses/spanish.json",
+      "lang": "es-ES"
+     },
+     {
+      "id": "japanese",
+      "name": "Japanese",
+      "icon": "fa-solid fa-earth-asia",
+      "level": "Beginner",
+      "packPath": "/content/courses/japanese.json",
+      "lang": "ja-JP"
+     }
+    ]
+   },
+   "programming": {
+    "title": "Choose a programming or computer skill",
+    "subjects": [
+     {
+      "id": "python",
+      "name": "Python",
+      "icon": "fa-brands fa-python",
+      "level": "General Purpose",
+      "packPath": "/content/courses/python.json"
+     },
+     {
+      "id": "dsa",
+      "name": "Data Structures and Algorithms",
+      "icon": "fa-solid fa-diagram-project",
+      "level": "Computer Science Core",
+      "packPath": "/content/courses/dsa.json"
+     }
+    ]
+   }
+  },
+  "version": 1
+ },
+ "packs": {
+  "spanish": {
+   "id": "spanish",
+   "name": "Spanish",
+   "category": "languages",
+   "icon": "fa-solid fa-earth-americas",
+   "level": "Beginner to Advanced",
+   "lang": "es-ES",
+   "version": 9,
+   "units": [
+    {
+     "id": "u1",
+     "title": "Basics",
+     "lessons": [
+      {
+       "id": "u1l1",
+       "title": "Greetings",
+       "exercises": [
+        {
+         "type": "translation",
+         "question": "Hello",
+         "answer": "Hola",
+         "choices": [
+          "Por favor",
+          "Hola",
+          "Gracias",
+          "Adiós"
+         ],
+         "id": "spanish_0"
+        },
+        {
+         "type": "translation",
+         "question": "Good morning",
+         "answer": "Buenos días",
+         "choices": [
+          "Buenos días",
+          "Buenas noches",
+          "Hasta luego",
+          "De nada"
+         ],
+         "id": "spanish_1"
+        },
+        {
+         "type": "translation",
+         "question": "Goodbye",
+         "answer": "Adiós",
+         "choices": [
+          "No",
+          "Hola",
+          "Adiós",
+          "Sí"
+         ],
+         "id": "spanish_2"
+        },
+        {
+         "type": "listening",
+         "question": "Type what you hear",
+         "audio": "Hola",
+         "answer": "Hola",
+         "id": "spanish_3"
+        },
+        {
+         "type": "sentence",
+         "question": "Good night",
+         "answer": "Buenas noches",
+         "words": [
+          "Buenas",
+          "noches",
+          "días",
+          "tardes"
+         ],
+         "id": "spanish_4"
+        }
+       ]
+      },
+      {
+       "id": "u1l2",
+       "title": "Courtesy",
+       "exercises": [
+        {
+         "type": "translation",
+         "question": "Thank you",
+         "answer": "Gracias",
+         "choices": [
+          "Gracias",
+          "De nada",
+          "Perdón",
+          "Por favor"
+         ],
+         "id": "spanish_5"
+        },
+        {
+         "type": "translation",
+         "question": "Please",
+         "answer": "Por favor",
+         "choices": [
+          "Hola",
+          "Sí",
+          "Gracias",
+          "Por favor"
+         ],
+         "id": "spanish_6"
+        },
+        {
+         "type": "translation",
+         "question": "You're welcome",
+         "answer": "De nada",
+         "choices": [
+          "Perdón",
+          "De nada",
+          "Gracias",
+          "Adiós"
+         ],
+         "id": "spanish_7"
+        },
+        {
+         "type": "translation",
+         "question": "Excuse me",
+         "answer": "Perdón",
+         "choices": [
+          "Perdón",
+          "Gracias",
+          "Hola",
+          "Bien"
+         ],
+         "id": "spanish_8"
+        },
+        {
+         "type": "listening",
+         "question": "Type what you hear",
+         "audio": "Por favor",
+         "answer": "Por favor",
+         "id": "spanish_9"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "dsa": {
+   "id": "dsa",
+   "name": "Data Structures and Algorithms",
+   "category": "programming",
+   "icon": "fa-solid fa-diagram-project",
+   "level": "Computer Science Core",
+   "version": 1,
+   "units": [
+    {
+     "id": "u1",
+     "title": "Big O Analysis",
+     "tip": "Big O measures how an algorithm's performance scales with input size. O(1) is constant, O(n) grows linearly, O(n^2) quadratically. Lower is faster. Understanding Big O helps you choose efficient algorithms.",
+     "lessons": [
+      {
+       "id": "u1l1",
+       "title": "Time and Space Complexity",
+       "exercises": [
+        {
+         "type": "mathChoice",
+         "question": "What does Big O notation measure?",
+         "answer": "How an algorithm's performance scales as input grows",
+         "explain": "Big O ignores constants and focuses on the dominant term. It predicts how performance changes with larger inputs.",
+         "choices": [
+          "The exact time in seconds",
+          "Memory used in bytes",
+          "The number of lines of code",
+          "How an algorithm's performance scales as input grows"
+         ],
+         "id": "dsa_u1l1_0"
+        },
+        {
+         "type": "mathChoice",
+         "question": "What does O(1) complexity mean?",
+         "answer": "Constant time, independent of input size",
+         "explain": "O(1) means the time is the same no matter how large the input is. Array access by index is O(1).",
+         "choices": [
+          "Logarithmic time",
+          "One operation only",
+          "Constant time, independent of input size",
+          "Linear time"
+         ],
+         "id": "dsa_u1l1_1"
+        },
+        {
+         "type": "mathChoice",
+         "question": "What does O(n) complexity mean?",
+         "answer": "Time grows proportionally with input size",
+         "explain": "O(n) is linear. Doubling the input size doubles the time. Linear search is O(n).",
+         "choices": [
+          "Time is zero",
+          "Time grows exponentially",
+          "Time is constant",
+          "Time grows proportionally with input size"
+         ],
+         "id": "dsa_u1l1_2"
+        },
+        {
+         "type": "mathChoice",
+         "question": "What does O(log n) complexity mean?",
+         "answer": "Time grows logarithmically with input size",
+         "explain": "O(log n) is very efficient. Doubling input size increases time only slightly. Binary search is O(log n).",
+         "choices": [
+          "Time is linear",
+          "Time grows quadratically",
+          "Time is constant",
+          "Time grows logarithmically with input size"
+         ],
+         "id": "dsa_u1l1_3"
+        },
+        {
+         "type": "mathChoice",
+         "question": "What does O(n^2) complexity mean?",
+         "answer": "Time grows quadratically with input size",
+         "explain": "O(n^2) means nested loops. Doubling input size multiplies time by 4. Bubble sort is O(n^2) in worst case.",
+         "choices": [
+          "Time grows logarithmically",
+          "Time is constant",
+          "Time is linear",
+          "Time grows quadratically with input size"
+         ],
+         "id": "dsa_u1l1_4"
+        }
+       ]
+      },
+      {
+       "id": "u1l2",
+       "title": "Comparing Complexities",
+       "exercises": [
+        {
+         "type": "mathChoice",
+         "question": "Which complexity is best?",
+         "answer": "O(1), then O(log n), then O(n)",
+         "explain": "Faster is better. O(1) is constant and fastest. O(log n) is very fast. O(n) is linear. O(n^2) is slow.",
+         "choices": [
+          "They are all equal",
+          "O(n^2)",
+          "O(n)",
+          "O(1), then O(log n), then O(n)"
+         ],
+         "id": "dsa_u1l2_0"
+        },
+        {
+         "type": "mathChoice",
+         "question": "What is O(n log n) complexity?",
+         "answer": "Time grows as n times log n, between linear and quadratic",
+         "explain": "O(n log n) is efficient and common in sorting. Merge sort and quicksort (average case) are O(n log n).",
+         "choices": [
+          "Time grows as n times log n, between linear and quadratic",
+          "Time is constant",
+          "Time is exponential",
+          "Time is linear"
+         ],
+         "id": "dsa_u1l2_1"
+        },
+        {
+         "type": "mathChoice",
+         "question": "For an input of size 1000, which is faster: O(n^2) or O(n log n)?",
+         "answer": "O(n log n) is much faster",
+         "explain": "O(n^2) = 1,000,000 operations. O(n log n) ≈ 10,000 operations. Logarithmic factors matter hugely.",
+         "choices": [
+          "O(n^2)",
+          "O(n log n) is much faster",
+          "They are the same",
+          "Depends on the constant factors"
+         ],
+         "id": "dsa_u1l2_2"
+        },
+        {
+         "type": "mathChoice",
+         "question": "What is the difference between average and worst case?",
+         "answer": "Average case is typical performance; worst case is the slowest possible",
+         "explain": "Quicksort is O(n log n) average, O(n^2) worst case. Stating both cases is more accurate than just one.",
+         "choices": [
+          "There is no difference",
+          "Only worst case matters",
+          "Average case is typical performance; worst case is the slowest possible",
+          "Average case is always slower"
+         ],
+         "id": "dsa_u1l2_3"
+        },
+        {
+         "type": "mathChoice",
+         "question": "What is space complexity?",
+         "answer": "How much extra memory an algorithm uses relative to input size",
+         "explain": "Space complexity measures auxiliary memory, not the input itself. Merge sort is O(n) space; bubble sort is O(1).",
+         "choices": [
+          "How much extra memory an algorithm uses relative to input size",
+          "The number of variables",
+          "The size of the input",
+          "The runtime in seconds"
+         ],
+         "id": "dsa_u1l2_4"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "python": {
+   "id": "python",
+   "name": "Python",
+   "category": "programming",
+   "icon": "fa-brands fa-python",
+   "level": "General Purpose",
+   "version": 2,
+   "units": [
+    {
+     "id": "u1",
+     "title": "Getting Started",
+     "lessons": [
+      {
+       "id": "u1l1",
+       "title": "Printing & comments",
+       "exercises": [
+        {
+         "type": "mathChoice",
+         "question": "Which line prints text to the screen?",
+         "answer": "print(\"hi\")",
+         "choices": [
+          "printf(\"hi\")",
+          "console.log(\"hi\")",
+          "print(\"hi\")",
+          "echo(\"hi\")"
+         ],
+         "id": "python_0"
+        },
+        {
+         "type": "mathChoice",
+         "question": "How do you start a single-line comment?",
+         "answer": "#",
+         "choices": [
+          "//",
+          "--",
+          "<!--",
+          "#"
+         ],
+         "id": "python_1"
+        },
+        {
+         "type": "sentence",
+         "question": "Order the line: print the word hello",
+         "answer": "print ( \"hello\" )",
+         "words": [
+          "print",
+          "(",
+          "\"hello\"",
+          ")"
+         ],
+         "id": "python_2"
+        },
+        {
+         "type": "mathChoice",
+         "question": "What does print() add at the end by default?",
+         "answer": "a newline",
+         "choices": [
+          "nothing",
+          "a tab",
+          "a space",
+          "a newline"
+         ],
+         "id": "python_3"
+        }
+       ]
+      },
+      {
+       "id": "u1l2",
+       "title": "Running code",
+       "exercises": [
+        {
+         "type": "mathChoice",
+         "question": "What file extension do Python scripts use?",
+         "answer": ".py",
+         "choices": [
+          ".py",
+          ".python",
+          ".pyt",
+          ".script"
+         ],
+         "id": "python_4"
+        },
+        {
+         "type": "mathChoice",
+         "question": "Which command runs a script named app.py?",
+         "answer": "python app.py",
+         "choices": [
+          "exec app.py",
+          "run app.py",
+          "python app.py",
+          "node app.py"
+         ],
+         "id": "python_5"
+        },
+        {
+         "type": "mathChoice",
+         "question": "Python is which kind of language?",
+         "answer": "interpreted",
+         "choices": [
+          "assembly",
+          "markup",
+          "interpreted",
+          "compiled to .exe only"
+         ],
+         "id": "python_6"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ }
+}
