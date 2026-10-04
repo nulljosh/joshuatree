@@ -203,12 +203,14 @@ static volatile unsigned mbox[36] __attribute__((aligned(64)));
 static int mbox_call(void) {
     unsigned long a = (unsigned long)mbox;
     dcache_clean((void *)mbox, sizeof mbox);
-    while (MBOX_STATUS & 0x80000000u) {}             /* full */
+    /* every wait is bounded: a wrong guess about the real GPU should print an error, not hang a first boot in silence */
+    for (unsigned n = 0; MBOX_STATUS & 0x80000000u; n++) if (n > 5000000) return 0;   /* full */
     MBOX_WRITE = (unsigned)(a & ~15UL) | 8;
-    for (;;) {
-        while (MBOX_STATUS & 0x40000000u) {}         /* empty */
+    for (unsigned n = 0;; n++) {
+        for (unsigned m = 0; MBOX_STATUS & 0x40000000u; m++) if (m > 5000000) return 0;   /* empty */
         unsigned r = MBOX_READ;
         if (r == ((unsigned)(a & ~15UL) | 8)) break;
+        if (n > 1000) return 0;
     }
     dcache_clean((void *)mbox, sizeof mbox);         /* civac also invalidates: the next reads come from RAM */
     return mbox[1] == 0x80000000u;
@@ -296,6 +298,7 @@ static void m1_selftest(void) {
     m1b_selftest();   /* with the exception table in place a bad map prints instead of hanging */
     __asm__ volatile ("svc #0");                   /* proves the sync path and the return */
     unsigned long freq; __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(freq));
+    if (!freq) freq = 54000000;                    /* a Pi 4 whose firmware left CNTFRQ unset runs its timer at 54 MHz */
     timer_step = freq / 20;                        /* 50 ms */
     GICD(0x000) = 1;                               /* distributor on */
     GICD(0x100) = 1u << TIMER_INTID;               /* enable the timer interrupt */

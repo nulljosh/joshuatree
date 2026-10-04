@@ -97,6 +97,8 @@ The lines after `M0 ok` are the exception table, the memory map with the caches 
 
 That is milestones M0, M1a and the first picture on real hardware. To leave `screen`, press Ctrl-A then K.
 
+The kernel guards against two things a real board may do differently from QEMU: if the firmware leaves the timer speed unset it assumes 54 MHz, and every wait on the GPU's mailbox gives up after a moment and prints `M1c mailbox framebuffer refused` instead of hanging.
+
 ## If nothing prints
 
 1. Swap the two data wires.
