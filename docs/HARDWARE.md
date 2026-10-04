@@ -1,6 +1,6 @@
 # Hardware
 
-> **Update, 2026-10-03:** the first real board is now a Raspberry Pi 4B, not the x86 mini PC below. The Mac mini cannot be the board (Apple Silicon, and this kernel is i386), and a Pi boots a plain `kernel8.img` with a documented UART, framebuffer and interrupt controller. That needs an ARM64 port, planned and tracked in [ARM64.md](ARM64.md); milestone M0 already boots under QEMU. The x86 board analysis below stays as the i386 path, and the Strata Kit math (3.1) is unchanged until a Pi build exists.
+> **Update, 2026-10-03:** the first real board is now a Raspberry Pi 4B, not the x86 mini PC below. The Mac mini cannot be the board (Apple Silicon, and this kernel is i386), and a Pi boots a plain `kernel8.img` with a documented UART, framebuffer and interrupt controller. That needs an ARM64 port, planned and tracked in [ARM64.md](ARM64.md); milestone M0 already boots under QEMU. The x86 board analysis below stays as the i386 path, and the Neo Kit math (3.1) is unchanged until a Pi build exists.
 
 3.0 is "it boots a real computer." One reference mini PC: UEFI, USB
 keyboard, mouse and stick, a real disk, a real network card, real sound.
@@ -161,8 +161,8 @@ this as a snapshot, not a quote.
 
 This is a build-it-yourself BOM, not the $199 dev kit price - it is
 already above $199 before labor, assembly, packaging and shipping are
-added. MONEY.md resolves it with two boxes: a $199 Strata Kit (case and OS
-stick, you bring the board) and a $349 Strata Complete.
+added. MONEY.md resolves it with two boxes: a $199 Neo Kit (case and OS
+stick, you bring the board) and a $349 Neo Complete.
 
 ## Risks and unknowns
 
@@ -188,22 +188,22 @@ stick, you bring the board) and a $349 Strata Complete.
   minute check against ASRock's official J4125B-ITX manual before
   ordering, since it's the whole reason for this pick.
 
-## Enclosure: Strata
+## Enclosure: Neo
 
-![Strata, front](hardware/strata-hero.jpg)
+![Neo, front](hardware/neo-hero.jpg)
 
-Strata is a stack of six rings, terracotta at the base fading to cream at
+Neo is a stack of six rings, terracotta at the base fading to cream at
 the top, like the layered rock around Joshua Tree. The 2 mm gaps between
 rings are the vents. The tree mark is laser engraved half a millimetre
 into the cap, tone on tone, so you see it up close and not across the
 room. It's the concept for the custom shell; v0 still ships in a stock
-mini-ITX case.
+mini-ITX case. Neo was called Strata until 2026-10-04.
 
-![Strata, rear I/O](hardware/strata-rear.jpg)
+![Neo, rear I/O](hardware/neo-rear.jpg)
 
 ### The drawing
 
-![Strata blueprint sheet](hardware/strata-blueprint.svg)
+![Neo blueprint sheet](hardware/neo-blueprint.svg)
 
 200 x 200 x 55 mm outside (a Mac mini is 127 x 127 x 50; the 170 mm board and its 158.75 mm I/O shield set the floor). Inside is a 178 mm core tray with 2 mm
 walls and chamfered corners, which leaves a 174 mm cavity for the 170 mm board. The rear notch
@@ -212,7 +212,7 @@ I/O shield fits.
 
 ### Parts
 
-Everything is split to fit a 180 x 180 x 180 mm bed (Bambu A1 mini). All numbers come from `hardware/strata_cad.py`, which fails if any part doesn't fit.
+Everything is split to fit a 180 x 180 x 180 mm bed (Bambu A1 mini). All numbers come from `hardware/neo_cad.py`, which fails if any part doesn't fit.
 
 <!-- parts:start -->
 | Part | Size | Print |
@@ -247,15 +247,15 @@ Follow `hardware/ASSEMBLY.md`. The short version: rods and nuts in ring 0, tray 
 
 ### Regenerate
 
-Every file here comes from one set of numbers in `hardware/strata_cad.py`.
+Every file here comes from one set of numbers in `hardware/neo_cad.py`.
 
 ```sh
-uv run --with build123d python docs/hardware/strata_cad.py docs/hardware   # STEP, STLs, step diagrams
-python3 docs/hardware/blueprint_sheet.py docs/hardware/strata-blueprint.svg
-blender -b -P docs/hardware/concepts.py -- docs/hardware strata  # renders
+uv run --with build123d python docs/hardware/neo_cad.py docs/hardware   # STEP, STLs, step diagrams
+python3 docs/hardware/blueprint_sheet.py docs/hardware/neo-blueprint.svg
+blender -b -P docs/hardware/concepts.py -- docs/hardware neo  # renders
 ```
 
-`strata_cad.py` asserts, in code, that:
+`neo_cad.py` asserts, in code, that:
 
 - every printed part fits the 180 mm bed (the tray is the biggest at 178 mm)
 - no flat roof is wider than 10 mm, so nothing needs supports (the tall rear window is its own plate, printed flat)
@@ -287,4 +287,4 @@ The existing dev kit BOM above is unchanged: its numbers still come from the lis
 6. Nothing is ordered until Joshua says so.
 
 ---
-Strata Kit and Joshua Tree are trademarks of Joshua Trommel. Designs licensed CC BY-NC-SA 4.0. Build one for yourself; please do not sell copies.
+Neo Kit and Joshua Tree are trademarks of Joshua Trommel. Designs licensed CC BY-NC-SA 4.0. Build one for yourself; please do not sell copies.

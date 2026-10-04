@@ -10,7 +10,7 @@ VOICE = "EXAVITQu4vr4xnSDxMaL"
 LINES = [("a", 0.9, "A computer you can print at home."), ("b", 4.6, "And build in forty-five minutes."),
  ("c", 11.4, "Every app gets its own room."), ("d", 14.8, "If one breaks, the others keep going."),
  ("e", 21.2, "And an assistant that lives on your desk."), ("g", 24.9, "Nothing leaves this machine."),
- ("h", 27.2, "Joshua Tree. Strata Kit.")]
+ ("h", 27.2, "Joshua Tree. Neo Kit.")]
 for k, _, t in LINES:
     if os.path.exists(f"{k}.mp3"): continue  # a re-run keeps voiced lines; delete a clip to re-voice it
     req = urllib.request.Request(f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE}?output_format=mp3_44100_128",

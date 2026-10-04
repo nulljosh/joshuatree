@@ -1,11 +1,11 @@
-# Strata product film shots. Reuses the Strata geometry from concepts.py, renders
+# Neo product film shots. Reuses the Neo geometry from concepts.py, renders
 # each shot frame by frame (direct transforms, no keyframes) to shots/<name>/NNNN.png.
 import bpy, math, sys, os
 HW = "/Users/joshua/.claude/jobs/5b8457ff/tmp/hw"
 FILM_OUT = sys.argv[sys.argv.index("--") + 1]
 ONLY = sys.argv[sys.argv.index("--") + 2:] or None
 src = open(os.path.join(HW, "concepts.py")).read()
-sys.argv = ["x", "--", HW, "strata"]
+sys.argv = ["x", "--", HW, "neo"]
 exec(src[:src.index("def shot(")])  # ponytail: one geometry source, the renders and the film can't drift apart
 
 scn.render.resolution_x, scn.render.resolution_y = 1920, 1080

@@ -1,25 +1,27 @@
-# Joshua Tree loop handoff (2026-10-03, night)
+# Joshua Tree loop handoff (2026-10-04)
 
 ## What the loop is
 
-Keep merging green PRs, then build the next item: the landing demo, the ARM64 port for the Raspberry Pi, and drivers that can be tested in QEMU. No stray branches or PRs left behind. The full list of what is left, with a model tag on each item, is the Pickup section of `docs/roadmap.md`.
+Keep merging green PRs, then build the next item: apps on their real backends, the ARM64 port for the Raspberry Pi, and drivers that can be tested in QEMU. No stray branches or PRs left behind. The full list of what is left, with a model tag on each item, is the Pickup section of `docs/roadmap.md`.
 
 ## Where things stand (2026-10-04)
 
-- Main is 2.6.21 once PR 393 merges (ARM screen: ramfb on QEMU virt). Stacked on it, not pushed yet: 2.6.22 on branch `arm64-m2-kbd` (worktree `../jt-arm-m2`): the Pi build draws through the VideoCore mailbox (proven on QEMU's raspi4b), a virtio input driver (keyboard and mouse), virtio-net (a real ARP answer) and virtio-blk (a sector read back), plus a `voicetime:` serial line in Samantha. Push it as one PR the moment 393 merges.
-- Joshua buys the Pi 4B this weekend. First boot is `docs/RASPBERRY-PI.md`: serial text, and now a picture on the monitor. 3.0.0 ships only when the desktop boots on a real Pi.
-- Voice chat (checked 2026-10-04): both sides are typed text in, her voice out, no speech-to-text, three server round trips per message, nothing streamed. Plan in the roadmap's Voice chat section.
-- Notebook items are filed in the roadmap ("From the notebook"). Neo is the new name for the Strata enclosure.
-- The pre-push hook now runs per worktree (`core.hooksPath` is the relative `tools/hooks`).
+- Main is 2.6.24. There are no open PRs or issues besides the docs PR that wrote this.
+- ARM64: M0 to M1d part one are done (serial, exceptions, MMU, a drawn desktop with smooth text). M2 has its first drivers (virtio keyboard, mouse, network, disk). M3a is done: an EL0 program runs, prints and exits through `svc`, a load from a kernel-only page faults and the kernel survives, and kernel RAM is not executable from EL0 (`tools/checks/arm64-m3-check.py`).
+- Joshua buys the Pi 4B this weekend. First boot is `docs/RASPBERRY-PI.md`: serial text and a picture on the monitor. 3.0.0 ships only when the desktop boots on a real Pi.
+- Voice chat: both sides are typed text in, her voice out, no speech-to-text, three server round trips per message, nothing streamed. Plan in the roadmap's Voice chat section.
+- Neo is the new name for the Strata enclosure.
+- The pre-push hook runs per worktree and now also checks the generated files (`docs/TESTING.md`, dock slots, the logo, icon tiles), so a stale one fails on the Mac, not in CI.
 - Disk: keep 6 GB free before `tools/ci-local.sh`. The Kaggle model weights moved to `/Volumes/LaCie/models/kaggle-hands-2026-10-03`.
 
 ## Next, in order
 
-1. Merge 393, then push `arm64-m2-kbd` as one PR (draft, `tools/ci-local.sh`, ready, merge).
-2. ARM: input on the GIC interrupt instead of polling, then M1d (the real font and window drawing on ARM), then IP, DHCP and TCP over virtio-net, then a FAT reader on virtio-blk.
-3. Voice: read `voicetime` off ten live messages, drop the `/api/pick` round trip, then streaming, then speech-to-text.
-4. Neo rename across hardware docs and CAD. Icons in one design system.
-5. If the Pi is in hand: first serial boot, photograph the console, fix whatever the real chip does differently.
+1. If the Pi is in hand: first serial boot per `docs/RASPBERRY-PI.md`. Photograph the console and fix whatever the real chip does differently.
+2. Fleet apps onto their real backends through `SYS_HTTP_GET`, one PR each, with the offline samples as the fallback: Bookrank, then Lexly, then Sparkjar (renamed Hikko inside the OS in that PR). Curbfind, Epiphany and Stocks already pull live data. The real apps are native Swift and cannot run here, so the OS versions stay C rewrites.
+3. CI slow-runner timing flakes: eight QEMUs share one runner.
+4. ARM64 M3 rest (more programs, per-program address spaces), then M2 rest (IP, DHCP, TCP, FAT).
+5. Voice chat items: read `voicetime` off ten live messages, drop the `/api/pick` round trip, stream, then speech-to-text.
+6. Icons in one design system.
 
 ## How to work
 
@@ -28,5 +30,5 @@ One small PR at a time, draft until `tools/ci-local.sh` passes (it takes about 2
 ## Restart prompt
 
 ```
-/loop until we can't build out anymore: keep merging green PRs, then build the next item (landing demo, ARM64 M1, drivers testable in QEMU), no stray branches or PRs left behind. State is in docs/LOOP-HANDOFF.md and the Pickup section of docs/roadmap.md.
+/loop until we can't build out anymore: keep merging green PRs, then build the next item (the Pi's first boot if the board is here, then the fleet apps on their real backends, CI flakes, ARM64 M3 and M2), no stray branches or PRs left behind. State is in docs/LOOP-HANDOFF.md and the Pickup section of docs/roadmap.md.
 ```

@@ -406,12 +406,7 @@
   footer .sheet-rule { padding: 14px 20px 28px; }
   @media (max-width: 520px) { footer .sheet-rule { flex-wrap: wrap; justify-content: center; white-space: normal; gap: 10px 16px; } footer .sheet-rule::before { order: -1; flex-basis: 100%; } }
 
-  /* Plain-words stand-ins for the developer blocks that moved into Tech specs. */
-  .plain { padding: 8px 20px 48px; max-width: 640px; margin: 0 auto; text-align: center; }
-  .plain h2 { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 12px; }
-  .plain .sub { color: var(--sub); font-size: 16px; max-width: 480px; margin: 0 auto; line-height: 1.5; }
-  .plain .sub a, .specs a { color: var(--fg); text-decoration-color: var(--accent); text-underline-offset: 3px; }
-  @media (max-width: 700px) { .plain h2 { font-size: 26px; } }
+  .specs a { color: var(--fg); text-decoration-color: var(--accent); text-underline-offset: 3px; }
   .facts-row.two { grid-template-columns: repeat(2, 1fr); max-width: 360px; }
   .facts-row.one { grid-template-columns: 1fr; max-width: 240px; }
 
@@ -451,8 +446,6 @@
   .foot-col a:hover { color: var(--fg); text-decoration: underline; }
   .foot-bar { max-width: 880px; margin: 0 auto; padding: 18px 20px 0; border-top: 1px solid var(--border); }
   .foot-bar .foot-meta { margin: 0; }
-  .foot-bar .foot-cta { position: relative; display: inline-block; padding: 4px 0; color: var(--fg); font-weight: 600; text-decoration-color: var(--accent); text-underline-offset: 3px; }
-  .foot-bar .foot-cta::after { content: ""; position: absolute; top: 50%; left: 0; transform: translateY(-50%); width: 100%; height: 44px; min-width: 44px; }
   @media (max-width: 700px) { .foot-dir { grid-template-columns: repeat(2, 1fr); } }
   .foot-meta { color: var(--sub); font-size: 12.5px; line-height: 1.9; }
   .foot-meta a { color: var(--sub); }
@@ -460,25 +453,20 @@
   /* The mark: a Joshua tree, branches raised like Joshua's arms. */
   .hero-logo { display: block; width: 96px; height: 96px; margin: 0 auto; }
   .closing-name { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 12px; text-align: center; text-wrap: balance; }
-  .more { padding: 24px 20px 72px; text-align: center; }
-  .more h2 { font-size: 40px; letter-spacing: -0.03em; margin: 0 0 28px; }
-  .more-list { list-style: none; padding: 0; margin: 0 auto; max-width: 880px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid var(--border); }
-  .more-list li { padding: 16px 8px; border-bottom: 1px solid var(--border); font-size: 17px; font-weight: 500; }
   .seal { display: block; width: 120px; height: 120px; margin: 0 auto 8px; }
-  @media (max-width: 700px) { .more h2 { font-size: 28px; } .more-list { grid-template-columns: repeat(2, 1fr); } }
   @media (prefers-color-scheme: dark) { .hero-logo, .seal { filter: invert(0.93); } }
   .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .plate-cap a#samantha-boot-link { color: var(--accent2); text-decoration: none; font-weight: 600; }
   .plate-cap a#samantha-boot-link:hover { text-decoration: underline; }
-  .ad-video, .strata-img { display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--border); margin: 28px auto 0; background: var(--card); }
-  .strata-link { display: block; }
-  .strata-cap a { color: var(--accent2); text-decoration: none; font-weight: 600; }
-  .strata-cap a:hover { text-decoration: underline; }
+  .ad-video, .neo-img { display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--border); margin: 28px auto 0; background: var(--card); }
+  .neo-link { display: block; }
+  .neo-cap a { color: var(--accent2); text-decoration: none; font-weight: 600; }
+  .neo-cap a:hover { text-decoration: underline; }
   .protected { padding: 8px 20px 48px; max-width: 640px; margin: 0 auto; text-align: center; }
   .protected h2 { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 12px; }
   .protected p { color: var(--sub); font-size: 16px; line-height: 1.5; margin: 0 auto; max-width: 52ch; }
   @media (max-width: 700px) { .protected h2 { font-size: 26px; } }
-  .strata-cap { margin: 10px 0 0; font-size: 14px; color: var(--sub); }
+  .neo-cap { margin: 10px 0 0; font-size: 14px; color: var(--sub); }
   .audience { max-width: 480px; margin: 0 auto 12px; }
   .waitlist-section { padding: 24px 20px 72px; text-align: center; }
   .waitlist-section h2 { font-size: 40px; letter-spacing: -0.03em; margin: 0 0 12px; }
@@ -586,7 +574,7 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">26</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">2.6.24</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">2.6.25</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a>
@@ -594,10 +582,6 @@
   </div>
 </section>
 
-<section class="plain reveal" aria-label="Fast on nothing">
-  <h2>Fast on nothing.</h2>
-  <p class="sub">It starts in a fraction of a second and answers as fast as you can type. The full numbers are in the <a href="#specs">tech specs</a>.</p>
-</section>
 
 <section class="meet-samantha reveal" id="samantha" aria-label="Meet Samantha">
   <h2>Meet Samantha.</h2>
@@ -642,19 +626,11 @@
   </div>
 </section>
 
-<section class="more reveal" aria-label="And so much more">
-  <h2>And so much more.</h2>
-  <ul class="more-list"><li>Burrow</li><li>Mail</li><li>Calendar</li><li>Notes</li><li>Reminders</li><li>Terminal</li><li>Samantha</li><li>Weather</li><li>Contacts</li><li>Calculator</li><li>Stocks</li><li>Search</li><li>Epiphany</li><li>Activity</li><li>Curbfind</li><li>Bookrank</li><li>Quotes</li><li>Lexly</li><li>Toroid</li><li>Sparkjar</li><li>Keyrate</li><li>Fieldbook</li><li>Portfolio</li><li>Clock</li><li>Music</li><li>Movies</li></ul>
-</section>
 <section class="protected reveal" id="protected" aria-label="Protected apps">
   <h2>One app crashes. The desktop stays up.</h2>
   <p>Each app runs as its own protected program, walled off from the kernel and from every other app. <span data-fact="ring3">26</span> of the <span data-fact="apps">26</span> run that way now. Every app is out of the kernel.</p>
 </section>
 
-<section class="plain reveal" aria-label="Growing every week">
-  <h2>Growing every week.</h2>
-  <p class="sub">New apps and fixes land all the time. How it grew is in the <a href="#specs">tech specs</a>.</p>
-</section>
 
 <section class="specs reveal" id="specs" aria-label="Tech specs">
   <h2>Tech specs</h2>
@@ -759,9 +735,9 @@
     </form>
     <p class="waitlist-status" id="waitlist-status" role="status" aria-live="polite"></p>
     <video class="ad-video" controls preload="none" playsinline poster="https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7-poster.jpg" aria-label="A 30 second ad for Joshua Tree"><source src="https://github.com/nulljosh/joshuatree/releases/download/1.9.32/joshua-tree-ad-v7.mp4" type="video/mp4"></video>
-    <p class="strata-cap">The 30 second version.</p>
-    <a class="strata-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md"><img class="strata-img" src="strata-hero.jpg" alt="A render of Strata, the case for the Joshua Tree board" width="1200" height="750" loading="lazy"></a>
-    <p class="strata-cap">Strata, the case. A concept for now, not for sale yet. <a class="strata-more" href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md">See the plans</a>.</p>
+    <p class="neo-cap">The 30 second version.</p>
+    <a class="neo-link" href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md"><img class="neo-img" src="neo-hero.jpg" alt="A render of Neo, the case for the Joshua Tree board" width="1200" height="750" loading="lazy"></a>
+    <p class="neo-cap">Neo, the case. A concept for now, not for sale yet. <a class="neo-more" href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md">See the plans</a>.</p>
   </div>
 </section>
 
@@ -792,7 +768,7 @@
         <li><a href="#samantha">Meet Samantha</a></li>
         <li><a href="#apps">Apps</a></li>
         <li><a href="#protected">Protected apps</a></li>
-        <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md">Strata hardware</a></li>
+        <li><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/HARDWARE.md">Neo hardware</a></li>
         <li><a href="#waitlist">Want one?</a></li>
       </ul>
     </div>
@@ -818,8 +794,7 @@
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.6.24</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
-    <p class="foot-meta"><a class="foot-cta" href="#waitlist">Want one? Join the dev-kit waitlist.</a></p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.6.25</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
 </footer>
 
