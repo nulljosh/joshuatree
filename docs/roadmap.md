@@ -12,8 +12,40 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
-## Now (set 2026-09-27)
-Samantha runs the machine. Mobile first by 2026-10-04: phone mode, the landing demo and the OS both usable on a phone screen. The PR merge queue moves one at a time, biggest first (see `docs/LOOP-HANDOFF.md` for exactly what's queued today). Full items live in the themed sections below, not here.
+## Now (set 2026-10-03)
+Samantha runs the machine, and Joshua is the face of the web portfolio. The phone demo, the OS and the landing all work on a phone. Everything below is what is left, in the order to pick it up. Merge one PR at a time, green first. `docs/LOOP-HANDOFF.md` has the restart prompt and the exact state. Full items live in the themed sections further down.
+
+## Pickup (written 2026-10-03, night)
+Main is 2.6.13 and live. CI takes about 10 minutes. The 3.0.0 gate is one thing: the desktop boots on a real Raspberry Pi 4.
+
+### Landing and demo, to A+
+- [ ] [Sonnet] Phone shows two input bars: the OS draws its own chat bar and the page draws a real composer for the phone keyboard. Keep one visible. The OS bar can hide while the composer is up, or the composer can be the only bar and feed the OS. Check: `tools/checks/phone-boot-check.py` plus a screenshot of the phone tour.
+- [ ] [Sonnet] The tour is silent after the intro video. Joshua speaks each stop in his cloned voice (`/api/speak` with `voice: "joshua"`, see the personas doc in the Turing repo), with the caption on screen and the speaker button respected. Check: extend `tools/checks/portfolio-mute-check.mjs` so muted means no audio request.
+- [ ] [Sonnet] Real-Chrome QA of the whole tour after any tour change, desktop and phone. Headless Chromium has no H.264, so it skips the intro video: run the checks with the system Chrome (`CHROMIUM_PATH`). The last full desktop pass was clean (intro, then Epiphany, Curbfind, Bookrank, Lexly, Sparkjar). The phone tour was last checked before the 2.6.13 fixes.
+- [ ] [Haiku] App tiles on the landing go stale. `python3 tools/landing-shots.py calendar` draws today's date, so the Calendar tile ages by the day. Pin the QEMU clock (`-rtc base=...`) in `tools/landing-shots.py` so every tile is the same on every run, then retake all of them.
+- [ ] [Sonnet] All icons share one design system. The fleet icons are imported untouched and keep their own tile colors (`tools/gen/import_fleet_icons.py`: `TILE` and `GLYPH`), so the Apps folder reads uneven. Decide the rule (Joshua's call: Lexly stays sky blue, #2E86DE), then bring the rest in line with the shared tile, light and margin in `tools/gen/restyle_icons.py`. Keep the `icon*-check.py` set green.
+- [ ] [Haiku] Lexly's own repo disagrees with itself: `icon.svg` is a black tile with blue dots, `assets/icon.svg` and the store icon are sky blue. Make `icon.svg` the blue one so the import needs no recolor, then drop the `GLYPH` workaround.
+- [ ] [Joshua] Judge the live landing against the Plank landing, the bar for the whole site. List what still falls short, in his words.
+
+### CI and speed
+- [ ] [Sonnet] Six of the last ten red runs were slow-runner timing flakes (Chat tool scenes, the phone mute button, Keyrate, the Apps folder layout): eight QEMUs share one runner. Find out how many cores the runner has, cap QEMUs per runner or move to 10 shards (the balancer says about 319 s of checks per shard, 12 shards about 266 s), and watch the next ten runs.
+- [ ] [Haiku] Re-balance after adding checks. New manifest lines default to 30 s until timed: run `python3 tools/gen/ci-balance.py <run-id>` on a green run (`--check` shows the numbers first) and commit the result.
+- [ ] [Haiku] About a third of recent runs were cancelled by force-pushes to an open PR. Push once per PR, or fold PRs together before CI starts.
+- [ ] [Haiku] Three red runs today were things the pre-push hook already covers (unlisted check, kernel.c over its line ceiling). The hook did not run on those pushes. Find out why (hook not installed in the worktree, or `--no-verify`) and make it hard to skip. It runs the god-file guard now.
+- [ ] [Sonnet] `tools/ci-local.sh` takes about 27 minutes (8 shards, 2 at a time). Run 4 at a time on the M4 and use the balanced manifest.
+
+### Raspberry Pi and ARM64
+- [ ] [Joshua] Buy the board (Pi 4B 4 GB, 5 V 3 A supply, 16 GB+ microSD, 3.3 V USB serial cable CP2102 or FTDI, jumper wires) plus a USB-C microSD reader and a USB-A to USB-C adapter, because the Mac mini has no SD slot. Best Buy Bellingham lists CanaKit kits but check stock by phone first. Canada Computers and Memory Express are the Vancouver options for the serial cable.
+- [ ] [Joshua] First real boot over serial, following `docs/RASPBERRY-PI.md`. Photograph the console. Whatever the chip does differently from QEMU becomes the next task.
+- [ ] [Fable] M1c: a framebuffer and the desktop on QEMU's virt machine (ramfb or virtio-gpu), then the first picture on the Pi through the mailbox framebuffer.
+- [ ] [Fable] M2: virtio keyboard, mouse, network and block drivers, each proven in QEMU. Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
+- [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO) needs a firmware blob and an 802.11 stack. Not scheduled: Ethernet first.
+
+### Known limits to recheck
+- [ ] [Sonnet] `SYS_READFILE` reads with interrupts off, so loading mid-song can glitch the audio.
+- [ ] [Sonnet] Music and Movies live in the Apps folder only, not on the dock.
+- [ ] [Sonnet] Silent movie clips play about twice too fast on this QEMU build.
+- [ ] [Haiku] Check that PR 387 (the portfolio demo starts at once and tours the launchpad) landed, and that no stray branch or worktree is left behind.
 
 ## Toward 2.0: apps leave the kernel
 - [x] [Fable] Step one, 1.7.7: Keyrate is the first app running as a real ring-3 process (`user/keyrate.c`, launched by `kernel/ring3app.c`) with its own window through two new syscalls (`SYS_WINDOW_OPEN`, `SYS_WINDOW_POLL`) and real crash isolation: a null write inside it is reaped by the kernel, the window is torn down, the desktop comes back. Proven by `tools/checks/ring3app-check.py`. Not 2.0 yet.
@@ -235,12 +267,12 @@ Needs a call from Joshua before scoping:
 
 ## Session task queue
 Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current. Each item also needs a `(plain: ...)` phrase right after the title, a few plain words a 20-year-old visitor would understand with zero dev background, that phrase is what actually shows on the landing page, never the dev title. Internal refactor work that a visitor has no way to try (nothing to click, nothing that looks different) uses `(plain: skip)`, which the generator drops from the card entirely instead of translating it into vague visitor-facing words.
-1. **Touch and an on-screen keyboard** (plain: type to her on your phone) [Sonnet]: VERSIONS 1.9.
-2. **Apps leave the kernel, each in its own protected space** (plain: apps that can't crash each other) [Sonnet]: the 2.0 gate; one app per PR with its crash check.
+1. **One input bar and a talking tour** (plain: a demo that talks you through it) [Sonnet]: the phone shows two bars and the tour is silent after the intro.
+2. **Joshua Tree on a Raspberry Pi** (plain: a real computer you can hold) [Fable]: ARM64 M1c to M4, gated on the first real boot.
 3. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
-4. **Real Activity and Clock icons** (plain: skip) [Sonnet]: they show placeholder art on the phone grid.
-5. **Music and Video players** (plain: music and video apps) [Sonnet]: VERSIONS 2.1 and 2.2.
-6. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after 2.0.
+4. **Every icon in one style** (plain: icons that match) [Sonnet]: the fleet icons keep their own tile colors.
+5. **Photos, Minesweeper, Solitaire, Voice Memos** (plain: photos, games and voice notes) [Haiku]: the "Apps after 2.2" list.
+6. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after the Pi boots.
 
 ## Top of the queue after 2.0.0
 - [x] Restore the full-bleed Joshua face in ring-3 portfolio mode (2.5.1, user/samantha.c draws the 320 px frame full screen with a glass bar; the kernel gives the portfolio chat a frameless full-screen window).
