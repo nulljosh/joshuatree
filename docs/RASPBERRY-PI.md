@@ -11,10 +11,10 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 | Boots under QEMU's generic ARM machine and prints over the UART | Works. `make -C arch/arm64 run` |
 | Boots as a Pi image on QEMU's Pi 4B model, enters at EL2, drops to EL1, prints | Works. `make -C arch/arm64 run-pi` |
 | Boots on a real Pi 4 | Built, never tried. This is the first thing to test. |
-| A picture on a monitor | Works on QEMU's Pi 4B model: the kernel asks the GPU for a screen through the mailbox and draws a simple desktop (`tools/checks/arm64-m1c-check.py`). Never tried on a real board. |
+| A picture on a monitor | Works on QEMU's Pi 4B model: the kernel asks the GPU for a screen through the mailbox, draws a simple desktop and prints the same boot lines in its window that go out over serial (`tools/checks/arm64-m1c-check.py`). Never tried on a real board. |
 | Keyboard, mouse, disk, network on the Pi | Not yet. M2 to M4. |
 
-So on day one, watch two things: text in a serial terminal, and with a monitor plugged in, a simple desktop of plain boxes (a grey menu bar, a white window with an orange title bar, a dock). The text is the one that tells us what went wrong if the picture does not show.
+So on day one, watch two things: the text in a serial terminal, and with a monitor plugged in, a simple desktop of plain boxes with the same boot lines written in its white window. If the serial cable is wrong, the monitor still tells you how far the kernel got. If both are blank, it is the SD card or `config.txt`.
 
 ## What to buy
 
@@ -93,7 +93,7 @@ M1c fb ok
 
 The lines after `M0 ok` are the exception table, the memory map with the caches on, a small heap, and the timer. They run on QEMU's Pi model; on a real board the interrupt controller setup is the part most likely to need a fix. If the output stops after `M1 vectors set`, the memory map is the likely cause on real hardware; if it stops after `M1 svc ok`, it is the interrupt controller. Send me the last line you see.
 
-`M1c fb ok` means the GPU gave us a screen and the desktop is drawn: the monitor should show it. If the text says `M1c fb ok` and the monitor stays black, the picture is in memory but the GPU is not showing it (photograph both). If it says `M1c mailbox framebuffer refused`, the firmware said no.
+`M1c fb ok` means the GPU gave us a screen and the desktop is drawn: the monitor should show it, with these same lines in the white window (lines printed before the screen came up are replayed there). If the text says `M1c fb ok` and the monitor stays black, the picture is in memory but the GPU is not showing it (photograph both). If it says `M1c mailbox framebuffer refused`, the firmware said no.
 
 That is milestones M0, M1a and the first picture on real hardware. To leave `screen`, press Ctrl-A then K.
 

@@ -42,9 +42,11 @@ static void uart_init(void) {
     REG(UART_CR) = 0x301;  /* UART, TX, RX on */
 #endif
 }
+static void console_putc(char c);   /* the same text, on the screen once there is one */
 static void uart_putc(char c) {
     while (REG(UART_FR) & TXFF) {}
     REG(UART_DR) = (unsigned char)c;
+    console_putc(c);
 }
 static void uart_puts(const char *s) { while (*s) uart_putc(*s++); }
 static void uart_hex(unsigned long v) {
@@ -232,6 +234,47 @@ static void fb_rect(int x, int y, int w, int h, unsigned c) {
     if (fb_swap) c = (c & 0xFF00FF00u) | (c >> 16 & 0xFF) | (c & 0xFF) << 16;
     for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) fb[j * fb_pitch + i] = c;
 }
+/* ---- The boot log on the screen. Everything the kernel prints over the UART is also kept in a small buffer and drawn
+   into the window with the old 8x16 VGA font, so a first boot with the monitor plugged in shows what happened even if
+   the serial cable is wrong. Lines printed before the screen exists are replayed once it does. ---- */
+#include "../../drivers/vgafont.h"
+#define LOG_MAX 4096
+#define CON_X 158
+#define CON_Y 132
+#define CON_COLS 61
+#define CON_ROWS 19
+#define CON_FG 0x00202020
+static char con_log[LOG_MAX];
+static unsigned con_len, con_col, con_row;
+static int con_live;   /* the framebuffer is up: draw as we go */
+static void con_glyph(unsigned col, unsigned row, char c) {
+    if (c < VGAFONT_FIRST || c > VGAFONT_LAST) return;
+    const unsigned char *g = vgafont_glyphs + (c - VGAFONT_FIRST) * 16;
+    unsigned px = CON_FG;
+    if (fb_swap) px = (px & 0xFF00FF00u) | (px >> 16 & 0xFF) | (px & 0xFF) << 16;
+    for (int y = 0; y < 16; y++)
+        for (int x = 0; x < 8; x++)
+            if (g[y] & (0x80 >> x)) fb[(CON_Y + row * 16 + y) * fb_pitch + CON_X + col * 8 + x] = px;
+}
+static void con_draw(char c) {
+    if (c == '\r') return;
+    if (c == '\n' || con_col >= CON_COLS) {
+        con_col = 0;
+        if (++con_row >= CON_ROWS) { con_row = 0; fb_rect(CON_X, CON_Y, CON_COLS * 8, CON_ROWS * 16, 0x00ffffff); }   /* a full page: start over at the top */
+        if (c == '\n') return;
+    }
+    con_glyph(con_col++, con_row, c);
+}
+static void console_putc(char c) {
+    if (con_len < LOG_MAX) con_log[con_len++] = c;
+    if (con_live) con_draw(c);
+}
+static void con_start(void) {   /* the screen is ready: replay what was printed before it */
+    con_live = 1;
+    con_col = con_row = 0;
+    for (unsigned i = 0; i < con_len; i++) con_draw(con_log[i]);
+}
+
 static void fb_init(void) {
     if (!fb_setup()) return;
     fb_rect(0, 0, FB_W, FB_H, 0x00203040);       /* desktop */
@@ -239,6 +282,7 @@ static void fb_init(void) {
     fb_rect(150, 100, 500, 350, 0x00ffffff);     /* a window */
     fb_rect(150, 100, 500, 28, 0x00b5502c);      /* its title bar, the house accent */
     fb_rect(300, 540, 200, 44, 0x00505a68);      /* the dock */
+    con_start();
     /* ponytail: the framebuffer sits in cacheable RAM, so a real GPU only sees pixels once they are cleaned out.
        One clean after drawing is enough for a still picture; a live desktop wants the buffer mapped write-combining. */
     dcache_clean(fb, (unsigned long)fb_pitch * FB_H * 4);
