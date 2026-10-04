@@ -60,13 +60,41 @@ static void rect(int x, int y, int w, int h, unsigned c) {
 }
 static void text(const char *s, int x, int y, unsigned fg) { jt_text_draw(&win, JT_FACE_BODY, x, y, fg, s); }
 
-/* Fit a label to maxw pixels by cutting characters, so it never spills into the next tile. */
-static void label(char *out, const struct jt_dirent *e, int maxw) {
-    int n = 0;
-    while (e->name[n] && n < JT_DIRENT_NAME - 2) { out[n] = e->name[n]; n++; }
-    if (e->is_dir) out[n++] = '/';
-    out[n] = 0;
-    while (n > 1 && jt_text_width(JT_FACE_BODY, out) > maxw) out[--n] = 0;
+/* A file name as the line(s) it needs. A short name stays on one line. A longer one breaks onto a second
+   line, and if that still does not fit it keeps "..." and the tail, so the extension survives. With
+   lines = 1 (the list view) nothing wraps: the end is cut and "..." added. Buffers are LABEL_BUF wide. */
+#define LABEL_BUF (JT_DIRENT_NAME + 6)
+static int fits_n(const char *s, int n, int maxw) {
+    char t[LABEL_BUF]; for (int i = 0; i < n; i++) t[i] = s[i];
+    t[n] = 0; return jt_text_width(JT_FACE_BODY, t) <= maxw;
+}
+static void label(char *l1, char *l2, const struct jt_dirent *e, int maxw, int lines) {
+    char full[LABEL_BUF]; int n = 0;
+    while (e->name[n] && n < JT_DIRENT_NAME - 1) { full[n] = e->name[n]; n++; }
+    if (e->is_dir) full[n++] = '/';
+    full[n] = 0; l1[0] = 0; l2[0] = 0;
+    if (fits_n(full, n, maxw)) { for (int i = 0; i <= n; i++) l1[i] = full[i]; return; }
+    if (lines == 1) {
+        for (int a = n - 1; a >= 1; a--) {
+            for (int i = 0; i < a; i++) l1[i] = full[i];
+            l1[a] = '.'; l1[a + 1] = '.'; l1[a + 2] = '.'; l1[a + 3] = 0;
+            if (jt_text_width(JT_FACE_BODY, l1) <= maxw) return;
+        }
+        return;
+    }
+    int a = 1; while (a < n && fits_n(full, a + 1, maxw)) a++;
+    for (int d = a; d > 1; d--)                       /* prefer to break before the dot: "WEATHER" then ".TXT" */
+        if (full[d] == '.') { a = d; break; }
+    for (int i = 0; i < a; i++) l1[i] = full[i];
+    l1[a] = 0;
+    const char *rest = full + a; int rl = n - a;
+    if (fits_n(rest, rl, maxw)) { for (int i = 0; i <= rl; i++) l2[i] = rest[i]; return; }
+    for (int t = rl - 1; t >= 1; t--) {
+        l2[0] = l2[1] = l2[2] = '.';
+        for (int k = 0; k < t; k++) l2[3 + k] = rest[rl - t + k];
+        l2[3 + t] = 0;
+        if (jt_text_width(JT_FACE_BODY, l2) <= maxw) return;
+    }
 }
 
 static int tb_x(int i) { return 20 + i * (TB_W + 8); }
@@ -143,7 +171,7 @@ static void glyph(int x, int y, int size, int is_dir) {
 }
 
 static void draw(void) {
-    char lb[JT_DIRENT_NAME + 2];
+    char lb[LABEL_BUF], lb2[LABEL_BUF];
     rect(0, 0, (int)win.width, (int)win.height, BG);
     const char *names[2] = {"List", "Icons"};
     for (int i = 0; i < 2; i++) {
@@ -160,8 +188,9 @@ static void draw(void) {
             const struct jt_dirent *e = &raw[order[i]];
             if (i == sel) rect(x - 4, y - 4, TILE - 8, TILE - 8, SEL);
             glyph(x + (TILE - 8 - ICON) / 2, y, ICON, (int)e->is_dir);
-            label(lb, e, TILE - 8);
+            label(lb, lb2, e, TILE - 8, 2);
             text(lb, x, y + ICON + 6, INK);
+            if (lb2[0]) text(lb2, x, y + ICON + 6 + LIST_H - 2, INK);
         }
     } else {
         for (int i = 0; i < count; i++) {
@@ -169,7 +198,7 @@ static void draw(void) {
             if (y + LIST_H > (int)win.height - 24) break;
             const struct jt_dirent *e = &raw[order[i]];
             if (i == sel) rect(16, y - 3, (int)win.width - 32, LIST_H, SEL);
-            label(lb, e, (int)win.width - 48);
+            label(lb, lb2, e, (int)win.width - 48, 1);
             text(lb, 20, y - 1, INK);
         }
     }

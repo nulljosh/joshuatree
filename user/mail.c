@@ -110,10 +110,8 @@ static void seed(void) {
 /* Same format as mail_load in kernel/mail.h: "r|from|subject|body\n". Parsed in
    place, the separators becoming NULs. */
 static void load(void) {
-    int fd = jt_open("MAIL.TXT", JT_O_RDONLY);
-    if (fd < 0) { seed(); return; }
-    int n = jt_read(fd, filebuf, 4096 - 1);
-    jt_close(fd);
+    /* One jt_read moves 255 bytes, so it only ever saw the first messages. jt_readfile takes the whole file. */
+    int n = jt_readfile("MAIL.TXT", filebuf, 4096 - 1);
     if (n < 0) { seed(); return; }
     filebuf[n] = 0;
     char *b = filebuf;

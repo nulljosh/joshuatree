@@ -73,6 +73,7 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
   - 2.6.29: Sparkjar is now Hikko inside the OS, and it shows the real forum's top twelve ideas (title, votes, text, plan) through the Worker and SYS_HTTP_GET. The ten demo ideas stay as the offline fallback, votes stay on this machine, and Samantha still opens it when you say Sparkjar or Hotaru.
   - 2.6.30: every app name inside the OS follows the fleet. Lexly is Tonchi (Samantha still opens it as "lexly"), the Portfolio catalog says Brick, Notate and Hagaki, and it gains Madobe and Plank. Tonchi keeps its old web address until the new one exists.
   - 2.6.31: Stocks shows all five watchlist rows with their price and sparkline again. The app read only the first 255 bytes of its data file, so only AAPL filled. It now reads the whole file, and the status line says Retrying or Offline instead of stale text.
+  - 2.6.32: Burrow wraps a long file name onto a second line instead of cutting it. Mail and Weather now read their whole data file (a single read only moved 255 bytes), so a long inbox or a long place name no longer drops the rest.
 - 3.0: It boots a real computer. One reference mini PC: UEFI, USB keyboard, mouse and stick, a real disk, a real network card, real sound.
 - 3.1: The Strata Kit ships. The $199 case and OS stick for the 3.0 board, bring your own parts (MONEY.md has the math).
 - 4.0: True multitasking. A compositor, many windows, resize and minimize, apps that never freeze each other.
