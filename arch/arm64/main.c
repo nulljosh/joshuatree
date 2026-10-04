@@ -72,9 +72,15 @@ void exc_sync(struct frame *f) {
     uart_puts("sync exception, ESR "); uart_hex(f->esr); uart_puts(" ELR "); uart_hex(f->elr); uart_puts("\n");
     for (;;) __asm__ volatile ("wfe");
 }
-void exc_irq(struct frame *f) {
+void exc_irq(struct frame *f) {   /* the timer stops after three ticks, so a core asleep in wfi can only be woken by a device */
     (void)f;
     unsigned iar = GICC(0x0C), id = iar & 0x3FF;
+#ifndef PI_BUILD
+    if (id >= 48 && id < 80) {   /* QEMU virt wires virtio-mmio slot n to INTID 48 + n */
+        unsigned long b = 0x0A000000UL + 0x200UL * (id - 48);
+        REG(b + 0x64) = REG(b + 0x60);   /* acknowledge what the device raised, or a level interrupt never drops */
+    }
+#endif
     if (id == TIMER_INTID) {
         __asm__ volatile ("msr cntp_tval_el0, %0" :: "r"(timer_step));   /* next tick */
         ticks++;
@@ -318,6 +324,11 @@ static void vq_kick(struct vq *v) { __asm__ volatile ("dsb sy" ::: "memory"); VR
 /* Keyboard and mouse: one event queue each, lent 8-byte buffers the device fills with Linux evdev events. Both devices
    speak the same events, so one driver serves both. */
 #define MAX_INPUT 2
+static void gic_enable(unsigned id) {   /* a shared peripheral: on, priority, sent to core 0 */
+    *(volatile unsigned char *)(GICD_BASE + 0x400 + id) = 0x80;
+    *(volatile unsigned char *)(GICD_BASE + 0x800 + id) = 1;
+    GICD(0x100 + 4 * (id / 32)) = 1u << (id % 32);
+}
 struct input_event { unsigned short type, code; unsigned value; };
 static struct vq vin[MAX_INPUT];
 static struct input_event *vin_ev[MAX_INPUT];
@@ -331,6 +342,7 @@ static int input_init(void) {
         for (unsigned i = 0; i < VQ; i++) vq_give(v, i, &ev[i], sizeof *ev, 1);
         VR(b, 0x70) = 1 | 2 | 8 | 4;                /* driver ok */
         vq_kick(v);
+        gic_enable(48 + (unsigned)((b - VIRTIO_BASE) / 0x200));   /* interrupt when an event lands */
         vin_ev[nvin++] = ev;
     }
     return nvin;
@@ -345,8 +357,7 @@ static void input_event(struct input_event e) {
         mouse_moved = 0;
     }
 }
-/* ponytail: polled, not interrupt driven. The GIC is already up (M1a), so wiring SPI 16+slot is the upgrade once the
-   desktop has an event loop to deliver input to. */
+/* The interrupt only wakes the core and acknowledges the device; the events are read here, in the main loop. */
 static void input_poll(void) {
     for (int n = 0; n < nvin; n++) {
         int id;
@@ -473,7 +484,7 @@ void main(void) {
     int inputs = input_init();
     if (inputs) {
         uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n');
-        for (;;) input_poll();
+        for (;;) { __asm__ volatile ("wfi"); input_poll(); }   /* asleep until a device interrupts */
     }
     for (;;) __asm__ volatile ("wfe");
 }

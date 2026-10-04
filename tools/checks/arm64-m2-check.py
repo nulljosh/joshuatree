@@ -10,6 +10,8 @@ and virtio-tablet-device waits for "M2 input ready, devices 2" on the UART, then
 send-key (the same path a real keystroke in the QEMU window takes) and checks the kernel prints each Linux key code
 going down and up: j is 36, t is 20. Then moves the pointer to the middle of the top half and clicks, through QMP
 input-send-event, and checks the kernel prints the position scaled to the 800x600 screen and the left button (272).
+The main loop sleeps in wfi and the boot timer has stopped by then, so every event arriving at all proves the virtio
+interrupts reach the core through the GIC; polling alone would hang.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-m2-check.py   (from the repo root)
 """
