@@ -184,6 +184,7 @@ once |6|Idle tour autoplay fix is in place (tourArmed reset)|node ./tools/checks
 once |6|RTC local-time shift math (v86's CMOS answers in UTC)|node ./tools/checks/rtc-timezone-check.mjs
 retry|0|Stocks opens without a supported network card|python3 ./tools/checks/stocks-dock-check.py
 retry|0|Stocks chart line is antialiased (coverage blend, no stair-stepping)|python3 ./tools/checks/stocks-aa-check.py
+retry|0|Stocks fills all five watchlist rows from a full-size stub Worker reply (fails if the app reads only part of STOCKS.TXT)|python3 ./tools/checks/ring3stocks-list-check.py
 once |6|Stocks live quotes and kernel parsing|node ./tools/checks/stocks-live-check.mjs
 retry|7|Epiphany command bar: AAPL GP draws the chart, an unknown code errors cleanly|python3 ./tools/checks/epiphany-cmdbar-check.py
 once |6|Worker /api/proxy allowlist|node ./tools/checks/worker-proxy-check.mjs

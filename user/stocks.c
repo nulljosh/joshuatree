@@ -48,8 +48,8 @@ static int num(const char **p) {
 }
 static void eol(const char **p) { while (**p && **p != '\n') (*p)++; if (**p) (*p)++; }
 static void load(void) {
-    int fd = jt_open("STOCKS.TXT", JT_O_RDONLY), n = fd < 0 ? 0 : jt_read(fd, file, sizeof file - 1);
-    if (fd >= 0) jt_close(fd);
+    /* jt_read moves 255 bytes a call, so one read only ever saw the first row (AAPL). Take the whole file. */
+    int n = jt_readfile("STOCKS.TXT", file, sizeof file - 1);
     file[n < 0 ? 0 : n] = 0;
     const char *p = file;
     if (*p != 'r') return;
@@ -183,11 +183,18 @@ static void draw(int fetching) {
     chart(px, cy0, pw, ch, pts[sel], n, col);
     rect(px, cy0 + ch + 4, pw, 1, RULE);
     int sy = cy0 + ch + 14;
-    text(n ? (stale[sel] ? "Stale quote. R to retry." : "Yahoo Finance / USD / may be delayed") : "R to retry. Quote service unavailable.", px, sy, MUTED, 0);
-    if (n) { /* provider time as hh:mm UTC */
-        int hr = stamp[sel] / 3600 % 24, mi = stamp[sel] / 60 % 60, p = cat(b, 0, "As of ");
-        b[p++] = (char)('0' + hr / 10); b[p++] = (char)('0' + hr % 10); b[p++] = ':'; b[p++] = (char)('0' + mi / 10); b[p++] = (char)('0' + mi % 10); b[p] = 0;
-        cat(b, p, " UTC");
+    /* The status line only says what is on screen: fresh quotes, old quotes with their time, or offline. */
+    int hr = stamp[sel] / 3600 % 24, mi = stamp[sel] / 60 % 60;
+    char when[24]; int wp = 0;
+    when[wp++] = (char)('0' + hr / 10); when[wp++] = (char)('0' + hr % 10); when[wp++] = ':';
+    when[wp++] = (char)('0' + mi / 10); when[wp++] = (char)('0' + mi % 10); when[wp] = 0;
+    cat(when, wp, " UTC");
+    if (fetching) text("Retrying...", px, sy, MUTED, 0);
+    else if (!n || stale[sel]) text("Offline. R to retry.", px, sy, MUTED, 0);
+    else text("Yahoo Finance / USD / may be delayed", px, sy, MUTED, 0);
+    if (n && !fetching) {
+        int p = cat(b, 0, stale[sel] ? "Last quote " : "As of ");
+        cat(b, p, when);
         text(b, px, sy + 22, MUTED, 0);
     }
 }
