@@ -74,6 +74,7 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 - [x] [Fable] M2 keyboard and mouse, 2.6.22: one modern virtio-mmio input driver reads key down and up, pointer position and clicks, polled (`tools/checks/arm64-m2-check.py`).
 - [x] [Fable] M2 disk, 2.6.22: a virtio-blk driver reads a known sector off a disk image (`tools/checks/arm64-m2-check.py`). Writes and a FAT reader on top are next.
 - [x] [Fable] M2 network, 2.6.22: a virtio-net driver sends an ARP request to the router and prints its real answer (`tools/checks/arm64-m2-check.py`).
+- [x] [Fable] M3a, 2.6.24: the first EL0 program (`arch/arm64/user.S`) runs unprivileged, prints and exits through `svc` (write and exit), and a deliberate load from a kernel-only page faults while the kernel prints it and survives (`tools/checks/arm64-m3-check.py`). Next: more than one program, per-program address spaces, then the apps.
 - [ ] [Fable] M2: IP, DHCP and a TCP connection on top of the ARM network card (port the i386 stack above the NIC), and the net and disk drivers moved to interrupts too (input already is). Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
 - [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO) needs a firmware blob and an 802.11 stack. Not scheduled: Ethernet first.
 

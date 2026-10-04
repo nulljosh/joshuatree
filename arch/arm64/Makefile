@@ -16,6 +16,8 @@ libc.o: libc.c
 	$(FPCC) -c $< -o $@
 start.o: start.S
 	$(CC) -c $< -o $@
+user.o: user.S
+	$(CC) -c $< -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
 main.o: main.c
@@ -24,12 +26,12 @@ pi-start.o: start.S
 	$(CC) -c $< -o $@
 pi-main.o: main.c
 	$(CC) -DPI_BUILD -c $< -o $@
-kernel8.elf: start.o vectors.o main.o ttf.o text.o libc.o linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o main.o ttf.o text.o libc.o
-pi-kernel8.elf: pi-start.o vectors.o pi-main.o ttf.o text.o libc.o linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o pi-main.o ttf.o text.o libc.o
+kernel8.elf: start.o vectors.o user.o main.o ttf.o text.o libc.o linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o ttf.o text.o libc.o
+pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o ttf.o text.o libc.o linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o ttf.o text.o libc.o
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o pi-main.o ttf.o text.o libc.o
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o ttf.o text.o libc.o
 pi: kernel8.img
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf

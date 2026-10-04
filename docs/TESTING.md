@@ -171,6 +171,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | ARM64: the aarch64 kernel boots under QEMU and prints over the UART (skips where the tools are missing) | `tools/checks/arm64-m0-check.py` | retry |
 | ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing) | `tools/checks/arm64-m1c-check.py` | retry |
 | ARM64 M2: the aarch64 kernel drives virtio disk, network, keyboard and mouse: a sector read back, a real ARP answer, key presses, moves and clicks (skips where the tools are missing) | `tools/checks/arm64-m2-check.py` | retry |
+| ARM64 M3a: an unprivileged EL0 program prints through a write syscall, exits, and a direct access to a kernel-only page faults while the kernel survives (skips where the tools are missing) | `tools/checks/arm64-m3-check.py` | retry |
 
 `retry` checks boot a VM and get one retry for host timing noise; `once` checks are pure and never retried.
 

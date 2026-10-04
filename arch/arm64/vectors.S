@@ -61,8 +61,8 @@ vectors:
     ventry irq_entry
     ventry bad_entry
     ventry bad_entry
-    ventry bad_entry        /* lower EL, AArch64 */
-    ventry bad_entry
+    ventry el0_sync_entry   /* lower EL, AArch64: svc and faults from EL0 */
+    ventry irq_entry
     ventry bad_entry
     ventry bad_entry
     ventry bad_entry        /* lower EL, AArch32 */
@@ -74,6 +74,12 @@ sync_entry:
     save_all
     mov x0, sp
     bl exc_sync
+    restore_all
+    eret
+el0_sync_entry:
+    save_all
+    mov x0, sp
+    bl exc_el0_sync
     restore_all
     eret
 irq_entry:
@@ -88,3 +94,74 @@ bad_entry:
     bl exc_bad
 1:  wfe
     b 1b
+
+/* M3a: enter_user(entry, sp, arg) saves the kernel's callee-saved registers, stack and interrupt mask, then drops to EL0
+   at entry with sp_el0 = sp, x0 = arg and every other register cleared. leave_user(status) is how a program ends (exit or a
+   fault): it restores that state and returns from enter_user with status in x0. */
+.section .text
+.global enter_user
+enter_user:
+    adrp x3, k_ctx
+    add x3, x3, :lo12:k_ctx
+    stp x19, x20, [x3]
+    stp x21, x22, [x3, #16]
+    stp x23, x24, [x3, #32]
+    stp x25, x26, [x3, #48]
+    stp x27, x28, [x3, #64]
+    stp x29, x30, [x3, #80]
+    mov x4, sp
+    mrs x5, daif
+    stp x4, x5, [x3, #96]
+    msr elr_el1, x0
+    msr sp_el0, x1
+    mov x4, #0x3c0              /* EL0t, interrupts masked */
+    msr spsr_el1, x4
+    mov x0, x2
+    mov x1, xzr
+    mov x2, xzr
+    mov x3, xzr
+    mov x4, xzr
+    mov x5, xzr
+    mov x6, xzr
+    mov x7, xzr
+    mov x8, xzr
+    mov x9, xzr
+    mov x10, xzr
+    mov x11, xzr
+    mov x12, xzr
+    mov x13, xzr
+    mov x14, xzr
+    mov x15, xzr
+    mov x16, xzr
+    mov x17, xzr
+    mov x18, xzr
+    mov x19, xzr
+    mov x20, xzr
+    mov x21, xzr
+    mov x22, xzr
+    mov x23, xzr
+    mov x24, xzr
+    mov x25, xzr
+    mov x26, xzr
+    mov x27, xzr
+    mov x28, xzr
+    mov x29, xzr
+    mov x30, xzr
+    eret
+.global leave_user
+leave_user:
+    adrp x3, k_ctx
+    add x3, x3, :lo12:k_ctx
+    ldp x19, x20, [x3]
+    ldp x21, x22, [x3, #16]
+    ldp x23, x24, [x3, #32]
+    ldp x25, x26, [x3, #48]
+    ldp x27, x28, [x3, #64]
+    ldp x29, x30, [x3, #80]
+    ldp x4, x5, [x3, #96]
+    mov sp, x4
+    msr daif, x5
+    ret
+.section .bss
+.balign 16
+k_ctx: .skip 112
