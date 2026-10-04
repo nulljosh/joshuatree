@@ -775,7 +775,7 @@ if (typeof document !== "undefined") (function () {
     if (/[?&]portfolio\b/.test(location.search)) {
       introVideo = document.createElement("video");
       introVideo.src = "face-joshua/intro.mp4";
-      introVideo.muted = introVideo.loop = introVideo.autoplay = introVideo.playsInline = true;
+      introVideo.muted = introVideo.autoplay = introVideo.playsInline = true;   // plays once and holds its last frame: a looping muted copy kept a visitor on the intro for minutes while the kernel booted
       introVideo.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:6;background:#e9e2d4;transition:opacity .6s;";
       container.appendChild(introVideo);
       introVideo.addEventListener("error", function () { introVideo.dispatchEvent(new Event("fade")); });   // missing or unplayable: the live kernel face takes the intro as before
@@ -2191,6 +2191,28 @@ if (typeof document !== "undefined") (function () {
   // same unconditional `KEY_ESC -> return` gui_launch_chat_app already
   // honors -- landing cleanly on the normal desktop the rest of this lap's
   // dock-based tour already assumes.
+  // The Apps folder (dock slot 0) opens the launchpad: the apps that are not on the portfolio dock. Arrow-free walk with 'd'
+  // (next tile), Enter opens, Escape returns to the grid on the same tile, a last Escape closes the launchpad.
+  var PORTFOLIO_LAUNCHPAD = [[0, BURROW_APP], [1, MAIL_APP], [2, CALENDAR_APP], [3, NOTES_APP], [4, REMINDERS_APP], [5, TERMINAL_APP], [7, WEATHER_APP]];   // tile index: Samantha (6) is his chat, already shown
+  async function runLaunchpadTour(gen) {
+    if (focused || tourGen !== gen || !adaptersReady) return;
+    var pos = dockSlotPos(0), at = 0;
+    await clickAt(pos[0], pos[1]); await sleep(1200);
+    for (var i = 0; i < PORTFOLIO_LAUNCHPAD.length; i++) {
+      if (focused || tourGen !== gen) return;
+      var idx = PORTFOLIO_LAUNCHPAD[i][0], app = PORTFOLIO_LAUNCHPAD[i][1];
+      if (idx > at) { await emulator.keyboard_send_text(new Array(idx - at + 1).join('d'), 120); at = idx; await sleep(400); }
+      await emulator.keyboard_send_keys([13], 80);
+      var t0 = Date.now(); await sleep(700);
+      updateHeadline(app.name);
+      await runScript(app.script, gen);
+      var rest = (app.dwell || DWELL_MS) - (Date.now() - t0); if (rest > 0) await sleep(rest);
+      if (focused || tourGen !== gen) return;
+      await emulator.keyboard_send_keys([27], 80); await sleep(700);
+    }
+    await emulator.keyboard_send_keys([27], 80); await sleep(900);   // close the launchpad itself
+    resetHeadline();
+  }
   async function phoneSamanthaIntro(gen) {
     if (!IS_PHONE && !PORTFOLIO_MODE) return;   // portfolio: boots into his face on every device, so this scene runs there too
     if (focused || tourGen !== gen || !adaptersReady) return;
@@ -2203,14 +2225,7 @@ if (typeof document !== "undefined") (function () {
       await sleep(150);
     }
     if (focused || tourGen !== gen) return;
-    if (tapTalkBtn && PORTFOLIO_MODE && !audioRunning()) {   // the demo starts at once; the speaker button, top right, is how a visitor turns the sound on
-      // Wait for the tap so her reply is audible; give up after 20s and run
-      // silently so the demo still moves (the button stays up for later).
-      tapTalkBtn.hidden = false;
-      await Promise.race([tapTalkPromise, new Promise(function (r) { setTimeout(r, PORTFOLIO_MODE ? 120000 : 5000); })]); // portfolio: he waits for the first click so his voice is heard, not spoken into a suspended AudioContext
-      if (focused || tourGen !== gen) return;
-      await new Promise(function (r) { setTimeout(r, 400); }); // let resume() settle
-    }
+    if (tapTalkBtn && PORTFOLIO_MODE && !audioRunning()) tapTalkBtn.hidden = false;   // portfolio: the demo starts at once, the speaker button (top right) is how a visitor turns the sound on
     updateHeadline(PORTFOLIO_MODE ? 'Joshua' : 'Samantha');
     if (PORTFOLIO_MODE) {
       // Portfolio: his face is the whole screen on every device. One line
@@ -2222,7 +2237,8 @@ if (typeof document !== "undefined") (function () {
         introVideo.loop = false;
         if (introVideo.paused) introVideo.play().catch(function () {});
         var vStart = Date.now();
-        while (introVideo && !introVideo.ended && Date.now() - vStart < 45000) {
+        // Escape starts ~1.5 s before the video ends so the fade lands on the last frame instead of after it
+        while (introVideo && !introVideo.ended && !(introVideo.duration && introVideo.duration - introVideo.currentTime < 1.5) && Date.now() - vStart < 45000) {
           if (focused || tourGen !== gen) return;
           await sleep(200);
         }
@@ -2231,7 +2247,8 @@ if (typeof document !== "undefined") (function () {
         // visitor sees him in the OS; then Escape drops to the dock for the tour. A phone stays on his face.
         // Escape while the video still covers the screen, then fade it: the visitor goes from the video straight into the tour
         // (the dock, or the phone's home grid), never through a still live face with its eyes shut.
-        await escClose(); await sleep(400);
+        await escClose();
+        if (introVideo) { while (introVideo && !introVideo.ended && Date.now() - vStart < 45000) await sleep(100); }   // let the last word finish
         if (introVideo) introVideo.dispatchEvent(new Event("fade"));
         await sleep(700);
         resetHeadline();
@@ -2349,14 +2366,20 @@ if (typeof document !== "undefined") (function () {
     // Portfolio mode: the dock is Joshua's own apps (GUI_DOCK_PORTFOLIO in kernel.c,
     // same slot order), so the show is just that, each one opened from its real dock
     // tile and closed by its real X. No reboot between laps, nothing here writes state.
+    var introDone = false;
     while (PORTFOLIO_MODE && !focused && tourGen === gen) {
-      await phoneSamanthaIntro(gen);   // his face first; the scene ends with Escape, which drops to the dock the tour below drives
+      if (!introDone) await phoneSamanthaIntro(gen);   // later laps skip it: typing his line into the bare desktop opened the launchpad and left it sitting there
+      introDone = true;   // his face first; the scene ends with Escape, which drops to the dock the tour below drives
       if (focused || tourGen !== gen) return;
       if (IS_PHONE) { await phonePortfolioTour(gen); while (!focused && tourGen === gen) await sleep(1000); return; }   // the phone pokes around the OS like the desktop does, then stays on him; leaving the loop would let the idle watchdog start a new lap that types into his chat
       for (var p = 0; p < PORTFOLIO_TOUR.length; p++) {
         if (focused || tourGen !== gen || !adaptersReady) return;
         await runSoloApp(gen, PORTFOLIO_TOUR[p]);
       }
+      await runLaunchpadTour(gen);
+      await demoAboutPanel(gen);
+      if (focused || tourGen !== gen) return;
+      await sleep(2500);
     }
     while (!focused && tourGen === gen) {
       lapIndex++; // fix/demo-aplus-1 item 6: picks this lap's Samantha exchange below
@@ -2479,11 +2502,10 @@ if (typeof document !== "undefined") (function () {
     Curbfind: browseList(4),
     Bookrank: browseList(4),
     Sparkjar: browseList(2).concat([{ type: 'keys', text: 'u', speed: 200 }, { type: 'wait', ms: 500 }, { type: 'scancodes', codes: downTimes(2), speed: 350 }, { type: 'keys', text: 'u', speed: 200 }]), // upvote two ideas
-    Keyrate: [{ type: 'wait', ms: 700 }, { type: 'keys', text: 'A real OS, from scratch, and every app on it. ', speed: 70 }],
-    Calculator: [{ type: 'wait', ms: 700 }, { type: 'keys', text: '12*7', speed: 80 }, { type: 'wait', ms: 500 }, { type: 'keys', text: '\n', speed: 200 }, { type: 'wait', ms: 800 }]
+    Keyrate: [{ type: 'wait', ms: 700 }, { type: 'keys', text: 'A real OS, from scratch, and every app on it. ', speed: 70 }]
   };
-  var PORTFOLIO_DWELL = { Epiphany: 16000, Curbfind: 7000, Bookrank: 6000, Sparkjar: 7000, Keyrate: 8000, Calculator: 4000 };
-  var PORTFOLIO_TOUR = ['Epiphany', 'Curbfind', 'Bookrank', 'Lexly', 'Sparkjar', 'Quotes', 'Keyrate', 'Toroid', 'Calculator']
+  var PORTFOLIO_DWELL = { Epiphany: 16000, Curbfind: 7000, Bookrank: 6000, Sparkjar: 7000, Keyrate: 8000 };
+  var PORTFOLIO_TOUR = ['Epiphany', 'Curbfind', 'Bookrank', 'Lexly', 'Sparkjar', 'Quotes', 'Keyrate', 'Toroid']
     // Lexly, Quotes and Toroid are click-only cards in the kernel, so they get a short beat instead of seconds of blank window.
     .map(function (name, i) { return { name: name, slot: i + 2, script: PORTFOLIO_SCRIPTS[name] || [], dwell: PORTFOLIO_DWELL[name] || 3000 }; }); // slot 1 is the Portfolio list, the show opens the apps themselves, never the list
   // Boot takes a few seconds; the tour waits for graphical mode plus a
