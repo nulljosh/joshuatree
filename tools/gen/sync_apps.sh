@@ -22,7 +22,7 @@ curbfind|curbfind|web/index.html|drivers/app_curbfind.h|app_curbfind
 keyrate|keyrate|index.html|drivers/app_keyrate.h|app_keyrate
 bookrank|bookrank|index.html|drivers/app_bookrank.h|app_bookrank
 quotestreak|quotestreak|index.html|drivers/app_quotestreak.h|app_quotestreak
-lexly|lexly|index.html|drivers/app_lexly.h|app_lexly
+tonchi|lexly|index.html|drivers/app_tonchi.h|app_tonchi
 toroid|conway|index.html|drivers/app_toroid.h|app_toroid
 hikko|hikko|index.html|drivers/app_hikko.h|app_hikko
 fieldbook|fieldbook|index.html|drivers/app_fieldbook.h|app_fieldbook

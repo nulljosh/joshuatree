@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Lexly runs as a real ring-3 process, the seventh app out of the kernel,
+"""Tonchi runs as a real ring-3 process, the seventh app out of the kernel,
 and crashing it does not take the desktop with it (roadmap 2.0, 1.9.1).
 
-Boots headless with `open=lexly`, which launches Lexly from the dock path
-the moment the desktop is up. Lexly is user/lexly.c, a flat binary
+Boots headless with `open=tonchi`, which launches Tonchi from the dock path
+the moment the desktop is up. Tonchi is user/tonchi.c, a flat binary
 loaded off the VFS by exec_user and run at CPL 3 through the same
 table-driven launcher Keyrate, Toroid, Calculator, Quotes and Bookrank use (kernel/ring3app.c,
 RING3_APPS). The deck and answer-rotation are the same drivers/
-app_lexlytreak.c ran in ring 0 (lx_cur/lx_option are deterministic off
+app_tonchitreak.c ran in ring 0 (lx_cur/lx_option are deterministic off
 lx_round, so round 0's right answer is always slot 0). The check then:
 
   1. asserts, off the serial log, that the program opened a window of the
@@ -18,34 +18,34 @@ lx_round, so round 0's right answer is always slot 0). The check then:
   3. presses "1" (round 0's slot 0 is always the right answer): asserts
      the program's own serial line says "pick 1 right" and the streak went
      up, and that slot 0's pixel flipped to the right-answer color;
-  4. presses any key to advance ("lexly: next"), then on round 1 (the
+  4. presses any key to advance ("tonchi: next"), then on round 1 (the
      scorer's right slot is 1) presses "1": asserts "pick 1 miss" and that
      the missed slot's pixel is the miss color;
   5. presses the backquote, the deliberate crash key: a null write, a page
      fault at ring 3. Asserts the kernel reaped the task, released the
      window, the launcher logged the crash by name, and the desktop is
      back: the dock is on screen and Mail opens from a dock click;
-  6. opens Lexly from the Apps folder grid (row 2, col 3, the 832x450
+  6. opens Tonchi from the Apps folder grid (row 2, col 3, the 832x450
      folder viewport) and closes it with Esc, then again with the red
      close dot; after each it must have exited 0, released its window, and
      Mail must open from the dock;
   7. opens the Apps folder by keyboard (Enter on a bare desktop), launches
-     Lexly from the grid, confirms it got a real window and no BUG line,
+     Tonchi from the grid, confirms it got a real window and no BUG line,
      backs out with two Esc, and confirms the desktop still takes a click.
 
-Discriminating: replace the null write in user/lexly.c with jt_exit(0)
+Discriminating: replace the null write in user/tonchi.c with jt_exit(0)
 and step 5 fails; break lx_option's slot math and step 3 or 4 reads the
 wrong pick/miss line or the wrong pixel; break gui_apps_launch's viewport
 setup and steps 6 and 7 fail.
 
-Usage: tools/checks/ring3lexly-check.py   (from the repo root, after make kernel.elf)
+Usage: tools/checks/ring3tonchi-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time
 from PIL import Image
 from freeport import free_port
 
-LOG = "/tmp/jt-ring3lexly-serial.log"
-DUMP = "/tmp/jt-ring3lexly.raw"
+LOG = "/tmp/jt-ring3tonchi-serial.log"
+DUMP = "/tmp/jt-ring3tonchi.raw"
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
@@ -66,7 +66,7 @@ for f in (LOG, DUMP):
     try: os.remove(f)
     except FileNotFoundError: pass
 
-q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-append", "open=lexly",
+q = subprocess.Popen(["qemu-system-i386", "-kernel", "kernel.elf", "-append", "open=tonchi",
                       "-display", "none", "-vga", "std",
                       "-qmp", f"tcp:127.0.0.1:{PORT},server,nowait", "-serial", "file:" + LOG],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -112,16 +112,16 @@ try:
         return (img or frame()).getpixel((x * SCALE + 1, y * SCALE + 1))
     def near(p, c, tol=12): return max(abs(p[i] - c[i]) for i in range(3)) <= tol
     def option_pixel(slot, img=None):
-        # Mid-row, well inside the option box (user/lexly.c LX_OPT_Y0/LX_OPT_H).
+        # Mid-row, well inside the option box (user/tonchi.c LX_OPT_Y0/LX_OPT_H).
         y = LX_OPT_Y0 + slot * 34 + 10
         return pixel(VIEW_X + 30, VIEW_Y + y, img)
 
     # 1. the program is up and has its window
-    if not wait_serial("ring3app: launching LEXLY.BIN at ring 3", 40):
-        fails.append("Lexly was never launched as a ring-3 program (open=lexly flag or ring3app.c broken)")
+    if not wait_serial("ring3app: launching TONCHI.BIN at ring 3", 40):
+        fails.append("Tonchi was never launched as a ring-3 program (open=tonchi flag or ring3app.c broken)")
     if not wait_serial("syscall: window opened for ring-3 task", 10):
         fails.append("SYS_WINDOW_OPEN never succeeded from ring 3")
-    if not wait_serial("lexly: ring-3 window 804x345", 10):
+    if not wait_serial("tonchi: ring-3 window 804x345", 10):
         fails.append("the program did not report the app viewport's size (expected 804x345) through write()")
     time.sleep(0.5)
 
@@ -135,40 +135,40 @@ try:
     #    deterministic off lx_round). Press "1" and check the real
     #    answer-checking logic ran, not just the draw.
     keys("1"); time.sleep(0.3)
-    if not wait_serial("lexly: pick 1 right", 5):
+    if not wait_serial("tonchi: pick 1 right", 5):
         fails.append('pressing "1" on round 0 (always the right slot) did not log "pick 1 right"')
     after = option_pixel(0)
     print(f"slot 0 after the right pick: {after}")
     if not near(after, RIGHT_COLOR):
         fails.append(f"slot 0 did not flip to the right-answer color after a correct pick (got {after})")
-    if "syscall: write(1) from ring 3: lexly: crashing" in serial():
+    if "syscall: write(1) from ring 3: tonchi: crashing" in serial():
         fails.append("the program crashed before the crash key was pressed")
 
     # 4. any key advances; round 1 scores slot 1 as right. Miss it on
     #    purpose with "1" and check the miss is drawn.
     keys("1"); time.sleep(0.3)  # "any key for the next one"
-    if not wait_serial("lexly: next", 5):
-        fails.append('advancing past a picked answer did not log "lexly: next"')
+    if not wait_serial("tonchi: next", 5):
+        fails.append('advancing past a picked answer did not log "tonchi: next"')
     keys("1"); time.sleep(0.3)
-    if not wait_serial("lexly: pick 1 miss", 5):
+    if not wait_serial("tonchi: pick 1 miss", 5):
         fails.append('pressing "1" on round 1 (the scorer\'s right slot is 1) did not log "pick 1 miss"')
     miss_px = option_pixel(0)
     print(f"slot 0 (missed) {miss_px}")
     if not near(miss_px, MISS_COLOR):
         fails.append(f"the missed slot did not flip to the miss color (got {miss_px})")
     keys("3"); time.sleep(0.3)  # advance again, back to a clean state before the crash
-    if not wait_serial("lexly: next", 5):
-        fails.append('advancing past the missed answer did not log a second "lexly: next"')
+    if not wait_serial("tonchi: next", 5):
+        fails.append('advancing past the missed answer did not log a second "tonchi: next"')
 
     # 5. the deliberate crash, and the supervisor's answer to it
     keys("grave_accent"); time.sleep(0.2)
-    if not wait_serial("lexly: crashing on purpose", 5):
+    if not wait_serial("tonchi: crashing on purpose", 5):
         fails.append("the crash key did not reach the program")
     if not wait_serial("exception: ring-3 task hit page-fault, reaped", 5):
         fails.append("the kernel did not reap the ring-3 task on its page fault")
     if not wait_serial("syscall: window released, task gone", 5):
         fails.append("the window was not released when the task died")
-    if not wait_serial("ring3app: LEXLY.BIN crashed (page-fault), window torn down, desktop alive", 5):
+    if not wait_serial("ring3app: TONCHI.BIN crashed (page-fault), window torn down, desktop alive", 5):
         fails.append("the launcher did not log the crash by name and return")
     if not wait_serial("autoopen: back on the desktop", 5):
         fails.append("the desktop loop was never re-entered after the crash")
@@ -197,7 +197,7 @@ try:
     if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED):
         fails.append("Mail did not close on Esc after the crash")
 
-    # 6. a normal close, both ways, from the Apps folder grid: Lexly is
+    # 6. a normal close, both ways, from the Apps folder grid: Tonchi is
     #    APPS[] index 12 = row 2, col 2 (5 columns wide), whose viewport is
     #    the folder's 832x450, not the dock's 804x345.
     APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
@@ -212,8 +212,8 @@ try:
             if resend and i == 40: keys("esc")
             time.sleep(0.1)
         return False
-    def open_lexly_from_grid(tag):
-        seen = serial().count("lexly: ring-3 window")
+    def open_tonchi_from_grid(tag):
+        seen = serial().count("tonchi: ring-3 window")
         move(*PARK); time.sleep(0.2)
         move(SLOT0_X + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click(); time.sleep(1.0)
         for _ in range(2): keys("d"); time.sleep(0.35)   # right x2
@@ -221,18 +221,18 @@ try:
         keys("ret")
         for _ in range(60):
             time.sleep(0.1)
-            if serial().count("lexly: ring-3 window") > seen: break
+            if serial().count("tonchi: ring-3 window") > seen: break
         else:
-            fails.append(f"{tag}: Lexly did not open a ring-3 window from the Apps folder grid"); return False
-        if "lexly: ring-3 window 796x345" not in serial():
+            fails.append(f"{tag}: Tonchi did not open a ring-3 window from the Apps folder grid"); return False
+        if "tonchi: ring-3 window 796x345" not in serial():
             fails.append(f"{tag}: the folder-launched window is not 796x345")
         if "ring3app: BUG" in serial():
             fails.append(f"{tag}: ring3app logged a BUG line")
         time.sleep(0.5)
         return True
     def assert_closed(tag, exits_before):
-        if not wait_serial("syscall: window released, task gone", 5) or serial().count("LEXLY.BIN exited 0") <= exits_before:
-            fails.append(f"{tag}: Lexly did not exit 0 and release its window on a normal close")
+        if not wait_serial("syscall: window released, task gone", 5) or serial().count("TONCHI.BIN exited 0") <= exits_before:
+            fails.append(f"{tag}: Tonchi did not exit 0 and release its window on a normal close")
         keys("esc"); time.sleep(0.8)  # the Apps folder itself
         move(*PARK); time.sleep(0.3)
         if not wait_closed():
@@ -245,30 +245,30 @@ try:
         print(f"{tag}: Mail opens from the dock afterwards: {'yes' if ok else 'NO'}")
         if not ok: fails.append(f"{tag}: Mail did not open from a dock click after the close: desktop stuck")
         keys("esc"); time.sleep(1.0)
-    exits = serial().count("LEXLY.BIN exited 0")
-    if open_lexly_from_grid("esc-close"):
+    exits = serial().count("TONCHI.BIN exited 0")
+    if open_tonchi_from_grid("esc-close"):
         keys("esc"); time.sleep(0.5)
         assert_closed("esc-close", exits)
-    exits = serial().count("LEXLY.BIN exited 0")
-    if open_lexly_from_grid("dot-close"):
+    exits = serial().count("TONCHI.BIN exited 0")
+    if open_tonchi_from_grid("dot-close"):
         move(APPS_CLOSE_X, APPS_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.5)
         assert_closed("dot-close", exits)
 
     # 7. the keyboard path into the Apps folder, not the dock click.
-    seen = serial().count("lexly: ring-3 window")
+    seen = serial().count("tonchi: ring-3 window")
     move(*PARK); time.sleep(0.3)
     keys("ret"); time.sleep(1.0)  # bare desktop -> Apps folder, by keyboard
     for _ in range(2): keys("d"); time.sleep(0.35)  # right x2
     for _ in range(2): keys("s"); time.sleep(0.35)  # down x2 -> index 12
-    keys("ret")  # launch Lexly from the grid selection
+    keys("ret")  # launch Tonchi from the grid selection
     for _ in range(60):
         time.sleep(0.1)
-        if serial().count("lexly: ring-3 window") > seen: break
+        if serial().count("tonchi: ring-3 window") > seen: break
     else:
-        fails.append("keyboard-open: Lexly did not open a ring-3 window after Enter opened the Apps folder by keyboard")
+        fails.append("keyboard-open: Tonchi did not open a ring-3 window after Enter opened the Apps folder by keyboard")
     if "ring3app: BUG" in serial():
-        fails.append("keyboard-open: ring3app logged a BUG line launching Lexly from a keyboard-opened Apps folder")
-    keys("esc"); time.sleep(0.5)  # closes Lexly
+        fails.append("keyboard-open: ring3app logged a BUG line launching Tonchi from a keyboard-opened Apps folder")
+    keys("esc"); time.sleep(0.5)  # closes Tonchi
     keys("esc"); time.sleep(0.5)  # closes the Apps folder
     move(*PARK); time.sleep(0.3)
     if not wait_closed():
@@ -292,4 +292,4 @@ if fails:
     print("--- serial tail ---")
     print(serial()[-1500:])
     sys.exit(1)
-print("PASS: Lexly ran at ring 3 with its own window, drew the word and option grid, answered right and wrong through the real logic, crashed on demand, closed normally both ways from the Apps folder, and the desktop stayed alive")
+print("PASS: Tonchi ran at ring 3 with its own window, drew the word and option grid, answered right and wrong through the real logic, crashed on demand, closed normally both ways from the Apps folder, and the desktop stayed alive")

@@ -6,7 +6,7 @@ Keep merging green PRs, then build the next item: apps on their real backends, t
 
 ## Where things stand (2026-10-04)
 
-- Main is 2.6.28 (2.6.29 is the Hikko PR: Sparkjar renamed, real forum ideas through `/api/hikko`; 2.6.28 was the landing tiles PR: Bookrank, Lexly, Curbfind and Epiphany tiles, a check that fails on a stale tile, and the built `user/*.bin` and `drivers/user_*.h` untracked).
+- Main is 2.6.29 (2.6.30 is the names PR: Lexly is now Tonchi inside the OS, the Portfolio catalog says Brick, Notate and Hagaki; 2.6.29 is the Hikko PR: Sparkjar renamed, real forum ideas through `/api/hikko`; 2.6.28 was the landing tiles PR: Bookrank, Lexly, Curbfind and Epiphany tiles, a check that fails on a stale tile, and the built `user/*.bin` and `drivers/user_*.h` untracked).
 - ARM64: M0 to M1d part one are done (serial, exceptions, MMU, a drawn desktop with smooth text). M2 has its first drivers (virtio keyboard, mouse, network, disk). M3a is done: an EL0 program runs, prints and exits through `svc`, a load from a kernel-only page faults and the kernel survives, and kernel RAM is not executable from EL0 (`tools/checks/arm64-m3-check.py`).
 - Joshua buys the Pi 4B this weekend. First boot is `docs/RASPBERRY-PI.md`: serial text and a picture on the monitor. 3.0.0 ships only when the desktop boots on a real Pi.
 - Voice chat: both sides are typed text in, her voice out, no speech-to-text, three server round trips per message, nothing streamed. Plan in the roadmap's Voice chat section.

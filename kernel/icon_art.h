@@ -4819,7 +4819,7 @@ static const unsigned char icon_art_quotes[5606] = {
 };
 #define ICON_ART_QUOTES_LEN 5606
 
-static const unsigned char icon_art_lexly[4235] = {
+static const unsigned char icon_art_tonchi[4235] = {
     137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,
     0,0,0,148,0,0,0,148,8,6,0,0,0,117,60,0,
     212,0,0,0,6,98,75,71,68,0,255,0,255,0,255,160,
@@ -5086,7 +5086,7 @@ static const unsigned char icon_art_lexly[4235] = {
     67,44,61,147,50,254,31,32,105,54,207,76,50,243,71,0,
     0,0,0,73,69,78,68,174,66,96,130,
 };
-#define ICON_ART_LEXLY_LEN 4235
+#define ICON_ART_TONCHI_LEN 4235
 
 static const unsigned char icon_art_toroid[3940] = {
     137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,
@@ -11201,7 +11201,7 @@ static const unsigned char *const ICON_ART[28] = {
     icon_art_keyrate,
     icon_art_bookrank,
     icon_art_quotes,
-    icon_art_lexly,
+    icon_art_tonchi,
     icon_art_toroid,
     icon_art_hikko,
     icon_art_fieldbook,
@@ -11231,7 +11231,7 @@ static const unsigned int ICON_ART_LEN[28] = {
     ICON_ART_KEYRATE_LEN,
     ICON_ART_BOOKRANK_LEN,
     ICON_ART_QUOTES_LEN,
-    ICON_ART_LEXLY_LEN,
+    ICON_ART_TONCHI_LEN,
     ICON_ART_TOROID_LEN,
     ICON_ART_HIKKO_LEN,
     ICON_ART_FIELDBOOK_LEN,

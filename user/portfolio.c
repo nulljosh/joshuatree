@@ -34,6 +34,7 @@ typedef struct {
     int kind;
 } pf_row_t;
 
+/* Names follow the fleet today. Block Frame still answers at its old wiretext host (DNS never moved). */
 static const pf_row_t PF_ROWS[] = {
     {"Joshua Trommel", "", "", PF_KIND_TEXT},
     {0, "I build apps, and the operating system this is running on.", "", PF_KIND_TEXT},
@@ -47,7 +48,7 @@ static const pf_row_t PF_ROWS[] = {
     {"Windgate",  "guided breathing",          "windgate.heyitsmejosh.com", PF_KIND_APP},
     {"Talli",     "benefits admin",            "talli.heyitsmejosh.com", PF_KIND_APP},
     {"Homeward",  "lost and found pets",       "homeward.heyitsmejosh.com", PF_KIND_APP},
-    {"Roost",     "real estate browsing",      "roost.heyitsmejosh.com", PF_KIND_APP},
+    {"Brick",     "real estate browsing",      "brick.heyitsmejosh.com", PF_KIND_APP},
     {"HomeQi",    "feng shui home check",      "homeqi.heyitsmejosh.com", PF_KIND_APP},
     {"Weather",   "forecast and live conditions", "weather.heyitsmejosh.com", PF_KIND_APP},
 
@@ -57,14 +58,14 @@ static const pf_row_t PF_ROWS[] = {
     {"Sidewise",  "news bias reader",          "sidewise.heyitsmejosh.com", PF_KIND_APP},
     {"Wordroot",  "etymology",                 "wordroot.heyitsmejosh.com", PF_KIND_APP},
     {"Fieldbook", "science explained plainly", "fieldbook.heyitsmejosh.com", PF_KIND_APP},
-    {"Lexly",     "language learning",         "lexly.heyitsmejosh.com", PF_KIND_APP},
+    {"Tonchi",    "language learning",         "lexly.heyitsmejosh.com", PF_KIND_APP}, /* was Lexly; tonchi.heyitsmejosh.com does not exist yet, so the address stays */
 
     {0, "Make", "", PF_KIND_HEADER},
     {"Block Frame", "wireframes in text",      "wiretext.heyitsmejosh.com", PF_KIND_APP},
     {"Curvely",   "equation grapher",          "curvely.heyitsmejosh.com", PF_KIND_APP},
     {"Numen",     "calculator canvas",         "numen.heyitsmejosh.com", PF_KIND_APP},
     {"Plain",     "text editor",               "", PF_KIND_APP},
-    {"Voxprint",  "on-device transcription",   "", PF_KIND_APP},
+    {"Notate",    "on-device transcription",   "notate.heyitsmejosh.com", PF_KIND_APP},
     {"Dream",     "dream journal",             "dream.heyitsmejosh.com", PF_KIND_APP},
     {"Costanza",  "poetry",                    "costanza.heyitsmejosh.com", PF_KIND_APP},
     {"Hikko",  "idea forum",                "hikko.heyitsmejosh.com", PF_KIND_APP},
@@ -81,10 +82,12 @@ static const pf_row_t PF_ROWS[] = {
     {"Cadence",   "commit tracker",            "cadence.heyitsmejosh.com", PF_KIND_APP},
     {"Tripwire",  "API drift watcher",         "tripwire.heyitsmejosh.com", PF_KIND_APP},
     {"Seamark",   "read values off charts",    "seamark.heyitsmejosh.com", PF_KIND_APP},
-    {"Siftbox",   "inbox triage",              "siftbox.heyitsmejosh.com", PF_KIND_APP},
+    {"Hagaki",    "inbox triage",              "hagaki.heyitsmejosh.com", PF_KIND_APP},
     {"Curbfind",  "Craigslist browser",        "curbfind.heyitsmejosh.com", PF_KIND_APP},
     {"Turing",    "local LLM",                 "", PF_KIND_APP},
     {"Conveyer",  "AI plays Factorio",         "", PF_KIND_APP},
+    {"Madobe",    "small web browser",         "madobe.heyitsmejosh.com", PF_KIND_APP},
+    {"Plank",     "one-file language",         "plank.heyitsmejosh.com", PF_KIND_APP},
 };
 #define PF_ROW_COUNT (int)(sizeof(PF_ROWS) / sizeof(PF_ROWS[0]))
 #define PF_ROW_H 22

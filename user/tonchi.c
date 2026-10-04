@@ -1,4 +1,4 @@
-/* lexly: learn anything, a four-choice drill, as a real ring-3 program.
+/* tonchi: learn anything, a four-choice drill, as a real ring-3 program.
  *
  * The seventh app to leave the kernel (roadmap 2.0), done the way
  * user/quotes.c was. Same deck and drill kernel/lexly.h ran in ring 0: a
@@ -9,7 +9,7 @@
  * input and the present, SYS_EXIT to leave.
  *
  * Live courses (2.6.27): the course list and a chosen course's questions
- * come from the real Lexly packs through SYS_HTTP_GET (the way
+ * come from the real Tonchi packs through SYS_HTTP_GET (the way
  * user/bookrank.c gets its shelf). The kernel fixes the host; the Worker's
  * /api/lexly turns the packs into plain text: "count" then
  * "id|name|category" rows, and for /api/lexly?c=<id> "count" then
@@ -24,8 +24,8 @@
  *
  * Type: the antialiased libjt face. The backquote key (`) is the deliberate
  * crash: a write through a null pointer, a page fault at ring 3, reaped by
- * the kernel. tools/checks/ring3lexly-check.py presses it on purpose;
- * tools/checks/ring3lexly-live-check.py proves the live and offline paths.
+ * the kernel. tools/checks/ring3tonchi-check.py presses it on purpose;
+ * tools/checks/ring3tonchi-live-check.py proves the live and offline paths.
  */
 #include "jtsys.h"
 #include "libjt/text.h"
@@ -258,7 +258,7 @@ static int lx_parse_questions(char *body, int n) {
 /* One GET through the kernel; the body only if it is a 200 that fits whole. */
 static int lx_get(const char *path, char *buf, int cap) {
     int n = jt_http_get(path, buf, (unsigned)(cap - 1));
-    say("lexly: fetch ", n, 0);
+    say("tonchi: fetch ", n, 0);
     return (n <= 0 || n >= cap - 1) ? 0 : n;
 }
 static void lx_fetch_courses(void) {
@@ -275,7 +275,7 @@ static int lx_load_course(int idx) {
     int n = lx_get(path, lx_qbody, (int)sizeof lx_qbody);
     if (n) lx_nq = lx_parse_questions(lx_qbody, n);
     if (lx_nq < 1) return 0;
-    say("lexly: course ", lx_nq, lx_courses[idx].id);
+    say("tonchi: course ", lx_nq, lx_courses[idx].id);
     return 1;
 }
 
@@ -363,7 +363,7 @@ static void lx_draw(void) {
 }
 
 /* Announce the question on screen: what the live check reads. */
-static void lx_say_question(void) { if (lx_live) say("lexly: q ", lx_round + 1, lx_qs[lx_round].q); }
+static void lx_say_question(void) { if (lx_live) say("tonchi: q ", lx_round + 1, lx_qs[lx_round].q); }
 
 static void lx_start_course(int idx) {
     lx_cur_course = idx; lx_live = 1; lx_round = 0; lx_score = 0; lx_streak = 0; lx_best = 0; lx_pick = -1;
@@ -372,7 +372,7 @@ static void lx_start_course(int idx) {
 }
 static void lx_to_picker(void) {
     lx_mode = LX_PICK; lx_live = 0; lx_pick = -1; lx_msg = "";
-    say("lexly: courses ", lx_ncourses, 0);
+    say("tonchi: courses ", lx_ncourses, 0);
 }
 /* Enter or a click on a course: fetch it behind a "Loading" frame; on a bad reply the picker stays. */
 static void lx_open_course(int idx) {
@@ -389,12 +389,12 @@ __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     (void)argc; (void)argv;
     if (jt_window_open(&win) != 0 || !win.pixels) {
-        jt_write(2, "lexly: no window\n", 18);
+        jt_write(2, "tonchi: no window\n", 18);
         jt_exit(1);
     }
     {   /* one line, one write: what tools/checks/ring3quotes-check.py asserts on */
         char line[48]; int l = 0;
-        const char *pfx = "lexly: ring-3 window ";
+        const char *pfx = "tonchi: ring-3 window ";
         while (*pfx) line[l++] = *pfx++;
         l += utoa10(win.width, line + l); line[l++] = 'x';
         l += utoa10(win.height, line + l); line[l++] = '\n';
@@ -410,8 +410,8 @@ void _start(int argc, char **argv) {
         pending = jt_window_poll(&ev, JT_POLL_PRESENT) == 1; /* an event this early is kept, not lost */
     }
     lx_fetch_courses();
-    if (lx_ncourses > 0) { lx_mode = LX_PICK; say("lexly: courses ", lx_ncourses, 0); }
-    else { lx_mode = LX_DRILL; lx_live = 0; say("lexly: samples ", LX_COUNT, 0); }
+    if (lx_ncourses > 0) { lx_mode = LX_PICK; say("tonchi: courses ", lx_ncourses, 0); }
+    else { lx_mode = LX_DRILL; lx_live = 0; say("tonchi: samples ", LX_COUNT, 0); }
     lx_draw();
 
     unsigned flags = JT_POLL_PRESENT;
@@ -427,7 +427,7 @@ void _start(int argc, char **argv) {
         }
 
         if (ev.kind == JT_EV_KEY && ev.a == '`') {
-            jt_write(1, "lexly: crashing on purpose\n", 28);
+            jt_write(1, "tonchi: crashing on purpose\n", 28);
             *(volatile int *)0 = 1;
         }
 
@@ -440,7 +440,7 @@ void _start(int argc, char **argv) {
                 else if (ev.a == JT_KEY_DOWN && lx_sel < lx_ncourses - 1) lx_sel++;
                 else if (ev.a == JT_KEY_ENTER) open = lx_sel;
                 else { flags = JT_POLL_PRESENT; continue; }
-                if (open < 0) say("lexly: sel ", lx_sel + 1, lx_courses[lx_sel].name);
+                if (open < 0) say("tonchi: sel ", lx_sel + 1, lx_courses[lx_sel].name);
             } else if (ev.kind == JT_EV_CLICK) {
                 int k = (ev.b - LX_LIST_TOP) / LX_ITEM_H;
                 if (ev.b >= LX_LIST_TOP && ev.a >= 20 && ev.a < (int)win.width - 20 && lx_top + k < lx_ncourses
@@ -480,10 +480,10 @@ void _start(int argc, char **argv) {
 
         if (lx_pick >= 0) {
             lx_pick = -1; lx_round++;
-            say("lexly: next", NONUM, 0); /* the marker the checks read to confirm the round advanced past a picked answer */
+            say("tonchi: next", NONUM, 0); /* the marker the checks read to confirm the round advanced past a picked answer */
             if (lx_live && lx_round >= lx_nq) {
                 lx_mode = LX_DONE;
-                say("lexly: done ", lx_score, 0);
+                say("tonchi: done ", lx_score, 0);
             } else lx_say_question();
             lx_draw(); flags = JT_POLL_PRESENT;
             continue;
@@ -493,9 +493,9 @@ void _start(int argc, char **argv) {
         int right = lx_right();
         if (slot == right) { lx_streak++; lx_score++; if (lx_streak > lx_best) lx_best = lx_streak; }
         else lx_streak = 0;
-        say("lexly: pick ", slot + 1, slot == right ? "right" : "miss");
+        say("tonchi: pick ", slot + 1, slot == right ? "right" : "miss");
         lx_draw(); flags = JT_POLL_PRESENT;
     }
-    jt_write(1, "lexly: closed\n", 15);
+    jt_write(1, "tonchi: closed\n", 15);
     jt_exit(0);
 }

@@ -16,7 +16,7 @@ Per-app actions:
 - Stocks: press right (next tab)
 - Epiphany: press right (next tab)
 - Contacts: press a then Esc (add prompt then cancel)
-- Lexly: press 1 (pick first answer)
+- Tonchi: press 1 (pick first answer)
 - Quotes: press 1
 - Hikko: press u (upvote)
 - Toroid: press space (pause/unpause)
@@ -48,7 +48,7 @@ PARK = (480, 200)
 
 # App names from kernel/kernel.c APPS[].name (indices 0-25)
 APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
-        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Lexly", "Toroid", "Hikko",
+        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Plan", "Tonchi", "Toroid", "Hikko",
         "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity", "Apps", "Trash"]
 
@@ -65,7 +65,7 @@ ACTIONS = [
     (18, "Stocks", ["right"]),
     (20, "Epiphany", ["right"]),
     (16, "Contacts", ["a", "esc"]),
-    (12, "Lexly", ["1"]),
+    (12, "Tonchi", ["1"]),
     (11, "Quotes", ["1"]),
     (14, "Hikko", ["u"]),
     (13, "Toroid", ["space"]),

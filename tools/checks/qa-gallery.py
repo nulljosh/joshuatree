@@ -35,7 +35,7 @@ PARK = (480, 200)
 
 # App names from kernel/kernel.c APPS[].name (indices 0-25)
 APPS = ["Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather",
-        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Lexly", "Toroid", "Hikko",
+        "Curbfind", "Keyrate", "Bookrank", "Quotes", "Tonchi", "Toroid", "Hikko",
         "Fieldbook", "Contacts", "Calculator", "Stocks", "Search", "Epiphany",
         "Portfolio", "Activity", "Apps", "Trash"]
 
