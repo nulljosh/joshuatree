@@ -1,6 +1,6 @@
 # Joshua Tree on ARM64 (Raspberry Pi)
 
-Status: plan, nothing built yet. Written 2026-10-03 on the `arm64-pi` branch.
+Status: M0 and M1a/M1b are built and run under QEMU (updated 2026-10-03). The first boot on a real Pi 4 is the next step.
 
 If this is accepted it replaces the x86 board in `docs/HARDWARE.md` as the 3.0 reference. The OS stays free; the board is what we sell around it.
 
