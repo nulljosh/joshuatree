@@ -45,7 +45,7 @@ Two notebook pages checked against the tree. Already shipped and not listed: men
 
 ### Fleet apps on their real backends (Joshua, 2026-10-04)
 Curbfind, Epiphany and Stocks already pull live data through `SYS_HTTP_GET`. The other fleet apps still show samples. The real apps are native Swift and cannot run here, so the OS versions stay C rewrites that talk to the same backends. One PR each, with the offline samples kept as the fallback when the network is down.
-- [ ] [Sonnet] Bookrank: book summaries from the live Bookrank API.
+- [x] [Sonnet] Bookrank, done 2.6.26: the ranked shelf (top twelve, rating, review count, badge, one-line summary) comes from the live Bookrank API through the Worker's `/api/books` and `SYS_HTTP_GET`; the ten samples stay as the offline fallback. Per-account chapter summaries are private in the real app, so they are not here. Check: `tools/checks/ring3bookrank-live-check.py`.
 - [ ] [Sonnet] Lexly: lessons from the live Lexly backend.
 - [ ] [Sonnet] Sparkjar, and rename it to Hikko inside the OS in the same PR (the app is Hikko now): the idea forum from its live backend.
 

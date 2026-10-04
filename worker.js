@@ -92,6 +92,7 @@ async function handleProxy(request, env) {
       && ["http:", "https:"].includes(targetUrl.protocol) && !targetUrl.port && !targetUrl.username && !targetUrl.password) {
     if (targetUrl.pathname === "/api/stocks") return handleStocks(targetUrl);
     if (targetUrl.pathname === "/api/quotes") return handleQuotes();
+    if (targetUrl.pathname === "/api/books") return handleBooks();
     if (targetUrl.pathname === "/api/deals") return handleDeals(request); // the guest's request rides the visitor's own browser fetch, so request.cf is the visitor
     // v1.6.12: kernel/chat_face.h's chat_face_load fetches Samantha's Chat
     // face frames (idle-0..5.jpg, talk-0..11.jpg) over the same plain-HTTP
@@ -343,6 +344,39 @@ async function handleDeals(request) {
   return new Response([city, ...rows].join("\n") + "\n", {headers: WIRE});
 }
 
+// Bookrank, the public ranked shelf from the real app's REST API
+// (bookrank.heyitsmejosh.com/api/books, a read-only GET). The kernel gets
+// plain text so its parser stays small: first line is the shelf total, then
+// one `rank|rating x100|reviews|badge|title|author|notes` row per book. A
+// field never holds a pipe, a newline or a non-ASCII byte, whatever the
+// upstream sends. Per-account chapter summaries are not public, so the
+// notes line is the summary the OS can show.
+const BOOKRANK_API = "https://bookrank.heyitsmejosh.com/api/books?section=ranked&limit=12";
+const wireText = (v, max) => String(v ?? "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"')
+  .replace(/[^\x20-\x7e]/g, " ").replace(/\|/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
+function bookrankWire(data) {
+  const list = Array.isArray(data?.results) ? data.results : [];
+  const rows = list.filter(b => b && typeof b.title === "string" && wireText(b.title, 60)).slice(0, 12).map((b, i) => {
+    const rank = Number.isInteger(b.rank) && b.rank > 0 && b.rank < 1000 ? b.rank : i + 1;
+    const rating = typeof b.rating === "number" && b.rating >= 0 && b.rating <= 5 ? Math.round(b.rating * 100) : 0;
+    const badge = Array.isArray(b.badges) && typeof b.badges[0] === "string" ? wireText(b.badges[0], 24) : "";
+    return [rank, rating, wireText(b.reviewCount, 24), badge, wireText(b.title, 60), wireText(b.author, 40), wireText(b.notes, 140)].join("|");
+  });
+  const total = Number.isInteger(data?.total) && data.total >= 0 && data.total < 100000 ? data.total : rows.length;
+  return [total, ...rows].join("\n") + "\n";
+}
+async function handleBooks() {
+  let res;
+  try { res = await fetch(BOOKRANK_API, {signal: AbortSignal.timeout(8000), cf: {cacheTtl: 300, cacheEverything: true}}); }
+  catch { return new Response("", {status: 502}); }
+  if (!res.ok) return new Response("", {status: 502});
+  let data;
+  try { data = await res.json(); } catch { return new Response("", {status: 502}); }
+  const wire = bookrankWire(data);
+  if (wire.split("\n").length < 3) return new Response("", {status: 502}); // no usable row: let the OS keep its samples
+  return new Response(wire, {headers: WIRE});
+}
+
 // Dev-kit waitlist: one email, one timestamp, key = email so a repeat
 // signup just overwrites its own row instead of growing the namespace.
 // WAITLIST_MAX_BODY guards against someone posting a huge JSON blob;
@@ -578,6 +612,7 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/api/stocks") return handleStocks(url);
     if (url.pathname === "/api/quotes") return handleQuotes();
+    if (url.pathname === "/api/books") return handleBooks();
     if (url.pathname === "/api/deals") return handleDeals(request);
     if (url.pathname === "/api/listen") return handleListen(request, env);
     if (url.pathname === "/api/mail/send") return handleMailSend(request, env);
@@ -601,6 +636,7 @@ export default {
 export { isAllowedTarget, handleProxy, ALLOWED_HOSTS };
 
 export { stockWire, handleStocks };
+export { bookrankWire, handleBooks };
 export { handleWaitlistPost, handleWaitlistCount };
 export { handleMailSend, MAIL_SEND_FROM };
 export { handleListen, wrapPcmAsWav, LISTEN_MAX_BYTES };

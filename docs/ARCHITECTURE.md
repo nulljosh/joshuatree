@@ -99,7 +99,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `user/toroid.c` | Toroid, Conway's Life on a torus, as a ring-3 program: the second app out of the kernel (1.7.11). Two 160x80 bit-packed boards in its own .data, generations paced off `SYS_TIME`, the backquote key crashes it on purpose. |
 | `user/calculator.c` | Calculator, a recursive-descent parser over `+ - * / ()`, as a ring-3 program: the third app out of the kernel (1.7.12). Same grammar as the in-kernel version, evaluated straight into a `double` per rule instead of an `expr_node` tree, since a flat binary has no `.bss` and no `kmalloc`. Dividing by zero yields 0, unchanged. The backquote key crashes it on purpose. Tab switches to scientific: `^`, `!`, `%`, pi, e, ans and sin through exp, on the x87 with no libm. |
 | `user/quotes.c` | Quotes, the film-quote guessing game, as a ring-3 program: the fourth app out of the kernel (1.7.14). Same fixed deck and answer-rotation as the in-kernel version, streak and best kept in its own `.data`. The backquote key crashes it on purpose. |
-| `user/bookrank.c` | Bookrank, the ranked non-fiction shelf, as a ring-3 program: the fifth app out of the kernel (2.0). Same fixed book list and two-pane layout as the in-kernel version, up/down or a click selects, the summary word-wraps by character count in its own `.data`. The backquote key crashes it on purpose. |
+| `user/bookrank.c` | Bookrank, the ranked non-fiction shelf, as a ring-3 program: the fifth app out of the kernel (2.0). Two panes, up/down or a click selects, the list scrolls. The top twelve books come live from the real Bookrank API through `SYS_HTTP_GET` and the Worker (2.6.26); the reply is untrusted, so every byte is forced printable and every copy is bounded. Ten built-in samples show when the fetch or the parse fails. The backquote key crashes it on purpose. |
 | `user/lexly.c` | Lexly, a Spanish word and four English choices with a streak, as a ring-3 program: the seventh app out of the kernel (1.9.1). Same 30-word deck and drill as the old in-kernel copy, keys 1 to 4 or a click answer, streak and best kept in its own `.data`. The backquote key crashes it on purpose for `tools/checks/ring3lexly-check.py`. |
 | `user/fieldbook.c` | Fieldbook, every field of science and math explained plainly, as a ring-3 program: the ninth app out of the kernel (1.9.3). Same twelve fields and two-pane layout as the old in-kernel copy, up/down or a click selects, the explanation word-wraps by character count in the 8x16 font, and backquote is the deliberate crash `tools/checks/ring3fieldbook-check.py` presses. |
 | `user/clock.c` | Clock, the time of day, a countdown timer and one alarm, as a ring-3 program: the tenth app out of the kernel (1.9.4). Same three jobs as the old in-kernel copy, the time comes from `SYS_TIME`, and the timer minutes and alarm are typed on the program's own line since a ring-3 program has no prompt box. Backquote is the deliberate crash `tools/checks/ring3clock-check.py` can press. |
@@ -175,6 +175,7 @@ The browser landing page routes kernel HTTP requests to a Cloudflare Worker
 | Endpoint | What it does |
 |---|---|
 | `/api/stocks` | Live stock quotes for the Stocks app. |
+| `/api/books` | The real Bookrank shelf (top twelve ranked books) as plain text for the Bookrank app. |
 | `/api/chat` | LLM routing and chat responses for the Chat app. |
 | `/api/pick` | LLM tool selection for Chat's command execution. |
 | `/api/waitlist` | Dev-kit waitlist signup (POST) and count (GET). Stores one email per address with a timestamp. |
@@ -313,7 +314,7 @@ sibling web apps, kept small on purpose.
 | Toroid | `user/toroid.c`, `kernel/ring3app.c` | Conway's Life on a torus. The second ring-3 app (1.7.11); its in-kernel copy is gone. |
 | Calculator | `user/calculator.c`, `kernel/ring3app.c` | Recursive-descent parser over `+ - * / ()`. The third ring-3 app (1.7.12); its in-kernel copy is gone. |
 | Quotes | `user/quotes.c`, `kernel/ring3app.c` | Name the film from the line. Streak and best for the session. The fourth ring-3 app (1.7.14); its in-kernel copy is gone. |
-| Bookrank | `user/bookrank.c`, `kernel/ring3app.c` | Ranked non-fiction: a list on the left, the selected book's title, author and summary on the right. The fifth ring-3 app (2.0); its in-kernel copy is gone. |
+| Bookrank | `user/bookrank.c`, `kernel/ring3app.c` | Ranked non-fiction: a list on the left, the selected book's title, author, rating, review count and summary on the right. Live through `SYS_HTTP_GET` with samples when offline (2.6.26). The fifth ring-3 app (2.0); its in-kernel copy is gone. |
 
 **Adding an app.** Every app is one row in `APPS[]` in `kernel/kernel.c`,
 and nothing else dispatches on an app's index: the dock, the Apps folder,
