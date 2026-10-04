@@ -1,0 +1,156 @@
+{
+ "total": 110,
+ "offset": 0,
+ "results": [
+  {
+   "title": "The Demon-Haunted World",
+   "author": "Carl Sagan",
+   "section": "ranked",
+   "rank": 1,
+   "rating": 4.38,
+   "reviewCount": "131k+ ratings",
+   "notes": "Science as a candle in the dark. Definitive case for skepticism and critical thinking.",
+   "badges": [],
+   "cover": null,
+   "goodreadsURL": "https://www.goodreads.com/book/show/17349.The_Demon_Haunted_World"
+  },
+  {
+   "title": "Bad Blood",
+   "author": "John Carreyrou",
+   "section": "ranked",
+   "rank": 2,
+   "rating": 4.32,
+   "reviewCount": "140k+ ratings",
+   "notes": "Inside the Theranos fraud. Best investigative nonfiction of the decade.",
+   "badges": [
+    "Very popular"
+   ],
+   "cover": null,
+   "goodreadsURL": "https://www.goodreads.com/book/show/37976541-bad-blood"
+  },
+  {
+   "title": "The New Jim Crow",
+   "author": "Michelle Alexander",
+   "section": "ranked",
+   "rank": 3,
+   "rating": 4.36,
+   "reviewCount": "100k+ ratings",
+   "notes": "Mass incarceration in the age of colorblindness. Landmark social justice work.",
+   "badges": [],
+   "cover": null,
+   "goodreadsURL": "https://www.goodreads.com/book/show/6792458-the-new-jim-crow"
+  },
+  {
+   "title": "The Hard Thing About Hard Things",
+   "author": "Ben Horowitz",
+   "section": "ranked",
+   "rank": 4,
+   "rating": 4.2,
+   "reviewCount": "111k+ ratings",
+   "notes": "Building a business when there are no easy answers. The most honest startup book ever written.",
+   "badges": [
+    "Very popular"
+   ],
+   "cover": null,
+   "goodreadsURL": "https://www.goodreads.com/book/show/18176747-the-hard-thing-about-hard-things"
+  },
+  {
+   "title": "The Black Swan",
+   "author": "Nassim Nicholas Taleb",
+   "section": "ranked",
+   "rank": 5,
+   "rating": 3.93,
+   "reviewCount": "200k+ ratings",
+   "notes": "The impact of the highly improbable. Changed how people think about risk.",
+   "badges": [],
+   "cover": null,
+   "goodreadsURL": "https://www.goodreads.com/book/show/242472.The_Black_Swan"
+  },
+  {
+   "title": "How to Change Your Mind",
+   "author": "Michael Pollan",
+   "section": "ranked",
+   "rank": 6,
+   "rating": 4.27,
+   "reviewCount": "84,602 ratings",
+   "notes": "Psychedelics and consciousness exploration.",
+   "badges": [
+    "Very popular"
+   ],
+   "cover": null,
+   "goodreadsURL": "https://www.goodreads.com/book/show/36613747-how-to-change-your-mind"
+  },
+  {
+   "title": "The Myth of Normal",
+   "author": "Gabor Mat\u00e9 & Daniel Mat\u00e9",
+   "section": "ranked",
+   "rank": 7,
+   "rating": 4.3,
+   "reviewCount": "37,769 ratings",
+   "notes": "Trauma, illness, and healing in a toxic culture. Mat\u00e9's most comprehensive work.",
+   "badges": [],
+   "cover": null,
+   "goodreadsURL": "https://www.goodreads.com/book/show/58537332-the-myth-of-normal"
+  },
+  {
+   "title": "Leonardo da Vinci",
+   "author": "Walter Isaacson",
+   "section": "ranked",
+   "rank": 8,
+   "rating": 4.19,
+   "reviewCount": "55,000 ratings",
+   "notes": "Biography of the ultimate Renaissance man. Isaacson at his best.",
+   "badges": [],
+   "cover": null,
+   "goodreadsURL": "https://www.goodreads.com/book/show/34684622-leonardo-da-vinci"
+  },
+  {
+   "title": "The Making of the Atomic Bomb",
+   "author": "Richard Rhodes",
+   "section": "ranked",
+   "rank": 9,
+   "rating": 4.38,
+   "reviewCount": "20,258 ratings",
+   "notes": "Comprehensive, authoritative history. Pulitzer Prize winner.",
+   "badges": [],
+   "cover": null,
+   "goodreadsURL": "https://www.goodreads.com/book/show/16884.The_Making_of_the_Atomic_Bomb"
+  },
+  {
+   "title": "Killing the Rising Sun",
+   "author": "Bill O'Reilly & Martin Dugard",
+   "section": "ranked",
+   "rank": 10,
+   "rating": 4.35,
+   "reviewCount": "20,658 ratings",
+   "notes": "Popular history of America's victory over Japan in WWII.",
+   "badges": [],
+   "cover": null,
+   "goodreadsURL": "https://www.goodreads.com/book/show/29370481-killing-the-rising-sun"
+  },
+  {
+   "title": "Unmasking Autism",
+   "author": "Devon Price",
+   "section": "ranked",
+   "rank": 11,
+   "rating": 4.31,
+   "reviewCount": "22,428 ratings",
+   "notes": "Discovering the new faces of neurodiversity. Validating and thorough.",
+   "badges": [],
+   "cover": null,
+   "goodreadsURL": "https://www.goodreads.com/book/show/58537365-unmasking-autism"
+  },
+  {
+   "title": "God Is Not Great",
+   "author": "Christopher Hitchens",
+   "section": "ranked",
+   "rank": 12,
+   "rating": 3.94,
+   "reviewCount": "101k+ ratings",
+   "notes": "Anti-religion polemic.",
+   "badges": [],
+   "cover": null,
+   "goodreadsURL": "https://www.goodreads.com/book/show/43369.God_Is_Not_Great"
+  }
+ ]
+}

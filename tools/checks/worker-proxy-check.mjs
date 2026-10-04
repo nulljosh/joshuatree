@@ -319,6 +319,46 @@ check("turing.heyitsmejosh.com is deliberately NOT in the general allowlist (the
   check("the frame past the end of the clip is an empty 200, not a console-error 404", past.status === 200 && (await past.text()) === "");
 }
 
+// 2.6.26: Bookrank's live shelf. The guest asks the fixed joshuatree host for
+// /api/books (no allowlist entry is needed: the Worker itself calls the real
+// bookrank host, and only that fixed URL). Upstream is mocked with a real-shaped
+// answer; the wire is the total, then rank|rating x100|reviews|badge|title|author|notes.
+{
+  const realFetch = globalThis.fetch;
+  let fetchedUrl = null, calls = 0;
+  const upstream = { total: 110, results: [
+    { title: "Caf\u00e9 \u201cOne\u201d|x", author: "Ana M\u00e9ndez", section: "ranked", rank: 1, rating: 4.38, reviewCount: "131k+ ratings", notes: "Line one\nline two", badges: ["Very popular"] },
+    { title: "Second", author: null, rank: null, rating: null, reviewCount: null, notes: null, badges: [true] },
+    { title: "", author: "No title" },
+  ] };
+  globalThis.fetch = async (url) => { calls++; fetchedUrl = String(url); return Response.json(upstream); };
+  try {
+    const target = "https://joshuatree.heyitsmejosh.com/api/books";
+    const res = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target)));
+    const lines = (await res.text()).split("\n");
+    check("/api/books reaches the real Bookrank API, ranked, capped at 12", /^https:\/\/bookrank\.heyitsmejosh\.com\/api\/books\?section=ranked&limit=12$/.test(fetchedUrl));
+    check("/api/books answers 200 text with CORS and no-store", res.status === 200 && res.headers.get("access-control-allow-origin") === "*" && res.headers.get("cache-control") === "no-store");
+    check("/api/books first line is the shelf total", lines[0] === "110");
+    check("/api/books row is rank|rating|reviews|badge|title|author|notes, ASCII only, no stray pipe or newline", lines[1] === "1|438|131k+ ratings|Very popular|Cafe \"One\" x|Ana Mendez|Line one line two");
+    check("/api/books null fields become empty fields and rank falls back to position", lines[2] === "2|0|||Second||");
+    check("/api/books drops a book with no title", lines.length === 4 && lines[3] === "");
+    globalThis.fetch = async () => new Response("down", { status: 503 });
+    const down = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target)));
+    check("/api/books upstream 503 -> 502 with an empty body, so the guest keeps its samples", down.status === 502 && (await down.text()) === "");
+    globalThis.fetch = async () => Response.json({ total: 0, results: [] });
+    const empty = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target)));
+    check("/api/books with no usable rows -> 502", empty.status === 502);
+    globalThis.fetch = async () => { throw new Error("offline"); };
+    const dead = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent(target)));
+    check("/api/books upstream unreachable -> 502", dead.status === 502);
+    const before = calls;
+    const other = await handleProxy(new Request("https://joshuatree.heyitsmejosh.com/api/proxy?url=" + encodeURIComponent("https://bookrank.heyitsmejosh.com/api/books")));
+    check("the real bookrank host is still not an open proxy target", other.status === 403 && calls === before);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 if (failures > 0) {
   console.log(`FAIL: ${failures} check(s) failed`);
   process.exit(1);
