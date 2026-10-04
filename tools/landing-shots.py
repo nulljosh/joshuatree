@@ -37,8 +37,10 @@ SLOT0_X, PITCH, ICON, DOCK_Y = 247, 43, 37, 487
 SLOT = {"files": 1, "calendar": 3, "notes": 4, "terminal": 6, "chat": 7, "weather": 8, "stocks": 9}
 # Fleet apps live in the Apps folder, not the dock. They boot with `open=<app>` (the flag the ring3 checks
 # use) and no NIC at all, so each one draws its built-in offline samples and no tile depends on the network.
-FLEET = {"bookrank": ("bookr", "bookrank: ring-3 window"), "lexly": ("lexly", "lexly: ring-3 window"),
-         "curbfind": ("curb", "curbfind: ring-3 window"), "epiphany": ("epip", "epiphany: ring-3 window")}
+FLEET = {"bookrank": ("bookr", "bookrank: ring-3 window", "bookrank: samples"),
+         "lexly": ("lexly", "lexly: ring-3 window", "lexly: samples"),
+         "curbfind": ("curb", "curbfind: ring-3 window", "curbfind: samples"),
+         "epiphany": ("epip", "epiphany: ring-3 window", "epiphany: fetch")}   # (open= flag, window opened, offline fallback chosen)
 FILE = {"bookrank": "app-bookrank", "lexly": "app-lexly", "curbfind": "app-curbfind", "epiphany": "app-epiphany",
         "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
         "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks"}
@@ -100,12 +102,13 @@ def shoot(name):
         time.sleep(1.0)
 
         if fleet:
-            for _ in range(80):
-                if FLEET[name][1] in serial(): break
-                time.sleep(0.25)
-            else:
-                sys.exit(f"FAIL {name}: window never opened (no '{FLEET[name][1]}' on serial)")
-            time.sleep(2.0)                    # let the first frame and the offline fallback land
+            for needle in FLEET[name][1:]:     # window first, then the offline fallback: a frame before it is mid-draw
+                for _ in range(120):
+                    if needle in serial(): break
+                    time.sleep(0.25)
+                else:
+                    sys.exit(f"FAIL {name}: no '{needle}' on serial")
+            time.sleep(2.0)                    # let the frame after the fallback land
         else:
             click(SLOT0_X + SLOT[name] * PITCH + ICON // 2, DOCK_Y)
             time.sleep(1.5)
