@@ -408,11 +408,55 @@ static void net_arp_probe(void) {
     } while (t - t0 < freq * 2);
     uart_puts("M2 net no ARP reply\n");
 }
+
+/* Disk: one request queue. A request is three descriptors chained: a 16-byte header (type, sector), the data buffer,
+   and one status byte the device writes back. Polled, one request at a time. */
+struct blk_hdr { unsigned type, reserved; unsigned long sector; };
+static struct vq blk_q;
+static int blk_ok;
+static int blk_init(void) {
+    unsigned long b = vio_find(2, 0);
+    if (!b || !vio_start(b, 0) || !vq_setup(&blk_q, b, 0)) return 0;
+    VR(b, 0x70) = 1 | 2 | 8 | 4;                    /* driver ok */
+    unsigned long sectors = (unsigned long)VR(b, 0x100) | (unsigned long)VR(b, 0x104) << 32;   /* config space: capacity */
+    uart_puts("M2 blk sectors "); uart_dec((unsigned)sectors); uart_putc('\n');
+    blk_ok = 1;
+    return 1;
+}
+static int blk_read(unsigned long sector, void *buf) {   /* one 512-byte sector, 1 on success */
+    static struct blk_hdr hdr __attribute__((aligned(16)));
+    static volatile unsigned char status __attribute__((aligned(16)));
+    hdr.type = 0; hdr.reserved = 0; hdr.sector = sector;   /* 0 = read */
+    status = 0xFF;
+    dcache_clean(&hdr, sizeof hdr); dcache_clean(buf, 512); dcache_clean((void *)&status, 1);   /* QEMU is coherent; a real DMA engine is not */
+    blk_q.d[0] = (struct vq_desc){ (unsigned long)&hdr, sizeof hdr, 1 /* next */, 1 };
+    blk_q.d[1] = (struct vq_desc){ (unsigned long)buf, 512, 1 | 2 /* next, device writes */, 2 };
+    blk_q.d[2] = (struct vq_desc){ (unsigned long)&status, 1, 2, 0 };
+    blk_q.a->ring[blk_q.a->idx % VQ] = 0;
+    __asm__ volatile ("dsb sy" ::: "memory");
+    blk_q.a->idx++;
+    vq_kick(&blk_q);
+    unsigned long freq, t0, t; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(freq), "=r"(t0));
+    while (vq_take(&blk_q, 0) < 0) {
+        __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(t));
+        if (t - t0 > freq * 2) return 0;
+    }
+    dcache_clean(buf, 512); dcache_clean((void *)&status, 1);   /* drop our stale copies so the reads below see what the device wrote */
+    return status == 0;
+}
+static void blk_probe(void) {
+    static unsigned char sec[512] __attribute__((aligned(64)));
+    if (!blk_read(0, sec)) { uart_puts("M2 blk read FAIL\n"); return; }
+    sec[511] = 0;   /* the test disk's first sector is text, ends in a newline */
+    uart_puts("M2 blk sector0 "); for (int i = 0; i < 32 && sec[i] >= 32 && sec[i] < 127; i++) uart_putc((char)sec[i]); uart_putc('\n');
+}
 #else
 static int input_init(void) { return 0; }
 static void input_poll(void) {}
 static int net_init(void) { return 0; }
 static void net_arp_probe(void) {}
+static int blk_init(void) { return 0; }
+static void blk_probe(void) {}
 #endif
 
 void main(void) {
@@ -425,6 +469,7 @@ void main(void) {
     uart_puts("M0 ok\n");
     m1_selftest();
     if (net_init()) net_arp_probe();
+    if (blk_init()) blk_probe();
     int inputs = input_init();
     if (inputs) {
         uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n');
