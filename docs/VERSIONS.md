@@ -72,6 +72,7 @@ Where this goes, one major version at a time. Up to 10 it's a plan: each version
   - 2.6.28: The landing shows tiles for Bookrank, Lexly, Curbfind and Epiphany, and a check fails when an app changes and its tile is not retaken. The built app binaries are no longer tracked in git.
   - 2.6.29: Sparkjar is now Hikko inside the OS, and it shows the real forum's top twelve ideas (title, votes, text, plan) through the Worker and SYS_HTTP_GET. The ten demo ideas stay as the offline fallback, votes stay on this machine, and Samantha still opens it when you say Sparkjar or Hotaru.
   - 2.6.30: every app name inside the OS follows the fleet. Lexly is Tonchi (Samantha still opens it as "lexly"), the Portfolio catalog says Brick, Notate and Hagaki, and it gains Madobe and Plank. Tonchi keeps its old web address until the new one exists.
+  - 2.6.31: Stocks shows all five watchlist rows with their price and sparkline again. The app read only the first 255 bytes of its data file, so only AAPL filled. It now reads the whole file, and the status line says Retrying or Offline instead of stale text.
 - 3.0: It boots a real computer. One reference mini PC: UEFI, USB keyboard, mouse and stick, a real disk, a real network card, real sound.
 - 3.1: The Strata Kit ships. The $199 case and OS stick for the 3.0 board, bring your own parts (MONEY.md has the math).
 - 4.0: True multitasking. A compositor, many windows, resize and minimize, apps that never freeze each other.
