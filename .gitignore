@@ -47,3 +47,9 @@ drivers/user_fbpoke.h
 # Agent scratch notes (per-worktree handoffs), never commit
 HANDOFF.md
 boot/memmap.ld
+
+# Every ring-3 program's flat binary and its embedded copy are build outputs
+# (the Makefile makes them from user/*.c). They used to be tracked and showed
+# as modified after every build.
+user/*.bin
+drivers/user_*.h

@@ -51,6 +51,7 @@ echo "pre-push: generated files are fresh..."
 ./tools/checks/testing-doc-check.sh
 python3 ./tools/checks/dockslots-check.py
 ./tools/checks/logo-check.sh
+python3 ./tools/checks/landing-shots-fresh-check.py
 python3 ./tools/checks/iconinset-check.py
 
 echo "pre-push: OK"

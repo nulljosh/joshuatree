@@ -61,6 +61,7 @@ once |6|Kernel memory keeps 16KB clear of the program window (toolchain drift gu
 once |6|Samantha's face loops wrap without a seam|python3 ./tools/checks/face-frames-check.py
 once |6|docs/TESTING.md lists every check in this suite|./tools/checks/testing-doc-check.sh
 once |6|The landing logo rebuilds byte for byte from tools/gen/logo.py|./tools/checks/logo-check.sh
+once |6|Landing app tiles are not older than the app code that draws them (source hashes, no QEMU)|python3 ./tools/checks/landing-shots-fresh-check.py
 once |6|The landing demo downloads the kernel once, gzipped|./tools/checks/kernel-gz-check.sh
 retry|1|Boot check|./check.sh
 retry|4|DHCP client leases real SLIRP config, DNS+HTTP still work, nodhcp keeps the old fixed path|./tools/checks/dhcp-check.sh
