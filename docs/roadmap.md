@@ -44,8 +44,11 @@ Two notebook pages checked against the tree. Already shipped and not listed: men
 - [ ] [Joshua] Constraints and design system as written rules: one page of what the OS never does (no pixels, no clutter) and the shared icon rules. The icon item under Landing already covers the second half.
 
 ### Voice chat, lag and sharing (Joshua, 2026-10-04)
-Voice chat works on the web portfolio and in the OS, laggy and glitchy in both; the portfolio is the better one. Order: measure, stream, then share.
-- [ ] [Sonnet] Log a timestamp at every stage (mic end, STT done, first LLM token, first TTS byte, first audio out) on both, so the lag has numbers before anything changes.
+Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice out, so "voice chat" still needs speech-to-text. Each message in the OS is three round trips in a row: `/api/pick` (which tool), `/api/chat` (the full reply, no streaming), then `/api/speak` per sentence piece. Order: measure, cut round trips, stream, then listen.
+- [x] [Sonnet] OS side, 2.6.22: one `voicetime:` serial line per message (pick, chat, first sound, in ms from Enter), asserted by `tools/checks/chat-face-check.py`.
+- [ ] [Sonnet] Read `voicetime` off the live demo for ten messages and post the numbers here. The web portfolio gets the same line (`console.info`) next.
+- [ ] [Sonnet] Skip `/api/pick` when the message plainly is not a tool request, or have `/api/chat` pick the tool in the same call. One round trip less on every message.
+- [ ] [Fable] Speech-to-text: mic in, words out. Web first (browser mic plus a hosted STT), then the OS once it has audio input (an SB16 capture path or the Pi's USB mic).
 - [ ] [Sonnet] Stream every stage: STT, LLM tokens, ElevenLabs over its WebSocket TTS, audio chunks played as they land. Add barge-in: talking over her stops her.
 - [ ] [Sonnet] One shared voice module, the portfolio's code, used by both. The OS stays thin: it opens the voice page or calls a small server, no audio pipeline or TLS of its own.
 - [ ] [Sonnet] Hardening: keys server-side only, a per-session cost cap, reconnect on a dropped socket, Claude as the fallback when Turing is down.
