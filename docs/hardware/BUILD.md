@@ -1,4 +1,4 @@
-# Build a Strata box
+# Build a Neo box
 
 ![Build sheet](build-sheet.svg)
 
@@ -68,4 +68,4 @@ The fade is the product, so print each ring in its own colour. All seven come fr
 | Black screen on first boot | Check the USB stick is in a rear port, tap F11, pick the stick with UEFI in its name. |
 
 ---
-Strata Kit and Joshua Tree are trademarks of Joshua Trommel. Designs licensed CC BY-NC-SA 4.0. Build one for yourself; please do not sell copies.
+Neo Kit and Joshua Tree are trademarks of Joshua Trommel. Designs licensed CC BY-NC-SA 4.0. Build one for yourself; please do not sell copies.

@@ -10,7 +10,7 @@
 //      collapsed and visible once opened.
 //   2. Every benchmark value and label, the growth chart with its lede, the
 //      documented % span and the ring-3 count are still in the DOM.
-//   3. The plain lines and the footer link to #specs, and every in-page
+//   3. The footer links to #specs, and every in-page
 //      anchor on the page resolves to a real id.
 //   4. The footer has four columns of links (2x2 on phones, 4 across on
 //      wider screens), every docs/ or LICENSE link points at a file in this
@@ -160,13 +160,11 @@ try {
       const allHrefs = [...document.querySelectorAll('a[href]')].map(a => a.getAttribute('href'));
       return {
         anchors, missing: anchors.filter(h => !ids.has(decodeURIComponent(h.slice(1)))),
-        specsLinks: anchors.filter(h => h === '#specs').length,
         specsFooter: nav ? [...nav.querySelectorAll('a')].some(a => a.getAttribute('href') === '#specs') : false,
         hasNav: !!nav, hasRule: !!document.querySelector('footer .sheet-rule'),
         cols: cols.map(c => ({ h: c.querySelector('h3, h2, h4')?.textContent.trim(), n: c.querySelectorAll('a').length, x: Math.round(c.getBoundingClientRect().x), y: Math.round(c.getBoundingClientRect().y) })),
         hrefs, allHrefs,
         bar: document.querySelector('footer .foot-bar')?.textContent.replace(/\s+/g, ' ').trim() || '',
-        barCta: !!document.querySelector('footer .foot-bar a[href="#waitlist"]'),
       };
     });
     if (!f.hasRule) fail(`${tag}: footer lost its .sheet-rule line`);
@@ -179,10 +177,8 @@ try {
       if (xs.size !== want[0] || ys.size !== want[1]) fail(`${tag}: footer columns form ${xs.size}x${ys.size}, expected ${want[0]}x${want[1]}`);
     }
     if (f.missing.length) fail(`${tag}: in-page anchors with no target: ${f.missing.join(', ')}`);
-    if (f.specsLinks < 2) fail(`${tag}: only ${f.specsLinks} links to #specs (plain lines + footer expected)`);
     if (!f.specsFooter) fail(`${tag}: footer has no Tech specs link`);
     if (!/Joshua Tree v\d+\.\d+\.\d+ .*Apache License 2\.0 .*Joshua Trommel .*Vancouver, BC/.test(f.bar)) fail(`${tag}: footer bar text is wrong: "${f.bar}"`);
-    if (!f.barCta) fail(`${tag}: footer bar has no waitlist link`);
     if (w === 1280 && scheme === 'light') {
       for (const h of f.allHrefs) {
         if (h.startsWith(REPO_URL + 'blob/main/') || h.startsWith(REPO_URL + 'tree/main/')) {

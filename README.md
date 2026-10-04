@@ -49,10 +49,10 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 - [Hardware](docs/HARDWARE.md): the real board and the 3.0 plan
 - [Portfolio mode](docs/PORTFOLIO.md): how heyitsmejosh.com is a mode of the OS, with Joshua in place of Samantha
 - [Raspberry Pi guide](docs/RASPBERRY-PI.md): what to buy, the serial cable, and how to boot it on a real Pi 4. [Printable Pi case](docs/hardware/PI-CASE.md)
-- [ARM64 and the Raspberry Pi](docs/ARM64.md): the second CPU target. Milestone 0 boots under QEMU today (`make -C arch/arm64 run`); the Pi 4B is the first real board
+- [ARM64 and the Raspberry Pi](docs/ARM64.md): the second CPU target. It boots under QEMU today with a drawn desktop, a keyboard, mouse, disk and network, and its first program in user mode (`make -C arch/arm64 run`); the Pi 4B is the first real board
 - [Roadmap](docs/roadmap.md): what is next
 - [All docs](docs/)
 
 ## License
 
-Software: Apache License 2.0, © 2026 Joshua Trommel. Hardware designs: CC BY-NC-SA 4.0, free to build for yourself, see [docs/hardware/LICENSE-NOTICE.md](docs/hardware/LICENSE-NOTICE.md). Joshua Tree™ and Strata Kit™ are trademarks, see [TRADEMARKS.md](TRADEMARKS.md).
+Software: Apache License 2.0, © 2026 Joshua Trommel. Hardware designs: CC BY-NC-SA 4.0, free to build for yourself, see [docs/hardware/LICENSE-NOTICE.md](docs/hardware/LICENSE-NOTICE.md). Joshua Tree™ and Neo Kit™ are trademarks, see [TRADEMARKS.md](TRADEMARKS.md).

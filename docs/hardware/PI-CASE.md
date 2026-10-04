@@ -1,8 +1,8 @@
-# Strata Pi: a printable case for the Raspberry Pi 4B
+# Neo Pi: a printable case for the Raspberry Pi 4B
 
-The same stacked-ring look as the [Strata enclosure](../HARDWARE.md#enclosure-strata), sized for the Pi. Four rings that get smaller as they climb, a cap, and a tray in the middle that holds the board. Every part fits a 180 mm printer bed (a Bambu A1 mini is enough).
+The same stacked-ring look as the [Neo enclosure](../HARDWARE.md#enclosure-neo), sized for the Pi. Four rings that get smaller as they climb, a cap, and a tray in the middle that holds the board. Every part fits a 180 mm printer bed (a Bambu A1 mini is enough).
 
-![Front elevation](strata-pi-front.svg)
+![Front elevation](neo-pi-front.svg)
 
 Overall size is about 131 x 102 x 27.5 mm.
 
@@ -13,14 +13,14 @@ The port positions come from the Raspberry Pi 4B mechanical drawing, and they ha
 1. Build the files (below).
 2. Print `fit_test.stl`. It is a flat plate with a thin lip the size of the board and four holes.
 3. Drop the Pi in. The board should sit inside the lip and the four mounting holes should line up with the plate's holes.
-4. If it is off by half a millimetre or more, change `BOARD_L`, `BOARD_S` or `HOLES` at the top of `strata_pi_cad.py` and rebuild.
+4. If it is off by half a millimetre or more, change `BOARD_L`, `BOARD_S` or `HOLES` at the top of `neo_pi_cad.py` and rebuild.
 
 The port windows are cut bigger than the connectors on purpose, so small errors still fit. The mounting holes are the part that has to be right.
 
 ## Build the files
 
 ```
-uv run --with build123d python docs/hardware/strata_pi_cad.py docs/hardware/pi
+uv run --with build123d python docs/hardware/neo_pi_cad.py docs/hardware/pi
 ```
 
 That writes one STL per part, the whole thing as a STEP file, and two drawings. The script stops with an error if the rods would miss the rings, the cap would not cover the tray, or the tallest port would hit the lid.
@@ -42,7 +42,7 @@ That writes one STL per part, the whole thing as a STEP file, and two drawings. 
 - PLA is fine. PETG if the case will sit somewhere warm.
 - 0.2 mm layers, 3 wall loops, 20% infill.
 - No supports. Lay every part flat on its biggest face. The tray prints floor down.
-- Colour: the Strata look runs a dark orange at the bottom to cream at the top. The colours are in [HARDWARE.md](../HARDWARE.md).
+- Colour: the Neo look runs a dark orange at the bottom to cream at the top. The colours are in [HARDWARE.md](../HARDWARE.md).
 
 ## Assemble
 

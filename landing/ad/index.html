@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Joshua Tree and Strata Kit</title>
+<html lang="en"><head><meta charset="utf-8"><title>Joshua Tree and Neo Kit</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="The 30 second Joshua Tree ad, running live in your browser. Click or press space to pause, drag the bar to scrub.">
 <meta name="theme-color" content="#f1ead8">
@@ -63,7 +63,7 @@ const shadow=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.ShaderMateria
  fragmentShader:`varying vec2 u;void main(){float r=length(u);float a=.34*exp(-r*r*9.)+.16*exp(-r*r*2.6);a*=1.-smoothstep(.75,1.,r);gl_FragColor=vec4(.30,.22,.14,a);}`}));
 shadow.rotation.x=-Math.PI/2;shadow.renderOrder=-1;scene.add(shadow);
 const items=[]; // {g, kind, ring}
-// Dimensions straight from docs/hardware/strata_cad.py and stl/manifest.json
+// Dimensions straight from docs/hardware/neo_cad.py and stl/manifest.json
 const THICK=[9,7,10,6.5,8.5,7],GAP=2,STEP_IN=3,BASE_W=224,CAP_T=4.5;
 const ringZ=[];let zacc=0;for(let i=0;i<6;i++){ringZ.push(zacc);zacc+=THICK[i]+GAP}
 const STACK_TOP=zacc;
@@ -245,7 +245,7 @@ function render2(t){
   line('Nothing leaves this machine.',25.0,26.8,t,H/2,88);
   const m=imgs.mark;if(m){const s=280;g.globalAlpha=am;g.drawImage(m,W/2-s/2,170,s,s);g.globalAlpha=1}
   text('Joshua Tree',W/2,580,128,600,S(27.0,27.8,t));
-  text('Strata Kit',W/2,700,68,400,S(27.4,28.2,t),TERRA);
+  text('Neo Kit',W/2,700,68,400,S(27.4,28.2,t),TERRA);
  }
 }
 let last=-1;

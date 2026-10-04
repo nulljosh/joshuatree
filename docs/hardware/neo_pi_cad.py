@@ -1,6 +1,6 @@
-# Strata Pi enclosure for a Raspberry Pi 4 Model B, printable parts. build123d -> STEP (whole thing) + STL per part.
-# Same stacked-ring look as strata_cad.py (the mini-ITX case), sized for an 85 x 56 mm board. mm throughout.
-# Run:  python3 strata_pi_cad.py OUTDIR    (needs build123d)
+# Neo Pi enclosure for a Raspberry Pi 4 Model B, printable parts. build123d -> STEP (whole thing) + STL per part.
+# Same stacked-ring look as neo_cad.py (the mini-ITX case), sized for an 85 x 56 mm board. mm throughout.
+# Run:  python3 neo_pi_cad.py OUTDIR    (needs build123d)
 # Print docs/hardware/PI-CASE.md's fit_test.stl first. Every number from the Raspberry Pi 4B mechanical drawing
 # is below as BOARD / HOLES / the window ranges. The windows are deliberately bigger than the connectors, so a
 # half-millimetre of error in a port position still fits. Check the real board with calipers before the full print.
@@ -91,13 +91,13 @@ os.makedirs(OUT, exist_ok=True)
 for name, p in parts.items():
     export_stl(p, os.path.join(OUT, f"{name}.stl"))
 stack = [p for n, p in parts.items() if n != "fit_test"]
-export_step(Compound(stack), os.path.join(OUT, "strata-pi.step"))
+export_step(Compound(stack), os.path.join(OUT, "neo-pi.step"))
 
 asm = Compound(stack)
 for name, eye, up in (("front", (0, -1000, 0), (0, 0, 1)), ("plan", (0, 0, 1000), (0, 1, 0))):
     drw = ExportSVG(unit=Unit.MM, line_weight=0.25); drw.add_layer("v", line_weight=0.3)
     vis, _ = asm.project_to_viewport(eye, up); drw.add_shape(vis, layer="v")
-    drw.write(os.path.join(OUT, f"strata-pi-{name}.svg"))
+    drw.write(os.path.join(OUT, f"neo-pi-{name}.svg"))
 
 bb = asm.bounding_box()
 print("PARTS", len(parts), "SIZE %.1f x %.1f x %.1f mm" % (bb.size.X, bb.size.Y, bb.size.Z))

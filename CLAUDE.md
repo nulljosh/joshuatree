@@ -171,12 +171,6 @@ tightened in place as gaps turn up, not left to drift.
 Gecko" idea is dropped and not coming back. Not to be confused with gato
 (`~/Documents/Code/gato`), a separate macOS voice app.
 
-## Upcoming, not yet on main
-
-An Activity Monitor app is in PR #62. A file write/read round-trip check
-across reboots is in PR #61. Do not document either as shipped until
-merged to `main`.
-
 ## Debug QEMU runs always get a timeout
 
 Never start QEMU with `-d int` (or any `-d` trace) and `-D <file>` without a

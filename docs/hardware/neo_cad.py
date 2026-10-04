@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: CC-BY-NC-SA-4.0
 # Copyright (c) 2026 Joshua Trommel. Hardware design, see docs/hardware/LICENSE-NOTICE.md
-# Strata Kit enclosure, print-ready parts (v4: 200 x 200 x 55 mm, staggered quarter seams, feet hide the bottom hardware, cap = frame + whole-tree panel). build123d -> STL per printable part, one STEP, exploded SVGs.
+# Neo Kit enclosure, print-ready parts (v4: 200 x 200 x 55 mm, staggered quarter seams, feet hide the bottom hardware, cap = frame + whole-tree panel). build123d -> STL per printable part, one STEP, exploded SVGs.
 # mm throughout. Numbers match docs/HARDWARE.md. Target: Bambu A1 mini (180 x 180 x 180), FDM.
-#   uv run --with build123d python docs/hardware/strata_cad.py docs/hardware
+#   uv run --with build123d python docs/hardware/neo_cad.py docs/hardware
 import sys, os, json, re, math
 from build123d import *
 
@@ -314,19 +314,19 @@ for a in range(len(placed)):
         assert v < 0.01, f"{placed[a][0]} and {placed[b][0]} overlap by {v:.3f} mm3"
 asm_parts = rings + [cap_panel, cap_frame, tray, rear, *feet, *rods]
 asm = Compound(asm_parts)
-if os.environ.get("STRATA_MESH"):                  # assembled-position meshes for render_strata.py, one per printed piece
-    import shutil; shutil.rmtree(os.environ["STRATA_MESH"], ignore_errors=True); os.makedirs(os.environ["STRATA_MESH"])
+if os.environ.get("NEO_MESH"):                  # assembled-position meshes for render_neo.py, one per printed piece
+    import shutil; shutil.rmtree(os.environ["NEO_MESH"], ignore_errors=True); os.makedirs(os.environ["NEO_MESH"])
     meshes = []
     for n, sh, q, hx in printables:
         for j in range(q if n == "foot" else 1):
             nm = f"{n}{j}" if n == "foot" else n
-            export_stl(feet[j] if n == "foot" else sh, os.path.join(os.environ["STRATA_MESH"], nm + ".stl"), tolerance=0.02, angular_tolerance=0.1)
+            export_stl(feet[j] if n == "foot" else sh, os.path.join(os.environ["NEO_MESH"], nm + ".stl"), tolerance=0.02, angular_tolerance=0.1)
             meshes.append({"name": nm, "hex": hx})
     for i, r in enumerate(rods):
-        export_stl(r, os.path.join(os.environ["STRATA_MESH"], f"rod{i}.stl")); meshes.append({"name": f"rod{i}", "hex": "#787878"})
-    json.dump(meshes, open(os.path.join(os.environ["STRATA_MESH"], "meshes.json"), "w"))
+        export_stl(r, os.path.join(os.environ["NEO_MESH"], f"rod{i}.stl")); meshes.append({"name": f"rod{i}", "hex": "#787878"})
+    json.dump(meshes, open(os.path.join(os.environ["NEO_MESH"], "meshes.json"), "w"))
 bb = asm.bounding_box()
-export_step(asm, os.path.join(OUT, "strata.step"))
+export_step(asm, os.path.join(OUT, "neo.step"))
 json.dump({"license": "CC-BY-NC-SA-4.0", "copyright": "2026 Joshua Trommel", "parts": report}, open(os.path.join(STL_DIR, "manifest.json"), "w"), indent=1)
 
 # ---- exploded step diagrams (iso view, visible edges) ----

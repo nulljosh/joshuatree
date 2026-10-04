@@ -1,16 +1,16 @@
 # Trademarks
 
-Joshua Tree™, Strata Kit™ and the Joshua tree mark are unregistered trademarks of Joshua Trommel. They are claimed through use. Registration may follow.
+Joshua Tree™, Neo Kit™ and the Joshua tree mark are unregistered trademarks of Joshua Trommel. They are claimed through use. Registration may follow.
 
 ## What they cover
 
 - **Joshua Tree™**: the operating system and its name.
-- **Strata Kit™**: the dev kit and its enclosure.
+- **Neo Kit™**: the dev kit and its enclosure.
 - **The Joshua tree mark**: the engraved tree logo and badge used on the landing page, the boot screen and the kit.
 
 ## What you can do
 
-Refer to them accurately. "Runs on Joshua Tree", "a review of the Strata Kit" and "I built a Strata Kit for myself" are all fine. Write about the project, link to it, make videos about it.
+Refer to them accurately. "Runs on Joshua Tree", "a review of the Neo Kit" and "I built a Neo Kit for myself" are all fine. Write about the project, link to it, make videos about it.
 
 ## What you can't do
 

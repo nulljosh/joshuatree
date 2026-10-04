@@ -1,8 +1,8 @@
-# Assembling the Strata Kit
+# Assembling the Neo Kit
 
 You have the printed parts, a board, a power supply and a bag of screws. This takes about 45 minutes. A one-page picture version is in [`BUILD.md`](BUILD.md). Nothing here needs a special tool. If you want to see it go together first, the [30 second ad](https://joshuatree.heyitsmejosh.com/ad/) runs live in 3D.
 
-The parts come from `strata_cad.py`. Every STL is in `stl/`, and `stl/manifest.json` lists how many of each to print. The whole machine is one stack: four rods hold a ring sandwich together, a tray sits in the middle, the board sits in the tray.
+The parts come from `neo_cad.py`. Every STL is in `stl/`, and `stl/manifest.json` lists how many of each to print. The whole machine is one stack: four rods hold a ring sandwich together, a tray sits in the middle, the board sits in the tray.
 
 ## Tools
 
@@ -74,7 +74,7 @@ PLA is fine to start. PETG is better if the box will sit near a warm room. Print
 
 ## If something doesn't fit
 
-Cutting down: 35 prints and 58 loose pieces became 28 printed pieces in 25 files, and 20 fasteners became 16. Parts have 0.2 mm of clearance on every mating face. If your printer runs tight, sand the edge, don't scale the part. If a ring hole won't clear the tray, you printed too hot. Fix the part in `strata_cad.py`, run it again, reprint. That loop is the whole point.
+Cutting down: 35 prints and 58 loose pieces became 28 printed pieces in 25 files, and 20 fasteners became 16. Parts have 0.2 mm of clearance on every mating face. If your printer runs tight, sand the edge, don't scale the part. If a ring hole won't clear the tray, you printed too hot. Fix the part in `neo_cad.py`, run it again, reprint. That loop is the whole point.
 
 ---
-Strata Kit and Joshua Tree are trademarks of Joshua Trommel. Designs licensed CC BY-NC-SA 4.0. Build one for yourself; please do not sell copies.
+Neo Kit and Joshua Tree are trademarks of Joshua Trommel. Designs licensed CC BY-NC-SA 4.0. Build one for yourself; please do not sell copies.

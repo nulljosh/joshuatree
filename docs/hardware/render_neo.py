@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: CC-BY-NC-SA-4.0
 # Copyright (c) 2026 Joshua Trommel. Hardware design, see docs/hardware/LICENSE-NOTICE.md
-# Strata Kit product renders, from the real CAD. One script, three views.
-#   python3 docs/hardware/render_strata.py [outdir]     (default docs/hardware/render)
-# Step 1 re-runs strata_cad.py (all assertions, STLs, STEP, manifest) and has it write assembled-position meshes.
+# Neo Kit product renders, from the real CAD. One script, three views.
+#   python3 docs/hardware/render_neo.py [outdir]     (default docs/hardware/render)
+# Step 1 re-runs neo_cad.py (all assertions, STLs, STEP, manifest) and has it write assembled-position meshes.
 # Step 2 runs Blender headless on those meshes: cream ground, soft light, hero / rear / top views, 1600 px wide PNG.
-# Every printed piece (24 ring quarters, cap panel and frame, tray, rear plate, feet) is loaded in its assembled position with the 0.2 mm seams, in the filament colour strata_cad.py wrote to stl/manifest.json. No metal paint, no gloss, no text.
+# Every printed piece (24 ring quarters, cap panel and frame, tray, rear plate, feet) is loaded in its assembled position with the 0.2 mm seams, in the filament colour neo_cad.py wrote to stl/manifest.json. No metal paint, no gloss, no text.
 import sys, os, subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PREVIEW = bool(os.environ.get("STRATA_PREVIEW"))             # 400 px, 8 samples, for checking exposure
+PREVIEW = bool(os.environ.get("NEO_PREVIEW"))             # 400 px, 8 samples, for checking exposure
 W, H = (400, 250) if PREVIEW else (1600, 1000)
 BASE, TOPC = (0xB9, 0x54, 0x2C), (0xF0, 0xE7, 0xD8)      # ring 0 and the cap, as in ASSEMBLY.md
 INK, CREAM = (0x1E, 0x1C, 0x1A), (0xE9, 0xE0, 0xCF)
@@ -45,9 +45,9 @@ def check(out):
 if bpy is None:
     out = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "render"))
     mesh = os.path.join(out, "mesh"); os.makedirs(mesh, exist_ok=True)
-    if os.environ.get("STRATA_CHECK_ONLY"): sys.exit(check(out))      # re-run just the colour check on existing renders
-    env = dict(os.environ, STRATA_MESH=mesh)
-    subprocess.run(["uv", "run", "--with", "build123d", "--with", "shapely", "python", os.path.join(HERE, "strata_cad.py"), HERE], check=True, env=env)
+    if os.environ.get("NEO_CHECK_ONLY"): sys.exit(check(out))      # re-run just the colour check on existing renders
+    env = dict(os.environ, NEO_MESH=mesh)
+    subprocess.run(["uv", "run", "--with", "build123d", "--with", "shapely", "python", os.path.join(HERE, "neo_cad.py"), HERE], check=True, env=env)
     subprocess.run(["/opt/homebrew/bin/blender", "-b", "-P", __file__, "--", mesh, out], check=True)
     sys.exit(check(out))
 
@@ -216,7 +216,7 @@ def env(k, v): return float(os.environ.get(k, v))
 LK_H, LK_R, LK_T = env("LK_H", 0.4), env("LK_R", 0.42), env("LK_T", 0.42)     # light scale per shot, exposure stays at 0 under the Standard transform
 WALL_K = env("WALL_K", 0.6)                                    # back-wall light: low enough that the black rear plate stops mirroring the backdrop
 GRD_K = env("GRD_K", 0.5)
-ONLY = os.environ.get("STRATA_ONLY")                          # render just one view, e.g. STRATA_ONLY=hero
+ONLY = os.environ.get("NEO_ONLY")                          # render just one view, e.g. NEO_ONLY=hero
 hero_lights = [("key", (-0.9, -0.45, 0.85), 0.7, 22 * LK_H), ("fill", (0.9, -0.6, 0.5), 1.2, 3.5 * LK_H),
                ("camleft", (-0.94, -0.03, 0.34), 0.9, 7 * LK_H),                    # weak fill from camera-left at 20 deg elevation, both trunk walls catch a line
                ("top", (0.0, 0.0, 1.2), 0.35, 3.0 * LK_H),                          # small overhead: a tight grounding shadow under every edge
