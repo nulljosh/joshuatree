@@ -45,6 +45,7 @@ app's own real framebuffer output rather than a shell round-trip.)
 
 Usage: tools/checks/activity-check.py   (from the repo root, after make kernel.elf)
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image
 from freeport import free_port
@@ -57,7 +58,7 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46  # the Apps folder's own outer window red dot (56+24, 30+16)
+APPS_CLOSE_X, APPS_CLOSE_Y = FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # the Apps folder's own outer window red dot (56+24, 30+16)
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 # gui_launch_apps' content viewport (same derivation search-check.py/launchpad-click-check.py use).
 VX, VY = 78, 72  # 1.9.6: the ring-3 app's viewport, same as the ring3*-check.py files

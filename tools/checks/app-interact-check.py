@@ -22,6 +22,7 @@ Usage: tools/checks/app-interact-check.py   (from the repo root, after make kern
 Creates its own fresh FAT16 image with tools/mkdisk.sh. Requires mkfs.vfat
 and mtools on Linux, or hdiutil and newfs_msdos on macOS.
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, re, socket, subprocess, sys, time, tempfile
 
 REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
@@ -37,8 +38,7 @@ DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 CLOSE_X, CLOSE_Y = 94, 56             # windowed (dock-launched) close hitbox
-FOLDER_CLOSE_X, FOLDER_CLOSE_Y = 80, 46  # apps launched from inside the Apps folder draw in its own already-offset (56,30) viewport, so their internal (26,20) titlebar lands here on screen, not at (26,20) itself
-APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
+APPS_CLOSE_X, APPS_CLOSE_Y = FOLDER_CLOSE_X, FOLDER_CLOSE_Y
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 DOCK_SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Trash"]

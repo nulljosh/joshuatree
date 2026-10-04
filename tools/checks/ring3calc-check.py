@@ -200,7 +200,7 @@ try:
 
     # 5. a normal close, both ways, from the Apps folder grid: Calculator
     #    is APPS[] index 17 = row 3, col 2 (5 columns wide), whose
-    #    viewport is the folder's 796x345 (updated from 832x450 after UI restyle).
+    #    viewport is the folder's 804x345 (updated from 832x450 after UI restyle).
     APPS_CLOSE_X, APPS_CLOSE_Y = 33, 56
     def wait_closed(resend=True):
         # Poll the screen (10s) instead of reading it once: on a slow runner
@@ -225,8 +225,8 @@ try:
             if serial().count("calculator: ring-3 window") > seen: break
         else:
             fails.append(f"{tag}: Calculator did not open a ring-3 window from the Apps folder grid"); return False
-        if "calculator: ring-3 window 796x345" not in serial():
-            fails.append(f"{tag}: the folder-launched window is not the folder viewport's 796x345")
+        if "calculator: ring-3 window 804x345" not in serial():
+            fails.append(f"{tag}: the folder-launched window is not the folder viewport's 804x345")
         if "ring3app: BUG" in serial():
             fails.append(f"{tag}: ring3app logged a BUG line")
         time.sleep(0.5)

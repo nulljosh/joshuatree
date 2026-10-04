@@ -23,7 +23,7 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-APPS_CLOSE_X, APPS_CLOSE_Y = 34, 56  # 2.0: Epiphany is a ring-3 window at the full-pane frame, its red light sits here
+APPS_CLOSE_X, APPS_CLOSE_Y = 94, 56  # 2.0: Epiphany is a ring-3 window at the full-pane frame, its red light sits here
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 EPI_IDX = 20  # GUI_LABELS index for Epiphany, same table feature-drive.py uses
 # 2.0: Epiphany is a ring-3 window at the full-pane frame (x=10,y=40,

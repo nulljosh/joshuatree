@@ -4707,7 +4707,7 @@ static void gui_app_frame_title(const char *label){
 }
 static int gui_multiwin_open(int icon); static void gui_refuse_open(int icon);
 /* 2.0 gate 5: the Apps folder has no window of its own to host an app, so a launch closes the folder and opens the app as a compositor window, exactly a dock click (full table: the same refusal notice). */
-static void gui_apps_launch(int icon){ if (gui_multiwin_open(icon) < 0) gui_refuse_open(icon); }
+static void gui_apps_launch(int icon){ window_clear_viewport(); /* the window is sized and clamped against the whole screen, not the folder's smaller viewport */ if (gui_multiwin_open(icon) < 0) gui_refuse_open(icon); }
 
 /* One serial line per full repaint with the real layout, so the checks measure what was drawn (tools/checks/launchpad-centered-check.py). */
 static void gui_apps_log_geom(const struct apps_geom *g){
@@ -4845,10 +4845,10 @@ static void gui_launch_apps(void){
         }
         if (k == KEY_ENTER) { gui_apps_launch(gui_app_at(sel)); return; }
         int old_sel = sel;
-        if (k == 'a' && sel > 0) sel--;                 /* left  */
-        else if (k == 'd' && sel < gui_apps_n() - 1) sel++; /* right */
-        else if (k == 'w' && sel >= APPS_COLS) sel -= APPS_COLS;
-        else if (k == 's' && sel + APPS_COLS < gui_apps_n()) sel += APPS_COLS;
+        if ((k == 'a' || k == KEY_LEFT) && sel > 0) sel--;                 /* left (the hint says arrow keys) */
+        else if ((k == 'd' || k == KEY_RIGHT) && sel < gui_apps_n() - 1) sel++; /* right */
+        else if ((k == 'w' || k == KEY_UP) && sel >= APPS_COLS) sel -= APPS_COLS;
+        else if ((k == 's' || k == KEY_DOWN) && sel + APPS_COLS < gui_apps_n()) sel += APPS_COLS;
         else if (k >= '1' && k <= '9' && (k - '1') < gui_apps_n()) { gui_apps_launch(gui_app_at(k - '1')); return; }
         if (sel != old_sel) {
             /* Keyboard selection drags the view with it, the direction that is

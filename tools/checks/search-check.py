@@ -44,6 +44,7 @@ before this file was finalized, not assumed from reading the code.
 
 Usage: tools/checks/search-check.py   (from the repo root, after make kernel.elf)
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, socket, subprocess, sys, time
 from PIL import Image
 from freeport import free_port
@@ -56,7 +57,7 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46  # the Apps folder's own outer window red dot (56+24, 30+16)
+APPS_CLOSE_X, APPS_CLOSE_Y = FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # the Apps folder's own outer window red dot (56+24, 30+16)
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 # gui_launch_apps' content viewport, from gui_launch_from_dock's own math for
 # the apps=1 window (x=56,y=30,w=848,h=490 -> viewport (64,62)), the same

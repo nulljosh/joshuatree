@@ -19,6 +19,7 @@ Ports 4513-4515, inside the reserved 4511-4519 range.
 
 Usage: tools/checks/clockicon-check.py   (from the repo root, after make kernel.elf)
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, socket, subprocess, sys, time
 from PIL import Image
 
@@ -33,7 +34,7 @@ os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 TRAY = (239, 235, 228)
 HANDS_INK_MIN = 30    # dark hand pixels: a slow runner can hold a still, white, handless face for seconds (reproduced under CPU load)
 FACE_WHITE_MIN = 3000  # Clock's face disc measures ~4400 white px in the tile box, Calculator ~1800
-CLOSE_X, CLOSE_Y, CLOSE_RED = 80, 46, (0xFF, 0x5F, 0x57)  # the Apps folder window's close dot (ring-3 app windows sit lower, at 94,56)
+CLOSE_X, CLOSE_Y, CLOSE_RED = FOLDER_CLOSE_X, FOLDER_CLOSE_Y, (0xFF, 0x5F, 0x57)  # the Apps folder window's close dot (ring-3 app windows sit lower, at 94,56)
 
 def near(p, c, tol=12): return max(abs(p[i] - c[i]) for i in range(3)) <= tol
 

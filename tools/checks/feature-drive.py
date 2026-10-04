@@ -28,6 +28,7 @@ Before/after pixel comparison with PIL ImageChops to detect screen changes.
 
 Usage: tools/checks/feature-drive.py [outdir]   (from the repo root, after make kernel.elf)
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image, ImageChops
 from freeport import free_port
@@ -40,9 +41,9 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
-APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
+APPS_CLOSE_X, APPS_CLOSE_Y = FOLDER_CLOSE_X, FOLDER_CLOSE_Y
 CLOSE_X, CLOSE_Y = 94, 56
-WIDE_CLOSE_X, WIDE_CLOSE_Y = 34, 56  # ring-3 windows now open at the resizable full-pane frame (feat/win-resize)
+WIDE_CLOSE_X, WIDE_CLOSE_Y = 94, 56  # ring-3 windows now open at the resizable full-pane frame (feat/win-resize)
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)
 

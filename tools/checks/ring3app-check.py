@@ -30,6 +30,7 @@ idt.c halt on a ring-3 fault the way it does for ring 0 and step 4 fails.
 
 Usage: tools/checks/ring3app-check.py   (from the repo root, after make kernel.elf)
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, socket, subprocess, sys, time
 from PIL import Image
 from freeport import free_port
@@ -170,14 +171,14 @@ try:
 
     # 5. a normal close, both ways, from the path qa-gallery.py takes: the
     #    Apps folder grid (Keyrate is row 1, col 4), which in 2.0 opens the app
-    #    as its own ring-3 window (796x345 here, red dot at 34,56) over the
+    #    as its own ring-3 window (804x345 here, red dot at 34,56) over the
     #    folder. Esc, then the red close dot; after each the program must have
     #    exited 0, the window must be released, and Mail must open from the
     #    dock. This is the case that left 17 apps "never opened" in 1.7.7: a
     #    folder-launched viewport did not fit JT_USER_FB, SYS_WINDOW_OPEN
     #    failed, and the desktop hung.
-    APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46            # the Apps window's own red dot
-    GRID_APP_CLOSE_X, GRID_APP_CLOSE_Y = 34, 56    # a window launched from the grid sits further left than a dock launch
+    APPS_CLOSE_X, APPS_CLOSE_Y = FOLDER_CLOSE_X, FOLDER_CLOSE_Y            # the Apps window's own red dot
+    GRID_APP_CLOSE_X, GRID_APP_CLOSE_Y = 94, 56    # a window launched from the grid sits further left than a dock launch
     def open_keyrate_from_grid(tag):
         seen = serial().count("keyrate: ring-3 window")
         move(*PARK); time.sleep(0.2)
@@ -191,8 +192,8 @@ try:
         else:
             fails.append(f"{tag}: Keyrate did not open a ring-3 window from the Apps folder grid"); return False
         last = [l for l in serial().splitlines() if "keyrate: ring-3 window " in l][-1]
-        if not last.endswith("keyrate: ring-3 window 796x345"):
-            fails.append(f"{tag}: the folder-launched window is not the 2.0 app viewport's 796x345 (got: {last})")
+        if not last.endswith("keyrate: ring-3 window 804x345"):
+            fails.append(f"{tag}: the folder-launched window is not the 2.0 app viewport's 804x345 (got: {last})")
         if "ring3app: BUG" in serial():
             fails.append(f"{tag}: ring3app logged a BUG line")
         time.sleep(0.5)
