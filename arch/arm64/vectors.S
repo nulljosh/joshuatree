@@ -95,12 +95,13 @@ bad_entry:
 1:  wfe
     b 1b
 
-/* M3a: enter_user(entry, sp, arg) saves the kernel's callee-saved registers, stack and interrupt mask, then drops to EL0
-   at entry with sp_el0 = sp, x0 = arg and every other register cleared. leave_user(status) is how a program ends (exit or a
+/* M3a: enter_user(entry, sp, arg, arg2) saves the kernel's callee-saved registers, stack and interrupt mask, then drops to EL0
+   at entry with sp_el0 = sp, x0 = arg, x1 = arg2 and every other register cleared. leave_user(status) is how a program ends (exit or a
    fault): it restores that state and returns from enter_user with status in x0. */
 .section .text
 .global enter_user
 enter_user:
+    mov x6, x3                  /* arg2 survives the context save below */
     adrp x3, k_ctx
     add x3, x3, :lo12:k_ctx
     stp x19, x20, [x3]
@@ -117,7 +118,7 @@ enter_user:
     mov x4, #0x3c0              /* EL0t, interrupts masked */
     msr spsr_el1, x4
     mov x0, x2
-    mov x1, xzr
+    mov x1, x6
     mov x2, xzr
     mov x3, xzr
     mov x4, xzr
