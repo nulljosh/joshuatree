@@ -977,6 +977,19 @@ static void speak_line(int status, int bytes) {
     jt_write(1, b, (unsigned)n);
 }
 
+/* One serial line per message: how long the tool pick, the chat reply and the first sound took, in ms from Enter.
+   The lag gets numbers before anything changes. Ticks are 10 ms. */
+static unsigned vt_start JT_DATA = 0, vt_pick JT_DATA = 0, vt_chat JT_DATA = 0, vt_open JT_DATA = 0;
+static void voicetime(void) {
+    char b[96]; int n = 0;
+    const char *h = "voicetime: pick="; while (*h) b[n++] = *h++;
+    put_num(b, &n, (int)(vt_pick * 10)); h = "ms chat="; while (*h) b[n++] = *h++;
+    put_num(b, &n, (int)(vt_chat * 10)); h = "ms firstaudio="; while (*h) b[n++] = *h++;
+    put_num(b, &n, (int)((now_ticks() - vt_start) * 10)); h = "ms\n"; while (*h) b[n++] = *h++;
+    jt_write(1, b, (unsigned)n);
+    vt_open = 0;
+}
+
 static void speak_stop(void) {
     if (spk_active) jt_audio_stop();
     spk_active = 0; spk_len = spk_off = 0; spk_pos = 0;
@@ -1052,6 +1065,7 @@ static int speak_tick(void) {
         if (r == 0) return 0; /* ring full: retry next pass */
         if (r < 0) { if (r == -19) spk_card = 0; speak_stop(); return 1; } /* -ENODEV: honest silence, the timer talks */
         spk_off += (unsigned)r;
+        if (vt_open) voicetime();   /* the first chunk of this reply just reached the card */
         return 1;
     }
     if (st.playing || st.queued) return 0; /* the last clip is still sounding */
@@ -1122,9 +1136,11 @@ static void send(void) {
     push(1, msg);
     inlen = 0; ar->in[0] = 0;
     status = "checking for a tool ...";
+    vt_start = now_ticks(); vt_pick = vt_chat = 0; vt_open = 1;
     draw();
     struct jt_event dummy; jt_window_poll(&dummy, JT_POLL_PRESENT); /* mark dirty so the desktop paints before the wait */
     int picked = pick(msg, tool, sizeof tool, arg, sizeof arg);
+    vt_pick = now_ticks() - vt_start;
     if (!picked) { arg[0] = 0; picked = keyword_fallback(msg, tool, sizeof tool); }
     if (picked && run_tool(tool, arg, msg)) {
         push(0, ar->reply);
@@ -1136,7 +1152,9 @@ static void send(void) {
     status = "generating ...";
     draw();
     jt_window_poll(&dummy, JT_POLL_PRESENT);
-    if (chat()) {
+    int chatted = chat();
+    vt_chat = now_ticks() - vt_start - vt_pick;
+    if (chatted) {
         status = "ready";
         talk_until = now_ticks() + 100u * 2u + 6u * (unsigned)slen(ar->t[nturn - 1].text);
         speak_begin(ar->t[nturn - 1].text);

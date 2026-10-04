@@ -210,6 +210,12 @@ def run(scenario, facehost):
         print(tag + f"face square after the reply: {after} ({name(after)})")
         if "chatreply=" not in serial(): fails.append(tag + "Chat never got its reply")
         if scenario == "face" and "speak: status=200" not in serial(): fails.append(tag + "the reply was never spoken")
+        if scenario == "face":   # the lag gets numbers: one voicetime line per message, pick <= first sound, chat <= first sound
+            m = re.search(r"voicetime: pick=(\d+)ms chat=(\d+)ms firstaudio=(\d+)ms", serial())
+            if not m: fails.append(tag + "no voicetime: line after the reply was spoken")
+            elif int(m.group(3)) < int(m.group(1)) + int(m.group(2)) or int(m.group(3)) == 0:
+                fails.append(tag + f"voicetime does not add up: {m.group(0)}")
+            else: print(f"  ok: {m.group(0)}")
         if scenario == "face":
             if "green" not in seen or "blue" not in seen: fails.append(tag + "face never cycled talk frames while she spoke")
             if name(after) != "idle": fails.append(tag + f"face did not return to idle after the audio: {after}")

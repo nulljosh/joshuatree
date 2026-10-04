@@ -43,7 +43,20 @@ Two notebook pages checked against the tree. Already shipped and not listed: men
 - [ ] [Fable] The big promise, in his words: say "computer, run the simulation", "build me a game", "publish and monetize my apps", "add X feature", "patch Y bug", and the OS does it. Samantha plus a coding agent plus the publish flow. Scope it as a doc before any code.
 - [ ] [Joshua] Constraints and design system as written rules: one page of what the OS never does (no pixels, no clutter) and the shared icon rules. The icon item under Landing already covers the second half.
 
+### Voice chat, lag and sharing (Joshua, 2026-10-04)
+Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice out, so "voice chat" still needs speech-to-text. Each message in the OS is three round trips in a row: `/api/pick` (which tool), `/api/chat` (the full reply, no streaming), then `/api/speak` per sentence piece. Order: measure, cut round trips, stream, then listen.
+- [x] [Sonnet] OS side, 2.6.22: one `voicetime:` serial line per message (pick, chat, first sound, in ms from Enter), asserted by `tools/checks/chat-face-check.py`.
+- [ ] [Sonnet] Read `voicetime` off the live demo for ten messages and post the numbers here. The web portfolio gets the same line (`console.info`) next.
+- [ ] [Sonnet] Skip `/api/pick` when the message plainly is not a tool request, or have `/api/chat` pick the tool in the same call. One round trip less on every message.
+- [ ] [Fable] Speech-to-text: mic in, words out. Web first (browser mic plus a hosted STT), then the OS once it has audio input (an SB16 capture path or the Pi's USB mic).
+- [ ] [Sonnet] Stream every stage: STT, LLM tokens, ElevenLabs over its WebSocket TTS, audio chunks played as they land. Add barge-in: talking over her stops her.
+- [ ] [Sonnet] One shared voice module, the portfolio's code, used by both. The OS stays thin: it opens the voice page or calls a small server, no audio pipeline or TLS of its own.
+- [ ] [Sonnet] Hardening: keys server-side only, a per-session cost cap, reconnect on a dropped socket, Claude as the fallback when Turing is down.
+- [ ] [Joshua] Live face: Simli or HeyGen LiveAvatar (credit based, about $30 to $500 a month). Veo and Higgsfield stay for pre-rendered ads and intros only.
+- [ ] [Joshua] ElevenLabs Agents could run the whole loop with any LLM endpoint as the brain (about $0.08 to $0.10 a minute). Decide: their loop, or ours.
+
 ### CI and speed
+- [x] [Sonnet] Clock icon check flake fixed, 2026-10-04: on a slow runner the face sits still, white and handless for seconds, and the check took that as settled. Reproduced locally under CPU load with the exact CI numbers; it now waits for the hands to have ink (`tools/checks/clockicon-check.py`).
 - [ ] [Sonnet] Six of the last ten red runs were slow-runner timing flakes (Chat tool scenes, the phone mute button, Keyrate, the Apps folder layout): eight QEMUs share one runner. Find out how many cores the runner has, cap QEMUs per runner or move to 10 shards (the balancer says about 319 s of checks per shard, 12 shards about 266 s), and watch the next ten runs.
 - [ ] [Haiku] Re-balance after adding checks. New manifest lines default to 30 s until timed: run `python3 tools/gen/ci-balance.py <run-id>` on a green run (`--check` shows the numbers first) and commit the result.
 - [ ] [Haiku] About a third of recent runs were cancelled by force-pushes to an open PR. Push once per PR, or fold PRs together before CI starts.
@@ -54,8 +67,13 @@ Two notebook pages checked against the tree. Already shipped and not listed: men
 - [ ] [Joshua] Buy the board (Pi 4B 4 GB, 5 V 3 A supply, 16 GB+ microSD, 3.3 V USB serial cable CP2102 or FTDI, jumper wires) plus a USB-C microSD reader and a USB-A to USB-C adapter, because the Mac mini has no SD slot. Best Buy Bellingham lists CanaKit kits but check stock by phone first. Canada Computers and Memory Express are the Vancouver options for the serial cable.
 - [ ] [Joshua] First real boot over serial, following `docs/RASPBERRY-PI.md`. Photograph the console. Whatever the chip does differently from QEMU becomes the next task.
 - [x] [Fable] M1c part one, 2.6.21: ramfb framebuffer on QEMU virt through fw_cfg, a first desktop drawn into it, proven by a QEMU screendump (`tools/checks/arm64-m1c-check.py`).
-- [ ] [Fable] M1c part two: the first picture on a Pi through the mailbox framebuffer (same pixels, different setup), then the real UI code (font, window drawing) running on the ARM build instead of rectangles. The mailbox call can only be tested on the real board.
-- [ ] [Fable] M2: virtio keyboard, mouse, network and block drivers, each proven in QEMU. Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
+- [x] [Fable] M1c part two, 2.6.22: the Pi build asks the GPU for a framebuffer through the VideoCore mailbox and draws the same desktop, proven on QEMU's Pi 4B model by screendump (`tools/checks/arm64-m1c-check.py`). Real board still to try.
+- [x] [Sonnet] M1c boot log on screen, 2.6.22: every line the ARM kernel prints over serial is also drawn in the window, so a first boot with a bad serial cable still shows how far it got (`tools/checks/arm64-m1c-check.py` counts the text pixels).
+- [ ] [Fable] M1d: the real UI code (the antialiased font, window drawing, the dock) running on the ARM build instead of rectangles and the old bitmap font, and the framebuffer mapped write-combining so a live desktop needs no cache cleans.
+- [x] [Fable] M2 keyboard and mouse, 2.6.22: one modern virtio-mmio input driver reads key down and up, pointer position and clicks, polled (`tools/checks/arm64-m2-check.py`).
+- [x] [Fable] M2 disk, 2.6.22: a virtio-blk driver reads a known sector off a disk image (`tools/checks/arm64-m2-check.py`). Writes and a FAT reader on top are next.
+- [x] [Fable] M2 network, 2.6.22: a virtio-net driver sends an ARP request to the router and prints its real answer (`tools/checks/arm64-m2-check.py`).
+- [ ] [Fable] M2: IP, DHCP and a TCP connection on top of the ARM network card (port the i386 stack above the NIC), and the net and disk drivers moved to interrupts too (input already is). Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
 - [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO) needs a firmware blob and an 802.11 stack. Not scheduled: Ethernet first.
 
 ### Known limits to recheck
