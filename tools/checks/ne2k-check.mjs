@@ -21,7 +21,7 @@
 // Usage: node tools/checks/ne2k-check.mjs [url]
 import { chromium } from 'playwright';
 
-const url = process.argv[2] || 'http://localhost:8934/index.html';
+const url = process.argv[2] || 'http://localhost:8934/index.html?desktop';
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 await page.goto(url, { waitUntil: 'load' });

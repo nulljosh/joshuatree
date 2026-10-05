@@ -16,7 +16,7 @@
 // apart without ever seeing the image.
 import { chromium } from 'playwright';
 
-const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com';
+const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com/?desktop';
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 page.on('console', msg => console.log('[page]', msg.text()));

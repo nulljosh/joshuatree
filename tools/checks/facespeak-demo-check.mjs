@@ -93,7 +93,7 @@ const server = http.createServer((q, r) => {
   fs.createReadStream(f).pipe(r);
 });
 await new Promise(res => server.listen(0, res));
-const url = `http://localhost:${server.address().port}/index.html`;
+const url = `http://localhost:${server.address().port}/index.html?desktop`;
 
 const fails = [];
 function fail(msg) { fails.push(msg); console.log('  FAIL: ' + msg); }

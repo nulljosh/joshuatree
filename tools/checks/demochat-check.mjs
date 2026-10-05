@@ -106,7 +106,7 @@ const server = http.createServer((q, r) => {
   fs.createReadStream(f).pipe(r);
 });
 await new Promise(res => server.listen(0, res));
-const url = `http://localhost:${server.address().port}/index.html`;
+const url = `http://localhost:${server.address().port}/index.html?desktop`;
 
 const fails = [];
 function fail(msg) { fails.push(msg); console.log('  FAIL: ' + msg); }
@@ -233,6 +233,10 @@ try {
     e.keyboard_adapter.emu_enabled = true;
   });
 
+  // 2.11.1: wait for the desktop itself before aiming at its dock. window.__jt.ready only means v86's adapters exist; a click
+  // sent before the kernel has drawn the dock lands on nothing and Samantha never opens (this timed out on origin/main too).
+  await page.waitForFunction(() => /menubarredraw|fullrepaint/.test(window.__jt.serial), null, { timeout: 90000 });
+  await page.waitForTimeout(1500);
   await page.evaluate(([x, y]) => window.__jt.moveTo(x, y), [CHAT_X, CHAT_Y]);
   await page.waitForTimeout(300);
   await page.evaluate(() => window.__jt.click());

@@ -64,7 +64,7 @@
 // live site works too once deployed, same as every sibling check here.)
 import { chromium } from 'playwright';
 
-const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com';
+const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com/?desktop';
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 800 } }); // a real mobile-shaped viewport, the case the original report called out
 

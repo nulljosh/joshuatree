@@ -62,7 +62,7 @@ let exitCode = 1;
 try {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-  await page.goto(`http://localhost:${PORT}/index.html`, { waitUntil: 'load' });
+  await page.goto(`http://localhost:${PORT}/index.html?desktop`, { waitUntil: 'load' });
 
   // The idle timer's own click-to-focus dwell isn't needed: the kernel
   // boots and paints the desktop with no interaction at all, the same
