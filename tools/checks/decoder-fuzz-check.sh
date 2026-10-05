@@ -20,7 +20,7 @@ clang -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=undefined \
     -Wall -Wextra \
     -Idrivers -Itools/png-host \
     -o /tmp/jt-decoder-fuzz \
-    tools/fuzz-host/fuzz_decoders.c drivers/png.c drivers/jpeg.c
+    tools/fuzz-host/fuzz_decoders.c drivers/png.c drivers/inflate.c drivers/jpeg.c
 
 # Per-input hangs are caught inside the harness via alarm(1) per case, so
 # a stuck input fails loudly instead of hanging the whole run. (No `timeout`

@@ -50,7 +50,7 @@ check(names[0] == "Burrow", "APPS[0] is %r, want 'Burrow'" % names[0])
 check("Files" not in names, "no APPS row is named 'Files'")
 menu = re.search(r'"About Joshua Tree",([^}]*?)"Shut Down"', kernel, re.S).group(1)
 check('"Burrow"' in menu and '"Files"' not in menu, "menu-bar list says Burrow, not Files")
-check(re.search(r'\{"Burrow",\s*user_burrow,\s*USER_BURROW_LEN,\s*"BURROW\.BIN"\}', read("kernel/ring3app.c")) is not None,
+check(re.search(r'\{"Burrow",\s*user_burrow,\s*USER_BURROW_LEN,\s*USER_BURROW_CLEN,\s*USER_BURROW_SUM,\s*"BURROW\.BIN"\}', read("kernel/ring3app.c")) is not None,
       "RING3_APPS has the Burrow row (BURROW.BIN)")
 check(not os.path.exists(os.path.join(ROOT, "kernel/files.h")), "the in-kernel kernel/files.h is gone")
 check("burrow: ring-3 window" in read("user/burrow.c"), "user/burrow.c identifies itself as burrow")
@@ -105,7 +105,7 @@ check("Tonchi" in names and "Lexly" not in names, "APPS has Tonchi and no Lexly 
 check(names.index("Tonchi") == 12, "Tonchi keeps slot 12")
 check(os.path.exists(os.path.join(ROOT, "user/tonchi.c")) and not os.path.exists(os.path.join(ROOT, "user/lexly.c")),
       "user/tonchi.c exists, user/lexly.c is gone")
-check(re.search(r'\{"Tonchi",\s*user_tonchi,\s*USER_TONCHI_LEN,\s*"TONCHI\.BIN"\}', read("kernel/ring3app.c")) is not None,
+check(re.search(r'\{"Tonchi",\s*user_tonchi,\s*USER_TONCHI_LEN,\s*USER_TONCHI_CLEN,\s*USER_TONCHI_SUM,\s*"TONCHI\.BIN"\}', read("kernel/ring3app.c")) is not None,
       "RING3_APPS has the Tonchi row (TONCHI.BIN)")
 check("tonchi: ring-3 window" in read("user/tonchi.c"), "user/tonchi.c identifies itself as tonchi")
 check(os.path.exists(os.path.join(ROOT, "art/icons/tonchi.svg")) and not os.path.exists(os.path.join(ROOT, "art/icons/lexly.svg")),
