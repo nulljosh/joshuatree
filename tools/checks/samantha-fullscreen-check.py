@@ -1,25 +1,34 @@
 #!/usr/bin/env python3
-"""Samantha full screen, headless and pixel based (2.9.0, mouth and blink polished in 2.9.1): she covers the whole screen, the conversation is glass and
-captions over her picture, the two old typing bugs stay fixed, and her mouth follows her voice.
+"""Samantha full screen, headless and pixel based (2.9.0, mouth and blink polished in 2.9.1, room around her in 2.12.1): she is the whole screen, the
+conversation is glass and captions over her picture, the two old typing bugs stay fixed, and her mouth follows her voice.
 
 Everything runs with -display none and every host stubbed on loopback (facehost=, llmhost= and wxhost= point at one
 stub through QEMU's user NAT at 10.0.2.2; the live site is never touched). The stub's portrait (/face/hd.jpg) is
 synthetic so every pixel can be read without guessing: left half red, right half blue, wide dark stripes (hard detail
-a blur must remove), and horizontal bars where her mouth sits. Set SAMANTHA_SHOTS=<dir> to serve her real portrait
+a blur must remove), horizontal bars where her mouth sits, a green patch on each eye box, and a known wall in her top
+corners (warm and light, a different colour each side) with hair-like rows beneath it. Set SAMANTHA_SHOTS=<dir> to serve her real portrait
 instead and save PNGs of each state there; in that mode the checks about the synthetic portrait's colours (cover, glass) are skipped, set SYN=1 to keep them with the synthetic picture.
 
   desktop 1920x1080   click her dock icon, then drive her like a person (scenarios 1 to 7).
+  res=1920x1080       the "samantha" boot flag, the room around her (scenario 1b) without the drive.
   res=1024x768        the "samantha" boot flag opens her first, on a small screen.
   blink               a machine booted without `noblink` watches her eyes for 16 s (see scenario_blink).
   phone               the 430x760 phone mode opens her; she fills what the phone leaves her.
 
 Asserted on the real framebuffer, each with a deadline and a poll, never a fixed sleep:
-  1 cover     her window is the whole screen: the four corners, the old menu bar and the old dock strip are all face.
+  1 room      her window is the whole screen and a wide one gives her room (2.12.1): the portrait is 86 percent of the width,
+              her eye row is 36 to 44 percent down, and the two bands either side are her own wall colour (the portrait's
+              top corners, blended across): the four corners match it, warm, light, never black and never the desktop; each
+              band column is the same top to bottom (no streaks from stretching the edge), the band steps no more than a
+              level or two from column to column and joins the portrait smoothly; the portrait's outer tenth fades into it;
+              the old menu bar and dock strip are all face; the mouth and eye boxes she reports sit on her mouth and eyes.
   2 glass     outside the input panel the picture has hard stripes; inside it the same columns are a smooth blur that is
               still red on the left and blue on the right, tinted lighter, with a smooth red-to-blue seam.
   3 captions  what you send appears over the picture (the backdrop darkens it), her answer follows, both are gone
               again after her voice ends (the picture is back to exactly what it was), and in between a poll catches
-              the fade half way.
+              the fade half way. In a wide window only one caption row fits under her lips (2.12.1), so yours sits in that
+              row above the input line and hers goes to the top of the picture; neither may darken the slot beside her
+              lips where a stacked caption would land, and the fade and the degree sign are read on whichever line hers is on.
   4 history   Tab opens a glass scrollback with the whole conversation in it; Tab closes it.
   5 bugs      the first typed letter: what she was handed (her own samtyped= serial line, not the stub) is the whole
               word, also for a word typed while she speaks. The degree sign: the weather answer draws a real degree
@@ -29,7 +38,8 @@ Asserted on the real framebuffer, each with a deadline and a poll, never a fixed
               edges, so the pixel change is measured over the same box as before and the check is unchanged.
   7 exit      Esc closes her cleanly and the desktop (menu bar, dock) is alive; the red dot closes her too.
 
-Discriminating: put the 0xF8 degree back in the sysinfo copy and (5) fails by name; make the key handler eat the key that
+Discriminating: fill the bands by stretching the portrait's edge column (the streaks) or put the portrait back at 100 percent
+of the width and (1) fails by name; put the 0xF8 degree back in the sysinfo copy and (5) fails by name; make the key handler eat the key that
 stops speech again and (5) fails by name; draw the panel without the blur and (2) fails by name; stop the fade and (3)
 fails by name; feed the mouth a constant level and (6) fails by name; make the blink draw nothing or never end and the blink
 scenario fails by name. Every scenario but the blink one boots with `noblink`, because they compare exact pixels (the
@@ -76,6 +86,12 @@ WX = (b'{"latitude":49.09,"longitude":-122.57,"timezone":"America/Vancouver",'
       b'"temperature_2m_max":[17.6,21.2,15.4,3.1,16.5],"temperature_2m_min":[9.4,8.5,9.2,-2.6,9.0]}}')
 
 
+WALL_L, WALL_R = (232, 220, 198), (212, 198, 172)   # her wall, warm and light, a different colour each side
+EDGE_W, WALL_ROWS = 40, 192                        # source px of wall or hair-like edge strip each side; wall rows above, hair rows below
+GREEN = (40, 150, 70)
+EYE_BOXES = [(314, 270, 27, 12), (468, 279, 32, 12)]   # source px: centre x, centre y, half width, half height of both eye boxes (427/367/37 and 636/379/43, 16 thousandths of 736)
+
+
 def portrait():
     im = Image.new("RGB", (736, 736))
     px = im.load()
@@ -85,12 +101,41 @@ def portrait():
             if (x // 8) % 2: base = tuple(int(c * 0.35) for c in base)
             if 400 <= y <= 470 and 290 <= x <= 480:   # her mouth: horizontal bars the warp has to move
                 base = (235, 220, 190) if ((y - 400) // 6) % 2 == 0 else (150, 60, 50)
+            for cx, cy, hw, hh in EYE_BOXES:   # her eyes: a solid patch the geometry has to land on
+                if abs(x - cx) <= hw and abs(y - cy) <= hh: base = GREEN
+            if x < EDGE_W or x >= 736 - EDGE_W:   # the edge: wall up top, rows of hair-like colour below (an edge stretched sideways would streak)
+                base = (WALL_L if x < 368 else WALL_R) if y < WALL_ROWS else (150 + (y * 37) % 80, 90 + (y * 53) % 50, 40 + (y * 29) % 40)
             px[x, y] = base
     b = io.BytesIO(); im.save(b, "JPEG", quality=70, subsampling=2); return b.getvalue()
 
 
 SYN = portrait()
 assert len(SYN) < 60000, len(SYN)
+SERVED = open(os.path.join(ROOT, "landing/face/hd.jpg"), "rb").read() if SHOTS and not os.environ.get("SYN") else SYN   # what /face/hd.jpg answers
+
+
+def expected_walls(jpeg):
+    """Her wall either side, worked out here from the picture she is served by the same rule the spec gives (the average of
+    the top corners: the outer 4 percent across, 2 to 25 percent down), not read back from her."""
+    im = Image.open(io.BytesIO(jpeg)).convert("RGB"); n = im.size[0]; px = im.load()
+    xs, ya, yb = n * 4 // 100, n * 2 // 100, n * 25 // 100
+    def avg(x0, x1):
+        t = [0, 0, 0]; k = 0
+        for y in range(ya, yb):
+            for x in range(x0, x1):
+                for i in range(3): t[i] += px[x, y][i]
+                k += 1
+        return tuple(round(v / k) for v in t)
+    return avg(0, xs), avg(n - xs, n)
+
+
+WALLS = expected_walls(SERVED)
+
+
+def wall_at(x, PW):
+    """The wall colour across the window at physical column x: the left wall at 0, the right wall at the last column, blended straight across."""
+    L, R = WALLS
+    return tuple(L[i] + (R[i] - L[i]) * x / (PW - 1) for i in range(3))
 
 
 class Stub(http.server.BaseHTTPRequestHandler):
@@ -287,6 +332,109 @@ def m_ybot(m): return m.PH // m.scale - VM_MARGIN - VM_PH - 12
 def m_ytop(m): return m_ybot(m) - 74
 
 
+def wide_geom(m):
+    """(S, band) in logical px for a wide window by the spec: the portrait is 86 percent of the width (never shorter than the window), centred."""
+    LW, LH = m.PW // m.scale, m.PH // m.scale
+    S = max(LW * 86 // 100, LH)
+    return S, (LW - S) // 2
+
+
+def serial_geom(m, what, n):
+    v = re.findall(r"samface: " + what + "=" + ",".join([r"(\d+)"] * n), m.serial())
+    return [int(x) * m.scale for x in v[-1]] if v else None
+
+
+def geometry_check(m, tag, img, desktop=None):
+    """(1) room: the picture is framed by the 2.12.1 spec, measured on the real framebuffer `img` of a settled wide window.
+    `desktop` is the desktop's own picture before she opened, to prove the corners are not the wallpaper showing through."""
+    PW, PH, sc = m.PW, m.PH, m.scale
+    LW, LH = PW // sc, PH // sc
+    S, band = wide_geom(m)
+    bw = band * sc
+    ok = True
+    def bad(msg):
+        nonlocal ok
+        ok = False; fail(tag, msg)
+    # the four corners are her wall colour: where the spec says it is, warm, light, never black, never the desktop
+    for name, (x, y) in {"top-left": (6, 6), "top-right": (PW - 7, 6), "bottom-left": (6, PH - 7), "bottom-right": (PW - 7, PH - 7)}.items():
+        p = img.getpixel((x, y)); w = wall_at(x, PW)
+        if max(abs(p[i] - w[i]) for i in range(3)) > 10: bad(f"the {name} corner is {p}, not her wall colour {tuple(round(v) for v in w)}")
+        if p == (0, 0, 0) or lum(p) < 150 or p[0] < p[2] + 10: bad(f"the {name} corner {p} is not warm and light like her wall")
+        if desktop is not None and sum(abs(p[i] - desktop.getpixel((x, y))[i]) for i in range(3)) < 30: bad(f"the {name} corner {p} is the desktop wallpaper showing through")
+    # the band: the same top to bottom, almost flat from column to column, exactly the blend of the two walls
+    ptop = panel_rect(m)[1]   # the glass panel can cross a band on a narrow screen (1024 wide): it is judged by its own checks
+    ys = [y for y in range(100, ptop - 6, 6)]
+    # Her own two walls as drawn at the ends of the window; they match the walls worked out here from the picture to within the
+    # difference between her JPEG decoder and PIL's, and everything between must be the straight blend of the two.
+    fbl = tuple(sum(img.getpixel((0, y))[i] for y in ys) / len(ys) for i in range(3)); fbr = tuple(sum(img.getpixel((PW - 1, y))[i] for y in ys) / len(ys) for i in range(3))
+    for name, got, want in (("left", fbl, WALLS[0]), ("right", fbr, WALLS[1])):
+        if max(abs(got[i] - want[i]) for i in range(3)) > 8: bad(f"her {name} wall is {tuple(round(v) for v in got)} at the window's edge, not the portrait's top corner colour {want}")
+    worst_col = worst_step = worst_wall = 0.0; prev = None
+    for x in range(2, bw - 2):
+        col = [img.getpixel((x, y)) for y in ys]; ls = [lum(p) for p in col]
+        mean = sum(ls) / len(ls); sd = math.sqrt(sum((v - mean) ** 2 for v in ls) / len(ls))
+        worst_col = max(worst_col, sd)
+        if prev is not None: worst_step = max(worst_step, abs(mean - prev))
+        prev = mean
+        w = tuple(fbl[i] + (fbr[i] - fbl[i]) * x / (PW - 1) for i in range(3))
+        worst_wall = max(worst_wall, max(abs(sum(p[i] for p in col) / len(col) - w[i]) for i in range(3)))
+    print(tag + f"side band {bw} px wide: most a column varies top to bottom {worst_col:.2f}, biggest step between columns {worst_step:.2f}, furthest from the walls' blend {worst_wall:.1f}")
+    if worst_col > 1.5: bad(f"the side band has streaks: a column varies {worst_col:.1f} levels top to bottom (an edge column stretched sideways, or the portrait showing in it)")
+    if worst_step > 2: bad(f"the side band is not smooth from column to column (steps of {worst_step:.1f})")
+    if worst_wall > 2.5: bad(f"the side band is not her left wall blended straight across to her right wall ({worst_wall:.1f} levels off)")
+    # the portrait joins it smoothly: no step between neighbouring columns over the band's edge and the first stretch of the portrait, in the rows below the wall
+    jump = 0.0
+    for y in range(int(PH * 0.45), min(int(PH * 0.85), ptop - 6), 6):
+        for x in range(bw - 6, bw + EDGE_W * S // 736 * sc - 4):   # across the band's edge and the test portrait's hair strip, up to its stripes
+            jump = max(jump, abs(lum(img.getpixel((x, y))) - lum(img.getpixel((x + 1, y)))))
+    print(tag + f"biggest step between neighbouring columns where the band meets the portrait: {jump:.1f}")
+    if jump > 6: bad(f"the portrait does not blend into the band: a step of {jump:.1f} levels between neighbouring columns at its edge")
+    # the old menu bar and dock strip are all face (the picture is the whole screen), a probe clear of the red and blue seam
+    for name, (x, y) in {"old menu bar": (PW // 2 + 120, 20), "old dock": (1200 * PW // 1920, min(935 * PH // 1080, ptop - 8))}.items():   # kept above the glass panel, a blur of the picture that says nothing about the desktop
+        p = img.getpixel((x, y))
+        if desktop is not None and p == desktop.getpixel((x, y)): bad(f"her picture does not cover the {name}: {p}")
+        elif SYNTH and not p[2] > p[0] + 25: bad(f"her picture does not cover the {name}: {p}")
+    # the portrait's outer tenth fades into the wall: the darkest stripe a little way in (a stretch where the weight is about
+    # 0.4 to 0.7) is much lighter than the darkest stripe inside, because it is mixed with the light wall. Without the fade they are equal.
+    if SYNTH:
+        def darkest(x0, x1):
+            return sum(min(lum(img.getpixel((x, y))) for x in range(x0, x1)) for y in range(120, 380, 10)) / len(range(120, 380, 10))
+        f_ = S // 10   # the fade is a tenth of the portrait; inside it is full strength
+        z0 = EDGE_W * S // 736 + 1; z1 = z0 + f_ // 4   # just past the test portrait's wall strip: the weight there is about 0.4 to 0.7
+        el, er = bw, PW - bw   # physical x of the portrait's left and right edge
+        inner_l = darkest(el + (f_ + 20) * sc, el + (f_ + 100) * sc); fade_l = darkest(el + z0 * sc, el + z1 * sc)
+        inner_r = darkest(er - (f_ + 100) * sc, er - (f_ + 20) * sc); fade_r = darkest(er - z1 * sc, er - z0 * sc)
+        print(tag + f"darkest stripe in the faded edge against inside the portrait: left {fade_l:.0f} vs {inner_l:.0f}, right {fade_r:.0f} vs {inner_r:.0f}")
+        if fade_l - inner_l < 40 or fade_r - inner_r < 40: bad(f"the portrait's edges are not feathered into the wall (the stripes in the fade are only {fade_l - inner_l:.0f} and {fade_r - inner_r:.0f} levels lighter than inside, want 40)")
+    # her eye row sits 36 to 44 percent down, and the eye and mouth boxes she reports are on her eyes and mouth
+    eyes = serial_geom(m, "eyes", 7); mouth = serial_geom(m, "mouth", 4)
+    if eyes is None or mouth is None: return bad("she never reported where her eyes and mouth are")
+    ex0, ey0, ew0, ex1, ey1, ew1, eh = eyes
+    row = (ey0 + ey1) / 2
+    if SYNTH:
+        def green(p): return p[1] > p[0] + 60 and p[1] > p[2] + 40
+        spans = []
+        for cx, cy, ew in ((ex0, ey0, ew0), (ex1, ey1, ew1)):
+            rows = [y for y in range(max(0, cy - 4 * eh), min(PH, cy + 4 * eh)) if green(img.getpixel((cx, y)))]
+            cols = [x for x in range(max(0, cx - 2 * ew), min(PW, cx + 2 * ew)) if green(img.getpixel((x, cy)))]
+            if not rows or not cols: bad(f"the eye box she reports at ({cx},{cy}) has no eye in it"); continue
+            spans.append(((min(rows) + max(rows)) / 2, (min(cols) + max(cols)) / 2, (max(cols) - min(cols)) / 2, (max(rows) - min(rows)) / 2))
+            gy, gx, gw, gh = spans[-1]
+            print(tag + f'eye patch: reported ({cx},{cy}) half {ew}x{eh}, on screen ({gx:.1f},{gy:.1f}) half {gw:.1f}x{gh:.1f}')
+            if abs(gy - cy) > 5 or abs(gx - cx) > 5 or abs(gw - ew) > 5 or abs(gh - eh) > 5: bad(f"the eye box she reports (centre {cx},{cy}, half {ew}x{eh}) is not on the eye: it is at {gx:.0f},{gy:.0f}, half {gw:.0f}x{gh:.0f}")
+        if len(spans) == 2: row = (spans[0][0] + spans[1][0]) / 2
+        mx, my, mhw, ml1 = mouth
+        def near(p, c): return all(abs(p[i] - c[i]) < 30 for i in range(3))
+        top = [y for y in range(0, PH * 9 // 10) if near(img.getpixel((mx, y)), (235, 220, 190)) or near(img.getpixel((mx, y)), (150, 60, 50))]
+        if not top: bad("the mouth bars of the test portrait are not under the mouth she reports")
+        elif not (min(top) <= my <= max(top)): bad(f"the mouth she reports (seam at {my}) is not on her lips: the bars are rows {min(top)} to {max(top)}")
+    pct = 100 * row / PH
+    print(tag + f"eye row {row:.0f} of {PH} px: {pct:.1f} percent down")
+    if not 36 <= pct <= 44: bad(f"her eye row is {pct:.1f} percent down the window, want 36 to 44")
+    if ok: print(tag + "room around her: 86 percent wide, eyes 40 percent down, the bands are her wall, the edges feather into it")
+    return ok
+
+
 def scenario_desktop():
     tag = "1920x1080 desktop: "
     m = Machine(tag, (1920, 1080), f"noblink llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
@@ -318,19 +466,13 @@ def scenario_desktop():
         if base is None: return fail(tag, "her picture never settled after the captions faded")
         m.shot(base, "01-full-screen-idle")
         PW, PH, sc = m.PW, m.PH, m.scale
-        # 1. cover: the whole screen, menu bar and dock included, is her picture
-        probes = {"top-left": (6, 6), "top-right": (PW - 6, 6), "bottom-left": (6, PH - 6), "bottom-right": (PW - 6, PH - 6),
-                  "old menu bar": (PW // 2, 20), "old dock": (1200, 935)}
-        okc = True
-        for name, (x, y) in probes.items():
-            p = base.getpixel((x, y)); left = x < PW // 2
-            good = (p[0] > p[2] + 25) if left else (p[2] > p[0] + 25)
-            if name == "old dock": good = p != DOCK_COLOUR and (p[0] > p[2] + 25 or p[2] > p[0] + 25)
-            if not good: okc = False; fail_s(tag, f"her picture does not cover the {name}: {p}")
-        if okc and SYNTH: print(tag + "her picture covers the whole screen, menu bar and dock included")
+        # 1. room: the whole screen is her picture, framed by the 2.12.1 spec (her wall in the bands, 86 percent wide, eyes 40 percent down)
+        geometry_check(m, tag, base, before)
         # 2. glass
         x0, y0, x1, y1 = panel_rect(m)
-        out = stats(base, 80, 80 + 160, y0 - 140, y0 - 120)         # picture above the panel
+        # picture above the panel, inside the portrait and clear of its faded edge (the first ~134 px are her wall, then a faded edge up to ~300 at 1920 wide; 2.12.1 moved this probe in from x=80)
+        S_, band_ = wide_geom(m); ox0 = (band_ + S_ // 10 + 20) * m.scale
+        out = stats(base, ox0, ox0 + 160, y0 - 140, y0 - 120)
         inl = stats(base, x0 + 40, x0 + 40 + 40, y0 + 12, y0 + 16)  # panel, left, clear of the text
         inr = stats(base, x1 - 120, x1 - 120 + 40, y0 + 12, y0 + 16)
         print(tag + f"deviation outside {out[3]:.1f}, inside left {inl[3]:.1f}, right {inr[3]:.1f}; mean outside {sum(out[:3]) / 3:.0f}, inside {sum(inl[:3]) / 3:.0f}")
@@ -345,17 +487,35 @@ def scenario_desktop():
         # 3. captions: send, watch the backdrop come, hold, fade, and go. The picture is static, so after the fade the
         #    region must be the baseline again, and the fade itself must pass through in-between values.
         LW = PW // sc
-        capbox = ((LW // 2 - 120) * sc, (m_ybot(m) - 34) * sc, (LW // 2 + 120) * sc, m_ybot(m) * sc)   # her one-line caption
-        m.typ("hello there"); m.keys("ret")
+        bot_box = ((LW // 2 - 120) * sc, (m_ybot(m) - 34) * sc, (LW // 2 + 120) * sc, m_ybot(m) * sc)   # a one-line caption just above the input line
+        top_box = ((LW // 2 - 120) * sc, 56 * sc, (LW // 2 + 120) * sc, 90 * sc)                         # a one-line caption at the top of the picture, under the status pill
+        # Her mouth sits low in a wide window (2.12.1): under her lips there is room for one row and no more (fewer than two rows
+        # fit). Then the roles swap so no caption lands on her lips: yours takes the one row above the input line and hers goes to
+        # the top of the picture (as many rows as fit above her eyebrows). With room under her lips the old order stands.
+        mg = serial_geom(m, "mouth", 4)
+        ytop_l = (mg[1] + mg[3]) // sc + 8
+        tight = (m_ybot(m) - ytop_l - 26) // 16 < 2
+        capbox = top_box if tight else bot_box   # her caption, whichever line it is on; the fade and the degree sign are read here
+        # a slot where a caption of either of you would sit if it were stacked on her lips: over her left cheek, where an open mouth
+        # never reaches (her lips draw within 1.3 half widths of their centre); a long message so its backdrop is wide enough to reach it
+        guard = (mg[0] - 2 * mg[2], mg[1] + 2 * sc, mg[0] - mg[2] * 14 // 10, mg[1] + 30 * sc)
+        guard_worst = mine_seen = 0.0
+        m.typ("hello there my friend how are you doing today"); m.keys("ret")
         samples = []; t_end = time.time() + 60; shot_cap = shot_half = False
         while time.time() < t_end:
             img = m.frame((capbox[1] - 4, capbox[3] + 4)); v = darkened(img, base, capbox); samples.append(v)
+            if len(samples) % 4 == 0:
+                guard_worst = max(guard_worst, darkened(m.frame((guard[1], guard[3])), base, guard))
+                if tight: mine_seen = max(mine_seen, darkened(m.frame((bot_box[1] - 4, bot_box[3] + 4)), base, bot_box))
             top = max(samples)
             if top > 8 and not shot_cap and v > 0.9 * top and len(samples) > 8: shot_cap = True; m.shot(m.frame(), "02-caption-visible")
             if top > 8 and not shot_half and 0.3 * top < v < 0.7 * top and len(samples) > 2 and samples[-2] > v: shot_half = True; m.shot(m.frame(), "03-caption-half-faded")
             if top > 8 and v < 0.5 and "speak: status=" in m.serial() and captions_gone(m): break
             time.sleep(0.03)
         top = max(samples)
+        print(tag + f"captions against her mouth: darkest the slot beside her lips got {guard_worst:.2f}; " + (f"room for one row under her lips, so hers is at the top and yours above the input line (reached {mine_seen:.1f})" if tight else "room under her lips for both"))
+        if guard_worst > 0.5: fail(tag, f"a caption sits on her mouth (the slot beside her lips was darkened by {guard_worst:.1f} levels)")
+        if tight and mine_seen <= 8: fail(tag, "your own caption never appeared above the input line")
         print(tag + f"caption backdrop: darkens the strip by up to {top:.1f} levels, {samples[-1]:.2f} left at the end, {len(samples)} polls")
         if top <= 8: fail(tag, "no caption appeared over the picture after she answered")
         elif samples[-1] >= 0.5: fail(tag, "the caption never went away after her voice ended")
@@ -389,7 +549,7 @@ def scenario_desktop():
         wx = re.findall(r"chattool=weather:(.*)", m.serial())[0]
         if wx.strip() == "none": return fail(tag, "the weather tool had no reading to speak")
         print(tag + f"weather text she was given: {wx.encode('latin-1')!r}")
-        degree_check(m, tag, capbox)
+        degree_check(m, tag, capbox, base)
         # 6. the mouth
         mouth_check(m, tag, base)
         # 7. Esc
@@ -417,15 +577,16 @@ def scenario_desktop():
         m.close()
 
 
-def degree_check(m, tag, capbox):
+def degree_check(m, tag, capbox, base):
     """The weather caption is white text on the dark backdrop. Its third glyph (after the two digits) must be a small
     ring in the top of the line, not a question mark that reaches the baseline."""
-    img = None
+    img = None; seen = 0.0
+    mid = (m.PW // 2 - 36 * m.scale, capbox[1], m.PW // 2 + 36 * m.scale, capbox[3])   # where a short caption's text sits
     def caption_up():
-        nonlocal img
-        img = m.frame((capbox[1] - 4, capbox[3] + 4))
-        return mean_lum(img, capbox) < 200
-    if not m.wait(caption_up, 20): return fail(tag, "the weather caption never appeared")
+        nonlocal img, seen
+        img = m.frame((capbox[1] - 4, capbox[3] + 4)); seen = max(seen, darkened(img, base, mid))
+        return seen > 12   # the backdrop is over the picture (against the idle picture, wherever on the screen the caption is)
+    if not m.wait(caption_up, 20): m.shot(m.frame(), "05-weather-missing"); return fail(tag, f"the weather caption never appeared (darkest {seen:.1f})")
     time.sleep(0.4); img = m.frame((capbox[1] - 4, capbox[3] + 4))
     m.shot(m.frame(), "05-weather-caption")
     px = img.load()
@@ -524,24 +685,27 @@ def mouth_check(m, tag, base):
     speech["pcm"] = TONE
 
 
+PAGE = (0xFA, 0xF8, 0xF6)   # BG in user/samantha.c: what she paints before her portrait is up
 RED_DOT = (24 * 2, 24 * 2, (0xFF, 0x5F, 0x57))   # her close dot, physical px at scale 2: drawn only by her window, never by the desktop
 
 
 def dot_up(img): return img.getpixel(RED_DOT[:2]) == RED_DOT[2]
 
 
-def corners_painted(PW, PH, top, dot=True):
-    """True once all four corners show her picture. The synthetic portrait is red on the left and blue on the right, so a
-    black (window not composited yet) or desktop-coloured corner is not it. In screenshot mode the real portrait is served and
-    colour probes mean nothing, so any non-black corners will do."""
+def corners_painted(PW, PH, top, dot=True, wall=False):
+    """True once all four corners show her picture. A wide window (`wall`) shows her wall colour in the corners (geometry_check
+    judges whether it is the right one); a tall one (the phone) has the synthetic portrait's red on the left and blue on the
+    right. Black (window not composited yet), the desktop wallpaper (no red dot) and the plain page colour she paints before the
+    portrait is up are none of those."""
     def ok(img):
         if dot and not dot_up(img): return False   # the wallpaper is also a stable, non-black picture; only her window has the red dot
-        for x, y in ((6, top), (PW - 6, top), (6, PH - 6), (PW - 6, PH - 6)):
+        for x, y in ((6, top), (PW - 7, top), (6, PH - 7), (PW - 7, PH - 7)):
             p = img.getpixel((x, y))
-            if not SYNTH:
+            if wall:   # painted, not the page colour she shows before the portrait is up: geometry_check judges which colour it is
+                if p == (0, 0, 0) or max(abs(p[i] - PAGE[i]) for i in range(3)) < 6: return False
+            elif not SYNTH:
                 if p == (0, 0, 0): return False
-                continue
-            if not ((p[0] > p[2] + 25) if x < PW // 2 else (p[2] > p[0] + 25)): return False
+            elif not ((p[0] > p[2] + 25) if x < PW // 2 else (p[2] > p[0] + 25)): return False
         return True
     return ok
 
@@ -551,14 +715,24 @@ def scenario_small():
     m = Machine(tag, (1024, 768), f"samantha noblink res=1024x768 llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
     try:
         if not m.wait(lambda: "face: hd=736" in m.serial(), 120): return fail(tag, "her portrait never loaded")
-        img = m.still(ok=corners_painted(m.PW, m.PH, 6), secs=120)   # wait for the picture to be painted, however slow the host
+        img = m.still(ok=corners_painted(m.PW, m.PH, 6, wall=True), secs=120)   # wait for the picture to be painted, however slow the host
         if img is None: return fail(tag, "her picture never finished painting on the small screen")
         m.shot(img, "07-small-screen")
-        PW, PH = m.PW, m.PH
-        for name, (x, y) in {"top-left": (6, 6), "top-right": (PW - 6, 6), "bottom-left": (6, PH - 6), "bottom-right": (PW - 6, PH - 6)}.items():
-            p = img.getpixel((x, y)); left = x < PW // 2
-            if not ((p[0] > p[2] + 25) if left else (p[2] > p[0] + 25)): fail_s(tag, f"her picture does not cover the {name} corner: {p}")
-        if not any(f.startswith(tag) for f in fails): print(tag + "her picture covers all four corners")
+        geometry_check(m, tag, img)
+    finally:
+        m.close()
+
+
+def scenario_wide():
+    """1920x1080 by the boot flag: the same room around her as the desktop drive (scenario 1), without driving her."""
+    tag = "1920x1080 boot flag: "
+    m = Machine(tag, (1920, 1080), f"samantha noblink res=1920x1080 llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
+    try:
+        if not m.wait(lambda: "face: hd=736" in m.serial(), 120): return fail(tag, "her portrait never loaded")
+        img = m.still(ok=corners_painted(m.PW, m.PH, 6, wall=True), secs=120)
+        if img is None: return fail(tag, "her picture never finished painting")
+        m.shot(img, "11-wide-boot-flag")
+        geometry_check(m, tag, img)
     finally:
         m.close()
 
@@ -638,7 +812,7 @@ def scenario_blink():
         rows = (min(y0, mbox[1]), max(y1, mbox[3]))
         # The window is composited some time after the portrait loads, and a slow runner can take many seconds: the open
         # picture is the first one that has been the same for a second, and is not black.
-        if not m.wait(lambda: corners_painted(m.PW, m.PH, 6)(m.frame()), 120, step=0.25): return fail(tag, "her window never showed her picture")   # not the wallpaper behind her
+        if not m.wait(lambda: corners_painted(m.PW, m.PH, 6, wall=True)(m.frame()), 120, step=0.25): return fail(tag, "her window never showed her picture")   # not the wallpaper behind her
         first = m.still(rows, need=4)
         if first is None: return fail(tag, "her open eyes never settled to a stable picture")
         base_e, base_m = eyes(first), mouth(first)
@@ -677,7 +851,7 @@ def scenario_blink():
         m.close()
 
 
-scens = [s for s in (scenario_desktop, scenario_small, scenario_phone, scenario_big2k, scenario_blink) if not os.environ.get("ONLY") or os.environ["ONLY"] in s.__name__]
+scens = [s for s in (scenario_desktop, scenario_wide, scenario_small, scenario_phone, scenario_big2k, scenario_blink) if not os.environ.get("ONLY") or os.environ["ONLY"] in s.__name__]
 for scen in scens:
     try: scen()
     except Exception as e: fails.append(f"{scen.__name__}: {type(e).__name__}: {e}")
