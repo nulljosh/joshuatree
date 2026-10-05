@@ -27,7 +27,7 @@ FLEET = {"epiphany": "epiphany", "curbfind": "curbfind", "bookrank": "bookrank",
 # full-size background rect here instead. Only the tile, never the glyph,
 # and only in this OS: the project's own icon.svg is untouched.
 TILE = {"epiphany": "#D6DEE6", "curbfind": "#C8644F", "bookrank": "#3E5C86", "tonchi": "#2E86DE",
-        "hikko": "#8A5A3C", "quotes": "#D8C7A3", "keyrate": "#5A5A5E"}  # toroid stays black: Life is white-on-black
+        "hikko": "#8A5A3C", "quotes": "#F5F5F8", "keyrate": "#5A5A5E"}  # toroid stays black: Life is white-on-black
 
 
 

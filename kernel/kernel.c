@@ -4619,12 +4619,16 @@ static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
        No fractional mul (integer divisor), so ~70% comes from dropping
        one face size each line: month 24px->16px@mul2=32px (~67% of 48),
        day 28px->20px@mul2=40px (~71% of 56). */
+    /* Proportions, the same on every tile: the month a small label whose caps are
+       about 13% of the tile tall, the day numeral about 22% tall and centered in
+       the space under it (equal air above and below), nothing near the side edges.
+       Dock: 16px month, 28px day. Bigger tiles: 24px month, 20px doubled day. */
     int mul_m = 1, mul_d = 1;
-    int face_m = 2, face_d = 3;
-    if (size > 40) { mul_m = 2; mul_d = 2; face_m = 0; face_d = 1; }
+    int face_m = 0, face_d = 3;
+    if (size > 40) { mul_d = 2; face_m = 2; face_d = 1; }
     const char *mon3 = GUI_CAL_MON3[monv - 1];
-    int ly_m = y + size * 16 / 100;
-    int ly_d = y + (size > 40 ? size * 48 / 100 : size * 42 / 100);
+    int ly_m = y + size * 13 / 100;
+    int ly_d = y + size * 51 / 100;
     int lwm = wx_text_lw(mon3, face_m, 1, mul_m);
     wx_text(mon3, cx_center - lwm / 2, ly_m, face_m, 1, mul_m, 0x00FF3B30);
     int lwd = wx_text_lw(daybuf, face_d, 1, mul_d);
