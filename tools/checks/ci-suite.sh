@@ -68,6 +68,7 @@ retry|4|DHCP client leases real SLIRP config, DNS+HTTP still work, nodhcp keeps 
 retry|3|Benchmarks run and report every number|./tools/checks/bench-check.sh
 retry|1|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
 once |0|PNG decoder, host harness|./tools/checks/png-host-check.sh
+once |0|Hamurabi game rules: SplitMix64, golden checksum, invariants, i386-freestanding|./tools/checks/hamurabi-rules-check.sh
 once |4|Burrow: Files renamed, Samantha still opens it as files / file browser, icon art is the new fox|python3 ./tools/checks/burrow-rename-check.py
 retry|4|Burrow icon view wraps a long file name onto a second line instead of cutting it|python3 ./tools/checks/burrow-labels-check.py
 retry|5|Mail, Notes and Weather read past byte 255 of their data file (SYS_READ moves 255 bytes a call)|python3 ./tools/checks/read-long-files-check.py
