@@ -41,6 +41,7 @@ setup and steps 6 and 7 fail.
 
 Usage: tools/checks/ring3quotes-check.py   (from the repo root, after make kernel.elf)
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, socket, subprocess, sys, time
 from PIL import Image
 from freeport import free_port
@@ -205,7 +206,7 @@ try:
     # 6. a normal close, both ways, from the Apps folder grid: Quotes is
     #    APPS[] index 11 = row 2, col 1 (5 columns wide), whose viewport is
     #    the folder's 832x450, not the dock's 804x345.
-    APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
+    APPS_CLOSE_X, APPS_CLOSE_Y = FOLDER_CLOSE_X, FOLDER_CLOSE_Y
     def wait_closed(resend=True):
         # Poll the screen (10s) instead of reading it once: on a slow runner
         # the post-Esc repaint lands after a fixed sleep. One resend of Esc
@@ -229,8 +230,8 @@ try:
             if serial().count("quotes: ring-3 window") > seen: break
         else:
             fails.append(f"{tag}: Quotes did not open a ring-3 window from the Apps folder grid"); return False
-        if "quotes: ring-3 window 796x345" not in serial():
-            fails.append(f"{tag}: the folder-launched window is not 796x345")
+        if "quotes: ring-3 window 804x345" not in serial():
+            fails.append(f"{tag}: the folder-launched window is not 804x345")
         if "ring3app: BUG" in serial():
             fails.append(f"{tag}: ring3app logged a BUG line")
         time.sleep(0.5)

@@ -156,6 +156,7 @@ retry|1|Dock hover survives mid-animation|python3 ./tools/checks/dockhover-check
 retry|1|Launchpad tile click launches, doesn't just close the folder|python3 ./tools/checks/launchpad-click-check.py
 retry|6|Apps folder layout (no black band, no row spill, no ghost icons)|python3 ./tools/checks/appsfolder-layout-check.py
 retry|6|Menu bar present after Launchpad, every app open and close, Esc, panels, drags; screen never black|python3 ./tools/checks/menubar-persist-check.py
+retry|6|Launchpad centered, evenly padded, icons 56px or smaller, labels clear (pixels, five screen sizes)|python3 ./tools/checks/launchpad-centered-check.py
 retry|0|Typography: baseline flatness, letter-gap variance, container padding|python3 ./tools/checks/baseline-check.py
 retry|7|Multi-window (click-to-focus, real z-order compositing)|python3 ./tools/checks/multiwindow-check.py
 retry|4|Ring-3 window: Reminders beside Notes, keys to the focused window only, a crash closes only its window|python3 ./tools/checks/ring3window-check.py

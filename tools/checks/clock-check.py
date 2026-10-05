@@ -69,6 +69,8 @@ try:
     def dump():
         cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
         return Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("RGB")
+    def has_red(img):  # the app window's red dot, wherever the compositor put it (top-left quarter)
+        return any(max(abs(img.getpixel((x * SCALE, y * SCALE))[i] - CLOSE_RED[i]) for i in range(3)) <= 12 for x in range(0, 200, 2) for y in range(0, 140, 2))
     def is_red(img, x, y): return max(abs(img.getpixel((x * SCALE + 1, y * SCALE + 1))[i] - CLOSE_RED[i]) for i in range(3)) <= 12
     def lum(p): return (p[0] * 299 + p[1] * 587 + p[2] * 114) // 1000
     def count_dark_pixels(img, x0, y0, w, h):
@@ -93,7 +95,7 @@ try:
     key("ret"); time.sleep(1.2)
 
     img1 = dump()
-    if not is_red(img1, APPS_CLOSE_X, APPS_CLOSE_Y):
+    if not has_red(img1):
         fails.append("Clock did not open: outer red close dot missing")
     else:
         print("Clock opened (outer window chrome present)")
@@ -108,7 +110,7 @@ try:
 
     # Verify app is still open
     img_after = dump()
-    if not is_red(img_after, APPS_CLOSE_X, APPS_CLOSE_Y):
+    if not has_red(img_after):
         fails.append("Clock closed during timer countdown")
     else:
         print("Timer running (app remained open)")

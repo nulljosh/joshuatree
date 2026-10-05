@@ -38,13 +38,12 @@ DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 APPS_FOLDER_SLOT = 0  # GUI_DOCK_DEFAULT[0] == GUI_APPS_FOLDER
-# Grid index 8 (row 1 col 3, whichever fleet app sits there) tile centre in the apps-folder
-# viewport, converted to full-screen logical coords by hand from
-# gui_launch_apps's own layout math (window x=56,y=30,w=848,h=490 ->
-# viewport origin 64,62,832,450; x0=(832-750)/2=41, y0=95; cell_w=150,
-# cell_h=108, tile=60; row=1,col=3 -> cx=566,cy=203; a point comfortably
-# inside that cell's hit box).
-CURBFIND_CLICK = (64 + 566, 62 + 240)
+# Grid index 8 (row 1 col 3, whichever fleet app sits there): the click point comes from the kernel's own
+# "appsgeom" serial line (kernel/apps_geom.h) once the folder is open, so it follows the centered layout.
+def tile_click(log):
+    g = [l for l in open(log, errors="replace").read().splitlines() if l.startswith("appsgeom")][-1].split()[1:]
+    g = {k: int(v) for k, v in (kv.split("=") for kv in g)}
+    return (g["vx"] + g["x0"] + 3 * g["cw"] + g["cw"] // 2, g["vy"] + g["y0"] + g["ch"] + g["tile"] // 2)
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -84,7 +83,7 @@ try:
     move(centre(APPS_FOLDER_SLOT), ICON_ROW_Y); time.sleep(0.4)
     click(); time.sleep(1.0)
     # Click squarely on the Curbfind tile.
-    move(*CURBFIND_CLICK); time.sleep(0.3)
+    move(*tile_click(LOG)); time.sleep(0.3)
     click()
     deadline = time.time() + 15
     while time.time() < deadline:

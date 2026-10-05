@@ -11,6 +11,7 @@ Exit 1 if any app does not open, does not close by Esc, or serial log contains p
 
 Usage: tools/checks/keyboard-only-check.py   (from the repo root, after make kernel.elf)
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image, ImageChops
 from freeport import free_port
@@ -26,7 +27,6 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 # is at (94, 56); a launch over the dock-opened folder lands at (10,40), light
 # at (34, 56). Either one counts as the app being up.
 CLOSE_SPOTS = ((94, 56), (34, 56))
-FOLDER_CLOSE_X, FOLDER_CLOSE_Y = 80, 46
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 
 # App names from kernel/kernel.c APPS[].name (indices 0-23, then Apps folder, then Trash)

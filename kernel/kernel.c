@@ -2275,7 +2275,8 @@ static void gui_draw_wallpaper_rect(int x, int y, int w, int h){
     int x0 = x * sc, x1 = (x + w) * sc;
     int y0 = y * sc, y1 = (y + h) * sc;
     if (x0 < 0) x0 = 0;
-    if (y0 < GUI_MENUBAR_H * sc) y0 = GUI_MENUBAR_H * sc;
+    int top = gui_app_windowed ? 0 : GUI_MENUBAR_H; /* a windowed app has no menu bar inside its viewport */
+    if (y0 < top * sc) y0 = top * sc;
     if (x1 > (int)window_width() * sc) x1 = (int)window_width() * sc;
     if (y1 > (int)window_height() * sc) y1 = (int)window_height() * sc;
     for (int py = y0; py < y1; py++) {
@@ -4644,27 +4645,8 @@ char *wx_put_int(char *o, int v){
    guitest.sh's header for that whole trace), and an app screen only
    reachable by mouse would be an app screen this project can never
    regression-test. */
-#define APPS_COLS 5
-/* Three grid rows are visible at once (108px cell each); the panel height
-   below (APPS_PANEL_H) is sized to actually hold them, see its own note.
-   Scroll limits and keyboard selection follow this row count, not a
-   repeated literal. */
-#define APPS_VIS_ROWS 3
-/* Real typography QA bug, confirmed with a real headless pmemsave crop
-   (tools/checks/baseline-check.py, /tmp/jt-loop/typography-crops/before): the old
-   375px panel height was sized as if the grid started at the panel's own
-   top edge (APPS_VIS_ROWS*108 = 324 < 375, "3 whole rows fit"), but the
-   grid actually starts 70px lower, at y0=95, to leave room for the "arrow
-   keys to move" hint line above it (panel top is 25). The real bottom
-   needed is 70 + 324 = 394, 19px past the old 375, so the last visible
-   row's labels ("Bookrank", "Quotes", "Tonchi", "Toroid" at the
-   default scroll offset) landed only ~8 logical px above the glass
-   panel's true bottom edge -- title-bar-tight everywhere else in this UI,
-   here almost touching. 410 gives that row the same order of breathing
-   room the top hint line gets, while staying inside the window's own
-   450px content viewport (gui_launch_from_dock's `h - 40` for the Apps
-   folder), 15px of margin above the window's own bottom edge. */
-#define APPS_PANEL_H 420
+#include "apps_geom.h"
+static int apps_vis_rows = 3; /* rows the open folder shows; set by gui_launch_from_dock, see apps_geom.h */
 /* The framebuffer has no alpha channel. Blend each glass pixel against the
    wallpaper already underneath it, keeping the real photo visible. */
 static void gui_apps_glass(int x, int y, int w, int h){
@@ -4687,45 +4669,27 @@ static void gui_apps_glass(int x, int y, int w, int h){
     }
 }
 static void gui_launch(int icon); /* mutually recursive with the folder: the folder launches apps, and the dock launches the folder */
-static void gui_apps_draw_grid(int scroll_offset, int sel, int x0, int y0, int cell_w, int cell_h, int tile){
+static void gui_apps_draw_grid(const struct apps_geom *g, int scroll_offset, int sel){
     for (int k = 0; k < gui_apps_n(); k++) {
         int i = gui_app_at(k);
         int row = k / APPS_COLS - scroll_offset;
         int col = k % APPS_COLS;
-        /* Bounded by row count, not a pixel guess: row*cell_h (324) still
-           clears the 375px panel_h even for the row that doesn't fit, so
-           that stray row used to get drawn anyway, spilling past the
-           panel's bottom edge and getting sliced by the window's own
-           bottom (measured: kernel/kernel.c's own APPS_VIS_ROWS=3 already
-           states the true count, "3 whole ones" -- this just enforces it
-           instead of re-deriving a looser bound from cell_h). Because that
-           spillover row was never inside the 375px rect gui_apps_redraw_
-           panel repaints on every scroll/selection change, its pixels
-           also never got cleared on a later repaint -- confirmed live: a
-           scroll from offset 0 to 1 left index 18/19's (Contacts,
-           Calculator) icons drawn at 0's row 3 sitting there under the
-           freshly drawn row 3 of the new offset, stale pixels, not a
-           second draw and not an index past GUI_APPS_FOLDER. */
-        if (row < 0 || row >= APPS_VIS_ROWS) continue;
-        int cx = x0 + col * cell_w + cell_w / 2;
-        int cy = y0 + row * cell_h;
-        if (k == sel) gui_rounded_rect_gradient(cx - tile / 2 - 10, cy - 10, tile + 20, cell_h - 4,
+        if (row < 0 || row >= g->vis) continue; /* by row count: a row past the panel would spill and leave stale pixels */
+        int cx = g->x0 + col * g->cell_w + g->cell_w / 2;
+        int cy = g->y0 + row * g->cell_h;
+        if (k == sel) gui_rounded_rect_gradient(cx - g->tile / 2 - 12, cy - 8, g->tile + 24, g->cell_h - 4,
                                                  0x00FFF8F1, 0x00E5D8D0, 0x00E9DEE0, 12);
-        gui_draw_one_icon_on(i, cx, cy + tile, tile, 0x00E9DEE0);
+        gui_draw_one_icon_on(i, cx, cy + g->tile, g->tile, 0x00E9DEE0);
         int lw = font_string_width(APPS[i].name);
-        font_draw_string(APPS[i].name, cx - lw / 2, cy + tile + 10, 0x001C1C1E, -1);
+        font_draw_string(APPS[i].name, cx - lw / 2, cy + g->tile + 8, 0x001C1C1E, -1);
     }
 }
-static void gui_apps_redraw_panel(int scroll_offset, int sel, int x0, int y0, int cell_w, int cell_h, int tile, int grid_w){
-    int panel_x = x0 - 28, panel_y = 25, panel_w = grid_w + 56, panel_h = APPS_PANEL_H;
-    gui_draw_wallpaper_rect(panel_x, panel_y, panel_w, panel_h);
-    gui_apps_glass(panel_x, panel_y, panel_w, panel_h);
-    /* The window's own title bar already reads "Apps" (gui_launch_from_
-       dock draws APPS[icon].name there); a second "Apps" heading here
-       just repeated it. Keep the key-hint line, moved up into the space
-       the heading used to take. */
-    gui_draw_hint(x0, 40, "arrow keys to move   enter opens   esc closes", 0x006A6064);
-    gui_apps_draw_grid(scroll_offset, sel, x0, y0, cell_w, cell_h, tile);
+static void gui_apps_redraw_panel(const struct apps_geom *g, int scroll_offset, int sel){
+    gui_draw_wallpaper_rect(g->px, g->py, g->pw, g->ph);
+    gui_apps_glass(g->px, g->py, g->pw, g->ph);
+    /* The title bar already reads "Apps"; only the key hint sits inside the panel. */
+    gui_draw_hint(g->x0, g->py + APPS_PAD + 2, "arrow keys to move   enter opens   esc closes", 0x006A6064);
+    gui_apps_draw_grid(g, scroll_offset, sel);
     serial_puts("appsgridrepaint\n");
 }
 /* The window frame's title while an app runs inside the Apps folder's
@@ -4743,15 +4707,25 @@ static void gui_app_frame_title(const char *label){
 }
 static int gui_multiwin_open(int icon); static void gui_refuse_open(int icon);
 /* 2.0 gate 5: the Apps folder has no window of its own to host an app, so a launch closes the folder and opens the app as a compositor window, exactly a dock click (full table: the same refusal notice). */
-static void gui_apps_launch(int icon){ if (gui_multiwin_open(icon) < 0) gui_refuse_open(icon); }
+static void gui_apps_launch(int icon){ window_clear_viewport(); /* the window is sized and clamped against the whole screen, not the folder's smaller viewport */ if (gui_multiwin_open(icon) < 0) gui_refuse_open(icon); }
 
+/* One serial line per full repaint with the real layout, so the checks measure what was drawn (tools/checks/launchpad-centered-check.py). */
+static void gui_apps_log_geom(const struct apps_geom *g){
+    const char *k[] = {" vis=", " px=", " py=", " pw=", " ph=", " x0=", " y0=", " cw=", " ch=", " tile=", " vx=", " vy="};
+    int v[] = {g->vis, g->px, g->py, g->pw, g->ph, g->x0, g->y0, g->cell_w, g->cell_h, g->tile, app_view_x, app_view_y};
+    char b[12];
+    serial_puts("appsgeom");
+    for (int n = 0; n < 12; n++) { serial_puts(k[n]); app_utoa((unsigned)v[n], b); serial_puts(b); }
+    serial_puts("\n");
+}
 static void gui_launch_apps(void){
     int sel = 0;
     int rows = (gui_apps_n() + APPS_COLS - 1) / APPS_COLS;
-    int cell_w = 150, cell_h = 116, tile = 74; /* 74 = the artwork's 148px at 2x: an exact 1:1 blit like the dock, not a 148 to 120 resample */
-    int grid_w = APPS_COLS * cell_w;
-    int x0 = ((int)window_width() - grid_w) / 2;
-    int y0 = 88;
+    int vw = (int)window_width(), vis, py;
+    if (gui_app_windowed) { vis = apps_vis_rows; py = APPS_MARGIN; } /* boxed: the window was sized and centered around the panel */
+    else { int top = GUI_MENUBAR_H, bot = gui_dock_y0(); vis = apps_rows_fit(top, bot); py = apps_panel_y(top, bot, vis); } /* bare desktop: centered between menu bar and dock */
+    struct apps_geom G = apps_geom_make(vw, vis, py);
+    const struct apps_geom *g = &G;
     int scroll_offset = 0; /* v0.77.0: mouse wheel scroll support, apps offset by row */
 
     /* The wallpaper behind this folder never changes while it is open, so it
@@ -4767,6 +4741,7 @@ static void gui_launch_apps(void){
         if (full) {
             full = 0;
             serial_puts("appsfullrepaint\n");
+            gui_apps_log_geom(g);
             window_clear(0x00201922);
             /* Not gui_draw_wallpaper(): that helper starts at GUI_MENUBAR_H,
                skipping the top strip to leave room for the desktop's own
@@ -4778,7 +4753,7 @@ static void gui_launch_apps(void){
                window_clear above set it to: a dead black band under the
                title bar, never painted with wallpaper at all. */
             gui_draw_wallpaper_rows(0, (int)window_height()); if (!gui_app_windowed) { gui_menubar_force_redraw(); gui_draw_menubar(); } /* 2.6.34: full-screen Launchpad keeps the bar */
-            gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w);
+            gui_apps_redraw_panel(g, scroll_offset, sel);
             /* The click that opened this folder (or closed the app launched
                from it) is the baseline, not a fresh click. Synced here, once
                per real repaint, never per loop pass: a per-pass sync threw
@@ -4794,7 +4769,7 @@ static void gui_launch_apps(void){
            actually catches this frame before we block, and a click/tap
            counting as input so a phone can leave this screen at all. */
         window_present(); sleep_ticks(5);
-        if (gui_clock_tick(&clock_min_seen)) gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w); /* Clock hands follow the minute */
+        if (gui_clock_tick(&clock_min_seen)) gui_apps_redraw_panel(g, scroll_offset, sel); /* Clock hands follow the minute */
         /* v0.77.0: mouse wheel scroll to browse all apps, one row per scroll. */
         int k = get_key_or_click_until(ticks() + 100); /* wakes each second */
         if (k == KEY_WHEEL_UP || k == KEY_WHEEL_DOWN) {
@@ -4804,13 +4779,13 @@ static void gui_launch_apps(void){
                the next frame jumped right back. Selection follows the view on
                the keyboard path below, not the other way round. */
             int old_offset = scroll_offset;
-            int max_scroll = rows - APPS_VIS_ROWS;
+            int max_scroll = rows - g->vis;
             if (max_scroll < 0) max_scroll = 0;
             scroll_offset += (k == KEY_WHEEL_UP) ? -1 : 1;
             if (scroll_offset < 0) scroll_offset = 0;
             if (scroll_offset > max_scroll) scroll_offset = max_scroll;
             if (scroll_offset != old_offset)
-                gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w);
+                gui_apps_redraw_panel(g, scroll_offset, sel);
             continue;
         }
         if (k == KEY_ESC) return;
@@ -4859,10 +4834,10 @@ static void gui_launch_apps(void){
                    panel's old, wrong 375px height (see APPS_PANEL_H's own
                    note), a second copy of the exact bug class
                    gui_apps_draw_grid's row bound was already fixed for. */
-                if (row < 0 || row >= APPS_VIS_ROWS) continue;
-                int cx = x0 + col * cell_w + cell_w / 2;
-                int cy = y0 + row * cell_h;
-                int cell_x0 = cx - cell_w / 2, cell_y0 = cy - 10, cell_x1 = cell_x0 + cell_w, cell_y1 = cy + tile + 24;
+                if (row < 0 || row >= g->vis) continue;
+                int cx = g->x0 + col * g->cell_w + g->cell_w / 2;
+                int cy = g->y0 + row * g->cell_h;
+                int cell_x0 = cx - g->cell_w / 2, cell_y0 = cy - 8, cell_x1 = cell_x0 + g->cell_w, cell_y1 = cy + APPS_LABEL_H + 4;
                 if (click_vx >= cell_x0 && click_vx < cell_x1 && click_vy >= cell_y0 && click_vy < cell_y1) { hit = i; break; }
             }
             if (hit >= 0) { gui_apps_launch(hit); return; }
@@ -4870,10 +4845,10 @@ static void gui_launch_apps(void){
         }
         if (k == KEY_ENTER) { gui_apps_launch(gui_app_at(sel)); return; }
         int old_sel = sel;
-        if (k == 'a' && sel > 0) sel--;                 /* left  */
-        else if (k == 'd' && sel < gui_apps_n() - 1) sel++; /* right */
-        else if (k == 'w' && sel >= APPS_COLS) sel -= APPS_COLS;
-        else if (k == 's' && sel + APPS_COLS < gui_apps_n()) sel += APPS_COLS;
+        if ((k == 'a' || k == KEY_LEFT) && sel > 0) sel--;                 /* left (the hint says arrow keys) */
+        else if ((k == 'd' || k == KEY_RIGHT) && sel < gui_apps_n() - 1) sel++; /* right */
+        else if ((k == 'w' || k == KEY_UP) && sel >= APPS_COLS) sel -= APPS_COLS;
+        else if ((k == 's' || k == KEY_DOWN) && sel + APPS_COLS < gui_apps_n()) sel += APPS_COLS;
         else if (k >= '1' && k <= '9' && (k - '1') < gui_apps_n()) { gui_apps_launch(gui_app_at(k - '1')); return; }
         if (sel != old_sel) {
             /* Keyboard selection drags the view with it, the direction that is
@@ -4881,9 +4856,9 @@ static void gui_launch_apps(void){
                follows. */
             int sel_row = sel / APPS_COLS;
             if (sel_row < scroll_offset) scroll_offset = sel_row;
-            if (sel_row >= scroll_offset + APPS_VIS_ROWS) scroll_offset = sel_row - APPS_VIS_ROWS + 1;
+            if (sel_row >= scroll_offset + g->vis) scroll_offset = sel_row - g->vis + 1;
         }
-        if (sel != old_sel) gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w);
+        if (sel != old_sel) gui_apps_redraw_panel(g, scroll_offset, sel);
     }
 }
 
@@ -4976,8 +4951,17 @@ again:
        clips every app draw, including window_clear and physical AA text. */
     gui_draw_desktop(-1, -1, 0, 0);
     int apps = icon == GUI_APPS_FOLDER;
-    int x = apps ? 56 : 70, y = apps ? 30 : 40;
-    int w = apps ? 848 : 820, h = apps ? 490 : 385;
+    int x = 70, y = 40, w = 820, h = 385;
+    if (apps) {
+        /* Launchpad: size the window around the glass panel, then center the PANEL on the screen
+           and in the strip between the menu bar and the dock (apps_geom.h). */
+        int top = GUI_MENUBAR_H, bot = gui_dock_y0();
+        apps_vis_rows = apps_rows_fit(top, bot);
+        int ph = apps_panel_h(apps_vis_rows), pw = apps_geom_make((int)window_width(), apps_vis_rows, 0).pw;
+        w = pw + 2 * APPS_MARGIN + APPS_FRAME_W; h = ph + 2 * APPS_MARGIN + APPS_FRAME_H;
+        x = ((int)window_width() - w) / 2;
+        y = apps_panel_y(top, bot, apps_vis_rows) - APPS_MARGIN - 32;
+    }
     gui_clamp_win_rect(&x, &y, &w, &h); /* phone screens are far narrower than these desktop-tuned numbers */
     gui_draw_window_frame(x, y, w, h, APPS[icon].name);
     window_set_viewport(x + 8, y + 32, (unsigned int)(w - 16), (unsigned int)(h - 40));

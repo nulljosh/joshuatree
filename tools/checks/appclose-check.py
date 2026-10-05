@@ -30,6 +30,7 @@ before the fix landed, see roadmap.md's v67 entry).
 
 Usage: tools/checks/appclose-check.py   (from the repo root, after make kernel.elf)
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, socket, subprocess, sys, time
 from PIL import Image
 from freeport import free_port
@@ -43,7 +44,7 @@ DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 CLOSE_X, CLOSE_Y = 94, 56          # gui_launch_from_dock: red circle at (x+24, y+16) for x=70, y=40
-APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46  # the Apps folder's own larger window origin (56, 30)
+APPS_CLOSE_X, APPS_CLOSE_Y = FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # the Apps folder's own larger window origin (56, 30)
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 PARK = (480, 200)                  # open wallpaper, away from every hit target
 SLOTS = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]

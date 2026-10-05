@@ -39,6 +39,7 @@ gui_apps_launch's viewport setup and steps 6 and 7 fail.
 
 Usage: tools/checks/ring3bookrank-check.py   (from the repo root, after make kernel.elf)
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, socket, subprocess, sys, time
 from PIL import Image
 
@@ -199,7 +200,7 @@ try:
     # 6. a normal close, both ways, from the Apps folder grid: Bookrank is
     #    APPS[] index 10 = row 2, col 0 (5 columns wide), whose viewport is
     #    the folder's 832x450, not the dock's 804x345.
-    APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
+    APPS_CLOSE_X, APPS_CLOSE_Y = FOLDER_CLOSE_X, FOLDER_CLOSE_Y
     def wait_closed(resend=True):
         # Poll the screen (10s) instead of reading it once: on a slow runner
         # the post-Esc repaint lands after a fixed sleep. One resend of Esc
@@ -222,8 +223,8 @@ try:
             if serial().count("bookrank: ring-3 window") > seen: break
         else:
             fails.append(f"{tag}: Bookrank did not open a ring-3 window from the Apps folder grid"); return False
-        if "bookrank: ring-3 window 796x345" not in serial():
-            fails.append(f"{tag}: the folder-launched window is not 796x345")
+        if "bookrank: ring-3 window 804x345" not in serial():
+            fails.append(f"{tag}: the folder-launched window is not 804x345")
         if "ring3app: BUG" in serial():
             fails.append(f"{tag}: ring3app logged a BUG line")
         time.sleep(0.5)

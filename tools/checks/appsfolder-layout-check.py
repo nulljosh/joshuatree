@@ -83,10 +83,9 @@ APPS_FOLDER_SLOT = 0
 # -> viewport origin (64,62), size (832,450). Panel (gui_apps_redraw_panel):
 # panel_x=x0-28, panel_y=25, panel_w=grid_w+56, panel_h=375, x0=41, grid_w=750
 # -> panel spans local (13,25)-(819,400), i.e. logical screen (77,87)-(883,462).
-WIN_X, WIN_Y = 56, 30
-VX, VY = WIN_X + 8, WIN_Y + 32
-PANEL_TOP_LOCAL, PANEL_BOTTOM_LOCAL = 25, 445  # APPS_PANEL_H 420 + panel_y 25
-TITLEBAR_BOTTOM_LOCAL = 0  # viewport's own top edge; the real title bar is drawn outside it
+# The layout now comes from the kernel's own "appsgeom" serial line (kernel/apps_geom.h): the window is
+# centered, so nothing here hard-codes its position any more.
+WIN_Y = 30  # only the old bottom-edge bound below uses it; the strip checks are clamped to the viewport
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP1, DUMP2):
@@ -133,6 +132,8 @@ try:
     move(centre(APPS_FOLDER_SLOT), ICON_ROW_Y); time.sleep(0.4)
     click(); time.sleep(2.0)
     dump(DUMP1)
+    GEOM = dict(kv.split("=") for kv in [l for l in open(LOG, errors="replace").read().splitlines() if l.startswith("appsgeom")][-1].split()[1:])
+    GEOM = {k: int(v) for k, v in GEOM.items()}
 
     for _ in range(6):
         wheel_down(); time.sleep(0.3)
@@ -147,6 +148,9 @@ finally:
 def load(path):
     return Image.frombytes("RGBA", (W, H), open(path, "rb").read(), "raw", "BGRA").convert("RGB")
 
+VX, VY = GEOM["vx"], GEOM["vy"]
+PANEL_TOP_LOCAL, PANEL_BOTTOM_LOCAL = GEOM["py"], GEOM["py"] + GEOM["ph"]
+VIEW_H = 450
 def logical_to_px(lx, ly):
     return lx * SCALE, ly * SCALE
 
@@ -161,7 +165,7 @@ img1 = load(DUMP1)
 band_x_logical = VX + 400
 dark = 0
 sampled = 0
-for local_y in range(2, PANEL_TOP_LOCAL - 2):
+for local_y in range(1, PANEL_TOP_LOCAL - 1):
     ly = VY + local_y
     px, py = logical_to_px(band_x_logical, ly)
     r, g, b = img1.getpixel((px, py))
@@ -181,7 +185,7 @@ def saturation(r, g, b):
     return (mx - mn)
 spill_hits = 0
 spill_checked = 0
-for local_y in range(PANEL_BOTTOM_LOCAL + 4, min(PANEL_BOTTOM_LOCAL + 90, (WIN_Y + 490 - 38) - VY)):
+for local_y in range(PANEL_BOTTOM_LOCAL + 3, PANEL_BOTTOM_LOCAL + 7):
     ly = VY + local_y
     for local_x in range(20, 800, 8):
         lx = VX + local_x
@@ -203,9 +207,9 @@ if spill_checked and spill_hits > 6:
 # (0x006A6064) so it should score much lower than the old dark heading
 # (0x002A2226) did.
 heading_row_dark = 0
-for local_x in range(41, 41 + 90):
+for local_x in range(GEOM["x0"], GEOM["x0"] + 90):
     lx = VX + local_x
-    for local_y in range(33, 48):
+    for local_y in range(PANEL_TOP_LOCAL + 4, PANEL_TOP_LOCAL + 22):  # above the hint line, where a second heading would sit
         ly = VY + local_y
         px, py = logical_to_px(lx, ly)
         r, g, b = img1.getpixel((px, py))
@@ -219,7 +223,7 @@ if heading_row_dark > 40:
 # cell_w=150, cell_h=108, tile=60, x0=41, y0=95; at max scroll the tail
 # row (Stocks/Search/Epiphany, cols 0-2) lands at local row APPS_VIS_ROWS-1.
 img2 = load(DUMP2)
-CELL_W, CELL_H, X0, Y0, APPS_VIS_ROWS = 150, 116, 41, 88, 3
+CELL_W, CELL_H, X0, Y0, APPS_VIS_ROWS = GEOM["cw"], GEOM["ch"], GEOM["x0"], GEOM["y0"], GEOM["vis"]
 tail_row_local_y = Y0 + (APPS_VIS_ROWS - 1) * CELL_H
 ghost_hits = 0
 ghost_checked = 0

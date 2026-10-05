@@ -1,34 +1,32 @@
-# Joshua Tree loop handoff (2026-10-04)
+# Joshua Tree loop handoff (2026-10-04, evening)
 
 ## What the loop is
 
-Keep merging green PRs, then build the next item: apps on their real backends, the ARM64 port for the Raspberry Pi, and drivers that can be tested in QEMU. No stray branches or PRs left behind. The full list of what is left, with a model tag on each item, is the Pickup section of `docs/roadmap.md`.
+Keep merging green PRs, then build the next item: the QA list from Joshua's photos, CI hardening, fleet apps on real backends, and the ARM64 port for the Raspberry Pi. No stray branches, PRs or issues left behind. The open work, with a model tag on each item, is the Pickup section of `docs/roadmap.md`. The QA list lives in the memory note `project_joshuatree_qa_backlog.md`.
 
 ## Where things stand (2026-10-04)
 
-- Main is 2.6.29 (2.6.30 is the names PR: Lexly is now Tonchi inside the OS, the Portfolio catalog says Brick, Notate and Hagaki; 2.6.29 is the Hikko PR: Sparkjar renamed, real forum ideas through `/api/hikko`; 2.6.28 was the landing tiles PR: Bookrank, Lexly, Curbfind and Epiphany tiles, a check that fails on a stale tile, and the built `user/*.bin` and `drivers/user_*.h` untracked).
-- ARM64: M0 to M1d part one are done (serial, exceptions, MMU, a drawn desktop with smooth text). M2 has its first drivers (virtio keyboard, mouse, network, disk). M3a is done: an EL0 program runs, prints and exits through `svc`, a load from a kernel-only page faults and the kernel survives, and kernel RAM is not executable from EL0 (`tools/checks/arm64-m3-check.py`).
-- Joshua buys the Pi 4B this weekend. First boot is `docs/RASPBERRY-PI.md`: serial text and a picture on the monitor. 3.0.0 ships only when the desktop boots on a real Pi.
-- Voice chat: both sides are typed text in, her voice out, no speech-to-text, three server round trips per message, nothing streamed. Plan in the roadmap's Voice chat section.
-- Neo is the new name for the Strata enclosure.
-- The pre-push hook runs per worktree and now also checks the generated files (`docs/TESTING.md`, dock slots, the logo, icon tiles), so a stale one fails on the Mac, not in CI.
-- Disk: keep 6 GB free before `tools/ci-local.sh`. The Kaggle model weights moved to `/Volumes/LaCie/models/kaggle-hands-2026-10-03`.
+- Main is 2.6.35 (this PR) and live. Shipped today: the app sandbox on the Pi version (EL0, svc write and exit, kernel RAM not executable from EL0), Neo, Bookrank, Tonchi (the OS name for Lexly, the App Store rename is not applied yet), Hikko, fleet names in the Portfolio, Stocks, Burrow, Mail and Weather file reads, and the menu bar fix. Main CI stayed green all day. The reds were on PR branches.
+- No PRs open once this one merges. 2.6.35 is the Launchpad: centered, icons 24 percent smaller, arrow keys now move the folder selection, apps opened from it size like dock apps.
+- Policy: helper PRs open as draft and pass `CI_LOCAL_JOBS=4 tools/ci-local.sh` before they go ready. Only one helper runs the full suite at a time. Never iterate on GitHub CI.
+- CI is slow because shard 5 holds 23 checks and shard 6 holds 42. Rebalance with `python3 tools/gen/ci-balance.py <green run id>` first. Never pick a shard by hand for a new check.
+- The Pi: Joshua buys and picks it up today. First boot per `docs/RASPBERRY-PI.md`. 3.0.0 ships only when the desktop boots on a real Pi.
+- Disk is tight (about 1 GB free) because other sessions run Xcode builds. Check `df -h /System/Volumes/Data` before heavy runs.
 
 ## Next, in order
 
-1. If the Pi is in hand: first serial boot per `docs/RASPBERRY-PI.md`. Photograph the console and fix whatever the real chip does differently.
-2. Fleet apps onto their real backends through `SYS_HTTP_GET`, one PR each, with the offline samples as the fallback: Curbfind, Epiphany, Stocks, Bookrank (2.6.26), Lexly (2.6.27) and Hikko (2.6.29) already pull live data. The real apps are native Swift and cannot run here, so the OS versions stay C rewrites.
-3. CI slow-runner timing flakes: eight QEMUs share one runner.
-4. ARM64 M3 rest (more programs, per-program address spaces), then M2 rest (IP, DHCP, TCP, FAT).
-5. Voice chat items: read `voicetime` off ten live messages, drop the `/api/pick` round trip, stream, then speech-to-text.
-6. Icons in one design system.
+1. CI: rebalance the shards, add a hard timeout per check, make key-driven checks wait on a serial or pixel marker instead of a fixed sleep.
+2. Samantha: full screen, the first typed letter is dropped, the degree sign draws as "?".
+3. Typography: sharpen text (the standing focus).
+4. Hikko, Brick and Hagaki feature parity on real backends.
+5. If the Pi is in hand: first serial boot, photograph the console, fix what the real chip does differently.
 
 ## How to work
 
-One small PR at a time, draft until `tools/ci-local.sh` passes (it takes about 27 minutes), bump VERSION for code changes, merge the moment CI is green. Fold PRs together before CI starts, because each rebase restarts it. Docs stay at 100 percent: every counted source file needs a row in `docs/ARCHITECTURE.md`.
+One small PR at a time, up to two helpers on different files, always draft first. Bump VERSION for code changes. Docs stay at 100 percent: every counted source file needs a row in `docs/ARCHITECTURE.md`. Merge the moment CI is green, then remove the worktree and branch.
 
 ## Restart prompt
 
 ```
-/loop until we can't build out anymore: keep merging green PRs, then build the next item (the Pi's first boot if the board is here, then the fleet apps on their real backends, CI flakes, ARM64 M3 and M2), no stray branches or PRs left behind. State is in docs/LOOP-HANDOFF.md and the Pickup section of docs/roadmap.md.
+/loop until 3.0.0 or just before: Joshua Tree. State is in docs/LOOP-HANDOFF.md, the Pickup section of docs/roadmap.md and the memory note project_joshuatree_qa_backlog.md. Keep merging green PRs, then build the next item. Helper PRs stay draft until CI_LOCAL_JOBS=4 tools/ci-local.sh passes, at most two helpers at once, verify each PR yourself before merging, no stray branches or PRs or issues left behind. 3.0.0 waits on the real Pi 4 booting the desktop.
 ```

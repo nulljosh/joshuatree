@@ -33,6 +33,7 @@ static); break gui_apps_launch's viewport setup and steps 4 and 5 fail.
 
 Usage: tools/checks/ring3toroid-check.py   (from the repo root, after make kernel.elf)
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, socket, subprocess, sys, time
 from PIL import Image
 from freeport import free_port
@@ -165,7 +166,7 @@ try:
     #    folder's 832x450, not the dock's 804x345. Esc, then the red close
     #    dot; after each the program must have exited 0, the window must be
     #    released, and Mail must open from the dock.
-    APPS_CLOSE_X, APPS_CLOSE_Y = 80, 46
+    APPS_CLOSE_X, APPS_CLOSE_Y = FOLDER_CLOSE_X, FOLDER_CLOSE_Y
     def open_toroid_from_grid(tag):
         seen = serial().count("toroid: ring-3 window")
         move(*PARK); time.sleep(0.2)
@@ -178,8 +179,8 @@ try:
             if serial().count("toroid: ring-3 window") > seen: break
         else:
             fails.append(f"{tag}: Toroid did not open a ring-3 window from the Apps folder grid"); return False
-        if "toroid: ring-3 window 796x345" not in serial():
-            fails.append(f"{tag}: the folder-launched window is not 796x345")
+        if "toroid: ring-3 window 804x345" not in serial():
+            fails.append(f"{tag}: the folder-launched window is not 804x345")
         if "ring3app: BUG" in serial():
             fails.append(f"{tag}: ring3app logged a BUG line")
         time.sleep(0.5)

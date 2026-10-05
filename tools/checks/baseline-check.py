@@ -64,8 +64,8 @@ DOCK_ICON, DOCK_GAP, SLOT0_X, ICON_ROW_Y = 37, 6, 247, 487
 # column-width or grid-spacing change does not silently stop testing the
 # right pixels.
 APPS_COLS = 5
-ROW_X0, ROW_X1 = 250, 1750      # physical x band inside the grid, clear of the window's own border/corner
-SCAN_Y0, SCAN_Y1 = 916, 962     # physical y band that brackets row 2's label ink (a fixed geometric slot; only which app's label lands there can vary)
+# Bands come from the kernel's own "appsgeom" serial line (kernel/apps_geom.h), set below once the folder is open.
+ROW_X0 = ROW_X1 = SCAN_Y0 = SCAN_Y1 = 0
 BG_LUMA = 244                   # the glass panel's own light fill, measured
 INK_DROP = 80                   # a column counts as "ink" when its darkest pixel is this far below BG_LUMA
 MIN_CLUSTER_W = 40              # physical px; drops stray window-edge noise, real labels are all >= 47px wide
@@ -133,6 +133,13 @@ finally:
 if img is None:
     print("FAIL: never captured a frame"); sys.exit(1)
 px = img.load()
+_g = [l for l in open(LOG, errors="replace").read().splitlines() if l.startswith("appsgeom")]
+if not _g:
+    print("FAIL: the kernel never logged the Apps folder's layout (appsgeom)"); sys.exit(1)
+_g = {k: int(v) for k, v in (kv.split("=") for kv in _g[-1].split()[1:])}
+ROW_X0, ROW_X1 = 2 * (_g["vx"] + _g["x0"]), 2 * (_g["vx"] + _g["x0"] + 5 * _g["cw"])
+SCAN_Y0 = 2 * (_g["vy"] + _g["y0"] + 2 * _g["ch"] + _g["tile"] + 6)  # the third visible row's label ink
+SCAN_Y1 = SCAN_Y0 + 44
 def luma(p): return (p[0] * 77 + p[1] * 150 + p[2] * 29) >> 8
 def greenish(p): return (p[1] - p[0]) >= 5  # the satellite wallpaper's own green cast; the glass tint never has it
 
@@ -189,28 +196,19 @@ for idx, (x0, x1) in enumerate(words):
     # would sit.
     ink_col_set = set(range(x0, x1 + 1))
     counts = {}
-    for y in range(SCAN_Y0, SCAN_Y0 + 90):
+    for y in range(SCAN_Y0, SCAN_Y1):
         counts[y] = sum(1 for x in ink_col_set if luma(px[x, y]) < BG_LUMA - INK_DROP)
     peak = max(counts.values()) if counts else 0
     baseline_y = SCAN_Y0
-    for y in range(SCAN_Y0, SCAN_Y0 + 90):
+    for y in range(SCAN_Y0, SCAN_Y1):
         if counts.get(y, 0) >= 0.3 * peak: baseline_y = y
     ink_bottom = baseline_y
     bottoms.append((name, ink_bottom))
 
-    # Walk down from the ink until the pixels turn "green": the glass tint
-    # (gui_apps_glass) blends toward a warm cream/mauve and never reads
-    # green, while the satellite wallpaper underneath it does (measured:
-    # glass G-R in -10..-3, wallpaper G-R in +9..+29). The panel's real
-    # bottom edge is where that switch happens.
-    wallpaper_y = None
-    for y in range(ink_bottom + 2, ink_bottom + 160):
-        row = [px[x, y] for x in range(cx - 10, cx + 10)]
-        if sum(greenish(p) for p in row) >= len(row) * 0.6:
-            wallpaper_y = y; break
-    if wallpaper_y is None:
-        print(f"FAIL: {name}: never found the panel's real bottom edge below its label")
-        fail = 1; continue
+    # The panel's bottom edge comes from the kernel's own appsgeom line (the old green-wallpaper walk-down
+    # misfired once the glass sat over green fields). The centered layout's own pixels are checked
+    # in launchpad-centered-check.py.
+    wallpaper_y = 2 * (_g["vy"] + _g["py"] + _g["ph"])
     clearance_logical = (wallpaper_y - ink_bottom) / 2
     print(f"{name}: ink bottom y={ink_bottom}, panel's real bottom y={wallpaper_y}, clearance {clearance_logical:.1f} logical px (need >= {MIN_CLEARANCE_LOGICAL})")
     if clearance_logical < MIN_CLEARANCE_LOGICAL:
