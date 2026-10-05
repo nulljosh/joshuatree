@@ -115,7 +115,9 @@ try:
         is_red_2 = max(abs(p2[i] - CLOSE_RED[i]) for i in range(3)) <= 12
         p3 = pixel(WIDE_CLOSE_X, WIDE_CLOSE_Y)
         is_red_3 = max(abs(p3[i] - CLOSE_RED[i]) for i in range(3)) <= 12
-        return is_red_1 or is_red_2 or is_red_3
+        p4 = pixel(24, 24)   # 2.9.0: Samantha is full screen; her red dot sits at the corner, there is no window frame to find
+        is_red_4 = max(abs(p4[i] - CLOSE_RED[i]) for i in range(3)) <= 12
+        return is_red_1 or is_red_2 or is_red_3 or is_red_4
 
     # Wait for desktop to be ready: dock tray color at (480, 511) = 0xEFEBE4
     for _ in range(120):
@@ -143,6 +145,8 @@ try:
                 move(CLOSE_X, CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)
             elif is_red_2:
                 move(APPS_CLOSE_X, APPS_CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)
+            elif max(abs(pixel(24, 24)[i] - CLOSE_RED[i]) for i in range(3)) <= 12:
+                move(24, 24); time.sleep(0.3); click(); time.sleep(0.8)   # Samantha's red dot (2.9.0)
             else:
                 break
         move(*PARK); time.sleep(0.3)

@@ -252,19 +252,18 @@ try:
     opened = False
     for _ in range(100):
         time.sleep(0.1)
-        if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): opened = True; break
+        if near(pixel(24, 24), CLOSE_RED): opened = True; break   # 2.9.0: she is full screen, her red dot is the corner
     if not opened:
         fails.append("Samantha did not open from the dock")
     else:
         time.sleep(0.5)
-        keys("n"); time.sleep(0.4)
         typed("what is on my calendar today")
         keys("ret")
         if not wait_serial("chattool=calendar_today:dentist", 30):
             fails.append("Samantha's calendar_today tool did not see the event the ring-3 program saved: "
                          + repr([l for l in serial().splitlines() if l.startswith("chattool=") or l.startswith("chatpick")]))
         time.sleep(0.5)
-        move(CLOSE_X, CLOSE_Y); time.sleep(0.3); click(); time.sleep(0.8)
+        keys("esc"); time.sleep(0.8)   # Esc closes her (she has no window frame to click)
 
     # 8. the desktop must answer
     if "exception: ring-0" in serial() or "panic in" in serial() or "ring3app: BUG" in serial():

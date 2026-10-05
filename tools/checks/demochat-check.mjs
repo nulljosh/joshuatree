@@ -201,7 +201,11 @@ async function ink(x0, y0, x1, y1) {
     let total = 0;
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
       const i = (Math.min(c.height - 1, Math.round(y * scale)) * c.width + Math.min(c.width - 1, Math.round(x * scale))) * 4;
-      if (Math.abs(data[i] - ink[0]) <= tol && Math.abs(data[i + 1] - ink[1]) <= tol && Math.abs(data[i + 2] - ink[2]) <= tol) total++;
+      // 2.9.0: her reply is no longer INK text in a bubble; it is white text on a dark translucent backdrop laid over
+      // the picture. In the demo her picture is not fetched (the proxy answers 403), so the screen behind the caption
+      // is bare cream (~245), and the backdrop turns it dark (every channel under 150). That dark-backdrop count is
+      // the "a reply is on screen" signal, and it is ~0 before she is sent anything.
+      if (data[i] <= 150 && data[i + 1] <= 150 && data[i + 2] <= 150) total++;
     }
     return { total, scale, canvasW: c.width, canvasH: c.height };
   }, [INK, INK_TOL, x0, y0, x1, y1]);
@@ -209,8 +213,10 @@ async function ink(x0, y0, x1, y1) {
 // samantha.c draw(): bubbles start at local y = HEAD_H(36) + FACE_H(64) + 8 = 108
 // and her side is x 20..380 (bw capped at 360); the question bubble is right-aligned
 // (x >= 424 local) and one 30px row tall, so her reply begins at local y 144.
-const RX0 = VX + 20, RX1 = VX + 20 + 360;
-const RY0 = VY + 108 + 30 + 6 - 2, RY1 = VY + VH - 36 - 8; // above her input bar
+// 2.9.0 (full screen, 960x540 logical): her caption sits centred just above the glass input panel, bottom edge at
+// y = 540 - 16 - 46 - 12 = 466. The rectangle starts below where your own caption (one row, 10 px above hers) ends.
+const RX0 = 300, RX1 = 660;
+const RY0 = 424, RY1 = 466;
 const replyInk = () => ink(RX0, RY0, RX1, RY1);
 
 try {
