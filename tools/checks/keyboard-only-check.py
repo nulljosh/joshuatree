@@ -26,7 +26,7 @@ LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 # A launch from the bare desktop lands at window 0's frame (x=70), whose light
 # is at (94, 56); a launch over the dock-opened folder lands at (10,40), light
 # at (34, 56). Either one counts as the app being up.
-CLOSE_SPOTS = ((94, 56), (34, 56))
+CLOSE_SPOTS = ((94, 56), (34, 56), (24, 24))   # (24,24): Samantha's red dot, she is full screen since 2.9.0
 CLOSE_RED = (0xFF, 0x5F, 0x57)
 
 # App names from kernel/kernel.c APPS[].name (indices 0-23, then Apps folder, then Trash)

@@ -44,6 +44,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | "samantha" boot flag opens Chat's full-screen avatar view, input focused, before the desktop | `tools/checks/samantha-boot-check.py` | retry |
 | "phone" boot flag opens a real 430x932 portrait frame straight into Samantha's view | `tools/checks/phone-boot-check.py` | retry |
 | Phone Samantha back chevron exits her view and F2/Esc hints are hidden on phones | `tools/checks/phone-samantha-back-check.py` | retry |
+| Samantha is full screen: glass input, fading captions, scrollback, the typing bugs, a mouth drawn from her voice, Esc and the red dot | `tools/checks/samantha-fullscreen-check.py` | retry |
 | Touch: a tap opens the on-screen keyboard on phone and a tapped key reaches the Notes editor | `tools/checks/touch-osk-check.py` | retry |
 | No-disk boot falls back to ramfs with seeded demo files | `tools/checks/ramfs-demo-check.sh` | retry |
 | Shell regression suite (heap, task, preempt, kill, ring3, ps) | `tools/checks/shellregress-check.sh` | retry |
@@ -199,7 +200,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Notes | `tools/checks/clipboard-check.py`, `tools/checks/editor_qa.py`, `tools/checks/editorflash-check.sh`, `tools/checks/notesfolders-check.py`, `tools/checks/notessharp-check.py`, `tools/checks/notestools-check.py`, `tools/checks/read-long-files-check.py`, `tools/checks/ring3resize-check.py`, `tools/checks/ring3window-check.py`, `tools/checks/textselect-check.py`, `tools/checks/touch-osk-check.py`, `tools/checks/windowdrag-check.py` |
 | Reminders | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/notestools-check.py`, `tools/checks/ring3reminders-check.py`, `tools/checks/ring3window-check.py` |
 | Terminal | `tools/checks/clipboard-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
-| Samantha | `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/landing-layout-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samweather-check.py` |
+| Samantha | `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/landing-layout-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
 | Weather | `tools/checks/read-long-files-check.py`, `tools/checks/ring3weather-check.py`, `tools/checks/samweather-check.py`, `tools/checks/weatherproxy-hang-check.mjs` |
 | Curbfind | `tools/checks/ring3curbfind-check.py` |
 | Keyrate | `tools/checks/ring3app-check.py` |

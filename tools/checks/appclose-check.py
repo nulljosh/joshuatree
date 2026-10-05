@@ -118,6 +118,7 @@ try:
         colour, which is why every other slot here keys off it."""
         if is_red(pixel(CLOSE_X, CLOSE_Y)): return (CLOSE_X, CLOSE_Y)
         if is_red(pixel(APPS_CLOSE_X, APPS_CLOSE_Y)): return (APPS_CLOSE_X, APPS_CLOSE_Y)
+        if is_red(pixel(24, 24)): return (24, 24)   # 2.9.0: Samantha is full screen, her red dot sits at the corner
         return None
     def window_open(): return close_button() is not None
     centre = lambda slot: SLOT0_X + slot * PITCH + DOCK_ICON // 2

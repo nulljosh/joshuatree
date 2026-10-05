@@ -5045,7 +5045,8 @@ static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_AP
    concurrently-open window is offset so both titlebars and both close
    buttons stay fully on screen and visually distinct, not stacked exactly
    on top of each other. */
-static int gui_window_bleed(int icon){ return !boot_to_phone && icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open == samantha_ring3_open; } /* Samantha's window is her face, full bleed (portfolio mode: under the menu bar too); Esc closes it */
+static int gui_bleed_fits(void){ return (unsigned)window_width() * (unsigned)window_height() * 4u <= JT_USER_FB_BYTES; } /* a ring-3 window buffer is 2.1 MB (960x540): a bigger screen gets her in an ordinary window instead of a refused open */
+static int gui_window_bleed(int icon){ return !boot_to_phone && gui_bleed_fits() && icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open == samantha_ring3_open; } /* Samantha's window is her face, full bleed (portfolio mode: under the menu bar too); Esc closes it */
 static int gui_bleed_open(void){ for (int i = 0; i < gui_window_count; i++) if (gui_window_bleed(gui_windows[i].icon)) return 1; return 0; }
 static void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
     if (boot_to_phone) { *x = -8; *y = 8; *w = (int)window_width() + 16; *h = (int)window_height(); return; } /* 2.0 gate 5: one window, full screen under the back chevron strip (content rect 0,40,W,H-40) */

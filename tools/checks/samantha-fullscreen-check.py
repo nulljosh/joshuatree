@@ -443,7 +443,7 @@ def mouth_check(m, tag, base):
     closed = m.frame((box[1], box[3]))
     n0 = m.serial().count("speak: status=")
     m.typ("tell me something"); m.keys("ret")
-    pairs = []; t_end = time.time() + 45
+    pairs = []; times = []; t_end = time.time() + 45
     while time.time() < t_end:
         a = last_open(m)
         img = m.frame((box[1], box[3]))
@@ -453,7 +453,7 @@ def mouth_check(m, tag, base):
             for y in range(box[1], box[3], 2):
                 for x in range(box[0], box[2], 2):
                     d += sum(abs(px[x, y][i] - cp[x, y][i]) for i in range(3)); n += 1
-            pairs.append((a, d / n))
+            pairs.append((a, d / n)); times.append(time.time())
             if SHOTS and a >= 14 and not os.path.exists(os.path.join(SHOTS, "06-mouth-open.png")): m.shot(m.frame(), "06-mouth-open")
         if m.serial().count("speak: status=") > n0 and last_open(m) == 0 and len(pairs) > 20 and time.time() > t_end - 30: break
         time.sleep(0.05)
@@ -465,6 +465,16 @@ def mouth_check(m, tag, base):
     levels = sorted(summary)
     if levels[-1] < 10: return fail(tag, f"her mouth never opened wide for loud speech (top opening {levels[-1]})")
     if 0 not in summary: return fail(tag, "her mouth never closed for the silent second")
+    # the silent second is in the middle of her speech: between the first and last time she was open there must be a
+    # stretch of at least 0.3 s with the mouth shut
+    live = [i for i, (a, _) in enumerate(pairs) if a > 0]
+    gap = 0.0; run_start = None
+    for i in range(live[0], live[-1] + 1):
+        if pairs[i][0] == 0:
+            run_start = times[i] if run_start is None else run_start; gap = max(gap, times[i] - run_start)
+        else: run_start = None
+    print(tag + f"longest shut stretch inside her speech: {gap:.2f} s")
+    if gap < 0.3: fail(tag, f"her mouth stayed open through the silent second of her speech (longest shut stretch {gap:.2f} s)")
     if summary[0] > 0.2: fail(tag, f"silent speech still changes the mouth pixels ({summary[0]:.1f}); the closed mouth must be the portrait exactly")
     xs = [a for a, _ in pairs]; ys = [d for _, d in pairs]
     mx_, my_ = sum(xs) / len(xs), sum(ys) / len(ys)
@@ -508,7 +518,33 @@ def scenario_phone():
         m.close()
 
 
-scens = [s for s in (scenario_desktop, scenario_small, scenario_phone) if not os.environ.get("ONLY") or os.environ["ONLY"] in s.__name__]
+def scenario_big(res):
+    """A screen over 960x540 logical is past the 2.1 MB a ring-3 window buffer can be: she must still open (in an
+    ordinary window, composed the same way) and show her portrait, not be refused."""
+    tag = f"{res[0]}x{res[1]} boot flag: "
+    m = Machine(tag, res, f"samantha res={res[0]}x{res[1]} llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
+    try:
+        if not m.wait(lambda: "samfocus" in m.serial() or "winrefuse" in m.serial(), 120): return fail(tag, "she never opened")
+        if "winrefuse" in m.serial(): return fail(tag, "the kernel refused her window on a big screen")
+        if not m.wait(lambda: "face: hd=736" in m.serial(), 180): return fail(tag, "her portrait never loaded on a big screen")
+        time.sleep(3.0)
+        img = m.frame(); m.shot(img, f"10-big-{res[0]}")
+        px = img.load(); red = blue = 0
+        for y in range(res[1] // 4, 3 * res[1] // 4, 8):
+            for x in range(res[0] // 4, 3 * res[0] // 4, 8):
+                p = px[x, y]
+                if p[0] > p[2] + 40: red += 1
+                if p[2] > p[0] + 40: blue += 1
+        if SYNTH and (red < 20 or blue < 20): fail(tag, f"her portrait is not on screen (red {red}, blue {blue} samples)")
+        else: print(tag + f"she opened in an ordinary window and her portrait shows (red {red}, blue {blue} samples)")
+    finally:
+        m.close()
+
+
+def scenario_big2k(): scenario_big((2560, 1440))
+
+
+scens = [s for s in (scenario_desktop, scenario_small, scenario_phone, scenario_big2k) if not os.environ.get("ONLY") or os.environ["ONLY"] in s.__name__]
 for scen in scens:
     try: scen()
     except Exception as e: fails.append(f"{scen.__name__}: {type(e).__name__}: {e}")

@@ -138,7 +138,7 @@ def check_app(name, key, binf, flag, src):
         time.sleep(1.0)
         up = False
         for _ in range(50):
-            if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): up = True; break
+            if (near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED) or near(pixel(24, 24), CLOSE_RED)): up = True; break
             time.sleep(0.1)
         if not up: fails.append("the app window (red close dot) was not on screen before the crash")
 
@@ -164,7 +164,7 @@ def check_app(name, key, binf, flag, src):
         move(*PARK); time.sleep(0.6)
         gone = False
         for _ in range(50):
-            if not near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): gone = True; break
+            if not (near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED) or near(pixel(24, 24), CLOSE_RED)): gone = True; break
             time.sleep(0.1)
         if not gone: fails.append("the dead app's window is still on screen")
         dock = pixel(480, 511)
@@ -175,11 +175,11 @@ def check_app(name, key, binf, flag, src):
         opened = False
         for _ in range(40):
             time.sleep(0.1)
-            if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): opened = True; break
+            if (near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED) or near(pixel(24, 24), CLOSE_RED)): opened = True; break
         if not opened: fails.append("Mail did not open from a dock click after the crash: desktop not responsive")
         else:
             press("esc"); time.sleep(0.8)
-            if near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED): fails.append("Mail did not close on Esc after the crash")
+            if (near(pixel(CLOSE_X, CLOSE_Y), CLOSE_RED) or near(pixel(24, 24), CLOSE_RED)): fails.append("Mail did not close on Esc after the crash")
         return fails
     except (RuntimeError, OSError, ValueError) as e:
         return fails + [f"harness error: {e}"]

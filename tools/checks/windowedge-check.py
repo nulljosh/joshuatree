@@ -90,13 +90,13 @@ try:
     def is_red(p): return max(abs(p[i] - CLOSE_RED[i]) for i in range(3)) <= 12
 
     time.sleep(6.0)
-    move(SLOT0_X + 7 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()
+    move(SLOT0_X + 5 * PITCH + DOCK_ICON // 2, ICON_ROW_Y); time.sleep(0.3); click()  # Reminders (slot 5): Samantha has no window frame since 2.9.0
     img = None
     for _ in range(200):
         time.sleep(0.1)
         img = dump()
         if is_red(logical_pixel(img, CLOSE_X, CLOSE_Y)): break
-    else: raise SystemExit("FAIL: Chat window never opened from dock slot 7")
+    else: raise SystemExit("FAIL: Reminders window never opened from dock slot 5")
     time.sleep(0.5)
     img = dump()
 

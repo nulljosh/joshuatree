@@ -1,21 +1,16 @@
 /* samantha: Samantha's chat window as a real ring-3 program (slice 2 of
  * "Samantha at ring 3" in docs/ARCHITECTURE.md).
  *
- * The look of kernel/chat.h: her name in mustard at the top, a conversation of
- * bubbles (you on the right, her on the left, newest at the bottom), and an
- * input line under it. Typing, Backspace, Enter sends, Esc closes, a click
- * never closes, and the backquote key is the deliberate crash. Enter asks
- * /api/pick first and then /api/chat, both through SYS_HTTP_POST, with the
- * request and reply shapes kernel/chat.h uses. Serial markers match the
- * kernel's: chatpick=, chatreply=, chatfail=.
+ * Full screen (2.9.0): her portrait (/face/hd.jpg, 736 px) covers the window; the input line is a blurred glass
+ * panel; what you say and what she answers appear as captions over the picture that fade out after her voice ends;
+ * Tab opens the whole conversation on glass; a red dot or Esc closes her. Her mouth is drawn by code from the
+ * loudness of the PCM she is playing (vm_mouth). Enter asks /api/pick first and then /api/chat, both through
+ * SYS_HTTP_POST, with the request and reply shapes kernel/chat.h used. Serial markers: chatpick=, chatreply=,
+ * chatfail=, samtyped= (what the keyboard handed her) and samface: (what the checks read).
  *
- * Face: the band under the title holds her animated face, the same real 320x320 JPEG frames the
- * kernel chat streams (/face/idle-N.jpg, /face/talk-N.jpg), fetched with SYS_HTTP_GET one frame
- * per idle poll so the window never blocks. 1.9.27: every JPEG (all 24 idle and 48 talk, about
- * 1.5MB) lives in the SYS_BRK heap through malloc, and the frame on screen is decoded on demand
- * by the kernel's own decoder (drivers/jpeg.c, built into libjt) straight to the 60x60 the
- * kernel's small face uses (FACE_SIDE in kernel/chat_face.h), RGB565. Idle loop while quiet,
- * talk frames while a reply shows.
+ * Face: a host without the portrait leaves the old frame set, the real 320x320 JPEG frames
+ * (/face/idle-N.jpg, /face/talk-N.jpg) fetched with SYS_HTTP_GET one per idle poll and scaled up; every JPEG
+ * lives in the SYS_BRK heap and the frame on screen is decoded on demand by drivers/jpeg.c (built into libjt).
  * Tools: a pick runs here (slices 3 and 4): reminders, calendar, mail and notes through the
  * file syscalls, weather through SYS_SYSINFO, "open <app>" through SYS_LAUNCH_REQUEST.
  * Type is the antialiased libjt face.
@@ -1321,7 +1316,8 @@ static void hist_draw(void) {
     text("Up and Down scroll, Tab closes", x + 24, top + h - 24, DIM);
 }
 
-static void draw_video(void) {
+static int vm_k JT_DATA = 1;   /* the picture is composed at 1/vm_k of the window and each pixel repeated vm_k times on the way out */
+static void draw_video_k(void) {
     int W = (int)win.width, H = (int)win.height;
     if (W < 64 || H < 64) return;
     if (!backbuf || back_w != W || back_h != H) {
@@ -1344,7 +1340,7 @@ static void draw_video(void) {
         if (!backbuf || !vm_base || !vm_col || !vm_panel || !vm_save || !vm_small || !vm_small2) { rect(0, 0, W, H, BG); return; }
         vm_geom(W, H);
         char d[72] = "samface: mouth="; int n = 15;
-        put_num(d, &n, vm_mx); d[n++] = ','; put_num(d, &n, vm_my); d[n++] = ','; put_num(d, &n, vm_mhw); d[n++] = ','; put_num(d, &n, vm_ml1); d[n++] = '\n';
+        put_num(d, &n, vm_mx * vm_k); d[n++] = ','; put_num(d, &n, vm_my * vm_k); d[n++] = ','; put_num(d, &n, vm_mhw * vm_k); d[n++] = ','; put_num(d, &n, vm_ml1 * vm_k); d[n++] = '\n';
         jt_write(1, d, (unsigned)n);   /* centre x, seam y, half width, depth: where the check looks */
     }
     unsigned now = now_ticks();
@@ -1413,7 +1409,28 @@ static void draw_video(void) {
         if (now - open_t < 700) pill("Esc closes", 24 + 62, 11, WHITE);
     }
     win.pixels = real;
-    { unsigned *d = real, *s = backbuf, n = c; __asm__ volatile ("rep movsl" : "+D"(d), "+S"(s), "+c"(n) : : "memory"); }
+    if (vm_k == 1) { unsigned *d = real, *s = backbuf, n = c; __asm__ volatile ("rep movsl" : "+D"(d), "+S"(s), "+c"(n) : : "memory"); }
+}
+
+/* The portrait, the base and the back buffer are 4 bytes a pixel each, and a ring-3 heap stops at 8 MB. A window bigger
+   than about 560000 pixels (a 2560x1440 screen is 640 thousand logical pixels over 3.6 MB a buffer) is composed at half
+   size or less, then every pixel is repeated on the way out: the same picture, chunkier type, still all of her. */
+static void draw_video(void) {
+    int WW = (int)win.width, WH = (int)win.height, k = 1;
+    while ((WW / k) * (WH / k) > 560000) k++;
+    if (k != vm_k) { vm_k = k; back_w = 0; }   /* a new size: buffers are rebuilt */
+    if (k == 1) { draw_video_k(); return; }
+    unsigned *real = win.pixels;
+    win.width = (unsigned)(WW / k); win.height = (unsigned)(WH / k);
+    draw_video_k();
+    win.width = (unsigned)WW; win.height = (unsigned)WH; win.pixels = real;
+    if (!backbuf) return;
+    int IW = WW / k, IH = WH / k;
+    for (int y = 0; y < WH; y++) {
+        unsigned *d = real + y * WW; const unsigned *sr = backbuf + (y / k < IH ? y / k : IH - 1) * IW;
+        if (y % k) { const unsigned *prev = real + (y - 1) * WW; for (int x = 0; x < WW; x++) d[x] = prev[x]; continue; }
+        for (int x = 0; x < WW; x++) d[x] = sr[(x / k < IW ? x / k : IW - 1)];
+    }
 }
 
 static void draw(void) {
@@ -1678,7 +1695,7 @@ void _start(int argc, char **argv) {
             else if (k == 8) { if (inlen > 0) ar->in[--inlen] = 0; }
             else if (k >= 32 && k < 127 && inlen < INMAX) { ar->in[inlen++] = (char)k; ar->in[inlen] = 0; }
         } else if (ev.kind == JT_EV_CLICK && uface_video) {
-            int cx = ev.a, cy = ev.b;
+            int cx = ev.a / vm_k, cy = ev.b / vm_k;
             { char d[40] = "samface: click="; int n = 15; put_num(d, &n, cx); d[n++] = ','; put_num(d, &n, cy); d[n++] = '\n'; jt_write(1, d, (unsigned)n); }
             if (!uface_phone && (cx - 24) * (cx - 24) + (cy - 24) * (cy - 24) <= 14 * 14) break;   /* the red dot: close */
             int mx = vm_px + vm_pw - 34, my = vm_py + vm_ph / 2;
