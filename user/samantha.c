@@ -1,9 +1,8 @@
 /* samantha: Samantha's chat window as a real ring-3 program (slice 2 of
  * "Samantha at ring 3" in docs/ARCHITECTURE.md).
  *
- * Full screen (2.9.0): her portrait (/face/hd.jpg, 736 px) fills the window, with room around her in a wide one
- * (2.12.1); the input line is a blurred glass
- * panel; what you say and what she answers appear as captions over the picture that fade out after her voice ends;
+ * Full screen (2.9.0): her portrait (/face/hd.jpg, 736 px) fills the window, with room around her in a wide one (2.12.1);
+ * the input line is a blurred glass panel; what you say and what she answers appear as captions over the picture that fade out after her voice ends;
  * Tab opens the whole conversation on glass; a red dot or Esc closes her. Her mouth is drawn by code from the
  * loudness of the PCM she is playing (vm_mouth). Enter asks /api/pick first and then /api/chat, both through
  * SYS_HTTP_POST, with the request and reply shapes kernel/chat.h used. Serial markers: chatpick=, chatreply=,
@@ -119,12 +118,28 @@ static void serial(const char *tag, const char *s) {
    (x, y + row * LINE) when draw is set; returns the line count. A word wider
    than a line is cut where it stops fitting. */
 static int wrap_cap JT_DATA = 0;   /* when set, rows past this many are counted but not drawn */
+static int wrap_ell JT_DATA = 0; static char ell_buf[264] JT_DATA;   /* wrap_ell with wrap_cap: the last row drawn ends in "..." (the text goes on) */
+static const char *ellipsize(const char *ln, int maxw) {   /* ln then "...", cut back (to a word if it can) until the row fits maxw */
+    int len = slen(ln), n = len > 258 ? 258 : len, k;
+    for (;; n--) {
+        for (int i = 0; i < n; i++) ell_buf[i] = ln[i];
+        while (n > 0 && ell_buf[n - 1] == ' ') n--;
+        ell_buf[n] = ell_buf[n + 1] = ell_buf[n + 2] = '.'; ell_buf[n + 3] = 0;
+        if (n == 0 || tw(ell_buf) <= maxw) break;
+    }
+    if (n < len && ln[n] != ' ') {   /* it cut a word: step back to the space before it, unless that is most of the row */
+        for (k = n; k > 0 && ln[k - 1] != ' '; k--) ;
+        while (k > 0 && ln[k - 1] == ' ') k--;
+        if (k > n / 2) { ell_buf[k] = ell_buf[k + 1] = ell_buf[k + 2] = '.'; ell_buf[k + 3] = 0; }
+    }
+    return ell_buf;
+}
 static int wrap_y0 JT_DATA = 0, wrap_y1 JT_DATA = 0;   /* when set, rows outside [y0, y1) are counted but not drawn (the scrollback's clip) */
 static int wrap(const char *s, int maxw, int x, int y, unsigned fg, int draw) {
     char ln[260], w[82], t[264];
     int n = 0, rows = 0;
     ln[0] = 0;
-#define FLUSH() do { if (draw && (!wrap_cap || rows < wrap_cap) && (!wrap_y1 || (y + rows * LINE >= wrap_y0 && y + rows * LINE + LINE <= wrap_y1))) text(ln, x, y + rows * LINE, fg); rows++; n = 0; ln[0] = 0; } while (0)
+#define FLUSH() do { if (draw && (!wrap_cap || rows < wrap_cap) && (!wrap_y1 || (y + rows * LINE >= wrap_y0 && y + rows * LINE + LINE <= wrap_y1))) text(wrap_ell && wrap_cap && rows == wrap_cap - 1 ? ellipsize(ln, maxw) : ln, x, y + rows * LINE, fg); rows++; n = 0; ln[0] = 0; } while (0)
     for (;;) {
         if (*s == '\n') { FLUSH(); s++; continue; }
         while (*s == ' ') s++;
@@ -948,11 +963,10 @@ static int rec_on JT_DATA = 0;
 static unsigned rec_peak JT_DATA = 0;
 static unsigned spk_queued JT_DATA = 0, talk_t0 JT_DATA = 0;   /* bytes still queued at the card; tick her reply began */
 
-/* ---- Video mode: Samantha is the whole screen. Her portrait is bilinear-scaled from the 736 px portrait (/face/hd.jpg)
-   or, when the host has no portrait, from the 320 px frame set. A tall window (the phone) is filled by her, scaled until
-   it fills, the overflow cropped. A wide window (2.12.1) gives her room: the portrait is 86 percent of the width, centred,
-   her eyes about 40 percent down, and the two bands either side are her own wall colour (sampled from the portrait's top
-   corners and blended across), with the outer tenth of the portrait faded into it so her hair settles into the wall.
+/* ---- Video mode: Samantha is the whole screen. Her portrait is bilinear-scaled from the 736 px portrait (/face/hd.jpg) or, with no
+   portrait on the host, from the 320 px frame set. A tall window (the phone) is filled by her, the overflow cropped. A wide one
+   (2.12.1) gives her room: the portrait is 86 percent of the width, centred, her eyes about 40 percent down, the bands either side
+   her own wall colour (sampled from the portrait's top corners, blended across) with the outer tenth of the portrait faded into it.
    Nothing frames her: the words are glass laid over the picture.
      - the input line sits in a blurred, tinted glass panel at the bottom;
      - what you said and what she answers appear as captions over the picture on a soft dark backdrop, fade in,
@@ -1037,12 +1051,11 @@ static void hd_load(void) {
     }
 }
 
-/* Window size to portrait mapping, the panel's place and where her mouth lands. A tall window shows all of her, filled
-   edge to edge (the phone). A wide one (2.12.1) gives her room: the portrait is 86 percent of the width (never shorter than
-   the window), centred, with her eye row (373 thousandths down the portrait) about 40 percent down the window, kept inside
-   the picture. ox is then negative: -ox columns of wall either side. Each window column gets the portrait column it
-   reads, how much of the wall to mix in (the outer tenth of the portrait fades in as (i/f)^1.5, i pixels in from its
-   edge, f a tenth of its width) in vm_col's top byte, or VM_OUT where only the wall shows. */
+/* Window size to portrait mapping, the panel's place and where her mouth lands. A tall window shows all of her, edge to edge
+   (the phone). A wide one (2.12.1) gives her room: the portrait is 86 percent of the width (never shorter than the window), centred,
+   her eye row (373 thousandths down) about 40 percent down the window, kept inside the picture; ox is then negative, -ox columns of
+   wall either side. Each window column gets the portrait column it reads and how much wall to mix in (the outer tenth fades in as
+   (i/f)^1.5, i pixels from the edge, f a tenth of the portrait) in vm_col's top byte, or VM_OUT where only the wall shows. */
 static void vm_geom(int W, int H) {
     vm_framed = hd_state != 2 && W > H;   /* the frame set (a host with no portrait) keeps the old fill; until we know, the portrait's layout, so her mouth does not move when it loads */
     int S = W > H ? W : H, oy;
@@ -1442,8 +1455,9 @@ static void cap_update(unsigned now) {
 
 /* One caption over the picture, bottom edge at ybot: a soft dark backdrop (rounded, with a feathered edge), white text,
    all composed at full strength and then mixed over what was there by the fade alpha. Returns the box's top. */
-static int cap_draw(struct cap *c, int ybot, int ytop_limit, unsigned now, int fixed_top, int fixed_rows) {
+static int cap_draw(struct cap *c, int ybot, int ytop_limit, unsigned now, int fixed_top, int fixed_rows, int amax) {
     int a = cap_alpha(c, now), W = back_w;
+    if (a > amax) a = amax;   /* a caption giving way to a newer one in the same place */
     int tw_ = (W - 2 * VM_MARGIN - 40 > 600 ? 600 : W - 2 * VM_MARGIN - 40);
     int avail = fixed_top ? fixed_rows : (ybot - ytop_limit - 26) / LINE; if (avail < 1) avail = 1;
     int rows = cap_rows(c->text, tw_, avail > 7 ? 7 : avail);
@@ -1472,11 +1486,11 @@ static int cap_draw(struct cap *c, int ybot, int ytop_limit, unsigned now, int f
         backbuf[py * W + px] = lerp8(backbuf[py * W + px], 0x00101012, al);
     }
     unsigned *real = win.pixels; win.pixels = backbuf;
-    wrap_cap = rows;
+    wrap_cap = rows; wrap_ell = fixed_top && cap_rows(c->text, tw_, 99) > rows;   /* the shared top slot says so when a reply goes on past its rows */
     int tx = (W - tw_) / 2;
     if (rows == 1 && bw < tw_) tx = (W - bw) / 2;
     wrap(c->text, tw_, tx, by + 9, c->mine ? 0x00E8D8BC : WHITE, 1);
-    wrap_cap = 0;
+    wrap_cap = wrap_ell = 0;
     win.pixels = real;
     for (int i = 0; i < rh; i++) for (int j = 0; j < rw; j++) {
         unsigned *p = &backbuf[(ry + i) * W + rx + j];
@@ -1557,19 +1571,21 @@ static void hist_draw(void) {
 static int vm_k JT_DATA = 1;   /* the picture is composed at 1/vm_k of the window and each pixel repeated vm_k times on the way out */
 /* Tell the checks where her mouth and eyes are now. The geometry changes once the portrait has loaded (a wide window gives her
    room only then), so this runs after every vm_geom and prints only when a number moved. */
-static int vm_rep[11] JT_DATA;
+static int vm_rep[13] JT_DATA;
 static void vm_report(void) {
-    int v[11] = { vm_mx * vm_k, vm_my * vm_k, vm_mhw * vm_k, vm_ml1 * vm_k, vm_ex[0], vm_ey[0], vm_ew[0], vm_ex[1], vm_ey[1], vm_ew[1], vm_eh };
+    int v[13] = { vm_mx * vm_k, vm_my * vm_k, vm_mhw * vm_k, vm_ml1 * vm_k, vm_ex[0], vm_ey[0], vm_ew[0], vm_ex[1], vm_ey[1], vm_ew[1], vm_eh, back_w * vm_k, back_h * vm_k };
     for (int i = 4; i < 11; i++) v[i] *= vm_k;
-    int same = 1; for (int i = 0; i < 11; i++) if (v[i] != vm_rep[i]) same = 0;
+    int same = 1; for (int i = 0; i < 13; i++) if (v[i] != vm_rep[i]) same = 0;
     if (same) return;
-    for (int i = 0; i < 11; i++) vm_rep[i] = v[i];
+    for (int i = 0; i < 13; i++) vm_rep[i] = v[i];
     char d[72] = "samface: mouth="; int n = 15;
     for (int i = 0; i < 4; i++) { put_num(d, &n, v[i]); d[n++] = i < 3 ? ',' : '\n'; }
     jt_write(1, d, (unsigned)n);   /* centre x, seam y, half width, depth: where the check looks */
     char e[96] = "samface: eyes="; int k = 14;
     for (int i = 4; i < 11; i++) { put_num(e, &k, v[i]); e[k++] = i < 10 ? ',' : '\n'; }
     jt_write(1, e, (unsigned)k);   /* both eyes' centres and half widths, then the half height: where the blink check looks */
+    char w[40] = "samface: win="; int j = 13; put_num(w, &j, v[11]); w[j++] = ','; put_num(w, &j, v[12]); w[j++] = '\n';
+    jt_write(1, w, (unsigned)j);   /* her window's size (an ordinary window on a big screen is not the screen): where the glass panel is */
 }
 static void draw_video_k(void) {
     int W = (int)win.width, H = (int)win.height;
@@ -1645,19 +1661,30 @@ static void draw_video_k(void) {
         rect(mx - 2, cy - 6, 5, 9, rec_on ? WHITE : INK); rect(mx - 4, cy + 1, 1, 3, rec_on ? WHITE : INK); rect(mx + 4, cy + 1, 1, 3, rec_on ? WHITE : INK);
         rect(mx - 3, cy + 4, 7, 1, rec_on ? WHITE : INK); rect(mx, cy + 5, 1, 3, rec_on ? WHITE : INK); rect(mx - 3, cy + 8, 7, 1, rec_on ? WHITE : INK);
     }
-    /* captions: hers on the bottom, yours above her. A wide window puts her mouth low (2.12.1), leaving under her lips room for one
-       row and no more. Then the roles swap so neither covers her mouth: yours takes that one row, right above the input line, and
-       hers goes to the top of the picture under the status pill, as many rows as fit above her eyebrows. */
+    /* captions. With room under her lips (the phone) hers is on the bottom and yours above it. A wide window puts her mouth low (2.12.1)
+       and her chin travels down to the glass when she speaks, so nothing is drawn under her lips there: both captions share one slot at
+       the top, as many rows as fit above her eyebrows (one at the very top of a window too short for that); the newest owns it and the
+       other fades out as it fades in. */
     int ytop = vm_my + vm_ml1 + 8, ybot = vm_py - 12;   /* captions stay below her lower lip */
-    int tight = (ybot - ytop - 26) / LINE < 2;
-    int brows = (vm_ey[0] < vm_ey[1] ? vm_ey[0] : vm_ey[1]) - vm_mhw * 8 / 10 - 6;   /* her eyebrows are about 0.07 of the portrait above her eyes */
-    int toprows = (brows - 56 - 18) / LINE; if (toprows < 1) toprows = 1; if (toprows > 7) toprows = 7;
-    for (int k = NCAP - 1; k >= 0; k--) {
-        struct cap *cp = &ar->cap[k];
-        if (!cp->live) continue;
-        if (tight && !cp->mine) { cap_draw(cp, ybot, ytop, now, 56, toprows); continue; }
-        int top = cap_draw(cp, ybot, ytop, now, 0, 0);
-        if (cap_alpha(cp, now) > 0) ybot = top - 10;
+    if ((ybot - ytop - 26) / LINE >= 2) {
+        for (int k = NCAP - 1; k >= 0; k--) {
+            struct cap *cp = &ar->cap[k];
+            if (!cp->live) continue;
+            int top = cap_draw(cp, ybot, ytop, now, 0, 0, 255);
+            if (cap_alpha(cp, now) > 0) ybot = top - 10;
+        }
+    } else {
+        int brows = (vm_ey[0] < vm_ey[1] ? vm_ey[0] : vm_ey[1]) - vm_mhw * 8 / 10 - 6;   /* her eyebrows are about 0.07 of the portrait above her eyes */
+        int top0 = 56, trows = (brows - top0 - 26) / LINE;   /* under the status pill; a box is its rows plus 18 and a feather of 8 either side */
+        if (trows < 1) { top0 = 8; trows = (brows - top0 - 26) / LINE; }
+        if (trows < 1) trows = 1; if (trows > 7) trows = 7;
+        int own = -1;
+        for (int k = 0; k < NCAP; k++) if (ar->cap[k].live && (own < 0 || ar->cap[k].born >= ar->cap[own].born)) own = k;
+        for (int k = 0; own >= 0 && k < NCAP; k++) {   /* the one that is giving way first, the owner over it */
+            struct cap *cp = &ar->cap[k];
+            if (k != own && cp->live) cap_draw(cp, ybot, ytop, now, top0, trows, 255 - cap_alpha(&ar->cap[own], now));
+        }
+        if (own >= 0) cap_draw(&ar->cap[own], ybot, ytop, now, top0, trows, 255);
     }
     if (hist_open) hist_draw();
     /* status pill (not while the scrollback covers it) and the way out */

@@ -12,6 +12,7 @@ instead and save PNGs of each state there; in that mode the checks about the syn
   desktop 1920x1080   click her dock icon, then drive her like a person (scenarios 1 to 7).
   res=1920x1080       the "samantha" boot flag, the room around her (scenario 1b) without the drive.
   res=1024x768        the "samantha" boot flag opens her first, on a small screen.
+  res=2560x1440       a screen past the ring-3 buffer limit: she opens in an ordinary window (804x344 logical), captions included.
   blink               a machine booted without `noblink` watches her eyes for 16 s (see scenario_blink).
   phone               the 430x760 phone mode opens her; she fills what the phone leaves her.
 
@@ -26,9 +27,13 @@ Asserted on the real framebuffer, each with a deadline and a poll, never a fixed
               still red on the left and blue on the right, tinted lighter, with a smooth red-to-blue seam.
   3 captions  what you send appears over the picture (the backdrop darkens it), her answer follows, both are gone
               again after her voice ends (the picture is back to exactly what it was), and in between a poll catches
-              the fade half way. In a wide window only one caption row fits under her lips (2.12.1), so yours sits in that
-              row above the input line and hers goes to the top of the picture; neither may darken the slot beside her
-              lips where a stacked caption would land, and the fade and the degree sign are read on whichever line hers is on.
+              the fade half way. In a wide window fewer than two rows fit under her lips and her mouth and chin travel
+              down to the glass when she speaks, so nothing is drawn there (2.12.1): both captions share one slot at the
+              top of the picture, as many rows as fit above her eyebrows (one row at the very top of a window too short
+              even for that, "..." where a reply goes on), the newest owns it and the other fades out as it comes in.
+              With her speech silent and her mouth settled shut, no caption may darken her lips, the room under them
+              down to the glass, or either eye: at 1920x1080 and 1024x768 full screen and in the ordinary window a 2560x1440
+              screen gets (found by its green eye patch). The fade and the degree sign are read in the slot.
   4 history   Tab opens a glass scrollback with the whole conversation in it; Tab closes it.
   5 bugs      the first typed letter: what she was handed (her own samtyped= serial line, not the stub) is the whole
               word, also for a word typed while she speaks. The degree sign: the weather answer draws a real degree
@@ -42,7 +47,8 @@ Discriminating: fill the bands by stretching the portrait's edge column (the str
 of the width and (1) fails by name; put the 0xF8 degree back in the sysinfo copy and (5) fails by name; make the key handler eat the key that
 stops speech again and (5) fails by name; draw the panel without the blur and (2) fails by name; stop the fade and (3)
 fails by name; feed the mouth a constant level and (6) fails by name; make the blink draw nothing or never end and the blink
-scenario fails by name. Every scenario but the blink one boots with `noblink`, because they compare exact pixels (the
+scenario fails by name; put a caption back under her lips (yours above the input line, as the first 2.12.1 did) or over her eyes (the
+56 px slot in a window too short for it) and (3) fails by name at the size where it lands. Every scenario but the blink one boots with `noblink`, because they compare exact pixels (the
 closed portrait, the caption backdrop, the scrollback) and a blink is a real change those would count as a fault.
 
 Usage: tools/checks/samantha-fullscreen-check.py   (repo root)
@@ -328,8 +334,134 @@ def panel_rect(m):
     return px * m.scale, py * m.scale, (px + pw) * m.scale, (py + VM_PH) * m.scale
 
 
-def m_ybot(m): return m.PH // m.scale - VM_MARGIN - VM_PH - 12
+def win_h(m):
+    """Her window's height in logical px, as she reports it (an ordinary window on a screen too big for a full-screen one is not the screen)."""
+    v = re.findall(r"samface: win=(\d+),(\d+)", m.serial())
+    return int(v[-1][1]) if v else m.PH // m.scale
+
+
+def m_ybot(m): return win_h(m) - VM_MARGIN - VM_PH - 12
 def m_ytop(m): return m_ybot(m) - 74
+
+
+SILENT = pcm([(3.0, 0)])   # speech with no sound in it: her mouth stays shut, so only a caption can darken the picture
+MSG = "hello there my friend how are you doing today"
+
+
+def slot_geom(m):
+    """(tight, fits, boxtop, capB): the caption layout of a wide window, worked out from the mouth she reports and her window's height by the same
+    arithmetic as draw_video_k, in logical px. tight: fewer than two rows fit under her lips, so the stack is capped at one compact row
+    (26 px high, its bottom 4 px above the glass panel at capB, its top at boxtop). fits: that one row clears her lower lip (a short ordinary
+    window may have no room at all, and then no caption is drawn)."""
+    sc = m.scale
+    mx, my, mhw, ml1 = [v // sc for v in serial_geom(m, "mouth", 4)]
+    py = win_h(m) - VM_MARGIN - VM_PH
+    tight = (py - 12 - (my + ml1 + 8) - 26) // 16 < 2
+    capB = py - 4; boxtop = capB - 26
+    return tight, boxtop - 4 > my + ml1, boxtop, capB
+
+
+def face_zones(m, org=(0, 0)):
+    """Physical rects no caption may darken in a wide window, where her mouth is low: her lips (from the top of the upper lip to the bottom of the
+    closed lower one), both eyes, and everything above the one-row slot (so a reply at the top over her forehead would fail). org is the
+    window's top left on the screen (0, 0 full screen)."""
+    ox, oy = org; sc = m.scale
+    mx, my, mhw, ml1 = serial_geom(m, "mouth", 4)
+    ex0, ey0, ew0, ex1, ey1, ew1, eh = serial_geom(m, "eyes", 7)
+    tight, fits, boxtop, capB = slot_geom(m)
+    return {"lips": (ox + mx - mhw * 13 // 10, oy + my - mhw * 8 // 10, ox + mx + mhw * 13 // 10, oy + my + ml1),
+            "left eye": (ox + ex0 - ew0, oy + ey0 - eh * 3 // 2, ox + ex0 + ew0, oy + ey0 + eh * 3 // 2),
+            "right eye": (ox + ex1 - ew1, oy + ey1 - eh * 3 // 2, ox + ex1 + ew1, oy + ey1 + eh * 3 // 2),
+            "everything above the slot": (ox + 40 * sc, oy + 50 * sc, ox + 2 * mx - 40 * sc, oy + (boxtop - 8) * sc)}
+
+
+def slot_box(m, org=(0, 0)):
+    """Physical rect of the one-row slot under her lips, 240 logical px across (the middle of the window: the mouth sits 0.018 of the portrait right of it)."""
+    sc = m.scale; mx, my, mhw, ml1 = serial_geom(m, "mouth", 4)
+    tight, fits, boxtop, capB = slot_geom(m)
+    cx = org[0] + mx - mhw * 18 // 87
+    return (cx - 120 * sc, org[1] + (boxtop - 4) * sc, cx + 120 * sc, org[1] + capB * sc)
+
+
+class Shut:
+    """Is her mouth settled shut? She prints open=0 as she draws the closing frame, a moment before it is on the screen, and before her
+    voice reaches the card she shapes the sentence by its letters, so a poll counts only when 0 was reported before and after the frame was
+    read and for 0.4 s already. Then the picture under her lips is the closed portrait exactly, and only a caption can darken it."""
+    def __init__(self): self.since = None
+
+    def poll(self, before, after):
+        if before in (0, None) and after in (0, None):
+            if self.since is None: self.since = time.time()
+        else: self.since = None
+        return self.since is not None and time.time() - self.since >= 0.4
+
+
+def window_origin(m, img):
+    """Where an ordinary window's picture starts on the screen (physical px), for a screen too big for a full-screen window: the
+    test portrait's left eye is a solid green patch, so its top left on the screen less its top left in the window is the origin."""
+    ex0, ey0, ew0, ex1, ey1, ew1, eh = serial_geom(m, "eyes", 7)
+    px = img.load(); xs = []; ys = []
+    for y in range(m.PH // 12, m.PH * 6 // 10, 2):
+        for x in range(0, m.PW, 2):
+            p = px[x, y]
+            if p[1] > p[0] + 60 and p[1] > p[2] + 40: xs.append(x); ys.append(y)   # the patch's green, as geometry_check reads it
+    if not xs: return None
+    return min(xs) - (ex0 - ew0), min(ys) - (ey0 - eh)
+
+
+def ticks(m, what):
+    """Her own clock: every tick she reported for `samface: <what>=`."""
+    return [int(v) for v in re.findall(r"samface: " + what + r"=(\d+)", m.serial())]
+
+
+def caption_run(m, tag, base, org=(0, 0)):
+    """Her reply and your message go up over a wide window with her mouth shut (silent speech). From the first frame to the last, nothing may
+    darken her lips, either eye, or anything above the one-row slot under her lips (no caption over her forehead and hair); where the
+    slot does not clear her lips (a short ordinary window) no caption may show at all; otherwise it shows in the slot. The picture is
+    static and `base` is the idle picture, so with no caption every one of these reads exactly 0."""
+    if org is None:   # screenshot runs with the real portrait: no test patches to find the window by, so nothing is measured, only photographed
+        speech["pcm"] = SILENT
+        try:
+            n0 = m.serial().count("samface: captions=1"); m.typ(MSG); m.keys("ret")
+            if not m.wait(lambda: m.serial().count("samface: captions=1") > n0, 120): return fail(tag, "no caption ever went up")
+            t_end = time.time() + 60
+            while time.time() < t_end:
+                img = m.frame(); d = sum(1 for y in range(0, m.PH, 4) for x in range(0, m.PW, 4) if sum(base.getpixel((x, y))) - sum(img.getpixel((x, y))) > 90)
+                if d > 300: m.shot(img, "14-caption-slot-" + tag.split()[0].replace("/", "-")); break
+                time.sleep(0.05)
+            m.wait(lambda: captions_gone(m), 120)
+        finally:
+            speech["pcm"] = TONE
+        return
+    tight, fits, boxtop, capB = slot_geom(m)
+    zones = face_zones(m, org); slot = slot_box(m, org)
+    worst = {k: 0.0 for k in zones}; seen = 0.0; shut = Shut(); polls = 0
+    y0 = max(0, min([slot[1]] + [z[1] for z in zones.values()]) - 4); y1 = min(m.PH, max([slot[3]] + [z[3] for z in zones.values()]) + 14)
+    speech["pcm"] = SILENT
+    try:
+        n0 = m.serial().count("samface: captions=1")
+        m.typ(MSG); m.keys("ret")
+        t_end = time.time() + 120; started = False; shot = False
+        while time.time() < t_end:
+            a = last_open(m); img = m.frame((y0, y1)); b = last_open(m)
+            settled = shut.poll(a, b)
+            if settled:
+                polls += 1
+                for k, z in zones.items(): worst[k] = max(worst[k], darkened(img, base, z))
+            v = darkened(img, base, slot); seen = max(seen, v)
+            if SHOTS and not shot and v > 20: shot = True; m.shot(m.frame(), "14-caption-slot-" + tag.split()[0].replace("/", "-"))
+            if m.serial().count("samface: captions=1") > n0: started = True
+            if started and captions_gone(m): break
+            time.sleep(0.03)
+    finally:
+        speech["pcm"] = TONE
+    print(tag + f"captions (one compact row at the bottom, y {boxtop} to {capB}, {'clears' if fits else 'cannot clear'} her lips): darkest in the slot {seen:.1f}; on " + ", ".join(f"{k} {w:.2f}" for k, w in worst.items()) + f" ({polls} polls with her mouth settled shut)")
+    if polls < 5: fail(tag, f"her mouth was never settled shut while the captions were up ({polls} polls), so nothing could be measured")
+    if not tight: fail(tag, "this check expects a window with no room under her lips for two rows; the slot arithmetic says there is")
+    if fits and seen <= 8: fail(tag, f"no caption showed in the one-row slot above the input (darkest {seen:.1f})")
+    if not fits and seen > 0.5: fail(tag, f"a caption was drawn at {seen:.1f} levels although no row clears her lips")
+    for k, w in worst.items():
+        if w > 0.5: fail(tag, f"a caption landed on {k} (it was darkened by {w:.1f} levels; nothing may be drawn there)")
 
 
 def wide_geom(m):
@@ -487,35 +619,43 @@ def scenario_desktop():
         # 3. captions: send, watch the backdrop come, hold, fade, and go. The picture is static, so after the fade the
         #    region must be the baseline again, and the fade itself must pass through in-between values.
         LW = PW // sc
-        bot_box = ((LW // 2 - 120) * sc, (m_ybot(m) - 34) * sc, (LW // 2 + 120) * sc, m_ybot(m) * sc)   # a one-line caption just above the input line
-        top_box = ((LW // 2 - 120) * sc, 56 * sc, (LW // 2 + 120) * sc, 90 * sc)                         # a one-line caption at the top of the picture, under the status pill
-        # Her mouth sits low in a wide window (2.12.1): under her lips there is room for one row and no more (fewer than two rows
-        # fit). Then the roles swap so no caption lands on her lips: yours takes the one row above the input line and hers goes to
-        # the top of the picture (as many rows as fit above her eyebrows). With room under her lips the old order stands.
-        mg = serial_geom(m, "mouth", 4)
-        ytop_l = (mg[1] + mg[3]) // sc + 8
-        tight = (m_ybot(m) - ytop_l - 26) // 16 < 2
-        capbox = top_box if tight else bot_box   # her caption, whichever line it is on; the fade and the degree sign are read here
-        # a slot where a caption of either of you would sit if it were stacked on her lips: over her left cheek, where an open mouth
-        # never reaches (her lips draw within 1.3 half widths of their centre); a long message so its backdrop is wide enough to reach it
-        guard = (mg[0] - 2 * mg[2], mg[1] + 2 * sc, mg[0] - mg[2] * 14 // 10, mg[1] + 30 * sc)
-        guard_worst = mine_seen = 0.0
-        m.typ("hello there my friend how are you doing today"); m.keys("ret")
-        samples = []; t_end = time.time() + 60; shot_cap = shot_half = False
+        bot_box = ((LW // 2 - 120) * sc, (m_ybot(m) - 34) * sc, (LW // 2 + 120) * sc, m_ybot(m) * sc)   # a one-line caption just above the input line (a window with room under her lips)
+        # Her mouth sits low in a wide window (2.12.1): fewer than two rows fit under her lips, and an opening mouth and chin travel down
+        # toward the glass, so the stack is capped at one compact row right above the input (bottom up; never over her forehead).
+        tight, fits, boxtop, capB = slot_geom(m)
+        capbox = slot_box(m) if tight else bot_box   # her caption's row; the fade and the degree sign are read here
+        zones = face_zones(m); zy0 = min(z[1] for z in zones.values()); zy1 = max(z[3] for z in zones.values())
+        zone_worst = {k: 0.0 for k in zones}; shut = Shut(); zone_polls = 0
+        speech["pcm"] = SILENT   # her mouth stays shut: only a caption can darken her lips, and an open mouth cannot be mistaken for one
+        n_lines = len(ticks(m, "line"))
+        m.typ(MSG); m.keys("ret")
+        samples = []; t_end = time.time() + 90; shot_cap = shot_half = False
         while time.time() < t_end:
             img = m.frame((capbox[1] - 4, capbox[3] + 4)); v = darkened(img, base, capbox); samples.append(v)
             if len(samples) % 4 == 0:
-                guard_worst = max(guard_worst, darkened(m.frame((guard[1], guard[3])), base, guard))
-                if tight: mine_seen = max(mine_seen, darkened(m.frame((bot_box[1] - 4, bot_box[3] + 4)), base, bot_box))
+                a = last_open(m); zimg = m.frame((zy0, zy1)); b = last_open(m)
+                settled = shut.poll(a, b); zone_polls += settled
+                if settled:
+                    for k, z in zones.items(): zone_worst[k] = max(zone_worst[k], darkened(zimg, base, z))
             top = max(samples)
             if top > 8 and not shot_cap and v > 0.9 * top and len(samples) > 8: shot_cap = True; m.shot(m.frame(), "02-caption-visible")
             if top > 8 and not shot_half and 0.3 * top < v < 0.7 * top and len(samples) > 2 and samples[-2] > v: shot_half = True; m.shot(m.frame(), "03-caption-half-faded")
             if top > 8 and v < 0.5 and "speak: status=" in m.serial() and captions_gone(m): break
             time.sleep(0.03)
+        speech["pcm"] = TONE
         top = max(samples)
-        print(tag + f"captions against her mouth: darkest the slot beside her lips got {guard_worst:.2f}; " + (f"room for one row under her lips, so hers is at the top and yours above the input line (reached {mine_seen:.1f})" if tight else "room under her lips for both"))
-        if guard_worst > 0.5: fail(tag, f"a caption sits on her mouth (the slot beside her lips was darkened by {guard_worst:.1f} levels)")
-        if tight and mine_seen <= 8: fail(tag, "your own caption never appeared above the input line")
+        print(tag + "captions against her face: one compact row at the bottom, darkest on " + ", ".join(f"{k} {w:.2f}" for k, w in zone_worst.items()) + f" ({zone_polls} polls with her mouth settled shut)")
+        if zone_polls < 5: fail(tag, f"her mouth was never settled shut while the captions were up ({zone_polls} polls), so nothing could be measured")
+        if not tight: fail(tag, "at 1920x1080 fewer than two rows fit under her lips; the arithmetic in slot_geom says there is room")
+        for k, w in zone_worst.items():
+            if w > 0.5: fail(tag, f"a caption landed on {k} (it was darkened by {w:.1f} levels; nothing may be drawn there)")
+        # the whole stack goes together, 4 s of quiet after the last line and her voice (her ticks, not the host's clock), then a 0.6 s fade
+        ln = ticks(m, "line"); fd = ticks(m, "fade"); gn = ticks(m, "gone")
+        if len(ln) <= n_lines or not fd or not gn: fail(tag, f"her fade markers are missing (lines {ln}, fade {fd}, gone {gn})")
+        else:
+            print(tag + f"last line at tick {ln[-1]}, the whole stack began to fade at {fd[-1]}, gone at {gn[-1]}")
+            if fd[-1] - ln[-1] < 400: fail(tag, f"the stack began to fade {fd[-1] - ln[-1]} ticks after the last line, want at least 400 (4 s of quiet)")
+            if not 60 <= gn[-1] - fd[-1] <= 75: fail(tag, f"the whole stack took {gn[-1] - fd[-1]} ticks to fade, want 60 (0.6 s)")
         print(tag + f"caption backdrop: darkens the strip by up to {top:.1f} levels, {samples[-1]:.2f} left at the end, {len(samples)} polls")
         if top <= 8: fail(tag, "no caption appeared over the picture after she answered")
         elif samples[-1] >= 0.5: fail(tag, "the caption never went away after her voice ended")
@@ -643,7 +783,7 @@ def mouth_check(m, tag, base):
                     d += sum(abs(px[x, y][i] - cp[x, y][i]) for i in range(3)); n += 1
             pairs.append((a, d / n)); times.append(time.time())
             if settled_zero: quiet.append(d / n)
-            if SHOTS and a >= 14 and not os.path.exists(os.path.join(SHOTS, "06-mouth-open.png")): m.shot(m.frame(), "06-mouth-open")
+            if SHOTS and a >= 14 and len(pairs) > 40 and not os.path.exists(os.path.join(SHOTS, "06-mouth-open.png")): m.shot(m.frame(), "06-mouth-open")   # well into her speech, after the captions have cross-faded
         if m.serial().count("speak: status=") > n0 and last_open(m) == 0 and len(pairs) > 20 and time.time() > t_end - 105: break
         time.sleep(0.05)
     if len(pairs) < 20: return fail(tag, f"too few mouth samples ({len(pairs)})")
@@ -719,6 +859,7 @@ def scenario_small():
         if img is None: return fail(tag, "her picture never finished painting on the small screen")
         m.shot(img, "07-small-screen")
         geometry_check(m, tag, img)
+        caption_run(m, tag, img)   # her reply over the picture: not on her lips or her eyes
     finally:
         m.close()
 
@@ -780,6 +921,14 @@ def scenario_big(res):
                 if p[2] > p[0] + 40: blue += 1
         if SYNTH and (red < 20 or blue < 20): fail(tag, f"her portrait is not on screen (red {red}, blue {blue} samples)")
         else: print(tag + f"she opened in an ordinary window and her portrait shows (red {red}, blue {blue} samples)")
+        # a short window (here 804x344 logical) has no room under her lips and none above her eyebrows either: her reply takes one row
+        # right at the top (and says "..." where it goes on); it still must not land on her lips or her eyes
+        if SYNTH:
+            org = window_origin(m, img)
+            if org is None: return fail(tag, "could not find her window on the screen (no green eye patch)")
+            print(tag + f"her window's picture starts at {org} on the screen")
+            caption_run(m, tag, img, org)
+        else: caption_run(m, tag, img, None)
     finally:
         m.close()
 

@@ -6,7 +6,9 @@ Each tile is gui_launch_from_dock's window rect (x=70,y=40,w=820,h=385 in
 the 960x540 logical canvas, 1640x770 physical at 2x), scaled by exactly
 0.6 to 984x462. Same ratio in and out, so nothing is stretched. The old
 tiles were saved at 960x553, which squashed every one of them, and two
-(Weather, Stocks) were never cropped at all.
+(Weather, Stocks) were never cropped at all. The Samantha tile is her full-screen view, not
+a window, and is cropped lower (y=90): since 2.12.1 her mouth sits lower in the picture, and
+y=40 cut through her lower lip. y=90 keeps both lips and her chin and stops above the input panel.
 
 Headless only: QEMU -display none, QMP input, pmemsave of the framebuffer.
 
@@ -29,6 +31,7 @@ LOG = "/tmp/jt-landingshots-serial.log"; DUMP = "/tmp/jt-landingshots.raw"
 FB = 0xfd000000; W, H = 1920, 1080; PORT = 4458
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 WIN = (70, 40, 820, 385)            # logical x, y, w, h
+WIN_OF = {"chat": (70, 90, 820, 385)}   # her full-screen view: lips and chin in, the glass panel (y=478) out
 OUT = (984, 462)                    # 820x385 * 0.6, same ratio
 DESKTOP_PX, DESKTOP_RGB = (480, 511), (0xEF, 0xEB, 0xE4)
 
@@ -148,7 +151,7 @@ def shoot(name):
         move(LOGICAL_W - 2, 2)                 # park the pointer outside the window crop
         time.sleep(1.0)
 
-        x, y, w, h = WIN
+        x, y, w, h = WIN_OF.get(name, WIN)
         img = frame().crop((x * SCALE, y * SCALE, (x + w) * SCALE, (y + h) * SCALE)).resize(OUT, Image.LANCZOS)
         out = f"landing/shots/{FILE[name]}.webp"
         for qual in (85, 80, 70, 60):

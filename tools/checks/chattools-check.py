@@ -55,7 +55,10 @@ FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()
 # Her transcript, in framebuffer pixels (the 2x desktop): the left half of the
 # body holds only her own reply bubbles (the typed turns sit on the right, the
 # face above y=340), so dark pixels there are her rendered replies.
-TX0, TX1, TY0, TY1 = 600, 1320, 770, 930   # 2.9.0: her reply caption; its dark backdrop is the ink
+# 2.9.0 put her reply caption at the bottom (y 770 to 930). In a wide window (2.12.1: her mouth is low and her chin travels down to the glass
+# panel, so nothing is drawn under her lips) captions share one slot at the top of the picture, 56 logical px down: up to four rows,
+# y 112 to 276 here. Its dark backdrop is the ink, over her forehead and hair, clear of the hair clip (x < 600) and the status pill (y < 100).
+TX0, TX1, TY0, TY1 = 600, 1320, 100, 300
 DARK = 90
 
 REPLY_CHAT = "The capital of France is Paris, a city famous for the Eiffel Tower and croissants."
