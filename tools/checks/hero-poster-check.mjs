@@ -17,6 +17,9 @@
 //   5. Phone width (390) and tablet (820): no horizontal scroll, the right source
 //      is used (430x760 portrait on a phone), a tap lifts the poster onto her face,
 //      and a keyboard takeover (focus the demo, Enter) lifts it too.
+//   5b. Tapping early (while the kernel boots) keeps the poster up with a "Waking up" pill until her
+//      portrait is painted: no ~300 ms stage sample between tap and lift is a flat box, and a phone
+//      is still on her face 15 s later (its scripted demo is opt-in with ?tour).
 //   6. Self-test: with the poster images blocked the same blank-pixel assertion
 //      FAILS. A check that cannot fail proves nothing; this shows it can.
 //
@@ -166,7 +169,65 @@ const serial = page => page.evaluate(() => window.__jt && window.__jt.serial || 
   await page.waitForFunction(() => window.__jt && window.__jt.ready, null, { timeout: DEADLINE });
   await page.focus('#v86-embed');
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => document.getElementById('hero-poster').hidden, null, { timeout: 5000 }).then(() => ok('keyboard takeover (focus the demo, Enter) lifts the poster'), () => fail('keyboard takeover left the poster up over a machine that is taking keys'));
+  await page.waitForFunction(() => document.getElementById('hero-poster').hidden, null, { timeout: DEADLINE }).then(() => ok('keyboard takeover (focus the demo, Enter) lifts the poster'), () => fail('keyboard takeover left the poster up over a machine that is taking keys'));
+  await page.context().close();
+}
+
+// ---- 3c: tap early, never a blank box between the tap and the lift --------------------------
+// The tap lands while the kernel is still booting. The poster must stay up (pill "Waking up")
+// until her portrait is painted, every ~300 ms screenshot of the stage in between must pass the
+// same sd/warm thresholds as the poster, and on a phone she must still be on screen 15 s later
+// (the phone's scripted demo is opt-in with ?tour now). HERO_SHOTS=<dir> also saves the frames.
+const shotDir = process.env.HERO_SHOTS;
+async function wakeCase(tag, name, vp, mobile) {
+  const page = await newPage(vp, { mobile });
+  await page.goto(base);
+  await page.waitForFunction(() => { const i = document.querySelector('#hero-poster img'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 15000 }).catch(() => {});
+  if (shotDir) await page.screenshot({ path: path.join(shotDir, `${name}-1-before.png`) });
+  if (mobile) await page.tap('#hero-poster'); else await page.click('#hero-poster');
+  const t0 = Date.now();
+  let samples = 0, sawWaking = false, badSample = null, lifted = false, savedWake = false;
+  while (Date.now() - t0 < DEADLINE) {
+    const st = await page.evaluate(() => { const e = document.getElementById('hero-poster'); const w = e.querySelector('.poster-cta-wake'); return { hidden: e.hidden, waking: e.classList.contains('waking'), pill: w && getComputedStyle(w).display !== 'none' ? w.textContent.trim() : '' }; });
+    if (st.hidden) { lifted = true; break; }
+    if (st.waking && st.pill === 'Waking up') {
+      sawWaking = true;
+      if (shotDir && !savedWake) { savedWake = true; await page.screenshot({ path: path.join(shotDir, `${name}-1b-waking.png`) }); }
+    }
+    const shot = await page.locator('#stage-wrap').screenshot();
+    const m = await statsOf(page, pngUrl(shot));
+    samples++;
+    if (!badSample && (m.sd < SD_MIN || m.warm < WARM_MIN)) badSample = `sample ${samples} at ${Date.now() - t0} ms: sd ${m.sd.toFixed(1)}, warm ${(m.warm * 100).toFixed(0)}%`;
+    await page.waitForTimeout(300);
+  }
+  console.log(`  [${tag}] ${samples} samples between tap and lift, saw "Waking up": ${sawWaking}, lifted after ${Date.now() - t0} ms`);
+  if (!lifted) fail(`${tag}: poster never lifted within ${DEADLINE / 1000} s`);
+  if (!sawWaking) fail(`${tag}: never showed the "Waking up" pill while waiting for her face (tap too late to test, or the pill is missing)`); else ok(`${tag}: pill reads "Waking up" until her face is painted`);
+  if (badSample) fail(`${tag}: stage was a flat or non-portrait box between tap and lift (${badSample})`); else ok(`${tag}: every sample between tap and lift is a portrait (${samples} checked)`);
+  if (lifted) {
+    const face = await statsOf(page, await page.evaluate(() => document.getElementById('screen_canvas').toDataURL('image/png')));
+    if (face.sd < SD_MIN || face.warm < WARM_MIN) fail(`${tag}: at the lift the live canvas is not her face (sd ${face.sd.toFixed(1)}, warm ${(face.warm * 100).toFixed(0)}%)`); else ok(`${tag}: at the lift the live canvas is her face`);
+    if (shotDir) await page.screenshot({ path: path.join(shotDir, `${name}-2-booted.png`) });
+    if (mobile) {
+      await page.waitForTimeout(15000);
+      const gone = await page.evaluate(() => /ring3app: SAMANTHA\.BIN (exited|crashed)/.test(window.__jt.serial));
+      const later = await statsOf(page, await page.evaluate(() => document.getElementById('screen_canvas').toDataURL('image/png')));
+      if (shotDir) await page.screenshot({ path: path.join(shotDir, `${name}-3-after-15s.png`) });
+      if (gone || later.sd < SD_MIN || later.warm < WARM_MIN) fail(`${tag}: 15 s after the lift she is gone (exited ${gone}, sd ${later.sd.toFixed(1)}, warm ${(later.warm * 100).toFixed(0)}%): the scripted phone demo ran without ?tour`); else ok(`${tag}: 15 s after the lift she is still on screen`);
+    }
+  }
+  await page.context().close();
+}
+await wakeCase('desktop early tap', 'desk', { width: 1440, height: 900 }, false);
+await wakeCase('phone early tap', 'phone', { width: 390, height: 844 }, true);
+
+// ---- 3d: ?tour opts a phone into the scripted demo (four questions, then the apps) ---------
+{
+  const page = await newPage({ width: 390, height: 844 }, { mobile: true });
+  await page.goto(base + '?tour');
+  await page.waitForFunction(() => /samopen/.test(window.__jt.serial) && /face: hd=/.test(window.__jt.serial), null, { timeout: DEADLINE });
+  await page.tap('#hero-poster');
+  await page.waitForFunction(() => /samtyped=/.test(window.__jt.serial), null, { timeout: 60000 }).then(() => ok('phone ?tour: the scripted demo starts after the tap (she is asked something)'), () => fail('phone ?tour: the scripted demo never started'));
   await page.context().close();
 }
 

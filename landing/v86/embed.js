@@ -656,7 +656,7 @@ if (typeof document !== "undefined") (function () {
     }, KIOSK_IDLE_MS);
   }
   function focusIn() {
-    if (heroPoster && !heroPoster.hidden) heroPoster.hidden = true;   // 2.11.1: any takeover (Tab then Enter on the demo, the phone chat bar) lifts the poster, never types into a machine the visitor cannot see
+    requestPosterLift();   // 2.11.1: any takeover (Tab then Enter on the demo, the phone chat bar) lifts the poster once her face is up, never types into a machine the visitor cannot see
     try { showComposer(true); } catch (e) {}   // a visitor taking over mid-tour gets the chat bar back at once
     if (focused || !adaptersReady) return;
     focused = true;
@@ -931,14 +931,53 @@ if (typeof document !== "undefined") (function () {
   }
   // 2.11.1: the hero poster (index.html #hero-poster, a still of her full-screen face) covers
   // the stage until the first click or tap. The machine boots behind it from page load, so
-  // the click only has to lift the poster and take the keyboard: that click is also the
-  // user gesture that lets her voice play. Phones keep their own tap-to-hear-Samantha flow
-  // (the poster just lifts); a click before the CPU is ready is remembered and applied then.
+  // the click takes the keyboard and unlocks audio at once (that gesture is what lets her
+  // voice play), but the VISUAL lift waits until the kernel has really painted her portrait:
+  // lifting earlier showed a cream box or the boot logo, the blank box this poster exists to
+  // prevent. Until then the pill reads "Waking up". Deadline: 60 s after the first click the
+  // poster lifts anyway, so nobody is stuck behind it. A click before the CPU is ready is
+  // remembered and applied then.
   var heroPoster = document.getElementById("hero-poster");
   var posterPendingFocus = false;
+  var posterWaitTimer = 0;
+  var POSTER_DEADLINE_MS = 60000;
+  var faceProbe = null;
+  // Is her portrait on the canvas? The serial gate below, then a 32x56 downscale of the live canvas: mostly warm (skin, hair). Cream ("waking up ..." screen), black and the boot logo all fail it. Pixel based
+  // so it is the same in WebKit and Chromium (the serial log alone says "open", not "painted").
+  function facePainted() {
+    var c = document.getElementById("screen_canvas");
+    if (!c || !c.width || !c.height || c.style.display === "none") return false;
+    // Her ring-3 window is open and her HD portrait has loaded ("face: hd=" follows samopen). The desktop wallpaper
+    // that shows for a moment first is warm too, so the pixels alone are not enough.
+    var so = serialLog.indexOf("samopen");
+    if (so === -1 || serialLog.indexOf("face: hd=", so) === -1) return false;
+    try {
+      if (!faceProbe) { faceProbe = document.createElement("canvas"); faceProbe.width = 32; faceProbe.height = 56; }
+      var g = faceProbe.getContext("2d", { willReadFrequently: true });
+      g.drawImage(c, 0, 0, 32, 56);
+      var d = g.getImageData(0, 0, 32, 56).data, warm = 0, n = d.length / 4;
+      for (var i = 0; i < d.length; i += 4) if (d[i] > d[i + 2] + 25) warm++;
+      return warm / n >= 0.5;
+    } catch (e) { return false; }   // a tainted or unreadable canvas: let the deadline decide
+  }
+  function liftPosterNow() {
+    if (posterWaitTimer) { clearInterval(posterWaitTimer); posterWaitTimer = 0; }
+    if (heroPoster) { heroPoster.hidden = true; heroPoster.classList.remove("waking"); }
+  }
+  // Ask for the lift: now if her face is up, otherwise show "Waking up" and poll for it.
+  function requestPosterLift() {
+    if (!heroPoster || heroPoster.hidden) return;
+    if (facePainted()) { liftPosterNow(); return; }
+    if (posterWaitTimer) return;
+    heroPoster.classList.add("waking");
+    var t0 = Date.now();
+    posterWaitTimer = setInterval(function () {
+      if (facePainted() || Date.now() - t0 > POSTER_DEADLINE_MS) liftPosterNow();
+    }, 150);
+  }
   function liftPoster(ev) {
     if (!heroPoster || heroPoster.hidden) return;
-    heroPoster.hidden = true;
+    requestPosterLift();
     if (IS_PHONE) return;
     if (adaptersReady) focusIn(); else posterPendingFocus = true;
   }
@@ -2549,8 +2588,11 @@ if (typeof document !== "undefined") (function () {
   var prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   setInterval(function () {
     if (tourArmed || focused || prefersReducedMotion) return;
-    if (heroPoster && !heroPoster.hidden) return;   // 2.11.1: nothing plays behind the poster; a phone's intro (phoneSamanthaIntro) starts on the tap that lifts it
-    if (WANT_SAMANTHA && !IS_PHONE && !PORTFOLIO_MODE) return;   // 2.11.1: on a desktop she owns the screen. The tour clicked dock tiles and Escaped her closed seconds after she opened; ?desktop is the tour.
+    if (heroPoster && !heroPoster.hidden) return;   // 2.11.1: nothing plays behind the poster
+    // 2.11.1: she owns the screen. On a desktop the tour clicked dock tiles and Escaped her closed seconds after she opened
+    // (?desktop is the tour there). A phone stays on her face too; its scripted demo (four questions, then the apps they
+    // touched, phoneSamanthaIntro) is opt-in with ?tour, which the "Tap to look around" link under the demo sets.
+    if (WANT_SAMANTHA && !PORTFOLIO_MODE && !(IS_PHONE && /[?&]tour\b/.test(location.search))) return;
     // `emulator` doesn't exist until startEmulator() has actually run (deferred, see above); this interval is itself
     // part of what naturally waits for that, same as the boot-detection interval's own guard.
     var vga = emulator && emulator.v86 && emulator.v86.cpu.devices.vga;
