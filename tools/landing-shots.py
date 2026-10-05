@@ -41,9 +41,10 @@ FLEET = {"bookrank": ("bookr", "bookrank: ring-3 window", "bookrank: samples"),
          "tonchi": ("tonchi", "tonchi: ring-3 window", "tonchi: samples"),
          "curbfind": ("curb", "curbfind: ring-3 window", "curbfind: samples"),
          "epiphany": ("epip", "epiphany: ring-3 window", "epiphany: fetch"),   # (open= flag, window opened, offline fallback chosen)
-         "hamurabi": ("hamu", "hamurabi: ring-3 window", "hamurabi: phase title")}   # Hamurapi: its title scene, drawn from first frame, no network
+         "hamurabi": ("hamu", "hamurabi: ring-3 window", "hamurabi: phase title"),   # Hamurapi: its title scene, drawn from first frame, no network
+         "windgate": ("windgate", "windgate: ring-3 window", "windgate: clock ready")}   # Windgate: offline by design; Space starts it and the shot lands mid in-breath
 FILE = {"bookrank": "app-bookrank", "tonchi": "app-tonchi", "curbfind": "app-curbfind", "epiphany": "app-epiphany",
-        "hamurabi": "app-hamurapi", "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
+        "hamurabi": "app-hamurapi", "windgate": "app-windgate", "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
         "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks"}
 
 
@@ -110,6 +111,8 @@ def shoot(name):
                 else:
                     sys.exit(f"FAIL {name}: no '{needle}' on serial")
             time.sleep(2.0)                    # let the frame after the fallback land
+            if name == "windgate":
+                key("spc"); time.sleep(2.0)    # start the breath: the tile shows the circle growing
         else:
             click(SLOT0_X + SLOT[name] * PITCH + ICON // 2, DOCK_Y)
             time.sleep(1.5)
