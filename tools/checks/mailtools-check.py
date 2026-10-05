@@ -43,7 +43,10 @@ FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()
 # Her transcript, in framebuffer pixels (the 2x desktop): the left half of the
 # body holds only her own reply bubbles (typed turns sit on the right, the
 # face above y=340), so dark pixels there are her rendered replies.
-TX0, TX1, TY0, TY1 = 200, 880, 360, 750
+# 2.12.1: Samantha is full screen and her reply is a caption, not a bubble. In a wide window the captions are one compact row whose
+# bottom sits 4 px above the glass panel: logical y 440 to 478, so y 870 to 960 in these 2x pixels (same slot as chattools-check).
+# Its dark backdrop is the ink. The old box (y 360 to 750, the pre-2.9 transcript) is now her face, so it saw nothing.
+TX0, TX1, TY0, TY1 = 600, 1320, 870, 960
 DARK = 90
 
 PICK_ANSWERS = [

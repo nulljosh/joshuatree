@@ -17,7 +17,7 @@ PROGRAM = {
     "app-hamurapi": "hamurabi", "app-windgate": "windgate", "app-panes": "panes",
 }
 # Headers a program includes that also change its picture (the sprite sheet and the rules and story the game shows).
-EXTRA = {"app-hamurapi": ["user/hamurabi_sprites.h", "user/hamurabi_rules.h", "user/hamurabi_story.h"]}
+EXTRA = {"samantha-chat": ["user/samcaps.h"], "app-hamurapi": ["user/hamurabi_sprites.h", "user/hamurabi_rules.h", "user/hamurabi_story.h"]}
 # Shared drawing code every program links in. Changing it can change every tile.
 SHARED = ["user/jtsys.h", "user/libjt/text.c", "user/libjt/text.h", "user/libjt/aafont.h",
           "user/libjt/stdio.c", "user/libjt/stdio.h", "user/libjt/string.c", "user/libjt/stdlib.c"]

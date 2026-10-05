@@ -44,7 +44,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | "samantha" boot flag opens Chat's full-screen avatar view, input focused, before the desktop | `tools/checks/samantha-boot-check.py` | retry |
 | "phone" boot flag opens a real 430x932 portrait frame straight into Samantha's view | `tools/checks/phone-boot-check.py` | retry |
 | Phone Samantha back chevron exits her view and F2/Esc hints are hidden on phones | `tools/checks/phone-samantha-back-check.py` | retry |
-| Samantha is full screen: glass input, fading captions, scrollback, the typing bugs, a mouth drawn from her voice, Esc and the red dot | `tools/checks/samantha-fullscreen-check.py` | retry |
+| Samantha is full screen: room around her (her wall in the side bands, eyes 40 percent down), glass input, fading captions that stay off her lips and eyes, scrollback, the typing bugs, a mouth drawn from her voice, Esc and the red dot | `tools/checks/samantha-fullscreen-check.py` | retry |
 | Touch: a tap opens the on-screen keyboard on phone and a tapped key reaches the Notes editor | `tools/checks/touch-osk-check.py` | retry |
 | No-disk boot falls back to ramfs with seeded demo files | `tools/checks/ramfs-demo-check.sh` | retry |
 | Shell regression suite (heap, task, preempt, kill, ring3, ps) | `tools/checks/shellregress-check.sh` | retry |
