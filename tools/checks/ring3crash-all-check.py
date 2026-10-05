@@ -58,7 +58,7 @@ def parse_apps():
     src = open("kernel/ring3app.c").read()
     table = re.search(r"RING3_APPS\[\]\s*=\s*\{(.*?)\n\};", src, re.S)
     if not table: sys.exit("FAIL: could not find the RING3_APPS table in kernel/ring3app.c")
-    apps = re.findall(r'\{\s*"([^"]+)"\s*,\s*\w+\s*,\s*\w+\s*,\s*"([^"]+)"\s*\}', table.group(1))
+    apps = re.findall(r'\{\s*"([^"]+)"\s*,\s*\w+\s*,\s*\w+\s*,\s*\w+\s*,\s*\w+\s*,\s*"([^"]+)"\s*\}', table.group(1))
     if not apps: sys.exit("FAIL: RING3_APPS parsed to zero apps")
     # open=<prefix> flags: `pc[5]=='k' && pc[6]=='e' ...` then serial_puts("autoopen=<name>")
     flags = {}

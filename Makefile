@@ -14,7 +14,7 @@ KERNEL_ASM  := kernel/isr.S kernel/irq_stubs.S kernel/ring3_asm.S
 DRIVER_SRCS := drivers/ata.c drivers/blockdev.c drivers/ramdisk.c drivers/trash.c drivers/fat.c drivers/vfs.c drivers/ramfs.c drivers/pci.c drivers/vbe.c drivers/mouse.c drivers/vmmouse.c \
                drivers/window.c drivers/rtl8139.c drivers/ne2k.c drivers/net.c drivers/http.c drivers/html.c \
                drivers/json.c drivers/font.c \
-               drivers/serial.c drivers/sb16.c drivers/speak.c drivers/png.c drivers/jpeg.c drivers/ttf.c
+               drivers/serial.c drivers/sb16.c drivers/speak.c drivers/inflate.c drivers/png.c drivers/jpeg.c drivers/ttf.c
 LIB_SRCS    := lib/libc.c third_party/bearssl/src/sha2small.c third_party/bearssl/src/hmac.c \
                third_party/bearssl/src/hmac_drbg.c third_party/bearssl/src/dec32be.c third_party/bearssl/src/enc32be.c
 

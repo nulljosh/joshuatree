@@ -7,5 +7,5 @@
 set -e
 cd "$(dirname "$0")/../.."
 python3 tools/gen/gen_png_testdata.py >/dev/null
-clang -O2 -Wall -Wextra -Itools/png-host -Idrivers -o /tmp/jt-png-host tools/png-host/main.c drivers/png.c
+clang -O2 -Wall -Wextra -Itools/png-host -Idrivers -o /tmp/jt-png-host tools/png-host/main.c drivers/png.c drivers/inflate.c
 /tmp/jt-png-host

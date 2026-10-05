@@ -40,6 +40,13 @@ int  stocks_ring3_run(void);     /* runs user/stocks.c, returns its exit status 
    desktop paint; if armed, launches that app from the dock path (mx, my
    are the cursor position to restore after) and disarms. No-op otherwise. */
 void ring3app_autoopen_arm(const char *cmdline);
+
+/* 2.7.1: embedded binaries are stored compressed. Unpacks `packed` (raw deflate, clen bytes) into a
+   temporary heap buffer, checks it is exactly len bytes with Adler-32 sum, writes it to the VFS as
+   `file` (replace: overwrite an existing copy) and frees the buffer. 0 = written, -1 = bad image or
+   write failed; a bad image logs "ring3app: bad image <file>, not started" on serial. */
+int ring3app_write_packed(const char *file, const unsigned char *packed, unsigned int clen,
+                          unsigned int len, unsigned int sum, int replace);
 void ring3app_autoopen_run(int mx, int my);
 
 /* SYS_WINDOW_POLL / SYS_WINDOW_OPEN support, called from kernel/syscall.c;

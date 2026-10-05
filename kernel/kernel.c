@@ -20,6 +20,7 @@
 #include "exec.h"
 #include "user_hello.h"
 #include "user_note.h"
+int ring3app_write_packed(const char *file, const unsigned char *packed, unsigned int clen, unsigned int len, unsigned int sum, int replace); /* ring3app.c: unpack + verify + vfs_write_file */
 #include "libc.h"
 #include "pci.h"
 #include "vbe.h"
@@ -6594,7 +6595,7 @@ static void usertest(void){
         serial_puts("usertest: FAILED (seed HELLO.TXT)\n");
         return;
     }
-    if (!vfs_write_file("HELLO.BIN", user_hello, USER_HELLO_LEN)) {
+    if (ring3app_write_packed("HELLO.BIN", user_hello, USER_HELLO_CLEN, USER_HELLO_LEN, USER_HELLO_SUM, 0) < 0) {
         puts("usertest: could not write HELLO.BIN to the active filesystem\n");
         serial_puts("usertest: FAILED (seed HELLO.BIN)\n");
         return;
@@ -6654,8 +6655,7 @@ static int notetest_run(const char *a1, const char *a2, const char *a3) {
     return status;
 }
 static void notetest(void){
-    if (!vfs_write_file("NOTE.BIN", user_note, USER_NOTE_LEN) &&
-        !vfs_replace_file("NOTE.BIN", user_note, USER_NOTE_LEN)) {
+    if (ring3app_write_packed("NOTE.BIN", user_note, USER_NOTE_CLEN, USER_NOTE_LEN, USER_NOTE_SUM, 1) < 0) {
         puts("notetest: could not write NOTE.BIN to the active filesystem\n");
         serial_puts("notetest: FAILED (seed NOTE.BIN)\n");
         return;

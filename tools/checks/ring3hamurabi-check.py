@@ -404,7 +404,11 @@ try:
     before = serial().count("hamurabi: Classic 1968 chosen")
     keys("right"); time.sleep(0.4); keys("right"); time.sleep(0.4)   # (a click leaves no focus ring: it starts from none)
     x, y, w, h = btns[1]
+    # wait for the ring to be painted instead of trusting a fixed sleep: a slow runner redraws late, a broken app never does
+    deadline = time.time() + 8
     ring = pixel(VIEW_X + x + w // 2, VIEW_Y + y - 2)   # just above the second button: the focus ring's top edge
+    while not near(ring, ACCENT, 6) and time.time() < deadline:
+        time.sleep(0.25); ring = pixel(VIEW_X + x + w // 2, VIEW_Y + y - 2)
     print(f"focus ring pixel above the second button: {ring}")
     if not near(ring, ACCENT, 6): fails.append(f"no focus ring above the second button after two Right presses (got {ring})")
 
