@@ -63,6 +63,17 @@ try:
     # an additional 2.5s to be safe.
     time.sleep(2.5)
 
+    # 2.12: a fixed wait is not enough on a busy host (a second QEMU, a build): the desktop can still
+    # be seconds away and the dump is then the black splash, a bar of "dark ink" the whole width. Poll
+    # until the light menu bar chrome has really been drawn, give the logo a moment, then judge the
+    # same pixels exactly as before.
+    for _ in range(100):
+        cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": GUI_MENUBAR_H * 4 * W, "filename": DUMP}})
+        strip = Image.frombytes("RGBA", (W, GUI_MENUBAR_H), open(DUMP, "rb").read(), "raw", "BGRA").convert("L")
+        if strip.crop((W // 2, 0, W // 2 + 200, GUI_MENUBAR_H)).resize((1, 1), Image.BOX).getpixel((0, 0)) > 100: break
+        time.sleep(0.2)
+    time.sleep(0.5)
+
     # Pmemsave the entire framebuffer
     cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
     try: cmd({"execute": "quit"})
