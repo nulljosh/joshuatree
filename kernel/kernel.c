@@ -843,7 +843,7 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-#define GUI_APP_COUNT   29 /* 27 real apps + the Apps folder + Trash; 2.2 Music (24) and Movies (25) pushed Apps/Trash to 26/27, 2.7 Hamurabi (26) to 27/28 */
+#define GUI_APP_COUNT   29 /* 27 real apps + the Apps folder + Trash; 2.2 Music (24) and Movies (25) pushed Apps/Trash to 26/27, 2.7 Hamurapi (26) to 27/28 */
 #define GUI_APPS_FOLDER 27 /* not an app: the dock tile that opens the folder */
 #define GUI_TRASH       28
 #define GUI_APP_PORTFOLIO 21 /* hidden from the Apps folder and phone home unless the boot line says "portfolio" (his site embed); the public OS ships without it */
@@ -5169,7 +5169,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 23 */ {"Clock",      0x00565A7A, gui_icon_clock,      clock_ring3_open,      0, 0}, /* live analog face (hands overlay, gui_clock_draw_hands); 1.9.4: ring 3 (user/clock.c) */
     /* 24 */ {"Music",      0x00B5502C, gui_icon_chat,       music_ring3_open,      0, 0}, /* 2.2: ring 3 (user/music.c), Apps folder only like Search */
     /* 25 */ {"Movies",     0x00B5502C, gui_icon_chat,       movies_ring3_open,     0, 0}, /* 2.2: ring 3 (user/movies.c), Apps folder only; authored art (art/icons/movies.svg) covers the icon */
-    /* 26 */ {"Hamurabi",   0x00B5502C, gui_icon_chat,       hamurabi_ring3_open,   0, 0}, /* 2.7: ring 3 (user/hamurabi.c), Apps folder only; authored art (art/icons/hamurabi.svg) covers the icon */
+    /* 26 */ {"Hamurapi",   0x00B5502C, gui_icon_chat,       hamurabi_ring3_open,   0, 0}, /* 2.7: ring 3 (user/hamurabi.c; the game is shown as Hamurapi, the store name Hamurabi was taken), Apps folder only; authored art (art/icons/hamurabi.svg) covers the icon */
     /* Apps and Trash aren't real apps with their own brand color, so their
        tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
        tinted background like every real app above. 2026-09-27: this used

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Hamurabi opens as a ring-3 window, draws its real title scene, answers its buttons and closes cleanly (2.7).
+"""Hamurapi (the game was Hamurabi until the store name was taken; the files, HAMURABI.BIN and open=hamurabi keep that
+spelling) opens as a ring-3 window, draws its real title scene, answers its buttons and closes cleanly (2.7).
 
 Boots headless with `open=hamurabi`, which launches Hamurabi from the dock path the moment the desktop is up.
 Hamurabi is user/hamurabi.c, a flat binary loaded off the VFS and run at CPL 3 through the table-driven
@@ -105,6 +106,18 @@ try:
         return (img or frame()).getpixel((x * SCALE + 1, y * SCALE + 1))
     def near(p, c, tol=12): return max(abs(p[i] - c[i]) for i in range(3)) <= tol
 
+    # 0. names, off the sources: what a person sees says Hamurapi; only the credit to the 1968 game keeps the old spelling
+    kernel_c = open("kernel/kernel.c").read()
+    apps_tab = re.search(r"struct app APPS\[GUI_APP_COUNT\]\s*=\s*\{(.*?)\n\};", kernel_c, re.S)[1]
+    app_names = re.findall(r'\{"([^"]*)",', apps_tab)
+    r3_names = re.findall(r'\{"([^"]+)",\s*user_', open("kernel/ring3app.c").read())
+    sam_names = re.findall(r'"([^"]+)"', re.search(r"APPNAME\[\] = \{(.*?)\};", open("user/samantha.c").read(), re.S)[1])
+    for what, names in (("APPS[]", app_names), ("RING3_APPS", r3_names), ("Samantha's APPNAME", sam_names)):
+        if "Hamurapi" not in names: fails.append(f"{what} has no 'Hamurapi' row: the app is not shown under its product name")
+        if "Hamurabi" in names: fails.append(f"{what} still has a 'Hamurabi' row: the old spelling is shown")
+    if 'word_prefix_ci("hamurabi", w)' not in open("user/samantha.c").read(): fails.append("Samantha no longer opens the app when told the old name 'hamurabi'")
+    if '"Based on Hamurabi by Doug Dyment, 1968."' not in open("user/hamurabi.c").read(): fails.append("the credit line to the 1968 game is not exactly 'Based on Hamurabi by Doug Dyment, 1968.'")
+
     # 1. the program is up, has its window, and says where things are
     if not wait_serial("ring3app: launching HAMURABI.BIN at ring 3", 40):
         fails.append("Hamurabi was never launched as a ring-3 program (open=hamurabi flag or ring3app.c broken)")
@@ -123,6 +136,7 @@ try:
     S, zx, zy = int(m[1]), int(m[2]), int(m[3])
     btns = [tuple(int(b[1 + 4 * i + k]) for k in range(4)) for i in range(3)]
     print(f"scale {S}, ziggurat at art ({zx},{zy}), buttons {btns}")
+    if "hamurabi: title Hamurapi\n" not in log: fails.append("the program did not draw the title 'Hamurapi'")
     if "BUG" in log or "no heap" in log or "no window" in log:
         fails.append("the program or ring3app logged a BUG / no heap / no window line")
 

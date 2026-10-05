@@ -134,7 +134,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Samantha",   user_samantha,   USER_SAMANTHA_LEN,   "SAMANTHA.BIN"},
     {"Music",      user_music,      USER_MUSIC_LEN,      "MUSIC.BIN"},
     {"Movies",     user_movies,     USER_MOVIES_LEN,     "MOVIES.BIN"},
-    {"Hamurabi",   user_hamurabi,   USER_HAMURABI_LEN,   "HAMURABI.BIN"},
+    {"Hamurapi",   user_hamurabi,   USER_HAMURABI_LEN,   "HAMURABI.BIN"}, /* shown as Hamurapi; the file, the open= flag and the sources keep the old spelling */
 };
 
 static int ring3app_seed(const struct ring3_app *a) {

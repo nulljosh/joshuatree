@@ -1,6 +1,9 @@
 /* hamurabi: the 1968 game of ruling a city for ten years, as a ring-3 program. This is the first
  * slice: the title screen with the real drawn scene, and nothing behind its buttons yet.
  *
+ * The game is shown as Hamurapi (the store name Hamurabi was taken); only the credit to the 1968 game and the
+ * internal names (this file, HAMURABI.BIN, open=hamurabi, the hamurabi_ prefixes) keep the old spelling.
+ *
  * The scene is a port of web/play/scene.js from the Hamurabi repo: a sky, two ridges of far hills,
  * a town of houses around a ziggurat with a king on top, a river with a boat, fields, sheep and
  * villagers pacing their lanes. Every sprite comes from one 256x149 sheet (user/hamurabi_sprites.h,
@@ -467,6 +470,7 @@ struct button { int x, y, w, h; const char *label; int primary; };
 static struct button btn[3] JT_DATA = {{0}};
 static int panel_y JT_DATA = 0, heading_bottom JT_DATA = 0;
 
+static const char TITLE[] = "Hamurapi"; /* the big title; the credit line below keeps the 1968 game's own name */
 static const char *const LABELS[3] = { "Start a new game", "Classic 1968", "Watch a demo" };
 
 static void layout(void) {
@@ -492,10 +496,10 @@ static void ui(void) {
     if (chh < 300 && f > 2) f = 2;
     const char *sub = "Be king for 10 years. Feed your people. Keep your crown.";
     if (jt_text_width(JT_FACE_BODY, sub) > cw - 80) sub = "Feed your people. Keep your crown.";
-    int tw = jt_text_width(JT_FACE_BOLD, "Hamurabi") * f, sw = jt_text_width(JT_FACE_BODY, sub);
+    int tw = jt_text_width(JT_FACE_BOLD, TITLE) * f, sw = jt_text_width(JT_FACE_BODY, sub);
     int hw = imax(tw, sw) + 56, hh = 10 + 16 * f + 2 + 16 + 12, hx = (cw - hw) / 2, hy = 10;
     glass(hx, hy, hw, hh, 22);
-    big_text("Hamurabi", cw / 2, hy + 10 - 2 * f / 2, f, INK);
+    big_text(TITLE, cw / 2, hy + 10 - 2 * f / 2, f, INK);
     text_c(JT_FACE_BODY, cw / 2, hy + 10 + 16 * f - 2, MUTED, sub);
     heading_bottom = hy + hh;
 
@@ -617,6 +621,14 @@ void _start(int argc, char **argv) {
             num(line, &l, btn[i].x); line[l++] = ','; num(line, &l, btn[i].y); line[l++] = ',';
             num(line, &l, btn[i].w); line[l++] = ','; num(line, &l, btn[i].h);
         }
+        line[l++] = '\n';
+        jt_write(1, line, (unsigned)l);
+    }
+    {   /* the title it draws, so the check can assert the product name */
+        char line[48]; int l = 0;
+        const char *pfx = "hamurabi: title ";
+        while (*pfx) line[l++] = *pfx++;
+        for (const char *t = TITLE; *t; t++) line[l++] = *t;
         line[l++] = '\n';
         jt_write(1, line, (unsigned)l);
     }
