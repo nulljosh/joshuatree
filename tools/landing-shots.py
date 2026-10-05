@@ -40,9 +40,10 @@ SLOT = {"files": 1, "calendar": 3, "notes": 4, "terminal": 6, "chat": 7, "weathe
 FLEET = {"bookrank": ("bookr", "bookrank: ring-3 window", "bookrank: samples"),
          "tonchi": ("tonchi", "tonchi: ring-3 window", "tonchi: samples"),
          "curbfind": ("curb", "curbfind: ring-3 window", "curbfind: samples"),
-         "epiphany": ("epip", "epiphany: ring-3 window", "epiphany: fetch")}   # (open= flag, window opened, offline fallback chosen)
+         "epiphany": ("epip", "epiphany: ring-3 window", "epiphany: fetch"),   # (open= flag, window opened, offline fallback chosen)
+         "hamurabi": ("hamu", "hamurabi: ring-3 window", "hamurabi: phase title")}   # Hamurapi: its title scene, drawn from first frame, no network
 FILE = {"bookrank": "app-bookrank", "tonchi": "app-tonchi", "curbfind": "app-curbfind", "epiphany": "app-epiphany",
-        "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
+        "hamurabi": "app-hamurapi", "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
         "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks"}
 
 

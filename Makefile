@@ -471,9 +471,9 @@ drivers/user_movies.h: user/movies.bin tools/gen/gen_user_bin.py
 
 kernel/ring3app.o: drivers/user_movies.h
 
-# Hamurabi (2.7): the 1968 city game with its drawn scene. The sprite sheet is a committed header
-# (user/hamurabi_sprites.h from art/hamurabi/sprites.png); the rules and story headers are plain C it will include next.
-user/hamurabi.o: user/hamurabi.c user/jtsys.h user/libjt/text.h user/hamurabi_sprites.h
+# Hamurabi (2.7): the 1968 city game, playable. The sprite sheet is a committed header (user/hamurabi_sprites.h from
+# art/hamurabi/sprites.png); the rules and the story words are plain C headers it includes (hamurabi_rules.h, hamurabi_story.h).
+user/hamurabi.o: user/hamurabi.c user/jtsys.h user/libjt/text.h user/hamurabi_sprites.h user/hamurabi_rules.h user/hamurabi_story.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/hamurabi.bin: user/hamurabi.o user/libjt.a user/note.ld boot/memmap.ld
