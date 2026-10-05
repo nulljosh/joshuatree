@@ -43,7 +43,17 @@ try:
             if "return" in r or "error" in r: return r
     f.readline()
     cmd({"execute": "qmp_capabilities"})
-    cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
+    # 2.12: poll for the splash instead of trusting one fixed 1.0 s sleep. On a busy host (a second
+    # QEMU, a build) the kernel reaches the splash well after 1.0 s and that single shot caught the
+    # firmware text on a black frame. The splash is the only frame with a white mark on black and no
+    # menu bar, so grab frames until that shows up (the same pixels are then judged exactly as before).
+    for _ in range(80):
+        cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": DUMP}})
+        fr = Image.frombytes("RGBA", (W, H), open(DUMP, "rb").read(), "raw", "BGRA").convert("L")
+        top = fr.crop((0, 0, W, 20)).resize((1, 1), Image.BOX).getpixel((0, 0))
+        mid = fr.crop((760, 380, 1160, 700)).getextrema()[1]
+        if mid > 200 and top < 30: break
+        time.sleep(0.1)
     try: cmd({"execute": "quit"})
     except (ConnectionResetError, BrokenPipeError, OSError): pass
 finally:
@@ -71,13 +81,19 @@ cw, ch = crop.size
 # Rasterize the source mark fresh, at the crop's own resolution, and
 # compare -- proof the CAPTURED pixels are the mark, not just "some
 # tree-ish blob in the right place".
+# 2.12: frame the reference the way the capture was framed. The capture is cropped to the mark's own
+# bounding box, so the reference is rasterized large, cropped to ITS bounding box, then resized to the
+# crop. Before 2.12 this stretched the whole square viewBox (margins included) onto the tight crop,
+# which only matched while the mark happened to fill the viewBox; the 2.12 ground line moved the
+# bottom edge and that exposed it.
 ref_png = "/tmp/jt-bootmark-ref.png"
-subprocess.run(["rsvg-convert", "-w", str(cw), "-h", str(ch), "landing/logo.svg", "-o", ref_png], check=True)
+subprocess.run(["rsvg-convert", "-w", "1000", "-h", "1000", "landing/logo.svg", "-o", ref_png], check=True)
 # Use the alpha channel, not a grayscale of the flattened RGB: rsvg draws
 # the mark as black fill/stroke on transparent, which flattens to
 # black-on-WHITE (inverted brightness vs. the splash's white-ink-on-black),
 # not a coverage map comparable to the captured crop.
 ref = Image.open(ref_png).convert("RGBA").split()[3]
+ref = ref.crop(ref.point(lambda v: 255 if v > 40 else 0).getbbox()).resize((cw, ch), Image.LANCZOS)
 
 crop_small = crop.resize((64, int(64 * ch / cw)))
 ref_small = ref.resize((64, int(64 * ch / cw)))
