@@ -55,6 +55,25 @@ Curbfind, Epiphany and Stocks already pull live data through `SYS_HTTP_GET`. The
 - [x] [Sonnet] Menu bar missing or dark, done 2.6.34: Joshua saw the demo lose its menu bar sometimes. Cause: the full-screen Launchpad clears the whole screen, and the bar only repaints when the minute changes, so it stayed gone after Esc. Now every full desktop repaint redraws the bar and the Launchpad draws it too. Check: `tools/checks/menubar-persist-check.py` (fails on 2.6.32, passes now).
 - [x] [Sonnet] Launchpad, done 2.6.35: Joshua saw it on a real monitor, left of center with big icons packed edge to edge. The folder window was parked at a fixed spot, so it was only centered on a 960 pixel screen. Now the glass panel is centered across the screen and between the menu bar and the dock, icons are 56 pixels (were 74), padding is even, and a short screen shows two rows. Check: `tools/checks/launchpad-centered-check.py` (fails on the old layout, passes now).
 
+#### Every fleet app in the Launchpad (Joshua, 2026-10-04)
+The goal: every app in the Portfolio catalog that fits this OS opens from the Launchpad with live data. One app, one PR, same pattern as Bookrank: a read-only Worker route, `SYS_HTTP_GET`, samples offline, a stub check. Let `ci-balance.py` place the new check, never pick a shard by hand. In the Launchpad today: Bookrank, Curbfind, Epiphany, Fieldbook, Hikko, Keyrate, Quotestreak, Stocks, Tonchi, Conway (Toroid), Weather.
+- [ ] [Sonnet] Brick: live rental listings.
+- [ ] [Sonnet] Hagaki: inbox triage (smart folders over the Mail app's messages).
+- [ ] [Sonnet] Nimble: instant answers from its real API.
+- [ ] [Sonnet] Sidewise: news with the bias rating per source.
+- [ ] [Sonnet] Wordroot: look up a word's origin.
+- [ ] [Sonnet] Intake (Healstack): today's supplement stack and log.
+- [ ] [Sonnet] Windgate: guided breathing, runs offline, a timer and a circle.
+- [ ] [Sonnet] Curvely: plot an equation. Numen: a calculator canvas. Both run offline.
+- [ ] [Sonnet] Inkpress: RSS reader over a Worker feed route.
+- [ ] [Sonnet] Homeward (lost pets) and HomeQi (room check): list views over their APIs.
+- [ ] [Sonnet] Dream and Costanza: read-only feeds of entries and poems.
+- [ ] [Sonnet] Cadence and Tripwire: commit streak and API drift status.
+- [ ] [Sonnet] Plain and Block Frame: fold into Notes as modes instead of new apps, or skip.
+- [ ] [Sonnet] Plank: run one-file programs. Needs the compiler ported, the biggest of these.
+- [ ] [Sonnet] Madobe: needs HTTPS in the OS first (see the browser item).
+- Not planned: Talli (private case data), Swing (video chat), Notate (speech model), Seamark (vision model), NYC, Conveyer, Vancouver Vice. They need hardware or models this OS does not have. Turing is Samantha, already here.
+
 ### Voice chat, lag and sharing (Joshua, 2026-10-04)
 Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice out, so "voice chat" still needs speech-to-text. Each message in the OS is three round trips in a row: `/api/pick` (which tool), `/api/chat` (the full reply, no streaming), then `/api/speak` per sentence piece. Order: measure, cut round trips, stream, then listen.
 - [x] [Sonnet] OS side, 2.6.22: one `voicetime:` serial line per message (pick, chat, first sound, in ms from Enter), asserted by `tools/checks/chat-face-check.py`.
