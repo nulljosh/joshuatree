@@ -85,6 +85,10 @@ const pngUrl = buf => 'data:image/png;base64,' + buf.toString('base64');
 
 // A portrait is not a flat field: real spread of light and dark, and mostly warm tones.
 // A blank cream/black box has sd ~ 0 and no warm share. Thresholds are far from both.
+// 2.12.0: the page lifts the poster once her portrait is painted and, failing that, 60 s after the tap (POSTER_DEADLINE_MS in
+// landing/v86/embed.js). A fixed 5 s wait failed on a slow GitHub runner (tablet 820, twice) because the OS had not painted her yet;
+// wait for the page's own deadline plus margin. 'Lifts' is still asserted, and the earlier checks pin that she is her face by then.
+const LIFT_MS = 70000;
 const SD_MIN = 25, WARM_MIN = 0.5;
 async function assertPosterPixels(page, tag, report) {
   const poster = await page.evaluate(() => {
@@ -142,7 +146,7 @@ const serial = page => page.evaluate(() => window.__jt && window.__jt.serial || 
   ok('kernel booted to Samantha by default (serial samopen, no click needed)');
   if (!/bootsamantha/.test(await serial(page))) fail('serial has no "bootsamantha": the default cmdline did not carry the samantha token'); else ok('default cmdline carried the samantha token (serial bootsamantha)');
   await page.click('#hero-poster');
-  await page.waitForFunction(() => document.getElementById('hero-poster').hidden, null, { timeout: 5000 });
+  await page.waitForFunction(() => document.getElementById('hero-poster').hidden, null, { timeout: LIFT_MS });
   ok('click lifts the poster');
   await page.waitForFunction(() => window.__jt.focused, null, { timeout: 5000 });
   ok('click takes the keyboard (focused)');
@@ -263,12 +267,12 @@ for (const [tag, vp, mobile, wantSrc, wantR] of [['phone 390', { width: 390, hei
   }
   if (mobile) await page.tap('#hero-poster'); else await page.click('#hero-poster');
   if (mobile) {
-    await page.waitForFunction(() => document.getElementById('hero-poster').hidden, null, { timeout: 5000 }).catch(() => {});
+    await page.waitForFunction(() => document.getElementById('hero-poster').hidden, null, { timeout: LIFT_MS }).catch(() => {});
     const live = await statsOf(page, await page.evaluate(() => document.getElementById('screen_canvas').toDataURL('image/png')));
     // read in the first moments after the tap: the phone's own scripted demo (pre-existing) walks through apps later
     if (live.sd < SD_MIN || live.warm < WARM_MIN) fail(`${tag}: right after the tap the live canvas is not her face (sd ${live.sd.toFixed(1)}, warm ${(live.warm * 100).toFixed(0)}%)`); else ok(`${tag}: right after the tap the live canvas is her face`);
   }
-  await page.waitForFunction(() => document.getElementById('hero-poster').hidden, null, { timeout: 5000 }).then(() => ok(`${tag}: ${mobile ? 'tap' : 'click'} lifts the poster`), () => fail(`${tag}: poster did not lift`));
+  await page.waitForFunction(() => document.getElementById('hero-poster').hidden, null, { timeout: LIFT_MS }).then(() => ok(`${tag}: ${mobile ? 'tap' : 'click'} lifts the poster`), () => fail(`${tag}: poster did not lift`));
   await page.context().close();
 }
 
