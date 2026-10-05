@@ -336,13 +336,17 @@ static void face_load_step(void) {
 static int vm_hd JT_DATA = 0, hd_state JT_DATA = 0;
 static void hd_load(void);
 static int hd_animating(unsigned now);
+static int blink_prog(unsigned now);
+static int uface_noblink JT_DATA = 0;
+static unsigned blink_said JT_DATA = 0;
+static int blink_shown JT_DATA = 0;   /* the lid position last painted: one more repaint is owed after it opens again */
 static int face_step(unsigned now) {
     if (!face_inited) return 0;
     if (uface_video && hd_state == 0) { if (inlen == 0 && !spk_active) { hd_load(); if (vm_hd) { draw(); return 1; } } return 0; }   /* the portrait first: one sharp picture, no 72 frame downloads */
     if (uface_video && vm_hd) {   /* a still: redraw only while the mouth or a caption is moving */
         if ((int)(now - face_next) < 0) return 0;
         if (!hd_animating(now)) return 0;
-        face_next = now + 8; draw(); return 1;
+        face_next = now + (blink_shown > 0 ? 2 : 8); draw(); return 1;
     }
     if (!uface_done) {
         if (inlen > 0) return 0;
@@ -967,6 +971,8 @@ static int vm_key JT_DATA = -2, vm_cap JT_DATA = 0, vm_small_n JT_DATA = 0;
 static int vm_px JT_DATA = 0, vm_py JT_DATA = 0, vm_pw JT_DATA = 0, vm_ph JT_DATA = 0;
 static int vm_inv JT_DATA = 0, vm_ox JT_DATA = 0, vm_oy JT_DATA = 0;   /* 16.16 source px per window px; crop origin in source px */
 static int vm_mx JT_DATA = 0, vm_my JT_DATA = 0, vm_mhw JT_DATA = 0, vm_ml1 JT_DATA = 0, vm_ml2 JT_DATA = 0, vm_mlu JT_DATA = 0, vm_mdmax JT_DATA = 0;   /* her mouth, window px */
+static int *vm_seam JT_DATA = 0;   /* seam row down each column, 24.8 fixed point; the second half of the array is scratch */
+static int vm_ex[2] JT_DATA, vm_ey[2] JT_DATA, vm_ew[2] JT_DATA, vm_eh JT_DATA = 0;   /* eye centres, half widths and the half height, window px */
 static int mouth_s JT_DATA = 0, mouth_last JT_DATA = -1;   /* smoothed opening 0..255, last value logged */
 static int uface_phone JT_DATA = 0;
 static int hist_open JT_DATA = 0, hist_off JT_DATA = 0;
@@ -1046,6 +1052,9 @@ static void vm_geom(int W, int H) {
     /* her mouth, in thousandths of the portrait's side: centre across 518, lip seam down 581, half width 87 */
     vm_mx = S * 518 / 1000 - ox; vm_my = S * 581 / 1000 - oy; vm_mhw = S * 87 / 1000;
     vm_ml1 = S * 55 / 1000; vm_ml2 = S * 130 / 1000; vm_mlu = S * 70 / 1000; vm_mdmax = S * 21 / 1000;
+    /* her eyes, in thousandths of the portrait's side: centres across 427 and 636, down 367 and 379, half widths 37 and 43, half height 16 */
+    vm_ex[0] = S * 427 / 1000 - ox; vm_ey[0] = S * 367 / 1000 - oy; vm_ex[1] = S * 636 / 1000 - ox; vm_ey[1] = S * 379 / 1000 - oy;
+    vm_ew[0] = S * 37 / 1000; vm_ew[1] = S * 43 / 1000; vm_eh = S * 16 / 1000;
 }
 
 /* One window row y, columns xa..xb, bilinear from the vm_n x vm_n source. */
@@ -1110,6 +1119,7 @@ static void vm_glass(unsigned *out, int stride, int x, int y, int w, int h, int 
     }
 }
 
+static void vm_seam_find(void);
 /* Compose the face alone into vm_base from vm_src, then the input panel's glass over a copy of it. */
 static void vm_compose(void) {
     int W = back_w, H = back_h;
@@ -1117,52 +1127,188 @@ static void vm_compose(void) {
     if (vm_hd) { tmp = hd_decode(); if (!tmp) { for (int i = 0; i < W * H; i++) vm_base[i] = BG; return; } vm_src = tmp; }
     for (int y = 0; y < H; y++) vm_scale_row(vm_base + y * W, y, 0, W);
     if (tmp) { free(tmp); vm_src = 0; }
+    vm_seam_find();
     vm_glass(vm_panel, vm_pw, vm_px, vm_py, vm_pw, vm_ph, 22, VM_WASH);
 }
 
-/* ---- the mouth, drawn from the voice ----
-   The portrait's lips are shut. open (0..255) is how wide she is speaking; the lower lip and chin slide down by up to
-   vm_mdmax pixels, the upper lip lifts a quarter as far, and the gap between them is filled with a mouth: a strip of
-   teeth under the upper lip over a dark inside. The lens narrows to nothing at the corners, so they stay put. Every
-   other pixel is the portrait's own, resampled a fraction of a row off. */
-static unsigned mouth_pix(int x, int row8) {
-    int r = vm_my + (row8 >> 8), W = back_w; unsigned f = (unsigned)(row8 & 255);
-    if (r < 0) r = 0; if (r >= back_h - 1) r = back_h - 2;
-    return lerp8(vm_base[r * W + x], vm_base[(r + 1) * W + x], f);
+/* ---- the mouth and the blink, drawn by code ----
+   The portrait's lips are shut. open (0..255) is how wide she is speaking. Her real lip seam is found column by column in
+   the picture (vm_seam), because it is not a straight line: the upper lip lifts a quarter of the opening along that
+   curve, the lower lip and chin slide down the rest, and the gap between is her mouth. The edges of the gap are soft
+   (about a pixel of blend into the lips' own colour, so the lip shading carries on into the opening), the upper teeth
+   are a short arch under the upper lip that fades out toward the corners and is shaded from the top, the inside is
+   dark with a hint of tongue, and the corners draw in a little as she opens. Every other pixel is the portrait's own.
+   Nothing is drawn at open == 0, so a closed or silent mouth is the portrait exactly. */
+
+static int ss8(int v) { if (v <= 0) return 0; if (v >= 256) return 256; return ((v * v >> 8) * (768 - 2 * v)) >> 8; }   /* smoothstep, 0..256 */
+static int lum_of(unsigned c) { return (int)(((c >> 16) & 255) * 3 + ((c >> 8) & 255) * 6 + (c & 255)); }
+static unsigned samp(int x8, int y8) {   /* bilinear read of the composed portrait */
+    int W = back_w;
+    if (x8 < 0) x8 = 0;
+    if (y8 < 0) y8 = 0;
+    int x = x8 >> 8, y = y8 >> 8; unsigned fx = (unsigned)(x8 & 255), fy = (unsigned)(y8 & 255);
+    if (x > W - 2) { x = W - 2; fx = 255; }
+    if (y > back_h - 2) { y = back_h - 2; fy = 255; }
+    const unsigned *p = vm_base + y * W + x;
+    return lerp8(lerp8(p[0], p[1], fx), lerp8(p[W], p[W + 1], fx), fy);
+}
+/* Follow the seam between her lips: the darkest row near the nominal one in each column, then smoothed over a few
+   columns so one noisy pixel cannot kink it. */
+static void vm_seam_find(void) {
+    if (!vm_seam || !vm_hd || vm_mhw < 8) return;
+    int W = back_w, H = back_h, R = vm_mhw * 13 / 10;
+    int ya = vm_my - vm_ml1 * 30 / 100, yb = vm_my + vm_ml1 * 25 / 100;
+    if (ya < 1) ya = 1;
+    if (yb > H - 3) yb = H - 3;
+    int xa = vm_mx - R < 1 ? 1 : vm_mx - R, xb = vm_mx + R > W - 2 ? W - 2 : vm_mx + R;
+    int *t = vm_seam + W;
+    for (int x = xa; x <= xb; x++) {
+        int best = 1 << 30, by = vm_my;
+        for (int y = ya; y <= yb; y++) {
+            int s = 0;
+            for (int dy = -1; dy <= 1; dy++) { const unsigned *r = vm_base + (y + dy) * W + x; s += lum_of(r[-1]) + 2 * lum_of(r[0]) + lum_of(r[1]); }
+            s += (y > vm_my ? y - vm_my : vm_my - y) * 3;
+            if (s < best) { best = s; by = y; }
+        }
+        vm_seam[x] = by * 256;
+    }
+    int rr = vm_mhw / 8; if (rr < 2) rr = 2;
+    for (int pass = 0; pass < 3; pass++) {
+        for (int x = xa; x <= xb; x++) {
+            int s = 0, n = 0;
+            for (int d = -rr; d <= rr; d++) { int q = x + d; if (q < xa || q > xb) continue; s += vm_seam[q]; n++; }
+            t[x] = s / n;
+        }
+        for (int x = xa; x <= xb; x++) vm_seam[x] = t[x];
+    }
 }
 static void vm_mouth(unsigned *dst, int open) {
-    if (!vm_hd || open <= 0 || vm_mhw < 8) return;
+    if (!vm_hd || !vm_seam || open <= 0 || vm_mhw < 8) return;
     int W = back_w, H = back_h;
-    int g8max = vm_mdmax * 256 * open / 255;
-    for (int x = vm_mx - vm_mhw + 1; x < vm_mx + vm_mhw; x++) {
-        if (x < 0 || x >= W) continue;
-        int u = (x - vm_mx) * 256 / vm_mhw, p = 256 - ((u * u) >> 8);
-        int g8 = g8max * p >> 8;
-        if (g8 < 48) continue;
-        int gu = g8 / 4, gl = g8 - gu;
-        for (int t = -vm_mlu; t < vm_ml2; t++) {
-            int y = vm_my + t; if (y < 0 || y >= H) continue;
-            int src8, mix = 0;   /* mix: how much of the inside shows (0 none .. 256 all) */
-            if (t < 0) {
-                int w = -t <= vm_ml1 / 2 ? 256 : (-t >= vm_mlu ? 0 : 256 * (vm_mlu + t) / (vm_mlu - vm_ml1 / 2));
-                src8 = t * 256 + gu * w / 256;
-                if (src8 > 0) mix = src8 > 256 ? 256 : src8;
+    int sq = vm_mhw * 5 / 100 * open / 255;                 /* how far the corners draw in */
+    int hwe = vm_mhw - sq, R = vm_mhw * 13 / 10;
+    int g8max = vm_mdmax * 256 * open / 255 * 14 / 10, E8 = 330;      /* E8: the soft edge, 1.3 px */
+    int thmax = vm_ml1 * 256 / 9;                           /* the most tooth that shows */
+    int ca = vm_mx - hwe * 8 / 10, cb = vm_mx + hwe * 8 / 10;   /* the chord between the corners: an open mouth is rounder than the seam it opens along */
+    if (ca < 1) ca = 1;
+    if (cb > W - 2) cb = W - 2;
+    int chord8 = (vm_seam[ca] + vm_seam[cb]) / 2;
+    for (int x = vm_mx - R; x <= vm_mx + R; x++) {
+        if (x < 1 || x >= W - 1) continue;
+        int dx = x - vm_mx, ad = dx < 0 ? -dx : dx, s8;
+        if (ad <= hwe) s8 = ad * vm_mhw * 256 / hwe;
+        else s8 = vm_mhw * 256 + (ad - hwe) * 256 * (R - vm_mhw) / (R - hwe);
+        int u = ad * 256 / hwe; if (u > 256) u = 256;
+        int ug = u * 256 / 215; if (ug > 256) ug = 256;   /* the opening stops short of the corners, which stay lips */
+        int pq = (isqrt_u((unsigned)(65536 - ug * ug)) + (256 - (ug * ug >> 8))) / 2;   /* the opening's outline: halfway between an ellipse and a lens */
+        int g8 = g8max * pq >> 8, gu = g8 / 5, gl = g8 - gu;
+        int sy8 = vm_seam[x];
+        gl += (chord8 - sy8) * 45 / 100 * pq / 256; if (gl < 0) gl = 0;   /* the lower edge sags less than the seam does */
+        g8 = gu + gl;
+        int y0 = (sy8 >> 8) - vm_mlu, y1 = (sy8 >> 8) + vm_ml2;
+        if (y0 < 0) y0 = 0;
+        if (y1 > H - 1) y1 = H - 1;
+        for (int y = y0; y < y1; y++) {
+            int t8 = y * 256 - sy8, at = t8 < 0 ? -t8 : t8, w, rel;
+            if (t8 < 0) {
+                int lo = vm_ml1 * 128, hi = vm_mlu * 256;
+                w = at <= lo ? 256 : (at >= hi ? 0 : 256 * (hi - at) / (hi - lo));
+                rel = t8 + gu * w / 256;
             } else {
-                int w = t <= vm_ml1 ? 256 : 256 * (vm_ml2 - t) / (vm_ml2 - vm_ml1);
-                src8 = t * 256 - gl * w / 256;
-                if (src8 < 0) mix = -src8 > 256 ? 256 : -src8;
+                int lo = vm_ml1 * 256, hi = vm_ml2 * 256;
+                w = at <= lo ? 256 : (at >= hi ? 0 : 256 * (hi - at) / (hi - lo));
+                rel = t8 - gl * w / 256;
             }
-            unsigned px = mouth_pix(x, src8 > 0 && t < 0 ? 0 : (src8 < 0 ? 0 : src8));
-            if (t < 0 && src8 <= 0) px = mouth_pix(x, src8);
-            if (mix) {
-                int fr = ((t * 256 + gu) * 256) / g8;   /* 0 at the top of the gap .. 256 at the bottom */
-                if (fr < 0) fr = 0; if (fr > 256) fr = 256;
-                unsigned in;
-                if (g8 >= 3 * 256 && fr < 100 && (u < 150 && u > -150)) { unsigned sh = 238 - (unsigned)fr * 60 / 100; in = (sh << 16) | ((sh - 12) << 8) | (sh - 26); }   /* teeth, shaded toward the bottom */
-                else { unsigned k = 90 - (unsigned)fr * 30 / 256; in = (k << 16) | ((k * 36 / 90) << 8) | (k * 38 / 90); }   /* the dark inside */
-                px = lerp8(px, in, (unsigned)(mix > 255 ? 255 : mix));
-            }
+            int sxo = dx < 0 ? -s8 : s8;
+            int xs8 = (vm_mx << 8) + dx * 256 + (sxo - dx * 256) * w / 256;   /* the corners' draw-in fades with the lip zone */
+            int cov = t8 < 0 ? ss8(rel * 256 / E8) : ss8(-rel * 256 / E8);
+            int ys8 = sy8 + (t8 < 0 ? (rel < 0 ? rel : 0) : (rel > 0 ? rel : 0));
+            unsigned px = samp(xs8, ys8);
+            if (cov > 0 && g8 > 64) {
+                int dtop = t8 + gu;                        /* how far below the upper lip's edge, 8.8 */
+                int fr = dtop * 256 / g8; if (fr < 0) fr = 0; if (fr > 256) fr = 256;
+                unsigned in = ((unsigned)(38 + fr * 34 / 256) << 16) | ((unsigned)(13 + fr * 14 / 256) << 8) | (unsigned)(17 + fr * 14 / 256);   /* the dark inside */
+                if (g8 >= 5 * 256) {                       /* a hint of tongue low in a wide opening */
+                    int qu = u * 256 / 120, qv = (fr > 205 ? fr - 205 : 205 - fr) * 256 / 70;
+                    int q = (qu * qu + qv * qv) >> 8, tg = q >= 256 ? 0 : ss8(256 - q);
+                    int big = g8 >= 9 * 256 ? 256 : (g8 - 5 * 256) * 256 / (4 * 256);
+                    in = lerp8(in, 0x00864240, (unsigned)(tg * big / 256 * 150 / 256));
+                }
+                if (g8 >= 3 * 256) {                       /* the upper teeth: a short arch, shaded from the top, gone toward the corners */
+                    int th = g8 * 55 / 100; if (th > thmax) th = thmax;
+                    int arch = 200 + ((256 - (u * u >> 8)) * 56 >> 8);
+                    th = th * arch >> 8;
+                    int lw = u <= 80 ? 256 : (u >= 175 ? 0 : 256 * (175 - u) / 95);
+                    int ta = ss8((th - dtop) * 256 / E8) * lw >> 8;
+                    if (ta > 0) {
+                        int gr = th > 0 ? dtop * 256 / th : 0; if (gr < 0) gr = 0; if (gr > 256) gr = 256;
+                        unsigned tc = lerp8(0x00D2C2AC, 0x009C8470, (unsigned)(gr > 255 ? 255 : gr));
+                        int side = 256 - ((u * u >> 8) * 150 >> 8);
+                        int lip = 130 + (ss8(dtop * 256 / (3 * 256)) * 126 >> 8);   /* the upper lip's shadow on the teeth */
+                        tc = lerp8(0x00000000, tc, (unsigned)((side * lip >> 8) > 255 ? 255 : (side * lip >> 8)));
+                        in = lerp8(in, tc, (unsigned)(ta > 255 ? 255 : ta));
+                    }
+                }
+                px = lerp8(px, in, (unsigned)(cov > 255 ? 255 : cov));
+            } else if (cov > 0) px = lerp8(px, 0x00381418, (unsigned)(cov > 255 ? 255 : cov) * 3 / 4);
             dst[y * W + x] = px;
+        }
+    }
+}
+
+/* The blink: each eye gets a lid that comes down from the lash line to the lower lid and goes back up. The lid is the
+   portrait's own skin above the eye, stretched down over it (so its shading, creases and colour are hers), with a dark
+   lash line along its edge. prog is 0 (open, nothing drawn) to 256 (shut). */
+static unsigned soft(int x, int y8) {   /* five reads along the row, 12 px wide */
+    return lerp8(lerp8(samp((x - 6) * 256, y8), samp((x + 6) * 256, y8), 128), lerp8(lerp8(samp((x - 3) * 256, y8), samp((x + 3) * 256, y8), 128), samp(x * 256, y8), 128), 170);
+}
+static void vm_blink(unsigned *dst, int prog) {
+    if (!vm_hd || prog <= 0 || vm_eh < 6) return;
+    int W = back_w, H = back_h, eh = vm_eh;
+    for (int e = 0; e < 2; e++) {
+        int cx = vm_ex[e], cy = vm_ey[e], ew = vm_ew[e], tilt = e ? -22 : 46;   /* tilt: the inner corner sits lower, the slope across the eye /256 */
+        for (int x = cx - ew - 2; x <= cx + ew + 2; x++) {
+            if (x < 2 || x >= W - 2) continue;
+            int u = (x - cx) * 256 / ew; if (u > 256) u = 256; if (u < -256) u = -256;
+            int hh = eh * isqrt_u((unsigned)((65536 - u * u) * 64)) / 8;   /* half the lens height at this column, 8.8 */
+            if (hh < 256) continue;
+            int au = u < 0 ? -u : u, hx = ss8((256 - au) * 256 / 70);          /* the sides fade into the untouched portrait */
+            int mid = (cy * 256 + tilt * (x - cx)) - 128;
+            int top = mid - hh, bot = mid + hh + 256;
+            int edge = top + (bot - top) * prog / 256;                          /* the lid's lower edge in this column */
+            int y0 = top - eh * 150;                                            /* the skin that gets stretched starts here ... */
+            int send = top - (prog * 4);                                        /* ... and its source ends a little above the lashes */
+            int ya = y0 >> 8, yb = (edge >> 8) + 1;
+            if (ya < 0) ya = 0;
+            if (yb >= H) yb = H - 1;
+            for (int y = ya; y <= yb; y++) {
+                int y8 = y * 256 + 128;
+                int under = ss8((edge - y8) * 256 / 330);                       /* the lid covers above its edge, soft by a pixel */
+                unsigned px = dst[y * W + x];
+                if (under > 0) {
+                    int ys8 = y0 + (y8 - y0) * (send - y0) / (edge - y0 > 1 ? edge - y0 : 1);
+                    int ramp = ss8((y8 - y0) * 256 / 2048);   /* sharp where the stretch begins, so there is no seam */
+                    unsigned lid = lerp8(samp(x * 256, ys8), soft(x, ys8), (unsigned)(ramp > 255 ? 255 : ramp));   /* stretched skin read soft: no streaks */
+                    lid = lerp8(lid, soft(x, bot + eh * 200), (unsigned)(ramp * 170 / 256));   /* and warmed with the lighter skin below the eye, so a shut lid is skin, not the lashes' shadow */
+                    int dep = ss8((y8 - top) * 256 / (hh + 256));          /* a little shadow deepens toward the lash line */
+                    lid = lerp8(lid, 0x005A3A30, (unsigned)(dep * 28 / 256));
+                    unsigned hsh = ((unsigned)x * 73856093u) ^ ((unsigned)y * 19349663u); hsh ^= hsh >> 13; hsh *= 1274126177u; hsh ^= hsh >> 16;
+                    int gr = (int)(hsh & 7) - 3;   /* the portrait's own grain, so the lid is not smoother than the skin around it */
+                    { int r = (int)((lid >> 16) & 255) + gr, g = (int)((lid >> 8) & 255) + gr, b = (int)(lid & 255) + gr;
+                      r = r < 0 ? 0 : r > 255 ? 255 : r; g = g < 0 ? 0 : g > 255 ? 255 : g; b = b < 0 ? 0 : b > 255 ? 255 : b;
+                      lid = ((unsigned)r << 16) | ((unsigned)g << 8) | (unsigned)b; }
+                    int cov = under * hx >> 8;
+                    px = lerp8(px, lid, (unsigned)(cov > 255 ? 255 : cov));
+                }
+                if (prog > 24) {                                                /* the lash line along the lid's edge */
+                    int d = y8 - edge; if (d < 0) d = -d;
+                    int la = 256 - d * 256 / 560; if (la < 0) la = 0;
+                    int fade = prog > 80 ? 256 : (prog - 24) * 256 / 56;
+                    la = la * hx >> 8; la = la * fade >> 8;
+                    if (la > 0) px = lerp8(px, 0x002E1E1A, (unsigned)(la * 150 / 256));
+                }
+                dst[y * W + x] = px;
+            }
         }
     }
 }
@@ -1271,8 +1417,32 @@ static int cap_draw(struct cap *c, int ybot, int ytop_limit, unsigned now) {
     return by;
 }
 
+/* ---- the blink ----
+   Every 3 to 6 seconds her lids close and open over 120 ms. The gap after each blink comes from a counter run through
+   a small hash, never from the clock or a random source, so the same boot blinks at the same moments. A `noblink`
+   boot flag (the checks that read exact pixels pass it) switches it off. */
+#define BLINK_TICKS 12u   /* 100 Hz ticks: 120 ms */
+static unsigned blink_n JT_DATA = 0, blink_at JT_DATA = 0;
+static unsigned blink_gap(unsigned n) {   /* 300..599 ticks */
+    unsigned h = (n + 1) * 2654435761u; h ^= h >> 15; h *= 2246822519u; h ^= h >> 13;
+    return 300u + h % 300u;
+}
+/* 0 (open) .. 256 (shut) for this moment; also moves on to the next blink once one has finished */
+static int blink_prog(unsigned now) {
+    if (uface_noblink || !vm_hd || !open_t) return 0;
+    if (!blink_at) blink_at = now + blink_gap(blink_n);   /* counted from the first moment the portrait is up */
+    int d = (int)(now - blink_at);
+    if (d < 0) return 0;
+    if (blink_said != blink_n + 1) {   /* one serial line per blink, with the tick it began on: the check reads the schedule from these */
+        blink_said = blink_n + 1;
+        char l[40] = "samface: blink="; int k = 15; put_num(l, &k, (int)blink_at); l[k++] = '\n'; jt_write(1, l, (unsigned)k);
+    }
+    if (d >= (int)BLINK_TICKS) { blink_n++; blink_at += BLINK_TICKS + blink_gap(blink_n); return 0; }
+    int ph = d * 256 / (int)BLINK_TICKS;   /* 0..255 through the blink: down for the first 40%, up for the rest */
+    return ph < 102 ? ss8(ph * 256 / 102) : ss8((256 - ph) * 256 / 154);
+}
 static int hd_animating(unsigned now) {
-    return face_talking(now) || mouth_s > 0 || caps_alive() || rec_on;
+    return face_talking(now) || mouth_s > 0 || caps_alive() || rec_on || blink_prog(now) > 0 || blink_shown > 0;
 }
 
 static void pill(const char *s, int cx, int y, unsigned fg) {
@@ -1321,15 +1491,16 @@ static void draw_video_k(void) {
     int W = (int)win.width, H = (int)win.height;
     if (W < 64 || H < 64) return;
     if (!backbuf || back_w != W || back_h != H) {
-        unsigned *old[5] = { backbuf, vm_base, vm_panel, vm_col, vm_save };
-        for (int i = 0; i < 5; i++) if (old[i]) free(old[i]);
+        unsigned *old[6] = { backbuf, vm_base, vm_panel, vm_col, vm_save, (unsigned *)vm_seam };
+        for (int i = 0; i < 6; i++) if (old[i]) free(old[i]);
         if (vm_small) free(vm_small);
         if (vm_small2) free(vm_small2);
-        backbuf = vm_base = vm_panel = vm_col = vm_save = vm_small = vm_small2 = 0;
+        backbuf = vm_base = vm_panel = vm_col = vm_save = vm_small = vm_small2 = 0; vm_seam = 0;
         back_w = W; back_h = H;
         backbuf = (unsigned *)malloc((unsigned)(W * H) * 4);
         vm_base = (unsigned *)malloc((unsigned)(W * H) * 4);
         vm_col = (unsigned *)malloc((unsigned)W * 4);
+        vm_seam = (int *)malloc((unsigned)W * 8);
         vm_panel = (unsigned *)malloc((unsigned)(W * VM_PH) * 4);
         vm_cap = (VM_PANEL_MAX + 80) * 170; if (vm_cap > W * (H / 2)) vm_cap = W * (H / 2);
         vm_save = (unsigned *)malloc((unsigned)vm_cap * 4);
@@ -1337,11 +1508,14 @@ static void draw_video_k(void) {
         vm_small = (unsigned *)malloc((unsigned)vm_small_n * 4);
         vm_small2 = (unsigned *)malloc((unsigned)(W > H ? W : H) * 4 + 64);
         vm_key = -2;
-        if (!backbuf || !vm_base || !vm_col || !vm_panel || !vm_save || !vm_small || !vm_small2) { rect(0, 0, W, H, BG); return; }
+        if (!backbuf || !vm_base || !vm_col || !vm_seam || !vm_panel || !vm_save || !vm_small || !vm_small2) { rect(0, 0, W, H, BG); return; }
         vm_geom(W, H);
         char d[72] = "samface: mouth="; int n = 15;
         put_num(d, &n, vm_mx * vm_k); d[n++] = ','; put_num(d, &n, vm_my * vm_k); d[n++] = ','; put_num(d, &n, vm_mhw * vm_k); d[n++] = ','; put_num(d, &n, vm_ml1 * vm_k); d[n++] = '\n';
         jt_write(1, d, (unsigned)n);   /* centre x, seam y, half width, depth: where the check looks */
+        { char e[96] = "samface: eyes="; int k = 14; int v[7] = { vm_ex[0], vm_ey[0], vm_ew[0], vm_ex[1], vm_ey[1], vm_ew[1], vm_eh };
+          for (int i = 0; i < 7; i++) { put_num(e, &k, v[i] * vm_k); e[k++] = i < 6 ? ',' : '\n'; }
+          jt_write(1, e, (unsigned)k); }   /* both eyes' centres and half widths, then the half height: where the blink check looks */
     }
     unsigned now = now_ticks();
     if (!open_t) open_t = now;
@@ -1368,6 +1542,8 @@ static void draw_video_k(void) {
     mouth_s = target > mouth_s ? (mouth_s + target * 2) / 3 : (mouth_s * 2 + target) / 3;
     if (mouth_s < 6) mouth_s = 0;
     vm_mouth(backbuf, mouth_s);
+    blink_shown = blink_prog(now);
+    vm_blink(backbuf, blink_shown);
     { /* her opening for the check: 0 is exactly shut, 1 to 16 are the steps above it */
         int step = mouth_s ? 1 + mouth_s / 16 : 0;
         if (vm_hd && step != mouth_last) { mouth_last = step; char d[40] = "samface: open="; int n = 14; n = face_num(d, n, step); d[n++] = '\n'; jt_write(1, d, (unsigned)n); }
@@ -1646,6 +1822,7 @@ __attribute__((section(".text.start"), used))
 void _start(int argc, char **argv) {
     for (int i = 1; i < argc; i++) { const char *a = argv[i], *b = "portfolio"; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) uface_portfolio = 1; }
     for (int i = 1; i < argc; i++) { const char *a = argv[i], *b = "phone"; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) uface_phone = 1; }   /* the phone has its own back chevron: no red dot, no Esc hint */
+    for (int i = 1; i < argc; i++) { const char *a = argv[i], *b = "noblink"; while (*a && *a == *b) { a++; b++; } if (!*a && !*b) uface_noblink = 1; }   /* checks that read exact pixels pass noblink */
     uface_full = 1; uface_n = UFACE_MAX;
     if (!uface_portfolio) uface_video = 1;   /* Samantha is full screen on the desktop and the phone alike; only Joshua's own face keeps its layout */
     if (jt_window_open(&win) != 0 || !win.pixels) { jt_write(2, "samantha: no window\n", 20); jt_exit(1); }
