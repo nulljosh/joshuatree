@@ -40,6 +40,15 @@ def cubic(p0, c1, c2, p1, t):
     return tuple(w[0]*p0[k] + w[1]*c1[k] + w[2]*c2[k] + w[3]*p1[k] for k in (0, 1))
 
 
+def quad_d(p0, c, p1, first=False):
+    """A quadratic curve as the equivalent cubic. Only M, L, C and Z are used in the mark, because
+    docs/hardware/neo_cad.py reads the SVG with exactly those commands."""
+    c1 = (p0[0] + 2/3*(c[0]-p0[0]), p0[1] + 2/3*(c[1]-p0[1]))
+    c2 = (p1[0] + 2/3*(c[0]-p1[0]), p1[1] + 2/3*(c[1]-p1[1]))
+    head = f"M{p0[0]:.2f} {p0[1]:.2f}" if first else ""
+    return f"{head}C{c1[0]:.2f} {c1[1]:.2f} {c2[0]:.2f} {c2[1]:.2f} {p1[0]:.2f} {p1[1]:.2f}"
+
+
 def pts_d(pts):
     return "M" + "L".join(f"{x:.2f} {y:.2f}" for x, y in pts) + "Z"
 
@@ -187,7 +196,7 @@ def build():
     limbs = [Limb(*a[:6]) for a in ARMS]
     o = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">']
     # the ground line: a short tapered stroke the trunk stands on
-    o.append(f'<path d="M20 97.8Q50 95.4 80 97.8Q50 100.2 20 97.8Z" fill="{ink}"/>')
+    o.append(f'<path d="{quad_d((20, 97.8), (50, 94.8), (80, 97.8), first=True)}{quad_d((80, 97.8), (50, 100.8), (20, 97.8))}Z" fill="{ink}"/>')
 
     # trunk, with two bark grooves cut through it (evenodd: a groove is a hole)
     def trunk_at(frac):
@@ -199,7 +208,7 @@ def build():
             dx, dy = x2-x, y2-y; d = math.hypot(dx, dy)
             return (x, y), (-dy/d, dx/d)
         return f
-    cuts = groove(trunk_at(0.33), 0.36, 0.90, 0.75) + groove(trunk_at(0.67), 0.46, 0.86, 0.5)
+    cuts = groove(trunk_at(0.33), 0.36, 0.90, 0.6) + groove(trunk_at(0.67), 0.46, 0.86, 0.4)
     o.append(f'<path fill-rule="evenodd" d="M{TL[0][0]} {TL[0][1]}C{TL[1][0]} {TL[1][1]} {TL[2][0]} {TL[2][1]} {TL[3][0]} {TL[3][1]}'
              f'L{TR[3][0]} {TR[3][1]}C{TR[2][0]} {TR[2][1]} {TR[1][0]} {TR[1][1]} {TR[0][0]} {TR[0][1]}Z{cuts}" fill="{ink}"/>')
 
@@ -229,7 +238,7 @@ def build():
     for k, limb in enumerate(limbs):
         bodies[f"arm{k}"] = limb.poly
         edges[f"arm{k}.l"] = (f"arm{k}", limb.l); edges[f"arm{k}.r"] = (f"arm{k}", limb.r)
-    patch = "".join(f"M{c[0]} {c[1]}L{A[0]:.2f} {A[1]:.2f}Q{P[0]:.2f} {P[1]:.2f} {B[0]:.2f} {B[1]:.2f}Z"
+    patch = "".join(f"M{c[0]} {c[1]}L{A[0]:.2f} {A[1]:.2f}{quad_d(A, P, B)}Z"
                     for P, A, B, c in fillets(edges, bodies, (50, 66), FILLET))
     o.append(f'<path d="{patch}" fill="{ink}"/>')
     o.append('</svg>')
