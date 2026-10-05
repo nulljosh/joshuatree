@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Burrow: the Files app was renamed and given a kit-fox icon.
+"""Burrow: the Files app was renamed. Its icon was a kit fox, then (2.7.2) one bold two-tone folder, Finder-simple.
 
 What this proves, from the real sources (no QEMU, so it is fast):
   1. APPS[0] in kernel/kernel.c is "Burrow", and no APPS row is named
@@ -128,9 +128,13 @@ slot0 = re.search(r"ICON_ART\[\d+\] = \{\s*(\w+),", art).group(1)
 check(slot0 == "icon_art_burrow", "ICON_ART[0] is %s, want icon_art_burrow" % slot0)
 body = re.search(r"static const unsigned char %s\[\d+\] = \{(.*?)\};" % slot0, art, re.S)
 data = bytes(int(x) for x in re.findall(r"\d+", body.group(1))) if body else b""
-check(data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) > 8000, "slot 0 art is a real PNG (%d bytes)" % len(data))
+# 2.7.2: the art is one flat folder now, so it compresses to a few KB; the point is "a real PNG, not an empty placeholder".
+check(data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) > 2000, "slot 0 art is a real PNG (%d bytes)" % len(data))
 check(hashlib.sha256(data).hexdigest() != OLD_FOLDER_SHA, "slot 0 art is no longer the old folder art")
 check(os.path.exists(os.path.join(ROOT, "art/icons/burrow.svg")), "art/icons/burrow.svg exists")
+svg = read("art/icons/burrow.svg") if os.path.exists(os.path.join(ROOT, "art/icons/burrow.svg")) else ""
+check("#B5502C" in svg.upper() and "<ellipse" not in svg and "<circle" not in svg,
+      "Burrow's icon is the flat terracotta folder: house accent, no fox shapes (no ellipses or circles)")
 check(not os.path.exists(os.path.join(ROOT, "art/icons/files.svg")), "old art/icons/files.svg is gone")
 r = subprocess.run([sys.executable, os.path.join(ROOT, "tools/gen/gen_icon_art.py"), "--check"], capture_output=True, text=True)
 check(r.returncode == 0, "kernel/icon_art.h matches the SVGs")

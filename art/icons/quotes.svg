@@ -10,7 +10,7 @@
   </defs>
   <g clip-path="url(#jt-tile)">
     <svg x="0" y="0" width="128" height="128" viewBox="0 0 200 200">
-  <rect width="200" height="200" rx="44" fill="#D8C7A3"/>
+  <rect width="200" height="200" rx="44" fill="#F5F5F8"/>
   <g fill="#3b82f6">
     <path transform="translate(33,44) scale(1.12) rotate(180,24,52)" d="M 0,24 A 24,24 0 1,1 48,24 C 48,64 34,90 8,104 C 20,84 26,62 23,42 A 24,24 0 0,1 0,24 Z"/>
     <path transform="translate(110,44) scale(1.12) rotate(180,24,52)" d="M 0,24 A 24,24 0 1,1 48,24 C 48,64 34,90 8,104 C 20,84 26,62 23,42 A 24,24 0 0,1 0,24 Z"/>

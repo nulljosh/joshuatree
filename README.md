@@ -1,4 +1,7 @@
-<img src="icon.svg" width="80">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/mark-paper.png">
+  <img src="docs/brand/mark-ink.png" width="80" alt="Joshua Tree">
+</picture>
 
 # Joshua Tree
 
@@ -44,15 +47,8 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 
 ## Read more
 
-- [Whitepaper](docs/WHITEPAPER.md): why and how
-- [Architecture](docs/ARCHITECTURE.md): how it fits together, every file
-- [Hardware](docs/HARDWARE.md): the real board and the 3.0 plan
-- [Portfolio mode](docs/PORTFOLIO.md): how heyitsmejosh.com is a mode of the OS, with Joshua in place of Samantha
-- [Raspberry Pi guide](docs/RASPBERRY-PI.md): what to buy, the serial cable, and how to boot it on a real Pi 4. [Printable Pi case](docs/hardware/PI-CASE.md)
-- [ARM64 and the Raspberry Pi](docs/ARM64.md): the second CPU target. It boots under QEMU today with a drawn desktop, a keyboard, mouse, disk and network, and its first program in user mode (`make -C arch/arm64 run`); the Pi 4B is the first real board
-- [Roadmap](docs/roadmap.md): what is next
-- [All docs](docs/)
+[The docs](docs/README.md): whitepaper, architecture, hardware, the Raspberry Pi guide and the roadmap.
 
 ## License
 
-Software: Apache License 2.0, © 2026 Joshua Trommel. Hardware designs: CC BY-NC-SA 4.0, free to build for yourself, see [docs/hardware/LICENSE-NOTICE.md](docs/hardware/LICENSE-NOTICE.md). Joshua Tree™ and Neo Kit™ are trademarks, see [TRADEMARKS.md](TRADEMARKS.md).
+[Apache License 2.0](LICENSE)

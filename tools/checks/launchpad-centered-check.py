@@ -155,6 +155,9 @@ def measure(img, size):
 
     comps = components(img, box)
     big = [c for c in comps if c[4] >= 300]
+    # An outline can split one icon into pieces (Hikko's cream jar rim separates its brown tile from the inside of the jar).
+    # A piece that sits wholly inside another is the same icon, not a second one.
+    big = [c for c in big if not any(g is not c and inside(c, g) for g in big)]
     small = [c for c in comps if c[4] < 300 and not any(inside(c, g) for g in big)]
     if len(big) < 5: fails.append(f"found only {len(big)} icons"); return out
     tile = max(max(c[2] - c[0], c[3] - c[1]) for c in big)
