@@ -10,7 +10,7 @@
 <rect x="500.3" y="244" width="82.6" height="18" rx="3" fill="#8fb996"/>
 <text x="40" y="280" font-size="12" fill="#333">working memory: 619 KB at 0xC0465000</text>
 <rect x="586.7" y="302" width="4.3" height="18" rx="3" fill="#2f6b3a"/>
-<text x="40" y="338" font-size="12" fill="#333">where programs load: 32 KB at 0xC0587000</text>
+<text x="40" y="338" font-size="12" fill="#333">where programs load: 32 KB at 0xC0597000</text>
 <rect x="591.5" y="360" width="8.5" height="18" rx="3" fill="#2f6b3a"/>
-<text x="40" y="396" font-size="12" fill="#333">sound buffer: 64 KB at 0xC0590000</text>
+<text x="40" y="396" font-size="12" fill="#333">sound buffer: 64 KB at 0xC05C0000</text>
 </svg>

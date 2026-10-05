@@ -27,13 +27,18 @@
  * within 1KB of 28KB. JT_USER_BASE did not move (docs/SYSCALL-ABI.md names
  * it); .dmabuf and .userfb slid up 128KB to make room, and the window end
  * (0xC0730000) still sits inside the second 4MB table. The page count is
- * hex so the Makefile's sed renders it into boot/memmap.ld too. */
+ * hex so the Makefile's sed renders it into boot/memmap.ld too.
+ *
+ * 2026-10-04: all three moved up 64KB (0xC0587000 to 0xC0597000). Hamurabi's binary (a sprite
+ * sheet and the scene) took the 54KB gap between .bss and the window to under the 16KB
+ * tools/checks/bss-margin-check.py insists on, and the linker refused. The end of .userfb is now
+ * 0xC07F0000, 64KB under the end of the second 4MB table: one more move this size is the last. */
 
-#define JT_USER_BASE        0xC0587000 /* program window: JT_USER_IMAGE_PAGES of image, then 1 page of stack (.userimg) */
+#define JT_USER_BASE        0xC0597000 /* program window: JT_USER_IMAGE_PAGES of image, then 1 page of stack (.userimg) */
 #define JT_USER_IMAGE_PAGES 0x20       /* 32 pages = 128KB of image (code+data) per ring-3 program; was 7 (28KB) until 2026-10-01, briefly 0x80 for face frames before SYS_BRK */
-#define JT_DMABUF_BASE      0xC05B0000 /* 64KB Sound Blaster DMA, 64KB aligned (.dmabuf) */
-#define JT_USER_FB          0xC05C0000 /* ring-3 window framebuffer (.userfb) */
-#define JT_USER_FB_BYTES  0x220000   /* 960x540 at 32bpp fits: Joshua's full-bleed portfolio face. .dmabuf and .userfb slid down 320KB into the gap under the image window to make room; the end (0xC07E0000) is still inside the 4MB table */
+#define JT_DMABUF_BASE      0xC05C0000 /* 64KB Sound Blaster DMA, 64KB aligned (.dmabuf) */
+#define JT_USER_FB          0xC05D0000 /* ring-3 window framebuffer (.userfb) */
+#define JT_USER_FB_BYTES  0x220000   /* 960x540 at 32bpp fits: Joshua's full-bleed portfolio face. .dmabuf and .userfb slid down 320KB into the gap under the image window to make room; the end (0xC07F0000 since 2026-10-04) is still inside the 4MB table */
 
 /* SYS_BRK (1.9.27): a per-task heap that grows above the image, backed by
  * pmm frames mapped only into that task's directory (kernel/brk.c). The
