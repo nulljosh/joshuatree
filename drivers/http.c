@@ -113,7 +113,7 @@ int http_get_timeout(const char *host, const char *path, unsigned short port,
 static int http_get_locked(u32 ip, const char *host, const char *path, unsigned short port,
                            void *body_out, unsigned int body_maxlen, unsigned int reply_timeout_ticks) {
 
-    char req[512];
+    char req[1024]; /* 2.10.0: the Weather request line alone is ~400 bytes; was 512 */
     u32 n = 0;
     /* v0.73.2: real bug, found chasing the satellite-wallpaper task's
        "wallerr=http" failure. A raw `nc` replay of this exact request

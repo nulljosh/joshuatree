@@ -2774,88 +2774,25 @@ static int geo_fetch(void){
     return 1;
 }
 
-/* Weather window extras, all from the same single Open-Meteo reply the
-   menu bar reading comes from. wx_extra_have / wx_day_count stay 0 when a
-   reply lacks them, and the window then leaves those cells out rather than
-   inventing a value. A later failed fetch returns before touching any of
-   this, so the stale face shows the whole last good reading. */
-#define WX_DAYS 5
-static int wx_extra_have = 0, wx_feels_c = 0, wx_humidity = 0, wx_wind_kmh = 0;
-static int wx_day_count = 0;
-static int wx_day_code[WX_DAYS], wx_day_hi[WX_DAYS], wx_day_lo[WX_DAYS], wx_day_wd[WX_DAYS];
-static int wx_round10(int v){ return (v >= 0 ? v + 5 : v - 5) / 10; }
-/* Points just past the '[' of "key":[ inside the real "daily":{ object.
-   Same trap as json_current_number: "daily_units" repeats every key first,
-   with string values, so the search has to start inside "daily":{ itself. */
-static const char *json_daily_array(const char *json, const char *key){
-    const char *p = json, *d = 0;
-    static const char tag[] = "\"daily\":{";
-    for (; *p; p++) { int i = 0; while (tag[i] && p[i] == tag[i]) i++; if (!tag[i]) { d = p + i; break; } }
-    if (!d) return 0;
-    for (p = d; *p && *p != '}'; p++) {
-        if (*p != '"') continue;
-        const char *q = p + 1, *k = key;
-        while (*k && *q == *k) { q++; k++; }
-        if (!*k && q[0] == '"' && q[1] == ':' && q[2] == '[') return q + 3;
-    }
-    return 0;
-}
-/* Up to `max` numbers from a JSON array body, each times ten with one
-   decimal kept, the same fixed-point json_current_number uses. */
-static int json_array_x10(const char *p, int *out, int max){
-    int n = 0;
-    while (p && *p && *p != ']' && n < max) {
-        while (*p == ' ' || *p == ',') p++;
-        int neg = 0, whole = 0, frac = 0, dot = 0, digits = 0;
-        if (*p == '-') { neg = 1; p++; }
-        while ((*p >= '0' && *p <= '9') || *p == '.') {
-            if (*p == '.') dot = 1;
-            else if (!dot) { whole = whole * 10 + (*p - '0'); digits = 1; }
-            else if (dot == 1) { frac = *p - '0'; dot = 2; }
-            p++;
-        }
-        if (!digits) break; /* null or a string: stop, keep what was real */
-        out[n++] = neg ? -(whole * 10 + frac) : whole * 10 + frac;
-    }
-    return n;
-}
-/* Weekday (0 = Sunday) for each "YYYY-MM-DD" in the daily time array,
-   Sakamoto's method. */
-static int json_array_weekdays(const char *p, int *out, int max){
-    static const int t[12] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
-    int n = 0;
-    while (p && *p && *p != ']' && n < max) {
-        while (*p == ' ' || *p == ',') p++;
-        if (*p != '"') break;
-        p++;
-        int ok = 1; for (int i = 0; i < 10; i++) if (i == 4 || i == 7 ? p[i] != '-' : (p[i] < '0' || p[i] > '9')) ok = 0;
-        if (!ok) break;
-        int y = (p[0]-'0')*1000 + (p[1]-'0')*100 + (p[2]-'0')*10 + (p[3]-'0');
-        int m = (p[5]-'0')*10 + (p[6]-'0'), d = (p[8]-'0')*10 + (p[9]-'0');
-        if (m < 1 || m > 12) break;
-        if (m < 3) y -= 1;
-        out[n++] = (y + y/4 - y/100 + y/400 + t[m-1] + d) % 7;
-        p += 10; if (*p == '"') p++;
-    }
-    return n;
-}
-
+#include "weather_extra.h"
 static int weather_fetch_inner(void){
     weather_err[0] = 0;
     if (!net_init(0x0A00020F)) { weather_set_error(WX_OFFLINE, "no network card", ""); return 0; }
     if (!geo_have && !geo_fetch()) return 0; /* v71: no real location, no fetch, nothing fabricated */
-    static char body[2048];
-    static char path[320]; /* was 128: the longer field list below needs ~235 bytes; http.c's own 512-byte request buffer still holds it */
+    static char body[6144]; /* the 24-hour and 7-day reply is ~2.7KB; was 2048 */
+    static char path[640]; /* was 320: the field list below is ~330 bytes plus the position; http.c's request buffer is 1024 */
     { int p = 0; const char *s;
       for (s = "/v1/forecast?latitude="; *s; s++) path[p++] = *s;
       for (s = geo_lat; *s; s++) path[p++] = *s;
       for (s = "&longitude="; *s; s++) path[p++] = *s;
       for (s = geo_lon; *s; s++) path[p++] = *s;
-      /* One request for everything the Weather window shows. Daily only,
-         five days, no hourly arrays: the real reply is ~860 bytes, well
-         inside the 2048-byte body buffer above. */
-      for (s = "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code"
-               "&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=5&timezone=auto"; *s && p < 318; s++) path[p++] = *s;
+      /* One request for everything the Weather window shows: now, the next 24 hours and seven
+         days with sunrise, sunset, UV and chance of rain. The real reply is ~2.7KB, inside the
+         6144-byte body buffer above; forecast_hours=24 starts at the current hour. */
+      for (s = "&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code,pressure_msl,visibility,is_day"
+               "&hourly=temperature_2m,precipitation_probability,weather_code,is_day"
+               "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,uv_index_max,precipitation_probability_max"
+               "&forecast_days=7&forecast_hours=24&timezone=auto"; *s && p < 638; s++) path[p++] = *s;
       path[p] = 0; }
     serial_puts("wxurl="); serial_puts(path); serial_puts("\n");
     int n = wx_override_host[0] ? http_get_timeout(wx_override_host, path, wx_override_port, body, sizeof(body) - 1, WX_REPLY_TIMEOUT_TICKS)
@@ -2868,18 +2805,7 @@ static int weather_fetch_inner(void){
     int t = (t10 >= 0 ? t10 + 5 : t10 - 5) / 10; /* round to whole degrees */
     weather_temp_c = t; weather_code10 = code10; weather_have = 1;
     wind_weather_pct = wind_pct_for_weather_code(code10 / 10); /* v60: real wind sway now follows real weather */
-    { int f10 = 0, h10 = 0, w10 = 0;
-      wx_extra_have = json_current_number(body, "apparent_temperature", &f10)
-                   && json_current_number(body, "relative_humidity_2m", &h10)
-                   && json_current_number(body, "wind_speed_10m", &w10);
-      wx_feels_c = wx_round10(f10); wx_humidity = wx_round10(h10); wx_wind_kmh = wx_round10(w10);
-      int nw = json_array_weekdays(json_daily_array(body, "time"), wx_day_wd, WX_DAYS);
-      int nc = json_array_x10(json_daily_array(body, "weather_code"), wx_day_code, WX_DAYS);
-      int nh = json_array_x10(json_daily_array(body, "temperature_2m_max"), wx_day_hi, WX_DAYS);
-      int nl = json_array_x10(json_daily_array(body, "temperature_2m_min"), wx_day_lo, WX_DAYS);
-      int nd = nw; if (nc < nd) nd = nc; if (nh < nd) nd = nh; if (nl < nd) nd = nl;
-      for (int i = 0; i < nd; i++) { wx_day_code[i] /= 10; wx_day_hi[i] = wx_round10(wx_day_hi[i]); wx_day_lo[i] = wx_round10(wx_day_lo[i]); }
-      wx_day_count = nd; }
+    wx_parse_extras(body);
     int p = 0;
     if (t < 0) { weather_text[p++] = '-'; t = -t; }
     if (t >= 10) weather_text[p++] = '0' + t / 10;
@@ -2890,8 +2816,7 @@ static int weather_fetch_inner(void){
     weather_text[p] = 0;
     weather_state = WX_OK;
     /* What the window's secondary row and forecast row will be built from. */
-    serial_puts("wxextra="); serial_puts(wx_extra_have ? "yes" : "no");
-    serial_puts(" days="); { char d[2] = { (char)('0' + wx_day_count), 0 }; serial_puts(d); } serial_puts("\n");
+    wx_serial_summary();
     serial_puts("wx="); serial_puts(weather_text); serial_puts("\n"); /* v71: tools/geo-check.sh asserts the fetch really landed, not just that the URL was built */
     return 1;
 }
@@ -2909,9 +2834,9 @@ static void weather_fetch(void){
 
 /* 1.9.22: Weather is a ring-3 program (user/weather.c). It cannot see these
    statics, so every fetch, good or not, leaves WEATHER.TXT for it: one
-   "key value" line per field, the five forecast days as "d weekday code hi lo". */
+   "key value" line per field, the seven forecast days as "d weekday code hi lo rain uv10 sunrise sunset" and the next 24 hours as hs/ht/hc/hp/hd lines. */
 static void weather_write_file(void){
-    char b[512], *o = b; const char *c;
+    char b[1536], *o = b; const char *c;
     #define WXPUT(str) do { for (c = (str); *c; c++) *o++ = *c; } while (0)
     #define WXNUM(key, v) do { WXPUT(key " "); o = wx_put_int(o, (v)); *o++ = '\n'; } while (0)
     WXPUT("state "); WXPUT(weather_state_name(weather_state)); *o++ = '\n';
@@ -2920,10 +2845,7 @@ static void weather_write_file(void){
     WXPUT("word "); WXPUT(weather_word(weather_code10 / 10)); *o++ = '\n';
     WXNUM("have", weather_have); WXNUM("temp", weather_temp_c); WXNUM("code", weather_code10 / 10);
     WXNUM("extra", wx_extra_have); WXNUM("feels", wx_feels_c); WXNUM("hum", wx_humidity); WXNUM("wind", wx_wind_kmh);
-    for (int i = 0; i < wx_day_count; i++) {
-        WXPUT("d "); o = wx_put_int(o, wx_day_wd[i]); *o++ = ' '; o = wx_put_int(o, wx_day_code[i]); *o++ = ' ';
-        o = wx_put_int(o, wx_day_hi[i]); *o++ = ' '; o = wx_put_int(o, wx_day_lo[i]); *o++ = '\n';
-    }
+    o = wx_write_extras(o);
     vfs_replace_file("WEATHER.TXT", b, (unsigned int)(o - b));
     jt_data_stamp++;
 }
