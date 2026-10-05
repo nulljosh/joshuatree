@@ -50,6 +50,10 @@ DOCK_TRAY = (0xEF, 0xEB, 0xE4)
 PARK = (480, 200)
 
 
+# Hamurapi is shown under its product name but its files, flag letters and log lines kept the old spelling Hamurabi.
+SOURCE_NAME = {"hamurapi": "hamurabi"}
+
+
 def parse_apps():
     src = open("kernel/ring3app.c").read()
     table = re.search(r"RING3_APPS\[\]\s*=\s*\{(.*?)\n\};", src, re.S)
@@ -68,14 +72,15 @@ def parse_apps():
         key = name.lower()
         if key not in flags:
             sys.exit(f"FAIL: {name} is in RING3_APPS but ring3app_autoopen_arm has no open= flag for it; the crash check cannot open it")
-        path = f"user/{key}.c"
-        if not os.path.exists(path) or f"{key}: crashing on purpose" not in open(path).read():
-            sys.exit(f"FAIL: {name} ({path}) has no `{key}: crashing on purpose` crash key; the crash check cannot crash it")
-        out.append((name, key, binf, flags[key]))
+        src = SOURCE_NAME.get(key, key)   # the row's shown name can differ from the source's spelling
+        path = f"user/{src}.c"
+        if not os.path.exists(path) or f"{src}: crashing on purpose" not in open(path).read():
+            sys.exit(f"FAIL: {name} ({path}) has no `{src}: crashing on purpose` crash key; the crash check cannot crash it")
+        out.append((name, key, binf, flags[key], src))
     return out
 
 
-def check_app(name, key, binf, flag):
+def check_app(name, key, binf, flag, src):
     fails = []
     for f in (LOG, DUMP):
         try: os.remove(f)
@@ -137,7 +142,7 @@ def check_app(name, key, binf, flag):
             time.sleep(0.1)
         if not up: fails.append("the app window (red close dot) was not on screen before the crash")
 
-        crash_line = f"{key}: crashing on purpose"
+        crash_line = f"{src}: crashing on purpose"
         for _ in range(4):  # the app may still be settling; retry the key
             press("grave_accent")
             if wait_serial(crash_line, 3): break
@@ -195,9 +200,9 @@ if want:
     apps = [a for a in apps if a[1] in want]
 failed = {}
 t0 = time.time()
-for name, key, binf, flag in apps:
+for name, key, binf, flag, src in apps:
     t = time.time()
-    fails = check_app(name, key, binf, flag)
+    fails = check_app(name, key, binf, flag, src)
     print(f"{name:11s} open={flag:7s} {'PASS' if not fails else 'FAIL'} ({time.time() - t:.0f}s)", flush=True)
     if fails:
         failed[name] = fails

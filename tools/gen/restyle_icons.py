@@ -312,6 +312,21 @@ APPS_ONLY = {
         <polygon points="55,34 100,26 100,44 55,52"/>
       </g>"""),
 
+    # Hamurabi: a stepped ziggurat with a shrine on top, cream on the design-system accent #b5502c. Flat, same ramp
+    # as Music, so only the shared top lip and the contact shadow remain. The stair is the tile colour cut through the tiers. No text.
+    "hamurabi": ("#B5502C", "#B5502C", "",
+                 """
+      <g fill="#F8F8F6">
+        <rect x="14" y="84" width="100" height="20" rx="3"/>
+        <rect x="27" y="63" width="74" height="19" rx="3"/>
+        <rect x="40" y="42" width="48" height="19" rx="3"/>
+        <rect x="52" y="22" width="24" height="18" rx="3"/>
+      </g>
+      <g fill="#B5502C">
+        <rect x="60" y="29" width="8" height="11"/>
+        <rect x="59" y="42" width="10" height="62"/>
+      </g>"""),
+
     "search": ("#9AA3B1", "#303A48", "",
                """
       <circle cx="52" cy="52" r="23" fill="none" stroke="#ECEFF3" stroke-width="11"/>

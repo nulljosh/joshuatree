@@ -14,7 +14,10 @@ PROGRAM = {
     "app-notes": "notes", "app-calendar": "calendar", "app-weather": "weather", "app-files": "burrow",
     "app-terminal": "terminal", "app-stocks": "stocks", "samantha-chat": "samantha",
     "app-bookrank": "bookrank", "app-tonchi": "tonchi", "app-curbfind": "curbfind", "app-epiphany": "epiphany",
+    "app-hamurapi": "hamurabi",
 }
+# Headers a program includes that also change its picture (the sprite sheet and the rules and story the game shows).
+EXTRA = {"app-hamurapi": ["user/hamurabi_sprites.h", "user/hamurabi_rules.h", "user/hamurabi_story.h"]}
 # Shared drawing code every program links in. Changing it can change every tile.
 SHARED = ["user/jtsys.h", "user/libjt/text.c", "user/libjt/text.h", "user/libjt/aafont.h",
           "user/libjt/stdio.c", "user/libjt/stdio.h", "user/libjt/string.c", "user/libjt/stdlib.c"]
@@ -23,7 +26,7 @@ SCRIPT = "tools/landing-shots.py"
 
 
 def sources(tile):
-    return [f"user/{PROGRAM[tile]}.c"] + SHARED
+    return [f"user/{PROGRAM[tile]}.c"] + EXTRA.get(tile, []) + SHARED
 
 
 def source_hash(tile):

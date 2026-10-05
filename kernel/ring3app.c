@@ -74,6 +74,7 @@
 #include "user_fbpoke.h"
 #include "user_brkpoke.h"
 #include "user_music.h"
+#include "user_hamurabi.h"
 #include "pmm.h"
 #include "brk.h"
 #include "app.h"
@@ -133,6 +134,7 @@ static const struct ring3_app RING3_APPS[] = {
     {"Samantha",   user_samantha,   USER_SAMANTHA_LEN,   "SAMANTHA.BIN"},
     {"Music",      user_music,      USER_MUSIC_LEN,      "MUSIC.BIN"},
     {"Movies",     user_movies,     USER_MOVIES_LEN,     "MOVIES.BIN"},
+    {"Hamurapi",   user_hamurabi,   USER_HAMURABI_LEN,   "HAMURABI.BIN"}, /* shown as Hamurapi; the file, the open= flag and the sources keep the old spelling */
 };
 
 static int ring3app_seed(const struct ring3_app *a) {
@@ -299,6 +301,7 @@ void mail_ring3_open(void)       { ring3app_launch(&RING3_APPS[20]); }
 void terminal_ring3_open(void)   { ring3app_launch(&RING3_APPS[22]); }
 void music_ring3_open(void)      { ring3app_launch(&RING3_APPS[24]); } /* 2.2: Apps folder, slot 24 */
 void movies_ring3_open(void)     { ring3app_launch(&RING3_APPS[25]); } /* 2.2: Apps folder, open=movi */
+void hamurabi_ring3_open(void)   { ring3app_launch(&RING3_APPS[26]); } /* 2.7: Apps folder, open=hamu */
 void samantha_ring3_open(void)   { ring3app_launch(&RING3_APPS[23]); } /* 1.9.26: dock slot 6, the shell commands and phone mode */
 void notes_ring3_launch(void)    { ring3app_launch(&RING3_APPS[21]); } /* kernel.c's notes_ring3_open runs the legacy NOTES.TXT migration first */
 int  weather_ring3_run(void)     { return ring3app_launch(&RING3_APPS[17]); } 
@@ -387,6 +390,7 @@ void ring3app_autoopen_arm(const char *cl){
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='t' && pc[6]=='e' && pc[7]=='r' && pc[8]=='m') { ring3app_autoopen_slot = 5; serial_puts("autoopen=terminal\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='m' && pc[6]=='u' && pc[7]=='s' && pc[8]=='i') { ring3app_autoopen_slot = 24; serial_puts("autoopen=music\n"); }
         if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='m' && pc[6]=='o' && pc[7]=='v' && pc[8]=='i') { ring3app_autoopen_slot = 25; serial_puts("autoopen=movies\n"); }
+        if (pc[0]=='o' && pc[1]=='p' && pc[2]=='e' && pc[3]=='n' && pc[4]=='=' && pc[5]=='h' && pc[6]=='a' && pc[7]=='m' && pc[8]=='u') { ring3app_autoopen_slot = 26; serial_puts("autoopen=hamurapi\n"); } /* the row is named Hamurapi; the flag letters and the files keep the old spelling */
         if (pc[0]=='f' && pc[1]=='b' && pc[2]=='p' && pc[3]=='o' && pc[4]=='k' && pc[5]=='e') { fbpoke_armed = 1; serial_puts("fbpoke armed\n"); }
         if (pc[0]=='b' && pc[1]=='r' && pc[2]=='k' && pc[3]=='p' && pc[4]=='o' && pc[5]=='k' && pc[6]=='e') { brkpoke_armed = 1; serial_puts("brkpoke armed\n"); }
     }

@@ -1,0 +1,228 @@
+{
+ "intro": {
+  "title": "You are king",
+  "text": "The old king is dead. Now you are king. You have 10 years to show what kind of king you are."
+ },
+ "interludes": {
+  "5": {
+   "title": "Halfway",
+   "text": "Half your time is gone. People are starting to talk about how you rule."
+  },
+  "10": {
+   "title": "The last year",
+   "text": "This is your last year. Make it count."
+  }
+ },
+ "omens": [
+  {
+   "id": "caravan",
+   "title": "Traders",
+   "text": "Traders want to buy land by the river. They will pay a lot.",
+   "needs": {
+    "acres": 400
+   },
+   "choices": [
+    {
+     "label": "Sell 40 acres",
+     "then": "The traders pay you 1,200 bushels.",
+     "acres": -40,
+     "grain": 1200
+    },
+    {
+     "label": "Say no",
+     "then": "The traders move on."
+    }
+   ]
+  },
+  {
+   "id": "temple",
+   "title": "The priests",
+   "text": "The priests want grain to build a new altar. Your people are watching.",
+   "needs": {
+    "grain": 400
+   },
+   "choices": [
+    {
+     "label": "Give 200 bushels",
+     "then": "People hear you are kind. 8 new people move in.",
+     "grain": -200,
+     "people": 8
+    },
+    {
+     "label": "Say no",
+     "then": "The priests are angry. 5 people leave with them.",
+     "people": -5
+    }
+   ]
+  },
+  {
+   "id": "refugees",
+   "title": "At the gate",
+   "text": "A flood wrecked a town up the river. Families are waiting at your gate.",
+   "choices": [
+    {
+     "label": "Let them in",
+     "then": "15 people join your city. They can work, but they need to eat.",
+     "people": 15
+    },
+    {
+     "label": "Send them away",
+     "then": "They walk on. The gate closes."
+    }
+   ]
+  },
+  {
+   "id": "cats",
+   "title": "Cats for sale",
+   "text": "A trader is selling cats. Cats hunt rats.",
+   "needs": {
+    "grain": 300
+   },
+   "choices": [
+    {
+     "label": "Buy cats for 150 bushels",
+     "then": "The cats guard the grain. No rats this year.",
+     "grain": -150,
+     "guard": true
+    },
+    {
+     "label": "Keep your grain",
+     "then": "The trader leaves with his cats."
+    }
+   ]
+  },
+  {
+   "id": "flood",
+   "title": "The river is rising",
+   "text": "The river is rising. You can pay to fix the walls that hold it back.",
+   "needs": {
+    "grain": 300
+   },
+   "choices": [
+    {
+     "label": "Fix the walls for 200 bushels",
+     "then": "The walls hold. Your fields stay dry.",
+     "grain": -200
+    },
+    {
+     "label": "Do nothing",
+     "then": "The river floods your low fields. You lose some land.",
+     "acresPct": -8
+    }
+   ]
+  },
+  {
+   "id": "tribute",
+   "title": "A greedy king",
+   "text": "A king nearby wants you to pay him. He has an army.",
+   "needs": {
+    "grain": 400
+   },
+   "choices": [
+    {
+     "label": "Pay 300 bushels",
+     "then": "His men take the grain and go.",
+     "grain": -300
+    },
+    {
+     "label": "Say no",
+     "then": "Nothing happens. This time.",
+     "gamble": {
+      "chance": 0.5,
+      "acres": -100,
+      "then": "His army takes 100 acres from you."
+     }
+    }
+   ]
+  },
+  {
+   "id": "festival",
+   "title": "A party",
+   "text": "Your people want a big party after the harvest.",
+   "needs": {
+    "grain": 500
+   },
+   "choices": [
+    {
+     "label": "Throw a party for 300 bushels",
+     "then": "The party is so good that 10 visitors stay for good.",
+     "grain": -300,
+     "people": 10
+    },
+    {
+     "label": "Not this year",
+     "then": "Everyone goes back to work."
+    }
+   ]
+  },
+  {
+   "id": "barley",
+   "title": "Better seed",
+   "text": "A farmer is selling better seed. He says it grows more grain.",
+   "needs": {
+    "grain": 400
+   },
+   "choices": [
+    {
+     "label": "Buy seed for 250 bushels",
+     "then": "You plant the new seed. Each acre gives 1 more bushel this year.",
+     "grain": -250,
+     "yieldBonus": 1
+    },
+    {
+     "label": "Keep the old seed",
+     "then": "The farmer leaves."
+    }
+   ]
+  },
+  {
+   "id": "stars",
+   "title": "The star reader",
+   "text": "A woman who reads the stars says she knows how the harvest will go. She wants to be paid.",
+   "needs": {
+    "grain": 200
+   },
+   "choices": [
+    {
+     "label": "Pay 100 bushels",
+     "then": "She looks at the sky.",
+     "grain": -100,
+     "peek": true
+    },
+    {
+     "label": "Say no",
+     "then": "She packs up her maps."
+    }
+   ]
+  },
+  {
+   "id": "steward",
+   "title": "A thief",
+   "text": "Your helper was caught stealing grain. He says sorry and promises to work harder.",
+   "choices": [
+    {
+     "label": "Kick him out",
+     "then": "He leaves at night. You find 150 bushels in his house.",
+     "grain": 150
+    },
+    {
+     "label": "Forgive him",
+     "then": "He works day and night. You gain 30 acres of new fields.",
+     "acres": 30
+    }
+   ]
+  }
+ ],
+ "epilogues": {
+  "A+": "You were a great king. Almost nobody went hungry, and there is plenty of land for everyone.",
+  "B": "You did okay. A few people went hungry who did not need to.",
+  "C": "People remember being hungry. Many are glad you are done.",
+  "F": "The people have had enough. They never want to hear your name again."
+ },
+ "hints": {
+  "1": "Each person eats 20 bushels a year. Feed everyone and more people will come.",
+  "2": "One person can farm 10 acres. Each acre needs 1 bushel of seed.",
+  "3": "Land costs less in some years. Buy when it is cheap. Sell when it costs a lot.",
+  "4": "Rats, sickness and bad harvests can come any time. Save some grain."
+ }
+}

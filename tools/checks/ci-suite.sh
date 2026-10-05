@@ -68,6 +68,8 @@ retry|4|DHCP client leases real SLIRP config, DNS+HTTP still work, nodhcp keeps 
 retry|3|Benchmarks run and report every number|./tools/checks/bench-check.sh
 retry|1|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
 once |0|PNG decoder, host harness|./tools/checks/png-host-check.sh
+once |0|Hamurabi game rules: SplitMix64, golden checksum, invariants, i386-freestanding|./tools/checks/hamurabi-rules-check.sh
+once |0|Hamurabi sprite sheet header is current with art/hamurabi/sprites.png and sprites.json (static)|python3 ./tools/gen/gen_hamurabi_sprites.py --check
 once |4|Burrow: Files renamed, Samantha still opens it as files / file browser, icon art is the new fox|python3 ./tools/checks/burrow-rename-check.py
 retry|4|Burrow icon view wraps a long file name onto a second line instead of cutting it|python3 ./tools/checks/burrow-labels-check.py
 retry|5|Mail, Notes and Weather read past byte 255 of their data file (SYS_READ moves 255 bytes a call)|python3 ./tools/checks/read-long-files-check.py
@@ -104,6 +106,7 @@ retry|5|Tonchi lists the real courses live (Worker text from a stub), drills one
 retry|6|Fieldbook runs as a ring-3 process through the table-driven launcher: draws the ranked field list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive|python3 ./tools/checks/ring3fieldbook-check.py
 retry|3|Clock runs as a ring-3 process through the table-driven launcher: draws the moving time, takes a timer through the real input logic, closes on Esc, desktop alive|python3 ./tools/checks/ring3clock-check.py
 retry|6|Movies plays a real AVI with sound at ring 3, audio-led: frame within one of the audio clock, drift under 100 ms, pause holds frame and sound (checked in the wav and on the framebuffer), seek by bar and keys, fullscreen, a damaged clip / non-AVI / over-cap file each show an error, closes on Esc, desktop alive|python3 ./tools/checks/movie-check.py
+retry|2|Hamurapi (Hamurabi in the sources) is playable as a ring-3 program: draws its real title scene (sprite pixels equal the sheet), plays a classic reign by keyboard, a story reign with cards and choices and the robot's demo, and every year it logs equals a host replay of the same rules header, closes on Esc, desktop alive|python3 ./tools/checks/ring3hamurabi-check.py
 once |6|AVI reader, host harness (real JPEG frames, bad headers, truncation, mutation fuzz under ASan/UBSan)|./tools/checks/avi-host-check.sh
 retry|5|Portfolio runs as a ring-3 process through the table-driven launcher: draws the fleet catalog, moves the selection by keyboard and mouse through the real logic, closes on Esc, desktop alive|python3 ./tools/checks/ring3portfolio-check.py
 retry|7|Activity runs as a ring-3 process through the table-driven launcher: draws the live task list, refreshes it on its own, has the kernel refuse to kill the shell, closes on Esc, desktop alive|python3 ./tools/checks/ring3activity-check.py

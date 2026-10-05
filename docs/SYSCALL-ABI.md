@@ -119,11 +119,11 @@ relocations, so its load address is not negotiable:
 
 - A user program is a flat binary. Entry is offset 0, not an ELF entry
   point; `exec_user()` jumps straight at the load address.
-- It is linked at **0xC0587000** and gets **33 pages**: thirty-two for the
+- It is linked at **0xC0597000** and gets **33 pages**: thirty-two for the
   image (128KB, `JT_USER_IMAGE_PAGES` in kernel/memmap.h; a larger one
-  fails to link), one for its stack, whose top, 0xC05A8000, is the initial
+  fails to link), one for its stack, whose top, 0xC05B8000, is the initial
   `esp`. (Until 2026-10-01 the image was 7 pages, 28KB, and the stack top
-  0xC0588000; the base address did not move.) (v2 pushes the argument block
+  0xC0588000; the base address did not move then. On 2026-10-04 the whole window moved up 64KB, 0xC0587000 to 0xC0597000, because the kernel image had grown to within 16KB of it; programs are rebuilt by the Makefile, which links every one against `boot/memmap.ld`.) (v2 pushes the argument block
   onto that page, so the initial `esp` is now a little below the top; see
   "One thing v1 said that v2 makes less than literally true" below. The
   page, its top and its size are unchanged.) `boot/linker.ld` reserves that
@@ -281,7 +281,7 @@ esp+4   argc
 esp+8   argv  ->  [ argv[0], ..., argv[argc-1], NULL ]
 ...     the argv pointer array
 ...     the argument strings, NUL-terminated
-top     0xC0588000, the top of the program's stack page
+top     0xC05B8000, the top of the program's stack page
 ```
 
 Why this layout and not Linux's: real Linux puts `argc` at `0(%esp)` with
@@ -316,7 +316,7 @@ Flagged rather than buried, because v1 is frozen and this is the one place
 the frozen text and the running kernel no longer read the same.
 
 v1's "How a program is built and loaded" says the stack page's top,
-0xC0588000, is the initial `esp`. With arguments on the stack that is no
+0xC05B8000, is the initial `esp`. With arguments on the stack that is no
 longer exact: `esp` starts below the argument block, by twelve bytes plus
 the pointer array plus the strings, and at most 256 + 8*4 + 12 bytes below
 the top in the worst case v2's own limits allow.
@@ -329,7 +329,7 @@ Why this is not treated as a MAJOR break:
   `user/jtsys.h` exposes no stack pointer, and a v1 `_start(void)` is
   defined as taking nothing, so there is nothing above `esp` it is entitled
   to read. A program that read its own `esp` and compared it to a literal
-  0xC0588000 would notice, and no such program exists or could have been
+  0xC05B8000 would notice, and no such program exists or could have been
   written usefully.
 - `user/hello.c` is unmodified and `tools/checks/usertest-check.sh` passes
   unmodified, which is the practical version of the same claim.
@@ -464,7 +464,7 @@ launcher (`kernel/ring3app.c`) runs the program, and the program asks for
 that viewport. It gets its size in `width`/`height`, `pitch` in bytes
 (always `width * 4`), and `pixels`, a framebuffer of exactly that size,
 32 bits per pixel, `0x00RRGGBB`, mapped user-accessible at a fixed address
-(`JT_USER_FB`, 0xC05A0000, reserved by `boot/linker.ld`). The program
+(`JT_USER_FB`, 0xC05D0000, reserved by `boot/linker.ld`). The program
 draws into it directly. Errors: -EFAULT (bad pointer), -EBUSY (another
 program owns the window), -ENODEV (no app viewport is open, e.g. the
 program was run from the text shell), -ENOMEM (viewport bigger than the
@@ -513,7 +513,7 @@ Release is complete, as of 1.7.8. When the owning task ends, by `exit` or
 by a fault, the buffer is zeroed and its pages are flipped back to
 supervisor-only (`paging_clear_user`), on every teardown path. The next
 program, with no `window_open` of its own, page-faults if it stores into
-`0xC05A0000`, and a syscall handed a pointer into that range gets
+`0xC05D0000`, and a syscall handed a pointer into that range gets
 `-EFAULT`, the same answer as for a pointer into the kernel. 1.7.7 only
 zeroed; `tools/checks/userfb-release-check.py` runs `user/fbpoke.c` right
 after a window closes and asserts both refusals and the fault.
