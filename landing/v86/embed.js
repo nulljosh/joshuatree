@@ -363,7 +363,7 @@ if (typeof document !== "undefined") (function () {
       // 2.11.1: the hero opens on her full-screen face, and Esc is how a visitor
       // closes her to the desktop (the red dot does the same). Forwarded only while
       // she is open: on the bare desktop Esc still must not reach the kernel (shell exit).
-      else if (!ev.shiftKey && focused && samanthaOpen && emulator && emulator.keyboard_send_keys) emulator.keyboard_send_keys([27], 80);
+      else if (!ev.shiftKey && focused && samanthaOpen && emulator && emulator.keyboard_send_keys && !ev.jtFullExit) emulator.keyboard_send_keys([27], 80);   // index.html sets jtFullExit when this same keypress already left the page's full-screen box: that Esc does not also close her, the next one does
     }
   }, true); // capture phase, BEFORE v86's own global listener (both on window, FIFO order)
 
@@ -656,6 +656,7 @@ if (typeof document !== "undefined") (function () {
     }, KIOSK_IDLE_MS);
   }
   function focusIn() {
+    if (heroPoster && !heroPoster.hidden) heroPoster.hidden = true;   // 2.11.1: any takeover (Tab then Enter on the demo, the phone chat bar) lifts the poster, never types into a machine the visitor cannot see
     try { showComposer(true); } catch (e) {}   // a visitor taking over mid-tour gets the chat bar back at once
     if (focused || !adaptersReady) return;
     focused = true;
