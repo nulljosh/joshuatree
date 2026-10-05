@@ -334,6 +334,7 @@ int jt_launch_request(const char *name);
 int jt_launch_take(void);
 int jt_refresh_request(int kind, int arg);
 int jt_refresh_take(int *arg);
+int jt_noblink(void); /* syscall.c: `noblink` on the boot line */
 void jt_facehost_cmdline(const char *cl); /* syscall.c: facehost=HOST[:PORT] */
 void jt_clip_cmdline(const char *cl);     /* syscall.c: cliptrace adds a content hash to the CLIPCOPY/CLIPPASTE lines */
 #define NSYSCALLS 416 /* 385 (SYS_WINDOW_POLL) rounded up to a multiple of 32; was 160 before v3. 386 (tasks), 387 (http_get), 388 (readdir), 392 (http_post) and 400 (text) fit under it */

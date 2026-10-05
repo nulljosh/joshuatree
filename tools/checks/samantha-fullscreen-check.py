@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Samantha full screen, headless and pixel based (2.9.0): she covers the whole screen, the conversation is glass and
+"""Samantha full screen, headless and pixel based (2.9.0, mouth and blink polished in 2.9.1): she covers the whole screen, the conversation is glass and
 captions over her picture, the two old typing bugs stay fixed, and her mouth follows her voice.
 
 Everything runs with -display none and every host stubbed on loopback (facehost=, llmhost= and wxhost= point at one
@@ -10,6 +10,7 @@ instead and save PNGs of each state there; in that mode the checks about the syn
 
   desktop 1920x1080   click her dock icon, then drive her like a person (scenarios 1 to 7).
   res=1024x768        the "samantha" boot flag opens her first, on a small screen.
+  blink               a machine booted without `noblink` watches her eyes for 16 s (see scenario_blink).
   phone               the 430x760 phone mode opens her; she fills what the phone leaves her.
 
 Asserted on the real framebuffer, each with a deadline and a poll, never a fixed sleep:
@@ -24,12 +25,15 @@ Asserted on the real framebuffer, each with a deadline and a poll, never a fixed
               word, also for a word typed while she speaks. The degree sign: the weather answer draws a real degree
               ring in its caption, not the "?" the old 0xF8 byte turned into.
   6 mouth     the stub plays loud, silent and quiet speech; her mouth opening (samface: open=) tracks it and the pixels
-              in the mouth rectangle follow that opening, silent speech leaves them exactly as the closed portrait.
+              in the mouth rectangle follow that opening, silent speech leaves them exactly as the closed portrait. 2.9.1 draws the opening along her real lip seam with soft
+              edges, so the pixel change is measured over the same box as before and the check is unchanged.
   7 exit      Esc closes her cleanly and the desktop (menu bar, dock) is alive; the red dot closes her too.
 
 Discriminating: put the 0xF8 degree back in the sysinfo copy and (5) fails by name; make the key handler eat the key that
 stops speech again and (5) fails by name; draw the panel without the blur and (2) fails by name; stop the fade and (3)
-fails by name; feed the mouth a constant level and (6) fails by name.
+fails by name; feed the mouth a constant level and (6) fails by name; make the blink draw nothing or never end and the blink
+scenario fails by name. Every scenario but the blink one boots with `noblink`, because they compare exact pixels (the
+closed portrait, the caption backdrop, the scrollback) and a blink is a real change those would count as a fault.
 
 Usage: tools/checks/samantha-fullscreen-check.py   (repo root)
 """
@@ -270,7 +274,7 @@ def m_ytop(m): return m_ybot(m) - 74
 
 def scenario_desktop():
     tag = "1920x1080 desktop: "
-    m = Machine(tag, (1920, 1080), f"llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
+    m = Machine(tag, (1920, 1080), f"noblink llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
     try:
         if not m.wait(lambda: m.frame((1020, 1030)).getpixel((961, 1023)) == DOCK_COLOUR, 60): return fail(tag, "the desktop dock never appeared")
         time.sleep(1.0)
@@ -488,7 +492,7 @@ def mouth_check(m, tag, base):
 
 def scenario_small():
     tag = "1024x768 boot flag: "
-    m = Machine(tag, (1024, 768), f"samantha res=1024x768 llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
+    m = Machine(tag, (1024, 768), f"samantha noblink res=1024x768 llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
     try:
         if not m.wait(lambda: "face: hd=736" in m.serial(), 120): return fail(tag, "her portrait never loaded")
         time.sleep(1.5)
@@ -504,7 +508,7 @@ def scenario_small():
 
 def scenario_phone():
     tag = "430x760 phone: "
-    m = Machine(tag, (860, 1520), f"phone samantha llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
+    m = Machine(tag, (860, 1520), f"phone samantha noblink llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
     try:
         if not m.wait(lambda: "face: hd=736" in m.serial(), 120): return fail(tag, "her portrait never loaded")
         time.sleep(1.5)
@@ -522,7 +526,7 @@ def scenario_big(res):
     """A screen over 960x540 logical is past the 2.1 MB a ring-3 window buffer can be: she must still open (in an
     ordinary window, composed the same way) and show her portrait, not be refused."""
     tag = f"{res[0]}x{res[1]} boot flag: "
-    m = Machine(tag, res, f"samantha res={res[0]}x{res[1]} llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
+    m = Machine(tag, res, f"samantha noblink res={res[0]}x{res[1]} llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
     try:
         if not m.wait(lambda: "samfocus" in m.serial() or "winrefuse" in m.serial(), 120): return fail(tag, "she never opened")
         if "winrefuse" in m.serial(): return fail(tag, "the kernel refused her window on a big screen")
@@ -544,7 +548,62 @@ def scenario_big(res):
 def scenario_big2k(): scenario_big((2560, 1440))
 
 
-scens = [s for s in (scenario_desktop, scenario_small, scenario_phone, scenario_big2k) if not os.environ.get("ONLY") or os.environ["ONLY"] in s.__name__]
+def scenario_blink():
+    """She blinks on her own (2.9.1). This is the one machine booted without `noblink`; every other scenario passes it
+    because they compare exact pixels and a blink would be a change they cannot tell from a fault. Here the eyes are
+    watched for 16 s: at least two blinks, each one a real change in the eye boxes that goes back to exactly the open
+    picture, 3 to 6 s apart (the schedule is a counter through a hash, not the clock), and the mouth never moves."""
+    tag = "blink: "
+    m = Machine(tag, (1024, 768), f"samantha res=1024x768 llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
+    try:
+        if not m.wait(lambda: "face: hd=736" in m.serial() and "samface: eyes=" in m.serial(), 120): return fail(tag, "her portrait never loaded")
+        g = [int(v) * m.scale for v in re.findall(r"samface: eyes=(\d+),(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)", m.serial())[-1]]
+        mg = [int(v) * m.scale for v in re.findall(r"samface: mouth=(\d+),(\d+),(\d+),(\d+)", m.serial())[-1]]
+        y0, y1 = min(g[1], g[4]) - 2 * g[6], max(g[1], g[4]) + 2 * g[6]
+        boxes = [(g[0] - g[2], g[0] + g[2]), (g[3] - g[5], g[3] + g[5])]
+        mbox = (mg[0] - mg[2], mg[1] - 6 * m.scale, mg[0] + mg[2], mg[1] + mg[3] - 10 * m.scale)
+        def eyes(img):
+            px = img.load(); out = []
+            for (xa, xb) in boxes:
+                out.append(bytes(c for y in range(y0, y1, 2) for x in range(xa, xb, 2) for c in px[x, y]))
+            return out
+        def mouth(img):
+            px = img.load(); return bytes(c for y in range(mbox[1], mbox[3], 2) for x in range(mbox[0], mbox[2], 2) for c in px[x, y])
+        def differs(a, b): return sum(1 for u, v in zip(a, b) if abs(u - v) > 12)
+        time.sleep(1.5)   # the window is composited a moment after the portrait loads (the small-screen scenario waits the same)
+        first = m.frame((min(y0, mbox[1]), max(y1, mbox[3])))
+        base_e, base_m = eyes(first), mouth(first)
+        t0 = time.time(); starts = []; closed = False; worst = 0; moved = 0; peak = None
+        while time.time() - t0 < 16:
+            img = m.frame() if SHOTS else m.frame((min(y0, mbox[1]), max(y1, mbox[3])))   # screenshot runs keep the whole frame of the deepest blink
+            e = eyes(img); d = max(differs(e[0], base_e[0]), differs(e[1], base_e[1]))
+            if mouth(img) != base_m: moved += 1
+            if d > 40 and not closed: closed = True; starts.append(time.time() - t0); worst = 0
+            if closed:
+                worst = max(worst, d)
+                if SHOTS and (peak is None or d > peak): peak = d; m.shot(img, "05-mid-blink")
+            if closed and e == base_e: closed = False   # back to exactly the open picture
+            time.sleep(0.02)
+        t1 = time.time()
+        while closed and time.time() - t1 < 1.0:   # the loop may end in the middle of a blink: give it its 120 ms
+            e = eyes(m.frame((min(y0, mbox[1]), max(y1, mbox[3]))))
+            if e == base_e: closed = False
+        gaps = [b - a for a, b in zip(starts, starts[1:])]
+        ticks = [int(v) for v in re.findall(r"samface: blink=(\d+)", m.serial())]   # her own clock: 100 ticks a second, whatever the host does
+        tgaps = [b - a for a, b in zip(ticks, ticks[1:])]
+        print(tag + f"{len(starts)} blinks seen in 16 s, {len(ticks)} reported, gaps {tgaps} ticks; mouth changed in {moved} polls")
+        if len(starts) < 2: fail(tag, f"only {len(starts)} blinks in 16 s")
+        if closed: fail(tag, "the eyes never went back to exactly the open picture after a blink")
+        if moved: fail(tag, f"the mouth changed {moved} times while she only blinked")
+        # the gap after a blink is 300 to 599 ticks (3 to 6 s on her 100 Hz clock) plus the 12 ticks the blink itself takes; the host's wall
+        # clock is not the measure (QEMU's timer runs fast while the guest idles), so the ticks she reports are
+        if len(ticks) < 2 or any(not (312 <= x <= 611) for x in tgaps): fail(tag, f"blinks not 3 to 6 s apart on her clock: {tgaps} ticks")
+        if len(set(tgaps)) < 2 and len(tgaps) > 2: fail(tag, f"every gap is the same, so the schedule is not varying: {tgaps}")
+    finally:
+        m.close()
+
+
+scens = [s for s in (scenario_desktop, scenario_small, scenario_phone, scenario_big2k, scenario_blink) if not os.environ.get("ONLY") or os.environ["ONLY"] in s.__name__]
 for scen in scens:
     try: scen()
     except Exception as e: fails.append(f"{scen.__name__}: {type(e).__name__}: {e}")

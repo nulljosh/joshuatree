@@ -849,10 +849,13 @@ static unsigned short http_port_val = 80;
 #define HTTP_PORT http_port_val
 /* 1.9.26: facehost=HOST[:PORT] on the boot command line moves where Samantha's face frames come from
    (the checks point it at a local stub). It lived in the kernel chat's face code; this is its new home. */
+static int noblink_on = 0; /* `noblink` on the boot line: ring-3 Samantha never blinks, so a check can read exact pixels */
+int jt_noblink(void) { return noblink_on; }
 static int http_stat_on = 0; /* `httpstat` on the boot line: one serial census line per ring-3 fetch, for tools/checks/httpstress-check.py */
 void jt_facehost_cmdline(const char *cl) {
     for (const char *p = cl; p && *p; p++) {
         if (p[0]=='h' && p[1]=='t' && p[2]=='t' && p[3]=='p' && p[4]=='s' && p[5]=='t' && p[6]=='a' && p[7]=='t' && (p == cl || p[-1] == ' ')) http_stat_on = 1;
+        if (p[0]=='n' && p[1]=='o' && p[2]=='b' && p[3]=='l' && p[4]=='i' && p[5]=='n' && p[6]=='k' && (p == cl || p[-1] == ' ') && (p[7] == 0 || p[7] == ' ')) noblink_on = 1;
         if (p[0]=='f' && p[1]=='a' && p[2]=='c' && p[3]=='e' && p[4]=='h' && p[5]=='o' && p[6]=='s' && p[7]=='t' && p[8]=='=') {
             p += 9; int n = 0;
             while (*p && *p != ' ' && *p != ':' && n < HTTP_HOST_MAX - 1) http_host_buf[n++] = *p++;

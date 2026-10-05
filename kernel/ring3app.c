@@ -214,8 +214,11 @@ int ring3app_launch_window(const char *name, unsigned int w, unsigned int h) {
     }
     if (!a || ring3app_seed(a) < 0) return -1;
     int phone = jt_phone_mode(), port = jt_portfolio_mode();
-    const char *argv[] = { a->file, phone ? "phone" : "portfolio", "portfolio" };
-    int argc = 1 + (phone || port) + (phone && port); /* argv[1]=="phone" stays the phone test; "portfolio" is last */
+    const char *argv[4] = { a->file };
+    int argc = 1;
+    if (phone) argv[argc++] = "phone";           /* argv[1]=="phone" stays the phone test */
+    if (port) argv[argc++] = "portfolio";
+    if (jt_noblink()) argv[argc++] = "noblink";  /* Samantha's blink off, for checks that read exact pixels */
     void *image = 0;
     serial_puts("ring3app: launching "); serial_puts(a->file); serial_puts(" at ring 3 as a window\n");
     __asm__ volatile ("cli"); /* the task must not get a tick before its window row exists */
