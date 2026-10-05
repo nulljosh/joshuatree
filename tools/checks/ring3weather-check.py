@@ -10,8 +10,16 @@ WEATHER.TXT for the app; with no NIC the file says "offline", so the window
 must show the honest offline face over labelled sample data. The check:
 
   1. asserts the launch, SYS_WINDOW_OPEN, the app's "wxwin=offline sample"
-     and the five sample forecast days, and that the window is the cream
+     and the seven sample forecast days, and that the window is the cream
      Weather surface;
+     1c. proves from framebuffer pixels (not serial) that every section of the
+     2.10.0 window drew, at the geometry the sample data implies: the hero's sun
+     disc, one terracotta high/low bar per day in the 7-day card at the x range its
+     low and high give, the hourly strip's sun and cloud glyphs and its scroll
+     thumb, and six detail tiles; then Tab/arrow keys: the terracotta focus ring
+     appears on the details tiles, moves to the week card, Down picks the next
+     day (selection pill moves, the tiles and their title change), and Right in
+     the hourly strip scrolls it (the thumb moves, "Now" leaves);
   2. presses R: the app draws "Fetching..." (wxwin=fetching), calls SYS_REFRESH,
      the desktop loop fetches exactly once more and the same window reloads
      and shows the offline face again;
@@ -23,7 +31,8 @@ must show the honest offline face over labelled sample data. The check:
      the desktop is back (Mail opens).
 
 Every wait has a deadline. Discriminating: drop the RING3_APPS row and step 1
-never sees the launch; stop the kernel writing WEATHER.TXT and the face
+never sees the launch; skip draw_week, draw_hourly or draw_details in user/weather.c
+and step 1c names the missing section; stop the kernel writing WEATHER.TXT and the face
 reads "Not fetched yet" with no wxwin=offline; drop the SYS_REFRESH pickup and
 step 2 sees no second fetch.
 (tools/checks/weather-app-check.sh covers the live, stale, bad and timeout faces.)
@@ -31,7 +40,7 @@ step 2 sees no second fetch.
 Usage: tools/checks/ring3weather-check.py   (from the repo root, after make kernel.elf)
 """
 import json, os, socket, subprocess, sys, time
-from PIL import Image
+from PIL import Image, ImageChops
 from freeport import free_port
 
 LOG = "/tmp/jt-ring3weather-serial.log"
@@ -105,8 +114,10 @@ try:
         fails.append("SYS_WINDOW_OPEN never succeeded from ring 3")
     if not wait_serial("wxwin=offline sample", 15):
         fails.append("the app did not read the kernel's WEATHER.TXT and show the offline face (wxwin=offline sample)")
-    if not wait_serial("wxrow=5 Mon,Tue,Wed,Thu,Fri facts=yes", 5):
-        fails.append("the sample face did not draw its five labelled forecast days")
+    if not wait_serial("wxrow=7 Mon,Tue,Wed,Thu,Fri,Sat,Sun facts=yes", 5):
+        fails.append("the sample face did not draw its seven labelled forecast days")
+    if not wait_serial("wxhours=24", 5):
+        fails.append("the sample face did not carry 24 hourly entries")
     time.sleep(0.5)
     bg = pixel(VIEW_X + 5, VIEW_Y + 5)
     print(f"surface pixel: {bg}")
@@ -132,6 +143,72 @@ try:
         if ink < 20: fails.append(f"no {name} text found to measure (ink={ink})")
         elif mid < ink * 0.15 or lv < 5:
             fails.append(f"{name} is not antialiased: {mid} intermediate pixels vs {ink} solid, {lv} distinct levels")
+
+    # 1c. every section is on screen, measured in framebuffer pixels. The window is 804x345 logical (wxdim),
+    # wide, so the layout is fixed: overview x20 y12 w352, hourly x20 y176 w352 h157, week x386 y12 w398
+    # h202 (rows 24 tall from y+30), details title y222 then two rows of three tiles 41 tall from y244.
+    # Colours are user/weather.c's: ACCENT sun and bars, CLOUD, CARD tiles, SEL the picked day's pill,
+    # TRACK and MID the hourly scroll bar. Sample data (offline) is fixed, so so is every number below.
+    ACCENT, CLOUD, CARD, SEL, TRACK, MID = (0xB5, 0x50, 0x2C), (0xB9, 0xAE, 0xA6), (0xEC, 0xE5, 0xDC), (0xE1, 0xD6, 0xC9), (0xD9, 0xCD, 0xBF), (0x64, 0x50, 0x57)
+    img = frame()
+    def vp(vx, vy, im=None): return pixel(VIEW_X + vx, VIEW_Y + vy, im or img)
+    def run(vy, lo_x, hi_x, col, im=None, tol=10):
+        xs = [x for x in range(lo_x, hi_x) if near(vp(x, vy, im), col, tol)]
+        return (min(xs), max(xs)) if xs else None
+    sections = {}
+    sections["overview (sun glyph)"] = near(vp(326, 78), ACCENT)                       # hero glyph at x+w-46, y+36+30
+    sections["overview (fact cards)"] = all(near(vp(x, 148), CARD) for x in (28, 146, 266))   # three cards at y124..166
+    # hourly: cell 54 wide from x32; hour 0 is a day-time clear sky (sun), hour 5 is cloud, the thumb is MID at its left end
+    sections["hourly (sun at Now)"] = near(vp(59, 252), ACCENT)
+    sections["hourly (cloud at hour 5)"] = near(vp(32 + 5 * 54 + 27, 252), CLOUD)
+    sections["hourly (scroll thumb)"] = near(vp(36, 321), MID) and near(vp(300, 321), TRACK)
+    # week: bars on one shared 9..21 scale from x580 to x722 (iw-50): Mon (row 0) lo 12 hi 21, Thu (row 3) lo 9 hi 15
+    bars = {}
+    for i, (lo, hi_) in enumerate(((12, 21), (11, 19), (10, 17), (9, 15), (10, 18), (11, 20), (11, 19))):
+        a, z = 580 + (lo - 9) * 142 // 12, 580 + (hi_ - 9) * 142 // 12
+        r = run(12 + 30 + i * 24 + 12, 570, 735, ACCENT)
+        bars[i] = r is not None and abs(r[0] - (a - 3)) <= 3 and abs(r[1] - (z + 3)) <= 3
+        if not bars[i]: print(f"week bar {i}: found {r}, wanted about {(a - 3, z + 3)}")
+    sections["week (seven high/low bars at their scale)"] = all(bars.values())
+    sections["week (picked-day pill on row 0)"] = near(vp(394, 12 + 30 + 4), SEL) and near(vp(394, 12 + 30 + 24 + 4), CARD)
+    tile_ok = []
+    for i in range(6):
+        tx, ty = 386 + (i % 3) * 136, 222 + 22 + (i // 3) * 49
+        tile_ok.append(near(vp(tx + 20, ty + 38), CARD) and near(vp(tx + 3, ty + 20), CARD) and not near(vp(tx + 20, ty + 43), CARD))
+    sections["details (six tiles)"] = all(tile_ok)
+    for name, ok in sections.items():
+        print(f"section {name}: {'drawn' if ok else 'MISSING'}")
+        if not ok: fails.append(f"the {name} did not draw in the framebuffer")
+    def region(im, x0, y0, x1, y1): return im.crop(((VIEW_X + x0) * SCALE, (VIEW_Y + y0) * SCALE, (VIEW_X + x1) * SCALE, (VIEW_Y + y1) * SCALE))
+    def changed(a, b, box): return ImageChops.difference(region(a, *box), region(b, *box)).convert('L').point(lambda v: 255 if v else 0).histogram()[255]
+    ring = lambda im, x, y: near(vp(x, y, im), ACCENT, 8)
+    # keys: no ring until one is pressed; Tab week -> details puts the ring round the six tiles
+    if ring(img, 385, 280) or ring(img, 385, 100): fails.append("a focus ring is drawn before any key was pressed")
+    keys("tab")
+    if not wait_serial("wxsec=details day=0 hoff=0", 5): fails.append("Tab did not move focus to the details section")
+    time.sleep(0.4); img_d = frame()
+    if not ring(img_d, 385, 270): fails.append("no terracotta focus ring round the details tiles after Tab")
+    keys("up")
+    if not wait_serial("wxsec=week day=0 hoff=0", 5): fails.append("Up from details did not return to the week")
+    keys("down"); keys("down")
+    if not wait_serial("wxsec=week day=2 hoff=0", 5): fails.append("Down in the week did not pick the third day")
+    time.sleep(0.4); img_w = frame()
+    if not ring(img_w, 385, 100): fails.append("no terracotta focus ring round the 7-day card")
+    if not (near(vp(394, 12 + 30 + 2 * 24 + 4, img_w), SEL) and near(vp(394, 12 + 30 + 4, img_w), CARD)):
+        fails.append("the picked-day pill did not move to the third row")
+    if changed(img, img_w, (386, 244, 784, 334)) < 60: fails.append("the details tiles did not change when another day was picked")
+    if changed(img, img_w, (386, 222, 520, 240)) < 15: fails.append("the details title did not change to the picked day")
+    keys("tab"); keys("tab")   # week -> details -> hourly
+    if not wait_serial("wxsec=hourly day=2 hoff=0", 5): fails.append("Tab twice did not reach the hourly strip")
+    keys("right"); keys("right")
+    if not wait_serial("wxsec=hourly day=2 hoff=2", 5): fails.append("Right in the hourly strip did not scroll it")
+    time.sleep(0.4); img_h = frame()
+    if not ring(img_h, 19, 250): fails.append("no terracotta focus ring round the hourly card")
+    # the thumb is 82 px of the 328 px track: it started at x32 and now starts at 32 + 246 * 2 / 18 = 59
+    if not (near(vp(36, 321, img_h), TRACK) and near(vp(75, 321, img_h), MID)): fails.append("the hourly scroll thumb did not move")
+    if changed(img, img_h, (20, 205, 100, 225)) < 20: fails.append("the hourly strip did not scroll (Now still first)")
+    keys("left"); keys("left")
+    if os.environ.get("JT_AA_DUMP"): img_h.save(os.environ["JT_AA_DUMP"] + ".keys.png")
 
     # 2. R: Fetching..., one more kernel fetch, a fresh run of the app
     fetches, launches = serial().count("wxfetch"), serial().count("launching WEATHER.BIN")

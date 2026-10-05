@@ -33,18 +33,16 @@ python3 - <<'PYEOF'
 import http.server, json, os, socket, subprocess, sys, tempfile, threading, time
 
 GEO = b'{"status":"success","country":"Canada","city":"Langley","zip":"V3A","lat":49.0983,"lon":-122.6498,"isp":"test"}'
-# Carries the real reply's traps: current_units and daily_units repeat every
-# key with string values before the real current/daily objects. Same shape and
-# field list as the one request the kernel makes (current + five daily days).
-WX = (b'{"latitude":49.09,"longitude":-122.57,"generationtime_ms":0.88,"utc_offset_seconds":-25200,"timezone":"America/Vancouver","timezone_abbreviation":"GMT-7","elevation":6.0,'
-      b'"current_units":{"time":"iso8601","interval":"seconds","temperature_2m":"\xc2\xb0C","apparent_temperature":"\xc2\xb0C","relative_humidity_2m":"%","wind_speed_10m":"km/h","weather_code":"wmo code"},'
-      b'"current":{"time":"2026-09-20T16:15","interval":900,"temperature_2m":14.2,"apparent_temperature":12.8,"relative_humidity_2m":69,"wind_speed_10m":11.4,"weather_code":3},'
-      b'"daily_units":{"time":"iso8601","weather_code":"wmo code","temperature_2m_max":"\xc2\xb0C","temperature_2m_min":"\xc2\xb0C"},'
-      b'"daily":{"time":["2026-09-20","2026-09-21","2026-09-22","2026-09-23","2026-09-24"],"weather_code":[3,0,61,71,95],'
-      b'"temperature_2m_max":[17.6,21.2,15.4,3.1,16.5],"temperature_2m_min":[9.4,8.5,9.2,-2.6,9.0]}}')
+# tools/checks/wxfixture.py: the canned reply carries the real one's traps (current_units, hourly_units
+# and daily_units repeat every key with string values before the real objects) and the same field list
+# as the one request the kernel makes: current, the next 24 hours, seven days.
+sys.path.insert(0, os.path.join(os.getcwd(), "tools", "checks"))
+import wxfixture
+WX = wxfixture.reply()
 # 2026-09-20 is a Sunday, so the forecast row the window draws must read:
-ROW = "wxrow=5 Sun,Mon,Tue,Wed,Thu facts=yes"
-WANT_FIELDS = ("apparent_temperature", "relative_humidity_2m", "wind_speed_10m", "daily=weather_code,temperature_2m_max,temperature_2m_min", "forecast_days=5", "timezone=auto")
+ROW = wxfixture.WEEK_ROW
+SAMPLE_ROW = wxfixture.SAMPLE_ROW
+WANT_FIELDS = wxfixture.WANT_FIELDS
 
 def make_server(state):
     class H(http.server.BaseHTTPRequestHandler):
@@ -138,13 +136,14 @@ def scenario(name, mode, steps):
 def s_success(b):
     if not b.wait("wxstate=ok", 120): return "never reached wxstate=ok against a valid reply"
     if "wx=14" not in b.serial(): return "parsed reading is not the served 14.2C"
-    if "wxextra=yes days=5" not in b.serial(): return "feels like / humidity / wind or the five daily entries were not parsed from the reply"
+    if "wxextra=yes days=7 hours=24" not in b.serial(): return "feels like / humidity / wind, the seven daily entries or the 24 hourly ones were not parsed from the reply"
     missing = [f for f in WANT_FIELDS if not any(f in p for p in b.state["paths"])]
     if missing: return "the one forecast request does not ask for: " + ", ".join(missing)
     if len([p for p in b.state["paths"] if p.startswith("/v1/forecast")]) != 1: return "more than one forecast request for a single reading"
     b.click_weather()
     if not b.wait("wxwin=ok live", 20): return "window did not show the live reading"
-    if not b.wait(ROW, 10): return "forecast row did not render five day cards with the served weekdays"
+    if not b.wait(ROW, 10): return "forecast section did not render seven days with the served weekdays"
+    if not b.wait("wxhours=24", 10): return "the app did not load the 24 hourly entries the kernel wrote to WEATHER.TXT"
     if "wxshow=14 Cloudy" not in b.serial(): return "the app did not draw the served 14 degrees and its condition word"
     if os.environ.get("WX_SCREENDUMP"): time.sleep(1.0); b.screendump(os.environ["WX_SCREENDUMP"]); time.sleep(0.5)
     b.state["mode"] = "bad"; b.key("r")
@@ -157,7 +156,7 @@ def s_bad(b):
     if not b.wait("wxstate=bad forecast: HTTP 403", 120): return "a 403 reply was not reported as a bad response"
     b.click_weather()
     if not b.wait("wxwin=bad sample", 20): return "window did not show the bad-response state over labelled sample data"
-    if not b.wait("wxrow=5 Mon,Tue,Wed,Thu,Fri facts=yes", 10): return "sample face did not render its labelled sample forecast row"
+    if not b.wait(SAMPLE_ROW, 10): return "sample face did not render its labelled seven-day sample"
     if os.environ.get("WX_SCREENDUMP_SAMPLE"): time.sleep(1.0); b.screendump(os.environ["WX_SCREENDUMP_SAMPLE"]); time.sleep(0.5)
     b.state["mode"] = "ok"; b.key("r")
     if not b.wait("wxwin=fetching", 20): return "R did not show the fetching state"
