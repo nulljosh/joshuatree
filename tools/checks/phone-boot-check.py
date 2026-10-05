@@ -341,11 +341,11 @@ try:
             row, col = icon // COLS, icon % COLS
             return col * CELL_W + CELL_W // 2, Y0 + row * CELL_H + TILE
 
-        # All 28 real apps' cells must land inside the 760px logical
+        # All 29 real apps' cells must land inside the 760px logical
         # screen (no scrolling) -- the exact bug Joshua's screenshot
         # review caught at 4 columns (Activity idx24, Clock idx25 sitting
         # off the bottom, unreachable by any tap).
-        GUI_APPS_FOLDER = 28
+        GUI_APPS_FOLDER = 29
         offscreen = [i for i in range(GUI_APPS_FOLDER) if cell_center(i)[1] + 24 > LOGICAL_H]
         if offscreen:
             fail = 1; print(f"FAIL: {len(offscreen)} app cell(s) fall below the {LOGICAL_H}px screen: {offscreen}")

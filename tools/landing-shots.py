@@ -42,9 +42,10 @@ FLEET = {"bookrank": ("bookr", "bookrank: ring-3 window", "bookrank: samples"),
          "curbfind": ("curb", "curbfind: ring-3 window", "curbfind: samples"),
          "epiphany": ("epip", "epiphany: ring-3 window", "epiphany: fetch"),   # (open= flag, window opened, offline fallback chosen)
          "hamurabi": ("hamu", "hamurabi: ring-3 window", "hamurabi: phase title"),   # Hamurapi: its title scene, drawn from first frame, no network
-         "windgate": ("windgate", "windgate: ring-3 window", "windgate: clock ready")}   # Windgate: offline by design; Space starts it and the shot lands mid in-breath
+         "windgate": ("windgate", "windgate: ring-3 window", "windgate: clock ready"),
+         "panes": ("pane", "panes: ring-3 window", "panes: tabs a=1 b=1")}   # Windgate: offline by design; Space starts it and the shot lands mid in-breath
 FILE = {"bookrank": "app-bookrank", "tonchi": "app-tonchi", "curbfind": "app-curbfind", "epiphany": "app-epiphany",
-        "hamurabi": "app-hamurapi", "windgate": "app-windgate", "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
+        "hamurabi": "app-hamurapi", "windgate": "app-windgate", "panes": "app-panes", "chat": "samantha-chat", "notes": "app-notes", "calendar": "app-calendar", "weather": "app-weather",
         "files": "app-files", "terminal": "app-terminal", "stocks": "app-stocks"}
 
 
@@ -111,6 +112,15 @@ def shoot(name):
                 else:
                     sys.exit(f"FAIL {name}: no '{needle}' on serial")
             time.sleep(2.0)                    # let the frame after the fallback land
+            if name == "panes":
+                type_text("ls"); key("ret"); time.sleep(0.6)
+                key("ctrl-t"); time.sleep(0.6)
+                type_text("sleep 2 build done"); key("ret"); time.sleep(0.6)
+                key("ctrl-1")                  # the second tab keeps running; its dot shows once the timer ends
+                for _ in range(120):
+                    if "panes: job done" in serial(): break
+                    time.sleep(0.25)
+                time.sleep(1.0)
             if name == "windgate":
                 key("spc"); time.sleep(2.0)    # start the breath: the tile shows the circle growing
         else:

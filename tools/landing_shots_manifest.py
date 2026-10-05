@@ -14,7 +14,7 @@ PROGRAM = {
     "app-notes": "notes", "app-calendar": "calendar", "app-weather": "weather", "app-files": "burrow",
     "app-terminal": "terminal", "app-stocks": "stocks", "samantha-chat": "samantha",
     "app-bookrank": "bookrank", "app-tonchi": "tonchi", "app-curbfind": "curbfind", "app-epiphany": "epiphany",
-    "app-hamurapi": "hamurabi", "app-windgate": "windgate",
+    "app-hamurapi": "hamurabi", "app-windgate": "windgate", "app-panes": "panes",
 }
 # Headers a program includes that also change its picture (the sprite sheet and the rules and story the game shows).
 EXTRA = {"app-hamurapi": ["user/hamurabi_sprites.h", "user/hamurabi_rules.h", "user/hamurabi_story.h"]}

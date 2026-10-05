@@ -142,6 +142,7 @@ retry|0|Notes' runtime-TTF text is real antialiased rasterization at 12pt and 20
 retry|4|Notes folders: legacy NOTES.TXT migrates intact, a new note lands in the current folder, both survive reboot, delete asks first|python3 ./tools/checks/notesfolders-check.py
 retry|1|Terminal grid draws the mono face at its true advance|python3 ./tools/checks/termmono-check.py
 retry|2|Terminal's runtime-TTF text is real antialiased rasterization with a driftless monospace grid|python3 ./tools/checks/termsharp-check.py
+retry|7|Panes: independent scrollback per tab, tab rail, activity dot on a background tab, close, split panes with their own shells|python3 ./tools/checks/panes-check.py
 retry|4|Apple-menu hover stays cheap, clock redraws on a minute change|./tools/checks/menuclock-check.sh
 retry|3|Lock Screen: menu item locks, Esc cannot bypass, password unlocks|python3 ./tools/checks/lockscreen-check.py
 retry|3|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mwkeyflash-check.sh

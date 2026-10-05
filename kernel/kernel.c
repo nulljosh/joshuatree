@@ -844,9 +844,10 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-#define GUI_APP_COUNT   30 /* 28 real apps + the Apps folder + Trash; 2.2 Music (24) and Movies (25) pushed Apps/Trash to 26/27, 2.7 Hamurapi (26) to 27/28, 2.8 Windgate (27) to 28/29 */
-#define GUI_APPS_FOLDER 28 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       29
+#define GUI_APP_COUNT   31 /* 29 real apps + the Apps folder + Trash; 2.2 Music (24) and Movies (25) pushed Apps/Trash to 26/27, 2.7 Hamurapi (26) to 27/28, 2.8 Windgate (27) to 28/29, 2.11 Panes (28) to 29/30 */
+#define GUI_APPS_FOLDER 29 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       30
+#define GUI_APP_PANES   28 /* the one app that gets Ctrl chords as KEY_CTL_* (kernel/app.h) */
 #define GUI_APP_PORTFOLIO 21 /* hidden from the Apps folder and phone home unless the boot line says "portfolio" (his site embed); the public OS ships without it */
 /* Every app's name, color, glyph and hooks live in one table, APPS[],
    defined further down once every hook it points at exists (see "The app
@@ -2066,7 +2067,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
 static int wind_base_width = 0; void music_ring3_open(void); void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void tonchi_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void hikko_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
-void movies_ring3_open(void); void hamurabi_ring3_open(void); void windgate_ring3_open(void);
+void movies_ring3_open(void); void hamurabi_ring3_open(void); void windgate_ring3_open(void); void panes_ring3_open(void);
 
 static int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
@@ -5099,6 +5100,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 25 */ {"Movies",     0x00B5502C, gui_icon_chat,       movies_ring3_open,     0, 0}, /* 2.2: ring 3 (user/movies.c), Apps folder only; authored art (art/icons/movies.svg) covers the icon */
     /* 26 */ {"Hamurapi",   0x00B5502C, gui_icon_chat,       hamurabi_ring3_open,   0, 0}, /* 2.7: ring 3 (user/hamurabi.c; the game is shown as Hamurapi, the store name Hamurabi was taken), Apps folder only; authored art (art/icons/hamurabi.svg) covers the icon */
     /* 27 */ {"Windgate",   0x000B1420, gui_icon_chat,       windgate_ring3_open,   0, 0}, /* 2.8: guided breathing, ring 3 (user/windgate.c), Apps folder only; authored art (art/icons/windgate.svg) covers the icon */
+    /* 28 */ {"Panes",      0x00F5F5F8, gui_icon_chat,       panes_ring3_open,      0, 0}, /* 2.11: cmux-style tabs and split panes sharing the Terminal's shell engine, ring 3 (user/panes.c), Apps folder only; authored art (art/icons/panes.svg) covers the icon */
     /* Apps and Trash aren't real apps with their own brand color, so their
        tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
        tinted background like every real app above. 2026-09-27: this used
@@ -5331,6 +5333,7 @@ static int gui_multiwin_key_nonblock(void){
         int sc2 = kbd_pop();
         if (sc2 < 0) return -1; int sh = sel_ok && kbd_shift; /* shift+arrow extends a selection only in a ring-3 window */
         if (sc2 == 0x48) return sh ? KEY_SUP : KEY_UP;    if (sc2 == 0x50) return sh ? KEY_SDOWN : KEY_DOWN;
+        if (sel_ok && kbd_ctrl && gui_windows[gui_window_count - 1].icon == GUI_APP_PANES) { if (sc2 == 0x4B) return KEY_CTL_LEFT; if (sc2 == 0x4D) return KEY_CTL_RIGHT; }
         if (sc2 == 0x4B) return sh ? KEY_SLEFT : KEY_LEFT; if (sc2 == 0x4D) return sh ? KEY_SRIGHT : KEY_RIGHT;
         if (sc2 == 0x47) return KEY_HOME;
         if (sc2 == 0x4F) return KEY_END;
@@ -5341,7 +5344,7 @@ static int gui_multiwin_key_nonblock(void){
     if (sc & 0x80) return -1; /* key release */
     if (sc == 0x3C) return KEY_F2;
     if (kbd_ctrl && (sc & 0x7F) == 0x1F) return KEY_SAVE;
-    if (kbd_ctrl) { int k = sc & 0x7F; if (k == 0x2E) return KEY_COPY; if (k == 0x2D) return KEY_CUT; if (k == 0x2F) return KEY_PASTE; if (sel_ok && k == 0x1E) return KEY_SELALL; } /* clipboard and select-all keys reach ring-3 windows too */
+    if (kbd_ctrl) { int k = sc & 0x7F; if (k == 0x2E) return KEY_COPY; if (k == 0x2D) return KEY_CUT; if (k == 0x2F) return KEY_PASTE; if (sel_ok && k == 0x1E) return KEY_SELALL; if (sel_ok && gui_windows[gui_window_count - 1].icon == GUI_APP_PANES && key_ctl_code(k)) return key_ctl_code(k); } /* clipboard and select-all keys reach ring-3 windows too */
     char c = kbd_map(sc);
     if (c == '\n') return KEY_ENTER;
     if (c == 27)   return KEY_ESC;

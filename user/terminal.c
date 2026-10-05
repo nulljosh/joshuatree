@@ -23,6 +23,7 @@
  */
 #include "jtsys.h"
 #include "libjt/text.h"
+#include "shellcore.h" /* the shell engine, shared with Panes */
 
 #define BG     0x001A1512
 #define INK    0x00D8CFC4
@@ -73,7 +74,6 @@ static void sputc(char c) {
     ar->sb[slen] = 0;
 }
 static void sputs(const char *s) { while (*s) sputc(*s++); }
-static int seq(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
 
 static void draw(void) {
     int cols = ((int)win.width - 2 * MARGIN) / CELL;
@@ -123,62 +123,10 @@ static void draw(void) {
     jt_text_draw(&win, JT_FACE_BODY, MARGIN, hint_y, HINT, "esc closes   |   help echo uptime mem ps cd ls cat");
 }
 
-/* cd: validate with jt_readdir (relative to the root, where cwd lives), then
-   move this app's own cwd. The kernel never learns it except per call. */
-static void do_cd(const char *arg) {
-    char t[CWD_MAX + 1];
-    unsigned n = 0;
-    if (!*arg || (arg[0] == '/' && !arg[1])) { ar->cwd[0] = 0; return; }
-    if (arg[0] == '.' && arg[1] == '.' && !arg[2]) {
-        while (ar->cwd[n]) n++;
-        while (n && ar->cwd[n - 1] != '/') n--;
-        if (n) n--;
-        ar->cwd[n] = 0;
-        return;
-    }
-    for (const char *c = ar->cwd; *c; c++) { if (n >= CWD_MAX) goto toolong; t[n++] = *c; }
-    if (n) { if (n >= CWD_MAX) goto toolong; t[n++] = '/'; }
-    for (; *arg; arg++) { if (n >= CWD_MAX) goto toolong; t[n++] = *arg; }
-    t[n] = 0;
-    struct jt_dirent d;
-    if (jt_readdir(t, &d, 1) < 0) { sputs("cd: no such folder\n"); return; }
-    for (unsigned i = 0; i <= n; i++) ar->cwd[i] = t[i];
-    return;
-toolong:
-    sputs("cd: path too long\n");
-}
-
 static void run_line(void) {
     ar->in[inlen] = 0;
-    sputs("~"); sputs(ar->cwd); sputs("> "); sputs(ar->in); sputc('\n');
-    if (inlen) {
-        const char *a = ar->in;
-        while (*a == ' ') a++;
-        if (seq(ar->in, "clear")) { slen = 0; ar->sb[0] = 0; }
-        else if (a[0] == 'c' && a[1] == 'd' && (!a[2] || a[2] == ' ')) {
-            a += 2;
-            while (*a == ' ') a++;
-            do_cd(a);
-        }
-        else {
-            unsigned q = 0;
-            for (const char *c = ar->cwd; *c; c++) ar->req[q++] = *c;
-            ar->req[q++] = '\n';
-            for (unsigned i = 0; i < inlen; i++) ar->req[q++] = ar->in[i];
-            ar->req[q] = 0;
-            int n = jt_shell_run(ar->req, ar->out, OUT_MAX);
-            if (n < 0) sputs("shell: refused\n");
-            else for (int i = 0; i < n; i++) sputc(ar->out[i]);
-            char m[32] = "terminal: ran=";
-            int l = 14, d[8], dn = 0;
-            unsigned v = n < 0 ? 0 : (unsigned)n;
-            if (!v) d[dn++] = 0;
-            while (v && dn < 8) { d[dn++] = (int)(v % 10); v /= 10; }
-            while (dn) m[l++] = (char)('0' + d[--dn]);
-            m[l++] = '\n';
-            jt_write(1, m, (unsigned)l);
-        }
-    }
+    sh_echo(sputc, ar->cwd, ar->in);
+    if (inlen && sh_dispatch(ar->cwd, ar->in, inlen, ar->req, ar->out, sputc) == SH_CLEAR) { slen = 0; ar->sb[0] = 0; }
     inlen = 0;
 }
 
