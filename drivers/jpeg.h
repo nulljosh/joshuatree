@@ -62,4 +62,9 @@ int jpeg_decode(const unsigned char *data, unsigned int len,
 int jpeg_decode_scaled(const unsigned char *data, unsigned int len, unsigned short *dst,
                        unsigned int dw, unsigned int dh, unsigned int *w, unsigned int *h);
 
+/* The same streaming decode into packed 0RGB (one u32 a pixel, dw up to 1024) for a picture worth keeping at full
+   colour, such as Samantha's 736 px portrait. */
+int jpeg_decode_scaled32(const unsigned char *data, unsigned int len, unsigned int *dst,
+                         unsigned int dw, unsigned int dh, unsigned int *w, unsigned int *h);
+
 #endif

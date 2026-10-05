@@ -13,8 +13,8 @@ The page embeds `joshuatree.heyitsmejosh.com/?full&portfolio`. `landing/v86/embe
 | Name and title | Samantha | Joshua |
 | Who answers | Samantha, from Turing | Joshua, in the first person (`"persona":"joshua"` in the chat request; Turing routes it, see its `docs/PERSONAS.md`) |
 | Voice | Her voice | His cloned voice (`/api/speak?v=joshua`) |
-| Face | A small band at the top, frames from `/face/` | The whole screen, frames from `/face-joshua/` (24 idle, 48 talk, 320 px each) |
-| Window | Normal | Frameless, full screen, no menu bar (`gui_window_bleed` in `kernel/kernel.c`) |
+| Face | The whole screen (2.9.0), her 736 px portrait from `/face/hd.jpg` with the mouth drawn from her voice | The whole screen, frames from `/face-joshua/` (24 idle, 48 talk, 320 px each) |
+| Window | Frameless, full screen, no menu bar, a red dot and Esc close her (2.9.0; on a screen bigger than 960x540 logical she opens in an ordinary window) | Frameless, full screen, no menu bar (`gui_window_bleed` in `kernel/kernel.c`) |
 | Dock | Everything | His apps; the Portfolio catalog app is visible |
 
 The face and the chat bar are drawn by `user/samantha.c`. The picture is built off screen and copied in one pass so it never tears. His latest reply floats above the glass bar while he talks and for six seconds after, then the face is clear. Frame downloads wait while he talks.

@@ -68,7 +68,7 @@ int gui_parse_res(const char *cl, int *rw, int *rh){
         const char *q = p + 4; int w = 0, h = 0;
         while (*q >= '0' && *q <= '9' && w < 100000) w = w * 10 + (*q++ - '0');
         if (*q == 'x') { q++; while (*q >= '0' && *q <= '9' && h < 100000) h = h * 10 + (*q++ - '0'); }
-        if (w < 1600 || w > 3840 || h < 900 || h > 2160 || (w % 8) || (h % 2)) return 0;
+        if (w < 1024 || w > 3840 || h < 768 || h > 2160 || (w % 8) || (h % 2)) return 0;
         *rw = w; *rh = h; return 1;
     }
     return 0;

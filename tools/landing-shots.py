@@ -101,7 +101,7 @@ def shoot(name):
             time.sleep(0.25)
         else:
             sys.exit(f"FAIL {name}: desktop never appeared")
-        time.sleep(1.0)
+        time.sleep(4.0)
 
         if fleet:
             for needle in FLEET[name][1:]:     # window first, then the offline fallback: a frame before it is mid-draw

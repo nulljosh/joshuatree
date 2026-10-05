@@ -45,7 +45,7 @@ PARK = (930, 300)          # right of the window: the pointer sprite must not re
 CLOSE = (94, 56)             # window 0's red traffic light (gui_multiwin_geom slot 0 / gui_launch_from_dock)
 VX0, VY0, VX1, VY1 = 78, 72, 890, 417  # content viewport: (x+8, y+32, w-16, h-40) for x=70,y=40,w=820,h=385
 MAX_GAP = 46   # 2.0 ring-3 apps keep a ~40px header margin on purpose; the 2026-09 bug sat at 52+
-SLOTS = {"Mail": 2, "Calendar": 3, "Notes": 4, "Reminders": 5, "Samantha": 7, "Trash": 10}
+SLOTS = {"Mail": 2, "Calendar": 3, "Notes": 4, "Reminders": 5, "Trash": 10}   # Samantha has no title bar since 2.9.0 (full screen); samantha-fullscreen-check.py covers her
 # In 2.0 an Apps-folder app opens as its own ring-3 window over the folder
 # (x=10,y=40,w=812,h=385), viewport (x+8, y+32, w-16, h-40), and the folder
 # keeps its "Apps" title strip underneath. Grid index i sits at row i/5,

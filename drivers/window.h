@@ -27,6 +27,8 @@ unsigned int window_get_pixel(int x, int y);
    the framebuffer is `scale` times bigger in each axis. */
 int window_open_scaled(unsigned int width, unsigned int height, unsigned int bpp, unsigned int scale);
 unsigned int window_scale(void);
+/* A ring-3 window's logical buffer into the current viewport in one pass (the fast path for big windows). */
+void window_blit_logical(const unsigned int *src, int srcw, int cw, int ch);
 void window_pixel_phys(int px, int py, unsigned int color);
 /* Fast solid-fill path for a whole rectangle, same viewport/back/
    screen_band routing window_pixel_phys does but paid once for the rect

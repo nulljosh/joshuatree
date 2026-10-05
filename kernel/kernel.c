@@ -2398,7 +2398,7 @@ void jt_sysinfo_fill(struct jt_sysinfo *si){
     si->wx_code10 = weather_code10;
     si->llm_port = (unsigned)llm_port;
     si->data_stamp = jt_data_stamp;
-    for (int i = 0; i < JT_WX_TEXT_MAX - 1 && weather_text[i]; i++) si->wx_text[i] = weather_text[i];
+    for (int i = 0; i < JT_WX_TEXT_MAX - 1 && weather_text[i]; i++) si->wx_text[i] = weather_text[i] == (char)0xF8 ? (char)0xB0 : weather_text[i]; /* ring 3 text is Latin-1: the kernel font's CP437 degree is 0xB0 there */
     for (int i = 0; i < JT_SYSINFO_HOST_MAX - 1 && llm_host[i]; i++) si->llm_host[i] = llm_host[i];
 }
 static volatile int launch_pending = -1;
@@ -5045,7 +5045,8 @@ static int gui_multiwin_interactive(int icon){ return icon >= 0 && icon < GUI_AP
    concurrently-open window is offset so both titlebars and both close
    buttons stay fully on screen and visually distinct, not stacked exactly
    on top of each other. */
-static int gui_window_bleed(int icon){ return portfolio_dock && !boot_to_phone && icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open == samantha_ring3_open; } /* portfolio mode: Samantha's window is Joshua's face, full bleed; Esc still closes it */
+static int gui_bleed_fits(void){ return (unsigned)window_width() * (unsigned)window_height() * 4u <= JT_USER_FB_BYTES; } /* a ring-3 window buffer is 2.1 MB (960x540): a bigger screen gets her in an ordinary window instead of a refused open */
+static int gui_window_bleed(int icon){ return !boot_to_phone && gui_bleed_fits() && icon >= 0 && icon < GUI_APP_COUNT && APPS[icon].open == samantha_ring3_open; } /* Samantha's window is her face, full bleed (portfolio mode: under the menu bar too); Esc closes it */
 static int gui_bleed_open(void){ for (int i = 0; i < gui_window_count; i++) if (gui_window_bleed(gui_windows[i].icon)) return 1; return 0; }
 static void gui_multiwin_geom(int slot_index, int *x, int *y, int *w, int *h){
     if (boot_to_phone) { *x = -8; *y = 8; *w = (int)window_width() + 16; *h = (int)window_height(); return; } /* 2.0 gate 5: one window, full screen under the back chevron strip (content rect 0,40,W,H-40) */
@@ -6200,10 +6201,11 @@ static void gui_run(void){
         int held = buttons & 1;
         int just_pressed = held && !(prev_buttons & 1);
         int just_released = !held && (prev_buttons & 1);
-        int logo_here = !menu_open && !notif_open && !weather_open && mx >= 4 && mx <= 28 && my < GUI_MENUBAR_H;
-        int clock_here = !menu_open && !notif_open && !weather_open && mx >= (int)window_width() - 200 && my < GUI_MENUBAR_H;
-        int weather_here = !menu_open && !notif_open && !weather_open && weather_hit_x0 >= 0 && mx >= weather_hit_x0 && mx <= weather_hit_x1 && my < GUI_MENUBAR_H;
-        int slot_here = (menu_open || notif_open || weather_open) ? -1 : gui_dock_hit_test(mx, my); /* the dock is inert while a panel covers it */
+        int bleed_now = gui_bleed_open(); /* a full-screen window hides the menu bar and dock, so their hot spots go dead too: its red dot sits where the logo was */
+        int logo_here = !bleed_now && !menu_open && !notif_open && !weather_open && mx >= 4 && mx <= 28 && my < GUI_MENUBAR_H;
+        int clock_here = !bleed_now && !menu_open && !notif_open && !weather_open && mx >= (int)window_width() - 200 && my < GUI_MENUBAR_H;
+        int weather_here = !bleed_now && !menu_open && !notif_open && !weather_open && weather_hit_x0 >= 0 && mx >= weather_hit_x0 && mx <= weather_hit_x1 && my < GUI_MENUBAR_H;
+        int slot_here = (bleed_now || menu_open || notif_open || weather_open) ? -1 : gui_dock_hit_test(mx, my); /* the dock is inert while a panel covers it */
         int win_hit_here = (menu_open || notif_open || weather_open) ? -1 : gui_multiwin_hit_test(mx, my); /* v0.73.6: real hit test against every open window, topmost first, see gui_multiwin_hit_test */
         int win_close_here = (win_hit_here >= 0 && win_hit_here == gui_window_count - 1) ? win_hit_here : -1; /* only the already-focused (topmost) window's own click-anywhere-closes contract; a click on a background window is click-to-focus, not close, handled below */
         int win_focus_changed = 0; /* set below when a click raises a background window; folded into `launched` once it's declared, so the z-order change gets a real full repaint this same frame */
