@@ -1,4 +1,4 @@
-# Joshua Tree loop handoff (2026-10-05, morning)
+# Joshua Tree loop handoff (2026-10-05, afternoon)
 
 ## What the loop is
 
@@ -6,25 +6,28 @@ Keep merging green PRs, then build the next item toward the 6.0 capabilities (co
 
 ## Where things stand (2026-10-05)
 
-- Main is 2.11.0 and live. Shipped since the last handoff: 2.7.2 icons and the README mark, 2.8.0 Windgate, 2.9.0 Samantha full screen with fading captions and a mouth driven by her voice, 2.9.1 her mouth parting along the real lip seam plus a blink, 2.10.0 a much richer Weather, 2.10.1 the Samantha check made condition-based, 2.11.0 Panes, a cmux-style tabs and splits terminal that shares Terminal's shell code. Terminal itself is unchanged.
-- The Launchpad has 29 apps. No PRs or issues are open.
-- Policy: helpers open draft PRs and pass `CI_LOCAL_JOBS=4 tools/ci-local.sh` before ready. Run `npx playwright install chromium webkit` first if the demo checks fail in under a second. Close out each agent with TaskStop as soon as its work merges.
-- Two GitHub-only timing flakes were seen and passed on one rerun: the Hikko forum check (shard 3) and the Samantha full-screen check (shard 4, since hardened). Rerun a failed job once before digging.
-- The landing hero demo is a blank box until clicked and opens on the desktop. It should show something first and open straight on Samantha's face.
-- The landing badge was not refreshed in 2.7 to 2.11. Joshua said to refresh the artwork. Follow the logo-refresh skill and `docs/BADGE.md`, and send the preview to Joshua.
-- App Store: Hikko iOS 3.0 is the only rejected app in the fleet. Reading why needs an Apple web login (`! asc-login`, 2FA code from Joshua's phone). Apple throttled sign-ins at 08:58 on 2026-10-05, so wait until after 10:30 and make one attempt.
-- Samantha's portrait: Joshua thinks it resembles a real actress. Check where the portrait came from before the site goes further public.
+- Main is 2.11.1 and live. Shipped today: 2.7.2 icons and the README mark, 2.8.0 Windgate, 2.9.0 Samantha full screen, 2.9.1 her mouth and blink, 2.10.0 a much richer Weather, 2.10.1 the Samantha check made condition-based, 2.11.0 Panes (a second, cmux-style terminal app; Terminal is unchanged), 2.11.1 the landing hero opening on Samantha's face with a poster before the click. The Launchpad has 29 apps.
+- Open PR 421, the 2.12.0 mark refresh (rounded forks, engraved grooves, a ground line). Joshua has seen it and likes it. It is ready and waiting on GitHub CI. Its first run had seven jobs cancelled at exactly 15 minutes with empty logs while GitHub's status page said the service was degraded; rerun the failed jobs once the page is green, and do not change code for that.
+- In progress: 2.12.1, Samantha's framing on wide screens. Joshua asked to give her face a little room. The approved mock scales her to 86 percent of the window width, puts her eyes about 40 percent down, and fills the sides with her wall colour through a soft feather. Branch `samantha-room`, worktree `/tmp/jt-room`. Joshua wants the final result graded honestly.
+- Local testing: on 2026-10-05 afternoon a full-screen game put the terminal's whole process tree at background priority, the Mac ran about four times slower, the OS took about 15 seconds to boot under QEMU, and checks with fixed sleeps failed on clean main too. Before any local suite run `ps -o pri= -p $$`: 31 is normal, 4 is throttled. Do not run the full suite while throttled.
+- Policy: helpers open draft PRs and pass `CI_LOCAL_JOBS=4 tools/ci-local.sh` before ready. Run `npx playwright install chromium webkit` first if the demo checks fail in under a second. Close out each agent with TaskStop as soon as its work merges. Agents twice killed processes that were not theirs; tell them to kill by PID only.
+- The live site can be checked headless with Playwright (desktop and phone): poster before the click, a real reply and voice after it, Esc to the desktop.
+- Known wart: on phones the landing page shows two "Message Samantha" bars, one drawn by the OS inside the demo and one from the page below it.
+- Still carrying the 2.0 tree after the mark refresh: `landing/ad.mp4`, `ad-poster.jpg`, `neo-hero.jpg` and the hardware CAD outputs.
+- App Store: Hikko iOS 3.0 is the only rejected app in the fleet. Reading why needs an Apple web login (`! asc-login`, 2FA code from Joshua's phone). Apple throttled sign-ins twice on 2026-10-05, so make one attempt only, when Joshua is at his phone. Hamurapi iOS and macOS are waiting for review.
+- Samantha's portrait is Joshua's own Higgsfield generation. That question is settled.
+- The Pi: Joshua went to buy a Raspberry Pi 4 (4 GB) and the first-boot kit on 2026-10-05. Ask whether he has it before planning around it.
 
 ## Next, in order
 
-1. Landing hero: show something before the click and open on Samantha's face. Then the logo and badge refresh.
-2. A design system for Joshua Tree (research the standards, write it down, check the OS against it).
-3. Landing refresh with real Chrome QA at desktop and phone widths.
-4. Web voice-in: browser mic to `/api/listen` (Cloudflare Whisper is already in the Worker). The OS mic needs hardware.
-5. Mobile QA of Samantha and the landing page.
-6. Fleet apps, one PR each: Curvely and Numen, Nimble, Sidewise, Wordroot, Brick on its other data source.
-7. CI: rebalance the shards, add a hard timeout per check.
-8. If the Pi is in hand: first serial boot per `docs/RASPBERRY-PI.md`.
+1. Land PR 421 (the mark) and the 2.12.1 framing change, then grade both for Joshua.
+2. If the Pi is in hand: first serial boot per `docs/RASPBERRY-PI.md`. This is the gate for 3.0.0.
+3. A design system for Joshua Tree (research the standards, write it down, check the OS against it).
+4. Landing refresh with real browser QA at desktop and phone widths, starting with the double message bar on phones.
+5. Web voice-in: browser mic to `/api/listen` (Cloudflare Whisper is already in the Worker). The OS mic needs USB audio first.
+6. Mobile QA of Samantha and the landing page.
+7. Fleet apps, one PR each: Curvely and Numen, Nimble, Sidewise, Wordroot, Brick on its other data source.
+8. CI: rebalance the shards, add a hard timeout per check, replace fixed sleeps with waits on a serial or pixel marker.
 
 ## How to work
 
@@ -33,5 +36,5 @@ One agent at a time, always a draft PR first, a git worktree outside the main ch
 ## Restart prompt
 
 ```
-/loop until Joshua Tree reaches the 6.0 capabilities and keep going after (the long road is in docs/roadmap.md). State is in docs/LOOP-HANDOFF.md. Big versions are cut only when their gates are true, so 3.0.0 waits for Joshua's real Raspberry Pi 4 boot; build the capabilities of 4.0, 5.0 and 6.0 as 2.x steps. One agent at a time, full rules in every brief, verify every claim myself, full local suite before ready, merge on GitHub green, verify the release cuts and the live site, TaskStop agents when their work merges. Keep open PRs and issues at zero between rounds. PushNotification after each landed PR. Check Hamurapi review each round (asc status --app 6819131590); on approval schedule 0.99 for approval day plus 7. Checkpoint at 90 percent usage.
+/loop until Joshua Tree reaches the 6.0 capabilities and keep going after (the long road is in docs/roadmap.md). State is in docs/LOOP-HANDOFF.md. Big versions are cut only when their gates are true, so 3.0.0 waits for Joshua's real Raspberry Pi 4 boot; build the capabilities of 4.0, 5.0 and 6.0 as 2.x steps. One agent at a time, full rules in every brief, verify every claim myself, full local suite before ready (check ps -o pri= -p $$ first, 4 means the Mac is throttled), merge on GitHub green, verify the release cuts and the live site, TaskStop agents when their work merges. Keep open PRs and issues at zero between rounds. PushNotification after each landed PR. Check Hamurapi review each round (asc status --app 6819131590); on approval schedule 0.99 for approval day plus 7. Checkpoint at 90 percent usage.
 ```
