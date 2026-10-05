@@ -87,7 +87,7 @@ typedef struct {
     int acres;
     int price;
     int starved_total;
-    int starved_pct;  /* sum of yearly (starved * 100 / people) */
+    int starved_pct;  /* sum of yearly starvation percent, in ten-thousandths of a percent (the reference keeps fractions) */
     int over;         /* 0 = ongoing, 1 = impeached, 2 = term ended */
 } hamurabi_city;
 
@@ -183,7 +183,11 @@ static hamurabi_year_report hamurabi_step(hamurabi_city *c, const hamurabi_order
 
     c->starved_total += rep.starved;
     int denom = c->people > 0 ? c->people : 1;
-    c->starved_pct += (rep.starved * 100) / denom;
+    {   /* starved * 100 / denom with four decimals, in 32-bit maths only (denom stays far under 400000) */
+        unsigned whole = (unsigned)rep.starved * 100u / (unsigned)denom;
+        unsigned rem   = (unsigned)rep.starved * 100u % (unsigned)denom;
+        c->starved_pct += (int)(whole * 10000u + rem * 10000u / (unsigned)denom);
+    }
     c->people -= rep.starved;
 
     rep.born = 0;
@@ -212,13 +216,12 @@ static hamurabi_year_report hamurabi_step(hamurabi_city *c, const hamurabi_order
 static int hamurabi_grade(const hamurabi_city *c) {
     int years = c->year - 1;
     if (years < 1) years = 1;
-    /* p1 = starved_pct / years: use 100x to compare like floats */
-    int p1_times_100 = (c->starved_pct * 100) / years;
-    int land = c->acres / (c->people > 0 ? c->people : 1);
+    /* p1 = starved_pct / years, compared as sum > limit * years so nothing is rounded */
+    int people = c->people > 0 ? c->people : 1;
 
-    if (c->over == 1 || p1_times_100 > 3300 || land < 7) return 0;  /* F */
-    if (p1_times_100 > 1000 || land < 9) return 1;  /* C */
-    if (p1_times_100 > 300 || land < 10) return 2;  /* B */
+    if (c->over == 1 || c->starved_pct > 330000 * years || c->acres < 7 * people) return 0;  /* F */
+    if (c->starved_pct > 100000 * years || c->acres < 9 * people) return 1;  /* C */
+    if (c->starved_pct > 30000 * years || c->acres < 10 * people) return 2;  /* B */
     return 3;  /* A+ */
 }
 
