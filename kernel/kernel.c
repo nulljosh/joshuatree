@@ -4110,7 +4110,7 @@ void gui_draw_desktop(int hover_slot, int drag_slot, int drag_mx, int drag_my){
             }
         }
     }
-    gui_draw_menubar();
+    gui_menubar_force_redraw(); gui_draw_menubar(); /* 2.6.34: every full repaint redraws the bar; the Launchpad clears it and the minute gate left it gone */
     gui_draw_dock(hover_slot, drag_slot, drag_mx, drag_my);
 }
 
@@ -4777,7 +4777,7 @@ static void gui_launch_apps(void){
                Starting at GUI_MENUBAR_H left that strip as whatever
                window_clear above set it to: a dead black band under the
                title bar, never painted with wallpaper at all. */
-            gui_draw_wallpaper_rows(0, (int)window_height());
+            gui_draw_wallpaper_rows(0, (int)window_height()); if (!gui_app_windowed) { gui_menubar_force_redraw(); gui_draw_menubar(); } /* 2.6.34: full-screen Launchpad keeps the bar */
             gui_apps_redraw_panel(scroll_offset, sel, x0, y0, cell_w, cell_h, tile, grid_w);
             /* The click that opened this folder (or closed the app launched
                from it) is the baseline, not a fresh click. Synced here, once
