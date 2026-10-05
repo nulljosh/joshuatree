@@ -42,13 +42,13 @@ REPLY = "The capital of France is Paris, a city famous for the Eiffel Tower and 
 LOG = "/tmp/jt-chatapp-serial.log"; DUMP = "/tmp/jt-chatapp.raw"
 FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
-CLOSE_X, CLOSE_Y = 94, 56; CLOSE_RED = (0xFF, 0x5F, 0x57)
+CLOSE_X, CLOSE_Y = 24, 24; CLOSE_RED = (0xFF, 0x5F, 0x57)
 # Framebuffer pixels (the 2x desktop). Her transcript: replies on the left
 # (x < 880, clear of the face that sits centred above), typed turns on the
 # right; the empty-state prompt sits at y~384 on the left.
-LEFT = (200, 880, 360, 750)      # x0, x1, y0, y1: her reply bubbles
-RIGHT = (1010, 1720, 362, 418)   # the first typed turn's bubble
-PROMPT = (196, 700, 365, 405)    # "Say something to Samantha."
+LEFT = (600, 1320, 770, 930)     # x0, x1, y0, y1: her reply caption (2.9.0: white text on a dark backdrop over the picture; the backdrop is the dark ink)
+RIGHT = (0, 0, 0, 0)             # (2.9.0: the question echo is a caption that fades before this check looks; samtyped= proves it instead)
+PROMPT = (380, 700, 975, 1030)   # "Message Samantha" in the glass input panel
 DARK = 90; GREY = 170
 
 recorded = {}
@@ -124,7 +124,7 @@ try:
     for _ in range(100):  # the compositor paints her window a beat after the marker
         time.sleep(0.2)
         if is_red(pixel(dump(), CLOSE_X, CLOSE_Y)): break
-    else: fails.append("no red close light on her window at (94,56)")
+    else: fails.append("no red close dot on her window at (24,24)")
     time.sleep(1.5)
     before = dump(); before_ink = ink_in(before, LEFT, DARK); prompt_ink = ink_in(before, PROMPT, GREY)
     # The empty state is her "Say something to Samantha." prompt, not a
@@ -143,7 +143,7 @@ try:
     after_ink = ink_in(after, LEFT, DARK) - before_ink; q_ink = ink_in(after, RIGHT, DARK)
     print("reply ink: before=%d (prompt ink %d) after=+%d; question-bubble ink=%d" % (before_ink, prompt_ink, after_ink, q_ink))
     if after_ink < 200: fails.append("reply did not render: only %d new ink px in her transcript" % after_ink)
-    if q_ink < 50: fails.append("question echo did not render (%d ink px)" % q_ink)
+    if "samtyped=" + QUESTION not in serial(): fails.append("the question never reached her whole (no samtyped= line)")
     body = recorded.get("body", b"").decode("utf-8", "replace")
     print("recorded request:", recorded.get("path"), body[:300])
     try:

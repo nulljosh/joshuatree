@@ -91,6 +91,7 @@ retry|7|Chat notes/reminders tools: list_reminders and read_notes work via the l
 retry|2|"samantha" boot flag opens Chat's full-screen avatar view, input focused, before the desktop|python3 ./tools/checks/samantha-boot-check.py
 retry|5|"phone" boot flag opens a real 430x932 portrait frame straight into Samantha's view|python3 ./tools/checks/phone-boot-check.py
 retry|1|Phone Samantha back chevron exits her view and F2/Esc hints are hidden on phones|python3 ./tools/checks/phone-samantha-back-check.py
+retry|4|Samantha is full screen: glass input, fading captions, scrollback, the typing bugs, a mouth drawn from her voice, Esc and the red dot|python3 ./tools/checks/samantha-fullscreen-check.py
 retry|7|Touch: a tap opens the on-screen keyboard on phone and a tapped key reaches the Notes editor|python3 ./tools/checks/touch-osk-check.py
 retry|2|No-disk boot falls back to ramfs with seeded demo files|./tools/checks/ramfs-demo-check.sh
 retry|0|Shell regression suite (heap, task, preempt, kill, ring3, ps)|./tools/checks/shellregress-check.sh

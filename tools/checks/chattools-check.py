@@ -45,7 +45,7 @@ she would ask the model "open notes" as a plain question.
 Usage: python3 tools/checks/chattools-check.py         (from the repo root, after make kernel.elf)
        python3 tools/checks/chattools-check.py --live   (real Turing host, no host overrides; prints chatpick=... if the real picker answers)
 """
-import http.server, json, os, socket, subprocess, sys, tempfile, threading, time
+import re, http.server, json, os, socket, subprocess, sys, tempfile, threading, time
 from PIL import Image
 from freeport import free_port
 
@@ -55,7 +55,7 @@ FB = 0xfd000000; W, H = 1920, 1080; PORT = free_port()
 # Her transcript, in framebuffer pixels (the 2x desktop): the left half of the
 # body holds only her own reply bubbles (the typed turns sit on the right, the
 # face above y=340), so dark pixels there are her rendered replies.
-TX0, TX1, TY0, TY1 = 200, 880, 360, 750
+TX0, TX1, TY0, TY1 = 600, 1320, 770, 930   # 2.9.0: her reply caption; its dark backdrop is the ink
 DARK = 90
 
 REPLY_CHAT = "The capital of France is Paris, a city famous for the Eiffel Tower and croissants."
@@ -159,6 +159,13 @@ def main():
                     if p[0] < DARK and p[1] < DARK and p[2] < DARK: n += 1
             return n
 
+        def settle():
+            """Wait until every caption has faded (her own marker), so the ink count starts from a bare picture."""
+            for _ in range(200):
+                v = re.findall(r"samface: captions=(\d)", serial())
+                if not v or v[-1] == "0": return
+                time.sleep(0.25)
+
         def keys(*qc): cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in qc]}})
 
         def type_msg(msg):
@@ -203,7 +210,7 @@ def main():
         time.sleep(1.0)
 
         # --- scenario (a): "remind me to buy milk" -> new_reminder ------
-        before_ink = reply_ink(dump())
+        settle(); before_ink = reply_ink(dump())
         mark = len(serial())
         type_msg("remind me to buy milk")
         wait_for("chattool=new_reminder:", 20, "no chattool=new_reminder: marker", after=mark)
@@ -227,7 +234,7 @@ def main():
         time.sleep(1.0)
 
         # --- scenario (b): an ordinary question -> pick says null --------
-        before_b = reply_ink(dump())
+        settle(); before_b = reply_ink(dump())
         mark = len(serial())
         type_msg("what is the capital of france")
         wait_for("chatreply=", 30, "scenario b: no chatreply= marker", after=mark)

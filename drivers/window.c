@@ -459,6 +459,46 @@ void window_pixel(int x, int y, u32 color) {
         for (u32 i = 0; i < scale; i++) window_pixel_phys(x * (int)scale + (int)i, y * (int)scale + (int)j, color);
 }
 
+/* Whole-picture blit of a ring-3 window's logical 0RGB buffer (src, srcw pixels a row) into the current viewport,
+   cw x ch logical pixels from its corner. The per-pixel window_pixel loop this replaces cost four window_pixel_phys
+   calls a logical pixel (viewport, bounds and damage checks each time): about 300 ms for a full-screen window, which
+   capped a full-screen Samantha at three keystrokes a second. Here the viewport and clip are worked out once, each
+   source row is expanded to one physical row and copied scale times, and the damage is declared once. An offscreen
+   target or band, or no back buffer, falls back to the slow path (same pixels either way). */
+void window_blit_logical(const u32 *src, int srcw, int cw, int ch) {
+    int s = (int)scale, vw = view_w ? (int)view_w : (int)win_w, vh = view_h ? (int)view_h : (int)win_h;
+    if (cw > vw) cw = vw;
+    if (ch > vh) ch = vh;
+    if (cw <= 0 || ch <= 0) return;
+    if (target_fb || screen_band || !back) {
+        for (int y = 0; y < ch; y++) for (int x = 0; x < cw; x++) window_pixel(x, y, src[y * srcw + x]);
+        return;
+    }
+    int ox = view_w ? view_x * s : 0, oy = view_h ? view_y * s : 0;
+    int x0 = 0, x1 = cw;   /* logical columns that land on the screen */
+    if (ox + x0 * s < 0) x0 = (-ox + s - 1) / s;
+    if (ox + x1 * s > (int)phys_w) x1 = ((int)phys_w - ox) / s;
+    if (x1 <= x0) return;
+    int py0 = oy, rows = 0;
+    for (int y = 0; y < ch; y++) {
+        int py = oy + y * s;
+        if (py < 0 || py + s > (int)(win_h * scale)) continue;
+        u32 *d = back + (u32)py * phys_w + (u32)(ox + x0 * s);
+        const u32 *r = src + y * srcw + x0;
+        if (s == 1) { for (int x = x0; x < x1; x++) *d++ = *r++; }
+        else {
+            for (int x = x0; x < x1; x++, r++) for (int k = 0; k < s; k++) *d++ = *r;
+            u32 *first = back + (u32)py * phys_w + (u32)(ox + x0 * s);
+            for (int j = 1; j < s; j++) {
+                u32 *to = first + (u32)j * phys_w;
+                for (int x = 0; x < (x1 - x0) * s; x++) to[x] = first[x];
+            }
+        }
+        rows++;
+    }
+    if (rows) window_damage(ox + x0 * s, py0, (x1 - x0) * s, ch * s);
+}
+
 void window_rect(int x, int y, int w, int h, u32 color) {
     for (int yy = y; yy < y + h; yy++)
         for (int xx = x; xx < x + w; xx++)

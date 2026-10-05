@@ -239,9 +239,7 @@ void ring3app_window_blit(int task, int vw, int vh) {
     if ((unsigned int)vw != fw || (unsigned int)vh != fh) syscall_window_request_size(task, (unsigned int)vw, (unsigned int)vh);
     unsigned int cw = fw < (unsigned int)vw ? fw : (unsigned int)vw;
     unsigned int ch = fh < (unsigned int)vh ? fh : (unsigned int)vh;
-    for (unsigned int yy = 0; yy < ch; yy++)
-        for (unsigned int xx = 0; xx < cw; xx++)
-            window_pixel((int)xx, (int)yy, fb[yy * fw + xx]);
+    window_blit_logical(fb, (int)fw, (int)cw, (int)ch);
 }
 /* Called by the compositor when it finds a window's task gone: the same
    crash/exit line the blocking launcher logs, so the crash checks read it. */

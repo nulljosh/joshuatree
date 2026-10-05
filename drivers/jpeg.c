@@ -179,12 +179,15 @@ struct jcomp {
 
 static u32 be16(const u8 *p) { return ((u32)p[0] << 8) | p[1]; }
 
-/* Average one accumulated destination row (dw sums of R,G,B,count) into RGB565 and clear it. */
-static void jpeg_flush_row(u16 *dst, u32 *acc, u32 dw, u32 dy) {
+/* Average one accumulated destination row (dw sums of R,G,B,count) into RGB565 (or, when jpeg_out32 is set, packed 0RGB
+   in a u32 array) and clear it. */
+static JPEG_STATIC int jpeg_out32 = 0;
+static void jpeg_flush_row(void *out, u32 *acc, u32 dw, u32 dy) {
     for (u32 x = 0; x < dw; x++) {
         u32 *a = acc + x * 4, n = a[3] ? a[3] : 1;
         u32 r = a[0] / n, g = a[1] / n, b = a[2] / n;
-        dst[dy * dw + x] = (u16)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+        if (jpeg_out32) ((u32 *)out)[dy * dw + x] = (r << 16) | (g << 8) | b;
+        else ((u16 *)out)[dy * dw + x] = (u16)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
         a[0] = a[1] = a[2] = a[3] = 0;
     }
 }
@@ -193,7 +196,7 @@ static void jpeg_flush_row(u16 *dst, u32 *acc, u32 dw, u32 dy) {
    only): a box-filtered dw x dh RGB565 frame decoded one MCU row at a time, so only one MCU row of
    planes is ever held (jpeg_decode_scaled, what ring 3 uses; a 320x320 frame cannot be held whole
    inside a ring-3 image). */
-static int jpeg_run(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *channels, u16 *dst, u32 dw, u32 dh) {
+static int jpeg_run(const u8 *data, u32 len, u8 **out, u32 *w, u32 *h, u32 *channels, void *dst, u32 dw, u32 dh) {
     *out = 0;
     if (len < 4) return JPEG_E_TRUNCATED;
     if (data[0] != 0xFF || data[1] != 0xD8) return JPEG_E_SIGNATURE;
@@ -489,5 +492,16 @@ int jpeg_decode_scaled(const unsigned char *data, unsigned int len, unsigned sho
                        unsigned int *w, unsigned int *h) {
     unsigned char *none = 0; unsigned int ch = 0;
     if (!dst || dw == 0 || dh == 0 || dw > 320) return JPEG_E_FORMAT;
+    jpeg_out32 = 0;
     return jpeg_run(data, len, &none, w, h, &ch, dst, dw, dh);
+}
+
+int jpeg_decode_scaled32(const unsigned char *data, unsigned int len, unsigned int *dst, unsigned int dw, unsigned int dh,
+                         unsigned int *w, unsigned int *h) {
+    unsigned char *none = 0; unsigned int ch = 0;
+    if (!dst || dw == 0 || dh == 0 || dw > 1024) return JPEG_E_FORMAT;
+    jpeg_out32 = 1;
+    int r = jpeg_run(data, len, &none, w, h, &ch, dst, dw, dh);
+    jpeg_out32 = 0;
+    return r;
 }
