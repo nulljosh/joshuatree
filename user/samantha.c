@@ -56,12 +56,12 @@ static int uface_n JT_DATA = 60;  /* decode side: the small 60 px band, or 320 i
 #define LINE 16
 
 struct turn { int mine; char text[TXT]; };
-#define CAP_HOLD_USER 220      /* ticks (10 ms) your own caption holds after you send */
-#define CAP_HOLD_AFTER 180     /* ticks her caption holds after her voice ends */
-#define CAP_IN 12              /* fade in */
+#define CAP_QUIET 400          /* ticks (10 ms) of quiet after the last line and her voice before the whole stack fades */
+#define CAP_IN 28              /* a new line eases in, rising from just above the input: 0.28 s */
+#define CAP_SHOW 3             /* lines visible at once, the newest at the bottom */
 #define CAP_OUT 60             /* fade out: 0.6 s */
 #define CAP_ALPHA 150          /* backdrop black at 150/256 */
-#define NCAP 2          /* captions over the picture: yours, then hers */
+#define NCAP 4          /* captions over the picture, oldest first: CAP_SHOW visible and one more still leaving */
 struct cap { int mine, live; unsigned born, ends; char text[TXT]; };
 struct mmsg { char from[MAIL_FROM], subj[MAIL_SUBJ], body[MAIL_BODY]; int read; };
 struct arena {
@@ -168,15 +168,22 @@ static int wrap(const char *s, int maxw, int x, int y, unsigned fg, int draw) {
 
 static unsigned now_ticks(void) { struct jt_tasks t; jt_tasks(&t, 0); return t.ticks; }
 
+static void put_num(char *o, int *n, int v);
+static unsigned stk_mark JT_DATA = 0, stk_end JT_DATA = 0;   /* the last tick anything was said or spoken; the tick the whole stack's fade began (0 not yet) */
 static void push(int mine, const char *s) {
     if (nturn == NMSG) { for (int i = 1; i < NMSG; i++) ar->t[i - 1] = ar->t[i]; nturn--; }
     struct turn *t = &ar->t[nturn++];
     t->mine = mine;
     int n = 0; while (s[n] && n < TXT - 1) { t->text[n] = s[n]; n++; }
     t->text[n] = 0;
-    struct cap *c = &ar->cap[mine ? 0 : 1];   /* the same words go up over the picture */
+    int nc = 0; while (nc < NCAP && ar->cap[nc].live) nc++;   /* the same words go up over the picture, newest last */
+    if (nc == NCAP) { for (int i = 1; i < NCAP; i++) ar->cap[i - 1] = ar->cap[i]; nc--; }
+    struct cap *c = &ar->cap[nc];
     for (int i = 0; i <= n; i++) c->text[i] = t->text[i];
-    c->mine = mine; c->live = 1; c->born = now_ticks(); c->ends = mine ? c->born + CAP_HOLD_USER : 0;
+    c->mine = mine; c->live = 1; c->born = now_ticks(); c->ends = 0;
+    for (int i = 0; i + CAP_SHOW <= nc; i++) if (!ar->cap[i].ends) ar->cap[i].ends = c->born;   /* a fourth line: the oldest leaves first */
+    stk_mark = c->born; stk_end = 0;
+    { char l[40] = "samface: line="; int k = 14; put_num(l, &k, (int)c->born); l[k++] = '\n'; jt_write(1, l, (unsigned)k); }   /* her tick, for the check */
 }
 
 
@@ -1098,9 +1105,10 @@ static void vm_geom(int W, int H) {
     vm_mx = S * 518 / 1000 - ox; vm_my = S * 581 / 1000 - oy; vm_mhw = S * 87 / 1000;
     vm_ml1 = S * 55 / 1000; vm_ml2 = S * 130 / 1000; vm_mlu = S * 70 / 1000; vm_mdmax = S * 21 / 1000;
     { /* her chin slides down with an open mouth only as far as the glass panel (it is hidden past that), never less than 1.5 lip depths */
-        int lim = vm_py - 6 - vm_my;
+        int lim = vm_py - 6 - vm_my, mn = vm_ml1 * 3 / 2;
+        if ((vm_py - 12 - (vm_my + vm_ml1 + 8) - 26) / LINE < 2) { lim = vm_py - 4 - (LINE + 10) - 4 - 2 - vm_my; mn = vm_ml1 * 5 / 4; }   /* one caption row under her lips: her chin stops above it */
         if (vm_ml2 > lim) vm_ml2 = lim;
-        if (vm_ml2 < vm_ml1 * 3 / 2) vm_ml2 = vm_ml1 * 3 / 2;
+        if (vm_ml2 < mn) vm_ml2 = mn;
     }
     /* her eyes, in thousandths of the portrait's side: centres across 427 and 636, down 367 and 379, half widths 37 and 43, half height 16 */
     vm_ex[0] = S * 427 / 1000 - ox; vm_ey[0] = S * 367 / 1000 - oy; vm_ex[1] = S * 636 / 1000 - ox; vm_ey[1] = S * 379 / 1000 - oy;
@@ -1424,80 +1432,7 @@ static int mouth_target(unsigned now) {
     return 0;
 }
 
-/* ---- captions ---- */
-static int cap_rows(const char *s, int tw_, int maxrows) {
-    int rows = wrap(s, tw_, 0, 0, 0, 0);
-    return rows > maxrows ? maxrows : rows;
-}
-static int cap_alpha(const struct cap *c, unsigned now) {
-    if (!c->live) return 0;
-    int a = 255;
-    unsigned age = now - c->born;
-    if (age < CAP_IN) a = (int)(age * 255 / CAP_IN);
-    if (c->ends) {
-        int over = (int)(now - c->ends);
-        if (over >= CAP_OUT) return 0;
-        if (over > 0) { int o = 255 - over * 255 / CAP_OUT; if (o < a) a = o; }
-    }
-    return a;
-}
-static int caps_alive(void) { for (int k = 0; k < NCAP; k++) if (ar->cap[k].live) return 1; return 0; }
-static int caps_prev JT_DATA = 0;
-static void cap_update(unsigned now) {
-    for (int k = 0; k < NCAP; k++) {
-        struct cap *c = &ar->cap[k];
-        if (!c->live) continue;
-        if (!c->ends && !c->mine && !face_talking(now) && now - c->born > 30) c->ends = now + CAP_HOLD_AFTER;   /* her voice is over: hold a moment, then fade */
-        if (c->ends && (int)(now - c->ends) >= CAP_OUT) c->live = 0;
-    }
-    if (caps_alive() != caps_prev) { caps_prev = caps_alive(); jt_write(1, caps_prev ? "samface: captions=1\n" : "samface: captions=0\n", 21); }   /* the check waits on these */
-}
-
-/* One caption over the picture, bottom edge at ybot: a soft dark backdrop (rounded, with a feathered edge), white text,
-   all composed at full strength and then mixed over what was there by the fade alpha. Returns the box's top. */
-static int cap_draw(struct cap *c, int ybot, int ytop_limit, unsigned now, int fixed_top, int fixed_rows, int amax) {
-    int a = cap_alpha(c, now), W = back_w;
-    if (a > amax) a = amax;   /* a caption giving way to a newer one in the same place */
-    int tw_ = (W - 2 * VM_MARGIN - 40 > 600 ? 600 : W - 2 * VM_MARGIN - 40);
-    int avail = fixed_top ? fixed_rows : (ybot - ytop_limit - 26) / LINE; if (avail < 1) avail = 1;
-    int rows = cap_rows(c->text, tw_, avail > 7 ? 7 : avail);
-    int bw = 0;
-    { /* the widest row decides the box */
-        int saved_sink = 0; (void)saved_sink;
-        bw = rows > 1 ? tw_ : (tw(c->text) < tw_ ? tw(c->text) : tw_);
-    }
-    int bh = rows * LINE + 18, bx = (W - bw) / 2 - 16, by = fixed_top ? fixed_top : ybot - bh;
-    int FE = 8;   /* feather */
-    int rx = bx - FE, ry = by - FE, rw = bw + 32 + 2 * FE, rh = bh + 2 * FE;
-    if (rx < 0) rx = 0; if (ry < 0) ry = 0;
-    if (rx + rw > W) rw = W - rx; if (ry + rh > back_h) rh = back_h - ry;
-    if (a <= 0 || rw <= 0 || rh <= 0 || rw * rh > vm_cap) return by;
-    for (int i = 0; i < rh; i++) for (int j = 0; j < rw; j++) vm_save[i * rw + j] = backbuf[(ry + i) * W + rx + j];
-    /* backdrop: signed distance to the rounded rect (radius 16) mapped to alpha across the feather */
-    int cx2 = bx + (bw + 32) / 2, cy2 = by + bh / 2, hw = (bw + 32) / 2 - 16, hh = bh / 2 - 16;
-    if (hh < 0) hh = 0;
-    for (int i = 0; i < rh; i++) for (int j = 0; j < rw; j++) {
-        int px = rx + j, py = ry + i;
-        int dx = px - cx2; if (dx < 0) dx = -dx; dx -= hw; if (dx < 0) dx = 0;
-        int dy = py - cy2; if (dy < 0) dy = -dy; dy -= hh; if (dy < 0) dy = 0;
-        int dist = isqrt_u((unsigned)(dx * dx + dy * dy)) - 16;   /* < 0 inside */
-        if (dist >= FE) continue;
-        unsigned al = dist <= -FE ? CAP_ALPHA : (unsigned)(CAP_ALPHA * (FE - dist) / (2 * FE));
-        backbuf[py * W + px] = lerp8(backbuf[py * W + px], 0x00101012, al);
-    }
-    unsigned *real = win.pixels; win.pixels = backbuf;
-    wrap_cap = rows; wrap_ell = fixed_top && cap_rows(c->text, tw_, 99) > rows;   /* the shared top slot says so when a reply goes on past its rows */
-    int tx = (W - tw_) / 2;
-    if (rows == 1 && bw < tw_) tx = (W - bw) / 2;
-    wrap(c->text, tw_, tx, by + 9, c->mine ? 0x00E8D8BC : WHITE, 1);
-    wrap_cap = wrap_ell = 0;
-    win.pixels = real;
-    for (int i = 0; i < rh; i++) for (int j = 0; j < rw; j++) {
-        unsigned *p = &backbuf[(ry + i) * W + rx + j];
-        *p = lerp8(vm_save[i * rw + j], *p, (unsigned)a);
-    }
-    return by;
-}
+#include "samcaps.h"   /* the captions: cap_update, cap_draw and caps_draw (the stack) */
 
 /* ---- the blink ----
    Every 3 to 6 seconds her lids close and open over 120 ms. The gap after each blink comes from a counter run through
@@ -1571,20 +1506,20 @@ static void hist_draw(void) {
 static int vm_k JT_DATA = 1;   /* the picture is composed at 1/vm_k of the window and each pixel repeated vm_k times on the way out */
 /* Tell the checks where her mouth and eyes are now. The geometry changes once the portrait has loaded (a wide window gives her
    room only then), so this runs after every vm_geom and prints only when a number moved. */
-static int vm_rep[13] JT_DATA;
+static int vm_rep[14] JT_DATA;
 static void vm_report(void) {
-    int v[13] = { vm_mx * vm_k, vm_my * vm_k, vm_mhw * vm_k, vm_ml1 * vm_k, vm_ex[0], vm_ey[0], vm_ew[0], vm_ex[1], vm_ey[1], vm_ew[1], vm_eh, back_w * vm_k, back_h * vm_k };
+    int v[14] = { vm_mx * vm_k, vm_my * vm_k, vm_mhw * vm_k, vm_ml1 * vm_k, vm_ex[0], vm_ey[0], vm_ew[0], vm_ex[1], vm_ey[1], vm_ew[1], vm_eh, back_w * vm_k, back_h * vm_k, vm_k };
     for (int i = 4; i < 11; i++) v[i] *= vm_k;
-    int same = 1; for (int i = 0; i < 13; i++) if (v[i] != vm_rep[i]) same = 0;
+    int same = 1; for (int i = 0; i < 14; i++) if (v[i] != vm_rep[i]) same = 0;
     if (same) return;
-    for (int i = 0; i < 13; i++) vm_rep[i] = v[i];
+    for (int i = 0; i < 14; i++) vm_rep[i] = v[i];
     char d[72] = "samface: mouth="; int n = 15;
     for (int i = 0; i < 4; i++) { put_num(d, &n, v[i]); d[n++] = i < 3 ? ',' : '\n'; }
     jt_write(1, d, (unsigned)n);   /* centre x, seam y, half width, depth: where the check looks */
     char e[96] = "samface: eyes="; int k = 14;
     for (int i = 4; i < 11; i++) { put_num(e, &k, v[i]); e[k++] = i < 10 ? ',' : '\n'; }
     jt_write(1, e, (unsigned)k);   /* both eyes' centres and half widths, then the half height: where the blink check looks */
-    char w[40] = "samface: win="; int j = 13; put_num(w, &j, v[11]); w[j++] = ','; put_num(w, &j, v[12]); w[j++] = '\n';
+    char w[40] = "samface: win="; int j = 13; put_num(w, &j, v[11]); w[j++] = ','; put_num(w, &j, v[12]); w[j++] = ','; put_num(w, &j, v[13]); w[j++] = '\n';
     jt_write(1, w, (unsigned)j);   /* her window's size (an ordinary window on a big screen is not the screen): where the glass panel is */
 }
 static void draw_video_k(void) {
@@ -1661,31 +1596,7 @@ static void draw_video_k(void) {
         rect(mx - 2, cy - 6, 5, 9, rec_on ? WHITE : INK); rect(mx - 4, cy + 1, 1, 3, rec_on ? WHITE : INK); rect(mx + 4, cy + 1, 1, 3, rec_on ? WHITE : INK);
         rect(mx - 3, cy + 4, 7, 1, rec_on ? WHITE : INK); rect(mx, cy + 5, 1, 3, rec_on ? WHITE : INK); rect(mx - 3, cy + 8, 7, 1, rec_on ? WHITE : INK);
     }
-    /* captions. With room under her lips (the phone) hers is on the bottom and yours above it. A wide window puts her mouth low (2.12.1)
-       and her chin travels down to the glass when she speaks, so nothing is drawn under her lips there: both captions share one slot at
-       the top, as many rows as fit above her eyebrows (one at the very top of a window too short for that); the newest owns it and the
-       other fades out as it fades in. */
-    int ytop = vm_my + vm_ml1 + 8, ybot = vm_py - 12;   /* captions stay below her lower lip */
-    if ((ybot - ytop - 26) / LINE >= 2) {
-        for (int k = NCAP - 1; k >= 0; k--) {
-            struct cap *cp = &ar->cap[k];
-            if (!cp->live) continue;
-            int top = cap_draw(cp, ybot, ytop, now, 0, 0, 255);
-            if (cap_alpha(cp, now) > 0) ybot = top - 10;
-        }
-    } else {
-        int brows = (vm_ey[0] < vm_ey[1] ? vm_ey[0] : vm_ey[1]) - vm_mhw * 8 / 10 - 6;   /* her eyebrows are about 0.07 of the portrait above her eyes */
-        int top0 = 56, trows = (brows - top0 - 26) / LINE;   /* under the status pill; a box is its rows plus 18 and a feather of 8 either side */
-        if (trows < 1) { top0 = 8; trows = (brows - top0 - 26) / LINE; }
-        if (trows < 1) trows = 1; if (trows > 7) trows = 7;
-        int own = -1;
-        for (int k = 0; k < NCAP; k++) if (ar->cap[k].live && (own < 0 || ar->cap[k].born >= ar->cap[own].born)) own = k;
-        for (int k = 0; own >= 0 && k < NCAP; k++) {   /* the one that is giving way first, the owner over it */
-            struct cap *cp = &ar->cap[k];
-            if (k != own && cp->live) cap_draw(cp, ybot, ytop, now, top0, trows, 255 - cap_alpha(&ar->cap[own], now));
-        }
-        if (own >= 0) cap_draw(&ar->cap[own], ybot, ytop, now, top0, trows, 255);
-    }
+    caps_draw(now);
     if (hist_open) hist_draw();
     /* status pill (not while the scrollback covers it) and the way out */
     if (status[0] != 'r' || status[1] != 'e') pill(status, W / 2, 16, WHITE);

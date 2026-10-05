@@ -325,7 +325,7 @@ user/mail.bin: user/mail.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/mail.o user/libjt.a
 
 # Samantha as a ring-3 program (dock slot 6, the shell commands and phone mode all open it).
-user/samantha.o: user/samantha.c user/jtsys.h user/libjt/text.h
+user/samantha.o: user/samantha.c user/samcaps.h user/jtsys.h user/libjt/text.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/samantha.bin: user/samantha.o user/libjt.a user/note.ld boot/memmap.ld
