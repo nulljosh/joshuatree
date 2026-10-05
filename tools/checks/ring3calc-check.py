@@ -201,7 +201,7 @@ try:
     # 5. a normal close, both ways, from the Apps folder grid: Calculator
     #    is APPS[] index 17 = row 3, col 2 (5 columns wide), whose
     #    viewport is the folder's 804x345 (updated from 832x450 after UI restyle).
-    APPS_CLOSE_X, APPS_CLOSE_Y = 33, 56
+    APPS_CLOSE_X, APPS_CLOSE_Y = 94, 56
     def wait_closed(resend=True):
         # Poll the screen (10s) instead of reading it once: on a slow runner
         # the post-Esc repaint lands after a fixed sleep. One resend of Esc

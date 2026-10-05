@@ -3,7 +3,6 @@
 alone, the same QMP absolute-pointer + pmemsave shape as dockhover-check.py.
 
 Why this exists (v67 / 0.62.2): "that notes app stuck glitch" was reported
-from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 from the landing page's live v86 demo, then re-reported as "all apps",
 and the honest finding was narrower and real: Notes (kernel/editor.h) ran
 its own mouse loop on mouse_get_delta only, never mouse_get_absolute, so
@@ -31,6 +30,7 @@ before the fix landed, see roadmap.md's v67 entry).
 
 Usage: tools/checks/appclose-check.py   (from the repo root, after make kernel.elf)
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, socket, subprocess, sys, time
 from PIL import Image
 from freeport import free_port

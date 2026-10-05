@@ -19,7 +19,7 @@ Ports 4513-4515, inside the reserved 4511-4519 range.
 
 Usage: tools/checks/clockicon-check.py   (from the repo root, after make kernel.elf)
 """
-from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y, folder_geometry, tile_center  # one source for the Launchpad window's red dot
 import json, os, socket, subprocess, sys, time
 from PIL import Image
 
@@ -33,7 +33,7 @@ os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 TRAY = (239, 235, 228)
 HANDS_INK_MIN = 30    # dark hand pixels: a slow runner can hold a still, white, handless face for seconds (reproduced under CPU load)
-FACE_WHITE_MIN = 3000  # Clock's face disc measures ~4400 white px in the tile box, Calculator ~1800
+FACE_WHITE_MIN = 2200  # the 56px tile's face disc (the tile was 74px); see the printed white count, Calculator is far lower
 CLOSE_X, CLOSE_Y, CLOSE_RED = FOLDER_CLOSE_X, FOLDER_CLOSE_Y, (0xFF, 0x5F, 0x57)  # the Apps folder window's close dot (ring-3 app windows sit lower, at 94,56)
 
 def near(p, c, tol=12): return max(abs(p[i] - c[i]) for i in range(3)) <= tol
@@ -114,10 +114,10 @@ def boot(port, rtc, tag, later=0):
         except subprocess.TimeoutExpired: q.kill()
 
 def tile_box(img):
-    # Clock is APPS[23]: row 4, col 3. Selecting it scrolls the grid to offset 2, so it sits in the
-    # last visible row (gui_launch_apps: x0=(960-5*150)/2=105, y0=88, cell 150x116, tile 74, 2x scale).
-    cx, cy = (105 + 2 * 150 + 75) * 2, (62 + 88 + 2 * 116 + 37) * 2  # +62: the Apps window's viewport top
-    return cx - 60, cy - 60, cx + 60, cy + 60
+    # Clock is APPS[23], grid slot 22 (row 4, col 2). Selecting it scrolls the grid to offset 2, so it sits in the
+    # last visible row. The slot's screen position comes from the shared Launchpad geometry (appsgeom.py), 2x scale.
+    cx, cy = [2 * v for v in tile_center(folder_geometry(), 22, scroll=2)]
+    return cx - 54, cy - 54, cx + 54, cy + 54
 
 def lum(p): return (p[0] * 299 + p[1] * 587 + p[2] * 114) // 1000
 

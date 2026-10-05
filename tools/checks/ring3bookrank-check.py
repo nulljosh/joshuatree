@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Bookrank runs as a real ring-3 process, the fifth app out of the kernel
 (roadmap 2.0). Boots headless with `open=bookr`, which launches Bookrank
-from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 from the dock path the moment the desktop is up. Bookrank is
 user/bookrank.c, a flat binary loaded off the VFS by exec_user and run at
 CPL 3 through the same table-driven launcher Keyrate, Toroid, Calculator
@@ -40,6 +39,7 @@ gui_apps_launch's viewport setup and steps 6 and 7 fail.
 
 Usage: tools/checks/ring3bookrank-check.py   (from the repo root, after make kernel.elf)
 """
+from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launchpad window's red dot
 import json, os, socket, subprocess, sys, time
 from PIL import Image
 

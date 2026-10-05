@@ -45,9 +45,9 @@ DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247
 PITCH = DOCK_ICON + DOCK_GAP
 ICON_ROW_Y = 487
 # 2.0: an app launched from the Apps folder is a compositor window at x=10,y=40 (812x385)
-CLOSE_X, CLOSE_Y = 10 + 24, 40 + 16
+CLOSE_X, CLOSE_Y = 70 + 24, 40 + 16
 CLOSE_RED = (0xFF, 0x5F, 0x57)
-VX, VY = 10 + 8, 40 + 32  # viewport origin
+VX, VY = 70 + 8, 40 + 32  # viewport origin
 ROW0_Y = VY + 68   # pf_draw's PF_TOP, relative y=68 (row r=0)
 ROW_X0, ROW_X1 = VX + 18, VX + 400
 
