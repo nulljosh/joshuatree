@@ -2,11 +2,13 @@
  * Mirrors hamurabi.py, web/play/rules.js, and app/App/Game.swift.
  * No libc, no malloc, no floats, no 64-bit division/modulo.
  * SplitMix64, rules, check/step/grade, the robot Ruler, and story logic.
+ * `tools/checks/hamurabi-rules-check.sh` holds it to the other ports: two golden numbers
+ * (classic 639940, story 390695) and an A+ count of exactly 878 in 1000 reigns.
  */
 #ifndef HAMURABI_RULES_H
 #define HAMURABI_RULES_H
 
-#include <limits.h>
+#include "hamurabi_story.h"
 
 #define HAMURABI_YEARS 10
 #define HAMURABI_FOOD 20  /* bushels per person per year */
@@ -38,47 +40,33 @@ static unsigned long long hamurabi_rng_next(hamurabi_rng *r) {
     return z ^ (z >> 31);
 }
 
-/* 64-bit modulo using only 32-bit operations to avoid __umoddi3 */
-static unsigned hamurabi_mod64_u32(unsigned long long n, unsigned divisor) {
-    unsigned high = (unsigned)(n >> 32);
-    unsigned low = (unsigned)(n & 0xFFFFFFFFUL);
-    /* Compute (high * 2^32 + low) % divisor using modular arithmetic:
-       (high % d * (2^32 % d) + low % d) % d  */
-    unsigned mod_high = high % divisor;
-    unsigned mod_low = low % divisor;
-    /* 2^32 % divisor for the specific divisors used in hamurabi */
-    unsigned pow2_mod;
-    if (divisor == 2) pow2_mod = 0;       /* 2^32 % 2 = 0 */
-    else if (divisor == 5) pow2_mod = 1;  /* 2^32 % 5 = 1 */
-    else if (divisor == 10) pow2_mod = 6; /* 2^32 % 10 = 6 */
-    else if (divisor == 1000) pow2_mod = 296; /* 2^32 % 1000 = 296 */
-    else pow2_mod = 0;  /* shouldn't happen */
-    /* Use only 32-bit arithmetic */
-    return (mod_high * pow2_mod + mod_low) % divisor;
-}
-
-/* Draw int in [lo, hi] inclusive. Uses helper to compute 64-bit modulo without __umoddi3. */
-static int hamurabi_rng_int(hamurabi_rng *r, int lo, int hi) {
-    unsigned long long n = hamurabi_rng_next(r);
-    unsigned range = (unsigned)(hi - lo + 1);
-    return lo + (int)hamurabi_mod64_u32(n, range);
-}
-
-/* Chance: draw random [0,1) < num/den. Uses precomputed thresholds. */
-static int hamurabi_rng_chance(hamurabi_rng *r, unsigned num, unsigned den) {
-    unsigned long long n = hamurabi_rng_next(r) >> 11;
-    /* Precomputed: num/100 * 9007199254740992, avoiding 64-bit division at runtime */
-    if (den == 100) {
-        if (num == 40) return n < 3602879701896396ULL;  /* 0.40 * 2^53 */
-        if (num == 45) return n < 4053479564833447ULL;  /* 0.45 * 2^53 */
-        if (num == 50) return n < 4503599627370496ULL;  /* 0.50 * 2^53 */
-        if (num == 25) return n < 2251799813685248ULL;  /* 0.25 * 2^53 */
-        if (num == 15) return n < 1351079812083897ULL;  /* 0.15 * 2^53 */
+/* n % d for a 64-bit n and a 32-bit d, in 32-bit maths only: shift the bits of n in one at a time,
+   subtracting d whenever the remainder reaches it. Exact for every d up to 2^31, so no __umoddi3. */
+static unsigned hamurabi_mod64_u32(unsigned long long n, unsigned d) {
+    unsigned r = 0;
+    for (int i = 63; i >= 0; i--) {
+        r = (r << 1) | (unsigned)((n >> i) & 1u);
+        if (r >= d) r -= d;
     }
-    if (den == 2 && num == 1) return n < 4503599627370496ULL;  /* 0.50 * 2^53 */
-    /* Shouldn't reach here for hamurabi game */
-    return 0;
+    return r;
 }
+
+/* Draw int in [lo, hi] inclusive. One draw is always used, even for a range of one. */
+static int hamurabi_rng_int(hamurabi_rng *r, int lo, int hi) {
+    return lo + (int)hamurabi_mod64_u32(hamurabi_rng_next(r), (unsigned)(hi - lo + 1));
+}
+
+/* True with probability p. The other ports test (draw >> 11) / 2^53 < p for a double p; that is the
+   same as (draw >> 11) < ceil(p * 2^53), and thr is that integer, worked out once with exact fractions. */
+static int hamurabi_rng_below(hamurabi_rng *r, unsigned long long thr) {
+    return (hamurabi_rng_next(r) >> 11) < thr;
+}
+#define HAMURABI_P25 2251799813685248ULL /* 0.25 */
+#define HAMURABI_P40 3602879701896397ULL /* 0.4 */
+#define HAMURABI_P45 4053239664633447ULL /* 0.45 */
+#define HAMURABI_P50 4503599627370496ULL /* 0.5 */
+#define HAMURABI_P15 1351079888211149ULL /* 0.15 */
+#define HAMURABI_P70 6305039478318694ULL /* 0.7 */
 
 typedef struct {
     int year;
@@ -89,6 +77,8 @@ typedef struct {
     int starved_total;
     int starved_pct;  /* sum of yearly starvation percent, in ten-thousandths of a percent (the reference keeps fractions) */
     int over;         /* 0 = ongoing, 1 = impeached, 2 = term ended */
+    int guarded;      /* cats at the barn: this year's rats find nothing */
+    int yield_bonus;  /* added to this year's harvest roll, then cleared */
 } hamurabi_city;
 
 typedef struct {
@@ -100,20 +90,20 @@ typedef struct {
 typedef struct {
     int grain;
     int acres;
-    int rat;      /* 0.4 = 40 (out of 100) */
-    int mercy;    /* 0.45 = 45 (out of 100) */
+    unsigned long long rat_thr; /* chance rats come: HAMURABI_P40 and friends */
+    int mercy;                  /* percent: starving more than this share of the people in a year ends the reign */
 } hamurabi_rules;
 
 static const hamurabi_rules hamurabi_rules_normal = {
-    .grain = 2800, .acres = 1000, .rat = 40, .mercy = 45
+    .grain = 2800, .acres = 1000, .rat_thr = HAMURABI_P40, .mercy = 45
 };
 
 static const hamurabi_rules hamurabi_rules_easy = {
-    .grain = 3600, .acres = 1200, .rat = 25, .mercy = 60
+    .grain = 3600, .acres = 1200, .rat_thr = HAMURABI_P25, .mercy = 60
 };
 
 static const hamurabi_rules hamurabi_rules_hard = {
-    .grain = 2400, .acres = 900, .rat = 50, .mercy = 35
+    .grain = 2400, .acres = 900, .rat_thr = HAMURABI_P50, .mercy = 35
 };
 
 static hamurabi_city hamurabi_new_city(const hamurabi_rules *r) {
@@ -161,15 +151,16 @@ static hamurabi_year_report hamurabi_step(hamurabi_city *c, const hamurabi_order
     c->acres += o->buy;
     c->grain -= o->buy * c->price + o->feed + o->plant;
 
-    rep.yield = hamurabi_rng_int(rng, 1, 5);
+    rep.yield = hamurabi_rng_int(rng, 1, 5) + c->yield_bonus;
+    c->yield_bonus = 0;
     rep.harvest = o->plant * rep.yield;
 
-    if (hamurabi_rng_chance(rng, r->rat, 100)) {
-        int divisor = hamurabi_rng_int(rng, 0, 1) ? 4 : 2;
-        rep.rats = c->grain / divisor;
-    } else {
-        rep.rats = 0;
+    rep.rats = 0;
+    if (hamurabi_rng_below(rng, r->rat_thr)) {
+        int eaten = c->grain / (hamurabi_rng_int(rng, 0, 1) ? 4 : 2);
+        if (!c->guarded) rep.rats = eaten;
     }
+    c->guarded = 0;
 
     c->grain += rep.harvest - rep.rats;
 
@@ -199,7 +190,7 @@ static hamurabi_year_report hamurabi_step(hamurabi_city *c, const hamurabi_order
     }
     c->people += rep.born;
 
-    rep.plague = hamurabi_rng_chance(rng, 15, 100);
+    rep.plague = hamurabi_rng_below(rng, HAMURABI_P15);
     if (rep.plague) c->people = c->people / 2;
 
     c->year += 1;
@@ -281,24 +272,51 @@ static hamurabi_orders hamurabi_ruler_legal(hamurabi_city *c,
     return o;
 }
 
-/* Story omens and choices */
-typedef struct {
-    const char *id;
-    int needs_grain;
-    int needs_acres;
-    int needs_people;
-} hamurabi_omen_needs;
+/* ---- The story. The words and numbers live in hamurabi_story.h, generated from art/hamurabi/story.json. ---- */
 
+/* The omen for this year, or NULL. Years 2 to 9, about two years in three, never the same one twice.
+   `seen` is a bit per omen. The dice order is the other ports' order: the 0.7 roll, then one draw to pick. */
+static const hamurabi_omen *hamurabi_omen_for(const hamurabi_city *c, unsigned seen, hamurabi_rng *srng) {
+    if (c->year < 2 || c->year > 9 || !hamurabi_rng_below(srng, HAMURABI_P70)) return 0;
+    int open[HAMURABI_OMENS], n = 0;
+    for (int i = 0; i < HAMURABI_OMENS; i++) {
+        const hamurabi_omen *o = &hamurabi_omens[i];
+        if (!(seen & (1u << i)) && c->grain >= o->needs_grain && c->acres >= o->needs_acres && c->people >= o->needs_people)
+            open[n++] = i;
+    }
+    return n ? &hamurabi_omens[open[hamurabi_rng_int(srng, 0, n - 1)]] : 0;
+}
+
+/* Whether the city can pay for a choice. A choice that costs no land is never blocked by having none. */
+static int hamurabi_can_afford(const hamurabi_choice *ch, const hamurabi_city *c) {
+    return c->grain + ch->grain >= 0 && (ch->acres >= 0 || c->acres + ch->acres >= 1);
+}
+
+/* What came of a choice: the line to show, and for the star reader the harvest to expect (0 if none). */
 typedef struct {
-    int grain;
-    int acres;
-    int acres_pct;
-    int people;
-    int guard;
-    int yield_bonus;
-    int gamble_chance;
-    int gamble_acres;
-    int gamble_yield_bonus;
-} hamurabi_choice;
+    const char *said;
+    int peek_yield;
+} hamurabi_outcome;
+
+/* Applies a choice. `harvest` is the year's dice; the star reader looks at a copy, so the real ones do not move. */
+static hamurabi_outcome hamurabi_apply_choice(const hamurabi_choice *ch, hamurabi_city *c, hamurabi_rng *srng,
+                                              const hamurabi_rng *harvest) {
+    hamurabi_outcome out = { ch->then, 0 };
+    int pct = c->acres * ch->acres_pct / 100;
+    c->grain += ch->grain; if (c->grain < 0) c->grain = 0;
+    c->acres += ch->acres + pct; if (c->acres < 1) c->acres = 1;
+    c->people += ch->people; if (c->people < 1) c->people = 1;
+    if (ch->guard) c->guarded = 1;
+    c->yield_bonus += ch->yield_bonus;
+    if (ch->has_gamble && hamurabi_rng_below(srng, ch->gamble_thr)) {
+        c->acres += ch->gamble_acres; if (c->acres < 1) c->acres = 1;
+        out.said = ch->gamble_then;
+    }
+    if (ch->peek) {
+        hamurabi_rng copy = *harvest;
+        out.peek_yield = hamurabi_rng_int(&copy, 1, 5) + c->yield_bonus;
+    }
+    return out;
+}
 
 #endif

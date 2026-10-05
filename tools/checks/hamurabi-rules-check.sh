@@ -1,123 +1,141 @@
-#!/bin/bash
-# Hamurabi rules validation: tests against exact golden checksums.
+#!/bin/sh
+# Hamurabi's rules in C against the other three ports (Python, JavaScript, Swift), headless, seconds.
+#   - classic: 200 robot reigns add up to 639940, and the robot earns A+ in exactly 878 of 1000
+#   - story: 120 scripted reigns across the three levels add up to 390695 (the same script rules.js runs)
+#   - random legal orders, classic and story, never push people, acres or grain below zero
+#   - the header builds freestanding for i386 with NO undefined symbols (no libgcc, no libc)
+# Discriminating: change one number in HAMURABI rules (say .grain = 2800 to 2799) and the classic golden fails;
+# change one effect in art/hamurabi/story.json, rerun tools/gen/gen_hamurabi_story.py, and the story golden fails.
 set -e
 cd "$(dirname "$0")/../.."
+python3 tools/gen/gen_hamurabi_story.py >/dev/null
+if ! git diff --quiet -- user/hamurabi_story.h 2>/dev/null && [ -n "$CI" ]; then
+    echo "FAIL: user/hamurabi_story.h is stale, run tools/gen/gen_hamurabi_story.py and commit it"; exit 1
+fi
+T=$(mktemp -d /tmp/jt-hamurabi-check-XXXXXX); trap 'rm -rf "$T"' EXIT
 
-HARNESS=$(mktemp /tmp/jt-hamurabi-host-XXXXXX.c)
-HARNESS_BIN=$(mktemp /tmp/jt-hamurabi-host-XXXXXX)
-I386_HARNESS=$(mktemp /tmp/jt-hamurabi-i386-harness-XXXXXX.c)
-I386_OBJ=$(mktemp /tmp/jt-hamurabi-i386-XXXXXX.o)
-trap "rm -f $HARNESS $HARNESS_BIN $I386_HARNESS $I386_OBJ" EXIT
-
-# Host harness: test golden numbers and invariants
-cat > "$HARNESS" <<'HARNESS_CODE'
+cat > "$T/host.c" <<'EOF'
 #include <stdio.h>
-#include <string.h>
 #include "user/hamurabi_rules.h"
+
+static hamurabi_city reign_classic(unsigned long long seed) {
+    hamurabi_rng rng = hamurabi_rng_new(seed);
+    hamurabi_city c = hamurabi_new_city(&hamurabi_rules_normal);
+    while (!c.over) { hamurabi_orders o = hamurabi_ruler_legal(&c, &hamurabi_ruler_default); hamurabi_step(&c, &o, &rng, &hamurabi_rules_normal); }
+    return c;
+}
+
+/* Orders that are legal by construction, drawn from a separate seeded stream. */
+static hamurabi_orders random_orders(const hamurabi_city *c, hamurabi_rng *d) {
+    hamurabi_orders o;
+    int maxbuy = c->grain / c->price;
+    o.buy = hamurabi_rng_int(d, -c->acres, maxbuy);
+    int left = c->grain - o.buy * c->price;
+    o.feed = hamurabi_rng_int(d, 0, left);
+    int cap = c->acres + o.buy; if (cap > c->people * HAMURABI_TEND) cap = c->people * HAMURABI_TEND;
+    if (cap > left - o.feed) cap = left - o.feed;
+    o.plant = hamurabi_rng_int(d, 0, cap < 0 ? 0 : cap);
+    return o;
+}
+
+static int bad(const char *what, unsigned long long seed, const hamurabi_city *c) {
+    if (c->people >= 0 && c->acres >= 0 && c->grain >= 0) return 0;
+    printf("FAIL %s seed %llu: people=%d acres=%d grain=%d\n", what, seed, c->people, c->acres, c->grain);
+    return 1;
+}
 
 int main(void) {
-    /* Golden: 200 robot reigns */
-    int golden = 0;
-    for (int seed = 0; seed < 200; seed++) {
-        hamurabi_rng rng = hamurabi_rng_new(seed);
-        hamurabi_city c = hamurabi_new_city(&hamurabi_rules_normal);
-        const hamurabi_ruler_knobs knobs = hamurabi_ruler_default;
-        while (!c.over) {
-            hamurabi_orders o = hamurabi_ruler_legal(&c, &knobs);
-            hamurabi_step(&c, &o, &rng, &hamurabi_rules_normal);
-        }
-        golden += c.people + 3 * c.acres + 7 * c.grain + 11 * c.starved_total;
-    }
-    printf("golden %d (want 639940)\n", golden);
-    if (golden != 639940) return 1;
+    int fail = 0, total = 0;
+    for (int s = 0; s < 200; s++) { hamurabi_city c = reign_classic(s); total += c.people + 3 * c.acres + 7 * c.grain + 11 * c.starved_total; }
+    printf("classic golden %d (want 639940)\n", total);
+    if (total != 639940) fail = 1;
 
-    /* A+ grader: exactly 878 of 1000 reigns */
-    int a_plus = 0;
-    for (int seed = 0; seed < 1000; seed++) {
-        hamurabi_rng rng = hamurabi_rng_new(seed);
-        hamurabi_city c = hamurabi_new_city(&hamurabi_rules_normal);
-        const hamurabi_ruler_knobs knobs = hamurabi_ruler_default;
-        while (!c.over) {
-            hamurabi_orders o = hamurabi_ruler_legal(&c, &knobs);
-            hamurabi_step(&c, &o, &rng, &hamurabi_rules_normal);
-        }
-        if (hamurabi_grade(&c) == 3) a_plus++;
-    }
-    printf("A+ count %d (want 878)\n", a_plus);
-    if (a_plus != 878) return 1;
+    int aplus = 0;
+    for (int s = 0; s < 1000; s++) { hamurabi_city c = reign_classic(s); if (hamurabi_grade(&c) == 3) aplus++; }
+    printf("A+ in %d of 1000 (want 878)\n", aplus);
+    if (aplus != 878) fail = 1;
 
-    /* Invariants: 200 reigns no negatives */
-    for (int seed = 0; seed < 200; seed++) {
-        hamurabi_rng rng = hamurabi_rng_new(seed);
-        hamurabi_city c = hamurabi_new_city(&hamurabi_rules_normal);
-        const hamurabi_ruler_knobs knobs = hamurabi_ruler_default;
+    /* the story script from storyGolden() in web/play/rules.js */
+    total = 0;
+    const hamurabi_rules *levels[3] = { &hamurabi_rules_normal, &hamurabi_rules_easy, &hamurabi_rules_hard };
+    for (int s = 0; s < 120; s++) {
+        const hamurabi_rules *rules = levels[s % 3];
+        hamurabi_rng rng = hamurabi_rng_new(s), srng = hamurabi_rng_new((unsigned long long)s ^ 0x5707ULL);
+        hamurabi_city c = hamurabi_new_city(rules);
+        unsigned seen = 0; int seen_n = 0;
         while (!c.over) {
-            hamurabi_orders o = hamurabi_ruler_legal(&c, &knobs);
-            hamurabi_step(&c, &o, &rng, &hamurabi_rules_normal);
-            if (c.people < 0 || c.acres < 0 || c.grain < 0) {
-                printf("FAIL: seed %d negative\n", seed);
-                return 1;
+            int interlude = 0;
+            for (int i = 0; i < HAMURABI_INTERLUDES; i++) if (hamurabi_interludes[i].year == c.year) interlude = 1;
+            if (c.year != 1 && !interlude) {
+                const hamurabi_omen *o = hamurabi_omen_for(&c, seen, &srng);
+                if (o) {
+                    seen |= 1u << (int)(o - hamurabi_omens); seen_n++;
+                    int order[2] = { s % 2, 1 - s % 2 };
+                    for (int k = 0; k < 2; k++) if (hamurabi_can_afford(&o->choice[order[k]], &c)) {
+                        hamurabi_apply_choice(&o->choice[order[k]], &c, &srng, &rng);
+                        break;
+                    }
+                }
             }
+            hamurabi_orders o = hamurabi_ruler_legal(&c, &hamurabi_ruler_default);
+            hamurabi_step(&c, &o, &rng, rules);
         }
+        total += c.people + 3 * c.acres + 7 * c.grain + 11 * c.starved_total + 13 * hamurabi_grade(&c) + 17 * seen_n;
     }
-    printf("invariants ok\n");
+    printf("story golden %d (want 390695)\n", total);
+    if (total != 390695) fail = 1;
 
-    /* Story golden: 120 reigns (40 normal, 40 easy, 40 hard) */
-    int story_golden = 0;
-    for (int seed = 0; seed < 120; seed++) {
-        int rule_idx = seed % 3;
-        const hamurabi_rules *r = rule_idx == 0 ? &hamurabi_rules_normal :
-                                  rule_idx == 1 ? &hamurabi_rules_easy :
-                                  &hamurabi_rules_hard;
-        hamurabi_rng rng = hamurabi_rng_new(seed);
-        hamurabi_city c = hamurabi_new_city(r);
-        const hamurabi_ruler_knobs knobs = hamurabi_ruler_default;
+    /* random legal orders, classic and story: nothing goes below zero */
+    for (int s = 0; s < 200; s++) {
+        hamurabi_rng rng = hamurabi_rng_new(5000 + s), dice = hamurabi_rng_new(9000 + s);
+        hamurabi_city c = hamurabi_new_city(&hamurabi_rules_normal);
+        while (!c.over) { hamurabi_orders o = random_orders(&c, &dice); if (hamurabi_check(&c, &o)) { printf("FAIL random orders illegal, seed %d\n", s); fail = 1; break; }
+                          hamurabi_step(&c, &o, &rng, &hamurabi_rules_normal); fail |= bad("classic", s, &c); }
+    }
+    for (int s = 0; s < 120; s++) {
+        const hamurabi_rules *rules = levels[s % 3];
+        hamurabi_rng rng = hamurabi_rng_new(7000 + s), srng = hamurabi_rng_new(8000 + s), dice = hamurabi_rng_new(9500 + s);
+        hamurabi_city c = hamurabi_new_city(rules); unsigned seen = 0;
         while (!c.over) {
-            hamurabi_orders o = hamurabi_ruler_legal(&c, &knobs);
-            hamurabi_step(&c, &o, &rng, r);
+            const hamurabi_omen *o = hamurabi_omen_for(&c, seen, &srng);
+            if (o) {
+                seen |= 1u << (int)(o - hamurabi_omens);
+                int pick = hamurabi_rng_int(&dice, 0, 1);
+                if (hamurabi_can_afford(&o->choice[pick], &c)) hamurabi_apply_choice(&o->choice[pick], &c, &srng, &rng);
+                fail |= bad("story choice", s, &c);
+            }
+            hamurabi_orders ord = random_orders(&c, &dice);
+            if (hamurabi_check(&c, &ord)) { printf("FAIL random orders illegal (story), seed %d\n", s); fail = 1; break; }
+            hamurabi_step(&c, &ord, &rng, rules); fail |= bad("story", s, &c);
         }
-        int grade = hamurabi_grade(&c);
-        story_golden += c.people + 3 * c.acres + 7 * c.grain + 11 * c.starved_total +
-                        13 * grade + 17 * 0;  /* 0 seen omens for now */
     }
-    printf("story golden %d (want 390695)\n", story_golden);
-    if (story_golden != 390695) return 1;
-
-    printf("all checks passed\n");
-    return 0;
+    printf("random legal orders: %s\n", fail ? "see FAIL lines" : "nothing went below zero");
+    printf("%s\n", fail ? "FAILED" : "all checks passed");
+    return fail;
 }
-HARNESS_CODE
+EOF
+clang -O2 -Wall -Wextra -Wno-unused-function -I. -o "$T/host" "$T/host.c"
+"$T/host"
 
-clang -O2 -Wall -Wextra -I. -o "$HARNESS_BIN" "$HARNESS"
-"$HARNESS_BIN"
-
-# i386 harness: test freestanding compilation
-cat > "$I386_HARNESS" <<'I386_HARNESS_CODE'
+# The same header, freestanding for i386, touching every function the app will use.
+cat > "$T/free.c" <<'EOF'
 #include "user/hamurabi_rules.h"
-
+int sink;
 void _start(void) {
-    hamurabi_rng rng = hamurabi_rng_new(0);
-    hamurabi_city c = hamurabi_new_city(&hamurabi_rules_normal);
-    hamurabi_orders o;
-    o.buy = 0; o.feed = 1000; o.plant = 0;
-    if (!hamurabi_check(&c, &o)) {
-        hamurabi_step(&c, &o, &rng, &hamurabi_rules_normal);
+    hamurabi_rng rng = hamurabi_rng_new(7), srng = hamurabi_rng_new(8);
+    hamurabi_city c = hamurabi_new_city(&hamurabi_rules_hard);
+    unsigned seen = 0;
+    for (int i = 0; i < 12 && !c.over; i++) {
+        const hamurabi_omen *om = hamurabi_omen_for(&c, seen, &srng);
+        if (om) { seen |= 1u << (om - hamurabi_omens); if (hamurabi_can_afford(&om->choice[0], &c)) sink += hamurabi_apply_choice(&om->choice[0], &c, &srng, &rng).peek_yield; }
+        hamurabi_orders o = hamurabi_ruler_legal(&c, &hamurabi_ruler_default);
+        if (!hamurabi_check(&c, &o)) sink += hamurabi_step(&c, &o, &rng, &hamurabi_rules_normal).born;
     }
-    int g = hamurabi_grade(&c);
-    (void)g;
+    sink += hamurabi_grade(&c) + (int)hamurabi_rng_int(&rng, 1, 7) + hamurabi_rng_below(&rng, HAMURABI_P45);
+    for (;;) { }
 }
-I386_HARNESS_CODE
-
-echo "Checking i386-freestanding compilation..."
-clang -target i386-unknown-none -ffreestanding -c \
-    -I. -Iuser -Ithird_party/bearssl/inc -Ithird_party/bearssl/src \
-    -o "$I386_OBJ" "$I386_HARNESS" 2>&1 | grep -v "warning:" || true
-
-echo "Checking for ANY undefined symbols..."
-if nm "$I386_OBJ" 2>/dev/null | grep "^[[:space:]]*U " > /dev/null 2>&1; then
-    echo "FAIL: found undefined symbols:"
-    nm "$I386_OBJ" | grep "^[[:space:]]*U "
-    exit 1
-fi
-
-echo "All tests passed"
+EOF
+clang -target i386-unknown-none -ffreestanding -fno-stack-protector -fno-pic -mno-sse -mno-mmx -Os -Wall -Wextra -Wno-unused-function -I. -c "$T/free.c" -o "$T/free.o"
+UND=$(nm -u "$T/free.o" || true)
+if [ -n "$UND" ]; then echo "FAIL: the freestanding i386 build needs symbols nobody provides:"; echo "$UND"; exit 1; fi
+echo "i386 freestanding build: no undefined symbols"

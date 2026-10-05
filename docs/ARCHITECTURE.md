@@ -321,7 +321,7 @@ sibling web apps, kept small on purpose.
 | Calculator | `user/calculator.c`, `kernel/ring3app.c` | Recursive-descent parser over `+ - * / ()`. The third ring-3 app (1.7.12); its in-kernel copy is gone. |
 | Quotes | `user/quotes.c`, `kernel/ring3app.c` | Name the film from the line. Streak and best for the session. The fourth ring-3 app (1.7.14); its in-kernel copy is gone. |
 | Bookrank | `user/bookrank.c`, `kernel/ring3app.c` | Ranked non-fiction: a list on the left, the selected book's title, author, rating, review count and summary on the right. Live through `SYS_HTTP_GET` with samples when offline (2.6.26). The fifth ring-3 app (2.0); its in-kernel copy is gone. |
-| Hamurabi | `user/hamurabi_rules.h`, `art/hamurabi/story.json`, `user/hamurabi_story.h` | Rule Sumeria for 10 years. Header-only C implementation of SplitMix64 PRNG, game rules (`check`, `step`, `grade`), the robot Ruler (`orders`, `legal`, `reign`), and story logic. No libc, no 64-bit division/modulo, no floats. Validated against golden checksums (639940 classic, 390695 story) and verified to compile as freestanding i386 code. |
+| Hamurabi (rules) | `user/hamurabi_rules.h`, `user/hamurabi_story.h`, `art/hamurabi/story.json` | The game's rules, robot king and story logic as plain C with no libc, no floats and no 64-bit division, so an app can include it as is. The story file is the one place for the words; the header is generated from it. Held to the other three ports by two golden numbers (`tools/checks/hamurabi-rules-check.sh`). |
 
 **Adding an app.** Every app is one row in `APPS[]` in `kernel/kernel.c`,
 and nothing else dispatches on an app's index: the dock, the Apps folder,
@@ -361,8 +361,8 @@ sanitizers, using the shims in `tools/parsers-host/`.
 **Generators** in `tools/gen/` produce the embedded data: the icon art
 from hand-drawn SVGs, the editor fonts, the VGA font fallback, the
 satellite wallpaper, the user program arrays, the ported app arrays, the
-fact row and progress chart on the landing page, and `gen_hamurabi_story.py`
-which turns `art/hamurabi/story.json` into `user/hamurabi_story.h` (C const arrays and strings).
+fact row and progress chart on the landing page, and Hamurabi's story data
+(`gen_hamurabi_story.py` turns `art/hamurabi/story.json` into `user/hamurabi_story.h`).
 
 **Checks** in `tools/checks/` are the regression suite. `check.sh` proves
 the kernel boots. `qa-gallery.py` opens every app in a
