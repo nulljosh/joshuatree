@@ -66,8 +66,14 @@ if (typeof document !== "undefined") (function () {
   // 1.7.16: one cmdline for the first boot AND every tour-lap reboot. reinjectKernel
   // used to reload the kernel with no cmdline, so after lap 1 a phone visitor got a
   // letterboxed desktop (no "phone"), and everyone lost facehost.
-  var BOOT_CMDLINE = (IS_PHONE ? "phone samantha " : "") + RES_TOKEN + (/[?&]portfolio\b/.test(location.search) ? "portfolio samantha " : "") + (/[?&]samantha\b/.test(location.search) ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com";
-  if (/[?&]portfolio\b/.test(location.search)) { var sbl = document.getElementById("samantha-boot-link"); if (sbl) sbl.parentNode.style.display = "none"; }   // his site, not Samantha's: no link to her
+  // 2.11.1: the hero opens on Samantha's full-screen face by default (a visitor's first
+  // look should be her, not a desktop tour). ?desktop is the opt-out ("See the desktop"
+  // under the demo); ?portfolio and ?full keep their own boots. ?samantha stays an alias.
+  var DESKTOP_MODE = /[?&]desktop\b/.test(location.search);
+  var HERO_SAMANTHA = !DESKTOP_MODE && !/[?&](portfolio|full)\b/.test(location.search);
+  var WANT_SAMANTHA = HERO_SAMANTHA || /[?&]samantha\b/.test(location.search);
+  var BOOT_CMDLINE = (IS_PHONE ? "phone samantha " : "") + RES_TOKEN + (/[?&]portfolio\b/.test(location.search) ? "portfolio samantha " : "") + (WANT_SAMANTHA && !IS_PHONE ? "samantha " : "") + "facehost=joshuatree.heyitsmejosh.com";
+  if (!HERO_SAMANTHA || IS_PHONE) { var dbl = document.getElementById("desktop-boot-link"); if (dbl) dbl.parentNode.style.display = "none"; }   // already on the desktop, his site, or a phone (the phone kernel has no desktop to show)
   var GLIDE_MAX_MS = 700; // longest tour cursor glide, see moveCursorTo
   // v52.6: real shadow cursor position, kept in sync by every real send
   // this file makes (mousemove, touchmove drags, and moveCursorTo's own
@@ -354,6 +360,10 @@ if (typeof document !== "undefined") (function () {
       // keyboard trap): it gives the keyboard back to the page. Plain Escape
       // still never reaches the kernel.
       if (ev.shiftKey && focused) releaseKeyboard();
+      // 2.11.1: the hero opens on her full-screen face, and Esc is how a visitor
+      // closes her to the desktop (the red dot does the same). Forwarded only while
+      // she is open: on the bare desktop Esc still must not reach the kernel (shell exit).
+      else if (!ev.shiftKey && focused && samanthaOpen && emulator && emulator.keyboard_send_keys && !ev.jtFullExit) emulator.keyboard_send_keys([27], 80);   // index.html sets jtFullExit when this same keypress already left the page's full-screen box: that Esc does not also close her, the next one does
     }
   }, true); // capture phase, BEFORE v86's own global listener (both on window, FIFO order)
 
@@ -363,6 +373,7 @@ if (typeof document !== "undefined") (function () {
   // and the `emulator` v0.82.x comment above `kernelElfFetch` for the
   // real report and root cause this whole gate exists for).
   var emulator = null;
+  var samanthaOpen = false;   // is her ring-3 window up (from the serial log); gates the Esc forward above
   var adaptersReady = false;
   var bootStart = 0; // set inside startEmulator, not here: the boot-detection setInterval's own "stuck in text mode" fallback measures elapsed time since boot actually STARTED, and boot no longer starts at page load
   var emulatorStarting = false;
@@ -486,6 +497,7 @@ if (typeof document !== "undefined") (function () {
     // "typing in the search bar" and "typing into someone else's kernel".
     emulator.keyboard_adapter.emu_enabled = false;
     emulator.mouse_adapter.emu_enabled = false;
+    if (posterPendingFocus) { posterPendingFocus = false; setTimeout(focusIn, 0); }   // the poster was clicked while the CPU was still loading
     // Direct report: the menu bar clock shows the wrong day, "should say
     // today but says tomorrow." Real, root-caused, not a kernel bug:
     // libv86.js's own CMOS/RTC device (class hb) answers every read with
@@ -547,6 +559,8 @@ if (typeof document !== "undefined") (function () {
         var m = /^(?:syscall: write\(1\) from ring 3: )?speak: status=200 bytes=(\d+)/.exec(serialLine); // ring-3 Samantha's writes arrive behind the kernel's syscall trace prefix
         if (m) { speakCount++; lastSpeakBytes = Number(m[1]); }
         if (/samface: idle ready/.test(serialLine)) faceReady = true;
+        if (/^samopen/.test(serialLine)) samanthaOpen = true;                                       // kernel.c: boot_to_samantha opened her
+        else if (/^ring3app: SAMANTHA\.BIN (?:exited|crashed)/.test(serialLine)) samanthaOpen = false;   // Esc, the red dot or the back chevron closed her
         if (/^ring3app: \S+ (?:exited|crashed)/.test(serialLine)) ring3Exits++;   // an app's window is gone
         if (m) lastInteractionTime = Date.now() + Math.ceil(Number(m[1]) / 16); // 16000 samples/s = 16 per ms
         else if (/^(?:syscall: write\(1\) from ring 3: )?(?:chatreply=|chattool=)/.test(serialLine)) {
@@ -642,6 +656,7 @@ if (typeof document !== "undefined") (function () {
     }, KIOSK_IDLE_MS);
   }
   function focusIn() {
+    requestPosterLift();   // 2.11.1: any takeover (Tab then Enter on the demo, the phone chat bar) lifts the poster once her face is up, never types into a machine the visitor cannot see
     try { showComposer(true); } catch (e) {}   // a visitor taking over mid-tour gets the chat bar back at once
     if (focused || !adaptersReady) return;
     focused = true;
@@ -913,6 +928,63 @@ if (typeof document !== "undefined") (function () {
         composeInput.focus(); // keep the keyboard up for the next message
       });
     }
+  }
+  // 2.11.1: the hero poster (index.html #hero-poster, a still of her full-screen face) covers
+  // the stage until the first click or tap. The machine boots behind it from page load, so
+  // the click takes the keyboard and unlocks audio at once (that gesture is what lets her
+  // voice play), but the VISUAL lift waits until the kernel has really painted her portrait:
+  // lifting earlier showed a cream box or the boot logo, the blank box this poster exists to
+  // prevent. Until then the pill reads "Waking up". Deadline: 60 s after the first click the
+  // poster lifts anyway, so nobody is stuck behind it. A click before the CPU is ready is
+  // remembered and applied then.
+  var heroPoster = document.getElementById("hero-poster");
+  var posterPendingFocus = false;
+  var posterWaitTimer = 0;
+  var POSTER_DEADLINE_MS = 60000;
+  var faceProbe = null;
+  // Is her portrait on the canvas? The serial gate below, then a 32x56 downscale of the live canvas: mostly warm (skin, hair). Cream ("waking up ..." screen), black and the boot logo all fail it. Pixel based
+  // so it is the same in WebKit and Chromium (the serial log alone says "open", not "painted").
+  function facePainted() {
+    var c = document.getElementById("screen_canvas");
+    if (!c || !c.width || !c.height || c.style.display === "none") return false;
+    // Her ring-3 window is open and her HD portrait has loaded ("face: hd=" follows samopen). The desktop wallpaper
+    // that shows for a moment first is warm too, so the pixels alone are not enough.
+    var so = serialLog.indexOf("samopen");
+    if (so === -1 || serialLog.indexOf("face: hd=", so) === -1) return false;
+    try {
+      if (!faceProbe) { faceProbe = document.createElement("canvas"); faceProbe.width = 32; faceProbe.height = 56; }
+      var g = faceProbe.getContext("2d", { willReadFrequently: true });
+      g.drawImage(c, 0, 0, 32, 56);
+      var d = g.getImageData(0, 0, 32, 56).data, warm = 0, n = d.length / 4;
+      for (var i = 0; i < d.length; i += 4) if (d[i] > d[i + 2] + 25) warm++;
+      return warm / n >= 0.5;
+    } catch (e) { return false; }   // a tainted or unreadable canvas: let the deadline decide
+  }
+  function liftPosterNow() {
+    if (posterWaitTimer) { clearInterval(posterWaitTimer); posterWaitTimer = 0; }
+    if (heroPoster) { heroPoster.hidden = true; heroPoster.classList.remove("waking"); }
+  }
+  // Ask for the lift: now if her face is up, otherwise show "Waking up" and poll for it.
+  function requestPosterLift() {
+    if (!heroPoster || heroPoster.hidden) return;
+    if (facePainted()) { liftPosterNow(); return; }
+    if (posterWaitTimer) return;
+    heroPoster.classList.add("waking");
+    var t0 = Date.now();
+    posterWaitTimer = setInterval(function () {
+      if (facePainted() || Date.now() - t0 > POSTER_DEADLINE_MS) liftPosterNow();
+    }, 150);
+  }
+  function liftPoster(ev) {
+    if (!heroPoster || heroPoster.hidden) return;
+    requestPosterLift();
+    if (IS_PHONE) return;
+    if (adaptersReady) focusIn(); else posterPendingFocus = true;
+  }
+  if (heroPoster) {
+    if (!HERO_SAMANTHA) heroPoster.hidden = true;
+    // document + capture: the phone's first-tap handler above stops propagation of that tap
+    document.addEventListener("click", function (ev) { if (ev.target && ev.target.closest && ev.target.closest("#hero-poster")) liftPoster(ev); }, true);
   }
   container.addEventListener("mousedown", focusIn);
   container.addEventListener("touchstart", focusIn, { passive: true });
@@ -2516,6 +2588,11 @@ if (typeof document !== "undefined") (function () {
   var prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   setInterval(function () {
     if (tourArmed || focused || prefersReducedMotion) return;
+    if (heroPoster && !heroPoster.hidden) return;   // 2.11.1: nothing plays behind the poster
+    // 2.11.1: she owns the screen. On a desktop the tour clicked dock tiles and Escaped her closed seconds after she opened
+    // (?desktop is the tour there). A phone stays on her face too; its scripted demo (four questions, then the apps they
+    // touched, phoneSamanthaIntro) is opt-in with ?tour, which the "Tap to look around" link under the demo sets.
+    if (WANT_SAMANTHA && !PORTFOLIO_MODE && !(IS_PHONE && /[?&]tour\b/.test(location.search))) return;
     // `emulator` doesn't exist until startEmulator() has actually run (deferred, see above); this interval is itself
     // part of what naturally waits for that, same as the boot-detection interval's own guard.
     var vga = emulator && emulator.v86 && emulator.v86.cpu.devices.vga;

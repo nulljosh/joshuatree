@@ -19,7 +19,7 @@
 
 import { chromium } from 'playwright';
 
-const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com';
+const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com/?desktop';
 const LOGICAL_W = 960;
 const LOGICAL_H = 540;
 

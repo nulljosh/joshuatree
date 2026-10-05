@@ -7,8 +7,10 @@
 //      the progress lede, the progress chart's caption and aria-label) is
 //      the same number, and it equals the real apps in kernel/kernel.c's
 //      APPS[] table (everything except Apps, Trash and Mail Compose).
-//   3. The "Boot straight into Samantha" link has a real theme color, not
-//      the browser's default link blue or the body text color.
+//   3. The "See the desktop" link has a real theme color, not
+//      the browser's default link blue or the body text color. 2.11.1: the hero
+//      boots into Samantha by default, so the secondary link under the demo is
+//      now "See the desktop" (#desktop-boot-link); same styling rule, new element.
 //   4. The key sections are visible (opacity > 0) on load. They used to sit
 //      at opacity 0 until a scroll observer fired.
 //   5. The "Want one?" section carries the ad video and the Neo render.
@@ -64,7 +66,7 @@ try {
         parts: [...f.querySelectorAll('strong, strong > .label, :scope > .label')].map(e => ({ t: e.textContent.trim(), b: box(e) })),
         spill: f.scrollWidth > f.clientWidth + 1,
       }));
-      const link = document.getElementById('samantha-boot-link');
+      const link = document.getElementById('desktop-boot-link');
       const ls = link && getComputedStyle(link);
       const body = getComputedStyle(document.body).color;
       const text = document.body.innerText + ' ' + document.documentElement.innerHTML;
@@ -117,7 +119,7 @@ try {
     for (const [where, n] of d.counts) if (+n !== realApps) fail(`${tag}: ${where} says ${n} apps, APPS[] has ${realApps}`);
     // 3. link styling
     const rgb = d.linkColor;
-    if (!rgb || rgb === 'rgb(0, 0, 238)' || rgb === 'rgb(0, 102, 204)' || rgb === d.bodyColor) fail(`${tag}: Samantha link is unstyled (color ${rgb}, body ${d.bodyColor})`);
+    if (!rgb || rgb === 'rgb(0, 0, 238)' || rgb === 'rgb(0, 102, 204)' || rgb === d.bodyColor) fail(`${tag}: desktop link is unstyled (color ${rgb}, body ${d.bodyColor})`);
     // 4. visibility without scrolling
     for (const [k, o] of d.sections) {
       if (o === null) fail(`${tag}: section "${k}" missing`);
@@ -143,7 +145,7 @@ try {
     if (g.w < 389) fail(`portfolio phone: stage is ${g.w}px wide, not the full 390`);
     await page.close();
   }
-  if (!process.exitCode) console.log('PASS: benchmark labels clear, one app count, Samantha link styled, sections visible on load');
+  if (!process.exitCode) console.log('PASS: benchmark labels clear, one app count, desktop link styled, sections visible on load');
 } finally {
   await browser.close();
   server.close();

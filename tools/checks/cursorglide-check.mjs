@@ -25,7 +25,7 @@ const server = http.createServer((q, r) => {
   fs.createReadStream(f).pipe(r);
 });
 await new Promise(res => server.listen(0, res));
-const url = `http://localhost:${server.address().port}/index.html`;
+const url = `http://localhost:${server.address().port}/index.html?desktop`;
 const CHROMIUM_PATH = process.env.JT_CHROMIUM || (fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
 const browser = await chromium.launch(CHROMIUM_PATH ? { executablePath: CHROMIUM_PATH } : {});
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });

@@ -28,7 +28,7 @@
 // Usage: node tools/checks/mailboxreset-check.mjs [url]
 import { chromium } from 'playwright';
 
-const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com';
+const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com/?desktop';
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 page.on('pageerror', function (e) { console.log('PAGE ERROR: ' + e); });

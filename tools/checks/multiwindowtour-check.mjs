@@ -46,7 +46,7 @@
 // the live site works too once deployed, same as tourinput-check.mjs.)
 import { chromium } from 'playwright';
 
-const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com';
+const url = process.argv[2] || 'https://joshuatree.heyitsmejosh.com/?desktop';
 // Same plain chromium.launch() every sibling check here uses (tourinput-
 // check.mjs, mailboxreset-check.mjs, ne2k-check.mjs): a real Chromium
 // install (`npx playwright install chromium`) resolves this on its own.

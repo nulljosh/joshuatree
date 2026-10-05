@@ -327,6 +327,23 @@
   #boot-logo .ink-img { width: 64px; height: 49px; background: #ece8df; --src: url(mark-tree.svg); }
   #boot-logo span { color: #fff; font-size: 13px; letter-spacing: 0.04em; opacity: 0.8; text-shadow: 0 2px 10px rgba(0,0,0,0.85); }
   #boot-logo[hidden] { display: none; }
+  /* 2.11.1: hero poster, above the stage and boot logo, below the full-screen button. object-fit
+     cover on a box whose aspect ratio equals the image's (16:9 or 430:760, the same shapes
+     #stage-wrap takes) so nothing is stretched or cropped. */
+  #hero-poster { position: absolute; inset: 0; z-index: 4; display: block; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; background: #000; cursor: pointer; font: inherit; -webkit-tap-highlight-color: transparent; }
+  #hero-poster[hidden], html.no-poster #hero-poster { display: none; }
+  #hero-poster picture, #hero-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  #hero-poster:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .poster-cta { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); background: var(--accent); color: var(--bg); font-size: 15px; font-weight: 600; letter-spacing: 0.01em; padding: 12px 26px; border-radius: 999px; white-space: nowrap; box-shadow: 0 4px 18px rgba(0,0,0,0.28); }
+  #hero-poster:hover .poster-cta { opacity: 0.92; }
+  .poster-cta-mobile, .poster-cta-wake { display: none; }
+  @media (max-width: 520px) { .poster-cta-desktop { display: none; } .poster-cta-mobile { display: inline; } .poster-cta { bottom: 14%; } }
+  /* Clicked, but her face is not painted yet: the pill says so and breathes quietly. Declared after the media rule so it wins on phones. */
+  #hero-poster.waking .poster-cta-desktop, #hero-poster.waking .poster-cta-mobile { display: none; }
+  #hero-poster.waking .poster-cta-wake { display: inline; }
+  #hero-poster.waking .poster-cta { animation: posterwake 1.4s ease-in-out infinite; }
+  @keyframes posterwake { 0%,100% { opacity: 0.7; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { #hero-poster.waking .poster-cta { animation: none; } }
   @keyframes bootpulse { 0%,100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 1; transform: scale(1.06); } }
   @media (prefers-reduced-motion: reduce) { #boot-logo { animation: none; opacity: 0.85; } }
   /* fix/demo-aplus-1 item 2: was #000. The tour's lap-boundary reboot blanks
@@ -456,8 +473,10 @@
   .seal { display: block; width: 120px; height: 120px; margin: 0 auto 8px; }
   @media (prefers-color-scheme: dark) { .hero-logo, .seal { filter: invert(0.93); } }
   .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-  .plate-cap a#samantha-boot-link { color: var(--accent2); text-decoration: none; font-weight: 600; }
-  .plate-cap a#samantha-boot-link:hover { text-decoration: underline; }
+  .plate-cap a#desktop-boot-link { color: var(--accent2); text-decoration: none; font-weight: 600; }
+  .plate-cap a#desktop-boot-link:hover { text-decoration: underline; }
+  .plate-cap a#tour-link { color: var(--fg); text-decoration: none; }
+  .plate-cap a#tour-link:hover { text-decoration: underline; }
   .ad-video, .neo-img { display: block; width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--border); margin: 28px auto 0; background: var(--card); }
   .neo-link { display: block; }
   .neo-cap a { color: var(--accent2); text-decoration: none; font-weight: 600; }
@@ -493,6 +512,19 @@
 <span id="demo"></span>
 <div id="demo-frame">
   <div id="stage-wrap">
+    <!-- 2.11.1: a real first frame before any click. The still is Samantha's actual full-screen
+         view (hero/samantha.webp, 16:9, hero/samantha-phone.webp, 430x760), captured from this
+         kernel, so lifting it on click shows the same picture, now alive. The machine boots
+         behind it from page load. embed.js lifts it on the first click or tap; ?desktop, ?portfolio
+         and ?full never show it. -->
+    <script>if (/[?&](desktop|portfolio|full)\b/.test(location.search)) document.documentElement.classList.add('no-poster');</script>
+    <button id="hero-poster" type="button" aria-label="Click to boot Joshua Tree. It opens on Samantha, full screen.">
+      <picture>
+        <source media="(max-width: 520px)" srcset="hero/samantha-phone.webp" width="430" height="760">
+        <img src="hero/samantha.webp" width="1920" height="1080" alt="Samantha's face, full screen, with a chat bar at the bottom" fetchpriority="high" decoding="async">
+      </picture>
+      <span class="poster-cta"><span class="poster-cta-desktop">Click to boot</span><span class="poster-cta-mobile">Tap to boot</span><span class="poster-cta-wake">Waking up</span></span>
+    </button>
     <div id="boot-logo" aria-hidden="true">
       <div class="ink-img"></div>
       <span>Booting...</span>
@@ -517,13 +549,13 @@
     <span class="plate-cap-desktop">Fig. 1 &middot; Joshua Tree, booting live in your browser</span>
     <!-- Phones get a chat bar (#demo-composer) under the demo, because v86
          only hears keys on the window and a phone has no keyboard for it. -->
-    <span class="plate-cap-mobile">Tap to look around.</span>
+    <span class="plate-cap-mobile"><a href="?tour" id="tour-link">Tap to look around.</a></span>
   </p>
-  <!-- ?samantha reload, same opt-in shape as os.html's ?portfolio embed:
-       embed.js's cmdline builder appends "samantha " to the kernel command
-       line when this query param is present, and kernel.c's boot_to_samantha
-       skips the desktop for Chat's full-screen avatar view. -->
-  <p class="plate-cap"><a href="?samantha" id="samantha-boot-link">Boot straight into Samantha</a></p>
+  <!-- 2.11.1: the demo boots into Samantha's full-screen face by default (embed.js appends
+       "samantha " to the kernel command line, kernel.c's boot_to_samantha skips the desktop).
+       ?desktop is the opt-out: a reload that boots the desktop and its tour instead. Esc
+       closes her to the same desktop without a reload. -->
+  <p class="plate-cap"><a href="?desktop" id="desktop-boot-link">See the desktop</a></p>
 </div>
 
 <div class="sheet-rule" aria-hidden="true"><span>Joshua Tree Co.</span><span>Est. 2026</span></div>
@@ -574,7 +606,7 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">29</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">2.11.0</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">2.11.1</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a>
@@ -818,7 +850,7 @@
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.11.0</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.11.1</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
 </footer>
 
@@ -860,7 +892,7 @@
   // ?full: the portfolio's /os page frames this site and wants only the machine, no landing page around it.
   if (/[?&]full\b/.test(location.search)) { setFull(true); btn.hidden = true; }
   // capture phase, never preventDefault: embed.js's own Escape interceptor still runs after this
-  window.addEventListener('keydown', function (ev) { if (isFull() && ev.key === 'Escape' && !/[?&]full\b/.test(location.search)) setFull(false); }, true); // ?full has no page to fall back to, Escape belongs to the OS there
+  window.addEventListener('keydown', function (ev) { if (isFull() && ev.key === 'Escape' && !/[?&]full\b/.test(location.search)) { ev.jtFullExit = true; setFull(false); } }, true); // ?full has no page to fall back to, Escape belongs to the OS there
   document.addEventListener('fullscreenchange', function () { if (!document.fullscreenElement && isFull()) setFull(false); });
 })();
 // Direct request: a dynamic version number next to the "Joshua Tree"
