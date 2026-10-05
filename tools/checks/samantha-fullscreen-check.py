@@ -214,6 +214,21 @@ class Machine:
             time.sleep(step)
         return False
 
+    def still(self, rows=None, need=4, secs=90, ok=None):
+        """Wait until the screen has stopped changing: `need` frames in a row (0.25 s apart) are byte for byte the same, and
+        `ok(frame)`, when given, holds (so a black or half-composited window does not count as still). Returns that frame, or
+        None at the deadline. The checks sample only after this, never after a fixed sleep: a shared CI runner can be many
+        times slower than a laptop, and a fixed sleep either wastes time or samples a picture that is not painted yet."""
+        t_end = time.time() + secs; last = None; run = 0
+        while time.time() < t_end:
+            img = self.frame(rows); raw = img.tobytes()
+            if raw == last and (ok is None or ok(img)): run += 1
+            else: run = 0
+            last = raw
+            if run >= need: return img
+            time.sleep(0.25)
+        return None
+
     def move(self, x, y):
         self.cmd({"execute": "input-send-event", "arguments": {"events": [
             {"type": "abs", "data": {"axis": "x", "value": int(x * 32768 / (self.PW // self.scale))}},
@@ -277,7 +292,7 @@ def scenario_desktop():
     m = Machine(tag, (1920, 1080), f"noblink llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
     try:
         if not m.wait(lambda: m.frame((1020, 1030)).getpixel((961, 1023)) == DOCK_COLOUR, 60): return fail(tag, "the desktop dock never appeared")
-        time.sleep(1.0)
+        if m.still(need=3, ok=lambda im: im.getpixel((961, 1023)) == DOCK_COLOUR) is None: return fail(tag, "the desktop never stopped changing before she opened")
         before = m.frame(); m.shot(before, "desktop-before")
         if before.getpixel((1200, 935)) != DOCK_COLOUR: return fail(tag, "the dock probe pixel is not dock-coloured before she opens; the cover assertion would mean nothing")
         if not m.wait(lambda: re.search(r"\nwx=", m.serial()) is not None, 90): return fail(tag, "the desktop never fetched the stub weather (no wx= line)")
@@ -299,8 +314,9 @@ def scenario_desktop():
         else: print(tag + "message typed while she spoke reached her whole: 'what'")
         # wait for everything to go quiet: her own marker says every caption has faded and the mouth is shut
         if not m.wait(lambda: m.serial().count("chatreply=") >= 2 and captions_gone(m), 90): return fail(tag, "the captions never faded out after her answers")
-        time.sleep(0.4)
-        base = m.frame(); m.shot(base, "01-full-screen-idle")
+        base = m.still(need=3)   # captions are gone (serial says so); the picture itself settles a frame or two later
+        if base is None: return fail(tag, "her picture never settled after the captions faded")
+        m.shot(base, "01-full-screen-idle")
         PW, PH, sc = m.PW, m.PH, m.scale
         # 1. cover: the whole screen, menu bar and dock included, is her picture
         probes = {"top-left": (6, 6), "top-right": (PW - 6, 6), "bottom-left": (6, PH - 6), "bottom-right": (PW - 6, PH - 6),
@@ -443,23 +459,31 @@ def mouth_check(m, tag, base):
     box = (cx - hw, cy - 6 * m.scale, cx + hw, cy + depth - 10 * m.scale)   # the lip zone, clear of the caption backdrop's feathered edge
     if not m.wait(lambda: captions_gone(m), 60): return fail(tag, "the captions never faded before the mouth test")
     speech["pcm"] = MOUTH_PCM
-    time.sleep(0.3)
-    closed = m.frame((box[1], box[3]))
+    closed = m.still((box[1], box[3]), need=4)   # the closed portrait, once it has really stopped changing (not after a fixed sleep)
+    if closed is None: return fail(tag, "the closed mouth never settled before the mouth test")
     n0 = m.serial().count("speak: status=")
     m.typ("tell me something"); m.keys("ret")
-    pairs = []; times = []; t_end = time.time() + 45
+    pairs = []; times = []; t_end = time.time() + 120; quiet = []; zero_since = None
     while time.time() < t_end:
         a = last_open(m)
         img = m.frame((box[1], box[3]))
         b = last_open(m)
+        # She prints "open=0" as she draws the closing frame, a moment before that frame is on the screen, so a poll that sees
+        # 0 straight after the opening changed may still be looking at the last frame with the mouth ajar (a slow runner made
+        # this 0.2). The silent assertion therefore reads only polls where 0 has been reported for 0.3 s already.
+        if a == 0 and b == 0:
+            if zero_since is None: zero_since = time.time()
+        elif a is not None: zero_since = None
+        settled_zero = a == 0 and b == 0 and zero_since is not None and time.time() - zero_since >= 0.3
         if a is not None and a == b:
             d = 0; px = img.load(); cp = closed.load(); n = 0
             for y in range(box[1], box[3], 2):
                 for x in range(box[0], box[2], 2):
                     d += sum(abs(px[x, y][i] - cp[x, y][i]) for i in range(3)); n += 1
             pairs.append((a, d / n)); times.append(time.time())
+            if settled_zero: quiet.append(d / n)
             if SHOTS and a >= 14 and not os.path.exists(os.path.join(SHOTS, "06-mouth-open.png")): m.shot(m.frame(), "06-mouth-open")
-        if m.serial().count("speak: status=") > n0 and last_open(m) == 0 and len(pairs) > 20 and time.time() > t_end - 30: break
+        if m.serial().count("speak: status=") > n0 and last_open(m) == 0 and len(pairs) > 20 and time.time() > t_end - 105: break
         time.sleep(0.05)
     if len(pairs) < 20: return fail(tag, f"too few mouth samples ({len(pairs)})")
     by = {}
@@ -479,15 +503,47 @@ def mouth_check(m, tag, base):
         else: run_start = None
     print(tag + f"longest shut stretch inside her speech: {gap:.2f} s")
     if gap < 0.3: fail(tag, f"her mouth stayed open through the silent second of her speech (longest shut stretch {gap:.2f} s)")
-    if summary[0] > 0.2: fail(tag, f"silent speech still changes the mouth pixels ({summary[0]:.1f}); the closed mouth must be the portrait exactly")
-    xs = [a for a, _ in pairs]; ys = [d for _, d in pairs]
+    if not quiet: fail(tag, "no poll caught the mouth settled shut inside her speech, so silence could not be measured")
+    else:
+        q = sum(quiet) / len(quiet)
+        print(tag + f"settled shut polls: {len(quiet)}, mean pixel change {q:.2f}")
+        if q > 0.2: fail(tag, f"silent speech still changes the mouth pixels ({q:.1f}); the closed mouth must be the portrait exactly")
+    # She prints each opening as she draws it and the frame reaches the screen a moment later, so on a slow host a poll in the
+    # middle of a change pairs the new number with the old picture. The correlation is therefore taken over steady polls
+    # only: those whose reported opening is the same as in the polls on either side, so the picture on screen is the one the
+    # number describes. The threshold is unchanged, and a constant mouth still has no variation to correlate.
+    held = [pairs[i] for i in range(1, len(pairs) - 1) if pairs[i - 1][0] == pairs[i][0] == pairs[i + 1][0]]
+    if len(held) < 20: return fail(tag, f"too few steady mouth samples ({len(held)} of {len(pairs)})")
+    xs = [a for a, _ in held]; ys = [d for _, d in held]
     mx_, my_ = sum(xs) / len(xs), sum(ys) / len(ys)
-    cov = sum((x - mx_) * (y - my_) for x, y in pairs); vx = sum((x - mx_) ** 2 for x in xs); vy = sum((y - my_) ** 2 for y in ys)
+    cov = sum((x - mx_) * (y - my_) for x, y in held); vx = sum((x - mx_) ** 2 for x in xs); vy = sum((y - my_) ** 2 for y in ys)
     r = cov / math.sqrt(vx * vy) if vx and vy else 0
-    print(tag + f"correlation between her reported opening and the mouth pixels: {r:.3f} over {len(pairs)} polls")
+    print(tag + f"correlation between her reported opening and the mouth pixels: {r:.3f} over {len(held)} steady polls of {len(pairs)}")
     if r < 0.9: fail(tag, f"the mouth pixels do not follow her opening (correlation {r:.2f})")
     if len(set(a for a, _ in pairs)) < 4: fail(tag, f"her mouth only used {len(set(a for a, _ in pairs))} different openings: it is not following the loudness")
     speech["pcm"] = TONE
+
+
+RED_DOT = (24 * 2, 24 * 2, (0xFF, 0x5F, 0x57))   # her close dot, physical px at scale 2: drawn only by her window, never by the desktop
+
+
+def dot_up(img): return img.getpixel(RED_DOT[:2]) == RED_DOT[2]
+
+
+def corners_painted(PW, PH, top, dot=True):
+    """True once all four corners show her picture. The synthetic portrait is red on the left and blue on the right, so a
+    black (window not composited yet) or desktop-coloured corner is not it. In screenshot mode the real portrait is served and
+    colour probes mean nothing, so any non-black corners will do."""
+    def ok(img):
+        if dot and not dot_up(img): return False   # the wallpaper is also a stable, non-black picture; only her window has the red dot
+        for x, y in ((6, top), (PW - 6, top), (6, PH - 6), (PW - 6, PH - 6)):
+            p = img.getpixel((x, y))
+            if not SYNTH:
+                if p == (0, 0, 0): return False
+                continue
+            if not ((p[0] > p[2] + 25) if x < PW // 2 else (p[2] > p[0] + 25)): return False
+        return True
+    return ok
 
 
 def scenario_small():
@@ -495,8 +551,9 @@ def scenario_small():
     m = Machine(tag, (1024, 768), f"samantha noblink res=1024x768 llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
     try:
         if not m.wait(lambda: "face: hd=736" in m.serial(), 120): return fail(tag, "her portrait never loaded")
-        time.sleep(1.5)
-        img = m.frame(); m.shot(img, "07-small-screen")
+        img = m.still(ok=corners_painted(m.PW, m.PH, 6), secs=120)   # wait for the picture to be painted, however slow the host
+        if img is None: return fail(tag, "her picture never finished painting on the small screen")
+        m.shot(img, "07-small-screen")
         PW, PH = m.PW, m.PH
         for name, (x, y) in {"top-left": (6, 6), "top-right": (PW - 6, 6), "bottom-left": (6, PH - 6), "bottom-right": (PW - 6, PH - 6)}.items():
             p = img.getpixel((x, y)); left = x < PW // 2
@@ -511,8 +568,9 @@ def scenario_phone():
     m = Machine(tag, (860, 1520), f"phone samantha noblink llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
     try:
         if not m.wait(lambda: "face: hd=736" in m.serial(), 120): return fail(tag, "her portrait never loaded")
-        time.sleep(1.5)
-        img = m.frame(); m.shot(img, "08-phone")
+        img = m.still(ok=corners_painted(m.PW, m.PH, 96, dot=False), secs=120)
+        if img is None: return fail(tag, "her picture never finished painting on the phone")
+        m.shot(img, "08-phone")
         PW, PH = m.PW, m.PH
         for name, (x, y) in {"top-left": (6, 96), "top-right": (PW - 6, 96), "bottom-left": (6, PH - 6), "bottom-right": (PW - 6, PH - 6)}.items():
             p = img.getpixel((x, y)); left = x < PW // 2
@@ -531,8 +589,15 @@ def scenario_big(res):
         if not m.wait(lambda: "samfocus" in m.serial() or "winrefuse" in m.serial(), 120): return fail(tag, "she never opened")
         if "winrefuse" in m.serial(): return fail(tag, "the kernel refused her window on a big screen")
         if not m.wait(lambda: "face: hd=736" in m.serial(), 180): return fail(tag, "her portrait never loaded on a big screen")
-        time.sleep(3.0)
-        img = m.frame(); m.shot(img, f"10-big-{res[0]}")
+        def painted(im):   # the same red and blue count as below, so "still" means "still and showing her", not still and black
+            px = im.load(); r = b = 0
+            for y in range(res[1] // 4, 3 * res[1] // 4, 8):
+                for x in range(res[0] // 4, 3 * res[0] // 4, 8):
+                    p = px[x, y]; r += p[0] > p[2] + 40; b += p[2] > p[0] + 40
+            return (r >= 20 and b >= 20) if SYNTH else (r + b >= 20)   # an ordinary window here: no red dot to look for
+        img = m.still(ok=painted, secs=180)
+        if img is None: return fail(tag, "her picture never finished painting on a big screen")
+        m.shot(img, f"10-big-{res[0]}")
         px = img.load(); red = blue = 0
         for y in range(res[1] // 4, 3 * res[1] // 4, 8):
             for x in range(res[0] // 4, 3 * res[0] // 4, 8):
@@ -551,7 +616,7 @@ def scenario_big2k(): scenario_big((2560, 1440))
 def scenario_blink():
     """She blinks on her own (2.9.1). This is the one machine booted without `noblink`; every other scenario passes it
     because they compare exact pixels and a blink would be a change they cannot tell from a fault. Here the eyes are
-    watched for 16 s: at least two blinks, each one a real change in the eye boxes that goes back to exactly the open
+    watched until four are reported on serial and two are seen (90 s deadline): at least two blinks, each one a real change in the eye boxes that goes back to exactly the open
     picture, 3 to 6 s apart (the schedule is a counter through a hash, not the clock), and the mouth never moves."""
     tag = "blink: "
     m = Machine(tag, (1024, 768), f"samantha res=1024x768 llmhost=10.0.2.2 llmport={port} facehost=10.0.2.2:{port} wxhost=10.0.2.2:{port}", 2)
@@ -570,12 +635,21 @@ def scenario_blink():
         def mouth(img):
             px = img.load(); return bytes(c for y in range(mbox[1], mbox[3], 2) for x in range(mbox[0], mbox[2], 2) for c in px[x, y])
         def differs(a, b): return sum(1 for u, v in zip(a, b) if abs(u - v) > 12)
-        time.sleep(1.5)   # the window is composited a moment after the portrait loads (the small-screen scenario waits the same)
-        first = m.frame((min(y0, mbox[1]), max(y1, mbox[3])))
+        rows = (min(y0, mbox[1]), max(y1, mbox[3]))
+        # The window is composited some time after the portrait loads, and a slow runner can take many seconds: the open
+        # picture is the first one that has been the same for a second, and is not black.
+        if not m.wait(lambda: corners_painted(m.PW, m.PH, 6)(m.frame()), 120, step=0.25): return fail(tag, "her window never showed her picture")   # not the wallpaper behind her
+        first = m.still(rows, need=4)
+        if first is None: return fail(tag, "her open eyes never settled to a stable picture")
         base_e, base_m = eyes(first), mouth(first)
         t0 = time.time(); starts = []; closed = False; worst = 0; moved = 0; peak = None
-        while time.time() - t0 < 16:
-            img = m.frame() if SHOTS else m.frame((min(y0, mbox[1]), max(y1, mbox[3])))   # screenshot runs keep the whole frame of the deepest blink
+        # Watch until she has reported 4 blinks and two of them were caught on screen, or 90 s of wall clock. A blink lasts
+        # 120 ms of her clock, which is less than that on the host, so a slow poll can miss one: the deadline is long and the
+        # loop ends on what was seen, not on a fixed 16 s.
+        def reported(): return len(re.findall(r"samface: blink=(\d+)", m.serial()))
+        while time.time() - t0 < 90:
+            if reported() >= 4 and len(starts) >= 2 and not closed: break
+            img = m.frame() if SHOTS else m.frame(rows)   # screenshot runs keep the whole frame of the deepest blink
             e = eyes(img); d = max(differs(e[0], base_e[0]), differs(e[1], base_e[1]))
             if mouth(img) != base_m: moved += 1
             if d > 40 and not closed: closed = True; starts.append(time.time() - t0); worst = 0
@@ -585,14 +659,14 @@ def scenario_blink():
             if closed and e == base_e: closed = False   # back to exactly the open picture
             time.sleep(0.02)
         t1 = time.time()
-        while closed and time.time() - t1 < 1.0:   # the loop may end in the middle of a blink: give it its 120 ms
-            e = eyes(m.frame((min(y0, mbox[1]), max(y1, mbox[3]))))
+        while closed and time.time() - t1 < 5.0:   # the deadline may land in the middle of a blink: give it its 120 ms
+            e = eyes(m.frame(rows))
             if e == base_e: closed = False
         gaps = [b - a for a, b in zip(starts, starts[1:])]
         ticks = [int(v) for v in re.findall(r"samface: blink=(\d+)", m.serial())]   # her own clock: 100 ticks a second, whatever the host does
         tgaps = [b - a for a, b in zip(ticks, ticks[1:])]
-        print(tag + f"{len(starts)} blinks seen in 16 s, {len(ticks)} reported, gaps {tgaps} ticks; mouth changed in {moved} polls")
-        if len(starts) < 2: fail(tag, f"only {len(starts)} blinks in 16 s")
+        print(tag + f"{len(starts)} blinks seen on screen, {len(ticks)} reported, gaps {tgaps} ticks; mouth changed in {moved} polls")
+        if len(starts) < 2: fail(tag, f"only {len(starts)} blinks seen on screen in {time.time() - t0:.0f} s ({len(ticks)} reported)")
         if closed: fail(tag, "the eyes never went back to exactly the open picture after a blink")
         if moved: fail(tag, f"the mouth changed {moved} times while she only blinked")
         # the gap after a blink is 300 to 599 ticks (3 to 6 s on her 100 Hz clock) plus the 12 ticks the blink itself takes; the host's wall
