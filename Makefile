@@ -339,7 +339,7 @@ user/notes.bin: user/notes.o user/libjt.a user/note.ld boot/memmap.ld
 	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/notes.o user/libjt.a
 
 # The desktop Terminal, the twenty-fifth ring-3 app: SYS_SHELL_RUN for commands.
-user/terminal.o: user/terminal.c user/jtsys.h user/libjt/text.h
+user/terminal.o: user/terminal.c user/jtsys.h user/libjt/text.h user/shellcore.h
 	$(CC) $(USER_CFLAGS) -c $< -o $@
 
 user/terminal.bin: user/terminal.o user/libjt.a user/note.ld boot/memmap.ld
@@ -496,6 +496,18 @@ drivers/user_windgate.h: user/windgate.bin tools/gen/gen_user_bin.py
 
 kernel/ring3app.o: drivers/user_windgate.h
 
+# Panes (2.11): the cmux-style multiplexer, a second app beside the Terminal that shares its shell engine (user/shellcore.h).
+user/panes.o: user/panes.c user/jtsys.h user/libjt/text.h user/shellcore.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/panes.bin: user/panes.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/panes.o user/libjt.a
+
+drivers/user_panes.h: user/panes.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/panes.bin drivers/user_panes.h user_panes
+
+kernel/ring3app.o: drivers/user_panes.h
+
 drivers/user_mail.h: user/mail.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/mail.bin drivers/user_mail.h user_mail
 
@@ -555,6 +567,7 @@ clean:
 	rm -f user/movies.o user/avi.o user/movies.bin drivers/user_movies.h
 	rm -f user/hamurabi.o user/hamurabi.bin drivers/user_hamurabi.h
 	rm -f user/windgate.o user/windgate.bin drivers/user_windgate.h
+	rm -f user/panes.o user/panes.bin drivers/user_panes.h
 	rm -f joshuatree.iso boot/memmap.ld
 	rm -rf build/iso_root
 

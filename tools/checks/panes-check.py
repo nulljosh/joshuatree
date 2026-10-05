@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Headless proof that the Terminal is a multiplexer (2.11.0): tabs with independent scrollback, a tab rail,
+"""Headless proof that Panes, the cmux-style multiplexer beside the Terminal (2.11.0), works: tabs with independent scrollback, a tab rail,
 an activity dot on a tab that printed while you were elsewhere, closing a tab, and split panes with their own
 shells. Everything is read from real framebuffer pixels (pmemsave) and the app's own serial markers.
 
-The Terminal (user/terminal.c) opens with `open=term`. Geometry, logical px (each shows as a 2x2 block):
+Panes (user/panes.c) opens with `open=pane`. Geometry, logical px (each shows as a 2x2 block):
 the window content starts at (78,72); the tab rail is the first 148 columns, a tab row is 30 tall from y+14,
 its activity dot sits 20 px in and the row's vertical middle; the pane area starts at rail+1 and each cell
 is 8 wide. The accent #b5502c is the dot colour.
@@ -19,7 +19,7 @@ What it proves, in order, each stage named in its FAIL message:
   4. splits: Ctrl+D makes two panes each with its own shell (different scrollback, a typed line in one does
      not touch the other), Ctrl+O moves focus, Ctrl+W closes just that pane.
 Waits are conditions with generous deadlines (serial markers and pixels), never fixed sleeps.
-Usage: tools/checks/terminal-tabs-check.py   (from the repo root, after make kernel.elf)
+Usage: tools/checks/panes-check.py   (from the repo root, after make kernel.elf)
 """
 import sys, tempfile, time, hashlib
 from pathlib import Path
@@ -114,7 +114,7 @@ def until(fn, what, secs=DEADLINE):
 
 
 def main():
-    vm = VM(None, 'open=term', 'terminal: ring-3 window', work=tempfile.mkdtemp(prefix='jt-termtabs-'))
+    vm = VM(None, 'open=pane', 'panes: ring-3 window', work=tempfile.mkdtemp(prefix='jt-termtabs-'))
     try:
         run(vm)
     except Fail as e:
@@ -122,7 +122,7 @@ def main():
         return 1
     finally:
         vm.quit()
-    print('PASS: Terminal tabs: independent scrollback, rail, switching, activity dot on a background tab, '
+    print('PASS: Panes: independent scrollback, rail, switching, activity dot on a background tab, '
           'closing, and split panes with their own shells')
     return 0
 
@@ -166,7 +166,7 @@ def run(vm):
         else:
             time.sleep(0.5)
 
-    until(lambda: vm.count('terminal: tabs a=1 b=1') >= 1, 'the Terminal never reported its first tab')
+    until(lambda: vm.count('panes: tabs a=1 b=1') >= 1, 'the Terminal never reported its first tab (Panes)')
     time.sleep(1.0)   # first key vs the window's first poll (the app buffers, but be kind)
 
     # ---- 1. tabs ----
@@ -176,7 +176,7 @@ def run(vm):
         raise Fail('tabs: the first tab is not drawn as the selected row in the rail')
     t1_cells = row_cells(img, PANE_X, 2)
     sig1 = region_sig(img, WX + RAIL + 2, WY + 8, WX + 805, WY + 120)
-    chord('ctrl-t', 'terminal: tabs a=2 b=2')
+    chord('ctrl-t', 'panes: tabs a=2 b=2')
     typeline('echo beta')
     img = vm.frame()
     t2_cells = row_cells(img, PANE_X, 2)
@@ -187,33 +187,33 @@ def run(vm):
         raise Fail(f'tabs: scrollback differs per tab ("alpha" 5 cells, "beta" 4), got {t1_cells} and {t2_cells}')
     if sig1 == sig2:
         raise Fail('tabs: two tabs show identical scrollback pixels')
-    chord('ctrl-1', 'terminal: tabs a=2 b=1')
+    chord('ctrl-1', 'panes: tabs a=2 b=1')
     img = vm.frame()
     if region_sig(img, WX + RAIL + 2, WY + 8, WX + 805, WY + 120) != sig1 or not row_selected(img, 0):
         raise Fail('tab switching: Ctrl+1 does not bring back tab 1 exactly as it was')
-    chord('ctrl-2', 'terminal: tabs a=2 b=2')
+    chord('ctrl-2', 'panes: tabs a=2 b=2')
     img = vm.frame()
     if region_sig(img, WX + RAIL + 2, WY + 8, WX + 805, WY + 120) != sig2 or not row_selected(img, 1):
         raise Fail('tab switching: Ctrl+2 does not bring back tab 2 exactly as it was')
 
     # ---- 2. activity dot ----
     typeline(f'sleep {SLEEP_S} build done')
-    chord('ctrl-1', 'terminal: tabs a=2 b=1')
+    chord('ctrl-1', 'panes: tabs a=2 b=1')
     img = vm.frame()
-    if vm.count('terminal: job done') != 0:
+    if vm.count('panes: job done') != 0:
         raise Fail('activity dot: the runner was too slow, the timer ended before the dot-absent probe')
     if dot_pixels(img, 1) != 0:
         raise Fail('activity dot: a dot is showing on tab 2 before it printed anything')
-    until(lambda: vm.count('terminal: job done tab a=2') >= 1, 'activity dot: the background timer never finished')
+    until(lambda: vm.count('panes: job done tab a=2') >= 1, 'activity dot: the background timer never finished')
     img = until(lambda: (lambda f: f if dot_pixels(f, 1) >= 60 else None)(vm.frame()),
                 'activity dot: no accent dot on the background tab after it printed')
     if dot_pixels(img, 0) != 0:
         raise Fail('activity dot: the active tab shows a dot')
-    chord('ctrl-2', 'terminal: tabs a=2 b=2')
+    chord('ctrl-2', 'panes: tabs a=2 b=2')
     until(lambda: dot_pixels(vm.frame(), 1) == 0, 'activity dot: the dot did not clear on focus')
 
     # ---- 3. close ----
-    chord('ctrl-w', 'terminal: tabs a=1 b=1')
+    chord('ctrl-w', 'panes: tabs a=1 b=1')
     img = vm.frame()
     if rail_rows(img) != 1:
         raise Fail(f'close: the rail still shows {rail_rows(img)} rows after Ctrl+W')
@@ -221,7 +221,7 @@ def run(vm):
         raise Fail('close: tab 1 is not back to its own scrollback after closing tab 2')
 
     # ---- 4. splits ----
-    chord('ctrl-d', 'terminal: panes a=2 b=11')
+    chord('ctrl-d', 'panes: panes a=2 b=11')
     half = (804 - RAIL - 1) // 2
     rx = WX + RAIL + 1 + half + 16
     typeline('echo hi', x0=rx)
@@ -232,20 +232,20 @@ def run(vm):
     sep = px(img, WX + RAIL + 1 + half - 1, WY + 150)
     if not near(sep, (0x2A, 0x22, 0x1D), 3):
         raise Fail('splits: no divider between the two panes')
-    chord('ctrl-o', 'terminal: panes a=2 b=10')
+    chord('ctrl-o', 'panes: panes a=2 b=10')
     typeline('echo zz')
     img = vm.frame()
     if row_cells(img, rx, 2, 12) != 2 or row_cells(img, rx, 3, 12) != 0:
         raise Fail('splits: a command run in the left pane leaked into the right pane')
     if row_cells(img, PANE_X, 4, 12) != 2:
         raise Fail('splits: the left pane did not show its own "zz" output')
-    chord('ctrl-w', 'terminal: panes a=1 b=0')
+    chord('ctrl-w', 'panes: panes a=1 b=0')
     img = vm.frame()
     if row_cells(img, PANE_X, 2, 12) != 2 or row_cells(img, PANE_X, 4, 12) != 0:
         raise Fail('splits: Ctrl+W closes only the focused pane; the right shell ("hi") should now fill the tab')
 
-    chord('ctrl-e', 'terminal: panes a=2 b=21')   # a second split, stacked: layout 2, focus on the new pane
-    chord('ctrl-w', 'terminal: panes a=1 b=0')
+    chord('ctrl-e', 'panes: panes a=2 b=21')   # a second split, stacked: layout 2, focus on the new pane
+    chord('ctrl-w', 'panes: panes a=1 b=0')
 
 
 sys.exit(main())

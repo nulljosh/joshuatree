@@ -95,7 +95,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Notes folders: legacy NOTES.TXT migrates intact, a new note lands in the current folder, both survive reboot, delete asks first | `tools/checks/notesfolders-check.py` | retry |
 | Terminal grid draws the mono face at its true advance | `tools/checks/termmono-check.py` | retry |
 | Terminal's runtime-TTF text is real antialiased rasterization with a driftless monospace grid | `tools/checks/termsharp-check.py` | retry |
-| Terminal tabs: independent scrollback, tab rail, activity dot on a background tab, close, split panes with their own shells | `tools/checks/terminal-tabs-check.py` | retry |
+| Panes: independent scrollback per tab, tab rail, activity dot on a background tab, close, split panes with their own shells | `tools/checks/panes-check.py` | retry |
 | Apple-menu hover stays cheap, clock redraws on a minute change | `tools/checks/menuclock-check.sh` | retry |
 | Lock Screen: menu item locks, Esc cannot bypass, password unlocks | `tools/checks/lockscreen-check.py` | retry |
 | Multi-window chrome doesn't redraw on plain keystrokes | `tools/checks/mwkeyflash-check.sh` | retry |
@@ -200,7 +200,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Calendar | `tools/checks/apptop-check.py`, `tools/checks/calicon-check.py`, `tools/checks/calviews-check.py`, `tools/checks/check-calendar.sh`, `tools/checks/ring3calendar-check.py` |
 | Notes | `tools/checks/clipboard-check.py`, `tools/checks/editor_qa.py`, `tools/checks/editorflash-check.sh`, `tools/checks/notesfolders-check.py`, `tools/checks/notessharp-check.py`, `tools/checks/notestools-check.py`, `tools/checks/read-long-files-check.py`, `tools/checks/ring3resize-check.py`, `tools/checks/ring3window-check.py`, `tools/checks/textselect-check.py`, `tools/checks/touch-osk-check.py`, `tools/checks/windowdrag-check.py` |
 | Reminders | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/notestools-check.py`, `tools/checks/ring3reminders-check.py`, `tools/checks/ring3window-check.py` |
-| Terminal | `tools/checks/clipboard-check.py`, `tools/checks/terminal-tabs-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
+| Terminal | `tools/checks/clipboard-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
 | Samantha | `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/landing-layout-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
 | Weather | `tools/checks/read-long-files-check.py`, `tools/checks/ring3weather-check.py`, `tools/checks/samweather-check.py`, `tools/checks/weatherproxy-hang-check.mjs` |
 | Curbfind | `tools/checks/ring3curbfind-check.py` |
@@ -217,12 +217,13 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 | Search | `tools/checks/ring3search-check.py` |
 | Epiphany | `tools/checks/epiphany-cmdbar-check.py`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3epiphany-check.py` |
 | Portfolio | `tools/checks/portfolio-check.py`, `tools/checks/portfolio-mute-check.mjs`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3portfolio-check.py` |
-| Activity | `tools/checks/ring3activity-check.py`, `tools/checks/terminal-tabs-check.py` |
+| Activity | `tools/checks/panes-check.py`, `tools/checks/ring3activity-check.py` |
 | Clock | `tools/checks/clock-check.py`, `tools/checks/clockicon-check.py`, `tools/checks/menuclock-check.sh`, `tools/checks/movie-check.py`, `tools/checks/ring3clock-check.py`, `tools/checks/ring3windgate-check.py` |
 | Music | `tools/checks/music-check.py` |
 | Movies | `tools/checks/movie-check.py` |
 | Hamurapi | `tools/checks/ring3hamurabi-check.py` |
 | Windgate | `tools/checks/ring3windgate-check.py` |
+| Panes | `tools/checks/panes-check.py` |
 | Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | none yet |
 

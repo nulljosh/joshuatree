@@ -24,10 +24,10 @@ PUNCT = {' ': 'spc', '\n': 'ret', '.': 'dot', ',': 'comma', '!': 'shift-1', '?':
 
 # The ring-3 Terminal (user/terminal.c) opened by `open=term`: its viewport is the
 # dock-launch one (logical 78,72, 805 x 345), the prompt line sits 52 px above the
-# bottom edge and its typed text starts after "~> " at local x 189 (the 2.11.0 tab rail takes the first 149), so the first
-# typed glyph's cell is at logical (267, 365). Cells are 8 logical px wide (the
+# bottom edge and its typed text starts after "~> " at local x 40, so the first
+# typed glyph's cell is at logical (118, 365). Cells are 8 logical px wide (the
 # libjt mono advance), 16 tall; the page colour is 0x1A1512.
-TERM_INPUT_X0, TERM_INPUT_Y0 = 267, 365
+TERM_INPUT_X0, TERM_INPUT_Y0 = 118, 365
 TERM_CELL_L, TERM_BG = 8, (0x1A, 0x15, 0x12)
 
 
