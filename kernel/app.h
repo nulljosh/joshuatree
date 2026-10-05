@@ -32,6 +32,30 @@
 #define KEY_SUP        313
 #define KEY_SDOWN      314
 #define KEY_SELALL     315   /* Ctrl+A */
+/* 2.11.0: the Terminal's multiplexer keys. A ring-3 window gets Ctrl+T/W/D/E/O, Ctrl+1..9, Ctrl+Left/Right
+   and Ctrl+Tab as these codes instead of a bare letter, digit or tab (the app switcher still owns Ctrl+Tab
+   while two windows are open). KEY_CTL_1 + n is Ctrl+(n+1). */
+#define KEY_CTL_TAB    320
+#define KEY_CTL_LEFT   321
+#define KEY_CTL_RIGHT  322
+#define KEY_CTL_T      323
+#define KEY_CTL_W      324
+#define KEY_CTL_D      325
+#define KEY_CTL_E      326
+#define KEY_CTL_O      327
+#define KEY_CTL_1      330
+/* Scancode (make, 0x7F masked) under Ctrl to its KEY_CTL_* code, 0 when it is not one of them. */
+static inline int key_ctl_code(int sc) {
+    switch (sc) {
+    case 0x0F: return KEY_CTL_TAB;
+    case 0x14: return KEY_CTL_T;
+    case 0x11: return KEY_CTL_W;
+    case 0x20: return KEY_CTL_D;
+    case 0x12: return KEY_CTL_E;
+    case 0x18: return KEY_CTL_O;
+    default: return sc >= 0x02 && sc <= 0x0A ? KEY_CTL_1 + (sc - 0x02) : 0;
+    }
+}
 
 /* One app, one entry. Every place the desktop used to switch on an app's
    index (launch, dock glyph, tile color, label, multiwindow content and

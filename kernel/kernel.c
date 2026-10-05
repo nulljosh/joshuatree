@@ -5331,6 +5331,7 @@ static int gui_multiwin_key_nonblock(void){
         int sc2 = kbd_pop();
         if (sc2 < 0) return -1; int sh = sel_ok && kbd_shift; /* shift+arrow extends a selection only in a ring-3 window */
         if (sc2 == 0x48) return sh ? KEY_SUP : KEY_UP;    if (sc2 == 0x50) return sh ? KEY_SDOWN : KEY_DOWN;
+        if (sel_ok && kbd_ctrl && sc2 == 0x4B) return KEY_CTL_LEFT; if (sel_ok && kbd_ctrl && sc2 == 0x4D) return KEY_CTL_RIGHT;
         if (sc2 == 0x4B) return sh ? KEY_SLEFT : KEY_LEFT; if (sc2 == 0x4D) return sh ? KEY_SRIGHT : KEY_RIGHT;
         if (sc2 == 0x47) return KEY_HOME;
         if (sc2 == 0x4F) return KEY_END;
@@ -5341,7 +5342,7 @@ static int gui_multiwin_key_nonblock(void){
     if (sc & 0x80) return -1; /* key release */
     if (sc == 0x3C) return KEY_F2;
     if (kbd_ctrl && (sc & 0x7F) == 0x1F) return KEY_SAVE;
-    if (kbd_ctrl) { int k = sc & 0x7F; if (k == 0x2E) return KEY_COPY; if (k == 0x2D) return KEY_CUT; if (k == 0x2F) return KEY_PASTE; if (sel_ok && k == 0x1E) return KEY_SELALL; } /* clipboard and select-all keys reach ring-3 windows too */
+    if (kbd_ctrl) { int k = sc & 0x7F; if (k == 0x2E) return KEY_COPY; if (k == 0x2D) return KEY_CUT; if (k == 0x2F) return KEY_PASTE; if (sel_ok && k == 0x1E) return KEY_SELALL; if (sel_ok && key_ctl_code(k)) return key_ctl_code(k); } /* clipboard and select-all keys reach ring-3 windows too */
     char c = kbd_map(sc);
     if (c == '\n') return KEY_ENTER;
     if (c == 27)   return KEY_ESC;

@@ -477,6 +477,8 @@ int gui_poll_event(int *a, int *b){
             gui_poll_pending_e0 = 0;
             if (sc == 0x48) { *a = kbd_shift ? KEY_SUP : KEY_UP; return 1; }
             if (sc == 0x50) { *a = kbd_shift ? KEY_SDOWN : KEY_DOWN; return 1; }
+            if (kbd_ctrl && sc == 0x4B) { *a = KEY_CTL_LEFT; return 1; }
+            if (kbd_ctrl && sc == 0x4D) { *a = KEY_CTL_RIGHT; return 1; }
             if (sc == 0x4B) { *a = kbd_shift ? KEY_SLEFT : KEY_LEFT; return 1; }
             if (sc == 0x4D) { *a = kbd_shift ? KEY_SRIGHT : KEY_RIGHT; return 1; }
             if (sc == 0x47) { *a = KEY_HOME; return 1; }
@@ -495,6 +497,7 @@ int gui_poll_event(int *a, int *b){
             if (code == 0x2F) { *a = KEY_PASTE; return 1; }
             if (code == 0x1F) { *a = KEY_SAVE; return 1; }
             if (code == 0x1E) { *a = KEY_SELALL; return 1; }
+            if (key_ctl_code(code)) { *a = key_ctl_code(code); return 1; }
         }
         char c = kbd_map(sc);
         if (c == '\n') { *a = KEY_ENTER; return 1; }
