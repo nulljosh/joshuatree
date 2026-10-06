@@ -53,3 +53,6 @@ boot/memmap.ld
 # as modified after every build.
 user/*.bin
 drivers/user_*.h
+# ARM64 Pi image and its ELF, built by `make -C arch/arm64 pi`.
+arch/arm64/kernel8.img
+arch/arm64/pi-kernel8.elf

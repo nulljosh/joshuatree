@@ -10,7 +10,7 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 |---|---|
 | Boots under QEMU's generic ARM machine and prints over the UART | Works. `make -C arch/arm64 run` |
 | Boots as a Pi image on QEMU's Pi 4B model, enters at EL2, drops to EL1, prints | Works. `make -C arch/arm64 run-pi` |
-| Boots on a real Pi 4 | Built, never tried. This is the first thing to test. |
+| Boots on a real Pi 4 | The board is here (2026-10-06) and the card is flashed with `tools/flash-pi.sh`. First power-on is the next step. See the log at the bottom. |
 | A picture on a monitor | Works on QEMU's Pi 4B model: the kernel asks the GPU for a screen through the mailbox, draws a simple desktop and prints the same boot lines in its window that go out over serial, in the same smooth DejaVu type as the main desktop (`tools/checks/arm64-m1c-check.py`). Never tried on a real board. |
 | Keyboard, mouse, disk, network on the Pi | Not yet. M2 to M4. |
 
@@ -48,25 +48,36 @@ make -C arch/arm64 pi          # makes arch/arm64/kernel8.img
 make -C arch/arm64 run-pi      # try it on QEMU's Pi 4B first
 ```
 
-The SD card needs the Pi's own boot files. The easy way:
+## Flash the card
 
-1. Flash **Raspberry Pi OS Lite (64-bit)** to the card with Raspberry Pi Imager.
-2. Open the card's boot partition on your computer.
-3. Copy the old `kernel8.img` somewhere safe, then copy ours over it.
-4. Add these four lines to the end of `config.txt`:
+You do not need Raspberry Pi OS. The Pi's firmware boots any `kernel8.img` it finds on a FAT32 card next to five files from the official [raspberrypi/firmware](https://github.com/raspberrypi/firmware/tree/stable/boot) repo. One script does the whole job:
+
+```
+tools/flash-pi.sh                    # finds the one mounted FAT32 card
+tools/flash-pi.sh "/Volumes/NO NAME" # or name it
+```
+
+It builds `kernel8.img`, downloads `bootcode.bin`, `start4.elf`, `fixup4.dat`, `bcm2711-rpi-4-b.dtb` and `overlays/disable-bt.dtbo` (cached in `build/pifw`), writes `config.txt`, strips the macOS `._` files and ejects. A card fresh out of the box is already FAT32. A used one: `diskutil eraseDisk FAT32 PI MBRFormat diskN` first (check `diskutil list` twice; the LaCie is also external).
+
+The `config.txt` it writes:
 
 ```
 arm_64bit=1
 kernel=kernel8.img
 enable_uart=1
 dtoverlay=disable-bt
+uart_2ndstage=1
 ```
 
-`disable-bt` matters. It gives the good UART (the PL011) to the pins on the header.
+`disable-bt` matters. It gives the good UART (the PL011) to the pins on the header. `uart_2ndstage` makes the firmware print before our kernel does, so a blank serial line means wiring and a firmware-only line means the kernel.
 
-5. Eject the card, put it in the Pi, plug the serial cable into your Mac.
+If you would rather start from Raspberry Pi OS Lite (64-bit), flash it with Imager, replace `kernel8.img` on the boot partition with ours, and append those five lines to its `config.txt`. Same result, bigger card image.
 
-Open the terminal. On a Mac the adapter shows up as `/dev/cu.usbserial-something`:
+Then put the card in the Pi. The monitor goes on the micro-HDMI port next to the USB-C power (HDMI 0). The serial cable is optional on day one; the screen shows the same boot lines.
+
+## Boot
+
+With a serial cable, open the terminal. On a Mac the adapter shows up as `/dev/cu.usbserial-something`:
 
 ```
 ls /dev/cu.usb*
@@ -104,9 +115,9 @@ The kernel guards against two things a real board may do differently from QEMU: 
 1. Swap the two data wires.
 2. Check the speed is 115200.
 3. Check the adapter is 3.3 V and the ground wire is on pin 6.
-4. Check all four lines are in `config.txt` and the card is fully ejected.
-5. Add `uart_2ndstage=1` to `config.txt`. The Pi's own firmware then prints before ours. If you see that and not ours, the kernel is not starting. If you see neither, it is the wiring.
-6. Look at the Pi's LEDs. A steady red light is power. A flickering green light is the card being read.
+4. Check all five lines are in `config.txt` and the card is fully ejected.
+5. `uart_2ndstage=1` is already in `config.txt`, so the Pi's own firmware prints before ours. If you see that and not ours, the kernel is not starting. If you see neither, it is the wiring.
+6. Look at the Pi's LEDs. A steady red light is power. A flickering green light is the card being read. A repeating pattern of green blinks is the firmware counting out an error: four means it could not find `start4.elf`, seven means no `kernel8.img`. Either way, re-run `tools/flash-pi.sh`.
 
 If it still fails, send the exact lines you see, even if they look like garbage. Garbage means the speed or the clock is off. Nothing at all means wiring or boot files.
 
@@ -120,5 +131,15 @@ If it still fails, send the exact lines you see, even if they look like garbage.
 | M3 | Every app running on ARM. |
 | M4 | The same on the real Pi: SD card, USB, Ethernet. Sound last. |
 | M5 | The Pi 5. |
+
+## The fan and the case
+
+The little fan runs off the header: red to pin 4 (5 V), black to pin 6 (ground). Pin 6 is also the serial cable's ground, so if both are wired, share it or use pin 9, which is another ground. Heat sinks go on the big SoC chip and the smaller chips next to it. For the printed case, see [hardware/PI-CASE.md](hardware/PI-CASE.md).
+
+## Log
+
+Newest first. Each entry says what was tried on the real board and the last line seen.
+
+- **2026-10-06.** Pi 4 Model B 4 GB arrived, with a 32 GB card, heat sinks, a case and a fan. Flashed the card from the Mac without Raspberry Pi OS: the five firmware files straight from `raspberrypi/firmware`, plus a 151 KB `kernel8.img` built that afternoon. That session became `tools/flash-pi.sh`. Not powered on yet.
 
 Joshua Tree 3.0 ships when it boots the desktop on a real Pi.
