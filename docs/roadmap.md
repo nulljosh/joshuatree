@@ -116,8 +116,14 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 - [ ] [Sonnet] `tools/ci-local.sh` takes about 27 minutes (8 shards, 2 at a time). Run 4 at a time on the M4 and use the balanced manifest.
 
 ### Raspberry Pi and ARM64
-- [ ] [Joshua] Buy the board (Pi 4B 4 GB, 5 V 3 A supply, 16 GB+ microSD, 3.3 V USB serial cable CP2102 or FTDI, jumper wires) plus a USB-C microSD reader and a USB-A to USB-C adapter, because the Mac mini has no SD slot. Best Buy Bellingham lists CanaKit kits but check stock by phone first. Canada Computers and Memory Express are the Vancouver options for the serial cable.
-- [ ] [Joshua] First real boot over serial, following `docs/RASPBERRY-PI.md`. Photograph the console. Whatever the chip does differently from QEMU becomes the next task.
+- [x] [Joshua] Bought the board, 2026-10-06: Pi 4B 4 GB, 32 GB microSD, heat sinks, case, fan. No serial cable yet; the screen shows the boot log so it can wait.
+- [x] [Sonnet] Card flashed without Raspberry Pi OS, 2026-10-06: `tools/flash-pi.sh` builds `kernel8.img`, fetches the five firmware files and writes the config file (`docs/RASPBERRY-PI.md`).
+- [x] [Joshua] First real boot over HDMI, 2026-10-06: the desktop came up on a Samsung monitor on the first clean power-on (`docs/RASPBERRY-PI.md` has the photo and log).
+- [ ] [Sonnet] Full screen on the real Pi: the kernel asks for 800x600, so the monitor shows it at half size. Ask the firmware for the display's own size and lay the desktop out to it, so it is sharp and fills the screen.
+- [ ] [Sonnet] A quiet Steve Jobs line on the Pi desktop (1955 to 2011), for the 15th anniversary of his death on 2011-10-05.
+- [ ] [Fable] Serial loader: a small loader on the card receives each new kernel over the serial cable and boots it, so testing needs no card swaps. Waits on the cable (Joshua, this week).
+- [ ] [Fable] USB on the real Pi: an xHCI driver with hub support, proven in QEMU first, then the BCM2711 PCIe and VL805 setup tried on the board. Keyboard, mouse and a Logitech receiver all ride on it.
+- [ ] [Fable] Console text on the real Pi: the boot lines inside the Console window draw as a thin column of marks at the left edge, while the menu bar text is right. A close-up shows exactly one mark per boot line, 13 for 13, so every line is drawn and every character in it rasterises as a one-pixel mark with no advance: the bytes reaching the console are not the ones the font table knows (a replay buffer read back wrong, or a glyph lookup that falls through on real hardware). Find it, and make `tools/checks/arm64-m1c-check.py` catch it (`docs/RASPBERRY-PI.md` has the photos).
 - [x] [Fable] M1c part one, 2.6.21: ramfb framebuffer on QEMU virt through fw_cfg, a first desktop drawn into it, proven by a QEMU screendump (`tools/checks/arm64-m1c-check.py`).
 - [x] [Fable] M1c part two, 2.6.22: the Pi build asks the GPU for a framebuffer through the VideoCore mailbox and draws the same desktop, proven on QEMU's Pi 4B model by screendump (`tools/checks/arm64-m1c-check.py`). Real board still to try.
 - [x] [Sonnet] M1c boot log on screen, 2.6.22: every line the ARM kernel prints over serial is also drawn in the window, so a first boot with a bad serial cable still shows how far it got (`tools/checks/arm64-m1c-check.py` counts the text pixels).
