@@ -257,14 +257,31 @@ static void user_demo(void) {
 
 /* ---- M1c: a framebuffer. QEMU's virt machine has no display unless one is asked for; ramfb is a plain RAM
    framebuffer the guest configures through fw_cfg (a DMA write of the "etc/ramfb" file). A Pi asks its GPU firmware
-   for one through the mailbox. Either way fb_setup hands back plain 32-bit pixels and the drawing is shared. ---- */
-#define FB_W 800
-#define FB_H 600
+   for one through the mailbox, at the monitor's own size when the firmware knows it. Either way fb_setup hands back
+   plain 32-bit pixels and the drawing is shared. Everything is laid out against an 800x600 design and scaled by
+   height/600, so 800x600 (QEMU) draws exactly what it always did. ---- */
+static unsigned fb_w = 800, fb_h = 600;   /* the screen we really got */
+static unsigned disp_w, disp_h;           /* what the firmware said the monitor is, 0x0 when nobody asked */
 static unsigned int *fb;
 static unsigned fb_pitch;   /* in pixels */
 static int fb_swap;         /* red and blue the other way round in memory */
+static int sc(int v) { return v * (int)fb_h / 600; }   /* a length on the 800x600 design, at this screen's size */
 static void dcache_clean(void *p, unsigned long n) {   /* push lines out to RAM, where a GPU or DMA engine reads */
     for (unsigned long a = (unsigned long)p & ~63UL; a < (unsigned long)p + n; a += 64) __asm__ volatile ("dc civac, %0" :: "r"(a) : "memory");
+    __asm__ volatile ("dsb sy" ::: "memory");
+}
+/* The framebuffer is ordinary cached RAM, and the GPU reads RAM, not the cache. Any pixel drawn and not cleaned out
+   stays invisible, so every drawing step that can happen after boot ends with this over the rectangle it touched. */
+static void fb_flush(int x, int y, int w, int h) {
+    if (x < 0) { w += x; x = 0; }
+    if (y < 0) { h += y; y = 0; }
+    if (x + w > (int)fb_w) w = (int)fb_w - x;
+    if (y + h > (int)fb_h) h = (int)fb_h - y;
+    if (w <= 0 || h <= 0) return;
+    for (int j = y; j < y + h; j++) {
+        unsigned long a = (unsigned long)&fb[(unsigned)j * fb_pitch + (unsigned)x], e = a + (unsigned long)w * 4;
+        for (a &= ~63UL; a < e; a += 64) __asm__ volatile ("dc civac, %0" :: "r"(a) : "memory");
+    }
     __asm__ volatile ("dsb sy" ::: "memory");
 }
 #ifndef PI_BUILD
@@ -289,14 +306,14 @@ struct ramfb_cfg { unsigned long addr; unsigned fourcc, flags, width, height, st
 static int fb_setup(void) {
     int sel = fw_find("etc/ramfb");
     if (sel < 0) { uart_puts("M1c no ramfb\n"); return 0; }
-    fb = kmalloc((unsigned long)FB_W * FB_H * 4);
-    fb_pitch = FB_W;
+    fb = kmalloc(fb_w * fb_h * 4);
+    fb_pitch = fb_w;
     static struct ramfb_cfg cfg __attribute__((aligned(16)));
     static struct fw_dma dma;
     cfg.addr = __builtin_bswap64((unsigned long)fb);
     cfg.fourcc = __builtin_bswap32(0x34325258);   /* 'XR24': 32-bit 0x00RRGGBB */
     cfg.flags = 0;
-    cfg.width = __builtin_bswap32(FB_W); cfg.height = __builtin_bswap32(FB_H); cfg.stride = __builtin_bswap32(FB_W * 4);
+    cfg.width = __builtin_bswap32(fb_w); cfg.height = __builtin_bswap32(fb_h); cfg.stride = __builtin_bswap32(fb_w * 4);
     dma.control = __builtin_bswap32(((unsigned)sel << 16) | 8 | 16);   /* select, write */
     dma.length = __builtin_bswap32(sizeof cfg);
     dma.address = __builtin_bswap64((unsigned long)&cfg);
@@ -330,20 +347,41 @@ static int mbox_call(void) {
     dcache_clean((void *)mbox, sizeof mbox);         /* civac also invalidates: the next reads come from RAM */
     return mbox[1] == 0x80000000u;
 }
+/* First ask how big the monitor is, so the picture fills it at its own pixels instead of an 800x600 box the firmware
+   blows up. Past 2560 wide (a 4K panel) take exactly half each way: a 2x scale stays crisp and the buffer stays small.
+   Anything odd, or no answer, keeps 800x600. */
+static void fb_pick_size(void) {
+    unsigned q[] = { 8 * 4, 0, 0x40003, 8, 0, 0, 0, 0 };   /* get physical (display) width and height */
+    for (unsigned i = 0; i < sizeof q / 4; i++) mbox[i] = q[i];
+    if (!mbox_call()) return;
+    disp_w = mbox[5]; disp_h = mbox[6];
+    if (disp_w > 8192 || disp_h > 8192) return;
+    unsigned w = disp_w, h = disp_h;
+    if (w > 2560) { w /= 2; h /= 2; }
+    if (w >= 800 && h >= 600 && (w > 800 || h > 600)) { fb_w = w; fb_h = h; }
+}
 static int fb_setup(void) {
+    fb_pick_size();
     unsigned m[] = { sizeof mbox, 0,
-        0x48003, 8, 0, FB_W, FB_H,     /* physical size */
-        0x48004, 8, 0, FB_W, FB_H,     /* virtual size */
+        0x48003, 8, 0, fb_w, fb_h,     /* physical size */
+        0x48004, 8, 0, fb_w, fb_h,     /* virtual size */
         0x48005, 4, 0, 32,             /* depth */
         0x48006, 4, 0, 0,              /* pixel order BGR: blue in the low byte, so 0x00RRGGBB as a 32-bit word */
         0x40001, 8, 0, 4096, 0,        /* allocate, 4 KiB aligned: answers address and size */
         0x40008, 4, 0, 0,              /* pitch in bytes */
         0 };
     for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
-    if (!mbox_call() || !mbox[23]) { uart_puts("M1c mailbox framebuffer refused\n"); return 0; }
+    if ((!mbox_call() || !mbox[23]) && (fb_w != 800 || fb_h != 600)) {   /* the big size was refused: 800x600 worked before */
+        fb_w = 800; fb_h = 600;
+        m[5] = m[10] = 800; m[6] = m[11] = 600;
+        for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
+        mbox_call();
+    }
+    if (mbox[1] != 0x80000000u || !mbox[23]) { uart_puts("M1c mailbox framebuffer refused\n"); return 0; }
     fb = (unsigned int *)(unsigned long)(mbox[23] & 0x3FFFFFFF);   /* a VideoCore bus address: drop the alias bits */
     fb_pitch = mbox[28] / 4;
     fb_swap = mbox[19] == 1;   /* the firmware answers the order it really used; follow it if it overrode us */
+    if (mbox[5] >= 800 && mbox[6] >= 600 && mbox[5] <= fb_pitch) { fb_w = mbox[5]; fb_h = mbox[6]; }   /* the size it really gave */
     return 1;
 }
 /* M4: tell the firmware the VL805 USB controller is out of PCIe reset, so it loads the VL805's firmware.
@@ -359,74 +397,139 @@ static void fb_rect(int x, int y, int w, int h, unsigned c) {
     for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) fb[j * fb_pitch + i] = c;
 }
 /* ---- The boot log on the screen. Everything the kernel prints over the UART is also kept in a small buffer and drawn
-   into the window with the old 8x16 VGA font, so a first boot with the monitor plugged in shows what happened even if
-   the serial cable is wrong. Lines printed before the screen exists are replayed once it does. ---- */
+   into the window, so a first boot with the monitor plugged in shows what happened even if the serial cable is wrong.
+   Lines printed before the screen exists are replayed once it does. When the window fills, it is wiped and the newest
+   half page is redrawn at the top, so the last lines printed are always the ones on screen. ---- */
 #include "../../drivers/vgafont.h"
 #define LOG_MAX 4096
-#define CON_X 158
-#define CON_Y 132
-#define CON_COLS 61
-#define CON_ROWS 19
 #define CON_FG 0x00202020
+#define CON_BG 0x00ffffff
 int text_init(void);   /* arch/arm64/text.c: the DejaVu faces through drivers/ttf.c */
 int text_draw(int which, const char *s, int x, int baseline, int px10, unsigned fg, unsigned *fb, unsigned pitch, int w, int h);
-static int text_ok;     /* smooth text is up; until then the old bitmap font draws */
+int text_width(int which, const char *s, int px10);
+int text_selftest(int px10, int *w, int *h, int *adv);
+static int text_ok;     /* smooth text is up */
 static unsigned fb_color(unsigned c) { return fb_swap ? (c & 0xFF00FF00u) | (c >> 16 & 0xFF) | (c & 0xFF) << 16 : c; }
 static char con_log[LOG_MAX];
 static unsigned con_len, con_col, con_row;
-static int con_live;   /* the framebuffer is up: draw as we go */
+static int con_live;    /* the framebuffer is up: draw as we go */
+static int con_x, con_y, con_cw, con_ch, con_base, con_cols, con_rows, con_px10;
+static int con_vga;     /* 0: DejaVu Sans Mono; n: the 8x16 VGA font drawn n times its size */
+static int mono_w, mono_h, mono_adv, mono_ok;   /* the 'M' self-test, kept for the diagnostic line */
 static void con_glyph(unsigned col, unsigned row, char c) {
-    if (text_ok) {   /* DejaVu Sans Mono at 13.3 px: an 8 px advance, so it sits in the same 8x16 cell grid */
+    int x = con_x + (int)col * con_cw, y = con_y + (int)row * con_ch;
+    if (!con_vga) {
         char b[2] = { c, 0 };
-        text_draw(0, b, CON_X + (int)col * 8, CON_Y + (int)row * 16 + 12, 133, fb_color(CON_FG), fb, fb_pitch, FB_W, FB_H);
-        return;
+        text_draw(0, b, x, y + con_base, con_px10, fb_color(CON_FG), fb, fb_pitch, (int)fb_w, (int)fb_h);
+    } else if (c >= VGAFONT_FIRST && c <= VGAFONT_LAST) {   /* integer only: no rasterizer, no floating point */
+        const unsigned char *g = vgafont_glyphs + (c - VGAFONT_FIRST) * 16;
+        unsigned px = fb_color(CON_FG);
+        for (int gy = 0; gy < 16; gy++)
+            for (int gx = 0; gx < 8; gx++)
+                if (g[gy] & (0x80 >> gx))
+                    for (int a = 0; a < con_vga; a++)
+                        for (int b = 0; b < con_vga; b++) fb[(unsigned)(y + gy * con_vga + a) * fb_pitch + (unsigned)(x + gx * con_vga + b)] = px;
     }
-    if (c < VGAFONT_FIRST || c > VGAFONT_LAST) return;
-    const unsigned char *g = vgafont_glyphs + (c - VGAFONT_FIRST) * 16;
-    unsigned px = CON_FG;
-    if (fb_swap) px = (px & 0xFF00FF00u) | (px >> 16 & 0xFF) | (px & 0xFF) << 16;
-    for (int y = 0; y < 16; y++)
-        for (int x = 0; x < 8; x++)
-            if (g[y] & (0x80 >> x)) fb[(CON_Y + row * 16 + y) * fb_pitch + CON_X + col * 8 + x] = px;
+    fb_flush(x - 4, y, con_cw + 8, con_ch);   /* a few pixels spare: a smooth glyph can lean past its cell */
 }
-static void con_draw(char c) {
+static void con_wipe(void) {
+    fb_rect(con_x, con_y, con_cols * con_cw, con_rows * con_ch, CON_BG);
+    fb_flush(con_x - 4, con_y, con_cols * con_cw + 8, con_rows * con_ch);
+    con_col = con_row = 0;
+}
+static int con_replaying;
+static void con_draw(unsigned i);
+static void con_scroll(unsigned end) {   /* the window is full: wipe it and redraw the newest half page from the log */
+    con_wipe();
+    if (con_replaying) return;
+    unsigned start = end; int nl = 0;
+    while (start > 0) { if (con_log[start - 1] == '\n' && ++nl > con_rows / 2) break; start--; }
+    con_replaying = 1;
+    for (unsigned k = start; k < end; k++) con_draw(k);
+    con_replaying = 0;
+}
+static void con_draw(unsigned i) {   /* draws con_log[i]; a newline only moves the cursor, the next character scrolls */
+    char c = con_log[i];
     if (c == '\r') return;
-    if (c == '\n' || con_col >= CON_COLS) {
-        con_col = 0;
-        if (++con_row >= CON_ROWS) { con_row = 0; fb_rect(CON_X, CON_Y, CON_COLS * 8, CON_ROWS * 16, 0x00ffffff); }   /* a full page: start over at the top */
-        if (c == '\n') return;
+    if (c == '\n') { con_col = 0; con_row++; return; }
+    if (con_col >= (unsigned)con_cols) { con_col = 0; con_row++; }
+    if (con_row >= (unsigned)con_rows) {
+        con_scroll(i);
+        if (con_col >= (unsigned)con_cols) { con_col = 0; con_row++; }
+        if (con_row >= (unsigned)con_rows) con_wipe();
     }
     con_glyph(con_col++, con_row, c);
 }
 static void console_putc(char c) {
-    if (con_len < LOG_MAX) con_log[con_len++] = c;
-    if (con_live) con_draw(c);
+    if (con_len == LOG_MAX) {   /* full: forget the older half */
+        for (unsigned i = 0; i < LOG_MAX / 2; i++) con_log[i] = con_log[i + LOG_MAX / 2];
+        con_len = LOG_MAX / 2;
+    }
+    con_log[con_len++] = c;
+    if (con_live) con_draw(con_len - 1);
+}
+/* The console's type. DejaVu Sans Mono at the screen's scale, unless a quick test of the rasterizer says no: then the
+   8x16 VGA font at a whole-number scale (2x on a 1080p screen), which needs nothing but integer stores. */
+static void con_layout(int win_x, int win_y, int win_w, int win_h) {
+    con_x = win_x + sc(8); con_y = win_y + sc(32);
+    con_px10 = sc(133);
+    mono_ok = text_ok && text_selftest(con_px10, &mono_w, &mono_h, &mono_adv);
+    if (mono_ok) { con_vga = 0; con_cw = mono_adv; con_ch = sc(16); con_base = sc(12); }
+    else {
+        con_vga = ((int)fb_h * 10 / 600 + 5) / 10;
+        if (con_vga < 1) con_vga = 1;
+        con_cw = 8 * con_vga; con_ch = 16 * con_vga; con_base = 0;
+    }
+    con_cols = (win_w - sc(12)) / con_cw;
+    con_rows = (win_h - sc(46)) / con_ch;
 }
 static void con_start(void) {   /* the screen is ready: replay what was printed before it */
     con_live = 1;
     con_col = con_row = 0;
-    for (unsigned i = 0; i < con_len; i++) con_draw(con_log[i]);
+    for (unsigned i = 0; i < con_len; i++) con_draw(i);
 }
 
 static void fb_init(void) {
     if (!fb_setup()) return;
-    fb_rect(0, 0, FB_W, FB_H, 0x00203040);       /* desktop */
-    fb_rect(0, 0, FB_W, 24, 0x00e0e0e0);         /* menu bar */
-    fb_rect(150, 100, 500, 350, 0x00ffffff);     /* a window */
-    fb_rect(150, 100, 500, 28, 0x00b5502c);      /* its title bar, the house accent */
-    fb_rect(300, 540, 200, 44, 0x00505a68);      /* the dock */
+    int W = (int)fb_w, H = (int)fb_h;
+    int win_w = sc(500), win_h = sc(350), win_x = (W - win_w) / 2, win_y = sc(100);
+    int dock_w = sc(200), dock_h = sc(44), dock_x = (W - dock_w) / 2, dock_y = H - sc(60);
+    fb_rect(0, 0, W, H, 0x00203040);                      /* desktop */
+    fb_rect(0, 0, W, sc(24), 0x00e0e0e0);                 /* menu bar */
+    fb_rect(win_x, win_y, win_w, win_h, CON_BG);          /* a window */
+    fb_rect(win_x, win_y, win_w, sc(28), 0x00b5502c);     /* its title bar, the house accent */
+    fb_rect(dock_x, dock_y, dock_w, dock_h, 0x00505a68);  /* the dock */
     text_ok = text_init();
     if (text_ok) {
-        text_draw(1, "Joshua Tree", 8, 17, 150, fb_color(0x00202020), fb, fb_pitch, FB_W, FB_H);              /* menu bar */
-        text_draw(1, "Console", 160, 120, 150, fb_color(0x00ffffff), fb, fb_pitch, FB_W, FB_H);               /* title bar */
-        text_draw(2, "ARM64", 720, 17, 130, fb_color(0x00505a68), fb, fb_pitch, FB_W, FB_H);
+        text_draw(1, "Joshua Tree", sc(8), sc(17), sc(150), fb_color(0x00202020), fb, fb_pitch, W, H);              /* menu bar */
+        text_draw(1, "Console", win_x + sc(10), win_y + sc(20), sc(150), fb_color(0x00ffffff), fb, fb_pitch, W, H);  /* title bar */
+        text_draw(2, "ARM64", W - sc(80), sc(17), sc(130), fb_color(0x00505a68), fb, fb_pitch, W, H);
+        /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock. */
+        const char *thanks = "Steve Jobs, 1955 to 2011. Thank you.";
+        text_draw(2, thanks, (W - text_width(2, thanks, sc(110))) / 2, dock_y - sc(12), sc(110), fb_color(0x00a8b4c4), fb, fb_pitch, W, H);
     } else uart_puts("M1d text FAIL\n");
+    con_layout(win_x, win_y, win_w, win_h);
     con_start();
-    /* ponytail: the framebuffer sits in cacheable RAM, so a real GPU only sees pixels once they are cleaned out.
-       One clean after drawing is enough for a still picture; a live desktop wants the buffer mapped write-combining. */
-    dcache_clean(fb, (unsigned long)fb_pitch * FB_H * 4);
-    int ok = fb[446 * fb_pitch + 400] == 0x00ffffff && fb[10 * fb_pitch + 400] == 0x00e0e0e0;   /* blank spots, clear of any text; grey and white read the same either way */
+    dcache_clean(fb, (unsigned long)fb_pitch * fb_h * 4);   /* the whole still picture out to RAM; con_glyph cleans as it goes from here */
+    int ok = fb[(unsigned)(win_y + win_h - 4) * fb_pitch + fb_w / 2] == 0x00ffffff && fb[(unsigned)sc(10) * fb_pitch + fb_w / 2] == 0x00e0e0e0;   /* blank spots, clear of any text; grey and white read the same either way */
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
+}
+/* One line that turns a photo of the screen into a measurement: where the firmware really put the kernel, the monitor
+   size it reported, the buffer we got and its pitch in bytes, and the console font's self-test ('M': width x height,
+   advance, verdict). For example "@0x80000 fb 1920x1080>1920x1080 p7680 M13x18 a14 ok". */
+static void uart_hexs(unsigned long v) {   /* hex without the leading zeros */
+    int i = 60; while (i > 0 && !((v >> i) & 15)) i -= 4;
+    uart_puts("0x"); for (; i >= 0; i -= 4) uart_putc("0123456789abcdef"[(v >> i) & 15]);
+}
+static void fb_diag(void) {
+    unsigned long at; __asm__ volatile ("adrp %0, _start\n add %0, %0, :lo12:_start" : "=r"(at));
+    uart_puts("@"); uart_hexs(at);
+    uart_puts(" fb "); uart_dec(disp_w); uart_putc('x'); uart_dec(disp_h);   /* monitor > buffer: 53 characters at most, */
+    uart_putc('>'); uart_dec(fb_w); uart_putc('x'); uart_dec(fb_h);          /* so it fits one console row in either font */
+    uart_puts(" p"); uart_dec(fb_pitch * 4);
+    uart_puts(" M"); uart_dec((unsigned)mono_w); uart_putc('x'); uart_dec((unsigned)mono_h);
+    uart_puts(" a"); uart_dec((unsigned)mono_adv);
+    uart_puts(mono_ok ? " ok\n" : " FAIL\n");
 }
 
 static void m1_selftest(void) {
@@ -677,6 +780,7 @@ void main(void) {
     user_demo();
     if (net_init()) net_arp_probe();
     if (blk_init()) blk_probe();
+    fb_diag();   /* last, so it is the newest line on the screen */
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
     if (usb_init()) {

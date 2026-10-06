@@ -150,6 +150,7 @@ The computer after the phone. Joshua Tree becomes what people talk to instead of
 
 ## Where we are
 
+- 2026-10-06: the first boot on real hardware happened, and it was a Raspberry Pi 4, not the x86 board the kit plan above was built around. The desktop came up over HDMI from a card flashed in one command (`tools/flash-pi.sh`). Honest gaps: the picture fills half the screen and the console text is broken. On the Pi, keyboard, mouse, disk and network only work under QEMU (they use QEMU's virtual devices); real USB, SD and Ethernet drivers are M4 in `docs/ARM64.md`. On the x86 side `rtl8139.c`, `ata.c` and `pci.c` target real chips; `vmmouse.c` only works under VMware or QEMU, never on a real board.
 - 2026-09-28, afternoon: a 36 second ad exists. Neo renders, the real OS booting, Samantha narrating in her own voice, original music. It's in the README. The landing page doesn't show the hardware yet; that's the next conversion fix before any waitlist push.
 - 2026-09-28: the $199 problem is fixed on paper. Two boxes: a $199 Neo Kit (case plus OS stick, bring your own board) that makes money if the case prints under about $160, and a $349 Neo Complete. The Neo case now has a real CAD file, a drawing and a build guide.
 - 2026-09-28: 1.7.4 merged. The OS now gets its own internet address on its own, has the start of voice input, and on phones Samantha's face no longer covers her title bar. A broken deploy setting kept the live site on 1.7.3; the fix is in review. Work started on moving apps out of the core so one crashing app can't take the machine down.
@@ -157,9 +158,11 @@ The computer after the phone. Joshua Tree becomes what people talk to instead of
 
 ## Next
 
-Real drivers for one real board. That's the first dollar.
+A USB keyboard working on the real Pi. A board you can type into is the first thing anyone would pay for, and the Pi is now the one board we know boots.
 
-*Set 2026-09-28.*
+*Set 2026-10-06. Was: real drivers for one real board, set 2026-09-28.*
+
+Decided 2026-10-06: the first dev kit is Pi-based. It is the board that boots, the one people already own, and its case is already drawn (`docs/hardware/PI-CASE.md`). The x86 Neo plan above stays as the later box. No Pi kit price yet; it needs a real parts list first.
 
 *Landing synced 2026-09-28: the 36 second ad and the Neo case concept sit under "Want one?". Neo is a concept, not for sale, no price set.*
 
