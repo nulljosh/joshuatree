@@ -1,6 +1,6 @@
 /* Joshua Tree on ARM64, the first instruction. Two places load this:
    QEMU's virt machine (image at 0x40000000, enters at EL1) and a real Raspberry Pi 4 (the firmware
-   puts kernel8.img at 0x80000 and enters at EL2). Either way: park every core but 0, drop to EL1
+   puts kernel8.img at 0x80000 because config.txt says kernel_address=0x80000, and enters at EL2). Either way: park every core but 0, drop to EL1
    with the MMU off, set a stack, call main. The EL the firmware gave us is kept in boot_el. */
 .section .text.boot
 .global _start
@@ -36,11 +36,17 @@ at_el1:
     orr x0, x0, #(3 << 20)       /* the floating point unit: the TrueType rasterizer uses it */
     msr cpacr_el1, x0
     isb
-    ldr x0, =_stack_top
+    msr s3_3_c4_c4_0, xzr        /* FPCR (spelled by number: this file builds without FP) = 0: round to nearest, no flush to zero: never trust what the firmware left (needs the FPU on, above) */
+    /* Every address below is PC-relative, so the stack and the .bss clear land in our own image wherever the firmware
+       put it, not where it was linked. */
+    adrp x0, _stack_top
+    add x0, x0, :lo12:_stack_top
     mov sp, x0
     /* zero .bss: a real board's RAM is not cleared for us, and every uninitialised global assumes zero */
-    ldr x0, =_bss_start
-    ldr x1, =_bss_end
+    adrp x0, _bss_start
+    add x0, x0, :lo12:_bss_start
+    adrp x1, _bss_end
+    add x1, x1, :lo12:_bss_end
 1:  cmp x0, x1
     b.hs 2f
     str xzr, [x0], #8
