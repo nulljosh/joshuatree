@@ -8,7 +8,9 @@ dependencies beyond clang, ld.lld and qemu.
 - Cross-compiles with stock Apple clang via `-target i386-unknown-none`. No
   cross-toolchain needed; do not add one.
 - Full subsystem map: `docs/ARCHITECTURE.md`. Plan and verification notes:
-  `docs/roadmap.md`.
+  `docs/roadmap.md`. The design rules (icons, type, colour, dock, motion) are one
+  page, `docs/DESIGN.md`, and `tools/checks/design-doc-check.py` fails when a
+  number in it stops matching the source.
 
 ## Verification rules
 
@@ -86,7 +88,7 @@ yet for 1.0.0.
 
 ## Theme
 
-Keep the Satellite wallpaper in color. The former engraving filter made it black and white, while the cream, hatched landing page felt too much like paper or a blueprint. The landing page now uses a clean light surface, slate text, blue and teal accents, simple rules, and rounded cards. Dark mode uses those colors on a navy surface. Keep the engraved tree artwork as a logo, with `landing/mark.png` for small sizes and `landing/badge.png` for large artwork. The VGA boot text is the kernel's actual black-on-gray output.
+Keep the Satellite wallpaper in color. The former engraving filter made it black and white, while the cream, hatched landing page felt too much like paper or a blueprint. The landing page now uses an off-white surface (`#faf8f4`), near-black ink, one terracotta accent (`#b5502c`), simple rules and rounded cards, with no teal, purple or gradients. Dark mode swaps to a warm near-black (`#141311`). The OS's own look is written down in `docs/DESIGN.md`. Keep the engraved tree artwork as a logo, with `landing/mark.png` for small sizes and `landing/badge.png` for large artwork. The VGA boot text is the kernel's actual black-on-gray output.
 
 ## Landing page / v86 demo
 
