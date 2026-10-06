@@ -36,8 +36,8 @@ start_s = open(os.path.join(arch, "start.S")).read()
 if "ldr x0, =" in start_s or "ldr x1, =" in start_s: fails.append("start.S loads an absolute address: wrong if the firmware loads us anywhere but the link address")
 elif "msr s3_3_c4_c4_0, xzr" not in start_s: fails.append("start.S no longer zeroes FPCR")
 else: print("  ok: start.S is PC-relative and zeroes FPCR")
-if "kernel_address=0x80000" not in open(os.path.join(root, "tools/flash-pi.sh")).read():
-    fails.append("tools/flash-pi.sh config.txt lost kernel_address=0x80000")
+if "kernel_address=0x80000" not in open(os.path.join(root, "tools/pi-config.txt")).read():
+    fails.append("tools/pi-config.txt lost kernel_address=0x80000")
 
 def shoot(name, qemu_args, image, size=(800, 600)):
     tmp = tempfile.mkdtemp()
