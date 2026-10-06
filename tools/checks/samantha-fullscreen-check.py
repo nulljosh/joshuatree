@@ -953,7 +953,10 @@ def stack_check(m, tag, base):
         print(tag + f"the new line rose on her clock (tick since it appeared, rows below its place): {rise}")
         if len(rise) < 3 or rise[0][1] < 8 or rise[-1][1] != 0 or any(b[1] > a[1] for a, b in zip(rise, rise[1:])) or any(b[0] <= a[0] for a, b in zip(rise, rise[1:])):
             fail(tag, f"the new line did not ease up into place (ticks and offsets {rise}): want 3 or more steps from at least 8 rows down to 0, never moving back down")
-        if not 24 <= rise[-1][0] <= 40: fail(tag, f"the rise ended at tick {rise[-1][0]} after the line appeared, want about 28 (0.28 s)")
+        # The log writes a step only when the row offset changes. The ease-out (rem = u*u/256) is under one row from tick 20 of CAP_IN 28, so the last logged
+        # step is the first frame at 0 rows: tick 20 when every tick is drawn, later when frames are skipped. Measuring "ends near 28" passed only on
+        # skipped frames and failed on a fast runner (2.12.2 CI). The window is the first sub-row tick up to the end of the 0.28 s plus slack.
+        if not 18 <= rise[-1][0] <= 40: fail(tag, f"the rise ended at tick {rise[-1][0]} after the line appeared, want 18 to 40 (it is under a row from tick 20 of 28)")
         if not m.wait(lambda: len(ticks(m, "line")) >= n0 + 2, 60): return fail(tag, "her reply never arrived")
         m.typ(LONG); m.keys("ret")   # a second message straight away: the exchange goes on
         most = 0; three = None; t_end = time.time() + 90; last = None; run = 0

@@ -2,6 +2,7 @@
 
 - [Whitepaper](WHITEPAPER.md): why and how
 - [Architecture](ARCHITECTURE.md): how it fits together, every file
+- [Design](DESIGN.md): the rules for icons, type, colour, the dock and motion, checked against the source
 - [Hardware](HARDWARE.md): the real board and the 3.0 plan
 - [Portfolio mode](PORTFOLIO.md): how heyitsmejosh.com is a mode of the OS, with Joshua in place of Samantha
 - [Raspberry Pi guide](RASPBERRY-PI.md): what to buy, the serial cable, and how to boot it on a real Pi 4. [Printable Pi case](hardware/PI-CASE.md)

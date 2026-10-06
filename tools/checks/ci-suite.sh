@@ -57,6 +57,7 @@ cd "$(dirname "$0")/../.."
 manifest() {
 cat <<'EOF'
 once |6|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
+once |0|docs/DESIGN.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static)|python3 ./tools/checks/design-doc-check.py
 once |6|Kernel memory keeps 16KB clear of the program window (toolchain drift guard)|python3 ./tools/checks/bss-margin-check.py
 once |6|Samantha's face loops wrap without a seam|python3 ./tools/checks/face-frames-check.py
 once |6|docs/TESTING.md lists every check in this suite|./tools/checks/testing-doc-check.sh
