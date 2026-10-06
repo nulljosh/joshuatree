@@ -162,6 +162,8 @@ A USB keyboard working on the real Pi. A board you can type into is the first th
 
 *Set 2026-10-06. Was: real drivers for one real board, set 2026-09-28.*
 
+Decided 2026-10-06: the first dev kit is Pi-based. It is the board that boots, the one people already own, and its case is already drawn (`docs/hardware/PI-CASE.md`). The x86 Neo plan above stays as the later box. No Pi kit price yet; it needs a real parts list first.
+
 *Landing synced 2026-09-28: the 36 second ad and the Neo case concept sit under "Want one?". Neo is a concept, not for sale, no price set.*
 
 Notes now has folders and lets you keep more than one note, so it starts to feel like a real app on a real board. Still free, nothing to sell. *2026-09-28.*

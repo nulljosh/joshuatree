@@ -21,7 +21,7 @@ So on day one, watch two things: the text in a serial terminal, and with a monit
 - **Raspberry Pi 4 Model B, 4 GB.** The port targets the 4B first. The Pi 5 comes after.
 - **A USB-C power supply, 5 V 3 A.** The official one is the safe pick.
 - **A microSD card, 16 GB or more.**
-- **A USB to serial cable, 3.3 V.** CP2102, FTDI or CH340 all work. This is how you see the output. Make sure it says 3.3 V, not 5 V.
+- **A USB to serial cable, 3.3 V.** CP2102, FTDI or CH340 all work. This is how you see the output. Make sure it says 3.3 V, not 5 V. The Mac mini only has USB-C, so search "USB-C to TTL serial 3.3V" (or a USB-A one plus an adapter). One end is USB, the other is three loose wires for the header pins. About $10.
 - **Three female to female jumper wires.**
 - A micro-HDMI to HDMI cable and a monitor, to see the first picture. Plug into the HDMI port next to the USB-C power port (HDMI 0). A USB keyboard and mouse come later (M4).
 
@@ -131,6 +131,32 @@ If it still fails, send the exact lines you see, even if they look like garbage.
 | M3 | Every app running on ARM. |
 | M4 | The same on the real Pi: SD card, USB, Ethernet. Sound last. |
 | M5 | The Pi 5. |
+
+## Why the serial cable matters
+
+Without it, every test is: build, swap the card, photograph the monitor, guess. With it:
+
+- **The exact error.** The Pi prints every step to the Mac, even when the screen is blank, so a failure names its own line.
+- **No more card swaps.** A tiny loader goes on the card once; after that each new build is sent down the cable and booted. This is the "auto update" path. Pulling updates from GitHub by itself needs networking and TLS in the kernel, which is much further out.
+- **Typing before USB works.** Serial is two-way, so the Mac's terminal can be Joshua Tree's keyboard while the USB driver is still being built.
+
+## Wireless
+
+A Bluetooth dongle and a Logitech receiver are both USB devices, so they wait on the USB driver. The receiver then works as a plain USB mouse and keyboard with no extra code. The Pi's own Wi-Fi and Bluetooth chip (CYW43455) needs a closed firmware file and a full wireless stack. Not scheduled; wired Ethernet comes first.
+
+## Time estimates (2026-10-06)
+
+Guesses, not measurements. Updated as each one lands.
+
+| Milestone | Estimate |
+|---|---|
+| Full-screen, sharp picture at the monitor's own size; console text fixed; Steve Jobs tribute line | Same day |
+| Serial loader (no card swaps) and typing from the Mac | The day the cable arrives |
+| USB keyboard and mouse on the real Pi | Days. Driver built and tested in QEMU first; the Pi's own PCIe and USB chip setup can only be tried on the board |
+| The real desktop and dock (`drivers/window.c`) on the Pi | About a week |
+| Apps running on the Pi | One to three weeks |
+| Files saved to the SD card, internet over Ethernet | One to two weeks, alongside the apps |
+| Fully usable Joshua Tree on the Pi, the 3.0 gate | Roughly three to six weeks |
 
 ## The fan and the case
 
