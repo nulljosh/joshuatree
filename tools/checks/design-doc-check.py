@@ -127,6 +127,15 @@ def icon_svgs():
     return sorted(glob.glob(os.path.join(ROOT, "art", "icons", "*.svg")))
 
 
+def icon_files():
+    return len(icon_svgs())
+
+
+def margin_tiles():
+    """The icons iconinset-check.py measures the glyph margin on: the ones that carry restyle_icons.py's tile header."""
+    return sum(1 for f in icon_svgs() if re.search(r"Tile #[0-9A-Fa-f]{6} -> #[0-9A-Fa-f]{6}", open(f).read()))
+
+
 def icon_text_elements():
     return sum(len(re.findall(r"<text\b", open(f).read())) for f in icon_svgs())
 
@@ -317,6 +326,8 @@ FACTS = {
     "HL_ALPHA": ("num", lambda: hl(1), "tools/gen/restyle_icons.py"),
     "HL_FADE": ("num", lambda: hl(2), "tools/gen/restyle_icons.py"),
     "GRADIENT_HUE_MAX": ("max", gradient_hue_spread, "art/icons/*.svg"),
+    "ICON_FILES": ("num", icon_files, "art/icons/*.svg"),
+    "MARGIN_TILES": ("num", margin_tiles, "art/icons/*.svg (the Tile header iconinset-check.py keys on)"),
     "ICON_TEXT_ELEMENTS": ("num", icon_text_elements, "art/icons/*.svg"),
     "ICON_PURPLE_TEAL": ("num", icon_purple_teal, "art/icons/*.svg"),
     "ACCENT": ("hex", accent, "landing/index.html, tools/gen/restyle_icons.py, art/icons/movies.svg"),

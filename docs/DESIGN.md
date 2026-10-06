@@ -20,13 +20,13 @@ No text, letters or wordmarks, so `ICON_TEXT_ELEMENTS = 0`. The one exception is
 
 The house accent is terracotta, `ACCENT = #b5502c`, the landing page's accent and the colour of the Music, Movies and Hamurapi tiles. The one deliberate exception is Tonchi, which keeps its own sky blue, `LEXLY_BLUE = #2E86DE`, because that is the colour of its store icon.
 
-Fleet icons are the `FLEET_ICONS = 10` apps imported from their own repos. They keep their own tile colour and their own picture. They must still share the squircle, the anti-aliased edge, the top lip and the glyph margin. They do not get the tile falloff, so a fleet tile is flat. The importer clips each one to the squircle and lays the lip on it. The checks measure the squircle and the edge on every icon, but the margin only on the authored tiles, so a fleet icon's margin is held by eye; the roadmap lists the fleet icons that still fall short.
+Fleet icons are the `FLEET_ICONS = 10` apps imported from their own repos. They keep their own tile colour and their own picture. They must still share the squircle, the anti-aliased edge, the top lip and the glyph margin. They do not get the tile falloff, so a fleet tile is flat. The importer clips each one to the squircle and lays the lip on it. The checks measure the squircle and the edge on all `ICON_FILES = 32` icons, but the glyph margin only on the `MARGIN_TILES = 19` that carry the shared tile header written by `restyle_icons.py`. A fleet icon's margin is held by eye, and the roadmap lists the fleet icons that still fall short.
 
 ## Type
 
 One family, DejaVu, in `DEJAVU_FACES = 6` faces: Sans, Sans Bold, Serif, Serif Bold, Mono and Mono Bold. Sans is the interface. The desktop draws it at `GUI_TEXT_PX = 24` physical pixels, 12 on the 960 wide grid. Apps draw it at `BODY_PX = 14.0`, with bold at the same size and the big display digits at `DISP_PX = 56.0`.
 
-Mono is for a shell grid and nothing else: `MONO_APPS = panes, terminal`, at `MONO_PX = 13.5` with every glyph `JT_MONO_ADV = 8` pixels wide. Serif ships with the fonts and nothing draws with it, so `SERIF_USES = 0`. Sans-serif only is the house rule, so serif has to earn its way in.
+On the desktop, Mono is for a shell grid and nothing else: `MONO_APPS = panes, terminal`, at `MONO_PX = 13.5` with every glyph `JT_MONO_ADV = 8` pixels wide. Serif ships with the fonts and nothing draws with it, so `SERIF_USES = 0`. Sans-serif only is the house rule, so serif has to earn its way in.
 
 The retina rule holds for type as it does for icons: stems are inked dense but stay anti-aliased. The 8x16 bitmap font is only the fallback for VGA text mode and for off-screen targets.
 
@@ -58,8 +58,8 @@ Apps move only when the movement is the app: Windgate's breathing circle, Samant
 
 The numbers above are checked by `design-doc-check.py` against the file that defines each one. It also reads every icon in `art/icons` for text, purple, teal and gradient hue.
 
-Run in the suite on every pull request: `iconinset-check.py` (the squircle, the edges and the glyph margin on all icons), `iconlight-check.py`, `iconhalo-check.py`, `iconedge-check.py` (its only hard assert is the Trash rim, the rest is a score to read), `calicon-check.py`, `clockicon-check.py`, `dockslots-check.py`, `dockband-check.py`, `dockhover-check.py`, `windowedge-check.py`, `windowsnap-check.py`, `windowdrag-check.py`, `launchpad-centered-check.py`, `textsharp-check.py`, `textspacing-check.sh` and `termsharp-check.py`.
+Run in the suite on every pull request: `iconinset-check.py` (the squircle and the edges on every icon, the glyph margin on the tiles with the shared header), `iconlight-check.py`, `iconhalo-check.py`, `iconedge-check.py` (its only hard assert is the Trash rim, the rest is a score to read), `calicon-check.py`, `clockicon-check.py`, `dockslots-check.py`, `dockband-check.py`, `dockhover-check.py`, `windowedge-check.py`, `windowsnap-check.py`, `windowdrag-check.py`, `launchpad-centered-check.py`, `textsharp-check.py`, `textspacing-check.sh` and `termsharp-check.py`.
 
 Run by hand, not in CI yet: `iconart-check.py`, `iconsync-check.sh` and `dockshadow-check.py`.
 
-Not measured, held by eye: a bold glyph, one picture per icon, no emblem or speech bubble, no stripes or decorative borders, and the glyph margin of a fleet icon.
+Not measured, held by eye: a bold glyph, one picture per icon, no emblem or speech bubble, no stripes or decorative borders, and the glyph margin of the icons without the shared tile header (the fleet icons, Movies, Panes and Portfolio).
