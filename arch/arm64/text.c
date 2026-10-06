@@ -46,3 +46,34 @@ int text_draw(int which, const char *s, int x, int baseline, int px10, unsigned 
     }
     return x;
 }
+
+int text_width(int which, const char *s, int px10) {   /* pen advance of a whole string, for centring */
+    ttf_font_t *f = face[which];
+    int w = 0;
+    if (f) for (; *s; s++) w += ttf_advance(f, (unsigned char)*s, (float)px10 / 10.0f);
+    return w;
+}
+
+/* Rasterizes 'M' in the console face and checks the result looks like an M: a sane box and advance for the size, ink
+   in nearly every column and a fair share of the box covered. Answers the measurements too, for the boot log. */
+int text_selftest(int px10, int *w, int *h, int *adv) {
+    *w = *h = *adv = 0;
+    if (!face[0]) return 0;
+    float px = (float)px10 / 10.0f;
+    unsigned long m = heap_mark();
+    ttf_glyph_t g;
+    int ok = 0;
+    if (ttf_glyph(face[0], 'M', px, &g) == 0) {
+        *w = g.width; *h = g.height; *adv = g.advance;
+        int ink = 0, cols = 0;
+        for (int i = 0; i < g.width; i++) {
+            int any = 0;
+            for (int j = 0; j < g.height; j++) if (g.coverage[j * g.width + i] > 64) { ink++; any = 1; }
+            cols += any;
+        }
+        ok = g.width >= px * 0.35f && g.width <= px && g.height >= px * 0.5f && g.height <= px
+          && g.advance >= px * 0.45f && g.advance <= px * 0.75f && cols >= g.width - 2 && ink * 5 >= g.width * g.height;
+    }
+    heap_release(m);
+    return ok;
+}
