@@ -1,5 +1,6 @@
 # Joshua Tree docs
 
+- [Our story](STORY.md): who we are, how it went, where it is going
 - [Whitepaper](WHITEPAPER.md): why and how
 - [Architecture](ARCHITECTURE.md): how it fits together, every file
 - [Design](DESIGN.md): the rules for icons, type, colour, the dock and motion, checked against the source
