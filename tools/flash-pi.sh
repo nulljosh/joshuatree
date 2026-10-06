@@ -4,40 +4,59 @@
 # No Raspberry Pi OS needed. The Pi's firmware boots any kernel8.img it
 # finds on a FAT32 card next to its own five boot files, so this script
 # builds ours, fetches those five from the official raspberrypi/firmware
-# repo, writes config.txt, and copies the lot onto the card. First done
-# by hand on 2026-10-06; this is that session as a script.
+# repo, copies tools/pi-config.txt over as config.txt, and copies the lot
+# onto the card. First done by hand on 2026-10-06; this is that session
+# as a script. tools/checks/flash-pi-check.sh covers it.
 #
 # Usage: tools/flash-pi.sh [/Volumes/CARD]
-# With no argument it looks for exactly one mounted FAT32 removable
-# volume. It never formats anything: a fresh card is already FAT32, and
-# for a used one `diskutil eraseDisk FAT32 PI MBRFormat diskN` first.
+# With no argument it looks for exactly one mounted FAT volume on an
+# external disk. It never formats anything: a fresh card is already
+# FAT32, and for a used one `diskutil eraseDisk FAT32 PI MBRFormat diskN`
+# first. An existing kernel8.img or config.txt on the card is kept as
+# .bak before it is replaced.
+#
+# FLASH_PI_FW=dir uses firmware files already in dir (the check uses
+# this, no network). FLASH_PI_NO_EJECT=1 leaves the card mounted.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CARD="${1:-}"
 if [ -z "$CARD" ]; then
     # ponytail: macOS only for auto-detect; Linux passes the mount point.
-    CARD=$(mount | awk '/\(msdos/ && /\/Volumes\// {sub(/^.* on /, ""); sub(/ \(msdos.*$/, ""); print}')
-    [ "$(printf '%s\n' "$CARD" | grep -c .)" = 1 ] || { echo "pass the card's mount point, e.g. tools/flash-pi.sh \"/Volumes/NO NAME\"" >&2; exit 1; }
+    found=()
+    for v in /Volumes/*; do
+        info=$(diskutil info "$v" 2>/dev/null) || continue
+        echo "$info" | grep -q 'File System Personality: *.*FAT' || continue
+        echo "$info" | grep -q 'Device Location: *External' || continue
+        found+=("$v")
+    done
+    [ "${#found[@]}" = 1 ] || { echo "found ${#found[@]} external FAT volumes; pass the card's mount point, e.g. tools/flash-pi.sh \"/Volumes/NO NAME\"" >&2; exit 1; }
+    CARD="${found[0]}"
 fi
 [ -d "$CARD" ] || { echo "$CARD is not mounted" >&2; exit 1; }
+echo "flashing $CARD"
 
-make -C arch/arm64 pi >/dev/null
+make -B -C arch/arm64 pi >/dev/null   # -B: the Makefile does not track headers
 
-FW=build/pifw
-B=https://github.com/raspberrypi/firmware/raw/stable/boot
-mkdir -p "$FW/overlays"
-for f in bootcode.bin start4.elf fixup4.dat bcm2711-rpi-4-b.dtb overlays/disable-bt.dtbo; do
-    [ -s "$FW/$f" ] || curl -sSfL -o "$FW/$f" "$B/$f"
-done
+FW="${FLASH_PI_FW:-build/pifw}"
+FILES="bootcode.bin start4.elf fixup4.dat bcm2711-rpi-4-b.dtb overlays/disable-bt.dtbo"
+missing=0; for f in $FILES; do [ -s "$FW/$f" ] || missing=1; done
+if [ "$missing" = 1 ]; then
+    # All five from one fetch, into a temp dir, moved in only when every one
+    # landed: a dropped download never leaves a half file in the cache, and
+    # start4.elf and fixup4.dat always come from the same firmware release.
+    B=https://github.com/raspberrypi/firmware/raw/stable/boot
+    tmp=$(mktemp -d); mkdir -p "$tmp/overlays"
+    for f in $FILES; do curl -sSfL -o "$tmp/$f" "$B/$f"; done
+    rm -rf "$FW"; mkdir -p "$(dirname "$FW")"; mv "$tmp" "$FW"
+fi
 
+for f in kernel8.img config.txt; do [ -f "$CARD/$f" ] && cp "$CARD/$f" "$CARD/$f.bak"; done
 cp -R "$FW"/. "$CARD"/
 cp arch/arm64/kernel8.img "$CARD"/kernel8.img
-# disable-bt hands the good UART (PL011) to header pins 8 and 10.
-# uart_2ndstage makes the firmware itself print first, so a blank
-# serial line means wiring and a firmware-only line means our kernel.
-printf 'arm_64bit=1\nkernel=kernel8.img\nenable_uart=1\ndtoverlay=disable-bt\nuart_2ndstage=1\n' > "$CARD"/config.txt
+cp tools/pi-config.txt "$CARD"/config.txt
 
 command -v dot_clean >/dev/null && dot_clean -m "$CARD"
-if [ "$(uname -s)" = "Darwin" ]; then diskutil eject "$CARD"; else /bin/sync; fi
-echo "flashed $(stat -f%z arch/arm64/kernel8.img 2>/dev/null || stat -c%s arch/arm64/kernel8.img) byte kernel8.img; card ejected"
+if [ "${FLASH_PI_NO_EJECT:-}" = 1 ]; then :
+elif [ "$(uname -s)" = "Darwin" ]; then diskutil eject "$CARD"; else /bin/sync; fi
+echo "flashed $(wc -c < arch/arm64/kernel8.img | tr -d ' ') byte kernel8.img"
