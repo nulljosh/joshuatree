@@ -1,6 +1,6 @@
 # Raspberry Pi
 
-Joshua Tree can't boot a real Pi yet. This page says what works today, what to buy, and exactly what to do the day the board arrives.
+Joshua Tree booted on a real Pi 4 on 2026-10-06. This page says what works today, what to buy, how to flash the card, and what happened on the real board.
 
 The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardware/PI-CASE.md](hardware/PI-CASE.md).
 
@@ -10,8 +10,8 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 |---|---|
 | Boots under QEMU's generic ARM machine and prints over the UART | Works. `make -C arch/arm64 run` |
 | Boots as a Pi image on QEMU's Pi 4B model, enters at EL2, drops to EL1, prints | Works. `make -C arch/arm64 run-pi` |
-| Boots on a real Pi 4 | The board is here (2026-10-06) and the card is flashed with `tools/flash-pi.sh`. First power-on is the next step. See the log at the bottom. |
-| A picture on a monitor | Works on QEMU's Pi 4B model: the kernel asks the GPU for a screen through the mailbox, draws a simple desktop and prints the same boot lines in its window that go out over serial, in the same smooth DejaVu type as the main desktop (`tools/checks/arm64-m1c-check.py`). Never tried on a real board. |
+| Boots on a real Pi 4 | **Works, 2026-10-06.** First power-on drew the desktop over HDMI. See the log at the bottom. |
+| A picture on a monitor | **Works on the real board**, same desktop as QEMU's Pi 4B model: the kernel asks the GPU for a screen through the mailbox, draws a simple desktop and prints the same boot lines in its window that go out over serial, in the same smooth DejaVu type as the main desktop (`tools/checks/arm64-m1c-check.py`). On the real board the menu bar text is right but the Console's boot lines come out as a thin column of marks at the left edge. Next fix. |
 | Keyboard, mouse, disk, network on the Pi | Not yet. M2 to M4. |
 
 So on day one, watch two things: the text in a serial terminal, and with a monitor plugged in, a simple desktop of plain boxes with the same boot lines written in its white window. If the serial cable is wrong, the monitor still tells you how far the kernel got. If both are blank, it is the SD card or `config.txt`.
@@ -140,6 +140,10 @@ The little fan runs off the header: red to pin 4 (5 V), black to pin 6 (ground).
 
 Newest first. Each entry says what was tried on the real board and the last line seen.
 
-- **2026-10-06.** Pi 4 Model B 4 GB arrived, with a 32 GB card, heat sinks, a case and a fan. Flashed the card from the Mac without Raspberry Pi OS: the five firmware files straight from `raspberrypi/firmware`, plus a 151 KB `kernel8.img` built that afternoon. That session became `tools/flash-pi.sh`. Not powered on yet.
+- **2026-10-06, first boot.** Pi 4 Model B 4 GB, 32 GB card, heat sinks, case, fan, the official 27 W supply. Flashed from the Mac without Raspberry Pi OS: the five firmware files straight from `raspberrypi/firmware` plus a 151 KB `kernel8.img` built that afternoon (now `tools/flash-pi.sh`). First power-on: red light only, black screen, because the card had gone in after power. Unplug, reseat, replug: the desktop came up over HDMI 0 on a Samsung monitor. Menu bar reads `Joshua Tree` and `ARM64` in DejaVu, the Console window and the dock box are drawn. The boot lines inside the Console render as a thin column of marks at the left edge instead of text; the title text is fine, so the font works. A close-up shows exactly 13 marks for the 13 boot lines, so every line arrives and every character in it draws as a one-pixel mark with no advance: the bytes reaching the console are not the ones the font table knows. No serial cable yet, so the serial log is unread.
+
+![First boot on a real Pi 4](hardware/first-boot-2026-10-06.jpg)
+
+![The Console window up close: one mark per boot line](hardware/first-boot-console-2026-10-06.jpg)
 
 Joshua Tree 3.0 ships when it boots the desktop on a real Pi.
