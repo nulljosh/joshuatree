@@ -556,16 +556,16 @@ static void m1_selftest(void) {
 /* ---- Input, from any driver: Linux evdev events (virtio input speaks them natively; the USB HID driver in xhci.c
    translates its reports into them). The pointer starts mid-screen; a tablet sets it, a mouse moves it. ---- */
 struct input_event { unsigned short type, code; unsigned value; };
-static unsigned mouse_x = FB_W / 2, mouse_y = FB_H / 2, mouse_moved;
+static unsigned mouse_x = 400, mouse_y = 300, mouse_moved;
 static void input_event(struct input_event e) {
     if (e.type == 1) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* EV_KEY: keys and buttons */
     else if (e.type == 3) {                                                                                /* EV_ABS: the tablet, 0..32767 */
-        if (e.code == 0) mouse_x = e.value * FB_W / 32768; else if (e.code == 1) mouse_y = e.value * FB_H / 32768;
+        if (e.code == 0) mouse_x = e.value * fb_w / 32768; else if (e.code == 1) mouse_y = e.value * fb_h / 32768;
         mouse_moved = 1;
     } else if (e.type == 2) {                                                                              /* EV_REL: a mouse, clamped to the screen */
         int v = (int)e.value;
-        if (e.code == 0) { int x = (int)mouse_x + v; mouse_x = x < 0 ? 0 : x >= FB_W ? FB_W - 1 : (unsigned)x; }
-        else if (e.code == 1) { int y = (int)mouse_y + v; mouse_y = y < 0 ? 0 : y >= FB_H ? FB_H - 1 : (unsigned)y; }
+        if (e.code == 0) { int x = (int)mouse_x + v; mouse_x = x < 0 ? 0 : x >= (int)fb_w ? (int)fb_w - 1 : (unsigned)x; }
+        else if (e.code == 1) { int y = (int)mouse_y + v; mouse_y = y < 0 ? 0 : y >= (int)fb_h ? (int)fb_h - 1 : (unsigned)y; }
         mouse_moved = 1;
     } else if (e.type == 0 && mouse_moved) {                                                               /* EV_SYN: one report done */
         uart_puts("mouse "); uart_dec(mouse_x); uart_putc(','); uart_dec(mouse_y); uart_putc('\n');
