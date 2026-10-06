@@ -333,6 +333,11 @@
   #hero-poster { position: absolute; inset: 0; z-index: 4; display: block; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; background: #000; cursor: pointer; font: inherit; -webkit-tap-highlight-color: transparent; }
   #hero-poster[hidden], html.no-poster #hero-poster { display: none; }
   #hero-poster picture, #hero-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  /* The still poster reads as a video that never started, so the real demo gets its own visible way in. */
+  .poster-skip { position: absolute; z-index: 5; right: 16px; top: 16px; padding: 8px 14px; border-radius: 999px; background: rgba(0,0,0,0.55); color: #fff; font-size: 13px; font-weight: 600; text-decoration: none; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .poster-skip:hover { background: rgba(0,0,0,0.75); }
+  .poster-skip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  #hero-poster[hidden] ~ .poster-skip, html.no-poster .poster-skip { display: none; }
   #hero-poster:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
   .poster-cta { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); background: var(--accent); color: var(--bg); font-size: 15px; font-weight: 600; letter-spacing: 0.01em; padding: 12px 26px; border-radius: 999px; white-space: nowrap; box-shadow: 0 4px 18px rgba(0,0,0,0.28); }
   #hero-poster:hover .poster-cta { opacity: 0.92; }
@@ -525,6 +530,7 @@
       </picture>
       <span class="poster-cta"><span class="poster-cta-desktop">Click to boot</span><span class="poster-cta-mobile">Tap to boot</span><span class="poster-cta-wake">Waking up</span></span>
     </button>
+    <a class="poster-skip" href="?desktop">Skip to the desktop</a>
     <div id="boot-logo" aria-hidden="true">
       <div class="ink-img"></div>
       <span>Booting...</span>
@@ -606,7 +612,7 @@
 <section class="facts reveal" aria-label="Joshua Tree by the numbers">
   <div class="facts-row two">
     <div class="fact"><strong><span data-fact="apps">29</span></strong><span class="label">Apps</span></div>
-    <div class="fact"><strong>v<span data-fact="version">2.12.2</span></strong><span class="label">Version</span></div>
+    <div class="fact"><strong>v<span data-fact="version">2.12.3</span></strong><span class="label">Version</span></div>
   </div>
   <div class="boot-cta">
     <a class="boot-btn" href="https://github.com/nulljosh/joshuatree/releases">Download for a USB stick</a>
@@ -850,7 +856,7 @@
     </div>
   </nav>
   <div class="foot-bar">
-    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.12.2</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
+    <p class="foot-meta">Joshua Tree v<span data-fact="version">2.12.3</span> &middot; Apache License 2.0 &middot; &copy; 2026 Joshua Trommel &middot; Made with <span class="heart">&hearts;</span> in Vancouver, BC</p>
   </div>
 </footer>
 
