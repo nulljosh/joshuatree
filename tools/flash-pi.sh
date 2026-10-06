@@ -36,7 +36,10 @@ cp arch/arm64/kernel8.img "$CARD"/kernel8.img
 # disable-bt hands the good UART (PL011) to header pins 8 and 10.
 # uart_2ndstage makes the firmware itself print first, so a blank
 # serial line means wiring and a firmware-only line means our kernel.
-printf 'arm_64bit=1\nkernel=kernel8.img\nenable_uart=1\ndtoverlay=disable-bt\nuart_2ndstage=1\n' > "$CARD"/config.txt
+# kernel_address pins the load address the kernel is linked for (newer
+# firmware loads 64-bit kernels at 0x200000 by default). disable_overscan
+# keeps the firmware from shrinking the picture inside a black border.
+printf 'arm_64bit=1\nkernel=kernel8.img\nkernel_address=0x80000\ndisable_overscan=1\nenable_uart=1\ndtoverlay=disable-bt\nuart_2ndstage=1\n' > "$CARD"/config.txt
 
 command -v dot_clean >/dev/null && dot_clean -m "$CARD"
 if [ "$(uname -s)" = "Darwin" ]; then diskutil eject "$CARD"; else /bin/sync; fi
