@@ -47,7 +47,7 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 
 ## Read more
 
-[The docs](docs/README.md): whitepaper, architecture, the design rules, hardware, the Raspberry Pi guide and the roadmap.
+[Our story](docs/STORY.md): who we are and how it went. [The docs](docs/README.md): whitepaper, architecture, the design rules, hardware, the Raspberry Pi guide and the roadmap.
 
 ## License
 
