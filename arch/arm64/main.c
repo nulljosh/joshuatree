@@ -355,7 +355,13 @@ static int fb_setup(void) {
         0x40008, 4, 0, 0,              /* pitch in bytes */
         0 };
     for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
-    if (!mbox_call() || !mbox[23]) { uart_puts("M1c mailbox framebuffer refused\n"); return 0; }
+    if ((!mbox_call() || !mbox[23]) && (fb_w != 800 || fb_h != 600)) {   /* the big size was refused: 800x600 worked before */
+        fb_w = 800; fb_h = 600;
+        m[5] = m[10] = 800; m[6] = m[11] = 600;
+        for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
+        mbox_call();
+    }
+    if (mbox[1] != 0x80000000u || !mbox[23]) { uart_puts("M1c mailbox framebuffer refused\n"); return 0; }
     fb = (unsigned int *)(unsigned long)(mbox[23] & 0x3FFFFFFF);   /* a VideoCore bus address: drop the alias bits */
     fb_pitch = mbox[28] / 4;
     fb_swap = mbox[19] == 1;   /* the firmware answers the order it really used; follow it if it overrode us */
