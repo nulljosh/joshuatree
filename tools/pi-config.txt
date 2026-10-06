@@ -1,0 +1,7 @@
+arm_64bit=1
+kernel=kernel8.img
+kernel_address=0x80000
+disable_overscan=1
+enable_uart=1
+dtoverlay=disable-bt
+uart_2ndstage=1

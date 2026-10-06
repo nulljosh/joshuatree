@@ -59,9 +59,9 @@ tools/flash-pi.sh                    # finds the one mounted FAT32 card
 tools/flash-pi.sh "/Volumes/NO NAME" # or name it
 ```
 
-It builds `kernel8.img`, downloads `bootcode.bin`, `start4.elf`, `fixup4.dat`, `bcm2711-rpi-4-b.dtb` and `overlays/disable-bt.dtbo` (cached in `build/pifw`), writes `config.txt`, strips the macOS `._` files and ejects. A card fresh out of the box is already FAT32. A used one: `diskutil eraseDisk FAT32 PI MBRFormat diskN` first (check `diskutil list` twice; the LaCie is also external).
+It builds `kernel8.img`, downloads `bootcode.bin`, `start4.elf`, `fixup4.dat`, `bcm2711-rpi-4-b.dtb` and `overlays/disable-bt.dtbo` (cached in `build/pifw`), copies `tools/pi-config.txt` over as `config.txt` (an existing `kernel8.img` or `config.txt` is kept as `.bak` first), strips the macOS `._` files and ejects. With no argument it only picks a FAT volume on an external disk, and stops if it finds more than one. A card fresh out of the box is already FAT32. A used one: `diskutil eraseDisk FAT32 PI MBRFormat diskN` first (check `diskutil list` twice; the LaCie is also external).
 
-The `config.txt` it writes:
+The `config.txt` it writes, from `tools/pi-config.txt`, the one copy:
 
 ```
 arm_64bit=1
@@ -75,7 +75,7 @@ uart_2ndstage=1
 
 `kernel_address` puts the kernel where it is built to run; newer firmware would otherwise load it at 0x200000. `disable_overscan` stops the firmware shrinking the picture inside a black border. `disable-bt` matters. It gives the good UART (the PL011) to the pins on the header. `uart_2ndstage` makes the firmware print before our kernel does, so a blank serial line means wiring and a firmware-only line means the kernel.
 
-If you would rather start from Raspberry Pi OS Lite (64-bit), flash it with Imager, replace `kernel8.img` on the boot partition with ours, and append those seven lines to its `config.txt`. Same result, bigger card image.
+If you would rather start from Raspberry Pi OS Lite (64-bit), flash it with Imager, replace `kernel8.img` on the boot partition with ours, and append the lines of `tools/pi-config.txt` to its `config.txt`. Same result, bigger card image.
 
 Then put the card in the Pi. The monitor goes on the micro-HDMI port next to the USB-C power (HDMI 0). The serial cable is optional on day one; the screen shows the same boot lines.
 
@@ -121,7 +121,7 @@ The kernel guards against two things a real board may do differently from QEMU: 
 1. Swap the two data wires.
 2. Check the speed is 115200.
 3. Check the adapter is 3.3 V and the ground wire is on pin 6.
-4. Check all seven lines are in `config.txt` and the card is fully ejected.
+4. Check `config.txt` matches `tools/pi-config.txt` and the card is fully ejected.
 5. `uart_2ndstage=1` is already in `config.txt`, so the Pi's own firmware prints before ours. If you see that and not ours, the kernel is not starting. If you see neither, it is the wiring.
 6. Look at the Pi's LEDs. A steady red light is power. A flickering green light is the card being read. A repeating pattern of green blinks is the firmware counting out an error: four means it could not find `start4.elf`, seven means no `kernel8.img`. Either way, re-run `tools/flash-pi.sh`.
 
