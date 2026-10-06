@@ -1,12 +1,12 @@
-# Joshua Tree loop handoff (2026-10-05, evening)
+# Joshua Tree loop handoff (2026-10-05, night)
 
 ## What the loop is
 
 Keep merging green PRs, then build the next item toward the 6.0 capabilities (compositor, real multitasking, Samantha voice, accounts, backups) as 2.x steps. Big versions are cut only when their gates are true, so 3.0.0 waits for a real Raspberry Pi 4 boot. One agent at a time, verify every claim myself, run the full local suite before a PR goes ready, merge on GitHub green, check the release cut and the live site. No stray branches, PRs, issues or stale background agents left behind.
 
-## Where things stand (2026-10-05, 18:10)
+## Where things stand (2026-10-05, 19:40)
 
-- Main is 2.12.1 and live, zero open PRs and issues. Shipped today: 2.7.2 icons and the README mark, 2.8.0 Windgate, 2.9.0 Samantha full screen, 2.9.1 her mouth and blink, 2.10.0 a much richer Weather, 2.10.1 the Samantha check made condition-based, 2.11.0 Panes (a second, cmux-style terminal app; Terminal is unchanged), 2.11.1 the landing hero opening on Samantha's face with a poster before the click, 2.12.0 the mark refresh (rounded forks, engraved grooves, a ground line), 2.12.1 her framing on wide screens (86 percent of the window width, eyes about 40 percent down, wall-colour side bands) plus captions that rise from the bottom, stack to three and fade a few seconds after she goes quiet. Graded for Joshua: framing A-, captions B+, logo A. The Launchpad has 29 apps.
+- Main is 2.12.2, zero open PRs and issues, the loop is stopped for the night. Shipped today: 2.7.2 icons and the README mark, 2.8.0 Windgate, 2.9.0 Samantha full screen, 2.9.1 her mouth and blink, 2.10.0 a much richer Weather, 2.10.1 the Samantha check made condition-based, 2.11.0 Panes (a second, cmux-style terminal app; Terminal is unchanged), 2.11.1 the landing hero opening on Samantha's face with a poster before the click, 2.12.0 the mark refresh (rounded forks, engraved grooves, a ground line), 2.12.1 her framing on wide screens (86 percent of the window width, eyes about 40 percent down, wall-colour side bands) plus captions that rise from the bottom, stack to three and fade a few seconds after she goes quiet, 2.12.2 `docs/DESIGN.md` (the OS design rules in one page) with `tools/checks/design-doc-check.py` keeping 71 facts in it equal to the source. Graded for Joshua: framing A-, captions B+, logo A. The Launchpad has 29 apps.
 - The main checkout at `~/Documents/Code/joshuatree` holds a stale local commit on `main` (a 2026-10-04 handoff edit). Leave it; work from a worktree of `origin/main` under `/tmp` (never a path containing "samantha").
 - Local testing: when Joshua's game (driven by the Conveyer session) is frontmost, macOS drops this terminal's process tree to background priority and the Mac runs about four times slower; fixed-sleep checks then fail on clean main. Before any local suite run `ps -o pri= -p $$`: 31 is normal, 4 is throttled. Do not run the full suite while throttled; tell Conveyer by SendMessage.
 - Policy: helpers open draft PRs and pass `CI_LOCAL_JOBS=4 tools/ci-local.sh` before ready. Run `npx playwright install chromium webkit` first if the demo checks fail in under a second. Close out each agent with TaskStop as soon as its work merges. Never message a running workflow agent to add requirements; brief fully up front. Agents twice killed processes that were not theirs; tell them to kill by PID only.
@@ -20,8 +20,8 @@ Keep merging green PRs, then build the next item toward the 6.0 capabilities (co
 
 ## Next, in order
 
-1. If the Pi is in hand: first serial boot per `docs/RASPBERRY-PI.md`. This is the gate for 3.0.0.
-2. A design system for Joshua Tree (research the standards, write it down, check the OS against it).
+1. Joshua buys the Pi on 2026-10-06. If it is in hand: first serial boot per `docs/RASPBERRY-PI.md`. This is the gate for 3.0.0.
+2. Icon offenders from the design page (roadmap line 45): Windgate's faint ring passes the glyph margin line, Tonchi's picture is a speech bubble. The caption stack check once saw 4 boxes on a phone window (passed on retry); if it fails again on GitHub, treat it as a real bug.
 3. Landing refresh with real browser QA at desktop and phone widths, starting with the double message bar on phones, then the graphics quality of the page.
 4. Web voice-in: browser mic to `/api/listen` (Cloudflare Whisper is already in the Worker). The OS mic needs USB audio first.
 5. Mobile QA of Samantha and the landing page.
