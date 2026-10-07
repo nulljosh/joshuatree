@@ -70,8 +70,11 @@ static unsigned num(const char *p, int n) { unsigned v = 0; for (int i = 0; i < 
 void net_clock_sync(void) {
     unsigned ip = 0;
     if (!net_get_gateway()) return;
-    for (int t = 0; t < 4 && !ip; t++)   /* the first lookup can be lost to ARP or a busy router: try the DNS server, then the gateway, twice */
-        if (!dns_resolve("www.google.com", t % 2 == 0 && net_get_dns() ? net_get_dns() : net_get_gateway(), &ip)) ip = 0;
+    extern unsigned net_dns_wait_ticks;
+    net_dns_wait_ticks = 200;   /* 2 s a try, not the 20 s a slow WAN gets: a lost first packet must not cost the clock half a minute */
+    for (int t = 0; t < 6 && !ip; t++)   /* the first lookup can be lost to ARP or a busy router: the gateway first (it answers from cache), then the DNS server */
+        if (!dns_resolve("www.google.com", t % 2 == 1 && net_get_dns() ? net_get_dns() : net_get_gateway(), &ip)) ip = 0;
+    net_dns_wait_ticks = 2000;
     if (!ip) { kputs("Internet: could not look up a web address (DNS)\n"); return; }
     static const char req[] = "HEAD / HTTP/1.0\r\nHost: www.google.com\r\nConnection: close\r\n\r\n";
     static char rep[1024];
