@@ -12,6 +12,24 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
+## Top 10, right now (2026-10-06 night)
+
+The short list. Two tracks run side by side, one helper each (Joshua agreed the order on 2026-10-06). Everything below is the long list; done items moved to [roadmap-done.md](roadmap-done.md).
+
+**Track A, what you see on the Pi**
+1. Console scrollback (Page Up), so the Wi-Fi lines can be read from a photo.
+2. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing).
+3. The mouse pointer and clicking, once a mouse is plugged in.
+4. Apps on the Pi: the ring-3 apps rebuilt for ARM, Notes and Clock first.
+
+**Track B, the goal (Claude Code inside Joshua Tree on the Pi)**
+5. The internet stack on the ARM build (DHCP and HTTP over QEMU's network first).
+6. Wi-Fi stage 1 on the real Pi (the scan lists Shaw), then stage 2 (join, get an address).
+7. Claude in the Console: type a question at the Pi's console and the answer prints, through the relay on the Mac. No app port needed, so it lands as soon as Wi-Fi joins.
+
+**Then**
+8. Admin and sudo. 9. SD card writes (MBR and FAT32). 10. The Claude app on ARM, the self-update loop and the fallback kernel.
+
 ## Now (set 2026-10-03)
 Samantha runs the machine, and Joshua is the face of the web portfolio. The phone demo, the OS and the landing all work on a phone. Everything below is what is left, in the order to pick it up. Merge one PR at a time, green first. `docs/LOOP-HANDOFF.md` has the restart prompt and the exact state. Full items live in the themed sections further down.
 
@@ -35,7 +53,6 @@ A guess at the shape, in Joshua's words as far as they are known. Each version h
 How to use this: the Pickup list below stays the near-term queue. When a Pickup item belongs to one of these versions, tag it (for example `[4.0]`), so the road and the queue stay one list.
 
 ### [5.0] Talk to it: Claude Code in Joshua Tree
-- [x] [5.0] Claude app, phase 1, 2.14.0: type a question in the Claude app and Claude Code answers. It runs on the Mac behind a small token-gated relay with read-only tools; Joshua Tree is the front end and never holds the token. How to run it and the security model: `docs/CLAUDE-APP.md`. Checks: `tools/checks/claude-relay-check.py`, `tools/checks/ring3claude-check.py`.
 - [ ] [5.0] [Fable] Claude phase 2: tools on Joshua Tree itself, so Claude can read and change the OS's own files. Needs real TLS on the box or a trusted relay protocol that calls back into the machine.
 - [ ] [5.0] Claude on the Pi: waits on the ARM64 network stack (after M4).
 
@@ -46,14 +63,11 @@ Main is 2.6.24 and live. CI takes about 10 minutes. The 3.0.0 gate is one thing:
 - [ ] [Sonnet] Phone shows two input bars: the OS draws its own chat bar and the page draws a real composer for the phone keyboard. Keep one visible. The OS bar can hide while the composer is up, or the composer can be the only bar and feed the OS. Check: `tools/checks/phone-boot-check.py` plus a screenshot of the phone tour.
 - [ ] [Sonnet] The tour is silent after the intro video. Joshua speaks each stop in his cloned voice (`/api/speak` with `voice: "joshua"`, see the personas doc in the Turing repo), with the caption on screen and the speaker button respected. Check: extend `tools/checks/portfolio-mute-check.mjs` so muted means no audio request.
 - [ ] [Sonnet] Real-Chrome QA of the whole tour after any tour change, desktop and phone. Headless Chromium has no H.264, so it skips the intro video: run the checks with the system Chrome (`CHROMIUM_PATH`). The last full desktop pass was clean (intro, then Epiphany, Curbfind, Bookrank, Lexly, Hikko). The phone tour was last checked before the 2.6.13 fixes.
-- [x] [Haiku] App tiles on the landing go stale. Done 2.6.28: tiles for Bookrank, Lexly, Curbfind and Epiphany, and `tools/checks/landing-shots-fresh-check.py` fails when an app changed and its tile was not retaken. Earlier: `tools/landing-shots.py` pins the QEMU clock to 2026-10-03 and the Calendar tile is retaken; the other tiles only redraw when their app changes. Original note: `python3 tools/landing-shots.py calendar` draws today's date, so the Calendar tile ages by the day. Pin the QEMU clock (`-rtc base=...`) in `tools/landing-shots.py` so every tile is the same on every run, then retake all of them.
 - [ ] [Sonnet] All icons share one design system. Rule decided 2.12.2 in `docs/DESIGN.md`: a fleet icon keeps its own tile colour and picture (Tonchi stays #2E86DE) but shares the squircle, edge, lip and glyph margin; its tile stays flat. Still open: Windgate's faint ring runs past the margin (the check exempts fleet icons), Tonchi's picture is a speech bubble, the `APPS` fallback colours for Quotes, Fieldbook and Tonchi are purple or green, and app windows keep their own accents (Epiphany and Windgate are blue). Next: make `iconinset-check.py` measure fleet margins, then fix what it finds. Details in PR 425.
-- [x] [Haiku] Done 2026-10-04: Lexly's `icon.svg` is now the sky blue one and the `GLYPH` recolor is gone. Original note: Lexly's own repo disagrees with itself: `icon.svg` is a black tile with blue dots, `assets/icon.svg` and the store icon are sky blue. Make `icon.svg` the blue one so the import needs no recolor, then drop the `GLYPH` workaround.
 - [ ] [Joshua] Judge the live landing against the Plank landing, the bar for the whole site. List what still falls short, in his words.
 
 ### From the notebook (Joshua, 2026-10-04)
 Two notebook pages checked against the tree. Already shipped and not listed: menu bar with weather, dock, Activity, Trash, clipboard, Burrow (the Finder), Epiphany tabs, Launchpad-style Apps folder, Music, Movies, landing page, docs at 100 percent, CI, Samantha chat with tools. Wi-Fi was ruled out for 1.0 and is under Our own computer.
-- [x] [Sonnet] Rename the Strata enclosure to Neo, done 2026-10-04: the hardware docs, CAD scripts and their output names, the landing and the ad text all say Neo now, and `docs/HARDWARE.md` notes the old name. Still [Joshua]: what mobility means for a Pi box (battery, portable monitor, carry case), since the notebook pitches Neo on mobility and security.
 - [ ] [Joshua] Competitor research as a doc: Apple Mac mini against our box on RAM (8 to 16 GB), integrated CPU, multi-display over HDMI, internal or external design, USB-C ports. A good-computer checklist for `docs/HARDWARE.md`.
 - [ ] [Fable] Time Machine: snapshots of the disk with a browse-the-past view. Nothing exists; needs a FAT snapshot design first.
 - [ ] [Sonnet] Fullscreen avatar, custom: Samantha (or Joshua's face) full screen as a mode, with the face picked in Settings. The page also lists video, audio and GUI mode as three ways to talk to her.
@@ -65,24 +79,12 @@ Two notebook pages checked against the tree. Already shipped and not listed: men
 - [ ] [Sonnet] GarageBand-lite: record and layer a few tracks from the Sound Blaster, then play them back. Movie trim (iMovie) is already listed.
 - [ ] [Sonnet] Sharp image everywhere, no visible pixels: audit the icons and small type at retina scale, same bar as the JT retina polish rule.
 - [ ] [Fable] The big promise, in his words: say "computer, run the simulation", "build me a game", "publish and monetize my apps", "add X feature", "patch Y bug", and the OS does it. Samantha plus a coding agent plus the publish flow. Scope it as a doc before any code.
-- [x] [Joshua] Constraints and design system as written rules, done 2.12.2: `docs/DESIGN.md` is the one page (what the OS never does, icons and the fleet rule, type, colour and the day and night blend, windows and dock, motion), and `tools/checks/design-doc-check.py` fails when a number in it stops matching the source or an icon picks up text, purple, teal or a hue-changing gradient. The icon half is the item under Landing, still open.
 
 ### Fleet apps on their real backends (Joshua, 2026-10-04)
 Curbfind, Epiphany and Stocks already pull live data through `SYS_HTTP_GET`. The other fleet apps still show samples. The real apps are native Swift and cannot run here, so the OS versions stay C rewrites that talk to the same backends. One PR each, with the offline samples kept as the fallback when the network is down.
-- [x] [Sonnet] Bookrank, done 2.6.26: the ranked shelf (top twelve, rating, review count, badge, one-line summary) comes from the live Bookrank API through the Worker's `/api/books` and `SYS_HTTP_GET`; the ten samples stay as the offline fallback. Per-account chapter summaries are private in the real app, so they are not here. Check: `tools/checks/ring3bookrank-live-check.py`.
-- [x] [Sonnet] Lexly, done 2.6.27: a course picker with 72 live courses and a four-choice drill with a score, from the real Lexly course packs through the Worker's `/api/lexly` and `SYS_HTTP_GET`; the Spanish deck stays as the offline fallback. Courses in scripts the font cannot draw (Japanese, Chinese, Korean, Russian, Arabic and more) and the short math courses are left out. Check: `tools/checks/ring3tonchi-live-check.py`.
-- [x] [Sonnet] Hikko, done 2.6.29: Sparkjar is renamed Hikko inside the OS (files, window, dock, Apps folder, checks; Samantha still opens it as "sparkjar" or "hotaru"). It shows the real forum's top twelve ideas (title, votes, text, plan) from the public post feed through the Worker's `/api/hikko` and `SYS_HTTP_GET`; the ten demo ideas stay as the offline fallback. Voting stays local: the real forum needs an account to vote. Check: `tools/checks/ring3hikko-live-check.py`.
-- [x] [Sonnet] Names, done 2.6.30: Lexly is Tonchi inside the OS (files, window, dock, Apps folder, checks, landing, Worker comments), the Portfolio catalog says Brick, Notate and Hagaki and adds Madobe and Plank. Samantha still opens Tonchi as "lexly". Tonchi keeps `lexly.heyitsmejosh.com` until `tonchi.` exists. Check: `tools/checks/burrow-rename-check.py` fails if an old name returns to the catalog or an alias stops working.
-- [x] [Sonnet] Stocks showed a price for AAPL and "--" for the other four rows, done 2.6.31. The app read its data file with one `jt_read`, which moves 255 bytes a call, so it saw only the first row. It now reads the whole file, and the status line says Retrying or Offline instead of stale text. Check: `tools/checks/ring3stocks-list-check.py` (fails on the old app, passes now).
-- [x] [Sonnet] Burrow labels, done 2.6.32: a long file name wraps onto a second line in icon view instead of being cut. Check: `tools/checks/burrow-labels-check.py` fails if the label goes back to one cut line.
-- [x] [Sonnet] Read audit, done 2.6.32: one read moves 255 bytes, so Mail (inbox past 255 bytes) and Weather (readings past 255 bytes) lost data. Both now use `jt_readfile`. Notes, Note, wc, Search, Calendar, Contacts and Reminders already loop. Check: `tools/checks/read-long-files-check.py` fails on the old Mail and Weather.
-- [x] [Sonnet] Menu bar missing or dark, done 2.6.34: Joshua saw the demo lose its menu bar sometimes. Cause: the full-screen Launchpad clears the whole screen, and the bar only repaints when the minute changes, so it stayed gone after Esc. Now every full desktop repaint redraws the bar and the Launchpad draws it too. Check: `tools/checks/menubar-persist-check.py` (fails on 2.6.32, passes now).
-- [x] [Sonnet] Launchpad, done 2.6.35: Joshua saw it on a real monitor, left of center with big icons packed edge to edge. The folder window was parked at a fixed spot, so it was only centered on a 960 pixel screen. Now the glass panel is centered across the screen and between the menu bar and the dock, icons are 56 pixels (were 74), padding is even, and a short screen shows two rows. Check: `tools/checks/launchpad-centered-check.py` (fails on the old layout, passes now).
 
 #### Every fleet app in the Launchpad (Joshua, 2026-10-04)
 The goal: every app in the Portfolio catalog that fits this OS opens from the Launchpad with live data. One app, one PR, same pattern as Bookrank: a read-only Worker route, `SYS_HTTP_GET`, samples offline, a stub check. Let `ci-balance.py` place the new check, never pick a shard by hand. In the Launchpad today: Bookrank, Curbfind, Epiphany, Fieldbook, Hikko, Keyrate, Quotestreak, Stocks, Tonchi, Conway (Toroid), Weather.
-- [x] [Fable] Room for apps, done 2.7.1: apps are stored compressed in the kernel image and unpacked (and checksummed) when launched. 857 KB of embedded programs became 444 KB; `tools/checks/bss-margin-check.py` went from 35 KB to 438 KB free, enough for about ten more apps this size. A damaged image is refused ("ring3app: bad image") and the desktop keeps running. Next biggest things in the image if room runs short again: `wallpaper_rgb` 1.5 MB, `editor_pixels` 500 KB, `wall_sat_png` 277 KB.
-- [x] [Sonnet] Hamurapi, done 2.7.0: the 1968 game with a drawn city, story cards, Classic, the orders panel, reports, endings and a robot demo. Its rules in C match the other three ports exactly; `tools/checks/ring3hamurabi-check.py` replays every reign on the host. Left for later: music and sound (the app has none yet), a difficulty setting, and a permanent check for the greyed-out choice.
 - [ ] [Sonnet] Brick: live rental listings.
 - [ ] [Sonnet] Hagaki: inbox triage (smart folders over the Mail app's messages).
 - [ ] [Sonnet] Nimble: instant answers from its real API.
@@ -102,7 +104,6 @@ The goal: every app in the Portfolio catalog that fits this OS opens from the La
 
 ### Voice chat, lag and sharing (Joshua, 2026-10-04)
 Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice out, so "voice chat" still needs speech-to-text. Each message in the OS is three round trips in a row: `/api/pick` (which tool), `/api/chat` (the full reply, no streaming), then `/api/speak` per sentence piece. Order: measure, cut round trips, stream, then listen.
-- [x] [Sonnet] OS side, 2.6.22: one `voicetime:` serial line per message (pick, chat, first sound, in ms from Enter), asserted by `tools/checks/chat-face-check.py`.
 - [ ] [Sonnet] Read `voicetime` off the live demo for ten messages and post the numbers here. The web portfolio gets the same line (`console.info`) next.
 - [ ] [Sonnet] Skip `/api/pick` when the message plainly is not a tool request, or have `/api/chat` pick the tool in the same call. One round trip less on every message.
 - [ ] [Fable] Speech-to-text: mic in, words out. Web first (browser mic plus a hosted STT), then the OS once it has audio input (an SB16 capture path or the Pi's USB mic).
@@ -113,22 +114,18 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 - [ ] [Joshua] ElevenLabs Agents could run the whole loop with any LLM endpoint as the brain (about $0.08 to $0.10 a minute). Decide: their loop, or ours.
 
 ### CI and speed
-- [x] [Sonnet] Clock icon check flake fixed, 2026-10-04: on a slow runner the face sits still, white and handless for seconds, and the check took that as settled. Reproduced locally under CPU load with the exact CI numbers; it now waits for the hands to have ink (`tools/checks/clockicon-check.py`).
+
+- [ ] [Sonnet] `tools/checks/samantha-fullscreen-check.py` flakes on a loaded GitHub runner (2026-10-06, PR 432, a docs-only change): "the caption does not fade: it went from full to nothing in 1 in-between polls" and "after Esc the menu bar is not back". The check samples the fade by wall-clock polls, so a slow runner sees one frame. Measure the fade against the kernel's own tick count (or slow the poll budget to the frame rate) instead of retrying it.
+
+- [ ] [Sonnet] Parallel-safe checks (found 2026-10-06 night): several checks write fixed paths such as `/tmp/jt-feature-drive.raw`, so two `ci-local.sh` runs at once corrupt each other's QEMU dumps and fail feature-drive, menuclock, ring3crash-all, qa-gallery and soak at random. Give every check its own `tempfile.mkdtemp()` directory and its own QMP socket, then prove it with two suites side by side. Until then, run one `ci-local.sh` at a time.
 - [ ] [Sonnet] Six of the last ten red runs were slow-runner timing flakes (Chat tool scenes, the phone mute button, Keyrate, the Apps folder layout): eight QEMUs share one runner. Find out how many cores the runner has, cap QEMUs per runner or move to 10 shards (the balancer says about 319 s of checks per shard, 12 shards about 266 s), and watch the next ten runs.
-- [x] [Sonnet] Two suites at once corrupted each other, found 2026-10-06 (feature-drive, menuclock, ring3crash-all, qa-gallery and soak failed at random on truncated dumps). `tools/ci-local.sh` now takes a one-at-a-time lock, those checks use private temp dirs, `tools/checks/tmp-paths-check.py` stops new fixed paths, and the Samantha caption-fade check steps her clock instead of polling the host's (`tools/checks/samantha-fullscreen-check.py`). The 122 older checks still on fixed paths are listed in `tools/checks/tmp-paths-baseline.txt`; the lock covers them until each is converted.
 - [ ] [Haiku] Re-balance after adding checks. New manifest lines default to 30 s until timed: run `python3 tools/gen/ci-balance.py <run-id>` on a green run (`--check` shows the numbers first) and commit the result.
 - [ ] [Haiku] About a third of recent runs were cancelled by force-pushes to an open PR. Push once per PR, or fold PRs together before CI starts.
-- [x] [Haiku] Found 2026-10-04: the repo's `core.hooksPath` was an absolute path into the main checkout, so every worktree ran whatever hook that checkout's branch had. Now the relative `tools/hooks` (what `make hooks` sets), so each worktree runs its own. Original note: Three red runs today were things the pre-push hook already covers (unlisted check, kernel.c over its line ceiling). The hook did not run on those pushes. Find out why (hook not installed in the worktree, or `--no-verify`) and make it hard to skip. It runs the god-file guard now.
 - [ ] [Sonnet] `tools/ci-local.sh` takes about 27 minutes (8 shards, 2 at a time). Run 4 at a time on the M4 and use the balanced manifest.
 
 ### Raspberry Pi and ARM64
-
 **Goal (Joshua, 2026-10-06 night, /goal): we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi.** The Pi runs the OS, the Claude app (phase 1, via a relay on the Mac) is the way in, and a session on the Pi edits and rebuilds a small Joshua Tree. The road there is the queue below: Wi-Fi (the relay needs the network), the desktop and dock, SD writes, `get`, then phase 2 of the Claude app (the model reading and writing the OS's own files through a tool loop), then a build toolchain on the box (the Plank compiler, 8.0). Say honestly what is not here yet in every release note.
-
 Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance"). Software first; items that need a part wait for the part.
-
-- [x] [Fable] Console scrollback, 2.19.0: Page Up, Page Down, Home and End scroll the Console over the whole boot log, the title bar says which lines are shown, and a pinned row keeps the latest `wifi` and `usb` line in every photo. `tools/checks/arm64-console-scroll-check.py`.
-
 - [ ] [Fable] Wi-Fi stage 1: the CYW43455 wakes up over SDIO, loads its firmware and lists the networks on screen. In progress, 2.16.0.
 - [ ] [Fable] Wi-Fi stage 2: join Shaw from `~/.config/joshuatree/wifi.conf` (never in the repo), DHCP, an address on screen. The IP stack ported from `drivers/net.c`.
 - [ ] [Fable] Admin and sudo (Joshua, 2026-10-06: "fix it soon"): a second privilege tier on the accounts that already exist (login screen, PBKDF2 passwords, Settings "Add user"). An admin flag per account, a password prompt before anything that installs, deletes a user or changes system settings, and a normal-user role that cannot. i386 build first; it touches `kernel/auth.h`, Settings and the syscall gate, not the ARM files, so it can run beside Wi-Fi. Per-user home folders and file permissions follow (6.0).
@@ -145,9 +142,7 @@ Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance
 - [ ] [Fable] Serial loader the day the cable arrives: new kernels over the wire, no card swaps.
 - [ ] [Fable] The self-update loop (Joshua, 2026-10-06: "make tweaks to the OS from inside the OS, push changes and hot swap"): ask Claude in the Claude app, the relay's Claude Code edits the repo on the Mac and opens a draft PR, CI goes green, the Pi pulls the new `kernel8.img` over Wi-Fi from a release, writes it to the card and reboots into it. Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror.
 - [ ] [Fable] A/B boot, so a bad self-update can never brick the Pi: keep the last good kernel on the card as `kernel8.old`, boot the new one once, and fall back to the old one if the new build never reaches the desktop (the Pi bootloader's `tryboot` is the likely mechanism; check it on the board).
-
 Also missing, added 2026-10-06 night, in order:
-
 - [ ] [Sonnet] Clean shutdown and reboot from the keyboard (the mailbox power-off and the watchdog reset), instead of pulling the plug.
 - [ ] [Fable] The other three cores: wake them from the spin table, give each a stack, run the desktop on one and the drivers on another.
 - [ ] [Sonnet] A clock that is right: the Pi has no battery clock, so take the time from the network once Wi-Fi joins (SNTP), and show it in the menu bar.
@@ -157,17 +152,13 @@ Also missing, added 2026-10-06 night, in order:
 - [ ] [Sonnet] A Wi-Fi settings screen on the Pi: name and password typed on the keyboard and saved on the card, so nothing is baked into the build.
 - [ ] [Sonnet] A crash screen: when the kernel faults, draw the fault address, the last console lines and the register dump on screen instead of freezing.
 - [ ] [Fable] The Pi 5 (M5): the RP1 chip over PCIe for every peripheral.
-
 Gaps against Linux distributions (Kali, Ubuntu, Arch), 2026-10-06 night. Most are already on the version road (4.0 processes and a real shell, 6.0 users and backups, 7.0 TLS and a browser, 8.0 a compiler and `get`); these are the ones it did not name:
-
 - [ ] [Fable] An SSH server: log in to the Pi from the Mac over Wi-Fi, with its own crypto (ed25519, ChaCha20-Poly1305). It makes the serial cable optional for everything but early boot.
 - [ ] [Fable] ext4 read-only, so a Linux-formatted USB stick or card can be opened. FAT stays the default.
 - [ ] [Sonnet] A packet capture and ping/traceroute/port-scan toolbox (raw sockets), the part of Kali that is a few tools, not the whole distro.
 - [ ] [Fable] Wi-Fi monitor mode, only if the CYW43455 firmware allows it. Kali's wireless tools depend on it. Low priority, owner's own network only.
 - [ ] [Sonnet] A sandbox for untrusted apps, the small version of containers: a ring-3 app with no network and a private folder, per `get` recipe.
-
 The rest of the Linux gaps, tagged with the version that owns them (Joshua, 2026-10-06 night: "add those gaps to the roadmap too"). These are the road items in `## The long road`, written out as work you can pick up:
-
 - [ ] [Fable] [4.0] Processes the Unix way: fork and exec, pipes, signals, a process table, exit codes. The base for everything below.
 - [ ] [Fable] [4.0] A real shell and Terminal: a command line with pipes, redirects, job control, a PATH and scripts, so `ls | grep` works. Tabs and splits come after.
 - [ ] [Fable] [6.0] Users and permissions: accounts, file owners and modes, a login screen, an admin role that can install. Joshua's "admin privileges" idea starts here.
@@ -179,9 +170,7 @@ The rest of the Linux gaps, tagged with the version that owns them (Joshua, 2026
 - [ ] [Sonnet] Driver breadth, by what Joshua owns: USB mass storage, USB audio, USB Ethernet, a USB serial adapter, a Bluetooth adapter. Each is a class driver on the xHCI code that already works.
 - [ ] [Fable] Power management: suspend and resume, CPU frequency scaling, the board's low-power states. Linux does this for free; a hobby OS never does until someone sits down.
 - [ ] [Sonnet] A security-update story: a signed release feed, a version check, and a changelog on screen, so "is my Pi current" has an answer.
-
 From the field, 2026-10-06 night (what Onyx and Circle, the two best bare-metal Pi 4 projects, have and we do not), in order:
-
 - [ ] [Fable] VNC server: the Pi's screen on the Mac over Wi-Fi, so debugging stops needing photos and demos need no monitor. After Wi-Fi stage 2.
 - [ ] [Fable] A USB stick as the first disk: mass storage over the xHCI driver we have, likely faster to "files survive a reboot" than EMMC2.
 - [ ] [Fable] Doom: the classic proof a platform is real, and Joshua's chosen benchmark (2026-10-06: "if we can get doom working that's sort of a benchmark"). Full speed with sound on the Pi is the flag right after 3.0. Keyboard first, gamepad next.
@@ -192,21 +181,15 @@ From the field, 2026-10-06 night (what Onyx and Circle, the two best bare-metal 
 - [ ] [Fable] A web browser on the Pi: Madobe on this OS, already the 7.0 gate; NetSurf is the reference port.
 - [ ] [Sonnet] I2C and SPI drivers for breadboard sensors and small screens.
 - [ ] [Sonnet] Console emulators (NES first), later.
-
 Sources: Onyx on Circle (Adafruit blog, 2026-09-29), Circle's feature list (github.com/rsta2/circle), rpi4-osdev, AROS on the Pi (Hackaday, 2026-08-23).
-
 Round 2, 2026-10-06 night (Raspberry Pi OS Trixie and RISC OS on the Pi 4). Small, all after Wi-Fi:
-
 - [ ] [Fable] Both HDMI ports: the Pi 4 drives two monitors; a second framebuffer through the mailbox display id, the desktop spanning or mirroring.
 - [ ] [Sonnet] A Screen settings page on the Pi: resolution, scale, which HDMI, saved on the card.
 - [ ] [Sonnet] Screen sleep: blank the picture after idle, wake on a key or the mouse, through the mailbox blank-screen tag.
 - [ ] [Sonnet] A notification strip: short messages from apps (Wi-Fi joined, file dropped, update ready) in the menu bar, the way the phone demo already toasts.
 - [ ] [Fable] Bluetooth audio: speakers and headphones over the same CYW43455 radio. After Bluetooth for the mouse.
-
 Note: RISC OS on the Pi 4 still lists USB 3 as unsupported (riscosopen.org port status); Joshua Tree got xHCI working on the board on 2026-10-06.
-
 Round 3, 2026-10-06 night (macOS Tahoe 26 and Windows 11 2026). Joshua Tree already has the glass look (v48); these are what the two big desktops added that we lack:
-
 - [ ] [Sonnet] Search that understands plain words, Spotlight style: one box that finds files, apps, contacts and actions ("open the clock", "new note") through Samantha. Starts with the Search app we already have.
 - [ ] [Fable] A screen reader (Narrator, VoiceOver): speaks the focused control and window title through the sound driver. The accessibility basics the 10.0 gate needs.
 - [ ] [Sonnet] A phone link: show a phone's live activities (a timer, a delivery, a call) in the menu bar. Needs Wi-Fi and a small relay; later.
@@ -216,35 +199,12 @@ Round 3, 2026-10-06 night (macOS Tahoe 26 and Windows 11 2026). Joshua Tree alre
 - [ ] [Sonnet] More wallpaper formats (WebP and AVIF through the decoder code we have, JPEG and PNG already work) and a slideshow.
 - [ ] [Sonnet] A Start-style launcher you can customise: pin, reorder and hide apps in the Launchpad.
 - [ ] [Sonnet] Camera controls in Settings, once the Pi camera driver exists.
-
 Sources: Tom's Guide and TechRadar on macOS Tahoe 26, Pureinfotech and Digital Citizen on Windows 11 2026.
-- [x] [Joshua] Bought the board, 2026-10-06: Pi 4B 4 GB, 32 GB microSD, heat sinks, case, fan. No serial cable yet; the screen shows the boot log so it can wait.
-- [x] [Sonnet] Card flashed without Raspberry Pi OS, 2026-10-06: `tools/flash-pi.sh` builds `kernel8.img`, fetches the five firmware files and writes the config file (`docs/RASPBERRY-PI.md`).
-- [x] [Joshua] First real boot over HDMI, 2026-10-06: the desktop came up on a Samsung monitor on the first clean power-on (`docs/RASPBERRY-PI.md` has the photo and log).
-- [x] [Sonnet] Full screen on the real Pi, 2.12.5: the kernel asks the firmware how big the monitor is and draws the desktop at that size, laid out to fit. A 4K monitor gets exactly half each way, so the 2x scale stays sharp. Check: `tools/checks/arm64-m1c-check.py` fakes a 1080p and a 4K monitor on QEMU's Pi model.
-- [x] [Sonnet] A quiet Steve Jobs line on the Pi desktop, 2.12.5: "Steve Jobs, 1955 to 2011. Thank you." sits just above the dock, added on the 15th anniversary. `tools/checks/arm64-m1c-check.py` looks for it.
 - [ ] [Fable] Serial loader: a small loader on the card receives each new kernel over the serial cable and boots it, so testing needs no card swaps. Waits on the cable (Joshua, this week).
-- [x] [Fable] USB on the real Pi, 2.13.0: xHCI with hub support, proven in QEMU, then the BCM2711 PCIe and VL805 setup on the board. 2026-10-06: a NuPhy keyboard enumerated behind the VL805 hub and keys arrived on screen on the first boot with a data cable (`docs/RASPBERRY-PI.md`). Mouse untested.
 - [ ] [Fable] Console text on the real Pi, fixed in 2.12.5, waiting on a photo: the boot lines showed as one thin mark each. Cause: the screen is cached memory and the GPU only sees what the kernel cleans out of the cache. The console wiped its full page after the one clean at startup, and nothing after that left the cache, so only two pixel columns of old text survived. Now every glyph and every wipe is cleaned, the console scrolls, and a diagnostic line ends the log. Tick it when a photo shows the text. Check: `tools/checks/arm64-m1c-check.py` fails if a draw or a wipe stops cleaning.
-- [x] [Fable] M1c part one, 2.6.21: ramfb framebuffer on QEMU virt through fw_cfg, a first desktop drawn into it, proven by a QEMU screendump (`tools/checks/arm64-m1c-check.py`).
-- [x] [Fable] M1c part two, 2.6.22: the Pi build asks the GPU for a framebuffer through the VideoCore mailbox and draws the same desktop, proven on QEMU's Pi 4B model by screendump (`tools/checks/arm64-m1c-check.py`). Real board still to try.
-- [x] [Sonnet] M1c boot log on screen, 2.6.22: every line the ARM kernel prints over serial is also drawn in the window, so a first boot with a bad serial cable still shows how far it got (`tools/checks/arm64-m1c-check.py` counts the text pixels).
-- [x] [Sonnet] M1d part one, 2.6.23: the ARM screen draws smooth DejaVu text (the i386 desktop's own rasterizer, `drivers/ttf.c`, built for aarch64 with the FPU on): a menu bar title, a titled window and an anti-aliased boot log. `tools/checks/arm64-m1c-check.py` counts the soft edge pixels.
 - [ ] [Fable] M1d part two: the real window and dock drawing code (`drivers/window.c`) running on the ARM build instead of rectangles, and the framebuffer mapped write-combining so a live desktop needs no cache cleans.
-- [x] [Fable] M2 keyboard and mouse, 2.6.22: one modern virtio-mmio input driver reads key down and up, pointer position and clicks, polled (`tools/checks/arm64-m2-check.py`).
-- [x] [Fable] M2 disk, 2.6.22: a virtio-blk driver reads a known sector off a disk image (`tools/checks/arm64-m2-check.py`). Writes and a FAT reader on top are next.
-- [x] [Fable] M2 network, 2.6.22: a virtio-net driver sends an ARP request to the router and prints its real answer (`tools/checks/arm64-m2-check.py`).
-- [x] [Fable] M3a, 2.6.24: the first EL0 program (`arch/arm64/user.S`) runs unprivileged, prints and exits through `svc` (write and exit), and a deliberate load from a kernel-only page faults while the kernel prints it and survives (`tools/checks/arm64-m3-check.py`). Next: more than one program, per-program address spaces, then the apps.
-- [x] [Fable] M4 USB keyboard and mouse, 2.13.0: a polled xHCI driver (`arch/arm64/xhci.c`) behind a small PCIe enumerator (`arch/arm64/pci.c`). It walks a hub, addresses the keyboard behind it and turns boot-protocol reports into key codes and pointer moves, each key echoed on screen. Proven under QEMU with the controller behind a PCIe root port and the keyboard behind a hub, the Pi's own shape (`tools/checks/arm64-usb-check.py`).
-- [x] [Joshua] M4 USB on the real Pi 4, 2026-10-06: booted the 2.13.0 card with a NuPhy keyboard on a data cable; PCIe, the VL805 firmware load, xHCI, the hub and the keyboard all came up first try and keys printed on screen (`docs/RASPBERRY-PI.md`).
-- [x] [Joshua] M4 USB on the real Pi 4, second try (2.13.2): the first boot got through PCIe, the VL805 firmware and the hub but saw nothing behind it. This build prints one status line per hub port and rescans every second, so plug the keyboard in (wired mode, lit up) before or after boot and photograph the screen: `usb hp N st .. ch ..` says whether any port saw a connection. Superseded: the first boot with a real data cable already found the keyboard.
-- [x] [Fable] USB scan fix, 2.13.2: hub ports are polled for up to 1.5 s after power, then reset and enumerated, and every root and hub port is rescanned once a second (hot-plug and unplug). Any boot-protocol keyboard or mouse interface of a composite device is used, a stalled request no longer wedges endpoint 0, and the Pi build polls without sleeping. `tools/checks/arm64-usb-check.py` plugs keyboards in after boot and fails without the rescan.
-- [x] [Fable] Crash screen, 2.17.0: an unexpected exception at EL1 now prints the class, ESR, FAR, ELR and the last console lines on the UART, draws them as a red panel on the screen (integer 8x16 font, cleaned out of the cache for the GPU) and halts in a `wfe` loop, instead of one line and a silent hang. `tools/checks/arm64-crash-check.py` crashes a test build on purpose and reads the UART and a screendump, on virt and the Pi 4B model.
-- [x] [Fable] FP state across interrupts, 2.17.0: `vectors.S` saves and restores q0-q31, FPCR and FPSR on every IRQ. `tools/checks/arm64-fp-check.py` holds known values across timer interrupts whose handler wipes them, and shows the same test failing on a build without the save.
-- [x] [Sonnet] Out of memory on ARM, 2.17.0: the ARM framebuffer allocation had no null check; it does now, and a full heap prints `oom fb`, `oom text`, `oom vq`, `oom net` or `oom input` and fails only that step (the 8x16 font stands in for a font that did not load). `tools/checks/arm64-oom-check.py` shrinks the heap on purpose. Still open: `arch/arm64/xhci.c` has one unchecked `kmalloc`, left for the USB PRs that own that file.
-- [x] [Sonnet] Boot health, 2.17.0: `tools/checks/arm64-boot-health-check.py` boots the Pi image on QEMU and fails on any `FAIL` line not in its short expected list, any `oom`, a crash report, or a missing desktop, so a new failing step cannot slip in unseen.
 - [ ] [Fable] M2: IP, DHCP and a TCP connection on top of the ARM network card (port the i386 stack above the NIC), and the net and disk drivers moved to interrupts too (input already is). Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
-- [x] [Fable] ARM IP stack, 2.20.0: the i386 kernel's own `drivers/net.c` and `drivers/http.c` now build for ARM on a four-call card interface (`drivers/nic.h`), so Wi-Fi only has to fill it in. On QEMU's virtio-net it leases 10.0.2.15 by DHCP and POSTs to the host. Check: `tools/checks/arm64-net-check.py`.
+- [ ] [Joshua] M4 USB on the real Pi 4: boot the 2.13.0 SD card with a keyboard in, photograph the screen. The Pi's PCIe bring-up and the VL805 firmware load are written from Circle and Linux but have never run on a board; every step prints a short `usb ...` line, so the photo shows how far it got.
 - [ ] [Fable] ARM IP stack, stage 2: TCP that survives a lost segment (retransmit, reorder, a real window) before the Claude app runs on ARM over Wi-Fi; net and disk drivers on interrupts too (input already is).
 - [ ] [Fable] Still ahead on ARM: M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
 - [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO). Stage 1 (list networks) is built, waiting on a photo from the real board; stage 2 (join, IP) is next. Ethernet first for everything else.
@@ -261,34 +221,59 @@ Why: the Neo kit's x86 board and almost every PC made after about 2015 is 64-bit
 - [ ] [Sonnet] A single `make` per target and one CI line each, so a change to shared code is checked on all three.
 - [ ] [Fable] RISC-V (later): the open chip family. Same shape as the ARM port; a cheap board and QEMU's `virt` machine make it the cheapest fourth port to try.
 
+### From the YouTube playlists (checked 2026-10-06)
+
+Both reference series are mapped in `docs/PLAYLIST.md`. What is still open from them:
+
+- [ ] [Sonnet] MBR partition tables and FAT32: `drivers/fat.c` is FAT16 on one volume from sector 0, but a Pi SD card is an MBR partition table with a FAT32 boot partition. Needed before the SD driver can read the card it boots from.
+- [ ] [Sonnet] ICMP: answer and send pings, so `ping` works on both builds.
+- [ ] [Sonnet] An ELF loader beside the flat binaries, so apps built by normal toolchains can run.
+- [ ] [Fable] POSIX compatibility for the common calls (open, read, write, fork, exec), part of 4.0.
+
+### From SerenityOS and Haiku (research round 4, 2026-10-06 night)
+
+The two from-scratch desktops closest to Joshua Tree. What they have that we do not, smallest first:
+
+- [ ] [Sonnet] Drag and drop everywhere: a file from Files onto an app, an image into Notes, text between windows. Haiku's signature feel.
+- [ ] [Sonnet] One decoder library for every format (Haiku's "translators"): each image, sound and video format decoded in one place, so every app that opens a picture opens all of them.
+- [ ] [Sonnet] A crash reporter app: when a ring-3 app dies, a window says which one, why and where, with a "send log" button (SerenityOS CrashServer). The kernel already survives the crash.
+- [ ] [Sonnet] A hex editor and a system profiler (which app is using the CPU, sampled), for debugging the OS from inside the OS.
+- [ ] [Fable] File tags and live queries (Haiku BFS): attributes on any file (artist, author, status) and saved searches that update themselves. Builds on the Search app.
+- [ ] [Fable] Hardening (SerenityOS): no memory both writable and executable (W^X), randomised kernel and app addresses (ASLR), and per-app promises of what it may touch (pledge and unveil). The sandbox item grows into this.
+- [ ] [Fable] A graphical debugger: step a ring-3 app, see its registers and memory. Needed once apps are built on the box (8.0).
+- [ ] [Sonnet] Fast boot and shutdown as a number on the landing page: power to desktop on the Pi, timed from the photo, beaten each release.
+- [ ] [Sonnet] More protocols for the small web: Gemini (tiny pages) and IMAP for the Mail app, after TLS.
+
+Sources: SerenityOS README and Wikipedia; Haiku project pages and Phoronix.
+
+Round 5, 2026-10-06 night (Android and ChromeOS, the phone and the laptop that update themselves). Items not already above:
+
+- [ ] [Fable] Verified boot: the Pi checks the kernel's signature before running it, so a tampered card refuses to boot. Pairs with the fallback kernel.
+- [ ] [Sonnet] Reset to factory (ChromeOS powerwash): one Settings button that wipes users and files back to a clean first boot.
+- [ ] [Sonnet] Guest mode: a session with no account that leaves nothing behind.
+- [ ] [Sonnet] Ask-first permissions (Android): the first time an app wants the camera, the mic, the network or your files, a prompt asks you, and Settings can take it back.
+- [ ] [Sonnet] Quick settings: one panel from the menu bar for Wi-Fi, sound, brightness, Bluetooth and do-not-disturb.
+- [ ] [Sonnet] Split screen and picture-in-picture: two apps side by side, a movie floating over the desktop.
+- [ ] [Sonnet] Clipboard history and an emoji picker, both from one key.
+- [ ] [Sonnet] Screen recording to a file, from the screenshot key's menu.
+
+The research loop ends here (Joshua's /loop, 2026-10-06): five rounds now cover Circle and Onyx on the Pi, Raspberry Pi OS and RISC OS, macOS and Windows, SerenityOS and Haiku, Android and ChromeOS. New rounds were starting to repeat what is already listed.
+
+### Nimbus, the hardware (Joshua, 2026-10-06 night)
+
+The hardware is called Neo in the files (`docs/hardware/neo_cad.py`, the blueprint, the build guide); Strata was the earlier name. Joshua prefers Nimbus and wants the design refreshed in Blender with the original Macintosh as inspiration: a compact, square box.
+
+- [ ] [Sonnet] Name check for Nimbus before it goes on a box: domain, trademark search in Canada and the US, and the App Store and GitHub namespaces (the asc-name-creator skill has the bulk domain check). Nimbus is a common word, so confirm it is free for computer hardware.
+- [ ] [Fable] Redesign: a compact, near-square all-in-one in the spirit of the first Macintosh, but an original design with no Apple marks. The Pi 4 (and a larger variant for the mini-ITX board) sits behind a front face that holds a 7 inch screen, a handle recess on top, a vent slot grille, one slot-shaped detail on the front, ports out the back. Built in build123d, exported to STL and STEP, rendered in Blender from the real CAD like the Neo hero image.
+- [ ] [Sonnet] Rename Neo to Nimbus across the repo once the name check passes: file names, the blueprint and build sheets, `docs/HARDWARE.md`, `MONEY.md`, the landing page. One PR, with `check-refs` green; mention the old names in a single "formerly Neo, Strata" line.
+- [ ] [Sonnet] A Nimbus build guide, blueprint sheet and assembly steps regenerated from the new CAD.
+
 ### Known limits to recheck
 - [ ] [Sonnet] `SYS_READFILE` reads with interrupts off, so loading mid-song can glitch the audio.
 - [ ] [Sonnet] Music and Movies live in the Apps folder only, not on the dock.
 - [ ] [Sonnet] Silent movie clips play about twice too fast on this QEMU build.
-- [x] [Haiku] PR 387 (the portfolio demo starts at once and tours the launchpad) landed in 2.6.15, and no branch for it is left.
 
 ## Toward 2.0: apps leave the kernel
-- [x] [Fable] Step one, 1.7.7: Keyrate is the first app running as a real ring-3 process (`user/keyrate.c`, launched by `kernel/ring3app.c`) with its own window through two new syscalls (`SYS_WINDOW_OPEN`, `SYS_WINDOW_POLL`) and real crash isolation: a null write inside it is reaped by the kernel, the window is torn down, the desktop comes back. Proven by `tools/checks/ring3app-check.py`. Not 2.0 yet.
-- [x] [Fable] Step two, 1.7.11: Toroid runs at ring 3 (`user/toroid.c`, bit-packed grids in its own .data), `kernel/ring3app.c` is one table-driven launcher (`RING3_APPS`), and the in-kernel copies of both Keyrate and Toroid are deleted. `tools/checks/ring3toroid-check.py` proves it draws, closes both ways, crashes safely.
-- [x] [Opus] Step three, 1.7.12: Calculator runs at ring 3 (`user/calculator.c`, the same recursive-descent grammar evaluated straight into a double instead of an expr_node tree, since a flat binary has no .bss and no kmalloc), still one row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3calc-check.py` proves it evaluates through the real parser (`12*3 = 36`, `5/0 = 0`), draws, closes both ways, crashes safely.
-- [x] [Opus] Step four, 1.7.14: Quotes runs at ring 3 (`user/quotes.c`, the same fixed deck and answer-rotation, streak and best kept in its own `.data`), still one row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3quotes-check.py` proves it draws the option grid, answers right and wrong through the real logic, closes both ways, crashes safely.
-- [x] [Opus] Step six, 1.9.1: Lexly runs at ring 3 (`user/tonchi.c`, the same 30-word deck and drill), one more row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3tonchi-check.py` proves it opens, draws, scores keys, crashes safely and leaves the desktop alive.
-- [x] [Opus] Step seven, 1.9.2: Plan runs at ring 3 (user/plan.c, removed in 2.0.0 with the app, the same five milestones and two-pane layout), one more row in `RING3_APPS`, and its in-kernel copy is deleted. tools/checks/ring3plan-check.py (removed with it) proved it opens, draws, selects by key and click, crashes safely and leaves the desktop alive.
-- [x] [Opus] Step eight, 1.9.3: Fieldbook runs at ring 3 (`user/fieldbook.c`, the same twelve fields and two-pane layout), one more row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3fieldbook-check.py` proves it opens, draws, selects by key and click, crashes safely and leaves the desktop alive.
-- [x] [Opus] Step nine, 1.9.4: Clock runs at ring 3 (`user/clock.c`, the same time, timer and alarm, reading `SYS_TIME`), one more row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3clock-check.py` proves it opens, draws the moving time, takes a timer, closes on Esc and leaves the desktop alive.
-- [x] [Opus] Step ten, 1.9.5: Portfolio runs at ring 3 (`user/portfolio.c`, the same About block and fleet catalog), one more row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3portfolio-check.py` proves it opens, draws, selects by key and click, closes on Esc and leaves the desktop alive.
-- [x] [Opus] Step eleven, 1.9.6: Activity runs at ring 3 (`user/activity.c`, the same task list, memory line and Kill button), one more row in `RING3_APPS`, one new syscall (`tasks`, 386) for the scheduler and memory numbers, and its in-kernel copy is deleted. `tools/checks/ring3activity-check.py` proves it opens, draws, refreshes on its own, selects, has the kernel refuse to kill the shell, closes on Esc and leaves the desktop alive.
-- [x] [Opus] Step twelve, 1.9.7: Contacts runs at ring 3 (`user/contacts.c`, the same list, add prompt, person view and delete, `CONTACTS.TXT` rewritten through the existing file calls), one more row in `RING3_APPS`, and its in-kernel copy is deleted. `tools/checks/ring3contacts-check.py` proves it opens, draws, adds and deletes through the real prompt, keeps the file across fresh runs, closes on Esc and leaves the desktop alive.
-- [x] [Opus] Step thirteen, 1.9.8: Sparkjar runs at ring 3 (user/sparkjar.c (now `user/hikko.c`), the same ranked idea list with upvote and re-sort, votes kept for the run only, no new syscall), one more row in `RING3_APPS`, and its in-kernel copy is deleted. tools/checks/ring3sparkjar-check.py (now `tools/checks/ring3hikko-check.py`) proves it opens, draws, moves the selection, re-sorts on the upvote that passes the leader, closes on Esc and leaves the desktop alive.
-- [x] [Opus] Step fourteen, 1.9.9: Reminders runs at ring 3 (`user/reminders.c`, the same checklist with add prompt, tick and delete, `REMINDERS.TXT` rewritten through the existing file calls), one more row in `RING3_APPS`, and its in-kernel copy is deleted; Samantha's reminder tools keep working by reading the file fresh on each call. `tools/checks/ring3reminders-check.py` proves it opens, draws, adds, ticks and deletes through the real keys, keeps the file across fresh runs, closes on Esc and leaves the desktop alive.
-- [x] [Fable] Step fifteen, 1.9.11: Curbfind runs at ring 3 (`user/curbfind.c`, the same ranked deal list, detail pane and Vancouver samples), one more row in `RING3_APPS`, one new syscall (`http_get`, 387) for the live rows with the host fixed kernel-side and the path checked before the network is touched, and its in-kernel copy is deleted. `tools/checks/ring3curbfind-check.py` proves it opens, draws, falls back to the samples with no NIC, selects by key and click, has every bad path and pointer refused, closes on Esc and leaves the desktop alive.
-- [x] [Opus] Step sixteen, 1.9.12: Calendar runs at ring 3 (`user/calendar.c`, the same Day, Week, Month and Year views and one event per day, today from `SYS_TIME` with the date math in the program, `EVENTS.TXT` rewritten through the existing file calls), one more row in `RING3_APPS`, and its in-kernel copy is deleted; Samantha's calendar tool keeps working by reading the file fresh on each call. `tools/checks/ring3calendar-check.py` proves it opens, draws the grid, saves an event through the real editor, keeps the file across a fresh run, answers Samantha, closes on Esc and leaves the desktop alive.
-- [x] [Fable] Step seventeen, 1.9.13: Search runs at ring 3 (`user/search.c`, the same query box, live filter, folder step-in and file view), one more row in `RING3_APPS`, one new syscall (`readdir`, 388) that lists a directory into fixed-size records by a path relative to the shell's directory, and its in-kernel copy is deleted. The app keeps its own cwd string, so stepping into a folder no longer moves the kernel's cwd; `open` takes the same relative paths. `tools/checks/ring3search-check.py` proves it opens, filters as you type, shows a file's real bytes, steps into a FAT folder and back out with the kernel's cwd untouched, has the kernel refuse a bad pointer, an over-long path and a missing folder, closes on Esc, crashes safely and leaves the desktop alive.
-- [x] [Sonnet] Phone visitors can type to the landing demo: phones get a chat bar and a Send button under the demo, and what is typed shows live in the kernel's own input line. Before, Samantha, Notes and Terminal took typed keys and a phone had no way to send any. `tools/checks/mobile-type-check.mjs` types on an iPhone profile and proves the letters reach Samantha's screen once each, a correction sends Backspace and Send sends Enter.
-- [x] [Sonnet] Landing QA fixes from the desktop pass: the demo no longer traps a keyboard user (Tab walks past it, Enter takes it over, Shift+Escape gives it back, and it shows a focus ring), the page has one `<main>` landmark, the version eyebrow is a paragraph not a heading, canonical and social meta are set, a stray sentence under the Strata render is gone, and on phones the Full screen button moved top right with an icon. `tools/checks/landing-demo-ui-check.mjs` proves each one and fails on the old page.
-- [x] [Sonnet] Landing QA fixes from the phone pass: Full screen and Send are icons, tapping the chat bar puts the demo in full screen and the screen shrinks to fit above the keyboard so she stays in view, a phone on its side gets a real demo instead of a 128x72 strip, an iPad gets the chat bar, and the waitlist fields are 44px. Covered by `tools/checks/landing-demo-ui-check.mjs` and `tools/checks/mobile-type-check.mjs`.
-- [x] [Sonnet] Landing reads in plain words, and the developer specs moved, not went away: benchmarks, the growth chart, the documented percent, architecture and build facts sit in collapsed Tech specs accordions near the bottom. The footer is now a four-column directory like apple.com. Covered by `tools/checks/landing-specs-footer-check.mjs`, and `tools/checks/landing-layout-check.mjs` opens every accordion before it measures.
-- [x] [Sonnet] Crash check: one check crashes every ring-3 app on purpose and proves the desktop survives each one. Contacts, Sparkjar, Reminders, Curbfind and Calendar gained the backquote crash key the other twelve already had. `tools/checks/ring3crash-all-check.py` reads `RING3_APPS`, so a new app is covered automatically, and checks that the task is reaped, the window is gone, the dock is drawn and Mail still opens (all 18 apps).
 - [ ] Window open takes about 640 ms for a ring-3 app (CI frametime check, 2.0.0): profile the seed, private page table and first draw; preseed binaries at boot and skip zeroing pages that get overwritten. [Sonnet]
 - [ ] [Sonnet] Port the remaining apps the same way, one PR each. Each PR: `user/<app>.c`, a row in `RING3_APPS`, the in-kernel copy deleted once the check passes.
 - [ ] [Fable] What the ports will need from the ABI: a font syscall (Keyrate carries its own 8x16 bitmap), a tick clock finer than `SYS_TIME`'s seconds, more than one program window at a time, and the framebuffer pages flipped back to supervisor-only on release (today they are zeroed and re-mapped on the next open).
@@ -324,7 +309,6 @@ Kernel.c is ~9,800 lines with 84 files pasted in; an Opus agent is building the 
 - [ ] [Haiku] `landing/icon.svg`, root `icon.svg`, and the app `.icns` redrawn as the simplified tree.
 - [ ] [Haiku] Audit that every fleet app has a native port or a line in this roadmap.
 - [ ] [Sonnet] File search, Spotlight-style. Needs an index-or-scan design, not a stub.
-- [x] [Sonnet] An Activity Monitor app over the shell's `ps`/`kill`/`mem`. Shipped in 1.9.6, at ring 3.
 - [ ] [Fable] A second privilege tier (sudo/admin) on top of the accounts that already exist.
 - [ ] [Fable] Text rendering: a dedicated pass on AA quality, separate from the font size/weight controls that already exist.
 - [ ] [Fable] Multi-core (SMP).
@@ -394,7 +378,6 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 ## Desktop and apps
 3 of 26 apps (Burrow, Weather, Mail) can open in their own window, capped at 2 at once; Reminders (1.9.9) and Calendar (1.9.12) left that set for ring 3.
 
-- [x] [Sonnet] Files is now Burrow, with a kit fox peeking out of its burrow for an icon. Samantha still opens it for "files" and "file browser". `tools/checks/burrow-rename-check.py` proves the name, the aliases and the new icon art.
 - [ ] [Sonnet] Calendar's Year view shows each day as a dot, not a number. A ring-3 window is 345px tall, which leaves about 10px per week row, and a digit needs 16. Either scale the digit font down for the mini months or let the year view use the full window height. `tools/checks/calviews-check.py` now proves the week bands of dots, so it should be tightened to digits when this lands.
 - [ ] [Fable] Per-window backing stores, not drawing straight into the shared framebuffer.
 - [ ] [Fable] A compositor with damage tracking, plus the back buffer this kernel still lacks.
@@ -495,7 +478,6 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 6. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after the Pi boots.
 
 ## Top of the queue after 2.0.0
-- [x] Restore the full-bleed Joshua face in ring-3 portfolio mode (2.5.1, user/samantha.c draws the 320 px frame full screen with a glass bar; the kernel gives the portfolio chat a frameless full-screen window).
 
 ## Landing roadmap summary
 `tools/gen/landing-roadmap.py` reads this file's Session task queue and takes up to three open, numbered, bold task titles for the landing page's "Where it's going" card, skipping completed entries and escaping for HTML. `tools/checks/landing-roadmap-check.py` and `tools/gen/landing-roadmap.py --check` are the regression checks. A roadmap change triggers the landing deploy workflow, which regenerates the card before upload.
