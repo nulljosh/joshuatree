@@ -33,11 +33,11 @@ static int wait_int(unsigned mask, unsigned ms) {   /* 1 when one of `mask` fire
     while (now() - t0 < n) { unsigned s = R32(SDH + INT); if (s & 0x8000) { R32(SDH + INT) = s; return 0; } if (s & mask) { R32(SDH + INT) = s & mask; return 1; } }
     return 0;
 }
-static int sd_cmd(unsigned idx, unsigned arg, unsigned rtype, unsigned *resp) {   /* rtype: 0 none, 2 R1/R4/R5/R6 (48 bit) */
+static int sd_cmd(unsigned idx, unsigned arg, unsigned rtype, unsigned *resp) {   /* rtype: 0 none, 2 R1/R5/R6 (48 bit, CRC and index checked), 3 R4 (48 bit, no CRC and no index: CMD5's reply carries 0x3f and 0x7f there, so checking them is a command error) */
     for (unsigned n = 0; R32(SDH + STATE) & 3; n++) if (n > 1000000) return 0;
     R32(SDH + INT) = 0xffffffff;
     R32(SDH + ARG) = arg;
-    R32(SDH + CMD) = idx << 24 | (rtype ? 0x1A0000 : 0);
+    R32(SDH + CMD) = idx << 24 | (rtype == 3 ? 0x020000 : rtype ? 0x1A0000 : 0);
     if (!wait_int(1, 100)) return 0;
     if (resp) *resp = R32(SDH + RESP);
     return 1;
@@ -237,8 +237,8 @@ int wifi_init(void) {
     wifi_power_on();
     if (!sd_init()) { kputs("wifi no host\n"); return 0; }
     if (!sd_cmd(0, 0, 0, 0)) { kputs("wifi no host\n"); return 0; }
-    if (!sd_cmd(5, 0, 2, &r)) { fail("cmd5"); return 0; }               /* IO_SEND_OP_COND: any SDIO card there? */
-    if (!sd_cmd(5, r & 0xffffff, 2, &r) || !(r & 0x80000000u)) { fail("cmd5 ocr"); return 0; }
+    if (!sd_cmd(5, 0, 3, &r)) { fail("cmd5"); return 0; }               /* IO_SEND_OP_COND: any SDIO card there? */
+    if (!sd_cmd(5, r & 0xffffff, 3, &r) || !(r & 0x80000000u)) { fail("cmd5 ocr"); return 0; }
     if (!sd_cmd(3, 0, 2, &r)) { fail("cmd3"); return 0; }               /* relative address */
     unsigned rca = r & 0xffff0000u;
     if (!sd_cmd(7, rca, 2, &r)) { fail("cmd7"); return 0; }             /* select */
