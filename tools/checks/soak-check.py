@@ -13,9 +13,11 @@ from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launch
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image, ImageChops
 from freeport import free_port
+from scratch import scratch_dir
 
-LOG = "/tmp/jt-soak-check-serial.log"
-DUMP = "/tmp/jt-soak-check.raw"
+TMP = scratch_dir("soak")  # private per run, see scratch.py
+LOG = os.path.join(TMP, "serial.log")
+DUMP = os.path.join(TMP, "fb.raw")
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2

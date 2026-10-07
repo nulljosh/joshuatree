@@ -55,14 +55,19 @@ set -e
 cd "$(dirname "$0")/../.."
 make -s kernel.elf
 
-cleanup() { pkill -9 -f "qemu-system-i386.*jt-menuclock" >/dev/null 2>&1 || true; }
-trap cleanup EXIT
+TMPD=$(mktemp -d "${TMPDIR:-/tmp}/jt-menuclock-XXXXXX")  # private per run; JT_KEEP_TMP=1 keeps it
+cleanup() { pkill -9 -f "qemu-system-i386.*-name jt-menuclock-$$\$" >/dev/null 2>&1 || true; }
+rmtmp() {
+  cleanup
+  [ "${JT_KEEP_TMP:-}" = 1 ] && echo "JT_KEEP_TMP=1: keeping $TMPD" || rm -rf "$TMPD"
+}
+trap rmtmp EXIT
 
 PORT=$(free_port)
-LOG=/tmp/jt-menuclock-check.log
+LOG=$TMPD/serial.log
 rm -f "$LOG"
 qemu-system-i386 -kernel kernel.elf -display none -vga std \
-    -qmp "tcp:127.0.0.1:$PORT,server,nowait" -serial "file:$LOG" -name jt-menuclock &
+    -qmp "tcp:127.0.0.1:$PORT,server,nowait" -serial "file:$LOG" -name jt-menuclock-$$ &
 
 python3 - "$PORT" "$LOG" <<'PYEOF'
 import json, socket, sys, time
@@ -135,12 +140,12 @@ if [ "$STATUS" -ne 0 ]; then exit "$STATUS"; fi
 # --- Part 2: positive proof a real minute rollover still redraws the
 # clock with the mouse untouched (RTC seeded 2s before a minute boundary,
 # same "no mouse movement at all" shape the negative check above used). ---
-PORT2=4484
-LOG2=/tmp/jt-menuclock-check2.log
+PORT2=$(free_port)
+LOG2=$TMPD/serial2.log
 rm -f "$LOG2"
 qemu-system-i386 -kernel kernel.elf -display none -vga std \
     -rtc "base=2024-01-01T00:00:50" \
-    -qmp "tcp:127.0.0.1:$PORT2,server,nowait" -serial "file:$LOG2" -name jt-menuclock &
+    -qmp "tcp:127.0.0.1:$PORT2,server,nowait" -serial "file:$LOG2" -name jt-menuclock-$$ &
 
 python3 - "$PORT2" "$LOG2" <<'PYEOF'
 import json, socket, sys, time

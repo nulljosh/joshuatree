@@ -9,7 +9,7 @@ navigate the grid by row/col (icon i: row = i // 5, col = i % 5, using arrow
 keys), press Enter to launch, dump the framebuffer with pmemsave, close via
 pointer or esc, repeat.
 
-Output format: <outdir>/NN-name.png per app (outdir default /tmp/jt-gallery,
+Output format: <outdir>/NN-name.png per app (outdir default a private temp dir, kept with JT_KEEP_TMP=1,
 overridable by argv[1]). Exit 1 if any app never opened or serial log
 contains panic/exception strings (grep appclose-check.py for the list).
 
@@ -19,9 +19,11 @@ from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launch
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image, ImageChops
 from freeport import free_port
+from scratch import scratch_dir
 
-LOG = "/tmp/jt-qa-gallery-serial.log"
-DUMP = "/tmp/jt-qa-gallery.raw"
+TMP = scratch_dir("qa-gallery")  # private per run, see scratch.py
+LOG = os.path.join(TMP, "serial.log")
+DUMP = os.path.join(TMP, "fb.raw")
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
@@ -54,7 +56,7 @@ CRASH_PATTERNS = [
     r"SIGSEGV",
 ]
 
-outdir = sys.argv[1] if len(sys.argv) > 1 else "/tmp/jt-gallery"
+outdir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(TMP, "shots")
 os.makedirs(outdir, exist_ok=True)
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
