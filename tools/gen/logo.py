@@ -31,7 +31,7 @@ MID = [(52.0, 60.0), (53.8, 47.0), (53.0, 34.0)]
 RIGHT = [(54.0, 63.0), (63.5, 59.5), (70.0, 53.5), (72.0, 47.5)]
 # Each tuft its own size and density: (knot radius, loops, stray loops, loop size); the bold copy only takes the radius.
 # (arm, radius, loops, stray loops, stray size, blades, blade reach)
-TUFTS = ((LEFT, 7.4, 5, 3, 1.1, 6, 6.0), (MID, 9.8, 6, 2, 0.75, 8, 5.0), (RIGHT, 7.8, 4, 2, 0.95, 5, 4.4))
+TUFTS = ((LEFT, 7.4, 3, 2, 0.9, 6, 6.0), (MID, 9.8, 6, 2, 0.75, 8, 5.0), (RIGHT, 7.8, 4, 2, 0.95, 5, 4.4))
 SMALL_R = (6.3, 7.8, 6.7)
 ARMS = (LEFT, MID, RIGHT)
 
@@ -197,7 +197,7 @@ def paths(small, line_w, knot_w):
 
 GRAIN = ('<filter id="crayon" x="-5%" y="-5%" width="110%" height="110%">'
          '<feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7"/>'
-         '<feDisplacementMap in="SourceGraphic" scale="1.1" xChannelSelector="R" yChannelSelector="G"/></filter>')
+         '<feDisplacementMap in="SourceGraphic" scale="1.7" xChannelSelector="R" yChannelSelector="G"/></filter>')
 
 
 def svg(body, box, grain=False, theme=False):
