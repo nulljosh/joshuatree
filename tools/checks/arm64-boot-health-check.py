@@ -23,6 +23,7 @@ if "raspi4b" not in subprocess.run(["qemu-system-aarch64", "-machine", "help"], 
 # they are listed so the day a step starts running on QEMU the check does not cry wolf about what QEMU cannot do.
 EXPECTED_FAIL = [
     "usb vl805 FAIL: firmware load refused",   # QEMU's mailbox does not model the VL805 firmware-load tag; only a real GPU answers it
+    "wifi power FAIL: WL_ON reads 0",          # QEMU has no model of the firmware GPIO expander, so the WL_ON readback is 0 there; the real Pi prints "wifi power on, WL_ON reads 1"
     "wifi FAIL cmd5",                          # the Wi-Fi bring-up (SDIO CMD5 to the CYW43455): QEMU's raspi4b has no such card
 ]
 
