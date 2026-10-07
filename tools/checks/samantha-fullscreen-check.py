@@ -634,12 +634,21 @@ def scenario_desktop():
         zones = face_zones(m); zy0 = min(z[1] for z in zones.values()); zy1 = max(z[3] for z in zones.values())
         zone_worst = {k: 0.0 for k in zones}; shut = Shut(); zone_polls = 0
         speech["pcm"] = SILENT   # her mouth stays shut: only a caption can darken her lips, and an open mouth cannot be mistaken for one
-        n_lines = len(ticks(m, "line"))
+        n_lines = len(ticks(m, "line")); n_fade0 = len(ticks(m, "fade"))
         m.typ(MSG); m.keys("ret")
         samples = []; t_end = time.time() + 90; shot_cap = shot_half = False
+        # The fade is 0.6 s of HER time (60 ticks). A slow runner takes longer than that to read a few frames, so polling on the
+        # host's clock saw "full, then nothing" and called the fade broken. Once her fade marker appears we step her clock instead:
+        # pause the guest (QMP stop), then loop {cont, 10 ms of host time, stop, read the strip}. Her clock does not run while she
+        # is paused, so the number of in-between frames depends on her ticks, not on how slow the runner is.
+        stepping = False
         while time.time() < t_end:
+            if stepping:
+                m.cmd({"execute": "cont"}); time.sleep(0.01); m.cmd({"execute": "stop"})
             img = m.frame((capbox[1] - 4, capbox[3] + 4)); v = darkened(img, base, capbox); samples.append(v)
-            if len(samples) % 4 == 0:
+            if not stepping and max(samples) > 8 and len(ticks(m, "fade")) > n_fade0:
+                stepping = True; m.cmd({"execute": "stop"})
+            if not stepping and len(samples) % 4 == 0:
                 a = last_open(m); zimg = m.frame((zy0, zy1)); b = last_open(m)
                 settled = shut.poll(a, b); zone_polls += settled
                 if settled:
@@ -648,7 +657,8 @@ def scenario_desktop():
             if top > 8 and not shot_cap and v > 0.9 * top and len(samples) > 8: shot_cap = True; m.shot(m.frame(), "02-caption-visible")
             if top > 8 and not shot_half and 0.3 * top < v < 0.7 * top and len(samples) > 2 and samples[-2] > v: shot_half = True; m.shot(m.frame(), "03-caption-half-faded")
             if top > 8 and v < 0.5 and "speak: status=" in m.serial() and captions_gone(m): break
-            time.sleep(0.03)
+            if not stepping: time.sleep(0.03)
+        m.cmd({"execute": "cont"})
         speech["pcm"] = TONE
         top = max(samples)
         print(tag + "captions against her face: one compact row at the bottom, darkest on " + ", ".join(f"{k} {w:.2f}" for k, w in zone_worst.items()) + f" ({zone_polls} polls with her mouth settled shut)")

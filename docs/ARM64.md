@@ -17,6 +17,10 @@ The kernel, drivers and lib are C, plus the user programs.
 - Port I/O (`inb`, `outb`) shows up in 13 files and becomes memory-mapped I/O.
 - Portable as is, in theory: the UI, fonts, JPEG and PNG decoders, FAT, the network stack above the NIC, the HTTP client, BearSSL, and the apps' C code. The user programs rebuild with an `svc` syscall ABI instead of `int 0x80`.
 
+## Console scrollback
+
+The on-screen Console is the only debug channel on a Pi with no serial cable, and the boot prints more lines than the window holds. Since 2.19.0 it keeps the last 16 KB of the log and a keyboard scrolls it: Page Up and Page Down by half a page, Home to the first line, End to the newest. The title bar reads "lines 12-27 of 61", and the bottom row of the window pins the newest `wifi` line and the newest `usb` line (key echoes excluded), cut to fit. New output while scrolled back is logged but does not move the view. `tools/checks/arm64-console-scroll-check.py` proves it with QEMU screendumps.
+
 ## Milestones, each one runs
 
 1. **M0, serial hello. Done (`arch/arm64`, `tools/checks/arm64-m0-check.py`). Also builds for a real Pi 4 (`make -C arch/arm64 pi`), tried on QEMU's raspi4b model; the first boot on a real board is still to do, see [RASPBERRY-PI.md](RASPBERRY-PI.md).** `clang -target aarch64-none-elf` plus `ld.lld` (both installed here) build a kernel that prints on the PL011 UART under `qemu-system-aarch64 -machine virt`. Days.
@@ -36,3 +40,9 @@ The kernel, drivers and lib are C, plus the user programs.
 ## First step
 
 M0 is a half-day: new `arch/arm64/` with a boot stub, a linker script and a UART print, and a `make ARCH=arm64` target. Nothing in the i386 build changes.
+
+## M4 Wi-Fi
+
+Stage 1 (2.16.0): the CYW43455 is alive and lists the networks on screen. `arch/arm64/wifi.c` brings up the SDIO host, loads the Cypress firmware (`brcmfmac43455-sdio.bin`, `.txt`, `.clm_blob` from RPi-Distro/firmware-nonfree at the commit pinned in `tools/wifi-fw.sh`, downloaded into `build/wifi-fw/`, never committed, `copyright` alongside), then prints `wifi ver`, `wifi mac` and one `wifi ap <rssi> ch<n> <ssid>` line per network. Lines in order on a real Pi: `wifi power on` (or `wifi power on (was on)`), `wifi sdio card rca 1`, `wifi f1 f2 up`, `wifi fw NNNk loaded`, `wifi fw ready`, `wifi ver`, `wifi mac`, `wifi ap ...`, `wifi scan done`. Any `wifi FAIL <step>` names the step that timed out and the desktop still comes up. Without the firmware files the build still links and prints `wifi no firmware`; QEMU has the SD host but no SDIO card, so it prints `wifi power on` then `wifi FAIL cmd5` and the boot carries on (`tools/checks/arm64-wifi-check.py`). A real board that prints `wifi FAIL cmd5` instead has a powered chip the host cannot see: check the GPIO 34-39 pin setup first.
+
+Stage 2 (next): join. Read `~/.config/joshuatree/wifi.conf` (fallback `arch/arm64/wifi.conf`, both gitignored, lines `ssid=`, `psk=`, `country=`) at build time into a generated object; never print the psk. Set `wsec` 4, `wpa_auth` 0x80, `wsec_pmk`, then `join` with the SSID (the firmware does the WPA2 handshake). Then SDPCM data frames in and out, the i386 IP stack (`drivers/net.c`: ARP, DHCP, TCP) on top, and `wifi ip 192.168.x.y` on screen.

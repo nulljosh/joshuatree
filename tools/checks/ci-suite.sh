@@ -35,8 +35,10 @@ set -uo pipefail
 # Every check's tempfile.mkdtemp(prefix='jt-...') used to land in the shared
 # TMPDIR and never get deleted: thousands of 37-75MB dirs, 12GB+, a full
 # disk on 2026-10-01. One scratch TMPDIR per suite run, gone on exit.
+. "$(dirname "$0")/../ci-lock.sh"
+ci_lock_acquire || exit 1
 export TMPDIR=$(mktemp -d "${TMPDIR:-/tmp}/jt-suite-XXXXXX")
-trap 'rm -rf "$TMPDIR"' EXIT
+trap 'rm -rf "$TMPDIR"; ci_lock_release' EXIT
 # SHARD=i runs only the checks assigned to shard i below, so CI can split the
 # suite across parallel runners. Unset, it runs everything, same as before.
 # Each check carries an explicit shard number (2nd manifest field) instead
@@ -57,6 +59,7 @@ cd "$(dirname "$0")/../.."
 manifest() {
 cat <<'EOF'
 once |6|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
+once |6|No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks)|python3 ./tools/checks/tmp-paths-check.py
 once |0|docs/DESIGN.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static)|python3 ./tools/checks/design-doc-check.py
 once |6|Kernel memory keeps 16KB clear of the program window (toolchain drift guard)|python3 ./tools/checks/bss-margin-check.py
 once |6|Samantha's face loops wrap without a seam|python3 ./tools/checks/face-frames-check.py
@@ -177,7 +180,7 @@ retry|1|Ring-3 window resize: snap Notes to a quarter, JT_EV_RESIZE answered, ne
 retry|0|Windows drag live by their title bar (single-window Notes and multi-window Files)|python3 ./tools/checks/windowdrag-check.py
 retry|0|Windowed apps start under the title bar, Calendar fits six weeks|python3 ./tools/checks/apptop-check.py
 retry|7|Calendar Day, Week, Month and Year views (ring-3 program)|python3 ./tools/checks/calviews-check.py
-retry|6|QA gallery: every app opens, screenshots, closes, no crash|python3 ./tools/checks/qa-gallery.py /tmp/jt-gallery
+retry|6|QA gallery: every app opens, screenshots, closes, no crash|python3 ./tools/checks/qa-gallery.py
 retry|2|Every app's main action, headless|python3 ./tools/checks/feature-drive.py
 retry|3|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
 retry|4|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
@@ -238,7 +241,10 @@ retry|3|Drunk mode easter egg: horizontal sway applied to framebuffer rows|pytho
 retry|6|ARM64: the aarch64 kernel boots under QEMU and prints over the UART (skips where the tools are missing)|python3 ./tools/checks/arm64-m0-check.py
 retry|6|ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing)|python3 ./tools/checks/arm64-m1c-check.py
 retry|6|ARM64 M2: the aarch64 kernel drives virtio disk, network, keyboard and mouse: a sector read back, a real ARP answer, key presses, moves and clicks (skips where the tools are missing)|python3 ./tools/checks/arm64-m2-check.py
+retry|6|ARM64 console scrollback: Page Up, End and Home scroll the on-screen Console over the whole boot log, the title bar says which lines (skips where the tools are missing)|python3 ./tools/checks/arm64-console-scroll-check.py
 retry|6|ARM64 M3a: an unprivileged EL0 program prints through a write syscall, exits, and a direct access to a kernel-only page faults while the kernel survives (skips where the tools are missing)|python3 ./tools/checks/arm64-m3-check.py
+retry|2|ARM64 M4 Wi-Fi proto: wifi_proto.h packs and parses SDPCM, BCDC, escan and NVRAM on the host clang|sh ./tools/checks/wifi-host-check.sh
+retry|6|ARM64 M4 Wi-Fi: the Pi image powers the chip, finds no SDIO card under QEMU, prints wifi FAIL cmd5 and the boot carries on, with and without the firmware files (skips where the tools are missing)|python3 ./tools/checks/arm64-wifi-check.py
 retry|6|ARM64 M4 USB: the aarch64 kernel finds an xHCI controller behind a PCIe root port, enumerates a hub, a keyboard behind it and a mouse, and reads key presses, moves and clicks (skips where the tools are missing)|python3 ./tools/checks/arm64-usb-check.py
 once |6|Pi card flasher: kernel, firmware and tools/pi-config.txt land on a stand-in card, and what was there is kept as .bak (skips where the tools are missing)|bash ./tools/checks/flash-pi-check.sh
 EOF

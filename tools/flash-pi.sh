@@ -51,6 +51,7 @@ if [ "$missing" = 1 ]; then
     rm -rf "$FW"; mkdir -p "$(dirname "$FW")"; mv "$tmp" "$FW"
 fi
 
+tools/wifi-fw.sh   # CYW43455 firmware into build/wifi-fw/, baked into kernel8.img by the pi target
 for f in kernel8.img config.txt; do [ -f "$CARD/$f" ] && cp "$CARD/$f" "$CARD/$f.bak"; done
 cp -R "$FW"/. "$CARD"/
 cp arch/arm64/kernel8.img "$CARD"/kernel8.img
