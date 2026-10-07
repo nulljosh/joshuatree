@@ -24,8 +24,16 @@ The short list. Two tracks run side by side, one helper each (Joshua agreed the 
 
 **Track B, the goal (Claude Code inside Joshua Tree on the Pi)**
 5. The internet stack on the ARM build (DHCP and HTTP over QEMU's network first).
-6. Wi-Fi stage 1 on the real Pi (the scan lists Shaw), then stage 2 (join, get an address).
+6. Wi-Fi on the real Pi: the scan works (16 networks). Join is next: the chip has no WPA2 handshake of its own, so Joshua Tree does it (`arch/arm64/wpa.h`). Then get an address, the clock, and a browser over HTTPS.
 7. Claude in the Console: type a question at the Pi's console and the answer prints, through the relay on the Mac. No app port needed, so it lands as soon as Wi-Fi joins.
+
+**Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, fewer get it onto a real board. Lean into that:
+- **Our own case.** 3D print the Neo case for the Pi 4 (CAD in `docs/hardware/`), film the first ugly print and every fix, then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
+- **Nothing underneath.** No Linux, no Raspberry Pi OS: it boots straight into our desktop. Say it on the box and in the first second of the video.
+- **It knows what you want.** The anticipation slice from `docs/VISION.md`, all on the device. No other hobby OS has an assistant that runs it.
+- **A maker pack.** The breadboard prototype (`docs/hardware/BREADBOARD.md`) with real drivers for the LED, button and speaker, so people can wire their own things to it.
+- **Show it in person.** A live Pi on a table at Vancouver maker meetups and the UBC and SFU computing clubs; a Show HN with the 30-second boot video (`docs/LAUNCH.md`).
+- **Later, our own board.** A carrier board for the Raspberry Pi compute module with the mark on it, so the kit is ours down to the copper.
 
 **Then**
 8. Admin and sudo. 9. SD card writes (MBR and FAT32). 10. The Claude app on ARM, the self-update loop and the fallback kernel.
