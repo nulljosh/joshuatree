@@ -1,264 +1,189 @@
-# The Joshua tree mark, 2.12: one solid silhouette from a few primitives, engraved with a few hairline cuts.
-# Four tapered arms (quadratic arcs narrowing to a flared tip), a flared trunk that stands on a short ground
-# line, a hub, and a crisp fan of nine tapered blades at each tip. Settlers named the tree for Joshua raising
-# his hands to the sky. One ink, no gradients. The hairlines are true holes in the ink, so the mark stays a
-# single-colour mask that works on light and dark. Run from the repo root.
+# The Joshua tree mark, 2.25: a crayon scribble.
 #
-# 2.12 over 2.0 (one small step, same tree):
-#   * the concave corners where the limbs meet the trunk and each other are filleted, so the forks read as
-#     grown wood instead of stacked shapes;
-#   * every arm flares into its crown, so the knob at each tuft base is gone;
-#   * the blades alternate long and short and the two inner crowns lean apart, so the four crowns stay
-#     separate down to 32 px;
-#   * the trunk stands on a short tapered ground line (the flat cut at the bottom is gone);
-#   * thin engraved grooves follow the trunk and each limb, lit from the upper left.
+# Drawn like a quick marker sketch: thin, sure lines for the trunk, the three arms and the ground, and a dense
+# knot of looping scribble at the end of every arm for the spiky tufts, with a few short strokes flicking out of
+# each knot for the blades. Black on off-white, no fill, no shading, round caps. Every point is placed by hand
+# below and then shaken a little by a seeded hand, so the line wavers like a real pen but the file is the same on
+# every run (tools/checks/logo-check.sh rebuilds it byte for byte).
 #
-# Every copy of the mark is written from here so none can drift:
-#   landing/logo.svg        the mark (favicon, landing seal, boot splash source, 3D cap source)
-#   landing/mark-tree.svg   the same bytes, the name the landing CSS masks use
-#   landing/icon.svg, icon.svg   the mark on a paper tile (the repo-root copy is what README renders)
-# The PNG copies (landing/mark.png, landing/og-image.png, docs/brand/) come from tools/gen/gen_brand_art.py.
+# Every copy of the mark is written from here:
+#   landing/logo.svg        the mark with a light crayon grain (an SVG displacement filter): landing seal, share
+#                           card, README, boot splash
+#   landing/mark-tree.svg   the same drawing with no grain, the name the landing CSS masks use
+#   landing/mark-bold.svg   no grain, heavier strokes on a tight box, for 16 to 48 px (favicon, menu bar, About)
+#   landing/icon.svg, icon.svg   the mark on an off-white square (the repo-root copy is what README renders)
+# The PNG copies (landing/mark.png, landing/badge.png, landing/og-image.png, docs/brand/) come from
+# tools/gen/gen_brand_art.py, the kernel's copies from tools/gen/gen_boot_mark.py.
 import math
 import os
+import random
 
 ink = "#161513"
-paper = "#ece8df"
+paper = "#faf8f4"
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 
-
-def smooth(x):
-    x = min(max(x, 0.0), 1.0)
-    return x * x * (3 - 2 * x)
-
-
-def quad(p0, c, p1, t):
-    return ((1-t)**2*p0[0] + 2*(1-t)*t*c[0] + t*t*p1[0], (1-t)**2*p0[1] + 2*(1-t)*t*c[1] + t*t*p1[1])
+# Centre lines, base to tip.
+TRUNK = [(50.0, 84.0), (49.3, 72.0), (50.0, 61.0)]
+LEFT = [(46.5, 61.0), (37.0, 56.0), (30.5, 47.0), (29.0, 36.0)]
+MID = [(50.5, 58.0), (52.5, 45.0), (52.0, 30.0)]
+RIGHT = [(54.0, 62.0), (63.5, 59.0), (70.0, 52.0), (71.5, 43.0)]
+ARMS = (LEFT, MID, RIGHT)
 
 
-def cubic(p0, c1, c2, p1, t):
-    w = ((1-t)**3, 3*t*(1-t)**2, 3*t*t*(1-t), t**3)
-    return tuple(w[0]*p0[k] + w[1]*c1[k] + w[2]*c2[k] + w[3]*p1[k] for k in (0, 1))
+def f(v):
+    return f"{v:.2f}".rstrip("0").rstrip(".")
 
 
-def quad_d(p0, c, p1, first=False):
-    """A quadratic curve as the equivalent cubic. Only M, L, C and Z are used in the mark, because
-    docs/hardware/neo_cad.py reads the SVG with exactly those commands."""
-    c1 = (p0[0] + 2/3*(c[0]-p0[0]), p0[1] + 2/3*(c[1]-p0[1]))
-    c2 = (p1[0] + 2/3*(c[0]-p1[0]), p1[1] + 2/3*(c[1]-p1[1]))
-    head = f"M{p0[0]:.2f} {p0[1]:.2f}" if first else ""
-    return f"{head}C{c1[0]:.2f} {c1[1]:.2f} {c2[0]:.2f} {c2[1]:.2f} {p1[0]:.2f} {p1[1]:.2f}"
+def smooth(pts):
+    """Catmull-Rom through the points, as one SVG subpath."""
+    d = [f"M{f(pts[0][0])} {f(pts[0][1])}"]
+    for i in range(1, len(pts)):
+        p0 = pts[max(i - 2, 0)]; p1 = pts[i - 1]; p2 = pts[i]; p3 = pts[min(i + 1, len(pts) - 1)]
+        c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
+        c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
+        d.append(f"C{f(c1[0])} {f(c1[1])} {f(c2[0])} {f(c2[1])} {f(p2[0])} {f(p2[1])}")
+    return "".join(d)
 
 
-def pts_d(pts):
-    return "M" + "L".join(f"{x:.2f} {y:.2f}" for x, y in pts) + "Z"
+def shaky(rnd, pts, amt, steps=2):
+    """Put points between the given ones and nudge every one, so a long line drifts like a hand-held pen."""
+    out = []
+    for a, b in zip(pts, pts[1:]):
+        for k in range(steps):
+            t = k / steps
+            out.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+    out.append(pts[-1])
+    return [(x + rnd.uniform(-amt, amt), y + rnd.uniform(-amt, amt)) for x, y in out]
 
 
-def inside(pt, poly):
-    x, y = pt; c = False
-    for i in range(len(poly)):
-        (x0, y0), (x1, y1) = poly[i], poly[(i+1) % len(poly)]
-        if (y0 > y) != (y1 > y) and x < (x1-x0)*(y-y0)/(y1-y0) + x0:
-            c = not c
-    return c
-
-
-def seg_hit(a, b, c, d):
-    r = (b[0]-a[0], b[1]-a[1]); s = (d[0]-c[0], d[1]-c[1])
-    den = r[0]*s[1] - r[1]*s[0]
-    if abs(den) < 1e-9:
-        return None
-    t = ((c[0]-a[0])*s[1] - (c[1]-a[1])*s[0]) / den
-    u = ((c[0]-a[0])*r[1] - (c[1]-a[1])*r[0]) / den
-    if 0 <= t <= 1 and 0 <= u <= 1:
-        return (a[0] + t*r[0], a[1] + t*r[1])
-    return None
-
-
-def along(poly, i, hit, dist, step):
-    """The point `dist` along a polyline from `hit` (on segment i, i+1), heading `step` (+1 or -1)."""
-    p, j, left = hit, i + (1 if step > 0 else 0), dist
-    while 0 <= j < len(poly):
-        q = poly[j]; seg = math.hypot(q[0]-p[0], q[1]-p[1])
-        if seg >= left:
-            f = left/seg
-            return (p[0] + (q[0]-p[0])*f, p[1] + (q[1]-p[1])*f)
-        left -= seg; p, j = q, j + step
-    return p
-
-
-def circle_poly(cx, cy, r, n=24):
-    return [(cx + r*math.cos(2*math.pi*i/n), cy + r*math.sin(2*math.pi*i/n)) for i in range(n)]
-
-
-def fillets(edges, bodies, anchor, d):
-    """Round each concave corner where two different bodies meet on the outline. The patch is the curve tangent to
-    both edges, closed through `anchor` (deep inside the ink) so it overlaps solid ink and leaves no hairline seam."""
-    union = lambda pt: any(inside(pt, b) for b in bodies.values())
-    out, seen = [], []
-    names = list(edges)
-    for ia, na in enumerate(names):
-        for nb in names[ia+1:]:
-            (ba, pa), (bb, pb) = edges[na], edges[nb]
-            if ba == bb:
-                continue
-            for i in range(len(pa)-1):
-                for j in range(len(pb)-1):
-                    P = seg_hit(pa[i], pa[i+1], pb[j], pb[j+1])
-                    if not P or any(math.hypot(P[0]-q[0], P[1]-q[1]) < 1.5 for q in seen):
-                        continue
-                    ring = [(P[0] + 0.5*math.cos(k*math.pi/6), P[1] + 0.5*math.sin(k*math.pi/6)) for k in range(12)]
-                    if all(union(q) for q in ring):
-                        continue                          # buried inside the ink, not on the outline
-                    # the exposed end of each edge is the one whose next stretch stays on the outline
-                    def exposed(poly, k):
-                        for step in (1, -1):
-                            q = along(poly, k, P, d, step)
-                            m = along(poly, k, P, d*0.5, step)
-                            # on the outline: nudge off the edge, one side must be outside the union
-                            ok = False
-                            for sgn in (1, -1):
-                                e = (q[0]-P[0], q[1]-P[1]); L = math.hypot(*e) or 1
-                                n2 = (-e[1]/L*sgn*0.3, e[0]/L*sgn*0.3)
-                                if not union((m[0]+n2[0], m[1]+n2[1])):
-                                    ok = True
-                            if ok:
-                                return q
-                        return None
-                    A, B = exposed(pa, i), exposed(pb, j)
-                    if A is None or B is None:
-                        continue
-                    seen.append(P)
-                    out.append((P, A, B, anchor))
+def offset(line, w0, w1, side):
+    """One edge of a limb: side -1 is the left of the direction of travel, +1 the right."""
+    out = []
+    n = len(line)
+    for i, (x, y) in enumerate(line):
+        a = line[max(i - 1, 0)]; b = line[min(i + 1, n - 1)]
+        dx, dy = b[0] - a[0], b[1] - a[1]; d = math.hypot(dx, dy)
+        w = w0 + (w1 - w0) * i / (n - 1)
+        out.append((x - side * dy / d * w, y + side * dx / d * w))
     return out
 
 
-class Limb:
-    """A tapered limb along a quadratic arc. The last 18% opens by `flare` so it runs straight into its crown."""
-    def __init__(self, p0, c, p1, w0, w1, flare, n=48):
-        pts = [quad(p0, c, p1, i/n) for i in range(n+1)]
-        self.cen, self.nor, self.l, self.r = pts, [], [], []
-        for i, (x, y) in enumerate(pts):
-            a, b = pts[max(i-1, 0)], pts[min(i+1, n)]
-            dx, dy = b[0]-a[0], b[1]-a[1]; d = math.hypot(dx, dy)
-            t = i/n
-            h = (w0 + (w1-w0)*t + flare*smooth((t-0.70)/0.30)) / 2
-            nx, ny = -dy/d, dx/d
-            self.nor.append((nx, ny))
-            self.l.append((x + nx*h, y + ny*h)); self.r.append((x - nx*h, y - ny*h))
-        self.poly = self.l + self.r[::-1]
-
-    def at(self, t):
-        n = len(self.cen) - 1
-        i = min(int(t*n), n-1); f = t*n - i
-        p = tuple(self.cen[i][k] + (self.cen[i+1][k]-self.cen[i][k])*f for k in (0, 1))
-        return p, self.nor[i]
+def tip(arm, push):
+    (ax, ay), (ex, ey) = arm[-2], arm[-1]
+    a = math.atan2(ey - ay, ex - ax)
+    return ex + math.cos(a) * push, ey + math.sin(a) * push, a
 
 
-def groove(at, lo, hi, wmax, off=0.0, sgn=1):
-    """A hairline cut: a tapered lens following at(t) -> (point, unit normal) from lo to hi, widest wmax mid-way."""
-    n = 20; a, b = [], []
-    for i in range(n+1):
-        u = i/n
-        (x, y), (nx, ny) = at(lo + (hi-lo)*u)
-        nx, ny = nx*sgn, ny*sgn
-        w = wmax/2 * math.sin(math.pi*u)**0.8
-        x += nx*off; y += ny*off
-        a.append((x + nx*w, y + ny*w)); b.append((x - nx*w, y - ny*w))
-    return pts_d(a + b[::-1][1:-1])
+def scribble(rnd, cx, cy, r, loops, amt):
+    """A knot of looping scribble: small loops whose centre wanders round inside a circle of radius r."""
+    pts = []
+    n = loops * 9
+    phase = rnd.uniform(0, 6.3)
+    for i in range(n + 1):
+        t = i / n
+        wander = 2 * math.pi * t * 2.3 + phase
+        mx = cx + math.cos(wander) * r * 0.5 + math.sin(wander * 2.7) * r * 0.12
+        my = cy + math.sin(wander) * r * 0.42 + math.cos(wander * 1.9) * r * 0.1
+        loop = 2 * math.pi * i / 9 + phase
+        lr = r * rnd.uniform(0.45, 0.8)
+        pts.append((mx + math.cos(loop) * lr + rnd.uniform(-amt, amt), my + math.sin(loop) * lr * 0.9 + rnd.uniform(-amt, amt)))
+    return pts
 
 
-def tuft(x, y, R, tilt, trim):
-    """Nine blades on one arc, alternating long and short. trim(angle) shortens a blade that would crowd a neighbouring crown."""
-    o = []
-    for i in range(9):
-        k = i - 4
-        ang = tilt - 90 + k*24
-        a = math.radians(ang)
-        L = R * (1.0 if abs(k) < 3.5 else 0.9) * (1.0 if i % 2 == 0 else 0.9) * trim(ang)
-        hw = 2.6 if i % 2 == 0 else 2.3
-        px, py = -math.sin(a)*hw, math.cos(a)*hw
-        o.append(f'M{x+px:.2f} {y+py:.2f}L{x+math.cos(a)*L:.2f} {y+math.sin(a)*L:.2f}L{x-px:.2f} {y-py:.2f}Z')
-    return "".join(o)
+def blades(rnd, cx, cy, up, r, count, reach):
+    """Short flicks out of the knot, the yucca's blades, fanned over its top."""
+    out = []
+    for k in range(count):
+        a = up - math.radians(105) + math.radians(210) * (k + rnd.uniform(-0.25, 0.25)) / (count - 1)
+        r0 = r * rnd.uniform(0.6, 0.85); r1 = r + reach * rnd.uniform(0.6, 1.0)
+        bend = rnd.uniform(-0.12, 0.12)
+        out.append([(cx + math.cos(a) * r0, cy + math.sin(a) * r0),
+                    (cx + math.cos(a + bend) * (r0 + r1) / 2, cy + math.sin(a + bend) * (r0 + r1) / 2),
+                    (cx + math.cos(a + bend * 2) * r1, cy + math.sin(a + bend * 2) * r1)])
+    return out
 
 
-# start, control, tip, base width, tip width, flare, crown tilt
-ARMS = [((50, 66), (30, 66), (22, 50), 7.4, 4.6, 0.8, -35),
-        ((49, 62), (40, 46), (34, 31), 7.4, 4.6, 0.8, -20),
-        ((51, 62), (60, 46), (66, 31), 7.4, 4.6, 0.8, 20),
-        ((50, 66), (70, 66), (78, 50), 7.4, 4.6, 0.8, 35)]
-CROWN_R = 3.0
-FILLET = 2.5
-TL = ((35.0, 97.8), (43.5, 94.0), (45.0, 78.0), (45.5, 62.0))
-TR = ((65.0, 97.8), (56.5, 94.0), (55.0, 78.0), (54.5, 62.0))
+def scale(pts, k, cx=50.0, cy=52.0):
+    return [(cx + (x - cx) * k, cy + (y - cy) * k) for x, y in pts]
 
 
-def build():
-    limbs = [Limb(*a[:6]) for a in ARMS]
-    o = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">']
-    # the ground line: a short tapered stroke the trunk stands on
-    o.append(f'<path d="{quad_d((20, 97.8), (50, 94.8), (80, 97.8), first=True)}{quad_d((80, 97.8), (50, 100.8), (20, 97.8))}Z" fill="{ink}"/>')
+def drawing(small):
+    """(thin line subpaths, scribble subpaths). small: the tree drawn down its middle for 16 to 48 px."""
+    rnd = random.Random(1932)
+    K = 0.82   # the drawing sits in the middle of the box, lots of paper round it
+    lines, knots = [], []
+    if small:
+        lines.append([(32.0, 84.6), (50.0, 84.0), (68.0, 84.4)])
+        lines.append(TRUNK)
+        for arm in ARMS:
+            lines.append([TRUNK[-1]] + arm[1:])
+        for arm in ARMS:
+            cx, cy, _ = tip(arm, 3.0)
+            knots.append(scribble(rnd, cx, cy, 7.0, 3, 0.3))
+        return [scale(p, K) for p in lines], [scale(p, K) for p in knots]
+    # the ground, one quick stroke under the trunk
+    lines.append(shaky(rnd, [(30.0, 87.4), (42.0, 86.8), (56.0, 87.2), (70.5, 86.6)], 0.5))
+    # the trunk and the arms: two thin edges each, one stroke up the outside of the tree, one for each crotch
+    tl, tr = offset(TRUNK, 5.4, 4.0, -1), offset(TRUNK, 5.4, 4.0, +1)
+    edges = {id(a): (offset(a, 3.3, 2.6, -1), offset(a, 3.3, 2.6, +1)) for a in ARMS}
+    lines.append(shaky(rnd, tl[:2] + edges[id(LEFT)][0][1:], 0.8))
+    lines.append(shaky(rnd, list(reversed(edges[id(LEFT)][1][1:])) + [(48.2, 57.6)] + edges[id(MID)][0][1:], 0.8))
+    lines.append(shaky(rnd, list(reversed(edges[id(MID)][1][1:])) + [(54.0, 59.6)] + edges[id(RIGHT)][0][1:], 0.8))
+    lines.append(shaky(rnd, list(reversed(edges[id(RIGHT)][1][1:])) + list(reversed(tr[:2])), 0.8))
+    # the tufts: a dense knot at each tip, and the blades flicking out of it
+    for arm, r in ((LEFT, 8.2), (MID, 9.0), (RIGHT, 7.8)):
+        cx, cy, up = tip(arm, 4.5)
+        knots.append(scribble(rnd, cx, cy, r, 3, 0.9))
+        knots.append(scribble(rnd, cx + 0.6, cy - 0.4, r * 0.4, 2, 0.4))
+        lines += blades(rnd, cx, cy, up, r, 9, 5.5)
+    return [scale(p, K) for p in lines], [scale(p, K) for p in knots]
 
-    # trunk, with two bark grooves cut through it (evenodd: a groove is a hole)
-    def trunk_at(frac):
-        def f(t):
-            a, b = cubic(*TL, 1-t), cubic(*TR, 1-t)
-            a2, b2 = cubic(*TL, 1-t-0.01), cubic(*TR, 1-t-0.01)
-            x, y = a[0] + (b[0]-a[0])*frac, a[1] + (b[1]-a[1])*frac
-            x2, y2 = a2[0] + (b2[0]-a2[0])*frac, a2[1] + (b2[1]-a2[1])*frac
-            dx, dy = x2-x, y2-y; d = math.hypot(dx, dy)
-            return (x, y), (-dy/d, dx/d)
-        return f
-    cuts = groove(trunk_at(0.33), 0.36, 0.90, 0.6) + groove(trunk_at(0.67), 0.46, 0.86, 0.4)
-    o.append(f'<path fill-rule="evenodd" d="M{TL[0][0]} {TL[0][1]}C{TL[1][0]} {TL[1][1]} {TL[2][0]} {TL[2][1]} {TL[3][0]} {TL[3][1]}'
-             f'L{TR[3][0]} {TR[3][1]}C{TR[2][0]} {TR[2][1]} {TR[1][0]} {TR[1][1]} {TR[0][0]} {TR[0][1]}Z{cuts}" fill="{ink}"/>')
 
-    tips = [a[2] for a in ARMS]
-    for k, (a, limb) in enumerate(zip(ARMS, limbs)):
-        p1, tilt = a[2], a[6]
-        mid = limb.nor[len(limb.nor)//2]
-        sgn = -1 if mid[0] + mid[1] > 0 else 1                 # shift the cut toward the upper-left light
-        cut = groove(limb.at, 0.22, 0.64, 0.42, off=0.2, sgn=sgn)
-        o.append(f'<path fill-rule="evenodd" d="{pts_d(limb.poly)}{cut}" fill="{ink}"/>')
-        others = [t for j, t in enumerate(tips) if j != k]
-        def trim(ang, p1=p1, others=others):
-            ca, sa = math.cos(math.radians(ang)), math.sin(math.radians(ang))
-            f = 1.0
-            for q in others:
-                dx, dy = q[0]-p1[0], q[1]-p1[1]; dist = math.hypot(dx, dy)
-                cosang = (ca*dx + sa*dy)/dist
-                if cosang > 0.80 and dist < 40:
-                    f = min(f, 0.88)
-            return f
-        o.append(f'<path d="{tuft(p1[0], p1[1], 14.6, tilt, trim)}" fill="{ink}"/><circle cx="{p1[0]}" cy="{p1[1]}" r="{CROWN_R}" fill="{ink}"/>')
-    o.append(f'<circle cx="50" cy="65" r="5.6" fill="{ink}"/>')
-    # fillet the concave corners of the outline: trunk to limbs, limb to limb
-    tl = [cubic(*TL, i/40) for i in range(41)]; tr = [cubic(*TR, i/40) for i in range(41)]
-    bodies = {"trunk": tl + tr[::-1], "hub": circle_poly(50, 65, 5.6)}
-    edges = {"trunk.l": ("trunk", tl), "trunk.r": ("trunk", tr)}
-    for k, limb in enumerate(limbs):
-        bodies[f"arm{k}"] = limb.poly
-        edges[f"arm{k}.l"] = (f"arm{k}", limb.l); edges[f"arm{k}.r"] = (f"arm{k}", limb.r)
-    patch = "".join(f"M{c[0]} {c[1]}L{A[0]:.2f} {A[1]:.2f}{quad_d(A, P, B)}Z"
-                    for P, A, B, c in fillets(edges, bodies, (50, 66), FILLET))
-    o.append(f'<path d="{patch}" fill="{ink}"/>')
-    o.append('</svg>')
-    return "".join(o)
+def paths(small, line_w, knot_w):
+    lines, knots = drawing(small)
+    a = f'<path d="{"".join(smooth(p) for p in lines)}" stroke-width="{line_w}"/>'
+    b = f'<path d="{"".join(smooth(p) for p in knots)}" stroke-width="{knot_w}"/>'
+    return a + b
+
+
+GRAIN = ('<filter id="crayon" x="-5%" y="-5%" width="110%" height="110%">'
+         '<feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7"/>'
+         '<feDisplacementMap in="SourceGraphic" scale="1.3" xChannelSelector="R" yChannelSelector="G"/></filter>')
+
+
+def svg(body, box, grain=False, theme=False):
+    style = (f'<style>g{{stroke:{ink}}}@media (prefers-color-scheme:dark){{g{{stroke:{paper}}}}}</style>'
+             if theme else "")
+    defs = f"<defs>{GRAIN}</defs>" if grain else ""
+    filt = ' filter="url(#crayon)"' if grain else ""
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{box}" width="100" height="100">{style}{defs}'
+            f'<g fill="none" stroke="{ink}" stroke-linecap="round" stroke-linejoin="round"{filt}>{body}</g></svg>\n')
+
+
+def bold_box():
+    lines, knots = drawing(True)
+    xs = [p[0] for s in lines + knots for p in s]; ys = [p[1] for s in lines + knots for p in s]
+    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+    side = max(max(xs) - min(xs), max(ys) - min(ys)) + 8
+    return f"{f(cx - side / 2)} {f(cy - side / 2)} {f(side)} {f(side)}"
 
 
 def write(path, text):
-    with open(os.path.join(ROOT, path), "w") as f:
-        f.write(text)
+    with open(os.path.join(ROOT, path), "w") as fh:
+        fh.write(text)
 
 
 def main():
-    svg = build()
-    write("landing/logo.svg", svg)
-    write("landing/mark-tree.svg", svg)
-    body = svg[svg.index(">") + 1:svg.rindex("</svg>")]
+    big = paths(False, 2.3, 1.7)
+    write("landing/logo.svg", svg(big, "0 0 100 100", grain=True))
+    write("landing/mark-tree.svg", svg(big, "0 0 100 100"))
+    write("landing/mark-bold.svg", svg(paths(True, 5.0, 4.2), bold_box(), theme=True))
     tile = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">\n'
-            '  <!-- The 2.12 mark (logo.svg) on paper, one ink on one paper. -->\n'
+            '  <!-- The 2.25 mark (logo.svg), a crayon scribble on an off-white square. -->\n'
+            f'  <defs>{GRAIN}</defs>\n'
             f'  <rect width="200" height="200" rx="44" fill="{paper}"/>\n'
-            f'  <g transform="translate(30 30) scale(1.4)">{body}</g>\n'
+            f'  <g transform="scale(2)" fill="none" stroke="{ink}" stroke-linecap="round" stroke-linejoin="round" '
+            f'filter="url(#crayon)">{big}</g>\n'
             '</svg>\n')
     write("landing/icon.svg", tile)
     write("icon.svg", tile)
