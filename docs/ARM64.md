@@ -36,3 +36,9 @@ The kernel, drivers and lib are C, plus the user programs.
 ## First step
 
 M0 is a half-day: new `arch/arm64/` with a boot stub, a linker script and a UART print, and a `make ARCH=arm64` target. Nothing in the i386 build changes.
+
+## M4 Wi-Fi
+
+Stage 1 (2.16.0): the CYW43455 is alive and lists the networks on screen. `arch/arm64/wifi.c` brings up the SDIO host, loads the Cypress firmware (`brcmfmac43455-sdio.bin`, `.txt`, `.clm_blob` from RPi-Distro/firmware-nonfree at the commit pinned in `tools/wifi-fw.sh`, downloaded into `build/wifi-fw/`, never committed, `copyright` alongside), then prints `wifi ver`, `wifi mac` and one `wifi ap <rssi> ch<n> <ssid>` line per network. Lines in order on a real Pi: `wifi power on` (or `wifi power on (was on)`), `wifi sdio card rca 1`, `wifi f1 f2 up`, `wifi fw NNNk loaded`, `wifi fw ready`, `wifi ver`, `wifi mac`, `wifi ap ...`, `wifi scan done`. Any `wifi FAIL <step>` names the step that timed out and the desktop still comes up. Without the firmware files the build still links and prints `wifi no firmware`; QEMU has the SD host but no SDIO card, so it prints `wifi power on` then `wifi FAIL cmd5` and the boot carries on (`tools/checks/arm64-wifi-check.py`). A real board that prints `wifi FAIL cmd5` instead has a powered chip the host cannot see: check the GPIO 34-39 pin setup first.
+
+Stage 2 (next): join. Read `~/.config/joshuatree/wifi.conf` (fallback `arch/arm64/wifi.conf`, both gitignored, lines `ssid=`, `psk=`, `country=`) at build time into a generated object; never print the psk. Set `wsec` 4, `wpa_auth` 0x80, `wsec_pmk`, then `join` with the SSID (the firmware does the WPA2 handshake). Then SDPCM data frames in and out, the i386 IP stack (`drivers/net.c`: ARP, DHCP, TCP) on top, and `wifi ip 192.168.x.y` on screen.
