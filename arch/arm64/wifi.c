@@ -66,10 +66,10 @@ static int cmd52(unsigned fn, unsigned addr, int write, unsigned v, unsigned *ou
 }
 static int cmd53(unsigned fn, unsigned addr, int write, unsigned char *buf, unsigned n) {   /* byte mode, up to 512 */
     unsigned r, a = (write ? 0x80000000u : 0) | fn << 28 | 1u << 26 | (addr & 0x1ffff) << 9 | (n & 0x1ff);
-    R32(SDH + BLK) = n;
+    R32(SDH + BLK) = 1u << 16 | n;   /* one block of n bytes (count in the top half; a count of 0 moves nothing) */
     for (unsigned k = 0; R32(SDH + STATE) & 3; k++) if (k > 1000000) return 0;
     R32(SDH + INT) = 0xffffffff; R32(SDH + ARG) = a;
-    R32(SDH + CMD) = 53u << 24 | 0x1A0000 | 0x20 | (write ? 0 : 0x10);
+    R32(SDH + CMD) = 53u << 24 | 0x1A0000 | 0x200000 | 0x2 | (write ? 0 : 0x10);   /* data present (bit 21), block count on, read = 0x10; the first real-board run had 0x20 (multi-block) here instead of data present, so no data ever moved and `arm halt` failed */
     if (!wait_int(1, 100)) return 0;
     r = R32(SDH + RESP); if (r & 0xcb00) return 0;
     for (unsigned i = 0; i < n; i += 4) {
@@ -244,8 +244,8 @@ int wifi_init(void) {
     if (!sd_cmd(7, rca, 2, &r)) { fail("cmd7"); return 0; }             /* select */
     kputs("wifi sdio card rca "); kx(rca >> 16); kputs("\n");
     if (!cmd52(0, 0x07, 1, 0x02, 0)) { fail("4-bit"); return 0; }       /* CCCR bus width 4 */
-    R32(SDH + CTL1) = (R32(SDH + CTL1) & ~0xff00u) | 1 | 4 | 0x4 << 8;  /* ~50 MHz */
-    R32(SDH + 0x28) = (R32(SDH + 0x28) & ~0xffu) | 2 | 4;              /* 4-bit, high speed */
+    R32(SDH + CTL1) = (R32(SDH + CTL1) & ~0xff00u) | 1 | 4 | 0x8 << 8;  /* base/16: 25 MHz or less, default speed (the card's high-speed mode is never enabled) */
+    R32(SDH + 0x28) = (R32(SDH + 0x28) & ~0xffu) | 2;                  /* 4-bit, default speed */
     if (!cmd52(0, 0x02, 1, 0x06, 0)) { fail("f1f2 enable"); return 0; }
     for (unsigned n = 0;; n++) { unsigned v; if (cmd52(0, 0x03, 0, 0, &v) && (v & 2)) break; if (n > 100) { fail("f1 ready"); return 0; } mdelay(10); }
     kputs("wifi f1 f2 up\n");
