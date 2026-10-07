@@ -109,6 +109,8 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 
 ### CI and speed
 
+- [ ] [Sonnet] `tools/checks/samantha-fullscreen-check.py` flakes on a loaded GitHub runner (2026-10-06, PR 432, a docs-only change): "the caption does not fade: it went from full to nothing in 1 in-between polls" and "after Esc the menu bar is not back". The check samples the fade by wall-clock polls, so a slow runner sees one frame. Measure the fade against the kernel's own tick count (or slow the poll budget to the frame rate) instead of retrying it.
+
 - [ ] [Sonnet] Parallel-safe checks (found 2026-10-06 night): several checks write fixed paths such as `/tmp/jt-feature-drive.raw`, so two `ci-local.sh` runs at once corrupt each other's QEMU dumps and fail feature-drive, menuclock, ring3crash-all, qa-gallery and soak at random. Give every check its own `tempfile.mkdtemp()` directory and its own QMP socket, then prove it with two suites side by side. Until then, run one `ci-local.sh` at a time.
 - [x] [Sonnet] Clock icon check flake fixed, 2026-10-04: on a slow runner the face sits still, white and handless for seconds, and the check took that as settled. Reproduced locally under CPU load with the exact CI numbers; it now waits for the hands to have ink (`tools/checks/clockicon-check.py`).
 - [ ] [Sonnet] Six of the last ten red runs were slow-runner timing flakes (Chat tool scenes, the phone mute button, Keyrate, the Apps folder layout): eight QEMUs share one runner. Find out how many cores the runner has, cap QEMUs per runner or move to 10 shards (the balancer says about 319 s of checks per shard, 12 shards about 266 s), and watch the next ten runs.
