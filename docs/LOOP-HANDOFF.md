@@ -1,4 +1,4 @@
-# Joshua Tree loop handoff (2026-10-07, afternoon)
+# Joshua Tree loop handoff (2026-10-07, evening)
 
 ## What the loop is
 
@@ -21,24 +21,18 @@ Joshua's /goal: a mini Joshua Tree with Claude Code inside it, running on the Pi
 
 ## Where things stand
 
-- All Pi work is on branch `pi-stack` (2.28.0) in one draft PR, 453. The old PRs (446 to 452) were folded into it and closed.
-- Wi-Fi joins on the real board. The chip has no supplicant, so the WPA2 4-way handshake is ours (`arch/arm64/wpa.h`: SHA-1, HMAC, key expansion, AES key unwrap), checked against the RFC and a recorded capture. Keys are installed in the chip. The stall was message 2 not repeating the association RSN element byte for byte (router wanted capabilities 0x000c; assoc info needs a 512-byte buffer).
-- Bring-up was stuck at step 9 of 10, on getting an address. The DHCP code and the network clock (time from a plain HTTP Date line) landed in c14ac464 but are untested on the board, so they need one SD swap from Joshua.
-- The console prints one line per result with a summary last. Wi-Fi status shows in the menu bar.
-- The menu bar clock shows --:-- on the board until the clock code (c14ac464, Pacific time) is tested.
-- Apps are not on ARM yet, so the dock icons do nothing on the board. The boot demo plays one lap of the dock labels with no mouse.
-- The latest commits are not covered by the last CI run on PR 453. `tools/ci-local.sh` is not running now; it has to run before the PR goes ready.
-- Benchmark: DEFERRED. Nothing was running at checkpoint time, but the bench waits for the CI run on PR 453 and runs only when the Mac is quiet.
-- `architecture.svg` is one combined graph drawn by `tools/gen/map.py`. `docs/VISION.md` holds the north star. `docs/hardware/BREADBOARD.md` has the wiring. The README logo merged as its own PR.
-- Weekly usage is at 92 to 94 percent, so big new work waits for the Saturday 22:00 reset. The loop stops and checkpoints at 95 percent.
-- Standing answers are in `docs/DECISIONS.md`; the parts list is `docs/SHOPPING.md`.
+- The Pi 4 joins Wi-Fi on the real board. The chip has no login helper, so the WPA2 handshake is ours (arch/arm64/wpa.h). The stall was the router wanting its exact security element repeated in our reply.
+- The Pi gets an address from the router and fetches the time over the internet. The menu bar shows a Wi-Fi fan icon and a 12-hour clock top right, verified on the real screen at 3:14 PM.
+- On a good boot the console shows only the title and typefaces. Lines appear only when something breaks. A small apple sits beside the Steve Jobs tribute line.
+- Everything is in one draft PR, 453 (pi-stack). Ready flips only after a full local CI run.
+- Naming: the file manager rename from Burrow to Drawer is decided, not done; it goes in its own PR after 453. An OS rename is being considered; no pick yet.
 
 ## Next, in order
 
-1. Run `tools/ci-local.sh` on PR 453 against the latest commits. If green, `gh pr ready 453`, merge on GitHub green. If red, fix the cause, do not mute it.
-2. Board-test c14ac464 (DHCP and the clock) in one batched SD swap. Then Joshua's asks, in order: an address on screen over the Wi-Fi data path, the clock, per-app menu bars, speaker (3.5mm), browser with HTTPS, Bluetooth mouse, phone, Yeti mic.
-3. Once the Mac is quiet, run the benchmark (`/jt-bench`) and open it as its own draft PR.
-4. Small, separate PR: image and diagram-only changes skip the QEMU suite in CI. Not started.
+1. Full local CI on PR 453 (one tools/ci-local.sh at a time), then flip it ready and merge.
+2. Burrow to Drawer rename, in its own PR after 453.
+3. Split kernel/kernel.c, which is far too big to work in.
+4. HTTPS on the Pi using the BearSSL already in third_party.
 
 ## Restart prompt
 
