@@ -72,11 +72,11 @@ void net_clock_sync(void) {
     if (!net_get_gateway()) return;
     for (int t = 0; t < 4 && !ip; t++)   /* the first lookup can be lost to ARP or a busy router: try the DNS server, then the gateway, twice */
         if (!dns_resolve("www.google.com", t % 2 == 0 && net_get_dns() ? net_get_dns() : net_get_gateway(), &ip)) ip = 0;
-    if (!ip) { kputs("net dns FAIL\n"); return; }
+    if (!ip) { kputs("Internet: could not look up a web address (DNS)\n"); return; }
     static const char req[] = "HEAD / HTTP/1.0\r\nHost: www.google.com\r\nConnection: close\r\n\r\n";
     static char rep[1024];
     int got = tcp_get_timeout(ip, 80, req, sizeof req - 1, rep, sizeof rep - 1, 500);
-    if (got <= 0) { kputs("net time FAIL (no reply)\n"); return; }
+    if (got <= 0) { kputs("Internet: the time server did not answer\n"); return; }
     rep[got] = 0;
     for (int i = 0; i + 6 < got; i++) {
         if ((rep[i] == 'D' || rep[i] == 'd') && rep[i + 1] == 'a' && rep[i + 2] == 't' && rep[i + 3] == 'e' && rep[i + 4] == ':') {
@@ -87,11 +87,11 @@ void net_clock_sync(void) {
             if (!mon || year < 2024) break;
             clock_utc0 = days_from_civil(year, mon, day) * 86400UL + hh * 3600UL + mm * 60UL + ss;
             clock_tick0 = ticks(); clock_ok = 1;
-            kputs("net time ok\n");
+            kputs("Internet: got the time, clock is set\n");
             return;
         }
     }
-    kputs("net time FAIL (no Date line)\n");
+    kputs("Internet: the reply had no time in it\n");
 }
 /* Seconds since 1970 in UTC, or 0 while the clock is unset. */
 unsigned long net_clock_utc(void) { return clock_ok ? clock_utc0 + (unsigned long)((unsigned)(ticks() - clock_tick0) / 100) : 0; }

@@ -20,7 +20,7 @@ static unsigned wstep; static const char *wname[] = { "", "power", "chip answers
     "firmware upload", "firmware running", "scan", "join", "internet" };
 void menubar_wifi(int state);   /* main.c: the signal icon at the right end of the menu bar: 0 off, 1 working, 2 connected */
 static void step(unsigned n) { wstep = n; }
-static void summary(void) { kputs("Wi-Fi: "); kdec(wstep); kputs(" of 10 steps done, stuck at "); kputs(wname[wstep < 10 ? wstep + 1 : 10]); kputs("\n"); }
+static void summary(void) { kputs("Wi-Fi: "); kdec(wstep); kputs(" of 10 steps done, stopped at "); kputs(wname[wstep < 10 ? wstep + 1 : 10]); kputs("\n"); }
 static void fail(const char *step) { summary(); kputs("wifi FAIL "); kputs(step); if (c53_stage) { kputs(" stage "); kdec(c53_stage); kputs(" int "); kx(c53_int); kputs(" state "); kx(c53_state); } kputs("\n"); }
 
 /* ---- SDHCI host (Arasan, EMMC1). Register names per the SD Host Controller spec; OSDev's SDHCI page. ---- */
@@ -319,22 +319,20 @@ static int wlc_ioctl(unsigned cmd, void *buf, unsigned len, unsigned *status) {
 #endif
 static int ap_shown, ap_rssi = -100;
 int wifi_signal_level(void) { return ap_rssi >= -60 ? 3 : ap_rssi >= -72 ? 2 : 1; }   /* bars from the scan, which is how loud our network was */
-static void ap_line(int rssi, unsigned chan, const char *ssid, unsigned slen) {   /* "wifi ap -51 ch6 MySSID", under 53 columns */
+static void ap_line(int rssi, unsigned chan, const char *ssid, unsigned slen) {   /* one plain-words line, no network name */
     if (ap_shown || slen != WIFI_SSID_LEN) return;
     for (unsigned i = 0; i < slen; i++) if ((unsigned char)ssid[i] != wifi_ssid[i]) return;
     ap_shown = 1; ap_rssi = rssi;
-    kputs("wifi found "); if (rssi < 0) { kputs("-"); rssi = -rssi; } kdec((unsigned)rssi); kputs(" ch"); kdec(chan); kputs(" ");
-    char s[33]; unsigned n = slen > 32 ? 32 : slen; for (unsigned i = 0; i < n; i++) s[i] = ssid[i] >= 32 && ssid[i] < 127 ? ssid[i] : '?'; s[n] = 0;
-    kputs(s); kputs("\n");
+    kputs("Wi-Fi: found our network, signal "); kputs(rssi >= -60 ? "strong" : rssi >= -72 ? "okay" : "weak"); kputs(" on channel "); kdec(chan); kputs("\n");
 }
 static int scan(void) {
     unsigned st; unsigned char v[64];
     if (!iovar("ver", 0, v, sizeof v, &st) || st) { fail("ver"); return 0; }
     v[48] = 0; for (unsigned i = 0; i < 48; i++) if (v[i] == '\n') v[i] = 0;
-    kputs("wifi ver "); kputs((char *)v); kputs("\n");
+    kputs("Wi-Fi: chip firmware "); { const char *q = (char *)v; unsigned n = 0; while (q[n] && q[n] != '(' && n < 60) n++; for (unsigned i = 0; i < n; i++) { char c[2] = {q[i], 0}; kputs(c); } } kputs("\n");
     unsigned char mac[6];
     if (!iovar("cur_etheraddr", 0, mac, 6, &st) || st) { fail("mac"); return 0; }
-    kputs("wifi mac "); for (int i = 0; i < 6; i++) { kx(mac[i]); if (i < 5) kputs(":"); } kputs("\n");
+    kputs("Wi-Fi: this Pi's address is "); for (int i = 0; i < 6; i++) { kx(mac[i]); if (i < 5) kputs(":"); } kputs("\n");
     /* clmload: chunks of {flag, type, len, crc, data}; 1k at a time with BEGIN(2)/END(4) flags */
     for (unsigned off = 0; off < wifi_fw_clm_len; off += 1024) {
         unsigned k = wifi_fw_clm_len - off > 1024 ? 1024 : wifi_fw_clm_len - off, fl = (off == 0 ? 2 : 0) | (off + k >= wifi_fw_clm_len ? 4 : 0) | 1 << 12;
@@ -373,7 +371,7 @@ static int scan(void) {
         }
         mdelay(5);
     }
-    menubar_wifi(1); kputs("wifi scan done, "); kdec(found); kputs(ap_shown ? " results\n" : " results, ours not among them\n"); step(8);
+    menubar_wifi(1); kputs("Wi-Fi: looked around, found "); kdec(found); kputs(ap_shown ? " networks\n" : " networks, but not ours\n"); step(8);
     return 1;
 }
 
@@ -463,7 +461,7 @@ static int join(void) {
     if (!iovar("wpaie", 1, (void *)rsn_ie, sizeof rsn_ie, &st) || st) { kputs("wifi wpaie status "); kx(st); kputs("\n"); }   /* best effort: the firmware can build its own */
     for (unsigned i = 0; i < 80; i++) b[i] = 0;
     put32(b, WIFI_SSID_LEN); for (unsigned i = 0; i < WIFI_SSID_LEN; i++) b[4 + i] = wifi_ssid[i];
-    kputs("wifi joining "); kputs((const char *)wifi_ssid); kputs("\n");
+    kputs("Wi-Fi: connecting to "); kputs((const char *)wifi_ssid); kputs("\n");
     if (!wlc_ioctl(26, b, 36, &st) || st) { kputs("wifi set ssid status "); kx(st); kputs("\n"); fail("set ssid"); return 0; }   /* WLC_SET_SSID */
     unsigned char aa[6], anonce[32], snonce[32], ptk[48]; int have_ptk = 0;
     {   /* our nonce: SHA-1 over the counter, our MAC and the SSID; fresh each boot because the counter is */
@@ -488,7 +486,7 @@ static int join(void) {
             if (type == 3) rsn_ok = 0;   /* a new authentication means a new association request */
             if ((type == 7 || type == 16) && stat == 0 && !rsn_ok) {   /* associated: read the element the chip sent, before message 1 */
                 unsigned n = assoc_rsn(used, sizeof used);
-                if (n) { used_len = n; rsn_ok = 1; if (m1count == 0) { kputs("wifi assoc RSN "); kdec(n); kputs(" bytes:"); for (unsigned i = 0; i < n; i++) { kputs(" "); kx(used[i]); } kputs("\n"); } }
+                if (n) { used_len = n; rsn_ok = 1; if (m1count == 0) { kputs(""); } }
             }
             if (type == 0 && stat == 3 && tries++ < 3) {   /* WLC_E_STATUS_NO_NETWORKS: its join scan missed Shaw, ask again */
                 kputs("wifi join: no network found, trying again\n"); mdelay(300);
@@ -511,9 +509,9 @@ static int join(void) {
                 wpa_ptk(wifi_pmk, aa, mymac, anonce, snonce, ptk); have_ptk = 1;
                 if (!rsn_ok) { unsigned n = assoc_rsn(used, sizeof used); if (n) { used_len = n; rsn_ok = 1; } }
                 m1count++;
-                if (m1count == 1) { kputs("wifi handshake 1 of 4, info "); kx(info); kputs(" kd "); kdec(kdlen); kputs(rsn_ok ? "\n" : " (our own RSN guess)\n"); }
+                if (m1count == 1) { kputs("Wi-Fi: the router said hello (secure handshake 1 of 4)\n"); }
                 if (!eapol_reply(aa, k[0], 0x010a, k + 9, snonce, used, used_len, ptk, 0)) { fail("msg2 send"); return 0; }
-                if (m1count == 1) kputs("wifi handshake 2 of 4 sent\n");
+                if (m1count == 1) kputs("Wi-Fi: we answered with the password proof (2 of 4)\n");
             } else if (have_ptk && (info & 0x0080) && (info & 0x0100) && (info & 0x0040)) {   /* message 3: ack, MIC, install */
                 unsigned char m[99 + 256], mic[20];
                 unsigned body = be16(k + 2); if (4 + body > sizeof m) continue;
@@ -522,7 +520,7 @@ static int join(void) {
                 wpa_hmac(ptk, 16, m, 4 + body, 0, 0, mic);
                 int micok = 1; for (int i = 0; i < 16; i++) if (mic[i] != k[81 + i]) micok = 0;
                 if (!micok) { kputs("wifi handshake 3 MIC wrong (the passphrase does not match)\n"); fail("mic"); return 0; }
-                kputs("wifi handshake 3 of 4, MIC good\n");
+                kputs("Wi-Fi: the router checked out too (3 of 4)\n");
                 unsigned char kd[256]; unsigned gtk_id = 1; const unsigned char *gtk = 0;
                 if ((info & 0x1000) && kdlen >= 24 && kdlen <= 264 && wpa_unwrap(ptk + 16, k + 99, kdlen, kd)) {
                     for (unsigned i = 0; i + 2 <= kdlen - 8; ) {   /* KDEs: dd len 00-0f-ac 01 keyid 0 GTK */
@@ -533,10 +531,10 @@ static int join(void) {
                     }
                 }
                 if (!eapol_reply(aa, k[0], 0x030a, k + 9, 0, 0, 0, ptk, 0)) { fail("msg4 send"); return 0; }
-                kputs("wifi handshake 4 of 4 sent\n");
+                kputs("Wi-Fi: handshake done (4 of 4)\n");
                 if (!set_key(0, ptk + 32, aa, 2)) { fail("pairwise key"); return 0; }   /* BRCMF_PRIMARY_KEY */
                 if (gtk && !set_key(gtk_id, gtk, 0, 0)) { fail("group key"); return 0; }
-                kputs(gtk ? "wifi joined, keys installed\n" : "wifi joined, no group key found\n");
+                kputs(gtk ? "Wi-Fi: connected, traffic is now encrypted\n" : "Wi-Fi: connected, but no shared key arrived\n");
                 menubar_wifi(2);
                 link_up = 1; step(9); summary(); return 1;
             }
