@@ -3,7 +3,8 @@
 through ramfb; on QEMU's Raspberry Pi 4B model through the VideoCore mailbox, the same call a real Pi answers.
 
 Boots each build, waits for "M1c fb ok" on the UART, then asks QEMU for a screendump over QMP and checks real pixels:
-the menu bar (its rule, and half wallpaper half white), the Satellite wallpaper (real photo pixels, in colour, not the old flat fill), window, accent title bar, dock and the tribute line above it. On the Pi model it also fakes a 1080p
+the menu bar (its rule, and half wallpaper half white), the Satellite wallpaper (real photo pixels, in colour, not the old flat fill), window, accent title bar, the i386 dock (its tray,
+hairline and 11 icon tiles, from the shared kernel/gui_paint.c) and the tribute line above it. On the Pi model it also fakes a 1080p
 and a 4K monitor and checks the desktop fills a 1920x1080 screen. This proves what the screen shows, not just what the
 kernel believes. The cache cleaning a real board needs is invisible to QEMU, so that part is checked in the source.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
@@ -67,7 +68,13 @@ def shoot(name, qemu_args, image, size=(800, 600)):
         parts = open(shot, "rb").read().split(b"\n", 3); w, h = map(int, parts[1].split()); px = parts[3]
         if (w, h) != size: fails.append(f"{name}: screen is {w}x{h}, want {size[0]}x{size[1]}"); return
         sc = lambda v: v * h // 600                                  # the kernel's own layout rule: an 800x600 design scaled by height
-        win_w, win_h = sc(500), sc(350); win_x, win_y = (w - win_w) // 2, sc(100); dock_y = h - sc(60)
+        win_w, win_h = sc(500), sc(350); win_x, win_y = (w - win_w) // 2, sc(100)
+        # The dock is the i386 desktop's own (kernel/gui_paint.c, kernel/dock_geom.c): a 1080p screen is the 960x540
+        # grid at scale 2, a smaller one scale 1. Same layout math as dock_geom.c, dock_scale_pct 7, 11 icons.
+        s2 = 2 if h >= 1080 else 1; lw, lh = w // s2, h // s2
+        icon = max(16, min(lh * 7 // 100, (min(740, lw - 40) - 2 * 10 - 10 * 6) // 11))
+        dock_w = 11 * icon + 10 * 6 + 2 * 10; dock_x0 = (lw - dock_w) // 2; dock_y0 = lh - icon - 2 * 10 - 24
+        dock_y = (dock_y0 - 24) * s2                                 # the top of the dock's band: the tribute sits above it
         win = [tuple(px[(y * w + x) * 3:(y * w + x) * 3 + 3]) for y in range(win_y + sc(32), win_y + win_h - sc(14)) for x in range(win_x + sc(8), win_x + win_w - sc(4))]
         ink = sum(1 for c in win if max(c) < 0x90)                  # dark text pixels
         soft = sum(1 for c in win if 0x30 < c[0] < 0xd0 and c[0] == c[1] == c[2])   # grey edge pixels: only smooth, anti-aliased text has them
@@ -98,7 +105,19 @@ def shoot(name, qemu_args, image, size=(800, 600)):
         elif tinted * 4 < len(dsk): fails.append(f"{name}: the wallpaper is not in colour ({tinted} of {len(dsk)} samples tinted)")
         else: print(f"  ok: {name} wallpaper is the photo: {colours} colours in {len(dsk)} samples, {tinted} tinted")
         want = [("window", (w // 2, win_y + win_h - 4), (0xff, 0xff, 0xff)), ("title bar", (w // 2, win_y + sc(10)), (0xb5, 0x50, 0x2c)),
-                ("dock", (w // 2, h - sc(40)), (0x50, 0x5a, 0x68))]
+                ("dock tray", (w // 2, (dock_y0 + 5) * s2), (0xef, 0xeb, 0xe4)),                 # DOCK_TRAY_COLOR, in the pad above the icons
+                ("dock hairline", (w // 2, dock_y0 * s2 + s2 - 1), (0xd6, 0xd0, 0xc6))]         # its top edge, one physical pixel
+        if "M1d dock 11 icons" not in out: fails.append(f"{name}: no 'M1d dock 11 icons' line: the icon artwork did not draw")
+        tiles = []                                                   # each slot's tile: the icon artwork, not bare tray
+        for slot in range(11):
+            x0, y0 = (dock_x0 + 10 + slot * (icon + 6)) * s2, (dock_y0 + 10) * s2
+            px_ = [at(x, y) for y in range(y0 + 4 * s2, y0 + (icon - 4) * s2, s2) for x in range(x0 + 4 * s2, x0 + (icon - 4) * s2, s2)]
+            tiles.append((sum(1 for c in px_ if c != (0xef, 0xeb, 0xe4)) * 100 // len(px_), len(set(px_))))
+        bare = [i for i, (cover, _) in enumerate(tiles) if cover < 60]
+        if bare: fails.append(f"{name}: dock slots {bare} show the tray, not an icon (cover % per slot: {[t[0] for t in tiles]})")
+        elif len({at((dock_x0 + 10 + k * (icon + 6) + icon // 2) * s2, (dock_y0 + 10 + icon // 3) * s2) for k in range(11)}) < 6:
+            fails.append(f"{name}: the 11 dock tiles look alike, the artwork is not drawing")
+        else: print(f"  ok: {name} dock: 11 icon tiles of {icon} at scale {s2}, {min(t[1] for t in tiles)}+ colours each")
         for what, (x, y), c in want:
             i = (y * w + x) * 3; got = tuple(px[i:i + 3])
             if got != c: fails.append(f"{name}: {what} at {(x, y)}: got {got}, want {c}")

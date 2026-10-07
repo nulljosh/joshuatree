@@ -30,7 +30,7 @@ Joshua's /goal: we can build a mini Joshua Tree with Claude Code inside Joshua T
 
 1. Joshua swaps in the newest card; he photographs the Console. Page Up shows the Wi-Fi lines; the pinned row shows the latest `wifi` line. If it says `WL_ON reads 1` and then a `sdio card rca` line, the chip is alive.
 2. Keep merging green PRs one at a time; rebase the rest above main's VERSION. Check the test variants in `arch/arm64/Makefile` still link the shared network and ask objects after any Makefile merge.
-3. Desktop slice 2: extract the dock painters from `kernel/kernel.c` into a shared `kernel/gui_paint.c`, then the ARM dock, window chrome, cursor and typing.
+3. Desktop slice 3: window chrome on ARM from the shared painters, then the cursor and typing. Slice 2 (2.22.0) moved the dock painters into `kernel/gui_paint.c` and the ARM desktop draws the real dock.
 4. Wi-Fi stage 2: join the network from the ignored config file, fill the four network calls, then TCP that survives loss.
 5. Admin and sudo; SD card writes with MBR and FAT32; the self-update loop and the fallback kernel; Doom.
 

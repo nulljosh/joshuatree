@@ -2,6 +2,7 @@
 #define DOCK_DRAW_H
 
 #include "dock_geom.h"
+#include "gui_paint.h"
 
 /* Dock pixel drawing and its hover/drag animation, split out of kernel.c
    to keep it under the godfile-check.sh ceiling. dock_geom.h already
@@ -12,8 +13,6 @@
 void gui_draw_dock(int hover_slot, int drag_slot, int drag_mx, int drag_my);
 void gui_redraw_dock_band(int hover_slot, int drag_slot, int drag_mx, int drag_my);
 void gui_dock_prewarm(void);
-void gui_hairline_h(int x, int y, int w, unsigned int color);
-int gui_dock_band_top(void);
 /* Frees the band cache/frame buffers; called once by gui_run() on exit so
    the GUI heap allocations don't linger past the session. */
 void gui_dock_band_cache_free(void);

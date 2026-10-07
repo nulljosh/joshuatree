@@ -47,13 +47,19 @@ inflate.o: ../../drivers/inflate.c
 	$(CC) $(SHARED) -c $< -o $@
 wall.o: wall.c ../../kernel/wall_sat.h
 	$(CC) $(SHARED) -c $< -o $@
+# The dock: the i386 desktop's own painters and dock layout, the same source files, drawn through main.c's window shim.
+GUIOBJ = gui_paint.o dock_geom.o
+gui_paint.o: ../../kernel/gui_paint.c ../../kernel/gui_paint.h ../../kernel/dock_geom.h
+	$(CC) $(SHARED) -c $< -o $@
+dock_geom.o: ../../kernel/dock_geom.c ../../kernel/dock_geom.h
+	$(CC) $(SHARED) -c $< -o $@
 start.o: start.S
 	$(CC) -c $< -o $@
 user.o: user.S
 	$(CC) -c $< -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-main.o: main.c
+main.o: main.c ../../kernel/gui_paint.h ../../kernel/icon_art.h
 	$(CC) -c $< -o $@
 pci.o: pci.c
 	$(CC) -c $< -o $@
@@ -77,12 +83,12 @@ pi-start.o: start.S
 	$(CC) -c $< -o $@
 pi-main.o: main.c
 	$(CC) -DPI_BUILD -c $< -o $@
-kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(NETOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(NETOBJ)
-pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(NETOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(NETOBJ)
+kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ)
+pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ)
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(NETOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ)
 pi: wifi-fw kernel8.img
 # Variant builds: $(1) names the output, $(2) the main.c flags, $(3) extra objects, $(4) the vectors.S flags.
 define variant
@@ -92,12 +98,12 @@ $(1)-pi-main.o: main.c
 	$(CC) -DPI_BUILD $(2) -c $$< -o $$@
 $(1)-vectors.o: vectors.S
 	$(CC) $(4) -c $$< -o $$@
-$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(NETOBJ) $(3) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(NETOBJ) $(3)
-$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(NETOBJ) $(3) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(NETOBJ) $(3)
+$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3)
+$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3)
 $(1)-kernel8.img: $(1)-pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(NETOBJ) $(3)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3)
 endef
 fptest.o: fptest.c
 	$(FPCC) -c $< -o $@
