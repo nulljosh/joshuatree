@@ -256,6 +256,12 @@ static int f2_read(void) {
 }
 /* What the last frame read back looked like, printed when a command gets no matching reply. */
 static unsigned last_chan = 98, last_len, last_cmd, last_id, last_st;
+/* A control reply matches on the request id alone. The BCDC status is its own field: 0xffffffff (-1) is the chip saying "error",
+   and bcdc_reply() in wifi_proto.h used -1 for "wrong id", so an error reply looked like no reply at all. */
+static int reply_match(const unsigned char *b, unsigned len, unsigned id, unsigned *off) {
+    if (len < 16 || (rd32(b + 8) >> 16) != id) return 0;
+    *off = 16; return 1;
+}
 static unsigned tx_max, tx_max_seen;   /* the chip's flow control: the highest sequence number it will take, from byte 9 of every SDPCM header it sends */
 /* brcmfmac only sends while seq != max and (max - seq) is not "negative" (bit 7). Frames sent past the credit are dropped by the chip,
    which looks exactly like a command that never gets a reply. Poll for fresh credit (any frame carries it) for up to half a second. */
@@ -279,7 +285,7 @@ static int iovar(const char *name, int set, void *buf, unsigned len, unsigned *s
         c = sdpcm_parse(frame, 1536, &off, &l);
         if (c >= 0) { tx_max = frame[9]; tx_max_seen = 1; last_chan = c; last_len = l; if (c == SDPCM_CONTROL && l >= 16) { last_cmd = rd32(frame + off); last_id = rd32(frame + off + 8) >> 16; last_st = rd32(frame + off + 12); } }
         else last_chan = 99;
-        if (c == SDPCM_CONTROL && bcdc_reply(frame + off, l, id, &ch) >= 0) {
+        if (c == SDPCM_CONTROL && reply_match(frame + off, l, id, &ch)) {
             *status = rd32(frame + off + 12);
             unsigned have = l - ch; if (have > len) have = len;
             for (unsigned i = 0; i < have; i++) ((unsigned char *)buf)[i] = frame[off + ch + i];
@@ -300,7 +306,7 @@ static int wlc_ioctl(unsigned cmd, void *buf, unsigned len, unsigned *status) {
         unsigned off, l, ch; int c;
         if (!f2_read()) return 0;
         c = sdpcm_parse(frame, 1536, &off, &l);
-        if (c == SDPCM_CONTROL && bcdc_reply(frame + off, l, id, &ch) >= 0) { *status = rd32(frame + off + 12); return 1; }
+        if (c == SDPCM_CONTROL && reply_match(frame + off, l, id, &ch)) { *status = rd32(frame + off + 12); return 1; }
         mdelay(5);
     }
     return 0;
@@ -324,10 +330,12 @@ static int scan(void) {
         unsigned char b[1040]; wr16(b, fl); wr16(b + 2, 2); wr32(b + 4, k); wr32(b + 8, 0);
         for (unsigned i = 0; i < k; i++) b[12 + i] = wifi_fw_clm[off + i];
         if (!iovar("clmload", 1, b, 12 + k, &st) || st) {   /* optional: the firmware carries a default CLM, brcmfmac only warns */
-            kputs("wifi clm skipped, status "); kdec(st); kputs(" (using the built-in regulatory data)\n"); break; }
+            kputs("wifi clm chunk at "); kdec(off); kputs(" of "); kdec(wifi_fw_clm_len); kputs(" refused, status "); kx(st); kputs("\n");
+            { unsigned cs = 0xdead; unsigned s2; if (iovar("clmload_status", 0, &cs, 4, &s2)) { kputs("wifi clmload_status "); kx(cs); kputs("\n"); } }
+            break; }
     }
     unsigned char cc[12] = { 'C', 'A', 0, 0, 0xff, 0xff, 0xff, 0xff, 'C', 'A', 0, 0 };   /* wlc_country: ccode, rev -1, abbrev */
-    if (!iovar("country", 1, cc, 12, &st) || st) { kputs("wifi country not set, status "); kdec(st); kputs(" (scanning with the default)\n"); }
+    if (!iovar("country", 1, cc, 12, &st) || st) { kputs("wifi country refused, status "); kx(st); kputs(" (scanning with the default)\n"); }
     unsigned char es[80] = {0}; wr32(es, 1); wr16(es + 4, 1); wr16(es + 6, 0x1234);   /* escan: version 1, ESCAN_ACTION_START, sync id */
     unsigned char *pr = es + 8; for (int i = 0; i < 6; i++) pr[36 + i] = 0xff;        /* wl_scan_params: wildcard SSID, any BSSID */
     pr[42] = 2; pr[43] = 0;   /* bss_type ANY (2), scan_type active (0): the two bytes were swapped, so the chip refused the scan */
@@ -337,7 +345,7 @@ static int scan(void) {
     { unsigned char em[20] = {0}; if (iovar("event_msgs", 0, em, 18, &st) && !st) { em[8] |= 1 << 5; if (!iovar("event_msgs", 1, em, 18, &st) || st) kputs("wifi event mask not set\n"); } else kputs("wifi event mask unreadable\n"); }
     if (!wlc_ioctl(2, 0, 0, &st) || st) { kputs("wifi up ioctl status "); kdec(st); kputs("\n"); } else kputs("wifi radio up\n");   /* WLC_UP */
     { unsigned ok = iovar("escan", 1, es, sizeof es, &st);
-      if (!ok || st) { kputs("wifi escan "); kputs(ok ? "status " : "no reply, status "); kdec(st); kputs("\n"); fail("escan"); return 0; } }
+      if (!ok || st) { kputs("wifi escan "); kputs(ok ? "status " : "no reply, status "); kx(st); kputs("\n"); fail("escan"); return 0; } }
     unsigned found = 0;
     for (unsigned t = 0; t < 600; t++) {   /* up to 3 s of events on the event channel */
         unsigned off, l; if (!f2_read()) break;
