@@ -59,7 +59,8 @@ user.o: user.S
 	$(CC) -c $< -o $@
 vectors.o: vectors.S
 	$(CC) -c $< -o $@
-main.o: main.c ../../kernel/gui_paint.h ../../kernel/icon_art.h
+MAINDEP = ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
+main.o: main.c $(MAINDEP)
 	$(CC) -c $< -o $@
 pci.o: pci.c
 	$(CC) -c $< -o $@
@@ -81,7 +82,7 @@ pi-xhci.o: xhci.c
 	$(CC) -DPI_BUILD -c $< -o $@
 pi-start.o: start.S
 	$(CC) -c $< -o $@
-pi-main.o: main.c
+pi-main.o: main.c $(MAINDEP)
 	$(CC) -DPI_BUILD -c $< -o $@
 kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) linker.ld
 	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ)
@@ -92,9 +93,9 @@ kernel8.img: pi-kernel8.elf
 pi: wifi-fw kernel8.img
 # Variant builds: $(1) names the output, $(2) the main.c flags, $(3) extra objects, $(4) the vectors.S flags.
 define variant
-$(1)-main.o: main.c
+$(1)-main.o: main.c $(MAINDEP)
 	$(CC) $(2) -c $$< -o $$@
-$(1)-pi-main.o: main.c
+$(1)-pi-main.o: main.c $(MAINDEP)
 	$(CC) -DPI_BUILD $(2) -c $$< -o $$@
 $(1)-vectors.o: vectors.S
 	$(CC) $(4) -c $$< -o $$@
