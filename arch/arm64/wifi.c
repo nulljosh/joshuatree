@@ -480,6 +480,14 @@ static int join(void) {
                 kputs("wifi handshake 1 of 4, info "); kx(info); kputs(" kd "); kdec(kdlen); kputs("\n");
                 if (!eapol_reply(aa, k[0], 0x010a, k + 9, snonce, (variant & 2) ? 0 : rsn_ie, (variant & 2) ? 0 : sizeof rsn_ie, ptk, (variant & 1) ? 16 : 0)) { fail("msg2 send"); return 0; }
                 kputs("wifi handshake 2 of 4 sent, variant "); kdec(variant); kputs("\n");
+                if (m1count <= 2) {   /* did it leave the radio? the chip's own counters: txframe, txbyte, txretrans, txerror */
+                    unsigned char cn[64] = {0}; unsigned s2 = 0;
+                    mdelay(50);
+                    if (iovar("counters", 0, cn, sizeof cn, &s2) && !s2) {
+                        kputs("wifi tx counters v"); kdec(rd16(cn)); kputs(" frames "); kdec(rd32(cn + 4)); kputs(" retries "); kdec(rd32(cn + 12));
+                        kputs(" errors "); kdec(rd32(cn + 16)); kputs("\n");
+                    } else { kputs("wifi counters status "); kx(s2); kputs("\n"); }
+                }
             } else if (have_ptk && (info & 0x0080) && (info & 0x0100) && (info & 0x0040)) {   /* message 3: ack, MIC, install */
                 unsigned char m[99 + 256], mic[20];
                 unsigned body = be16(k + 2); if (4 + body > sizeof m) continue;
