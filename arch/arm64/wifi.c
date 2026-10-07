@@ -254,6 +254,12 @@ static int f2_read(void) {
     if (len > 64 && len <= 1600) { unsigned rest = (len - 64 + 3) & ~3u; if (!cmd53(2, 0x8000, 0, frame + 64, rest)) return 0; }
     return 1;
 }
+/* What the last frame read back looked like, printed when a command gets no matching reply. */
+static unsigned last_chan = 98, last_len, last_cmd, last_id, last_st;
+static void no_reply(const char *name, unsigned want) {
+    kputs("wifi "); kputs(name); kputs(" no reply: want id "); kdec(want); kputs(", last frame ch "); kdec(last_chan);
+    kputs(" len "); kdec(last_len); kputs(" cmd "); kdec(last_cmd); kputs(" id "); kdec(last_id); kputs(" st "); kx(last_st); kputs("\n");
+}
 static int iovar(const char *name, int set, void *buf, unsigned len, unsigned *status) {
     unsigned char p[1024]; unsigned k = 0;
     while (name[k]) { p[k] = name[k]; k++; } p[k++] = 0;
@@ -264,6 +270,8 @@ static int iovar(const char *name, int set, void *buf, unsigned len, unsigned *s
         unsigned off, l, ch; int c;
         if (!f2_read()) return 0;
         c = sdpcm_parse(frame, 1536, &off, &l);
+        if (c >= 0) { last_chan = c; last_len = l; if (c == SDPCM_CONTROL && l >= 16) { last_cmd = rd32(frame + off); last_id = rd32(frame + off + 8) >> 16; last_st = rd32(frame + off + 12); } }
+        else last_chan = 99;
         if (c == SDPCM_CONTROL && bcdc_reply(frame + off, l, id, &ch) >= 0) {
             *status = rd32(frame + off + 12);
             unsigned have = l - ch; if (have > len) have = len;
@@ -272,6 +280,7 @@ static int iovar(const char *name, int set, void *buf, unsigned len, unsigned *s
         }
         mdelay(5);
     }
+    no_reply(name, id);
     return 0;
 }
 /* A plain BCDC ioctl (no variable name): WLC_UP is 2, a set with no payload. brcmfmac brings the interface up this way
