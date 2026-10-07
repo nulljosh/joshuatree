@@ -38,6 +38,14 @@ The only seam is `drivers/nic.h`, four calls: bring the card up, read its MAC, s
 
 Next, in order: Wi-Fi joins a network below the same four calls (the CYW43455 driver). Then TCP that survives a lost segment, which a real radio needs and QEMU never tests. TLS comes later, through the BearSSL the i386 build already has.
 
+## Claude in the Console
+
+Since 2.21.0 the bottom row of the Console is a prompt, `ask>`. Type a question, Backspace to fix it, Enter to send. The kernel posts it to the Claude relay on the Mac (`tools/claude-relay/relay.py`, see [CLAUDE-APP.md](CLAUDE-APP.md)) through the IP stack above, and prints the answer in the Console in lines of at most 53 columns. A follow-up keeps the conversation. Each outcome is one short line: `claude: thinking`, `claude: error -401` when the relay refuses the token, `claude: timeout`, `claude: no network` with no DHCP lease, `claude: no token` when the build had none. Typed keys show on the prompt row and their echo lines go to the serial port only, so the log stays readable.
+
+The relay's address and token are set at build time, never in git: `CLAUDE_RELAY_HOST` (default 10.0.2.2), `CLAUDE_RELAY_PORT` (default 8765) and the token file named by `CLAUDE_RELAY_TOKEN_FILE` (default the same token file the Claude app uses). `arch/arm64/claude_cfg.sh` writes them into a gitignored header on every build. The token is never printed.
+
+It works end to end on QEMU's virt machine with virtio-net: `tools/checks/arm64-claude-console-check.py` types a question with QMP keys and reads the answer back from a stub Claude. A real Pi has no network until Wi-Fi joins (stage 2 below), so today it says `claude: no network, Wi-Fi has not joined yet`. Once Wi-Fi joins, run the relay with `--lan` and build with `CLAUDE_RELAY_HOST` set to the Mac's LAN address.
+
 ## Risks
 
 - USB through xHCI is the largest single driver and the first thing a real board needs.
