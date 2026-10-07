@@ -36,6 +36,20 @@ SMALL_R = (6.3, 7.8, 6.7)
 ARMS = (LEFT, MID, RIGHT)
 
 
+def tilt(pts, deg=8.0, cx=48.8, cy=84.0):
+    """Lean points over to the right about the trunk's foot."""
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    return [(cx + (x - cx) * c - (y - cy) * s, cy + (x - cx) * s + (y - cy) * c) for x, y in pts]
+
+
+# The big copy leans harder (8 degrees, kink kept) and its right arm forks higher, so the fork sits off centre.
+# The bold 16 px copy keeps the upright TRUNK and ARMS above.
+BIG_TRUNK = tilt(TRUNK)
+BIG_LEFT, BIG_MID = tilt(LEFT), tilt(MID)
+BIG_RIGHT = tilt([(54.0, 59.5)] + RIGHT[1:])
+CROTCH_L, CROTCH_R = tilt([(50.0, 59.0)])[0], tilt([(55.0, 57.0)])[0]
+
+
 def f(v):
     return f"{v:.2f}".rstrip("0").rstrip(".")
 
@@ -123,41 +137,44 @@ def drawing(small):
     """(line subpaths, scribble subpaths, (width factor, subpaths) marker presses). small: the tree drawn down
     its middle for 16 to 48 px, one even weight."""
     rnd = random.Random(1932)
+    TRUNK_, LEFT_, MID_, RIGHT_ = (TRUNK, LEFT, MID, RIGHT) if small else (BIG_TRUNK, BIG_LEFT, BIG_MID, BIG_RIGHT)
+    ARMS_ = (LEFT_, MID_, RIGHT_)
+    TUFTS_ = tuple((a,) + t[1:] for a, t in zip(ARMS_, TUFTS))
     K = 0.82   # the drawing sits in the middle of the box, lots of paper round it
     lines, knots = [], []
     if small:
         lines.append([(30.5, 85.4), (49.0, 84.0), (68.5, 83.6)])
-        lines.append(TRUNK)
-        for arm in ARMS:
-            lines.append([TRUNK[-1]] + arm[1:])
-        for arm, r in zip(ARMS, SMALL_R):
+        lines.append(TRUNK_)
+        for arm in ARMS_:
+            lines.append([TRUNK_[-1]] + arm[1:])
+        for arm, r in zip(ARMS_, SMALL_R):
             cx, cy, _ = tip(arm, 3.0)
             knots.append(scribble(rnd, cx, cy, r, 3, 0.3))
         return [scale(p, K) for p in lines], [scale(p, K) for p in knots], []
     # the ground, one quick stroke that runs a touch downhill, sags, and flicks up past where it meant to stop
-    ground = shaky(rnd, [(26.5, 87.2), (38.0, 87.9), (52.0, 88.1), (66.0, 87.0), (72.6, 86.0)], 0.45) + [(73.8, 85.1)]
+    ground = shaky(rnd, [(21.5, 87.4), (34.0, 88.0), (50.0, 88.1), (62.5, 87.1), (68.6, 86.2)], 0.45) + [(69.8, 85.3)]
     lines.append(ground)
     # the trunk and the arms: two thin edges each, one stroke up the outside of the tree, one for each crotch
-    tl, tr = offset(TRUNK, 5.6, 3.9, -1), offset(TRUNK, 5.6, 3.9, +1)
+    tl, tr = offset(TRUNK_, 5.6, 3.9, -1), offset(TRUNK_, 5.6, 3.9, +1)
     # each edge starts a hair past the ground, the way a fast pen overshoots
     tl = [(tl[0][0] - 0.5, tl[0][1] + 4.4)] + tl
     tr = [(tr[0][0] + 0.7, tr[0][1] + 3.3)] + tr
-    edges = {id(a): (offset(a, 3.3, 2.6, -1), offset(a, 3.3, 2.6, +1)) for a in ARMS}
-    outer_l = shaky(rnd, tl[:-1] + edges[id(LEFT)][0][1:], 0.8)
-    outer_r = shaky(rnd, list(reversed(edges[id(RIGHT)][1][1:])) + list(reversed(tr[:-1])), 0.8)
+    edges = {id(a): (offset(a, 3.3, 2.6, -1), offset(a, 3.3, 2.6, +1)) for a in ARMS_}
+    outer_l = shaky(rnd, tl[:-1] + edges[id(LEFT_)][0][1:], 0.8)
+    outer_r = shaky(rnd, list(reversed(edges[id(RIGHT_)][1][1:])) + list(reversed(tr[:-1])), 0.8)
     lines.append(outer_l)
-    lines.append(shaky(rnd, list(reversed(edges[id(LEFT)][1][1:])) + [(50.0, 59.0)] + edges[id(MID)][0][1:], 0.8))
-    lines.append(shaky(rnd, list(reversed(edges[id(MID)][1][1:])) + [(55.0, 60.6)] + edges[id(RIGHT)][0][1:], 0.8))
+    lines.append(shaky(rnd, list(reversed(edges[id(LEFT_)][1][1:])) + [CROTCH_L] + edges[id(MID_)][0][1:], 0.8))
+    lines.append(shaky(rnd, list(reversed(edges[id(MID_)][1][1:])) + [CROTCH_R] + edges[id(RIGHT_)][0][1:], 0.8))
     lines.append(outer_r)
     # the marker pressed harder down the trunk and through the middle of the ground, so the width swells and thins
-    press = [(1.35, [part(outer_l, 0.04, 0.42), part(outer_r, 0.6, 0.97), part(ground, 0.12, 0.62)]),
-             (1.7, [part(outer_l, 0.12, 0.28), part(outer_r, 0.74, 0.9), part(ground, 0.25, 0.45)])]
+    press = [(1.5, [part(outer_l, 0.02, 0.42), part(outer_r, 0.6, 0.97)]),
+             (2.1, [part(outer_l, 0.04, 0.22), part(outer_r, 0.8, 0.97)])]
     # the tufts: a mass of overlapping loops worked back and forth at each tip, a ragged edge, and a few loose
     # loops trailing off it, each tuft its own size and density
     # the blades sit between the two weights: thinner than the trunk, firmer than the loops
     spikes = []
-    press.append((0.65, spikes))
-    for arm, r, loops, strays, size, count, reach in TUFTS:
+    press.append((1.3, spikes))
+    for arm, r, loops, strays, size, count, reach in TUFTS_:
         cx, cy, up = tip(arm, 4.5)
         knots.append(scribble(rnd, cx, cy, r, loops, 0.9))
         knots.append(scribble(rnd, cx + 0.6, cy - 0.4, r * 0.4, max(loops - 1, 1), 0.4))
@@ -206,7 +223,7 @@ def write(path, text):
 
 
 def main():
-    big = paths(False, 2.3, 1.1)   # thin loop stroke so white shows through the tufts
+    big = paths(False, 1.1, 1.1)   # thin loop stroke so white shows through the tufts
     write("landing/logo.svg", svg(big, "0 0 100 100", grain=True))
     write("landing/mark-tree.svg", svg(big, "0 0 100 100"))
     write("landing/mark-bold.svg", svg(paths(True, 5.0, 4.2), bold_box(), theme=True))
