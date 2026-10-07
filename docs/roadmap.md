@@ -445,6 +445,22 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 - [ ] [Sonnet] A split/multiplexed terminal, the buildable substitute for tmux (tmux itself needs pty/job control this kernel lacks).
 - [ ] [Sonnet] Moveable dock position, menu bar customization, a network status panel in Settings.
 
+### Mac gaps (Joshua, 2026-10-07)
+The Mac apps and menu bar pieces this OS still lacks, listed so they can be picked up one at a time.
+
+- [ ] [Sonnet] Browser (a real web browser app, not a stub).
+- [ ] [Sonnet] Messages.
+- [ ] [Sonnet] FaceTime.
+- [ ] [Sonnet] Photos.
+- [ ] [Sonnet] Preview (open and view documents and images).
+- [ ] [Sonnet] Maps.
+- [ ] [Sonnet] System Settings as its own app, not panels inside Settings.
+- [ ] [Sonnet] App Store.
+- [ ] [Sonnet] Podcasts.
+- [ ] [Sonnet] Control Center in the menu bar.
+- [ ] [Sonnet] Battery status in the menu bar.
+- [ ] [Sonnet] Focus in the menu bar.
+
 ## Tests and the loop
 Everything a stranger needs to use it for an hour in the browser or an emulator without getting stuck. See `docs/LOOP-HANDOFF.md` for what's merging right now.
 
