@@ -59,6 +59,7 @@ cd "$(dirname "$0")/../.."
 manifest() {
 cat <<'EOF'
 once |6|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
+once |6|No check hard-codes a fixed /tmp/jt-* path or socket, so two suites cannot corrupt each other (static, baseline only shrinks)|python3 ./tools/checks/tmp-paths-check.py
 once |0|docs/DESIGN.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static)|python3 ./tools/checks/design-doc-check.py
 once |6|Kernel memory keeps 16KB clear of the program window (toolchain drift guard)|python3 ./tools/checks/bss-margin-check.py
 once |6|Samantha's face loops wrap without a seam|python3 ./tools/checks/face-frames-check.py
@@ -179,7 +180,7 @@ retry|1|Ring-3 window resize: snap Notes to a quarter, JT_EV_RESIZE answered, ne
 retry|0|Windows drag live by their title bar (single-window Notes and multi-window Files)|python3 ./tools/checks/windowdrag-check.py
 retry|0|Windowed apps start under the title bar, Calendar fits six weeks|python3 ./tools/checks/apptop-check.py
 retry|7|Calendar Day, Week, Month and Year views (ring-3 program)|python3 ./tools/checks/calviews-check.py
-retry|6|QA gallery: every app opens, screenshots, closes, no crash|python3 ./tools/checks/qa-gallery.py /tmp/jt-gallery
+retry|6|QA gallery: every app opens, screenshots, closes, no crash|python3 ./tools/checks/qa-gallery.py
 retry|2|Every app's main action, headless|python3 ./tools/checks/feature-drive.py
 retry|3|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
 retry|4|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
