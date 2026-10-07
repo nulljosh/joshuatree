@@ -50,12 +50,12 @@ chain(330, [('You type', '"call Mom at 5"'), ('Turing', 'picks the tool'), ('Jos
 # The Pi, on the real board. done = seen working in a photo of the screen.
 sec(400, 'The Pi, on the real board')
 pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi scan', '16 networks', 1),
-      ('Wi-Fi join', 'in progress', 0), ('Clock', 'from the net', 0), ('Sound', 'headphone jack', 0),
+      ('Wi-Fi join', 'WPA2, Shaw', 1), ('Clock', 'from the net', 0), ('Sound', 'headphone jack', 0),
       ('Mouse', 'Bluetooth', 0), ('Mic', 'Yeti, USB', 0)]
 pw = (W - 40 - 7 * 8) / 8
 for i, (a, b, done) in enumerate(pi):
     box(20 + i * (pw + 8), 410, pw, 40, a, b, 'new' if done else 'todo')
-out.append(f'<text x="20" y="468" fill="{MUT}" font-size="9">Wi-Fi: 8 of 10 steps on the real board. Solid boxes are seen working on the screen; dashed are next, in order.</text>')
+out.append(f'<text x="20" y="468" fill="{MUT}" font-size="9">Wi-Fi: 9 of 10 steps on the real board (joined Shaw with WPA2, 2026-10-07). Solid boxes are seen working on the screen; dashed are next, in order.</text>')
 
 sec(496, 'How it gets built')
 chain(506, [('Roadmap', 'the queue'), ('Build it', 'one agent, own branch'), ('Prove it', 'tests, real frames'), ('Ship it', 'merge on green')],
