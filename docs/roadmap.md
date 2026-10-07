@@ -54,7 +54,6 @@ How to use this: the Pickup list below stays the near-term queue. When a Pickup 
 
 ### [5.0] Talk to it: Claude Code in Joshua Tree
 - [ ] [5.0] [Fable] Claude phase 2: tools on Joshua Tree itself, so Claude can read and change the OS's own files. Needs real TLS on the box or a trusted relay protocol that calls back into the machine.
-- [x] [5.0] Claude in the ARM Console, 2.21.0: type at the Console's `ask>` row and Claude answers there, through the relay and the shared IP stack. Done on QEMU virt. `tools/checks/arm64-claude-console-check.py`.
 - [ ] [5.0] Claude on the real Pi: the same Console prompt, once Wi-Fi stage 2 joins a network. Today it says `claude: no network`.
 
 ## Pickup (written 2026-10-03, night)
@@ -485,8 +484,6 @@ Feeds the landing page's "Where it's going" card automatically via `tools/gen/la
 4. **Every icon in one style** (plain: icons that match) [Sonnet]: the fleet icons keep their own tile colors.
 5. **Photos, Minesweeper, Solitaire, Voice Memos** (plain: photos, games and voice notes) [Haiku]: the "Apps after 2.2" list.
 6. **Rich document app, richer Weather icons, native code editor, package tool** (plain: a word processor, nicer weather art, a code editor, installable apps) [Sonnet]: after the Pi boots.
-
-## Top of the queue after 2.0.0
 
 ## Landing roadmap summary
 `tools/gen/landing-roadmap.py` reads this file's Session task queue and takes up to three open, numbered, bold task titles for the landing page's "Where it's going" card, skipping completed entries and escaping for HTML. `tools/checks/landing-roadmap-check.py` and `tools/gen/landing-roadmap.py --check` are the regression checks. A roadmap change triggers the landing deploy workflow, which regenerates the card before upload.
