@@ -990,7 +990,7 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
 }
 int wifi_signal_level(void);   /* wifi.c: 1 to 3 from how loud our network was in the scan */
 /* The right end of the menu bar: the clock in 12-hour form, and left of it a three-bar signal icon, no name. Connected
-   bars show in the house accent, as many as the signal earns; anything else (starting, joining, no network) is three
+   bars show in the same ink as the clock, as many as the signal earns; anything else (starting, joining, no network) is three
    quiet grey bars. Each call puts the saved bare bar back first, so old pixels never show through. */
 void menubar_wifi(int state) {
     if (!fb || !text_ok) return;
@@ -1011,7 +1011,7 @@ void menubar_wifi(int state) {
     int bw = sg(4), gap = sg(2), iw = 3 * bw + 2 * gap, ix = cx - sg(18) - iw, base = mb / 2 + sg(5);
     int level = state == 2 ? wifi_signal_level() : 0;
     static const int hts[3] = {5, 8, 11};
-    for (int i = 0; i < 3; i++) fb_rect(ix + i * (bw + gap), base - sg(hts[i]), bw, sg(hts[i]), i < level ? 0x00b5502c : 0x00B8B4AC);
+    for (int i = 0; i < 3; i++) fb_rect(ix + i * (bw + gap), base - sg(hts[i]), bw, sg(hts[i]), i < level ? 0x001C1C1E : 0x00B8B4AC);
     fb_flush(mb_x0, 0, W - mb_x0, mb);
 }
 void menubar_tick(void) {   /* the poll loop calls this; it redraws only when the minute has changed */
