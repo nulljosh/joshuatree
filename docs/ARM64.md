@@ -36,3 +36,12 @@ The kernel, drivers and lib are C, plus the user programs.
 ## First step
 
 M0 is a half-day: new `arch/arm64/` with a boot stub, a linker script and a UART print, and a `make ARCH=arm64` target. Nothing in the i386 build changes.
+
+## Errors and crashes
+
+The tests for this section are `tools/checks/arm64-crash-check.py`, `arm64-fp-check.py`, `arm64-oom-check.py` and `arm64-boot-health-check.py`. Each drives a test build (`make -C arch/arm64 crashtest`, `fpsave`, `fpnosave`, `oomtest`) that the real kernel never contains.
+
+- **A kernel fault.** An unexpected exception at EL1 prints `KERNEL CRASH: <class>`, the ESR, FAR and ELR and the last five console lines on the UART, draws the same text as a red panel on the screen, and sleeps in a `wfe` loop. It uses only the raw UART and the 8x16 VGA font, so it works if the fault came from the console or the text code, and the panel is cleaned out of the data cache so the real GPU shows it. A fault inside the crash code halts quietly. The deliberate EL0 faults of M3 are not crashes: they are printed and the kernel carries on.
+- **Interrupts and floating point.** `irq_entry` saves q0-q31, FPCR and FPSR next to the general registers, so a handler can never corrupt the floating point work it interrupted. Today no handler uses floating point; the save makes that a promise nobody has to keep.
+- **Out of memory.** `kmalloc` returns 0 when the bump heap is full and every caller checks. A failure prints `oom <where>` and ends only that step: no framebuffer means no screen but a working UART, and fonts that do not load mean the 8x16 VGA font. Open gap: one allocation in `xhci.c`.
+- **A new failure cannot hide.** The boot health check fails on any `FAIL` or `oom` line the boot prints that is not on its short, commented list of things QEMU cannot do.
