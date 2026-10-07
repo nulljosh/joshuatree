@@ -399,9 +399,11 @@ static void fb_rect(int x, int y, int w, int h, unsigned c) {
 /* ---- The boot log on the screen. Everything the kernel prints over the UART is also kept in a small buffer and drawn
    into the window, so a first boot with the monitor plugged in shows what happened even if the serial cable is wrong.
    Lines printed before the screen exists are replayed once it does. When the window fills, it is wiped and the newest
-   half page is redrawn at the top, so the last lines printed are always the ones on screen. ---- */
+   half page is redrawn at the top, so the last lines printed are always the ones on screen. A USB or virtio keyboard
+   scrolls it: Page Up and Page Down by half a page, Home to the first line, End to the newest. The title bar says which
+   lines are shown, and a pinned row under the text keeps the latest wifi and usb status in view wherever you are. ---- */
 #include "../../drivers/vgafont.h"
-#define LOG_MAX 4096
+#define LOG_MAX 16384
 #define CON_FG 0x00202020
 #define CON_BG 0x00ffffff
 int text_init(void);   /* arch/arm64/text.c: the DejaVu faces through drivers/ttf.c */
@@ -412,6 +414,10 @@ static int text_ok;     /* smooth text is up */
 static unsigned fb_color(unsigned c) { return fb_swap ? (c & 0xFF00FF00u) | (c >> 16 & 0xFF) | (c & 0xFF) << 16 : c; }
 static char con_log[LOG_MAX];
 static unsigned con_len, con_col, con_row;
+static unsigned con_anchor;   /* offset in the log of the line at the top of the window while it follows the newest output */
+static int con_scrolled;      /* the keyboard moved the view back: new output is only logged until End */
+static unsigned con_vtop, con_vlast;   /* while scrolled: the first line shown (0 based) and the last (1 based) */
+static int con_wx, con_wy, con_ww;
 static int con_live;    /* the framebuffer is up: draw as we go */
 static int con_x, con_y, con_cw, con_ch, con_base, con_cols, con_rows, con_px10;
 static int con_vga;     /* 0: DejaVu Sans Mono; n: the 8x16 VGA font drawn n times its size */
@@ -444,6 +450,7 @@ static void con_scroll(unsigned end) {   /* the window is full: wipe it and redr
     if (con_replaying) return;
     unsigned start = end; int nl = 0;
     while (start > 0) { if (con_log[start - 1] == '\n' && ++nl > con_rows / 2) break; start--; }
+    con_anchor = start;
     con_replaying = 1;
     for (unsigned k = start; k < end; k++) con_draw(k);
     con_replaying = 0;
@@ -460,17 +467,139 @@ static void con_draw(unsigned i) {   /* draws con_log[i]; a newline only moves t
     }
     con_glyph(con_col++, con_row, c);
 }
+static unsigned con_nlines(void) {   /* lines in the log, a last line still being written counts */
+    unsigned n = 0;
+    for (unsigned i = 0; i < con_len; i++) if (con_log[i] == '\n') n++;
+    return n + (con_len && con_log[con_len - 1] != '\n');
+}
+static unsigned con_line_off(unsigned line) {   /* where line n starts in the log */
+    unsigned i = 0;
+    while (line && i < con_len) { if (con_log[i++] == '\n') line--; }
+    return i;
+}
+static unsigned con_off_line(unsigned off) { unsigned n = 0; for (unsigned i = 0; i < off && i < con_len; i++) if (con_log[i] == '\n') n++; return n; }
+static void con_text(const char *s, int right, int y) {   /* a short white string, right edge at x = right, vertically in the 28-unit title bar */
+    int px = sc(110);
+    if (text_ok) { text_draw(1, s, right - text_width(1, s, px), y + sc(20), px, fb_color(0x00ffffff), fb, fb_pitch, (int)fb_w, (int)fb_h); return; }
+    int n = 0; while (s[n]) n++;
+    int x = right - n * 8 * con_vga; y += (sc(28) - 16 * con_vga) / 2;
+    for (int i = 0; i < n; i++) {
+        char c = s[i];
+        if (c < VGAFONT_FIRST || c > VGAFONT_LAST) continue;
+        const unsigned char *g = vgafont_glyphs + (c - VGAFONT_FIRST) * 16;
+        for (int gy = 0; gy < 16; gy++) for (int gx = 0; gx < 8; gx++) if (g[gy] & (0x80 >> gx))
+            for (int a = 0; a < con_vga; a++) for (int b = 0; b < con_vga; b++)
+                fb[(unsigned)(y + gy * con_vga + a) * fb_pitch + (unsigned)(x + (i * 8 + gx) * con_vga + b)] = fb_color(0x00ffffff);
+    }
+}
+static void con_hint(void) {   /* the title bar's "lines 12-27 of 61": a photo says which part of the log it shows */
+    unsigned total = con_nlines(), first = con_scrolled ? con_vtop : con_off_line(con_anchor), last = con_scrolled ? con_vlast : total;
+    char b[40]; int n = 0;
+    for (const char *t = "lines "; *t; ) b[n++] = *t++;
+    unsigned v[3] = { first + 1, last, total };
+    for (int k = 0; k < 3; k++) {
+        char d[12]; int m = 0; unsigned x = v[k];
+        do { d[m++] = (char)('0' + x % 10); x /= 10; } while (x);
+        while (m) b[n++] = d[--m];
+        if (k == 0) b[n++] = '-'; else if (k == 1) { b[n++] = ' '; b[n++] = 'o'; b[n++] = 'f'; b[n++] = ' '; }
+    }
+    b[n] = 0;
+    int x0 = con_wx + con_ww / 2, w = con_ww - con_ww / 2, h = sc(28);
+    fb_rect(x0, con_wy, w, h, 0x00b5502c);
+    con_text(b, con_wx + con_ww - sc(10), con_wy);
+    fb_flush(x0, con_wy, w, h);
+}
+static int con_is_status(const char *l, unsigned n) {   /* wifi lines, and usb lines that are not just a key echo */
+    if (n >= 4 && l[0] == 'w' && l[1] == 'i' && l[2] == 'f' && l[3] == 'i') return 1;
+    if (n >= 4 && l[0] == 'u' && l[1] == 's' && l[2] == 'b' && l[3] == ' ') return !(n >= 8 && l[4] == 'k' && l[5] == 'e' && l[6] == 'y' && l[7] == ' ');
+    return 0;
+}
+static void con_summary(void) {   /* the row under the text: the newest wifi and usb line, cut to fit, whatever is scrolled into view */
+    unsigned wo = 0, wn = 0, uo = 0, un = 0;
+    for (unsigned i = 0; i < con_len; ) {
+        unsigned e = i; while (e < con_len && con_log[e] != '\n') e++;
+        if (con_is_status(con_log + i, e - i)) { if (con_log[i] == 'w') { wo = i; wn = e - i; } else { uo = i; un = e - i; } }
+        i = e + 1;
+    }
+    unsigned cols = (unsigned)con_cols > 90 ? 90 : (unsigned)con_cols, half = cols > 4 ? (cols - 3) / 2 : 1;
+    char b[96]; unsigned n = 0;
+    for (int part = 0; part < 2; part++) {
+        const char *l = part ? con_log + uo : con_log + wo, *none = part ? "usb -" : "wifi -"; unsigned ln = part ? un : wn;
+        unsigned start = n;
+        if (!ln) { l = none; while (l[ln]) ln++; }
+        for (unsigned i = 0; i < ln && n - start < half; i++) b[n++] = (l[i] >= 32 && l[i] < 127) ? l[i] : '?';
+        if (!part) { while (n - start < half) b[n++] = ' '; b[n++] = '|'; b[n++] = ' '; }
+    }
+    int y = con_y + con_rows * con_ch;
+    fb_rect(con_x, y, con_cols * con_cw, con_ch, CON_BG);
+    fb_flush(con_x - 4, y, con_cols * con_cw + 8, con_ch);
+    for (unsigned i = 0; i < n; i++) if (b[i] != ' ') con_glyph(i, (unsigned)con_rows, b[i]);
+}
+static int con_render(unsigned top) {   /* draws the window from line `top` down; 1 if the end of the log fits */
+    unsigned nl = con_nlines(), line = top, last = top;
+    con_wipe();
+    for (unsigned k = con_line_off(top); k < con_len; k++) {
+        char c = con_log[k];
+        if (c == '\r') continue;
+        if (c == '\n') {
+            con_col = 0; con_row++; line++;
+            if (con_row >= (unsigned)con_rows) { con_vlast = last + 1; return 0; }
+            last = line; continue;
+        }
+        if (con_col >= (unsigned)con_cols) { con_col = 0; con_row++; }
+        if (con_row >= (unsigned)con_rows) { con_vlast = last + 1; return 0; }
+        con_glyph(con_col++, con_row, c);
+        last = line;
+    }
+    con_vlast = last < nl ? last + 1 : nl;
+    return 1;
+}
+static void con_follow(void) {   /* End: back to the newest, the same picture the streaming draw would have made */
+    if (!con_scrolled) return;
+    con_scrolled = 0;
+    con_wipe();
+    for (unsigned k = con_anchor; k < con_len; k++) con_draw(k);
+}
+static int con_key(unsigned code, unsigned value) {   /* Page Up 104, Page Down 109, Home 102, End 107: 1 if the console took the key */
+    if (code != 104 && code != 109 && code != 102 && code != 107) return 0;
+    if (!con_live || !value) return 1;
+    unsigned half = (unsigned)con_rows / 2 ? (unsigned)con_rows / 2 : 1, nl = con_nlines();
+    if (code == 104 || code == 102) {
+        unsigned cur = con_scrolled ? con_vtop : con_off_line(con_anchor);
+        con_vtop = code == 102 ? 0 : cur > half ? cur - half : 0;
+        con_scrolled = 1;
+        con_render(con_vtop);
+    } else if (code == 109 && con_scrolled) {
+        con_vtop += half; if (con_vtop >= nl) con_vtop = nl ? nl - 1 : 0;
+        if (con_render(con_vtop)) con_follow(); /* the end of the log is in view: follow again */
+    } else if (code == 107) con_follow();
+    con_hint();
+    return 1;
+}
 static void console_putc(char c) {
-    if (con_len == LOG_MAX) {   /* full: forget the older half */
-        for (unsigned i = 0; i < LOG_MAX / 2; i++) con_log[i] = con_log[i + LOG_MAX / 2];
-        con_len = LOG_MAX / 2;
+    if (con_len == LOG_MAX) {   /* full: forget the older half, up to a line end */
+        unsigned drop = LOG_MAX / 2;
+        while (drop < con_len && con_log[drop - 1] != '\n') drop++;
+        unsigned gone = con_off_line(drop);
+        for (unsigned i = drop; i < con_len; i++) con_log[i - drop] = con_log[i];
+        con_len -= drop;
+        con_anchor = con_anchor > drop ? con_anchor - drop : 0;
+        con_vtop = con_vtop > gone ? con_vtop - gone : 0; con_vlast = con_vlast > gone ? con_vlast - gone : 0;
     }
     con_log[con_len++] = c;
-    if (con_live) con_draw(con_len - 1);
+    if (!con_live) return;
+    unsigned was = con_anchor;
+    if (!con_scrolled) con_draw(con_len - 1);
+    if (c == '\n' || con_anchor != was) {
+        unsigned e = con_len - 1, s = e; while (s > 0 && con_log[s - 1] != '\n') s--;
+        if (c == '\n' && con_is_status(con_log + s, e - s)) con_summary();
+        con_hint();
+    }
 }
 /* The console's type. DejaVu Sans Mono at the screen's scale, unless a quick test of the rasterizer says no: then the
    8x16 VGA font at a whole-number scale (2x on a 1080p screen), which needs nothing but integer stores. */
 static void con_layout(int win_x, int win_y, int win_w, int win_h) {
+    con_wx = win_x; con_wy = win_y; con_ww = win_w;
     con_x = win_x + sc(8); con_y = win_y + sc(32);
     con_px10 = sc(133);
     mono_ok = text_ok && text_selftest(con_px10, &mono_w, &mono_h, &mono_adv);
@@ -481,12 +610,13 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
         con_cw = 8 * con_vga; con_ch = 16 * con_vga; con_base = 0;
     }
     con_cols = (win_w - sc(12)) / con_cw;
-    con_rows = (win_h - sc(46)) / con_ch;
+    con_rows = (win_h - sc(46)) / con_ch - 1;   /* the last row is the pinned wifi and usb status */
 }
 static void con_start(void) {   /* the screen is ready: replay what was printed before it */
     con_live = 1;
     con_col = con_row = 0;
     for (unsigned i = 0; i < con_len; i++) con_draw(i);
+    con_summary(); con_hint();
 }
 
 static void fb_init(void) {
@@ -559,6 +689,7 @@ static void m1_selftest(void) {
 struct input_event { unsigned short type, code; unsigned value; };
 static unsigned mouse_x = 400, mouse_y = 300, mouse_moved;
 static void input_event(struct input_event e) {
+    if (e.type == 1 && con_key(e.code, e.value)) return;   /* the console's scroll keys are not logged: that would add lines to the picture they move */
     if (e.type == 1) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* EV_KEY: keys and buttons */
     else if (e.type == 3) {                                                                                /* EV_ABS: the tablet, 0..32767 */
         if (e.code == 0) mouse_x = e.value * fb_w / 32768; else if (e.code == 1) mouse_y = e.value * fb_h / 32768;
