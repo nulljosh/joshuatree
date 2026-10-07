@@ -764,6 +764,13 @@ void gui_text(const char *s, int x, int y, unsigned int fg) {
     if (text_ok) text_draw(2, s, x * k, y * k + 25 * k / 2, 120 * k, fb_color(fg), fb, fb_pitch, (int)fb_w, (int)fb_h);
 }
 int gui_text_width(const char *s) { int k = (int)window_scale(); return text_ok ? text_width(2, s, 120 * k) / k : 0; }
+/* The icon text (the Calendar face's month and day): bold sans, face 0..3 a 16, 20, 24 or 28 physical pixel face times
+   mul, as i386's wx_text, with the line box's top at logical ly; DejaVu's ascent puts the baseline 93% of a face down. */
+void gui_icon_text(const char *s, int lx, int ly, int face, int mul, unsigned int fg) {
+    int k = (int)window_scale(), px = (16 + 4 * face) * mul;
+    if (text_ok) text_draw(1, s, lx * k, ly * k + px * 93 / 100, px * 10, fb_color(fg), fb, fb_pitch, (int)fb_w, (int)fb_h);
+}
+int gui_icon_text_w(const char *s, int face, int mul) { int k = (int)window_scale(); return text_ok ? (text_width(1, s, (16 + 4 * face) * mul * 10) + k - 1) / k : 0; }
 /* The wallpaper is already on the screen, so reading the framebuffer is reading the wallpaper, as long as the dock is
    painted before anything else covers its band. */
 unsigned int gui_wallpaper_sample(int px, int py, int sway) { (void)sway; return window_get_pixel_phys(px, py); }
@@ -781,6 +788,9 @@ static void dock_paint(void) {
         if (tile && png_decode(ICON_ART[icon], ICON_ART_LEN[icon], &art, &aw, &ah, &ach) == 0 && art && aw == ICON_ART_SIZE && ah == ICON_ART_SIZE && ach == 4) {
             gui_icon_art_scale(art, tile, pw, DOCK_TRAY_COLOR);
             gui_blit_tile(tile, cx - size / 2, cy_bottom - size, size, DOCK_TRAY_COLOR);
+            /* Calendar's art is a blank page; i386 writes the date on it (gui_calendar_face). The Pi has no battery
+               clock and no time source yet, so it gets the face's "date unknown" dashes, never a made-up date. */
+            if (icon == GUI_CALENDAR) { gui_calendar_face(cx, cy_bottom, size, 0, 0); uart_puts("M1d calendar face, date unknown\n"); }
             drawn++;
         }
         heap_release(mark);
@@ -820,9 +830,9 @@ static void fb_init(void) {
         fb[(unsigned)y * fb_pitch + (unsigned)x] = ((c >> 1) & 0x007F7F7Fu) + 0x00808080u;   /* each colour lane: half itself plus half of 255 */
     }
     fb_rect(0, mb - 1, W, 1, MENUBAR_RULE);               /* closed by a one pixel rule */
+    text_ok = text_init();                                /* before the dock (the Calendar face) and the window (its title) */
     dock_paint();                                         /* the i386 dock, while only the wallpaper is under it */
     int band_y = gui_dock_band_top() * (int)window_scale();   /* the top of the dock's band, room for a hover label */
-    text_ok = text_init();                                /* before the window: its frame has a title */
     /* Slice 3: the Console wears the i386 window frame (gui_paint.c): rounded cream body on the wallpaper, traffic
        lights, centred name, a hairline under the title band. Its content well is white for the log. */
     int s = (int)window_scale(), lx = win_x / s, ly = win_y / s, lw = win_w / s, lh = win_h / s;

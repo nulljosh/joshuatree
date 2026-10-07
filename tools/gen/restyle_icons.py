@@ -116,15 +116,21 @@ DOCK = {
                                         "#32D74B", "#5B9BD5", "#0A84FF",
                                         "#A87C5B", "#8A8F99", "#FF375F"]))),
 
-    # Burrow (the file browser): one bold flat folder, two tones, nothing else.
-    # Finder-simple on purpose: no animal, no outline, no gradient inside the
-    # glyph. A white tile like Calendar and Reminders, the house terracotta
-    # for the front, a lighter tint of it for the back.
-    "burrow": ("#F5F5F8", "#E0E1E6",
-               "",
+    # Burrow (the file browser): the Finder idea done in the house colours.
+    # The whole tile is the face, split left/right into a light terracotta
+    # and the accent, with two dots and one smile across the split in the
+    # deep tone. Full-bleed like Finder, one bold object like Mail or
+    # Terminal, no mascot: the fox, the plain folder, the arch head and the
+    # hill-with-a-hole all lost to this at 64 px. The tile is Samantha's lit
+    # accent ramp, so the dark half keeps the one shared top light. The
+    # full-bleed half is allow-listed in iconart, iconlight and iconinset
+    # (FULL_BLEED there): they sample Burrow's dark half only.
+    "burrow": ("#C65E37", "#A24526", "",
                """
-      <path d="M22 48 Q22 36 34 36 H52 Q57 36 60 40 L65 46 H94 Q106 46 106 58 V88 Q106 100 94 100 H34 Q22 100 22 88 Z" fill="#E39A78"/>
-      <path d="M22 62 Q22 54 30 54 H98 Q106 54 106 62 V88 Q106 100 94 100 H34 Q22 100 22 88 Z" fill="#B5502C"/>"""),
+      <path d="M0 0 H66 C64 40 60 52 60 64 C60 78 64 90 66 128 H0 Z" fill="#E7A07E"/>
+      <rect x="40" y="40" width="11" height="20" rx="5.5" fill="#5C2210"/>
+      <rect x="77" y="40" width="11" height="20" rx="5.5" fill="#5C2210"/>
+      <path d="M36 80 Q64 102 92 80" fill="none" stroke="#5C2210" stroke-width="7" stroke-linecap="round"/>"""),
 
     # Mail: a white envelope on a blue tile.
     "mail": ("#34A6FF", "#157FF3",

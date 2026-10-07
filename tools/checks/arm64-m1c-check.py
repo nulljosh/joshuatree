@@ -4,7 +4,8 @@ through ramfb; on QEMU's Raspberry Pi 4B model through the VideoCore mailbox, th
 
 Boots each build, waits for "M1c fb ok" on the UART, then asks QEMU for a screendump over QMP and checks real pixels:
 the menu bar (its rule, and half wallpaper half white), the Satellite wallpaper (real photo pixels, in colour, not the old flat fill), the i386 dock (its tray,
-hairline and 11 icon tiles, from the shared kernel/gui_paint.c), the i386 window frame on the Console (cream body, rounded
+hairline and 11 icon tiles, from the shared kernel/gui_paint.c; at 1080p every tile but Calendar must be the shared icon art pixel for pixel,
+and Calendar must carry its face, which on the clockless Pi is a red and an ink dash, never a blank page), the i386 window frame on the Console (cream body, rounded
 corner, title hairline, traffic lights, centred title, white well) and the tribute line above the dock. A dockhover test build
 (`make hovertest`) must show the i386 hover label, capsule and name, over slot 3; the shipped kernel must not. On the Pi model it also fakes a 1080p
 and a 4K monitor and checks the desktop fills a 1920x1080 screen. This proves what the screen shows, not just what the
@@ -23,6 +24,41 @@ if subprocess.run(["make", "-C", arch], capture_output=True).returncode:
     print("FAIL: arch/arm64 `make` does not build"); sys.exit(1)
 
 fails = []
+
+# The dock's artwork, straight from kernel/icon_art.h, scaled the way gui_paint.c gui_icon_art_scale does (area filter,
+# premultiplied, over the tray), so a tile that differs from the shared art by even one pixel shows up. Corner pixels
+# that land on the tray colour are skipped: gui_blit_tile leaves the shadow there.
+import io, re
+from PIL import Image
+icon_h = open(os.path.join(root, "kernel/icon_art.h")).read()
+ART_SIZE = int(re.search(r"#define ICON_ART_SIZE (\d+)", icon_h).group(1))
+art_vars = re.findall(r"(icon_art_\w+),", re.search(r"ICON_ART\[\d+\] = \{(.*?)\};", icon_h, re.S).group(1))
+dock_order = re.search(r"#define GUI_DOCK_DEFAULT_ORDER \{(.*?)\}", open(os.path.join(root, "kernel/gui_paint.h")).read()).group(1).replace(" ", "").split(",")
+def _slot(t): return {"GUI_APPS_FOLDER": 30, "GUI_TRASH": 31}.get(t) if not t.isdigit() else int(t)
+DOCK_ART = [art_vars[_slot(t)] for t in dock_order]
+DOCK_NAMES = ["Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"]
+def art_tile(var, pw, under=(0xef, 0xeb, 0xe4)):
+    body = re.search(r"%s\[\d+\] = \{(.*?)\};" % var, icon_h, re.S).group(1)
+    png = Image.open(io.BytesIO(bytes(int(b) for b in body.replace("\n", "").split(",") if b.strip()))).convert("RGBA")
+    S, data, out = png.width, png.load(), {}
+    total = S * S; half = total // 2
+    for py in range(pw):
+        y0, y1 = py * S, py * S + S
+        for px in range(pw):
+            x0, x1 = px * S, px * S + S; rs = gs = bs = as_ = 0
+            sy = y0 // pw
+            while sy * pw < y1:
+                wy = min(y1, (sy + 1) * pw) - max(y0, sy * pw); sx = x0 // pw
+                while sx * pw < x1:
+                    wx = min(x1, (sx + 1) * pw) - max(x0, sx * pw); r, g, b, a = data[sx, sy]
+                    if a:
+                        w_ = wx * wy; rs += w_ * ((r * a + 127) // 255); gs += w_ * ((g * a + 127) // 255); bs += w_ * ((b * a + 127) // 255); as_ += w_ * a
+                    sx += 1
+                sy += 1
+            a = (as_ + half) // total
+            c = tuple(min(255, (s_ + half) // total + (u * (255 - a) + 127) // 255) for s_, u in zip((rs, gs, bs), under))
+            if c != under: out[(py, px)] = c
+    return out
 
 # The board-only half: QEMU has no cache, so a missing cache clean can never show up in a screendump. On the real Pi 4
 # it did (2.12.5): the console's page wipe ran after the only clean, and the screen kept just the two pixel columns of
@@ -146,6 +182,23 @@ def shoot(name, qemu_args, image, size=(800, 600), hover=False):
         elif len({at((dock_x0 + 10 + k * (icon + 6) + icon // 2) * s2, (dock_y0 + 10 + icon // 3) * s2) for k in range(11)}) < 6:
             fails.append(f"{name}: the 11 dock tiles look alike, the artwork is not drawing")
         else: print(f"  ok: {name} dock: 11 icon tiles of {icon} at scale {s2}, {min(t[1] for t in tiles)}+ colours each")
+        # Calendar's art is a blank page: the face (gui_paint.c gui_calendar_face) is what makes it a calendar. The Pi has
+        # no clock, so it shows a red header dash and an ink dash; a tile with neither is the blank page Joshua saw.
+        x0, y0 = (dock_x0 + 10 + 3 * (icon + 6)) * s2, (dock_y0 + 10) * s2
+        cal = [at(x, y) for y in range(y0, y0 + icon * s2) for x in range(x0, x0 + icon * s2)]
+        red = sum(1 for c in cal if c[0] > 200 and c[1] < 120 and c[2] < 120); dark = sum(1 for c in cal if max(c) < 0x60)
+        if red < 8 * s2 or dark < 8 * s2: fails.append(f"{name}: the Calendar tile is a blank page ({red} red, {dark} ink pixels): no face drawn on it")
+        else: print(f"  ok: {name} Calendar tile has its face ({red} red, {dark} ink pixels)")
+        if s2 == 2 and icon * s2 < ART_SIZE:                         # at 1080p each tile is the shared art, area-filtered exactly
+            off = []
+            for slot, var in enumerate(DOCK_ART):
+                if slot == 3: continue                               # Calendar: the art plus its live face
+                want_t = art_tile(var, icon * s2)
+                x0 = (dock_x0 + 10 + slot * (icon + 6)) * s2
+                bad_px = sum(1 for (j, i), c in want_t.items() if at(x0 + i, y0 + j) != c)
+                if bad_px: off.append(f"{DOCK_NAMES[slot]} ({bad_px} px)")
+            if off: fails.append(f"{name}: dock tiles differ from the shared icon art (kernel/icon_art.h): {', '.join(off)}")
+            else: print(f"  ok: {name} the other 10 dock tiles are the shared icon art, pixel for pixel")
         for what, (x, y), c in want:
             i = (y * w + x) * 3; got = tuple(px[i:i + 3])
             if got != c: fails.append(f"{name}: {what} at {(x, y)}: got {got}, want {c}")

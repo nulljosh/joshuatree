@@ -18,7 +18,7 @@ The short list. Two tracks run side by side, one helper each (Joshua agreed the 
 
 **Track A, what you see on the Pi**
 1. Console scrollback (Page Up), so the Wi-Fi lines can be read from a photo.
-2. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing). Wallpaper, menu bar, shared paint code, the dock, its hover label and window chrome are done (2.23.0: `kernel/gui_paint.c`, `tools/checks/arm64-m1c-check.py`). Next: the cursor and typing.
+2. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing). Wallpaper, menu bar, shared paint code, the dock, its hover label and window chrome are done (2.23.0: `kernel/gui_paint.c`, `tools/checks/arm64-m1c-check.py`). 2.26.0: the Calendar tile's face is shared too, so on the Pi it shows dashes until there is a clock instead of a blank page, and the check holds every other dock tile to the shared art pixel for pixel. Next: the cursor and typing.
 3. The mouse pointer and clicking, once a mouse is plugged in.
 4. Apps on the Pi: the ring-3 apps rebuilt for ARM, Notes and Clock first.
 

@@ -630,3 +630,38 @@ void gui_draw_window_frame(int x, int y, int w, int h, const char *name){
     gui_text("-", x + 43, y + 8, 0x00624A20);
     gui_text(name, x + (w - gui_text_width(name)) / 2, y + 8, 0x001C1C1E); /* 2.0: centered, full ink */
 }
+
+/* The Calendar tile shows the real date, macOS style: its art is a blank page and this writes the month and day on
+   it, fresh at every draw (a date cannot be baked into the cached tile). Moved out of kernel.c so the Pi draws the
+   same face. The month is a small red label whose caps are about 13% of the tile tall, the day numeral about 22% tall
+   and centred under it. Dock: a 16px month and a 28px day. Bigger tiles (the Launchpad): a 24px month and a doubled
+   20px day; scaling both with the tile let the day's caps reach the month's baseline. */
+static const char *const GUI_CAL_MON3[12] = {"JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"};
+#define GUI_CAL_RED 0x00FF3B30
+#define GUI_CAL_INK 0x001F1F22
+void gui_calendar_face(int cx_center, int cy_bottom, int size, int month, int day){
+    int y = cy_bottom - size;
+    if (month < 1 || month > 12) {
+        /* No clock yet: a short red dash where the month goes and a thin ink dash where the day goes, at the text's
+           own centres, so the tile reads as a calendar waiting for the time, never a made-up date. */
+        int sc = (int)window_scale(), pw = size * sc, pcx = cx_center * sc, py = y * sc;
+        int pr = pw * 3 / 100 < 2 ? 2 : pw * 3 / 100;
+        int hm = pw * 12 / 100, hd = pw * 16 / 100;
+        gui_capsule_phys(pcx - hm, py + pw * 20 / 100, pcx + hm, py + pw * 20 / 100, pr, GUI_CAL_RED);
+        gui_capsule_phys(pcx - hd, py + pw * 63 / 100, pcx + hd, py + pw * 63 / 100, pr, GUI_CAL_INK);
+        return;
+    }
+    if (day < 1 || day > 31) day = 1;
+    char daybuf[3]; int n = 0;
+    if (day >= 10) daybuf[n++] = (char)('0' + day / 10);
+    daybuf[n++] = (char)('0' + day % 10);
+    daybuf[n] = 0;
+    int mul_m = 1, mul_d = 1, face_m = 0, face_d = 3;
+    if (size > 40) { mul_d = 2; face_m = 2; face_d = 1; }
+    const char *mon3 = GUI_CAL_MON3[month - 1];
+    int ly_m = y + size * 13 / 100, ly_d = y + size * 51 / 100;
+    int lwm = gui_icon_text_w(mon3, face_m, mul_m);
+    gui_icon_text(mon3, cx_center - lwm / 2, ly_m, face_m, mul_m, GUI_CAL_RED);
+    int lwd = gui_icon_text_w(daybuf, face_d, mul_d);
+    gui_icon_text(daybuf, cx_center - lwd / 2, ly_d, face_d, mul_d, GUI_CAL_INK);
+}

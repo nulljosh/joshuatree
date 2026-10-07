@@ -120,6 +120,8 @@ That is milestones M0, M1a and the first picture on real hardware. To leave `scr
 
 The kernel guards against two things a real board may do differently from QEMU: if the firmware leaves the timer speed unset it assumes 54 MHz, and every wait on the GPU's mailbox gives up after a moment and prints `M1c mailbox framebuffer refused` instead of hanging.
 
+The Pi has no battery clock, so it does not know the date until something gives it the time (Wi-Fi, once it is up). Until then the menu bar clock reads `--:--` and the Calendar tile in the dock shows its normal page with a red dash where the month goes and a dark dash where the day goes. That is on purpose: it never shows a made-up date. `tools/checks/arm64-m1c-check.py` fails if the tile turns blank.
+
 ## If nothing prints
 
 1. Swap the two data wires.

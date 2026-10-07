@@ -47,6 +47,9 @@ SVGS = ["apps", "burrow", "mail", "calendar", "notes", "reminders", "terminal", 
 COLS = range(20, 54)
 BANDS = (range(3, 8), range(64, 70))
 TOL = 8
+# Burrow is a full-bleed Finder-style split (its left half is a light tint
+# edge to edge), so only its right, tile-coloured half is sampled.
+FULL_BLEED = {"Burrow": range(42, 54)}
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -152,7 +155,7 @@ for slot, (name, svg) in enumerate(zip(SLOTS, SVGS)):
         got = [0, 0, 0]; want = [0.0, 0.0, 0.0]; n = 0
         for y in band:
             t = (y + 0.5) / pw
-            for x in COLS:
+            for x in FULL_BLEED.get(name, COLS):
                 p = img.getpixel((x0 + x, y0 + y))
                 for c in range(3):
                     got[c] += p[c]; want[c] += top[c] + (bot[c] - top[c]) * t
