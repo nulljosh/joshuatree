@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Draws architecture.svg: every Joshua Tree graph in one picture (where it runs, the stack, talking to Samantha, the Pi
 bring-up, how it gets built, memory, apps over time). The apps line is read from progress.svg, so rerun this after
-tools/gen/progress.sh. The Pi row and the memory numbers are typed in: update them when the board or the layout moves."""
+tools/gen/progress.sh. The memory numbers come from docs/memory-map.svg (rerun tools/gen/memory-map.py first). The Pi row is typed in: update it when the board moves."""
 import re, os
 ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 G, T, INK, MUT = '#2f6b3a', '#b5502c', '#141413', '#888'
@@ -27,8 +27,9 @@ def chain(y, steps, kinds, back=None):
     if back: out.append(f'<path d="M{W - 20 - sw / 2} {y + 40}v10H{20 + sw / 2}v-6" fill="none" stroke="{T}" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#a)"/>'
                         f'<text x="{W / 2}" y="{y + 62}" fill="{MUT}" font-size="9" text-anchor="middle">{back}</text>')
 
+APPS = re.findall(r'data-apps="(\d+)"', open(os.path.join(ROOT, 'progress.svg')).read())[-1]
 out.append(f'<text x="{W / 2}" y="30" fill="{INK}" font-size="18" font-weight="700" text-anchor="middle">Joshua Tree at a glance</text>')
-out.append(f'<text x="{W / 2}" y="48" fill="{MUT}" font-size="11" text-anchor="middle">where it runs, what it is made of, how it talks, the Pi, how it gets built</text>')
+out.append(f'<text x="{W / 2}" y="48" fill="{MUT}" font-size="11" text-anchor="middle">A computer that knows what you want before you ask, and keeps it on your machine.</text>')
 
 sec(78, 'Where it runs')
 xs, bw = [20, 175, 330, 485], 135
@@ -36,7 +37,7 @@ for x, (a, b, k) in zip(xs, [('Browser', 'the landing page', 'host'), ('QEMU', '
                              ('Raspberry Pi 4', 'the real board', 'new'), ('Real PC', 'from a USB stick', 'host')]):
     box(x, 86, bw, 42, a, b, k)
 lines.append('M87 128v16M242 128v16M397 128v16M552 128v16M87 144H552M210 144v14M430 144v14')
-box(110, 158, 200, 42, 'Desktop', 'windows, dock, 30 apps')
+box(110, 158, 200, 42, 'Desktop', f'windows, dock, {APPS} apps')
 box(330, 158, 200, 42, 'Samantha', 'you type, she runs it')
 lines.append('M210 200v14M430 200v14M210 214H430M320 214v14')
 box(110, 228, 420, 42, 'Kernel', 'tasks, drivers, fonts, network, disk, on i386 and ARM64')
@@ -61,8 +62,12 @@ chain(506, [('Roadmap', 'the queue'), ('Build it', 'one agent, own branch'), ('P
       ['host', 'core', 'core', 'new'], back='next item')
 
 sec(594, 'Memory, PC build')
-mem = [('code', 415, '#2f6b3a'), ('fonts, images, text', 3018, '#7fa886'), ('starting values', 12, '#b5502c'),
-       ('working memory', 619, '#c9d9cb'), ('programs', 32, '#141413'), ('sound', 64, '#d97757')]
+# Read from docs/memory-map.svg, which tools/gen/memory-map.py draws from the built kernel.elf: never typed in.
+mm = open(os.path.join(ROOT, 'docs', 'memory-map.svg')).read()
+kb = {n: int(k.replace(',', '')) for n, k in re.findall(r'>([a-z ,()]+): ([0-9,]+) KB', mm)}
+mem = [('code', kb['code'], '#2f6b3a'), ('fonts, images, text', kb['fixed data (fonts, images, text)'], '#7fa886'),
+       ('starting values', kb['starting values'], '#b5502c'), ('working memory', kb['working memory'], '#c9d9cb'),
+       ('programs', kb['where programs load'], '#141413'), ('sound', kb['sound buffer'], '#d97757')]
 tot = sum(k for _, k, _ in mem); x = 20.0
 for n, k, c in mem:
     w = max(2.0, (W - 40) * k / tot); out.append(f'<rect x="{x:.1f}" y="602" width="{w:.1f}" height="16" fill="{c}"/>'); x += w
