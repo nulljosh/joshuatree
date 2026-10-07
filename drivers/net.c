@@ -5,10 +5,14 @@
    splitting them now would just be more files to keep in sync for no
    present benefit; split later if any one of them grows real complexity. */
 #include "net.h"
+#ifdef NET_NIC   /* a build that brings its own card (ARM64): nic.h is the whole hardware interface */
+#include "nic.h"
+#else
 #include "rtl8139.h"
 #include "ne2k.h"
 #include "irq.h"
 #include "serial.h"
+#endif
 
 typedef unsigned int   u32;
 typedef unsigned short u16;
@@ -356,6 +360,15 @@ static u32 dhcp_lease_ip = 0;
 int net_nodhcp = 0; /* set from kernel.c's cmdline parse ("nodhcp"), see net.h */
 
 int net_init(u32 ip) {
+#ifdef NET_NIC
+    if (nic_init()) {
+        nic_mac(our_mac);
+        active_send = nic_send;
+        active_receive = nic_recv;
+    } else {
+        return 0;
+    }
+#else
     if (rtl8139_init()) {
         rtl8139_get_mac(our_mac);
         active_send = rtl8139_send;
@@ -367,6 +380,7 @@ int net_init(u32 ip) {
     } else {
         return 0;
     }
+#endif
 
     /* net_init is called fresh from every command site (nettest, ifconfig,
        weather, web, ...), same as it always has been; DHCP itself must
@@ -507,6 +521,7 @@ static void arp_maybe_reply(const u8 *rx, u32 n) {
 u32 net_get_gateway(void) { return dhcp_gateway_ip; }
 u32 net_get_dns(void) { return dhcp_dns_ip; }
 u32 net_get_netmask(void) { return dhcp_netmask; }
+u32 net_get_ip(void) { return our_ip; }
 
 static int resolve_next_hop(u32 dest_ip, u8 mac_out[6]) {
     u32 gw = dhcp_gateway_ip ? dhcp_gateway_ip : DEFAULT_GATEWAY_IP;
