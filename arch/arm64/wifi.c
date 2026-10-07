@@ -111,8 +111,13 @@ static int fw_load(void) {
     if (!wifi_fw_bin_len) { kputs("wifi no firmware\n"); return 0; }
     unsigned nvsz = fw_padded(wifi_fw_nvram_len), nvat = CHIP_RAM + CHIP_RAM_SIZE - nvsz;
     if (fw_padded(wifi_fw_bin_len) > CHIP_RAM_SIZE - nvsz) { fail("fw size"); return 0; }
-    /* hold the ARM in reset (wrapper RESETCTRL=1, IOCTRL=CPUHALT|CLK) while RAM is written */
-    if (!bp_write32(CR4_WRAP + 0x800, 1) || !bp_write32(CR4_WRAP + 0x408, 0x21)) { fail("arm halt"); return 0; }
+    /* Halt the ARM but take it OUT of reset, as brcmfmac's cr4_set_passive does: its TCM is the RAM we load, and a
+       core held in reset stops answering (the seventh real-board run: 64 bytes in, then an R5 error, flags 0x1800).
+       IOCTRL = CPUHALT|FGC|CLK, RESETCTRL 1 then 0, then IOCTRL = CPUHALT|CLK. */
+    if (!bp_write32(CR4_WRAP + 0x408, 0x23) || !bp_write32(CR4_WRAP + 0x800, 1)) { fail("arm halt"); return 0; }
+    mdelay(1);
+    if (!bp_write32(CR4_WRAP + 0x800, 0) || !bp_write32(CR4_WRAP + 0x408, 0x21)) { fail("arm unreset"); return 0; }
+    kputs("wifi arm halted\n");
     if (!bp_write(CHIP_RAM, wifi_fw_bin, wifi_fw_bin_len)) { kputs("wifi FAIL fw load at byte "); kdec(bp_done); kputs(" stage "); kdec(c53_stage); kputs(" int "); kx(c53_int); kputs(" state "); kx(c53_state); kputs("\n"); return 0; }
     if (!bp_write(nvat, wifi_fw_nvram, wifi_fw_nvram_len)) { fail("nvram"); return 0; }
     kputs("wifi fw "); kdec(wifi_fw_bin_len / 1024); kputs("k loaded\n");
