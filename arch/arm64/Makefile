@@ -9,6 +9,8 @@
 #   fpsave      fp-kernel8.elf: floating point registers held across timer interrupts whose handler wipes them
 #   fpnosave    fpnosave-kernel8.elf: the same with vectors.S not saving them (the control: the check must fail)
 #   oomtest     oom-kernel8.elf / oom-kernel8.img: HEAP_SIZE shrunk to OOM_HEAP bytes (make -B oomtest OOM_HEAP=n)
+# The Console's ask> prompt asks the Claude relay. claude_cfg.sh writes its address and token (gitignored) on every build
+# from CLAUDE_RELAY_HOST, CLAUDE_RELAY_PORT and CLAUDE_RELAY_TOKEN_FILE (default ~/.claude-relay-token); no file, no token.
 CC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -O2 -Wall -Wextra
 # ttf.c, text.c and libc.c are the one part that uses floating point (the TrueType rasterizer), so they skip
 # -mgeneral-regs-only; start.S turns the FPU on at EL1. Everything else stays integer-only.
@@ -25,12 +27,26 @@ http.o: ../../drivers/http.c ../../drivers/http.h
 	$(NETCC) -c $< -o $@
 ip.o: ip.c ../../drivers/nic.h
 	$(NETCC) -DNETPORT=$(NETPORT) -c $< -o $@
+claude_cfg.h: claude_cfg.sh FORCE
+	@./claude_cfg.sh
+ask.o: ask.c claude_cfg.h ../../drivers/http.h ../../drivers/net.h
+	$(NETCC) -c ask.c -o $@
+pi-ask.o: ask.c claude_cfg.h ../../drivers/http.h ../../drivers/net.h
+	$(NETCC) -DPI_BUILD -c ask.c -o $@
 ttf.o: ../../drivers/ttf.c
 	$(FPCC) -c $< -o $@
 text.o: text.c ../../drivers/ttf.h
 	$(FPCC) -c $< -o $@
 libc.o: libc.c
 	$(FPCC) -c $< -o $@
+# The wallpaper: the shared PNG and inflate decoders (integer only; they want kmalloc and a few libc calls) plus wall.c, which scales the photo.
+SHARED = -I../../kernel -I../../lib -I../../drivers
+png.o: ../../drivers/png.c
+	$(CC) $(SHARED) -c $< -o $@
+inflate.o: ../../drivers/inflate.c
+	$(CC) $(SHARED) -c $< -o $@
+wall.o: wall.c ../../kernel/wall_sat.h
+	$(CC) $(SHARED) -c $< -o $@
 start.o: start.S
 	$(CC) -c $< -o $@
 user.o: user.S
@@ -61,12 +77,12 @@ pi-start.o: start.S
 	$(CC) -c $< -o $@
 pi-main.o: main.c
 	$(CC) -DPI_BUILD -c $< -o $@
-kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o $(NETOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o $(NETOBJ)
-pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o $(NETOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o $(NETOBJ)
+kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(NETOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(NETOBJ)
+pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(NETOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(NETOBJ)
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o $(NETOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(NETOBJ)
 pi: wifi-fw kernel8.img
 # Variant builds: $(1) names the output, $(2) the main.c flags, $(3) extra objects, $(4) the vectors.S flags.
 define variant
@@ -76,12 +92,12 @@ $(1)-pi-main.o: main.c
 	$(CC) -DPI_BUILD $(2) -c $$< -o $$@
 $(1)-vectors.o: vectors.S
 	$(CC) $(4) -c $$< -o $$@
-$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o $(NETOBJ) $(3) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o $(NETOBJ) $(3)
-$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o $(NETOBJ) $(3) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o $(NETOBJ) $(3)
+$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(NETOBJ) $(3) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(NETOBJ) $(3)
+$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(NETOBJ) $(3) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(NETOBJ) $(3)
 $(1)-kernel8.img: $(1)-pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o $(NETOBJ) $(3)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(NETOBJ) $(3)
 endef
 fptest.o: fptest.c
 	$(FPCC) -c $< -o $@
@@ -99,5 +115,6 @@ run: kernel8.elf
 run-pi: kernel8.img
 	qemu-system-aarch64 -machine raspi4b -nographic -kernel kernel8.img
 clean:
-	rm -f *.o *.elf *.img
-.PHONY: wifi-fw crashtest fpsave fpnosave oomtest
+	rm -f *.o *.elf *.img claude_cfg.h claude_cfg.h.tmp
+FORCE:
+.PHONY: wifi-fw FORCE crashtest fpsave fpnosave oomtest

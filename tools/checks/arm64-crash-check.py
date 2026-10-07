@@ -78,7 +78,7 @@ def run(name, qemu_args, image, size=(800, 600)):
         s_ = max(1, (h * 10 // 600 + 5) // 10)                      # the kernel's panel rule: 16s, 32s, W-32s wide, 14 rows of 16s
         pxl, pyl, pw, ph = 16 * s_, 32 * s_, w - 32 * s_, 16 * s_ * 14
         for what, (x, y), c in (("panel background", (pxl + pw - 4, pyl + ph - 4), (0x90, 0, 0)), ("panel corner", (pxl + 1, pyl + 1), (0x90, 0, 0)),
-                                ("desktop beside the panel", (8, pyl + ph // 2), (0x20, 0x30, 0x40))):
+                                ("desktop beside the panel", (8, pyl + ph // 2), None)):
             got = pix(x, y)
             if c and got != c: fails.append(f"{name}: {what} at {(x, y)}: got {got}, want {c}"); return
         def white(y0, y1): return sum(1 for y in range(y0, y1) for x in range(pxl, pxl + pw) if pix(x, y) == (255, 255, 255))
