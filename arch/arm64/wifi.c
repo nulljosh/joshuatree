@@ -407,6 +407,25 @@ static int set_key(unsigned index, const unsigned char *key, const unsigned char
     if (!iovar("wsec_key", 1, k, sizeof k, &st) || st) { kputs("wifi key "); kdec(index); kputs(" status "); kx(st); kputs("\n"); return 0; }
     return 1;
 }
+/* The RSN element the chip put in its association request, read back from the firmware (assoc_info, then assoc_req_ies, as
+   brcmfmac does). Message 2 has to repeat it byte for byte or the router ignores the reply; guessing it did not work (the
+   chip's frame went out, was acknowledged, and message 1 kept coming). Returns its length, 0 when not found. */
+static unsigned assoc_rsn(unsigned char *out, unsigned cap) {
+    static unsigned char ib[512]; unsigned st = 0;
+    for (unsigned i = 0; i < sizeof ib; i++) ib[i] = 0;
+    if (!iovar("assoc_info", 0, ib, 16, &st) || st) { kputs("wifi assoc_info status "); kx(st); kputs("\n"); return 0; }
+    unsigned req = rd32(ib); if (!req || req > 400) { kputs("wifi assoc req len "); kdec(req); kputs("\n"); return 0; }
+    for (unsigned i = 0; i < sizeof ib; i++) ib[i] = 0;
+    if (!iovar("assoc_req_ies", 0, ib, req, &st) || st) { kputs("wifi assoc_req_ies status "); kx(st); kputs("\n"); return 0; }
+    for (unsigned i = 0; i + 2 <= req; ) {
+        unsigned tag = ib[i], len = ib[i + 1];
+        if (i + 2 + len > req) break;
+        if (tag == 0x30 && 2 + len <= cap) { for (unsigned j = 0; j < 2 + len; j++) out[j] = ib[i + j]; return 2 + len; }
+        i += 2 + len;
+    }
+    kputs("wifi no RSN element in the association request\n");
+    return 0;
+}
 static unsigned be16(const unsigned char *p) { return (unsigned)p[0] << 8 | p[1]; }
 /* An EAPOL-Key reply (msg 2 or 4): copies the replay counter, sets our nonce and key data, signs it with the KCK. */
 static int eapol_reply(const unsigned char aa[6], unsigned ver, unsigned info, const unsigned char replay[8],
@@ -443,7 +462,8 @@ static int join(void) {
         wpa_sha1_add(&h, wifi_ssid, WIFI_SSID_LEN); unsigned char d[20]; wpa_sha1_end(&h, d);
         for (int i = 0; i < 32; i++) snonce[i] = d[i % 20] ^ (unsigned char)(c >> (8 * (i % 8)));
     }
-    unsigned shown = 0, ndata = 0, nread = 0, nbad = 0, tries = 0, variant = 0, m1count = 0;
+    unsigned shown = 0, ndata = 0, nread = 0, nbad = 0, tries = 0, variant = 0, m1count = 0, used_len = 0;
+    unsigned char used[64]; for (unsigned i = 0; i < sizeof rsn_ie; i++) used[i] = rsn_ie[i]; used_len = sizeof rsn_ie;
     for (unsigned t = 0; t < 3000; t++) {   /* up to 15 s: association and the four messages */
         unsigned off, l; if (!f2_read()) { nbad++; if (nbad > 20) break; mdelay(5); continue; }
         nread++;
@@ -476,9 +496,13 @@ static int join(void) {
                 /* The router resends message 1 until it likes our message 2, and we cannot see why it does not. So each resend gets a
                    different message 2: 0 as brcmfmac sends it, 1 with key length 16, 2 with no key data, 3 with both. The variant that
                    draws message 3 is printed, and that is what the router wanted. */
+                if (!m1count) {
+                    unsigned n = assoc_rsn(used, sizeof used);
+                    if (n) { used_len = n; kputs("wifi assoc RSN "); kdec(n); kputs(" bytes:"); for (unsigned i = 0; i < n && i < 24; i++) { kputs(" "); kx(used[i]); } kputs("\n"); }
+                }
                 variant = m1count++ & 3;
                 kputs("wifi handshake 1 of 4, info "); kx(info); kputs(" kd "); kdec(kdlen); kputs("\n");
-                if (!eapol_reply(aa, k[0], 0x010a, k + 9, snonce, (variant & 2) ? 0 : rsn_ie, (variant & 2) ? 0 : sizeof rsn_ie, ptk, (variant & 1) ? 16 : 0)) { fail("msg2 send"); return 0; }
+                if (!eapol_reply(aa, k[0], 0x010a, k + 9, snonce, (variant & 2) ? 0 : used, (variant & 2) ? 0 : used_len, ptk, (variant & 1) ? 16 : 0)) { fail("msg2 send"); return 0; }
                 kputs("wifi handshake 2 of 4 sent, variant "); kdec(variant); kputs("\n");
                 if (m1count <= 2) {   /* did it leave the radio? the chip's counter block; the old 64-byte ask got BUFTOOSHORT (-14) */
                     static unsigned char cn[1400]; unsigned s2 = 0;
