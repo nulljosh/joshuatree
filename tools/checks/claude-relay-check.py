@@ -84,6 +84,10 @@ def stub_calls(tmp):
 
 
 def alive(pid):
+    try:  # Linux: a killed process nobody has reaped yet is a zombie, which is dead for this purpose
+        with open("/proc/%d/stat" % pid) as f:
+            if f.read().rsplit(")", 1)[1].split()[0] == "Z": return False
+    except (OSError, IndexError): pass
     try: os.kill(pid, 0); return True
     except ProcessLookupError: return False
     except PermissionError: return True
