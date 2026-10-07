@@ -244,6 +244,16 @@ static int fw_load(void) {
 /* ---- Control path: BCDC over SDPCM on function 2. One request in flight, polled reply. ---- */
 static unsigned char frame[2048] __attribute__((aligned(64)));
 static unsigned seq, reqid;
+/* Read ONE frame from F2: 64 bytes first, then only the rest the SDPCM length asks for, like brcmfmac's first-read.
+   Reading a flat 1536 bytes swallowed the start of whatever frame came next, so once the firmware had events queued
+   (after the radio came up) the replies to set-commands vanished: the seventeenth run saw 'status 0' no-replies for
+   clmload, country and escan while the plain gets before them worked. */
+static int f2_read(void) {
+    if (!cmd53(2, 0x8000, 0, frame, 64)) return 0;
+    unsigned len = frame[0] | frame[1] << 8;
+    if (len > 64 && len <= 1600) { unsigned rest = (len - 64 + 3) & ~3u; if (!cmd53(2, 0x8000, 0, frame + 64, rest)) return 0; }
+    return 1;
+}
 static int iovar(const char *name, int set, void *buf, unsigned len, unsigned *status) {
     unsigned char p[1024]; unsigned k = 0;
     while (name[k]) { p[k] = name[k]; k++; } p[k++] = 0;
@@ -252,7 +262,7 @@ static int iovar(const char *name, int set, void *buf, unsigned len, unsigned *s
     if (!cmd53(2, 0x8000, 1, frame, fw_padded(n))) return 0;
     for (unsigned t = 0; t < 200; t++) {
         unsigned off, l, ch; int c;
-        if (!cmd53(2, 0x8000, 0, frame, 1536)) return 0;
+        if (!f2_read()) return 0;
         c = sdpcm_parse(frame, 1536, &off, &l);
         if (c == SDPCM_CONTROL && bcdc_reply(frame + off, l, id, &ch) >= 0) {
             *status = rd32(frame + off + 12);
@@ -271,7 +281,7 @@ static int wlc_ioctl(unsigned cmd, void *buf, unsigned len, unsigned *status) {
     if (!cmd53(2, 0x8000, 1, frame, fw_padded(n))) return 0;
     for (unsigned t = 0; t < 200; t++) {
         unsigned off, l, ch; int c;
-        if (!cmd53(2, 0x8000, 0, frame, 1536)) return 0;
+        if (!f2_read()) return 0;
         c = sdpcm_parse(frame, 1536, &off, &l);
         if (c == SDPCM_CONTROL && bcdc_reply(frame + off, l, id, &ch) >= 0) { *status = rd32(frame + off + 12); return 1; }
         mdelay(5);
@@ -313,7 +323,7 @@ static int scan(void) {
       if (!ok || st) { kputs("wifi escan "); kputs(ok ? "status " : "no reply, status "); kdec(st); kputs("\n"); fail("escan"); return 0; } }
     unsigned found = 0;
     for (unsigned t = 0; t < 600; t++) {   /* up to 3 s of events on the event channel */
-        unsigned off, l; if (!cmd53(2, 0x8000, 0, frame, 1536)) break;
+        unsigned off, l; if (!f2_read()) break;
         if (sdpcm_parse(frame, 1536, &off, &l) == SDPCM_EVENT && l > 4 + 48 + 12) {
             const unsigned char *ev = frame + off + 4;   /* past the BCDC data header; brcmf_event: 14 eth + 10 bcmeth + 24 msg */
             unsigned type = ev[24 + 2] << 8 | ev[24 + 3];
