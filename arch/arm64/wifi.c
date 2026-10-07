@@ -264,6 +264,20 @@ static int iovar(const char *name, int set, void *buf, unsigned len, unsigned *s
     }
     return 0;
 }
+/* A plain BCDC ioctl (no variable name): WLC_UP is 2, a set with no payload. brcmfmac brings the interface up this way
+   before it scans; without it the chip refuses the scan. */
+static int wlc_ioctl(unsigned cmd, void *buf, unsigned len, unsigned *status) {
+    unsigned id = ++reqid & 0xffff, n = sdpcm_pack(frame, seq++, SDPCM_CONTROL, cmd, id, 1, buf, len);
+    if (!cmd53(2, 0x8000, 1, frame, fw_padded(n))) return 0;
+    for (unsigned t = 0; t < 200; t++) {
+        unsigned off, l, ch; int c;
+        if (!cmd53(2, 0x8000, 0, frame, 1536)) return 0;
+        c = sdpcm_parse(frame, 1536, &off, &l);
+        if (c == SDPCM_CONTROL && bcdc_reply(frame + off, l, id, &ch) >= 0) { *status = rd32(frame + off + 12); return 1; }
+        mdelay(5);
+    }
+    return 0;
+}
 static void ap_line(int rssi, unsigned chan, const char *ssid, unsigned slen) {   /* "wifi ap -51 ch6 MySSID", under 53 columns */
     kputs("wifi ap "); if (rssi < 0) { kputs("-"); rssi = -rssi; } kdec((unsigned)rssi); kputs(" ch"); kdec(chan); kputs(" ");
     char s[33]; unsigned n = slen > 32 ? 32 : slen; for (unsigned i = 0; i < n; i++) s[i] = ssid[i] >= 32 && ssid[i] < 127 ? ssid[i] : '?'; s[n] = 0;
@@ -291,7 +305,12 @@ static int scan(void) {
     unsigned char *pr = es + 8; for (int i = 0; i < 6; i++) pr[36 + i] = 0xff;        /* wl_scan_params: wildcard SSID, any BSSID */
     pr[42] = 2; pr[43] = 0;   /* bss_type ANY (2), scan_type active (0): the two bytes were swapped, so the chip refused the scan */
     wr32(pr + 44, (unsigned)-1); wr32(pr + 48, (unsigned)-1); wr32(pr + 52, (unsigned)-1); wr32(pr + 56, (unsigned)-1);   /* nprobes, active, passive, home time: -1 = the chip's defaults */
-    if (!iovar("escan", 1, es, sizeof es, &st) || st) { fail("escan"); return 0; }
+    /* Scan results come back as events, and the chip only sends the ones in its event mask: turn on ESCAN_RESULT (event 69,
+       so byte 8, bit 5) the way brcmfmac does, reading the current 18-byte mask first. */
+    { unsigned char em[20] = {0}; if (iovar("event_msgs", 0, em, 18, &st) && !st) { em[8] |= 1 << 5; if (!iovar("event_msgs", 1, em, 18, &st) || st) kputs("wifi event mask not set\n"); } else kputs("wifi event mask unreadable\n"); }
+    if (!wlc_ioctl(2, 0, 0, &st) || st) { kputs("wifi up ioctl status "); kdec(st); kputs("\n"); } else kputs("wifi radio up\n");   /* WLC_UP */
+    { unsigned ok = iovar("escan", 1, es, sizeof es, &st);
+      if (!ok || st) { kputs("wifi escan "); kputs(ok ? "status " : "no reply, status "); kdec(st); kputs("\n"); fail("escan"); return 0; } }
     unsigned found = 0;
     for (unsigned t = 0; t < 600; t++) {   /* up to 3 s of events on the event channel */
         unsigned off, l; if (!cmd53(2, 0x8000, 0, frame, 1536)) break;
