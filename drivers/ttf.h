@@ -17,8 +17,27 @@ typedef enum {
     TTF_FACE_SERIF_BOLD,
     TTF_FACE_MONO,
     TTF_FACE_MONO_BOLD,
+    /* 2.27.0 font library: user-picked document faces, OFL look-alikes,
+       Regular only, ASCII only. Embedded for now; loading from disk is a
+       later step. The UI chrome stays DejaVu Sans. */
+    TTF_FACE_INTER,          /* Helvetica-like sans */
+    TTF_FACE_EB_GARAMOND,    /* Garamond */
+    TTF_FACE_COMIC_NEUE,     /* Comic Sans-like */
+    TTF_FACE_CAVEAT_BRUSH,   /* nearest open brush face to Papyrus */
+    TTF_FACE_DANCING_SCRIPT, /* cursive */
+    TTF_FACE_JETBRAINS_MONO, /* second monospace */
+    TTF_FACE_SOURCE_SERIF,   /* classic serif */
+    TTF_FACE_SOURCE_SANS,    /* plain sans */
     TTF_FACE_COUNT
 } ttf_face_t;
+
+/* Font registry: faces by name. Names are lowercase, no spaces
+   ("inter", "ebgaramond", "dejavu-sans"). */
+const char *ttf_face_name(ttf_face_t face);
+/* Returns the face for a registry name, or -1 when there is none. */
+int ttf_face_by_name(const char *name);
+/* 1 for faces whose every glyph shares one advance (Terminal-safe). */
+int ttf_face_is_mono(ttf_face_t face);
 
 typedef struct {
     unsigned char *coverage; /* w*h bytes, 0-255 alpha, kmalloc'd; free with ttf_free_glyph */

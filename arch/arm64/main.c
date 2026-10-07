@@ -44,13 +44,38 @@ static void uart_init(void) {
 }
 static void console_putc(char c);   /* the same text, on the screen once there is one */
 static int con_quiet;   /* the rest of this line goes to the UART only: key echoes stay off the screen once the ask> prompt is in use */
+static int con_line_start = 1;   /* the next character begins a line */
 static void uart_putc(char c) {
     while (REG(UART_FR) & TXFF) {}
     REG(UART_DR) = (unsigned char)c;
     if (!con_quiet) console_putc(c);
     if (c == '\n') con_quiet = 0;
+    con_line_start = c == '\n';
 }
-static void uart_puts(const char *s) { while (*s) uart_putc(*s++); }
+/* The boot narrative is long, and on the screen it pushed the lines that matter out of the window. These line starts go to
+   the UART only (the serial log is unchanged): the self-test chatter, the USB enumeration walk and the Wi-Fi steps that went
+   fine. Every FAIL, every odd status and the summary lines still reach the screen. */
+static int con_noise(const char *s) {
+#ifdef CON_VERBOSE
+    (void)s; return 0;   /* the scroll check builds with every line on the screen so there is a long log to scroll */
+#else
+    static const char *const skip[] = { "tick", "M0 ", "M1 ", "M1a ", "M1b ", "M1c fb ok", "M1d dock ", "M3 ", "EL0", "EL1", "booted at ",
+        "usb ", "wifi power", "wifi sdio", "wifi f1", "wifi alp", "wifi chip", "wifi cores", "wifi arm", "wifi fw ", "wifi ht ",
+        "wifi bus", "wifi radio up", "wifi ver", "wifi mac", "wifi found", "wifi scan", "wifi joining", "wifi handshake", "wifi assoc",
+        "Wi-Fi: found", "Wi-Fi: looked", "Wi-Fi: this Pi", "Wi-Fi: chip", "Wi-Fi: connecting", "Wi-Fi: the router", "Wi-Fi: we answered", "Wi-Fi: handshake",
+        "dhcp: lease", "net dhcp", "@", "M1d calendar", "Wi-Fi: connected", "Internet: online" };
+    for (unsigned i = 0; i < sizeof skip / sizeof skip[0]; i++) {
+        const char *a = s, *b = skip[i];
+        while (*b && *a == *b) { a++; b++; }
+        if (!*b) return 1;
+    }
+    return 0;
+#endif
+}
+static void uart_puts(const char *s) {
+    if (con_line_start && con_noise(s)) con_quiet = 1;
+    while (*s) uart_putc(*s++);
+}
 static void uart_hex(unsigned long v) {
     uart_puts("0x");
     for (int i = 60; i >= 0; i -= 4) uart_putc("0123456789abcdef"[(v >> i) & 15]);
@@ -217,7 +242,7 @@ void exc_el0_sync(struct frame *f) {
         if (n == SYS_WRITE) {
             const char *p = (const char *)f->x[1]; unsigned long len = f->x[2];
             if (f->x[0] != 1 || !user_in_range((unsigned long)p, len)) { f->x[0] = (unsigned long)-14; return; }   /* -EFAULT */
-            for (unsigned long i = 0; i < len; i++) uart_putc(p[i]);
+            for (unsigned long i = 0; i < len; i++) { if (con_line_start) con_quiet = 1; uart_putc(p[i]); }   /* the EL0 self-test talks to the UART only */
             f->x[0] = len;
         } else if (n == SYS_EXIT) {
             uart_puts("M3 EL0 exit "); uart_dec((unsigned)f->x[0]); uart_putc('\n');
@@ -534,7 +559,9 @@ static void con_hint(void) {   /* the title bar's "lines 12-27 of 61": a photo s
     con_text(b, x0 + w - sc(4), con_wy);
     fb_flush(x0, y0, w, h);
 }
-static int con_is_status(const char *l, unsigned n) {   /* wifi lines, and usb lines that are not just a key echo */
+static int con_is_status(const char *l, unsigned n) {   /* wifi and usb lines that report a failure; no news is good news */
+    int bad = 0; for (unsigned i = 0; i + 4 <= n; i++) if (l[i] == 'F' && l[i + 1] == 'A' && l[i + 2] == 'I' && l[i + 3] == 'L') bad = 1;
+    if (!bad) return 0;
     if (n >= 4 && l[0] == 'w' && l[1] == 'i' && l[2] == 'f' && l[3] == 'i') return 1;
     if (n >= 4 && l[0] == 'u' && l[1] == 's' && l[2] == 'b' && l[3] == ' ') return !(n >= 8 && l[4] == 'k' && l[5] == 'e' && l[6] == 'y' && l[7] == ' ');
     return 0;
@@ -551,10 +578,11 @@ static void con_summary(void) {   /* the row under the text: the newest wifi and
     for (int part = 0; part < 2; part++) {
         const char *l = part ? con_log + uo : con_log + wo, *none = part ? "usb -" : "wifi -"; unsigned ln = part ? un : wn;
         unsigned start = n;
-        if (!ln) { l = none; while (l[ln]) ln++; }
+        if (!ln) { l = none; (void)l; ln = 0; }
         for (unsigned i = 0; i < ln && n - start < half; i++) b[n++] = (l[i] >= 32 && l[i] < 127) ? l[i] : '?';
         if (!part) { while (n - start < half) b[n++] = ' '; b[n++] = '|'; b[n++] = ' '; }
     }
+    if (!wn && !un) n = 0;   /* nothing broke: an empty row */
     int y = con_y + con_rows * con_ch;
     fb_rect(con_x, y, con_cols * con_cw, con_ch, CON_BG);
     fb_flush(con_x - 4, y, con_cols * con_cw + 8, con_ch);
@@ -601,6 +629,8 @@ static int con_key(unsigned code, unsigned value) {   /* Page Up 104, Page Down 
     con_hint();
     return 1;
 }
+static int cur_hold(void);           /* slice 4, below: take the pointer's arrow off the Console while it draws */
+static void cur_release(int held);   /* ...and put it back */
 static void console_putc(char c) {
     if (con_len == LOG_MAX) {   /* full: forget the older half, up to a line end */
         unsigned drop = LOG_MAX / 2;
@@ -613,6 +643,7 @@ static void console_putc(char c) {
     }
     con_log[con_len++] = c;
     if (!con_live) return;
+    int held = cur_hold();
     unsigned was = con_anchor;
     if (!con_scrolled) con_draw(con_len - 1);
     if (c == '\n' || con_anchor != was) {
@@ -620,6 +651,7 @@ static void console_putc(char c) {
         if (c == '\n' && con_is_status(con_log + s, e - s)) con_summary();
         con_hint();
     }
+    cur_release(held);
 }
 /* The console's type. DejaVu Sans Mono at the screen's scale, unless a quick test of the rasterizer says no: then the
    8x16 VGA font at a whole-number scale (2x on a 1080p screen), which needs nothing but integer stores. */
@@ -640,6 +672,7 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
 /* The bottom row: "ask> " and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
 void con_prompt(const char *s, unsigned n) {
     if (!con_live) return;
+    int held = cur_hold();
     unsigned row = (unsigned)con_rows + 1, cols = (unsigned)con_cols, room = cols > 7 ? cols - 6 : 1;
     int y = con_y + (int)row * con_ch;
     fb_rect(con_x, y, con_cols * con_cw, con_ch, CON_BG);
@@ -650,6 +683,7 @@ void con_prompt(const char *s, unsigned n) {
     if (n > room) { s += n - room; n = room; }
     for (unsigned i = 0; i < n; i++, col++) if (s[i] != ' ') con_glyph(col, row, s[i]);
     con_glyph(col, row, '_');
+    cur_release(held);
 }
 int con_columns(void) { return con_live ? con_cols : 0; }
 static void con_start(void) {   /* the screen is ready: replay what was printed before it */
@@ -739,6 +773,7 @@ static void crash(const struct frame *f) {
 #include "../../kernel/dock_geom.h"
 #include "../../kernel/gui_paint.h"
 #include "../../kernel/icon_art.h"
+#include "../../kernel/boot_mark.h"
 int dock_scale_pct = 7;   /* the i386 default (Settings can change it there; nothing does here yet) */
 unsigned int window_scale(void) { return fb_h >= 1080 ? 2 : 1; }
 unsigned int window_width(void) { return fb_w / window_scale(); }
@@ -764,9 +799,33 @@ void gui_text(const char *s, int x, int y, unsigned int fg) {
     if (text_ok) text_draw(2, s, x * k, y * k + 25 * k / 2, 120 * k, fb_color(fg), fb, fb_pitch, (int)fb_w, (int)fb_h);
 }
 int gui_text_width(const char *s) { int k = (int)window_scale(); return text_ok ? text_width(2, s, 120 * k) / k : 0; }
+/* The icon text (the Calendar face's month and day): bold sans, face 0..3 a 16, 20, 24 or 28 physical pixel face times
+   mul, as i386's wx_text, with the line box's top at logical ly; DejaVu's ascent puts the baseline 93% of a face down. */
+void gui_icon_text(const char *s, int lx, int ly, int face, int mul, unsigned int fg) {
+    int k = (int)window_scale(), px = (16 + 4 * face) * mul;
+    if (text_ok) text_draw(1, s, lx * k, ly * k + px * 93 / 100, px * 10, fb_color(fg), fb, fb_pitch, (int)fb_w, (int)fb_h);
+}
+int gui_icon_text_w(const char *s, int face, int mul) { int k = (int)window_scale(); return text_ok ? (text_width(1, s, (16 + 4 * face) * mul * 10) + k - 1) / k : 0; }
 /* The wallpaper is already on the screen, so reading the framebuffer is reading the wallpaper, as long as the dock is
    painted before anything else covers its band. */
 unsigned int gui_wallpaper_sample(int px, int py, int sway) { (void)sway; return window_get_pixel_phys(px, py); }
+/* 2.25: the brand mark in the menu bar's corner, as on i386 (gui_draw_mark_sized): the small copy of the scribbled
+   tree from kernel/boot_mark.h, box-filtered to T physical pixels and blended in ink over what is there. */
+static void menu_mark_paint(int cx, int cy, int T, unsigned ink) {
+    int ox = cx - T / 2, oy = cy - T / 2;
+    for (int row = 0; row < T; row++) for (int col = 0; col < T; col++) {
+        int c0 = col * MENU_MARK_W / T, c1 = (col + 1) * MENU_MARK_W / T, r0 = row * MENU_MARK_H / T, r1 = (row + 1) * MENU_MARK_H / T;
+        if (c1 == c0) c1 = c0 + 1;
+        if (r1 == r0) r1 = r0 + 1;
+        int sum = 0, n = (c1 - c0) * (r1 - r0);
+        for (int y = r0; y < r1; y++) for (int x = c0; x < c1; x++) sum += menu_mark_cov[y * MENU_MARK_W + x];
+        unsigned a = (unsigned)(sum / n);
+        if (!a) continue;
+        unsigned d = window_get_pixel_phys(ox + col, oy + row), out = 0;
+        for (int sh = 0; sh <= 16; sh += 8) out |= ((((ink >> sh) & 0xFF) * a + ((d >> sh) & 0xFF) * (255 - a)) / 255) << sh;
+        window_pixel_phys(ox + col, oy + row, out);
+    }
+}
 static void dock_paint(void) {
     static const int order[GUI_ICON_COUNT] = GUI_DOCK_DEFAULT_ORDER;
     gui_draw_dock_tray();
@@ -781,6 +840,9 @@ static void dock_paint(void) {
         if (tile && png_decode(ICON_ART[icon], ICON_ART_LEN[icon], &art, &aw, &ah, &ach) == 0 && art && aw == ICON_ART_SIZE && ah == ICON_ART_SIZE && ach == 4) {
             gui_icon_art_scale(art, tile, pw, DOCK_TRAY_COLOR);
             gui_blit_tile(tile, cx - size / 2, cy_bottom - size, size, DOCK_TRAY_COLOR);
+            /* Calendar's art is a blank page; i386 writes the date on it (gui_calendar_face). The Pi has no battery
+               clock and no time source yet, so it gets the face's "date unknown" dashes, never a made-up date. */
+            if (icon == GUI_CALENDAR) { gui_calendar_face(cx, cy_bottom, size, 0, 0); uart_puts("M1d calendar face, date unknown\n"); }
             drawn++;
         }
         heap_release(mark);
@@ -789,12 +851,17 @@ static void dock_paint(void) {
 }
 /* Slice 3: the hover label, the i386 one (gui_draw_dock_label). The first hover keeps a copy of the dock's band, so
    moving to another slot or to none puts the plain band back before the next label; nothing is allocated until then.
-   The pointer drives it in the next slice; today only the dockhover test build calls it. Names follow APPS[] in
+   The pointer drives it (slice 4, below); the dockhover test build calls it once at boot. Names follow APPS[] in
    kernel/kernel.c for GUI_DOCK_DEFAULT_ORDER (arm64-m1c-check.py compares them). */
 static const char *const dock_names[GUI_ICON_COUNT] = {"Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"};
 static unsigned *dock_band;
+static int cur_on;           /* slice 4: the pointer's arrow is on the screen */
+static void cur_hide(void);
+static void cur_show(void);
 void dock_hover(int slot) {
     int s = (int)window_scale(), top = gui_dock_band_top() * s, rows = (int)fb_h - top;
+    int arrow = cur_on;
+    cur_hide();   /* the band copy must never hold the arrow, or every later restore paints a ghost of it */
     if (!dock_band) {
         unsigned long mark = heap_mark();
         dock_band = kmalloc((unsigned)rows * fb_pitch * 4);
@@ -803,16 +870,180 @@ void dock_hover(int slot) {
     } else for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) fb[(unsigned)top * fb_pitch + i] = dock_band[i];
     if (slot >= 0 && slot < GUI_ICON_COUNT) {
         gui_draw_dock_label(gui_slot_x(slot) + DOCK_ICON / 2, gui_dock_y0(), dock_names[slot]);
+        con_quiet = 1;   /* the UART only: a pointer sweeping the dock would fill the Console */
         uart_puts("M1d hover "); uart_dec((unsigned)slot); uart_putc(' '); uart_puts(dock_names[slot]); uart_putc('\n');
     }
     fb_flush(0, top, (int)fb_w, rows);
+    if (arrow) cur_show();
 }
 
+/* ---- Slice 4: the pointer. The i386 arrow (gui_paint.c's software cursor: a save of the pixels it covers, then the
+   antialiased arrow blended on top) over the framebuffer. Anything else that draws where the arrow is takes it off
+   first and puts it back after (cur_hold, cur_release), so the save never goes stale and nothing smears. Every change
+   is cleaned out of the data cache, as the GPU reads RAM. The arrow shows from the first pointer event on, so a desktop
+   nobody has touched looks exactly as before. mouse_x and mouse_y are physical pixels; the painters and the dock's hit
+   test work on the logical grid, so both are divided by window_scale(). ---- */
+static unsigned mouse_x = 400, mouse_y = 300, mouse_moved;   /* fb_init moves it to the middle of the real screen */
+static int cur_wanted;                   /* a pointer has moved: show the arrow */
+static int win_lx, win_ly, win_lw, win_lh;   /* the Console's frame on the logical grid */
+static unsigned *con_under;              /* the wallpaper under that frame, saved before it was drawn: closing puts it back */
+static int hover_slot = -1;
+static void cur_flush(int lx, int ly) { int s = (int)window_scale(); fb_flush(lx * s, ly * s, CURSOR_W * s, CURSOR_H * s); }
+static void cur_hide(void) {
+    if (!cur_on) return;
+    int x = cursor_saved_x, y = cursor_saved_y;
+    gui_cursor_restore();
+    cur_flush(x, y);
+    cur_on = 0;
+}
+static void cur_show(void) {
+    if (cur_on || !cur_wanted || !fb) return;
+    int s = (int)window_scale(), x = (int)mouse_x / s, y = (int)mouse_y / s;
+    gui_cursor_save(x, y);
+    gui_draw_cursor(x, y);
+    cur_flush(x, y);
+    cur_on = 1;
+}
+static int cur_hold(void) {   /* the Console is about to draw: take the arrow off if it is over the Console's frame */
+    if (!cur_on) return 0;
+    int ax = cursor_saved_x, ay = cursor_saved_y;
+    if (ax >= win_lx + win_lw || ax + CURSOR_W <= win_lx || ay >= win_ly + win_lh || ay + CURSOR_H <= win_ly) return 0;
+    cur_hide();
+    return 1;
+}
+static void cur_release(int held) { if (held) cur_show(); }
+static void console_frame(void) {   /* the i386 window frame, and a white well for the log */
+    int s = (int)window_scale();
+    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Console");
+    fb_rect((win_lx + 8) * s, (win_ly + 30) * s, (win_lw - 16) * s, (win_lh - 38) * s, CON_BG);
+}
+/* The red close button puts the wallpaper back where the Console was. The log keeps every line (and the UART still
+   prints them); a click on any dock tile opens it again with the newest lines, so the one debug view on a Pi can
+   never be lost for good. */
+static void console_close(void) {
+    if (!con_live || !con_under) return;
+    int s = (int)window_scale(), x = win_lx * s, y = win_ly * s, w = win_lw * s, h = win_lh * s;
+    cur_hide();
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = con_under[j * w + i];
+    fb_flush(x, y, w, h);
+    con_live = 0;
+    uart_puts("console closed\n");
+    cur_show();
+}
+void ask_redraw(void);   /* ask.c: the line being typed, back on the ask> row */
+static void console_open(void) {
+    if (con_live || !con_under) return;
+    int s = (int)window_scale();
+    cur_hide();
+    console_frame();
+    con_live = 1; con_scrolled = 0;
+    unsigned nl = con_nlines(), keep = con_rows > 1 ? (unsigned)con_rows - 1 : 1;
+    con_anchor = con_line_off(nl > keep ? nl - keep : 0);
+    con_wipe();
+    for (unsigned k = con_anchor; k < con_len; k++) con_draw(k);
+    con_summary(); con_hint(); ask_redraw();
+    fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
+    uart_puts("console open\n");
+    cur_show();
+}
+static void pointer_moved(void) {   /* one report done: the arrow to its new place, the dock's label to the slot under it */
+    if (!fb) return;
+    int s = (int)window_scale(), slot = gui_dock_hit_test((int)mouse_x / s, (int)mouse_y / s);
+    cur_wanted = 1;
+    cur_hide();
+    if (slot != hover_slot) { hover_slot = slot; dock_hover(slot); }
+    cur_show();
+}
+static void pointer_click(void) {   /* the left button went down */
+    if (!fb) return;
+    int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
+    int dx = lx - (win_lx + 24), dy = ly - (win_ly + 16);   /* the close button: gui_draw_window_frame's red dot, radius 7 */
+    if (slot >= 0) {
+        console_open();
+        uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
+    } else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
+}
+
+unsigned long net_clock_utc(void);   /* ip.c: UTC seconds once the network has told us, 0 before */
+static unsigned *mb_save; static int mb_h, mb_x0;
+static int mb_wifi = -1;   /* the Wi-Fi state last shown (0 off, 1 working, 2 connected), so the clock can redraw alone each minute */
+static int clock_minute = -1;
+/* Pacific time (Vancouver) from UTC: 8 hours back, 7 in daylight time, which runs from the second Sunday of March to the
+   first Sunday of November (the change itself is at 2 am local, 10:00 and 09:00 UTC). */
+static unsigned long civil_days(long y, unsigned m, unsigned d) {
+    y -= m <= 2; long era = (y >= 0 ? y : y - 399) / 400; unsigned yoe = (unsigned)(y - era * 400);
+    unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1, doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return (unsigned long)(era * 146097 + (long)doe - 719468);
+}
+static void civil_from_days(unsigned long z, long *y, unsigned *m, unsigned *d) {
+    z += 719468; unsigned long era = z / 146097; unsigned doe = (unsigned)(z - era * 146097);
+    unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; long yy = (long)yoe + (long)era * 400;
+    unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100), mp = (5 * doy + 2) / 153;
+    *d = doy - (153 * mp + 2) / 5 + 1; *m = mp < 10 ? mp + 3 : mp - 9; *y = yy + (*m <= 2);
+}
+static unsigned long nth_sunday_utc(long y, unsigned mon, unsigned nth, unsigned hour) {   /* the nth Sunday of a month, at hour UTC */
+    unsigned long d1 = civil_days(y, mon, 1); unsigned dow = (unsigned)((d1 + 4) % 7);   /* 1970-01-01 was a Thursday; 0 = Sunday */
+    unsigned first = dow == 0 ? 1 : 1 + (7 - dow);
+    return (civil_days(y, mon, first + (nth - 1) * 7)) * 86400UL + hour * 3600UL;
+}
+static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, unsigned *day) {
+    long y; unsigned m, d; civil_from_days(utc / 86400, &y, &m, &d);
+    int dst = utc >= nth_sunday_utc(y, 3, 2, 10) && utc < nth_sunday_utc(y, 11, 1, 9);
+    unsigned long loc = utc - (dst ? 7 : 8) * 3600UL;
+    civil_from_days(loc / 86400, &y, mon, day);
+    *hh = (unsigned)(loc % 86400) / 3600; *mm = (unsigned)(loc % 3600) / 60;
+}
+int wifi_signal_level(void);   /* wifi.c: 1 to 3 from how loud our network was in the scan */
+/* The right end of the menu bar: the clock in 12-hour form, and left of it a three-bar signal icon, no name. Connected
+   bars show in the same ink as the clock, as many as the signal earns; anything else (starting, joining, no network) is three
+   quiet grey bars. Each call puts the saved bare bar back first, so old pixels never show through. */
+void menubar_wifi(int state) {
+    if (!fb || !text_ok) return;
+    int W = (int)fb_w, H = (int)fb_h, mb = sg(MENUBAR_H);
+    if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) fb[(unsigned)y * fb_pitch + (unsigned)x] = mb_save[y * (W - mb_x0) + (x - mb_x0)];
+    mb_wifi = state;
+    char clkbuf[12] = "--:--"; const char *clk = clkbuf;   /* the clock slot: dashes until the network has told us the time */
+    unsigned long u = net_clock_utc();
+    if (u) {
+        unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd); unsigned h12 = h % 12 ? h % 12 : 12; unsigned n = 0;
+        if (h12 >= 10) clkbuf[n++] = '1';
+        clkbuf[n++] = (char)('0' + h12 % 10); clkbuf[n++] = ':'; clkbuf[n++] = (char)('0' + m / 10); clkbuf[n++] = (char)('0' + m % 10);
+        clkbuf[n++] = ' '; clkbuf[n++] = h >= 12 ? 'P' : 'A'; clkbuf[n++] = 'M'; clkbuf[n] = 0;
+        clock_minute = (int)(h * 60 + m);
+    }
+    int cx = W - sg(16) - text_width(2, clk, sg(120));
+    text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
+    int R = sg(11), th = sg(3) / 2, dr = sg(3) / 2, ox = cx - sg(16) - R, oy = mb / 2 + sg(5);   /* the classic fan: a dot, then three arcs above it */
+    int level = state == 2 ? wifi_signal_level() : 0;
+    for (int y = -R; y <= dr; y++) for (int x = -R; x <= R; x++) {
+        int d2 = x * x + y * y, ring = 0;
+        if (d2 <= dr * dr) ring = 1;   /* the dot */
+        else if (y < 0 && x <= -y && -x <= -y) for (int i = 1; i <= 3; i++) { int ro = sg(3 * i + 2), ri = ro - th; if (d2 <= ro * ro && d2 >= ri * ri) ring = i + 1; }   /* 45 degrees either side of straight up */
+        if (ring) fb_rect(ox + x, oy + y, 1, 1, ring - 1 <= level && (ring > 1 || level) ? 0x001C1C1E : 0x00B8B4AC);
+    }
+    fb_flush(mb_x0, 0, W - mb_x0, mb);
+}
+void menubar_tick(void) {   /* the poll loop calls this; it redraws only when the minute has changed */
+    unsigned long u = net_clock_utc();
+    if (!u || mb_wifi < 0) return;
+    unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
+    if ((int)(h * 60 + m) != clock_minute) menubar_wifi(mb_wifi);
+}
 static void fb_init(void) {
     if (!fb_setup()) return;
     int W = (int)fb_w, H = (int)fb_h;
+    mouse_x = fb_w / 2; mouse_y = fb_h / 2;               /* the pointer starts in the middle of the screen */
     int win_w = sc(500), win_h = sc(350), win_x = (W - win_w) / 2, win_y = sc(100);
     int mb = sg(MENUBAR_H);                               /* the menu bar's height on this screen: 26 on the 960x540 grid */
+    {   /* the boot screen while the photo decodes (the slow part): the tree on off-white and a thin bar a third full,
+           one of three steps done (screen up; the photo and the desktop follow). The wallpaper paints straight over it. */
+        fb_rect(0, 0, W, H, 0x00faf8f4);
+        menu_mark_paint(W / 2, H / 2 - sg(30), sg(110), 0x001C1C1E);
+        int bw = sg(140), bh = sg(4) > 2 ? sg(4) : 2, bx = (W - bw) / 2, by = H / 2 + sg(50);
+        fb_rect(bx, by, bw, bh, 0x00DDD8CE);
+        fb_rect(bx, by, bw / 3, bh, 0x001C1C1E);
+        fb_flush(0, 0, W, H);
+    }
     int wall_ok = wall_paint(fb, fb_pitch, W, H, fb_swap);
     if (!wall_ok) fb_rect(0, 0, W, H, 0x00203040);   /* the Satellite photo; flat only if it will not decode */
     for (int y = 0; y < mb - 1; y++) for (int x = 0; x < W; x++) {   /* menu bar: half wallpaper, half white, per pixel */
@@ -820,25 +1051,36 @@ static void fb_init(void) {
         fb[(unsigned)y * fb_pitch + (unsigned)x] = ((c >> 1) & 0x007F7F7Fu) + 0x00808080u;   /* each colour lane: half itself plus half of 255 */
     }
     fb_rect(0, mb - 1, W, 1, MENUBAR_RULE);               /* closed by a one pixel rule */
+    mb_h = mb - 1; mb_x0 = W / 2;                          /* keep the bare right half of the bar, for menubar_status() */
+    mb_save = kmalloc((unsigned)(mb_h * (W - mb_x0)) * 4);
+    if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) mb_save[y * (W - mb_x0) + (x - mb_x0)] = fb[(unsigned)y * fb_pitch + (unsigned)x];
+    text_ok = text_init();                                /* before the dock (the Calendar face) and the window (its title) */
     dock_paint();                                         /* the i386 dock, while only the wallpaper is under it */
     int band_y = gui_dock_band_top() * (int)window_scale();   /* the top of the dock's band, room for a hover label */
-    text_ok = text_init();                                /* before the window: its frame has a title */
     /* Slice 3: the Console wears the i386 window frame (gui_paint.c): rounded cream body on the wallpaper, traffic
        lights, centred name, a hairline under the title band. Its content well is white for the log. */
     int s = (int)window_scale(), lx = win_x / s, ly = win_y / s, lw = win_w / s, lh = win_h / s;
-    gui_draw_window_frame(lx, ly, lw, lh, "Console");
-    fb_rect((lx + 8) * s, (ly + 30) * s, (lw - 16) * s, (lh - 38) * s, CON_BG);
+    win_lx = lx; win_ly = ly; win_lw = lw; win_lh = lh;
+    con_under = kmalloc((unsigned)(lw * s * lh * s) * 4);   /* slice 4: what the close button puts back */
+    if (con_under) { for (int j = 0; j < lh * s; j++) for (int i = 0; i < lw * s; i++) con_under[j * lw * s + i] = fb[(unsigned)(ly * s + j) * fb_pitch + (unsigned)(lx * s + i)]; }
+    else uart_puts("oom console close\n");                  /* the Console then just has no working close button */
+    console_frame();
     if (text_ok) {
-        text_draw(1, "Joshua Tree", sg(16), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
-        const char *clk = "--:--";                          /* the clock slot, until there is a time source */
-        int cx = W - sg(16) - text_width(2, clk, sg(120));
-        text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
-        int bx = cx - sg(18) - text_width(1, "ARM64", sg(110));   /* the ARM64 badge, in the house accent */
-        text_draw(1, "ARM64", bx, (mb + sg(8)) / 2, sg(110), fb_color(0x00b5502c), fb, fb_pitch, W, H);
+        menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
+        text_draw(1, "Joshua Tree", sg(40), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
+        menubar_wifi(1);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
-        const char *thanks = "Steve Jobs, 1955 to 2011. Thank you. Make something wonderful.";
-        int tx = (W - text_width(2, thanks, sc(110))) / 2, ty = band_y - sc(4), sh = sc(1) > 1 ? sc(1) : 1;
+        const char *thanks = "Steve Jobs, 1955 to 2011. Make something wonderful.";
+        int ar = sc(5), gapx = sc(6), tw = text_width(2, thanks, sc(110)), tx = (W - tw + 2 * ar + gapx) / 2, ty = band_y - sc(4), sh = sc(1) > 1 ? sc(1) : 1;
+        {   /* a small apple to the left of the line: a round fruit with a dip on top and a leaf, no bite, so it is a fruit and not a logo */
+            int acx = tx - gapx - ar, acy = ty - sc(4);
+            for (int pass = 0; pass < 2; pass++) for (int y = -2 * ar; y <= ar; y++) for (int x = -ar - 1; x <= ar + 1; x++) {
+                int body = x * x + y * y <= ar * ar && !(x * x + (y + ar) * (y + ar) <= (ar / 3) * (ar / 3));
+                int lx2 = x - ar / 3, ly2 = y + ar + ar / 2, leaf = 4 * lx2 * lx2 + 9 * ly2 * ly2 - 4 * lx2 * ly2 <= ar * ar && y < -ar + 1 && x > 0;
+                if (body || leaf) fb_rect(acx + x + (pass ? 0 : sh), acy + y + (pass ? 0 : sh), 1, 1, pass ? 0x00f0f4f8 : 0x00101010);
+            }
+        }
         text_draw(2, thanks, tx + sh, ty + sh, sc(110), fb_color(0x00101010), fb, fb_pitch, W, H);   /* a dark shadow so it reads on the busy photo */
         text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
     } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
@@ -853,6 +1095,10 @@ static void fb_init(void) {
     con_start();
 #ifdef DOCK_HOVER_TEST   /* the dockhover test build: the label over one slot, then (arm64-m1c-check.py) its pixels */
     dock_hover(DOCK_HOVER_TEST);
+#endif
+#ifdef CURSOR_TEST   /* the cursortest build: the pointer over dock slot 3 at boot, the 1080p (scale 2) arrow for arm64-mouse-check.py */
+    mouse_x = (unsigned)((gui_slot_x(3) + DOCK_ICON / 2) * s); mouse_y = (unsigned)((gui_dock_y0() + DOCK_PAD + DOCK_ICON / 2) * s);
+    pointer_moved();
 #endif
     dcache_clean(fb, (unsigned long)fb_pitch * fb_h * 4);   /* the whole still picture out to RAM; con_glyph cleans as it goes from here */
     /* Blank spots, clear of any text: the bottom of the window's white well, the menu bar's rule, and the wallpaper (not
@@ -915,14 +1161,22 @@ static void m1_selftest(void) {
 /* ---- Input, from any driver: Linux evdev events (virtio input speaks them natively; the USB HID driver in xhci.c
    translates its reports into them). The pointer starts mid-screen; a tablet sets it, a mouse moves it. ---- */
 struct input_event { unsigned short type, code; unsigned value; };
-static unsigned mouse_x = 400, mouse_y = 300, mouse_moved;
 int ask_key(unsigned code, unsigned value);   /* ask.c: the ask> line editor */
 void ask_poll(void);
 static void input_event(struct input_event e) {
-    if (e.type == 1 && con_key(e.code, e.value)) return;   /* the console's scroll keys are not logged: that would add lines to the picture they move */
-    if (e.type == 1) {                                                                                     /* EV_KEY: keys and buttons */
-        if (ask_key(e.code, e.value) || ask_active()) con_quiet = 1;   /* typed keys show on the ask> row; the echo stays on the UART */
+    if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                   /* BTN_LEFT, RIGHT, MIDDLE */
+        con_quiet = 1;   /* the UART only */
         uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
+        if (e.code == 272 && e.value) pointer_click();
+        return;
+    }
+    if (e.type == 1) {                                                                                     /* EV_KEY: keys */
+        int held = cur_hold();
+        if (!con_key(e.code, e.value)) {   /* the console's scroll keys are not logged: that would add lines to the picture they move */
+            if (ask_key(e.code, e.value) || ask_active()) con_quiet = 1;   /* typed keys show on the ask> row; the echo stays on the UART */
+            uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
+        }
+        cur_release(held);
     }
     else if (e.type == 3) {                                                                                /* EV_ABS: the tablet, 0..32767 */
         if (e.code == 0) mouse_x = e.value * fb_w / 32768; else if (e.code == 1) mouse_y = e.value * fb_h / 32768;
@@ -933,14 +1187,39 @@ static void input_event(struct input_event e) {
         else if (e.code == 1) { int y = (int)mouse_y + v; mouse_y = y < 0 ? 0 : y >= (int)fb_h ? (int)fb_h - 1 : (unsigned)y; }
         mouse_moved = 1;
     } else if (e.type == 0 && mouse_moved) {                                                               /* EV_SYN: one report done */
+        con_quiet = 1;   /* the UART only: every report would scroll the Console */
         uart_puts("mouse "); uart_dec(mouse_x); uart_putc(','); uart_dec(mouse_y); uart_putc('\n');
         mouse_moved = 0;
+        pointer_moved();
     }
 }
 void kinput(unsigned type, unsigned code, int value) { input_event((struct input_event){ (unsigned short)type, (unsigned short)code, (unsigned)value }); }
 int usb_init(void);    /* xhci.c */
-int wifi_init(void);   /* wifi.c: M4 Wi-Fi stage 1, polled, every wait bounded */
+int wifi_init(void);
+#ifdef PI_BUILD
+#define WIFI_ON_PI 1
+#else
+#define WIFI_ON_PI 0
+#endif   /* wifi.c: M4 Wi-Fi stage 1, polled, every wait bounded */
 void usb_poll(void);
+/* The boot demo: the Pi has no mouse yet, so one lap of the dock labels plays by itself, Apps to Trash, a beat each,
+   and then stops. Joshua's request for the first video of it booting (2026-10-07). */
+#ifdef PI_BUILD
+static void demo_tick(void) {
+    static unsigned next; static int slot = -1;
+    if (slot > GUI_ICON_COUNT) return;
+    unsigned long f, c;
+    __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    unsigned t = (unsigned)(c / ((f ? f : 54000000) / 100));   /* 100 a second, like ip.c's ticks() */
+    if (!next) next = t + 300;   /* three seconds after the loop starts: the console has settled */
+    if (t < next) return;
+    next = t + 80;
+    if (slot < 0) slot = 0;
+    hover_slot = slot < GUI_ICON_COUNT ? slot : -1;
+    dock_hover(hover_slot);
+    slot++;
+}
+#endif
 
 /* ---- M2: devices on QEMU's virt machine. 32 virtio-mmio slots from 0x0A000000, 0x200 apart, each says which device
    sits there: 1 is a network card, 18 is input (keyboard or tablet). Modern virtio (version 2) only: QEMU needs
@@ -1163,20 +1442,24 @@ static int input_init(void) { return 0; }
 static void input_poll(void) {}
 static int net_init(void) { return 0; }
 static void net_arp_probe(void) {}
-int nic_init(void) { return 0; }   /* the Pi's card goes here (Wi-Fi or Genet Ethernet) */
-void nic_mac(unsigned char mac[6]) { for (int i = 0; i < 6; i++) mac[i] = 0; }
-int nic_send(const void *frame, unsigned int len) { (void)frame; (void)len; return 0; }
-unsigned int nic_recv(void *buf, unsigned int max) { (void)buf; (void)max; return 0; }
+/* The Pi's network card is its Wi-Fi chip (wifi.c): up once the handshake has installed the keys. */
+int wifi_nic_up(void); void wifi_nic_mac(unsigned char mac[6]); int wifi_nic_send(const void *f, unsigned len); unsigned wifi_nic_recv(void *b, unsigned max);
+int nic_init(void) { return wifi_nic_up(); }
+void nic_mac(unsigned char mac[6]) { wifi_nic_mac(mac); }
+int nic_send(const void *frame, unsigned int len) { return wifi_nic_send(frame, len); }
+unsigned int nic_recv(void *buf, unsigned int max) { return wifi_nic_recv(buf, max); }
 static int blk_init(void) { return 0; }
 static void blk_probe(void) {}
 #endif
 
 void net_stack_demo(void);
+void net_clock_sync(void);
 void main(void) {
     unsigned long el;
     uart_init();
     __asm__ volatile ("mrs %0, CurrentEL" : "=r"(el));
     uart_puts("Joshua Tree on ARM64\n");
+    { const char *sp = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789 .,;:!?&@#$%\n"; while (*sp) console_putc(*sp++); }   /* the type specimen: screen only, at the top of the log */
     uart_puts("booted at EL"); uart_putc((char)('0' + boot_el)); uart_puts("\n");
     uart_puts(((el >> 2) & 3) == 1 ? "EL1\n" : "not EL1\n");
     uart_puts("M0 ok\n");
@@ -1188,8 +1471,12 @@ void main(void) {
     fb_diag();   /* last, so it is the newest line on the screen */
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
-    wifi_init();   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
-    if (usb_init()) {
+    int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
+    if (!wifi_init()) menubar_wifi(0);
+#ifdef PI_BUILD
+    if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); }   /* the address from the router, then the time */
+#endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
+    if (usb_ok) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
            masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
            so its handler never runs; the short unmask is for the virtio devices, whose handler acknowledges them. */
@@ -1198,7 +1485,7 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); ask_poll(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) { usb_poll(); input_poll(); ask_poll(); demo_tick(); menubar_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
 #else
         for (;;) {
             __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"

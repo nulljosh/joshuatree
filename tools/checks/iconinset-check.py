@@ -71,6 +71,9 @@ TOL_SQUIRCLE = 1.0    # logical units of allowed radius deviation from the share
 MIN_AA_STEPS = 1      # raster samples partway between background and fill at the crossing
 MARGIN_TOL = 10        # luminance tolerance for the top/bottom margin check
 TOP_ROW, BOT_ROW = 8, 118
+# Burrow is a full-bleed Finder-style split by design (owner call): its light
+# left half crosses both margins, so only its right, tile-coloured half is held to them.
+FULL_BLEED = {"burrow": range(72, 108, 4)}
 
 
 def squircle_radius(theta):
@@ -173,7 +176,7 @@ def margin_check(name, img, top_hex, bot_hex):
     def worst_row(row):
         want = predicted(row)
         worst = 0
-        for x in range(20, 108, 4):
+        for x in FULL_BLEED.get(name, range(20, 108, 4)):
             p = img.getpixel((x * SS, row * SS))
             worst = max(worst, max(abs(p[c] - want[c]) for c in range(3)))
         return worst

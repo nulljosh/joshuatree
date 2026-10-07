@@ -36,7 +36,7 @@ fi
 [ -d "$CARD" ] || { echo "$CARD is not mounted" >&2; exit 1; }
 echo "flashing $CARD"
 
-make -B -C arch/arm64 pi >/dev/null   # -B: the Makefile does not track headers
+JT_WIFI_DEV=1 make -B -C arch/arm64 pi >/dev/null   # JT_WIFI_DEV: this card joins our network; release builds never carry it   # -B: the Makefile does not track headers
 
 FW="${FLASH_PI_FW:-build/pifw}"
 FILES="bootcode.bin start4.elf fixup4.dat bcm2711-rpi-4-b.dtb overlays/disable-bt.dtbo"

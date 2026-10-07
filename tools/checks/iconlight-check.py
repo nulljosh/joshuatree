@@ -61,6 +61,9 @@ DEPTH_MIN, DEPTH_MAX = 6, 45   # glossy 90-99, Big Sur 16-28
 HL_MIN, HL_FRAC = 3, 0.30  # row 0 at least 3 brighter AND 30% of the way from the band to white
 EDGE_MAX = 6                   # glossy 17-28, Big Sur about 2
 BAND_RANGE_MAX = 12
+# Burrow is a full-bleed Finder-style split: its light left half runs edge to
+# edge by design, so the light is measured on its right, tile-coloured half.
+FULL_BLEED = {"Burrow": range(42, 54)}
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 for f in (LOG, DUMP):
@@ -133,7 +136,7 @@ for slot, name in enumerate(SLOTS):
     y0 = ICON_TOP_Y * SCALE
     rows = {}
     for y in list(TOP_ROWS) + list(BOT_ROWS) + [HL_ROW, EDGE_ROW]:
-        v = [lum(img.getpixel((x0 + x, y0 + y))) for x in COLS]
+        v = [lum(img.getpixel((x0 + x, y0 + y))) for x in FULL_BLEED.get(name, COLS)]
         rows[y] = (sum(v) / len(v), max(v) - min(v))
     top = sum(rows[y][0] for y in TOP_ROWS) / len(TOP_ROWS)
     bot = sum(rows[y][0] for y in BOT_ROWS) / len(BOT_ROWS)

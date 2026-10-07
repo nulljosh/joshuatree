@@ -3561,94 +3561,7 @@ static void wall_caches_drop(void){
     gui_wall_full_cache_drop();
 }
 
-/* v40: a real software cursor. Save the 13x13 patch it's about to cover,
-   draw, and later put that patch back exactly. Moving the cursor then
-   costs ~340 pixel writes instead of repainting the desktop, which is the
-   whole fix for "icons flash on hover": the flashing WAS the full
-   repaint, visible because there's no double buffer, triggered by every
-   single mouse packet. */
-#define CURSOR_W 13
-#define CURSOR_H 19
-#define CURSOR_MAX_SCALE 2 /* window_open_scaled(..., 2) in gui_run; bump together */
-/* The backup is kept at PHYSICAL resolution (v56.1). It used to go through
-   the logical layer: window_get_pixel reads only the top-left physical
-   pixel of each scale x scale block and window_pixel writes the whole
-   block back, so every cursor pass silently pixel-doubled whatever
-   antialiased text it crossed. Surfaces that repaint on hover (menu bar,
-   dock) hid it; the notification panel, never repainted while open, kept
-   the damage and read as "still the old bitmap font" (roadmap, Sep 2026).
-   Reproduced headlessly with a scripted sweep + pmemsave, fixed here. */
-static unsigned int cursor_backup[CURSOR_W * CURSOR_MAX_SCALE * CURSOR_H * CURSOR_MAX_SCALE];
-int cursor_saved_x = -1, cursor_saved_y = -1;
-static int gui_cursor_scale(void){ int sc = (int)window_scale(); return sc > CURSOR_MAX_SCALE ? CURSOR_MAX_SCALE : sc; }
-static void gui_cursor_restore(void){
-    if (cursor_saved_x < 0) return;
-    int sc = gui_cursor_scale(), pw = CURSOR_W * sc, ph = CURSOR_H * sc;
-    int px0 = cursor_saved_x * sc, py0 = cursor_saved_y * sc;
-    for (int j = 0; j < ph; j++)
-        for (int i = 0; i < pw; i++)
-            window_pixel_phys(px0 + i, py0 + j, cursor_backup[j * pw + i]);
-    cursor_saved_x = cursor_saved_y = -1;
-}
-void gui_cursor_save(int x, int y){
-    int sc = gui_cursor_scale(), pw = CURSOR_W * sc, ph = CURSOR_H * sc;
-    int px0 = x * sc, py0 = y * sc;
-    for (int j = 0; j < ph; j++)
-        for (int i = 0; i < pw; i++)
-            cursor_backup[j * pw + i] = window_get_pixel_phys(px0 + i, py0 + j);
-    cursor_saved_x = x; cursor_saved_y = y;
-}
-/* The arrow as two convex polygons in 1/8 logical-pixel units (no FPU here).
-   v42 drew it as logical scanlines, so at scale 2 every edge was a 2x2
-   staircase. Now it is sampled 4x4 per PHYSICAL pixel into a coverage mask,
-   once per scale, and each draw is one blend per pixel. */
-static const int cur_head[] = {0,0, 100,100, 0,100};           /* tip, lower right, lower left */
-static const int cur_tail[] = {32,96, 56,96, 74,134, 52,134};  /* slanted stem under the head */
-static int cur_in_convex(const int *p, int n, int x, int y){
-    int pos = 0, neg = 0;
-    for (int k = 0; k < n; k++){
-        int ax = p[2*k], ay = p[2*k+1], bx = p[2*((k+1)%n)], by = p[2*((k+1)%n)+1];
-        int c = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
-        if (c > 0) pos = 1; else if (c < 0) neg = 1;
-    }
-    return !(pos && neg);
-}
-static int cur_in_shape(int x, int y){ return cur_in_convex(cur_head, 3, x, y) || cur_in_convex(cur_tail, 4, x, y); }
-static unsigned char cur_cov_w[CURSOR_W * CURSOR_MAX_SCALE * CURSOR_H * CURSOR_MAX_SCALE];
-static unsigned char cur_cov_b[CURSOR_W * CURSOR_MAX_SCALE * CURSOR_H * CURSOR_MAX_SCALE];
-static int cur_mask_scale = 0;
-static void gui_cursor_build_mask(int sc){
-    static const int ox[8] = {7,-7,0,0,5,5,-5,-5}, oy[8] = {0,0,7,-7,5,-5,5,-5}; /* 7/8 px: the white outline's width */
-    int pw = CURSOR_W * sc, ph = CURSOR_H * sc;
-    for (int j = 0; j < ph; j++) for (int i = 0; i < pw; i++){
-        int w = 0, b = 0;
-        for (int sj = 0; sj < 4; sj++) for (int si = 0; si < 4; si++){
-            /* subsample centre in 1/8 logical px, shifted so the outline is not clipped at the tip */
-            int x = (i * 8 + si * 2 + 1) / sc - 8, y = (j * 8 + sj * 2 + 1) / sc - 8;
-            if (!cur_in_shape(x, y)){
-                int near = 0;
-                for (int k = 0; k < 8 && !near; k++) near = cur_in_shape(x + ox[k], y + oy[k]);
-                if (near) w++;
-            } else b++;
-        }
-        cur_cov_w[j * pw + i] = (unsigned char)w; cur_cov_b[j * pw + i] = (unsigned char)b;
-    }
-    cur_mask_scale = sc;
-}
-void gui_draw_cursor(int x, int y){
-    int sc = gui_cursor_scale(), pw = CURSOR_W * sc, ph = CURSOR_H * sc;
-    if (cur_mask_scale != sc) gui_cursor_build_mask(sc);
-    for (int j = 0; j < ph; j++) for (int i = 0; i < pw; i++){
-        int w = cur_cov_w[j * pw + i], b = cur_cov_b[j * pw + i];
-        if (!w && !b) continue;
-        unsigned int bg = window_get_pixel_phys(x * sc + i, y * sc + j);
-        int keep = 16 - w - b;
-        unsigned int r = (((bg >> 16) & 0xFF) * keep + 255 * w) / 16;
-        unsigned int g = (((bg >> 8) & 0xFF) * keep + 255 * w) / 16;
-        unsigned int bl = ((bg & 0xFF) * keep + 255 * w) / 16;
-        window_pixel_phys(x * sc + i, y * sc + j, (r << 16) | (g << 8) | bl);
-    }
-}
+/* The software cursor (save-under, the antialiased arrow) lives in gui_paint.c, shared with the ARM build. */
 
 /* v0.89.x: gui_calendar_draw_date (above, near gui_draw_one_icon_on)
    draws the real date fresh on every call, so the Calendar tile is never
@@ -3999,77 +3912,20 @@ static int wx_text(const char *s, int lx, int ly, int size, int bold, int mul, u
 }
 static int wx_text_lw(const char *s, int size, int bold, int mul){ int sc = (int)window_scale(); return (wx_text_w(s, size, bold, mul) + sc - 1) / sc; }
 
-/* v0.89.x: the Calendar dock/Apps-folder tile shows the real current date,
-   macOS style, instead of a fixed baked-in "SEP 17" (that art still
-   exists at art/icons/calendar.svg, but restyle_icons.py's design table
-   now leaves the tile's glyph body empty: a real date can't be baked into
-   a rasterized PNG, tools/gen/gen_icon_art.py's whole point). Drawn here
-   as an overlay on top of the plain white tile gui_draw_one_icon_on just
-   blitted, at physical resolution with the same wx_text/text_ink glyph
-   path the Weather window uses, so it is drawn fresh every call rather
-   than baked into gui_render_icon_cached's cache -- the cache key has no
-   room for "today's date" and does not need one this way, and it means
-   this never goes stale as long as *something* redraws the icon.
-   cmos_read_time_stable, not calendar.h's own cal_read_today: this must
-   never show a different day than the menu bar clock does, and that
-   clock already reads month/day through this exact stable-against-RTC-
-   update-in-progress function (see its own comment above), not
-   calendar.h's plainer wait-once read. Sharing the function, not just the
-   register numbers, is what makes "the icon and the clock never
-   disagree" true by construction instead of by coincidence. */
-static const char *GUI_CAL_MON3[12] = {"JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"};
+/* The Calendar tile's live face is gui_calendar_face (kernel/gui_paint.c, shared with the Pi), drawn over the
+   cached blank page at every site that draws the icon. Its date comes from cmos_read_time_stable, the same read the
+   menu bar clock makes, so the icon and the clock never disagree. These two answer its text through wx_text, the
+   physical-resolution DejaVu path the Weather window uses. */
+void gui_icon_text(const char *s, int lx, int ly, int face, int mul, unsigned int fg){ wx_text(s, lx, ly, face, 1, mul, fg); }
+int gui_icon_text_w(const char *s, int face, int mul){ return wx_text_lw(s, face, 1, mul); }
 static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
-    int y = cy_bottom - size;
     u8 h, m, wd, dom, mon;
     cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
     int domv = (dom & 0x0F) + ((dom >> 4) * 10);
     int monv = (mon & 0x0F) + ((mon >> 4) * 10);
     if (monv < 1 || monv > 12) monv = 1;
     if (domv < 1 || domv > 31) domv = 1;
-    char daybuf[3]; int n = 0;
-    if (domv >= 10) daybuf[n++] = (char)('0' + domv / 10);
-    daybuf[n++] = (char)('0' + domv % 10);
-    daybuf[n] = 0;
-    /* One fixed physical size for both faces, not scaled with the tile:
-       tried scaling month/day up together with the Apps-folder grid's
-       bigger (120-physical-at-2x, vs. the dock's 74) tile first (2x/3x
-       mul there), and a real headless crop showed the day numeral's cap
-       height then reaching past the month label's own baseline -- the
-       two texts' vertical gap was a fraction of `size`, but each face's
-       glyph height was a multiple of a fixed 16/20/24/28px table, so the
-       two didn't grow at the same rate and the larger tile closed the
-       gap between them instead of widening it. Keeping both at the one
-       size that was measured clean on the dock (real 4x crop, see the
-       commit this landed in) means the Apps-folder tile's text sits a
-       little smaller relative to its own tile than the dock's does, the
-       same trade the authored artwork itself already makes everywhere
-       else (one 148px source raster area-averaged down, never redrawn
-       per size) rather than a second layout to get right and keep right. */
-    /* v0.89.x follow-up: mul_d=2 overflowed the dock's own 74px tile (a
-       real crop showed "25" edge to edge, its descender crossing the
-       tile's bottom curve); mul_d=1 keeps real breathing room there. */
-    /* v0.90.x: mul_d=1 was only ever measured against the dock's 74px
-       tile; on the bigger Apps-folder/phone tile (tile=60 logical) it
-       left the day numeral small with the tile's bottom third empty.
-       size is the same logical unit both callers pass, so branch on it. */
-    /* v1.8: phone tile's "SEP"/"28" spilled past the rounded corners.
-       No fractional mul (integer divisor), so ~70% comes from dropping
-       one face size each line: month 24px->16px@mul2=32px (~67% of 48),
-       day 28px->20px@mul2=40px (~71% of 56). */
-    /* Proportions, the same on every tile: the month a small label whose caps are
-       about 13% of the tile tall, the day numeral about 22% tall and centered in
-       the space under it (equal air above and below), nothing near the side edges.
-       Dock: 16px month, 28px day. Bigger tiles: 24px month, 20px doubled day. */
-    int mul_m = 1, mul_d = 1;
-    int face_m = 0, face_d = 3;
-    if (size > 40) { mul_d = 2; face_m = 2; face_d = 1; }
-    const char *mon3 = GUI_CAL_MON3[monv - 1];
-    int ly_m = y + size * 13 / 100;
-    int ly_d = y + size * 51 / 100;
-    int lwm = wx_text_lw(mon3, face_m, 1, mul_m);
-    wx_text(mon3, cx_center - lwm / 2, ly_m, face_m, 1, mul_m, 0x00FF3B30);
-    int lwd = wx_text_lw(daybuf, face_d, 1, mul_d);
-    wx_text(daybuf, cx_center - lwd / 2, ly_d, face_d, 1, mul_d, 0x001F1F22);
+    gui_calendar_face(cx_center, cy_bottom, size, monv, domv);
 }
 
 /* "18°" style degrees into out. */
@@ -4885,16 +4741,18 @@ static int gui_multiwin_key_nonblock(void){
    its rasterized 8-bit coverage; blended at PHYSICAL resolution via
    window_pixel_phys, the same pattern gui_aa_char uses for text. cx,cy are
    LOGICAL center coords, converted to physical here. */
-static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink){
+static void gui_blend_cov(const unsigned char *cov, int cw, int ch, int cx, int cy, int size, unsigned int ink){
     int sc = window_has_target() ? 1 : (int)window_scale(); if (sc < 1) sc = 1;
-    int T = size * sc; /* box-filtered down from the 160px coverage; T == 160 is a straight copy */
+    int T = size * sc; /* box-filtered from the stored coverage; T == the stored size is a straight copy */
     int ox = cx * sc - T / 2, oy = cy * sc - T / 2;
     for (int row = 0; row < T; row++){
         for (int col = 0; col < T; col++){
-            int c0 = col * BOOT_MARK_W / T, c1 = (col + 1) * BOOT_MARK_W / T, r0 = row * BOOT_MARK_H / T, r1 = (row + 1) * BOOT_MARK_H / T;
+            int c0 = col * cw / T, c1 = (col + 1) * cw / T, r0 = row * ch / T, r1 = (row + 1) * ch / T;
+            if (c1 == c0) c1 = c0 + 1; /* drawn bigger than stored: take the nearest source pixel instead of none */
+            if (r1 == r0) r1 = r0 + 1;
             int sum = 0, n = (c1 - c0) * (r1 - r0);
-            for (int yy = r0; yy < r1; yy++) for (int xx = c0; xx < c1; xx++) sum += boot_mark_cov[yy * BOOT_MARK_W + xx];
-            int a = n ? sum / n : 0;
+            for (int yy = r0; yy < r1; yy++) for (int xx = c0; xx < c1; xx++) sum += cov[yy * cw + xx];
+            int a = sum / n;
             if (!a) continue;
             int x = ox + col, y = oy + row;
             unsigned int d = window_get_pixel_phys(x, y);
@@ -4904,6 +4762,12 @@ static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink){
             window_pixel_phys(x, y, (r << 16) | (g << 8) | b);
         }
     }
+}
+/* 2.25: small sizes (menu bar, About) take the bold copy, the tree drawn down its middle; the splash's thin
+   one-line copy would fade to a grey smudge at 20 px. */
+static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink){
+    if (size <= 48) gui_blend_cov(menu_mark_cov, MENU_MARK_W, MENU_MARK_H, cx, cy, size, ink);
+    else gui_blend_cov(boot_mark_cov, BOOT_MARK_W, BOOT_MARK_H, cx, cy, size, ink);
 }
 static void gui_draw_boot_mark(int cx, int cy, unsigned int ink){
     int sc = window_has_target() ? 1 : (int)window_scale(); if (sc < 1) sc = 1;
@@ -4990,7 +4854,8 @@ static void gui_launch_about(void){
     const char *lines[3] = { tagline, mem_line, version_line };
     unsigned int colors[3] = { 0x001C1C1E, 0x00884B16, 0x0075726E };
     int line_h = 24;
-    int text_top = by + (ABOUT_H - 3 * line_h) / 2 + 6; /* real vertical centering of the whole text block within the card */
+    gui_draw_mark_sized(bx + ABOUT_W / 2, by + 56, 32, 0x001C1C1E); /* 2.25: the mark heads the card, as the logo does on a Mac's About box */
+    int text_top = by + (ABOUT_H - 3 * line_h) / 2 + 22; /* the text block sits under the mark */
     for (int i = 0; i < 3; i++) {
         int x = bx + (ABOUT_W - font_string_width(lines[i])) / 2; /* real horizontal centering per line */
         font_draw_string(lines[i], x, text_top + i * line_h, colors[i], -1);
@@ -6263,6 +6128,13 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "uptime")){ putn(ticks() / 100); puts("s\n"); }
+    else if (!strcmp(line, "fonts")) {
+        /* 2.27.0 font registry: every embedded face, by name. */
+        for (int i = 0; i < TTF_FACE_COUNT; i++) {
+            puts(ttf_face_name((ttf_face_t)i));
+            puts(ttf_face_is_mono((ttf_face_t)i) ? "  (mono)\n" : "\n");
+        }
+    }
     else if (!strcmp(line, "dmesg")) klog_dump();
     else if (!strcmp(line, "mem")) {
         putn(pmm_free_frames() * 4); puts("K free / ");

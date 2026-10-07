@@ -96,6 +96,19 @@ breakeven, but it is an estimate until the cart says so. At home on a Bambu
 A1 mini ($299) the plastic is about $9. The 5x-cost rule of thumb
 would put the case alone near $200-375, so the Kit price needs the real quote first.
 
+### Price set by Joshua, 2026-10-07: $500 USD a unit, ready in about two months
+
+Joshua's call: one unit sells for **$500 USD**, with a target of early December 2026 (two months from today). No customer has paid anything yet, and nothing here is a promise to anyone.
+
+What it means against the numbers above, all of them estimates: the stock-case build costs about $281-291 with fees, shipping and warranty, so $500 leaves roughly $210-220 a unit. That is a thick margin on paper, and it has to be earned by what is in the box. The $349 "Complete" price above is replaced by this one. The $199 Kit stays as the cheap way in unless Joshua says otherwise.
+
+Not decided yet, and the price needs an answer to each:
+- **What the box holds.** Board, case, power, card, keyboard, mouse? A monitor? The parts list in `docs/SHOPPING.md` and `docs/HARDWARE.md` has no Pi kit total, so the real cost of a $500 unit is "no number yet" until it is written down.
+- **Currency.** $500 USD, so card fees, exchange and shipping to US buyers are different from the CAD estimates above.
+- **Who builds and ships it.** Still unresolved.
+
+The gates in the next section still apply: nobody is charged until the board passes Phase 0-3 on camera and the costs are real quotes. The two-month date depends on the mouse, Wi-Fi and the case print, in that order. The software stays free and Apache 2.0, so the $1 app rule does not apply to hardware.
+
 ### The first dollar
 
 What has to be true before anyone is charged:
@@ -192,3 +205,5 @@ Curbfind now runs on its own at ring 3, sixteen apps out of the kernel, and it i
 
 Calendar now runs on its own at ring 3, seventeen apps out of the kernel. A crash in the month grid can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-30.*
 Search now runs on its own at ring 3, eighteen apps out of the kernel, and stepping into a folder no longer moves the kernel's own working directory from inside an app. A crash in the search box can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-30.*
+
+The OS runs on a real Pi 4 with a working desktop, dock, window frame and USB keyboard. The desktop boots at 1920x1080 and every element renders from the shared draw code. The console scrollback, Burrow icon redesign and eight typefaces in a registry are in review. The landing waitlist is live and verified by a test email. The Show HN post and a 30 second video are drafted in docs/LAUNCH.md and wait for the mouse working on the Pi. Joshua is buying a wired USB mouse and a 3.3V serial cable. The first dev kit is a Pi with the OS on an SD card. No price and no number yet; that waits for a real parts list and the case print quote. *2026-10-07.*

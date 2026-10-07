@@ -642,6 +642,7 @@ static const u8 *dns_skip_name(const u8 *p) {
    appsfolder-mousescroll-check.sh already proves the wheel-byte parser:
    a small host-side program replicating this exact check, fed a real
    correct-ID answer (accepted) and a real wrong-ID answer (rejected). */
+u32 net_dns_wait_ticks = WAN_TIMEOUT_TICKS;   /* a caller that can retry (the Pi clock) sets this short */
 int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
     u8 query[256];
     u16 txid = (u16)(ticks() & 0xFFFF); if (!txid) txid = 1;
@@ -650,7 +651,7 @@ int dns_resolve(const char *hostname, u32 dns_server_ip, u32 *ip_out) {
     if (!udp_send(dns_server_ip, DNS_PORT, DNS_SRC_PORT, query, qlen)) { if (!net_err) net_err = NET_ERR_SEND; return 0; }
 
     u8 rx[1514];
-    u32 deadline = ticks() + WAN_TIMEOUT_TICKS;
+    u32 deadline = ticks() + net_dns_wait_ticks;
     while (ticks() < deadline) {
         u32 n = active_receive(rx, sizeof(rx));
         if (n < sizeof(struct eth_header) + sizeof(struct ip_header) + sizeof(struct udp_header)) continue;

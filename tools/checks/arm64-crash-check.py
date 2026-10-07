@@ -57,9 +57,9 @@ def run(name, qemu_args, image, size=(800, 600)):
         if "FAR 0x0000000300000000" not in tail: fails.append(f"{name}: FAR line missing or wrong (stored to 0x300000000): {tail[:4]}"); return
         if not any(t.startswith("ELR 0x") for t in tail): fails.append(f"{name}: no ELR line"); return
         j = tail.index("last console lines:") if "last console lines:" in tail else -1
-        if j < 0 or "M1c fb ok" not in tail[j:] or "CRASHTEST: storing to unmapped memory" not in tail[j:]: fails.append(f"{name}: the last console lines are missing from the report: {tail}"); return
+        if j < 0 or "ABCDEFGHIJKLMNOPQRSTUVWXYZ" not in tail[j:] or "CRASHTEST: storing to unmapped memory" not in tail[j:]: fails.append(f"{name}: the last console lines are missing from the report: {tail}"); return
         if not tail[-1].startswith("halted:"): fails.append(f"{name}: the kernel kept printing after the crash report: {tail[-3:]}"); return
-        if out2.count("Joshua Tree on ARM64") != 1: fails.append(f"{name}: the boot banner printed {out2.count('Joshua Tree on ARM64')} times: the kernel reset"); return
+        if out2.count("booted at EL") != 1: fails.append(f"{name}: the boot line printed {out2.count('booted at EL')} times: the kernel reset"); return   # not the banner: the short screen log now holds the banner, so the crash report repeats it
         print(f"  ok: {name} UART report: class, ESR, FAR, ELR, last console lines, halt line, then silence")
         s = socket.socket(socket.AF_UNIX); s.connect(sock); f = s.makefile("rw")
         f.readline()

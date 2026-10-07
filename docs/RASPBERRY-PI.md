@@ -16,7 +16,7 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 | Console text on the real board | **Fixed and seen on the real board, 2026-10-06.** The first boot showed one thin mark per line because later drawing never left the CPU cache. Every glyph is now cleaned out to memory as it is drawn. |
 | Console scrollback from the keyboard | **In 2.19.0, not yet seen on the board.** The Console keeps the whole boot log. Page Up and Page Down on a USB keyboard move half a page, Home jumps to the first line, End returns to the newest. The title bar says which lines are shown, and a pinned row under the text always shows the latest `wifi` and `usb` line, so the Wi-Fi lines survive a photo. |
 
-| USB keyboard and mouse on the Pi | **Keyboard works on the real board, 2026-10-06** (see the Log). Mouse untested, no wired one yet. Since 2.13.2 each hub port prints one status line and every port is rescanned once a second, so a keyboard plugged in after boot is found too. Proven end to end in QEMU (`tools/checks/arm64-usb-check.py`). Each step prints a short `usb ...` line on screen: `usb pcie link up`, `usb vl805 ok`, `usb xhci run`, `usb port N connected`, `usb kbd addr N`, then `usb key 0x04 a` for every key. The last line on the photo is where it stopped. |
+| USB keyboard and mouse on the Pi | **Keyboard works on the real board, 2026-10-06** (see the Log). Mouse untested, no wired one yet. Since 2.24.0 a USB mouse moves an arrow over the desktop, the dock's label follows it, the Console's red button closes it and a dock click opens it again, all proven in QEMU (`tools/checks/arm64-mouse-check.py`); see the mouse test list below. Since 2.13.2 each hub port prints one status line and every port is rescanned once a second, so a keyboard plugged in after boot is found too. Proven end to end in QEMU (`tools/checks/arm64-usb-check.py`). Each step prints a short `usb ...` line on screen: `usb pcie link up`, `usb vl805 ok`, `usb xhci run`, `usb port N connected`, `usb kbd addr N`, then `usb key 0x04 a` for every key. The last line on the photo is where it stopped. |
 | Wi-Fi on the Pi (CYW43455) | Built in 2.16.0, waiting on a photo from the real board. Stage 1 lists nearby networks on screen as `wifi ap ...` lines; joining one is stage 2. QEMU has no SDIO card, so it only proves the failure path (`wifi FAIL cmd5`, boot carries on): `tools/checks/arm64-wifi-check.py`. |
 | Disk, network on the Pi | Not yet. M4. |
 
@@ -120,6 +120,8 @@ That is milestones M0, M1a and the first picture on real hardware. To leave `scr
 
 The kernel guards against two things a real board may do differently from QEMU: if the firmware leaves the timer speed unset it assumes 54 MHz, and every wait on the GPU's mailbox gives up after a moment and prints `M1c mailbox framebuffer refused` instead of hanging.
 
+The Pi has no battery clock, so it does not know the date until something gives it the time (Wi-Fi, once it is up). Until then the menu bar clock reads `--:--` and the Calendar tile in the dock shows its normal page with a red dash where the month goes and a dark dash where the day goes. That is on purpose: it never shows a made-up date. `tools/checks/arm64-m1c-check.py` fails if the tile turns blank.
+
 ## If nothing prints
 
 1. Swap the two data wires.
@@ -141,6 +143,18 @@ If it still fails, send the exact lines you see, even if they look like garbage.
 | M3 | Every app running on ARM. |
 | M4 | The same on the real Pi: SD card, USB, Ethernet. Sound last. |
 | M5 | The Pi 5. |
+
+## Mouse test on the real board (2.24.0)
+
+QEMU proves the arrow, the label and the clicks, but not real mice or the real cache. Joshua's mouse is Bluetooth, and there is no Bluetooth stack, so this needs a wired USB mouse (or a wireless one with its own USB receiver).
+
+1. Plug a wired USB mouse into the Pi before power-on. The Console should show `usb mouse addr N port ...`. Move it: an arrow appears and follows, with no trail left behind at 1080p.
+2. Hover the dock: the tile's name shows above it and goes away when the pointer leaves. No arrow-shaped mark stays in the dock.
+3. Click the Console's red button: the window goes and the wallpaper is back. Click any dock tile: the Console is back with `dock <name>: not on ARM yet` as its newest line.
+4. Unplug the mouse and plug it in again: `usb port ... disconnected`, then a new `usb mouse` line, and it moves the arrow again.
+5. Keyboard and mouse together, on the hub and on the Pi's own ports: typing at `ask>` still works while the arrow sits over the Console.
+6. A wireless keyboard and mouse receiver (one USB plug, two devices inside): both should show as `usb kbd` and `usb mouse` on one address.
+7. If the arrow moves too slowly or too fast at 1080p, say so: there is no acceleration yet, one mouse count is one pixel.
 
 ## Why the serial cable matters
 
@@ -178,6 +192,8 @@ Wi-Fi firmware: the three CYW43455 files (`brcmfmac43455-sdio.bin`, `.txt`, `.cl
 
 Newest first. Each entry says what was tried on the real board and the last line seen.
 
+- **2026-10-07: the real desktop on a Pi 4 (2.23.0).** Main is at 2.23.0 (PR 445, ARM desktop slice 3). The Pi boots to a 1920x1080 desktop with the satellite wallpaper, dock with eleven icons, a window frame and the menu bar all rendered live from `drivers/window.c` shared with i386. The Steve Jobs tribute line sits above the dock. A USB keyboard types and hot-plugs after boot. The Console window shows the boot log with readable DejaVu text (the cache clean fix still holds). Page Up scrollback is in 2.19.0 but not yet seen on the real board because the Wi-Fi lines scroll off screen during boot. The Wi-Fi chip advanced from silent to nine of twelve steps (power, bus, clock, reset, chip RAM size, core addresses, block-mode transfers); the optional regulatory-data and country-code steps were made optional and skipped, so the newest card goes straight to the network scan (not yet confirmed on board). Reading the failure lines off photos found key bugs in the ARM code: the ARM core held in reset froze its own memory, the chip's RAM was 32 KB short of expectation, core addresses were guessed instead of read from the chip, and frames over 512 bytes need block mode. The Burrow dock icon is a Finder-style split face in terracotta. Eight typefaces are now available in a registry (PR 451), with pickers and boot-time load still to implement. Joshua's next steps are to buy a wired USB mouse and a 3.3V serial cable. The HN post and a 30-second video are drafted in docs/LAUNCH.md and wait for the mouse working on the Pi.
+
 - **2026-10-06, night: full screen, readable console and USB first light (2.13.0).** Flashed with `tools/flash-pi.sh` and booted. The picture now fills the Samsung monitor at 1920x1080, sharp, and the Console shows real text: the cache write-back fix for the marks worked, so that explanation was right. The Steve Jobs line sits above the dock. The first diagnostic line read `@0x80000 fb 1920x1080>1920x1080 p7680 M13x18 a14 ok`: loaded at 0x80000, the firmware gave the size we asked for, and the font test passed. The USB bring-up ran on the real chips: PCIe link up at gen 2 x1, the VL805 firmware loaded through the mailbox, the xHCI controller started with 5 ports, and one port held a hub (`2109:3431`, a VIA 4-port hub, the VL805's own) which the driver enumerated. The first try ended with `usb ready: 0 kbd, 0 mouse`: the keyboard's cable was a charge-only one with no data wires. On a real data cable the NuPhy keyboard enumerated behind the hub (`usb kbd addr 2 port 1.1 full 1915:3266`, `usb ready: 1 kbd, 0 mouse`) and every key pressed printed on screen (`usb key 0x0c i`). **A USB keyboard works on the real Pi.** The Pi also shut off once mid-session: the USB-C power plug had worked loose.
 
 ![USB first light: the whole bring-up on the real Pi's screen](hardware/usb-first-light-2026-10-06.jpg)
@@ -193,3 +209,5 @@ Newest first. Each entry says what was tried on the real board and the last line
 ![The Console window up close: one mark per boot line](hardware/first-boot-console-2026-10-06.jpg)
 
 Joshua Tree 3.0 ships when it boots the desktop on a real Pi.
+
+Want to try parts (an LED, a button, a speaker) before soldering anything? See [the breadboard prototype](hardware/BREADBOARD.md).

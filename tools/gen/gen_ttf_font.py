@@ -35,6 +35,20 @@ FACES = [
 ]
 
 
+# 2.27.0 font library: open look-alikes, instanced at wght 400 and subset
+# to ASCII (recipe in docs/fonts-sources.md). Headers only here.
+LIBRARY = [
+    (f"{n}-Regular-subset.ttf", f"lib_{a}_font.h", f"lib_{a}_font_data", pretty,
+     f"{pretty} is SIL Open Font License 1.1, see tools/fonts/{n}-OFL.txt.")
+    for n, a, pretty in [
+        ("Inter", "inter", "Inter"), ("EBGaramond", "ebgaramond", "EB Garamond"),
+        ("ComicNeue", "comicneue", "Comic Neue"), ("CaveatBrush", "caveatbrush", "Caveat Brush"),
+        ("DancingScript", "dancingscript", "Dancing Script"), ("JetBrainsMono", "jetbrainsmono", "JetBrains Mono"),
+        ("SourceSerif4", "sourceserif4", "Source Serif 4"), ("SourceSans3", "sourcesans3", "Source Sans 3"),
+    ]
+]
+
+
 def subset_font(src_path, dst_path):
     subprocess.run(
         [
@@ -77,6 +91,11 @@ def main():
         write_header(dst_path, header_path, array_name, guard, pretty_name, license_line)
         total += os.path.getsize(dst_path)
 
+    for subset_name, header_name, array_name, pretty_name, license_line in LIBRARY:
+        dst_path = os.path.join(FONTS_DIR, subset_name)
+        guard = header_name.upper().replace(".", "_")
+        write_header(dst_path, os.path.join(DRIVERS_DIR, header_name), array_name, guard, pretty_name, license_line)
+        total += os.path.getsize(dst_path)
     print(f"total embedded font bytes: {total}")
 
 
