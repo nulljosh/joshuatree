@@ -352,7 +352,7 @@ static int scan(void) {
     wr32(pr + 44, (unsigned)-1); wr32(pr + 48, (unsigned)-1); wr32(pr + 52, (unsigned)-1); wr32(pr + 56, (unsigned)-1);   /* nprobes, active, passive, home time: -1 = the chip's defaults */
     /* Scan results come back as events, and the chip only sends the ones in its event mask: turn on ESCAN_RESULT (event 69,
        so byte 8, bit 5) the way brcmfmac does, reading the current 18-byte mask first. */
-    { unsigned char em[20] = {0}; if (iovar("event_msgs", 0, em, 18, &st) && !st) { em[8] |= 1 << 5; em[0] |= 1 | 1 << 3 | 1 << 7; em[2] |= 1; em[5] |= 1 << 6;   /* + SET_SSID 0, AUTH 3, ASSOC 7, LINK 16, PSK_SUP 46 */ if (!iovar("event_msgs", 1, em, 18, &st) || st) kputs("wifi event mask not set\n"); } else kputs("wifi event mask unreadable\n"); }
+    { unsigned char em[20] = {0}; if (iovar("event_msgs", 0, em, 18, &st) && !st) { em[8] |= 1 << 5; em[0] |= 1 | 1 << 3 | 1 << 5 | 1 << 6 | 1 << 7; em[1] |= 1 << 4; em[2] |= 1; em[5] |= 1 << 6;   /* + SET_SSID 0, AUTH 3, DEAUTH 5, DEAUTH_IND 6, ASSOC 7, DISASSOC_IND 12, LINK 16, PSK_SUP 46 */ if (!iovar("event_msgs", 1, em, 18, &st) || st) kputs("wifi event mask not set\n"); } else kputs("wifi event mask unreadable\n"); }
     if (!wlc_ioctl(2, 0, 0, &st) || st) { kputs("wifi up ioctl status "); kdec(st); kputs("\n"); } else kputs("wifi radio up\n");   /* WLC_UP */
     { unsigned ok = iovar("escan", 1, es, sizeof es, &st);
       if (!ok || st) { kputs("wifi escan "); kputs(ok ? "status " : "no reply, status "); kx(st); kputs("\n"); fail("escan"); return 0; } }
@@ -420,10 +420,10 @@ static int set_key(unsigned index, const unsigned char *key, const unsigned char
 static unsigned assoc_rsn(unsigned char *out, unsigned cap) {
     static unsigned char ib[512]; unsigned st = 0;
     for (unsigned i = 0; i < sizeof ib; i++) ib[i] = 0;
-    if (!iovar("assoc_info", 0, ib, 16, &st) || st) { kputs("wifi assoc_info status "); kx(st); kputs("\n"); return 0; }
+    if (!iovar("assoc_info", 0, ib, sizeof ib, &st) || st) { kputs("wifi assoc_info status "); kx(st); kputs("\n"); return 0; }
     unsigned req = rd32(ib); if (!req || req > 400) { kputs("wifi assoc req len "); kdec(req); kputs("\n"); return 0; }
     for (unsigned i = 0; i < sizeof ib; i++) ib[i] = 0;
-    if (!iovar("assoc_req_ies", 0, ib, req, &st) || st) { kputs("wifi assoc_req_ies status "); kx(st); kputs("\n"); return 0; }
+    if (!iovar("assoc_req_ies", 0, ib, sizeof ib, &st) || st) { kputs("wifi assoc_req_ies status "); kx(st); kputs("\n"); return 0; }
     for (unsigned i = 0; i + 2 <= req; ) {
         unsigned tag = ib[i], len = ib[i + 1];
         if (i + 2 + len > req) break;
@@ -437,7 +437,8 @@ static unsigned be16(const unsigned char *p) { return (unsigned)p[0] << 8 | p[1]
 /* An EAPOL-Key reply (msg 2 or 4): copies the replay counter, sets our nonce and key data, signs it with the KCK. */
 static int eapol_reply(const unsigned char aa[6], unsigned ver, unsigned info, const unsigned char replay[8],
                        const unsigned char *nonce, const unsigned char *kd, unsigned kdlen, const unsigned char kck[16], unsigned keylen) {
-    unsigned char m[99 + 32] = {0}, mic[20];
+    unsigned char m[99 + 96] = {0}, mic[20];
+    if (kdlen > 96) return 0;
     unsigned body = 95 + kdlen;
     m[0] = (unsigned char)ver; m[1] = 3; m[2] = (unsigned char)(body >> 8); m[3] = (unsigned char)body;
     m[4] = 2; m[5] = (unsigned char)(info >> 8); m[6] = (unsigned char)info; m[8] = (unsigned char)keylen;
@@ -469,7 +470,7 @@ static int join(void) {
         wpa_sha1_add(&h, wifi_ssid, WIFI_SSID_LEN); unsigned char d[20]; wpa_sha1_end(&h, d);
         for (int i = 0; i < 32; i++) snonce[i] = d[i % 20] ^ (unsigned char)(c >> (8 * (i % 8)));
     }
-    unsigned evt[8], evs[8], shown = 0, ndata = 0, nread = 0, nbad = 0, tries = 0, variant = 0, m1count = 0, used_len = 0;
+    unsigned evt[8], evs[8], evr[8], shown = 0, ndata = 0, nread = 0, nbad = 0, tries = 0, m1count = 0, used_len = 0, rsn_ok = 0;
     unsigned char used[64]; for (unsigned i = 0; i < sizeof rsn_ie; i++) used[i] = rsn_ie[i]; used_len = sizeof rsn_ie;
     for (unsigned t = 0; t < 3000; t++) {   /* up to 15 s: association and the four messages */
         unsigned off, l; if (!f2_read()) { nbad++; if (nbad > 20) break; mdelay(5); continue; }
@@ -480,8 +481,13 @@ static int join(void) {
             unsigned type = (unsigned)ev[28] << 24 | ev[29] << 16 | ev[30] << 8 | ev[31];
             unsigned stat = (unsigned)ev[32] << 24 | ev[33] << 16 | ev[34] << 8 | ev[35];
             unsigned reason = (unsigned)ev[36] << 24 | ev[37] << 16 | ev[38] << 8 | ev[39];
-            if (type != WLC_E_ESCAN_RESULT && shown < 8) { evt[shown] = type; evs[shown] = stat; shown++; }
-            if (0) { kputs(" reason "); kdec(reason); kputs("\n"); }
+            unsigned flags = (unsigned)ev[26] << 8 | ev[27];
+            if (type != WLC_E_ESCAN_RESULT && shown < 8) { evt[shown] = type; evs[shown] = stat; evr[shown] = type == 16 ? (flags & 1) : reason; shown++; }
+            if (type == 3) rsn_ok = 0;   /* a new authentication means a new association request */
+            if ((type == 7 || type == 16) && stat == 0 && !rsn_ok) {   /* associated: read the element the chip sent, before message 1 */
+                unsigned n = assoc_rsn(used, sizeof used);
+                if (n) { used_len = n; rsn_ok = 1; if (m1count == 0) { kputs("wifi assoc RSN "); kdec(n); kputs(" bytes:"); for (unsigned i = 0; i < n; i++) { kputs(" "); kx(used[i]); } kputs("\n"); } }
+            }
             if (type == 0 && stat == 3 && tries++ < 3) {   /* WLC_E_STATUS_NO_NETWORKS: its join scan missed Shaw, ask again */
                 kputs("wifi join: no network found, trying again\n"); mdelay(300);
                 for (unsigned i = 0; i < 80; i++) b[i] = 0;
@@ -501,25 +507,11 @@ static int join(void) {
                 for (int i = 0; i < 6; i++) aa[i] = e[6 + i];
                 for (int i = 0; i < 32; i++) anonce[i] = k[17 + i];
                 wpa_ptk(wifi_pmk, aa, mymac, anonce, snonce, ptk); have_ptk = 1;
-                /* The router resends message 1 until it likes our message 2, and we cannot see why it does not. So each resend gets a
-                   different message 2: 0 as brcmfmac sends it, 1 with key length 16, 2 with no key data, 3 with both. The variant that
-                   draws message 3 is printed, and that is what the router wanted. */
-                if (!m1count) {
-                    unsigned n = assoc_rsn(used, sizeof used);
-                    if (n) { used_len = n; kputs("wifi assoc RSN "); kdec(n); kputs(" bytes:"); for (unsigned i = 0; i < n && i < 24; i++) { kputs(" "); kx(used[i]); } kputs("\n"); }
-                }
-                variant = m1count++ & 1;   /* the real RSN element now, so only key length 0 or 16 is left to try */
-                if (m1count == 1) { kputs("wifi handshake 1 of 4, info "); kx(info); kputs(" kd "); kdec(kdlen); kputs("\n"); }
-                if (!eapol_reply(aa, k[0], 0x010a, k + 9, snonce, (variant & 2) ? 0 : used, (variant & 2) ? 0 : used_len, ptk, (variant & 1) ? 16 : 0)) { fail("msg2 send"); return 0; }
+                if (!rsn_ok) { unsigned n = assoc_rsn(used, sizeof used); if (n) { used_len = n; rsn_ok = 1; } }
+                m1count++;
+                if (m1count == 1) { kputs("wifi handshake 1 of 4, info "); kx(info); kputs(" kd "); kdec(kdlen); kputs(rsn_ok ? "\n" : " (our own RSN guess)\n"); }
+                if (!eapol_reply(aa, k[0], 0x010a, k + 9, snonce, used, used_len, ptk, 0)) { fail("msg2 send"); return 0; }
                 if (m1count == 1) kputs("wifi handshake 2 of 4 sent\n");
-                if (m1count == 1) {   /* did it leave the radio? the chip's counter block; the old 64-byte ask got BUFTOOSHORT (-14) */
-                    static unsigned char cn[1400]; unsigned s2 = 0;
-                    for (unsigned i = 0; i < sizeof cn; i++) cn[i] = 0;
-                    mdelay(50);
-                    if (iovar("counters", 0, cn, sizeof cn, &s2) && !s2) {
-                        kputs("wifi radio sent "); kdec(rd32(cn + 4)); kputs(" frames, "); kdec(rd32(cn + 12)); kputs(" retries, "); kdec(rd32(cn + 16)); kputs(" errors\n");
-                    } else { kputs("wifi counters status "); kx(s2); kputs("\n"); }
-                }
             } else if (have_ptk && (info & 0x0080) && (info & 0x0100) && (info & 0x0040)) {   /* message 3: ack, MIC, install */
                 unsigned char m[99 + 256], mic[20];
                 unsigned body = be16(k + 2); if (4 + body > sizeof m) continue;
@@ -528,7 +520,7 @@ static int join(void) {
                 wpa_hmac(ptk, 16, m, 4 + body, 0, 0, mic);
                 int micok = 1; for (int i = 0; i < 16; i++) if (mic[i] != k[81 + i]) micok = 0;
                 if (!micok) { kputs("wifi handshake 3 MIC wrong (the passphrase does not match)\n"); fail("mic"); return 0; }
-                kputs("wifi handshake 3 of 4, MIC good, the router took variant "); kdec(variant); kputs("\n");
+                kputs("wifi handshake 3 of 4, MIC good\n");
                 unsigned char kd[256]; unsigned gtk_id = 1; const unsigned char *gtk = 0;
                 if ((info & 0x1000) && kdlen >= 24 && kdlen <= 264 && wpa_unwrap(ptk + 16, k + 99, kdlen, kd)) {
                     for (unsigned i = 0; i + 2 <= kdlen - 8; ) {   /* KDEs: dd len 00-0f-ac 01 keyid 0 GTK */
@@ -549,7 +541,14 @@ static int join(void) {
         }
         mdelay(5);
     }
-    kputs("wifi join events:"); for (unsigned i = 0; i < shown; i++) { kputs(" "); kdec(evt[i]); kputs("/"); kdec(evs[i]); } kputs("\n");
+    kputs("wifi join events:");
+    for (unsigned i = 0; i < shown; i++) {
+        kputs(" "); kdec(evt[i]);
+        if (evt[i] == 16) kputs(evr[i] ? "up" : "down");
+        else if (evt[i] == 5 || evt[i] == 6 || evt[i] == 12) { kputs(" reason "); kdec(evr[i]); }
+        else { kputs("/"); kdec(evs[i]); }
+    }
+    kputs("\n");
     kputs("wifi handshake: message 1 came "); kdec(m1count); kputs(" times, we answered each, no message 3\n");
     if (!m1count) { kputs("wifi frames read "); kdec(nread); kputs(", data "); kdec(ndata); kputs(", read errors "); kdec(nbad); kputs("\n"); }
     fail("join");
