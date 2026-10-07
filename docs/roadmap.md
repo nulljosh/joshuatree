@@ -116,6 +116,22 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 - [ ] [Sonnet] `tools/ci-local.sh` takes about 27 minutes (8 shards, 2 at a time). Run 4 at a time on the M4 and use the balanced manifest.
 
 ### Raspberry Pi and ARM64
+
+Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance"). Software first; items that need a part wait for the part.
+
+- [ ] [Fable] Wi-Fi stage 1: the CYW43455 wakes up over SDIO, loads its firmware and lists the networks on screen. In progress, 2.16.0.
+- [ ] [Fable] Wi-Fi stage 2: join Shaw from `~/.config/joshuatree/wifi.conf` (never in the repo), DHCP, an address on screen. The IP stack ported from `drivers/net.c`.
+- [ ] [Sonnet] Blink the Pi's own green light (GPIO 42 on the Pi 4) from Joshua Tree: the simplest driver there is, and it proves the GPIO block. No breadboard needed; a breadboard LED is the same code on another pin.
+- [ ] [Fable] Sound out of the 3.5 mm jack (PWM audio on GPIO 40 and 41 through DMA), then HDMI audio; then Movies plays a clip with sound on the Pi.
+- [ ] [Fable] SD card reads and writes through EMMC2, so files survive a reboot and the Wi-Fi firmware can load from the card.
+- [ ] [Sonnet] `get`, the Joshua Tree installer: a public recipes repo in the Homebrew shape (name, URL, checksum), a C command that downloads an app over Wi-Fi and drops it on the card. Needs Wi-Fi stage 2 and SD writes.
+- [ ] [Sonnet] mruby as a ring-3 app: Ruby scripts compiled to bytecode on the Mac, run on Joshua Tree through `user/libjt`. Full Ruby and Homebrew stay out of reach (they need git, curl, a shell and a compiler).
+- [ ] [Sonnet] Jellyfin app: list and stream Joshua's movies from the Jellyfin server on the Mac (installed 2026-10-06) through the Movies player. Needs Wi-Fi stage 2 and sound.
+- [ ] [Fable] USB audio: the Yeti mic in, a USB speaker out. Then the Samantha box: talk to Joshua Tree on the Pi.
+- [ ] [Fable] Pi camera (needs the part, about $25): a CSI driver, the picture on screen.
+- [ ] [Fable] Touchscreen (needs the part, about $60): the i386 touch driver's shape on the Pi's DSI or USB touch.
+- [ ] [Fable] Ethernet through the Genet MAC, as the wired backup.
+- [ ] [Fable] Serial loader the day the cable arrives: new kernels over the wire, no card swaps.
 - [x] [Joshua] Bought the board, 2026-10-06: Pi 4B 4 GB, 32 GB microSD, heat sinks, case, fan. No serial cable yet; the screen shows the boot log so it can wait.
 - [x] [Sonnet] Card flashed without Raspberry Pi OS, 2026-10-06: `tools/flash-pi.sh` builds `kernel8.img`, fetches the five firmware files and writes the config file (`docs/RASPBERRY-PI.md`).
 - [x] [Joshua] First real boot over HDMI, 2026-10-06: the desktop came up on a Samsung monitor on the first clean power-on (`docs/RASPBERRY-PI.md` has the photo and log).
