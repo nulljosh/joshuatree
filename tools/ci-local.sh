@@ -45,6 +45,10 @@ cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 START=$(date +%s)
 
+# One suite at a time on this Mac (see tools/ci-lock.sh).
+. "$ROOT/tools/ci-lock.sh"
+ci_lock_acquire || exit 1
+
 PASS=0
 FAIL=0
 FAILED_NAMES=()
