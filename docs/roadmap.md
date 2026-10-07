@@ -125,6 +125,15 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 - [ ] [Fable] M2: IP, DHCP and a TCP connection on top of the ARM network card (port the i386 stack above the NIC), and the net and disk drivers moved to interrupts too (input already is). Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
 - [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO) needs a firmware blob and an 802.11 stack. Not scheduled: Ethernet first.
 
+### From the YouTube playlists (checked 2026-10-06)
+
+Both reference series are mapped in `docs/PLAYLIST.md`. What is still open from them:
+
+- [ ] [Sonnet] MBR partition tables and FAT32: `drivers/fat.c` is FAT16 on one volume from sector 0, but a Pi SD card is an MBR partition table with a FAT32 boot partition. Needed before the SD driver can read the card it boots from.
+- [ ] [Sonnet] ICMP: answer and send pings, so `ping` works on both builds.
+- [ ] [Sonnet] An ELF loader beside the flat binaries, so apps built by normal toolchains can run.
+- [ ] [Fable] POSIX compatibility for the common calls (open, read, write, fork, exec), part of 4.0.
+
 ### From SerenityOS and Haiku (research round 4, 2026-10-06 night)
 
 The two from-scratch desktops closest to Joshua Tree. What they have that we do not, smallest first:
