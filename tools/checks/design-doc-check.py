@@ -260,11 +260,11 @@ def dock_order():
 
 
 def window_frame(i):
-    body = func_body("kernel/kernel.c", "static void gui_draw_window_frame(")
+    body = func_body("kernel/gui_paint.c", "void gui_draw_window_frame(")
     body_col, radius = re.search(r"gui_rounded_rect_on_wallpaper\(x, y, w, h, (0x[0-9A-Fa-f]+), (\d+)\)", body).groups()
     rule = re.search(r"gui_hairline_h\(x \+ 8, y \+ 29, w - 16, (0x[0-9A-Fa-f]+)\)", body).group(1)
     close = re.search(r"gui_fill_circle\(x \+ 24, y \+ 16, 7, (0x[0-9A-Fa-f]+)", body).group(1)
-    ink = re.search(r"font_draw_string\(name, .*?, (0x[0-9A-Fa-f]+), -1\)", body).group(1)
+    ink = re.search(r"gui_text\(name, .*?, (0x[0-9A-Fa-f]+)\);", body).group(1)
     return [hexval(body_col), int(radius), hexval(rule), hexval(close), hexval(ink)][i]
 
 
@@ -352,11 +352,11 @@ FACTS = {
     "MENUBAR_WHITE": ("num", menubar_white, "kernel/kernel.c"),
     "MENUBAR_RULE": ("hex", lambda: hexval(rx("kernel/kernel.c", r"gui_hairline_h\(0, GUI_MENUBAR_H - 1, \(int\)window_width\(\), (0x[0-9A-Fa-f]+)\)")), "kernel/kernel.c"),
     "DOCK_TRAY_COLOR": ("hex", lambda: hexval(rx("kernel/dock_geom.h", r"#define DOCK_TRAY_COLOR\s+(0x[0-9A-Fa-f]+)")), "kernel/dock_geom.h"),
-    "WINDOW_BODY": ("hex", lambda: window_frame(0), "kernel/kernel.c"),
-    "WINDOW_RADIUS": ("num", lambda: window_frame(1), "kernel/kernel.c"),
-    "WINDOW_RULE": ("hex", lambda: window_frame(2), "kernel/kernel.c"),
-    "CLOSE_DOT": ("hex", lambda: window_frame(3), "kernel/kernel.c"),
-    "WINDOW_INK": ("hex", lambda: window_frame(4), "kernel/kernel.c"),
+    "WINDOW_BODY": ("hex", lambda: window_frame(0), "kernel/gui_paint.c"),
+    "WINDOW_RADIUS": ("num", lambda: window_frame(1), "kernel/gui_paint.c"),
+    "WINDOW_RULE": ("hex", lambda: window_frame(2), "kernel/gui_paint.c"),
+    "CLOSE_DOT": ("hex", lambda: window_frame(3), "kernel/gui_paint.c"),
+    "WINDOW_INK": ("hex", lambda: window_frame(4), "kernel/gui_paint.c"),
     "SNAP_EDGE": ("num", lambda: int(rxs("kernel/kernel.c", r"const int corner = (\d+), edge = (\d+);")[1]), "kernel/kernel.c"),
     "SNAP_CORNER": ("num", lambda: int(rxs("kernel/kernel.c", r"const int corner = (\d+), edge = (\d+);")[0]), "kernel/kernel.c"),
     "DOCK_SLOTS": ("num", lambda: int(rx("kernel/dock_geom.h", r"#define GUI_ICON_COUNT\s+(\d+)")), "kernel/dock_geom.h"),
@@ -369,8 +369,8 @@ FACTS = {
     "TRAY_RADIUS": ("num", lambda: tray(0), "kernel/gui_paint.c"),
     "TRAY_EDGE": ("hex", lambda: tray(1), "kernel/gui_paint.c"),
     "TRAY_SHADOW_ROWS": ("num", lambda: tray(2), "kernel/gui_paint.c"),
-    "DOCK_LABEL_BG": ("hex", lambda: hexval(rx("kernel/dock_draw.c", r"#define DOCK_LABEL_BG\s+(0x[0-9A-Fa-f]+)")), "kernel/dock_draw.c"),
-    "DOCK_LABEL_EDGE": ("hex", lambda: hexval(rx("kernel/dock_draw.c", r"#define DOCK_LABEL_EDGE\s+(0x[0-9A-Fa-f]+)")), "kernel/dock_draw.c"),
+    "DOCK_LABEL_BG": ("hex", lambda: hexval(rx("kernel/gui_paint.h", r"#define DOCK_LABEL_BG\s+(0x[0-9A-Fa-f]+)")), "kernel/gui_paint.h"),
+    "DOCK_LABEL_EDGE": ("hex", lambda: hexval(rx("kernel/gui_paint.h", r"#define DOCK_LABEL_EDGE\s+(0x[0-9A-Fa-f]+)")), "kernel/gui_paint.h"),
     "APPS_COLS": ("num", lambda: int(rx("kernel/apps_geom.h", r"#define APPS_COLS\s+(\d+)")), "kernel/apps_geom.h"),
     "APPS_TILE": ("num", apps_tile, "kernel/apps_geom.h, tools/checks/launchpad-centered-check.py"),
     "LAUNCHPAD_MIN_TOP": ("num", lambda: launchpad(0), "tools/checks/launchpad-centered-check.py"),

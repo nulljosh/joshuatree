@@ -404,3 +404,229 @@ void gui_blit_tile(const unsigned int *tile, int x, int y, int size, unsigned in
             if (tile[py * pw + px] != under)
                 window_pixel_phys(x * (int)sc + px, y * (int)sc + py, tile[py * pw + px]);
 }
+
+/* The circle and capsule primitives, moved verbatim out of kernel.c for the dock's hover label and the window
+   chrome. aa_band is the one AA width: kernel.c's icon renderer widens it for a supersampled render and puts it back. */
+int gui_aa_band = 5;
+#define AA_BAND gui_aa_band
+
+/* No libm in this freestanding build, and these icons are small enough
+   (radius well under 16px) that a plain increment-until-it-fits search is
+   plenty fast for something drawn on hover, not every frame. */
+int gui_isqrt(int n){
+    if (n < 0) n = 0;
+    int r = 0;
+    while ((r + 1) * (r + 1) <= n) r++;
+    return r;
+}
+
+/* `into` is whatever color surrounds this circle, so the AA_BAND-pixel
+   soft edge can fade toward it: the icon's own colored background for a
+   solid fill, or the fill color itself when punching a hole (the pin's
+   eyelet) into a shape that was drawn in that fill color. */
+/* v82: real second instance of the v79 tray-corner staircase pattern,
+   found by following that entry's own "check for other things that draw
+   straight to physical pixels outside the 6x-supersampled icon pipeline"
+   guidance, not a re-check of the glyphs it already confirmed clean.
+   Every icon GLYPH calls this inside gui_render_icon_cached's offscreen
+   ICON_SS_SCALE buffer (window_push_target set), where window_pixel
+   writes straight into that buffer 1:1 and the later box-downsample does
+   the real AA; those calls were never broken, same as v79 already found
+   for the glyphs. But this function has three other real callers with no
+   target pushed at all: gui_draw_app_titlebar's traffic-light dots (every
+   single windowed app: Weather, Mail, Calendar, Contacts, Settings, ...)
+   and Settings' own duplicate traffic lights. Those go through plain
+   window_pixel, which at window_scale() 2 (every real dock-launched app)
+   replicates each LOGICAL pixel it's given into a flat 2x2 PHYSICAL
+   block, no interpolation. The AA ramp above is computed once per
+   logical pixel, so it produces a handful of correct logical-space grey
+   levels, but each one lands on screen as a hard-edged physical block:
+   real macro-visible staircasing, confirmed with an actual pmemsave
+   capture of the Weather window's red close dot (dock-clicked, real
+   mouse path via QMP abs+btn events, not the scale-1 `testapps` shell
+   diagnostic, which never hits this because it opens its own 800x600
+   scale-1 window): the AA fringe shows as distinct flat terraces, not a
+   smooth gradient, at physical (172..205, 96..129). Fix, same shape as
+   gui_rounded_rect_on_wallpaper's v79 fix: when there's no offscreen
+   target and the window is actually scaled, do the coverage math in
+   PHYSICAL pixels via window_pixel_phys (4x4 subsamples per physical
+   pixel, real coverage fraction) instead of letting window_pixel's
+   block-replication flatten a logical-space ramp. Every glyph caller is
+   unaffected (window_has_target() is true there, so this still takes the
+   original logical-space path with AA_BAND widened to 18 for that
+   buffer, exactly as before). */
+void gui_fill_circle(int cx, int cy, int r, unsigned int color, unsigned int into){
+    if (!window_has_target() && window_scale() > 1){
+        int sc = (int)window_scale();
+        int pcx = cx * sc, pcy = cy * sc, pr = r * sc;
+        const int SS = 4;
+        int outer = pr + sc;
+        for (int dy = -outer; dy <= outer; dy++){
+            for (int dx = -outer; dx <= outer; dx++){
+                long d2 = (long)dx * dx + (long)dy * dy;
+                if (d2 > (long)(pr + 2) * (pr + 2)) continue;
+                unsigned int col;
+                if (d2 <= (long)(pr - 2) * (pr - 2)) { col = color; }
+                else {
+                    int inside = 0;
+                    for (int sy = 0; sy < SS; sy++){
+                        int subdy = dy * SS + sy * 2 + 1 - SS;
+                        for (int sx = 0; sx < SS; sx++){
+                            int subdx = dx * SS + sx * 2 + 1 - SS;
+                            long sd2 = (long)subdx * subdx + (long)subdy * subdy;
+                            if (sd2 <= (long)(pr * SS) * (pr * SS)) inside++;
+                        }
+                    }
+                    if (inside == 0) continue;
+                    col = inside >= SS * SS ? color : gui_lerp(color, into, SS * SS - inside, SS * SS);
+                }
+                window_pixel_phys(pcx + dx, pcy + dy, col);
+            }
+        }
+        return;
+    }
+    int outer2 = (r + AA_BAND) * (r + AA_BAND);
+    for (int dy = -r - AA_BAND; dy <= r + AA_BAND; dy++){
+        for (int dx = -r - AA_BAND; dx <= r + AA_BAND; dx++){
+            int d2 = dx * dx + dy * dy;
+            if (d2 > outer2) continue;
+            if (d2 <= r * r) { window_pixel(cx + dx, cy + dy, color); continue; }
+            int t = gui_isqrt(d2) - r;
+            window_pixel(cx + dx, cy + dy, gui_lerp(color, into, t, AA_BAND));
+        }
+    }
+}
+
+/* A thick, soft-edged line segment (a capsule: flat sides, rounded caps),
+   anti-aliased into `into` with the same AA_BAND falloff every other shape
+   here uses. The one real line primitive icons were missing: before this,
+   a diagonal like the weather icon's sun rays could only be a raw, single-
+   pixel-wide staircase of window_pixel calls, no thickness, no softening,
+   the single most "8-bit" looking thing on the whole dock. Point-to-segment
+   distance stays in plain 32-bit int math (icon coordinates never exceed a
+   few hundred px, nowhere near overflow), no 64-bit division helper this
+   freestanding build doesn't link.
+   v83: same staircasing fix gui_fill_circle received in v82: when rendering
+   at scaled resolution outside an offscreen target, use physical-pixel
+   coverage sampling (4x4 subsamples per physical pixel) instead of logical-
+   space AA_BAND that window_pixel's block replication flattens into visible
+   terraces. Glyphs (inside gui_render_icon_cached's window_push_target) are
+   unaffected; app title-bar and other scaled non-glyph uses of this primitive
+   get the coverage fix.
+   v0.86.x: real bug found from an actual headless boot-splash capture, not
+   a guess: the boot logo (gui_draw_logo) draws its crown out of several
+   overlapping capsules that share joints (trunk top, each branch split),
+   and this partial-coverage blend faded every edge pixel toward the flat
+   `into` background regardless of what was already drawn there. Where a
+   later capsule's own edge band crossed a spot an earlier capsule had
+   already painted solid, it punched a visible dark hairline crack through
+   what should have read as solid fill, the thing that actually made the
+   logo look "8-bit" up close, not the AA itself (a zoomed pmemsave capture
+   showed real multi-level AA ramps on the true outer silhouette, just
+   these false seams cutting across the interior). Real fix: sample the
+   pixel that is already there and blend toward it instead of toward the
+   caller's flat backdrop; coverage 0 then reproduces the old into-blend
+   exactly (nothing else has been drawn there), and coverage 0 < inside <
+   full over already-opaque neighboring geometry now blends toward that
+   geometry's own color instead of carving a false notch into it. */
+/* One antialiased capsule in PHYSICAL pixels. gui_draw_capsule scales logical
+   input into this; gui_draw_logo calls it directly so thin strokes keep a real
+   radius instead of rounding to zero at logical resolution. */
+void gui_capsule_phys(int pcx0, int pcy0, int pcx1, int pcy1, int pr, unsigned int color){
+        int pdx = pcx1 - pcx0, pdy = pcy1 - pcy0;
+    long plen2 = (long)pdx * pdx + (long)pdy * pdy;
+    int minx = (pcx0 < pcx1 ? pcx0 : pcx1) - pr - 2, maxx = (pcx0 > pcx1 ? pcx0 : pcx1) + pr + 2;
+    int miny = (pcy0 < pcy1 ? pcy0 : pcy1) - pr - 2, maxy = (pcy0 > pcy1 ? pcy0 : pcy1) + pr + 2;
+    const int SS = 4;
+    for (int py = miny; py <= maxy; py++){
+        for (int px = minx; px <= maxx; px++){
+            int vx = px - pcx0, vy = py - pcy0;
+            int ex, ey;
+            if (plen2 == 0) { ex = vx; ey = vy; }
+            else {
+                long dot = (long)vx * pdx + (long)vy * pdy;
+                if (dot < 0) dot = 0; else if (dot > plen2) dot = plen2;
+                int cxp = pcx0 + (int)(dot * pdx / plen2), cyp = pcy0 + (int)(dot * pdy / plen2);
+                ex = px - cxp; ey = py - cyp;
+            }
+            long d2 = (long)ex * ex + (long)ey * ey;
+            if (d2 > (long)(pr + 2) * (pr + 2)) continue;
+            unsigned int col;
+            if (d2 <= (long)(pr - 2) * (pr - 2)) { col = color; }
+            else {
+                int inside = 0;
+                for (int sy = 0; sy < SS; sy++){
+                    int subdy = ey * SS + sy * 2 + 1 - SS;
+                    for (int sx = 0; sx < SS; sx++){
+                        int subdx = ex * SS + sx * 2 + 1 - SS;
+                        long sd2 = (long)subdx * subdx + (long)subdy * subdy;
+                        if (sd2 <= (long)(pr * SS) * (pr * SS)) inside++;
+                    }
+                }
+                if (inside == 0) continue;
+                if (inside >= SS * SS) col = color;
+                else {
+                    unsigned int backdrop = window_get_pixel_phys(px, py);
+                    col = gui_lerp(color, backdrop, SS * SS - inside, SS * SS);
+                }
+            }
+            window_pixel_phys(px, py, col);
+        }
+    }
+}
+
+void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color, unsigned int into){
+    if (!window_has_target() && window_scale() > 1){
+        int sc = (int)window_scale();
+        gui_capsule_phys(x0 * sc, y0 * sc, x1 * sc, y1 * sc, r * sc, color);
+        return;
+    }
+    int dx = x1 - x0, dy = y1 - y0;
+    int len2 = dx * dx + dy * dy;
+    int minx = (x0 < x1 ? x0 : x1) - r - AA_BAND, maxx = (x0 > x1 ? x0 : x1) + r + AA_BAND;
+    int miny = (y0 < y1 ? y0 : y1) - r - AA_BAND, maxy = (y0 > y1 ? y0 : y1) + r + AA_BAND;
+    int outer2 = (r + AA_BAND) * (r + AA_BAND);
+    for (int py = miny; py <= maxy; py++){
+        for (int px = minx; px <= maxx; px++){
+            int vx = px - x0, vy = py - y0, ex, ey;
+            if (len2 == 0) { ex = vx; ey = vy; }
+            else {
+                int dot = vx * dx + vy * dy;
+                if (dot < 0) dot = 0; else if (dot > len2) dot = len2;
+                int cxp = x0 + dot * dx / len2, cyp = y0 + dot * dy / len2;
+                ex = px - cxp; ey = py - cyp;
+            }
+            int d2 = ex * ex + ey * ey;
+            if (d2 > outer2) continue;
+            if (d2 <= r * r) { window_pixel(px, py, color); continue; }
+            int t = gui_isqrt(d2) - r;
+            window_pixel(px, py, gui_lerp(color, into, t, AA_BAND));
+        }
+    }
+}
+
+/* The dock's hover label: the app's name in dark ink on a pale capsule with a hairline edge, the macOS dock tooltip in
+   the tray's own cream. Bare light text read on dark wallpaper but vanished on bright map tiles and collided with an
+   open window's bottom edge (QA tour, 2026-09-21); the hairline keeps the capsule distinct over a light window. The
+   capsule spans ly-3 .. ly+19: clear of the tray's top edge and inside the band gui_dock_band_top() composes. */
+void gui_draw_dock_label(int cx_center, int y0, const char *name){
+    int label_w = gui_text_width(name);
+    int ly = y0 - 21;
+    int lx0 = cx_center - label_w / 2 - 2, lx1 = cx_center + label_w / 2 + 2;
+    gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 11, DOCK_LABEL_EDGE, DOCK_LABEL_EDGE);
+    gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 10, DOCK_LABEL_BG, DOCK_LABEL_BG);
+    gui_text(name, cx_center - label_w / 2, ly, 0x001C1C1E);
+}
+
+/* One app window's frame: rounded body, content well, traffic lights, title. */
+void gui_draw_window_frame(int x, int y, int w, int h, const char *name){
+    gui_rounded_rect_on_wallpaper(x, y, w, h, 0x00F5F0EB, 18);
+    window_rect(x + 8, y + 30, w - 16, h - 38, 0x00F5F0EB);
+    gui_hairline_h(x + 8, y + 29, w - 16, 0x00D9D3CB); /* 2.0: one physical pixel rule under the title band */
+    gui_fill_circle(x + 24, y + 16, 7, 0x00FF5F57, 0x00F5F0EB);
+    gui_fill_circle(x + 46, y + 16, 7, 0x00FFD64A, 0x00F5F0EB);
+    gui_fill_circle(x + 68, y + 16, 7, 0x00D8D4CE, 0x00F5F0EB);
+    gui_text("x", x + 21, y + 8, 0x00602B28);
+    gui_text("-", x + 43, y + 8, 0x00624A20);
+    gui_text(name, x + (w - gui_text_width(name)) / 2, y + 8, 0x001C1C1E); /* 2.0: centered, full ink */
+}

@@ -10,16 +10,14 @@
 /* Primitives that stay defined in kernel.c (used well beyond the dock:
    every flyout, icon glyph and window chrome leans on them too) but that
    this file needs, so they are non-static there and declared here. The
-   tray, the contact shadow and the colour math come from gui_paint.h. */
+   tray, the contact shadow, the hover label and the colour math come from
+   gui_paint.h. */
 void gui_draw_wallpaper_rows(int y_from, int y_to);
 void gui_draw_one_icon(int icon, int cx_center, int cy_bottom, int size);
-void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color, unsigned int into);
 
 /* hover_slot: which slot shows the magnify+label (-1 none). drag_slot: the
    slot currently being dragged, drawn separately so it can float free of
    the row under the cursor instead of at its slot position. */
-#define DOCK_LABEL_BG   0x00F4F1EC /* hover label capsule fill */
-#define DOCK_LABEL_EDGE 0x00BDB4A8 /* its hairline edge */
 #define DOCK_LABEL_SPAN 48         /* px either side of a slot a hover change repaints: the widest label plus its capsule */
 
 /* v0.79.x: the dock splits into the half that never changes while the
@@ -131,21 +129,7 @@ static void gui_draw_dock_icons(int drag_slot, int drag_mx, int drag_my){
         int cy_bottom = y0 + DOCK_PAD + DOCK_ICON;
         gui_draw_icon_shadow(cx_center, cy_bottom, size);
         gui_draw_one_icon(icon, cx_center, cy_bottom, size);
-        if (slot == dock_hover) {
-            int label_w = font_string_width(APPS[icon].name);
-            int ly = y0 - 21; /* capsule spans ly-3 .. ly+19: clear of the tray's top edge, inside the band (y0 - 24) */
-            /* Dark text on a light capsule with a hairline edge, the macOS
-               dock tooltip, in the tray's own cream. Bare light text read
-               on dark wallpaper but vanished on bright map tiles and
-               collided with an open window's bottom edge (QA tour,
-               2026-09-21); the hairline keeps the capsule distinct over a
-               light window. It stays inside the band gui_dock_band_top()
-               composes and the per-slot present span DOCK_LABEL_SPAN. */
-            int lx0 = cx_center - label_w / 2 - 2, lx1 = cx_center + label_w / 2 + 2;
-            gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 11, DOCK_LABEL_EDGE, DOCK_LABEL_EDGE);
-            gui_draw_capsule(lx0, ly + 8, lx1, ly + 8, 10, DOCK_LABEL_BG, DOCK_LABEL_BG);
-            font_draw_string(APPS[icon].name, cx_center - label_w / 2, ly, 0x001C1C1E, -1);
-        }
+        if (slot == dock_hover) gui_draw_dock_label(cx_center, y0, APPS[icon].name); /* gui_paint.c, shared with ARM; it stays inside DOCK_LABEL_SPAN */
     }
     if (drag_slot >= 0) {
         int icon = gui_order[drag_slot];
