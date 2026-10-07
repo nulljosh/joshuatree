@@ -109,9 +109,18 @@ static int bp_write(unsigned addr, const unsigned char *p, unsigned n) {
     return 1;
 }
 static int bp_write32(unsigned addr, unsigned v) { unsigned char b[4]; wr32(b, v); return bp_write(addr, b, 4); }
+static int bp_read(unsigned addr, unsigned char *p, unsigned n) {   /* read back through the same window, 64 bytes at a time */
+    while (n) {
+        unsigned k = n > 64 ? 64 : n;
+        if (!bp_window(addr) || !cmd53(1, 0x8000 | (addr & 0x7fff), 0, p, k)) return 0;
+        addr += k; p += k; n -= k;
+    }
+    return 1;
+}
 #define CHIP_RAM 0x198000       /* 43455: 1.5 MiB of SOCRAM at 0x198000; the ARM CR4 core at 0x18002000 */
 #define CHIP_RAM_SIZE 0xc0000    /* brcmfmac chip.c for the 4345 family: 768 KiB; the old 0x120000 put the NVRAM past the end of RAM */
 #define CR4_WRAP 0x18102000
+#define SDIOD_CORE 0x18003000   /* the SDIO device core on the 4345 family (brcmfmac's EROM walk puts it third) */
 static int fw_load(void) {
     if (!wifi_fw_bin_len) { kputs("wifi no firmware\n"); return 0; }
     static unsigned char nv[8192];   /* the NVRAM text packed as the firmware wants it (key=value strings, a length trailer) */
@@ -128,6 +137,15 @@ static int fw_load(void) {
     if (!bp_write(CHIP_RAM, wifi_fw_bin, wifi_fw_bin_len)) { summary(); kputs("wifi FAIL fw load at byte "); kdec(bp_done); kputs(" stage "); kdec(c53_stage); kputs(" int "); kx(c53_int); kputs(" state "); kx(c53_state); kputs("\n"); return 0; }
     if (!bp_write(nvat, nv, nvsz)) { fail("nvram"); return 0; }
     kputs("wifi fw "); kdec(wifi_fw_bin_len / 1024); kputs("k loaded\n"); step(6);
+    {   /* read the first and last 64 bytes back: a write that "succeeds" into the wrong place shows here */
+        unsigned char chk[64]; unsigned bad = 0;
+        if (!bp_read(CHIP_RAM, chk, 64)) { fail("fw verify read"); return 0; }
+        for (unsigned i = 0; i < 64; i++) if (chk[i] != wifi_fw_bin[i]) { bad = i + 1; break; }
+        if (!bad) { if (!bp_read(nvat + nvsz - 64, chk, 64)) { fail("nvram verify read"); return 0; }
+                    for (unsigned i = 0; i < 64; i++) if (chk[i] != nv[nvsz - 64 + i]) { bad = 1000 + i + 1; break; } }
+        if (bad) { summary(); kputs("wifi FAIL verify at "); kdec(bad - 1); kputs(bad > 1000 ? " (nvram)\n" : " (fw)\n"); return 0; }
+        kputs("wifi fw verified\n");
+    }
     /* Start it the way brcmfmac's cr4_set_active does: the firmware's first word is the reset vector and goes to
        backplane address 0; the 802.11 core gets a reset with its PHY clock on (wrapper 0x18101000, best effort); then
        the ARM core is cycled through reset with CPUHALT dropped: IOCTRL=CPUHALT|FGC|CLK, RESETCTRL=1, IOCTRL=FGC|CLK,
@@ -144,11 +162,20 @@ static int fw_load(void) {
     if (!bp_write32(CR4_WRAP + 0x408, 0x1)) { fail("arm run"); return 0; }
     kputs("wifi arm running\n");
     mdelay(50);
-    cmd52(0, 0x02, 1, 0x06, 0);   /* F2 enable again now that the firmware owns it, as brcmfmac enables F2 only after download */
-    cmd52(1, 0x1000e, 1, 0x10, 0);   /* the firmware wants the high-throughput clock: HT_AVAIL_REQ 0x10 (it answers with HT_AVAIL 0x80) */
+    /* brcmfmac's firmware_callback, in order: ask for the HT clock and wait for HT_AVAIL, force HT on so the F2
+       interrupt propagates, tell the firmware the SDPCM protocol version through the SDIO core's mailbox data
+       register, enable F2, then wait for the card to say F2 is ready. */
+    unsigned clk = 0;
+    cmd52(1, 0x1000e, 1, 0x10, 0);
+    for (unsigned n = 0; n < 100; n++) { if (cmd52(1, 0x1000e, 0, 0, &clk) && (clk & 0x80)) break; mdelay(10); }
+    kputs(clk & 0x80 ? "wifi ht clock up\n" : "wifi ht clock not up (carrying on)\n");
+    cmd52(1, 0x1000e, 1, clk | 0x02, 0);
+    bp_write32(SDIOD_CORE + 0x48, 4u << 16);   /* tosbmailboxdata: SDPCM_PROT_VERSION 4 */
+    cmd52(0, 0x02, 1, 0x06, 0);   /* F2 enable, now that the firmware owns it */
     for (unsigned n = 0;; n++) {   /* F2 ready (IORDY bit 2) says the firmware is up */
         unsigned v; if (cmd52(0, 0x03, 0, 0, &v) && (v & 4)) break;
-        if (n > 500) { fail("fw ready"); return 0; }
+        if (n > 500) { unsigned ioe = 0, c2 = 0; cmd52(0, 0x02, 0, 0, &ioe); cmd52(1, 0x1000e, 0, 0, &c2);
+                       summary(); kputs("wifi FAIL fw ready: ioe "); kx(ioe); kputs(" ior "); kx(v); kputs(" clkcsr "); kx(c2); kputs("\n"); return 0; }
         mdelay(10);
     }
     kputs("wifi fw ready\n"); step(7);
