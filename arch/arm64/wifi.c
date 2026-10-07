@@ -13,7 +13,8 @@ static unsigned long ticks_per_ms(void) { unsigned long f; __asm__ volatile ("mr
 extern const unsigned char wifi_fw_bin[], wifi_fw_nvram[], wifi_fw_clm[];
 extern const unsigned wifi_fw_bin_len, wifi_fw_nvram_len, wifi_fw_clm_len;
 static void mdelay(unsigned ms) { unsigned long t0 = now(), n = ticks_per_ms() * ms; while (now() - t0 < n) {} }
-static void fail(const char *step) { kputs("wifi FAIL "); kputs(step); kputs("\n"); }
+static unsigned c53_stage, c53_int, c53_state;   /* where the last CMD53 gave up and what the host said */
+static void fail(const char *step) { kputs("wifi FAIL "); kputs(step); if (c53_stage) { kputs(" stage "); kdec(c53_stage); kputs(" int "); kx(c53_int); kputs(" state "); kx(c53_state); } kputs("\n"); }
 
 /* ---- SDHCI host (Arasan, EMMC1). Register names per the SD Host Controller spec; OSDev's SDHCI page. ---- */
 #define GPIO 0xFE200000UL
@@ -65,7 +66,6 @@ static int cmd52(unsigned fn, unsigned addr, int write, unsigned v, unsigned *ou
     if (out) *out = r & 0xff;
     return 1;
 }
-static unsigned c53_stage, c53_int, c53_state;   /* where the last CMD53 gave up and what the host said: printed by the firmware-load failure line */
 static int c53_fail(unsigned stage) { c53_stage = stage; c53_int = R32(SDH + INT) | last_err; c53_state = R32(SDH + STATE); return 0; }
 static int cmd53(unsigned fn, unsigned addr, int write, unsigned char *buf, unsigned n) {   /* byte mode, up to 512 */
     unsigned r, a = (write ? 0x80000000u : 0) | fn << 28 | 1u << 26 | (addr & 0x1ffff) << 9 | (n & 0x1ff);
@@ -257,9 +257,9 @@ int wifi_init(void) {
     for (unsigned n = 0;; n++) { unsigned v; if (cmd52(0, 0x03, 0, 0, &v) && (v & 2)) break; if (n > 100) { fail("f1 ready"); return 0; } mdelay(10); }
     kputs("wifi f1 f2 up\n");
     /* The backplane (the chip's RAM and cores) only answers while its ALP clock runs: ask for it through CHIPCLKCSR
-       (F1 0x1000e: FORCE_HW_CLKREQ_OFF 0x20 | ALP_AVAIL_REQ 0x08) and wait for ALP_AVAIL (0x40), like brcmfmac and
+       (F1 0x1000e: ALP_AVAIL_REQ 0x08) and wait for ALP_AVAIL (0x40), like brcmfmac and
        Plan 9's ether4330. The fourth real-board run wrote 64 bytes and then got a general error on the next block. */
-    if (!cmd52(1, 0x1000e, 1, 0x28, 0)) { fail("alp req"); return 0; }
+    if (!cmd52(1, 0x1000e, 1, 0x08, 0)) { fail("alp req"); return 0; }   /* ALP_AVAIL_REQ alone, as brcmfmac's htclk does; the sixth run with 0x28 (plus FORCE_HW_CLKREQ_OFF) lost the backplane again */
     for (unsigned n = 0;; n++) { unsigned v; if (cmd52(1, 0x1000e, 0, 0, &v) && (v & 0x40)) break; if (n > 100) { fail("alp"); return 0; } mdelay(5); }
     kputs("wifi alp clock up\n");
     if (!fw_load()) return 0;
