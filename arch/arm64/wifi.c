@@ -370,48 +370,136 @@ static int scan(void) {
 }
 
 
-/* Join the network in wifi_cfg.h with the chip's own WPA2 supplicant, the way brcmfmac does: AES on, supplicant on,
-   WPA2-PSK, the passphrase handed over whole, then SET_SSID. The chip does the handshake; we only read its events.
-   Done when it says the 4-way handshake keyed (PSK_SUP status 6) or the link came up. */
+/* Join the network in wifi_cfg.h. The Pi's firmware has no supplicant (sup_wpa: -23, unsupported, on the real board),
+   so the chip only associates and we do the WPA2 4-way handshake over EAPOL frames ourselves (arch/arm64/wpa.h), then
+   hand it the pairwise and group keys; it encrypts in hardware from then on. The order is brcmfmac's with wpa_supplicant:
+   infra, open auth, AES, WPA2-PSK, our RSN element, SET_SSID; message 1 in, message 2 out, message 3 in, message 4 out,
+   then the keys. */
 static void put32(unsigned char *b, unsigned v) { b[0] = (unsigned char)v; b[1] = (unsigned char)(v >> 8); b[2] = (unsigned char)(v >> 16); b[3] = (unsigned char)(v >> 24); }
-static int join(void) {
 #if WIFI_SSID_LEN > 0
+#include "wpa.h"
+static unsigned char mymac[6];
+/* RSN element: version 1, group CCMP, one pairwise CCMP, one AKM PSK, no capabilities. Sent in association and msg 2. */
+static const unsigned char rsn_ie[22] = {0x30, 20, 1, 0, 0, 0x0f, 0xac, 4, 1, 0, 0, 0x0f, 0xac, 4, 1, 0, 0, 0x0f, 0xac, 2, 0, 0};
+static unsigned char txf[512] __attribute__((aligned(64)));
+/* One Ethernet frame out on the data channel: SDPCM header, a 4-byte BDC header (version 2, no offset), the frame. */
+static int data_send(const unsigned char dst[6], unsigned type, const unsigned char *body, unsigned len) {
+    unsigned n = SDPCM_HDRLEN + 4 + 14 + len;
+    if (n > sizeof txf) return 0;
+    wait_credit();
+    wr16(txf, n); wr16(txf + 2, ~n & 0xffff); txf[4] = (unsigned char)seq++; txf[5] = SDPCM_DATA; txf[6] = 0; txf[7] = SDPCM_HDRLEN;
+    txf[8] = txf[9] = txf[10] = txf[11] = 0;
+    unsigned char *b = txf + SDPCM_HDRLEN; b[0] = 0x20; b[1] = b[2] = b[3] = 0;
+    unsigned char *e = b + 4;
+    for (int i = 0; i < 6; i++) { e[i] = dst[i]; e[6 + i] = mymac[i]; }
+    e[12] = (unsigned char)(type >> 8); e[13] = (unsigned char)type;
+    for (unsigned i = 0; i < len; i++) e[14 + i] = body[i];
+    return cmd53(2, 0x8000, 1, txf, fw_padded(n));
+}
+/* brcmf_wsec_key_le: index, len, data[32], pad[18 words], algo, flags, pad[3], iv_initialized, pad, rxiv, pad[2], ea. */
+static int set_key(unsigned index, const unsigned char *key, const unsigned char *ea, unsigned flags) {
+    unsigned char k[164] = {0}; unsigned st = 0;
+    put32(k, index); put32(k + 4, 16);
+    for (int i = 0; i < 16; i++) k[8 + i] = key[i];
+    put32(k + 112, 4);   /* CRYPTO_ALGO_AES_CCM */
+    put32(k + 116, flags);
+    if (ea) for (int i = 0; i < 6; i++) k[156 + i] = ea[i];
+    if (!iovar("wsec_key", 1, k, sizeof k, &st) || st) { kputs("wifi key "); kdec(index); kputs(" status "); kx(st); kputs("\n"); return 0; }
+    return 1;
+}
+static unsigned be16(const unsigned char *p) { return (unsigned)p[0] << 8 | p[1]; }
+/* An EAPOL-Key reply (msg 2 or 4): copies the replay counter, sets our nonce and key data, signs it with the KCK. */
+static int eapol_reply(const unsigned char aa[6], unsigned ver, unsigned info, const unsigned char replay[8],
+                       const unsigned char *nonce, const unsigned char *kd, unsigned kdlen, const unsigned char kck[16]) {
+    unsigned char m[99 + 32] = {0}, mic[20];
+    unsigned body = 95 + kdlen;
+    m[0] = (unsigned char)ver; m[1] = 3; m[2] = (unsigned char)(body >> 8); m[3] = (unsigned char)body;
+    m[4] = 2; m[5] = (unsigned char)(info >> 8); m[6] = (unsigned char)info;
+    for (int i = 0; i < 8; i++) m[9 + i] = replay[i];
+    if (nonce) for (int i = 0; i < 32; i++) m[17 + i] = nonce[i];
+    m[97] = (unsigned char)(kdlen >> 8); m[98] = (unsigned char)kdlen;
+    for (unsigned i = 0; i < kdlen; i++) m[99 + i] = kd[i];
+    wpa_hmac(kck, 16, m, 4 + body, 0, 0, mic);
+    for (int i = 0; i < 16; i++) m[81 + i] = mic[i];
+    return data_send(aa, 0x888e, m, 4 + body);
+}
+static int join(void) {
     unsigned st = 0; unsigned char b[80] = {0};
-    put32(b, 1); if (!wlc_ioctl(20, b, 4, &st) || st) { fail("infra"); return 0; }   /* WLC_SET_INFRA: infrastructure */
-    put32(b, 0); if (!wlc_ioctl(22, b, 4, &st) || st) { fail("auth"); return 0; }                          /* WLC_SET_AUTH: open system */
-    put32(b, 4); if (!wlc_ioctl(134, b, 4, &st) || st) { fail("wsec"); return 0; }                         /* WLC_SET_WSEC: AES */
-    put32(b, 1); if (!iovar("sup_wpa", 1, b, 4, &st) || st) { kputs("wifi sup_wpa status "); kx(st); kputs("\n"); fail("sup_wpa"); return 0; }   /* interface 0 takes the plain name: brcmfmac adds "bsscfg:" only for the others */
-    put32(b, 0x80); if (!iovar("wpa_auth", 1, b, 4, &st) || st) { kputs("wifi wpa_auth status "); kx(st); kputs("\n"); fail("wpa_auth"); return 0; }            /* WPA2_AUTH_PSK */
-    for (unsigned i = 0; i < 80; i++) b[i] = 0;
-    b[0] = WIFI_PSK_LEN; b[2] = 1;                                                                          /* wsec_pmk: key_len, flags = passphrase */
-    for (unsigned i = 0; i < WIFI_PSK_LEN; i++) b[4 + i] = wifi_psk[i];
-    if (!wlc_ioctl(268, b, 68, &st) || st) { kputs("wifi pmk status "); kx(st); kputs("\n"); fail("pmk"); return 0; }                                      /* WLC_SET_WSEC_PMK */
+    if (!iovar("cur_etheraddr", 0, mymac, 6, &st) || st) { fail("mac"); return 0; }
+    put32(b, 1); if (!wlc_ioctl(20, b, 4, &st) || st) { fail("infra"); return 0; }    /* WLC_SET_INFRA: infrastructure */
+    put32(b, 0); if (!wlc_ioctl(22, b, 4, &st) || st) { fail("auth"); return 0; }     /* WLC_SET_AUTH: open system */
+    put32(b, 4); if (!wlc_ioctl(134, b, 4, &st) || st) { fail("wsec"); return 0; }    /* WLC_SET_WSEC: AES */
+    put32(b, 0x80); if (!iovar("wpa_auth", 1, b, 4, &st) || st) { kputs("wifi wpa_auth status "); kx(st); kputs("\n"); fail("wpa_auth"); return 0; }   /* WPA2_AUTH_PSK */
+    if (!iovar("wpaie", 1, (void *)rsn_ie, sizeof rsn_ie, &st) || st) { kputs("wifi wpaie status "); kx(st); kputs("\n"); }   /* best effort: the firmware can build its own */
     for (unsigned i = 0; i < 80; i++) b[i] = 0;
     put32(b, WIFI_SSID_LEN); for (unsigned i = 0; i < WIFI_SSID_LEN; i++) b[4 + i] = wifi_ssid[i];
     kputs("wifi joining "); kputs((const char *)wifi_ssid); kputs("\n");
-    if (!wlc_ioctl(26, b, 36, &st) || st) { kputs("wifi set ssid status "); kx(st); kputs("\n"); fail("set ssid"); return 0; }                                  /* WLC_SET_SSID starts the join */
+    if (!wlc_ioctl(26, b, 36, &st) || st) { kputs("wifi set ssid status "); kx(st); kputs("\n"); fail("set ssid"); return 0; }   /* WLC_SET_SSID */
+    unsigned char aa[6], anonce[32], snonce[32], ptk[48]; int have_ptk = 0;
+    {   /* our nonce: SHA-1 over the counter, our MAC and the SSID; fresh each boot because the counter is */
+        unsigned long c; __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c));
+        wpa_sha1 h; wpa_sha1_init(&h); wpa_sha1_add(&h, (unsigned char *)&c, sizeof c); wpa_sha1_add(&h, mymac, 6);
+        wpa_sha1_add(&h, wifi_ssid, WIFI_SSID_LEN); unsigned char d[20]; wpa_sha1_end(&h, d);
+        for (int i = 0; i < 32; i++) snonce[i] = d[i % 20] ^ (unsigned char)(c >> (8 * (i % 8)));
+    }
     unsigned shown = 0;
-    for (unsigned t = 0; t < 2400; t++) {   /* up to 12 s: scan, auth, assoc and the handshake */
+    for (unsigned t = 0; t < 3000; t++) {   /* up to 15 s: association and the four messages */
         unsigned off, l; if (!f2_read()) break;
-        if (sdpcm_parse(frame, 1536, &off, &l) == SDPCM_EVENT && l > 4 + 72) {
+        int ch = sdpcm_parse(frame, 1600, &off, &l);
+        if (ch == SDPCM_EVENT && l > 4 + 72) {
             const unsigned char *ev = frame + off + 4;
             unsigned type = (unsigned)ev[28] << 24 | ev[29] << 16 | ev[30] << 8 | ev[31];
             unsigned stat = (unsigned)ev[32] << 24 | ev[33] << 16 | ev[34] << 8 | ev[35];
             unsigned reason = (unsigned)ev[36] << 24 | ev[37] << 16 | ev[38] << 8 | ev[39];
-            if (type == WLC_E_ESCAN_RESULT) continue;
-            if (shown++ < 8) { kputs("wifi join event "); kdec(type); kputs(" status "); kdec(stat); kputs(" reason "); kdec(reason); kputs("\n"); }
-            if (type == 46 && stat == 6) { kputs("wifi joined, keys installed\n"); step(9); summary(); return 1; }   /* WLC_E_PSK_SUP, WLC_SUP_KEYED */
-            if (type == 0 && stat != 0) { kputs("wifi join refused\n"); break; }                            /* SET_SSID failed: no such network */
+            if (type != WLC_E_ESCAN_RESULT && shown++ < 8) { kputs("wifi join event "); kdec(type); kputs(" status "); kdec(stat); kputs(" reason "); kdec(reason); kputs("\n"); }
+            if (type == 0 && stat != 0) { kputs("wifi join refused\n"); break; }   /* SET_SSID failed */
+        } else if (ch == SDPCM_DATA && l > 4 + 14 + 99) {
+            const unsigned char *bd = frame + off, *e = bd + 4 + bd[3] * 4;
+            if (be16(e + 12) != 0x888e) { mdelay(5); continue; }
+            const unsigned char *k = e + 14;
+            unsigned info = be16(k + 5), kdlen = be16(k + 97);
+            if (k[1] != 3 || 99 + kdlen > l - 4 - 14) continue;
+            if ((info & 0x0080) && !(info & 0x0100)) {   /* message 1: ack, no MIC */
+                for (int i = 0; i < 6; i++) aa[i] = e[6 + i];
+                for (int i = 0; i < 32; i++) anonce[i] = k[17 + i];
+                wpa_ptk(wifi_pmk, aa, mymac, anonce, snonce, ptk); have_ptk = 1;
+                kputs("wifi handshake 1 of 4\n");
+                if (!eapol_reply(aa, k[0], 0x010a, k + 9, snonce, rsn_ie, sizeof rsn_ie, ptk)) { fail("msg2 send"); return 0; }
+                kputs("wifi handshake 2 of 4 sent\n");
+            } else if (have_ptk && (info & 0x0080) && (info & 0x0100) && (info & 0x0040)) {   /* message 3: ack, MIC, install */
+                unsigned char m[99 + 256], mic[20];
+                unsigned body = be16(k + 2); if (4 + body > sizeof m) continue;
+                for (unsigned i = 0; i < 4 + body; i++) m[i] = k[i];
+                for (int i = 0; i < 16; i++) m[81 + i] = 0;
+                wpa_hmac(ptk, 16, m, 4 + body, 0, 0, mic);
+                int micok = 1; for (int i = 0; i < 16; i++) if (mic[i] != k[81 + i]) micok = 0;
+                if (!micok) { kputs("wifi handshake 3 MIC wrong (the passphrase does not match)\n"); fail("mic"); return 0; }
+                kputs("wifi handshake 3 of 4, MIC good\n");
+                unsigned char kd[256]; unsigned gtk_id = 1; const unsigned char *gtk = 0;
+                if ((info & 0x1000) && kdlen >= 24 && kdlen <= 264 && wpa_unwrap(ptk + 16, k + 99, kdlen, kd)) {
+                    for (unsigned i = 0; i + 2 <= kdlen - 8; ) {   /* KDEs: dd len 00-0f-ac 01 keyid 0 GTK */
+                        unsigned tl = kd[i + 1];
+                        if (kd[i] == 0xdd && tl >= 6 + 16 && kd[i + 2] == 0 && kd[i + 3] == 0x0f && kd[i + 4] == 0xac && kd[i + 5] == 1) { gtk_id = kd[i + 6] & 3; gtk = kd + i + 8; break; }
+                        if (kd[i] == 0) break;
+                        i += 2 + tl;
+                    }
+                }
+                if (!eapol_reply(aa, k[0], 0x030a, k + 9, 0, 0, 0, ptk)) { fail("msg4 send"); return 0; }
+                kputs("wifi handshake 4 of 4 sent\n");
+                if (!set_key(0, ptk + 32, aa, 2)) { fail("pairwise key"); return 0; }   /* BRCMF_PRIMARY_KEY */
+                if (gtk && !set_key(gtk_id, gtk, 0, 0)) { fail("group key"); return 0; }
+                kputs(gtk ? "wifi joined, keys installed\n" : "wifi joined, no group key found\n");
+                step(9); summary(); return 1;
+            }
         }
         mdelay(5);
     }
     fail("join");
     return 0;
-#else
-    kputs("wifi: no network configured, scan only\n");
-    return 1;
-#endif
 }
+#else
+static int join(void) { kputs("wifi: no network configured, scan only\n"); return 1; }
+#endif
 
 /* WLAN power. On the Pi 4 the chip's WL_ON line is pin 1 of the firmware's GPIO expander (expander pins are numbered
    from 128), reached only through the mailbox. Tags from Linux's include/soc/bcm2835/raspberrypi-firmware.h:
