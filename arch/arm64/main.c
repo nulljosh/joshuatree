@@ -1111,6 +1111,24 @@ void kinput(unsigned type, unsigned code, int value) { input_event((struct input
 int usb_init(void);    /* xhci.c */
 int wifi_init(void);   /* wifi.c: M4 Wi-Fi stage 1, polled, every wait bounded */
 void usb_poll(void);
+/* The boot demo: the Pi has no mouse yet, so one lap of the dock labels plays by itself, Apps to Trash, a beat each,
+   and then stops. Joshua's request for the first video of it booting (2026-10-07). */
+#ifdef PI_BUILD
+static void demo_tick(void) {
+    static unsigned next; static int slot = -1;
+    if (slot > GUI_ICON_COUNT) return;
+    unsigned long f, c;
+    __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    unsigned t = (unsigned)(c / ((f ? f : 54000000) / 100));   /* 100 a second, like ip.c's ticks() */
+    if (!next) next = t + 300;   /* three seconds after the loop starts: the console has settled */
+    if (t < next) return;
+    next = t + 80;
+    if (slot < 0) slot = 0;
+    hover_slot = slot < GUI_ICON_COUNT ? slot : -1;
+    dock_hover(hover_slot);
+    slot++;
+}
+#endif
 
 /* ---- M2: devices on QEMU's virt machine. 32 virtio-mmio slots from 0x0A000000, 0x200 apart, each says which device
    sits there: 1 is a network card, 18 is input (keyboard or tablet). Modern virtio (version 2) only: QEMU needs
@@ -1370,7 +1388,7 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); ask_poll(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) { usb_poll(); input_poll(); ask_poll(); demo_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
 #else
         for (;;) {
             __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
