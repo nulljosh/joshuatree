@@ -272,7 +272,7 @@ static void no_reply(const char *name, unsigned want) {
     kputs(" len "); kdec(last_len); kputs(" cmd "); kdec(last_cmd); kputs(" id "); kdec(last_id); kputs(" st "); kx(last_st); kputs(" seq "); kdec(seq); kputs(" max "); kdec(tx_max); kputs("\n");
 }
 static int iovar(const char *name, int set, void *buf, unsigned len, unsigned *status) {
-    unsigned char p[1024]; unsigned k = 0;
+    unsigned char p[1536]; unsigned k = 0;   /* room for a 1 KiB CLM chunk, its 12-byte header and the name: a 1024-byte buffer here cut every chunk short, so the chip's whole-blob check failed (clmload_status 6) */
     while (name[k]) { p[k] = name[k]; k++; } p[k++] = 0;
     for (unsigned i = 0; i < len && k < sizeof p; i++) p[k++] = ((unsigned char *)buf)[i];
     wait_credit();
