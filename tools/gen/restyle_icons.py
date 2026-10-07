@@ -309,6 +309,18 @@ APPS_ONLY = {
         <rect x="59" y="42" width="10" height="62"/>
       </g>"""),
 
+    # Claude (2.14): an eight-spoke spark, cream on the design-system accent #b5502c. Flat, the same
+    # ramp as Music, so only the shared top lip and the contact shadow remain. No text.
+    "claude": ("#B5502C", "#B5502C", "",
+               """
+      <g stroke="#FAF8F4" stroke-width="11" stroke-linecap="round">
+        <line x1="64" y1="28" x2="64" y2="96"/>
+        <line x1="30" y1="62" x2="98" y2="62"/>
+        <line x1="40" y1="38" x2="88" y2="86"/>
+        <line x1="88" y1="38" x2="40" y2="86"/>
+      </g>
+      <circle cx="64" cy="62" r="12" fill="#FAF8F4"/>"""),
+
     "search": ("#9AA3B1", "#303A48", "",
                """
       <circle cx="52" cy="52" r="23" fill="none" stroke="#ECEFF3" stroke-width="11"/>

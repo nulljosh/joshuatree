@@ -705,7 +705,7 @@ a ring-3 window through the compositor's event push.
 
 | # | Name | ebx | ecx | edx | Returns |
 |---|---|---|---|---|---|
-| 392 | `http_post` | `struct jt_http_post *` | flags (0) | 0 | reply body bytes, -status, or -errno |
+| 392 | `http_post` | `struct jt_http_post *` | flags (0, or `JT_POST_WORKER` 1, `JT_POST_BIG` 2, `JT_POST_CLAUDE` 4) | 0 | reply body bytes, -status, or -errno |
 
 ```c
 struct jt_http_post {
@@ -753,6 +753,21 @@ armed for that one request and cleared straight after, so no other path or later
 request carries it. With no token set the Worker answers 401 and the call returns
 -401. On a failure the Worker's error text is not returned (nothing is written to
 `out`), only the status: Mail maps -401, -429, -400, -503 and -502 to a short reason.
+
+`JT_POST_CLAUDE` (4, 2.14.0) is the Claude app's selector. It sends to the Claude relay
+Settings keeps (Assistant, `claudehost=`/`claudeport=` in `SETTINGS.TXT`), its own
+host, never the chat host, so the relay token can only reach a machine the owner named.
+The path must be exactly `/api/claude`, anything else is -EINVAL, and the kernel adds
+`Authorization: Bearer <token>` from the Claude token in Settings (`claudetoken=`), the
+same way as the Mail token: the program never supplies, sees or can read it. With no
+relay host or no token set the call returns -EACCES (-13) at once and the network is
+never touched; that is what the browser demo gets. `reply_ticks` clamps to 24000 (240 s)
+instead of 4500, because Claude Code can take minutes; the relay's own timeout is
+shorter, so a slow answer comes back as -504 rather than -EIO. The wait holds the one
+fetch-at-a-time flag, so Weather and Stocks refreshes wait (-EBUSY) until it ends; the
+desktop itself keeps running. Combining it with `JT_POST_WORKER` is -EINVAL. A bearer
+armed for either path is cleared after every POST, including one that fails before the
+request is built.
 
 ## audio (1.9.26)
 

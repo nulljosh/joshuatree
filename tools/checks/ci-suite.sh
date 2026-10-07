@@ -144,6 +144,8 @@ retry|4|Notes folders: legacy NOTES.TXT migrates intact, a new note lands in the
 retry|1|Terminal grid draws the mono face at its true advance|python3 ./tools/checks/termmono-check.py
 retry|2|Terminal's runtime-TTF text is real antialiased rasterization with a driftless monospace grid|python3 ./tools/checks/termsharp-check.py
 retry|7|Panes: independent scrollback per tab, tab rail, activity dot on a background tab, close, split panes with their own shells|python3 ./tools/checks/panes-check.py
+retry|1|Claude app: asks Claude Code through the relay (stub claude on the host), draws the reply, resumes the session, red error line on a wrong token, a stopped relay and no relay set (-EACCES at once)|python3 ./tools/checks/ring3claude-check.py
+once |0|Claude relay: token refused and accepted, session resume, exact read-only argv, prompt on stdin, timeout kills the process group, size cap, one request at a time, log hygiene, and a mutant without the token check lets a tokenless request in|python3 ./tools/checks/claude-relay-check.py
 retry|4|Apple-menu hover stays cheap, clock redraws on a minute change|./tools/checks/menuclock-check.sh
 retry|3|Lock Screen: menu item locks, Esc cannot bypass, password unlocks|python3 ./tools/checks/lockscreen-check.py
 retry|3|Multi-window chrome doesn't redraw on plain keystrokes|./tools/checks/mwkeyflash-check.sh
@@ -236,7 +238,10 @@ retry|3|Drunk mode easter egg: horizontal sway applied to framebuffer rows|pytho
 retry|6|ARM64: the aarch64 kernel boots under QEMU and prints over the UART (skips where the tools are missing)|python3 ./tools/checks/arm64-m0-check.py
 retry|6|ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing)|python3 ./tools/checks/arm64-m1c-check.py
 retry|6|ARM64 M2: the aarch64 kernel drives virtio disk, network, keyboard and mouse: a sector read back, a real ARP answer, key presses, moves and clicks (skips where the tools are missing)|python3 ./tools/checks/arm64-m2-check.py
+retry|6|ARM64 console scrollback: Page Up, End and Home scroll the on-screen Console over the whole boot log, the title bar says which lines (skips where the tools are missing)|python3 ./tools/checks/arm64-console-scroll-check.py
 retry|6|ARM64 M3a: an unprivileged EL0 program prints through a write syscall, exits, and a direct access to a kernel-only page faults while the kernel survives (skips where the tools are missing)|python3 ./tools/checks/arm64-m3-check.py
+retry|2|ARM64 M4 Wi-Fi proto: wifi_proto.h packs and parses SDPCM, BCDC, escan and NVRAM on the host clang|sh ./tools/checks/wifi-host-check.sh
+retry|6|ARM64 M4 Wi-Fi: the Pi image powers the chip, finds no SDIO card under QEMU, prints wifi FAIL cmd5 and the boot carries on, with and without the firmware files (skips where the tools are missing)|python3 ./tools/checks/arm64-wifi-check.py
 retry|6|ARM64 M4 USB: the aarch64 kernel finds an xHCI controller behind a PCIe root port, enumerates a hub, a keyboard behind it and a mouse, and reads key presses, moves and clicks (skips where the tools are missing)|python3 ./tools/checks/arm64-usb-check.py
 retry|6|ARM64 crash screen: an unexpected EL1 fault prints class, ESR, FAR, ELR and the last console lines on the UART, draws them as a panel (QEMU screendump on virt and the Pi 4B model) and halts quietly (skips where the tools are missing)|python3 ./tools/checks/arm64-crash-check.py
 retry|6|ARM64 FP state: q0-q31, FPCR and FPSR survive timer interrupts whose handler wipes them, and the build without the save fails the same test (skips where the tools are missing)|python3 ./tools/checks/arm64-fp-check.py

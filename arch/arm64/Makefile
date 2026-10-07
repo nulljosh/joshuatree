@@ -33,19 +33,29 @@ xhci.o: xhci.c
 	$(CC) -c $< -o $@
 pi-pci.o: pci.c
 	$(CC) -DPI_BUILD -c $< -o $@
+wifi.o: wifi.c wifi_proto.h
+	$(CC) -c -o $@ wifi.c
+pi-wifi.o: wifi.c wifi_proto.h
+	$(CC) -DPI_BUILD -c -o $@ wifi.c
+wifi-fw:
+	cd ../.. && tools/wifi-fw.sh
+wifi_fw.S: wifi_fw_gen.sh wifi-fw
+	./wifi_fw_gen.sh
+wifi_fw.o: wifi_fw.S
+	$(CC) -c -o $@ wifi_fw.S
 pi-xhci.o: xhci.c
 	$(CC) -DPI_BUILD -c $< -o $@
 pi-start.o: start.S
 	$(CC) -c $< -o $@
 pi-main.o: main.c
 	$(CC) -DPI_BUILD -c $< -o $@
-kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o ttf.o text.o libc.o linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o ttf.o text.o libc.o
-pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o ttf.o text.o libc.o linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o ttf.o text.o libc.o
+kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o
+pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o ttf.o text.o libc.o
-pi: kernel8.img
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o
+pi: wifi-fw kernel8.img
 # Variant builds: $(1) names the output, $(2) the main.c flags, $(3) extra objects, $(4) the vectors.S flags.
 define variant
 $(1)-main.o: main.c
@@ -54,12 +64,12 @@ $(1)-pi-main.o: main.c
 	$(CC) -DPI_BUILD $(2) -c $$< -o $$@
 $(1)-vectors.o: vectors.S
 	$(CC) $(4) -c $$< -o $$@
-$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o ttf.o text.o libc.o $(3) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o ttf.o text.o libc.o $(3)
-$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o ttf.o text.o libc.o $(3) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o ttf.o text.o libc.o $(3)
+$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o $(3) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o $(3)
+$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o $(3) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o $(3)
 $(1)-kernel8.img: $(1)-pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o ttf.o text.o libc.o $(3)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o $(3)
 endef
 fptest.o: fptest.c
 	$(FPCC) -c $< -o $@
@@ -78,4 +88,4 @@ run-pi: kernel8.img
 	qemu-system-aarch64 -machine raspi4b -nographic -kernel kernel8.img
 clean:
 	rm -f *.o *.elf *.img
-.PHONY: crashtest fpsave fpnosave oomtest
+.PHONY: wifi-fw crashtest fpsave fpnosave oomtest

@@ -56,3 +56,7 @@ drivers/user_*.h
 # ARM64 Pi image and its ELF, built by `make -C arch/arm64 pi`.
 arch/arm64/kernel8.img
 arch/arm64/pi-kernel8.elf
+arch/arm64/wifi_fw.S
+# Wi-Fi credentials never enter the repo; the build reads ~/.config/joshuatree/wifi.conf
+arch/arm64/wifi.conf
+build/wifi-fw/
