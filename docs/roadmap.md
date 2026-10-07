@@ -54,7 +54,8 @@ How to use this: the Pickup list below stays the near-term queue. When a Pickup 
 
 ### [5.0] Talk to it: Claude Code in Joshua Tree
 - [ ] [5.0] [Fable] Claude phase 2: tools on Joshua Tree itself, so Claude can read and change the OS's own files. Needs real TLS on the box or a trusted relay protocol that calls back into the machine.
-- [ ] [5.0] Claude on the Pi: waits on the ARM64 network stack (after M4).
+- [x] [5.0] Claude in the ARM Console, 2.21.0: type at the Console's `ask>` row and Claude answers there, through the relay and the shared IP stack. Done on QEMU virt. `tools/checks/arm64-claude-console-check.py`.
+- [ ] [5.0] Claude on the real Pi: the same Console prompt, once Wi-Fi stage 2 joins a network. Today it says `claude: no network`.
 
 ## Pickup (written 2026-10-03, night)
 Main is 2.6.24 and live. CI takes about 10 minutes. The 3.0.0 gate is one thing: the desktop boots on a real Raspberry Pi 4.
