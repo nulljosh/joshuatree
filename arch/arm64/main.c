@@ -647,8 +647,9 @@ static void fb_init(void) {
         text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
         int bx = cx - sg(18) - text_width(1, "ARM64", sg(110));   /* the ARM64 badge, in the house accent */
         text_draw(1, "ARM64", bx, (mb + sg(8)) / 2, sg(110), fb_color(0x00b5502c), fb, fb_pitch, W, H);
-        /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock. */
-        const char *thanks = "Steve Jobs, 1955 to 2011. Thank you.";
+        /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
+           of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
+        const char *thanks = "Steve Jobs, 1955 to 2011. Thank you. Make something wonderful.";
         int tx = (W - text_width(2, thanks, sc(110))) / 2, ty = dock_y - sc(12), sh = sc(1) > 1 ? sc(1) : 1;
         text_draw(2, thanks, tx + sh, ty + sh, sc(110), fb_color(0x00101010), fb, fb_pitch, W, H);   /* a dark shadow so it reads on the busy photo */
         text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
