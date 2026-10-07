@@ -108,7 +108,7 @@ static unsigned bp_done;   /* bytes the last bp_write moved, printed when the fi
 static int bp_write(unsigned addr, const unsigned char *p, unsigned n) {
     bp_done = 0;
     while (n) {
-        unsigned k = n > 512 ? 512 : n;   /* the byte-mode limit; 64-byte chunks made the 595 KB upload take most of a minute with every pause in it */
+        unsigned k = n > 64 ? 64 : n;   /* function 1's byte-mode limit is its block size, 64: a 512-byte chunk (tried to speed the upload) fails on the first byte with OUT_OF_RANGE. The speed-up that mattered was dropping the 1 ms pause per access. */
         if (!bp_window(addr) || !cmd53(1, 0x8000 | (addr & 0x7fff), 1, (unsigned char *)p, k)) return 0;
         addr += k; p += k; n -= k; bp_done += k;
     }
