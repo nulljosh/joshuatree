@@ -186,27 +186,49 @@ static int scan(void) {
     return 1;
 }
 
-/* WLAN power. On the Pi 4 the chip's WL_ON line is pin 1 of the firmware's GPIO expander, reached only through the
-   mailbox (tags 0x00030043 get / 0x00030041 set, expander pins numbered from 128: Circle's CBcmPropertyTags and
-   Linux's gpio-raspberrypi-exp). Read it, raise it, give the chip 150 ms, then start SDIO. Bounded like the rest. */
+/* WLAN power. On the Pi 4 the chip's WL_ON line is pin 1 of the firmware's GPIO expander (expander pins are numbered
+   from 128), reached only through the mailbox. Tags from Linux's include/soc/bcm2835/raspberrypi-firmware.h:
+   0x00030043 get config, 0x00038043 set config, 0x00030041 get state, 0x00038041 set state. Following
+   drivers/gpio/gpio-raspberrypi-exp.c: read the pin's polarity, make it an output (direction 1) driven high, then set
+   the state high and read it back. The first real-board boot (2026-10-06) failed at CMD5 because the old code sent
+   the two "get" tags, so the chip was never powered. The message lives in cacheable RAM, so it is cleaned out to RAM
+   before the GPU reads it and invalidated before we read the reply, like the framebuffer mailbox in main.c. */
 #define WL_ON 129
-static volatile unsigned wmbox[16] __attribute__((aligned(16)));
+static volatile unsigned wmbox[16] __attribute__((aligned(64)));
+static void wmbox_flush(void) {
+    for (unsigned long a = (unsigned long)wmbox & ~63UL; a < (unsigned long)wmbox + sizeof wmbox; a += 64)
+        __asm__ volatile ("dc civac, %0" :: "r"(a) : "memory");
+    __asm__ volatile ("dsb sy" ::: "memory");
+}
 static int wmbox_call(void) {
     unsigned long m = 0xFE00B880UL, a = (unsigned long)wmbox | 8;
+    wmbox_flush();
     for (unsigned n = 0; R32(m + 0x38) & 0x80000000u; n++) if (n > 1000000) return 0;
     R32(m + 0x20) = (unsigned)a;
     for (unsigned n = 0; ; n++) {
         if (n > 1000000) return 0;
         if (R32(m + 0x18) & 0x40000000u) continue;
-        if (R32(m + 0x00) == (unsigned)a) return wmbox[1] == 0x80000000u;
+        if (R32(m + 0x00) == (unsigned)a) { wmbox_flush(); return wmbox[1] == 0x80000000u; }
     }
 }
 static void wifi_power_on(void) {
-    wmbox[0] = 32; wmbox[1] = 0; wmbox[2] = 0x00030043; wmbox[3] = 8; wmbox[4] = 0; wmbox[5] = WL_ON; wmbox[6] = 0; wmbox[7] = 0;
-    unsigned was = wmbox_call() ? wmbox[6] : 0;
-    wmbox[0] = 32; wmbox[1] = 0; wmbox[2] = 0x00030041; wmbox[3] = 8; wmbox[4] = 0; wmbox[5] = WL_ON; wmbox[6] = 1; wmbox[7] = 0;
-    int ok = wmbox_call();
-    kputs(ok ? (was ? "wifi power on (was on)\n" : "wifi power on\n") : "wifi power on (no mailbox)\n");
+    /* get config: gpio, direction, polarity, term_en, term_pull_up (24-byte value buffer) */
+    wmbox[0] = 48; wmbox[1] = 0; wmbox[2] = 0x00030043; wmbox[3] = 24; wmbox[4] = 0;
+    wmbox[5] = WL_ON; wmbox[6] = 0; wmbox[7] = 0; wmbox[8] = 0; wmbox[9] = 0; wmbox[10] = 0; wmbox[11] = 0;
+    unsigned pol = wmbox_call() ? wmbox[7] : 0;
+    /* set config: output, keep polarity, no termination, driven high */
+    wmbox[0] = 48; wmbox[1] = 0; wmbox[2] = 0x00038043; wmbox[3] = 24; wmbox[4] = 0;
+    wmbox[5] = WL_ON; wmbox[6] = 1; wmbox[7] = pol; wmbox[8] = 0; wmbox[9] = 0; wmbox[10] = 1; wmbox[11] = 0;
+    int cfg = wmbox_call();
+    /* set state high */
+    wmbox[0] = 32; wmbox[1] = 0; wmbox[2] = 0x00038041; wmbox[3] = 8; wmbox[4] = 0; wmbox[5] = WL_ON; wmbox[6] = 1; wmbox[7] = 0;
+    int set = wmbox_call();
+    /* read it back */
+    wmbox[0] = 32; wmbox[1] = 0; wmbox[2] = 0x00030041; wmbox[3] = 8; wmbox[4] = 0; wmbox[5] = WL_ON; wmbox[6] = 0; wmbox[7] = 0;
+    int got = wmbox_call() ? (int)wmbox[6] : -1;
+    if (!cfg && !set) kputs("wifi power on (no mailbox)\n");
+    else if (got == 1) kputs("wifi power on, WL_ON reads 1\n");
+    else kputs(got == 0 ? "wifi power FAIL: WL_ON reads 0\n" : "wifi power on, readback failed\n");
     mdelay(150);
 }
 
