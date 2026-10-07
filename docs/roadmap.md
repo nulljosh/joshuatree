@@ -227,7 +227,7 @@ Sources: Tom's Guide and TechRadar on macOS Tahoe 26, Pureinfotech and Digital C
 - [x] [Fable] M1c part two, 2.6.22: the Pi build asks the GPU for a framebuffer through the VideoCore mailbox and draws the same desktop, proven on QEMU's Pi 4B model by screendump (`tools/checks/arm64-m1c-check.py`). Real board still to try.
 - [x] [Sonnet] M1c boot log on screen, 2.6.22: every line the ARM kernel prints over serial is also drawn in the window, so a first boot with a bad serial cable still shows how far it got (`tools/checks/arm64-m1c-check.py` counts the text pixels).
 - [x] [Sonnet] M1d part one, 2.6.23: the ARM screen draws smooth DejaVu text (the i386 desktop's own rasterizer, `drivers/ttf.c`, built for aarch64 with the FPU on): a menu bar title, a titled window and an anti-aliased boot log. `tools/checks/arm64-m1c-check.py` counts the soft edge pixels.
-- [ ] [Fable] M1d part two: the real window and dock drawing code (`drivers/window.c`) running on the ARM build instead of rectangles, and the framebuffer mapped write-combining so a live desktop needs no cache cleans.
+- [ ] [Fable] M1d part two (slice 1 of 5 done, 2.15.0: the Satellite wallpaper and the real menu bar on ARM, `arch/arm64/wall.c`; slice 2 extracts the dock painters from `kernel/kernel.c` to a shared kernel/gui_paint.c): the real window and dock drawing code (`drivers/window.c`) running on the ARM build instead of rectangles, and the framebuffer mapped write-combining so a live desktop needs no cache cleans.
 - [x] [Fable] M2 keyboard and mouse, 2.6.22: one modern virtio-mmio input driver reads key down and up, pointer position and clicks, polled (`tools/checks/arm64-m2-check.py`).
 - [x] [Fable] M2 disk, 2.6.22: a virtio-blk driver reads a known sector off a disk image (`tools/checks/arm64-m2-check.py`). Writes and a FAT reader on top are next.
 - [x] [Fable] M2 network, 2.6.22: a virtio-net driver sends an ARP request to the router and prints its real answer (`tools/checks/arm64-m2-check.py`).
@@ -478,7 +478,7 @@ Needs a call from Joshua before scoping:
 ## Session task queue
 Feeds the landing page's "Where it's going" card automatically via `tools/gen/landing-roadmap.py`. Keep titles short, bold, and current. Each item also needs a `(plain: ...)` phrase right after the title, a few plain words a 20-year-old visitor would understand with zero dev background, that phrase is what actually shows on the landing page, never the dev title. Internal refactor work that a visitor has no way to try (nothing to click, nothing that looks different) uses `(plain: skip)`, which the generator drops from the card entirely instead of translating it into vague visitor-facing words.
 1. **One input bar and a talking tour** (plain: a demo that talks you through it) [Sonnet]: the phone shows two bars and the tour is silent after the intro.
-2. **Joshua Tree on a Raspberry Pi** (plain: a real computer you can hold) [Fable]: ARM64 M1d to M4, gated on the first real boot.
+2. **Joshua Tree on a Raspberry Pi** (plain: a real computer you can hold) [Fable]: ARM64 M1d to M4, gated on the first real boot. Desktop slice 1 of 5 is done (wallpaper and menu bar).
 3. **Per-check QMP ports** (plain: skip) [Haiku]: parallel test runs stop colliding on fixed ports.
 4. **Every icon in one style** (plain: icons that match) [Sonnet]: the fleet icons keep their own tile colors.
 5. **Photos, Minesweeper, Solitaire, Voice Memos** (plain: photos, games and voice notes) [Haiku]: the "Apps after 2.2" list.

@@ -14,6 +14,14 @@ text.o: text.c ../../drivers/ttf.h
 	$(FPCC) -c $< -o $@
 libc.o: libc.c
 	$(FPCC) -c $< -o $@
+# The wallpaper: the shared PNG and inflate decoders (integer only; they want kmalloc and a few libc calls) plus wall.c, which scales the photo.
+SHARED = -I../../kernel -I../../lib -I../../drivers
+png.o: ../../drivers/png.c
+	$(CC) $(SHARED) -c $< -o $@
+inflate.o: ../../drivers/inflate.c
+	$(CC) $(SHARED) -c $< -o $@
+wall.o: wall.c ../../kernel/wall_sat.h
+	$(CC) $(SHARED) -c $< -o $@
 start.o: start.S
 	$(CC) -c $< -o $@
 user.o: user.S
@@ -34,12 +42,12 @@ pi-start.o: start.S
 	$(CC) -c $< -o $@
 pi-main.o: main.c
 	$(CC) -DPI_BUILD -c $< -o $@
-kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o ttf.o text.o libc.o linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o ttf.o text.o libc.o
-pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o ttf.o text.o libc.o linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o ttf.o text.o libc.o
+kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o ttf.o text.o libc.o png.o inflate.o wall.o linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o ttf.o text.o libc.o png.o inflate.o wall.o
+pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o ttf.o text.o libc.o png.o inflate.o wall.o linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o ttf.o text.o libc.o png.o inflate.o wall.o
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o ttf.o text.o libc.o
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o ttf.o text.o libc.o png.o inflate.o wall.o
 pi: kernel8.img
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf
