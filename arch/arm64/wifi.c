@@ -410,11 +410,11 @@ static int set_key(unsigned index, const unsigned char *key, const unsigned char
 static unsigned be16(const unsigned char *p) { return (unsigned)p[0] << 8 | p[1]; }
 /* An EAPOL-Key reply (msg 2 or 4): copies the replay counter, sets our nonce and key data, signs it with the KCK. */
 static int eapol_reply(const unsigned char aa[6], unsigned ver, unsigned info, const unsigned char replay[8],
-                       const unsigned char *nonce, const unsigned char *kd, unsigned kdlen, const unsigned char kck[16]) {
+                       const unsigned char *nonce, const unsigned char *kd, unsigned kdlen, const unsigned char kck[16], unsigned keylen) {
     unsigned char m[99 + 32] = {0}, mic[20];
     unsigned body = 95 + kdlen;
     m[0] = (unsigned char)ver; m[1] = 3; m[2] = (unsigned char)(body >> 8); m[3] = (unsigned char)body;
-    m[4] = 2; m[5] = (unsigned char)(info >> 8); m[6] = (unsigned char)info;
+    m[4] = 2; m[5] = (unsigned char)(info >> 8); m[6] = (unsigned char)info; m[8] = (unsigned char)keylen;
     for (int i = 0; i < 8; i++) m[9 + i] = replay[i];
     if (nonce) for (int i = 0; i < 32; i++) m[17 + i] = nonce[i];
     m[97] = (unsigned char)(kdlen >> 8); m[98] = (unsigned char)kdlen;
@@ -443,7 +443,7 @@ static int join(void) {
         wpa_sha1_add(&h, wifi_ssid, WIFI_SSID_LEN); unsigned char d[20]; wpa_sha1_end(&h, d);
         for (int i = 0; i < 32; i++) snonce[i] = d[i % 20] ^ (unsigned char)(c >> (8 * (i % 8)));
     }
-    unsigned shown = 0, ndata = 0, nread = 0, nbad = 0, tries = 0;
+    unsigned shown = 0, ndata = 0, nread = 0, nbad = 0, tries = 0, variant = 0, m1count = 0;
     for (unsigned t = 0; t < 3000; t++) {   /* up to 15 s: association and the four messages */
         unsigned off, l; if (!f2_read()) { nbad++; if (nbad > 20) break; mdelay(5); continue; }
         nread++;
@@ -464,7 +464,7 @@ static int join(void) {
         } else if (ch == SDPCM_DATA && l >= 4 + 14 + 4) {   /* >=: a bare message 1 is exactly 4 + 14 + 99 bytes, and > threw it away */
             const unsigned char *bd = frame + off, *e = bd + 4 + bd[3] * 4;
             ndata++;
-            if (ndata <= 4) { kputs("wifi data frame len "); kdec(l); kputs(" type "); kx(be16(e + 12)); kputs("\n"); }
+            
             if (be16(e + 12) != 0x888e || l < 4 + 14 + 99) { mdelay(5); continue; }
             const unsigned char *k = e + 14;
             unsigned info = be16(k + 5), kdlen = be16(k + 97);
@@ -473,9 +473,13 @@ static int join(void) {
                 for (int i = 0; i < 6; i++) aa[i] = e[6 + i];
                 for (int i = 0; i < 32; i++) anonce[i] = k[17 + i];
                 wpa_ptk(wifi_pmk, aa, mymac, anonce, snonce, ptk); have_ptk = 1;
-                kputs("wifi handshake 1 of 4\n");
-                if (!eapol_reply(aa, k[0], 0x010a, k + 9, snonce, rsn_ie, sizeof rsn_ie, ptk)) { fail("msg2 send"); return 0; }
-                kputs("wifi handshake 2 of 4 sent\n");
+                /* The router resends message 1 until it likes our message 2, and we cannot see why it does not. So each resend gets a
+                   different message 2: 0 as brcmfmac sends it, 1 with key length 16, 2 with no key data, 3 with both. The variant that
+                   draws message 3 is printed, and that is what the router wanted. */
+                variant = m1count++ & 3;
+                kputs("wifi handshake 1 of 4, info "); kx(info); kputs(" kd "); kdec(kdlen); kputs("\n");
+                if (!eapol_reply(aa, k[0], 0x010a, k + 9, snonce, (variant & 2) ? 0 : rsn_ie, (variant & 2) ? 0 : sizeof rsn_ie, ptk, (variant & 1) ? 16 : 0)) { fail("msg2 send"); return 0; }
+                kputs("wifi handshake 2 of 4 sent, variant "); kdec(variant); kputs("\n");
             } else if (have_ptk && (info & 0x0080) && (info & 0x0100) && (info & 0x0040)) {   /* message 3: ack, MIC, install */
                 unsigned char m[99 + 256], mic[20];
                 unsigned body = be16(k + 2); if (4 + body > sizeof m) continue;
@@ -484,7 +488,7 @@ static int join(void) {
                 wpa_hmac(ptk, 16, m, 4 + body, 0, 0, mic);
                 int micok = 1; for (int i = 0; i < 16; i++) if (mic[i] != k[81 + i]) micok = 0;
                 if (!micok) { kputs("wifi handshake 3 MIC wrong (the passphrase does not match)\n"); fail("mic"); return 0; }
-                kputs("wifi handshake 3 of 4, MIC good\n");
+                kputs("wifi handshake 3 of 4, MIC good, the router took variant "); kdec(variant); kputs("\n");
                 unsigned char kd[256]; unsigned gtk_id = 1; const unsigned char *gtk = 0;
                 if ((info & 0x1000) && kdlen >= 24 && kdlen <= 264 && wpa_unwrap(ptk + 16, k + 99, kdlen, kd)) {
                     for (unsigned i = 0; i + 2 <= kdlen - 8; ) {   /* KDEs: dd len 00-0f-ac 01 keyid 0 GTK */
@@ -494,7 +498,7 @@ static int join(void) {
                         i += 2 + tl;
                     }
                 }
-                if (!eapol_reply(aa, k[0], 0x030a, k + 9, 0, 0, 0, ptk)) { fail("msg4 send"); return 0; }
+                if (!eapol_reply(aa, k[0], 0x030a, k + 9, 0, 0, 0, ptk, 0)) { fail("msg4 send"); return 0; }
                 kputs("wifi handshake 4 of 4 sent\n");
                 if (!set_key(0, ptk + 32, aa, 2)) { fail("pairwise key"); return 0; }   /* BRCMF_PRIMARY_KEY */
                 if (gtk && !set_key(gtk_id, gtk, 0, 0)) { fail("group key"); return 0; }
