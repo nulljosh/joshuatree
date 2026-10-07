@@ -28,9 +28,10 @@ static void fail(const char *step) { kputs("wifi FAIL "); kputs(step); kputs("\n
 #define INT 0x30
 #define INTMASK 0x34
 #define INTEN 0x38
+static unsigned last_err;   /* the INT bits seen when the last wait ended in an error */
 static int wait_int(unsigned mask, unsigned ms) {   /* 1 when one of `mask` fired without an error bit */
     unsigned long t0 = now(), n = ticks_per_ms() * ms;
-    while (now() - t0 < n) { unsigned s = R32(SDH + INT); if (s & 0x8000) { R32(SDH + INT) = s; return 0; } if (s & mask) { R32(SDH + INT) = s & mask; return 1; } }
+    while (now() - t0 < n) { unsigned s = R32(SDH + INT); if (s & 0x8000) { last_err = s; R32(SDH + INT) = s; return 0; } if (s & mask) { R32(SDH + INT) = s & mask; return 1; } }
     return 0;
 }
 static int sd_cmd(unsigned idx, unsigned arg, unsigned rtype, unsigned *resp) {   /* rtype: 0 none, 2 R1/R5/R6 (48 bit, CRC and index checked), 3 R4 (48 bit, no CRC and no index: CMD5's reply carries 0x3f and 0x7f there, so checking them is a command error) */
@@ -64,20 +65,23 @@ static int cmd52(unsigned fn, unsigned addr, int write, unsigned v, unsigned *ou
     if (out) *out = r & 0xff;
     return 1;
 }
+static unsigned c53_stage, c53_int, c53_state;   /* where the last CMD53 gave up and what the host said: printed by the firmware-load failure line */
+static int c53_fail(unsigned stage) { c53_stage = stage; c53_int = R32(SDH + INT) | last_err; c53_state = R32(SDH + STATE); return 0; }
 static int cmd53(unsigned fn, unsigned addr, int write, unsigned char *buf, unsigned n) {   /* byte mode, up to 512 */
     unsigned r, a = (write ? 0x80000000u : 0) | fn << 28 | 1u << 26 | (addr & 0x1ffff) << 9 | (n & 0x1ff);
     R32(SDH + BLK) = 1u << 16 | n;   /* one block of n bytes (count in the top half; a count of 0 moves nothing) */
-    for (unsigned k = 0; R32(SDH + STATE) & 3; k++) if (k > 1000000) return 0;
+    mdelay(1);   /* the BCM2835 host wants a couple of SD clocks between accesses; a millisecond is far more than enough */
+    for (unsigned k = 0; R32(SDH + STATE) & 3; k++) if (k > 1000000) return c53_fail(1);
     R32(SDH + INT) = 0xffffffff; R32(SDH + ARG) = a;
     R32(SDH + CMD) = 53u << 24 | 0x1A0000 | 0x200000 | 0x2 | (write ? 0 : 0x10);   /* data present (bit 21), block count on, read = 0x10; the first real-board run had 0x20 (multi-block) here instead of data present, so no data ever moved and `arm halt` failed */
-    if (!wait_int(1, 100)) return 0;
-    r = R32(SDH + RESP); if (r & 0xcb00) return 0;
-    if (!wait_int(write ? 0x10 : 0x20, 100)) return 0;   /* buffer ready fires once per block, not per word: the third real-board run moved 4 bytes and stalled on 64 */
+    if (!wait_int(1, 100)) return c53_fail(2);
+    r = R32(SDH + RESP); if (r & 0xcb00) { c53_fail(3); c53_int = r; return 0; }
+    if (!wait_int(write ? 0x10 : 0x20, 100)) return c53_fail(4);   /* buffer ready fires once per block, not per word: the third real-board run moved 4 bytes and stalled on 64 */
     for (unsigned i = 0; i < n; i += 4) {
         if (write) R32(SDH + DATA) = buf[i] | buf[i + 1] << 8 | buf[i + 2] << 16 | (unsigned)buf[i + 3] << 24;
         else { unsigned w = R32(SDH + DATA); buf[i] = w; buf[i + 1] = w >> 8; buf[i + 2] = w >> 16; buf[i + 3] = w >> 24; }
     }
-    return wait_int(2, 100);
+    return wait_int(2, 100) ? 1 : c53_fail(5);
 }
 
 /* ---- Backplane: the chip's cores through function 1 (SBSDIO window registers 0x1000a-c pick a 32 KiB window). ---- */
@@ -109,7 +113,7 @@ static int fw_load(void) {
     if (fw_padded(wifi_fw_bin_len) > CHIP_RAM_SIZE - nvsz) { fail("fw size"); return 0; }
     /* hold the ARM in reset (wrapper RESETCTRL=1, IOCTRL=CPUHALT|CLK) while RAM is written */
     if (!bp_write32(CR4_WRAP + 0x800, 1) || !bp_write32(CR4_WRAP + 0x408, 0x21)) { fail("arm halt"); return 0; }
-    if (!bp_write(CHIP_RAM, wifi_fw_bin, wifi_fw_bin_len)) { kputs("wifi FAIL fw load at byte "); kdec(bp_done); kputs("\n"); return 0; }
+    if (!bp_write(CHIP_RAM, wifi_fw_bin, wifi_fw_bin_len)) { kputs("wifi FAIL fw load at byte "); kdec(bp_done); kputs(" stage "); kdec(c53_stage); kputs(" int "); kx(c53_int); kputs(" state "); kx(c53_state); kputs("\n"); return 0; }
     if (!bp_write(nvat, wifi_fw_nvram, wifi_fw_nvram_len)) { fail("nvram"); return 0; }
     kputs("wifi fw "); kdec(wifi_fw_bin_len / 1024); kputs("k loaded\n");
     /* reset vector = start of RAM, then release: RESETCTRL=0, IOCTRL=CLK */
