@@ -219,8 +219,6 @@ struct jt_http_post { const char *path; const char *body; unsigned int body_len;
 static inline int jt_http_post(struct jt_http_post *a) { return jt_syscall(JT_SYS_HTTP_POST, (unsigned)a, 0, 0); }
 #define JT_POST_WORKER 1u /* post to the fixed joshuatree Worker host instead of the chat host */
 #define JT_POST_BIG    2u /* body and reply up to JT_HTTP_BIG_MAX, straight from/to the caller buffers */
-#define JT_POST_CLAUDE 4u /* 2.14.0: to the Settings-owned Claude relay, path /api/claude only; the kernel adds the token. -13 (EACCES) when no relay is set */
-#define JT_HTTP_POST_TICKS_CLAUDE 24000 /* the longer wait JT_POST_CLAUDE allows */
 static inline int jt_http_post_ex(struct jt_http_post *a, unsigned flags) { return jt_syscall(JT_SYS_HTTP_POST, (unsigned)a, flags, 0); }
 static inline int jt_readdir(const char *path, struct jt_dirent *out, unsigned max) { return jt_syscall(JT_SYS_READDIR, (unsigned)path, (unsigned)out, max); }
 /* Bytes read (at most cap), -ENOENT missing or empty, -EINVAL, -EFAULT. */

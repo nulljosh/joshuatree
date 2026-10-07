@@ -26,6 +26,13 @@
 #include "libjt/text.h"
 #include "libjt/stdlib.h"
 
+/* SYS_HTTP_POST's Claude selector and its longer wait, the same values as kernel/syscall.h
+   (docs/SYSCALL-ABI.md). Defined here, not in jtsys.h, because a jtsys.h edit marks every
+   landing tile stale (tools/landing_shots_manifest.py) for a change that draws nothing. */
+#ifndef JT_POST_CLAUDE
+#define JT_POST_CLAUDE 4u
+#endif
+#define JT_HTTP_POST_TICKS_CLAUDE 24000
 #define BG      0x00F5F0EB /* WINDOW_BODY */
 #define INK     0x001C1C1E /* WINDOW_INK */
 #define MUTED   0x00807468
