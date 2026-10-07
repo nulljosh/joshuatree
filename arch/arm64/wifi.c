@@ -346,13 +346,20 @@ static int scan(void) {
     { unsigned ok = iovar("escan", 1, es, sizeof es, &st);
       if (!ok || st) { kputs("wifi escan "); kputs(ok ? "status " : "no reply, status "); kx(st); kputs("\n"); fail("escan"); return 0; } }
     unsigned found = 0;
-    for (unsigned t = 0; t < 600; t++) {   /* up to 3 s of events on the event channel */
+    /* brcmf_event, big-endian: 14 bytes of Ethernet header, 10 of bcmeth (subtype, length, version, oui, usr_subtype), then
+       the 48-byte event message: version 2, flags 2, event_type 4, status 4, reason 4, auth_type 4, datalen 4, addr 6,
+       ifname 16, ifidx 1, bsscfgidx 1. The data follows at 72. The first real scan read the flags as the type and so
+       never saw a single result (scan done, 0 networks). */
+    unsigned seen = 0;
+    for (unsigned t = 0; t < 1600; t++) {   /* up to 8 s: an active scan of both bands takes a few seconds */
         unsigned off, l; if (!f2_read()) break;
-        if (sdpcm_parse(frame, 1536, &off, &l) == SDPCM_EVENT && l > 4 + 48 + 12) {
-            const unsigned char *ev = frame + off + 4;   /* past the BCDC data header; brcmf_event: 14 eth + 10 bcmeth + 24 msg */
-            unsigned type = ev[24 + 2] << 8 | ev[24 + 3];
-            if (type == WLC_E_ESCAN_RESULT) found += escan_walk(ev + 48, l - 4 - 48, ap_line);
-            unsigned stat = ev[24 + 4] << 24 | ev[24 + 5] << 16 | ev[24 + 6] << 8 | ev[24 + 7];
+        if (sdpcm_parse(frame, 1536, &off, &l) == SDPCM_EVENT && l > 4 + 72 + 12) {
+            const unsigned char *ev = frame + off + 4;   /* past the BCDC data header */
+            unsigned type = (unsigned)ev[28] << 24 | ev[29] << 16 | ev[30] << 8 | ev[31];
+            unsigned stat = (unsigned)ev[32] << 24 | ev[33] << 16 | ev[34] << 8 | ev[35];
+            if (seen < 6) { kputs("wifi event "); kdec(type); kputs(" status "); kdec(stat); kputs("\n"); }
+            seen++;
+            if (type == WLC_E_ESCAN_RESULT && stat == 8) found += escan_walk(ev + 72, l - 4 - 72, ap_line);
             if (type == WLC_E_ESCAN_RESULT && stat != 8) break;   /* anything but WLC_E_STATUS_PARTIAL ends the scan */
         }
         mdelay(5);
