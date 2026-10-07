@@ -31,6 +31,8 @@ ip.o: ip.c ../../drivers/nic.h
 	$(NETCC) -DNETPORT=$(NETPORT) -c $< -o $@
 claude_cfg.h: claude_cfg.sh FORCE
 	@./claude_cfg.sh
+wifi_cfg.h: wifi_cfg.sh FORCE
+	@./wifi_cfg.sh
 ask.o: ask.c claude_cfg.h ../../drivers/http.h ../../drivers/net.h
 	$(NETCC) -c ask.c -o $@
 pi-ask.o: ask.c claude_cfg.h ../../drivers/http.h ../../drivers/net.h
@@ -72,7 +74,7 @@ pi-pci.o: pci.c
 	$(CC) -DPI_BUILD -c $< -o $@
 wifi.o: wifi.c wifi_proto.h
 	$(CC) -c -o $@ wifi.c
-pi-wifi.o: wifi.c wifi_proto.h
+pi-wifi.o: wifi.c wifi_proto.h wifi_cfg.h
 	$(CC) -DPI_BUILD -c -o $@ wifi.c
 wifi-fw:
 	cd ../.. && tools/wifi-fw.sh

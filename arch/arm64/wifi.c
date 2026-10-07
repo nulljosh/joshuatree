@@ -5,6 +5,7 @@
    or the chip, so there the whole thing ends at `wifi no host` and the desktop carries on. The pure-logic half (frame
    packing, escan parsing, NVRAM packing) lives in wifi_proto.h and has a host-side test. Only built for PI_BUILD. */
 #ifdef PI_BUILD
+#include "wifi_cfg.h"
 #include "wifi_proto.h"
 #define R32(a) (*(volatile unsigned *)(unsigned long)(a))
 void kputs(const char *s); void kdec(unsigned v); void kx(unsigned v);
@@ -341,7 +342,7 @@ static int scan(void) {
     wr32(pr + 44, (unsigned)-1); wr32(pr + 48, (unsigned)-1); wr32(pr + 52, (unsigned)-1); wr32(pr + 56, (unsigned)-1);   /* nprobes, active, passive, home time: -1 = the chip's defaults */
     /* Scan results come back as events, and the chip only sends the ones in its event mask: turn on ESCAN_RESULT (event 69,
        so byte 8, bit 5) the way brcmfmac does, reading the current 18-byte mask first. */
-    { unsigned char em[20] = {0}; if (iovar("event_msgs", 0, em, 18, &st) && !st) { em[8] |= 1 << 5; if (!iovar("event_msgs", 1, em, 18, &st) || st) kputs("wifi event mask not set\n"); } else kputs("wifi event mask unreadable\n"); }
+    { unsigned char em[20] = {0}; if (iovar("event_msgs", 0, em, 18, &st) && !st) { em[8] |= 1 << 5; em[0] |= 1 | 1 << 3 | 1 << 7; em[2] |= 1; em[5] |= 1 << 6;   /* + SET_SSID 0, AUTH 3, ASSOC 7, LINK 16, PSK_SUP 46 */ if (!iovar("event_msgs", 1, em, 18, &st) || st) kputs("wifi event mask not set\n"); } else kputs("wifi event mask unreadable\n"); }
     if (!wlc_ioctl(2, 0, 0, &st) || st) { kputs("wifi up ioctl status "); kdec(st); kputs("\n"); } else kputs("wifi radio up\n");   /* WLC_UP */
     { unsigned ok = iovar("escan", 1, es, sizeof es, &st);
       if (!ok || st) { kputs("wifi escan "); kputs(ok ? "status " : "no reply, status "); kx(st); kputs("\n"); fail("escan"); return 0; } }
@@ -366,6 +367,50 @@ static int scan(void) {
     }
     kputs("wifi scan done, "); kdec(found); kputs(" networks\n"); step(8); summary();
     return 1;
+}
+
+
+/* Join the network in wifi_cfg.h with the chip's own WPA2 supplicant, the way brcmfmac does: AES on, supplicant on,
+   WPA2-PSK, the passphrase handed over whole, then SET_SSID. The chip does the handshake; we only read its events.
+   Done when it says the 4-way handshake keyed (PSK_SUP status 6) or the link came up. */
+static void put32(unsigned char *b, unsigned v) { b[0] = (unsigned char)v; b[1] = (unsigned char)(v >> 8); b[2] = (unsigned char)(v >> 16); b[3] = (unsigned char)(v >> 24); }
+static int join(void) {
+#if WIFI_SSID_LEN > 0
+    unsigned st = 0; unsigned char b[80] = {0};
+    put32(b, 1); if (!wlc_ioctl(20, b, 4, &st) || st) { fail("infra"); return 0; }   /* WLC_SET_INFRA: infrastructure */
+    put32(b, 0); if (!wlc_ioctl(22, b, 4, &st) || st) { fail("auth"); return 0; }                          /* WLC_SET_AUTH: open system */
+    put32(b, 4); if (!wlc_ioctl(134, b, 4, &st) || st) { fail("wsec"); return 0; }                         /* WLC_SET_WSEC: AES */
+    put32(b, 0); put32(b + 4, 1); if (!iovar("bsscfg:sup_wpa", 1, b, 8, &st) || st) { fail("sup_wpa"); return 0; }
+    put32(b, 0x80); if (!iovar("wpa_auth", 1, b, 4, &st) || st) { fail("wpa_auth"); return 0; }            /* WPA2_AUTH_PSK */
+    for (unsigned i = 0; i < 80; i++) b[i] = 0;
+    b[0] = WIFI_PSK_LEN; b[2] = 1;                                                                          /* wsec_pmk: key_len, flags = passphrase */
+    for (unsigned i = 0; i < WIFI_PSK_LEN; i++) b[4 + i] = wifi_psk[i];
+    if (!wlc_ioctl(268, b, 68, &st) || st) { fail("pmk"); return 0; }                                      /* WLC_SET_WSEC_PMK */
+    for (unsigned i = 0; i < 80; i++) b[i] = 0;
+    put32(b, WIFI_SSID_LEN); for (unsigned i = 0; i < WIFI_SSID_LEN; i++) b[4 + i] = wifi_ssid[i];
+    kputs("wifi joining "); kputs((const char *)wifi_ssid); kputs("\n");
+    if (!wlc_ioctl(26, b, 36, &st) || st) { fail("set ssid"); return 0; }                                  /* WLC_SET_SSID starts the join */
+    unsigned shown = 0;
+    for (unsigned t = 0; t < 2400; t++) {   /* up to 12 s: scan, auth, assoc and the handshake */
+        unsigned off, l; if (!f2_read()) break;
+        if (sdpcm_parse(frame, 1536, &off, &l) == SDPCM_EVENT && l > 4 + 72) {
+            const unsigned char *ev = frame + off + 4;
+            unsigned type = (unsigned)ev[28] << 24 | ev[29] << 16 | ev[30] << 8 | ev[31];
+            unsigned stat = (unsigned)ev[32] << 24 | ev[33] << 16 | ev[34] << 8 | ev[35];
+            unsigned reason = (unsigned)ev[36] << 24 | ev[37] << 16 | ev[38] << 8 | ev[39];
+            if (type == WLC_E_ESCAN_RESULT) continue;
+            if (shown++ < 8) { kputs("wifi join event "); kdec(type); kputs(" status "); kdec(stat); kputs(" reason "); kdec(reason); kputs("\n"); }
+            if (type == 46 && stat == 6) { kputs("wifi joined, keys installed\n"); step(9); summary(); return 1; }   /* WLC_E_PSK_SUP, WLC_SUP_KEYED */
+            if (type == 0 && stat != 0) { kputs("wifi join refused\n"); break; }                            /* SET_SSID failed: no such network */
+        }
+        mdelay(5);
+    }
+    fail("join");
+    return 0;
+#else
+    kputs("wifi: no network configured, scan only\n");
+    return 1;
+#endif
 }
 
 /* WLAN power. On the Pi 4 the chip's WL_ON line is pin 1 of the firmware's GPIO expander (expander pins are numbered
@@ -442,7 +487,8 @@ int wifi_init(void) {
     for (unsigned n = 0;; n++) { unsigned v; if (cmd52(1, 0x1000e, 0, 0, &v) && (v & 0x40)) break; if (n > 100) { fail("alp"); return 0; } mdelay(5); }
     kputs("wifi alp clock up\n"); step(4);
     if (!fw_load()) return 0;
-    return scan();
+    if (!scan()) return 0;
+    return join();
 }
 #else
 int wifi_init(void) { return 0; }

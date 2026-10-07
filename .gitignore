@@ -64,3 +64,5 @@ build/wifi-fw/
 # The Claude relay address and token for the ARM Console, written at build time; never commit it.
 arch/arm64/claude_cfg.h
 arch/arm64/claude_cfg.h.tmp
+arch/arm64/wifi_cfg.h
+arch/arm64/wifi_cfg.h.tmp

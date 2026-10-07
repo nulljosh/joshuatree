@@ -334,15 +334,18 @@
   #hero-poster[hidden], html.no-poster #hero-poster { display: none; }
   #hero-poster picture, #hero-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
   /* The still poster reads as a video that never started, so the real demo gets its own visible way in. */
+  #pi .tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 760px; margin: 0 auto; }
+  @media (max-width: 520px) { #pi .tile-grid { grid-template-columns: 1fr; } }
+  #pi a { color: var(--accent); font-weight: 600; text-decoration: none; }
   .poster-skip { position: absolute; z-index: 5; right: 16px; top: 16px; padding: 8px 14px; border-radius: 999px; background: rgba(0,0,0,0.55); color: #fff; font-size: 13px; font-weight: 600; text-decoration: none; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   .poster-skip:hover { background: rgba(0,0,0,0.75); }
   .poster-skip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   #hero-poster[hidden] ~ .poster-skip, html.no-poster .poster-skip { display: none; }
   #hero-poster:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
-  .poster-cta { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); background: var(--accent); color: var(--bg); font-size: 15px; font-weight: 600; letter-spacing: 0.01em; padding: 12px 26px; border-radius: 999px; white-space: nowrap; box-shadow: 0 4px 18px rgba(0,0,0,0.28); }
+  .poster-cta { position: absolute; left: 50%; top: 5%; transform: translateX(-50%); background: var(--accent); color: var(--bg); font-size: 15px; font-weight: 600; letter-spacing: 0.01em; padding: 12px 26px; border-radius: 999px; white-space: nowrap; box-shadow: 0 4px 18px rgba(0,0,0,0.28); }
   #hero-poster:hover .poster-cta { opacity: 0.92; }
   .poster-cta-mobile, .poster-cta-wake { display: none; }
-  @media (max-width: 520px) { .poster-cta-desktop { display: none; } .poster-cta-mobile { display: inline; } .poster-cta { bottom: 14%; } }
+  @media (max-width: 520px) { .poster-cta-desktop { display: none; } .poster-cta-mobile { display: inline; } .poster-cta { top: auto; bottom: 16%; } .poster-skip { top: 56px; } }   /* phones: the pill sits on her collar, the skip link under the frame's own top bar */
   /* Clicked, but her face is not painted yet: the pill says so and breathes quietly. Declared after the media rule so it wins on phones. */
   #hero-poster.waking .poster-cta-desktop, #hero-poster.waking .poster-cta-mobile { display: none; }
   #hero-poster.waking .poster-cta-wake { display: inline; }
@@ -599,7 +602,7 @@
      eyebrow below (data-latest, same injector), where it belongs: H1 says
      what this is, H2 says what is new about it. -->
 <h1>Introducing <span class="brand">Joshua Tree.</span></h1>
-    <p class="eyebrow" data-latest="Joshua on the web, Music and Movies, and a Raspberry Pi build"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></p>
+    <p class="eyebrow" data-latest="Now on a real Raspberry Pi 4"><a href="https://github.com/nulljosh/joshuatree/releases" style="color: inherit; text-decoration: none; cursor: pointer;"><span id="kernel-version" class="kernel-version"></span></a></p>
   </div>
 </header>
 
@@ -694,6 +697,18 @@
 </section>
 
 
+<section class="app-features reveal" id="pi" aria-label="Raspberry Pi">
+  <h2>Now on a real Raspberry Pi.</h2>
+  <p class="sub">The same desktop, on a small board you can hold. One command puts it on an SD card.</p>
+  <div class="tile-grid">
+    <div class="tile"><p><strong>The whole desktop.</strong> Wallpaper, menu bar, dock and windows, full screen at 1080p.</p></div>
+    <div class="tile"><p><strong>Plug in a keyboard.</strong> USB, any time, even after it boots. The mouse works in the emulator and comes to the board with Bluetooth.</p></div>
+    <div class="tile"><p><strong>Wi-Fi is waking up.</strong> The chip runs and finds the networks around it. Joining one is next.</p></div>
+    <div class="tile"><p><strong>Claude, inside.</strong> Ask Claude Code from the Console. It works in the emulator today, and on the board once Wi-Fi joins.</p></div>
+  </div>
+  <p class="sub" style="margin-top:16px"><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/RASPBERRY-PI.md">Put it on your own Pi</a></p>
+</section>
+
 <section class="specs reveal" id="specs" aria-label="Tech specs">
   <h2>Tech specs</h2>
   <p class="sub">For the curious. Every number here is measured from the real thing, not promised.</p>
@@ -719,7 +734,7 @@
       <summary>Architecture</summary>
       <div class="spec-body">
         <dl class="spec-dl">
-          <div><dt>Kernel</dt><dd>A freestanding i386 kernel. No libc, and no dependencies beyond the toolchain.</dd></div>
+          <div><dt>Kernel</dt><dd>A freestanding kernel for PCs (i386) and the Raspberry Pi 4 (ARM64). No libc, and no dependencies beyond the toolchain.</dd></div>
           <div><dt>Apps</dt><dd><span data-fact="apps">30</span> built in, <span data-fact="ring3">30</span> of them running as their own protected programs at ring 3.</dd></div>
           <div><dt>Read more</dt><dd><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/ARCHITECTURE.md">Architecture</a> &middot; <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/SYSCALL-ABI.md">System calls</a> &middot; <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/THREAT-MODEL.md">Threat model</a></dd></div>
         </dl>
@@ -730,7 +745,7 @@
       <div class="spec-body">
         <dl class="spec-dl">
           <div><dt>Toolchain</dt><dd>Stock clang and <code>ld.lld</code>, cross-compiling straight to i386. No cross-toolchain to install.</dd></div>
-          <div><dt>Runs on</dt><dd>QEMU, or a real machine from a USB stick.</dd></div>
+          <div><dt>Runs on</dt><dd>QEMU, a real PC from a USB stick, or a Raspberry Pi 4 from an SD card.</dd></div>
           <div><dt>Commands</dt><dd><code>make</code> builds <code>kernel.elf</code>. <code>make run</code> boots it. <code>./check.sh</code> is the boot test.</dd></div>
           <div><dt>Read more</dt><dd><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/TESTING.md">Testing</a></dd></div>
         </dl>
@@ -806,7 +821,7 @@
 <section class="grain-zone reveal">
   <img class="seal" src="logo.svg" alt="The Joshua Tree mark: a Joshua tree with its branches raised like arms" width="160" height="160" loading="lazy">
   <p class="closing-name">Settlers named the Joshua tree for Joshua, arms raised to the sky.</p>
-  <p class="closing">Joshua Tree is a real desktop built from nothing, not a skin on top of something else. It remembers your files, runs <span data-fact="apps">30</span> apps, and its Chat actually talks back over the internet to a real assistant. Try it live above, no download. It's free and open source, named for the tree that survives on nothing.</p>
+  <p class="closing">A real computer built from nothing, not a skin on someone else's. <span data-fact="apps">30</span> apps, Samantha to run them, and now a real Raspberry Pi. Free and open source, named for the tree that survives on nothing.</p>
 </section>
 
 </main>
