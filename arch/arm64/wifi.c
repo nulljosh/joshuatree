@@ -72,19 +72,26 @@ static int cmd52(unsigned fn, unsigned addr, int write, unsigned v, unsigned *ou
     return 1;
 }
 static int c53_fail(unsigned stage) { c53_stage = stage; c53_int = R32(SDH + INT) | last_err; c53_state = R32(SDH + STATE); return 0; }
-static int cmd53(unsigned fn, unsigned addr, int write, unsigned char *buf, unsigned n) {   /* byte mode, up to 512 */
-    unsigned r, a = (write ? 0x80000000u : 0) | fn << 28 | 1u << 26 | (addr & 0x1ffff) << 9 | (n & 0x1ff);
-    R32(SDH + BLK) = 1u << 16 | n;   /* one block of n bytes (count in the top half; a count of 0 moves nothing) */
+#define F2_BLOCK 512   /* F2 block size, set in CCCR FBR2 once F2 is enabled (brcmfmac uses 512 too) */
+/* CMD53. Up to 512 bytes go in byte mode. Anything longer goes in block mode, F2_BLOCK bytes a block, and the
+   buffer is padded up to whole blocks (SDPCM frames carry their own length, so the tail is ignored). The thirteenth
+   real-board run failed at the CLM upload: a 1072-byte frame sent in byte mode, where the count field only holds
+   nine bits, so the card expected 48 bytes and the host pushed 1072. Callers hand in buffers with room for the pad. */
+static int cmd53(unsigned fn, unsigned addr, int write, unsigned char *buf, unsigned n) {
+    unsigned blocks = 1, bytes = n, block = n;
+    if (n > 512) { blocks = (n + F2_BLOCK - 1) / F2_BLOCK; block = F2_BLOCK; bytes = blocks * F2_BLOCK; }
+    unsigned r, a = (write ? 0x80000000u : 0) | fn << 28 | (n > 512 ? 1u << 27 : 0) | 1u << 26 | (addr & 0x1ffff) << 9 | ((n > 512 ? blocks : n) & 0x1ff);
+    R32(SDH + BLK) = blocks << 16 | block;
     mdelay(1);   /* the BCM2835 host wants a couple of SD clocks between accesses; a millisecond is far more than enough */
     for (unsigned k = 0; R32(SDH + STATE) & 3; k++) if (k > 1000000) return c53_fail(1);
     R32(SDH + INT) = 0xffffffff; R32(SDH + ARG) = a;
-    R32(SDH + CMD) = 53u << 24 | 0x1A0000 | 0x200000 | 0x2 | (write ? 0 : 0x10);   /* data present (bit 21), block count on, read = 0x10; the first real-board run had 0x20 (multi-block) here instead of data present, so no data ever moved and `arm halt` failed */
+    R32(SDH + CMD) = 53u << 24 | 0x1A0000 | 0x200000 | 0x2 | (blocks > 1 ? 0x20 : 0) | (write ? 0 : 0x10);   /* data present, block count on, multi-block when more than one, read = 0x10 */
     if (!wait_int(1, 100)) return c53_fail(2);
     r = R32(SDH + RESP); if (r & 0xcb00) { c53_fail(3); c53_int = r; return 0; }
-    if (!wait_int(write ? 0x10 : 0x20, 100)) return c53_fail(4);   /* buffer ready fires once per block, not per word: the third real-board run moved 4 bytes and stalled on 64 */
-    for (unsigned i = 0; i < n; i += 4) {
-        if (write) R32(SDH + DATA) = buf[i] | buf[i + 1] << 8 | buf[i + 2] << 16 | (unsigned)buf[i + 3] << 24;
-        else { unsigned w = R32(SDH + DATA); buf[i] = w; buf[i + 1] = w >> 8; buf[i + 2] = w >> 16; buf[i + 3] = w >> 24; }
+    for (unsigned i = 0; i < bytes; i += 4) {
+        if ((i % block) == 0 && !wait_int(write ? 0x10 : 0x20, 100)) return c53_fail(4);   /* buffer ready fires once per block */
+        if (write) { unsigned w = i < n ? buf[i] | buf[i + 1] << 8 | buf[i + 2] << 16 | (unsigned)buf[i + 3] << 24 : 0; R32(SDH + DATA) = w; }
+        else { unsigned w = R32(SDH + DATA); if (i < n) { buf[i] = w; buf[i + 1] = w >> 8; buf[i + 2] = w >> 16; buf[i + 3] = w >> 24; } }
     }
     return wait_int(2, 100) ? 1 : c53_fail(5);
 }
@@ -212,6 +219,7 @@ static int fw_load(void) {
     bp_write32(SDIOD_CORE + 0x48, 4u << 16);   /* tosbmailboxdata: SDPCM_PROT_VERSION 4 */
     cmd52(1, 0x1000e, 0, 0, &t[2]);
     cmd52(0, 0x02, 1, 0x06, 0);   /* F2 enable, now that the firmware owns it */
+    cmd52(0, 0x210, 1, F2_BLOCK & 0xff, 0); cmd52(0, 0x211, 1, F2_BLOCK >> 8, 0);   /* FBR2 block size for the block-mode transfers */
     cmd52(1, 0x1000e, 0, 0, &t[3]);
     kputs("wifi bus "); kx(t[0]); kputs(" "); kx(t[1]); kputs(" "); kx(t[2]); kputs(" "); kx(t[3]); kputs("\n");
     { unsigned long t0 = now(), lim = ticks_per_ms() * 5000; unsigned v = 0, dead = 0;   /* F2 ready (IORDY bit 2) says the firmware is up */
@@ -244,8 +252,8 @@ static int iovar(const char *name, int set, void *buf, unsigned len, unsigned *s
     if (!cmd53(2, 0x8000, 1, frame, fw_padded(n))) return 0;
     for (unsigned t = 0; t < 200; t++) {
         unsigned off, l, ch; int c;
-        if (!cmd53(2, 0x8000, 0, frame, 512)) return 0;
-        c = sdpcm_parse(frame, 512, &off, &l);
+        if (!cmd53(2, 0x8000, 0, frame, 1536)) return 0;
+        c = sdpcm_parse(frame, 1536, &off, &l);
         if (c == SDPCM_CONTROL && bcdc_reply(frame + off, l, id, &ch) >= 0) {
             *status = rd32(frame + off + 12);
             unsigned have = l - ch; if (have > len) have = len;
