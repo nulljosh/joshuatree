@@ -183,7 +183,14 @@ static int fw_load(void) {
       for (;;) {
         if (cmd52(0, 0x03, 0, 0, &v)) { dead = 0; if (v & 4) break; } else if (++dead > 10) { summary(); kputs("wifi FAIL bus dead after the firmware started\n"); return 0; }
         if (now() - t0 > lim) { unsigned ioe = 0, c2 = 0; cmd52(0, 0x02, 0, 0, &ioe); cmd52(1, 0x1000e, 0, 0, &c2);
-                       summary(); kputs("wifi FAIL fw ready: ioe "); kx(ioe); kputs(" ior "); kx(v); kputs(" clkcsr "); kx(c2); kputs("\n"); return 0; }
+                       /* What the firmware itself says: brcmfmac's readshared. It stores the address of its status block
+                          in the last word of RAM once it is up; an assert or a trap sets flags 1 or 2. */
+                       { unsigned char b[4], sh[32]; unsigned ptr = 0;
+                         if (bp_read(CHIP_RAM + CHIP_RAM_SIZE - 4, b, 4)) ptr = rd32(b);
+                         kputs("wifi shared ptr "); kx(ptr); kputs("\n");
+                         if (ptr >= CHIP_RAM && ptr < CHIP_RAM + CHIP_RAM_SIZE - 32 && bp_read(ptr, sh, 32)) {
+                           kputs("wifi fw flags "); kx(rd32(sh)); kputs(" trap "); kx(rd32(sh + 4)); kputs(" assert "); kx(rd32(sh + 8)); kputs(" line "); kdec(rd32(sh + 16)); kputs("\n"); } }
+                       summary(); kputs("wifi FAIL fw ready e"); kx(ioe); kputs(" r"); kx(v); kputs(" c"); kx(c2); kputs("\n"); return 0; }
         mdelay(10);
       }
     }
