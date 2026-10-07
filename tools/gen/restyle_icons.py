@@ -116,24 +116,21 @@ DOCK = {
                                         "#32D74B", "#5B9BD5", "#0A84FF",
                                         "#A87C5B", "#8A8F99", "#FF375F"]))),
 
-    # Burrow (the file browser): a terracotta mound on a ground line, a low
-    # round burrow mouth in it, and a friendly face glimpsed in the dark:
-    # two eyes and a smile in a pale tint of the accent. The plain folder
-    # read too systematic, the kit fox too cartoon, and the 2.26.0 arch face
-    # read as a tombstone; a low, wide mouth reads as a hole, not a head.
-    # A darker crescent along the top of the mouth is the shade line above
-    # the eyes, so they sit low, looking out. Flat fills, one accent and its
-    # light and dark tones, no outline, nothing below y 105.
-    "burrow": ("#F5F5F8", "#E0E1E6",
-               '<clipPath id="hole"><path d="M26 100 A38 38 0 0 1 102 100 Z"/></clipPath>',
+    # Burrow (the file browser): the Finder idea done in the house colours.
+    # The whole tile is the face, split left/right into a light terracotta
+    # and the accent, with two dots and one smile across the split in the
+    # deep tone. Full-bleed like Finder, one bold object like Mail or
+    # Terminal, no mascot: the fox, the plain folder, the arch head and the
+    # hill-with-a-hole all lost to this at 64 px. The tile is Samantha's lit
+    # accent ramp, so the dark half keeps the one shared top light. The
+    # full-bleed half is allow-listed in iconart, iconlight and iconinset
+    # (FULL_BLEED there): they sample Burrow's dark half only.
+    "burrow": ("#C65E37", "#A24526", "",
                """
-      <path d="M8 100 C14 62 38 34 64 34 C90 34 114 62 120 100 Z" fill="#B5502C"/>
-      <path d="M26 100 A38 38 0 0 1 102 100 Z" fill="#43170A"/>
-      <path clip-path="url(#hole)" d="M26 107 A38 38 0 0 1 102 107 Z" fill="#5C2210"/>
-      <rect x="46" y="71" width="10" height="12" rx="5" fill="#F8E3D6"/>
-      <rect x="72" y="71" width="10" height="12" rx="5" fill="#F8E3D6"/>
-      <path d="M51 89 Q64 97 77 89" fill="none" stroke="#F8E3D6" stroke-width="6" stroke-linecap="round"/>
-      <path d="M9.5 98 H118.5 A3.5 3.5 0 0 1 118.5 105 H9.5 A3.5 3.5 0 0 1 9.5 98 Z" fill="#5C2210"/>"""),
+      <path d="M0 0 H66 C64 40 60 52 60 64 C60 78 64 90 66 128 H0 Z" fill="#E7A07E"/>
+      <rect x="40" y="40" width="11" height="20" rx="5.5" fill="#5C2210"/>
+      <rect x="77" y="40" width="11" height="20" rx="5.5" fill="#5C2210"/>
+      <path d="M36 80 Q64 102 92 80" fill="none" stroke="#5C2210" stroke-width="7" stroke-linecap="round"/>"""),
 
     # Mail: a white envelope on a blue tile.
     "mail": ("#34A6FF", "#157FF3",
