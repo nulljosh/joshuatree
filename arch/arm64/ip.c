@@ -87,7 +87,7 @@ void net_clock_sync(void) {
             if (!mon || year < 2024) break;
             clock_utc0 = days_from_civil(year, mon, day) * 86400UL + hh * 3600UL + mm * 60UL + ss;
             clock_tick0 = ticks(); clock_ok = 1;
-            kputs("Internet: got the time, clock is set\n");
+            kputs("Internet: online, clock set\n");
             return;
         }
     }
