@@ -20,13 +20,8 @@ Joshua's /goal: we can build a mini Joshua Tree with Claude Code inside Joshua T
 
 ## Where things stand
 
-<<<<<<< HEAD
 - Main is 2.23.0 (PR 445: ARM desktop slice 3, dock hover label, window chrome shared with Pi). On the real Pi: 1920x1080 desktop, satellite wallpaper, dock with 11 icons, window frame, USB keyboard typing and hot-plugging. Console output readable. Wi-Fi chip at step 9 of 12 (power, bus, clock, reset, chip RAM size, core addresses, block-mode transfers); the optional regulatory-data and country-code steps made optional, newest card goes straight to network scan (not yet confirmed on board). The key bugs found reading failure lines off the screen: ARM core held in reset froze its own memory, chip's RAM was 32 KB short, core addresses were guessed instead of read from the chip, frames over 512 bytes need block mode. Burrow dock icon is Finder-style split face in terracotta. Fonts: 8 open faces plus DejaVu in a registry (PR 451); pickers and boot-time load still to do.
 - Open PRs: 446 README and launch drafts, 447 Wi-Fi real-board fixes, 448 ARM mouse, 449 scribble logo, 450 dock icon parity and Burrow face, 451 font library slice 1. Zero issues. Main unchanged since 2.23.0.
-=======
-- Main is 2.23.0 once this PR lands. On the real Pi: 1080p desktop, readable console, the tribute, USB keyboard with hot-plug. Merged this week and not yet seen on the board: the Satellite wallpaper and real menu bar, Claude in the Console, the crash screen, the real dock. The dock, its hover label and the window chrome are now drawn by the same code on i386 and ARM (`kernel/gui_paint.c`), and the Console wears the i386 window frame. The Wi-Fi code is on the card and its power-on bug is fixed; Wi-Fi is still unconfirmed on the real Pi.
-- Open PRs: this one (desktop slice 3, hover label and window chrome) only. Zero issues.
->>>>>>> origin/main
 - The newest card image is rebuilt in `jt-card3` after each merge that touches `arch/arm64`.
 - Standing answers are in `docs/DECISIONS.md`; the parts list is `docs/SHOPPING.md`; the Top 10 is at the top of `docs/roadmap.md`. Joshua's next steps: buy a wired USB mouse, buy a 3.3V serial cable. HN post drafted in `docs/LAUNCH.md`, waits for the mouse working on the Pi.
 - Hardware: the first kit is the Pi with the OS on an SD card, no price and no number yet.
