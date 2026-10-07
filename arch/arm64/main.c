@@ -63,11 +63,11 @@ static int con_noise(const char *s) {
         "usb ", "wifi power", "wifi sdio", "wifi f1", "wifi alp", "wifi chip", "wifi cores", "wifi arm", "wifi fw ", "wifi ht ",
         "wifi bus", "wifi radio up", "wifi ver", "wifi mac", "wifi found", "wifi scan", "wifi joining", "wifi handshake", "wifi assoc",
         "Wi-Fi: found", "Wi-Fi: looked", "Wi-Fi: this Pi", "Wi-Fi: chip", "Wi-Fi: connecting", "Wi-Fi: the router", "Wi-Fi: we answered", "Wi-Fi: handshake",
-        "dhcp: lease", "net dhcp", "@0x" };
+        "dhcp: lease", "net dhcp", "@", "M1d calendar", "Wi-Fi: connected", "Internet: online" };
     for (unsigned i = 0; i < sizeof skip / sizeof skip[0]; i++) {
         const char *a = s, *b = skip[i];
         while (*b && *a == *b) { a++; b++; }
-        if (!*b) return !(skip[i][0] == 'u' && s[4] == 'r');   /* "usb ready: ..." is the one usb line worth the screen */
+        if (!*b) return 1;
     }
     return 0;
 #endif
@@ -242,7 +242,7 @@ void exc_el0_sync(struct frame *f) {
         if (n == SYS_WRITE) {
             const char *p = (const char *)f->x[1]; unsigned long len = f->x[2];
             if (f->x[0] != 1 || !user_in_range((unsigned long)p, len)) { f->x[0] = (unsigned long)-14; return; }   /* -EFAULT */
-            for (unsigned long i = 0; i < len; i++) uart_putc(p[i]);
+            for (unsigned long i = 0; i < len; i++) { if (con_line_start) con_quiet = 1; uart_putc(p[i]); }   /* the EL0 self-test talks to the UART only */
             f->x[0] = len;
         } else if (n == SYS_EXIT) {
             uart_puts("M3 EL0 exit "); uart_dec((unsigned)f->x[0]); uart_putc('\n');
@@ -559,7 +559,9 @@ static void con_hint(void) {   /* the title bar's "lines 12-27 of 61": a photo s
     con_text(b, x0 + w - sc(4), con_wy);
     fb_flush(x0, y0, w, h);
 }
-static int con_is_status(const char *l, unsigned n) {   /* wifi lines, and usb lines that are not just a key echo */
+static int con_is_status(const char *l, unsigned n) {   /* wifi and usb lines that report a failure; no news is good news */
+    int bad = 0; for (unsigned i = 0; i + 4 <= n; i++) if (l[i] == 'F' && l[i + 1] == 'A' && l[i + 2] == 'I' && l[i + 3] == 'L') bad = 1;
+    if (!bad) return 0;
     if (n >= 4 && l[0] == 'w' && l[1] == 'i' && l[2] == 'f' && l[3] == 'i') return 1;
     if (n >= 4 && l[0] == 'u' && l[1] == 's' && l[2] == 'b' && l[3] == ' ') return !(n >= 8 && l[4] == 'k' && l[5] == 'e' && l[6] == 'y' && l[7] == ' ');
     return 0;
@@ -576,10 +578,11 @@ static void con_summary(void) {   /* the row under the text: the newest wifi and
     for (int part = 0; part < 2; part++) {
         const char *l = part ? con_log + uo : con_log + wo, *none = part ? "usb -" : "wifi -"; unsigned ln = part ? un : wn;
         unsigned start = n;
-        if (!ln) { l = none; while (l[ln]) ln++; }
+        if (!ln) { l = none; (void)l; ln = 0; }
         for (unsigned i = 0; i < ln && n - start < half; i++) b[n++] = (l[i] >= 32 && l[i] < 127) ? l[i] : '?';
         if (!part) { while (n - start < half) b[n++] = ' '; b[n++] = '|'; b[n++] = ' '; }
     }
+    if (!wn && !un) n = 0;   /* nothing broke: an empty row */
     int y = con_y + con_rows * con_ch;
     fb_rect(con_x, y, con_cols * con_cw, con_ch, CON_BG);
     fb_flush(con_x - 4, y, con_cols * con_cw + 8, con_ch);
@@ -1059,8 +1062,16 @@ static void fb_init(void) {
         menubar_wifi(1);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
-        const char *thanks = "Steve Jobs, 1955 to 2011. Thank you. Make something wonderful.";
-        int tx = (W - text_width(2, thanks, sc(110))) / 2, ty = band_y - sc(4), sh = sc(1) > 1 ? sc(1) : 1;
+        const char *thanks = "Steve Jobs, 1955 to 2011. Make something wonderful.";
+        int ar = sc(5), gapx = sc(6), tw = text_width(2, thanks, sc(110)), tx = (W - tw + 2 * ar + gapx) / 2, ty = band_y - sc(4), sh = sc(1) > 1 ? sc(1) : 1;
+        {   /* a small apple to the left of the line: a round fruit with a dip on top and a leaf, no bite, so it is a fruit and not a logo */
+            int acx = tx - gapx - ar, acy = ty - sc(4);
+            for (int pass = 0; pass < 2; pass++) for (int y = -2 * ar; y <= ar; y++) for (int x = -ar - 1; x <= ar + 1; x++) {
+                int body = x * x + y * y <= ar * ar && !(x * x + (y + ar) * (y + ar) <= (ar / 3) * (ar / 3));
+                int lx2 = x - ar / 3, ly2 = y + ar + ar / 2, leaf = 4 * lx2 * lx2 + 9 * ly2 * ly2 - 4 * lx2 * ly2 <= ar * ar && y < -ar + 1 && x > 0;
+                if (body || leaf) fb_rect(acx + x + (pass ? 0 : sh), acy + y + (pass ? 0 : sh), 1, 1, pass ? 0x00f0f4f8 : 0x00101010);
+            }
+        }
         text_draw(2, thanks, tx + sh, ty + sh, sc(110), fb_color(0x00101010), fb, fb_pitch, W, H);   /* a dark shadow so it reads on the busy photo */
         text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
     } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
