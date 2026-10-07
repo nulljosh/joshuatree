@@ -118,6 +118,7 @@ static int fw_load(void) {
     kputs("wifi fw "); kdec(wifi_fw_bin_len / 1024); kputs("k loaded\n");
     /* reset vector = start of RAM, then release: RESETCTRL=0, IOCTRL=CLK */
     if (!bp_write32(0x18002000 + 0x120, CHIP_RAM) || !bp_write32(CR4_WRAP + 0x800, 0) || !bp_write32(CR4_WRAP + 0x408, 1)) { fail("arm run"); return 0; }
+    cmd52(1, 0x1000e, 1, 0x10, 0);   /* the firmware wants the high-throughput clock: HT_AVAIL_REQ 0x10 (it answers with HT_AVAIL 0x80) */
     for (unsigned n = 0;; n++) {   /* F2 ready (IORDY bit 2) says the firmware is up */
         unsigned v; if (cmd52(0, 0x03, 0, 0, &v) && (v & 4)) break;
         if (n > 300) { fail("fw ready"); return 0; }
@@ -255,6 +256,12 @@ int wifi_init(void) {
     if (!cmd52(0, 0x02, 1, 0x06, 0)) { fail("f1f2 enable"); return 0; }
     for (unsigned n = 0;; n++) { unsigned v; if (cmd52(0, 0x03, 0, 0, &v) && (v & 2)) break; if (n > 100) { fail("f1 ready"); return 0; } mdelay(10); }
     kputs("wifi f1 f2 up\n");
+    /* The backplane (the chip's RAM and cores) only answers while its ALP clock runs: ask for it through CHIPCLKCSR
+       (F1 0x1000e: FORCE_HW_CLKREQ_OFF 0x20 | ALP_AVAIL_REQ 0x08) and wait for ALP_AVAIL (0x40), like brcmfmac and
+       Plan 9's ether4330. The fourth real-board run wrote 64 bytes and then got a general error on the next block. */
+    if (!cmd52(1, 0x1000e, 1, 0x28, 0)) { fail("alp req"); return 0; }
+    for (unsigned n = 0;; n++) { unsigned v; if (cmd52(1, 0x1000e, 0, 0, &v) && (v & 0x40)) break; if (n > 100) { fail("alp"); return 0; } mdelay(5); }
+    kputs("wifi alp clock up\n");
     if (!fw_load()) return 0;
     return scan();
 }
