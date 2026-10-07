@@ -664,6 +664,8 @@ void gui_calendar_face(int cx_center, int cy_bottom, int size, int month, int da
     gui_icon_text(mon3, cx_center - lwm / 2, ly_m, face_m, mul_m, GUI_CAL_RED);
     int lwd = gui_icon_text_w(daybuf, face_d, mul_d);
     gui_icon_text(daybuf, cx_center - lwd / 2, ly_d, face_d, mul_d, GUI_CAL_INK);
+}
+
 /* v40: a real software cursor. Save the 13x13 patch it's about to cover,
    draw, and later put that patch back exactly. Moving the cursor then
    costs ~340 pixel writes instead of repainting the desktop, which is the
