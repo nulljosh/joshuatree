@@ -56,11 +56,12 @@ cd "$(dirname "$0")/../.."
 make -s kernel.elf
 
 TMPD=$(mktemp -d "${TMPDIR:-/tmp}/jt-menuclock-XXXXXX")  # private per run; JT_KEEP_TMP=1 keeps it
-cleanup() {
-  pkill -9 -f "qemu-system-i386.*-name jt-menuclock-$$\$" >/dev/null 2>&1 || true
+cleanup() { pkill -9 -f "qemu-system-i386.*-name jt-menuclock-$$\$" >/dev/null 2>&1 || true; }
+rmtmp() {
+  cleanup
   [ "${JT_KEEP_TMP:-}" = 1 ] && echo "JT_KEEP_TMP=1: keeping $TMPD" || rm -rf "$TMPD"
 }
-trap cleanup EXIT
+trap rmtmp EXIT
 
 PORT=$(free_port)
 LOG=$TMPD/serial.log

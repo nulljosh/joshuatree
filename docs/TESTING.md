@@ -14,7 +14,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | What it proves | File | Mode |
 |---|---|---|
 | Dock slot constants agree with kernel.c (static drift guard) | `tools/checks/dockslots-check.py` | once |
-| No check hard-codes a fixed /tmp/jt-* path or socket, so two suites cannot corrupt each other (static, baseline only shrinks) | `tools/checks/tmp-paths-check.py` | once |
+| No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks) | `tools/checks/tmp-paths-check.py` | once |
 | docs/DESIGN.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static) | `tools/checks/design-doc-check.py` | once |
 | Kernel memory keeps 16KB clear of the program window (toolchain drift guard) | `tools/checks/bss-margin-check.py` | once |
 | Samantha's face loops wrap without a seam | `tools/checks/face-frames-check.py` | once |
