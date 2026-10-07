@@ -489,7 +489,6 @@ static int join(void) {
                         for (int w = 1; w <= 5; w++) { kputs(" "); kdec(rd32(cn + 4 * w)); }   /* v6 and older: txframe, txbyte, txretrans, txerror, txctl */
                         kputs("\n");
                     } else { kputs("wifi counters status "); kx(s2); kputs("\n"); }
-                } else { kputs("wifi counters status "); kx(s2); kputs("\n"); }
                 }
             } else if (have_ptk && (info & 0x0080) && (info & 0x0100) && (info & 0x0040)) {   /* message 3: ack, MIC, install */
                 unsigned char m[99 + 256], mic[20];
