@@ -170,6 +170,8 @@ Guesses, not measurements. Updated as each one lands.
 
 The little fan runs off the header: red to pin 4 (5 V), black to pin 6 (ground). Pin 6 is also the serial cable's ground, so if both are wired, share it or use pin 9, which is another ground. Heat sinks go on the big SoC chip and the smaller chips next to it. For the printed case, see [hardware/PI-CASE.md](hardware/PI-CASE.md).
 
+Wi-Fi firmware: the three Cypress CYW43455 files come from raspberrypi/firmware-nonfree (redistributable under Cypress's licence, not ours, so never committed); `tools/flash-pi.sh` fetches them into `build/wifi-fw/` and the build embeds them. See docs/ARM64.md, M4 Wi-Fi.
+
 ## Log
 
 Newest first. Each entry says what was tried on the real board and the last line seen.
