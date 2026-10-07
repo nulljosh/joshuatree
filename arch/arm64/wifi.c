@@ -110,11 +110,13 @@ static int bp_write(unsigned addr, const unsigned char *p, unsigned n) {
 }
 static int bp_write32(unsigned addr, unsigned v) { unsigned char b[4]; wr32(b, v); return bp_write(addr, b, 4); }
 #define CHIP_RAM 0x198000       /* 43455: 1.5 MiB of SOCRAM at 0x198000; the ARM CR4 core at 0x18002000 */
-#define CHIP_RAM_SIZE 0x120000
+#define CHIP_RAM_SIZE 0xc0000    /* brcmfmac chip.c for the 4345 family: 768 KiB; the old 0x120000 put the NVRAM past the end of RAM */
 #define CR4_WRAP 0x18102000
 static int fw_load(void) {
     if (!wifi_fw_bin_len) { kputs("wifi no firmware\n"); return 0; }
-    unsigned nvsz = fw_padded(wifi_fw_nvram_len), nvat = CHIP_RAM + CHIP_RAM_SIZE - nvsz;
+    static unsigned char nv[8192];   /* the NVRAM text packed as the firmware wants it (key=value strings, a length trailer) */
+    unsigned nvsz = nvram_pack((const char *)wifi_fw_nvram, wifi_fw_nvram_len, nv, sizeof nv), nvat = CHIP_RAM + CHIP_RAM_SIZE - nvsz;
+    if (!nvsz) { fail("nvram pack"); return 0; }
     if (fw_padded(wifi_fw_bin_len) > CHIP_RAM_SIZE - nvsz) { fail("fw size"); return 0; }
     /* Halt the ARM but take it OUT of reset, as brcmfmac's cr4_set_passive does: its TCM is the RAM we load, and a
        core held in reset stops answering (the seventh real-board run: 64 bytes in, then an R5 error, flags 0x1800).
@@ -124,14 +126,29 @@ static int fw_load(void) {
     if (!bp_write32(CR4_WRAP + 0x800, 0) || !bp_write32(CR4_WRAP + 0x408, 0x21)) { fail("arm unreset"); return 0; }
     kputs("wifi arm halted\n"); step(5);
     if (!bp_write(CHIP_RAM, wifi_fw_bin, wifi_fw_bin_len)) { summary(); kputs("wifi FAIL fw load at byte "); kdec(bp_done); kputs(" stage "); kdec(c53_stage); kputs(" int "); kx(c53_int); kputs(" state "); kx(c53_state); kputs("\n"); return 0; }
-    if (!bp_write(nvat, wifi_fw_nvram, wifi_fw_nvram_len)) { fail("nvram"); return 0; }
+    if (!bp_write(nvat, nv, nvsz)) { fail("nvram"); return 0; }
     kputs("wifi fw "); kdec(wifi_fw_bin_len / 1024); kputs("k loaded\n"); step(6);
-    /* reset vector = start of RAM, then release: RESETCTRL=0, IOCTRL=CLK */
-    if (!bp_write32(0x18002000 + 0x120, CHIP_RAM) || !bp_write32(CR4_WRAP + 0x800, 0) || !bp_write32(CR4_WRAP + 0x408, 1)) { fail("arm run"); return 0; }
+    /* Start it the way brcmfmac's cr4_set_active does: the firmware's first word is the reset vector and goes to
+       backplane address 0; the 802.11 core gets a reset with its PHY clock on (wrapper 0x18101000, best effort); then
+       the ARM core is cycled through reset with CPUHALT dropped: IOCTRL=CPUHALT|FGC|CLK, RESETCTRL=1, IOCTRL=FGC|CLK,
+       RESETCTRL=0, IOCTRL=CLK. The eighth real-board run loaded everything and the firmware never came up: the old
+       code wrote the vector to a made-up register and left the NVRAM unpacked and past the end of RAM. */
+    unsigned rstvec = wifi_fw_bin[0] | wifi_fw_bin[1] << 8 | wifi_fw_bin[2] << 16 | (unsigned)wifi_fw_bin[3] << 24;
+    if (!bp_write32(0, rstvec)) { fail("reset vector"); return 0; }
+    bp_write32(0x18101000 + 0x408, 0xf); bp_write32(0x18101000 + 0x800, 1); mdelay(1); bp_write32(0x18101000 + 0x408, 0x7);
+    bp_write32(0x18101000 + 0x800, 0); mdelay(1); bp_write32(0x18101000 + 0x408, 0x5);
+    if (!bp_write32(CR4_WRAP + 0x408, 0x23) || !bp_write32(CR4_WRAP + 0x800, 1)) { fail("arm run"); return 0; }
+    mdelay(1);
+    if (!bp_write32(CR4_WRAP + 0x408, 0x3) || !bp_write32(CR4_WRAP + 0x800, 0)) { fail("arm run"); return 0; }
+    mdelay(1);
+    if (!bp_write32(CR4_WRAP + 0x408, 0x1)) { fail("arm run"); return 0; }
+    kputs("wifi arm running\n");
+    mdelay(50);
+    cmd52(0, 0x02, 1, 0x06, 0);   /* F2 enable again now that the firmware owns it, as brcmfmac enables F2 only after download */
     cmd52(1, 0x1000e, 1, 0x10, 0);   /* the firmware wants the high-throughput clock: HT_AVAIL_REQ 0x10 (it answers with HT_AVAIL 0x80) */
     for (unsigned n = 0;; n++) {   /* F2 ready (IORDY bit 2) says the firmware is up */
         unsigned v; if (cmd52(0, 0x03, 0, 0, &v) && (v & 4)) break;
-        if (n > 300) { fail("fw ready"); return 0; }
+        if (n > 500) { fail("fw ready"); return 0; }
         mdelay(10);
     }
     kputs("wifi fw ready\n"); step(7);
