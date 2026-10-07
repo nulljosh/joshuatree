@@ -32,9 +32,11 @@ from appsgeom import FOLDER_CLOSE_X, FOLDER_CLOSE_Y  # one source for the Launch
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image, ImageChops
 from freeport import free_port
+from scratch import scratch_dir
 
-LOG = "/tmp/jt-feature-drive-serial.log"
-DUMP = "/tmp/jt-feature-drive.raw"
+TMP = scratch_dir("feature-drive")  # private per run, see scratch.py
+LOG = os.path.join(TMP, "serial.log")
+DUMP = os.path.join(TMP, "fb.raw")
 FB = 0xfd000000; W, H = 1920, 1080
 PORT = free_port()
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
@@ -90,7 +92,7 @@ CRASH_PATTERNS = [
     r"SIGSEGV",
 ]
 
-outdir = sys.argv[1] if len(sys.argv) > 1 else "/tmp/jt-feature-drive"
+outdir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(TMP, "shots")
 os.makedirs(outdir, exist_ok=True)
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
