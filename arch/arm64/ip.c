@@ -70,7 +70,9 @@ static unsigned num(const char *p, int n) { unsigned v = 0; for (int i = 0; i < 
 void net_clock_sync(void) {
     unsigned ip = 0;
     if (!net_get_gateway()) return;
-    if (!dns_resolve("www.google.com", net_get_dns() ? net_get_dns() : net_get_gateway(), &ip)) { kputs("net dns FAIL\n"); return; }
+    for (int t = 0; t < 4 && !ip; t++)   /* the first lookup can be lost to ARP or a busy router: try the DNS server, then the gateway, twice */
+        if (!dns_resolve("www.google.com", t % 2 == 0 && net_get_dns() ? net_get_dns() : net_get_gateway(), &ip)) ip = 0;
+    if (!ip) { kputs("net dns FAIL\n"); return; }
     static const char req[] = "HEAD / HTTP/1.0\r\nHost: www.google.com\r\nConnection: close\r\n\r\n";
     static char rep[1024];
     int got = tcp_get_timeout(ip, 80, req, sizeof req - 1, rep, sizeof rep - 1, 500);
