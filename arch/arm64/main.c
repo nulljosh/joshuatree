@@ -43,10 +43,12 @@ static void uart_init(void) {
 #endif
 }
 static void console_putc(char c);   /* the same text, on the screen once there is one */
+static int con_quiet;   /* the rest of this line goes to the UART only: key echoes stay off the screen once the ask> prompt is in use */
 static void uart_putc(char c) {
     while (REG(UART_FR) & TXFF) {}
     REG(UART_DR) = (unsigned char)c;
-    console_putc(c);
+    if (!con_quiet) console_putc(c);
+    if (c == '\n') con_quiet = 0;
 }
 static void uart_puts(const char *s) { while (*s) uart_putc(*s++); }
 static void uart_hex(unsigned long v) {
@@ -59,7 +61,12 @@ static void uart_dec(unsigned v) {
     while (n) uart_putc(b[--n]);
 }
 /* M4: the same printing for the drivers in their own files (pci.c, xhci.c) */
-void kputs(const char *s) { uart_puts(s); }
+int ask_active(void);   /* ask.c */
+void kputs(const char *s) {
+    if (ask_active() && s[0] == 'u' && s[1] == 's' && s[2] == 'b' && s[3] == ' ' && s[4] == 'k' && s[5] == 'e' && s[6] == 'y' && s[7] == ' ')
+        con_quiet = 1;   /* xhci.c's "usb key 0x0d j" echo: the letter is on the ask> row now, the line stays on the UART */
+    uart_puts(s);
+}
 void kdec(unsigned v) { uart_dec(v); }
 void kx(unsigned v) {   /* short hex, no 0x and no leading zeros: status lines stay under 60 columns for the screen */
     int i = 28; while (i > 0 && !(v >> i)) i -= 4;
@@ -610,13 +617,28 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
         con_cw = 8 * con_vga; con_ch = 16 * con_vga; con_base = 0;
     }
     con_cols = (win_w - sc(12)) / con_cw;
-    con_rows = (win_h - sc(46)) / con_ch - 1;   /* the last row is the pinned wifi and usb status */
+    con_rows = (win_h - sc(46)) / con_ch - 2;   /* then a row pinning the wifi and usb status, and the ask> prompt last */
 }
+/* The bottom row: "ask> " and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
+void con_prompt(const char *s, unsigned n) {
+    if (!con_live) return;
+    unsigned row = (unsigned)con_rows + 1, cols = (unsigned)con_cols, room = cols > 7 ? cols - 6 : 1;
+    int y = con_y + (int)row * con_ch;
+    fb_rect(con_x, y, con_cols * con_cw, con_ch, CON_BG);
+    fb_flush(con_x - 4, y, con_cols * con_cw + 8, con_ch);
+    const char *p = "ask> ";
+    unsigned col = 0;
+    for (; *p; p++) con_glyph(col++, row, *p);
+    if (n > room) { s += n - room; n = room; }
+    for (unsigned i = 0; i < n; i++, col++) if (s[i] != ' ') con_glyph(col, row, s[i]);
+    con_glyph(col, row, '_');
+}
+int con_columns(void) { return con_live ? con_cols : 0; }
 static void con_start(void) {   /* the screen is ready: replay what was printed before it */
     con_live = 1;
     con_col = con_row = 0;
     for (unsigned i = 0; i < con_len; i++) con_draw(i);
-    con_summary(); con_hint();
+    con_summary(); con_hint(); con_prompt("", 0);
 }
 
 static void fb_init(void) {
@@ -687,9 +709,14 @@ static void m1_selftest(void) {
    translates its reports into them). The pointer starts mid-screen; a tablet sets it, a mouse moves it. ---- */
 struct input_event { unsigned short type, code; unsigned value; };
 static unsigned mouse_x = 400, mouse_y = 300, mouse_moved;
+int ask_key(unsigned code, unsigned value);   /* ask.c: the ask> line editor */
+void ask_poll(void);
 static void input_event(struct input_event e) {
     if (e.type == 1 && con_key(e.code, e.value)) return;   /* the console's scroll keys are not logged: that would add lines to the picture they move */
-    if (e.type == 1) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* EV_KEY: keys and buttons */
+    if (e.type == 1) {                                                                                     /* EV_KEY: keys and buttons */
+        if (ask_key(e.code, e.value) || ask_active()) con_quiet = 1;   /* typed keys show on the ask> row; the echo stays on the UART */
+        uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
+    }
     else if (e.type == 3) {                                                                                /* EV_ABS: the tablet, 0..32767 */
         if (e.code == 0) mouse_x = e.value * fb_w / 32768; else if (e.code == 1) mouse_y = e.value * fb_h / 32768;
         mouse_moved = 1;
@@ -963,15 +990,15 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) { usb_poll(); input_poll(); ask_poll(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
 #else
         for (;;) {
             __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
-            usb_poll(); input_poll();
+            usb_poll(); input_poll(); ask_poll();
         }
 #endif
     }
-    if (inputs) for (;;) { __asm__ volatile ("wfi"); input_poll(); }   /* asleep until a device interrupts */
+    if (inputs) for (;;) { __asm__ volatile ("wfi"); input_poll(); ask_poll(); }   /* asleep until a device interrupts */
     for (;;) __asm__ volatile ("wfe");
 }
