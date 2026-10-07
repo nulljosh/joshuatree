@@ -273,6 +273,7 @@ static unsigned int *fb;
 static unsigned fb_pitch;   /* in pixels */
 static int fb_swap;         /* red and blue the other way round in memory */
 static int sc(int v) { return v * (int)fb_h / 600; }   /* a length on the 800x600 design, at this screen's size */
+static int sg(int v) { return v * (int)fb_h / 540; }   /* a length on the real desktop's 960x540 grid (docs/DESIGN.md), at this screen's size */
 static void dcache_clean(void *p, unsigned long n) {   /* push lines out to RAM, where a GPU or DMA engine reads */
     for (unsigned long a = (unsigned long)p & ~63UL; a < (unsigned long)p + n; a += 64) __asm__ volatile ("dc civac, %0" :: "r"(a) : "memory");
     __asm__ volatile ("dsb sy" ::: "memory");
@@ -413,6 +414,9 @@ static void fb_rect(int x, int y, int w, int h, unsigned c) {
 #define LOG_MAX 16384
 #define CON_FG 0x00202020
 #define CON_BG 0x00ffffff
+int wall_paint(unsigned *fb, unsigned pitch, int w, int h, int swap);   /* arch/arm64/wall.c: the Satellite photo scaled onto the screen */
+#define MENUBAR_H 26             /* docs/DESIGN.md: GUI_MENUBAR_H, on the 960x540 grid */
+#define MENUBAR_RULE 0x00BDB8B0  /* docs/DESIGN.md: MENUBAR_RULE */
 int text_init(void);   /* arch/arm64/text.c: the DejaVu faces through drivers/ttf.c */
 int text_draw(int which, const char *s, int x, int baseline, int px10, unsigned fg, unsigned *fb, unsigned pitch, int w, int h);
 int text_width(int which, const char *s, int px10);
@@ -646,25 +650,40 @@ static void fb_init(void) {
     int W = (int)fb_w, H = (int)fb_h;
     int win_w = sc(500), win_h = sc(350), win_x = (W - win_w) / 2, win_y = sc(100);
     int dock_w = sc(200), dock_h = sc(44), dock_x = (W - dock_w) / 2, dock_y = H - sc(60);
-    fb_rect(0, 0, W, H, 0x00203040);                      /* desktop */
-    fb_rect(0, 0, W, sc(24), 0x00e0e0e0);                 /* menu bar */
+    int mb = sg(MENUBAR_H);                               /* the menu bar's height on this screen: 26 on the 960x540 grid */
+    if (!wall_paint(fb, fb_pitch, W, H, fb_swap)) fb_rect(0, 0, W, H, 0x00203040);   /* the Satellite photo; flat only if it will not decode */
+    for (int y = 0; y < mb - 1; y++) for (int x = 0; x < W; x++) {   /* menu bar: half wallpaper, half white, per pixel */
+        unsigned c = fb[(unsigned)y * fb_pitch + (unsigned)x];
+        fb[(unsigned)y * fb_pitch + (unsigned)x] = ((c >> 1) & 0x007F7F7Fu) + 0x00808080u;   /* each colour lane: half itself plus half of 255 */
+    }
+    fb_rect(0, mb - 1, W, 1, MENUBAR_RULE);               /* closed by a one pixel rule */
     fb_rect(win_x, win_y, win_w, win_h, CON_BG);          /* a window */
     fb_rect(win_x, win_y, win_w, sc(28), 0x00b5502c);     /* its title bar, the house accent */
     fb_rect(dock_x, dock_y, dock_w, dock_h, 0x00505a68);  /* the dock */
     text_ok = text_init();
     if (text_ok) {
-        text_draw(1, "Joshua Tree", sc(8), sc(17), sc(150), fb_color(0x00202020), fb, fb_pitch, W, H);              /* menu bar */
+        text_draw(1, "Joshua Tree", sg(16), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
         text_draw(1, "Console", win_x + sc(10), win_y + sc(20), sc(150), fb_color(0x00ffffff), fb, fb_pitch, W, H);  /* title bar */
-        text_draw(2, "ARM64", W - sc(80), sc(17), sc(130), fb_color(0x00505a68), fb, fb_pitch, W, H);
+        const char *clk = "--:--";                          /* the clock slot, until there is a time source */
+        int cx = W - sg(16) - text_width(2, clk, sg(120));
+        text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
+        int bx = cx - sg(18) - text_width(1, "ARM64", sg(110));   /* the ARM64 badge, in the house accent */
+        text_draw(1, "ARM64", bx, (mb + sg(8)) / 2, sg(110), fb_color(0x00b5502c), fb, fb_pitch, W, H);
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
         const char *thanks = "Steve Jobs, 1955 to 2011. Thank you. Make something wonderful.";
-        text_draw(2, thanks, (W - text_width(2, thanks, sc(110))) / 2, dock_y - sc(12), sc(110), fb_color(0x00a8b4c4), fb, fb_pitch, W, H);
+        int tx = (W - text_width(2, thanks, sc(110))) / 2, ty = dock_y - sc(12), sh = sc(1) > 1 ? sc(1) : 1;
+        text_draw(2, thanks, tx + sh, ty + sh, sc(110), fb_color(0x00101010), fb, fb_pitch, W, H);   /* a dark shadow so it reads on the busy photo */
+        text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
     } else uart_puts("M1d text FAIL\n");
     con_layout(win_x, win_y, win_w, win_h);
     con_start();
     dcache_clean(fb, (unsigned long)fb_pitch * fb_h * 4);   /* the whole still picture out to RAM; con_glyph cleans as it goes from here */
-    int ok = fb[(unsigned)(win_y + win_h - 4) * fb_pitch + fb_w / 2] == 0x00ffffff && fb[(unsigned)sc(10) * fb_pitch + fb_w / 2] == 0x00e0e0e0;   /* blank spots, clear of any text; grey and white read the same either way */
+    /* Blank spots, clear of any text: the window body, the menu bar's rule, and the wallpaper (not the old flat fill,
+       and not one colour everywhere). Grey and white read the same either byte order; the rule is checked in fb_color order. */
+    int ok = fb[(unsigned)(win_y + win_h - 4) * fb_pitch + fb_w / 2] == 0x00ffffff && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
+    unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
+    ok = ok && w0 != 0x00203040 && (w0 != w1 || w1 != w2);
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
 }
 /* One line that turns a photo of the screen into a measurement: where the firmware really put the kernel, the monitor
