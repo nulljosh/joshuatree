@@ -20,8 +20,9 @@ Joshua's /goal: we can build a mini Joshua Tree with Claude Code inside Joshua T
 
 ## Where things stand
 
-- Main is 2.23.0 once this PR lands. On the real Pi: 1080p desktop, readable console, the tribute, USB keyboard with hot-plug. Merged this week and not yet seen on the board: the Satellite wallpaper and real menu bar, Claude in the Console, the crash screen, the real dock. The dock, its hover label and the window chrome are now drawn by the same code on i386 and ARM (`kernel/gui_paint.c`), and the Console wears the i386 window frame. The Wi-Fi code is on the card and its power-on bug is fixed; Wi-Fi is still unconfirmed on the real Pi.
-- Open PRs: this one (desktop slice 3, hover label and window chrome) only. Zero issues.
+- Main is 2.24.0 once this PR lands. On the real Pi: 1080p desktop, readable console, the tribute, USB keyboard with hot-plug. Merged this week and not yet seen on the board: the Satellite wallpaper and real menu bar, Claude in the Console, the crash screen, the real dock, its hover label and the window chrome. The Wi-Fi code is on the card and its power-on bug is fixed; Wi-Fi is still unconfirmed on the real Pi.
+- The mouse (slice 4, 2.24.0): the i386 arrow now lives in `kernel/gui_paint.c` and a USB mouse moves it on ARM; the dock's label follows it, the Console's red button closes it and a dock click opens it again. Proven in QEMU only (`tools/checks/arm64-mouse-check.py`). Joshua's mouse is Bluetooth, which the Pi build cannot use; a wired USB mouse runs the short test list in `docs/RASPBERRY-PI.md`.
+- Open PRs: this one (desktop slice 4, the mouse) only. Zero issues.
 - The newest card image is rebuilt in `jt-card3` after each merge that touches `arch/arm64`.
 - Standing answers are in `docs/DECISIONS.md`; the parts list is `docs/SHOPPING.md`; the Top 10 is at the top of `docs/roadmap.md`.
 - Hardware: Neo is being renamed Nimbus with a Macintosh-inspired redesign (roadmap, waits for a name check).
@@ -30,7 +31,7 @@ Joshua's /goal: we can build a mini Joshua Tree with Claude Code inside Joshua T
 
 1. Joshua swaps in the newest card; he photographs the Console. Page Up shows the Wi-Fi lines; the pinned row shows the latest `wifi` line. If it says `WL_ON reads 1` and then a `sdio card rca` line, the chip is alive.
 2. Keep merging green PRs one at a time; rebase the rest above main's VERSION. Check the test variants in `arch/arm64/Makefile` still link the shared network and ask objects after any Makefile merge.
-3. Desktop slice 4: the cursor and typing on the ARM desktop. The pointer should drive `dock_hover` in `arch/arm64/main.c`, which already draws the i386 hover label (slice 3, 2.23.0, along with the window chrome).
+3. Desktop slice 5: typing into apps on the ARM desktop, then the live Clock and Calendar faces. Buy or borrow a wired USB mouse for the slice 4 test list.
 4. Wi-Fi stage 2: join the network from the ignored config file, fill the four network calls, then TCP that survives loss.
 5. Admin and sudo; SD card writes with MBR and FAT32; the self-update loop and the fallback kernel; Doom.
 

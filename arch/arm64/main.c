@@ -624,6 +624,8 @@ static int con_key(unsigned code, unsigned value) {   /* Page Up 104, Page Down 
     con_hint();
     return 1;
 }
+static int cur_hold(void);           /* slice 4, below: take the pointer's arrow off the Console while it draws */
+static void cur_release(int held);   /* ...and put it back */
 static void console_putc(char c) {
     if (con_len == LOG_MAX) {   /* full: forget the older half, up to a line end */
         unsigned drop = LOG_MAX / 2;
@@ -636,6 +638,7 @@ static void console_putc(char c) {
     }
     con_log[con_len++] = c;
     if (!con_live) return;
+    int held = cur_hold();
     unsigned was = con_anchor;
     if (!con_scrolled) con_draw(con_len - 1);
     if (c == '\n' || con_anchor != was) {
@@ -643,6 +646,7 @@ static void console_putc(char c) {
         if (c == '\n' && con_is_status(con_log + s, e - s)) con_summary();
         con_hint();
     }
+    cur_release(held);
 }
 /* The console's type. DejaVu Sans Mono at the screen's scale, unless a quick test of the rasterizer says no: then the
    8x16 VGA font at a whole-number scale (2x on a 1080p screen), which needs nothing but integer stores. */
@@ -663,6 +667,7 @@ static void con_layout(int win_x, int win_y, int win_w, int win_h) {
 /* The bottom row: "ask> " and the line being typed (ask.c), its tail when it is longer than the row, then a cursor. */
 void con_prompt(const char *s, unsigned n) {
     if (!con_live) return;
+    int held = cur_hold();
     unsigned row = (unsigned)con_rows + 1, cols = (unsigned)con_cols, room = cols > 7 ? cols - 6 : 1;
     int y = con_y + (int)row * con_ch;
     fb_rect(con_x, y, con_cols * con_cw, con_ch, CON_BG);
@@ -673,6 +678,7 @@ void con_prompt(const char *s, unsigned n) {
     if (n > room) { s += n - room; n = room; }
     for (unsigned i = 0; i < n; i++, col++) if (s[i] != ' ') con_glyph(col, row, s[i]);
     con_glyph(col, row, '_');
+    cur_release(held);
 }
 int con_columns(void) { return con_live ? con_cols : 0; }
 static void con_start(void) {   /* the screen is ready: replay what was printed before it */
@@ -840,12 +846,17 @@ static void dock_paint(void) {
 }
 /* Slice 3: the hover label, the i386 one (gui_draw_dock_label). The first hover keeps a copy of the dock's band, so
    moving to another slot or to none puts the plain band back before the next label; nothing is allocated until then.
-   The pointer drives it in the next slice; today only the dockhover test build calls it. Names follow APPS[] in
+   The pointer drives it (slice 4, below); the dockhover test build calls it once at boot. Names follow APPS[] in
    kernel/kernel.c for GUI_DOCK_DEFAULT_ORDER (arm64-m1c-check.py compares them). */
 static const char *const dock_names[GUI_ICON_COUNT] = {"Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"};
 static unsigned *dock_band;
+static int cur_on;           /* slice 4: the pointer's arrow is on the screen */
+static void cur_hide(void);
+static void cur_show(void);
 void dock_hover(int slot) {
     int s = (int)window_scale(), top = gui_dock_band_top() * s, rows = (int)fb_h - top;
+    int arrow = cur_on;
+    cur_hide();   /* the band copy must never hold the arrow, or every later restore paints a ghost of it */
     if (!dock_band) {
         unsigned long mark = heap_mark();
         dock_band = kmalloc((unsigned)rows * fb_pitch * 4);
@@ -854,14 +865,104 @@ void dock_hover(int slot) {
     } else for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) fb[(unsigned)top * fb_pitch + i] = dock_band[i];
     if (slot >= 0 && slot < GUI_ICON_COUNT) {
         gui_draw_dock_label(gui_slot_x(slot) + DOCK_ICON / 2, gui_dock_y0(), dock_names[slot]);
+        con_quiet = 1;   /* the UART only: a pointer sweeping the dock would fill the Console */
         uart_puts("M1d hover "); uart_dec((unsigned)slot); uart_putc(' '); uart_puts(dock_names[slot]); uart_putc('\n');
     }
     fb_flush(0, top, (int)fb_w, rows);
+    if (arrow) cur_show();
+}
+
+/* ---- Slice 4: the pointer. The i386 arrow (gui_paint.c's software cursor: a save of the pixels it covers, then the
+   antialiased arrow blended on top) over the framebuffer. Anything else that draws where the arrow is takes it off
+   first and puts it back after (cur_hold, cur_release), so the save never goes stale and nothing smears. Every change
+   is cleaned out of the data cache, as the GPU reads RAM. The arrow shows from the first pointer event on, so a desktop
+   nobody has touched looks exactly as before. mouse_x and mouse_y are physical pixels; the painters and the dock's hit
+   test work on the logical grid, so both are divided by window_scale(). ---- */
+static unsigned mouse_x = 400, mouse_y = 300, mouse_moved;   /* fb_init moves it to the middle of the real screen */
+static int cur_wanted;                   /* a pointer has moved: show the arrow */
+static int win_lx, win_ly, win_lw, win_lh;   /* the Console's frame on the logical grid */
+static unsigned *con_under;              /* the wallpaper under that frame, saved before it was drawn: closing puts it back */
+static int hover_slot = -1;
+static void cur_flush(int lx, int ly) { int s = (int)window_scale(); fb_flush(lx * s, ly * s, CURSOR_W * s, CURSOR_H * s); }
+static void cur_hide(void) {
+    if (!cur_on) return;
+    int x = cursor_saved_x, y = cursor_saved_y;
+    gui_cursor_restore();
+    cur_flush(x, y);
+    cur_on = 0;
+}
+static void cur_show(void) {
+    if (cur_on || !cur_wanted || !fb) return;
+    int s = (int)window_scale(), x = (int)mouse_x / s, y = (int)mouse_y / s;
+    gui_cursor_save(x, y);
+    gui_draw_cursor(x, y);
+    cur_flush(x, y);
+    cur_on = 1;
+}
+static int cur_hold(void) {   /* the Console is about to draw: take the arrow off if it is over the Console's frame */
+    if (!cur_on) return 0;
+    int ax = cursor_saved_x, ay = cursor_saved_y;
+    if (ax >= win_lx + win_lw || ax + CURSOR_W <= win_lx || ay >= win_ly + win_lh || ay + CURSOR_H <= win_ly) return 0;
+    cur_hide();
+    return 1;
+}
+static void cur_release(int held) { if (held) cur_show(); }
+static void console_frame(void) {   /* the i386 window frame, and a white well for the log */
+    int s = (int)window_scale();
+    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Console");
+    fb_rect((win_lx + 8) * s, (win_ly + 30) * s, (win_lw - 16) * s, (win_lh - 38) * s, CON_BG);
+}
+/* The red close button puts the wallpaper back where the Console was. The log keeps every line (and the UART still
+   prints them); a click on any dock tile opens it again with the newest lines, so the one debug view on a Pi can
+   never be lost for good. */
+static void console_close(void) {
+    if (!con_live || !con_under) return;
+    int s = (int)window_scale(), x = win_lx * s, y = win_ly * s, w = win_lw * s, h = win_lh * s;
+    cur_hide();
+    for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) fb[(unsigned)(y + j) * fb_pitch + (unsigned)(x + i)] = con_under[j * w + i];
+    fb_flush(x, y, w, h);
+    con_live = 0;
+    uart_puts("console closed\n");
+    cur_show();
+}
+void ask_redraw(void);   /* ask.c: the line being typed, back on the ask> row */
+static void console_open(void) {
+    if (con_live || !con_under) return;
+    int s = (int)window_scale();
+    cur_hide();
+    console_frame();
+    con_live = 1; con_scrolled = 0;
+    unsigned nl = con_nlines(), keep = con_rows > 1 ? (unsigned)con_rows - 1 : 1;
+    con_anchor = con_line_off(nl > keep ? nl - keep : 0);
+    con_wipe();
+    for (unsigned k = con_anchor; k < con_len; k++) con_draw(k);
+    con_summary(); con_hint(); ask_redraw();
+    fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
+    uart_puts("console open\n");
+    cur_show();
+}
+static void pointer_moved(void) {   /* one report done: the arrow to its new place, the dock's label to the slot under it */
+    if (!fb) return;
+    int s = (int)window_scale(), slot = gui_dock_hit_test((int)mouse_x / s, (int)mouse_y / s);
+    cur_wanted = 1;
+    cur_hide();
+    if (slot != hover_slot) { hover_slot = slot; dock_hover(slot); }
+    cur_show();
+}
+static void pointer_click(void) {   /* the left button went down */
+    if (!fb) return;
+    int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
+    int dx = lx - (win_lx + 24), dy = ly - (win_ly + 16);   /* the close button: gui_draw_window_frame's red dot, radius 7 */
+    if (slot >= 0) {
+        console_open();
+        uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
+    } else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
 }
 
 static void fb_init(void) {
     if (!fb_setup()) return;
     int W = (int)fb_w, H = (int)fb_h;
+    mouse_x = fb_w / 2; mouse_y = fb_h / 2;               /* the pointer starts in the middle of the screen */
     int win_w = sc(500), win_h = sc(350), win_x = (W - win_w) / 2, win_y = sc(100);
     int mb = sg(MENUBAR_H);                               /* the menu bar's height on this screen: 26 on the 960x540 grid */
     int wall_ok = wall_paint(fb, fb_pitch, W, H, fb_swap);
@@ -877,8 +978,11 @@ static void fb_init(void) {
     /* Slice 3: the Console wears the i386 window frame (gui_paint.c): rounded cream body on the wallpaper, traffic
        lights, centred name, a hairline under the title band. Its content well is white for the log. */
     int s = (int)window_scale(), lx = win_x / s, ly = win_y / s, lw = win_w / s, lh = win_h / s;
-    gui_draw_window_frame(lx, ly, lw, lh, "Console");
-    fb_rect((lx + 8) * s, (ly + 30) * s, (lw - 16) * s, (lh - 38) * s, CON_BG);
+    win_lx = lx; win_ly = ly; win_lw = lw; win_lh = lh;
+    con_under = kmalloc((unsigned)(lw * s * lh * s) * 4);   /* slice 4: what the close button puts back */
+    if (con_under) { for (int j = 0; j < lh * s; j++) for (int i = 0; i < lw * s; i++) con_under[j * lw * s + i] = fb[(unsigned)(ly * s + j) * fb_pitch + (unsigned)(lx * s + i)]; }
+    else uart_puts("oom console close\n");                  /* the Console then just has no working close button */
+    console_frame();
     if (text_ok) {
         menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
         text_draw(1, "Joshua Tree", sg(40), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
@@ -905,6 +1009,10 @@ static void fb_init(void) {
     con_start();
 #ifdef DOCK_HOVER_TEST   /* the dockhover test build: the label over one slot, then (arm64-m1c-check.py) its pixels */
     dock_hover(DOCK_HOVER_TEST);
+#endif
+#ifdef CURSOR_TEST   /* the cursortest build: the pointer over dock slot 3 at boot, the 1080p (scale 2) arrow for arm64-mouse-check.py */
+    mouse_x = (unsigned)((gui_slot_x(3) + DOCK_ICON / 2) * s); mouse_y = (unsigned)((gui_dock_y0() + DOCK_PAD + DOCK_ICON / 2) * s);
+    pointer_moved();
 #endif
     dcache_clean(fb, (unsigned long)fb_pitch * fb_h * 4);   /* the whole still picture out to RAM; con_glyph cleans as it goes from here */
     /* Blank spots, clear of any text: the bottom of the window's white well, the menu bar's rule, and the wallpaper (not
@@ -967,14 +1075,22 @@ static void m1_selftest(void) {
 /* ---- Input, from any driver: Linux evdev events (virtio input speaks them natively; the USB HID driver in xhci.c
    translates its reports into them). The pointer starts mid-screen; a tablet sets it, a mouse moves it. ---- */
 struct input_event { unsigned short type, code; unsigned value; };
-static unsigned mouse_x = 400, mouse_y = 300, mouse_moved;
 int ask_key(unsigned code, unsigned value);   /* ask.c: the ask> line editor */
 void ask_poll(void);
 static void input_event(struct input_event e) {
-    if (e.type == 1 && con_key(e.code, e.value)) return;   /* the console's scroll keys are not logged: that would add lines to the picture they move */
-    if (e.type == 1) {                                                                                     /* EV_KEY: keys and buttons */
-        if (ask_key(e.code, e.value) || ask_active()) con_quiet = 1;   /* typed keys show on the ask> row; the echo stays on the UART */
+    if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                   /* BTN_LEFT, RIGHT, MIDDLE */
+        con_quiet = 1;   /* the UART only */
         uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
+        if (e.code == 272 && e.value) pointer_click();
+        return;
+    }
+    if (e.type == 1) {                                                                                     /* EV_KEY: keys */
+        int held = cur_hold();
+        if (!con_key(e.code, e.value)) {   /* the console's scroll keys are not logged: that would add lines to the picture they move */
+            if (ask_key(e.code, e.value) || ask_active()) con_quiet = 1;   /* typed keys show on the ask> row; the echo stays on the UART */
+            uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n");
+        }
+        cur_release(held);
     }
     else if (e.type == 3) {                                                                                /* EV_ABS: the tablet, 0..32767 */
         if (e.code == 0) mouse_x = e.value * fb_w / 32768; else if (e.code == 1) mouse_y = e.value * fb_h / 32768;
@@ -985,8 +1101,10 @@ static void input_event(struct input_event e) {
         else if (e.code == 1) { int y = (int)mouse_y + v; mouse_y = y < 0 ? 0 : y >= (int)fb_h ? (int)fb_h - 1 : (unsigned)y; }
         mouse_moved = 1;
     } else if (e.type == 0 && mouse_moved) {                                                               /* EV_SYN: one report done */
+        con_quiet = 1;   /* the UART only: every report would scroll the Console */
         uart_puts("mouse "); uart_dec(mouse_x); uart_putc(','); uart_dec(mouse_y); uart_putc('\n');
         mouse_moved = 0;
+        pointer_moved();
     }
 }
 void kinput(unsigned type, unsigned code, int value) { input_event((struct input_event){ (unsigned short)type, (unsigned short)code, (unsigned)value }); }

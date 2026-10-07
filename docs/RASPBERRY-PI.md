@@ -16,7 +16,7 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 | Console text on the real board | **Fixed and seen on the real board, 2026-10-06.** The first boot showed one thin mark per line because later drawing never left the CPU cache. Every glyph is now cleaned out to memory as it is drawn. |
 | Console scrollback from the keyboard | **In 2.19.0, not yet seen on the board.** The Console keeps the whole boot log. Page Up and Page Down on a USB keyboard move half a page, Home jumps to the first line, End returns to the newest. The title bar says which lines are shown, and a pinned row under the text always shows the latest `wifi` and `usb` line, so the Wi-Fi lines survive a photo. |
 
-| USB keyboard and mouse on the Pi | **Keyboard works on the real board, 2026-10-06** (see the Log). Mouse untested, no wired one yet. Since 2.13.2 each hub port prints one status line and every port is rescanned once a second, so a keyboard plugged in after boot is found too. Proven end to end in QEMU (`tools/checks/arm64-usb-check.py`). Each step prints a short `usb ...` line on screen: `usb pcie link up`, `usb vl805 ok`, `usb xhci run`, `usb port N connected`, `usb kbd addr N`, then `usb key 0x04 a` for every key. The last line on the photo is where it stopped. |
+| USB keyboard and mouse on the Pi | **Keyboard works on the real board, 2026-10-06** (see the Log). Mouse untested, no wired one yet. Since 2.24.0 a USB mouse moves an arrow over the desktop, the dock's label follows it, the Console's red button closes it and a dock click opens it again, all proven in QEMU (`tools/checks/arm64-mouse-check.py`); see the mouse test list below. Since 2.13.2 each hub port prints one status line and every port is rescanned once a second, so a keyboard plugged in after boot is found too. Proven end to end in QEMU (`tools/checks/arm64-usb-check.py`). Each step prints a short `usb ...` line on screen: `usb pcie link up`, `usb vl805 ok`, `usb xhci run`, `usb port N connected`, `usb kbd addr N`, then `usb key 0x04 a` for every key. The last line on the photo is where it stopped. |
 | Wi-Fi on the Pi (CYW43455) | Built in 2.16.0, waiting on a photo from the real board. Stage 1 lists nearby networks on screen as `wifi ap ...` lines; joining one is stage 2. QEMU has no SDIO card, so it only proves the failure path (`wifi FAIL cmd5`, boot carries on): `tools/checks/arm64-wifi-check.py`. |
 | Disk, network on the Pi | Not yet. M4. |
 
@@ -143,6 +143,18 @@ If it still fails, send the exact lines you see, even if they look like garbage.
 | M3 | Every app running on ARM. |
 | M4 | The same on the real Pi: SD card, USB, Ethernet. Sound last. |
 | M5 | The Pi 5. |
+
+## Mouse test on the real board (2.24.0)
+
+QEMU proves the arrow, the label and the clicks, but not real mice or the real cache. Joshua's mouse is Bluetooth, and there is no Bluetooth stack, so this needs a wired USB mouse (or a wireless one with its own USB receiver).
+
+1. Plug a wired USB mouse into the Pi before power-on. The Console should show `usb mouse addr N port ...`. Move it: an arrow appears and follows, with no trail left behind at 1080p.
+2. Hover the dock: the tile's name shows above it and goes away when the pointer leaves. No arrow-shaped mark stays in the dock.
+3. Click the Console's red button: the window goes and the wallpaper is back. Click any dock tile: the Console is back with `dock <name>: not on ARM yet` as its newest line.
+4. Unplug the mouse and plug it in again: `usb port ... disconnected`, then a new `usb mouse` line, and it moves the arrow again.
+5. Keyboard and mouse together, on the hub and on the Pi's own ports: typing at `ask>` still works while the arrow sits over the Console.
+6. A wireless keyboard and mouse receiver (one USB plug, two devices inside): both should show as `usb kbd` and `usb mouse` on one address.
+7. If the arrow moves too slowly or too fast at 1080p, say so: there is no acceleration yet, one mouse count is one pixel.
 
 ## Why the serial cable matters
 

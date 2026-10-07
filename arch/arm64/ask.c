@@ -48,6 +48,7 @@ static const char shifted[58] = {
 #define KEY_RSHIFT 54
 
 int ask_active(void) { return active; }
+void ask_redraw(void) { con_prompt(line, len); }   /* main.c: the Console was reopened, put the line being typed back */
 
 /* One key event from any keyboard. 1 when it is the editor's (the caller then keeps its echo line off the screen). */
 int ask_key(unsigned code, unsigned value) {
