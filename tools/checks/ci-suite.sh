@@ -239,6 +239,8 @@ retry|6|ARM64: the aarch64 kernel boots under QEMU and prints over the UART (ski
 retry|6|ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing)|python3 ./tools/checks/arm64-m1c-check.py
 retry|6|ARM64 M2: the aarch64 kernel drives virtio disk, network, keyboard and mouse: a sector read back, a real ARP answer, key presses, moves and clicks (skips where the tools are missing)|python3 ./tools/checks/arm64-m2-check.py
 retry|6|ARM64 M3a: an unprivileged EL0 program prints through a write syscall, exits, and a direct access to a kernel-only page faults while the kernel survives (skips where the tools are missing)|python3 ./tools/checks/arm64-m3-check.py
+retry|2|ARM64 M4 Wi-Fi proto: wifi_proto.h packs and parses SDPCM, BCDC, escan and NVRAM on the host clang|sh ./tools/checks/wifi-host-check.sh
+retry|6|ARM64 M4 Wi-Fi: the Pi image powers the chip, finds no SDIO card under QEMU, prints wifi FAIL cmd5 and the boot carries on, with and without the firmware files (skips where the tools are missing)|python3 ./tools/checks/arm64-wifi-check.py
 retry|6|ARM64 M4 USB: the aarch64 kernel finds an xHCI controller behind a PCIe root port, enumerates a hub, a keyboard behind it and a mouse, and reads key presses, moves and clicks (skips where the tools are missing)|python3 ./tools/checks/arm64-usb-check.py
 once |6|Pi card flasher: kernel, firmware and tools/pi-config.txt land on a stand-in card, and what was there is kept as .bak (skips where the tools are missing)|bash ./tools/checks/flash-pi-check.sh
 EOF
