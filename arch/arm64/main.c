@@ -805,6 +805,7 @@ static void input_poll(void) {
 #define NET_BUF 1536
 static struct vq net_rx, net_tx;
 static unsigned char *net_rxbuf, *net_txbuf, net_mac[6];
+static int net_up;
 static const unsigned char my_ip[4] = { 10, 0, 2, 15 }, gw_ip[4] = { 10, 0, 2, 2 };
 static void uart_mac(const unsigned char *m) {
     for (int i = 0; i < 6; i++) { if (i) uart_putc(':'); uart_putc("0123456789abcdef"[m[i] >> 4]); uart_putc("0123456789abcdef"[m[i] & 15]); }
@@ -820,7 +821,38 @@ static int net_init(void) {
     VR(b, 0x70) = 1 | 2 | 8 | 4;                    /* driver ok */
     vq_kick(&net_rx);
     uart_puts("M2 net mac "); uart_mac(net_mac); uart_putc('\n');
+    net_up = 1;
     return 1;
+}
+/* The card under the shared IP stack (drivers/nic.h; drivers/net.c sits on top). One send buffer, so a send waits
+   until the device has handed back every frame it was lent, the ARP probe's included, before reusing it. */
+int nic_init(void) { return net_up; }
+void nic_mac(unsigned char mac[6]) { for (int i = 0; i < 6; i++) mac[i] = net_mac[i]; }
+int nic_send(const void *frame, unsigned int len) {
+    if (!net_up || len > NET_BUF - 12) return 0;
+    for (int i = 0; i < 12; i++) net_txbuf[i] = 0;
+    for (unsigned i = 0; i < len; i++) net_txbuf[12 + i] = ((const unsigned char *)frame)[i];
+    vq_give(&net_tx, 0, net_txbuf, 12 + len, 0);
+    vq_kick(&net_tx);
+    unsigned long freq, t0, t; __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(freq), "=r"(t0));
+    while (net_tx.u->idx != net_tx.a->idx) {
+        __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(t));
+        if (t - t0 > freq) return 0;
+    }
+    net_tx.seen = net_tx.u->idx;
+    return 1;
+}
+unsigned int nic_recv(void *buf, unsigned int max) {
+    unsigned len; int id;
+    if (!net_up || (id = vq_take(&net_rx, &len)) < 0) return 0;
+    unsigned char *r = net_rxbuf + (unsigned)id * NET_BUF;
+    if (len > NET_BUF) len = NET_BUF;
+    len = len > 12 ? len - 12 : 0;
+    if (len > max) len = max;
+    for (unsigned i = 0; i < len; i++) ((unsigned char *)buf)[i] = r[12 + i];
+    vq_give(&net_rx, (unsigned)id, r, NET_BUF, 1);
+    vq_kick(&net_rx);
+    return len;
 }
 static void net_arp_probe(void) {
     unsigned char *f = net_txbuf;
@@ -896,10 +928,15 @@ static int input_init(void) { return 0; }
 static void input_poll(void) {}
 static int net_init(void) { return 0; }
 static void net_arp_probe(void) {}
+int nic_init(void) { return 0; }   /* the Pi's card goes here (Wi-Fi or Genet Ethernet) */
+void nic_mac(unsigned char mac[6]) { for (int i = 0; i < 6; i++) mac[i] = 0; }
+int nic_send(const void *frame, unsigned int len) { (void)frame; (void)len; return 0; }
+unsigned int nic_recv(void *buf, unsigned int max) { (void)buf; (void)max; return 0; }
 static int blk_init(void) { return 0; }
 static void blk_probe(void) {}
 #endif
 
+void net_stack_demo(void);
 void main(void) {
     unsigned long el;
     uart_init();
@@ -912,6 +949,7 @@ void main(void) {
     user_demo();
     if (net_init()) net_arp_probe();
     if (blk_init()) blk_probe();
+    net_stack_demo();   /* ip.c: DHCP and an HTTP POST through the shared stack, silent with no card */
     fb_diag();   /* last, so it is the newest line on the screen */
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
