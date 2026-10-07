@@ -20,6 +20,10 @@ int gui_dock_w(void){ return GUI_ICON_COUNT * DOCK_ICON + (GUI_ICON_COUNT - 1) *
 int gui_dock_x0(void){ return ((int)window_width() - gui_dock_w()) / 2; }
 int gui_dock_y0(void){ return (int)window_height() - DOCK_ICON - 2 * DOCK_PAD - DOCK_MARGIN_BOT; }
 int gui_slot_x(int slot){ return gui_dock_x0() + DOCK_PAD + slot * (DOCK_ICON + DOCK_GAP); }
+/* v40: the dock band's top edge, high enough to cover a magnified,
+   lifted icon and its label, so repainting this band alone is enough to
+   erase any previous hover state. */
+int gui_dock_band_top(void){ return gui_dock_y0() - 24; }
 
 /* Which dock slot a point falls in, clamped to the nearest end rather than
    returning "none": once a drag has started, the icon should track the

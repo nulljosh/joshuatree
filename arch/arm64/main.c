@@ -728,11 +728,55 @@ static void crash(const struct frame *f) {
     for (;;) __asm__ volatile ("wfe");
 }
 
+/* Desktop slice 2: the dock is the i386 desktop's own painters (kernel/gui_paint.c) and layout (kernel/dock_geom.c),
+   linked into this build. They draw through five window.h calls, answered here over the framebuffer: a 1080p or
+   taller screen is the i386 desktop's 960x540 grid at scale 2, anything smaller is scale 1. */
+#include "../../drivers/window.h"
+#include "../../drivers/png.h"
+#include "../../kernel/dock_geom.h"
+#include "../../kernel/gui_paint.h"
+#include "../../kernel/icon_art.h"
+int dock_scale_pct = 7;   /* the i386 default (Settings can change it there; nothing does here yet) */
+unsigned int window_scale(void) { return fb_h >= 1080 ? 2 : 1; }
+unsigned int window_width(void) { return fb_w / window_scale(); }
+unsigned int window_height(void) { return fb_h / window_scale(); }
+void window_pixel_phys(int px, int py, unsigned int color) {
+    if (px >= 0 && py >= 0 && px < (int)fb_w && py < (int)fb_h) fb[(unsigned)py * fb_pitch + (unsigned)px] = fb_color(color);
+}
+unsigned int window_get_pixel_phys(int px, int py) {
+    return px >= 0 && py >= 0 && px < (int)fb_w && py < (int)fb_h ? fb_color(fb[(unsigned)py * fb_pitch + (unsigned)px]) : 0;
+}
+void window_fill_rect_phys(int px, int py, int w, int h, unsigned int color) {
+    for (int y = py; y < py + h; y++) for (int x = px; x < px + w; x++) window_pixel_phys(x, y, color);
+}
+/* The wallpaper is already on the screen, so reading the framebuffer is reading the wallpaper, as long as the dock is
+   painted before anything else covers its band. */
+unsigned int gui_wallpaper_sample(int px, int py, int sway) { (void)sway; return window_get_pixel_phys(px, py); }
+static void dock_paint(void) {
+    static const int order[GUI_ICON_COUNT] = GUI_DOCK_DEFAULT_ORDER;
+    gui_draw_dock_tray();
+    int size = DOCK_ICON, pw = size * (int)window_scale(), y0 = gui_dock_y0(), drawn = 0;
+    for (int slot = 0; slot < GUI_ICON_COUNT; slot++) {
+        int icon = order[slot], cx = gui_slot_x(slot) + size / 2, cy_bottom = y0 + DOCK_PAD + size;
+        gui_draw_icon_shadow(cx, cy_bottom, size);
+        unsigned long mark = heap_mark();   /* the bump heap never frees: the decode and the tile are rolled back */
+        unsigned int *tile = kmalloc((unsigned)(pw * pw) * 4);
+        unsigned char *art = 0;
+        unsigned aw = 0, ah = 0, ach = 0;
+        if (tile && png_decode(ICON_ART[icon], ICON_ART_LEN[icon], &art, &aw, &ah, &ach) == 0 && art && aw == ICON_ART_SIZE && ah == ICON_ART_SIZE && ach == 4) {
+            gui_icon_art_scale(art, tile, pw, DOCK_TRAY_COLOR);
+            gui_blit_tile(tile, cx - size / 2, cy_bottom - size, size, DOCK_TRAY_COLOR);
+            drawn++;
+        }
+        heap_release(mark);
+    }
+    uart_puts("M1d dock "); uart_dec((unsigned)drawn); uart_puts(" icons\n");
+}
+
 static void fb_init(void) {
     if (!fb_setup()) return;
     int W = (int)fb_w, H = (int)fb_h;
     int win_w = sc(500), win_h = sc(350), win_x = (W - win_w) / 2, win_y = sc(100);
-    int dock_w = sc(200), dock_h = sc(44), dock_x = (W - dock_w) / 2, dock_y = H - sc(60);
     int mb = sg(MENUBAR_H);                               /* the menu bar's height on this screen: 26 on the 960x540 grid */
     int wall_ok = wall_paint(fb, fb_pitch, W, H, fb_swap);
     if (!wall_ok) fb_rect(0, 0, W, H, 0x00203040);   /* the Satellite photo; flat only if it will not decode */
@@ -741,9 +785,10 @@ static void fb_init(void) {
         fb[(unsigned)y * fb_pitch + (unsigned)x] = ((c >> 1) & 0x007F7F7Fu) + 0x00808080u;   /* each colour lane: half itself plus half of 255 */
     }
     fb_rect(0, mb - 1, W, 1, MENUBAR_RULE);               /* closed by a one pixel rule */
+    dock_paint();                                         /* the i386 dock, while only the wallpaper is under it */
+    int band_y = gui_dock_band_top() * (int)window_scale();   /* the top of the dock's band, room for a hover label */
     fb_rect(win_x, win_y, win_w, win_h, CON_BG);          /* a window */
     fb_rect(win_x, win_y, win_w, sc(28), 0x00b5502c);     /* its title bar, the house accent */
-    fb_rect(dock_x, dock_y, dock_w, dock_h, 0x00505a68);  /* the dock */
     text_ok = text_init();
     if (text_ok) {
         text_draw(1, "Joshua Tree", sg(16), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
@@ -756,7 +801,7 @@ static void fb_init(void) {
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
         const char *thanks = "Steve Jobs, 1955 to 2011. Thank you. Make something wonderful.";
-        int tx = (W - text_width(2, thanks, sc(110))) / 2, ty = dock_y - sc(12), sh = sc(1) > 1 ? sc(1) : 1;
+        int tx = (W - text_width(2, thanks, sc(110))) / 2, ty = band_y - sc(4), sh = sc(1) > 1 ? sc(1) : 1;
         text_draw(2, thanks, tx + sh, ty + sh, sc(110), fb_color(0x00101010), fb, fb_pitch, W, H);   /* a dark shadow so it reads on the busy photo */
         text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
     } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");

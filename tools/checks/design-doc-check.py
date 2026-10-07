@@ -255,7 +255,7 @@ def dock_order():
     k = text("kernel/kernel.c")
     labels = re.findall(r'\{"([^"]+)",', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", k, re.S).group(1))
     sym = {"GUI_APPS_FOLDER": labels.index("Apps"), "GUI_TRASH": labels.index("Trash")}
-    raw = re.search(r"GUI_DOCK_DEFAULT\[GUI_ICON_COUNT\] = \{(.*?)\};", k).group(1).replace(" ", "").split(",")
+    raw = re.search(r"#define GUI_DOCK_DEFAULT_ORDER \{(.*?)\}", text("kernel/gui_paint.h")).group(1).replace(" ", "").split(",")
     return ", ".join(labels[sym[t] if t in sym else int(t)] for t in raw)
 
 
@@ -274,12 +274,12 @@ def menubar_white():
 
 
 def tray(i):
-    t = text("kernel/dock_draw.c")
+    t = text("kernel/gui_paint.c")
     radius = re.search(r"gui_rounded_rect_on_wallpaper\(dock_x, y0, dock_w, dock_h, DOCK_TRAY_COLOR, (\d+)\)", t)
     edge = re.search(r"gui_hairline_h\(dock_x \+ 18, y0, dock_w - 36, (0x[0-9A-Fa-f]+)\)", t)
     rows = re.search(r"rows = (\d+) \* sc;", t)
     if not (radius and edge and rows):
-        raise Gone("kernel/dock_draw.c: gui_draw_dock_tray no longer matches the tray patterns")
+        raise Gone("kernel/gui_paint.c: gui_draw_dock_tray no longer matches the tray patterns")
     return [int(radius.group(1)), hexval(edge.group(1)), int(rows.group(1))][i]
 
 
@@ -366,9 +366,9 @@ FACTS = {
     "DOCK_GAP": ("num", lambda: int(rx("kernel/dock_geom.h", r"#define DOCK_GAP\s+(\d+)")), "kernel/dock_geom.h"),
     "DOCK_PAD": ("num", lambda: int(rx("kernel/dock_geom.h", r"#define DOCK_PAD\s+(\d+)")), "kernel/dock_geom.h"),
     "DOCK_MARGIN_BOT": ("num", lambda: int(rx("kernel/dock_geom.h", r"#define DOCK_MARGIN_BOT\s+(\d+)")), "kernel/dock_geom.h"),
-    "TRAY_RADIUS": ("num", lambda: tray(0), "kernel/dock_draw.c"),
-    "TRAY_EDGE": ("hex", lambda: tray(1), "kernel/dock_draw.c"),
-    "TRAY_SHADOW_ROWS": ("num", lambda: tray(2), "kernel/dock_draw.c"),
+    "TRAY_RADIUS": ("num", lambda: tray(0), "kernel/gui_paint.c"),
+    "TRAY_EDGE": ("hex", lambda: tray(1), "kernel/gui_paint.c"),
+    "TRAY_SHADOW_ROWS": ("num", lambda: tray(2), "kernel/gui_paint.c"),
     "DOCK_LABEL_BG": ("hex", lambda: hexval(rx("kernel/dock_draw.c", r"#define DOCK_LABEL_BG\s+(0x[0-9A-Fa-f]+)")), "kernel/dock_draw.c"),
     "DOCK_LABEL_EDGE": ("hex", lambda: hexval(rx("kernel/dock_draw.c", r"#define DOCK_LABEL_EDGE\s+(0x[0-9A-Fa-f]+)")), "kernel/dock_draw.c"),
     "APPS_COLS": ("num", lambda: int(rx("kernel/apps_geom.h", r"#define APPS_COLS\s+(\d+)")), "kernel/apps_geom.h"),

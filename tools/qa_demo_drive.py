@@ -55,7 +55,7 @@ def hold(seconds, tag=""):
         time.sleep(0.25)
 
 LOGICAL_W, LOGICAL_H = 960, 540
-# Dock order and geometry come from kernel/kernel.c itself (GUI_DOCK_DEFAULT,
+# Dock order and geometry come from the kernel source itself (GUI_DOCK_DEFAULT_ORDER in kernel/gui_paint.h,
 # APPS[].name, gui_dock_w/gui_dock_x0), the way tools/checks/dockslots-check.py
 # reads them. A hardcoded copy went stale when Stocks joined the dock: every
 # click landed a tile off and the "Weather" and "Trash" steps both opened
@@ -64,7 +64,7 @@ _k = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "kernel
 _labels = re.findall(r'\{"([^"]+)",', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", _k, re.S).group(1))
 _sym = {"GUI_APPS_FOLDER": _labels.index("Apps"), "GUI_TRASH": _labels.index("Trash")}
 DOCK = [_labels[_sym[t] if t in _sym else int(t)]
-        for t in re.search(r"GUI_DOCK_DEFAULT\[GUI_ICON_COUNT\] = \{(.*?)\};", _k).group(1).replace(" ", "").split(",")]
+        for t in re.search(r"#define GUI_DOCK_DEFAULT_ORDER \{(.*?)\}", open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "kernel", "gui_paint.h")).read()).group(1).replace(" ", "").split(",")]
 DOCK_ICON, DOCK_GAP, DOCK_PAD = 37, 6, 10
 PITCH = DOCK_ICON + DOCK_GAP
 SLOT0_X = (LOGICAL_W - (len(DOCK) * DOCK_ICON + (len(DOCK) - 1) * DOCK_GAP + 2 * DOCK_PAD)) // 2 + DOCK_PAD

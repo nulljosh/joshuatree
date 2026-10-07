@@ -28,6 +28,7 @@ int gui_dock_w(void);
 int gui_dock_x0(void);
 int gui_dock_y0(void);
 int gui_slot_x(int slot);
+int gui_dock_band_top(void);
 int gui_slot_at(int mx);
 int gui_dock_hit_test(int mx, int my);
 

@@ -4,7 +4,7 @@
 Every check that clicks a dock tile hardcodes that tile's slot number. When the
 dock changes (Stocks pinned at 9 pushed Trash to 10) those numbers go stale and
 unrelated checks fail far downstream. This reads the one real source, kernel.c's
-GUI_DOCK_DEFAULT + APPS[].name, and fails naming every file that disagrees.
+GUI_DOCK_DEFAULT_ORDER (kernel/gui_paint.h, shared with the ARM dock) + APPS[].name, and fails naming every file that disagrees.
 """
 import glob, os, re, sys
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
@@ -12,7 +12,7 @@ k = open("kernel/kernel.c").read()
 labels = re.findall(r'\{"([^"]+)",', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", k, re.S).group(1))
 sym = {"GUI_APPS_FOLDER": labels.index("Apps"), "GUI_TRASH": labels.index("Trash")}
 order = [labels[sym[t] if t in sym else int(t)]
-         for t in re.search(r"GUI_DOCK_DEFAULT\[GUI_ICON_COUNT\] = \{(.*?)\};", k).group(1).replace(" ", "").split(",")]
+         for t in re.search(r"#define GUI_DOCK_DEFAULT_ORDER \{(.*?)\}", open("kernel/gui_paint.h").read()).group(1).replace(" ", "").split(",")]
 slot = {n.upper(): i for i, n in enumerate(order)}
 bad = []
 for f in sorted(glob.glob("tools/checks/*")) + ["landing/v86/embed.js"]:

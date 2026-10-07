@@ -18,7 +18,7 @@ The short list. Two tracks run side by side, one helper each (Joshua agreed the 
 
 **Track A, what you see on the Pi**
 1. Console scrollback (Page Up), so the Wi-Fi lines can be read from a photo.
-2. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing).
+2. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing). Wallpaper, menu bar, shared paint code and the dock are done (2.22.0: `kernel/gui_paint.c`, `tools/checks/arm64-m1c-check.py`). Next: window chrome.
 3. The mouse pointer and clicking, once a mouse is plugged in.
 4. Apps on the Pi: the ring-3 apps rebuilt for ARM, Notes and Clock first.
 
