@@ -20,8 +20,8 @@ Boot 1, virtio-net, ramfb, virtio keyboard:
 Boot 2, no network card: a question prints "claude: no network" and the relay is never asked.
 Boot 3, built with no token file: a question prints "claude: no token" and the relay is never asked.
 
-Discriminating: point ask.c at another path ("/api/claudx") and step 2 fails with "claude: error -404"; drop the
-http_post_set_bearer call and it fails with "claude: error -401".
+Discriminating: point ask.c at another path ("/api/claudx") and step 2 fails with "claude: error -404": the stub is
+never asked, no answer on the UART and no ##### line on the screen.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-claude-console-check.py   (from the repo root)
 """
@@ -42,6 +42,7 @@ QUESTION = "what is in version?"
 SECOND = "and again"
 ANSWER = ("The VERSION file holds the release number of Joshua Tree, and the Console wraps this answer "
           "at a space so that every line fits the fifty three columns of a Pi screen.")
+MARK = "#" * 50   # the answer's last line: denser than any boot line, so a screendump can find it
 STUB = r'''#!/usr/bin/env python3
 import json, os, sys, uuid
 prompt = sys.stdin.read()
@@ -80,7 +81,7 @@ relay = None
 def start_relay(token):
     global relay
     stop_relay()
-    env = dict(base_env, PATH=tmp + "/bin" + os.pathsep + os.environ["PATH"], STUB_LOG=stub_log, STUB_ANSWER=ANSWER,
+    env = dict(base_env, PATH=tmp + "/bin" + os.pathsep + os.environ["PATH"], STUB_LOG=stub_log, STUB_ANSWER=ANSWER + "\n" + MARK,
                CLAUDE_RELAY_TOKEN=token)
     err = open(tmp + "/relay-%d.log" % time.time_ns(), "w+")
     relay = subprocess.Popen([sys.executable, relay_py, "--port", str(port), "--cwd", tmp, "--timeout", "20"],
@@ -139,6 +140,14 @@ def ink(shot_, x0, y0, x1, y1):   # dark pixels in a rectangle: the Console's te
     w, _, px = shot_
     return sum(1 for y in range(y0, y1) for x in range(x0, x1) if max(px[(y * w + x) * 3:(y * w + x) * 3 + 3]) < 0x90)
 
+def densest_row(shot_, rect):   # the most inked pixel columns in any one text-row-high band of the rectangle
+    w, h, px = shot_
+    x0, y0, x1, y1 = rect
+    dark = lambda x, y: max(px[(y * w + x) * 3:(y * w + x) * 3 + 3]) < 0x90
+    k = 16 * h // 600
+    # pixel columns with any ink inside the band: a run of # leaves almost no blank column, words leave gaps
+    return max(sum(1 for x in range(x0, x1) if any(dark(x, y) for y in range(i, i + k))) for i in range(y0, y1 - k, 2))
+
 def bands(shot_):   # the kernel's layout: an 800x600 design scaled by height; 19 rows of 16 under the title bar
     w, h, _ = shot_
     sc = lambda v: v * h // 600
@@ -167,22 +176,25 @@ try:
               "%d -> %d dark pixels" % (ink(a, *prompt), ink(t, *prompt)))
         check("key echoes stay on the UART", "key 17 down" in b.uart())
         b.key("ret")
-        got = b.wait_for("claude: thinking", 10) and b.wait_for("screen.", 30)
+        got = b.wait_for("claude: thinking", 10) and b.wait_for(MARK, 30)
         out = b.uart()
         calls = stub_calls()
         check("Enter sent the question: the stub got exactly the typed text, Backspace applied",
               len(calls) == 1 and calls[0]["stdin"] == QUESTION, repr([c["stdin"] for c in calls]))
         lines = answer_after(out, 1) if got else []
-        check("the answer comes back word for word", " ".join(" ".join(lines).split()) == ANSWER, repr(lines))
+        check("the answer comes back word for word", " ".join(" ".join(lines).split()) == ANSWER + " " + MARK, repr(lines))
         check("it is wrapped to lines of at most 53 columns", len(lines) > 1 and all(len(l) <= 53 for l in lines),
               repr([len(l) for l in lines]))
         check("the question is echoed into the log", "ask> " + QUESTION in out)
         c = b.shot()
-        check("the answer is drawn in the Console window", ink(c, *body) != ink(t, *body) and c[2] != t[2])
+        dense_a, dense_c = densest_row(a, body), densest_row(c, body)
+        print("    densest text row: %d inked columns at boot, %d with the answer" % (dense_a, dense_c))
+        check("the answer is drawn in the Console window: its ##### line is the densest row on screen",
+              dense_c > dense_a + 60, "%d vs %d" % (dense_c, dense_a))
         check("the ask> row is empty again after Enter", ink(c, *prompt) < ink(t, *prompt))
         # a follow-up resumes the relay's session
         b.type(SECOND); b.key("ret")
-        b.wait_for("claude: thinking", 10, 2); b.wait_for("screen.", 30, 2)
+        b.wait_for("claude: thinking", 10, 2); b.wait_for(MARK, 30, 2)
         calls = stub_calls()
         sid = None
         if len(calls) == 2:
