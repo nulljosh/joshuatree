@@ -34,6 +34,11 @@ A guess at the shape, in Joshua's words as far as they are known. Each version h
 
 How to use this: the Pickup list below stays the near-term queue. When a Pickup item belongs to one of these versions, tag it (for example `[4.0]`), so the road and the queue stay one list.
 
+### [5.0] Talk to it: Claude Code in Joshua Tree
+- [x] [5.0] Claude app, phase 1, 2.14.0: type a question in the Claude app and Claude Code answers. It runs on the Mac behind a small token-gated relay with read-only tools; Joshua Tree is the front end and never holds the token. How to run it and the security model: `docs/CLAUDE-APP.md`. Checks: `tools/checks/claude-relay-check.py`, `tools/checks/ring3claude-check.py`.
+- [ ] [5.0] [Fable] Claude phase 2: tools on Joshua Tree itself, so Claude can read and change the OS's own files. Needs real TLS on the box or a trusted relay protocol that calls back into the machine.
+- [ ] [5.0] Claude on the Pi: waits on the ARM64 network stack (after M4).
+
 ## Pickup (written 2026-10-03, night)
 Main is 2.6.24 and live. CI takes about 10 minutes. The 3.0.0 gate is one thing: the desktop boots on a real Raspberry Pi 4.
 

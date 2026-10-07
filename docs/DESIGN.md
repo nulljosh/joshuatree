@@ -20,7 +20,7 @@ No text, letters or wordmarks, so `ICON_TEXT_ELEMENTS = 0`. The one exception is
 
 The house accent is terracotta, `ACCENT = #b5502c`, the landing page's accent and the colour of the Music, Movies and Hamurapi tiles. The one deliberate exception is Tonchi, which keeps its own sky blue, `LEXLY_BLUE = #2E86DE`, because that is the colour of its store icon.
 
-Fleet icons are the `FLEET_ICONS = 10` apps imported from their own repos. They keep their own tile colour and their own picture. They must still share the squircle, the anti-aliased edge, the top lip and the glyph margin. They do not get the tile falloff, so a fleet tile is flat. The importer clips each one to the squircle and lays the lip on it. The checks measure the squircle and the edge on all `ICON_FILES = 32` icons, but the glyph margin only on the `MARGIN_TILES = 19` that carry the shared tile header written by `restyle_icons.py`. A fleet icon's margin is held by eye, and the roadmap lists the fleet icons that still fall short.
+Fleet icons are the `FLEET_ICONS = 10` apps imported from their own repos. They keep their own tile colour and their own picture. They must still share the squircle, the anti-aliased edge, the top lip and the glyph margin. They do not get the tile falloff, so a fleet tile is flat. The importer clips each one to the squircle and lays the lip on it. The checks measure the squircle and the edge on all `ICON_FILES = 33` icons, but the glyph margin only on the `MARGIN_TILES = 20` that carry the shared tile header written by `restyle_icons.py`. A fleet icon's margin is held by eye, and the roadmap lists the fleet icons that still fall short.
 
 ## Type
 

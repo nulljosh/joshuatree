@@ -75,3 +75,7 @@ able to create an account first, so that build is, and stays,
 unconfigured by design. Creating the first account is a deliberate,
 in-desktop action (Settings' "Add user" row) rather than something the
 boot path forces on every visitor.
+
+## The Claude relay (2.14.0)
+
+The Claude app is the first thing here with a remote caller, so it gets its own line. The relay (`tools/claude-relay/relay.py`) runs Claude Code on the host for anyone who presents its token. The token is a shared secret, kept in plain text in `SETTINGS.TXT` like the Mail token, added to the request by the kernel and never handed to ring 3. The relay listens on loopback by default; with `--lan` the token crosses the network in plain HTTP and can be replayed by anyone who sees it. Claude's tools are read-only and scoped to the relay's working directory, so the worst case for a stolen token is reading that directory and spending the owner's plan. `docs/CLAUDE-APP.md` has the full list.

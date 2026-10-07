@@ -63,7 +63,7 @@ static int settings_prompt_line(const char *prompt, char *out, int max, int mask
     return 1;
 }
 
-#define SETTINGS_ROW_COUNT 9 /* 1.9.27: + Mail token */ /* v75: + wallpaper source; v85: + LLM model, + LLM host:port; v0.77: + Account (change password), + Add user; v0.85.5: + Location */
+#define SETTINGS_ROW_COUNT 11 /* 2.14.0: + Claude relay, + Claude token */ /* 1.9.27: + Mail token */ /* v75: + wallpaper source; v85: + LLM model, + LLM host:port; v0.77: + Account (change password), + Add user; v0.85.5: + Location */
 
 /* 1.8: redesign modeled on macOS System Settings -- a left sidebar of
    sections (icon + label, selected row highlighted) and a right detail
@@ -78,14 +78,15 @@ static const char *SETTINGS_SECTION_NAMES[SETTINGS_SECTION_COUNT] = {"General", 
 /* Row indices belonging to each section, in the order they're drawn top
    to bottom in the detail pane. -1 pads unused slots in the fixed-size
    array (plain C array, no VLAs in this freestanding build). */
-static const int SETTINGS_SECTION_ROWS[SETTINGS_SECTION_COUNT][4] = {
-    {0, 1, 2, 7},   /* General: Wind, Dock size, Wallpaper, Location */
-    {3, 4, 8, -1},  /* Assistant: LLM model, LLM host:port, Mail token */
-    {5, 6, -1, -1}, /* Account: Account, Add user */
+#define SETTINGS_SECTION_MAX 5 /* 2.14.0: Assistant holds five rows now */
+static const int SETTINGS_SECTION_ROWS[SETTINGS_SECTION_COUNT][SETTINGS_SECTION_MAX] = {
+    {0, 1, 2, 7, -1},   /* General: Wind, Dock size, Wallpaper, Location */
+    {3, 4, 8, 9, 10},   /* Assistant: LLM model, LLM host:port, Mail token, Claude relay, Claude token */
+    {5, 6, -1, -1, -1}, /* Account: Account, Add user */
 };
 static int settings_section_row_count(int sec){
     int n = 0;
-    while (n < 4 && SETTINGS_SECTION_ROWS[sec][n] >= 0) n++;
+    while (n < SETTINGS_SECTION_MAX && SETTINGS_SECTION_ROWS[sec][n] >= 0) n++;
     return n;
 }
 
@@ -336,6 +337,25 @@ static void gui_launch_settings(void){
                 font_draw_string("Mail token", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
                 const char *mt = mail_token[0] ? "set" : "(not set: Mail cannot send)";
                 font_draw_string(mt, detail_right - font_string_width(mt), y, mail_token[0] ? 0x002F7B4F : 0x00807468, -1);
+            } else if (i == 9) {
+                /* 2.14.0: where the Claude app's relay listens (tools/claude-relay/relay.py). */
+                font_draw_string("Claude relay", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
+                char hp[CLAUDE_HOST_MAX + 8]; int p = 0;
+                if (claude_host[0]) {
+                    const char *s = claude_host; while (*s && p < (int)sizeof(hp) - 8) hp[p++] = *s++;
+                    hp[p++] = ':';
+                    char digits[8]; int nd = 0; int v = claude_port;
+                    if (v == 0) digits[nd++] = '0';
+                    while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
+                    while (nd) hp[p++] = digits[--nd];
+                    hp[p] = 0;
+                } else { const char *s = "(not set)"; while (*s) hp[p++] = *s++; hp[p] = 0; }
+                font_draw_string(hp, detail_right - font_string_width(hp), y, claude_host[0] ? 0x001C1C1E : 0x00807468, -1);
+            } else if (i == 10) {
+                /* 2.14.0: never draw the token itself, only whether one is set. */
+                font_draw_string("Claude token", SETTINGS_DETAIL_X, y, 0x001C1C1E, -1);
+                const char *ct = claude_token[0] ? "set" : "(not set: Claude cannot ask)";
+                font_draw_string(ct, detail_right - font_string_width(ct), y, claude_token[0] ? 0x002F7B4F : 0x00807468, -1);
             } else {
                 /* v0.85.5: the Location field roadmap.md asked for. Empty
                    means "no override", the same honest-label convention
@@ -570,6 +590,36 @@ static void gui_launch_settings(void){
                 char tbuf[MAIL_TOKEN_MAX]; tbuf[0] = 0; /* starts empty: retype to replace, never echo the old one */
                 if (settings_prompt_line("Mail token (enter to confirm, empty clears, esc to cancel):", tbuf, sizeof(tbuf), 1)) {
                     int j = 0; while (tbuf[j] && j < MAIL_TOKEN_MAX - 1) { mail_token[j] = tbuf[j]; j++; } mail_token[j] = 0;
+                    settings_save();
+                }
+                memset(tbuf, 0, sizeof(tbuf));
+            }
+            else if (sel == 9 && k != 'a' && k != 'd') {
+                /* 2.14.0: the Claude relay's host and port. Empty host turns the Claude app off. */
+                char hostbuf[CLAUDE_HOST_MAX];
+                int hn = 0; while (claude_host[hn] && hn < CLAUDE_HOST_MAX - 1) { hostbuf[hn] = claude_host[hn]; hn++; }
+                hostbuf[hn] = 0;
+                if (settings_prompt_line("Claude relay host (10.0.2.2 in QEMU, empty turns it off, esc to cancel):", hostbuf, CLAUDE_HOST_MAX, 0)) {
+                    int j = 0; while (hostbuf[j] && j < CLAUDE_HOST_MAX - 1 && hostbuf[j] != ' ') { claude_host[j] = hostbuf[j]; j++; } claude_host[j] = 0;
+                    char portbuf[8]; int pn = 0; int v = claude_port;
+                    char digits[8]; int nd = 0;
+                    if (v == 0) digits[nd++] = '0';
+                    while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
+                    while (nd) portbuf[pn++] = digits[--nd];
+                    portbuf[pn] = 0;
+                    if (claude_host[0] && settings_prompt_line("Claude relay port (enter to confirm, esc to cancel):", portbuf, sizeof(portbuf), 0)) {
+                        int nv = 0; for (int c = 0; portbuf[c] && nv < 100000; c++) if (portbuf[c] >= '0' && portbuf[c] <= '9') nv = nv * 10 + (portbuf[c] - '0');
+                        if (nv > 0 && nv <= 65535) claude_port = nv;
+                    }
+                    settings_save();
+                }
+            }
+            else if (sel == 10 && k != 'a' && k != 'd') {
+                /* 2.14.0: the relay's shared token. Typed masked, saved to SETTINGS.TXT, added by
+                   SYS_HTTP_POST only for /api/claude on the relay host. Empty clears it. */
+                char tbuf[CLAUDE_TOKEN_MAX]; tbuf[0] = 0; /* starts empty: retype to replace, never echo the old one */
+                if (settings_prompt_line("Claude token (enter to confirm, empty clears, esc to cancel):", tbuf, sizeof(tbuf), 1)) {
+                    int j = 0; while (tbuf[j] && j < CLAUDE_TOKEN_MAX - 1 && tbuf[j] != ' ') { claude_token[j] = tbuf[j]; j++; } claude_token[j] = 0;
                     settings_save();
                 }
                 memset(tbuf, 0, sizeof(tbuf));

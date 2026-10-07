@@ -700,7 +700,7 @@ static void civil(unsigned days, int *y, int *m, int *d) {
 static const char *const APPNAME[] = {
     "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Curbfind", "Keyrate",
     "Bookrank", "Quotes", "Tonchi", "Toroid", "Hikko", "Fieldbook", "Contacts", "Calculator",
-    "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Clock", "Music", "Movies", "Hamurapi", "Windgate", "Panes",
+    "Stocks", "Search", "Epiphany", "Portfolio", "Activity", "Clock", "Music", "Movies", "Hamurapi", "Windgate", "Panes", "Claude",
 };
 #define NAPPS ((int)(sizeof APPNAME / sizeof APPNAME[0]))
 #define HIKKO_SLOT 14 /* its index in APPNAME */

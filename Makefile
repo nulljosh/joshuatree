@@ -508,6 +508,18 @@ drivers/user_panes.h: user/panes.bin tools/gen/gen_user_bin.py
 
 kernel/ring3app.o: drivers/user_panes.h
 
+# Claude (2.14): the front end for Claude Code on the relay machine (tools/claude-relay/relay.py), over SYS_HTTP_POST's JT_POST_CLAUDE.
+user/claude.o: user/claude.c user/jtsys.h user/libjt/text.h user/libjt/stdlib.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/claude.bin: user/claude.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/claude.o user/libjt.a
+
+drivers/user_claude.h: user/claude.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/claude.bin drivers/user_claude.h user_claude
+
+kernel/ring3app.o: drivers/user_claude.h
+
 drivers/user_mail.h: user/mail.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/mail.bin drivers/user_mail.h user_mail
 
@@ -568,6 +580,7 @@ clean:
 	rm -f user/hamurabi.o user/hamurabi.bin drivers/user_hamurabi.h
 	rm -f user/windgate.o user/windgate.bin drivers/user_windgate.h
 	rm -f user/panes.o user/panes.bin drivers/user_panes.h
+	rm -f user/claude.o user/claude.bin drivers/user_claude.h
 	rm -f joshuatree.iso boot/memmap.ld
 	rm -rf build/iso_root
 
