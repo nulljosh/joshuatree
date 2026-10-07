@@ -34,11 +34,13 @@ after make kernel.elf; with names, only those apps)
 import json, os, re, socket, subprocess, sys, time
 from PIL import Image
 from freeport import free_port
+from scratch import scratch_dir
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 os.chdir(ROOT)
-LOG = "/tmp/jt-ring3crashall-serial.log"
-DUMP = "/tmp/jt-ring3crashall.raw"
+TMP = scratch_dir("ring3crashall")  # private per run, see scratch.py
+LOG = os.path.join(TMP, "serial.log")
+DUMP = os.path.join(TMP, "fb.raw")
 FB = 0xfd000000; W, H = 1920, 1080
 LOGICAL_W, LOGICAL_H, SCALE = 960, 540, 2
 DOCK_ICON, DOCK_GAP, SLOT0_X = 37, 6, 247

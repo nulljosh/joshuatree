@@ -35,8 +35,10 @@ set -uo pipefail
 # Every check's tempfile.mkdtemp(prefix='jt-...') used to land in the shared
 # TMPDIR and never get deleted: thousands of 37-75MB dirs, 12GB+, a full
 # disk on 2026-10-01. One scratch TMPDIR per suite run, gone on exit.
+. "$(dirname "$0")/../ci-lock.sh"
+ci_lock_acquire || exit 1
 export TMPDIR=$(mktemp -d "${TMPDIR:-/tmp}/jt-suite-XXXXXX")
-trap 'rm -rf "$TMPDIR"' EXIT
+trap 'rm -rf "$TMPDIR"; ci_lock_release' EXIT
 # SHARD=i runs only the checks assigned to shard i below, so CI can split the
 # suite across parallel runners. Unset, it runs everything, same as before.
 # Each check carries an explicit shard number (2nd manifest field) instead
@@ -57,6 +59,7 @@ cd "$(dirname "$0")/../.."
 manifest() {
 cat <<'EOF'
 once |6|Dock slot constants agree with kernel.c (static drift guard)|python3 ./tools/checks/dockslots-check.py
+once |6|No check hard-codes a fixed temp path or socket, so two suites cannot corrupt each other (static, baseline only shrinks)|python3 ./tools/checks/tmp-paths-check.py
 once |0|docs/DESIGN.md states only what the source says: icon shape and light, fonts, colours, dock and window numbers, caption timings (static)|python3 ./tools/checks/design-doc-check.py
 once |6|Kernel memory keeps 16KB clear of the program window (toolchain drift guard)|python3 ./tools/checks/bss-margin-check.py
 once |6|Samantha's face loops wrap without a seam|python3 ./tools/checks/face-frames-check.py
@@ -177,7 +180,7 @@ retry|1|Ring-3 window resize: snap Notes to a quarter, JT_EV_RESIZE answered, ne
 retry|0|Windows drag live by their title bar (single-window Notes and multi-window Files)|python3 ./tools/checks/windowdrag-check.py
 retry|0|Windowed apps start under the title bar, Calendar fits six weeks|python3 ./tools/checks/apptop-check.py
 retry|7|Calendar Day, Week, Month and Year views (ring-3 program)|python3 ./tools/checks/calviews-check.py
-retry|6|QA gallery: every app opens, screenshots, closes, no crash|python3 ./tools/checks/qa-gallery.py /tmp/jt-gallery
+retry|6|QA gallery: every app opens, screenshots, closes, no crash|python3 ./tools/checks/qa-gallery.py
 retry|2|Every app's main action, headless|python3 ./tools/checks/feature-drive.py
 retry|3|Dock icon edge quality (no staircased corners)|python3 ./tools/checks/iconedge-check.py
 retry|4|Dock icon halo (clean clip to the tray, no glyph bleed)|python3 ./tools/checks/iconhalo-check.py
