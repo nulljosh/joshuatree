@@ -9,6 +9,56 @@
 #include "dejavu_serif_bold_font.h"
 #include "dejavu_mono_font.h"
 #include "dejavu_mono_bold_font.h"
+#include "lib_inter_font.h"
+#include "lib_ebgaramond_font.h"
+#include "lib_comicneue_font.h"
+#include "lib_caveatbrush_font.h"
+#include "lib_dancingscript_font.h"
+#include "lib_jetbrainsmono_font.h"
+#include "lib_sourceserif4_font.h"
+#include "lib_sourcesans3_font.h"
+
+/* The font registry: one row per face, in ttf_face_t order. */
+static const struct {
+    const char *name;
+    const unsigned char *data;
+    int mono;
+} ttf_registry[TTF_FACE_COUNT] = {
+    { "dejavu-sans",        dejavu_font_data,             0 },
+    { "dejavu-sans-bold",   dejavu_bold_font_data,        0 },
+    { "dejavu-serif",       dejavu_serif_font_data,       0 },
+    { "dejavu-serif-bold",  dejavu_serif_bold_font_data,  0 },
+    { "dejavu-mono",        dejavu_mono_font_data,        1 },
+    { "dejavu-mono-bold",   dejavu_mono_bold_font_data,   1 },
+    { "inter",              lib_inter_font_data,          0 },
+    { "ebgaramond",         lib_ebgaramond_font_data,     0 },
+    { "comicneue",          lib_comicneue_font_data,      0 },
+    { "caveatbrush",        lib_caveatbrush_font_data,    0 },
+    { "dancingscript",      lib_dancingscript_font_data,  0 },
+    { "jetbrainsmono",      lib_jetbrainsmono_font_data,  1 },
+    { "sourceserif",        lib_sourceserif4_font_data,   0 },
+    { "sourcesans",         lib_sourcesans3_font_data,    0 },
+};
+
+const char *ttf_face_name(ttf_face_t face) {
+    if ((int)face < 0 || face >= TTF_FACE_COUNT) return "";
+    return ttf_registry[face].name;
+}
+
+int ttf_face_by_name(const char *name) {
+    if (!name) return -1;
+    for (int i = 0; i < TTF_FACE_COUNT; i++) {
+        const char *a = ttf_registry[i].name, *b = name;
+        while (*a && *a == *b) { a++; b++; }
+        if (*a == 0 && *b == 0) return i;
+    }
+    return -1;
+}
+
+int ttf_face_is_mono(ttf_face_t face) {
+    if ((int)face < 0 || face >= TTF_FACE_COUNT) return 0;
+    return ttf_registry[face].mono;
+}
 
 #ifdef TTF_HOST_BUILD
 #include "kheap.h"
@@ -148,15 +198,8 @@ ttf_font_t *ttf_load_default(void) {
 }
 
 ttf_font_t *ttf_load_face(ttf_face_t face) {
-    switch (face) {
-    case TTF_FACE_SANS:        return ttf_load(dejavu_font_data);
-    case TTF_FACE_SANS_BOLD:   return ttf_load(dejavu_bold_font_data);
-    case TTF_FACE_SERIF:       return ttf_load(dejavu_serif_font_data);
-    case TTF_FACE_SERIF_BOLD:  return ttf_load(dejavu_serif_bold_font_data);
-    case TTF_FACE_MONO:        return ttf_load(dejavu_mono_font_data);
-    case TTF_FACE_MONO_BOLD:   return ttf_load(dejavu_mono_bold_font_data);
-    default:                   return ttf_load(dejavu_font_data);
-    }
+    if ((int)face < 0 || face >= TTF_FACE_COUNT) return ttf_load(dejavu_font_data);
+    return ttf_load(ttf_registry[face].data);
 }
 
 void ttf_free(ttf_font_t *font) {

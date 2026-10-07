@@ -223,6 +223,7 @@ The browser landing page routes kernel HTTP requests to a Cloudflare Worker
 | `tools/inflate-host/main.c` | Host harness for `drivers/inflate.c`. `tools/checks/user-compress-check.py` builds it with every app header and requires each embedded app to inflate to its exact binary and every damaged copy to be refused. |
 | `drivers/ttf.c` | A runtime TrueType rasterizer, so text scales to any size. Wraps `drivers/stb_truetype.h`, vendored unmodified from Sean Barrett's stb, with the heap and string shims it needs. |
 | `drivers/dejavu_font.h` and siblings | The six DejaVu faces, Sans, Serif and Mono in regular and bold, as ASCII plus Latin-1 subsets: `dejavu_bold_font.h`, `dejavu_serif_font.h`, `dejavu_serif_bold_font.h`, `dejavu_mono_font.h`, `dejavu_mono_bold_font.h`. Generated from the TTFs in `tools/fonts/`. |
+| `drivers/lib_inter_font.h` and siblings | The font library: eight open faces (Inter, EB Garamond, Comic Neue, Caveat Brush, Dancing Script, JetBrains Mono, Source Serif, Source Sans) as ASCII subsets, registered by name in `drivers/ttf.c` and listed by the `fonts` shell command. Sources and licences: `docs/fonts-sources.md`. |
 | `drivers/mouse.c` | The PS/2 mouse, including the wheel. |
 | `drivers/vmmouse.c` | The VMware absolute-pointer interface. When the host answers, a tap lands exactly where the finger is. Real hardware falls back to `mouse.c`. |
 | `drivers/serial.c` | COM1 output for debugging. A boot trace you can read with `-serial stdio` even after the screen is dead. |
