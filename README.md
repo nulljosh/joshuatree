@@ -15,6 +15,16 @@ A whole computer, built from scratch: its own windows, dock, fonts, sound, inter
 
 You can talk to it. Ask Samantha to set a reminder, take a note or open an app, and she answers out loud. (She is the assistant from [Turing](https://github.com/nulljosh/turing). Joshua Tree is the machine she runs.)
 
+## In plain words
+
+A computer is a pile of chips and a pile of software on top. Most people never see the bottom of that pile. This project is the whole pile, written by one person: the code that wakes the chip, draws the screen, reads the keyboard, and runs the apps. You can read all of it.
+
+It runs in your browser, in an emulator on a Mac, and on a real Raspberry Pi 4.
+
+## On a Raspberry Pi
+
+It boots on a Pi 4 with a USB keyboard and an HDMI screen: the desktop, the dock, the console and the Claude prompt. Wi-Fi is the next thing to prove on real hardware. The steps to flash a card are in [the Pi guide](docs/RASPBERRY-PI.md); one script, `tools/flash-pi.sh`, does the work.
+
 ## Boot it
 
 - **Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
