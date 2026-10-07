@@ -4828,16 +4828,18 @@ static int gui_multiwin_key_nonblock(void){
    its rasterized 8-bit coverage; blended at PHYSICAL resolution via
    window_pixel_phys, the same pattern gui_aa_char uses for text. cx,cy are
    LOGICAL center coords, converted to physical here. */
-static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink){
+static void gui_blend_cov(const unsigned char *cov, int cw, int ch, int cx, int cy, int size, unsigned int ink){
     int sc = window_has_target() ? 1 : (int)window_scale(); if (sc < 1) sc = 1;
-    int T = size * sc; /* box-filtered down from the 160px coverage; T == 160 is a straight copy */
+    int T = size * sc; /* box-filtered from the stored coverage; T == the stored size is a straight copy */
     int ox = cx * sc - T / 2, oy = cy * sc - T / 2;
     for (int row = 0; row < T; row++){
         for (int col = 0; col < T; col++){
-            int c0 = col * BOOT_MARK_W / T, c1 = (col + 1) * BOOT_MARK_W / T, r0 = row * BOOT_MARK_H / T, r1 = (row + 1) * BOOT_MARK_H / T;
+            int c0 = col * cw / T, c1 = (col + 1) * cw / T, r0 = row * ch / T, r1 = (row + 1) * ch / T;
+            if (c1 == c0) c1 = c0 + 1; /* drawn bigger than stored: take the nearest source pixel instead of none */
+            if (r1 == r0) r1 = r0 + 1;
             int sum = 0, n = (c1 - c0) * (r1 - r0);
-            for (int yy = r0; yy < r1; yy++) for (int xx = c0; xx < c1; xx++) sum += boot_mark_cov[yy * BOOT_MARK_W + xx];
-            int a = n ? sum / n : 0;
+            for (int yy = r0; yy < r1; yy++) for (int xx = c0; xx < c1; xx++) sum += cov[yy * cw + xx];
+            int a = sum / n;
             if (!a) continue;
             int x = ox + col, y = oy + row;
             unsigned int d = window_get_pixel_phys(x, y);
@@ -4847,6 +4849,12 @@ static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink){
             window_pixel_phys(x, y, (r << 16) | (g << 8) | b);
         }
     }
+}
+/* 2.25: small sizes (menu bar, About) take the bold copy, the tree drawn down its middle; the splash's thin
+   one-line copy would fade to a grey smudge at 20 px. */
+static void gui_draw_mark_sized(int cx, int cy, int size, unsigned int ink){
+    if (size <= 48) gui_blend_cov(menu_mark_cov, MENU_MARK_W, MENU_MARK_H, cx, cy, size, ink);
+    else gui_blend_cov(boot_mark_cov, BOOT_MARK_W, BOOT_MARK_H, cx, cy, size, ink);
 }
 static void gui_draw_boot_mark(int cx, int cy, unsigned int ink){
     int sc = window_has_target() ? 1 : (int)window_scale(); if (sc < 1) sc = 1;
@@ -4933,7 +4941,8 @@ static void gui_launch_about(void){
     const char *lines[3] = { tagline, mem_line, version_line };
     unsigned int colors[3] = { 0x001C1C1E, 0x00884B16, 0x0075726E };
     int line_h = 24;
-    int text_top = by + (ABOUT_H - 3 * line_h) / 2 + 6; /* real vertical centering of the whole text block within the card */
+    gui_draw_mark_sized(bx + ABOUT_W / 2, by + 56, 32, 0x001C1C1E); /* 2.25: the mark heads the card, as the logo does on a Mac's About box */
+    int text_top = by + (ABOUT_H - 3 * line_h) / 2 + 22; /* the text block sits under the mark */
     for (int i = 0; i < 3; i++) {
         int x = bx + (ABOUT_W - font_string_width(lines[i])) / 2; /* real horizontal centering per line */
         font_draw_string(lines[i], x, text_top + i * line_h, colors[i], -1);

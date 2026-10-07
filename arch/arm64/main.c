@@ -762,6 +762,7 @@ static void crash(const struct frame *f) {
 #include "../../kernel/dock_geom.h"
 #include "../../kernel/gui_paint.h"
 #include "../../kernel/icon_art.h"
+#include "../../kernel/boot_mark.h"
 int dock_scale_pct = 7;   /* the i386 default (Settings can change it there; nothing does here yet) */
 unsigned int window_scale(void) { return fb_h >= 1080 ? 2 : 1; }
 unsigned int window_width(void) { return fb_w / window_scale(); }
@@ -797,6 +798,23 @@ int gui_icon_text_w(const char *s, int face, int mul) { int k = (int)window_scal
 /* The wallpaper is already on the screen, so reading the framebuffer is reading the wallpaper, as long as the dock is
    painted before anything else covers its band. */
 unsigned int gui_wallpaper_sample(int px, int py, int sway) { (void)sway; return window_get_pixel_phys(px, py); }
+/* 2.25: the brand mark in the menu bar's corner, as on i386 (gui_draw_mark_sized): the small copy of the scribbled
+   tree from kernel/boot_mark.h, box-filtered to T physical pixels and blended in ink over what is there. */
+static void menu_mark_paint(int cx, int cy, int T, unsigned ink) {
+    int ox = cx - T / 2, oy = cy - T / 2;
+    for (int row = 0; row < T; row++) for (int col = 0; col < T; col++) {
+        int c0 = col * MENU_MARK_W / T, c1 = (col + 1) * MENU_MARK_W / T, r0 = row * MENU_MARK_H / T, r1 = (row + 1) * MENU_MARK_H / T;
+        if (c1 == c0) c1 = c0 + 1;
+        if (r1 == r0) r1 = r0 + 1;
+        int sum = 0, n = (c1 - c0) * (r1 - r0);
+        for (int y = r0; y < r1; y++) for (int x = c0; x < c1; x++) sum += menu_mark_cov[y * MENU_MARK_W + x];
+        unsigned a = (unsigned)(sum / n);
+        if (!a) continue;
+        unsigned d = window_get_pixel_phys(ox + col, oy + row), out = 0;
+        for (int sh = 0; sh <= 16; sh += 8) out |= ((((ink >> sh) & 0xFF) * a + ((d >> sh) & 0xFF) * (255 - a)) / 255) << sh;
+        window_pixel_phys(ox + col, oy + row, out);
+    }
+}
 static void dock_paint(void) {
     static const int order[GUI_ICON_COUNT] = GUI_DOCK_DEFAULT_ORDER;
     gui_draw_dock_tray();
@@ -862,7 +880,8 @@ static void fb_init(void) {
     gui_draw_window_frame(lx, ly, lw, lh, "Console");
     fb_rect((lx + 8) * s, (ly + 30) * s, (lw - 16) * s, (lh - 38) * s, CON_BG);
     if (text_ok) {
-        text_draw(1, "Joshua Tree", sg(16), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
+        menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
+        text_draw(1, "Joshua Tree", sg(40), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
         const char *clk = "--:--";                          /* the clock slot, until there is a time source */
         int cx = W - sg(16) - text_width(2, clk, sg(120));
         text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);

@@ -88,7 +88,7 @@ yet for 1.0.0.
 
 ## Theme
 
-Keep the Satellite wallpaper in color. The former engraving filter made it black and white, while the cream, hatched landing page felt too much like paper or a blueprint. The landing page now uses an off-white surface (`#faf8f4`), near-black ink, one terracotta accent (`#b5502c`), simple rules and rounded cards, with no teal, purple or gradients. Dark mode swaps to a warm near-black (`#141311`). The OS's own look is written down in `docs/DESIGN.md`. Keep the engraved tree artwork as a logo, with `landing/mark.png` for small sizes and `landing/badge.png` for large artwork. The VGA boot text is the kernel's actual black-on-gray output.
+Keep the Satellite wallpaper in color. The former engraving filter made it black and white, while the cream, hatched landing page felt too much like paper or a blueprint. The landing page now uses an off-white surface (`#faf8f4`), near-black ink, one terracotta accent (`#b5502c`), simple rules and rounded cards, with no teal, purple or gradients. Dark mode swaps to a warm near-black (`#141311`). The OS's own look is written down in `docs/DESIGN.md`. The logo is a crayon scribble of one Joshua tree (2.25, replacing the engraved tree): thin wobbly lines for the trunk, arms and ground, a dense looping scribble for each tuft, black ink on `#faf8f4` (an off-white line on `#141311` in dark mode), no fill, no shading. `tools/gen/logo.py` draws every copy. `landing/logo.svg` carries a light crayon grain; `landing/mark-bold.svg` is the clean heavy copy for 16 to 48 px (favicon, menu bar, About). `landing/mark.png` is for small sizes and `landing/badge.png` for large artwork. The VGA boot text is the kernel's actual black-on-gray output.
 
 ## Landing page / v86 demo
 
