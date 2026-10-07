@@ -62,7 +62,7 @@ vectors.o: vectors.S
 	$(CC) -c $< -o $@
 MAINDEP = ../../kernel/gui_paint.h ../../kernel/dock_geom.h ../../kernel/icon_art.h
 main.o: main.c $(MAINDEP)
-	$(CC) -c $< -o $@
+	$(CC) $(MAINFLAGS) -c $< -o $@
 pci.o: pci.c
 	$(CC) -c $< -o $@
 xhci.o: xhci.c
