@@ -29,8 +29,8 @@ TRUNK = [(48.8, 84.0), (49.6, 74.5), (50.9, 70.5), (51.8, 62.0)]
 LEFT = [(49.0, 64.5), (39.0, 62.0), (30.0, 56.5), (23.5, 48.5), (22.0, 41.0)]
 MID = [(52.0, 60.0), (53.8, 47.0), (53.0, 34.0)]
 RIGHT = [(54.0, 63.0), (63.5, 59.5), (70.0, 53.5), (72.0, 47.5)]
-# Each tuft its own size and density: (knot radius, loops, blades, blade reach); the bold copy only takes the radius.
-TUFTS = ((LEFT, 7.0, 2, 7, 6.8), (MID, 9.8, 4, 10, 5.0), (RIGHT, 7.6, 3, 8, 4.4))
+# Each tuft its own size and density: (knot radius, loops, stray loops, loop size); the bold copy only takes the radius.
+TUFTS = ((LEFT, 7.4, 3, 3, 1.1), (MID, 9.8, 5, 2, 0.75), (RIGHT, 7.8, 4, 2, 0.95))
 SMALL_R = (6.3, 7.8, 6.7)
 ARMS = (LEFT, MID, RIGHT)
 
@@ -90,22 +90,9 @@ def scribble(rnd, cx, cy, r, loops, amt):
         mx = cx + math.cos(wander) * r * 0.5 + math.sin(wander * 2.7) * r * 0.12
         my = cy + math.sin(wander) * r * 0.42 + math.cos(wander * 1.9) * r * 0.1
         loop = 2 * math.pi * i / 9 + phase
-        lr = r * rnd.uniform(0.45, 0.8)
+        lr = r * rnd.uniform(0.4, 0.95)
         pts.append((mx + math.cos(loop) * lr + rnd.uniform(-amt, amt), my + math.sin(loop) * lr * 0.9 + rnd.uniform(-amt, amt)))
     return pts
-
-
-def blades(rnd, cx, cy, up, r, count, reach):
-    """Short flicks out of the knot, the yucca's blades, fanned over its top."""
-    out = []
-    for k in range(count):
-        a = up - math.radians(105) + math.radians(210) * (k + rnd.uniform(-0.25, 0.25)) / (count - 1)
-        r0 = r * rnd.uniform(0.6, 0.85); r1 = r + reach * rnd.uniform(0.6, 1.0)
-        bend = rnd.uniform(-0.12, 0.12)
-        out.append([(cx + math.cos(a) * r0, cy + math.sin(a) * r0),
-                    (cx + math.cos(a + bend) * (r0 + r1) / 2, cy + math.sin(a + bend) * (r0 + r1) / 2),
-                    (cx + math.cos(a + bend * 2) * r1, cy + math.sin(a + bend * 2) * r1)])
-    return out
 
 
 def part(stroke, a, b):
@@ -151,12 +138,17 @@ def drawing(small):
     # the marker pressed harder down the trunk and through the middle of the ground, so the width swells and thins
     press = [(1.35, [part(outer_l, 0.04, 0.42), part(outer_r, 0.6, 0.97), part(ground, 0.12, 0.62)]),
              (1.7, [part(outer_l, 0.12, 0.28), part(outer_r, 0.74, 0.9), part(ground, 0.25, 0.45)])]
-    # the tufts: a knot at each tip, each its own size and density, and the blades flicking out of it
-    for arm, r, loops, count, reach in TUFTS:
+    # the tufts: a mass of overlapping loops worked back and forth at each tip, a ragged edge, and a few loose
+    # loops trailing off it, each tuft its own size and density
+    for arm, r, loops, strays, size in TUFTS:
         cx, cy, up = tip(arm, 4.5)
         knots.append(scribble(rnd, cx, cy, r, loops, 0.9))
+        knots.append(scribble(rnd, cx - 0.8, cy + 0.5, r * 0.72 * size, loops + 1, 0.6))
         knots.append(scribble(rnd, cx + 0.6, cy - 0.4, r * 0.4, max(loops - 1, 1), 0.4))
-        lines += blades(rnd, cx, cy, up, r, count, reach)
+        for k in range(strays):
+            a = up + rnd.uniform(-1.9, 1.9)
+            d = r * rnd.uniform(0.95, 1.2)
+            knots.append(scribble(rnd, cx + math.cos(a) * d, cy + math.sin(a) * d, r * 0.3 * size, 1, 0.3))
     return ([scale(p, K) for p in lines], [scale(p, K) for p in knots],
             [(w, [scale(p, K) for p in group]) for w, group in press])
 
