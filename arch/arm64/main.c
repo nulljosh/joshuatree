@@ -1035,6 +1035,15 @@ static void fb_init(void) {
     mouse_x = fb_w / 2; mouse_y = fb_h / 2;               /* the pointer starts in the middle of the screen */
     int win_w = sc(500), win_h = sc(350), win_x = (W - win_w) / 2, win_y = sc(100);
     int mb = sg(MENUBAR_H);                               /* the menu bar's height on this screen: 26 on the 960x540 grid */
+    {   /* the boot screen while the photo decodes (the slow part): the tree on off-white and a thin bar a third full,
+           one of three steps done (screen up; the photo and the desktop follow). The wallpaper paints straight over it. */
+        fb_rect(0, 0, W, H, 0x00faf8f4);
+        menu_mark_paint(W / 2, H / 2 - sg(30), sg(110), 0x001C1C1E);
+        int bw = sg(140), bh = sg(4) > 2 ? sg(4) : 2, bx = (W - bw) / 2, by = H / 2 + sg(50);
+        fb_rect(bx, by, bw, bh, 0x00DDD8CE);
+        fb_rect(bx, by, bw / 3, bh, 0x001C1C1E);
+        fb_flush(0, 0, W, H);
+    }
     int wall_ok = wall_paint(fb, fb_pitch, W, H, fb_swap);
     if (!wall_ok) fb_rect(0, 0, W, H, 0x00203040);   /* the Satellite photo; flat only if it will not decode */
     for (int y = 0; y < mb - 1; y++) for (int x = 0; x < W; x++) {   /* menu bar: half wallpaper, half white, per pixel */
