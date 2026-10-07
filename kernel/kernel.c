@@ -6263,6 +6263,13 @@ static void run(char *line){
         }
     }
     else if (!strcmp(line, "uptime")){ putn(ticks() / 100); puts("s\n"); }
+    else if (!strcmp(line, "fonts")) {
+        /* 2.27.0 font registry: every embedded face, by name. */
+        for (int i = 0; i < TTF_FACE_COUNT; i++) {
+            puts(ttf_face_name((ttf_face_t)i));
+            puts(ttf_face_is_mono((ttf_face_t)i) ? "  (mono)\n" : "\n");
+        }
+    }
     else if (!strcmp(line, "dmesg")) klog_dump();
     else if (!strcmp(line, "mem")) {
         putn(pmm_free_frames() * 4); puts("K free / ");

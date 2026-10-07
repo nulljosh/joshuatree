@@ -173,12 +173,10 @@ def gradient_hue_spread():
 def dejavu_faces():
     members = re.findall(r"^\s*(TTF_FACE_[A-Z_]+)\b", rx("drivers/ttf.h", r"typedef enum \{(.*?)\}", flags=re.S), re.M)
     members = [m for m in members if m != "TTF_FACE_COUNT"]
-    have = 0
-    for m in members:
-        blob = rx("drivers/ttf.c", r"case %s:\s+return ttf_load\((\w+)\);" % m)
-        header = blob[:-len("_data")] + ".h"
-        if blob.endswith("_data") and os.path.isfile(os.path.join(ROOT, "drivers", header)):
-            have += 1
+    # 2.27.0: faces come from the ttf_registry table, one row per enum member.
+    with open(os.path.join(ROOT, "drivers", "ttf.c")) as f:
+        rows = re.findall(r'\{\s*"[a-z0-9-]+",\s*(\w+)_data,', f.read())
+    have = sum(1 for b in rows if os.path.isfile(os.path.join(ROOT, "drivers", b + ".h")))
     return have if have == len(members) else "%d faces in ttf.h, only %d have a header in drivers/" % (len(members), have)
 
 

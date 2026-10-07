@@ -24,7 +24,7 @@ Fleet icons are the `FLEET_ICONS = 10` apps imported from their own repos. They 
 
 ## Type
 
-One family, DejaVu, in `DEJAVU_FACES = 6` faces: Sans, Sans Bold, Serif, Serif Bold, Mono and Mono Bold. Sans is the interface. The desktop draws it at `GUI_TEXT_PX = 24` physical pixels, 12 on the 960 wide grid. Apps draw it at `BODY_PX = 14.0`, with bold at the same size and the big display digits at `DISP_PX = 56.0`.
+The registry holds `DEJAVU_FACES = 14` faces. Six are DejaVu: Sans, Sans Bold, Serif, Serif Bold, Mono and Mono Bold. Eight are open look-alikes for documents and user choice: Inter, EB Garamond, Comic Neue, Caveat Brush, Dancing Script, JetBrains Mono, Source Serif and Source Sans (`fonts` lists them). Sans only in the UI chrome: the menu bar, dock and window titles stay DejaVu Sans. Sans is the interface. The desktop draws it at `GUI_TEXT_PX = 24` physical pixels, 12 on the 960 wide grid. Apps draw it at `BODY_PX = 14.0`, with bold at the same size and the big display digits at `DISP_PX = 56.0`.
 
 On the desktop, Mono is for a shell grid and nothing else: `MONO_APPS = panes, terminal`, at `MONO_PX = 13.5` with every glyph `JT_MONO_ADV = 8` pixels wide. Serif ships with the fonts and nothing draws with it, so `SERIF_USES = 0`. Sans-serif only is the house rule, so serif has to earn its way in.
 
