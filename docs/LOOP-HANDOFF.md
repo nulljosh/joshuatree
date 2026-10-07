@@ -1,42 +1,45 @@
-# Joshua Tree loop handoff (2026-10-07, 07:30)
+# Joshua Tree loop handoff (2026-10-07, midday)
 
 ## What the loop is
 
-The Pi loop. Joshua Tree runs on a real Raspberry Pi 4 with a USB keyboard. The loop merges green PRs one at a time, builds the newest SD card image, and works down the roadmap's Top 10 toward 3.0 (type and click on the real Pi).
+The Pi loop. Joshua Tree runs on a real Raspberry Pi 4 with a USB keyboard. The loop merges green PRs one at a time, keeps the newest SD card image built in worktree `jt-card3`, and works the roadmap's Top 10 toward 3.0 (type and click on the real Pi).
 
 ## The goal
 
-Joshua's /goal: we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi. The Claude app (merged) works in QEMU through a relay on the Mac. The ARM build has the shared IP stack and the Console's ask> row talks to the relay on QEMU. Wi-Fi has to fill in its four network calls, then Claude can run on the Pi.
+Joshua's /goal: we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi. The Claude app works in QEMU through a relay on the Mac. The ARM build has the shared IP stack and the Console's ask> row talks to the relay. Wi-Fi has to join a network and fill in its network calls, then Claude can run on the Pi.
 
-## Overnight rules (Joshua asleep, 2026-10-06 to 07)
+## Standing rules
 
-- Never ask him a question; pick the sensible default and write it down here.
+- Never ask Joshua a question you can answer with a sensible default; write the default down here.
 - Claude opens pull requests and never merges by hand; `gh pr merge --auto --squash` only once a PR is ready and its local run was green. Never force-push main. Never use `--admin`.
-- Max three helpers, two if any is Opus or Fable. Stop starting new work at 90 percent of either weekly limit.
-- One `tools/ci-local.sh` at a time (it takes a lock now). Disk above 6 GB free.
-- At most four open PRs and zero issues. Delete a branch once its PR merges.
-- The SD card needs Joshua: the newest image is built in worktree `jt-card3`; a watcher flashes it when the card mounts.
+- Max three helpers, two if any is Opus or Fable. One Haiku agent at a time. Verify every claim yourself. Kill by PID only.
+- One `tools/ci-local.sh` at a time (it takes a lock). Run it with `CI_LOCAL_JOBS=4`. Disk above 6 GB free.
+- Joshua swaps the SD card by hand. Batch board tests and ask for one swap per round. Never ask for a swap while `tools/flash-pi.sh` is still running; check with `ps -Ao stat,args | grep flash-pi` first.
+- Never pull the card mid-flash. A cut-off flash left `cp` stuck in kernel I/O, and that hung disk arbitration so every disk command froze. Only a Mac restart clears it.
+- At most six open PRs, zero issues. Delete a branch once its PR merges.
 - Never print or commit the Wi-Fi password, tokens or keys. Nothing destructive on his files or the LaCie.
 
 ## Where things stand
 
-- Main is 2.24.0 once this PR lands. On the real Pi: 1080p desktop, readable console, the tribute, USB keyboard with hot-plug. Merged this week and not yet seen on the board: the Satellite wallpaper and real menu bar, Claude in the Console, the crash screen, the real dock, its hover label and the window chrome. The Wi-Fi code is on the card and its power-on bug is fixed; Wi-Fi is still unconfirmed on the real Pi.
-- The mouse (slice 4, 2.24.0): the i386 arrow now lives in `kernel/gui_paint.c` and a USB mouse moves it on ARM; the dock's label follows it, the Console's red button closes it and a dock click opens it again. Proven in QEMU only (`tools/checks/arm64-mouse-check.py`). Joshua's mouse is Bluetooth, which the Pi build cannot use; a wired USB mouse runs the short test list in `docs/RASPBERRY-PI.md`.
-- Open PRs: this one (desktop slice 4, the mouse) only. Zero issues.
-- The newest card image is rebuilt in `jt-card3` after each merge that touches `arch/arm64`.
-- Standing answers are in `docs/DECISIONS.md`; the parts list is `docs/SHOPPING.md`; the Top 10 is at the top of `docs/roadmap.md`. Joshua's next steps: buy a wired USB mouse, buy a 3.3V serial cable. HN post drafted in `docs/LAUNCH.md`, waits for the mouse working on the Pi.
-- Hardware: the first kit is the Pi with the OS on an SD card, no price and no number yet.
+- Joshua has the Raspberry Pi 4. The first real boot draws the full desktop. Yesterday and last night went to Pi Wi-Fi, swapping the SD card by hand over and over. Wi-Fi is still unconfirmed on the real board.
+- Main is 2.23.0 (desktop slice 3 merged as #445).
+- Open draft PRs: #446 README Pi section, #447 2.22.1 Wi-Fi CMD5 reply flags (the real-board fix, branch `wifi-cmd5`), #448 2.24.0 ARM desktop slice 4 (mouse), #449 2.25.0 crayon scribble logo, #450 2.26.0 Pi dock icon parity, #451 2.27.0 font library slice 1. Zero issues.
+- Wi-Fi status: local branch `wifi-finish` has seven commits that #447 does not contain, including the power fix "actually power the chip (set, not get), and flush the mailbox buffer". Its top commit is also pushed as `origin/wifi-stage1`, so that work is not local only, but it is not in #447. Finishing Wi-Fi means bringing these onto the PR branch.
+- Disk is tight: about 4.5 GB free, minimum 6 GB. Eight stale agent worktrees under `.claude/worktrees` were removed today with their branches kept. Five locked ones remain: console-scrollback, wifi-finish, arm64-errors-tests, arm64-claude-console, arm64-desktop-slice4.
+- The Mac disk layer hung this morning, so the Mac needs a restart before any board work. The Step 6c bench is deferred until then.
+- Usage: weekly at 90 percent, resets Saturday 22:00. The loop stops and checkpoints at 95 percent.
+- Standing answers are in `docs/DECISIONS.md`; the parts list is `docs/SHOPPING.md`; the Top 10 is at the top of `docs/roadmap.md`.
 
 ## Next, in order
 
-1. Joshua swaps in the newest card; he photographs the Console. Page Up shows the Wi-Fi lines; the pinned row shows the latest `wifi` line. If it says `WL_ON reads 1` and then a `sdio card rca` line, the chip is alive.
-2. Keep merging green PRs one at a time; rebase the rest above main's VERSION. Check the test variants in `arch/arm64/Makefile` still link the shared network and ask objects after any Makefile merge.
-3. Desktop slice 5: typing into apps on the ARM desktop, then the live Clock and Calendar faces. Buy or borrow a wired USB mouse for the slice 4 test list.
-4. Wi-Fi stage 2: join the network from the ignored config file, fill the four network calls, then TCP that survives loss.
-5. Admin and sudo; SD card writes with MBR and FAT32; the self-update loop and the fallback kernel; Doom.
+1. Restart the Mac.
+2. Reflash the card and let `tools/flash-pi.sh` finish. Then one card swap per round to test Wi-Fi on the board. Page Up shows the Wi-Fi lines; the pinned row shows the latest `wifi` line. If it says `WL_ON reads 1` and then a `sdio card rca` line, the chip is alive.
+3. Finish Wi-Fi: move the `wifi-finish` commits onto #447, then join the network from the ignored config file, fill the four network calls, and make TCP survive loss.
+4. Land #446 through #451 one at a time: rebase each above main's VERSION, check the test variants in `arch/arm64/Makefile` still link the shared network and ask objects, `CI_LOCAL_JOBS=4 tools/ci-local.sh` green, then ready, then merge on GitHub green, then `gh pr update-branch` on the rest.
+5. The rest of the old Next list: desktop slice 4 is #448, then admin and sudo, SD card writes with MBR and FAT32, the self-update loop and the fallback kernel, and Doom.
 
 ## Restart prompt
 
 ```
-/loop until it's done! Joshua Tree on the Pi: read docs/LOOP-HANDOFF.md, merge open PRs one at a time when green, keep the newest card image built in jt-card3, then work the Next list in order. Draft PRs, one ci-local run at a time (it locks), max three helpers (two if Opus), stop new work at 90 percent weekly usage. Keep the repo, branches and PR list clean (zero issues, at most four PRs). TLDR after each round.
+/loop Joshua Tree loop. State in ~/Documents/Code/joshuatree/docs/LOOP-HANDOFF.md on origin/main. Top item: finish real-board Pi Wi-Fi (draft PR #447 CMD5 reply flags, local branch wifi-finish), then land the open draft PRs #446-#451 one at a time (CI_LOCAL_JOBS=4 tools/ci-local.sh green before ready, merge on GitHub green, gh pr update-branch after merges). One Haiku agent at a time, verify every claim myself, kill by PID only. Joshua swaps the SD card by hand, so batch board tests, ask for one swap per round, and never ask for a swap while tools/flash-pi.sh is still running. USAGE: check ~/.claude/scripts/usage.sh each round, stop and checkpoint at 95% weekly. Replies to Joshua: one line, his voice.
 ```
