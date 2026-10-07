@@ -24,8 +24,8 @@ Joshua's /goal: we can build a mini Joshua Tree with Claude Code inside Joshua T
 - The mouse (slice 4, 2.24.0): the i386 arrow now lives in `kernel/gui_paint.c` and a USB mouse moves it on ARM; the dock's label follows it, the Console's red button closes it and a dock click opens it again. Proven in QEMU only (`tools/checks/arm64-mouse-check.py`). Joshua's mouse is Bluetooth, which the Pi build cannot use; a wired USB mouse runs the short test list in `docs/RASPBERRY-PI.md`.
 - Open PRs: this one (desktop slice 4, the mouse) only. Zero issues.
 - The newest card image is rebuilt in `jt-card3` after each merge that touches `arch/arm64`.
-- Standing answers are in `docs/DECISIONS.md`; the parts list is `docs/SHOPPING.md`; the Top 10 is at the top of `docs/roadmap.md`.
-- Hardware: Neo is being renamed Nimbus with a Macintosh-inspired redesign (roadmap, waits for a name check).
+- Standing answers are in `docs/DECISIONS.md`; the parts list is `docs/SHOPPING.md`; the Top 10 is at the top of `docs/roadmap.md`. Joshua's next steps: buy a wired USB mouse, buy a 3.3V serial cable. HN post drafted in `docs/LAUNCH.md`, waits for the mouse working on the Pi.
+- Hardware: the first kit is the Pi with the OS on an SD card, no price and no number yet.
 
 ## Next, in order
 
