@@ -118,7 +118,7 @@ static int bp_read(unsigned addr, unsigned char *p, unsigned n) {   /* read back
     return 1;
 }
 #define CHIP_RAM 0x198000       /* 43455: 1.5 MiB of SOCRAM at 0x198000; the ARM CR4 core at 0x18002000 */
-#define CHIP_RAM_SIZE 0xc0000    /* brcmfmac chip.c for the 4345 family: 768 KiB; the old 0x120000 put the NVRAM past the end of RAM */
+#define CHIP_RAM_SIZE 0xc8000    /* brcmfmac chip.c, BRCM_CC_4345_CHIP_ID (the CYW43455 is a 4345 rev 6): 800 KiB, and the firmware looks for its NVRAM at the very end. 0xc0000 put it 32 KiB early and the firmware never raised HT (tenth real-board run: CLKCSR 0x50 = ALP up, HT requested, never granted). */
 #define CR4_WRAP 0x18102000
 #define SDIOD_CORE 0x18003000   /* the SDIO device core on the 4345 family (brcmfmac's EROM walk puts it third) */
 static int fw_load(void) {
@@ -171,7 +171,8 @@ static int fw_load(void) {
     cmd52(1, 0x1000e, 1, 0x10, 0);
     { unsigned long t0 = now(), lim = ticks_per_ms() * 3000;
       while (now() - t0 < lim) { if (cmd52(1, 0x1000e, 0, 0, &clk) && (clk & 0x80)) break; mdelay(10); } }
-    kputs(clk & 0x80 ? "wifi ht clock up\n" : "wifi ht clock not up (carrying on), clkcsr "); if (!(clk & 0x80)) { kx(clk); kputs("\n"); }
+    if (!(clk & 0x80)) { summary(); kputs("wifi FAIL ht clock: clkcsr "); kx(clk); kputs(" (the firmware did not start its clock)\n"); return 0; }
+    kputs("wifi ht clock up\n");
     cmd52(1, 0x1000e, 1, clk | 0x02, 0); cmd52(1, 0x1000e, 0, 0, &t[1]);
     bp_write32(SDIOD_CORE + 0x48, 4u << 16);   /* tosbmailboxdata: SDPCM_PROT_VERSION 4 */
     cmd52(1, 0x1000e, 0, 0, &t[2]);
