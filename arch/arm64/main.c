@@ -500,9 +500,11 @@ static unsigned con_line_off(unsigned line) {   /* where line n starts in the lo
     return i;
 }
 static unsigned con_off_line(unsigned off) { unsigned n = 0; for (unsigned i = 0; i < off && i < con_len; i++) if (con_log[i] == '\n') n++; return n; }
-static void con_text(const char *s, int right, int y) {   /* a short white string, right edge at x = right, vertically in the 28-unit title bar */
+#define CON_TITLE_BG  0x00F5F0EB   /* the window frame's cream title band (gui_draw_window_frame) */
+#define CON_HINT_INK  0x0075726E   /* secondary grey ink on it */
+static void con_text(const char *s, int right, int y) {   /* a short grey string, right edge at x = right, vertically in the title band */
     int px = sc(110);
-    if (text_ok) { text_draw(1, s, right - text_width(1, s, px), y + sc(20), px, fb_color(0x00ffffff), fb, fb_pitch, (int)fb_w, (int)fb_h); return; }
+    if (text_ok) { text_draw(1, s, right - text_width(1, s, px), y + sc(20), px, fb_color(CON_HINT_INK), fb, fb_pitch, (int)fb_w, (int)fb_h); return; }
     int n = 0; while (s[n]) n++;
     int x = right - n * 8 * con_vga; y += (sc(28) - 16 * con_vga) / 2;
     for (int i = 0; i < n; i++) {
@@ -511,7 +513,7 @@ static void con_text(const char *s, int right, int y) {   /* a short white strin
         const unsigned char *g = vgafont_glyphs + (c - VGAFONT_FIRST) * 16;
         for (int gy = 0; gy < 16; gy++) for (int gx = 0; gx < 8; gx++) if (g[gy] & (0x80 >> gx))
             for (int a = 0; a < con_vga; a++) for (int b = 0; b < con_vga; b++)
-                fb[(unsigned)(y + gy * con_vga + a) * fb_pitch + (unsigned)(x + (i * 8 + gx) * con_vga + b)] = fb_color(0x00ffffff);
+                fb[(unsigned)(y + gy * con_vga + a) * fb_pitch + (unsigned)(x + (i * 8 + gx) * con_vga + b)] = fb_color(CON_HINT_INK);
     }
 }
 static void con_hint(void) {   /* the title bar's "lines 12-27 of 61": a photo says which part of the log it shows */
@@ -526,10 +528,11 @@ static void con_hint(void) {   /* the title bar's "lines 12-27 of 61": a photo s
         if (k == 0) b[n++] = '-'; else if (k == 1) { b[n++] = ' '; b[n++] = 'o'; b[n++] = 'f'; b[n++] = ' '; }
     }
     b[n] = 0;
-    int x0 = con_wx + con_ww / 2, w = con_ww - con_ww / 2, h = sc(28);
-    fb_rect(x0, con_wy, w, h, 0x00b5502c);
-    con_text(b, con_wx + con_ww - sc(10), con_wy);
-    fb_flush(x0, con_wy, w, h);
+    /* right of the centred title and left of the rounded corner, above the hairline: only the band's flat cream */
+    int x0 = con_wx + con_ww / 2 + sc(40), y0 = con_wy + sc(3), w = con_ww / 2 - sc(60), h = sc(24);
+    fb_rect(x0, y0, w, h, CON_TITLE_BG);
+    con_text(b, x0 + w - sc(4), con_wy);
+    fb_flush(x0, y0, w, h);
 }
 static int con_is_status(const char *l, unsigned n) {   /* wifi lines, and usb lines that are not just a key echo */
     if (n >= 4 && l[0] == 'w' && l[1] == 'i' && l[2] == 'f' && l[3] == 'i') return 1;
@@ -749,6 +752,18 @@ unsigned int window_get_pixel_phys(int px, int py) {
 void window_fill_rect_phys(int px, int py, int w, int h, unsigned int color) {
     for (int y = py; y < py + h; y++) for (int x = px; x < px + w; x++) window_pixel_phys(x, y, color);
 }
+/* Slice 3: the logical calls the circle, capsule and window frame painters make. There is never an offscreen target
+   here, and a logical pixel is a window_scale() square, as in drivers/window.c. */
+int window_has_target(void) { return 0; }
+void window_pixel(int x, int y, unsigned int color) { int s = (int)window_scale(); window_fill_rect_phys(x * s, y * s, s, s, color); }
+void window_rect(int x, int y, int w, int h, unsigned int color) { int s = (int)window_scale(); window_fill_rect_phys(x * s, y * s, w * s, h * s, color); }
+/* The painters' text: DejaVu Sans at 12 on the logical grid, the i386 UI size (a 24 pixel face in a 32 pixel line at
+   scale 2), with the baseline 12.5 below the line box's top. Nothing draws before text_init has loaded the faces. */
+void gui_text(const char *s, int x, int y, unsigned int fg) {
+    int k = (int)window_scale();
+    if (text_ok) text_draw(2, s, x * k, y * k + 25 * k / 2, 120 * k, fb_color(fg), fb, fb_pitch, (int)fb_w, (int)fb_h);
+}
+int gui_text_width(const char *s) { int k = (int)window_scale(); return text_ok ? text_width(2, s, 120 * k) / k : 0; }
 /* The wallpaper is already on the screen, so reading the framebuffer is reading the wallpaper, as long as the dock is
    painted before anything else covers its band. */
 unsigned int gui_wallpaper_sample(int px, int py, int sway) { (void)sway; return window_get_pixel_phys(px, py); }
@@ -772,6 +787,26 @@ static void dock_paint(void) {
     }
     uart_puts("M1d dock "); uart_dec((unsigned)drawn); uart_puts(" icons\n");
 }
+/* Slice 3: the hover label, the i386 one (gui_draw_dock_label). The first hover keeps a copy of the dock's band, so
+   moving to another slot or to none puts the plain band back before the next label; nothing is allocated until then.
+   The pointer drives it in the next slice; today only the dockhover test build calls it. Names follow APPS[] in
+   kernel/kernel.c for GUI_DOCK_DEFAULT_ORDER (arm64-m1c-check.py compares them). */
+static const char *const dock_names[GUI_ICON_COUNT] = {"Apps", "Burrow", "Mail", "Calendar", "Notes", "Reminders", "Terminal", "Samantha", "Weather", "Stocks", "Trash"};
+static unsigned *dock_band;
+void dock_hover(int slot) {
+    int s = (int)window_scale(), top = gui_dock_band_top() * s, rows = (int)fb_h - top;
+    if (!dock_band) {
+        unsigned long mark = heap_mark();
+        dock_band = kmalloc((unsigned)rows * fb_pitch * 4);
+        if (!dock_band) { heap_release(mark); uart_puts("oom dock hover\n"); return; }
+        for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) dock_band[i] = fb[(unsigned)top * fb_pitch + i];
+    } else for (unsigned i = 0; i < (unsigned)rows * fb_pitch; i++) fb[(unsigned)top * fb_pitch + i] = dock_band[i];
+    if (slot >= 0 && slot < GUI_ICON_COUNT) {
+        gui_draw_dock_label(gui_slot_x(slot) + DOCK_ICON / 2, gui_dock_y0(), dock_names[slot]);
+        uart_puts("M1d hover "); uart_dec((unsigned)slot); uart_putc(' '); uart_puts(dock_names[slot]); uart_putc('\n');
+    }
+    fb_flush(0, top, (int)fb_w, rows);
+}
 
 static void fb_init(void) {
     if (!fb_setup()) return;
@@ -787,12 +822,14 @@ static void fb_init(void) {
     fb_rect(0, mb - 1, W, 1, MENUBAR_RULE);               /* closed by a one pixel rule */
     dock_paint();                                         /* the i386 dock, while only the wallpaper is under it */
     int band_y = gui_dock_band_top() * (int)window_scale();   /* the top of the dock's band, room for a hover label */
-    fb_rect(win_x, win_y, win_w, win_h, CON_BG);          /* a window */
-    fb_rect(win_x, win_y, win_w, sc(28), 0x00b5502c);     /* its title bar, the house accent */
-    text_ok = text_init();
+    text_ok = text_init();                                /* before the window: its frame has a title */
+    /* Slice 3: the Console wears the i386 window frame (gui_paint.c): rounded cream body on the wallpaper, traffic
+       lights, centred name, a hairline under the title band. Its content well is white for the log. */
+    int s = (int)window_scale(), lx = win_x / s, ly = win_y / s, lw = win_w / s, lh = win_h / s;
+    gui_draw_window_frame(lx, ly, lw, lh, "Console");
+    fb_rect((lx + 8) * s, (ly + 30) * s, (lw - 16) * s, (lh - 38) * s, CON_BG);
     if (text_ok) {
         text_draw(1, "Joshua Tree", sg(16), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
-        text_draw(1, "Console", win_x + sc(10), win_y + sc(20), sc(150), fb_color(0x00ffffff), fb, fb_pitch, W, H);  /* title bar */
         const char *clk = "--:--";                          /* the clock slot, until there is a time source */
         int cx = W - sg(16) - text_width(2, clk, sg(120));
         text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
@@ -806,11 +843,22 @@ static void fb_init(void) {
         text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
     } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
     con_layout(win_x, win_y, win_w, win_h);
+    {   /* keep the log inside the frame's white well: under the title band's hairline, clear of the cream margins */
+        int wx = (lx + 8) * s, wy = (ly + 30) * s + 2 * s, wr = (lx + lw - 8) * s, wb = (ly + lh - 8) * s;
+        if (con_x < wx) con_x = wx;
+        if (con_y < wy) con_y = wy;
+        if (con_x + con_cols * con_cw > wr) con_cols = (wr - con_x) / con_cw;
+        if (con_y + (con_rows + 2) * con_ch > wb) con_rows = (wb - con_y) / con_ch - 2;
+    }
     con_start();
+#ifdef DOCK_HOVER_TEST   /* the dockhover test build: the label over one slot, then (arm64-m1c-check.py) its pixels */
+    dock_hover(DOCK_HOVER_TEST);
+#endif
     dcache_clean(fb, (unsigned long)fb_pitch * fb_h * 4);   /* the whole still picture out to RAM; con_glyph cleans as it goes from here */
-    /* Blank spots, clear of any text: the window body, the menu bar's rule, and the wallpaper (not the old flat fill,
-       and not one colour everywhere). Grey and white read the same either byte order; the rule is checked in fb_color order. */
-    int ok = fb[(unsigned)(win_y + win_h - 4) * fb_pitch + fb_w / 2] == 0x00ffffff && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
+    /* Blank spots, clear of any text: the bottom of the window's white well, the menu bar's rule, and the wallpaper (not
+       the old flat fill, and not one colour everywhere). Grey and white read the same either byte order; the rule is
+       checked in fb_color order. */
+    int ok = fb[(unsigned)((ly + lh - 8) * s - 2) * fb_pitch + fb_w / 2] == 0x00ffffff && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
     ok = ok && (!wall_ok || (w0 != 0x00203040 && (w0 != w1 || w1 != w2)));   /* a full heap leaves the flat fill, which is the fallback working */
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
