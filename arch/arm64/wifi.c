@@ -256,21 +256,28 @@ static int f2_read(void) {
 }
 /* What the last frame read back looked like, printed when a command gets no matching reply. */
 static unsigned last_chan = 98, last_len, last_cmd, last_id, last_st;
+static unsigned tx_max, tx_max_seen;   /* the chip's flow control: the highest sequence number it will take, from byte 9 of every SDPCM header it sends */
+/* brcmfmac only sends while seq != max and (max - seq) is not "negative" (bit 7). Frames sent past the credit are dropped by the chip,
+   which looks exactly like a command that never gets a reply. Poll for fresh credit (any frame carries it) for up to half a second. */
+static void wait_credit(void) {
+    for (unsigned t = 0; t < 100 && tx_max_seen && (((tx_max - seq) & 0xff) == 0 || ((tx_max - seq) & 0x80)); t++) { f2_read(); mdelay(5); }
+}
 static void no_reply(const char *name, unsigned want) {
     kputs("wifi "); kputs(name); kputs(" no reply: want id "); kdec(want); kputs(", last frame ch "); kdec(last_chan);
-    kputs(" len "); kdec(last_len); kputs(" cmd "); kdec(last_cmd); kputs(" id "); kdec(last_id); kputs(" st "); kx(last_st); kputs("\n");
+    kputs(" len "); kdec(last_len); kputs(" cmd "); kdec(last_cmd); kputs(" id "); kdec(last_id); kputs(" st "); kx(last_st); kputs(" seq "); kdec(seq); kputs(" max "); kdec(tx_max); kputs("\n");
 }
 static int iovar(const char *name, int set, void *buf, unsigned len, unsigned *status) {
     unsigned char p[1024]; unsigned k = 0;
     while (name[k]) { p[k] = name[k]; k++; } p[k++] = 0;
     for (unsigned i = 0; i < len && k < sizeof p; i++) p[k++] = ((unsigned char *)buf)[i];
+    wait_credit();
     unsigned id = ++reqid & 0xffff, n = sdpcm_pack(frame, seq++, SDPCM_CONTROL, set ? BCDC_SET_VAR : BCDC_GET_VAR, id, set, p, k);
     if (!cmd53(2, 0x8000, 1, frame, fw_padded(n))) return 0;
     for (unsigned t = 0; t < 200; t++) {
         unsigned off, l, ch; int c;
         if (!f2_read()) return 0;
         c = sdpcm_parse(frame, 1536, &off, &l);
-        if (c >= 0) { last_chan = c; last_len = l; if (c == SDPCM_CONTROL && l >= 16) { last_cmd = rd32(frame + off); last_id = rd32(frame + off + 8) >> 16; last_st = rd32(frame + off + 12); } }
+        if (c >= 0) { tx_max = frame[9]; tx_max_seen = 1; last_chan = c; last_len = l; if (c == SDPCM_CONTROL && l >= 16) { last_cmd = rd32(frame + off); last_id = rd32(frame + off + 8) >> 16; last_st = rd32(frame + off + 12); } }
         else last_chan = 99;
         if (c == SDPCM_CONTROL && bcdc_reply(frame + off, l, id, &ch) >= 0) {
             *status = rd32(frame + off + 12);
@@ -286,6 +293,7 @@ static int iovar(const char *name, int set, void *buf, unsigned len, unsigned *s
 /* A plain BCDC ioctl (no variable name): WLC_UP is 2, a set with no payload. brcmfmac brings the interface up this way
    before it scans; without it the chip refuses the scan. */
 static int wlc_ioctl(unsigned cmd, void *buf, unsigned len, unsigned *status) {
+    wait_credit();
     unsigned id = ++reqid & 0xffff, n = sdpcm_pack(frame, seq++, SDPCM_CONTROL, cmd, id, 1, buf, len);
     if (!cmd53(2, 0x8000, 1, frame, fw_padded(n))) return 0;
     for (unsigned t = 0; t < 200; t++) {
