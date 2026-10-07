@@ -959,11 +959,9 @@ static void pointer_click(void) {   /* the left button went down */
     } else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
 }
 
-/* The right end of the menu bar: the clock slot, then a Wi-Fi status in the house accent ("Wi-Fi: starting", "Wi-Fi: Shaw",
-   "Wi-Fi: not joined"). Each call puts the saved bare bar back first, so old text never shows through. */
 unsigned long net_clock_utc(void);   /* ip.c: UTC seconds once the network has told us, 0 before */
 static unsigned *mb_save; static int mb_h, mb_x0;
-static const char *mb_word = "";   /* the Wi-Fi word last shown, so the clock can redraw alone each minute */
+static int mb_wifi = -1;   /* the Wi-Fi state last shown (0 off, 1 working, 2 connected), so the clock can redraw alone each minute */
 static int clock_minute = -1;
 /* Pacific time (Vancouver) from UTC: 8 hours back, 7 in daylight time, which runs from the second Sunday of March to the
    first Sunday of November (the change itself is at 2 am local, 10:00 and 09:00 UTC). */
@@ -990,25 +988,37 @@ static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned 
     civil_from_days(loc / 86400, &y, mon, day);
     *hh = (unsigned)(loc % 86400) / 3600; *mm = (unsigned)(loc % 3600) / 60;
 }
-void menubar_status(const char *st) {
+int wifi_signal_level(void);   /* wifi.c: 1 to 3 from how loud our network was in the scan */
+/* The right end of the menu bar: the clock in 12-hour form, and left of it a three-bar signal icon, no name. Connected
+   bars show in the house accent, as many as the signal earns; anything else (starting, joining, no network) is three
+   quiet grey bars. Each call puts the saved bare bar back first, so old pixels never show through. */
+void menubar_wifi(int state) {
     if (!fb || !text_ok) return;
     int W = (int)fb_w, H = (int)fb_h, mb = sg(MENUBAR_H);
     if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) fb[(unsigned)y * fb_pitch + (unsigned)x] = mb_save[y * (W - mb_x0) + (x - mb_x0)];
-    mb_word = st;
-    char clkbuf[8] = "--:--"; const char *clk = clkbuf;   /* the clock slot: dashes until the network has told us the time */
+    mb_wifi = state;
+    char clkbuf[12] = "--:--"; const char *clk = clkbuf;   /* the clock slot: dashes until the network has told us the time */
     unsigned long u = net_clock_utc();
-    if (u) { unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd); clkbuf[0] = (char)('0' + h / 10); clkbuf[1] = (char)('0' + h % 10); clkbuf[3] = (char)('0' + m / 10); clkbuf[4] = (char)('0' + m % 10); clock_minute = (int)(h * 60 + m); }
+    if (u) {
+        unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd); unsigned h12 = h % 12 ? h % 12 : 12; unsigned n = 0;
+        if (h12 >= 10) clkbuf[n++] = '1';
+        clkbuf[n++] = (char)('0' + h12 % 10); clkbuf[n++] = ':'; clkbuf[n++] = (char)('0' + m / 10); clkbuf[n++] = (char)('0' + m % 10);
+        clkbuf[n++] = ' '; clkbuf[n++] = h >= 12 ? 'P' : 'A'; clkbuf[n++] = 'M'; clkbuf[n] = 0;
+        clock_minute = (int)(h * 60 + m);
+    }
     int cx = W - sg(16) - text_width(2, clk, sg(120));
     text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
-    int bx = cx - sg(18) - text_width(1, st, sg(110));
-    text_draw(1, st, bx, (mb + sg(8)) / 2, sg(110), fb_color(0x00b5502c), fb, fb_pitch, W, H);
+    int bw = sg(4), gap = sg(2), iw = 3 * bw + 2 * gap, ix = cx - sg(18) - iw, base = mb / 2 + sg(5);
+    int level = state == 2 ? wifi_signal_level() : 0;
+    static const int hts[3] = {5, 8, 11};
+    for (int i = 0; i < 3; i++) fb_rect(ix + i * (bw + gap), base - sg(hts[i]), bw, sg(hts[i]), i < level ? 0x00b5502c : 0x00B8B4AC);
     fb_flush(mb_x0, 0, W - mb_x0, mb);
 }
 void menubar_tick(void) {   /* the poll loop calls this; it redraws only when the minute has changed */
     unsigned long u = net_clock_utc();
-    if (!u || !mb_word[0]) return;
+    if (!u || mb_wifi < 0) return;
     unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
-    if ((int)(h * 60 + m) != clock_minute) menubar_status(mb_word);
+    if ((int)(h * 60 + m) != clock_minute) menubar_wifi(mb_wifi);
 }
 static void fb_init(void) {
     if (!fb_setup()) return;
@@ -1040,7 +1050,7 @@ static void fb_init(void) {
     if (text_ok) {
         menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
         text_draw(1, "Joshua Tree", sg(40), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
-        menubar_status("Wi-Fi: starting");   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
+        menubar_wifi(1);   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
         const char *thanks = "Steve Jobs, 1955 to 2011. Thank you. Make something wonderful.";
@@ -1436,9 +1446,9 @@ void main(void) {
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
-    if (!wifi_init()) menubar_status(WIFI_ON_PI ? "Wi-Fi: not joined" : "Wi-Fi: none");
+    if (!wifi_init()) menubar_wifi(0);
 #ifdef PI_BUILD
-    if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_status(mb_word); }   /* the address from the router, then the time */
+    if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
     if (usb_ok) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay

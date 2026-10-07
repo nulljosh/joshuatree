@@ -18,7 +18,7 @@ static unsigned c53_stage, c53_int, c53_state;   /* where the last CMD53 gave up
 /* Plain-English progress: the step reached so far, out of the ten it takes to reach the internet. */
 static unsigned wstep; static const char *wname[] = { "", "power", "chip answers", "bus up", "chip clock", "chip halted",
     "firmware upload", "firmware running", "scan", "join", "internet" };
-void menubar_status(const char *s);   /* main.c: the Wi-Fi word at the right end of the menu bar */
+void menubar_wifi(int state);   /* main.c: the signal icon at the right end of the menu bar: 0 off, 1 working, 2 connected */
 static void step(unsigned n) { wstep = n; }
 static void summary(void) { kputs("Wi-Fi: "); kdec(wstep); kputs(" of 10 steps done, stuck at "); kputs(wname[wstep < 10 ? wstep + 1 : 10]); kputs("\n"); }
 static void fail(const char *step) { summary(); kputs("wifi FAIL "); kputs(step); if (c53_stage) { kputs(" stage "); kdec(c53_stage); kputs(" int "); kx(c53_int); kputs(" state "); kx(c53_state); } kputs("\n"); }
@@ -317,11 +317,12 @@ static int wlc_ioctl(unsigned cmd, void *buf, unsigned len, unsigned *status) {
 #ifndef WIFI_SSID_LEN
 #include "wifi_cfg.h"
 #endif
-static int ap_shown;
+static int ap_shown, ap_rssi = -100;
+int wifi_signal_level(void) { return ap_rssi >= -60 ? 3 : ap_rssi >= -72 ? 2 : 1; }   /* bars from the scan, which is how loud our network was */
 static void ap_line(int rssi, unsigned chan, const char *ssid, unsigned slen) {   /* "wifi ap -51 ch6 MySSID", under 53 columns */
     if (ap_shown || slen != WIFI_SSID_LEN) return;
     for (unsigned i = 0; i < slen; i++) if ((unsigned char)ssid[i] != wifi_ssid[i]) return;
-    ap_shown = 1;
+    ap_shown = 1; ap_rssi = rssi;
     kputs("wifi found "); if (rssi < 0) { kputs("-"); rssi = -rssi; } kdec((unsigned)rssi); kputs(" ch"); kdec(chan); kputs(" ");
     char s[33]; unsigned n = slen > 32 ? 32 : slen; for (unsigned i = 0; i < n; i++) s[i] = ssid[i] >= 32 && ssid[i] < 127 ? ssid[i] : '?'; s[n] = 0;
     kputs(s); kputs("\n");
@@ -372,7 +373,7 @@ static int scan(void) {
         }
         mdelay(5);
     }
-    menubar_status(WIFI_SSID_LEN ? "Wi-Fi: joining" : "Wi-Fi: on"); kputs("wifi scan done, "); kdec(found); kputs(ap_shown ? " results\n" : " results, ours not among them\n"); step(8);
+    menubar_wifi(1); kputs("wifi scan done, "); kdec(found); kputs(ap_shown ? " results\n" : " results, ours not among them\n"); step(8);
     return 1;
 }
 
@@ -536,7 +537,7 @@ static int join(void) {
                 if (!set_key(0, ptk + 32, aa, 2)) { fail("pairwise key"); return 0; }   /* BRCMF_PRIMARY_KEY */
                 if (gtk && !set_key(gtk_id, gtk, 0, 0)) { fail("group key"); return 0; }
                 kputs(gtk ? "wifi joined, keys installed\n" : "wifi joined, no group key found\n");
-                { static char st[48] = "Wi-Fi: "; unsigned n = 7; for (unsigned i = 0; i < WIFI_SSID_LEN && n < 47; i++) st[n++] = (char)wifi_ssid[i]; st[n] = 0; menubar_status(st); }
+                menubar_wifi(2);
                 link_up = 1; step(9); summary(); return 1;
             }
         }
@@ -669,4 +670,5 @@ int wifi_init(void) {
 }
 #else
 int wifi_init(void) { return 0; }
+int wifi_signal_level(void) { return 1; }
 #endif
