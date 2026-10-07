@@ -6,7 +6,7 @@ set -eu
 O=${1:-wifi_cfg.h}
 f=${WIFI_CONF:-$HOME/.config/joshuatree/wifi.conf}
 ssid=; psk=
-if [ -r "$f" ]; then
+if [ "${JT_WIFI_DEV:-0}" = 1 ] && [ -r "$f" ]; then   # only a dev card (tools/flash-pi.sh) ever carries the network; a release build never does
     ssid=$(sed -n 's/^ssid=//p' "$f" | head -1); psk=$(sed -n 's/^psk=//p' "$f" | head -1)
 fi
 if [ -n "$ssid" ] && { [ "${#ssid}" -gt 32 ] || [ "${#psk}" -lt 8 ] || [ "${#psk}" -gt 63 ]; }; then echo "wifi_cfg: ssid up to 32 and psk 8 to 63 characters; building without Wi-Fi join" >&2; ssid=; psk=; fi

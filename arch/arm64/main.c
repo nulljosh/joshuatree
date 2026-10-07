@@ -959,6 +959,20 @@ static void pointer_click(void) {   /* the left button went down */
     } else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
 }
 
+/* The right end of the menu bar: the clock slot, then a Wi-Fi status in the house accent ("Wi-Fi: starting", "Wi-Fi: Shaw",
+   "Wi-Fi: not joined"). Each call puts the saved bare bar back first, so old text never shows through. */
+static unsigned *mb_save; static int mb_h, mb_x0;
+void menubar_status(const char *st) {
+    if (!fb || !text_ok) return;
+    int W = (int)fb_w, H = (int)fb_h, mb = sg(MENUBAR_H);
+    if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) fb[(unsigned)y * fb_pitch + (unsigned)x] = mb_save[y * (W - mb_x0) + (x - mb_x0)];
+    const char *clk = "--:--";   /* the clock slot, until there is a time source (network time, once Wi-Fi joins) */
+    int cx = W - sg(16) - text_width(2, clk, sg(120));
+    text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
+    int bx = cx - sg(18) - text_width(1, st, sg(110));
+    text_draw(1, st, bx, (mb + sg(8)) / 2, sg(110), fb_color(0x00b5502c), fb, fb_pitch, W, H);
+    fb_flush(mb_x0, 0, W - mb_x0, mb);
+}
 static void fb_init(void) {
     if (!fb_setup()) return;
     int W = (int)fb_w, H = (int)fb_h;
@@ -972,6 +986,9 @@ static void fb_init(void) {
         fb[(unsigned)y * fb_pitch + (unsigned)x] = ((c >> 1) & 0x007F7F7Fu) + 0x00808080u;   /* each colour lane: half itself plus half of 255 */
     }
     fb_rect(0, mb - 1, W, 1, MENUBAR_RULE);               /* closed by a one pixel rule */
+    mb_h = mb - 1; mb_x0 = W / 2;                          /* keep the bare right half of the bar, for menubar_status() */
+    mb_save = kmalloc((unsigned)(mb_h * (W - mb_x0)) * 4);
+    if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) mb_save[y * (W - mb_x0) + (x - mb_x0)] = fb[(unsigned)y * fb_pitch + (unsigned)x];
     text_ok = text_init();                                /* before the dock (the Calendar face) and the window (its title) */
     dock_paint();                                         /* the i386 dock, while only the wallpaper is under it */
     int band_y = gui_dock_band_top() * (int)window_scale();   /* the top of the dock's band, room for a hover label */
@@ -986,11 +1003,7 @@ static void fb_init(void) {
     if (text_ok) {
         menu_mark_paint(sg(24), mb / 2, sg(20), 0x001C1C1E);   /* the mark in the corner, the i386 menu bar's */
         text_draw(1, "Joshua Tree", sg(40), (mb + sg(8)) / 2, sg(130), fb_color(0x001C1C1E), fb, fb_pitch, W, H);   /* menu bar title: bold sans, 13 on the grid, ink */
-        const char *clk = "--:--";                          /* the clock slot, until there is a time source */
-        int cx = W - sg(16) - text_width(2, clk, sg(120));
-        text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
-        int bx = cx - sg(18) - text_width(1, "ARM64", sg(110));   /* the ARM64 badge, in the house accent */
-        text_draw(1, "ARM64", bx, (mb + sg(8)) / 2, sg(110), fb_color(0x00b5502c), fb, fb_pitch, W, H);
+        menubar_status("Wi-Fi: starting");   /* replaces the ARM64 badge: wifi.c moves it along as the chip comes up */
         /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
            of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
         const char *thanks = "Steve Jobs, 1955 to 2011. Thank you. Make something wonderful.";
@@ -1109,7 +1122,12 @@ static void input_event(struct input_event e) {
 }
 void kinput(unsigned type, unsigned code, int value) { input_event((struct input_event){ (unsigned short)type, (unsigned short)code, (unsigned)value }); }
 int usb_init(void);    /* xhci.c */
-int wifi_init(void);   /* wifi.c: M4 Wi-Fi stage 1, polled, every wait bounded */
+int wifi_init(void);
+#ifdef PI_BUILD
+#define WIFI_ON_PI 1
+#else
+#define WIFI_ON_PI 0
+#endif   /* wifi.c: M4 Wi-Fi stage 1, polled, every wait bounded */
 void usb_poll(void);
 /* The boot demo: the Pi has no mouse yet, so one lap of the dock labels plays by itself, Apps to Trash, a beat each,
    and then stops. Joshua's request for the first video of it booting (2026-10-07). */
@@ -1378,7 +1396,7 @@ void main(void) {
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
-    wifi_init();   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
+    if (!wifi_init()) menubar_status(WIFI_ON_PI ? "Wi-Fi: not joined" : "Wi-Fi: none");   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
     if (usb_ok) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
            masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
