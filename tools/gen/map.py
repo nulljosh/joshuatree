@@ -28,75 +28,65 @@ def chain(y, steps, kinds, back=None):
                         f'<text x="{W / 2}" y="{y + 62}" fill="{MUT}" font-size="9" text-anchor="middle">{back}</text>')
 
 out.append(f'<text x="{W / 2}" y="30" fill="{INK}" font-size="18" font-weight="700" text-anchor="middle">Joshua Tree at a glance</text>')
-out.append(f'<text x="{W / 2}" y="48" fill="{MUT}" font-size="11" text-anchor="middle">where it runs, what it is made of, how it talks, how far the Pi has come, how it gets built</text>')
+out.append(f'<text x="{W / 2}" y="48" fill="{MUT}" font-size="11" text-anchor="middle">where it runs, what it is made of, how it talks, the Pi, how it gets built</text>')
 
 sec(78, 'Where it runs')
 xs, bw = [20, 175, 330, 485], 135
-for x, (a, b, k) in zip(xs, [('Browser', 'v86 on the landing page', 'host'), ('QEMU', 'dev and CI', 'host'),
-                             ('Raspberry Pi 4', 'ARM64, Wi-Fi, USB keys', 'new'), ('Real PC', 'ISO on a USB stick', 'host')]):
+for x, (a, b, k) in zip(xs, [('Browser', 'the landing page', 'host'), ('QEMU', 'dev and CI', 'host'),
+                             ('Raspberry Pi 4', 'the real board', 'new'), ('Real PC', 'from a USB stick', 'host')]):
     box(x, 86, bw, 42, a, b, k)
 lines.append('M87 128v16M242 128v16M397 128v16M552 128v16M87 144H552M210 144v14M430 144v14')
 box(110, 158, 200, 42, 'Desktop', 'windows, dock, 30 apps')
-box(330, 158, 200, 42, 'Samantha', 'face, voice, tools')
-lines.append('M210 200v14M430 200v14M210 214H430M210 214v14M430 214v14')
-box(110, 228, 200, 42, 'Kernel', 'i386 and ARM64, tasks, syscalls')
-box(330, 228, 200, 42, 'Userland', 'libjt, ring-3 apps')
-lines.append('M320 270v14M87 284H552M87 284v14M320 284v14M552 284v14')
-for x, (a, b) in zip(xs, [('Drivers', 'disk, PCI, sound, USB'), ('Text and images', 'fonts, PNG, JPEG, HTML'),
-                          ('Network', 'TCP, DNS, HTTP, Pi Wi-Fi'), ('Storage', 'FAT16 disk, Ramfs')]):
-    box(x, 298, bw, 42, a, b)
-lines.append('M397 340v18M87 358H552M87 358v18M242 358v18M397 358v18M552 358v18')
-for x, (a, b) in zip(xs, [('Cloudflare Worker', 'proxy, quotes, mail'), ('Turing', 'picks the tool, writes'),
-                          ('ElevenLabs', 'her voice'), ('Open-Meteo', 'weather and maps')]):
-    box(x, 376, bw, 34, a, b, 'svc')
+box(330, 158, 200, 42, 'Samantha', 'you type, she runs it')
+lines.append('M210 200v14M430 200v14M210 214H430M320 214v14')
+box(110, 228, 420, 42, 'Kernel', 'tasks, drivers, fonts, network, disk, on i386 and ARM64')
+out.append(f'<text x="{W / 2}" y="290" fill="{MUT}" font-size="10" text-anchor="middle">Calls out to a Cloudflare Worker, Turing (her brain), ElevenLabs (her voice) and Open-Meteo.</text>')
 
-sec(440, 'What happens when you talk to Samantha')
-chain(450, [('You type', '"call Mom at 5"'), ('Samantha', 'sends your words'), ('Worker', 'carries it out'),
-            ('Turing', 'picks the tool'), ('Joshua Tree', 'does it'), ('Her voice', 'and her face')],
-      ['host', 'core', 'host', 'host', 'core', 'core'])
+sec(320, 'What happens when you talk to Samantha')
+chain(330, [('You type', '"call Mom at 5"'), ('Turing', 'picks the tool'), ('Joshua Tree', 'does it'), ('She answers', 'voice and face')],
+      ['host', 'host', 'core', 'core'])
 
 # The Pi, on the real board. done = seen working in a photo of the screen.
-sec(520, 'The Pi, on the real board')
-pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi scan', '11 networks', 1),
-      ('Wi-Fi join', 'next', 0), ('Clock', 'from the net', 0), ('Sound', 'headphone jack', 0),
+sec(400, 'The Pi, on the real board')
+pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi scan', '16 networks', 1),
+      ('Wi-Fi join', 'in progress', 0), ('Clock', 'from the net', 0), ('Sound', 'headphone jack', 0),
       ('Mouse', 'Bluetooth', 0), ('Mic', 'Yeti, USB', 0)]
 pw = (W - 40 - 7 * 8) / 8
 for i, (a, b, done) in enumerate(pi):
-    box(20 + i * (pw + 8), 530, pw, 40, a, b, 'new' if done else 'todo')
-out.append(f'<text x="20" y="588" fill="{MUT}" font-size="9">Wi-Fi: 8 of 10 steps on the real board. Solid boxes are seen working on the screen; dashed are next, in order.</text>')
+    box(20 + i * (pw + 8), 410, pw, 40, a, b, 'new' if done else 'todo')
+out.append(f'<text x="20" y="468" fill="{MUT}" font-size="9">Wi-Fi: 8 of 10 steps on the real board. Solid boxes are seen working on the screen; dashed are next, in order.</text>')
 
-sec(616, 'How it gets built')
-chain(626, [('roadmap.md', 'the queue'), ('Main session', 'picks the work'), ('One agent', 'own worktree'),
-            ('ci-local', 'draft until green'), ('Verify', 'real frames'), ('Merge on green', 'tag, release')],
-      ['host', 'core', 'core', 'host', 'core', 'new'], back='next item')
+sec(496, 'How it gets built')
+chain(506, [('Roadmap', 'the queue'), ('Build it', 'one agent, own branch'), ('Prove it', 'tests, real frames'), ('Ship it', 'merge on green')],
+      ['host', 'core', 'core', 'new'], back='next item')
 
-sec(714, 'Memory, PC build')
+sec(594, 'Memory, PC build')
 mem = [('code', 415, '#2f6b3a'), ('fonts, images, text', 3018, '#7fa886'), ('starting values', 12, '#b5502c'),
        ('working memory', 619, '#c9d9cb'), ('programs', 32, '#141413'), ('sound', 64, '#d97757')]
 tot = sum(k for _, k, _ in mem); x = 20.0
 for n, k, c in mem:
-    w = max(2.0, (W - 40) * k / tot); out.append(f'<rect x="{x:.1f}" y="722" width="{w:.1f}" height="16" fill="{c}"/>'); x += w
+    w = max(2.0, (W - 40) * k / tot); out.append(f'<rect x="{x:.1f}" y="602" width="{w:.1f}" height="16" fill="{c}"/>'); x += w
 for i, (n, k, c) in enumerate(mem):   # three to a row, so the labels never run into each other
-    lx, ly = 20 + (i % 3) * 200, 746 + (i // 3) * 14
+    lx, ly = 20 + (i % 3) * 200, 626 + (i // 3) * 14
     out.append(f'<rect x="{lx}" y="{ly}" width="8" height="8" fill="{c}"/><text x="{lx + 11}" y="{ly + 8}" fill="#555" font-size="9">{n} {k:,} KB</text>')
 
-sec(784, 'Apps shipped')
+sec(664, 'Apps shipped')
 svg = open(os.path.join(ROOT, 'progress.svg')).read()
 pts = [tuple(map(int, p.split(','))) for p in re.search(r'<polyline points="([^"]+)"', svg).group(1).split()]
 apps = re.findall(r'data-apps="(\d+)"', svg)[-1]
 dates = re.findall(r'data-version="([\d-]+)"', svg)
 x0, x1 = pts[0][0], pts[-1][0]
-sp = ' '.join(f'{20 + (x - x0) * 600 / (x1 - x0):.0f},{794 + (y - 10) * 80 / 140:.0f}' for x, y in pts)
-out.append('<path d="M20 794H620M20 834H620M20 874H620" stroke="#ece8df"/>')
+sp = ' '.join(f'{20 + (x - x0) * 600 / (x1 - x0):.0f},{674 + (y - 10) * 80 / 140:.0f}' for x, y in pts)
+out.append('<path d="M20 674H620M20 714H620M20 754H620" stroke="#ece8df"/>')
 out.append(f'<polyline points="{sp}" fill="none" stroke="{INK}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>')
-ey = 794 + (pts[-1][1] - 10) * 80 / 140
+ey = 674 + (pts[-1][1] - 10) * 80 / 140
 out.append(f'<circle cx="620" cy="{ey:.0f}" r="4" fill="#fff" stroke="{T}" stroke-width="2"/>')
 out.append(f'<text x="612" y="{ey + 22:.0f}" fill="{INK}" font-size="12" font-weight="600" text-anchor="end">{apps} apps</text>')
-out.append(f'<text x="20" y="892" fill="{MUT}" font-size="10">{dates[0]}</text><text x="620" y="892" fill="{MUT}" font-size="10" text-anchor="end">{dates[-1]}</text>')
-out.append(f'<text x="{W / 2}" y="918" fill="{MUT}" font-size="10" text-anchor="middle">Terracotta: the newest piece. Drawn by tools/gen/map.py; the detail graphs live in docs/.</text>')
+out.append(f'<text x="20" y="772" fill="{MUT}" font-size="10">{dates[0]}</text><text x="620" y="772" fill="{MUT}" font-size="10" text-anchor="end">{dates[-1]}</text>')
+out.append(f'<text x="{W / 2}" y="798" fill="{MUT}" font-size="10" text-anchor="middle">Terracotta: the newest piece. Drawn by tools/gen/map.py; the detail graphs live in docs/.</text>')
 
 open(os.path.join(ROOT, 'architecture.svg'), 'w').write(
-    f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="934" viewBox="0 0 {W} 934" '
+    f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="814" viewBox="0 0 {W} 814" '
     'style="background:#fff;font-family:-apple-system,BlinkMacSystemFont,Helvetica,sans-serif">\n'
     f'<defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L8 4L0 8z" fill="{T}"/></marker></defs>\n'
     f'<rect width="100%" height="100%" fill="#fff"/>\n<path d="{"".join(lines)}" stroke="#d1d1d6" fill="none"/>\n'
