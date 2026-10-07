@@ -14,18 +14,21 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
 ## Top 10, right now (2026-10-06 night)
 
-The short list. Everything below it is the long list; done items moved to [roadmap-done.md](roadmap-done.md) so this file only shows open work.
+The short list. Two tracks run side by side, one helper each (Joshua agreed the order on 2026-10-06). Everything below is the long list; done items moved to [roadmap-done.md](roadmap-done.md).
 
-1. Wi-Fi stage 1 on the real Pi: the card is built, waiting on a photo that lists Shaw.
-2. Wi-Fi stage 2: join Shaw, get an address.
-3. Admin and sudo on the accounts that already exist.
-4. The real desktop and dock on the Pi (five slices).
-5. SD card reads and writes, so files survive a reboot.
-6. Parallel-safe checks, so test suites stop tripping over each other.
-7. The Claude app on the Pi, then the self-update loop and the fallback kernel.
-8. Sound out of the jack, then Movies and Jellyfin.
-9. Doom, the benchmark.
-10. x86-64, slice 1.
+**Track A, what you see on the Pi**
+1. Console scrollback (Page Up), so the Wi-Fi lines can be read from a photo.
+2. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing).
+3. The mouse pointer and clicking, once a mouse is plugged in.
+4. Apps on the Pi: the ring-3 apps rebuilt for ARM, Notes and Clock first.
+
+**Track B, the goal (Claude Code inside Joshua Tree on the Pi)**
+5. The internet stack on the ARM build (DHCP and HTTP over QEMU's network first).
+6. Wi-Fi stage 1 on the real Pi (the scan lists Shaw), then stage 2 (join, get an address).
+7. Claude in the Console: type a question at the Pi's console and the answer prints, through the relay on the Mac. No app port needed, so it lands as soon as Wi-Fi joins.
+
+**Then**
+8. Admin and sudo. 9. SD card writes (MBR and FAT32). 10. The Claude app on ARM, the self-update loop and the fallback kernel.
 
 ## Now (set 2026-10-03)
 Samantha runs the machine, and Joshua is the face of the web portfolio. The phone demo, the OS and the landing all work on a phone. Everything below is what is left, in the order to pick it up. Merge one PR at a time, green first. `docs/LOOP-HANDOFF.md` has the restart prompt and the exact state. Full items live in the themed sections further down.
