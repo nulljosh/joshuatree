@@ -430,6 +430,7 @@ static int join(void) {
     put32(b, 0); if (!wlc_ioctl(22, b, 4, &st) || st) { fail("auth"); return 0; }     /* WLC_SET_AUTH: open system */
     put32(b, 4); if (!wlc_ioctl(134, b, 4, &st) || st) { fail("wsec"); return 0; }    /* WLC_SET_WSEC: AES */
     put32(b, 0x80); if (!iovar("wpa_auth", 1, b, 4, &st) || st) { kputs("wifi wpa_auth status "); kx(st); kputs("\n"); fail("wpa_auth"); return 0; }   /* WPA2_AUTH_PSK */
+    { unsigned z = 0, s2; iovar("sup_wpa", 1, &z, 4, &s2); }   /* the host does the handshake */
     if (!iovar("wpaie", 1, (void *)rsn_ie, sizeof rsn_ie, &st) || st) { kputs("wifi wpaie status "); kx(st); kputs("\n"); }   /* best effort: the firmware can build its own */
     for (unsigned i = 0; i < 80; i++) b[i] = 0;
     put32(b, WIFI_SSID_LEN); for (unsigned i = 0; i < WIFI_SSID_LEN; i++) b[4 + i] = wifi_ssid[i];
@@ -442,9 +443,10 @@ static int join(void) {
         wpa_sha1_add(&h, wifi_ssid, WIFI_SSID_LEN); unsigned char d[20]; wpa_sha1_end(&h, d);
         for (int i = 0; i < 32; i++) snonce[i] = d[i % 20] ^ (unsigned char)(c >> (8 * (i % 8)));
     }
-    unsigned shown = 0;
+    unsigned shown = 0, ndata = 0, nread = 0, nbad = 0;
     for (unsigned t = 0; t < 3000; t++) {   /* up to 15 s: association and the four messages */
-        unsigned off, l; if (!f2_read()) break;
+        unsigned off, l; if (!f2_read()) { nbad++; if (nbad > 20) break; mdelay(5); continue; }
+        nread++;
         int ch = sdpcm_parse(frame, 1600, &off, &l);
         if (ch == SDPCM_EVENT && l > 4 + 72) {
             const unsigned char *ev = frame + off + 4;
@@ -453,9 +455,11 @@ static int join(void) {
             unsigned reason = (unsigned)ev[36] << 24 | ev[37] << 16 | ev[38] << 8 | ev[39];
             if (type != WLC_E_ESCAN_RESULT && shown++ < 8) { kputs("wifi join event "); kdec(type); kputs(" status "); kdec(stat); kputs(" reason "); kdec(reason); kputs("\n"); }
             if (type == 0 && stat != 0) { kputs("wifi join refused\n"); break; }   /* SET_SSID failed */
-        } else if (ch == SDPCM_DATA && l > 4 + 14 + 99) {
+        } else if (ch == SDPCM_DATA && l >= 4 + 14 + 4) {   /* >=: a bare message 1 is exactly 4 + 14 + 99 bytes, and > threw it away */
             const unsigned char *bd = frame + off, *e = bd + 4 + bd[3] * 4;
-            if (be16(e + 12) != 0x888e) { mdelay(5); continue; }
+            ndata++;
+            if (ndata <= 4) { kputs("wifi data frame len "); kdec(l); kputs(" type "); kx(be16(e + 12)); kputs("\n"); }
+            if (be16(e + 12) != 0x888e || l < 4 + 14 + 99) { mdelay(5); continue; }
             const unsigned char *k = e + 14;
             unsigned info = be16(k + 5), kdlen = be16(k + 97);
             if (k[1] != 3 || 99 + kdlen > l - 4 - 14) continue;
@@ -494,6 +498,7 @@ static int join(void) {
         }
         mdelay(5);
     }
+    kputs("wifi join: no handshake; frames read "); kdec(nread); kputs(", data "); kdec(ndata); kputs(", read errors "); kdec(nbad); kputs("\n");
     fail("join");
     return 0;
 }
