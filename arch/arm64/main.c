@@ -44,13 +44,36 @@ static void uart_init(void) {
 }
 static void console_putc(char c);   /* the same text, on the screen once there is one */
 static int con_quiet;   /* the rest of this line goes to the UART only: key echoes stay off the screen once the ask> prompt is in use */
+static int con_line_start = 1;   /* the next character begins a line */
 static void uart_putc(char c) {
     while (REG(UART_FR) & TXFF) {}
     REG(UART_DR) = (unsigned char)c;
     if (!con_quiet) console_putc(c);
     if (c == '\n') con_quiet = 0;
+    con_line_start = c == '\n';
 }
-static void uart_puts(const char *s) { while (*s) uart_putc(*s++); }
+/* The boot narrative is long, and on the screen it pushed the lines that matter out of the window. These line starts go to
+   the UART only (the serial log is unchanged): the self-test chatter, the USB enumeration walk and the Wi-Fi steps that went
+   fine. Every FAIL, every odd status and the summary lines still reach the screen. */
+static int con_noise(const char *s) {
+#ifdef CON_VERBOSE
+    (void)s; return 0;   /* the scroll check builds with every line on the screen so there is a long log to scroll */
+#else
+    static const char *const skip[] = { "tick", "M0 ", "M1 ", "M1a ", "M1b ", "M1c fb ok", "M1d dock ", "M3 ", "EL0", "EL1", "booted at ",
+        "usb ", "wifi power", "wifi sdio", "wifi f1", "wifi alp", "wifi chip", "wifi cores", "wifi arm", "wifi fw ", "wifi ht ",
+        "wifi bus", "wifi radio up" };
+    for (unsigned i = 0; i < sizeof skip / sizeof skip[0]; i++) {
+        const char *a = s, *b = skip[i];
+        while (*b && *a == *b) { a++; b++; }
+        if (!*b) return !(skip[i][0] == 'u' && s[4] == 'r');   /* "usb ready: ..." is the one usb line worth the screen */
+    }
+    return 0;
+#endif
+}
+static void uart_puts(const char *s) {
+    if (con_line_start && con_noise(s)) con_quiet = 1;
+    while (*s) uart_putc(*s++);
+}
 static void uart_hex(unsigned long v) {
     uart_puts("0x");
     for (int i = 60; i >= 0; i -= 4) uart_putc("0123456789abcdef"[(v >> i) & 15]);
@@ -1187,6 +1210,7 @@ void main(void) {
     uart_init();
     __asm__ volatile ("mrs %0, CurrentEL" : "=r"(el));
     uart_puts("Joshua Tree on ARM64\n");
+    { const char *sp = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789 .,;:!?&@#$%\n"; while (*sp) console_putc(*sp++); }   /* the type specimen: screen only, at the top of the log */
     uart_puts("booted at EL"); uart_putc((char)('0' + boot_el)); uart_puts("\n");
     uart_puts(((el >> 2) & 3) == 1 ? "EL1\n" : "not EL1\n");
     uart_puts("M0 ok\n");

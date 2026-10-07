@@ -19,7 +19,7 @@ arch = os.path.join(root, "arch/arm64")
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
     print("SKIP: clang, ld.lld or qemu-system-aarch64 not installed"); sys.exit(0)
 subprocess.run(["make", "-C", arch, "clean"], capture_output=True, timeout=120)
-if subprocess.run(["make", "-C", arch], capture_output=True, timeout=300).returncode:
+if subprocess.run(["make", "-C", arch, "MAINFLAGS=-DCON_VERBOSE"], capture_output=True, timeout=300).returncode:
     print("FAIL: arch/arm64 `make` does not build"); sys.exit(1)
 
 tmp = tempfile.mkdtemp()
