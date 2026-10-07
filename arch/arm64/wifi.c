@@ -119,8 +119,42 @@ static int bp_read(unsigned addr, unsigned char *p, unsigned n) {   /* read back
 }
 #define CHIP_RAM 0x198000       /* 43455: 1.5 MiB of SOCRAM at 0x198000; the ARM CR4 core at 0x18002000 */
 #define CHIP_RAM_SIZE 0xc8000    /* brcmfmac chip.c, BRCM_CC_4345_CHIP_ID (the CYW43455 is a 4345 rev 6): 800 KiB, and the firmware looks for its NVRAM at the very end. 0xc0000 put it 32 KiB early and the firmware never raised HT (tenth real-board run: CLKCSR 0x50 = ALP up, HT requested, never granted). */
-#define CR4_WRAP 0x18102000
-#define SDIOD_CORE 0x18003000   /* the SDIO device core on the 4345 family (brcmfmac's EROM walk puts it third) */
+/* Where the cores are. The guesses below are brcmfmac's usual layout for the 4345 family; erom_walk() replaces them
+   with what the chip's own enumeration ROM says (chipcommon 0x18000000, its EROM pointer at 0xfc), the way brcmfmac's
+   chip.c does. A write to a wrong wrapper address succeeds on the bus and does nothing, which is one way the twelfth
+   real-board run could look fine right up to the firmware never saying ready. */
+static unsigned CR4_WRAP = 0x18102000, D11_WRAP = 0x18101000, SDIOD_CORE = 0x18003000;
+static int bp_read32(unsigned addr, unsigned *v) { unsigned char b[4]; if (!bp_read(addr, b, 4)) return 0; *v = rd32(b); return 1; }
+static void erom_walk(void) {
+    unsigned id = 0, erom = 0;
+    if (!bp_read32(0x18000000, &id) || !bp_read32(0x18000000 + 0xfc, &erom)) { kputs("wifi erom unreadable\n"); return; }
+    kputs("wifi chip "); kx(id & 0xffff); kputs(" rev "); kdec((id >> 16) & 0xf); kputs(" erom "); kx(erom); kputs("\n");
+    unsigned core = 0, regbase = 0, wrap = 0, found = 0;
+    for (unsigned n = 0; n < 200; n++, erom += 4) {
+        unsigned v; if (!bp_read32(erom, &v)) break;
+        unsigned desc = v & 0xf;
+        if (desc == 0xf) break;
+        if (desc == 1) {   /* a component: two words, the first holds the core id */
+            unsigned cib; erom += 4; if (!bp_read32(erom, &cib)) break;
+            core = (v >> 8) & 0xfff; regbase = 0; wrap = 0; continue;
+        }
+        if (desc == 3) continue;   /* a master port */
+        if (desc != 5) continue;   /* only address descriptors from here */
+        unsigned stype = (v >> 6) & 3, sztype = (v >> 4) & 3;
+        if (sztype == 3) { unsigned sz; erom += 4; if (!bp_read32(erom, &sz)) break; if (sz & 8) erom += 4; }
+        if (v & 8) erom += 4;   /* a 64-bit address: skip the high word */
+        unsigned base = v & 0xfffff000u;
+        if (stype == 0 && !regbase) regbase = base;
+        if ((stype == 2 || stype == 3) && !wrap) wrap = base;
+        if (regbase && wrap) {
+            if (core == 0x83e && !(found & 1)) { CR4_WRAP = wrap; found |= 1; }
+            if (core == 0x812 && !(found & 2)) { D11_WRAP = wrap; found |= 2; }
+            if (core == 0x829 && !(found & 4)) { SDIOD_CORE = regbase; found |= 4; }
+            regbase = 0; wrap = 0; core = 0;   /* one pair per core is all we need */
+        }
+    }
+    kputs("wifi cores cr4w "); kx(CR4_WRAP); kputs(" d11w "); kx(D11_WRAP); kputs(" sdiod "); kx(SDIOD_CORE); kputs(found == 7 ? "\n" : " (some guessed)\n");
+}
 static int fw_load(void) {
     if (!wifi_fw_bin_len) { kputs("wifi no firmware\n"); return 0; }
     static unsigned char nv[8192];   /* the NVRAM text packed as the firmware wants it (key=value strings, a length trailer) */
@@ -130,6 +164,7 @@ static int fw_load(void) {
     /* Halt the ARM but take it OUT of reset, as brcmfmac's cr4_set_passive does: its TCM is the RAM we load, and a
        core held in reset stops answering (the seventh real-board run: 64 bytes in, then an R5 error, flags 0x1800).
        IOCTRL = CPUHALT|FGC|CLK, RESETCTRL 1 then 0, then IOCTRL = CPUHALT|CLK. */
+    erom_walk();
     if (!bp_write32(CR4_WRAP + 0x408, 0x23) || !bp_write32(CR4_WRAP + 0x800, 1)) { fail("arm halt"); return 0; }
     mdelay(1);
     if (!bp_write32(CR4_WRAP + 0x800, 0) || !bp_write32(CR4_WRAP + 0x408, 0x21)) { fail("arm unreset"); return 0; }
@@ -153,8 +188,8 @@ static int fw_load(void) {
        code wrote the vector to a made-up register and left the NVRAM unpacked and past the end of RAM. */
     unsigned rstvec = wifi_fw_bin[0] | wifi_fw_bin[1] << 8 | wifi_fw_bin[2] << 16 | (unsigned)wifi_fw_bin[3] << 24;
     if (!bp_write32(0, rstvec)) { fail("reset vector"); return 0; }
-    bp_write32(0x18101000 + 0x408, 0xf); bp_write32(0x18101000 + 0x800, 1); mdelay(1); bp_write32(0x18101000 + 0x408, 0x7);
-    bp_write32(0x18101000 + 0x800, 0); mdelay(1); bp_write32(0x18101000 + 0x408, 0x5);
+    bp_write32(D11_WRAP + 0x408, 0xf); bp_write32(D11_WRAP + 0x800, 1); mdelay(1); bp_write32(D11_WRAP + 0x408, 0x7);
+    bp_write32(D11_WRAP + 0x800, 0); mdelay(1); bp_write32(D11_WRAP + 0x408, 0x5);
     if (!bp_write32(CR4_WRAP + 0x408, 0x23) || !bp_write32(CR4_WRAP + 0x800, 1)) { fail("arm run"); return 0; }
     mdelay(1);
     if (!bp_write32(CR4_WRAP + 0x408, 0x3) || !bp_write32(CR4_WRAP + 0x800, 0)) { fail("arm run"); return 0; }
