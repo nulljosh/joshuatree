@@ -176,6 +176,9 @@ From the field, 2026-10-06 night (what Onyx and Circle, the two best bare-metal 
 - [ ] [Fable] A USB stick as the first disk: mass storage over the xHCI driver we have, likely faster to "files survive a reboot" than EMMC2.
 - [ ] [Fable] Doom: the classic proof a platform is real, and Joshua's chosen benchmark (2026-10-06: "if we can get doom working that's sort of a benchmark"). Full speed with sound on the Pi is the flag right after 3.0. Keyboard first, gamepad next.
 - [ ] [Sonnet] USB gamepad: a HID report parser beside the keyboard and mouse. Doom and Hamurapi on the couch.
+- [ ] [Sonnet] Brick, our own brick-breaker (Joshua, 2026-10-07: "Breakout would be a cool game to add"). Own code, own name, own art: the rules of a ball, a paddle and a wall of bricks are free to use, but "Breakout", "Pong" and "Atari" are not. Mouse moves the paddle, keys work too. First proof the mouse and keyboard make a real game on the Pi.
+- [ ] [Sonnet] Paddle, a two-player bounce game (the Pong idea under our own name), and Snake. Small, original, no third-party code or assets.
+- [ ] [Fable] An Atari-style console: our own 6502 core and a tiny TIA-like video chip. Only homebrew games whose authors allow redistribution, never original cartridges (the ROMs are copyrighted). Avoid Tetris-like and Space-Invaders-like designs.
 - [ ] [Sonnet] Drop files from the Mac over Wi-Fi: a tiny upload server on the Pi (plain HTTP PUT), no card swap.
 - [ ] [Sonnet] `joshuatree.local`: mDNS so the Pi announces its name on the network.
 - [ ] [Fable] GPU 3D: the V3D block for real 3D, the way Onyx did it. Samantha's face in 3D is the first use.
