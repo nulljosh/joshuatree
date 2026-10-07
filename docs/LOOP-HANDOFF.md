@@ -4,6 +4,10 @@
 
 The Pi loop. Joshua Tree booted on a real Raspberry Pi 4 today; the loop keeps merging green PRs, puts each merged build on the SD card, and works down the list below toward 3.0 (the desktop on a real Pi, where you can type and click).
 
+## The goal
+
+Joshua's /goal (2026-10-06 night): we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi. Everything below serves it: Wi-Fi first, then the Claude app (#433) on the Pi, then the model editing the OS's own files, then a toolchain on the box.
+
 ## Where things stand (2026-10-06, 19:30)
 
 - Main is 2.13.0. On the real Pi 4 at 1920x1080: the desktop boots, the console is readable, the Steve Jobs line is drawn, and a USB keyboard (NuPhy, behind the VL805 hub) types on screen. `docs/RASPBERRY-PI.md` has the log and photos.
