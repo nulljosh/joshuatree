@@ -3,8 +3,10 @@
 through ramfb; on QEMU's Raspberry Pi 4B model through the VideoCore mailbox, the same call a real Pi answers.
 
 Boots each build, waits for "M1c fb ok" on the UART, then asks QEMU for a screendump over QMP and checks real pixels:
-the menu bar (its rule, and half wallpaper half white), the Satellite wallpaper (real photo pixels, in colour, not the old flat fill), window, accent title bar, the i386 dock (its tray,
-hairline and 11 icon tiles, from the shared kernel/gui_paint.c) and the tribute line above it. On the Pi model it also fakes a 1080p
+the menu bar (its rule, and half wallpaper half white), the Satellite wallpaper (real photo pixels, in colour, not the old flat fill), the i386 dock (its tray,
+hairline and 11 icon tiles, from the shared kernel/gui_paint.c), the i386 window frame on the Console (cream body, rounded
+corner, title hairline, traffic lights, centred title, white well) and the tribute line above the dock. A dockhover test build
+(`make hovertest`) must show the i386 hover label, capsule and name, over slot 3; the shipped kernel must not. On the Pi model it also fakes a 1080p
 and a 4K monitor and checks the desktop fills a 1920x1080 screen. This proves what the screen shows, not just what the
 kernel believes. The cache cleaning a real board needs is invisible to QEMU, so that part is checked in the source.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
@@ -40,7 +42,7 @@ else: print("  ok: start.S is PC-relative and zeroes FPCR")
 if "kernel_address=0x80000" not in open(os.path.join(root, "tools/pi-config.txt")).read():
     fails.append("tools/pi-config.txt lost kernel_address=0x80000")
 
-def shoot(name, qemu_args, image, size=(800, 600)):
+def shoot(name, qemu_args, image, size=(800, 600), hover=False):
     tmp = tempfile.mkdtemp()
     log, sock, shot = tmp + "/uart", tmp + "/qmp", tmp + "/shot.ppm"
     q = subprocess.Popen(["qemu-system-aarch64", *qemu_args, "-display", "none", "-serial", "file:" + log,
@@ -104,9 +106,35 @@ def shoot(name, qemu_args, image, size=(800, 600)):
         elif colours < 150: fails.append(f"{name}: the desktop has only {colours} colours, that is not a photo")
         elif tinted * 4 < len(dsk): fails.append(f"{name}: the wallpaper is not in colour ({tinted} of {len(dsk)} samples tinted)")
         else: print(f"  ok: {name} wallpaper is the photo: {colours} colours in {len(dsk)} samples, {tinted} tinted")
-        want = [("window", (w // 2, win_y + win_h - 4), (0xff, 0xff, 0xff)), ("title bar", (w // 2, win_y + sc(10)), (0xb5, 0x50, 0x2c)),
+        # The Console wears the i386 window frame (kernel/gui_paint.c gui_draw_window_frame) on the logical grid: cream
+        # body, a hairline under the 30 pixel title band, three traffic lights at x+24/46/68, the name centred in ink,
+        # and a white well for the log. Each dot is sampled 5 left of its centre, clear of the "x" and "-" glyphs.
+        fx, fy, fw, fh = win_x // s2, win_y // s2, win_w // s2, win_h // s2
+        L = lambda x, y: (x * s2, y * s2)
+        want = [("window well", (w // 2, (fy + fh - 8) * s2 - 2), (0xff, 0xff, 0xff)),
+                ("title band", L(fx + 100, fy + 6), (0xf5, 0xf0, 0xeb)),                          # WINDOW_BODY
+                ("title hairline", (L(fx + 100, 0)[0], (fy + 29) * s2 + s2 - 1), (0xd9, 0xd3, 0xcb)),   # WINDOW_RULE
+                ("close dot", L(fx + 19, fy + 16), (0xff, 0x5f, 0x57)), ("minimize dot", L(fx + 41, fy + 16), (0xff, 0xd6, 0x4a)),
+                ("zoom dot", L(fx + 63, fy + 16), (0xd8, 0xd4, 0xce)),
                 ("dock tray", (w // 2, (dock_y0 + 5) * s2), (0xef, 0xeb, 0xe4)),                 # DOCK_TRAY_COLOR, in the pad above the icons
                 ("dock hairline", (w // 2, dock_y0 * s2 + s2 - 1), (0xd6, 0xd0, 0xc6))]         # its top edge, one physical pixel
+        if at(*L(fx, fy)) == (0xf5, 0xf0, 0xeb): fails.append(f"{name}: the window's top-left corner is square, not rounded onto the wallpaper")
+        else: print(f"  ok: {name} window corner is rounded onto the wallpaper")
+        title = [at(x, y) for y in range(fy * s2 + 4 * s2, (fy + 26) * s2) for x in range((fx + fw // 2 - 30) * s2, (fx + fw // 2 + 30) * s2)]
+        if sum(1 for c in title if max(c) < 0x80) < 15 * s2: fails.append(f"{name}: no 'Console' title in ink at the centre of the title band")
+        else: print(f"  ok: {name} 'Console' title centred in the title band")
+        # The dock's hover label (gui_draw_dock_label): the dockhover test build hovers slot 3, Calendar. A pale capsule
+        # (DOCK_LABEL_BG) whose centre line is gui_dock_y0() - 13, with the name in ink. The shipped kernel has none.
+        cx, ly = dock_x0 + 10 + 3 * (icon + 6) + icon // 2, dock_y0 - 21
+        cap = [at(*L(x, ly + 1)) for x in range(cx - 10, cx + 11, 2)]
+        lab = [at(x, y) for y in range((ly + 3) * s2, (ly + 16) * s2) for x in range((cx - 30) * s2, (cx + 30) * s2)]
+        ink_ = sum(1 for c in lab if max(c) < 0x80)
+        if hover:
+            if "M1d hover 3 Calendar" not in out: fails.append(f"{name}: no 'M1d hover 3 Calendar' line from the dockhover build")
+            if any(c != (0xf4, 0xf1, 0xec) for c in cap): fails.append(f"{name}: no hover label capsule over slot 3: {cap}")
+            elif ink_ < 20 * s2: fails.append(f"{name}: the hover label has no name in ink ({ink_} pixels)")
+            else: print(f"  ok: {name} hover label over slot 3: capsule {cap[0]}, {ink_} ink pixels of 'Calendar'")
+        elif sum(1 for c in cap if c == (0xf4, 0xf1, 0xec)) > 2: fails.append(f"{name}: a hover label shows with nothing hovered")
         if "M1d dock 11 icons" not in out: fails.append(f"{name}: no 'M1d dock 11 icons' line: the icon artwork did not draw")
         tiles = []                                                   # each slot's tile: the icon artwork, not bare tray
         for slot in range(11):
@@ -126,13 +154,25 @@ def shoot(name, qemu_args, image, size=(800, 600)):
         q.kill(); q.wait()
         shutil.rmtree(tmp, ignore_errors=True)
 
+# The Pi's dock names follow APPS[] in kernel/kernel.c for GUI_DOCK_DEFAULT_ORDER: the label must say what i386 says.
+import re
+k = open(os.path.join(root, "kernel/kernel.c")).read()
+apps = re.findall(r'\{"([^"]+)",', re.search(r"struct app APPS\[GUI_APP_COUNT\] = \{(.*?)\n\};", k, re.S).group(1))
+order = re.search(r"#define GUI_DOCK_DEFAULT_ORDER \{(.*?)\}", open(os.path.join(root, "kernel/gui_paint.h")).read()).group(1).replace(" ", "").split(",")
+i386_names = [apps[apps.index("Apps") if t == "GUI_APPS_FOLDER" else apps.index("Trash") if t == "GUI_TRASH" else int(t)] for t in order]
+arm_names = re.findall(r'"([^"]+)"', re.search(r"dock_names\[GUI_ICON_COUNT\] = \{(.*?)\};", main_c).group(1))
+if arm_names != i386_names: fails.append(f"main.c dock_names {arm_names} differ from the i386 dock {i386_names}")
+else: print("  ok: the ARM dock's names match APPS[] for the default order")
 shoot("virt ramfb", ["-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-device", "ramfb"], "kernel8.elf")
+if subprocess.run(["make", "-C", arch, "hovertest"], capture_output=True).returncode: fails.append("`make hovertest` does not build")
+else: shoot("virt hover", ["-machine", "virt", "-cpu", "cortex-a72", "-m", "256", "-device", "ramfb"], "hover-kernel8.elf", hover=True)
 if "raspi4b" in subprocess.run(["qemu-system-aarch64", "-machine", "help"], capture_output=True, text=True).stdout:
     if subprocess.run(["make", "-C", arch, "pi"], capture_output=True).returncode: fails.append("pi: `make pi` does not build")
     else:
         shoot("pi mailbox", ["-machine", "raspi4b"], "kernel8.img")   # QEMU's model reports a 640x480 monitor: too small, stays 800x600
         # A 1080p monitor gets a 1080p desktop; a 4K one gets exactly half, so the firmware's 2x scale stays sharp.
         shoot("pi 1080p", ["-machine", "raspi4b", "-global", "bcm2835-fb.xres=1920", "-global", "bcm2835-fb.yres=1080"], "kernel8.img", (1920, 1080))
+        shoot("pi 1080p hover", ["-machine", "raspi4b", "-global", "bcm2835-fb.xres=1920", "-global", "bcm2835-fb.yres=1080"], "hover-kernel8.img", (1920, 1080), hover=True)
         shoot("pi 4K", ["-machine", "raspi4b", "-global", "bcm2835-fb.xres=3840", "-global", "bcm2835-fb.yres=2160"], "kernel8.img", (1920, 1080))
 else:
     print("  QEMU here has no raspi4b model (needs QEMU 9 or newer), Pi screen skipped")
