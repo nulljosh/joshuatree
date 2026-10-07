@@ -286,7 +286,7 @@ static int scan(void) {
             kputs("wifi clm skipped, status "); kdec(st); kputs(" (using the built-in regulatory data)\n"); break; }
     }
     unsigned char cc[12] = { 'C', 'A', 0, 0, 0xff, 0xff, 0xff, 0xff, 'C', 'A', 0, 0 };   /* wlc_country: ccode, rev -1, abbrev */
-    if (!iovar("country", 1, cc, 12, &st) || st) { fail("country"); return 0; }
+    if (!iovar("country", 1, cc, 12, &st) || st) { kputs("wifi country not set, status "); kdec(st); kputs(" (scanning with the default)\n"); }
     unsigned char es[80] = {0}; wr32(es, 1); wr16(es + 4, 1); wr16(es + 6, 0x1234);   /* escan: version 1, ESCAN_ACTION_START, sync id */
     unsigned char *pr = es + 8; for (int i = 0; i < 6; i++) pr[36 + i] = 0xff;        /* wl_scan_params: wildcard SSID, any BSSID */
     pr[42] = 0; pr[43] = 2; wr32(pr + 44, (unsigned)-1); wr32(pr + 48, (unsigned)-1); wr32(pr + 52, (unsigned)-1); wr32(pr + 56, 0);
