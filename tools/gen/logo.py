@@ -1,8 +1,8 @@
 # The Joshua tree mark, 2.25: a crayon scribble.
 #
 # Drawn like a quick marker sketch: thin, sure lines for the trunk, the three arms and the ground, and a dense
-# knot of looping scribble at the end of every arm for the spiky tufts, with a few short strokes flicking out of
-# each knot for the blades. The tree is lopsided like a real one, and the trunk and ground swell where the marker
+# knot of overlapping loops at the end of every arm for the tufts, with a ragged edge and a few loose loops
+# trailing off it. The tree is lopsided like a real one, and the trunk and ground swell where the marker
 # pressed harder and overshoot their ends a hair, as if drawn in one quick pass. Black on off-white, no fill, no shading, round caps. Every point is placed by hand
 # below and then shaken a little by a seeded hand, so the line wavers like a real pen but the file is the same on
 # every run (tools/checks/logo-check.sh rebuilds it byte for byte).
