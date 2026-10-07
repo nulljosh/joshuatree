@@ -705,6 +705,7 @@ static void input_event(struct input_event e) {
 }
 void kinput(unsigned type, unsigned code, int value) { input_event((struct input_event){ (unsigned short)type, (unsigned short)code, (unsigned)value }); }
 int usb_init(void);    /* xhci.c */
+int wifi_init(void);   /* wifi.c: M4 Wi-Fi stage 1, polled, every wait bounded */
 void usb_poll(void);
 
 /* ---- M2: devices on QEMU's virt machine. 32 virtio-mmio slots from 0x0A000000, 0x200 apart, each says which device
@@ -914,6 +915,7 @@ void main(void) {
     fb_diag();   /* last, so it is the newest line on the screen */
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
+    wifi_init();   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
     if (usb_init()) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
            masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
