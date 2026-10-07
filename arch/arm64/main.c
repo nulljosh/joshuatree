@@ -961,17 +961,54 @@ static void pointer_click(void) {   /* the left button went down */
 
 /* The right end of the menu bar: the clock slot, then a Wi-Fi status in the house accent ("Wi-Fi: starting", "Wi-Fi: Shaw",
    "Wi-Fi: not joined"). Each call puts the saved bare bar back first, so old text never shows through. */
+unsigned long net_clock_utc(void);   /* ip.c: UTC seconds once the network has told us, 0 before */
 static unsigned *mb_save; static int mb_h, mb_x0;
+static const char *mb_word = "";   /* the Wi-Fi word last shown, so the clock can redraw alone each minute */
+static int clock_minute = -1;
+/* Pacific time (Vancouver) from UTC: 8 hours back, 7 in daylight time, which runs from the second Sunday of March to the
+   first Sunday of November (the change itself is at 2 am local, 10:00 and 09:00 UTC). */
+static unsigned long civil_days(long y, unsigned m, unsigned d) {
+    y -= m <= 2; long era = (y >= 0 ? y : y - 399) / 400; unsigned yoe = (unsigned)(y - era * 400);
+    unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1, doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return (unsigned long)(era * 146097 + (long)doe - 719468);
+}
+static void civil_from_days(unsigned long z, long *y, unsigned *m, unsigned *d) {
+    z += 719468; unsigned long era = z / 146097; unsigned doe = (unsigned)(z - era * 146097);
+    unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365; long yy = (long)yoe + (long)era * 400;
+    unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100), mp = (5 * doy + 2) / 153;
+    *d = doy - (153 * mp + 2) / 5 + 1; *m = mp < 10 ? mp + 3 : mp - 9; *y = yy + (*m <= 2);
+}
+static unsigned long nth_sunday_utc(long y, unsigned mon, unsigned nth, unsigned hour) {   /* the nth Sunday of a month, at hour UTC */
+    unsigned long d1 = civil_days(y, mon, 1); unsigned dow = (unsigned)((d1 + 4) % 7);   /* 1970-01-01 was a Thursday; 0 = Sunday */
+    unsigned first = dow == 0 ? 1 : 1 + (7 - dow);
+    return (civil_days(y, mon, first + (nth - 1) * 7)) * 86400UL + hour * 3600UL;
+}
+static void clock_local(unsigned long utc, unsigned *hh, unsigned *mm, unsigned *mon, unsigned *day) {
+    long y; unsigned m, d; civil_from_days(utc / 86400, &y, &m, &d);
+    int dst = utc >= nth_sunday_utc(y, 3, 2, 10) && utc < nth_sunday_utc(y, 11, 1, 9);
+    unsigned long loc = utc - (dst ? 7 : 8) * 3600UL;
+    civil_from_days(loc / 86400, &y, mon, day);
+    *hh = (unsigned)(loc % 86400) / 3600; *mm = (unsigned)(loc % 3600) / 60;
+}
 void menubar_status(const char *st) {
     if (!fb || !text_ok) return;
     int W = (int)fb_w, H = (int)fb_h, mb = sg(MENUBAR_H);
     if (mb_save) for (int y = 0; y < mb_h; y++) for (int x = mb_x0; x < W; x++) fb[(unsigned)y * fb_pitch + (unsigned)x] = mb_save[y * (W - mb_x0) + (x - mb_x0)];
-    const char *clk = "--:--";   /* the clock slot, until there is a time source (network time, once Wi-Fi joins) */
+    mb_word = st;
+    char clkbuf[8] = "--:--"; const char *clk = clkbuf;   /* the clock slot: dashes until the network has told us the time */
+    unsigned long u = net_clock_utc();
+    if (u) { unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd); clkbuf[0] = (char)('0' + h / 10); clkbuf[1] = (char)('0' + h % 10); clkbuf[3] = (char)('0' + m / 10); clkbuf[4] = (char)('0' + m % 10); clock_minute = (int)(h * 60 + m); }
     int cx = W - sg(16) - text_width(2, clk, sg(120));
     text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
     int bx = cx - sg(18) - text_width(1, st, sg(110));
     text_draw(1, st, bx, (mb + sg(8)) / 2, sg(110), fb_color(0x00b5502c), fb, fb_pitch, W, H);
     fb_flush(mb_x0, 0, W - mb_x0, mb);
+}
+void menubar_tick(void) {   /* the poll loop calls this; it redraws only when the minute has changed */
+    unsigned long u = net_clock_utc();
+    if (!u || !mb_word[0]) return;
+    unsigned h, m, mo, dd; clock_local(u, &h, &m, &mo, &dd);
+    if ((int)(h * 60 + m) != clock_minute) menubar_status(mb_word);
 }
 static void fb_init(void) {
     if (!fb_setup()) return;
@@ -1369,15 +1406,18 @@ static int input_init(void) { return 0; }
 static void input_poll(void) {}
 static int net_init(void) { return 0; }
 static void net_arp_probe(void) {}
-int nic_init(void) { return 0; }   /* the Pi's card goes here (Wi-Fi or Genet Ethernet) */
-void nic_mac(unsigned char mac[6]) { for (int i = 0; i < 6; i++) mac[i] = 0; }
-int nic_send(const void *frame, unsigned int len) { (void)frame; (void)len; return 0; }
-unsigned int nic_recv(void *buf, unsigned int max) { (void)buf; (void)max; return 0; }
+/* The Pi's network card is its Wi-Fi chip (wifi.c): up once the handshake has installed the keys. */
+int wifi_nic_up(void); void wifi_nic_mac(unsigned char mac[6]); int wifi_nic_send(const void *f, unsigned len); unsigned wifi_nic_recv(void *b, unsigned max);
+int nic_init(void) { return wifi_nic_up(); }
+void nic_mac(unsigned char mac[6]) { wifi_nic_mac(mac); }
+int nic_send(const void *frame, unsigned int len) { return wifi_nic_send(frame, len); }
+unsigned int nic_recv(void *buf, unsigned int max) { return wifi_nic_recv(buf, max); }
 static int blk_init(void) { return 0; }
 static void blk_probe(void) {}
 #endif
 
 void net_stack_demo(void);
+void net_clock_sync(void);
 void main(void) {
     unsigned long el;
     uart_init();
@@ -1396,7 +1436,10 @@ void main(void) {
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
-    if (!wifi_init()) menubar_status(WIFI_ON_PI ? "Wi-Fi: not joined" : "Wi-Fi: none");   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
+    if (!wifi_init()) menubar_status(WIFI_ON_PI ? "Wi-Fi: not joined" : "Wi-Fi: none");
+#ifdef PI_BUILD
+    if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_status(mb_word); }   /* the address from the router, then the time */
+#endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
     if (usb_ok) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
            masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
@@ -1406,7 +1449,7 @@ void main(void) {
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
 #ifdef PI_BUILD
         (void)step;
-        for (;;) { usb_poll(); input_poll(); ask_poll(); demo_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+        for (;;) { usb_poll(); input_poll(); ask_poll(); demo_tick(); menubar_tick(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
 #else
         for (;;) {
             __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"

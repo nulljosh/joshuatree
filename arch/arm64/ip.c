@@ -51,3 +51,45 @@ void net_stack_demo(void) {
     kputs("net http "); kdec((unsigned)http_last_status());
     kputs(" "); kdec((unsigned)got); kputs(" bytes\n");
 }
+
+/* ---- The clock. The Pi has no battery clock, so the time comes from the network once there is one: a plain HTTP HEAD
+   request (port 80, no TLS needed) and the Date: line of the reply, which every web server sends in UTC. Seconds are good
+   enough for a menu-bar clock; ticks() carries it forward from there. A later NTP version can be exact. */
+static unsigned long clock_utc0; static unsigned clock_tick0; static int clock_ok;
+static int month_of(const char *m) {
+    static const char *const n[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+    for (int i = 0; i < 12; i++) if (m[0] == n[i][0] && m[1] == n[i][1] && m[2] == n[i][2]) return i + 1;
+    return 0;
+}
+static unsigned long days_from_civil(long y, unsigned m, unsigned d) {   /* days since 1970-01-01, proleptic Gregorian */
+    y -= m <= 2; long era = (y >= 0 ? y : y - 399) / 400; unsigned yoe = (unsigned)(y - era * 400);
+    unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1, doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return (unsigned long)(era * 146097 + (long)doe - 719468);
+}
+static unsigned num(const char *p, int n) { unsigned v = 0; for (int i = 0; i < n && p[i] >= '0' && p[i] <= '9'; i++) v = v * 10 + (unsigned)(p[i] - '0'); return v; }
+void net_clock_sync(void) {
+    unsigned ip = 0;
+    if (!net_get_gateway()) return;
+    if (!dns_resolve("www.google.com", net_get_dns() ? net_get_dns() : net_get_gateway(), &ip)) { kputs("net dns FAIL\n"); return; }
+    static const char req[] = "HEAD / HTTP/1.0\r\nHost: www.google.com\r\nConnection: close\r\n\r\n";
+    static char rep[1024];
+    int got = tcp_get_timeout(ip, 80, req, sizeof req - 1, rep, sizeof rep - 1, 500);
+    if (got <= 0) { kputs("net time FAIL (no reply)\n"); return; }
+    rep[got] = 0;
+    for (int i = 0; i + 6 < got; i++) {
+        if ((rep[i] == 'D' || rep[i] == 'd') && rep[i + 1] == 'a' && rep[i + 2] == 't' && rep[i + 3] == 'e' && rep[i + 4] == ':') {
+            const char *d = rep + i + 5; while (*d == ' ') d++;
+            while (*d && *d != ',') d++;   /* weekday */
+            if (*d == ',') d++; while (*d == ' ') d++;
+            unsigned day = num(d, 2), mon = month_of(d + 3), year = num(d + 7, 4), hh = num(d + 12, 2), mm = num(d + 15, 2), ss = num(d + 18, 2);
+            if (!mon || year < 2024) break;
+            clock_utc0 = days_from_civil(year, mon, day) * 86400UL + hh * 3600UL + mm * 60UL + ss;
+            clock_tick0 = ticks(); clock_ok = 1;
+            kputs("net time ok\n");
+            return;
+        }
+    }
+    kputs("net time FAIL (no Date line)\n");
+}
+/* Seconds since 1970 in UTC, or 0 while the clock is unset. */
+unsigned long net_clock_utc(void) { return clock_ok ? clock_utc0 + (unsigned long)((unsigned)(ticks() - clock_tick0) / 100) : 0; }
