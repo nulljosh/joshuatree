@@ -534,7 +534,7 @@ static int join(void) {
                 kputs("Wi-Fi: handshake done (4 of 4)\n");
                 if (!set_key(0, ptk + 32, aa, 2)) { fail("pairwise key"); return 0; }   /* BRCMF_PRIMARY_KEY */
                 if (gtk && !set_key(gtk_id, gtk, 0, 0)) { fail("group key"); return 0; }
-                kputs(gtk ? "Wi-Fi: connected, traffic is now encrypted\n" : "Wi-Fi: connected, but no shared key arrived\n");
+                kputs(gtk ? "Wi-Fi: connected\n" : "Wi-Fi: connected, no group key\n");
                 menubar_wifi(2);
                 link_up = 1; step(9); return 1;
             }
