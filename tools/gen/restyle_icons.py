@@ -117,7 +117,8 @@ DOCK = {
                                         "#A87C5B", "#8A8F99", "#FF375F"]))),
 
     # Burrow (the file browser): the Finder idea done in the house colours.
-    # The whole tile is the face, split left/right into a light terracotta
+    # The whole tile is the face, split left/right into a pale periwinkle
+    # and a cobalt (blue at Joshua's ask, 2026-10-07, in a cobalt that is neither Finder's sky blue nor Mail's)
     # and the accent, with two dots and one smile across the split in the
     # deep tone. Full-bleed like Finder, one bold object like Mail or
     # Terminal, no mascot: the fox, the plain folder, the arch head and the
@@ -125,12 +126,12 @@ DOCK = {
     # accent ramp, so the dark half keeps the one shared top light. The
     # full-bleed half is allow-listed in iconart, iconlight and iconinset
     # (FULL_BLEED there): they sample Burrow's dark half only.
-    "burrow": ("#C65E37", "#A24526", "",
+    "burrow": ("#4F6FF2", "#2D47C4", "",
                """
-      <path d="M0 0 H66 C64 40 60 52 60 64 C60 78 64 90 66 128 H0 Z" fill="#E7A07E"/>
-      <rect x="40" y="40" width="11" height="20" rx="5.5" fill="#5C2210"/>
-      <rect x="77" y="40" width="11" height="20" rx="5.5" fill="#5C2210"/>
-      <path d="M36 80 Q64 102 92 80" fill="none" stroke="#5C2210" stroke-width="7" stroke-linecap="round"/>"""),
+      <path d="M0 0 H66 C64 40 60 52 60 64 C60 78 64 90 66 128 H0 Z" fill="#A9B9FF"/>
+      <rect x="40" y="40" width="11" height="20" rx="5.5" fill="#070A12"/>
+      <rect x="77" y="40" width="11" height="20" rx="5.5" fill="#070A12"/>
+      <path d="M36 80 Q64 102 92 80" fill="none" stroke="#070A12" stroke-width="7" stroke-linecap="round"/>"""),
 
     # Mail: a white envelope on a blue tile.
     "mail": ("#34A6FF", "#157FF3",
