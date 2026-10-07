@@ -16,6 +16,7 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 | Console text on the real board | Fixed in 2.12.5, waiting on a photo. The first boot showed one thin mark per line because later drawing never left the CPU cache. Every glyph is now cleaned out to memory as it is drawn. |
 
 | USB keyboard and mouse on the Pi | Written, proven in QEMU only (`tools/checks/arm64-usb-check.py`). Each step prints a short `usb ...` line on screen: `usb pcie link up`, `usb vl805 ok`, `usb xhci run`, `usb port N connected`, `usb kbd addr N`, then `usb key 0x04 a` for every key. The last line on the photo is where it stopped. |
+| Wi-Fi on the Pi (CYW43455) | Built in 2.16.0, waiting on a photo from the real board. Stage 1 lists nearby networks on screen as `wifi ap ...` lines; joining one is stage 2. QEMU has no SDIO card, so it only proves the failure path (`wifi FAIL cmd5`, boot carries on): `tools/checks/arm64-wifi-check.py`. |
 | Disk, network on the Pi | Not yet. M4. |
 
 So on day one, watch two things: the text in a serial terminal, and with a monitor plugged in, a simple desktop of plain boxes with the same boot lines written in its white window. If the serial cable is wrong, the monitor still tells you how far the kernel got. If both are blank, it is the SD card or `config.txt`.
@@ -150,7 +151,7 @@ Without it, every test is: build, swap the card, photograph the monitor, guess. 
 
 ## Wireless
 
-A Bluetooth dongle and a Logitech receiver are both USB devices, so they wait on the USB driver. The receiver then works as a plain USB mouse and keyboard with no extra code. The Pi's own Wi-Fi and Bluetooth chip (CYW43455) needs a closed firmware file and a full wireless stack. Not scheduled; wired Ethernet comes first.
+A Bluetooth dongle and a Logitech receiver are both USB devices, so they wait on the USB driver. The receiver then works as a plain USB mouse and keyboard with no extra code. The Pi's own Wi-Fi and Bluetooth chip (CYW43455) needs a closed firmware file and a full wireless stack. Stage 1 (listing networks) is built, see the table above; wired Ethernet still comes first.
 
 ## Time estimates (2026-10-06)
 
@@ -170,7 +171,7 @@ Guesses, not measurements. Updated as each one lands.
 
 The little fan runs off the header: red to pin 4 (5 V), black to pin 6 (ground). Pin 6 is also the serial cable's ground, so if both are wired, share it or use pin 9, which is another ground. Heat sinks go on the big SoC chip and the smaller chips next to it. For the printed case, see [hardware/PI-CASE.md](hardware/PI-CASE.md).
 
-Wi-Fi firmware: the three Cypress CYW43455 files come from raspberrypi/firmware-nonfree (redistributable under Cypress's licence, not ours, so never committed); `tools/flash-pi.sh` fetches them into `build/wifi-fw/` and the build embeds them. See docs/ARM64.md, M4 Wi-Fi.
+Wi-Fi firmware: the three CYW43455 files (`brcmfmac43455-sdio.bin`, `.txt`, `.clm_blob`) come from RPi-Distro/firmware-nonfree at the commit pinned in `tools/wifi-fw.sh`. They are redistributable under the terms in that repo's `debian/copyright` (saved next to them as `build/wifi-fw/copyright`), they are not ours, and they are never committed. `tools/flash-pi.sh` and `make -C arch/arm64 pi` fetch them into `build/wifi-fw/` and the build embeds them. The on-board chip needs no `dtoverlay=sdio`. Network credentials will live in `~/.config/joshuatree/wifi.conf` and never in the repo. See docs/ARM64.md, M4 Wi-Fi.
 
 ## Log
 
