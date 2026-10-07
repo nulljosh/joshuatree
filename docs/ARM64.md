@@ -17,6 +17,10 @@ The kernel, drivers and lib are C, plus the user programs.
 - Port I/O (`inb`, `outb`) shows up in 13 files and becomes memory-mapped I/O.
 - Portable as is, in theory: the UI, fonts, JPEG and PNG decoders, FAT, the network stack above the NIC, the HTTP client, BearSSL, and the apps' C code. The user programs rebuild with an `svc` syscall ABI instead of `int 0x80`.
 
+## Console scrollback
+
+The on-screen Console is the only debug channel on a Pi with no serial cable, and the boot prints more lines than the window holds. Since 2.19.0 it keeps the last 16 KB of the log and a keyboard scrolls it: Page Up and Page Down by half a page, Home to the first line, End to the newest. The title bar reads "lines 12-27 of 61", and the bottom row of the window pins the newest `wifi` line and the newest `usb` line (key echoes excluded), cut to fit. New output while scrolled back is logged but does not move the view. `tools/checks/arm64-console-scroll-check.py` proves it with QEMU screendumps.
+
 ## Milestones, each one runs
 
 1. **M0, serial hello. Done (`arch/arm64`, `tools/checks/arm64-m0-check.py`). Also builds for a real Pi 4 (`make -C arch/arm64 pi`), tried on QEMU's raspi4b model; the first boot on a real board is still to do, see [RASPBERRY-PI.md](RASPBERRY-PI.md).** `clang -target aarch64-none-elf` plus `ld.lld` (both installed here) build a kernel that prints on the PL011 UART under `qemu-system-aarch64 -machine virt`. Days.
