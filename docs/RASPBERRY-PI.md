@@ -14,7 +14,9 @@ The plan and the milestones live in [ARM64.md](ARM64.md). The case is in [hardwa
 | A picture on a monitor | **Works on the real board**, same desktop as QEMU's Pi 4B model: the kernel asks the GPU for a screen through the mailbox, draws a simple desktop and prints the same boot lines in its window that go out over serial, in the same smooth DejaVu type as the main desktop (`tools/checks/arm64-m1c-check.py`). |
 | Full screen at the monitor's own size | Built in 2.12.5, waiting on a photo. The kernel asks the firmware how big the monitor is and draws at that size; a 4K monitor gets exactly half each way, so it stays sharp. Proven on QEMU's Pi model with a faked 1080p and 4K monitor. |
 | Console text on the real board | Fixed in 2.12.5, waiting on a photo. The first boot showed one thin mark per line because later drawing never left the CPU cache. Every glyph is now cleaned out to memory as it is drawn. |
-| Keyboard, mouse, disk, network on the Pi | Not yet. M2 to M4. |
+
+| USB keyboard and mouse on the Pi | Written, proven in QEMU only (`tools/checks/arm64-usb-check.py`). Each step prints a short `usb ...` line on screen: `usb pcie link up`, `usb vl805 ok`, `usb xhci run`, `usb port N connected`, `usb kbd addr N`, then `usb key 0x04 a` for every key. The last line on the photo is where it stopped. |
+| Disk, network on the Pi | Not yet. M4. |
 
 So on day one, watch two things: the text in a serial terminal, and with a monitor plugged in, a simple desktop of plain boxes with the same boot lines written in its white window. If the serial cable is wrong, the monitor still tells you how far the kernel got. If both are blank, it is the SD card or `config.txt`.
 

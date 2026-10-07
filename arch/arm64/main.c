@@ -58,6 +58,13 @@ static void uart_dec(unsigned v) {
     do { b[n++] = (char)('0' + v % 10); v /= 10; } while (v);
     while (n) uart_putc(b[--n]);
 }
+/* M4: the same printing for the drivers in their own files (pci.c, xhci.c) */
+void kputs(const char *s) { uart_puts(s); }
+void kdec(unsigned v) { uart_dec(v); }
+void kx(unsigned v) {   /* short hex, no 0x and no leading zeros: status lines stay under 60 columns for the screen */
+    int i = 28; while (i > 0 && !(v >> i)) i -= 4;
+    for (; i >= 0; i -= 4) uart_putc("0123456789abcdef"[(v >> i) & 15]);
+}
 
 /* ---- M1: exceptions, the interrupt controller, the timer ---- */
 struct frame { unsigned long x[31]; unsigned long elr, esr; };   /* what vectors.S saved */
@@ -68,9 +75,11 @@ static unsigned long timer_step;
 #define GICC(o) REG(GICC_BASE + (o))
 #define TIMER_INTID 30   /* the EL1 physical timer, a private interrupt on every GIC */
 
+volatile int kprobe_armed, kprobe_faulted;   /* M4: a driver probing for hardware that may not be there (pci.c) */
 void exc_sync(struct frame *f) {
     unsigned ec = (unsigned)(f->esr >> 26);
     if (ec == 0x15) { uart_puts("M1 svc ok\n"); return; }   /* a deliberate svc #0: elr is already the next instruction */
+    if (ec == 0x25 && kprobe_armed) { kprobe_faulted = 1; kprobe_armed = 0; f->elr += 4; return; }   /* skip the access */
     uart_puts("sync exception, ESR "); uart_hex(f->esr); uart_puts(" ELR "); uart_hex(f->elr); uart_puts("\n");
     for (;;) __asm__ volatile ("wfe");
 }
@@ -132,6 +141,13 @@ static void mmu_init(void) {
 #endif
         l1[i] = base | (dev ? DEVICE : NORMAL);
     }
+    /* M4: the GiB holding PCIe, as device memory. QEMU virt's ECAM config space sits at 0x40_1000_0000; a Pi 4's
+       PCIe outbound window (the VL805 USB controller's registers) at 0x6_0000_0000. */
+#ifdef PI_BUILD
+    l1[0x600000000UL >> 30] = 0x600000000UL | DEVICE;
+#else
+    l1[0x4000000000UL >> 30] = 0x4000000000UL | DEVICE;
+#endif
     /* M3a: the RAM GiB becomes a table of 2 MiB blocks (all kernel-only, as before), and the arena block a table of 4 KiB pages */
     for (int i = 0; i < 512; i++) l2[i] = (((unsigned long)RAM_GIB << 30) + ((unsigned long)i << 21)) | NORMAL;
     for (int i = 0; i < 512; i++) l3[i] = 0;
@@ -368,6 +384,13 @@ static int fb_setup(void) {
     if (mbox[5] >= 800 && mbox[6] >= 600 && mbox[5] <= fb_pitch) { fb_w = mbox[5]; fb_h = mbox[6]; }   /* the size it really gave */
     return 1;
 }
+/* M4: tell the firmware the VL805 USB controller is out of PCIe reset, so it loads the VL805's firmware.
+   Tag 0x00030058, the device as bus << 20 | slot << 15 | function << 12 (Linux reset-raspberrypi.c, Circle). */
+int mbox_notify_xhci_reset(unsigned dev_addr) {
+    unsigned m[] = { 7 * 4, 0, 0x30058, 4, 0, dev_addr, 0 };
+    for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
+    return mbox_call();
+}
 #endif
 static void fb_rect(int x, int y, int w, int h, unsigned c) {
     if (fb_swap) c = (c & 0xFF00FF00u) | (c >> 16 & 0xFF) | (c & 0xFF) << 16;
@@ -530,6 +553,29 @@ static void m1_selftest(void) {
     fb_init();
 }
 
+/* ---- Input, from any driver: Linux evdev events (virtio input speaks them natively; the USB HID driver in xhci.c
+   translates its reports into them). The pointer starts mid-screen; a tablet sets it, a mouse moves it. ---- */
+struct input_event { unsigned short type, code; unsigned value; };
+static unsigned mouse_x = 400, mouse_y = 300, mouse_moved;
+static void input_event(struct input_event e) {
+    if (e.type == 1) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* EV_KEY: keys and buttons */
+    else if (e.type == 3) {                                                                                /* EV_ABS: the tablet, 0..32767 */
+        if (e.code == 0) mouse_x = e.value * fb_w / 32768; else if (e.code == 1) mouse_y = e.value * fb_h / 32768;
+        mouse_moved = 1;
+    } else if (e.type == 2) {                                                                              /* EV_REL: a mouse, clamped to the screen */
+        int v = (int)e.value;
+        if (e.code == 0) { int x = (int)mouse_x + v; mouse_x = x < 0 ? 0 : x >= (int)fb_w ? (int)fb_w - 1 : (unsigned)x; }
+        else if (e.code == 1) { int y = (int)mouse_y + v; mouse_y = y < 0 ? 0 : y >= (int)fb_h ? (int)fb_h - 1 : (unsigned)y; }
+        mouse_moved = 1;
+    } else if (e.type == 0 && mouse_moved) {                                                               /* EV_SYN: one report done */
+        uart_puts("mouse "); uart_dec(mouse_x); uart_putc(','); uart_dec(mouse_y); uart_putc('\n');
+        mouse_moved = 0;
+    }
+}
+void kinput(unsigned type, unsigned code, int value) { input_event((struct input_event){ (unsigned short)type, (unsigned short)code, (unsigned)value }); }
+int usb_init(void);    /* xhci.c */
+void usb_poll(void);
+
 /* ---- M2: devices on QEMU's virt machine. 32 virtio-mmio slots from 0x0A000000, 0x200 apart, each says which device
    sits there: 1 is a network card, 18 is input (keyboard or tablet). Modern virtio (version 2) only: QEMU needs
    -global virtio-mmio.force-legacy=false. Every device talks through queues of buffers the guest lends it. The Pi gets
@@ -593,11 +639,9 @@ static void gic_enable(unsigned id) {   /* a shared peripheral: on, priority, se
     *(volatile unsigned char *)(GICD_BASE + 0x800 + id) = 1;
     GICD(0x100 + 4 * (id / 32)) = 1u << (id % 32);
 }
-struct input_event { unsigned short type, code; unsigned value; };
 static struct vq vin[MAX_INPUT];
 static struct input_event *vin_ev[MAX_INPUT];
 static int nvin;
-static unsigned mouse_x, mouse_y, mouse_moved;
 static int input_init(void) {
     for (unsigned long b = vio_find(18, 0); b && nvin < MAX_INPUT; b = vio_find(18, b)) {
         struct vq *v = &vin[nvin];
@@ -610,16 +654,6 @@ static int input_init(void) {
         vin_ev[nvin++] = ev;
     }
     return nvin;
-}
-static void input_event(struct input_event e) {
-    if (e.type == 1) { uart_puts("key "); uart_dec(e.code); uart_puts(e.value ? " down\n" : " up\n"); }   /* EV_KEY: keys and buttons */
-    else if (e.type == 3) {                                                                                /* EV_ABS: the tablet, 0..32767 */
-        if (e.code == 0) mouse_x = e.value * fb_w / 32768; else if (e.code == 1) mouse_y = e.value * fb_h / 32768;
-        mouse_moved = 1;
-    } else if (e.type == 0 && mouse_moved) {                                                               /* EV_SYN: one report done */
-        uart_puts("mouse "); uart_dec(mouse_x); uart_putc(','); uart_dec(mouse_y); uart_putc('\n');
-        mouse_moved = 0;
-    }
 }
 /* The interrupt only wakes the core and acknowledges the device; the events are read here, in the main loop. */
 static void input_poll(void) {
@@ -748,9 +782,20 @@ void main(void) {
     if (blk_init()) blk_probe();
     fb_diag();   /* last, so it is the newest line on the screen */
     int inputs = input_init();
-    if (inputs) {
-        uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n');
-        for (;;) { __asm__ volatile ("wfi"); input_poll(); }   /* asleep until a device interrupts */
+    if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
+    if (usb_init()) {
+        /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
+           masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
+           so its handler never runs; the short unmask is for the virtio devices, whose handler acknowledges them. */
+        *(volatile unsigned char *)(GICD_BASE + 0x400 + 27) = 0x80;
+        GICD(0x100) = 1u << 27;
+        unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
+        for (;;) {
+            __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
+                              " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
+            usb_poll(); input_poll();
+        }
     }
+    if (inputs) for (;;) { __asm__ volatile ("wfi"); input_poll(); }   /* asleep until a device interrupts */
     for (;;) __asm__ volatile ("wfe");
 }
