@@ -50,7 +50,7 @@ chain(330, [('You type', '"call Mom at 5"'), ('Turing', 'picks the tool'), ('Jos
 # The Pi, on the real board. done = seen working in a photo of the screen.
 sec(400, 'The Pi, on the real board')
 pi = [('Screen', '1080p desktop', 1), ('Keyboard', 'USB, hot-plug', 1), ('Wi-Fi scan', '16 networks', 1),
-      ('Wi-Fi join', 'WPA2, Shaw', 1), ('Clock', 'from the net', 0), ('Sound', 'headphone jack', 0),
+      ('Wi-Fi join', 'WPA2, Shaw', 1), ('Clock', 'from the net', 1), ('Sound', 'headphone jack', 0),
       ('Mouse', 'Bluetooth', 0), ('Mic', 'Yeti, USB', 0)]
 pw = (W - 40 - 7 * 8) / 8
 for i, (a, b, done) in enumerate(pi):
