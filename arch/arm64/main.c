@@ -1008,10 +1008,14 @@ void menubar_wifi(int state) {
     }
     int cx = W - sg(16) - text_width(2, clk, sg(120));
     text_draw(2, clk, cx, (mb + sg(8)) / 2, sg(120), fb_color(0x001C1C1E), fb, fb_pitch, W, H);
-    int bw = sg(4), gap = sg(2), iw = 3 * bw + 2 * gap, ix = cx - sg(18) - iw, base = mb / 2 + sg(5);
+    int R = sg(11), th = sg(3) / 2, dr = sg(3) / 2, ox = cx - sg(16) - R, oy = mb / 2 + sg(5);   /* the classic fan: a dot, then three arcs above it */
     int level = state == 2 ? wifi_signal_level() : 0;
-    static const int hts[3] = {5, 8, 11};
-    for (int i = 0; i < 3; i++) fb_rect(ix + i * (bw + gap), base - sg(hts[i]), bw, sg(hts[i]), i < level ? 0x001C1C1E : 0x00B8B4AC);
+    for (int y = -R; y <= dr; y++) for (int x = -R; x <= R; x++) {
+        int d2 = x * x + y * y, ring = 0;
+        if (d2 <= dr * dr) ring = 1;   /* the dot */
+        else if (y < 0 && x <= -y && -x <= -y) for (int i = 1; i <= 3; i++) { int ro = sg(3 * i + 2), ri = ro - th; if (d2 <= ro * ro && d2 >= ri * ri) ring = i + 1; }   /* 45 degrees either side of straight up */
+        if (ring) fb_rect(ox + x, oy + y, 1, 1, ring - 1 <= level && (ring > 1 || level) ? 0x001C1C1E : 0x00B8B4AC);
+    }
     fb_flush(mb_x0, 0, W - mb_x0, mb);
 }
 void menubar_tick(void) {   /* the poll loop calls this; it redraws only when the minute has changed */
