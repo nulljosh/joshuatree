@@ -199,9 +199,18 @@ struct jt_tasks { unsigned int ticks, free_kb, total_kb, current, used; };
      JT_POST_BIG: body up to JT_HTTP_BIG_MAX read straight from the caller buffer and
        reply up to JT_HTTP_BIG_MAX written straight into out (no kernel bounce; the net
        layer copies the body into its own request buffer). On failure out may hold
-       scratch bytes. Unknown flag bits are -EINVAL. */
+       scratch bytes. Unknown flag bits are -EINVAL.
+     JT_POST_CLAUDE (2.14.0): send to the Claude relay Settings keeps (claudehost/claudeport,
+       its own host, never the chat host). The path must be exactly /api/claude (else
+       -EINVAL), and the kernel adds "Authorization: Bearer <claude token>" itself; the token
+       never crosses into ring 3. No relay host or no token set: -EACCES at once, the network
+       is never touched (the browser demo has neither). reply_ticks clamps to
+       JT_HTTP_POST_TICKS_CLAUDE instead of JT_HTTP_POST_TICKS_MAX. Cannot be combined with
+       JT_POST_WORKER (-EINVAL). */
 #define JT_POST_WORKER 1u
 #define JT_POST_BIG    2u
+#define JT_POST_CLAUDE 4u
+#define JT_HTTP_POST_TICKS_CLAUDE 24000 /* 240 s nominal (QEMU's tick runs fast, so ~2 min there); the relay gives up first */
 #define SYS_HTTP_POST   392
 #define JT_HTTP_POST_BODY_MAX  6144 /* chat.h's req_body cap: full history to /api/chat */
 #define JT_HTTP_POST_REPLY_MAX 8192 /* chat.h's resp cap for /api/chat */
@@ -218,6 +227,10 @@ const char *llm_host_get(void);
 int llm_port_get(void);
 /* kernel.c: the Settings-owned Mail token (SETTINGS.TXT mailtoken=), read only by SYS_HTTP_POST. */
 const char *mail_token_get(void);
+/* kernel.c: the Settings-owned Claude relay (claudehost=, claudeport=, claudetoken=), read only by SYS_HTTP_POST. */
+const char *claude_host_get(void);
+int claude_port_get(void);
+const char *claude_token_get(void);
 /* 1.9.26: SYS_SYSINFO, the read-only state Samantha reports (weather, host, phone flag, clock).
    ebx = struct jt_sysinfo* (user, write), ecx = the caller's sizeof (so the struct can grow:
    an old program passes a smaller size and gets only the fields it knows, a new one on an old

@@ -844,9 +844,9 @@ static void reboot(void){
    Search. tools/gen/gen_icon_art.py's ART/VARIANT index maps moved with
    it (24: apps, 25: trash); Portfolio itself has no authored art yet, so
    it keeps the primitive glyph path like every other unart'd icon. */
-#define GUI_APP_COUNT   31 /* 29 real apps + the Apps folder + Trash; 2.2 Music (24) and Movies (25) pushed Apps/Trash to 26/27, 2.7 Hamurapi (26) to 27/28, 2.8 Windgate (27) to 28/29, 2.11 Panes (28) to 29/30 */
-#define GUI_APPS_FOLDER 29 /* not an app: the dock tile that opens the folder */
-#define GUI_TRASH       30
+#define GUI_APP_COUNT   32 /* 30 real apps + the Apps folder + Trash; 2.2 Music (24) and Movies (25) pushed Apps/Trash to 26/27, 2.7 Hamurapi (26) to 27/28, 2.8 Windgate (27) to 28/29, 2.11 Panes (28) to 29/30, 2.14 Claude (29) to 30/31 */
+#define GUI_APPS_FOLDER 30 /* not an app: the dock tile that opens the folder */
+#define GUI_TRASH       31
 #define GUI_APP_PANES   28 /* the one app that gets Ctrl chords as KEY_CTL_* (kernel/app.h) */
 #define GUI_APP_PORTFOLIO 21 /* hidden from the Apps folder and phone home unless the boot line says "portfolio" (his site embed); the public OS ships without it */
 /* Every app's name, color, glyph and hooks live in one table, APPS[],
@@ -1024,6 +1024,19 @@ int llm_port_get(void) { return llm_port; }
 #define MAIL_TOKEN_MAX 64
 static char mail_token[MAIL_TOKEN_MAX] = "";
 const char *mail_token_get(void) { return mail_token; }
+/* 2.14.0: the Claude relay (tools/claude-relay/relay.py) Settings owns: SETTINGS.TXT claudehost=,
+   claudeport=, claudetoken=. Its own host, never the LLM host: the token must only ever go to a
+   relay the owner pointed at, not to turing.heyitsmejosh.com. Empty host or token means "not set
+   up", and SYS_HTTP_POST refuses JT_POST_CLAUDE without touching the network. Only SYS_HTTP_POST
+   reads the token, to build the bearer for /api/claude; no syscall hands it to ring 3. */
+#define CLAUDE_HOST_MAX 40
+#define CLAUDE_TOKEN_MAX 64
+static char claude_host[CLAUDE_HOST_MAX] = "";
+static int claude_port = 8765;
+static char claude_token[CLAUDE_TOKEN_MAX] = "";
+const char *claude_host_get(void) { return claude_host; }
+int claude_port_get(void) { return claude_port; }
+const char *claude_token_get(void) { return claude_token; }
 /* v85: real chat models actually installed on the host (checked via
    `ollama list`), not a free-text field a typo can point at nothing.
    nomic-embed-text is also installed but is embedding-only, deliberately
@@ -1056,8 +1069,14 @@ static const char *LLM_MODELS[] = { "samantha", "qwen3:8b", "llama3.1:8b" };
    flat key=value shape, just a second value-parsing path alongside the
    existing numeric one rather than a new file format. */
 #define SETTINGS_FILE "SETTINGS.TXT"
+/* 2.14.0: exact key match for settings_load's newer keys, instead of another letter-by-letter chain. */
+static int key_is(const char *k, int len, const char *want){
+    int i = 0;
+    while (i < len && want[i] && k[i] == want[i]) i++;
+    return i == len && !want[i];
+}
 static void settings_load(void){
-    static char buf[512];
+    static char buf[1024]; /* 2.14.0: was 512; the Claude relay's host and token would not fit beside the rest */
     int n = vfs_read_file(SETTINGS_FILE, buf, sizeof(buf) - 1);
     if (n <= 0) return; /* no file yet: compiled-in defaults stand */
     buf[n] = 0;
@@ -1078,6 +1097,23 @@ static void settings_load(void){
         int is_llmport  = keylen == 7 && buf[start]=='l' && buf[start+1]=='l' && buf[start+2]=='m' && buf[start+3]=='p' && buf[start+4]=='o' && buf[start+5]=='r' && buf[start+6]=='t';
         int is_mailtoken = keylen == 9 && buf[start]=='m' && buf[start+1]=='a' && buf[start+2]=='i' && buf[start+3]=='l' && buf[start+4]=='t' && buf[start+5]=='o' && buf[start+6]=='k' && buf[start+7]=='e' && buf[start+8]=='n';
         int is_loc = keylen == 3 && buf[start]=='l' && buf[start+1]=='o' && buf[start+2]=='c';
+        int is_claudehost = key_is(buf + start, keylen, "claudehost");
+        int is_claudeport = key_is(buf + start, keylen, "claudeport");
+        int is_claudetoken = key_is(buf + start, keylen, "claudetoken");
+        if (is_claudehost || is_claudetoken) {
+            char *dst = is_claudehost ? claude_host : claude_token;
+            int cap = is_claudehost ? CLAUDE_HOST_MAX : CLAUDE_TOKEN_MAX;
+            int j = 0, k = eq + 1;
+            while (k < line_end && j < cap - 1 && buf[k] > ' ' && buf[k] < 0x7F) dst[j++] = buf[k++];
+            dst[j] = 0;
+            continue;
+        }
+        if (is_claudeport) {
+            int v = 0, k = eq + 1;
+            while (k < line_end && buf[k] >= '0' && buf[k] <= '9' && v < 100000) v = v * 10 + (buf[k++] - '0');
+            if (v > 0 && v <= 65535) claude_port = v;
+            continue;
+        }
         if (is_loc) {
             /* value shape: name;lat;lon -- the same three fields
                loc_geocode fills in, ';'-joined since '=' is already the
@@ -1154,7 +1190,7 @@ static void settings_load(void){
 }
 
 static void settings_save(void){
-    static char buf[512];
+    static char buf[1024]; /* 2.14.0: was 512, see settings_load */
     int n = 0;
     const char *k1 = "wind="; while (*k1) buf[n++] = *k1++;
     buf[n++] = wind_enabled ? '1' : '0'; buf[n++] = '\n';
@@ -1179,6 +1215,22 @@ static void settings_save(void){
     if (mail_token[0]) {
         const char *k8 = "mailtoken="; while (*k8) buf[n++] = *k8++;
         { const char *s = mail_token; while (*s && n < (int)sizeof(buf) - 80) buf[n++] = *s++; }
+        buf[n++] = '\n';
+    }
+    if (claude_host[0]) {
+        const char *k9 = "claudehost="; while (*k9) buf[n++] = *k9++;
+        { const char *s = claude_host; while (*s && n < (int)sizeof(buf) - 200) buf[n++] = *s++; }
+        buf[n++] = '\n';
+        const char *k10 = "claudeport="; while (*k10) buf[n++] = *k10++;
+        { char digits[8]; int nd = 0; int v = claude_port;
+          if (v == 0) digits[nd++] = '0';
+          while (v) { digits[nd++] = (char)('0' + v % 10); v /= 10; }
+          while (nd) buf[n++] = digits[--nd]; }
+        buf[n++] = '\n';
+    }
+    if (claude_token[0]) {
+        const char *k11 = "claudetoken="; while (*k11) buf[n++] = *k11++;
+        { const char *s = claude_token; while (*s && n < (int)sizeof(buf) - 120) buf[n++] = *s++; }
         buf[n++] = '\n';
     }
     if (loc_have) {
@@ -2067,7 +2119,7 @@ void gui_draw_wallpaper_rows(int y_from, int y_to){ gui_draw_wallpaper_rows_sway
 struct wp_row { const unsigned char *r0, *r1; int wy, shift, pw; };
 static unsigned int *wind_base = 0;
 static int wind_base_width = 0; void music_ring3_open(void); void keyrate_ring3_open(void); void toroid_ring3_open(void); void calculator_ring3_open(void); void quotestreak_ring3_open(void); void bookrank_ring3_open(void); void tonchi_ring3_open(void); void fieldbook_ring3_open(void); void clock_ring3_open(void); void portfolio_ring3_open(void); void activity_ring3_open(void); void contacts_ring3_open(void); void hikko_ring3_open(void); void reminders_ring3_open(void); void curbfind_ring3_open(void); void calendar_ring3_open(void); void search_ring3_open(void); void epiphany_ring3_open(void); void burrow_ring3_open(void); void mail_ring3_open(void); void notes_ring3_open(void); void terminal_ring3_open(void); void samantha_ring3_open(void); void ring3app_autoopen_arm(const char *cl); void r3stress_arm(const char *cl); void r3stress_desktop_round(void); void ring3app_autoopen_run(int mx, int my); void entropy_init(void); void entropy_bytes(void *buf, unsigned int n); void pdestress_desktop_round(void);
-void movies_ring3_open(void); void hamurabi_ring3_open(void); void windgate_ring3_open(void); void panes_ring3_open(void);
+void movies_ring3_open(void); void hamurabi_ring3_open(void); void windgate_ring3_open(void); void panes_ring3_open(void); void claude_ring3_open(void);
 
 static int gui_ring3_windowed(int icon);
 int gui_app_windowed; /* real definition + comment below, near gui_draw_app_titlebar; forward-declared here so the wallpaper sampler and the menubar clamp below can both read it */
@@ -5101,6 +5153,7 @@ const struct app APPS[GUI_APP_COUNT] = {
     /* 26 */ {"Hamurapi",   0x00B5502C, gui_icon_chat,       hamurabi_ring3_open,   0, 0}, /* 2.7: ring 3 (user/hamurabi.c; the game is shown as Hamurapi, the store name Hamurabi was taken), Apps folder only; authored art (art/icons/hamurabi.svg) covers the icon */
     /* 27 */ {"Windgate",   0x000B1420, gui_icon_chat,       windgate_ring3_open,   0, 0}, /* 2.8: guided breathing, ring 3 (user/windgate.c), Apps folder only; authored art (art/icons/windgate.svg) covers the icon */
     /* 28 */ {"Panes",      0x00F5F5F8, gui_icon_chat,       panes_ring3_open,      0, 0}, /* 2.11: cmux-style tabs and split panes sharing the Terminal's shell engine, ring 3 (user/panes.c), Apps folder only; authored art (art/icons/panes.svg) covers the icon */
+    /* 29 */ {"Claude",     0x00B5502C, gui_icon_chat,       claude_ring3_open,     0, 0}, /* 2.14: Claude Code through the relay (user/claude.c, tools/claude-relay/relay.py), ring 3, Apps folder only; authored art (art/icons/claude.svg) covers the icon */
     /* Apps and Trash aren't real apps with their own brand color, so their
        tile renders at the tray's own tone (DOCK_TRAY_COLOR) instead of a
        tinted background like every real app above. 2026-09-27: this used
@@ -8391,6 +8444,12 @@ void kmain(unsigned int multiboot_info_addr){
        default or whatever Settings has saved stands. */
     char llm_host_override[LLM_HOST_MAX] = "";
     int llm_port_override = 0;
+    /* 2.14.0: claudehost=/claudeport=/claudetoken=, the same one-boot override for the Claude
+       relay (tools/checks/ring3claude-check.py boots with no disk). Applied after settings_load,
+       never saved. The token is never echoed to serial. */
+    char claude_host_override[CLAUDE_HOST_MAX] = "";
+    char claude_token_override[CLAUDE_TOKEN_MAX] = "";
+    int claude_port_override = 0;
     /* Multiboot command line (flags bit 2, pointer at +16), read here while
        the bootloader's low memory is still identity-reachable. Only one
        option exists: wxhost=A.B.C.D[:PORT], see wx_override_host. */
@@ -8496,6 +8555,23 @@ void kmain(unsigned int multiboot_info_addr){
                 if (pt && pt < 65536) llm_port_override = (int)pt;
                 break;
             }
+        for (const char *pc = cl0; pc && *pc; pc++) {
+            if (pc != cl0 && pc[-1] != ' ') continue; /* whole words only */
+            int is_h = key_is(pc, 11, "claudehost="), is_t = key_is(pc, 12, "claudetoken="), is_p = key_is(pc, 11, "claudeport=");
+            if (is_h || is_t) {
+                char *dst = is_h ? claude_host_override : claude_token_override;
+                int cap = is_h ? CLAUDE_HOST_MAX : CLAUDE_TOKEN_MAX, j = 0;
+                const char *v = pc + (is_h ? 11 : 12);
+                while (*v && *v != ' ' && j < cap - 1) dst[j++] = *v++;
+                dst[j] = 0;
+                if (is_h) { serial_puts("claudehostcli="); serial_puts(claude_host_override); serial_puts("\n"); }
+                else serial_puts("claudetokencli=set\n");
+            } else if (is_p) {
+                unsigned int pt = 0; const char *v = pc + 11;
+                while (*v >= '0' && *v <= '9' && pt < 100000) pt = pt * 10 + (unsigned int)(*v++ - '0');
+                if (pt && pt < 65536) claude_port_override = (int)pt;
+            }
+        }
         stocks_cmdline(cl0); /* stkhost=HOST:PORT, kernel/stocks.h */
         jt_clip_cmdline(cl0); /* cliptrace, kernel/syscall.c: content hash on the CLIPCOPY/CLIPPASTE lines */
         jt_facehost_cmdline(cl0); /* facehost=HOST[:PORT], kernel/syscall.c: where ring-3 Samantha fetches her face and speech */
@@ -8581,6 +8657,9 @@ void kmain(unsigned int multiboot_info_addr){
        to what Settings remembers. */
     if (llm_host_override[0]) { int p = 0; while (llm_host_override[p] && p < LLM_HOST_MAX - 1) { llm_host[p] = llm_host_override[p]; p++; } llm_host[p] = 0; }
     if (llm_port_override) llm_port = llm_port_override;
+    if (claude_host_override[0]) { int p = 0; while (claude_host_override[p]) { claude_host[p] = claude_host_override[p]; p++; } claude_host[p] = 0; }
+    if (claude_token_override[0]) { int p = 0; while (claude_token_override[p]) { claude_token[p] = claude_token_override[p]; p++; } claude_token[p] = 0; }
+    if (claude_port_override) claude_port = claude_port_override;
     if (wall_theme_override >= 0) { wall_theme = wall_theme_override; serial_puts("wallthemeoverride="); { char d[2] = { (char)(48 + wall_theme), 0 }; serial_puts(d); } serial_puts("\n"); }
     clear();
     boot_chime();

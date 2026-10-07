@@ -49,6 +49,10 @@ A guess at the shape, in Joshua's words as far as they are known. Each version h
 
 How to use this: the Pickup list below stays the near-term queue. When a Pickup item belongs to one of these versions, tag it (for example `[4.0]`), so the road and the queue stay one list.
 
+### [5.0] Talk to it: Claude Code in Joshua Tree
+- [ ] [5.0] [Fable] Claude phase 2: tools on Joshua Tree itself, so Claude can read and change the OS's own files. Needs real TLS on the box or a trusted relay protocol that calls back into the machine.
+- [ ] [5.0] Claude on the Pi: waits on the ARM64 network stack (after M4).
+
 ## Pickup (written 2026-10-03, night)
 Main is 2.6.24 and live. CI takes about 10 minutes. The 3.0.0 gate is one thing: the desktop boots on a real Raspberry Pi 4.
 
@@ -117,13 +121,100 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 - [ ] [Sonnet] `tools/ci-local.sh` takes about 27 minutes (8 shards, 2 at a time). Run 4 at a time on the M4 and use the balanced manifest.
 
 ### Raspberry Pi and ARM64
+**Goal (Joshua, 2026-10-06 night, /goal): we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi.** The Pi runs the OS, the Claude app (phase 1, via a relay on the Mac) is the way in, and a session on the Pi edits and rebuilds a small Joshua Tree. The road there is the queue below: Wi-Fi (the relay needs the network), the desktop and dock, SD writes, `get`, then phase 2 of the Claude app (the model reading and writing the OS's own files through a tool loop), then a build toolchain on the box (the Plank compiler, 8.0). Say honestly what is not here yet in every release note.
+Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance"). Software first; items that need a part wait for the part.
+- [ ] [Fable] Wi-Fi stage 1: the CYW43455 wakes up over SDIO, loads its firmware and lists the networks on screen. In progress, 2.16.0.
+- [ ] [Fable] Wi-Fi stage 2: join Shaw from `~/.config/joshuatree/wifi.conf` (never in the repo), DHCP, an address on screen. The IP stack ported from `drivers/net.c`.
+- [ ] [Fable] Admin and sudo (Joshua, 2026-10-06: "fix it soon"): a second privilege tier on the accounts that already exist (login screen, PBKDF2 passwords, Settings "Add user"). An admin flag per account, a password prompt before anything that installs, deletes a user or changes system settings, and a normal-user role that cannot. i386 build first; it touches `kernel/auth.h`, Settings and the syscall gate, not the ARM files, so it can run beside Wi-Fi. Per-user home folders and file permissions follow (6.0).
+- [ ] [Sonnet] Blink the Pi's own green light (GPIO 42 on the Pi 4) from Joshua Tree: the simplest driver there is, and it proves the GPIO block. No breadboard needed; a breadboard LED is the same code on another pin.
+- [ ] [Fable] Sound out of the 3.5 mm jack (PWM audio on GPIO 40 and 41 through DMA), then HDMI audio; then Movies plays a clip with sound on the Pi.
+- [ ] [Fable] SD card reads and writes through EMMC2, so files survive a reboot and the Wi-Fi firmware can load from the card.
+- [ ] [Sonnet] `get`, the Joshua Tree installer: a public recipes repo in the Homebrew shape (name, URL, checksum), a C command that downloads an app over Wi-Fi and drops it on the card. Needs Wi-Fi stage 2 and SD writes.
+- [ ] [Sonnet] mruby as a ring-3 app: Ruby scripts compiled to bytecode on the Mac, run on Joshua Tree through `user/libjt`. Full Ruby and Homebrew stay out of reach (they need git, curl, a shell and a compiler).
+- [ ] [Sonnet] Jellyfin app: list and stream Joshua's movies from the Jellyfin server on the Mac (installed 2026-10-06) through the Movies player. Needs Wi-Fi stage 2 and sound.
+- [ ] [Fable] USB audio: the Yeti mic in, a USB speaker out. Then the Samantha box: talk to Joshua Tree on the Pi.
+- [ ] [Fable] Pi camera (needs the part, about $25): a CSI driver, the picture on screen.
+- [ ] [Fable] Touchscreen (needs the part, about $60): the i386 touch driver's shape on the Pi's DSI or USB touch.
+- [ ] [Fable] Ethernet through the Genet MAC, as the wired backup.
+- [ ] [Fable] Serial loader the day the cable arrives: new kernels over the wire, no card swaps.
+- [ ] [Fable] The self-update loop (Joshua, 2026-10-06: "make tweaks to the OS from inside the OS, push changes and hot swap"): ask Claude in the Claude app, the relay's Claude Code edits the repo on the Mac and opens a draft PR, CI goes green, the Pi pulls the new `kernel8.img` over Wi-Fi from a release, writes it to the card and reboots into it. Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror.
+- [ ] [Fable] A/B boot, so a bad self-update can never brick the Pi: keep the last good kernel on the card as `kernel8.old`, boot the new one once, and fall back to the old one if the new build never reaches the desktop (the Pi bootloader's `tryboot` is the likely mechanism; check it on the board).
+Also missing, added 2026-10-06 night, in order:
+- [ ] [Sonnet] Clean shutdown and reboot from the keyboard (the mailbox power-off and the watchdog reset), instead of pulling the plug.
+- [ ] [Fable] The other three cores: wake them from the spin table, give each a stack, run the desktop on one and the drivers on another.
+- [ ] [Sonnet] A clock that is right: the Pi has no battery clock, so take the time from the network once Wi-Fi joins (SNTP), and show it in the menu bar.
+- [ ] [Fable] Bluetooth for the mouse: same CYW43455 chip as Wi-Fi, HCI over the PL011 UART, a HID-over-GATT or classic HID mouse. After Wi-Fi stage 2.
+- [ ] [Sonnet] Heat and the fan: read the SoC temperature through the mailbox, show it, drive the fan pin.
+- [ ] [Fable] Update over Wi-Fi: the Pi fetches the newest kernel8.img from the GitHub release and writes it to the card, then reboots. Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror (no TLS yet).
+- [ ] [Sonnet] A Wi-Fi settings screen on the Pi: name and password typed on the keyboard and saved on the card, so nothing is baked into the build.
+- [ ] [Sonnet] A crash screen: when the kernel faults, draw the fault address, the last console lines and the register dump on screen instead of freezing.
+- [ ] [Fable] The Pi 5 (M5): the RP1 chip over PCIe for every peripheral.
+Gaps against Linux distributions (Kali, Ubuntu, Arch), 2026-10-06 night. Most are already on the version road (4.0 processes and a real shell, 6.0 users and backups, 7.0 TLS and a browser, 8.0 a compiler and `get`); these are the ones it did not name:
+- [ ] [Fable] An SSH server: log in to the Pi from the Mac over Wi-Fi, with its own crypto (ed25519, ChaCha20-Poly1305). It makes the serial cable optional for everything but early boot.
+- [ ] [Fable] ext4 read-only, so a Linux-formatted USB stick or card can be opened. FAT stays the default.
+- [ ] [Sonnet] A packet capture and ping/traceroute/port-scan toolbox (raw sockets), the part of Kali that is a few tools, not the whole distro.
+- [ ] [Fable] Wi-Fi monitor mode, only if the CYW43455 firmware allows it. Kali's wireless tools depend on it. Low priority, owner's own network only.
+- [ ] [Sonnet] A sandbox for untrusted apps, the small version of containers: a ring-3 app with no network and a private folder, per `get` recipe.
+The rest of the Linux gaps, tagged with the version that owns them (Joshua, 2026-10-06 night: "add those gaps to the roadmap too"). These are the road items in `## The long road`, written out as work you can pick up:
+- [ ] [Fable] [4.0] Processes the Unix way: fork and exec, pipes, signals, a process table, exit codes. The base for everything below.
+- [ ] [Fable] [4.0] A real shell and Terminal: a command line with pipes, redirects, job control, a PATH and scripts, so `ls | grep` works. Tabs and splits come after.
+- [ ] [Fable] [6.0] Users and permissions: accounts, file owners and modes, a login screen, an admin role that can install. Joshua's "admin privileges" idea starts here.
+- [ ] [Fable] [6.0] A journaling or copy-on-write filesystem for the card, so a pulled plug mid-write loses nothing (FAT stays for sticks).
+- [ ] [Fable] [7.0] TLS 1.3 in the kernel or a ring-3 library: the gate for HTTPS, so websites, Plex and a real Claude API connection work without a relay.
+- [ ] [Fable] [7.0] A web browser on the Pi (Madobe on this OS; NetSurf is the reference port). Needs TLS, fonts and a JavaScript engine decision.
+- [ ] [Fable] [8.0] A compiler and linker on the box (the Plank compiler first), so the OS can build its own apps. The last piece of "build Joshua Tree inside Joshua Tree".
+- [ ] [Sonnet] [8.0] App breadth: ports of Joshua's own apps to native Joshua Tree, in the order they are most used (Bookrank, Tonchi, Curvely), each a ring-3 C rewrite.
+- [ ] [Sonnet] Driver breadth, by what Joshua owns: USB mass storage, USB audio, USB Ethernet, a USB serial adapter, a Bluetooth adapter. Each is a class driver on the xHCI code that already works.
+- [ ] [Fable] Power management: suspend and resume, CPU frequency scaling, the board's low-power states. Linux does this for free; a hobby OS never does until someone sits down.
+- [ ] [Sonnet] A security-update story: a signed release feed, a version check, and a changelog on screen, so "is my Pi current" has an answer.
+From the field, 2026-10-06 night (what Onyx and Circle, the two best bare-metal Pi 4 projects, have and we do not), in order:
+- [ ] [Fable] VNC server: the Pi's screen on the Mac over Wi-Fi, so debugging stops needing photos and demos need no monitor. After Wi-Fi stage 2.
+- [ ] [Fable] A USB stick as the first disk: mass storage over the xHCI driver we have, likely faster to "files survive a reboot" than EMMC2.
+- [ ] [Fable] Doom: the classic proof a platform is real, and Joshua's chosen benchmark (2026-10-06: "if we can get doom working that's sort of a benchmark"). Full speed with sound on the Pi is the flag right after 3.0. Keyboard first, gamepad next.
+- [ ] [Sonnet] USB gamepad: a HID report parser beside the keyboard and mouse. Doom and Hamurapi on the couch.
+- [ ] [Sonnet] Drop files from the Mac over Wi-Fi: a tiny upload server on the Pi (plain HTTP PUT), no card swap.
+- [ ] [Sonnet] `joshuatree.local`: mDNS so the Pi announces its name on the network.
+- [ ] [Fable] GPU 3D: the V3D block for real 3D, the way Onyx did it. Samantha's face in 3D is the first use.
+- [ ] [Fable] A web browser on the Pi: Madobe on this OS, already the 7.0 gate; NetSurf is the reference port.
+- [ ] [Sonnet] I2C and SPI drivers for breadboard sensors and small screens.
+- [ ] [Sonnet] Console emulators (NES first), later.
+Sources: Onyx on Circle (Adafruit blog, 2026-09-29), Circle's feature list (github.com/rsta2/circle), rpi4-osdev, AROS on the Pi (Hackaday, 2026-08-23).
+Round 2, 2026-10-06 night (Raspberry Pi OS Trixie and RISC OS on the Pi 4). Small, all after Wi-Fi:
+- [ ] [Fable] Both HDMI ports: the Pi 4 drives two monitors; a second framebuffer through the mailbox display id, the desktop spanning or mirroring.
+- [ ] [Sonnet] A Screen settings page on the Pi: resolution, scale, which HDMI, saved on the card.
+- [ ] [Sonnet] Screen sleep: blank the picture after idle, wake on a key or the mouse, through the mailbox blank-screen tag.
+- [ ] [Sonnet] A notification strip: short messages from apps (Wi-Fi joined, file dropped, update ready) in the menu bar, the way the phone demo already toasts.
+- [ ] [Fable] Bluetooth audio: speakers and headphones over the same CYW43455 radio. After Bluetooth for the mouse.
+Note: RISC OS on the Pi 4 still lists USB 3 as unsupported (riscosopen.org port status); Joshua Tree got xHCI working on the board on 2026-10-06.
+Round 3, 2026-10-06 night (macOS Tahoe 26 and Windows 11 2026). Joshua Tree already has the glass look (v48); these are what the two big desktops added that we lack:
+- [ ] [Sonnet] Search that understands plain words, Spotlight style: one box that finds files, apps, contacts and actions ("open the clock", "new note") through Samantha. Starts with the Search app we already have.
+- [ ] [Fable] A screen reader (Narrator, VoiceOver): speaks the focused control and window title through the sound driver. The accessibility basics the 10.0 gate needs.
+- [ ] [Sonnet] A phone link: show a phone's live activities (a timer, a delivery, a call) in the menu bar. Needs Wi-Fi and a small relay; later.
+- [ ] [Sonnet] Shortcuts: small chains of actions (open this, type that, play a song) built from blocks, run by a key or by Samantha. Pairs with the Plank language at 8.0.
+- [ ] [Sonnet] A built-in network speed test in the Wi-Fi menu, and a signal bar in the menu bar. After Wi-Fi stage 2.
+- [ ] [Sonnet] Game mode: a full-screen mode that quiets notifications and background work, for Doom and the handheld idea.
+- [ ] [Sonnet] More wallpaper formats (WebP and AVIF through the decoder code we have, JPEG and PNG already work) and a slideshow.
+- [ ] [Sonnet] A Start-style launcher you can customise: pin, reorder and hide apps in the Launchpad.
+- [ ] [Sonnet] Camera controls in Settings, once the Pi camera driver exists.
+Sources: Tom's Guide and TechRadar on macOS Tahoe 26, Pureinfotech and Digital Citizen on Windows 11 2026.
 - [ ] [Fable] Serial loader: a small loader on the card receives each new kernel over the serial cable and boots it, so testing needs no card swaps. Waits on the cable (Joshua, this week).
-- [ ] [Fable] USB on the real Pi: an xHCI driver with hub support, proven in QEMU first, then the BCM2711 PCIe and VL805 setup tried on the board. Keyboard, mouse and a Logitech receiver all ride on it.
 - [ ] [Fable] Console text on the real Pi, fixed in 2.12.5, waiting on a photo: the boot lines showed as one thin mark each. Cause: the screen is cached memory and the GPU only sees what the kernel cleans out of the cache. The console wiped its full page after the one clean at startup, and nothing after that left the cache, so only two pixel columns of old text survived. Now every glyph and every wipe is cleaned, the console scrolls, and a diagnostic line ends the log. Tick it when a photo shows the text. Check: `tools/checks/arm64-m1c-check.py` fails if a draw or a wipe stops cleaning.
 - [ ] [Fable] M1d part two: the real window and dock drawing code (`drivers/window.c`) running on the ARM build instead of rectangles, and the framebuffer mapped write-combining so a live desktop needs no cache cleans.
 - [ ] [Joshua] M4 USB on the real Pi 4: boot the 2.13.0 SD card with a keyboard in, photograph the screen. The Pi's PCIe bring-up and the VL805 firmware load are written from Circle and Linux but have never run on a board; every step prints a short `usb ...` line, so the photo shows how far it got.
 - [ ] [Fable] M2: IP, DHCP and a TCP connection on top of the ARM network card (port the i386 stack above the NIC), and the net and disk drivers moved to interrupts too (input already is). Then M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
-- [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO) needs a firmware blob and an 802.11 stack. Not scheduled: Ethernet first.
+- [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO) needs a firmware blob and an 802.11 stack. Scheduled right after Ethernet (Joshua, 2026-10-06: "I want wifi on the pi"). Ethernet first because it is one documented chip and proves the stack.
+
+### x86-64 (Joshua, 2026-10-06 night: "let's do x86-64 next")
+
+Why: the Neo kit's x86 board and almost every PC made after about 2015 is 64-bit and boots through UEFI, and the i386 kernel boots from GRUB on legacy BIOS. Joshua Tree stays one OS with three ports (i386, ARM64, x86-64); the shared code moves into common files so a driver is written once. Slices, each a shippable draft PR, started after Wi-Fi stage 2 and the ARM desktop so the Pi keeps priority:
+
+- [ ] [Fable] x86-64 slice 1, boots and prints: a 64-bit kernel that GRUB or UEFI loads into long mode under QEMU (`qemu-system-x86_64`), sets up 64-bit paging and a stack, and prints to the serial port and the framebuffer. A new headless boot check proves it, named after the ARM one.
+- [ ] [Fable] x86-64 slice 2, a machine: the 64-bit IDT and exception frames, the APIC timer, the heap and the page allocator, a keyboard and a mouse.
+- [ ] [Fable] x86-64 slice 3, the shared drivers: split the code that assumes 32-bit pointers (`u32` addresses in `kernel/syscall.c`, the PCI and network drivers) behind a pointer-size type, and share the PCIe and xHCI code the ARM port already proved on the Pi.
+- [ ] [Fable] x86-64 slice 4, apps: the 64-bit syscall entry (`syscall`/`sysret`), a 64-bit `user/libjt`, and the ring-3 apps rebuilt for it. The 32-bit app ABI stays supported on i386.
+- [ ] [Fable] x86-64 slice 5, a real PC: UEFI boot from a USB stick with a GOP framebuffer, USB keyboard and mouse, NVMe or AHCI disks. The first photo from a real x86-64 board closes the slice.
+- [ ] [Sonnet] A single `make` per target and one CI line each, so a change to shared code is checked on all three.
+- [ ] [Fable] RISC-V (later): the open chip family. Same shape as the ARM port; a cheap board and QEMU's `virt` machine make it the cheapest fourth port to try.
 
 ### From the YouTube playlists (checked 2026-10-06)
 

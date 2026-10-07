@@ -55,6 +55,7 @@ typedef int (*syscall_fn)(u32 a, u32 b, u32 c);
 #define EBUSY   16
 #define ENODEV  19
 #define EPERM    1
+#define EACCES  13 /* 2.14.0: JT_POST_CLAUDE with no relay host or token set */
 #define EISDIR  21
 
 extern void syscall_entry(void);
@@ -953,12 +954,19 @@ static int path_is_mail_send(const char *p) {
     while (*m && *p == *m) { p++; m++; }
     return !*m && !*p;
 }
+static int path_is_claude(const char *p) { /* 2.14.0: the one path JT_POST_CLAUDE may name */
+    const char *m = "/api/claude";
+    while (*m && *p == *m) { p++; m++; }
+    return !*m && !*p;
+}
 static char http_post_body[JT_HTTP_POST_BODY_MAX];
 static char http_post_reply[JT_HTTP_POST_REPLY_MAX];
 static int sys_http_post(u32 argp, u32 flags, u32 unused2) {
     (void)unused2;
-    if (flags & ~(u32)(JT_POST_WORKER | JT_POST_BIG)) return -EINVAL;
+    if (flags & ~(u32)(JT_POST_WORKER | JT_POST_BIG | JT_POST_CLAUDE)) return -EINVAL;
+    if ((flags & JT_POST_WORKER) && (flags & JT_POST_CLAUDE)) return -EINVAL;
     int big = (flags & JT_POST_BIG) != 0;
+    int claude = (flags & JT_POST_CLAUDE) != 0;
     if (!paging_user_range_ok(argp, sizeof(struct jt_http_post))) return -EFAULT;
     struct jt_http_post a = *(const struct jt_http_post *)argp; /* one copy; the user struct is not read again */
     char kpath[JT_HTTP_PATH_MAX + 1];
@@ -972,12 +980,15 @@ static int sys_http_post(u32 argp, u32 flags, u32 unused2) {
     }
     if (i > JT_HTTP_PATH_MAX) return -EINVAL;
     if (i == 0 || kpath[0] != '/') return -EINVAL;
+    if (claude && !path_is_claude(kpath)) return -EINVAL; /* the relay bearer goes to one path, nowhere else */
     if (a.body_len > (big ? (u32)JT_HTTP_BIG_MAX : (u32)JT_HTTP_POST_BODY_MAX)) return -EINVAL;
     if (!paging_user_range_ok((u32)a.body, a.body_len ? a.body_len : 1)) return -EFAULT;
     if (a.out_len > (big ? (u32)JT_HTTP_BIG_MAX : (u32)JT_HTTP_POST_REPLY_MAX)) a.out_len = big ? JT_HTTP_BIG_MAX : JT_HTTP_POST_REPLY_MAX;
     if (!paging_user_range_ok((u32)a.out, a.out_len ? a.out_len : 1)) return -EFAULT;
     u32 ticks = a.reply_ticks ? a.reply_ticks : JT_HTTP_POST_TICKS_DEFAULT;
-    if (ticks > JT_HTTP_POST_TICKS_MAX) ticks = JT_HTTP_POST_TICKS_MAX;
+    if (ticks > (claude ? (u32)JT_HTTP_POST_TICKS_CLAUDE : (u32)JT_HTTP_POST_TICKS_MAX)) ticks = claude ? JT_HTTP_POST_TICKS_CLAUDE : JT_HTTP_POST_TICKS_MAX;
+    /* 2.14.0: no relay set up (the browser demo, a fresh install) is a clean refusal, not a wait. */
+    if (claude && (!claude_host_get()[0] || !claude_token_get()[0])) return -EACCES;
     if (http_busy) return -EBUSY;
     if (task_stack_room() < JT_NET_STACK_MIN) return -ENOMEM; /* 2.0.0: never enter the net path without stack room, see task_stack_room */
     /* Big: no bounce at all. net's POST builder already copies the body into its own
@@ -989,13 +1000,16 @@ static int sys_http_post(u32 argp, u32 flags, u32 unused2) {
     if (!http_wait_idle(HTTP_WAIT_TICKS)) { n = -EBUSY; }
     else if (!net_init(0x0A00020F)) { n = -ENODEV; }
     else {
-        const char *host = (flags & JT_POST_WORKER) ? HTTP_HOST : llm_host_get();
-        unsigned short port = (flags & JT_POST_WORKER) ? HTTP_PORT : (unsigned short)llm_port_get();
+        const char *host = (flags & JT_POST_WORKER) ? HTTP_HOST : claude ? claude_host_get() : llm_host_get();
+        unsigned short port = (flags & JT_POST_WORKER) ? HTTP_PORT : (unsigned short)(claude ? claude_port_get() : llm_port_get());
         /* 1.9.27: the Mail token never crosses into ring 3. The kernel adds the bearer itself, only
-           for the Worker's mail route, from the Settings-owned token. */
+           for the Worker's mail route, from the Settings-owned token. 2.14.0: the Claude relay's
+           token the same way, only for /api/claude on the relay host (checked above). */
         if ((flags & JT_POST_WORKER) && path_is_mail_send(kpath)) http_post_set_bearer(mail_token_get());
+        if (claude) http_post_set_bearer(claude_token_get());
         if (big) n = http_post_timeout(host, kpath, port, a.body, a.body_len, a.out, a.out_len, ticks);
         else n = http_post_timeout(host, kpath, port, http_post_body, a.body_len, http_post_reply, sizeof(http_post_reply), ticks);
+        http_post_set_bearer(0); /* 2.14.0: a failed resolve or a busy stack returns before the request is built; never leave a token armed for the next POST */
         st = http_last_status();
         if (n < 0) n = -EIO;
         else if (st != 200) n = st >= 100 && st <= 599 ? -st : -EIO;
