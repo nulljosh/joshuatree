@@ -72,8 +72,8 @@ static int cmd53(unsigned fn, unsigned addr, int write, unsigned char *buf, unsi
     R32(SDH + CMD) = 53u << 24 | 0x1A0000 | 0x200000 | 0x2 | (write ? 0 : 0x10);   /* data present (bit 21), block count on, read = 0x10; the first real-board run had 0x20 (multi-block) here instead of data present, so no data ever moved and `arm halt` failed */
     if (!wait_int(1, 100)) return 0;
     r = R32(SDH + RESP); if (r & 0xcb00) return 0;
+    if (!wait_int(write ? 0x10 : 0x20, 100)) return 0;   /* buffer ready fires once per block, not per word: the third real-board run moved 4 bytes and stalled on 64 */
     for (unsigned i = 0; i < n; i += 4) {
-        if (!wait_int(write ? 0x10 : 0x20, 100)) return 0;
         if (write) R32(SDH + DATA) = buf[i] | buf[i + 1] << 8 | buf[i + 2] << 16 | (unsigned)buf[i + 3] << 24;
         else { unsigned w = R32(SDH + DATA); buf[i] = w; buf[i + 1] = w >> 8; buf[i + 2] = w >> 16; buf[i + 3] = w >> 24; }
     }
@@ -89,11 +89,13 @@ static int bp_window(unsigned addr) {
     if (!cmd52(1, SB_WIN, 1, w >> 8, 0) || !cmd52(1, SB_WIN + 1, 1, w >> 16, 0) || !cmd52(1, SB_WIN + 2, 1, w >> 24, 0)) return 0;
     win = w; return 1;
 }
+static unsigned bp_done;   /* bytes the last bp_write moved, printed when the firmware load fails */
 static int bp_write(unsigned addr, const unsigned char *p, unsigned n) {
+    bp_done = 0;
     while (n) {
         unsigned k = n > 64 ? 64 : n;
         if (!bp_window(addr) || !cmd53(1, 0x8000 | (addr & 0x7fff), 1, (unsigned char *)p, k)) return 0;
-        addr += k; p += k; n -= k;
+        addr += k; p += k; n -= k; bp_done += k;
     }
     return 1;
 }
@@ -107,7 +109,7 @@ static int fw_load(void) {
     if (fw_padded(wifi_fw_bin_len) > CHIP_RAM_SIZE - nvsz) { fail("fw size"); return 0; }
     /* hold the ARM in reset (wrapper RESETCTRL=1, IOCTRL=CPUHALT|CLK) while RAM is written */
     if (!bp_write32(CR4_WRAP + 0x800, 1) || !bp_write32(CR4_WRAP + 0x408, 0x21)) { fail("arm halt"); return 0; }
-    if (!bp_write(CHIP_RAM, wifi_fw_bin, wifi_fw_bin_len)) { fail("fw load"); return 0; }
+    if (!bp_write(CHIP_RAM, wifi_fw_bin, wifi_fw_bin_len)) { kputs("wifi FAIL fw load at byte "); kdec(bp_done); kputs("\n"); return 0; }
     if (!bp_write(nvat, wifi_fw_nvram, wifi_fw_nvram_len)) { fail("nvram"); return 0; }
     kputs("wifi fw "); kdec(wifi_fw_bin_len / 1024); kputs("k loaded\n");
     /* reset vector = start of RAM, then release: RESETCTRL=0, IOCTRL=CLK */
