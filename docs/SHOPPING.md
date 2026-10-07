@@ -5,10 +5,11 @@ Everything the Pi work needs, cheapest and most useful first. Prices are rough C
 ## Get this week
 
 - [ ] **USB-C to TTL serial cable, 3.3 V** (about $10 to $15). The Mac sees everything the Pi prints, even with a black screen. Search "USB-C to TTL serial 3.3V" (CP2102, FTDI or CH340).
+- [ ] **A smart plug** (about $15 to $20). The Mac power-cycles the Pi, so no plugging and unplugging for each test. Joshua 2026-10-07.
 - [ ] **A second microSD card, 32 GB** (about $10). One card keeps the last good build, the other is for experiments.
 - [ ] **A wired USB mouse** (about $10 to $15), unless the old one turns up. Bluetooth mice wait for the Bluetooth driver.
 - [ ] **A USB-C to USB-A data cable** (about $10). A real data cable, not a charging one: the vape cable was the reason the keyboard went missing.
-- [ ] **An Ethernet cable** (about $5 to $10), if the old ones stay lost. The wired backup to Wi-Fi.
+- [ ] **An Ethernet cable** (about $5 to $10), if the old ones stay lost. The wired backup to Wi-Fi, and what lets the Pi 4 load its kernel over the network so the SD card never has to leave the Pi.
 
 ## Soon
 
