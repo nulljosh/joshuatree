@@ -504,8 +504,9 @@ static void fb_init(void) {
         text_draw(1, "Joshua Tree", sc(8), sc(17), sc(150), fb_color(0x00202020), fb, fb_pitch, W, H);              /* menu bar */
         text_draw(1, "Console", win_x + sc(10), win_y + sc(20), sc(150), fb_color(0x00ffffff), fb, fb_pitch, W, H);  /* title bar */
         text_draw(2, "ARM64", W - sc(80), sc(17), sc(130), fb_color(0x00505a68), fb, fb_pitch, W, H);
-        /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock. */
-        const char *thanks = "Steve Jobs, 1955 to 2011. Thank you.";
+        /* Steve Jobs died on 5 October 2011. Fifteen years on, one quiet line above the dock, ending on the title
+           of the Steve Jobs Archive's book of his own words, which Joshua was reading that week. */
+        const char *thanks = "Steve Jobs, 1955 to 2011. Thank you. Make something wonderful.";
         text_draw(2, thanks, (W - text_width(2, thanks, sc(110))) / 2, dock_y - sc(12), sc(110), fb_color(0x00a8b4c4), fb, fb_pitch, W, H);
     } else uart_puts("M1d text FAIL\n");
     con_layout(win_x, win_y, win_w, win_h);
