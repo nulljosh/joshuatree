@@ -209,3 +209,5 @@ Newest first. Each entry says what was tried on the real board and the last line
 ![The Console window up close: one mark per boot line](hardware/first-boot-console-2026-10-06.jpg)
 
 Joshua Tree 3.0 ships when it boots the desktop on a real Pi.
+
+Want to try parts (an LED, a button, a speaker) before soldering anything? See [the breadboard prototype](hardware/BREADBOARD.md).
