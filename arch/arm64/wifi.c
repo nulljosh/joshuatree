@@ -282,7 +282,8 @@ static int scan(void) {
         unsigned k = wifi_fw_clm_len - off > 1024 ? 1024 : wifi_fw_clm_len - off, fl = (off == 0 ? 2 : 0) | (off + k >= wifi_fw_clm_len ? 4 : 0) | 1 << 12;
         unsigned char b[1040]; wr16(b, fl); wr16(b + 2, 2); wr32(b + 4, k); wr32(b + 8, 0);
         for (unsigned i = 0; i < k; i++) b[12 + i] = wifi_fw_clm[off + i];
-        if (!iovar("clmload", 1, b, 12 + k, &st) || st) { fail("clm"); return 0; }
+        if (!iovar("clmload", 1, b, 12 + k, &st) || st) {   /* optional: the firmware carries a default CLM, brcmfmac only warns */
+            kputs("wifi clm skipped, status "); kdec(st); kputs(" (using the built-in regulatory data)\n"); break; }
     }
     unsigned char cc[12] = { 'C', 'A', 0, 0, 0xff, 0xff, 0xff, 0xff, 'C', 'A', 0, 0 };   /* wlc_country: ccode, rev -1, abbrev */
     if (!iovar("country", 1, cc, 12, &st) || st) { fail("country"); return 0; }
