@@ -11,6 +11,7 @@
    APPS[] and ICON_ART[] slots. */
 #define GUI_APPS_FOLDER 30 /* not an app: the dock tile that opens the folder */
 #define GUI_TRASH       31
+#define GUI_CALENDAR     2 /* APPS[] slot whose tile gets the live date face, gui_calendar_face */
 #define GUI_DOCK_DEFAULT_ORDER {GUI_APPS_FOLDER, 0, 1, 2, 3, 4, 5, 6, 7, 18, GUI_TRASH}
 
 /* Channel-wise average and t/max interpolation of two 0x00RRGGBB colours. */
@@ -68,5 +69,15 @@ void gui_draw_dock_label(int cx_center, int y0, const char *name);
    wallpaper, content well from y + 30, a hairline under the title band,
    the three traffic lights and the centred name. */
 void gui_draw_window_frame(int x, int y, int w, int h, const char *name);
+
+/* Provided by the platform: bold DejaVu Sans with its line box's top-left at logical (lx, ly), face 0..3 a 16, 20,
+   24 or 28 physical pixel face, mul an integer upscale; and the width of that string in logical pixels, rounded up.
+   i386 answers with wx_text, ARM with arch/arm64/text.c. */
+void gui_icon_text(const char *s, int lx, int ly, int face, int mul, unsigned int fg);
+int gui_icon_text_w(const char *s, int face, int mul);
+/* The Calendar tile's live face, over its blank page art: the month in red and the day in ink, for month 1..12 and
+   day 1..31. Month 0 means the date is unknown (the Pi has no battery clock), and the tile shows a red header dash and
+   an ink dash instead of a made-up date. */
+void gui_calendar_face(int cx_center, int cy_bottom, int size, int month, int day);
 
 #endif

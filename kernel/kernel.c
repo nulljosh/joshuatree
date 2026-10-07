@@ -3999,77 +3999,20 @@ static int wx_text(const char *s, int lx, int ly, int size, int bold, int mul, u
 }
 static int wx_text_lw(const char *s, int size, int bold, int mul){ int sc = (int)window_scale(); return (wx_text_w(s, size, bold, mul) + sc - 1) / sc; }
 
-/* v0.89.x: the Calendar dock/Apps-folder tile shows the real current date,
-   macOS style, instead of a fixed baked-in "SEP 17" (that art still
-   exists at art/icons/calendar.svg, but restyle_icons.py's design table
-   now leaves the tile's glyph body empty: a real date can't be baked into
-   a rasterized PNG, tools/gen/gen_icon_art.py's whole point). Drawn here
-   as an overlay on top of the plain white tile gui_draw_one_icon_on just
-   blitted, at physical resolution with the same wx_text/text_ink glyph
-   path the Weather window uses, so it is drawn fresh every call rather
-   than baked into gui_render_icon_cached's cache -- the cache key has no
-   room for "today's date" and does not need one this way, and it means
-   this never goes stale as long as *something* redraws the icon.
-   cmos_read_time_stable, not calendar.h's own cal_read_today: this must
-   never show a different day than the menu bar clock does, and that
-   clock already reads month/day through this exact stable-against-RTC-
-   update-in-progress function (see its own comment above), not
-   calendar.h's plainer wait-once read. Sharing the function, not just the
-   register numbers, is what makes "the icon and the clock never
-   disagree" true by construction instead of by coincidence. */
-static const char *GUI_CAL_MON3[12] = {"JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"};
+/* The Calendar tile's live face is gui_calendar_face (kernel/gui_paint.c, shared with the Pi), drawn over the
+   cached blank page at every site that draws the icon. Its date comes from cmos_read_time_stable, the same read the
+   menu bar clock makes, so the icon and the clock never disagree. These two answer its text through wx_text, the
+   physical-resolution DejaVu path the Weather window uses. */
+void gui_icon_text(const char *s, int lx, int ly, int face, int mul, unsigned int fg){ wx_text(s, lx, ly, face, 1, mul, fg); }
+int gui_icon_text_w(const char *s, int face, int mul){ return wx_text_lw(s, face, 1, mul); }
 static void gui_calendar_draw_date(int cx_center, int cy_bottom, int size){
-    int y = cy_bottom - size;
     u8 h, m, wd, dom, mon;
     cmos_read_time_stable(&h, &m, &wd, &dom, &mon);
     int domv = (dom & 0x0F) + ((dom >> 4) * 10);
     int monv = (mon & 0x0F) + ((mon >> 4) * 10);
     if (monv < 1 || monv > 12) monv = 1;
     if (domv < 1 || domv > 31) domv = 1;
-    char daybuf[3]; int n = 0;
-    if (domv >= 10) daybuf[n++] = (char)('0' + domv / 10);
-    daybuf[n++] = (char)('0' + domv % 10);
-    daybuf[n] = 0;
-    /* One fixed physical size for both faces, not scaled with the tile:
-       tried scaling month/day up together with the Apps-folder grid's
-       bigger (120-physical-at-2x, vs. the dock's 74) tile first (2x/3x
-       mul there), and a real headless crop showed the day numeral's cap
-       height then reaching past the month label's own baseline -- the
-       two texts' vertical gap was a fraction of `size`, but each face's
-       glyph height was a multiple of a fixed 16/20/24/28px table, so the
-       two didn't grow at the same rate and the larger tile closed the
-       gap between them instead of widening it. Keeping both at the one
-       size that was measured clean on the dock (real 4x crop, see the
-       commit this landed in) means the Apps-folder tile's text sits a
-       little smaller relative to its own tile than the dock's does, the
-       same trade the authored artwork itself already makes everywhere
-       else (one 148px source raster area-averaged down, never redrawn
-       per size) rather than a second layout to get right and keep right. */
-    /* v0.89.x follow-up: mul_d=2 overflowed the dock's own 74px tile (a
-       real crop showed "25" edge to edge, its descender crossing the
-       tile's bottom curve); mul_d=1 keeps real breathing room there. */
-    /* v0.90.x: mul_d=1 was only ever measured against the dock's 74px
-       tile; on the bigger Apps-folder/phone tile (tile=60 logical) it
-       left the day numeral small with the tile's bottom third empty.
-       size is the same logical unit both callers pass, so branch on it. */
-    /* v1.8: phone tile's "SEP"/"28" spilled past the rounded corners.
-       No fractional mul (integer divisor), so ~70% comes from dropping
-       one face size each line: month 24px->16px@mul2=32px (~67% of 48),
-       day 28px->20px@mul2=40px (~71% of 56). */
-    /* Proportions, the same on every tile: the month a small label whose caps are
-       about 13% of the tile tall, the day numeral about 22% tall and centered in
-       the space under it (equal air above and below), nothing near the side edges.
-       Dock: 16px month, 28px day. Bigger tiles: 24px month, 20px doubled day. */
-    int mul_m = 1, mul_d = 1;
-    int face_m = 0, face_d = 3;
-    if (size > 40) { mul_d = 2; face_m = 2; face_d = 1; }
-    const char *mon3 = GUI_CAL_MON3[monv - 1];
-    int ly_m = y + size * 13 / 100;
-    int ly_d = y + size * 51 / 100;
-    int lwm = wx_text_lw(mon3, face_m, 1, mul_m);
-    wx_text(mon3, cx_center - lwm / 2, ly_m, face_m, 1, mul_m, 0x00FF3B30);
-    int lwd = wx_text_lw(daybuf, face_d, 1, mul_d);
-    wx_text(daybuf, cx_center - lwd / 2, ly_d, face_d, 1, mul_d, 0x001F1F22);
+    gui_calendar_face(cx_center, cy_bottom, size, monv, domv);
 }
 
 /* "18°" style degrees into out. */
