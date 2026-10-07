@@ -1,6 +1,7 @@
 # Joshua Tree docs
 
 - [Our story](STORY.md): who we are, how it went, where it is going
+- [Soul](SOUL.md): the pro and the rebel, and seduce, ignore, vilify: the two ideas under every decision
 - [Launch drafts](LAUNCH.md): the Show HN post and the 30 second video script, not yet posted
 - [Decisions](DECISIONS.md): the standing answers (who can push, who it is for, when 3.0 is done)
 - [Shopping list](SHOPPING.md): parts for the Pi work and the books worth reading
