@@ -87,7 +87,8 @@ try:
         # Hot-plug: nothing is attached at these ports at boot, so only the once-a-second rescan can find them.
         r = cmd("device_add", driver="usb-kbd", bus="x.0", port="1.2", id="k2")
         if "error" in r: fails.append(f"device_add behind the hub failed: {r}")
-        if wait_for("usb port 5.2 connected", 60) and re.search(r"usb kbd addr \d+ port 5\.2 full", uart()):
+        # the address line lands a moment after "connected": wait for it too, reading in between was a flake
+        if wait_for("usb port 5.2 connected", 60) and any(re.search(r"usb kbd addr \d+ port 5\.2 full", uart()) or time.sleep(0.1) for _ in range(50)):
             print("  ok: a keyboard plugged into the hub after boot was found by the rescan")
             cmd("send-key", keys=[{"type": "qcode", "data": "k"}])   # the newest keyboard takes the keys
             if wait_for("usb key 0x0e k", 30): print("  ok: ... and its key presses arrive")

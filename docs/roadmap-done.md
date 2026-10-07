@@ -93,3 +93,6 @@ Items ticked off in `docs/roadmap.md`, moved here on 2026-10-06 so the roadmap o
 
 ## Moved from main, 2026-10-07
 - [x] [Fable] Console scrollback, 2.19.0: Page Up, Page Down, Home and End scroll the Console over the whole boot log, the title bar says which lines are shown, and a pinned row keeps the latest `wifi` and `usb` line in every photo. `tools/checks/arm64-console-scroll-check.py`.
+
+## Moved from main, 2026-10-07 (IP stack and others)
+- [x] [Fable] ARM IP stack, 2.20.0: the i386 kernel's own `drivers/net.c` and `drivers/http.c` now build for ARM on a four-call card interface (`drivers/nic.h`), so Wi-Fi only has to fill it in. On QEMU's virtio-net it leases 10.0.2.15 by DHCP and POSTs to the host. Check: `tools/checks/arm64-net-check.py`.

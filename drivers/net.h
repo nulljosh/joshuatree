@@ -27,6 +27,7 @@ extern int net_nodhcp;
 unsigned int net_get_gateway(void);
 unsigned int net_get_dns(void);
 unsigned int net_get_netmask(void);
+unsigned int net_get_ip(void);   /* our address now: the lease, or the fixed fallback */
 
 /* Hardware-agnostic single raw-frame send and MAC accessor, for low-level
    diagnostics (kernel.c's "nettest"/"ifconfig") that used to call
