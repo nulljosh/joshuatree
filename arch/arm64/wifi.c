@@ -82,7 +82,6 @@ static int cmd53(unsigned fn, unsigned addr, int write, unsigned char *buf, unsi
     if (n > 512) { blocks = (n + F2_BLOCK - 1) / F2_BLOCK; block = F2_BLOCK; bytes = blocks * F2_BLOCK; }
     unsigned r, a = (write ? 0x80000000u : 0) | fn << 28 | (n > 512 ? 1u << 27 : 0) | 1u << 26 | (addr & 0x1ffff) << 9 | ((n > 512 ? blocks : n) & 0x1ff);
     R32(SDH + BLK) = blocks << 16 | block;
-    mdelay(1);   /* the BCM2835 host wants a couple of SD clocks between accesses; a millisecond is far more than enough */
     for (unsigned k = 0; R32(SDH + STATE) & 3; k++) if (k > 1000000) return c53_fail(1);
     R32(SDH + INT) = 0xffffffff; R32(SDH + ARG) = a;
     R32(SDH + CMD) = 53u << 24 | 0x1A0000 | 0x200000 | 0x2 | (blocks > 1 ? 0x20 : 0) | (write ? 0 : 0x10);   /* data present, block count on, multi-block when more than one, read = 0x10 */
@@ -109,7 +108,7 @@ static unsigned bp_done;   /* bytes the last bp_write moved, printed when the fi
 static int bp_write(unsigned addr, const unsigned char *p, unsigned n) {
     bp_done = 0;
     while (n) {
-        unsigned k = n > 64 ? 64 : n;
+        unsigned k = n > 512 ? 512 : n;   /* the byte-mode limit; 64-byte chunks made the 595 KB upload take most of a minute with every pause in it */
         if (!bp_window(addr) || !cmd53(1, 0x8000 | (addr & 0x7fff), 1, (unsigned char *)p, k)) return 0;
         addr += k; p += k; n -= k; bp_done += k;
     }
