@@ -380,16 +380,16 @@ static int join(void) {
     put32(b, 1); if (!wlc_ioctl(20, b, 4, &st) || st) { fail("infra"); return 0; }   /* WLC_SET_INFRA: infrastructure */
     put32(b, 0); if (!wlc_ioctl(22, b, 4, &st) || st) { fail("auth"); return 0; }                          /* WLC_SET_AUTH: open system */
     put32(b, 4); if (!wlc_ioctl(134, b, 4, &st) || st) { fail("wsec"); return 0; }                         /* WLC_SET_WSEC: AES */
-    put32(b, 0); put32(b + 4, 1); if (!iovar("bsscfg:sup_wpa", 1, b, 8, &st) || st) { fail("sup_wpa"); return 0; }
-    put32(b, 0x80); if (!iovar("wpa_auth", 1, b, 4, &st) || st) { fail("wpa_auth"); return 0; }            /* WPA2_AUTH_PSK */
+    put32(b, 1); if (!iovar("sup_wpa", 1, b, 4, &st) || st) { kputs("wifi sup_wpa status "); kx(st); kputs("\n"); fail("sup_wpa"); return 0; }   /* interface 0 takes the plain name: brcmfmac adds "bsscfg:" only for the others */
+    put32(b, 0x80); if (!iovar("wpa_auth", 1, b, 4, &st) || st) { kputs("wifi wpa_auth status "); kx(st); kputs("\n"); fail("wpa_auth"); return 0; }            /* WPA2_AUTH_PSK */
     for (unsigned i = 0; i < 80; i++) b[i] = 0;
     b[0] = WIFI_PSK_LEN; b[2] = 1;                                                                          /* wsec_pmk: key_len, flags = passphrase */
     for (unsigned i = 0; i < WIFI_PSK_LEN; i++) b[4 + i] = wifi_psk[i];
-    if (!wlc_ioctl(268, b, 68, &st) || st) { fail("pmk"); return 0; }                                      /* WLC_SET_WSEC_PMK */
+    if (!wlc_ioctl(268, b, 68, &st) || st) { kputs("wifi pmk status "); kx(st); kputs("\n"); fail("pmk"); return 0; }                                      /* WLC_SET_WSEC_PMK */
     for (unsigned i = 0; i < 80; i++) b[i] = 0;
     put32(b, WIFI_SSID_LEN); for (unsigned i = 0; i < WIFI_SSID_LEN; i++) b[4 + i] = wifi_ssid[i];
     kputs("wifi joining "); kputs((const char *)wifi_ssid); kputs("\n");
-    if (!wlc_ioctl(26, b, 36, &st) || st) { fail("set ssid"); return 0; }                                  /* WLC_SET_SSID starts the join */
+    if (!wlc_ioctl(26, b, 36, &st) || st) { kputs("wifi set ssid status "); kx(st); kputs("\n"); fail("set ssid"); return 0; }                                  /* WLC_SET_SSID starts the join */
     unsigned shown = 0;
     for (unsigned t = 0; t < 2400; t++) {   /* up to 12 s: scan, auth, assoc and the handshake */
         unsigned off, l; if (!f2_read()) break;
