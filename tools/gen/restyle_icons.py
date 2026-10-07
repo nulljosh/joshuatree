@@ -116,15 +116,21 @@ DOCK = {
                                         "#32D74B", "#5B9BD5", "#0A84FF",
                                         "#A87C5B", "#8A8F99", "#FF375F"]))),
 
-    # Burrow (the file browser): one bold flat folder, two tones, nothing else.
-    # Finder-simple on purpose: no animal, no outline, no gradient inside the
-    # glyph. A white tile like Calendar and Reminders, the house terracotta
-    # for the front, a lighter tint of it for the back.
+    # Burrow (the file browser): the burrow's doorway as a face, its Finder.
+    # The plain folder read too systematic and the old kit fox too cartoon,
+    # so this sits between them: an arch split in two tones like Finder's
+    # face, a profile with a nose down the middle, two eyes and one smile.
+    # Flat shapes, no ears, no fur, no outline. A light tile like Mail's
+    # neighbours, the house terracotta for the head, a lighter tint of it
+    # for the lit half, features in a deep terracotta that reads at 24 px.
     "burrow": ("#F5F5F8", "#E0E1E6",
-               "",
+               '<clipPath id="head"><path d="M26 100 V64 A38 38 0 0 1 102 64 V100 Q102 106 96 106 H32 Q26 106 26 100 Z"/></clipPath>',
                """
-      <path d="M22 48 Q22 36 34 36 H52 Q57 36 60 40 L65 46 H94 Q106 46 106 58 V88 Q106 100 94 100 H34 Q22 100 22 88 Z" fill="#E39A78"/>
-      <path d="M22 62 Q22 54 30 54 H98 Q106 54 106 62 V88 Q106 100 94 100 H34 Q22 100 22 88 Z" fill="#B5502C"/>"""),
+      <path d="M26 100 V64 A38 38 0 0 1 102 64 V100 Q102 106 96 106 H32 Q26 106 26 100 Z" fill="#B5502C"/>
+      <path clip-path="url(#head)" d="M0 0 H68 C67 30 65 42 62 52 L56 66 Q54 71 59 72 H63 C62 86 63 98 65 128 H0 Z" fill="#E7A07E"/>
+      <rect x="43" y="49" width="10" height="19" rx="5" fill="#5C2210"/>
+      <rect x="76" y="49" width="10" height="19" rx="5" fill="#5C2210"/>
+      <path d="M41 84 Q64 101 87 84" fill="none" stroke="#5C2210" stroke-width="7" stroke-linecap="round"/>"""),
 
     # Mail: a white envelope on a blue tile.
     "mail": ("#34A6FF", "#157FF3",

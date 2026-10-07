@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Burrow: the Files app was renamed. Its icon was a kit fox, then (2.7.2) one bold two-tone folder, Finder-simple.
+"""Burrow: the Files app was renamed. Its icon was a kit fox, then (2.7.2) one bold two-tone folder, then (2.26.0) the burrow doorway as a
+two-tone face, Finder-style: two eyes and a smile, no ears or fur.
 
 What this proves, from the real sources (no QEMU, so it is fast):
   1. APPS[0] in kernel/kernel.c is "Burrow", and no APPS row is named
@@ -133,8 +134,8 @@ check(data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) > 2000, "slot 0 art is a re
 check(hashlib.sha256(data).hexdigest() != OLD_FOLDER_SHA, "slot 0 art is no longer the old folder art")
 check(os.path.exists(os.path.join(ROOT, "art/icons/burrow.svg")), "art/icons/burrow.svg exists")
 svg = read("art/icons/burrow.svg") if os.path.exists(os.path.join(ROOT, "art/icons/burrow.svg")) else ""
-check("#B5502C" in svg.upper() and "<ellipse" not in svg and "<circle" not in svg,
-      "Burrow's icon is the flat terracotta folder: house accent, no fox shapes (no ellipses or circles)")
+check("#B5502C" in svg.upper() and "<ellipse" not in svg and "<circle" not in svg and svg.count("<rect") == 2,
+      "Burrow's icon is the two-tone terracotta doorway face: house accent, two eyes, no fox shapes (no ellipses or circles)")
 check(not os.path.exists(os.path.join(ROOT, "art/icons/files.svg")), "old art/icons/files.svg is gone")
 r = subprocess.run([sys.executable, os.path.join(ROOT, "tools/gen/gen_icon_art.py"), "--check"], capture_output=True, text=True)
 check(r.returncode == 0, "kernel/icon_art.h matches the SVGs")
