@@ -32,7 +32,9 @@ wifi.o: wifi.c wifi_proto.h
 	$(CC) -c -o $@ wifi.c
 pi-wifi.o: wifi.c wifi_proto.h
 	$(CC) -DPI_BUILD -c -o $@ wifi.c
-wifi_fw.S: wifi_fw_gen.sh
+wifi-fw:
+	cd ../.. && tools/wifi-fw.sh
+wifi_fw.S: wifi_fw_gen.sh wifi-fw
 	./wifi_fw_gen.sh
 wifi_fw.o: wifi_fw.S
 	$(CC) -c -o $@ wifi_fw.S
@@ -48,10 +50,11 @@ pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi
 	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o
 kernel8.img: pi-kernel8.elf
 	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o
-pi: kernel8.img
+pi: wifi-fw kernel8.img
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf
 run-pi: kernel8.img
 	qemu-system-aarch64 -machine raspi4b -nographic -kernel kernel8.img
 clean:
 	rm -f *.o *.elf kernel8.img
+.PHONY: wifi-fw

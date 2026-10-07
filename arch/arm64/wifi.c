@@ -47,7 +47,8 @@ static int sd_init(void) {
         unsigned long r = GPIO + (g / 10) * 4, sh = (g % 10) * 3;
         R32(r) = (R32(r) & ~(7u << sh)) | 7u << sh;
     }
-    R32(SDH + 0x2F) = 0; R32(SDH + CTL1) = R32(SDH + CTL1) | 0x07000000;   /* reset all */
+    R32(SDH + CTL1) = R32(SDH + CTL1) | 0x07000000;   /* reset all: SRST bits 24-26 of CTL1 (the byte at 0x2F; a
+                                                         32-bit store there is an alignment fault on device memory) */
     for (unsigned n = 0; R32(SDH + CTL1) & 0x07000000; n++) if (n > 1000000) return 0;
     R32(SDH + CTL1) = 1 | 0x80 << 8 | 0xE << 16;   /* internal clock on, divider for ~400 kHz identification, timeout max */
     for (unsigned n = 0; !(R32(SDH + CTL1) & 2); n++) if (n > 1000000) return 0;
@@ -185,8 +186,33 @@ static int scan(void) {
     return 1;
 }
 
+/* WLAN power. On the Pi 4 the chip's WL_ON line is pin 1 of the firmware's GPIO expander, reached only through the
+   mailbox (tags 0x00030043 get / 0x00030041 set, expander pins numbered from 128: Circle's CBcmPropertyTags and
+   Linux's gpio-raspberrypi-exp). Read it, raise it, give the chip 150 ms, then start SDIO. Bounded like the rest. */
+#define WL_ON 129
+static volatile unsigned wmbox[16] __attribute__((aligned(16)));
+static int wmbox_call(void) {
+    unsigned long m = 0xFE00B880UL, a = (unsigned long)wmbox | 8;
+    for (unsigned n = 0; R32(m + 0x38) & 0x80000000u; n++) if (n > 1000000) return 0;
+    R32(m + 0x20) = (unsigned)a;
+    for (unsigned n = 0; ; n++) {
+        if (n > 1000000) return 0;
+        if (R32(m + 0x18) & 0x40000000u) continue;
+        if (R32(m + 0x00) == (unsigned)a) return wmbox[1] == 0x80000000u;
+    }
+}
+static void wifi_power_on(void) {
+    wmbox[0] = 32; wmbox[1] = 0; wmbox[2] = 0x00030043; wmbox[3] = 8; wmbox[4] = 0; wmbox[5] = WL_ON; wmbox[6] = 0; wmbox[7] = 0;
+    unsigned was = wmbox_call() ? wmbox[6] : 0;
+    wmbox[0] = 32; wmbox[1] = 0; wmbox[2] = 0x00030041; wmbox[3] = 8; wmbox[4] = 0; wmbox[5] = WL_ON; wmbox[6] = 1; wmbox[7] = 0;
+    int ok = wmbox_call();
+    kputs(ok ? (was ? "wifi power on (was on)\n" : "wifi power on\n") : "wifi power on (no mailbox)\n");
+    mdelay(150);
+}
+
 int wifi_init(void) {
     unsigned r;
+    wifi_power_on();
     if (!sd_init()) { kputs("wifi no host\n"); return 0; }
     if (!sd_cmd(0, 0, 0, 0)) { kputs("wifi no host\n"); return 0; }
     if (!sd_cmd(5, 0, 2, &r)) { fail("cmd5"); return 0; }               /* IO_SEND_OP_COND: any SDIO card there? */
