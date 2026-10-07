@@ -14,6 +14,9 @@ and checks the kernel echoes each one ("usb key 0x0d j") and prints the Linux ke
 t is 20), then moves the mouse right 20
 and down 10 through QMP input-send-event and checks the pointer, which starts mid-screen at 400,300, lands on 420,310,
 then clicks and checks the left button (272) going down and up.
+Then hot-plug, which only the once-a-second rescan can notice: a second keyboard added to a free hub port through QMP
+device_add must be found and typed on, and removed again with device_del ("usb port 5.2 disconnected"); a third added to a
+free root port likewise. The hub's per-port status lines ("usb hp N st .. ch ..") must be there too.
 No virtio input devices are attached, so every event can only have come through USB. QEMU runs headless
 (-display none) and is killed when the check ends.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
@@ -57,6 +60,8 @@ try:
                            (r"usb mouse addr \d+ port \d+ high", "a boot mouse on its own root port")):
             if re.search(want, uart()): print(f"  ok: {what}")
             else: fails.append(f"no {want!r} on the UART ({what})")
+        if re.search(r"usb hp 1 st [0-9a-f]{4} ch [0-9a-f]{4}", uart()) and re.search(r"usb hp 2 empty st", uart()): print("  ok: one status line per hub port (connected and empty)")
+        else: fails.append("no per-port 'usb hp N' status lines")
         s = socket.socket(socket.AF_UNIX); s.connect(sock); f = s.makefile("rw")
         f.readline()
         def cmd(c, **a):
@@ -79,6 +84,27 @@ try:
         for want in ("key 272 down", "key 272 up"):
             if wait_for(want, 30): print(f"  ok: left click printed {want!r}")
             else: fails.append(f"clicking: no {want!r} on the UART, got {uart()[-300:]!r}")
+        # Hot-plug: nothing is attached at these ports at boot, so only the once-a-second rescan can find them.
+        r = cmd("device_add", driver="usb-kbd", bus="x.0", port="1.2", id="k2")
+        if "error" in r: fails.append(f"device_add behind the hub failed: {r}")
+        if wait_for("usb port 5.2 connected", 60) and re.search(r"usb kbd addr \d+ port 5\.2 full", uart()):
+            print("  ok: a keyboard plugged into the hub after boot was found by the rescan")
+            cmd("send-key", keys=[{"type": "qcode", "data": "k"}])   # the newest keyboard takes the keys
+            if wait_for("usb key 0x0e k", 30): print("  ok: ... and its key presses arrive")
+            else: fails.append(f"the hot-plugged keyboard's 'k' never arrived, got {uart()[-300:]!r}")
+        else: fails.append(f"a keyboard plugged into the hub after boot was never found, got {uart()[-300:]!r}")
+        cmd("device_del", id="k2")
+        if wait_for("usb port 5.2 disconnected", 60): print("  ok: unplugging it printed 'usb port 5.2 disconnected'")
+        else: fails.append(f"the unplugged hub keyboard was not noticed, got {uart()[-300:]!r}")
+        r = cmd("device_add", driver="usb-kbd", bus="x.0", port="3", id="k3")
+        if "error" in r: fails.append(f"device_add on a root port failed: {r}")
+        if re.search(r"usb kbd addr \d+ port 7 ", uart()) or (wait_for("usb port 7 connected", 60) and wait_for(" port 7 ", 20)):
+            print("  ok: a keyboard plugged into a root port after boot was found by the rescan")
+            time.sleep(0.5)
+            cmd("send-key", keys=[{"type": "qcode", "data": "u"}])
+            if wait_for("usb key 0x18 u", 30): print("  ok: ... and its key presses arrive")
+            else: fails.append(f"the hot-plugged root-port keyboard's 'u' never arrived, got {uart()[-300:]!r}")
+        else: fails.append(f"a keyboard plugged into a root port after boot was never found, got {uart()[-300:]!r}")
 finally:
     q.kill(); q.wait()
     shutil.rmtree(tmp, ignore_errors=True)

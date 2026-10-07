@@ -790,11 +790,16 @@ void main(void) {
         *(volatile unsigned char *)(GICD_BASE + 0x400 + 27) = 0x80;
         GICD(0x100) = 1u << 27;
         unsigned long step = timer_step / 25;   /* timer_step is 50 ms */
+#ifdef PI_BUILD
+        (void)step;
+        for (;;) { usb_poll(); input_poll(); }   /* nothing on the Pi sleeps: no wake source to trust yet, so spin and poll */
+#else
         for (;;) {
             __asm__ volatile ("msr daifset, #2\n msr cntv_tval_el0, %0\n msr cntv_ctl_el0, %1\n isb\n wfi\n"
                               " msr cntv_ctl_el0, xzr\n isb\n msr daifclr, #2\n isb" :: "r"(step), "r"(1UL) : "memory");
             usb_poll(); input_poll();
         }
+#endif
     }
     if (inputs) for (;;) { __asm__ volatile ("wfi"); input_poll(); }   /* asleep until a device interrupts */
     for (;;) __asm__ volatile ("wfe");
