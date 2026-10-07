@@ -31,6 +31,8 @@ def boot(name, want, nofw=False):
     if not build(nofw): fails.append(f"{name}: arch/arm64 `make pi` does not build"); return
     log = tempfile.mktemp()
     q = subprocess.Popen(["qemu-system-aarch64", "-machine", "raspi4b", "-display", "none", "-serial", "file:" + log,
+# QEMU has no model of the firmware's GPIO expander, so the WL_ON readback says "wifi power FAIL: WL_ON reads 0" there;
+# on the real Pi it says "wifi power on, WL_ON reads 1". Either way the line must come before CMD5.
                           "-kernel", os.path.join(arch, "kernel8.img")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     out = ""
     try:
@@ -49,10 +51,10 @@ def boot(name, want, nofw=False):
         at = i
     print(f"  ok: {name} printed, in order, {want}")
 
-boot("no SDIO card", ["M1c fb ok", "wifi power on", "wifi FAIL cmd5", "usb pcie absent"])
+boot("no SDIO card", ["M1c fb ok", "wifi power", "wifi FAIL cmd5", "usb pcie absent"])
 # Without the three files the build links empty stubs. QEMU has no SDIO card, so fw_load() is never reached here and the
 # boot ends at cmd5 as before; the `wifi no firmware` line itself is checked in the image and the source.
-boot("no firmware", ["M1c fb ok", "wifi power on", "wifi FAIL cmd5", "usb pcie absent"], nofw=True)
+boot("no firmware", ["M1c fb ok", "wifi power", "wifi FAIL cmd5", "usb pcie absent"], nofw=True)
 if b"wifi no firmware" not in open(os.path.join(arch, "kernel8.img"), "rb").read() if os.path.exists(os.path.join(arch, "kernel8.img")) else True:
     fails.append("no firmware: the image lost its `wifi no firmware` line")
 else: print("  ok: no firmware: image carries the `wifi no firmware` line and the stub reports length 0")
