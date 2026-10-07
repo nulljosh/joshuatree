@@ -132,6 +132,18 @@ Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance
 - [ ] [Fable] Touchscreen (needs the part, about $60): the i386 touch driver's shape on the Pi's DSI or USB touch.
 - [ ] [Fable] Ethernet through the Genet MAC, as the wired backup.
 - [ ] [Fable] Serial loader the day the cable arrives: new kernels over the wire, no card swaps.
+
+Also missing, added 2026-10-06 night, in order:
+
+- [ ] [Sonnet] Clean shutdown and reboot from the keyboard (the mailbox power-off and the watchdog reset), instead of pulling the plug.
+- [ ] [Fable] The other three cores: wake them from the spin table, give each a stack, run the desktop on one and the drivers on another.
+- [ ] [Sonnet] A clock that is right: the Pi has no battery clock, so take the time from the network once Wi-Fi joins (SNTP), and show it in the menu bar.
+- [ ] [Fable] Bluetooth for the mouse: same CYW43455 chip as Wi-Fi, HCI over the PL011 UART, a HID-over-GATT or classic HID mouse. After Wi-Fi stage 2.
+- [ ] [Sonnet] Heat and the fan: read the SoC temperature through the mailbox, show it, drive the fan pin.
+- [ ] [Fable] Update over Wi-Fi: the Pi fetches the newest kernel8.img from the GitHub release and writes it to the card, then reboots. Needs Wi-Fi stage 2, SD writes and plain-HTTP downloads from a mirror (no TLS yet).
+- [ ] [Sonnet] A Wi-Fi settings screen on the Pi: name and password typed on the keyboard and saved on the card, so nothing is baked into the build.
+- [ ] [Sonnet] A crash screen: when the kernel faults, draw the fault address, the last console lines and the register dump on screen instead of freezing.
+- [ ] [Fable] The Pi 5 (M5): the RP1 chip over PCIe for every peripheral.
 - [x] [Joshua] Bought the board, 2026-10-06: Pi 4B 4 GB, 32 GB microSD, heat sinks, case, fan. No serial cable yet; the screen shows the boot log so it can wait.
 - [x] [Sonnet] Card flashed without Raspberry Pi OS, 2026-10-06: `tools/flash-pi.sh` builds `kernel8.img`, fetches the five firmware files and writes the config file (`docs/RASPBERRY-PI.md`).
 - [x] [Joshua] First real boot over HDMI, 2026-10-06: the desktop came up on a Samsung monitor on the first clean power-on (`docs/RASPBERRY-PI.md` has the photo and log).
