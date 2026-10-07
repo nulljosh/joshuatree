@@ -196,6 +196,20 @@ Round 2, 2026-10-06 night (Raspberry Pi OS Trixie and RISC OS on the Pi 4). Smal
 - [ ] [Fable] Bluetooth audio: speakers and headphones over the same CYW43455 radio. After Bluetooth for the mouse.
 
 Note: RISC OS on the Pi 4 still lists USB 3 as unsupported (riscosopen.org port status); Joshua Tree got xHCI working on the board on 2026-10-06.
+
+Round 3, 2026-10-06 night (macOS Tahoe 26 and Windows 11 2026). Joshua Tree already has the glass look (v48); these are what the two big desktops added that we lack:
+
+- [ ] [Sonnet] Search that understands plain words, Spotlight style: one box that finds files, apps, contacts and actions ("open the clock", "new note") through Samantha. Starts with the Search app we already have.
+- [ ] [Fable] A screen reader (Narrator, VoiceOver): speaks the focused control and window title through the sound driver. The accessibility basics the 10.0 gate needs.
+- [ ] [Sonnet] A phone link: show a phone's live activities (a timer, a delivery, a call) in the menu bar. Needs Wi-Fi and a small relay; later.
+- [ ] [Sonnet] Shortcuts: small chains of actions (open this, type that, play a song) built from blocks, run by a key or by Samantha. Pairs with the Plank language at 8.0.
+- [ ] [Sonnet] A built-in network speed test in the Wi-Fi menu, and a signal bar in the menu bar. After Wi-Fi stage 2.
+- [ ] [Sonnet] Game mode: a full-screen mode that quiets notifications and background work, for Doom and the handheld idea.
+- [ ] [Sonnet] More wallpaper formats (WebP and AVIF through the decoder code we have, JPEG and PNG already work) and a slideshow.
+- [ ] [Sonnet] A Start-style launcher you can customise: pin, reorder and hide apps in the Launchpad.
+- [ ] [Sonnet] Camera controls in Settings, once the Pi camera driver exists.
+
+Sources: Tom's Guide and TechRadar on macOS Tahoe 26, Pureinfotech and Digital Citizen on Windows 11 2026.
 - [x] [Joshua] Bought the board, 2026-10-06: Pi 4B 4 GB, 32 GB microSD, heat sinks, case, fan. No serial cable yet; the screen shows the boot log so it can wait.
 - [x] [Sonnet] Card flashed without Raspberry Pi OS, 2026-10-06: `tools/flash-pi.sh` builds `kernel8.img`, fetches the five firmware files and writes the config file (`docs/RASPBERRY-PI.md`).
 - [x] [Joshua] First real boot over HDMI, 2026-10-06: the desktop came up on a Samsung monitor on the first clean power-on (`docs/RASPBERRY-PI.md` has the photo and log).
