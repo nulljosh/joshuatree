@@ -289,7 +289,8 @@ static int scan(void) {
     if (!iovar("country", 1, cc, 12, &st) || st) { kputs("wifi country not set, status "); kdec(st); kputs(" (scanning with the default)\n"); }
     unsigned char es[80] = {0}; wr32(es, 1); wr16(es + 4, 1); wr16(es + 6, 0x1234);   /* escan: version 1, ESCAN_ACTION_START, sync id */
     unsigned char *pr = es + 8; for (int i = 0; i < 6; i++) pr[36 + i] = 0xff;        /* wl_scan_params: wildcard SSID, any BSSID */
-    pr[42] = 0; pr[43] = 2; wr32(pr + 44, (unsigned)-1); wr32(pr + 48, (unsigned)-1); wr32(pr + 52, (unsigned)-1); wr32(pr + 56, 0);
+    pr[42] = 2; pr[43] = 0;   /* bss_type ANY (2), scan_type active (0): the two bytes were swapped, so the chip refused the scan */
+    wr32(pr + 44, (unsigned)-1); wr32(pr + 48, (unsigned)-1); wr32(pr + 52, (unsigned)-1); wr32(pr + 56, (unsigned)-1);   /* nprobes, active, passive, home time: -1 = the chip's defaults */
     if (!iovar("escan", 1, es, sizeof es, &st) || st) { fail("escan"); return 0; }
     unsigned found = 0;
     for (unsigned t = 0; t < 600; t++) {   /* up to 3 s of events on the event channel */
