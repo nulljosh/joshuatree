@@ -1188,8 +1188,9 @@ void main(void) {
     fb_diag();   /* last, so it is the newest line on the screen */
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }
+    int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
     wifi_init();   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
-    if (usb_init()) {
+    if (usb_ok) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
            masked around wfi (a pending one still wakes it) and the timer is stopped before they are let through again,
            so its handler never runs; the short unmask is for the virtio devices, whose handler acknowledges them. */
