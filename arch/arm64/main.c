@@ -82,16 +82,23 @@ static unsigned long timer_step;
 #define GICC(o) REG(GICC_BASE + (o))
 #define TIMER_INTID 30   /* the EL1 physical timer, a private interrupt on every GIC */
 
+static void crash(const struct frame *f);   /* the crash screen, further down: it needs the framebuffer code */
+#ifdef FP_TEST
+void fp_clobber(void);   /* fptest.c: stands in for a handler that uses floating point */
+unsigned long fp_spin(volatile unsigned *t, unsigned want);
+#endif
 volatile int kprobe_armed, kprobe_faulted;   /* M4: a driver probing for hardware that may not be there (pci.c) */
 void exc_sync(struct frame *f) {
     unsigned ec = (unsigned)(f->esr >> 26);
     if (ec == 0x15) { uart_puts("M1 svc ok\n"); return; }   /* a deliberate svc #0: elr is already the next instruction */
     if (ec == 0x25 && kprobe_armed) { kprobe_faulted = 1; kprobe_armed = 0; f->elr += 4; return; }   /* skip the access */
-    uart_puts("sync exception, ESR "); uart_hex(f->esr); uart_puts(" ELR "); uart_hex(f->elr); uart_puts("\n");
-    for (;;) __asm__ volatile ("wfe");
+    crash(f);
 }
 void exc_irq(struct frame *f) {   /* the timer stops after three ticks, so a core asleep in wfi can only be woken by a device */
     (void)f;
+#ifdef FP_TEST
+    fp_clobber();
+#endif
     unsigned iar = GICC(0x0C), id = iar & 0x3FF;
 #ifndef PI_BUILD
     if (id >= 48 && id < 80) {   /* QEMU virt wires virtio-mmio slot n to INTID 48 + n */
@@ -108,7 +115,7 @@ void exc_irq(struct frame *f) {   /* the timer stops after three ticks, so a cor
     GICC(0x10) = iar;   /* end of interrupt */
 }
 void exc_bad(struct frame *f) {
-    uart_puts("unexpected exception, ESR "); uart_hex(f->esr); uart_puts(" ELR "); uart_hex(f->elr); uart_puts("\n");
+    crash(f);   /* an exception on a vector nothing handles: it never returns */
 }
 /* ---- M1b: the MMU, the caches, a heap ---- */
 extern char _heap_start[];
@@ -125,10 +132,13 @@ static unsigned long l3[512] __attribute__((aligned(4096)));   /* ...and one of 
 #define UP_STACK 0x2000UL   /* EL0 stack, one page; sp starts at its top */
 #define UP_KERN  0x4000UL   /* a page in the same arena that only EL1 may touch */
 static unsigned long heap_next;
+#ifndef HEAP_SIZE   /* the oomtest builds (arch/arm64/Makefile) shrink it so an allocation fails on purpose */
 #define HEAP_SIZE (16UL << 20)
-void *kmalloc(unsigned int n) {   /* the name and shape drivers/ttf.c expects */
+#endif
+static unsigned heap_oom;   /* allocations refused so far: fb_init tells an out-of-memory font failure from a bad font */
+void *kmalloc(unsigned int n) {   /* the name and shape drivers/ttf.c expects; 0 when the heap is full, and every caller checks */
     unsigned long p = (heap_next + 15) & ~15UL;
-    if (p + n > (unsigned long)_heap_start + HEAP_SIZE) return 0;
+    if (p + n > (unsigned long)_heap_start + HEAP_SIZE) { heap_oom++; return 0; }
     heap_next = p + n;
     return (void *)p;
 }
@@ -315,6 +325,7 @@ static int fb_setup(void) {
     int sel = fw_find("etc/ramfb");
     if (sel < 0) { uart_puts("M1c no ramfb\n"); return 0; }
     fb = kmalloc(fb_w * fb_h * 4);
+    if (!fb) { uart_puts("oom fb\n"); return 0; }   /* no screen, but the kernel carries on over the UART */
     fb_pitch = fb_w;
     static struct ramfb_cfg cfg __attribute__((aligned(16)));
     static struct fw_dma dma;
@@ -645,13 +656,86 @@ static void con_start(void) {   /* the screen is ready: replay what was printed 
     con_summary(); con_hint(); con_prompt("", 0);
 }
 
+/* ---- The crash screen. An unexpected exception at EL1 (a kernel bug; the deliberate EL0 faults are answered in
+   exc_el0_sync) ends here: the report goes out on the UART first, then onto the screen as a red panel over whatever was
+   drawn, then the core sleeps in a wfe loop for good. Nothing here uses floating point or the console (which may be
+   the thing that faulted): the UART is written raw and the panel is the 8x16 VGA font, integer stores only, cleaned
+   out of the data cache so a real GPU shows it. A fault inside this code halts quietly rather than looping. ---- */
+#define CRASH_BG 0x00900000
+#define CRASH_ROWS 12
+#define CRASH_COLS 100
+static char crash_txt[CRASH_ROWS][CRASH_COLS];
+static unsigned crash_row, crash_col;
+static void crash_c(char c) { if (crash_row < CRASH_ROWS && crash_col < CRASH_COLS - 1) crash_txt[crash_row][crash_col++] = c; }
+static void crash_s(const char *s) { while (*s) crash_c(*s++); }
+static void crash_x(unsigned long v) { crash_s("0x"); for (int i = 60; i >= 0; i -= 4) crash_c("0123456789abcdef"[(v >> i) & 15]); }
+static void crash_nl(void) { if (crash_row < CRASH_ROWS) crash_txt[crash_row][crash_col] = 0; crash_row++; crash_col = 0; }
+static const char *crash_class(unsigned ec) {
+    switch (ec) {
+    case 0x00: return "unknown reason";   case 0x01: return "wfi or wfe trapped";   case 0x07: return "floating point access trapped";
+    case 0x0e: return "illegal execution state";   case 0x15: return "svc";   case 0x20: case 0x21: return "instruction abort";
+    case 0x22: return "pc alignment fault";   case 0x24: case 0x25: return "data abort";   case 0x26: return "sp alignment fault";
+    case 0x2c: return "floating point exception";   case 0x2f: return "serror";   case 0x3c: return "brk";
+    default: return "exception";
+    }
+}
+static void crash(const struct frame *f) {
+    static int crashing;
+    __asm__ volatile ("msr daifset, #3" ::: "memory");   /* no interrupt may run while we report */
+    if (crashing++) for (;;) __asm__ volatile ("wfe");   /* a second fault, in here: stay quiet and halted */
+    con_live = 0;   /* console_putc only keeps the log from now on: the screen is ours */
+    unsigned long far; __asm__ volatile ("mrs %0, far_el1" : "=r"(far));
+    unsigned ec = (unsigned)(f->esr >> 26), fsc = (unsigned)(f->esr & 0x3f);
+    crash_s("KERNEL CRASH: "); crash_s(crash_class(ec));
+    if (ec == 0x20 || ec == 0x21 || ec == 0x24 || ec == 0x25) {
+        crash_s((fsc & 0x3c) == 0x0c ? ", permission fault level " : (fsc & 0x3c) == 0x04 ? ", translation fault level " : (fsc & 0x3c) == 0x08 ? ", access flag fault level " : ", fault code ");
+        crash_c((char)('0' + ((fsc & 0x3c) == 0x0c || (fsc & 0x3c) == 0x04 || (fsc & 0x3c) == 0x08 ? (fsc & 3) : fsc % 10)));
+    }
+    crash_nl();
+    crash_s("ESR "); crash_x(f->esr); crash_s(" EC "); crash_x(ec); crash_nl();
+    crash_s("FAR "); crash_x(far); crash_nl();
+    crash_s("ELR "); crash_x(f->elr); crash_nl();
+    crash_s("last console lines:"); crash_nl();
+    unsigned end = con_len;
+    if (end && con_log[end - 1] == '\n') end--;
+    unsigned start = end; int nl = 0;
+    while (start > 0) { if (con_log[start - 1] == '\n' && ++nl >= 5) break; start--; }
+    for (unsigned i = start; i < end; i++) { if (con_log[i] == '\n') crash_nl(); else if (con_log[i] != '\r') crash_c(con_log[i]); }
+    crash_nl();
+    crash_s("halted: this core sleeps in a wfe loop"); crash_nl();
+    for (unsigned r = 0; r < CRASH_ROWS && r < crash_row; r++) {   /* the UART first: it works whatever state the screen is in */
+        for (const char *p = crash_txt[r]; *p; p++) { while (REG(UART_FR) & TXFF) {} REG(UART_DR) = (unsigned char)*p; }
+        while (REG(UART_FR) & TXFF) {}
+        REG(UART_DR) = '\n';
+    }
+    if (fb) {
+        int s = ((int)fb_h * 10 / 600 + 5) / 10; if (s < 1) s = 1;
+        int px = 16 * s, py = 32 * s, pw = (int)fb_w - 32 * s, ph = 16 * s * (CRASH_ROWS + 2);
+        fb_rect(px, py, pw, ph, CRASH_BG);
+        unsigned white = fb_color(0x00ffffff);
+        int cols = (pw - 16 * s) / (8 * s);
+        for (unsigned r = 0; r < CRASH_ROWS && r < crash_row; r++)
+            for (int c = 0; c < cols && crash_txt[r][c]; c++) {
+                char ch = crash_txt[r][c];
+                if (ch < VGAFONT_FIRST || ch > VGAFONT_LAST) continue;
+                const unsigned char *g = vgafont_glyphs + (ch - VGAFONT_FIRST) * 16;
+                int gx0 = px + 8 * s + c * 8 * s, gy0 = py + 8 * s + (int)r * 16 * s;
+                for (int gy = 0; gy < 16; gy++) for (int gx = 0; gx < 8; gx++) if (g[gy] & (0x80 >> gx))
+                    for (int a = 0; a < s; a++) for (int b = 0; b < s; b++) fb[(unsigned)(gy0 + gy * s + a) * fb_pitch + (unsigned)(gx0 + gx * s + b)] = white;
+            }
+        fb_flush(px, py, pw, ph);   /* out of the data cache to RAM: the GPU reads RAM */
+    }
+    for (;;) __asm__ volatile ("wfe");
+}
+
 static void fb_init(void) {
     if (!fb_setup()) return;
     int W = (int)fb_w, H = (int)fb_h;
     int win_w = sc(500), win_h = sc(350), win_x = (W - win_w) / 2, win_y = sc(100);
     int dock_w = sc(200), dock_h = sc(44), dock_x = (W - dock_w) / 2, dock_y = H - sc(60);
     int mb = sg(MENUBAR_H);                               /* the menu bar's height on this screen: 26 on the 960x540 grid */
-    if (!wall_paint(fb, fb_pitch, W, H, fb_swap)) fb_rect(0, 0, W, H, 0x00203040);   /* the Satellite photo; flat only if it will not decode */
+    int wall_ok = wall_paint(fb, fb_pitch, W, H, fb_swap);
+    if (!wall_ok) fb_rect(0, 0, W, H, 0x00203040);   /* the Satellite photo; flat only if it will not decode */
     for (int y = 0; y < mb - 1; y++) for (int x = 0; x < W; x++) {   /* menu bar: half wallpaper, half white, per pixel */
         unsigned c = fb[(unsigned)y * fb_pitch + (unsigned)x];
         fb[(unsigned)y * fb_pitch + (unsigned)x] = ((c >> 1) & 0x007F7F7Fu) + 0x00808080u;   /* each colour lane: half itself plus half of 255 */
@@ -675,7 +759,7 @@ static void fb_init(void) {
         int tx = (W - text_width(2, thanks, sc(110))) / 2, ty = dock_y - sc(12), sh = sc(1) > 1 ? sc(1) : 1;
         text_draw(2, thanks, tx + sh, ty + sh, sc(110), fb_color(0x00101010), fb, fb_pitch, W, H);   /* a dark shadow so it reads on the busy photo */
         text_draw(2, thanks, tx, ty, sc(110), fb_color(0x00f0f4f8), fb, fb_pitch, W, H);
-    } else uart_puts("M1d text FAIL\n");
+    } else uart_puts(heap_oom ? "oom text\n" : "M1d text FAIL\n");
     con_layout(win_x, win_y, win_w, win_h);
     con_start();
     dcache_clean(fb, (unsigned long)fb_pitch * fb_h * 4);   /* the whole still picture out to RAM; con_glyph cleans as it goes from here */
@@ -683,7 +767,7 @@ static void fb_init(void) {
        and not one colour everywhere). Grey and white read the same either byte order; the rule is checked in fb_color order. */
     int ok = fb[(unsigned)(win_y + win_h - 4) * fb_pitch + fb_w / 2] == 0x00ffffff && fb[(unsigned)(mb - 1) * fb_pitch + fb_w / 2] == fb_color(MENUBAR_RULE);
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
-    ok = ok && w0 != 0x00203040 && (w0 != w1 || w1 != w2);
+    ok = ok && (!wall_ok || (w0 != 0x00203040 && (w0 != w1 || w1 != w2)));   /* a full heap leaves the flat fill, which is the fallback working */
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
 }
 /* One line that turns a photo of the screen into a measurement: where the firmware really put the kernel, the monitor
@@ -720,9 +804,19 @@ static void m1_selftest(void) {
     __asm__ volatile ("msr cntp_tval_el0, %0" :: "r"(timer_step));
     __asm__ volatile ("msr cntp_ctl_el0, %0" :: "r"(1UL));
     __asm__ volatile ("msr daifclr, #2");          /* unmask interrupts */
+#ifdef FP_TEST   /* fptest.c: hold known FP registers across the timer interrupts, whose handler wipes them */
+    unsigned long bad = fp_spin(&ticks, 3);
+    uart_puts(bad ? "FPTEST FAIL, registers changed: " : "FPTEST ok\n");
+    if (bad) { uart_hex(bad); uart_putc('\n'); }
+#else
     while (ticks < 3) __asm__ volatile ("wfi");
+#endif
     uart_puts("M1a ok\n");
     fb_init();
+#ifdef CRASH_TEST   /* arm64-crash-check.py: an unexpected EL1 fault right after the screen is up */
+    uart_puts("CRASHTEST: storing to unmapped memory\n");
+    *(volatile unsigned long *)0x300000000UL = 1;
+#endif
 }
 
 /* ---- Input, from any driver: Linux evdev events (virtio input speaks them natively; the USB HID driver in xhci.c
@@ -786,7 +880,7 @@ static int vq_setup(struct vq *v, unsigned long b, unsigned q) {
     VR(b, 0x38) = VQ;
     v->base = b; v->q = q; v->seen = 0;
     v->d = kmalloc(sizeof *v->d * VQ); v->a = kmalloc(sizeof *v->a); v->u = kmalloc(sizeof *v->u);
-    if (!v->d || !v->a || !v->u) return 0;
+    if (!v->d || !v->a || !v->u) { uart_puts("oom vq\n"); return 0; }
     v->a->flags = 0; v->a->idx = 0; v->u->idx = 0;
     VR(b, 0x80) = (unsigned)(unsigned long)v->d;  VR(b, 0x84) = (unsigned)((unsigned long)v->d >> 32);
     VR(b, 0x90) = (unsigned)(unsigned long)v->a;  VR(b, 0x94) = (unsigned)((unsigned long)v->a >> 32);
@@ -825,7 +919,8 @@ static int input_init(void) {
     for (unsigned long b = vio_find(18, 0); b && nvin < MAX_INPUT; b = vio_find(18, b)) {
         struct vq *v = &vin[nvin];
         struct input_event *ev = kmalloc(sizeof *ev * VQ);
-        if (!ev || !vio_start(b, 0) || !vq_setup(v, b, 0)) continue;
+        if (!ev) { uart_puts("oom input\n"); continue; }
+        if (!vio_start(b, 0) || !vq_setup(v, b, 0)) continue;
         for (unsigned i = 0; i < VQ; i++) vq_give(v, i, &ev[i], sizeof *ev, 1);
         VR(b, 0x70) = 1 | 2 | 8 | 4;                /* driver ok */
         vq_kick(v);
@@ -862,7 +957,7 @@ static int net_init(void) {
     if (!b || !vio_start(b, 1u << 5 /* VIRTIO_NET_F_MAC */)) return 0;
     if (!vq_setup(&net_rx, b, 0) || !vq_setup(&net_tx, b, 1)) return 0;
     net_rxbuf = kmalloc(NET_BUF * VQ); net_txbuf = kmalloc(NET_BUF);
-    if (!net_rxbuf || !net_txbuf) return 0;
+    if (!net_rxbuf || !net_txbuf) { uart_puts("oom net\n"); return 0; }
     for (int i = 0; i < 6; i++) net_mac[i] = *(volatile unsigned char *)(b + 0x100 + i);   /* config space: mac first */
     for (unsigned i = 0; i < VQ; i++) vq_give(&net_rx, i, net_rxbuf + i * NET_BUF, NET_BUF, 1);
     VR(b, 0x70) = 1 | 2 | 8 | 4;                    /* driver ok */

@@ -1,43 +1,41 @@
-# Joshua Tree loop handoff (2026-10-06, late night)
+# Joshua Tree loop handoff (2026-10-07, 05:30)
 
 ## What the loop is
 
-The Pi loop. Joshua Tree runs on a real Raspberry Pi 4 with a USB keyboard. The loop merges green PRs, flashes each test build onto the SD card, and works down the roadmap's top 10 toward 3.0 (type and click on the real Pi).
+The Pi loop. Joshua Tree runs on a real Raspberry Pi 4 with a USB keyboard. The loop merges green PRs one at a time, builds the newest SD card image, and works down the roadmap's Top 10 toward 3.0 (type and click on the real Pi).
 
 ## The goal
 
-Joshua's /goal: we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi. The Claude app (merged, 2.14.0) works in QEMU through a relay on the Mac. It needs the Pi to have a network stack, so Wi-Fi comes first.
+Joshua's /goal: we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi. The Claude app (merged) works in QEMU through a relay on the Mac. The ARM build has the shared IP stack and the Console's ask> row talks to the relay on QEMU. Wi-Fi has to fill in its four network calls, then Claude can run on the Pi.
 
 ## Overnight rules (Joshua asleep, 2026-10-06 to 07)
 
-Joshua is asleep and said: build as much as you can overnight, keep refreshing the loop, strengthen the harness. So:
 - Never ask him a question; pick the sensible default and write it down here.
-- Claude opens pull requests and never merges by hand; use `gh pr merge --auto --squash` only once a PR is ready and its local run was green. Never force-push main. Never use `--admin`.
-- Max three helpers, two if any is Opus or Fable. Stop starting new work at 90 percent of either weekly limit, then only merge, flash-prep and write this file.
-- One `tools/ci-local.sh` at a time (a lock lands with the harness PR). Disk must stay above 6 GB free.
-- Keep at most four open PRs and zero issues. Delete a branch once its PR merges.
-- The SD card needs Joshua: build the newest test image into a worktree and leave it ready; do not wait for the card.
-- Never print or commit the Wi-Fi password, tokens or keys. Never run destructive commands on his files or the LaCie.
-- Each round: merge what is green, rebase what conflicts, start the next item from the list below, refresh this file's "Where things stand", and send a one-line PushNotification if something needs him.
+- Claude opens pull requests and never merges by hand; `gh pr merge --auto --squash` only once a PR is ready and its local run was green. Never force-push main. Never use `--admin`.
+- Max three helpers, two if any is Opus or Fable. Stop starting new work at 90 percent of either weekly limit.
+- One `tools/ci-local.sh` at a time (it takes a lock now). Disk above 6 GB free.
+- At most four open PRs and zero issues. Delete a branch once its PR merges.
+- The SD card needs Joshua: the newest image is built in worktree `jt-card3`; a watcher flashes it when the card mounts.
+- Never print or commit the Wi-Fi password, tokens or keys. Nothing destructive on his files or the LaCie.
 
 ## Where things stand
 
-- Main is 2.14.0. On the real Pi: 1080p desktop, readable console, the Steve Jobs tribute, USB keyboard with hot-plug. The Wi-Fi code is on the card and runs, but its lines scroll off the Console (the screen is the only debug channel; no serial cable yet).
-- Open PRs: #435 Wi-Fi stage 1 (ready, in GitHub's checks), #436 tribute line, shopping list, decisions, roadmap (draft), #437 crash screen, FP state, OOM, boot health check (draft), #438 console scrollback with Page Up and Down and a pinned status line (draft). A helper is porting the IP stack to ARM (branch arm64-net-stack).
-- Issues: none, on purpose. Branches: only those for open PRs.
-- Test suites collide on fixed /tmp paths: run one `tools/ci-local.sh` at a time. A roadmap item fixes it.
-- Standing answers are in `docs/DECISIONS.md`; the parts list is `docs/SHOPPING.md`; the top 10 is at the top of `docs/roadmap.md`.
+- Main is 2.21.2 once this PR lands. On the real Pi: 1080p desktop, readable console, the tribute, USB keyboard with hot-plug. Merged this week and not yet seen on the board: the Satellite wallpaper and real menu bar, Claude in the Console, the crash screen. The Wi-Fi code is on the card and its power-on bug is fixed; no Wi-Fi result from the real board yet.
+- Open PRs: this one (crash screen, FP state, OOM, boot health) only. Zero issues.
+- The newest card image is rebuilt in `jt-card3` after each merge that touches `arch/arm64`.
+- Standing answers are in `docs/DECISIONS.md`; the parts list is `docs/SHOPPING.md`; the Top 10 is at the top of `docs/roadmap.md`.
+- Hardware: Neo is being renamed Nimbus with a Macintosh-inspired redesign (roadmap, waits for a name check).
 
 ## Next, in order
 
-1. Flash the scrollback build once #438 is written, photograph the Console with Page Up, read the Wi-Fi lines.
-2. Merge the open PRs as they go green, one at a time. Keep the PR list short.
-3. Wi-Fi stage 2: join the network from the ignored config file, then the IP stack on top.
-4. Admin and sudo, then the real desktop and dock on the Pi, then SD card writes.
-5. Plain README and CLAUDE.md, the self-update loop, the fallback kernel, Doom.
+1. Joshua swaps in the newest card; he photographs the Console. Page Up shows the Wi-Fi lines; the pinned row shows the latest `wifi` line. If it says `WL_ON reads 1` and then a `sdio card rca` line, the chip is alive.
+2. Keep merging green PRs one at a time; rebase the rest above main's VERSION. Check the test variants in `arch/arm64/Makefile` still link the shared network and ask objects after any Makefile merge.
+3. Desktop slice 2: extract the dock painters from `kernel/kernel.c` into a shared `kernel/gui_paint.c`, then the ARM dock, window chrome, cursor and typing.
+4. Wi-Fi stage 2: join the network from the ignored config file, fill the four network calls, then TCP that survives loss.
+5. Admin and sudo; SD card writes with MBR and FAT32; the self-update loop and the fallback kernel; Doom.
 
 ## Restart prompt
 
 ```
-/loop until it's done! Joshua Tree on the Pi: read docs/LOOP-HANDOFF.md, merge open PRs one at a time when green, flash the card with the newest build for Joshua to photograph, then work the Next list in order. Draft PRs, one ci-local run at a time, max three helpers (two if Opus), stop new work at 90 percent weekly usage. Keep the repo, branches and PR list clean. TLDR after each round.
+/loop until it's done! Joshua Tree on the Pi: read docs/LOOP-HANDOFF.md, merge open PRs one at a time when green, keep the newest card image built in jt-card3, then work the Next list in order. Draft PRs, one ci-local run at a time (it locks), max three helpers (two if Opus), stop new work at 90 percent weekly usage. Keep the repo, branches and PR list clean (zero issues, at most four PRs). TLDR after each round.
 ```
