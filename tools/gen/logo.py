@@ -31,7 +31,7 @@ MID = [(52.0, 60.0), (53.8, 47.0), (53.0, 34.0)]
 RIGHT = [(54.0, 63.0), (63.5, 59.5), (70.0, 53.5), (72.0, 47.5)]
 # Each tuft its own size and density: (knot radius, loops, stray loops, loop size); the bold copy only takes the radius.
 # (arm, radius, loops, stray loops, stray size, blades, blade reach)
-TUFTS = ((LEFT, 7.4, 3, 2, 0.9, 6, 6.0), (MID, 9.8, 6, 2, 0.75, 8, 5.0), (RIGHT, 7.8, 4, 2, 0.95, 5, 4.4))
+TUFTS = ((LEFT, 7.0, 3, 2, 0.9, 6, 6.0), (MID, 9.8, 4, 2, 0.75, 8, 5.0), (RIGHT, 8.4, 3, 2, 0.8, 5, 4.4))
 SMALL_R = (6.3, 7.8, 6.7)
 ARMS = (LEFT, MID, RIGHT)
 
@@ -94,16 +94,17 @@ def tip(arm, push):
     return ex + math.cos(a) * push, ey + math.sin(a) * push, a
 
 
-def scribble(rnd, cx, cy, r, loops, amt):
-    """A knot of looping scribble: small loops whose centre wanders round inside a circle of radius r."""
+def scribble(rnd, cx, cy, r, loops, amt, orbit=(0.85, 0.7)):
+    """A knot of looping scribble: small loops whose centre wanders round inside a circle of radius r.
+    orbit: how far out the loops ride, so the weight sits at the rim and paper shows in the middle."""
     pts = []
     n = loops * 9
     phase = rnd.uniform(0, 6.3)
     for i in range(n + 1):
         t = i / n
         wander = 2 * math.pi * t * 2.3 + phase
-        mx = cx + math.cos(wander) * r * 0.75 + math.sin(wander * 2.7) * r * 0.12
-        my = cy + math.sin(wander) * r * 0.62 + math.cos(wander * 1.9) * r * 0.1
+        mx = cx + math.cos(wander) * r * orbit[0] + math.sin(wander * 2.7) * r * 0.12
+        my = cy + math.sin(wander) * r * orbit[1] + math.cos(wander * 1.9) * r * 0.1
         loop = 2 * math.pi * i / 9 + phase
         lr = r * rnd.uniform(0.33, 0.5)
         pts.append((mx + math.cos(loop) * lr + rnd.uniform(-amt, amt), my + math.sin(loop) * lr * 0.9 + rnd.uniform(-amt, amt)))
@@ -149,7 +150,7 @@ def drawing(small):
             lines.append([TRUNK_[-1]] + arm[1:])
         for arm, r in zip(ARMS_, SMALL_R):
             cx, cy, _ = tip(arm, 3.0)
-            knots.append(scribble(rnd, cx, cy, r, 3, 0.3))
+            knots.append(scribble(rnd, cx, cy, r, 3, 0.3, (0.75, 0.62)))
         return [scale(p, K) for p in lines], [scale(p, K) for p in knots], []
     # the ground, one quick stroke that runs a touch downhill, sags, and flicks up past where it meant to stop
     ground = shaky(rnd, [(21.5, 87.4), (34.0, 88.0), (50.0, 88.1), (62.5, 87.1), (68.6, 86.2)], 0.45) + [(69.8, 85.3)]
@@ -177,11 +178,10 @@ def drawing(small):
     for arm, r, loops, strays, size, count, reach in TUFTS_:
         cx, cy, up = tip(arm, 4.5)
         knots.append(scribble(rnd, cx, cy, r, loops, 0.9))
-        knots.append(scribble(rnd, cx + 0.6, cy - 0.4, r * 0.4, max(loops - 1, 1), 0.4))
         for k in range(strays):
             a = up + rnd.uniform(-1.9, 1.9)
-            d = r * rnd.uniform(0.95, 1.2)
-            knots.append(scribble(rnd, cx + math.cos(a) * d, cy + math.sin(a) * d, r * 0.3 * size, 1, 0.3))
+            d = r * rnd.uniform(1.1, 1.35)
+            knots.append(scribble(rnd, cx + math.cos(a) * d, cy + math.sin(a) * d, r * 0.5 * size, 1, 0.3))
         spikes += blades(rnd, cx, cy, up, r, count, reach)
     return ([scale(p, K) for p in lines], [scale(p, K) for p in knots],
             [(w, [scale(p, K) for p in group]) for w, group in press])
