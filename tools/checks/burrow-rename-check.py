@@ -135,7 +135,7 @@ check(hashlib.sha256(data).hexdigest() != OLD_FOLDER_SHA, "slot 0 art is no long
 check(os.path.exists(os.path.join(ROOT, "art/icons/burrow.svg")), "art/icons/burrow.svg exists")
 svg = read("art/icons/burrow.svg") if os.path.exists(os.path.join(ROOT, "art/icons/burrow.svg")) else ""
 check("<ellipse" not in svg and "<circle" not in svg and svg.count("<rect") == 2
-      and "Tile #C65E37 -> #A24526" in svg and 'fill="#E7A07E"' in svg and 'id="head"' not in svg and 'id="hole"' not in svg,
+      and "Tile #4F6FF2 -> #2D47C4" in svg and 'fill="#A9B9FF"' in svg and 'id="head"' not in svg and 'id="hole"' not in svg,
       "Burrow's icon is the full-bleed split tile: accent tile, light half, two dots and a smile, no fox shapes, not the arch head or the hill")
 check(not os.path.exists(os.path.join(ROOT, "art/icons/files.svg")), "old art/icons/files.svg is gone")
 r = subprocess.run([sys.executable, os.path.join(ROOT, "tools/gen/gen_icon_art.py"), "--check"], capture_output=True, text=True)
