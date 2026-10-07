@@ -1,34 +1,31 @@
-# Joshua Tree loop handoff (2026-10-06, night)
+# Joshua Tree loop handoff (2026-10-06, late night)
 
 ## What the loop is
 
-The Pi loop. Joshua Tree booted on a real Raspberry Pi 4 today; the loop keeps merging green PRs, puts each merged build on the SD card, and works down the list below toward 3.0 (the desktop on a real Pi, where you can type and click).
+The Pi loop. Joshua Tree runs on a real Raspberry Pi 4 with a USB keyboard. The loop merges green PRs, flashes each test build onto the SD card, and works down the roadmap's top 10 toward 3.0 (type and click on the real Pi).
 
 ## The goal
 
-Joshua's /goal (2026-10-06 night): we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi. Everything below serves it: Wi-Fi first, then the Claude app (#433) on the Pi, then the model editing the OS's own files, then a toolchain on the box.
+Joshua's /goal: we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi. The Claude app (merged, 2.14.0) works in QEMU through a relay on the Mac. It needs the Pi to have a network stack, so Wi-Fi comes first.
 
-## Where things stand (2026-10-06, 19:30)
+## Where things stand
 
-- Main is 2.13.0. On the real Pi 4 at 1920x1080: the desktop boots, the console is readable, the Steve Jobs line is drawn, and a USB keyboard (NuPhy, behind the VL805 hub) types on screen. `docs/RASPBERRY-PI.md` has the log and photos.
-- Open PRs, all drafts waiting on checks: #432 Pi log (2.13.1), #433 Claude app through a Mac relay (2.14.0), #434 USB hot-plug and port diagnostics (2.13.2). Merge each when green, rebase the next.
-- The real desktop and dock on ARM is scoped, not started: the dock painters live inside `kernel/kernel.c` and must move to a shared `kernel/gui_paint.c` first (five slices, see roadmap). Version 2.15.0 is reserved for it.
-- Flashing: `tools/flash-pi.sh` on the card in the Mac's reader. Joshua swaps the card by hand; no serial cable yet (he is buying a USB-C to TTL 3.3 V one this week).
-- The main checkout at `~/Documents/Code/joshuatree` still holds a stale local commit on `main`; work from worktrees branched off `origin/main`.
-- Helpers: at most three, two if any is Opus or Fable; each opens a draft PR, runs `tools/ci-local.sh` (about 35 minutes, never two at once with benchmarks), `gh pr ready` only when green. Main merges and flashes.
-- Benchmarks are deferred while suites run; `/jt-bench` once the Mac is quiet.
+- Main is 2.14.0. On the real Pi: 1080p desktop, readable console, the Steve Jobs tribute, USB keyboard with hot-plug. The Wi-Fi code is on the card and runs, but its lines scroll off the Console (the screen is the only debug channel; no serial cable yet).
+- Open PRs: #435 Wi-Fi stage 1 (ready, in GitHub's checks), #436 tribute line, shopping list, decisions, roadmap (draft), #437 crash screen, FP state, OOM, boot health check (draft), #438 console scrollback with Page Up and Down and a pinned status line (draft). A helper is porting the IP stack to ARM (branch arm64-net-stack).
+- Issues: none, on purpose. Branches: only those for open PRs.
+- Test suites collide on fixed /tmp paths: run one `tools/ci-local.sh` at a time. A roadmap item fixes it.
+- Standing answers are in `docs/DECISIONS.md`; the parts list is `docs/SHOPPING.md`; the top 10 is at the top of `docs/roadmap.md`.
 
 ## Next, in order
 
-1. Merge #432, #433, #434 as they go green; flash the card after #434.
-2. Dock and desktop on ARM, five slices: png/inflate plus wallpaper and the real menu bar; extract `kernel/gui_paint.c`; the ARM dock and window chrome; cursor and console typing; checks, docs, 2.15.0.
-3. Dock launches apps on ARM (the first app on the Pi).
-4. SD card reads through EMMC2, then Ethernet through the Genet MAC, then sound.
-5. Serial loader the day the cable arrives: new kernels over the wire, no card swaps.
-6. A wired mouse or the Logitech receiver on the Pi, once Joshua has one.
+1. Flash the scrollback build once #438 is written, photograph the Console with Page Up, read the Wi-Fi lines.
+2. Merge the open PRs as they go green, one at a time. Keep the PR list short.
+3. Wi-Fi stage 2: join the network from the ignored config file, then the IP stack on top.
+4. Admin and sudo, then the real desktop and dock on the Pi, then SD card writes.
+5. Plain README and CLAUDE.md, the self-update loop, the fallback kernel, Doom.
 
 ## Restart prompt
 
 ```
-/loop until it's done! Joshua Tree on the Pi: read docs/LOOP-HANDOFF.md, merge open PRs when green, flash the card after USB hot-plug lands, then work the Next list in order (dock and desktop on ARM in five slices, app launching, SD and Ethernet, serial loader when the cable arrives). Draft PRs, ci-local green before ready, max three helpers, two if Opus or Fable. TLDR after each round.
+/loop until it's done! Joshua Tree on the Pi: read docs/LOOP-HANDOFF.md, merge open PRs one at a time when green, flash the card with the newest build for Joshua to photograph, then work the Next list in order. Draft PRs, one ci-local run at a time, max three helpers (two if Opus), stop new work at 90 percent weekly usage. Keep the repo, branches and PR list clean. TLDR after each round.
 ```
