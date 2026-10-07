@@ -24,7 +24,7 @@ The short list. Two tracks run side by side, one helper each (Joshua agreed the 
 
 **Track B, the goal (Claude Code inside Joshua Tree on the Pi)**
 5. The internet stack on the ARM build (DHCP and HTTP over QEMU's network first).
-6. Wi-Fi on the real Pi: the scan works (16 networks). Join is next: the chip has no WPA2 handshake of its own, so Joshua Tree does it (`arch/arm64/wpa.h`). Then get an address, the clock, and a browser over HTTPS.
+6. Wi-Fi on the real Pi: the scan works (16 networks). Join works on the real board: the chip has no WPA2 handshake of its own, so Joshua Tree does it (`arch/arm64/wpa.h`). Next: get an address, the clock, and a browser over HTTPS.
 7. Claude in the Console: type a question at the Pi's console and the answer prints, through the relay on the Mac. No app port needed, so it lands as soon as Wi-Fi joins.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, fewer get it onto a real board. Lean into that:
@@ -137,7 +137,7 @@ Checked 2026-10-04: neither side listens yet. Both are typed text in, her voice 
 **Goal (Joshua, 2026-10-06 night, /goal): we can build a mini Joshua Tree with Claude Code inside Joshua Tree on the Pi.** The Pi runs the OS, the Claude app (phase 1, via a relay on the Mac) is the way in, and a session on the Pi edits and rebuilds a small Joshua Tree. The road there is the queue below: Wi-Fi (the relay needs the network), the desktop and dock, SD writes, `get`, then phase 2 of the Claude app (the model reading and writing the OS's own files through a tool loop), then a build toolchain on the box (the Plank compiler, 8.0). Say honestly what is not here yet in every release note.
 Pi queue (Joshua, 2026-10-06 night: "bang out all of those in order of relevance"). Software first; items that need a part wait for the part.
 - [ ] [Fable] Wi-Fi stage 1: the CYW43455 wakes up over SDIO, loads its firmware and lists the networks on screen. In progress, 2.16.0.
-- [ ] [Fable] Wi-Fi stage 2: join Shaw from `~/.config/joshuatree/wifi.conf` (never in the repo), DHCP, an address on screen. The IP stack ported from `drivers/net.c`.
+- [ ] [Fable] Wi-Fi stage 2: join works on the real board (our own WPA2, `arch/arm64/wpa.h`; name and key from `~/.config/joshuatree/wifi.conf`, never the repo). Still open: DHCP, an address on screen. The IP stack ported from `drivers/net.c`.
 - [ ] [Fable] Admin and sudo (Joshua, 2026-10-06: "fix it soon"): a second privilege tier on the accounts that already exist (login screen, PBKDF2 passwords, Settings "Add user"). An admin flag per account, a password prompt before anything that installs, deletes a user or changes system settings, and a normal-user role that cannot. i386 build first; it touches `kernel/auth.h`, Settings and the syscall gate, not the ARM files, so it can run beside Wi-Fi. Per-user home folders and file permissions follow (6.0).
 - [ ] [Sonnet] Blink the Pi's own green light (GPIO 42 on the Pi 4) from Joshua Tree: the simplest driver there is, and it proves the GPIO block. No breadboard needed; a breadboard LED is the same code on another pin.
 - [ ] [Fable] Sound out of the 3.5 mm jack (PWM audio on GPIO 40 and 41 through DMA), then HDMI audio; then Movies plays a clip with sound on the Pi.
@@ -223,7 +223,7 @@ Sources: Tom's Guide and TechRadar on macOS Tahoe 26, Pureinfotech and Digital C
 - [ ] [Joshua] M4 USB on the real Pi 4: boot the 2.13.0 SD card with a keyboard in, photograph the screen. The Pi's PCIe bring-up and the VL805 firmware load are written from Circle and Linux but have never run on a board; every step prints a short `usb ...` line, so the photo shows how far it got.
 - [ ] [Fable] ARM IP stack, stage 2: TCP that survives a lost segment (retransmit, reorder, a real window) before the Claude app runs on ARM over Wi-Fi; net and disk drivers on interrupts too (input already is).
 - [ ] [Fable] Still ahead on ARM: M3 (EL0 userland and the syscall layer) and M4 (SD through EMMC2, USB through xHCI, Ethernet through the Genet MAC). 3.0.0 ships when M4 shows the desktop on a real Pi. `docs/ARM64.md` has the milestones.
-- [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO). Stage 1 (list networks) is built, waiting on a photo from the real board; stage 2 (join, IP) is next. Ethernet first for everything else.
+- [ ] [Fable] Wi-Fi on the Pi 4 (CYW43455 over SDIO). Stage 1 (list networks) is built, waiting on a photo from the real board; stage 2 join works on the board; IP is next. Ethernet first for everything else.
 
 ### x86-64 (Joshua, 2026-10-06 night: "let's do x86-64 next")
 
