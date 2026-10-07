@@ -165,18 +165,26 @@ static int fw_load(void) {
     /* brcmfmac's firmware_callback, in order: ask for the HT clock and wait for HT_AVAIL, force HT on so the F2
        interrupt propagates, tell the firmware the SDPCM protocol version through the SDIO core's mailbox data
        register, enable F2, then wait for the card to say F2 is ready. */
-    unsigned clk = 0;
+    /* A bus trace for the photo: CLKCSR read after each step (0x1ff = the read itself failed, so the bus is gone). */
+    unsigned t[4] = { 0x1ff, 0x1ff, 0x1ff, 0x1ff }, clk = 0;
+    cmd52(1, 0x1000e, 0, 0, &t[0]);
     cmd52(1, 0x1000e, 1, 0x10, 0);
-    for (unsigned n = 0; n < 100; n++) { if (cmd52(1, 0x1000e, 0, 0, &clk) && (clk & 0x80)) break; mdelay(10); }
-    kputs(clk & 0x80 ? "wifi ht clock up\n" : "wifi ht clock not up (carrying on)\n");
-    cmd52(1, 0x1000e, 1, clk | 0x02, 0);
+    { unsigned long t0 = now(), lim = ticks_per_ms() * 3000;
+      while (now() - t0 < lim) { if (cmd52(1, 0x1000e, 0, 0, &clk) && (clk & 0x80)) break; mdelay(10); } }
+    kputs(clk & 0x80 ? "wifi ht clock up\n" : "wifi ht clock not up (carrying on), clkcsr "); if (!(clk & 0x80)) { kx(clk); kputs("\n"); }
+    cmd52(1, 0x1000e, 1, clk | 0x02, 0); cmd52(1, 0x1000e, 0, 0, &t[1]);
     bp_write32(SDIOD_CORE + 0x48, 4u << 16);   /* tosbmailboxdata: SDPCM_PROT_VERSION 4 */
+    cmd52(1, 0x1000e, 0, 0, &t[2]);
     cmd52(0, 0x02, 1, 0x06, 0);   /* F2 enable, now that the firmware owns it */
-    for (unsigned n = 0;; n++) {   /* F2 ready (IORDY bit 2) says the firmware is up */
-        unsigned v; if (cmd52(0, 0x03, 0, 0, &v) && (v & 4)) break;
-        if (n > 500) { unsigned ioe = 0, c2 = 0; cmd52(0, 0x02, 0, 0, &ioe); cmd52(1, 0x1000e, 0, 0, &c2);
+    cmd52(1, 0x1000e, 0, 0, &t[3]);
+    kputs("wifi bus "); kx(t[0]); kputs(" "); kx(t[1]); kputs(" "); kx(t[2]); kputs(" "); kx(t[3]); kputs("\n");
+    { unsigned long t0 = now(), lim = ticks_per_ms() * 5000; unsigned v = 0, dead = 0;   /* F2 ready (IORDY bit 2) says the firmware is up */
+      for (;;) {
+        if (cmd52(0, 0x03, 0, 0, &v)) { dead = 0; if (v & 4) break; } else if (++dead > 10) { summary(); kputs("wifi FAIL bus dead after the firmware started\n"); return 0; }
+        if (now() - t0 > lim) { unsigned ioe = 0, c2 = 0; cmd52(0, 0x02, 0, 0, &ioe); cmd52(1, 0x1000e, 0, 0, &c2);
                        summary(); kputs("wifi FAIL fw ready: ioe "); kx(ioe); kputs(" ior "); kx(v); kputs(" clkcsr "); kx(c2); kputs("\n"); return 0; }
         mdelay(10);
+      }
     }
     kputs("wifi fw ready\n"); step(7);
     return 1;
@@ -310,6 +318,10 @@ int wifi_init(void) {
     if (!cmd52(0, 0x02, 1, 0x06, 0)) { fail("f1f2 enable"); return 0; }
     for (unsigned n = 0;; n++) { unsigned v; if (cmd52(0, 0x03, 0, 0, &v) && (v & 2)) break; if (n > 100) { fail("f1 ready"); return 0; } mdelay(10); }
     kputs("wifi f1 f2 up\n"); step(3);
+    /* brcmfmac's kso_init: KEEP_SDIO_ON in F1 SLEEPCSR (0x1000f), or the chip may sleep once the firmware runs and
+       every access after that times out. CARDCTRL (CCCR 0xf1) bit 1: a card reset also resets the WLAN backplane. */
+    { unsigned v = 0; cmd52(1, 0x1000f, 0, 0, &v); if (!(v & 1)) cmd52(1, 0x1000f, 1, v | 1, 0);
+      v = 0; cmd52(0, 0xf1, 0, 0, &v); cmd52(0, 0xf1, 1, v | 2, 0); }
     /* The backplane (the chip's RAM and cores) only answers while its ALP clock runs: ask for it through CHIPCLKCSR
        (F1 0x1000e: ALP_AVAIL_REQ 0x08) and wait for ALP_AVAIL (0x40), like brcmfmac and
        Plan 9's ether4330. The fourth real-board run wrote 64 bytes and then got a general error on the next block. */
