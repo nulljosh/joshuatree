@@ -388,7 +388,8 @@ static __attribute__((unused)) void put32(unsigned char *b, unsigned v) { b[0] =
 static unsigned char mymac[6];
 /* RSN element: version 1, group CCMP, one pairwise CCMP, one AKM PSK, no capabilities. Sent in association and msg 2. */
 static const unsigned char rsn_ie[22] = {0x30, 20, 1, 0, 0, 0x0f, 0xac, 4, 1, 0, 0, 0x0f, 0xac, 4, 1, 0, 0, 0x0f, 0xac, 2, 0, 0};
-static unsigned char txf[512] __attribute__((aligned(64)));
+static unsigned char txf[1700] __attribute__((aligned(64)));
+static int link_up;   /* set once the handshake has installed the keys: from then on the chip carries our IP traffic */
 /* One Ethernet frame out on the data channel: SDPCM header, a 4-byte BDC header (version 2, no offset), the frame. */
 static int data_send(const unsigned char dst[6], unsigned type, const unsigned char *body, unsigned len) {
     unsigned n = SDPCM_HDRLEN + 4 + 14 + len;
@@ -536,7 +537,7 @@ static int join(void) {
                 if (gtk && !set_key(gtk_id, gtk, 0, 0)) { fail("group key"); return 0; }
                 kputs(gtk ? "wifi joined, keys installed\n" : "wifi joined, no group key found\n");
                 { static char st[48] = "Wi-Fi: "; unsigned n = 7; for (unsigned i = 0; i < WIFI_SSID_LEN && n < 47; i++) st[n++] = (char)wifi_ssid[i]; st[n] = 0; menubar_status(st); }
-                step(9); summary(); return 1;
+                link_up = 1; step(9); summary(); return 1;
             }
         }
         mdelay(5);
@@ -554,7 +555,38 @@ static int join(void) {
     fail("join");
     return 0;
 }
+/* The Pi's network card, as the shared IP stack (drivers/nic.h) sees it: whole Ethernet frames in and out through the
+   chip's data channel. A frame out is an SDPCM header, a 4-byte BDC header, then the frame itself; a frame in is the
+   same, and anything that is not on the data channel (events, control replies) is skipped. */
+int wifi_nic_up(void) { return link_up; }
+void wifi_nic_mac(unsigned char mac[6]) { for (int i = 0; i < 6; i++) mac[i] = mymac[i]; }
+int wifi_nic_send(const void *fr, unsigned len) {
+    unsigned n = SDPCM_HDRLEN + 4 + len;
+    if (!link_up || n > sizeof txf) return 0;
+    wait_credit();
+    wr16(txf, n); wr16(txf + 2, ~n & 0xffff); txf[4] = (unsigned char)seq++; txf[5] = SDPCM_DATA; txf[6] = 0; txf[7] = SDPCM_HDRLEN;
+    txf[8] = txf[9] = txf[10] = txf[11] = 0;
+    unsigned char *b = txf + SDPCM_HDRLEN; b[0] = 0x20; b[1] = b[2] = b[3] = 0;
+    for (unsigned i = 0; i < len; i++) b[4 + i] = ((const unsigned char *)fr)[i];
+    return cmd53(2, 0x8000, 1, txf, fw_padded(n));
+}
+unsigned wifi_nic_recv(void *buf, unsigned max) {
+    if (!link_up || !f2_read()) return 0;
+    unsigned off, l; int ch = sdpcm_parse(frame, 1600, &off, &l);
+    if (ch < 0) return 0;
+    tx_max = frame[9]; tx_max_seen = 1;   /* every frame carries fresh send credit */
+    if (ch != SDPCM_DATA || l < 4) return 0;
+    const unsigned char *bd = frame + off; unsigned skip = 4 + bd[3] * 4;
+    if (l <= skip) return 0;
+    unsigned len = l - skip; if (len > max) len = max;
+    for (unsigned i = 0; i < len; i++) ((unsigned char *)buf)[i] = bd[skip + i];
+    return len;
+}
 #else
+int wifi_nic_up(void) { return 0; }
+void wifi_nic_mac(unsigned char mac[6]) { for (int i = 0; i < 6; i++) mac[i] = 0; }
+int wifi_nic_send(const void *fr, unsigned len) { (void)fr; (void)len; return 0; }
+unsigned wifi_nic_recv(void *buf, unsigned max) { (void)buf; (void)max; return 0; }
 static int join(void) { kputs("wifi: no network configured, scan only\n"); return 1; }
 #endif
 
