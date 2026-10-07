@@ -68,10 +68,9 @@ try:
             body = (win_x + sc(8), win_y + sc(32), win_x + win_w - sc(4), win_y + win_h - sc(14))   # the console text and the pinned row
             hint = (win_x + win_w // 2, win_y + 2, win_x + win_w - 2, win_y + sc(26))                # the title bar's right half
             ink = lambda r: sum(1 for c in r if max(c) < 0x90)
-            white = lambda r: sum(1 for c in r if min(c) > 0xd0)
             if ink(rect(a, *body)) < 300: fails.append("the boot log is not on screen before any key")
-            if white(rect(a, *hint)) < 20: fails.append("no 'lines A-B of N' hint in the title bar")
-            else: print("  ok: the title bar carries a position hint (%d light pixels)" % white(rect(a, *hint)))
+            if ink(rect(a, *hint)) < 20: fails.append("no 'lines A-B of N' hint in the title bar")
+            else: print("  ok: the title bar carries a position hint (%d ink pixels on the cream band)" % ink(rect(a, *hint)))
             # the pinned row: the bottom row of the console text area holds the wifi/usb summary even before any scrolling
             key("pgup"); b = shot()
             key("end"); c = shot()

@@ -41,4 +41,32 @@ void gui_icon_art_bilinear(const unsigned char *art, unsigned int *out, int pw, 
 /* Draws a finished tile at logical (x, y), skipping its `under` corners. */
 void gui_blit_tile(const unsigned int *tile, int x, int y, int size, unsigned int under);
 
+/* The circle and capsule primitives every icon glyph, the hover label and
+   the window chrome use. gui_aa_band is their logical AA width (5); the
+   i386 icon renderer widens it while it draws into a supersampled buffer.
+   At window_scale() 2 with no offscreen target they work in physical
+   pixels instead. */
+extern int gui_aa_band;
+int gui_isqrt(int n);
+void gui_fill_circle(int cx, int cy, int r, unsigned int color, unsigned int into);
+void gui_capsule_phys(int pcx0, int pcy0, int pcx1, int pcy1, int pr, unsigned int color);
+void gui_draw_capsule(int x0, int y0, int x1, int y1, int r, unsigned int color, unsigned int into);
+
+/* Provided by the platform: one line of UI text (DejaVu Sans) with its
+   line box's top-left at logical (x, y), and its width in logical pixels.
+   i386 answers with font_draw_string and font_string_width; ARM with
+   arch/arm64/text.c. */
+void gui_text(const char *s, int x, int y, unsigned int fg);
+int gui_text_width(const char *s);
+
+#define DOCK_LABEL_BG   0x00F4F1EC /* hover label capsule fill */
+#define DOCK_LABEL_EDGE 0x00BDB4A8 /* its hairline edge */
+/* The hovered tile's name, centred over cx_center, above the tray whose
+   top is logical row y0 (gui_dock_y0()). */
+void gui_draw_dock_label(int cx_center, int y0, const char *name);
+/* One app window's frame at logical (x, y, w, h): rounded body on the
+   wallpaper, content well from y + 30, a hairline under the title band,
+   the three traffic lights and the centred name. */
+void gui_draw_window_frame(int x, int y, int w, int h, const char *name);
+
 #endif
