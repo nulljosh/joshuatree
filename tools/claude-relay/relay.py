@@ -58,7 +58,7 @@ against a stub `claude`.
 import argparse, hmac, http.server, json, os, re, signal, subprocess, sys, threading, time
 
 DEFAULT_PORT = 8765
-DEFAULT_TIMEOUT = 100          # seconds; under the kernel's Claude wait (see docs/CLAUDE-APP.md)
+DEFAULT_TIMEOUT = 150          # seconds; the kernel waits up to 240 s (JT_HTTP_POST_TICKS_CLAUDE), so the relay's 504 lands first
 DEFAULT_MAX_BODY = 4096        # the app's prompt is at most a few hundred bytes
 REPLY_MAX = 8191               # JT_HTTP_POST_REPLY_MAX (8192) minus the app's NUL
 TOKEN_MIN, TOKEN_MAX = 16, 63  # 63: the kernel keeps it in a 64-byte buffer
