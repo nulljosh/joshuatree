@@ -69,4 +69,20 @@ void gui_draw_dock_label(int cx_center, int y0, const char *name);
    the three traffic lights and the centred name. */
 void gui_draw_window_frame(int x, int y, int w, int h, const char *name);
 
+/* The software cursor: an antialiased arrow CURSOR_W x CURSOR_H logical
+   pixels, top-left at the pointer. gui_cursor_save copies the patch it is
+   about to cover (at physical resolution, up to CURSOR_MAX_SCALE),
+   gui_draw_cursor blends the arrow over it, gui_cursor_restore puts the
+   patch back and forgets it. cursor_saved_x/y are -1 while nothing is
+   saved. */
+#define CURSOR_W 13
+#define CURSOR_H 19
+#define CURSOR_MAX_SCALE 2 /* window_open_scaled(..., 2) in gui_run; bump together */
+extern unsigned int cursor_backup[CURSOR_W * CURSOR_MAX_SCALE * CURSOR_H * CURSOR_MAX_SCALE];
+extern int cursor_saved_x, cursor_saved_y;
+int gui_cursor_scale(void);
+void gui_cursor_save(int x, int y);
+void gui_draw_cursor(int x, int y);
+void gui_cursor_restore(void);
+
 #endif
