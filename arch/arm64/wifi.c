@@ -14,7 +14,12 @@ extern const unsigned char wifi_fw_bin[], wifi_fw_nvram[], wifi_fw_clm[];
 extern const unsigned wifi_fw_bin_len, wifi_fw_nvram_len, wifi_fw_clm_len;
 static void mdelay(unsigned ms) { unsigned long t0 = now(), n = ticks_per_ms() * ms; while (now() - t0 < n) {} }
 static unsigned c53_stage, c53_int, c53_state;   /* where the last CMD53 gave up and what the host said */
-static void fail(const char *step) { kputs("wifi FAIL "); kputs(step); if (c53_stage) { kputs(" stage "); kdec(c53_stage); kputs(" int "); kx(c53_int); kputs(" state "); kx(c53_state); } kputs("\n"); }
+/* Plain-English progress: the step reached so far, out of the ten it takes to reach the internet. */
+static unsigned wstep; static const char *wname[] = { "", "power", "chip answers", "bus up", "chip clock", "chip halted",
+    "firmware upload", "firmware running", "scan", "join", "internet" };
+static void step(unsigned n) { wstep = n; }
+static void summary(void) { kputs("Wi-Fi: "); kdec(wstep); kputs(" of 10 steps done, stuck at "); kputs(wname[wstep < 10 ? wstep + 1 : 10]); kputs("\n"); }
+static void fail(const char *step) { summary(); kputs("wifi FAIL "); kputs(step); if (c53_stage) { kputs(" stage "); kdec(c53_stage); kputs(" int "); kx(c53_int); kputs(" state "); kx(c53_state); } kputs("\n"); }
 
 /* ---- SDHCI host (Arasan, EMMC1). Register names per the SD Host Controller spec; OSDev's SDHCI page. ---- */
 #define GPIO 0xFE200000UL
@@ -117,10 +122,10 @@ static int fw_load(void) {
     if (!bp_write32(CR4_WRAP + 0x408, 0x23) || !bp_write32(CR4_WRAP + 0x800, 1)) { fail("arm halt"); return 0; }
     mdelay(1);
     if (!bp_write32(CR4_WRAP + 0x800, 0) || !bp_write32(CR4_WRAP + 0x408, 0x21)) { fail("arm unreset"); return 0; }
-    kputs("wifi arm halted\n");
-    if (!bp_write(CHIP_RAM, wifi_fw_bin, wifi_fw_bin_len)) { kputs("wifi FAIL fw load at byte "); kdec(bp_done); kputs(" stage "); kdec(c53_stage); kputs(" int "); kx(c53_int); kputs(" state "); kx(c53_state); kputs("\n"); return 0; }
+    kputs("wifi arm halted\n"); step(5);
+    if (!bp_write(CHIP_RAM, wifi_fw_bin, wifi_fw_bin_len)) { summary(); kputs("wifi FAIL fw load at byte "); kdec(bp_done); kputs(" stage "); kdec(c53_stage); kputs(" int "); kx(c53_int); kputs(" state "); kx(c53_state); kputs("\n"); return 0; }
     if (!bp_write(nvat, wifi_fw_nvram, wifi_fw_nvram_len)) { fail("nvram"); return 0; }
-    kputs("wifi fw "); kdec(wifi_fw_bin_len / 1024); kputs("k loaded\n");
+    kputs("wifi fw "); kdec(wifi_fw_bin_len / 1024); kputs("k loaded\n"); step(6);
     /* reset vector = start of RAM, then release: RESETCTRL=0, IOCTRL=CLK */
     if (!bp_write32(0x18002000 + 0x120, CHIP_RAM) || !bp_write32(CR4_WRAP + 0x800, 0) || !bp_write32(CR4_WRAP + 0x408, 1)) { fail("arm run"); return 0; }
     cmd52(1, 0x1000e, 1, 0x10, 0);   /* the firmware wants the high-throughput clock: HT_AVAIL_REQ 0x10 (it answers with HT_AVAIL 0x80) */
@@ -129,7 +134,7 @@ static int fw_load(void) {
         if (n > 300) { fail("fw ready"); return 0; }
         mdelay(10);
     }
-    kputs("wifi fw ready\n");
+    kputs("wifi fw ready\n"); step(7);
     return 1;
 }
 
@@ -194,7 +199,7 @@ static int scan(void) {
         }
         mdelay(5);
     }
-    kputs("wifi scan done, "); kdec(found); kputs(" networks\n");
+    kputs("wifi scan done, "); kdec(found); kputs(" networks\n"); step(8); summary();
     return 1;
 }
 
@@ -239,7 +244,7 @@ static void wifi_power_on(void) {
     wmbox[0] = 32; wmbox[1] = 0; wmbox[2] = 0x00030041; wmbox[3] = 8; wmbox[4] = 0; wmbox[5] = WL_ON; wmbox[6] = 0; wmbox[7] = 0;
     int got = wmbox_call() ? (int)wmbox[6] : -1;
     if (!cfg && !set) kputs("wifi power on (no mailbox)\n");
-    else if (got == 1) kputs("wifi power on, WL_ON reads 1\n");
+    else if (got == 1) kputs("wifi power on, WL_ON reads 1\n"), step(1);
     else kputs(got == 0 ? "wifi power FAIL: WL_ON reads 0\n" : "wifi power on, readback failed\n");
     mdelay(150);
 }
@@ -254,19 +259,19 @@ int wifi_init(void) {
     if (!sd_cmd(3, 0, 2, &r)) { fail("cmd3"); return 0; }               /* relative address */
     unsigned rca = r & 0xffff0000u;
     if (!sd_cmd(7, rca, 2, &r)) { fail("cmd7"); return 0; }             /* select */
-    kputs("wifi sdio card rca "); kx(rca >> 16); kputs("\n");
+    kputs("wifi sdio card rca "); kx(rca >> 16); kputs("\n"); step(2);
     if (!cmd52(0, 0x07, 1, 0x02, 0)) { fail("4-bit"); return 0; }       /* CCCR bus width 4 */
     R32(SDH + CTL1) = (R32(SDH + CTL1) & ~0xff00u) | 1 | 4 | 0x8 << 8;  /* base/16: 25 MHz or less, default speed (the card's high-speed mode is never enabled) */
     R32(SDH + 0x28) = (R32(SDH + 0x28) & ~0xffu) | 2;                  /* 4-bit, default speed */
     if (!cmd52(0, 0x02, 1, 0x06, 0)) { fail("f1f2 enable"); return 0; }
     for (unsigned n = 0;; n++) { unsigned v; if (cmd52(0, 0x03, 0, 0, &v) && (v & 2)) break; if (n > 100) { fail("f1 ready"); return 0; } mdelay(10); }
-    kputs("wifi f1 f2 up\n");
+    kputs("wifi f1 f2 up\n"); step(3);
     /* The backplane (the chip's RAM and cores) only answers while its ALP clock runs: ask for it through CHIPCLKCSR
        (F1 0x1000e: ALP_AVAIL_REQ 0x08) and wait for ALP_AVAIL (0x40), like brcmfmac and
        Plan 9's ether4330. The fourth real-board run wrote 64 bytes and then got a general error on the next block. */
     if (!cmd52(1, 0x1000e, 1, 0x08, 0)) { fail("alp req"); return 0; }   /* ALP_AVAIL_REQ alone, as brcmfmac's htclk does; the sixth run with 0x28 (plus FORCE_HW_CLKREQ_OFF) lost the backplane again */
     for (unsigned n = 0;; n++) { unsigned v; if (cmd52(1, 0x1000e, 0, 0, &v) && (v & 0x40)) break; if (n > 100) { fail("alp"); return 0; } mdelay(5); }
-    kputs("wifi alp clock up\n");
+    kputs("wifi alp clock up\n"); step(4);
     if (!fw_load()) return 0;
     return scan();
 }
