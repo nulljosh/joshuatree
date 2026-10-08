@@ -11,8 +11,8 @@ The OS and its apps are free, Apache 2.0, forever. The money is the
 ready-made kit: a Raspberry Pi 4 board, an SD card with Joshua Tree
 already on it, a printed Neo case, built and tested, with support.
 Joshua set the kit price at $500 USD on 2026-10-07. The kit is not built,
-nothing is for sale, nobody has paid, and the waitlist has no number
-worth quoting. The first dollar is still ahead of us.
+nothing is for sale, nobody has paid, and the waitlist has no count
+yet. The first dollar is still ahead of us.
 
 ## What we sell and what stays free
 
@@ -21,7 +21,7 @@ worth quoting. The first dollar is still ahead of us.
 | The OS (kernel, desktop, drivers) | Free, Apache 2.0 | Shipped. Runs in the browser and on a real Pi 4 |
 | The apps (Notes, Clock, Samantha, the rest) | Free, Apache 2.0 | Shipped on x86 and in QEMU. Being rebuilt for the Pi |
 | The case designs (Neo, Neo Pi) | Free to build for yourself, CC BY-NC-SA 4.0 | Drawn, not printed |
-| The kit: board, SD card with the OS, case, built, supported | $500 USD | Not built. No waitlist number. No date promised |
+| The kit: board, SD card with the OS, case, built, supported | $500 USD | Not built. No waitlist count yet. No date promised |
 
 The hardware licence is non-commercial on purpose. Anyone can print a
 case for themselves. Nobody can sell copies of the kit. That protects
@@ -91,7 +91,7 @@ quote.
 | Bolts and nuts | about $7 | estimate | `docs/HARDWARE.md`, hardware bag |
 | Card fees, about 3% of $500 | about $15 | estimate, standard processor rate | no processor picked |
 | Shipping, small box | about $15 to $25 | estimate, no carrier quote | same guess as the x86 kit |
-| Warranty reserve | about $10 | estimate, no return data | same guess as the x86 kit |
+| Warranty reserve | about $10, too low | placeholder, no return data | same guess as the x86 kit. Too low for a hardware kit that can arrive damaged. One dead board or one return shipped both ways costs more than this. Needs a real number from a shipping and return quote |
 | Build and test time | no number yet | estimate needed | depends on who builds it |
 | **Price** | **$500** | **real, Joshua's call** | this page |
 
@@ -105,6 +105,14 @@ first real print quote for the Neo Pi STLs (built by
 `docs/hardware/neo_pi_cad.py`), and a carrier quote
 for one boxed kit to a US address.
 
+**Retail check.** Before anyone defends the $500, price a Pi 4 kit at
+retail: the board, a microSD card, a USB-C power supply and a stock
+case, from one ordinary shop. Retail kit price: no number yet. Write it
+here when it is found. The buyer will do this check. So the
+$500 has to name what it buys beyond the parts: a box that is built,
+tested and supported, the OS already on it, and a person to write to
+when it breaks.
+
 ### Scenarios (assumptions, not facts)
 
 **Made up for planning. Replace with real numbers as they arrive.**
@@ -114,25 +122,44 @@ year, not a forecast. Each assumption is written beside its number.
 
 | Case | Kits sold in year one | Revenue at $500 | Estimated cost per kit | Gross margin | The assumption behind it |
 |---|---|---|---|---|---|
-| Low | 20 | $10,000 | $250 | $5,000 (50%) | Friends, meetups and the osdev crowd. Parts at retail, case from a print service, Joshua builds each one |
-| Middle | 150 | $75,000 | $200 | $45,000 (60%) | One Show HN that lands plus a video that gets shared. Parts in small batches, case printed at home |
-| High | 1,000 | $500,000 | $170 | $330,000 (66%) | A second launch wave and press. Parts at small-volume pricing, a contract builder. Support load at this size needs a second person |
+| Low (assumption) | 20 | $10,000 | $250 | $5,000 (50%) | Friends, meetups and the osdev crowd. Parts at retail, case from a print service, Joshua builds each one |
+| Middle (assumption) | 150 | $75,000 | $200 | $45,000 (60%) | One Show HN that lands plus a video that gets shared. Parts in small batches, case printed at home |
+| High (assumption) | 1,000 | $500,000 | $170 | $330,000 (66%) | A second launch wave and press. Parts at small-volume pricing, a contract builder. Support load at this size needs a second person |
+
+Margins fall if the board and power supply are priced high, and this
+table is not a forecast.
 
 The cost-per-kit column is a guess built on the estimate table above
 plus a guess at labour. It is not from a quote. The margin is before
-income tax, tools, the printer, returns above the reserve, and any time
-spent on support. If the real board and power supply prices come in
-high, every row shrinks.
+income tax, tools, the printer, returns above the reserve, certification
+(see Risks), and any time spent on support.
+
+## Before any money changes hands
+
+A demand gate comes first. No parts get bought for a batch, and no
+parts money is taken from anyone, until enough people have asked.
+
+- **The gate: 50 people on the waitlist.** This number is a guess, a
+  planning threshold, not a measured one. Move it if real numbers say
+  so.
+- **The waitlist** is the "Notify me" form on the landing page.
+- **The count today:** no count exists yet. The form is live. Write the
+  number here when one is taken.
+
+Until the gate is met, the kit stays a plan. Nobody is charged, not even
+a deposit.
 
 ## The first dollar, and the order we would try things in
 
 What has to be true before anyone is charged:
 
+- The demand gate above is met.
 - A Pi that boots to the desktop, takes a keyboard and a mouse, and
   keeps a file across a reboot, on camera, on the real board.
 - A real print of the Neo Pi case that fits the board (the fit test in
   `docs/hardware/PI-CASE.md` first).
-- A real parts total and a real shipping quote.
+- A real parts total, the retail check, and a real shipping quote.
+- An answer on certification (see Risks).
 - A real fulfilment path: who builds, who ships, who answers mail.
 
 Then, in this order. Each step is paid for by the one before it.
@@ -184,11 +211,13 @@ In order. Each one feeds the next.
 3. The story: one person in Langley, Claude as the hands. Pitched to AI and developer newsletters.
 4. The osdev forums: source, a write-up of the hard parts. These are the first kit buyers.
 5. In person: a live Pi on a table at Vancouver maker meetups and the UBC and SFU computing clubs.
-6. The waitlist on the landing page. It is live and verified by a test email. Its count is the demand test before any hardware is ordered. The count is not quoted here because it is not yet a number worth quoting.
+6. The waitlist on the landing page. It is live and verified by a test email. Its count is the demand gate (see "Before any money changes hands") before any hardware is ordered. No count has been taken yet.
 
 ## Risks, plainly
 
 - **Parts supply and price swings.** The Pi 4 has had long shortages before. Board, card and power supply prices move. A $500 price with no parts quote behind it can lose its margin without anyone changing a line here.
+- **Certification.** Selling a fully built electronic device usually needs FCC compliance in the US and ISED compliance in Canada. That is a real cost and a real wait, and neither is in this plan. To check before the first charge; no quote yet.
+- **The warranty reserve is a placeholder.** About $10 a kit will not cover a board that arrives dead or a return shipped both ways. It needs a real number from a shipping and return quote.
 - **Support on one person.** Every kit is a person who can mail Joshua. At the low case that is fine. At the high case it is a job. There is no second person today.
 - **The names are not cleared.** The file manager may become Folio and the OS may become Mirage. Both were decided in chat, neither is done, and the trademark check is still pending (`docs/LOOP-HANDOFF.md`). "Joshua Tree" and "Neo Kit" are claimed as trademarks on the hardware pages, not registered.
 - **Cloud cost of anything hosted.** Step 3 above puts a server of ours between the customer and the model. That is a bill that grows with use, and the fleet's rule so far is no subscriptions. It is not built, and should not be until the bill is understood.
@@ -201,7 +230,7 @@ In order. Each one feeds the next.
 Stop or rethink the kit if any of these turns out true:
 
 - The real parts total plus labour comes in above about $350. Then $500 is a hobby price again and the number has to move or the box has to change.
-- The waitlist stays near zero after the Show HN post and the video have both run.
+- The waitlist stays short of the demand gate after the Show HN post and the video have both run.
 - The first ten buyers each take more than a few hours of support. Then the kit needs a guide and a second person before the eleventh.
 - The Pi 4 goes out of stock for months with no drop-in board. Then the kit waits for the Pi 5 port, which does not exist.
 - A trademark search finds a conflict on a name already on the box. Then the box waits for the rename.
@@ -239,6 +268,7 @@ ships Joshua Tree on their device.
 
 ## Where we are
 
+- 2026-10-08: the OS runs on the real Pi 4. The kit is not built. The money plan now has a demand gate (50 on the waitlist, a guess), a retail check, and certification and the warranty reserve named as open costs. No waitlist count, no retail kit price, no certification quote yet.
 - 2026-10-07: on the real Pi 4, Wi-Fi joins and holds, DHCP and the network clock work, the menu bar shows the 12-hour clock and the three-bar Wi-Fi icon, and Samantha can act on the Pi (print a note, blink the green light). The desktop, dock, window frame and a USB keyboard work. No mouse, no browser, no HTTPS yet. The landing waitlist is live. The kit is not built and has no waitlist number. Joshua is buying a wired USB mouse and a 3.3V serial cable.
 - 2026-10-06: the first boot on real hardware, a Raspberry Pi 4, flashed in one command (`tools/flash-pi.sh`). Decided the same day: the first kit is Pi-based, because it is the board that boots, the one people already own, and its case is already drawn (`docs/hardware/PI-CASE.md`).
 - 2026-09-28 to 2026-09-30: eighteen apps moved out of the kernel to ring 3, so one app crashing cannot take the machine down. A 36 second ad exists (Neo renders, the real OS booting, Samantha narrating). Touch and an on-screen keyboard work on a phone screen. The $199 x86 problem was solved on paper with two boxes; that plan is now the later x86 box.
@@ -247,10 +277,16 @@ ships Joshua Tree on their device.
 
 ## Next
 
-A wired USB mouse working on the real Pi. A board you can click in is
-the first thing anyone would pay for. After that: a real Pi parts total
-and power supply price on this page, the Neo Pi fit test printed, and a
-shipping quote. Then the price has numbers under it.
+The demand gate and the retail check. Take a count from the "Notify me"
+form and write it here. Price a Pi 4 kit at a normal shop and write that
+number here too. Nothing gets bought for a batch until the gate is met.
 
-*Set 2026-10-08. Was: a USB keyboard on the Pi, set 2026-10-06. Was:
-real drivers for one real board, set 2026-09-28.*
+Alongside, on the build side: a wired USB mouse working on the real Pi,
+because a board you can click in is the first thing anyone would pay
+for. After that: the Pi parts total and power supply price, the Neo Pi
+fit test printed, a shipping and return quote, and an answer on
+certification. Then the price has numbers under it.
+
+*Set 2026-10-08: the demand gate and the retail check. Was: a wired USB
+mouse on the Pi, set 2026-10-08. Was: a USB keyboard on the Pi, set
+2026-10-06. Was: real drivers for one real board, set 2026-09-28.*
