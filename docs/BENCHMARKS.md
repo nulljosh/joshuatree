@@ -2,15 +2,15 @@
 
 Measured by `tools/bench.sh`: the kernel boots headless in QEMU on this Mac,
 runs `kernel/bench.h` and prints the numbers over serial. Run it yourself;
-the numbers move with the host. Version 1.6.21, 2026-09-27.
+the numbers move with the host. Version 2.30.6, 2026-10-08.
 
 | Benchmark | Result |
 |---|---|
-| boot_to_shell | 250 ms |
-| heap_alloc_free | 65 ns/op |
-| memcpy | 777 MB/s |
-| context_switch | 2797 ns/switch |
-| disk_read | 11443 KB/s |
+| boot_to_shell | 240 ms |
+| heap_alloc_free | 157 ns/op |
+| memcpy | 836 MB/s |
+| context_switch | 2831 ns/switch |
+| disk_read | 11351 KB/s |
 
 boot_to_shell is timer ticks from the first interrupt to the shell prompt.
 heap_alloc_free is one kmalloc plus one kfree, averaged over 20,000.
