@@ -72,6 +72,7 @@ retry|4|DHCP client leases real SLIRP config, DNS+HTTP still work, nodhcp keeps 
 retry|4|Benchmarks run and report every number|./tools/checks/bench-check.sh
 retry|6|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
 once |5|PNG decoder, host harness|./tools/checks/png-host-check.sh
+once |5|Vendored BearSSL TLS 1.2 client subset compiles for aarch64 freestanding (static)|python3 ./tools/checks/bearssl-tls-check.py
 once |3|Embedded apps are stored compressed: every one inflates to its exact binary, damaged copies are refused (host harness)|python3 ./tools/checks/user-compress-check.py
 once |4|Hamurabi game rules: SplitMix64, golden checksum, invariants, i386-freestanding|./tools/checks/hamurabi-rules-check.sh
 once |5|Hamurabi sprite sheet header is current with art/hamurabi/sprites.png and sprites.json (static)|python3 ./tools/gen/gen_hamurabi_sprites.py --check
@@ -245,6 +246,8 @@ retry|6|ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer a
 retry|6|ARM64 M2: the aarch64 kernel drives virtio disk, network, keyboard and mouse: a sector read back, a real ARP answer, key presses, moves and clicks (skips where the tools are missing)|python3 ./tools/checks/arm64-m2-check.py
 retry|6|ARM64 console scrollback: Page Up, End and Home scroll the on-screen Console over the whole boot log, the title bar says which lines (skips where the tools are missing)|python3 ./tools/checks/arm64-console-scroll-check.py
 retry|6|ARM64 net: the shared IP stack (drivers/net.c, drivers/http.c) on virtio-net leases 10.0.2.15 by DHCP and POSTs to a host server, 200 and the exact reply length (skips where the tools are missing)|python3 ./tools/checks/arm64-net-check.py
+retry|6|ARM64 HTTPS: a TLS 1.2 page from a host server with a throwaway certificate built in as a trust anchor, refused (tls FAIL 62) when it is left out (skips where the tools are missing)|python3 ./tools/checks/arm64-tls-check.py
+retry|6|ARM64 browser: browse URL typed at the ask> row reads an HTTPS page through a redirect, prints readable text with numbered links, open N follows one, a redirect loop stops (skips where the tools are missing)|python3 ./tools/checks/arm64-browser-check.py
 once |6|ARM64 green light: the Pi's activity LED is blinked through the firmware mailbox (pin 42), never at boot, on a wait that ends (static, no hardware)|python3 tools/checks/arm64-led-check.py
 once |6|Pi actions: an answer's [[note TEXT]] and [[led blink]] lines are stripped and run by ask.c's real parser (compiled on the host), anything else stays as text, and the relay prompt names both|python3 tools/checks/pi-actions-check.py
 retry|6|ARM64 Claude in the Console: typed at the ask> row, a question reaches the real relay (stub claude, 127.0.0.1) over virtio-net and the answer prints in 53-column lines; wrong token -401, no network and no token each say so (skips where the tools are missing)|python3 ./tools/checks/arm64-claude-console-check.py

@@ -994,6 +994,95 @@ int tcp_get_timeout(u32 dest_ip, u16 dest_port, const void *request, u32 request
     return (int)total;
 }
 
+/* ---- A TCP stream (2.31): the one shape tcp_get cannot do, a connection that stays open while both ends take turns.
+   TLS needs it (arch/arm64/tls.c: hello, reply, keys, reply, then the request). Same rules as tcp_get: one connection
+   at a time, no retransmission, out-of-order segments dropped; the pending buffer holds a segment a short read did
+   not finish. ---- */
+static struct {
+    u32 ip, seq, ack; u16 lport, rport; u8 mac[6]; int open, fin;
+    u8 rx[1514]; u8 *pend; u32 pend_n;
+} st;
+int tcp_open(u32 dest_ip, u16 dest_port) {
+    static u16 next_port = 46000;
+    net_err = NET_ERR_NONE; st.open = 0;
+    if (!resolve_next_hop(dest_ip, st.mac)) return 0;
+    st.ip = dest_ip; st.rport = dest_port; st.lport = next_port++; if (next_port >= 60000) next_port = 46000;
+    st.seq = 0x3000 + ((u32)st.lport << 8); st.ack = 0; st.fin = 0; st.pend_n = 0;
+    if (!tcp_send_segment(st.ip, st.mac, st.lport, st.rport, st.seq, 0, TCP_SYN, 0, 0)) { net_err = NET_ERR_SEND; return 0; }
+    st.seq++;
+    struct tcp_header *tcp; u8 *payload; u32 paylen;
+    u32 deadline = ticks() + WAN_TIMEOUT_TICKS;
+    while (ticks() < deadline) {
+        u32 n = active_receive(st.rx, sizeof st.rx);
+        if (!n || !tcp_match(st.ip, st.lport, st.rport, st.rx, n, &tcp, &payload, &paylen)) continue;
+        if (tcp->flags & TCP_RST) break;
+        if ((tcp->flags & (TCP_SYN | TCP_ACK)) == (TCP_SYN | TCP_ACK) && htonl(tcp->ack) == st.seq) {
+            st.ack = htonl(tcp->seq) + 1;
+            tcp_send_segment(st.ip, st.mac, st.lport, st.rport, st.seq, st.ack, TCP_ACK, 0, 0);
+            st.open = 1;
+            return 1;
+        }
+    }
+    net_err = NET_ERR_CONNECT_TIMEOUT;
+    return 0;
+}
+int tcp_write(const void *data, u32 len) {
+    if (!st.open) return 0;
+    const u8 *p = data; u32 sent = 0;
+    while (sent < len) {
+        u32 chunk = len - sent; if (chunk > TCP_MAX_PAYLOAD) chunk = TCP_MAX_PAYLOAD;
+        u8 flags = sent + chunk >= len ? (TCP_PSH | TCP_ACK) : TCP_ACK;
+        if (!tcp_send_segment(st.ip, st.mac, st.lport, st.rport, st.seq, st.ack, flags, p + sent, chunk)) { net_err = NET_ERR_SEND; return 0; }
+        st.seq += chunk; sent += chunk;
+    }
+    return 1;
+}
+/* Bytes read, 0 once the other end closed, -1 when nothing arrived before the deadline. */
+int tcp_read(void *buf, u32 max, u32 timeout_ticks) {
+    if (!st.open) return 0;
+    u8 *out = buf;
+    if (st.pend_n) {   /* the rest of a segment a shorter read left behind */
+        u32 c = st.pend_n < max ? st.pend_n : max;
+        for (u32 i = 0; i < c; i++) out[i] = st.pend[i];
+        st.pend += c; st.pend_n -= c;
+        return (int)c;
+    }
+    if (st.fin) return 0;
+    struct tcp_header *tcp; u8 *payload; u32 paylen;
+    u32 deadline = ticks() + timeout_ticks;
+    while (ticks() < deadline) {
+        u32 n = active_receive(st.rx, sizeof st.rx);
+        if (!n || !tcp_match(st.ip, st.lport, st.rport, st.rx, n, &tcp, &payload, &paylen)) continue;
+        if (tcp->flags & TCP_RST) { st.fin = 1; return 0; }
+        u32 seg = htonl(tcp->seq);
+        if (seg != st.ack) {   /* a duplicate or out of order: say where we are, drop it */
+            if (paylen) tcp_send_segment(st.ip, st.mac, st.lport, st.rport, st.seq, st.ack, TCP_ACK, 0, 0);
+            continue;
+        }
+        if (paylen) {
+            st.ack += paylen;
+            tcp_send_segment(st.ip, st.mac, st.lport, st.rport, st.seq, st.ack, TCP_ACK, 0, 0);
+            u32 c = paylen < max ? paylen : max;
+            for (u32 i = 0; i < c; i++) out[i] = payload[i];
+            st.pend = payload + c; st.pend_n = paylen - c;
+            if (tcp->flags & TCP_FIN) { st.ack++; st.fin = 1; tcp_send_segment(st.ip, st.mac, st.lport, st.rport, st.seq, st.ack, TCP_ACK, 0, 0); }
+            return (int)c;
+        }
+        if (tcp->flags & TCP_FIN) {
+            st.ack++; st.fin = 1;
+            tcp_send_segment(st.ip, st.mac, st.lport, st.rport, st.seq, st.ack, TCP_ACK, 0, 0);
+            return 0;
+        }
+    }
+    net_err = NET_ERR_REPLY_TIMEOUT;
+    return -1;
+}
+void tcp_close(void) {
+    if (!st.open) return;
+    tcp_send_segment(st.ip, st.mac, st.lport, st.rport, st.seq, st.ack, TCP_FIN | TCP_ACK, 0, 0);   /* best effort, like tcp_get */
+    st.open = 0;
+}
+
 /* ---- TCP server side: one connection at a time, passive open. Waits for
    a SYN on port, handshakes, discards whatever request comes in (there's
    only one thing to serve), sends response, closes. The client's MAC
