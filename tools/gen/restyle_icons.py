@@ -328,6 +328,19 @@ APPS_ONLY = {
       </g>
       <circle cx="64" cy="62" r="12" fill="#FAF8F4"/>"""),
 
+    # Mines (2.32): one cream mine on the accent #b5502c, flat like Claude and Hamurapi. A round
+    # body, four bold spikes and a small accent glint. No text, no flag, no grid.
+    "mines": ("#B5502C", "#B5502C", "",
+              """
+      <g stroke="#FAF8F4" stroke-width="10" stroke-linecap="round">
+        <line x1="64" y1="26" x2="64" y2="98"/>
+        <line x1="28" y1="62" x2="100" y2="62"/>
+        <line x1="40" y1="38" x2="88" y2="86"/>
+        <line x1="88" y1="38" x2="40" y2="86"/>
+      </g>
+      <circle cx="64" cy="62" r="25" fill="#FAF8F4"/>
+      <circle cx="55" cy="53" r="6" fill="#B5502C"/>"""),
+
     "search": ("#9AA3B1", "#303A48", "",
                """
       <circle cx="52" cy="52" r="23" fill="none" stroke="#ECEFF3" stroke-width="11"/>

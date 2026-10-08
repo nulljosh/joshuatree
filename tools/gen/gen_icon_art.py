@@ -84,7 +84,8 @@ ART = {
     27: "windgate",
     28: "panes",
     29: "claude",
-    # 30 is Mines (no authored art yet). Apps and Trash are 31/32.
+    # 30 is Mines. Apps and Trash are 31/32.
+    30: "mines",
     31: "apps",
     32: "trash",
 }
