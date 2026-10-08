@@ -611,6 +611,7 @@ int usb_init(void) {
     handle_events();
     root_scan();
     kputs("usb ready: "); kdec(nkbd); kputs(" kbd, "); kdec(nmouse); kputs(" mouse\n");
+    if (!nkbd) kputs("Keyboard: none found. Plug it straight into a Pi port.\n");   /* the quiet console hides "usb" lines; a missing keyboard must still show */
     return 1;
 }
 
