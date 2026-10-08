@@ -119,11 +119,28 @@ try:
 
     def keys(*qcodes):
         cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in qcodes], "hold-time": 30}})
-        time.sleep(0.15)
 
-    def open_slot(slot):
+    def poll(cond, timeout=30.0, step=0.1):
+        """Re-check cond() until truthy or the deadline passes (shared
+        runners are slow and jittery, so no fixed sleeps)."""
+        end = time.time() + timeout
+        while True:
+            v = cond()
+            if v or time.time() >= end: return v
+            time.sleep(step)
+    def settled(timeout=30.0):
+        """Wait until two consecutive overlap captures are identical (the
+        desktop finished repainting), then return that capture."""
+        prev = [overlap_region()]
+        def same():
+            cur = overlap_region(); ok = cur.tobytes() == prev[0].tobytes(); prev[0] = cur; return ok
+        poll(same, timeout, 0.2)
+        return prev[0]
+    def open_slot(slot, ready):
         move(centre(slot), ICON_ROW_Y); time.sleep(0.3)
-        click(); time.sleep(1.2)
+        base = overlap_region()
+        click()
+        return poll(lambda: ready(base))  # true once the new window has painted
 
     def serial_text():
         with open(LOG, "rb") as fh:
@@ -138,23 +155,26 @@ try:
 
     move(*PARK); time.sleep(0.5)
 
-    open_slot(FILES_SLOT)
-    if not window_open(): fails.append("Files: dock click did not open a window")
-    open_slot(NOTES_SLOT)
-    if not window_open(): fails.append("Notes: dock click did not open a second window")
+    if not open_slot(FILES_SLOT, lambda b: window_open()):
+        fails.append("Files: dock click did not open a window")
+    elif not open_slot(NOTES_SLOT, lambda b: overlap_region().tobytes() != b.tobytes()):
+        fails.append("Notes: dock click did not open a second window")
 
     if not fails:
-        before = overlap_region()
+        before = settled()
         keys("ctrl", "tab")
-        log = wait_marker("SWITCHER:tab")
+        log = wait_marker("SWITCHER:tab", 30.0)
         if "SWITCHER:tab" not in log:
             fails.append("Ctrl+Tab: SWITCHER:tab marker not found -- the switcher hotkey never fired")
-        log = wait_marker("SWITCHER:focus")
+        log = wait_marker("SWITCHER:focus", 30.0)
         if "SWITCHER:focus" not in log:
             fails.append("Ctrl+Tab release: SWITCHER:focus marker not found -- focus was never committed")
         else:
-            after = overlap_region()
-            diff = sum(1 for a, b in zip(before.getdata(), after.getdata()) if a != b)
+            def ndiff():
+                a = overlap_region()
+                return sum(1 for x, y in zip(before.getdata(), a.getdata()) if x != y)
+            poll(lambda: ndiff() >= 200)  # repaint can lag the serial marker
+            diff = ndiff()
             if diff < 200:
                 fails.append(f"Alt/Ctrl+Tab: only {diff} pixels changed across the whole Files/Notes overlap rect -- the focused window's z-order never actually flipped")
             else:
