@@ -27,7 +27,7 @@ arch = os.path.join(root, "arch/arm64")
 if not all(shutil.which(t) for t in ("clang", "ld.lld", "qemu-system-aarch64")):
     print("SKIP: clang, ld.lld or qemu-system-aarch64 not installed"); sys.exit(0)
 
-DIM, HID, LAYERS, HEADS, KVH, SEQ = 64, 172, 2, 4, 2, 64
+DIM, HID, LAYERS, HEADS, KVH, SEQ = 64, 172, 2, 4, 2, 160   # SEQ over 128: llm.c clamps a run to 128 positions
 MERGES = ["th", "he", "in", "er", "an", "on", "re", " t", " a", " h", "the", " the", "ll", "lo", "hel", "hell", "hello",
           "ce", "up", "im", "me", " o", " u"]
 PROMPT, QUESTION = "once upon a time", "hello there"
