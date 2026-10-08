@@ -17,6 +17,8 @@ void kdec(unsigned v);
 int con_columns(void);
 void con_prompt(const char *s, unsigned n);
 unsigned long heap_mark(void);
+unsigned long net_clock_utc(void);   /* ip.c: seconds since 1970, 0 until the network set it */
+int wifi_signal_level(void);         /* wifi.c: 1 to 3 */
 void heap_release(unsigned long m);
 void http_post_set_bearer(const char *token);
 
@@ -101,8 +103,14 @@ static int is_session(const char *s, unsigned n) {
     return 1;
 }
 
+static unsigned put_dec(char *o, unsigned long v) {   /* decimal digits of v at o, returns how many */
+    char t[20]; unsigned n = 0, k = 0;
+    do { t[n++] = (char)('0' + v % 10); v /= 10; } while (v);
+    while (n) o[k++] = t[--n];
+    return k;
+}
 static void ask(const char *q, unsigned n) {
-    static char body[2 * ASK_MAX + 96], reply[REPLY_MAX + 1];
+    static char body[2 * ASK_MAX + 192], reply[REPLY_MAX + 1];
     say_wrapped("ask> ", q, n);
     if (!CLAUDE_TOKEN_LEN) { kputs("claude: no token\n"); return; }
     if (!net_get_gateway()) {                  /* no DHCP lease, or no card at all */
@@ -118,7 +126,20 @@ static void ask(const char *q, unsigned n) {
     for (unsigned i = 0; i < n; i++) { if (q[i] == '"' || q[i] == '\\') body[b++] = '\\'; body[b++] = q[i]; }
     for (const char *p = "\",\"session\":\""; *p; p++) body[b++] = *p;
     for (const char *p = session; *p; p++) body[b++] = *p;
-    body[b++] = '"'; body[b++] = '}';
+    body[b++] = '"';
+    {   /* the Pi's live status, so the answer can be about this machine: "pi":"ip 10.0.0.189, utc 1791..., wifi 3/3" */
+        char st[80]; unsigned k = 0, ip = net_get_ip(); unsigned long u = net_clock_utc();
+        for (const char *p = "ip "; *p; p++) st[k++] = *p;
+        for (int sh = 24; sh >= 0; sh -= 8) { k += put_dec(st + k, (ip >> sh) & 255); if (sh) st[k++] = '.'; }
+        for (const char *p = ", utc "; *p; p++) st[k++] = *p;
+        k += put_dec(st + k, u);
+        for (const char *p = ", wifi "; *p; p++) st[k++] = *p;
+        st[k++] = (char)('0' + wifi_signal_level()); st[k++] = '/'; st[k++] = '3';
+        for (const char *p = ",\"pi\":\""; *p; p++) body[b++] = *p;
+        for (unsigned i = 0; i < k; i++) body[b++] = st[i];
+        body[b++] = '"';
+    }
+    body[b++] = '}';
     kputs("claude: thinking\n");
     static char token[64];
     for (int i = 0; i < CLAUDE_TOKEN_LEN && i < 63; i++) token[i] = (char)claude_token[i];

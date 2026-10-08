@@ -137,15 +137,15 @@ def run_tool(name, args):
     return "Unknown tool."
 
 
-def api_call(cfg, key, model, messages):
-    body = json.dumps({"model": model, "max_tokens": 600, "system": SAMANTHA, "tools": TOOLS, "messages": messages}).encode()
+def api_call(cfg, key, model, messages, system=SAMANTHA):
+    body = json.dumps({"model": model, "max_tokens": 600, "system": system, "tools": TOOLS, "messages": messages}).encode()
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
         "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
     with urllib.request.urlopen(req, timeout=cfg.timeout) as r:
         return json.loads(r.read().decode("utf-8", "replace"))
 
 
-def run_api(cfg, prompt):
+def run_api(cfg, prompt, pi=""):
     """--api-key-file mode: the Messages API with two read-only file tools, paid from the Claude Platform credit, not
     the Claude Code plan. Stateless: each question stands alone, at most 4 model turns. Returns (status, text)."""
     try:
@@ -153,10 +153,11 @@ def run_api(cfg, prompt):
     except OSError:
         return 502, "The relay has no API key file."
     model = pick_model(cfg, prompt)
+    system = SAMANTHA + (" Live status of the Pi you run on (ip, clock in UTC seconds since 1970, Wi-Fi bars): " + pi if pi else "")
     messages = [{"role": "user", "content": prompt}]
     try:
         for _ in range(4):
-            d = api_call(cfg, key, model, messages)
+            d = api_call(cfg, key, model, messages, system)
             blocks = d.get("content", [])
             if d.get("stop_reason") != "tool_use": break
             messages.append({"role": "assistant", "content": blocks})
@@ -178,9 +179,9 @@ class Relay:
         self.busy = threading.Lock()
         self.sessions = set()   # session ids this relay has handed out; --resume only accepts these
 
-    def run_claude(self, prompt, session):
+    def run_claude(self, prompt, session, pi=""):
         """Returns (status, text). Kills claude's whole process group past the timeout."""
-        if self.cfg.api_key_file: return run_api(self.cfg, prompt)
+        if self.cfg.api_key_file: return run_api(self.cfg, prompt, pi)
         p = subprocess.Popen(claude_argv(self.cfg, session), cwd=self.cfg.cwd, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
         try:
@@ -252,6 +253,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except ValueError: return self.reply(400, "Bad JSON.", n, t0)
             if not isinstance(d, dict): return self.reply(400, "Bad JSON.", n, t0)
             prompt, session = d.get("prompt", ""), d.get("session", "") or ""
+            pi = d.get("pi", "") if isinstance(d.get("pi", ""), str) else ""
+            self.pi_status = pi[:120]
             if not isinstance(prompt, str) or not isinstance(session, str): return self.reply(400, "Bad JSON.", n, t0)
         else:
             prompt = raw.decode("utf-8", "replace")
@@ -261,7 +264,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if session and (not UUID_RE.match(session) or session not in r.sessions):
             session = ""  # unknown or malformed: start fresh rather than pass it to --resume
         if not r.busy.acquire(blocking=False): return self.reply(429, "Claude is busy with another question.", n, t0)
-        try: status, text = r.run_claude(prompt, session)
+        try: status, text = r.run_claude(prompt, session, getattr(self, "pi_status", ""))
         finally: r.busy.release()
         return self.reply(status, text, n, t0)
 
