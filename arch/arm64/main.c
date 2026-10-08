@@ -430,6 +430,19 @@ static int fb_setup(void) {
 }
 /* M4: tell the firmware the VL805 USB controller is out of PCIe reset, so it loads the VL805's firmware.
    Tag 0x00030058, the device as bus << 20 | slot << 15 | function << 12 (Linux reset-raspberrypi.c, Circle). */
+/* The Pi 4's green activity light is GPIO 42, but the chip cannot drive it directly: the VideoCore firmware owns that
+   pin. Ask the firmware to set it through the mailbox ("set GPIO state", tag 0x38041): pin, then state (0 off, 1 on). */
+int led_set(unsigned state) {
+    unsigned m[] = { 8 * 4, 0, 0x00038041, 8, 0, 42, state, 0 };
+    for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
+    return mbox_call();
+}
+void led_blink(unsigned times) {   /* three quick blinks at boot: the Pi is alive and we are the ones blinking it */
+    for (unsigned i = 0; i < times; i++) {
+        led_set(1); unsigned t = ticks; while (ticks - t < 15) {}   /* ticks counts 100 a second: 15 is 150 ms */
+        led_set(0); t = ticks; while (ticks - t < 15) {}
+    }
+}
 int mbox_notify_xhci_reset(unsigned dev_addr) {
     unsigned m[] = { 7 * 4, 0, 0x30058, 4, 0, dev_addr, 0 };
     for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
@@ -1474,7 +1487,8 @@ void main(void) {
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
     if (!wifi_init()) menubar_wifi(0);
 #ifdef PI_BUILD
-    if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); }   /* the address from the router, then the time */
+    if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); }
+    led_blink(3);   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
     if (usb_ok) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
