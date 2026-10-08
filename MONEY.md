@@ -1,209 +1,256 @@
 # Joshua Tree Money
 
-How Joshua Tree makes money. The fleet-wide ledger is `GTM.md` in the Code root.
+How Joshua Tree would make money. It does not make any yet. This page is
+a plan, written so a stranger can follow it. Real numbers are marked
+real. Everything else is an estimate or an assumption, and says so. The
+fleet-wide ledger is GTM.md in the Code root, outside this repo.
 
-## Price
+## In one paragraph
 
-Free. The OS and its apps stay free, forever.
+The OS and its apps are free, Apache 2.0, forever. The money is the
+ready-made kit: a Raspberry Pi 4 board, an SD card with Joshua Tree
+already on it, a printed Neo case, built and tested, with support.
+Joshua set the kit price at $500 USD on 2026-10-07. The kit is not built,
+nothing is for sale, nobody has paid, and the waitlist has no number
+worth quoting. The first dollar is still ahead of us.
 
-## Rail
+## What we sell and what stays free
 
-None yet. No accounts, no payments in the kernel. That's on purpose.
+| Thing | Price | State |
+|---|---|---|
+| The OS (kernel, desktop, drivers) | Free, Apache 2.0 | Shipped. Runs in the browser and on a real Pi 4 |
+| The apps (Notes, Clock, Samantha, the rest) | Free, Apache 2.0 | Shipped on x86 and in QEMU. Being rebuilt for the Pi |
+| The case designs (Neo, Neo Pi) | Free to build for yourself, CC BY-NC-SA 4.0 | Drawn, not printed |
+| The kit: board, SD card with the OS, case, built, supported | $500 USD | Not built. No waitlist number. No date promised |
+
+The hardware licence is non-commercial on purpose. Anyone can print a
+case for themselves. Nobody can sell copies of the kit. That protects
+kit sales while every line of software stays free.
+
+No accounts, no payments and no tracking in the kernel. That is on
+purpose, and it stays that way.
 
 ## The bet
 
-An operating system you talk to. Ask it to open an app or take a note and it does, out loud. The assistant is Samantha, from Turing, a separate project; Joshua Tree is the OS she runs the machine through. No Linux underneath. No libc. Every line is ours, so every line can be checked.
+An operating system you talk to. Ask it to open an app, take a note or
+blink the light and it does, out loud. The assistant is Samantha, from
+Turing, a separate project. Joshua Tree is the OS she runs the machine
+through. No Linux underneath. No libc. Every line is ours, so every line
+can be checked.
 
 The software is the demo. The money is in the thing it runs on.
 
-## What it's worth today
+## What it is worth today
 
 Revenue: $0. On purpose, the OS is free.
 
-Real value right now is proof. One person built a whole computer from nothing, and anyone can click and run it. That gets a founder funded or an engineer hired senior. Treat it as the reputation that sells the dev kit later.
+The real value right now is proof. One person built a whole computer
+from nothing, got it onto a real board, and anyone can click and run it.
+That gets a founder funded or an engineer hired senior. Treat it as the
+reputation that sells the kit later.
+
+## Who the kit is for
+
+Nobody has bought one. These are the people we think would, and what
+each would get.
+
+| Who | What they get |
+|---|---|
+| People who build computers for fun | A box with nothing underneath. No Linux, no vendor OS. Every layer is readable and theirs to change |
+| Makers | A board with the 40-pin header open through the case, real drivers for an LED, a button and a speaker, and an assistant that can act on the pins |
+| Students | A whole OS small enough to read end to end, with a plain-words guide (planned, `docs/roadmap.md`) that explains every file |
+| Small teams that want a private assistant on a box they own | Samantha on their desk, their own AI key, nothing stored on our side |
+
+## The price: $500 USD, set by Joshua on 2026-10-07
+
+One kit, built and tested, $500 USD. Target: about two months from the
+decision, so early December 2026. Nothing here is a promise to anyone.
+
+Why $500. It has to cover three things: the parts, the hours to build
+and test each box, and the upkeep of the hardware and the software after
+the sale. A hobby price covers parts only. A product price covers the
+other two. The earlier $199 Kit and $349 Complete prices for the x86 Neo
+box are replaced by this one number for the Pi kit. The x86 Neo plan
+stays as a later box.
+
+### Unit economics, from the BOM
+
+The parts list for the Pi kit is in `docs/SHOPPING.md` and the case in
+`docs/hardware/PI-CASE.md`. Neither has a kit total yet. The only line
+in the repo with a real listing behind it is the x86 board in
+`docs/HARDWARE.md` (about $120 USD), and that board is not in this kit.
+So every Pi line below is an estimate. Read the table as a shape, not a
+quote.
+
+| Line | Amount (USD) | Real or estimate | Where it comes from |
+|---|---|---|---|
+| Raspberry Pi 4B board | no number yet | estimate needed | not priced in any doc yet; a retail listing goes here |
+| Power supply, USB-C | no number yet | estimate needed | not in `docs/SHOPPING.md` yet |
+| microSD card, 32 GB, with the OS on it | about $10 | estimate (CAD, rough) | `docs/SHOPPING.md` |
+| Neo Pi case, printed | about $9 plastic at home; $40 to $75 from a print service | estimate | `docs/HARDWARE.md`, Prototype cost (sized for the bigger x86 case, so the Pi case should be less) |
+| Bolts and nuts | about $7 | estimate | `docs/HARDWARE.md`, hardware bag |
+| Card fees, about 3% of $500 | about $15 | estimate, standard processor rate | no processor picked |
+| Shipping, small box | about $15 to $25 | estimate, no carrier quote | same guess as the x86 kit |
+| Warranty reserve | about $10 | estimate, no return data | same guess as the x86 kit |
+| Build and test time | no number yet | estimate needed | depends on who builds it |
+| **Price** | **$500** | **real, Joshua's call** | this page |
+
+What the table says: the known lines add to roughly $65 to $140 before
+the board, the power supply and labour. The board and power supply are
+the biggest missing numbers. Until they are written down, the margin is
+"probably wide, not known."
+
+What fills it in, in order: the Pi 4B and power supply retail price, the
+first real print quote for the Neo Pi STLs (built by
+`docs/hardware/neo_pi_cad.py`), and a carrier quote
+for one boxed kit to a US address.
+
+### Scenarios (assumptions, not facts)
+
+**Made up for planning. Replace with real numbers as they arrive.**
+
+No kit has sold. These three rows are a way to think about the first
+year, not a forecast. Each assumption is written beside its number.
+
+| Case | Kits sold in year one | Revenue at $500 | Estimated cost per kit | Gross margin | The assumption behind it |
+|---|---|---|---|---|---|
+| Low | 20 | $10,000 | $250 | $5,000 (50%) | Friends, meetups and the osdev crowd. Parts at retail, case from a print service, Joshua builds each one |
+| Middle | 150 | $75,000 | $200 | $45,000 (60%) | One Show HN that lands plus a video that gets shared. Parts in small batches, case printed at home |
+| High | 1,000 | $500,000 | $170 | $330,000 (66%) | A second launch wave and press. Parts at small-volume pricing, a contract builder. Support load at this size needs a second person |
+
+The cost-per-kit column is a guess built on the estimate table above
+plus a guess at labour. It is not from a quote. The margin is before
+income tax, tools, the printer, returns above the reserve, and any time
+spent on support. If the real board and power supply prices come in
+high, every row shrinks.
+
+## The first dollar, and the order we would try things in
+
+What has to be true before anyone is charged:
+
+- A Pi that boots to the desktop, takes a keyboard and a mouse, and
+  keeps a file across a reboot, on camera, on the real board.
+- A real print of the Neo Pi case that fits the board (the fit test in
+  `docs/hardware/PI-CASE.md` first).
+- A real parts total and a real shipping quote.
+- A real fulfilment path: who builds, who ships, who answers mail.
+
+Then, in this order. Each step is paid for by the one before it.
+
+| Step | What it is | Built? |
+|---|---|---|
+| 1. The kit | Board, card with the OS, case, built and supported, $500 | The OS runs on the Pi. The kit itself is not built |
+| 2. Paid support | Help by mail for people who built their own from the free designs, or who want the OS on hardware we did not sell | Not built. No price |
+| 3. A hosted or premium pack | Extra apps, voices or a hosted relay for Samantha, for people who do not want to bring a key | Not built. No price. Would carry cloud cost, see Risks |
+| 4. Private model training for teams | Samantha tuned on a team's own documents, on a box they own | Not built. Not designed. The farthest out |
+
+Only the OS on the Pi exists today. Everything else on this list is a
+plan.
+
+Channel: the Joshua Tree landing page, the same place the OS demo runs.
+No third-party storefront planned for the first kits. Fulfilment at low
+volume is Joshua building and shipping each box. At higher volume it is
+a contract builder. No decision made, no quote gathered.
+
+Precedent from the rest of the fleet (GTM.md): every app is free or
+$1, no subscriptions, no tips, and the Stripe account has zero charges
+ever. The kit is the one thing in the fleet priced above a dollar,
+because it is the one thing with real parts and real hours in it.
+
+## Bring your own AI key
+
+Samantha answers through an AI model over the network. Release builds of
+the OS carry no key and no network credentials. The card Joshua develops
+on carries our Wi-Fi and our key, flashed with `tools/flash-pi.sh` and
+the `JT_WIFI_DEV=1` flag, and that card never ships. The relay's key
+lives outside the repo.
+
+A customer types their own key into the box once, and every answer is
+billed to their account, not ours. That keeps our cost per user near
+zero. There is no server of ours in the middle to pay for, scale or
+secure. It also keeps the promise that nothing of theirs is stored on
+our side.
+
+The catch: typing a key is a step some buyers will not want. That is
+what the hosted pack in step 3 above would solve, at a cloud cost we do
+not have today.
 
 ## Getting it seen
 
 In order. Each one feeds the next.
 
-1. Show HN: "I built an operating system from scratch, and it runs in your browser." The live demo is the pitch. One click, no install.
-2. A 30 second video: boot, open apps, ask for something, hear the answer. X, Reddit (r/osdev, r/programming), YouTube Shorts.
+1. Show HN: "I built an operating system from scratch, and it runs in your browser." The live demo is the pitch. One click, no install. Drafted in `docs/LAUNCH.md`, waits for the mouse working on the Pi.
+2. A 30 second video: boot, open apps, ask for something, hear the answer. X, Reddit (r/osdev, r/programming), YouTube Shorts. Drafted in the same file.
 3. The story: one person in Langley, Claude as the hands. Pitched to AI and developer newsletters.
-4. The osdev forums: source, a write-up of the hard parts. These are the first dev kit buyers.
-5. A waitlist on the landing page for the dev kit. The count is the demand test before any hardware gets ordered.
+4. The osdev forums: source, a write-up of the hard parts. These are the first kit buyers.
+5. In person: a live Pi on a table at Vancouver maker meetups and the UBC and SFU computing clubs.
+6. The waitlist on the landing page. It is live and verified by a test email. Its count is the demand test before any hardware is ordered. The count is not quoted here because it is not yet a number worth quoting.
 
-## The million dollar plan
+## Risks, plainly
 
-A dev kit. A small board with Joshua Tree flashed on it, sold to the people who build their own computers for fun. The board pick and driver work are in `docs/HARDWARE.md`.
+- **Parts supply and price swings.** The Pi 4 has had long shortages before. Board, card and power supply prices move. A $500 price with no parts quote behind it can lose its margin without anyone changing a line here.
+- **Support on one person.** Every kit is a person who can mail Joshua. At the low case that is fine. At the high case it is a job. There is no second person today.
+- **The names are not cleared.** The file manager may become Folio and the OS may become Mirage. Both were decided in chat, neither is done, and the trademark check is still pending (`docs/LOOP-HANDOFF.md`). "Joshua Tree" and "Neo Kit" are claimed as trademarks on the hardware pages, not registered.
+- **Cloud cost of anything hosted.** Step 3 above puts a server of ours between the customer and the model. That is a bill that grows with use, and the fleet's rule so far is no subscriptions. It is not built, and should not be until the bill is understood.
+- **The board is someone else's product.** The Raspberry Pi is made by a company we do not control. They can change it, raise the price or end it. The long-term answer in `docs/roadmap.md` is a carrier board of our own for the compute module. That is years away, not months.
+- **The kit price is ahead of the kit.** $500 was set before a parts list, a print or a build existed. The honest state is "a price and a plan," not "a product."
+- **Nothing to show for input yet.** On the real Pi there is no mouse, no browser and no HTTPS. A box you cannot click in is not a box people pay for.
 
-The hardware designs are CC BY-NC-SA 4.0 on purpose: anyone can build one for themselves, but nobody can resell the kit, which protects the kit sales while the OS stays free.
+## What would make us stop or change course
 
-- 5,000 boards at $199 is $1M.
-- Needs: real drivers for one real board (network, sound, USB keyboard and mouse), a landing page that sells it, one launch on Hacker News and the osdev crowd.
-- Proof it's working: the first 100 preorders.
+Stop or rethink the kit if any of these turns out true:
 
-### Unit economics (v0, from the HARDWARE.md BOM)
+- The real parts total plus labour comes in above about $350. Then $500 is a hobby price again and the number has to move or the box has to change.
+- The waitlist stays near zero after the Show HN post and the video have both run.
+- The first ten buyers each take more than a few hours of support. Then the kit needs a guide and a second person before the eleventh.
+- The Pi 4 goes out of stock for months with no drop-in board. Then the kit waits for the Pi 5 port, which does not exist.
+- A trademark search finds a conflict on a name already on the box. Then the box waits for the rename.
 
-Everything below is either sourced (a real listing) or marked estimate. As of this writing only the board price has a real listing behind it - the rest of the BOM is estimate. Don't read this as a quote.
+Change course, not stop, if the kit sells but the hosted pack is what
+people ask for. That would mean the price was for the convenience, not
+the hardware, and the plan should follow the customer.
 
-| Line | Amount | Note |
-|---|---|---|
-| Parts (board, RAM, storage, case, PSU, USB stick, cables) | ~$250 | docs/HARDWARE.md BOM; mostly estimate, board price sourced |
-| Payment fees (~3%, card processing) | ~$6 at $199 | standard processor rate, estimate |
-| Shipping (domestic, boxed mini-ITX build) | ~$15-25 | estimate, no carrier quote yet |
-| Warranty reserve | ~$10/unit | estimate, no return-rate data exists yet |
-| **Cost per unit (parts + fees + shipping + warranty)** | **~$281-291** | **exceeds $199** |
-| Price | $199 | current price, unchanged here |
-| **Margin at $199** | **negative, roughly -$85 to -$95/unit** | the BOM does not support $199 today |
+## The million dollar dream
 
-$199 doesn't work for a whole computer. So we don't sell a whole
-computer at $199.
+A dream, not a plan. A small kit, sold to the people who build their own
+computers for fun. At $500 a kit, a million dollars is 2,000 kits. It
+needs the kit to exist, a landing page that sells it, one launch on
+Hacker News and the osdev crowd, and someone besides Joshua building
+boxes. Proof it is working: the first 100 paid orders.
 
-### The fix: two boxes (decided 2026-09-28)
+## The billion dollar dream
 
-**Neo Kit, $199.** The case, a USB stick with the OS on it, the screws,
-and a printed parts list. The buyer brings the board, RAM, SSD and power
-supply. Developers already own half of that, and the board is a $120
-listing they can buy anywhere.
+A dream, not a plan. The Joshua Tree device. A box on the counter with a
+screen and a face. You talk, she does it. Mail, calendar, music, the
+lights. No cloud account needed for the basics. It needs a
+manufacturing partner, an assistant model that runs inside the kernel,
+sign-in with Google and Apple for mail, and a phone version of the OS.
+Proof it is working: people keep talking to her after the first week.
 
-| Line | Amount | Note |
-|---|---|---|
-| Neo case (6 rings, cap, tray, rear plate; 30 printed pieces) | ~$40-75 prototype, one-off | estimate, JLC3DP print plus shipping, no real quote yet (`docs/HARDWARE.md`, Prototype cost). Prototype pricing is not volume pricing. $40 is the stock-case estimate above |
-| USB stick, pre-flashed | ~$8 | estimate |
-| Screws, nuts, rods (16 fasteners) | ~$7 | estimate |
-| Payment fees | ~$6 | 3% of $199 |
-| Shipping, small box | ~$15 | estimate, no carrier quote |
-| **Cost without the case** | **~$36** | |
-| **Breakeven case cost** | **~$163** | $199 minus $36 |
+## The trillion dollar dream
 
-The kit makes money as long as the Neo case costs under about $160 to
-make. The first real print quote says by how much.
-
-**Neo Complete, $349.** Everything built and tested, plug it in. Parts
-are ~$250 with a stock case, ~$281-291 with fees, shipping and warranty,
-so $349 leaves roughly $58-68 before the Neo case costs more than a
-stock one. $299 would leave $8-18, too thin to survive one return.
-
-**Later: a cheaper board.** The ODROID-H4 lists at $99
-(<https://liliputing.com/odroid-h4-is-a-mini-pc-board-with-intel-alder-lake-n-that-sells-for-99-and-up/>)
-against ~$120 for the current pick, but it has no PS/2 ports, so it only
-works once the kernel has a USB driver for keyboards. That's the xHCI
-item on the roadmap. Not before.
-
-**Next real step:** upload `docs/hardware/stl/` to JLC3DP and write the real
-cart total here. The prototype estimate (~$40-75) is far under the ~$163
-breakeven, but it is an estimate until the cart says so. At home on a Bambu
-A1 mini ($299) the plastic is about $9. The 5x-cost rule of thumb
-would put the case alone near $200-375, so the Kit price needs the real quote first.
-
-### Price set by Joshua, 2026-10-07: $500 USD a unit, ready in about two months
-
-Joshua's call: one unit sells for **$500 USD**, with a target of early December 2026 (two months from today). No customer has paid anything yet, and nothing here is a promise to anyone.
-
-What it means against the numbers above, all of them estimates: the stock-case build costs about $281-291 with fees, shipping and warranty, so $500 leaves roughly $210-220 a unit. That is a thick margin on paper, and it has to be earned by what is in the box. The $349 "Complete" price above is replaced by this one. The $199 Kit stays as the cheap way in unless Joshua says otherwise.
-
-Not decided yet, and the price needs an answer to each:
-- **What the box holds.** Board, case, power, card, keyboard, mouse? A monitor? The parts list in `docs/SHOPPING.md` and `docs/HARDWARE.md` has no Pi kit total, so the real cost of a $500 unit is "no number yet" until it is written down.
-- **Currency.** $500 USD, so card fees, exchange and shipping to US buyers are different from the CAD estimates above.
-- **Who builds and ships it.** Still unresolved.
-
-The gates in the next section still apply: nobody is charged until the board passes Phase 0-3 on camera and the costs are real quotes. The two-month date depends on the mouse, Wi-Fi and the case print, in that order. The software stays free and Apache 2.0, so the $1 app rule does not apply to hardware.
-
-### The first dollar
-
-What has to be true before anyone is charged:
-- A board that passes Phase 0-2 in `docs/HARDWARE.md` (boots, shows a
-  screen, takes keyboard input) on real hardware, not QEMU.
-- A real print quote for the Neo case under the ~$163 kit breakeven.
-- A real fulfillment path: who assembles the kit and who ships it.
-
-Path, in order:
-1. **Waitlist first, no charge.** The landing page's existing waitlist
-   ("Getting it seen," step 5 above) is the demand signal. No fixed
-   threshold is set here - that's Joshua's call once Phase 2 is real and
-   the board price isn't mostly estimate. The Kit ships first.
-2. **Channel:** the Joshua Tree landing page (joshuatree.heyitsmejosh.com),
-   same place the OS demo runs. No third-party storefront planned for v0.
-3. **Fulfillment:** unresolved. Self-assembly-and-ship by Joshua at low
-   volume, or a contract assembler at higher volume - no decision made,
-   no quote gathered.
-4. **First charge only after:** a board that passes Phase 0-3 (boots,
-   desktop, input, a file survives a reboot) on camera, and a BOM that
-   doesn't lose money: Kit at $199, Complete at $349.
-
-### Milestones (targets, not promises)
-
-Tied to the bring-up phases in `docs/HARDWARE.md`. No revenue, user
-count, or date below is a fact.
-
-| Milestone | Tied to | What it proves |
-|---|---|---|
-| Board boots, shows a picture | Phase 0-1 | GRUB/multiboot works on real silicon, not just QEMU |
-| Keyboard and mouse work | Phase 2 | the PS/2 pick was right, or the fallback plan kicks in |
-| Files survive a reboot | Phase 3 | "a real disk" in the 3.0 definition is true |
-| The board gets online | Phase 4 | Samantha's tools work off QEMU |
-| The board makes sound | Phase 5 | all five 3.0 pieces are real |
-| First 100 preorders | after unit economics resolve | demand exists at a price that doesn't lose money |
-
-## The billion dollar plan
-
-The Joshua Tree device. A box on the counter with a screen and a face. You talk, she does it. Mail, calendar, music, the lights. No cloud account needed for the basics.
-
-- 3 million devices at $299, plus a $5 a month plan for her bigger brain in the cloud. Hardware pays for itself, the plan is the business.
-- Needs: a manufacturing partner, an assistant model running inside the kernel, sign-in with Google and Apple for mail, a phone version of the OS.
-- Proof it's working: people keep talking to her after the first week.
-
-## The trillion dollar plan
-
-The computer after the phone. Joshua Tree becomes what people talk to instead of tapping: phones, cars, glasses, the kitchen. Every device runs the same small, auditable OS, and talking to it is the only interface most people ever need.
-
-- A trillion means a billion people. That's Apple and Google territory.
-- Needs: an OS small enough to trust and prove secure, an assistant good enough to replace the home screen, and partners who put it on hardware we don't build.
-- Proof it's working: another company ships Joshua Tree on their device.
+A dream, not a plan. The computer after the phone. Every device runs the
+same small, auditable OS, and talking to it is the only interface most
+people need. A trillion means a billion people. That is Apple and
+Google territory. It needs an OS small enough to prove secure, an
+assistant good enough to replace the home screen, and partners who put
+it on hardware we do not build. Proof it is working: another company
+ships Joshua Tree on their device.
 
 ## Where we are
 
-- 2026-10-06: the first boot on real hardware happened, and it was a Raspberry Pi 4, not the x86 board the kit plan above was built around. The desktop came up over HDMI from a card flashed in one command (`tools/flash-pi.sh`). Honest gaps: the picture fills half the screen and the console text is broken. On the Pi, keyboard, mouse, disk and network only work under QEMU (they use QEMU's virtual devices); real USB, SD and Ethernet drivers are M4 in `docs/ARM64.md`. On the x86 side `rtl8139.c`, `ata.c` and `pci.c` target real chips; `vmmouse.c` only works under VMware or QEMU, never on a real board.
-- 2026-09-28, afternoon: a 36 second ad exists. Neo renders, the real OS booting, Samantha narrating in her own voice, original music. It's in the README. The landing page doesn't show the hardware yet; that's the next conversion fix before any waitlist push.
-- 2026-09-28: the $199 problem is fixed on paper. Two boxes: a $199 Neo Kit (case plus OS stick, bring your own board) that makes money if the case prints under about $160, and a $349 Neo Complete. The Neo case now has a real CAD file, a drawing and a build guide.
-- 2026-09-28: 1.7.4 merged. The OS now gets its own internet address on its own, has the start of voice input, and on phones Samantha's face no longer covers her title bar. A broken deploy setting kept the live site on 1.7.3; the fix is in review. Work started on moving apps out of the core so one crashing app can't take the machine down.
-- 2026-09-27: the Samantha app (Turing's assistant, reached through Joshua Tree) talks with a face and a real voice through the OS's own sound driver. The landing page runs the whole OS live in the browser.
+- 2026-10-07: on the real Pi 4, Wi-Fi joins and holds, DHCP and the network clock work, the menu bar shows the 12-hour clock and the three-bar Wi-Fi icon, and Samantha can act on the Pi (print a note, blink the green light). The desktop, dock, window frame and a USB keyboard work. No mouse, no browser, no HTTPS yet. The landing waitlist is live. The kit is not built and has no waitlist number. Joshua is buying a wired USB mouse and a 3.3V serial cable.
+- 2026-10-06: the first boot on real hardware, a Raspberry Pi 4, flashed in one command (`tools/flash-pi.sh`). Decided the same day: the first kit is Pi-based, because it is the board that boots, the one people already own, and its case is already drawn (`docs/hardware/PI-CASE.md`).
+- 2026-09-28 to 2026-09-30: eighteen apps moved out of the kernel to ring 3, so one app crashing cannot take the machine down. A 36 second ad exists (Neo renders, the real OS booting, Samantha narrating). Touch and an on-screen keyboard work on a phone screen. The $199 x86 problem was solved on paper with two boxes; that plan is now the later x86 box.
+- 2026-09-27: Samantha talks with a face and a real voice through the OS's own sound driver. The landing page runs the whole OS live in the browser.
+- On the x86 side, `rtl8139.c`, `ata.c` and `pci.c` target real chips. `vmmouse.c` only works under VMware or QEMU. The x86 board has never been bought.
 
 ## Next
 
-A USB keyboard working on the real Pi. A board you can type into is the first thing anyone would pay for, and the Pi is now the one board we know boots.
+A wired USB mouse working on the real Pi. A board you can click in is
+the first thing anyone would pay for. After that: a real Pi parts total
+and power supply price on this page, the Neo Pi fit test printed, and a
+shipping quote. Then the price has numbers under it.
 
-*Set 2026-10-06. Was: real drivers for one real board, set 2026-09-28.*
-
-Decided 2026-10-06: the first dev kit is Pi-based. It is the board that boots, the one people already own, and its case is already drawn (`docs/hardware/PI-CASE.md`). The x86 Neo plan above stays as the later box. No Pi kit price yet; it needs a real parts list first.
-
-*Landing synced 2026-09-28: the 36 second ad and the Neo case concept sit under "Want one?". Neo is a concept, not for sale, no price set.*
-
-Notes now has folders and lets you keep more than one note, so it starts to feel like a real app on a real board. Still free, nothing to sell. *2026-09-28.*
-
-Touch works now and Notes gets its own on-screen keyboard on a phone screen, so you can tap a note and type it with no keys attached. That is the first thing a phone buyer tries, so it earns its place in the pitch. Still free, nothing to sell yet. *2026-09-28.*
-
-Lexly now runs on its own at ring 3, seven apps out of the kernel. A crash in a flashcard drill can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
-
-Plan now runs on its own at ring 3, eight apps out of the kernel. A crash in the roadmap app can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
-
-Fieldbook now runs on its own at ring 3, nine apps out of the kernel. A crash in the science explainer can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
-
-Clock now runs on its own at ring 3, ten apps out of the kernel. A crash in the timer app can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
-
-Portfolio now runs on its own at ring 3, eleven apps out of the kernel. A crash in the catalog app can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
-
-Activity now runs on its own at ring 3, twelve apps out of the kernel. A crash in the task monitor can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
-
-Contacts now runs on its own at ring 3, thirteen apps out of the kernel. A crash in the address book can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
-
-Sparkjar now runs on its own at ring 3, fourteen apps out of the kernel. A crash in the idea jar can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
-
-Reminders now runs on its own at ring 3, fifteen apps out of the kernel. A crash in the checklist can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-29.*
-
-Curbfind now runs on its own at ring 3, sixteen apps out of the kernel, and it is the first app to reach the network from outside the kernel through one narrow, checked call. A crash in the deal list can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-30.*
-
-Calendar now runs on its own at ring 3, seventeen apps out of the kernel. A crash in the month grid can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-30.*
-Search now runs on its own at ring 3, eighteen apps out of the kernel, and stepping into a folder no longer moves the kernel's own working directory from inside an app. A crash in the search box can no longer take the machine down. Nothing to sell yet, but the real board pitch gets a little more believable with each one. *2026-09-30.*
-
-The OS runs on a real Pi 4 with a working desktop, dock, window frame and USB keyboard. The desktop boots at 1920x1080 and every element renders from the shared draw code. The console scrollback, Burrow icon redesign and eight typefaces in a registry are in review. The landing waitlist is live and verified by a test email. The Show HN post and a 30 second video are drafted in docs/LAUNCH.md and wait for the mouse working on the Pi. Joshua is buying a wired USB mouse and a 3.3V serial cable. The first dev kit is a Pi with the OS on an SD card. No price and no number yet; that waits for a real parts list and the case print quote. *2026-10-07.*
+*Set 2026-10-08. Was: a USB keyboard on the Pi, set 2026-10-06. Was:
+real drivers for one real board, set 2026-09-28.*
