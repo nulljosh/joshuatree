@@ -1,30 +1,49 @@
-# Joshua Tree loop handoff (2026-10-07, 21:10)
+# Joshua Tree loop handoff (2026-10-08, morning)
 
 ## What the loop is
 
-Keep merging green PRs, then take the Pi track toward 3.0.0 (the desktop boots on a real Raspberry Pi 4, and you can type and click). After that comes the goal: Claude Code running inside Joshua Tree on the Pi, which needs HTTPS first. One agent at a time, verify every claim myself, run the full local suite before a PR goes ready, merge on GitHub green, check the live site. No stray branches, PRs, issues or stale background agents left behind.
+The Pi loop. Joshua Tree runs on a real Raspberry Pi 4 with a USB keyboard. The loop merges green PRs one at a time, rebuilds the SD card image, and works the roadmap toward a Pi that boots, gets online, and lets Joshua use it without a keyboard-only detour.
 
-## Where things stand (2026-10-07, 21:10)
+## The goal
 
-- Main is 2.29.0. Two PRs are open. PR 459 is a draft: one slow green light blink at boot, replacing the three quick blinks. Its local CI run is going right now (log at /tmp/jt-ci-led3.log). Do not start another run and do not stop this one. PR 458 is the HTTPS plan, roadmap only, and it now also says the full BearSSL TLS client has to be vendored.
-- Done on the real Pi: Wi-Fi joins and holds (the WPA2 handshake is ours), DHCP and the network clock, the 12-hour clock and three-bar icon in the menu bar, the quiet console, and the boot screen. The clock read 3:14 PM on the real screen.
-- The repo's BearSSL is only five crypto files. Until the handshake, certificate and record code is vendored from upstream, no secure page loads on the Pi.
-- Bench: deferred, because CI is running. Rerun /jt-bench once the Mac is quiet.
-- Weekly usage is at 93 percent, so big work waits for the Saturday reset.
-- The main checkout at ~/Documents/Code/joshuatree sits on branch pi-flash-script. Work from a worktree under /tmp, never a path containing "samantha", and never switch branches in a worktree while CI runs from it.
-- Joshua swaps the SD card by hand. Batch board tests and ask for one swap per round. Never pull the card mid-flash. Never print Wi-Fi secrets.
+Joshua's /goal: a mini Joshua Tree with Claude Code inside it, running on the Pi. Samantha now answers on the real Pi through the Messages API, on Joshua's own API credit. A relay on the Mac picks a cheap or strong model per question, so nobody picks models by hand. She can read files from a shared folder on the Mac, read-only, and the Pi sends its live status (IP, clock, Wi-Fi) with each question. That is the first real Pi tool.
+
+## Standing rules
+
+- Never ask Joshua a question you can answer with a sensible default; write the default down here.
+- Claude opens pull requests as drafts and never merges by hand. `gh pr merge --auto --squash` only once a PR is ready and its local run is green. Never force-push main. Never use `--admin`.
+- One Haiku agent at a time, and only when asked. Verify every claim yourself. Kill by PID only.
+- One `tools/ci-local.sh` at a time (it takes a lock). Disk above 6 GB free.
+- Joshua swaps the SD card by hand. Batch board tests and ask for one swap per round. Never pull the card while `tools/flash-pi.sh` is running; a cut-off flash froze the Mac's disk until a restart.
+- At most six open PRs, zero issues. The loop does not mirror the roadmap into GitHub issues. Delete a branch once its PR merges.
+- Ship visible fixes as their own tiny PR; the big stack stays one draft.
+- Never print or commit the Wi-Fi password, tokens or keys. Wi-Fi name and key go only into dev cards (`tools/flash-pi.sh` with `JT_WIFI_DEV=1`); release and CI builds carry no network. Nothing destructive on his files or the LaCie.
+- The relay's API key lives outside the repo. Never copy it into a file, a log or a PR.
+
+## Where things stand
+
+- The Pi 4 joins Wi-Fi on the real board. The chip has no login helper, so the WPA2 handshake is ours (arch/arm64/wpa.h). The stall was the router wanting its exact security element repeated in our reply. PR 453 (the Pi stack) is merged.
+- A later stretch of Wi-Fi trouble (joins refused, then no address) cleared after a router reboot. Nothing in the code is known to be at fault.
+- Clock: a lost DNS lookup used to wait 20 seconds per try. Each try now waits 2 seconds and retries six times.
+- The console stays quiet on a good boot. Lines appear only when something breaks. The boot screen draws the tree while the photo decodes, and a small apple sits beside the Steve Jobs tribute line.
+- The green light works. The old blink broke the keyboard because it waited on the `ticks` counter, which stops early; Samantha's blink now waits on the hardware clock and drives GPIO 42 directly. PR 459 is merged.
+- PR 460 (Samantha through the Messages API, the Pi's live status, and the actions `[[note TEXT]]` and `[[led blink]]`) is in local CI, then GitHub. Main is 2.29.x; 460 is 2.30.0.
+- Merged today: the Pi stack, the HTTPS plan (458), the graph refresh. Open: 460, 463 (graph Pi row), 464 (CLAUDE.md and AGENTS.md sync for Codex), 465 (landing Pi section).
+- The API credit runs a repo agent: `~/.config/joshuatree/agent.py` (own branch, hard cost cap, no push). Codex on the Pi needs a secure tunnel; a relay Codex mode was blocked as a remote-run risk.
+- Benchmark: DEFERRED. Run `/jt-bench` only when nothing else is running on the Mac.
+- Naming: the file manager becomes Folio and the OS may become Mirage. Both decided in chat, neither done, trademark check still needed; each goes in its own PR.
 
 ## Next, in order
 
-1. Local CI on PR 459 finishes. If it is green, ready it and merge on GitHub green. Then merge 458.
-2. HTTPS on the Pi: vendor the rest of BearSSL's TLS client (handshake, certificates, records) from upstream, then a test that fetches one secure page. Only then can a browser load secure pages.
-3. Claude in the Console: type a question at the Pi's console and the answer prints, through the relay. Wi-Fi is in place, so this needs only the relay setup.
-4. Track A on the Pi: the real desktop and dock in five slices, a wired USB mouse, sound from the 3.5 mm jack with a boot chime, then the ring-3 apps for ARM, Notes and Clock first.
-5. Rename Burrow to Drawer, in its own change, after the open PRs are in.
-6. Admin and sudo, SD card writes, then the Claude app on ARM.
+1. Merge 460 once local and GitHub CI are green, then 463, 464 and 465 (merge 463 before 465: both bump the version).
+2. More Pi actions (SD card files, opening an app), then hide the Console on boot and move chat into its own Claude app, then the model and effort in the prompt.
+3. Folio and Mirage renames, each in its own PR, after a trademark check.
+4. HTTPS on the Pi: vendor the full BearSSL TLS client (the repo has only five crypto files; the upstream file list is in `~/Documents/Code/scratch-bearssl`).
+5. Split kernel/kernel.c, which is far too big to work in.
+6. Benchmark when the Mac is quiet.
 
 ## Restart prompt
 
 ```
-/loop Joshua Tree loop. State in ~/Documents/Code/joshuatree/docs/LOOP-HANDOFF.md on origin/roadmap-https-plan (PR 458) and draft PR 459. First: check the local CI log at /tmp/jt-ci-led3.log for PR 459. If it passed, ready it and merge on GitHub green, then merge 458. If it is still running, wait for it and do not start another. Then vendor the full BearSSL TLS client and add a test that fetches one secure page on the Pi, then Claude in the Console through the relay. Ship visible fixes as their own tiny PR. One Haiku agent at a time, verify every claim yourself, kill by PID only. Joshua swaps the SD card by hand, so batch board tests and ask for one swap per round. Never pull the card mid-flash. Never print Wi-Fi secrets. Stop and checkpoint at 95 percent usage.
+/loop Joshua Tree loop. State in ~/Documents/Code/joshuatree/docs/LOOP-HANDOFF.md on origin/main. First: finish PR 459 (keyboard message, light off) once its rerun is green, then PR 460 (Samantha through the Messages API and Pi tools, draft): one tools/ci-local.sh run, ready, merge on GitHub green. After the Saturday reset: Pi actions (light, SD card files, open an app), hide the Console on boot, a separate Claude app, model and effort in the prompt. Then the Burrow to Drawer rename in its own PR, split kernel/kernel.c, and HTTPS on the Pi from the plan in PR 458. Benchmark stays deferred until nothing else runs. Ship visible fixes as their own tiny PR. One Haiku agent at a time, verify every claim yourself, kill by PID only. Joshua swaps the SD card by hand, so batch board tests and ask for one swap per round. Never pull the card mid-flash. Never print Wi-Fi secrets or the relay key. Stop and checkpoint at 95 percent usage.
 ```
