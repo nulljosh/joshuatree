@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (206 checks)
+## The suite (207 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -206,6 +206,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | ARM64 browser: browse URL typed at the ask> row reads an HTTPS page through a redirect, prints readable text with numbered links, open N follows one, a redirect loop stops (skips where the tools are missing) | `tools/checks/arm64-browser-check.py` | retry |
 | ARM64 green light: the Pi's activity LED is blinked through the firmware mailbox (pin 42), never at boot, on a wait that ends (static, no hardware) | `tools/checks/arm64-led-check.py` | once |
 | Pi actions: an answer's [[note TEXT]] and [[led blink]] lines are stripped and run by ask.c's real parser (compiled on the host), anything else stays as text, and the relay prompt names both | `tools/checks/pi-actions-check.py` | once |
+| ARM64 relay token gate: a 24-byte throwaway token is absent from kernel8.img with JT_WIFI_DEV unset and present with it set (skips where the tools are missing) | `tools/checks/arm64-token-gate-check.py` | retry |
 | ARM64 Claude in the Console: typed at the ask> row, a question reaches the real relay (stub claude, 127.0.0.1) over virtio-net and the answer prints in 53-column lines; wrong token -401, no network and no token each say so (skips where the tools are missing) | `tools/checks/arm64-claude-console-check.py` | retry |
 | ARM64 M3a: an unprivileged EL0 program prints through a write syscall, exits, and a direct access to a kernel-only page faults while the kernel survives (skips where the tools are missing) | `tools/checks/arm64-m3-check.py` | retry |
 | ARM64 M4 Wi-Fi proto: wifi_proto.h packs and parses SDPCM, BCDC, escan and NVRAM on the host clang | `tools/checks/wifi-host-check.sh` | retry |
