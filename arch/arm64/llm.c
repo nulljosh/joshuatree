@@ -199,6 +199,7 @@ static int load(void) {   /* 0 ok, -1 no model, -2 out of memory, -3 the files d
     W.wcls = shared ? W.emb : p;
     if (!shared) p += c.vocab * dim;
     if ((const unsigned char *)p > llm_model_end) return -3;
+    if (c.seq > LLM_STEPS) c.seq = LLM_STEPS;   /* a run never goes past LLM_STEPS: no key/value cache beyond it (heap room at 1080p) */
 
     unsigned long seq = c.seq;
     x = kmalloc(dim * 4); xb = kmalloc(dim * 4); xb2 = kmalloc(dim * 4); q = kmalloc(dim * 4);
