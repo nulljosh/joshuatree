@@ -16,7 +16,7 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
 The short list. Two tracks run side by side, one helper each (Joshua agreed the order on 2026-10-06). Everything below is the long list; done items moved to [roadmap-done.md](roadmap-done.md).
 
-**Done on the Pi (2026-10-07):** Wi-Fi joins and holds (WPA2 done on our side), DHCP and the network clock, the 12-hour clock and three-bar icon in the menu bar, the quiet console, the boot screen, and the green light, driven through the firmware (PR 456). It no longer blinks at boot: that wait never ended and left the USB keyboard dead.
+**Done on the Pi (2026-10-07):** Wi-Fi joins and holds (WPA2 done on our side), DHCP and the network clock, the 12-hour clock and three-bar icon in the menu bar, the quiet console, the boot screen, and the green light blinks once at boot (PR 459, in review).
 
 **Track A, what you see on the Pi**
 1. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing).
@@ -25,7 +25,7 @@ The short list. Two tracks run side by side, one helper each (Joshua agreed the 
 4. Apps on the Pi: the ring-3 apps rebuilt for ARM, Notes and Clock first.
 
 **Track B, the goal (Claude Code inside Joshua Tree on the Pi)**
-5. HTTPS on the Pi (BearSSL is already in `third_party/`), so a browser can load secure pages.
+5. HTTPS on the Pi. Saturday's job: the repo's BearSSL is only the crypto pieces (five files), so vendor the rest of its TLS client (handshake, certificates, records) from upstream, then a test that fetches one secure page. Only then a browser can load secure pages.
 6. Tools on the Pi. Done: the Pi sends its live status (IP, clock, Wi-Fi) with each question, and Samantha can act on it: [[note TEXT]] prints a note and [[led blink]] blinks the green light (four slow blinks, pin 42 driven directly). Answers come from the API credit with automatic model picking, and read-only Mac files from a shared folder. Next: more Pi actions (SD files, open an app), computer-use tools, hide the Console on boot, a separate Claude app, model and effort in the prompt, and a secure tunnel for Codex.
 
 **Then**
