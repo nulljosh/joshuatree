@@ -157,17 +157,36 @@ static unsigned put_dec(char *o, unsigned long v) {   /* decimal digits of v at 
     while (n) o[k++] = t[--n];
     return k;
 }
+/* The local model (llm.c): `llm PROMPT` at the ask> row, and Samantha's answer when the relay cannot be reached. */
+int llm_generate(const char *prompt, unsigned n, char *out, unsigned cap, unsigned *npos, unsigned *tps10);
+static void local(const char *q, unsigned n) {
+    static char out[2048];
+    unsigned npos, tps10;
+    kputs("llm: thinking\n");
+    int got = llm_generate(q, n, out, sizeof out, &npos, &tps10);
+    if (got == -1) { kputs("llm: no model in this build\n"); return; }
+    if (got == -2) { kputs("llm: out of memory\n"); return; }
+    if (got == -3) { kputs("llm: the model files are bad\n"); return; }
+    if (got == -4) { kputs("llm: prompt too long\n"); return; }
+    say_wrapped("", out, (unsigned)got);
+    kputs("llm: "); kdec(npos); kputs(" tokens, "); kdec(tps10 / 10); kputs("."); kdec(tps10 % 10); kputs(" tok/s\n");
+}
+int llm_present(void);
+static void fallback(const char *q, unsigned n) { if (llm_present()) local(q, n); }   /* silent in a build with no model */
+
 static void ask(const char *q, unsigned n) {
     static char body[2 * ASK_MAX + 192], reply[REPLY_MAX + 1];
     say_wrapped("ask> ", q, n);
     if (browse_command(q, n)) return;          /* browser.c: `browse URL` and `open N` never go to Claude */
-    if (!CLAUDE_TOKEN_LEN) { kputs("claude: no token\n"); return; }
+    if (n > 4 && q[0] == 'l' && q[1] == 'l' && q[2] == 'm' && q[3] == ' ') { local(q + 4, n - 4); return; }
+    if (!CLAUDE_TOKEN_LEN) { kputs("claude: no token\n"); fallback(q, n); return; }
     if (!net_get_gateway()) {                  /* no DHCP lease, or no card at all */
 #ifdef PI_BUILD
         kputs("claude: no network, Wi-Fi has not joined yet\n");
 #else
         kputs("claude: no network\n");
 #endif
+        fallback(q, n);                        /* the relay is out of reach: the local model answers */
         return;
     }
     unsigned b = 0;                            /* {"prompt":"...","session":"..."}: only " and \ need escaping in ASCII */
@@ -204,6 +223,7 @@ static void ask(const char *q, unsigned n) {
         int e = net_last_error();
         if (e == NET_ERR_CONNECT_TIMEOUT || e == NET_ERR_REPLY_TIMEOUT) kputs("claude: timeout\n");
         else { kputs("claude: error "); kputs(e == NET_ERR_NONE ? "busy" : net_error_name(e)); kputs("\n"); }
+        fallback(q, n);                        /* the relay never answered: the local model does */
         return;
     }
     reply[got] = 0;

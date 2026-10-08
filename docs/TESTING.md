@@ -197,6 +197,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Screenshot key: Ctrl+Shift+3 saves a real framebuffer BMP, numbered and visible in Files | `tools/checks/screenshot-check.py` | retry |
 | Drunk mode easter egg: horizontal sway applied to framebuffer rows | `tools/checks/drunk-mode-check.py` | retry |
 | ARM64: the aarch64 kernel boots under QEMU and prints over the UART (skips where the tools are missing) | `tools/checks/arm64-m0-check.py` | retry |
+| ARM64: a tiny local language model answers under QEMU (skips where the tools are missing) | `tools/checks/arm64-llm-check.py` | retry |
 | ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing) | `tools/checks/arm64-m1c-check.py` | retry |
 | ARM64 M2: the aarch64 kernel drives virtio disk, network, keyboard and mouse: a sector read back, a real ARP answer, key presses, moves and clicks (skips where the tools are missing) | `tools/checks/arm64-m2-check.py` | retry |
 | ARM64 console scrollback: Page Up, End and Home scroll the on-screen Console over the whole boot log, the title bar says which lines (skips where the tools are missing) | `tools/checks/arm64-console-scroll-check.py` | retry |
