@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (205 checks)
+## The suite (206 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -197,6 +197,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Screenshot key: Ctrl+Shift+3 saves a real framebuffer BMP, numbered and visible in Files | `tools/checks/screenshot-check.py` | retry |
 | Drunk mode easter egg: horizontal sway applied to framebuffer rows | `tools/checks/drunk-mode-check.py` | retry |
 | ARM64: the aarch64 kernel boots under QEMU and prints over the UART (skips where the tools are missing) | `tools/checks/arm64-m0-check.py` | retry |
+| ARM64: a tiny local language model answers under QEMU (skips where the tools are missing) | `tools/checks/arm64-llm-check.py` | retry |
 | ARM64 M1c: the aarch64 kernel draws a desktop into a ramfb framebuffer and QEMU screendump shows it (skips where the tools are missing) | `tools/checks/arm64-m1c-check.py` | retry |
 | ARM64 M2: the aarch64 kernel drives virtio disk, network, keyboard and mouse: a sector read back, a real ARP answer, key presses, moves and clicks (skips where the tools are missing) | `tools/checks/arm64-m2-check.py` | retry |
 | ARM64 console scrollback: Page Up, End and Home scroll the on-screen Console over the whole boot log, the title bar says which lines (skips where the tools are missing) | `tools/checks/arm64-console-scroll-check.py` | retry |
