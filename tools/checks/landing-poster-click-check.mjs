@@ -67,14 +67,18 @@ for (const [tag, vp, mobile] of [['desktop click', { width: 1440, height: 900 },
   await page.waitForTimeout(3000);   // her portrait paints a moment after face: hd=
 
   // A page left open: fill the serial log past its 128 KB trim through the emulator's own bus.
+  // emulator_bus is the CPU's half of v86's paired bus: its send() reaches the page-side listeners embed.js registered
+  // with add_listener, the same path a real serial byte takes. (emulator.bus.send would go the other way, to nobody.)
   const trimmed = await page.evaluate(() => {
-    const bus = window.__joshuaTreeEmulator && window.__joshuaTreeEmulator.bus;
+    const bus = window.__joshuaTreeEmulator && window.__joshuaTreeEmulator.emulator_bus;
     if (!bus) return null;
     const line = 'samface: draws=0 filler for the trim\n';
     for (let i = 0; i < 140000 / line.length; i++) for (let k = 0; k < line.length; k++) bus.send('serial0-output-byte', line.charCodeAt(k));
-    return { len: window.__jt.serial.length, samopen: /samopen/.test(window.__jt.serial) };
+    return { len: window.__jt.serial.length, hd: /face: hd=/.test(window.__jt.serial) };
   });
-  console.log(`  [${tag}] after filler: serial ${trimmed && trimmed.len} bytes, samopen still in the log: ${trimmed && trimmed.samopen}`);
+  console.log(`  [${tag}] after filler: serial ${trimmed && trimmed.len} bytes, "face: hd=" still in the log: ${trimmed && trimmed.hd}`);
+  // Without the trim this check proves nothing: the old code would lift at once too.
+  ok(trimmed && !trimmed.hd, `${tag}: the filler reached the 128 KB trim and cut "face: hd=" from the log`);
 
   if (mobile) await page.tap('#hero-poster'); else await page.click('#hero-poster');
   const fired = await page.evaluate(() => { const e = document.getElementById('hero-poster'); return e.hidden || e.classList.contains('waking'); });
