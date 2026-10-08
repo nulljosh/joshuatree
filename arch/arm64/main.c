@@ -1488,7 +1488,8 @@ void main(void) {
     if (!wifi_init()) menubar_wifi(0);
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); }
-    led_blink(1);   /* the address from the router, then the time */
+    /* led_blink(1) is off for now: the keyboard dropped right after the green light's firmware call on the real Pi.
+       Test build: turn it back on only after the keyboard stays up. */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
     if (usb_ok) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
