@@ -29,7 +29,7 @@ The short list. Two tracks run side by side, one helper each (Joshua agreed the 
 6. Tools on the Pi. Done: the Pi sends its live status (IP, clock, Wi-Fi) with each question, and Samantha can act on it: [[note TEXT]] prints a note and [[led blink]] blinks the green light (four slow blinks, pin 42 driven directly). Answers come from the API credit with automatic model picking, and read-only Mac files from a shared folder. Next: more Pi actions (SD files, open an app), computer-use tools, hide the Console on boot, a separate Claude app, model and effort in the prompt, and a secure tunnel for Codex.
 
 **Then**
-7. Admin and sudo. 8. SD card writes (MBR and FAT32). 9. The Claude app on ARM, the self-update loop and the fallback kernel.
+7. Admin and sudo. 8. SD card writes (MBR and FAT32). 9. The Claude app on ARM, the self-update loop and the fallback kernel. 10. The autonomy gap list, [docs/AUTONOMY.md](AUTONOMY.md): the pipeline from a Pi prompt to a flashed kernel, what is missing at each step, and the first three tasks.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, fewer get it onto a real board. Lean into that:
 - **Our own case.** 3D print the Neo case for the Pi 4 (CAD in `docs/hardware/`), film the first ugly print and every fix, then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
