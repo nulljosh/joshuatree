@@ -1,6 +1,6 @@
 # Blueprint: where the OS goes after 1.0
 
-> **Status:** the plan below was carried out. Apps run at ring 3 in their own address spaces; this page is kept for the reasoning. Current state: `docs/ARCHITECTURE.md`.
+> **Status:** the plan below was carried out. Apps now run at ring 3 (user mode), not inside the kernel; this page is kept for the reasoning. Current state: `docs/ARCHITECTURE.md`.
 
 Today every app runs inside the kernel. One buggy app can take the whole
 machine down. The next big step is to give each app its own protected
