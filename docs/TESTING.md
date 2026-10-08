@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (205 checks)
+## The suite (206 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -67,6 +67,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Tonchi lists the real courses live (Worker text from a stub), drills one with a score, bounds a hostile reply, and shows the Spanish deck for junk, a 500, an oversize body and no NIC | `tools/checks/ring3tonchi-live-check.py` | retry |
 | Fieldbook runs as a ring-3 process through the table-driven launcher: draws the ranked field list, moves the selection by keyboard and mouse through the real logic, closes both ways, crashes safely, desktop alive | `tools/checks/ring3fieldbook-check.py` | retry |
 | Clock runs as a ring-3 process through the table-driven launcher: draws the moving time, takes a timer through the real input logic, closes on Esc, desktop alive | `tools/checks/ring3clock-check.py` | retry |
+| Mines (Minesweeper) runs as a ring-3 process: a scripted game on the fixed first board is won by keyboard, closes on Esc, desktop alive | `tools/checks/ring3mines-check.py` | retry |
 | Movies plays a real AVI with sound at ring 3, audio-led: frame within one of the audio clock, drift under 100 ms, pause holds frame and sound (checked in the wav and on the framebuffer), seek by bar and keys, fullscreen, a damaged clip / non-AVI / over-cap file each show an error, closes on Esc, desktop alive | `tools/checks/movie-check.py` | retry |
 | Hamurapi (Hamurabi in the sources) is playable as a ring-3 program: draws its real title scene (sprite pixels equal the sheet), plays a classic reign by keyboard, a story reign with cards and choices and the robot's demo, and every year it logs equals a host replay of the same rules header, closes on Esc, desktop alive | `tools/checks/ring3hamurabi-check.py` | retry |
 | Windgate runs as a ring-3 process through the table-driven launcher: the circle grows on the in-breath and shrinks on the out-breath (measured off the framebuffer), all four presets by key and click log the web app's exact phases and seconds, pause holds the circle and the clock, closes on Esc, desktop alive | `tools/checks/ring3windgate-check.py` | retry |
@@ -255,6 +256,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Windgate | `tools/checks/ring3windgate-check.py` |
 | Panes | `tools/checks/panes-check.py` |
 | Claude | `tools/checks/arm64-claude-console-check.py`, `tools/checks/claude-relay-check.py`, `tools/checks/ring3claude-check.py` |
+| Mines | `tools/checks/ring3mines-check.py` |
 | Apps | `tools/checks/appclose-check.py`, `tools/checks/appsfolder-layout-check.py`, `tools/checks/appswitcher-check.py`, `tools/checks/apptop-check.py`, `tools/checks/mwdupetoolbar-check.sh`, `tools/checks/ring3crash-all-check.py`, `tools/checks/tourappcount-check.mjs`, `tools/checks/user-compress-check.py` |
 | Trash | none yet |
 
