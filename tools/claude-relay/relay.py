@@ -103,13 +103,16 @@ SAMANTHA = ("You are Samantha, the assistant inside Joshua Tree, a small operati
             "sentences, no markdown, no lists unless asked.")
 
 
+TOP_WORDS = ("architecture", "design a", "prove", "security", "tradeoff", "step by step plan")
 HARD_WORDS = ("fix", "bug", "why", "explain", "write", "design", "debug", "compare", "plan", "code")
 
 
 def pick_model(cfg, prompt):
     """A short, easy question goes to the cheap model; a long one or one that asks for real work goes to the strong one.
     Both names are flags, so there is nothing to watch: --api-model (cheap) and --api-model-hard."""
-    hard = len(prompt) > 280 or any(w in prompt.lower() for w in HARD_WORDS)
+    low = prompt.lower()
+    if any(w in low for w in TOP_WORDS): return cfg.api_model_top
+    hard = len(prompt) > 280 or any(w in low for w in HARD_WORDS)
     return cfg.api_model_hard if hard else cfg.api_model
 
 
@@ -293,6 +296,7 @@ def main(argv=None):
     ap.add_argument("--model", default="", help="optional --model for claude")
     ap.add_argument("--api-key-file", default="", help="answer with the Messages API as Samantha (Claude Platform credit) instead of claude -p")
     ap.add_argument("--api-model", default="claude-haiku-5-5", help="cheap model for short questions in --api-key-file mode")
+    ap.add_argument("--api-model-top", default="claude-opus-5-5", help="strongest model, for design, proofs and security questions")
     ap.add_argument("--api-model-hard", default="claude-sonnet-5-5", help="stronger model for long or hard questions")
     ap.add_argument("--tools", default=",".join(READ_ONLY_TOOLS),
                     help="comma-separated built-in tools (default Read,Grep,Glob: read-only)")
