@@ -21,8 +21,8 @@ NETPORT ?= 0
 # The IP stack is the i386 kernel's own drivers/net.c and drivers/http.c, built against drivers/nic.h (-DNET_NIC)
 # instead of the PC network cards. -mstrict-align: a real board's firmware may leave alignment checks on.
 NETCC = $(CC) -DNET_NIC -mstrict-align -I../../drivers -I../../kernel
-NETOBJ = net.o http.o ip.o tls.o $(BSSLOBJ)
-NETLD = net.o http.o ip.o tls.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
+NETOBJ = net.o http.o ip.o tls.o browser.o $(BSSLOBJ)
+NETLD = net.o http.o ip.o tls.o browser.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
 all: kernel8.elf
 net.o: ../../drivers/net.c ../../drivers/net.h ../../drivers/nic.h
 	$(NETCC) -c $< -o $@
@@ -44,6 +44,8 @@ bearssl/%.o: $(BSSL)/src/%.c $(BSSL)/src/inner.h $(BSSL)/src/config.h
 	$(BSSLCC) -c $< -o $@
 tls_ta.h: ../../tools/gen/tls-ta.py $(wildcard certs/*.pem) $(TLS_TA)
 	python3 ../../tools/gen/tls-ta.py $@ $(wildcard certs/*.pem) $(TLS_TA)
+browser.o: browser.c tls.h ../../drivers/net.h ../../drivers/http.h
+	$(NETCC) -c $< -o $@
 tls.o: tls.c tls.h tls_ta.h ../../drivers/net.h ../../drivers/http.h
 	$(NETCC) -I$(BSSL)/inc -I$(BSSL)/shim -I../../lib -DBUILD_UTC=$(shell date +%s)UL -c tls.c -o $@
 claude_cfg.h: claude_cfg.sh FORCE

@@ -123,7 +123,7 @@ int https_fetch(const char *host, unsigned short port, const void *request, unsi
 }
 
 /* The body of GET https://host/path, like drivers/http.c's http_get. Returns its length, -1 on any failure. */
-int https_get(const char *host, const char *path, char *body, unsigned max) {
+int https_get(const char *host, unsigned short port, const char *path, char *body, unsigned max) {
     static const char *const parts[] = { "GET ", 0, " HTTP/1.0\r\nHost: ", 0, "\r\nUser-Agent: JoshuaTree/1.0\r\nConnection: close\r\n\r\n" };
     char req[1024]; unsigned n = 0;
     last_status = 0;
@@ -132,7 +132,7 @@ int https_get(const char *host, const char *path, char *body, unsigned max) {
     unsigned long mark = heap_mark();
     char *raw = kmalloc(max + 2048);
     if (!raw) return -1;
-    int got = https_fetch(host, 443, req, n, raw, max + 2047), r = -1;
+    int got = https_fetch(host, port, req, n, raw, max + 2047), r = -1;
     if (got > 0) {
         raw[got] = 0;
         last_status = http_status_of(raw, (unsigned)got);
