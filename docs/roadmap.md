@@ -25,7 +25,7 @@ The short list. Two tracks run side by side, one helper each (Joshua agreed the 
 4. Apps on the Pi: the ring-3 apps rebuilt for ARM, Notes and Clock first.
 
 **Track B, the goal (Claude Code inside Joshua Tree on the Pi)**
-5. HTTPS on the Pi (BearSSL is already in `third_party/`), so a browser can load secure pages.
+5. HTTPS on the Pi. Saturday's job: the repo's BearSSL is only the crypto pieces (five files), so vendor the rest of its TLS client (handshake, certificates, records) from upstream, then a test that fetches one secure page. Only then a browser can load secure pages.
 6. Claude in the Console: type a question at the Pi's console and the answer prints, through the relay. Wi-Fi is in place, so this needs only the relay setup.
 
 **Then**
