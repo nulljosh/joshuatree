@@ -113,24 +113,59 @@ def pick_model(cfg, prompt):
     return cfg.api_model_hard if hard else cfg.api_model
 
 
+FILES_DIR = os.path.expanduser("~/pi-files")   # the only folder the model can look in
+TOOLS = [
+    {"name": "list_files", "description": "List the files in the shared folder.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "read_file", "description": "Read one text file from the shared folder by its plain name.",
+     "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
+]
+
+
+def run_tool(name, args):
+    """Read-only, one folder, plain file names only: no paths, no dot files, no links, 20000 characters at most."""
+    try:
+        files = sorted(f for f in os.listdir(FILES_DIR) if not f.startswith(".")
+                       and os.path.isfile(os.path.join(FILES_DIR, f)) and not os.path.islink(os.path.join(FILES_DIR, f)))
+    except OSError:
+        return "The shared folder does not exist."
+    if name == "list_files": return "\n".join(files) or "(empty)"
+    if name == "read_file":
+        n = args.get("name", "") if isinstance(args, dict) else ""
+        if n not in files: return "No such file. Use list_files first."
+        with open(os.path.join(FILES_DIR, n), errors="replace") as fh: return fh.read(20000)
+    return "Unknown tool."
+
+
+def api_call(cfg, key, model, messages):
+    body = json.dumps({"model": model, "max_tokens": 600, "system": SAMANTHA, "tools": TOOLS, "messages": messages}).encode()
+    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
+        "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    with urllib.request.urlopen(req, timeout=cfg.timeout) as r:
+        return json.loads(r.read().decode("utf-8", "replace"))
+
+
 def run_api(cfg, prompt):
-    """--api-key-file mode: one Messages API call, paid from the Claude Platform credit, not the Claude Code
-    plan. Stateless: each question stands alone. Returns (status, text)."""
+    """--api-key-file mode: the Messages API with two read-only file tools, paid from the Claude Platform credit, not
+    the Claude Code plan. Stateless: each question stands alone, at most 4 model turns. Returns (status, text)."""
     try:
         key = open(os.path.expanduser(cfg.api_key_file)).read().strip()
     except OSError:
         return 502, "The relay has no API key file."
     model = pick_model(cfg, prompt)
-    body = json.dumps({"model": model, "max_tokens": 400, "system": SAMANTHA,
-                       "messages": [{"role": "user", "content": prompt}]}).encode()
-    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
-        "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    messages = [{"role": "user", "content": prompt}]
     try:
-        with urllib.request.urlopen(req, timeout=cfg.timeout) as r:
-            d = json.loads(r.read().decode("utf-8", "replace"))
+        for _ in range(4):
+            d = api_call(cfg, key, model, messages)
+            blocks = d.get("content", [])
+            if d.get("stop_reason") != "tool_use": break
+            messages.append({"role": "assistant", "content": blocks})
+            results = [{"type": "tool_result", "tool_use_id": b["id"], "content": run_tool(b.get("name"), b.get("input"))}
+                       for b in blocks if b.get("type") == "tool_use"]
+            messages.append({"role": "user", "content": results})
     except urllib.error.HTTPError as e:
         return 502, "The API said %d." % e.code
-    except (urllib.error.URLError, OSError, ValueError):
+    except (urllib.error.URLError, OSError, ValueError, KeyError):
         return 502, "The API did not answer."
     text = "".join(b.get("text", "") for b in d.get("content", []) if isinstance(b, dict))
     return (200, "S -\n" + text) if text else (502, "The API returned no text.")
