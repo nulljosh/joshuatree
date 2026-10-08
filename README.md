@@ -25,7 +25,7 @@ It runs in your browser, in an emulator on a Mac, and on a real Raspberry Pi 4.
 
 ## On a Raspberry Pi
 
-It boots on a Pi 4 with a USB keyboard and an HDMI screen: the desktop, the dock, the console and the Claude prompt. Wi-Fi is the next thing to prove on real hardware. The steps to flash a card are in [the Pi guide](docs/RASPBERRY-PI.md); one script, `tools/flash-pi.sh`, does the work.
+It boots on a Pi 4 with a USB keyboard and an HDMI screen: the desktop, the dock, the console and the Claude prompt. It joins Wi-Fi, sets its clock from the network, and answers questions at the console through Samantha. The steps to flash a card are in [the Pi guide](docs/RASPBERRY-PI.md); one script, `tools/flash-pi.sh`, does the work.
 
 ## Boot it
 

@@ -55,7 +55,7 @@ Then in Joshua Tree: Settings > Assistant > Claude relay = 10.0.2.2:8765, Claude
 Python standard library only. tools/checks/claude-relay-check.py proves the rules above
 against a stub `claude`.
 """
-import argparse, hmac, http.server, json, os, re, signal, subprocess, sys, threading, time
+import argparse, hmac, http.server, json, os, re, signal, subprocess, sys, threading, time, urllib.request, urllib.error
 
 DEFAULT_PORT = 8765
 DEFAULT_TIMEOUT = 150          # seconds; the kernel waits up to 240 s (JT_HTTP_POST_TICKS_CLAUDE), so the relay's 504 lands first
@@ -98,6 +98,86 @@ def claude_argv(cfg, session):
     return argv
 
 
+SAMANTHA = ("You are Samantha, the assistant inside Joshua Tree, a small operating system built from scratch "
+            "that runs on a Raspberry Pi. You answer at its console. Be warm, plain and brief: a few short "
+            "sentences, no markdown, no lists unless asked. You can also act on the Pi: end your answer with an "
+            "action, alone on its own line, under 80 characters. [[note TEXT]] prints TEXT on the Pi's console. "
+            "[[led blink]] blinks the Pi's green light once. These two are the only actions; use one only when it "
+            "helps, never invent others.")
+
+
+TOP_WORDS = ("architecture", "design a", "prove", "security", "tradeoff", "step by step plan")
+HARD_WORDS = ("fix", "bug", "why", "explain", "write", "design", "debug", "compare", "plan", "code")
+
+
+def pick_model(cfg, prompt):
+    """A short, easy question goes to the cheap model; a long one or one that asks for real work goes to the strong one.
+    Both names are flags, so there is nothing to watch: --api-model (cheap) and --api-model-hard."""
+    low = prompt.lower()
+    if any(w in low for w in TOP_WORDS): return cfg.api_model_top
+    hard = len(prompt) > 280 or any(w in low for w in HARD_WORDS)
+    return cfg.api_model_hard if hard else cfg.api_model
+
+
+FILES_DIR = os.path.expanduser("~/pi-files")   # the only folder the model can look in
+TOOLS = [
+    {"name": "list_files", "description": "List the files in the shared folder.",
+     "input_schema": {"type": "object", "properties": {}}},
+    {"name": "read_file", "description": "Read one text file from the shared folder by its plain name.",
+     "input_schema": {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}},
+]
+
+
+def run_tool(name, args):
+    """Read-only, one folder, plain file names only: no paths, no dot files, no links, 20000 characters at most."""
+    try:
+        files = sorted(f for f in os.listdir(FILES_DIR) if not f.startswith(".")
+                       and os.path.isfile(os.path.join(FILES_DIR, f)) and not os.path.islink(os.path.join(FILES_DIR, f)))
+    except OSError:
+        return "The shared folder does not exist."
+    if name == "list_files": return "\n".join(files) or "(empty)"
+    if name == "read_file":
+        n = args.get("name", "") if isinstance(args, dict) else ""
+        if n not in files: return "No such file. Use list_files first."
+        with open(os.path.join(FILES_DIR, n), errors="replace") as fh: return fh.read(20000)
+    return "Unknown tool."
+
+
+def api_call(cfg, key, model, messages, system=SAMANTHA):
+    body = json.dumps({"model": model, "max_tokens": 600, "system": system, "tools": TOOLS, "messages": messages}).encode()
+    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
+        "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    with urllib.request.urlopen(req, timeout=cfg.timeout) as r:
+        return json.loads(r.read().decode("utf-8", "replace"))
+
+
+def run_api(cfg, prompt, pi=""):
+    """--api-key-file mode: the Messages API with two read-only file tools, paid from the Claude Platform credit, not
+    the Claude Code plan. Stateless: each question stands alone, at most 4 model turns. Returns (status, text)."""
+    try:
+        key = open(os.path.expanduser(cfg.api_key_file)).read().strip()
+    except OSError:
+        return 502, "The relay has no API key file."
+    model = pick_model(cfg, prompt)
+    system = SAMANTHA + (" Live status of the Pi you run on (ip, clock in UTC seconds since 1970, Wi-Fi bars): " + pi if pi else "")
+    messages = [{"role": "user", "content": prompt}]
+    try:
+        for _ in range(4):
+            d = api_call(cfg, key, model, messages, system)
+            blocks = d.get("content", [])
+            if d.get("stop_reason") != "tool_use": break
+            messages.append({"role": "assistant", "content": blocks})
+            results = [{"type": "tool_result", "tool_use_id": b["id"], "content": run_tool(b.get("name"), b.get("input"))}
+                       for b in blocks if b.get("type") == "tool_use"]
+            messages.append({"role": "user", "content": results})
+    except urllib.error.HTTPError as e:
+        return 502, "The API said %d." % e.code
+    except (urllib.error.URLError, OSError, ValueError, KeyError):
+        return 502, "The API did not answer."
+    text = "".join(b.get("text", "") for b in d.get("content", []) if isinstance(b, dict))
+    return (200, "S -\n" + text) if text else (502, "The API returned no text.")
+
+
 class Relay:
     def __init__(self, cfg, token):
         self.cfg = cfg
@@ -105,8 +185,9 @@ class Relay:
         self.busy = threading.Lock()
         self.sessions = set()   # session ids this relay has handed out; --resume only accepts these
 
-    def run_claude(self, prompt, session):
+    def run_claude(self, prompt, session, pi=""):
         """Returns (status, text). Kills claude's whole process group past the timeout."""
+        if self.cfg.api_key_file: return run_api(self.cfg, prompt, pi)
         p = subprocess.Popen(claude_argv(self.cfg, session), cwd=self.cfg.cwd, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
         try:
@@ -178,6 +259,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except ValueError: return self.reply(400, "Bad JSON.", n, t0)
             if not isinstance(d, dict): return self.reply(400, "Bad JSON.", n, t0)
             prompt, session = d.get("prompt", ""), d.get("session", "") or ""
+            pi = d.get("pi", "") if isinstance(d.get("pi", ""), str) else ""
+            self.pi_status = pi[:120]
             if not isinstance(prompt, str) or not isinstance(session, str): return self.reply(400, "Bad JSON.", n, t0)
         else:
             prompt = raw.decode("utf-8", "replace")
@@ -187,7 +270,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if session and (not UUID_RE.match(session) or session not in r.sessions):
             session = ""  # unknown or malformed: start fresh rather than pass it to --resume
         if not r.busy.acquire(blocking=False): return self.reply(429, "Claude is busy with another question.", n, t0)
-        try: status, text = r.run_claude(prompt, session)
+        try: status, text = r.run_claude(prompt, session, getattr(self, "pi_status", ""))
         finally: r.busy.release()
         return self.reply(status, text, n, t0)
 
@@ -214,6 +297,10 @@ def main(argv=None):
     ap.add_argument("--max-body", type=int, default=DEFAULT_MAX_BODY, help="largest request body, bytes")
     ap.add_argument("--claude", default="claude", help="the claude executable")
     ap.add_argument("--model", default="", help="optional --model for claude")
+    ap.add_argument("--api-key-file", default="", help="answer with the Messages API as Samantha (Claude Platform credit) instead of claude -p")
+    ap.add_argument("--api-model", default="claude-haiku-5-5", help="cheap model for short questions in --api-key-file mode")
+    ap.add_argument("--api-model-top", default="claude-opus-5-5", help="strongest model, for design, proofs and security questions")
+    ap.add_argument("--api-model-hard", default="claude-sonnet-5-5", help="stronger model for long or hard questions")
     ap.add_argument("--tools", default=",".join(READ_ONLY_TOOLS),
                     help="comma-separated built-in tools (default Read,Grep,Glob: read-only)")
     args = ap.parse_args(argv)

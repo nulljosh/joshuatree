@@ -26,7 +26,7 @@ The short list. Two tracks run side by side, one helper each (Joshua agreed the 
 
 **Track B, the goal (Claude Code inside Joshua Tree on the Pi)**
 5. HTTPS on the Pi. Saturday's job: the repo's BearSSL is only the crypto pieces (five files), so vendor the rest of its TLS client (handshake, certificates, records) from upstream, then a test that fetches one secure page. Only then a browser can load secure pages.
-6. Claude in the Console: type a question at the Pi's console and the answer prints, through the relay. Wi-Fi is in place, so this needs only the relay setup.
+6. Tools on the Pi. Done: the Pi sends its live status (IP, clock, Wi-Fi) with each question, and Samantha can act on it: [[note TEXT]] prints a note and [[led blink]] blinks the green light (four slow blinks, pin 42 driven directly). Answers come from the API credit with automatic model picking, and read-only Mac files from a shared folder. Next: more Pi actions (SD files, open an app), computer-use tools, hide the Console on boot, a separate Claude app, model and effort in the prompt, and a secure tunnel for Codex.
 
 **Then**
 7. Admin and sudo. 8. SD card writes (MBR and FAT32). 9. The Claude app on ARM, the self-update loop and the fallback kernel.
