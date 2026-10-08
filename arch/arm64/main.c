@@ -152,7 +152,11 @@ static unsigned long l3[512] __attribute__((aligned(4096)));   /* ...and one of 
 #else
 #define RAM_GIB 1
 #endif
-#define USER_BASE (((unsigned long)RAM_GIB << 30) + (64UL << 20))   /* the arena: one 2 MiB block, clear of the kernel image and the heap */
+/* The arena: one 2 MiB block, clear of the kernel image and the heap. 64 MiB into RAM unless the heap reaches that far
+   (an image with a language model baked in, llm_model.S), then the first 2 MiB boundary after the heap. */
+#define ARENA_LOW (((unsigned long)RAM_GIB << 30) + (64UL << 20))
+#define HEAP_END ((unsigned long)_heap_start + HEAP_SIZE)
+#define USER_BASE (HEAP_END <= ARENA_LOW ? ARENA_LOW : (HEAP_END + (2UL << 20) - 1) & ~((2UL << 20) - 1))
 #define UP_CODE  0x0000UL   /* EL0 code, read-only and executable */
 #define UP_STACK 0x2000UL   /* EL0 stack, one page; sp starts at its top */
 #define UP_KERN  0x4000UL   /* a page in the same arena that only EL1 may touch */

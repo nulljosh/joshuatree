@@ -66,3 +66,4 @@ arch/arm64/claude_cfg.h
 arch/arm64/claude_cfg.h.tmp
 arch/arm64/wifi_cfg.h
 arch/arm64/wifi_cfg.h.tmp
+arch/arm64/llm.cfg

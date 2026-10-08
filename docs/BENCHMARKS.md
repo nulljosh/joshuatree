@@ -31,3 +31,14 @@ Measured on the board on 2026-10-08 by asking Samantha to run the benchmark (the
 | clock set from the net | 8.7 s |
 
 memcpy copies a 256 KB block 64 times. alloc is one allocation plus one free, averaged over 20,000. The Wi-Fi time includes loading the chip's firmware and the WPA2 handshake; the clock time adds the DHCP lease and one HTTP request.
+
+## Local language model on ARM (QEMU)
+
+Measured on 2026-10-08 under QEMU's virt machine (cortex-a72, emulated on this Mac), not on a Pi. The `llm` command prints these numbers. Both checkpoints have random weights, so the text is nonsense. No real TinyStories weights have been downloaded or run yet.
+
+| Checkpoint | Positions | Speed (QEMU) |
+|---|---|---|
+| Random, shaped like stories15M (dim 288, 6 layers, 32000 tokens, 15.2M parameters, 60.8 MB) | 128 | 12.4 and 12.1 tok/s (two runs) |
+| Tiny random, from `tools/checks/arm64-llm-check.py` (dim 64, 2 layers) | until the model stops it | 581.6 to 981.3 tok/s over six runs |
+
+Speed counts every position the model ran, prompt included, divided by the time for the whole loop. Float32, one core, no hand-written NEON. The Pi 4 number is still to be measured.
