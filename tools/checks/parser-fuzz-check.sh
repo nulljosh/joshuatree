@@ -9,8 +9,8 @@
 # nasties (truncated/malformed status lines, unterminated JSON strings, a
 # boot sector with impossible geometry). No QEMU, seconds.
 #
-# drivers/net.c is deliberately NOT linked in: fuzz_parsers.c stubs its two
-# functions http.c actually calls (dns_resolve, tcp_get_timeout) so the
+# drivers/net.c is deliberately NOT linked in: fuzz_parsers.c stubs its
+# functions http.c actually calls (dns_resolve, net_get_dns, tcp_get_timeout) so the
 # real network/NIC state machine never has to run on the host; the stub
 # tcp_get_timeout hands the fuzzed bytes straight to http.c's own
 # status-line/header parsing, which is the real target. drivers/fat.c is

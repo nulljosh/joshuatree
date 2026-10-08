@@ -54,13 +54,15 @@ static void on_alarm(int sig) {
     siglongjmp(g_jmp, 1);
 }
 
-/* ---- host stand-ins for the two net.c functions http.c calls ----------- */
+/* ---- host stand-ins for the net.c functions http.c calls ----------- */
 
 int dns_resolve(const char *hostname, unsigned int dns_server_ip, unsigned int *ip_out) {
     (void)hostname; (void)dns_server_ip;
     *ip_out = 0x0A000202u;
     return 1;
 }
+
+unsigned int net_get_dns(void) { return 0; }   /* 0 = no DHCP DNS, http.c falls back to SLIRP's */
 
 /* fat_vfs_register (never called by this harness) references vfs_register;
    linked here only to satisfy that symbol, the same reasoning dns_resolve
