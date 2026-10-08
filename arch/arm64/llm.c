@@ -219,6 +219,8 @@ static int load(void) {   /* 0 ok, -1 no model, -2 out of memory, -3 the files d
     return 0;
 }
 
+int llm_present(void) { return llm_model_end - llm_model_start >= 28; }   /* a checkpoint was baked into this image */
+
 /* Runs the model on a prompt and writes the text (the prompt, then what it generated) to out.
    Returns the length written, or -1 no model, -2 out of memory, -3 bad model files, -4 prompt too long.
    *npos is how many positions ran, *tps10 the speed in tenths of a token per second, from the generic counter. */

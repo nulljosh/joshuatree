@@ -169,19 +169,21 @@ static void local(const char *q, unsigned n) {
     say_wrapped("", out, (unsigned)got);
     kputs("llm: "); kdec(npos); kputs(" tokens, "); kdec(tps10 / 10); kputs("."); kdec(tps10 % 10); kputs(" tok/s\n");
 }
+int llm_present(void);
+static void fallback(const char *q, unsigned n) { if (llm_present()) local(q, n); }   /* silent in a build with no model */
 
 static void ask(const char *q, unsigned n) {
     static char body[2 * ASK_MAX + 192], reply[REPLY_MAX + 1];
     say_wrapped("ask> ", q, n);
     if (n > 4 && q[0] == 'l' && q[1] == 'l' && q[2] == 'm' && q[3] == ' ') { local(q + 4, n - 4); return; }
-    if (!CLAUDE_TOKEN_LEN) { kputs("claude: no token\n"); local(q, n); return; }
+    if (!CLAUDE_TOKEN_LEN) { kputs("claude: no token\n"); fallback(q, n); return; }
     if (!net_get_gateway()) {                  /* no DHCP lease, or no card at all */
 #ifdef PI_BUILD
         kputs("claude: no network, Wi-Fi has not joined yet\n");
 #else
         kputs("claude: no network\n");
 #endif
-        local(q, n);                           /* the relay is out of reach: the local model answers */
+        fallback(q, n);                        /* the relay is out of reach: the local model answers */
         return;
     }
     unsigned b = 0;                            /* {"prompt":"...","session":"..."}: only " and \ need escaping in ASCII */
@@ -218,7 +220,7 @@ static void ask(const char *q, unsigned n) {
         int e = net_last_error();
         if (e == NET_ERR_CONNECT_TIMEOUT || e == NET_ERR_REPLY_TIMEOUT) kputs("claude: timeout\n");
         else { kputs("claude: error "); kputs(e == NET_ERR_NONE ? "busy" : net_error_name(e)); kputs("\n"); }
-        local(q, n);                           /* the relay never answered: the local model does */
+        fallback(q, n);                        /* the relay never answered: the local model does */
         return;
     }
     reply[got] = 0;

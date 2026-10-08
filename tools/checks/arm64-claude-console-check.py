@@ -218,6 +218,8 @@ try:
     try:
         b.type("hi"); b.key("ret")
         check("with no network card: claude: no network", b.wait_for("claude: no network", 10), b.uart()[-300:])
+        time.sleep(1)
+        check("... and with no model baked in, no local-model line follows", "llm:" not in b.uart(), b.uart()[-300:])
     finally:
         b.close()
     check("... and the relay was never asked", len(stub_calls()) == n0)

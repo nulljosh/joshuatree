@@ -12,7 +12,7 @@ pick wins by a clear margin, so float32 against float64 rounding cannot flip a t
      a plain question gets "claude: error ..." (the relay is unreachable) and then the local model's answer to it.
   2. no network card: a plain question prints "claude: no network", then the local model's answer. This build pads the
      checkpoint with 64 MiB of zeros, so the image and heap reach past the EL0 arena's usual place (RAM + 64 MiB):
-     without main.c moving the arena past the heap, the first allocation there is a translation fault.
+     without main.c moving the arena past the heap, this build stops booting right after "M1 vectors set".
   3. the LLM_BREAK build (llm.c without its rotary position step) must NOT match: the check can tell.
 Skips (exit 0) when clang's aarch64 target, ld.lld or qemu-system-aarch64 is missing.
 Usage: tools/checks/arm64-llm-check.py   (from the repo root)
