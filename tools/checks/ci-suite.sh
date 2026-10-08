@@ -235,6 +235,7 @@ retry|2|Portfolio tour starts even when his face frames are slow and the first E
 once |4|Landing demo on a phone: the chat bar raises the keyboard, typed letters reach Samantha once each and Send is Enter|node ./tools/checks/mobile-type-check.mjs
 once |0|Landing: Tech specs accordions hold every developer number collapsed, and the footer is a four-column directory of real links|node ./tools/checks/landing-specs-footer-check.mjs
 once |2|Landing demo: no keyboard trap, one main landmark, Full screen top right on phones|node ./tools/checks/landing-demo-ui-check.mjs
+once |2|Landing on a phone: exactly one visible "Message Samantha" input, focusable and typeable|node ./tools/checks/phone-one-input-check.mjs
 retry|6|App switcher: Ctrl+Tab cycles open windows and focuses the highlighted one|python3 ./tools/checks/appswitcher-check.py
 retry|7|Screenshot key: Ctrl+Shift+3 saves a real framebuffer BMP, numbered and visible in Files|python3 ./tools/checks/screenshot-check.py
 retry|3|Drunk mode easter egg: horizontal sway applied to framebuffer rows|python3 ./tools/checks/drunk-mode-check.py
