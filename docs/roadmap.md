@@ -19,18 +19,17 @@ The short list. Two tracks run side by side, one helper each (Joshua agreed the 
 **Done on the Pi (2026-10-07):** Wi-Fi joins and holds (WPA2 done on our side), DHCP and the network clock, the 12-hour clock and three-bar icon in the menu bar, the quiet console, the boot screen, and the green light blinks at boot (PR 456).
 
 **Track A, what you see on the Pi**
-1. Console scrollback (Page Up), so the Wi-Fi lines can be read from a photo.
-2. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing).
-3. A wired USB mouse on the Pi. Pointer and clicks work in QEMU; the Pi needs a mouse plugged straight into a port.
-4. Sound from the 3.5 mm jack: a boot chime first.
-5. Apps on the Pi: the ring-3 apps rebuilt for ARM, Notes and Clock first.
+1. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing).
+2. A wired USB mouse on the Pi. Pointer and clicks work in QEMU; the Pi needs a mouse plugged straight into a port.
+3. Sound from the 3.5 mm jack: a boot chime first.
+4. Apps on the Pi: the ring-3 apps rebuilt for ARM, Notes and Clock first.
 
 **Track B, the goal (Claude Code inside Joshua Tree on the Pi)**
-6. HTTPS on the Pi (BearSSL is already in `third_party/`), so a browser can load secure pages.
-7. Claude in the Console: type a question at the Pi's console and the answer prints, through the relay. Wi-Fi is in place, so this needs only the relay setup.
+5. HTTPS on the Pi (BearSSL is already in `third_party/`), so a browser can load secure pages.
+6. Claude in the Console: type a question at the Pi's console and the answer prints, through the relay. Wi-Fi is in place, so this needs only the relay setup.
 
 **Then**
-8. Admin and sudo. 9. SD card writes (MBR and FAT32). 10. The Claude app on ARM, the self-update loop and the fallback kernel.
+7. Admin and sudo. 8. SD card writes (MBR and FAT32). 9. The Claude app on ARM, the self-update loop and the fallback kernel.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, fewer get it onto a real board. Lean into that:
 - **Our own case.** 3D print the Neo case for the Pi 4 (CAD in `docs/hardware/`), film the first ugly print and every fix, then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
@@ -43,7 +42,7 @@ The short list. Two tracks run side by side, one helper each (Joshua agreed the 
 **A guide for everyone (Joshua 2026-10-07).** Documentation a person can read without knowing code: a plain-words user guide where every part of the OS, and every file behind it, is explained so a curious reader understands what each piece does and why it is there. Plan: the guide (docs/GUIDE, not written yet), one chapter per area (boot, memory, screen, apps, network, Wi-Fi, Samantha), each file in `docs/ARCHITECTURE.md` gets a one-line "in plain words" summary, and a check keeps the two in step. Written a chapter at a time, Wi-Fi first because it is freshest.
 
 **Then**
-8. Admin and sudo. 9. SD card writes (MBR and FAT32). 10. The Claude app on ARM, the self-update loop and the fallback kernel.
+7. Admin and sudo. 8. SD card writes (MBR and FAT32). 9. The Claude app on ARM, the self-update loop and the fallback kernel.
 
 ## Now (set 2026-10-03)
 Samantha runs the machine, and Joshua is the face of the web portfolio. The phone demo, the OS and the landing all work on a phone. Everything below is what is left, in the order to pick it up. Merge one PR at a time, green first. `docs/LOOP-HANDOFF.md` has the restart prompt and the exact state. Full items live in the themed sections further down.
