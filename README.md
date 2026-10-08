@@ -31,7 +31,8 @@ It boots on a Pi 4 with a USB keyboard and an HDMI screen: the desktop, the dock
 
 - **Browser:** [joshuatree.heyitsmejosh.com](https://joshuatree.heyitsmejosh.com)
 - **USB stick:** download the ISO from [Releases](https://github.com/nulljosh/joshuatree/releases). The release notes have the copy steps.
-- **Talk to her:** `make talk`, then hold **F2**. Needs real hardware and a mic (see `user/samantha.c`).
+- **Talk to her:** `make talk`, then hold **F2**. Needs real hardware and a mic (see `user/samantha.c`). She is built to answer out loud. Voice on the real Pi is not verified yet: no speaker has been tested there.
+- **Samantha on the Pi:** she answers questions at the Pi's console through a relay on your Mac that uses the Claude API. You need your own API key. It stays on the Mac and never goes on the Pi. See [the Pi guide](docs/RASPBERRY-PI.md).
 - **Ask Claude Code:** run the relay on your Mac and open Claude from the Launchpad. See [the Claude app](docs/CLAUDE-APP.md).
 
 ## Build it
@@ -52,11 +53,11 @@ Measured headless in QEMU by `tools/bench.sh`. The numbers move with the host.
 | Benchmark | Result |
 |---|---|
 | Boot to shell | 250 ms |
-| Alloc + free | 65 ns/op |
-| memcpy | 777 MB/s |
 | Context switch | 2797 ns/switch |
-| Disk read | 11443 KB/s |
+| memcpy | 777 MB/s |
 <!-- bench:end -->
+
+On the real Pi 4: memcpy 1109 MB/s, alloc 30 ns/op, Wi-Fi joined in 6.4 s; the full table is in docs/BENCHMARKS.md.
 
 ## Read more
 

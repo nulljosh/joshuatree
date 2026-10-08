@@ -1,6 +1,7 @@
 # Joshua Tree docs
 
 - [Our story](STORY.md): who we are, how it went, where it is going
+- [The book](BOOK.md): how it got here, in our words
 - [Soul](SOUL.md): the pro and the rebel, and seduce, ignore, vilify: the two ideas under every decision
 - [Launch drafts](LAUNCH.md): the Show HN post and the 30 second video script, not yet posted
 - [Decisions](DECISIONS.md): the standing answers (who can push, who it is for, when 3.0 is done)
@@ -12,6 +13,7 @@
 - [Portfolio mode](PORTFOLIO.md): how heyitsmejosh.com is a mode of the OS, with Joshua in place of Samantha
 - [Raspberry Pi guide](RASPBERRY-PI.md): what to buy, the serial cable, and how to boot it on a real Pi 4. [Printable Pi case](hardware/PI-CASE.md)
 - [ARM64 and the Raspberry Pi](ARM64.md): the second CPU target. It boots under QEMU today with a drawn desktop, a keyboard, mouse, disk and network, and its first program in user mode (`make -C arch/arm64 run`); the Pi 4B is the first real board
+- [Autonomy](AUTONOMY.md): the gap list between today's Pi and a computer that fixes itself, with the first three tasks
 - [The Claude app](CLAUDE-APP.md): Claude Code from inside Joshua Tree, through a relay on your Mac, and its security model
 - [Roadmap](roadmap.md): what is next
 

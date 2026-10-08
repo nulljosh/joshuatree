@@ -32,6 +32,20 @@ Jobs's marketing rule, used here as a design rule.
 
 **Vilify.** Name the thing we are against, not a competitor's name. The enemy is the computer you cannot read: the OS that is a hundred million lines nobody owns, the chip that needs a cloud login, the settings page with forty toggles. Every "we do not do that" in `DESIGN.md` is a small act of this.
 
+## Aspen, 1983
+
+In 1983 Jobs gave a talk at the Aspen design conference. Four of its points hold up here. The quotes are short phrases from the talk's auto captions, so treat them as close, not exact.
+
+**No magic, only layers.** He said computers are "really dumb", "exceptionally simple but they're really fast". Speed and layers of abstraction make them look like magic. Joshua Tree is built from the bottom up so every layer can be opened and explained. Nothing here should feel like a trick.
+
+**Liberal arts in the machine.** He described Apple as "injecting some liberal arts into these computers": proportional fonts, many fonts, pictures. That is the job `DESIGN.md` does. Type, icons and colour are not decoration; they are the point.
+
+**Closer to artists.** He said computer people are "a lot closer to artists" than the nerd picture suggests. That is the rebel half above.
+
+**Voice is the hard part.** He said "understanding language is much harder than understanding voice", because meaning depends on context. That is still true of Samantha. Turning sound into words is the easy part. Knowing what you meant is not, and we should say so plainly instead of pretending.
+
+Steve Jobs, Aspen, 1983.
+
 ## How it is enforced
 
 The pro half is enforced by the checks (`tools/checks/`), the 100 percent docs rule and the merge-on-green rule. The rebel half is enforced by what the repo refuses to contain: no vendored kernel, no libc, no analytics, no third-party runtime. `DESIGN.md` holds the never-do list; this page holds the why.
