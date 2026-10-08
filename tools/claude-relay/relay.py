@@ -103,6 +103,16 @@ SAMANTHA = ("You are Samantha, the assistant inside Joshua Tree, a small operati
             "sentences, no markdown, no lists unless asked.")
 
 
+HARD_WORDS = ("fix", "bug", "why", "explain", "write", "design", "debug", "compare", "plan", "code")
+
+
+def pick_model(cfg, prompt):
+    """A short, easy question goes to the cheap model; a long one or one that asks for real work goes to the strong one.
+    Both names are flags, so there is nothing to watch: --api-model (cheap) and --api-model-hard."""
+    hard = len(prompt) > 280 or any(w in prompt.lower() for w in HARD_WORDS)
+    return cfg.api_model_hard if hard else cfg.api_model
+
+
 def run_api(cfg, prompt):
     """--api-key-file mode: one Messages API call, paid from the Claude Platform credit, not the Claude Code
     plan. Stateless: each question stands alone. Returns (status, text)."""
@@ -110,7 +120,8 @@ def run_api(cfg, prompt):
         key = open(os.path.expanduser(cfg.api_key_file)).read().strip()
     except OSError:
         return 502, "The relay has no API key file."
-    body = json.dumps({"model": cfg.api_model, "max_tokens": 400, "system": SAMANTHA,
+    model = pick_model(cfg, prompt)
+    body = json.dumps({"model": model, "max_tokens": 400, "system": SAMANTHA,
                        "messages": [{"role": "user", "content": prompt}]}).encode()
     req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
         "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
@@ -243,7 +254,8 @@ def main(argv=None):
     ap.add_argument("--claude", default="claude", help="the claude executable")
     ap.add_argument("--model", default="", help="optional --model for claude")
     ap.add_argument("--api-key-file", default="", help="answer with the Messages API as Samantha (Claude Platform credit) instead of claude -p")
-    ap.add_argument("--api-model", default="claude-haiku-5-5", help="model for --api-key-file mode")
+    ap.add_argument("--api-model", default="claude-haiku-5-5", help="cheap model for short questions in --api-key-file mode")
+    ap.add_argument("--api-model-hard", default="claude-sonnet-5-5", help="stronger model for long or hard questions")
     ap.add_argument("--tools", default=",".join(READ_ONLY_TOOLS),
                     help="comma-separated built-in tools (default Read,Grep,Glob: read-only)")
     args = ap.parse_args(argv)
