@@ -180,3 +180,11 @@ Never start QEMU with `-d int` (or any `-d` trace) and `-D <file>` without a
 grew `/tmp/fbq.log` to 5GB, filled the disk and took down everything else on
 the Mac twice. `timeout 60 qemu-system-i386 ... -d int -D /tmp/x.log`, then
 delete the log when you're done reading it.
+
+## Pi, Samantha and the relay (2026-10-08)
+
+- A Pi build is flashed with `tools/flash-pi.sh`: only that dev card carries the Wi-Fi key and the relay token. Release builds carry neither, and the user brings their own key. Keys live outside the repo (`~/.config/joshuatree/`, `~/.claude-relay-token`); never print or commit one.
+- The relay (`tools/claude-relay/relay.py`, `--api-key-file`) answers the Pi's `ask>` question through the Messages API on the Claude Platform credit, picks Haiku, Sonnet or Opus by the question, and gives Samantha two read-only file tools for `~/pi-files`. The Pi sends its live status (IP, clock, Wi-Fi bars) with each question.
+- Samantha can act on the Pi by ending an answer with `[[note TEXT]]` or `[[led blink]]` on their own lines. `arch/arm64/ask.c` strips and runs them. Add an action in both places and in `tools/checks/pi-actions-check.py`.
+- The green light is GPIO 42 on the chip (Pi 4), driven by the GPIO registers, never at boot. Never wait on the `ticks` variable in `arch/arm64/main.c`: it stops counting early and a wait on it hangs the boot loop and kills the keyboard.
+- The SD card drops off the Mac for a second or two. Flash with a loop that waits for it, mounts it and writes in one step.
