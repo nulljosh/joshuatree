@@ -16,7 +16,7 @@ body = re.search(r"static void led_wait\(void\) \{.*?\n\}", src, re.S)
 code = re.sub(r"/\*.*?\*/", "", body.group(0), flags=re.S) if body else ""
 if "cntpct_el0" not in code or re.search(r"\bticks\b", code):
     print("FAIL: led_blink's wait is not on the generic counter"); ok = False
-if "led_blink(1)" not in open("arch/arm64/ask.c").read():
+if "led_blink(4)" not in open("arch/arm64/ask.c").read():
     print("FAIL: ask.c does not run [[led blink]]"); ok = False
 if ok:
     print("PASS: the green light is driven through GPIO registers (pin 42), never at boot, on a wait that ends")
