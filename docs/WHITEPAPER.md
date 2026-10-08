@@ -1,5 +1,7 @@
 # Joshua Tree Technical Whitepaper
 
+> **Written at 1.5.18 (September 2026).** The system has moved on: apps now run at ring 3, and there is an ARM64 build on a real Raspberry Pi. For the current picture see `docs/ARCHITECTURE.md`; this paper keeps the reasoning.
+
 **1.5.18** | September 2026
 
 An operating system, written from nothing. Not a Linux distribution. Not a
