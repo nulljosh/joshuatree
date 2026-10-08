@@ -22,14 +22,33 @@ NETPORT ?= 0
 # The IP stack is the i386 kernel's own drivers/net.c and drivers/http.c, built against drivers/nic.h (-DNET_NIC)
 # instead of the PC network cards. -mstrict-align: a real board's firmware may leave alignment checks on.
 NETCC = $(CC) -DNET_NIC -mstrict-align -I../../drivers -I../../kernel
-NETOBJ = net.o http.o ip.o
+NETOBJ = net.o http.o ip.o tls.o browser.o $(BSSLOBJ)
+NETLD = net.o http.o ip.o tls.o browser.o --start-lib $(BSSLOBJ) --end-lib   # lld pulls only the BearSSL objects tls.c uses
 all: kernel8.elf
 net.o: ../../drivers/net.c ../../drivers/net.h ../../drivers/nic.h
 	$(NETCC) -c $< -o $@
 http.o: ../../drivers/http.c ../../drivers/http.h
 	$(NETCC) -c $< -o $@
-ip.o: ip.c ../../drivers/nic.h
-	$(NETCC) -DNETPORT=$(NETPORT) -c $< -o $@
+# TLSPORT=n: at boot, GET https://10.0.2.2:n/hello and print the result (tools/checks/arm64-tls-check.py). 0 skips it.
+TLSPORT ?= 0
+ip.o: ip.c ../../drivers/nic.h tls.h
+	$(NETCC) -DNETPORT=$(NETPORT) -DTLSPORT=$(TLSPORT) -c $< -o $@
+# HTTPS (tls.c) over BearSSL. The trust anchors are generated from certs/*.pem (plus TLS_TA=extra.pem, the check's
+# throwaway server cert) into tls_ta.h, gitignored; nothing is fetched at run time. The whole vendored subset goes
+# behind --start-lib so the link pulls only what tls.c uses.
+TLS_TA ?=
+BSSL = ../../third_party/bearssl
+BSSLCC = $(CC) -mstrict-align -Wno-unused-parameter -DBR_INT128=0 -DBR_UMUL128=0 -I$(BSSL)/inc -I$(BSSL)/src -I$(BSSL)/shim -I../../lib
+BSSLOBJ = $(patsubst $(BSSL)/src/%.c,bearssl/%.o,$(wildcard $(BSSL)/src/*.c))
+bearssl/%.o: $(BSSL)/src/%.c $(BSSL)/src/inner.h $(BSSL)/src/config.h
+	@mkdir -p bearssl
+	$(BSSLCC) -c $< -o $@
+tls_ta.h: ../../tools/gen/tls-ta.py $(wildcard certs/*.pem) $(TLS_TA)
+	python3 ../../tools/gen/tls-ta.py $@ $(wildcard certs/*.pem) $(TLS_TA)
+browser.o: browser.c tls.h ../../drivers/net.h ../../drivers/http.h
+	$(NETCC) -c $< -o $@
+tls.o: tls.c tls.h tls_ta.h ../../drivers/net.h ../../drivers/http.h
+	$(NETCC) -I$(BSSL)/inc -I$(BSSL)/shim -I../../lib -DBUILD_UTC=$(shell date +%s)UL -c tls.c -o $@
 claude_cfg.h: claude_cfg.sh FORCE
 	@./claude_cfg.sh
 wifi_cfg.h: wifi_cfg.sh FORCE
@@ -101,11 +120,11 @@ pi-start.o: start.S
 pi-main.o: main.c $(MAINDEP)
 	$(CC) -DPI_BUILD -c $< -o $@
 kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
 pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(LLMOBJ)
 pi: wifi-fw kernel8.img
 # Variant builds: $(1) names the output, $(2) the main.c flags, $(3) extra objects, $(4) the vectors.S flags.
 define variant
@@ -115,12 +134,12 @@ $(1)-pi-main.o: main.c $(MAINDEP)
 	$(CC) -DPI_BUILD $(2) -c $$< -o $$@
 $(1)-vectors.o: vectors.S
 	$(CC) $(4) -c $$< -o $$@
-$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3)
-$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3)
+$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
+$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(3) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
 $(1)-kernel8.img: $(1)-pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETLD) $(3) $(LLMOBJ)
 endef
 fptest.o: fptest.c
 	$(FPCC) -c $< -o $@
@@ -144,6 +163,6 @@ run: kernel8.elf
 run-pi: kernel8.img
 	qemu-system-aarch64 -machine raspi4b -nographic -kernel kernel8.img
 clean:
-	rm -f *.o *.elf *.img claude_cfg.h claude_cfg.h.tmp llm.cfg
+	rm -rf *.o *.a *.elf *.img claude_cfg.h claude_cfg.h.tmp tls_ta.h bearssl llm.cfg
 FORCE:
 .PHONY: wifi-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest calctest

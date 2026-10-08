@@ -1563,6 +1563,7 @@ static void blk_probe(void) {}
 
 void net_stack_demo(void);
 void net_clock_sync(void);
+void tls_demo(void);
 void main(void) {
     unsigned long el;
     uart_init();
@@ -1577,6 +1578,7 @@ void main(void) {
     if (net_init()) net_arp_probe();
     if (blk_init()) blk_probe();
     net_stack_demo();   /* ip.c: DHCP and an HTTP POST through the shared stack, silent with no card */
+    tls_demo();         /* ip.c: the HTTPS proof, only in a TLSPORT= build */
     fb_diag();   /* last, so it is the newest line on the screen */
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }

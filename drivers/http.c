@@ -32,6 +32,24 @@ static int resolve_host(const char *host, u32 *ip) {
     if (parse_ipv4_literal(host, ip)) return 1;
     return dns_resolve(host, SLIRP_DNS_IP, ip);
 }
+int http_resolve_host(const char *host, unsigned int *ip) { return resolve_host(host, ip); }
+
+/* "HTTP/1.x NNN": the three digits after the first space, 0 when there is no status line. */
+int http_status_of(const char *raw, unsigned int total) {
+    if (total >= 12 && raw[0] == 'H' && raw[1] == 'T' && raw[2] == 'T' && raw[3] == 'P') {
+        unsigned int i = 4;
+        while (i < total && raw[i] != ' ' && raw[i] != '\r') i++;
+        if (i + 3 < total && raw[i] == ' ' && raw[i+1] >= '0' && raw[i+1] <= '9' && raw[i+2] >= '0' && raw[i+2] <= '9' && raw[i+3] >= '0' && raw[i+3] <= '9')
+            return (raw[i+1] - '0') * 100 + (raw[i+2] - '0') * 10 + (raw[i+3] - '0');
+    }
+    return 0;
+}
+/* Where the body starts (after the blank line), -1 when the headers never ended. */
+int http_body_start(const char *raw, unsigned int total) {
+    for (unsigned int i = 0; i + 3 < total; i++)
+        if (raw[i] == '\r' && raw[i + 1] == '\n' && raw[i + 2] == '\r' && raw[i + 3] == '\n') return (int)i + 4;
+    return -1;
+}
 
 /* Both http_get and http_post send a request buffer then strip the status
    line and headers down to just the body; shared here since that part is
@@ -68,21 +86,8 @@ static int http_body_only(u32 ip, unsigned short port, const char *req, u32 req_
     int total = tcp_get_timeout(ip, port, req, req_len, raw, raw_cap - 1, reply_timeout_ticks);
     if (total < 0) return -1;
 
-    /* "HTTP/1.x NNN": the three digits after the first space. */
-    if (total >= 12 && raw[0] == 'H' && raw[1] == 'T' && raw[2] == 'T' && raw[3] == 'P') {
-        int i = 4;
-        while (i < total && raw[i] != ' ' && raw[i] != '\r') i++;
-        if (i + 3 < total && raw[i] == ' ' && raw[i+1] >= '0' && raw[i+1] <= '9' && raw[i+2] >= '0' && raw[i+2] <= '9' && raw[i+3] >= '0' && raw[i+3] <= '9')
-            last_status = (raw[i+1] - '0') * 100 + (raw[i+2] - '0') * 10 + (raw[i+3] - '0');
-    }
-
-    int body_start = -1;
-    for (int i = 0; i + 3 < total; i++) {
-        if (raw[i] == '\r' && raw[i + 1] == '\n' && raw[i + 2] == '\r' && raw[i + 3] == '\n') {
-            body_start = i + 4;
-            break;
-        }
-    }
+    last_status = http_status_of(raw, (u32)total);
+    int body_start = http_body_start(raw, (u32)total);
     if (body_start < 0) return 0;
 
     u32 body_len = (u32)(total - body_start);
