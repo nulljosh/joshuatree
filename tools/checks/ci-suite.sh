@@ -72,6 +72,7 @@ retry|4|DHCP client leases real SLIRP config, DNS+HTTP still work, nodhcp keeps 
 retry|4|Benchmarks run and report every number|./tools/checks/bench-check.sh
 retry|6|ISO boot (CD-ROM and USB/raw-disk paths)|./tools/checks/iso-boot-check.sh
 once |5|PNG decoder, host harness|./tools/checks/png-host-check.sh
+once |5|Vendored BearSSL TLS 1.2 client subset compiles for aarch64 freestanding (static)|python3 ./tools/checks/bearssl-tls-check.py
 once |3|Embedded apps are stored compressed: every one inflates to its exact binary, damaged copies are refused (host harness)|python3 ./tools/checks/user-compress-check.py
 once |4|Hamurabi game rules: SplitMix64, golden checksum, invariants, i386-freestanding|./tools/checks/hamurabi-rules-check.sh
 once |5|Hamurabi sprite sheet header is current with art/hamurabi/sprites.png and sprites.json (static)|python3 ./tools/gen/gen_hamurabi_sprites.py --check

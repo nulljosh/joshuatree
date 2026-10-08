@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (199 checks)
+## The suite (200 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -27,6 +27,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Benchmarks run and report every number | `tools/checks/bench-check.sh` | retry |
 | ISO boot (CD-ROM and USB/raw-disk paths) | `tools/checks/iso-boot-check.sh` | retry |
 | PNG decoder, host harness | `tools/checks/png-host-check.sh` | once |
+| Vendored BearSSL TLS 1.2 client subset compiles for aarch64 freestanding (static) | `tools/checks/bearssl-tls-check.py` | once |
 | Embedded apps are stored compressed: every one inflates to its exact binary, damaged copies are refused (host harness) | `tools/checks/user-compress-check.py` | once |
 | Hamurabi game rules: SplitMix64, golden checksum, invariants, i386-freestanding | `tools/checks/hamurabi-rules-check.sh` | once |
 | Hamurabi sprite sheet header is current with art/hamurabi/sprites.png and sprites.json (static) | `python3 ./tools/gen/gen_hamurabi_sprites.py --check` | once |

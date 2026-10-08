@@ -59,7 +59,7 @@ Each layer only leans on the ones above it on this page, so it reads top to bott
 | `kernel/paging.c` | Decides which memory each program can see, and keeps programs out of the kernel's. |
 | `kernel/kheap.c` | `kmalloc` and `kfree`. A first-fit free list that grows one frame at a time. |
 | `lib/libc.c` | `memcpy`, `memset`, `strlen` and the other handful of primitives a freestanding kernel cannot live without. |
-| `third_party/bearssl/` | Vendored BearSSL 0.6 subset (MIT): implementation files (`src/sha2small.c`, `src/hmac.c`, `src/hmac_drbg.c`, `src/dec32be.c`, `src/enc32be.c`), public API headers (`inc/bearssl.h`, `bearssl_aead.h`, `bearssl_block.h`, `bearssl_ec.h`, `bearssl_hash.h`, `bearssl_hmac.h`, `bearssl_kdf.h`, `bearssl_pem.h`, `bearssl_prf.h`, `bearssl_rand.h`, `bearssl_rsa.h`, `bearssl_ssl.h`, `bearssl_x509.h`), an internal header (`src/inner.h`), a config header (`src/config.h`), and a one-line `string.h` shim onto `lib/libc.h`. Nothing modified; see its README.md. |
+| `third_party/bearssl/` | Vendored BearSSL subset (upstream 7bea48e, MIT): 90 flat `.c` files in `src/` for a minimal TLS 1.2 client (SSL client core and record layer, x509 minimal, i31 bignum, P-256, RSA/ECDSA verify, SHA-1/2, HMAC, HMAC_DRBG, constant-time AES, GCM, codec helpers), the full public header set in `inc/`, `src/inner.h`, `src/config.h`, and a one-line `string.h` shim onto `lib/libc.h`. The i386 kernel links only `src/sha2small.c`, `src/hmac.c`, `src/hmac_drbg.c`, `src/dec32be.c`, `src/enc32be.c` (entropy pool). Not yet wired into the Pi network code. File list: `tools/gen/bearssl-vendor.sh`; check: `tools/checks/bearssl-tls-check.py`. Nothing modified; see its README.md. |
 
 ### Tasks and user programs
 
