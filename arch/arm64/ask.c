@@ -220,7 +220,7 @@ static void ask(const char *q, unsigned n) {
     for (unsigned a = 0; a < act_n; a++) {     /* the answer first, then what she asked the Pi to do */
         if (act_kind[a] == ACT_NOTE) { char *t = act_text[a]; unsigned k = 0; while (t[k]) k++; say_wrapped("pi: ", t, k); }
 #ifdef PI_BUILD
-        else led_blink(1);
+        else led_blink(4);
 #else
         else kputs("pi: no green light on QEMU\n");
 #endif

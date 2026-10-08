@@ -439,10 +439,10 @@ int led_set(unsigned state) {
     REG(GPIO_BASE + (state ? 0x20 : 0x2C)) = 1u << 10;
     return 1;
 }
-static void led_wait(void) {   /* 150 ms on the generic counter: `ticks` stops at 3, so waiting on it never ends */
+static void led_wait(void) {   /* 300 ms on the generic counter: `ticks` stops at 3, so waiting on it never ends */
     unsigned long f, c, end;
     __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
-    end = c + (f ? f : 54000000) / 100 * 15;
+    end = c + (f ? f : 54000000) / 100 * 30;
     do __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); while (c < end);
 }
 void led_blink(unsigned times) {   /* Samantha's [[led blink]] (ask.c). Never at boot: the boot call left the USB keyboard dead */
