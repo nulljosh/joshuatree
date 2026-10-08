@@ -12,24 +12,22 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
 **Model tag on each item**: `[Haiku]` mechanical, known-correct shape, cheap. `[Sonnet]` general feature work with a clear pattern to follow. `[Fable]` anything where a subtly wrong answer still boots fine: privilege isolation, exact register/stack layouts, wire-protocol bytes, memory-model changes. `[Joshua]` a design or scope call, not code. Re-tag if an item turns out easier or harder once opened.
 
-## Top 10, right now (2026-10-06 night)
+## Top 10, right now (2026-10-08)
 
-The short list. Two tracks run side by side, one helper each (Joshua agreed the order on 2026-10-06). Everything below is the long list; done items moved to [roadmap-done.md](roadmap-done.md).
+The short list. Everything below is the long list; done items moved to [roadmap-done.md](roadmap-done.md).
 
-**Done on the Pi (2026-10-07):** Wi-Fi joins and holds (WPA2 done on our side), DHCP and the network clock, the 12-hour clock and three-bar icon in the menu bar, the quiet console, the boot screen, and the green light blinks once at boot (PR 459, in review).
+**Done on the Pi.** Wi-Fi joins with our own WPA2, the clock sets itself from the net, the menu bar shows the three bars and the clock, the console is quiet, the boot screen shows, the green light blinks once at boot, Samantha answers and acts ([[note TEXT]] prints a note, [[led blink]] blinks the light). First benchmark on the board: memcpy 1109 MB/s, alloc 30 ns, Wi-Fi joined in 6.4 s, clock set in 8.7 s.
 
-**Track A, what you see on the Pi**
-1. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing).
-2. A wired USB mouse on the Pi. Pointer and clicks work in QEMU; the Pi needs a mouse plugged straight into a port.
-3. Sound from the 3.5 mm jack: a boot chime first.
-4. Apps on the Pi: the ring-3 apps rebuilt for ARM, Notes and Clock first.
-
-**Track B, the goal (Claude Code inside Joshua Tree on the Pi)**
-5. HTTPS on the Pi. Saturday's job: the repo's BearSSL is only the crypto pieces (five files), so vendor the rest of its TLS client (handshake, certificates, records) from upstream, then a test that fetches one secure page. Only then a browser can load secure pages.
-6. Tools on the Pi. Done: the Pi sends its live status (IP, clock, Wi-Fi) with each question, and Samantha can act on it: [[note TEXT]] prints a note and [[led blink]] blinks the green light (four slow blinks, pin 42 driven directly). Answers come from the API credit with automatic model picking, and read-only Mac files from a shared folder. Next: more Pi actions (SD files, open an app), computer-use tools, hide the Console on boot, a separate Claude app, model and effort in the prompt, and a secure tunnel for Codex.
-
-**Then**
-7. Admin and sudo. 8. SD card writes (MBR and FAT32). 9. The Claude app on ARM, the self-update loop and the fallback kernel. 10. The autonomy gap list, [docs/AUTONOMY.md](AUTONOMY.md): the pipeline from a Pi prompt to a flashed kernel, what is missing at each step, and the first three tasks.
+**Next, in order**
+1. A wired USB mouse on the Pi. Pointer and clicks work in QEMU; check it on the board with a mouse in a port.
+2. Secure websites. Wire the vendored BearSSL TLS client into the Pi network code, then one test that fetches a secure page.
+3. Notes and Clock running on the Pi (the ring-3 apps rebuilt for ARM).
+4. A boot chime through the 3.5 mm jack.
+5. SD card writes (MBR and FAT32).
+6. The self-update path, with a fallback kernel.
+7. The admin tier (admin and sudo).
+8. The Claude app on ARM.
+9. The autonomy gap list, [docs/AUTONOMY.md](AUTONOMY.md): the path from a Pi prompt to a computer that fixes itself.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, fewer get it onto a real board. Lean into that:
 - **Our own case.** 3D print the Neo case for the Pi 4 (CAD in `docs/hardware/`), film the first ugly print and every fix, then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
@@ -40,9 +38,6 @@ The short list. Two tracks run side by side, one helper each (Joshua agreed the 
 - **Later, our own board.** A carrier board for the Raspberry Pi compute module with the mark on it, so the kit is ours down to the copper.
 
 **A guide for everyone (Joshua 2026-10-07).** Documentation a person can read without knowing code: a plain-words user guide where every part of the OS, and every file behind it, is explained so a curious reader understands what each piece does and why it is there. Plan: the guide (docs/GUIDE, not written yet), one chapter per area (boot, memory, screen, apps, network, Wi-Fi, Samantha), each file in `docs/ARCHITECTURE.md` gets a one-line "in plain words" summary, and a check keeps the two in step. Written a chapter at a time, Wi-Fi first because it is freshest.
-
-**Then**
-7. Admin and sudo. 8. SD card writes (MBR and FAT32). 9. The Claude app on ARM, the self-update loop and the fallback kernel.
 
 ## Now (set 2026-10-03)
 Samantha runs the machine, and Joshua is the face of the web portfolio. The phone demo, the OS and the landing all work on a phone. Everything below is what is left, in the order to pick it up. Merge one PR at a time, green first. `docs/LOOP-HANDOFF.md` has the restart prompt and the exact state. Full items live in the themed sections further down.
