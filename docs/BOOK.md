@@ -122,7 +122,7 @@ The second bug was not in the kernel at all. We had a helper script for the buil
 
 By the second week of October there were more tasks than hours. So the API credit started running agents overnight.
 
-The shape is strict, and strict is the point. Each agent gets one task from the roadmap and its own branch. It has a hard spending cap per run, five dollars when it started, and it cannot push. It edits, builds, and runs the checks on the Mac. In the morning there is a branch and a result. A person reviews and merges, with `gh pr merge --auto --squash`, only once the pull request is ready and the local run is green. Nobody force-pushes main. Nobody uses `--admin`. The rule is written in `docs/LOOP-HANDOFF.md` and it stays human on purpose.
+The shape is strict, and strict is the point. Each agent gets one task from the roadmap and its own branch. It has a hard spending cap per run, five dollars when it started, and it cannot push. It edits, builds, and runs the checks on the Mac. In the morning there is a branch and a result. A person reviews and merges, with `gh pr merge --auto --squash`, only once the pull request is ready and the local run is green. Nobody force-pushes main. I tried `--admin` once, to push a pull request past its checks, and the permission check stopped it. It was right. The rule is written in `docs/LOOP-HANDOFF.md` and it stays human on purpose.
 
 The first overnight run built Notes and Clock for the Pi, a mouse check, and the HTTPS wiring that stays off until it can be tested on the board. That was more than I expected and less than it sounds, since none of it had met the real hardware yet.
 
@@ -154,7 +154,7 @@ The retail check is the other one. Before anyone defends $500, price a Pi 4 kit 
 
 The list is short because the roadmap says no to more things than it says yes to.
 
-A wired USB mouse on the Pi. The pointer and clicks work in QEMU. My mouse is Bluetooth and there is no Bluetooth stack, so a wired one is on order.
+A wired USB mouse on the Pi. The pointer and clicks work in QEMU. My mouse is Bluetooth and there is no Bluetooth stack, so a wired one is next on the shopping list.
 
 Secure websites. The repo holds five BearSSL crypto files, not a TLS client. The rest gets vendored, and one test fetches a secure page. Until then the Pi talks to the relay over plain HTTP on the home network, and the token can be sniffed. The autonomy doc says so plainly.
 
