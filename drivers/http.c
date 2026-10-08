@@ -28,9 +28,12 @@ static int parse_ipv4_literal(const char *s, u32 *out) {
     return 1;
 }
 
+/* The DHCP lease's DNS server when there is one (on a real LAN 10.0.2.3 is nobody, and a query to it sits out the
+   whole wait); SLIRP's proxy otherwise, which is also what SLIRP's own DHCP hands out, so QEMU and v86 are unchanged. */
 static int resolve_host(const char *host, u32 *ip) {
     if (parse_ipv4_literal(host, ip)) return 1;
-    return dns_resolve(host, SLIRP_DNS_IP, ip);
+    u32 dns = net_get_dns();
+    return dns_resolve(host, dns ? dns : SLIRP_DNS_IP, ip);
 }
 int http_resolve_host(const char *host, unsigned int *ip) { return resolve_host(host, ip); }
 

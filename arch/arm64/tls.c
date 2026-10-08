@@ -19,7 +19,7 @@ void heap_release(unsigned long m);
 #ifndef BUILD_UTC
 #define BUILD_UTC 1790000000UL   /* the Makefile passes the real build time; this is 2026-09 */
 #endif
-#define TLS_READ_TICKS 1500      /* 15 s for one piece of the reply to show up */
+#define TLS_READ_TICKS 800       /* 8 s for one piece of the reply to show up; the browser promises an answer in about 10 */
 
 static br_ssl_client_context sc;
 static br_x509_minimal_context xc;
@@ -98,28 +98,47 @@ static void setup(const char *host) {
     br_sslio_init(&ioc, &sc.eng, sock_read, 0, sock_write, 0);
 }
 
-/* One request over TLS to host:port; the whole reply (status line, headers, body) lands in out. Returns its length,
-   or -1 with tls_last_error set: a BearSSL code (BR_ERR_X509_NOT_TRUSTED is 62, BR_ERR_X509_BAD_SERVER_NAME 56),
-   or TLS_ERR_DNS, TLS_ERR_CONNECT, TLS_ERR_TIMEOUT for the network under it. */
-int https_fetch(const char *host, unsigned short port, const void *request, unsigned request_len, char *out, unsigned max) {
-    unsigned ip; int total = -1;
+/* A fetch in three steps, so a caller can say where it got to (the Pi browser prints a line after each):
+   tls_connect opens TCP to ip:port and readies the engine for host; tls_handshake runs the handshake; tls_exchange sends
+   the request and reads the whole reply (status line, headers, body) into out, then closes. Each returns -1 with
+   tls_last_error set: a BearSSL code (BR_ERR_X509_NOT_TRUSTED is 62, BR_ERR_X509_BAD_SERVER_NAME 56), or TLS_ERR_CONNECT,
+   TLS_ERR_TIMEOUT for the network under it. */
+static int failed(void) {   /* -1, with the engine's error or the network's in tls_err; closes the connection */
+    int e = br_ssl_engine_last_error(&sc.eng);
+    tls_err = e != BR_ERR_OK && e != BR_ERR_IO ? e : net_last_error() == NET_ERR_REPLY_TIMEOUT ? TLS_ERR_TIMEOUT : TLS_ERR_CONNECT;
+    tcp_close();
+    return -1;
+}
+int tls_connect(unsigned ip, unsigned short port, const char *host) {
     tls_err = 0;
-    if (!http_resolve_host(host, &ip)) { tls_err = TLS_ERR_DNS; return -1; }
     if (!tcp_open(ip, port)) { tls_err = TLS_ERR_CONNECT; return -1; }
     setup(host);
-    if (br_sslio_write_all(&ioc, request, request_len) == 0 && br_sslio_flush(&ioc) == 0) {
-        total = 0;
-        while ((unsigned)total < max) {
-            int r = br_sslio_read(&ioc, out + total, max - (unsigned)total);
-            if (r <= 0) break;
-            total += r;
-        }
+    return 0;
+}
+int tls_handshake(void) {
+    return br_sslio_flush(&ioc) == 0 ? 0 : failed();   /* nothing to send yet, so flush runs the handshake and no more */
+}
+int tls_exchange(const void *request, unsigned request_len, char *out, unsigned max) {
+    if (br_sslio_write_all(&ioc, request, request_len) != 0 || br_sslio_flush(&ioc) != 0) return failed();
+    int total = 0;
+    while ((unsigned)total < max) {
+        int r = br_sslio_read(&ioc, out + total, max - (unsigned)total);
+        if (r <= 0) break;
+        total += r;
     }
     int e = br_ssl_engine_last_error(&sc.eng);
-    if (e != BR_ERR_OK && e != BR_ERR_IO) { tls_err = e; total = -1; }   /* BR_ERR_IO is the plain FIN an HTTP/1.0 server ends with */
-    else if (total <= 0 && net_last_error() == NET_ERR_REPLY_TIMEOUT) { tls_err = TLS_ERR_TIMEOUT; total = -1; }
+    if (e != BR_ERR_OK && e != BR_ERR_IO) return failed();   /* BR_ERR_IO is the plain FIN an HTTP/1.0 server ends with */
+    if (total <= 0 && net_last_error() == NET_ERR_REPLY_TIMEOUT) return failed();
     tcp_close();
     return total;
+}
+/* The three steps in one, after a DNS lookup of host (TLS_ERR_DNS when that fails). */
+int https_fetch(const char *host, unsigned short port, const void *request, unsigned request_len, char *out, unsigned max) {
+    unsigned ip;
+    tls_err = 0;
+    if (!http_resolve_host(host, &ip)) { tls_err = TLS_ERR_DNS; return -1; }
+    if (tls_connect(ip, port, host) < 0 || tls_handshake() < 0) return -1;
+    return tls_exchange(request, request_len, out, max);
 }
 
 /* The body of GET https://host/path, like drivers/http.c's http_get. Returns its length, -1 on any failure. */

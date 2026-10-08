@@ -17,7 +17,12 @@ void *kmalloc(unsigned int n);
 #define LINK_MAX 32
 #define RAW_MAX 65536       /* the reply, headers and all */
 #define TEXT_MAX 8192       /* the readable text: half the Console log, so a page never pushes itself out */
-#define HTTP_TICKS 2000     /* 20 s for a plain-http reply */
+/* Budgets in ticks (100 a second). A fetch answers or fails in about 10 s: 3 s for DNS, 4 s for the SYN-ACK, 8 s for
+   each piece of the reply (tls.c's own read budget matches). The stack's defaults are 20 s each, which on a real LAN
+   with a dead hop reads as "stuck on fetching". */
+#define DNS_TICKS 300
+#define CONNECT_TICKS 400
+#define HTTP_TICKS 800
 
 static char cur[URL_MAX];                 /* the page on screen, the base for relative links */
 static char links[LINK_MAX][URL_MAX];
@@ -78,22 +83,34 @@ static int fetch(const char *url, char *raw, unsigned max) {
         for (const char *p = " HTTP/1.0\r\nHost: "; *p; p++) req[n++] = *p;
         for (const char *p = u.host; *p; p++) req[n++] = *p;
         for (const char *p = "\r\nUser-Agent: JoshuaTree/1.0\r\nConnection: close\r\n\r\n"; *p; p++) req[n++] = *p;
-        int got;
-        if (u.tls) got = https_fetch(u.host, u.port, req, n, raw, max - 1);
-        else {
-            unsigned ip;
-            if (!http_resolve_host(u.host, &ip)) { kputs("browser: no such host\n"); return -1; }
-            got = tcp_get_timeout(ip, u.port, req, n, raw, max - 1, HTTP_TICKS);
-        }
+        /* Each stage prints one line when it passes, so a photo of the screen says where a failed fetch stopped. */
+        unsigned ip; int got;
+        if (!http_resolve_host(u.host, &ip)) { kputs(net_last_error() == NET_ERR_DNS_TIMEOUT ? "browser: dns timeout\n" : "browser: no such host\n"); return -1; }
+        kputs("browser: dns ok\n");
+        if (u.tls) {
+            if (tls_connect(ip, u.port, u.host) < 0) { kputs("browser: connect timeout\n"); return -1; }
+            kputs("browser: tcp ok\n");
+            if (tls_handshake() < 0) {
+                int e = tls_last_error();
+                kputs("browser: ");
+                if (e == TLS_ERR_TIMEOUT) kputs("tls timeout\n");
+                else if (e == TLS_ERR_CONNECT) kputs("tls connection closed\n");
+                else { kputs("tls error "); kdec((unsigned)e); kputs(e == 62 ? " (not trusted)\n" : e == 56 ? " (wrong host name)\n" : "\n"); }
+                return -1;
+            }
+            kputs("browser: tls ok\n");
+            got = tls_exchange(req, n, raw, max - 1);
+            if (got < 0 && tls_last_error() > 0) { kputs("browser: tls error "); kdec((unsigned)tls_last_error()); kputs("\n"); return -1; }
+        } else got = tcp_get_timeout(ip, u.port, req, n, raw, max - 1, HTTP_TICKS);
         if (got <= 0) {
-            kputs("browser: ");
-            if (u.tls && tls_last_error() > 0) { kputs("tls error "); kdec((unsigned)tls_last_error()); kputs(u.tls && tls_last_error() == 62 ? " (not trusted)\n" : "\n"); }
-            else if (u.tls && tls_last_error() == TLS_ERR_DNS) kputs("no such host\n");
-            else kputs(got == 0 ? "empty reply\n" : "no reply\n");
+            int e = net_last_error();
+            kputs(e == NET_ERR_CONNECT_TIMEOUT ? "browser: connect timeout\n" : e == NET_ERR_REPLY_TIMEOUT ? "browser: reply timeout\n" : got == 0 ? "browser: empty reply\n" : "browser: no reply\n");
             return -1;
         }
+        if (!u.tls) kputs("browser: tcp ok\n");
         raw[got] = 0;
         int status = http_status_of(raw, (unsigned)got);
+        kputs("browser: http "); kdec((unsigned)status); kputs("\n");
         if (status >= 300 && status < 400) {
             int b = http_body_start(raw, (unsigned)got); if (b < 0) b = got;
             unsigned i = 0, found = 0;
@@ -110,7 +127,6 @@ static int fetch(const char *url, char *raw, unsigned max) {
             scopy(cur, next, slen(next), URL_MAX);
             continue;
         }
-        if (status != 200) { kputs("browser: http "); kdec((unsigned)status); kputs("\n"); }
         return got;
     }
     return -1;
@@ -184,7 +200,10 @@ static void show(const char *url) {
     if (!raw || !text) { kputs("browser: out of memory\n"); heap_release(mark); return; }
     if (!net_get_gateway()) { kputs("browser: no network\n"); heap_release(mark); return; }
     kputs("browser: fetching\n");
+    unsigned dns_was = net_dns_wait_ticks, connect_was = net_connect_wait_ticks;
+    net_dns_wait_ticks = DNS_TICKS; net_connect_wait_ticks = CONNECT_TICKS;
     int got = fetch(url, raw, RAW_MAX);
+    net_dns_wait_ticks = dns_was; net_connect_wait_ticks = connect_was;
     if (got > 0) {
         int b = http_body_start(raw, (unsigned)got); if (b < 0) b = 0;
         unsigned n = to_text(raw + b, (unsigned)got - (unsigned)b, text, title);

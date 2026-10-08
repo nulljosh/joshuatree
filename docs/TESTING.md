@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (205 checks)
+## The suite (206 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -203,6 +203,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | ARM64 net: the shared IP stack (drivers/net.c, drivers/http.c) on virtio-net leases 10.0.2.15 by DHCP and POSTs to a host server, 200 and the exact reply length (skips where the tools are missing) | `tools/checks/arm64-net-check.py` | retry |
 | ARM64 HTTPS: a TLS 1.2 page from a host server with a throwaway certificate built in as a trust anchor, refused (tls FAIL 62) when it is left out (skips where the tools are missing) | `tools/checks/arm64-tls-check.py` | retry |
 | ARM64 browser: browse URL typed at the ask> row reads an HTTPS page through a redirect, prints readable text with numbered links, open N follows one, a redirect loop stops (skips where the tools are missing) | `tools/checks/arm64-browser-check.py` | retry |
+| ARM64 browser, dead server: a host that accepts and never answers, and a closed port, each end in one timeout line (tls, reply, connect) within 12 s with dns ok and tcp ok printed first, and the prompt still answers (skips where the tools are missing) | `tools/checks/arm64-browser-deadserver-check.py` | retry |
 | ARM64 green light: the Pi's activity LED is blinked through the firmware mailbox (pin 42), never at boot, on a wait that ends (static, no hardware) | `tools/checks/arm64-led-check.py` | once |
 | Pi actions: an answer's [[note TEXT]] and [[led blink]] lines are stripped and run by ask.c's real parser (compiled on the host), anything else stays as text, and the relay prompt names both | `tools/checks/pi-actions-check.py` | once |
 | ARM64 Claude in the Console: typed at the ask> row, a question reaches the real relay (stub claude, 127.0.0.1) over virtio-net and the answer prints in 53-column lines; wrong token -401, no network and no token each say so (skips where the tools are missing) | `tools/checks/arm64-claude-console-check.py` | retry |
