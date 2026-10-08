@@ -5,7 +5,11 @@
 #include "../../drivers/nic.h"
 #include "../../drivers/net.h"
 #include "../../drivers/http.h"
+#include "tls.h"
 
+#ifndef TLSPORT
+#define TLSPORT 0
+#endif
 #ifndef NETPORT
 #define NETPORT 0   /* the host port for the boot POST; 0 skips it (make -C arch/arm64 NETPORT=8080 turns it on) */
 #endif
@@ -50,6 +54,24 @@ void net_stack_demo(void) {
     }
     kputs("net http "); kdec((unsigned)http_last_status());
     kputs(" "); kdec((unsigned)got); kputs(" bytes\n");
+}
+
+/* The HTTPS proof (tools/checks/arm64-tls-check.py): built with TLSPORT=n, GET https://10.0.2.2:n/hello through
+   tls.c and print `tls 200 N bytes`, or `tls FAIL e` with e from tls_last_error (62: certificate not trusted). */
+void tls_demo(void) {
+    if (!TLSPORT || !net_get_gateway()) return;
+    static char body[2048], req[128];
+    unsigned n = 0;
+    for (const char *p = "GET /hello HTTP/1.0\r\nHost: 10.0.2.2\r\nConnection: close\r\n\r\n"; *p; p++) req[n++] = *p;
+    int got = https_fetch("10.0.2.2", TLSPORT, req, n, body, sizeof body - 1);
+    if (got < 0) {
+        int e = tls_last_error();
+        kputs("tls FAIL "); if (e < 0) { kputs("-"); e = -e; } kdec((unsigned)e); kputs("\n");
+        return;
+    }
+    int b = http_body_start(body, (unsigned)got);
+    kputs("tls "); kdec((unsigned)http_status_of(body, (unsigned)got));
+    kputs(" "); kdec((unsigned)(b < 0 ? 0 : got - b)); kputs(" bytes\n");
 }
 
 /* ---- The clock. The Pi has no battery clock, so the time comes from the network once there is one: a plain HTTP HEAD

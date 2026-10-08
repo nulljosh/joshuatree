@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (201 checks)
+## The suite (205 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -27,6 +27,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Benchmarks run and report every number | `tools/checks/bench-check.sh` | retry |
 | ISO boot (CD-ROM and USB/raw-disk paths) | `tools/checks/iso-boot-check.sh` | retry |
 | PNG decoder, host harness | `tools/checks/png-host-check.sh` | once |
+| Vendored BearSSL TLS 1.2 client subset compiles for aarch64 freestanding (static) | `tools/checks/bearssl-tls-check.py` | once |
 | Embedded apps are stored compressed: every one inflates to its exact binary, damaged copies are refused (host harness) | `tools/checks/user-compress-check.py` | once |
 | Hamurabi game rules: SplitMix64, golden checksum, invariants, i386-freestanding | `tools/checks/hamurabi-rules-check.sh` | once |
 | Hamurabi sprite sheet header is current with art/hamurabi/sprites.png and sprites.json (static) | `python3 ./tools/gen/gen_hamurabi_sprites.py --check` | once |
@@ -200,6 +201,8 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | ARM64 M2: the aarch64 kernel drives virtio disk, network, keyboard and mouse: a sector read back, a real ARP answer, key presses, moves and clicks (skips where the tools are missing) | `tools/checks/arm64-m2-check.py` | retry |
 | ARM64 console scrollback: Page Up, End and Home scroll the on-screen Console over the whole boot log, the title bar says which lines (skips where the tools are missing) | `tools/checks/arm64-console-scroll-check.py` | retry |
 | ARM64 net: the shared IP stack (drivers/net.c, drivers/http.c) on virtio-net leases 10.0.2.15 by DHCP and POSTs to a host server, 200 and the exact reply length (skips where the tools are missing) | `tools/checks/arm64-net-check.py` | retry |
+| ARM64 HTTPS: a TLS 1.2 page from a host server with a throwaway certificate built in as a trust anchor, refused (tls FAIL 62) when it is left out (skips where the tools are missing) | `tools/checks/arm64-tls-check.py` | retry |
+| ARM64 browser: browse URL typed at the ask> row reads an HTTPS page through a redirect, prints readable text with numbered links, open N follows one, a redirect loop stops (skips where the tools are missing) | `tools/checks/arm64-browser-check.py` | retry |
 | ARM64 green light: the Pi's activity LED is blinked through the firmware mailbox (pin 42), never at boot, on a wait that ends (static, no hardware) | `tools/checks/arm64-led-check.py` | once |
 | Pi actions: an answer's [[note TEXT]] and [[led blink]] lines are stripped and run by ask.c's real parser (compiled on the host), anything else stays as text, and the relay prompt names both | `tools/checks/pi-actions-check.py` | once |
 | ARM64 Claude in the Console: typed at the ask> row, a question reaches the real relay (stub claude, 127.0.0.1) over virtio-net and the answer prints in 53-column lines; wrong token -401, no network and no token each say so (skips where the tools are missing) | `tools/checks/arm64-claude-console-check.py` | retry |
@@ -209,6 +212,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | ARM64 M4 Wi-Fi: the Pi image powers the chip, finds no SDIO card under QEMU, prints wifi FAIL cmd5 and the boot carries on, with and without the firmware files (skips where the tools are missing) | `tools/checks/arm64-wifi-check.py` | retry |
 | ARM64 M4 USB: the aarch64 kernel finds an xHCI controller behind a PCIe root port, enumerates a hub, a keyboard behind it and a mouse, and reads key presses, moves and clicks (skips where the tools are missing) | `tools/checks/arm64-usb-check.py` | retry |
 | ARM64 mouse: a USB mouse behind a hub moves the shared arrow over the ARM desktop, the dock label follows it and leaves no ghost, the Console's close button and a dock click work, a hot-plugged mouse moves it, and the scale-2 arrow at 1080p (skips where the tools are missing) | `tools/checks/arm64-mouse-check.py` | retry |
+| ARM64 Calculator: calc.c gets a table of 42 sums right on the host (sin(30deg)=0.5, 5!=120, 2^10=1024, 1/0 is an error), its keypad's memory and Deg keys work, and the calctest build types four sums at boot with the same answers on the UART and the window in a screendump (QEMU part skips where the tools are missing) | `tools/checks/arm64-calc-check.py` | retry |
 | ARM64 crash screen: an unexpected EL1 fault prints class, ESR, FAR, ELR and the last console lines on the UART, draws them as a panel (QEMU screendump on virt and the Pi 4B model) and halts quietly (skips where the tools are missing) | `tools/checks/arm64-crash-check.py` | retry |
 | ARM64 FP state: q0-q31, FPCR and FPSR survive timer interrupts whose handler wipes them, and the build without the save fails the same test (skips where the tools are missing) | `tools/checks/arm64-fp-check.py` | retry |
 | ARM64 out of memory: a full heap prints oom fb or oom text and the kernel carries on (no screen, or the VGA fallback font) on virt and the Pi 4B model (skips where the tools are missing) | `tools/checks/arm64-oom-check.py` | retry |
@@ -238,7 +242,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Hikko | `tools/checks/ring3hikko-check.py`, `tools/checks/ring3hikko-live-check.py` |
 | Fieldbook | `tools/checks/ring3fieldbook-check.py` |
 | Contacts | `tools/checks/ring3contacts-check.py` |
-| Calculator | `tools/checks/ring3calc-check.py` |
+| Calculator | `tools/checks/arm64-calc-check.py`, `tools/checks/ring3calc-check.py` |
 | Stocks | `tools/checks/ring3stocks-list-check.py`, `tools/checks/stocks-aa-check.py`, `tools/checks/stocks-dock-check.py`, `tools/checks/stocks-live-check.mjs` |
 | Search | `tools/checks/ring3search-check.py` |
 | Epiphany | `tools/checks/epiphany-cmdbar-check.py`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3epiphany-check.py` |

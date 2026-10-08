@@ -964,6 +964,67 @@ static void console_open(void) {
     uart_puts("console open\n");
     cur_show();
 }
+/* The Calculator (calc.c holds the sums and the keypad; this draws it). One window at a time: it takes the Console's
+   place, so the Console's saved wallpaper is what closing it puts back, and the Console then comes back. The Apps
+   tile or F2 opens it; a click on a key or typing works it; Esc or the red dot closes it. */
+int calc_keys(int *cols);
+const char *calc_key(int i);
+int calc_press(const char *k);
+int calc_type(int ch);
+const char *calc_input(void);
+const char *calc_output(void);
+int calc_flags(void);   /* bit 0 scientific, bit 1 degrees, bit 2 memory held */
+static int calc_live;
+#define CALC_TOP 36      /* the display's top, under the title band */
+#define CALC_DISP 46     /* the display's height */
+static void calc_cell(int i, int *x, int *y, int *w, int *h) {   /* key i's box on the logical grid */
+    int cols, n = calc_keys(&cols), rows = (n + cols - 1) / cols, gap = 4;
+    int ax = win_lx + 12, ay = win_ly + CALC_TOP + CALC_DISP + 8, aw = win_lw - 24, ah = win_ly + win_lh - 10 - ay;
+    *w = (aw - gap * (cols - 1)) / cols; *h = (ah - gap * (rows - 1)) / rows;
+    *x = ax + (i % cols) * (*w + gap); *y = ay + (i / cols) * (*h + gap);
+}
+static void calc_paint(void) {
+    int s = (int)window_scale(), x0 = win_lx + 12, w0 = win_lw - 24, y0 = win_ly + CALC_TOP, f = calc_flags();
+    cur_hide();
+    gui_draw_window_frame(win_lx, win_ly, win_lw, win_lh, "Calculator");
+    window_rect(x0, y0, w0, CALC_DISP, 0x00DDD8CE);
+    window_rect(x0 + 1, y0 + 1, w0 - 2, CALC_DISP - 2, 0x00FFFFFF);
+    const char *in = calc_input(), *out = calc_output();
+    while (*in && gui_text_width(in) > w0 - 70) in++;   /* keep the end of a long sum in view */
+    gui_text(*in ? in : "Type or click a sum", x0 + 6, y0 + 3, *in ? 0x001C1C1E : 0x0075726E);
+    gui_text(f & 1 ? (f & 2 ? "DEG" : "RAD") : "", x0 + w0 - 34, y0 + 3, 0x0075726E);
+    if (f & 4) gui_text("M", x0 + w0 - 50, y0 + 3, 0x00b5502c);
+    if (*out) gui_icon_text(out, x0 + w0 - 8 - gui_icon_text_w(out, 1, s), y0 + 20, 1, s, *out == 'E' ? 0x00b5502c : 0x001C1C1E);
+    int cols, n = calc_keys(&cols);
+    for (int i = 0; i < n; i++) {
+        const char *k = calc_key(i);
+        int x, y, w, h, eq = k[0] == '=', op = !k[1] && (k[0] == '+' || k[0] == '-' || k[0] == '*' || k[0] == '/');
+        calc_cell(i, &x, &y, &w, &h);
+        window_rect(x, y, w, h, eq ? 0x00b5502c : 0x00DDD8CE);
+        if (!eq) window_rect(x + 1, y + 1, w - 2, h - 2, op ? 0x00EFEBE4 : 0x00FFFFFF);
+        gui_text(k, x + (w - gui_text_width(k)) / 2, y + (h - 16) / 2, eq ? 0x00FFFFFF : 0x001C1C1E);
+    }
+    fb_flush(win_lx * s, win_ly * s, win_lw * s, win_lh * s);
+    cur_show();
+}
+static void calc_open(void) {
+    if (calc_live || !con_under) return;   /* no saved wallpaper (a full heap): nothing to close it back to */
+    console_close();
+    calc_live = 1;
+    calc_paint();
+    uart_puts("calc open\n");
+}
+static void calc_close(void) {
+    if (!calc_live) return;
+    calc_live = 0;
+    con_live = 1;   /* console_close puts the Console's saved wallpaper back over the same rectangle */
+    console_close();
+    console_open();
+}
+static void calc_did(int ran) {   /* after a key: redraw, and log a finished sum on the UART (what arm64-calc-check.py reads) */
+    calc_paint();
+    if (ran) { con_quiet = 1; uart_puts("calc: "); uart_puts(calc_input()); uart_puts(" = "); uart_puts(calc_output()); uart_putc('\n'); }
+}
 static void pointer_moved(void) {   /* one report done: the arrow to its new place, the dock's label to the slot under it */
     if (!fb) return;
     int s = (int)window_scale(), slot = gui_dock_hit_test((int)mouse_x / s, (int)mouse_y / s);
@@ -976,7 +1037,16 @@ static void pointer_click(void) {   /* the left button went down */
     if (!fb) return;
     int s = (int)window_scale(), lx = (int)mouse_x / s, ly = (int)mouse_y / s, slot = gui_dock_hit_test(lx, ly);
     int dx = lx - (win_lx + 24), dy = ly - (win_ly + 16);   /* the close button: gui_draw_window_frame's red dot, radius 7 */
-    if (slot >= 0) {
+    if (slot == 0) calc_open();   /* Apps: the Calculator, the one app on ARM so far */
+    else if (calc_live && slot < 0) {
+        if (dx * dx + dy * dy <= 8 * 8) { calc_close(); return; }
+        int cols, n = calc_keys(&cols);
+        for (int i = 0; i < n; i++) {
+            int x, y, w, h; calc_cell(i, &x, &y, &w, &h);
+            if (lx >= x && lx < x + w && ly >= y && ly < y + h) { calc_did(calc_press(calc_key(i))); return; }
+        }
+    } else if (slot >= 0) {
+        calc_close();
         console_open();
         uart_puts("dock "); uart_puts(dock_names[slot]); uart_puts(": not on ARM yet\n");
     } else if (con_live && dx * dx + dy * dy <= 8 * 8) console_close();
@@ -1126,6 +1196,12 @@ static void fb_init(void) {
     unsigned w0 = fb[(unsigned)sc(300) * fb_pitch + 50], w1 = fb[(unsigned)(H - sc(8)) * fb_pitch + fb_w - 50], w2 = fb[(unsigned)(mb + sc(40)) * fb_pitch + fb_w - 50];
     ok = ok && (!wall_ok || (w0 != 0x00203040 && (w0 != w1 || w1 != w2)));   /* a full heap leaves the flat fill, which is the fallback working */
     uart_puts(ok ? "M1c fb ok\n" : "M1c fb FAIL\n");
+#ifdef CALC_TEST   /* the calctest build: the Calculator open at boot, four sums typed into it (arm64-calc-check.py) */
+    calc_open();
+    static const char *const sums[] = {"sin(30deg)", "5!", "2^10", "1/0"};
+    for (unsigned i = 0; i < 4; i++) { calc_press("C"); for (const char *p = sums[i]; *p; p++) calc_type(*p); calc_did(calc_type('\n')); }
+    calc_press("Sci"); calc_press("M+"); calc_did(0);   /* end on the scientific pad, memory held, for the screendump */
+#endif
 }
 /* One line that turns a photo of the screen into a measurement: where the firmware really put the kernel, the monitor
    size it reported, the buffer we got and its pitch in bytes, and the console font's self-test ('M': width x height,
@@ -1180,6 +1256,7 @@ static void m1_selftest(void) {
    translates its reports into them). The pointer starts mid-screen; a tablet sets it, a mouse moves it. ---- */
 struct input_event { unsigned short type, code; unsigned value; };
 int ask_key(unsigned code, unsigned value);   /* ask.c: the ask> line editor */
+int ask_char(unsigned code);                  /* ask.c: a key code as the character it types, Shift included */
 void ask_poll(void);
 static void input_event(struct input_event e) {
     if (e.type == 1 && e.code >= 272 && e.code <= 274) {                                                   /* BTN_LEFT, RIGHT, MIDDLE */
@@ -1188,6 +1265,16 @@ static void input_event(struct input_event e) {
         if (e.code == 272 && e.value) pointer_click();
         return;
     }
+    if (e.type == 1 && e.value && (e.code == 60 || (calc_live && e.code != 42 && e.code != 54))) {        /* F2, or a key for the open Calculator (Shift still goes to ask.c) */
+        con_quiet = 1;
+        uart_puts("key "); uart_dec(e.code); uart_puts(" down\n");
+        if (e.code == 60) { if (calc_live) calc_close(); else calc_open(); return; }
+        if (e.code == 1) { calc_close(); return; }                                                          /* Esc */
+        int ch = e.code == 15 ? '\t' : e.code == 14 ? '\b' : e.code == 28 || e.code == 96 ? '\n' : ask_char(e.code);
+        if (ch) calc_did(calc_type(ch));
+        return;
+    }
+    if (e.type == 1 && calc_live && e.code != 42 && e.code != 54) return;                                  /* its key ups */
     if (e.type == 1) {                                                                                     /* EV_KEY: keys */
         int held = cur_hold();
         if (!con_key(e.code, e.value)) {   /* the console's scroll keys are not logged: that would add lines to the picture they move */
@@ -1472,6 +1559,7 @@ static void blk_probe(void) {}
 
 void net_stack_demo(void);
 void net_clock_sync(void);
+void tls_demo(void);
 void main(void) {
     unsigned long el;
     uart_init();
@@ -1486,6 +1574,7 @@ void main(void) {
     if (net_init()) net_arp_probe();
     if (blk_init()) blk_probe();
     net_stack_demo();   /* ip.c: DHCP and an HTTP POST through the shared stack, silent with no card */
+    tls_demo();         /* ip.c: the HTTPS proof, only in a TLSPORT= build */
     fb_diag();   /* last, so it is the newest line on the screen */
     int inputs = input_init();
     if (inputs) { uart_puts("M2 input ready, devices "); uart_dec((unsigned)inputs); uart_putc('\n'); }

@@ -72,6 +72,13 @@ int tcp_get_timeout(unsigned int dest_ip, unsigned short dest_port,
                     void *response, unsigned int response_maxlen,
                     unsigned int reply_timeout_ticks);
 
+/* A TCP stream (2.31): open once, then write and read in any order until the other end closes. One at a time,
+   never while a tcp_get is in flight. tcp_read returns bytes, 0 at the end of the stream, -1 on a timeout. */
+int tcp_open(unsigned int dest_ip, unsigned short dest_port);
+int tcp_write(const void *data, unsigned int len);
+int tcp_read(void *buf, unsigned int max, unsigned int timeout_ticks);
+void tcp_close(void);
+
 /* Why the last dns_resolve/tcp_get failed. Every failure path in net.c
    used to collapse into the same 0/-1, so a caller could not tell "no
    route" from "the server never answered" from "no such host", and the

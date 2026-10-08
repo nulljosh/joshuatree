@@ -433,7 +433,7 @@ Epiphany is the terminal. Stocks stays a basic ticker widget and never grows int
 - [ ] [Sonnet] Video playback: an MJPEG or raw-frame player synced to audio. Needs the sound driver and a JPEG decoder.
 - [ ] [Sonnet] Music app enhancements: equalizer, better playback controls.
 - [ ] [Sonnet] Video editor: basic timeline, trimming, and export.
-- [ ] [Haiku] Scientific Calculator app: standard and scientific modes, memory functions.
+- [x] [Haiku] Scientific Calculator app: standard and scientific modes, memory functions. On ARM too: the Apps tile or F2 opens it, and dividing by zero says Error. `tools/checks/arm64-calc-check.py`.
 - [ ] [Sonnet] Basic games: Pong, Chess, Conway's Game of Life, fully playable in the OS.
 - [ ] [Fable] Dual monitor support: a second framebuffer (QEMU `-device secondary-vga`), the desktop across both, windows dragged between them. Needs the compositor.
 - [ ] [Sonnet] Installing and updating apps from inside the OS.

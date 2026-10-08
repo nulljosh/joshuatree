@@ -23,6 +23,7 @@ int wifi_signal_level(void);         /* wifi.c: 1 to 3 */
 void heap_release(unsigned long m);
 void http_post_set_bearer(const char *token);
 void led_blink(unsigned times);      /* main.c, Pi only: the green light, through the firmware mailbox */
+int browse_command(const char *q, unsigned n);   /* browser.c */
 
 #define ASK_MAX 200          /* one question; the relay takes up to 4 KB, this keeps the JSON body small */
 #define ASK_WIDTH 53         /* the Pi console rule: every printed line fits a 53-column row */
@@ -52,6 +53,7 @@ static const char shifted[58] = {
 #define KEY_RSHIFT 54
 
 int ask_active(void) { return active; }
+int ask_char(unsigned code) { return code < 58 ? (shift ? shifted[code] : plain[code]) : 0; }   /* main.c's Calculator: same map, same Shift */
 void ask_redraw(void) { con_prompt(line, len); }   /* main.c: the Console was reopened, put the line being typed back */
 
 /* One key event from any keyboard. 1 when it is the editor's (the caller then keeps its echo line off the screen). */
@@ -72,7 +74,7 @@ int ask_key(unsigned code, unsigned value) {
 }
 
 /* Prints text as lines of at most `width` columns, breaking at a space where it can, and makes it plain ASCII. */
-static void say_wrapped(const char *prefix, const char *s, unsigned n) {
+void say_wrapped(const char *prefix, const char *s, unsigned n) {   /* browser.c prints its pages through it too */
     int cols = con_columns();
     unsigned width = cols >= 20 && cols < ASK_WIDTH ? (unsigned)cols : ASK_WIDTH;
     char out[ASK_WIDTH + 2];
@@ -158,6 +160,7 @@ static unsigned put_dec(char *o, unsigned long v) {   /* decimal digits of v at 
 static void ask(const char *q, unsigned n) {
     static char body[2 * ASK_MAX + 192], reply[REPLY_MAX + 1];
     say_wrapped("ask> ", q, n);
+    if (browse_command(q, n)) return;          /* browser.c: `browse URL` and `open N` never go to Claude */
     if (!CLAUDE_TOKEN_LEN) { kputs("claude: no token\n"); return; }
     if (!net_get_gateway()) {                  /* no DHCP lease, or no card at all */
 #ifdef PI_BUILD
