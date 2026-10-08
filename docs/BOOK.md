@@ -46,6 +46,8 @@ The north star from chapter 1 is her job. Learn the habits on the device, offer 
 
 ## 4. The board arrives
 
+![The first boot: the desktop on a monitor, with the menu bar and the Console](book/first-boot-2026-10-06.jpg)
+
 On October 6, 2026, a Raspberry Pi 4 Model B with 4 GB arrived. I had ordered it to find out whether any of this was real or whether it only worked inside an emulator.
 
 The ARM64 port had been built blind, in QEMU's Pi 4B model, for a few days. We had a flash script that did not need Raspberry Pi OS at all: five firmware files straight from the Raspberry Pi repo, a `config.txt`, and our 151 KB `kernel8.img` on a FAT32 card.
@@ -54,11 +56,19 @@ First power-on: red light, black screen. I had put the card in after the power. 
 
 The boot lines inside the Console were not text. They were a thin column of marks at the left edge, one per line. Thirteen marks for thirteen lines. The title text was fine, so the font worked. Something between the kernel and the screen was eating every character after the first pixel.
 
-The answer took the evening. The screen lives in cached memory, and the GPU only sees what the CPU cleans out of the cache. We cleaned once, after drawing the first page. Every later line stayed in the cache. The wipe between pages happened to overwrite whole cache lines and went straight to memory, but the two pixel columns just left of a line boundary kept the old text. That was the column of marks. The fix was to clean every glyph and every wipe as it is drawn. The photo had told us exactly what was wrong, once we read it right.
+The answer took the evening.
+
+ ![The Console close-up: the column of marks at the left edge](book/first-boot-console-2026-10-06.jpg)
+
+The screen lives in cached memory, and the GPU only sees what the CPU cleans out of the cache. We cleaned once, after drawing the first page. Every later line stayed in the cache. The wipe between pages happened to overwrite whole cache lines and went straight to memory, but the two pixel columns just left of a line boundary kept the old text. That was the column of marks. The fix was to clean every glyph and every wipe as it is drawn. The photo had told us exactly what was wrong, once we read it right.
 
 That night the picture filled the monitor at 1920 by 1080, sharp, with real text in the Console. Above the dock it said "Steve Jobs, 1955 to 2011. Thank you." It was fifteen years to the week.
 
 Then USB. The driver had been written and tested in QEMU first. On the real chip it went: PCIe link up, the VL805 controller's firmware loaded through the mailbox, the xHCI controller started with five ports, a hub found on one of them. Then `usb ready: 0 kbd, 0 mouse`. The keyboard cable was a charge-only cable with no data wires. I swapped it. The NuPhy keyboard enumerated behind the hub, and every key I pressed printed on the screen. A USB keyboard worked on the real Pi, the same day it arrived.
+
+![The NuPhy keyboard enumerated behind the hub, and the keys printed on screen](book/usb-keyboard-2026-10-06.jpg)
+
+![USB first light: the controller and the hub found on the board](book/usb-first-light-2026-10-06.jpg)
 
 The Pi also switched off once mid-session. The USB-C plug had worked loose. Not every bug is software.
 
@@ -120,6 +130,8 @@ The second bug was not in the kernel at all. We had a helper script for the buil
 
 ## 9. Building while asleep
 
+![The breadboard prototype: a Pi and the parts we would wire next](book/breadboard.jpg)
+
 By the second week of October there were more tasks than hours. So the API credit started running agents overnight.
 
 The shape is strict, and strict is the point. Each agent gets one task from the roadmap and its own branch. It has a hard spending cap per run, five dollars when it started, and it cannot push. It edits, builds, and runs the checks on the Mac. In the morning there is a branch and a result. A person reviews and merges, with `gh pr merge --auto --squash`, only once the pull request is ready and the local run is green. Nobody force-pushes main. I tried `--admin` once, to push a pull request past its checks, and the permission check stopped it. It was right. The rule is written in `docs/LOOP-HANDOFF.md` and it stays human on purpose.
@@ -137,6 +149,8 @@ Never paste a key into chat. The relay's API key lives outside the repo. The Wi-
 Also, while I am being honest: a Codex mode for the relay was tried and the safety check blocked it. Correctly. It would have let anyone on the network run a program on my Mac. Codex on the Pi waits for a secure tunnel.
 
 ## 10. Names and money
+
+![Neo, the case concept for the Pi kit. A concept render, not for sale](book/neo-hero.jpg)
 
 Names first. The file manager was going to become Folio and the OS was going to become Mirage. Both were decided in a chat, written into the handoff, and dropped. The favourites right now are Maple and Desk. Nothing has been renamed. Joshua Tree stays the project's name, and a trademark check comes before any new one goes on a box.
 
