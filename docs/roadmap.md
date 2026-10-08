@@ -16,7 +16,7 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
 The short list. Two tracks run side by side, one helper each (Joshua agreed the order on 2026-10-06). Everything below is the long list; done items moved to [roadmap-done.md](roadmap-done.md).
 
-**Done on the Pi (2026-10-07):** Wi-Fi joins and holds (WPA2 done on our side), DHCP and the network clock, the 12-hour clock and three-bar icon in the menu bar, the quiet console, the boot screen, and the green light blinks at boot (PR 456).
+**Done on the Pi (2026-10-07):** Wi-Fi joins and holds (WPA2 done on our side), DHCP and the network clock, the 12-hour clock and three-bar icon in the menu bar, the quiet console, the boot screen, and the green light, driven through the firmware (PR 456). It no longer blinks at boot: that wait never ended and left the USB keyboard dead.
 
 **Track A, what you see on the Pi**
 1. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing).
@@ -26,7 +26,7 @@ The short list. Two tracks run side by side, one helper each (Joshua agreed the 
 
 **Track B, the goal (Claude Code inside Joshua Tree on the Pi)**
 5. HTTPS on the Pi (BearSSL is already in `third_party/`), so a browser can load secure pages.
-6. Tools on the Pi. Done first step: the Pi sends its live status (IP, clock, Wi-Fi) with each question, and Samantha answers from the API credit with read-only Mac file tools. Next: actions on the Pi itself (green light, SD card files, open an app), then hide the Console on boot and move chat into its own Claude app.
+6. Tools on the Pi. Done first step: the Pi sends its live status (IP, clock, Wi-Fi) with each question, and Samantha answers from the API credit with read-only Mac file tools. She can also act on the Pi: an answer may end with `[[note TEXT]]` (printed on the console) or `[[led blink]]` (blinks the green light), checked by `tools/checks/pi-actions-check.py`. Next: more actions (SD card files, open an app), then hide the Console on boot and move chat into its own Claude app.
 
 **Then**
 7. Admin and sudo. 8. SD card writes (MBR and FAT32). 9. The Claude app on ARM, the self-update loop and the fallback kernel.

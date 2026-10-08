@@ -437,11 +437,14 @@ int led_set(unsigned state) {
     for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
     return mbox_call();
 }
-void led_blink(unsigned times) {   /* three quick blinks at boot: the Pi is alive and we are the ones blinking it */
-    for (unsigned i = 0; i < times; i++) {
-        led_set(1); unsigned t = ticks; while (ticks - t < 15) {}   /* ticks counts 100 a second: 15 is 150 ms */
-        led_set(0); t = ticks; while (ticks - t < 15) {}
-    }
+static void led_wait(void) {   /* 150 ms on the generic counter: `ticks` stops at 3, so waiting on it never ends */
+    unsigned long f, c, end;
+    __asm__ volatile ("mrs %0, cntfrq_el0\n mrs %1, cntpct_el0" : "=r"(f), "=r"(c));
+    end = c + (f ? f : 54000000) / 100 * 15;
+    do __asm__ volatile ("mrs %0, cntpct_el0" : "=r"(c)); while (c < end);
+}
+void led_blink(unsigned times) {   /* Samantha's [[led blink]] (ask.c). Never at boot: the boot call left the USB keyboard dead */
+    for (unsigned i = 0; i < times; i++) { led_set(1); led_wait(); led_set(0); led_wait(); }
 }
 int mbox_notify_xhci_reset(unsigned dev_addr) {
     unsigned m[] = { 7 * 4, 0, 0x30058, 4, 0, dev_addr, 0 };
@@ -1487,8 +1490,7 @@ void main(void) {
     int usb_ok = usb_init();   /* USB first: the keyboard is the way in, and Wi-Fi bring-up is a blocking stretch of seconds on the real Pi */
     if (!wifi_init()) menubar_wifi(0);
 #ifdef PI_BUILD
-    if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); }
-    led_blink(3);   /* the address from the router, then the time */
+    if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); }   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
     if (usb_ok) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay

@@ -7,7 +7,8 @@
    environment and a file outside the repo; the token is sent only in the Authorization header of this one request and
    is never printed. Every outcome is one short honest line: `claude: thinking`, `claude: no token`, `claude: no
    network` (no DHCP lease: on a Pi that means Wi-Fi has not joined yet), `claude: error -401` for a relay refusal,
-   `claude: timeout`. The relay keeps a session per conversation, so a follow-up question knows what came before. */
+   `claude: timeout`. The relay keeps a session per conversation, so a follow-up question knows what came before.
+   An answer may end with actions for the Pi ([[note TEXT]], [[led blink]]): see take_actions. */
 #include "../../drivers/net.h"
 #include "../../drivers/http.h"
 #include "claude_cfg.h"
@@ -21,6 +22,7 @@ unsigned long net_clock_utc(void);   /* ip.c: seconds since 1970, 0 until the ne
 int wifi_signal_level(void);         /* wifi.c: 1 to 3 */
 void heap_release(unsigned long m);
 void http_post_set_bearer(const char *token);
+void led_blink(unsigned times);      /* main.c, Pi only: the green light, through the firmware mailbox */
 
 #define ASK_MAX 200          /* one question; the relay takes up to 4 KB, this keeps the JSON body small */
 #define ASK_WIDTH 53         /* the Pi console rule: every printed line fits a 53-column row */
@@ -93,6 +95,50 @@ static void say_wrapped(const char *prefix, const char *s, unsigned n) {
     }
     if (o) { out[o++] = '\n'; out[o] = 0; kputs(out); }
 }
+
+/* pi-actions begin: pure, no kernel calls, so tools/checks/pi-actions-check.py compiles this block on the host.
+   Samantha may end an answer with actions, each alone on its line: [[note TEXT]] or [[led blink]], 80 characters at
+   most. take_actions removes those lines from s in place, records them, and returns the new length. Anything else in
+   [[ ]] (an unknown action, a long one, one inside a sentence) stays as plain text. */
+#define ACT_MAX 4
+#define ACT_LEN 80
+#define ACT_NOTE 1
+#define ACT_LED 2
+static int act_kind[ACT_MAX];
+static char act_text[ACT_MAX][ACT_LEN + 1];
+static unsigned act_n;
+static int starts(const char *s, unsigned n, const char *w) {
+    unsigned i = 0;
+    for (; w[i]; i++) if (i >= n || s[i] != w[i]) return 0;
+    return 1;
+}
+static unsigned take_actions(char *s, unsigned n) {
+    unsigned o = 0, i = 0;
+    act_n = 0;
+    while (i < n) {
+        unsigned e = i, z;
+        while (e < n && s[e] != '\n') e++;
+        z = e;
+        while (z > i && (s[z - 1] == ' ' || s[z - 1] == '\r')) z--;
+        int kind = 0;
+        if (z - i >= 4 && z - i <= ACT_LEN && act_n < ACT_MAX && starts(s + i, z - i, "[[") && s[z - 2] == ']' && s[z - 1] == ']') {
+            const char *p = s + i + 2; unsigned m = z - i - 4;
+            if (m == 9 && starts(p, m, "led blink")) kind = ACT_LED;
+            else if (m > 5 && starts(p, m, "note ")) kind = ACT_NOTE;
+            if (kind) {
+                unsigned k = 0;
+                if (kind == ACT_NOTE) for (; k < m - 5; k++) act_text[act_n][k] = p[5 + k];
+                act_text[act_n][k] = 0;
+                act_kind[act_n++] = kind;
+            }
+        }
+        if (!kind) { for (unsigned k = i; k < e; k++) s[o++] = s[k]; if (e < n) s[o++] = '\n'; }
+        i = e < n ? e + 1 : e;
+    }
+    while (o && (s[o - 1] == '\n' || s[o - 1] == ' ' || s[o - 1] == '\r')) o--;   /* no blank tail where markers were */
+    return o;
+}
+/* pi-actions end */
 
 static int is_session(const char *s, unsigned n) {
     if (n != 36) return 0;
@@ -170,7 +216,15 @@ static void ask(const char *q, unsigned n) {
         if (is_session(reply + 2, e - 2)) { for (unsigned i = 0; i < 36; i++) session[i] = reply[2 + i]; session[36] = 0; }
         start = e < (unsigned)got ? e + 1 : e;
     }
-    say_wrapped("", reply + start, (unsigned)got - start);
+    say_wrapped("", reply + start, take_actions(reply + start, (unsigned)got - start));
+    for (unsigned a = 0; a < act_n; a++) {     /* the answer first, then what she asked the Pi to do */
+        if (act_kind[a] == ACT_NOTE) { char *t = act_text[a]; unsigned k = 0; while (t[k]) k++; say_wrapped("pi: ", t, k); }
+#ifdef PI_BUILD
+        else led_blink(1);
+#else
+        else kputs("pi: no green light on QEMU\n");
+#endif
+    }
 }
 
 /* Called from the main loop: runs a question Enter queued, so the keyboard handler never blocks on the network. */
