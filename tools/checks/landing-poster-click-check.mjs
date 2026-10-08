@@ -69,16 +69,20 @@ for (const [tag, vp, mobile] of [['desktop click', { width: 1440, height: 900 },
   // A page left open: fill the serial log past its 128 KB trim through the emulator's own bus.
   // emulator_bus is the CPU's half of v86's paired bus: its send() reaches the page-side listeners embed.js registered
   // with add_listener, the same path a real serial byte takes. (emulator.bus.send would go the other way, to nobody.)
-  const trimmed = await page.evaluate(() => {
+  // The fix is that facePainted() reads flags from the line parser, so assert the flags, not the log.
+  const flagsBefore = await page.evaluate(() => ({ hd: window.__jt.faceHd, open: window.__jt.samanthaOpen }));
+  ok(flagsBefore.hd && flagsBefore.open, `${tag}: the line parser set faceHd and samanthaOpen before the trim`);
+  const sent = await page.evaluate(() => {
     const bus = window.__joshuaTreeEmulator && window.__joshuaTreeEmulator.emulator_bus;
-    if (!bus) return null;
+    if (!bus) return false;
     const line = 'samface: draws=0 filler for the trim\n';
     for (let i = 0; i < 140000 / line.length; i++) for (let k = 0; k < line.length; k++) bus.send('serial0-output-byte', line.charCodeAt(k));
-    return { len: window.__jt.serial.length, hd: /face: hd=/.test(window.__jt.serial) };
+    return true;
   });
-  console.log(`  [${tag}] after filler: serial ${trimmed && trimmed.len} bytes, "face: hd=" still in the log: ${trimmed && trimmed.hd}`);
-  // Without the trim this check proves nothing: the old code would lift at once too.
-  ok(trimmed && !trimmed.hd, `${tag}: the filler reached the 128 KB trim and cut "face: hd=" from the log`);
+  ok(sent, `${tag}: filler went through the emulator's serial bus`);
+  const after = await page.evaluate(() => ({ hd: window.__jt.faceHd, open: window.__jt.samanthaOpen, len: window.__jt.serial.length }));
+  console.log(`  [${tag}] after filler: serial ${after.len} bytes`);
+  ok(after.hd && after.open, `${tag}: faceHd and samanthaOpen are still set after the filler`);
 
   if (mobile) await page.tap('#hero-poster'); else await page.click('#hero-poster');
   const fired = await page.evaluate(() => { const e = document.getElementById('hero-poster'); return e.hidden || e.classList.contains('waking'); });

@@ -1075,6 +1075,7 @@ if (typeof document !== "undefined") (function () {
     get mouseOn() { return !!(emulator && emulator.mouse_adapter && emulator.mouse_adapter.emu_enabled); },
     get absolute() { return absoluteMouse; }, /* v62: did the kernel enable v86's vmmouse backdoor */
     get serial() { return serialLog; },
+    get faceHd() { return faceHd; }, get samanthaOpen() { return samanthaOpen; }, /* landing-poster-click-check.mjs: the line-parser flags facePainted() reads, which survive the serialLog trim */
     get toolCounts() { return toolCounts; }, /* demochat-check.mjs: running count per chattool=<tool>: marker, immune to the serial window rolling */
     get started() { return !!emulator || emulatorStarting; }, /* v0.82.x: true once startEmulator() has actually run (construction kicked off, not necessarily finished) -- lets a check script tell "gated, not yet started" apart from "started", the real signal lazy-boot-check.mjs asserts on */
     get audioState() { return emulator && emulator.speaker_adapter && emulator.speaker_adapter.audio_context ? emulator.speaker_adapter.audio_context.state : "no-speaker-adapter"; }, /* mobile-audio-check.mjs: real iPhone AudioContext unlock state, no ?audiodebug flag needed */
