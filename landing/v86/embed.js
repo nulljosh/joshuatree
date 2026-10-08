@@ -118,7 +118,8 @@ if (typeof document !== "undefined") (function () {
   var serialLog = "";
   var toolCounts = {}; // every "chattool=<tool>:" line, counted as it arrives, so a check never depends on the window still holding it
   var ring3Exits = 0;   // ring-3 apps that have exited so far, counted off the kernel's own log
-  var faceReady = false;   // ring-3 Joshua wrote "samface: idle ready": his idle frames are in, the live face can take over from the intro video
+  var faceHd = false;      // ring-3 Samantha wrote "face: hd=": her HD portrait is loaded
+  var faceReady = false;  // ring-3 Joshua wrote "samface: idle ready": his idle frames are in, the live face can take over from the intro video
   var chatDone = 0;   // every chattool= or chatreply= line: one answer finished
   var speakCount = 0, lastSpeakBytes = 0; // every "speak: status=200 bytes=N" line, counted as it arrives (serialLog is a head+rolling-tail window, see the serial0 listener)
   // v0.73.5: fetched once and reused by the idle tour's reboot sequence
@@ -559,6 +560,7 @@ if (typeof document !== "undefined") (function () {
         var m = /^(?:syscall: write\(1\) from ring 3: )?speak: status=200 bytes=(\d+)/.exec(serialLine); // ring-3 Samantha's writes arrive behind the kernel's syscall trace prefix
         if (m) { speakCount++; lastSpeakBytes = Number(m[1]); }
         if (/samface: idle ready/.test(serialLine)) faceReady = true;
+        if (/face: hd=/.test(serialLine)) faceHd = true;   // facePainted reads this flag: the serialLog trim above can cut the marker itself
         if (/^samopen/.test(serialLine)) samanthaOpen = true;                                       // kernel.c: boot_to_samantha opened her
         else if (/^ring3app: SAMANTHA\.BIN (?:exited|crashed)/.test(serialLine)) samanthaOpen = false;   // Esc, the red dot or the back chevron closed her
         if (/^ring3app: \S+ (?:exited|crashed)/.test(serialLine)) ring3Exits++;   // an app's window is gone
@@ -949,8 +951,10 @@ if (typeof document !== "undefined") (function () {
     if (!c || !c.width || !c.height || c.style.display === "none") return false;
     // Her ring-3 window is open and her HD portrait has loaded ("face: hd=" follows samopen). The desktop wallpaper
     // that shows for a moment first is warm too, so the pixels alone are not enough.
-    var so = serialLog.indexOf("samopen");
-    if (so === -1 || serialLog.indexOf("face: hd=", so) === -1) return false;
+    // Flags from the line parser, not serialLog.indexOf: past 128 KB the log keeps only its head and tail, so a visitor who
+    // reads the page before clicking found "samopen" gone and sat on "Waking up" for the whole 60 s deadline.
+    // faceReady covers the frame-set fallback, when the HD portrait failed and "face: hd=" never prints.
+    if (!samanthaOpen || !(faceHd || faceReady)) return false;
     try {
       if (!faceProbe) { faceProbe = document.createElement("canvas"); faceProbe.width = 32; faceProbe.height = 56; }
       var g = faceProbe.getContext("2d", { willReadFrequently: true });
