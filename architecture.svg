@@ -101,7 +101,7 @@
 <rect x="420" y="640" width="8" height="8" fill="#d97757"/><text x="431" y="648" fill="#555" font-size="9">sound 64 KB</text>
 <text x="20" y="664" fill="#888" font-size="10" font-weight="600" letter-spacing="1">APPS SHIPPED</text>
 <path d="M20 674H620M20 714H620M20 754H620" stroke="#ece8df"/>
-<polyline points="20,754 34,754 49,754 63,754 77,754 93,744 107,733 121,733 136,714 151,706 166,701 180,698 194,698 210,698 224,698 239,698 253,693 269,688 283,688 297,688 311,688 327,685 341,685 356,685 370,685 386,685 400,685 414,685 429,685 444,685 459,690 473,690 487,690 503,690 517,685 531,685 546,685 561,680 576,674 590,674 604,674 620,674" fill="none" stroke="#141413" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="20,754 34,754 49,754 63,754 77,754 93,736 107,733 121,733 136,714 151,706 166,701 180,698 194,698 210,698 224,698 239,696 253,690 269,688 283,688 297,688 311,688 327,685 341,685 356,685 370,685 386,685 400,685 414,685 429,685 444,690 459,690 473,690 487,690 503,685 517,685 531,685 546,680 561,674 576,674 590,674 604,674 620,674" fill="none" stroke="#141413" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="620" cy="674" r="4" fill="#fff" stroke="#b5502c" stroke-width="2"/>
 <text x="612" y="696" fill="#141413" font-size="12" font-weight="600" text-anchor="end">30 apps</text>
 <text x="20" y="772" fill="#888" font-size="10">2026-08-31</text><text x="620" y="772" fill="#888" font-size="10" text-anchor="end">2026-10-07</text>
