@@ -30,6 +30,6 @@ The roadmap is public. So are the mistakes. The log in [RASPBERRY-PI.md](RASPBER
 
 ## Where it's going
 
-The OS stays free. The money is in hardware: a small kit with Joshua Tree already on it, starting with the Pi. Further out, a box you talk to, running nothing but Joshua Tree and Samantha.
+The OS stays free. The money is in hardware: a small kit with Joshua Tree already on it, starting with the Pi. Further out, a box you talk to, running nothing but Joshua Tree and Samantha. Steve Jobs, at Aspen in 1983, described the computer going from one shared machine to a small one in every home; the kit is our small part of that.
 
 Next up: a keyboard and mouse on the real Pi, then the full desktop, then the apps. The plan is in [roadmap.md](roadmap.md). The money is in [MONEY.md](../MONEY.md).
