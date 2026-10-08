@@ -437,10 +437,10 @@ int led_set(unsigned state) {
     for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
     return mbox_call();
 }
-void led_blink(unsigned times) {   /* three quick blinks at boot: the Pi is alive and we are the ones blinking it */
+void led_blink(unsigned times) {   /* a short blink at boot: the Pi is alive and we are the ones blinking it */
     for (unsigned i = 0; i < times; i++) {
-        led_set(1); unsigned t = ticks; while (ticks - t < 15) {}   /* ticks counts 100 a second: 15 is 150 ms */
-        led_set(0); t = ticks; while (ticks - t < 15) {}
+        led_set(1); unsigned t = ticks; while (ticks - t < 30) {}   /* ticks counts 100 a second: 30 is 300 ms, long enough to see */
+        led_set(0); t = ticks; while (ticks - t < 30) {}
     }
 }
 int mbox_notify_xhci_reset(unsigned dev_addr) {
@@ -1488,7 +1488,7 @@ void main(void) {
     if (!wifi_init()) menubar_wifi(0);
 #ifdef PI_BUILD
     if (wifi_nic_up()) { net_stack_demo(); net_clock_sync(); menubar_wifi(2); }
-    led_blink(3);   /* the address from the router, then the time */
+    led_blink(1);   /* the address from the router, then the time */
 #endif   /* prints `wifi ...` lines; on QEMU it ends at `wifi no host` and the desktop carries on */
     if (usb_ok) {
         /* USB is polled, so nothing interrupts on its own: the virtual timer (INTID 27) wakes wfi every 2 ms. IRQs stay
