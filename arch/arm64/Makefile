@@ -63,6 +63,9 @@ text.o: text.c ../../drivers/ttf.h
 	$(FPCC) -c $< -o $@
 libc.o: libc.c
 	$(FPCC) -c $< -o $@
+# The Calculator's evaluator: the FPU does the sums, so it is built like text.c; main.c draws its window.
+calc.o: calc.c
+	$(FPCC) -c $< -o $@
 # The local language model (llm.c, llama2.c's forward pass). LLM_MODEL= and LLM_TOK= name a llama2.c checkpoint and
 # tokenizer.bin to bake into the image (llm_model.S); without them `llm` says there is no model. llm.cfg holds the last
 # values, so changing them rebuilds. LLM_CFLAGS=-DLLM_BREAK is the check's broken control build.
