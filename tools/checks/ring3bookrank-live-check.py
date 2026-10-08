@@ -113,11 +113,19 @@ def run(name):
     def serial():
         try: return open(log, "rb").read().decode("latin-1")
         except OSError: return ""
-    def wait(needle, secs):
-        for _ in range(int(secs * 10)):
-            if needle in serial(): return True
+    # Poll serial against a wall-clock deadline, never a fixed sleep: a loaded CI
+    # runner can take many seconds to deliver a key and run the guest's redraw.
+    def poll(cond, secs=30):
+        end = time.time() + secs
+        while True:
+            if cond(): return True
+            if time.time() >= end: return False
             time.sleep(0.1)
-        return False
+    def wait(needle, secs=30): return poll(lambda: needle in serial(), secs)
+    def wait_line(text, secs=30):   # a whole line, so "sel 1" does not match "sel 12"
+        return poll(lambda: re.search(re.escape(text) + r"\r?$", serial(), re.M), secs)
+    def down_to(n):                  # Down once, then wait for the guest to select row n
+        key("down"); return wait_line(f"bookrank: sel {n}")
     def bad(msg): fails.append(f"[{name}] {msg}")
     try:
         sock = None
@@ -136,15 +144,14 @@ def run(name):
         def key(q_):
             r = cmd({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": q_}]}})
             if "error" in r: raise SystemExit(f"FAIL: QMP rejected send-key {q_}: {r['error']}")
-            time.sleep(0.3)
         def frame():
             cmd({"execute": "pmemsave", "arguments": {"val": FB, "size": W * H * 4, "filename": dump}})
             return Image.frombytes("RGBA", (W, H), open(dump, "rb").read(), "raw", "BGRA").convert("RGB")
         def near(p, c, tol=12): return max(abs(p[i] - c[i]) for i in range(3)) <= tol
 
         if not wait("bookrank: ring-3 window 804x345", 60): bad("Bookrank never opened its window"); return
-        if not (wait("bookrank: live ", 30) or wait("bookrank: samples ", 5)): bad("the program never said live or samples"); return
-        time.sleep(0.5)
+        if not poll(lambda: re.search(r"bookrank: (live|samples) \d+\r?\n.*bookrank: shown ", serial())):
+            bad("the program never said live or samples and its first shown row"); return
         s = serial()
         fetch = re.search(r"bookrank: fetch (-?\d+)", s)
         verdict = re.search(r"bookrank: (live|samples) (\d+)", s)
@@ -159,24 +166,25 @@ def run(name):
             if not verdict or verdict.group(1) != "live" or verdict.group(2) != "12": bad(f"expected 'live 12', got {verdict and verdict.group(0)}")
             if not shown or shown[0] != TITLES[0]: bad(f"first row is not the real #1 ({TITLES[0]!r}): {shown[:1]}")
             if "/api/books" not in current["paths"]: bad("the stub never saw GET /api/books")
-            key("down")
-            if not wait(f"bookrank: shown {TITLES[1]}", 5): bad(f"Down did not show the real #2 ({TITLES[1]!r})")
-            if not wait("bookrank: sel 2", 5): bad("no 'bookrank: sel 2' after Down")
-            for _ in range(10): key("down")
-            if not wait(f"bookrank: shown {TITLES[11]}", 8): bad(f"Down x11 did not reach row 12 ({TITLES[11]!r})")
-            time.sleep(0.4)
-            img = frame()
-            last = img.getpixel(((VIEW_X + BR_LIST_X + 30) * SCALE + 1, (VIEW_Y + BR_LIST_TOP + (VISIBLE_ROWS - 1) * BR_ITEM_H + 2) * SCALE + 1))
-            print(f"live: last visible list row after scrolling to row 12: {last}")
-            if not near(last, SEL_COLOR): bad(f"row 12 is selected but the list did not scroll to show it (last visible row {last})")
+            if not down_to(2): bad("no 'bookrank: sel 2' after Down")
+            if not wait_line(f"bookrank: shown {TITLES[1]}"): bad(f"Down did not show the real #2 ({TITLES[1]!r})")
+            for n in range(3, 13):
+                if not down_to(n): bad(f"no 'bookrank: sel {n}' after Down"); break
+            if not wait_line(f"bookrank: shown {TITLES[11]}"): bad(f"Down x11 did not reach row 12 ({TITLES[11]!r})")
+            px = ((VIEW_X + BR_LIST_X + 30) * SCALE + 1, (VIEW_Y + BR_LIST_TOP + (VISIBLE_ROWS - 1) * BR_ITEM_H + 2) * SCALE + 1)
+            last = [None]
+            def scrolled():   # the redraw lands after the serial line, so poll the pixel too
+                last[0] = frame().getpixel(px); return near(last[0], SEL_COLOR)
+            ok = poll(scrolled, 15)
+            print(f"live: last visible list row after scrolling to row 12: {last[0]}")
+            if not ok: bad(f"row 12 is selected but the list did not scroll to show it (last visible row {last[0]})")
         elif name == "hostile":
             if not verdict or verdict.group(1) != "live": bad(f"the usable rows were not kept: {verdict and verdict.group(0)}")
             elif int(verdict.group(2)) != 12: bad(f"expected the 12-row cap, got {verdict.group(2)}")
             if shown and not shown[0].startswith("T"): bad(f"hostile first title not kept: {shown[:1]}")
             if shown and len(shown[0]) > 90: bad("a shown title was not bounded")
-            for _ in range(11): key("down")
-            time.sleep(0.5)
-            if not wait("bookrank: sel 12", 8): bad("could not walk the hostile rows to row 12")
+            for n in range(2, 13):
+                if not down_to(n): bad(f"could not walk the hostile rows to row 12 (stuck before {n})"); break
         else:
             want_fetch = "-19" if name == "offline" else None
             if verdict is None or verdict.group(1) != "samples" or verdict.group(2) != "10": bad(f"expected the ten samples, got {verdict and verdict.group(0)}")
@@ -184,10 +192,10 @@ def run(name):
             if want_fetch and (fetch is None or fetch.group(1) != want_fetch): bad(f"fetch should be {want_fetch} with no NIC, got {fetch and fetch.group(1)}")
             if name != "offline" and "/api/books" not in current["paths"]: bad("the guest never asked the stub for /api/books")
             key("down")
-            if not wait("bookrank: shown Sapiens", 5): bad("selection no longer works on the samples")
+            if not wait_line("bookrank: shown Sapiens"): bad("selection no longer works on the samples")
         key("esc")
-        if not wait("bookrank: closed", 5): bad("Esc did not close the program")
-        if not wait("BOOKRANK.BIN exited 0", 5): bad("the program did not exit 0")
+        if not wait("bookrank: closed"): bad("Esc did not close the program")
+        if not wait("BOOKRANK.BIN exited 0"): bad("the program did not exit 0")
     finally:
         try: cmd({"execute": "quit"})
         except Exception: pass

@@ -1581,9 +1581,9 @@ static void draw_video_k(void) {
         if (vm_hd && step != mouth_last) { mouth_last = step; char d[40] = "samface: open="; int n = 14; n = face_num(d, n, step); d[n++] = '\n'; jt_write(1, d, (unsigned)n); }
     }
     /* the input panel: its glass, then the line, the mic and the caret */
-    for (int dy = 0; dy < vm_ph; dy++) for (int x = 0; x < vm_pw; x++) backbuf[(vm_py + dy) * W + vm_px + x] = vm_panel[dy * vm_pw + x];
+    if (!uface_phone) for (int dy = 0; dy < vm_ph; dy++) for (int x = 0; x < vm_pw; x++) backbuf[(vm_py + dy) * W + vm_px + x] = vm_panel[dy * vm_pw + x];   /* phones: the page's own bar under the demo is the one input */
     win.pixels = backbuf;
-    {
+    if (!uface_phone) {
         int lx = vm_px + 24, iy = vm_py + (vm_ph - LINE) / 2, mx = vm_px + vm_pw - 34;
         const char *shown = ar->in;
         while (*shown && tw(shown) > vm_pw - 110) shown++;
@@ -1900,7 +1900,7 @@ void _start(int argc, char **argv) {
             { char d[40] = "samface: click="; int n = 15; put_num(d, &n, cx); d[n++] = ','; put_num(d, &n, cy); d[n++] = '\n'; jt_write(1, d, (unsigned)n); }
             if (!uface_phone && (cx - 24) * (cx - 24) + (cy - 24) * (cy - 24) <= 14 * 14) break;   /* the red dot: close */
             int mx = vm_px + vm_pw - 34, my = vm_py + vm_ph / 2;
-            if ((cx - mx) * (cx - mx) + (cy - my) * (cy - my) <= 15 * 15) { if (rec_on) listen_stop_and_send(); else listen_start(); }
+            if (!uface_phone && (cx - mx) * (cx - mx) + (cy - my) * (cy - my) <= 15 * 15) { if (rec_on) listen_stop_and_send(); else listen_start(); }
         } else if (ev.kind == JT_EV_WHEEL && hist_open) { hist_off += ev.a * LINE * 2; }
         else { flags = JT_POLL_PRESENT; continue; } /* other clicks and the wheel change nothing */
         draw();
