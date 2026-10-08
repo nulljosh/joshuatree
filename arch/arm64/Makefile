@@ -11,6 +11,7 @@
 #   oomtest     oom-kernel8.elf / oom-kernel8.img: HEAP_SIZE shrunk to OOM_HEAP bytes (make -B oomtest OOM_HEAP=n)
 #   hovertest   hover-kernel8.elf / hover-kernel8.img: the dock's hover label over slot 3 (Calendar) at boot
 #   cursortest  cursor-kernel8.elf / cursor-kernel8.img: the pointer's arrow over slot 3 at boot, with its hover label
+#   calctest    calc-kernel8.elf: the Calculator open at boot with four sums typed into it
 # The Console's ask> prompt asks the Claude relay. claude_cfg.sh writes its address and token (gitignored) on every build
 # from CLAUDE_RELAY_HOST, CLAUDE_RELAY_PORT and CLAUDE_RELAY_TOKEN_FILE (default ~/.claude-relay-token); no file, no token.
 CC = clang -target aarch64-none-elf -ffreestanding -fno-stack-protector -mgeneral-regs-only -O2 -Wall -Wextra
@@ -99,12 +100,12 @@ pi-start.o: start.S
 	$(CC) -c $< -o $@
 pi-main.o: main.c $(MAINDEP)
 	$(CC) -DPI_BUILD -c $< -o $@
-kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ)
-pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ)
+kernel8.elf: start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $@ start.o vectors.o user.o main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ)
+pi-kernel8.elf: pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ)
 kernel8.img: pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $@ pi-start.o vectors.o user.o pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ)
 pi: wifi-fw kernel8.img
 # Variant builds: $(1) names the output, $(2) the main.c flags, $(3) extra objects, $(4) the vectors.S flags.
 define variant
@@ -114,12 +115,12 @@ $(1)-pi-main.o: main.c $(MAINDEP)
 	$(CC) -DPI_BUILD $(2) -c $$< -o $$@
 $(1)-vectors.o: vectors.S
 	$(CC) $(4) -c $$< -o $$@
-$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3) linker.ld
-	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3)
-$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3) linker.ld
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3)
+$(1)-kernel8.elf: start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3) linker.ld
+	ld.lld --defsym=KBASE=0x40000000 -T linker.ld -o $$@ start.o $(1)-vectors.o user.o $(1)-main.o pci.o xhci.o wifi.o ttf.o text.o libc.o calc.o ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3)
+$(1)-pi-kernel8.elf: pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3) linker.ld
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3)
 $(1)-kernel8.img: $(1)-pi-kernel8.elf
-	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3)
+	ld.lld --defsym=KBASE=0x80000 -T linker.ld --oformat binary -o $$@ pi-start.o $(1)-vectors.o user.o $(1)-pi-main.o pi-pci.o pi-xhci.o pi-wifi.o wifi_fw.o ttf.o text.o libc.o calc.o pi-ask.o png.o inflate.o wall.o $(GUIOBJ) $(NETOBJ) $(LLMOBJ) $(3)
 endef
 fptest.o: fptest.c
 	$(FPCC) -c $< -o $@
@@ -136,6 +137,8 @@ fpnosave: fpnosave-kernel8.elf
 oomtest: oom-kernel8.elf oom-kernel8.img
 hovertest: hover-kernel8.elf hover-kernel8.img
 cursortest: cursor-kernel8.elf cursor-kernel8.img
+$(eval $(call variant,calc,-DCALC_TEST,,))
+calctest: calc-kernel8.elf
 run: kernel8.elf
 	qemu-system-aarch64 -machine virt -cpu cortex-a72 -m 256 -nographic -kernel kernel8.elf
 run-pi: kernel8.img
@@ -143,4 +146,4 @@ run-pi: kernel8.img
 clean:
 	rm -f *.o *.elf *.img claude_cfg.h claude_cfg.h.tmp llm.cfg
 FORCE:
-.PHONY: wifi-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest
+.PHONY: wifi-fw FORCE crashtest fpsave fpnosave oomtest hovertest cursortest calctest
