@@ -1,4 +1,4 @@
-# Joshua Tree loop handoff (2026-10-07, night)
+# Joshua Tree loop handoff (2026-10-08, morning)
 
 ## What the loop is
 
@@ -26,22 +26,21 @@ Joshua's /goal: a mini Joshua Tree with Claude Code inside it, running on the Pi
 - A later stretch of Wi-Fi trouble (joins refused, then no address) cleared after a router reboot. Nothing in the code is known to be at fault.
 - Clock: a lost DNS lookup used to wait 20 seconds per try. Each try now waits 2 seconds and retries six times.
 - The console stays quiet on a good boot. Lines appear only when something breaks. The boot screen draws the tree while the photo decodes, and a small apple sits beside the Steve Jobs tribute line.
-- The green-light blink broke the keyboard. PR 459 (the keyboard message, light off) turns it off for now. The keyboard works again on the board. PR 459 is open and one CI shard is rerunning.
-- PR 460 (Samantha through the Messages API, plus the first Pi tools) is a draft.
-- PR 458 (the HTTPS plan in the roadmap) is open.
-- The graph refresh is merged; main is 2.29.1.
+- The green light works. The old blink broke the keyboard because it waited on the `ticks` counter, which stops early; Samantha's blink now waits on the hardware clock and drives GPIO 42 directly. PR 459 is merged.
+- PR 460 (Samantha through the Messages API, the Pi's live status, and the actions `[[note TEXT]]` and `[[led blink]]`) is in local CI, then GitHub. Main is 2.29.x; 460 is 2.30.0.
+- Merged today: the Pi stack, the HTTPS plan (458), the graph refresh. Open: 460, 463 (graph Pi row), 464 (CLAUDE.md and AGENTS.md sync for Codex), 465 (landing Pi section).
+- The API credit runs a repo agent: `~/.config/joshuatree/agent.py` (own branch, hard cost cap, no push). Codex on the Pi needs a secure tunnel; a relay Codex mode was blocked as a remote-run risk.
 - Benchmark: DEFERRED. Run `/jt-bench` only when nothing else is running on the Mac.
-- Naming: the file manager rename from Burrow to Drawer is decided, not done; it goes in its own PR. An OS rename is being considered; no pick yet.
+- Naming: the file manager becomes Folio and the OS may become Mirage. Both decided in chat, neither done, trademark check still needed; each goes in its own PR.
 
 ## Next, in order
 
-1. Finish PR 459 once its rerun is green, then merge it on GitHub green.
-2. Finish PR 460: run `tools/ci-local.sh` once, flip it ready, merge on green.
-3. After the Saturday reset (weekly usage was 93 percent at this checkpoint): Pi actions (the light, SD card files, opening an app), hide the Console on boot, a separate Claude app, and the model and effort chosen from the prompt.
-4. Burrow to Drawer rename, in its own PR.
+1. Merge 460 once local and GitHub CI are green, then 463, 464 and 465 (merge 463 before 465: both bump the version).
+2. More Pi actions (SD card files, opening an app), then hide the Console on boot and move chat into its own Claude app, then the model and effort in the prompt.
+3. Folio and Mirage renames, each in its own PR, after a trademark check.
+4. HTTPS on the Pi: vendor the full BearSSL TLS client (the repo has only five crypto files; the upstream file list is in `~/Documents/Code/scratch-bearssl`).
 5. Split kernel/kernel.c, which is far too big to work in.
-6. HTTPS on the Pi using the BearSSL already in third_party, following the plan in PR 458.
-7. Benchmark when the Mac is quiet.
+6. Benchmark when the Mac is quiet.
 
 ## Restart prompt
 
