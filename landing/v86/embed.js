@@ -951,8 +951,8 @@ if (typeof document !== "undefined") (function () {
     if (!c || !c.width || !c.height || c.style.display === "none") return false;
     // Her ring-3 window is open and her HD portrait has loaded ("face: hd=" follows samopen). The desktop wallpaper
     // that shows for a moment first is warm too, so the pixels alone are not enough.
-    // Flags from the line parser, not serialLog.indexOf: past 128 KB the log keeps only its head and tail, so a visitor who
-    // reads the page before clicking found "samopen" gone and sat on "Waking up" for the whole 60 s deadline.
+    // Flags from the line parser, not serialLog.indexOf: past 128 KB the log keeps only its head and tail, so on a page
+    // left open long enough "samopen" was gone and the poster sat on "Waking up" for the whole 60 s deadline.
     // faceReady covers the frame-set fallback, when the HD portrait failed and "face: hd=" never prints.
     if (!samanthaOpen || !(faceHd || faceReady)) return false;
     try {
