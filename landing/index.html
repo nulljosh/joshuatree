@@ -699,12 +699,16 @@
 
 <section class="app-features reveal" id="pi" aria-label="Raspberry Pi">
   <h2>Now on a real Raspberry Pi.</h2>
-  <p class="sub">The same desktop, on a small board you can hold. One command puts it on an SD card.</p>
+  <p class="sub">The same desktop, on a small board you can hold. One command puts it on an SD card. Here is what works on a Pi 4 today, and what does not yet.</p>
   <div class="tile-grid">
-    <div class="tile"><p><strong>The whole desktop.</strong> Wallpaper, menu bar, dock and windows, full screen at 1080p.</p></div>
-    <div class="tile"><p><strong>Plug in a keyboard.</strong> USB, any time, even after it boots. The mouse works in the emulator and comes to the board next.</p></div>
-    <div class="tile"><p><strong>Wi-Fi, and the time.</strong> It joins your network, gets an address, and sets its own clock from the internet. The signal shows in the menu bar.</p></div>
-    <div class="tile"><p><strong>Samantha, on the board.</strong> Type a question and she answers. She can also act: print a note, or blink the board's green light. She runs through a small helper on your Mac.</p></div>
+    <div class="tile"><p><strong>The whole desktop.</strong> Wallpaper, menu bar, dock and windows, full screen at 1080p. It boots to a screen with the tree and a progress bar.</p></div>
+    <div class="tile"><p><strong>Plug in a keyboard.</strong> USB, any time, even after it boots. Unplug it and plug it back in, and it keeps working.</p></div>
+    <div class="tile"><p><strong>Wi-Fi, done by hand.</strong> The Pi's radio chip has no way to join a protected network on its own, so Joshua Tree does the WPA2 handshake itself. Then it gets an address and sets its clock from the internet.</p></div>
+    <div class="tile"><p><strong>A menu bar that tells you.</strong> Wi-Fi bars and a 12-hour clock sit at the top right. The console stays quiet and only shows a line when something breaks.</p></div>
+    <div class="tile"><p><strong>Samantha, on the board.</strong> Type a question and she answers, through a small relay on your Mac that calls the Claude API. The relay picks a small model for easy questions and a strong one for hard ones. She can read files from a shared folder.</p></div>
+    <div class="tile"><p><strong>She knows the board.</strong> Each question goes out with the Pi's live status: its address, its clock and its Wi-Fi. She can act on it too: print a note, or blink the green light.</p></div>
+    <div class="tile"><p><strong>It builds overnight.</strong> A repo agent works on the code at night on the API credit. It only makes branches. Nothing lands without a person merging it.</p></div>
+    <div class="tile"><p><strong>Not yet.</strong> A mouse on the Pi (it works in the emulator). HTTPS and a browser. Opening apps on the Pi. Each is on the <a href="https://github.com/nulljosh/joshuatree/blob/main/docs/roadmap.md">roadmap</a>.</p></div>
   </div>
   <p class="sub" style="margin-top:16px"><a href="https://github.com/nulljosh/joshuatree/blob/main/docs/RASPBERRY-PI.md">Put it on your own Pi</a></p>
 </section>
@@ -804,7 +808,7 @@
   <h2>Want one?</h2>
   <div class="waitlist-card">
     <p class="sub audience">For anyone curious how a computer really works, and for developers who want to help build one.</p>
-    <p class="sub">It already boots on a real Raspberry Pi 4: the full desktop at 1080p, a USB keyboard, and Wi-Fi that finds the networks around it. The dev kit is that board, ready to go. Leave your email, we'll tell you when it ships.</p>
+    <p class="sub">It already boots on a real Raspberry Pi 4: the full desktop at 1080p, a USB keyboard, Wi-Fi it joins on its own, and Samantha to talk to. The dev kit is that board, ready to go. Leave your email, we'll tell you when it ships.</p>
     <form class="waitlist-form" id="waitlist-form" novalidate>
       <label class="visually-hidden" for="waitlist-email">Email address</label>
       <input type="email" id="waitlist-email" name="email" placeholder="you@example.com" autocomplete="email" required maxlength="254">
@@ -821,7 +825,7 @@
 <section class="grain-zone reveal">
   <img class="seal" src="logo.svg" alt="The Joshua Tree mark: a Joshua tree with its branches raised like arms" width="160" height="160" loading="lazy">
   <p class="closing-name">Settlers named the Joshua tree for Joshua, arms raised to the sky.</p>
-  <p class="closing">A real computer built from nothing, not a skin on someone else's. <span data-fact="apps">30</span> apps, Samantha to run them, and now a real Raspberry Pi. Free and open source, named for the tree that survives on nothing.</p>
+  <p class="closing">A real computer built from nothing, not a skin on someone else's. <span data-fact="apps">30</span> apps, Samantha to run them, and now a real Raspberry Pi with Wi-Fi. Free and open source, named for the tree that survives on nothing.</p>
 </section>
 
 </main>
