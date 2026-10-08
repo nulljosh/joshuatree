@@ -332,7 +332,8 @@ Decided, not doing: a C++ rewrite (no gain for a freestanding kernel, only risk)
 ## Apps after 2.2 (cheapest first, one agent and one PR each)
 
 - [ ] [Haiku] Photos: browse and view JPEG and PNG from Files, next and previous by arrow key. The decoders already exist.
-- [ ] [Haiku] Minesweeper, then Solitaire. One app each, each with a boot check that plays a scripted game.
+- [x] Minesweeper: `user/mines.c`, Apps folder, `open=mine`. `tools/checks/ring3mines-check.py` wins a scripted game on the fixed first board.
+- [ ] [Haiku] Solitaire. Same shape: one app, one boot check that plays a scripted game.
 - [ ] [Sonnet] Voice Memos: record with `SYS_AUDIO_RECORD`, save a WAV to Files, play it back in Music.
 - [ ] [Sonnet] Samantha media tools: "play something", "pause", "what's playing", one check each.
 - [ ] [Sonnet] Movie trim: cut, split and join clips at frame boundaries and save a new AVI. The iMovie-lite step.

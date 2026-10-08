@@ -520,6 +520,18 @@ drivers/user_claude.h: user/claude.bin tools/gen/gen_user_bin.py
 
 kernel/ring3app.o: drivers/user_claude.h
 
+# Mines (Apps after 2.2): Minesweeper, 9x9 with 10 mines.
+user/mines.o: user/mines.c user/jtsys.h user/libjt/text.h
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+user/mines.bin: user/mines.o user/libjt.a user/note.ld boot/memmap.ld
+	$(LD) -m elf_i386 -T user/note.ld --oformat binary -o $@ user/mines.o user/libjt.a
+
+drivers/user_mines.h: user/mines.bin tools/gen/gen_user_bin.py
+	python3 tools/gen/gen_user_bin.py user/mines.bin drivers/user_mines.h user_mines
+
+kernel/ring3app.o: drivers/user_mines.h
+
 drivers/user_mail.h: user/mail.bin tools/gen/gen_user_bin.py
 	python3 tools/gen/gen_user_bin.py user/mail.bin drivers/user_mail.h user_mail
 
@@ -581,6 +593,7 @@ clean:
 	rm -f user/windgate.o user/windgate.bin drivers/user_windgate.h
 	rm -f user/panes.o user/panes.bin drivers/user_panes.h
 	rm -f user/claude.o user/claude.bin drivers/user_claude.h
+	rm -f user/mines.o user/mines.bin drivers/user_mines.h
 	rm -f joshuatree.iso boot/memmap.ld
 	rm -rf build/iso_root
 
