@@ -430,12 +430,14 @@ static int fb_setup(void) {
 }
 /* M4: tell the firmware the VL805 USB controller is out of PCIe reset, so it loads the VL805's firmware.
    Tag 0x00030058, the device as bus << 20 | slot << 15 | function << 12 (Linux reset-raspberrypi.c, Circle). */
-/* The Pi 4's green activity light is GPIO 42, but the chip cannot drive it directly: the VideoCore firmware owns that
-   pin. Ask the firmware to set it through the mailbox ("set GPIO state", tag 0x38041): pin, then state (0 off, 1 on). */
+/* The Pi 4's green activity light is GPIO 42 on the chip itself (bcm2711-rpi-4-b.dts: led-act, gpio 42, active high),
+   not on the firmware expander the Pi 3 uses, so it is driven straight through the GPIO registers: function select 4
+   (pins 40 to 49, three bits each, pin 42 is bits 6 to 8) set to output, then GPSET1 or GPCLR1 bit 10 (pin 42 minus 32). */
 int led_set(unsigned state) {
-    unsigned m[] = { 8 * 4, 0, 0x00038041, 8, 0, 42, state, 0 };
-    for (unsigned i = 0; i < sizeof m / 4; i++) mbox[i] = m[i];
-    return mbox_call();
+    unsigned f = REG(GPIO_BASE + 0x10);
+    REG(GPIO_BASE + 0x10) = (f & ~(7u << 6)) | (1u << 6);
+    REG(GPIO_BASE + (state ? 0x20 : 0x2C)) = 1u << 10;
+    return 1;
 }
 static void led_wait(void) {   /* 150 ms on the generic counter: `ticks` stops at 3, so waiting on it never ends */
     unsigned long f, c, end;
