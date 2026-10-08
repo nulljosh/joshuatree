@@ -55,7 +55,7 @@ Then in Joshua Tree: Settings > Assistant > Claude relay = 10.0.2.2:8765, Claude
 Python standard library only. tools/checks/claude-relay-check.py proves the rules above
 against a stub `claude`.
 """
-import argparse, hmac, http.server, json, os, re, signal, subprocess, sys, threading, time
+import argparse, hmac, http.server, json, os, re, signal, subprocess, sys, threading, time, urllib.request, urllib.error
 
 DEFAULT_PORT = 8765
 DEFAULT_TIMEOUT = 150          # seconds; the kernel waits up to 240 s (JT_HTTP_POST_TICKS_CLAUDE), so the relay's 504 lands first
@@ -98,6 +98,33 @@ def claude_argv(cfg, session):
     return argv
 
 
+SAMANTHA = ("You are Samantha, the assistant inside Joshua Tree, a small operating system built from scratch "
+            "that runs on a Raspberry Pi. You answer at its console. Be warm, plain and brief: a few short "
+            "sentences, no markdown, no lists unless asked.")
+
+
+def run_api(cfg, prompt):
+    """--api-key-file mode: one Messages API call, paid from the Claude Platform credit, not the Claude Code
+    plan. Stateless: each question stands alone. Returns (status, text)."""
+    try:
+        key = open(os.path.expanduser(cfg.api_key_file)).read().strip()
+    except OSError:
+        return 502, "The relay has no API key file."
+    body = json.dumps({"model": cfg.api_model, "max_tokens": 400, "system": SAMANTHA,
+                       "messages": [{"role": "user", "content": prompt}]}).encode()
+    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
+        "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=cfg.timeout) as r:
+            d = json.loads(r.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as e:
+        return 502, "The API said %d." % e.code
+    except (urllib.error.URLError, OSError, ValueError):
+        return 502, "The API did not answer."
+    text = "".join(b.get("text", "") for b in d.get("content", []) if isinstance(b, dict))
+    return (200, "S -\n" + text) if text else (502, "The API returned no text.")
+
+
 class Relay:
     def __init__(self, cfg, token):
         self.cfg = cfg
@@ -107,6 +134,7 @@ class Relay:
 
     def run_claude(self, prompt, session):
         """Returns (status, text). Kills claude's whole process group past the timeout."""
+        if self.cfg.api_key_file: return run_api(self.cfg, prompt)
         p = subprocess.Popen(claude_argv(self.cfg, session), cwd=self.cfg.cwd, stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
         try:
@@ -214,6 +242,8 @@ def main(argv=None):
     ap.add_argument("--max-body", type=int, default=DEFAULT_MAX_BODY, help="largest request body, bytes")
     ap.add_argument("--claude", default="claude", help="the claude executable")
     ap.add_argument("--model", default="", help="optional --model for claude")
+    ap.add_argument("--api-key-file", default="", help="answer with the Messages API as Samantha (Claude Platform credit) instead of claude -p")
+    ap.add_argument("--api-model", default="claude-haiku-5-5", help="model for --api-key-file mode")
     ap.add_argument("--tools", default=",".join(READ_ONLY_TOOLS),
                     help="comma-separated built-in tools (default Read,Grep,Glob: read-only)")
     args = ap.parse_args(argv)
