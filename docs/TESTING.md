@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (201 checks)
+## The suite (202 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -209,6 +209,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | ARM64 M4 Wi-Fi: the Pi image powers the chip, finds no SDIO card under QEMU, prints wifi FAIL cmd5 and the boot carries on, with and without the firmware files (skips where the tools are missing) | `tools/checks/arm64-wifi-check.py` | retry |
 | ARM64 M4 USB: the aarch64 kernel finds an xHCI controller behind a PCIe root port, enumerates a hub, a keyboard behind it and a mouse, and reads key presses, moves and clicks (skips where the tools are missing) | `tools/checks/arm64-usb-check.py` | retry |
 | ARM64 mouse: a USB mouse behind a hub moves the shared arrow over the ARM desktop, the dock label follows it and leaves no ghost, the Console's close button and a dock click work, a hot-plugged mouse moves it, and the scale-2 arrow at 1080p (skips where the tools are missing) | `tools/checks/arm64-mouse-check.py` | retry |
+| ARM64 Calculator: calc.c gets a table of 42 sums right on the host (sin(30deg)=0.5, 5!=120, 2^10=1024, 1/0 is an error), its keypad's memory and Deg keys work, and the calctest build types four sums at boot with the same answers on the UART and the window in a screendump (QEMU part skips where the tools are missing) | `tools/checks/arm64-calc-check.py` | retry |
 | ARM64 crash screen: an unexpected EL1 fault prints class, ESR, FAR, ELR and the last console lines on the UART, draws them as a panel (QEMU screendump on virt and the Pi 4B model) and halts quietly (skips where the tools are missing) | `tools/checks/arm64-crash-check.py` | retry |
 | ARM64 FP state: q0-q31, FPCR and FPSR survive timer interrupts whose handler wipes them, and the build without the save fails the same test (skips where the tools are missing) | `tools/checks/arm64-fp-check.py` | retry |
 | ARM64 out of memory: a full heap prints oom fb or oom text and the kernel carries on (no screen, or the VGA fallback font) on virt and the Pi 4B model (skips where the tools are missing) | `tools/checks/arm64-oom-check.py` | retry |
@@ -238,7 +239,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Hikko | `tools/checks/ring3hikko-check.py`, `tools/checks/ring3hikko-live-check.py` |
 | Fieldbook | `tools/checks/ring3fieldbook-check.py` |
 | Contacts | `tools/checks/ring3contacts-check.py` |
-| Calculator | `tools/checks/ring3calc-check.py` |
+| Calculator | `tools/checks/arm64-calc-check.py`, `tools/checks/ring3calc-check.py` |
 | Stocks | `tools/checks/ring3stocks-list-check.py`, `tools/checks/stocks-aa-check.py`, `tools/checks/stocks-dock-check.py`, `tools/checks/stocks-live-check.mjs` |
 | Search | `tools/checks/ring3search-check.py` |
 | Epiphany | `tools/checks/epiphany-cmdbar-check.py`, `tools/checks/portfolio-slowframes-check.mjs`, `tools/checks/ring3epiphany-check.py` |
