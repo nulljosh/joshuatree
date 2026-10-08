@@ -16,16 +16,21 @@ See `docs/BLUEPRINT.md` for the structural plan of where this OS goes after 1.0.
 
 The short list. Two tracks run side by side, one helper each (Joshua agreed the order on 2026-10-06). Everything below is the long list; done items moved to [roadmap-done.md](roadmap-done.md).
 
+**Done on the Pi (2026-10-07):** Wi-Fi joins and holds (WPA2 done on our side), DHCP and the network clock, the 12-hour clock and three-bar icon in the menu bar, the quiet console, the boot screen, and the green light blinks at boot (PR 456).
+
 **Track A, what you see on the Pi**
 1. Console scrollback (Page Up), so the Wi-Fi lines can be read from a photo.
-2. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing). Wallpaper, menu bar, shared paint code, the dock, its hover label, window chrome and the mouse are done (2.24.0: `kernel/gui_paint.c`, `tools/checks/arm64-mouse-check.py`). The Calendar tile's face is shared too (dashes until there is a clock), and the check holds every other dock tile to the shared art pixel for pixel. Next: typing into apps, and per-app menu bars (the frontmost app's File, Edit and so on in the top bar, like the Mac; Joshua 2026-10-07).
-3. The mouse pointer and clicking on the real Pi: done in QEMU (2.24.0), waiting on a wired USB mouse (test list in `docs/RASPBERRY-PI.md`).
-4. Apps on the Pi: the ring-3 apps rebuilt for ARM, Notes and Clock first.
+2. The real desktop and dock on the Pi (five slices: shared paint code, wallpaper and menu bar, dock, window chrome, cursor and typing).
+3. A wired USB mouse on the Pi. Pointer and clicks work in QEMU; the Pi needs a mouse plugged straight into a port.
+4. Sound from the 3.5 mm jack: a boot chime first.
+5. Apps on the Pi: the ring-3 apps rebuilt for ARM, Notes and Clock first.
 
 **Track B, the goal (Claude Code inside Joshua Tree on the Pi)**
-5. The internet stack on the ARM build (DHCP and HTTP over QEMU's network first).
-6. Wi-Fi on the real Pi: the scan works (16 networks). Join works on the real board: the chip has no WPA2 handshake of its own, so Joshua Tree does it (`arch/arm64/wpa.h`). Next: get an address, the clock, and a browser over HTTPS.
-7. Claude in the Console: type a question at the Pi's console and the answer prints, through the relay on the Mac. No app port needed, so it lands as soon as Wi-Fi joins.
+6. HTTPS on the Pi (BearSSL is already in `third_party/`), so a browser can load secure pages.
+7. Claude in the Console: type a question at the Pi's console and the answer prints, through the relay. Wi-Fi is in place, so this needs only the relay setup.
+
+**Then**
+8. Admin and sudo. 9. SD card writes (MBR and FAT32). 10. The Claude app on ARM, the self-update loop and the fallback kernel.
 
 **Stand out (Joshua 2026-10-07).** Almost nobody builds their own OS, fewer get it onto a real board. Lean into that:
 - **Our own case.** 3D print the Neo case for the Pi 4 (CAD in `docs/hardware/`), film the first ugly print and every fix, then sell board, card and case as one kit at about 5x the print cost. The waitlist is already live.
