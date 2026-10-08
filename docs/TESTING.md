@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (199 checks)
+## The suite (200 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -183,6 +183,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Burrow view switcher: List/Icons choice is saved to BURROW.TXT and a fresh run reads it back | `tools/checks/filesview-check.py` | retry |
 | Demo canvas fills its frame, pixelated only at an exact 1:1 map | `tools/checks/democrisp-check.mjs` | retry |
 | Landing hero: a real portrait before any click (pixels, undistorted), default boot opens Samantha's face, Esc reaches the desktop, ?desktop opts out, phone and tablet hold; fails if the poster is removed | `tools/checks/hero-poster-check.mjs` | retry |
+| Landing hero: Click or Tap to boot lifts the poster onto her face well before the 60 s fallback, even after the serial log is trimmed | `tools/checks/landing-poster-click-check.mjs` | once |
 | Landing page never overflows horizontally at phone widths | `tools/checks/mobile-overflow-check.mjs` | once |
 | Landing: benchmark labels clear, one app count, See the desktop link styled, sections visible on load | `tools/checks/landing-layout-check.mjs` | once |
 | Portfolio voice: on by default, mute button top right, remembered across a reload, absent outside portfolio | `tools/checks/portfolio-mute-check.mjs` | once |

@@ -228,6 +228,7 @@ retry|4|HTTP stress: a ring-3 app makes 72 sequential SYS_HTTP_GET calls, all su
 retry|1|Burrow view switcher: List/Icons choice is saved to BURROW.TXT and a fresh run reads it back|python3 ./tools/checks/filesview-check.py
 retry|5|Demo canvas fills its frame, pixelated only at an exact 1:1 map|node ./tools/checks/democrisp-check.mjs
 retry|4|Landing hero: a real portrait before any click (pixels, undistorted), default boot opens Samantha's face, Esc reaches the desktop, ?desktop opts out, phone and tablet hold; fails if the poster is removed|node ./tools/checks/hero-poster-check.mjs
+once |4|Landing hero: Click or Tap to boot lifts the poster onto her face well before the 60 s fallback, even after the serial log is trimmed|node ./tools/checks/landing-poster-click-check.mjs
 once |5|Landing page never overflows horizontally at phone widths|node ./tools/checks/mobile-overflow-check.mjs
 once |6|Landing: benchmark labels clear, one app count, See the desktop link styled, sections visible on load|node ./tools/checks/landing-layout-check.mjs
 once |0|Portfolio voice: on by default, mute button top right, remembered across a reload, absent outside portfolio|node ./tools/checks/portfolio-mute-check.mjs
