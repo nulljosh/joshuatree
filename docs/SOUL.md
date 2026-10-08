@@ -40,7 +40,7 @@ In 1983 Jobs gave a talk at the Aspen design conference. Four of its points hold
 
 **Liberal arts in the machine.** He described Apple as "injecting some liberal arts into these computers": proportional fonts, many fonts, pictures. That is the job `DESIGN.md` does. Type, icons and colour are not decoration; they are the point.
 
-**Closer to artists.** He said computer people are "a lot closer to artists" than the nerd picture suggests. That is the rebel half above, and why we steal like Picasso and not like a committee.
+**Closer to artists.** He said computer people are "a lot closer to artists" than the nerd picture suggests. That is the rebel half above.
 
 **Voice is the hard part.** He said "understanding language is much harder than understanding voice", because meaning depends on context. That is still true of Samantha. Turning sound into words is the easy part. Knowing what you meant is not, and we should say so plainly instead of pretending.
 
