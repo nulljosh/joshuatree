@@ -9,7 +9,7 @@ Run it all locally with `tools/ci-local.sh`. Run one with the command in the tab
 
 Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci-suite.sh` take a lock (`tools/ci-lock.sh`) and a second run waits its turn, printing `waiting for ci-local pid N` every two minutes for up to an hour. A lock left by a dead run clears itself. `CI_LOCAL_NO_LOCK=1` skips it. Every QEMU check writes into its own temp directory (`tools/checks/scratch.py`); `JT_KEEP_TMP=1` keeps it for debugging, and `tools/checks/tmp-paths-check.py` fails any new fixed `/tmp/jt-*` path.
 
-## The suite (200 checks)
+## The suite (204 checks)
 
 | What it proves | File | Mode |
 |---|---|---|
@@ -184,6 +184,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Burrow view switcher: List/Icons choice is saved to BURROW.TXT and a fresh run reads it back | `tools/checks/filesview-check.py` | retry |
 | Demo canvas fills its frame, pixelated only at an exact 1:1 map | `tools/checks/democrisp-check.mjs` | retry |
 | Landing hero: a real portrait before any click (pixels, undistorted), default boot opens Samantha's face, Esc reaches the desktop, ?desktop opts out, phone and tablet hold; fails if the poster is removed | `tools/checks/hero-poster-check.mjs` | retry |
+| Landing hero: Click or Tap to boot lifts the poster onto her face well before the 60 s fallback, even after the serial log is trimmed | `tools/checks/landing-poster-click-check.mjs` | once |
 | Landing page never overflows horizontally at phone widths | `tools/checks/mobile-overflow-check.mjs` | once |
 | Landing: benchmark labels clear, one app count, See the desktop link styled, sections visible on load | `tools/checks/landing-layout-check.mjs` | once |
 | Portfolio voice: on by default, mute button top right, remembered across a reload, absent outside portfolio | `tools/checks/portfolio-mute-check.mjs` | once |
@@ -191,6 +192,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Landing demo on a phone: the chat bar raises the keyboard, typed letters reach Samantha once each and Send is Enter | `tools/checks/mobile-type-check.mjs` | once |
 | Landing: Tech specs accordions hold every developer number collapsed, and the footer is a four-column directory of real links | `tools/checks/landing-specs-footer-check.mjs` | once |
 | Landing demo: no keyboard trap, one main landmark, Full screen top right on phones | `tools/checks/landing-demo-ui-check.mjs` | once |
+| Landing on a phone: exactly one visible "Message Samantha" input, focusable and typeable | `tools/checks/phone-one-input-check.mjs` | once |
 | App switcher: Ctrl+Tab cycles open windows and focuses the highlighted one | `tools/checks/appswitcher-check.py` | retry |
 | Screenshot key: Ctrl+Shift+3 saves a real framebuffer BMP, numbered and visible in Files | `tools/checks/screenshot-check.py` | retry |
 | Drunk mode easter egg: horizontal sway applied to framebuffer rows | `tools/checks/drunk-mode-check.py` | retry |
@@ -228,7 +230,7 @@ Only one suite runs at a time on a Mac. `tools/ci-local.sh` and `tools/checks/ci
 | Notes | `tools/checks/clipboard-check.py`, `tools/checks/editor_qa.py`, `tools/checks/editorflash-check.sh`, `tools/checks/notesfolders-check.py`, `tools/checks/notessharp-check.py`, `tools/checks/notestools-check.py`, `tools/checks/read-long-files-check.py`, `tools/checks/ring3resize-check.py`, `tools/checks/ring3window-check.py`, `tools/checks/textselect-check.py`, `tools/checks/touch-osk-check.py`, `tools/checks/windowdrag-check.py` |
 | Reminders | `tools/checks/gui-prompt-keystroke-check.sh`, `tools/checks/notestools-check.py`, `tools/checks/ring3reminders-check.py`, `tools/checks/ring3window-check.py` |
 | Terminal | `tools/checks/clipboard-check.py`, `tools/checks/termmono-check.py`, `tools/checks/termsharp-check.py` |
-| Samantha | `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
+| Samantha | `tools/checks/burrow-rename-check.py`, `tools/checks/chat-samantha-check.py`, `tools/checks/chatapp-check.py`, `tools/checks/chattools-check.py`, `tools/checks/face-frames-check.py`, `tools/checks/hero-poster-check.mjs`, `tools/checks/mobile-type-check.mjs`, `tools/checks/phone-boot-check.py`, `tools/checks/phone-one-input-check.mjs`, `tools/checks/phone-samantha-back-check.py`, `tools/checks/ring3calendar-check.py`, `tools/checks/samantha-boot-check.py`, `tools/checks/samantha-fullscreen-check.py`, `tools/checks/samweather-check.py` |
 | Weather | `tools/checks/read-long-files-check.py`, `tools/checks/ring3weather-check.py`, `tools/checks/samweather-check.py`, `tools/checks/weatherproxy-hang-check.mjs` |
 | Curbfind | `tools/checks/ring3curbfind-check.py` |
 | Keyrate | `tools/checks/ring3app-check.py` |
