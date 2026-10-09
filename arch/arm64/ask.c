@@ -7,7 +7,7 @@
 
    Where the relay is and the token it wants come from claude_cfg.h, generated at build time by claude_cfg.sh from the
    environment and a file outside the repo; the token is sent only in the Authorization header of this one request and
-   is never printed. Every outcome is one short honest line: `claude: thinking`, `claude: no token`, `claude: no
+   is never printed. Enter hands the line to cmd.c's cmd_run; this file answers what is not a browser command. Every outcome is one short honest line: `claude: thinking`, `claude: no token`, `claude: no
    network` (no DHCP lease: on a Pi that means Wi-Fi has not joined yet), `claude: error -401` for a relay refusal,
    `claude: timeout`. The relay keeps a session per conversation, so a follow-up question knows what came before.
    An answer may end with actions for the Pi ([[note TEXT]], [[browse URL]] and the rest: see take_actions); the Pi
@@ -21,7 +21,11 @@
 #endif
 
 void kputs(const char *s);                     /* main.c */
-void kdec(unsigned v);
+extern void (*cmd_out)(const char *s);         /* cmd.c: where this line's output goes */
+void cmd_dec(unsigned v);
+void cmd_run(const char *q, unsigned n, void (*out)(const char *));
+#define kputs cmd_out
+#define kdec cmd_dec
 int con_columns(void);
 void con_prompt(const char *s, unsigned n);
 void term_output(int on);   /* main.c: what a command prints goes to the Terminal */
@@ -31,7 +35,6 @@ int wifi_signal_level(void);         /* wifi.c: 1 to 3 */
 void heap_release(unsigned long m);
 void http_post_set_bearer(const char *token);
 void led_blink(unsigned times);      /* main.c, Pi only: the green light, through the firmware mailbox */
-int browse_command(const char *q, unsigned n);   /* browser.c */
 
 #define ASK_MAX 200          /* one question; the relay takes up to 4 KB, this keeps the JSON body small */
 #define ASK_WIDTH 53         /* the Pi console rule: every printed line fits a 53-column row */
@@ -363,6 +366,7 @@ static int post(const char *q, unsigned n, char *reply, char **ans) {
 }
 
 int app_open_name(const char *name);         /* main.c */
+int browse_command(const char *q, unsigned n);   /* browser.c: the agent's [[browse URL]] runs it directly */
 int calc_eval_str(const char *src, int deg, char *out);   /* calc.c: 0 ok, out holds 32 bytes */
 void input_drain(void);                      /* main.c: the keys that queued during a request */
 
@@ -412,12 +416,12 @@ static void run_actions(void) {
     }
 }
 
-static void ask(const char *q, unsigned n) {
+int ask_command(const char *q, unsigned n) {   /* cmd.c, before the browser: "stop" with nothing running, and the slash commands */
+    if (is_stop(q, n)) { kputs("agent: nothing running\n"); return 1; }
+    return slash(q, n);
+}
+void ask_claude(const char *q, unsigned n) {   /* cmd.c sends here what is not a command or a browser line */
     static char reply[REPLY_MAX + 1];
-    say_wrapped(ask_prompt(), q, n);
-    if (is_stop(q, n)) { kputs("agent: nothing running\n"); return; }
-    if (slash(q, n)) return;
-    if (browse_command(q, n)) return;          /* browser.c: `browse URL` and `open N` never go to Claude */
     if (n > 4 && q[0] == 'l' && q[1] == 'l' && q[2] == 'm' && q[3] == ' ') { local(q + 4, n - 4); return; }
     if (!CLAUDE_TOKEN_LEN) { kputs("claude: no token\n"); fallback(q, n); return; }
     if (!net_get_gateway()) {                  /* no DHCP lease, or no card at all */
@@ -454,7 +458,8 @@ static void ask(const char *q, unsigned n) {
 void ask_poll(void) {
     if (!pending) return;
     term_output(1);
-    ask(question, qlen);
+    say_wrapped(ask_prompt(), question, qlen);
+    cmd_run(question, qlen, 0);                /* cmd.c: the one command line (help, /model, browse, llm, Claude), into the Terminal */
     term_output(0);
     pending = 0;
     con_prompt(line, len);
