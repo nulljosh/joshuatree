@@ -4,7 +4,10 @@
 # is the Mac as QEMU's user network sees it, and 8765, the relay's own default). The token comes from the file in
 # CLAUDE_RELAY_TOKEN_FILE, default ~/.claude-relay-token, the same file docs/CLAUDE-APP.md has you make. No file, or a
 # token the relay would refuse (16 to 63 printable characters), and the header holds an empty token: the build still
-# links and the Console says `claude: no token`. The token goes in as bytes, never as a string or on a command line,
+# links and the Console says `claude: no token`. The token and the relay host go in only on a dev build: JT_WIFI_DEV=1
+# (set by tools/flash-pi.sh, the same flag that gates the Wi-Fi key) or an explicit CLAUDE_RELAY_TOKEN_FILE (the QEMU
+# checks, with a throwaway token). A plain `make` on the Mac that holds ~/.claude-relay-token carries neither.
+# The token goes in as bytes, never as a string or on a command line,
 # and this script never prints it. The header is rewritten only when its contents change, so a build stays incremental.
 set -eu
 O=${1:-claude_cfg.h}
@@ -15,6 +18,7 @@ case "$host" in ''|*[!A-Za-z0-9.-]*) echo "claude_cfg: CLAUDE_RELAY_HOST must be
 case "$port" in ''|*[!0-9]*) port=0 ;; esac
 if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then echo "claude_cfg: CLAUDE_RELAY_PORT must be 1 to 65535, using 8765" >&2; port=8765; fi
 tok=
+if [ "${JT_WIFI_DEV:-0}" != 1 ] && [ -z "${CLAUDE_RELAY_TOKEN_FILE:-}" ]; then host=; port=0; file=/dev/null; fi   # release build: no secret, no relay
 [ -r "$file" ] && tok=$(LC_ALL=C tr -d ' \t\r\n' < "$file")
 n=${#tok}
 if [ -n "$tok" ]; then
@@ -28,7 +32,7 @@ tmp=$O.tmp
     echo "#define CLAUDE_HOST \"$host\""
     echo "#define CLAUDE_PORT $port"
     echo "#define CLAUDE_TOKEN_LEN $n"
-    printf 'static const unsigned char claude_token[] = {'
+    printf 'static const volatile unsigned char claude_token[] = {'   # volatile: stays in rodata as bytes, so a token scan of the image finds it
     [ -n "$tok" ] && printf '%s' "$tok" | od -An -v -tu1 | tr -s ' \n' '  ' | sed 's/^ *//; s/ *$//; s/ /, /g; s/$/, /'
     echo '0 };'
 } > "$tmp"
